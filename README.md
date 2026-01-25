@@ -1,91 +1,68 @@
-# Stock Analysis CLI (Local-First)
+# AI Saham - Stock Analysis CLI
 
-## Overview
+A **local-first, production-grade CLI application** for stock analysis focused on the Indonesia Stock Exchange (IDX).
 
-This project is a **local-first, production-grade CLI application for stock analysis**.
+## Features
 
-It is designed to be:
-
-* Deterministic and reproducible
-* Useful without AI by default
-* Extensible to AI-enhanced analysis
-* Easy to install and run
-* Portable to bots, web, and mobile interfaces
-
-The initial market focus is **Indonesia Stock Exchange (IDX)**, with a clear path to global markets.
+- **Deterministic analysis** - Rule-based technical indicators (SMA, EMA, RSI)
+- **Risk assessment** - Three risk profiles (conservative, balanced, aggressive)
+- **Offline-first** - Works without internet after initial data fetch
+- **Local storage** - SQLite database for cached market data
+- **Extensible** - Hexagonal architecture ready for bots, web, and AI integration
 
 ---
 
-## What This Project Is
+## Quick Start
 
-* A **stock analysis tool**, not a trading bot
-* Rule-based by default (technical indicators, deterministic logic)
-* Offline-first (no cloud services required to start)
-* Architected with **Hexagonal (Ports & Adapters)** principles
-* Designed for auditability and long-term maintainability
+```bash
+# Fetch stock data
+saham fetch BBCA
 
----
+# View all indicators
+saham indicators BBCA
 
-## What This Project Is NOT
-
-* ❌ An automated trading or execution system
-* ❌ An AI-only or black-box analyzer
-* ❌ A real-time, high-frequency trading platform
-* ❌ Dependent on external APIs or internet access
-
----
-
-## Key Design Principles
-
-* **Local-first**: runs fully offline by default
-* **Deterministic core**: same input + config → same output
-* **AI as optional advisor**: OFF by default, never the sole decision maker
-* **Clear separation of concerns**: domain logic is pure and framework-agnostic
-
----
-
-## High-Level Architecture
-
+# Assess risk
+saham risk BBCA --all
 ```
-Domain (pure logic)
-  ├─ Analysis & Rules
-  ├─ Models
-  └─ Ports (interfaces)
-
-Adapters
-  ├─ CLI
-  ├─ Market Data Providers
-  ├─ Storage (SQLite / DuckDB)
-  └─ AI (optional)
-```
-
-External systems never leak into the domain.
 
 ---
 
 ## Installation
 
-Requires Python 3.11+.
+Requires **Python 3.11+**.
+
+### Using Virtual Environment (Recommended)
 
 ```bash
 # Clone the repository
 git clone <repository-url>
 cd ai-saham
 
-# Install dependencies
+# Create and activate virtual environment
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install the package
 pip install -e .
 
 # Or with development dependencies
 pip install -e ".[dev]"
 ```
 
+### Verify Installation
+
+```bash
+saham version
+# Output: saham v0.1.0
+```
+
 ---
 
-## Usage
+## CLI Commands
 
-### Fetch Market Data
+### `saham fetch` - Fetch Market Data
 
-Fetch daily OHLCV data for an IDX stock ticker:
+Fetch daily OHLCV data for an IDX stock ticker. Data is cached locally after first fetch.
 
 ```bash
 # Basic usage - fetches 1 year of data
@@ -101,115 +78,227 @@ saham fetch TLKM --refresh
 saham fetch ASII --db /path/to/custom.db
 ```
 
-### Calculate SMA (Simple Moving Average)
+**Options:**
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--days` | `-d` | 365 | Number of days of history |
+| `--refresh` | `-r` | false | Force refresh from provider |
+| `--db` | | ~/.ai-saham/data.db | Database path |
 
-Calculate SMA over cached market data:
+---
+
+### `saham sma` - Simple Moving Average
+
+Calculate SMA over cached market data.
 
 ```bash
-# Basic usage - SMA(20) on close prices
-saham sma BBCA
-
-# Custom period
-saham sma BBRI --period 50
-
-# Different price field
-saham sma TLKM --period 20 --field open
-
-# Analyze more history
-saham sma ASII --period 200 --days 730
+saham sma BBCA                    # SMA(20) on close prices
+saham sma BBRI --period 50        # Custom period
+saham sma TLKM --field open       # Different price field
+saham sma ASII --days 730         # More history
 ```
 
 **Options:**
-- `--period, -p`: SMA period (default: 20)
-- `--field, -f`: Price field - open/high/low/close (default: close)
-- `--days, -d`: Days of history to analyze (default: 365)
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--period` | `-p` | 20 | SMA period |
+| `--field` | `-f` | close | Price field (open/high/low/close) |
+| `--days` | `-d` | 365 | Days of history |
 
-**Note:** Requires cached data. Run `saham fetch <TICKER>` first.
+---
 
-### Calculate EMA (Exponential Moving Average)
+### `saham ema` - Exponential Moving Average
 
-Calculate EMA over cached market data with professional-grade SMA-seeded initialization:
+Calculate EMA with SMA-seeded initialization (matches TradingView, Bloomberg).
 
 ```bash
-# Basic usage - EMA(20) on close prices
-saham ema BBCA
+saham ema BBCA                    # EMA(20) on close prices
+saham ema BBRI --period 50        # Custom period
+saham ema TLKM --field high       # Different price field
+```
 
-# Custom period
-saham ema BBRI --period 50
+**Options:** Same as `sma` command.
 
-# Different price field
-saham ema TLKM --period 12 --field high
+---
 
-# Analyze more history
-saham ema ASII --period 200 --days 730
+### `saham rsi` - Relative Strength Index
+
+Calculate RSI using Wilder's smoothed moving average.
+
+```bash
+saham rsi BBCA                    # RSI(14)
+saham rsi BBRI --period 7         # Shorter period
+saham rsi TLKM --days 180         # Less history
 ```
 
 **Options:**
-- `--period, -p`: EMA period (default: 20)
-- `--field, -f`: Price field - open/high/low/close (default: close)
-- `--days, -d`: Days of history to display (default: 365)
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--period` | `-p` | 14 | RSI period |
+| `--days` | `-d` | 365 | Days of history |
 
-**Implementation Details:**
-- Uses SMA-seeded initialization (matches TradingView, Bloomberg, TA-Lib)
-- Smoothing multiplier: k = 2 / (period + 1)
-- Warm-up buffer handling ensures converged values (2× period)
+**RSI Interpretation:**
+- Above 70: Potentially overbought
+- Below 30: Potentially oversold
+- 30-70: Neutral
 
-**Note:** Requires cached data. Run `saham fetch <TICKER>` first.
+---
 
-### How Caching Works
+### `saham indicators` - All Indicators
 
-1. **First run**: Data is fetched from Yahoo Finance and cached locally
-2. **Subsequent runs**: Data is served from local cache (fast, offline)
-3. **With `--refresh`**: Cache is bypassed and fresh data is fetched
+Calculate SMA, EMA, and RSI together with aligned dates.
 
-Data is stored in `~/.ai-saham/data.db` by default.
+```bash
+saham indicators BBCA                          # Default periods
+saham indicators BBRI --sma 50 --ema 50        # Custom SMA/EMA
+saham indicators TLKM --rsi 7 --days 180       # Custom RSI
+```
+
+**Options:**
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--sma` | 20 | SMA period |
+| `--ema` | 20 | EMA period |
+| `--rsi` | 14 | RSI period |
+| `--days` | 365 | Days of history |
+
+---
+
+### `saham risk` - Risk Assessment
+
+Assess risk using deterministic, rule-based evaluation.
+
+```bash
+saham risk BBCA                       # Balanced profile (default)
+saham risk BBRI --profile conservative
+saham risk TLKM --all                 # Compare all profiles
+```
+
+**Risk Profiles:**
+
+| Profile | Description |
+|---------|-------------|
+| `conservative` | Strict thresholds, requires indicators to agree |
+| `balanced` | Standard thresholds, majority rules |
+| `aggressive` | Wide thresholds, either indicator can signal |
+
+**Risk Levels:**
+- `HIGH_RISK` - Indicators suggest elevated risk
+- `MODERATE` - Indicators suggest neutral conditions
+- `LOW_RISK` - Indicators suggest favorable conditions
+
+**Options:**
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--profile` | `-p` | balanced | Risk profile |
+| `--all` | `-a` | false | Show all profiles |
+| `--sma` | | 20 | SMA period |
+| `--ema` | | 20 | EMA period |
+| `--rsi` | | 14 | RSI period |
+
+---
+
+### `saham version` - Version Info
+
+```bash
+saham version
+```
+
+---
+
+## Architecture
+
+```
+src/
+├── domain/              # Pure business logic (no external dependencies)
+│   ├── entities/        # Stock, Candle, AnalysisResult
+│   ├── indicators/      # SMA, EMA, RSI, MACD calculations
+│   ├── ports/           # Interfaces (MarketDataProvider, Repository)
+│   └── rules/           # Risk assessment rules by profile
+│
+├── application/         # Use cases orchestrating domain logic
+│   ├── use_case/        # FetchMarketData, ComputeSMA, AssessRisk, etc.
+│   └── dto/             # Request/Response objects
+│
+├── infrastructure/      # External system implementations
+│   ├── data_providers/  # Yahoo Finance, IDX adapters
+│   ├── persistence/     # SQLite repositories
+│   ├── ai/              # Claude, Gemini integrations (optional)
+│   └── sentiment/       # News, social media analyzers (future)
+│
+└── adapters/            # User interfaces
+    ├── cli/             # Typer-based CLI (current)
+    ├── bot/             # Telegram, WhatsApp (stubs)
+    └── web/             # REST API (stub)
+```
+
+**Key Principle:** Domain logic is pure and framework-agnostic. External systems never leak into the domain.
 
 ---
 
 ## Configuration
 
-Default settings in `config/default.yaml`:
+Risk profiles are defined in `config/`:
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `market.suffix` | `.JK` | Ticker suffix for IDX |
-| `market.default_days` | `365` | Default history to fetch |
-| `storage.db_path` | `~/.ai-saham/data.db` | SQLite database path |
-| `ai.enabled` | `false` | AI features (future) |
+| File | Description |
+|------|-------------|
+| `default.yaml` | Base configuration |
+| `conservative.yaml` | Strict risk thresholds |
+| `balanced.yaml` | Standard risk thresholds |
+| `aggressive.yaml` | Wide risk thresholds |
+| `full_ai.yaml` | AI-enhanced mode (future) |
+
+---
+
+## Development
+
+```bash
+# Activate virtual environment
+source .venv/bin/activate
+
+# Run tests
+make test
+
+# Run tests with coverage
+make test-cov
+
+# Lint code
+make lint
+
+# Format code
+make format
+
+# Clean build artifacts
+make clean
+```
+
+---
+
+## Data Storage
+
+- **Location:** `~/.ai-saham/data.db` (SQLite)
+- **Content:** Cached OHLCV candles per ticker
+- **Refresh:** Use `--refresh` flag to update
 
 ---
 
 ## Limitations
 
-* **Daily data only** - no intraday or real-time streaming
-* **IDX market only** - designed for Indonesia Stock Exchange
-* **Yahoo Finance** - data may be delayed; unofficial source
-* **Internet required** for first fetch (offline after caching)
-* **Indicator partial results** - SMA/EMA values start after `period` candles are available
+- **Daily data only** - No intraday or real-time streaming
+- **IDX market focus** - Designed for Indonesia Stock Exchange
+- **Yahoo Finance source** - Data may be delayed; unofficial source
+- **Internet required** for first fetch (offline after caching)
 
 ---
 
-## Development Philosophy
+## What This Project Is NOT
 
-* Build vertical slices
-* Prefer clarity over cleverness
-* Test domain logic
-* Avoid premature optimization
-* If AI disappears tomorrow, the system must still be valuable
+- An automated trading or execution system
+- An AI-only or black-box analyzer
+- A real-time, high-frequency trading platform
+- Financial advice provider
 
----
-
-## AI Development Notes
-
-This repository is developed with AI assistance.
-
-Agent behavior is governed by:
-
-* `CLAUDE.md` – architectural authority
-* `GEMINI.md` – implementation assistance
-* `CURSOR.md` – editor-level pair programming
-
-These files are part of the system design.
+**DISCLAIMER:** This tool provides analysis only, not trading advice.
 
 ---
 
