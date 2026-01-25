@@ -44,7 +44,13 @@ from src.application.use_case.fetch_market_data import (
     FetchMarketDataRequest,
     FetchMarketDataUseCase,
 )
+from src.application.use_case.fetch_sentiment import (
+    FetchSentimentRequest,
+    FetchSentimentUseCase,
+)
+from src.domain.value_objects.sentiment import Sentiment, SentimentSnapshot
 from src.infrastructure.data_providers.yahoo import YahooFinanceProvider
+from src.infrastructure.sentiment import SentimentFactory
 from src.infrastructure.persistence.sqlite_market_repository import (
     SQLiteMarketRepository,
 )
@@ -81,6 +87,96 @@ def validate_field(value: str) -> str:
             f"Invalid field '{value}'. Must be one of: {', '.join(VALID_FIELDS)}"
         )
     return value.lower()
+
+
+def _display_sentiment_full(
+    snapshot: SentimentSnapshot,
+    provider: str,
+    classifier: str,
+    warning: str | None = None,
+) -> None:
+    """Display full sentiment snapshot output.
+
+    Args:
+        snapshot: The sentiment snapshot to display
+        provider: Name of news provider used
+        classifier: Name of classifier used
+        warning: Optional warning message
+    """
+    if warning:
+        typer.echo(f"\nWarning: {warning}")
+        return
+
+    # Sentiment symbol map
+    sentiment_symbols = {
+        Sentiment.POSITIVE: "+",
+        Sentiment.NEUTRAL: "=",
+        Sentiment.NEGATIVE: "-",
+    }
+
+    # Overall sentiment display
+    typer.echo(f"\n{'-' * 39}")
+    typer.echo("SENTIMENT SNAPSHOT")
+    typer.echo(f"{'-' * 39}")
+
+    # Get the count for the winning sentiment
+    sentiment_counts = {
+        Sentiment.POSITIVE: snapshot.positive_count,
+        Sentiment.NEUTRAL: snapshot.neutral_count,
+        Sentiment.NEGATIVE: snapshot.negative_count,
+    }
+    winning_count = sentiment_counts[snapshot.overall_sentiment]
+
+    typer.echo(f"\nOverall: {snapshot.overall_sentiment.value.upper()}")
+    typer.echo(
+        f"Confidence: {winning_count}/{snapshot.total_count} headlines ({snapshot.confidence_pct}%)"
+    )
+
+    typer.echo(f"\nBreakdown:")
+    typer.echo(f"  Positive:  {snapshot.positive_count} ({int(snapshot.positive_count / snapshot.total_count * 100) if snapshot.total_count else 0}%)")
+    typer.echo(f"  Neutral:   {snapshot.neutral_count} ({int(snapshot.neutral_count / snapshot.total_count * 100) if snapshot.total_count else 0}%)")
+    typer.echo(f"  Negative:  {snapshot.negative_count} ({int(snapshot.negative_count / snapshot.total_count * 100) if snapshot.total_count else 0}%)")
+
+    # Show recent headlines (max 5)
+    if snapshot.headlines:
+        typer.echo(f"\nRecent Headlines:")
+        for headline in snapshot.headlines[:5]:
+            symbol = sentiment_symbols.get(headline.sentiment, "?")
+            typer.echo(f"  [{symbol}] {headline.title[:70]}{'...' if len(headline.title) > 70 else ''}")
+
+    typer.echo(f"\n[Provider: {provider} | Classifier: {classifier}]")
+
+
+def _display_sentiment_brief(
+    snapshot: SentimentSnapshot,
+    warning: str | None = None,
+) -> None:
+    """Display brief sentiment output for --with-sentiment flag.
+
+    Args:
+        snapshot: The sentiment snapshot to display
+        warning: Optional warning message
+    """
+    typer.echo(f"\n{'-' * 39}")
+    typer.echo("NEWS SENTIMENT")
+    typer.echo(f"{'-' * 39}")
+
+    if warning:
+        typer.echo(f"\nWarning: {warning}")
+        typer.echo("\nNote: Sentiment is contextual information only.")
+        typer.echo("      It does NOT affect the risk assessment above.")
+        return
+
+    typer.echo(
+        f"\nOverall: {snapshot.overall_sentiment.value.upper()} "
+        f"({snapshot.total_count} headlines, {snapshot.confidence_pct}%)"
+    )
+    typer.echo(
+        f"\nBreakdown: +{snapshot.positive_count} / "
+        f"={snapshot.neutral_count} / -{snapshot.negative_count}"
+    )
+    typer.echo("\nNote: Sentiment is contextual information only.")
+    typer.echo("      It does NOT affect the risk assessment above.")
 
 
 def _display_ai_explanation(
@@ -717,6 +813,10 @@ def risk(
         Optional[str],
         typer.Option("--model", "-m", help="Model name for AI provider (e.g., qwen2.5-coder:1.5b for Ollama)"),
     ] = None,
+    with_sentiment: Annotated[
+        bool,
+        typer.Option("--with-sentiment", "-s", help="Include news sentiment analysis"),
+    ] = False,
 ) -> None:
     """
     Assess risk for an IDX stock based on technical indicators.
@@ -839,6 +939,30 @@ def risk(
                 err=True,
             )
 
+        # Display sentiment if requested
+        if with_sentiment:
+            try:
+                news_provider = SentimentFactory.create_news_provider()
+                classifier = SentimentFactory.create_classifier(use_ai=False)
+                sentiment_use_case = FetchSentimentUseCase(
+                    news_provider=news_provider,
+                    classifier=classifier,
+                )
+                sentiment_response = sentiment_use_case.execute(
+                    FetchSentimentRequest(ticker=ticker)
+                )
+                _display_sentiment_brief(
+                    snapshot=sentiment_response.snapshot,
+                    warning=sentiment_response.warning,
+                )
+            except Exception as e:
+                typer.echo(f"\n{'-' * 39}")
+                typer.echo("NEWS SENTIMENT")
+                typer.echo(f"{'-' * 39}")
+                typer.echo(f"\nWarning: Could not fetch sentiment: {e}", err=True)
+                typer.echo("\nNote: Sentiment is contextual information only.")
+                typer.echo("      It does NOT affect the risk assessment above.")
+
         typer.echo("\nDISCLAIMER: Analysis only, not trading advice.")
 
     except ValueError as e:
@@ -855,6 +979,96 @@ def risk(
             typer.echo(f"Tip: Run 'saham fetch {ticker.upper()}' first to download data.", err=True)
         else:
             typer.echo(f"Failed to assess risk: {e}", err=True)
+        raise typer.Exit(1)
+
+
+@app.command()
+def sentiment(
+    ticker: Annotated[str, typer.Argument(help="Stock ticker symbol (e.g., BBCA)")],
+    days: Annotated[
+        int,
+        typer.Option("--days", "-d", help="Days of news to fetch", min=1, max=30),
+    ] = 3,
+    max_headlines: Annotated[
+        int,
+        typer.Option("--max", help="Maximum headlines to analyze", min=1, max=50),
+    ] = 20,
+    ai_classify: Annotated[
+        bool,
+        typer.Option("--ai-classify", help="Use AI for classification (requires API key)"),
+    ] = False,
+    provider: Annotated[
+        Optional[str],
+        typer.Option("--provider", help="AI provider for classification (claude/openai/gemini/ollama)"),
+    ] = None,
+    model: Annotated[
+        Optional[str],
+        typer.Option("--model", "-m", help="Model name for AI provider"),
+    ] = None,
+) -> None:
+    """
+    Fetch and analyze news sentiment for an IDX stock.
+
+    Retrieves recent news headlines and classifies them as positive,
+    neutral, or negative using keyword matching (default) or AI.
+
+    Sentiment is informational only and does NOT affect risk assessment.
+
+    Classifier modes:
+    - keyword (default): Rule-based, uses Indonesian + English keywords
+    - AI (--ai-classify): Uses LLM for more nuanced classification
+
+    Examples:
+        saham sentiment BBCA
+        saham sentiment BBRI --days 7
+        saham sentiment TLKM --ai-classify
+        saham sentiment ASII --ai-classify --provider ollama --model llama3
+    """
+    typer.echo(f"Fetching news sentiment for {ticker.upper()}...")
+
+    try:
+        # Wire up dependencies
+        news_provider = SentimentFactory.create_news_provider()
+        classifier = SentimentFactory.create_classifier(
+            use_ai=ai_classify,
+            provider=provider,
+            model=model,
+        )
+        use_case = FetchSentimentUseCase(
+            news_provider=news_provider,
+            classifier=classifier,
+        )
+
+        # Execute use case
+        request = FetchSentimentRequest(
+            ticker=ticker,
+            max_headlines=max_headlines,
+            days=days,
+        )
+        response = use_case.execute(request)
+
+        # Display header
+        typer.echo(f"\nTicker: {response.ticker}")
+        typer.echo(f"Date: {response.snapshot.fetch_date}")
+        typer.echo(f"Headlines Analyzed: {response.snapshot.total_count}")
+
+        # Display sentiment
+        _display_sentiment_full(
+            snapshot=response.snapshot,
+            provider=response.provider,
+            classifier=response.classifier,
+            warning=response.warning,
+        )
+
+        typer.echo("\nDISCLAIMER: Sentiment analysis only, not trading advice.")
+
+    except Exception as e:
+        error_msg = str(e).lower()
+        if "connection" in error_msg or "network" in error_msg or "timeout" in error_msg:
+            typer.echo("Warning: Could not fetch news (network issue).", err=True)
+            typer.echo("Tip: Check your internet connection and try again.", err=True)
+        else:
+            typer.echo(f"Failed to analyze sentiment: {e}", err=True)
         raise typer.Exit(1)
 
 
