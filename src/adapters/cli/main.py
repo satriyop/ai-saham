@@ -54,13 +54,35 @@ DEFAULT_DB_PATH = Path.home() / ".ai-saham" / "data.db"
 DEFAULT_DAYS = 365
 DEFAULT_MARKET_SUFFIX = ".JK"
 
+# Valid options for validation
+VALID_PROFILES = ["conservative", "balanced", "aggressive"]
+VALID_FIELDS = ["open", "high", "low", "close"]
+
+
+def validate_profile(value: str) -> str:
+    """Validate risk profile option."""
+    if value.lower() not in VALID_PROFILES:
+        raise typer.BadParameter(
+            f"Invalid profile '{value}'. Must be one of: {', '.join(VALID_PROFILES)}"
+        )
+    return value.lower()
+
+
+def validate_field(value: str) -> str:
+    """Validate price field option."""
+    if value.lower() not in VALID_FIELDS:
+        raise typer.BadParameter(
+            f"Invalid field '{value}'. Must be one of: {', '.join(VALID_FIELDS)}"
+        )
+    return value.lower()
+
 
 @app.command()
 def fetch(
     ticker: Annotated[str, typer.Argument(help="Stock ticker symbol (e.g., BBCA)")],
     days: Annotated[
         int,
-        typer.Option("--days", "-d", help="Number of days of history to fetch"),
+        typer.Option("--days", "-d", help="Number of days of history", min=1),
     ] = DEFAULT_DAYS,
     refresh: Annotated[
         bool,
@@ -68,7 +90,7 @@ def fetch(
     ] = False,
     db_path: Annotated[
         Optional[Path],
-        typer.Option("--db", help="Path to SQLite database"),
+        typer.Option("--db", help="Path to SQLite database (default: ~/.ai-saham/data.db)"),
     ] = None,
 ) -> None:
     """
@@ -126,8 +148,24 @@ def fetch(
     except ValueError as e:
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1)
+    except ConnectionError:
+        typer.echo("Error: Network connection failed.", err=True)
+        typer.echo("Tip: Check your internet connection and try again.", err=True)
+        raise typer.Exit(1)
+    except PermissionError:
+        typer.echo(f"Error: Cannot write to database at {resolved_db_path}", err=True)
+        typer.echo("Tip: Check file permissions or use --db to specify a different path.", err=True)
+        raise typer.Exit(1)
     except Exception as e:
-        typer.echo(f"Failed to fetch data: {e}", err=True)
+        error_msg = str(e).lower()
+        if "connection" in error_msg or "network" in error_msg or "timeout" in error_msg:
+            typer.echo("Error: Network connection failed.", err=True)
+            typer.echo("Tip: Check your internet connection and try again.", err=True)
+        elif "no data" in error_msg or "not found" in error_msg:
+            typer.echo(f"Error: No market data found for ticker '{ticker.upper()}'", err=True)
+            typer.echo("Tip: Verify the ticker symbol is valid for IDX (e.g., BBCA, BBRI, TLKM).", err=True)
+        else:
+            typer.echo(f"Failed to fetch data: {e}", err=True)
         raise typer.Exit(1)
 
 
@@ -136,19 +174,19 @@ def sma(
     ticker: Annotated[str, typer.Argument(help="Stock ticker symbol (e.g., BBCA)")],
     period: Annotated[
         int,
-        typer.Option("--period", "-p", help="SMA period (number of days)"),
+        typer.Option("--period", "-p", help="SMA period (number of days)", min=1),
     ] = 20,
     field: Annotated[
         str,
-        typer.Option("--field", "-f", help="Price field (open/high/low/close)"),
+        typer.Option("--field", "-f", help="Price field (open/high/low/close)", callback=validate_field),
     ] = "close",
     days: Annotated[
         int,
-        typer.Option("--days", "-d", help="Number of days of history to analyze"),
+        typer.Option("--days", "-d", help="Number of days of history", min=1),
     ] = DEFAULT_DAYS,
     db_path: Annotated[
         Optional[Path],
-        typer.Option("--db", help="Path to SQLite database"),
+        typer.Option("--db", help="Path to SQLite database (default: ~/.ai-saham/data.db)"),
     ] = None,
 ) -> None:
     """
@@ -219,8 +257,17 @@ def sma(
     except ValueError as e:
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1)
+    except FileNotFoundError:
+        typer.echo(f"Error: Database not found at {resolved_db_path}", err=True)
+        typer.echo(f"Tip: Run 'saham fetch {ticker.upper()}' first to download data.", err=True)
+        raise typer.Exit(1)
     except Exception as e:
-        typer.echo(f"Failed to compute SMA: {e}", err=True)
+        error_msg = str(e).lower()
+        if "no such table" in error_msg or "no data" in error_msg:
+            typer.echo(f"Error: No cached data found for {ticker.upper()}", err=True)
+            typer.echo(f"Tip: Run 'saham fetch {ticker.upper()}' first to download data.", err=True)
+        else:
+            typer.echo(f"Failed to compute SMA: {e}", err=True)
         raise typer.Exit(1)
 
 
@@ -229,19 +276,19 @@ def ema(
     ticker: Annotated[str, typer.Argument(help="Stock ticker symbol (e.g., BBCA)")],
     period: Annotated[
         int,
-        typer.Option("--period", "-p", help="EMA period (number of days)"),
+        typer.Option("--period", "-p", help="EMA period (number of days)", min=1),
     ] = 20,
     field: Annotated[
         str,
-        typer.Option("--field", "-f", help="Price field (open/high/low/close)"),
+        typer.Option("--field", "-f", help="Price field (open/high/low/close)", callback=validate_field),
     ] = "close",
     days: Annotated[
         int,
-        typer.Option("--days", "-d", help="Number of days of history to display"),
+        typer.Option("--days", "-d", help="Number of days of history", min=1),
     ] = DEFAULT_DAYS,
     db_path: Annotated[
         Optional[Path],
-        typer.Option("--db", help="Path to SQLite database"),
+        typer.Option("--db", help="Path to SQLite database (default: ~/.ai-saham/data.db)"),
     ] = None,
 ) -> None:
     """
@@ -315,8 +362,17 @@ def ema(
     except ValueError as e:
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1)
+    except FileNotFoundError:
+        typer.echo(f"Error: Database not found at {resolved_db_path}", err=True)
+        typer.echo(f"Tip: Run 'saham fetch {ticker.upper()}' first to download data.", err=True)
+        raise typer.Exit(1)
     except Exception as e:
-        typer.echo(f"Failed to compute EMA: {e}", err=True)
+        error_msg = str(e).lower()
+        if "no such table" in error_msg or "no data" in error_msg:
+            typer.echo(f"Error: No cached data found for {ticker.upper()}", err=True)
+            typer.echo(f"Tip: Run 'saham fetch {ticker.upper()}' first to download data.", err=True)
+        else:
+            typer.echo(f"Failed to compute EMA: {e}", err=True)
         raise typer.Exit(1)
 
 
@@ -325,15 +381,15 @@ def rsi(
     ticker: Annotated[str, typer.Argument(help="Stock ticker symbol (e.g., BBCA)")],
     period: Annotated[
         int,
-        typer.Option("--period", "-p", help="RSI period (number of days)"),
+        typer.Option("--period", "-p", help="RSI period (number of days)", min=1),
     ] = 14,
     days: Annotated[
         int,
-        typer.Option("--days", "-d", help="Number of days of history to display"),
+        typer.Option("--days", "-d", help="Number of days of history", min=1),
     ] = DEFAULT_DAYS,
     db_path: Annotated[
         Optional[Path],
-        typer.Option("--db", help="Path to SQLite database"),
+        typer.Option("--db", help="Path to SQLite database (default: ~/.ai-saham/data.db)"),
     ] = None,
 ) -> None:
     """
@@ -417,8 +473,17 @@ def rsi(
     except ValueError as e:
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1)
+    except FileNotFoundError:
+        typer.echo(f"Error: Database not found at {resolved_db_path}", err=True)
+        typer.echo(f"Tip: Run 'saham fetch {ticker.upper()}' first to download data.", err=True)
+        raise typer.Exit(1)
     except Exception as e:
-        typer.echo(f"Failed to compute RSI: {e}", err=True)
+        error_msg = str(e).lower()
+        if "no such table" in error_msg or "no data" in error_msg:
+            typer.echo(f"Error: No cached data found for {ticker.upper()}", err=True)
+            typer.echo(f"Tip: Run 'saham fetch {ticker.upper()}' first to download data.", err=True)
+        else:
+            typer.echo(f"Failed to compute RSI: {e}", err=True)
         raise typer.Exit(1)
 
 
@@ -427,23 +492,23 @@ def indicators(
     ticker: Annotated[str, typer.Argument(help="Stock ticker symbol (e.g., BBCA)")],
     sma_period: Annotated[
         int,
-        typer.Option("--sma", help="SMA period (default: 20)"),
+        typer.Option("--sma", help="SMA period (default: 20)", min=1),
     ] = 20,
     ema_period: Annotated[
         int,
-        typer.Option("--ema", help="EMA period (default: 20)"),
+        typer.Option("--ema", help="EMA period (default: 20)", min=1),
     ] = 20,
     rsi_period: Annotated[
         int,
-        typer.Option("--rsi", help="RSI period (default: 14)"),
+        typer.Option("--rsi", help="RSI period (default: 14)", min=1),
     ] = 14,
     days: Annotated[
         int,
-        typer.Option("--days", "-d", help="Number of days of history to display"),
+        typer.Option("--days", "-d", help="Number of days of history", min=1),
     ] = DEFAULT_DAYS,
     db_path: Annotated[
         Optional[Path],
-        typer.Option("--db", help="Path to SQLite database"),
+        typer.Option("--db", help="Path to SQLite database (default: ~/.ai-saham/data.db)"),
     ] = None,
 ) -> None:
     """
@@ -538,8 +603,17 @@ def indicators(
     except ValueError as e:
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1)
+    except FileNotFoundError:
+        typer.echo(f"Error: Database not found at {resolved_db_path}", err=True)
+        typer.echo(f"Tip: Run 'saham fetch {ticker.upper()}' first to download data.", err=True)
+        raise typer.Exit(1)
     except Exception as e:
-        typer.echo(f"Failed to compute indicators: {e}", err=True)
+        error_msg = str(e).lower()
+        if "no such table" in error_msg or "no data" in error_msg:
+            typer.echo(f"Error: No cached data found for {ticker.upper()}", err=True)
+            typer.echo(f"Tip: Run 'saham fetch {ticker.upper()}' first to download data.", err=True)
+        else:
+            typer.echo(f"Failed to compute indicators: {e}", err=True)
         raise typer.Exit(1)
 
 
@@ -548,7 +622,7 @@ def risk(
     ticker: Annotated[str, typer.Argument(help="Stock ticker symbol (e.g., BBCA)")],
     profile: Annotated[
         str,
-        typer.Option("--profile", "-p", help="Risk profile (conservative/balanced/aggressive)"),
+        typer.Option("--profile", "-p", help="Risk profile (conservative/balanced/aggressive)", callback=validate_profile),
     ] = "balanced",
     all_profiles: Annotated[
         bool,
@@ -556,19 +630,19 @@ def risk(
     ] = False,
     sma_period: Annotated[
         int,
-        typer.Option("--sma", help="SMA period (default: 20)"),
+        typer.Option("--sma", help="SMA period (default: 20)", min=1),
     ] = 20,
     ema_period: Annotated[
         int,
-        typer.Option("--ema", help="EMA period (default: 20)"),
+        typer.Option("--ema", help="EMA period (default: 20)", min=1),
     ] = 20,
     rsi_period: Annotated[
         int,
-        typer.Option("--rsi", help="RSI period (default: 14)"),
+        typer.Option("--rsi", help="RSI period (default: 14)", min=1),
     ] = 14,
     db_path: Annotated[
         Optional[Path],
-        typer.Option("--db", help="Path to SQLite database"),
+        typer.Option("--db", help="Path to SQLite database (default: ~/.ai-saham/data.db)"),
     ] = None,
 ) -> None:
     """
@@ -652,34 +726,50 @@ def risk(
             typer.echo(f"  EMA({response.ema_period}):  {snapshot.ema:>12,.2f}")
             typer.echo(f"  RSI({response.rsi_period}):  {snapshot.rsi:>12.2f}")
 
-            typer.echo(f"\n{'─' * 39}")
+            typer.echo(f"\n{'-' * 39}")
             typer.echo("RISK ASSESSMENT")
-            typer.echo(f"{'─' * 39}")
+            typer.echo(f"{'-' * 39}")
 
             typer.echo(f"\nRisk Level:  {assessment.risk_level_name}")
             typer.echo(f"Confidence:  {assessment.confidence}/100")
 
             typer.echo(f"\nRationale:")
             for reason in assessment.rationale_list:
-                typer.echo(f"  • {reason}")
+                typer.echo(f"  - {reason}")
 
-            typer.echo(f"\n{'─' * 39}")
+            typer.echo(f"\n{'-' * 39}")
 
         typer.echo("\nDISCLAIMER: Analysis only, not trading advice.")
 
     except ValueError as e:
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1)
+    except FileNotFoundError:
+        typer.echo(f"Error: Database not found at {resolved_db_path}", err=True)
+        typer.echo(f"Tip: Run 'saham fetch {ticker.upper()}' first to download data.", err=True)
+        raise typer.Exit(1)
     except Exception as e:
-        typer.echo(f"Failed to assess risk: {e}", err=True)
+        error_msg = str(e).lower()
+        if "no such table" in error_msg or "no data" in error_msg:
+            typer.echo(f"Error: No cached data found for {ticker.upper()}", err=True)
+            typer.echo(f"Tip: Run 'saham fetch {ticker.upper()}' first to download data.", err=True)
+        else:
+            typer.echo(f"Failed to assess risk: {e}", err=True)
         raise typer.Exit(1)
 
 
 @app.command()
 def version() -> None:
-    """Show version information."""
+    """
+    Show version and build information.
+
+    Displays the current version of the saham CLI and basic build info.
+    """
     typer.echo("saham v0.1.0")
-    typer.echo("Local-first stock analysis CLI")
+    typer.echo("Local-first stock analysis CLI for Indonesia Stock Exchange (IDX)")
+    typer.echo("")
+    typer.echo("For help:  saham --help")
+    typer.echo("For docs:  https://github.com/your-repo/ai-saham")
 
 
 def main() -> None:
