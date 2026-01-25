@@ -22,6 +22,12 @@ from src.application.use_case.assess_risk import (
     AssessRiskRequest,
     AssessRiskUseCase,
 )
+from src.application.use_case.explain_risk import (
+    ExplainRiskRequest,
+    ExplainRiskUseCase,
+)
+from src.domain.ports.ai_explainer import ExplainerAuthError
+from src.infrastructure.ai import ExplainerFactory
 from src.application.use_case.compute_ema import (
     ComputeEMARequest,
     ComputeEMAUseCase,
@@ -75,6 +81,61 @@ def validate_field(value: str) -> str:
             f"Invalid field '{value}'. Must be one of: {', '.join(VALID_FIELDS)}"
         )
     return value.lower()
+
+
+def _display_ai_explanation(
+    ticker: str,
+    assessment: "RiskAssessment",
+    snapshot: "IndicatorSnapshot",
+    provider: Optional[str] = None,
+    model: Optional[str] = None,
+) -> None:
+    """Display AI-generated explanation for a risk assessment.
+
+    Handles errors gracefully - displays warning but doesn't crash.
+
+    Args:
+        ticker: Stock ticker symbol
+        assessment: The risk assessment result
+        snapshot: The indicator snapshot
+        provider: Optional provider override
+        model: Optional model name override (for Ollama)
+    """
+    from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
+    from src.domain.value_objects.risk_assessment import RiskAssessment
+
+    typer.echo(f"{'-' * 39}")
+    typer.echo("AI EXPLANATION")
+    typer.echo(f"{'-' * 39}")
+
+    try:
+        # Try to create explainer
+        explainer = ExplainerFactory.create(provider=provider, model=model)
+        explain_use_case = ExplainRiskUseCase(explainer=explainer)
+
+        explain_response = explain_use_case.execute(
+            ExplainRiskRequest(
+                ticker=ticker,
+                assessment=assessment,
+                snapshot=snapshot,
+            )
+        )
+
+        if explain_response.success:
+            typer.echo(f"\n{explain_response.explanation}")
+            typer.echo(f"\n[Provider: {explain_response.provider}]")
+        else:
+            typer.echo(
+                f"\nAI explanation unavailable: {explain_response.error_message}",
+                err=True,
+            )
+
+    except ExplainerAuthError as e:
+        typer.echo(f"\nAI explanation unavailable: {e}", err=True)
+        typer.echo("Tip: Set the appropriate API key environment variable.", err=True)
+
+    except Exception as e:
+        typer.echo(f"\nAI explanation unavailable: {e}", err=True)
 
 
 @app.command()
@@ -644,6 +705,18 @@ def risk(
         Optional[Path],
         typer.Option("--db", help="Path to SQLite database (default: ~/.ai-saham/data.db)"),
     ] = None,
+    explain: Annotated[
+        bool,
+        typer.Option("--explain", "-e", help="Generate AI explanation for the assessment"),
+    ] = False,
+    provider: Annotated[
+        Optional[str],
+        typer.Option("--provider", help="AI provider (claude/openai/gemini/ollama/mock)"),
+    ] = None,
+    model: Annotated[
+        Optional[str],
+        typer.Option("--model", "-m", help="Model name for AI provider (e.g., qwen2.5-coder:1.5b for Ollama)"),
+    ] = None,
 ) -> None:
     """
     Assess risk for an IDX stock based on technical indicators.
@@ -660,10 +733,18 @@ def risk(
 
     Requires cached data (run 'saham fetch TICKER' first).
 
+    AI Explanation (optional):
+        Use --explain to get AI-generated insights about the assessment.
+        Use --provider to override the default AI provider.
+        Use --model to specify a model (useful for Ollama).
+
     Examples:
         saham risk BBCA
         saham risk BBRI --profile conservative
         saham risk TLKM --all
+        saham risk BBCA --explain
+        saham risk BBCA --explain --provider ollama
+        saham risk BBCA --explain --provider ollama --model qwen2.5-coder:1.5b
     """
     # Resolve configuration
     resolved_db_path = db_path or DEFAULT_DB_PATH
@@ -738,6 +819,25 @@ def risk(
                 typer.echo(f"  - {reason}")
 
             typer.echo(f"\n{'-' * 39}")
+
+            # Generate AI explanation if requested (single profile only)
+            if explain:
+                typer.echo("")  # Blank line before AI section
+                _display_ai_explanation(
+                    ticker=ticker.upper(),
+                    assessment=assessment,
+                    snapshot=snapshot,
+                    provider=provider,
+                    model=model,
+                )
+
+        # Warn if --explain used with --all
+        if explain and all_profiles:
+            typer.echo(
+                "\nNote: AI explanation is only available for single profile view. "
+                "Run without --all to get AI explanation.",
+                err=True,
+            )
 
         typer.echo("\nDISCLAIMER: Analysis only, not trading advice.")
 
