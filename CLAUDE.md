@@ -1,5 +1,12 @@
 # CLAUDE.md
 
+## Agent & SubAgent
+- Always use model Opus for Planning & Implementation.
+- Always use model Haiku for code/file exploration, use sub agents for everytime you need to explore the code
+- Use model Sonnet as sub agent for creating test in paralel, but switch immediately to Opus for implementation.
+- When execute test code, use subagent, do not pollute context
+- Offer to create skills if you find some insight that will potentially help you to work more effectively in upcoming task, skills should be project scope not user scope. Use Skill creator plugin to create the skill.
+
 ## Purpose
 
 This file instructs **Claude Code** how to behave as a disciplined senior engineer while developing this project. Claude should treat this repository as a **real financial software product**, not a prototype or demo.

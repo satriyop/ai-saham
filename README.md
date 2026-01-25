@@ -282,6 +282,119 @@ make clean
 
 ---
 
+## Offline Behavior
+
+This CLI is designed to work **offline after initial data fetch**:
+
+1. **First fetch requires internet** - Downloads data from Yahoo Finance
+2. **All analysis works offline** - SMA, EMA, RSI, indicators, risk assessment use cached data
+3. **Cache persists** - Data stored in SQLite survives restarts
+
+**Typical workflow:**
+```bash
+# Online: Fetch data once
+saham fetch BBCA
+saham fetch BBRI
+saham fetch TLKM
+
+# Offline: Analyze anytime
+saham indicators BBCA
+saham risk BBRI --all
+saham sma TLKM --period 50
+```
+
+**Refreshing data:**
+```bash
+# Re-download latest data (requires internet)
+saham fetch BBCA --refresh
+```
+
+---
+
+## Troubleshooting
+
+### "Database not found"
+
+```
+Error: Database not found at ~/.ai-saham/data.db
+```
+
+**Solution:** Fetch data first:
+```bash
+saham fetch BBCA
+```
+
+### "No cached data found"
+
+```
+Error: No cached data found for XXXX
+```
+
+**Solution:** The ticker hasn't been fetched yet:
+```bash
+saham fetch XXXX
+```
+
+### "Insufficient data"
+
+```
+Insufficient data for BBCA
+Candles available: 15
+Required for SMA(200): 200
+```
+
+**Solution:** Fetch more historical data:
+```bash
+saham fetch BBCA --days 730 --refresh
+```
+
+### "Network connection failed"
+
+```
+Error: Network connection failed.
+```
+
+**Solutions:**
+- Check your internet connection
+- Try again later (Yahoo Finance may be temporarily unavailable)
+- Use cached data for analysis if available
+
+### Invalid option values
+
+```
+Error: Invalid value for '--profile': Invalid profile 'xyz'. Must be one of: conservative, balanced, aggressive
+```
+
+**Solution:** Use valid option values as shown in command help:
+```bash
+saham risk --help
+```
+
+---
+
+## Risk Profile Selection Guide
+
+Choose the right profile based on your analysis needs:
+
+| Profile | Best For | Characteristics |
+|---------|----------|-----------------|
+| **conservative** | Long-term investors, risk-averse | Strict thresholds, requires multiple indicators to agree |
+| **balanced** | General analysis, moderate risk tolerance | Standard thresholds, majority of indicators rules |
+| **aggressive** | Active traders, higher risk tolerance | Wide thresholds, single indicator can signal |
+
+**Quick decision guide:**
+
+- **New to stock analysis?** Start with `balanced`
+- **Prioritizing capital preservation?** Use `conservative`
+- **Comfortable with higher risk for potential gains?** Try `aggressive`
+
+**Compare all profiles at once:**
+```bash
+saham risk BBCA --all
+```
+
+---
+
 ## Limitations
 
 - **Daily data only** - No intraday or real-time streaming
