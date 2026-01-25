@@ -1,0 +1,25 @@
+# Default configuration for ai-saham
+# This file defines sensible defaults. Override via CLI flags or environment.
+
+# Market data settings
+market:
+  # Default data provider
+  provider: yahoo
+  # Market suffix for ticker symbols (IDX = .JK)
+  suffix: ".JK"
+  # Default number of days to fetch
+  default_days: 365
+
+# Persistence settings
+storage:
+  # SQLite database path (supports ~ for home directory)
+  db_path: "~/.ai-saham/data.db"
+
+# Analysis settings (future use)
+analysis:
+  # Default risk profile
+  risk_profile: balanced
+
+# AI settings (future use, disabled by default)
+ai:
+  enabled: false
