@@ -1,3 +1,14 @@
+from src.application.use_case.aggregate_indicators import (
+    AggregateIndicatorsRequest,
+    AggregateIndicatorsResponse,
+    AggregateIndicatorsUseCase,
+)
+from src.application.use_case.assess_risk import (
+    AssessAllProfilesResponse,
+    AssessRiskRequest,
+    AssessRiskResponse,
+    AssessRiskUseCase,
+)
 from src.application.use_case.compute_ema import (
     ComputeEMARequest,
     ComputeEMAResponse,
@@ -20,6 +31,13 @@ from src.application.use_case.fetch_market_data import (
 )
 
 __all__ = [
+    "AggregateIndicatorsRequest",
+    "AggregateIndicatorsResponse",
+    "AggregateIndicatorsUseCase",
+    "AssessAllProfilesResponse",
+    "AssessRiskRequest",
+    "AssessRiskResponse",
+    "AssessRiskUseCase",
     "ComputeEMARequest",
     "ComputeEMAResponse",
     "ComputeEMAUseCase",
