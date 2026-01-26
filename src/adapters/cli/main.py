@@ -47,6 +47,12 @@ from src.application.use_case.fetch_sentiment import (
     FetchSentimentRequest,
     FetchSentimentUseCase,
 )
+from src.application.rules.exceptions import (
+    RulesError,
+    RulesFileError,
+    RulesSchemaError,
+    RulesValidationError,
+)
 from src.domain.ports.ai_explainer import ExplainerAuthError
 from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 from src.domain.value_objects.risk_assessment import RiskAssessment
@@ -804,6 +810,14 @@ def risk(
         bool,
         typer.Option("--all", "-a", help="Show assessment for all profiles"),
     ] = False,
+    rules_file: Annotated[
+        Optional[Path],
+        typer.Option(
+            "--rules-file",
+            "-r",
+            help="Path to custom YAML rules file (overrides --profile)",
+        ),
+    ] = None,
     sma_period: Annotated[
         int,
         typer.Option("--sma", help="SMA period (default: 20)", min=1),
@@ -850,6 +864,11 @@ def risk(
     - MODERATE: Indicators suggest balanced/neutral conditions
     - LOW_RISK: Indicators suggest favorable risk conditions
 
+    Custom Rules:
+        Use --rules-file to provide a YAML file with custom rules.
+        This overrides the --profile option and uses your custom rules instead.
+        See config/custom_rules.yaml.example for the YAML schema.
+
     Requires cached data (run 'saham fetch TICKER' first).
 
     AI Explanation (optional):
@@ -861,12 +880,21 @@ def risk(
         saham risk BBCA
         saham risk BBRI --profile conservative
         saham risk TLKM --all
+        saham risk BBCA --rules-file config/my_rules.yaml
+        saham risk BBCA -r ~/.ai-saham/rules.yaml
         saham risk BBCA --explain
-        saham risk BBCA --explain --provider ollama
         saham risk BBCA --explain --provider ollama --model qwen2.5-coder:1.5b
     """
     # Resolve configuration
     resolved_db_path = db_path or DEFAULT_DB_PATH
+
+    # Warn if --rules-file used with --all
+    if rules_file and all_profiles:
+        typer.echo(
+            "Warning: --rules-file is incompatible with --all. "
+            "Using custom rules for single assessment.",
+            err=True,
+        )
 
     # Wire up dependencies
     repository = SQLiteMarketRepository(db_path=resolved_db_path)
@@ -881,9 +909,11 @@ def risk(
             sma_period=sma_period,
             ema_period=ema_period,
             rsi_period=rsi_period,
+            rules_file=rules_file,
         )
 
-        if all_profiles:
+        # Custom rules take precedence over --all
+        if all_profiles and not rules_file:
             # Show all profiles in table format
             response = use_case.execute_all_profiles(request)
 
@@ -984,6 +1014,15 @@ def risk(
 
         typer.echo("\nDISCLAIMER: Analysis only, not trading advice.")
 
+    except RulesFileError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+    except RulesSchemaError as e:
+        typer.echo(f"Error in rules file: {e}", err=True)
+        raise typer.Exit(1)
+    except RulesValidationError as e:
+        typer.echo(f"Invalid rules: {e}", err=True)
+        raise typer.Exit(1)
     except ValueError as e:
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1)
