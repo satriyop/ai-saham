@@ -1,0 +1,572 @@
+"""
+CLI commands for strategy management.
+
+Provides commands to init, validate, list, and create strategy packages.
+
+Layer: Adapter
+"""
+
+from pathlib import Path
+from typing import Annotated, Optional
+
+import typer
+
+from src.application.rules.exceptions import StrategyNotFoundError
+from src.application.services.bootstrap import create_indicator_registry
+from src.application.services.strategy_loader import (
+    StrategyLoader,
+    USER_STRATEGIES_DIR,
+)
+from src.application.use_case.create_strategy_from_intent import (
+    CreateStrategyFromIntentRequest,
+    CreateStrategyFromIntentUseCase,
+)
+from src.infrastructure.ai.strategy_translator import StrategyTranslatorAdapter
+
+# Create Typer sub-app for strategy commands
+strategy_app = typer.Typer(
+    name="strategy",
+    help="Manage strategy packages (init, validate, list)",
+    no_args_is_help=True,
+)
+
+# Template for new strategy.yaml
+STRATEGY_TEMPLATE = '''version: 1
+name: "{name}"
+description: "Strategy description goes here"
+
+# ====================
+# Indicator Definitions (optional)
+# ====================
+# Define custom indicator instances with specific periods.
+# Built-in defaults (always available): RSI(14), SMA(20), EMA(20)
+
+indicators:
+  fast_ema:
+    type: EMA
+    period: 9
+
+  slow_ema:
+    type: EMA
+    period: 21
+
+# REQUIRED: Outcome when no rules match
+default_outcome: MODERATE
+
+# Optional: Map outcomes to trade actions for backtesting
+signal_mapping:
+  LOW_RISK: ENTER_LONG
+  MODERATE: HOLD
+  HIGH_RISK: EXIT_LONG
+
+rules:
+  # EMA Crossover - bullish
+  - name: bullish_crossover
+    priority: 10
+    when:
+      left:
+        indicator: fast_ema
+      operator: ">"
+      right:
+        indicator: slow_ema
+    outcome: LOW_RISK
+    rationale: "Fast EMA above slow EMA indicates bullish momentum"
+
+  # EMA Crossover - bearish
+  - name: bearish_crossover
+    priority: 10
+    when:
+      left:
+        indicator: fast_ema
+      operator: "<"
+      right:
+        indicator: slow_ema
+    outcome: HIGH_RISK
+    rationale: "Fast EMA below slow EMA indicates bearish momentum"
+
+  # RSI oversold
+  - name: rsi_oversold
+    priority: 20
+    when:
+      indicator: RSI
+      operator: "<"
+      value: 30
+    outcome: LOW_RISK
+    rationale: "RSI below 30 indicates oversold conditions"
+
+  # RSI overbought
+  - name: rsi_overbought
+    priority: 20
+    when:
+      indicator: RSI
+      operator: ">"
+      value: 70
+    outcome: HIGH_RISK
+    rationale: "RSI above 70 indicates overbought conditions"
+'''
+
+README_TEMPLATE = '''# {name}
+
+{description}
+
+## Usage
+
+```bash
+# Run backtest with this strategy
+saham backtest BBCA --strategy {name}
+
+# Validate the strategy
+saham strategy validate {name}
+```
+
+## Rules
+
+This strategy uses the following rules:
+
+1. **EMA Crossover**: Compares 9-period EMA vs 21-period EMA
+2. **RSI Thresholds**: Standard overbought/oversold levels (70/30)
+
+## Customization
+
+Edit `strategy.yaml` to customize:
+- Indicator periods
+- Rule thresholds
+- Signal mapping
+'''
+
+
+@strategy_app.command("init")
+def init(
+    name: Annotated[str, typer.Argument(help="Strategy name (e.g., 'momentum')")],
+    directory: Annotated[
+        Optional[Path],
+        typer.Option(
+            "--dir", "-d",
+            help="Directory to create strategy in (default: ./strategies/NAME)",
+        ),
+    ] = None,
+    force: Annotated[
+        bool,
+        typer.Option("--force", "-f", help="Overwrite existing strategy"),
+    ] = False,
+) -> None:
+    """
+    Initialize a new strategy package.
+
+    Creates a strategy folder with:
+    - strategy.yaml (required)
+    - README.md (documentation)
+
+    Examples:
+        saham strategy init momentum
+        saham strategy init my_strategy --dir ~/.ai-saham/strategies/my_strategy
+    """
+    # Validate name
+    if "/" in name or "\\" in name:
+        typer.echo("Error: Strategy name cannot contain path separators.", err=True)
+        raise typer.Exit(1)
+
+    if name.endswith(".yaml"):
+        typer.echo("Error: Strategy name should not end with .yaml.", err=True)
+        raise typer.Exit(1)
+
+    # Determine target directory
+    if directory:
+        target_dir = directory
+    else:
+        target_dir = Path("strategies") / name
+
+    strategy_yaml = target_dir / "strategy.yaml"
+    readme_md = target_dir / "README.md"
+
+    # Check if already exists
+    if strategy_yaml.exists() and not force:
+        typer.echo(f"Error: Strategy already exists at {strategy_yaml}", err=True)
+        typer.echo("Use --force to overwrite.", err=True)
+        raise typer.Exit(1)
+
+    # Create directory
+    try:
+        target_dir.mkdir(parents=True, exist_ok=True)
+    except PermissionError:
+        typer.echo(f"Error: Permission denied creating {target_dir}", err=True)
+        raise typer.Exit(1)
+    except OSError as e:
+        typer.echo(f"Error creating directory: {e}", err=True)
+        raise typer.Exit(1)
+
+    # Write strategy.yaml
+    try:
+        strategy_yaml.write_text(
+            STRATEGY_TEMPLATE.format(name=name),
+            encoding="utf-8",
+        )
+    except OSError as e:
+        typer.echo(f"Error writing strategy.yaml: {e}", err=True)
+        raise typer.Exit(1)
+
+    # Write README.md
+    try:
+        readme_md.write_text(
+            README_TEMPLATE.format(name=name, description="Strategy description"),
+            encoding="utf-8",
+        )
+    except OSError as e:
+        typer.echo(f"Warning: Could not write README.md: {e}", err=True)
+
+    typer.echo(f"Created strategy '{name}' at {target_dir}")
+    typer.echo("")
+    typer.echo("Files created:")
+    typer.echo(f"  - {strategy_yaml}")
+    typer.echo(f"  - {readme_md}")
+    typer.echo("")
+    typer.echo("Next steps:")
+    typer.echo(f"  1. Edit {strategy_yaml} to customize your strategy")
+    typer.echo(f"  2. Run: saham strategy validate {name}")
+    typer.echo(f"  3. Run: saham backtest BBCA --strategy {name}")
+
+
+@strategy_app.command("validate")
+def validate(
+    strategy: Annotated[
+        str,
+        typer.Argument(help="Strategy name or path to strategy.yaml"),
+    ],
+    strict: Annotated[
+        bool,
+        typer.Option("--strict", "-s", help="Treat warnings as errors"),
+    ] = False,
+) -> None:
+    """
+    Validate a strategy file.
+
+    Checks:
+    - YAML syntax
+    - Required fields
+    - Indicator definitions
+    - Rule logic
+
+    Examples:
+        saham strategy validate momentum
+        saham strategy validate ./my_strategy/strategy.yaml
+        saham strategy validate momentum --strict
+    """
+    # Create registry for indicator validation
+    registry = create_indicator_registry()
+    loader = StrategyLoader(registry=registry)
+
+    # Resolve path
+    try:
+        path = loader.resolve(strategy)
+    except StrategyNotFoundError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+    # Validate
+    result = loader.validate(path, strict=strict)
+
+    # Display results
+    typer.echo(f"Validating: {path}")
+    typer.echo("")
+
+    if result.valid:
+        typer.echo("Status: VALID")
+        if result.strategy_name:
+            typer.echo(f"Name: {result.strategy_name}")
+
+        if result.warnings:
+            typer.echo("")
+            typer.echo("Warnings:")
+            for warning in result.warnings:
+                typer.echo(f"  - {warning}")
+    else:
+        typer.echo("Status: INVALID", err=True)
+        typer.echo("")
+        typer.echo("Errors:", err=True)
+        for error in result.errors:
+            typer.echo(f"  - {error}", err=True)
+        raise typer.Exit(1)
+
+
+@strategy_app.command("list")
+def list_strategies(
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", "-v", help="Show detailed information"),
+    ] = False,
+    include_invalid: Annotated[
+        bool,
+        typer.Option("--all", "-a", help="Include invalid strategies"),
+    ] = False,
+) -> None:
+    """
+    List available strategies.
+
+    Shows strategies from:
+    - ./strategies/ (local)
+    - ~/.ai-saham/strategies/ (user)
+
+    Examples:
+        saham strategy list
+        saham strategy list --verbose
+        saham strategy list --all
+    """
+    # Create registry for validation
+    registry = create_indicator_registry()
+    loader = StrategyLoader(registry=registry)
+
+    # List strategies
+    strategies = loader.list_available(include_invalid=include_invalid)
+
+    if not strategies:
+        typer.echo("No strategies found.")
+        typer.echo("")
+        typer.echo("Search locations:")
+        typer.echo("  - ./strategies/")
+        typer.echo(f"  - {USER_STRATEGIES_DIR}/")
+        typer.echo("")
+        typer.echo("Create a new strategy:")
+        typer.echo("  saham strategy init my_strategy")
+        return
+
+    # Display strategies
+    typer.echo(f"Found {len(strategies)} strateg{'y' if len(strategies) == 1 else 'ies'}:")
+    typer.echo("")
+
+    if verbose:
+        # Detailed view
+        for info in strategies:
+            status = "valid" if info.valid else "INVALID"
+            location_badge = f"[{info.location}]"
+
+            typer.echo(f"{info.name} {location_badge}")
+            typer.echo(f"  Path: {info.path}")
+            if info.display_name and info.display_name != info.name:
+                typer.echo(f"  Display Name: {info.display_name}")
+            if info.description:
+                typer.echo(f"  Description: {info.description}")
+            typer.echo(f"  Status: {status}")
+            typer.echo("")
+    else:
+        # Compact view
+        for info in strategies:
+            status_mark = "" if info.valid else " (invalid)"
+            location_mark = " [user]" if info.location == "user" else ""
+            display = info.display_name or info.name
+            typer.echo(f"  {info.name:<20} {display}{location_mark}{status_mark}")
+
+    typer.echo("")
+    typer.echo("Run 'saham strategy validate NAME' to check a strategy.")
+    typer.echo("Run 'saham backtest TICKER --strategy NAME' to use a strategy.")
+
+
+@strategy_app.command("create")
+def create(
+    intent: Annotated[
+        str,
+        typer.Argument(help="Natural language strategy description"),
+    ],
+    name: Annotated[
+        Optional[str],
+        typer.Option("--name", "-n", help="Strategy name (default: derived from intent)"),
+    ] = None,
+    provider: Annotated[
+        str,
+        typer.Option("--provider", "-p", help="AI provider (claude, openai, gemini, ollama, mock)"),
+    ] = "mock",
+    model: Annotated[
+        Optional[str],
+        typer.Option("--model", "-m", help="Model name (for Ollama)"),
+    ] = None,
+    directory: Annotated[
+        Optional[Path],
+        typer.Option("--dir", "-d", help="Directory to save strategy (default: ./strategies/NAME)"),
+    ] = None,
+    save: Annotated[
+        bool,
+        typer.Option("--save/--no-save", help="Save to file (default: save)"),
+    ] = True,
+) -> None:
+    """
+    Create a strategy from natural language description using AI.
+
+    Generates a complete strategy.yaml from your description and validates
+    that it's correct before saving.
+
+    Examples:
+        saham strategy create "RSI oversold strategy" --name oversold_rsi
+        saham strategy create "EMA crossover with 9 and 21 periods" -n ema_cross
+        saham strategy create "conservative momentum strategy" --provider claude
+        saham strategy create "MACD crossover" --no-save  # Preview only
+    """
+    # Derive strategy name from intent if not provided
+    if not name:
+        # Create a simple slug from intent
+        name = _slugify_intent(intent)
+
+    typer.echo(f"Creating strategy from intent...")
+    typer.echo("")
+
+    try:
+        # Initialize components
+        registry = create_indicator_registry()
+        translator = StrategyTranslatorAdapter(
+            provider=provider,
+            model=model,
+        )
+
+        # Execute use case
+        use_case = CreateStrategyFromIntentUseCase(
+            translator=translator,
+            registry=registry,
+        )
+
+        response = use_case.execute(
+            CreateStrategyFromIntentRequest(
+                intent=intent,
+                strategy_name=name,
+            )
+        )
+
+        # Handle response
+        if response.unsupported:
+            typer.echo("Error: This intent cannot be expressed as a strategy.", err=True)
+            typer.echo("", err=True)
+            typer.echo("Unsupported requests include:", err=True)
+            typer.echo("  - Specific stock recommendations", err=True)
+            typer.echo("  - Price predictions", err=True)
+            typer.echo("  - Guaranteed outcomes", err=True)
+            typer.echo("  - Non-strategy requests", err=True)
+            raise typer.Exit(1)
+
+        if not response.success:
+            typer.echo(f"Error: {response.error_message}", err=True)
+            _handle_error_hints(response.error_message or "", provider)
+            raise typer.Exit(1)
+
+        # Display generated strategy
+        typer.echo("Generated Strategy:")
+        typer.echo("─" * 50)
+        typer.echo(response.yaml_content)
+        typer.echo("─" * 50)
+        typer.echo("")
+
+        # Save if requested
+        if save:
+            # Determine target directory
+            if directory:
+                target_dir = directory
+            else:
+                target_dir = Path("strategies") / response.strategy_name
+
+            strategy_yaml = target_dir / "strategy.yaml"
+
+            # Check if already exists
+            if strategy_yaml.exists():
+                typer.echo(f"Warning: Strategy already exists at {strategy_yaml}", err=True)
+                if not typer.confirm("Overwrite?"):
+                    typer.echo("Aborted.")
+                    raise typer.Exit(0)
+
+            # Create directory and save
+            try:
+                target_dir.mkdir(parents=True, exist_ok=True)
+                strategy_yaml.write_text(response.yaml_content, encoding="utf-8")
+            except PermissionError:
+                typer.echo(f"Error: Permission denied creating {target_dir}", err=True)
+                raise typer.Exit(1)
+            except OSError as e:
+                typer.echo(f"Error saving strategy: {e}", err=True)
+                raise typer.Exit(1)
+
+            typer.echo(f"Strategy saved to: {strategy_yaml}")
+            typer.echo("")
+            typer.echo("Next steps:")
+            typer.echo(f"  1. Run: saham strategy validate {response.strategy_name}")
+            typer.echo(f"  2. Run: saham backtest BBCA --strategy {response.strategy_name}")
+        else:
+            typer.echo("Strategy not saved (--no-save specified).")
+            typer.echo("")
+            typer.echo("To save, run again without --no-save:")
+            typer.echo(f'  saham strategy create "{intent}" --name {name}')
+
+    except ValueError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+    except Exception as e:
+        error_str = str(e).lower()
+        if "api key" in error_str or "authentication" in error_str:
+            _handle_auth_error(provider)
+        elif "connection" in error_str or "timeout" in error_str:
+            _handle_connection_error(provider)
+        else:
+            typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+
+def _slugify_intent(intent: str) -> str:
+    """Convert intent to a valid strategy name slug.
+
+    Args:
+        intent: Natural language intent.
+
+    Returns:
+        A valid strategy name slug.
+    """
+    import re
+
+    # Take first few words
+    words = intent.lower().split()[:4]
+    slug = "_".join(words)
+
+    # Remove non-alphanumeric characters except underscore
+    slug = re.sub(r"[^a-z0-9_]", "", slug)
+
+    # Ensure it doesn't start with a number
+    if slug and slug[0].isdigit():
+        slug = "strategy_" + slug
+
+    # Fallback if empty
+    if not slug:
+        slug = "generated_strategy"
+
+    return slug
+
+
+def _handle_error_hints(error_message: str, provider: str) -> None:
+    """Display helpful hints based on error message."""
+    error_lower = error_message.lower()
+
+    if "api key" in error_lower or "authentication" in error_lower:
+        _handle_auth_error(provider)
+    elif "timeout" in error_lower:
+        _handle_connection_error(provider)
+    elif "invalid yaml" in error_lower or "schema" in error_lower:
+        typer.echo("", err=True)
+        typer.echo("The AI generated invalid YAML. Try:", err=True)
+        typer.echo("  - Rephrasing your intent more clearly", err=True)
+        typer.echo("  - Using simpler language", err=True)
+        typer.echo("  - Using a different AI provider", err=True)
+
+
+def _handle_auth_error(provider: str) -> None:
+    """Display helpful message for authentication errors."""
+    env_vars = {
+        "claude": "ANTHROPIC_API_KEY",
+        "openai": "OPENAI_API_KEY",
+        "gemini": "GOOGLE_API_KEY",
+    }
+    typer.echo("", err=True)
+    if provider in env_vars:
+        typer.echo(f"Set {env_vars[provider]} environment variable.", err=True)
+    else:
+        typer.echo("Check your API configuration.", err=True)
+
+
+def _handle_connection_error(provider: str) -> None:
+    """Display helpful message for connection errors."""
+    typer.echo("", err=True)
+    if provider == "ollama":
+        typer.echo("Is Ollama running? Start with: ollama serve", err=True)
+    else:
+        typer.echo("Check your internet connection.", err=True)

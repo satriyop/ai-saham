@@ -61,7 +61,9 @@ from src.application.rules.exceptions import (
     RulesFileError,
     RulesSchemaError,
     RulesValidationError,
+    StrategyNotFoundError,
 )
+from src.application.services.strategy_loader import StrategyLoader
 from src.domain.ports.ai_explainer import ExplainerAuthError
 from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 from src.domain.value_objects.risk_assessment import RiskAssessment
@@ -83,6 +85,10 @@ app = typer.Typer(
     help="Local-first stock analysis CLI for Indonesia Stock Exchange (IDX)",
     no_args_is_help=True,
 )
+
+# Register strategy subcommands
+from src.adapters.cli.strategy_commands import strategy_app
+app.add_typer(strategy_app, name="strategy")
 
 # Default configuration
 DEFAULT_DB_PATH = Path.home() / ".ai-saham" / "data.db"
@@ -680,6 +686,118 @@ def rsi(
 
 
 @app.command()
+def compute(
+    indicator: Annotated[str, typer.Argument(help="Indicator name (SMA, RSI, ATR, or custom formula)")],
+    ticker: Annotated[str, typer.Argument(help="Stock ticker symbol (e.g., BBCA)")],
+    period: Annotated[
+        int,
+        typer.Option("--period", "-p", help="Period (ignored for formulas)", min=1),
+    ] = 14,
+    days: Annotated[
+        int,
+        typer.Option("--days", "-d", help="Days of data to fetch", min=1),
+    ] = DEFAULT_DAYS,
+    tail: Annotated[
+        int,
+        typer.Option("--tail", "-t", help="Show last N values", min=1),
+    ] = 30,
+    db_path: Annotated[
+        Optional[Path],
+        typer.Option("--db", help="Path to SQLite database (default: ~/.ai-saham/data.db)"),
+    ] = None,
+) -> None:
+    """
+    Compute any indicator values for a stock.
+
+    Works with built-in indicators (SMA, EMA, RSI), plugins (ATR),
+    and custom formulas created via create-indicator.
+
+    Examples:
+        saham compute RSI BBCA
+        saham compute SMA BBCA --period 50
+        saham compute SMOOTH_RSI BBCA --tail 10
+        saham compute ATR BBCA --days 180 --tail 50
+    """
+    # Create registry with plugins and formulas loaded
+    registry = create_indicator_registry()
+    indicator_upper = indicator.upper()
+
+    if not registry.is_registered(indicator_upper):
+        typer.echo(f"Unknown indicator: {indicator}", err=True)
+        typer.echo("\nAvailable indicators:")
+        for name in sorted(registry.list_indicators()):
+            typer.echo(f"  {name}")
+        raise typer.Exit(1)
+
+    # Resolve configuration
+    resolved_db_path = db_path or DEFAULT_DB_PATH
+
+    # Wire up dependencies
+    repository = SQLiteMarketRepository(db_path=resolved_db_path)
+    candles = repository.get_candles(ticker.upper())
+
+    if not candles:
+        typer.echo(f"No data for {ticker.upper()}. Run: saham fetch {ticker.upper()}", err=True)
+        raise typer.Exit(1)
+
+    typer.echo(f"Computing {indicator_upper} for {ticker.upper()}...")
+
+    try:
+        # Limit candles to requested days (most recent)
+        if len(candles) > days:
+            candles = candles[-days:]
+
+        values = registry.compute(indicator_upper, candles, period)
+
+        if not values:
+            typer.echo(f"Insufficient data to compute {indicator_upper}", err=True)
+            raise typer.Exit(1)
+
+        # Limit to tail
+        display_values = values[-tail:] if len(values) > tail else values
+
+        # Display header
+        typer.echo(f"\nTicker: {ticker.upper()}")
+        typer.echo(f"Indicator: {indicator_upper}")
+
+        # Show period only for non-formula indicators
+        default_period = registry.get_default_period(indicator_upper)
+        if default_period > 0:
+            typer.echo(f"Period: {period}")
+
+        typer.echo(f"Values: {len(values)} (showing last {len(display_values)})")
+
+        # Display table
+        typer.echo(f"\n{'Date':<12} {indicator_upper:>14}")
+        typer.echo("-" * 27)
+        for dt, val in display_values:
+            typer.echo(f"{dt!s:<12} {val:>14.2f}")
+
+        # Summary
+        all_vals = [v for _, v in values]
+        typer.echo(f"\nSummary:")
+        typer.echo(f"  Latest:  {all_vals[-1]:>14.2f}")
+        typer.echo(f"  Highest: {max(all_vals):>14.2f}")
+        typer.echo(f"  Lowest:  {min(all_vals):>14.2f}")
+
+    except ValueError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+    except FileNotFoundError:
+        typer.echo(f"Error: Database not found at {resolved_db_path}", err=True)
+        typer.echo(f"Tip: Run 'saham fetch {ticker.upper()}' first to download data.", err=True)
+        raise typer.Exit(1)
+    except Exception as e:
+        error_msg = str(e).lower()
+        if "no such table" in error_msg or "no data" in error_msg:
+            typer.echo(f"Error: No cached data found for {ticker.upper()}", err=True)
+            typer.echo(f"Tip: Run 'saham fetch {ticker.upper()}' first to download data.", err=True)
+        else:
+            typer.echo(f"Failed to compute indicator: {e}", err=True)
+        raise typer.Exit(1)
+
+
+@app.command()
 def indicators(
     ticker: Annotated[str, typer.Argument(help="Stock ticker symbol (e.g., BBCA)")],
     sma_period: Annotated[
@@ -913,7 +1031,9 @@ def risk(
 
     # Wire up dependencies
     repository = SQLiteMarketRepository(db_path=resolved_db_path)
-    use_case = AssessRiskUseCase(repository=repository)
+    # Create registry with plugins and formulas loaded for custom rules support
+    registry = create_indicator_registry()
+    use_case = AssessRiskUseCase(repository=repository, registry=registry)
 
     typer.echo(f"Assessing risk for {ticker.upper()}...")
 
@@ -1058,14 +1178,22 @@ def risk(
 @app.command()
 def backtest(
     ticker: Annotated[str, typer.Argument(help="Stock ticker symbol (e.g., BBCA)")],
+    strategy: Annotated[
+        Optional[str],
+        typer.Option(
+            "--strategy",
+            "-S",
+            help="Strategy name or path (e.g., 'momentum' or './strategies/momentum/strategy.yaml')",
+        ),
+    ] = None,
     rules_file: Annotated[
-        Path,
+        Optional[Path],
         typer.Option(
             "--rules-file",
             "-r",
-            help="Path to YAML rules file (required)",
+            help="Path to YAML rules file (backward-compatible alias for --strategy)",
         ),
-    ],
+    ] = None,
     start: Annotated[
         Optional[str],
         typer.Option(
@@ -1107,9 +1235,16 @@ def backtest(
     """
     Backtest a strategy against historical data.
 
-    Runs a deterministic backtest simulation using rules from a YAML file.
-    Replays historical candles chronologically and applies rules per candle
-    to generate hypothetical entry/exit signals.
+    Runs a deterministic backtest simulation using rules from a YAML file
+    or strategy package. Replays historical candles chronologically and
+    applies rules per candle to generate hypothetical entry/exit signals.
+
+    Strategy Resolution:
+        --strategy can be a strategy name (e.g., 'momentum') or an explicit path.
+        Strategy names are searched in:
+        1. ./NAME/strategy.yaml
+        2. ./strategies/NAME/strategy.yaml
+        3. ~/.ai-saham/strategies/NAME/strategy.yaml
 
     Requires cached data (run 'saham fetch TICKER' first).
 
@@ -1119,11 +1254,22 @@ def backtest(
         HIGH_RISK -> EXIT_LONG (sell)
 
     Examples:
+        saham backtest BBCA --strategy momentum
+        saham backtest BBCA -S ./strategies/momentum/strategy.yaml
         saham backtest BBCA --rules-file config/custom_rules.yaml.example
-        saham backtest BBRI -r rules.yaml --start 2024-01-01
-        saham backtest TLKM -r rules.yaml --capital 50000000 --verbose
+        saham backtest BBRI -S momentum --start 2024-01-01
+        saham backtest TLKM -S momentum --capital 50000000 --verbose
     """
     from datetime import datetime
+
+    # Validate that either --strategy or --rules-file is provided
+    if not strategy and not rules_file:
+        typer.echo("Error: Either --strategy or --rules-file is required.", err=True)
+        typer.echo("")
+        typer.echo("Examples:", err=True)
+        typer.echo("  saham backtest BBCA --strategy momentum", err=True)
+        typer.echo("  saham backtest BBCA --rules-file config/rules.yaml", err=True)
+        raise typer.Exit(1)
 
     # Resolve configuration
     resolved_db_path = db_path or DEFAULT_DB_PATH
@@ -1140,17 +1286,41 @@ def backtest(
         typer.echo("Error: Invalid date format. Use YYYY-MM-DD.", err=True)
         raise typer.Exit(1)
 
-    typer.echo(f"Backtesting {ticker.upper()} with {rules_file}...")
+    # Resolve strategy path
+    # --strategy takes precedence over --rules-file
+    resolved_rules_path: Path
+    strategy_display: str
+
+    if strategy:
+        # Use StrategyLoader to resolve strategy name or path
+        registry = create_indicator_registry()
+        loader = StrategyLoader(registry=registry)
+        try:
+            resolved_rules_path = loader.resolve(strategy)
+            strategy_display = strategy
+        except StrategyNotFoundError as e:
+            typer.echo(f"Error: {e}", err=True)
+            raise typer.Exit(1)
+    else:
+        # Use rules_file directly (backward compatible)
+        resolved_rules_path = rules_file  # type: ignore
+        strategy_display = str(rules_file)
+
+    typer.echo(f"Backtesting {ticker.upper()} with {strategy_display}...")
 
     try:
         # Wire up dependencies
         repository = SQLiteMarketRepository(db_path=resolved_db_path)
-        use_case = BacktestUseCase(repository=repository)
+        # Create registry with plugins and formulas loaded for custom indicator support
+        # Note: registry may already be created above for strategy resolution
+        if not strategy:
+            registry = create_indicator_registry()
+        use_case = BacktestUseCase(repository=repository, registry=registry)
 
         # Execute use case
         request = BacktestRequest(
             ticker=ticker,
-            rules_file=rules_file,
+            rules_file=resolved_rules_path,
             start_date=start_date,
             end_date=end_date,
             initial_capital=Decimal(str(capital)),
@@ -1221,6 +1391,9 @@ def backtest(
 
         typer.echo("\nDISCLAIMER: Historical simulation only, not trading advice.")
 
+    except StrategyNotFoundError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
     except RulesFileError as e:
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1)
