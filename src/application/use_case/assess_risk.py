@@ -132,11 +132,13 @@ class AssessRiskUseCase:
             from src.application.rules.interpreter import YamlRuleInterpreter
             from src.infrastructure.config.yaml_loader import YamlConfigLoader
 
-            rule_set = YamlConfigLoader.load(request.rules_file)
+            # Load rules with registry for indicator validation
+            rule_set = YamlConfigLoader.load(request.rules_file, registry=self._registry)
             interpreter = YamlRuleInterpreter(rule_set)
 
             # Get required indicators from the rule set
-            required_indicators = interpreter.get_required_indicators()
+            # Pass registry so it can resolve custom formulas (from ~/.ai-saham/formulas.yaml)
+            required_indicators = interpreter.get_required_indicators(registry=self._registry)
 
             # Build snapshot with all required indicators
             latest_snapshot = self._build_snapshot_for_rules(
@@ -214,7 +216,7 @@ class AssessRiskUseCase:
             raise ValueError("Ticker cannot be empty")
 
         # Fetch candles once (enough for all indicators)
-        candles = self._repository.get_candles(ticker, days=365)
+        candles = self._repository.get_candles(ticker)
         if not candles:
             raise ValueError(
                 f"Insufficient data for {ticker}. "

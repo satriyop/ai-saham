@@ -128,8 +128,8 @@ class BacktestUseCase:
         if not ticker:
             raise ValueError("Ticker cannot be empty")
 
-        # 1. Load rules and get signal mapping
-        rule_set = YamlConfigLoader.load(request.rules_file)
+        # 1. Load rules and get signal mapping (pass registry for indicator validation)
+        rule_set = YamlConfigLoader.load(request.rules_file, registry=self._registry)
         interpreter = YamlRuleInterpreter(rule_set)
         signal_mapping = rule_set.signal_mapping or SignalMapping()
 
@@ -147,7 +147,8 @@ class BacktestUseCase:
             )
 
         # 3. Get required indicators
-        required_indicators = interpreter.get_required_indicators()
+        # Pass registry so it can resolve custom formulas (from ~/.ai-saham/formulas.yaml)
+        required_indicators = interpreter.get_required_indicators(registry=self._registry)
 
         # 4. Compute all indicator series
         indicator_series = self._compute_all_indicators(candles, required_indicators)

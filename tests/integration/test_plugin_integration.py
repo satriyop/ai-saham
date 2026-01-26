@@ -162,8 +162,12 @@ class TestGracefulDegradation:
 
     def test_registry_works_without_plugins(self):
         """Registry should work with only built-in indicators."""
-        # Use non-existent plugin directory
-        registry = create_indicator_registry("/nonexistent/plugins")
+        # Use non-existent plugin directory and disable formula loading
+        # to test pure plugin graceful degradation
+        registry = create_indicator_registry(
+            plugin_dir="/nonexistent/plugins",
+            load_formulas=False,
+        )
 
         # Built-ins should work
         assert registry.is_registered("SMA")

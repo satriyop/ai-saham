@@ -9,7 +9,7 @@ Layer: Infrastructure
 
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import yaml
 
@@ -33,6 +33,9 @@ from src.application.rules.schema import (
 )
 from src.domain.value_objects.trade_action import TradeAction
 
+if TYPE_CHECKING:
+    from src.application.services.indicator_registry import IndicatorRegistry
+
 
 # Default locations to search for rules files
 DEFAULT_LOCATIONS = [
@@ -52,11 +55,18 @@ class YamlConfigLoader:
     """
 
     @classmethod
-    def load(cls, path: Path | str | None = None) -> RuleSet:
+    def load(
+        cls,
+        path: Path | str | None = None,
+        registry: "IndicatorRegistry | None" = None,
+    ) -> RuleSet:
         """Load a YAML rules file and return a validated RuleSet.
 
         Args:
             path: Path to the YAML file. If None, searches default locations.
+            registry: Optional IndicatorRegistry for validating indicator references.
+                     If provided, indicators registered in the registry (formulas,
+                     plugins) are also considered valid references.
 
         Returns:
             Validated RuleSet ready for interpretation
@@ -69,7 +79,34 @@ class YamlConfigLoader:
         resolved_path = cls._resolve_path(path)
         raw_content = cls._read_file(resolved_path)
         parsed_yaml = cls._parse_yaml(raw_content, resolved_path)
-        return cls._build_rule_set(parsed_yaml, resolved_path)
+        return cls._build_rule_set(parsed_yaml, resolved_path, registry=registry)
+
+    @classmethod
+    def load_from_string(
+        cls,
+        content: str,
+        registry: "IndicatorRegistry | None" = None,
+        source_name: str = "<generated>",
+    ) -> RuleSet:
+        """Load a RuleSet from YAML string content.
+
+        Useful for validating AI-generated strategy YAML before saving.
+
+        Args:
+            content: YAML string content to parse.
+            registry: Optional IndicatorRegistry for validating indicator references.
+            source_name: Source identifier for error messages (default: "<generated>").
+
+        Returns:
+            Validated RuleSet ready for interpretation
+
+        Raises:
+            RulesSchemaError: If YAML syntax is invalid or structure is wrong
+            RulesValidationError: If rule content is invalid
+        """
+        source_path = Path(source_name)
+        parsed_yaml = cls._parse_yaml(content, source_path)
+        return cls._build_rule_set(parsed_yaml, source_path, registry=registry)
 
     @classmethod
     def _resolve_path(cls, path: Path | str | None) -> Path:
@@ -147,12 +184,18 @@ class YamlConfigLoader:
             raise RulesSchemaError(f"Invalid YAML syntax in {path}: {e}")
 
     @classmethod
-    def _build_rule_set(cls, data: dict[str, Any], path: Path) -> RuleSet:
+    def _build_rule_set(
+        cls,
+        data: dict[str, Any],
+        path: Path,
+        registry: "IndicatorRegistry | None" = None,
+    ) -> RuleSet:
         """Build a RuleSet from parsed YAML data.
 
         Args:
             data: Parsed YAML dictionary
             path: Path for error messages
+            registry: Optional IndicatorRegistry for validating indicator references
 
         Returns:
             Validated RuleSet
@@ -218,7 +261,7 @@ class YamlConfigLoader:
             raise RulesValidationError(str(e))
 
         # Validate that all referenced indicators are defined
-        cls._validate_indicator_references(rule_set)
+        cls._validate_indicator_references(rule_set, registry=registry)
 
         return rule_set
 
@@ -410,23 +453,44 @@ class YamlConfigLoader:
             raise RulesValidationError(str(e))
 
     @classmethod
-    def _validate_indicator_references(cls, rule_set: RuleSet) -> None:
+    def _validate_indicator_references(
+        cls,
+        rule_set: RuleSet,
+        registry: "IndicatorRegistry | None" = None,
+    ) -> None:
         """Validate that all indicator references in rules are defined.
 
         Args:
             rule_set: The rule set to validate
+            registry: Optional IndicatorRegistry for checking registered
+                     formulas and plugins
 
         Raises:
             RulesValidationError: If any indicator reference is undefined
         """
         referenced = rule_set.get_all_referenced_indicators()
         for ref_name in referenced:
-            if not rule_set.is_indicator_defined(ref_name):
-                raise RulesValidationError(
-                    f"Rule references undefined indicator '{ref_name}'. "
-                    f"Define it in the 'indicators' section or use a built-in "
-                    f"({', '.join(BUILTIN_INDICATORS.keys())})."
-                )
+            # Check if defined in rules file or is a built-in
+            if rule_set.is_indicator_defined(ref_name):
+                continue
+
+            # Check if registered in the registry (formula or plugin)
+            if registry is not None and registry.is_registered(ref_name.upper()):
+                continue
+
+            # Not found anywhere - raise error
+            sources = list(BUILTIN_INDICATORS.keys())
+            if registry is not None:
+                # Add registry indicators to the error message
+                sources.extend(sorted(registry.list_indicators()))
+                sources = sorted(set(sources))
+
+            raise RulesValidationError(
+                f"Rule references undefined indicator '{ref_name}'. "
+                f"Define it in the 'indicators' section, use a built-in, "
+                f"or register a formula. Available: {', '.join(sources[:10])}"
+                + ("..." if len(sources) > 10 else "")
+            )
 
     @classmethod
     def _build_rule(cls, data: dict[str, Any], index: int) -> Rule:

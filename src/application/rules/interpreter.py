@@ -10,6 +10,8 @@ Layer: Application
 from decimal import Decimal
 from typing import Callable, Union
 
+from typing import TYPE_CHECKING
+
 from src.application.rules.schema import (
     BUILTIN_INDICATORS,
     Condition,
@@ -24,6 +26,9 @@ from src.application.rules.schema import (
 )
 from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 from src.domain.value_objects.risk_signal import RiskLevel
+
+if TYPE_CHECKING:
+    from src.application.services.indicator_registry import IndicatorRegistry
 
 
 class YamlRuleInterpreter:
@@ -251,16 +256,26 @@ class YamlRuleInterpreter:
 
     def get_required_indicators(
         self,
+        registry: "IndicatorRegistry | None" = None,
     ) -> dict[str, tuple[Union[IndicatorType, str], int]]:
         """Get all indicators required to evaluate this rule set.
 
         Returns a dictionary mapping indicator names to (type, period) tuples.
-        Includes both custom definitions and built-in defaults.
+        Includes custom definitions, built-in defaults, and registered formulas/plugins.
+
+        Args:
+            registry: Optional IndicatorRegistry for looking up custom formulas
+                     and plugins. If provided, unknown indicators are checked
+                     against the registry.
 
         Returns:
             Dict mapping indicator name to (IndicatorType or str, period).
             Built-in indicators return IndicatorType enum.
-            Plugin indicators return uppercase string (e.g., "ATR").
+            Plugin/formula indicators return uppercase string with period=0 for formulas.
+
+        Raises:
+            ValueError: If an indicator is not defined, not built-in, and not
+                       registered (when registry is provided).
         """
         required: dict[str, tuple[Union[IndicatorType, str], int]] = {}
 
@@ -268,13 +283,32 @@ class YamlRuleInterpreter:
         referenced = self._rule_set.get_all_referenced_indicators()
 
         for name in referenced:
-            # Check if it's a custom definition
+            name_upper = name.upper()
+
+            # Check if it's a custom definition in the rules file
             definition = self._rule_set.get_indicator_definition(name)
             if definition is not None:
-                required[name] = (definition.indicator_type, definition.period)
-            elif name in BUILTIN_INDICATORS:
+                if definition.is_formula():
+                    # Inline formula defined in rules.yaml - use the name, period=0
+                    required[name_upper] = (name_upper, 0)
+                else:
+                    type_name = definition.get_type_name()
+                    required[name_upper] = (type_name, definition.period)
+            elif name_upper in BUILTIN_INDICATORS:
                 # Use built-in default
-                required[name] = BUILTIN_INDICATORS[name]
-            # Note: undefined indicators would have been caught during loading
+                required[name_upper] = BUILTIN_INDICATORS[name_upper]
+            elif registry is not None and registry.is_registered(name_upper):
+                # Registered formula or plugin - use name, registry handles dispatch
+                # Period=0 for formulas (embedded), registry.get_default_period() for plugins
+                default_period = registry.get_default_period(name_upper)
+                required[name_upper] = (name_upper, default_period)
+            elif registry is not None:
+                # Registry provided but indicator not found - raise error
+                raise ValueError(
+                    f"Unknown indicator '{name}' in rules. "
+                    f"Not defined in rules file, not a built-in, and not registered. "
+                    f"Available: {', '.join(sorted(registry.list_indicators()))}"
+                )
+            # If no registry provided, silently skip (backward compatibility)
 
         return required
