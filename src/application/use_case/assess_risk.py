@@ -9,6 +9,7 @@ Depends on: Domain rules, Domain value objects, AggregateIndicatorsUseCase
 """
 
 from dataclasses import dataclass
+from pathlib import Path
 
 from src.application.use_case.aggregate_indicators import (
     AggregateIndicatorsRequest,
@@ -29,6 +30,7 @@ class AssessRiskRequest:
     sma_period: int = 20
     ema_period: int = 20
     rsi_period: int = 14
+    rules_file: Path | str | None = None  # Custom YAML rules file
 
 
 @dataclass
@@ -95,21 +97,23 @@ class AssessRiskUseCase:
 
     def execute(self, request: AssessRiskRequest) -> AssessRiskResponse:
         """
-        Execute risk assessment for a single profile.
+        Execute risk assessment for a single profile or custom rules.
+
+        If rules_file is provided, uses custom YAML rules instead of built-in profiles.
 
         Args:
-            request: Contains ticker, profile, and indicator periods
+            request: Contains ticker, profile, indicator periods, and optional rules_file
 
         Returns:
             AssessRiskResponse with the risk assessment
 
         Raises:
             ValueError: If ticker invalid, profile invalid, or insufficient data
+            RulesFileError: If rules file not found (when rules_file specified)
+            RulesSchemaError: If rules file has invalid syntax
+            RulesValidationError: If rules file has invalid content
         """
-        # Validate profile first (fail fast)
-        profile = RiskProfile.from_string(request.profile)
-
-        # Get aggregated indicators
+        # Get aggregated indicators first (needed for both paths)
         agg_use_case = AggregateIndicatorsUseCase(self._repository)
         agg_response = agg_use_case.execute(
             AggregateIndicatorsRequest(
@@ -130,8 +134,20 @@ class AssessRiskUseCase:
         # Extract latest snapshot
         latest_snapshot = agg_response.snapshots[-1]
 
-        # Evaluate using rule engine
-        assessment = self._rule_engine.evaluate(latest_snapshot, profile)
+        # Evaluate using custom rules or built-in profile
+        if request.rules_file is not None:
+            # Load and evaluate custom rules
+            from src.application.rules.interpreter import YamlRuleInterpreter
+            from src.infrastructure.config.yaml_loader import YamlConfigLoader
+
+            rule_set = YamlConfigLoader.load(request.rules_file)
+            interpreter = YamlRuleInterpreter(rule_set)
+            self._rule_engine.register_custom_rules(interpreter)
+            assessment = self._rule_engine.evaluate_custom(latest_snapshot)
+        else:
+            # Use built-in profile
+            profile = RiskProfile.from_string(request.profile)
+            assessment = self._rule_engine.evaluate(latest_snapshot, profile)
 
         return AssessRiskResponse(
             ticker=agg_response.ticker,
