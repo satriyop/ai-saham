@@ -12,7 +12,6 @@
 This file instructs **Claude Code** how to behave as a disciplined senior engineer while developing this project. Claude should treat this repository as a **real financial software product**, not a prototype or demo.
 
 🚨 Important: What NOT to do
-
 Do not:
 - merge domain + infrastructure
 - put AI logic in rules
@@ -25,13 +24,14 @@ Do not:
 
 We are building a **local-first, developer first, production-grade composable engine analyser with CLI application for stock analysis** with the following characteristics:
 * “Composable stock analysis engine for developers, traders, and fintech teams — starting with Indonesia. Terraform for market analysis.
+* Make strategies first-class, shareable artifacts.
 * Default: deterministic, rule-based technical analysis
 * Optional: AI-enhanced analysis (OFF by default)
 * Initial market: **Indonesia Stock Exchange (IDX)**
 * Future-ready: global markets, bots, web, mobile
 * Designed for maintainability, auditability, and extensibility
 
-This is **composable analysis engine**, not an automated trading bot.
+This is **composable analysis engine & strategy shareable artifacts**, not an automated trading bot.
 
 ---
 
