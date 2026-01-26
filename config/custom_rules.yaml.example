@@ -10,7 +10,40 @@
 
 version: 1
 name: "my_custom_rules"
-description: "Example custom rules for risk assessment"
+description: "Example custom rules demonstrating parameterized indicators"
+
+# ====================
+# Indicator Definitions (NEW)
+# ====================
+# Define custom indicator instances with specific periods.
+# These can be referenced by name in rule conditions.
+#
+# Built-in defaults (always available without definition):
+#   RSI -> RSI(14)
+#   SMA -> SMA(20)
+#   EMA -> EMA(20)
+#
+# Supported types: RSI, SMA, EMA
+
+indicators:
+  # Multiple EMAs for crossover strategies
+  fast_ema:
+    type: EMA
+    period: 9
+
+  slow_ema:
+    type: EMA
+    period: 21
+
+  # Short-term RSI for faster signals
+  rsi_short:
+    type: RSI
+    period: 7
+
+  # Longer-term SMA for trend confirmation
+  sma_50:
+    type: SMA
+    period: 50
 
 # REQUIRED: Outcome when no rules match
 # Must be one of: HIGH_RISK, MODERATE, LOW_RISK
@@ -18,81 +51,98 @@ default_outcome: MODERATE
 
 rules:
   # ====================
-  # Type A: Indicator vs Value
+  # Parameterized Indicator Examples
   # ====================
-  # Compare an indicator to a literal number value.
-  # Supported indicators: RSI, SMA, EMA
-  # Supported operators: <, <=, >, >=, ==, !=
 
-  - name: oversold_rsi
-    priority: 10  # Lower priority = evaluated first (default: 100)
+  # EMA Crossover using custom indicators
+  - name: bullish_ema_crossover
+    priority: 10
     when:
-      indicator: RSI
+      left:
+        indicator: fast_ema    # Uses EMA(9) defined above
+      operator: ">"
+      right:
+        indicator: slow_ema    # Uses EMA(21) defined above
+    outcome: LOW_RISK
+    rationale: "EMA(9) above EMA(21) indicates bullish momentum"
+
+  - name: bearish_ema_crossover
+    priority: 10
+    when:
+      left:
+        indicator: fast_ema
+      operator: "<"
+      right:
+        indicator: slow_ema
+    outcome: HIGH_RISK
+    rationale: "EMA(9) below EMA(21) indicates bearish momentum"
+
+  # Short RSI (period 7) - more sensitive to price changes
+  - name: short_rsi_oversold
+    priority: 15
+    when:
+      indicator: rsi_short    # Uses RSI(7) defined above
+      operator: "<"
+      value: 25
+    outcome: LOW_RISK
+    rationale: "RSI(7) below 25 suggests oversold - potential reversal"
+
+  - name: short_rsi_overbought
+    priority: 15
+    when:
+      indicator: rsi_short
+      operator: ">"
+      value: 75
+    outcome: HIGH_RISK
+    rationale: "RSI(7) above 75 suggests overbought - potential reversal"
+
+  # ====================
+  # Built-in Indicator Examples
+  # ====================
+  # You can still use built-in indicators (RSI, SMA, EMA) directly.
+  # They use default periods: RSI(14), SMA(20), EMA(20)
+
+  - name: standard_rsi_oversold
+    priority: 20
+    when:
+      indicator: RSI          # Uses built-in RSI(14)
       operator: "<"
       value: 30
     outcome: LOW_RISK
-    rationale: "RSI below 30 indicates oversold conditions - potential buying opportunity"
+    rationale: "RSI(14) below 30 indicates oversold conditions"
 
-  - name: overbought_rsi
+  - name: standard_rsi_overbought
     priority: 20
     when:
       indicator: RSI
       operator: ">="
       value: 70
     outcome: HIGH_RISK
-    rationale: "RSI at or above 70 indicates overbought conditions - elevated risk"
+    rationale: "RSI(14) at or above 70 indicates overbought conditions"
 
-  # ====================
-  # Type B: Indicator vs Indicator
-  # ====================
-  # Compare two indicators against each other.
-  # Useful for trend detection (e.g., EMA crossing SMA).
-
-  - name: bullish_crossover
+  # Compare built-in indicators
+  - name: standard_trend_up
     priority: 30
     when:
       left:
-        indicator: EMA
+        indicator: EMA        # Uses built-in EMA(20)
       operator: ">"
       right:
-        indicator: SMA
+        indicator: SMA        # Uses built-in SMA(20)
     outcome: LOW_RISK
-    rationale: "EMA above SMA suggests bullish trend"
+    rationale: "EMA(20) above SMA(20) suggests bullish trend"
 
-  - name: bearish_crossover
-    priority: 40
+  # Mix custom and built-in indicators
+  - name: trend_confirmation
+    priority: 25
     when:
       left:
-        indicator: EMA
-      operator: "<"
+        indicator: EMA        # Built-in EMA(20)
+      operator: ">"
       right:
-        indicator: SMA
-    outcome: HIGH_RISK
-    rationale: "EMA below SMA suggests bearish trend"
-
-  # ====================
-  # Additional Examples
-  # ====================
-
-  # Using not-equal operator
-  - name: neutral_zone_exit
-    priority: 50
-    when:
-      indicator: RSI
-      operator: "!="
-      value: 50
-    outcome: MODERATE
-    rationale: "RSI moved away from neutral 50 - watch for trend development"
-
-  # Using less-than-or-equal
-  - name: extreme_oversold
-    priority: 5  # Highest priority (evaluated first)
-    when:
-      indicator: RSI
-      operator: "<="
-      value: 20
+        indicator: sma_50     # Custom SMA(50) defined above
     outcome: LOW_RISK
-    rationale: "RSI at or below 20 is extremely oversold - strong potential reversal"
+    rationale: "EMA(20) above SMA(50) confirms uptrend"
 
 # ====================
 # Schema Reference
@@ -102,6 +152,12 @@ rules:
 # name: string (unique identifier for this rule set)
 # description: string (optional)
 # default_outcome: HIGH_RISK | MODERATE | LOW_RISK (required)
+#
+# indicators: mapping (optional)
+#   <name>:
+#     type: RSI | SMA | EMA (required)
+#     period: int >= 1 (required)
+#     override: bool (optional, default=false - allows shadowing built-in names)
 #
 # rules: list of rules, each with:
 #   - name: string (unique within file)
@@ -114,17 +170,26 @@ rules:
 #
 # 1. Indicator vs Value:
 #    when:
-#      indicator: RSI | SMA | EMA
+#      indicator: <indicator_name>    # Custom or built-in (RSI, SMA, EMA)
 #      operator: "<" | "<=" | ">" | ">=" | "==" | "!="
 #      value: number
 #
 # 2. Indicator vs Indicator:
 #    when:
 #      left:
-#        indicator: RSI | SMA | EMA
+#        indicator: <indicator_name>
 #      operator: "<" | "<=" | ">" | ">=" | "==" | "!="
 #      right:
-#        indicator: RSI | SMA | EMA
+#        indicator: <indicator_name>
+#
+# ====================
+# Validation Rules
+# ====================
+#
+# - Indicator names must be unique (no duplicates)
+# - Cannot shadow built-in names (RSI, SMA, EMA) without 'override: true'
+# - All indicators referenced in rules must be defined or be built-in
+# - Period must be >= 1
 #
 # ====================
 # Evaluation Order
