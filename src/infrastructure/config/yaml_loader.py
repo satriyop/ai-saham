@@ -312,9 +312,10 @@ class YamlConfigLoader:
     ) -> IndicatorDefinition:
         """Build a single indicator definition.
 
-        Supports both built-in indicators (SMA, EMA, RSI) and plugin
-        indicators (ATR, VWAP, etc.). Built-in types are parsed to
-        IndicatorType enum; plugin types are stored as strings.
+        Supports three modes:
+        1. Built-in indicators (SMA, EMA, RSI) with type and period
+        2. Plugin indicators (ATR, VWAP, etc.) with type and period
+        3. Formula-based indicators with formula expression
 
         Args:
             name: Indicator instance name
@@ -332,7 +333,57 @@ class YamlConfigLoader:
                 f"expected mapping, got {type(data).__name__}"
             )
 
-        cls._require_field(data, "type", str, "indicator")
+        has_type = "type" in data
+        has_formula = "formula" in data
+
+        # Validate mutual exclusivity
+        if has_type and has_formula:
+            raise RulesSchemaError(
+                "cannot have both 'type' and 'formula'. "
+                "Use either type+period OR formula."
+            )
+
+        if not has_type and not has_formula:
+            raise RulesSchemaError(
+                "must have either 'type' (with period) or 'formula'"
+            )
+
+        # Parse override (common to both modes)
+        override = data.get("override", False)
+        if not isinstance(override, bool):
+            raise RulesSchemaError(
+                f"override: expected bool, got {type(override).__name__}"
+            )
+
+        # Formula-based indicator
+        if has_formula:
+            formula = data["formula"]
+            if not isinstance(formula, str):
+                raise RulesSchemaError(
+                    f"formula: expected string, got {type(formula).__name__}"
+                )
+
+            formula = formula.strip()
+            if not formula:
+                raise RulesValidationError("formula: cannot be empty")
+
+            # Period should not be specified for formula indicators
+            if "period" in data:
+                raise RulesSchemaError(
+                    "formula indicators should not have 'period'. "
+                    "Period is determined by the formula expression."
+                )
+
+            try:
+                return IndicatorDefinition(
+                    name=name,
+                    formula=formula,
+                    override=override,
+                )
+            except ValueError as e:
+                raise RulesValidationError(str(e))
+
+        # Type-based indicator (existing logic)
         cls._require_field(data, "period", int, "indicator")
 
         # Parse indicator type - try built-in first, then accept as plugin name
@@ -347,12 +398,6 @@ class YamlConfigLoader:
         period = data["period"]
         if period < 1:
             raise RulesValidationError(f"period: must be >= 1, got {period}")
-
-        override = data.get("override", False)
-        if not isinstance(override, bool):
-            raise RulesSchemaError(
-                f"override: expected bool, got {type(override).__name__}"
-            )
 
         try:
             return IndicatorDefinition(

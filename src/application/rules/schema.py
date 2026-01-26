@@ -69,42 +69,97 @@ Indicator = IndicatorType
 
 @dataclass(frozen=True)
 class IndicatorDefinition:
-    """Definition of a named indicator instance with custom period.
+    """Definition of a named indicator instance.
 
-    Allows users to create multiple instances of the same indicator type
-    with different periods for use in rules.
+    Supports two modes:
+    1. Type-based: Standard indicator with type and period (e.g., EMA with period 9)
+    2. Formula-based: Composite indicator defined by formula expression
 
-    Example:
+    Example (type-based):
         IndicatorDefinition(name="fast_ema", indicator_type=IndicatorType.EMA, period=9)
         IndicatorDefinition(name="atr_14", indicator_type="ATR", period=14)  # Plugin
+
+    Example (formula-based):
+        IndicatorDefinition(name="smooth_rsi", formula="SMA(RSI(14), 10)")
+        IndicatorDefinition(name="macd_line", formula="EMA(CLOSE, 12) - EMA(CLOSE, 26)")
 
     Attributes:
         name: Unique name for this indicator instance (e.g., "fast_ema")
         indicator_type: Type of indicator calculation. Can be:
             - IndicatorType enum for built-ins (RSI, SMA, EMA)
             - str for plugin indicators (e.g., "ATR", "VWAP")
-        period: Lookback period for the calculation (>= 1)
+            - None for formula-based indicators
+        period: Lookback period for the calculation (>= 1), None for formulas
+        formula: Formula expression string (e.g., "SMA(RSI(14), 10)"), None for type-based
         override: If True, allows shadowing built-in indicator names
     """
 
     name: str
-    indicator_type: Union[IndicatorType, str]  # str for plugins
-    period: int
+    indicator_type: Union[IndicatorType, str, None] = None
+    period: int | None = None
+    formula: str | None = None
     override: bool = False
 
     def __post_init__(self) -> None:
         """Validate indicator definition fields."""
         if not self.name:
             raise ValueError("Indicator name cannot be empty")
-        if self.period < 1:
-            raise ValueError(f"Indicator period must be >= 1, got {self.period}")
+
+        has_type = self.indicator_type is not None
+        has_formula = self.formula is not None
+
+        # Must have exactly one: (type + period) OR formula
+        if has_type and has_formula:
+            raise ValueError(
+                f"Indicator '{self.name}' cannot have both 'type' and 'formula'. "
+                "Use either type+period OR formula."
+            )
+
+        if not has_type and not has_formula:
+            raise ValueError(
+                f"Indicator '{self.name}' must have either 'type' (with period) "
+                "or 'formula'."
+            )
+
+        # Type-based validation
+        if has_type:
+            if self.period is None:
+                raise ValueError(
+                    f"Indicator '{self.name}' with type requires a period."
+                )
+            if self.period < 1:
+                raise ValueError(
+                    f"Indicator period must be >= 1, got {self.period}"
+                )
+
+        # Formula-based validation
+        if has_formula:
+            if self.period is not None:
+                raise ValueError(
+                    f"Formula indicator '{self.name}' should not have a period. "
+                    "Period is determined by the formula expression."
+                )
+            if not self.formula.strip():
+                raise ValueError(
+                    f"Indicator '{self.name}' has empty formula."
+                )
+
+    def is_formula(self) -> bool:
+        """Check if this is a formula-based indicator.
+
+        Returns:
+            True if indicator is defined by a formula expression.
+        """
+        return self.formula is not None
 
     def get_type_name(self) -> str:
         """Get indicator type as string (works for both enum and plugin types).
 
         Returns:
-            Uppercase type name (e.g., "RSI", "ATR")
+            Uppercase type name (e.g., "RSI", "ATR") or "FORMULA" for formulas.
         """
+        if self.is_formula():
+            return "FORMULA"
         if isinstance(self.indicator_type, IndicatorType):
             return self.indicator_type.value
         return str(self.indicator_type).upper()
