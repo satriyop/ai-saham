@@ -786,7 +786,99 @@ print(response.formula)  # "SMA(RSI(14), 10)"
 
 ---
 
-## 10. Complete Workflow Examples
+## 10. Indicator Management Commands
+
+Create, list, and manage custom indicators from the command line.
+
+### `create-indicator` - Create from Natural Language
+
+Use AI to translate a description into a formula:
+
+```bash
+# Basic usage (saves to ~/.ai-saham/formulas.yaml)
+saham create-indicator "smoothed RSI with 14-period and 10-day smoothing" --name SMOOTH_RSI
+
+# Specify AI provider
+saham create-indicator "MACD line" --name MACD --provider claude
+
+# Use local Ollama
+saham create-indicator "average true range" --name ATR14 --provider ollama
+
+# Don't save (just see the formula)
+saham create-indicator "price distance from 50-day SMA" --no-save
+```
+
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--name` | `-n` | auto-generated | Indicator name (uppercase) |
+| `--provider` | `-p` | mock | AI provider (claude/openai/gemini/ollama/mock) |
+| `--model` | `-m` | provider default | Model name |
+| `--save/--no-save` | | save | Save formula to storage |
+| `--formulas` | | ~/.ai-saham/formulas.yaml | Custom storage path |
+
+### `list-indicators` - View All Indicators
+
+See built-in, plugin, and custom indicators:
+
+```bash
+# List all indicators
+saham list-indicators
+
+# Show formula expressions
+saham list-indicators --formulas
+```
+
+**Output example:**
+```
+Built-in Indicators:
+----------------------------------------
+  EMA          Exponential Moving Average   (period: 20)
+  RSI          Relative Strength Index      (period: 14)
+  SMA          Simple Moving Average        (period: 20)
+
+Plugin Indicators:
+----------------------------------------
+  ATR          (period: 14)
+
+Custom Formulas:
+----------------------------------------
+  SMOOTH_RSI   = SMA(RSI(14), 10)
+  MACD         = EMA(CLOSE, 12) - EMA(CLOSE, 26)
+
+Total available: 6
+```
+
+### `show-formula` - View Formula Details
+
+See the full details of a saved formula:
+
+```bash
+saham show-formula SMOOTH_RSI
+```
+
+**Output:**
+```
+Name:    SMOOTH_RSI
+Formula: SMA(RSI(14), 10)
+Intent:  smoothed RSI with 14-period and 10-day smoothing
+Created: 2025-01-27 10:30:45
+```
+
+### `delete-indicator` - Remove Custom Formula
+
+Delete a saved formula (built-ins cannot be deleted):
+
+```bash
+# With confirmation prompt
+saham delete-indicator SMOOTH_RSI
+
+# Skip confirmation
+saham delete-indicator SMOOTH_RSI --force
+```
+
+---
+
+## 11. Complete Workflow Examples
 
 ### Conservative Investor Workflow
 
@@ -860,7 +952,7 @@ saham backtest TLKM -r config/my_strategy.yaml --start 2023-01-01 --verbose
 
 ---
 
-## 11. Command Reference (Quick Lookup)
+## 12. Command Reference (Quick Lookup)
 
 | Command | Purpose | Key Options |
 |---------|---------|-------------|
@@ -873,6 +965,10 @@ saham backtest TLKM -r config/my_strategy.yaml --start 2023-01-01 --verbose
 | `saham risk TICKER` | Risk assessment | `--profile`, `--all`, `--rules-file`, `--explain`, `--with-sentiment` |
 | `saham sentiment TICKER` | News sentiment | `--days`, `--max`, `--ai-classify` |
 | `saham backtest TICKER` | Strategy backtesting | `--rules-file` (required), `--start`, `--end`, `--capital`, `--verbose` |
+| `saham create-indicator` | Create formula from NL | `--name`, `--provider`, `--save/--no-save` |
+| `saham list-indicators` | List all indicators | `--formulas` |
+| `saham show-formula NAME` | Show formula details | — |
+| `saham delete-indicator NAME` | Delete custom formula | `--force` |
 
 ---
 
