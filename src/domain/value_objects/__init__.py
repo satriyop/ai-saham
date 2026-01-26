@@ -7,6 +7,7 @@ without unique identity. They are defined by their attributes.
 Layer: Domain
 """
 
+from src.domain.value_objects.backtest_result import BacktestResult
 from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 from src.domain.value_objects.risk_assessment import RiskAssessment
 from src.domain.value_objects.risk_signal import RiskLevel, RiskProfile
@@ -15,8 +16,10 @@ from src.domain.value_objects.sentiment import (
     Sentiment,
     SentimentSnapshot,
 )
+from src.domain.value_objects.trade_action import TradeAction
 
 __all__ = [
+    "BacktestResult",
     "HeadlineResult",
     "IndicatorSnapshot",
     "RiskAssessment",
@@ -24,4 +27,5 @@ __all__ = [
     "RiskProfile",
     "Sentiment",
     "SentimentSnapshot",
+    "TradeAction",
 ]
