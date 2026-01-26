@@ -1,5 +1,9 @@
 # AI Saham - Stock Analysis CLI
 
+[![CI](https://github.com/anthropics/ai-saham/actions/workflows/ci.yml/badge.svg)](https://github.com/anthropics/ai-saham/actions/workflows/ci.yml)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 A **local-first, production-grade CLI application** for stock analysis focused on the Indonesia Stock Exchange (IDX).
 
 ## Features
@@ -415,6 +419,12 @@ saham risk BBCA --all
 
 ---
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and guidelines.
+
+---
+
 ## License
 
-License to be determined.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
