@@ -41,13 +41,14 @@ class IndicatorSnapshot:
         """Get indicator value by name.
 
         Supports both built-in indicators and custom extras.
+        Lookups are case-insensitive for flexibility.
 
-        Built-in names (case-sensitive):
-        - "RSI" -> self.rsi
-        - "SMA" -> self.sma
-        - "EMA" -> self.ema
+        Built-in names:
+        - "RSI" / "rsi" -> self.rsi
+        - "SMA" / "sma" -> self.sma
+        - "EMA" / "ema" -> self.ema
 
-        Custom names are looked up in the extras field.
+        Custom names are looked up in the extras field (case-insensitive).
 
         Args:
             name: Indicator name to retrieve
@@ -58,18 +59,20 @@ class IndicatorSnapshot:
         Raises:
             KeyError: If indicator name is not found
         """
-        # Check built-in indicators first (using uppercase names)
+        name_upper = name.upper()
+
+        # Check built-in indicators first (case-insensitive)
         builtin_map = {
             "RSI": self.rsi,
             "SMA": self.sma,
             "EMA": self.ema,
         }
-        if name in builtin_map:
-            return builtin_map[name]
+        if name_upper in builtin_map:
+            return builtin_map[name_upper]
 
-        # Check extras
+        # Check extras (case-insensitive)
         for extra_name, extra_value in self.extras:
-            if extra_name == name:
+            if extra_name.upper() == name_upper:
                 return extra_value
 
         # Not found
