@@ -312,6 +312,10 @@ class YamlConfigLoader:
     ) -> IndicatorDefinition:
         """Build a single indicator definition.
 
+        Supports both built-in indicators (SMA, EMA, RSI) and plugin
+        indicators (ATR, VWAP, etc.). Built-in types are parsed to
+        IndicatorType enum; plugin types are stored as strings.
+
         Args:
             name: Indicator instance name
             data: Indicator definition dictionary
@@ -331,11 +335,14 @@ class YamlConfigLoader:
         cls._require_field(data, "type", str, "indicator")
         cls._require_field(data, "period", int, "indicator")
 
-        # Parse indicator type
+        # Parse indicator type - try built-in first, then accept as plugin name
+        type_str = data["type"].strip()
         try:
-            indicator_type = IndicatorType.from_string(data["type"])
-        except ValueError as e:
-            raise RulesValidationError(f"type: {e}")
+            indicator_type: IndicatorType | str = IndicatorType.from_string(type_str)
+        except ValueError:
+            # Not a built-in - store as string for plugin lookup
+            # Plugin validation happens at runtime via IndicatorRegistry
+            indicator_type = type_str.upper()
 
         period = data["period"]
         if period < 1:

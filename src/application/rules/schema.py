@@ -76,16 +76,19 @@ class IndicatorDefinition:
 
     Example:
         IndicatorDefinition(name="fast_ema", indicator_type=IndicatorType.EMA, period=9)
+        IndicatorDefinition(name="atr_14", indicator_type="ATR", period=14)  # Plugin
 
     Attributes:
         name: Unique name for this indicator instance (e.g., "fast_ema")
-        indicator_type: Type of indicator calculation (RSI, SMA, EMA)
+        indicator_type: Type of indicator calculation. Can be:
+            - IndicatorType enum for built-ins (RSI, SMA, EMA)
+            - str for plugin indicators (e.g., "ATR", "VWAP")
         period: Lookback period for the calculation (>= 1)
         override: If True, allows shadowing built-in indicator names
     """
 
     name: str
-    indicator_type: IndicatorType
+    indicator_type: Union[IndicatorType, str]  # str for plugins
     period: int
     override: bool = False
 
@@ -95,6 +98,16 @@ class IndicatorDefinition:
             raise ValueError("Indicator name cannot be empty")
         if self.period < 1:
             raise ValueError(f"Indicator period must be >= 1, got {self.period}")
+
+    def get_type_name(self) -> str:
+        """Get indicator type as string (works for both enum and plugin types).
+
+        Returns:
+            Uppercase type name (e.g., "RSI", "ATR")
+        """
+        if isinstance(self.indicator_type, IndicatorType):
+            return self.indicator_type.value
+        return str(self.indicator_type).upper()
 
 
 class Operator(Enum):

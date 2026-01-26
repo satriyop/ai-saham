@@ -12,13 +12,14 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
+from typing import Union
 
 from src.application.rules.schema import BUILTIN_INDICATORS, IndicatorType
+from src.application.services.indicator_registry import IndicatorRegistry
 from src.application.use_case.aggregate_indicators import (
     AggregateIndicatorsRequest,
     AggregateIndicatorsUseCase,
 )
-from src.domain.indicators import calculate_ema, calculate_rsi, calculate_sma
 from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.rules.rule_engine import RuleEngine
 from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
@@ -90,14 +91,21 @@ class AssessRiskUseCase:
     Works fully offline using cached market data.
     """
 
-    def __init__(self, repository: MarketDataRepository) -> None:
+    def __init__(
+        self,
+        repository: MarketDataRepository,
+        registry: IndicatorRegistry | None = None,
+    ) -> None:
         """
-        Initialize with repository dependency.
+        Initialize with repository and optional registry.
 
         Args:
             repository: MarketDataRepository for fetching cached candles
+            registry: IndicatorRegistry for computing indicators.
+                     If None, creates default registry (built-ins only).
         """
         self._repository = repository
+        self._registry = registry if registry is not None else IndicatorRegistry()
         self._rule_engine = RuleEngine()
 
     def execute(self, request: AssessRiskRequest) -> AssessRiskResponse:
@@ -181,18 +189,19 @@ class AssessRiskUseCase:
     def _build_snapshot_for_rules(
         self,
         ticker: str,
-        required_indicators: dict[str, tuple[IndicatorType, int]],
+        required_indicators: dict[str, tuple[Union[IndicatorType, str], int]],
     ) -> IndicatorSnapshot:
         """
         Build an IndicatorSnapshot with all indicators required by the rules.
 
-        Computes each indicator with its specified period and returns
-        a snapshot with built-in fields (sma, ema, rsi) plus extras
+        Computes each indicator (built-in or plugin) with its specified period
+        and returns a snapshot with built-in fields (sma, ema, rsi) plus extras
         for any custom-named indicators.
 
         Args:
             ticker: Stock ticker symbol
-            required_indicators: Dict mapping indicator name to (type, period)
+            required_indicators: Dict mapping indicator name to (type, period).
+                                Type can be IndicatorType or string for plugins.
 
         Returns:
             IndicatorSnapshot with all required indicator values
@@ -212,13 +221,17 @@ class AssessRiskUseCase:
                 f"Run 'saham fetch {ticker}' first."
             )
 
-        # Compute each required indicator
+        # Compute each required indicator using registry
         indicator_values: dict[str, tuple[date, Decimal]] = {}
         for name, (ind_type, period) in required_indicators.items():
-            values = self._compute_indicator(candles, ind_type, period)
+            # Get type name as string for registry
+            type_name = (
+                ind_type.value if isinstance(ind_type, IndicatorType) else ind_type
+            )
+            values = self._registry.compute(type_name, candles, period)
             if not values:
                 raise ValueError(
-                    f"Insufficient data to compute {name} ({ind_type.value}, period={period})"
+                    f"Insufficient data to compute {name} ({type_name}, period={period})"
                 )
             # Store the latest value
             indicator_values[name] = values[-1]
@@ -231,21 +244,11 @@ class AssessRiskUseCase:
         # This ensures all indicator values are from the same date or earlier
         latest_date = min(d for d, _ in indicator_values.values())
 
-        # Get values for this date (or the closest available)
-        # For now, we use the last computed value for each indicator
-        # In production, you might want stricter date alignment
-
         # Build the snapshot
         # First, extract built-in indicator values (use defaults if not in required)
-        sma_value = self._get_indicator_or_default(
-            indicator_values, "SMA", IndicatorType.SMA, candles
-        )
-        ema_value = self._get_indicator_or_default(
-            indicator_values, "EMA", IndicatorType.EMA, candles
-        )
-        rsi_value = self._get_indicator_or_default(
-            indicator_values, "RSI", IndicatorType.RSI, candles
-        )
+        sma_value = self._get_indicator_or_default(indicator_values, "SMA", candles)
+        ema_value = self._get_indicator_or_default(indicator_values, "EMA", candles)
+        rsi_value = self._get_indicator_or_default(indicator_values, "RSI", candles)
 
         # Build extras for custom-named indicators (not built-in names)
         extras: list[tuple[str, Decimal]] = []
@@ -261,36 +264,19 @@ class AssessRiskUseCase:
             extras=tuple(extras),
         )
 
-    def _compute_indicator(
-        self,
-        candles: list,
-        ind_type: IndicatorType,
-        period: int,
-    ) -> list[tuple[date, Decimal]]:
-        """Compute indicator values using domain functions."""
-        if ind_type == IndicatorType.SMA:
-            return calculate_sma(candles, period=period)
-        elif ind_type == IndicatorType.EMA:
-            return calculate_ema(candles, period=period)
-        elif ind_type == IndicatorType.RSI:
-            return calculate_rsi(candles, period=period)
-        else:
-            raise ValueError(f"Unknown indicator type: {ind_type}")
-
     def _get_indicator_or_default(
         self,
         indicator_values: dict[str, tuple[date, Decimal]],
         builtin_name: str,
-        ind_type: IndicatorType,
         candles: list,
     ) -> Decimal:
         """Get indicator value from computed values or compute with default period."""
         if builtin_name in indicator_values:
             return indicator_values[builtin_name][1]
 
-        # Compute with default period
-        _, default_period = BUILTIN_INDICATORS[builtin_name]
-        values = self._compute_indicator(candles, ind_type, default_period)
+        # Compute with default period using registry
+        default_period = self._registry.get_default_period(builtin_name)
+        values = self._registry.compute(builtin_name, candles, default_period)
         if values:
             return values[-1][1]
         return Decimal("0")  # Fallback if insufficient data

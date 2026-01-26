@@ -8,7 +8,7 @@ Layer: Application
 """
 
 from decimal import Decimal
-from typing import Callable
+from typing import Callable, Union
 
 from src.application.rules.schema import (
     BUILTIN_INDICATORS,
@@ -249,16 +249,20 @@ class YamlRuleInterpreter:
         else:
             return str(condition)
 
-    def get_required_indicators(self) -> dict[str, tuple[IndicatorType, int]]:
+    def get_required_indicators(
+        self,
+    ) -> dict[str, tuple[Union[IndicatorType, str], int]]:
         """Get all indicators required to evaluate this rule set.
 
         Returns a dictionary mapping indicator names to (type, period) tuples.
         Includes both custom definitions and built-in defaults.
 
         Returns:
-            Dict mapping indicator name to (IndicatorType, period)
+            Dict mapping indicator name to (IndicatorType or str, period).
+            Built-in indicators return IndicatorType enum.
+            Plugin indicators return uppercase string (e.g., "ATR").
         """
-        required: dict[str, tuple[IndicatorType, int]] = {}
+        required: dict[str, tuple[Union[IndicatorType, str], int]] = {}
 
         # Get all referenced indicator names
         referenced = self._rule_set.get_all_referenced_indicators()

@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
+from typing import Union
 
 from src.application.rules.interpreter import YamlRuleInterpreter
 from src.application.rules.schema import (
@@ -19,8 +20,8 @@ from src.application.rules.schema import (
     IndicatorType,
     SignalMapping,
 )
+from src.application.services.indicator_registry import IndicatorRegistry
 from src.domain.entities.candle import Candle
-from src.domain.indicators import calculate_ema, calculate_rsi, calculate_sma
 from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.services.backtest_engine import BacktestEngine
 from src.domain.value_objects.backtest_result import BacktestResult
@@ -91,14 +92,21 @@ class BacktestUseCase:
     Works fully offline using cached market data.
     """
 
-    def __init__(self, repository: MarketDataRepository) -> None:
+    def __init__(
+        self,
+        repository: MarketDataRepository,
+        registry: IndicatorRegistry | None = None,
+    ) -> None:
         """
-        Initialize with repository dependency.
+        Initialize with repository and optional registry.
 
         Args:
             repository: MarketDataRepository for fetching cached candles
+            registry: IndicatorRegistry for computing indicators.
+                     If None, creates default registry (built-ins only).
         """
         self._repository = repository
+        self._registry = registry if registry is not None else IndicatorRegistry()
 
     def execute(self, request: BacktestRequest) -> BacktestResponse:
         """
@@ -197,14 +205,18 @@ class BacktestUseCase:
     def _compute_all_indicators(
         self,
         candles: list[Candle],
-        required_indicators: dict[str, tuple[IndicatorType, int]],
+        required_indicators: dict[str, tuple[Union[IndicatorType, str], int]],
     ) -> dict[str, dict[date, Decimal]]:
         """
         Compute all required indicators and return as date-indexed series.
 
+        Uses IndicatorRegistry for unified computation of both built-in
+        and plugin indicators.
+
         Args:
             candles: Historical price data
-            required_indicators: Dict mapping name to (type, period)
+            required_indicators: Dict mapping name to (type, period).
+                                Type can be IndicatorType or string for plugins.
 
         Returns:
             Dict mapping indicator name to {date: value} dict
@@ -212,33 +224,21 @@ class BacktestUseCase:
         result: dict[str, dict[date, Decimal]] = {}
 
         for name, (ind_type, period) in required_indicators.items():
-            values = self._compute_indicator(candles, ind_type, period)
+            # Get type name as string for registry lookup
+            type_name = (
+                ind_type.value if isinstance(ind_type, IndicatorType) else ind_type
+            )
+            values = self._registry.compute(type_name, candles, period)
             # Convert list of tuples to date-indexed dict
             result[name] = {d: v for d, v in values}
 
         return result
 
-    def _compute_indicator(
-        self,
-        candles: list[Candle],
-        ind_type: IndicatorType,
-        period: int,
-    ) -> list[tuple[date, Decimal]]:
-        """Compute indicator values using domain functions."""
-        if ind_type == IndicatorType.SMA:
-            return calculate_sma(candles, period=period)
-        elif ind_type == IndicatorType.EMA:
-            return calculate_ema(candles, period=period)
-        elif ind_type == IndicatorType.RSI:
-            return calculate_rsi(candles, period=period)
-        else:
-            raise ValueError(f"Unknown indicator type: {ind_type}")
-
     def _evaluate_candles(
         self,
         candles: list[Candle],
         indicator_series: dict[str, dict[date, Decimal]],
-        required_indicators: dict[str, tuple[IndicatorType, int]],
+        required_indicators: dict[str, tuple[Union[IndicatorType, str], int]],
         interpreter: YamlRuleInterpreter,
         signal_mapping: SignalMapping,
     ) -> list[tuple[date, TradeAction, str]]:
@@ -289,7 +289,7 @@ class BacktestUseCase:
         self,
         target_date: date,
         indicator_series: dict[str, dict[date, Decimal]],
-        required_indicators: dict[str, tuple[IndicatorType, int]],
+        required_indicators: dict[str, tuple[Union[IndicatorType, str], int]],
     ) -> IndicatorSnapshot | None:
         """
         Build an IndicatorSnapshot for a specific date.
