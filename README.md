@@ -8,11 +8,14 @@ A **local-first, production-grade CLI application** for stock analysis focused o
 
 ## Features
 
-- **Deterministic analysis** - Rule-based technical indicators (SMA, EMA, RSI)
-- **Risk assessment** - Three risk profiles (conservative, balanced, aggressive)
-- **Offline-first** - Works without internet after initial data fetch
-- **Local storage** - SQLite database for cached market data
-- **Extensible** - Hexagonal architecture ready for bots, web, and AI integration
+- **Technical Indicators** - SMA, EMA, RSI with professional-grade calculations
+- **Risk Assessment** - Three built-in profiles (conservative, balanced, aggressive)
+- **Custom Rules DSL** - Define your own rules via YAML configuration
+- **AI Explanations** - Get AI-powered insights (Claude, OpenAI, Gemini, Ollama)
+- **News Sentiment** - Analyze news headlines with keyword or AI classification
+- **Offline-First** - Works without internet after initial data fetch
+- **Local Storage** - SQLite database for cached market data
+- **Hexagonal Architecture** - Clean separation of domain, application, and infrastructure
 
 ---
 
@@ -25,8 +28,14 @@ saham fetch BBCA
 # View all indicators
 saham indicators BBCA
 
-# Assess risk
+# Assess risk with all profiles
 saham risk BBCA --all
+
+# Get AI explanation
+saham risk BBCA --explain --provider ollama
+
+# Analyze news sentiment
+saham sentiment BBCA
 ```
 
 ---
@@ -57,7 +66,6 @@ pip install -e ".[dev]"
 
 ```bash
 saham version
-# Output: saham v0.1.0
 ```
 
 ---
@@ -66,43 +74,30 @@ saham version
 
 ### `saham fetch` - Fetch Market Data
 
-Fetch daily OHLCV data for an IDX stock ticker. Data is cached locally after first fetch.
+Fetch daily OHLCV data for an IDX stock ticker from Yahoo Finance.
 
 ```bash
-# Basic usage - fetches 1 year of data
-saham fetch BBCA
-
-# Fetch 2 years of data
-saham fetch BBRI --days 730
-
-# Force refresh (bypass cache)
-saham fetch TLKM --refresh
-
-# Custom database location
-saham fetch ASII --db /path/to/custom.db
+saham fetch BBCA                    # Fetch 1 year of data
+saham fetch BBRI --days 730         # Fetch 2 years
+saham fetch TLKM --refresh          # Force refresh cache
 ```
 
-**Options:**
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
-| `--days` | `-d` | 365 | Number of days of history |
-| `--refresh` | `-r` | false | Force refresh from provider |
-| `--db` | | ~/.ai-saham/data.db | Database path |
+| `--days` | `-d` | 365 | Days of history to fetch |
+| `--refresh` | `-r` | false | Bypass cache, fetch fresh data |
+| `--db` | | ~/.ai-saham/data.db | Custom database path |
 
 ---
 
 ### `saham sma` - Simple Moving Average
 
-Calculate SMA over cached market data.
-
 ```bash
-saham sma BBCA                    # SMA(20) on close prices
-saham sma BBRI --period 50        # Custom period
-saham sma TLKM --field open       # Different price field
-saham sma ASII --days 730         # More history
+saham sma BBCA                      # SMA(20) on close
+saham sma BBRI --period 50          # Custom period
+saham sma TLKM --field open         # Different price field
 ```
 
-**Options:**
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
 | `--period` | `-p` | 20 | SMA period |
@@ -113,52 +108,44 @@ saham sma ASII --days 730         # More history
 
 ### `saham ema` - Exponential Moving Average
 
-Calculate EMA with SMA-seeded initialization (matches TradingView, Bloomberg).
+Uses SMA-seeded initialization (matches TradingView, Bloomberg).
 
 ```bash
-saham ema BBCA                    # EMA(20) on close prices
-saham ema BBRI --period 50        # Custom period
-saham ema TLKM --field high       # Different price field
+saham ema BBCA                      # EMA(20) on close
+saham ema BBRI --period 50          # Custom period
 ```
 
-**Options:** Same as `sma` command.
+Options same as `sma` command.
 
 ---
 
 ### `saham rsi` - Relative Strength Index
 
-Calculate RSI using Wilder's smoothed moving average.
+Uses Wilder's smoothed moving average.
 
 ```bash
-saham rsi BBCA                    # RSI(14)
-saham rsi BBRI --period 7         # Shorter period
-saham rsi TLKM --days 180         # Less history
+saham rsi BBCA                      # RSI(14)
+saham rsi BBRI --period 7           # Shorter period
 ```
 
-**Options:**
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
 | `--period` | `-p` | 14 | RSI period |
 | `--days` | `-d` | 365 | Days of history |
 
-**RSI Interpretation:**
-- Above 70: Potentially overbought
-- Below 30: Potentially oversold
-- 30-70: Neutral
+**RSI Interpretation:** >70 overbought, <30 oversold, 30-70 neutral
 
 ---
 
-### `saham indicators` - All Indicators
+### `saham indicators` - All Indicators Combined
 
 Calculate SMA, EMA, and RSI together with aligned dates.
 
 ```bash
-saham indicators BBCA                          # Default periods
-saham indicators BBRI --sma 50 --ema 50        # Custom SMA/EMA
-saham indicators TLKM --rsi 7 --days 180       # Custom RSI
+saham indicators BBCA               # Default periods
+saham indicators BBRI --sma 50 --ema 50 --rsi 7
 ```
 
-**Options:**
 | Option | Default | Description |
 |--------|---------|-------------|
 | `--sma` | 20 | SMA period |
@@ -170,13 +157,35 @@ saham indicators TLKM --rsi 7 --days 180       # Custom RSI
 
 ### `saham risk` - Risk Assessment
 
-Assess risk using deterministic, rule-based evaluation.
+Assess risk using rule-based evaluation with optional AI explanation.
 
 ```bash
-saham risk BBCA                       # Balanced profile (default)
+# Built-in profiles
+saham risk BBCA                           # Balanced (default)
 saham risk BBRI --profile conservative
-saham risk TLKM --all                 # Compare all profiles
+saham risk TLKM --all                     # Compare all profiles
+
+# Custom rules
+saham risk BBCA --rules-file config/my_rules.yaml
+
+# With AI explanation
+saham risk BBCA --explain
+saham risk BBCA --explain --provider ollama
+saham risk BBCA --explain --provider ollama --model llama3:8b
+
+# With sentiment
+saham risk BBCA --with-sentiment
 ```
+
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--profile` | `-p` | balanced | Risk profile |
+| `--all` | `-a` | false | Show all profiles |
+| `--rules-file` | `-r` | | Custom YAML rules (overrides --profile) |
+| `--explain` | `-e` | false | Generate AI explanation |
+| `--provider` | | claude | AI provider |
+| `--model` | `-m` | | Model name (for Ollama) |
+| `--with-sentiment` | `-s` | false | Include news sentiment |
 
 **Risk Profiles:**
 
@@ -184,21 +193,32 @@ saham risk TLKM --all                 # Compare all profiles
 |---------|-------------|
 | `conservative` | Strict thresholds, requires indicators to agree |
 | `balanced` | Standard thresholds, majority rules |
-| `aggressive` | Wide thresholds, either indicator can signal |
+| `aggressive` | Wide thresholds, single indicator can signal |
 
-**Risk Levels:**
-- `HIGH_RISK` - Indicators suggest elevated risk
-- `MODERATE` - Indicators suggest neutral conditions
-- `LOW_RISK` - Indicators suggest favorable conditions
+**Risk Levels:** `HIGH_RISK`, `MODERATE`, `LOW_RISK`
 
-**Options:**
+---
+
+### `saham sentiment` - News Sentiment Analysis
+
+Fetch and analyze news sentiment for a stock.
+
+```bash
+saham sentiment BBCA                      # Keyword classification (default)
+saham sentiment BBRI --days 7             # More days
+saham sentiment TLKM --ai-classify        # AI classification
+saham sentiment ASII --ai-classify --provider ollama --model llama3
+```
+
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
-| `--profile` | `-p` | balanced | Risk profile |
-| `--all` | `-a` | false | Show all profiles |
-| `--sma` | | 20 | SMA period |
-| `--ema` | | 20 | EMA period |
-| `--rsi` | | 14 | RSI period |
+| `--days` | `-d` | 3 | Days of news (1-30) |
+| `--max` | | 20 | Max headlines (1-50) |
+| `--ai-classify` | | false | Use AI for classification |
+| `--provider` | | | AI provider for classification |
+| `--model` | `-m` | | Model name |
+
+**Sentiment Levels:** `POSITIVE`, `NEUTRAL`, `NEGATIVE`
 
 ---
 
@@ -210,30 +230,135 @@ saham version
 
 ---
 
+## AI Providers
+
+For `--explain` and `--ai-classify` features:
+
+| Provider | Environment Variable | Default Model |
+|----------|---------------------|---------------|
+| `claude` | `ANTHROPIC_API_KEY` | claude-3-haiku |
+| `openai` | `OPENAI_API_KEY` | gpt-3.5-turbo |
+| `gemini` | `GOOGLE_API_KEY` | gemini-pro |
+| `ollama` | (local, no key) | qwen2.5-coder:1.5b |
+| `mock` | (none) | (for testing) |
+
+```bash
+# Set API key
+export ANTHROPIC_API_KEY=sk-...
+
+# Or use local Ollama
+ollama serve  # In another terminal
+saham risk BBCA --explain --provider ollama
+```
+
+---
+
+## Custom Rules DSL
+
+Define custom rules in YAML format. See `config/custom_rules.yaml.example`.
+
+```yaml
+version: 1
+name: "my_rules"
+default_outcome: MODERATE
+
+rules:
+  # Compare indicator to value
+  - name: oversold_rsi
+    priority: 10
+    when:
+      indicator: RSI
+      operator: "<"
+      value: 30
+    outcome: LOW_RISK
+    rationale: "RSI below 30 - oversold"
+
+  # Compare indicator to indicator
+  - name: bullish_crossover
+    priority: 20
+    when:
+      left:
+        indicator: EMA
+      operator: ">"
+      right:
+        indicator: SMA
+    outcome: LOW_RISK
+    rationale: "EMA above SMA - bullish"
+```
+
+**Usage:**
+```bash
+saham risk BBCA --rules-file config/my_rules.yaml
+```
+
+**Supported indicators:** `RSI`, `SMA`, `EMA`
+**Supported operators:** `<`, `<=`, `>`, `>=`, `==`, `!=`
+
+---
+
 ## Architecture
 
 ```
 src/
-├── domain/              # Pure business logic (no external dependencies)
-│   ├── entities/        # Stock, Candle, AnalysisResult
-│   ├── indicators/      # SMA, EMA, RSI, MACD calculations
-│   ├── ports/           # Interfaces (MarketDataProvider, Repository)
-│   └── rules/           # Risk assessment rules by profile
+├── domain/                    # Pure business logic (no dependencies)
+│   ├── entities/              # Stock, Candle, AnalysisResult
+│   ├── indicators/            # SMA, EMA, RSI, MACD calculations
+│   ├── ports/                 # Interfaces
+│   │   ├── market_data_provider.py
+│   │   ├── market_data_repository.py
+│   │   ├── ai_explainer.py
+│   │   ├── news_provider.py
+│   │   └── headline_classifier.py
+│   ├── rules/                 # Risk assessment rules
+│   │   ├── rule_engine.py
+│   │   ├── conservative.py
+│   │   ├── balanced.py
+│   │   └── aggressive.py
+│   ├── value_objects/         # Immutable domain objects
+│   │   ├── indicator_snapshot.py
+│   │   ├── risk_assessment.py
+│   │   └── sentiment.py
+│   └── services/              # Domain services
 │
-├── application/         # Use cases orchestrating domain logic
-│   ├── use_case/        # FetchMarketData, ComputeSMA, AssessRisk, etc.
-│   └── dto/             # Request/Response objects
+├── application/               # Use cases
+│   ├── use_case/
+│   │   ├── fetch_market_data.py
+│   │   ├── compute_sma.py
+│   │   ├── compute_ema.py
+│   │   ├── compute_rsi.py
+│   │   ├── aggregate_indicators.py
+│   │   ├── assess_risk.py
+│   │   ├── explain_risk.py
+│   │   └── fetch_sentiment.py
+│   ├── rules/                 # Custom rules DSL
+│   │   ├── schema.py
+│   │   └── interpreter.py
+│   └── dto/                   # Data transfer objects
 │
-├── infrastructure/      # External system implementations
-│   ├── data_providers/  # Yahoo Finance, IDX adapters
-│   ├── persistence/     # SQLite repositories
-│   ├── ai/              # Claude, Gemini integrations (optional)
-│   └── sentiment/       # News, social media analyzers (future)
+├── infrastructure/            # External implementations
+│   ├── data_providers/
+│   │   └── yahoo.py           # Yahoo Finance adapter
+│   ├── persistence/
+│   │   └── sqlite_market_repository.py
+│   ├── ai/                    # AI explainers
+│   │   ├── factory.py
+│   │   ├── claude_explainer.py
+│   │   ├── openai_explainer.py
+│   │   ├── gemini_explainer.py
+│   │   ├── ollama_explainer.py
+│   │   └── mock_explainer.py
+│   ├── sentiment/             # Sentiment analysis
+│   │   ├── factory.py
+│   │   ├── google_news_provider.py
+│   │   ├── keyword_classifier.py
+│   │   └── ai_classifier.py
+│   └── config/
+│       └── yaml_loader.py     # Custom rules loader
 │
-└── adapters/            # User interfaces
-    ├── cli/             # Typer-based CLI (current)
-    ├── bot/             # Telegram, WhatsApp (stubs)
-    └── web/             # REST API (stub)
+└── adapters/                  # User interfaces
+    ├── cli/                   # Typer CLI (main interface)
+    ├── bot/                   # Telegram, WhatsApp (stubs)
+    └── web/                   # REST API (stub)
 ```
 
 **Key Principle:** Domain logic is pure and framework-agnostic. External systems never leak into the domain.
@@ -242,15 +367,27 @@ src/
 
 ## Configuration
 
-Risk profiles are defined in `config/`:
+### Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `ANTHROPIC_API_KEY` | Claude API key |
+| `OPENAI_API_KEY` | OpenAI API key |
+| `GOOGLE_API_KEY` | Google/Gemini API key |
+| `AI_PROVIDER` | Default AI provider |
+| `AI_RATE_LIMIT` | Calls per minute (default: 10) |
+| `OLLAMA_HOST` | Ollama server URL |
+| `OLLAMA_MODEL` | Default Ollama model |
+
+### Config Files
 
 | File | Description |
 |------|-------------|
-| `default.yaml` | Base configuration |
-| `conservative.yaml` | Strict risk thresholds |
-| `balanced.yaml` | Standard risk thresholds |
-| `aggressive.yaml` | Wide risk thresholds |
-| `full_ai.yaml` | AI-enhanced mode (future) |
+| `config/default.yaml` | Base configuration |
+| `config/conservative.yaml` | Conservative profile |
+| `config/balanced.yaml` | Balanced profile |
+| `config/aggressive.yaml` | Aggressive profile |
+| `config/custom_rules.yaml.example` | Custom rules template |
 
 ---
 
@@ -276,6 +413,8 @@ make format
 make clean
 ```
 
+**Project Stats:** 81 source files, 29 test files
+
 ---
 
 ## Data Storage
@@ -286,125 +425,12 @@ make clean
 
 ---
 
-## Offline Behavior
-
-This CLI is designed to work **offline after initial data fetch**:
-
-1. **First fetch requires internet** - Downloads data from Yahoo Finance
-2. **All analysis works offline** - SMA, EMA, RSI, indicators, risk assessment use cached data
-3. **Cache persists** - Data stored in SQLite survives restarts
-
-**Typical workflow:**
-```bash
-# Online: Fetch data once
-saham fetch BBCA
-saham fetch BBRI
-saham fetch TLKM
-
-# Offline: Analyze anytime
-saham indicators BBCA
-saham risk BBRI --all
-saham sma TLKM --period 50
-```
-
-**Refreshing data:**
-```bash
-# Re-download latest data (requires internet)
-saham fetch BBCA --refresh
-```
-
----
-
-## Troubleshooting
-
-### "Database not found"
-
-```
-Error: Database not found at ~/.ai-saham/data.db
-```
-
-**Solution:** Fetch data first:
-```bash
-saham fetch BBCA
-```
-
-### "No cached data found"
-
-```
-Error: No cached data found for XXXX
-```
-
-**Solution:** The ticker hasn't been fetched yet:
-```bash
-saham fetch XXXX
-```
-
-### "Insufficient data"
-
-```
-Insufficient data for BBCA
-Candles available: 15
-Required for SMA(200): 200
-```
-
-**Solution:** Fetch more historical data:
-```bash
-saham fetch BBCA --days 730 --refresh
-```
-
-### "Network connection failed"
-
-```
-Error: Network connection failed.
-```
-
-**Solutions:**
-- Check your internet connection
-- Try again later (Yahoo Finance may be temporarily unavailable)
-- Use cached data for analysis if available
-
-### Invalid option values
-
-```
-Error: Invalid value for '--profile': Invalid profile 'xyz'. Must be one of: conservative, balanced, aggressive
-```
-
-**Solution:** Use valid option values as shown in command help:
-```bash
-saham risk --help
-```
-
----
-
-## Risk Profile Selection Guide
-
-Choose the right profile based on your analysis needs:
-
-| Profile | Best For | Characteristics |
-|---------|----------|-----------------|
-| **conservative** | Long-term investors, risk-averse | Strict thresholds, requires multiple indicators to agree |
-| **balanced** | General analysis, moderate risk tolerance | Standard thresholds, majority of indicators rules |
-| **aggressive** | Active traders, higher risk tolerance | Wide thresholds, single indicator can signal |
-
-**Quick decision guide:**
-
-- **New to stock analysis?** Start with `balanced`
-- **Prioritizing capital preservation?** Use `conservative`
-- **Comfortable with higher risk for potential gains?** Try `aggressive`
-
-**Compare all profiles at once:**
-```bash
-saham risk BBCA --all
-```
-
----
-
 ## Limitations
 
 - **Daily data only** - No intraday or real-time streaming
 - **IDX market focus** - Designed for Indonesia Stock Exchange
 - **Yahoo Finance source** - Data may be delayed; unofficial source
-- **Internet required** for first fetch (offline after caching)
+- **Internet required** for first fetch and sentiment (offline for cached analysis)
 
 ---
 
