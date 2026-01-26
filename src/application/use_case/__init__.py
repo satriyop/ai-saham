@@ -29,6 +29,11 @@ from src.application.use_case.compute_sma import (
     ComputeSMAResponse,
     ComputeSMAUseCase,
 )
+from src.application.use_case.create_indicator_from_intent import (
+    CreateIndicatorFromIntentRequest,
+    CreateIndicatorFromIntentResponse,
+    CreateIndicatorFromIntentUseCase,
+)
 from src.application.use_case.fetch_market_data import (
     FetchMarketDataRequest,
     FetchMarketDataResponse,
@@ -60,6 +65,9 @@ __all__ = [
     "ComputeSMARequest",
     "ComputeSMAResponse",
     "ComputeSMAUseCase",
+    "CreateIndicatorFromIntentRequest",
+    "CreateIndicatorFromIntentResponse",
+    "CreateIndicatorFromIntentUseCase",
     "FetchMarketDataRequest",
     "FetchMarketDataResponse",
     "FetchMarketDataUseCase",
