@@ -21,7 +21,6 @@ from src.application.rules.interpreter import YamlRuleInterpreter
 from src.application.rules.schema import (
     ConditionIndicatorVsIndicator,
     ConditionIndicatorVsValue,
-    Indicator,
     IndicatorRef,
     Operator,
     Outcome,
@@ -39,6 +38,7 @@ def make_snapshot(
     rsi: str = "50",
     sma: str = "100",
     ema: str = "100",
+    extras: tuple[tuple[str, Decimal], ...] = (),
 ) -> IndicatorSnapshot:
     """Create a test indicator snapshot."""
     return IndicatorSnapshot(
@@ -46,12 +46,13 @@ def make_snapshot(
         rsi=Decimal(rsi),
         sma=Decimal(sma),
         ema=Decimal(ema),
+        extras=extras,
     )
 
 
 def make_rule(
     name: str,
-    indicator: Indicator = Indicator.RSI,
+    indicator_name: str = "RSI",
     operator: Operator = Operator.LT,
     value: str = "30",
     outcome: Outcome = Outcome.LOW_RISK,
@@ -62,7 +63,7 @@ def make_rule(
     return Rule(
         name=name,
         condition=ConditionIndicatorVsValue(
-            indicator=indicator,
+            indicator_name=indicator_name,
             operator=operator,
             value=Decimal(value),
         ),
@@ -74,9 +75,9 @@ def make_rule(
 
 def make_indicator_rule(
     name: str,
-    left: Indicator = Indicator.EMA,
+    left: str = "EMA",
     operator: Operator = Operator.GT,
-    right: Indicator = Indicator.SMA,
+    right: str = "SMA",
     outcome: Outcome = Outcome.LOW_RISK,
     priority: int = 100,
 ) -> Rule:
@@ -84,9 +85,9 @@ def make_indicator_rule(
     return Rule(
         name=name,
         condition=ConditionIndicatorVsIndicator(
-            left=IndicatorRef(indicator=left),
+            left=IndicatorRef(name=left),
             operator=operator,
-            right=IndicatorRef(indicator=right),
+            right=IndicatorRef(name=right),
         ),
         outcome=outcome,
         priority=priority,
@@ -251,7 +252,7 @@ class TestIndicatorVsIndicator:
 
     def test_ema_above_sma(self):
         """EMA > SMA should match when EMA=105, SMA=100."""
-        rules = [make_indicator_rule("bullish", left=Indicator.EMA, right=Indicator.SMA)]
+        rules = [make_indicator_rule("bullish", left="EMA", right="SMA")]
         rule_set = make_rule_set(rules)
         interpreter = YamlRuleInterpreter(rule_set)
         snapshot = make_snapshot(ema="105", sma="100")
@@ -263,7 +264,7 @@ class TestIndicatorVsIndicator:
 
     def test_ema_below_sma(self):
         """EMA > SMA should NOT match when EMA=95, SMA=100."""
-        rules = [make_indicator_rule("bullish", left=Indicator.EMA, right=Indicator.SMA)]
+        rules = [make_indicator_rule("bullish", left="EMA", right="SMA")]
         rule_set = make_rule_set(rules)
         interpreter = YamlRuleInterpreter(rule_set)
         snapshot = make_snapshot(ema="95", sma="100")
@@ -277,9 +278,9 @@ class TestIndicatorVsIndicator:
         rules = [
             make_indicator_rule(
                 "bearish",
-                left=Indicator.EMA,
+                left="EMA",
                 operator=Operator.LT,
-                right=Indicator.SMA,
+                right="SMA",
                 outcome=Outcome.HIGH_RISK,
             )
         ]
@@ -518,7 +519,7 @@ class TestRationale:
 
     def test_includes_condition_details(self):
         """Should include condition evaluation details."""
-        rules = [make_rule("test", value="50", indicator=Indicator.RSI)]
+        rules = [make_rule("test", value="50", indicator_name="RSI")]
         rule_set = make_rule_set(rules)
         interpreter = YamlRuleInterpreter(rule_set)
         snapshot = make_snapshot(rsi="30")

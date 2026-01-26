@@ -125,7 +125,7 @@ class TestValidFileLoading:
             rule = rule_set.rules[0]
 
             assert isinstance(rule.condition, ConditionIndicatorVsValue)
-            assert rule.condition.indicator == Indicator.RSI
+            assert rule.condition.indicator_name == "RSI"
             assert rule.condition.operator == Operator.LT
             assert rule.condition.value == 30
         finally:
@@ -139,9 +139,9 @@ class TestValidFileLoading:
             rule = rule_set.rules[1]
 
             assert isinstance(rule.condition, ConditionIndicatorVsIndicator)
-            assert rule.condition.left.indicator == Indicator.EMA
+            assert rule.condition.left.name == "EMA"
             assert rule.condition.operator == Operator.GT
-            assert rule.condition.right.indicator == Indicator.SMA
+            assert rule.condition.right.name == "SMA"
         finally:
             path.unlink()
 
@@ -431,7 +431,7 @@ rules:
 """
         path = write_yaml(yaml_content)
         try:
-            with pytest.raises(RulesValidationError, match="Unknown indicator 'MACD'"):
+            with pytest.raises(RulesValidationError, match="undefined indicator 'MACD'"):
                 YamlConfigLoader.load(path)
         finally:
             path.unlink()

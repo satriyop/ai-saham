@@ -52,8 +52,8 @@ class TestIndicatorEnum:
         assert Indicator.from_string("  RSI  ") == Indicator.RSI
 
     def test_from_string_invalid_raises(self):
-        """Should raise ValueError for unknown indicators."""
-        with pytest.raises(ValueError, match="Unknown indicator 'MACD'"):
+        """Should raise ValueError for unknown indicator types."""
+        with pytest.raises(ValueError, match="Unknown indicator type 'MACD'"):
             Indicator.from_string("MACD")
 
     def test_from_string_empty_raises(self):
@@ -129,18 +129,18 @@ class TestConditionIndicatorVsValue:
     def test_creation(self):
         """Should create a valid condition."""
         condition = ConditionIndicatorVsValue(
-            indicator=Indicator.RSI,
+            indicator_name="RSI",
             operator=Operator.LT,
             value=Decimal("30"),
         )
-        assert condition.indicator == Indicator.RSI
+        assert condition.indicator_name == "RSI"
         assert condition.operator == Operator.LT
         assert condition.value == Decimal("30")
 
     def test_immutability(self):
         """Should be immutable (frozen dataclass)."""
         condition = ConditionIndicatorVsValue(
-            indicator=Indicator.RSI,
+            indicator_name="RSI",
             operator=Operator.LT,
             value=Decimal("30"),
         )
@@ -150,12 +150,12 @@ class TestConditionIndicatorVsValue:
     def test_equality(self):
         """Same conditions should be equal."""
         c1 = ConditionIndicatorVsValue(
-            indicator=Indicator.RSI,
+            indicator_name="RSI",
             operator=Operator.LT,
             value=Decimal("30"),
         )
         c2 = ConditionIndicatorVsValue(
-            indicator=Indicator.RSI,
+            indicator_name="RSI",
             operator=Operator.LT,
             value=Decimal("30"),
         )
@@ -168,20 +168,20 @@ class TestConditionIndicatorVsIndicator:
     def test_creation(self):
         """Should create a valid condition."""
         condition = ConditionIndicatorVsIndicator(
-            left=IndicatorRef(indicator=Indicator.EMA),
+            left=IndicatorRef(name="EMA"),
             operator=Operator.GT,
-            right=IndicatorRef(indicator=Indicator.SMA),
+            right=IndicatorRef(name="SMA"),
         )
-        assert condition.left.indicator == Indicator.EMA
+        assert condition.left.name == "EMA"
         assert condition.operator == Operator.GT
-        assert condition.right.indicator == Indicator.SMA
+        assert condition.right.name == "SMA"
 
     def test_immutability(self):
         """Should be immutable (frozen dataclass)."""
         condition = ConditionIndicatorVsIndicator(
-            left=IndicatorRef(indicator=Indicator.EMA),
+            left=IndicatorRef(name="EMA"),
             operator=Operator.GT,
-            right=IndicatorRef(indicator=Indicator.SMA),
+            right=IndicatorRef(name="SMA"),
         )
         with pytest.raises(AttributeError):
             condition.operator = Operator.LT
@@ -198,7 +198,7 @@ class TestRule:
         rule = Rule(
             name="test_rule",
             condition=ConditionIndicatorVsValue(
-                indicator=Indicator.RSI,
+                indicator_name="RSI",
                 operator=Operator.LT,
                 value=Decimal("30"),
             ),
@@ -213,7 +213,7 @@ class TestRule:
         rule = Rule(
             name="test_rule",
             condition=ConditionIndicatorVsValue(
-                indicator=Indicator.RSI,
+                indicator_name="RSI",
                 operator=Operator.LT,
                 value=Decimal("30"),
             ),
@@ -229,7 +229,7 @@ class TestRule:
         rule = Rule(
             name="test_rule",
             condition=ConditionIndicatorVsValue(
-                indicator=Indicator.RSI,
+                indicator_name="RSI",
                 operator=Operator.LT,
                 value=Decimal("30"),
             ),
@@ -244,7 +244,7 @@ class TestRule:
             Rule(
                 name="",
                 condition=ConditionIndicatorVsValue(
-                    indicator=Indicator.RSI,
+                    indicator_name="RSI",
                     operator=Operator.LT,
                     value=Decimal("30"),
                 ),
@@ -263,7 +263,7 @@ class TestRuleSet:
         return Rule(
             name=name,
             condition=ConditionIndicatorVsValue(
-                indicator=Indicator.RSI,
+                indicator_name="RSI",
                 operator=Operator.LT,
                 value=Decimal("30"),
             ),
