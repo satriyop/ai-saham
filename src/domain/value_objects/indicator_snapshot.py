@@ -20,14 +20,84 @@ class IndicatorSnapshot:
     This value object captures the state of SMA, EMA, and RSI at a specific date.
     It is immutable (frozen) and defined by its attributes.
 
+    The `extras` field allows storing additional indicator values computed
+    with custom periods (e.g., fast_ema=EMA(9), slow_ema=EMA(21)).
+
     Attributes:
         date: The date this snapshot represents
-        sma: Simple Moving Average value
-        ema: Exponential Moving Average value
-        rsi: Relative Strength Index value (0-100)
+        sma: Simple Moving Average value (default period, typically 20)
+        ema: Exponential Moving Average value (default period, typically 20)
+        rsi: Relative Strength Index value (0-100, default period typically 14)
+        extras: Tuple of (name, value) pairs for custom indicator instances
     """
 
     date: date
     sma: Decimal
     ema: Decimal
     rsi: Decimal
+    extras: tuple[tuple[str, Decimal], ...] = ()
+
+    def get(self, name: str) -> Decimal:
+        """Get indicator value by name.
+
+        Supports both built-in indicators and custom extras.
+
+        Built-in names (case-sensitive):
+        - "RSI" -> self.rsi
+        - "SMA" -> self.sma
+        - "EMA" -> self.ema
+
+        Custom names are looked up in the extras field.
+
+        Args:
+            name: Indicator name to retrieve
+
+        Returns:
+            The indicator value as Decimal
+
+        Raises:
+            KeyError: If indicator name is not found
+        """
+        # Check built-in indicators first (using uppercase names)
+        builtin_map = {
+            "RSI": self.rsi,
+            "SMA": self.sma,
+            "EMA": self.ema,
+        }
+        if name in builtin_map:
+            return builtin_map[name]
+
+        # Check extras
+        for extra_name, extra_value in self.extras:
+            if extra_name == name:
+                return extra_value
+
+        # Not found
+        available = list(builtin_map.keys()) + [n for n, _ in self.extras]
+        raise KeyError(
+            f"Indicator '{name}' not found. "
+            f"Available: {available}"
+        )
+
+    def with_extras(
+        self, extras: tuple[tuple[str, Decimal], ...]
+    ) -> "IndicatorSnapshot":
+        """Create a new snapshot with additional extras.
+
+        This is useful when you need to add custom indicator values
+        to an existing snapshot.
+
+        Args:
+            extras: Additional (name, value) pairs to add
+
+        Returns:
+            New IndicatorSnapshot with combined extras
+        """
+        combined_extras = self.extras + extras
+        return IndicatorSnapshot(
+            date=self.date,
+            sma=self.sma,
+            ema=self.ema,
+            rsi=self.rsi,
+            extras=combined_extras,
+        )
