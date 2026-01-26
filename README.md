@@ -222,6 +222,46 @@ saham sentiment ASII --ai-classify --provider ollama --model llama3
 
 ---
 
+### `saham backtest` - Strategy Backtesting
+
+Run a deterministic backtest simulation on historical data using custom rules.
+
+```bash
+saham backtest BBCA --rules-file config/custom_rules.yaml.example
+saham backtest BBRI -r rules.yaml --start 2024-01-01
+saham backtest TLKM -r rules.yaml --capital 50000000 --verbose
+```
+
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--rules-file` | `-r` | (required) | Path to YAML rules file |
+| `--start` | `-s` | | Start date (YYYY-MM-DD) |
+| `--end` | `-e` | | End date (YYYY-MM-DD) |
+| `--capital` | `-c` | 100000000 | Initial capital in IDR |
+| `--verbose` | `-v` | false | Show detailed trade-by-trade output |
+| `--db` | | ~/.ai-saham/data.db | Custom database path |
+
+**Signal Mapping (customizable in YAML):**
+
+| Risk Level | Trade Action | Description |
+|------------|--------------|-------------|
+| `LOW_RISK` | `ENTER_LONG` | Buy signal |
+| `MODERATE` | `HOLD` | Maintain position |
+| `HIGH_RISK` | `EXIT_LONG` | Sell signal |
+
+**Metrics Reported:**
+- Total Return (%)
+- Max Drawdown (%)
+- Trade Count
+- Win Rate (%)
+- Profit Factor
+- Winning/Losing Trades
+- Average Win/Loss
+
+**Note:** Requires cached data. Run `saham fetch TICKER` first.
+
+---
+
 ### `saham version` - Version Info
 
 ```bash
@@ -329,6 +369,27 @@ saham risk BBCA --rules-file config/my_rules.yaml
 **Supported types:** `RSI`, `SMA`, `EMA`
 **Supported operators:** `<`, `<=`, `>`, `>=`, `==`, `!=`
 
+### Signal Mapping (for Backtests)
+
+Customize how risk levels map to trade actions:
+
+```yaml
+version: 1
+name: "my_backtest_strategy"
+default_outcome: MODERATE
+
+# Custom signal mapping (optional, defaults shown)
+signal_mapping:
+  low_risk: ENTER_LONG    # Buy signal
+  moderate: HOLD          # Maintain position
+  high_risk: EXIT_LONG    # Sell signal
+
+rules:
+  # ... your rules here
+```
+
+**Available Trade Actions:** `ENTER_LONG`, `EXIT_LONG`, `HOLD`, `FLAT`
+
 ---
 
 ## Architecture
@@ -336,8 +397,8 @@ saham risk BBCA --rules-file config/my_rules.yaml
 ```
 src/
 ├── domain/                    # Pure business logic (no dependencies)
-│   ├── entities/              # Stock, Candle, AnalysisResult
-│   ├── indicators/            # SMA, EMA, RSI, MACD calculations
+│   ├── entities/              # Stock, Candle, BacktestTrade
+│   ├── indicators/            # SMA, EMA, RSI calculations
 │   ├── ports/                 # Interfaces
 │   │   ├── market_data_provider.py
 │   │   ├── market_data_repository.py
@@ -352,8 +413,11 @@ src/
 │   ├── value_objects/         # Immutable domain objects
 │   │   ├── indicator_snapshot.py
 │   │   ├── risk_assessment.py
+│   │   ├── backtest_result.py
+│   │   ├── trade_action.py
 │   │   └── sentiment.py
 │   └── services/              # Domain services
+│       └── backtest_engine.py # Backtest simulation engine
 │
 ├── application/               # Use cases
 │   ├── use_case/
@@ -364,9 +428,10 @@ src/
 │   │   ├── aggregate_indicators.py
 │   │   ├── assess_risk.py
 │   │   ├── explain_risk.py
-│   │   └── fetch_sentiment.py
+│   │   ├── fetch_sentiment.py
+│   │   └── backtest.py        # Backtest use case
 │   ├── rules/                 # Custom rules DSL
-│   │   ├── schema.py
+│   │   ├── schema.py          # Includes SignalMapping
 │   │   └── interpreter.py
 │   └── dto/                   # Data transfer objects
 │
@@ -448,7 +513,7 @@ make format
 make clean
 ```
 
-**Project Stats:** 81 source files, 29 test files
+**Project Stats:** 87 source files, 32 test files
 
 ---
 
