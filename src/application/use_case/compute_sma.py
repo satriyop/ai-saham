@@ -91,9 +91,28 @@ class ComputeSMAUseCase:
         if request.period < 1:
             raise ValueError("Period must be at least 1")
 
-        # Calculate date range for query
-        end_date = date.today()
-        start_date = end_date - timedelta(days=request.days)
+        # Determine date range for query
+        # Use the actual data range from the repository, not an absolute date range
+        date_range = self._repository.get_date_range(ticker)
+        
+        if not date_range:
+            # No data available for this ticker
+            return ComputeSMAResponse(
+                ticker=ticker,
+                period=request.period,
+                price_field=request.price_field,
+                values=[],
+                candle_count=0,
+                sma_count=0,
+                date_range=None,
+            )
+        
+        earliest_date, latest_date = date_range
+        
+        # Calculate how far back we need to go, but don't go beyond available data
+        days_back = min(request.days, (latest_date - earliest_date).days + 1)
+        start_date = latest_date - timedelta(days=days_back - 1)
+        end_date = latest_date
 
         # Fetch candles from cache
         candles = self._repository.get_candles(ticker, start_date, end_date)
@@ -118,7 +137,7 @@ class ComputeSMAUseCase:
         )
 
         # Build response with metadata
-        date_range = (candles[0].date, candles[-1].date)
+        date_range_result = (candles[0].date, candles[-1].date)
 
         return ComputeSMAResponse(
             ticker=ticker,
@@ -127,5 +146,5 @@ class ComputeSMAUseCase:
             values=sma_values,
             candle_count=len(candles),
             sma_count=len(sma_values),
-            date_range=date_range,
+            date_range=date_range_result,
         )

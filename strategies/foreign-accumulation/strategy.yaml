@@ -1,0 +1,118 @@
+version: 1
+name: "Foreign Accumulation"
+description: |
+  Strategy based on foreign investor flow patterns.
+  Enters when foreigners are consistently buying (accumulating).
+  Exits when foreign flow turns negative (distribution).
+
+  Requires broker data to be fetched first:
+    saham broker fetch <TICKER> --days 90
+
+# ====================
+# Indicator Definitions
+# ====================
+# Note: FOREIGN_FLOW indicators require broker data loaded separately.
+# They are computed from BrokerSummary, not from candle prices.
+
+indicators:
+  # Price-based indicators for confirmation
+  sma_50:
+    type: SMA
+    period: 50
+
+  rsi:
+    type: RSI
+    period: 14
+
+  # Foreign flow indicators (computed from broker data)
+  foreign_flow_3d:
+    type: FOREIGN_FLOW
+    period: 3
+
+  consecutive_buy:
+    type: CONSECUTIVE_FOREIGN_BUY
+    period: 1
+
+# REQUIRED: Outcome when no rules match
+default_outcome: MODERATE
+
+# Map outcomes to trade actions
+signal_mapping:
+  LOW_RISK: ENTER_LONG
+  MODERATE: HOLD
+  HIGH_RISK: EXIT_LONG
+
+rules:
+  # ====================
+  # Entry Rules (LOW_RISK)
+  # ====================
+
+  # Strong accumulation signal
+  - name: foreign_accumulation_strong
+    priority: 10
+    when:
+      all:
+        - left:
+            indicator: foreign_flow_3d
+          operator: ">"
+          right:
+            value: 50000000000  # 50B IDR over 3 days
+        - left:
+            indicator: consecutive_buy
+          operator: ">="
+          right:
+            value: 3  # At least 3 consecutive buying days
+    outcome: LOW_RISK
+    rationale: "Strong foreign accumulation with 3+ consecutive buy days"
+
+  # Moderate accumulation with RSI not overbought
+  - name: foreign_accumulation_moderate
+    priority: 20
+    when:
+      all:
+        - left:
+            indicator: foreign_flow_3d
+          operator: ">"
+          right:
+            value: 20000000000  # 20B IDR
+        - left:
+            indicator: rsi
+          operator: "<"
+          right:
+            value: 70
+    outcome: LOW_RISK
+    rationale: "Foreign accumulation with RSI below overbought level"
+
+  # ====================
+  # Exit Rules (HIGH_RISK)
+  # ====================
+
+  # Strong distribution signal
+  - name: foreign_distribution
+    priority: 10
+    when:
+      left:
+        indicator: foreign_flow_3d
+      operator: "<"
+      right:
+        value: -30000000000  # -30B IDR (net selling)
+    outcome: HIGH_RISK
+    rationale: "Heavy foreign selling - potential distribution"
+
+  # RSI overbought with no foreign support
+  - name: overbought_no_support
+    priority: 30
+    when:
+      all:
+        - left:
+            indicator: rsi
+          operator: ">"
+          right:
+            value: 75
+        - left:
+            indicator: foreign_flow_3d
+          operator: "<"
+          right:
+            value: 0
+    outcome: HIGH_RISK
+    rationale: "RSI overbought while foreign selling"

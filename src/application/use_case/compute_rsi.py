@@ -100,16 +100,34 @@ class ComputeRSIUseCase:
         if request.period < 1:
             raise ValueError("Period must be at least 1")
 
+        # Determine date range from the repository
+        date_range = self._repository.get_date_range(ticker)
+        
+        if not date_range:
+            # No data available for this ticker
+            return ComputeRSIResponse(
+                ticker=ticker,
+                period=request.period,
+                values=[],
+                candle_count=0,
+                rsi_count=0,
+                date_range=None,
+            )
+        
+        earliest_date, latest_date = date_range
+        
         # Calculate warm-up buffer (3× period for RSI convergence)
         warm_up_days = request.period * self.WARM_UP_MULTIPLIER
-
-        # Calculate date range for query (over-fetch to include warm-up)
-        end_date = date.today()
-        fetch_start_date = end_date - timedelta(days=request.days + warm_up_days)
-        user_cutoff_date = end_date - timedelta(days=request.days)
+        
+        # Calculate how far back we need to go, but don't go beyond available data
+        total_days_needed = min(request.days + warm_up_days, (latest_date - earliest_date).days + 1)
+        fetch_start_date = latest_date - timedelta(days=total_days_needed - 1)
+        
+        # User cutoff: after excluding warm-up buffer
+        user_cutoff_date = latest_date - timedelta(days=request.days - 1)
 
         # Fetch candles from cache (over-fetched to include warm-up region)
-        candles = self._repository.get_candles(ticker, fetch_start_date, end_date)
+        candles = self._repository.get_candles(ticker, fetch_start_date, latest_date)
 
         # Handle no data case
         if not candles:
@@ -130,9 +148,9 @@ class ComputeRSIUseCase:
 
         # Calculate date range of returned values
         if converged_values:
-            date_range = (converged_values[0][0], converged_values[-1][0])
+            date_range_result = (converged_values[0][0], converged_values[-1][0])
         else:
-            date_range = None
+            date_range_result = None
 
         return ComputeRSIResponse(
             ticker=ticker,
@@ -140,5 +158,5 @@ class ComputeRSIUseCase:
             values=converged_values,
             candle_count=len(candles),
             rsi_count=len(converged_values),
-            date_range=date_range,
+            date_range=date_range_result,
         )

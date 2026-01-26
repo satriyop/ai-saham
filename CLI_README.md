@@ -502,7 +502,228 @@ This adds a sentiment section to the risk output, but remember: sentiment is con
 
 ---
 
-## 7. Backtesting - The `backtest` Command
+## 7. Broker Data & Foreign Flow - The `broker` Command
+
+Foreign investor flow is one of the most watched metrics in the Indonesian market. The `broker` command suite lets you fetch, cache, and analyze broker summary data from Stockbit.
+
+### Why Foreign Flow Matters in IDX
+
+| Metric | What It Tells You |
+|--------|-------------------|
+| **Foreign Net Buy** | Foreigners accumulating → often bullish signal |
+| **Foreign Net Sell** | Foreigners distributing → potential weakness |
+| **Consecutive Buy Days** | Sustained accumulation pattern |
+| **Top Brokers** | Which brokers are driving the flow |
+
+### Setting Up Authentication
+
+Stockbit requires a JWT token from your browser session:
+
+```bash
+# Step 1: Get your token from Stockbit
+# 1. Login to stockbit.com
+# 2. Open DevTools (F12) → Network tab
+# 3. Click any stock ticker
+# 4. Filter for "exodus" requests
+# 5. Copy the Bearer token from Authorization header
+
+# Step 2: Configure the token
+saham broker auth "eyJhbGciOiJSUzI1NiIsInR5cCI6..."
+
+# Step 3: Verify it works
+saham broker status
+```
+
+**Note:** Tokens expire in ~24 hours. You'll need to refresh periodically.
+
+### Fetching Broker Data
+
+```bash
+# Fetch last 30 days (default)
+saham broker fetch BBCA
+
+# Fetch 90 days of history
+saham broker fetch BBRI --days 90
+
+# Specific date range
+saham broker fetch TLKM --start 2024-01-01 --end 2024-06-30
+
+# Force refresh from Stockbit (ignore cache)
+saham broker fetch BBCA --refresh
+```
+
+**Options:**
+
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--days` | `-d` | 30 | Number of days to fetch |
+| `--start` | `-s` | — | Start date (YYYY-MM-DD) |
+| `--end` | `-e` | — | End date (YYYY-MM-DD) |
+| `--refresh` | `-r` | false | Force refresh from Stockbit |
+| `--db` | | ~/.ai-saham/data.db | Database path |
+
+### Viewing Foreign Flow
+
+```bash
+# Show foreign flow summary
+saham broker flow BBCA
+
+# Last 20 trading days
+saham broker flow BBRI --days 20
+```
+
+**Output Example:**
+
+```
+Foreign Flow for BBCA (last 10 trading days)
+============================================================
+Total net flow: 125.50B
+Buy days: 7 | Sell days: 3
+Consecutive buy days: 4
+------------------------------------------------------------
+Date         Net Flow       Ratio  Top Buyer  Top Seller
+------------------------------------------------------------
+2025-01-27       15.20B      3.2%         YP          CC
+2025-01-24       22.45B      4.8%         MS          RX
+2025-01-23       -8.30B     -1.9%         CC          YP
+...
+```
+
+**Reading the Output:**
+- **Net Flow**: Positive = foreign buying, Negative = foreign selling
+- **Ratio**: Foreign flow as % of total trading value
+- **Consecutive buy days**: How many days in a row foreigners have been buying
+
+### Viewing Top Brokers
+
+```bash
+# Top brokers for latest date
+saham broker top BBCA
+
+# Top brokers for specific date
+saham broker top BBRI --date 2025-01-15
+```
+
+**Output Example:**
+
+```
+Broker Summary for BBCA on 2025-01-27
+======================================================================
+Foreign Net Flow: 15.20B (3.2%)
+Total Value: 475.00B
+----------------------------------------------------------------------
+
+Top Buyers:
+Code   Name                 Type     Net Value       Net Lot
+YP     Mirae Asset          Foreign       8.50B      850,000
+MS     Morgan Stanley       Foreign       4.20B      420,000
+CC     Mandiri Sekuritas    Local         2.50B      250,000
+...
+
+Top Sellers:
+Code   Name                 Type     Net Value       Net Lot
+RX     RHB Sekuritas        Foreign      -5.30B     -530,000
+DB     Deutsche Bank        Foreign      -3.80B     -380,000
+...
+```
+
+### Checking Provider Status
+
+```bash
+# Check if Stockbit is configured and working
+saham broker status
+```
+
+**Output:**
+```
+Stockbit token: Configured
+Validating...
+Status: Connected and working
+```
+
+### Using Foreign Flow in Strategies
+
+Once you've fetched broker data, you can use foreign flow indicators in your strategies:
+
+```yaml
+# strategies/foreign-accumulation/strategy.yaml
+version: 1
+name: "Foreign Accumulation"
+description: "Enter when foreigners are consistently buying"
+
+indicators:
+  foreign_flow_3d:
+    type: FOREIGN_FLOW
+    period: 3
+
+  consecutive_buy:
+    type: CONSECUTIVE_FOREIGN_BUY
+    period: 1
+
+default_outcome: MODERATE
+
+signal_mapping:
+  LOW_RISK: ENTER_LONG
+  MODERATE: HOLD
+  HIGH_RISK: EXIT_LONG
+
+rules:
+  - name: strong_accumulation
+    priority: 10
+    when:
+      all:
+        - left:
+            indicator: foreign_flow_3d
+          operator: ">"
+          right:
+            value: 50000000000  # 50B IDR
+        - left:
+            indicator: consecutive_buy
+          operator: ">="
+          right:
+            value: 3
+    outcome: LOW_RISK
+    rationale: "Strong foreign accumulation pattern"
+
+  - name: heavy_distribution
+    priority: 10
+    when:
+      left:
+        indicator: foreign_flow_3d
+      operator: "<"
+      right:
+        value: -30000000000  # -30B IDR
+    outcome: HIGH_RISK
+    rationale: "Heavy foreign selling"
+```
+
+**Available Foreign Flow Indicators:**
+
+| Indicator | Description | Example Usage |
+|-----------|-------------|---------------|
+| `FOREIGN_FLOW` | Rolling sum of foreign net value | `> 50B` over 3 days |
+| `FOREIGN_FLOW_RATIO` | Foreign flow as % of total value | `> 5%` average |
+| `CONSECUTIVE_FOREIGN_BUY` | Count of consecutive buy days | `>= 3` days |
+
+### Complete Workflow
+
+```bash
+# 1. Set up authentication (once per day)
+saham broker auth "your-token-here"
+
+# 2. Fetch broker data
+saham broker fetch BBCA --days 90
+
+# 3. View the flow
+saham broker flow BBCA
+
+# 4. Use in backtest (requires broker data pre-loaded)
+saham backtest BBCA --strategy foreign-accumulation
+```
+
+---
+
+## 8. Backtesting - The `backtest` Command
 
 Backtesting lets you test a strategy on historical data before risking real capital.
 
@@ -605,7 +826,7 @@ Avg Loss:                   1,500,000 IDR
 
 ---
 
-## 8. Custom Rules DSL
+## 9. Custom Rules DSL
 
 The Custom Rules DSL lets you encode YOUR investment philosophy into YAML.
 
@@ -792,7 +1013,7 @@ saham backtest BBCA --rules-file config/my_rules.yaml --verbose
 
 ---
 
-## 9. Strategy Packages - The `strategy` Command
+## 10. Strategy Packages - The `strategy` Command
 
 Strategy packages make strategies **first-class artifacts** - versionable, portable, and shareable.
 
@@ -1020,7 +1241,7 @@ cp -r strategies/momentum ~/.ai-saham/strategies/
 
 ---
 
-## 10. AI-Enhanced Analysis (Optional)
+## 11. AI-Enhanced Analysis (Optional)
 
 AI is **OFF by default**. The system works completely without AI. Use AI for:
 - Learning what indicators mean
@@ -1117,7 +1338,7 @@ print(response.formula)  # "SMA(RSI(14), 10)"
 
 ---
 
-## 11. Indicator Management Commands
+## 12. Indicator Management Commands
 
 Create, list, and manage custom indicators from the command line.
 
@@ -1209,7 +1430,7 @@ saham delete-indicator SMOOTH_RSI --force
 
 ---
 
-## 12. Complete Workflow Examples
+## 13. Complete Workflow Examples
 
 ### Conservative Investor Workflow
 
@@ -1341,9 +1562,53 @@ saham list-indicators --formulas
 
 **Key insight:** Once you create a formula with `create-indicator`, it's saved globally and can be used in any rules file without redefining it.
 
+### Foreign Flow Analysis Workflow
+
+Goal: Analyze foreign investor behavior and build a foreign flow strategy.
+
+```bash
+# Step 1: Set up Stockbit authentication (once per day)
+# Get token from stockbit.com DevTools → Network → exodus requests
+saham broker auth "eyJhbGciOiJSUzI1NiIs..."
+
+# Step 2: Verify connection
+saham broker status
+
+# Step 3: Fetch broker data for target stocks
+saham broker fetch BBCA --days 90
+saham broker fetch BBRI --days 90
+saham broker fetch BMRI --days 90
+
+# Step 4: Analyze foreign flow patterns
+saham broker flow BBCA --days 20
+saham broker flow BBRI --days 20
+
+# Step 5: Check top brokers on specific dates
+saham broker top BBCA --date 2025-01-27
+
+# Step 6: Fetch price data for backtesting
+saham fetch BBCA --days 365
+saham fetch BBRI --days 365
+
+# Step 7: Use the pre-built foreign accumulation strategy
+saham backtest BBCA --strategy foreign-accumulation --verbose
+
+# Step 8: Or create your own strategy
+saham strategy init my_flow_strategy
+# Edit to use FOREIGN_FLOW indicators
+vim strategies/my_flow_strategy/strategy.yaml
+saham strategy validate my_flow_strategy
+saham backtest BBCA --strategy my_flow_strategy
+```
+
+**Key Insights:**
+- Foreign net buy > 50B for 3+ days often precedes price moves
+- Consecutive buy days matter more than single-day spikes
+- Watch for divergence between foreign flow and price
+
 ---
 
-## 13. Command Reference (Quick Lookup)
+## 14. Command Reference (Quick Lookup)
 
 | Command | Purpose | Key Options |
 |---------|---------|-------------|
@@ -1356,6 +1621,11 @@ saham list-indicators --formulas
 | `saham indicators TICKER` | All indicators combined | `--sma`, `--ema`, `--rsi`, `--days` |
 | `saham risk TICKER` | Risk assessment | `--profile`, `--all`, `--rules-file`, `--explain`, `--with-sentiment` |
 | `saham sentiment TICKER` | News sentiment | `--days`, `--max`, `--ai-classify` |
+| `saham broker auth TOKEN` | Configure Stockbit token | `--validate/--no-validate` |
+| `saham broker status` | Check Stockbit connection | — |
+| `saham broker fetch TICKER` | Fetch broker summary data | `--days`, `--start`, `--end`, `--refresh` |
+| `saham broker flow TICKER` | View foreign flow summary | `--days` |
+| `saham broker top TICKER` | View top brokers | `--date` |
 | `saham strategy init NAME` | Create strategy package | `--dir`, `--force` |
 | `saham strategy create INTENT` | Create strategy from natural language | `--name`, `--provider`, `--save/--no-save` |
 | `saham strategy validate NAME` | Validate strategy | `--strict` |
@@ -1394,6 +1664,10 @@ Data is cached at `~/.ai-saham/data.db`. Use `--refresh` to update when needed.
 | **Candle** | One day's OHLCV data |
 | **Drawdown** | Peak-to-trough decline during backtesting |
 | **Profit Factor** | Total wins divided by total losses |
+| **Foreign Flow** | Net buying/selling by foreign investors (ASING) |
+| **Broker Summary** | Daily breakdown of which brokers bought/sold a stock |
+| **Accumulation** | Pattern of sustained buying (foreign net buy > 0) |
+| **Distribution** | Pattern of sustained selling (foreign net sell) |
 
 ---
 
@@ -1530,6 +1804,47 @@ Tip: Set the appropriate API key environment variable.
 - Set API key: `export ANTHROPIC_API_KEY=sk-...`
 - Or use local Ollama: `--provider ollama`
 - Or use mock for testing: `--provider mock`
+
+### "Stockbit token not configured"
+
+```
+Error: Stockbit token not configured.
+Run 'saham broker auth <token>' to set your token.
+```
+
+**Solution:** You need to configure your Stockbit JWT token:
+
+1. Login to stockbit.com in your browser
+2. Open DevTools (F12) → Network tab
+3. Click any stock ticker
+4. Filter for "exodus" requests
+5. Copy the Bearer token from the Authorization header
+6. Run: `saham broker auth "your-token-here"`
+
+### "Stockbit token expired or invalid"
+
+```
+Error: Stockbit token expired or invalid.
+Please get a new token from stockbit.com
+```
+
+**Solution:** Stockbit tokens expire in ~24 hours. Get a fresh token:
+```bash
+# Get new token from browser DevTools
+saham broker auth "new-token-here"
+```
+
+### "No broker data found"
+
+```
+No data found. Run 'saham broker fetch BBCA' first.
+```
+
+**Solution:** Fetch broker data before viewing:
+```bash
+saham broker fetch BBCA --days 30
+saham broker flow BBCA
+```
 
 ---
 

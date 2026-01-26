@@ -90,6 +90,10 @@ app = typer.Typer(
 from src.adapters.cli.strategy_commands import strategy_app
 app.add_typer(strategy_app, name="strategy")
 
+# Register broker subcommands
+from src.adapters.cli.broker_commands import broker_app
+app.add_typer(broker_app, name="broker")
+
 # Default configuration
 DEFAULT_DB_PATH = Path.home() / ".ai-saham" / "data.db"
 DEFAULT_FORMULAS_PATH = Path.home() / ".ai-saham" / "formulas.yaml"
