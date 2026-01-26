@@ -15,9 +15,14 @@ from typing import Annotated, Optional
 import typer
 
 from src import __version__
+from src.application.services.bootstrap import create_indicator_registry
 from src.application.use_case.aggregate_indicators import (
     AggregateIndicatorsRequest,
     AggregateIndicatorsUseCase,
+)
+from src.application.use_case.create_indicator_from_intent import (
+    CreateIndicatorFromIntentRequest,
+    CreateIndicatorFromIntentUseCase,
 )
 from src.application.use_case.assess_risk import (
     AssessRiskRequest,
@@ -63,6 +68,11 @@ from src.domain.value_objects.risk_assessment import RiskAssessment
 from src.domain.value_objects.sentiment import Sentiment, SentimentSnapshot
 from src.infrastructure.ai import ExplainerFactory
 from src.infrastructure.data_providers.yahoo import YahooFinanceProvider
+from src.infrastructure.ai.formula_translator import FormulaTranslatorAdapter
+from src.infrastructure.persistence.formula_storage import (
+    FormulaStorage,
+    FormulaStorageError,
+)
 from src.infrastructure.persistence.sqlite_market_repository import (
     SQLiteMarketRepository,
 )
@@ -76,6 +86,7 @@ app = typer.Typer(
 
 # Default configuration
 DEFAULT_DB_PATH = Path.home() / ".ai-saham" / "data.db"
+DEFAULT_FORMULAS_PATH = Path.home() / ".ai-saham" / "formulas.yaml"
 DEFAULT_DAYS = 365
 DEFAULT_MARKET_SUFFIX = ".JK"
 
@@ -1325,6 +1336,317 @@ def sentiment(
             typer.echo("Tip: Check your internet connection and try again.", err=True)
         else:
             typer.echo(f"Failed to analyze sentiment: {e}", err=True)
+        raise typer.Exit(1)
+
+
+@app.command("create-indicator")
+def create_indicator(
+    intent: Annotated[
+        str, typer.Argument(help="Natural language description of the indicator")
+    ],
+    name: Annotated[
+        Optional[str],
+        typer.Option("--name", "-n", help="Indicator name (e.g., SMOOTH_RSI)"),
+    ] = None,
+    provider: Annotated[
+        str,
+        typer.Option("--provider", "-p", help="AI provider (claude/openai/gemini/ollama/mock)"),
+    ] = "mock",
+    model: Annotated[
+        Optional[str],
+        typer.Option("--model", "-m", help="Model name for AI provider"),
+    ] = None,
+    save: Annotated[
+        bool,
+        typer.Option("--save/--no-save", help="Save formula to storage"),
+    ] = True,
+    formulas_path: Annotated[
+        Optional[Path],
+        typer.Option("--formulas", help="Path to formulas file"),
+    ] = None,
+) -> None:
+    """
+    Create a custom indicator from natural language description.
+
+    Uses AI to translate natural language into a formula expression,
+    validates the formula, and optionally saves it for reuse.
+
+    AI Providers:
+    - mock: Local mock (no API key needed, for testing)
+    - claude: Anthropic Claude (requires ANTHROPIC_API_KEY)
+    - openai: OpenAI GPT (requires OPENAI_API_KEY)
+    - gemini: Google Gemini (requires GOOGLE_API_KEY)
+    - ollama: Local Ollama (requires running Ollama server)
+
+    Examples:
+        saham create-indicator "smoothed RSI with 14 period" --name SMOOTH_RSI
+        saham create-indicator "MACD line" --name MACD --provider claude
+        saham create-indicator "14-day RSI" --no-save
+    """
+    typer.echo(f"Translating: {intent!r}")
+    typer.echo(f"Provider: {provider}")
+
+    try:
+        # Create registry to get available functions
+        registry = create_indicator_registry()
+        available_functions = registry.get_available_indicators()
+
+        # Create translator adapter
+        translator = FormulaTranslatorAdapter(provider=provider, model=model)
+
+        # Create and execute use case
+        use_case = CreateIndicatorFromIntentUseCase(
+            translator=translator,
+            available_functions=available_functions,
+        )
+
+        request = CreateIndicatorFromIntentRequest(
+            intent=intent,
+            indicator_name=name,
+        )
+        response = use_case.execute(request)
+
+        # Handle result
+        if response.unsupported:
+            typer.echo("\nThis intent cannot be expressed as a formula.", err=True)
+            typer.echo(
+                "Tip: Try describing a mathematical combination of indicators.",
+                err=True,
+            )
+            raise typer.Exit(1)
+
+        if not response.success:
+            typer.echo(f"\nError: {response.error_message}", err=True)
+            raise typer.Exit(1)
+
+        # Success
+        typer.echo(f"\nFormula: {response.formula}")
+
+        # Generate name if not provided
+        indicator_name = name
+        if not indicator_name:
+            # Generate from formula (simple heuristic)
+            formula_clean = response.formula.replace("(", "_").replace(")", "")
+            formula_clean = formula_clean.replace(",", "_").replace(" ", "")
+            indicator_name = f"CUSTOM_{formula_clean[:20]}".upper()
+            typer.echo(f"Auto-generated name: {indicator_name}")
+
+        indicator_name = indicator_name.upper()
+
+        # Register in memory
+        if response.ast:
+            try:
+                registry.register_formula(indicator_name, response.ast)
+                typer.echo(f"Registered: {indicator_name}")
+            except Exception as e:
+                typer.echo(f"Warning: Could not register formula: {e}", err=True)
+
+        # Save to storage
+        if save and response.formula:
+            resolved_path = formulas_path or DEFAULT_FORMULAS_PATH
+            storage = FormulaStorage(path=resolved_path)
+
+            try:
+                storage.save(
+                    name=indicator_name,
+                    formula=response.formula,
+                    intent=intent,
+                )
+                typer.echo(f"Saved to: {resolved_path}")
+            except FormulaStorageError as e:
+                typer.echo(f"Warning: Could not save formula: {e}", err=True)
+
+        typer.echo(f"\nYou can now use {indicator_name} in risk rules or backtest.")
+
+    except ValueError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+    except Exception as e:
+        error_msg = str(e).lower()
+        if "api key" in error_msg or "authentication" in error_msg:
+            typer.echo(f"Error: {e}", err=True)
+            typer.echo(
+                f"Tip: Set the appropriate API key environment variable for {provider}.",
+                err=True,
+            )
+        elif "connection" in error_msg or "timeout" in error_msg:
+            typer.echo("Error: Could not connect to AI provider.", err=True)
+            if provider == "ollama":
+                typer.echo("Tip: Ensure Ollama is running: ollama serve", err=True)
+            else:
+                typer.echo("Tip: Check your internet connection.", err=True)
+        else:
+            typer.echo(f"Failed to create indicator: {e}", err=True)
+        raise typer.Exit(1)
+
+
+@app.command("list-indicators")
+def list_indicators(
+    show_formulas: Annotated[
+        bool,
+        typer.Option("--formulas", "-f", help="Show formula expressions"),
+    ] = False,
+    formulas_path: Annotated[
+        Optional[Path],
+        typer.Option("--formulas-file", help="Path to formulas file"),
+    ] = None,
+) -> None:
+    """
+    List all available indicators.
+
+    Shows built-in indicators, loaded plugins, and custom formulas.
+    Use --formulas to see the formula expressions for custom indicators.
+
+    Examples:
+        saham list-indicators
+        saham list-indicators --formulas
+    """
+    # Load registry with plugins
+    registry = create_indicator_registry()
+
+    # Load stored formulas
+    resolved_path = formulas_path or DEFAULT_FORMULAS_PATH
+    storage = FormulaStorage(path=resolved_path)
+    stored_formulas = storage.load_all()
+
+    # Built-in indicators
+    from src.application.services.indicator_registry import BUILTIN_NAMES
+
+    typer.echo("\nBuilt-in Indicators:")
+    typer.echo("-" * 40)
+    builtin_descriptions = {
+        "SMA": "Simple Moving Average",
+        "EMA": "Exponential Moving Average",
+        "RSI": "Relative Strength Index",
+    }
+    for name in sorted(BUILTIN_NAMES):
+        desc = builtin_descriptions.get(name, "")
+        period = registry.get_default_period(name)
+        typer.echo(f"  {name:<12} {desc:<30} (period: {period})")
+
+    # Plugin indicators
+    plugin_names = set(registry.list_indicators()) - BUILTIN_NAMES - set(registry.list_formulas())
+    if plugin_names:
+        typer.echo("\nPlugin Indicators:")
+        typer.echo("-" * 40)
+        for name in sorted(plugin_names):
+            period = registry.get_default_period(name)
+            typer.echo(f"  {name:<12} (period: {period})")
+
+    # Custom formulas
+    if stored_formulas:
+        typer.echo("\nCustom Formulas:")
+        typer.echo("-" * 40)
+        for name, stored in sorted(stored_formulas.items()):
+            if show_formulas:
+                typer.echo(f"  {name:<12} = {stored.formula}")
+            else:
+                typer.echo(f"  {name:<12}")
+
+        typer.echo(f"\nFormulas file: {resolved_path}")
+    else:
+        typer.echo("\nNo custom formulas saved.")
+        typer.echo("Tip: Use 'saham create-indicator' to create custom indicators.")
+
+    typer.echo(f"\nTotal available: {len(registry.list_indicators()) + len(stored_formulas)}")
+
+
+@app.command("show-formula")
+def show_formula(
+    name: Annotated[str, typer.Argument(help="Formula name")],
+    formulas_path: Annotated[
+        Optional[Path],
+        typer.Option("--formulas-file", help="Path to formulas file"),
+    ] = None,
+) -> None:
+    """
+    Show details of a saved formula.
+
+    Displays the formula expression, original intent, and creation date.
+
+    Examples:
+        saham show-formula SMOOTH_RSI
+        saham show-formula MACD
+    """
+    resolved_path = formulas_path or DEFAULT_FORMULAS_PATH
+    storage = FormulaStorage(path=resolved_path)
+
+    stored = storage.get(name)
+    if stored is None:
+        typer.echo(f"Formula '{name.upper()}' not found.", err=True)
+        typer.echo("\nAvailable formulas:")
+        for formula_name in storage.list_names():
+            typer.echo(f"  {formula_name}")
+        raise typer.Exit(1)
+
+    typer.echo(f"\nName:    {stored.name}")
+    typer.echo(f"Formula: {stored.formula}")
+    if stored.intent:
+        typer.echo(f"Intent:  {stored.intent}")
+    typer.echo(f"Created: {stored.created.strftime('%Y-%m-%d %H:%M:%S')}")
+
+
+@app.command("delete-indicator")
+def delete_indicator(
+    name: Annotated[str, typer.Argument(help="Formula name to delete")],
+    force: Annotated[
+        bool,
+        typer.Option("--force", "-f", help="Skip confirmation prompt"),
+    ] = False,
+    formulas_path: Annotated[
+        Optional[Path],
+        typer.Option("--formulas-file", help="Path to formulas file"),
+    ] = None,
+) -> None:
+    """
+    Delete a saved custom formula.
+
+    Removes the formula from persistent storage. Built-in and plugin
+    indicators cannot be deleted.
+
+    Examples:
+        saham delete-indicator SMOOTH_RSI
+        saham delete-indicator MACD --force
+    """
+    name_upper = name.upper()
+
+    # Check if built-in
+    from src.application.services.indicator_registry import BUILTIN_NAMES
+
+    if name_upper in BUILTIN_NAMES:
+        typer.echo(f"Cannot delete built-in indicator: {name_upper}", err=True)
+        raise typer.Exit(1)
+
+    resolved_path = formulas_path or DEFAULT_FORMULAS_PATH
+    storage = FormulaStorage(path=resolved_path)
+
+    # Check if exists
+    if not storage.exists(name_upper):
+        typer.echo(f"Formula '{name_upper}' not found in storage.", err=True)
+        raise typer.Exit(1)
+
+    # Confirm deletion
+    if not force:
+        stored = storage.get(name_upper)
+        typer.echo(f"\nFormula to delete:")
+        typer.echo(f"  Name:    {stored.name}")
+        typer.echo(f"  Formula: {stored.formula}")
+
+        confirm = typer.confirm("\nDelete this formula?")
+        if not confirm:
+            typer.echo("Cancelled.")
+            raise typer.Exit(0)
+
+    # Delete
+    try:
+        deleted = storage.delete(name_upper)
+        if deleted:
+            typer.echo(f"Deleted {name_upper} from storage.")
+        else:
+            typer.echo(f"Formula '{name_upper}' not found.", err=True)
+            raise typer.Exit(1)
+    except FormulaStorageError as e:
+        typer.echo(f"Failed to delete formula: {e}", err=True)
         raise typer.Exit(1)
 
 
