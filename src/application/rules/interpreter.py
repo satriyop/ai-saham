@@ -11,10 +11,12 @@ from decimal import Decimal
 from typing import Callable
 
 from src.application.rules.schema import (
+    BUILTIN_INDICATORS,
     Condition,
     ConditionIndicatorVsIndicator,
     ConditionIndicatorVsValue,
-    Indicator,
+    IndicatorDefinition,
+    IndicatorType,
     Operator,
     Outcome,
     Rule,
@@ -128,9 +130,10 @@ class YamlRuleInterpreter:
     ) -> bool:
         """Evaluate an indicator-vs-value condition.
 
-        Example: RSI < 30
+        Example: RSI < 30 (built-in)
+        Example: rsi_short < 25 (custom defined)
         """
-        indicator_value = self._get_indicator_value(condition.indicator, snapshot)
+        indicator_value = self._get_indicator_value(condition.indicator_name, snapshot)
         compare_func = self._OPERATOR_FUNCS[condition.operator]
         return compare_func(indicator_value, condition.value)
 
@@ -139,34 +142,33 @@ class YamlRuleInterpreter:
     ) -> bool:
         """Evaluate an indicator-vs-indicator condition.
 
-        Example: EMA > SMA
+        Example: fast_ema > slow_ema (custom defined)
+        Example: EMA > SMA (built-in)
         """
-        left_value = self._get_indicator_value(condition.left.indicator, snapshot)
-        right_value = self._get_indicator_value(condition.right.indicator, snapshot)
+        left_value = self._get_indicator_value(condition.left.name, snapshot)
+        right_value = self._get_indicator_value(condition.right.name, snapshot)
         compare_func = self._OPERATOR_FUNCS[condition.operator]
         return compare_func(left_value, right_value)
 
     def _get_indicator_value(
-        self, indicator: Indicator, snapshot: IndicatorSnapshot
+        self, indicator_name: str, snapshot: IndicatorSnapshot
     ) -> Decimal:
         """Get the value of an indicator from a snapshot.
 
+        Supports both built-in indicators (RSI, SMA, EMA) and custom
+        defined indicators that are stored in snapshot.extras.
+
         Args:
-            indicator: The indicator to get
+            indicator_name: The indicator name to look up
             snapshot: The indicator snapshot
 
         Returns:
             The indicator value as Decimal
+
+        Raises:
+            KeyError: If indicator not found in snapshot
         """
-        if indicator == Indicator.RSI:
-            return snapshot.rsi
-        elif indicator == Indicator.SMA:
-            return snapshot.sma
-        elif indicator == Indicator.EMA:
-            return snapshot.ema
-        else:
-            # Should never happen with proper typing
-            raise ValueError(f"Unknown indicator: {indicator}")
+        return snapshot.get(indicator_name)
 
     def _build_match_result(
         self, rule: Rule, snapshot: IndicatorSnapshot
@@ -227,22 +229,48 @@ class YamlRuleInterpreter:
             Human-readable condition string
         """
         if isinstance(condition, ConditionIndicatorVsValue):
-            actual = self._get_indicator_value(condition.indicator, snapshot)
+            actual = self._get_indicator_value(condition.indicator_name, snapshot)
             return (
-                f"{condition.indicator.value}({actual:.2f}) "
+                f"{condition.indicator_name}({actual:.2f}) "
                 f"{condition.operator.value} {condition.value}"
             )
         elif isinstance(condition, ConditionIndicatorVsIndicator):
             left_actual = self._get_indicator_value(
-                condition.left.indicator, snapshot
+                condition.left.name, snapshot
             )
             right_actual = self._get_indicator_value(
-                condition.right.indicator, snapshot
+                condition.right.name, snapshot
             )
             return (
-                f"{condition.left.indicator.value}({left_actual:.2f}) "
+                f"{condition.left.name}({left_actual:.2f}) "
                 f"{condition.operator.value} "
-                f"{condition.right.indicator.value}({right_actual:.2f})"
+                f"{condition.right.name}({right_actual:.2f})"
             )
         else:
             return str(condition)
+
+    def get_required_indicators(self) -> dict[str, tuple[IndicatorType, int]]:
+        """Get all indicators required to evaluate this rule set.
+
+        Returns a dictionary mapping indicator names to (type, period) tuples.
+        Includes both custom definitions and built-in defaults.
+
+        Returns:
+            Dict mapping indicator name to (IndicatorType, period)
+        """
+        required: dict[str, tuple[IndicatorType, int]] = {}
+
+        # Get all referenced indicator names
+        referenced = self._rule_set.get_all_referenced_indicators()
+
+        for name in referenced:
+            # Check if it's a custom definition
+            definition = self._rule_set.get_indicator_definition(name)
+            if definition is not None:
+                required[name] = (definition.indicator_type, definition.period)
+            elif name in BUILTIN_INDICATORS:
+                # Use built-in default
+                required[name] = BUILTIN_INDICATORS[name]
+            # Note: undefined indicators would have been caught during loading
+
+        return required
