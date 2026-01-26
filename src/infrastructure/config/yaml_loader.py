@@ -19,10 +19,12 @@ from src.application.rules.exceptions import (
     RulesValidationError,
 )
 from src.application.rules.schema import (
+    BUILTIN_INDICATORS,
     ConditionIndicatorVsIndicator,
     ConditionIndicatorVsValue,
-    Indicator,
+    IndicatorDefinition,
     IndicatorRef,
+    IndicatorType,
     Operator,
     Outcome,
     Rule,
@@ -178,6 +180,10 @@ class YamlConfigLoader:
         except ValueError as e:
             raise RulesValidationError(f"default_outcome: {e}")
 
+        # Parse indicators (optional section)
+        indicators_data = data.get("indicators", {})
+        indicators = cls._build_indicators(indicators_data)
+
         # Parse rules
         rules_data = data["rules"]
         if not rules_data:
@@ -192,15 +198,122 @@ class YamlConfigLoader:
                 raise type(e)(f"rules[{i}]: {e}")
 
         try:
-            return RuleSet(
+            rule_set = RuleSet(
                 version=version,
                 name=name,
                 default_outcome=default_outcome,
                 rules=tuple(rules),
+                indicators=indicators,
                 description=description,
             )
         except ValueError as e:
             raise RulesValidationError(str(e))
+
+        # Validate that all referenced indicators are defined
+        cls._validate_indicator_references(rule_set)
+
+        return rule_set
+
+    @classmethod
+    def _build_indicators(
+        cls, indicators_data: dict[str, Any]
+    ) -> tuple[IndicatorDefinition, ...]:
+        """Build indicator definitions from parsed YAML data.
+
+        Args:
+            indicators_data: Dictionary mapping indicator names to their definitions
+
+        Returns:
+            Tuple of IndicatorDefinition objects
+
+        Raises:
+            RulesSchemaError: If indicator structure is invalid
+            RulesValidationError: If indicator content is invalid
+        """
+        if not isinstance(indicators_data, dict):
+            raise RulesSchemaError(
+                f"indicators: expected mapping, got {type(indicators_data).__name__}"
+            )
+
+        indicators = []
+        for ind_name, ind_data in indicators_data.items():
+            try:
+                indicator = cls._build_indicator_definition(ind_name, ind_data)
+                indicators.append(indicator)
+            except (RulesSchemaError, RulesValidationError) as e:
+                raise type(e)(f"indicators.{ind_name}: {e}")
+
+        return tuple(indicators)
+
+    @classmethod
+    def _build_indicator_definition(
+        cls, name: str, data: dict[str, Any]
+    ) -> IndicatorDefinition:
+        """Build a single indicator definition.
+
+        Args:
+            name: Indicator instance name
+            data: Indicator definition dictionary
+
+        Returns:
+            IndicatorDefinition object
+
+        Raises:
+            RulesSchemaError: If required fields missing
+            RulesValidationError: If values are invalid
+        """
+        if not isinstance(data, dict):
+            raise RulesSchemaError(
+                f"expected mapping, got {type(data).__name__}"
+            )
+
+        cls._require_field(data, "type", str, "indicator")
+        cls._require_field(data, "period", int, "indicator")
+
+        # Parse indicator type
+        try:
+            indicator_type = IndicatorType.from_string(data["type"])
+        except ValueError as e:
+            raise RulesValidationError(f"type: {e}")
+
+        period = data["period"]
+        if period < 1:
+            raise RulesValidationError(f"period: must be >= 1, got {period}")
+
+        override = data.get("override", False)
+        if not isinstance(override, bool):
+            raise RulesSchemaError(
+                f"override: expected bool, got {type(override).__name__}"
+            )
+
+        try:
+            return IndicatorDefinition(
+                name=name,
+                indicator_type=indicator_type,
+                period=period,
+                override=override,
+            )
+        except ValueError as e:
+            raise RulesValidationError(str(e))
+
+    @classmethod
+    def _validate_indicator_references(cls, rule_set: RuleSet) -> None:
+        """Validate that all indicator references in rules are defined.
+
+        Args:
+            rule_set: The rule set to validate
+
+        Raises:
+            RulesValidationError: If any indicator reference is undefined
+        """
+        referenced = rule_set.get_all_referenced_indicators()
+        for ref_name in referenced:
+            if not rule_set.is_indicator_defined(ref_name):
+                raise RulesValidationError(
+                    f"Rule references undefined indicator '{ref_name}'. "
+                    f"Define it in the 'indicators' section or use a built-in "
+                    f"({', '.join(BUILTIN_INDICATORS.keys())})."
+                )
 
     @classmethod
     def _build_rule(cls, data: dict[str, Any], index: int) -> Rule:
@@ -287,6 +400,12 @@ class YamlConfigLoader:
     ) -> ConditionIndicatorVsValue:
         """Build an indicator-vs-value condition.
 
+        Indicator references are strings that can be either:
+        - Custom defined indicators (e.g., "fast_ema", "rsi_short")
+        - Built-in indicators ("RSI", "SMA", "EMA")
+
+        Validation of references happens after all indicators are parsed.
+
         Args:
             data: Condition dictionary
 
@@ -301,10 +420,10 @@ class YamlConfigLoader:
         cls._require_field(data, "operator", str, "when")
         # value can be int, float, or str
 
-        try:
-            indicator = Indicator.from_string(data["indicator"])
-        except ValueError as e:
-            raise RulesValidationError(f"when.indicator: {e}")
+        # Indicator is now a string reference (validated later)
+        indicator_name = data["indicator"].strip()
+        if not indicator_name:
+            raise RulesValidationError("when.indicator: cannot be empty")
 
         try:
             operator = Operator.from_string(data["operator"])
@@ -313,13 +432,13 @@ class YamlConfigLoader:
 
         try:
             value = Decimal(str(data["value"]))
-        except (InvalidOperation, TypeError) as e:
+        except (InvalidOperation, TypeError):
             raise RulesValidationError(
                 f"when.value: must be a number, got '{data['value']}'"
             )
 
         return ConditionIndicatorVsValue(
-            indicator=indicator,
+            indicator_name=indicator_name,
             operator=operator,
             value=value,
         )
@@ -329,6 +448,12 @@ class YamlConfigLoader:
         cls, data: dict[str, Any]
     ) -> ConditionIndicatorVsIndicator:
         """Build an indicator-vs-indicator condition.
+
+        Indicator references are strings that can be either:
+        - Custom defined indicators (e.g., "fast_ema", "slow_ema")
+        - Built-in indicators ("RSI", "SMA", "EMA")
+
+        Validation of references happens after all indicators are parsed.
 
         Args:
             data: Condition dictionary
@@ -355,20 +480,19 @@ class YamlConfigLoader:
         cls._require_field(left_data, "indicator", str, "when.left")
         cls._require_field(right_data, "indicator", str, "when.right")
 
-        try:
-            left_indicator = Indicator.from_string(left_data["indicator"])
-        except ValueError as e:
-            raise RulesValidationError(f"when.left.indicator: {e}")
+        # Indicator references are now strings (validated later)
+        left_name = left_data["indicator"].strip()
+        right_name = right_data["indicator"].strip()
 
-        try:
-            right_indicator = Indicator.from_string(right_data["indicator"])
-        except ValueError as e:
-            raise RulesValidationError(f"when.right.indicator: {e}")
+        if not left_name:
+            raise RulesValidationError("when.left.indicator: cannot be empty")
+        if not right_name:
+            raise RulesValidationError("when.right.indicator: cannot be empty")
 
         return ConditionIndicatorVsIndicator(
-            left=IndicatorRef(indicator=left_indicator),
+            left=IndicatorRef(name=left_name),
             operator=operator,
-            right=IndicatorRef(indicator=right_indicator),
+            right=IndicatorRef(name=right_name),
         )
 
     @classmethod
