@@ -1,0 +1,138 @@
+# Custom Rules DSL Example
+# ========================
+#
+# This file demonstrates the YAML schema for defining custom risk assessment rules.
+# Copy this file to config/custom_rules.yaml or ~/.ai-saham/rules.yaml and modify as needed.
+#
+# Usage:
+#   saham risk BBCA --rules-file config/custom_rules.yaml
+#   saham risk BBCA -r ~/.ai-saham/rules.yaml
+
+version: 1
+name: "my_custom_rules"
+description: "Example custom rules for risk assessment"
+
+# REQUIRED: Outcome when no rules match
+# Must be one of: HIGH_RISK, MODERATE, LOW_RISK
+default_outcome: MODERATE
+
+rules:
+  # ====================
+  # Type A: Indicator vs Value
+  # ====================
+  # Compare an indicator to a literal number value.
+  # Supported indicators: RSI, SMA, EMA
+  # Supported operators: <, <=, >, >=, ==, !=
+
+  - name: oversold_rsi
+    priority: 10  # Lower priority = evaluated first (default: 100)
+    when:
+      indicator: RSI
+      operator: "<"
+      value: 30
+    outcome: LOW_RISK
+    rationale: "RSI below 30 indicates oversold conditions - potential buying opportunity"
+
+  - name: overbought_rsi
+    priority: 20
+    when:
+      indicator: RSI
+      operator: ">="
+      value: 70
+    outcome: HIGH_RISK
+    rationale: "RSI at or above 70 indicates overbought conditions - elevated risk"
+
+  # ====================
+  # Type B: Indicator vs Indicator
+  # ====================
+  # Compare two indicators against each other.
+  # Useful for trend detection (e.g., EMA crossing SMA).
+
+  - name: bullish_crossover
+    priority: 30
+    when:
+      left:
+        indicator: EMA
+      operator: ">"
+      right:
+        indicator: SMA
+    outcome: LOW_RISK
+    rationale: "EMA above SMA suggests bullish trend"
+
+  - name: bearish_crossover
+    priority: 40
+    when:
+      left:
+        indicator: EMA
+      operator: "<"
+      right:
+        indicator: SMA
+    outcome: HIGH_RISK
+    rationale: "EMA below SMA suggests bearish trend"
+
+  # ====================
+  # Additional Examples
+  # ====================
+
+  # Using not-equal operator
+  - name: neutral_zone_exit
+    priority: 50
+    when:
+      indicator: RSI
+      operator: "!="
+      value: 50
+    outcome: MODERATE
+    rationale: "RSI moved away from neutral 50 - watch for trend development"
+
+  # Using less-than-or-equal
+  - name: extreme_oversold
+    priority: 5  # Highest priority (evaluated first)
+    when:
+      indicator: RSI
+      operator: "<="
+      value: 20
+    outcome: LOW_RISK
+    rationale: "RSI at or below 20 is extremely oversold - strong potential reversal"
+
+# ====================
+# Schema Reference
+# ====================
+#
+# version: int (must be 1)
+# name: string (unique identifier for this rule set)
+# description: string (optional)
+# default_outcome: HIGH_RISK | MODERATE | LOW_RISK (required)
+#
+# rules: list of rules, each with:
+#   - name: string (unique within file)
+#   - priority: int (optional, default=100, lower = evaluated first)
+#   - when: condition (required)
+#   - outcome: HIGH_RISK | MODERATE | LOW_RISK
+#   - rationale: string (optional, human-readable explanation)
+#
+# Condition types:
+#
+# 1. Indicator vs Value:
+#    when:
+#      indicator: RSI | SMA | EMA
+#      operator: "<" | "<=" | ">" | ">=" | "==" | "!="
+#      value: number
+#
+# 2. Indicator vs Indicator:
+#    when:
+#      left:
+#        indicator: RSI | SMA | EMA
+#      operator: "<" | "<=" | ">" | ">=" | "==" | "!="
+#      right:
+#        indicator: RSI | SMA | EMA
+#
+# ====================
+# Evaluation Order
+# ====================
+#
+# 1. Rules are sorted by priority (lower number = first)
+# 2. Rules with same priority are evaluated in file order
+# 3. First matching rule wins (evaluation stops)
+# 4. If no rules match, default_outcome is used
+#
+# This ensures deterministic, reproducible results.
