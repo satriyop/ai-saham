@@ -8,7 +8,6 @@
 - Offer to create skills if you find some insight that will potentially help you to work more effectively in upcoming task, skills should be project scope not user scope. Use Skill creator plugin to create the skill.
 
 ## Purpose
-
 This file instructs **Claude Code** how to behave as a disciplined senior engineer while developing this project. Claude should treat this repository as a **real financial software product**, not a prototype or demo.
 
 🚨 Important: What NOT to do
@@ -21,6 +20,8 @@ Do not:
 ---
 
 ## Project Summary
+This project is a deterministic computational artifact runtime with AI-assisted authoring.
+We believe AI should not generate opaque code that runs unchecked. Instead, AI should translate human intent into constrained, versioned, and machine-verifiable artifacts that are compiled, validated, and executed by a deterministic engine. AI-Saham turns natural language into safe computational building blocks—indicators, formulas, rules, and strategies—that can be tested, reasoned about, and reproduced. Stock analysis is our first domain, but our true mission is to provide a portable policy and strategy runtime where humans express intent, AI proposes artifacts, and the system—not the model—decides what is allowed to run.
 
 We are building a **local-first, developer first, production-grade composable engine analyser with CLI application for stock analysis** with the following characteristics:
 * “Composable stock analysis engine for developers, traders, and fintech teams — starting with Indonesia. Terraform for market analysis.
@@ -31,7 +32,7 @@ We are building a **local-first, developer first, production-grade composable en
 * Future-ready: global markets, bots, web, mobile
 * Designed for maintainability, auditability, and extensibility
 
-This is **composable analysis engine & strategy shareable artifacts**, not an automated trading bot.
+This is **AI-assisted quantitative research environment, composable analysis engine**, not an automated trading bot.
 
 ---
 
@@ -42,6 +43,7 @@ This is **composable analysis engine & strategy shareable artifacts**, not an au
 * Domain logic must be framework-agnostic
 * CLI, AI, database, and data providers are adapters
 * No adapter may leak into the domain
+* Registry as Single Authority: The registry already knows how to dispatch to built-in, plugin, or formula.
 
 **Rule:** If domain logic depends on an external library, the design is wrong.
 

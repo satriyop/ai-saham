@@ -13,6 +13,8 @@ A **local-first, production-grade CLI application** for stock analysis focused o
 - **Plugin System** - Extend with custom indicators (ATR included as example)
 - **Risk Assessment** - Three built-in profiles (conservative, balanced, aggressive)
 - **Custom Rules DSL** - Define your own rules via YAML configuration
+- **Strategy Packages** - First-class, versionable, portable strategy artifacts
+- **AI Strategy Creator** - Describe strategies in natural language, get complete YAML
 - **AI Formula Translator** - Describe indicators in natural language, get formula back
 - **AI Explanations** - Get AI-powered insights (Claude, OpenAI, Gemini, Ollama)
 - **News Sentiment** - Analyze news headlines with keyword or AI classification
@@ -40,6 +42,13 @@ saham risk BBCA --explain --provider ollama
 
 # Analyze news sentiment
 saham sentiment BBCA
+
+# Create and use a strategy
+saham strategy init momentum
+saham backtest BBCA --strategy momentum
+
+# Or create a strategy from natural language
+saham strategy create "RSI oversold strategy" --name my_rsi --provider mock
 ```
 
 ---
@@ -228,22 +237,33 @@ saham sentiment ASII --ai-classify --provider ollama --model llama3
 
 ### `saham backtest` - Strategy Backtesting
 
-Run a deterministic backtest simulation on historical data using custom rules.
+Run a deterministic backtest simulation on historical data using a strategy package or rules file.
 
 ```bash
+# Using strategy packages (recommended)
+saham backtest BBCA --strategy momentum
+saham backtest BBRI -S momentum --start 2024-01-01
+saham backtest TLKM -S ./strategies/my_strat/strategy.yaml --verbose
+
+# Using rules file (backward compatible)
 saham backtest BBCA --rules-file config/custom_rules.yaml.example
-saham backtest BBRI -r rules.yaml --start 2024-01-01
-saham backtest TLKM -r rules.yaml --capital 50000000 --verbose
+saham backtest BBRI -r rules.yaml --capital 50000000 --verbose
 ```
 
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
-| `--rules-file` | `-r` | (required) | Path to YAML rules file |
+| `--strategy` | `-S` | | Strategy name or path (recommended) |
+| `--rules-file` | `-r` | | Path to YAML rules file (alias for --strategy) |
 | `--start` | `-s` | | Start date (YYYY-MM-DD) |
 | `--end` | `-e` | | End date (YYYY-MM-DD) |
 | `--capital` | `-c` | 100000000 | Initial capital in IDR |
 | `--verbose` | `-v` | false | Show detailed trade-by-trade output |
 | `--db` | | ~/.ai-saham/data.db | Custom database path |
+
+**Strategy Resolution:** When using `--strategy`, names are searched in:
+1. `./NAME/strategy.yaml` (current directory)
+2. `./strategies/NAME/strategy.yaml` (local strategies)
+3. `~/.ai-saham/strategies/NAME/strategy.yaml` (user strategies)
 
 **Signal Mapping (customizable in YAML):**
 
@@ -263,6 +283,90 @@ saham backtest TLKM -r rules.yaml --capital 50000000 --verbose
 - Average Win/Loss
 
 **Note:** Requires cached data. Run `saham fetch TICKER` first.
+
+---
+
+### `saham strategy` - Strategy Management
+
+Manage strategy packages - portable, versionable strategy definitions.
+
+#### `saham strategy init` - Create New Strategy
+
+```bash
+saham strategy init momentum                    # Create in ./strategies/momentum/
+saham strategy init my_strat --dir ~/strategies # Custom location
+saham strategy init test --force                # Overwrite existing
+```
+
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--dir` | `-d` | ./strategies/NAME | Directory to create strategy |
+| `--force` | `-f` | false | Overwrite existing strategy |
+
+Creates:
+```
+strategies/momentum/
+├── strategy.yaml    # Strategy rules (required)
+└── README.md        # Documentation
+```
+
+#### `saham strategy validate` - Validate Strategy
+
+```bash
+saham strategy validate momentum                        # By name
+saham strategy validate ./strategies/momentum/strategy.yaml  # By path
+saham strategy validate momentum --strict               # Warnings as errors
+```
+
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--strict` | `-s` | false | Treat warnings as errors |
+
+#### `saham strategy create` - Create from Natural Language
+
+Use AI to generate a complete strategy from a natural language description.
+
+```bash
+saham strategy create "RSI oversold strategy" --name my_rsi
+saham strategy create "EMA crossover with 9 and 21" --name ema_cross --provider claude
+saham strategy create "momentum strategy" --provider ollama --no-save  # Preview only
+```
+
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--name` | `-n` | auto-generated | Strategy name |
+| `--provider` | `-p` | mock | AI provider (claude/openai/gemini/ollama/mock) |
+| `--model` | `-m` | | Model name (for Ollama) |
+| `--dir` | `-d` | ./strategies/NAME | Directory to save strategy |
+| `--save/--no-save` | | save | Save to file or preview only |
+
+**Supported intents:**
+- "RSI oversold strategy" → RSI < 30 → LOW_RISK
+- "EMA crossover with 9 and 21 periods" → EMA crossover rules
+- "conservative RSI strategy" → Strict thresholds
+- "momentum strategy" → RSI + EMA combination
+
+**Unsupported intents** (returns error):
+- Specific stock recommendations: "strategy for BBCA"
+- Guaranteed outcomes: "strategy that always wins"
+- Price predictions: "predict tomorrow's price"
+
+#### `saham strategy list` - List Available Strategies
+
+```bash
+saham strategy list                  # List valid strategies
+saham strategy list --verbose        # Show detailed info
+saham strategy list --all            # Include invalid strategies
+```
+
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--verbose` | `-v` | false | Show detailed information |
+| `--all` | `-a` | false | Include invalid strategies |
+
+**Search Locations:**
+- `./strategies/` (local project)
+- `~/.ai-saham/strategies/` (user-wide)
 
 ---
 
@@ -296,6 +400,27 @@ export ANTHROPIC_API_KEY=sk-...
 ollama serve  # In another terminal
 saham risk BBCA --explain --provider ollama
 ```
+
+### AI Strategy Creator
+
+Create complete strategy YAML from natural language descriptions:
+
+```bash
+# Create RSI-based strategy
+saham strategy create "buy when RSI below 30, sell when RSI above 70" --name rsi_strategy
+
+# Create EMA crossover strategy
+saham strategy create "EMA crossover with 9 and 21 periods" --name ema_cross --provider claude
+
+# Preview without saving
+saham strategy create "momentum strategy" --no-save
+```
+
+The AI generates:
+- Complete YAML structure with version, name, description
+- Custom indicator definitions (if needed)
+- Rules with conditions and rationales
+- Signal mapping for backtesting
 
 ### AI Formula Translator
 
@@ -509,6 +634,65 @@ rules:
 
 ---
 
+## Strategy Packages
+
+Strategies are first-class, versionable, portable artifacts. Instead of loose YAML files, organize strategies as packages.
+
+### Package Structure
+
+```
+strategies/
+└── momentum/
+    ├── strategy.yaml   # Required: strategy rules
+    ├── README.md       # Optional: documentation
+    ├── tests/          # Optional: test cases
+    └── examples/       # Optional: example usage
+```
+
+### Creating a Strategy
+
+```bash
+# Initialize new strategy
+saham strategy init momentum
+
+# Customize the rules
+vim strategies/momentum/strategy.yaml
+
+# Validate
+saham strategy validate momentum
+
+# Use in backtest
+saham backtest BBCA --strategy momentum
+```
+
+### Strategy Resolution
+
+When you reference a strategy by name (e.g., `--strategy momentum`), it's searched in priority order:
+
+1. **Explicit path** - If contains `/` or ends with `.yaml`
+2. **Local directory** - `./momentum/strategy.yaml`
+3. **Local strategies** - `./strategies/momentum/strategy.yaml`
+4. **User strategies** - `~/.ai-saham/strategies/momentum/strategy.yaml`
+
+### Sharing Strategies
+
+Strategies are self-contained packages that can be:
+- Committed to version control
+- Shared with team members
+- Published as templates
+- Tested independently
+
+```bash
+# Copy a strategy
+cp -r strategies/momentum strategies/momentum-v2
+
+# Share via git
+git add strategies/momentum
+git commit -m "Add momentum strategy"
+```
+
+---
+
 ## Architecture
 
 ```
@@ -547,7 +731,8 @@ src/
 │   │   ├── explain_risk.py
 │   │   ├── fetch_sentiment.py
 │   │   ├── backtest.py
-│   │   └── create_indicator_from_intent.py  # AI formula translation
+│   │   ├── create_indicator_from_intent.py  # AI formula translation
+│   │   └── create_strategy_from_intent.py   # AI strategy generation
 │   ├── formula/               # Formula DSL engine
 │   │   ├── tokenizer.py       # Lexical analysis
 │   │   ├── parser.py          # Recursive descent parser
@@ -555,9 +740,11 @@ src/
 │   │   ├── validator.py       # Semantic validation
 │   │   └── evaluator.py       # AST evaluation
 │   ├── services/
-│   │   └── indicator_registry.py  # Centralized indicator management
+│   │   ├── indicator_registry.py  # Centralized indicator management
+│   │   └── strategy_loader.py     # Strategy package resolution
 │   ├── ports/
-│   │   └── formula_translator.py  # AI translator interface
+│   │   ├── formula_translator.py  # AI formula translator interface
+│   │   └── strategy_translator.py # AI strategy translator interface
 │   ├── rules/                 # Custom rules DSL
 │   │   ├── schema.py          # Includes formula support
 │   │   └── interpreter.py
@@ -576,6 +763,8 @@ src/
 │   │   ├── ollama_explainer.py
 │   │   ├── formula_translator.py       # AI formula translation
 │   │   ├── formula_translator_prompt.py
+│   │   ├── strategy_translator.py      # AI strategy generation
+│   │   ├── strategy_translator_prompt.py
 │   │   └── mock_explainer.py
 │   ├── sentiment/             # Sentiment analysis
 │   │   ├── factory.py
@@ -589,6 +778,8 @@ src/
 │
 ├── adapters/                  # User interfaces
 │   ├── cli/                   # Typer CLI (main interface)
+│   │   ├── main.py            # Main CLI entry point
+│   │   └── strategy_commands.py  # Strategy management commands
 │   ├── bot/                   # Telegram, WhatsApp (stubs)
 │   └── web/                   # REST API (stub)
 │

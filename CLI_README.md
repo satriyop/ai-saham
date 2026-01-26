@@ -18,6 +18,7 @@ This tool provides:
 - **Rule-based analysis** - Every result is reproducible and explainable
 - **Local-first design** - Works offline after initial data fetch
 - **Composable indicators** - Combine SMA, EMA, RSI in custom rules
+- **Strategy packages** - First-class, versionable, portable strategy artifacts
 - **Optional AI** - Get explanations, but never depend on them
 
 ### What This Tool Is NOT
@@ -41,12 +42,23 @@ saham fetch BBCA
 
 # Step 3: See risk assessment across all profiles
 saham risk BBCA --all
+
+# Step 4: Create and test a strategy
+saham strategy init momentum
+saham backtest BBCA --strategy momentum
+
+# Step 5: Or create a strategy from natural language!
+saham strategy create "RSI oversold strategy" --name my_rsi --provider mock
+saham backtest BBCA --strategy my_rsi
 ```
 
 **What just happened?**
 1. `version` - Confirmed the CLI is installed
 2. `fetch` - Downloaded 1 year of daily price data for Bank Central Asia (BBCA)
 3. `risk --all` - Analyzed the stock using 3 different risk tolerance profiles
+4. `strategy init` - Created a reusable strategy package
+5. `backtest --strategy` - Tested the strategy on historical data
+6. `strategy create` - Used AI to generate a complete strategy from natural language
 
 You now have a local copy of BBCA's data and can analyze it offline anytime.
 
@@ -233,7 +245,64 @@ Summary:
   Status: NEUTRAL (30 <= RSI <= 70)
 ```
 
-### 4.4 Combining Indicators - The `indicators` Command
+### 4.4 The `compute` Command - Universal Indicator Computation
+
+Compute **any** indicator - built-in, plugin, or custom formula - for any stock.
+
+```bash
+# Compute built-in indicators
+saham compute RSI BBCA
+saham compute SMA BBCA --period 50
+
+# Compute plugin indicators
+saham compute ATR BBCA --period 14
+
+# Compute custom formulas (created via create-indicator)
+saham compute SMOOTH_RSI BBCA --tail 10
+
+# Control output
+saham compute EMA BBRI --period 20 --days 180 --tail 50
+```
+
+**Options:**
+
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--period` | `-p` | 14 | Period for the indicator (ignored for formulas) |
+| `--days` | `-d` | 365 | Days of data to use |
+| `--tail` | `-t` | 30 | Show last N values |
+| `--db` | | ~/.ai-saham/data.db | Database path |
+
+**Output Example:**
+
+```
+Computing SMOOTH_RSI for BBCA...
+
+Ticker: BBCA
+Indicator: SMOOTH_RSI
+Values: 245 (showing last 10)
+
+Date         SMOOTH_RSI
+---------------------------
+2026-01-15         45.23
+2026-01-16         47.89
+2026-01-17         42.15
+...
+2026-01-27         38.72
+
+Summary:
+  Latest:        38.72
+  Highest:       52.30
+  Lowest:        28.45
+```
+
+**Use Cases:**
+- Debug formula outputs before using in rules
+- Verify indicator calculations match TradingView
+- Quick analysis without writing rules files
+- Explore plugin indicator behavior
+
+### 4.5 Combining Indicators - The `indicators` Command
 
 **Why combine?** Single indicators can give false signals. When multiple indicators agree, signals are stronger.
 
@@ -455,28 +524,37 @@ Backtesting lets you test a strategy on historical data before risking real capi
 ### Basic Usage
 
 ```bash
-# Backtest with custom rules (rules file required)
+# Recommended: Use strategy packages
+saham backtest BBCA --strategy momentum
+saham backtest BBRI -S momentum --start 2024-01-01 --end 2024-12-31
+
+# Or use explicit path
+saham backtest TLKM -S ./strategies/my_strat/strategy.yaml --verbose
+
+# Backward compatible: Use rules file directly
 saham backtest BBCA --rules-file config/custom_rules.yaml.example
-
-# Specify date range
-saham backtest BBRI -r rules.yaml --start 2024-01-01 --end 2024-12-31
-
-# Different starting capital
-saham backtest TLKM -r rules.yaml --capital 50000000
-
-# See individual trades
-saham backtest ASII -r rules.yaml --verbose
+saham backtest ASII -r rules.yaml --capital 50000000
 ```
 
 ### Key Options
 
 | Option | Purpose | Example |
 |--------|---------|---------|
-| `--rules-file` / `-r` | Strategy rules (required) | `-r my_rules.yaml` |
+| `--strategy` / `-S` | Strategy name or path (recommended) | `-S momentum` |
+| `--rules-file` / `-r` | Rules file (alias for --strategy) | `-r rules.yaml` |
 | `--start` | Start date | `--start 2024-01-01` |
 | `--end` | End date | `--end 2024-12-31` |
 | `--capital` | Initial capital (IDR) | `--capital 50000000` |
 | `--verbose` | Show each trade | Debug your strategy |
+
+### Strategy Resolution
+
+When using `--strategy NAME`, the system searches in order:
+1. `./NAME/strategy.yaml` (current directory)
+2. `./strategies/NAME/strategy.yaml` (local strategies folder)
+3. `~/.ai-saham/strategies/NAME/strategy.yaml` (user strategies)
+
+If you provide a path with `/` or ending in `.yaml`, it's used directly.
 
 ### Understanding Backtest Metrics
 
@@ -570,16 +648,41 @@ rules:
     rationale: "RSI(7) below 25 suggests oversold"
 ```
 
-### Built-in Indicators
+### Built-in and Registered Indicators
 
-These are always available without definition:
+These are always available without definition in your rules file:
 
-| Name | Default Period | Access As |
-|------|---------------|-----------|
-| RSI | 14 | `indicator: RSI` |
-| SMA | 20 | `indicator: SMA` |
-| EMA | 20 | `indicator: EMA` |
-| ATR | 14 | `indicator: ATR` (plugin) |
+| Name | Default Period | Type | Access As |
+|------|---------------|------|-----------|
+| RSI | 14 | Built-in | `indicator: RSI` |
+| SMA | 20 | Built-in | `indicator: SMA` |
+| EMA | 20 | Built-in | `indicator: EMA` |
+| ATR | 14 | Plugin | `indicator: ATR` |
+| *Your formulas* | — | Formula | `indicator: YOUR_NAME` |
+
+**Using Registered Formulas in Rules:**
+
+Any formula created via `create-indicator` and saved to `~/.ai-saham/formulas.yaml` can be used directly in rules without re-defining them:
+
+```yaml
+# First, create your formula once:
+# saham create-indicator "smoothed RSI" --name SMOOTH_RSI
+
+# Then use it in rules.yaml - no definition needed!
+version: 1
+name: "smooth_rsi_strategy"
+default_outcome: MODERATE
+
+rules:
+  - name: oversold
+    when:
+      indicator: SMOOTH_RSI   # Uses formula from ~/.ai-saham/formulas.yaml
+      operator: "<"
+      value: 30
+    outcome: LOW_RISK
+```
+
+This keeps rules files clean and promotes formula reuse across strategies.
 
 ### Formula-Based Indicators (Advanced)
 
@@ -689,7 +792,235 @@ saham backtest BBCA --rules-file config/my_rules.yaml --verbose
 
 ---
 
-## 9. AI-Enhanced Analysis (Optional)
+## 9. Strategy Packages - The `strategy` Command
+
+Strategy packages make strategies **first-class artifacts** - versionable, portable, and shareable.
+
+### Why Strategy Packages?
+
+Instead of loose YAML files scattered around, organize strategies as self-contained packages:
+
+```
+strategies/
+└── momentum/
+    ├── strategy.yaml   # Required: your rules
+    ├── README.md       # Optional: documentation
+    ├── tests/          # Optional: test cases
+    └── examples/       # Optional: example usage
+```
+
+### Creating a Strategy Manually
+
+```bash
+# Initialize a new strategy package
+saham strategy init momentum
+
+# Creates: ./strategies/momentum/
+#   ├── strategy.yaml (starter template)
+#   └── README.md (documentation)
+
+# Create in a custom location
+saham strategy init my_strat --dir ~/trading/strategies/my_strat
+
+# Overwrite existing
+saham strategy init momentum --force
+```
+
+### Creating a Strategy from Natural Language (AI-Assisted)
+
+Don't know YAML syntax? Describe your strategy in plain English and let AI generate it:
+
+```bash
+# Create strategy from natural language
+saham strategy create "buy when RSI below 30 and EMA crossover" --name momentum
+
+# With specific AI provider
+saham strategy create "conservative RSI strategy with strict thresholds" \
+    --name conservative_rsi --provider claude
+
+# Preview without saving
+saham strategy create "MACD crossover strategy" --no-save
+
+# Use local Ollama (no API key needed)
+saham strategy create "EMA crossover with 9 and 21 periods" \
+    --name ema_cross --provider ollama
+```
+
+**Options:**
+
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--name` | `-n` | auto-generated | Strategy name |
+| `--provider` | `-p` | mock | AI provider (claude/openai/gemini/ollama/mock) |
+| `--model` | `-m` | provider default | Model name (for Ollama) |
+| `--dir` | `-d` | ./strategies/NAME | Directory to save strategy |
+| `--save/--no-save` | | save | Save to file or preview only |
+
+**Output Example:**
+
+```
+Creating strategy from intent...
+
+Generated Strategy:
+──────────────────────────────────────────────────
+version: 1
+name: "momentum"
+description: "RSI oversold with EMA crossover strategy"
+
+indicators:
+  fast_ema:
+    type: EMA
+    period: 9
+  slow_ema:
+    type: EMA
+    period: 21
+
+default_outcome: MODERATE
+
+signal_mapping:
+  LOW_RISK: ENTER_LONG
+  MODERATE: HOLD
+  HIGH_RISK: EXIT_LONG
+
+rules:
+  - name: rsi_oversold
+    priority: 10
+    when:
+      indicator: RSI
+      operator: "<"
+      value: 30
+    outcome: LOW_RISK
+    rationale: "RSI below 30 indicates oversold conditions"
+
+  - name: bullish_ema_crossover
+    priority: 10
+    when:
+      left:
+        indicator: fast_ema
+      operator: ">"
+      right:
+        indicator: slow_ema
+    outcome: LOW_RISK
+    rationale: "Fast EMA above slow EMA confirms bullish momentum"
+──────────────────────────────────────────────────
+
+Strategy saved to: ./strategies/momentum/strategy.yaml
+
+Next steps:
+  1. Run: saham strategy validate momentum
+  2. Run: saham backtest BBCA --strategy momentum
+```
+
+**What you can describe:**
+
+| Natural Language | Generated Strategy |
+|------------------|-------------------|
+| "RSI oversold strategy" | RSI < 30 → LOW_RISK, RSI > 70 → HIGH_RISK |
+| "EMA crossover with 9 and 21 periods" | EMA(9) > EMA(21) → bullish |
+| "conservative RSI strategy" | Strict thresholds (25/75 instead of 30/70) |
+| "momentum strategy" | RSI + EMA combination |
+
+**Unsupported requests** (returns error):
+- "strategy for BBCA" (specific stock recommendations)
+- "strategy that always wins" (guaranteed outcomes)
+- "predict price" (price predictions)
+- "explain RSI" (non-strategy requests)
+
+### Validating a Strategy
+
+```bash
+# Validate by name (searches standard locations)
+saham strategy validate momentum
+
+# Validate by explicit path
+saham strategy validate ./strategies/momentum/strategy.yaml
+
+# Strict mode: treat warnings as errors
+saham strategy validate momentum --strict
+```
+
+**Output Example:**
+```
+Validating: ./strategies/momentum/strategy.yaml
+
+Status: VALID
+Name: momentum
+
+Warnings:
+  - Missing README.md (recommended)
+```
+
+### Listing Available Strategies
+
+```bash
+# List all valid strategies
+saham strategy list
+
+# Show detailed information
+saham strategy list --verbose
+
+# Include invalid strategies (for debugging)
+saham strategy list --all
+```
+
+**Output Example:**
+```
+Found 3 strategies:
+
+  momentum             Momentum-based EMA crossover
+  conservative_rsi     RSI with strict thresholds [user]
+  broken_strat         broken_strat (invalid)
+
+Run 'saham strategy validate NAME' to check a strategy.
+Run 'saham backtest TICKER --strategy NAME' to use a strategy.
+```
+
+**Location Badges:**
+- No badge = local (`./strategies/`)
+- `[user]` = user directory (`~/.ai-saham/strategies/`)
+
+### Using Strategies in Backtest
+
+```bash
+# By name (recommended)
+saham backtest BBCA --strategy momentum
+
+# By explicit path
+saham backtest BBCA -S ./strategies/momentum/strategy.yaml
+```
+
+### Strategy Package vs Rules File
+
+| Aspect | Strategy Package | Loose Rules File |
+|--------|------------------|------------------|
+| Organization | Folder with structure | Single YAML file |
+| Documentation | README.md included | Separate or none |
+| Discoverability | `saham strategy list` | Manual search |
+| Sharing | Copy folder | Copy file |
+| Version control | Natural (folder) | Works but scattered |
+
+**Recommendation:** Use strategy packages for any strategy you plan to reuse or share.
+
+### Sharing Strategies
+
+Strategies are self-contained and easy to share:
+
+```bash
+# Share via git
+git add strategies/momentum
+git commit -m "Add momentum strategy"
+git push
+
+# Copy to another project
+cp -r strategies/momentum ~/other-project/strategies/
+
+# Install to user directory (available everywhere)
+cp -r strategies/momentum ~/.ai-saham/strategies/
+```
+
+---
+
+## 10. AI-Enhanced Analysis (Optional)
 
 AI is **OFF by default**. The system works completely without AI. Use AI for:
 - Learning what indicators mean
@@ -786,7 +1117,7 @@ print(response.formula)  # "SMA(RSI(14), 10)"
 
 ---
 
-## 10. Indicator Management Commands
+## 11. Indicator Management Commands
 
 Create, list, and manage custom indicators from the command line.
 
@@ -878,7 +1209,7 @@ saham delete-indicator SMOOTH_RSI --force
 
 ---
 
-## 11. Complete Workflow Examples
+## 12. Complete Workflow Examples
 
 ### Conservative Investor Workflow
 
@@ -935,24 +1266,84 @@ Goal: Build and test a custom trading strategy.
 # Step 1: Get enough historical data
 saham fetch TLKM --days 730
 
-# Step 2: Create rules file (use example as template)
-cp config/custom_rules.yaml.example config/my_strategy.yaml
+# Step 2: Create a strategy package
+saham strategy init my_strategy
 
-# Step 3: Edit rules in your editor
+# Step 3: Edit the strategy in your editor
+vim strategies/my_strategy/strategy.yaml
 # ... define your indicators and rules ...
 
-# Step 4: Test rules on current data
-saham risk TLKM --rules-file config/my_strategy.yaml
+# Step 4: Validate the strategy
+saham strategy validate my_strategy
 
-# Step 5: Backtest on historical data
-saham backtest TLKM -r config/my_strategy.yaml --start 2023-01-01 --verbose
+# Step 5: Test rules on current data
+saham risk TLKM --rules-file strategies/my_strategy/strategy.yaml
 
-# Step 6: Iterate until metrics are acceptable
+# Step 6: Backtest on historical data
+saham backtest TLKM --strategy my_strategy --start 2023-01-01 --verbose
+
+# Step 7: Iterate until metrics are acceptable
+# Step 8: Share or version control your strategy
+git add strategies/my_strategy
+git commit -m "Add my_strategy"
 ```
+
+### Custom Formula Workflow
+
+Goal: Create a custom indicator and use it in trading rules.
+
+```bash
+# Step 1: Create custom formula using AI
+saham create-indicator "smoothed RSI with 14-period and 10-day smoothing" \
+    --name SMOOTH_RSI --provider ollama
+
+# Step 2: Verify it works
+saham compute SMOOTH_RSI BBCA --tail 10
+
+# Step 3: Create a rules file that uses it (no definition needed!)
+cat > config/smooth_rules.yaml << 'EOF'
+version: 1
+name: smooth_rsi_strategy
+default_outcome: MODERATE
+
+rules:
+  - name: oversold
+    when:
+      indicator: SMOOTH_RSI   # Uses saved formula!
+      operator: "<"
+      value: 30
+    outcome: LOW_RISK
+    rationale: "Smoothed RSI indicates oversold"
+
+  - name: overbought
+    when:
+      indicator: SMOOTH_RSI
+      operator: ">"
+      value: 70
+    outcome: HIGH_RISK
+    rationale: "Smoothed RSI indicates overbought"
+
+signal_mapping:
+  LOW_RISK: ENTER_LONG
+  MODERATE: HOLD
+  HIGH_RISK: EXIT_LONG
+EOF
+
+# Step 4: Run risk assessment
+saham risk BBCA --rules-file config/smooth_rules.yaml
+
+# Step 5: Backtest the strategy
+saham backtest BBCA --rules-file config/smooth_rules.yaml --verbose
+
+# Step 6: List all your custom formulas
+saham list-indicators --formulas
+```
+
+**Key insight:** Once you create a formula with `create-indicator`, it's saved globally and can be used in any rules file without redefining it.
 
 ---
 
-## 12. Command Reference (Quick Lookup)
+## 13. Command Reference (Quick Lookup)
 
 | Command | Purpose | Key Options |
 |---------|---------|-------------|
@@ -961,10 +1352,15 @@ saham backtest TLKM -r config/my_strategy.yaml --start 2023-01-01 --verbose
 | `saham sma TICKER` | Simple Moving Average | `--period`, `--field`, `--days` |
 | `saham ema TICKER` | Exponential Moving Average | `--period`, `--field`, `--days` |
 | `saham rsi TICKER` | Relative Strength Index | `--period`, `--days` |
+| `saham compute INDICATOR TICKER` | Compute any indicator | `--period`, `--days`, `--tail`, `--db` |
 | `saham indicators TICKER` | All indicators combined | `--sma`, `--ema`, `--rsi`, `--days` |
 | `saham risk TICKER` | Risk assessment | `--profile`, `--all`, `--rules-file`, `--explain`, `--with-sentiment` |
 | `saham sentiment TICKER` | News sentiment | `--days`, `--max`, `--ai-classify` |
-| `saham backtest TICKER` | Strategy backtesting | `--rules-file` (required), `--start`, `--end`, `--capital`, `--verbose` |
+| `saham strategy init NAME` | Create strategy package | `--dir`, `--force` |
+| `saham strategy create INTENT` | Create strategy from natural language | `--name`, `--provider`, `--save/--no-save` |
+| `saham strategy validate NAME` | Validate strategy | `--strict` |
+| `saham strategy list` | List available strategies | `--verbose`, `--all` |
+| `saham backtest TICKER` | Strategy backtesting | `--strategy`/`--rules-file`, `--start`, `--end`, `--capital`, `--verbose` |
 | `saham create-indicator` | Create formula from NL | `--name`, `--provider`, `--save/--no-save` |
 | `saham list-indicators` | List all indicators | `--formulas` |
 | `saham show-formula NAME` | Show formula details | — |
@@ -1049,6 +1445,78 @@ Error: Rules file not found: config/my_rules.yaml
 **Solution:** Verify the path is correct, or copy from example:
 ```bash
 cp config/custom_rules.yaml.example config/my_rules.yaml
+```
+
+### "Strategy not found"
+
+```
+Error: Strategy 'momentum' not found.
+
+Searched:
+  - ./momentum/strategy.yaml
+  - ./strategies/momentum/strategy.yaml
+  - ~/.ai-saham/strategies/momentum/strategy.yaml
+
+Tip: Use 'saham strategy init momentum' to create a new strategy.
+```
+
+**Solution:** The strategy doesn't exist in any search location. Options:
+
+1. **Create the strategy:**
+   ```bash
+   saham strategy init momentum
+   ```
+
+2. **Check spelling:** Strategy names are case-sensitive
+
+3. **Use explicit path:** If the file is elsewhere:
+   ```bash
+   saham backtest BBCA --strategy ./path/to/strategy.yaml
+   ```
+
+4. **List available strategies:**
+   ```bash
+   saham strategy list
+   ```
+
+### "Strategy already exists"
+
+```
+Error: Strategy already exists at strategies/momentum/strategy.yaml
+Use --force to overwrite.
+```
+
+**Solution:** Either use a different name or add `--force`:
+```bash
+saham strategy init momentum --force
+```
+
+### "Unknown indicator" in rules
+
+```
+Error: Rule references undefined indicator 'SMOOTH_RSI'.
+Define it in the 'indicators' section, use a built-in, or register a formula.
+```
+
+**Solution:** The indicator isn't defined anywhere. Options:
+
+1. **Create and save the formula:**
+   ```bash
+   saham create-indicator "smoothed RSI" --name SMOOTH_RSI --provider mock
+   ```
+
+2. **Define it in the rules file:**
+   ```yaml
+   indicators:
+     smooth_rsi:
+       formula: "SMA(RSI(14), 10)"
+   ```
+
+3. **Use a built-in instead:** RSI, SMA, EMA, ATR
+
+Check available indicators with:
+```bash
+saham list-indicators
 ```
 
 ### "AI explanation unavailable"
