@@ -3,7 +3,7 @@
 ## Agent & SubAgent
 - Always use model Opus for Planning & Implementation.
 - Always use model Haiku for code/file exploration, use sub agents for everytime you need to explore the code
-- Use model Sonnet as sub agent for creating test in paralel, but switch immediately to Opus for implementation.
+- Always use model Opus to think edge case when crafting test code, but use Sonnet sub agents to write the test code. When test code failed switch back to use model Opus to fix the implementation. in loop until all test code is passed. 
 - When execute test code, use subagent, do not pollute context
 - Offer to create skills if you find some insight that will potentially help you to work more effectively in upcoming task, skills should be project scope not user scope. Use Skill creator plugin to create the skill.
 
@@ -23,15 +23,15 @@ Do not:
 
 ## Project Summary
 
-We are building a **local-first, production-grade CLI application for stock analysis** with the following characteristics:
-
+We are building a **local-first, developer first, production-grade composable engine analyser with CLI application for stock analysis** with the following characteristics:
+* “Composable stock analysis engine for developers, traders, and fintech teams — starting with Indonesia. Terraform for market analysis.
 * Default: deterministic, rule-based technical analysis
 * Optional: AI-enhanced analysis (OFF by default)
 * Initial market: **Indonesia Stock Exchange (IDX)**
 * Future-ready: global markets, bots, web, mobile
 * Designed for maintainability, auditability, and extensibility
 
-This is **analysis software**, not an automated trading bot.
+This is **composable analysis engine**, not an automated trading bot.
 
 ---
 
