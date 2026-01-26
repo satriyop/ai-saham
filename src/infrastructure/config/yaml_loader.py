@@ -29,7 +29,9 @@ from src.application.rules.schema import (
     Outcome,
     Rule,
     RuleSet,
+    SignalMapping,
 )
+from src.domain.value_objects.trade_action import TradeAction
 
 
 # Default locations to search for rules files
@@ -184,6 +186,11 @@ class YamlConfigLoader:
         indicators_data = data.get("indicators", {})
         indicators = cls._build_indicators(indicators_data)
 
+        # Parse signal_mapping (optional section)
+        signal_mapping = None
+        if "signal_mapping" in data:
+            signal_mapping = cls._build_signal_mapping(data["signal_mapping"])
+
         # Parse rules
         rules_data = data["rules"]
         if not rules_data:
@@ -205,6 +212,7 @@ class YamlConfigLoader:
                 rules=tuple(rules),
                 indicators=indicators,
                 description=description,
+                signal_mapping=signal_mapping,
             )
         except ValueError as e:
             raise RulesValidationError(str(e))
@@ -244,6 +252,59 @@ class YamlConfigLoader:
                 raise type(e)(f"indicators.{ind_name}: {e}")
 
         return tuple(indicators)
+
+    @classmethod
+    def _build_signal_mapping(cls, data: dict[str, Any]) -> SignalMapping:
+        """Build SignalMapping from parsed YAML data.
+
+        Parses the optional signal_mapping section that maps risk levels
+        to trade actions for backtesting.
+
+        Args:
+            data: Dictionary mapping outcome names to action names
+
+        Returns:
+            SignalMapping with custom or default actions
+
+        Raises:
+            RulesSchemaError: If structure is invalid
+            RulesValidationError: If values are invalid
+        """
+        if not isinstance(data, dict):
+            raise RulesSchemaError(
+                f"signal_mapping: expected mapping, got {type(data).__name__}"
+            )
+
+        # Map of valid action strings to TradeAction enums
+        action_map = {
+            "ENTER_LONG": TradeAction.ENTER_LONG,
+            "EXIT_LONG": TradeAction.EXIT_LONG,
+            "HOLD": TradeAction.HOLD,
+            "FLAT": TradeAction.FLAT,
+        }
+
+        # Parse each mapping with defaults
+        def parse_action(key: str, default: TradeAction) -> TradeAction:
+            if key not in data:
+                return default
+            value = data[key]
+            if not isinstance(value, str):
+                raise RulesSchemaError(
+                    f"signal_mapping.{key}: expected string, got {type(value).__name__}"
+                )
+            normalized = value.upper().strip()
+            if normalized not in action_map:
+                valid = list(action_map.keys())
+                raise RulesValidationError(
+                    f"signal_mapping.{key}: '{value}' is not valid. Must be one of: {valid}"
+                )
+            return action_map[normalized]
+
+        return SignalMapping(
+            low_risk=parse_action("LOW_RISK", TradeAction.ENTER_LONG),
+            moderate=parse_action("MODERATE", TradeAction.HOLD),
+            high_risk=parse_action("HIGH_RISK", TradeAction.EXIT_LONG),
+        )
 
     @classmethod
     def _build_indicator_definition(
