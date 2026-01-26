@@ -257,33 +257,67 @@ saham risk BBCA --explain --provider ollama
 
 Define custom rules in YAML format. See `config/custom_rules.yaml.example`.
 
+### Basic Example
+
 ```yaml
 version: 1
 name: "my_rules"
 default_outcome: MODERATE
 
 rules:
-  # Compare indicator to value
   - name: oversold_rsi
     priority: 10
     when:
-      indicator: RSI
+      indicator: RSI        # Uses built-in RSI(14)
       operator: "<"
       value: 30
     outcome: LOW_RISK
     rationale: "RSI below 30 - oversold"
+```
 
-  # Compare indicator to indicator
+### Parameterized Indicators
+
+Define custom indicator instances with specific periods:
+
+```yaml
+version: 1
+name: "ema_crossover"
+default_outcome: MODERATE
+
+# Define custom indicators with specific periods
+indicators:
+  fast_ema:
+    type: EMA
+    period: 9
+  slow_ema:
+    type: EMA
+    period: 21
+  rsi_short:
+    type: RSI
+    period: 7
+
+rules:
+  # EMA crossover strategy
   - name: bullish_crossover
-    priority: 20
+    priority: 10
     when:
       left:
-        indicator: EMA
+        indicator: fast_ema   # EMA(9)
       operator: ">"
       right:
-        indicator: SMA
+        indicator: slow_ema   # EMA(21)
     outcome: LOW_RISK
-    rationale: "EMA above SMA - bullish"
+    rationale: "EMA(9) > EMA(21) - bullish momentum"
+
+  # Short RSI for faster signals
+  - name: short_rsi_oversold
+    priority: 20
+    when:
+      indicator: rsi_short    # RSI(7)
+      operator: "<"
+      value: 25
+    outcome: LOW_RISK
+    rationale: "RSI(7) < 25 - oversold"
 ```
 
 **Usage:**
@@ -291,7 +325,8 @@ rules:
 saham risk BBCA --rules-file config/my_rules.yaml
 ```
 
-**Supported indicators:** `RSI`, `SMA`, `EMA`
+**Built-in indicators** (always available): `RSI` (14), `SMA` (20), `EMA` (20)
+**Supported types:** `RSI`, `SMA`, `EMA`
 **Supported operators:** `<`, `<=`, `>`, `>=`, `==`, `!=`
 
 ---
