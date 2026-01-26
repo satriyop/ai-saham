@@ -794,7 +794,8 @@ def risk(
     profile: Annotated[
         str,
         typer.Option(
-            "--profile", "-p",
+            "--profile",
+            "-p",
             help="Risk profile (conservative/balanced/aggressive)",
             callback=validate_profile,
         ),
@@ -829,9 +830,7 @@ def risk(
     ] = None,
     model: Annotated[
         Optional[str],
-        typer.Option(
-            "--model", "-m", help="Model name for AI provider (e.g., qwen2.5-coder:1.5b)"
-        ),
+        typer.Option("--model", "-m", help="Model name for AI provider (e.g., qwen2.5-coder:1.5b)"),
     ] = None,
     with_sentiment: Annotated[
         bool,

@@ -39,9 +39,7 @@ class ConservativeRuleSet(BaseRule):
     def profile_name(self) -> str:
         return "conservative"
 
-    def evaluate(
-        self, snapshot: IndicatorSnapshot
-    ) -> tuple[RiskLevel, int, list[str]]:
+    def evaluate(self, snapshot: IndicatorSnapshot) -> tuple[RiskLevel, int, list[str]]:
         """
         Evaluate snapshot using conservative thresholds.
 
@@ -96,9 +94,7 @@ class ConservativeRuleSet(BaseRule):
                     f"{self.DIVERGENCE_THRESHOLD}% threshold (sideways)"
                 )
             else:
-                rationale.append(
-                    f"EMA/SMA divergence {self._format_decimal(magnitude)}% (neutral)"
-                )
+                rationale.append(f"EMA/SMA divergence {self._format_decimal(magnitude)}% (neutral)")
 
         # Calculate confidence and determine risk level
         # Conservative requires BOTH indicators to agree

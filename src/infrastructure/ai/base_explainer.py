@@ -162,9 +162,7 @@ class BaseExplainer(ABC):
                 user_prompt=user_prompt,
             )
             elapsed_ms = int((time.time() - start_time) * 1000)
-            logger.info(
-                f"AI response: tokens={token_count}, time={elapsed_ms}ms"
-            )
+            logger.info(f"AI response: tokens={token_count}, time={elapsed_ms}ms")
             return explanation
 
         except Exception as e:

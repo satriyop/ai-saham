@@ -87,8 +87,7 @@ class TestConservativeRuleSet:
         assert risk_level == RiskLevel.MODERATE
         assert confidence == 50  # One indicator active
         assert any(
-            "do not agree" in r.lower() or "defaults to moderate" in r.lower()
-            for r in rationale
+            "do not agree" in r.lower() or "defaults to moderate" in r.lower() for r in rationale
         )
 
     def test_moderate_when_only_trend_signals(self):

@@ -53,9 +53,7 @@ class OpenAIExplainer(BaseExplainer):
         try:
             import openai
         except ImportError:
-            raise ExplainerError(
-                "openai package not installed. Run: pip install openai"
-            )
+            raise ExplainerError("openai package not installed. Run: pip install openai")
 
         try:
             client = openai.OpenAI(

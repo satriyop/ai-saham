@@ -349,8 +349,7 @@ class TestRSIBoundaries:
         # Create a volatile price series
         prices = ["100", "120", "90", "130", "85", "140", "80", "150", "70", "160"]
         candles = [
-            make_candle("TEST", len(prices) - 1 - i, price)
-            for i, price in enumerate(prices)
+            make_candle("TEST", len(prices) - 1 - i, price) for i, price in enumerate(prices)
         ]
 
         result = calculate_rsi(candles, period=3)
@@ -363,8 +362,8 @@ class TestRSIBoundaries:
         # Extreme upward move
         candles = [
             make_candle("TEST", 3, "1.00"),
-            make_candle("TEST", 2, "10.00"),    # +900%
-            make_candle("TEST", 1, "100.00"),   # +900%
+            make_candle("TEST", 2, "10.00"),  # +900%
+            make_candle("TEST", 1, "100.00"),  # +900%
             make_candle("TEST", 0, "1000.00"),  # +900%
         ]
 
@@ -374,9 +373,9 @@ class TestRSIBoundaries:
         # Extreme downward move
         candles = [
             make_candle("TEST", 3, "1000.00"),
-            make_candle("TEST", 2, "100.00"),   # -90%
-            make_candle("TEST", 1, "10.00"),    # -90%
-            make_candle("TEST", 0, "1.00"),     # -90%
+            make_candle("TEST", 2, "100.00"),  # -90%
+            make_candle("TEST", 1, "10.00"),  # -90%
+            make_candle("TEST", 0, "1.00"),  # -90%
         ]
 
         result = calculate_rsi(candles, period=3)

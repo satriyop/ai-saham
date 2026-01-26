@@ -81,9 +81,7 @@ class YahooFinanceProvider(MarketDataProvider):
             return self._dataframe_to_candles(ticker.upper(), df)
 
         except Exception as e:
-            raise MarketDataProviderError(
-                f"Failed to fetch data for {ticker}: {e}"
-            ) from e
+            raise MarketDataProviderError(f"Failed to fetch data for {ticker}: {e}") from e
 
     def _to_yahoo_ticker(self, ticker: str) -> str:
         """Convert ticker to Yahoo Finance format."""

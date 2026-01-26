@@ -167,9 +167,7 @@ class TestComputeEMAUseCase:
         repository = MockRepository(candles)
 
         use_case = ComputeEMAUseCase(repository)
-        request = ComputeEMARequest(
-            ticker="BBCA", period=10, price_field="high", days=30
-        )
+        request = ComputeEMARequest(ticker="BBCA", period=10, price_field="high", days=30)
 
         response = use_case.execute(request)
 

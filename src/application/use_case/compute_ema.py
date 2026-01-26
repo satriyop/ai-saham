@@ -133,9 +133,7 @@ class ComputeEMAUseCase:
         )
 
         # Slice off warm-up region: keep only values >= user_cutoff_date
-        converged_values = [
-            (d, v) for d, v in full_ema_values if d >= user_cutoff_date
-        ]
+        converged_values = [(d, v) for d, v in full_ema_values if d >= user_cutoff_date]
 
         # Calculate date range of returned values
         if converged_values:

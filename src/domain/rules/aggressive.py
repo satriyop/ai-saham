@@ -38,9 +38,7 @@ class AggressiveRuleSet(BaseRule):
     def profile_name(self) -> str:
         return "aggressive"
 
-    def evaluate(
-        self, snapshot: IndicatorSnapshot
-    ) -> tuple[RiskLevel, int, list[str]]:
+    def evaluate(self, snapshot: IndicatorSnapshot) -> tuple[RiskLevel, int, list[str]]:
         """
         Evaluate snapshot using aggressive thresholds.
 
@@ -95,9 +93,7 @@ class AggressiveRuleSet(BaseRule):
                     f"{self.DIVERGENCE_THRESHOLD}% threshold (sideways)"
                 )
             else:
-                rationale.append(
-                    f"EMA/SMA divergence {self._format_decimal(magnitude)}% (neutral)"
-                )
+                rationale.append(f"EMA/SMA divergence {self._format_decimal(magnitude)}% (neutral)")
 
         # Count active signals for confidence
         rsi_active = 1 if (rsi_signals_high or rsi_signals_low) else 0

@@ -85,17 +85,12 @@ class OllamaExplainer(BaseExplainer):
             text = result.get("message", {}).get("content", "")
 
             # Ollama returns token counts in different fields
-            total_tokens = (
-                result.get("prompt_eval_count", 0) +
-                result.get("eval_count", 0)
-            )
+            total_tokens = result.get("prompt_eval_count", 0) + result.get("eval_count", 0)
 
             return text, total_tokens
 
         except TimeoutError:
-            raise ExplainerTimeoutError(
-                f"Ollama request timed out after {LLM_TIMEOUT_SECONDS}s"
-            )
+            raise ExplainerTimeoutError(f"Ollama request timed out after {LLM_TIMEOUT_SECONDS}s")
         except URLError as e:
             if "timed out" in str(e).lower():
                 raise ExplainerTimeoutError(f"Ollama request timed out: {e}")

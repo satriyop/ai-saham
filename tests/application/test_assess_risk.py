@@ -124,9 +124,7 @@ class TestAssessRiskUseCase:
         conservative_resp = use_case.execute(
             AssessRiskRequest(ticker="BBCA", profile="conservative")
         )
-        aggressive_resp = use_case.execute(
-            AssessRiskRequest(ticker="BBCA", profile="aggressive")
-        )
+        aggressive_resp = use_case.execute(AssessRiskRequest(ticker="BBCA", profile="aggressive"))
 
         assert conservative_resp.profile == "conservative"
         assert aggressive_resp.profile == "aggressive"
@@ -313,12 +311,8 @@ class TestAssessRiskDeterminism:
         repository = MockRepository(candles)
         use_case = AssessRiskUseCase(repository)
 
-        conservative = use_case.execute(
-            AssessRiskRequest(ticker="BBCA", profile="conservative")
-        )
-        aggressive = use_case.execute(
-            AssessRiskRequest(ticker="BBCA", profile="aggressive")
-        )
+        conservative = use_case.execute(AssessRiskRequest(ticker="BBCA", profile="conservative"))
+        aggressive = use_case.execute(AssessRiskRequest(ticker="BBCA", profile="aggressive"))
 
         # They may be the same or different - the point is they're both valid
         assert conservative.assessment.profile == RiskProfile.CONSERVATIVE

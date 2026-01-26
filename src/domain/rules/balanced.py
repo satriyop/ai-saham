@@ -40,9 +40,7 @@ class BalancedRuleSet(BaseRule):
     def profile_name(self) -> str:
         return "balanced"
 
-    def evaluate(
-        self, snapshot: IndicatorSnapshot
-    ) -> tuple[RiskLevel, int, list[str]]:
+    def evaluate(self, snapshot: IndicatorSnapshot) -> tuple[RiskLevel, int, list[str]]:
         """
         Evaluate snapshot using balanced thresholds.
 
@@ -77,19 +75,13 @@ class BalancedRuleSet(BaseRule):
         # Note: uptrend (EMA > SMA) is LOW_RISK, downtrend is HIGH_RISK
         if direction == 1:  # Uptrend
             trend_signal = -1  # Low-risk direction
-            rationale.append(
-                f"EMA > SMA by {self._format_decimal(magnitude)}% (uptrend)"
-            )
+            rationale.append(f"EMA > SMA by {self._format_decimal(magnitude)}% (uptrend)")
         elif direction == -1:  # Downtrend
             trend_signal = 1  # High-risk direction
-            rationale.append(
-                f"EMA < SMA by {self._format_decimal(magnitude)}% (downtrend)"
-            )
+            rationale.append(f"EMA < SMA by {self._format_decimal(magnitude)}% (downtrend)")
         else:  # Sideways
             trend_signal = 0
-            rationale.append(
-                f"EMA/SMA divergence {self._format_decimal(magnitude)}% (sideways)"
-            )
+            rationale.append(f"EMA/SMA divergence {self._format_decimal(magnitude)}% (sideways)")
 
         # Combine signals using majority rules
         # Convert trend_signal to match risk direction: positive = high-risk, negative = low-risk

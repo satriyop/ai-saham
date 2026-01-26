@@ -149,9 +149,7 @@ class FetchSentimentUseCase:
             )
 
         # Classify headlines
-        sentiments = self._classifier.classify_batch(
-            [h.title for h in raw_headlines]
-        )
+        sentiments = self._classifier.classify_batch([h.title for h in raw_headlines])
 
         # Build classified results
         results = [

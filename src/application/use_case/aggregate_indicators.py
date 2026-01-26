@@ -83,9 +83,7 @@ class AggregateIndicatorsUseCase:
         """
         self._repository = repository
 
-    def execute(
-        self, request: AggregateIndicatorsRequest
-    ) -> AggregateIndicatorsResponse:
+    def execute(self, request: AggregateIndicatorsRequest) -> AggregateIndicatorsResponse:
         """
         Execute the aggregate indicators use case.
 
@@ -148,11 +146,7 @@ class AggregateIndicatorsUseCase:
         rsi_by_date: dict[date, Decimal] = {d: v for d, v in rsi_response.values}
 
         # Find common dates (intersection)
-        common_dates = (
-            set(sma_by_date.keys())
-            & set(ema_by_date.keys())
-            & set(rsi_by_date.keys())
-        )
+        common_dates = set(sma_by_date.keys()) & set(ema_by_date.keys()) & set(rsi_by_date.keys())
 
         # Create snapshots for common dates, sorted by date
         snapshots = [

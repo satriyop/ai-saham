@@ -77,10 +77,7 @@ class TestMaxHeadlines:
 
     def test_max_headlines_limits_result(self):
         """max_headlines should limit returned count."""
-        custom = [
-            RawHeadline(f"Headline {i}", "Source", datetime.now())
-            for i in range(10)
-        ]
+        custom = [RawHeadline(f"Headline {i}", "Source", datetime.now()) for i in range(10)]
         provider = MockNewsProvider(headlines=custom)
 
         headlines = provider.fetch_headlines("BBCA", max_headlines=3)
@@ -89,10 +86,7 @@ class TestMaxHeadlines:
 
     def test_max_headlines_greater_than_available(self):
         """max_headlines greater than available should return all."""
-        custom = [
-            RawHeadline(f"Headline {i}", "Source", datetime.now())
-            for i in range(3)
-        ]
+        custom = [RawHeadline(f"Headline {i}", "Source", datetime.now()) for i in range(3)]
         provider = MockNewsProvider(headlines=custom)
 
         headlines = provider.fetch_headlines("BBCA", max_headlines=10)
@@ -192,12 +186,8 @@ class TestCombinedParameters:
         """Both days and max_headlines should work together."""
         now = datetime.now()
         custom = [
-            RawHeadline(f"Recent {i}", "Source", now - timedelta(hours=i))
-            for i in range(5)
-        ] + [
-            RawHeadline(f"Old {i}", "Source", now - timedelta(days=5 + i))
-            for i in range(5)
-        ]
+            RawHeadline(f"Recent {i}", "Source", now - timedelta(hours=i)) for i in range(5)
+        ] + [RawHeadline(f"Old {i}", "Source", now - timedelta(days=5 + i)) for i in range(5)]
         provider = MockNewsProvider(headlines=custom)
 
         # Filter by days first, then limit

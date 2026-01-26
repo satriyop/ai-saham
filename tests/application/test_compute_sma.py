@@ -166,9 +166,7 @@ class TestComputeSMAUseCase:
         repository = MockRepository(candles)
 
         use_case = ComputeSMAUseCase(repository)
-        request = ComputeSMARequest(
-            ticker="BBCA", period=10, price_field="high", days=100
-        )
+        request = ComputeSMARequest(ticker="BBCA", period=10, price_field="high", days=100)
 
         response = use_case.execute(request)
 

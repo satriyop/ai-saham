@@ -53,8 +53,7 @@ class GeminiExplainer(BaseExplainer):
             import google.generativeai as genai
         except ImportError:
             raise ExplainerError(
-                "google-generativeai package not installed. "
-                "Run: pip install google-generativeai"
+                "google-generativeai package not installed. Run: pip install google-generativeai"
             )
 
         try:
@@ -79,9 +78,8 @@ class GeminiExplainer(BaseExplainer):
             # Gemini returns usage metadata differently
             total_tokens = 0
             if hasattr(response, "usage_metadata") and response.usage_metadata:
-                total_tokens = (
-                    getattr(response.usage_metadata, "prompt_token_count", 0) +
-                    getattr(response.usage_metadata, "candidates_token_count", 0)
+                total_tokens = getattr(response.usage_metadata, "prompt_token_count", 0) + getattr(
+                    response.usage_metadata, "candidates_token_count", 0
                 )
 
             return text, total_tokens

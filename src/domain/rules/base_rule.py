@@ -33,9 +33,7 @@ class BaseRule(ABC):
         ...
 
     @abstractmethod
-    def evaluate(
-        self, snapshot: IndicatorSnapshot
-    ) -> tuple[RiskLevel, int, list[str]]:
+    def evaluate(self, snapshot: IndicatorSnapshot) -> tuple[RiskLevel, int, list[str]]:
         """
         Evaluate an indicator snapshot against this profile's rules.
 

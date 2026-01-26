@@ -45,9 +45,7 @@ class MockProvider(MarketDataProvider):
         self.candles = candles or []
         self.fetch_count = 0
 
-    def fetch_daily_ohlcv(
-        self, ticker: str, start_date: date, end_date: date
-    ) -> list[Candle]:
+    def fetch_daily_ohlcv(self, ticker: str, start_date: date, end_date: date) -> list[Candle]:
         self.fetch_count += 1
         filtered = [c for c in self.candles if start_date <= c.date <= end_date]
         return sorted(filtered, key=lambda c: c.date)
@@ -66,9 +64,7 @@ class MockRepository(MarketDataRepository):
             if c.ticker not in self._storage:
                 self._storage[c.ticker] = []
             # Upsert
-            self._storage[c.ticker] = [
-                x for x in self._storage[c.ticker] if x.date != c.date
-            ]
+            self._storage[c.ticker] = [x for x in self._storage[c.ticker] if x.date != c.date]
             self._storage[c.ticker].append(c)
             self._storage[c.ticker].sort(key=lambda x: x.date)
 

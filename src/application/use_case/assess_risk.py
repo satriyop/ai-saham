@@ -141,9 +141,7 @@ class AssessRiskUseCase:
             rsi_period=request.rsi_period,
         )
 
-    def execute_all_profiles(
-        self, request: AssessRiskRequest
-    ) -> AssessAllProfilesResponse:
+    def execute_all_profiles(self, request: AssessRiskRequest) -> AssessAllProfilesResponse:
         """
         Execute risk assessment for all profiles.
 

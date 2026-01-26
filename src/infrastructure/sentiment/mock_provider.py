@@ -59,9 +59,7 @@ class MockNewsProvider:
             List of mock headlines
         """
         cutoff = datetime.now() - timedelta(days=days)
-        filtered = [
-            h for h in self._headlines if h.published >= cutoff
-        ]
+        filtered = [h for h in self._headlines if h.published >= cutoff]
         return filtered[:max_headlines]
 
     @staticmethod

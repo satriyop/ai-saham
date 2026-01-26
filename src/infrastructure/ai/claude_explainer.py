@@ -53,9 +53,7 @@ class ClaudeExplainer(BaseExplainer):
         try:
             import anthropic
         except ImportError:
-            raise ExplainerError(
-                "anthropic package not installed. Run: pip install anthropic"
-            )
+            raise ExplainerError("anthropic package not installed. Run: pip install anthropic")
 
         try:
             client = anthropic.Anthropic(

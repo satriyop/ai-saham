@@ -106,8 +106,7 @@ class TestRequestParameters:
         """max_headlines should limit results."""
         now = datetime.now()
         headlines = [
-            RawHeadline(f"Headline {i}", "Source", now - timedelta(hours=i))
-            for i in range(10)
+            RawHeadline(f"Headline {i}", "Source", now - timedelta(hours=i)) for i in range(10)
         ]
         provider = MockNewsProvider(headlines=headlines)
         classifier = KeywordClassifier()
@@ -116,9 +115,7 @@ class TestRequestParameters:
             classifier=classifier,
         )
 
-        response = use_case.execute(
-            FetchSentimentRequest(ticker="BBCA", max_headlines=3)
-        )
+        response = use_case.execute(FetchSentimentRequest(ticker="BBCA", max_headlines=3))
 
         assert response.snapshot.total_count == 3
 
@@ -136,9 +133,7 @@ class TestRequestParameters:
             classifier=classifier,
         )
 
-        response = use_case.execute(
-            FetchSentimentRequest(ticker="BBCA", days=3)
-        )
+        response = use_case.execute(FetchSentimentRequest(ticker="BBCA", days=3))
 
         assert response.snapshot.total_count == 1
 

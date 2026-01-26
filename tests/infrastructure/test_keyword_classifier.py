@@ -11,7 +11,6 @@ These tests verify:
 All tests run offline with no external dependencies.
 """
 
-
 from src.domain.value_objects.sentiment import Sentiment
 from src.infrastructure.sentiment.keyword_classifier import (
     NEGATIVE_KEYWORDS,
