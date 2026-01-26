@@ -12,6 +12,9 @@ from decimal import Decimal
 from enum import Enum
 from typing import Union
 
+from src.domain.value_objects.risk_signal import RiskLevel
+from src.domain.value_objects.trade_action import TradeAction
+
 
 class IndicatorType(Enum):
     """Supported technical indicator types for parameterized definitions.
@@ -162,6 +165,54 @@ class Outcome(Enum):
 
 
 @dataclass(frozen=True)
+class SignalMapping:
+    """Maps rule outcomes (RiskLevel) to trade actions.
+
+    Used by backtesting to convert rule evaluation results into
+    actionable trade signals. Defaults are quant-standard:
+    - LOW_RISK -> ENTER_LONG (opportunity to buy)
+    - MODERATE -> HOLD (maintain position)
+    - HIGH_RISK -> EXIT_LONG (close position)
+
+    Example YAML:
+        signal_mapping:
+          LOW_RISK: ENTER_LONG
+          MODERATE: HOLD
+          HIGH_RISK: EXIT_LONG
+
+    Attributes:
+        low_risk: Action for LOW_RISK outcome
+        moderate: Action for MODERATE outcome
+        high_risk: Action for HIGH_RISK outcome
+    """
+
+    low_risk: TradeAction = TradeAction.ENTER_LONG
+    moderate: TradeAction = TradeAction.HOLD
+    high_risk: TradeAction = TradeAction.EXIT_LONG
+
+    def get_action(self, risk_level: RiskLevel) -> TradeAction:
+        """Get trade action for a given risk level.
+
+        Args:
+            risk_level: Domain RiskLevel from rule evaluation
+
+        Returns:
+            Corresponding TradeAction
+
+        Raises:
+            ValueError: If risk_level is not recognized
+        """
+        mapping = {
+            RiskLevel.LOW_RISK: self.low_risk,
+            RiskLevel.MODERATE: self.moderate,
+            RiskLevel.HIGH_RISK: self.high_risk,
+        }
+        if risk_level not in mapping:
+            raise ValueError(f"Unknown risk level: {risk_level}")
+        return mapping[risk_level]
+
+
+@dataclass(frozen=True)
 class IndicatorRef:
     """Reference to an indicator for use in conditions.
 
@@ -262,6 +313,7 @@ class RuleSet:
         rules: Ordered tuple of rules
         indicators: Tuple of custom indicator definitions (optional)
         description: Optional description of the rule set
+        signal_mapping: Optional mapping of outcomes to trade actions (for backtesting)
     """
 
     version: int
@@ -270,6 +322,7 @@ class RuleSet:
     rules: tuple[Rule, ...]
     indicators: tuple[IndicatorDefinition, ...] = ()
     description: str | None = None
+    signal_mapping: SignalMapping | None = None
 
     def __post_init__(self) -> None:
         """Validate rule set fields."""

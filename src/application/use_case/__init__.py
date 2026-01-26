@@ -9,6 +9,11 @@ from src.application.use_case.assess_risk import (
     AssessRiskResponse,
     AssessRiskUseCase,
 )
+from src.application.use_case.backtest import (
+    BacktestRequest,
+    BacktestResponse,
+    BacktestUseCase,
+)
 from src.application.use_case.compute_ema import (
     ComputeEMARequest,
     ComputeEMAResponse,
@@ -43,6 +48,9 @@ __all__ = [
     "AssessRiskRequest",
     "AssessRiskResponse",
     "AssessRiskUseCase",
+    "BacktestRequest",
+    "BacktestResponse",
+    "BacktestUseCase",
     "ComputeEMARequest",
     "ComputeEMAResponse",
     "ComputeEMAUseCase",
