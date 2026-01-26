@@ -23,7 +23,8 @@ class RiskAssessment:
     metadata for transparency and auditability.
 
     Attributes:
-        profile: The risk profile used for evaluation
+        profile: The risk profile used for evaluation (RiskProfile enum or string
+                 for custom YAML-based rules)
         risk_level: The determined risk level (HIGH_RISK, MODERATE, LOW_RISK)
         confidence: Rule alignment strength (0, 50, or 100)
         rationale: Human-readable explanations for the assessment
@@ -31,7 +32,7 @@ class RiskAssessment:
         indicators: The full indicator snapshot that was evaluated
     """
 
-    profile: RiskProfile
+    profile: RiskProfile | str  # str for custom YAML rules
     risk_level: RiskLevel
     confidence: int
     rationale: tuple[str, ...]  # Immutable tuple for frozen dataclass
@@ -46,7 +47,14 @@ class RiskAssessment:
     @property
     def profile_name(self) -> str:
         """Return profile name as string for display."""
+        if isinstance(self.profile, str):
+            return self.profile
         return self.profile.value
+
+    @property
+    def is_custom_profile(self) -> bool:
+        """Return True if this assessment used custom YAML rules."""
+        return isinstance(self.profile, str)
 
     @property
     def risk_level_name(self) -> str:
