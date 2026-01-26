@@ -23,6 +23,10 @@ from src.application.use_case.assess_risk import (
     AssessRiskRequest,
     AssessRiskUseCase,
 )
+from src.application.use_case.backtest import (
+    BacktestRequest,
+    BacktestUseCase,
+)
 from src.application.use_case.compute_ema import (
     ComputeEMARequest,
     ComputeEMAUseCase,
@@ -1037,6 +1041,198 @@ def risk(
             typer.echo(f"Tip: Run 'saham fetch {ticker.upper()}' first to download data.", err=True)
         else:
             typer.echo(f"Failed to assess risk: {e}", err=True)
+        raise typer.Exit(1)
+
+
+@app.command()
+def backtest(
+    ticker: Annotated[str, typer.Argument(help="Stock ticker symbol (e.g., BBCA)")],
+    rules_file: Annotated[
+        Path,
+        typer.Option(
+            "--rules-file",
+            "-r",
+            help="Path to YAML rules file (required)",
+        ),
+    ],
+    start: Annotated[
+        Optional[str],
+        typer.Option(
+            "--start",
+            "-s",
+            help="Start date (YYYY-MM-DD)",
+        ),
+    ] = None,
+    end: Annotated[
+        Optional[str],
+        typer.Option(
+            "--end",
+            "-e",
+            help="End date (YYYY-MM-DD)",
+        ),
+    ] = None,
+    capital: Annotated[
+        int,
+        typer.Option(
+            "--capital",
+            "-c",
+            help="Initial capital in IDR (default: 100,000,000)",
+            min=1,
+        ),
+    ] = 100_000_000,
+    verbose: Annotated[
+        bool,
+        typer.Option(
+            "--verbose",
+            "-v",
+            help="Show detailed trade-by-trade output",
+        ),
+    ] = False,
+    db_path: Annotated[
+        Optional[Path],
+        typer.Option("--db", help="Path to SQLite database (default: ~/.ai-saham/data.db)"),
+    ] = None,
+) -> None:
+    """
+    Backtest a strategy against historical data.
+
+    Runs a deterministic backtest simulation using rules from a YAML file.
+    Replays historical candles chronologically and applies rules per candle
+    to generate hypothetical entry/exit signals.
+
+    Requires cached data (run 'saham fetch TICKER' first).
+
+    Signal Mapping (customizable in YAML):
+        LOW_RISK  -> ENTER_LONG (buy)
+        MODERATE  -> HOLD (maintain position)
+        HIGH_RISK -> EXIT_LONG (sell)
+
+    Examples:
+        saham backtest BBCA --rules-file config/custom_rules.yaml.example
+        saham backtest BBRI -r rules.yaml --start 2024-01-01
+        saham backtest TLKM -r rules.yaml --capital 50000000 --verbose
+    """
+    from datetime import datetime
+
+    # Resolve configuration
+    resolved_db_path = db_path or DEFAULT_DB_PATH
+
+    # Parse dates
+    start_date = None
+    end_date = None
+    try:
+        if start:
+            start_date = datetime.strptime(start, "%Y-%m-%d").date()
+        if end:
+            end_date = datetime.strptime(end, "%Y-%m-%d").date()
+    except ValueError:
+        typer.echo("Error: Invalid date format. Use YYYY-MM-DD.", err=True)
+        raise typer.Exit(1)
+
+    typer.echo(f"Backtesting {ticker.upper()} with {rules_file}...")
+
+    try:
+        # Wire up dependencies
+        repository = SQLiteMarketRepository(db_path=resolved_db_path)
+        use_case = BacktestUseCase(repository=repository)
+
+        # Execute use case
+        request = BacktestRequest(
+            ticker=ticker,
+            rules_file=rules_file,
+            start_date=start_date,
+            end_date=end_date,
+            initial_capital=Decimal(str(capital)),
+        )
+        response = use_case.execute(request)
+        result = response.result
+
+        # Display results
+        typer.echo("")
+        typer.echo("=" * 50)
+        typer.echo("BACKTEST RESULTS")
+        typer.echo("=" * 50)
+        typer.echo("")
+        typer.echo(f"Ticker:         {result.ticker}")
+        typer.echo(f"Strategy:       {result.strategy_name}")
+        typer.echo(f"Period:         {result.start_date} to {result.end_date}")
+
+        typer.echo("")
+        typer.echo("-" * 50)
+        typer.echo("PERFORMANCE")
+        typer.echo("-" * 50)
+        typer.echo("")
+        typer.echo(f"Initial Capital:     {result.initial_capital:>18,.0f} IDR")
+        typer.echo(f"Final Capital:       {result.final_capital:>18,.0f} IDR")
+        typer.echo(f"Total Return:        {result.total_return_pct:>18.2f}%")
+        typer.echo(f"Max Drawdown:        {result.max_drawdown_pct:>18.2f}%")
+
+        typer.echo("")
+        typer.echo("-" * 50)
+        typer.echo("TRADE STATISTICS")
+        typer.echo("-" * 50)
+        typer.echo("")
+        typer.echo(f"Total Trades:        {result.trade_count:>18}")
+        typer.echo(f"Winning Trades:      {result.winning_trades:>18}")
+        typer.echo(f"Losing Trades:       {result.losing_trades:>18}")
+        typer.echo(f"Win Rate:            {result.win_rate:>18.2f}%")
+        typer.echo(f"Profit Factor:       {result.profit_factor:>18.2f}")
+
+        if result.trades:
+            typer.echo(f"Avg Win:             {result.avg_win:>18,.0f} IDR")
+            typer.echo(f"Avg Loss:            {result.avg_loss:>18,.0f} IDR")
+
+        typer.echo("")
+        typer.echo("=" * 50)
+
+        # Verbose mode: show individual trades
+        if verbose and result.trades:
+            typer.echo("")
+            typer.echo("TRADE HISTORY")
+            typer.echo("-" * 80)
+            typer.echo(
+                f"{'#':<4} {'Entry':<12} {'Exit':<12} {'Entry Price':>12} "
+                f"{'Exit Price':>12} {'P&L':>14} {'%':>8}"
+            )
+            typer.echo("-" * 80)
+
+            for i, trade in enumerate(result.trades, 1):
+                pnl_sign = "+" if trade.pnl >= 0 else ""
+                typer.echo(
+                    f"{i:<4} {str(trade.entry_date):<12} {str(trade.exit_date):<12} "
+                    f"{trade.entry_price:>12,.0f} {trade.exit_price:>12,.0f} "
+                    f"{pnl_sign}{trade.pnl:>13,.0f} {trade.pnl_percent:>7.2f}%"
+                )
+
+            typer.echo("-" * 80)
+            typer.echo(f"\nEntry Rules: {', '.join(set(t.entry_rule for t in result.trades))}")
+            typer.echo(f"Exit Rules:  {', '.join(set(t.exit_rule for t in result.trades))}")
+
+        typer.echo("\nDISCLAIMER: Historical simulation only, not trading advice.")
+
+    except RulesFileError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+    except RulesSchemaError as e:
+        typer.echo(f"Error in rules file: {e}", err=True)
+        raise typer.Exit(1)
+    except RulesValidationError as e:
+        typer.echo(f"Invalid rules: {e}", err=True)
+        raise typer.Exit(1)
+    except ValueError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+    except FileNotFoundError:
+        typer.echo(f"Error: Database not found at {resolved_db_path}", err=True)
+        typer.echo(f"Tip: Run 'saham fetch {ticker.upper()}' first to download data.", err=True)
+        raise typer.Exit(1)
+    except Exception as e:
+        error_msg = str(e).lower()
+        if "no such table" in error_msg or "no data" in error_msg:
+            typer.echo(f"Error: No cached data found for {ticker.upper()}", err=True)
+            typer.echo(f"Tip: Run 'saham fetch {ticker.upper()}' first to download data.", err=True)
+        else:
+            typer.echo(f"Failed to run backtest: {e}", err=True)
         raise typer.Exit(1)
 
 
