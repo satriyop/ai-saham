@@ -14,6 +14,7 @@ from typing import Annotated, Optional
 
 import typer
 
+from src import __version__
 from src.application.use_case.aggregate_indicators import (
     AggregateIndicatorsRequest,
     AggregateIndicatorsUseCase,
@@ -22,12 +23,6 @@ from src.application.use_case.assess_risk import (
     AssessRiskRequest,
     AssessRiskUseCase,
 )
-from src.application.use_case.explain_risk import (
-    ExplainRiskRequest,
-    ExplainRiskUseCase,
-)
-from src.domain.ports.ai_explainer import ExplainerAuthError
-from src.infrastructure.ai import ExplainerFactory
 from src.application.use_case.compute_ema import (
     ComputeEMARequest,
     ComputeEMAUseCase,
@@ -40,6 +35,10 @@ from src.application.use_case.compute_sma import (
     ComputeSMARequest,
     ComputeSMAUseCase,
 )
+from src.application.use_case.explain_risk import (
+    ExplainRiskRequest,
+    ExplainRiskUseCase,
+)
 from src.application.use_case.fetch_market_data import (
     FetchMarketDataRequest,
     FetchMarketDataUseCase,
@@ -48,12 +47,14 @@ from src.application.use_case.fetch_sentiment import (
     FetchSentimentRequest,
     FetchSentimentUseCase,
 )
+from src.domain.ports.ai_explainer import ExplainerAuthError
 from src.domain.value_objects.sentiment import Sentiment, SentimentSnapshot
+from src.infrastructure.ai import ExplainerFactory
 from src.infrastructure.data_providers.yahoo import YahooFinanceProvider
-from src.infrastructure.sentiment import SentimentFactory
 from src.infrastructure.persistence.sqlite_market_repository import (
     SQLiteMarketRepository,
 )
+from src.infrastructure.sentiment import SentimentFactory
 
 app = typer.Typer(
     name="saham",
@@ -1079,11 +1080,11 @@ def version() -> None:
 
     Displays the current version of the saham CLI and basic build info.
     """
-    typer.echo("saham v0.1.0")
+    typer.echo(f"saham v{__version__}")
     typer.echo("Local-first stock analysis CLI for Indonesia Stock Exchange (IDX)")
     typer.echo("")
     typer.echo("For help:  saham --help")
-    typer.echo("For docs:  https://github.com/your-repo/ai-saham")
+    typer.echo("For docs:  https://github.com/anthropics/ai-saham")
 
 
 def main() -> None:

@@ -1,8 +1,9 @@
 [project]
 name = "ai-saham"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Local-first stock analysis CLI for Indonesia Stock Exchange (IDX)"
 readme = "README.md"
+license = "MIT"
 requires-python = ">=3.11"
 dependencies = [
     "typer>=0.9.0",
@@ -23,6 +24,9 @@ saham = "src.adapters.cli.main:main"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "src/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src"]
