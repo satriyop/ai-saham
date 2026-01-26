@@ -1,0 +1,89 @@
+# Example CSV Mapping Configuration
+# Copy this file and modify for your custom CSV format
+#
+# Save as: ~/.ai-saham/csv_mappings/my_format.yaml
+# Use with: saham broker import data.csv --mapping my_format
+
+version: 1
+name: "example"
+format: simple  # simple | detailed | custom
+
+# Column mappings
+# Map your CSV column names to expected fields
+columns:
+  # Required for all formats
+  date: "Trade Date"           # Your column name for date
+  ticker: "Stock Code"         # Your column name for ticker symbol
+
+  # Required for simple format (aggregate foreign flow)
+  foreign_buy_value: "FB Val"  # Foreign buy value column
+  foreign_sell_value: "FS Val" # Foreign sell value column
+  foreign_buy_lot: "FB Lot"    # Foreign buy lots column
+  foreign_sell_lot: "FS Lot"   # Foreign sell lots column
+  total_value: "Total Val"     # Total trading value column
+  total_lot: "Total Lot"       # Total lots column
+
+  # Required for detailed format (broker transactions)
+  # broker_code: "Broker"
+  # broker_name: "Broker Name"
+  # broker_type: "Type"        # FOREIGN or LOCAL
+  # buy_lot: "Buy Lot"
+  # sell_lot: "Sell Lot"
+  # buy_value: "Buy Value"
+  # sell_value: "Sell Value"
+
+# Transforms (optional)
+# Apply transformations to specific columns
+transforms:
+  date:
+    format: "%d/%m/%Y"         # Date format (strptime format string)
+
+  foreign_buy_value:
+    multiplier: 1000000        # Values in millions -> convert to actual
+
+  foreign_sell_value:
+    multiplier: 1000000
+
+  total_value:
+    multiplier: 1000000
+
+
+# ---
+# Example: RTI Export Format
+# ---
+# version: 1
+# name: "rti_export"
+# format: detailed
+#
+# columns:
+#   date: "Tanggal"
+#   ticker: "Kode"
+#   broker_code: "Broker"
+#   broker_name: "Nama Broker"
+#   broker_type: "Kategori"    # ASING or LOKAL
+#   buy_lot: "Beli Lot"
+#   sell_lot: "Jual Lot"
+#   buy_value: "Beli Value"
+#   sell_value: "Jual Value"
+#
+# transforms:
+#   date:
+#     format: "%d-%m-%Y"
+
+
+# ---
+# Example: Stockbit Manual Export
+# ---
+# version: 1
+# name: "stockbit"
+# format: simple
+#
+# columns:
+#   date: "date"
+#   ticker: "symbol"
+#   foreign_buy_value: "foreign_buy"
+#   foreign_sell_value: "foreign_sell"
+#   foreign_buy_lot: "foreign_buy_lot"
+#   foreign_sell_lot: "foreign_sell_lot"
+#   total_value: "total_value"
+#   total_lot: "total_volume"

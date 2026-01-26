@@ -641,6 +641,85 @@ Validating...
 Status: Connected and working
 ```
 
+### Importing Broker Data from CSV
+
+Don't have Stockbit access? Import broker data from any CSV source (RTI exports, manual downloads, spreadsheets):
+
+```bash
+# Auto-detect format and import
+saham broker import data.csv
+
+# Preview without importing
+saham broker import data.csv --preview
+
+# Use custom column mapping
+saham broker import data.csv --mapping my_format
+
+# Control error handling
+saham broker import data.csv --on-error skip    # Skip invalid rows (default)
+saham broker import data.csv --on-error fail    # Stop on first error
+saham broker import data.csv --on-error report  # Import valid rows, report all errors
+```
+
+**Supported CSV Formats:**
+
+| Format | Description | Required Columns |
+|--------|-------------|------------------|
+| **Simple** | Aggregate foreign flow | date, ticker, foreign_buy_value, foreign_sell_value |
+| **Detailed** | Individual broker transactions | date, ticker, broker_code, broker_type, buy_value, sell_value |
+
+**Simple Format Example:**
+```csv
+date,ticker,foreign_buy_value,foreign_sell_value,foreign_buy_lot,foreign_sell_lot,total_value,total_lot
+2024-01-15,BBCA,50000000000,30000000000,5000,3000,200000000000,20000
+```
+
+**Detailed Format Example:**
+```csv
+date,ticker,broker_code,broker_name,broker_type,buy_lot,sell_lot,buy_value,sell_value
+2024-01-15,BBCA,YP,Mirae Asset,FOREIGN,10000,5000,50000000000,25000000000
+```
+
+**Custom Column Mappings:**
+
+For non-standard CSV formats, create a YAML mapping file:
+
+```yaml
+# ~/.ai-saham/csv_mappings/my_format.yaml
+version: 1
+name: "my_format"
+format: simple
+
+columns:
+  date: "Trade Date"           # Your column name
+  ticker: "Stock Code"
+  foreign_buy_value: "FB Val"
+  foreign_sell_value: "FS Val"
+
+transforms:
+  date:
+    format: "%d/%m/%Y"         # Date format
+  foreign_buy_value:
+    multiplier: 1000000        # Values in millions
+```
+
+**Listing Available Mappings:**
+
+```bash
+saham broker mappings
+```
+
+**Output:**
+```
+Available CSV Mappings:
+----------------------------------------
+  default (built-in auto-detection)
+  rti_export
+  stockbit_manual
+
+Use with: saham broker import data.csv --mapping <name>
+```
+
 ### Using Foreign Flow in Strategies
 
 Once you've fetched broker data, you can use foreign flow indicators in your strategies:
@@ -1626,6 +1705,8 @@ saham backtest BBCA --strategy my_flow_strategy
 | `saham broker fetch TICKER` | Fetch broker summary data | `--days`, `--start`, `--end`, `--refresh` |
 | `saham broker flow TICKER` | View foreign flow summary | `--days` |
 | `saham broker top TICKER` | View top brokers | `--date` |
+| `saham broker import FILE` | Import broker data from CSV | `--preview`, `--mapping`, `--on-error` |
+| `saham broker mappings` | List available CSV mappings | — |
 | `saham strategy init NAME` | Create strategy package | `--dir`, `--force` |
 | `saham strategy create INTENT` | Create strategy from natural language | `--name`, `--provider`, `--save/--no-save` |
 | `saham strategy validate NAME` | Validate strategy | `--strict` |

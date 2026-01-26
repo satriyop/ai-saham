@@ -1,7 +1,8 @@
 """
 CLI commands for broker data management.
 
-Provides commands to fetch broker summary, configure auth, and view foreign flow.
+Provides commands to fetch broker summary, configure auth, view foreign flow,
+and import broker data from CSV files.
 
 Layer: Adapter
 """
@@ -18,10 +19,19 @@ from src.application.use_case.fetch_broker_data import (
     FetchBrokerDataUseCase,
     GetBrokerDataUseCase,
 )
+from src.application.use_case.import_broker_data import (
+    ImportBrokerDataRequest,
+    ImportBrokerDataUseCase,
+)
 from src.domain.ports.broker_data_provider import (
     BrokerDataAuthError,
     BrokerDataProviderError,
 )
+from src.domain.ports.csv_broker_parser import (
+    CsvBrokerParserError,
+    ErrorStrategy,
+)
+from src.infrastructure.csv import BrokerCsvAdapter, MappingLoader
 from src.infrastructure.data_providers.stockbit import (
     StockbitBrokerDataProvider,
     validate_token,
@@ -413,3 +423,227 @@ def broker_top(
             + typer.style(f"{format_value(s.net_value):>14}", fg=typer.colors.RED)
             + f" {s.net_lot:>10,}"
         )
+
+
+@broker_app.command("import")
+def broker_import(
+    file_path: Annotated[
+        Path,
+        typer.Argument(
+            help="Path to CSV file to import",
+            exists=True,
+            readable=True,
+        ),
+    ],
+    preview: Annotated[
+        bool,
+        typer.Option(
+            "--preview",
+            "-p",
+            help="Preview import without saving",
+        ),
+    ] = False,
+    mapping: Annotated[
+        Optional[str],
+        typer.Option(
+            "--mapping",
+            "-m",
+            help="Custom mapping name or YAML file path",
+        ),
+    ] = None,
+    on_error: Annotated[
+        str,
+        typer.Option(
+            "--on-error",
+            help="Error handling: skip (default), fail, report",
+        ),
+    ] = "skip",
+    db_path: Annotated[
+        Path,
+        typer.Option("--db", help="Database path"),
+    ] = DEFAULT_DB_PATH,
+) -> None:
+    """
+    Import broker flow data from a CSV file.
+
+    Supports auto-detection of CSV format based on column headers:
+
+    \b
+    Simple format (aggregate foreign flow):
+      date,ticker,foreign_buy_value,foreign_sell_value,foreign_buy_lot,
+      foreign_sell_lot,total_value,total_lot
+
+    \b
+    Detailed format (broker transactions):
+      date,ticker,broker_code,broker_name,broker_type,buy_lot,sell_lot,
+      buy_value,sell_value
+
+    Examples:
+        saham broker import data.csv                  # Auto-detect format
+        saham broker import data.csv --preview        # Preview without saving
+        saham broker import data.csv --mapping rti    # Use custom mapping
+        saham broker import data.csv --on-error fail  # Stop on first error
+    """
+    # Parse error strategy
+    error_strategies = {
+        "skip": ErrorStrategy.SKIP,
+        "fail": ErrorStrategy.FAIL,
+        "report": ErrorStrategy.REPORT,
+    }
+    if on_error not in error_strategies:
+        typer.echo(
+            typer.style(f"Invalid --on-error value: {on_error}", fg=typer.colors.RED)
+        )
+        typer.echo(f"Valid values: {', '.join(error_strategies.keys())}")
+        raise typer.Exit(1)
+
+    error_strategy = error_strategies[on_error]
+
+    # Load custom mapping if specified
+    mapping_config = None
+    if mapping:
+        mapping_loader = MappingLoader()
+        try:
+            # Check if it's a file path
+            mapping_path = Path(mapping)
+            if mapping_path.exists():
+                mapping_config = mapping_loader.load_from_file(mapping_path)
+            else:
+                mapping_config = mapping_loader.load(mapping)
+            typer.echo(f"Using mapping: {mapping_config.name}")
+        except CsvBrokerParserError as e:
+            typer.echo(typer.style(f"Mapping error: {e}", fg=typer.colors.RED))
+            raise typer.Exit(1)
+
+    # Initialize dependencies
+    parser = BrokerCsvAdapter()
+    repository = SQLiteBrokerRepository(db_path)
+    use_case = ImportBrokerDataUseCase(parser, repository)
+
+    # Create request
+    request = ImportBrokerDataRequest(
+        file_path=file_path,
+        preview_only=preview,
+        error_strategy=error_strategy,
+        mapping=mapping_config,
+    )
+
+    try:
+        # Execute import
+        if preview:
+            typer.echo(f"Previewing {file_path.name}...")
+        else:
+            typer.echo(f"Importing {file_path.name}...")
+
+        response = use_case.execute(request)
+
+        # Display format detected
+        typer.echo(f"Format detected: {response.format_detected.value}")
+
+        # Preview mode output
+        if preview:
+            typer.echo("\n" + typer.style("Preview Results", bold=True))
+            typer.echo("-" * 60)
+
+            if response.summaries:
+                # Show preview data
+                typer.echo(f"{'Date':<12} {'Ticker':<8} {'Foreign Net':>14} {'Total Value':>14}")
+                typer.echo("-" * 60)
+
+                for summary in response.summaries:
+                    flow = summary.foreign_net_value
+                    color = typer.colors.GREEN if flow > 0 else typer.colors.RED
+                    typer.echo(
+                        f"{summary.date.isoformat():<12} "
+                        f"{summary.ticker:<8} "
+                        + typer.style(f"{format_value(flow):>14}", fg=color)
+                        + f" {format_value(summary.total_value):>14}"
+                    )
+
+                typer.echo("-" * 60)
+                typer.echo(
+                    f"Showing {len(response.summaries)} of {response.total_rows} rows"
+                )
+
+            if response.errors:
+                typer.echo(
+                    f"\n{typer.style('Errors:', fg=typer.colors.YELLOW)} "
+                    f"{len(response.errors)} rows with issues"
+                )
+                for error in response.errors[:3]:
+                    typer.echo(f"  - {error}")
+                if len(response.errors) > 3:
+                    typer.echo(f"  ... and {len(response.errors) - 3} more")
+
+            typer.echo("\nRun without --preview to import data.")
+
+        # Import mode output
+        else:
+            if response.success:
+                typer.echo(
+                    typer.style(
+                        f"\nImported {response.imported_count} broker summaries",
+                        fg=typer.colors.GREEN,
+                    )
+                )
+
+                # Show summary stats
+                if response.summaries:
+                    tickers = sorted(set(s.ticker for s in response.summaries))
+                    dates = sorted(s.date for s in response.summaries)
+
+                    typer.echo(f"Tickers: {', '.join(tickers)}")
+                    if len(dates) > 1:
+                        typer.echo(f"Date range: {dates[0]} to {dates[-1]}")
+                    else:
+                        typer.echo(f"Date: {dates[0]}")
+
+                if response.skipped_count > 0:
+                    typer.echo(
+                        typer.style(
+                            f"Skipped {response.skipped_count} invalid rows",
+                            fg=typer.colors.YELLOW,
+                        )
+                    )
+            else:
+                typer.echo(
+                    typer.style(f"\nImport failed: {response.message}", fg=typer.colors.RED)
+                )
+                raise typer.Exit(1)
+
+            # Show errors if using report strategy
+            if response.errors and error_strategy == ErrorStrategy.REPORT:
+                typer.echo(f"\n{typer.style('Parse Errors:', fg=typer.colors.YELLOW)}")
+                for error in response.errors[:10]:
+                    typer.echo(f"  - {error}")
+                if len(response.errors) > 10:
+                    typer.echo(f"  ... and {len(response.errors) - 10} more")
+
+    except CsvBrokerParserError as e:
+        typer.echo(typer.style(f"Parse error: {e}", fg=typer.colors.RED))
+        raise typer.Exit(1)
+
+
+@broker_app.command("mappings")
+def broker_mappings() -> None:
+    """
+    List available CSV mapping configurations.
+
+    Mappings define how CSV columns map to expected fields.
+    Create custom mappings in ~/.ai-saham/csv_mappings/ or config/csv_mappings/
+    """
+    loader = MappingLoader()
+    mappings = loader.list_available()
+
+    typer.echo("Available CSV Mappings:")
+    typer.echo("-" * 40)
+
+    for name in mappings:
+        if name == "default":
+            typer.echo(f"  {name} (built-in auto-detection)")
+        else:
+            typer.echo(f"  {name}")
+
+    typer.echo("-" * 40)
+    typer.echo(f"\nUse with: saham broker import data.csv --mapping <name>")
+    typer.echo(f"Custom mappings: ~/.ai-saham/csv_mappings/<name>.yaml")
