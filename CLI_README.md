@@ -579,6 +579,37 @@ These are always available without definition:
 | RSI | 14 | `indicator: RSI` |
 | SMA | 20 | `indicator: SMA` |
 | EMA | 20 | `indicator: EMA` |
+| ATR | 14 | `indicator: ATR` (plugin) |
+
+### Formula-Based Indicators (Advanced)
+
+Instead of just type+period, you can define indicators using **mathematical expressions**:
+
+```yaml
+indicators:
+  # Smoothed RSI - apply 10-day SMA to RSI(14)
+  smooth_rsi:
+    formula: "SMA(RSI(14), 10)"
+
+  # MACD line - difference of two EMAs
+  macd_line:
+    formula: "EMA(CLOSE, 12) - EMA(CLOSE, 26)"
+
+  # Price distance from moving average (percentage)
+  sma_distance:
+    formula: "(CLOSE - SMA(CLOSE, 20)) / SMA(CLOSE, 20) * 100"
+```
+
+**Formula Syntax:**
+- **Series:** `OPEN`, `HIGH`, `LOW`, `CLOSE`, `VOLUME`
+- **Functions:** `SMA(series, period)`, `EMA(series, period)`, `RSI(period)`, `ATR(period)`
+- **Math:** `+`, `-`, `*`, `/`
+- **Grouping:** `( )`
+
+**Why use formulas?**
+- Create indicators that don't exist as built-ins
+- Combine multiple indicators into one
+- Express complex trading concepts concisely
 
 ### Condition Types
 
@@ -664,6 +695,7 @@ AI is **OFF by default**. The system works completely without AI. Use AI for:
 - Learning what indicators mean
 - Getting a second opinion
 - Explaining complex market conditions
+- **Translating natural language to formulas** (new!)
 
 ### Enabling AI Explanation
 
@@ -714,6 +746,43 @@ saham sentiment BBCA
 saham sentiment BBCA --ai-classify
 saham sentiment BBCA --ai-classify --provider ollama
 ```
+
+### AI Formula Translator (Programmatic)
+
+Don't know formula syntax? Describe what you want in plain English:
+
+```python
+from src.application.use_case.create_indicator_from_intent import (
+    CreateIndicatorFromIntentRequest,
+    CreateIndicatorFromIntentUseCase,
+)
+from src.infrastructure.ai import FormulaTranslatorFactory
+
+translator = FormulaTranslatorFactory.create(provider="ollama")
+use_case = CreateIndicatorFromIntentUseCase(translator=translator)
+
+response = use_case.execute(
+    CreateIndicatorFromIntentRequest(
+        intent="smoothed RSI with 14-period and 10-day smoothing"
+    )
+)
+
+print(response.formula)  # "SMA(RSI(14), 10)"
+```
+
+**Examples of what you can ask:**
+
+| Natural Language | Resulting Formula |
+|------------------|-------------------|
+| "smoothed RSI with 10-day smoothing" | `SMA(RSI(14), 10)` |
+| "MACD line with 12 and 26 EMAs" | `EMA(CLOSE, 12) - EMA(CLOSE, 26)` |
+| "average true range over 14 days" | `ATR(14)` |
+| "price as percentage of 50-day SMA" | `CLOSE / SMA(CLOSE, 50) * 100` |
+
+**Unsupported requests** return `UNSUPPORTED`:
+- "Should I buy BBCA?" (trading advice)
+- "Will the price go up?" (predictions)
+- "Explain what RSI means" (not a formula)
 
 ---
 

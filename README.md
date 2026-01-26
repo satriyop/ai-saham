@@ -8,11 +8,15 @@ A **local-first, production-grade CLI application** for stock analysis focused o
 
 ## Features
 
-- **Technical Indicators** - SMA, EMA, RSI with professional-grade calculations
+- **Technical Indicators** - SMA, EMA, RSI, ATR with professional-grade calculations
+- **Formula DSL** - Compose indicators with expressions like `SMA(RSI(14), 10)`
+- **Plugin System** - Extend with custom indicators (ATR included as example)
 - **Risk Assessment** - Three built-in profiles (conservative, balanced, aggressive)
 - **Custom Rules DSL** - Define your own rules via YAML configuration
+- **AI Formula Translator** - Describe indicators in natural language, get formula back
 - **AI Explanations** - Get AI-powered insights (Claude, OpenAI, Gemini, Ollama)
 - **News Sentiment** - Analyze news headlines with keyword or AI classification
+- **Backtesting** - Test strategies on historical data with detailed metrics
 - **Offline-First** - Works without internet after initial data fetch
 - **Local Storage** - SQLite database for cached market data
 - **Hexagonal Architecture** - Clean separation of domain, application, and infrastructure
@@ -270,9 +274,11 @@ saham version
 
 ---
 
-## AI Providers
+## AI Features
 
-For `--explain` and `--ai-classify` features:
+### AI Providers
+
+For `--explain`, `--ai-classify`, and formula translation:
 
 | Provider | Environment Variable | Default Model |
 |----------|---------------------|---------------|
@@ -290,6 +296,79 @@ export ANTHROPIC_API_KEY=sk-...
 ollama serve  # In another terminal
 saham risk BBCA --explain --provider ollama
 ```
+
+### AI Formula Translator
+
+Translate natural language descriptions into formula expressions:
+
+```python
+from src.application.use_case.create_indicator_from_intent import (
+    CreateIndicatorFromIntentRequest,
+    CreateIndicatorFromIntentUseCase,
+)
+from src.infrastructure.ai import FormulaTranslatorFactory
+
+# Create translator
+translator = FormulaTranslatorFactory.create(provider="claude")
+use_case = CreateIndicatorFromIntentUseCase(translator=translator)
+
+# Translate intent to formula
+response = use_case.execute(
+    CreateIndicatorFromIntentRequest(
+        intent="smoothed RSI with 14-period RSI and 10-day smoothing",
+        indicator_name="smooth_rsi"
+    )
+)
+
+print(response.formula)  # "SMA(RSI(14), 10)"
+```
+
+**Supported intents:**
+- "smoothed RSI with 14-period and 10-day smoothing" → `SMA(RSI(14), 10)`
+- "MACD line using 12 and 26 period EMAs" → `EMA(CLOSE, 12) - EMA(CLOSE, 26)`
+- "average true range over 14 days" → `ATR(14)`
+
+**Unsupported intents** (returns `UNSUPPORTED`):
+- Trading advice: "should I buy BBCA?"
+- Predictions: "will the price go up?"
+- Non-indicator requests: "explain RSI"
+
+---
+
+## Plugin System
+
+Extend the indicator library with custom plugins.
+
+### Using Plugins
+
+Plugins are auto-discovered from `plugins/` directory:
+
+```bash
+plugins/
+└── atr_plugin.py     # ATR indicator (included)
+```
+
+### Creating a Plugin
+
+```python
+# plugins/my_indicator.py
+from src.application.services.indicator_registry import IndicatorPlugin
+
+class MyIndicatorPlugin(IndicatorPlugin):
+    @property
+    def name(self) -> str:
+        return "MY_IND"
+
+    @property
+    def required_periods(self) -> int:
+        return 14
+
+    def compute(self, candles, period: int):
+        # Return list of (date, Decimal) tuples
+        ...
+```
+
+See `plugins/atr_plugin.py` for a complete example.
 
 ---
 
@@ -366,8 +445,46 @@ saham risk BBCA --rules-file config/my_rules.yaml
 ```
 
 **Built-in indicators** (always available): `RSI` (14), `SMA` (20), `EMA` (20)
-**Supported types:** `RSI`, `SMA`, `EMA`
+**Plugin indicators** (if installed): `ATR` and custom plugins
+**Supported types:** `RSI`, `SMA`, `EMA`, plus any registered plugins
 **Supported operators:** `<`, `<=`, `>`, `>=`, `==`, `!=`
+
+### Formula-Based Indicators
+
+Define composite indicators using mathematical expressions:
+
+```yaml
+version: 1
+name: "formula_strategy"
+default_outcome: MODERATE
+
+indicators:
+  # Smoothed RSI - applies 10-period SMA to RSI(14)
+  smooth_rsi:
+    formula: "SMA(RSI(14), 10)"
+
+  # MACD line - difference of two EMAs
+  macd_line:
+    formula: "EMA(CLOSE, 12) - EMA(CLOSE, 26)"
+
+  # Price distance from SMA as percentage
+  sma_distance:
+    formula: "(CLOSE - SMA(CLOSE, 20)) / SMA(CLOSE, 20) * 100"
+
+rules:
+  - name: smooth_rsi_oversold
+    when:
+      indicator: smooth_rsi
+      operator: "<"
+      value: 30
+    outcome: LOW_RISK
+```
+
+**Supported formula syntax:**
+- **Series:** `OPEN`, `HIGH`, `LOW`, `CLOSE`, `VOLUME`
+- **Functions:** `SMA(series, period)`, `EMA(series, period)`, `RSI(period)`, `ATR(period)`
+- **Operators:** `+`, `-`, `*`, `/`
+- **Parentheses:** `( )` for grouping
 
 ### Signal Mapping (for Backtests)
 
@@ -419,7 +536,7 @@ src/
 │   └── services/              # Domain services
 │       └── backtest_engine.py # Backtest simulation engine
 │
-├── application/               # Use cases
+├── application/               # Use cases & application services
 │   ├── use_case/
 │   │   ├── fetch_market_data.py
 │   │   ├── compute_sma.py
@@ -429,9 +546,20 @@ src/
 │   │   ├── assess_risk.py
 │   │   ├── explain_risk.py
 │   │   ├── fetch_sentiment.py
-│   │   └── backtest.py        # Backtest use case
+│   │   ├── backtest.py
+│   │   └── create_indicator_from_intent.py  # AI formula translation
+│   ├── formula/               # Formula DSL engine
+│   │   ├── tokenizer.py       # Lexical analysis
+│   │   ├── parser.py          # Recursive descent parser
+│   │   ├── ast_nodes.py       # Immutable AST types
+│   │   ├── validator.py       # Semantic validation
+│   │   └── evaluator.py       # AST evaluation
+│   ├── services/
+│   │   └── indicator_registry.py  # Centralized indicator management
+│   ├── ports/
+│   │   └── formula_translator.py  # AI translator interface
 │   ├── rules/                 # Custom rules DSL
-│   │   ├── schema.py          # Includes SignalMapping
+│   │   ├── schema.py          # Includes formula support
 │   │   └── interpreter.py
 │   └── dto/                   # Data transfer objects
 │
@@ -440,28 +568,39 @@ src/
 │   │   └── yahoo.py           # Yahoo Finance adapter
 │   ├── persistence/
 │   │   └── sqlite_market_repository.py
-│   ├── ai/                    # AI explainers
+│   ├── ai/                    # AI adapters
 │   │   ├── factory.py
 │   │   ├── claude_explainer.py
 │   │   ├── openai_explainer.py
 │   │   ├── gemini_explainer.py
 │   │   ├── ollama_explainer.py
+│   │   ├── formula_translator.py       # AI formula translation
+│   │   ├── formula_translator_prompt.py
 │   │   └── mock_explainer.py
 │   ├── sentiment/             # Sentiment analysis
 │   │   ├── factory.py
 │   │   ├── google_news_provider.py
 │   │   ├── keyword_classifier.py
 │   │   └── ai_classifier.py
+│   ├── plugins/               # Plugin discovery
+│   │   └── loader.py          # Auto-loads from plugins/
 │   └── config/
 │       └── yaml_loader.py     # Custom rules loader
 │
-└── adapters/                  # User interfaces
-    ├── cli/                   # Typer CLI (main interface)
-    ├── bot/                   # Telegram, WhatsApp (stubs)
-    └── web/                   # REST API (stub)
+├── adapters/                  # User interfaces
+│   ├── cli/                   # Typer CLI (main interface)
+│   ├── bot/                   # Telegram, WhatsApp (stubs)
+│   └── web/                   # REST API (stub)
+│
+└── plugins/                   # User plugins directory
+    └── atr_plugin.py          # ATR indicator (example)
 ```
 
-**Key Principle:** Domain logic is pure and framework-agnostic. External systems never leak into the domain.
+**Key Principles:**
+- Domain logic is pure and framework-agnostic
+- External systems never leak into the domain
+- AI is always optional and swappable
+- Plugins extend functionality without modifying core
 
 ---
 
