@@ -32,6 +32,7 @@ If any item cannot be satisfied, the agent must stop and state why.
 * Local-first assumptions are preserved
 * I verified indicator initialization follows industry standard (SMA seed, warm-up, no shortcut seeding) 
 
+
 ---
 
 ## 4. Determinism & Safety
