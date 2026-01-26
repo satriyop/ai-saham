@@ -1,1 +1,1 @@
-macd.py
+"""macd stub (placeholder)."""

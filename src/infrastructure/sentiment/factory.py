@@ -95,7 +95,9 @@ class SentimentFactory:
 
             return AIClassifier(provider=provider, model=model)
         else:
-            from src.infrastructure.sentiment.keyword_classifier import KeywordClassifier
+            from src.infrastructure.sentiment.keyword_classifier import (
+                KeywordClassifier,
+            )
 
             return KeywordClassifier()
 

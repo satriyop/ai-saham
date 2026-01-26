@@ -8,7 +8,6 @@ Layer: Infrastructure
 
 import os
 import time
-from typing import Protocol
 
 from src.domain.ports.ai_explainer import (
     AIExplainer,

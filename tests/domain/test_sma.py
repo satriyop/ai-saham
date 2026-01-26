@@ -18,7 +18,6 @@ import pytest
 from src.domain.entities.candle import Candle
 from src.domain.indicators.sma import calculate_sma
 
-
 # --- Test Fixtures ---
 
 

@@ -12,7 +12,7 @@ Depends on: Domain ports, Domain value objects, Other use cases
 """
 
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date
 from decimal import Decimal
 
 from src.application.use_case.compute_ema import ComputeEMARequest, ComputeEMAUseCase

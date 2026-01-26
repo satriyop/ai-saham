@@ -22,7 +22,6 @@ from src.infrastructure.persistence.sqlite_market_repository import (
     SQLiteMarketRepository,
 )
 
-
 # --- Test Fixtures ---
 
 

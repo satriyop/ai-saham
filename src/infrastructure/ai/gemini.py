@@ -1,1 +1,1 @@
-gemini.py
+"""gemini stub (placeholder)."""

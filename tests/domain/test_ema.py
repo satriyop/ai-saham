@@ -20,7 +20,6 @@ import pytest
 from src.domain.entities.candle import Candle
 from src.domain.indicators.ema import calculate_ema
 
-
 # --- Test Fixtures ---
 
 
@@ -81,8 +80,8 @@ class TestEMACalculation:
         result = calculate_ema(candles, period=3)
 
         # k = 2 / (3 + 1) = 0.5
-        k = Decimal("0.5")
-        one_minus_k = Decimal("0.5")
+        Decimal("0.5")
+        Decimal("0.5")
 
         # EMA[0] = SMA seed = (10+20+30)/3 = 20
         # EMA[1] = 40 * 0.5 + 20 * 0.5 = 30

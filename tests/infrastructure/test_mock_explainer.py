@@ -7,8 +7,6 @@ Verifies mock explainer returns valid templated explanations.
 from datetime import date
 from decimal import Decimal
 
-import pytest
-
 from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 from src.domain.value_objects.risk_assessment import RiskAssessment
 from src.domain.value_objects.risk_signal import RiskLevel, RiskProfile

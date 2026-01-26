@@ -1,1 +1,1 @@
-sqlite.py
+"""sqlite stub (placeholder)."""

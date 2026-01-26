@@ -11,13 +11,12 @@ These tests verify:
 All tests run offline with no external dependencies.
 """
 
-import pytest
 
 from src.domain.value_objects.sentiment import Sentiment
 from src.infrastructure.sentiment.keyword_classifier import (
-    KeywordClassifier,
-    POSITIVE_KEYWORDS,
     NEGATIVE_KEYWORDS,
+    POSITIVE_KEYWORDS,
+    KeywordClassifier,
 )
 
 

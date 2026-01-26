@@ -61,7 +61,9 @@ class Candle:
         """Create Candle from dictionary."""
         return cls(
             ticker=data["ticker"],
-            date=date.fromisoformat(data["date"]) if isinstance(data["date"], str) else data["date"],
+            date=(
+                date.fromisoformat(data["date"]) if isinstance(data["date"], str) else data["date"]
+            ),
             open=Decimal(data["open"]),
             high=Decimal(data["high"]),
             low=Decimal(data["low"]),

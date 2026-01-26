@@ -1,7 +1,7 @@
-This adapter:
+"""
+Sentiment analyzer adapter (stub).
 
-fetches text (news, social)
+Future implementation for AI-based sentiment analysis.
 
-calls LLM
-
-returns structured output
+Layer: Infrastructure
+"""

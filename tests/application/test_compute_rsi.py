@@ -24,7 +24,6 @@ from src.application.use_case.compute_rsi import (
 from src.domain.entities.candle import Candle
 from src.domain.ports.market_data_repository import MarketDataRepository
 
-
 # --- Test Fixtures ---
 
 

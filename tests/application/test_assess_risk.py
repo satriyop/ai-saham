@@ -23,8 +23,7 @@ from src.application.use_case.assess_risk import (
 )
 from src.domain.entities.candle import Candle
 from src.domain.ports.market_data_repository import MarketDataRepository
-from src.domain.value_objects.risk_signal import RiskLevel, RiskProfile
-
+from src.domain.value_objects.risk_signal import RiskProfile
 
 # --- Test Fixtures ---
 

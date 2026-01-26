@@ -10,7 +10,7 @@ These tests verify:
 All tests run offline with no external dependencies.
 """
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 
 import pytest
 

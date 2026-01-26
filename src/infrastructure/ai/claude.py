@@ -1,1 +1,1 @@
-claude.py
+"""claude stub (placeholder)."""

@@ -118,12 +118,10 @@ class KeywordClassifier:
                               Pass explicit empty list [] to disable negative matching.
         """
         # Use 'is None' check to allow explicit empty lists
-        self._positive = frozenset(
-            k.lower() for k in (POSITIVE_KEYWORDS if positive_keywords is None else positive_keywords)
-        )
-        self._negative = frozenset(
-            k.lower() for k in (NEGATIVE_KEYWORDS if negative_keywords is None else negative_keywords)
-        )
+        pos_kw = POSITIVE_KEYWORDS if positive_keywords is None else positive_keywords
+        neg_kw = NEGATIVE_KEYWORDS if negative_keywords is None else negative_keywords
+        self._positive = frozenset(k.lower() for k in pos_kw)
+        self._negative = frozenset(k.lower() for k in neg_kw)
 
     @property
     def classifier_name(self) -> str:

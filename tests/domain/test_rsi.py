@@ -20,7 +20,6 @@ import pytest
 from src.domain.entities.candle import Candle
 from src.domain.indicators.rsi import calculate_rsi
 
-
 # --- Test Fixtures ---
 
 

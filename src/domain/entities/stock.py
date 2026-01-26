@@ -1,1 +1,1 @@
-stock.py
+"""stock stub (placeholder)."""

@@ -13,8 +13,6 @@ All tests run offline with no external dependencies.
 
 from datetime import datetime, timedelta
 
-import pytest
-
 from src.domain.ports.news_provider import RawHeadline
 from src.infrastructure.sentiment.mock_provider import MockNewsProvider
 

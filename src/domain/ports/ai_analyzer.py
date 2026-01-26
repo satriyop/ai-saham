@@ -1,1 +1,1 @@
-ai_analyzer.py
+"""ai_analyzer stub (placeholder)."""

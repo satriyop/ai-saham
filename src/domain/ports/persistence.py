@@ -1,1 +1,1 @@
-persistence.py
+"""persistence stub (placeholder)."""

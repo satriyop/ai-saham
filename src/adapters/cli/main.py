@@ -48,6 +48,8 @@ from src.application.use_case.fetch_sentiment import (
     FetchSentimentUseCase,
 )
 from src.domain.ports.ai_explainer import ExplainerAuthError
+from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
+from src.domain.value_objects.risk_assessment import RiskAssessment
 from src.domain.value_objects.sentiment import Sentiment, SentimentSnapshot
 from src.infrastructure.ai import ExplainerFactory
 from src.infrastructure.data_providers.yahoo import YahooFinanceProvider
@@ -133,17 +135,23 @@ def _display_sentiment_full(
         f"Confidence: {winning_count}/{snapshot.total_count} headlines ({snapshot.confidence_pct}%)"
     )
 
-    typer.echo(f"\nBreakdown:")
-    typer.echo(f"  Positive:  {snapshot.positive_count} ({int(snapshot.positive_count / snapshot.total_count * 100) if snapshot.total_count else 0}%)")
-    typer.echo(f"  Neutral:   {snapshot.neutral_count} ({int(snapshot.neutral_count / snapshot.total_count * 100) if snapshot.total_count else 0}%)")
-    typer.echo(f"  Negative:  {snapshot.negative_count} ({int(snapshot.negative_count / snapshot.total_count * 100) if snapshot.total_count else 0}%)")
+    typer.echo("\nBreakdown:")
+    total = snapshot.total_count or 1  # Avoid division by zero
+    pos_pct = int(snapshot.positive_count / total * 100)
+    neu_pct = int(snapshot.neutral_count / total * 100)
+    neg_pct = int(snapshot.negative_count / total * 100)
+    typer.echo(f"  Positive:  {snapshot.positive_count} ({pos_pct}%)")
+    typer.echo(f"  Neutral:   {snapshot.neutral_count} ({neu_pct}%)")
+    typer.echo(f"  Negative:  {snapshot.negative_count} ({neg_pct}%)")
 
     # Show recent headlines (max 5)
     if snapshot.headlines:
-        typer.echo(f"\nRecent Headlines:")
+        typer.echo("\nRecent Headlines:")
         for headline in snapshot.headlines[:5]:
             symbol = sentiment_symbols.get(headline.sentiment, "?")
-            typer.echo(f"  [{symbol}] {headline.title[:70]}{'...' if len(headline.title) > 70 else ''}")
+            title = headline.title[:70]
+            suffix = "..." if len(headline.title) > 70 else ""
+            typer.echo(f"  [{symbol}] {title}{suffix}")
 
     typer.echo(f"\n[Provider: {provider} | Classifier: {classifier}]")
 
@@ -198,8 +206,6 @@ def _display_ai_explanation(
         provider: Optional provider override
         model: Optional model name override (for Ollama)
     """
-    from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
-    from src.domain.value_objects.risk_assessment import RiskAssessment
 
     typer.echo(f"{'-' * 39}")
     typer.echo("AI EXPLANATION")
@@ -321,7 +327,10 @@ def fetch(
             typer.echo("Tip: Check your internet connection and try again.", err=True)
         elif "no data" in error_msg or "not found" in error_msg:
             typer.echo(f"Error: No market data found for ticker '{ticker.upper()}'", err=True)
-            typer.echo("Tip: Verify the ticker symbol is valid for IDX (e.g., BBCA, BBRI, TLKM).", err=True)
+            typer.echo(
+                "Tip: Verify the ticker symbol is valid for IDX (e.g., BBCA, BBRI, TLKM).",
+                err=True,
+            )
         else:
             typer.echo(f"Failed to fetch data: {e}", err=True)
         raise typer.Exit(1)
@@ -336,7 +345,9 @@ def sma(
     ] = 20,
     field: Annotated[
         str,
-        typer.Option("--field", "-f", help="Price field (open/high/low/close)", callback=validate_field),
+        typer.Option(
+            "--field", "-f", help="Price field (open/high/low/close)", callback=validate_field
+        ),
     ] = "close",
     days: Annotated[
         int,
@@ -405,7 +416,7 @@ def sma(
         # Summary statistics
         if response.values:
             sma_only = [val for _, val in response.values]
-            typer.echo(f"\nSummary:")
+            typer.echo("\nSummary:")
             typer.echo(f"  Latest:  {sma_only[-1]:>14.2f}")
             typer.echo(f"  Highest: {max(sma_only):>14.2f}")
             typer.echo(f"  Lowest:  {min(sma_only):>14.2f}")
@@ -438,7 +449,9 @@ def ema(
     ] = 20,
     field: Annotated[
         str,
-        typer.Option("--field", "-f", help="Price field (open/high/low/close)", callback=validate_field),
+        typer.Option(
+            "--field", "-f", help="Price field (open/high/low/close)", callback=validate_field
+        ),
     ] = "close",
     days: Annotated[
         int,
@@ -510,7 +523,7 @@ def ema(
         # Summary statistics
         if response.values:
             ema_only = [val for _, val in response.values]
-            typer.echo(f"\nSummary:")
+            typer.echo("\nSummary:")
             typer.echo(f"  Latest:  {ema_only[-1]:>14.2f}")
             typer.echo(f"  Highest: {max(ema_only):>14.2f}")
             typer.echo(f"  Lowest:  {min(ema_only):>14.2f}")
@@ -612,7 +625,7 @@ def rsi(
         # Summary statistics
         if response.values:
             rsi_only = [val for _, val in response.values]
-            typer.echo(f"\nSummary:")
+            typer.echo("\nSummary:")
             typer.echo(f"  Latest:  {rsi_only[-1]:>10.2f}")
             typer.echo(f"  Highest: {max(rsi_only):>10.2f}")
             typer.echo(f"  Lowest:  {min(rsi_only):>10.2f}")
@@ -622,11 +635,11 @@ def rsi(
             # Overbought/oversold analysis
             latest_rsi = rsi_only[-1]
             if latest_rsi > Decimal("70"):
-                typer.echo(f"\n  Status: OVERBOUGHT (RSI > 70)")
+                typer.echo("\n  Status: OVERBOUGHT (RSI > 70)")
             elif latest_rsi < Decimal("30"):
-                typer.echo(f"\n  Status: OVERSOLD (RSI < 30)")
+                typer.echo("\n  Status: OVERSOLD (RSI < 30)")
             else:
-                typer.echo(f"\n  Status: NEUTRAL (30 <= RSI <= 70)")
+                typer.echo("\n  Status: NEUTRAL (30 <= RSI <= 70)")
 
     except ValueError as e:
         typer.echo(f"Error: {e}", err=True)
@@ -744,7 +757,7 @@ def indicators(
             ema_values = [s.ema for s in response.snapshots]
             rsi_values = [s.rsi for s in response.snapshots]
 
-            typer.echo(f"\nSummary:")
+            typer.echo("\nSummary:")
             typer.echo(
                 f"  SMA  - Latest: {sma_values[-1]:>12,.2f}  "
                 f"Range: [{min(sma_values):,.2f} - {max(sma_values):,.2f}]"
@@ -780,7 +793,11 @@ def risk(
     ticker: Annotated[str, typer.Argument(help="Stock ticker symbol (e.g., BBCA)")],
     profile: Annotated[
         str,
-        typer.Option("--profile", "-p", help="Risk profile (conservative/balanced/aggressive)", callback=validate_profile),
+        typer.Option(
+            "--profile", "-p",
+            help="Risk profile (conservative/balanced/aggressive)",
+            callback=validate_profile,
+        ),
     ] = "balanced",
     all_profiles: Annotated[
         bool,
@@ -812,7 +829,9 @@ def risk(
     ] = None,
     model: Annotated[
         Optional[str],
-        typer.Option("--model", "-m", help="Model name for AI provider (e.g., qwen2.5-coder:1.5b for Ollama)"),
+        typer.Option(
+            "--model", "-m", help="Model name for AI provider (e.g., qwen2.5-coder:1.5b)"
+        ),
     ] = None,
     with_sentiment: Annotated[
         bool,
@@ -903,7 +922,7 @@ def risk(
             typer.echo(f"Profile: {response.profile}")
             typer.echo(f"Data Date: {assessment.snapshot_date}")
 
-            typer.echo(f"\nIndicators:")
+            typer.echo("\nIndicators:")
             typer.echo(f"  SMA({response.sma_period}):  {snapshot.sma:>12,.2f}")
             typer.echo(f"  EMA({response.ema_period}):  {snapshot.ema:>12,.2f}")
             typer.echo(f"  RSI({response.rsi_period}):  {snapshot.rsi:>12.2f}")
@@ -915,7 +934,7 @@ def risk(
             typer.echo(f"\nRisk Level:  {assessment.risk_level_name}")
             typer.echo(f"Confidence:  {assessment.confidence}/100")
 
-            typer.echo(f"\nRationale:")
+            typer.echo("\nRationale:")
             for reason in assessment.rationale_list:
                 typer.echo(f"  - {reason}")
 
@@ -1000,7 +1019,9 @@ def sentiment(
     ] = False,
     provider: Annotated[
         Optional[str],
-        typer.Option("--provider", help="AI provider for classification (claude/openai/gemini/ollama)"),
+        typer.Option(
+            "--provider", help="AI provider for classification (claude/openai/gemini/ollama)"
+        ),
     ] = None,
     model: Annotated[
         Optional[str],

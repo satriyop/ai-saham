@@ -55,13 +55,11 @@ class ConservativeRuleSet(BaseRule):
         # Evaluate RSI condition
         rsi_signals_high = rsi > self.RSI_HIGH_RISK
         rsi_signals_low = rsi < self.RSI_LOW_RISK
-        rsi_neutral = not rsi_signals_high and not rsi_signals_low
 
         # Evaluate trend condition (with threshold check)
         trend_significant = magnitude >= self.DIVERGENCE_THRESHOLD
         trend_down = direction == -1 and trend_significant
         trend_up = direction == 1 and trend_significant
-        trend_neutral = not trend_significant or direction == 0
 
         # Build rationale for RSI
         if rsi_signals_high:

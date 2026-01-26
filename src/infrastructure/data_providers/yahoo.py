@@ -108,7 +108,7 @@ class YahooFinanceProvider(MarketDataProvider):
                     volume=int(row["Volume"]),
                 )
                 candles.append(candle)
-            except (ValueError, KeyError) as e:
+            except (ValueError, KeyError):
                 # Skip invalid rows but log them
                 continue
 

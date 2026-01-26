@@ -1,1 +1,1 @@
-idx.py
+"""idx stub (placeholder)."""

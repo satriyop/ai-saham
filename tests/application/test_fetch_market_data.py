@@ -22,7 +22,6 @@ from src.domain.entities.candle import Candle
 from src.domain.ports.market_data_provider import MarketDataProvider
 from src.domain.ports.market_data_repository import MarketDataRepository
 
-
 # --- Test Fixtures ---
 
 

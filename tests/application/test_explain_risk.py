@@ -8,8 +8,6 @@ handles errors gracefully.
 from datetime import date
 from decimal import Decimal
 
-import pytest
-
 from src.application.use_case.explain_risk import (
     ExplainRiskRequest,
     ExplainRiskResponse,
@@ -220,7 +218,7 @@ class TestDeterminismPreserved:
         # Run through explainer
         explainer = MockExplainer()
         use_case = ExplainRiskUseCase(explainer=explainer)
-        response = use_case.execute(
+        use_case.execute(
             ExplainRiskRequest(
                 ticker="BBCA",
                 assessment=assessment_before,

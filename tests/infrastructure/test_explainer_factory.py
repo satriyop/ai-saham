@@ -5,7 +5,6 @@ Verifies factory creates correct explainer types and rate limiting works.
 """
 
 import os
-import time
 from datetime import date
 from decimal import Decimal
 from unittest.mock import patch
@@ -17,9 +16,9 @@ from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 from src.domain.value_objects.risk_assessment import RiskAssessment
 from src.domain.value_objects.risk_signal import RiskLevel, RiskProfile
 from src.infrastructure.ai.factory import (
+    SUPPORTED_PROVIDERS,
     ExplainerFactory,
     RateLimitedExplainer,
-    SUPPORTED_PROVIDERS,
 )
 from src.infrastructure.ai.mock_explainer import MockExplainer
 

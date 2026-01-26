@@ -1,1 +1,1 @@
-indicator_snapshot.py
+"""indicator_snapshot stub (placeholder)."""

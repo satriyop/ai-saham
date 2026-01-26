@@ -1,1 +1,1 @@
-analysis_result.py
+"""analysis_result stub (placeholder)."""
