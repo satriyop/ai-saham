@@ -19,6 +19,7 @@ A **local-first, production-grade CLI application** for stock analysis focused o
 - **AI Explanations** - Get AI-powered insights (Claude, OpenAI, Gemini, Ollama)
 - **News Sentiment** - Analyze news headlines with keyword or AI classification
 - **Backtesting** - Test strategies on historical data with detailed metrics
+- **Broker & Foreign Flow** - Track foreign investor activity from IDX (public, no auth) or Stockbit
 - **Offline-First** - Works without internet after initial data fetch
 - **Local Storage** - SQLite database for cached market data
 - **Hexagonal Architecture** - Clean separation of domain, application, and infrastructure
@@ -49,6 +50,10 @@ saham backtest BBCA --strategy momentum
 
 # Or create a strategy from natural language
 saham strategy create "RSI oversold strategy" --name my_rsi --provider mock
+
+# Fetch foreign flow data (no auth required)
+saham broker fetch BBCA --days 30
+saham broker flow BBCA
 ```
 
 ---
@@ -693,6 +698,40 @@ git commit -m "Add momentum strategy"
 
 ---
 
+## Broker Data & Foreign Flow
+
+Track foreign investor activity on IDX stocks. Two data providers available:
+
+| Provider | Auth | Data Provided |
+|----------|------|---------------|
+| **`idx`** (default) | None | Foreign buy/sell lots, estimated values, total volume |
+| **`stockbit`** | JWT token | Exact foreign values + top broker breakdown |
+
+```bash
+# Fetch foreign flow (IDX - no auth needed)
+saham broker fetch BBCA --days 30
+
+# Or use Stockbit for broker-level detail
+saham broker auth "your-stockbit-token"
+saham broker fetch BBCA --provider stockbit
+
+# View foreign flow summary
+saham broker flow BBCA --days 20
+
+# Check top brokers (requires Stockbit data)
+saham broker top BBCA
+
+# Import from CSV
+saham broker import data.csv --preview
+
+# Check provider status
+saham broker status
+```
+
+See [CLI_README.md](CLI_README.md) for detailed broker data documentation.
+
+---
+
 ## Architecture
 
 ```
@@ -752,7 +791,9 @@ src/
 │
 ├── infrastructure/            # External implementations
 │   ├── data_providers/
-│   │   └── yahoo.py           # Yahoo Finance adapter
+│   │   ├── yahoo.py           # Yahoo Finance adapter
+│   │   ├── idx.py             # IDX broker data (public API, no auth)
+│   │   └── stockbit.py        # Stockbit broker data (JWT auth)
 │   ├── persistence/
 │   │   └── sqlite_market_repository.py
 │   ├── ai/                    # AI adapters
@@ -779,6 +820,7 @@ src/
 ├── adapters/                  # User interfaces
 │   ├── cli/                   # Typer CLI (main interface)
 │   │   ├── main.py            # Main CLI entry point
+│   │   ├── broker_commands.py    # Broker data & foreign flow
 │   │   └── strategy_commands.py  # Strategy management commands
 │   ├── bot/                   # Telegram, WhatsApp (stubs)
 │   └── web/                   # REST API (stub)

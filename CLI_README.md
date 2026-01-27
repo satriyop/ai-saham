@@ -504,7 +504,20 @@ This adds a sentiment section to the risk output, but remember: sentiment is con
 
 ## 7. Broker Data & Foreign Flow - The `broker` Command
 
-Foreign investor flow is one of the most watched metrics in the Indonesian market. The `broker` command suite lets you fetch, cache, and analyze broker summary data from Stockbit.
+Foreign investor flow is one of the most watched metrics in the Indonesian market. The `broker` command suite lets you fetch, cache, and analyze broker summary data.
+
+### Data Providers
+
+Two providers are available for fetching broker/foreign flow data:
+
+| Provider | Auth Required | Data | Best For |
+|----------|--------------|------|----------|
+| **`idx`** (default) | None | Foreign flow (lots + estimated values), OHLCV, total volume | Quick setup, no auth hassle |
+| **`stockbit`** | JWT token (~24h expiry) | Foreign flow (exact values) + top broker breakdown | Per-broker analysis |
+
+The **IDX provider** uses the public idx.co.id API — no registration or token needed. It provides per-stock foreign buy/sell data in lots (values are estimated from volume × closing price).
+
+The **Stockbit provider** provides exact foreign flow values and per-broker breakdowns (top buyers/sellers), but requires a JWT token that expires every ~24 hours.
 
 ### Why Foreign Flow Matters in IDX
 
@@ -513,11 +526,42 @@ Foreign investor flow is one of the most watched metrics in the Indonesian marke
 | **Foreign Net Buy** | Foreigners accumulating → often bullish signal |
 | **Foreign Net Sell** | Foreigners distributing → potential weakness |
 | **Consecutive Buy Days** | Sustained accumulation pattern |
-| **Top Brokers** | Which brokers are driving the flow |
+| **Top Brokers** | Which brokers are driving the flow (Stockbit only) |
 
-### Setting Up Authentication
+### Fetching Broker Data
 
-Stockbit requires a JWT token from your browser session:
+```bash
+# Fetch using IDX provider (default - no auth required)
+saham broker fetch BBCA
+
+# Explicitly specify provider
+saham broker fetch BBCA --provider idx
+saham broker fetch BBCA --provider stockbit
+
+# Fetch 90 days of history
+saham broker fetch BBRI --days 90
+
+# Specific date range
+saham broker fetch TLKM --start 2024-01-01 --end 2024-06-30
+
+# Force refresh (ignore cache)
+saham broker fetch BBCA --refresh
+```
+
+**Options:**
+
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--days` | `-d` | 30 | Number of days to fetch |
+| `--start` | `-s` | — | Start date (YYYY-MM-DD) |
+| `--end` | `-e` | — | End date (YYYY-MM-DD) |
+| `--refresh` | `-r` | false | Force refresh from provider |
+| `--provider` | `-P` | idx | Data provider (idx, stockbit) |
+| `--db` | | ~/.ai-saham/data.db | Database path |
+
+### Setting Up Stockbit (Optional)
+
+Only needed if you want per-broker breakdown data (top buyers/sellers):
 
 ```bash
 # Step 1: Get your token from Stockbit
@@ -535,32 +579,6 @@ saham broker status
 ```
 
 **Note:** Tokens expire in ~24 hours. You'll need to refresh periodically.
-
-### Fetching Broker Data
-
-```bash
-# Fetch last 30 days (default)
-saham broker fetch BBCA
-
-# Fetch 90 days of history
-saham broker fetch BBRI --days 90
-
-# Specific date range
-saham broker fetch TLKM --start 2024-01-01 --end 2024-06-30
-
-# Force refresh from Stockbit (ignore cache)
-saham broker fetch BBCA --refresh
-```
-
-**Options:**
-
-| Option | Short | Default | Description |
-|--------|-------|---------|-------------|
-| `--days` | `-d` | 30 | Number of days to fetch |
-| `--start` | `-s` | — | Start date (YYYY-MM-DD) |
-| `--end` | `-e` | — | End date (YYYY-MM-DD) |
-| `--refresh` | `-r` | false | Force refresh from Stockbit |
-| `--db` | | ~/.ai-saham/data.db | Database path |
 
 ### Viewing Foreign Flow
 
@@ -630,15 +648,17 @@ DB     Deutsche Bank        Foreign      -3.80B     -380,000
 ### Checking Provider Status
 
 ```bash
-# Check if Stockbit is configured and working
 saham broker status
 ```
 
 **Output:**
 ```
-Stockbit token: Configured
-Validating...
-Status: Connected and working
+IDX provider: Available (public API, no auth required)
+Stockbit provider: Configured
+  Validating Stockbit token...
+  Status: Connected and working
+
+Default provider: idx
 ```
 
 ### Importing Broker Data from CSV
@@ -1646,33 +1666,27 @@ saham list-indicators --formulas
 Goal: Analyze foreign investor behavior and build a foreign flow strategy.
 
 ```bash
-# Step 1: Set up Stockbit authentication (once per day)
-# Get token from stockbit.com DevTools → Network → exodus requests
-saham broker auth "eyJhbGciOiJSUzI1NiIs..."
-
-# Step 2: Verify connection
-saham broker status
-
-# Step 3: Fetch broker data for target stocks
+# Step 1: Fetch broker data (IDX provider - no auth needed)
 saham broker fetch BBCA --days 90
 saham broker fetch BBRI --days 90
 saham broker fetch BMRI --days 90
 
-# Step 4: Analyze foreign flow patterns
+# Step 2: Analyze foreign flow patterns
 saham broker flow BBCA --days 20
 saham broker flow BBRI --days 20
 
-# Step 5: Check top brokers on specific dates
+# Step 3: Check top brokers (requires Stockbit provider)
+saham broker fetch BBCA --provider stockbit --days 30
 saham broker top BBCA --date 2025-01-27
 
-# Step 6: Fetch price data for backtesting
+# Step 4: Fetch price data for backtesting
 saham fetch BBCA --days 365
 saham fetch BBRI --days 365
 
-# Step 7: Use the pre-built foreign accumulation strategy
+# Step 5: Use the pre-built foreign accumulation strategy
 saham backtest BBCA --strategy foreign-accumulation --verbose
 
-# Step 8: Or create your own strategy
+# Step 6: Or create your own strategy
 saham strategy init my_flow_strategy
 # Edit to use FOREIGN_FLOW indicators
 vim strategies/my_flow_strategy/strategy.yaml
@@ -1684,6 +1698,7 @@ saham backtest BBCA --strategy my_flow_strategy
 - Foreign net buy > 50B for 3+ days often precedes price moves
 - Consecutive buy days matter more than single-day spikes
 - Watch for divergence between foreign flow and price
+- IDX provider is sufficient for flow trend analysis; Stockbit adds broker-level detail
 
 ---
 
@@ -1701,8 +1716,8 @@ saham backtest BBCA --strategy my_flow_strategy
 | `saham risk TICKER` | Risk assessment | `--profile`, `--all`, `--rules-file`, `--explain`, `--with-sentiment` |
 | `saham sentiment TICKER` | News sentiment | `--days`, `--max`, `--ai-classify` |
 | `saham broker auth TOKEN` | Configure Stockbit token | `--validate/--no-validate` |
-| `saham broker status` | Check Stockbit connection | — |
-| `saham broker fetch TICKER` | Fetch broker summary data | `--days`, `--start`, `--end`, `--refresh` |
+| `saham broker status` | Check all provider status | — |
+| `saham broker fetch TICKER` | Fetch broker summary data | `--days`, `--start`, `--end`, `--refresh`, `--provider` |
 | `saham broker flow TICKER` | View foreign flow summary | `--days` |
 | `saham broker top TICKER` | View top brokers | `--date` |
 | `saham broker import FILE` | Import broker data from CSV | `--preview`, `--mapping`, `--on-error` |
@@ -1893,7 +1908,13 @@ Error: Stockbit token not configured.
 Run 'saham broker auth <token>' to set your token.
 ```
 
-**Solution:** You need to configure your Stockbit JWT token:
+**Solution:** This only applies if using `--provider stockbit`. Switch to the IDX provider (default) which needs no auth:
+```bash
+saham broker fetch BBCA                     # Uses IDX, no auth needed
+saham broker fetch BBCA --provider stockbit  # Needs Stockbit token
+```
+
+If you need Stockbit for top broker data, configure the token:
 
 1. Login to stockbit.com in your browser
 2. Open DevTools (F12) → Network tab
@@ -1909,11 +1930,22 @@ Error: Stockbit token expired or invalid.
 Please get a new token from stockbit.com
 ```
 
-**Solution:** Stockbit tokens expire in ~24 hours. Get a fresh token:
+**Solution:** Stockbit tokens expire in ~24 hours. Either switch to IDX provider or get a fresh token:
 ```bash
-# Get new token from browser DevTools
+# Option 1: Use IDX (no auth)
+saham broker fetch BBCA
+
+# Option 2: Refresh Stockbit token
 saham broker auth "new-token-here"
 ```
+
+### "IDX API returned 403 Forbidden"
+
+```
+Error: IDX API returned 403 Forbidden.
+```
+
+**Solution:** The IDX API may be temporarily unavailable or blocking requests. Wait a few minutes and retry. If persistent, the API endpoint may have changed.
 
 ### "No broker data found"
 
