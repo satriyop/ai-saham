@@ -25,6 +25,7 @@ from src.application.use_case.import_broker_data import (
 )
 from src.domain.ports.broker_data_provider import (
     BrokerDataAuthError,
+    BrokerDataProvider,
     BrokerDataProviderError,
 )
 from src.domain.ports.csv_broker_parser import (
@@ -32,6 +33,7 @@ from src.domain.ports.csv_broker_parser import (
     ErrorStrategy,
 )
 from src.infrastructure.csv import BrokerCsvAdapter, MappingLoader
+from src.infrastructure.data_providers.idx import IdxBrokerDataProvider
 from src.infrastructure.data_providers.stockbit import (
     StockbitBrokerDataProvider,
     validate_token,
@@ -39,6 +41,20 @@ from src.infrastructure.data_providers.stockbit import (
 from src.infrastructure.persistence.sqlite_broker_repository import (
     SQLiteBrokerRepository,
 )
+
+# Supported providers
+PROVIDERS = ("idx", "stockbit")
+DEFAULT_PROVIDER = "idx"
+
+
+def _create_provider(provider_name: str) -> BrokerDataProvider:
+    """Create a broker data provider by name."""
+    if provider_name == "idx":
+        return IdxBrokerDataProvider()
+    elif provider_name == "stockbit":
+        return StockbitBrokerDataProvider()
+    else:
+        raise ValueError(f"Unknown provider: {provider_name}. Choose from: {', '.join(PROVIDERS)}")
 
 # Create Typer sub-app for broker commands
 broker_app = typer.Typer(
@@ -118,45 +134,47 @@ def broker_status() -> None:
     """
     Check broker data provider status.
 
-    Shows whether Stockbit token is configured and valid.
+    Shows status of all available providers.
     """
-    provider = StockbitBrokerDataProvider()
+    # IDX provider (always available)
+    typer.echo("IDX provider: " + typer.style("Available", fg=typer.colors.GREEN)
+               + " (public API, no auth required)")
 
-    if not provider.is_authenticated():
-        typer.echo(
-            typer.style("Not configured. ", fg=typer.colors.YELLOW)
-            + "Run 'saham broker auth <token>' to set your Stockbit token."
-        )
-        raise typer.Exit(1)
+    # Stockbit provider (needs token)
+    stockbit = StockbitBrokerDataProvider()
+    if stockbit.is_authenticated():
+        typer.echo("Stockbit provider: " + typer.style("Configured", fg=typer.colors.GREEN))
 
-    typer.echo("Stockbit token: " + typer.style("Configured", fg=typer.colors.GREEN))
-    typer.echo("Validating...")
-
-    # Try a test request
-    try:
-        summary = provider.fetch_broker_summary("BBCA", date.today())
-        if summary:
+        typer.echo("  Validating Stockbit token...")
+        try:
+            summary = stockbit.fetch_broker_summary("BBCA", date.today())
+            if summary:
+                typer.echo(
+                    "  " + typer.style("Status: ", fg=typer.colors.GREEN)
+                    + "Connected and working"
+                )
+            else:
+                typer.echo(
+                    "  " + typer.style("Status: ", fg=typer.colors.YELLOW)
+                    + "Connected (no data for today yet)"
+                )
+        except BrokerDataAuthError:
             typer.echo(
-                typer.style("Status: ", fg=typer.colors.GREEN)
-                + "Connected and working"
+                "  " + typer.style("Token expired or invalid. ", fg=typer.colors.RED)
+                + "Please get a new token from stockbit.com"
             )
-        else:
+        except BrokerDataProviderError as e:
             typer.echo(
-                typer.style("Status: ", fg=typer.colors.YELLOW)
-                + "Connected (no data for today yet)"
+                "  " + typer.style("Connection error: ", fg=typer.colors.RED)
+                + str(e)
             )
-    except BrokerDataAuthError as e:
+    else:
         typer.echo(
-            typer.style("Token expired or invalid. ", fg=typer.colors.RED)
-            + "Please get a new token from stockbit.com"
+            "Stockbit provider: " + typer.style("Not configured", fg=typer.colors.YELLOW)
+            + " (run 'saham broker auth <token>' to set up)"
         )
-        raise typer.Exit(1)
-    except BrokerDataProviderError as e:
-        typer.echo(
-            typer.style("Connection error: ", fg=typer.colors.RED)
-            + str(e)
-        )
-        raise typer.Exit(1)
+
+    typer.echo(f"\nDefault provider: {DEFAULT_PROVIDER}")
 
 
 @broker_app.command("fetch")
@@ -179,8 +197,15 @@ def broker_fetch(
     ] = None,
     refresh: Annotated[
         bool,
-        typer.Option("--refresh", "-r", help="Force refresh from Stockbit"),
+        typer.Option("--refresh", "-r", help="Force refresh from provider"),
     ] = False,
+    provider_name: Annotated[
+        str,
+        typer.Option(
+            "--provider", "-P",
+            help=f"Data provider ({', '.join(PROVIDERS)})",
+        ),
+    ] = DEFAULT_PROVIDER,
     db_path: Annotated[
         Path,
         typer.Option("--db", help="Database path"),
@@ -189,15 +214,28 @@ def broker_fetch(
     """
     Fetch broker summary data for a stock.
 
-    Fetches broker flow data from Stockbit and caches locally.
+    Fetches broker flow data and caches locally.
     Subsequent calls use cached data unless --refresh is specified.
 
+    Providers:
+        idx       - IDX public API (default, no auth required)
+        stockbit  - Stockbit API (requires auth token)
+
     Examples:
-        saham broker fetch BBCA                  # Last 30 days
-        saham broker fetch BBCA --days 90        # Last 90 days
-        saham broker fetch BBCA --refresh        # Force refresh
+        saham broker fetch BBCA                       # IDX provider (default)
+        saham broker fetch BBCA --provider stockbit   # Stockbit provider
+        saham broker fetch BBCA --days 90             # Last 90 days
+        saham broker fetch BBCA --refresh             # Force refresh
         saham broker fetch BBCA -s 2024-01-01 -e 2024-06-30
     """
+    # Validate provider
+    if provider_name not in PROVIDERS:
+        typer.echo(
+            typer.style(f"Unknown provider: {provider_name}", fg=typer.colors.RED)
+        )
+        typer.echo(f"Available providers: {', '.join(PROVIDERS)}")
+        raise typer.Exit(1)
+
     # Parse dates
     if start:
         start_date = date.fromisoformat(start)
@@ -210,10 +248,10 @@ def broker_fetch(
         end_date = date.today()
 
     typer.echo(f"Fetching broker data for {ticker.upper()}...")
-    typer.echo(f"Date range: {start_date} to {end_date}")
+    typer.echo(f"Provider: {provider_name} | Date range: {start_date} to {end_date}")
 
     # Initialize dependencies
-    provider = StockbitBrokerDataProvider()
+    provider = _create_provider(provider_name)
     repository = SQLiteBrokerRepository(db_path)
     use_case = FetchBrokerDataUseCase(provider, repository)
 
@@ -227,7 +265,7 @@ def broker_fetch(
             )
         )
 
-        source = "cache" if response.from_cache else "Stockbit"
+        source = "cache" if response.from_cache else provider_name
         typer.echo(
             typer.style(f"Loaded {len(response.summaries)} days from {source}",
                        fg=typer.colors.GREEN)
