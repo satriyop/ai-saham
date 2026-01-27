@@ -8,7 +8,7 @@
 - Offer to create skills if you find some insight that will potentially help you to work more effectively in upcoming task, skills should be project scope not user scope. Use Skill creator plugin to create the skill.
 
 ## Purpose
-This file instructs **Claude Code** how to behave as a disciplined senior engineer while developing this project. Claude should treat this repository as a **real financial software product**, not a prototype or demo.
+This file instructs **Claude Code** how to behave as a disciplined senior engineer while developing this project. Claude should treat this repository as a **A compiler where AI writes source code**, not a prototype or demo.
 
 🚨 Important: What NOT to do
 Do not:
@@ -32,7 +32,22 @@ We are building a **local-first, developer first, production-grade composable en
 * Future-ready: global markets, bots, web, mobile
 * Designed for maintainability, auditability, and extensibility
 
-This is **AI-assisted quantitative research environment, composable analysis engine**, not an automated trading bot.
+This is **AI-assisted quantitative research environment, composable analysis engine**, not an automated AI trading bot.
+
+There are three distinct roles in architecture:
+
+1) Author : Who proposes artifacts.
+
+2) Validator : Who decides if artifacts are acceptable.
+
+3) Executor : Who runs artifacts.
+
+In our project:
+- AI = Author
+- Engine = Validator + Executor
+- YAML = Contract between them
+
+**This separation is sacred.**
 
 ---
 
@@ -47,6 +62,16 @@ This is **AI-assisted quantitative research environment, composable analysis eng
 
 **Rule:** If domain logic depends on an external library, the design is wrong.
 
+```
+User Intent
+   ↓
+AI generates strategy.yaml (+ indicator definitions if needed)
+   ↓
+Engine validates (schema + semantics)
+   ↓
+If valid → usable
+If invalid → rejected
+```
 ---
 
 ### 2. Local-First & Offline-First
@@ -80,14 +105,16 @@ Claude MUST NOT hardcode any data provider.
 * Rule-based
 * Uses technical indicators (SMA, RSI, MACD, Bollinger Bands, ATR, etc.)
 
-#### AI Mode (Optional)
-
+#### AI Mode OFF
+* Claude MUST ensure the system is useful without AI. 
 * OFF by default
 * AI acts as an **advisor**, not a decision maker
 * AI output must be explainable and traceable
 
-Claude MUST ensure the system is useful without AI.
-
+#### AI Mode ON
+* Claude will prioritize AI LLM as first class citizen to 
+* SKILL.md and SKILLS_INDEX.md are always disposable artifacts, Must be regeneratable, Never manually edited.
+* AI → YAML → Validator → Registry → Runtime
 ---
 
 ### 5. Risk Profiles
