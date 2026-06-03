@@ -1,0 +1,27 @@
+version: 1
+name: "pre-open-screener"
+description: |
+  Pre-open market screener for IDX stocks.
+
+  Screens for high-IEV movers before market open, computes entry and
+  stop-loss levels from the order book, and runs AI research per candidate.
+
+  Requires: Stockbit authenticated browser session, ANTHROPIC_API_KEY
+  Mode: AI Mode ON
+
+mode: ai_assisted
+
+screener:
+  iev_min: 100000        # Minimum IEV to qualify (step 3 of workflow)
+
+entry:
+  capital: 3000000       # Entry position size in IDR (Rp 3,000,000)
+  tick_above: 1          # Place bid N ticks above the largest bid (step 6)
+
+risk:
+  stop_loss_pct: 0.20    # Hard stop-loss: 20% below entry price (step 7)
+
+analysis:
+  sma_period: 20         # SMA period for trend filter
+  rsi_period: 14         # RSI period for momentum assessment
+  days: 365              # Days of historical data to load

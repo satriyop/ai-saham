@@ -94,9 +94,17 @@ app.add_typer(strategy_app, name="strategy")
 from src.adapters.cli.broker_commands import broker_app
 app.add_typer(broker_app, name="broker")
 
+# Register skill subcommands
+from src.adapters.cli.skill_commands import skill_app
+app.add_typer(skill_app, name="skill")
+
+# Register screen subcommands
+from src.adapters.cli.screen_commands import screen_app
+app.add_typer(screen_app, name="screen")
+
 # Default configuration
-DEFAULT_DB_PATH = Path.home() / ".ai-saham" / "data.db"
-DEFAULT_FORMULAS_PATH = Path.home() / ".ai-saham" / "formulas.yaml"
+DEFAULT_DB_PATH = Path("data.db")
+DEFAULT_FORMULAS_PATH = Path("config/formulas.yaml")
 DEFAULT_DAYS = 365
 DEFAULT_MARKET_SUFFIX = ".JK"
 
@@ -285,7 +293,7 @@ def fetch(
     ] = False,
     db_path: Annotated[
         Optional[Path],
-        typer.Option("--db", help="Path to SQLite database (default: ~/.ai-saham/data.db)"),
+        typer.Option("--db", help="Path to SQLite database (default: ./data.db)"),
     ] = None,
 ) -> None:
     """
@@ -386,7 +394,7 @@ def sma(
     ] = DEFAULT_DAYS,
     db_path: Annotated[
         Optional[Path],
-        typer.Option("--db", help="Path to SQLite database (default: ~/.ai-saham/data.db)"),
+        typer.Option("--db", help="Path to SQLite database (default: ./data.db)"),
     ] = None,
 ) -> None:
     """
@@ -490,7 +498,7 @@ def ema(
     ] = DEFAULT_DAYS,
     db_path: Annotated[
         Optional[Path],
-        typer.Option("--db", help="Path to SQLite database (default: ~/.ai-saham/data.db)"),
+        typer.Option("--db", help="Path to SQLite database (default: ./data.db)"),
     ] = None,
 ) -> None:
     """
@@ -591,7 +599,7 @@ def rsi(
     ] = DEFAULT_DAYS,
     db_path: Annotated[
         Optional[Path],
-        typer.Option("--db", help="Path to SQLite database (default: ~/.ai-saham/data.db)"),
+        typer.Option("--db", help="Path to SQLite database (default: ./data.db)"),
     ] = None,
 ) -> None:
     """
@@ -707,7 +715,7 @@ def compute(
     ] = 30,
     db_path: Annotated[
         Optional[Path],
-        typer.Option("--db", help="Path to SQLite database (default: ~/.ai-saham/data.db)"),
+        typer.Option("--db", help="Path to SQLite database (default: ./data.db)"),
     ] = None,
 ) -> None:
     """
@@ -822,7 +830,7 @@ def indicators(
     ] = DEFAULT_DAYS,
     db_path: Annotated[
         Optional[Path],
-        typer.Option("--db", help="Path to SQLite database (default: ~/.ai-saham/data.db)"),
+        typer.Option("--db", help="Path to SQLite database (default: ./data.db)"),
     ] = None,
 ) -> None:
     """
@@ -969,7 +977,7 @@ def risk(
     ] = 14,
     db_path: Annotated[
         Optional[Path],
-        typer.Option("--db", help="Path to SQLite database (default: ~/.ai-saham/data.db)"),
+        typer.Option("--db", help="Path to SQLite database (default: ./data.db)"),
     ] = None,
     explain: Annotated[
         bool,
@@ -1018,7 +1026,7 @@ def risk(
         saham risk BBRI --profile conservative
         saham risk TLKM --all
         saham risk BBCA --rules-file config/my_rules.yaml
-        saham risk BBCA -r ~/.ai-saham/rules.yaml
+        saham risk BBCA -r config/custom_rules.yaml
         saham risk BBCA --explain
         saham risk BBCA --explain --provider ollama --model qwen2.5-coder:1.5b
     """
@@ -1233,7 +1241,7 @@ def backtest(
     ] = False,
     db_path: Annotated[
         Optional[Path],
-        typer.Option("--db", help="Path to SQLite database (default: ~/.ai-saham/data.db)"),
+        typer.Option("--db", help="Path to SQLite database (default: ./data.db)"),
     ] = None,
 ) -> None:
     """
@@ -1248,7 +1256,7 @@ def backtest(
         Strategy names are searched in:
         1. ./NAME/strategy.yaml
         2. ./strategies/NAME/strategy.yaml
-        3. ~/.ai-saham/strategies/NAME/strategy.yaml
+        3. ./strategies/NAME/strategy.yaml
 
     Requires cached data (run 'saham fetch TICKER' first).
 
