@@ -246,12 +246,12 @@ class TestBootstrapWithFormulas:
     """Test bootstrap integration with formula loading."""
 
     def test_default_storage_path(self, temp_dir, monkeypatch):
-        """Default storage path should be in home directory."""
-        # Patch home directory for test
-        monkeypatch.setattr(Path, "home", lambda: temp_dir)
+        """Default storage path should be project-local formulas.yaml."""
+        # Change to temp directory so project-local path resolves there
+        monkeypatch.chdir(temp_dir)
 
         # Create registry with default loading
-        # This should look for ~/.ai-saham/formulas.yaml
+        # This should look for formulas.yaml in project root
         registry = create_indicator_registry(
             load_formulas=True,
         )
