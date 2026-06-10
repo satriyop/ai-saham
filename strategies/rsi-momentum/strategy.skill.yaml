@@ -1,0 +1,18 @@
+description: >
+  Momentum strategy combining RSI extremes with SMA trend confirmation.
+  Buys oversold dips in uptrends, exits on overbought or trend breakdown.
+when_to_use: >
+  Trending markets where pullbacks are buying opportunities.
+  Works best with liquid large-cap stocks.
+tags:
+  - momentum
+  - rsi
+  - trend-following
+  - mean-reversion
+limitations:
+  - Underperforms in range-bound/sideways markets
+  - May generate false signals during trend transitions
+  - Single timeframe analysis only
+examples:
+  - "Buy BBCA on RSI oversold dip while still in uptrend"
+  - "Exit when RSI overbought or price breaks below SMA50"

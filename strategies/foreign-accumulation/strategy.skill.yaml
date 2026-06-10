@@ -1,0 +1,18 @@
+description: >
+  Detects foreign investor accumulation patterns on IDX stocks.
+  Combines foreign flow data with RSI confirmation.
+when_to_use: >
+  Screening for stocks with sustained institutional/foreign buying.
+  Best in trending or early-trend market conditions.
+tags:
+  - foreign-flow
+  - institutional
+  - accumulation
+  - idx
+limitations:
+  - Requires broker flow data (run broker fetch first)
+  - May lag actual accumulation by 1-2 trading days
+  - Not suitable for intraday analysis
+examples:
+  - "Foreign accumulation with RSI confirmation on BBRI"
+  - "Detect distribution when foreigners sell consistently"
