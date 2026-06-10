@@ -13,7 +13,6 @@ Search order:
 1. Explicit path if contains "/" or ends with ".yaml"
 2. ./NAME/strategy.yaml
 3. ./strategies/NAME/strategy.yaml
-4. ~/.ai-saham/strategies/NAME/strategy.yaml
 
 Layer: Application
 """
@@ -35,9 +34,6 @@ if TYPE_CHECKING:
     from src.application.rules.schema import RuleSet
     from src.application.services.indicator_registry import IndicatorRegistry
 
-
-# User-level strategies directory
-USER_STRATEGIES_DIR = Path.home() / ".ai-saham" / "strategies"
 
 # Local strategies directories (relative to cwd)
 LOCAL_STRATEGIES_DIRS = [
@@ -100,7 +96,6 @@ class StrategyLoader:
     1. Explicit path if contains "/" or ends with ".yaml"
     2. ./NAME/strategy.yaml
     3. ./strategies/NAME/strategy.yaml
-    4. ~/.ai-saham/strategies/NAME/strategy.yaml
     """
 
     def __init__(self, registry: "IndicatorRegistry | None" = None) -> None:
@@ -249,7 +244,7 @@ class StrategyLoader:
         strategies: list[StrategyInfo] = []
         seen_names: set[str] = set()
 
-        # Search local directories first (higher priority)
+        # Search local directories
         for base_dir in LOCAL_STRATEGIES_DIRS:
             if not base_dir.exists():
                 continue
@@ -259,15 +254,7 @@ class StrategyLoader:
                         strategies.append(strategy_info)
                         seen_names.add(strategy_info.name)
 
-        # Search user directory
-        if USER_STRATEGIES_DIR.exists():
-            for strategy_info in self._scan_directory(USER_STRATEGIES_DIR, "user"):
-                if strategy_info.name not in seen_names:
-                    if include_invalid or strategy_info.valid:
-                        strategies.append(strategy_info)
-                        seen_names.add(strategy_info.name)
-
-        return sorted(strategies, key=lambda s: (s.location != "local", s.name))
+        return sorted(strategies, key=lambda s: s.name)
 
     def _is_explicit_path(self, name_or_path: str) -> bool:
         """Check if the input looks like an explicit path.
@@ -294,9 +281,6 @@ class StrategyLoader:
         # Local directories
         for base_dir in LOCAL_STRATEGIES_DIRS:
             paths.append(base_dir / name / "strategy.yaml")
-
-        # User directory
-        paths.append(USER_STRATEGIES_DIR / name / "strategy.yaml")
 
         return paths
 

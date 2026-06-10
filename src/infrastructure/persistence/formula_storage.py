@@ -1,7 +1,7 @@
 """
 Formula storage for persisting custom indicator formulas.
 
-Stores formulas in YAML format at ~/.ai-saham/formulas.yaml for:
+Stores formulas in YAML format at config/formulas.yaml for:
 - Cross-session persistence
 - Human-readable/editable format
 - Git-friendly storage
@@ -20,7 +20,7 @@ import yaml
 logger = logging.getLogger(__name__)
 
 # Default storage location
-DEFAULT_FORMULAS_PATH = Path.home() / ".ai-saham" / "formulas.yaml"
+DEFAULT_FORMULAS_PATH = Path("config/formulas.yaml")
 
 
 class FormulaStorageError(Exception):
@@ -63,7 +63,7 @@ class FormulaStorage:
 
         Args:
             path: Custom path for formulas file. If None, uses
-                  ~/.ai-saham/formulas.yaml
+                  config/formulas.yaml.
         """
         self._path = path or DEFAULT_FORMULAS_PATH
 
@@ -80,7 +80,7 @@ class FormulaStorage:
     ) -> StoredFormula:
         """Save a formula to persistent storage.
 
-        Creates the storage directory if it doesn't exist.
+        Creates the parent directory if it doesn't exist.
         Overwrites existing formula with same name.
 
         Args:

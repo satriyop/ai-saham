@@ -74,7 +74,7 @@ def _load_formulas_into_registry(
     Args:
         registry: IndicatorRegistry to load formulas into.
         formula_storage: Optional FormulaStorage instance. If None,
-                        creates default storage from ~/.ai-saham/formulas.yaml.
+                        creates default storage from config/formulas.yaml.
     """
     # Create default storage if not provided
     if formula_storage is None:

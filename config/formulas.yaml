@@ -1,0 +1,5 @@
+formulas:
+  SMOOTH_RSI:
+    created: '2026-01-27T00:17:20.693470'
+    formula: RSI(14)
+    intent: smoothed RSI

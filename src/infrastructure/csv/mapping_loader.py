@@ -31,7 +31,6 @@ class MappingLoader:
 
     # Default search paths for mapping files
     DEFAULT_SEARCH_PATHS = [
-        Path.home() / ".ai-saham" / "csv_mappings",
         Path("config/csv_mappings"),
     ]
 

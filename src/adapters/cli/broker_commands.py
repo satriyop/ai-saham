@@ -64,7 +64,7 @@ broker_app = typer.Typer(
 )
 
 # Default configuration
-DEFAULT_DB_PATH = Path.home() / ".ai-saham" / "data.db"
+DEFAULT_DB_PATH = Path("data.db")
 DEFAULT_DAYS = 30
 
 
@@ -126,7 +126,7 @@ def broker_auth(
     # Save token
     provider = StockbitBrokerDataProvider()
     provider.save_token(token)
-    typer.echo(f"Token saved to ~/.ai-saham/stockbit_token.json")
+    typer.echo(f"Token saved to stockbit_token.json")
 
 
 @broker_app.command("status")
@@ -311,6 +311,10 @@ def broker_flow(
         Path,
         typer.Option("--db", help="Database path"),
     ] = DEFAULT_DB_PATH,
+    fmt: Annotated[
+        str,
+        typer.Option("--format", help="Output format: table or json"),
+    ] = "table",
 ) -> None:
     """
     Show foreign flow summary for a stock.
@@ -319,6 +323,7 @@ def broker_flow(
 
     Example:
         saham broker flow BBCA --days 20
+        saham broker flow BBCA --format json
     """
     repository = SQLiteBrokerRepository(db_path)
     use_case = GetBrokerDataUseCase(repository)
@@ -337,6 +342,11 @@ def broker_flow(
 
     # Take last N days
     summaries = summaries[-days:]
+
+    if fmt == "json":
+        import json as _json
+        typer.echo(_json.dumps([s.to_dict() for s in summaries], indent=2, default=str))
+        return
 
     typer.echo(f"\nForeign Flow for {ticker.upper()} (last {len(summaries)} trading days)")
     typer.echo("=" * 60)
@@ -668,7 +678,7 @@ def broker_mappings() -> None:
     List available CSV mapping configurations.
 
     Mappings define how CSV columns map to expected fields.
-    Create custom mappings in ~/.ai-saham/csv_mappings/ or config/csv_mappings/
+    Create custom mappings in config/csv_mappings/
     """
     loader = MappingLoader()
     mappings = loader.list_available()
@@ -684,4 +694,4 @@ def broker_mappings() -> None:
 
     typer.echo("-" * 40)
     typer.echo(f"\nUse with: saham broker import data.csv --mapping <name>")
-    typer.echo(f"Custom mappings: ~/.ai-saham/csv_mappings/<name>.yaml")
+    typer.echo(f"Custom mappings: config/csv_mappings/<name>.yaml")

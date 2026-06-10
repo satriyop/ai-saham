@@ -73,6 +73,7 @@ reports/
 .env.*.local
 *.pem
 *.key
+stockbit_token.json
 
 # Logs
 *.log
