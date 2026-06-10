@@ -1054,6 +1054,56 @@ when:
     indicator: slow_ema
 ```
 
+**3. Indicator vs Literal Value (Left/Right Form):**
+```yaml
+when:
+  left:
+    indicator: foreign_flow_3d
+  operator: ">"
+  right:
+    value: 50000000000  # 50B IDR threshold
+```
+
+The right-hand side can be either an `indicator:` reference or a literal `value:`.
+
+**4. Compound Conditions (`all:` — Logical AND):**
+```yaml
+when:
+  all:
+    - indicator: rsi
+      operator: "<"
+      value: 30
+    - left:
+        indicator: CLOSE
+      operator: ">"
+      right:
+        indicator: sma_50
+```
+
+All sub-conditions must be true for the rule to match. Each sub-condition can be any of the above types (indicator vs value, indicator vs indicator, or nested `all:`).
+
+**5. Price Field References:**
+
+You can reference raw candle price fields directly in conditions:
+
+| Field | Description |
+|-------|-------------|
+| `OPEN` | Opening price |
+| `HIGH` | Highest price |
+| `LOW` | Lowest price |
+| `CLOSE` | Closing price |
+| `VOLUME` | Trading volume |
+
+```yaml
+# Compare closing price to a moving average
+when:
+  left:
+    indicator: CLOSE
+  operator: ">"
+  right:
+    indicator: sma_50
+```
+
 ### Example: EMA Crossover Strategy
 
 ```yaml
@@ -1123,10 +1173,12 @@ Instead of loose YAML files scattered around, organize strategies as self-contai
 ```
 strategies/
 └── momentum/
-    ├── strategy.yaml   # Required: your rules
-    ├── README.md       # Optional: documentation
-    ├── tests/          # Optional: test cases
-    └── examples/       # Optional: example usage
+    ├── strategy.yaml        # Required: your rules
+    ├── strategy.skill.yaml  # Optional: annotation sidecar (for SKILL.md generation)
+    ├── SKILL.md             # Auto-generated: machine-readable documentation
+    ├── README.md            # Optional: human documentation
+    ├── tests/               # Optional: test cases
+    └── examples/            # Optional: example usage
 ```
 
 ### Creating a Strategy Manually
@@ -1340,7 +1392,158 @@ cp -r strategies/momentum ~/.ai-saham/strategies/
 
 ---
 
-## 11. AI-Enhanced Analysis (Optional)
+## 11. Skill Documentation - The `skill` Command
+
+The skill system generates machine-readable documentation (SKILL.md) for strategies, indicators, and formulas. These files power the project's SKILLS_INDEX.md catalog and enable drift detection when rules change.
+
+### Why Skill Documentation?
+
+- **Discoverability** - SKILLS_INDEX.md catalogs all documented artifacts in one place
+- **Drift Detection** - Detects when strategy rules change but documentation hasn't been regenerated
+- **Machine-Readable** - SKILL.md files include structured metadata (tags, dependencies, data requirements)
+- **Auto-Generated** - No manual writing needed; generated from strategy YAML + annotation sidecar
+
+### How It Works
+
+Each strategy can have a **sidecar annotation file** (`strategy.skill.yaml`) next to `strategy.yaml`:
+
+```
+strategies/rsi-momentum/
+├── strategy.yaml           # Strategy rules (required)
+├── strategy.skill.yaml     # Annotation sidecar (optional)
+└── SKILL.md                # Auto-generated documentation
+```
+
+The sidecar provides human-authored context that can't be inferred from rules alone:
+
+```yaml
+# strategy.skill.yaml
+description: >
+  Momentum strategy combining RSI extremes with SMA trend confirmation.
+  Buys oversold dips in uptrends, exits on overbought or trend breakdown.
+when_to_use: >
+  Trending markets where pullbacks are buying opportunities.
+  Works best with liquid large-cap stocks.
+tags:
+  - momentum
+  - rsi
+  - trend-following
+limitations:
+  - Underperforms in range-bound/sideways markets
+  - May generate false signals during trend transitions
+examples:
+  - "Buy BBCA on RSI oversold dip while still in uptrend"
+  - "Exit when RSI overbought or price breaks below SMA50"
+```
+
+### Auto-Generation on Validate
+
+When you run `saham strategy validate`, SKILL.md is automatically generated if a sidecar exists:
+
+```bash
+saham strategy validate rsi-momentum
+```
+
+```
+Validating: strategies/rsi-momentum/strategy.yaml
+
+Status: VALID
+Name: RSI Momentum
+
+SKILL.md: strategies/rsi-momentum/SKILL.md
+```
+
+If rules have changed since the last generation, you'll see a drift warning:
+
+```
+SKILL.md: strategies/rsi-momentum/SKILL.md
+  Warning: SKILL.md is stale — rules have changed since last generation
+  Warning: Rules changed — SKILL.md regenerated.
+```
+
+### Explicit Generation
+
+Generate SKILL.md on demand for any artifact type:
+
+```bash
+# Strategy (default type)
+saham skill generate rsi-momentum
+saham skill generate foreign-accumulation
+
+# Indicator plugin
+saham skill generate atr --type indicator
+
+# Formula
+saham skill generate SMOOTH_RSI --type formula
+```
+
+If no sidecar exists, a placeholder SKILL.md is generated with a warning.
+
+### Checking for Stale Documentation
+
+Scan all strategies and report which SKILL.md files are out of date:
+
+```bash
+saham skill check
+```
+
+```
+  foreign-accumulation: up to date
+  rsi-momentum: STALE (run: saham skill generate rsi-momentum)
+
+1/2 artifact(s) need regeneration.
+```
+
+This uses a hash of the strategy rules embedded in each SKILL.md to detect drift without requiring a full re-parse.
+
+### Building the Skills Index
+
+Generate a project-wide catalog of all SKILL.md files:
+
+```bash
+saham skill index
+```
+
+Creates `SKILLS_INDEX.md` at the project root:
+
+```markdown
+# Skills Index
+
+## Strategies
+
+| Name | Description | Tags | Link |
+|------|-------------|------|------|
+| Foreign Accumulation | Detects foreign investor accumulation... | foreign-flow, institutional | SKILL.md |
+| RSI Momentum | Momentum strategy combining RSI... | momentum, rsi | SKILL.md |
+
+## Indicators
+
+| Name | Description | Tags | Link |
+|------|-------------|------|------|
+| ATR | — | — | SKILL.md |
+```
+
+### Annotating a New Strategy
+
+To add skill documentation to any strategy:
+
+1. Create `strategies/<name>/strategy.skill.yaml` (see sidecar format above)
+2. Run `saham strategy validate <name>` — SKILL.md is auto-generated
+3. Run `saham skill index` — updates the project-wide catalog
+
+### Command Reference
+
+| Command | Purpose | Reads | Writes |
+|---------|---------|-------|--------|
+| `saham skill generate NAME` | Generate SKILL.md | strategy.yaml + sidecar | SKILL.md |
+| `saham skill generate NAME --type indicator` | Generate for indicator | plugin + sidecar | SKILL.md |
+| `saham skill generate NAME --type formula` | Generate for formula | formula + sidecar | SKILL.md |
+| `saham skill check` | Report stale/missing docs | strategy.yaml + SKILL.md | Nothing |
+| `saham skill index` | Rebuild catalog | All SKILL.md files | SKILLS_INDEX.md |
+
+---
+
+## 12. AI-Enhanced Analysis (Optional)
 
 AI is **OFF by default**. The system works completely without AI. Use AI for:
 - Learning what indicators mean
@@ -1437,7 +1640,7 @@ print(response.formula)  # "SMA(RSI(14), 10)"
 
 ---
 
-## 12. Indicator Management Commands
+## 13. Indicator Management Commands
 
 Create, list, and manage custom indicators from the command line.
 
@@ -1529,7 +1732,7 @@ saham delete-indicator SMOOTH_RSI --force
 
 ---
 
-## 13. Complete Workflow Examples
+## 14. Complete Workflow Examples
 
 ### Conservative Investor Workflow
 
@@ -1702,7 +1905,7 @@ saham backtest BBCA --strategy my_flow_strategy
 
 ---
 
-## 14. Command Reference (Quick Lookup)
+## 15. Command Reference (Quick Lookup)
 
 | Command | Purpose | Key Options |
 |---------|---------|-------------|
@@ -1724,8 +1927,11 @@ saham backtest BBCA --strategy my_flow_strategy
 | `saham broker mappings` | List available CSV mappings | — |
 | `saham strategy init NAME` | Create strategy package | `--dir`, `--force` |
 | `saham strategy create INTENT` | Create strategy from natural language | `--name`, `--provider`, `--save/--no-save` |
-| `saham strategy validate NAME` | Validate strategy | `--strict` |
+| `saham strategy validate NAME` | Validate strategy (auto-generates SKILL.md) | `--strict` |
 | `saham strategy list` | List available strategies | `--verbose`, `--all` |
+| `saham skill generate NAME` | Generate SKILL.md for an artifact | `--type` (strategy/indicator/formula) |
+| `saham skill check` | Report stale/missing SKILL.md files | — |
+| `saham skill index` | Rebuild SKILLS_INDEX.md catalog | — |
 | `saham backtest TICKER` | Strategy backtesting | `--strategy`/`--rules-file`, `--start`, `--end`, `--capital`, `--verbose` |
 | `saham create-indicator` | Create formula from NL | `--name`, `--provider`, `--save/--no-save` |
 | `saham list-indicators` | List all indicators | `--formulas` |

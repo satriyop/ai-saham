@@ -14,6 +14,7 @@ A **local-first, production-grade CLI application** for stock analysis focused o
 - **Risk Assessment** - Three built-in profiles (conservative, balanced, aggressive)
 - **Custom Rules DSL** - Define your own rules via YAML configuration
 - **Strategy Packages** - First-class, versionable, portable strategy artifacts
+- **Skill Documentation** - Auto-generated SKILL.md with drift detection and project-wide catalog
 - **AI Strategy Creator** - Describe strategies in natural language, get complete YAML
 - **AI Formula Translator** - Describe indicators in natural language, get formula back
 - **AI Explanations** - Get AI-powered insights (Claude, OpenAI, Gemini, Ollama)
@@ -575,9 +576,43 @@ saham risk BBCA --rules-file config/my_rules.yaml
 ```
 
 **Built-in indicators** (always available): `RSI` (14), `SMA` (20), `EMA` (20)
+**Price fields** (always available): `OPEN`, `HIGH`, `LOW`, `CLOSE`, `VOLUME`
 **Plugin indicators** (if installed): `ATR` and custom plugins
 **Supported types:** `RSI`, `SMA`, `EMA`, plus any registered plugins
 **Supported operators:** `<`, `<=`, `>`, `>=`, `==`, `!=`
+
+### Compound Conditions & Advanced Syntax
+
+Combine multiple conditions with `all:` (logical AND):
+
+```yaml
+rules:
+  - name: oversold_uptrend
+    priority: 10
+    when:
+      all:
+        - indicator: rsi
+          operator: "<"
+          value: 30
+        - left:
+            indicator: CLOSE
+          operator: ">"
+          right:
+            indicator: sma_50
+    outcome: LOW_RISK
+    rationale: "RSI oversold while price above SMA50"
+```
+
+Use `right: {value: N}` for indicator-vs-literal in the left/right form:
+
+```yaml
+when:
+  left:
+    indicator: foreign_flow_3d
+  operator: ">"
+  right:
+    value: 50000000000  # 50B IDR
+```
 
 ### Formula-Based Indicators
 
@@ -698,6 +733,57 @@ git commit -m "Add momentum strategy"
 
 ---
 
+### `saham skill` - Skill Documentation
+
+Auto-generate machine-readable SKILL.md files for strategies, indicators, and formulas. Includes drift detection and a project-wide catalog.
+
+#### Package Structure with Skill Annotation
+
+```
+strategies/rsi-momentum/
+├── strategy.yaml           # Strategy rules (required)
+├── strategy.skill.yaml     # Annotation sidecar (optional)
+└── SKILL.md                # Auto-generated documentation
+```
+
+#### Commands
+
+```bash
+# Auto-generate SKILL.md during validation
+saham strategy validate rsi-momentum
+
+# Explicit generation
+saham skill generate rsi-momentum                  # Strategy (default)
+saham skill generate atr --type indicator           # Indicator plugin
+saham skill generate SMOOTH_RSI --type formula      # Formula
+
+# Check for stale documentation
+saham skill check
+
+# Rebuild project-wide catalog
+saham skill index
+```
+
+| Command | Purpose |
+|---------|---------|
+| `saham skill generate NAME` | Generate SKILL.md for an artifact |
+| `saham skill check` | Report stale/missing SKILL.md files |
+| `saham skill index` | Rebuild SKILLS_INDEX.md catalog |
+
+**Annotation sidecar** (`strategy.skill.yaml`) provides human context:
+
+```yaml
+description: "One-paragraph description"
+when_to_use: "Market conditions where this applies"
+tags: [momentum, rsi]
+limitations: ["Known limitation"]
+examples: ["Example usage"]
+```
+
+See [CLI_README.md](CLI_README.md) for detailed skill documentation guide.
+
+---
+
 ## Broker Data & Foreign Flow
 
 Track foreign investor activity on IDX stocks. Two data providers available:
@@ -755,6 +841,7 @@ src/
 │   │   ├── risk_assessment.py
 │   │   ├── backtest_result.py
 │   │   ├── trade_action.py
+│   │   ├── skill_annotation.py
 │   │   └── sentiment.py
 │   └── services/              # Domain services
 │       └── backtest_engine.py # Backtest simulation engine
@@ -780,10 +867,12 @@ src/
 │   │   └── evaluator.py       # AST evaluation
 │   ├── services/
 │   │   ├── indicator_registry.py  # Centralized indicator management
-│   │   └── strategy_loader.py     # Strategy package resolution
+│   │   ├── strategy_loader.py     # Strategy package resolution
+│   │   └── skill_generator.py     # SKILL.md generation orchestrator
 │   ├── ports/
 │   │   ├── formula_translator.py  # AI formula translator interface
-│   │   └── strategy_translator.py # AI strategy translator interface
+│   │   ├── strategy_translator.py # AI strategy translator interface
+│   │   └── skill_writer.py        # Skill documentation writer interface
 │   ├── rules/                 # Custom rules DSL
 │   │   ├── schema.py          # Includes formula support
 │   │   └── interpreter.py
@@ -814,6 +903,11 @@ src/
 │   │   └── ai_classifier.py
 │   ├── plugins/               # Plugin discovery
 │   │   └── loader.py          # Auto-loads from plugins/
+│   ├── skill/                 # Skill documentation system
+│   │   ├── annotation_reader.py  # Reads .skill.yaml sidecars
+│   │   ├── markdown_writer.py    # Generates SKILL.md
+│   │   ├── rules_hasher.py       # Drift detection via hash
+│   │   └── index_writer.py       # Generates SKILLS_INDEX.md
 │   └── config/
 │       └── yaml_loader.py     # Custom rules loader
 │
@@ -821,7 +915,8 @@ src/
 │   ├── cli/                   # Typer CLI (main interface)
 │   │   ├── main.py            # Main CLI entry point
 │   │   ├── broker_commands.py    # Broker data & foreign flow
-│   │   └── strategy_commands.py  # Strategy management commands
+│   │   ├── strategy_commands.py  # Strategy management commands
+│   │   └── skill_commands.py     # Skill documentation commands
 │   ├── bot/                   # Telegram, WhatsApp (stubs)
 │   └── web/                   # REST API (stub)
 │

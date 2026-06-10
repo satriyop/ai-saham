@@ -8,7 +8,7 @@
 - Offer to create skills if you find some insight that will potentially help you to work more effectively in upcoming task, skills should be project scope not user scope. Use Skill creator plugin to create the skill.
 
 ## Purpose
-This file instructs **Claude Code** how to behave as a disciplined senior engineer while developing this project. Claude should treat this repository as a **A compiler where AI writes source code**, not a prototype or demo.
+This file instructs **Claude Code** how to behave as a disciplined senior engineer while developing this project. Claude should treat this repository as a **real financial software product**, not a prototype or demo.
 
 🚨 Important: What NOT to do
 Do not:
@@ -115,6 +115,7 @@ Claude MUST NOT hardcode any data provider.
 * Claude will prioritize AI LLM as first class citizen to 
 * SKILL.md and SKILLS_INDEX.md are always disposable artifacts, Must be regeneratable, Never manually edited.
 * AI → YAML → Validator → Registry → Runtime
+* A compiler where AI writes source code
 ---
 
 ### 5. Risk Profiles
