@@ -8,7 +8,7 @@ Layer: Infrastructure
 """
 
 import logging
-import xml.etree.ElementTree as ET
+import defusedxml.ElementTree as ET
 from datetime import datetime, timedelta
 from html import unescape
 from urllib.error import HTTPError, URLError

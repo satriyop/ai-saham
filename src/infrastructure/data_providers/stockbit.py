@@ -46,7 +46,7 @@ BROKER_SUMMARY_ENDPOINT = "/marketdetectors/{ticker}"
 REQUEST_DELAY_SECONDS = 0.5
 
 # Default paths
-DEFAULT_TOKEN_PATH = Path.home() / ".ai-saham" / "stockbit_token.json"
+DEFAULT_TOKEN_PATH = Path("stockbit_token.json")
 
 
 class StockbitBrokerDataProvider(BrokerDataProvider):

@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from src.domain.ports.news_provider import NewsProvider
 
 # Supported providers
-SUPPORTED_NEWS_PROVIDERS = ("google", "mock")
+SUPPORTED_NEWS_PROVIDERS = ("google", "kontan", "cnbc", "mock")
 SUPPORTED_CLASSIFIERS = ("keyword", "ai")
 DEFAULT_NEWS_PROVIDER = "google"
 DEFAULT_CLASSIFIER = "keyword"
@@ -67,6 +67,16 @@ class SentimentFactory:
             from src.infrastructure.sentiment.mock_provider import MockNewsProvider
 
             return MockNewsProvider()
+        elif provider == "kontan":
+            from src.infrastructure.sentiment.kontan_provider import KontanNewsProvider
+
+            return KontanNewsProvider()
+        elif provider == "cnbc":
+            from src.infrastructure.sentiment.cnbc_indonesia_provider import (
+                CNBCIndonesiaNewsProvider,
+            )
+
+            return CNBCIndonesiaNewsProvider()
         else:  # google
             from src.infrastructure.sentiment.google_news_provider import (
                 GoogleNewsProvider,
