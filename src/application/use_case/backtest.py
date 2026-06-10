@@ -147,7 +147,7 @@ class BacktestUseCase:
             )
 
         # 3. Get required indicators
-        # Pass registry so it can resolve custom formulas (from ~/.ai-saham/formulas.yaml)
+        # Pass registry so it can resolve custom formulas (from config/formulas.yaml)
         required_indicators = interpreter.get_required_indicators(registry=self._registry)
 
         # 4. Compute all indicator series
@@ -266,6 +266,7 @@ class BacktestUseCase:
                 candle.date,
                 indicator_series,
                 required_indicators,
+                candle=candle,
             )
 
             if snapshot is None:
@@ -291,6 +292,7 @@ class BacktestUseCase:
         target_date: date,
         indicator_series: dict[str, dict[date, Decimal]],
         required_indicators: dict[str, tuple[Union[IndicatorType, str], int]],
+        candle: Candle | None = None,
     ) -> IndicatorSnapshot | None:
         """
         Build an IndicatorSnapshot for a specific date.
@@ -301,6 +303,7 @@ class BacktestUseCase:
             target_date: Date to build snapshot for
             indicator_series: Pre-computed indicator values
             required_indicators: Required indicator definitions
+            candle: Optional candle to inject price fields (OPEN, HIGH, LOW, CLOSE, VOLUME)
 
         Returns:
             IndicatorSnapshot if all indicators available, None otherwise
@@ -325,6 +328,14 @@ class BacktestUseCase:
         for name, value in values.items():
             if name not in BUILTIN_INDICATORS:
                 extras.append((name, value))
+
+        # Inject price fields from candle data (OPEN, HIGH, LOW, CLOSE, VOLUME)
+        if candle is not None:
+            extras.append(("OPEN", candle.open))
+            extras.append(("HIGH", candle.high))
+            extras.append(("LOW", candle.low))
+            extras.append(("CLOSE", candle.close))
+            extras.append(("VOLUME", Decimal(candle.volume)))
 
         return IndicatorSnapshot(
             date=target_date,

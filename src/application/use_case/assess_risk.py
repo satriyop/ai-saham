@@ -76,6 +76,17 @@ class AssessAllProfilesResponse:
     rsi_period: int
 
 
+@dataclass
+class AssessRiskTrendResponse:
+    """Response DTO for risk trend over N days."""
+
+    ticker: str
+    profile: str
+    history: list[tuple[date, str, int]]  # (date, risk_level, confidence)
+    direction: str  # "IMPROVING" | "STABLE" | "DETERIORATING"
+    days_in_current: int
+
+
 class AssessRiskUseCase:
     """
     Use case for assessing stock risk using rule-based evaluation.
@@ -137,7 +148,7 @@ class AssessRiskUseCase:
             interpreter = YamlRuleInterpreter(rule_set)
 
             # Get required indicators from the rule set
-            # Pass registry so it can resolve custom formulas (from ~/.ai-saham/formulas.yaml)
+            # Pass registry so it can resolve custom formulas (from config/formulas.yaml)
             required_indicators = interpreter.get_required_indicators(registry=self._registry)
 
             # Build snapshot with all required indicators
@@ -326,4 +337,73 @@ class AssessRiskUseCase:
             sma_period=request.sma_period,
             ema_period=request.ema_period,
             rsi_period=request.rsi_period,
+        )
+
+    def execute_trend(
+        self, request: AssessRiskRequest, days: int = 7
+    ) -> "AssessRiskTrendResponse":
+        """
+        Assess risk level trend over the last N trading days.
+
+        Re-uses AggregateIndicatorsUseCase snapshots (no extra DB queries).
+
+        Args:
+            request: Standard risk request (profile applies)
+            days: Number of recent snapshots to include in history
+
+        Returns:
+            AssessRiskTrendResponse with per-day history and direction
+        """
+        agg_use_case = AggregateIndicatorsUseCase(self._repository)
+        agg_response = agg_use_case.execute(
+            AggregateIndicatorsRequest(
+                ticker=request.ticker,
+                sma_period=request.sma_period,
+                ema_period=request.ema_period,
+                rsi_period=request.rsi_period,
+                days=365,
+            )
+        )
+
+        if not agg_response.has_values:
+            raise ValueError(
+                f"Insufficient data for {request.ticker.upper()}. "
+                f"Run 'saham fetch {request.ticker.upper()}' first."
+            )
+
+        profile = RiskProfile.from_string(request.profile)
+        window = agg_response.snapshots[-days:]
+
+        history: list[tuple[date, str, int]] = []
+        for snapshot in window:
+            assessment = self._rule_engine.evaluate(snapshot, profile)
+            history.append((snapshot.date, assessment.risk_level_name, assessment.confidence))
+
+        # Determine direction: compare first vs last risk level
+        _rank = {"LOW_RISK": 0, "MODERATE": 1, "HIGH_RISK": 2}
+        first_rank = _rank.get(history[0][1], 1) if history else 1
+        last_rank = _rank.get(history[-1][1], 1) if history else 1
+
+        if last_rank < first_rank:
+            direction = "IMPROVING"
+        elif last_rank > first_rank:
+            direction = "DETERIORATING"
+        else:
+            direction = "STABLE"
+
+        # Count consecutive days at current level
+        current_level = history[-1][1] if history else ""
+        days_in_current = 0
+        for _, level, _ in reversed(history):
+            if level == current_level:
+                days_in_current += 1
+            else:
+                break
+
+        return AssessRiskTrendResponse(
+            ticker=agg_response.ticker,
+            profile=request.profile,
+            history=history,
+            direction=direction,
+            days_in_current=days_in_current,
         )
