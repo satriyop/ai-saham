@@ -13,10 +13,7 @@ import typer
 
 from src.application.rules.exceptions import StrategyNotFoundError
 from src.application.services.bootstrap import create_indicator_registry
-from src.application.services.strategy_loader import (
-    StrategyLoader,
-    USER_STRATEGIES_DIR,
-)
+from src.application.services.strategy_loader import StrategyLoader
 from src.application.use_case.create_strategy_from_intent import (
     CreateStrategyFromIntentRequest,
     CreateStrategyFromIntentUseCase,
@@ -159,7 +156,7 @@ def init(
 
     Examples:
         saham strategy init momentum
-        saham strategy init my_strategy --dir ~/.ai-saham/strategies/my_strategy
+        saham strategy init my_strategy --dir strategies/my_strategy
     """
     # Validate name
     if "/" in name or "\\" in name:
@@ -279,6 +276,9 @@ def validate(
             typer.echo("Warnings:")
             for warning in result.warnings:
                 typer.echo(f"  - {warning}")
+
+        # Generate SKILL.md after successful validation
+        _generate_skill_md(path)
     else:
         typer.echo("Status: INVALID", err=True)
         typer.echo("")
@@ -304,7 +304,6 @@ def list_strategies(
 
     Shows strategies from:
     - ./strategies/ (local)
-    - ~/.ai-saham/strategies/ (user)
 
     Examples:
         saham strategy list
@@ -323,7 +322,6 @@ def list_strategies(
         typer.echo("")
         typer.echo("Search locations:")
         typer.echo("  - ./strategies/")
-        typer.echo(f"  - {USER_STRATEGIES_DIR}/")
         typer.echo("")
         typer.echo("Create a new strategy:")
         typer.echo("  saham strategy init my_strategy")
@@ -570,3 +568,43 @@ def _handle_connection_error(provider: str) -> None:
         typer.echo("Is Ollama running? Start with: ollama serve", err=True)
     else:
         typer.echo("Check your internet connection.", err=True)
+
+
+def _generate_skill_md(strategy_path: Path) -> None:
+    """Generate SKILL.md after successful strategy validation.
+
+    Silently skips if no sidecar .skill.yaml exists (3rd party strategy).
+    Warns on drift detection or generation issues.
+
+    Args:
+        strategy_path: Path to the validated strategy.yaml.
+    """
+    from src.application.services.skill_generator import SkillGeneratorService
+    from src.infrastructure.skill.annotation_reader import AnnotationReader
+    from src.infrastructure.skill.markdown_writer import MarkdownSkillWriter
+    from src.infrastructure.skill.rules_hasher import RulesHasher
+
+    strategy_dir = strategy_path.parent
+    sidecar_path = strategy_dir / "strategy.skill.yaml"
+
+    # Skip silently for strategies without sidecar annotations (3rd party)
+    if not sidecar_path.exists():
+        return
+
+    generator = SkillGeneratorService(
+        annotation_reader=AnnotationReader(),
+        skill_writer=MarkdownSkillWriter(),
+        rules_hasher=RulesHasher(),
+    )
+
+    result = generator.generate_for_strategy(strategy_path)
+
+    for warning in result.warnings:
+        typer.echo(f"  Warning: {warning}", err=True)
+
+    if result.success:
+        typer.echo(f"\nSKILL.md: {result.output_path}")
+        if result.drift_detected:
+            typer.echo(
+                "  Warning: Rules changed — SKILL.md regenerated.", err=True
+            )

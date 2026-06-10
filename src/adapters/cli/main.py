@@ -26,6 +26,7 @@ from src.application.use_case.create_indicator_from_intent import (
 )
 from src.application.use_case.assess_risk import (
     AssessRiskRequest,
+    AssessRiskTrendResponse,
     AssessRiskUseCase,
 )
 from src.application.use_case.backtest import (
@@ -101,6 +102,10 @@ app.add_typer(skill_app, name="skill")
 # Register screen subcommands
 from src.adapters.cli.screen_commands import screen_app
 app.add_typer(screen_app, name="screen")
+
+# Register chart subcommands
+from src.adapters.cli.chart_commands import chart_app
+app.add_typer(chart_app, name="chart")
 
 # Default configuration
 DEFAULT_DB_PATH = Path("data.db")
@@ -295,6 +300,10 @@ def fetch(
         Optional[Path],
         typer.Option("--db", help="Path to SQLite database (default: ./data.db)"),
     ] = None,
+    data_provider: Annotated[
+        str,
+        typer.Option("--provider", help="Data provider: yahoo (default) or idx"),
+    ] = "yahoo",
 ) -> None:
     """
     Fetch daily OHLCV data for an IDX stock ticker.
@@ -306,12 +315,17 @@ def fetch(
         saham fetch BBCA
         saham fetch BBRI --days 730
         saham fetch TLKM --refresh
+        saham fetch BBCA --provider idx
     """
     # Resolve configuration
     resolved_db_path = db_path or DEFAULT_DB_PATH
 
     # Wire up dependencies
-    provider = YahooFinanceProvider(market_suffix=DEFAULT_MARKET_SUFFIX)
+    if data_provider == "idx":
+        from src.infrastructure.data_providers.idx_market import IdxMarketDataProvider
+        provider = IdxMarketDataProvider()
+    else:
+        provider = YahooFinanceProvider(market_suffix=DEFAULT_MARKET_SUFFIX)
     repository = SQLiteMarketRepository(db_path=resolved_db_path)
     use_case = FetchMarketDataUseCase(provider=provider, repository=repository)
 
@@ -832,6 +846,10 @@ def indicators(
         Optional[Path],
         typer.Option("--db", help="Path to SQLite database (default: ./data.db)"),
     ] = None,
+    fmt: Annotated[
+        str,
+        typer.Option("--format", help="Output format: table or json"),
+    ] = "table",
 ) -> None:
     """
     Calculate SMA, EMA, and RSI together for an IDX stock.
@@ -876,6 +894,20 @@ def indicators(
             )
             typer.echo(f"\nRun: saham fetch {ticker.upper()}", err=True)
             raise typer.Exit(1)
+
+        if fmt == "json":
+            import json as _json
+            out = [
+                {
+                    "date": str(s.date),
+                    f"sma_{sma_period}": float(s.sma),
+                    f"ema_{ema_period}": float(s.ema),
+                    f"rsi_{rsi_period}": float(s.rsi),
+                }
+                for s in response.snapshots
+            ]
+            typer.echo(_json.dumps(out, indent=2))
+            return
 
         # Display header
         typer.echo(f"\nTicker: {response.ticker}")
@@ -995,6 +1027,14 @@ def risk(
         bool,
         typer.Option("--with-sentiment", "-s", help="Include news sentiment analysis"),
     ] = False,
+    trend: Annotated[
+        int,
+        typer.Option("--trend", help="Show risk trend over last N days (0=off)", min=0),
+    ] = 0,
+    fmt: Annotated[
+        str,
+        typer.Option("--format", help="Output format: table or json"),
+    ] = "table",
 ) -> None:
     """
     Assess risk for an IDX stock based on technical indicators.
@@ -1089,10 +1129,27 @@ def risk(
                 )
 
         else:
-            # Show single profile with full details
+            # Single profile
             response = use_case.execute(request)
             assessment = response.assessment
             snapshot = assessment.indicators
+
+            if fmt == "json":
+                import json as _json
+                out = {
+                    "ticker": response.ticker,
+                    "risk_level": assessment.risk_level_name,
+                    "confidence": assessment.confidence,
+                    "profile": response.profile,
+                    "rationale": assessment.rationale_list,
+                    "indicators": {
+                        f"sma_{response.sma_period}": float(snapshot.sma),
+                        f"ema_{response.ema_period}": float(snapshot.ema),
+                        f"rsi_{response.rsi_period}": float(snapshot.rsi),
+                    },
+                }
+                typer.echo(_json.dumps(out, indent=2))
+                return
 
             typer.echo(f"\nTicker: {response.ticker}")
             typer.echo(f"Profile: {response.profile}")
@@ -1134,6 +1191,20 @@ def risk(
                 "Run without --all to get AI explanation.",
                 err=True,
             )
+
+        # Risk trend (--trend N)
+        if trend > 0 and not all_profiles and not rules_file:
+            try:
+                trend_resp = use_case.execute_trend(request, days=trend)
+                typer.echo(f"\n{'DATE':<12} {'RISK':<12} {'CONF':>6}")
+                typer.echo("-" * 32)
+                for hist_date, hist_level, hist_conf in trend_resp.history:
+                    typer.echo(f"{hist_date!s:<12} {hist_level:<12} {hist_conf:>4}/100")
+                typer.echo("-" * 32)
+                marker = {"IMPROVING": "↑", "DETERIORATING": "↓", "STABLE": "→"}.get(trend_resp.direction, "")
+                typer.echo(f"Trend: {marker} {trend_resp.direction}  ({trend_resp.days_in_current}d at current level)")
+            except Exception as e:
+                typer.echo(f"\nTrend unavailable: {e}", err=True)
 
         # Display sentiment if requested
         if with_sentiment:
@@ -1243,6 +1314,10 @@ def backtest(
         Optional[Path],
         typer.Option("--db", help="Path to SQLite database (default: ./data.db)"),
     ] = None,
+    fmt: Annotated[
+        str,
+        typer.Option("--format", help="Output format: table or json"),
+    ] = "table",
 ) -> None:
     """
     Backtest a strategy against historical data.
@@ -1339,6 +1414,11 @@ def backtest(
         )
         response = use_case.execute(request)
         result = response.result
+
+        if fmt == "json":
+            import json as _json
+            typer.echo(_json.dumps(result.to_dict(), indent=2))
+            return
 
         # Display results
         typer.echo("")
@@ -1457,6 +1537,13 @@ def sentiment(
         Optional[str],
         typer.Option("--model", "-m", help="Model name for AI provider"),
     ] = None,
+    news_provider_name: Annotated[
+        str,
+        typer.Option(
+            "--news-provider",
+            help="News source: google (default), kontan, cnbc, mock",
+        ),
+    ] = "google",
 ) -> None:
     """
     Fetch and analyze news sentiment for an IDX stock.
@@ -1470,17 +1557,22 @@ def sentiment(
     - keyword (default): Rule-based, uses Indonesian + English keywords
     - AI (--ai-classify): Uses LLM for more nuanced classification
 
+    News providers:
+    - google (default): Google News RSS (global coverage)
+    - kontan: Kontan RSS (Indonesia's leading financial newspaper)
+    - cnbc: CNBC Indonesia market RSS (IDX market commentary)
+
     Examples:
         saham sentiment BBCA
-        saham sentiment BBRI --days 7
+        saham sentiment BBRI --days 7 --news-provider kontan
         saham sentiment TLKM --ai-classify
-        saham sentiment ASII --ai-classify --provider ollama --model llama3
+        saham sentiment ASII --news-provider cnbc
     """
     typer.echo(f"Fetching news sentiment for {ticker.upper()}...")
 
     try:
         # Wire up dependencies
-        news_provider = SentimentFactory.create_news_provider()
+        news_provider = SentimentFactory.create_news_provider(news_provider_name)
         classifier = SentimentFactory.create_classifier(
             use_ai=ai_classify,
             provider=provider,
@@ -1833,6 +1925,82 @@ def delete_indicator(
     except FormulaStorageError as e:
         typer.echo(f"Failed to delete formula: {e}", err=True)
         raise typer.Exit(1)
+
+
+@app.command()
+def compare(
+    tickers: Annotated[
+        list[str],
+        typer.Argument(help="Two or more tickers to compare (e.g., BBCA BBRI BMRI)"),
+    ],
+    profile: Annotated[
+        str,
+        typer.Option(
+            "--profile",
+            "-p",
+            help="Risk profile (conservative/balanced/aggressive)",
+            callback=validate_profile,
+        ),
+    ] = "balanced",
+    sma_period: Annotated[int, typer.Option("--sma", help="SMA period", min=1)] = 20,
+    rsi_period: Annotated[int, typer.Option("--rsi", help="RSI period", min=1)] = 14,
+    days: Annotated[int, typer.Option("--days", "-d", help="Days of history", min=30)] = 365,
+    db_path: Annotated[
+        Optional[Path],
+        typer.Option("--db", help="SQLite database path"),
+    ] = None,
+) -> None:
+    """
+    Side-by-side risk comparison for multiple IDX tickers.
+
+    Requires cached data for each ticker (run 'saham fetch TICKER' first).
+
+    Examples:
+        saham compare BBCA BBRI BMRI
+        saham compare BBCA TLKM --profile conservative
+    """
+    if len(tickers) < 2:
+        typer.echo("Error: Provide at least 2 tickers to compare.", err=True)
+        raise typer.Exit(1)
+
+    resolved_db = db_path or DEFAULT_DB_PATH
+    repository = SQLiteMarketRepository(db_path=resolved_db)
+    registry = create_indicator_registry()
+    use_case = AssessRiskUseCase(repository=repository, registry=registry)
+
+    typer.echo(f"\n{'TICKER':<8} {'CLOSE':>10} {'SMA('+str(sma_period)+')':>10} {'RSI('+str(rsi_period)+')':>9} {'RISK':<12} {'CONF':>6}")
+    typer.echo("-" * 60)
+
+    for ticker in tickers:
+        try:
+            request = AssessRiskRequest(
+                ticker=ticker,
+                profile=profile,
+                sma_period=sma_period,
+                ema_period=sma_period,
+                rsi_period=rsi_period,
+            )
+            response = use_case.execute(request)
+            assessment = response.assessment
+            snapshot = assessment.indicators
+
+            candles = repository.get_candles(ticker.upper())
+            close = f"{candles[-1].close:,.0f}" if candles else "—"
+
+            typer.echo(
+                f"{ticker.upper():<8} "
+                f"{close:>10} "
+                f"{float(snapshot.sma):>10,.0f} "
+                f"{float(snapshot.rsi):>9.1f} "
+                f"{assessment.risk_level_name:<12} "
+                f"{assessment.confidence:>4}/100"
+            )
+        except Exception:
+            typer.echo(f"{ticker.upper():<8} {'—':>10} {'—':>10} {'—':>9} {'NO DATA':<12} {'—':>6}")
+
+    typer.echo("-" * 60)
+    typer.echo(f"Profile: {profile}")
+    typer.echo("\nDISCLAIMER: Analysis only, not trading advice.")
 
 
 @app.command()

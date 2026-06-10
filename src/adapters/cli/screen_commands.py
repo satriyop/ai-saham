@@ -51,6 +51,20 @@ screen_app = typer.Typer(
 
 DEFAULT_DB_PATH = Path("data.db")
 DEFAULT_STRATEGY_PATH = Path("strategies/pre-open-screener/strategy.yaml")
+DEFAULT_SESSION_FILE = Path("stockbit_session.json")
+
+
+def _playwright_available() -> bool:
+    """Return True if playwright is installed."""
+    try:
+        import playwright  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+def _session_exists() -> bool:
+    return DEFAULT_SESSION_FILE.exists()
 
 
 def _load_config(strategy_path: Path, overrides: dict) -> PreOpenScreenConfig:
@@ -224,6 +238,10 @@ def pre_open(
         Optional[str],
         typer.Option("--provider", help="AI provider for research (claude/openai)"),
     ] = None,
+    headless: Annotated[
+        bool,
+        typer.Option("--headless/--no-headless", help="Run Playwright headless (default) or visible"),
+    ] = True,
 ) -> None:
     """
     Run the pre-open market screener for IDX stocks.
@@ -232,10 +250,14 @@ def pre_open(
     the order book, and optionally runs AI research on each candidate.
 
     Workflow:
-      Without flags: prints browser action plan for Claude Code to follow.
+      Auto-mode (playwright installed + session saved): runs fully autonomously.
       With --movers-json: runs full analysis using pre-fetched browser data.
+      Without flags: prints browser action plan for Claude Code to follow.
 
     Examples:
+        # Autonomous (requires: pip install playwright && saham screen save-session):
+        saham screen pre-open
+
         # Print browser action plan (Claude Code reads and executes):
         saham screen pre-open
 
@@ -264,35 +286,46 @@ def pre_open(
         },
     )
 
-    # No browser data supplied → print action plan for Claude Code
+    # No browser data supplied → try Playwright auto-mode, then fall back to plan
     if not movers_json:
-        typer.echo(f"Strategy: {resolved_strategy}")
-        typer.echo(f"IEV threshold: {config.iev_min:,}")
-        _print_browser_plan(config)
-        raise typer.Exit(0)
-
-    # Parse browser data
-    try:
-        movers_raw = json.loads(movers_json)
-        if not isinstance(movers_raw, list):
-            typer.echo("Error: --movers-json must be a JSON array.", err=True)
-            raise typer.Exit(1)
-    except json.JSONDecodeError as e:
-        typer.echo(f"Error: Invalid JSON in --movers-json: {e}", err=True)
-        raise typer.Exit(1)
-
-    order_books_raw: dict | None = None
-    if order_books_json:
+        if _playwright_available() and _session_exists():
+            typer.echo("Playwright session found — running autonomously...")
+            from src.infrastructure.browser.playwright_stockbit import PlaywrightStockbitProvider
+            browser_provider = PlaywrightStockbitProvider(
+                session_file=DEFAULT_SESSION_FILE,
+                headless=headless,
+            )
+            # Skip JSON parsing, go straight to use-case wiring below
+        else:
+            if _playwright_available() and not _session_exists():
+                typer.echo("Playwright installed but no session found.")
+                typer.echo("Run: saham screen save-session")
+                typer.echo("")
+            typer.echo(f"Strategy: {resolved_strategy}")
+            typer.echo(f"IEV threshold: {config.iev_min:,}")
+            _print_browser_plan(config)
+            raise typer.Exit(0)
+    else:
+        # Parse browser data provided via flags
         try:
-            order_books_raw = json.loads(order_books_json)
+            movers_raw = json.loads(movers_json)
+            if not isinstance(movers_raw, list):
+                typer.echo("Error: --movers-json must be a JSON array.", err=True)
+                raise typer.Exit(1)
         except json.JSONDecodeError as e:
-            typer.echo(f"Error: Invalid JSON in --order-books-json: {e}", err=True)
+            typer.echo(f"Error: Invalid JSON in --movers-json: {e}", err=True)
             raise typer.Exit(1)
 
-    typer.echo(f"Running pre-open screen ({len(movers_raw)} movers, IEV >= {config.iev_min:,})...")
+        order_books_raw: dict | None = None
+        if order_books_json:
+            try:
+                order_books_raw = json.loads(order_books_json)
+            except json.JSONDecodeError as e:
+                typer.echo(f"Error: Invalid JSON in --order-books-json: {e}", err=True)
+                raise typer.Exit(1)
 
-    # Wire up dependencies
-    browser_provider = ManualBrowserDataProvider.from_json(movers_raw, order_books_raw)
+        typer.echo(f"Running pre-open screen ({len(movers_raw)} movers, IEV >= {config.iev_min:,})...")
+        browser_provider = ManualBrowserDataProvider.from_json(movers_raw, order_books_raw)
     repository = SQLiteMarketRepository(db_path=resolved_db)
     registry = create_indicator_registry()
 
@@ -346,3 +379,41 @@ def _build_ai_researcher(provider: Optional[str] = None):
         )
 
     return ClaudeTickerResearcher()
+
+
+@screen_app.command("save-session")
+def save_session(
+    session_file: Annotated[
+        Optional[Path],
+        typer.Option("--session", help="Path to save session cookies (default: stockbit_session.json)"),
+    ] = None,
+    timeout: Annotated[
+        int,
+        typer.Option("--timeout", help="Seconds to wait for login completion", min=30),
+    ] = 120,
+) -> None:
+    """
+    Save a Stockbit browser session for autonomous pre-open screening.
+
+    Opens a browser window (Chromium) for manual login. Once you are logged in,
+    the session cookies are saved and used by subsequent 'saham screen pre-open' runs.
+
+    Requires: pip install playwright && playwright install chromium
+
+    Examples:
+        saham screen save-session
+        saham screen save-session --timeout 180
+    """
+    if not _playwright_available():
+        typer.echo("Error: playwright not installed.", err=True)
+        typer.echo("Run: pip install playwright && playwright install chromium", err=True)
+        raise typer.Exit(1)
+
+    from src.infrastructure.browser.playwright_stockbit import save_stockbit_session
+
+    resolved = session_file or DEFAULT_SESSION_FILE
+    try:
+        save_stockbit_session(session_file=resolved, timeout=timeout)
+    except Exception as e:
+        typer.echo(f"Failed to save session: {e}", err=True)
+        raise typer.Exit(1)
