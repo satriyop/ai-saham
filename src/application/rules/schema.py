@@ -318,7 +318,11 @@ class ConditionIndicatorVsValue:
 
 @dataclass(frozen=True)
 class ConditionIndicatorVsIndicator:
-    """Condition comparing two indicators.
+    """Condition comparing two indicators, or an indicator to a literal value.
+
+    Supports two forms for the right-hand side:
+    1. Indicator reference: right: {indicator: "slow_ema"}
+    2. Literal value: right: {value: 50000000000}
 
     Example YAML:
         when:
@@ -327,15 +331,48 @@ class ConditionIndicatorVsIndicator:
           operator: ">"
           right:
             indicator: slow_ema   # Custom defined
+
+        when:
+          left:
+            indicator: foreign_flow_3d
+          operator: ">"
+          right:
+            value: 50000000000    # Literal value
     """
 
     left: IndicatorRef
     operator: Operator
-    right: IndicatorRef
+    right: Union[IndicatorRef, Decimal]
+
+
+@dataclass(frozen=True)
+class CompoundCondition:
+    """Compound condition combining multiple sub-conditions with AND logic.
+
+    All sub-conditions must be true for the compound condition to be true.
+
+    Example YAML:
+        when:
+          all:
+            - indicator: rsi
+              operator: "<"
+              value: 30
+            - left:
+                indicator: CLOSE
+              operator: ">"
+              right:
+                indicator: sma_50
+    """
+
+    conditions: tuple[Union["ConditionIndicatorVsValue", "ConditionIndicatorVsIndicator"], ...]
 
 
 # Union type for all condition types
-Condition = Union[ConditionIndicatorVsValue, ConditionIndicatorVsIndicator]
+Condition = Union[
+    ConditionIndicatorVsValue,
+    ConditionIndicatorVsIndicator,
+    CompoundCondition,
+]
 
 
 @dataclass(frozen=True)
@@ -444,13 +481,21 @@ class RuleSet:
         """
         refs: set[str] = set()
         for rule in self.rules:
-            condition = rule.condition
-            if isinstance(condition, ConditionIndicatorVsValue):
-                refs.add(condition.indicator_name)
-            elif isinstance(condition, ConditionIndicatorVsIndicator):
-                refs.add(condition.left.name)
-                refs.add(condition.right.name)
+            self._collect_condition_refs(rule.condition, refs)
         return refs
+
+    @staticmethod
+    def _collect_condition_refs(condition: Condition, refs: set[str]) -> None:
+        """Recursively collect indicator references from a condition."""
+        if isinstance(condition, ConditionIndicatorVsValue):
+            refs.add(condition.indicator_name)
+        elif isinstance(condition, ConditionIndicatorVsIndicator):
+            refs.add(condition.left.name)
+            if isinstance(condition.right, IndicatorRef):
+                refs.add(condition.right.name)
+        elif isinstance(condition, CompoundCondition):
+            for sub in condition.conditions:
+                RuleSet._collect_condition_refs(sub, refs)
 
     def is_indicator_defined(self, name: str) -> bool:
         """Check if an indicator name is defined (custom or built-in).

@@ -20,6 +20,7 @@ from src.application.rules.exceptions import (
 )
 from src.application.rules.schema import (
     BUILTIN_INDICATORS,
+    CompoundCondition,
     ConditionIndicatorVsIndicator,
     ConditionIndicatorVsValue,
     IndicatorDefinition,
@@ -39,7 +40,6 @@ if TYPE_CHECKING:
 
 # Default locations to search for rules files
 DEFAULT_LOCATIONS = [
-    Path.home() / ".ai-saham" / "rules.yaml",
     Path("config") / "custom_rules.yaml",
 ]
 
@@ -452,6 +452,9 @@ class YamlConfigLoader:
         except ValueError as e:
             raise RulesValidationError(str(e))
 
+    # Price field names that are valid as indicator references in rules
+    _PRICE_FIELDS = frozenset({"OPEN", "HIGH", "LOW", "CLOSE", "VOLUME"})
+
     @classmethod
     def _validate_indicator_references(
         cls,
@@ -470,6 +473,10 @@ class YamlConfigLoader:
         """
         referenced = rule_set.get_all_referenced_indicators()
         for ref_name in referenced:
+            # Check if it's a price field (OPEN, HIGH, LOW, CLOSE, VOLUME)
+            if ref_name.upper() in cls._PRICE_FIELDS:
+                continue
+
             # Check if defined in rules file or is a built-in
             if rule_set.is_indicator_defined(ref_name):
                 continue
@@ -479,7 +486,7 @@ class YamlConfigLoader:
                 continue
 
             # Not found anywhere - raise error
-            sources = list(BUILTIN_INDICATORS.keys())
+            sources = list(BUILTIN_INDICATORS.keys()) + sorted(cls._PRICE_FIELDS)
             if registry is not None:
                 # Add registry indicators to the error message
                 sources.extend(sorted(registry.list_indicators()))
@@ -541,10 +548,11 @@ class YamlConfigLoader:
     @classmethod
     def _build_condition(
         cls, data: dict[str, Any]
-    ) -> ConditionIndicatorVsValue | ConditionIndicatorVsIndicator:
+    ) -> ConditionIndicatorVsValue | ConditionIndicatorVsIndicator | CompoundCondition:
         """Build a Condition from parsed YAML data.
 
         Detects condition type based on fields present:
+        - all: list of sub-conditions (CompoundCondition, logical AND)
         - indicator + value: ConditionIndicatorVsValue
         - left + right: ConditionIndicatorVsIndicator
 
@@ -558,18 +566,57 @@ class YamlConfigLoader:
             RulesSchemaError: If required fields missing or wrong type
             RulesValidationError: If condition content is invalid
         """
+        # Check for compound condition (all: [...])
+        if "all" in data:
+            return cls._build_compound_condition(data)
+
         # Check for indicator-vs-value condition
         if "indicator" in data and "value" in data:
             return cls._build_indicator_vs_value(data)
 
-        # Check for indicator-vs-indicator condition
+        # Check for indicator-vs-indicator condition (or indicator-vs-value in left/right form)
         if "left" in data and "right" in data:
             return cls._build_indicator_vs_indicator(data)
 
         raise RulesSchemaError(
-            "when: must have either (indicator + operator + value) "
-            "or (left + operator + right)"
+            "when: must have either (indicator + operator + value), "
+            "(left + operator + right), or (all: [...])"
         )
+
+    @classmethod
+    def _build_compound_condition(cls, data: dict[str, Any]) -> CompoundCondition:
+        """Build a compound AND condition from a list of sub-conditions.
+
+        Args:
+            data: Condition dictionary containing an 'all' key with a list.
+
+        Returns:
+            CompoundCondition with all sub-conditions.
+
+        Raises:
+            RulesSchemaError: If structure is invalid.
+        """
+        sub_list = data["all"]
+        if not isinstance(sub_list, list):
+            raise RulesSchemaError(
+                f"when.all: expected list, got {type(sub_list).__name__}"
+            )
+        if len(sub_list) < 2:
+            raise RulesSchemaError("when.all: must have at least 2 sub-conditions")
+
+        subs = []
+        for i, sub_data in enumerate(sub_list):
+            if not isinstance(sub_data, dict):
+                raise RulesSchemaError(
+                    f"when.all[{i}]: expected mapping, got {type(sub_data).__name__}"
+                )
+            try:
+                sub = cls._build_condition(sub_data)
+                subs.append(sub)
+            except (RulesSchemaError, RulesValidationError) as e:
+                raise type(e)(f"when.all[{i}]: {e}")
+
+        return CompoundCondition(conditions=tuple(subs))
 
     @classmethod
     def _build_indicator_vs_value(
@@ -624,13 +671,12 @@ class YamlConfigLoader:
     def _build_indicator_vs_indicator(
         cls, data: dict[str, Any]
     ) -> ConditionIndicatorVsIndicator:
-        """Build an indicator-vs-indicator condition.
+        """Build an indicator-vs-indicator (or indicator-vs-value) condition.
 
-        Indicator references are strings that can be either:
-        - Custom defined indicators (e.g., "fast_ema", "slow_ema")
-        - Built-in indicators ("RSI", "SMA", "EMA")
-
-        Validation of references happens after all indicators are parsed.
+        Left side must always be an indicator reference. Right side can be
+        either an indicator reference or a literal value:
+        - right: {indicator: "slow_ema"}  — indicator vs indicator
+        - right: {value: 50000000000}     — indicator vs literal value
 
         Args:
             data: Condition dictionary
@@ -654,22 +700,34 @@ class YamlConfigLoader:
         left_data = data["left"]
         right_data = data["right"]
 
+        # Left side must always be an indicator reference
         cls._require_field(left_data, "indicator", str, "when.left")
-        cls._require_field(right_data, "indicator", str, "when.right")
-
-        # Indicator references are now strings (validated later)
         left_name = left_data["indicator"].strip()
-        right_name = right_data["indicator"].strip()
-
         if not left_name:
             raise RulesValidationError("when.left.indicator: cannot be empty")
-        if not right_name:
-            raise RulesValidationError("when.right.indicator: cannot be empty")
+
+        # Right side: indicator reference OR literal value
+        if "indicator" in right_data:
+            right_name = right_data["indicator"]
+            if not isinstance(right_name, str) or not right_name.strip():
+                raise RulesValidationError("when.right.indicator: must be a non-empty string")
+            right: IndicatorRef | Decimal = IndicatorRef(name=right_name.strip())
+        elif "value" in right_data:
+            try:
+                right = Decimal(str(right_data["value"]))
+            except (InvalidOperation, TypeError):
+                raise RulesValidationError(
+                    f"when.right.value: must be a number, got '{right_data['value']}'"
+                )
+        else:
+            raise RulesSchemaError(
+                "when.right: must have either 'indicator' or 'value'"
+            )
 
         return ConditionIndicatorVsIndicator(
             left=IndicatorRef(name=left_name),
             operator=operator,
-            right=IndicatorRef(name=right_name),
+            right=right,
         )
 
     @classmethod

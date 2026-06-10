@@ -14,10 +14,12 @@ from typing import TYPE_CHECKING
 
 from src.application.rules.schema import (
     BUILTIN_INDICATORS,
+    CompoundCondition,
     Condition,
     ConditionIndicatorVsIndicator,
     ConditionIndicatorVsValue,
     IndicatorDefinition,
+    IndicatorRef,
     IndicatorType,
     Operator,
     Outcome,
@@ -122,7 +124,12 @@ class YamlRuleInterpreter:
         Returns:
             True if condition is satisfied, False otherwise
         """
-        if isinstance(condition, ConditionIndicatorVsValue):
+        if isinstance(condition, CompoundCondition):
+            return all(
+                self._evaluate_condition(sub, snapshot)
+                for sub in condition.conditions
+            )
+        elif isinstance(condition, ConditionIndicatorVsValue):
             return self._evaluate_indicator_vs_value(condition, snapshot)
         elif isinstance(condition, ConditionIndicatorVsIndicator):
             return self._evaluate_indicator_vs_indicator(condition, snapshot)
@@ -145,13 +152,15 @@ class YamlRuleInterpreter:
     def _evaluate_indicator_vs_indicator(
         self, condition: ConditionIndicatorVsIndicator, snapshot: IndicatorSnapshot
     ) -> bool:
-        """Evaluate an indicator-vs-indicator condition.
+        """Evaluate an indicator-vs-indicator (or indicator-vs-value) condition.
 
-        Example: fast_ema > slow_ema (custom defined)
-        Example: EMA > SMA (built-in)
+        Right side can be either an IndicatorRef or a Decimal literal.
         """
         left_value = self._get_indicator_value(condition.left.name, snapshot)
-        right_value = self._get_indicator_value(condition.right.name, snapshot)
+        if isinstance(condition.right, IndicatorRef):
+            right_value = self._get_indicator_value(condition.right.name, snapshot)
+        else:
+            right_value = condition.right
         compare_func = self._OPERATOR_FUNCS[condition.operator]
         return compare_func(left_value, right_value)
 
@@ -233,7 +242,13 @@ class YamlRuleInterpreter:
         Returns:
             Human-readable condition string
         """
-        if isinstance(condition, ConditionIndicatorVsValue):
+        if isinstance(condition, CompoundCondition):
+            parts = [
+                self._format_condition(sub, snapshot)
+                for sub in condition.conditions
+            ]
+            return " AND ".join(f"({p})" for p in parts)
+        elif isinstance(condition, ConditionIndicatorVsValue):
             actual = self._get_indicator_value(condition.indicator_name, snapshot)
             return (
                 f"{condition.indicator_name}({actual:.2f}) "
@@ -243,13 +258,17 @@ class YamlRuleInterpreter:
             left_actual = self._get_indicator_value(
                 condition.left.name, snapshot
             )
-            right_actual = self._get_indicator_value(
-                condition.right.name, snapshot
-            )
+            if isinstance(condition.right, IndicatorRef):
+                right_actual = self._get_indicator_value(
+                    condition.right.name, snapshot
+                )
+                right_str = f"{condition.right.name}({right_actual:.2f})"
+            else:
+                right_str = str(condition.right)
             return (
                 f"{condition.left.name}({left_actual:.2f}) "
                 f"{condition.operator.value} "
-                f"{condition.right.name}({right_actual:.2f})"
+                f"{right_str}"
             )
         else:
             return str(condition)
@@ -282,8 +301,15 @@ class YamlRuleInterpreter:
         # Get all referenced indicator names
         referenced = self._rule_set.get_all_referenced_indicators()
 
+        # Price fields are not indicators — they're resolved at runtime
+        _PRICE_FIELDS = frozenset({"OPEN", "HIGH", "LOW", "CLOSE", "VOLUME"})
+
         for name in referenced:
             name_upper = name.upper()
+
+            # Skip price fields — they are resolved from candle data, not indicators
+            if name_upper in _PRICE_FIELDS:
+                continue
 
             # Check if it's a custom definition in the rules file
             definition = self._rule_set.get_indicator_definition(name)

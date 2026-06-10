@@ -15,6 +15,7 @@ from src.application.rules.exceptions import (
 )
 from src.application.rules.interpreter import YamlRuleInterpreter
 from src.application.rules.schema import (
+    CompoundCondition,
     ConditionIndicatorVsIndicator,
     ConditionIndicatorVsValue,
     Indicator,
@@ -32,6 +33,7 @@ __all__ = [
     "RulesSchemaError",
     "RulesValidationError",
     # Schema
+    "CompoundCondition",
     "Indicator",
     "IndicatorRef",
     "Operator",
