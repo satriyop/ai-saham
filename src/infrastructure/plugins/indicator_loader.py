@@ -67,44 +67,41 @@ class IndicatorPluginLoader:
             if path.name.startswith("_"):
                 continue
 
-            plugin_class = self._load_plugin(path)
-            if plugin_class is not None:
-                plugins.append(plugin_class)
+            found = self._load_plugins(path)
+            plugins.extend(found)
 
         logger.info(f"Discovered {len(plugins)} indicator plugin(s)")
         return plugins
 
-    def _load_plugin(self, path: Path) -> type["IndicatorPlugin"] | None:
+    def _load_plugins(self, path: Path) -> list[type["IndicatorPlugin"]]:
         """
-        Load a single plugin file and extract the IndicatorPlugin subclass.
+        Load all IndicatorPlugin subclasses from a single plugin file.
 
-        Returns None on any error (logged as warning).
+        A file may define multiple plugins (e.g., BB_UPPER, BB_LOWER, BB_WIDTH
+        in one module). All valid subclasses are returned.
 
         Args:
             path: Path to .py file
 
         Returns:
-            IndicatorPlugin subclass or None if loading failed
+            List of valid IndicatorPlugin subclasses (may be empty on error)
         """
-        # Import IndicatorPlugin here to avoid circular imports
         from src.application.ports.indicator_plugin import IndicatorPlugin
 
         try:
-            # Create module spec from file
             spec = importlib.util.spec_from_file_location(path.stem, path)
             if spec is None or spec.loader is None:
                 logger.warning(f"Could not create spec for {path}")
-                return None
+                return []
 
-            # Load the module
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
 
-            # Find IndicatorPlugin subclass in module
+            found: list[type["IndicatorPlugin"]] = []
+
             for attr_name in dir(module):
                 attr = getattr(module, attr_name)
 
-                # Must be a class, subclass of IndicatorPlugin, not the ABC itself
                 if not isinstance(attr, type):
                     continue
                 if not issubclass(attr, IndicatorPlugin):
@@ -112,14 +109,12 @@ class IndicatorPluginLoader:
                 if attr is IndicatorPlugin:
                     continue
 
-                # Validate required class attributes
                 if not hasattr(attr, "name"):
                     logger.warning(
                         f"Plugin in {path} missing 'name' class attribute"
                     )
                     continue
 
-                # Validate name format: must be uppercase letters, digits, underscores
                 name = attr.name
                 if not isinstance(name, str) or not VALID_NAME_PATTERN.match(name):
                     logger.warning(
@@ -135,11 +130,17 @@ class IndicatorPluginLoader:
                     continue
 
                 logger.info(f"Loaded plugin: {attr.name} from {path.name}")
-                return attr
+                found.append(attr)
 
-            logger.warning(f"No IndicatorPlugin subclass found in {path}")
-            return None
+            if not found:
+                logger.warning(f"No IndicatorPlugin subclass found in {path}")
+            return found
 
         except Exception as e:
             logger.warning(f"Failed to load plugin {path}: {e}")
-            return None
+            return []
+
+    def _load_plugin(self, path: Path) -> type["IndicatorPlugin"] | None:
+        """Load first plugin from a file. Kept for backward compatibility."""
+        found = self._load_plugins(path)
+        return found[0] if found else None
