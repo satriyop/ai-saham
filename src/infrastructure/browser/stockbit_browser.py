@@ -61,6 +61,33 @@ def entry_price_from_bid(best_bid: Decimal, ticks_above: int = 1) -> Decimal:
     return best_bid + (tick * ticks_above)
 
 
+def suggested_limit_from_close(
+    prev_close: Decimal,
+    suggested_limit_pct: Decimal = Decimal("0.005"),
+) -> Decimal:
+    """Compute a suggested limit order price from yesterday's close.
+
+    Used as the entry_price in the call-auction-aware model:
+    the trader places this limit AFTER the opening price is known,
+    only if the open falls within the entry range.
+
+    Args:
+        prev_close: Yesterday's closing price
+        suggested_limit_pct: Fraction above prev_close (default 0.5%)
+
+    Returns:
+        Suggested limit price rounded to the nearest valid IDX tick
+    """
+    raw = prev_close * (1 + suggested_limit_pct)
+    tick = idx_tick_size(raw)
+    # Round up to nearest tick
+    ticks = int(raw / tick)
+    rounded = tick * ticks
+    if rounded < raw:
+        rounded += tick
+    return rounded
+
+
 class ManualBrowserDataProvider(BrowserDataProvider):
     """Accepts pre-fetched browser data passed as Python dicts.
 
