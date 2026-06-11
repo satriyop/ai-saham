@@ -45,13 +45,20 @@ class ScreenerCandidate:
     Attributes:
         ticker: IDX ticker symbol
         iev: IEV value that triggered the screen
-        entry_price: Suggested entry = best_bid + N ticks (None if order book unavailable)
-        stop_loss_price: Hard stop = entry_price * (1 - stop_loss_pct)
+        entry_price: Suggested limit = prev_close * 1.005 (0.5% above yesterday's close)
+        stop_loss_price: ATR-based stop (or legacy fixed-pct fallback)
         capital: Planned position size in IDR
-        trend_signal: Signal from technical indicators (e.g., 'BULLISH', 'NEUTRAL', 'BEARISH')
+        trend_signal: Signal from gap% + RSI gate (BULLISH/BEARISH/NEUTRAL)
         rsi: Latest RSI value if available
-        sma: Latest SMA value if available
+        sma: Latest SMA value if available (kept for backward compat, not used for trend)
         ai_summary: AI research summary (news, sentiment, affiliate tickers)
+        atr: Latest ATR(14) value if available
+        prev_close: Yesterday's closing price
+        prev_high: Yesterday's high (intraday resistance reference)
+        prev_low: Yesterday's low (intraday support reference)
+        gap_pct: (pre_open_bid - prev_close) / prev_close * 100; None in fast mode
+        entry_range_low: prev_close * (1 - max_gap_pct) — lower bound of safe open range
+        entry_range_high: prev_close * (1 + max_gap_pct) — upper bound of safe open range
     """
 
     ticker: str
@@ -63,6 +70,13 @@ class ScreenerCandidate:
     rsi: Decimal | None = None
     sma: Decimal | None = None
     ai_summary: str | None = None
+    atr: Decimal | None = None
+    prev_close: Decimal | None = None
+    prev_high: Decimal | None = None
+    prev_low: Decimal | None = None
+    gap_pct: Decimal | None = None
+    entry_range_low: Decimal | None = None
+    entry_range_high: Decimal | None = None
 
     @property
     def has_entry_plan(self) -> bool:
@@ -75,6 +89,19 @@ class ScreenerCandidate:
         loss = self.entry_price - self.stop_loss_price
         pct = (loss / self.entry_price * 100).quantize(Decimal("0.1"))
         return f"-{pct}%"
+
+    @property
+    def entry_range_label(self) -> str:
+        if self.entry_range_low and self.entry_range_high:
+            return f"{self.entry_range_low:,.0f}–{self.entry_range_high:,.0f}"
+        return "N/A"
+
+    @property
+    def gap_label(self) -> str:
+        if self.gap_pct is None:
+            return "—"
+        sign = "+" if self.gap_pct >= 0 else ""
+        return f"{sign}{float(self.gap_pct):.1f}%"
 
 
 @dataclass
