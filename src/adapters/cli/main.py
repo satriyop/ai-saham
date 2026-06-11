@@ -107,6 +107,15 @@ app.add_typer(screen_app, name="screen")
 from src.adapters.cli.chart_commands import chart_app
 app.add_typer(chart_app, name="chart")
 
+# Register update command (single command, no sub-commands)
+from src.adapters.cli.update_commands import update
+app.command("update")(update)
+
+# Register accumulation screener directly on screen_app
+from src.adapters.cli.accumulation_commands import accumulation_run, universe_app
+screen_app.command("accumulation")(accumulation_run)
+app.add_typer(universe_app, name="universe")
+
 # Default configuration
 DEFAULT_DB_PATH = Path("data.db")
 DEFAULT_FORMULAS_PATH = Path("config/formulas.yaml")
