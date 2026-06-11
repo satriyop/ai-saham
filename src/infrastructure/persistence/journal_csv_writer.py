@@ -24,7 +24,16 @@ _COLUMNS = [
 
 
 def _to_str(val) -> str:
-    return "" if val is None else str(val)
+    if val is None:
+        return ""
+    if isinstance(val, Decimal):
+        # Round to 4 decimal places, strip trailing zeros after decimal point
+        quantized = val.quantize(Decimal("0.0001"))
+        s = format(quantized, "f")  # force fixed-point, never scientific notation
+        if "." in s:
+            s = s.rstrip("0").rstrip(".")
+        return s
+    return str(val)
 
 
 def _from_str(s: str) -> Decimal | None:
@@ -41,8 +50,12 @@ class JournalCsvWriter(JournalStore):
     def __init__(self, path: Path) -> None:
         self._path = path
 
-    def append(self, entries: list[JournalEntry]) -> None:
-        """Append entries, skipping any (screened_at, ticker) already present."""
+    def append(self, entries: list[JournalEntry]) -> int:
+        """Append entries, skipping any (screened_at, ticker) already present.
+
+        Returns:
+            Number of rows actually written.
+        """
         existing_keys: set[tuple] = set()
         if self._path.exists():
             with open(self._path, newline="") as f:
@@ -58,7 +71,7 @@ class JournalCsvWriter(JournalStore):
             if (str(e.screened_at), e.ticker) not in existing_keys
         ]
         if not new_entries:
-            return
+            return 0
 
         with open(self._path, "a", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=_COLUMNS)
@@ -80,6 +93,7 @@ class JournalCsvWriter(JournalStore):
                     "actual_close_1d": _to_str(e.actual_close_1d),
                     "actual_close_5d": _to_str(e.actual_close_5d),
                 })
+        return len(new_entries)
 
     def read_all(self) -> list[JournalEntry]:
         """Return all stored entries sorted by screened_at ascending."""

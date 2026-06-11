@@ -74,8 +74,7 @@ class PaperTradeJournalService:
             )
             for c in candidates
         ]
-        self._store.append(entries)
-        return len(entries)
+        return self._store.append(entries)
 
     def review(self, horizon_days: int = 5) -> ReviewReport:
         """Enrich journal entries with actual opens/closes and compute hit-rate.

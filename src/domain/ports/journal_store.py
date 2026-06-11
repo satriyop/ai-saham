@@ -11,8 +11,12 @@ from src.domain.value_objects.journal_entry import JournalEntry
 
 class JournalStore(ABC):
     @abstractmethod
-    def append(self, entries: list[JournalEntry]) -> None:
-        """Append entries to the store. Idempotent: (screened_at, ticker) is the key."""
+    def append(self, entries: list[JournalEntry]) -> int:
+        """Append entries to the store. Idempotent: (screened_at, ticker) is the key.
+
+        Returns:
+            Number of rows actually written (0 if all were duplicates).
+        """
 
     @abstractmethod
     def read_all(self) -> list[JournalEntry]:

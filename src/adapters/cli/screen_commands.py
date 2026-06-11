@@ -487,7 +487,10 @@ def log_session(
     service = PaperTradeJournalService(store=store, repository=repository)
 
     count = service.log_session(candidates, screened_at)
-    typer.echo(f"Logged {count} candidate(s) for {screened_at} → {journal_path}")
+    if count == 0:
+        typer.echo(f"Already logged for {screened_at} — no new rows added ({journal_path})")
+    else:
+        typer.echo(f"Logged {count} candidate(s) for {screened_at} → {journal_path}")
 
 
 @screen_app.command("review")
