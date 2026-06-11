@@ -5,28 +5,24 @@ Steps:
   1-3. Fetch movers from Stockbit browser, filter by IEV >= threshold,
        apply top-N cap if configured
   4.   Technical context: ATR(14), RSI(14), prev close/high/low
-  5.   Compute entry range and gap% (skipped in fast mode)
-  6.   Fetch order book best bid (skipped in fast mode)
-  7.   Compute ATR-based stop (or legacy fixed-pct fallback)
-  8.   AI research per ticker (optional)
-  9.   Build ScreenerCandidate list
+  5.   ATR-scaled entry range (Improvement #3)
+  6.   Order book bid → gap% (skipped in fast mode)
+  7.   ATR-based stop (or legacy fixed-pct fallback)
+  8.   Accumulation backing tag + Foreign VWAP (Improvements #1 & #2)
+  9.   AI research per ticker (optional)
+  10.  Build ScreenerCandidate
 
-Entry model (replaces legacy bid+tick):
-  IDX 08:45–09:00 is a call auction — the clearing price is set at 09:00
-  from accumulated orders. "bid+tick" is a continuous-market construct and
-  does not predict the opening price. Instead, this screener outputs:
-    - entry_range: [prev_close * (1-max_gap), prev_close * (1+max_gap)]
-    - entry_price: prev_close * (1 + suggested_limit_pct) — a starting
-      limit to place after the opening price is known
-  The trader then enters IF the opening price falls within the range.
+Entry model:
+  IDX 08:45–09:00 is a call auction. Entry range is derived from yesterday's
+  close ± ATR (not bid+tick). Trader enters only if opening price falls in range.
 
 Layer: Application
 """
 
+import math
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
-from pathlib import Path
 
 from src.application.services.indicator_registry import IndicatorRegistry
 from src.domain.ports.browser_data_provider import BrowserDataProvider
@@ -40,6 +36,12 @@ from src.infrastructure.browser.stockbit_browser import (
     suggested_limit_from_close,
 )
 
+# TYPE_CHECKING import to avoid circular dependency
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.domain.ports.broker_data_repository import BrokerDataRepository
+
 
 @dataclass
 class PreOpenScreenConfig:
@@ -52,22 +54,28 @@ class PreOpenScreenConfig:
     sma_period: int = 20
     rsi_period: int = 14
     history_days: int = 365
-    # New fields (Change 2)
     atr_period: int = 14
     atr_multiplier: Decimal = Decimal("1.0")
     max_stop_pct: Decimal = Decimal("0.07")
     use_atr_stop: bool = True
-    # New fields (Change 1 + 3)
-    max_gap_pct: Decimal = Decimal("0.03")
+    max_gap_pct: Decimal = Decimal("0.03")       # fallback when no ATR
     suggested_limit_pct: Decimal = Decimal("0.005")
     rsi_overbought_threshold: Decimal = Decimal("75")
-    # New fields (Change 5)
     top_n: int | None = None
     fast_mode: bool = False
+    # Improvement #3 — ATR-scaled entry range
+    use_atr_range: bool = True
+    atr_range_cap_min: Decimal = Decimal("0.01")  # never narrower than 1%
+    atr_range_cap_max: Decimal = Decimal("0.05")  # never wider than 5%
+    # Improvement #1 — accumulation backing
+    accum_window_days: int = 7
+    accum_backed_threshold: float = 50.0
+    # Improvement #2 — foreign VWAP
+    fvwap_period: int = 20
 
     @classmethod
     def from_yaml(cls, data: dict) -> "PreOpenScreenConfig":
-        """Parse from strategy.yaml content dict. All new keys have safe defaults."""
+        """Parse from strategy.yaml. All new keys have safe defaults."""
         screener = data.get("screener", {})
         entry = data.get("entry", {})
         risk = data.get("risk", {})
@@ -94,6 +102,12 @@ class PreOpenScreenConfig:
             ),
             top_n=int(top_n_raw) if top_n_raw is not None else None,
             fast_mode=bool(screener.get("fast_mode", False)),
+            use_atr_range=bool(analysis.get("use_atr_range", True)),
+            atr_range_cap_min=Decimal(str(analysis.get("atr_range_cap_min", 0.01))),
+            atr_range_cap_max=Decimal(str(analysis.get("atr_range_cap_max", 0.05))),
+            accum_window_days=int(analysis.get("accum_window_days", 7)),
+            accum_backed_threshold=float(analysis.get("accum_backed_threshold", 50.0)),
+            fvwap_period=int(analysis.get("fvwap_period", 20)),
         )
 
 
@@ -116,6 +130,7 @@ class PreOpenScreenUseCase:
         browser: Provides movers list and order book data
         repository: Local SQLite market data cache
         registry: Indicator registry for ATR / SMA / RSI computation
+        broker_repository: Optional — enables accumulation backing + Foreign VWAP
         ai_explainer: Optional — generates AI research summary per ticker
     """
 
@@ -124,11 +139,13 @@ class PreOpenScreenUseCase:
         browser: BrowserDataProvider,
         repository: MarketDataRepository,
         registry: IndicatorRegistry,
+        broker_repository: "BrokerDataRepository | None" = None,
         ai_explainer=None,
     ) -> None:
         self._browser = browser
         self._repository = repository
         self._registry = registry
+        self._broker_repository = broker_repository
         self._ai_explainer = ai_explainer
 
     def execute(self, request: PreOpenScreenRequest) -> PreOpenScreenResponse:
@@ -149,7 +166,7 @@ class PreOpenScreenUseCase:
         for mover in movers:
             ticker = mover.ticker
 
-            # Step 4: Technical context — ATR, RSI, prev OHLC
+            # Step 4: Technical context — ATR, RSI, SMA, prev OHLC + candles
             ctx = self._assess_context(
                 ticker=ticker,
                 sma_period=config.sma_period,
@@ -166,21 +183,18 @@ class PreOpenScreenUseCase:
             rsi_val = ctx["rsi"]
             sma_val = ctx["sma"]
             atr_val = ctx["atr"]
+            candles = ctx["candles"]
 
-            # Step 5: Entry range from prev_close
-            entry_range_low: Decimal | None = None
-            entry_range_high: Decimal | None = None
-            if prev_close is not None and prev_close > 0:
-                entry_range_low = (prev_close * (1 - config.max_gap_pct)).quantize(
-                    Decimal("1")
-                )
-                entry_range_high = (prev_close * (1 + config.max_gap_pct)).quantize(
-                    Decimal("1")
-                )
+            # Step 5 (Improvement #3): ATR-scaled entry range
+            effective_band, entry_range_low, entry_range_high = self._compute_entry_range(
+                prev_close=prev_close,
+                atr=atr_val,
+                config=config,
+            )
 
             # Step 6: Order book bid → gap% (skipped in fast mode)
             gap_pct: Decimal | None = None
-            entry_price: Decimal | None = None
+            ob = None
 
             if not config.fast_mode:
                 ob = self._browser.fetch_order_book_best_bid(ticker)
@@ -189,9 +203,9 @@ class PreOpenScreenUseCase:
                         gap_pct = (
                             (ob.price - prev_close) / prev_close * 100
                         ).quantize(Decimal("0.01"))
-                        if abs(gap_pct) > config.max_gap_pct * 100:
+                        if abs(gap_pct) > effective_band * 100:
                             warnings.append(
-                                f"{ticker}: Gap {gap_pct:+.1f}% exceeds ±{float(config.max_gap_pct*100):.0f}% threshold"
+                                f"{ticker}: Gap {gap_pct:+.1f}% exceeds ±{float(effective_band*100):.1f}% ATR band"
                             )
                 else:
                     warnings.append(
@@ -199,13 +213,13 @@ class PreOpenScreenUseCase:
                     )
 
             # Suggested limit order price
+            entry_price: Decimal | None = None
             if prev_close is not None and prev_close > 0:
                 entry_price = suggested_limit_from_close(prev_close, config.suggested_limit_pct)
-            elif not config.fast_mode and "ob" in dir() and ob is not None:
-                # Fallback: legacy bid+tick if no prev_close
+            elif ob is not None:
                 entry_price = entry_price_from_bid(ob.price, config.tick_above)
 
-            # Step 7: ATR-based stop (or legacy fallback)
+            # Step 7: ATR-based stop
             stop_loss_price: Decimal | None = None
             if entry_price is not None:
                 if config.use_atr_stop and atr_val is not None:
@@ -217,20 +231,43 @@ class PreOpenScreenUseCase:
                         entry_price * (1 - config.stop_loss_pct)
                     ).quantize(Decimal("1"))
 
-            # Trend classification (Change 3)
+            # Trend classification — uses effective ATR-based band as gap threshold
             trend_signal = self._classify_trend_v2(
                 gap_pct=gap_pct,
                 rsi=rsi_val,
-                max_gap_pct=config.max_gap_pct,
+                effective_band=effective_band,
                 rsi_overbought=config.rsi_overbought_threshold,
                 close=prev_close,
                 sma=sma_val,
             )
 
-            # Step 8: AI research (optional)
+            # Step 8 (Improvements #1 + #2): Accumulation backing + Foreign VWAP
+            # Broker summaries loaded once, reused by both signals.
+            accum_score: float | None = None
+            accum_tag: str | None = None
+            accum_streak: int | None = None
+            foreign_vwap: Decimal | None = None
+            fvwap_discount_pct: float | None = None
+
+            if self._broker_repository is not None:
+                broker_ctx = self._assess_broker_signals(
+                    ticker=ticker,
+                    candles=candles,
+                    current_price=ob.price if ob else prev_close,
+                    accum_window=config.accum_window_days,
+                    accum_threshold=config.accum_backed_threshold,
+                    fvwap_period=config.fvwap_period,
+                )
+                accum_score = broker_ctx["accum_score"]
+                accum_tag = broker_ctx["accum_tag"]
+                accum_streak = broker_ctx["accum_streak"]
+                foreign_vwap = broker_ctx["foreign_vwap"]
+                fvwap_discount_pct = broker_ctx["fvwap_discount_pct"]
+
+            # Step 9: AI research (optional)
             ai_summary = self._research_ticker(ticker)
 
-            # Step 9: Build candidate
+            # Step 10: Build candidate
             candidates.append(
                 ScreenerCandidate(
                     ticker=ticker,
@@ -249,6 +286,11 @@ class PreOpenScreenUseCase:
                     gap_pct=gap_pct,
                     entry_range_low=entry_range_low,
                     entry_range_high=entry_range_high,
+                    accum_score=accum_score,
+                    accum_tag=accum_tag,
+                    accum_streak=accum_streak,
+                    foreign_vwap=foreign_vwap,
+                    fvwap_discount_pct=fvwap_discount_pct,
                 )
             )
 
@@ -274,12 +316,13 @@ class PreOpenScreenUseCase:
     ) -> dict:
         """Load candles and compute ATR, RSI, SMA, prev OHLC.
 
-        Returns a dict with keys: prev_close, prev_high, prev_low, rsi, sma, atr, warning.
-        All values default to None on failure.
+        Returns dict with keys: prev_close, prev_high, prev_low, rsi, sma, atr,
+        candles (list), warning. All indicator values default to None on failure.
         """
         empty = {
             "prev_close": None, "prev_high": None, "prev_low": None,
-            "rsi": None, "sma": None, "atr": None, "warning": None,
+            "rsi": None, "sma": None, "atr": None,
+            "candles": [], "warning": None,
         }
 
         try:
@@ -306,6 +349,7 @@ class PreOpenScreenUseCase:
                 "sma": sma_values[-1][1] if sma_values else None,
                 "rsi": rsi_values[-1][1] if rsi_values else None,
                 "atr": atr_values[-1][1] if atr_values else None,
+                "candles": candles,
                 "warning": None,
             }
 
@@ -314,33 +358,146 @@ class PreOpenScreenUseCase:
             return empty
 
     @staticmethod
+    def _compute_entry_range(
+        prev_close: Decimal | None,
+        atr: Decimal | None,
+        config: "PreOpenScreenConfig",
+    ) -> tuple[Decimal, Decimal | None, Decimal | None]:
+        """Compute effective gap band and entry range.
+
+        Improvement #3: use ATR-scaled band (ATR/prev_close) instead of fixed %.
+        Returns (effective_band, range_low, range_high).
+        """
+        # Determine the effective band
+        if (
+            config.use_atr_range
+            and atr is not None
+            and prev_close is not None
+            and prev_close > 0
+        ):
+            atr_pct = atr / prev_close
+            effective_band = max(
+                config.atr_range_cap_min,
+                min(atr_pct, config.atr_range_cap_max),
+            )
+        else:
+            effective_band = config.max_gap_pct
+
+        if prev_close is None or prev_close <= 0:
+            return effective_band, None, None
+
+        low = (prev_close * (1 - effective_band)).quantize(Decimal("1"))
+        high = (prev_close * (1 + effective_band)).quantize(Decimal("1"))
+        return effective_band, low, high
+
+    def _assess_broker_signals(
+        self,
+        ticker: str,
+        candles: list,
+        current_price: Decimal | None,
+        accum_window: int,
+        accum_threshold: float,
+        fvwap_period: int,
+    ) -> dict:
+        """Load broker summaries once; compute accumulation tag + Foreign VWAP.
+
+        Returns dict with: accum_score, accum_tag, accum_streak,
+        foreign_vwap, fvwap_discount_pct. All None on failure or missing data.
+        """
+        empty = {
+            "accum_score": None, "accum_tag": None, "accum_streak": None,
+            "foreign_vwap": None, "fvwap_discount_pct": None,
+        }
+
+        try:
+            today = date.today()
+            start = today - timedelta(days=accum_window + fvwap_period + 10)
+            summaries = self._broker_repository.get_broker_summaries(
+                ticker=ticker, start_date=start, end_date=today
+            )
+        except Exception:
+            return empty
+
+        if not summaries:
+            return empty
+
+        result = dict(empty)
+
+        # ── Improvement #1: Accumulation backing ──────────────────────────
+        cutoff = date.today() - timedelta(days=accum_window)
+        window = [s for s in summaries if s.date > cutoff]
+
+        if window:
+            net_buy_days = sum(1 for s in window if s.is_foreign_accumulating)
+            total_days = len(window)
+            ratio = net_buy_days / total_days if total_days > 0 else 0.0
+
+            streak = 0
+            for s in sorted(window, key=lambda x: x.date, reverse=True):
+                if s.is_foreign_accumulating:
+                    streak += 1
+                else:
+                    break
+
+            # Score: consistency (40pts) + exponential streak (30pts, τ=7d)
+            score = round(
+                ratio * 40.0 + 30.0 * (1.0 - math.exp(-streak / 7.0)),
+                1,
+            )
+
+            if score >= accum_threshold:
+                tag = "BACKED"
+            elif ratio < 0.3:
+                tag = "DISTRIBUTING"
+            else:
+                tag = "UNCONFIRMED"
+
+            result["accum_score"] = score
+            result["accum_tag"] = tag
+            result["accum_streak"] = streak
+
+        # ── Improvement #2: Foreign VWAP ──────────────────────────────────
+        if candles and current_price is not None and current_price > 0:
+            try:
+                from plugins.indicators.foreign_vwap import ForeignVWAPIndicator
+                indicator = ForeignVWAPIndicator()
+                indicator.set_broker_data(summaries)
+                vwap_values = indicator.compute(
+                    candles[-max(len(candles), fvwap_period):], fvwap_period
+                )
+                if vwap_values:
+                    fvwap = vwap_values[-1]
+                    if fvwap > 0:
+                        result["foreign_vwap"] = fvwap
+                        result["fvwap_discount_pct"] = round(
+                            float((fvwap - current_price) / current_price * 100), 2
+                        )
+            except Exception:
+                pass
+
+        return result
+
+    @staticmethod
     def _classify_trend_v2(
         gap_pct: Decimal | None,
         rsi: Decimal | None,
-        max_gap_pct: Decimal,
+        effective_band: Decimal,
         rsi_overbought: Decimal,
         close: Decimal | None = None,
         sma: Decimal | None = None,
     ) -> str | None:
-        """Classify trend using gap% and RSI gate.
-
-        BEARISH: RSI > overbought threshold, OR gap too large to trade safely.
-        BULLISH: RSI in 30–65 range AND gap within safe band.
-        NEUTRAL: everything else.
-
-        Falls back to legacy SMA comparison when gap_pct is unavailable (fast mode).
-        """
+        """Classify trend using gap% (vs effective ATR band) and RSI gate."""
         if rsi is not None and rsi > rsi_overbought:
             return "BEARISH"
 
-        if gap_pct is not None and abs(gap_pct) > max_gap_pct * 100:
+        if gap_pct is not None and abs(gap_pct) > effective_band * 100:
             return "BEARISH"
 
         if rsi is not None and Decimal("30") < rsi < Decimal("65"):
             if gap_pct is None or abs(gap_pct) <= Decimal("2"):
                 return "BULLISH"
 
-        # Legacy fallback when no gap data (fast mode, no order book)
+        # Legacy SMA fallback for fast mode (no gap data)
         if gap_pct is None and close is not None and sma is not None:
             return _classify_trend_legacy(close, sma, rsi)
 
@@ -360,16 +517,15 @@ def _classify_trend_legacy(
     sma: Decimal | None,
     rsi: Decimal | None,
 ) -> str | None:
-    """Original SMA-based trend classifier (kept for fallback)."""
+    """Original SMA-based trend classifier (fallback for fast mode)."""
     if close is None or sma is None or rsi is None:
         return None
     above_sma = close > sma
-    oversold = rsi < Decimal("40")
     overbought = rsi > Decimal("65")
     if above_sma and not overbought:
         return "BULLISH"
     if not above_sma and overbought:
         return "BEARISH"
-    if above_sma and oversold:
+    if above_sma and rsi < Decimal("40"):
         return "DIP_BUY"
     return "NEUTRAL"

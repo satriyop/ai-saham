@@ -77,6 +77,13 @@ class ScreenerCandidate:
     gap_pct: Decimal | None = None
     entry_range_low: Decimal | None = None
     entry_range_high: Decimal | None = None
+    # Improvement #1 — smart money alignment
+    accum_score: float | None = None       # 0–70 pts consistency + streak
+    accum_tag: str | None = None           # BACKED / UNCONFIRMED / DISTRIBUTING
+    accum_streak: int | None = None        # consecutive foreign buy days
+    # Improvement #2 — foreign VWAP floor signal
+    foreign_vwap: Decimal | None = None
+    fvwap_discount_pct: float | None = None  # positive = foreigners underwater (bullish floor)
 
     @property
     def has_entry_plan(self) -> bool:

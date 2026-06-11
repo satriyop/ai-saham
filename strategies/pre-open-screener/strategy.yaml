@@ -32,11 +32,17 @@ risk:
   max_stop_pct: 0.07     # Hard cap: stop never more than 7% below entry
 
 analysis:
-  sma_period: 20         # SMA period (kept as optional context)
+  sma_period: 20         # SMA period (optional context, fast-mode fallback)
   rsi_period: 14         # RSI period for overbought gate
-  atr_period: 14         # ATR period for stop sizing
+  atr_period: 14         # ATR period for stop sizing and range scaling
   rsi_overbought_threshold: 75  # RSI > this → BEARISH (skip long)
   days: 365              # Days of historical data to load
+  use_atr_range: true          # scale entry band by ATR instead of fixed %
+  atr_range_cap_min: 0.01      # floor: never narrower than 1%
+  atr_range_cap_max: 0.05      # ceiling: never wider than 5%
+  accum_window_days: 7         # lookback for accumulation backing check
+  accum_backed_threshold: 50   # score >= this → BACKED
+  fvwap_period: 20             # rolling window for Foreign VWAP
 
 journal:
   path: "journals/pre-open.csv"  # Paper trade log path
