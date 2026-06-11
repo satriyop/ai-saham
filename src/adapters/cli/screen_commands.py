@@ -42,6 +42,7 @@ from src.infrastructure.browser.stockbit_browser import (
     ManualBrowserDataProvider,
     StockbitBrowserInstructionsProvider,
 )
+from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
 screen_app = typer.Typer(
@@ -187,16 +188,46 @@ def _display_results(
             f"{suggest:>9}  {stop:>9}  {stop_pct:>6}  {rsi_str:>5}  {trend_str}"
         )
 
-        # Show prev H/L as S/R context
+        # Context line 1: Prev H/L as intraday S/R
         if c.prev_high and c.prev_low:
-            hl = (
+            typer.echo(
                 typer.style(
-                    f"  Prev H:{c.prev_high:,.0f}  L:{c.prev_low:,.0f}  "
-                    f"(yesterday's intraday S/R levels)",
+                    f"  Prev H:{c.prev_high:,.0f}  L:{c.prev_low:,.0f}",
                     fg=typer.colors.BRIGHT_BLACK,
                 )
             )
-            typer.echo(hl)
+
+        # Context line 2: Accumulation backing + Foreign VWAP (broker data)
+        ctx_parts: list[str] = []
+        if c.accum_tag is not None:
+            tag_color = (
+                typer.colors.GREEN if c.accum_tag == "BACKED"
+                else typer.colors.RED if c.accum_tag == "DISTRIBUTING"
+                else typer.colors.YELLOW
+            )
+            score_str = f" {c.accum_score:.0f}pts" if c.accum_score is not None else ""
+            streak_str = f" streak:{c.accum_streak}d" if c.accum_streak else ""
+            ctx_parts.append(
+                "  ACCUM: "
+                + typer.style(f"{c.accum_tag}{score_str}{streak_str}", fg=tag_color)
+            )
+        if c.fvwap_discount_pct is not None:
+            pct = c.fvwap_discount_pct
+            if pct > 0:
+                fvwap_color = typer.colors.GREEN
+                fvwap_note = " (floor)"
+            elif pct < -3:
+                fvwap_color = typer.colors.RED
+                fvwap_note = " (sell risk)"
+            else:
+                fvwap_color = typer.colors.BRIGHT_BLACK
+                fvwap_note = ""
+            ctx_parts.append(
+                "   FVWAP: "
+                + typer.style(f"{pct:+.1f}%{fvwap_note}", fg=fvwap_color)
+            )
+        if ctx_parts:
+            typer.echo("".join(ctx_parts))
 
     typer.echo("-" * 90)
 
@@ -218,9 +249,11 @@ def _display_results(
             typer.echo(f"  ! {w}")
 
     typer.echo("")
-    typer.echo("ENTRY-RANGE: enter at open IF opening price falls within this range")
+    typer.echo("ENTRY-RANGE: ATR-scaled band (±ATR/price, capped 1–5%) — enter only if open is within range")
     typer.echo("SUGGEST: limit order = prev_close + 0.5% (place after opening price known)")
     typer.echo("ATR-STOP: stop = entry - 1× ATR(14), capped at -7%")
+    typer.echo("ACCUM: BACKED=smart money buying ≥50pts | UNCONFIRMED=no pattern | DISTRIBUTING=selling")
+    typer.echo("FVWAP: positive = foreigners underwater (price floor) | negative = foreigners in profit (sell risk)")
     typer.echo("")
     typer.echo("DISCLAIMER: Analysis only. Not trading advice.")
     typer.echo("=" * 90)
@@ -380,6 +413,7 @@ def pre_open(
 
     repository = SQLiteMarketRepository(db_path=resolved_db)
     registry = create_indicator_registry()
+    broker_repo = SQLiteBrokerRepository(resolved_db)
 
     ai_explainer = None
     if with_ai:
@@ -392,6 +426,7 @@ def pre_open(
         browser=browser_provider,
         repository=repository,
         registry=registry,
+        broker_repository=broker_repo,
         ai_explainer=ai_explainer,
     )
 
