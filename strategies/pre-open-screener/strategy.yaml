@@ -3,8 +3,11 @@ name: "pre-open-screener"
 description: |
   Pre-open market screener for IDX stocks.
 
-  Screens for high-IEV movers before market open, computes entry and
-  stop-loss levels from the order book, and runs AI research per candidate.
+  Screens for high-IEV movers before market open, computes entry range and
+  ATR-based stop-loss, and runs AI research per candidate.
+
+  Entry model: conditional range based on yesterday's close (not bid+tick).
+  IDX 08:45–09:00 is a call auction — enter at open if price is within range.
 
   Requires: Stockbit authenticated browser session, ANTHROPIC_API_KEY
   Mode: AI Mode ON
@@ -12,16 +15,28 @@ description: |
 mode: ai_assisted
 
 screener:
-  iev_min: 100000        # Minimum IEV to qualify (step 3 of workflow)
+  iev_min: 100000        # Minimum IEV to qualify
+  top_n: 5               # Process only top N by IEV (reduces run time)
+  fast_mode: false       # true = skip order book fetches (~15s total)
 
 entry:
   capital: 3000000       # Entry position size in IDR (Rp 3,000,000)
-  tick_above: 1          # Place bid N ticks above the largest bid (step 6)
+  tick_above: 1          # Legacy: ticks above best bid (kept for reference)
+  max_gap_pct: 0.03      # ±3% from prev_close defines safe open range
+  suggested_limit_pct: 0.005  # Suggested limit = prev_close * (1 + this)
 
 risk:
-  stop_loss_pct: 0.20    # Hard stop-loss: 20% below entry price (step 7)
+  stop_loss_pct: 0.20    # Legacy fallback when use_atr_stop is false
+  use_atr_stop: true     # true = ATR-based stop; false = legacy fixed %
+  atr_multiplier: 1.0    # Stop = entry - (multiplier * ATR)
+  max_stop_pct: 0.07     # Hard cap: stop never more than 7% below entry
 
 analysis:
-  sma_period: 20         # SMA period for trend filter
-  rsi_period: 14         # RSI period for momentum assessment
+  sma_period: 20         # SMA period (kept as optional context)
+  rsi_period: 14         # RSI period for overbought gate
+  atr_period: 14         # ATR period for stop sizing
+  rsi_overbought_threshold: 75  # RSI > this → BEARISH (skip long)
   days: 365              # Days of historical data to load
+
+journal:
+  path: "journals/pre-open.csv"  # Paper trade log path
