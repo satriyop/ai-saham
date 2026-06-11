@@ -1,0 +1,216 @@
+# IDX Stock Universe Lists
+#
+# These lists are used by `saham update` and `saham screen accumulation`
+# to define which tickers to scan.
+#
+# IDX rebalances LQ45 and IDX80 every February and August.
+# Run `saham universe update` to refresh from IDX website.
+#
+# Last updated: 2026-02-01
+
+lq45:
+  updated: "2026-02-01"
+  tickers:
+    - AALI
+    - ACES
+    - ADRO
+    - AKRA
+    - AMRT
+    - ANTM
+    - ASII
+    - BBCA
+    - BBNI
+    - BBRI
+    - BBTN
+    - BDMN
+    - BMRI
+    - BRIS
+    - BRPT
+    - BUKA
+    - CPIN
+    - EMTK
+    - EXCL
+    - GGRM
+    - GOTO
+    - HEAL
+    - HMSP
+    - HRUM
+    - ICBP
+    - INCO
+    - INDF
+    - INKP
+    - INTP
+    - ITMG
+    - JPFA
+    - KLBF
+    - MAPI
+    - MBMA
+    - MEDC
+    - MIKA
+    - PGAS
+    - PTBA
+    - SIDO
+    - SMGR
+    - TLKM
+    - TOWR
+    - UNTR
+    - UNVR
+    - WSKT
+
+idx80:
+  updated: "2026-02-01"
+  tickers:
+    # Includes all LQ45 + 35 additional mid-large caps
+    - AALI
+    - ACES
+    - ADRO
+    - AKRA
+    - AMRT
+    - ANTM
+    - ARNA
+    - ASII
+    - ASRI
+    - BBCA
+    - BBNI
+    - BBRI
+    - BBTN
+    - BDMN
+    - BFIN
+    - BJBR
+    - BJTM
+    - BMRI
+    - BRIS
+    - BRPT
+    - BSDE
+    - BUKA
+    - CPIN
+    - CTRA
+    - DMAS
+    - DOID
+    - EMTK
+    - ERAA
+    - ESSA
+    - EXCL
+    - GGRM
+    - GOTO
+    - HEAL
+    - HMSP
+    - HRUM
+    - ICBP
+    - INCO
+    - INDF
+    - INKP
+    - INTP
+    - ISAT
+    - ITMG
+    - JPFA
+    - JSMR
+    - KLBF
+    - MAPI
+    - MBMA
+    - MDKA
+    - MEDC
+    - MIKA
+    - MNCN
+    - MYOR
+    - NCKL
+    - NISP
+    - PGAS
+    - PTBA
+    - PTPP
+    - PWON
+    - SIDO
+    - SMGR
+    - SMRA
+    - TBIG
+    - TKIM
+    - TLKM
+    - TOWR
+    - UNTR
+    - UNVR
+    - WSKT
+
+idxcomp100:
+  updated: "2026-02-01"
+  tickers:
+    # IDX80 + 20 additional stocks by market cap
+    - AALI
+    - ACES
+    - ADRO
+    - AKRA
+    - AMRT
+    - ANTM
+    - ARNA
+    - ASII
+    - ASRI
+    - AUTO
+    - BBCA
+    - BBNI
+    - BBRI
+    - BBTN
+    - BDMN
+    - BFIN
+    - BJBR
+    - BJTM
+    - BMRI
+    - BRIS
+    - BRPT
+    - BSDE
+    - BUKA
+    - CPIN
+    - CTRA
+    - DMAS
+    - DOID
+    - DSNG
+    - ELSA
+    - EMTK
+    - ERAA
+    - ESSA
+    - EXCL
+    - FILM
+    - GGRM
+    - GOTO
+    - HEAL
+    - HMSP
+    - HRUM
+    - ICBP
+    - INCO
+    - INDF
+    - INKP
+    - INTP
+    - ISAT
+    - ISSP
+    - ITMG
+    - JPFA
+    - JSMR
+    - KAEF
+    - KLBF
+    - LPPF
+    - MAPI
+    - MBMA
+    - MDKA
+    - MEDC
+    - MIKA
+    - MNCN
+    - MYOR
+    - NCKL
+    - NISP
+    - PGAS
+    - PTBA
+    - PTPP
+    - PWON
+    - SCMA
+    - SIDO
+    - SMGR
+    - SMRA
+    - SRTG
+    - TAPG
+    - TBIG
+    - TKIM
+    - TLKM
+    - TOWR
+    - UNTR
+    - UNVR
+    - WIKA
+    - WSKT
+    - WTON
