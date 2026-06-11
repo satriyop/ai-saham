@@ -78,13 +78,27 @@ def _fetch_candles(
         provider = YahooFinanceProvider()
 
     repo = SQLiteMarketRepository(db_path=db_path)
+
+    end_date = date.today()
+    days_to_fetch = days
+
+    if not refresh:
+        existing = repo.get_date_range(ticker)
+        if existing:
+            _, latest = existing
+            # 5-day window covers weekends + IDX multi-day holidays (e.g. Eid al-Adha)
+            if latest >= end_date - timedelta(days=5):
+                return "fresh"
+            # Only fetch the gap from latest+1 to today
+            days_to_fetch = (end_date - (latest + timedelta(days=1))).days + 1
+
     use_case = FetchMarketDataUseCase(provider=provider, repository=repo)
 
     try:
         resp = use_case.execute(
-            FetchMarketDataRequest(ticker=ticker, days=days, refresh=refresh)
+            FetchMarketDataRequest(ticker=ticker, days=days_to_fetch, refresh=refresh)
         )
-        return f"{resp.count}d"
+        return f"+{resp.count}d"
     except Exception as e:
         return f"ERR:{str(e)[:30]}"
 
@@ -98,8 +112,22 @@ def _fetch_broker(
 ) -> str:
     """Fetch broker flow for one ticker. Returns status string."""
     end_date = date.today()
-    start_date = end_date - timedelta(days=days)
     repo = SQLiteBrokerRepository(db_path)
+
+    if not refresh:
+        existing = repo.get_date_range(ticker)
+        if existing:
+            _, latest = existing
+            # 5-day window covers weekends + IDX multi-day holidays (e.g. Eid al-Adha)
+            if latest >= end_date - timedelta(days=5):
+                return "fresh"
+            # Only fetch the gap from latest+1 to today
+            start_date = latest + timedelta(days=1)
+        else:
+            start_date = end_date - timedelta(days=days)
+    else:
+        start_date = end_date - timedelta(days=days)
+
     use_case = FetchBrokerDataUseCase(broker_provider, repo)
 
     try:
@@ -111,7 +139,7 @@ def _fetch_broker(
                 refresh=refresh,
             )
         )
-        return f"{len(resp.summaries)}d"
+        return f"+{len(resp.summaries)}d"
     except BrokerDataAuthError:
         return "ERR:auth"
     except BrokerDataProviderError as e:
@@ -225,6 +253,7 @@ def update(
             )
 
         any_error = "ERR:" in candles_status or "ERR:" in broker_status
+        all_fresh = candles_status == "fresh" and broker_status == "fresh"
 
         if any_error:
             fail_count += 1
@@ -232,7 +261,7 @@ def update(
             status_color = typer.colors.RED
         else:
             ok_count += 1
-            status_color = typer.colors.GREEN
+            status_color = typer.colors.BRIGHT_BLACK if all_fresh else typer.colors.GREEN
 
         typer.echo(
             f"  {progress} {ticker:<6} "
