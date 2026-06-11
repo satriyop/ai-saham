@@ -80,5 +80,8 @@ stockbit_token.json
 logs/
 notes/
 
+# Paper trade journal (local artefacts, not committed)
+journals/
+
 # Jupyter (if used for analysis exploration)
 .ipynb_checkpoints/
