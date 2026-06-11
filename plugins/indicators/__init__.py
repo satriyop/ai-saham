@@ -12,6 +12,7 @@ from plugins.indicators.bollinger_bands import (
     BollingerWidthIndicator,
 )
 from plugins.indicators.stochastic import StochasticIndicator
+from plugins.indicators.foreign_vwap import ForeignVWAPIndicator
 
 __all__ = [
     "MACDIndicator",
@@ -20,4 +21,5 @@ __all__ = [
     "BollingerLowerIndicator",
     "BollingerWidthIndicator",
     "StochasticIndicator",
+    "ForeignVWAPIndicator",
 ]
