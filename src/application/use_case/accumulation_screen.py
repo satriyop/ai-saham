@@ -4,9 +4,11 @@ AccumulationScreenUseCase — multi-stock foreign accumulation screener.
 Scans a list of tickers for sustained foreign investor accumulation
 patterns. Scores each ticker using a composite signal:
   - Net buy consistency (% of days with net foreign buying)
-  - Consecutive buy streak
+  - Consecutive buy streak (exponential, uncapped)
   - Foreign VWAP vs current price (are foreigners underwater?)
-  - RSI (is there still upside room?)
+  - RSI headroom (tent function peaking at RSI=40)
+  - Avg foreign flow ratio (% of daily turnover that's foreign)
+  - Bollinger Band squeeze (coiled spring detection)
 
 Intraday vs Swing usage:
   This screener produces a SWING WATCHLIST (5–20 day horizon).
@@ -16,6 +18,7 @@ Layer: Application
 Depends on: Domain ports only — no infrastructure imports
 """
 
+import math
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
@@ -58,9 +61,15 @@ class AccumulationCandidate:
                                      # positive = foreigners are underwater
     rsi: float | None
     trend: str                     # "UP" | "DOWN" | "SIDE"
-    score: float                   # 0–100 composite score
+    score: float                   # 0–120 composite score
     top_brokers: list[str] | None  # per-broker codes (Stockbit only)
     institutional_flag: bool       # True if major institutional broker present
+    # Improvement #1: flow ratio signal
+    avg_flow_ratio: float | None = None   # avg % of daily turnover that's foreign
+    score_breakdown: dict = field(default_factory=dict)  # per-component pts
+    # Improvement #3: BB squeeze
+    bb_width: float | None = None         # current BB Width %
+    bb_width_pctile: float | None = None  # 0..1 vs last 60 days (lower = tighter)
 
     def to_dict(self) -> dict:
         return {
@@ -74,11 +83,15 @@ class AccumulationCandidate:
             "foreign_vwap": str(self.foreign_vwap) if self.foreign_vwap else None,
             "current_price": str(self.current_price),
             "vwap_discount_pct": round(self.vwap_discount_pct, 2) if self.vwap_discount_pct is not None else None,
-            "rsi": round(self.rsi, 2) if self.rsi else None,
+            "rsi": round(self.rsi, 2) if self.rsi is not None else None,
             "trend": self.trend,
             "score": self.score,
             "top_brokers": self.top_brokers,
             "institutional_flag": self.institutional_flag,
+            "avg_flow_ratio": round(self.avg_flow_ratio, 2) if self.avg_flow_ratio is not None else None,
+            "score_breakdown": self.score_breakdown,
+            "bb_width": round(self.bb_width, 2) if self.bb_width is not None else None,
+            "bb_width_pctile": round(self.bb_width_pctile, 3) if self.bb_width_pctile is not None else None,
         }
 
 
@@ -94,26 +107,71 @@ class AccumulationScreenResponse:
     provider: str                  # "idx" or "stockbit"
 
 
-def _score(candidate: AccumulationCandidate) -> float:
-    """Composite score 0–100 (105 with institutional bonus).
+def _score(candidate: AccumulationCandidate) -> tuple[float, dict]:
+    """Composite score 0–120 (soft cap).
 
     Weights:
       40 pts — net buy ratio (consistency)
-      30 pts — consecutive streak (capped at 10 days)
-      20 pts — foreign VWAP > current price (foreigners underwater = floor)
-      10 pts — RSI < 50 (room to run, not overbought)
+      30 pts — consecutive streak (exponential, τ=7d, uncapped)
+      20 pts — VWAP discount (linear 0..10% → 0..20 pts)
+      10 pts — RSI headroom (tent peak at RSI=40, zero at ≤25 or ≥75)
+      10 pts — avg foreign flow ratio (% of daily turnover, saturates at 20%)
+      10 pts — BB Width squeeze (bottom 20th pctile vs last 60d)
        5 pts — institutional broker present (Stockbit only)
     """
-    s = 0.0
-    s += candidate.net_buy_ratio * 40.0
-    s += min(candidate.consecutive_streak / 10.0, 1.0) * 30.0
-    if candidate.vwap_discount_pct is not None and candidate.vwap_discount_pct > 0:
-        s += 20.0
-    if candidate.rsi is not None and candidate.rsi < 50:
-        s += 10.0
-    if candidate.institutional_flag:
-        s += 5.0
-    return round(s, 1)
+    # Consistency: 0..40
+    s_consistency = candidate.net_buy_ratio * 40.0
+
+    # Streak: soft exponential saturation, τ=7d — 7d≈63%, 14d≈86%, never caps
+    s_streak = 30.0 * (1.0 - math.exp(-candidate.consecutive_streak / 7.0))
+
+    # VWAP discount: linear ramp, saturates at 10% underwater
+    d = candidate.vwap_discount_pct or 0.0
+    s_vwap = max(0.0, min(d, 10.0)) / 10.0 * 20.0
+
+    # RSI: tent function peaking at 40 (room to run without panic)
+    rsi = candidate.rsi
+    if rsi is None:
+        s_rsi = 5.0          # neutral when data missing
+    elif rsi <= 25 or rsi >= 75:
+        s_rsi = 0.0
+    elif rsi <= 40:
+        s_rsi = (rsi - 25) / 15.0 * 10.0
+    else:
+        s_rsi = (75.0 - rsi) / 35.0 * 10.0
+
+    # Avg flow ratio: % of daily turnover that's net foreign
+    fr = max(0.0, min(candidate.avg_flow_ratio or 0.0, 20.0))
+    s_flow = fr / 20.0 * 10.0
+
+    # Institutional flag
+    s_inst = 5.0 if candidate.institutional_flag else 0.0
+
+    # BB squeeze: low percentile rank = tighter band = coiled spring
+    pctile = candidate.bb_width_pctile
+    if pctile is None:
+        s_squeeze = 0.0
+    elif pctile <= 0.20:
+        s_squeeze = 10.0 - pctile / 0.20 * 5.0   # 10..5 pts
+    elif pctile <= 0.40:
+        s_squeeze = 5.0 - (pctile - 0.20) / 0.20 * 5.0  # 5..0 pts
+    else:
+        s_squeeze = 0.0
+
+    total = round(
+        min(s_consistency + s_streak + s_vwap + s_rsi + s_flow + s_inst + s_squeeze, 120.0),
+        1,
+    )
+    breakdown = {
+        "cons": round(s_consistency, 1),
+        "streak": round(s_streak, 1),
+        "vwap": round(s_vwap, 1),
+        "rsi": round(s_rsi, 1),
+        "flow": round(s_flow, 1),
+        "bb": round(s_squeeze, 1),
+        "inst": round(s_inst, 1),
+    }
+    return total, breakdown
 
 
 class AccumulationScreenUseCase:
@@ -161,7 +219,7 @@ class AccumulationScreenUseCase:
             if result.top_brokers is not None:
                 uses_stockbit = True
 
-            result.score = _score(result)
+            result.score, result.score_breakdown = _score(result)
             if result.score >= request.min_score:
                 candidates.append(result)
 
@@ -234,16 +292,27 @@ class AccumulationScreenUseCase:
             except InvalidOperation:
                 foreign_vwap = None
 
-        # Load candles for price + RSI + trend
+        # Avg foreign flow ratio (% of total daily turnover, already in BrokerSummary)
+        flow_ratios = [
+            float(s.foreign_flow_ratio)
+            for s in window_summaries
+            if s.total_value > 0
+        ]
+        avg_flow_ratio = sum(flow_ratios) / len(flow_ratios) if flow_ratios else None
+
+        # Load candles for price + RSI + trend + BB squeeze
         candles = self._market_repo.get_candles(ticker)
         if not candles:
             current_price = Decimal("0")
             rsi = None
             trend = "SIDE"
+            bb_width = None
+            bb_width_pctile = None
         else:
             current_price = candles[-1].close
             rsi = self._compute_rsi(candles, rsi_period)
             trend = self._compute_trend(candles, sma_period)
+            bb_width, bb_width_pctile = self._compute_bb_squeeze(candles)
 
         # VWAP discount %
         vwap_discount_pct: float | None = None
@@ -286,10 +355,13 @@ class AccumulationScreenUseCase:
             score=0.0,  # set after by _score()
             top_brokers=top_brokers,
             institutional_flag=institutional_flag,
+            avg_flow_ratio=avg_flow_ratio,
+            bb_width=bb_width,
+            bb_width_pctile=bb_width_pctile,
         )
 
     def _compute_rsi(self, candles: list, period: int) -> float | None:
-        """Simple RSI computation from candles."""
+        """Wilder's RSI from candle close prices."""
         closes = [float(c.close) for c in candles]
         if len(closes) < period + 1:
             return None
@@ -329,3 +401,38 @@ class AccumulationScreenUseCase:
         elif pct_diff < -2.0:
             return "DOWN"
         return "SIDE"
+
+    @staticmethod
+    def _compute_bb_widths(candles: list, period: int = 20) -> list[float]:
+        """BB Width = (upper - lower) / mid * 100 for each candle."""
+        closes = [float(c.close) for c in candles]
+        if len(closes) < period:
+            return []
+        out = []
+        for i in range(period - 1, len(closes)):
+            window = closes[i - period + 1: i + 1]
+            mid = sum(window) / period
+            if mid <= 0:
+                out.append(0.0)
+                continue
+            std = (sum((x - mid) ** 2 for x in window) / period) ** 0.5
+            out.append(4.0 * std / mid * 100)  # (upper-lower)/mid*100, upper=mid+2σ
+        return out
+
+    def _compute_bb_squeeze(
+        self, candles: list, period: int = 20, history: int = 60
+    ) -> tuple[float | None, float | None]:
+        """Return (bb_width_now, percentile_rank_vs_last_N_days).
+
+        percentile=0.0 means current width is the tightest in `history` days
+        (maximum squeeze). percentile=1.0 means widest (expanding volatility).
+        """
+        widths = self._compute_bb_widths(candles, period)
+        if not widths:
+            return None, None
+        bb_width_now = widths[-1]
+        if len(widths) < history:
+            return bb_width_now, None
+        recent = widths[-history:]
+        rank = sum(1 for w in recent if w <= bb_width_now) / len(recent)
+        return bb_width_now, rank
