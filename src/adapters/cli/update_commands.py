@@ -111,6 +111,9 @@ def _fetch_broker(
     refresh: bool,
 ) -> str:
     """Fetch broker flow for one ticker. Returns status string."""
+    if ticker.startswith("^"):
+        return "n/a:index"
+
     end_date = date.today()
     repo = SQLiteBrokerRepository(db_path)
 

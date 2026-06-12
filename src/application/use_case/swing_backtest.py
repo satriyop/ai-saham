@@ -16,6 +16,11 @@ from src.application.use_case.accumulation_screen import (
     AccumulationScreenRequest,
     AccumulationScreenUseCase,
 )
+from src.application.use_case.market_regime import (
+    MarketRegimeRequest,
+    MarketRegimeResponse,
+    MarketRegimeUseCase,
+)
 from src.domain.entities.candle import Candle
 from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.market_data_repository import MarketDataRepository
@@ -46,6 +51,9 @@ class SwingBacktestRequest:
     stop_loss_pct: Decimal = Decimal("5")
     max_hold_days: int = 10
     cost_bps: Decimal = Decimal("0")
+    include_regime: bool = False
+    benchmark_ticker: str = "^JKSE"
+    allowed_regimes: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -70,6 +78,7 @@ class SwingBacktestTrade:
     flow_pct: float | None
     vwap_disc_pct: float | None
     rsi: float | None
+    regime: str | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -91,6 +100,7 @@ class SwingBacktestTrade:
             "flow_pct": self.flow_pct,
             "vwap_disc_pct": self.vwap_disc_pct,
             "rsi": self.rsi,
+            "regime": self.regime,
         }
 
 
@@ -113,6 +123,26 @@ class SwingBacktestDailyEquity:
 
 
 @dataclass(frozen=True)
+class SwingBacktestRegimeStat:
+    """Trade performance grouped by entry-date market regime."""
+
+    regime: str
+    count: int
+    avg_return_pct: float | None
+    win_rate_pct: float | None
+    total_pnl: Decimal
+
+    def to_dict(self) -> dict:
+        return {
+            "regime": self.regime,
+            "count": self.count,
+            "avg_return_pct": self.avg_return_pct,
+            "win_rate_pct": self.win_rate_pct,
+            "total_pnl": str(self.total_pnl),
+        }
+
+
+@dataclass(frozen=True)
 class SwingBacktestResponse:
     """Portfolio-level walk-forward result."""
 
@@ -131,8 +161,11 @@ class SwingBacktestResponse:
     skipped_no_cash: int
     skipped_duplicate: int
     skipped_no_forward_data: int
+    skipped_by_regime: int
     trades: list[SwingBacktestTrade] = field(default_factory=list)
     equity_curve: list[SwingBacktestDailyEquity] = field(default_factory=list)
+    regime_stats: list[SwingBacktestRegimeStat] = field(default_factory=list)
+    regime_by_date: dict[date, MarketRegimeResponse] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
 
 
@@ -149,6 +182,7 @@ class _OpenPosition:
     flow_pct: float | None
     vwap_disc_pct: float | None
     rsi: float | None
+    regime: str | None
 
 
 class SwingBacktestUseCase:
@@ -171,11 +205,16 @@ class SwingBacktestUseCase:
             broker_repository=broker_repository,
             market_repository=market_repository,
         )
+        self._regime = MarketRegimeUseCase(
+            market_repository=market_repository,
+            broker_repository=broker_repository,
+        )
 
     def execute(self, request: SwingBacktestRequest) -> SwingBacktestResponse:
         self._validate(request)
         tickers = [ticker.upper().strip() for ticker in request.tickers if ticker.strip()]
         replay_dates = self._replay_dates(tickers, request.start_date, request.end_date)
+        regime_by_date = self._regime_by_date(tickers, replay_dates, request)
 
         cash = request.capital
         open_positions: list[_OpenPosition] = []
@@ -184,6 +223,7 @@ class SwingBacktestUseCase:
         skipped_no_cash = 0
         skipped_duplicate = 0
         skipped_no_forward_data = 0
+        skipped_by_regime = 0
         exposure_days = 0
 
         for current_date in replay_dates:
@@ -215,11 +255,22 @@ class SwingBacktestUseCase:
                     if candidate.ticker in open_tickers:
                         skipped_duplicate += 1
                         continue
+                    regime = regime_by_date.get(current_date)
+                    regime_label = regime.label if regime is not None else None
+                    if not self._passes_regime_filter(regime_label, request):
+                        skipped_by_regime += 1
+                        continue
                     if not self._has_forward_data(candidate.ticker, current_date):
                         skipped_no_forward_data += 1
                         continue
 
-                    position = self._build_position(candidate, current_date, cash, request)
+                    position = self._build_position(
+                        candidate,
+                        current_date,
+                        cash,
+                        request,
+                        regime_label,
+                    )
                     if position is None:
                         skipped_no_cash += 1
                         continue
@@ -268,8 +319,11 @@ class SwingBacktestUseCase:
             skipped_no_cash=skipped_no_cash,
             skipped_duplicate=skipped_duplicate,
             skipped_no_forward_data=skipped_no_forward_data,
+            skipped_by_regime=skipped_by_regime,
             trades=trades,
             equity_curve=equity_curve,
+            regime_stats=self._regime_stats(trades),
+            regime_by_date=regime_by_date,
             warnings=[
                 "Backtest uses the supplied current universe; "
                 "historical index membership is not reconstructed.",
@@ -296,6 +350,12 @@ class SwingBacktestUseCase:
             raise ValueError("max_hold_days must be positive")
         if request.cost_bps < 0:
             raise ValueError("cost_bps cannot be negative")
+        valid_regimes = {"BULLISH", "SIDEWAYS", "WEAK", "RISK_OFF"}
+        invalid = [r for r in request.allowed_regimes if r.upper() not in valid_regimes]
+        if invalid:
+            raise ValueError(
+                "allowed_regimes must contain only: BULLISH, SIDEWAYS, WEAK, RISK_OFF"
+            )
 
     def _signals_for_date(
         self,
@@ -340,12 +400,25 @@ class SwingBacktestUseCase:
             and candidate.rsi <= request.max_rsi
         )
 
+    def _passes_regime_filter(
+        self,
+        regime_label: str | None,
+        request: SwingBacktestRequest,
+    ) -> bool:
+        if not request.allowed_regimes:
+            return True
+        if regime_label is None:
+            return False
+        allowed = {regime.upper() for regime in request.allowed_regimes}
+        return regime_label.upper() in allowed
+
     def _build_position(
         self,
         candidate: AccumulationCandidate,
         signal_date: date,
         cash: Decimal,
         request: SwingBacktestRequest,
+        regime: str | None,
     ) -> _OpenPosition | None:
         entry = candidate.current_price
         if entry <= 0:
@@ -378,6 +451,7 @@ class SwingBacktestUseCase:
             flow_pct=candidate.avg_flow_ratio,
             vwap_disc_pct=candidate.vwap_discount_pct,
             rsi=candidate.rsi,
+            regime=regime,
         )
 
     def _maybe_exit(
@@ -452,6 +526,7 @@ class SwingBacktestUseCase:
             flow_pct=position.flow_pct,
             vwap_disc_pct=position.vwap_disc_pct,
             rsi=position.rsi,
+            regime=position.regime,
         )
 
     def _replay_dates(
@@ -469,6 +544,24 @@ class SwingBacktestUseCase:
             )
             dates.update(c.date for c in candles)
         return sorted(dates)
+
+    def _regime_by_date(
+        self,
+        tickers: list[str],
+        replay_dates: list[date],
+        request: SwingBacktestRequest,
+    ) -> dict[date, MarketRegimeResponse]:
+        if not request.include_regime and not request.allowed_regimes:
+            return {}
+
+        regimes: dict[date, MarketRegimeResponse] = {}
+        for replay_date in replay_dates:
+            regimes[replay_date] = self._regime.execute(MarketRegimeRequest(
+                universe=tickers,
+                benchmark_ticker=request.benchmark_ticker,
+                as_of_date=replay_date,
+            ))
+        return regimes
 
     def _has_forward_data(self, ticker: str, signal_date: date) -> bool:
         candles = self._market_repo.get_candles(
@@ -520,6 +613,28 @@ class SwingBacktestUseCase:
                 if drawdown < max_dd:
                     max_dd = drawdown
         return round(float(max_dd), 4)
+
+    def _regime_stats(
+        self,
+        trades: list[SwingBacktestTrade],
+    ) -> list[SwingBacktestRegimeStat]:
+        buckets: dict[str, list[SwingBacktestTrade]] = {}
+        for trade in trades:
+            if trade.regime is None:
+                continue
+            buckets.setdefault(trade.regime, []).append(trade)
+
+        stats = [
+            SwingBacktestRegimeStat(
+                regime=regime,
+                count=len(rows),
+                avg_return_pct=_avg([trade.net_return_pct for trade in rows]),
+                win_rate_pct=_win_rate([float(trade.pnl) for trade in rows]),
+                total_pnl=sum((trade.pnl for trade in rows), Decimal("0")),
+            )
+            for regime, rows in buckets.items()
+        ]
+        return sorted(stats, key=lambda s: s.count, reverse=True)
 
 
 def _pct_change(value: Decimal, base: Decimal) -> float:

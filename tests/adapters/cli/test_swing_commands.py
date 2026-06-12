@@ -1,6 +1,7 @@
 """Tests for swing command helper logic."""
 
 from decimal import Decimal
+from pathlib import Path
 
 from typer.testing import CliRunner
 
@@ -69,3 +70,38 @@ def test_swing_backtest_unknown_preset_error():
     assert result.exit_code != 0
     assert "unknown swing preset" in result.output.lower()
     assert FOREIGN_BOUNCE_PRESET in result.output
+
+
+def test_regime_command_accepts_explicit_ticker_with_empty_cache(tmp_path: Path):
+    result = runner.invoke(
+        app,
+        [
+            "regime",
+            "BBCA",
+            "--universe",
+            "cached",
+            "--db",
+            str(tmp_path / "empty.db"),
+            "--as-of",
+            "2026-06-12",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "MARKET REGIME" in result.output
+    assert "RISK_OFF" in result.output
+
+
+def test_swing_backtest_rejects_invalid_allowed_regime():
+    result = runner.invoke(
+        app,
+        [
+            "swing-backtest",
+            "BBCA",
+            "--allow-regimes",
+            "CALM",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "--allow-regimes" in result.output

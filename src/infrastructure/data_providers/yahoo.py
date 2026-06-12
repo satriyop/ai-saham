@@ -86,6 +86,10 @@ class YahooFinanceProvider(MarketDataProvider):
     def _to_yahoo_ticker(self, ticker: str) -> str:
         """Convert ticker to Yahoo Finance format."""
         ticker = ticker.upper().strip()
+        if ticker.startswith("^"):
+            return ticker
+        if "." in ticker:
+            return ticker
         if not ticker.endswith(self._market_suffix):
             return f"{ticker}{self._market_suffix}"
         return ticker

@@ -112,7 +112,8 @@ from src.adapters.cli.update_commands import update
 app.command("update")(update)
 
 # Register swing and size commands
-from src.adapters.cli.swing_commands import swing, swing_backtest, size
+from src.adapters.cli.swing_commands import regime, swing, swing_backtest, size
+app.command("regime")(regime)
 app.command("swing")(swing)
 app.command("swing-backtest")(swing_backtest)
 app.command("size")(size)

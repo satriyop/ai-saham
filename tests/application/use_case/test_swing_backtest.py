@@ -158,9 +158,15 @@ def test_swing_backtest_opens_signal_and_exits_at_target():
         _summary("BBCA", base + timedelta(days=i), Decimal("110"))
         for i in range(18, 25)
     ]
+    benchmark_candles = [
+        _flat_candle("^JKSE", base - timedelta(days=60 - i), Decimal(1000 + i))
+        for i in range(86)
+    ]
     use_case = SwingBacktestUseCase(
         broker_repository=MockBrokerRepository(summaries),
-        market_repository=MockMarketRepository(_base_candles("BBCA", base)),
+        market_repository=MockMarketRepository(
+            _base_candles("BBCA", base) + benchmark_candles
+        ),
     )
 
     response = use_case.execute(SwingBacktestRequest(
@@ -171,6 +177,8 @@ def test_swing_backtest_opens_signal_and_exits_at_target():
         risk_pct=Decimal("0.01"),
         max_positions=1,
         min_net_buy_days=1,
+        include_regime=True,
+        benchmark_ticker="^JKSE",
     ))
 
     assert response.trade_count == 1
@@ -181,6 +189,8 @@ def test_swing_backtest_opens_signal_and_exits_at_target():
     assert trade.exit_reason == "target"
     assert trade.net_return_pct == 5.0
     assert trade.lots == 20
+    assert trade.regime is not None
+    assert response.regime_stats
 
 
 def test_swing_backtest_respects_max_positions():
@@ -210,3 +220,39 @@ def test_swing_backtest_respects_max_positions():
 
     assert response.trade_count == 1
     assert len({trade.ticker for trade in response.trades}) == 1
+
+
+def test_swing_backtest_can_filter_entries_by_allowed_regimes():
+    base = date(2026, 1, 1)
+    signal_date = base + timedelta(days=24)
+    exit_date = base + timedelta(days=25)
+    summaries = [
+        _summary("BBCA", base + timedelta(days=i), Decimal("110"))
+        for i in range(18, 25)
+    ]
+    benchmark_candles = [
+        _flat_candle("^JKSE", base - timedelta(days=60 - i), Decimal(1000 + i))
+        for i in range(86)
+    ]
+    use_case = SwingBacktestUseCase(
+        broker_repository=MockBrokerRepository(summaries),
+        market_repository=MockMarketRepository(
+            _base_candles("BBCA", base) + benchmark_candles
+        ),
+    )
+
+    response = use_case.execute(SwingBacktestRequest(
+        tickers=["BBCA"],
+        start_date=signal_date,
+        end_date=exit_date,
+        capital=Decimal("1000000"),
+        risk_pct=Decimal("0.01"),
+        max_positions=1,
+        min_net_buy_days=1,
+        benchmark_ticker="^JKSE",
+        allowed_regimes=("RISK_OFF",),
+    ))
+
+    assert response.trade_count == 0
+    assert response.skipped_by_regime == 1
+    assert response.regime_by_date
