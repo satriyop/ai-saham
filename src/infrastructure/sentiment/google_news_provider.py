@@ -97,7 +97,7 @@ class GoogleNewsProvider:
         """Build Google News RSS URL for Indonesian stock.
 
         Searches for ticker + "saham" (Indonesian for "stock")
-        in Indonesian language context.
+        in Indonesian language context. Properly URL-encodes the query.
 
         Args:
             ticker: Stock ticker symbol
@@ -105,10 +105,12 @@ class GoogleNewsProvider:
         Returns:
             Full RSS URL
         """
+        import urllib.parse
         # "saham" = stock in Indonesian, helps filter relevant results
-        query = f"{ticker}+saham"
+        query = f"{ticker} saham"
+        encoded_query = urllib.parse.quote_plus(query)
         # hl=id (Indonesian), gl=ID (Indonesia), ceid=ID:id (Indonesia context)
-        return f"{GOOGLE_NEWS_RSS_URL}?q={query}&hl=id&gl=ID&ceid=ID:id"
+        return f"{GOOGLE_NEWS_RSS_URL}?q={encoded_query}&hl=id&gl=ID&ceid=ID:id"
 
     def _fetch_rss(self, url: str) -> bytes:
         """Fetch RSS content with timeout.
