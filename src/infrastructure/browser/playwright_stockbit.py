@@ -667,33 +667,23 @@ def save_stockbit_session(
         )
 
         print("Waiting for login to complete (including 2FA if enabled)...")
-        print("Current URL will be printed every 5 seconds.\n")
+        print(f"  Current page: {LOGIN_URL}\n")
 
-        last_printed_url = ""
+        def _is_logged_in(url: str) -> bool:
+            in_auth_flow = any(f in url for f in _AUTH_FLOW_FRAGMENTS)
+            return "stockbit.com" in url and not in_auth_flow
+
         try:
-            start = time.time()
-            while time.time() - start < timeout:
-                try:
-                    current_url = page.url
-
-                    if current_url != last_printed_url:
-                        elapsed = int(time.time() - start)
-                        print(f"  [{elapsed}s] {current_url}")
-                        last_printed_url = current_url
-
-                    in_auth_flow = any(f in current_url for f in _AUTH_FLOW_FRAGMENTS)
-                    on_stockbit = "stockbit.com" in current_url
-
-                    # Logged in = on stockbit.com, not on any auth/login page
-                    if on_stockbit and not in_auth_flow and current_url != LOGIN_URL:
-                        page.wait_for_timeout(2_000)  # let app shell settle
-                        logged_in = True
-                        break
-                except Exception:
-                    pass
-                time.sleep(1)
-        except KeyboardInterrupt:
-            pass
+            # event-driven wait — fires as soon as the URL predicate matches
+            page.wait_for_url(_is_logged_in, timeout=timeout * 1_000)
+            print(f"  Logged in → {page.url}")
+            page.wait_for_timeout(2_000)  # let app shell settle + localStorage populate
+            logged_in = True
+        except Exception as e:
+            if "Timeout" in str(e):
+                print(f"\nTimeout reached ({timeout}s). Last URL: {page.url}")
+            else:
+                print(f"\nLogin detection error: {e}")
 
         if logged_in:
             cookies = ctx.cookies()
