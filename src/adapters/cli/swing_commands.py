@@ -29,6 +29,10 @@ from src.application.services.position_sizer import (
     compute_position_size,
 )
 from src.application.services.strategy_loader import StrategyLoader
+from src.application.services.universe_loader import (
+    UniverseNotFoundError,
+    resolve_tickers,
+)
 from src.application.use_case.accumulation_screen import (
     AccumulationCandidate,
     AccumulationScreenRequest,
@@ -39,6 +43,14 @@ from src.application.use_case.backtest import BacktestRequest, BacktestUseCase
 from src.application.use_case.fetch_sentiment import (
     FetchSentimentRequest,
     FetchSentimentUseCase,
+)
+from src.application.use_case.swing_backtest import (
+    FOREIGN_BOUNCE_PRESET as BACKTEST_FOREIGN_BOUNCE_PRESET,
+)
+from src.application.use_case.swing_backtest import (
+    SwingBacktestRequest,
+    SwingBacktestResponse,
+    SwingBacktestUseCase,
 )
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
@@ -245,6 +257,77 @@ def _style_classification(value: str) -> str:
     if value == "WATCH":
         return typer.style(value, fg=typer.colors.YELLOW, bold=True)
     return typer.style(value, fg=typer.colors.RED, bold=True)
+
+
+def _fmt_pct(value: float | None, signed: bool = False) -> str:
+    if value is None:
+        return "N/A"
+    return f"{value:+.2f}%" if signed else f"{value:.1f}%"
+
+
+def _display_swing_backtest(response: SwingBacktestResponse, show_trades: int) -> None:
+    typer.echo("")
+    typer.echo(typer.style("=" * 86, fg=typer.colors.CYAN))
+    typer.echo(typer.style("WALK-FORWARD SWING BACKTEST", fg=typer.colors.CYAN, bold=True))
+    typer.echo(typer.style("=" * 86, fg=typer.colors.CYAN))
+    typer.echo(
+        f"Preset: {response.preset} | Period: {response.start_date} to {response.end_date}"
+    )
+    typer.echo(
+        "Read as: the workflow scans each replay date, opens eligible signals within "
+        "portfolio limits, then exits by TP/SL/max-hold."
+    )
+    typer.echo("")
+    typer.echo(f"{'METRIC':<24} {'VALUE':>18}")
+    typer.echo("-" * 46)
+    typer.echo(f"{'Initial capital':<24} {float(response.initial_capital):>18,.0f}")
+    typer.echo(f"{'Final equity':<24} {float(response.final_equity):>18,.0f}")
+    typer.echo(f"{'Total return':<24} {_fmt_pct(response.total_return_pct, True):>18}")
+    typer.echo(f"{'Max drawdown':<24} {_fmt_pct(response.max_drawdown_pct, True):>18}")
+    typer.echo(f"{'Trades':<24} {response.trade_count:>18}")
+    typer.echo(f"{'Win rate':<24} {_fmt_pct(response.win_rate_pct):>18}")
+    typer.echo(f"{'Avg trade return':<24} {_fmt_pct(response.avg_trade_return_pct, True):>18}")
+    profit_factor = (
+        "INF" if response.profit_factor == float("inf")
+        else "N/A" if response.profit_factor is None
+        else f"{response.profit_factor:.2f}"
+    )
+    typer.echo(f"{'Profit factor':<24} {profit_factor:>18}")
+    typer.echo(f"{'Exposure days':<24} {_fmt_pct(response.exposure_pct):>18}")
+    typer.echo("")
+    typer.echo(
+        f"Skipped: no_cash={response.skipped_no_cash}, "
+        f"duplicate={response.skipped_duplicate}, "
+        f"no_forward_data={response.skipped_no_forward_data}"
+    )
+
+    if show_trades > 0 and response.trades:
+        typer.echo("")
+        typer.echo("RECENT TRADES")
+        typer.echo("-" * 86)
+        typer.echo(
+            f"{'ENTRY':<10} {'EXIT':<10} {'TICKER':<7} {'LOTS':>6} "
+            f"{'RET':>9} {'PNL':>14} {'DAYS':>5} {'REASON':<10}"
+        )
+        for trade in response.trades[-show_trades:]:
+            typer.echo(
+                f"{trade.entry_date:%Y-%m-%d} {trade.exit_date:%Y-%m-%d} "
+                f"{trade.ticker:<7} {trade.lots:>6} "
+                f"{_fmt_pct(trade.net_return_pct, True):>9} "
+                f"{float(trade.pnl):>14,.0f} {trade.holding_days:>5} "
+                f"{trade.exit_reason:<10}"
+            )
+
+    if response.warnings:
+        typer.echo("")
+        typer.echo("WARNINGS")
+        typer.echo("-" * 40)
+        for warning in response.warnings:
+            typer.echo(f"  ! {warning}")
+
+    typer.echo("")
+    typer.echo("DISCLAIMER: Historical simulation only. Not trading advice.")
+    typer.echo(typer.style("=" * 86, fg=typer.colors.CYAN))
 
 
 def _print_swing_output(
@@ -864,6 +947,164 @@ def swing(
         no_backtest=no_backtest,
         no_sentiment=no_sentiment,
     )
+
+
+# ─── swing backtest command ──────────────────────────────────────────────────
+
+def swing_backtest(
+    tickers: Annotated[
+        Optional[list[str]],
+        typer.Argument(help="Explicit ticker symbols (e.g. BBCA BBRI)"),
+    ] = None,
+    universe: Annotated[
+        Optional[str],
+        typer.Option("--universe", "-u", help="Universe: lq45, idx80, idxcomp100, cached"),
+    ] = None,
+    preset: Annotated[
+        str,
+        typer.Option("--preset", help="Swing preset to validate"),
+    ] = BACKTEST_FOREIGN_BOUNCE_PRESET,
+    start: Annotated[
+        str,
+        typer.Option("--start", help="Backtest start date, YYYY-MM-DD"),
+    ] = "2026-01-01",
+    end: Annotated[
+        Optional[str],
+        typer.Option("--end", help="Backtest end date, YYYY-MM-DD (default: today)"),
+    ] = None,
+    capital: Annotated[
+        int,
+        typer.Option("--capital", "-c", help="Initial capital in IDR", min=1),
+    ] = 100_000_000,
+    risk_pct: Annotated[
+        float,
+        typer.Option("--risk-pct", help="% of capital risked per trade", min=0.01),
+    ] = 1.0,
+    max_positions: Annotated[
+        int,
+        typer.Option("--max-positions", help="Maximum concurrent open positions", min=1),
+    ] = 5,
+    take_profit: Annotated[
+        float,
+        typer.Option("--take-profit", help="Take-profit percentage", min=0.01),
+    ] = 5.0,
+    stop_loss: Annotated[
+        float,
+        typer.Option("--stop-loss", help="Stop-loss percentage", min=0.01),
+    ] = 5.0,
+    max_hold: Annotated[
+        int,
+        typer.Option("--max-hold", help="Maximum holding period in trading days", min=1),
+    ] = 10,
+    cost_bps: Annotated[
+        float,
+        typer.Option("--cost-bps", help="One-way transaction cost in basis points", min=0),
+    ] = 0.0,
+    show_trades: Annotated[
+        int,
+        typer.Option("--show-trades", help="Number of recent trades to print", min=0),
+    ] = 20,
+    output_format: Annotated[
+        str,
+        typer.Option("--format", help="Output format: table or json"),
+    ] = "table",
+    db_path: Annotated[
+        Optional[Path],
+        typer.Option("--db", help="SQLite database path"),
+    ] = None,
+) -> None:
+    """
+    Walk-forward backtest for the deterministic swing workflow.
+
+    This validates the full daily process: scan, apply preset gates, rank
+    candidates, open only within portfolio limits, avoid duplicate positions,
+    and exit by TP/SL/max-hold. It reads local cached market and broker data.
+    """
+    preset_name = preset.lower()
+    if preset_name != BACKTEST_FOREIGN_BOUNCE_PRESET:
+        typer.echo(
+            f"Unknown swing preset '{preset}'. "
+            f"Available presets: {BACKTEST_FOREIGN_BOUNCE_PRESET}",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    try:
+        start_date = date.fromisoformat(start)
+        end_date = date.fromisoformat(end) if end else date.today()
+    except ValueError as e:
+        typer.echo(f"Error: invalid date format: {e}", err=True)
+        raise typer.Exit(1)
+
+    resolved_db = db_path or DEFAULT_DB_PATH
+    try:
+        ticker_list = resolve_tickers(
+            universe=universe,
+            explicit=list(tickers) if tickers else [],
+            db_path=resolved_db,
+        )
+    except (UniverseNotFoundError, FileNotFoundError) as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+    if not ticker_list:
+        typer.echo(
+            "No tickers to backtest. Specify --universe or provide ticker arguments.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    typer.echo(
+        f"Backtesting {len(ticker_list)} tickers | {start_date} to {end_date} | "
+        f"preset={preset_name} | max positions={max_positions}..."
+    )
+
+    use_case = SwingBacktestUseCase(
+        broker_repository=SQLiteBrokerRepository(resolved_db),
+        market_repository=SQLiteMarketRepository(db_path=resolved_db),
+    )
+    try:
+        response = use_case.execute(SwingBacktestRequest(
+            tickers=ticker_list,
+            start_date=start_date,
+            end_date=end_date,
+            preset=preset_name,
+            capital=Decimal(str(capital)),
+            risk_pct=Decimal(str(risk_pct)) / Decimal("100"),
+            max_positions=max_positions,
+            take_profit_pct=Decimal(str(take_profit)),
+            stop_loss_pct=Decimal(str(stop_loss)),
+            max_hold_days=max_hold,
+            cost_bps=Decimal(str(cost_bps)),
+        ))
+    except ValueError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+    if output_format == "json":
+        typer.echo(json.dumps({
+            "preset": response.preset,
+            "start_date": response.start_date.isoformat(),
+            "end_date": response.end_date.isoformat(),
+            "initial_capital": str(response.initial_capital),
+            "final_equity": str(response.final_equity),
+            "total_return_pct": response.total_return_pct,
+            "max_drawdown_pct": response.max_drawdown_pct,
+            "trade_count": response.trade_count,
+            "win_rate_pct": response.win_rate_pct,
+            "avg_trade_return_pct": response.avg_trade_return_pct,
+            "profit_factor": response.profit_factor,
+            "exposure_pct": response.exposure_pct,
+            "skipped_no_cash": response.skipped_no_cash,
+            "skipped_duplicate": response.skipped_duplicate,
+            "skipped_no_forward_data": response.skipped_no_forward_data,
+            "warnings": response.warnings,
+            "trades": [trade.to_dict() for trade in response.trades],
+            "equity_curve": [point.to_dict() for point in response.equity_curve],
+        }, indent=2, default=str))
+        return
+
+    _display_swing_backtest(response, show_trades=show_trades)
 
 
 # ─── size command ─────────────────────────────────────────────────────────────

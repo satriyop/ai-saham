@@ -2,11 +2,16 @@
 
 from decimal import Decimal
 
+from typer.testing import CliRunner
+
+from src.adapters.cli.main import app
 from src.adapters.cli.swing_commands import (
     FOREIGN_BOUNCE_PRESET,
     _evaluate_foreign_bounce,
 )
 from src.application.use_case.accumulation_screen import AccumulationCandidate
+
+runner = CliRunner()
 
 
 def _candidate(**overrides) -> AccumulationCandidate:
@@ -56,3 +61,11 @@ def test_foreign_bounce_missing_accumulation_is_avoid():
 
     assert evaluation.passed is False
     assert evaluation.classification == "AVOID"
+
+
+def test_swing_backtest_unknown_preset_error():
+    result = runner.invoke(app, ["swing-backtest", "--preset", "unknown"])
+
+    assert result.exit_code != 0
+    assert "unknown swing preset" in result.output.lower()
+    assert FOREIGN_BOUNCE_PRESET in result.output
