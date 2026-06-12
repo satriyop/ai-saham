@@ -36,10 +36,22 @@ DEFAULT_PROFILE_DIR = Path(".stockbit_profile")        # persistent browser prof
 
 # ── Stockbit URLs ──────────────────────────────────────────────────────────
 BASE_URL = "https://stockbit.com"
-SCREENER_URL = "https://stockbit.com/screener"
+STREAM_URL = "https://stockbit.com/stream"       # IEV movers widget lives here
+SCREENER_URL = "https://stockbit.com/screener"   # kept for spy fallback
 ORDER_BOOK_URL = "https://stockbit.com/stock/{ticker}/orderbook"
 LOGIN_URL = "https://stockbit.com/login"
 EXODUS_API = "https://exodus.stockbit.com"
+
+# ── Confirmed Exodus API endpoints (from DevTools spy, 2026-06-13) ─────────
+_IEV_MOVER_URL = (
+    "https://exodus.stockbit.com/order-trade/market-mover"
+    "?mover_type=MOVER_CATEGORY_IEPIEV_MOVER"
+    "&filter_stocks=FILTER_STOCKS_TYPE_MAIN_BOARD"
+    "&filter_stocks=FILTER_STOCKS_TYPE_DEVELOPMENT_BOARD"
+    "&filter_stocks=FILTER_STOCKS_TYPE_ACCELERATION_BOARD"
+    "&filter_stocks=FILTER_STOCKS_TYPE_NEW_ECONOMY_BOARD"
+)
+_ORDER_BOOK_API = "https://exodus.stockbit.com/order-trade/orderbook/{ticker}"
 
 # ── Timeouts (ms) ─────────────────────────────────────────────────────────
 NAV_TIMEOUT = 30_000
@@ -182,6 +194,43 @@ def _url_matches(url: str, patterns: list[str]) -> bool:
     return any(p in url_lower for p in patterns)
 
 
+def _extract_jwt(page) -> str | None:
+    """Scan localStorage for a JWT token (all JWTs start with 'eyJ')."""
+    try:
+        token = page.evaluate("""
+            () => {
+                for (const key of Object.keys(localStorage)) {
+                    const val = localStorage.getItem(key);
+                    if (val && val.startsWith('eyJ')) return val;
+                }
+                return null;
+            }
+        """)
+        return token
+    except Exception as e:
+        logger.debug("JWT extraction failed: %s", e)
+        return None
+
+
+def _exodus_get(url: str, token: str) -> dict | None:
+    """Make an authenticated GET to the Exodus API using httpx."""
+    import httpx
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "accept": "application/json, text/plain, */*",
+        "x-platform": "web",
+        "origin": "https://stockbit.com",
+        "referer": "https://stockbit.com/",
+    }
+    try:
+        resp = httpx.get(url, headers=headers, timeout=15)
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as e:
+        logger.warning("Exodus API call failed: %s — %s", url, e)
+        return None
+
+
 def _parse_number(text: str) -> int | None:
     """Parse a formatted number string like '1.234.567' or '1,234,567'."""
     cleaned = re.sub(r"[^\d]", "", text)
@@ -222,64 +271,16 @@ class PlaywrightStockbitProvider(BrowserDataProvider):
         return self._profile_dir.exists() and any(self._profile_dir.iterdir())
 
     def fetch_preopen_movers(self, iev_min: int) -> list[MoverData]:
-        """Navigate screener page; extract movers via API intercept or DOM."""
+        """
+        Fetch IEV movers from the Exodus API using a JWT extracted from the browser.
+
+        Flow:
+          1. Open stream page (contains the IEV widget + fires auth requests)
+          2. Extract JWT from localStorage
+          3. Call exodus.stockbit.com/order-trade/market-mover directly with httpx
+          4. Parse and return MoverData list
+        """
         sync_playwright = _require_playwright()
-
-        with sync_playwright() as pw:
-            if self._use_persistent():
-                ctx, page = _persistent_context(pw, self._profile_dir, self._headless)
-                browser = None  # persistent context IS the browser
-            else:
-                session = _load_session(self._session_file)
-                browser, ctx, page = _new_authenticated_context(
-                    pw, session, headless=self._headless
-                )
-
-            captured_responses: list[dict] = []
-
-            def on_response(response):
-                if response.status != 200:
-                    return
-                ct = response.headers.get("content-type", "")
-                if "json" not in ct:
-                    return
-                if _url_matches(response.url, _MOVERS_URL_PATTERNS):
-                    try:
-                        captured_responses.append({
-                            "url": response.url,
-                            "body": response.json(),
-                        })
-                        logger.info("Captured movers API: %s", response.url)
-                    except Exception as e:
-                        logger.debug("Failed to parse response from %s: %s", response.url, e)
-
-            page.on("response", on_response)
-
-            try:
-                page.goto(SCREENER_URL, timeout=self._timeout)
-                page.wait_for_load_state("networkidle", timeout=self._timeout)
-                page.wait_for_timeout(SPA_SETTLE_MS)
-
-                # Try API intercept first
-                if captured_responses:
-                    movers = _parse_movers_from_api(captured_responses, iev_min)
-                    if movers:
-                        logger.info("API intercept: %d movers found", len(movers))
-                        return movers
-                    logger.warning("API intercept: response captured but could not parse movers")
-
-                # Fallback: DOM scraping
-                logger.info("Falling back to DOM scraping for movers")
-                movers = _scrape_movers_from_dom(page, iev_min)
-                return movers
-
-            finally:
-                ctx.close()  # closes persistent context or browser
-
-    def fetch_order_book_best_bid(self, ticker: str) -> OrderBookBid | None:
-        """Navigate order book page; extract best bid via API intercept or DOM."""
-        sync_playwright = _require_playwright()
-        url = ORDER_BOOK_URL.format(ticker=ticker.upper())
 
         with sync_playwright() as pw:
             if self._use_persistent():
@@ -290,40 +291,70 @@ class PlaywrightStockbitProvider(BrowserDataProvider):
                     pw, session, headless=self._headless
                 )
 
-            captured_responses: list[dict] = []
-
-            def on_response(response):
-                if response.status != 200:
-                    return
-                ct = response.headers.get("content-type", "")
-                if "json" not in ct:
-                    return
-                if _url_matches(response.url, _ORDERBOOK_URL_PATTERNS):
-                    try:
-                        captured_responses.append({
-                            "url": response.url,
-                            "body": response.json(),
-                        })
-                        logger.info("Captured orderbook API: %s", response.url)
-                    except Exception as e:
-                        logger.debug("Failed to parse %s: %s", response.url, e)
-
-            page.on("response", on_response)
-
             try:
-                page.goto(url, timeout=self._timeout)
-                page.wait_for_load_state("networkidle", timeout=self._timeout)
+                # Navigate to stream — this loads auth state + fires IEV request
+                page.goto(STREAM_URL, timeout=self._timeout, wait_until="domcontentloaded")
                 page.wait_for_timeout(SPA_SETTLE_MS)
 
-                if captured_responses:
-                    bid = _parse_best_bid_from_api(captured_responses, ticker)
-                    if bid:
-                        logger.info("API intercept: best bid %s = %s", ticker, bid.price)
-                        return bid
-                    logger.warning("API intercept: response captured but could not parse bid")
+                token = _extract_jwt(page)
+                if not token:
+                    logger.warning("Could not extract JWT — falling back to DOM")
+                    return _scrape_movers_from_dom(page, iev_min)
 
-                logger.info("Falling back to DOM scraping for order book")
-                return _scrape_best_bid_from_dom(page, ticker)
+                logger.info("JWT extracted, calling Exodus IEV API directly")
+                body = _exodus_get(_IEV_MOVER_URL, token)
+                if body:
+                    movers = _parse_iev_response(body, iev_min)
+                    if movers:
+                        logger.info("Exodus API: %d movers (IEV >= %d)", len(movers), iev_min)
+                        return movers
+                    logger.warning("Exodus API returned data but 0 movers matched IEV >= %d", iev_min)
+                    logger.debug("Response: %s", str(body)[:500])
+
+                # Fallback: DOM scraping
+                logger.info("Falling back to DOM scraping")
+                return _scrape_movers_from_dom(page, iev_min)
+
+            finally:
+                ctx.close()
+
+    def fetch_order_book_best_bid(self, ticker: str) -> OrderBookBid | None:
+        """
+        Fetch order book best bid from Exodus API.
+
+        Reuses the JWT from the stream page — only navigates if no token cached.
+        """
+        sync_playwright = _require_playwright()
+
+        with sync_playwright() as pw:
+            if self._use_persistent():
+                ctx, page = _persistent_context(pw, self._profile_dir, self._headless)
+            else:
+                session = _load_session(self._session_file)
+                _, ctx, page = _new_authenticated_context(
+                    pw, session, headless=self._headless
+                )
+
+            try:
+                page.goto(STREAM_URL, timeout=self._timeout, wait_until="domcontentloaded")
+                page.wait_for_timeout(2_000)
+
+                token = _extract_jwt(page)
+                if not token:
+                    logger.warning("Could not extract JWT for order book")
+                    return None
+
+                ob_url = _ORDER_BOOK_API.format(ticker=ticker.upper())
+                body = _exodus_get(ob_url, token)
+                if body:
+                    bid = _parse_order_book_response(body)
+                    if bid:
+                        logger.info("Order book: %s best bid = %s", ticker, bid.price)
+                        return bid
+                    logger.warning("Order book response parsed but no bid found for %s", ticker)
+                    logger.debug("Response: %s", str(body)[:500])
+
+                return None
 
             finally:
                 ctx.close()
@@ -332,6 +363,69 @@ class PlaywrightStockbitProvider(BrowserDataProvider):
 # ── API response parsers ────────────────────────────────────────────────────
 # These need updating once `saham stockbit spy` reveals the real response shape.
 # Currently structured to try common patterns and log what it finds.
+
+def _parse_iev_response(body: dict, iev_min: int) -> list[MoverData]:
+    """
+    Parse IEV movers from the Exodus market-mover API response.
+
+    Tries common response shapes. The Exodus API typically wraps data in
+    a 'data' key containing a list of mover objects.
+    """
+    movers: list[MoverData] = []
+
+    # Unwrap common envelope patterns
+    payload = body
+    for key in ("data", "result", "movers", "items"):
+        if isinstance(payload, dict) and key in payload:
+            payload = payload[key]
+            if isinstance(payload, list):
+                break
+
+    if not isinstance(payload, list):
+        # Try one more level
+        candidates = _find_list_in_json(body)
+        payload = max(candidates, key=len) if candidates else []
+
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+        ticker = _extract_ticker(item)
+        iev = _extract_iev_from_mover(item)
+        if ticker and iev is not None and iev >= iev_min:
+            movers.append(MoverData(ticker=ticker, iev=iev))
+
+    return sorted(movers, key=lambda m: m.iev, reverse=True)
+
+
+def _extract_iev_from_mover(item: dict) -> int | None:
+    """Extract IEV value — tries direct keys then nested stock object."""
+    # Direct keys
+    for key in ("iev", "IEV", "intraday_expected_volume", "ie_volume",
+                "expected_volume", "volume_iev"):
+        val = item.get(key)
+        if val is not None:
+            try:
+                return int(float(str(val).replace("K", "e3").replace("M", "e6")))
+            except (ValueError, TypeError):
+                pass
+
+    # Nested under 'stock' or 'data'
+    for nested_key in ("stock", "data", "detail"):
+        nested = item.get(nested_key)
+        if isinstance(nested, dict):
+            result = _extract_iev_from_mover(nested)
+            if result is not None:
+                return result
+    return None
+
+
+def _parse_order_book_response(body: dict) -> OrderBookBid | None:
+    """
+    Parse order book API response from Exodus.
+    Looks for the bid side (buy orders) and returns the largest by volume.
+    """
+    return _find_best_bid_in_json(body)
+
 
 def _parse_movers_from_api(
     responses: list[dict], iev_min: int
