@@ -438,6 +438,32 @@ saham screen log
 
 Perintah ini membaca hasil screener terakhir dan menyimpannya ke `journals/pre-open.csv`. Data aktual (opening price, close 1 hari kemudian, close 5 hari kemudian) akan diisi otomatis dari database lokal saat kamu jalankan `review`.
 
+Kalau kamu memakai `confirm-open`, catat keputusan post-open juga:
+
+```bash
+saham screen confirm-log
+```
+
+Perintah ini membaca `journals/.last-confirmation.json` dan menyimpan keputusan
+`ENTER`, `WAIT`, dan `SKIP_*` ke `journals/intraday-confirmations.csv`.
+Field yang disimpan meliputi reason codes, opening price, planned entry, stop,
+RSI, gap%, ACCUM tag, dan FVWAP discount.
+
+Kalau kamu benar-benar mengambil trade, isi hasil aktualnya:
+
+```bash
+saham screen confirm-outcome BBCA \
+  --date 2026-06-12 \
+  --entry 9050 \
+  --exit 9200 \
+  --result target \
+  --notes "exit di 1R"
+```
+
+Perintah ini menghitung hasil dalam satuan `R` berdasarkan jarak entry ke stop
+yang sudah tersimpan di journal. Hasil aktual ini akan dipakai oleh
+`confirm-review` sebelum memakai proxy OHLC harian.
+
 ---
 
 ### Setelah 20 Sesi — Evaluasi
@@ -473,6 +499,18 @@ Per-trend breakdown:
 - **Direction accuracy 58%**: dari kandidat BULLISH, 58% naik hari itu → sedikit lebih baik dari coin flip, perlu ditingkatkan
 - Kalau hit rate < 50%: pertimbangkan perlebar range atau naikkan IEV threshold
 - Kalau direction accuracy < 52%: sinyal BULLISH/BEARISH kita tidak lebih baik dari random → perlu ditinjau ulang
+
+Untuk mengevaluasi kualitas keputusan post-open:
+
+```bash
+saham screen confirm-review
+```
+
+Output ini membucket hasil berdasarkan decision, gap, RSI, stop distance,
+ACCUM tag, dan FVWAP. `STOP` dan `TGT1R` memakai OHLC harian sebagai proxy:
+kalau low harian menyentuh stop, dihitung stop-hit; kalau high harian mencapai
+entry + 1R, dihitung target-hit. Urutan intraday yang tepat tetap membutuhkan
+data menit/tick.
 
 ---
 

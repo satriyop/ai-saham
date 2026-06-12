@@ -44,6 +44,7 @@ from src.domain.ports.browser_data_provider import BrowserInteractionRequired
 from src.domain.value_objects.intraday_confirmation import (
     IntradayConfirmation,
     IntradayConfirmationCandidate,
+    IntradayConfirmationJournalEntry,
 )
 from src.domain.value_objects.screener_result import ScreenerCandidate
 from src.infrastructure.browser.stockbit_browser import (
@@ -63,6 +64,7 @@ DEFAULT_STRATEGY_PATH = Path("strategies/pre-open-screener/strategy.yaml")
 DEFAULT_SESSION_FILE = Path("stockbit_session.json")
 DEFAULT_SIDECAR_PATH = Path("journals/.last-session.json")
 DEFAULT_CONFIRMATION_PATH = Path("journals/.last-confirmation.json")
+DEFAULT_CONFIRMATION_JOURNAL_PATH = Path("journals/intraday-confirmations.csv")
 DEFAULT_JOURNAL_PATH = Path("journals/pre-open.csv")
 
 
@@ -420,12 +422,66 @@ def _write_confirmation_sidecar(
                 "stop_loss_price": str(c.stop_loss_price) if c.stop_loss_price else None,
                 "stop_pct": str(c.stop_pct) if c.stop_pct is not None else None,
                 "reasons": list(c.reasons),
+                "iev": c.iev,
+                "trend": c.trend,
+                "rsi": str(c.rsi) if c.rsi is not None else None,
+                "gap_pct": str(c.gap_pct) if c.gap_pct is not None else None,
+                "accum_tag": c.accum_tag,
+                "fvwap_discount_pct": (
+                    str(c.fvwap_discount_pct)
+                    if c.fvwap_discount_pct is not None
+                    else None
+                ),
             }
             for c in confirmations
         ],
     }
     with open(output_path, "w") as f:
         json.dump(data, f, indent=2)
+
+
+def _display_intraday_review(report, journal_path: Path) -> None:
+    typer.echo("")
+    typer.echo("=" * 78)
+    typer.echo("INTRADAY CONFIRMATION REVIEW")
+    typer.echo("=" * 78)
+    typer.echo(f"Journal: {journal_path}")
+    typer.echo(f"Total logged entries : {report.total_entries}")
+    typer.echo(f"Entries with outcome : {report.entries_with_data}")
+
+    if report.total_entries == 0:
+        typer.echo("\nNo confirmation entries logged yet.")
+        typer.echo("=" * 78)
+        return
+
+    def print_bucket_table(title: str, rows) -> None:
+        if not rows:
+            return
+        typer.echo("")
+        typer.echo(title)
+        typer.echo("-" * 78)
+        typer.echo(
+            f"{'BUCKET':<24} {'TOTAL':>6} {'DATA':>6} {'ENTER':>7} "
+            f"{'UP':>5} {'STOP':>6} {'TGT1R':>6} {'AVG_R':>7}"
+        )
+        for row in rows:
+            avg_r = f"{row.avg_close_r:+.2f}" if row.avg_close_r is not None else "-"
+            typer.echo(
+                f"{row.bucket:<24} {row.total:>6} {row.with_data:>6} "
+                f"{row.enter_count:>7} {row.up_count:>5} "
+                f"{row.stop_hit_count:>6} {row.target_1r_hit_count:>6} {avg_r:>7}"
+            )
+
+    print_bucket_table("By decision", report.decision_buckets)
+    for label, rows in report.context_buckets.items():
+        print_bucket_table(f"By {label}", rows)
+
+    typer.echo("")
+    typer.echo(
+        "Note: manual outcomes are used first. Rows without manual outcomes use "
+        "daily OHLC as a proxy; exact intraday sequence requires minute/tick data."
+    )
+    typer.echo("=" * 78)
 
 
 @screen_app.command("pre-open")
@@ -684,6 +740,218 @@ def confirm_open(
         result.confirmed_date,
         result.max_stop_pct,
         output_path,
+    )
+
+
+@screen_app.command("confirm-log")
+def confirm_log(
+    confirmation: Annotated[
+        Optional[Path],
+        typer.Option(
+            "--confirmation",
+            help="Path to confirmation sidecar JSON",
+        ),
+    ] = None,
+    journal: Annotated[
+        Optional[Path],
+        typer.Option(
+            "--journal",
+            help="Path to intraday confirmation CSV journal",
+        ),
+    ] = None,
+) -> None:
+    """
+    Append the latest `confirm-open` result to the intraday confirmation journal.
+
+    The journal is idempotent by (confirmed_at, ticker), so repeated logs for the
+    same confirmation run do not duplicate rows.
+    """
+    from src.infrastructure.persistence.intraday_confirmation_csv import (
+        IntradayConfirmationCsvStore,
+    )
+
+    confirmation_path = confirmation or DEFAULT_CONFIRMATION_PATH
+    journal_path = journal or DEFAULT_CONFIRMATION_JOURNAL_PATH
+
+    if not confirmation_path.exists():
+        typer.echo(
+            f"No confirmation sidecar found at '{confirmation_path}'.\n"
+            "Run `saham screen confirm-open` first.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    with open(confirmation_path) as f:
+        data = json.load(f)
+
+    confirmed_at = date.fromisoformat(data["confirmed_at"])
+    entries = [
+        IntradayConfirmationJournalEntry(
+            confirmed_at=confirmed_at,
+            ticker=row["ticker"],
+            decision=row["decision"],
+            reason_codes=tuple(row.get("reasons", [])),
+            opening_price=_decimal_or_none(row.get("opening_price")),
+            planned_entry=_decimal_or_none(row.get("planned_entry")),
+            stop_loss_price=_decimal_or_none(row.get("stop_loss_price")),
+            stop_pct=_decimal_or_none(row.get("stop_pct")),
+            iev=row.get("iev"),
+            trend=row.get("trend"),
+            rsi=_decimal_or_none(row.get("rsi")),
+            gap_pct=_decimal_or_none(row.get("gap_pct")),
+            accum_tag=row.get("accum_tag"),
+            fvwap_discount_pct=_decimal_or_none(row.get("fvwap_discount_pct")),
+        )
+        for row in data.get("confirmations", [])
+    ]
+
+    store = IntradayConfirmationCsvStore(journal_path)
+    count = store.append(entries)
+    if count == 0:
+        typer.echo(
+            f"Already logged for {confirmed_at} — no new rows added ({journal_path})"
+        )
+    else:
+        typer.echo(f"Logged {count} confirmation(s) for {confirmed_at} → {journal_path}")
+
+
+@screen_app.command("confirm-review")
+def confirm_review(
+    journal: Annotated[
+        Optional[Path],
+        typer.Option(
+            "--journal",
+            help="Path to intraday confirmation CSV journal",
+        ),
+    ] = None,
+    db_path: Annotated[Optional[Path], typer.Option("--db")] = None,
+) -> None:
+    """
+    Review logged intraday confirmation decisions by decision and context buckets.
+
+    Uses local daily candles as an outcome proxy. Exact intraday stop/target
+    sequencing requires finer-grained data and is intentionally out of scope here.
+    """
+    from src.application.services.intraday_confirmation_journal import (
+        IntradayConfirmationJournalService,
+    )
+    from src.infrastructure.persistence.intraday_confirmation_csv import (
+        IntradayConfirmationCsvStore,
+    )
+
+    journal_path = journal or DEFAULT_CONFIRMATION_JOURNAL_PATH
+    resolved_db = db_path or DEFAULT_DB_PATH
+
+    if not journal_path.exists():
+        typer.echo(
+            f"No confirmation journal found at '{journal_path}'.\n"
+            "Run `saham screen confirm-log` after confirming opens first.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    store = IntradayConfirmationCsvStore(journal_path)
+    repository = SQLiteMarketRepository(db_path=resolved_db)
+    service = IntradayConfirmationJournalService(store=store, repository=repository)
+    report = service.review()
+    _display_intraday_review(report, journal_path)
+
+
+@screen_app.command("confirm-outcome")
+def confirm_outcome(
+    ticker: Annotated[str, typer.Argument(help="Ticker to update (e.g. BBCA)")],
+    entry: Annotated[
+        float,
+        typer.Option("--entry", help="Actual executed entry price", min=0.0001),
+    ],
+    exit_price: Annotated[
+        float,
+        typer.Option("--exit", help="Actual executed exit price", min=0.0001),
+    ],
+    result: Annotated[
+        str,
+        typer.Option("--result", help="Outcome label: target, stop, manual, breakeven"),
+    ] = "manual",
+    confirmed_date: Annotated[
+        Optional[str],
+        typer.Option("--date", help="Confirmation date YYYY-MM-DD (default: today)"),
+    ] = None,
+    notes: Annotated[
+        Optional[str],
+        typer.Option("--notes", help="Optional execution notes"),
+    ] = None,
+    journal: Annotated[
+        Optional[Path],
+        typer.Option(
+            "--journal",
+            help="Path to intraday confirmation CSV journal",
+        ),
+    ] = None,
+    db_path: Annotated[Optional[Path], typer.Option("--db")] = None,
+) -> None:
+    """
+    Record actual trade outcome for a logged intraday confirmation.
+
+    This upgrades `confirm-review` from daily OHLC proxy to actual execution data
+    for that ticker/date.
+    """
+    from src.application.services.intraday_confirmation_journal import (
+        IntradayConfirmationJournalService,
+    )
+    from src.infrastructure.persistence.intraday_confirmation_csv import (
+        IntradayConfirmationCsvStore,
+    )
+
+    valid_results = {"target", "stop", "manual", "breakeven"}
+    outcome_result = result.lower()
+    if outcome_result not in valid_results:
+        typer.echo(
+            f"Error: --result must be one of: {', '.join(sorted(valid_results))}",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    journal_path = journal or DEFAULT_CONFIRMATION_JOURNAL_PATH
+    resolved_db = db_path or DEFAULT_DB_PATH
+    if not journal_path.exists():
+        typer.echo(
+            f"No confirmation journal found at '{journal_path}'.\n"
+            "Run `saham screen confirm-log` first.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    try:
+        target_date = (
+            date.fromisoformat(confirmed_date) if confirmed_date else date.today()
+        )
+    except ValueError:
+        typer.echo("Error: --date must use YYYY-MM-DD format.", err=True)
+        raise typer.Exit(1)
+
+    store = IntradayConfirmationCsvStore(journal_path)
+    repository = SQLiteMarketRepository(db_path=resolved_db)
+    service = IntradayConfirmationJournalService(store=store, repository=repository)
+    updated, outcome_r = service.record_outcome(
+        confirmed_at=target_date,
+        ticker=ticker.upper(),
+        actual_entry_price=Decimal(str(entry)),
+        actual_exit_price=Decimal(str(exit_price)),
+        outcome_result=outcome_result,
+        notes=notes,
+    )
+
+    if not updated:
+        typer.echo(
+            f"No logged confirmation found for {ticker.upper()} on {target_date}.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    r_label = f"{outcome_r:+.2f}R" if outcome_r is not None else "N/A"
+    typer.echo(
+        f"Recorded outcome for {ticker.upper()} on {target_date}: "
+        f"{outcome_result} | entry={entry:,.0f} exit={exit_price:,.0f} | R={r_label}"
     )
 
 

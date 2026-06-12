@@ -174,4 +174,10 @@ class ConfirmIntradayOpenUseCase:
             stop_loss_price=candidate.atr_stop,
             stop_pct=stop_pct,
             reasons=reasons,
+            iev=candidate.iev,
+            trend=candidate.trend,
+            rsi=candidate.rsi,
+            gap_pct=candidate.gap_pct,
+            accum_tag=candidate.accum_tag,
+            fvwap_discount_pct=candidate.fvwap_discount_pct,
         )
