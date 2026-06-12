@@ -12,24 +12,33 @@ import os
 import time
 
 from src.domain.ports.headline_classifier import HeadlineClassifierError
-from src.domain.value_objects.sentiment import Sentiment
+from src.domain.value_objects.sentiment import CatalystType, Classification, Sentiment
 
 logger = logging.getLogger("ai_saham.sentiment")
 
 # LLM Configuration
 LLM_TIMEOUT_SECONDS = 10
-LLM_MAX_TOKENS = 50
+LLM_MAX_TOKENS = 60
 
 # System prompt for classification
-SYSTEM_PROMPT = """You are a financial news sentiment classifier for Indonesian stocks.
-Your task is to classify headlines as POSITIVE, NEUTRAL, or NEGATIVE.
+SYSTEM_PROMPT = """You are a financial news sentiment and catalyst classifier for Indonesian stocks.
+Your task is to classify headlines as follows:
 
-Classification guidelines:
-- POSITIVE: Good news about the company (profits up, expansion, strong performance)
-- NEGATIVE: Bad news (losses, decline, regulatory issues, scandals)
-- NEUTRAL: Factual news without clear positive/negative sentiment
+1. Sentiment: POSITIVE, NEUTRAL, or NEGATIVE.
+2. Catalyst: EARNINGS, CORP_ACTION, REGULATORY, MACRO, GOVERNANCE, RUMOR, or GENERAL.
 
-Only respond with exactly one word: POSITIVE, NEUTRAL, or NEGATIVE.
+Classification guidelines for Catalysts:
+- EARNINGS: Quarterly reports, profit projections, dividend news.
+- CORP_ACTION: Stock splits, rights issues, buybacks, mergers, acquisitions.
+- REGULATORY: Government policy, export bans, OJK/IDX mandates, legal cases.
+- MACRO: Interest rates, global markets, commodity prices (Coal, Nickel, etc.).
+- GOVERNANCE: Management changes, scandals, audits, ownership shifts.
+- RUMOR: Unverified news, market gossip, speculative whispers.
+- GENERAL: News that doesn't fit specific categories above.
+
+Only respond in the format: SENTIMENT | CATALYST
+Example: POSITIVE | EARNINGS
+Example: NEGATIVE | RUMOR
 No explanation or additional text."""
 
 # User prompt template
@@ -39,18 +48,15 @@ USER_PROMPT = "Classify this headline: {headline}"
 class AIClassifier:
     """AI-based headline classifier using LLM.
 
-    Optional classifier that provides more nuanced sentiment analysis
-    compared to keyword matching. Falls back to NEUTRAL on any error.
+    Optional classifier that provides nuanced sentiment and catalyst
+    analysis compared to keyword matching. Falls back to NEUTRAL|GENERAL on any error.
 
-    Reuses the existing AI infrastructure (ExplainerFactory) for
-    consistency and rate limiting.
+    Reuses existing AI infrastructure for consistency and rate limiting.
 
     Usage:
-        classifier = AIClassifier()  # Uses default provider
-        classifier = AIClassifier(provider="ollama", model="llama3")
-
-        sentiment = classifier.classify("BBCA laba naik 20%")
-        # Returns Sentiment.POSITIVE
+        classifier = AIClassifier()
+        result = classifier.classify("BBCA laba naik 20%")
+        # Returns Classification(sentiment=Sentiment.POSITIVE, catalyst=CatalystType.EARNINGS)
     """
 
     def __init__(
@@ -61,9 +67,9 @@ class AIClassifier:
         """Initialize AI classifier.
 
         Args:
-            provider: AI provider name (claude, openai, gemini, ollama)
+            provider: AI provider name (deepseek, claude, openai, gemini, ollama)
                      If None, reads from AI_PROVIDER env var.
-            model: Optional model override (mainly for Ollama)
+            model: Optional model override
         """
         self._provider = provider
         self._model = model
@@ -72,36 +78,33 @@ class AIClassifier:
     @property
     def classifier_name(self) -> str:
         """Return classifier identifier."""
-        provider = self._provider or os.getenv("AI_PROVIDER", "claude")
+        provider = self._provider or os.getenv("AI_PROVIDER", "deepseek")
         return f"ai:{provider}"
 
-    def classify(self, headline: str) -> Sentiment:
+    def classify(self, headline: str) -> Classification:
         """Classify headline using AI.
 
         Args:
             headline: The headline text to classify
 
         Returns:
-            Sentiment classification. Returns NEUTRAL on any error.
+            Classification result. Returns NEUTRAL|GENERAL on any error.
         """
         try:
             response = self._call_ai(headline)
             return self._parse_response(response)
         except Exception as e:
-            logger.warning(f"AI classification failed, defaulting to NEUTRAL: {e}")
-            return Sentiment.NEUTRAL
+            logger.warning(f"AI classification failed, defaulting to NEUTRAL|GENERAL: {e}")
+            return Classification(Sentiment.NEUTRAL, CatalystType.GENERAL)
 
-    def classify_batch(self, headlines: list[str]) -> list[Sentiment]:
+    def classify_batch(self, headlines: list[str]) -> list[Classification]:
         """Classify multiple headlines.
-
-        Note: Currently calls classify() for each headline.
-        Could be optimized with batch prompts in the future.
 
         Args:
             headlines: List of headline texts to classify
 
         Returns:
-            List of Sentiment classifications in same order
+            List of Classification results in same order
         """
         return [self.classify(h) for h in headlines]
 
@@ -114,9 +117,11 @@ class AIClassifier:
         if self._client is not None:
             return self._client
 
-        provider = (self._provider or os.getenv("AI_PROVIDER", "claude")).lower()
+        provider = (self._provider or os.getenv("AI_PROVIDER", "deepseek")).lower()
 
-        if provider == "claude":
+        if provider == "deepseek":
+            self._client = self._create_deepseek_client()
+        elif provider == "claude":
             self._client = self._create_claude_client()
         elif provider == "openai":
             self._client = self._create_openai_client()
@@ -128,6 +133,23 @@ class AIClassifier:
             raise HeadlineClassifierError(f"Unsupported AI provider: {provider}")
 
         return self._client
+
+    def _create_deepseek_client(self):
+        """Create DeepSeek client (using OpenAI SDK)."""
+        try:
+            import openai
+
+            api_key = os.getenv("DEEPSEEK_API_KEY")
+            if not api_key:
+                raise HeadlineClassifierError("DEEPSEEK_API_KEY not set")
+            # DeepSeek uses OpenAI-compatible API
+            return openai.OpenAI(
+                api_key=api_key,
+                base_url="https://api.deepseek.com",
+                timeout=LLM_TIMEOUT_SECONDS
+            )
+        except ImportError:
+            raise HeadlineClassifierError("openai package not installed (required for DeepSeek)")
 
     def _create_claude_client(self):
         """Create Claude client."""
@@ -192,7 +214,7 @@ class AIClassifier:
         headline = headline[:500]
         user_prompt = USER_PROMPT.format(headline=headline)
 
-        provider = (self._provider or os.getenv("AI_PROVIDER", "claude")).lower()
+        provider = (self._provider or os.getenv("AI_PROVIDER", "deepseek")).lower()
 
         start_time = time.time()
         logger.debug(f"AI classify request: provider={provider}")
@@ -200,7 +222,9 @@ class AIClassifier:
         try:
             client = self._get_client()
 
-            if provider == "claude":
+            if provider == "deepseek":
+                response = self._call_deepseek(client, user_prompt)
+            elif provider == "claude":
                 response = self._call_claude(client, user_prompt)
             elif provider == "openai":
                 response = self._call_openai(client, user_prompt)
@@ -220,6 +244,18 @@ class AIClassifier:
             elapsed_ms = int((time.time() - start_time) * 1000)
             logger.warning(f"AI classify error after {elapsed_ms}ms: {e}")
             raise
+
+    def _call_deepseek(self, client, user_prompt: str) -> str:
+        """Call DeepSeek API."""
+        response = client.chat.completions.create(
+            model=self._model or "deepseek-chat",  # Default model
+            max_tokens=LLM_MAX_TOKENS,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ],
+        )
+        return response.choices[0].message.content or ""
 
     def _call_claude(self, client, user_prompt: str) -> str:
         """Call Claude API."""
@@ -262,20 +298,29 @@ class AIClassifier:
         )
         return response["message"]["content"]
 
-    def _parse_response(self, response: str) -> Sentiment:
-        """Parse AI response to Sentiment.
+    def _parse_response(self, response: str) -> Classification:
+        """Parse AI response to Classification.
 
         Args:
-            response: Raw AI response text
+            response: Raw AI response text (expected: SENTIMENT | CATALYST)
 
         Returns:
-            Parsed Sentiment (defaults to NEUTRAL on ambiguous response)
+            Parsed Classification (defaults to NEUTRAL|GENERAL on ambiguity)
         """
         response = response.strip().upper()
 
+        sentiment = Sentiment.NEUTRAL
         if "POSITIVE" in response:
-            return Sentiment.POSITIVE
+            sentiment = Sentiment.POSITIVE
         elif "NEGATIVE" in response:
-            return Sentiment.NEGATIVE
-        else:
-            return Sentiment.NEUTRAL
+            sentiment = Sentiment.NEGATIVE
+
+        catalyst = CatalystType.GENERAL
+        if "|" in response:
+            cat_part = response.split("|")[1].strip()
+            for ct in CatalystType:
+                if ct.name in cat_part:
+                    catalyst = ct
+                    break
+
+        return Classification(sentiment=sentiment, catalyst=catalyst)

@@ -9,7 +9,7 @@ Layer: Domain
 
 from typing import Protocol
 
-from src.domain.value_objects.sentiment import Sentiment
+from src.domain.value_objects.sentiment import Classification
 
 
 class HeadlineClassifierError(Exception):
@@ -31,18 +31,18 @@ class HeadlineClassifier(Protocol):
         """Return the classifier identifier."""
         ...
 
-    def classify(self, headline: str) -> Sentiment:
+    def classify(self, headline: str) -> Classification:
         """Classify a single headline.
 
         Args:
             headline: The headline text to classify
 
         Returns:
-            Sentiment classification (POSITIVE, NEUTRAL, or NEGATIVE)
+            Classification result containing sentiment and catalyst
         """
         ...
 
-    def classify_batch(self, headlines: list[str]) -> list[Sentiment]:
+    def classify_batch(self, headlines: list[str]) -> list[Classification]:
         """Classify multiple headlines.
 
         Default implementation calls classify() for each headline.
@@ -52,6 +52,6 @@ class HeadlineClassifier(Protocol):
             headlines: List of headline texts to classify
 
         Returns:
-            List of Sentiment classifications in same order as input
+            List of Classification results in same order as input
         """
         ...

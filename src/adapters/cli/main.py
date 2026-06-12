@@ -1134,7 +1134,7 @@ def risk(
         if with_sentiment:
             try:
                 news_provider = SentimentFactory.create_news_provider()
-                classifier = SentimentFactory.create_classifier(use_ai=False)
+                classifier = SentimentFactory.create_classifier(use_ai=True)
                 sentiment_use_case = FetchSentimentUseCase(
                     news_provider=news_provider,
                     classifier=classifier,

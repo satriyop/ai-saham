@@ -1,0 +1,39 @@
+# IDX Conglomerate and Group Mappings
+# Used for sentiment propagation across related tickers.
+
+groups:
+  BUMN:
+    name: "Badan Usaha Milik Negara"
+    tickers: [BBRI, BMRI, BBNI, TLKM, ASII, PGAS, ANTM, TINS, PTBA, JSMR, WIKA, ADHI, PTPP]
+
+  BARITO:
+    name: "Barito Pacific Group"
+    tickers: [BRPT, BREN, TPIA, PTRO, CUAN]
+
+  ASTRA:
+    name: "Astra International Group"
+    tickers: [ASII, UNTR, ASGR, ASLI]
+
+  SALIM:
+    name: "Salim Group"
+    tickers: [ICBP, INDF, LSIP, DNET]
+
+  SINARMAS:
+    name: "Sinar Mas Group"
+    tickers: [INKP, TKIM, BSDE, SMMA, SMAR]
+
+  LIPPO:
+    name: "Lippo Group"
+    tickers: [LPKR, LPKP, MLPL, MPPA]
+
+  ADARO:
+    name: "Adaro Group"
+    tickers: [ADRO, ADMR]
+
+  MNI:
+    name: "MNC Group"
+    tickers: [MNCN, BMTR, MSIN, BHIT]
+
+  CT_CORP:
+    name: "CT Corp"
+    tickers: [MEGA, ALLO]

@@ -20,18 +20,39 @@ class Sentiment(Enum):
     NEGATIVE = "negative"
 
 
+class CatalystType(Enum):
+    """Category of the news catalyst."""
+
+    EARNINGS = "earnings"
+    CORP_ACTION = "corp_action"
+    REGULATORY = "regulatory"
+    MACRO = "macro"
+    GOVERNANCE = "governance"
+    RUMOR = "rumor"
+    GENERAL = "general"
+
+
+@dataclass(frozen=True)
+class Classification:
+    """Combined sentiment and catalyst classification."""
+
+    sentiment: Sentiment
+    catalyst: CatalystType
+
+
 @dataclass(frozen=True)
 class HeadlineResult:
     """Single classified headline.
 
     Immutable value object representing a news headline with its
-    sentiment classification.
+    sentiment and catalyst classification.
     """
 
     title: str
     source: str
     published: datetime
     sentiment: Sentiment
+    catalyst: CatalystType = CatalystType.GENERAL
     url: str = ""
 
     def __post_init__(self) -> None:

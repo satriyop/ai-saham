@@ -9,11 +9,14 @@ Layer: Application
 
 from dataclasses import dataclass
 from datetime import date
-from typing import ClassVar
+from typing import ClassVar, Optional
 
+from src.application.services.group_mapping import GroupMappingService
 from src.domain.ports.headline_classifier import HeadlineClassifier
 from src.domain.ports.news_provider import NewsProvider
+from src.domain.ports.sentiment_repository import SentimentLog, SentimentRepository
 from src.domain.value_objects.sentiment import (
+    CatalystType,
     HeadlineResult,
     SentimentSnapshot,
 )
@@ -95,15 +98,21 @@ class FetchSentimentUseCase:
         self,
         news_provider: NewsProvider,
         classifier: HeadlineClassifier,
+        group_service: Optional[GroupMappingService] = None,
+        sentiment_repo: Optional[SentimentRepository] = None,
     ):
         """Initialize use case with dependencies.
 
         Args:
             news_provider: News provider implementation
             classifier: Headline classifier implementation
+            group_service: Optional service for group propagation
+            sentiment_repo: Optional repository for persisting sentiment logs
         """
         self._news_provider = news_provider
         self._classifier = classifier
+        self._group_service = group_service
+        self._sentiment_repo = sentiment_repo
 
     def execute(self, request: FetchSentimentRequest) -> FetchSentimentResponse:
         """Fetch and classify news headlines for a ticker.
@@ -129,12 +138,26 @@ class FetchSentimentUseCase:
                 from_cache=True,
             )
 
-        # Fetch headlines from provider
+        # Fetch headlines from provider for ticker
         raw_headlines = self._news_provider.fetch_headlines(
             ticker=ticker,
             max_headlines=request.max_headlines,
             days=request.days,
         )
+
+        # Optional Phase 2: Group Propagation
+        if self._group_service:
+            group_id = self._group_service.get_group_id(ticker)
+            if group_id:
+                group_info = self._group_service.get_group_info(group_id)
+                if group_info:
+                    # Fetch top news for the group name
+                    group_headlines = self._news_provider.fetch_headlines(
+                        ticker=group_info["name"],
+                        max_headlines=5,  # Fewer headlines for group context
+                        days=request.days,
+                    )
+                    raw_headlines.extend(group_headlines)
 
         # Handle no news found
         if not raw_headlines:
@@ -149,7 +172,7 @@ class FetchSentimentUseCase:
             )
 
         # Classify headlines
-        sentiments = self._classifier.classify_batch([h.title for h in raw_headlines])
+        classifications = self._classifier.classify_batch([h.title for h in raw_headlines])
 
         # Build classified results
         results = [
@@ -157,14 +180,35 @@ class FetchSentimentUseCase:
                 title=raw.title,
                 source=raw.source,
                 published=raw.published,
-                sentiment=sentiment,
+                sentiment=c.sentiment,
+                catalyst=c.catalyst,
                 url=raw.url,
             )
-            for raw, sentiment in zip(raw_headlines, sentiments)
+            for raw, c in zip(raw_headlines, classifications)
         ]
 
         # Create snapshot with majority vote aggregation
         snapshot = SentimentSnapshot.from_headlines(ticker, results)
+
+        # Optional Phase 3: Persist Log for Auditing
+        if self._sentiment_repo:
+            try:
+                # Determine primary catalyst by majority
+                cat_counts = {}
+                for r in results:
+                    cat_counts[r.catalyst] = cat_counts.get(r.catalyst, 0) + 1
+                primary_catalyst = max(cat_counts, key=cat_counts.get) if cat_counts else CatalystType.GENERAL
+
+                self._sentiment_repo.save_log(SentimentLog(
+                    id=None,
+                    date=today,
+                    ticker=ticker,
+                    sentiment=snapshot.overall_sentiment,
+                    catalyst=primary_catalyst,
+                    score=float(snapshot.confidence_pct) / 100.0
+                ))
+            except Exception:
+                pass  # Logging is secondary to the immediate result
 
         # Cache result for this session
         self._cache[cache_key] = snapshot

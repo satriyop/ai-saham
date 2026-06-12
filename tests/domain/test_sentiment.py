@@ -15,6 +15,7 @@ from datetime import date, datetime
 import pytest
 
 from src.domain.value_objects.sentiment import (
+    CatalystType,
     HeadlineResult,
     Sentiment,
     SentimentSnapshot,
@@ -37,6 +38,16 @@ class TestSentimentEnum:
         assert Sentiment("negative") == Sentiment.NEGATIVE
 
 
+class TestCatalystTypeEnum:
+    """Test CatalystType enumeration."""
+
+    def test_catalyst_values(self):
+        """CatalystType enum should have correct values."""
+        assert CatalystType.EARNINGS.value == "earnings"
+        assert CatalystType.RUMOR.value == "rumor"
+        assert CatalystType.GENERAL.value == "general"
+
+
 class TestHeadlineResult:
     """Test HeadlineResult value object."""
 
@@ -48,6 +59,7 @@ class TestHeadlineResult:
             source="Kontan",
             published=now,
             sentiment=Sentiment.POSITIVE,
+            catalyst=CatalystType.EARNINGS,
             url="https://example.com/news",
         )
 
@@ -55,7 +67,18 @@ class TestHeadlineResult:
         assert headline.source == "Kontan"
         assert headline.published == now
         assert headline.sentiment == Sentiment.POSITIVE
+        assert headline.catalyst == CatalystType.EARNINGS
         assert headline.url == "https://example.com/news"
+
+    def test_headline_defaults_to_general_catalyst(self):
+        """HeadlineResult should default to GENERAL catalyst."""
+        headline = HeadlineResult(
+            title="Test",
+            source="Test Source",
+            published=datetime.now(),
+            sentiment=Sentiment.NEUTRAL,
+        )
+        assert headline.catalyst == CatalystType.GENERAL
 
     def test_headline_is_immutable(self):
         """HeadlineResult should be immutable (frozen dataclass)."""
@@ -232,6 +255,7 @@ class TestSentimentSnapshotFromHeadlines:
             source="Test Source",
             published=datetime.now(),
             sentiment=sentiment,
+            catalyst=CatalystType.GENERAL,
         )
 
     def test_from_headlines_majority_positive(self):
@@ -327,6 +351,7 @@ class TestMajorityVoteEdgeCases:
             source="Test Source",
             published=datetime.now(),
             sentiment=sentiment,
+            catalyst=CatalystType.GENERAL,
         )
 
     def test_positive_wins_over_neutral_tie_with_negative(self):

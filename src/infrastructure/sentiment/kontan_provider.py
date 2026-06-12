@@ -21,7 +21,7 @@ from src.domain.ports.news_provider import RawHeadline
 
 logger = logging.getLogger("ai_saham.sentiment")
 
-KONTAN_RSS_URL = "https://www.kontan.co.id/rss/news"
+KONTAN_RSS_URL = "https://investasi.kontan.co.id/rss"
 DEFAULT_TIMEOUT = 10
 MAX_TITLE_LENGTH = 500
 USER_AGENT = (

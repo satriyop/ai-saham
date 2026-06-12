@@ -9,7 +9,7 @@ Layer: Infrastructure
 
 import re
 
-from src.domain.value_objects.sentiment import Sentiment
+from src.domain.value_objects.sentiment import CatalystType, Classification, Sentiment
 
 # Indonesian + English keywords (case-insensitive)
 POSITIVE_KEYWORDS = [
@@ -128,7 +128,7 @@ class KeywordClassifier:
         """Return classifier identifier."""
         return "keyword"
 
-    def classify(self, headline: str) -> Sentiment:
+    def classify(self, headline: str) -> Classification:
         """Classify headline using keyword matching.
 
         Algorithm:
@@ -140,7 +140,7 @@ class KeywordClassifier:
             headline: The headline text to classify
 
         Returns:
-            Sentiment classification
+            Classification result containing sentiment and catalyst
         """
         # Normalize: lowercase, extract words using word boundaries
         words = frozenset(re.findall(r"\b\w+\b", headline.lower()))
@@ -148,20 +148,21 @@ class KeywordClassifier:
         positive_matches = len(words & self._positive)
         negative_matches = len(words & self._negative)
 
+        sentiment = Sentiment.NEUTRAL
         if positive_matches > negative_matches:
-            return Sentiment.POSITIVE
+            sentiment = Sentiment.POSITIVE
         elif negative_matches > positive_matches:
-            return Sentiment.NEGATIVE
-        else:
-            return Sentiment.NEUTRAL
+            sentiment = Sentiment.NEGATIVE
 
-    def classify_batch(self, headlines: list[str]) -> list[Sentiment]:
+        return Classification(sentiment=sentiment, catalyst=CatalystType.GENERAL)
+
+    def classify_batch(self, headlines: list[str]) -> list[Classification]:
         """Classify multiple headlines.
 
         Args:
             headlines: List of headline texts to classify
 
         Returns:
-            List of Sentiment classifications in same order
+            List of Classification results in same order
         """
         return [self.classify(h) for h in headlines]

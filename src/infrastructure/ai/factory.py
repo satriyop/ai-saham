@@ -18,8 +18,8 @@ from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 from src.domain.value_objects.risk_assessment import RiskAssessment
 
 # Supported providers
-SUPPORTED_PROVIDERS = ("claude", "openai", "gemini", "ollama", "mock")
-DEFAULT_PROVIDER = "claude"
+SUPPORTED_PROVIDERS = ("deepseek", "claude", "openai", "gemini", "ollama", "mock")
+DEFAULT_PROVIDER = "deepseek"
 DEFAULT_RATE_LIMIT = 10  # calls per minute
 
 
@@ -137,7 +137,12 @@ class ExplainerFactory:
         Returns:
             AIExplainer instance
         """
-        if provider == "claude":
+        if provider == "deepseek":
+            from src.infrastructure.ai.deepseek_explainer import DeepSeekExplainer
+
+            return DeepSeekExplainer()
+
+        elif provider == "claude":
             from src.infrastructure.ai.claude_explainer import ClaudeExplainer
 
             return ClaudeExplainer()
