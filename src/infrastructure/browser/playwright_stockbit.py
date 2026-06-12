@@ -641,7 +641,8 @@ def spy_stockbit_session(
 
         try:
             page.goto(url, timeout=NAV_TIMEOUT, wait_until="domcontentloaded")
-            page.wait_for_load_state("networkidle", timeout=NAV_TIMEOUT)
+            # Don't wait for networkidle — SPA pages never fully settle.
+            # Just wait a fixed duration for API calls to fire.
             page.wait_for_timeout(settle_ms)
         except KeyboardInterrupt:
             pass
