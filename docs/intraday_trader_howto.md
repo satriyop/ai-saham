@@ -8,15 +8,17 @@
 1. [Apa itu Intraday Trading?](#1-apa-itu-intraday-trading)
 2. [Jam Bursa IDX yang Wajib Kamu Tahu](#2-jam-bursa-idx-yang-wajib-kamu-tahu)
 3. [Konsep Penting Sebelum Mulai](#3-konsep-penting-sebelum-mulai)
-4. [Cara Kerja Pre-Open Screener](#4-cara-kerja-pre-open-screener)
-5. [Memahami Setiap Indikator](#5-memahami-setiap-indikator)
+4. [Cara Kerja — Full Workflow](#4-cara-kerja--full-workflow)
+5. [Memahami Setiap Indikator dan Sinyal](#5-memahami-setiap-indikator-dan-sinyal)
 6. [Workflow Harian Step-by-Step](#6-workflow-harian-step-by-step)
-7. [Membaca Output Screener](#7-membaca-output-screener)
-8. [Kapan Harus Masuk, Kapan Harus Lewat](#8-kapan-harus-masuk-kapan-harus-lewat)
-9. [Manajemen Risiko](#9-manajemen-risiko)
-10. [Paper Trade Journal — Validasi Sebelum Uang Sungguhan](#10-paper-trade-journal)
-11. [Kesalahan Umum Pemula](#11-kesalahan-umum-pemula)
-12. [Glosarium](#12-glosarium)
+7. [Membaca Output Pre-Open](#7-membaca-output-pre-open)
+8. [Membaca Output Confirm-Open](#8-membaca-output-confirm-open)
+9. [Kapan Harus Masuk, Kapan Harus Lewat](#9-kapan-harus-masuk-kapan-harus-lewat)
+10. [Manajemen Risiko](#10-manajemen-risiko)
+11. [Journal — Validasi Sebelum Uang Sungguhan](#11-journal--validasi-sebelum-uang-sungguhan)
+12. [Catatan tentang Stockbit Adapter](#12-catatan-tentang-stockbit-adapter)
+13. [Kesalahan Umum Pemula](#13-kesalahan-umum-pemula)
+14. [Glosarium](#14-glosarium)
 
 ---
 
@@ -34,15 +36,16 @@ Intraday trading berarti kamu membuka dan menutup posisi di **hari yang sama**. 
 - Biaya transaksi (komisi + pajak) memakan margin lebih besar secara proporsional
 - Psikologi lebih berat — harga bergerak setiap detik
 
-**Tool ini membantu kamu dengan:** identifikasi kandidat sebelum pasar buka, menentukan di harga berapa masuk, dan di harga berapa keluar rugi. Tool ini **tidak** mengeksekusi order — kamu tetap yang memutuskan.
+**Tool ini membantu kamu dengan:** identifikasi kandidat sebelum pasar buka, menentukan entry range yang valid, dan di harga berapa keluar rugi. Tool ini **tidak** mengeksekusi order — kamu tetap yang memutuskan.
 
 ---
 
 ## 2. Jam Bursa IDX yang Wajib Kamu Tahu
 
 ```
-08:45 – 09:00  PRE-OPEN AUCTION       ← Kamu bekerja di sini
-09:00          PASAR BUKA (Regular Market)
+08:45 – 09:00  PRE-OPEN AUCTION       ← saham intraday pre-open dijalankan di sini
+09:00          PASAR BUKA
+09:00 – 09:05  OPENING WINDOW         ← saham intraday confirm-open dijalankan di sini
 09:00 – 11:30  SESI 1
 11:30 – 13:30  ISTIRAHAT (Jumat: 11:30 – 14:00)
 13:30 – 15:49  SESI 2
@@ -50,16 +53,28 @@ Intraday trading berarti kamu membuka dan menutup posisi di **hari yang sama**. 
 16:00          HARGA PENUTUPAN RESMI
 ```
 
+### Mengapa Ada Dua Step?
+
+Tool ini membagi keputusan menjadi dua fase:
+
+**Phase 1 — Pre-open (08:45–09:00): `saham intraday pre-open`**
+Identifikasi KANDIDAT berdasarkan IEV, ATR, RSI, ACCUM, dan FVWAP.
+Output: entry range, suggested limit, ATR stop, dan sinyal arah per saham.
+Kamu belum memutuskan masuk — kamu hanya menyiapkan daftar pantau.
+
+**Phase 2 — Post-open (09:00–09:05): `saham intraday confirm-open`**
+Setelah pasar buka dan opening price diketahui, kamu memasukkan harga pembukaan aktual.
+Tool memberikan keputusan deterministik: **ENTER / WAIT / SKIP** per saham.
+Ini yang membuat kamu tidak perlu menghitung ulang manual di saat paling kritis.
+
 ### Memahami Pre-Open Auction (08:45–09:00)
 
-Ini bagian **paling penting** untuk intraday trader.
+Selama 15 menit ini, investor memasukkan order beli/jual tapi **tidak ada matching**. Bursa mengumpulkan semua order. Pada tepat 09:00, sistem menemukan satu harga yang memaksimalkan volume yang bisa dieksekusi — inilah opening price.
 
-Selama 15 menit ini, investor memasukkan order beli/jual tapi **tidak ada matching yang terjadi**. Bursa hanya mengumpulkan semua order. Pada tepat 09:00, sistem menemukan satu harga yang memaksimalkan volume yang bisa dieksekusi — inilah harga pembukaan (opening price).
-
-**Implikasinya untuk kamu:**
-- Kamu tidak bisa "lihat bid terbaik lalu masuk 1 tick di atas" — bid yang kamu lihat pukul 08:52 belum tentu menjadi opening price
-- Opening price bisa lebih tinggi ATAU lebih rendah dari bid manapun yang terlihat sebelum 09:00
-- Strategi yang tepat: identifikasi kandidat saham dulu, lalu setelah 09:00 dan opening price diketahui, baru putuskan masuk atau tidak
+**Implikasinya:**
+- Bid yang kamu lihat pukul 08:52 belum tentu menjadi opening price
+- Opening price bisa lebih tinggi ATAU lebih rendah dari bid manapun sebelum 09:00
+- Strategi yang benar: siapkan kandidat + entry range dulu, putuskan setelah opening price diketahui
 
 ---
 
@@ -70,680 +85,712 @@ Selama 15 menit ini, investor memasukkan order beli/jual tapi **tidak ada matchi
 IEV adalah estimasi volume (dalam lot) yang akan ditransaksikan saat opening, dihitung dari order-order yang masuk selama pre-open auction.
 
 **Cara membacanya:**
-- IEV tinggi = banyak pihak (institusi + ritel) yang sudah antri order → saham ini akan ramai diperdagangkan
+- IEV tinggi = banyak pihak yang sudah antri order → saham ramai, likuid
 - IEV rendah = sedikit minat → spread lebar, susah keluar kalau salah arah
 
-**Contoh nyata:**
 ```
-BBCA  IEV: 450,000 lots  ← banyak order, likuid
+BBCA  IEV: 450,000 lots  ← banyak order, likuid, kandidat intraday
 ABCD  IEV:   8,000 lots  ← sepi, hindari untuk intraday
 ```
 
-**Threshold default tool ini: IEV ≥ 100,000 lots.** Artinya hanya saham dengan aktivitas pre-open yang signifikan yang masuk daftar.
+**Threshold default: IEV ≥ 100,000 lots.**
 
-**Peringatan:** IEV tinggi tidak berarti harga pasti naik. Ia hanya mengatakan saham ini akan aktif dan punya likuiditas — syarat *minimal* untuk intraday, bukan sinyal arah.
+**Peringatan:** IEV tinggi tidak berarti harga pasti naik. Ia hanya mengatakan saham ini akan aktif — syarat *minimal* untuk intraday, bukan sinyal arah.
 
-### Mengapa Liquiditas Penting untuk Intraday?
+### Mengapa Liquidity Penting?
 
-Bayangkan kamu beli 10 lot ABCD tapi ternyata salah arah dan ingin jual. Kalau bid-nya tipis (sedikit pembeli), kamu bisa terjebak di harga yang jauh lebih rendah dari yang kamu inginkan. Saham dengan IEV tinggi punya banyak pembeli dan penjual aktif — kamu bisa masuk dan keluar mendekati harga yang kamu inginkan.
-
----
-
-## 4. Cara Kerja Pre-Open Screener
-
-Tool ini mengerjakan hal berikut secara otomatis:
-
-```
-1. Ambil daftar saham dengan IEV tertinggi dari Stockbit (pre-open)
-2. Ambil top 5 (default) berdasarkan IEV
-3. Untuk setiap saham:
-   a. Hitung ATR(14) — ukuran volatilitas harian normal
-   b. Hitung RSI(14) — apakah saham sudah overbought?
-   c. Ambil harga penutupan kemarin (prev_close)
-   d. Hitung entry range: prev_close ± 3%
-   e. Hitung stop-loss berdasarkan ATR
-   f. Kalau tersedia: cek gap% dari pre-open bid vs prev_close
-4. Tampilkan hasil + prev High/Low sebagai referensi S/R
-```
-
-**Mengapa menggunakan prev_close sebagai acuan, bukan bid pre-open?**
-
-Karena pre-open bid berubah terus selama 08:45–09:00 dan tidak mencerminkan clearing price. Prev_close adalah harga terakhir yang disepakati pasar — ini titik referensi yang stabil dan objektif.
+Kamu beli 10 lot lalu ternyata salah arah. Kalau bid-nya tipis, kamu terjebak di harga jauh lebih rendah dari yang kamu inginkan. IEV tinggi = banyak pembeli dan penjual aktif = kamu bisa keluar mendekati harga yang kamu mau.
 
 ---
 
-## 5. Memahami Setiap Indikator
+## 4. Cara Kerja — Full Workflow
+
+### Fase 1: Pre-Open Screener
+
+```
+INPUT: Movers dari Stockbit (IEV data) + Order Book (opsional)
+       ↓
+1. Filter IEV >= 100,000 — ambil top 5 (default)
+2. Per saham:
+   a. ATR(14) dari data harian lokal
+   b. RSI(14) dari data harian lokal
+   c. Entry range: prev_close ± ATR% (bukan fixed 3%)
+   d. ATR Stop: entry - 1×ATR, capped -7%
+   e. Gap%: (bid - prev_close) / prev_close (jika order book tersedia)
+   f. ACCUM (baru): cek 7 hari broker flow → BACKED/UNCONFIRMED/DISTRIBUTING
+   g. FVWAP (baru): Foreign VWAP vs current price → floor/sell risk
+3. Trend: RSI gate + gap% gate + ACCUM context
+OUTPUT: Daftar kandidat dengan entry range, stop, dan sinyal arah
+```
+
+### Fase 2: Open Confirmation (setelah 09:00)
+
+```
+INPUT: Hasil pre-open + opening prices aktual dari Stockbit
+       ↓
+1. Per kandidat: apakah opening price dalam entry range?
+2. Apakah trend bukan BEARISH?
+3. Apakah ACCUM bukan DISTRIBUTING?
+4. Apakah ATR stop tidak lebih dari 7% dari opening?
+5. ENTER (BULLISH + semua gate pass)
+   WAIT (NEUTRAL + range pass)
+   SKIP_GAP_UP/DOWN (di luar range)
+   SKIP_BEARISH_CONTEXT (trend/ACCUM buruk)
+   SKIP_RISK_TOO_WIDE (stop terlalu jauh)
+OUTPUT: Keputusan deterministik per saham dengan alasan
+```
+
+**Mengapa prev_close sebagai acuan, bukan bid?**
+
+Karena pre-open bid berubah terus dan tidak mencerminkan clearing price. Prev_close adalah harga terakhir yang disepakati pasar — referensi stabil dan objektif.
+
+---
+
+## 5. Memahami Setiap Indikator dan Sinyal
 
 ### 5.1 ATR — Average True Range
 
-**Apa itu:** ATR mengukur seberapa jauh rata-rata harga bergerak per hari, dengan mempertimbangkan gap antar sesi. Dihitung dari 14 hari terakhir.
+**Apa itu:** ATR mengukur seberapa jauh rata-rata harga bergerak per hari. Dihitung dari 14 hari terakhir.
 
-**Rumusnya (versi sederhana):**
 ```
 True Range = max(High-Low, |High-PrevClose|, |Low-PrevClose|)
 ATR(14)    = rata-rata bergerak dari 14 True Range terakhir
 ```
 
-**Contoh konkret:**
-```
-BBCA close kemarin: 9,000
-BBCA ATR(14): 150
+**Dua kegunaan ATR dalam tool ini:**
 
-Artinya: dalam 14 hari terakhir, BBCA rata-rata bergerak 150 poin per hari
-(naik 150 atau turun 150 dari high ke low, secara rata-rata)
+**1. Untuk stop-loss:**
 ```
+Stop = entry - (1.0 × ATR), tidak lebih dari -7% entry
 
-**Bagaimana tool ini menggunakannya:**
-```
-Stop-loss = entry_price - (1.0 × ATR)
-         = 9,050 - (1.0 × 150)
-         = 8,900
-
-Kalau ATR menghasilkan stop yang terlalu jauh (> 7% dari entry),
-tool ini otomatis memotong di batas 7%.
+BBCA entry 9,050 | ATR 150 → stop = 8,900 (-1.7%)  ✓
+GOTO entry   240 | ATR   8 → stop = 232   (-3.3%)  ✓
 ```
 
-**Mengapa ATR lebih baik dari stop tetap 20%?**
+**2. Untuk entry range (baru — ATR-scaled):**
+```
+Entry Range = prev_close ± (ATR / prev_close), capped [1%, 5%]
 
-Setiap saham punya "karakter" volatilitas berbeda:
-- BBCA: ATR ~150 poin → intraday wajar bergerak 100-200 poin
-- GOTO: ATR ~8 poin → intraday wajar bergerak 5-15 poin
+BBCA prev_close 5,000 | ATR 280 → band = 5.6% → capped 5%
+  → Entry Range: 4,750 – 5,250
 
-Stop 20% untuk BBCA = 1,800 poin — jauh sekali, tidak masuk akal untuk intraday. Stop berbasis ATR menyesuaikan dengan karakter masing-masing saham.
+GOTO prev_close   235 | ATR   8 → band = 3.4% → tidak di-cap
+  → Entry Range: 227 – 243
+```
 
-**Apa yang perlu diwaspadai:**
-- ATR dihitung dari data HARIAN, bukan menit. Ini masih kasar untuk intraday — tapi jauh lebih baik dari stop tetap
-- Saat saham baru habis corporate action (stock split, rights issue), ATR lama tidak relevan
-- Kalau ATR sangat kecil (< 0.5% dari harga), saham mungkin sedang konsolidasi ketat — bisa breakout besar
+**Mengapa ATR-scaled lebih baik dari fixed ±3%:**
+- BBCA dengan ATR 5.6% dari harga: ±3% terlalu sempit, banyak false rejection
+- Saham berbeda punya karakter volatilitas berbeda
+- ATR mencerminkan volatilitas *aktual* saham tersebut, bukan asumsi generik
+
+**Yang perlu diwaspadai:**
+- ATR dari data HARIAN — masih kasar untuk intraday, tapi jauh lebih baik dari stop tetap
+- Setelah corporate action (split, rights issue), ATR lama tidak relevan
+- ATR sangat kecil (< 1% harga) → saham sedang konsolidasi ketat, bisa breakout besar
 
 ---
 
 ### 5.2 RSI — Relative Strength Index
 
-**Apa itu:** RSI mengukur kecepatan dan besarnya perubahan harga dalam 14 hari terakhir. Nilainya antara 0–100.
+**Apa itu:** RSI mengukur kecepatan dan besarnya perubahan harga dalam 14 hari terakhir. Nilai 0–100.
 
-**Cara membaca RSI:**
 ```
-RSI > 75   : OVERBOUGHT — saham sudah naik terlalu cepat, risiko koreksi tinggi
-RSI 65–75  : Panas, tapi belum ekstrem — waspada
-RSI 30–65  : Zona ideal untuk long intraday (ada ruang naik)
-RSI 25–30  : OVERSOLD — saham turun terlalu cepat, potensi rebound
-RSI < 25   : Sangat oversold — tapi bisa terus turun (jangan catch the knife)
+RSI > 75   : OVERBOUGHT → tool tandai BEARISH, skip long
+RSI 65–75  : Panas, waspada
+RSI 30–65  : Zona ideal untuk long intraday
+RSI < 30   : OVERSOLD → potensi rebound, tapi bisa terus turun
 ```
 
-**Mengapa tool ini menggunakan RSI > 75 sebagai gate BEARISH:**
-
-Kalau kamu masuk long di saham dengan RSI 85, artinya saham ini sudah naik signifikan 14 hari terakhir. Peluang saham bisa naik lagi hari ini masih ada, tapi odds-nya tidak menguntungkan — terlalu banyak profit-taker yang menunggu.
+**Bagaimana digunakan:**
+- RSI > 75 = gate BEARISH — kandidat di-skip untuk long
+- RSI 30–65 + gap kecil = sinyal BULLISH
+- Di fast mode (tanpa order book), RSI + SMA digunakan sebagai fallback classifier
 
 **Peringatan penting:**
-- RSI dihitung dari data HARIAN 14 hari — ini memberikan konteks tren, bukan sinyal masuk intraday
-- RSI 40 bukan berarti "pasti naik hari ini" — hanya berarti ruang naik lebih terbuka dibanding RSI 80
-- Saham dengan RSI sangat rendah (< 25) bisa dalam downtrend kuat — jangan masuk hanya karena "murah"
-
-**Contoh penggunaan:**
-```
-BBRI RSI: 52 → Zona ideal, lanjut evaluasi
-TLKM RSI: 79 → Overbought, tool tandai BEARISH, lewati
-
-BBCA RSI: 38, IEV tinggi → Menarik: likuid + ada ruang naik
-```
+- RSI dari data 14 hari terakhir — memberikan *konteks tren*, bukan sinyal masuk
+- RSI 40 ≠ "pasti naik hari ini" — hanya berarti ruang naik lebih terbuka dibanding RSI 80
+- Saham RSI sangat rendah (< 25) bisa dalam downtrend kuat — jangan FOMO beli
 
 ---
 
 ### 5.3 Gap% — Kesenjangan Harga Pre-Open
 
-**Apa itu:** Gap% mengukur seberapa jauh harga pre-open (dari order book Stockbit) menyimpang dari harga penutupan kemarin.
+**Apa itu:** Selisih antara harga pre-open bid dan harga penutupan kemarin.
 
-**Rumus:**
 ```
-Gap% = (harga_pre_open_bid - prev_close) / prev_close × 100
+Gap% = (bid_pre_open - prev_close) / prev_close × 100
 ```
+
+Hanya tersedia kalau kamu menyediakan data order book (`--order-books-json`). Di `--fast` mode, Gap% ditampilkan sebagai `—`.
 
 **Cara membaca:**
 ```
-Gap% = +0.5%  : Buka sedikit di atas kemarin — normal, aman
-Gap% = +2.0%  : Buka 2% di atas — mulai waspada, sudah "lebih mahal" dari kemarin
-Gap% = +4.5%  : GAP UP BESAR — terlalu mahal di open, risiko langsung koreksi
-Gap% = -3.0%  : GAP DOWN — sentimen negatif, hindari long kecuali ada katalis kuat
+Gap% = +0.5%  → normal, dalam ATR band → aman
+Gap% = +2.5%  → mungkin masih dalam band BBCA (ATR ~5%), tergantung saham
+Gap% = +4.2%  → keluar band → tool tandai BEARISH, warning ditampilkan
+Gap% = -3.0%  → gap down signifikan → BEARISH
 ```
 
-**Mengapa tool ini menggunakan batas ±3%:**
-
-Secara historis, saham yang gap lebih dari 3% saat open cenderung mengalami "gap fill" — harga kembali ke arah kemarin setelah euforia/panik opening mereda. Kalau kamu masuk long saat gap +5%, kamu beli di harga yang sudah +5% lebih mahal dari orang yang masuk kemarin. Ini mengurangi upside dan memperbesar risiko.
-
-**Catatan:**
-- Gap% dalam tool ini hanya tersedia kalau order book diambil (bukan --fast mode)
-- Di fast mode, gap% ditampilkan sebagai "—"
+**Kunci:** batas BEARISH bukan lagi fixed ±3% — sekarang menggunakan ATR band per saham. TLKM dengan ATR 5% tidak di-flag BEARISH pada gap +3.2%, tapi BBRI dengan ATR 2% akan di-flag.
 
 ---
 
-### 5.4 Entry Range — Rentang Harga Masuk yang Aman
+### 5.4 Entry Range — Rentang Harga Masuk
 
-**Apa itu:** Range harga di mana kamu sebaiknya masuk, berdasarkan harga kemarin ± toleransi gap.
-
-**Rumus:**
-```
-Entry Range Low  = prev_close × (1 - 0.03) = prev_close × 0.97
-Entry Range High = prev_close × (1 + 0.03) = prev_close × 1.03
-```
-
-**Cara menggunakannya:**
-
-Tunggu sampai pasar buka (09:00). Lihat di mana opening price-nya. Kemudian:
+**Apa itu:** Range harga opening yang dianggap "normal" dan aman untuk masuk long.
 
 ```
-Kalau opening price DALAM range → pertimbangkan masuk
-Kalau opening price LUAR range  → lewati, tunggu hari lain
+Entry Range = [prev_close × (1 - band), prev_close × (1 + band)]
+Band = ATR / prev_close, capped antara 1% dan 5%
 ```
 
-**Contoh:**
+**Cara menggunakannya (setelah 09:00):**
 ```
-BBCA prev_close: 9,000
-Entry Range: 8,730 – 9,270
-
-Skenario 1: Opening price 9,100 → DALAM range → evaluasi masuk
-Skenario 2: Opening price 9,400 → LUAR range (gap +4.4%) → LEWATI
-Skenario 3: Opening price 8,600 → LUAR range (gap -4.4%) → LEWATI
+Kalau opening price DALAM entry range  → masuk konfirmasi Fase 2
+Kalau opening price DI ATAS range high → SKIP_GAP_UP (terlalu mahal)
+Kalau opening price DI BAWAH range low → SKIP_GAP_DOWN (ada masalah)
 ```
-
-**Mengapa tidak selalu masuk meski di luar range?**
-
-Kalau opening terlalu tinggi: kamu beli di titik yang sudah banyak orang profit. Penjual lebih banyak dari pembeli. Probabilitas turun lebih besar.
-
-Kalau opening terlalu rendah: ada sesuatu yang buruk terjadi (berita negatif, aksi jual institusi). Jangan melawan arus besar.
 
 ---
 
-### 5.5 Suggested Entry — Harga Limit Order yang Disarankan
+### 5.5 Suggested Entry — Harga Limit Order
 
-**Apa itu:** Harga limit order yang disarankan untuk dipasang setelah opening price diketahui.
-
-**Rumus:**
 ```
-Suggested Entry = prev_close × 1.005
+Suggested Entry = prev_close × 1.005  (0.5% di atas close kemarin)
 ```
 
-Ini adalah titik awal — 0.5% di atas harga penutupan kemarin. Bukan angka sakral. Kamu bisa adjust berdasarkan di mana opening price terjadi.
-
-**Cara menggunakannya:**
-1. Tunggu opening price (09:00–09:05)
-2. Kalau opening dalam entry range, pasang limit order di harga Suggested Entry atau sedikit di bawah opening price
-3. Kalau terisi, pasang stop-loss di ATR Stop
+Ini titik awal untuk limit order, bukan harga pasti. Kamu pasang setelah opening price diketahui dan masuk dalam entry range. Adjust berdasarkan posisi opening price.
 
 ---
 
 ### 5.6 ATR Stop — Harga Stop-Loss
 
-**Apa itu:** Harga di mana kamu harus keluar jika harga bergerak berlawanan dengan posisimu.
-
-**Rumus:**
 ```
-ATR Stop = entry_price - (1.0 × ATR14)
-         Tapi tidak boleh lebih dari 7% di bawah entry
+ATR Stop = entry - (1.0 × ATR14), tidak lebih dari -7%
 ```
 
-**Cara menggunakannya:**
-
-Segera setelah order beli terisi, pasang stop-loss di harga ini. Jangan ubah stop ke bawah karena "sayang". Stop ada untuk melindungi modal kamu dari kerugian besar.
-
-**Contoh:**
-```
-BBCA entry: 9,050
-ATR(14): 150
-ATR Stop: 9,050 - 150 = 8,900
-Stop%: -1.66%
-
-Artinya: kalau BBCA turun ke 8,900, kamu keluar dengan rugi 1.66%
-Ini jauh lebih baik daripada menahan turun 10–20%
-```
+Pasang segera setelah order beli terisi. Jangan digeser ke bawah.
 
 ---
 
-### 5.7 Prev High / Prev Low — Level Support/Resistance Kemarin
+### 5.7 ACCUM — Akumulasi Smart Money (Sinyal Baru)
 
-**Apa itu:** Harga tertinggi (High) dan terendah (Low) dari hari kemarin.
+**Apa itu:** Ringkasan aktivitas beli/jual asing selama 7 hari terakhir.
 
-**Mengapa penting untuk intraday:**
+Tool menganalisis data broker flow (dari IDX atau Stockbit) dan memberikan tag:
 
-Trader lain juga memperhatikan level ini. High kemarin sering menjadi resistance (hambatan naik) dan Low kemarin sering menjadi support (lantai harga).
+| Tag | Artinya | Aksi |
+|-----|---------|------|
+| **BACKED** (score ≥ 50) | Asing net-beli konsisten 7 hari → smart money positioning | Konviksi tinggi untuk long |
+| **UNCONFIRMED** | IEV spike tapi tidak ada pola akumulasi yang jelas | Konviksi sedang, ukuran lebih kecil |
+| **DISTRIBUTING** | Asing net-jual konsisten → IEV mungkin driven retail | Tool akan SKIP_BEARISH_CONTEXT di Fase 2 |
 
-**Cara menggunakannya:**
+**Score (0–70 pts):**
 ```
-Kalau kamu masuk long di 9,050 dan Prev High kemarin 9,200:
-→ Target pertama: 9,200 (resistance kemarin)
-→ Kalau tembus 9,200, target berikutnya: 9,200 + ATR = 9,350
-
-Kalau Prev Low kemarin 8,900 dan kamu masuk di 9,050:
-→ Stop tambahan: kalau break di bawah 8,900, ada masalah serius
+Consistency: net_buy_days / total_days × 40 pts  (berapa hari asing beli)
+Streak:      30 × (1 - e^(-streak/7))            (berapa hari beruntun beli)
 ```
 
-**Output di terminal:**
+**Contoh:**
 ```
-BBCA     Prev H:9,200  L:8,900  (yesterday's intraday S/R levels)
+BMRI ACCUM: BACKED 65pts streak:5d
+→ Asing beli 5 hari beruntun, konviksi tinggi
+
+GOTO ACCUM: DISTRIBUTING 0pts
+→ Asing net-jual, skip untuk long meskipun IEV tinggi
 ```
+
+**Mengapa penting:**
+IEV tinggi bisa karena *institusi yang lanjutkan posisi* atau *retail yang chase breakout*. ACCUM membedakan keduanya. Konfluensi IEV + BACKED → probabilitas lebih tinggi.
+
+**Catatan:** Membutuhkan data broker flow di database lokal. Jalankan `saham update --universe lq45` dulu.
+
+---
+
+### 5.8 FVWAP — Foreign VWAP Discount (Sinyal Baru)
+
+**Apa itu:** Selisih antara harga rata-rata beli asing (volume-weighted, 20 hari) dan harga saat ini.
+
+```
+FVWAP = Σ(foreign_buy_value) / (Σ(foreign_buy_lots) × 100)
+FVWAP% = (FVWAP - current_price) / current_price × 100
+```
+
+**Cara membaca:**
+```
+FVWAP% = +3.2%  (hijau: "floor")
+→ Asing rata-rata beli di harga +3.2% di atas harga sekarang
+→ Mereka rugi saat ini → incentif kuat untuk DEFEND posisi (tidak jual)
+→ Ada "lantai" di bawah harga sekarang = bullish untuk long
+
+FVWAP% = -5.8%  (merah: "sell risk")
+→ Asing rata-rata beli di harga -5.8% dari sekarang
+→ Mereka untung → mungkin JUAL di opening untuk lock profit
+→ Ada tekanan jual potensial = waspada untuk long
+
+FVWAP% = -0.5%  (netral)
+→ Asing hampir impas → tidak ada incentif kuat ke salah satu arah
+```
+
+**Mengapa relevan untuk intraday:**
+Kalau FVWAP positif (asing underwater), saham punya "price floor" alami karena institusi cenderung defend atau average down. Ini meningkatkan probabilitas upside jangka pendek.
+
+**Contoh konfluensi ideal:**
+```
+BBCA: BACKED 72pts streak:5d | FVWAP: +3.2% (floor)
+→ Asing akumulasi + masih underwater = sangat menarik untuk long
+```
+
+**Catatan:** Membutuhkan data broker flow. Jika tidak ada data, ditampilkan sebagai tidak ada baris FVWAP.
+
+---
+
+### 5.9 Prev High / Prev Low — S/R Kemarin
+
+**Apa itu:** Harga tertinggi (H) dan terendah (L) dari hari kemarin.
+
+```
+Prev H → resistance — sering menjadi target pertama
+Prev L → support   — kalau breach di sini, ada masalah
+```
+
+Gunakan sebagai:
+- **Target**: entry di 4,290, Prev H 4,260 di bawah → sudah melewati resistance, lebih bersih
+- **Warning**: entry di 4,290, Prev L 4,050 di bawah → stop di 4,148, masih di atas Prev L → oke
+
+---
+
+### 5.10 Decisions dari Confirm-Open
+
+Setelah kamu masukkan opening prices aktual:
+
+| Decision | Artinya |
+|----------|---------|
+| `ENTER` | Semua gate pass + BULLISH → masuk dengan limit di Suggested Entry |
+| `WAIT` | Range pass tapi NEUTRAL trend → pantau dulu, masuk kalau konfirmasi arah |
+| `SKIP_GAP_UP` | Opening di atas entry range → terlambat, harga sudah terlalu tinggi |
+| `SKIP_GAP_DOWN` | Opening di bawah entry range → ada sentimen negatif, jangan lawan |
+| `SKIP_BEARISH_CONTEXT` | Trend BEARISH atau ACCUM DISTRIBUTING → skip long |
+| `SKIP_RISK_TOO_WIDE` | ATR stop > 7% dari opening → risiko terlalu besar |
 
 ---
 
 ## 6. Workflow Harian Step-by-Step
 
-### Malam Sebelumnya (opsional, 10 menit)
-
-Update data supaya pagi tidak perlu waktu lama:
+### Malam Sebelumnya (10 menit, opsional tapi direkomendasikan)
 
 ```bash
-saham update --universe lq45 --days 30
+saham update --universe lq45
 ```
 
-Ini mengambil data harga + data broker flow untuk 45 saham LQ45. Kalau data sudah fresh (< 5 hari), otomatis di-skip.
+Refresh data harga + broker flow. Kalau sudah fresh (< 5 hari), otomatis di-skip.
 
 ---
 
-### Pagi Hari (08:30–08:45) — Persiapan
+### 08:30–08:45 — Persiapan di Browser
 
-**Step 1: Buka Stockbit di browser**
-
-Login ke Stockbit. Navigasi ke Screener → Movers.
-
-**Step 2: Ambil data IEV movers**
-
-Cari saham dengan IEV tertinggi. Catat ticker dan nilai IEV-nya dalam format JSON:
+Buka Stockbit. Navigasi ke Screener → Movers section. Catat ticker dan IEV:
 
 ```json
 [
   {"ticker": "BBCA", "iev": 450000},
   {"ticker": "BMRI", "iev": 320000},
-  {"ticker": "BBRI", "iev": 280000},
   {"ticker": "TLKM", "iev": 195000},
-  {"ticker": "ASII", "iev": 167000}
+  {"ticker": "BBRI", "iev": 167000},
+  {"ticker": "ASII", "iev": 134000}
 ]
 ```
 
-**Step 3 (opsional, untuk mode normal): Ambil data order book**
-
-Untuk setiap ticker, buka halaman order book Stockbit dan catat best bid:
+**Mode Normal (lebih akurat):** Juga ambil order book untuk setiap ticker — buka `stockbit.com/#/stock/BBCA/orderbook`, catat bid terbesar:
 
 ```json
 {
-  "BBCA": {"price": 9025, "volume": 25000},
-  "BMRI": {"price": 5875, "volume": 18000}
+  "BBCA": {"price": 5150, "volume": 25000},
+  "BMRI": {"price": 4275, "volume": 18000}
 }
 ```
 
+**Mode Fast (lebih cepat, ~15 detik):** Cukup data IEV saja.
+
 ---
 
-### Pagi Hari (08:45–08:55) — Jalankan Screener
+### 08:45–08:55 — Jalankan Pre-Open Screener
 
-**Mode Cepat (fast, ~15 detik, tidak perlu order book):**
-
+**Mode Fast:**
 ```bash
-saham screen pre-open \
+saham intraday pre-open \
   --movers-json '[{"ticker":"BBCA","iev":450000},{"ticker":"BMRI","iev":320000}]' \
   --fast
 ```
 
-**Mode Normal (dengan order book, ~45–90 detik):**
-
+**Mode Normal (dengan order book):**
 ```bash
-saham screen pre-open \
+saham intraday pre-open \
   --movers-json '[{"ticker":"BBCA","iev":450000},{"ticker":"BMRI","iev":320000}]' \
-  --order-books-json '{"BBCA":{"price":9025,"volume":25000},"BMRI":{"price":5875,"volume":18000}}'
+  --order-books-json '{"BBCA":{"price":5150,"volume":25000},"BMRI":{"price":4275,"volume":18000}}'
 ```
+
+**Override threshold:**
+```bash
+saham intraday pre-open --movers-json '...' --top 3 --max-gap 0.05 --atr-mult 1.5
+```
+
+Catat: entry range, ATR stop, dan sinyal ACCUM/FVWAP per saham.
 
 ---
 
-### Jam 09:00 — Pasar Buka, Ambil Keputusan
+### 09:00–09:05 — Konfirmasi Setelah Pasar Buka
 
-Ini momen paling kritis. Dalam 5 menit pertama setelah pasar buka:
-
-1. **Lihat opening price** untuk setiap kandidat dari screener
-2. **Bandingkan dengan entry range** dari output screener
-3. **Putuskan: masuk atau lewati**
-
-> Jangan terburu-buru. Lebih baik lewati 5 peluang daripada masuk di harga yang salah.
-
-Kamu juga bisa memakai konfirmasi deterministik dari hasil screener terakhir:
+Setelah pasar buka, lihat opening price aktual di Stockbit untuk setiap kandidat. Masukkan ke tool:
 
 ```bash
-saham screen confirm-open \
-  --opening-json '{"BBCA":9050,"BMRI":5875,"GOTO":245}'
+saham intraday confirm-open \
+  --opening-json '{"BBCA":5175,"BMRI":4290,"TLKM":2820}'
 ```
 
-Perintah ini membaca `journals/.last-session.json` dari `saham screen pre-open`,
-lalu membandingkan opening price aktual dengan entry range, trend pre-open,
-dan risiko stop. Output keputusan:
-
+Tool langsung output:
 ```
-ENTER                  open valid, konteks bullish, stop masih wajar
-WAIT                   open valid, tapi konteks belum bullish
-SKIP_GAP_UP            opening price di atas entry range
-SKIP_GAP_DOWN          opening price di bawah entry range
-SKIP_BEARISH_CONTEXT   trend bearish atau broker flow distributing
-SKIP_RISK_TOO_WIDE     jarak stop melebihi batas risiko
-SKIP_INSUFFICIENT_DATA data konfirmasi belum lengkap
+BBCA → ENTER    (open 5,175 dalam range 4,892–5,408, trend BULLISH)
+BMRI → WAIT     (open 4,290 dalam range, NEUTRAL trend)
+TLKM → SKIP_GAP_UP  (open 2,820 di atas range high 2,789)
 ```
 
-Hasil konfirmasi disimpan ke `journals/.last-confirmation.json` untuk evaluasi
-workflow berikutnya.
-
-**Batasan saat ini:** opening price masih dimasukkan manual via JSON. Tool belum
-mengambil data intraday live secara otomatis.
+**Ini momen paling penting.** Ikuti keputusan tool:
+- `ENTER` → pasang limit di Suggested Entry, set stop di ATR Stop
+- `WAIT` → pantau 15 menit, masuk kalau arah mulai jelas ke atas
+- `SKIP_*` → lewati saham ini hari ini
 
 ---
 
 ### Setelah Trading — Catat di Journal
 
 ```bash
-saham screen log
+# Log hasil pre-open screening
+saham intraday pre-open-log
+
+# Log hasil confirmation (lebih detail, termasuk keputusan)
+saham intraday log
 ```
-
-Perintah ini membaca hasil screener terakhir dan menyimpannya ke `journals/pre-open.csv`. Data aktual (opening price, close 1 hari kemudian, close 5 hari kemudian) akan diisi otomatis dari database lokal saat kamu jalankan `review`.
-
-Kalau kamu memakai `confirm-open`, catat keputusan post-open juga:
-
-```bash
-saham screen confirm-log
-```
-
-Perintah ini membaca `journals/.last-confirmation.json` dan menyimpan keputusan
-`ENTER`, `WAIT`, dan `SKIP_*` ke `journals/intraday-confirmations.csv`.
-Field yang disimpan meliputi reason codes, opening price, planned entry, stop,
-RSI, gap%, ACCUM tag, dan FVWAP discount.
-
-Kalau kamu benar-benar mengambil trade, isi hasil aktualnya:
-
-```bash
-saham screen confirm-outcome BBCA \
-  --date 2026-06-12 \
-  --entry 9050 \
-  --exit 9200 \
-  --result target \
-  --notes "exit di 1R"
-```
-
-Perintah ini menghitung hasil dalam satuan `R` berdasarkan jarak entry ke stop
-yang sudah tersimpan di journal. Hasil aktual ini akan dipakai oleh
-`confirm-review` sebelum memakai proxy OHLC harian.
 
 ---
 
-### Setelah 20 Sesi — Evaluasi
+### Catat Hasil Aktual (setelah posisi ditutup)
 
 ```bash
-saham screen review --horizon 5
+saham intraday outcome BBCA \
+  --entry 5200 \
+  --exit 5375 \
+  --notes "keluar jam 10:30, target tercapai di Prev H"
 ```
-
-Output contoh:
-
-```
-=======================================================
-PAPER TRADE JOURNAL REVIEW
-=======================================================
-Total logged entries :  87
-Entries with DB data :  72
-Entry range hit rate : 74.3%
-  (% of sessions where opening price fell within entry range)
-Direction accuracy 1d: 58.2%
-Direction accuracy 5d: 61.4%
-
-Per-trend breakdown:
-  TREND      TOTAL  IN_RANGE  UP_1D
-  -------  -------  --------  -----
-  BULLISH       45        35     26
-  BEARISH       18        12      7
-  NEUTRAL        9         6      4
-=======================================================
-```
-
-**Cara membaca hasil:**
-- **Hit rate 74%**: 74% dari saham yang masuk kandidat, opening price-nya memang dalam range ±3% dari kemarin → entry range model kita cukup akurat
-- **Direction accuracy 58%**: dari kandidat BULLISH, 58% naik hari itu → sedikit lebih baik dari coin flip, perlu ditingkatkan
-- Kalau hit rate < 50%: pertimbangkan perlebar range atau naikkan IEV threshold
-- Kalau direction accuracy < 52%: sinyal BULLISH/BEARISH kita tidak lebih baik dari random → perlu ditinjau ulang
-
-Untuk mengevaluasi kualitas keputusan post-open:
-
-```bash
-saham screen confirm-review
-```
-
-Output ini membucket hasil berdasarkan decision, gap, RSI, stop distance,
-ACCUM tag, dan FVWAP. `STOP` dan `TGT1R` memakai OHLC harian sebagai proxy:
-kalau low harian menyentuh stop, dihitung stop-hit; kalau high harian mencapai
-entry + 1R, dihitung target-hit. Urutan intraday yang tepat tetap membutuhkan
-data menit/tick.
 
 ---
 
-## 7. Membaca Output Screener
+### Evaluasi Berkala (setiap 20+ sesi)
 
-Contoh output lengkap:
+```bash
+# Evaluasi accuracy entry range
+saham intraday pre-open-review --horizon 5
+
+# Evaluasi accuracy keputusan confirm-open
+saham intraday review
+```
+
+---
+
+## 7. Membaca Output Pre-Open
+
+Contoh output lengkap dengan semua fitur baru:
 
 ```
 ==========================================================================================
 PRE-OPEN SCREENER RESULTS
 ==========================================================================================
 Date: 2026-06-12   IEV filter: >= 100,000
-Movers evaluated: 12   Candidates: 5
+Movers evaluated: 5   Candidates: 5
 
-TICKER      IEV   GAP%        ENTRY-RANGE    SUGGEST   ATR-STOP   STOP%    RSI  TREND
-BBCA    450000  +0.6%  8,720 – 9,270       9,050    8,900     -1.7%     52  BULLISH
-  Prev H:9,200  L:8,750  (yesterday's intraday S/R levels)
-BMRI    320000  +0.3%  5,693 – 6,057       5,887    5,712     -3.0%     44  BULLISH
-  Prev H:6,050  L:5,750  (yesterday's intraday S/R levels)
-TLKM    195000    —    3,087 – 3,273       3,177    3,050     -4.0%     38  BULLISH
-  Prev H:3,300  L:3,100  (yesterday's intraday S/R levels)
-BBRI    167000  +1.2%  5,105 – 5,427       5,259    5,050     -4.0%     61  NEUTRAL
-  Prev H:5,400  L:5,200  (yesterday's intraday S/R levels)
-GOTO     155000  +4.2%    228 – 242           235      221     -6.0%     73  BEARISH
-  Prev H:248  L:232  (yesterday's intraday S/R levels)
+TICKER        IEV    GAP%           ENTRY-RANGE    SUGGEST   ATR-STOP   STOP%    RSI  TREND
+------------------------------------------------------------------------------------------
+BBCA      450,000   +1.1%           4,892–5,408      5,200      4,904   -5.7%     52  BULLISH
+  Prev H:5,150  L:4,820
+  ACCUM: BACKED 72pts streak:5d   FVWAP: +3.2% (floor)
+BMRI      320,000   +0.8%           4,132–4,388      4,290      4,148   -3.3%     56  BULLISH
+  Prev H:4,260  L:4,050
+  ACCUM: UNCONFIRMED 28pts   FVWAP: -0.5%
+TLKM      195,000   +4.5%           2,670–2,950      2,830      2,669   -5.7%     47  BEARISH
+  Prev H:2,810  L:2,500
+  ACCUM: DISTRIBUTING 5pts   FVWAP: -5.8% (sell risk)
+BBRI      167,000   +1.2%           4,800–5,280      5,020      4,850   -3.4%     61  BULLISH
+  Prev H:5,100  L:4,900
+  ACCUM: BACKED 58pts streak:3d   FVWAP: +1.8% (floor)
+ASII      134,000     —             4,270–4,730      4,494      4,325   -3.8%     44  BULLISH
+  Prev H:4,600  L:4,350
+  ACCUM: BACKED 51pts streak:2d   FVWAP: +0.9% (floor)
 ```
 
-**Penjelasan kolom per kolom:**
+**Analisis per baris:**
+
+| Saham | Evaluasi | Keputusan pre |
+|-------|---------|---------------|
+| BBCA | BACKED 72pts + FVWAP floor + BULLISH + gap kecil | **Kandidat terkuat** |
+| BBRI | BACKED 58pts + FVWAP floor + BULLISH | **Kandidat kuat** |
+| ASII | BACKED 51pts + FVWAP floor (tipis) + BULLISH + fast mode | **Kandidat bagus** |
+| BMRI | UNCONFIRMED + FVWAP netral | **Perlu konfirmasi** |
+| TLKM | Gap 4.5% di atas band + DISTRIBUTING + FVWAP sell risk | **Skip** |
+
+**Penjelasan kolom:**
 
 | Kolom | Penjelasan |
 |-------|-----------|
 | `TICKER` | Kode saham IDX |
-| `IEV` | Volume expected di opening. Makin tinggi = makin likuid |
-| `GAP%` | Selisih pre-open bid vs kemarin. `—` = fast mode, tidak ada data order book |
-| `ENTRY-RANGE` | Rentang harga aman untuk masuk. Cek opening price masuk sini atau tidak |
-| `SUGGEST` | Harga limit order yang disarankan (prev_close + 0.5%) |
-| `ATR-STOP` | Harga stop-loss. Pasang ini segera setelah order beli terisi |
-| `STOP%` | Seberapa jauh stop dari entry. Di sini -1.7% sampai -6% |
-| `RSI` | 0–100. Di atas 75 = overbought (hindari long) |
-| `TREND` | BULLISH/BEARISH/NEUTRAL berdasarkan RSI + gap% |
-| `Prev H/L` | High dan Low kemarin. Gunakan sebagai target (H) dan level warning (L) |
-
-**Analisis contoh di atas:**
-
-- **BBCA**: IEV tertinggi, gap kecil (+0.6%), RSI ideal (52), BULLISH → kandidat terkuat. Entry range 8,720–9,270, stop di 8,900
-- **BMRI**: Juga bagus. Gap kecil, RSI oke. Perhatikan Prev H di 6,050 — kalau opening di 5,990, resistance tinggal 60 poin
-- **TLKM**: Fast mode (GAP% = —), tapi RSI 38 menarik — ada ruang naik, dan RSI hampir oversold
-- **BBRI**: RSI 61 mendekati batas 65, trend NEUTRAL. Bisa masuk tapi dengan ekspektasi lebih konservatif
-- **GOTO**: **SKIP**. Gap +4.2% sudah keluar batas (>3%), RSI 73 hampir overbought, trend BEARISH. Risiko masuk di harga tinggi lalu langsung koreksi
+| `IEV` | Volume expected. Makin tinggi = makin likuid |
+| `GAP%` | Selisih pre-open bid vs kemarin. `—` = fast mode |
+| `ENTRY-RANGE` | ATR-scaled band. **Masuk hanya kalau opening di sini** |
+| `SUGGEST` | Limit order awal = prev_close + 0.5% |
+| `ATR-STOP` | Pasang stop di sini segera setelah masuk |
+| `STOP%` | % rugi kalau stop kena |
+| `RSI` | Momentum. > 75 = overbought (BEARISH) |
+| `TREND` | BULLISH/NEUTRAL/BEARISH berdasarkan RSI + gap% |
+| `Prev H/L` | Resistance (H) dan support (L) kemarin |
+| `ACCUM` | BACKED/UNCONFIRMED/DISTRIBUTING + score + streak |
+| `FVWAP` | Discount% foreigners. Positif = floor, negatif besar = sell risk |
 
 ---
 
-## 8. Kapan Harus Masuk, Kapan Harus Lewati
+## 8. Membaca Output Confirm-Open
+
+Setelah kamu jalankan `saham intraday confirm-open`:
+
+```
+========================================================
+INTRADAY CONFIRMATION — 2026-06-12
+========================================================
+TICKER  DECISION          OPEN    ENTRY   STOP   STOP%  REASON
+BBCA    ENTER           5,175   5,200   4,904  -5.7%  open in range, BULLISH, BACKED
+BBRI    ENTER           5,050   5,020   4,850  -3.4%  open in range, BULLISH, BACKED
+ASII    WAIT            4,500   4,494   4,325  -3.8%  open in range, NEUTRAL trend
+BMRI    SKIP_GAP_UP     4,450       —       —     —   open 4450 above range high 4388
+TLKM    SKIP_BEARISH_CONTEXT  2,800       —       —     —  DISTRIBUTING broker context
+========================================================
+```
+
+**Apa yang kamu lakukan sekarang:**
+
+- **BBCA ENTER**: Pasang limit buy di 5,200. Begitu terisi, set stop di 4,904.
+- **BBRI ENTER**: Pasang limit buy di 5,020. Begitu terisi, set stop di 4,850.
+- **ASII WAIT**: Pantau 15 menit. Kalau harga bergerak naik dengan volume, pertimbangkan masuk.
+- **BMRI SKIP_GAP_UP**: Sudah terlambat. Opening 4,450 di atas range — tidak masuk.
+- **TLKM SKIP_BEARISH_CONTEXT**: DISTRIBUTING + gap besar. Tidak ada alasan masuk long.
+
+**Penting:** Jangan masuk di saham yang di-SKIP. Odds tidak menguntungkan.
+
+---
+
+## 9. Kapan Harus Masuk, Kapan Harus Lewat
 
 ### Checklist Sebelum Masuk (semua harus terpenuhi)
 
 ```
-□ Opening price ada di dalam ENTRY-RANGE
+□ confirm-open output: ENTER atau WAIT
+□ Opening price dalam ENTRY-RANGE
 □ TREND bukan BEARISH
-□ RSI < 75
-□ Gap% < 3% (atau N/A karena fast mode — masih bisa masuk, tapi lebih waspada)
-□ Kamu tahu di mana stop-loss kamu (ATR-STOP)
-□ Modal untuk 1 trade tidak lebih dari 10% total modal kamu
+□ ACCUM bukan DISTRIBUTING
+□ Kamu sudah tahu di mana stop-loss kamu (ATR-STOP)
+□ Modal per trade tidak lebih dari 10% total modal kamu
+□ Tidak ada berita besar yang belum kamu baca
 ```
 
 ### Langsung Lewati Kalau:
 
-- **Opening price di atas ENTRY-RANGE HIGH**: saham buka terlalu tinggi, sudah ada gap-up. Terlambat masuk di sini
-- **Opening price di bawah ENTRY-RANGE LOW**: ada sesuatu yang negatif, gap-down besar. Tunggu konfirmasi arah
-- **TREND = BEARISH**: RSI terlalu tinggi atau gap terlalu besar
-- **Tidak ada data historis di database**: jalankan `saham fetch TICKER` dulu
-- **Kamu belum pasang stop-loss**: jangan masuk tanpa tahu kapan kamu keluar rugi
+- `SKIP_GAP_UP`: Opening sudah terlalu tinggi, banyak penjual di atas
+- `SKIP_GAP_DOWN`: Sentimen negatif, ada alasan kuat untuk harga turun
+- `SKIP_BEARISH_CONTEXT`: RSI overbought, atau asing net-jual
+- `SKIP_RISK_TOO_WIDE`: Stop terlalu jauh, risk/reward tidak masuk akal
+- `WAIT` + tidak ada konfirmasi naik dalam 15 menit → skip
 
-### Situasi Khusus yang Perlu Diwaspadai
-
-**Berita setelah tutup pasar kemarin:**
-
-Earnings release, aksi korporasi, berita macro — semua bisa menyebabkan gap besar yang tidak bisa diprediksi oleh tool ini. Kalau ada berita besar untuk suatu saham, pertimbangkan skip meskipun indikator bagus.
+### Situasi Khusus
 
 **Hari Senin dan setelah libur panjang:**
+Gap lebih sering terjadi karena akumulasi berita selama libur. Pertimbangkan `--max-gap 0.05` (5%) atau skip lebih banyak.
 
-Gap lebih sering terjadi karena ada akumulasi berita selama weekend/libur. Pertimbangkan perlebar tolerance atau skip lebih banyak di hari-hari ini.
+**BBCA FVWAP -5.8% (sell risk) meski BACKED:**
+Asing mungkin ambil profit di opening. Konfirmasi WAIT dulu, masuk kalau harga tidak langsung turun setelah 5 menit.
 
 **30 menit pertama (09:00–09:30):**
-
-Volume sangat tinggi, spread bisa lebar, harga bergerak cepat. Ini bukan waktu yang baik untuk pemula. Lebih aman tunggu 09:30–10:00 ketika harga sudah lebih stabil dan arah lebih jelas.
+Volume tinggi tapi harga belum stabil. Pemula lebih aman tunggu sampai 09:30 untuk entry WAIT.
 
 ---
 
-## 9. Manajemen Risiko
+## 10. Manajemen Risiko
 
-### Aturan Dasar yang Tidak Boleh Dilanggar
+### Aturan Dasar
 
-**1. Maksimal loss per trade: 2% dari total modal**
-
+**1. Maksimal loss per trade: 2% total modal**
 ```
 Total modal: Rp 10,000,000
-Maksimal loss per trade: Rp 200,000
+Maksimal loss: Rp 200,000
 
-Kalau stop-loss di -2% dan modal per trade Rp 3,000,000:
-Maksimal loss = 3,000,000 × 2% = Rp 60,000 ← aman
-
-Kalau kamu terlalu besar posisi:
-Modal per trade Rp 8,000,000, stop -2%:
-Maksimal loss = 8,000,000 × 2% = Rp 160,000 ← mendekati batas
+BBCA: entry 5,200, stop 4,904, risk = 296 poin/saham
+Max lot = 200,000 / (296 × 100) = 6.7 → ambil 6 lot
+Check: 6 × 100 × 5,200 = Rp 3,120,000 modal terpakai ✓
 ```
 
-**2. Jangan trading lebih dari 3 saham sekaligus**
-
-Lebih banyak posisi = lebih sulit dipantau. Fokus pada 1–2 kandidat terkuat dari screener.
+**2. Jangan lebih dari 2 ENTER sekaligus**
+Kalau BBCA dan BBRI keduanya ENTER, fokus pada 1 dulu. Dua posisi simultaan butuh monitoring ganda di saat market paling volatile.
 
 **3. Stop-loss tidak boleh digeser ke bawah**
+Pernah geser stop? Itu adalah awal dari kekalahan besar.
 
-Kalau kamu pasang stop di 8,900 dan saham turun ke 8,920, sangat menggoda untuk turunkan stop ke 8,850. Jangan. Stop ada karena kamu sudah menentukan di titik mana tesis kamu terbukti salah.
+**4. Ambil profit sebagian di Prev High**
+Jual 50% posisi di Prev High, sisanya biarkan jalan. Kalau tembus Prev High, trailing stop.
 
-**4. Ambil profit secara bertahap**
-
-Jangan tunggu target penuh lalu turun lagi. Pertimbangkan jual 50% di target pertama (Prev High), sisanya di target kedua.
-
-### Position Sizing
-
-Tool ini menampilkan `SUGGEST` (harga entry) dan `ATR-STOP`. Dari sini, hitung berapa lot yang bisa kamu beli:
+### Position Sizing dari Tool
 
 ```
-Modal per trade    : Rp 3,000,000
-Entry price (BBCA) : 9,050
-ATR Stop           : 8,900
-Risk per saham     : 9,050 - 8,900 = 150 poin
+Dari confirm-open output:
+  BBCA: entry 5,200 | stop 4,904 | risk = 296 poin
 
-Maksimal loss yang kamu toleransi: 2% × total modal = Rp 200,000
-
-Jumlah saham yang bisa dibeli:
-  200,000 / 150 = 1,333 saham = 13 lot (1 lot = 100 saham)
-
-Cek: 13 lot × 100 × 9,050 = Rp 11,765,000
-Kalau total modal Rp 10 juta, ini terlalu besar.
-Pakai 10 lot saja: 10 × 100 × 9,050 = Rp 9,050,000
+Maksimal loss kamu: Rp 200,000
+Max saham: 200,000 / 296 = 675 saham = 6 lot
+Nilai posisi: 6 × 100 × 5,200 = Rp 3,120,000
 ```
 
 ---
 
-## 10. Paper Trade Journal
+## 11. Journal — Validasi Sebelum Uang Sungguhan
 
-### Mengapa Paper Trade Dulu?
+### Mengapa Journal?
 
-Tool ini memberikan kandidat, entry range, dan stop-loss — tapi kita belum tahu apakah sinyalnya akurat untuk kondisi pasar IDX hari ini. Setelah 20–30 sesi trading, kamu punya data nyata.
+Sebelum kamu tahu apakah screener ini bekerja untuk kondisi pasar saat ini, paper trade dulu. Setelah 20–30 sesi kamu punya data:
+- Berapa % entry range akurat?
+- Keputusan ENTER yang benar berapa %?
+- FVWAP floor signal memprediksi apa?
 
-**Paper trade = tracking hasil tanpa uang sungguhan.** Kamu "berpura-pura" masuk di harga suggested, lalu lihat apa yang terjadi.
-
-### Alur Paper Trade
+### Alur Journal
 
 ```bash
-# Setelah menjalankan screener dan mencatat "keputusan" kamu:
-saham screen log
+# Setelah pre-open run:
+saham intraday pre-open-log
 
-# Lihat hasilnya setelah beberapa hari:
-saham screen review --horizon 1   # evaluasi 1 hari kemudian
-saham screen review --horizon 5   # evaluasi 5 hari kemudian
+# Setelah confirm-open run:
+saham intraday log
+
+# Setelah posisi ditutup (masukkan outcome aktual):
+saham intraday outcome BBCA --entry 5200 --exit 5375 --notes "target tercapai"
+
+# Evaluasi setelah 20+ sesi:
+saham intraday pre-open-review --horizon 1    # akurasi range 1 hari
+saham intraday review                          # akurasi keputusan confirm-open
 ```
 
-### Apa yang Perlu Dievaluasi
+### Membaca `saham intraday review`
 
-Dari `saham screen review`, perhatikan:
+```
+DECISION BREAKDOWN:
+  ENTER      : 45 total, 28 win (62.2%) ← ini yang paling penting
+  WAIT       : 18 total, 10 win (55.6%)
+  SKIP_*     : 24 total (tidak dieksekusi — tidak ada data win/loss)
 
-1. **Hit rate entry range > 70%?** Kalau tidak, artinya model ±3% terlalu sempit untuk kondisi pasar saat ini. Coba `--max-gap 0.05` (5%)
+CONTEXT BREAKDOWN (untuk ENTER):
+  ACCUM=BACKED    : 28 entries, 20 win (71.4%)  ← lebih baik
+  ACCUM=UNCONFIRMED: 12 entries,  7 win (58.3%)
+  FVWAP positive  : 22 entries, 16 win (72.7%)  ← floor signal works
+  FVWAP negative  :  6 entries,  3 win (50.0%)
+```
 
-2. **Direction accuracy BULLISH > 55%?** Kalau tidak, sinyal BULLISH kita tidak bermakna. Perlu ditambahkan filter
-
-3. **Ada pola di BEARISH yang benar?** Kalau BEARISH direction accuracy < 50% (artinya saham yang ditandai BEARISH malah naik), mungkin gate RSI terlalu sensitif
-
-4. **Apakah ada saham yang selalu gagal?** Mungkin ada karakteristik saham tertentu yang tidak cocok dengan model ini
-
----
-
-## 11. Kesalahan Umum Pemula
-
-### Kesalahan 1: FOMO — Masuk Karena Takut Ketinggalan
-
-Screener menampilkan 5 kandidat. Kamu lihat BBCA sudah naik 2% dari opening. Kamu pikir "aduh, sudah naik, cepat masuk sebelum lebih tinggi."
-
-**Jangan.** Kalau harga sudah keluar dari entry range, peluangnya sudah berubah. Hari ini ada kandidat, besok ada kandidat lain. Disiplin lebih penting dari tidak ingin rugi.
-
-### Kesalahan 2: Tidak Pasang Stop-Loss
-
-"Nanti kalau turun saya cut manual." Tapi saat harga turun, otak membujuk: "Sebentar lagi balik naik." Dan terus turun.
-
-Stop-loss bukan kekalahan. Ini adalah biaya operasional dari trading.
-
-### Kesalahan 3: Terlalu Banyak Saham Sekaligus
-
-3 posisi terbuka saat pasar buka jam 09:00 → kamu tidak bisa memantau semuanya dengan baik. Fokus pada 1–2 kandidat terkuat.
-
-### Kesalahan 4: Trading Saham yang Tidak Ada di Database
-
-Kalau `saham screen pre-open` menampilkan "No cached data — run saham fetch TICKER first", artinya tidak ada data historis untuk menghitung ATR dan RSI. Jangan masuk tanpa data ini — kamu tidak punya referensi volatilitas.
-
-### Kesalahan 5: Mengabaikan Konteks Makro
-
-Tool ini tidak membaca berita. Kalau BI baru naikkan suku bunga, atau ada krisis global — sinyal teknikal dari screener ini kurang relevan. Selalu cek berita besar sebelum trading.
-
-### Kesalahan 6: Averaging Down Posisi Rugi
-
-Kamu beli BBCA di 9,050, stop di 8,900. Harga turun ke 8,950. Kamu beli lagi karena "lebih murah." Ini melanggar aturan stop-loss. Keluar di 8,900, bukan tambah posisi.
+Dari breakdown ini kamu tahu: BACKED + FVWAP floor meningkatkan win rate. Data ini memvalidasi bahwa sinyal-sinyal tersebut memang berguna, bukan hanya noise.
 
 ---
 
-## 12. Glosarium
+## 12. Catatan tentang Stockbit Adapter
+
+### Mode Manual (Direkomendasikan)
+
+Mode `--movers-json` dan `--order-books-json` adalah mode yang **sudah tested dan bekerja dengan baik**. Kamu input data yang kamu ambil manual dari Stockbit.
+
+Ini intentional — tool sengaja dirancang untuk bekerja dengan data yang kamu validasi sendiri.
+
+### Mode Autonomous (Playwright — Status: Butuh Kalibrasi)
+
+```bash
+saham intraday save-session    # Simpan session login Stockbit
+saham intraday pre-open        # Jalankan tanpa --movers-json
+```
+
+**Status saat ini:** Implementasi Playwright ada tapi belum dikalibrasi terhadap DOM aktual Stockbit. Stockbit adalah React SPA dengan struktur DOM yang bisa berubah setiap update.
+
+**Kemungkinan penyebab gagal:**
+1. Selector `table tbody tr` tidak cocok — Stockbit mungkin pakai `div` bukan `table`
+2. Kolom IEV bukan di posisi terakhir (`cells[-1]`)
+3. Order book structure berbeda dari yang diasumsikan
+
+**Cara debug kalau mau mencoba:**
+```bash
+# Jalankan dengan headless=false untuk lihat apa yang terjadi:
+saham intraday pre-open --no-headless
+
+# Cek apakah session tersimpan:
+cat stockbit_session.json | python3 -c "import json,sys; d=json.load(sys.stdin); print(len(d['cookies']), 'cookies')"
+```
+
+**Jika autonomous mode gagal:** gunakan mode manual — buka Stockbit di browser, ambil data movers dan order book, lalu jalankan dengan `--movers-json`.
+
+---
+
+## 13. Kesalahan Umum Pemula
+
+**1. FOMO — Masuk karena confirm-open output WAIT**
+
+Tool bilang WAIT bukan ENTER. Kamu pikir "sayang dilewati" dan tetap masuk. Tool memberi WAIT karena trend belum terkonfirmasi. Tunggu atau skip.
+
+**2. Mengabaikan DISTRIBUTING**
+
+"Tapi IEV-nya tinggi!" — ya, tapi asing net-jual 7 hari terakhir. Itu penjual yang sudah siap di opening. Ikuti sinyal SKIP_BEARISH_CONTEXT.
+
+**3. Tidak pasang stop-loss segera setelah masuk**
+
+Setiap menit tanpa stop adalah menit kamu menanggung unlimited risk. Pasang stop sebelum melakukan hal lain.
+
+**4. Averaging down posisi rugi**
+
+Stop di 4,904 → harga turun ke 4,950 → kamu beli lagi karena "lebih murah". Ini salah. Kalau keyakinan masih ada, cut di 4,904 lalu evaluate ulang setelah jelas arahnya.
+
+**5. Trading saham yang tidak ada di database**
+
+Kalau output menunjukkan "No cached data", jalankan `saham fetch TICKER` dulu. Tanpa data historis, tidak ada ATR, tidak ada entry range.
+
+**6. Tidak membaca context FVWAP negatif besar**
+
+FVWAP -5.8% bukan hanya "kurang ideal" — artinya asing duduk di profit besar dan mungkin jual di opening. Confirm-open mungkin tetap WAIT jika semua gate lain pass, tapi kamu harus extra cautious.
+
+---
+
+## 14. Glosarium
 
 | Istilah | Penjelasan |
 |---------|-----------|
-| **ATR** | Average True Range. Ukuran volatilitas harian rata-rata dalam 14 hari terakhir |
-| **Call Auction** | Sistem matching IDX di mana semua order dikumpulkan dulu, baru dieksekusi sekaligus di satu harga (08:45–09:00 dan 15:50–16:00) |
-| **Clearing Price** | Harga yang ditemukan call auction untuk memaksimalkan volume yang bisa dieksekusi |
-| **Entry Range** | Rentang harga aman untuk masuk, berdasarkan prev_close ± max_gap_pct |
-| **Fast Mode** | Mode screener tanpa mengambil data order book. Lebih cepat tapi tidak ada Gap% |
-| **Gap%** | Selisih persentase antara harga pre-open dan harga penutupan kemarin |
-| **IEV** | Intraday Expected Volume. Estimasi volume yang akan ditransaksikan saat opening |
-| **Lot** | Satuan pembelian saham di IDX. 1 lot = 100 saham |
-| **Overbought** | RSI > 75. Saham sudah naik terlalu cepat, risiko koreksi meningkat |
-| **Oversold** | RSI < 25. Saham sudah turun terlalu cepat, potensi rebound |
-| **Prev Close** | Harga penutupan hari kemarin. Referensi utama untuk entry range |
-| **Prev High/Low** | Harga tertinggi/terendah hari kemarin. Digunakan sebagai level S/R intraday |
-| **RSI** | Relative Strength Index. Ukuran momentum 0–100 |
-| **S/R** | Support dan Resistance. Level harga di mana saham cenderung berhenti atau berbalik |
-| **Stop-Loss** | Harga di mana kamu keluar dengan kerugian terbatas. Wajib dipasang setelah order beli terisi |
-| **Suggested Entry** | Harga limit order yang disarankan, dihitung sebagai prev_close × 1.005 |
-| **Swing Trade** | Trading yang ditahan beberapa hari hingga beberapa minggu (beda dengan intraday) |
-| **Tick** | Unit pergerakan harga terkecil di IDX. Besarnya tergantung range harga saham |
+| **ATR** | Average True Range. Volatilitas harian rata-rata 14 hari |
+| **ATR Band** | Entry range width = ATR / prev_close, capped [1%, 5%] |
+| **ACCUM** | Sinyal akumulasi asing 7 hari: BACKED/UNCONFIRMED/DISTRIBUTING |
+| **Call Auction** | Sistem IDX: order dikumpulkan, matching di satu harga saat buka (08:45–09:00) |
+| **Clearing Price** | Harga hasil call auction yang memaksimalkan volume |
+| **Confirm-Open** | Phase 2: keputusan post-open berdasarkan opening price aktual |
+| **Entry Range** | ATR-scaled band di sekitar prev_close. Enter hanya jika open di sini |
+| **FVWAP** | Foreign VWAP Discount: % selisih VWAP asing vs harga sekarang |
+| **IEV** | Intraday Expected Volume. Proxy untuk likuiditas dan institutional interest |
+| **Lot** | 1 lot = 100 saham di IDX |
+| **Overbought** | RSI > 75. Terlalu cepat naik, risiko koreksi meningkat |
+| **Pre-Open** | Phase 1: kandidat dan entry plan sebelum pasar buka |
+| **Prev Close** | Harga penutupan kemarin. Referensi utama untuk entry range |
+| **RSI** | Relative Strength Index. Momentum 0–100 |
+| **S/R** | Support dan Resistance. Level harga penting |
+| **Smart Money** | Institusi dan investor asing yang dianggap lebih informed |
+| **Stop-Loss** | Harga keluar rugi. Wajib dipasang |
+| **VWAP** | Volume-Weighted Average Price |
 
-### Tick Size IDX (Referensi)
+### Tick Size IDX
 
-| Harga Saham | Tick |
-|-------------|------|
+| Harga | Tick |
+|-------|------|
 | < Rp 200 | Rp 1 |
 | Rp 200 – < Rp 500 | Rp 2 |
 | Rp 500 – < Rp 2.000 | Rp 5 |
@@ -754,12 +801,20 @@ Kamu beli BBCA di 9,050, stop di 8,900. Harga turun ke 8,950. Kamu beli lagi kar
 
 ## Penutup
 
-Tool ini memberikan kamu struktur dan data — tapi keputusan tetap di tangan kamu. Tidak ada screener yang bisa menjamin profit. Yang bisa dilakukan adalah meningkatkan probabilitas dengan menggunakan data yang lebih baik, dan melindungi modal dengan stop-loss yang disiplin.
+Workflow lengkap intraday dengan tool ini:
 
-**Mulai dengan paper trade selama 20–30 sesi sebelum menggunakan uang sungguhan.** Data dari `saham screen review` akan memberi tahu kamu apakah setup ini bekerja untuk gaya trading kamu, sebelum kamu menemukan hal itu dengan cara yang mahal.
+```
+Malam sebelum  : saham update --universe lq45
+08:30–08:45    : buka Stockbit, catat IEV + order book
+08:45–08:55    : saham intraday pre-open --movers-json '...'
+09:00–09:05    : saham intraday confirm-open --opening-json '...'
+Setelah trading: saham intraday log && saham intraday outcome TICKER --entry X --exit Y
+```
+
+Mulai dengan paper trade 20–30 sesi. Gunakan `saham intraday review` untuk evaluasi objektif. Data akurat lebih berharga dari keyakinan — ikuti angka, bukan perasaan.
 
 > "Preserve capital first. Profits will follow discipline."
 
 ---
 
-*Dokumen ini menjelaskan cara menggunakan tool ai-saham untuk analisis pre-open. Ini bukan saran investasi atau trading. Seluruh keputusan trading adalah tanggung jawab pribadi kamu.*
+*Dokumen ini menjelaskan cara menggunakan tool ai-saham untuk analisis pre-open dan intraday. Ini bukan saran investasi atau trading. Semua keputusan trading adalah tanggung jawab pribadi kamu.*
