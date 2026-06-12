@@ -99,9 +99,18 @@ app.add_typer(broker_app, name="broker")
 from src.adapters.cli.skill_commands import skill_app
 app.add_typer(skill_app, name="skill")
 
-# Register screen subcommands
-from src.adapters.cli.screen_commands import screen_app
-app.add_typer(screen_app, name="screen")
+# Register sentiment commands
+from src.adapters.cli.sentiment_commands import sentiment, sentiment_audit
+app.command("sentiment")(sentiment)
+app.command("sentiment-audit")(sentiment_audit)
+
+# Register intraday command family
+from src.adapters.cli.screen_commands import intraday_app
+app.add_typer(intraday_app, name="intraday")
+
+# Register Stockbit session management + diagnostics
+from src.adapters.cli.stockbit_commands import stockbit_app
+app.add_typer(stockbit_app, name="stockbit")
 
 # Register chart subcommands
 from src.adapters.cli.chart_commands import chart_app
@@ -111,25 +120,11 @@ app.add_typer(chart_app, name="chart")
 from src.adapters.cli.update_commands import update
 app.command("update")(update)
 
-# Register swing and size commands
-from src.adapters.cli.swing_commands import regime, swing, swing_backtest, size
+# Register swing command family
+from src.adapters.cli.swing_commands import swing_app, regime
+from src.adapters.cli.accumulation_commands import universe_app
+app.add_typer(swing_app, name="swing")
 app.command("regime")(regime)
-app.command("swing")(swing)
-app.command("swing-backtest")(swing_backtest)
-app.command("size")(size)
-
-# Register accumulation screener directly on screen_app
-from src.adapters.cli.accumulation_commands import (
-    accumulation_audit,
-    accumulation_log,
-    accumulation_review,
-    accumulation_run,
-    universe_app,
-)
-screen_app.command("accumulation")(accumulation_run)
-screen_app.command("accumulation-audit")(accumulation_audit)
-screen_app.command("accumulation-log")(accumulation_log)
-screen_app.command("accumulation-review")(accumulation_review)
 app.add_typer(universe_app, name="universe")
 
 # Default configuration
@@ -159,102 +154,6 @@ def validate_field(value: str) -> str:
             f"Invalid field '{value}'. Must be one of: {', '.join(VALID_FIELDS)}"
         )
     return value.lower()
-
-
-def _display_sentiment_full(
-    snapshot: SentimentSnapshot,
-    provider: str,
-    classifier: str,
-    warning: str | None = None,
-) -> None:
-    """Display full sentiment snapshot output.
-
-    Args:
-        snapshot: The sentiment snapshot to display
-        provider: Name of news provider used
-        classifier: Name of classifier used
-        warning: Optional warning message
-    """
-    if warning:
-        typer.echo(f"\nWarning: {warning}")
-        return
-
-    # Sentiment symbol map
-    sentiment_symbols = {
-        Sentiment.POSITIVE: "+",
-        Sentiment.NEUTRAL: "=",
-        Sentiment.NEGATIVE: "-",
-    }
-
-    # Overall sentiment display
-    typer.echo(f"\n{'-' * 39}")
-    typer.echo("SENTIMENT SNAPSHOT")
-    typer.echo(f"{'-' * 39}")
-
-    # Get the count for the winning sentiment
-    sentiment_counts = {
-        Sentiment.POSITIVE: snapshot.positive_count,
-        Sentiment.NEUTRAL: snapshot.neutral_count,
-        Sentiment.NEGATIVE: snapshot.negative_count,
-    }
-    winning_count = sentiment_counts[snapshot.overall_sentiment]
-
-    typer.echo(f"\nOverall: {snapshot.overall_sentiment.value.upper()}")
-    typer.echo(
-        f"Confidence: {winning_count}/{snapshot.total_count} headlines ({snapshot.confidence_pct}%)"
-    )
-
-    typer.echo("\nBreakdown:")
-    total = snapshot.total_count or 1  # Avoid division by zero
-    pos_pct = int(snapshot.positive_count / total * 100)
-    neu_pct = int(snapshot.neutral_count / total * 100)
-    neg_pct = int(snapshot.negative_count / total * 100)
-    typer.echo(f"  Positive:  {snapshot.positive_count} ({pos_pct}%)")
-    typer.echo(f"  Neutral:   {snapshot.neutral_count} ({neu_pct}%)")
-    typer.echo(f"  Negative:  {snapshot.negative_count} ({neg_pct}%)")
-
-    # Show recent headlines (max 5)
-    if snapshot.headlines:
-        typer.echo("\nRecent Headlines:")
-        for headline in snapshot.headlines[:5]:
-            symbol = sentiment_symbols.get(headline.sentiment, "?")
-            title = headline.title[:70]
-            suffix = "..." if len(headline.title) > 70 else ""
-            typer.echo(f"  [{symbol}] {title}{suffix}")
-
-    typer.echo(f"\n[Provider: {provider} | Classifier: {classifier}]")
-
-
-def _display_sentiment_brief(
-    snapshot: SentimentSnapshot,
-    warning: str | None = None,
-) -> None:
-    """Display brief sentiment output for --with-sentiment flag.
-
-    Args:
-        snapshot: The sentiment snapshot to display
-        warning: Optional warning message
-    """
-    typer.echo(f"\n{'-' * 39}")
-    typer.echo("NEWS SENTIMENT")
-    typer.echo(f"{'-' * 39}")
-
-    if warning:
-        typer.echo(f"\nWarning: {warning}")
-        typer.echo("\nNote: Sentiment is contextual information only.")
-        typer.echo("      It does NOT affect the risk assessment above.")
-        return
-
-    typer.echo(
-        f"\nOverall: {snapshot.overall_sentiment.value.upper()} "
-        f"({snapshot.total_count} headlines, {snapshot.confidence_pct}%)"
-    )
-    typer.echo(
-        f"\nBreakdown: +{snapshot.positive_count} / "
-        f"={snapshot.neutral_count} / -{snapshot.negative_count}"
-    )
-    typer.echo("\nNote: Sentiment is contextual information only.")
-    typer.echo("      It does NOT affect the risk assessment above.")
 
 
 def _display_ai_explanation(
@@ -1042,7 +941,7 @@ def risk(
     ] = False,
     provider: Annotated[
         Optional[str],
-        typer.Option("--provider", help="AI provider (claude/openai/gemini/ollama/mock)"),
+        typer.Option("--provider", help="AI provider (deepseek/claude/openai/gemini/ollama/mock)"),
     ] = None,
     model: Annotated[
         Optional[str],
@@ -1243,7 +1142,8 @@ def risk(
                 sentiment_response = sentiment_use_case.execute(
                     FetchSentimentRequest(ticker=ticker)
                 )
-                _display_sentiment_brief(
+                from src.adapters.cli.sentiment_commands import _display_sentiment_brief as show_sentiment
+                show_sentiment(
                     snapshot=sentiment_response.snapshot,
                     warning=sentiment_response.warning,
                 )
@@ -1537,110 +1437,6 @@ def backtest(
         raise typer.Exit(1)
 
 
-@app.command()
-def sentiment(
-    ticker: Annotated[str, typer.Argument(help="Stock ticker symbol (e.g., BBCA)")],
-    days: Annotated[
-        int,
-        typer.Option("--days", "-d", help="Days of news to fetch", min=1, max=30),
-    ] = 3,
-    max_headlines: Annotated[
-        int,
-        typer.Option("--max", help="Maximum headlines to analyze", min=1, max=50),
-    ] = 20,
-    ai_classify: Annotated[
-        bool,
-        typer.Option("--ai-classify", help="Use AI for classification (requires API key)"),
-    ] = False,
-    provider: Annotated[
-        Optional[str],
-        typer.Option(
-            "--provider", help="AI provider for classification (claude/openai/gemini/ollama)"
-        ),
-    ] = None,
-    model: Annotated[
-        Optional[str],
-        typer.Option("--model", "-m", help="Model name for AI provider"),
-    ] = None,
-    news_provider_name: Annotated[
-        str,
-        typer.Option(
-            "--news-provider",
-            help="News source: google (default), kontan, cnbc, mock",
-        ),
-    ] = "google",
-) -> None:
-    """
-    Fetch and analyze news sentiment for an IDX stock.
-
-    Retrieves recent news headlines and classifies them as positive,
-    neutral, or negative using keyword matching (default) or AI.
-
-    Sentiment is informational only and does NOT affect risk assessment.
-
-    Classifier modes:
-    - keyword (default): Rule-based, uses Indonesian + English keywords
-    - AI (--ai-classify): Uses LLM for more nuanced classification
-
-    News providers:
-    - google (default): Google News RSS (global coverage)
-    - kontan: Kontan RSS (Indonesia's leading financial newspaper)
-    - cnbc: CNBC Indonesia market RSS (IDX market commentary)
-
-    Examples:
-        saham sentiment BBCA
-        saham sentiment BBRI --days 7 --news-provider kontan
-        saham sentiment TLKM --ai-classify
-        saham sentiment ASII --news-provider cnbc
-    """
-    typer.echo(f"Fetching news sentiment for {ticker.upper()}...")
-
-    try:
-        # Wire up dependencies
-        news_provider = SentimentFactory.create_news_provider(news_provider_name)
-        classifier = SentimentFactory.create_classifier(
-            use_ai=ai_classify,
-            provider=provider,
-            model=model,
-        )
-        use_case = FetchSentimentUseCase(
-            news_provider=news_provider,
-            classifier=classifier,
-        )
-
-        # Execute use case
-        request = FetchSentimentRequest(
-            ticker=ticker,
-            max_headlines=max_headlines,
-            days=days,
-        )
-        response = use_case.execute(request)
-
-        # Display header
-        typer.echo(f"\nTicker: {response.ticker}")
-        typer.echo(f"Date: {response.snapshot.fetch_date}")
-        typer.echo(f"Headlines Analyzed: {response.snapshot.total_count}")
-
-        # Display sentiment
-        _display_sentiment_full(
-            snapshot=response.snapshot,
-            provider=response.provider,
-            classifier=response.classifier,
-            warning=response.warning,
-        )
-
-        typer.echo("\nDISCLAIMER: Sentiment analysis only, not trading advice.")
-
-    except Exception as e:
-        error_msg = str(e).lower()
-        if "connection" in error_msg or "network" in error_msg or "timeout" in error_msg:
-            typer.echo("Warning: Could not fetch news (network issue).", err=True)
-            typer.echo("Tip: Check your internet connection and try again.", err=True)
-        else:
-            typer.echo(f"Failed to analyze sentiment: {e}", err=True)
-        raise typer.Exit(1)
-
-
 @app.command("create-indicator")
 def create_indicator(
     intent: Annotated[
@@ -1652,7 +1448,7 @@ def create_indicator(
     ] = None,
     provider: Annotated[
         str,
-        typer.Option("--provider", "-p", help="AI provider (claude/openai/gemini/ollama/mock)"),
+        typer.Option("--provider", "-p", help="AI provider (deepseek/claude/openai/gemini/ollama/mock)"),
     ] = "mock",
     model: Annotated[
         Optional[str],

@@ -1,22 +1,22 @@
 """
-CLI commands for pre-open market screening.
+CLI commands for the intraday trading command family.
 
 Usage patterns:
 
   # Autonomous (playwright + saved session):
-  saham screen pre-open
+  saham intraday pre-open
 
   # Fast mode (no order book, ~15s):
-  saham screen pre-open --movers-json '[{"ticker":"BBCA","iev":150000}]' --fast
+  saham intraday pre-open --movers-json '[{"ticker":"BBCA","iev":150000}]' --fast
 
   # Normal mode with order book data:
-  saham screen pre-open \\
+  saham intraday pre-open \\
     --movers-json '[{"ticker":"BBCA","iev":150000}]' \\
     --order-books-json '{"BBCA":{"price":8900,"volume":50000}}'
 
   # Paper trade journal:
-  saham screen log
-  saham screen review --horizon 5
+  saham intraday pre-open-log
+  saham intraday pre-open-review --horizon 5
 
 Layer: Adapter
 """
@@ -53,9 +53,9 @@ from src.infrastructure.browser.stockbit_browser import (
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
-screen_app = typer.Typer(
-    name="screen",
-    help="Pre-open market screening and journal commands",
+intraday_app = typer.Typer(
+    name="intraday",
+    help="Intraday screening, confirmation, journal, and audit workflow",
     no_args_is_help=True,
 )
 
@@ -139,13 +139,13 @@ def _print_browser_plan(config: PreOpenScreenConfig) -> None:
         typer.echo("")
         typer.echo("STEP 3 — Re-run with collected data")
         typer.echo("-" * 40)
-        typer.echo("  saham screen pre-open \\")
+        typer.echo("  saham screen intraday pre-open \\")
         typer.echo("    --movers-json '<step1_json>' \\")
         typer.echo("    --order-books-json '<step2_json>'")
     else:
         typer.echo("STEP 2 — Re-run with movers data (fast mode — no order book needed)")
         typer.echo("-" * 40)
-        typer.echo("  saham screen pre-open --fast --movers-json '<step1_json>'")
+        typer.echo("  saham screen intraday pre-open --fast --movers-json '<step1_json>'")
     typer.echo("")
     typer.echo("=" * 60)
 
@@ -283,7 +283,7 @@ def _write_sidecar(
     screened_date: date,
     sidecar_path: Path,
 ) -> None:
-    """Write session sidecar JSON so `saham screen log` can read it."""
+    """Write session sidecar JSON so `saham screen intraday pre-open-log` can read it."""
     sidecar_path.parent.mkdir(parents=True, exist_ok=True)
     data = {
         "screened_at": str(screened_date),
@@ -484,7 +484,7 @@ def _display_intraday_review(report, journal_path: Path) -> None:
     typer.echo("=" * 78)
 
 
-@screen_app.command("pre-open")
+@intraday_app.command("pre-open")
 def pre_open(
     movers_json: Annotated[
         Optional[str],
@@ -538,18 +538,18 @@ def pre_open(
 
     Examples:
         # Fast mode (no order book, ~15s):
-        saham screen pre-open --movers-json '[{"ticker":"BBCA","iev":150000}]' --fast
+        saham screen intraday pre-open --movers-json '[{"ticker":"BBCA","iev":150000}]' --fast
 
         # Normal mode with order book:
-        saham screen pre-open \\
+        saham screen intraday pre-open \\
           --movers-json '[{"ticker":"BBCA","iev":150000}]' \\
           --order-books-json '{"BBCA":{"price":8900,"volume":50000}}'
 
         # Top 3 only, wider gap tolerance:
-        saham screen pre-open --movers-json '...' --top 3 --max-gap 0.05
+        saham screen intraday pre-open --movers-json '...' --top 3 --max-gap 0.05
 
         # Log results after run:
-        saham screen pre-open --movers-json '...' && saham screen log
+        saham screen intraday pre-open --movers-json '...' && saham screen intraday pre-open-log
     """
     resolved_strategy = strategy_path or DEFAULT_STRATEGY_PATH
     resolved_db = db_path or DEFAULT_DB_PATH
@@ -641,7 +641,7 @@ def pre_open(
             warnings=response.warnings,
         )
 
-        # Write session sidecar for `saham screen log`
+        # Write session sidecar for `saham screen intraday pre-open-log`
         _write_sidecar(result.candidates, result.screened_date, DEFAULT_SIDECAR_PATH)
 
     except BrowserInteractionRequired as e:
@@ -654,7 +654,7 @@ def pre_open(
         raise typer.Exit(1)
 
 
-@screen_app.command("confirm-open")
+@intraday_app.command("confirm-open")
 def confirm_open(
     opening_json: Annotated[
         str,
@@ -679,11 +679,11 @@ def confirm_open(
     """
     Confirm pre-open candidates after the opening auction clears.
 
-    Reads the last `saham screen pre-open` sidecar and actual opening prices,
+    Reads the last `saham screen intraday pre-open` sidecar and actual opening prices,
     then emits deterministic ENTER / WAIT / SKIP decisions. No AI is used.
 
     Example:
-        saham screen confirm-open --opening-json '{"BBCA":9050,"BMRI":5875}'
+        saham screen intraday confirm-open --opening-json '{"BBCA":9050,"BMRI":5875}'
     """
     sidecar_path = session or DEFAULT_SIDECAR_PATH
     output_path = output or DEFAULT_CONFIRMATION_PATH
@@ -691,7 +691,7 @@ def confirm_open(
     if not sidecar_path.exists():
         typer.echo(
             f"No session sidecar found at '{sidecar_path}'.\n"
-            "Run `saham screen pre-open` first.",
+            "Run `saham screen intraday pre-open` first.",
             err=True,
         )
         raise typer.Exit(1)
@@ -743,7 +743,8 @@ def confirm_open(
     )
 
 
-@screen_app.command("confirm-log")
+@intraday_app.command("confirm-log")
+@intraday_app.command("log")
 def confirm_log(
     confirmation: Annotated[
         Optional[Path],
@@ -776,7 +777,7 @@ def confirm_log(
     if not confirmation_path.exists():
         typer.echo(
             f"No confirmation sidecar found at '{confirmation_path}'.\n"
-            "Run `saham screen confirm-open` first.",
+            "Run `saham screen intraday confirm-open` first.",
             err=True,
         )
         raise typer.Exit(1)
@@ -815,7 +816,8 @@ def confirm_log(
         typer.echo(f"Logged {count} confirmation(s) for {confirmed_at} → {journal_path}")
 
 
-@screen_app.command("confirm-review")
+@intraday_app.command("confirm-review")
+@intraday_app.command("review")
 def confirm_review(
     journal: Annotated[
         Optional[Path],
@@ -845,7 +847,7 @@ def confirm_review(
     if not journal_path.exists():
         typer.echo(
             f"No confirmation journal found at '{journal_path}'.\n"
-            "Run `saham screen confirm-log` after confirming opens first.",
+            "Run `saham screen intraday confirm-log` after confirming opens first.",
             err=True,
         )
         raise typer.Exit(1)
@@ -857,7 +859,8 @@ def confirm_review(
     _display_intraday_review(report, journal_path)
 
 
-@screen_app.command("confirm-outcome")
+@intraday_app.command("confirm-outcome")
+@intraday_app.command("outcome")
 def confirm_outcome(
     ticker: Annotated[str, typer.Argument(help="Ticker to update (e.g. BBCA)")],
     entry: Annotated[
@@ -916,7 +919,7 @@ def confirm_outcome(
     if not journal_path.exists():
         typer.echo(
             f"No confirmation journal found at '{journal_path}'.\n"
-            "Run `saham screen confirm-log` first.",
+            "Run `saham screen intraday confirm-log` first.",
             err=True,
         )
         raise typer.Exit(1)
@@ -955,7 +958,7 @@ def confirm_outcome(
     )
 
 
-@screen_app.command("log")
+@intraday_app.command("pre-open-log")
 def log_session(
     session: Annotated[
         Optional[Path],
@@ -972,14 +975,14 @@ def log_session(
     """
     Append last screener run to the paper trade journal.
 
-    Reads the session sidecar written by `saham screen pre-open` and
+    Reads the session sidecar written by `saham screen intraday pre-open` and
     appends one row per candidate to the journal CSV. Idempotent:
     re-running for the same date never duplicates rows.
 
     Example:
-        saham screen pre-open --movers-json '...'
-        saham screen log
-        saham screen review --horizon 5
+        saham screen intraday pre-open --movers-json '...'
+        saham screen intraday pre-open-log
+        saham screen intraday pre-open-review --horizon 5
     """
     from src.application.services.paper_trade_journal import PaperTradeJournalService
     from src.domain.value_objects.screener_result import ScreenerCandidate
@@ -991,7 +994,7 @@ def log_session(
     if not sidecar_path.exists():
         typer.echo(
             f"No session sidecar found at '{sidecar_path}'.\n"
-            "Run `saham screen pre-open` first.",
+            "Run `saham screen intraday pre-open` first.",
             err=True,
         )
         raise typer.Exit(1)
@@ -1034,7 +1037,7 @@ def log_session(
         typer.echo(f"Logged {count} candidate(s) for {screened_at} → {journal_path}")
 
 
-@screen_app.command("review")
+@intraday_app.command("pre-open-review")
 def review(
     journal: Annotated[
         Optional[Path],
@@ -1057,7 +1060,7 @@ def review(
     and computes what % of entry ranges were accurate.
 
     Example:
-        saham screen review --horizon 5
+        saham screen intraday pre-open-review --horizon 5
     """
     from src.application.services.paper_trade_journal import PaperTradeJournalService
     from src.infrastructure.persistence.journal_csv_writer import JournalCsvWriter
@@ -1068,7 +1071,7 @@ def review(
     if not journal_path.exists():
         typer.echo(
             f"No journal found at '{journal_path}'.\n"
-            "Run `saham screen log` after a screening session first.",
+            "Run `saham screen intraday pre-open-log` after a screening session first.",
             err=True,
         )
         raise typer.Exit(1)
@@ -1125,32 +1128,15 @@ def _build_ai_researcher(provider: Optional[str] = None):
     return ClaudeTickerResearcher()
 
 
-@screen_app.command("save-session")
-def save_session(
-    session_file: Annotated[
-        Optional[Path],
-        typer.Option("--session"),
-    ] = None,
-    timeout: Annotated[int, typer.Option("--timeout", min=30)] = 120,
-) -> None:
+@intraday_app.command("save-session")
+def save_session() -> None:
     """
-    Save a Stockbit browser session for autonomous pre-open screening.
-
-    Requires: pip install playwright && playwright install chromium
-
-    Example:
-        saham screen save-session
+    Deprecated. Use: saham stockbit login
     """
-    if not _playwright_available():
-        typer.echo("Error: playwright not installed.", err=True)
-        typer.echo("Run: pip install playwright && playwright install chromium", err=True)
-        raise typer.Exit(1)
-
-    from src.infrastructure.browser.playwright_stockbit import save_stockbit_session
-
-    resolved = session_file or DEFAULT_SESSION_FILE
-    try:
-        save_stockbit_session(session_file=resolved, timeout=timeout)
-    except Exception as e:
-        typer.echo(f"Failed to save session: {e}", err=True)
-        raise typer.Exit(1)
+    typer.echo(
+        "This command has moved. Use:\n\n"
+        "  saham stockbit login\n\n"
+        "Run 'saham stockbit --help' for all Stockbit session commands.",
+        err=True,
+    )
+    raise typer.Exit(1)
