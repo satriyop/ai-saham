@@ -42,6 +42,7 @@ class AccumulationScreenRequest:
     min_score: float = 0.0         # filter: only include scores >= this
     rsi_period: int = 14
     sma_period: int = 20
+    as_of_date: date | None = None # deterministic replay date; defaults to today
 
 
 @dataclass
@@ -193,7 +194,7 @@ class AccumulationScreenUseCase:
     def execute(
         self, request: AccumulationScreenRequest
     ) -> AccumulationScreenResponse:
-        today = date.today()
+        today = request.as_of_date or date.today()
         window_start = today - timedelta(days=request.window_days + 30)
         # +30 days buffer for RSI/SMA warmup
 
@@ -301,7 +302,7 @@ class AccumulationScreenUseCase:
         avg_flow_ratio = sum(flow_ratios) / len(flow_ratios) if flow_ratios else None
 
         # Load candles for price + RSI + trend + BB squeeze
-        candles = self._market_repo.get_candles(ticker)
+        candles = self._market_repo.get_candles(ticker, end_date=today)
         if not candles:
             current_price = Decimal("0")
             rsi = None

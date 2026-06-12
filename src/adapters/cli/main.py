@@ -111,9 +111,23 @@ app.add_typer(chart_app, name="chart")
 from src.adapters.cli.update_commands import update
 app.command("update")(update)
 
+# Register swing and size commands
+from src.adapters.cli.swing_commands import swing, size
+app.command("swing")(swing)
+app.command("size")(size)
+
 # Register accumulation screener directly on screen_app
-from src.adapters.cli.accumulation_commands import accumulation_run, universe_app
+from src.adapters.cli.accumulation_commands import (
+    accumulation_audit,
+    accumulation_log,
+    accumulation_review,
+    accumulation_run,
+    universe_app,
+)
 screen_app.command("accumulation")(accumulation_run)
+screen_app.command("accumulation-audit")(accumulation_audit)
+screen_app.command("accumulation-log")(accumulation_log)
+screen_app.command("accumulation-review")(accumulation_review)
 app.add_typer(universe_app, name="universe")
 
 # Default configuration

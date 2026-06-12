@@ -2,14 +2,18 @@
 CLI commands for foreign accumulation screening and universe management.
 
 Commands:
-  saham screen accumulation — scan stocks for foreign accumulation patterns
-  saham universe list       — show configured ticker universes
-  saham universe update     — refresh universe lists from IDX (future)
+  saham screen accumulation        — scan stocks for foreign accumulation patterns
+  saham screen accumulation-log    — log a candidate to the trade journal
+  saham screen accumulation-review — review journal forward returns
+  saham universe list              — show configured ticker universes
+  saham universe update            — refresh universe lists from IDX (future)
 
 Layer: Adapter
 """
 
+import csv
 import json
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 from typing import Annotated, Optional
@@ -20,6 +24,11 @@ from src.application.services.universe_loader import (
     UniverseNotFoundError,
     load_universe_meta,
     resolve_tickers,
+)
+from src.application.use_case.accumulation_audit import (
+    AccumulationAuditRequest,
+    AccumulationAuditResponse,
+    AccumulationAuditUseCase,
 )
 from src.application.use_case.accumulation_screen import (
     AccumulationCandidate,
@@ -714,6 +723,429 @@ def accumulation_run(
         _print_column_guide()
 
 
+def _display_audit_summary(response: AccumulationAuditResponse, top_groups: int) -> None:
+    typer.echo("")
+    typer.echo(typer.style("=" * 96, fg=typer.colors.CYAN))
+    typer.echo(
+        typer.style(
+            "FOREIGN ACCUMULATION HISTORICAL AUDIT",
+            fg=typer.colors.CYAN,
+            bold=True,
+        )
+    )
+    typer.echo(typer.style("=" * 96, fg=typer.colors.CYAN))
+    typer.echo(
+        f"Period: {response.start_date} to {response.end_date} | "
+        f"window: {response.window_days}d | replay dates: {response.total_replay_dates} | "
+        f"tickers: {response.total_tickers}"
+    )
+    typer.echo(
+        f"Signals: {response.total_records} | "
+        f"Skipped no forward data: {response.skipped_no_forward_data}"
+    )
+    typer.echo(
+        "Read fixed-hold rows as: if you bought every matching signal at the signal-date "
+        "close, what happened after 5/10/20 trading days."
+    )
+    typer.echo("")
+
+    if not response.records:
+        typer.echo("No replayed signals matched the audit filters.")
+        return
+
+    typer.echo(
+        f"{'DIMENSION':<14} {'BUCKET':<12} {'N':>6} "
+        f"{'AVG5D':>9} {'AVG10D':>9} {'WIN10D':>9} "
+        f"{'AVG20D':>9} {'MAXUP':>9} {'MAXDD':>9}"
+    )
+    typer.echo("-" * 96)
+    for stat in response.group_stats[:top_groups]:
+        def fmt(v: float | None) -> str:
+            return "—" if v is None else f"{v:+.2f}%"
+
+        win = "—" if stat.win_rate_10d_pct is None else f"{stat.win_rate_10d_pct:.1f}%"
+        typer.echo(
+            f"{stat.dimension:<14} {stat.bucket:<12} {stat.count:>6} "
+            f"{fmt(stat.avg_return_5d_pct):>9} {fmt(stat.avg_return_10d_pct):>9} "
+            f"{win:>9} {fmt(stat.avg_return_20d_pct):>9} "
+            f"{fmt(stat.avg_max_upside_pct):>9} {fmt(stat.avg_max_drawdown_pct):>9}"
+        )
+
+    if response.exit_simulations:
+        typer.echo("")
+        typer.echo("EXIT SIMULATION")
+        typer.echo("-" * 96)
+        best = response.exit_simulations[0]
+        avg_ret = (
+            "N/A" if best.avg_return_pct is None
+            else f"{best.avg_return_pct:+.2f}%"
+        )
+        win = "N/A" if best.win_rate_pct is None else f"{best.win_rate_pct:.1f}%"
+        avg_days = (
+            "N/A" if best.avg_holding_days is None
+            else f"{best.avg_holding_days:.1f}d"
+        )
+        typer.echo(
+            "Rows below simulate managed exits using daily high/low: stop is checked "
+            "first, then target, otherwise exit at max-hold close."
+        )
+        typer.echo(
+            f"Best by AVG_RET: TP {best.take_profit_pct:g}%, "
+            f"SL {best.stop_loss_pct:g}%, max hold {best.max_hold_days}d -> "
+            f"avg {avg_ret}, win {win}, avg hold {avg_days}."
+        )
+        if response.total_records < 30:
+            typer.echo(
+                "Caution: sample is small (<30 signals). Treat this as a hypothesis "
+                "to retest on more dates/universes, not a final rule."
+            )
+        typer.echo("")
+        typer.echo(
+            f"{'TP%':>6} {'SL%':>6} {'HOLD':>6} {'N':>6} "
+            f"{'AVG_RET':>9} {'WIN':>8} {'AVG_DAYS':>9} "
+            f"{'STOP':>8} {'TARGET':>8} {'MAXHOLD':>8} {'AVG_DD':>9}"
+        )
+        for stat in response.exit_simulations[:top_groups]:
+            def fmt_pct(v: float | None, signed: bool = False) -> str:
+                if v is None:
+                    return "—"
+                return f"{v:+.2f}%" if signed else f"{v:.1f}%"
+
+            avg_days = "—" if stat.avg_holding_days is None else f"{stat.avg_holding_days:.1f}"
+            typer.echo(
+                f"{stat.take_profit_pct:>6.1f} {stat.stop_loss_pct:>6.1f} "
+                f"{stat.max_hold_days:>6} {stat.count:>6} "
+                f"{fmt_pct(stat.avg_return_pct, signed=True):>9} "
+                f"{fmt_pct(stat.win_rate_pct):>8} {avg_days:>9} "
+                f"{fmt_pct(stat.stop_rate_pct):>8} "
+                f"{fmt_pct(stat.target_rate_pct):>8} "
+                f"{fmt_pct(stat.max_hold_rate_pct):>8} "
+                f"{fmt_pct(stat.avg_max_drawdown_pct, signed=True):>9}"
+            )
+
+    typer.echo("")
+    typer.echo("COLUMN GUIDE")
+    typer.echo("-" * 40)
+    typer.echo("AVG5D/10D/20D: passive close-to-close return after that many trading days.")
+    typer.echo("MAXUP/MAXDD: average best/worst close-to-close move inside the horizon.")
+    typer.echo("AVG_RET: simulated exit return after TP/SL/max-hold rules.")
+    typer.echo("WIN: percent of simulated exits with positive return.")
+    typer.echo("STOP/TARGET/MAXHOLD: how often each exit reason happened.")
+    typer.echo("AVG_DD: average intratrade drawdown using daily low before exit.")
+
+    if response.warnings:
+        typer.echo("")
+        typer.echo("WARNINGS")
+        typer.echo("-" * 40)
+        for warning in response.warnings:
+            typer.echo(f"  ! {warning}")
+
+    typer.echo("")
+    typer.echo("DISCLAIMER: Historical audit only. Not trading advice.")
+    typer.echo(typer.style("=" * 96, fg=typer.colors.CYAN))
+
+
+def _write_audit_csv(response: AccumulationAuditResponse, output_path: Path) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    rows = [r.to_dict() for r in response.records]
+    fieldnames = list(rows[0].keys()) if rows else [
+        "signal_date", "ticker", "score", "streak", "net_buy_ratio",
+        "total_net_value", "flow_pct", "vwap_disc_pct", "rsi", "bb_pctile",
+        "trend", "current_price", "return_5d_pct", "return_10d_pct",
+        "return_20d_pct", "max_upside_pct", "max_drawdown_pct",
+    ]
+    with output_path.open("w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def _parse_float_grid(value: str, option_name: str) -> tuple[float, ...]:
+    try:
+        parsed = tuple(float(part.strip()) for part in value.split(",") if part.strip())
+    except ValueError as e:
+        raise typer.BadParameter(f"{option_name} must be comma-separated numbers") from e
+    if not parsed or any(item <= 0 for item in parsed):
+        raise typer.BadParameter(f"{option_name} must contain positive numbers")
+    return parsed
+
+
+def _parse_int_grid(value: str, option_name: str) -> tuple[int, ...]:
+    try:
+        parsed = tuple(int(part.strip()) for part in value.split(",") if part.strip())
+    except ValueError as e:
+        raise typer.BadParameter(f"{option_name} must be comma-separated integers") from e
+    if not parsed or any(item <= 0 for item in parsed):
+        raise typer.BadParameter(f"{option_name} must contain positive integers")
+    return parsed
+
+
+AUDIT_PRESETS = {
+    "foreign-bounce": {
+        "universe": "idx80",
+        "window": 7,
+        "min_score": 70.0,
+        "min_net_buy_days": 2,
+        "min_vwap_disc": 3.0,
+        "trend": "SIDE",
+        "min_flow_pct": 5.0,
+        "require_rsi": True,
+        "max_rsi": 60.0,
+        "simulate_exits": True,
+        "take_profits": "4,5,6",
+        "stop_losses": "3,5,7",
+        "max_holds": "3,5,7,10",
+    },
+}
+
+
+@accumulation_app.command("audit")
+def accumulation_audit(
+    tickers: Annotated[
+        Optional[list[str]],
+        typer.Argument(help="Explicit ticker symbols (e.g. BBCA BBRI)"),
+    ] = None,
+    universe: Annotated[
+        Optional[str],
+        typer.Option("--universe", "-u", help="Universe: lq45, idx80, idxcomp100, cached"),
+    ] = None,
+    preset: Annotated[
+        Optional[str],
+        typer.Option("--preset", help="Audit preset: foreign-bounce"),
+    ] = None,
+    start: Annotated[
+        str,
+        typer.Option("--start", help="Audit start date, YYYY-MM-DD"),
+    ] = "2026-01-01",
+    end: Annotated[
+        Optional[str],
+        typer.Option("--end", help="Audit end date, YYYY-MM-DD (default: today)"),
+    ] = None,
+    window: Annotated[
+        Optional[int],
+        typer.Option("--window", "-w", help="Accumulation window in days", min=3),
+    ] = None,
+    min_score: Annotated[
+        Optional[float],
+        typer.Option("--min-score", help="Minimum composite score to audit", min=0),
+    ] = None,
+    min_net_buy_days: Annotated[
+        Optional[int],
+        typer.Option("--min-net-buy-days", help="Minimum foreign net-buy days", min=1),
+    ] = None,
+    min_vwap_disc: Annotated[
+        Optional[float],
+        typer.Option(
+            "--min-vwap-disc",
+            help="Require VWAP discount at least this percent",
+        ),
+    ] = None,
+    trend: Annotated[
+        Optional[str],
+        typer.Option("--trend", help="Require trend bucket: UP, SIDE, or DOWN"),
+    ] = None,
+    min_flow_pct: Annotated[
+        Optional[float],
+        typer.Option("--min-flow-pct", help="Require average foreign flow percent"),
+    ] = None,
+    require_rsi: Annotated[
+        bool,
+        typer.Option("--require-rsi", help="Exclude signals with missing RSI"),
+    ] = False,
+    max_rsi: Annotated[
+        Optional[float],
+        typer.Option("--max-rsi", help="Require RSI at or below this value"),
+    ] = None,
+    simulate_exits: Annotated[
+        Optional[bool],
+        typer.Option("--simulate-exits", help="Run TP/SL/max-hold exit grid"),
+    ] = None,
+    take_profits: Annotated[
+        Optional[str],
+        typer.Option("--take-profits", help="Comma-separated take-profit percentages"),
+    ] = None,
+    stop_losses: Annotated[
+        Optional[str],
+        typer.Option("--stop-losses", help="Comma-separated stop-loss percentages"),
+    ] = None,
+    max_holds: Annotated[
+        Optional[str],
+        typer.Option("--max-holds", help="Comma-separated max holding days"),
+    ] = None,
+    horizon: Annotated[
+        int,
+        typer.Option("--horizon", help="Forward horizon for max up/down metrics", min=5),
+    ] = 20,
+    output_path: Annotated[
+        Optional[Path],
+        typer.Option("--output", "-o", help="Write raw audit records to CSV"),
+    ] = None,
+    output_format: Annotated[
+        str,
+        typer.Option("--format", help="Output format: table or json"),
+    ] = "table",
+    top_groups: Annotated[
+        int,
+        typer.Option("--top-groups", help="Number of grouped summary rows to print", min=1),
+    ] = 80,
+    db_path: Annotated[
+        Optional[Path],
+        typer.Option("--db", help="SQLite database path"),
+    ] = None,
+) -> None:
+    """
+    Replay accumulation signals historically and measure forward returns.
+
+    This command is deterministic and offline. It uses cached local candles and
+    broker summaries only; run `saham update --universe <name>` first.
+    """
+    resolved_db = db_path or DEFAULT_DB_PATH
+
+    preset_name = preset.lower() if preset else None
+    preset_values = {}
+    if preset_name is not None:
+        if preset_name not in AUDIT_PRESETS:
+            typer.echo(
+                f"Error: unknown preset '{preset}'. "
+                f"Available presets: {', '.join(AUDIT_PRESETS)}",
+                err=True,
+            )
+            raise typer.Exit(1)
+        preset_values = AUDIT_PRESETS[preset_name]
+
+    universe = universe or preset_values.get("universe")
+    window = window if window is not None else int(preset_values.get("window", 7))
+    min_score = (
+        min_score if min_score is not None
+        else float(preset_values.get("min_score", 40.0))
+    )
+    min_net_buy_days = (
+        min_net_buy_days if min_net_buy_days is not None
+        else int(preset_values.get("min_net_buy_days", 2))
+    )
+    min_vwap_disc = (
+        min_vwap_disc if min_vwap_disc is not None
+        else preset_values.get("min_vwap_disc")
+    )
+    trend = trend or preset_values.get("trend")
+    min_flow_pct = (
+        min_flow_pct if min_flow_pct is not None
+        else preset_values.get("min_flow_pct")
+    )
+    require_rsi = require_rsi or bool(preset_values.get("require_rsi", False))
+    max_rsi = max_rsi if max_rsi is not None else preset_values.get("max_rsi")
+    simulate_exits = (
+        simulate_exits if simulate_exits is not None
+        else bool(preset_values.get("simulate_exits", False))
+    )
+    take_profits = take_profits or str(preset_values.get("take_profits", "4,5,6"))
+    stop_losses = stop_losses or str(preset_values.get("stop_losses", "3,5,7"))
+    max_holds = max_holds or str(preset_values.get("max_holds", "3,5,7,10"))
+
+    try:
+        start_date = date.fromisoformat(start)
+        end_date = date.fromisoformat(end) if end else date.today()
+    except ValueError as e:
+        typer.echo(f"Error: invalid date format: {e}", err=True)
+        raise typer.Exit(1)
+
+    try:
+        ticker_list = resolve_tickers(
+            universe=universe,
+            explicit=list(tickers) if tickers else [],
+            db_path=resolved_db,
+        )
+    except (UniverseNotFoundError, FileNotFoundError) as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+    if not ticker_list:
+        typer.echo(
+            "No tickers to audit. Specify --universe or provide ticker arguments.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    trend_filter = trend.upper() if trend else None
+    if trend_filter is not None and trend_filter not in {"UP", "SIDE", "DOWN"}:
+        typer.echo("Error: --trend must be one of: UP, SIDE, DOWN", err=True)
+        raise typer.Exit(1)
+
+    filter_parts = []
+    if min_vwap_disc is not None:
+        filter_parts.append(f"VWAP>={min_vwap_disc:g}%")
+    if trend_filter is not None:
+        filter_parts.append(f"trend={trend_filter}")
+    if min_flow_pct is not None:
+        filter_parts.append(f"flow>={min_flow_pct:g}%")
+    if require_rsi:
+        filter_parts.append("RSI present")
+    if max_rsi is not None:
+        filter_parts.append(f"RSI<={max_rsi:g}")
+    if simulate_exits:
+        filter_parts.append("exit simulation")
+    filter_label = f" | filters: {', '.join(filter_parts)}" if filter_parts else ""
+
+    try:
+        take_profit_grid = _parse_float_grid(take_profits, "--take-profits")
+        stop_loss_grid = _parse_float_grid(stop_losses, "--stop-losses")
+        max_hold_grid = _parse_int_grid(max_holds, "--max-holds")
+    except typer.BadParameter as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+    typer.echo(
+        f"Auditing {len(ticker_list)} tickers | {start_date} to {end_date} | "
+        f"{window}d window | min score {min_score:g}{filter_label}..."
+    )
+
+    use_case = AccumulationAuditUseCase(
+        broker_repository=SQLiteBrokerRepository(resolved_db),
+        market_repository=SQLiteMarketRepository(db_path=resolved_db),
+    )
+    response = use_case.execute(
+        AccumulationAuditRequest(
+            tickers=ticker_list,
+            start_date=start_date,
+            end_date=end_date,
+            window_days=window,
+            min_net_buy_days=min_net_buy_days,
+            min_score=min_score,
+            horizon_days=horizon,
+            min_vwap_disc_pct=min_vwap_disc,
+            trend=trend_filter,
+            min_flow_pct=min_flow_pct,
+            require_rsi=require_rsi,
+            max_rsi=max_rsi,
+            simulate_exits=simulate_exits,
+            take_profit_pcts=take_profit_grid,
+            stop_loss_pcts=stop_loss_grid,
+            max_hold_days=max_hold_grid,
+        )
+    )
+
+    if output_path is not None:
+        _write_audit_csv(response, output_path)
+        typer.echo(f"Wrote {response.total_records} audit records to {output_path}")
+
+    if output_format == "json":
+        typer.echo(json.dumps({
+            "start_date": response.start_date.isoformat(),
+            "end_date": response.end_date.isoformat(),
+            "window_days": response.window_days,
+            "total_replay_dates": response.total_replay_dates,
+            "total_tickers": response.total_tickers,
+            "total_records": response.total_records,
+            "skipped_no_forward_data": response.skipped_no_forward_data,
+            "warnings": response.warnings,
+            "group_stats": [s.to_dict() for s in response.group_stats],
+            "exit_simulations": [s.to_dict() for s in response.exit_simulations],
+        }, indent=2, default=str))
+        return
+
+    _display_audit_summary(response, top_groups=top_groups)
+
+
 # ---------------------------------------------------------------------------
 # Universe management commands
 # ---------------------------------------------------------------------------
@@ -780,3 +1212,266 @@ def universe_update(
     typer.echo("  4. Update the 'updated' date field")
     typer.echo("")
     typer.echo("IDX rebalances indices every February and August.")
+
+
+# ---------------------------------------------------------------------------
+# Accumulation trade journal commands
+# ---------------------------------------------------------------------------
+
+DEFAULT_ACCUM_JOURNAL_PATH = Path("journals/accumulation.csv")
+
+
+def accumulation_log(
+    ticker: Annotated[
+        str,
+        typer.Option("--ticker", "-t", help="Ticker symbol to log (e.g. BBRI)"),
+    ],
+    window: Annotated[
+        int,
+        typer.Option("--window", "-w", help="Accumulation window in days", min=3),
+    ] = 7,
+    entry_price: Annotated[
+        Optional[float],
+        typer.Option("--entry-price", help="Entry price override (default = latest close)"),
+    ] = None,
+    journal: Annotated[
+        Optional[Path],
+        typer.Option("--journal", help="Journal CSV path"),
+    ] = None,
+    db_path: Annotated[
+        Optional[Path],
+        typer.Option("--db", help="SQLite database path"),
+    ] = None,
+) -> None:
+    """
+    Log an accumulation candidate to the trade journal.
+
+    Runs the accumulation screen for TICKER and appends one row to the
+    journal CSV. Idempotent: re-running for the same (date, ticker, window)
+    never duplicates rows.
+
+    Example:
+        saham screen accumulation-log --ticker BBRI --window 7
+        saham screen accumulation-log --ticker BBCA --entry-price 9450
+    """
+    from src.application.services.accumulation_journal import AccumulationJournalService
+    from src.infrastructure.persistence.accumulation_journal_csv_writer import (
+        AccumulationJournalCsvWriter,
+    )
+
+    resolved_db = db_path or DEFAULT_DB_PATH
+    journal_path = journal or DEFAULT_ACCUM_JOURNAL_PATH
+    ticker_upper = ticker.upper()
+    logged_at = date.today()
+
+    broker_repo = SQLiteBrokerRepository(resolved_db)
+    market_repo = SQLiteMarketRepository(db_path=resolved_db)
+
+    # Run single-ticker screen to get candidate
+    use_case = AccumulationScreenUseCase(
+        broker_repository=broker_repo,
+        market_repository=market_repo,
+    )
+    response = use_case.execute(AccumulationScreenRequest(
+        tickers=[ticker_upper],
+        window_days=window,
+        min_score=0.0,
+        min_net_buy_days=0,
+    ))
+    candidate = next((c for c in response.candidates if c.ticker == ticker_upper), None)
+
+    # Compute multi-window pattern (7, 30, 90)
+    pattern: str | None = None
+    try:
+        windows = [7, 30, 90]
+        multi = {
+            w: use_case.execute(AccumulationScreenRequest(
+                tickers=[ticker_upper],
+                window_days=w,
+                min_score=0.0,
+                min_net_buy_days=0,
+            ))
+            for w in windows
+        }
+        candidates_by_window = {
+            w: next((c for c in resp.candidates if c.ticker == ticker_upper), None)
+            for w, resp in multi.items()
+        }
+        pattern = _classify_pattern(windows, candidates_by_window)
+    except Exception:
+        pass  # pattern stays None if multi-window fails
+
+    # Resolve entry price
+    resolved_entry: Decimal
+    if entry_price is not None:
+        resolved_entry = Decimal(str(entry_price))
+    elif candidate is not None:
+        # Use latest close from candles
+        try:
+            today = date.today()
+            candles = market_repo.get_candles(
+                ticker_upper,
+                start_date=today.replace(month=1, day=1),
+                end_date=today,
+            )
+            resolved_entry = candles[-1].close if candles else Decimal("0")
+        except Exception:
+            resolved_entry = Decimal("0")
+    else:
+        typer.echo(
+            f"Warning: no accumulation data for {ticker_upper} in the last {window}d. "
+            "Logging with score=0.",
+            err=True,
+        )
+        resolved_entry = Decimal("0")
+
+    store = AccumulationJournalCsvWriter(journal_path)
+    service = AccumulationJournalService(store=store, repository=market_repo)
+
+    count = service.log_candidate(
+        ticker=ticker_upper,
+        entry_price=resolved_entry,
+        window_days=window,
+        candidate=candidate,
+        logged_at=logged_at,
+        pattern=pattern,
+    )
+
+    if count == 0:
+        typer.echo(
+            f"Already logged {ticker_upper} for {logged_at} (window={window}d) — "
+            f"no new row added ({journal_path})"
+        )
+    else:
+        score_str = f"{candidate.score:.1f}" if candidate else "0.0"
+        pattern_str = f" | pattern: {pattern}" if pattern else ""
+        typer.echo(
+            f"Logged {ticker_upper} | {logged_at} | window={window}d | "
+            f"score={score_str}{pattern_str} → {journal_path}"
+        )
+
+
+def accumulation_review(
+    horizon: Annotated[
+        int,
+        typer.Option("--horizon", help="Trading days forward for max/min window", min=1),
+    ] = 10,
+    min_score: Annotated[
+        float,
+        typer.Option("--min-score", help="Only include entries with score ≥ this"),
+    ] = 0.0,
+    journal: Annotated[
+        Optional[Path],
+        typer.Option("--journal", help="Journal CSV path"),
+    ] = None,
+    db_path: Annotated[
+        Optional[Path],
+        typer.Option("--db", help="SQLite database path"),
+    ] = None,
+) -> None:
+    """
+    Review accumulation trade journal: forward returns by score and pattern.
+
+    Fetches actual forward closes from the local database and computes
+    what the accumulation score thresholds actually delivered.
+
+    Example:
+        saham screen accumulation-review
+        saham screen accumulation-review --horizon 10 --min-score 70
+    """
+    from src.application.services.accumulation_journal import AccumulationJournalService
+    from src.infrastructure.persistence.accumulation_journal_csv_writer import (
+        AccumulationJournalCsvWriter,
+    )
+
+    journal_path = journal or DEFAULT_ACCUM_JOURNAL_PATH
+    resolved_db = db_path or DEFAULT_DB_PATH
+
+    if not journal_path.exists():
+        typer.echo(
+            f"No journal found at '{journal_path}'.\n"
+            "Run `saham screen accumulation-log --ticker BBRI` first.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    market_repo = SQLiteMarketRepository(db_path=resolved_db)
+    store = AccumulationJournalCsvWriter(journal_path)
+    service = AccumulationJournalService(store=store, repository=market_repo)
+
+    typer.echo(f"Reviewing journal ({journal_path}) | horizon={horizon}d ...")
+    report = service.review(horizon_days=horizon)
+
+    _W = 70
+
+    typer.echo("")
+    typer.echo("=" * _W)
+    typer.echo("ACCUMULATION TRADE JOURNAL REVIEW")
+    typer.echo("=" * _W)
+    typer.echo(f"Journal  : {journal_path}")
+    typer.echo(f"Entries  : {report.total_entries} total | {report.enriched_entries} with {horizon}d+ data")
+    typer.echo(f"Horizon  : {horizon} trading days | min_score filter: {min_score}")
+
+    if report.enriched_entries == 0:
+        typer.echo("")
+        typer.echo("No enriched entries yet — check back after market data covers the horizon.")
+        typer.echo("=" * _W)
+        return
+
+    # Apply min_score filter to the enriched entries for display
+    # (report already computed; we just filter display)
+    def _pct(v: float | None) -> str:
+        return f"{v:+.1f}%" if v is not None else "  N/A"
+
+    def _wr(v: float | None) -> str:
+        return f"{v:.0f}%" if v is not None else " N/A"
+
+    # ── PERFORMANCE BY SCORE BUCKET ──
+    typer.echo("")
+    typer.echo(typer.style("PERFORMANCE BY SCORE BUCKET", fg=typer.colors.CYAN, bold=True))
+    typer.echo(f"  {'BUCKET':<10} {'N':>4}  {'AVG_5D':>8}  {'AVG_10D':>8}  {'WIN_RATE_10D':>13}")
+    typer.echo("  " + "-" * 50)
+    for stat in report.score_buckets:
+        if stat.n == 0 and min_score > 0:
+            continue
+        typer.echo(
+            f"  {stat.bucket:<10} {stat.n:>4}  {_pct(stat.avg_return_5d):>8}  "
+            f"{_pct(stat.avg_return_10d):>8}  {_wr(stat.win_rate_10d):>13}"
+        )
+
+    # ── PERFORMANCE BY PATTERN ──
+    if report.by_pattern:
+        typer.echo("")
+        typer.echo(typer.style("PERFORMANCE BY PATTERN", fg=typer.colors.CYAN, bold=True))
+        typer.echo(
+            f"  {'PATTERN':<18} {'N':>4}  {'AVG_10D':>8}  {'WIN_RATE':>9}  "
+            f"{'AVG_MAX_UP':>11}  {'AVG_MAX_DD':>11}"
+        )
+        typer.echo("  " + "-" * 70)
+        for stat in report.by_pattern:
+            typer.echo(
+                f"  {stat.pattern:<18} {stat.n:>4}  {_pct(stat.avg_return_10d):>8}  "
+                f"{_wr(stat.win_rate_10d):>9}  {_pct(stat.avg_max_upside):>11}  "
+                f"{_pct(stat.avg_max_drawdown):>11}"
+            )
+
+    # ── SIGNAL DELTA ──
+    if report.signal_deltas:
+        typer.echo("")
+        typer.echo(typer.style("SIGNAL DELTA (correlation with 10d return)", fg=typer.colors.CYAN, bold=True))
+        typer.echo(
+            f"  {'SIGNAL':<12}  {'GROUP A':<20}  {'N_A':>4}  {'AVG_A':>7}  "
+            f"{'GROUP B':<20}  {'N_B':>4}  {'AVG_B':>7}"
+        )
+        typer.echo("  " + "-" * 82)
+        for d in report.signal_deltas:
+            typer.echo(
+                f"  {d.signal:<12}  {d.group_a_label:<20}  {d.group_a_n:>4}  "
+                f"{_pct(d.group_a_avg_10d):>7}  {d.group_b_label:<20}  "
+                f"{d.group_b_n:>4}  {_pct(d.group_b_avg_10d):>7}"
+            )
+
+    typer.echo("")
+    typer.echo("Note: 20+ entries needed for statistically meaningful results.")
+    typer.echo("DISCLAIMER: Past performance does not predict future returns.")
+    typer.echo("=" * _W)
