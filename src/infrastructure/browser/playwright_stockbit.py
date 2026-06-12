@@ -38,20 +38,29 @@ BASE_URL = "https://stockbit.com"
 SCREENER_URL = "https://stockbit.com/#/screener"
 ORDER_BOOK_URL = "https://stockbit.com/#/stock/{ticker}/orderbook"
 LOGIN_URL = "https://stockbit.com/#/login"
+EXODUS_API = "https://exodus.stockbit.com"
 
 # ── Timeouts (ms) ─────────────────────────────────────────────────────────
 NAV_TIMEOUT = 30_000
 ELEMENT_TIMEOUT = 15_000
 SPA_SETTLE_MS = 4_000   # extra wait for React to render after navigation
 
-# ── API endpoint patterns (populated by `saham stockbit spy`) ─────────────
-# Once we know the real endpoints, update these patterns.
-# Current values are best guesses — `spy` will reveal the truth.
+# ── API endpoint patterns ──────────────────────────────────────────────────
+# Base: exodus.stockbit.com (confirmed by spy session)
+# IEV/movers endpoint still unknown — needs spy with valid Pro session.
 _MOVERS_URL_PATTERNS = [
-    "mover", "iev", "screener/movers", "preopen", "pre-open",
+    "exodus.stockbit.com/screener",
+    "exodus.stockbit.com/market/mover",
+    "exodus.stockbit.com/pre-open",
+    "exodus.stockbit.com/iev",
+    "exodus.stockbit.com/stock/mover",
+    "mover", "iev", "preopen",
 ]
 _ORDERBOOK_URL_PATTERNS = [
-    "orderbook", "order-book", "order_book", "bid", "offer",
+    "exodus.stockbit.com/orderbook",
+    "exodus.stockbit.com/order-book",
+    "exodus.stockbit.com/stock",
+    "orderbook", "order-book",
 ]
 
 
@@ -70,7 +79,8 @@ def _require_playwright():
         )
 
 
-def _load_cookies(session_file: Path) -> list[dict]:
+def _load_session(session_file: Path) -> dict:
+    """Load cookies + localStorage from saved session file."""
     if not session_file.exists():
         raise RuntimeError(
             f"No session file at '{session_file}'.\n"
@@ -78,13 +88,50 @@ def _load_cookies(session_file: Path) -> list[dict]:
         )
     with open(session_file) as f:
         data = json.load(f)
-    cookies = data.get("cookies", [])
-    if not cookies:
+    if not data.get("cookies") and not data.get("local_storage"):
         raise RuntimeError(
-            f"Session file '{session_file}' has no cookies.\n"
+            f"Session file '{session_file}' appears empty.\n"
             "Run: saham stockbit login to refresh."
         )
-    return cookies
+    return data
+
+
+def _apply_session(ctx, page, session_data: dict) -> None:
+    """Inject cookies + localStorage into an open page."""
+    # Cookies can be set on the context before navigation
+    cookies = session_data.get("cookies", [])
+    if cookies:
+        ctx.add_cookies(cookies)
+
+    # localStorage must be injected after navigating to the domain
+    local_storage = session_data.get("local_storage", {})
+    if local_storage:
+        try:
+            page.evaluate(
+                """(data) => {
+                    for (const [key, value] of Object.entries(data)) {
+                        try { localStorage.setItem(key, value); } catch(e) {}
+                    }
+                }""",
+                local_storage,
+            )
+        except Exception as e:
+            logger.debug("Could not inject localStorage: %s", e)
+
+    # sessionStorage too
+    session_storage = session_data.get("session_storage", {})
+    if session_storage:
+        try:
+            page.evaluate(
+                """(data) => {
+                    for (const [key, value] of Object.entries(data)) {
+                        try { sessionStorage.setItem(key, value); } catch(e) {}
+                    }
+                }""",
+                session_storage,
+            )
+        except Exception as e:
+            logger.debug("Could not inject sessionStorage: %s", e)
 
 
 def _url_matches(url: str, patterns: list[str]) -> bool:
@@ -129,13 +176,15 @@ class PlaywrightStockbitProvider(BrowserDataProvider):
     def fetch_preopen_movers(self, iev_min: int) -> list[MoverData]:
         """Navigate screener page; extract movers via API intercept or DOM."""
         sync_playwright = _require_playwright()
-        cookies = _load_cookies(self._session_file)
+        session = _load_session(self._session_file)
 
         with sync_playwright() as pw:
             browser = pw.chromium.launch(headless=self._headless)
             ctx = browser.new_context()
-            ctx.add_cookies(cookies)
             page = ctx.new_page()
+            # Navigate to domain first so localStorage injection works
+            page.goto(BASE_URL, timeout=self._timeout)
+            _apply_session(ctx, page, session)
 
             captured_responses: list[dict] = []
 
@@ -181,14 +230,15 @@ class PlaywrightStockbitProvider(BrowserDataProvider):
     def fetch_order_book_best_bid(self, ticker: str) -> OrderBookBid | None:
         """Navigate order book page; extract best bid via API intercept or DOM."""
         sync_playwright = _require_playwright()
-        cookies = _load_cookies(self._session_file)
+        session = _load_session(self._session_file)
         url = ORDER_BOOK_URL.format(ticker=ticker.upper())
 
         with sync_playwright() as pw:
             browser = pw.chromium.launch(headless=self._headless)
             ctx = browser.new_context()
-            ctx.add_cookies(cookies)
             page = ctx.new_page()
+            page.goto(BASE_URL, timeout=self._timeout)
+            _apply_session(ctx, page, session)
 
             captured_responses: list[dict] = []
 
@@ -500,21 +550,22 @@ def spy_stockbit_session(
         Summary dict with total_responses, unique_urls, output_file path
     """
     sync_playwright = _require_playwright()
-    cookies = _load_cookies(session_file)
 
     if target == "orderbook":
         url = ORDER_BOOK_URL.format(ticker=ticker.upper())
     else:
         url = SCREENER_URL
 
+    session = _load_session(session_file)
     captured: list[dict] = []
 
     with sync_playwright() as pw:
-        # Use headed so user can interact if needed (e.g. click Selengkapnya)
         browser = pw.chromium.launch(headless=False)
         ctx = browser.new_context()
-        ctx.add_cookies(cookies)
         page = ctx.new_page()
+        # Inject session (cookies + localStorage) before navigating to target
+        page.goto(BASE_URL, timeout=NAV_TIMEOUT)
+        _apply_session(ctx, page, session)
 
         def on_response(response):
             ct = response.headers.get("content-type", "")
@@ -597,36 +648,70 @@ def save_stockbit_session(
 
         start = time.time()
         logged_in = False
+        last_url = ""
 
         while time.time() - start < timeout:
+            elapsed = int(time.time() - start)
+            remaining = timeout - elapsed
             try:
                 current_url = page.url
-                # Logged in = no longer on a login/auth page
-                if (
-                    "stockbit.com" in current_url
-                    and "login" not in current_url.lower()
-                    and "auth" not in current_url.lower()
-                ):
-                    # Extra check: wait for a nav element that only appears after login
-                    try:
-                        page.wait_for_selector(
-                            "nav, [class*='sidebar'], [class*='navbar'], [class*='header']",
-                            timeout=3_000,
-                        )
-                        logged_in = True
-                        break
-                    except Exception:
-                        pass
+                if current_url != last_url:
+                    print(f"  [{elapsed}s] URL: {current_url}")
+                    last_url = current_url
+
+                # Detect login: URL moved away from the login page
+                # Stockbit uses hash routing: #/login → #/ or #/beranda etc.
+                is_on_login_page = (
+                    "#/login" in current_url
+                    or current_url.rstrip("/") == "https://stockbit.com"
+                    and elapsed < 3
+                )
+                if "stockbit.com" in current_url and not is_on_login_page and elapsed > 3:
+                    logged_in = True
+                    break
             except Exception:
                 pass
+
+            if remaining % 15 == 0 and remaining != timeout:
+                print(f"  Waiting... {remaining}s remaining. Current URL: {last_url}")
             time.sleep(2)
 
         if logged_in:
             cookies = ctx.cookies()
+
+            # Capture localStorage — Stockbit stores JWT/auth tokens here, not in cookies
+            local_storage: dict = {}
+            session_storage: dict = {}
+            try:
+                local_storage = page.evaluate("() => ({...localStorage})")
+            except Exception:
+                pass
+            try:
+                session_storage = page.evaluate("() => ({...sessionStorage})")
+            except Exception:
+                pass
+
             session_file.parent.mkdir(parents=True, exist_ok=True)
             with open(session_file, "w") as f:
-                json.dump({"cookies": cookies, "saved_at": str(time.time())}, f, indent=2)
-            print(f"\nSession saved ({len(cookies)} cookies) → {session_file}")
+                json.dump(
+                    {
+                        "cookies": cookies,
+                        "local_storage": local_storage,
+                        "session_storage": session_storage,
+                        "saved_at": str(time.time()),
+                    },
+                    f,
+                    indent=2,
+                )
+            auth_keys = [k for k in local_storage if any(
+                kw in k.lower() for kw in ("token", "auth", "jwt", "user", "session")
+            )]
+            print(
+                f"\nSession saved → {session_file}\n"
+                f"  Cookies     : {len(cookies)}\n"
+                f"  localStorage: {len(local_storage)} keys"
+                + (f" (auth keys: {', '.join(auth_keys[:5])})" if auth_keys else "")
+            )
             print("Run 'saham stockbit status' to verify.")
             print("Run 'saham stockbit spy' to discover API endpoints.")
         else:
@@ -645,6 +730,7 @@ def get_session_status(session_file: Path = DEFAULT_SESSION_FILE) -> dict:
         data = json.load(f)
 
     cookies = data.get("cookies", [])
+    local_storage = data.get("local_storage", {})
     saved_at = data.get("saved_at")
 
     age_hours: float | None = None
@@ -654,17 +740,24 @@ def get_session_status(session_file: Path = DEFAULT_SESSION_FILE) -> dict:
         except Exception:
             pass
 
-    # Check for session/auth cookies that indicate a valid login
     auth_cookies = [c for c in cookies if any(
         kw in c.get("name", "").lower()
         for kw in ("session", "token", "auth", "jwt", "sid", "user")
     )]
+    auth_ls_keys = [k for k in local_storage if any(
+        kw in k.lower() for kw in ("token", "auth", "jwt", "user", "session", "access")
+    )]
+
+    # Valid session = has localStorage auth tokens (Stockbit stores JWT there)
+    likely_valid = len(auth_ls_keys) > 0 or len(auth_cookies) > 0
 
     return {
         "exists": True,
         "path": str(session_file),
         "cookie_count": len(cookies),
         "auth_cookie_count": len(auth_cookies),
+        "local_storage_keys": len(local_storage),
+        "auth_local_storage_keys": auth_ls_keys[:5],
         "age_hours": age_hours,
-        "likely_valid": len(auth_cookies) > 0,
+        "likely_valid": likely_valid,
     }

@@ -101,9 +101,13 @@ def status(
         typer.echo("Run: saham stockbit login")
         return
 
-    typer.echo(f"  File       : {info['path']}")
-    typer.echo(f"  Cookies    : {info['cookie_count']}")
-    typer.echo(f"  Auth cookies: {info['auth_cookie_count']}")
+    typer.echo(f"  File            : {info['path']}")
+    typer.echo(f"  Cookies         : {info['cookie_count']}")
+    typer.echo(f"  Auth cookies    : {info['auth_cookie_count']}")
+    typer.echo(f"  localStorage    : {info.get('local_storage_keys', '?')} keys")
+    auth_ls = info.get("auth_local_storage_keys", [])
+    if auth_ls:
+        typer.echo(f"  Auth LS keys    : {', '.join(auth_ls)}")
 
     if info.get("age_hours") is not None:
         age = info["age_hours"]
