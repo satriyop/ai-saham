@@ -83,5 +83,8 @@ notes/
 # Paper trade journal (local artefacts, not committed)
 journals/
 
+# Stockbit persistent browser profile (contains session tokens)
+.stockbit_profile/
+
 # Jupyter (if used for analysis exploration)
 .ipynb_checkpoints/

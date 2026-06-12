@@ -95,19 +95,25 @@ def status(
     typer.echo("=" * 40)
 
     if not info["exists"]:
-        typer.echo(typer.style("  No session file found.", fg=typer.colors.RED))
-        typer.echo(f"  Expected: {info['path']}")
+        typer.echo(typer.style("  No session found.", fg=typer.colors.RED))
+        typer.echo(f"  Expected profile: {info['path']}")
         typer.echo("")
         typer.echo("Run: saham stockbit login")
         return
 
-    typer.echo(f"  File            : {info['path']}")
-    typer.echo(f"  Cookies         : {info['cookie_count']}")
-    typer.echo(f"  Auth cookies    : {info['auth_cookie_count']}")
-    typer.echo(f"  localStorage    : {info.get('local_storage_keys', '?')} keys")
-    auth_ls = info.get("auth_local_storage_keys", [])
-    if auth_ls:
-        typer.echo(f"  Auth LS keys    : {', '.join(auth_ls)}")
+    session_type = info.get("type", "unknown")
+    if session_type == "persistent_profile":
+        typer.echo(f"  Type            : persistent browser profile (recommended)")
+        typer.echo(f"  Profile dir     : {info['path']}")
+    else:
+        typer.echo(f"  Type            : legacy cookie file")
+        typer.echo(f"  File            : {info['path']}")
+        typer.echo(f"  Cookies         : {info.get('cookie_count', '?')}")
+        typer.echo(f"  Auth cookies    : {info.get('auth_cookie_count', '?')}")
+        typer.echo(f"  localStorage    : {info.get('local_storage_keys', '?')} keys")
+        auth_ls = info.get("auth_local_storage_keys", [])
+        if auth_ls:
+            typer.echo(f"  Auth LS keys    : {', '.join(auth_ls)}")
 
     if info.get("age_hours") is not None:
         age = info["age_hours"]

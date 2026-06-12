@@ -31,7 +31,8 @@ from src.domain.value_objects.screener_result import MoverData, OrderBookBid
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_SESSION_FILE = Path("stockbit_session.json")
+DEFAULT_SESSION_FILE = Path("stockbit_session.json")  # legacy cookie file
+DEFAULT_PROFILE_DIR = Path(".stockbit_profile")        # persistent browser profile
 
 # ── Stockbit URLs ──────────────────────────────────────────────────────────
 BASE_URL = "https://stockbit.com"
@@ -94,6 +95,32 @@ def _load_session(session_file: Path) -> dict:
             "Run: saham stockbit login to refresh."
         )
     return data
+
+
+def _persistent_context(pw, profile_dir: Path, headless: bool = True):
+    """
+    Launch a persistent Chromium context using a saved browser profile.
+
+    The profile directory stores ALL browser state (cookies, localStorage,
+    IndexedDB, cache) exactly like a real Chrome profile. No cookie extraction
+    or injection needed — the browser is simply already logged in.
+
+    Args:
+        pw: sync_playwright instance
+        profile_dir: Path to the browser profile directory
+        headless: Whether to run the browser headlessly
+
+    Returns:
+        (context, page) — context IS the browser; call context.close() when done.
+    """
+    profile_dir.mkdir(parents=True, exist_ok=True)
+    ctx = pw.chromium.launch_persistent_context(
+        str(profile_dir),
+        headless=headless,
+        args=["--no-first-run", "--no-default-browser-check"],
+    )
+    page = ctx.pages[0] if ctx.pages else ctx.new_page()
+    return ctx, page
 
 
 def _new_authenticated_context(pw, session_data: dict, headless: bool = True):
@@ -179,25 +206,34 @@ class PlaywrightStockbitProvider(BrowserDataProvider):
     def __init__(
         self,
         session_file: Path = DEFAULT_SESSION_FILE,
+        profile_dir: Path = DEFAULT_PROFILE_DIR,
         headless: bool = True,
         timeout: int = NAV_TIMEOUT,
         api_patterns_file: Path | None = None,
     ) -> None:
         self._session_file = session_file
+        self._profile_dir = profile_dir
         self._headless = headless
         self._timeout = timeout
-        # Optional: load custom API patterns discovered by `saham stockbit spy`
         self._api_patterns = _load_api_patterns(api_patterns_file) if api_patterns_file else {}
+
+    def _use_persistent(self) -> bool:
+        """Prefer persistent profile if it exists, fall back to cookie file."""
+        return self._profile_dir.exists() and any(self._profile_dir.iterdir())
 
     def fetch_preopen_movers(self, iev_min: int) -> list[MoverData]:
         """Navigate screener page; extract movers via API intercept or DOM."""
         sync_playwright = _require_playwright()
-        session = _load_session(self._session_file)
 
         with sync_playwright() as pw:
-            browser, ctx, page = _new_authenticated_context(
-                pw, session, headless=self._headless
-            )
+            if self._use_persistent():
+                ctx, page = _persistent_context(pw, self._profile_dir, self._headless)
+                browser = None  # persistent context IS the browser
+            else:
+                session = _load_session(self._session_file)
+                browser, ctx, page = _new_authenticated_context(
+                    pw, session, headless=self._headless
+                )
 
             captured_responses: list[dict] = []
 
@@ -238,18 +274,21 @@ class PlaywrightStockbitProvider(BrowserDataProvider):
                 return movers
 
             finally:
-                browser.close()
+                ctx.close()  # closes persistent context or browser
 
     def fetch_order_book_best_bid(self, ticker: str) -> OrderBookBid | None:
         """Navigate order book page; extract best bid via API intercept or DOM."""
         sync_playwright = _require_playwright()
-        session = _load_session(self._session_file)
         url = ORDER_BOOK_URL.format(ticker=ticker.upper())
 
         with sync_playwright() as pw:
-            browser, ctx, page = _new_authenticated_context(
-                pw, session, headless=self._headless
-            )
+            if self._use_persistent():
+                ctx, page = _persistent_context(pw, self._profile_dir, self._headless)
+            else:
+                session = _load_session(self._session_file)
+                _, ctx, page = _new_authenticated_context(
+                    pw, session, headless=self._headless
+                )
 
             captured_responses: list[dict] = []
 
@@ -287,7 +326,7 @@ class PlaywrightStockbitProvider(BrowserDataProvider):
                 return _scrape_best_bid_from_dom(page, ticker)
 
             finally:
-                browser.close()
+                ctx.close()
 
 
 # ── API response parsers ────────────────────────────────────────────────────
@@ -539,6 +578,7 @@ def _load_api_patterns(path: Path) -> dict:
 
 def spy_stockbit_session(
     session_file: Path = DEFAULT_SESSION_FILE,
+    profile_dir: Path = DEFAULT_PROFILE_DIR,
     target: str = "screener",
     ticker: str = "BBCA",
     output_file: Path = Path("journals/stockbit-spy.json"),
@@ -567,13 +607,15 @@ def spy_stockbit_session(
     else:
         url = SCREENER_URL
 
-    session = _load_session(session_file)
     captured: list[dict] = []
+    profile_exists = profile_dir.exists() and any(profile_dir.iterdir())
 
     with sync_playwright() as pw:
-        browser, ctx, page = _new_authenticated_context(
-            pw, session, headless=False
-        )
+        if profile_exists:
+            ctx, page = _persistent_context(pw, profile_dir, headless=False)
+        else:
+            session = _load_session(session_file)
+            _, ctx, page = _new_authenticated_context(pw, session, headless=False)
 
         def on_response(response):
             ct = response.headers.get("content-type", "")
@@ -598,13 +640,13 @@ def spy_stockbit_session(
         print("Press Ctrl+C to stop early.\n")
 
         try:
-            page.goto(url, timeout=NAV_TIMEOUT)
+            page.goto(url, timeout=NAV_TIMEOUT, wait_until="domcontentloaded")
             page.wait_for_load_state("networkidle", timeout=NAV_TIMEOUT)
             page.wait_for_timeout(settle_ms)
         except KeyboardInterrupt:
             pass
         finally:
-            browser.close()
+            ctx.close()
 
     # Save full capture
     output_file.parent.mkdir(parents=True, exist_ok=True)
@@ -633,13 +675,20 @@ def spy_stockbit_session(
 
 def save_stockbit_session(
     session_file: Path = DEFAULT_SESSION_FILE,
+    profile_dir: Path = DEFAULT_PROFILE_DIR,
     timeout: int = 300,
 ) -> None:
     """
-    Launch headed Chromium for manual Stockbit login. Saves cookies on success.
+    Launch headed Chromium for manual Stockbit login.
+
+    Uses a PERSISTENT browser profile (.stockbit_profile/) so all browser
+    state (cookies, localStorage, IndexedDB) is preserved across runs —
+    no cookie extraction/injection needed. The browser "stays logged in"
+    exactly like a regular Chrome profile.
 
     Args:
-        session_file: Where to write session cookies JSON
+        session_file: Legacy cookie file path (kept for backward compat)
+        profile_dir: Persistent browser profile directory
         timeout: Seconds to wait for login completion
     """
     sync_playwright = _require_playwright()
@@ -648,12 +697,10 @@ def save_stockbit_session(
     print(f"Please log in manually. You have {timeout} seconds.")
     if timeout < 180:
         print("Tip: use --timeout 300 if you have 2FA enabled.")
-    print(f"Session will be saved to: {session_file}\n")
+    print(f"Browser profile: {profile_dir}  (stays logged in across runs)\n")
 
     with sync_playwright() as pw:
-        browser = pw.chromium.launch(headless=False)
-        ctx = browser.new_context()
-        page = ctx.new_page()
+        ctx, page = _persistent_context(pw, profile_dir, headless=False)
         # domcontentloaded avoids hanging on SPA navigation
         page.goto(LOGIN_URL, timeout=NAV_TIMEOUT, wait_until="domcontentloaded")
 
@@ -664,6 +711,7 @@ def save_stockbit_session(
             "/login", "/register", "/forgot",
             "/verify", "/otp", "/2fa", "/two-factor",
             "/email-verification", "/phone-verification",
+            "/trusted-device",
         )
 
         print("Waiting for login to complete (including 2FA if enabled)...")
@@ -686,40 +734,15 @@ def save_stockbit_session(
                 print(f"\nLogin detection error: {e}")
 
         if logged_in:
-            cookies = ctx.cookies()
-
-            # Capture localStorage — Stockbit stores JWT/auth tokens here, not in cookies
-            local_storage: dict = {}
-            session_storage: dict = {}
-            try:
-                local_storage = page.evaluate("() => ({...localStorage})")
-            except Exception:
-                pass
-            try:
-                session_storage = page.evaluate("() => ({...sessionStorage})")
-            except Exception:
-                pass
-
-            session_file.parent.mkdir(parents=True, exist_ok=True)
-            with open(session_file, "w") as f:
-                json.dump(
-                    {
-                        "cookies": cookies,
-                        "local_storage": local_storage,
-                        "session_storage": session_storage,
-                        "saved_at": str(time.time()),
-                    },
-                    f,
-                    indent=2,
-                )
-            auth_keys = [k for k in local_storage if any(
-                kw in k.lower() for kw in ("token", "auth", "jwt", "user", "session")
-            )]
+            # The persistent profile already saved everything to profile_dir —
+            # no extraction needed. Just write a marker file so 'status' works.
+            profile_dir.mkdir(parents=True, exist_ok=True)
+            marker = profile_dir / ".logged_in_at"
+            marker.write_text(str(time.time()))
             print(
-                f"\nSession saved → {session_file}\n"
-                f"  Cookies     : {len(cookies)}\n"
-                f"  localStorage: {len(local_storage)} keys"
-                + (f" (auth keys: {', '.join(auth_keys[:5])})" if auth_keys else "")
+                f"\nSession saved → {profile_dir}/\n"
+                f"  The browser profile stores all cookies and tokens.\n"
+                f"  It will stay logged in across runs (like a Chrome profile)."
             )
             print("Run 'saham stockbit status' to verify.")
             print("Run 'saham stockbit spy' to discover API endpoints.")
@@ -727,13 +750,35 @@ def save_stockbit_session(
             print("\nTimeout — login not detected. Session NOT saved.")
             print("Run 'saham stockbit login' again and complete login within the time limit.")
 
-        browser.close()
+        ctx.close()
 
 
-def get_session_status(session_file: Path = DEFAULT_SESSION_FILE) -> dict:
+def get_session_status(
+    session_file: Path = DEFAULT_SESSION_FILE,
+    profile_dir: Path = DEFAULT_PROFILE_DIR,
+) -> dict:
     """Return info about the saved session without opening a browser."""
+    marker = profile_dir / ".logged_in_at"
+
+    # Prefer persistent profile
+    if profile_dir.exists() and any(profile_dir.iterdir()):
+        age_hours: float | None = None
+        if marker.exists():
+            try:
+                age_hours = round((time.time() - float(marker.read_text())) / 3600, 1)
+            except Exception:
+                pass
+        return {
+            "exists": True,
+            "type": "persistent_profile",
+            "path": str(profile_dir),
+            "age_hours": age_hours,
+            "likely_valid": True,
+        }
+
+    # Fall back to legacy cookie file
     if not session_file.exists():
-        return {"exists": False, "path": str(session_file)}
+        return {"exists": False, "path": str(session_file), "type": "none"}
 
     with open(session_file) as f:
         data = json.load(f)
@@ -742,7 +787,7 @@ def get_session_status(session_file: Path = DEFAULT_SESSION_FILE) -> dict:
     local_storage = data.get("local_storage", {})
     saved_at = data.get("saved_at")
 
-    age_hours: float | None = None
+    age_hours = None
     if saved_at:
         try:
             age_hours = round((time.time() - float(saved_at)) / 3600, 1)
@@ -757,16 +802,14 @@ def get_session_status(session_file: Path = DEFAULT_SESSION_FILE) -> dict:
         kw in k.lower() for kw in ("token", "auth", "jwt", "user", "session", "access")
     )]
 
-    # Valid session = has localStorage auth tokens (Stockbit stores JWT there)
-    likely_valid = len(auth_ls_keys) > 0 or len(auth_cookies) > 0
-
     return {
         "exists": True,
+        "type": "cookie_file",
         "path": str(session_file),
         "cookie_count": len(cookies),
         "auth_cookie_count": len(auth_cookies),
         "local_storage_keys": len(local_storage),
         "auth_local_storage_keys": auth_ls_keys[:5],
         "age_hours": age_hours,
-        "likely_valid": likely_valid,
+        "likely_valid": len(auth_ls_keys) > 0 or len(auth_cookies) > 0,
     }
