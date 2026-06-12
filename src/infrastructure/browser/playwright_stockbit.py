@@ -96,42 +96,58 @@ def _load_session(session_file: Path) -> dict:
     return data
 
 
-def _apply_session(ctx, page, session_data: dict) -> None:
-    """Inject cookies + localStorage into an open page."""
-    # Cookies can be set on the context before navigation
+def _new_authenticated_context(pw, session_data: dict, headless: bool = True):
+    """
+    Create a Playwright browser + context with session pre-loaded.
+
+    Cookies are injected into the context BEFORE any navigation so the first
+    request to stockbit.com already carries auth cookies. localStorage is
+    injected after a lightweight navigation to the domain.
+
+    Returns (browser, context, page) — caller is responsible for browser.close().
+    """
     cookies = session_data.get("cookies", [])
+    local_storage = session_data.get("local_storage", {})
+    session_storage = session_data.get("session_storage", {})
+
+    browser = pw.chromium.launch(headless=headless)
+    ctx = browser.new_context()
+
+    # Step 1: inject cookies onto context BEFORE any navigation
     if cookies:
         ctx.add_cookies(cookies)
 
-    # localStorage must be injected after navigating to the domain
-    local_storage = session_data.get("local_storage", {})
-    if local_storage:
-        try:
-            page.evaluate(
-                """(data) => {
-                    for (const [key, value] of Object.entries(data)) {
-                        try { localStorage.setItem(key, value); } catch(e) {}
-                    }
-                }""",
-                local_storage,
-            )
-        except Exception as e:
-            logger.debug("Could not inject localStorage: %s", e)
+    page = ctx.new_page()
 
-    # sessionStorage too
-    session_storage = session_data.get("session_storage", {})
-    if session_storage:
-        try:
-            page.evaluate(
-                """(data) => {
-                    for (const [key, value] of Object.entries(data)) {
-                        try { sessionStorage.setItem(key, value); } catch(e) {}
-                    }
-                }""",
-                session_storage,
-            )
-        except Exception as e:
-            logger.debug("Could not inject sessionStorage: %s", e)
+    # Step 2: navigate to domain so localStorage can be written
+    if local_storage or session_storage:
+        page.goto(BASE_URL, timeout=NAV_TIMEOUT)
+        if local_storage:
+            try:
+                page.evaluate(
+                    """(data) => {
+                        for (const [k, v] of Object.entries(data)) {
+                            try { localStorage.setItem(k, v); } catch(e) {}
+                        }
+                    }""",
+                    local_storage,
+                )
+            except Exception as e:
+                logger.debug("Could not inject localStorage: %s", e)
+        if session_storage:
+            try:
+                page.evaluate(
+                    """(data) => {
+                        for (const [k, v] of Object.entries(data)) {
+                            try { sessionStorage.setItem(k, v); } catch(e) {}
+                        }
+                    }""",
+                    session_storage,
+                )
+            except Exception as e:
+                logger.debug("Could not inject sessionStorage: %s", e)
+
+    return browser, ctx, page
 
 
 def _url_matches(url: str, patterns: list[str]) -> bool:
@@ -179,12 +195,9 @@ class PlaywrightStockbitProvider(BrowserDataProvider):
         session = _load_session(self._session_file)
 
         with sync_playwright() as pw:
-            browser = pw.chromium.launch(headless=self._headless)
-            ctx = browser.new_context()
-            page = ctx.new_page()
-            # Navigate to domain first so localStorage injection works
-            page.goto(BASE_URL, timeout=self._timeout)
-            _apply_session(ctx, page, session)
+            browser, ctx, page = _new_authenticated_context(
+                pw, session, headless=self._headless
+            )
 
             captured_responses: list[dict] = []
 
@@ -234,11 +247,9 @@ class PlaywrightStockbitProvider(BrowserDataProvider):
         url = ORDER_BOOK_URL.format(ticker=ticker.upper())
 
         with sync_playwright() as pw:
-            browser = pw.chromium.launch(headless=self._headless)
-            ctx = browser.new_context()
-            page = ctx.new_page()
-            page.goto(BASE_URL, timeout=self._timeout)
-            _apply_session(ctx, page, session)
+            browser, ctx, page = _new_authenticated_context(
+                pw, session, headless=self._headless
+            )
 
             captured_responses: list[dict] = []
 
@@ -560,12 +571,9 @@ def spy_stockbit_session(
     captured: list[dict] = []
 
     with sync_playwright() as pw:
-        browser = pw.chromium.launch(headless=False)
-        ctx = browser.new_context()
-        page = ctx.new_page()
-        # Inject session (cookies + localStorage) before navigating to target
-        page.goto(BASE_URL, timeout=NAV_TIMEOUT)
-        _apply_session(ctx, page, session)
+        browser, ctx, page = _new_authenticated_context(
+            pw, session, headless=False
+        )
 
         def on_response(response):
             ct = response.headers.get("content-type", "")
@@ -646,35 +654,39 @@ def save_stockbit_session(
         page = ctx.new_page()
         page.goto(LOGIN_URL, timeout=NAV_TIMEOUT)
 
-        start = time.time()
+        print("Waiting for you to log in...")
+        print("(The window will close automatically once login is detected)\n")
+
         logged_in = False
-        last_url = ""
+        # Wait for a Stockbit-authenticated page element.
+        # We try two signals in order:
+        #  1. URL contains /beranda, /feed, /watchlist, /portfolio (post-login pages)
+        #  2. A DOM element present only in the authenticated app shell
+        _AUTHENTICATED_URL_FRAGMENTS = (
+            "/beranda", "/feed", "/watchlist", "/portfolio",
+            "/screener", "/stock/", "/#/",
+        )
+        _LOGIN_URL_FRAGMENTS = ("/login", "/register", "/forgot")
 
-        while time.time() - start < timeout:
-            elapsed = int(time.time() - start)
-            remaining = timeout - elapsed
-            try:
-                current_url = page.url
-                if current_url != last_url:
-                    print(f"  [{elapsed}s] URL: {current_url}")
-                    last_url = current_url
+        try:
+            # Poll until we're clearly past the login page
+            start = time.time()
+            while time.time() - start < timeout:
+                try:
+                    current_url = page.url
+                    is_login = any(f in current_url for f in _LOGIN_URL_FRAGMENTS)
+                    is_app = any(f in current_url for f in _AUTHENTICATED_URL_FRAGMENTS)
 
-                # Detect login: URL moved away from the login page
-                # Stockbit uses hash routing: #/login → #/ or #/beranda etc.
-                is_on_login_page = (
-                    "#/login" in current_url
-                    or current_url.rstrip("/") == "https://stockbit.com"
-                    and elapsed < 3
-                )
-                if "stockbit.com" in current_url and not is_on_login_page and elapsed > 3:
-                    logged_in = True
-                    break
-            except Exception:
-                pass
-
-            if remaining % 15 == 0 and remaining != timeout:
-                print(f"  Waiting... {remaining}s remaining. Current URL: {last_url}")
-            time.sleep(2)
+                    if is_app and not is_login:
+                        # Wait a moment for the app shell to fully render
+                        page.wait_for_timeout(2_000)
+                        logged_in = True
+                        break
+                except Exception:
+                    pass
+                time.sleep(1)
+        except KeyboardInterrupt:
+            pass
 
         if logged_in:
             cookies = ctx.cookies()
