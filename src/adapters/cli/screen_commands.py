@@ -31,16 +31,23 @@ import typer
 import yaml
 
 from src.application.services.bootstrap import create_indicator_registry
+from src.application.use_case.confirm_intraday_open import (
+    ConfirmIntradayOpenRequest,
+    ConfirmIntradayOpenUseCase,
+)
 from src.application.use_case.pre_open_screen import (
     PreOpenScreenConfig,
     PreOpenScreenRequest,
     PreOpenScreenUseCase,
 )
 from src.domain.ports.browser_data_provider import BrowserInteractionRequired
+from src.domain.value_objects.intraday_confirmation import (
+    IntradayConfirmation,
+    IntradayConfirmationCandidate,
+)
 from src.domain.value_objects.screener_result import ScreenerCandidate
 from src.infrastructure.browser.stockbit_browser import (
     ManualBrowserDataProvider,
-    StockbitBrowserInstructionsProvider,
 )
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
@@ -55,6 +62,7 @@ DEFAULT_DB_PATH = Path("data.db")
 DEFAULT_STRATEGY_PATH = Path("strategies/pre-open-screener/strategy.yaml")
 DEFAULT_SESSION_FILE = Path("stockbit_session.json")
 DEFAULT_SIDECAR_PATH = Path("journals/.last-session.json")
+DEFAULT_CONFIRMATION_PATH = Path("journals/.last-confirmation.json")
 DEFAULT_JOURNAL_PATH = Path("journals/pre-open.csv")
 
 
@@ -249,11 +257,20 @@ def _display_results(
             typer.echo(f"  ! {w}")
 
     typer.echo("")
-    typer.echo("ENTRY-RANGE: ATR-scaled band (±ATR/price, capped 1–5%) — enter only if open is within range")
+    typer.echo(
+        "ENTRY-RANGE: ATR-scaled band (±ATR/price, capped 1–5%) "
+        "— enter only if open is within range"
+    )
     typer.echo("SUGGEST: limit order = prev_close + 0.5% (place after opening price known)")
     typer.echo("ATR-STOP: stop = entry - 1× ATR(14), capped at -7%")
-    typer.echo("ACCUM: BACKED=smart money buying ≥50pts | UNCONFIRMED=no pattern | DISTRIBUTING=selling")
-    typer.echo("FVWAP: positive = foreigners underwater (price floor) | negative = foreigners in profit (sell risk)")
+    typer.echo(
+        "ACCUM: BACKED=smart money buying ≥50pts | "
+        "UNCONFIRMED=no pattern | DISTRIBUTING=selling"
+    )
+    typer.echo(
+        "FVWAP: positive = foreigners underwater (price floor) | "
+        "negative = foreigners in profit (sell risk)"
+    )
     typer.echo("")
     typer.echo("DISCLAIMER: Analysis only. Not trading advice.")
     typer.echo("=" * 90)
@@ -279,11 +296,135 @@ def _write_sidecar(
                 "atr_stop": str(c.stop_loss_price) if c.stop_loss_price else None,
                 "trend": c.trend_signal,
                 "rsi": str(c.rsi) if c.rsi else None,
+                "accum_tag": c.accum_tag,
+                "accum_score": c.accum_score,
+                "accum_streak": c.accum_streak,
+                "foreign_vwap": str(c.foreign_vwap) if c.foreign_vwap else None,
+                "fvwap_discount_pct": (
+                    c.fvwap_discount_pct if c.fvwap_discount_pct is not None else None
+                ),
             }
             for c in candidates
         ],
     }
     with open(sidecar_path, "w") as f:
+        json.dump(data, f, indent=2)
+
+
+def _decimal_or_none(value) -> Decimal | None:
+    if value is None or value == "":
+        return None
+    return Decimal(str(value))
+
+
+def _load_confirmation_candidates(
+    session_path: Path,
+    opening_prices: dict[str, Decimal],
+) -> tuple[date, list[IntradayConfirmationCandidate]]:
+    with open(session_path) as f:
+        data = json.load(f)
+
+    screened_at = date.fromisoformat(data["screened_at"])
+    candidates: list[IntradayConfirmationCandidate] = []
+
+    for row in data.get("candidates", []):
+        ticker = str(row["ticker"]).upper()
+        candidates.append(
+            IntradayConfirmationCandidate(
+                ticker=ticker,
+                opening_price=opening_prices.get(ticker),
+                iev=row.get("iev"),
+                entry_range_low=_decimal_or_none(row.get("entry_range_low")),
+                entry_range_high=_decimal_or_none(row.get("entry_range_high")),
+                suggested_entry=_decimal_or_none(row.get("suggested_entry")),
+                atr_stop=_decimal_or_none(row.get("atr_stop")),
+                trend=row.get("trend"),
+                rsi=_decimal_or_none(row.get("rsi")),
+                gap_pct=_decimal_or_none(row.get("gap_pct")),
+                accum_tag=row.get("accum_tag"),
+                fvwap_discount_pct=_decimal_or_none(row.get("fvwap_discount_pct")),
+            )
+        )
+
+    return screened_at, candidates
+
+
+def _display_confirmations(
+    confirmations: tuple[IntradayConfirmation, ...],
+    confirmed_date: date,
+    max_stop_pct: Decimal,
+) -> None:
+    typer.echo("")
+    typer.echo("=" * 96)
+    typer.echo("INTRADAY OPEN CONFIRMATION")
+    typer.echo("=" * 96)
+    typer.echo(f"Date: {confirmed_date}   Max stop: {float(max_stop_pct * 100):.1f}%")
+    typer.echo("")
+
+    if not confirmations:
+        typer.echo("No candidates found in session sidecar.")
+        typer.echo("=" * 96)
+        return
+
+    header = (
+        f"{'TICKER':<8} {'DECISION':<24} {'OPEN':>10} {'ENTRY':>10} "
+        f"{'STOP':>10} {'STOP%':>7}  REASONS"
+    )
+    typer.echo(header)
+    typer.echo("-" * 96)
+
+    for c in confirmations:
+        if c.decision.value == "ENTER":
+            decision = typer.style(f"{c.decision.value:<24}", fg=typer.colors.GREEN, bold=True)
+        elif c.decision.value == "WAIT":
+            decision = typer.style(f"{c.decision.value:<24}", fg=typer.colors.YELLOW, bold=True)
+        else:
+            decision = typer.style(f"{c.decision.value:<24}", fg=typer.colors.RED)
+
+        open_str = f"{c.opening_price:,.0f}" if c.opening_price else "-"
+        entry_str = f"{c.planned_entry:,.0f}" if c.planned_entry else "-"
+        stop_str = f"{c.stop_loss_price:,.0f}" if c.stop_loss_price else "-"
+        stop_pct = f"-{c.stop_pct:.1f}%" if c.stop_pct is not None else "-"
+        reasons = "; ".join(c.reasons)
+
+        typer.echo(
+            f"{c.ticker:<8} {decision} {open_str:>10} {entry_str:>10} "
+            f"{stop_str:>10} {stop_pct:>7}  {reasons}"
+        )
+
+    typer.echo("-" * 96)
+    typer.echo(
+        "Decision is deterministic and based only on supplied opening prices "
+        "plus pre-open context."
+    )
+    typer.echo("DISCLAIMER: Analysis only. Not trading advice.")
+    typer.echo("=" * 96)
+
+
+def _write_confirmation_sidecar(
+    confirmations: tuple[IntradayConfirmation, ...],
+    confirmed_date: date,
+    max_stop_pct: Decimal,
+    output_path: Path,
+) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    data = {
+        "confirmed_at": str(confirmed_date),
+        "max_stop_pct": str(max_stop_pct),
+        "confirmations": [
+            {
+                "ticker": c.ticker,
+                "decision": c.decision.value,
+                "opening_price": str(c.opening_price) if c.opening_price else None,
+                "planned_entry": str(c.planned_entry) if c.planned_entry else None,
+                "stop_loss_price": str(c.stop_loss_price) if c.stop_loss_price else None,
+                "stop_pct": str(c.stop_pct) if c.stop_pct is not None else None,
+                "reasons": list(c.reasons),
+            }
+            for c in confirmations
+        ],
+    }
+    with open(output_path, "w") as f:
         json.dump(data, f, indent=2)
 
 
@@ -407,7 +548,8 @@ def pre_open(
         top_label = f"top {config.top_n}" if config.top_n else str(len(movers_raw))
         mode_label = "fast" if config.fast_mode else "normal"
         typer.echo(
-            f"Running pre-open screen ({top_label} movers, IEV >= {config.iev_min:,}, {mode_label} mode)..."
+            f"Running pre-open screen ({top_label} movers, IEV >= {config.iev_min:,}, "
+            f"{mode_label} mode)..."
         )
         browser_provider = ManualBrowserDataProvider.from_json(movers_raw, order_books_raw)
 
@@ -447,7 +589,7 @@ def pre_open(
         _write_sidecar(result.candidates, result.screened_date, DEFAULT_SIDECAR_PATH)
 
     except BrowserInteractionRequired as e:
-        typer.echo(f"\nBrowser action required:", err=True)
+        typer.echo("\nBrowser action required:", err=True)
         typer.echo(f"  URL: {e.url}", err=True)
         typer.echo(f"  {e.instructions}", err=True)
         raise typer.Exit(1)
@@ -456,11 +598,103 @@ def pre_open(
         raise typer.Exit(1)
 
 
+@screen_app.command("confirm-open")
+def confirm_open(
+    opening_json: Annotated[
+        str,
+        typer.Option(
+            "--opening-json",
+            help='Actual opening prices JSON object, e.g. {"BBCA":9050}',
+        ),
+    ],
+    session: Annotated[
+        Optional[Path],
+        typer.Option("--session", help="Path to pre-open sidecar JSON"),
+    ] = None,
+    output: Annotated[
+        Optional[Path],
+        typer.Option("--output", help="Path to write confirmation sidecar JSON"),
+    ] = None,
+    max_stop: Annotated[
+        float,
+        typer.Option("--max-stop", help="Max stop distance as decimal, e.g. 0.07 for 7%"),
+    ] = 0.07,
+) -> None:
+    """
+    Confirm pre-open candidates after the opening auction clears.
+
+    Reads the last `saham screen pre-open` sidecar and actual opening prices,
+    then emits deterministic ENTER / WAIT / SKIP decisions. No AI is used.
+
+    Example:
+        saham screen confirm-open --opening-json '{"BBCA":9050,"BMRI":5875}'
+    """
+    sidecar_path = session or DEFAULT_SIDECAR_PATH
+    output_path = output or DEFAULT_CONFIRMATION_PATH
+
+    if not sidecar_path.exists():
+        typer.echo(
+            f"No session sidecar found at '{sidecar_path}'.\n"
+            "Run `saham screen pre-open` first.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    try:
+        raw_opening = json.loads(opening_json)
+    except json.JSONDecodeError as e:
+        typer.echo(f"Error: Invalid JSON in --opening-json: {e}", err=True)
+        raise typer.Exit(1)
+
+    if not isinstance(raw_opening, dict):
+        typer.echo("Error: --opening-json must be a JSON object.", err=True)
+        raise typer.Exit(1)
+
+    try:
+        opening_prices = {
+            str(ticker).upper(): Decimal(str(price))
+            for ticker, price in raw_opening.items()
+            if price is not None
+        }
+    except Exception as e:
+        typer.echo(f"Error: opening prices must be numeric: {e}", err=True)
+        raise typer.Exit(1)
+
+    if max_stop <= 0:
+        typer.echo("Error: --max-stop must be positive.", err=True)
+        raise typer.Exit(1)
+
+    screened_at, candidates = _load_confirmation_candidates(sidecar_path, opening_prices)
+    use_case = ConfirmIntradayOpenUseCase()
+    result = use_case.execute(
+        ConfirmIntradayOpenRequest(
+            candidates=candidates,
+            run_date=screened_at,
+            max_stop_pct=Decimal(str(max_stop)),
+        )
+    )
+
+    _display_confirmations(
+        result.confirmations,
+        result.confirmed_date,
+        result.max_stop_pct,
+    )
+    _write_confirmation_sidecar(
+        result.confirmations,
+        result.confirmed_date,
+        result.max_stop_pct,
+        output_path,
+    )
+
+
 @screen_app.command("log")
 def log_session(
     session: Annotated[
         Optional[Path],
-        typer.Option("--session", help="Path to session sidecar JSON (default: journals/.last-session.json)"),
+        typer.Option(
+            "--session",
+            help="Path to session sidecar JSON (default: journals/.last-session.json)",
+        ),
     ] = None,
     journal: Annotated[
         Optional[Path],
@@ -512,8 +746,12 @@ def log_session(
                 trend_signal=row.get("trend"),
                 rsi=Decimal(row["rsi"]) if row.get("rsi") else None,
                 gap_pct=Decimal(row["gap_pct"]) if row.get("gap_pct") else None,
-                entry_range_low=Decimal(row["entry_range_low"]) if row.get("entry_range_low") else None,
-                entry_range_high=Decimal(row["entry_range_high"]) if row.get("entry_range_high") else None,
+                entry_range_low=(
+                    Decimal(row["entry_range_low"]) if row.get("entry_range_low") else None
+                ),
+                entry_range_high=(
+                    Decimal(row["entry_range_high"]) if row.get("entry_range_high") else None
+                ),
             )
         )
 
@@ -537,7 +775,11 @@ def review(
     db_path: Annotated[Optional[Path], typer.Option("--db")] = None,
     horizon: Annotated[
         int,
-        typer.Option("--horizon", help="Trading days after screen date to check close price", min=1),
+        typer.Option(
+            "--horizon",
+            help="Trading days after screen date to check close price",
+            min=1,
+        ),
     ] = 5,
 ) -> None:
     """
@@ -609,7 +851,7 @@ def _build_ai_researcher(provider: Optional[str] = None):
     from src.application.services.ai_research import ClaudeTickerResearcher
     if provider and provider not in ("claude", None):
         typer.echo(
-            f"Warning: AI research only supports 'claude' provider. Falling back.",
+            "Warning: AI research only supports 'claude' provider. Falling back.",
             err=True,
         )
     return ClaudeTickerResearcher()

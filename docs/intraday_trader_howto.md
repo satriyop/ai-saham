@@ -401,6 +401,33 @@ Ini momen paling kritis. Dalam 5 menit pertama setelah pasar buka:
 
 > Jangan terburu-buru. Lebih baik lewati 5 peluang daripada masuk di harga yang salah.
 
+Kamu juga bisa memakai konfirmasi deterministik dari hasil screener terakhir:
+
+```bash
+saham screen confirm-open \
+  --opening-json '{"BBCA":9050,"BMRI":5875,"GOTO":245}'
+```
+
+Perintah ini membaca `journals/.last-session.json` dari `saham screen pre-open`,
+lalu membandingkan opening price aktual dengan entry range, trend pre-open,
+dan risiko stop. Output keputusan:
+
+```
+ENTER                  open valid, konteks bullish, stop masih wajar
+WAIT                   open valid, tapi konteks belum bullish
+SKIP_GAP_UP            opening price di atas entry range
+SKIP_GAP_DOWN          opening price di bawah entry range
+SKIP_BEARISH_CONTEXT   trend bearish atau broker flow distributing
+SKIP_RISK_TOO_WIDE     jarak stop melebihi batas risiko
+SKIP_INSUFFICIENT_DATA data konfirmasi belum lengkap
+```
+
+Hasil konfirmasi disimpan ke `journals/.last-confirmation.json` untuk evaluasi
+workflow berikutnya.
+
+**Batasan saat ini:** opening price masih dimasukkan manual via JSON. Tool belum
+mengambil data intraday live secara otomatis.
+
 ---
 
 ### Setelah Trading — Catat di Journal
