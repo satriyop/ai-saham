@@ -35,9 +35,9 @@ DEFAULT_SESSION_FILE = Path("stockbit_session.json")
 
 # ── Stockbit URLs ──────────────────────────────────────────────────────────
 BASE_URL = "https://stockbit.com"
-SCREENER_URL = "https://stockbit.com/#/screener"
-ORDER_BOOK_URL = "https://stockbit.com/#/stock/{ticker}/orderbook"
-LOGIN_URL = "https://stockbit.com/#/login"
+SCREENER_URL = "https://stockbit.com/screener"
+ORDER_BOOK_URL = "https://stockbit.com/stock/{ticker}/orderbook"
+LOGIN_URL = "https://stockbit.com/login"
 EXODUS_API = "https://exodus.stockbit.com"
 
 # ── Timeouts (ms) ─────────────────────────────────────────────────────────
@@ -121,7 +121,7 @@ def _new_authenticated_context(pw, session_data: dict, headless: bool = True):
 
     # Step 2: navigate to domain so localStorage can be written
     if local_storage or session_storage:
-        page.goto(BASE_URL, timeout=NAV_TIMEOUT)
+        page.goto(BASE_URL, timeout=NAV_TIMEOUT, wait_until="domcontentloaded")
         if local_storage:
             try:
                 page.evaluate(
@@ -654,34 +654,35 @@ def save_stockbit_session(
         browser = pw.chromium.launch(headless=False)
         ctx = browser.new_context()
         page = ctx.new_page()
-        page.goto(LOGIN_URL, timeout=NAV_TIMEOUT)
-
-        print("Waiting for you to log in...")
-        print("(The window will close automatically once login is detected)\n")
+        # domcontentloaded avoids hanging on SPA navigation
+        page.goto(LOGIN_URL, timeout=NAV_TIMEOUT, wait_until="domcontentloaded")
 
         logged_in = False
-        # Wait for a Stockbit-authenticated page element.
-        # We try two signals in order:
-        #  1. URL contains /beranda, /feed, /watchlist, /portfolio (post-login pages)
-        #  2. A DOM element present only in the authenticated app shell
-        _AUTHENTICATED_URL_FRAGMENTS = (
-            "/beranda", "/feed", "/watchlist", "/portfolio",
-            "/screener", "/stock/", "/#/",
+
+        # Pages that are part of the auth flow — keep waiting while on any of these
+        _AUTH_FLOW_FRAGMENTS = (
+            "/login", "/register", "/forgot",
+            "/verify", "/otp", "/2fa", "/two-factor",
+            "/email-verification", "/phone-verification",
         )
-        _LOGIN_URL_FRAGMENTS = ("/login", "/register", "/forgot")
+        # Pages that only appear after full successful login
+        _POST_LOGIN_FRAGMENTS = (
+            "/beranda", "/feed", "/watchlist", "/portfolio",
+            "/screener", "/explore", "/market",
+        )
+
+        print("Waiting for login to complete (including 2FA if enabled)...")
 
         try:
-            # Poll until we're clearly past the login page
             start = time.time()
             while time.time() - start < timeout:
                 try:
                     current_url = page.url
-                    is_login = any(f in current_url for f in _LOGIN_URL_FRAGMENTS)
-                    is_app = any(f in current_url for f in _AUTHENTICATED_URL_FRAGMENTS)
+                    in_auth_flow = any(f in current_url for f in _AUTH_FLOW_FRAGMENTS)
+                    in_app = any(f in current_url for f in _POST_LOGIN_FRAGMENTS)
 
-                    if is_app and not is_login:
-                        # Wait a moment for the app shell to fully render
-                        page.wait_for_timeout(2_000)
+                    if in_app and not in_auth_flow:
+                        page.wait_for_timeout(2_000)  # let app shell settle
                         logged_in = True
                         break
                 except Exception:
