@@ -45,8 +45,8 @@ def login(
     ] = None,
     timeout: Annotated[
         int,
-        typer.Option("--timeout", help="Seconds to wait for manual login", min=30),
-    ] = 120,
+        typer.Option("--timeout", help="Seconds to wait for manual login (use 300+ if you have 2FA)", min=30),
+    ] = 300,
 ) -> None:
     """
     Open a browser window for manual Stockbit login. Saves session cookies.

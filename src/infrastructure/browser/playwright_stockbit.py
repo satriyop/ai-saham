@@ -633,7 +633,7 @@ def spy_stockbit_session(
 
 def save_stockbit_session(
     session_file: Path = DEFAULT_SESSION_FILE,
-    timeout: int = 120,
+    timeout: int = 300,
 ) -> None:
     """
     Launch headed Chromium for manual Stockbit login. Saves cookies on success.
@@ -646,6 +646,8 @@ def save_stockbit_session(
 
     print("Opening Stockbit login page in a browser window.")
     print(f"Please log in manually. You have {timeout} seconds.")
+    if timeout < 180:
+        print("Tip: use --timeout 300 if you have 2FA enabled.")
     print(f"Session will be saved to: {session_file}\n")
 
     with sync_playwright() as pw:
