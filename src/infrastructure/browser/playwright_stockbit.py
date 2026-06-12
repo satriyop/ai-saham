@@ -665,23 +665,27 @@ def save_stockbit_session(
             "/verify", "/otp", "/2fa", "/two-factor",
             "/email-verification", "/phone-verification",
         )
-        # Pages that only appear after full successful login
-        _POST_LOGIN_FRAGMENTS = (
-            "/beranda", "/feed", "/watchlist", "/portfolio",
-            "/screener", "/explore", "/market",
-        )
 
         print("Waiting for login to complete (including 2FA if enabled)...")
+        print("Current URL will be printed every 5 seconds.\n")
 
+        last_printed_url = ""
         try:
             start = time.time()
             while time.time() - start < timeout:
                 try:
                     current_url = page.url
-                    in_auth_flow = any(f in current_url for f in _AUTH_FLOW_FRAGMENTS)
-                    in_app = any(f in current_url for f in _POST_LOGIN_FRAGMENTS)
 
-                    if in_app and not in_auth_flow:
+                    if current_url != last_printed_url:
+                        elapsed = int(time.time() - start)
+                        print(f"  [{elapsed}s] {current_url}")
+                        last_printed_url = current_url
+
+                    in_auth_flow = any(f in current_url for f in _AUTH_FLOW_FRAGMENTS)
+                    on_stockbit = "stockbit.com" in current_url
+
+                    # Logged in = on stockbit.com, not on any auth/login page
+                    if on_stockbit and not in_auth_flow and current_url != LOGIN_URL:
                         page.wait_for_timeout(2_000)  # let app shell settle
                         logged_in = True
                         break
