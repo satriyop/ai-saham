@@ -283,6 +283,19 @@ class AssessRiskUseCase:
             if name not in BUILTIN_INDICATORS:
                 extras.append((name, value))
 
+        # Inject price fields (OPEN, HIGH, LOW, CLOSE, VOLUME) from the candle
+        # at latest_date, so rules can reference CLOSE directly.
+        candle_by_date = {c.date: c for c in candles}
+        candle = candle_by_date.get(latest_date) or (candles[-1] if candles else None)
+        if candle:
+            extras.extend([
+                ("OPEN", candle.open),
+                ("HIGH", candle.high),
+                ("LOW", candle.low),
+                ("CLOSE", candle.close),
+                ("VOLUME", Decimal(candle.volume)),
+            ])
+
         return IndicatorSnapshot(
             date=latest_date,
             sma=sma_value,
