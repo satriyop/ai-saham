@@ -22,14 +22,15 @@ Step 1 → Update data        saham update --universe lq45
 Step 2 → Check market       saham regime
 Step 3 → Find candidates    saham swing screen --universe lq45 --multi
 Step 4 → Deep-dive          saham swing analyze BBRI --preset foreign-bounce --capital N
-Step 5 → Size the trade     saham swing size BBRI --capital N    (if not using preset)
-Step 6 → Log the candidate  saham swing log --ticker BBRI
+Step 5 → Confirm chart      saham chart price BBRI --sma 20 --days 90
+Step 6 → Size the trade     saham swing size BBRI --capital N    (if not using preset)
+Step 7 → Log the decision   saham swing log --ticker BBRI --from-analysis --with-regime
 ──────────────────────────────────────────────────────────────────
 After 10–20 trading days: review what the setup actually delivered
-Step 7 → Review outcomes    saham swing review
+Step 8 → Review outcomes    saham swing review
 ```
 
-Steps 3–5 collapse what previously required 6+ separate commands into one primary command (`saham swing analyze`) for each candidate.
+Steps 3–6 collapse what previously required 6+ separate commands into one primary command (`saham swing analyze`) for each candidate, plus chart confirmation before logging or entry.
 
 ---
 
@@ -122,9 +123,12 @@ saham swing analyze BBRI
 saham swing analyze BBRI --no-sentiment                          # skip news fetch
 saham swing analyze BBRI --no-refresh --no-backtest --no-sentiment # fastest, cached-only
 saham swing analyze BBRI --force-refresh                         # force provider refresh
+saham swing analyze BBRI --sentiment-verbose                     # debug news provider issues
 ```
 
 By default, `saham swing analyze` checks and refreshes only the requested ticker's candles and broker flow if local data is behind today. The `DATA` section shows whether refresh used current cache, fetched new rows, checked the provider but found no newer trading rows, failed, or was disabled.
+
+Sentiment is optional context. Provider/RSS errors are suppressed into a concise `SENTIMENT` warning by default so deterministic gates stay readable. Use `--sentiment-verbose` only when debugging the news provider, or `--no-sentiment` for a fully offline deterministic run.
 
 ### With the `foreign-bounce` preset
 
@@ -261,6 +265,7 @@ PLAN:  ENTER setup passed. Consider 4 lots at 4,840; TP 5,082; SL 4,598; max hol
 | `--regime-universe` | `idx80` | Universe for breadth context |
 | `--benchmark` | `^JKSE` | Benchmark ticker for regime |
 | `--no-sentiment` | off | Skip news sentiment (offline mode) |
+| `--sentiment-verbose` | off | Show optional sentiment provider errors/noise |
 | `--no-backtest` | off | Skip historical backtest |
 | `--no-refresh` | off | Disable automatic single-ticker candle/broker refresh |
 | `--force-refresh` | off | Force provider refresh even when cached data is fresh |
@@ -268,7 +273,30 @@ PLAN:  ENTER setup passed. Consider 4 lots at 4,840; TP 5,082; SL 4,598; max hol
 
 ---
 
-## Step 5 — Size the Trade
+## Step 5 — Confirm Chart Structure
+
+Before sizing or logging a paper entry, confirm that price structure agrees with the numeric gates. This uses existing chart commands and does not change the deterministic signal.
+
+```bash
+saham chart price BBRI --sma 20 --days 90
+saham chart rsi BBRI --days 90
+saham chart volume BBRI --days 30
+```
+
+| Check | Prefer | Avoid |
+|---|---|---|
+| Price structure | Sideways base, higher low, or tight range near SMA20/support | Lower-high breakdown, wide red candles, price far below support |
+| RSI | Recovering from 30-50 with room before 60 | RSI pinned below 30 while price keeps making lower lows |
+| Volume | Accumulation days supported by visible participation | Thin volume, or volume spikes mostly on down days |
+
+Decision rule:
+
+- `ENTER` from `saham swing analyze` plus constructive chart = eligible for sizing/logging.
+- `ENTER` plus breakdown chart = downgrade to `WATCH`; wait for structure to repair.
+- `WATCH` plus constructive chart = keep on shortlist and rerun tomorrow.
+- `AVOID` stays `AVOID`; charts are not used to override failed deterministic gates.
+
+## Step 6 — Size the Trade
 
 When you need position sizing independently (without the full swing view), use `saham swing size`. It uses ATR-based fixed-fractional sizing.
 
@@ -331,24 +359,28 @@ Setting a stop at "5% below entry" ignores the stock's actual volatility. A stoc
 
 ---
 
-## Step 6 — Log to the Trade Journal
+## Step 7 — Log to the Trade Journal
 
-After identifying a candidate, log it to the accumulation journal. This creates a record that can be reviewed after 10–20 trading days to answer: *did the setup actually deliver?*
+After identifying a candidate, log the actual decision and plan to the accumulation journal. This creates a record that can be reviewed after 10–20 trading days to answer: *did ENTER setups outperform WATCH setups, and did failed gates matter?*
 
 ```bash
-saham swing log --ticker BBRI --window 7
-saham swing log --ticker BBCA --entry-price 9450
+saham swing log --ticker BBRI --window 7 --from-analysis --with-regime
+saham swing log --ticker BBCA --window 7 --entry-price 9450 --from-analysis --with-regime
 ```
 
 The command:
 1. Runs the accumulation screen for that ticker on the specified window
 2. Computes the multi-window pattern (7/30/90 broker sessions) automatically
-3. Appends one row to `journals/accumulation.csv`
-4. Is idempotent — re-running the same (date, ticker, window) never duplicates
+3. Re-evaluates the `foreign-bounce` preset gates when `--from-analysis` is used
+4. Stores preset name, decision (`ENTER/WATCH/AVOID`), failed gates, regime, entry, stop, target, and max hold
+5. Appends one row to `journals/accumulation.csv`
+6. Is idempotent — re-running the same (date, ticker, window) never duplicates
+
+Use `--entry-price` when your planned entry differs from the latest close. Without `--from-analysis`, the command still works as the old lightweight candidate log, but it will not preserve the trade decision or plan.
 
 ---
 
-## Step 7 — Review Outcomes
+## Step 8 — Review Outcomes
 
 After 10+ trading days, check whether the accumulation signals actually predicted returns.
 
@@ -366,6 +398,15 @@ PERFORMANCE BY SCORE BUCKET
   70+          12     +3.2%    +5.1%            67%
   40–69         8     +1.1%    +1.8%            50%
   0–39          5     -0.8%    -2.1%            40%
+```
+
+**Performance by preset decision** — answers: do true `ENTER` rows outperform watchlist rows?
+```
+PERFORMANCE BY PRESET DECISION
+  DECISION        N   AVG_10D   WIN_RATE   AVG_MAX_UP   AVG_MAX_DD
+  ENTER           8    +5.4%       62%        +8.9%       -3.8%
+  WATCH           6    +1.7%       50%        +5.2%       -5.9%
+  AVOID           3    -2.4%       33%        +2.1%       -7.4%
 ```
 
 **Performance by pattern** — answers: does `sustained` outperform `building`?
@@ -502,13 +543,19 @@ saham swing screen --universe lq45 --multi --min-score 50
 saham swing analyze BBRI --preset foreign-bounce --capital 10000000 --with-regime
 # → PLAN: ENTER setup passed. Consider 4 lots at 4,840; TP 5,082; SL 4,598
 
-# 5. Check second candidate
+# 5. Confirm chart structure before paper entry
+saham chart price BBRI --sma 20 --days 90
+saham chart rsi BBRI --days 90
+saham chart volume BBRI --days 30
+# → Confirm sideways base / support, RSI room, and volume participation
+
+# 6. Check second candidate
 saham swing analyze TLKM --preset foreign-bounce --capital 10000000
 # → PLAN: WATCH only. vwap_disc: 1.2% (required >= 3%)
 
-# 6. Log BBRI to journal
-saham swing log --ticker BBRI --window 7
-# → Logged BBRI | 2026-06-12 | window=7 sessions | score=74.1 | pattern: sustained
+# 7. Log BBRI decision and plan to journal
+saham swing log --ticker BBRI --window 7 --from-analysis --with-regime
+# → Logged BBRI | 2026-06-12 | window=7 sessions | score=74.1 | pattern: sustained | preset=foreign-bounce | decision=ENTER | regime=SIDEWAYS | plan entry=4,840 stop=4,598 target=5,082 hold=10d
 
 # --- 10 trading days later ---
 
@@ -551,8 +598,8 @@ The discipline is: run `saham swing analyze TICKER --preset foreign-bounce` on e
 | `saham swing size TICKER --capital N` | Standalone ATR-based position sizing |
 | `saham swing backtest --universe lq45` | Walk-forward portfolio backtest of the preset |
 | `saham swing compare --universe lq45` | Compare baseline vs regime-filtered variants |
-| `saham swing log --ticker BBRI` | Log candidate to trade journal |
-| `saham swing review` | Review journal: did high-score setups deliver? |
+| `saham swing log --ticker BBRI --from-analysis --with-regime` | Log candidate, preset decision, failed gates, regime, and plan |
+| `saham swing review` | Review journal: did ENTER beat WATCH and did high-score setups deliver? |
 
 For a reference of accumulation screener columns (`STREAK`, `VWAP_DISC`, `FLOW%`, `BB%ILE`, `PATTERN`), run:
 

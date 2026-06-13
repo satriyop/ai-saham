@@ -209,3 +209,39 @@ class BrokerSummary:
             total_value=Decimal(data["total_value"]),
             total_lot=int(data["total_lot"]),
         )
+
+
+@dataclass(frozen=True)
+class ForeignFlowSnapshot:
+    """
+    Lightweight snapshot of foreign broker aggregate flow for a stock.
+
+    Returned by the broker-centric universe scan (which stocks are foreign
+    brokers accumulating?). Does NOT include named broker breakdown.
+    Use BrokerSummary for the full named breakdown.
+    """
+
+    ticker: str
+    date: date
+    net_val: Decimal  # positive = net buy, negative = net sell
+    net_lot: int
+
+    @property
+    def is_accumulating(self) -> bool:
+        return self.net_val > Decimal("0")
+
+
+@dataclass(frozen=True)
+class BrokerFlowPoint:
+    """
+    Single data point in the historical broker flow time-series for a stock.
+
+    Returned by the stock-centric historical endpoint (daily/weekly aggregate
+    foreign flow). Used for backfilling and trend context.
+    """
+
+    ticker: str
+    date: date
+    net_val: Decimal   # foreign net value (positive = net buy)
+    net_lot: int
+    avg_price: Decimal  # average price for the period

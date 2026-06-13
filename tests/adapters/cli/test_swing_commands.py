@@ -1,5 +1,7 @@
 """Tests for swing command helper logic."""
 
+import logging
+import sys
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -12,6 +14,7 @@ from src.adapters.cli.swing_commands import (
     _build_data_freshness,
     _build_flow_detail,
     _evaluate_foreign_bounce,
+    _fetch_swing_sentiment,
 )
 from src.application.use_case.accumulation_screen import AccumulationCandidate
 from src.domain.entities.broker_flow import BrokerSummary
@@ -154,6 +157,60 @@ def test_flow_detail_uses_latest_broker_sessions():
     assert detail.consecutive_buy_sessions == 2
     assert detail.latest_net_flow == Decimal("80000000")
     assert detail.to_dict()["window_sessions"] == 3
+
+
+class NoisyNewsProvider:
+    provider_name = "noisy"
+
+    def fetch_headlines(self, ticker: str, max_headlines: int = 20, days: int = 3):
+        print("RAW_SENTIMENT_STDOUT")
+        print("RAW_SENTIMENT_STDERR", file=sys.stderr)
+        logging.getLogger("ai_saham.sentiment").warning("RAW_SENTIMENT_LOG")
+        raise RuntimeError("RAW_SENTIMENT_EXCEPTION")
+
+
+def test_fetch_swing_sentiment_suppresses_provider_noise_by_default(
+    monkeypatch,
+    capsys,
+):
+    monkeypatch.setattr(
+        "src.adapters.cli.swing_commands.SentimentFactory.create_news_provider",
+        lambda: NoisyNewsProvider(),
+    )
+    monkeypatch.setattr(
+        "src.adapters.cli.swing_commands.SentimentFactory.create_classifier",
+        lambda use_ai=False: object(),
+    )
+
+    response, warning = _fetch_swing_sentiment("BBCA", sentiment_verbose=False)
+
+    captured = capsys.readouterr()
+    assert response is None
+    assert warning == "News unavailable (provider fetch failed)."
+    assert "RAW_SENTIMENT" not in captured.out
+    assert "RAW_SENTIMENT" not in captured.err
+
+
+def test_fetch_swing_sentiment_verbose_keeps_provider_details(
+    monkeypatch,
+    capsys,
+):
+    monkeypatch.setattr(
+        "src.adapters.cli.swing_commands.SentimentFactory.create_news_provider",
+        lambda: NoisyNewsProvider(),
+    )
+    monkeypatch.setattr(
+        "src.adapters.cli.swing_commands.SentimentFactory.create_classifier",
+        lambda use_ai=False: object(),
+    )
+
+    response, warning = _fetch_swing_sentiment("BBCA", sentiment_verbose=True)
+
+    captured = capsys.readouterr()
+    assert response is None
+    assert warning == "Sentiment fetch failed: RAW_SENTIMENT_EXCEPTION"
+    assert "RAW_SENTIMENT_STDOUT" in captured.out
+    assert "RAW_SENTIMENT_STDERR" in captured.err
 
 
 def test_swing_backtest_unknown_preset_error():

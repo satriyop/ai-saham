@@ -16,12 +16,13 @@
 5. [Langkah 1 — Cek Regime Pasar](#5-langkah-1--cek-regime-pasar)
 6. [Langkah 2 — Jalankan Screener Akumulasi](#6-langkah-2--jalankan-screener-akumulasi)
 7. [Langkah 3 — Analisis Kandidat Terpilih](#7-langkah-3--analisis-kandidat-terpilih)
-8. [Langkah 4 — Sizing dan Order Plan](#8-langkah-4--sizing-dan-order-plan)
-9. [Langkah 5 — Eksekusi dan Manajemen Posisi](#9-langkah-5--eksekusi-dan-manajemen-posisi)
-10. [Langkah 6 — Log dan Review](#10-langkah-6--log-dan-review)
-11. [Validasi Strategi dengan Backtest](#11-validasi-strategi-dengan-backtest)
-12. [Quick Reference Card](#12-quick-reference-card)
-13. [Troubleshooting](#13-troubleshooting)
+8. [Langkah 4 — Konfirmasi Struktur Chart](#8-langkah-4--konfirmasi-struktur-chart)
+9. [Langkah 5 — Sizing dan Order Plan](#9-langkah-5--sizing-dan-order-plan)
+10. [Langkah 6 — Eksekusi dan Manajemen Posisi](#10-langkah-6--eksekusi-dan-manajemen-posisi)
+11. [Langkah 7 — Log dan Review](#11-langkah-7--log-dan-review)
+12. [Validasi Strategi dengan Backtest](#12-validasi-strategi-dengan-backtest)
+13. [Quick Reference Card](#13-quick-reference-card)
+14. [Troubleshooting](#14-troubleshooting)
 
 ---
 
@@ -90,7 +91,7 @@ Setiap hari      Refresh data harga + broker flow    saham update --universe lq4
 Setiap hari      Cek regime pasar                    saham regime
 Setiap hari      Jalankan screener                   saham swing screen --universe lq45 --multi
 Per kandidat     Analisis detail + sizing            saham swing analyze TICKER --preset foreign-bounce
-Saat entry       Log ke journal                      saham swing log --ticker TICKER
+Saat entry       Log keputusan ke journal            saham swing log --ticker TICKER --from-analysis --with-regime
 Saat exit        Catat outcome                       (manual di journal)
 Mingguan         Review hit rate                     saham swing review --horizon 10
 Bulanan          Validasi dengan backtest             saham swing backtest --universe lq45 --start ...
@@ -293,6 +294,8 @@ saham swing analyze GGRM --preset foreign-bounce --capital 10000000 --with-regim
 
 Secara default, command ini akan mengecek dan refresh data harga + broker flow hanya untuk ticker tersebut kalau cache lokal stale atau belum ada. Gunakan `--no-refresh` untuk mode cached-only/offline, atau `--force-refresh` kalau ingin memaksa fetch ulang dari provider.
 
+Sentiment/news hanya konteks tambahan. Error provider RSS disembunyikan menjadi warning singkat di blok `SENTIMENT` supaya gate deterministik tetap mudah dibaca. Gunakan `--sentiment-verbose` hanya untuk debugging provider berita, atau `--no-sentiment` untuk workflow offline penuh.
+
 ### Contoh Output Lengkap
 
 ```
@@ -428,7 +431,32 @@ saham swing analyze BBRI --preset foreign-bounce --format json
 
 ---
 
-## 8. Langkah 4 — Sizing dan Order Plan
+## 8. Langkah 4 — Konfirmasi Struktur Chart
+
+Sebelum sizing atau log paper entry, pastikan struktur harga mendukung gate numerik. Ini memakai command chart yang sudah ada dan tidak mengubah sinyal deterministik.
+
+```bash
+saham chart price BBRI --sma 20 --days 90
+saham chart rsi BBRI --days 90
+saham chart volume BBRI --days 30
+```
+
+| Cek | Lebih Baik | Hindari |
+|-----|------------|---------|
+| Struktur harga | Base sideways, higher low, range ketat dekat SMA20/support | Lower-high breakdown, candle merah lebar, harga jauh di bawah support |
+| RSI | Pulih dari area 30-50 dan masih punya ruang ke 60 | RSI tertahan di bawah 30 saat harga terus lower low |
+| Volume | Hari akumulasi didukung partisipasi volume yang terlihat | Volume tipis, atau spike volume dominan di hari turun |
+
+Aturan praktis:
+
+- `ENTER` dari `saham swing analyze` + chart konstruktif = boleh lanjut sizing/logging.
+- `ENTER` + chart breakdown = downgrade ke `WATCH`; tunggu struktur membaik.
+- `WATCH` + chart konstruktif = tetap di shortlist, cek ulang besok.
+- `AVOID` tetap `AVOID`; chart tidak dipakai untuk override gate deterministik.
+
+---
+
+## 9. Langkah 5 — Sizing dan Order Plan
 
 ### Sizing Standalone (Kalau Sudah Tahu Entry)
 
@@ -492,7 +520,7 @@ Lots    : 2 lots (Rp ~9.4jt, risk Rp ~94rb = 0.94% modal)
 
 ---
 
-## 9. Langkah 5 — Eksekusi dan Manajemen Posisi
+## 10. Langkah 6 — Eksekusi dan Manajemen Posisi
 
 ### Entry
 
@@ -553,18 +581,29 @@ saham broker flow GGRM --days 5
 
 ---
 
-## 10. Langkah 6 — Log dan Review
+## 11. Langkah 7 — Log dan Review
 
-### Log Kandidat ke Journal
+### Log Keputusan ke Journal
 
-Catat setiap kandidat yang kamu analisis (bukan hanya yang kamu masuki) — ini membangun database untuk review akurasi.
+Catat setiap kandidat yang kamu analisis (bukan hanya yang kamu masuki), tetapi simpan juga keputusan preset dan rencana trade. Ini membuat review bisa membedakan setup `ENTER`, `WATCH`, dan `AVOID`.
 
 ```bash
-saham swing log --ticker GGRM --window 7
+saham swing log --ticker GGRM --window 7 --from-analysis --with-regime
 
-# Dengan harga entry
-saham swing log --ticker GGRM --window 7 --entry-price 47100
+# Dengan harga entry yang berbeda dari latest close
+saham swing log --ticker GGRM --window 7 --entry-price 47100 --from-analysis --with-regime
 ```
+
+Dengan `--from-analysis`, journal menyimpan:
+
+| Field | Isi |
+|-------|-----|
+| `preset` | Nama preset, saat ini `foreign-bounce` |
+| `classification` | `ENTER`, `WATCH`, atau `AVOID` |
+| `failed_gates` | Gate yang gagal, misalnya VWAP atau trend |
+| `regime` | Regime pasar jika memakai `--with-regime` |
+| `planned_entry`, `planned_stop`, `planned_target` | Rencana harga dari preset |
+| `max_hold_days` | Batas hold preset, saat ini 10 hari trading |
 
 ### Review Performa Strategi
 
@@ -582,6 +621,11 @@ SWING REVIEW — horizon: 10d | 2026-06-13
 ═══════════════════════════════════════════════════════════════════
 BY SCORE BUCKET
   Score ≥ 70  :  12 entries | avg +3.8%  | win rate 66.7%
+
+BY PRESET DECISION
+  ENTER        :   8 entries | avg +5.4%  | win rate 62.5%
+  WATCH        :   6 entries | avg +1.7%  | win rate 50.0%
+  AVOID        :   3 entries | avg -2.4%  | win rate 33.3%
   Score 40–69 :   8 entries | avg +1.2%  | win rate 50.0%
   Score < 40  :   4 entries | avg -0.8%  | win rate 25.0%
 
@@ -605,7 +649,7 @@ RECOMMENDATION
 
 ---
 
-## 11. Validasi Strategi dengan Backtest
+## 12. Validasi Strategi dengan Backtest
 
 Sebelum sizing besar atau mengubah parameter, validasi dengan backtest historis.
 
@@ -687,7 +731,7 @@ Default backtest biaya adalah `--cost-bps 20` one-way, diterapkan saat entry dan
 
 ---
 
-## 12. Quick Reference Card
+## 13. Quick Reference Card
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
@@ -736,7 +780,8 @@ Default backtest biaya adalah `--cost-bps 20` one-way, diterapkan saat entry dan
 │    Max hold: 10 hari trading                                          │
 ├──────────────────────────────────────────────────────────────────────┤
 │  JOURNAL                                                              │
-│    saham swing log --ticker TICKER --entry-price XXXX                 │
+│    saham swing log --ticker TICKER --entry-price XXXX --from-analysis │
+│                    --with-regime                                      │
 │    saham swing review --horizon 10                                    │
 ├──────────────────────────────────────────────────────────────────────┤
 │  VALIDASI BERKALA (bulanan)                                           │
@@ -747,7 +792,7 @@ Default backtest biaya adalah `--cost-bps 20` one-way, diterapkan saat entry dan
 
 ---
 
-## 13. Troubleshooting
+## 14. Troubleshooting
 
 ### Screener Tidak Menampilkan Skor (Semua N/A atau 0)
 

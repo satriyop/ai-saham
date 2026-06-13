@@ -25,9 +25,9 @@ def test_is_cached_status_matches_explicit_cache_statuses():
 def test_no_new_data_status_reports_provider_check_result():
     assert (
         _no_new_data_status(date(2026, 6, 10))
-        == "provider-no-new-data(latest=2026-06-10)"
+        == "up-to-date(2026-06-10)"
     )
-    assert _no_new_data_status(None) == "provider-no-data"
+    assert _no_new_data_status(None) == "no-data"
 
 
 def test_fetch_broker_skips_index_ticker(tmp_path: Path):

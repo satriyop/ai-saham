@@ -36,6 +36,10 @@ from src.application.use_case.accumulation_screen import (
     AccumulationScreenResponse,
     AccumulationScreenUseCase,
 )
+from src.application.use_case.market_regime import (
+    MarketRegimeRequest,
+    MarketRegimeUseCase,
+)
 from src.infrastructure.persistence.sqlite_broker_repository import (
     SQLiteBrokerRepository,
 )
@@ -57,6 +61,10 @@ universe_app = typer.Typer(
 )
 
 DEFAULT_DB_PATH = Path("data.db")
+FOREIGN_BOUNCE_PRESET = "foreign-bounce"
+FOREIGN_BOUNCE_TAKE_PROFIT = Decimal("5")
+FOREIGN_BOUNCE_STOP_LOSS = Decimal("5")
+FOREIGN_BOUNCE_MAX_HOLD_DAYS = 10
 
 # Table widths
 _TABLE_WIDTH = 93
@@ -112,6 +120,73 @@ def _classify_pattern(
     if min(windows) in hot and len(hot) >= 2:
         return "building"
     return "mixed"
+
+
+def _fmt_optional_float(value: float | None, suffix: str = "") -> str:
+    return "missing" if value is None else f"{value:.1f}{suffix}"
+
+
+def _foreign_bounce_decision(
+    candidate: AccumulationCandidate | None,
+) -> tuple[str, tuple[str, ...]]:
+    if candidate is None:
+        return "AVOID", ("No accumulation/broker-flow candidate available",)
+
+    gates = (
+        (
+            "score",
+            candidate.score >= 70,
+            f"{candidate.score:.1f}",
+            ">= 70",
+        ),
+        (
+            "vwap_disc_pct",
+            candidate.vwap_discount_pct is not None
+            and candidate.vwap_discount_pct >= 3,
+            _fmt_optional_float(candidate.vwap_discount_pct, "%"),
+            ">= +3%",
+        ),
+        (
+            "trend",
+            candidate.trend == "SIDE",
+            candidate.trend,
+            "SIDE",
+        ),
+        (
+            "flow_pct",
+            candidate.avg_flow_ratio is not None and candidate.avg_flow_ratio >= 5,
+            _fmt_optional_float(candidate.avg_flow_ratio, "%"),
+            ">= +5%",
+        ),
+        (
+            "RSI present",
+            candidate.rsi is not None,
+            _fmt_optional_float(candidate.rsi),
+            "present",
+        ),
+        (
+            "RSI",
+            candidate.rsi is not None and candidate.rsi <= 60,
+            _fmt_optional_float(candidate.rsi),
+            "<= 60",
+        ),
+    )
+    failed = tuple(
+        f"{label}: {actual} (required {required})"
+        for label, passed, actual, required in gates
+        if not passed
+    )
+    if not failed:
+        return "ENTER", failed
+    if candidate.score >= 70 or len(failed) <= 2:
+        return "WATCH", failed
+    return "AVOID", failed
+
+
+def _percent_plan(entry: Decimal) -> tuple[Decimal, Decimal]:
+    stop = entry * (Decimal("1") - FOREIGN_BOUNCE_STOP_LOSS / Decimal("100"))
+    target = entry * (Decimal("1") + FOREIGN_BOUNCE_TAKE_PROFIT / Decimal("100"))
+    return stop, target
 
 
 def _display_results(
@@ -1246,6 +1321,29 @@ def accumulation_log(
         Optional[float],
         typer.Option("--entry-price", help="Entry price override (default = latest close)"),
     ] = None,
+    from_analysis: Annotated[
+        bool,
+        typer.Option(
+            "--from-analysis",
+            help="Record preset decision, failed gates, and trade plan fields",
+        ),
+    ] = False,
+    preset: Annotated[
+        str,
+        typer.Option("--preset", help="Swing preset to journal with --from-analysis"),
+    ] = FOREIGN_BOUNCE_PRESET,
+    with_regime: Annotated[
+        bool,
+        typer.Option("--with-regime", help="Include market regime label in journal row"),
+    ] = False,
+    regime_universe: Annotated[
+        Optional[str],
+        typer.Option("--regime-universe", help="Universe for regime breadth"),
+    ] = "lq45",
+    benchmark: Annotated[
+        str,
+        typer.Option("--benchmark", help="Benchmark ticker for regime context"),
+    ] = "^JKSE",
     journal: Annotated[
         Optional[Path],
         typer.Option("--journal", help="Journal CSV path"),
@@ -1265,6 +1363,7 @@ def accumulation_log(
     Example:
         saham swing log --ticker BBRI --window 7
         saham swing log --ticker BBCA --entry-price 9450
+        saham swing log --ticker BBRI --from-analysis --with-regime
     """
     from src.application.services.accumulation_journal import AccumulationJournalService
     from src.infrastructure.persistence.accumulation_journal_csv_writer import (
@@ -1275,6 +1374,13 @@ def accumulation_log(
     journal_path = journal or DEFAULT_ACCUM_JOURNAL_PATH
     ticker_upper = ticker.upper()
     logged_at = date.today()
+    preset_name = preset.lower()
+    if from_analysis and preset_name != FOREIGN_BOUNCE_PRESET:
+        typer.echo(
+            f"Unknown swing preset '{preset}'. Available presets: {FOREIGN_BOUNCE_PRESET}",
+            err=True,
+        )
+        raise typer.Exit(1)
 
     broker_repo = SQLiteBrokerRepository(resolved_db)
     market_repo = SQLiteMarketRepository(db_path=resolved_db)
@@ -1337,6 +1443,45 @@ def accumulation_log(
         )
         resolved_entry = Decimal("0")
 
+    classification: str | None = None
+    failed_gates: tuple[str, ...] = ()
+    planned_entry: Decimal | None = None
+    planned_stop: Decimal | None = None
+    planned_target: Decimal | None = None
+    max_hold_days: int | None = None
+    regime: str | None = None
+    journal_preset: str | None = None
+
+    if from_analysis:
+        journal_preset = preset_name
+        classification, failed_gates = _foreign_bounce_decision(candidate)
+        planned_entry = resolved_entry
+        planned_stop, planned_target = _percent_plan(resolved_entry)
+        max_hold_days = FOREIGN_BOUNCE_MAX_HOLD_DAYS
+
+        if with_regime:
+            try:
+                regime_tickers = resolve_tickers(
+                    universe=regime_universe,
+                    explicit=[],
+                    db_path=resolved_db,
+                )
+                regime_uc = MarketRegimeUseCase(
+                    market_repository=market_repo,
+                    broker_repository=broker_repo,
+                )
+                regime_response = regime_uc.execute(MarketRegimeRequest(
+                    universe=regime_tickers,
+                    benchmark_ticker=benchmark,
+                    as_of_date=logged_at,
+                ))
+                regime = regime_response.label
+            except Exception as exc:
+                typer.echo(
+                    f"Warning: could not compute market regime for journal row: {exc}",
+                    err=True,
+                )
+
     store = AccumulationJournalCsvWriter(journal_path)
     service = AccumulationJournalService(store=store, repository=market_repo)
 
@@ -1347,6 +1492,14 @@ def accumulation_log(
         candidate=candidate,
         logged_at=logged_at,
         pattern=pattern,
+        preset=journal_preset,
+        classification=classification,
+        failed_gates=failed_gates,
+        regime=regime,
+        planned_entry=planned_entry,
+        planned_stop=planned_stop,
+        planned_target=planned_target,
+        max_hold_days=max_hold_days,
     )
 
     if count == 0:
@@ -1357,10 +1510,30 @@ def accumulation_log(
     else:
         score_str = f"{candidate.score:.1f}" if candidate else "0.0"
         pattern_str = f" | pattern: {pattern}" if pattern else ""
+        decision_str = (
+            f" | preset={journal_preset} | decision={classification}"
+            if from_analysis
+            else ""
+        )
+        plan_str = (
+            f" | plan entry={planned_entry:,.0f} stop={planned_stop:,.0f} "
+            f"target={planned_target:,.0f} hold={max_hold_days}d"
+            if from_analysis
+            and planned_entry is not None
+            and planned_stop is not None
+            and planned_target is not None
+            and max_hold_days is not None
+            else ""
+        )
+        regime_str = f" | regime={regime}" if regime else ""
         typer.echo(
             f"Logged {ticker_upper} | {logged_at} | window={window} sessions | "
-            f"score={score_str}{pattern_str} → {journal_path}"
+            f"score={score_str}{pattern_str}{decision_str}{regime_str}{plan_str} → {journal_path}"
         )
+        if from_analysis and failed_gates:
+            typer.echo("Failed gates:")
+            for gate in failed_gates:
+                typer.echo(f"  - {gate}")
 
 
 def accumulation_review(
@@ -1450,6 +1623,22 @@ def accumulation_review(
             f"  {stat.bucket:<10} {stat.n:>4}  {_pct(stat.avg_return_5d):>8}  "
             f"{_pct(stat.avg_return_10d):>8}  {_wr(stat.win_rate_10d):>13}"
         )
+
+    # ── PERFORMANCE BY PRESET DECISION ──
+    if report.by_decision:
+        typer.echo("")
+        typer.echo(typer.style("PERFORMANCE BY PRESET DECISION", fg=typer.colors.CYAN, bold=True))
+        typer.echo(
+            f"  {'DECISION':<12} {'N':>4}  {'AVG_10D':>8}  {'WIN_RATE':>9}  "
+            f"{'AVG_MAX_UP':>11}  {'AVG_MAX_DD':>11}"
+        )
+        typer.echo("  " + "-" * 62)
+        for stat in report.by_decision:
+            typer.echo(
+                f"  {stat.decision:<12} {stat.n:>4}  {_pct(stat.avg_return_10d):>8}  "
+                f"{_wr(stat.win_rate_10d):>9}  {_pct(stat.avg_max_upside):>11}  "
+                f"{_pct(stat.avg_max_drawdown):>11}"
+            )
 
     # ── PERFORMANCE BY PATTERN ──
     if report.by_pattern:

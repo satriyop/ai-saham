@@ -11,7 +11,7 @@ Dependencies: None (only domain entities)
 from abc import ABC, abstractmethod
 from datetime import date
 
-from src.domain.entities.broker_flow import BrokerSummary
+from src.domain.entities.broker_flow import BrokerFlowPoint, BrokerSummary, ForeignFlowSnapshot
 
 
 class BrokerDataProvider(ABC):
@@ -79,6 +79,37 @@ class BrokerDataProvider(ABC):
             True if authenticated, False otherwise.
         """
         pass
+
+    def fetch_foreign_top_stocks(
+        self,
+        start_date: date,
+        end_date: date,
+        limit: int = 20,
+    ) -> list[ForeignFlowSnapshot]:
+        """
+        Return stocks that foreign brokers are most actively trading in the period.
+
+        Broker-centric scan: given the set of known foreign brokers, which stocks
+        appear in their top buys/sells? Useful for universe screening.
+
+        Default: returns empty list (providers that don't support it are no-ops).
+        """
+        return []
+
+    def fetch_broker_flow_history(
+        self,
+        ticker: str,
+        days: int = 365,
+    ) -> list[BrokerFlowPoint]:
+        """
+        Return daily aggregate foreign broker flow for a stock, up to `days` back.
+
+        Stock-centric historical time-series: N.Val, N.Lot, Avg.Price per day.
+        Used for backfilling and trend context.
+
+        Default: returns empty list (providers that don't support it are no-ops).
+        """
+        return []
 
 
 class BrokerDataProviderError(Exception):

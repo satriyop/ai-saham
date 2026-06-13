@@ -144,12 +144,16 @@ def spy(
         str,
         typer.Option(
             "--target",
-            help="Page to spy on: 'screener' (movers) or 'orderbook'",
+            help=(
+                "Page to spy on: 'screener' (movers), 'orderbook', "
+                "'stock' (named broker breakdown for a ticker), "
+                "'broker-scan' (foreign top stocks universe scan)"
+            ),
         ),
     ] = "screener",
     ticker: Annotated[
         str,
-        typer.Option("--ticker", help="Ticker for orderbook target (e.g. BBCA)"),
+        typer.Option("--ticker", help="Ticker for orderbook/stock target (e.g. BBCA)"),
     ] = "BBCA",
     output: Annotated[
         Optional[Path],
@@ -170,12 +174,14 @@ def spy(
     Opens a headed browser (so you can interact if needed), navigates to
     the target page, and saves every JSON API response to a file.
 
-    The output shows which URLs contain movers/orderbook data — share this
-    output when reporting adapter issues so selectors can be calibrated.
+    The output shows which URLs contain movers/orderbook/broker data — share
+    this output when reporting adapter issues so selectors can be calibrated.
 
     Examples:
         saham stockbit spy
         saham stockbit spy --target orderbook --ticker BBRI
+        saham stockbit spy --target stock --ticker BBCA   (named broker breakdown)
+        saham stockbit spy --target broker-scan           (foreign top stocks)
         saham stockbit spy --wait 10 --output journals/my-capture.json
     """
     _require_playwright_cli()
@@ -184,7 +190,7 @@ def spy(
     resolved_session = session or DEFAULT_SESSION_FILE
     resolved_output = output or DEFAULT_SPY_OUTPUT
 
-    typer.echo(f"Target  : {target}" + (f" ({ticker})" if target == "orderbook" else ""))
+    typer.echo(f"Target  : {target}" + (f" ({ticker})" if target in ("orderbook", "stock") else ""))
     typer.echo(f"Wait    : {wait}s")
     typer.echo(f"Output  : {resolved_output}")
     typer.echo("")
@@ -226,6 +232,16 @@ def spy(
             typer.echo(f"  ★ {url}")
     else:
         typer.echo(typer.style("No orderbook endpoint detected.", fg=typer.colors.YELLOW))
+
+    typer.echo("")
+
+    if result.get("broker_candidates"):
+        typer.echo(typer.style("Possible BROKER endpoints:", fg=typer.colors.GREEN))
+        for url in result["broker_candidates"]:
+            typer.echo(f"  ★ {url}")
+    elif target in ("stock", "broker-scan"):
+        typer.echo(typer.style("No broker endpoint detected.", fg=typer.colors.YELLOW))
+        typer.echo("  Re-run with --wait 15; or check the full URL list below.")
 
     typer.echo("")
     typer.echo("All unique JSON URLs captured:")

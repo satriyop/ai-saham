@@ -43,8 +43,10 @@ from src.infrastructure.persistence.sqlite_broker_repository import (
 )
 
 # Supported providers
-PROVIDERS = ("idx", "stockbit")
+PROVIDERS = ("idx", "stockbit", "stockbit-session")
 DEFAULT_PROVIDER = "idx"
+
+_DEFAULT_PROFILE_DIR = Path(".stockbit_profile")
 
 
 def _create_provider(provider_name: str) -> BrokerDataProvider:
@@ -53,6 +55,9 @@ def _create_provider(provider_name: str) -> BrokerDataProvider:
         return IdxBrokerDataProvider()
     elif provider_name == "stockbit":
         return StockbitBrokerDataProvider()
+    elif provider_name == "stockbit-session":
+        from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
+        return StockbitPlaywrightBrokerProvider()
     else:
         raise ValueError(f"Unknown provider: {provider_name}. Choose from: {', '.join(PROVIDERS)}")
 
@@ -140,11 +145,10 @@ def broker_status() -> None:
     typer.echo("IDX provider: " + typer.style("Available", fg=typer.colors.GREEN)
                + " (public API, no auth required)")
 
-    # Stockbit provider (needs token)
+    # Stockbit manual-token provider
     stockbit = StockbitBrokerDataProvider()
     if stockbit.is_authenticated():
         typer.echo("Stockbit provider: " + typer.style("Configured", fg=typer.colors.GREEN))
-
         typer.echo("  Validating Stockbit token...")
         try:
             summary = stockbit.fetch_broker_summary("BBCA", date.today())
@@ -172,6 +176,37 @@ def broker_status() -> None:
         typer.echo(
             "Stockbit provider: " + typer.style("Not configured", fg=typer.colors.YELLOW)
             + " (run 'saham broker auth <token>' to set up)"
+        )
+
+    # Stockbit Playwright session provider
+    try:
+        from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
+        session_provider = StockbitPlaywrightBrokerProvider()
+        if session_provider.is_authenticated():
+            marker = _DEFAULT_PROFILE_DIR / ".logged_in_at"
+            age_h: float | None = None
+            if marker.exists():
+                import time as _time
+                try:
+                    age_h = round((_time.time() - float(marker.read_text())) / 3600, 1)
+                except Exception:
+                    pass
+            age_str = f" ({age_h}h old)" if age_h is not None else ""
+            typer.echo(
+                "Stockbit-Session provider: "
+                + typer.style(f"Active{age_str}", fg=typer.colors.GREEN)
+                + " — use --provider stockbit-session"
+            )
+        else:
+            typer.echo(
+                "Stockbit-Session provider: "
+                + typer.style("No session", fg=typer.colors.YELLOW)
+                + " (run 'saham stockbit login' to set up)"
+            )
+    except ImportError:
+        typer.echo(
+            "Stockbit-Session provider: "
+            + typer.style("playwright not installed", fg=typer.colors.YELLOW)
         )
 
     typer.echo(f"\nDefault provider: {DEFAULT_PROVIDER}")
@@ -471,6 +506,76 @@ def broker_top(
             + typer.style(f"{format_value(s.net_value):>14}", fg=typer.colors.RED)
             + f" {s.net_lot:>10,}"
         )
+
+
+@broker_app.command("top-foreign")
+def broker_top_foreign(
+    days: Annotated[
+        int,
+        typer.Option("--days", help="Look-back window in days (1/3/7/30/90/365)", min=1, max=365),
+    ] = 7,
+    limit: Annotated[
+        int,
+        typer.Option("--limit", help="Max stocks to return", min=1, max=50),
+    ] = 20,
+    provider: Annotated[
+        str,
+        typer.Option("--provider", help="Provider: stockbit-session"),
+    ] = "stockbit-session",
+) -> None:
+    """
+    Show which stocks foreign brokers are most actively buying/selling.
+
+    Calls the broker-centric Stockbit Exodus API to scan the universe:
+    given 10 known foreign broker codes, returns the stocks they traded
+    most in the period. Useful as a complementary screening signal to IEV.
+
+    Requires an active Stockbit browser session (run 'saham stockbit login' first).
+
+    Examples:
+        saham broker top-foreign
+        saham broker top-foreign --days 7 --limit 20
+        saham broker top-foreign --days 365
+    """
+    prov = _create_provider(provider)
+    if not prov.is_authenticated():
+        typer.echo(
+            typer.style("Not authenticated.", fg=typer.colors.RED)
+            + " Run: saham stockbit login"
+        )
+        raise typer.Exit(1)
+
+    end = date.today()
+    start = end - timedelta(days=days)
+
+    typer.echo("")
+    typer.echo(f"Foreign broker accumulation scan ({start} → {end})")
+    typer.echo("─" * 55)
+
+    try:
+        snapshots = prov.fetch_foreign_top_stocks(start, end, limit=limit)
+    except Exception as e:
+        typer.echo(typer.style(f"Error: {e}", fg=typer.colors.RED), err=True)
+        raise typer.Exit(1)
+
+    if not snapshots:
+        typer.echo(typer.style("No data returned.", fg=typer.colors.YELLOW))
+        typer.echo("Run: saham stockbit spy --target broker-scan")
+        return
+
+    typer.echo(f"  {'#':<4} {'TICKER':<8} {'NET VALUE':>14}  {'NET LOT':>10}  DIR")
+    typer.echo("  " + "─" * 45)
+    for rank, snap in enumerate(snapshots, 1):
+        direction = "▲ BUY " if snap.is_accumulating else "▼ SELL"
+        color = typer.colors.GREEN if snap.is_accumulating else typer.colors.RED
+        line = (
+            f"  {rank:<4} {snap.ticker:<8} "
+            f"{format_value(snap.net_val):>14}  {snap.net_lot:>10,}  {direction}"
+        )
+        typer.echo(typer.style(line, fg=color) if rank <= 5 else line)
+
+    typer.echo("")
+    typer.echo(f"Showing {len(snapshots)} stocks. Use --limit to adjust.")
 
 
 @broker_app.command("import")

@@ -121,8 +121,9 @@ Why:
 
 Expected behavior:
 
-- In `saham swing analyze`, suppress provider stack/noise into a concise warning unless verbose mode is enabled.
-- Add a clear `--sentiment-source cached|live|off` behavior or document that `--no-sentiment` is the offline deterministic workflow.
+- Implemented: `saham swing analyze` suppresses optional sentiment provider stdout/stderr/log noise into a concise `SENTIMENT` warning by default.
+- Implemented: `--sentiment-verbose` shows provider details for debugging.
+- Documented: `--no-sentiment` is the fully offline deterministic workflow.
 
 Benefit:
 
@@ -137,11 +138,12 @@ Why:
 
 Expected behavior:
 
-- Add a confirmation step after `saham swing analyze`:
+- Implemented: added a chart-structure confirmation step after `saham swing analyze` in both swing workflow docs:
   - `saham chart price TICKER --sma 20 --days 90`
   - `saham chart rsi TICKER --days 90`
   - `saham chart volume TICKER --days 30`
-- Optional future improvement: `saham swing analyze --charts` to print compact charts inline.
+- The docs now explain what to confirm or avoid for price structure, RSI, and volume.
+- Optional future improvement remains: `saham swing analyze --charts` to print compact charts inline.
 
 Benefit:
 
@@ -156,8 +158,10 @@ Why:
 
 Expected behavior:
 
-- Journal entries should include preset name, classification (`ENTER/WATCH/AVOID`), failed gates, regime, entry, stop, target, and max hold.
-- Consider a `--paper-entry` command or `saham swing log --from-analysis` mode that records the exact plan emitted by `saham swing analyze`.
+- Implemented: `saham swing log --from-analysis` records the preset name, classification (`ENTER/WATCH/AVOID`), failed gates, planned entry, stop, target, and max hold.
+- Implemented: add `--with-regime` to the log command to persist the market regime label in the same journal row.
+- Implemented: `saham swing review` now includes a performance-by-preset-decision table so `ENTER`, `WATCH`, `AVOID`, and legacy `unknown` rows can be compared.
+- Existing lightweight behavior remains available by omitting `--from-analysis`.
 
 Benefit:
 

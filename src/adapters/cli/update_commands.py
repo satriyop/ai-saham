@@ -63,8 +63,8 @@ def _cached_status(latest: date, end_date: date) -> str:
 
 def _no_new_data_status(latest: date | None) -> str:
     if latest is None:
-        return "provider-no-data"
-    return f"provider-no-new-data(latest={latest.isoformat()})"
+        return "no-data"
+    return f"up-to-date({latest.isoformat()})"
 
 
 def _is_cached_status(status: str) -> bool:
@@ -86,6 +86,7 @@ def _fetch_candles(
     db_path: Path,
     provider_name: str,
     refresh: bool,
+    short_history: list[str] | None = None,
 ) -> str:
     """Fetch candles for one ticker. Returns status string."""
     from src.infrastructure.data_providers.idx_market import IdxMarketDataProvider
@@ -105,8 +106,15 @@ def _fetch_candles(
     if not refresh:
         existing = repo.get_date_range(ticker)
         if existing:
-            _, latest = existing
+            earliest, latest = existing
             previous_latest = latest
+            requested_start = end_date - timedelta(days=days)
+            if short_history is not None and earliest > requested_start:
+                cached_days = (latest - earliest).days
+                short_history.append(
+                    f"  candles {ticker}: {cached_days}d cached (from {earliest}), "
+                    f"requested {days}d — use --refresh to backfill"
+                )
             if latest >= end_date:
                 return _cached_status(latest, end_date)
             # Only fetch the gap from latest+1 to today
@@ -145,6 +153,7 @@ def _fetch_broker(
     db_path: Path,
     broker_provider,
     refresh: bool,
+    short_history: list[str] | None = None,
 ) -> str:
     """Fetch broker flow for one ticker. Returns status string."""
     if ticker.startswith("^"):
@@ -157,8 +166,15 @@ def _fetch_broker(
     if not refresh:
         existing = repo.get_date_range(ticker)
         if existing:
-            _, latest = existing
+            earliest, latest = existing
             previous_latest = latest
+            requested_start = end_date - timedelta(days=days)
+            if short_history is not None and earliest > requested_start:
+                cached_days = (latest - earliest).days
+                short_history.append(
+                    f"  broker  {ticker}: {cached_days}d cached (from {earliest}), "
+                    f"requested {days}d — use --refresh to backfill"
+                )
             if latest >= end_date:
                 return _cached_status(latest, end_date)
             # Only fetch the gap from latest+1 to today
@@ -278,6 +294,7 @@ def update(
     ok_count = 0
     fail_count = 0
     failures: list[str] = []
+    short_history: list[str] = []
 
     for i, ticker in enumerate(ticker_list, 1):
         progress = f"[{i:>3}/{len(ticker_list)}]"
@@ -286,12 +303,12 @@ def update(
 
         if not broker_only:
             candles_status = _fetch_candles(
-                ticker, days, resolved_db, candles_provider, refresh
+                ticker, days, resolved_db, candles_provider, refresh, short_history
             )
 
         if not candles_only:
             broker_status = _fetch_broker(
-                ticker, days, resolved_db, broker_provider, refresh
+                ticker, days, resolved_db, broker_provider, refresh, short_history
             )
 
         any_error = "ERR:" in candles_status or "ERR:" in broker_status
@@ -322,3 +339,19 @@ def update(
     )
     if failures:
         typer.echo(f"Failed: {', '.join(failures)}")
+    if short_history:
+        typer.echo("")
+        typer.echo(
+            typer.style(
+                f"⚠  Cache shorter than --days {days} for {len(short_history)} ticker(s):",
+                fg=typer.colors.YELLOW,
+            )
+        )
+        for msg in short_history:
+            typer.echo(typer.style(msg, fg=typer.colors.YELLOW))
+        typer.echo(
+            typer.style(
+                "   Re-run with --refresh to backfill missing history.",
+                fg=typer.colors.YELLOW,
+            )
+        )

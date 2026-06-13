@@ -568,7 +568,7 @@ saham swing audit --universe lq45 --simulate-exits
 #### `saham swing log` - Log to Journal
 
 ```bash
-saham swing log --ticker BBRI --window 7
+saham swing log --ticker BBRI --window 7 --from-analysis --with-regime
 ```
 
 ---
@@ -639,6 +639,7 @@ saham swing analyze BBRI --format json
 | `--atr-mult` | | 1.5 | ATR multiplier for stop |
 | `--rr` | | 2.0 | Reward:risk ratio |
 | `--no-sentiment` | | false | Skip news sentiment |
+| `--sentiment-verbose` | | false | Show optional sentiment provider errors/noise |
 | `--no-backtest` | | false | Skip historical backtest |
 | `--no-refresh` | | false | Disable automatic single-ticker candle/broker refresh |
 | `--force-refresh` | | false | Force provider refresh even when cached data is fresh |

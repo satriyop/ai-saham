@@ -267,12 +267,15 @@ def fetch(
 
         # Display results
         typer.echo(f"\nTicker: {response.ticker}")
-        typer.echo(f"Source: {response.source}")
-        typer.echo(f"Records: {response.count}")
+        typer.echo(f"Source: {response.source} ({days}d requested)")
 
         if response.date_range:
             start, end = response.date_range
-            typer.echo(f"Date range: {start} to {end}")
+            calendar_days = (end - start).days + 1
+            typer.echo(
+                f"Period: {start} to {end}  "
+                f"({response.count} trading days / {calendar_days} calendar days)"
+            )
 
         typer.echo(f"\nDatabase: {resolved_db_path}")
 
