@@ -10,6 +10,7 @@ Layer: Domain
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
+from typing import Union
 
 
 @dataclass(frozen=True)
@@ -21,7 +22,8 @@ class IndicatorSnapshot:
     It is immutable (frozen) and defined by its attributes.
 
     The `extras` field allows storing additional indicator values computed
-    with custom periods (e.g., fast_ema=EMA(9), slow_ema=EMA(21)).
+    with custom periods (e.g., fast_ema=EMA(9), slow_ema=EMA(21)), or
+    non-numeric contextual data (like sentiment catalyst).
 
     Attributes:
         date: The date this snapshot represents
@@ -35,9 +37,9 @@ class IndicatorSnapshot:
     sma: Decimal
     ema: Decimal
     rsi: Decimal
-    extras: tuple[tuple[str, Decimal], ...] = ()
+    extras: tuple[tuple[str, Union[Decimal, str]], ...] = ()
 
-    def get(self, name: str) -> Decimal:
+    def get(self, name: str) -> Union[Decimal, str]:
         """Get indicator value by name.
 
         Supports both built-in indicators and custom extras.
@@ -54,7 +56,7 @@ class IndicatorSnapshot:
             name: Indicator name to retrieve
 
         Returns:
-            The indicator value as Decimal
+            The indicator value as Decimal or str
 
         Raises:
             KeyError: If indicator name is not found
@@ -83,7 +85,7 @@ class IndicatorSnapshot:
         )
 
     def with_extras(
-        self, extras: tuple[tuple[str, Decimal], ...]
+        self, extras: tuple[tuple[str, Union[Decimal, str]], ...]
     ) -> "IndicatorSnapshot":
         """Create a new snapshot with additional extras.
 

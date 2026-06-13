@@ -147,6 +147,16 @@ class YamlRuleInterpreter:
         """
         indicator_value = self._get_indicator_value(condition.indicator_name, snapshot)
         compare_func = self._OPERATOR_FUNCS[condition.operator]
+        
+        # If comparing mixed types (e.g. str vs Decimal), try casting or use strict equality
+        if type(indicator_value) != type(condition.value):
+            if condition.operator in (Operator.EQ, Operator.NE):
+                # For EQ/NE, str vs Decimal is safe to compare as strings
+                return compare_func(str(indicator_value), str(condition.value))
+            else:
+                # Ordering operators (<, >) between mixed types are invalid
+                return False
+
         return compare_func(indicator_value, condition.value)
 
     def _evaluate_indicator_vs_indicator(
@@ -250,8 +260,9 @@ class YamlRuleInterpreter:
             return " AND ".join(f"({p})" for p in parts)
         elif isinstance(condition, ConditionIndicatorVsValue):
             actual = self._get_indicator_value(condition.indicator_name, snapshot)
+            actual_str = f"{actual:.2f}" if isinstance(actual, Decimal) else str(actual)
             return (
-                f"{condition.indicator_name}({actual:.2f}) "
+                f"{condition.indicator_name}({actual_str}) "
                 f"{condition.operator.value} {condition.value}"
             )
         elif isinstance(condition, ConditionIndicatorVsIndicator):

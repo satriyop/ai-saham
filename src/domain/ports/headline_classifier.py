@@ -31,10 +31,11 @@ class HeadlineClassifier(Protocol):
         """Return the classifier identifier."""
         ...
 
-    def classify(self, headline: str) -> Classification:
+    def classify(self, ticker: str, headline: str) -> Classification:
         """Classify a single headline.
 
         Args:
+            ticker: The stock ticker to evaluate the headline against
             headline: The headline text to classify
 
         Returns:
@@ -42,13 +43,14 @@ class HeadlineClassifier(Protocol):
         """
         ...
 
-    def classify_batch(self, headlines: list[str]) -> list[Classification]:
+    def classify_batch(self, ticker: str, headlines: list[str]) -> list[Classification]:
         """Classify multiple headlines.
 
         Default implementation calls classify() for each headline.
         AI implementations may batch for efficiency.
 
         Args:
+            ticker: The stock ticker to evaluate the headlines against
             headlines: List of headline texts to classify
 
         Returns:

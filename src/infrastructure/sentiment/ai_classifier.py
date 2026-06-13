@@ -42,7 +42,7 @@ Example: NEGATIVE | RUMOR
 No explanation or additional text."""
 
 # User prompt template
-USER_PROMPT = "Classify this headline: {headline}"
+USER_PROMPT = "Classify the sentiment of this headline STRICTLY in relation to the company represented by ticker '{ticker}'.\n\nHeadline: {headline}"
 
 
 class AIClassifier:
@@ -55,7 +55,7 @@ class AIClassifier:
 
     Usage:
         classifier = AIClassifier()
-        result = classifier.classify("BBCA laba naik 20%")
+        result = classifier.classify("BBCA", "BBCA laba naik 20%")
         # Returns Classification(sentiment=Sentiment.POSITIVE, catalyst=CatalystType.EARNINGS)
     """
 
@@ -81,32 +81,35 @@ class AIClassifier:
         provider = self._provider or os.getenv("AI_PROVIDER", "deepseek")
         return f"ai:{provider}"
 
-    def classify(self, headline: str) -> Classification:
+    def classify(self, ticker: str, headline: str) -> Classification:
         """Classify headline using AI.
 
         Args:
+            ticker: The stock ticker to evaluate the headline against
             headline: The headline text to classify
 
         Returns:
             Classification result. Returns NEUTRAL|GENERAL on any error.
         """
         try:
-            response = self._call_ai(headline)
+            response = self._call_ai(ticker, headline)
             return self._parse_response(response)
         except Exception as e:
             logger.warning(f"AI classification failed, defaulting to NEUTRAL|GENERAL: {e}")
             return Classification(Sentiment.NEUTRAL, CatalystType.GENERAL)
 
-    def classify_batch(self, headlines: list[str]) -> list[Classification]:
+    def classify_batch(self, ticker: str, headlines: list[str]) -> list[Classification]:
         """Classify multiple headlines.
 
         Args:
+            ticker: The stock ticker
             headlines: List of headline texts to classify
 
         Returns:
             List of Classification results in same order
         """
-        return [self.classify(h) for h in headlines]
+        return [self.classify(ticker, h) for h in headlines]
+
 
     def _get_client(self):
         """Lazy initialize the AI client.
@@ -201,10 +204,11 @@ class AIClassifier:
         except ImportError:
             raise HeadlineClassifierError("ollama package not installed")
 
-    def _call_ai(self, headline: str) -> str:
+    def _call_ai(self, ticker: str, headline: str) -> str:
         """Call AI provider for classification.
 
         Args:
+            ticker: Stock ticker symbol
             headline: Headline text (truncated to 500 chars)
 
         Returns:
@@ -212,7 +216,7 @@ class AIClassifier:
         """
         # Truncate long headlines
         headline = headline[:500]
-        user_prompt = USER_PROMPT.format(headline=headline)
+        user_prompt = USER_PROMPT.format(ticker=ticker, headline=headline)
 
         provider = (self._provider or os.getenv("AI_PROVIDER", "deepseek")).lower()
 

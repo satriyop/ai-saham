@@ -69,8 +69,6 @@ class SentimentSnapshot:
 
     Immutable value object representing a point-in-time snapshot of
     sentiment analysis for a stock ticker.
-
-    Note: This is purely informational and does NOT affect risk assessment.
     """
 
     ticker: str
@@ -108,6 +106,23 @@ class SentimentSnapshot:
             Sentiment.NEGATIVE: self.negative_count,
         }
         return int(counts[self.overall_sentiment] / self.total_count * 100)
+
+    @property
+    def score(self) -> float:
+        """Numerical sentiment score (0.0 to 1.0)."""
+        return float(self.confidence_pct) / 100.0
+
+    @property
+    def primary_catalyst(self) -> CatalystType:
+        """Determine the primary catalyst type by majority vote."""
+        if not self.headlines:
+            return CatalystType.GENERAL
+
+        cat_counts: dict[CatalystType, int] = {}
+        for h in self.headlines:
+            cat_counts[h.catalyst] = cat_counts.get(h.catalyst, 0) + 1
+
+        return max(cat_counts, key=cat_counts.get) if cat_counts else CatalystType.GENERAL
 
     @classmethod
     def empty(cls, ticker: str) -> "SentimentSnapshot":

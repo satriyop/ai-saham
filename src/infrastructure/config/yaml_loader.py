@@ -655,11 +655,11 @@ class YamlConfigLoader:
             raise RulesValidationError(f"when.operator: {e}")
 
         try:
+            # First try parsing as Decimal
             value = Decimal(str(data["value"]))
         except (InvalidOperation, TypeError):
-            raise RulesValidationError(
-                f"when.value: must be a number, got '{data['value']}'"
-            )
+            # If it fails, keep it as a string
+            value = str(data["value"])
 
         return ConditionIndicatorVsValue(
             indicator_name=indicator_name,

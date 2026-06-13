@@ -1,12 +1,18 @@
 """
-CLI commands for swing trade composite analysis and position sizing.
+CLI commands for the swing trade command family.
 
-Commands:
-  saham swing TICKER   — unified 5-section composite view
-  saham size  TICKER   — ATR-based position sizing calculator
+Commands (all under `saham swing`):
+  saham swing analyze TICKER   — unified 5-section composite view
+  saham swing size    TICKER   — ATR-based position sizing calculator
+  saham swing backtest         — portfolio walk-forward backtest
+  saham swing compare          — compare variants across market regimes
+  saham swing screen           — accumulation screener (find candidates)
+  saham swing audit            — audit accumulation broker data
+  saham swing log              — log a candidate to the journal
+  saham swing review           — review journal performance
 
-Each section in `swing` calls an existing use case and degrades
-gracefully when data is unavailable, so the command is always useful.
+Top-level:
+  saham regime                 — market regime (standalone)
 
 Layer: Adapter
 """
@@ -68,6 +74,12 @@ FOREIGN_BOUNCE_PRESET = "foreign-bounce"
 FOREIGN_BOUNCE_TAKE_PROFIT = Decimal("5")
 FOREIGN_BOUNCE_STOP_LOSS = Decimal("5")
 FOREIGN_BOUNCE_MAX_HOLD_DAYS = 10
+
+SWING_COMPARE_VARIANTS: dict[str, tuple[str, ...]] = {
+    "baseline": (),
+    "sideways_only": ("SIDEWAYS", "BULLISH"),
+    "weak_plus": ("WEAK", "SIDEWAYS", "BULLISH"),
+}
 
 
 @dataclass(frozen=True)
@@ -281,6 +293,58 @@ def _parse_regime_filter(value: str | None) -> tuple[str, ...]:
             "--allow-regimes must contain only: BULLISH, SIDEWAYS, WEAK, RISK_OFF"
         )
     return regimes
+
+
+def _parse_compare_variants(value: str) -> tuple[str, ...]:
+    variants = tuple(part.strip().lower() for part in value.split(",") if part.strip())
+    if not variants:
+        raise typer.BadParameter("--variants must contain at least one variant")
+    invalid = [variant for variant in variants if variant not in SWING_COMPARE_VARIANTS]
+    if invalid:
+        available = ", ".join(SWING_COMPARE_VARIANTS)
+        raise typer.BadParameter(
+            f"Unknown variants: {', '.join(invalid)}. Available: {available}"
+        )
+    return variants
+
+
+def _display_swing_compare(
+    rows: list[tuple[str, SwingBacktestResponse]],
+    start_date: date,
+    end_date: date,
+    universe_label: str,
+) -> None:
+    typer.echo("")
+    typer.echo(typer.style("=" * 102, fg=typer.colors.CYAN))
+    typer.echo(typer.style("SWING BACKTEST COMPARISON", fg=typer.colors.CYAN, bold=True))
+    typer.echo(typer.style("=" * 102, fg=typer.colors.CYAN))
+    typer.echo(f"Universe: {universe_label} | Period: {start_date} to {end_date}")
+    typer.echo("")
+    typer.echo(
+        f"{'VARIANT':<16} {'REGIMES':<24} {'TRADES':>7} {'RETURN':>9} "
+        f"{'MAX_DD':>9} {'WIN':>8} {'PF':>8} {'SKIP_REG':>9} {'EXPOSURE':>9}"
+    )
+    typer.echo("-" * 102)
+    for name, response in rows:
+        regimes = SWING_COMPARE_VARIANTS[name]
+        regime_label = "all" if not regimes else ",".join(regimes)
+        profit_factor = (
+            "INF" if response.profit_factor == float("inf")
+            else "N/A" if response.profit_factor is None
+            else f"{response.profit_factor:.2f}"
+        )
+        typer.echo(
+            f"{name:<16} {regime_label:<24} {response.trade_count:>7} "
+            f"{_fmt_pct(response.total_return_pct, True):>9} "
+            f"{_fmt_pct(response.max_drawdown_pct, True):>9} "
+            f"{_fmt_pct(response.win_rate_pct):>8} "
+            f"{profit_factor:>8} "
+            f"{response.skipped_by_regime:>9} "
+            f"{_fmt_pct(response.exposure_pct):>9}"
+        )
+    typer.echo("")
+    typer.echo("DISCLAIMER: Historical simulation only. Not trading advice.")
+    typer.echo(typer.style("=" * 102, fg=typer.colors.CYAN))
 
 
 def _display_swing_backtest(response: SwingBacktestResponse, show_trades: int) -> None:
@@ -1261,6 +1325,183 @@ def swing_backtest(
     _display_swing_backtest(response, show_trades=show_trades)
 
 
+def swing_compare(
+    tickers: Annotated[
+        Optional[list[str]],
+        typer.Argument(help="Explicit ticker symbols (e.g. BBCA BBRI)"),
+    ] = None,
+    universe: Annotated[
+        Optional[str],
+        typer.Option("--universe", "-u", help="Universe: lq45, idx80, idxcomp100, cached"),
+    ] = None,
+    variants: Annotated[
+        str,
+        typer.Option(
+            "--variants",
+            help="Comma-separated variants: baseline, sideways_only, weak_plus",
+        ),
+    ] = "baseline,sideways_only,weak_plus",
+    preset: Annotated[
+        str,
+        typer.Option("--preset", help="Swing preset to validate"),
+    ] = BACKTEST_FOREIGN_BOUNCE_PRESET,
+    start: Annotated[
+        str,
+        typer.Option("--start", help="Backtest start date, YYYY-MM-DD"),
+    ] = "2026-01-01",
+    end: Annotated[
+        Optional[str],
+        typer.Option("--end", help="Backtest end date, YYYY-MM-DD (default: today)"),
+    ] = None,
+    capital: Annotated[
+        int,
+        typer.Option("--capital", "-c", help="Initial capital in IDR", min=1),
+    ] = 100_000_000,
+    risk_pct: Annotated[
+        float,
+        typer.Option("--risk-pct", help="% of capital risked per trade", min=0.01),
+    ] = 1.0,
+    max_positions: Annotated[
+        int,
+        typer.Option("--max-positions", help="Maximum concurrent open positions", min=1),
+    ] = 5,
+    take_profit: Annotated[
+        float,
+        typer.Option("--take-profit", help="Take-profit percentage", min=0.01),
+    ] = 5.0,
+    stop_loss: Annotated[
+        float,
+        typer.Option("--stop-loss", help="Stop-loss percentage", min=0.01),
+    ] = 5.0,
+    max_hold: Annotated[
+        int,
+        typer.Option("--max-hold", help="Maximum holding period in trading days", min=1),
+    ] = 10,
+    cost_bps: Annotated[
+        float,
+        typer.Option("--cost-bps", help="One-way transaction cost in basis points", min=0),
+    ] = 0.0,
+    benchmark: Annotated[
+        str,
+        typer.Option("--benchmark", help="Benchmark ticker for regime context"),
+    ] = "^JKSE",
+    output_format: Annotated[
+        str,
+        typer.Option("--format", help="Output format: table or json"),
+    ] = "table",
+    db_path: Annotated[
+        Optional[Path],
+        typer.Option("--db", help="SQLite database path"),
+    ] = None,
+) -> None:
+    """
+    Compare swing backtest regime variants side-by-side.
+
+    Variants use the same portfolio simulation as `saham swing-backtest`;
+    only the allowed entry regimes differ.
+    """
+    preset_name = preset.lower()
+    if preset_name != BACKTEST_FOREIGN_BOUNCE_PRESET:
+        typer.echo(
+            f"Unknown swing preset '{preset}'. "
+            f"Available presets: {BACKTEST_FOREIGN_BOUNCE_PRESET}",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    try:
+        start_date = date.fromisoformat(start)
+        end_date = date.fromisoformat(end) if end else date.today()
+        variant_names = _parse_compare_variants(variants)
+    except ValueError as e:
+        typer.echo(f"Error: invalid date format: {e}", err=True)
+        raise typer.Exit(1)
+    except typer.BadParameter as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+    resolved_db = db_path or DEFAULT_DB_PATH
+    try:
+        ticker_list = resolve_tickers(
+            universe=universe,
+            explicit=list(tickers) if tickers else [],
+            db_path=resolved_db,
+        )
+    except (UniverseNotFoundError, FileNotFoundError) as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+    if not ticker_list:
+        typer.echo(
+            "No tickers to compare. Specify --universe or provide ticker arguments.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    typer.echo(
+        f"Comparing {len(variant_names)} variants over {len(ticker_list)} tickers | "
+        f"{start_date} to {end_date}..."
+    )
+
+    use_case = SwingBacktestUseCase(
+        broker_repository=SQLiteBrokerRepository(resolved_db),
+        market_repository=SQLiteMarketRepository(db_path=resolved_db),
+    )
+    rows: list[tuple[str, SwingBacktestResponse]] = []
+    try:
+        for variant in variant_names:
+            allowed_regimes = SWING_COMPARE_VARIANTS[variant]
+            response = use_case.execute(SwingBacktestRequest(
+                tickers=ticker_list,
+                start_date=start_date,
+                end_date=end_date,
+                preset=preset_name,
+                capital=Decimal(str(capital)),
+                risk_pct=Decimal(str(risk_pct)) / Decimal("100"),
+                max_positions=max_positions,
+                take_profit_pct=Decimal(str(take_profit)),
+                stop_loss_pct=Decimal(str(stop_loss)),
+                max_hold_days=max_hold,
+                cost_bps=Decimal(str(cost_bps)),
+                include_regime=True,
+                benchmark_ticker=benchmark,
+                allowed_regimes=allowed_regimes,
+            ))
+            rows.append((variant, response))
+    except ValueError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+    if output_format == "json":
+        typer.echo(json.dumps({
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat(),
+            "ticker_count": len(ticker_list),
+            "variants": [
+                {
+                    "name": name,
+                    "allowed_regimes": list(SWING_COMPARE_VARIANTS[name]),
+                    "total_return_pct": response.total_return_pct,
+                    "max_drawdown_pct": response.max_drawdown_pct,
+                    "trade_count": response.trade_count,
+                    "win_rate_pct": response.win_rate_pct,
+                    "profit_factor": response.profit_factor,
+                    "exposure_pct": response.exposure_pct,
+                    "skipped_by_regime": response.skipped_by_regime,
+                }
+                for name, response in rows
+            ],
+        }, indent=2, default=str))
+        return
+
+    _display_swing_compare(
+        rows=rows,
+        start_date=start_date,
+        end_date=end_date,
+        universe_label=universe or "explicit",
+    )
+
+
 def regime(
     tickers: Annotated[
         Optional[list[str]],
@@ -1557,3 +1798,27 @@ def size(
         fg=typer.colors.BRIGHT_BLACK,
     ))
     typer.echo("")
+
+
+# ─── swing typer family ──────────────────────────────────────────────────────
+
+from src.adapters.cli.accumulation_commands import (  # noqa: E402
+    accumulation_audit,
+    accumulation_log,
+    accumulation_review,
+    accumulation_run,
+)
+
+swing_app = typer.Typer(
+    name="swing",
+    help="Swing trading workflow — screen, analyze, size, backtest, and journal.",
+    no_args_is_help=True,
+)
+swing_app.command("analyze")(swing)
+swing_app.command("backtest")(swing_backtest)
+swing_app.command("compare")(swing_compare)
+swing_app.command("size")(size)
+swing_app.command("screen")(accumulation_run)
+swing_app.command("audit")(accumulation_audit)
+swing_app.command("log")(accumulation_log)
+swing_app.command("review")(accumulation_review)

@@ -32,6 +32,9 @@ class IndicatorType(Enum):
     RSI = "RSI"
     SMA = "SMA"
     EMA = "EMA"
+    SENTIMENT_SCORE = "SENTIMENT_SCORE"
+    SENTIMENT_LABEL = "SENTIMENT_LABEL"
+    SENTIMENT_CATALYST = "SENTIMENT_CATALYST"
 
     @classmethod
     def from_string(cls, value: str) -> "IndicatorType":
@@ -60,6 +63,9 @@ BUILTIN_INDICATORS: dict[str, tuple["IndicatorType", int]] = {
     "RSI": (IndicatorType.RSI, 14),
     "SMA": (IndicatorType.SMA, 20),
     "EMA": (IndicatorType.EMA, 20),
+    "SENTIMENT_SCORE": (IndicatorType.SENTIMENT_SCORE, 0),
+    "SENTIMENT_LABEL": (IndicatorType.SENTIMENT_LABEL, 0),
+    "SENTIMENT_CATALYST": (IndicatorType.SENTIMENT_CATALYST, 0),
 }
 
 
@@ -309,11 +315,16 @@ class ConditionIndicatorVsValue:
           indicator: RSI        # Built-in indicator
           operator: "<"
           value: 30
+          
+        when:
+          indicator: SENTIMENT_CATALYST
+          operator: "=="
+          value: "EARNINGS"
     """
 
     indicator_name: str
     operator: Operator
-    value: Decimal
+    value: Union[Decimal, str]
 
 
 @dataclass(frozen=True)

@@ -1,4 +1,4 @@
-"""Tests for screen CLI commands."""
+"""Tests for intraday CLI commands."""
 
 import json
 from datetime import date
@@ -57,7 +57,7 @@ def test_confirm_open_outputs_decisions_and_writes_sidecar(tmp_path):
     result = runner.invoke(
         app,
         [
-            "screen",
+            "intraday",
             "confirm-open",
             "--session",
             str(session),
@@ -88,7 +88,7 @@ def test_confirm_open_rejects_non_object_opening_json(tmp_path):
     result = runner.invoke(
         app,
         [
-            "screen",
+            "intraday",
             "confirm-open",
             "--session",
             str(session),
@@ -99,6 +99,30 @@ def test_confirm_open_rejects_non_object_opening_json(tmp_path):
 
     assert result.exit_code == 1
     assert "--opening-json must be a JSON object" in result.output
+
+
+def test_intraday_confirm_open_works(tmp_path):
+    session = tmp_path / "last-session.json"
+    output = tmp_path / "last-confirmation.json"
+    _write_sidecar(session)
+
+    result = runner.invoke(
+        app,
+        [
+            "intraday",
+            "confirm-open",
+            "--session",
+            str(session),
+            "--output",
+            str(output),
+            "--opening-json",
+            '{"BBCA":9050}',
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "BBCA" in result.stdout
+    assert "ENTER" in result.stdout
 
 
 def test_confirm_log_appends_confirmation_sidecar(tmp_path):
@@ -133,7 +157,7 @@ def test_confirm_log_appends_confirmation_sidecar(tmp_path):
     result = runner.invoke(
         app,
         [
-            "screen",
+            "intraday",
             "confirm-log",
             "--confirmation",
             str(confirmation),
@@ -180,7 +204,7 @@ def test_confirm_review_outputs_bucket_tables(tmp_path):
     runner.invoke(
         app,
         [
-            "screen",
+            "intraday",
             "confirm-log",
             "--confirmation",
             str(confirmation),
@@ -207,7 +231,7 @@ def test_confirm_review_outputs_bucket_tables(tmp_path):
     result = runner.invoke(
         app,
         [
-            "screen",
+            "intraday",
             "confirm-review",
             "--journal",
             str(journal),
@@ -247,7 +271,7 @@ def test_confirm_outcome_updates_logged_confirmation(tmp_path):
     runner.invoke(
         app,
         [
-            "screen",
+            "intraday",
             "confirm-log",
             "--confirmation",
             str(confirmation),
@@ -259,7 +283,7 @@ def test_confirm_outcome_updates_logged_confirmation(tmp_path):
     result = runner.invoke(
         app,
         [
-            "screen",
+            "intraday",
             "confirm-outcome",
             "BBCA",
             "--date",

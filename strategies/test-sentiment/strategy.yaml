@@ -1,0 +1,23 @@
+version: 1
+name: sentiment_test_match
+description: "Strategy to test sentiment rule integration - expecting a match"
+default_outcome: MODERATE
+
+rules:
+  - name: test_match
+    priority: 1
+    when:
+      all:
+        - indicator: SENTIMENT_CATALYST
+          operator: "=="
+          value: "GENERAL"
+        - indicator: SENTIMENT_SCORE
+          operator: ">="
+          value: 0.4
+    outcome: LOW_RISK
+    rationale: "Rule integration match test successful."
+
+signal_mapping:
+  LOW_RISK: ENTER_LONG
+  MODERATE: HOLD
+  HIGH_RISK: EXIT_LONG

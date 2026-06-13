@@ -12,7 +12,7 @@ runner = CliRunner()
 def test_accumulation_audit_unknown_preset_error():
     result = runner.invoke(
         app,
-        ["screen", "accumulation-audit", "--preset", "unknown-preset"],
+        ["swing", "audit", "--preset", "unknown-preset"],
     )
 
     assert result.exit_code != 0

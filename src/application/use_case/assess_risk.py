@@ -25,6 +25,7 @@ from src.domain.rules.rule_engine import RuleEngine
 from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 from src.domain.value_objects.risk_assessment import RiskAssessment
 from src.domain.value_objects.risk_signal import RiskProfile
+from src.domain.value_objects.sentiment import SentimentSnapshot
 
 
 @dataclass
@@ -37,6 +38,7 @@ class AssessRiskRequest:
     ema_period: int = 20
     rsi_period: int = 14
     rules_file: Path | str | None = None  # Custom YAML rules file
+    sentiment: SentimentSnapshot | None = None  # Optional sentiment context
 
 
 @dataclass
@@ -157,6 +159,15 @@ class AssessRiskUseCase:
                 required_indicators=required_indicators,
             )
 
+            # Inject sentiment indicators if provided
+            if request.sentiment:
+                sentiment_extras = (
+                    ("SENTIMENT_SCORE", Decimal(str(request.sentiment.score))),
+                    ("SENTIMENT_LABEL", request.sentiment.overall_sentiment.name),
+                    ("SENTIMENT_CATALYST", request.sentiment.primary_catalyst.name),
+                )
+                latest_snapshot = latest_snapshot.with_extras(sentiment_extras)
+
             self._rule_engine.register_custom_rules(interpreter)
             assessment = self._rule_engine.evaluate_custom(latest_snapshot)
 
@@ -237,6 +248,10 @@ class AssessRiskUseCase:
         # Compute each required indicator using registry
         indicator_values: dict[str, tuple[date, Decimal]] = {}
         for name, (ind_type, period) in required_indicators.items():
+            # Skip sentiment context indicators (they are injected later)
+            if name in ("SENTIMENT_SCORE", "SENTIMENT_LABEL", "SENTIMENT_CATALYST"):
+                continue
+
             # Get type name as string for registry
             type_name = (
                 ind_type.value if isinstance(ind_type, IndicatorType) else ind_type
@@ -249,13 +264,12 @@ class AssessRiskUseCase:
             # Store the latest value
             indicator_values[name] = values[-1]
 
-        # Find the most recent date common to all indicators
-        if not indicator_values:
-            raise ValueError("No indicators required by rules")
-
-        # For simplicity, use the earliest "latest" date among all indicators
-        # This ensures all indicator values are from the same date or earlier
-        latest_date = min(d for d, _ in indicator_values.values())
+        # Use the earliest "latest" date among all computed indicators
+        # Or today if no indicators computed (context only rules)
+        if indicator_values:
+            latest_date = min(d for d, _ in indicator_values.values())
+        else:
+            latest_date = date.today()
 
         # Build the snapshot
         # First, extract built-in indicator values (use defaults if not in required)

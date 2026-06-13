@@ -65,7 +65,7 @@ def test_foreign_bounce_missing_accumulation_is_avoid():
 
 
 def test_swing_backtest_unknown_preset_error():
-    result = runner.invoke(app, ["swing-backtest", "--preset", "unknown"])
+    result = runner.invoke(app, ["swing", "backtest", "--preset", "unknown"])
 
     assert result.exit_code != 0
     assert "unknown swing preset" in result.output.lower()
@@ -96,7 +96,8 @@ def test_swing_backtest_rejects_invalid_allowed_regime():
     result = runner.invoke(
         app,
         [
-            "swing-backtest",
+            "swing",
+            "backtest",
             "BBCA",
             "--allow-regimes",
             "CALM",
@@ -105,3 +106,20 @@ def test_swing_backtest_rejects_invalid_allowed_regime():
 
     assert result.exit_code != 0
     assert "--allow-regimes" in result.output
+
+
+def test_swing_compare_rejects_unknown_variant():
+    result = runner.invoke(
+        app,
+        [
+            "swing",
+            "compare",
+            "BBCA",
+            "--variants",
+            "baseline,unknown",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "unknown" in result.output.lower()
+    assert "baseline" in result.output

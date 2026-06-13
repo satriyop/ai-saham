@@ -128,7 +128,7 @@ class KeywordClassifier:
         """Return classifier identifier."""
         return "keyword"
 
-    def classify(self, headline: str) -> Classification:
+    def classify(self, ticker: str, headline: str) -> Classification:
         """Classify headline using keyword matching.
 
         Algorithm:
@@ -137,6 +137,7 @@ class KeywordClassifier:
         3. Higher count wins; tie defaults to NEUTRAL
 
         Args:
+            ticker: The stock ticker (currently unused by keyword matcher, but required by port)
             headline: The headline text to classify
 
         Returns:
@@ -156,13 +157,14 @@ class KeywordClassifier:
 
         return Classification(sentiment=sentiment, catalyst=CatalystType.GENERAL)
 
-    def classify_batch(self, headlines: list[str]) -> list[Classification]:
+    def classify_batch(self, ticker: str, headlines: list[str]) -> list[Classification]:
         """Classify multiple headlines.
 
         Args:
+            ticker: The stock ticker
             headlines: List of headline texts to classify
 
         Returns:
             List of Classification results in same order
         """
-        return [self.classify(h) for h in headlines]
+        return [self.classify(ticker, h) for h in headlines]

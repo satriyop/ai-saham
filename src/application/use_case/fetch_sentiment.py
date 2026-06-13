@@ -172,7 +172,7 @@ class FetchSentimentUseCase:
             )
 
         # Classify headlines
-        classifications = self._classifier.classify_batch([h.title for h in raw_headlines])
+        classifications = self._classifier.classify_batch(ticker, [h.title for h in raw_headlines])
 
         # Build classified results
         results = [

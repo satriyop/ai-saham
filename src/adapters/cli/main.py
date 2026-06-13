@@ -951,6 +951,17 @@ def risk(
         bool,
         typer.Option("--with-sentiment", "-s", help="Include news sentiment analysis"),
     ] = False,
+    news_provider_name: Annotated[
+        str,
+        typer.Option(
+            "--news-provider",
+            help="News source: composite (default), google, kontan, cnbc, mock",
+        ),
+    ] = "composite",
+    no_ai: Annotated[
+        bool,
+        typer.Option("--no-ai", help="Disable AI and use offline keyword classification"),
+    ] = False,
     trend: Annotated[
         int,
         typer.Option("--trend", help="Show risk trend over last N days (0=off)", min=0),
@@ -1014,6 +1025,29 @@ def risk(
     typer.echo(f"Assessing risk for {ticker.upper()}...")
 
     try:
+        # Fetch sentiment context if requested (needed for rules)
+        sentiment_snapshot = None
+        if with_sentiment:
+            try:
+                from src.application.use_case.fetch_sentiment import (
+                    FetchSentimentRequest,
+                    FetchSentimentUseCase,
+                )
+                from src.infrastructure.sentiment import SentimentFactory
+
+                news_provider = SentimentFactory.create_news_provider(news_provider_name)
+                classifier = SentimentFactory.create_classifier(use_ai=not no_ai)
+                sentiment_use_case = FetchSentimentUseCase(
+                    news_provider=news_provider,
+                    classifier=classifier,
+                )
+                sentiment_response = sentiment_use_case.execute(
+                    FetchSentimentRequest(ticker=ticker)
+                )
+                sentiment_snapshot = sentiment_response.snapshot
+            except Exception as e:
+                typer.echo(f"Warning: Could not fetch sentiment for rule evaluation: {e}", err=True)
+
         request = AssessRiskRequest(
             ticker=ticker,
             profile=profile,
@@ -1021,6 +1055,7 @@ def risk(
             ema_period=ema_period,
             rsi_period=rsi_period,
             rules_file=rules_file,
+            sentiment=sentiment_snapshot,
         )
 
         # Custom rules take precedence over --all
@@ -1131,29 +1166,11 @@ def risk(
                 typer.echo(f"\nTrend unavailable: {e}", err=True)
 
         # Display sentiment if requested
-        if with_sentiment:
-            try:
-                news_provider = SentimentFactory.create_news_provider()
-                classifier = SentimentFactory.create_classifier(use_ai=True)
-                sentiment_use_case = FetchSentimentUseCase(
-                    news_provider=news_provider,
-                    classifier=classifier,
-                )
-                sentiment_response = sentiment_use_case.execute(
-                    FetchSentimentRequest(ticker=ticker)
-                )
-                from src.adapters.cli.sentiment_commands import _display_sentiment_brief as show_sentiment
-                show_sentiment(
-                    snapshot=sentiment_response.snapshot,
-                    warning=sentiment_response.warning,
-                )
-            except Exception as e:
-                typer.echo(f"\n{'-' * 39}")
-                typer.echo("NEWS SENTIMENT")
-                typer.echo(f"{'-' * 39}")
-                typer.echo(f"\nWarning: Could not fetch sentiment: {e}", err=True)
-                typer.echo("\nNote: Sentiment is contextual information only.")
-                typer.echo("      It does NOT affect the risk assessment above.")
+        if with_sentiment and sentiment_snapshot:
+            from src.adapters.cli.sentiment_commands import _display_sentiment_brief as show_sentiment
+            show_sentiment(
+                snapshot=sentiment_snapshot,
+            )
 
         typer.echo("\nDISCLAIMER: Analysis only, not trading advice.")
 
