@@ -133,6 +133,40 @@ def _display_raw_movers(raw_movers: list, top_n: int | None, iev_min: int) -> No
     typer.echo("")
 
 
+_VERDICT_ORDER = {"PRIME": 0, "WATCH": 1, "NO_DATA": 2, "SKIP": 3}
+
+
+def _verdict(c: "ScreenerCandidate") -> str:
+    """Synthesise all signals into a single action verdict."""
+    if c.entry_range_low is None:
+        return "NO_DATA"
+    if c.trend_signal == "BEARISH" or c.accum_tag == "DISTRIBUTING":
+        return "SKIP"
+    if c.trend_signal == "NEUTRAL":
+        return "SKIP"
+    # BULLISH from here
+    backed = c.accum_tag == "BACKED"
+    floor = c.fvwap_discount_pct is not None and c.fvwap_discount_pct > 0
+    if backed and floor:
+        return "PRIME"
+    return "WATCH"
+
+
+def _signal_col(c: "ScreenerCandidate") -> str:
+    """Compact ACCUM tag + FVWAP into a single SIGNAL string."""
+    parts: list[str] = []
+    if c.accum_tag is not None:
+        tag = c.accum_tag[:8]  # truncate UNCONFIRMED → UNCONFIRM
+        streak = f"×{c.accum_streak}d" if c.accum_streak else ""
+        parts.append(f"{tag}{streak}")
+    if c.fvwap_discount_pct is not None:
+        note = " floor" if c.fvwap_discount_pct > 0 else (" sell" if c.fvwap_discount_pct < -3 else "")
+        parts.append(f"{c.fvwap_discount_pct:+.1f}%{note}")
+    if c.prev_high:
+        parts.append(f"PH:{c.prev_high:,.0f}")
+    return "  ".join(parts) if parts else "—"
+
+
 def _print_browser_plan(config: PreOpenScreenConfig) -> None:
     typer.echo("")
     typer.echo("=" * 60)
@@ -192,86 +226,55 @@ def _display_results(
 
     if not candidates:
         typer.echo("No candidates passed the IEV filter.")
+        typer.echo("=" * 90)
         return
 
+    # Sort: PRIME → WATCH → NO_DATA → SKIP, then by IEV descending within group
+    sorted_candidates = sorted(
+        candidates,
+        key=lambda c: (_VERDICT_ORDER.get(_verdict(c), 99), -c.iev),
+    )
+
+    # Header — compact 1-row-per-ticker layout
     header = (
-        f"{'TICKER':<8} {'IEV':>8} {'GAP%':>7}  {'ENTRY-RANGE':>20}  "
-        f"{'SUGGEST':>9}  {'ATR-STOP':>9}  {'STOP%':>6}  {'RSI':>5}  {'TREND':<8}"
+        f"{'VERDICT':<10} {'TICKER':<7} {'IEV':>7}  {'GAP%':>6}  "
+        f"{'ENTRY-RANGE':>16}  {'STOP%':>6}  {'RSI':>4}  {'SIGNAL'}"
     )
     typer.echo(header)
     typer.echo("-" * 90)
 
-    for c in candidates:
+    _VERDICT_STYLE = {
+        "PRIME":   (typer.colors.GREEN,       True,  "★ PRIME  "),
+        "WATCH":   (typer.colors.YELLOW,      False, "◉ WATCH  "),
+        "NO_DATA": (typer.colors.BRIGHT_BLACK, False, "? NO_DATA"),
+        "SKIP":    (typer.colors.RED,         False, "✗ SKIP   "),
+    }
+
+    for c in sorted_candidates:
+        v = _verdict(c)
+        color, bold, label = _VERDICT_STYLE.get(v, (typer.colors.WHITE, False, v))
+        verdict_str = typer.style(label, fg=color, bold=bold)
+
         gap = c.gap_label
         rng = c.entry_range_label
-        suggest = f"{c.entry_price:,.0f}" if c.entry_price else "—"
-        stop = f"{c.stop_loss_price:,.0f}" if c.stop_loss_price else "—"
         stop_pct = c.risk_reward_label
         rsi_str = f"{float(c.rsi):.0f}" if c.rsi else "—"
-        trend = c.trend_signal or "—"
-
-        # Color trend
-        if trend == "BULLISH":
-            trend_str = typer.style(f"{trend:<8}", fg=typer.colors.GREEN)
-        elif trend == "BEARISH":
-            trend_str = typer.style(f"{trend:<8}", fg=typer.colors.RED)
-        else:
-            trend_str = typer.style(f"{trend:<8}", fg=typer.colors.YELLOW)
+        signal = _signal_col(c)
 
         typer.echo(
-            f"{c.ticker:<8} {c.iev:>8,} {gap:>7}  {rng:>20}  "
-            f"{suggest:>9}  {stop:>9}  {stop_pct:>6}  {rsi_str:>5}  {trend_str}"
+            f"{verdict_str} {c.ticker:<7} {c.iev:>7,}  {gap:>6}  "
+            f"{rng:>16}  {stop_pct:>6}  {rsi_str:>4}  {signal}"
         )
-
-        # Context line 1: Prev H/L as intraday S/R
-        if c.prev_high and c.prev_low:
-            typer.echo(
-                typer.style(
-                    f"  Prev H:{c.prev_high:,.0f}  L:{c.prev_low:,.0f}",
-                    fg=typer.colors.BRIGHT_BLACK,
-                )
-            )
-
-        # Context line 2: Accumulation backing + Foreign VWAP (broker data)
-        ctx_parts: list[str] = []
-        if c.accum_tag is not None:
-            tag_color = (
-                typer.colors.GREEN if c.accum_tag == "BACKED"
-                else typer.colors.RED if c.accum_tag == "DISTRIBUTING"
-                else typer.colors.YELLOW
-            )
-            score_str = f" {c.accum_score:.0f}pts" if c.accum_score is not None else ""
-            streak_str = f" streak:{c.accum_streak}d" if c.accum_streak else ""
-            ctx_parts.append(
-                "  ACCUM: "
-                + typer.style(f"{c.accum_tag}{score_str}{streak_str}", fg=tag_color)
-            )
-        if c.fvwap_discount_pct is not None:
-            pct = c.fvwap_discount_pct
-            if pct > 0:
-                fvwap_color = typer.colors.GREEN
-                fvwap_note = " (floor)"
-            elif pct < -3:
-                fvwap_color = typer.colors.RED
-                fvwap_note = " (sell risk)"
-            else:
-                fvwap_color = typer.colors.BRIGHT_BLACK
-                fvwap_note = ""
-            ctx_parts.append(
-                "   FVWAP: "
-                + typer.style(f"{pct:+.1f}%{fvwap_note}", fg=fvwap_color)
-            )
-        if ctx_parts:
-            typer.echo("".join(ctx_parts))
 
     typer.echo("-" * 90)
 
-    has_ai = any(c.ai_summary for c in candidates)
+    # AI summaries (if any)
+    has_ai = any(c.ai_summary for c in sorted_candidates)
     if has_ai:
         typer.echo("")
         typer.echo("AI RESEARCH SUMMARIES")
         typer.echo("-" * 90)
-        for c in candidates:
+        for c in sorted_candidates:
             if c.ai_summary:
                 typer.echo(f"\n[{c.ticker}]")
                 typer.echo(c.ai_summary)
@@ -283,21 +286,49 @@ def _display_results(
         for w in warnings:
             typer.echo(f"  ! {w}")
 
+    # Action summary — watchlist + ready-to-run confirm-open command
+    watchlist = [c for c in sorted_candidates if _verdict(c) in ("PRIME", "WATCH")]
+    skipped   = [c for c in sorted_candidates if _verdict(c) not in ("PRIME", "WATCH")]
+
+    typer.echo("")
+    typer.echo("━" * 60)
+    if watchlist:
+        watch_labels = []
+        for c in watchlist:
+            prefix = "★" if _verdict(c) == "PRIME" else "◉"
+            watch_labels.append(f"{prefix} {c.ticker}")
+        skip_labels = "  ".join(c.ticker for c in skipped) or "—"
+        typer.echo(
+            " WATCHLIST  " + typer.style("  ".join(watch_labels), fg=typer.colors.GREEN, bold=True)
+        )
+        typer.echo(
+            " SKIP       " + typer.style(skip_labels, fg=typer.colors.BRIGHT_BLACK)
+        )
+        # Build confirm-open command template
+        tickers_json = ",".join(f'"{c.ticker}":___' for c in watchlist)
+        typer.echo("")
+        typer.echo(" At 09:00, fill opening prices and run:")
+        typer.echo(
+            typer.style(
+                f"   saham intraday confirm-open \\\n"
+                f"     --opening-json '{{{tickers_json}}}'",
+                fg=typer.colors.CYAN,
+            )
+        )
+    else:
+        typer.echo(" No candidates meet criteria today.")
+        typer.echo(" Consider: --iev-min 50000 or check 'saham stockbit fetch-top5'")
+    typer.echo("━" * 60)
+
     typer.echo("")
     typer.echo(
-        "ENTRY-RANGE: ATR-scaled band (±ATR/price, capped 1–5%) "
-        "— enter only if open is within range"
-    )
-    typer.echo("SUGGEST: limit order = prev_close + 0.5% (place after opening price known)")
-    typer.echo("ATR-STOP: stop = entry - 1× ATR(14), capped at -7%")
-    typer.echo(
-        "ACCUM: BACKED=smart money buying ≥50pts | "
-        "UNCONFIRMED=no pattern | DISTRIBUTING=selling"
+        "VERDICT: ★ PRIME=all signals green  ◉ WATCH=bullish, needs confirm  "
+        "✗ SKIP=bearish/distributing  ? NO_DATA=run 'saham fetch TICKER'"
     )
     typer.echo(
-        "FVWAP: positive = foreigners underwater (price floor) | "
-        "negative = foreigners in profit (sell risk)"
+        "SIGNAL: ACCUM tag × streak  |  FVWAP% (floor=asing underwater, sell=asing profit)  |  PH=Prev High"
     )
+    typer.echo("STOP%: max loss from entry (ATR-based, capped -7%)")
     typer.echo("")
     typer.echo("DISCLAIMER: Analysis only. Not trading advice.")
     typer.echo("=" * 90)
@@ -330,6 +361,8 @@ def _write_sidecar(
                 "fvwap_discount_pct": (
                     c.fvwap_discount_pct if c.fvwap_discount_pct is not None else None
                 ),
+                "prev_high": float(c.prev_high) if c.prev_high else None,
+                "prev_low": float(c.prev_low) if c.prev_low else None,
             }
             for c in candidates
         ],
@@ -347,12 +380,13 @@ def _decimal_or_none(value) -> Decimal | None:
 def _load_confirmation_candidates(
     session_path: Path,
     opening_prices: dict[str, Decimal],
-) -> tuple[date, list[IntradayConfirmationCandidate]]:
+) -> tuple[date, list[IntradayConfirmationCandidate], dict[str, dict]]:
     with open(session_path) as f:
         data = json.load(f)
 
     screened_at = date.fromisoformat(data["screened_at"])
     candidates: list[IntradayConfirmationCandidate] = []
+    extras: dict[str, dict] = {}  # {ticker: {prev_high, prev_low, entry_range_low}}
 
     for row in data.get("candidates", []):
         ticker = str(row["ticker"]).upper()
@@ -372,60 +406,112 @@ def _load_confirmation_candidates(
                 fvwap_discount_pct=_decimal_or_none(row.get("fvwap_discount_pct")),
             )
         )
+        extras[ticker] = {
+            "prev_high": row.get("prev_high"),
+            "prev_low": row.get("prev_low"),
+            "entry_range_low": row.get("entry_range_low"),
+            "entry_range_high": row.get("entry_range_high"),
+            "accum_tag": row.get("accum_tag"),
+            "fvwap_discount_pct": row.get("fvwap_discount_pct"),
+        }
 
-    return screened_at, candidates
+    return screened_at, candidates, extras
 
 
 def _display_confirmations(
     confirmations: tuple[IntradayConfirmation, ...],
     confirmed_date: date,
     max_stop_pct: Decimal,
+    extras: dict[str, dict] | None = None,
 ) -> None:
+    extras = extras or {}
+
     typer.echo("")
-    typer.echo("=" * 96)
-    typer.echo("INTRADAY OPEN CONFIRMATION")
-    typer.echo("=" * 96)
-    typer.echo(f"Date: {confirmed_date}   Max stop: {float(max_stop_pct * 100):.1f}%")
-    typer.echo("")
+    typer.echo("━" * 60)
+    typer.echo(f" {confirmed_date}  INTRADAY CONFIRMATION")
+    typer.echo("━" * 60)
 
     if not confirmations:
-        typer.echo("No candidates found in session sidecar.")
-        typer.echo("=" * 96)
+        typer.echo(" No candidates found in session sidecar.")
+        typer.echo("━" * 60)
         return
 
-    header = (
-        f"{'TICKER':<8} {'DECISION':<24} {'OPEN':>10} {'ENTRY':>10} "
-        f"{'STOP':>10} {'STOP%':>7}  REASONS"
-    )
-    typer.echo(header)
-    typer.echo("-" * 96)
+    enters = [c for c in confirmations if c.decision.value == "ENTER"]
+    waits  = [c for c in confirmations if c.decision.value == "WAIT"]
+    skips  = [c for c in confirmations if c.decision.value not in ("ENTER", "WAIT")]
 
-    for c in confirmations:
-        if c.decision.value == "ENTER":
-            decision = typer.style(f"{c.decision.value:<24}", fg=typer.colors.GREEN, bold=True)
-        elif c.decision.value == "WAIT":
-            decision = typer.style(f"{c.decision.value:<24}", fg=typer.colors.YELLOW, bold=True)
-        else:
-            decision = typer.style(f"{c.decision.value:<24}", fg=typer.colors.RED)
+    # ── ENTER ──────────────────────────────────────────────────────────────
+    if enters:
+        typer.echo("")
+        typer.echo(typer.style(" ▶ ENTER  (act now)", fg=typer.colors.GREEN, bold=True))
+        for c in enters:
+            ex        = extras.get(c.ticker, {})
+            open_str  = f"{c.opening_price:,.0f}" if c.opening_price else "?"
+            rng_low   = ex.get("entry_range_low")
+            rng_high  = ex.get("entry_range_high")
+            rng_str   = f"{float(rng_low):,.0f}–{float(rng_high):,.0f}" if rng_low and rng_high else "—"
+            entry_str = f"{c.planned_entry:,.0f}" if c.planned_entry else "—"
+            stop_str  = f"{c.stop_loss_price:,.0f}" if c.stop_loss_price else "—"
+            stop_pct  = f"-{c.stop_pct:.1f}%" if c.stop_pct is not None else ""
+            prev_h    = ex.get("prev_high")
+            target    = f"  |  Target: Prev H {prev_h:,.0f}" if prev_h else ""
 
-        open_str = f"{c.opening_price:,.0f}" if c.opening_price else "-"
-        entry_str = f"{c.planned_entry:,.0f}" if c.planned_entry else "-"
-        stop_str = f"{c.stop_loss_price:,.0f}" if c.stop_loss_price else "-"
-        stop_pct = f"-{c.stop_pct:.1f}%" if c.stop_pct is not None else "-"
-        reasons = "; ".join(c.reasons)
+            typer.echo(
+                typer.style(
+                    f"   {c.ticker:<6}  open {open_str}  in range {rng_str}",
+                    fg=typer.colors.GREEN,
+                )
+            )
+            typer.echo(
+                typer.style(
+                    f"   → Limit BUY {entry_str}  |  Stop {stop_str} ({stop_pct}){target}",
+                    fg=typer.colors.GREEN, bold=True,
+                )
+            )
 
-        typer.echo(
-            f"{c.ticker:<8} {decision} {open_str:>10} {entry_str:>10} "
-            f"{stop_str:>10} {stop_pct:>7}  {reasons}"
-        )
+    # ── WAIT ───────────────────────────────────────────────────────────────
+    if waits:
+        typer.echo("")
+        typer.echo(typer.style(" ◎ WAIT  (monitor 15 min — skip if no direction)", fg=typer.colors.YELLOW, bold=True))
+        for c in waits:
+            ex       = extras.get(c.ticker, {})
+            open_str = f"{c.opening_price:,.0f}" if c.opening_price else "?"
+            rng_low  = ex.get("entry_range_low")
+            rng_high = ex.get("entry_range_high")
+            rng_str  = f"{float(rng_low):,.0f}–{float(rng_high):,.0f}" if rng_low and rng_high else "—"
+            floor    = float(rng_low) if rng_low else None
+            trigger  = f"holds above {floor:,.0f}" if floor else "shows directional move up"
 
-    typer.echo("-" * 96)
+            typer.echo(
+                typer.style(
+                    f"   {c.ticker:<6}  open {open_str}  in range {rng_str}",
+                    fg=typer.colors.YELLOW,
+                )
+            )
+            typer.echo(
+                typer.style(
+                    f"   → Watch volume. Enter only if price {trigger} with uptick.",
+                    fg=typer.colors.YELLOW,
+                )
+            )
+
+    # ── SKIP ───────────────────────────────────────────────────────────────
+    if skips:
+        typer.echo("")
+        typer.echo(typer.style(" ✗ SKIP  (do not enter)", fg=typer.colors.BRIGHT_BLACK))
+        for c in skips:
+            # Last reason is the actual skip cause; first is often "open inside entry range"
+            reason = c.reasons[-1] if c.reasons else c.decision.value.lower().replace("_", " ")
+            typer.echo(
+                typer.style(f"   {c.ticker:<6}  {reason}", fg=typer.colors.BRIGHT_BLACK)
+            )
+
+    typer.echo("")
+    typer.echo("━" * 60)
     typer.echo(
-        "Decision is deterministic and based only on supplied opening prices "
-        "plus pre-open context."
+        typer.style("  saham intraday log   (record this session)", fg=typer.colors.BRIGHT_BLACK)
     )
-    typer.echo("DISCLAIMER: Analysis only. Not trading advice.")
-    typer.echo("=" * 96)
+    typer.echo("━" * 60)
 
 
 def _write_confirmation_sidecar(
@@ -749,7 +835,7 @@ def confirm_open(
         typer.echo("Error: --max-stop must be positive.", err=True)
         raise typer.Exit(1)
 
-    screened_at, candidates = _load_confirmation_candidates(sidecar_path, opening_prices)
+    screened_at, candidates, extras = _load_confirmation_candidates(sidecar_path, opening_prices)
     use_case = ConfirmIntradayOpenUseCase()
     result = use_case.execute(
         ConfirmIntradayOpenRequest(
@@ -763,6 +849,7 @@ def confirm_open(
         result.confirmations,
         result.confirmed_date,
         result.max_stop_pct,
+        extras=extras,
     )
     _write_confirmation_sidecar(
         result.confirmations,
