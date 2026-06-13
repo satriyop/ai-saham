@@ -71,9 +71,11 @@ reports/
 .env
 .env.local
 .env.*.local
+config/user.yaml
 *.pem
 *.key
 stockbit_token.json
+stockbit_session.json
 
 # Logs
 *.log

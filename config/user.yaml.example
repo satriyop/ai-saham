@@ -1,0 +1,8 @@
+# Personal defaults for saham CLI.
+# Copy this file to config/user.yaml and fill in your values.
+# config/user.yaml is gitignored — safe to store personal capital amounts.
+
+swing:
+  capital: 10000000      # IDR — default --capital for swing analyze and swing size
+  risk_pct: 1.0          # % of capital to risk per trade (1 = 1%)
+  min_score: 70          # minimum accumulation score for swing screen (0–120)

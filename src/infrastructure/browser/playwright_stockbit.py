@@ -22,10 +22,23 @@ import json
 import logging
 import re
 import time
+from datetime import date
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
+from src.domain.entities.broker_flow import (
+    BrokerFlowPoint,
+    BrokerSummary,
+    BrokerTransaction,
+    BrokerType,
+    ForeignFlowSnapshot,
+)
+from src.domain.ports.broker_data_provider import (
+    BrokerDataAuthError,
+    BrokerDataProvider,
+    BrokerDataProviderError,
+)
 from src.domain.ports.browser_data_provider import BrowserDataProvider
 from src.domain.value_objects.screener_result import MoverData, MoverWithOrderBook, OrderBookBid
 
@@ -63,6 +76,24 @@ _IEV_MOVER_URL_SPECIAL = (
 )
 # Orderbook confirmed via DevTools: company-price-feed/v2/orderbook/companies/{TICKER}
 _ORDER_BOOK_API = "https://exodus.stockbit.com/company-price-feed/v2/orderbook/companies/{ticker}"
+
+# ── Broker data endpoints (confirmed from DevTools 2026-06-13) ────────────
+# Stock-centric named breakdown: stockbit.com/broker-analysis/stock → fires on load
+_MARKETDETECTORS_API = "https://exodus.stockbit.com/marketdetectors"
+# Broker-centric universe scan: stockbit.com/broker-analysis/broker → fires on load
+_BROKER_ACTIVITY_API = "https://exodus.stockbit.com/order-trade/broker/activity"
+# Stock-centric daily time-series for backfilling
+_BROKER_HISTORICAL_API = "https://exodus.stockbit.com/order-trade/broker/activity/historical"
+
+# 10 foreign broker codes confirmed from broker-analysis/stock historical screenshot.
+# historical endpoint uses broker_codes= (plural); activity scan uses broker_code= (singular).
+_FOREIGN_BROKER_CODES = ["AK", "ZP", "YP", "BK", "YU", "CP", "KZ", "HD", "RX", "DR"]
+
+# Spy navigation pages — each fires its respective endpoint immediately on load
+_STOCK_BROKER_PAGE_URL = "https://stockbit.com/broker-analysis/stock"
+_BROKER_ANALYSIS_PAGE_URL = "https://stockbit.com/broker-analysis/broker"
+
+_BROKER_URL_PATTERNS = ["marketdetectors", "broker/activity", "activity/historical"]
 
 # ── Timeouts (ms) ─────────────────────────────────────────────────────────
 NAV_TIMEOUT = 30_000
@@ -539,6 +570,564 @@ class PlaywrightStockbitProvider(BrowserDataProvider):
 
             finally:
                 ctx.close()
+
+
+# ── Playwright-backed BrokerDataProvider ──────────────────────────────────
+
+class StockbitPlaywrightBrokerProvider(BrokerDataProvider):
+    """
+    Implements BrokerDataProvider using the Playwright persistent browser session.
+
+    Reuses the existing .stockbit_profile/ persistent context to extract an
+    RS256 Bearer token, then makes direct httpx calls to the Exodus API.
+    No manual token management needed — the browser session auto-refreshes.
+
+    Usage:
+        provider = StockbitPlaywrightBrokerProvider()
+        summaries = provider.fetch_broker_summaries("BBCA", date(2026,1,1), date.today())
+    """
+
+    # In-process token cache: avoids launching Chromium on every request
+    # during batch updates. Reset when session is re-created.
+    _TOKEN_TTL_SECONDS = 1800  # 30 minutes
+
+    def __init__(
+        self,
+        profile_dir: Path = DEFAULT_PROFILE_DIR,
+        headless: bool = True,
+        timeout: int = NAV_TIMEOUT,
+    ) -> None:
+        self._profile_dir = profile_dir
+        self._headless = headless
+        self._timeout = timeout
+        self._token_cache: str | None = None
+        self._token_cached_at: float = 0
+
+    def is_authenticated(self) -> bool:
+        """True if a persistent profile exists and its login marker is < 8h old."""
+        marker = self._profile_dir / ".logged_in_at"
+        if not (self._profile_dir.exists() and marker.exists()):
+            return False
+        try:
+            age_hours = (time.time() - float(marker.read_text())) / 3600
+            return age_hours < 8
+        except Exception:
+            return False
+
+    def _get_token(self) -> str:
+        """
+        Return a valid RS256 Bearer token.
+
+        Uses a 30-minute in-process cache so batch updates don't launch
+        Chromium for every ticker. On cache miss, opens the browser, navigates
+        to ORDERBOOK_PAGE_URL (which reliably fires Bearer-authenticated Exodus
+        requests), intercepts the token, then immediately closes the browser.
+        """
+        now = time.time()
+        if self._token_cache and (now - self._token_cached_at) < self._TOKEN_TTL_SECONDS:
+            return self._token_cache
+
+        if not (self._profile_dir.exists() and any(self._profile_dir.iterdir())):
+            raise BrokerDataAuthError(
+                "No Stockbit session found.\nRun: saham stockbit login"
+            )
+
+        sync_playwright = _require_playwright()
+        token: str | None = None
+        with sync_playwright() as pw:
+            ctx, page = _persistent_context(pw, self._profile_dir, self._headless)
+            try:
+                token_box = _intercept_token(page)
+                page.goto(ORDERBOOK_PAGE_URL, timeout=self._timeout, wait_until="domcontentloaded")
+                page.wait_for_timeout(SPA_SETTLE_MS)
+                token = _resolve_token(page, token_box)
+            finally:
+                ctx.close()
+
+        if not token:
+            raise BrokerDataAuthError(
+                "Could not extract auth token — session may be expired.\n"
+                "Run: saham stockbit login"
+            )
+
+        self._token_cache = token
+        self._token_cached_at = time.time()
+        return token
+
+    def fetch_broker_summary(
+        self,
+        ticker: str,
+        target_date: date,
+    ) -> BrokerSummary | None:
+        summaries = self.fetch_broker_summaries(ticker, target_date, target_date)
+        return summaries[0] if summaries else None
+
+    def fetch_broker_summaries(
+        self,
+        ticker: str,
+        start_date: date,
+        end_date: date,
+    ) -> list[BrokerSummary]:
+        """
+        Fetch named broker breakdown for a specific ticker via marketdetectors endpoint.
+
+        Uses the stock-centric Exodus API (confirmed 2026-06-13) which returns
+        which named brokers bought/sold the stock in the requested period.
+        Maps the date range to the closest supported period parameter.
+        """
+        token = self._get_token()
+        days = (end_date - start_date).days
+        # All confirmed valid as of 2026-06-13
+        if days <= 1:
+            period = "BROKER_SUMMARY_PERIOD_LATEST"
+        elif days <= 7:
+            period = "BROKER_SUMMARY_PERIOD_LAST_7_DAYS"
+        elif days <= 30:
+            period = "BROKER_SUMMARY_PERIOD_LAST_1_MONTH"
+        elif days <= 90:
+            period = "BROKER_SUMMARY_PERIOD_LAST_3_MONTHS"
+        elif days <= 180:
+            period = "BROKER_SUMMARY_PERIOD_LAST_6_MONTHS"
+        else:
+            period = "BROKER_SUMMARY_PERIOD_LAST_1_YEAR"
+        url = (
+            f"{_MARKETDETECTORS_API}/{ticker.upper()}"
+            f"?transaction_type=TRANSACTION_TYPE_NET"
+            f"&market_board=MARKET_BOARD_REGULER"
+            f"&investor_type=INVESTOR_TYPE_ALL"
+            f"&limit=25"
+            f"&period={period}"
+        )
+        body = _exodus_get(url, token)
+        if not body:
+            logger.warning(
+                "No broker data for %s (%s–%s). "
+                "Run: saham stockbit spy --target stock --ticker %s",
+                ticker, start_date, end_date, ticker,
+            )
+            return []
+
+        summaries = _parse_marketdetectors_response(ticker, end_date, body)
+        if summaries:
+            logger.info("Stockbit named broker data: %s → %d entry", ticker, len(summaries))
+        else:
+            logger.warning(
+                "marketdetectors/%s returned data but no parseable broker rows. "
+                "Run spy to inspect the response shape.",
+                ticker,
+            )
+        return summaries
+
+    def fetch_foreign_top_stocks(
+        self,
+        start_date: date,
+        end_date: date,
+        limit: int = 20,
+    ) -> list[ForeignFlowSnapshot]:
+        """
+        Return stocks most actively traded by foreign brokers in the period.
+
+        Uses the broker-centric Exodus API: given the 10 known foreign broker codes,
+        returns which stocks they collectively bought/sold the most. Useful for
+        universe-level screening ("is this IEV mover in foreign top buys?").
+        """
+        token = self._get_token()
+        days = (end_date - start_date).days
+        # Confirmed valid periods (2026-06-13): 1D, 3D, 7D, 1M, 3M, 1Y
+        # LAST_1_WEEK and LAST_6_MONTHS are not valid values
+        if days <= 1:
+            period = "RT_PERIOD_LAST_1_DAY"
+        elif days <= 3:
+            period = "RT_PERIOD_LAST_3_DAYS"
+        elif days <= 7:
+            period = "RT_PERIOD_LAST_7_DAYS"
+        elif days <= 30:
+            period = "RT_PERIOD_LAST_1_MONTH"
+        elif days <= 90:
+            period = "RT_PERIOD_LAST_3_MONTHS"
+        else:
+            period = "RT_PERIOD_LAST_1_YEAR"
+        broker_params = "&".join(f"broker_code={c}" for c in _FOREIGN_BROKER_CODES)
+        url = (
+            f"{_BROKER_ACTIVITY_API}?{broker_params}"
+            f"&transaction_type=TRANSACTION_TYPE_NET"
+            f"&investor_type=INVESTOR_TYPE_ALL"
+            f"&limit={limit}&market_board=MARKET_TYPE_REGULER&page=1"
+            f"&period={period}"
+            f"&net_val_period=NET_VAL_PERIOD_7D"
+        )
+        body = _exodus_get(url, token)
+        if not body:
+            logger.warning("No response from broker-centric scan endpoint")
+            return []
+        snapshots = _parse_foreign_top_stocks(end_date, body)
+        logger.info("Foreign top stocks scan: %d stocks returned", len(snapshots))
+        return snapshots
+
+    def fetch_broker_flow_history(
+        self,
+        ticker: str,
+        days: int = 365,
+    ) -> list[BrokerFlowPoint]:
+        """
+        Return daily foreign broker flow for a stock, up to `days` back.
+
+        Uses the stock-centric historical Exodus API. Returns daily N.Val/N.Lot
+        time-series for trend context and backfilling the broker_flow table.
+        """
+        token = self._get_token()
+        codes_params = "&".join(f"broker_codes={c}" for c in _FOREIGN_BROKER_CODES)
+        url = (
+            f"{_BROKER_HISTORICAL_API}?interval=INTERVAL_DAILY"
+            f"&period=RT_PERIOD_LAST_1_YEAR"
+            f"&{codes_params}"
+            f"&symbols={ticker.upper()}"
+            f"&market_board=BOARD_TYPE_REGULAR"
+            f"&investor_type=INVESTOR_TYPE_ALL"
+            f"&pagination.page=1&pagination.limit={min(days, 365)}"
+        )
+        body = _exodus_get(url, token)
+        if not body:
+            logger.warning("No response from broker flow history endpoint for %s", ticker)
+            return []
+        points = _parse_broker_flow_history(ticker, body)
+        logger.info("Broker flow history: %s → %d data points", ticker, len(points))
+        return points
+
+
+def _dict_int(d: dict | None, *keys: str) -> int:
+    """Extract an integer from a dict, trying multiple key names."""
+    for k in keys:
+        v = (d or {}).get(k)
+        if v is not None:
+            try:
+                return int(float(str(v)))
+            except (ValueError, TypeError):
+                pass
+    return 0
+
+
+def _dict_dec(d: dict | None, *keys: str) -> Decimal:
+    """Extract a Decimal from a dict, trying multiple key names."""
+    for k in keys:
+        v = (d or {}).get(k)
+        if v is not None:
+            try:
+                return Decimal(str(v))
+            except Exception:
+                pass
+    return Decimal("0")
+
+
+def _parse_broker_tx(item: dict) -> BrokerTransaction | None:
+    """
+    Parse a single named-broker row from a marketdetectors response item.
+
+    Handles two common shapes:
+      Shape A (nested):  item.buy.lot / item.sell.lot
+      Shape B (flat):    item.buy_lot / item.sell_lot
+    """
+    broker_node = item.get("broker") or {}
+    code = (
+        broker_node.get("code")
+        or item.get("broker_code")
+        or item.get("code")
+        or ""
+    )
+    name = broker_node.get("name") or item.get("broker_name") or item.get("name") or code
+    if not code:
+        return None
+
+    inv_type = (item.get("investor_type") or "").upper()
+    if "FOREIGN" in inv_type or "ASING" in inv_type:
+        broker_type = BrokerType.FOREIGN
+    elif "LOCAL" in inv_type or "LOKAL" in inv_type or "DOMESTIC" in inv_type:
+        broker_type = BrokerType.LOCAL
+    else:
+        broker_type = BrokerType.UNKNOWN
+
+    buy_node = item.get("buy") or {}
+    sell_node = item.get("sell") or {}
+
+    buy_lot = _dict_int(buy_node, "lot", "lots") or _dict_int(item, "buy_lot")
+    sell_lot = _dict_int(sell_node, "lot", "lots") or _dict_int(item, "sell_lot")
+    buy_val = _dict_dec(buy_node, "value") or _dict_dec(item, "buy_value")
+    sell_val = _dict_dec(sell_node, "value") or _dict_dec(item, "sell_value")
+    avg_buy = _dict_dec(buy_node, "avg_price", "avg") or _dict_dec(item, "avg_buy_price")
+    avg_sell = _dict_dec(sell_node, "avg_price", "avg") or _dict_dec(item, "avg_sell_price")
+
+    try:
+        return BrokerTransaction(
+            broker_code=str(code).upper(),
+            broker_name=str(name),
+            broker_type=broker_type,
+            buy_lot=abs(buy_lot),
+            sell_lot=abs(sell_lot),
+            buy_value=abs(buy_val),
+            sell_value=abs(sell_val),
+            avg_buy_price=avg_buy,
+            avg_sell_price=avg_sell,
+        )
+    except Exception as e:
+        logger.debug("Could not parse broker tx %s: %s", code, e)
+        return None
+
+
+def _parse_marketdetectors_response(
+    ticker: str,
+    trading_date: date,
+    body: dict,
+) -> list[BrokerSummary]:
+    """
+    Parse the stock-centric /marketdetectors/{ticker} response into a BrokerSummary.
+
+    Confirmed response shape (2026-06-13):
+      data.broker_summary.brokers_buy[]  — net buyer rows
+        netbs_broker_code, blot, bval, netbs_buy_avg_price, type, netbs_date (YYYYMMDD)
+      data.broker_summary.brokers_sell[] — net seller rows
+        netbs_broker_code, slot (neg), sval (neg), netbs_sell_avg_price, type
+    """
+    data = body.get("data") if isinstance(body, dict) else body
+    if not isinstance(data, dict):
+        return []
+
+    broker_summary = data.get("broker_summary") or {}
+    if not isinstance(broker_summary, dict):
+        return []
+
+    buy_items: list = broker_summary.get("brokers_buy") or []
+    sell_items: list = broker_summary.get("brokers_sell") or []
+
+    if not buy_items and not sell_items:
+        logger.debug("marketdetectors/%s: no brokers_buy/brokers_sell in response", ticker)
+        return []
+
+    def _broker_type(item: dict) -> BrokerType:
+        return BrokerType.FOREIGN if item.get("type") == "Asing" else BrokerType.LOCAL
+
+    def _parse_yyyymmdd(s: str) -> date:
+        """Parse YYYYMMDD date string."""
+        s = str(s or "").strip()
+        if len(s) == 8:
+            try:
+                return date(int(s[:4]), int(s[4:6]), int(s[6:8]))
+            except (ValueError, TypeError):
+                pass
+        return trading_date
+
+    buyers: list[BrokerTransaction] = []
+    for item in buy_items:
+        if not isinstance(item, dict):
+            continue
+        code = str(item.get("netbs_broker_code") or "").strip()
+        if not code:
+            continue
+        try:
+            buyers.append(BrokerTransaction(
+                broker_code=code,
+                broker_name=code,
+                broker_type=_broker_type(item),
+                buy_lot=abs(_dict_int(item, "blot")),
+                sell_lot=0,
+                buy_value=abs(_dict_dec(item, "bval")),
+                sell_value=Decimal("0"),
+                avg_buy_price=_dict_dec(item, "netbs_buy_avg_price"),
+                avg_sell_price=Decimal("0"),
+            ))
+        except Exception as e:
+            logger.debug("Could not parse buy broker %s: %s", code, e)
+
+    sellers: list[BrokerTransaction] = []
+    for item in sell_items:
+        if not isinstance(item, dict):
+            continue
+        code = str(item.get("netbs_broker_code") or "").strip()
+        if not code:
+            continue
+        try:
+            sellers.append(BrokerTransaction(
+                broker_code=code,
+                broker_name=code,
+                broker_type=_broker_type(item),
+                buy_lot=0,
+                sell_lot=abs(_dict_int(item, "slot")),
+                buy_value=Decimal("0"),
+                sell_value=abs(_dict_dec(item, "sval")),
+                avg_buy_price=Decimal("0"),
+                avg_sell_price=_dict_dec(item, "netbs_sell_avg_price"),
+            ))
+        except Exception as e:
+            logger.debug("Could not parse sell broker %s: %s", code, e)
+
+    if not buyers and not sellers:
+        return []
+
+    # Actual trading date from first item (YYYYMMDD field)
+    first_item = buy_items[0] if buy_items else sell_items[0]
+    actual_date = _parse_yyyymmdd(first_item.get("netbs_date", ""))
+
+    all_txns = buyers + sellers
+    foreign_txns = [t for t in all_txns if t.is_foreign]
+
+    foreign_buy_val = sum((t.buy_value for t in foreign_txns), Decimal("0"))
+    foreign_sell_val = sum((t.sell_value for t in foreign_txns), Decimal("0"))
+    foreign_buy_lot = sum(t.buy_lot for t in foreign_txns)
+    foreign_sell_lot = sum(t.sell_lot for t in foreign_txns)
+    total_val = sum((t.buy_value + t.sell_value for t in all_txns), Decimal("0"))
+    total_lot = sum(t.buy_lot + t.sell_lot for t in all_txns)
+
+    try:
+        return [BrokerSummary(
+            ticker=ticker.upper(),
+            date=actual_date,
+            top_buyers=tuple(buyers[:10]),
+            top_sellers=tuple(sellers[:10]),
+            foreign_buy_value=foreign_buy_val,
+            foreign_sell_value=foreign_sell_val,
+            foreign_buy_lot=foreign_buy_lot,
+            foreign_sell_lot=foreign_sell_lot,
+            total_value=total_val,
+            total_lot=total_lot,
+        )]
+    except Exception as e:
+        logger.debug("Could not build BrokerSummary for %s: %s", ticker, e)
+        return []
+
+
+def _parse_foreign_top_stocks(
+    snapshot_date: date,
+    body: dict,
+) -> list[ForeignFlowSnapshot]:
+    """
+    Parse the broker-centric /order-trade/broker/activity response.
+
+    Confirmed response shape (2026-06-13):
+      data.broker_activity_transaction.brokers_buy[]  — net buyer stocks
+        stock_code, value (net val), lot, avg_price, type
+      data.broker_activity_transaction.brokers_sell[] — net seller stocks
+        stock_code, value (negative), lot (negative), avg_price, type
+    """
+    data = body.get("data") if isinstance(body, dict) else body
+    if not isinstance(data, dict):
+        return []
+
+    txn = data.get("broker_activity_transaction") or {}
+    if not isinstance(txn, dict):
+        logger.debug("_parse_foreign_top_stocks: no broker_activity_transaction in response")
+        return []
+
+    buy_items: list = txn.get("brokers_buy") or []
+    sell_items: list = txn.get("brokers_sell") or []
+
+    snapshots: list[ForeignFlowSnapshot] = []
+    seen: set[str] = set()
+
+    for item in buy_items:
+        if not isinstance(item, dict):
+            continue
+        ticker = str(item.get("stock_code") or "").upper()
+        if not ticker or ticker in seen:
+            continue
+        seen.add(ticker)
+        try:
+            net_val = _dict_dec(item, "value")
+            net_lot = _dict_int(item, "lot")
+            item_date_str = str(item.get("date") or "")
+            try:
+                item_date = date.fromisoformat(item_date_str[:10])
+            except (ValueError, TypeError):
+                item_date = snapshot_date
+            snapshots.append(ForeignFlowSnapshot(
+                ticker=ticker,
+                date=item_date,
+                net_val=net_val,
+                net_lot=net_lot,
+            ))
+        except Exception as e:
+            logger.debug("Could not parse foreign flow snapshot for %s: %s", ticker, e)
+
+    for item in sell_items:
+        if not isinstance(item, dict):
+            continue
+        ticker = str(item.get("stock_code") or "").upper()
+        if not ticker or ticker in seen:
+            continue
+        seen.add(ticker)
+        try:
+            # sell values are negative in the response
+            net_val = _dict_dec(item, "value")
+            net_lot = _dict_int(item, "lot")
+            item_date_str = str(item.get("date") or "")
+            try:
+                item_date = date.fromisoformat(item_date_str[:10])
+            except (ValueError, TypeError):
+                item_date = snapshot_date
+            snapshots.append(ForeignFlowSnapshot(
+                ticker=ticker,
+                date=item_date,
+                net_val=net_val,
+                net_lot=net_lot,
+            ))
+        except Exception as e:
+            logger.debug("Could not parse foreign flow snapshot for %s: %s", ticker, e)
+
+    return sorted(snapshots, key=lambda s: abs(s.net_val), reverse=True)
+
+
+def _parse_broker_flow_history(
+    ticker: str,
+    body: dict,
+) -> list[BrokerFlowPoint]:
+    """
+    Parse the stock-centric /order-trade/broker/activity/historical response.
+
+    Confirmed response shape (2026-06-13):
+      data.records[].date                              — "YYYY-MM-DD"
+      data.records[].trade_activity.net_summary.lot   — net lot (can be negative)
+      data.records[].trade_activity.net_summary.value — net value (can be negative)
+      data.records[].trade_activity.net_summary.avg_price
+      data.records[].price_activity.close_price       — fallback price
+    """
+    data = body.get("data") if isinstance(body, dict) else body
+    if not isinstance(data, dict):
+        return []
+
+    rows = data.get("records")
+    if not isinstance(rows, list) or not rows:
+        logger.debug("broker_flow_history/%s: no 'records' list in response", ticker)
+        return []
+
+    points: list[BrokerFlowPoint] = []
+    for item in rows:
+        if not isinstance(item, dict):
+            continue
+
+        date_str = str(item.get("date") or "")
+        try:
+            point_date = date.fromisoformat(date_str[:10])
+        except (ValueError, TypeError):
+            continue
+
+        trade = item.get("trade_activity") or {}
+        net = trade.get("net_summary") or {}
+        price_activity = item.get("price_activity") or {}
+
+        net_val = _dict_dec(net, "value")
+        net_lot = _dict_int(net, "lot")
+        avg_price = _dict_dec(net, "avg_price") or _dict_dec(price_activity, "close_price")
+
+        try:
+            points.append(BrokerFlowPoint(
+                ticker=ticker.upper(),
+                date=point_date,
+                net_val=net_val,
+                net_lot=net_lot,
+                avg_price=avg_price,
+            ))
+        except Exception as e:
+            logger.debug("Could not parse flow point for %s %s: %s", ticker, date_str, e)
+
+    return sorted(points, key=lambda p: p.date)
 
 
 # ── Board-aware IEV fetcher ────────────────────────────────────────────────
@@ -1027,6 +1616,15 @@ def spy_stockbit_session(
 
     if target == "orderbook":
         url = ORDER_BOOK_URL.format(ticker=ticker.upper())
+    elif target == "stock":
+        # Named broker breakdown: loads marketdetectors/{ticker} on page open
+        url = _STOCK_BROKER_PAGE_URL
+    elif target == "broker-scan":
+        # Broker-centric universe scan: loads /order-trade/broker/activity on page open
+        url = _BROKER_ANALYSIS_PAGE_URL
+    elif target == "broker":
+        # Legacy alias for stock (pre-2026-06-13)
+        url = _STOCK_BROKER_PAGE_URL
     else:
         url = SCREENER_URL
 
@@ -1084,6 +1682,7 @@ def spy_stockbit_session(
     # Flag URLs that might be relevant
     movers_hits = [u for u in unique_urls if _url_matches(u, _MOVERS_URL_PATTERNS)]
     orderbook_hits = [u for u in unique_urls if _url_matches(u, _ORDERBOOK_URL_PATTERNS)]
+    broker_hits = [u for u in unique_urls if _url_matches(u, _BROKER_URL_PATTERNS)]
 
     return {
         "total_responses": len(captured),
@@ -1091,6 +1690,7 @@ def spy_stockbit_session(
         "unique_json_urls": unique_urls,
         "movers_candidates": movers_hits,
         "orderbook_candidates": orderbook_hits,
+        "broker_candidates": broker_hits,
         "output_file": str(output_file),
     }
 
@@ -1158,8 +1758,16 @@ def save_stockbit_session(
                 print(f"\nLogin detection error: {e}")
 
         if logged_in:
-            # The persistent profile already saved everything to profile_dir —
-            # no extraction needed. Just write a marker file so 'status' works.
+            # Wait for the app to finish persisting credentials to the profile
+            # (IndexedDB writes are async — 2s is not always enough).
+            page.wait_for_timeout(3_000)
+
+        # Close the headed browser BEFORE writing the marker or doing anything else.
+        # Opening a second browser on the same profile dir while this one is still
+        # running causes Chromium to corrupt or reset the credential storage.
+        ctx.close()
+
+        if logged_in:
             profile_dir.mkdir(parents=True, exist_ok=True)
             marker = profile_dir / ".logged_in_at"
             marker.write_text(str(time.time()))
@@ -1168,28 +1776,11 @@ def save_stockbit_session(
                 f"  The browser profile stores all cookies and tokens.\n"
                 f"  It will stay logged in across runs (like a Chrome profile)."
             )
-
-            # Warm up the API token in headless mode so the first autonomous
-            # command after login doesn't hit a 401. The orderbook page reliably
-            # fires Bearer-authenticated Exodus API requests on load.
-            print("\nWarming up API token (headless)...", end=" ", flush=True)
-            try:
-                with sync_playwright() as _pw:
-                    _ctx, _page = _persistent_context(_pw, profile_dir, headless=True)
-                    _page.goto(ORDERBOOK_PAGE_URL, timeout=NAV_TIMEOUT, wait_until="domcontentloaded")
-                    _page.wait_for_timeout(SPA_SETTLE_MS)
-                    _ctx.close()
-                print("done.")
-            except Exception as _e:
-                print(f"skipped ({_e})")
-
             print("Run 'saham stockbit status' to verify.")
             print("Run 'saham stockbit spy' to discover API endpoints.")
         else:
             print("\nTimeout — login not detected. Session NOT saved.")
             print("Run 'saham stockbit login' again and complete login within the time limit.")
-
-        ctx.close()
 
 
 def get_session_status(
