@@ -241,91 +241,76 @@ PRE-OPEN SCREENER RESULTS
 Date: 2026-06-13   IEV filter: >= 100,000
 Movers evaluated: 16   Candidates: 5
 
-TICKER        IEV    GAP%           ENTRY-RANGE    SUGGEST   ATR-STOP   STOP%    RSI  TREND
+VERDICT    TICKER      IEV    GAP%       ENTRY-RANGE   STOP%   RSI  SIGNAL
 ------------------------------------------------------------------------------------------
-BUMI      972,420   -0.6%               149–165        158        147   -7.0%     42  BULLISH
-  Prev H:162  L:143
-  ACCUM: UNCONFIRMED 34pts streak:2d   FVWAP: +0.8% (floor)
-BNBR      428,497   -0.9%               104–116        111        103   -7.2%     43  BULLISH
-  Prev H:114  L:100
-  ACCUM: BACKED 50pts streak:3d   FVWAP: +8.8% (floor)
-BBRI      373,423   -1.0%           2,768–2,992      2,900      2,788   -3.9%     44  BULLISH
-  Prev H:2,910  L:2,730
-  ACCUM: DISTRIBUTING 0pts   FVWAP: +2.3% (floor)
-BBCA      297,068  +15.1%           4,892–5,408      5,200      4,904   -5.7%     17  BEARISH
-  Prev H:5,150  L:4,820
-  ACCUM: DISTRIBUTING 0pts   FVWAP: -11.1% (sell risk)
-CUAN      281,822   -0.7%               684–756        725        674   -7.0%     46  BULLISH
-  Prev H:735  L:665
-  ACCUM: DISTRIBUTING 0pts   FVWAP: -9.8% (sell risk)
+★ PRIME   BNBR    428,497   -0.9%           104–116   -7.2%    43  BACKED×3d  +8.8% floor  PH:114
+◉ WATCH   BUMI    972,420   -0.6%           149–165   -7.0%    42  UNCONFIR×2d  +0.8% floor  PH:162
+✗ SKIP    BBRI    373,423   -1.0%       2,768–2,992   -3.9%    44  DISTRIBU  +2.3% floor  PH:2,910
+✗ SKIP    BBCA    297,068  +15.1%       4,892–5,408   -5.7%    17  DISTRIBU  -11.1% sell  PH:5,150
+✗ SKIP    CUAN    281,822   -0.7%           684–756   -7.0%    46  DISTRIBU  -9.8% sell  PH:735
+------------------------------------------------------------------------------------------
 
 WARNINGS
   ! BBCA: Gap +15.0% exceeds ±5.0% ATR band
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ WATCHLIST  ★ BNBR  ◉ BUMI
+ SKIP       BBRI  BBCA  CUAN
+
+ At 09:00, fill opening prices and run:
+   saham intraday confirm-open \
+     --opening-json '{"BNBR":___,"BUMI":___}'
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ==========================================================================================
 ```
 
-Baris `Fetched 16 movers` menunjukkan seluruh universe IEV yang datang dari Stockbit.
+Output dimulai dengan baris `Fetched 16 movers` — universe penuh dari Stockbit.
 Saham di luar top 5 (PPRO, ELTY, dll.) adalah kandidat untuk `saham fetch` malam ini.
+
+**VERDICT** sudah mensintesis semua sinyal — kamu tidak perlu membaca setiap kolom secara manual.
 
 ---
 
-### Framework Evaluasi: Baca dari Kiri ke Kanan
+### Cara Baca Output — Lihat VERDICT, Bukan Setiap Kolom
 
-Untuk setiap baris, evaluasi dalam urutan ini:
+VERDICT sudah mensintesis semua sinyal. Cukup baca kolom pertama:
 
-```
-1. Apakah ada ENTRY-RANGE?
-   → N/A = tidak ada data ATR → data lokal kosong, skip atau fetch dulu
+| VERDICT | Artinya | Aksi |
+|---------|---------|------|
+| `★ PRIME` | BULLISH + BACKED + FVWAP floor + range valid | Masuk WATCHLIST prioritas |
+| `◉ WATCH` | BULLISH tapi belum semua sinyal hijau | Masuk WATCHLIST, konfirmasi di 09:00 |
+| `✗ SKIP` | BEARISH atau DISTRIBUTING atau gap di luar range | Tidak masuk, tidak dipikirkan lagi |
+| `? NO_DATA` | Tidak ada data ATR lokal | Skip hari ini, `saham fetch TICKER` malam ini |
 
-2. Cek TREND
-   → BEARISH = stop, jangan lanjut evaluasi baris ini
-   → NEUTRAL = perlu konfirmasi di confirm-open
-   → BULLISH = lanjut ke step 3
-
-3. Cek GAP%
-   → Dalam entry range? Bagus
-   → Di atas range high? SKIP_GAP_UP nanti
-   → Di bawah range low? SKIP_GAP_DOWN nanti
-
-4. Cek ACCUM
-   → BACKED (score ≥ 50) = konviksi tinggi
-   → UNCONFIRMED = konviksi sedang, ukuran kecil
-   → DISTRIBUTING = waspada, mungkin SKIP_BEARISH_CONTEXT nanti
-
-5. Cek FVWAP
-   → Positif (floor) = asing underwater, ada support
-   → Negatif besar (sell risk) = asing bisa jual di opening
-```
+Kolom lain berguna untuk context, bukan untuk keputusan utama:
+- **GAP%** dan **ENTRY-RANGE** → dikonfirmasi oleh confirm-open di 09:00
+- **STOP%** → posisi sizing, baca saat buat order plan
+- **SIGNAL** → ringkasan ACCUM + FVWAP + Prev High dalam satu string
 
 ---
 
 ### Tabel Evaluasi Cepat
 
-| Kondisi | Penilaian Pre | Aksi |
-|---------|--------------|------|
-| ENTRY-RANGE ada + BULLISH + BACKED + FVWAP floor | **Kandidat kuat** | Masuk watchlist prioritas |
-| ENTRY-RANGE ada + BULLISH + UNCONFIRMED | **Kandidat sedang** | Masuk watchlist, ukuran kecil |
-| ENTRY-RANGE ada + NEUTRAL + ACCUM apapun | **Perlu konfirmasi** | Masuk watchlist, tunggu confirm-open |
-| ENTRY-RANGE N/A (no data) | **Skip** | Jalankan `saham fetch TICKER` untuk hari berikutnya |
-| BEARISH atau DISTRIBUTING + gap besar | **Skip** | Tidak masuk watchlist |
-| Warning gap terlalu besar | **Skip** | Kemungkinan besar SKIP_GAP_UP nanti |
+| VERDICT | Penilaian | Aksi |
+|---------|-----------|------|
+| `★ PRIME` | Semua sinyal selaras | Watchlist prioritas, sizing penuh |
+| `◉ WATCH` | Bullish tapi perlu konfirmasi | Watchlist, sizing lebih kecil |
+| `✗ SKIP` | Distributing/Bearish | Tidak masuk |
+| `? NO_DATA` | Tidak ada data historis | `saham fetch TICKER --days 365` malam ini |
 
 ---
 
 ### Contoh Evaluasi Output di Atas
 
 ```
-BUMI      → No cached data → SKIP (untuk hari ini)
-BNBR      → No cached data → SKIP (untuk hari ini)
-BBRI      → ENTRY-RANGE ada, BULLISH, GAP -1.0%, DISTRIBUTING, FVWAP floor
-           → Kandidat sedang — entry range oke tapi ACCUM lemah
-           → Masuk watchlist dengan ukuran kecil
-BBCA      → Gap +15.1% jauh di atas range, BEARISH, DISTRIBUTING
-           → SKIP — semua sinyal negatif
-CUAN      → No cached data → SKIP (untuk hari ini)
+★ PRIME  BNBR  → Masuk WATCHLIST — semua sinyal hijau (BACKED, floor, BULLISH)
+◉ WATCH  BUMI  → Masuk WATCHLIST — bullish tapi ACCUM belum kuat (UNCONFIRMED)
+✗ SKIP   BBRI  → Skip — DISTRIBUTING (asing net-jual)
+✗ SKIP   BBCA  → Skip — BEARISH + gap jauh di atas range
+✗ SKIP   CUAN  → Skip — DISTRIBUTING + FVWAP sell risk
 ```
 
-**Hasil:** hanya BBRI yang masuk watchlist hari ini, dengan ekspektasi terbatas.
+**Hasil:** BNBR dan BUMI masuk watchlist. Confirm-open command sudah otomatis di-generate di bawah tabel — isi harga pembukaan saat 09:00.
 
 ---
 
@@ -335,28 +320,31 @@ Sebelum pasar buka, siapkan mental order plan untuk setiap kandidat di watchlist
 
 ### Template Per Saham
 
+Ambil data dari output screener — kolom ENTRY-RANGE dan STOP%:
+
 ```
-TICKER: BBRI
+TICKER: BNBR  (★ PRIME)
 ────────────────────────────────────────
-Entry Range : 2,768 – 2,992
-Suggest     : 2,900
-ATR Stop    : 2,788
-Stop%       : -3.9%
-Prev H (target) : 2,910
-Prev L (support): 2,730
+Entry Range : 104 – 116          (dari ENTRY-RANGE)
+Stop%       : -7.2%              (dari STOP%)
+Prev H      : 114                (dari SIGNAL: PH:114)
 
-Skenario kalau open DALAM range (2,768–2,992):
-  → Pasang limit buy di 2,900
-  → Set stop di 2,788 segera setelah terisi
-  → Target awal: Prev H 2,910
+Skenario kalau open DALAM range (104–116):
+  → confirm-open akan output ENTER
+  → Pasang limit buy di harga yang ditampilkan confirm-open
+  → Set stop segera setelah terisi
+  → Target awal: Prev H 114
 
-Skenario kalau open DI ATAS 2,992:
-  → Tidak masuk — tunggu confirm-open output SKIP_GAP_UP
+Skenario kalau open DI ATAS 116:
+  → confirm-open akan output SKIP (gap up)
 
-Skenario kalau open DI BAWAH 2,768:
-  → Tidak masuk — ada tekanan jual, SKIP_GAP_DOWN
+Skenario kalau open DI BAWAH 104:
+  → confirm-open akan output SKIP (gap down)
 ────────────────────────────────────────
 ```
+
+> **Catatan:** Kamu tidak perlu hitung SUGGEST atau ATR-STOP manual lagi —
+> confirm-open langsung menampilkan "Limit BUY X | Stop Y" setelah kamu input opening price.
 
 ### Hitung Position Size
 
@@ -391,34 +379,47 @@ saham intraday confirm-open \
 
 ### Contoh Output Confirm-Open
 
-```
-========================================================
-INTRADAY CONFIRMATION — 2026-06-13
-========================================================
-TICKER  DECISION          OPEN    ENTRY   STOP   STOP%  REASON
-BBRI    ENTER           2,870   2,900   2,788  -3.9%  open in range, BULLISH trend
-========================================================
+Output sekarang dikelompokkan per aksi — tidak perlu membaca tabel:
 
-Next steps:
-  BBRI ENTER → place limit buy at 2,900, set stop at 2,788
 ```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 2026-06-13  INTRADAY CONFIRMATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ ▶ ENTER  (act now)
+   BNBR    open 110  in range 104–116
+   → Limit BUY 110  |  Stop 103 (-6.4%)  |  Target: Prev H 114
+   BUMI    open 158  in range 149–165
+   → Limit BUY 158  |  Stop 147 (-7.0%)  |  Target: Prev H 162
+
+ ✗ SKIP  (do not enter)
+   BBRI    broker context is DISTRIBUTING
+   BBCA    pre-open trend is BEARISH
+   CUAN    broker context is DISTRIBUTING
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  saham intraday log   (record this session)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+**Harga limit buy dan stop sudah dihitung otomatis.** Kamu hanya perlu:
+1. Buka aplikasi broker
+2. Pasang limit buy di harga yang tertera
+3. Set stop segera setelah terisi
 
 ---
 
 ### Keputusan dan Aksi
 
-| Decision | Artinya | Yang Kamu Lakukan |
-|----------|---------|------------------|
-| `ENTER` | Semua gate pass + BULLISH | Pasang limit buy di ENTRY, set stop di STOP segera setelah terisi |
-| `WAIT` | Gap oke tapi NEUTRAL trend | Pantau 10–15 menit. Masuk kalau harga naik dengan volume. Kalau tidak, lewati. |
-| `SKIP_GAP_UP` | Opening terlalu tinggi dari range | Tidak masuk — harga sudah ahead of value |
-| `SKIP_GAP_DOWN` | Opening terlalu rendah dari range | Tidak masuk — ada tekanan jual |
-| `SKIP_BEARISH_CONTEXT` | Trend BEARISH atau DISTRIBUTING | Tidak masuk — tidak ada alasan long |
-| `SKIP_RISK_TOO_WIDE` | Stop > 7% dari opening | Tidak masuk — risiko terlalu besar |
+| Group | Artinya | Yang Kamu Lakukan |
+|-------|---------|------------------|
+| `▶ ENTER` | Semua gate pass | Pasang limit buy di harga ENTER, set stop segera setelah terisi |
+| `◎ WAIT` | Opening dalam range tapi trend NEUTRAL | Pantau 15 menit. Masuk hanya kalau harga holds above range_low dengan volume. |
+| `✗ SKIP` | Berbagai alasan (distributing, bearish, gap, stop terlalu wide) | Tidak masuk — alasan ditampilkan per ticker |
 
 **Aturan keras:**
-- Kalau output `SKIP_*` → tidak ada pengecualian
-- Kalau `WAIT` dan tidak ada konfirmasi naik dalam 15 menit → jadikan SKIP
+- Kalau output `✗ SKIP` → tidak ada pengecualian
+- Kalau `◎ WAIT` dan tidak ada konfirmasi dalam 15 menit → skip
 - Jangan masuk setelah 09:30 untuk strategi pre-open ini
 
 ---
@@ -531,20 +532,20 @@ Potong dan tempel di terminal kamu.
 │    saham stockbit fetch-top5                ← lihat data    │
 │    saham intraday pre-open --fast           ← manual/cepat  │
 ├─────────────────────────────────────────────────────────────┤
-│  08:50  Evaluasi output                                     │
-│    ✓ BULLISH + BACKED + FVWAP floor → kandidat kuat         │
-│    ~ BULLISH + UNCONFIRMED → kandidat sedang                │
-│    ~ NEUTRAL → perlu konfirmasi                             │
-│    ✗ BEARISH / DISTRIBUTING / No data → skip                │
+│  08:50  Baca VERDICT (kolom pertama)                        │
+│    ★ PRIME   → watchlist prioritas                          │
+│    ◉ WATCH   → watchlist, konfirmasi di 09:00               │
+│    ✗ SKIP    → tidak masuk, tidak dipikirkan lagi           │
+│    ? NO_DATA → saham fetch TICKER malam ini                 │
 ├─────────────────────────────────────────────────────────────┤
-│  09:00  Confirm-open (masukkan opening prices aktual)       │
+│  09:00  Isi opening prices dari WATCHLIST template          │
 │    saham intraday confirm-open \                            │
-│      --opening-json '{"BBRI":2870,"BBCA":5200}'             │
+│      --opening-json '{"BNBR":___,"BUMI":___}'              │
 ├─────────────────────────────────────────────────────────────┤
-│  09:00–09:05  Eksekusi                                      │
-│    ENTER → limit buy di ENTRY, stop di STOP (langsung!)     │
-│    WAIT  → pantau 15 menit, skip kalau tidak naik           │
-│    SKIP_* → tidak masuk, tanpa pengecualian                 │
+│  09:00–09:05  Eksekusi dari output confirm-open             │
+│    ▶ ENTER → limit buy & stop sudah tertera, pasang langsung│
+│    ◎ WAIT  → pantau 15 menit, entry kalau holds above range │
+│    ✗ SKIP  → tidak masuk, tanpa pengecualian                │
 ├─────────────────────────────────────────────────────────────┤
 │  Setelah sesi                                               │
 │    saham intraday log                                       │

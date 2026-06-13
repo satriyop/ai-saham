@@ -520,89 +520,90 @@ saham intraday review
 
 ## 7. Membaca Output Pre-Open
 
-Contoh output lengkap dengan semua fitur baru:
+Output pre-open sekarang menggunakan layout **VERDICT-first** — satu baris per ticker, diurutkan dari setup terkuat ke terlemah. VERDICT sudah mensintesis semua sinyal sehingga kamu tidak perlu membaca setiap kolom secara manual.
 
 ```
-==========================================================================================
 PRE-OPEN SCREENER RESULTS
-==========================================================================================
 Date: 2026-06-12   IEV filter: >= 100,000
 Movers evaluated: 5   Candidates: 5
 
-TICKER        IEV    GAP%           ENTRY-RANGE    SUGGEST   ATR-STOP   STOP%    RSI  TREND
+VERDICT    TICKER      IEV    GAP%     ENTRY-RANGE   STOP%   RSI  SIGNAL
 ------------------------------------------------------------------------------------------
-BBCA      450,000   +1.1%           4,892–5,408      5,200      4,904   -5.7%     52  BULLISH
-  Prev H:5,150  L:4,820
-  ACCUM: BACKED 72pts streak:5d   FVWAP: +3.2% (floor)
-BMRI      320,000   +0.8%           4,132–4,388      4,290      4,148   -3.3%     56  BULLISH
-  Prev H:4,260  L:4,050
-  ACCUM: UNCONFIRMED 28pts   FVWAP: -0.5%
-TLKM      195,000   +4.5%           2,670–2,950      2,830      2,669   -5.7%     47  BEARISH
-  Prev H:2,810  L:2,500
-  ACCUM: DISTRIBUTING 5pts   FVWAP: -5.8% (sell risk)
-BBRI      167,000   +1.2%           4,800–5,280      5,020      4,850   -3.4%     61  BULLISH
-  Prev H:5,100  L:4,900
-  ACCUM: BACKED 58pts streak:3d   FVWAP: +1.8% (floor)
-ASII      134,000     —             4,270–4,730      4,494      4,325   -3.8%     44  BULLISH
-  Prev H:4,600  L:4,350
-  ACCUM: BACKED 51pts streak:2d   FVWAP: +0.9% (floor)
+★ PRIME   BBCA    450,000   +1.1%     4,892–5,408   -5.7%    52  BACKED×5d  +3.2% floor  PH:5,150
+★ PRIME   BBRI    167,000   +1.2%     4,800–5,280   -3.4%    61  BACKED×3d  +1.8% floor  PH:5,100
+◉ WATCH   ASII    134,000     —       4,270–4,730   -3.8%    44  BACKED×2d  +0.9% floor  PH:4,600
+◉ WATCH   BMRI    320,000   +0.8%     4,132–4,388   -3.3%    56  UNCONFIR  -0.5%
+✗ SKIP    TLKM    195,000   +4.5%     2,670–2,950   -5.7%    47  DISTRIBU  -5.8% sell  PH:2,810
+------------------------------------------------------------------------------------------
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ WATCHLIST  ★ BBCA  ★ BBRI  ◉ ASII  ◉ BMRI
+ SKIP       TLKM
+
+ At 09:00, fill opening prices and run:
+   saham intraday confirm-open \
+     --opening-json '{"BBCA":___,"BBRI":___,"ASII":___,"BMRI":___}'
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
-**Analisis per baris:**
+**Cara membaca VERDICT:**
 
-| Saham | Evaluasi | Keputusan pre |
-|-------|---------|---------------|
-| BBCA | BACKED 72pts + FVWAP floor + BULLISH + gap kecil | **Kandidat terkuat** |
-| BBRI | BACKED 58pts + FVWAP floor + BULLISH | **Kandidat kuat** |
-| ASII | BACKED 51pts + FVWAP floor (tipis) + BULLISH + fast mode | **Kandidat bagus** |
-| BMRI | UNCONFIRMED + FVWAP netral | **Perlu konfirmasi** |
-| TLKM | Gap 4.5% di atas band + DISTRIBUTING + FVWAP sell risk | **Skip** |
+| VERDICT | Artinya | Aksi |
+|---------|---------|------|
+| `★ PRIME` | BULLISH + BACKED + FVWAP floor + range valid | Watchlist prioritas |
+| `◉ WATCH` | Bullish tapi belum semua sinyal hijau | Watchlist, konfirmasi di 09:00 |
+| `✗ SKIP` | BEARISH atau DISTRIBUTING atau gap di luar range | Tidak masuk |
+| `? NO_DATA` | Tidak ada data ATR lokal | `saham fetch TICKER` malam ini |
 
 **Penjelasan kolom:**
 
 | Kolom | Penjelasan |
 |-------|-----------|
-| `TICKER` | Kode saham IDX |
+| `VERDICT` | Sinyal sintesis — baca kolom ini saja untuk keputusan utama |
 | `IEV` | Volume expected. Makin tinggi = makin likuid |
 | `GAP%` | Selisih pre-open bid vs kemarin. `—` = fast mode |
-| `ENTRY-RANGE` | ATR-scaled band. **Masuk hanya kalau opening di sini** |
-| `SUGGEST` | Limit order awal = prev_close + 0.5% |
-| `ATR-STOP` | Pasang stop di sini segera setelah masuk |
-| `STOP%` | % rugi kalau stop kena |
-| `RSI` | Momentum. > 75 = overbought (BEARISH) |
-| `TREND` | BULLISH/NEUTRAL/BEARISH berdasarkan RSI + gap% |
-| `Prev H/L` | Resistance (H) dan support (L) kemarin |
-| `ACCUM` | BACKED/UNCONFIRMED/DISTRIBUTING + score + streak |
-| `FVWAP` | Discount% foreigners. Positif = floor, negatif besar = sell risk |
+| `ENTRY-RANGE` | ATR-scaled band. Dikonfirmasi oleh confirm-open di 09:00 |
+| `STOP%` | % rugi kalau stop kena (ATR-based, capped -7%) |
+| `RSI` | Momentum. > 75 = overbought |
+| `SIGNAL` | ACCUM tag × streak + FVWAP% + PH (Prev High target) |
 
 ---
 
 ## 8. Membaca Output Confirm-Open
 
-Setelah kamu jalankan `saham intraday confirm-open`:
+Setelah kamu jalankan `saham intraday confirm-open`, output dikelompokkan per aksi:
 
 ```
-========================================================
-INTRADAY CONFIRMATION — 2026-06-12
-========================================================
-TICKER  DECISION          OPEN    ENTRY   STOP   STOP%  REASON
-BBCA    ENTER           5,175   5,200   4,904  -5.7%  open in range, BULLISH, BACKED
-BBRI    ENTER           5,050   5,020   4,850  -3.4%  open in range, BULLISH, BACKED
-ASII    WAIT            4,500   4,494   4,325  -3.8%  open in range, NEUTRAL trend
-BMRI    SKIP_GAP_UP     4,450       —       —     —   open 4450 above range high 4388
-TLKM    SKIP_BEARISH_CONTEXT  2,800       —       —     —  DISTRIBUTING broker context
-========================================================
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 2026-06-12  INTRADAY CONFIRMATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ ▶ ENTER  (act now)
+   BBCA    open 5,175  in range 4,892–5,408
+   → Limit BUY 5,200  |  Stop 4,904 (-5.7%)  |  Target: Prev H 5,150
+   BBRI    open 5,050  in range 4,800–5,280
+   → Limit BUY 5,020  |  Stop 4,850 (-3.4%)  |  Target: Prev H 5,100
+
+ ◎ WAIT  (monitor 15 min — skip if no direction)
+   ASII    open 4,500  in range 4,270–4,730
+   → Watch volume. Enter only if holds above 4,270 with uptick.
+
+ ✗ SKIP  (do not enter)
+   BMRI    open 4450 above range high 4388
+   TLKM    broker context is DISTRIBUTING
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  saham intraday log   (record this session)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
-**Apa yang kamu lakukan sekarang:**
+**Apa yang kamu lakukan:**
 
-- **BBCA ENTER**: Pasang limit buy di 5,200. Begitu terisi, set stop di 4,904.
-- **BBRI ENTER**: Pasang limit buy di 5,020. Begitu terisi, set stop di 4,850.
-- **ASII WAIT**: Pantau 15 menit. Kalau harga bergerak naik dengan volume, pertimbangkan masuk.
-- **BMRI SKIP_GAP_UP**: Sudah terlambat. Opening 4,450 di atas range — tidak masuk.
-- **TLKM SKIP_BEARISH_CONTEXT**: DISTRIBUTING + gap besar. Tidak ada alasan masuk long.
+- **▶ ENTER**: Buka broker, pasang limit buy di harga yang tertera, set stop segera setelah terisi.
+- **◎ WAIT**: Pantau 15 menit. Entry hanya kalau harga holds above range_low dengan volume. Skip kalau tidak ada gerakan.
+- **✗ SKIP**: Tidak masuk — alasan ditampilkan per ticker. Tidak ada pengecualian.
 
-**Penting:** Jangan masuk di saham yang di-SKIP. Odds tidak menguntungkan.
+**Penting:** Harga limit buy dan stop sudah dihitung otomatis. Kamu tidak perlu kalkulasi manual.
 
 ---
 
@@ -611,22 +612,16 @@ TLKM    SKIP_BEARISH_CONTEXT  2,800       —       —     —  DISTRIBUTING br
 ### Checklist Sebelum Masuk (semua harus terpenuhi)
 
 ```
-□ confirm-open output: ENTER atau WAIT
-□ Opening price dalam ENTRY-RANGE
-□ TREND bukan BEARISH
-□ ACCUM bukan DISTRIBUTING
-□ Kamu sudah tahu di mana stop-loss kamu (ATR-STOP)
+□ confirm-open output: ▶ ENTER atau ◎ WAIT
+□ Stop-loss sudah tertera di confirm-open output — catat sebelum pasang order
 □ Modal per trade tidak lebih dari 10% total modal kamu
 □ Tidak ada berita besar yang belum kamu baca
 ```
 
 ### Langsung Lewati Kalau:
 
-- `SKIP_GAP_UP`: Opening sudah terlalu tinggi, banyak penjual di atas
-- `SKIP_GAP_DOWN`: Sentimen negatif, ada alasan kuat untuk harga turun
-- `SKIP_BEARISH_CONTEXT`: RSI overbought, atau asing net-jual
-- `SKIP_RISK_TOO_WIDE`: Stop terlalu jauh, risk/reward tidak masuk akal
-- `WAIT` + tidak ada konfirmasi naik dalam 15 menit → skip
+- `✗ SKIP` (alasan apapun) — tidak ada pengecualian
+- `◎ WAIT` + tidak ada konfirmasi naik dalam 15 menit → skip
 
 ### Situasi Khusus
 
