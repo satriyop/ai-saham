@@ -13,6 +13,13 @@ from plugins.indicators.bollinger_bands import (
 )
 from plugins.indicators.stochastic import StochasticIndicator
 from plugins.indicators.foreign_vwap import ForeignVWAPIndicator
+from plugins.indicators.ichimoku import (
+    IchimokuTenkan,
+    IchimokuKijun,
+    IchimokuSpanA,
+    IchimokuSpanB,
+    IchimokuChikou,
+)
 
 __all__ = [
     "MACDIndicator",
@@ -22,4 +29,9 @@ __all__ = [
     "BollingerWidthIndicator",
     "StochasticIndicator",
     "ForeignVWAPIndicator",
+    "IchimokuTenkan",
+    "IchimokuKijun",
+    "IchimokuSpanA",
+    "IchimokuSpanB",
+    "IchimokuChikou",
 ]
