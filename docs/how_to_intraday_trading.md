@@ -16,7 +16,7 @@
 9. [Kapan Harus Masuk, Kapan Harus Lewat](#9-kapan-harus-masuk-kapan-harus-lewat)
 10. [Manajemen Risiko](#10-manajemen-risiko)
 11. [Journal — Validasi Sebelum Uang Sungguhan](#11-journal--validasi-sebelum-uang-sungguhan)
-12. [Catatan tentang Stockbit Adapter](#12-catatan-tentang-stockbit-adapter)
+12. [Stockbit Adapter — Setup dan Penggunaan](#12-stockbit-adapter--setup-dan-penggunaan)
 13. [Kesalahan Umum Pemula](#13-kesalahan-umum-pemula)
 14. [Glosarium](#14-glosarium)
 
@@ -387,55 +387,76 @@ Refresh data harga + broker flow. Kalau sudah fresh (< 5 hari), otomatis di-skip
 
 ---
 
-### 08:30–08:45 — Persiapan di Browser
+### Setup Satu Kali — Login Stockbit (kalau belum pernah atau sesi expired)
 
-Buka Stockbit. Navigasi ke Screener → Movers section. Catat ticker dan IEV:
-
-```json
-[
-  {"ticker": "BBCA", "iev": 450000},
-  {"ticker": "BMRI", "iev": 320000},
-  {"ticker": "TLKM", "iev": 195000},
-  {"ticker": "BBRI", "iev": 167000},
-  {"ticker": "ASII", "iev": 134000}
-]
+```bash
+saham stockbit login
 ```
 
-**Mode Normal (lebih akurat):** Juga ambil order book untuk setiap ticker — buka `stockbit.com/#/stock/BBCA/orderbook`, catat bid terbesar:
-
-```json
-{
-  "BBCA": {"price": 5150, "volume": 25000},
-  "BMRI": {"price": 4275, "volume": 18000}
-}
-```
-
-**Mode Fast (lebih cepat, ~15 detik):** Cukup data IEV saja.
+Sesi tersimpan di `.stockbit_profile/`. Tidak perlu diulang setiap hari kecuali expired.
 
 ---
 
 ### 08:45–08:55 — Jalankan Pre-Open Screener
 
-**Mode Fast:**
+Ada tiga cara, pilih yang sesuai situasi:
+
+---
+
+#### Cara 1 — Autonomous (Direkomendasikan)
+
+Satu perintah, tidak perlu buka browser manual:
+
+```bash
+saham intraday pre-open --top 5
+```
+
+Tool otomatis fetch IEV movers + orderbook dari Stockbit, lalu tampilkan hasil screening. Butuh `.stockbit_profile/` valid (lihat login di atas).
+
+---
+
+#### Cara 2 — Fetch Data Dulu, Screener Terpisah
+
+Berguna kalau mau lihat raw data IEV + orderbook sebelum diproses:
+
+```bash
+# Langkah 1: ambil top 5 IEV + orderbook
+saham stockbit fetch-top5
+
+# Contoh output:
+#   1  BUMI   972,420   bid=156 (409K lots)   offer=157 (303K lots)
+#   2  BBRI   373,423   bid=2,850 (219K lots)  offer=2,860 (2.7K lots)
+#   ...
+
+# Langkah 2: jalankan screener dengan data yang sudah terlihat
+saham intraday pre-open \
+  --movers-json '[{"ticker":"BUMI","iev":972420},{"ticker":"BBRI","iev":373423}]' \
+  --order-books-json '{"BUMI":{"price":156,"volume":409437},"BBRI":{"price":2850,"volume":219024}}'
+```
+
+---
+
+#### Cara 3 — Fast Mode (Input Manual, Tanpa Orderbook)
+
+Kalau Playwright tidak tersedia atau preferensi manual:
+
 ```bash
 saham intraday pre-open \
   --movers-json '[{"ticker":"BBCA","iev":450000},{"ticker":"BMRI","iev":320000}]' \
   --fast
 ```
 
-**Mode Normal (dengan order book):**
+Data IEV diambil manual dari Stockbit web (Movers → IEP/IEV tab). Fast mode tidak membutuhkan data orderbook (~15 detik total).
+
+---
+
+#### Override Threshold
+
 ```bash
-saham intraday pre-open \
-  --movers-json '[{"ticker":"BBCA","iev":450000},{"ticker":"BMRI","iev":320000}]' \
-  --order-books-json '{"BBCA":{"price":5150,"volume":25000},"BMRI":{"price":4275,"volume":18000}}'
+saham intraday pre-open --top 3 --max-gap 0.05 --atr-mult 1.5
 ```
 
-**Override threshold:**
-```bash
-saham intraday pre-open --movers-json '...' --top 3 --max-gap 0.05 --atr-mult 1.5
-```
-
-Catat: entry range, ATR stop, dan sinyal ACCUM/FVWAP per saham.
+Catat output: entry range, ATR stop, dan sinyal ACCUM/FVWAP per saham.
 
 ---
 
@@ -701,38 +722,114 @@ Dari breakdown ini kamu tahu: BACKED + FVWAP floor meningkatkan win rate. Data i
 
 ---
 
-## 12. Catatan tentang Stockbit Adapter
+## 12. Stockbit Adapter — Setup dan Penggunaan
 
-### Mode Manual (Direkomendasikan)
+Adapter Stockbit menggunakan Playwright untuk mengakses Exodus API (API internal Stockbit) secara langsung. **Semua mode sudah diverifikasi bekerja** — tidak ada kalibrasi manual yang dibutuhkan.
 
-Mode `--movers-json` dan `--order-books-json` adalah mode yang **sudah tested dan bekerja dengan baik**. Kamu input data yang kamu ambil manual dari Stockbit.
+---
 
-Ini intentional — tool sengaja dirancang untuk bekerja dengan data yang kamu validasi sendiri.
-
-### Mode Autonomous (Playwright — Status: Butuh Kalibrasi)
+### Setup Satu Kali — Login Stockbit
 
 ```bash
-saham intraday save-session    # Simpan session login Stockbit
-saham intraday pre-open        # Jalankan tanpa --movers-json
+saham stockbit login
 ```
 
-**Status saat ini:** Implementasi Playwright ada tapi belum dikalibrasi terhadap DOM aktual Stockbit. Stockbit adalah React SPA dengan struktur DOM yang bisa berubah setiap update.
+Ini membuka browser Chrome. Login manual seperti biasa (termasuk 2FA kalau ada). Setelah berhasil, sesi tersimpan di `.stockbit_profile/` dan **tidak perlu login ulang** selama sesi masih valid.
 
-**Kemungkinan penyebab gagal:**
-1. Selector `table tbody tr` tidak cocok — Stockbit mungkin pakai `div` bukan `table`
-2. Kolom IEV bukan di posisi terakhir (`cells[-1]`)
-3. Order book structure berbeda dari yang diasumsikan
-
-**Cara debug kalau mau mencoba:**
 ```bash
-# Jalankan dengan headless=false untuk lihat apa yang terjadi:
-saham intraday pre-open --no-headless
-
-# Cek apakah session tersimpan:
-cat stockbit_session.json | python3 -c "import json,sys; d=json.load(sys.stdin); print(len(d['cookies']), 'cookies')"
+saham stockbit status    # Cek apakah sesi masih valid
 ```
 
-**Jika autonomous mode gagal:** gunakan mode manual — buka Stockbit di browser, ambil data movers dan order book, lalu jalankan dengan `--movers-json`.
+Output contoh:
+```
+Stockbit Session Status
+========================================
+  Type   : persistent browser profile (recommended)
+  Saved  : 2.5h ago
+  Status : likely valid
+```
+
+---
+
+### Perintah Stockbit
+
+| Perintah | Fungsi |
+|----------|--------|
+| `saham stockbit login` | Login manual (satu kali, atau kalau sesi expired) |
+| `saham stockbit status` | Cek kesehatan sesi tanpa buka browser |
+| `saham stockbit fetch-top5` | Ambil top-N IEV + orderbook dalam satu sesi browser |
+| `saham stockbit test` | Smoke test: verifikasi movers + orderbook bekerja |
+| `saham stockbit spy` | Capture semua API traffic (untuk debugging) |
+
+---
+
+### `saham stockbit fetch-top5` — Siapkan Data Pre-Open Secara Otomatis
+
+Membuka browser sekali, mengambil token dari session aktif, memanggil Exodus API untuk IEV movers dari semua board, lalu mengambil orderbook untuk top-N ticker — semuanya dalam satu sesi.
+
+```bash
+saham stockbit fetch-top5           # top 5 (default)
+saham stockbit fetch-top5 --top 10  # top 10
+saham stockbit fetch-top5 --no-headless  # lihat proses di browser
+```
+
+Contoh output:
+```
+  #    TICKER            IEV     BEST BID     LOTS   BEST OFFER     LOTS
+  --------------------------------------------------------------------
+  1    BUMI          972,420          156   409,437          157   303,382
+  2    BNBR          428,497          109    32,009          110   102,408
+  3    BBRI          373,423        2,850   219,024        2,860     2,772
+  4    BBCA          297,068        5,925    33,568        5,950       502
+  5    CUAN          281,822          715     2,923          720    21,487
+```
+
+Gunakan output ini sebagai input ke `saham intraday pre-open` (lihat Workflow di Bagian 6).
+
+---
+
+### Mode Autonomous `saham intraday pre-open`
+
+Kalau `.stockbit_profile/` ada dan valid, pre-open berjalan **sepenuhnya otomatis**:
+
+```bash
+saham intraday pre-open --top 5
+```
+
+Output langsung:
+```
+Playwright session found — running autonomously...
+```
+
+Tool otomatis fetch IEV movers dari semua board (main + special monitoring board), ambil orderbook per ticker, lalu jalankan screener — tanpa input JSON manual.
+
+---
+
+### Endpoint Exodus API yang Dikonfirmasi (DevTools, 2026-06-13)
+
+| Data | Endpoint |
+|------|---------|
+| IEV Movers (main boards) | `order-trade/market-mover?mover_type=MOVER_TYPE_IEV_TOP_GAINER` + `filter_stocks=FILTER_STOCKS_TYPE_MAIN_BOARD` (+ dev/acc/neo) |
+| IEV Movers (special monitoring) | `order-trade/market-mover?mover_type=MOVER_TYPE_IEV_TOP_GAINER&filter_stocks=FILTER_STOCKS_TYPE_SPECIAL_MONITORING_BOARD` |
+| Orderbook per ticker | `company-price-feed/v2/orderbook/companies/{TICKER}` |
+
+Field response yang digunakan:
+- **IEV**: `item.iepiev_detail.iev.raw`
+- **Ticker**: `item.stock_detail.code`
+- **Best bid price / lots**: `data.iepiev.best_bid_offer.bid.price.raw` / `.quantity.raw`
+- **Best offer price / lots**: `data.iepiev.best_bid_offer.offer.price.raw` / `.quantity.raw`
+
+---
+
+### Debugging
+
+```bash
+saham stockbit spy --wait 10                        # Lihat semua API request
+saham stockbit spy --target orderbook --ticker BBCA # Spy khusus orderbook
+saham intraday pre-open --no-headless --top 3       # Lihat browser saat berjalan
+```
+
+Kalau sesi expired: `saham stockbit login`.
 
 ---
 
@@ -804,11 +901,14 @@ FVWAP -5.8% bukan hanya "kurang ideal" — artinya asing duduk di profit besar d
 Workflow lengkap intraday dengan tool ini:
 
 ```
-Malam sebelum  : saham update --universe lq45
-08:30–08:45    : buka Stockbit, catat IEV + order book
-08:45–08:55    : saham intraday pre-open --movers-json '...'
-09:00–09:05    : saham intraday confirm-open --opening-json '...'
-Setelah trading: saham intraday log && saham intraday outcome TICKER --entry X --exit Y
+Setup (sekali)  : saham stockbit login
+Malam sebelum   : saham update --universe lq45
+08:45–08:55     : saham intraday pre-open --top 5          ← autonomous
+   atau          : saham stockbit fetch-top5                ← lihat data dulu
+                  saham intraday pre-open --movers-json '...' --order-books-json '...'
+09:00–09:05     : saham intraday confirm-open --opening-json '...'
+Setelah trading : saham intraday log && saham intraday outcome TICKER --entry X --exit Y
+Evaluasi berkala: saham intraday review
 ```
 
 Mulai dengan paper trade 20–30 sesi. Gunakan `saham intraday review` untuk evaluasi objektif. Data akurat lebih berharga dari keyakinan — ikuti angka, bukan perasaan.

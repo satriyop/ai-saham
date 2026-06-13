@@ -83,7 +83,7 @@ Each trading day produces these 5 values:
 ### Basic Usage
 
 ```bash
-# Fetch 1 year of data (default)
+# Fetch 1 year of data (default, Yahoo Finance)
 saham fetch BBCA
 
 # Fetch 2 years for longer analysis
@@ -91,6 +91,9 @@ saham fetch BBRI --days 730
 
 # Force re-download (ignore cache)
 saham fetch TLKM --refresh
+
+# Use IDX public API directly
+saham fetch BBCA --provider idx
 ```
 
 ### When to Use Each Option
@@ -99,6 +102,7 @@ saham fetch TLKM --refresh
 |--------|-------------|------------------|
 | `--days 730` | Need longer history | "Analyze 2-year trend" |
 | `--refresh` | Data seems stale | "Stock moved but data unchanged" |
+| `--provider idx` | Yahoo is unreliable | "Use IDX public API" |
 | `--db path/to/file.db` | Multiple portfolios | Separate DBs for different accounts |
 
 ### Output Explained
@@ -111,7 +115,7 @@ Source: yahoo_finance
 Records: 252
 Date range: 2024-01-02 to 2025-01-24
 
-Database: /Users/you/.ai-saham/data.db
+Database: /path/to/project/data.db
 
 Latest (2025-01-24):
   Open:        10,575
@@ -271,7 +275,7 @@ saham compute EMA BBRI --period 20 --days 180 --tail 50
 | `--period` | `-p` | 14 | Period for the indicator (ignored for formulas) |
 | `--days` | `-d` | 365 | Days of data to use |
 | `--tail` | `-t` | 30 | Show last N values |
-| `--db` | | ~/.ai-saham/data.db | Database path |
+| `--db` | | ./data.db | Database path |
 
 **Output Example:**
 
@@ -312,6 +316,9 @@ saham indicators BBCA
 
 # Custom periods for your strategy
 saham indicators BBRI --sma 50 --ema 50 --rsi 7
+
+# JSON output for programmatic use
+saham indicators BBCA --format json
 ```
 
 **Reading Combined Output:**
@@ -453,6 +460,12 @@ saham sentiment BBCA --days 7
 
 # Use AI for classification (more nuanced)
 saham sentiment BBCA --ai-classify
+
+# Choose news source
+saham sentiment BBCA --news-provider google
+
+# Offline keyword classification
+saham sentiment BBCA --no-ai
 ```
 
 ### Options Explained
@@ -462,6 +475,8 @@ saham sentiment BBCA --ai-classify
 | `--days 7` | Fetch 7 days of news | Need more context |
 | `--max 30` | Limit to 30 headlines | Faster analysis |
 | `--ai-classify` | Use AI instead of keywords | Need nuance (e.g., sarcasm) |
+| `--news-provider` | News source (composite, google, kontan, cnbc, mock) | Choose source |
+| `--no-ai` | Offline keyword classification | No API key, faster |
 | `--provider ollama` | Use local Ollama | Privacy, no API key |
 
 ### Output Interpretation
@@ -492,6 +507,17 @@ Recent Headlines:
 - `[=]` Neutral - No clear impact
 - `[-]` Negative - Bad news for the stock
 
+### Risk Trend Over Time
+
+Track how risk levels have been evolving:
+
+```bash
+# Show risk history for last 20 days
+saham risk BBCA --trend 20
+```
+
+Output shows the risk level and confidence for each day plus a trend direction (↑ IMPROVING, ↓ DETERIORATING, → STABLE).
+
 ### Adding Sentiment to Risk Assessment
 
 ```bash
@@ -499,6 +525,33 @@ saham risk BBCA --with-sentiment
 ```
 
 This adds a sentiment section to the risk output, but remember: sentiment is contextual information only and does NOT change the risk level.
+
+### JSON Output
+
+```bash
+saham risk BBCA --format json
+```
+
+Useful for programmatic consumption or piping to other tools.
+
+### Additional Risk Options
+
+| Option | Purpose |
+|--------|---------|
+| `--trend N` | Show risk trend over last N days |
+| `--format table/json` | Output format |
+| `--news-provider` | News source: composite, google, kontan, cnbc |
+| `--no-ai` | Disable AI classification for sentiment |
+
+### Sentiment Accuracy Audit
+
+Audit past sentiment predictions against actual price moves:
+
+```bash
+saham sentiment-audit
+```
+
+Uses logged sentiment data (stored automatically in SQLite) and checks whether POSITIVE/NEUTRAL/NEGATIVE classifications were correct after 1, 3, and 5 trading days.
 
 ---
 
@@ -557,28 +610,34 @@ saham broker fetch BBCA --refresh
 | `--end` | `-e` | — | End date (YYYY-MM-DD) |
 | `--refresh` | `-r` | false | Force refresh from provider |
 | `--provider` | `-P` | idx | Data provider (idx, stockbit) |
-| `--db` | | ~/.ai-saham/data.db | Database path |
+| `--db` | | ./data.db | Database path |
 
 ### Setting Up Stockbit (Optional)
 
-Only needed if you want per-broker breakdown data (top buyers/sellers):
+Only needed if you want per-broker breakdown data (top buyers/sellers). Stockbit now uses **browser session cookies** (Playwright-based) instead of JWT tokens:
 
 ```bash
-# Step 1: Get your token from Stockbit
-# 1. Login to stockbit.com
-# 2. Open DevTools (F12) → Network tab
-# 3. Click any stock ticker
-# 4. Filter for "exodus" requests
-# 5. Copy the Bearer token from Authorization header
+# Install browser automation dependencies
+pip install -e ".[browser]"
+playwright install chromium
 
-# Step 2: Configure the token
-saham broker auth "eyJhbGciOiJSUzI1NiIsInR5cCI6..."
+# Step 1: Login via browser (opens a Chromium window)
+saham stockbit login
 
-# Step 3: Verify it works
-saham broker status
+# The browser stays open until you log in to stockbit.com.
+# Once logged in, cookies are saved automatically.
+# Use --timeout 300 if you have 2FA.
+
+# Step 2: Check session health
+saham stockbit status
+
+# Step 3: Smoke test the adapter
+saham stockbit test
 ```
 
-**Note:** Tokens expire in ~24 hours. You'll need to refresh periodically.
+**Legacy token auth** is still supported via `saham broker auth <token>` but the browser session method is recommended as it avoids manual token extraction.
+
+**Note:** Browser sessions may expire. Run `saham stockbit status` to check, and `saham stockbit login` to refresh.
 
 ### Viewing Foreign Flow
 
@@ -866,6 +925,7 @@ saham backtest ASII -r rules.yaml --capital 50000000
 | `--end` | End date | `--end 2024-12-31` |
 | `--capital` | Initial capital (IDR) | `--capital 50000000` |
 | `--verbose` | Show each trade | Debug your strategy |
+| `--format` | Output format | `--format json` |
 
 ### Strategy Resolution
 
@@ -982,7 +1042,7 @@ These are always available without definition in your rules file:
 
 **Using Registered Formulas in Rules:**
 
-Any formula created via `create-indicator` and saved to `~/.ai-saham/formulas.yaml` can be used directly in rules without re-defining them:
+Any formula created via `create-indicator` and saved to `config/formulas.yaml` can be used directly in rules without re-defining them:
 
 ```yaml
 # First, create your formula once:
@@ -996,7 +1056,7 @@ default_outcome: MODERATE
 rules:
   - name: oversold
     when:
-      indicator: SMOOTH_RSI   # Uses formula from ~/.ai-saham/formulas.yaml
+      indicator: SMOOTH_RSI   # Uses formula from config/formulas.yaml
       operator: "<"
       value: 30
     outcome: LOW_RISK
@@ -1223,7 +1283,7 @@ saham strategy create "EMA crossover with 9 and 21 periods" \
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
 | `--name` | `-n` | auto-generated | Strategy name |
-| `--provider` | `-p` | mock | AI provider (claude/openai/gemini/ollama/mock) |
+| `--provider` | `-p` | mock | AI provider (deepseek/claude/openai/gemini/ollama/mock) |
 | `--model` | `-m` | provider default | Model name (for Ollama) |
 | `--dir` | `-d` | ./strategies/NAME | Directory to save strategy |
 | `--save/--no-save` | | save | Save to file or preview only |
@@ -1568,11 +1628,14 @@ saham risk BBCA --explain --provider ollama --model llama3:8b
 
 | Provider | Requires | Best For |
 |----------|----------|----------|
+| `deepseek` | `DEEPSEEK_API_KEY` | Default provider, cost-effective |
 | `claude` | `ANTHROPIC_API_KEY` | High-quality explanations |
 | `openai` | `OPENAI_API_KEY` | Widely available |
 | `gemini` | `GOOGLE_API_KEY` | Good free tier |
 | `ollama` | Local server | Privacy, no API costs |
 | `mock` | Nothing | Testing |
+
+**Default provider is `deepseek`.** Set `DEEPSEEK_API_KEY` in your environment.
 
 ### Setting Up Ollama (Local AI)
 
@@ -1601,27 +1664,14 @@ saham sentiment BBCA --ai-classify
 saham sentiment BBCA --ai-classify --provider ollama
 ```
 
-### AI Formula Translator (Programmatic)
+### AI Formula Translator (CLI)
 
 Don't know formula syntax? Describe what you want in plain English:
 
-```python
-from src.application.use_case.create_indicator_from_intent import (
-    CreateIndicatorFromIntentRequest,
-    CreateIndicatorFromIntentUseCase,
-)
-from src.infrastructure.ai import FormulaTranslatorFactory
-
-translator = FormulaTranslatorFactory.create(provider="ollama")
-use_case = CreateIndicatorFromIntentUseCase(translator=translator)
-
-response = use_case.execute(
-    CreateIndicatorFromIntentRequest(
-        intent="smoothed RSI with 14-period and 10-day smoothing"
-    )
-)
-
-print(response.formula)  # "SMA(RSI(14), 10)"
+```bash
+saham create-indicator "smoothed RSI with 14-period and 10-day smoothing" --name SMOOTH_RSI
+saham create-indicator "MACD line using 12 and 26 period EMAs" --name MACD --provider deepseek
+saham create-indicator "average true range over 14 days" --name ATR14 --no-save
 ```
 
 **Examples of what you can ask:**
@@ -1649,7 +1699,7 @@ Create, list, and manage custom indicators from the command line.
 Use AI to translate a description into a formula:
 
 ```bash
-# Basic usage (saves to ~/.ai-saham/formulas.yaml)
+# Basic usage (saves to config/formulas.yaml)
 saham create-indicator "smoothed RSI with 14-period and 10-day smoothing" --name SMOOTH_RSI
 
 # Specify AI provider
@@ -1665,10 +1715,10 @@ saham create-indicator "price distance from 50-day SMA" --no-save
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
 | `--name` | `-n` | auto-generated | Indicator name (uppercase) |
-| `--provider` | `-p` | mock | AI provider (claude/openai/gemini/ollama/mock) |
+| `--provider` | `-p` | mock | AI provider (deepseek/claude/openai/gemini/ollama/mock) |
 | `--model` | `-m` | provider default | Model name |
 | `--save/--no-save` | | save | Save formula to storage |
-| `--formulas` | | ~/.ai-saham/formulas.yaml | Custom storage path |
+| `--formulas` | | config/formulas.yaml | Custom storage path |
 
 ### `list-indicators` - View All Indicators
 
@@ -1732,7 +1782,326 @@ saham delete-indicator SMOOTH_RSI --force
 
 ---
 
-## 14. Complete Workflow Examples
+## 14. Batch Data Update - The `update` Command
+
+Keep your local data fresh with a single command. Fetches candles + broker flow for an entire universe.
+
+```bash
+# Update all LQ45 stocks (candles + broker flow)
+saham update --universe lq45
+
+# Update explicitly listed tickers
+saham update BBCA BBRI BMRI
+
+# Refresh only already-cached tickers
+saham update --universe cached
+
+# Force refresh all (ignore cache)
+saham update --universe lq45 --refresh
+
+# Broker flow only (skip candles)
+saham update --universe lq45 --broker-only
+
+# Use shorter history
+saham update --universe lq45 --days 30
+```
+
+**Why use this?** Instead of running `saham fetch TICKER` and `saham broker fetch TICKER` for every stock, this fetches everything for an entire universe in one pass. Run daily before morning screening.
+
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--universe` | `-u` | | Named universe: lq45, idx80, idxcomp100, cached |
+| `--days` | `-d` | 90 | Days of history to fetch |
+| `--candles-only` | | false | Skip broker flow fetch |
+| `--broker-only` | | false | Skip candles fetch |
+| `--provider` | | yahoo | Candles provider: yahoo or idx |
+| `--refresh` | `-r` | false | Force refresh all |
+
+---
+
+## 15. Foreign Accumulation Screener - The `screen accumulation` Command
+
+Screen stocks for institutional foreign accumulation patterns. Detects stocks being quietly bought by foreign investors over multiple days.
+
+### Single-Window Mode
+
+```bash
+# Screen LQ45 with 7-day window (default)
+saham screen accumulation --universe lq45
+
+# 30-day window
+saham screen accumulation --universe idx80 --window 30
+
+# Specific tickers
+saham screen accumulation BBCA BBRI BMRI --window 7
+```
+
+### Multi-Window Mode
+
+Compare scores across 7d, 30d, and 90d windows side-by-side:
+
+```bash
+saham screen accumulation --universe lq45 --multi
+saham screen accumulation --universe lq45 --multi --sort-by 30d
+```
+
+**Pattern labels:**
+- `sustained` — Score ≥60 on all 3 windows (highest conviction)
+- `building` — Strong recent, weaker long-term
+- `fresh rotation` — Strong 7d only; very recent
+- `coiled spring` — Squeeze + score ≥60 (compressed, ready to break)
+- `long-term only` — Strong 90d, weak recent
+- `weak` — No window scores ≥60
+
+### Filters
+
+```bash
+# Score threshold
+saham screen accumulation --universe lq45 --min-score 50 --top 10
+
+# Only where foreigners are underwater (bought higher than today)
+saham screen accumulation --universe lq45 --vwap-only
+
+# Only Bollinger Band squeeze setups
+saham screen accumulation --universe lq45 --squeeze-only
+
+# Show per-broker detail (requires Stockbit data)
+saham screen accumulation --universe lq45 --granular
+
+# Show score component breakdown
+saham screen accumulation --universe lq45 --breakdown
+
+# Column reference guide
+saham screen accumulation --guide
+```
+
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--universe` | `-u` | | Universe: lq45, idx80, idxcomp100, cached |
+| `--window` | `-w` | 7 | Analysis window in days |
+| `--min-streak` | | 0 | Minimum consecutive buy days |
+| `--min-score` | | 0.0 | Minimum composite score (0-120) |
+| `--vwap-only` | | false | Only underwater foreign positions |
+| `--squeeze-only` | | false | Only BB squeeze stocks |
+| `--top` | | 20 | Show top N results |
+| `--multi` | | false | Multi-window side-by-side |
+| `--sort-by` | | avg | Sort: avg, max, 7d, 30d, 90d |
+| `--format` | | table | Output format: table or json |
+| `--guide` | | false | Column reference guide |
+
+### Historical Audit
+
+Replay accumulation signals historically and measure forward returns:
+
+```bash
+saham screen accumulation audit --universe idx80 --preset foreign-bounce
+saham screen accumulation audit --universe lq45 --window 7 --min-score 70
+```
+
+### Logging to Journal
+
+```bash
+saham screen accumulation-log --ticker BBRI --window 7
+```
+
+---
+
+## 16. Intraday Pre-Open Screener - The `intraday` Command
+
+A complete pre-market screening to opening-auction confirmation workflow.
+
+### Step 1: Pre-Open Screen
+
+```bash
+# Fast mode (no order book, ~15s)
+saham intraday pre-open \
+  --movers-json '[{"ticker":"BBCA","iev":150000}]' \
+  --fast
+
+# Normal mode with order book data
+saham intraday pre-open \
+  --movers-json '[{"ticker":"BBCA","iev":150000}]' \
+  --order-books-json '{"BBCA":{"price":8900,"volume":50000}}'
+```
+
+### Step 2: Confirm at Opening
+
+After the opening auction clears, check which candidates actually trigger:
+
+```bash
+saham intraday confirm-open --opening-json '{"BBCA":9050,"BMRI":5875}'
+```
+
+Emits deterministic ENTER / WAIT / SKIP decisions based on entry ranges from the pre-open screen.
+
+### Step 3: Log & Review
+
+```bash
+# Log to paper trade journal
+saham intraday log
+
+# Review hit rate
+saham intraday review --horizon 5
+
+# Record actual outcome
+saham intraday outcome BBCA --entry 9000 --exit 9500 --result target
+```
+
+### Command Summary
+
+| Command | Purpose |
+|---------|---------|
+| `saham intraday pre-open` | Pre-market movers screener |
+| `saham intraday confirm-open` | Confirm against actual opening prices |
+| `saham intraday log` | Append to paper trade journal |
+| `saham intraday review` | Review journal accuracy |
+| `saham intraday outcome` | Record actual trade outcome |
+
+---
+
+## 17. Swing Trade Workflow - The `swing` Command
+
+Unified analysis combining accumulation, risk, sizing, backtest, and sentiment in one command.
+
+```bash
+# Full analysis
+saham swing BBRI
+
+# With position sizing
+saham swing BBRI --capital 10000000
+
+# With preset strategy gates
+saham swing BBRI --preset foreign-bounce --capital 10000000
+
+# Conservative profile, skip sentiment
+saham swing BBRI --profile conservative --no-sentiment
+
+# Compare with market regime context
+saham swing BBRI --with-regime
+```
+
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--profile` | `-p` | balanced | Risk profile |
+| `--strategy` | `-S` | foreign-accumulation | Backtest strategy |
+| `--preset` | | | Swing preset: foreign-bounce |
+| `--capital` | `-c` | | Capital (enables sizing) |
+| `--risk-pct` | | 1.0 | % of capital at risk |
+| `--no-sentiment` | | false | Skip sentiment |
+| `--no-backtest` | | false | Skip backtest |
+| `--with-regime` | | false | Add regime context |
+
+### Swing Backtest
+
+Walk-forward portfolio backtest for the swing workflow:
+
+```bash
+saham swing backtest --universe idx80 --preset foreign-bounce
+saham swing backtest --universe lq45 --capital 50000000 --max-positions 3
+```
+
+### Swing Compare
+
+Compare regime-filtered variants side-by-side:
+
+```bash
+saham swing compare --universe idx80
+saham swing compare --universe lq45 --variants baseline,sideways_only
+```
+
+### Swing Size
+
+ATR-based position sizing calculator:
+
+```bash
+saham swing size BBRI --capital 10000000
+saham swing size BBRI --capital 10000000 --risk-pct 2 --entry 4825
+```
+
+---
+
+## 18. Market Regime - The `regime` Command
+
+Show deterministic IHSG market regime context for swing trading.
+
+```bash
+# Today's regime
+saham regime
+
+# Specific date
+saham regime --as-of 2026-06-01
+
+# Custom universe and benchmark
+saham regime --universe idx80 --benchmark ^JKSE
+```
+
+**Regime labels:** `BULLISH` (strong), `SIDEWAYS` (mixed), `WEAK` (declining), `RISK_OFF` (bearish)
+
+Computed from: benchmark SMA20/SMA50 position, breadth (% of universe above SMA20), breadth change, and foreign flow breadth.
+
+---
+
+## 19. Terminal Charts - The `chart` Command
+
+Plot ASCII charts in your terminal (requires `pip install plotext`).
+
+```bash
+# Price chart with SMA overlay
+saham chart price BBCA
+saham chart price BBCA --sma 20 --ema 9 --days 120
+
+# RSI with overbought/oversold bands
+saham chart rsi BBCA
+saham chart rsi BBCA --period 9 --days 120
+
+# Volume bars
+saham chart volume BBCA
+saham chart volume BBCA --days 30
+```
+
+---
+
+## 20. Stockbit Session Management - The `stockbit` Command
+
+Manage Stockbit browser sessions for automated data fetching.
+
+```bash
+# Open browser to log in (saves session cookies)
+saham stockbit login
+
+# Check session health
+saham stockbit status
+
+# Capture API traffic to identify endpoints
+saham stockbit spy
+saham stockbit spy --target orderbook --ticker BBRI
+
+# Smoke-test the adapter
+saham stockbit test
+saham stockbit test --no-headless
+```
+
+| Command | Purpose |
+|---------|---------|
+| `saham stockbit login` | Save browser session (Playwright) |
+| `saham stockbit status` | Check session health |
+| `saham stockbit spy` | Capture API traffic for calibration |
+| `saham stockbit test` | Smoke-test live adapter |
+
+---
+
+## 21. Side-by-Side Comparison - The `compare` Command
+
+Quickly compare risk levels across multiple tickers:
+
+```bash
+saham compare BBCA BBRI BMRI
+saham compare BBCA TLKM --profile conservative
+```
+
+---
+
+## 22. Complete Workflow Examples
 
 ### Conservative Investor Workflow
 
@@ -1905,19 +2274,22 @@ saham backtest BBCA --strategy my_flow_strategy
 
 ---
 
-## 15. Command Reference (Quick Lookup)
+## 23. Command Reference (Quick Lookup)
 
 | Command | Purpose | Key Options |
 |---------|---------|-------------|
 | `saham version` | Show version | — |
-| `saham fetch TICKER` | Download OHLCV data | `--days`, `--refresh`, `--db` |
+| `saham fetch TICKER` | Download OHLCV data | `--days`, `--refresh`, `--provider`, `--db` |
+| `saham update` | Batch data update for universe | `--universe`, `--days`, `--broker-only`, `--refresh` |
 | `saham sma TICKER` | Simple Moving Average | `--period`, `--field`, `--days` |
 | `saham ema TICKER` | Exponential Moving Average | `--period`, `--field`, `--days` |
 | `saham rsi TICKER` | Relative Strength Index | `--period`, `--days` |
 | `saham compute INDICATOR TICKER` | Compute any indicator | `--period`, `--days`, `--tail`, `--db` |
-| `saham indicators TICKER` | All indicators combined | `--sma`, `--ema`, `--rsi`, `--days` |
-| `saham risk TICKER` | Risk assessment | `--profile`, `--all`, `--rules-file`, `--explain`, `--with-sentiment` |
-| `saham sentiment TICKER` | News sentiment | `--days`, `--max`, `--ai-classify` |
+| `saham indicators TICKER` | All indicators combined | `--sma`, `--ema`, `--rsi`, `--days`, `--format` |
+| `saham compare TICKER TICKER...` | Side-by-side risk comparison | `--profile`, `--sma`, `--rsi` |
+| `saham risk TICKER` | Risk assessment | `--profile`, `--all`, `--rules-file`, `--explain`, `--with-sentiment`, `--trend`, `--format` |
+| `saham sentiment TICKER` | News sentiment | `--days`, `--max`, `--ai-classify`, `--news-provider`, `--no-ai` |
+| `saham sentiment-audit` | Audit sentiment accuracy | — |
 | `saham broker auth TOKEN` | Configure Stockbit token | `--validate/--no-validate` |
 | `saham broker status` | Check all provider status | — |
 | `saham broker fetch TICKER` | Fetch broker summary data | `--days`, `--start`, `--end`, `--refresh`, `--provider` |
@@ -1932,11 +2304,30 @@ saham backtest BBCA --strategy my_flow_strategy
 | `saham skill generate NAME` | Generate SKILL.md for an artifact | `--type` (strategy/indicator/formula) |
 | `saham skill check` | Report stale/missing SKILL.md files | — |
 | `saham skill index` | Rebuild SKILLS_INDEX.md catalog | — |
-| `saham backtest TICKER` | Strategy backtesting | `--strategy`/`--rules-file`, `--start`, `--end`, `--capital`, `--verbose` |
-| `saham create-indicator` | Create formula from NL | `--name`, `--provider`, `--save/--no-save` |
+| `saham backtest TICKER` | Strategy backtesting | `--strategy`/`--rules-file`, `--start`, `--end`, `--capital`, `--verbose`, `--format` |
+| `saham create-indicator` | Create formula from natural language | `--name`, `--provider`, `--save/--no-save` |
 | `saham list-indicators` | List all indicators | `--formulas` |
 | `saham show-formula NAME` | Show formula details | — |
 | `saham delete-indicator NAME` | Delete custom formula | `--force` |
+| `saham screen accumulation` | Foreign accumulation screener | `--universe`, `--window`, `--multi`, `--format` |
+| `saham screen accumulation audit` | Historical accumulation audit | `--universe`, `--preset`, `--simulate-exits` |
+| `saham intraday pre-open` | Pre-open market screener | `--movers-json`, `--fast`, `--top` |
+| `saham intraday confirm-open` | Confirm at opening auction | `--opening-json` |
+| `saham intraday log` | Log confirmation to journal | — |
+| `saham intraday review` | Review paper trade journal | `--horizon` |
+| `saham intraday outcome` | Record actual trade outcome | `--entry`, `--exit`, `--result` |
+| `saham swing TICKER` | Unified swing analysis | `--capital`, `--preset`, `--with-regime` |
+| `saham swing backtest` | Portfolio walk-forward backtest | `--universe`, `--capital`, `--allow-regimes` |
+| `saham swing compare` | Compare regime variants | `--universe`, `--variants` |
+| `saham swing size TICKER` | ATR position sizing | `--capital`, `--risk-pct`, `--entry` |
+| `saham regime` | Market regime context | `--universe`, `--as-of`, `--format` |
+| `saham chart price TICKER` | Price chart with overlays | `--sma`, `--ema`, `--days`, `--width` |
+| `saham chart rsi TICKER` | RSI chart | `--period`, `--days` |
+| `saham chart volume TICKER` | Volume bar chart | `--days` |
+| `saham universe list` | List ticker universes | — |
+| `saham stockbit login` | Stockbit browser login | `--timeout` |
+| `saham stockbit status` | Check session health | — |
+| `saham stockbit test` | Smoke-test adapter | `--ticker`, `--no-headless` |
 
 ---
 
@@ -1948,7 +2339,7 @@ saham backtest BBCA --strategy my_flow_strategy
 4. **Reliability** - Works during internet outages
 5. **Cost** - No ongoing API fees for basic analysis
 
-Data is cached at `~/.ai-saham/data.db`. Use `--refresh` to update when needed.
+Data is cached at `./data.db` (configurable with `--db`). Use `--refresh` to update when needed.
 
 ---
 
@@ -2098,51 +2489,45 @@ saham list-indicators
 ### "AI explanation unavailable"
 
 ```
-AI explanation unavailable: ANTHROPIC_API_KEY not set
+AI explanation unavailable: DEEPSEEK_API_KEY not set
 Tip: Set the appropriate API key environment variable.
 ```
 
 **Solution:**
-- Set API key: `export ANTHROPIC_API_KEY=sk-...`
+- Set DeepSeek API key (default): `export DEEPSEEK_API_KEY=sk-...`
+- Set Claude API key: `export ANTHROPIC_API_KEY=sk-...`
 - Or use local Ollama: `--provider ollama`
 - Or use mock for testing: `--provider mock`
 
-### "Stockbit token not configured"
+### "Stockbit session not found"
 
 ```
-Error: Stockbit token not configured.
-Run 'saham broker auth <token>' to set your token.
+No session found.
+Run: saham stockbit login
 ```
 
-**Solution:** This only applies if using `--provider stockbit`. Switch to the IDX provider (default) which needs no auth:
+**Solution:** Stockbit browser session cookies are not saved. Use the new browser-based login:
+
+1. Install dependencies: `pip install -e ".[browser]" && playwright install chromium`
+2. Login: `saham stockbit login`
+3. Check: `saham stockbit status`
+
+The old JWT token method (`saham broker auth <token>`) is also still supported if you prefer.
+
+### "Stockbit session expired"
+
+```
+Session may be expired — re-run login.
+```
+
+**Solution:** Browser sessions can expire. Refresh with:
 ```bash
-saham broker fetch BBCA                     # Uses IDX, no auth needed
-saham broker fetch BBCA --provider stockbit  # Needs Stockbit token
+saham stockbit login
 ```
 
-If you need Stockbit for top broker data, configure the token:
-
-1. Login to stockbit.com in your browser
-2. Open DevTools (F12) → Network tab
-3. Click any stock ticker
-4. Filter for "exodus" requests
-5. Copy the Bearer token from the Authorization header
-6. Run: `saham broker auth "your-token-here"`
-
-### "Stockbit token expired or invalid"
-
-```
-Error: Stockbit token expired or invalid.
-Please get a new token from stockbit.com
-```
-
-**Solution:** Stockbit tokens expire in ~24 hours. Either switch to IDX provider or get a fresh token:
+Or use IDX provider (no auth needed):
 ```bash
-# Option 1: Use IDX (no auth)
 saham broker fetch BBCA
-
-# Option 2: Refresh Stockbit token
-saham broker auth "new-token-here"
 ```
 
 ### "IDX API returned 403 Forbidden"

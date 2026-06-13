@@ -4,39 +4,25 @@ AI Saham uses a provider abstraction to fetch market data. This document explain
 
 ---
 
-## Supported Providers
+## Provider Ports
 
-### Yahoo Finance (Default)
+The system uses two port interfaces for data access, both following the port/adapter pattern:
 
-**Provider:** `YahooFinanceProvider`
-
-- **Data type:** Daily OHLCV (Open, High, Low, Close, Volume)
-- **Source:** Yahoo Finance (unofficial API via yfinance)
-- **Market suffix:** `.JK` for Indonesia Stock Exchange
-
-**Limitations:**
-- Data may be delayed (not real-time)
-- Unofficial source (no SLA)
-- Daily data only (no intraday)
-
-**Usage:**
-```bash
-saham fetch BBCA          # Fetches BBCA.JK
-saham fetch BBRI --days 730
-```
-
----
-
-## Provider Architecture
-
-The system uses a port/adapter pattern for data providers:
+| Port | Purpose | Implementations |
+|------|---------|-----------------|
+| `MarketDataProvider` | OHLCV candle data | YahooFinanceProvider, IdxMarketDataProvider |
+| `BrokerDataProvider` | Foreign flow + broker breakdown | IdxBrokerDataProvider, StockbitBrokerDataProvider |
 
 ```
-Domain Port                    Infrastructure Adapter
------------                    ----------------------
-MarketDataProvider  <-------   YahooFinanceProvider
-                    <-------   (Future) IDXProvider
-                    <-------   (Future) AlphaVantageProvider
+Domain Port                    Infrastructure Adapters
+-----------                    -----------------------
+MarketDataProvider  <-------   YahooFinanceProvider 
+                    <-------   IdxMarketDataProvider
+                    <-------   (Planned) AlphaVantageProvider
+
+BrokerDataProvider  <-------   IdxBrokerDataProvider
+                    <-------   StockbitBrokerDataProvider
+                    <-------   BrokerCsvAdapter (import only)
 ```
 
 This allows:
@@ -46,13 +32,122 @@ This allows:
 
 ---
 
+## Market Data Providers (OHLCV)
+
+### Yahoo Finance (Default)
+
+**Provider:** `YahooFinanceProvider`
+
+- **Data type:** Daily OHLCV (Open, High, Low, Close, Volume)
+- **Source:** Yahoo Finance (unofficial API via yfinance)
+- **Market suffix:** `.JK` for Indonesia Stock Exchange (auto-appended)
+
+**Limitations:**
+- Data may be delayed (not real-time)
+- Unofficial source (no SLA)
+- Daily data only (no intraday)
+
+**Usage:**
+```bash
+saham fetch BBCA          # Fetches BBCA.JK via Yahoo (default)
+saham fetch BBRI --days 730
+```
+
+### IDX Public API
+
+**Provider:** `IdxMarketDataProvider`
+
+- **Data type:** Daily OHLCV (Open, High, Low, Close, Volume) — raw (unadjusted) prices
+- **Source:** IDX TradingSummary API (`idx.co.id`)
+- **Auth:** None required
+
+**Advantages over Yahoo:**
+- Same-day availability (data published on trading day)
+- Raw prices (no adjustment artifacts)
+- No `.JK` suffix needed
+
+**Tradeoffs:**
+- Slower for large date ranges (one HTTP request per trading day, rate-limited to 1s delay)
+- Non-trading days return 403 (handled silently)
+
+**Usage:**
+```bash
+saham fetch BBCA --provider idx              # Uses IDX public API
+saham fetch BBCA --provider idx --days 30    # Faster for small ranges
+```
+
+---
+
+## Broker Data Providers (Foreign Flow)
+
+### IDX Public API
+
+**Provider:** `IdxBrokerDataProvider` (auto-selected when no Stockbit token found)
+
+- **Data type:** Foreign buy/sell lots, estimated foreign flow value
+- **Source:** IDX TradingSummary API (`idx.co.id`)
+- **Auth:** None required
+
+**Limitations:**
+- Per-broker breakdown (`top_buyers` / `top_sellers`) is not available
+- Foreign flow values are estimated as `volume * closing price` (IDX provides share volumes, not transaction values)
+- Foreign flow lots are exact (from `ForeignBuy` / `ForeignSell` fields)
+
+**Usage:**
+```bash
+saham broker fetch BBCA                # Auto-selects IDX (no auth)
+saham broker fetch BBCA --days 90
+```
+
+### Stockbit
+
+**Provider:** `StockbitBrokerDataProvider` (auto-selected if authenticated)
+
+- **Data type:** Full per-broker breakdown (top 10 buyers + sellers), exact foreign flow values
+- **Source:** Stockbit Exodus API (undocumented)
+- **Auth:** JWT token from browser session (~24h validity)
+
+**Setup:**
+```bash
+# Browser-based login (recommended)
+saham stockbit login
+
+# Or set token directly
+saham broker auth "your-jwt-token"
+```
+
+**Usage:**
+```bash
+saham broker fetch BBCA --provider stockbit   # Richer per-broker detail
+saham broker top BBCA --date 2024-01-15
+```
+
+### CSV Import
+
+**Provider:** `BrokerCsvAdapter` (via `saham broker import`)
+
+- **Data type:** Broker summary data from external sources
+- **Formats:** SIMPLE (aggregate) or DETAILED (per-broker)
+- **Auto-detection:** Format + column mapping via `FormatDetector`
+
+**Supported date formats:** ISO, DD/MM/YYYY, MM/DD/YYYY, DD-MM-YYYY, YYYYMMDD
+
+**Usage:**
+```bash
+saham broker import data.csv               # Auto-detect format
+saham broker import data.csv --preview     # Validate before import
+saham broker mappings                      # List available column mappings
+```
+
+---
+
 ## Caching Strategy
 
 ### Local-First Caching
 
 Data is cached locally after first fetch to enable **offline analysis**.
 
-**Storage:** SQLite database at `~/.ai-saham/data.db`
+**Storage:** SQLite database at `./data.db` (configurable via `--db`)
 
 **Cache behavior:**
 
@@ -79,7 +174,7 @@ ORDER BY date;
 ### Fetch Flow
 
 ```
-User: saham fetch BBCA
+User: saham fetch BBCA --provider yahoo
          |
          v
 CLI Adapter
@@ -95,16 +190,54 @@ FetchMarketDataUseCase
          |     No    |    Yes (and not --refresh)
          |           |           |
          v           v           v
-   YahooFinanceProvider    Return cached
+   Provider selected by --provider flag
+         |
+         +--- Yahoo? ---> YahooFinanceProvider
+         |                     |
+         |                     v
+         |              Download from Yahoo
+         |
+         +--- IDX?   ---> IdxMarketDataProvider
+                               |
+                               v
+                        Download from IDX API
          |
          v
-   Download from Yahoo
-         |
-         v
-   Save to cache
+   Save to cache (SQLiteRepository)
          |
          v
    Return data
+```
+
+### Broker Fetch Flow
+
+```
+User: saham broker fetch BBCA
+         |
+         v
+CLI Adapter
+         |
+         v
+FetchBrokerDataUseCase
+         |
+         v
+   Auto-select provider:
+         |
+         +--- Stockbit token exists + valid?
+         |       |
+         |       v
+         |   StockbitBrokerDataProvider  (per-broker detail, exact values)
+         |
+         +--- Otherwise:
+                 |
+                 v
+             IdxBrokerDataProvider  (no auth, estimated values)
+         |
+         v
+   Save to cache (SQLiteBrokerRepository)
+         |
+         v
+   Return BrokerSummary[]
 ```
 
 ### Analysis Flow
@@ -191,13 +324,32 @@ To add a new data provider:
 1. **Implement the port** in `src/infrastructure/data_providers/`:
 
 ```python
-class NewProvider:
-    def fetch(self, ticker: str, days: int) -> list[Candle]:
+from datetime import date
+from src.domain.ports.market_data_provider import MarketDataProvider, MarketDataProviderError
+from src.domain.entities.candle import Candle
+
+class NewProvider(MarketDataProvider):
+    def fetch_daily_ohlcv(
+        self,
+        ticker: str,
+        start_date: date,
+        end_date: date,
+    ) -> list[Candle]:
         # Implement fetching logic
+        # Return Candle objects sorted by date ascending
         ...
 ```
 
-2. **Wire in adapter** - Update CLI to use new provider
+2. **Wire in CLI** - Add provider option to `src/adapters/cli/main.py`:
+
+```python
+if data_provider == "new":
+    provider = NewProvider()
+elif data_provider == "idx":
+    provider = IdxMarketDataProvider()
+else:
+    provider = YahooFinanceProvider()
+```
 
 3. **Test thoroughly** - Ensure data format matches expectations
 
@@ -208,7 +360,7 @@ class NewProvider:
 ### Default Path
 
 ```
-~/.ai-saham/data.db
+./data.db
 ```
 
 ### Custom Path
@@ -222,24 +374,22 @@ saham sma BBCA --db /path/to/custom.db
 
 ```bash
 # View database size
-ls -lh ~/.ai-saham/data.db
+ls -lh data.db
 
 # Backup database
-cp ~/.ai-saham/data.db ~/backup/
+cp data.db data.db.backup
 
 # Reset (delete all cached data)
-rm ~/.ai-saham/data.db
+rm data.db
 ```
 
 ---
 
 ## Future Data Sources
 
-Planned providers (not yet implemented):
+Providers not yet implemented:
 
 | Provider | Status | Use Case |
 |----------|--------|----------|
-| IDX Direct | Planned | Official IDX data |
-| Alpha Vantage | Planned | Alternative source |
-| CSV Import | Planned | Custom data files |
-| Local Files | Planned | Offline data loading |
+| Alpha Vantage | Planned | Alternative OHLCV source |
+| Local Files (non-CSV) | Planned | Offline data loading from custom formats |
