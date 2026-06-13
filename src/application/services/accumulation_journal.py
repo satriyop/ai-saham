@@ -38,6 +38,16 @@ class PatternStat:
 
 
 @dataclass
+class DecisionStat:
+    decision: str
+    n: int
+    avg_return_10d: float | None
+    win_rate_10d: float | None
+    avg_max_upside: float | None
+    avg_max_drawdown: float | None
+
+
+@dataclass
 class SignalDelta:
     """Compares avg 10d return for two groups to assess signal quality."""
     signal: str
@@ -54,6 +64,7 @@ class AccumulationJournalReport:
     total_entries: int
     enriched_entries: int
     score_buckets: list[ScoreBucketStat] = field(default_factory=list)
+    by_decision: list[DecisionStat] = field(default_factory=list)
     by_pattern: list[PatternStat] = field(default_factory=list)
     signal_deltas: list[SignalDelta] = field(default_factory=list)
 
@@ -92,6 +103,14 @@ class AccumulationJournalService:
         candidate: AccumulationCandidate | None,
         logged_at: date,
         pattern: str | None = None,
+        preset: str | None = None,
+        classification: str | None = None,
+        failed_gates: tuple[str, ...] = (),
+        regime: str | None = None,
+        planned_entry: Decimal | None = None,
+        planned_stop: Decimal | None = None,
+        planned_target: Decimal | None = None,
+        max_hold_days: int | None = None,
     ) -> int:
         """Build an AccumulationJournalEntry from a screener result and persist it.
 
@@ -122,6 +141,14 @@ class AccumulationJournalService:
             rsi=_d(candidate.rsi) if candidate else None,
             trend=candidate.trend if candidate else None,
             pattern=pattern,
+            preset=preset,
+            classification=classification,
+            failed_gates=failed_gates,
+            regime=regime,
+            planned_entry=planned_entry,
+            planned_stop=planned_stop,
+            planned_target=planned_target,
+            max_hold_days=max_hold_days,
         )
         return self._store.append([entry])
 
@@ -159,6 +186,7 @@ class AccumulationJournalService:
             total_entries=len(all_entries),
             enriched_entries=len(with_data),
             score_buckets=self._score_buckets(with_data),
+            by_decision=self._decision_stats(with_data),
             by_pattern=self._pattern_stats(with_data),
             signal_deltas=self._signal_deltas(with_data),
         )
@@ -207,6 +235,14 @@ class AccumulationJournalService:
             rsi=entry.rsi,
             trend=entry.trend,
             pattern=entry.pattern,
+            preset=entry.preset,
+            classification=entry.classification,
+            failed_gates=entry.failed_gates,
+            regime=entry.regime,
+            planned_entry=entry.planned_entry,
+            planned_stop=entry.planned_stop,
+            planned_target=entry.planned_target,
+            max_hold_days=entry.max_hold_days,
             actual_close_5d=close_5d,
             actual_close_10d=close_10d,
             actual_close_20d=close_20d,
@@ -239,6 +275,29 @@ class AccumulationJournalService:
                 avg_return_5d=_avg(returns_5d),  # type: ignore[arg-type]
                 avg_return_10d=_avg(returns_10d),  # type: ignore[arg-type]
                 win_rate_10d=_win_rate(returns_10d),  # type: ignore[arg-type]
+            ))
+        return result
+
+    def _decision_stats(
+        self, entries: list[AccumulationJournalEntry]
+    ) -> list[DecisionStat]:
+        decisions: dict[str, list[AccumulationJournalEntry]] = {}
+        for e in entries:
+            key = e.classification or "unknown"
+            decisions.setdefault(key, []).append(e)
+
+        result = []
+        for decision, group in sorted(decisions.items(), key=lambda x: -len(x[1])):
+            returns_10d = [e.return_10d_pct for e in group if e.return_10d_pct is not None]
+            upsides = [e.max_upside_pct for e in group if e.max_upside_pct is not None]
+            drawdowns = [e.max_drawdown_pct for e in group if e.max_drawdown_pct is not None]
+            result.append(DecisionStat(
+                decision=decision,
+                n=len(group),
+                avg_return_10d=_avg(returns_10d),  # type: ignore[arg-type]
+                win_rate_10d=_win_rate(returns_10d),  # type: ignore[arg-type]
+                avg_max_upside=_avg(upsides),  # type: ignore[arg-type]
+                avg_max_drawdown=_avg(drawdowns),  # type: ignore[arg-type]
             ))
         return result
 

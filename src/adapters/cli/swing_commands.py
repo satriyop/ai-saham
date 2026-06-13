@@ -18,9 +18,12 @@ Layer: Adapter
 """
 
 import json
+import logging
+from contextlib import contextmanager, nullcontext, redirect_stderr, redirect_stdout
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
+from io import StringIO
 from pathlib import Path
 from typing import Annotated, Optional
 
@@ -64,6 +67,7 @@ from src.application.use_case.swing_backtest import (
     SwingBacktestResponse,
     SwingBacktestUseCase,
 )
+from src.infrastructure.config.user_config import get_swing_default
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 from src.infrastructure.sentiment import SentimentFactory
@@ -494,6 +498,49 @@ def _auto_refresh_swing_data(
     return tuple(actions)
 
 
+@contextmanager
+def _quiet_sentiment_fetch(enabled: bool):
+    """Suppress optional sentiment provider noise in composite swing output."""
+    if not enabled:
+        with nullcontext():
+            yield
+        return
+
+    previous_disable = logging.root.manager.disable
+    sink = StringIO()
+    try:
+        logging.disable(logging.CRITICAL)
+        with redirect_stdout(sink), redirect_stderr(sink):
+            yield
+    finally:
+        logging.disable(previous_disable)
+
+
+def _fetch_swing_sentiment(
+    ticker: str,
+    sentiment_verbose: bool,
+):
+    """Fetch optional sentiment context without leaking provider noise by default."""
+    try:
+        with _quiet_sentiment_fetch(enabled=not sentiment_verbose):
+            news_provider = SentimentFactory.create_news_provider()
+            classifier = SentimentFactory.create_classifier(use_ai=False)
+            sent_uc = FetchSentimentUseCase(
+                news_provider=news_provider,
+                classifier=classifier,
+            )
+            response = sent_uc.execute(FetchSentimentRequest(
+                ticker=ticker,
+                max_headlines=20,
+                days=3,
+            ))
+        return response, response.warning
+    except Exception as exc:
+        if sentiment_verbose:
+            return None, f"Sentiment fetch failed: {exc}"
+        return None, "News unavailable (provider fetch failed)."
+
+
 def _parse_regime_filter(value: str | None) -> tuple[str, ...]:
     if not value:
         return ()
@@ -704,6 +751,8 @@ def _print_swing_output(
     capital: "int | None",
     backtest_result,
     sentiment_resp,
+    sentiment_warning: str | None,
+    sentiment_verbose: bool,
     no_backtest: bool,
     no_sentiment: bool,
 ) -> None:
@@ -999,10 +1048,16 @@ def _print_swing_output(
             )
         else:
             _section_header("SENTIMENT (3d)")
+            message = sentiment_warning or "News unavailable (no network or fetch failed)."
             typer.echo(typer.style(
-                "  News unavailable (no network or fetch failed).",
+                f"  {message}",
                 fg=typer.colors.BRIGHT_BLACK,
             ))
+            if not sentiment_verbose:
+                typer.echo(typer.style(
+                    "  Use --sentiment-verbose to show provider details.",
+                    fg=typer.colors.BRIGHT_BLACK,
+                ))
 
     # ── SUMMARY ──────────────────────────────────────────────────────────────
     typer.echo("")
@@ -1079,8 +1134,8 @@ def swing(
     ] = "foreign-accumulation",
     preset: Annotated[
         Optional[str],
-        typer.Option("--preset", help="Swing preset: foreign-bounce"),
-    ] = None,
+        typer.Option("--preset", help="Swing preset to evaluate (default: foreign-bounce)"),
+    ] = "foreign-bounce",
     window: Annotated[
         int,
         typer.Option("--window", "-w", help="Accumulation analysis window in broker sessions (default: 7)"),
@@ -1112,6 +1167,10 @@ def swing(
     no_sentiment: Annotated[
         bool,
         typer.Option("--no-sentiment", help="Skip news sentiment (offline mode)"),
+    ] = False,
+    sentiment_verbose: Annotated[
+        bool,
+        typer.Option("--sentiment-verbose", help="Show sentiment provider errors/noise"),
     ] = False,
     no_backtest: Annotated[
         bool,
@@ -1172,6 +1231,11 @@ def swing(
     resolved_db = db_path or DEFAULT_DB_PATH
     ticker_upper = ticker.upper()
     today = date.today()
+
+    if capital is None:
+        _cfg = get_swing_default("capital")
+        if _cfg is not None:
+            capital = int(_cfg)
 
     preset_name = preset.lower() if preset else None
     if preset_name is not None and preset_name != FOREIGN_BOUNCE_PRESET:
@@ -1307,21 +1371,12 @@ def swing(
 
     # ── Sentiment ─────────────────────────────────────────────────────────────
     sentiment_resp = None
+    sentiment_warning: str | None = None
     if not no_sentiment:
-        try:
-            news_provider = SentimentFactory.create_news_provider()
-            classifier = SentimentFactory.create_classifier(use_ai=False)
-            sent_uc = FetchSentimentUseCase(
-                news_provider=news_provider,
-                classifier=classifier,
-            )
-            sentiment_resp = sent_uc.execute(FetchSentimentRequest(
-                ticker=ticker_upper,
-                max_headlines=20,
-                days=3,
-            ))
-        except Exception:
-            pass
+        sentiment_resp, sentiment_warning = _fetch_swing_sentiment(
+            ticker=ticker_upper,
+            sentiment_verbose=sentiment_verbose,
+        )
 
     # ── Market regime ───────────────────────────────────────────────────────
     market_regime: MarketRegimeResponse | None = None
@@ -1416,6 +1471,7 @@ def swing(
                     sentiment_resp.snapshot.overall_sentiment.value
                     if sentiment_resp and not sentiment_resp.warning else None
                 ),
+                "warning": sentiment_warning,
                 "total_headlines": (
                     sentiment_resp.snapshot.total_count
                     if sentiment_resp and not sentiment_resp.warning else None
@@ -1448,6 +1504,8 @@ def swing(
         capital=capital,
         backtest_result=backtest_result,
         sentiment_resp=sentiment_resp,
+        sentiment_warning=sentiment_warning,
+        sentiment_verbose=sentiment_verbose,
         no_backtest=no_backtest,
         no_sentiment=no_sentiment,
     )
@@ -1909,9 +1967,9 @@ def regime(
 def size(
     ticker: Annotated[str, typer.Argument(help="Stock ticker symbol (e.g., BBRI)")],
     capital: Annotated[
-        int,
-        typer.Option("--capital", "-c", help="Total capital in IDR", min=1),
-    ],
+        Optional[int],
+        typer.Option("--capital", "-c", help="Total capital in IDR (default: from config/user.yaml)", min=1),
+    ] = None,
     risk_pct: Annotated[
         float,
         typer.Option("--risk-pct", help="% of capital at risk per trade (default: 1.0)"),
@@ -1956,6 +2014,17 @@ def size(
     resolved_db = db_path or DEFAULT_DB_PATH
     ticker_upper = ticker.upper()
     today = date.today()
+
+    if capital is None:
+        _cfg = get_swing_default("capital")
+        if _cfg is not None:
+            capital = int(_cfg)
+    if capital is None:
+        typer.echo(
+            "Error: --capital is required. Pass it as a flag or set swing.capital in config/user.yaml.",
+            err=True,
+        )
+        raise typer.Exit(1)
 
     market_repo = SQLiteMarketRepository(db_path=resolved_db)
     registry = create_indicator_registry()

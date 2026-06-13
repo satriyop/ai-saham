@@ -31,6 +31,14 @@ class AccumulationJournalEntry:
     rsi: Decimal | None
     trend: str | None
     pattern: str | None
+    preset: str | None = None
+    classification: str | None = None
+    failed_gates: tuple[str, ...] = ()
+    regime: str | None = None
+    planned_entry: Decimal | None = None
+    planned_stop: Decimal | None = None
+    planned_target: Decimal | None = None
+    max_hold_days: int | None = None
     # Filled by review
     actual_close_5d: Decimal | None = None
     actual_close_10d: Decimal | None = None
