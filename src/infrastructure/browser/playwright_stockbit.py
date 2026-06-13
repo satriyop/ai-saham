@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Any
 
 from src.domain.ports.browser_data_provider import BrowserDataProvider
-from src.domain.value_objects.screener_result import MoverData, OrderBookBid
+from src.domain.value_objects.screener_result import MoverData, MoverWithOrderBook, OrderBookBid
 
 logger = logging.getLogger(__name__)
 
@@ -36,22 +36,33 @@ DEFAULT_PROFILE_DIR = Path(".stockbit_profile")        # persistent browser prof
 
 # ── Stockbit URLs ──────────────────────────────────────────────────────────
 BASE_URL = "https://stockbit.com"
-STREAM_URL = "https://stockbit.com/stream"       # IEV movers widget lives here
+STREAM_URL = "https://stockbit.com/stream"       # kept for spy
 SCREENER_URL = "https://stockbit.com/screener"   # kept for spy fallback
 ORDER_BOOK_URL = "https://stockbit.com/stock/{ticker}/orderbook"
+# Confirmed to fire Bearer-authenticated Exodus API calls immediately on load.
+# stockbit.com/stream does NOT reliably fire Bearer requests within the settle window.
+ORDERBOOK_PAGE_URL = "https://stockbit.com/orderbook"
 LOGIN_URL = "https://stockbit.com/login"
 EXODUS_API = "https://exodus.stockbit.com"
 
 # ── Confirmed Exodus API endpoints (from DevTools spy, 2026-06-13) ─────────
-_IEV_MOVER_URL = (
+# IEV movers: two separate board groups, mirroring how Stockbit frontend calls them.
+# mover_type confirmed via DevTools: MOVER_TYPE_IEV_TOP_GAINER (NOT MOVER_CATEGORY_IEPIEV_MOVER)
+_IEV_MOVER_URL_MAIN = (
     "https://exodus.stockbit.com/order-trade/market-mover"
-    "?mover_type=MOVER_CATEGORY_IEPIEV_MOVER"
+    "?mover_type=MOVER_TYPE_IEV_TOP_GAINER"
     "&filter_stocks=FILTER_STOCKS_TYPE_MAIN_BOARD"
     "&filter_stocks=FILTER_STOCKS_TYPE_DEVELOPMENT_BOARD"
     "&filter_stocks=FILTER_STOCKS_TYPE_ACCELERATION_BOARD"
     "&filter_stocks=FILTER_STOCKS_TYPE_NEW_ECONOMY_BOARD"
 )
-_ORDER_BOOK_API = "https://exodus.stockbit.com/order-trade/orderbook/{ticker}"
+_IEV_MOVER_URL_SPECIAL = (
+    "https://exodus.stockbit.com/order-trade/market-mover"
+    "?mover_type=MOVER_TYPE_IEV_TOP_GAINER"
+    "&filter_stocks=FILTER_STOCKS_TYPE_SPECIAL_MONITORING_BOARD"
+)
+# Orderbook confirmed via DevTools: company-price-feed/v2/orderbook/companies/{TICKER}
+_ORDER_BOOK_API = "https://exodus.stockbit.com/company-price-feed/v2/orderbook/companies/{ticker}"
 
 # ── Timeouts (ms) ─────────────────────────────────────────────────────────
 NAV_TIMEOUT = 30_000
@@ -70,6 +81,7 @@ _MOVERS_URL_PATTERNS = [
     "mover", "iev", "preopen",
 ]
 _ORDERBOOK_URL_PATTERNS = [
+    "company-price-feed/v2/orderbook",   # confirmed endpoint
     "exodus.stockbit.com/orderbook",
     "exodus.stockbit.com/order-book",
     "exodus.stockbit.com/stock",
@@ -194,8 +206,71 @@ def _url_matches(url: str, patterns: list[str]) -> bool:
     return any(p in url_lower for p in patterns)
 
 
+def _intercept_token(page) -> list[str]:
+    """
+    Register a request interceptor on page BEFORE navigation to capture
+    the RS256 Bearer token Stockbit sends to exodus.stockbit.com.
+
+    Returns a mutable list that will be populated as requests fire.
+    Call _resolve_token() after the page settles to read it.
+    """
+    captured: list[str] = []
+
+    def _on_req(request):
+        auth = request.headers.get("authorization", "")
+        if auth.startswith("Bearer ") and "exodus.stockbit.com" in request.url:
+            token = auth.removeprefix("Bearer ")
+            if token not in captured:
+                captured.append(token)
+
+    try:
+        page.on("request", _on_req)
+    except Exception as e:
+        logger.debug("Could not register token interceptor: %s", e)
+
+    return captured
+
+
+def _resolve_token(page, token_box: list[str]) -> str | None:
+    """
+    Return the first token captured by _intercept_token, falling back to
+    _extract_jwt (localStorage) if no request-based token was captured yet.
+    """
+    if token_box:
+        logger.debug("RS256 token from intercepted request (%d chars)", len(token_box[0]))
+        return token_box[0]
+    logger.debug("No intercepted token yet — trying localStorage fallback")
+    return _extract_jwt(page)
+
+
 def _extract_jwt(page) -> str | None:
-    """Scan localStorage for a JWT token (all JWTs start with 'eyJ')."""
+    """
+    Extract the API Bearer token by intercepting an outgoing Exodus request.
+
+    The app uses two different JWTs: an HS256 token stored in localStorage
+    (for in-app use) and an RS256 Bearer token sent to the Exodus API. Only
+    the latter works for direct httpx calls, so we capture it from request headers.
+    """
+    captured: list[str] = []
+
+    def _on_req(request):
+        auth = request.headers.get("authorization", "")
+        if auth.startswith("Bearer ") and "exodus.stockbit.com" in request.url:
+            captured.append(auth.removeprefix("Bearer "))
+
+    try:
+        page.on("request", _on_req)
+        # Small wait for any pending requests already in-flight to arrive
+        page.wait_for_timeout(2_000)
+    except Exception as e:
+        logger.debug("JWT intercept setup failed: %s", e)
+
+    if captured:
+        token = captured[0]
+        logger.debug("JWT intercepted from request headers (%d chars)", len(token))
+        return token
+
+    # Fallback: localStorage HS256 token (may not work for all endpoints)
     try:
         token = page.evaluate("""
             () => {
@@ -206,10 +281,16 @@ def _extract_jwt(page) -> str | None:
                 return null;
             }
         """)
+        if token:
+            logger.debug("JWT from localStorage (HS256 — may be rejected by some endpoints)")
         return token
     except Exception as e:
-        logger.debug("JWT extraction failed: %s", e)
+        logger.debug("JWT localStorage fallback failed: %s", e)
         return None
+
+
+class StockbitSessionExpired(RuntimeError):
+    """Raised when the Exodus API rejects our token with 401."""
 
 
 def _exodus_get(url: str, token: str) -> dict | None:
@@ -224,8 +305,14 @@ def _exodus_get(url: str, token: str) -> dict | None:
     }
     try:
         resp = httpx.get(url, headers=headers, timeout=15)
+        if resp.status_code == 401:
+            raise StockbitSessionExpired(
+                "Stockbit API session expired (401). Run: saham stockbit login"
+            )
         resp.raise_for_status()
         return resp.json()
+    except StockbitSessionExpired:
+        raise
     except Exception as e:
         logger.warning("Exodus API call failed: %s — %s", url, e)
         return None
@@ -270,16 +357,32 @@ class PlaywrightStockbitProvider(BrowserDataProvider):
         """Prefer persistent profile if it exists, fall back to cookie file."""
         return self._profile_dir.exists() and any(self._profile_dir.iterdir())
 
+    def _assert_session_fresh(self) -> None:
+        """Raise before launching a browser if the session marker is too old."""
+        marker = self._profile_dir / ".logged_in_at"
+        if not marker.exists():
+            return  # no marker → let the browser try (legacy flow)
+        try:
+            age_hours = (time.time() - float(marker.read_text())) / 3600
+        except Exception:
+            return
+        if age_hours >= 8:
+            raise RuntimeError(
+                f"Stockbit session is {age_hours:.1f}h old — likely expired.\n"
+                "Run: saham stockbit login"
+            )
+
     def fetch_preopen_movers(self, iev_min: int) -> list[MoverData]:
         """
         Fetch IEV movers from the Exodus API using a JWT extracted from the browser.
 
         Flow:
-          1. Open stream page (contains the IEV widget + fires auth requests)
-          2. Extract JWT from localStorage
-          3. Call exodus.stockbit.com/order-trade/market-mover directly with httpx
-          4. Parse and return MoverData list
+          1. Open orderbook page (reliably fires Bearer-authenticated Exodus requests)
+          2. Intercept RS256 Bearer token from request headers
+          3. Call market-mover for main boards + special monitoring, merge results
+          4. Parse and return MoverData list filtered by iev_min
         """
+        self._assert_session_fresh()
         sync_playwright = _require_playwright()
 
         with sync_playwright() as pw:
@@ -292,28 +395,105 @@ class PlaywrightStockbitProvider(BrowserDataProvider):
                 )
 
             try:
-                # Navigate to stream — this loads auth state + fires IEV request
-                page.goto(STREAM_URL, timeout=self._timeout, wait_until="domcontentloaded")
+                token = _intercept_token(page)
+                # ORDERBOOK_PAGE_URL reliably fires Bearer-authenticated Exodus requests.
+                # STREAM_URL does not fire Bearer requests within the settle window.
+                page.goto(ORDERBOOK_PAGE_URL, timeout=self._timeout, wait_until="domcontentloaded")
                 page.wait_for_timeout(SPA_SETTLE_MS)
 
-                token = _extract_jwt(page)
-                if not token:
+                resolved = _resolve_token(page, token)
+                if not resolved:
                     logger.warning("Could not extract JWT — falling back to DOM")
                     return _scrape_movers_from_dom(page, iev_min)
 
-                logger.info("JWT extracted, calling Exodus IEV API directly")
-                body = _exodus_get(_IEV_MOVER_URL, token)
-                if body:
-                    movers = _parse_iev_response(body, iev_min)
-                    if movers:
-                        logger.info("Exodus API: %d movers (IEV >= %d)", len(movers), iev_min)
-                        return movers
-                    logger.warning("Exodus API returned data but 0 movers matched IEV >= %d", iev_min)
-                    logger.debug("Response: %s", str(body)[:500])
+                logger.info("JWT extracted, calling Exodus IEV API (all boards)")
+                try:
+                    all_movers = _fetch_iev_all_boards(resolved)
+                except StockbitSessionExpired as e:
+                    raise RuntimeError(
+                        f"{e}\n\nRun: saham stockbit login"
+                    ) from None
 
-                # Fallback: DOM scraping
+                filtered = [m for m in all_movers if m.iev >= iev_min]
+                if filtered:
+                    logger.info("Exodus API: %d movers (IEV >= %d)", len(filtered), iev_min)
+                    return filtered
+                logger.warning("Exodus API returned data but 0 movers matched IEV >= %d", iev_min)
+
                 logger.info("Falling back to DOM scraping")
                 return _scrape_movers_from_dom(page, iev_min)
+
+            finally:
+                ctx.close()
+
+    def fetch_top5_iev_with_orderbooks(self, top_n: int = 5) -> list[MoverWithOrderBook]:
+        """
+        Fetch top-N IEV movers and their live orderbook snapshots in ONE browser session.
+        Raises RuntimeError immediately if session marker is >= 8h old.
+
+        Flow:
+          1. Open browser, navigate to stream page to load auth state
+          2. Extract JWT from localStorage
+          3. Call IEV movers API for all boards (main + special monitoring), merge
+          4. Take top_n by IEV descending
+          5. For each ticker, call orderbook API via httpx
+          6. Return combined list
+
+        Args:
+            top_n: How many top IEV movers to return (default 5)
+
+        Returns:
+            List of MoverWithOrderBook sorted by IEV descending
+        """
+        self._assert_session_fresh()
+        sync_playwright = _require_playwright()
+
+        with sync_playwright() as pw:
+            if self._use_persistent():
+                ctx, page = _persistent_context(pw, self._profile_dir, self._headless)
+            else:
+                session = _load_session(self._session_file)
+                _, ctx, page = _new_authenticated_context(
+                    pw, session, headless=self._headless
+                )
+
+            try:
+                token_box = _intercept_token(page)
+                page.goto(ORDERBOOK_PAGE_URL, timeout=self._timeout, wait_until="domcontentloaded")
+                page.wait_for_timeout(SPA_SETTLE_MS)
+
+                token = _resolve_token(page, token_box)
+                if not token:
+                    logger.warning("Could not extract JWT for fetch_top5")
+                    return []
+
+                logger.info("Fetching IEV movers (all boards)...")
+                try:
+                    all_movers = _fetch_iev_all_boards(token)
+                except StockbitSessionExpired as e:
+                    raise RuntimeError(f"{e}\n\nRun: saham stockbit login") from None
+                top_movers = all_movers[:top_n]
+                logger.info("Top %d movers: %s", len(top_movers), [m.ticker for m in top_movers])
+
+                results: list[MoverWithOrderBook] = []
+                for mover in top_movers:
+                    ob_url = _ORDER_BOOK_API.format(ticker=mover.ticker.upper())
+                    body = _exodus_get(ob_url, token)
+                    bid_price, bid_lots, offer_price, offer_lots = _parse_top_of_book(body)
+                    results.append(MoverWithOrderBook(
+                        ticker=mover.ticker,
+                        iev=mover.iev,
+                        best_bid=bid_price,
+                        best_bid_lots=bid_lots,
+                        best_offer=offer_price,
+                        best_offer_lots=offer_lots,
+                    ))
+                    logger.info(
+                        "%s: bid=%s (%s lots)  offer=%s (%s lots)",
+                        mover.ticker, bid_price, bid_lots, offer_price, offer_lots,
+                    )
+
+                return results
 
             finally:
                 ctx.close()
@@ -336,10 +516,11 @@ class PlaywrightStockbitProvider(BrowserDataProvider):
                 )
 
             try:
-                page.goto(STREAM_URL, timeout=self._timeout, wait_until="domcontentloaded")
+                token_box = _intercept_token(page)
+                page.goto(ORDERBOOK_PAGE_URL, timeout=self._timeout, wait_until="domcontentloaded")
                 page.wait_for_timeout(2_000)
 
-                token = _extract_jwt(page)
+                token = _resolve_token(page, token_box)
                 if not token:
                     logger.warning("Could not extract JWT for order book")
                     return None
@@ -360,46 +541,103 @@ class PlaywrightStockbitProvider(BrowserDataProvider):
                 ctx.close()
 
 
+# ── Board-aware IEV fetcher ────────────────────────────────────────────────
+
+def _fetch_iev_all_boards(token: str) -> list[MoverData]:
+    """
+    Call IEV movers API for both board groups, merge, deduplicate, sort by IEV desc.
+
+    Mirrors how the Stockbit frontend works: two separate API calls (main boards
+    and special monitoring board), then combined into one sorted list.
+
+    Raises StockbitSessionExpired if any call returns 401.
+    """
+    seen: dict[str, int] = {}  # ticker → iev
+
+    for url in (_IEV_MOVER_URL_MAIN, _IEV_MOVER_URL_SPECIAL):
+        body = _exodus_get(url, token)  # raises StockbitSessionExpired on 401
+        if not body:
+            logger.debug("No response from %s", url)
+            continue
+        for mover in _parse_iev_response(body, iev_min=0):
+            # Keep highest IEV if ticker appears in both boards
+            if mover.iev > seen.get(mover.ticker, -1):
+                seen[mover.ticker] = mover.iev
+
+    return sorted(
+        [MoverData(ticker=t, iev=v) for t, v in seen.items()],
+        key=lambda m: m.iev,
+        reverse=True,
+    )
+
+
 # ── API response parsers ────────────────────────────────────────────────────
-# These need updating once `saham stockbit spy` reveals the real response shape.
-# Currently structured to try common patterns and log what it finds.
 
 def _parse_iev_response(body: dict, iev_min: int) -> list[MoverData]:
     """
     Parse IEV movers from the Exodus market-mover API response.
 
-    Tries common response shapes. The Exodus API typically wraps data in
-    a 'data' key containing a list of mover objects.
+    Confirmed response shape (2026-06-13):
+      data.mover_list[].stock_detail.code       → ticker
+      data.mover_list[].iepiev_detail.iev.raw   → IEV as integer
     """
     movers: list[MoverData] = []
 
-    # Unwrap common envelope patterns
+    # Primary path: data.mover_list
+    mover_list = (body.get("data") or {}).get("mover_list")
+    if isinstance(mover_list, list):
+        for item in mover_list:
+            if not isinstance(item, dict):
+                continue
+            ticker = _extract_ticker_confirmed(item)
+            iev = _extract_iev_confirmed(item)
+            if ticker and iev is not None and iev >= iev_min:
+                movers.append(MoverData(ticker=ticker, iev=iev))
+        if movers:
+            return sorted(movers, key=lambda m: m.iev, reverse=True)
+
+    # Fallback: generic traversal (handles API shape changes)
     payload = body
     for key in ("data", "result", "movers", "items"):
         if isinstance(payload, dict) and key in payload:
-            payload = payload[key]
-            if isinstance(payload, list):
+            candidate = payload[key]
+            if isinstance(candidate, list):
+                payload = candidate
                 break
 
-    if not isinstance(payload, list):
-        # Try one more level
-        candidates = _find_list_in_json(body)
-        payload = max(candidates, key=len) if candidates else []
-
-    for item in payload:
-        if not isinstance(item, dict):
-            continue
-        ticker = _extract_ticker(item)
-        iev = _extract_iev_from_mover(item)
-        if ticker and iev is not None and iev >= iev_min:
-            movers.append(MoverData(ticker=ticker, iev=iev))
+    if isinstance(payload, list):
+        for item in payload:
+            if not isinstance(item, dict):
+                continue
+            ticker = _extract_ticker(item)
+            iev = _extract_iev_from_mover(item)
+            if ticker and iev is not None and iev >= iev_min:
+                movers.append(MoverData(ticker=ticker, iev=iev))
 
     return sorted(movers, key=lambda m: m.iev, reverse=True)
 
 
+def _extract_ticker_confirmed(item: dict) -> str | None:
+    """Extract ticker from confirmed Exodus mover_list item shape."""
+    code = (item.get("stock_detail") or {}).get("code")
+    if isinstance(code, str) and 2 <= len(code) <= 6:
+        return code.upper()
+    return _extract_ticker(item)  # fallback
+
+
+def _extract_iev_confirmed(item: dict) -> int | None:
+    """Extract IEV from confirmed Exodus mover_list item shape."""
+    raw = (item.get("iepiev_detail") or {}).get("iev", {}).get("raw")
+    if raw is not None:
+        try:
+            return int(raw)
+        except (ValueError, TypeError):
+            pass
+    return _extract_iev_from_mover(item)  # fallback
+
+
 def _extract_iev_from_mover(item: dict) -> int | None:
-    """Extract IEV value — tries direct keys then nested stock object."""
-    # Direct keys
+    """Extract IEV value — generic fallback for unknown response shapes."""
     for key in ("iev", "IEV", "intraday_expected_volume", "ie_volume",
                 "expected_volume", "volume_iev"):
         val = item.get(key)
@@ -408,9 +646,7 @@ def _extract_iev_from_mover(item: dict) -> int | None:
                 return int(float(str(val).replace("K", "e3").replace("M", "e6")))
             except (ValueError, TypeError):
                 pass
-
-    # Nested under 'stock' or 'data'
-    for nested_key in ("stock", "data", "detail"):
+    for nested_key in ("stock", "data", "detail", "iepiev_detail"):
         nested = item.get(nested_key)
         if isinstance(nested, dict):
             result = _extract_iev_from_mover(nested)
@@ -422,9 +658,101 @@ def _extract_iev_from_mover(item: dict) -> int | None:
 def _parse_order_book_response(body: dict) -> OrderBookBid | None:
     """
     Parse order book API response from Exodus.
-    Looks for the bid side (buy orders) and returns the largest by volume.
+    Uses confirmed company-price-feed/v2/orderbook response shape.
     """
-    return _find_best_bid_in_json(body)
+    bid_price, bid_lots, _, _ = _parse_top_of_book(body)
+    if bid_price is not None and bid_lots is not None:
+        return OrderBookBid(price=bid_price, volume=bid_lots)
+    return None
+
+
+def _parse_top_of_book(
+    body: dict | None,
+) -> tuple[Decimal | None, int | None, Decimal | None, int | None]:
+    """
+    Extract best bid and best offer from a company-price-feed/v2/orderbook response.
+
+    Returns (bid_price, bid_lots, offer_price, offer_lots).
+
+    Confirmed response shape (2026-06-13):
+      data.iepiev.best_bid_offer.bid.price.raw      → best bid price (int)
+      data.iepiev.best_bid_offer.bid.quantity.raw   → best bid lots (int, already in lots)
+      data.iepiev.best_bid_offer.offer.price.raw    → best offer price (int)
+      data.iepiev.best_bid_offer.offer.quantity.raw → best offer lots (int, already in lots)
+
+    The data.bid[] / data.offer[] lists contain full depth (price as string, volume in shares).
+    The iepiev.best_bid_offer represents the pre-open equilibrium top-of-book.
+    """
+    if not body:
+        return None, None, None, None
+
+    data = body.get("data") if isinstance(body, dict) else None
+    if not isinstance(data, dict):
+        return None, None, None, None
+
+    # Primary: iepiev.best_bid_offer (confirmed, values already in lots)
+    bbo = (data.get("iepiev") or {}).get("best_bid_offer") or {}
+    bid_raw = (bbo.get("bid") or {})
+    offer_raw = (bbo.get("offer") or {})
+
+    bid_price = _safe_decimal((bid_raw.get("price") or {}).get("raw"))
+    bid_lots = _safe_int((bid_raw.get("quantity") or {}).get("raw"))
+    offer_price = _safe_decimal((offer_raw.get("price") or {}).get("raw"))
+    offer_lots = _safe_int((offer_raw.get("quantity") or {}).get("raw"))
+
+    # If iepiev is missing/zero, fall back to data.bid[0] / data.offer[0]
+    # Note: volume in bid/offer list is shares; divide by 100 for lots.
+    if bid_price is None or bid_price == 0:
+        bid_list = data.get("bid") or []
+        if bid_list and isinstance(bid_list[0], dict):
+            entry = bid_list[0]
+            bid_price = _safe_decimal(entry.get("price"))
+            shares = _safe_int(entry.get("volume"))
+            bid_lots = (shares // 100) if shares else None
+
+    if offer_price is None or offer_price == 0:
+        offer_list = data.get("offer") or []
+        if offer_list and isinstance(offer_list[0], dict):
+            entry = offer_list[0]
+            offer_price = _safe_decimal(entry.get("price"))
+            shares = _safe_int(entry.get("volume"))
+            offer_lots = (shares // 100) if shares else None
+
+    return bid_price, bid_lots, offer_price, offer_lots
+
+
+def _safe_decimal(val) -> Decimal | None:
+    if val is None:
+        return None
+    try:
+        d = Decimal(str(val))
+        return d if d > 0 else None
+    except (InvalidOperation, TypeError):
+        return None
+
+
+def _safe_int(val) -> int | None:
+    if val is None:
+        return None
+    try:
+        return int(val)
+    except (ValueError, TypeError):
+        return None
+
+
+def _find_side_list(obj: Any, keys: tuple[str, ...], depth: int = 0) -> list | None:
+    """Recursively search for a named list (bid side or offer side) in JSON."""
+    if depth > 5 or not isinstance(obj, dict):
+        return None
+    for key in keys:
+        val = obj.get(key) or obj.get(key.upper())
+        if isinstance(val, list) and val:
+            return val
+    for v in obj.values():
+        result = _find_side_list(v, keys, depth + 1)
+        if result:
+            return result
+    return None
 
 
 def _parse_movers_from_api(
@@ -575,7 +903,8 @@ def _extract_price(item: dict) -> Decimal | None:
 
 
 def _extract_volume(item: dict) -> int | None:
-    for key in ("volume", "lot", "lots", "qty", "quantity", "vol", "v"):
+    # Stockbit orderbook uses "lot" as the column name (visible in UI)
+    for key in ("lot", "lots", "volume", "qty", "quantity", "vol", "v"):
         val = item.get(key) or item.get(key.upper())
         if val is not None:
             try:
@@ -839,6 +1168,21 @@ def save_stockbit_session(
                 f"  The browser profile stores all cookies and tokens.\n"
                 f"  It will stay logged in across runs (like a Chrome profile)."
             )
+
+            # Warm up the API token in headless mode so the first autonomous
+            # command after login doesn't hit a 401. The orderbook page reliably
+            # fires Bearer-authenticated Exodus API requests on load.
+            print("\nWarming up API token (headless)...", end=" ", flush=True)
+            try:
+                with sync_playwright() as _pw:
+                    _ctx, _page = _persistent_context(_pw, profile_dir, headless=True)
+                    _page.goto(ORDERBOOK_PAGE_URL, timeout=NAV_TIMEOUT, wait_until="domcontentloaded")
+                    _page.wait_for_timeout(SPA_SETTLE_MS)
+                    _ctx.close()
+                print("done.")
+            except Exception as _e:
+                print(f"skipped ({_e})")
+
             print("Run 'saham stockbit status' to verify.")
             print("Run 'saham stockbit spy' to discover API endpoints.")
         else:
@@ -863,12 +1207,15 @@ def get_session_status(
                 age_hours = round((time.time() - float(marker.read_text())) / 3600, 1)
             except Exception:
                 pass
+        # Stockbit API tokens typically expire within 8–12 hours.
+        # Flag sessions older than 8h as needing re-login.
+        likely_valid = age_hours is None or age_hours < 8
         return {
             "exists": True,
             "type": "persistent_profile",
             "path": str(profile_dir),
             "age_hours": age_hours,
-            "likely_valid": True,
+            "likely_valid": likely_valid,
         }
 
     # Fall back to legacy cookie file

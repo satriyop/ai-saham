@@ -330,3 +330,76 @@ def test(
         typer.echo(typer.style(f"  ✗ Error: {e}", fg=typer.colors.RED))
 
     typer.echo("")
+
+
+@stockbit_app.command("fetch-top5")
+def fetch_top5(
+    top: Annotated[
+        int,
+        typer.Option("--top", help="How many top IEV movers to fetch", min=1, max=20),
+    ] = 5,
+    session: Annotated[
+        Optional[Path],
+        typer.Option("--session", help="Path to session file"),
+    ] = None,
+    headless: Annotated[
+        bool,
+        typer.Option("--headless/--no-headless", help="Run browser headless"),
+    ] = True,
+) -> None:
+    """
+    Fetch top-N IEV movers and their live orderbook snapshots in one session.
+
+    Calls the Exodus IEV movers API (all boards: main + special monitoring),
+    takes the top N by IEV, then fetches the orderbook for each ticker.
+    Displays a ranked table with best bid and best offer.
+
+    Examples:
+        saham stockbit fetch-top5
+        saham stockbit fetch-top5 --top 10
+        saham stockbit fetch-top5 --no-headless   (see the browser)
+    """
+    _require_playwright_cli()
+    from src.infrastructure.browser.playwright_stockbit import PlaywrightStockbitProvider
+
+    resolved_session = session or DEFAULT_SESSION_FILE
+    provider = PlaywrightStockbitProvider(
+        session_file=resolved_session,
+        headless=headless,
+    )
+
+    typer.echo("")
+    typer.echo(f"Fetching top {top} IEV movers + orderbooks...")
+    typer.echo("(one browser session — this may take 10-20 seconds)")
+    typer.echo("")
+
+    try:
+        results = provider.fetch_top5_iev_with_orderbooks(top_n=top)
+    except Exception as e:
+        typer.echo(typer.style(f"Error: {e}", fg=typer.colors.RED), err=True)
+        raise typer.Exit(1)
+
+    if not results:
+        typer.echo(typer.style("No results returned.", fg=typer.colors.YELLOW))
+        typer.echo("Try: saham stockbit login  (session may have expired)")
+        return
+
+    typer.echo(
+        f"  {'#':<4} {'TICKER':<8} {'IEV':>12}   "
+        f"{'BEST BID':>10} {'LOTS':>8}   {'BEST OFFER':>10} {'LOTS':>8}"
+    )
+    typer.echo("  " + "-" * 68)
+
+    for rank, r in enumerate(results, start=1):
+        bid_str = f"{r.best_bid:,.0f}" if r.best_bid is not None else "—"
+        bid_lots_str = f"{r.best_bid_lots:,}" if r.best_bid_lots is not None else "—"
+        offer_str = f"{r.best_offer:,.0f}" if r.best_offer is not None else "—"
+        offer_lots_str = f"{r.best_offer_lots:,}" if r.best_offer_lots is not None else "—"
+
+        line = (
+            f"  {rank:<4} {r.ticker:<8} {r.iev:>12,}   "
+            f"{bid_str:>10} {bid_lots_str:>8}   {offer_str:>10} {offer_lots_str:>8}"
+        )
+        typer.echo(typer.style(line, fg=typer.colors.GREEN) if rank <= 3 else line)
+
+    typer.echo("")

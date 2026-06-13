@@ -38,6 +38,27 @@ class OrderBookBid:
     volume: int
 
 
+@dataclass(frozen=True)
+class MoverWithOrderBook:
+    """Top IEV mover combined with its live orderbook top-of-book snapshot.
+
+    Attributes:
+        ticker: IDX ticker symbol
+        iev: Intraday External Volume
+        best_bid: Highest bid price (None if orderbook unavailable)
+        best_bid_lots: Lots queued at best bid
+        best_offer: Lowest offer price (None if orderbook unavailable)
+        best_offer_lots: Lots queued at best offer
+    """
+
+    ticker: str
+    iev: int
+    best_bid: Decimal | None
+    best_bid_lots: int | None
+    best_offer: Decimal | None
+    best_offer_lots: int | None
+
+
 @dataclass
 class ScreenerCandidate:
     """A ticker that passed pre-open screening, with entry plan.
