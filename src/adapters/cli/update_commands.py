@@ -53,6 +53,24 @@ DEFAULT_DAYS = 90
 STOCKBIT_TOKEN_PATH = Path("stockbit_token.json")
 
 
+def _cached_status(latest: date, end_date: date) -> str:
+    """Return an explicit cache status for update output."""
+    lag_days = (end_date - latest).days
+    if lag_days <= 0:
+        return "cached-current"
+    return f"cached({lag_days}d lag)"
+
+
+def _no_new_data_status(latest: date | None) -> str:
+    if latest is None:
+        return "provider-no-data"
+    return f"provider-no-new-data(latest={latest.isoformat()})"
+
+
+def _is_cached_status(status: str) -> bool:
+    return status == "cached-current"
+
+
 def _auto_broker_provider():
     """Return Stockbit if token exists, IDX otherwise."""
     if STOCKBIT_TOKEN_PATH.exists():
@@ -81,23 +99,41 @@ def _fetch_candles(
 
     end_date = date.today()
     days_to_fetch = days
+    force_provider = refresh
+    previous_latest: date | None = None
 
     if not refresh:
         existing = repo.get_date_range(ticker)
         if existing:
             _, latest = existing
-            # 5-day window covers weekends + IDX multi-day holidays (e.g. Eid al-Adha)
-            if latest >= end_date - timedelta(days=5):
-                return "fresh"
+            previous_latest = latest
+            if latest >= end_date:
+                return _cached_status(latest, end_date)
             # Only fetch the gap from latest+1 to today
             days_to_fetch = (end_date - (latest + timedelta(days=1))).days + 1
+            force_provider = True
 
     use_case = FetchMarketDataUseCase(provider=provider, repository=repo)
 
     try:
         resp = use_case.execute(
-            FetchMarketDataRequest(ticker=ticker, days=days_to_fetch, refresh=refresh)
+            FetchMarketDataRequest(
+                ticker=ticker,
+                days=days_to_fetch,
+                refresh=force_provider,
+            )
         )
+        if previous_latest is not None:
+            updated_range = repo.get_date_range(ticker)
+            updated_latest = updated_range[1] if updated_range else previous_latest
+            if updated_latest <= previous_latest:
+                return _no_new_data_status(previous_latest)
+            new_candles = repo.get_candles(
+                ticker,
+                start_date=previous_latest + timedelta(days=1),
+                end_date=updated_latest,
+            )
+            return f"+{len(new_candles)}d"
         return f"+{resp.count}d"
     except Exception as e:
         return f"ERR:{str(e)[:30]}"
@@ -116,14 +152,15 @@ def _fetch_broker(
 
     end_date = date.today()
     repo = SQLiteBrokerRepository(db_path)
+    previous_latest: date | None = None
 
     if not refresh:
         existing = repo.get_date_range(ticker)
         if existing:
             _, latest = existing
-            # 5-day window covers weekends + IDX multi-day holidays (e.g. Eid al-Adha)
-            if latest >= end_date - timedelta(days=5):
-                return "fresh"
+            previous_latest = latest
+            if latest >= end_date:
+                return _cached_status(latest, end_date)
             # Only fetch the gap from latest+1 to today
             start_date = latest + timedelta(days=1)
         else:
@@ -142,6 +179,8 @@ def _fetch_broker(
                 refresh=refresh,
             )
         )
+        if previous_latest is not None and not resp.summaries:
+            return _no_new_data_status(previous_latest)
         return f"+{len(resp.summaries)}d"
     except BrokerDataAuthError:
         return "ERR:auth"
@@ -256,7 +295,7 @@ def update(
             )
 
         any_error = "ERR:" in candles_status or "ERR:" in broker_status
-        all_fresh = candles_status == "fresh" and broker_status == "fresh"
+        all_cached = _is_cached_status(candles_status) and _is_cached_status(broker_status)
 
         if any_error:
             fail_count += 1
@@ -264,7 +303,7 @@ def update(
             status_color = typer.colors.RED
         else:
             ok_count += 1
-            status_color = typer.colors.BRIGHT_BLACK if all_fresh else typer.colors.GREEN
+            status_color = typer.colors.BRIGHT_BLACK if all_cached else typer.colors.GREEN
 
         typer.echo(
             f"  {progress} {ticker:<6} "

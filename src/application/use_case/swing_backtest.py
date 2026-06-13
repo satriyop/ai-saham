@@ -27,6 +27,7 @@ from src.domain.ports.market_data_repository import MarketDataRepository
 
 SHARES_PER_LOT = 100
 FOREIGN_BOUNCE_PRESET = "foreign-bounce"
+DEFAULT_SWING_COST_BPS = Decimal("20")
 
 
 @dataclass(frozen=True)
@@ -50,7 +51,7 @@ class SwingBacktestRequest:
     take_profit_pct: Decimal = Decimal("5")
     stop_loss_pct: Decimal = Decimal("5")
     max_hold_days: int = 10
-    cost_bps: Decimal = Decimal("0")
+    cost_bps: Decimal = DEFAULT_SWING_COST_BPS
     include_regime: bool = False
     benchmark_ticker: str = "^JKSE"
     allowed_regimes: tuple[str, ...] = ()
@@ -150,6 +151,7 @@ class SwingBacktestResponse:
     start_date: date
     end_date: date
     initial_capital: Decimal
+    cost_bps: Decimal
     final_equity: Decimal
     total_return_pct: float
     max_drawdown_pct: float
@@ -307,6 +309,7 @@ class SwingBacktestUseCase:
             start_date=request.start_date,
             end_date=request.end_date,
             initial_capital=request.capital,
+            cost_bps=request.cost_bps,
             final_equity=final_equity,
             total_return_pct=_pct_change(final_equity, request.capital),
             max_drawdown_pct=self._max_drawdown(equity_curve),

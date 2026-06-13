@@ -2,9 +2,9 @@
 CLI commands for foreign accumulation screening and universe management.
 
 Commands:
-  saham screen accumulation        — scan stocks for foreign accumulation patterns
-  saham screen accumulation-log    — log a candidate to the trade journal
-  saham screen accumulation-review — review journal forward returns
+  saham swing screen  — scan stocks for foreign accumulation patterns
+  saham swing log     — log a candidate to the trade journal
+  saham swing review  — review journal forward returns
   saham universe list              — show configured ticker universes
   saham universe update            — refresh universe lists from IDX (future)
 
@@ -39,6 +39,7 @@ from src.application.use_case.accumulation_screen import (
 from src.infrastructure.persistence.sqlite_broker_repository import (
     SQLiteBrokerRepository,
 )
+from src.infrastructure.config.user_config import get_swing_default
 from src.infrastructure.persistence.sqlite_market_repository import (
     SQLiteMarketRepository,
 )
@@ -135,7 +136,7 @@ def _display_results(
     typer.echo("=" * _TABLE_WIDTH)
     typer.echo(
         f"FOREIGN ACCUMULATION — {universe_label.upper()} "
-        f"| {response.window_days}d window | {response.screened_at}"
+        f"| {response.window_days} sessions | {response.screened_at}"
     )
     typer.echo("=" * _TABLE_WIDTH)
 
@@ -159,7 +160,7 @@ def _display_results(
         net_days_str = f"{c.net_buy_days}/{c.total_days}"
         vwap_str = f"{c.vwap_discount_pct:+.1f}%" if c.vwap_discount_pct is not None else "    —  "
         rsi_str = f"{c.rsi:.1f}" if c.rsi is not None else "  —"
-        streak_str = f"{c.consecutive_streak}d"
+        streak_str = f"{c.consecutive_streak}s"
         flow_str = f"{c.avg_flow_ratio:+.1f}" if c.avg_flow_ratio is not None else "   —"
         if c.bb_width_pctile is not None:
             pct_int = int(c.bb_width_pctile * 100)
@@ -218,7 +219,7 @@ def _display_results(
     typer.echo("BB%ILE: BB Width pctile vs last 60d — green(≤20%) = squeeze (coiled spring)")
     typer.echo("Score 0–120 | consistency 40 | streak 30 | VWAP 20 | RSI 10 | flow 10 | BB 10 | inst 5")
     typer.echo("")
-    typer.echo("Swing trade watchlist — cross-check with `saham screen pre-open` for intraday entry timing.")
+    typer.echo("Swing trade watchlist — cross-check with `saham intraday pre-open` for intraday entry timing.")
     typer.echo("DISCLAIMER: Analysis only, not trading advice.")
     typer.echo("=" * _TABLE_WIDTH)
 
@@ -280,7 +281,7 @@ def _display_multi(
         if sort_by == "max":
             return max(scores)
         try:
-            w = int(sort_by.rstrip("d"))
+            w = int(sort_by.rstrip("ds"))
             c = pw.get(w)
             return c.score if c else 0.0
         except (ValueError, AttributeError):
@@ -301,7 +302,7 @@ def _display_multi(
         typer.echo("=" * _TABLE_WIDTH)
         return
 
-    win_headers = "  ".join(f"{w:>4}d" for w in windows)
+    win_headers = "  ".join(f"{w:>4}s" for w in windows)
     typer.echo(f"{'#':>3} {'TICKER':<7} {win_headers}  {'PATTERN':<18} {'TREND':>5}")
     typer.echo("-" * _SEP_WIDTH)
 
@@ -370,8 +371,9 @@ def _print_column_guide() -> None:
 
     # ── NET_DAYS ──
     _h("NET_DAYS  — Consistency Ratio  (e.g. 5/7)")
-    typer.echo("  Net buy days / total days in window. 5/7 = foreigners bought on 5")
-    typer.echo("  of the last 7 trading days. This is the highest-weight signal (40 pts).")
+    typer.echo("  Net buy days / total broker sessions in the window. 5/7 =")
+    typer.echo("  foreigners bought on 5 of the last 7 broker sessions. This is")
+    typer.echo("  the highest-weight signal (40 pts).")
     _row("100% (4/4, 7/7)", "Every day was a buy — strong conviction")
     _row("70–99%", "Most days positive — healthy trend")
     _row("50–69%", "Mixed — watch for deterioration")
@@ -381,7 +383,7 @@ def _print_column_guide() -> None:
 
     # ── NET_VALUE ──
     _h("NET_VALUE  — Total Net Foreign Flow (IDR)")
-    typer.echo("  Total (foreign buys − foreign sells) over the window in IDR.")
+    typer.echo("  Total (foreign buys − foreign sells) over the broker-session window in IDR.")
     typer.echo("  Confirms real money is behind the consistency signal.")
     _row("+19.4B", "Net bought Rp 19.4 billion — meaningful size")
     _row("+10M", "Net bought Rp 10 million — may be too small")
@@ -524,7 +526,7 @@ def accumulation_run(
         int,
         typer.Option(
             "--window", "-w",
-            help="Analysis window in days (7, 30, or 90)",
+            help="Analysis window in broker sessions (7, 30, or 90)",
             min=3,
         ),
     ] = 7,
@@ -533,9 +535,9 @@ def accumulation_run(
         typer.Option("--min-streak", help="Minimum consecutive buy days required", min=0),
     ] = 0,
     min_score: Annotated[
-        float,
-        typer.Option("--min-score", help="Minimum composite score (0–120)", min=0),
-    ] = 0.0,
+        Optional[float],
+        typer.Option("--min-score", help="Minimum composite score (0–120, default: 70)", min=0),
+    ] = None,
     vwap_only: Annotated[
         bool,
         typer.Option("--vwap-only", help="Only show stocks where foreigners are underwater"),
@@ -562,11 +564,17 @@ def accumulation_run(
     ] = False,
     windows: Annotated[
         Optional[str],
-        typer.Option("--windows", help="Comma-separated window days for --multi (default: 7,30,90)"),
+        typer.Option("--windows", help="Comma-separated broker-session windows for --multi (default: 7,30,90)"),
     ] = None,
     sort_by: Annotated[
         str,
-        typer.Option("--sort-by", help="In --multi mode, sort by: avg|max|7d|30d|90d (default: avg)"),
+        typer.Option(
+            "--sort-by",
+            help=(
+                "In --multi mode, sort by: avg|max|7s|30s|90s "
+                "(legacy 7d/30d/90d also accepted; default: avg)"
+            ),
+        ),
     ] = "avg",
     output_format: Annotated[
         str,
@@ -595,25 +603,28 @@ def accumulation_run(
     Run `saham update --universe lq45` first to ensure fresh data.
 
     Examples:
-        saham screen accumulation --universe lq45
-        saham screen accumulation --universe lq45 --window 30
-        saham screen accumulation --universe lq45 --multi
-        saham screen accumulation --universe lq45 --multi --sort-by 30d
-        saham screen accumulation --universe lq45 --min-score 50 --top 10
-        saham screen accumulation BBCA BBRI BMRI --window 7
-        saham screen accumulation --universe lq45 --vwap-only
-        saham screen accumulation --universe lq45 --squeeze-only
-        saham screen accumulation --universe lq45 --granular
-        saham screen accumulation --universe lq45 --breakdown
-        saham screen accumulation --universe lq45 --explain
-        saham screen accumulation --guide
-        saham screen accumulation --universe lq45 --format json
+        saham swing screen --universe lq45
+        saham swing screen --universe lq45 --window 30
+        saham swing screen --universe lq45 --multi
+        saham swing screen --universe lq45 --multi --sort-by 30s
+        saham swing screen --universe lq45 --min-score 50 --top 10
+        saham swing screen BBCA BBRI BMRI --window 7
+        saham swing screen --universe lq45 --vwap-only
+        saham swing screen --universe lq45 --squeeze-only
+        saham swing screen --universe lq45 --granular
+        saham swing screen --universe lq45 --breakdown
+        saham swing screen --universe lq45 --explain
+        saham swing screen --guide
+        saham swing screen --universe lq45 --format json
     """
     if guide:
         _print_column_guide()
         return
 
     resolved_db = db_path or DEFAULT_DB_PATH
+
+    if min_score is None:
+        min_score = float(get_swing_default("min_score", 70.0))
 
     # Resolve tickers
     try:
@@ -656,7 +667,8 @@ def accumulation_run(
     if multi:
         window_list = [int(w.strip()) for w in (windows or "7,30,90").split(",")]
         typer.echo(
-            f"Screening {len(ticker_list)} tickers | windows: {', '.join(str(w)+'d' for w in window_list)}..."
+            f"Screening {len(ticker_list)} tickers | windows: "
+            f"{', '.join(str(w) + ' sessions' for w in window_list)}..."
         )
         multi_results = _run_multi(use_case, ticker_list, window_list, base_request)
         screened_at = next(iter(multi_results.values())).screened_at
@@ -665,10 +677,10 @@ def accumulation_run(
             by_ticker: dict = {}
             for w, resp in multi_results.items():
                 for c in resp.candidates:
-                    by_ticker.setdefault(c.ticker, {})[f"{w}d"] = c.to_dict()
+                    by_ticker.setdefault(c.ticker, {})[f"{w}_sessions"] = c.to_dict()
             typer.echo(json.dumps({
                 "mode": "multi",
-                "windows": [f"{w}d" for w in sorted(multi_results.keys())],
+                "windows": [f"{w}_sessions" for w in sorted(multi_results.keys())],
                 "screened_at": str(screened_at),
                 "tickers": by_ticker,
             }, indent=2, default=str))
@@ -688,7 +700,7 @@ def accumulation_run(
 
     # --- Single-window mode ---
     typer.echo(
-        f"Screening {len(ticker_list)} tickers | {window}d window..."
+        f"Screening {len(ticker_list)} tickers | {window} sessions..."
     )
     response = use_case.execute(base_request)
 
@@ -736,7 +748,7 @@ def _display_audit_summary(response: AccumulationAuditResponse, top_groups: int)
     typer.echo(typer.style("=" * 96, fg=typer.colors.CYAN))
     typer.echo(
         f"Period: {response.start_date} to {response.end_date} | "
-        f"window: {response.window_days}d | replay dates: {response.total_replay_dates} | "
+        f"window: {response.window_days} sessions | replay dates: {response.total_replay_dates} | "
         f"tickers: {response.total_tickers}"
     )
     typer.echo(
@@ -923,7 +935,7 @@ def accumulation_audit(
     ] = None,
     window: Annotated[
         Optional[int],
-        typer.Option("--window", "-w", help="Accumulation window in days", min=3),
+        typer.Option("--window", "-w", help="Accumulation window in broker sessions", min=3),
     ] = None,
     min_score: Annotated[
         Optional[float],
@@ -1096,7 +1108,7 @@ def accumulation_audit(
 
     typer.echo(
         f"Auditing {len(ticker_list)} tickers | {start_date} to {end_date} | "
-        f"{window}d window | min score {min_score:g}{filter_label}..."
+        f"{window} sessions | min score {min_score:g}{filter_label}..."
     )
 
     use_case = AccumulationAuditUseCase(
@@ -1183,7 +1195,7 @@ def universe_list(
     typer.echo(f"Config file: {resolved_config}")
     typer.echo("")
     typer.echo("Usage: saham update --universe <name>")
-    typer.echo("       saham screen accumulation --universe <name>")
+    typer.echo("       saham swing screen --universe <name>")
 
 
 @universe_app.command("update")
@@ -1228,7 +1240,7 @@ def accumulation_log(
     ],
     window: Annotated[
         int,
-        typer.Option("--window", "-w", help="Accumulation window in days", min=3),
+        typer.Option("--window", "-w", help="Accumulation window in broker sessions", min=3),
     ] = 7,
     entry_price: Annotated[
         Optional[float],
@@ -1251,8 +1263,8 @@ def accumulation_log(
     never duplicates rows.
 
     Example:
-        saham screen accumulation-log --ticker BBRI --window 7
-        saham screen accumulation-log --ticker BBCA --entry-price 9450
+        saham swing log --ticker BBRI --window 7
+        saham swing log --ticker BBCA --entry-price 9450
     """
     from src.application.services.accumulation_journal import AccumulationJournalService
     from src.infrastructure.persistence.accumulation_journal_csv_writer import (
@@ -1319,7 +1331,7 @@ def accumulation_log(
             resolved_entry = Decimal("0")
     else:
         typer.echo(
-            f"Warning: no accumulation data for {ticker_upper} in the last {window}d. "
+            f"Warning: no accumulation data for {ticker_upper} in the last {window} broker sessions. "
             "Logging with score=0.",
             err=True,
         )
@@ -1339,14 +1351,14 @@ def accumulation_log(
 
     if count == 0:
         typer.echo(
-            f"Already logged {ticker_upper} for {logged_at} (window={window}d) — "
+            f"Already logged {ticker_upper} for {logged_at} (window={window} sessions) — "
             f"no new row added ({journal_path})"
         )
     else:
         score_str = f"{candidate.score:.1f}" if candidate else "0.0"
         pattern_str = f" | pattern: {pattern}" if pattern else ""
         typer.echo(
-            f"Logged {ticker_upper} | {logged_at} | window={window}d | "
+            f"Logged {ticker_upper} | {logged_at} | window={window} sessions | "
             f"score={score_str}{pattern_str} → {journal_path}"
         )
 
@@ -1376,8 +1388,8 @@ def accumulation_review(
     what the accumulation score thresholds actually delivered.
 
     Example:
-        saham screen accumulation-review
-        saham screen accumulation-review --horizon 10 --min-score 70
+        saham swing review
+        saham swing review --horizon 10 --min-score 70
     """
     from src.application.services.accumulation_journal import AccumulationJournalService
     from src.infrastructure.persistence.accumulation_journal_csv_writer import (
@@ -1390,7 +1402,7 @@ def accumulation_review(
     if not journal_path.exists():
         typer.echo(
             f"No journal found at '{journal_path}'.\n"
-            "Run `saham screen accumulation-log --ticker BBRI` first.",
+            "Run `saham swing log --ticker BBRI` first.",
             err=True,
         )
         raise typer.Exit(1)

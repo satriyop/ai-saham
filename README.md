@@ -71,10 +71,10 @@ saham broker fetch BBCA --days 30
 saham update --universe lq45
 
 # Screen for foreign accumulation
-saham screen accumulation --universe lq45 --multi
+saham swing screen --universe lq45 --multi
 
 # Unified swing analysis
-saham swing BBRI --capital 10000000
+saham swing analyze BBRI --capital 10000000
 
 # Terminal chart
 saham chart price BBCA
@@ -507,38 +507,38 @@ saham universe update --universe lq45    # Instructions to update universe
 
 ---
 
-### `saham screen accumulation` - Foreign Accumulation Screener
+### `saham swing screen` - Foreign Accumulation Screener
 
 Screen stocks for institutional foreign accumulation patterns.
 
 ```bash
 # Single window
-saham screen accumulation --universe lq45
-saham screen accumulation --universe lq45 --window 30
-saham screen accumulation BBCA BBRI BMRI --window 7
+saham swing screen --universe lq45
+saham swing screen --universe lq45 --window 30
+saham swing screen BBCA BBRI BMRI --window 7
 
-# Multi-window (7d, 30d, 90d side-by-side)
-saham screen accumulation --universe lq45 --multi
-saham screen accumulation --universe lq45 --multi --sort-by 30d
+# Multi-window (7, 30, 90 broker sessions side-by-side)
+saham swing screen --universe lq45 --multi
+saham swing screen --universe lq45 --multi --sort-by 30s
 
 # Filters
-saham screen accumulation --universe lq45 --min-score 50 --top 10
-saham screen accumulation --universe lq45 --vwap-only
-saham screen accumulation --universe lq45 --squeeze-only
-saham screen accumulation --universe lq45 --granular
-saham screen accumulation --universe lq45 --breakdown
+saham swing screen --universe lq45 --min-score 50 --top 10
+saham swing screen --universe lq45 --vwap-only
+saham swing screen --universe lq45 --squeeze-only
+saham swing screen --universe lq45 --granular
+saham swing screen --universe lq45 --breakdown
 
 # Column reference guide
-saham screen accumulation --guide
+saham swing screen --guide
 
 # JSON output
-saham screen accumulation --universe lq45 --format json
+saham swing screen --universe lq45 --format json
 ```
 
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
 | `--universe` | `-u` | | Universe: lq45, idx80, idxcomp100, cached |
-| `--window` | `-w` | 7 | Analysis window in days (7, 30, 90) |
+| `--window` | `-w` | 7 | Analysis window in broker sessions (7, 30, 90) |
 | `--min-streak` | | 0 | Minimum consecutive buy days |
 | `--min-score` | | 0.0 | Minimum composite score (0-120) |
 | `--vwap-only` | | false | Only stocks where foreigners are underwater |
@@ -547,28 +547,28 @@ saham screen accumulation --universe lq45 --format json
 | `--granular` | | false | Show per-broker detail (Stockbit data) |
 | `--breakdown` | | false | Show per-component score breakdown |
 | `--multi` | | false | Show scores across multiple windows |
-| `--windows` | | 7,30,90 | Comma-separated windows for --multi |
-| `--sort-by` | | avg | Sort by: avg, max, 7d, 30d, 90d |
+| `--windows` | | 7,30,90 | Comma-separated broker-session windows for --multi |
+| `--sort-by` | | avg | Sort by: avg, max, 7s, 30s, 90s. Legacy 7d/30d/90d labels are also accepted. |
 | `--format` | | table | Output format: table or json |
 | `--guide` | | false | Print column reference guide |
 | `--explain` | | false | Print column guide after results |
 
 **Score components (0-120 total):** consistency (40) + streak (30) + VWAP discount (20) + RSI headroom (10) + flow % (10) + BB squeeze (10) + institutional flag (5)
 
-#### `saham screen accumulation audit` - Historical Audit
+#### `saham swing audit` - Historical Audit
 
 Replay accumulation signals historically and measure forward returns.
 
 ```bash
-saham screen accumulation audit --universe idx80 --preset foreign-bounce
-saham screen accumulation audit --universe idx80 --window 7 --min-score 70
-saham screen accumulation audit --universe lq45 --simulate-exits
+saham swing audit --universe idx80 --preset foreign-bounce
+saham swing audit --universe idx80 --window 7 --min-score 70
+saham swing audit --universe lq45 --simulate-exits
 ```
 
-#### `saham screen accumulation-log` - Log to Journal
+#### `saham swing log` - Log to Journal
 
 ```bash
-saham screen accumulation-log --ticker BBRI --window 7
+saham swing log --ticker BBRI --window 7
 ```
 
 ---
@@ -615,13 +615,15 @@ Unified composite swing trade analysis combining accumulation, risk, sizing, bac
 
 ```bash
 # Full analysis
-saham swing BBRI
-saham swing BBRI --capital 10000000
-saham swing BBRI --preset foreign-bounce --capital 10000000
-saham swing BBRI --capital 10000000 --risk-pct 1
-saham swing BBRI --profile conservative --no-sentiment
-saham swing BBRI --with-regime
-saham swing BBRI --format json
+saham swing analyze BBRI
+saham swing analyze BBRI --capital 10000000
+saham swing analyze BBRI --preset foreign-bounce --capital 10000000
+saham swing analyze BBRI --capital 10000000 --risk-pct 1
+saham swing analyze BBRI --profile conservative --no-sentiment
+saham swing analyze BBRI --no-refresh --no-backtest --no-sentiment
+saham swing analyze BBRI --force-refresh
+saham swing analyze BBRI --with-regime
+saham swing analyze BBRI --format json
 ```
 
 | Option | Short | Default | Description |
@@ -629,7 +631,8 @@ saham swing BBRI --format json
 | `--profile` | `-p` | balanced | Risk profile |
 | `--strategy` | `-S` | foreign-accumulation | Backtest strategy name |
 | `--preset` | | | Swing preset: foreign-bounce |
-| `--window` | `-w` | 7 | Accumulation window in days |
+| `--window` | `-w` | 7 | Accumulation window in broker sessions |
+| `--flow-window` | | 30 | Broker-flow detail window in broker sessions |
 | `--capital` | `-c` | | Capital in IDR (enables sizing) |
 | `--risk-pct` | | 1.0 | % of capital at risk per trade |
 | `--entry` | | | Entry price override |
@@ -637,6 +640,8 @@ saham swing BBRI --format json
 | `--rr` | | 2.0 | Reward:risk ratio |
 | `--no-sentiment` | | false | Skip news sentiment |
 | `--no-backtest` | | false | Skip historical backtest |
+| `--no-refresh` | | false | Disable automatic single-ticker candle/broker refresh |
+| `--force-refresh` | | false | Force provider refresh even when cached data is fresh |
 | `--with-regime` | | false | Add market regime context |
 | `--format` | | table | Output format: table or json |
 
@@ -646,7 +651,11 @@ saham swing BBRI --format json
 saham swing backtest --universe idx80 --preset foreign-bounce
 saham swing backtest --universe lq45 --capital 50000000 --max-positions 3
 saham swing backtest --universe idx80 --with-regime --allow-regimes BULLISH,SIDEWAYS
+saham swing backtest --universe idx80 --cost-bps 0  # gross/no-cost comparison
 ```
+
+Default backtests include `--cost-bps 20` one-way transaction cost. Override explicitly
+when testing a different broker fee assumption.
 
 #### `saham swing compare` - Compare Regime Variants
 
@@ -664,11 +673,11 @@ saham swing size BBRI --capital 10000000 --risk-pct 2 --entry 4825
 
 #### `saham swing screen` - Accumulation Screener
 
-Alias for `saham screen accumulation run`.
+Alias for the accumulation screener.
 
 #### `saham swing audit` - Accumulation Audit
 
-Alias for `saham screen accumulation audit`.
+Alias for the accumulation audit.
 
 #### `saham swing log` / `saham swing review`
 

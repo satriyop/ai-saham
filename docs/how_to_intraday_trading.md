@@ -383,7 +383,7 @@ Setelah kamu masukkan opening prices aktual:
 saham update --universe lq45
 ```
 
-Refresh data harga + broker flow. Kalau sudah fresh (< 5 hari), otomatis di-skip.
+Refresh data harga + broker flow. Kalau cache belum mencapai tanggal hari ini, `saham update` mencoba mengisi gap ke provider. `cached-current` berarti cache sudah sampai hari ini; `provider-no-new-data(latest=YYYY-MM-DD)` berarti provider sudah dicek tetapi belum punya data trading lebih baru.
 
 ---
 

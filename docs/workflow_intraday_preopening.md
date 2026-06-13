@@ -58,7 +58,7 @@ saham broker fetch BUMI BBRI BBCA --days 90
 ```
 WAKTU        AKTIVITAS                                  TOOL
 ─────────────────────────────────────────────────────────────────────
-Malam        Refresh data (opsional, kalau belum fresh)  saham update
+Malam        Refresh data / gap-fill lokal                saham update
 08:00        Cek sesi Stockbit masih valid                saham stockbit status
 08:45        ★ JALANKAN PRE-OPEN SCREENER ★              saham intraday pre-open
 08:50        Baca output, pilih kandidat
@@ -82,7 +82,7 @@ Sore         Log sesi ke journal                          saham intraday log
 saham update --universe lq45
 ```
 
-Perintah ini mengunduh data harga + broker flow untuk semua saham LQ45. Kalau data sudah fresh (< 5 hari), otomatis di-skip — cepat.
+Perintah ini mengunduh data harga + broker flow untuk semua saham LQ45. Kalau cache belum mencapai tanggal hari ini, `saham update` akan mencoba mengisi gap ke provider. Output `cached-current` berarti cache sudah sampai hari ini, `+Nd` berarti ada baris baru, dan `provider-no-new-data(latest=YYYY-MM-DD)` berarti provider sudah dicek tetapi belum punya data trading lebih baru.
 
 Kalau ada saham non-LQ45 yang sering muncul di movers (misalnya BUMI, BREN, GOTO), tambahkan manual:
 

@@ -59,8 +59,12 @@ Screener menghitung skor dari data broker flow yang tersimpan lokal. Tanpa ini, 
 saham update --universe lq45        # harga + broker flow LQ45 (~5 menit)
 
 # Saham di luar LQ45 yang ingin di-screen
-saham fetch BUMI GOTO BREN --days 365
-saham broker fetch BUMI GOTO BREN --days 90
+saham fetch BUMI --days 365
+saham fetch GOTO --days 365
+saham fetch BREN --days 365
+saham broker fetch BUMI --days 90
+saham broker fetch GOTO --days 90
+saham broker fetch BREN --days 90
 ```
 
 ### Seberapa Sering Refresh?
@@ -71,7 +75,9 @@ saham broker fetch BUMI GOTO BREN --days 90
 | Mingguan untuk universe lebih luas | `saham update --universe idx80` |
 | Kalau ada saham baru masuk radar | `saham broker fetch TICKER --days 90` |
 
-Data yang sudah fresh (< 5 hari) otomatis di-skip — tidak ada download ulang.
+Data akan di-gap-fill otomatis kalau cache lokal belum mencapai tanggal hari ini. Output `cached-current` berarti cache sudah sampai hari ini, `+Nd` berarti ada baris baru tersimpan, dan `provider-no-new-data(latest=YYYY-MM-DD)` berarti provider sudah dicek tetapi belum punya data trading yang lebih baru.
+
+Catatan: opsi `--window 7`, `--window 30`, dan `--window 90` memakai jumlah sesi broker terakhir yang tersedia. Selalu baca `NET_DAYS` / `STREAK` untuk mengetahui berapa sesi yang merupakan net buy asing.
 
 ---
 
@@ -124,7 +130,7 @@ Sebelum menggunakan screener, pahami apa yang diukur tiap komponen skor.
 |-------|--------|---------|
 | `SCORE` | 72.4 | Skor komposit 0–120 |
 | `STREAK` | 4d | Hari beruntun net-beli terakhir |
-| `NET_DAYS` | 4/7 | 4 hari net-beli dari 7 hari window |
+| `NET_DAYS` | 4/7 | 4 sesi net-beli dari 7 sesi broker |
 | `NET_VALUE` | +19.4B | Kumulatif net IDR asing di window |
 | `FLOW%` | +24.8 | % volume harian yang merupakan net asing |
 | `VWAP_DISC` | +3.2% | Positif = asing underwater (bullish floor) |
@@ -186,9 +192,9 @@ Foreign Flow Breadth: +23.4% stocks with net foreign buy
 saham swing screen --universe lq45
 ```
 
-Contoh output (7d window):
+Contoh output (7 sesi broker):
 ```
-FOREIGN ACCUMULATION — LQ45 | 7d window | 2026-06-13
+FOREIGN ACCUMULATION — LQ45 | 7 sessions | 2026-06-13
 ══════════════════════════════════════════════════════════════════════════════
   # TICKER   SCORE  STREAK  NET_DAYS    NET_VALUE  FLOW%  VWAP_DISC    RSI  BB%ILE TREND
 ──────────────────────────────────────────────────────────────────────────────
@@ -206,7 +212,7 @@ Run with --guide for column explanations
 
 ### Screening Multi-Window (Lebih Informatif)
 
-Tampilkan skor 7d, 30d, dan 90d sekaligus — ini memberikan konteks apakah akumulasi baru mulai atau sudah berlangsung lama.
+Tampilkan skor 7, 30, dan 90 sesi sekaligus — ini memberikan konteks apakah akumulasi baru mulai atau sudah berlangsung lama.
 
 ```bash
 saham swing screen --universe lq45 --multi
@@ -216,7 +222,7 @@ Contoh output:
 ```
 FOREIGN ACCUMULATION — LQ45 | MULTI-WINDOW | 2026-06-13
 ══════════════════════════════════════════════════════════════════════════
-  # TICKER     7d    30d    90d  PATTERN            TREND
+  # TICKER     7s    30s    90s  PATTERN            TREND
 ────────────────────────────────────────────────────────────────────────
   1 GGRM      72.4    78.0    69.8  sustained           SIDE
   2 BBRI      68.1    52.3    38.4  building             SIDE
@@ -232,10 +238,10 @@ FOREIGN ACCUMULATION — LQ45 | MULTI-WINDOW | 2026-06-13
 
 | Pattern | Skor Antar Window | Trade Implication | Aksi |
 |---------|------------------|-------------------|------|
-| **sustained** | Tinggi di SEMUA window (7d/30d/90d ≥ 60) | Asing beli berbulan-bulan — konviksi tertinggi | Entry prioritas |
-| **building** | Kuat 7d+30d, lebih lemah 90d | Akselerasi baru-baru ini — momentum sedang terbentuk | Entry dengan konfirmasi |
-| **fresh rotation** | Kuat 7d saja, lemah 30d+90d | Baru mulai — bisa awal gerakan atau noise | Monitor dulu, masuk kalau streak bertambah |
-| **long-term only** | Kuat 90d, lemah recent | Asing mungkin sudah mulai ambil profit | Waspada, cek FVWAP negatif |
+| **sustained** | Tinggi di SEMUA window (7/30/90 sesi ≥ 60) | Asing beli berbulan-bulan — konviksi tertinggi | Entry prioritas |
+| **building** | Kuat 7s+30s, lebih lemah 90s | Akselerasi baru-baru ini — momentum sedang terbentuk | Entry dengan konfirmasi |
+| **fresh rotation** | Kuat 7s saja, lemah 30s+90s | Baru mulai — bisa awal gerakan atau noise | Monitor dulu, masuk kalau streak bertambah |
+| **long-term only** | Kuat 90s, lemah recent | Asing mungkin sudah mulai ambil profit | Waspada, cek FVWAP negatif |
 | **coiled spring** | Window apapun ≥ 60 + BB Width ≤ 20%ile | Volatilitas rendah + akumulasi = setup breakout | Entry prioritas tinggi |
 | **weak** | Tidak ada window ≥ 60 | Tidak ada pola yang jelas | Skip |
 
@@ -285,6 +291,8 @@ Untuk setiap kandidat dari screener, jalankan analisis lengkap dengan preset `fo
 saham swing analyze GGRM --preset foreign-bounce --capital 10000000 --with-regime
 ```
 
+Secara default, command ini akan mengecek dan refresh data harga + broker flow hanya untuk ticker tersebut kalau cache lokal stale atau belum ada. Gunakan `--no-refresh` untuk mode cached-only/offline, atau `--force-refresh` kalau ingin memaksa fetch ulang dari provider.
+
 ### Contoh Output Lengkap
 
 ```
@@ -292,7 +300,15 @@ saham swing analyze GGRM --preset foreign-bounce --capital 10000000 --with-regim
 SWING ANALYSIS — GGRM  |  2026-06-13  |  balanced profile
 ══════════════════════════════════════════════════════════════════════════════
 
-ACCUMULATION (7d)
+DATA
+─────────────────────────────────────────────────────────────────────────────
+  Analysis date       :  2026-06-13
+  Candles through     :  2026-06-12
+  Broker flow through :  2026-06-12
+  Regime as of        :  2026-06-13
+  Refresh             :  candles=cached-current; broker(idx)=cached-current
+
+ACCUMULATION (7 sessions)
 ─────────────────────────────────────────────────────────────────────────────
   Score     :  72.4 / 120
   Streak    :  4d consecutive foreign net-buy
@@ -303,6 +319,15 @@ ACCUMULATION (7d)
   BB %ile   :  15%    (coiled spring — bottom 20th pctile)
   RSI       :  42.5
   Trend     :  SIDE   (vs SMA20)
+
+FLOW DETAIL (30 sessions)
+─────────────────────────────────────────────────────────────────────────────
+  Range     :  2026-05-04 -> 2026-06-12
+  Sessions  :  30/30
+  Net Flow  :  +71.81 B IDR
+  Buy/Sell  :  19/11 sessions
+  Streak    :  6 sessions consecutive foreign net-buy
+  Latest    :  +8.20 B IDR (+24.8%) on 2026-06-12
 
 PRESET — foreign-bounce
 ─────────────────────────────────────────────────────────────────────────────
@@ -646,6 +671,8 @@ VARIANT COMPARISON — LQ45 | 2025-01-01 → today
 saham swing backtest BBCA BBRI BMRI --start 2025-01-01 --capital 50000000
 ```
 
+Default backtest biaya adalah `--cost-bps 20` one-way, diterapkan saat entry dan exit. Angka ini mendekati rata-rata fee retail Indonesia 0.15% buy / 0.25% sell. Pakai `--cost-bps 0` hanya untuk membandingkan hasil gross tanpa biaya.
+
 ### Parameter Backtest yang Bisa Disesuaikan
 
 | Parameter | Default | Keterangan |
@@ -655,7 +682,7 @@ saham swing backtest BBCA BBRI BMRI --start 2025-01-01 --capital 50000000
 | `--max-hold` | 10 | Maks hari hold |
 | `--max-positions` | 5 | Posisi concurrent maksimal |
 | `--risk-pct` | 1.0% | Risk per trade |
-| `--cost-bps` | 0.0 | Biaya transaksi one-way (bps) |
+| `--cost-bps` | 20.0 | Biaya transaksi one-way (bps); `0` untuk gross/no-cost |
 | `--allow-regimes` | all | Filter: `BULLISH,SIDEWAYS` atau `SIDEWAYS` saja |
 
 ---
@@ -684,7 +711,7 @@ saham swing backtest BBCA BBRI BMRI --start 2025-01-01 --capital 50000000
 │    --squeeze-only     BB Width ≤ 20th pctile (coiled spring)         │
 │    --vwap-only        Asing masih underwater                         │
 │    --min-score 60     Hanya skor tinggi                               │
-│    --multi            Tampilkan 7d/30d/90d + pattern                 │
+│    --multi            Tampilkan 7/30/90 sesi + pattern               │
 │    --breakdown        Skor per komponen                               │
 ├──────────────────────────────────────────────────────────────────────┤
 │  PRIORITAS ENTRY                                                      │
@@ -751,7 +778,7 @@ Lihat gate mana yang `✗ FAIL` dan alasannya:
 
 ### Pattern `long-term only` Tapi Skor Tinggi
 
-Artinya akumulasi kuat di 90d tapi melemah di 30d dan 7d. Ini warning: asing mungkin sudah mulai distribusi perlahan. Cek:
+Artinya akumulasi kuat di 90 sesi tapi melemah di 30 dan 7 sesi. Ini warning: asing mungkin sudah mulai distribusi perlahan. Cek `FLOW DETAIL` di output `saham swing analyze`, atau jalankan breakdown harian bila perlu:
 ```bash
 saham broker flow TICKER --days 30
 ```

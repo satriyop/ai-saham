@@ -12,7 +12,7 @@ patterns. Scores each ticker using a composite signal:
 
 Intraday vs Swing usage:
   This screener produces a SWING WATCHLIST (5–20 day horizon).
-  For intraday timing, cross-reference with `saham screen pre-open`.
+  For intraday timing, cross-reference with `saham intraday pre-open`.
 
 Layer: Application
 Depends on: Domain ports only — no infrastructure imports
@@ -20,7 +20,7 @@ Depends on: Domain ports only — no infrastructure imports
 
 import math
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import date
 from decimal import Decimal, InvalidOperation
 
 from src.domain.ports.broker_data_repository import BrokerDataRepository
@@ -37,7 +37,7 @@ class AccumulationScreenRequest:
     """Input parameters for the screener."""
 
     tickers: list[str]
-    window_days: int = 7           # analysis window: 7, 30, or 90
+    window_days: int = 7           # latest broker sessions: 7, 30, or 90
     min_net_buy_days: int = 2      # skip tickers with fewer qualifying days
     min_score: float = 0.0         # filter: only include scores >= this
     rsi_period: int = 14
@@ -195,9 +195,6 @@ class AccumulationScreenUseCase:
         self, request: AccumulationScreenRequest
     ) -> AccumulationScreenResponse:
         today = request.as_of_date or date.today()
-        window_start = today - timedelta(days=request.window_days + 30)
-        # +30 days buffer for RSI/SMA warmup
-
         candidates: list[AccumulationCandidate] = []
         skipped = 0
         uses_stockbit = False
@@ -206,7 +203,6 @@ class AccumulationScreenUseCase:
             result = self._evaluate_ticker(
                 ticker=ticker,
                 window_days=request.window_days,
-                window_start=window_start,
                 today=today,
                 min_net_buy_days=request.min_net_buy_days,
                 rsi_period=request.rsi_period,
@@ -239,26 +235,25 @@ class AccumulationScreenUseCase:
         self,
         ticker: str,
         window_days: int,
-        window_start: date,
         today: date,
         min_net_buy_days: int,
         rsi_period: int,
         sma_period: int,
     ) -> AccumulationCandidate | None:
         """Compute accumulation metrics for one ticker."""
-        # Load broker data for the window
+        # Load all broker rows up to as_of_date, then select the latest N
+        # broker sessions. Calendar-day cutoffs distort IDX windows around
+        # weekends, holidays, and data-lag days.
         summaries = self._broker_repo.get_broker_summaries(
             ticker=ticker,
-            start_date=window_start,
+            start_date=None,
             end_date=today,
         )
 
         if not summaries:
             return None
 
-        # Restrict to exact window
-        cutoff = today - timedelta(days=window_days)
-        window_summaries = [s for s in summaries if s.date > cutoff]
+        window_summaries = sorted(summaries, key=lambda s: s.date)[-window_days:]
 
         if len(window_summaries) < min_net_buy_days:
             return None

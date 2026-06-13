@@ -56,6 +56,7 @@ from src.application.use_case.market_regime import (
     MarketRegimeUseCase,
 )
 from src.application.use_case.swing_backtest import (
+    DEFAULT_SWING_COST_BPS,
     FOREIGN_BOUNCE_PRESET as BACKTEST_FOREIGN_BOUNCE_PRESET,
 )
 from src.application.use_case.swing_backtest import (
@@ -97,6 +98,66 @@ class PresetEvaluation:
     classification: str
     gates: tuple[PresetGate, ...]
     failed_reasons: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class DataFreshness:
+    """Cached source data dates used by a swing analysis run."""
+
+    as_of_date: date
+    candle_start: date | None
+    candle_end: date | None
+    broker_start: date | None
+    broker_end: date | None
+    warnings: tuple[str, ...]
+    refresh_actions: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict:
+        return {
+            "as_of_date": self.as_of_date.isoformat(),
+            "candles_from": self.candle_start.isoformat() if self.candle_start else None,
+            "candles_through": self.candle_end.isoformat() if self.candle_end else None,
+            "broker_flow_from": self.broker_start.isoformat() if self.broker_start else None,
+            "broker_flow_through": self.broker_end.isoformat() if self.broker_end else None,
+            "refresh_actions": list(self.refresh_actions),
+            "warnings": list(self.warnings),
+        }
+
+
+@dataclass(frozen=True)
+class FlowDetail:
+    """Broker-flow detail for the current ticker over recent broker sessions."""
+
+    window_sessions: int
+    available_sessions: int
+    from_date: date | None
+    through_date: date | None
+    total_net_flow: Decimal
+    buy_sessions: int
+    sell_sessions: int
+    consecutive_buy_sessions: int
+    avg_flow_ratio_pct: float | None
+    latest_net_flow: Decimal | None
+    latest_flow_ratio_pct: float | None
+    latest_date: date | None
+
+    def to_dict(self) -> dict:
+        return {
+            "window_sessions": self.window_sessions,
+            "available_sessions": self.available_sessions,
+            "from": self.from_date.isoformat() if self.from_date else None,
+            "through": self.through_date.isoformat() if self.through_date else None,
+            "total_net_flow": str(self.total_net_flow),
+            "buy_sessions": self.buy_sessions,
+            "sell_sessions": self.sell_sessions,
+            "consecutive_buy_sessions": self.consecutive_buy_sessions,
+            "avg_flow_ratio_pct": self.avg_flow_ratio_pct,
+            "latest_net_flow": (
+                str(self.latest_net_flow) if self.latest_net_flow is not None else None
+            ),
+            "latest_flow_ratio_pct": self.latest_flow_ratio_pct,
+            "latest_date": self.latest_date.isoformat() if self.latest_date else None,
+        }
 
 
 # ─── formatting helpers ──────────────────────────────────────────────────────
@@ -282,6 +343,157 @@ def _fmt_pct(value: float | None, signed: bool = False) -> str:
     return f"{value:+.2f}%" if signed else f"{value:.1f}%"
 
 
+def _fmt_date(value: date | None) -> str:
+    return value.isoformat() if value else "missing"
+
+
+def _fmt_money_short(value: Decimal) -> str:
+    abs_value = abs(value)
+    if abs_value >= Decimal("1000000000000"):
+        return f"{value / Decimal('1000000000000'):.2f}T"
+    if abs_value >= Decimal("1000000000"):
+        return f"{value / Decimal('1000000000'):.2f}B"
+    if abs_value >= Decimal("1000000"):
+        return f"{value / Decimal('1000000'):.2f}M"
+    if abs_value >= Decimal("1000"):
+        return f"{value / Decimal('1000'):.2f}K"
+    return f"{value:.2f}"
+
+
+def _days_lag(latest: date | None, as_of_date: date) -> int | None:
+    if latest is None:
+        return None
+    return (as_of_date - latest).days
+
+
+def _build_data_freshness(
+    ticker: str,
+    as_of_date: date,
+    market_repo: SQLiteMarketRepository,
+    broker_repo: SQLiteBrokerRepository,
+    refresh_actions: tuple[str, ...] = (),
+) -> DataFreshness:
+    candle_range = market_repo.get_date_range(ticker)
+    broker_range = broker_repo.get_date_range(ticker)
+    candle_start, candle_end = candle_range if candle_range else (None, None)
+    broker_start, broker_end = broker_range if broker_range else (None, None)
+
+    warnings: list[str] = []
+    if candle_end is None:
+        warnings.append(f"No cached candle data for {ticker}.")
+    else:
+        lag = _days_lag(candle_end, as_of_date)
+        if lag and lag > 0:
+            warnings.append(
+                f"Latest candle is {lag} calendar day(s) before analysis date."
+            )
+
+    if broker_end is None:
+        warnings.append(f"No cached broker flow data for {ticker}.")
+    else:
+        lag = _days_lag(broker_end, as_of_date)
+        if lag and lag > 0:
+            warnings.append(
+                f"Latest broker flow is {lag} calendar day(s) before analysis date."
+            )
+
+    if candle_end and broker_end and candle_end != broker_end:
+        warnings.append(
+            f"Candle date ({candle_end}) and broker flow date ({broker_end}) differ."
+        )
+    for action in refresh_actions:
+        if "ERR:" in action:
+            warnings.append(f"Refresh issue: {action}")
+
+    return DataFreshness(
+        as_of_date=as_of_date,
+        candle_start=candle_start,
+        candle_end=candle_end,
+        broker_start=broker_start,
+        broker_end=broker_end,
+        warnings=tuple(warnings),
+        refresh_actions=refresh_actions,
+    )
+
+
+def _build_flow_detail(
+    ticker: str,
+    broker_repo: SQLiteBrokerRepository,
+    window_sessions: int,
+    as_of_date: date,
+) -> FlowDetail | None:
+    summaries = broker_repo.get_broker_summaries(ticker, end_date=as_of_date)
+    summaries = summaries[-window_sessions:]
+    if not summaries:
+        return None
+
+    total_net_flow = sum(
+        (summary.foreign_net_value for summary in summaries),
+        Decimal("0"),
+    )
+    buy_sessions = sum(1 for summary in summaries if summary.is_foreign_accumulating)
+    sell_sessions = len(summaries) - buy_sessions
+
+    consecutive_buy_sessions = 0
+    for summary in reversed(summaries):
+        if summary.is_foreign_accumulating:
+            consecutive_buy_sessions += 1
+        else:
+            break
+
+    ratios = [float(summary.foreign_flow_ratio) for summary in summaries]
+    latest = summaries[-1]
+    return FlowDetail(
+        window_sessions=window_sessions,
+        available_sessions=len(summaries),
+        from_date=summaries[0].date,
+        through_date=latest.date,
+        total_net_flow=total_net_flow,
+        buy_sessions=buy_sessions,
+        sell_sessions=sell_sessions,
+        consecutive_buy_sessions=consecutive_buy_sessions,
+        avg_flow_ratio_pct=(sum(ratios) / len(ratios)) if ratios else None,
+        latest_net_flow=latest.foreign_net_value,
+        latest_flow_ratio_pct=float(latest.foreign_flow_ratio),
+        latest_date=latest.date,
+    )
+
+
+def _auto_refresh_swing_data(
+    ticker: str,
+    db_path: Path,
+    force_refresh: bool,
+) -> tuple[str, ...]:
+    """Refresh only the requested ticker for swing analysis."""
+    from src.adapters.cli.update_commands import (
+        _auto_broker_provider,
+        _fetch_broker,
+        _fetch_candles,
+    )
+
+    actions: list[str] = []
+    candles_status = _fetch_candles(
+        ticker=ticker,
+        days=365,
+        db_path=db_path,
+        provider_name="yahoo",
+        refresh=force_refresh,
+    )
+    actions.append(f"candles={candles_status}")
+
+    broker_provider, broker_provider_name = _auto_broker_provider()
+    broker_status = _fetch_broker(
+        ticker=ticker,
+        days=90,
+        db_path=db_path,
+        broker_provider=broker_provider,
+        refresh=force_refresh,
+    )
+    actions.append(f"broker({broker_provider_name})={broker_status}")
+
+    return tuple(actions)
+
+
 def _parse_regime_filter(value: str | None) -> tuple[str, ...]:
     if not value:
         return ()
@@ -318,7 +530,11 @@ def _display_swing_compare(
     typer.echo(typer.style("=" * 102, fg=typer.colors.CYAN))
     typer.echo(typer.style("SWING BACKTEST COMPARISON", fg=typer.colors.CYAN, bold=True))
     typer.echo(typer.style("=" * 102, fg=typer.colors.CYAN))
-    typer.echo(f"Universe: {universe_label} | Period: {start_date} to {end_date}")
+    cost_bps = rows[0][1].cost_bps if rows else Decimal("0")
+    typer.echo(
+        f"Universe: {universe_label} | Period: {start_date} to {end_date} | "
+        f"Cost: {float(cost_bps):g} bps one-way"
+    )
     typer.echo("")
     typer.echo(
         f"{'VARIANT':<16} {'REGIMES':<24} {'TRADES':>7} {'RETURN':>9} "
@@ -355,6 +571,7 @@ def _display_swing_backtest(response: SwingBacktestResponse, show_trades: int) -
     typer.echo(
         f"Preset: {response.preset} | Period: {response.start_date} to {response.end_date}"
     )
+    typer.echo(f"Cost: {float(response.cost_bps):g} bps one-way, applied on entry and exit")
     typer.echo(
         "Read as: the workflow scans each replay date, opens eligible signals within "
         "portfolio limits, then exits by TP/SL/max-hold."
@@ -474,6 +691,8 @@ def _print_swing_output(
     today: date,
     profile: str,
     strategy_name: str,
+    data_freshness: DataFreshness,
+    flow_detail: FlowDetail | None,
     window: int,
     accum: "AccumulationCandidate | None",
     risk_resp,
@@ -496,12 +715,28 @@ def _print_swing_output(
     ))
     _sep("=")
 
+    # ── DATA FRESHNESS ──────────────────────────────────────────────────────
+    typer.echo("")
+    _section_header("DATA")
+    typer.echo(
+        f"  Analysis date  {_fmt_date(data_freshness.as_of_date)}   "
+        f"Candles through  {_fmt_date(data_freshness.candle_end)}   "
+        f"Broker flow through  {_fmt_date(data_freshness.broker_end)}"
+    )
+    if market_regime is not None:
+        typer.echo(f"  Regime as of   {_fmt_date(market_regime.as_of_date)}")
+    if data_freshness.refresh_actions:
+        typer.echo("  Refresh        " + "; ".join(data_freshness.refresh_actions))
+    if data_freshness.warnings:
+        for warning in data_freshness.warnings[:3]:
+            typer.echo(typer.style(f"  ! {warning}", fg=typer.colors.YELLOW))
+
     # ── ACCUMULATION ─────────────────────────────────────────────────────────
     typer.echo("")
     if accum:
         label = _signal_label(accum)
         _section_header(
-            f"ACCUMULATION ({window}d)",
+            f"ACCUMULATION ({window} sessions)",
             f"signal: {typer.style(label, bold=label in ('strong', 'coiled spring'))}",
         )
         flow_str = (
@@ -517,7 +752,7 @@ def _print_swing_output(
 
         typer.echo(
             f"  Score  {_style_score(accum.score)}   "
-            f"STREAK  {accum.consecutive_streak}d   "
+            f"STREAK  {accum.consecutive_streak}s   "
             f"NET_DAYS  {net_str}   "
             f"FLOW%  {flow_str}"
         )
@@ -535,7 +770,40 @@ def _print_swing_output(
                 fg=typer.colors.BRIGHT_BLACK,
             ))
     else:
-        _section_header(f"ACCUMULATION ({window}d)")
+        _section_header(f"ACCUMULATION ({window} sessions)")
+        typer.echo(typer.style(
+            f"  No broker flow data. Run: saham broker fetch {ticker}",
+            fg=typer.colors.BRIGHT_BLACK,
+            ))
+
+    # ── BROKER FLOW DETAIL ──────────────────────────────────────────────────
+    typer.echo("")
+    if flow_detail:
+        _section_header(
+            f"FLOW DETAIL ({flow_detail.window_sessions} sessions)",
+            f"through: {_fmt_date(flow_detail.through_date)}",
+        )
+        typer.echo(
+            f"  Range  {_fmt_date(flow_detail.from_date)} → "
+            f"{_fmt_date(flow_detail.through_date)}   "
+            f"Sessions  {flow_detail.available_sessions}/{flow_detail.window_sessions}"
+        )
+        typer.echo(
+            f"  Net    {_fmt_money_short(flow_detail.total_net_flow)} IDR   "
+            f"BUY/SELL  {flow_detail.buy_sessions}/{flow_detail.sell_sessions}   "
+            f"STREAK  {flow_detail.consecutive_buy_sessions}s"
+        )
+        latest_flow = (
+            _fmt_money_short(flow_detail.latest_net_flow)
+            if flow_detail.latest_net_flow is not None else "N/A"
+        )
+        typer.echo(
+            f"  Avg FLOW%  {_fmt_pct(flow_detail.avg_flow_ratio_pct, True)}   "
+            f"Latest  {latest_flow} "
+            f"({_fmt_pct(flow_detail.latest_flow_ratio_pct, True)})"
+        )
+    else:
+        _section_header("FLOW DETAIL")
         typer.echo(typer.style(
             f"  No broker flow data. Run: saham broker fetch {ticker}",
             fg=typer.colors.BRIGHT_BLACK,
@@ -815,8 +1083,12 @@ def swing(
     ] = None,
     window: Annotated[
         int,
-        typer.Option("--window", "-w", help="Accumulation analysis window in days (default: 7)"),
+        typer.Option("--window", "-w", help="Accumulation analysis window in broker sessions (default: 7)"),
     ] = 7,
+    flow_window: Annotated[
+        int,
+        typer.Option("--flow-window", help="Broker-flow detail window in broker sessions", min=1),
+    ] = 30,
     capital: Annotated[
         Optional[int],
         typer.Option("--capital", "-c", help="Capital in IDR — enables position sizing block"),
@@ -844,6 +1116,17 @@ def swing(
     no_backtest: Annotated[
         bool,
         typer.Option("--no-backtest", help="Skip historical backtest"),
+    ] = False,
+    auto_refresh: Annotated[
+        bool,
+        typer.Option(
+            "--auto-refresh/--no-refresh",
+            help="Refresh this ticker's candles and broker flow before analysis",
+        ),
+    ] = True,
+    force_refresh: Annotated[
+        bool,
+        typer.Option("--force-refresh", help="Force provider refresh even if cached data is fresh"),
     ] = False,
     with_regime: Annotated[
         bool,
@@ -873,16 +1156,18 @@ def swing(
     historical backtest, and news sentiment in one command.
 
     Replaces the 5–6 command morning workflow:
-      saham screen accumulation, saham risk, saham compute ATR,
+      saham swing screen, saham risk, saham compute ATR,
       saham backtest, saham sentiment — all in one.
 
     Examples:
-        saham swing BBRI
-        saham swing BBRI --preset foreign-bounce --capital 10000000
-        saham swing BBRI --capital 10000000 --risk-pct 1
-        saham swing BBRI --profile conservative --no-sentiment
-        saham swing BBRI --no-backtest --no-sentiment
-        saham swing BBRI --capital 10000000 --entry 4825 --rr 2.5
+        saham swing analyze BBRI
+        saham swing analyze BBRI --preset foreign-bounce --capital 10000000
+        saham swing analyze BBRI --capital 10000000 --risk-pct 1
+        saham swing analyze BBRI --profile conservative --no-sentiment
+        saham swing analyze BBRI --no-refresh --no-backtest --no-sentiment
+        saham swing analyze BBRI --no-backtest --no-sentiment
+        saham swing analyze BBRI --force-refresh
+        saham swing analyze BBRI --capital 10000000 --entry 4825 --rr 2.5
     """
     resolved_db = db_path or DEFAULT_DB_PATH
     ticker_upper = ticker.upper()
@@ -899,6 +1184,30 @@ def swing(
     market_repo = SQLiteMarketRepository(db_path=resolved_db)
     broker_repo = SQLiteBrokerRepository(resolved_db)
     registry = create_indicator_registry()
+
+    refresh_actions: tuple[str, ...] = ()
+    if auto_refresh:
+        refresh_actions = _auto_refresh_swing_data(
+            ticker=ticker_upper,
+            db_path=resolved_db,
+            force_refresh=force_refresh,
+        )
+    else:
+        refresh_actions = ("disabled",)
+
+    data_freshness = _build_data_freshness(
+        ticker=ticker_upper,
+        as_of_date=today,
+        market_repo=market_repo,
+        broker_repo=broker_repo,
+        refresh_actions=refresh_actions,
+    )
+    flow_detail = _build_flow_detail(
+        ticker=ticker_upper,
+        broker_repo=broker_repo,
+        window_sessions=flow_window,
+        as_of_date=today,
+    )
 
     candles = market_repo.get_candles(ticker_upper)
     if not candles:
@@ -1036,10 +1345,15 @@ def swing(
             pass
 
     if output_format == "json":
+        data_out = data_freshness.to_dict()
+        if market_regime is not None:
+            data_out["regime_as_of"] = market_regime.as_of_date.isoformat()
         out: dict = {
             "ticker": ticker_upper,
             "date": str(today),
             "profile": profile,
+            "data": data_out,
+            "flow_detail": flow_detail.to_dict() if flow_detail else None,
             "accumulation": {
                 "score": accum_candidate.score if accum_candidate else None,
                 "streak": accum_candidate.consecutive_streak if accum_candidate else None,
@@ -1121,6 +1435,8 @@ def swing(
         today=today,
         profile=profile,
         strategy_name=strategy,
+        data_freshness=data_freshness,
+        flow_detail=flow_detail,
         window=window,
         accum=accum_candidate,
         risk_resp=risk_resp,
@@ -1186,8 +1502,12 @@ def swing_backtest(
     ] = 10,
     cost_bps: Annotated[
         float,
-        typer.Option("--cost-bps", help="One-way transaction cost in basis points", min=0),
-    ] = 0.0,
+        typer.Option(
+            "--cost-bps",
+            help="One-way transaction cost in basis points (20 ~= 0.20%)",
+            min=0,
+        ),
+    ] = float(DEFAULT_SWING_COST_BPS),
     with_regime: Annotated[
         bool,
         typer.Option("--with-regime", help="Group trades by entry-date market regime"),
@@ -1299,6 +1619,7 @@ def swing_backtest(
             "start_date": response.start_date.isoformat(),
             "end_date": response.end_date.isoformat(),
             "initial_capital": str(response.initial_capital),
+            "cost_bps": str(response.cost_bps),
             "final_equity": str(response.final_equity),
             "total_return_pct": response.total_return_pct,
             "max_drawdown_pct": response.max_drawdown_pct,
@@ -1379,8 +1700,12 @@ def swing_compare(
     ] = 10,
     cost_bps: Annotated[
         float,
-        typer.Option("--cost-bps", help="One-way transaction cost in basis points", min=0),
-    ] = 0.0,
+        typer.Option(
+            "--cost-bps",
+            help="One-way transaction cost in basis points (20 ~= 0.20%)",
+            min=0,
+        ),
+    ] = float(DEFAULT_SWING_COST_BPS),
     benchmark: Annotated[
         str,
         typer.Option("--benchmark", help="Benchmark ticker for regime context"),
@@ -1481,6 +1806,7 @@ def swing_compare(
                 {
                     "name": name,
                     "allowed_regimes": list(SWING_COMPARE_VARIANTS[name]),
+                    "cost_bps": str(response.cost_bps),
                     "total_return_pct": response.total_return_pct,
                     "max_drawdown_pct": response.max_drawdown_pct,
                     "trade_count": response.trade_count,
@@ -1622,10 +1948,10 @@ def size(
     and exact lot count from fixed-fractional capital risk.
 
     Examples:
-        saham size BBRI --capital 10000000
-        saham size BBRI --capital 10000000 --risk-pct 2 --entry 4825
-        saham size BBRI --capital 50000000 --risk-pct 1 --rr 2.5
-        saham size BBRI --capital 10000000 --atr-mult 2.0
+        saham swing size BBRI --capital 10000000
+        saham swing size BBRI --capital 10000000 --risk-pct 2 --entry 4825
+        saham swing size BBRI --capital 50000000 --risk-pct 1 --rr 2.5
+        saham swing size BBRI --capital 10000000 --atr-mult 2.0
     """
     resolved_db = db_path or DEFAULT_DB_PATH
     ticker_upper = ticker.upper()

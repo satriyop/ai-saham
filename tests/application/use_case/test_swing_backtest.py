@@ -8,6 +8,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from src.application.use_case.swing_backtest import (
+    DEFAULT_SWING_COST_BPS,
     SwingBacktestRequest,
     SwingBacktestUseCase,
 )
@@ -177,6 +178,7 @@ def test_swing_backtest_opens_signal_and_exits_at_target():
         risk_pct=Decimal("0.01"),
         max_positions=1,
         min_net_buy_days=1,
+        cost_bps=Decimal("0"),
         include_regime=True,
         benchmark_ticker="^JKSE",
     ))
@@ -191,6 +193,36 @@ def test_swing_backtest_opens_signal_and_exits_at_target():
     assert trade.lots == 20
     assert trade.regime is not None
     assert response.regime_stats
+
+
+def test_swing_backtest_default_applies_transaction_costs():
+    base = date(2026, 1, 1)
+    signal_date = base + timedelta(days=24)
+    exit_date = base + timedelta(days=25)
+    summaries = [
+        _summary("BBCA", base + timedelta(days=i), Decimal("110"))
+        for i in range(18, 25)
+    ]
+    use_case = SwingBacktestUseCase(
+        broker_repository=MockBrokerRepository(summaries),
+        market_repository=MockMarketRepository(_base_candles("BBCA", base)),
+    )
+
+    response = use_case.execute(SwingBacktestRequest(
+        tickers=["BBCA"],
+        start_date=signal_date,
+        end_date=exit_date,
+        capital=Decimal("1000000"),
+        risk_pct=Decimal("0.01"),
+        max_positions=1,
+        min_net_buy_days=1,
+    ))
+
+    assert response.cost_bps == DEFAULT_SWING_COST_BPS
+    assert response.trade_count == 1
+    assert response.total_return_pct == 0.918
+    assert response.final_equity == Decimal("1009180.000")
+    assert response.trades[0].net_return_pct == 4.59
 
 
 def test_swing_backtest_respects_max_positions():
@@ -216,6 +248,7 @@ def test_swing_backtest_respects_max_positions():
         risk_pct=Decimal("0.01"),
         max_positions=1,
         min_net_buy_days=1,
+        cost_bps=Decimal("0"),
     ))
 
     assert response.trade_count == 1
@@ -249,6 +282,7 @@ def test_swing_backtest_can_filter_entries_by_allowed_regimes():
         risk_pct=Decimal("0.01"),
         max_positions=1,
         min_net_buy_days=1,
+        cost_bps=Decimal("0"),
         benchmark_ticker="^JKSE",
         allowed_regimes=("RISK_OFF",),
     ))
