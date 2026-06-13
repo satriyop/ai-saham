@@ -108,6 +108,31 @@ def _load_config(strategy_path: Path, overrides: dict) -> PreOpenScreenConfig:
     return config
 
 
+def _display_raw_movers(raw_movers: list, top_n: int | None, iev_min: int) -> None:
+    """Print a compact summary of all movers fetched from IEV API before screener filtering."""
+    if not raw_movers:
+        return
+    total = len(raw_movers)
+    shown = top_n if top_n else total
+    cap = min(shown, total)
+
+    typer.echo("")
+    typer.echo(f"Fetched {total} movers from Stockbit (top {cap} screened):")
+
+    # Two rows of up to 10 tickers each, compact format
+    tickers_with_iev = [
+        f"{m.ticker} {m.iev / 1000:.0f}K" for m in raw_movers[:20]
+    ]
+    row1 = "  " + "  |  ".join(tickers_with_iev[:10])
+    typer.echo(row1)
+    if len(tickers_with_iev) > 10:
+        row2 = "  " + "  |  ".join(tickers_with_iev[10:])
+        typer.echo(row2)
+    if total > 20:
+        typer.echo(f"  ... and {total - 20} more below threshold")
+    typer.echo("")
+
+
 def _print_browser_plan(config: PreOpenScreenConfig) -> None:
     typer.echo("")
     typer.echo("=" * 60)
@@ -632,6 +657,10 @@ def pre_open(
         request = PreOpenScreenRequest(config=config)
         response = use_case.execute(request)
         result = response.result
+
+        # Show raw IEV fetch summary so users can see what came in before filtering
+        if not movers_json and getattr(response, "raw_movers", None):
+            _display_raw_movers(response.raw_movers, config.top_n, config.iev_min)
 
         _display_results(
             candidates=result.candidates,

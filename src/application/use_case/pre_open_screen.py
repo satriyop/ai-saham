@@ -121,6 +121,7 @@ class PreOpenScreenRequest:
 class PreOpenScreenResponse:
     result: PreOpenScreenResult
     warnings: list[str]
+    raw_movers: "list"  # list[MoverData] — all movers returned by IEV API before top-N cap
 
 
 class PreOpenScreenUseCase:
@@ -302,6 +303,7 @@ class PreOpenScreenUseCase:
                 candidates=candidates,
             ),
             warnings=warnings,
+            raw_movers=raw_movers,
         )
 
     # ── Private helpers ────────────────────────────────────────────────────
