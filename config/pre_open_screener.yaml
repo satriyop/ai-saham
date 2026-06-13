@@ -1,28 +1,29 @@
 version: 1
 name: "pre-open-screener"
 description: |
-  Pre-open market screener for IDX stocks.
+  Pre-open market screener policy for IDX stocks.
 
   Screens for high-IEV movers before market open, computes entry range and
-  ATR-based stop-loss, and runs AI research per candidate.
+  ATR-based stop-loss, and can run optional AI research per candidate.
 
   Entry model: conditional range based on yesterday's close (not bid+tick).
-  IDX 08:45–09:00 is a call auction — enter at open if price is within range.
+  IDX 08:45-09:00 is a call auction; enter at open only if price is within range.
 
-  Requires: Stockbit authenticated browser session, ANTHROPIC_API_KEY
-  Mode: AI Mode ON
+  Requires: Stockbit authenticated browser session for autonomous mode.
+  AI research is optional and only runs when --with-ai is passed.
+  Mode: deterministic by default, AI-assisted when explicitly enabled.
 
-mode: ai_assisted
+mode: deterministic
 
 screener:
   iev_min: 100000        # Minimum IEV to qualify
   top_n: 5               # Process only top N by IEV (reduces run time)
-  fast_mode: false       # true = skip order book fetches (~15s total)
+  fast_mode: false       # true = skip order book fetches
 
 entry:
   capital: 3000000       # Entry position size in IDR (Rp 3,000,000)
   tick_above: 1          # Legacy: ticks above best bid (kept for reference)
-  max_gap_pct: 0.03      # ±3% from prev_close defines safe open range
+  max_gap_pct: 0.03      # Fallback band when ATR range is unavailable
   suggested_limit_pct: 0.005  # Suggested limit = prev_close * (1 + this)
 
 risk:
@@ -35,13 +36,13 @@ analysis:
   sma_period: 20         # SMA period (optional context, fast-mode fallback)
   rsi_period: 14         # RSI period for overbought gate
   atr_period: 14         # ATR period for stop sizing and range scaling
-  rsi_overbought_threshold: 75  # RSI > this → BEARISH (skip long)
+  rsi_overbought_threshold: 75  # RSI > this -> BEARISH (skip long)
   days: 365              # Days of historical data to load
   use_atr_range: true          # scale entry band by ATR instead of fixed %
   atr_range_cap_min: 0.01      # floor: never narrower than 1%
   atr_range_cap_max: 0.05      # ceiling: never wider than 5%
   accum_window_days: 7         # lookback for accumulation backing check
-  accum_backed_threshold: 50   # score >= this → BACKED
+  accum_backed_threshold: 50   # score >= this -> BACKED
   fvwap_period: 20             # rolling window for Foreign VWAP
 
 journal:

@@ -45,7 +45,7 @@ if TYPE_CHECKING:
 
 @dataclass
 class PreOpenScreenConfig:
-    """Screening parameters, loaded from strategy.yaml or overridden by CLI flags."""
+    """Screening parameters, loaded from config YAML or overridden by CLI flags."""
 
     iev_min: int = 100_000
     capital: Decimal = Decimal("3000000")
@@ -75,7 +75,7 @@ class PreOpenScreenConfig:
 
     @classmethod
     def from_yaml(cls, data: dict) -> "PreOpenScreenConfig":
-        """Parse from strategy.yaml. All new keys have safe defaults."""
+        """Parse from pre-open screener config YAML. All new keys have safe defaults."""
         screener = data.get("screener", {})
         entry = data.get("entry", {})
         risk = data.get("risk", {})

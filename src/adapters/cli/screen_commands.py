@@ -22,18 +22,31 @@ Layer: Adapter
 """
 
 import json
-from datetime import date
+from dataclasses import dataclass
+from datetime import date, datetime, time
 from decimal import Decimal
 from pathlib import Path
 from typing import Annotated, Optional
+from zoneinfo import ZoneInfo
 
 import typer
 import yaml
 
 from src.application.services.bootstrap import create_indicator_registry
+from src.application.services.universe_loader import UniverseNotFoundError, resolve_tickers
+from src.application.use_case.intraday_backtest import (
+    IntradayBacktestRequest,
+    IntradayBacktestResponse,
+    IntradayBacktestUseCase,
+)
 from src.application.use_case.confirm_intraday_open import (
     ConfirmIntradayOpenRequest,
     ConfirmIntradayOpenUseCase,
+)
+from src.application.use_case.market_regime import (
+    MarketRegimeRequest,
+    MarketRegimeResponse,
+    MarketRegimeUseCase,
 )
 from src.application.use_case.pre_open_screen import (
     PreOpenScreenConfig,
@@ -60,12 +73,36 @@ intraday_app = typer.Typer(
 )
 
 DEFAULT_DB_PATH = Path("data.db")
-DEFAULT_STRATEGY_PATH = Path("strategies/pre-open-screener/strategy.yaml")
+DEFAULT_PRE_OPEN_CONFIG_PATH = Path("config/pre_open_screener.yaml")
 DEFAULT_SESSION_FILE = Path("stockbit_session.json")
 DEFAULT_SIDECAR_PATH = Path("journals/.last-session.json")
 DEFAULT_CONFIRMATION_PATH = Path("journals/.last-confirmation.json")
 DEFAULT_CONFIRMATION_JOURNAL_PATH = Path("journals/intraday-confirmations.csv")
 DEFAULT_JOURNAL_PATH = Path("journals/pre-open.csv")
+DEFAULT_REGIME_UNIVERSE = "idx80"
+DEFAULT_REGIME_BENCHMARK = "^JKSE"
+IDX_TIMEZONE = ZoneInfo("Asia/Jakarta")
+PRE_OPEN_START = time(8, 45)
+PRE_OPEN_END = time(9, 0)
+
+
+@dataclass(frozen=True)
+class IntradayRunGuard:
+    """Runtime guard for pre-open workflow timing."""
+
+    run_at: datetime
+    warnings: tuple[str, ...] = ()
+    error: str | None = None
+
+
+@dataclass(frozen=True)
+class IntradayDataFreshness:
+    """Data-source dates used by the pre-open screen."""
+
+    analysis_date: date
+    candle_end: date | None
+    broker_end: date | None
+    warnings: tuple[str, ...] = ()
 
 
 def _playwright_available() -> bool:
@@ -80,9 +117,40 @@ def _session_exists() -> bool:
     return DEFAULT_SESSION_FILE.exists()
 
 
-def _load_config(strategy_path: Path, overrides: dict) -> PreOpenScreenConfig:
-    if strategy_path.exists():
-        with open(strategy_path) as f:
+def _current_idx_datetime() -> datetime:
+    return datetime.now(IDX_TIMEZONE)
+
+
+def _build_intraday_run_guard(
+    run_at: datetime,
+    allow_non_trading_day: bool = False,
+) -> IntradayRunGuard:
+    """Build deterministic timing warnings/errors for the pre-open workflow."""
+    warnings: list[str] = []
+
+    local_run_at = run_at.astimezone(IDX_TIMEZONE)
+    if local_run_at.weekday() >= 5:
+        message = (
+            f"{local_run_at.date()} is a weekend in Asia/Jakarta. "
+            "Use --allow-non-trading-day only for dry-runs/backfills."
+        )
+        if not allow_non_trading_day:
+            return IntradayRunGuard(run_at=local_run_at, error=message)
+        warnings.append(message)
+
+    current_time = local_run_at.time()
+    if not (PRE_OPEN_START <= current_time < PRE_OPEN_END):
+        warnings.append(
+            "Current Asia/Jakarta time is outside IDX pre-open window "
+            f"{PRE_OPEN_START.strftime('%H:%M')}-{PRE_OPEN_END.strftime('%H:%M')}."
+        )
+
+    return IntradayRunGuard(run_at=local_run_at, warnings=tuple(warnings))
+
+
+def _load_config(config_path: Path, overrides: dict) -> PreOpenScreenConfig:
+    if config_path.exists():
+        with open(config_path) as f:
             data = yaml.safe_load(f)
         config = PreOpenScreenConfig.from_yaml(data)
     else:
@@ -106,6 +174,134 @@ def _load_config(strategy_path: Path, overrides: dict) -> PreOpenScreenConfig:
         config.atr_multiplier = Decimal(str(overrides["atr_mult"]))
 
     return config
+
+
+def _min_latest_date(dates: list[date]) -> date | None:
+    if not dates:
+        return None
+    return min(dates)
+
+
+def _build_data_freshness(
+    candidates: list[ScreenerCandidate],
+    analysis_date: date,
+    market_repo: SQLiteMarketRepository,
+    broker_repo: SQLiteBrokerRepository,
+) -> IntradayDataFreshness:
+    tickers = sorted({c.ticker.upper() for c in candidates})
+    candle_dates: list[date] = []
+    broker_dates: list[date] = []
+
+    for ticker in tickers:
+        candle_range = market_repo.get_date_range(ticker)
+        if candle_range:
+            candle_dates.append(candle_range[1])
+        broker_range = broker_repo.get_date_range(ticker)
+        if broker_range:
+            broker_dates.append(broker_range[1])
+
+    candle_end = _min_latest_date(candle_dates)
+    broker_end = _min_latest_date(broker_dates)
+    warnings: list[str] = []
+
+    if candle_end is None:
+        warnings.append("No cached candle date found for screened candidates.")
+    elif candle_end < analysis_date:
+        lag = (analysis_date - candle_end).days
+        warnings.append(
+            f"Latest candle date is {candle_end}, {lag} calendar day(s) before analysis date."
+        )
+
+    if broker_end is None:
+        warnings.append("No cached broker-flow date found for screened candidates.")
+    elif broker_end < analysis_date:
+        lag = (analysis_date - broker_end).days
+        warnings.append(
+            f"Latest broker-flow date is {broker_end}, {lag} calendar day(s) before analysis date."
+        )
+
+    if candle_end and broker_end and candle_end != broker_end:
+        warnings.append(
+            f"Candle and broker-flow dates differ ({candle_end} vs {broker_end})."
+        )
+
+    return IntradayDataFreshness(
+        analysis_date=analysis_date,
+        candle_end=candle_end,
+        broker_end=broker_end,
+        warnings=tuple(warnings),
+    )
+
+
+def _display_data_freshness(freshness: IntradayDataFreshness | None) -> None:
+    if freshness is None:
+        return
+
+    candle = freshness.candle_end.isoformat() if freshness.candle_end else "N/A"
+    broker = freshness.broker_end.isoformat() if freshness.broker_end else "N/A"
+    typer.echo("")
+    typer.echo(
+        "DATA: "
+        f"Analysis date {freshness.analysis_date.isoformat()}   "
+        f"Candles through {candle}   "
+        f"Broker flow through {broker}"
+    )
+
+
+def _fmt_pct(value: float | None, signed: bool = False) -> str:
+    if value is None:
+        return "N/A"
+    sign = "+" if signed else ""
+    return f"{value:{sign}.2f}%"
+
+
+def _format_market_regime(response: MarketRegimeResponse) -> str:
+    return (
+        f"REGIME: {response.label} score={response.score}/7   "
+        f"{response.benchmark_ticker} 20d {_fmt_pct(response.benchmark_return_20d_pct, True)}   "
+        f"Breadth SMA20 {_fmt_pct(response.breadth_above_sma20_pct)}   "
+        f"Foreign breadth {_fmt_pct(response.foreign_flow_breadth_pct)}"
+    )
+
+
+def _market_regime_warning(response: MarketRegimeResponse) -> str | None:
+    if response.label == "RISK_OFF":
+        return "Market regime is RISK_OFF; avoid marginal long scalps or cut size."
+    if response.label == "WEAK":
+        return "Market regime is WEAK; require cleaner opening confirmation or reduce size."
+    return None
+
+
+def _build_market_regime(
+    market_repo: SQLiteMarketRepository,
+    broker_repo: SQLiteBrokerRepository,
+    db_path: Path,
+    as_of_date: date,
+    universe: str,
+    benchmark: str,
+) -> MarketRegimeResponse:
+    tickers = resolve_tickers(
+        universe=universe,
+        explicit=[],
+        db_path=db_path,
+    )
+    use_case = MarketRegimeUseCase(
+        market_repository=market_repo,
+        broker_repository=broker_repo,
+    )
+    return use_case.execute(
+        MarketRegimeRequest(
+            universe=tickers,
+            benchmark_ticker=benchmark,
+            as_of_date=as_of_date,
+        )
+    )
+
+
+def _display_market_regime(response: MarketRegimeResponse | None) -> None:
+    if response is None:
+        return
+    typer.echo(_format_market_regime(response))
 
 
 def _display_raw_movers(raw_movers: list, top_n: int | None, iev_min: int) -> None:
@@ -198,13 +394,13 @@ def _print_browser_plan(config: PreOpenScreenConfig) -> None:
         typer.echo("")
         typer.echo("STEP 3 — Re-run with collected data")
         typer.echo("-" * 40)
-        typer.echo("  saham screen intraday pre-open \\")
+        typer.echo("  saham intraday pre-open \\")
         typer.echo("    --movers-json '<step1_json>' \\")
         typer.echo("    --order-books-json '<step2_json>'")
     else:
         typer.echo("STEP 2 — Re-run with movers data (fast mode — no order book needed)")
         typer.echo("-" * 40)
-        typer.echo("  saham screen intraday pre-open --fast --movers-json '<step1_json>'")
+        typer.echo("  saham intraday pre-open --fast --movers-json '<step1_json>'")
     typer.echo("")
     typer.echo("=" * 60)
 
@@ -215,6 +411,8 @@ def _display_results(
     iev_min: int,
     total_movers_seen: int,
     warnings: list[str],
+    data_freshness: IntradayDataFreshness | None = None,
+    market_regime: MarketRegimeResponse | None = None,
 ) -> None:
     typer.echo("")
     typer.echo("=" * 90)
@@ -222,6 +420,8 @@ def _display_results(
     typer.echo("=" * 90)
     typer.echo(f"Date: {screened_date}   IEV filter: >= {iev_min:,}")
     typer.echo(f"Movers evaluated: {total_movers_seen}   Candidates: {len(candidates)}")
+    _display_data_freshness(data_freshness)
+    _display_market_regime(market_regime)
     typer.echo("")
 
     if not candidates:
@@ -279,11 +479,20 @@ def _display_results(
                 typer.echo(f"\n[{c.ticker}]")
                 typer.echo(c.ai_summary)
 
-    if warnings:
+    all_warnings = list(warnings)
+    if data_freshness is not None:
+        all_warnings.extend(data_freshness.warnings)
+    if market_regime is not None:
+        all_warnings.extend(market_regime.warnings)
+        regime_warning = _market_regime_warning(market_regime)
+        if regime_warning:
+            all_warnings.append(regime_warning)
+
+    if all_warnings:
         typer.echo("")
         typer.echo("WARNINGS")
         typer.echo("-" * 40)
-        for w in warnings:
+        for w in all_warnings:
             typer.echo(f"  ! {w}")
 
     # Action summary — watchlist + ready-to-run confirm-open command
@@ -338,11 +547,13 @@ def _write_sidecar(
     candidates: list[ScreenerCandidate],
     screened_date: date,
     sidecar_path: Path,
+    market_regime: MarketRegimeResponse | None = None,
 ) -> None:
-    """Write session sidecar JSON so `saham screen intraday pre-open-log` can read it."""
+    """Write session sidecar JSON so `saham intraday pre-open-log` can read it."""
     sidecar_path.parent.mkdir(parents=True, exist_ok=True)
     data = {
         "screened_at": str(screened_date),
+        "market_regime": market_regime.to_dict() if market_regime else None,
         "candidates": [
             {
                 "ticker": c.ticker,
@@ -625,20 +836,47 @@ def pre_open(
         Optional[float],
         typer.Option("--atr-mult", help="Override ATR stop multiplier (e.g. 1.5)"),
     ] = None,
-    strategy_path: Annotated[
+    config_path: Annotated[
         Optional[Path],
-        typer.Option("--strategy", "-s"),
+        typer.Option("--config", "-c", help="Pre-open screener config YAML path"),
+    ] = None,
+    legacy_strategy_path: Annotated[
+        Optional[Path],
+        typer.Option(
+            "--strategy",
+            "-s",
+            help="Deprecated alias for --config",
+        ),
     ] = None,
     db_path: Annotated[Optional[Path], typer.Option("--db")] = None,
     with_ai: Annotated[
         bool,
         typer.Option("--with-ai", help="Enable AI research (requires ANTHROPIC_API_KEY)"),
     ] = False,
+    with_regime: Annotated[
+        bool,
+        typer.Option("--with-regime", help="Add deterministic market regime context"),
+    ] = False,
+    regime_universe: Annotated[
+        str,
+        typer.Option("--regime-universe", help="Universe for regime breadth context"),
+    ] = DEFAULT_REGIME_UNIVERSE,
+    benchmark: Annotated[
+        str,
+        typer.Option("--benchmark", help="Benchmark ticker for regime context"),
+    ] = DEFAULT_REGIME_BENCHMARK,
     provider: Annotated[Optional[str], typer.Option("--provider")] = None,
     headless: Annotated[
         bool,
         typer.Option("--headless/--no-headless"),
     ] = True,
+    allow_non_trading_day: Annotated[
+        bool,
+        typer.Option(
+            "--allow-non-trading-day",
+            help="Allow weekend/non-trading-day dry-runs that can write sidecars",
+        ),
+    ] = False,
 ) -> None:
     """
     Run the pre-open market screener for IDX stocks.
@@ -649,20 +887,20 @@ def pre_open(
 
     Examples:
         # Fast mode (no order book, ~15s):
-        saham screen intraday pre-open --movers-json '[{"ticker":"BBCA","iev":150000}]' --fast
+        saham intraday pre-open --movers-json '[{"ticker":"BBCA","iev":150000}]' --fast
 
         # Normal mode with order book:
-        saham screen intraday pre-open \\
+        saham intraday pre-open \\
           --movers-json '[{"ticker":"BBCA","iev":150000}]' \\
           --order-books-json '{"BBCA":{"price":8900,"volume":50000}}'
 
         # Top 3 only, wider gap tolerance:
-        saham screen intraday pre-open --movers-json '...' --top 3 --max-gap 0.05
+        saham intraday pre-open --movers-json '...' --top 3 --max-gap 0.05
 
         # Log results after run:
-        saham screen intraday pre-open --movers-json '...' && saham screen intraday pre-open-log
+        saham intraday pre-open --movers-json '...' && saham intraday pre-open-log
     """
-    resolved_strategy = strategy_path or DEFAULT_STRATEGY_PATH
+    resolved_config = config_path or legacy_strategy_path or DEFAULT_PRE_OPEN_CONFIG_PATH
     resolved_db = db_path or DEFAULT_DB_PATH
 
     overrides: dict = {
@@ -675,7 +913,19 @@ def pre_open(
         "max_gap": max_gap,
         "atr_mult": atr_mult,
     }
-    config = _load_config(resolved_strategy, overrides)
+    config = _load_config(resolved_config, overrides)
+    if legacy_strategy_path and not config_path:
+        typer.echo(
+            "Warning: --strategy is deprecated for intraday pre-open; use --config.",
+            err=True,
+        )
+    run_guard = _build_intraday_run_guard(
+        _current_idx_datetime(),
+        allow_non_trading_day=allow_non_trading_day,
+    )
+    if run_guard.error:
+        typer.echo(f"Pre-open guard: {run_guard.error}", err=True)
+        raise typer.Exit(1)
 
     if not movers_json:
         if _playwright_available() and _session_exists():
@@ -688,10 +938,12 @@ def pre_open(
         else:
             if _playwright_available() and not _session_exists():
                 typer.echo("Playwright installed but no session found.")
-                typer.echo("Run: saham screen save-session")
-                typer.echo("")
-            typer.echo(f"Strategy: {resolved_strategy}")
+                typer.echo("Run: saham stockbit login")
+            typer.echo("")
+            typer.echo(f"Config: {resolved_config}")
             typer.echo(f"IEV threshold: {config.iev_min:,}")
+            for warning in run_guard.warnings:
+                typer.echo(f"Warning: {warning}")
             _print_browser_plan(config)
             raise typer.Exit(0)
     else:
@@ -740,9 +992,29 @@ def pre_open(
     )
 
     try:
-        request = PreOpenScreenRequest(config=config)
+        request = PreOpenScreenRequest(config=config, run_date=run_guard.run_at.date())
         response = use_case.execute(request)
         result = response.result
+        data_freshness = _build_data_freshness(
+            candidates=result.candidates,
+            analysis_date=result.screened_date,
+            market_repo=repository,
+            broker_repo=broker_repo,
+        )
+        display_warnings = list(response.warnings) + list(run_guard.warnings)
+        market_regime: MarketRegimeResponse | None = None
+        if with_regime:
+            try:
+                market_regime = _build_market_regime(
+                    market_repo=repository,
+                    broker_repo=broker_repo,
+                    db_path=resolved_db,
+                    as_of_date=result.screened_date,
+                    universe=regime_universe,
+                    benchmark=benchmark,
+                )
+            except Exception as e:
+                display_warnings.append(f"Market regime unavailable: {e}")
 
         # Show raw IEV fetch summary so users can see what came in before filtering
         if not movers_json and getattr(response, "raw_movers", None):
@@ -753,11 +1025,18 @@ def pre_open(
             screened_date=result.screened_date,
             iev_min=result.iev_min,
             total_movers_seen=result.total_movers_seen,
-            warnings=response.warnings,
+            warnings=display_warnings,
+            data_freshness=data_freshness,
+            market_regime=market_regime,
         )
 
-        # Write session sidecar for `saham screen intraday pre-open-log`
-        _write_sidecar(result.candidates, result.screened_date, DEFAULT_SIDECAR_PATH)
+        # Write session sidecar for `saham intraday pre-open-log`
+        _write_sidecar(
+            result.candidates,
+            result.screened_date,
+            DEFAULT_SIDECAR_PATH,
+            market_regime=market_regime,
+        )
 
     except BrowserInteractionRequired as e:
         typer.echo("\nBrowser action required:", err=True)
@@ -794,11 +1073,11 @@ def confirm_open(
     """
     Confirm pre-open candidates after the opening auction clears.
 
-    Reads the last `saham screen intraday pre-open` sidecar and actual opening prices,
+    Reads the last `saham intraday pre-open` sidecar and actual opening prices,
     then emits deterministic ENTER / WAIT / SKIP decisions. No AI is used.
 
     Example:
-        saham screen intraday confirm-open --opening-json '{"BBCA":9050,"BMRI":5875}'
+        saham intraday confirm-open --opening-json '{"BBCA":9050,"BMRI":5875}'
     """
     sidecar_path = session or DEFAULT_SIDECAR_PATH
     output_path = output or DEFAULT_CONFIRMATION_PATH
@@ -806,7 +1085,7 @@ def confirm_open(
     if not sidecar_path.exists():
         typer.echo(
             f"No session sidecar found at '{sidecar_path}'.\n"
-            "Run `saham screen intraday pre-open` first.",
+            "Run `saham intraday pre-open` first.",
             err=True,
         )
         raise typer.Exit(1)
@@ -893,7 +1172,7 @@ def confirm_log(
     if not confirmation_path.exists():
         typer.echo(
             f"No confirmation sidecar found at '{confirmation_path}'.\n"
-            "Run `saham screen intraday confirm-open` first.",
+            "Run `saham intraday confirm-open` first.",
             err=True,
         )
         raise typer.Exit(1)
@@ -963,7 +1242,7 @@ def confirm_review(
     if not journal_path.exists():
         typer.echo(
             f"No confirmation journal found at '{journal_path}'.\n"
-            "Run `saham screen intraday confirm-log` after confirming opens first.",
+            "Run `saham intraday confirm-log` after confirming opens first.",
             err=True,
         )
         raise typer.Exit(1)
@@ -1035,7 +1314,7 @@ def confirm_outcome(
     if not journal_path.exists():
         typer.echo(
             f"No confirmation journal found at '{journal_path}'.\n"
-            "Run `saham screen intraday confirm-log` first.",
+            "Run `saham intraday confirm-log` first.",
             err=True,
         )
         raise typer.Exit(1)
@@ -1091,14 +1370,14 @@ def log_session(
     """
     Append last screener run to the paper trade journal.
 
-    Reads the session sidecar written by `saham screen intraday pre-open` and
+    Reads the session sidecar written by `saham intraday pre-open` and
     appends one row per candidate to the journal CSV. Idempotent:
     re-running for the same date never duplicates rows.
 
     Example:
-        saham screen intraday pre-open --movers-json '...'
-        saham screen intraday pre-open-log
-        saham screen intraday pre-open-review --horizon 5
+        saham intraday pre-open --movers-json '...'
+        saham intraday pre-open-log
+        saham intraday pre-open-review --horizon 5
     """
     from src.application.services.paper_trade_journal import PaperTradeJournalService
     from src.domain.value_objects.screener_result import ScreenerCandidate
@@ -1110,7 +1389,7 @@ def log_session(
     if not sidecar_path.exists():
         typer.echo(
             f"No session sidecar found at '{sidecar_path}'.\n"
-            "Run `saham screen intraday pre-open` first.",
+            "Run `saham intraday pre-open` first.",
             err=True,
         )
         raise typer.Exit(1)
@@ -1176,7 +1455,7 @@ def review(
     and computes what % of entry ranges were accurate.
 
     Example:
-        saham screen intraday pre-open-review --horizon 5
+        saham intraday pre-open-review --horizon 5
     """
     from src.application.services.paper_trade_journal import PaperTradeJournalService
     from src.infrastructure.persistence.journal_csv_writer import JournalCsvWriter
@@ -1187,7 +1466,7 @@ def review(
     if not journal_path.exists():
         typer.echo(
             f"No journal found at '{journal_path}'.\n"
-            "Run `saham screen intraday pre-open-log` after a screening session first.",
+            "Run `saham intraday pre-open-log` after a screening session first.",
             err=True,
         )
         raise typer.Exit(1)
@@ -1242,6 +1521,298 @@ def _build_ai_researcher(provider: Optional[str] = None):
             err=True,
         )
     return ClaudeTickerResearcher()
+
+
+def _display_intraday_backtest(response: IntradayBacktestResponse, show_trades: int) -> None:
+    """Print walk-forward intraday backtest results to the console."""
+    W = 72
+    typer.echo("")
+    typer.echo(typer.style("=" * W, fg=typer.colors.CYAN))
+    typer.echo(typer.style("INTRADAY WALK-FORWARD BACKTEST (Option A — daily OHLC proxy)", fg=typer.colors.CYAN, bold=True))
+    typer.echo(typer.style("=" * W, fg=typer.colors.CYAN))
+    typer.echo(f"Period : {response.start_date} to {response.end_date}")
+    typer.echo(
+        f"Config : cost={float(response.cost_bps):g} bps/side | "
+        f"max_daily={response.max_daily_positions} | "
+        f"include_wait={response.include_wait}"
+    )
+    typer.echo(
+        "Entry  : candle.open (IDX 09:00 call-auction clearing price)\n"
+        "Exit   : H/L/close same day. Both-breached → stop (conservative).\n"
+        "IEV    : not replayed — all universe tickers screened each day."
+    )
+    typer.echo("")
+
+    # ── Equity & trade stats ──────────────────────────────────────────────────
+    typer.echo(f"{'METRIC':<30} {'VALUE':>20}")
+    typer.echo("-" * 54)
+    typer.echo(f"{'Initial capital':<30} {float(response.initial_capital):>20,.0f}")
+    typer.echo(f"{'Final equity':<30} {float(response.final_equity):>20,.0f}")
+    typer.echo(f"{'Total return':<30} {_fmt_pct(response.total_return_pct, True):>20}")
+    typer.echo(f"{'Max drawdown':<30} {_fmt_pct(response.max_drawdown_pct, True):>20}")
+    typer.echo(f"{'Trades':<30} {response.trade_count:>20}")
+    typer.echo(f"{'Win rate':<30} {_fmt_pct(response.win_rate_pct):>20}")
+    typer.echo(f"{'Avg trade return (net)':<30} {_fmt_pct(response.avg_trade_return_pct, True):>20}")
+    typer.echo(f"{'Avg winner':<30} {_fmt_pct(response.avg_winner_pct, True):>20}")
+    typer.echo(f"{'Avg loser':<30} {_fmt_pct(response.avg_loser_pct, True):>20}")
+    pf_str = (
+        "INF" if response.profit_factor == float("inf")
+        else "N/A" if response.profit_factor is None
+        else f"{response.profit_factor:.2f}"
+    )
+    typer.echo(f"{'Profit factor':<30} {pf_str:>20}")
+    exp_str = _fmt_pct(response.expectancy_pct, signed=True) if response.expectancy_pct is not None else "N/A"
+    typer.echo(f"{'Expectancy':<30} {exp_str:>20}")
+    r_str = f"{response.avg_r_multiple:.3f}R" if response.avg_r_multiple is not None else "N/A"
+    typer.echo(f"{'Avg R-multiple':<30} {r_str:>20}")
+    typer.echo(f"{'Trading days':<30} {response.trading_days:>20}")
+    typer.echo(f"{'Days with trades':<30} {response.days_with_trades:>20}")
+    typer.echo("")
+
+    # ── Exit reasons ──────────────────────────────────────────────────────────
+    if response.exit_reason_counts:
+        typer.echo("EXIT REASONS")
+        total_trades = response.trade_count
+        for reason, count in sorted(response.exit_reason_counts.items(), key=lambda x: -x[1]):
+            pct = count / total_trades * 100 if total_trades else 0
+            flag = ""
+            if reason == "both_assume_stop" and total_trades > 0 and count / total_trades > 0.15:
+                flag = " ← H/L ambiguity HIGH (>15%)"
+            typer.echo(f"  {reason:<22} {count:>5}  ({pct:.0f}%){flag}")
+        typer.echo("")
+
+    # ── Signal-quality breakdowns ─────────────────────────────────────────────
+    def _print_breakdown(title: str, rows: list[dict]) -> None:
+        if not rows:
+            return
+        typer.echo(title)
+        typer.echo(f"  {'LABEL':<22} {'TRADES':>7} {'WIN%':>7} {'AVG_RET':>9} {'TOTAL_PNL':>14}")
+        typer.echo("  " + "-" * 63)
+        for row in rows:
+            pnl = float(row["total_pnl"])
+            pnl_str = f"{pnl:+,.0f}"
+            wr = _fmt_pct(row["win_rate_pct"])
+            ar = _fmt_pct(row["avg_return_pct"], signed=True)
+            typer.echo(f"  {row['label']:<22} {row['count']:>7} {wr:>7} {ar:>9} {pnl_str:>14}")
+        typer.echo("")
+
+    _print_breakdown("BY ACCUM TAG", response.by_accum_tag)
+    _print_breakdown("BY FVWAP SIGN", response.by_fvwap_sign)
+    _print_breakdown("BY RSI BUCKET", response.by_rsi_bucket)
+    _print_breakdown("TOP TICKERS (by trade count)", response.by_ticker)
+
+    # ── Recent trades ─────────────────────────────────────────────────────────
+    if show_trades > 0 and response.trades:
+        display = response.trades[-show_trades:]
+        typer.echo(f"RECENT {len(display)} TRADES (of {response.trade_count} total)")
+        typer.echo(
+            f"  {'DATE':<12} {'TICKER':<6} {'DEC':<6} {'OPEN':>7} "
+            f"{'STOP':>7} {'TARGET':>7} {'EXIT':>7} {'REASON':<18} {'RET%':>7} {'PNL':>10}"
+        )
+        typer.echo("  " + "-" * 100)
+        for t in display:
+            pnl_col = f"{float(t.pnl):+,.0f}"
+            ret_col = _fmt_pct(t.net_return_pct, signed=True)
+            typer.echo(
+                f"  {t.trade_date.isoformat():<12} {t.ticker:<6} {t.decision:<6} "
+                f"{float(t.entry_price):>7,.0f} {float(t.stop_price):>7,.0f} "
+                f"{float(t.target_price):>7,.0f} {float(t.exit_price):>7,.0f} "
+                f"{t.exit_reason:<18} {ret_col:>7} {pnl_col:>10}"
+            )
+        typer.echo("")
+
+    # ── Warnings ──────────────────────────────────────────────────────────────
+    for warning in response.warnings:
+        prefix = "  ⚠ " if "WARNING" in warning else "  ! "
+        typer.echo(typer.style(prefix + warning, fg=typer.colors.YELLOW))
+    typer.echo("")
+    typer.echo("DISCLAIMER: Historical simulation only. Not trading advice.")
+    typer.echo(typer.style("=" * W, fg=typer.colors.CYAN))
+
+
+@intraday_app.command("backtest")
+def intraday_backtest(
+    tickers: Annotated[
+        Optional[list[str]],
+        typer.Argument(help="Explicit ticker symbols (e.g. BBCA BBRI BMRI)"),
+    ] = None,
+    universe: Annotated[
+        Optional[str],
+        typer.Option("--universe", "-u", help="Universe: lq45, idx80, idxcomp100, cached"),
+    ] = None,
+    start: Annotated[
+        str,
+        typer.Option("--start", help="Backtest start date YYYY-MM-DD"),
+    ] = "2026-01-01",
+    end: Annotated[
+        Optional[str],
+        typer.Option("--end", help="Backtest end date YYYY-MM-DD (default: today)"),
+    ] = None,
+    capital: Annotated[
+        int,
+        typer.Option("--capital", "-c", help="Initial capital in IDR", min=1),
+    ] = 100_000_000,
+    risk_pct: Annotated[
+        float,
+        typer.Option("--risk-pct", help="% of capital at risk per trade", min=0.01),
+    ] = 1.0,
+    max_daily_positions: Annotated[
+        int,
+        typer.Option("--max-daily-positions", help="Max simultaneous trades per day", min=1),
+    ] = 3,
+    max_stop: Annotated[
+        float,
+        typer.Option("--max-stop", help="Max allowed stop distance (e.g. 0.07 = 7%)", min=0.005),
+    ] = 0.07,
+    cost_bps: Annotated[
+        float,
+        typer.Option("--cost-bps", help="Transaction cost in basis points per side", min=0),
+    ] = 20.0,
+    include_wait: Annotated[
+        bool,
+        typer.Option("--include-wait/--no-include-wait", help="Treat WAIT decisions as ENTER"),
+    ] = False,
+    atr_mult: Annotated[
+        float,
+        typer.Option("--atr-mult", help="ATR multiplier for stop distance", min=0.1),
+    ] = 1.0,
+    rsi_overbought: Annotated[
+        float,
+        typer.Option("--rsi-overbought", help="RSI threshold for BEARISH classification"),
+    ] = 75.0,
+    show_trades: Annotated[
+        int,
+        typer.Option("--show-trades", help="Number of recent trades to display", min=0),
+    ] = 20,
+    output_format: Annotated[
+        str,
+        typer.Option("--format", help="Output format: table or json"),
+    ] = "table",
+    db_path: Annotated[
+        Optional[Path],
+        typer.Option("--db", help="Path to SQLite database"),
+    ] = None,
+) -> None:
+    """
+    Walk-forward backtest of the intraday pre-open workflow (Option A: daily OHLC proxy).
+
+    Replays the same signals as the live workflow (ATR range, RSI, ACCUM, FVWAP,
+    confirm-open decision tree) on historical daily candles. IEV filter is skipped
+    — historical IEV is not stored. Entries/exits use candle.open/high/low/close.
+    All trades exit same day (no overnight holds).
+
+    Examples:
+
+      saham intraday backtest --universe lq45 --start 2025-12-01
+
+      saham intraday backtest BBCA BBRI BMRI ASII TLKM --start 2025-09-01
+
+      saham intraday backtest --universe lq45 --start 2025-12-01 --include-wait
+
+      saham intraday backtest --universe idx80 --start 2025-09-01 --format json
+    """
+    try:
+        start_date = date.fromisoformat(start)
+        end_date = date.fromisoformat(end) if end else date.today()
+    except ValueError as exc:
+        typer.echo(f"Error: invalid date format — {exc}", err=True)
+        raise typer.Exit(1)
+
+    resolved_db = db_path or DEFAULT_DB_PATH
+    try:
+        ticker_list = resolve_tickers(
+            universe=universe,
+            explicit=list(tickers) if tickers else [],
+            db_path=resolved_db,
+        )
+    except (UniverseNotFoundError, FileNotFoundError) as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(1)
+
+    if not ticker_list:
+        typer.echo(
+            "No tickers to backtest. Specify --universe or provide ticker arguments.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    typer.echo(
+        f"Intraday backtest: {len(ticker_list)} tickers | "
+        f"{start_date} to {end_date} | "
+        f"max_daily={max_daily_positions} | "
+        f"include_wait={include_wait}",
+        err=True,
+    )
+
+    market_repo = SQLiteMarketRepository(db_path=resolved_db)
+    broker_repo = SQLiteBrokerRepository(resolved_db)
+    registry = create_indicator_registry()
+
+    use_case = IntradayBacktestUseCase(
+        market_repository=market_repo,
+        broker_repository=broker_repo,
+        indicator_registry=registry,
+    )
+
+    try:
+        response = use_case.execute(IntradayBacktestRequest(
+            tickers=ticker_list,
+            start_date=start_date,
+            end_date=end_date,
+            capital=Decimal(str(capital)),
+            risk_pct=Decimal(str(risk_pct)) / Decimal("100"),
+            max_daily_positions=max_daily_positions,
+            max_stop_pct=Decimal(str(max_stop)),
+            cost_bps=Decimal(str(cost_bps)),
+            include_wait=include_wait,
+            atr_multiplier=Decimal(str(atr_mult)),
+            rsi_overbought_threshold=Decimal(str(rsi_overbought)),
+        ))
+    except ValueError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(1)
+
+    if output_format == "json":
+        import json as _json
+        typer.echo(_json.dumps(
+            {
+                "start_date": response.start_date.isoformat(),
+                "end_date": response.end_date.isoformat(),
+                "initial_capital": str(response.initial_capital),
+                "cost_bps": str(response.cost_bps),
+                "include_wait": response.include_wait,
+                "final_equity": str(response.final_equity),
+                "total_return_pct": response.total_return_pct,
+                "max_drawdown_pct": response.max_drawdown_pct,
+                "trade_count": response.trade_count,
+                "win_rate_pct": response.win_rate_pct,
+                "avg_trade_return_pct": response.avg_trade_return_pct,
+                "profit_factor": response.profit_factor,
+                "expectancy_pct": response.expectancy_pct,
+                "avg_r_multiple": response.avg_r_multiple,
+                "exit_reason_counts": response.exit_reason_counts,
+                "decisions": response.decisions,
+                "by_accum_tag": [
+                    {**r, "total_pnl": str(r["total_pnl"])} for r in response.by_accum_tag
+                ],
+                "by_fvwap_sign": [
+                    {**r, "total_pnl": str(r["total_pnl"])} for r in response.by_fvwap_sign
+                ],
+                "by_rsi_bucket": [
+                    {**r, "total_pnl": str(r["total_pnl"])} for r in response.by_rsi_bucket
+                ],
+                "by_ticker": [
+                    {**r, "total_pnl": str(r["total_pnl"])} for r in response.by_ticker
+                ],
+                "trades": [t.to_dict() for t in response.trades],
+                "warnings": response.warnings,
+            },
+            indent=2,
+            default=str,
+        ))
+        return
+
+    _display_intraday_backtest(response, show_trades=show_trades)
 
 
 @intraday_app.command("save-session")

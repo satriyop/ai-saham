@@ -32,7 +32,8 @@ saham stockbit login
 ```
 
 ```bash
-# Intercept Stockbit — untuk api call 
+# Optional: intercept Stockbit API calls for debugging endpoint changes.
+# Ini bukan prasyarat harian untuk pre-open screener.
 saham stockbit spy
 ```
 
@@ -47,8 +48,7 @@ Screener butuh data historis (ATR, RSI, broker flow) untuk menghasilkan sinyal. 
 saham update --universe lq45
 
 # Tambah saham spesifik yang sering muncul di movers
-saham fetch BUMI BBRI BBCA BMRI TLKM GOTO ASII --days 365
-saham broker fetch BUMI BBRI BBCA --days 90
+saham update BUMI BBRI BBCA BMRI TLKM GOTO ASII --days 365
 ```
 
 ---
@@ -87,8 +87,7 @@ Perintah ini mengunduh data harga + broker flow untuk semua saham LQ45. Kalau ca
 Kalau ada saham non-LQ45 yang sering muncul di movers (misalnya BUMI, BREN, GOTO), tambahkan manual:
 
 ```bash
-saham fetch BUMI BREN GOTO --days 365
-saham broker fetch BUMI BREN GOTO --days 90
+saham update BUMI BREN GOTO --days 365
 ```
 
 ---
@@ -218,6 +217,30 @@ Data IEV diambil manual dari Stockbit web: Movers overlay → tab **IEP/IEV** �
 | `--max-gap 0.05` | dari config | Hari berita: naikkan ke 5% |
 | `--atr-mult 1.5` | 1.0 | Mau stop lebih longgar |
 | `--fast` | off | Tidak ada data orderbook |
+| `--allow-non-trading-day` | off | Dry-run/backfill di weekend atau hari non-bursa |
+| `--config PATH` | `config/pre_open_screener.yaml` | Pakai policy screener lain |
+| `--with-regime` | off | Tampilkan konteks market regime deterministik |
+| `--regime-universe NAME` | `idx80` | Universe untuk breadth regime |
+| `--benchmark TICKER` | `^JKSE` | Benchmark regime, biasanya IHSG |
+
+Secara default, `saham intraday pre-open` menolak run di weekend agar journal tidak
+terisi sesi palsu. Kalau kamu memang sedang latihan atau backfill, pakai
+`--allow-non-trading-day`; output akan tetap menampilkan warning dan tanggal data.
+
+Konfigurasi default ada di `config/pre_open_screener.yaml`. File ini adalah policy
+screener, bukan strategy package untuk `saham backtest --strategy`.
+
+Untuk hari scalping long, tambahkan market regime agar output memberi konteks risiko
+pasar luas:
+
+```bash
+saham intraday pre-open --top 5 --with-regime
+```
+
+Baris `REGIME` memakai logic yang sama dengan `saham regime`: benchmark 20d,
+breadth di atas SMA20, dan foreign-flow breadth. Regime tidak mengubah verdict
+`PRIME` / `WATCH` / `SKIP` secara diam-diam; kalau regime `WEAK` atau `RISK_OFF`,
+output menambahkan warning agar entry confirmation lebih ketat atau size dikurangi.
 
 ---
 
@@ -468,6 +491,9 @@ saham intraday pre-open-log
 saham intraday log
 ```
 
+`saham intraday log` adalah alias dari `saham intraday confirm-log`. Keduanya
+mencatat hasil `confirm-open` terakhir ke `journals/intraday-confirmations.csv`.
+
 ### Catat Outcome Aktual
 
 Setelah posisi ditutup (profit atau loss):
@@ -495,6 +521,10 @@ saham intraday pre-open-review --horizon 5
 # Akurasi keputusan (win rate per decision type)
 saham intraday review
 ```
+
+`saham intraday review` adalah alias dari `saham intraday confirm-review`. Review
+confirmation memakai manual outcome jika sudah dicatat dengan `saham intraday outcome`;
+jika belum ada, tool memakai daily OHLC lokal sebagai proxy, bukan urutan tick intraday.
 
 Contoh output review yang berguna:
 ```
@@ -556,6 +586,30 @@ Potong dan tempel di terminal kamu.
 ---
 
 ## 12. Troubleshooting
+
+### Pre-Open Ditolak Karena Weekend / Non-Trading Day
+
+```
+Pre-open guard: 2026-06-13 is a weekend in Asia/Jakarta.
+Use --allow-non-trading-day only for dry-runs/backfills.
+```
+
+Untuk workflow live: jangan lanjut, tunggu hari bursa berikutnya.
+
+Untuk latihan/backfill:
+
+```bash
+saham intraday pre-open --movers-json '...' --fast --allow-non-trading-day
+```
+
+Output akan menampilkan baris `DATA`:
+
+```
+DATA: Analysis date 2026-06-13   Candles through 2026-06-12   Broker flow through 2026-06-12
+```
+
+Kalau `Candles through` atau `Broker flow through` tertinggal dari `Analysis date`,
+anggap hasil sebagai dry-run, bukan sinyal live.
 
 ### Sesi Stockbit Expired
 

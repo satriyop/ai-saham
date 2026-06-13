@@ -16,9 +16,10 @@
 9. [Kapan Harus Masuk, Kapan Harus Lewat](#9-kapan-harus-masuk-kapan-harus-lewat)
 10. [Manajemen Risiko](#10-manajemen-risiko)
 11. [Journal — Validasi Sebelum Uang Sungguhan](#11-journal--validasi-sebelum-uang-sungguhan)
-12. [Stockbit Adapter — Setup dan Penggunaan](#12-stockbit-adapter--setup-dan-penggunaan)
-13. [Kesalahan Umum Pemula](#13-kesalahan-umum-pemula)
-14. [Glosarium](#14-glosarium)
+12. [Backtest — Validasi Strategi pada Data Historis](#12-backtest--validasi-strategi-pada-data-historis)
+13. [Stockbit Adapter — Setup dan Penggunaan](#13-stockbit-adapter--setup-dan-penggunaan)
+14. [Kesalahan Umum Pemula](#14-kesalahan-umum-pemula)
+15. [Glosarium](#15-glosarium)
 
 ---
 
@@ -458,6 +459,41 @@ saham intraday pre-open --top 3 --max-gap 0.05 --atr-mult 1.5
 
 Catat output: entry range, ATR stop, dan sinyal ACCUM/FVWAP per saham.
 
+Policy default disimpan di `config/pre_open_screener.yaml`. Ini adalah konfigurasi
+screener intraday, bukan strategy package untuk `saham backtest --strategy`.
+Untuk eksperimen threshold yang reproducible:
+
+```bash
+saham intraday pre-open --config config/pre_open_screener.yaml --top 3
+```
+
+Untuk menambahkan konteks market regime deterministik:
+
+```bash
+saham intraday pre-open --top 5 --with-regime
+```
+
+Default-nya memakai `--regime-universe idx80` dan `--benchmark ^JKSE`.
+Regime hanya konteks risiko. Verdict `PRIME`, `WATCH`, dan `SKIP` tetap berasal
+dari screener pre-open; kalau regime `WEAK` atau `RISK_OFF`, output memberi warning
+agar confirmation lebih ketat atau size dikurangi.
+
+#### Dry-Run di Weekend / Non-Trading Day
+
+Secara default, tool menolak `pre-open` di weekend agar journal tidak terisi sesi
+palsu. Untuk latihan atau backfill, pakai override eksplisit:
+
+```bash
+saham intraday pre-open \
+  --movers-json '[{"ticker":"BBCA","iev":450000}]' \
+  --fast \
+  --allow-non-trading-day
+```
+
+Output akan menampilkan baris `DATA` berisi `Analysis date`, `Candles through`, dan
+`Broker flow through`. Kalau tanggal data tertinggal dari tanggal analisis, anggap
+hasil sebagai dry-run, bukan sinyal live.
+
 ---
 
 ### 09:00–09:05 — Konfirmasi Setelah Pasar Buka
@@ -493,6 +529,8 @@ saham intraday pre-open-log
 saham intraday log
 ```
 
+`saham intraday log` adalah alias dari `saham intraday confirm-log`.
+
 ---
 
 ### Catat Hasil Aktual (setelah posisi ditutup)
@@ -516,6 +554,10 @@ saham intraday pre-open-review --horizon 5
 saham intraday review
 ```
 
+`saham intraday review` adalah alias dari `saham intraday confirm-review`. Jika
+manual outcome belum dicatat, review memakai daily OHLC lokal sebagai proxy; urutan
+stop/target intraday yang persis membutuhkan data menit/tick dan belum dimodelkan.
+
 ---
 
 ## 7. Membaca Output Pre-Open
@@ -526,6 +568,9 @@ Output pre-open sekarang menggunakan layout **VERDICT-first** — satu baris per
 PRE-OPEN SCREENER RESULTS
 Date: 2026-06-12   IEV filter: >= 100,000
 Movers evaluated: 5   Candidates: 5
+
+DATA: Analysis date 2026-06-12   Candles through 2026-06-12   Broker flow through 2026-06-12
+REGIME: WEAK score=2/7   ^JKSE 20d -13.28%   Breadth SMA20 23.53%   Foreign breadth 39.71%
 
 VERDICT    TICKER      IEV    GAP%     ENTRY-RANGE   STOP%   RSI  SIGNAL
 ------------------------------------------------------------------------------------------
@@ -717,7 +762,124 @@ Dari breakdown ini kamu tahu: BACKED + FVWAP floor meningkatkan win rate. Data i
 
 ---
 
-## 12. Stockbit Adapter — Setup dan Penggunaan
+## 12. Backtest — Validasi Strategi pada Data Historis
+
+### Review vs Backtest — Apa Bedanya?
+
+| Aspek | `saham intraday review` | `saham intraday backtest` |
+|-------|-------------------------|---------------------------|
+| **Sumber data** | Journal sesi nyata yang sudah kamu log | Data harian historis di `data.db` |
+| **Periode** | Hanya hari-hari yang sudah kamu jalankan live | Periode bebas yang kamu pilih |
+| **Butuh journaling dulu?** | Ya — min. 20 sesi | Tidak — langsung pakai data historis |
+| **Kapan dipakai** | Setelah paper trade berjalan | Sebelum mulai paper trade, validasi awal |
+
+Singkatnya: **backtest melihat ke belakang sejauh data kamu**, sedangkan **review hanya tahu sesi-sesi yang sudah kamu log**. Backtest cocok untuk menjawab: "kalau workflow ini dijalankan setiap hari selama 6 bulan terakhir, hasilnya seperti apa?"
+
+### Cara Kerja `saham intraday backtest` (Option A — Daily OHLC Proxy)
+
+Backtest ini menggunakan candle harian (open/high/low/close) sebagai pengganti data tick intraday:
+
+```
+Untuk setiap tanggal d di [start, end]:
+  1. Hitung sinyal pre-open menggunakan data sampai d-1
+     (ATR, RSI, SMA, ACCUM, FVWAP, entry range, ATR stop)
+  2. Opening price = candle.open di tanggal d
+     (di IDX, candle open ADALAH harga clearing call auction 09:00)
+  3. Jalankan confirm-open decision tree (ENTER / WAIT / SKIP_*)
+  4. Untuk setiap ENTER:
+     - Entry di candle.open
+     - Cek candle.low ≤ stop → exit di stop ("stop")
+     - Cek candle.high ≥ target (prev_high) → exit di target ("target")
+     - Kedua-duanya kena → asumsi stop duluan, konservatif ("both_assume_stop")
+     - Tidak ada yang kena → exit di candle.close ("close")
+  5. Semua posisi ditutup hari yang sama — tidak ada overnight
+```
+
+### Caveat Penting — IEV Tidak Bisa Direplay
+
+Live screener menyaring top 5 saham berdasarkan IEV (volume institutional pre-open). **IEV historis tidak tersimpan** — ia hanya valid 15 menit sebelum pasar buka.
+
+Konsekuensi untuk backtest:
+- Backtest menjalankan screener pada **seluruh** ticker di universe, bukan top-5 IEV
+- Beberapa entry mungkin tidak akan muncul di live (karena IEV rendah hari itu)
+- **Mitigasi**: batasi universe ke saham yang biasanya liquid (BBCA, BBRI, BMRI, ASII, TLKM, dst.)
+
+### Perintah dan Contoh
+
+```bash
+# Default: LQ45, mulai Januari 2026
+saham intraday backtest --universe lq45 --start 2026-01-01
+
+# Subset eksplisit, 6 bulan ke belakang
+saham intraday backtest BBCA BBRI BMRI ASII TLKM --start 2025-12-01
+
+# Sertakan keputusan WAIT (lebih agresif)
+saham intraday backtest --universe lq45 --start 2025-12-01 --include-wait
+
+# Biaya lebih realistis (25bps), max 5 posisi per hari
+saham intraday backtest --universe lq45 --start 2025-12-01 --cost-bps 25 --max-daily-positions 5
+
+# Output JSON untuk analisis lanjut
+saham intraday backtest --universe idx80 --start 2025-09-01 --format json > bt.json
+```
+
+### Parameter Lengkap
+
+| Parameter | Default | Penjelasan |
+|-----------|---------|-----------|
+| `--universe` / arg ticker | — | `lq45` / `idx80` / `idxcomp100` / `cached`, atau daftar ticker eksplisit |
+| `--start` / `--end` | start=2026-01-01, end=hari ini | Rentang tanggal backtest |
+| `--capital` | 100,000,000 | Modal awal dalam IDR |
+| `--risk-pct` | 1.0 | % modal yang di-risk per trade |
+| `--max-daily-positions` | 3 | Max trade per hari |
+| `--max-stop` | 0.07 | Max stop distance (7%) |
+| `--cost-bps` | 20 | Biaya per side dalam bps (20 = 0.20%) |
+| `--include-wait` | False | Anggap WAIT sebagai ENTER |
+| `--atr-mult` | 1.0 | Multiplier ATR untuk stop |
+| `--show-trades` | 20 | Berapa trade terakhir di-print |
+| `--format` | table | `table` atau `json` |
+
+### Membaca Output
+
+Output terdiri dari tiga blok utama:
+
+**1. Metric summary** — equity, return, drawdown, win rate, profit factor:
+- **Expectancy %** = win% × avg_winner − loss% × |avg_loser| → positif = ada edge setelah biaya
+- **Avg R-multiple** = rata-rata pnl / risk awal → target ≥ +0.2R agar strategi layak
+- **both_assume_stop rate** — kalau > 15% dari trade, daily OHLC proxy terlalu kasar
+
+**2. Exit reason mix** — `target / stop / close / both_assume_stop`
+
+**3. Breakdown by ACCUM / FVWAP / RSI / ticker** — validasi empiris klaim sinyal:
+- Idealnya BACKED win rate > UNCONFIRMED > DISTRIBUTING
+- FVWAP positif (floor signal) seharusnya outperform FVWAP negatif
+
+### Kapan Hasil Backtest Tidak Bisa Dipercaya
+
+- Periode < 1 bulan (statistik tidak meaningful — butuh min. 30 trade)
+- Universe < 5 saham (terlalu sedikit kandidat)
+- `both_assume_stop` > 15% dari total trade
+- Tidak ada data broker untuk periode → ACCUM/FVWAP selalu `None`
+
+### Rekomendasi Workflow Validasi
+
+```
+1. saham intraday backtest --universe lq45 --start 2025-12-01
+   → lihat apakah ada edge historis
+
+2. Paper trade 20+ sesi (saham intraday log + outcome)
+
+3. saham intraday review
+   → bandingkan hasil paper dengan ekspektasi backtest
+
+4. Kalau aligned → naikkan modal secara bertahap
+```
+
+> Backtest bukan jaminan masa depan — ia indikator bahwa workflow punya edge historis. Pasar berubah; selalu validasi dengan paper trade sebelum modal nyata.
+
+---
+
+## 13. Stockbit Adapter — Setup dan Penggunaan
 
 Adapter Stockbit menggunakan Playwright untuk mengakses Exodus API (API internal Stockbit) secara langsung. **Semua mode sudah diverifikasi bekerja** — tidak ada kalibrasi manual yang dibutuhkan.
 
@@ -754,7 +916,20 @@ Stockbit Session Status
 | `saham stockbit status` | Cek kesehatan sesi tanpa buka browser |
 | `saham stockbit fetch-top5` | Ambil top-N IEV + orderbook dalam satu sesi browser |
 | `saham stockbit test` | Smoke test: verifikasi movers + orderbook bekerja |
-| `saham stockbit spy` | Capture semua API traffic (untuk debugging) |
+| `saham stockbit spy` | Capture semua API traffic (debugging endpoint, bukan prasyarat harian) |
+
+### Perintah Intraday Lengkap
+
+| Perintah | Fungsi |
+|----------|--------|
+| `saham intraday pre-open` | Screen movers sebelum pembukaan |
+| `saham intraday confirm-open` | Konfirmasi opening price menjadi ENTER / WAIT / SKIP |
+| `saham intraday pre-open-log` | Log hasil pre-open ke `journals/pre-open.csv` |
+| `saham intraday pre-open-review` | Review akurasi entry range pre-open |
+| `saham intraday log` / `confirm-log` | Log hasil confirm-open ke `journals/intraday-confirmations.csv` |
+| `saham intraday review` / `confirm-review` | Review keputusan confirm-open dan context buckets |
+| `saham intraday outcome` / `confirm-outcome` | Catat hasil aktual trade untuk mengganti proxy daily OHLC |
+| `saham intraday backtest` | Walk-forward backtest pada data harian historis (lihat §12) |
 
 ---
 
@@ -828,7 +1003,7 @@ Kalau sesi expired: `saham stockbit login`.
 
 ---
 
-## 13. Kesalahan Umum Pemula
+## 14. Kesalahan Umum Pemula
 
 **1. FOMO — Masuk karena confirm-open output WAIT**
 
@@ -856,11 +1031,14 @@ FVWAP -5.8% bukan hanya "kurang ideal" — artinya asing duduk di profit besar d
 
 ---
 
-## 14. Glosarium
+## 15. Glosarium
 
 | Istilah | Penjelasan |
 |---------|-----------|
 | **ATR** | Average True Range. Volatilitas harian rata-rata 14 hari |
+| **Backtest (Option A)** | Simulasi workflow pada data harian historis; candle.open sebagai proxy opening price 09:00, exit H/L/close hari yang sama |
+| **Expectancy** | Rata-rata laba per trade = win% × avgWin − loss% × \|avgLoss\|. Positif berarti strategi punya edge |
+| **R-multiple** | Rasio pnl / risk awal (entry − stop × shares). Mengukur kualitas trade independen dari sizing |
 | **ATR Band** | Entry range width = ATR / prev_close, capped [1%, 5%] |
 | **ACCUM** | Sinyal akumulasi asing 7 hari: BACKED/UNCONFIRMED/DISTRIBUTING |
 | **Call Auction** | Sistem IDX: order dikumpulkan, matching di satu harga saat buka (08:45–09:00) |
