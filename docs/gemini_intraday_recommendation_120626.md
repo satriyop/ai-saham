@@ -75,3 +75,14 @@ Automates the critical "Go/No-Go" decision, allowing the trader to focus exclusi
 | **ARA/ARB Metrics** | `domain/entities/price_limits.py` | Avoids "trapped" stocks; targets momentum limits. |
 | **IEV Delta (Δ)** | `infrastructure/persistence/iev_cache.json` | Detects late-stage institutional entry. |
 | **Flash Validation** | `adapters/cli/screen_commands.py (watch)` | Reduces 09:00 AM cognitive load for faster entry. |
+
+---
+
+## Implementation Status (Audit June 2026)
+
+- **ARA/ARB Metrics:** **NOT MET.** Calculation of Auto-Rejection limits is not yet present in the `ScreenerCandidate` or Risk Engine.
+- **IEV Delta (Δ) Tracking:** **NOT MET.** The `.iev_delta.json` cache and delta calculation logic are currently missing.
+- **Flash Validation:** **MET.** Implemented as `saham intraday confirm-open`. This command realizes the goal of "Flash Validation" by grouping candidates into ENTER/WAIT/SKIP based on actual opening prices, reducing 09:00 AM cognitive load.
+
+**Conclusion:**
+Work on the intraday workflow has focused on the "Phase 2" execution logic (Confirm-Open). While safety guardrails (ARA/ARB) and velocity tracking (IEV Delta) are still pending, the core bottleneck of manual opening-price validation has been successfully solved.

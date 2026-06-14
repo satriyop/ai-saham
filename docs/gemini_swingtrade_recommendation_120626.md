@@ -71,3 +71,14 @@ Introduce a **`saham swing manage`** command.
 | **Weekly Filter** | `IndicatorRegistry` / `CandleResampler` | Filters noise; ensures trading with the "Big Money" trend. |
 | **Silent Scanner** | `AccumulationScreenUseCase` | Identifies low-risk entries before the "masses" arrive. |
 | **Exit Monitor** | `swing_commands.py` (new command) | Replaces emotional selling with data-driven trade management. |
+
+---
+
+## Implementation Status (Audit June 2026)
+
+- **Multi-Timeframe Trend Alignment:** **NOT MET.** Indicator assessments remain focused on daily intervals; Weekly resampling and filters are not yet integrated.
+- **Silent Accumulation Scanner:** **NOT MET.** While OBV and Bollinger Band indicators exist, a specialized "Silent Accumulation" preset or mode is not currently implemented in the screener.
+- **Systematic Exit Monitor:** **NOT MET.** The `saham swing manage` command and the associated thesis-failure monitoring logic are missing.
+
+**Conclusion:**
+This document remains a **Strategic Roadmap.** Implementation effort has recently been concentrated on the "Discovery" and "Verification" (Backtest/Review) phases of the swing trading lifecycle. "Trade Management" and "Weekly Multi-Timeframe Analysis" are identified as the next high-value areas for development.

@@ -63,3 +63,14 @@ Create a **`SentimentAudit` Service** to bridge Perception and Reality.
 | **Catalyst Taxonomy** | `src/infrastructure/ai/ai_classifier.py` | Distinguishes between "Noise" and "Real Momentum." |
 | **Group Propagation** | `src/application/services/group_mapping.py` | Captures conglomerate-driven volatility. |
 | **Impact Auditing** | `src/infrastructure/persistence/sentiment_repository.py` | **(The Learning Loop)**: Predicts actual price moves based on historical catalyst performance. |
+
+---
+
+## Implementation Status (Audit June 2026)
+
+- **Catalyst Taxonomy:** **MET.** The `CatalystType` enum (EARNINGS, CORP_ACTION, etc.) is fully integrated into the domain model and AI classification prompts.
+- **Group Propagation:** **MET.** `GroupMappingService` is implemented and used to contextually link tickers to their respective conglomerates (Astra, BUMN, etc.) during sentiment analysis.
+- **Impact Auditing:** **MET.** `AuditSentimentUseCase` and the `saham sentiment audit` command are fully functional, providing accuracy reports for sentiment vs. price performance over 1, 3, and 5-day horizons.
+
+**Conclusion:**
+This recommendation has been **fully implemented.** The sentiment engine is now one of the most advanced parts of the system, capable of not only classifying news but also auditing its own historical "Catalyst Intelligence" against actual IHSG market moves.

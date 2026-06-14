@@ -68,3 +68,14 @@ VWAP is the universal benchmark for "Fair Value" in daily trading. In the IHSG, 
 
 ### Integration Note
 These three indicators complement the existing `FOREIGN_FLOW` and `FOREIGN_VWAP` by providing a broader market context. While the existing indicators tell you what **Foreigners** are doing, these additions tell you what the **Market** as a whole is confirming.
+
+---
+
+## Implementation Status (Audit June 2026)
+
+- **MFI (Money Flow Index):** **MET.** Implemented as a plugin in `plugins/indicators/mfi.py`.
+- **Ichimoku Kinko Hyo:** **MET.** Implemented as a plugin in `plugins/indicators/ichimoku.py` with full support for Tenkan, Kijun, and Kumo Cloud.
+- **Standard VWAP:** **PARTIALLY MET.** The codebase heavily utilizes `FOREIGN_VWAP`. While a standalone market-wide `VWAP` plugin is missing from the default plugins folder, the logic exists within the data providers and `FOREIGN_VWAP` implementations for price-to-cost-basis analysis.
+
+**Conclusion:**
+The recommendation to bridge volume and trend gaps has been successfully executed for the two most complex indicators (MFI and Ichimoku). The system is now significantly more robust for trend and volume confirmation.

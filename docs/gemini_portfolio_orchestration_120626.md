@@ -52,3 +52,14 @@ The final stage of the automated learning loop is to evaluate the **Trader's Sty
 
 ## Conclusion: The Fund Manager Transformation
 With the **Portfolio Correlation Orchestrator**, `ai-saham` reaches its peak maturity. It empowers the user to manage their capital with the sophistication of a fund manager, ensuring that they are protected against "Black Swan" events and are always positioned in the most favorable sectors of the Indonesia Stock Exchange relative to the global macro landscape.
+
+---
+
+## Implementation Status (Audit June 2026)
+
+- **Pillar I (Global Macro):** **NOT MET.** There is no `GlobalMacroProvider` or integration of DXY/Yields into the analysis engine.
+- **Pillar II (Correlation Auditing):** **NOT MET.** The `saham portfolio audit` and correlation matrix calculation are not implemented. The existing `audit` command is a "Strategy Audit" (backtest verification) rather than a "Portfolio Audit."
+- **Pillar III (Asset Allocation):** **NOT MET.** Kelly Criterion or MPT optimization is not yet available.
+
+**Conclusion:**
+This document remains a **Strategic Roadmap.** The current focus of the application remains on high-fidelity individual stock signals and market-regime breadth analysis. Portfolio-level math and global macro integration represent the next major architectural tier.

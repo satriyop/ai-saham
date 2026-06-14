@@ -54,3 +54,14 @@ Before the autonomous system executes an order, it performs a micro-second "Tape
 By implementing Autonomous Order Execution, `ai-saham` completes its evolution. 
 
 It becomes a system that can run headless on a local server, wake up at 08:30 AM, scrape the pre-open movers, adjust its thresholds based on the global macro regime, detect fake liquidity, and execute precision algorithmic orders across the IDX—all with zero human emotion or delay.
+
+---
+
+## Implementation Status (Audit June 2026)
+
+- **Pillar I (Broker Bridging):** **PENDING.** While the `StockbitPlaywrightBrokerProvider` implements automated data fetching (movers, orderbooks) by hijacking the browser's network layer, it does NOT yet implement order placement or an `OrderRoutingAdapter`.
+- **Pillar II (Algo Orders):** **NOT MET.** TWAP and Iceberg logic are not present in the current codebase.
+- **Pillar III (Anti-Spoofing):** **NOT MET.** There is no Level 2 "Tape Reading" or spoofing detection logic implemented.
+
+**Conclusion:**
+This document remains a **Strategic Roadmap.** The system has achieved the "Data Bridge" milestone (automated scraping via Playwright), but the "Execution" half (placing orders) is not yet implemented to maintain the project's "Decision Support" focus and avoid the complexities of autonomous brokerage interaction.

@@ -68,3 +68,14 @@ Implement a **Systematic Error Attribution** module.
 
 ## Conclusion
 By implementing the **Strategic Intelligence Loop**, `ai-saham` ceases to be a tool that the user "operates" and starts becoming a partner that the user "trains." It shifts the focus from finding *any* signal to finding the *highest-conviction* signal aligned with the current market regime of the Indonesia Stock Exchange.
+
+---
+
+## Implementation Status (Audit June 2026)
+
+- **Market Regime Contextualization:** **MET.** Implemented as `MarketRegimeUseCase`, calculating IHSG benchmark trends and universe-wide breadth (Price vs SMA20 and Foreign Flow breadth).
+- **Broker Archetype Clustering:** **NOT MET.** The transaction quality weighting based on "Smart Money" vs "Retail" brokers is not yet implemented.
+- **Signal-to-Outcome Feedback:** **PARTIALLY MET.** The `accumulation_review` command (via `saham swing review`) implements the "Audit" and "Correlate" steps by matching journaled signals to actual 5/10/20d returns. However, the automated "Strategy Modification Proposal" generation (the "Auto-Tuning" part) is still a manual analytical process.
+
+**Conclusion:**
+The project has successfully bridged the gap between "Signal" and "Outcome" through the journal/review system. The system now provides all the data needed for a Strategic Intelligence Loop, but the final step—automated proposal of strategy changes—is the next frontier for implementation.

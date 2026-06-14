@@ -72,3 +72,14 @@ Protects users from "value traps" and "liquidity traps" caused by regulatory cha
 | **Broker-Weighted Flow** | Accuracy | Better entry signals by following institutional lead. |
 | **Live Scraper Bridge** | Speed | Captured opportunities in the 08:45-09:00 AM window. |
 | **Microstructure Logic** | Safety | Avoidance of high-risk regulatory traps (FCA/Notasi). |
+
+---
+
+## Implementation Status (Audit June 2026)
+
+- **Broker-Weighted Flow:** **NOT MET.** The system currently calculates foreign/broker flow as an aggregate block without per-broker institutional weights.
+- **Live Scraper Bridge:** **MET.** Implemented via `StockbitPlaywrightBrokerProvider` in `src/infrastructure/browser/playwright_stockbit.py`. This allows automated fetching of IEV movers and orderbooks during the pre-open window without manual JSON entry.
+- **Microstructure Awareness (FCA/Notasi):** **NOT MET.** Regulatory notations (X, E, etc.) and Full Call Auction (FCA) logic are not yet integrated into the domain or risk engine.
+
+**Conclusion:**
+Usability has been the priority, with the "Live Scraper" providing immediate value to intraday traders. The advanced "Smart Money" weighting and regulatory safety checks (FCA/Notasi) are recommended as the next logical steps for signal refinement.

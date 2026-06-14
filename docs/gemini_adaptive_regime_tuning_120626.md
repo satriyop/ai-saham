@@ -70,3 +70,15 @@ The ultimate objective is a system that **Self-Corrects.**
 - The ART system will detect these failures, attribute them to the regime shift, and **instantly tighten the entry requirements** for all future signals. 
 
 This creates an application that doesn't just "show signals" but **"understands its own limitations"** and evolves to overcome them.
+
+---
+
+## Implementation Status (Audit June 2026)
+
+- **Phase I (Observation):** **PARTIALLY MET.** The `AccumulationJournalEntry` domain object has been enriched with the `regime` field, along with `preset`, `classification`, and `failed_gates`. However, specific fields like `sector_rsi` and `macro_volatility` are not yet persisted in the journal.
+- **Phase II (Verification):** **MET.** The `accumulation_review` command (via `saham swing review`) calculates actual returns (5d, 10d, 20d) and identifies winners, providing the necessary "Reward Signal."
+- **Phase III & IV (Attribution & Adaptation):** **PENDING.** The `CorrelationEngine` and automated `regime_overrides.yaml` generation are not yet implemented. The `saham learn` command is missing.
+- **Domain/Application:** **MET.** `MarketRegimeUseCase` and `MarketRegimeResponse` are fully implemented in `src/application/use_case/market_regime.py` and are integrated into the swing and intraday workflows.
+
+**Conclusion:**
+The foundation for Adaptive Regime Tuning is solid. The system now "knows" the market regime during analysis and logs it, but the automated feedback loop to tune thresholds (the "Learning" part) remains a manual analytical task for the user using the `review` data.
