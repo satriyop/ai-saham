@@ -2,12 +2,18 @@ version: 1
 name: "Ichimoku Trend"
 description: |
   Classic Ichimoku Kinko Hyo trend-following strategy.
-  LOW_RISK: price above cloud + tenkan > kijun + price rising over 26 days.
-  HIGH_RISK: price below cloud, or tenkan/kijun cross with price under base line.
+  LOW_RISK: price above cloud + green cloud (SpanA > SpanB) + tenkan > kijun + price rising over 26 days.
+  HIGH_RISK: price below cloud, or tenkan crossed below kijun (momentum shift).
   MODERATE: mixed or inside cloud.
 
   Minimum data required: 78 trading days (SpanB warmup).
   Standard settings: Tenkan-9, Kijun-26, Span A-26 displaced, Span B-52 displaced.
+
+  Anti-whipsaw filters:
+  - Green cloud (SpanA > SpanB): only enter when the cloud itself is bullish.
+    Prevents entries into rallies within a bearish/red cloud (downtrend context).
+  - Tenkan/Kijun cross exit: fires on momentum shift without requiring price
+    to drop all the way below the base line first.
 
 indicators:
   tenkan:
@@ -49,6 +55,11 @@ rules:
           right:
             indicator: span_b
         - left:
+            indicator: span_a
+          operator: ">"
+          right:
+            indicator: span_b
+        - left:
             indicator: tenkan
           operator: ">"
           right:
@@ -59,7 +70,7 @@ rules:
           right:
             indicator: chikou
     outcome: LOW_RISK
-    rationale: "Price above cloud, tenkan > kijun, close > 26-day-ago close — full bullish alignment"
+    rationale: "Price above green cloud, tenkan > kijun, close > 26-day-ago close — full bullish alignment"
 
   - name: bearish_below_cloud
     priority: 10
@@ -93,4 +104,4 @@ rules:
           right:
             indicator: kijun
     outcome: HIGH_RISK
-    rationale: "Tenkan crossed below kijun with price below base line"
+    rationale: "Tenkan crossed below kijun with price below base line — confirmed momentum breakdown"
