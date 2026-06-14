@@ -1,0 +1,66 @@
+version: 1
+name: "OBV Trend"
+description: |
+  On-Balance Volume trend strategy. Detects institutional accumulation
+  by comparing OBV to its 20-day moving average. When OBV rises above
+  its average, volume flow is net bullish — the bandarmologi pattern
+  on IDX where price lags but volume leads.
+
+  Entry: OBV > SMA(OBV, 20) — rising volume trend — with RSI not overbought.
+  Exit:  OBV < SMA(OBV, 20) — volume trend reversed.
+
+  The obv_sma20 indicator is computed via formula: SMA applied to OBV series.
+  Minimum data: 21 candles (OBV accumulates from candle 1; SMA needs 20).
+
+indicators:
+  obv:
+    type: OBV
+    period: 1
+  obv_sma20:
+    formula: "SMA(OBV, 20)"
+  rsi:
+    type: RSI
+    period: 14
+
+default_outcome: MODERATE
+
+signal_mapping:
+  LOW_RISK: ENTER_LONG
+  MODERATE: HOLD
+  HIGH_RISK: EXIT_LONG
+
+rules:
+  - name: obv_rising_trend
+    priority: 10
+    when:
+      all:
+        - left:
+            indicator: obv
+          operator: ">"
+          right:
+            indicator: obv_sma20
+        - indicator: rsi
+          operator: "<"
+          value: 65
+    outcome: LOW_RISK
+    rationale: "OBV above its 20-day SMA — cumulative volume flow is bullish (accumulation phase)"
+
+  - name: obv_trend_reversal_exit
+    priority: 10
+    when:
+      left:
+        indicator: obv
+      operator: "<"
+      right:
+        indicator: obv_sma20
+    outcome: HIGH_RISK
+    rationale: "OBV dropped below its 20-day SMA — volume trend reversed (distribution phase)"
+
+  - name: rsi_overbought_exit
+    priority: 20
+    when:
+      indicator: rsi
+      operator: ">"
+      value: 75
+    outcome: HIGH_RISK
+    rationale: "RSI overbought — take profit"

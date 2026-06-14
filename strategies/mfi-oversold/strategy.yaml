@@ -1,0 +1,65 @@
+version: 1
+name: "MFI Oversold Bounce"
+description: |
+  Volume-weighted oversold bounce. MFI < 25 means selling pressure
+  has been backed by high volume — a stronger oversold signal than
+  pure RSI which ignores whether the selling had conviction.
+
+  No trend filter — same design philosophy as bb-mean-reversion:
+  works in downtrends by catching sharp oversold bounces.
+
+  Entry: MFI < 25 AND RSI < 35 (dual oversold confirmation).
+  Exit:  MFI > 75 (overbought with volume) or RSI > 70.
+
+  Minimum data: 15 candles (MFI warmup).
+
+indicators:
+  mfi:
+    type: MFI
+    period: 14
+  rsi:
+    type: RSI
+    period: 14
+
+default_outcome: MODERATE
+
+signal_mapping:
+  LOW_RISK: ENTER_LONG
+  MODERATE: HOLD
+  HIGH_RISK: EXIT_LONG
+
+rules:
+  - name: mfi_oversold_entry
+    priority: 10
+    when:
+      all:
+        - left:
+            indicator: mfi
+          operator: "<"
+          right:
+            value: 25
+        - indicator: rsi
+          operator: "<"
+          value: 35
+    outcome: LOW_RISK
+    rationale: "MFI < 25 with RSI < 35 — oversold confirmed by both price momentum and volume pressure"
+
+  - name: mfi_overbought_exit
+    priority: 10
+    when:
+      left:
+        indicator: mfi
+      operator: ">"
+      right:
+        value: 75
+    outcome: HIGH_RISK
+    rationale: "MFI overbought (>75) — buying pressure exhausted with volume, take profit"
+
+  - name: rsi_overbought_exit
+    priority: 20
+    when:
+      indicator: rsi
+      operator: ">"
+      value: 70
+    outcome: HIGH_RISK
+    rationale: "RSI overbought — exit before reversal"

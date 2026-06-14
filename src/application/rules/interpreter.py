@@ -326,7 +326,12 @@ class YamlRuleInterpreter:
             definition = self._rule_set.get_indicator_definition(name)
             if definition is not None:
                 if definition.is_formula():
-                    # Inline formula defined in rules.yaml - use the name, period=0
+                    # Inline formula defined in strategy YAML — parse and register
+                    # into the registry so _compute_plugin can dispatch it at runtime.
+                    if registry is not None and not registry.is_registered(name_upper):
+                        from src.application.formula.parser import parse
+                        ast = parse(definition.formula)
+                        registry.register_formula(name_upper, ast)
                     required[name_upper] = (name_upper, 0)
                 else:
                     type_name = definition.get_type_name()

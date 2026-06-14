@@ -1,0 +1,63 @@
+version: 1
+name: "Williams %R Bounce"
+description: |
+  Williams %R oversold bounce strategy. No SMA/EMA trend filter —
+  works in downtrends by catching sharp oversold reversals.
+  Williams %R < -80 means close is near the N-period low.
+
+  Widely recognised by Indonesian retail traders (Stockbit, RTI, Ajaib).
+  Similar to bb-mean-reversion in philosophy: buy weakness, not strength.
+
+  Entry: %R < -80 (deeply oversold).
+  Exit:  %R > -20 (overbought) or close < EMA(21) (trend break).
+
+  Minimum data: 14 candles (Williams %R) + 21 (EMA).
+
+indicators:
+  williams_r:
+    type: WILLIAMS_R
+    period: 14
+  ema_21:
+    type: EMA
+    period: 21
+
+default_outcome: MODERATE
+
+signal_mapping:
+  LOW_RISK: ENTER_LONG
+  MODERATE: HOLD
+  HIGH_RISK: EXIT_LONG
+
+rules:
+  - name: williams_oversold_entry
+    priority: 10
+    when:
+      left:
+        indicator: williams_r
+      operator: "<"
+      right:
+        value: -80
+    outcome: LOW_RISK
+    rationale: "Williams %R below -80 — price near N-period low, oversold bounce setup"
+
+  - name: williams_overbought_exit
+    priority: 10
+    when:
+      left:
+        indicator: williams_r
+      operator: ">"
+      right:
+        value: -20
+    outcome: HIGH_RISK
+    rationale: "Williams %R above -20 — price near N-period high, overbought, take profit"
+
+  - name: trend_break_exit
+    priority: 20
+    when:
+      left:
+        indicator: CLOSE
+      operator: "<"
+      right:
+        indicator: ema_21
+    outcome: HIGH_RISK
+    rationale: "Price below EMA(21) — short-term trend broken, exit"

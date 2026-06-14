@@ -1,0 +1,70 @@
+version: 1
+name: "Relative Strength + Momentum"
+description: |
+  Selects stocks outperforming IHSG (RS > 1.0) with MACD confirming
+  bullish momentum. Strong stocks during corrections are the first to
+  recover — a core IDX selection concept used by institutional desks.
+
+  Entry: RS_IHSG > 1.0 (outperforming market) AND MACD bullish cross.
+  Exit:  RS_IHSG < 0.8 (significantly underperforming) or MACD bearish cross.
+
+  Requires IHSG data:  saham update ^JKSE --days 365
+  Minimum data: 21 candles (MACD signal) + 20 (RS lookback = 20 trading days).
+
+indicators:
+  rs_ihsg:
+    type: RS_IHSG
+    period: 20
+  macd:
+    type: MACD
+    period: 12
+  macd_signal:
+    type: MACD_SIGNAL
+    period: 9
+
+default_outcome: MODERATE
+
+signal_mapping:
+  LOW_RISK: ENTER_LONG
+  MODERATE: HOLD
+  HIGH_RISK: EXIT_LONG
+
+rules:
+  - name: outperformer_with_bullish_momentum
+    priority: 10
+    when:
+      all:
+        - left:
+            indicator: rs_ihsg
+          operator: ">"
+          right:
+            value: 1.0
+        - left:
+            indicator: macd
+          operator: ">"
+          right:
+            indicator: macd_signal
+    outcome: LOW_RISK
+    rationale: "Stock outperforming IHSG (RS > 1) with MACD bullish cross — market leader with momentum"
+
+  - name: underperformer_exit
+    priority: 10
+    when:
+      left:
+        indicator: rs_ihsg
+      operator: "<"
+      right:
+        value: 0.8
+    outcome: HIGH_RISK
+    rationale: "RS_IHSG < 0.8 — stock underperforming market by >20%, leadership lost"
+
+  - name: macd_reversal_exit
+    priority: 20
+    when:
+      left:
+        indicator: macd
+      operator: "<"
+      right:
+        indicator: macd_signal
+    outcome: HIGH_RISK
+    rationale: "MACD bearish cross — momentum reversed, exit"
