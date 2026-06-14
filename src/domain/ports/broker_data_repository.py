@@ -12,6 +12,7 @@ from abc import ABC, abstractmethod
 from datetime import date
 
 from src.domain.entities.broker_flow import (
+    BrokerDailyFlow,
     BrokerFlowPoint,
     BrokerSummary,
     ForeignFlowPoint,
@@ -183,6 +184,43 @@ class BrokerDataRepository(ABC):
 
         source=None returns any source. source='idx' or 'stockbit' restricts
         the range to that source.
+        """
+        return None
+
+    def save_broker_daily_flows(self, flows: list[BrokerDailyFlow]) -> None:
+        """
+        Persist real per-day per-broker flow records.
+
+        PK is (ticker, date, broker_code, source) — one row per trading session
+        per broker. Never aggregates. Upserts on conflict.
+        """
+
+    def get_broker_daily_flows(
+        self,
+        ticker: str,
+        start_date: date | None = None,
+        end_date: date | None = None,
+        broker_codes: list[str] | None = None,
+        source: str | None = None,
+    ) -> list[BrokerDailyFlow]:
+        """
+        Retrieve per-broker daily flow records for a ticker.
+
+        broker_codes=None returns all tracked broker codes.
+        source=None returns all sources.
+        Results sorted by (date, broker_code) ascending.
+        """
+        return []
+
+    def get_broker_daily_flow_date_range(
+        self,
+        ticker: str,
+        source: str | None = None,
+    ) -> tuple[date, date] | None:
+        """
+        Get the earliest and latest date stored in broker_daily_flow for a ticker.
+
+        source=None returns range across all sources.
         """
         return None
 

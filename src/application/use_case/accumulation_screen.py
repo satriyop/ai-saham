@@ -28,8 +28,9 @@ from src.domain.ports.market_data_repository import MarketDataRepository
 
 SHARES_PER_LOT = 100
 
-# Known institutional/foreign broker codes on IDX
-INSTITUTIONAL_BROKERS = {"CS", "AK", "BK", "ZP", "MS", "DB", "RX", "ML", "YU"}
+# Institutional/foreign broker codes that signal smart-money accumulation.
+# CS excluded: Credit Suisse wound down Indonesian operations (confirmed 0 trades).
+INSTITUTIONAL_BROKERS = {"AK", "BK", "ZP", "MS", "DB", "RX", "ML", "YU", "KZ", "CP", "HD", "DR"}
 
 
 @dataclass
@@ -320,20 +321,37 @@ class AccumulationScreenUseCase:
             except (InvalidOperation, ZeroDivisionError):
                 pass
 
-        # Granular broker info (Stockbit only — top_buyers is non-empty)
+        # Granular broker info from per-day broker_daily_flow (Stockbit only).
+        # These are real daily rows — never period aggregates.
         top_brokers: list[str] | None = None
         institutional_flag = False
 
-        # Use the most recent summary that has broker detail
-        for s in sorted(window_summaries, key=lambda x: x.date, reverse=True):
-            if s.top_buyers:
-                top_brokers = [b.broker_code for b in s.top_buyers[:5] if b.is_net_buyer]
-                institutional_flag = any(
-                    b.broker_code in INSTITUTIONAL_BROKERS
-                    for b in s.top_buyers
-                    if b.is_net_buyer
+        daily_flows = self._broker_repo.get_broker_daily_flows(
+            ticker=ticker,
+            end_date=today,
+        )
+        if daily_flows:
+            # Collect the window dates from broker summaries to align the window
+            window_dates = {s.date for s in window_summaries}
+            window_flows = [f for f in daily_flows if f.date in window_dates]
+
+            if window_flows:
+                # Aggregate net_value per broker across the window
+                from collections import defaultdict
+                broker_net: dict[str, int] = defaultdict(int)
+                for f in window_flows:
+                    broker_net[f.broker_code] += f.net_lot
+
+                net_buyers = sorted(
+                    [(code, net) for code, net in broker_net.items() if net > 0],
+                    key=lambda x: x[1],
+                    reverse=True,
                 )
-                break
+                if net_buyers:
+                    top_brokers = [code for code, _ in net_buyers[:5]]
+                    institutional_flag = any(
+                        code in INSTITUTIONAL_BROKERS for code in top_brokers
+                    )
 
         return AccumulationCandidate(
             ticker=ticker,

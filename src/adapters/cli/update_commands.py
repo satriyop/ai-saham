@@ -30,6 +30,11 @@ from src.application.use_case.fetch_broker_data import (
     FetchBrokerDataRequest,
     FetchBrokerDataUseCase,
 )
+from src.application.use_case.fetch_broker_daily_flows import (
+    FetchBrokerDailyFlowsRequest,
+    FetchBrokerDailyFlowsResponse,
+    FetchBrokerDailyFlowsUseCase,
+)
 from src.application.use_case.refresh_market_data import (
     RefreshMarketDataRequest,
     RefreshMarketDataUseCase,
@@ -108,6 +113,52 @@ def _range_update_status(
     return f"{prefix}{added_count}rows/span={span_days}d"
 
 
+def _broker_status_with_daily(
+    daily_resp: "FetchBrokerDailyFlowsResponse | None",
+    agg_added_count: int,
+    agg_updated_range: "tuple[date, date] | None",
+    fetch_modes: set[str],
+) -> str:
+    """Combine daily-flow and aggregate-flow results into a single status string.
+
+    Examples:
+      daily:+636rows/12codes/365d flow:+1rows/366d  (both ran)
+      daily:+636rows/12codes/365d                   (only daily ran)
+      +1rows/span=366d                              (IDX — no daily flow)
+    """
+    # Daily-flow part (only when the provider actually fetched from the API)
+    daily_part: str | None = None
+    if daily_resp is not None and daily_resp.fetched_count > 0:
+        span = (
+            (daily_resp.cached_range[1] - daily_resp.cached_range[0]).days + 1
+            if daily_resp.cached_range
+            else 0
+        )
+        daily_part = (
+            f"daily:+{daily_resp.fetched_count}rows"
+            f"/{daily_resp.active_codes}codes/{span}d"
+        )
+
+    # Aggregate-flow part
+    agg_part: str | None = None
+    if agg_added_count > 0 or agg_updated_range:
+        span = (
+            (agg_updated_range[1] - agg_updated_range[0]).days + 1
+            if agg_updated_range
+            else 0
+        )
+        prefix = "backfill+" if "backfill" in fetch_modes else "+"
+        agg_part = f"flow:{prefix}{agg_added_count}rows/{span}d"
+
+    if daily_part and agg_part:
+        return f"{daily_part} {agg_part}"
+    if daily_part:
+        return daily_part
+    if agg_part:
+        return _broker_update_status(agg_added_count, agg_updated_range, fetch_modes)
+    return "no-data"
+
+
 def _echo_note_group(
     title: str,
     messages: list[str],
@@ -132,6 +183,9 @@ def _echo_note_group(
 def _create_broker_provider(name: str | None):
     """
     Create broker provider by explicit name, or auto-detect if name is None.
+
+    The returned provider is used ONLY for broker_daily_flow and foreign_flow_points.
+    broker_summaries always go through IdxBrokerDataProvider (accurate total_value).
 
     Auto-detect order:
       1. Playwright session (.stockbit_profile/) — preferred; no token file needed
@@ -200,6 +254,7 @@ def _fetch_broker(
     broker_provider,
     refresh: bool,
     short_history: list[str] | None = None,
+    _idx_summary_provider=None,  # injectable for testing; production code uses IdxBrokerDataProvider
 ) -> str:
     """Fetch broker flow for one ticker. Returns status string."""
     if ticker.startswith("^"):
@@ -212,9 +267,26 @@ def _fetch_broker(
     previous_latest: date | None = None
     fetch_ranges: list[tuple[date, date, str]] = []
 
+    # Per-broker daily flow — runs before the aggregate cache check so it is
+    # never skipped by an early "cached-current" return below.
+    daily_resp: FetchBrokerDailyFlowsResponse | None = None
+    if hasattr(broker_provider, "fetch_broker_daily_flows"):
+        try:
+            daily_uc = FetchBrokerDailyFlowsUseCase(broker_provider, repo)
+            daily_resp = daily_uc.execute(FetchBrokerDailyFlowsRequest(
+                ticker=ticker,
+                days=days,
+                refresh=refresh,
+            ))
+        except Exception as e:
+            if short_history is not None:
+                short_history.append(
+                    f"  {ticker}: broker daily flow unavailable ({str(e)[:60]})"
+                )
+
     if not refresh:
-        # Check cache only for THIS source — IDX cache must not block Stockbit fetch
-        summary_range = repo.get_date_range(ticker, source=source)
+        # broker_summaries always come from IDX; only foreign_flow_points use the Stockbit source
+        summary_range = repo.get_date_range(ticker, source='idx')
         flow_range = repo.get_foreign_flow_date_range(ticker, source=source)
         existing = flow_range or summary_range
         if existing:
@@ -231,6 +303,17 @@ def _fetch_broker(
                     f"requested {days}d — backfilling older gap"
                 )
             if not needs_forward_fill and not needs_older_backfill:
+                # Daily flow may have fetched new rows even when aggregate is current
+                if daily_resp is not None and daily_resp.fetched_count > 0:
+                    span = (
+                        (daily_resp.cached_range[1] - daily_resp.cached_range[0]).days + 1
+                        if daily_resp.cached_range
+                        else 0
+                    )
+                    return (
+                        f"daily:+{daily_resp.fetched_count}rows"
+                        f"/{daily_resp.active_codes}codes/{span}d"
+                    )
                 return "cached-current"
             if needs_older_backfill:
                 # Cache is current or partly current but shorter than requested;
@@ -248,12 +331,20 @@ def _fetch_broker(
     else:
         fetch_ranges.append((requested_start, end_date, "refresh"))
 
-    use_case = FetchBrokerDataUseCase(broker_provider, repo)
+    # broker_summaries always use IDX (accurate total_value); Stockbit is for daily_flow + flow_points.
+    # If broker_provider is already IDX, reuse it. Otherwise create an IDX provider for summaries.
+    if _idx_summary_provider is not None:
+        idx_summary_provider = _idx_summary_provider
+    elif broker_provider.provider_name == "idx":
+        idx_summary_provider = broker_provider
+    else:
+        idx_summary_provider = IdxBrokerDataProvider()
+    use_case = FetchBrokerDataUseCase(idx_summary_provider, repo)
     before_flow_dates = {
         p.date for p in repo.get_foreign_flow_points(ticker, source=source)
     }
     before_summary_dates = {
-        s.date for s in repo.get_broker_summaries(ticker, source=source)
+        s.date for s in repo.get_broker_summaries(ticker, source='idx')
     }
 
     try:
@@ -271,8 +362,7 @@ def _fetch_broker(
                 )
             )
 
-        # Also fetch exact historical foreign flow (Stockbit) so the daily
-        # foreign-flow series has real avg_price. Failures are soft.
+        # Fetch aggregate foreign flow history for VWAP/trend context.
         try:
             points = broker_provider.fetch_foreign_flow_history(ticker, days=days)
             if points:
@@ -285,22 +375,31 @@ def _fetch_broker(
             p.date for p in repo.get_foreign_flow_points(ticker, source=source)
         }
         after_summary_dates = {
-            s.date for s in repo.get_broker_summaries(ticker, source=source)
+            s.date for s in repo.get_broker_summaries(ticker, source='idx')
         }
         added_flow_count = len(after_flow_dates - before_flow_dates)
         added_summary_count = len(after_summary_dates - before_summary_dates)
         added_count = max(added_summary_count, added_flow_count)
 
         if previous_latest is not None and added_count == 0:
+            # Aggregate had nothing new — but daily flow may have fetched rows
+            if daily_resp is not None and daily_resp.fetched_count > 0:
+                span = (
+                    (daily_resp.cached_range[1] - daily_resp.cached_range[0]).days + 1
+                    if daily_resp.cached_range
+                    else 0
+                )
+                return (
+                    f"daily:+{daily_resp.fetched_count}rows"
+                    f"/{daily_resp.active_codes}codes/{span}d"
+                )
             return _no_new_data_status(previous_latest)
 
-        # Show new days added / total days for this source. Prefer daily flow
-        # coverage because Stockbit-session summaries may be period aggregates.
         updated_range = (
             repo.get_foreign_flow_date_range(ticker, source=source)
-            or repo.get_date_range(ticker, source=source)
+            or repo.get_date_range(ticker, source='idx')
         )
-        return _broker_update_status(added_count, updated_range, fetch_modes)
+        return _broker_status_with_daily(daily_resp, added_count, updated_range, fetch_modes)
     except BrokerDataAuthError:
         return "ERR:auth"
     except BrokerDataProviderError as e:

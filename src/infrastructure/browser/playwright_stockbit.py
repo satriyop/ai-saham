@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from src.domain.entities.broker_flow import (
+    BrokerDailyFlow,
     BrokerFlowPoint,
     BrokerSummary,
     BrokerTransaction,
@@ -86,9 +87,33 @@ _BROKER_ACTIVITY_API = "https://exodus.stockbit.com/order-trade/broker/activity"
 # Stock-centric daily time-series for backfilling
 _BROKER_HISTORICAL_API = "https://exodus.stockbit.com/order-trade/broker/activity/historical"
 
-# 10 foreign broker codes confirmed from broker-analysis/stock historical screenshot.
+# 10 institutional proxy codes used for foreign_flow_points aggregate.
+# These are NOT all foreign investors — they are major institutional desks that concentrate
+# most foreign-style flow. YP (Indo Premier) is domestic but mirrors institutional orders.
+# For true all-foreign aggregate, use broker_summaries.foreign_net_value (IDX source).
 # historical endpoint uses broker_codes= (plural); activity scan uses broker_code= (singular).
-_FOREIGN_BROKER_CODES = ["AK", "ZP", "YP", "BK", "YU", "CP", "KZ", "HD", "RX", "DR"]
+_INSTITUTIONAL_PROXY_CODES = ["AK", "ZP", "YP", "BK", "YU", "CP", "KZ", "HD", "RX", "DR"]
+
+# Broker codes to fetch individually for per-day named-broker analysis.
+# Call the historical endpoint ONCE PER CODE — multi-code calls aggregate and lose identity.
+# CS excluded: Credit Suisse wound down Indonesian operations (confirmed 0 trades).
+TRACKED_BROKER_CODES = [
+    "AK",   # UBS Sekuritas Indonesia (foreign)
+    "ZP",   # Macquarie Sekuritas Indonesia (foreign)
+    "YP",   # Indo Premier Sekuritas (domestic, high foreign flow proxy)
+    "BK",   # J.P. Morgan Sekuritas Indonesia (foreign)
+    "YU",   # Deutsche Sekuritas Indonesia (foreign)
+    "CP",   # Valbury Asia Securities (foreign)
+    "KZ",   # CIMB Sekuritas Indonesia (foreign)
+    "HD",   # HD Capital Securities (foreign)
+    "RX",   # Macquarie Capital Securities (foreign)
+    "DR",   # OSO Securities (foreign)
+    "XL",   # Stockbit Sekuritas Digital (domestic retail)
+    "PD",   # Phintraco Sekuritas (domestic retail)
+    "MS",   # Morgan Stanley Sekuritas Indonesia (institutional)
+    "DB",   # Deutsche Bank Sekuritas Indonesia (institutional)
+    "ML",   # Merrill Lynch Sekuritas Indonesia (institutional)
+]
 
 # Spy navigation pages — each fires its respective endpoint immediately on load
 _STOCK_BROKER_PAGE_URL = "https://stockbit.com/broker-analysis/stock"
@@ -799,7 +824,7 @@ class StockbitPlaywrightBrokerProvider(BrokerDataProvider):
             period = "RT_PERIOD_LAST_3_MONTHS"
         else:
             period = "RT_PERIOD_LAST_1_YEAR"
-        broker_params = "&".join(f"broker_code={c}" for c in _FOREIGN_BROKER_CODES)
+        broker_params = "&".join(f"broker_code={c}" for c in _INSTITUTIONAL_PROXY_CODES)
         url = (
             f"{_BROKER_ACTIVITY_API}?{broker_params}"
             f"&transaction_type=TRANSACTION_TYPE_NET"
@@ -828,7 +853,7 @@ class StockbitPlaywrightBrokerProvider(BrokerDataProvider):
         time-series for trend context and backfilling the foreign-flow table.
         """
         token = self._get_token()
-        codes_params = "&".join(f"broker_codes={c}" for c in _FOREIGN_BROKER_CODES)
+        codes_params = "&".join(f"broker_codes={c}" for c in _INSTITUTIONAL_PROXY_CODES)
         url = (
             f"{_BROKER_HISTORICAL_API}?interval=INTERVAL_DAILY"
             f"&period=RT_PERIOD_LAST_1_YEAR"
@@ -853,6 +878,146 @@ class StockbitPlaywrightBrokerProvider(BrokerDataProvider):
     ) -> list[BrokerFlowPoint]:
         """Deprecated alias for fetch_foreign_flow_history."""
         return self.fetch_foreign_flow_history(ticker, days)
+
+    def fetch_broker_daily_flows(
+        self,
+        ticker: str,
+        broker_codes: list[str] | None = None,
+        days: int = 365,
+    ) -> list[BrokerDailyFlow]:
+        """
+        Fetch real per-day per-broker flow for a stock.
+
+        Calls /order-trade/broker/activity/historical once per broker code with
+        pagination (max 100 records/page). Returns one BrokerDailyFlow per
+        (date, broker_code) — never an aggregate.
+
+        Args:
+            ticker: Stock ticker symbol.
+            broker_codes: Which broker codes to fetch. Defaults to TRACKED_BROKER_CODES.
+            days: Max calendar days to look back (capped at 365 by the API).
+        """
+        token = self._get_token()
+        codes = broker_codes if broker_codes is not None else TRACKED_BROKER_CODES
+        all_flows: list[BrokerDailyFlow] = []
+
+        for code in codes:
+            flows = _fetch_broker_daily_flows_for_code(token, ticker, code, days)
+            all_flows.extend(flows)
+            logger.debug(
+                "fetch_broker_daily_flows: %s/%s → %d records", ticker, code, len(flows)
+            )
+
+        logger.info(
+            "fetch_broker_daily_flows: %s → %d total records across %d codes",
+            ticker, len(all_flows), len(codes),
+        )
+        return all_flows
+
+
+def _fetch_broker_daily_flows_for_code(
+    token: str,
+    ticker: str,
+    broker_code: str,
+    days: int,
+) -> list[BrokerDailyFlow]:
+    """
+    Fetch all daily flow records for one broker code on one ticker, with pagination.
+
+    The API caps at 100 records per page (confirmed 2026-06-14). Uses has_next
+    to determine when to stop. Stops early if the oldest returned date is older
+    than `days` back from today.
+    """
+    from datetime import date as date_type, timedelta
+
+    cutoff = date_type.today() - timedelta(days=days)
+    page = 1
+    results: list[BrokerDailyFlow] = []
+    broker_name = broker_code  # default; overwritten from first response
+
+    while True:
+        url = (
+            f"{_BROKER_HISTORICAL_API}"
+            f"?broker_codes={broker_code}"
+            f"&symbols={ticker.upper()}"
+            f"&market_board=BOARD_TYPE_REGULAR"
+            f"&investor_type=INVESTOR_TYPE_ALL"
+            f"&interval=INTERVAL_DAILY"
+            f"&period=RT_PERIOD_LAST_1_YEAR"
+            f"&pagination.page={page}"
+            f"&pagination.limit=100"
+        )
+        body = _exodus_get(url, token)
+        if not body:
+            break
+
+        data = body.get("data") or {}
+        # broker_name is only present when a single code is requested
+        if data.get("broker_name"):
+            broker_name = data["broker_name"]
+
+        records = data.get("records") or []
+        if not records:
+            break
+
+        for item in records:
+            if not isinstance(item, dict):
+                continue
+            date_str = str(item.get("date") or "")
+            try:
+                flow_date = date_type.fromisoformat(date_str[:10])
+            except (ValueError, TypeError):
+                continue
+
+            if flow_date < cutoff:
+                return results  # older than requested window — stop paginating
+
+            trade = item.get("trade_activity") or {}
+            buy = trade.get("buy_summary") or {}
+            sell = trade.get("sell_summary") or {}
+            net = trade.get("net_summary") or {}
+            total_buy = trade.get("total_buy_lot") or {}
+            total_sell = trade.get("total_sell_lot") or {}
+
+            buy_lot = _dict_int(buy, "lot") or 0
+            sell_lot = _dict_int(sell, "lot") or 0
+            net_lot = _dict_int(net, "lot") or 0
+            buy_value = _dict_dec(buy, "value")
+            sell_value = _dict_dec(sell, "value")
+            net_value = _dict_dec(net, "value")
+            avg_buy_price = _dict_dec(buy, "avg_price")
+            avg_sell_price = _dict_dec(sell, "avg_price")
+            avg_price = _dict_dec(net, "avg_price")
+
+            try:
+                results.append(BrokerDailyFlow(
+                    ticker=ticker.upper(),
+                    date=flow_date,
+                    broker_code=broker_code.upper(),
+                    broker_name=broker_name,
+                    source="stockbit",
+                    buy_lot=abs(buy_lot),
+                    sell_lot=abs(sell_lot),
+                    net_lot=net_lot,
+                    buy_value=abs(buy_value),
+                    sell_value=abs(sell_value),
+                    net_value=net_value,
+                    avg_buy_price=avg_buy_price,
+                    avg_sell_price=avg_sell_price,
+                    avg_price=avg_price,
+                    buy_pct=float(total_buy.get("pct") or 0),
+                    sell_pct=float(total_sell.get("pct") or 0),
+                ))
+            except Exception as e:
+                logger.debug("Could not parse BrokerDailyFlow %s/%s %s: %s",
+                             ticker, broker_code, date_str, e)
+
+        pagination = data.get("pagination") or {}
+        if not pagination.get("has_next"):
+            break
+        page += 1
+
+    return results
 
 
 def _dict_int(d: dict | None, *keys: str) -> int:
@@ -1249,8 +1414,9 @@ def _parse_iev_response(body: dict, iev_min: int) -> list[MoverData]:
                 continue
             ticker = _extract_ticker_confirmed(item)
             iev = _extract_iev_confirmed(item)
+            iep = _extract_iep_confirmed(item)
             if ticker and iev is not None and iev >= iev_min:
-                movers.append(MoverData(ticker=ticker, iev=iev))
+                movers.append(MoverData(ticker=ticker, iev=iev, iep=iep))
         if movers:
             return sorted(movers, key=lambda m: m.iev, reverse=True)
 
@@ -1292,6 +1458,21 @@ def _extract_iev_confirmed(item: dict) -> int | None:
         except (ValueError, TypeError):
             pass
     return _extract_iev_from_mover(item)  # fallback
+
+
+def _extract_iep_confirmed(item: dict) -> int | None:
+    """Try to extract IEP from iepiev_detail.iep.raw (field presence unconfirmed — may be absent).
+
+    IEP = Indicative Equilibrium Price, the expected call-auction clearing price in IDR.
+    Returns None gracefully if the field does not exist in the response.
+    """
+    raw = (item.get("iepiev_detail") or {}).get("iep", {}).get("raw")
+    if raw is not None:
+        try:
+            return int(raw)
+        except (ValueError, TypeError):
+            pass
+    return None
 
 
 def _extract_iev_from_mover(item: dict) -> int | None:

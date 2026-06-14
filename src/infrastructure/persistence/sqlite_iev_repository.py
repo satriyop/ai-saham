@@ -1,11 +1,13 @@
 """
-SQLite repository for IEV (Intraday Expected Volume) snapshots.
+SQLite repository for IEV/IEP snapshots.
 
-Stores the ranked list of IEV movers captured during the IDX pre-open
-auction window (08:45–09:00 WIB) each trading day.
+Stores the ranked list of IEV movers and their IEP (Indicative Equilibrium Price)
+captured during the IDX pre-open auction window (08:45–09:00 WIB) each trading day.
 
-These snapshots enable the intraday backtest to apply the IEV filter
-historically, making replay behaviour match the live workflow.
+Two daily captures:
+  08:50 WIB — IEV rankings (early mover signal)
+  08:55 WIB — IEP refresh (more settled price, 5 min before auction close)
+Both upsert into the same row; the later run's IEP overwrites the earlier one.
 
 Layer: Infrastructure
 """
@@ -15,19 +17,22 @@ from datetime import date
 from dataclasses import dataclass
 from pathlib import Path
 
+from src.domain.value_objects.screener_result import MoverData
+
 
 @dataclass(frozen=True)
 class IEVSnapshot:
-    """One ticker's IEV entry for a given trading date."""
+    """One ticker's IEV/IEP entry for a given trading date."""
 
     date: date
     ticker: str
     iev: int
-    rank: int           # 1 = highest IEV mover that day
+    rank: int               # 1 = highest IEV mover that day
+    iep: int | None = None  # Indicative Equilibrium Price in IDR (None if not captured)
 
 
 class SQLiteIEVRepository:
-    """Persist and query IEV snapshots in the local SQLite database."""
+    """Persist and query IEV/IEP snapshots in the local SQLite database."""
 
     def __init__(self, db_path: str | Path) -> None:
         self._db_path = Path(db_path).expanduser()
@@ -47,6 +52,7 @@ class SQLiteIEVRepository:
                     ticker     TEXT NOT NULL,
                     iev        INTEGER NOT NULL,
                     rank       INTEGER NOT NULL,
+                    iep        INTEGER,
                     fetched_at TEXT DEFAULT (datetime('now')),
                     PRIMARY KEY (date, ticker)
                 )
@@ -55,24 +61,35 @@ class SQLiteIEVRepository:
                 CREATE INDEX IF NOT EXISTS idx_iev_snapshots_date
                 ON iev_snapshots (date)
             """)
+            # Migration: add iep column to existing tables that lack it
+            try:
+                conn.execute("ALTER TABLE iev_snapshots ADD COLUMN iep INTEGER")
+            except Exception:
+                pass  # column already exists
 
-    def save_snapshot(self, snapshot_date: date, movers: list[tuple[str, int]]) -> int:
-        """Upsert IEV movers for a date. movers = [(ticker, iev), ...] sorted by IEV desc.
+    def save_snapshot(self, snapshot_date: date, movers: list[MoverData]) -> int:
+        """Upsert IEV+IEP movers for a date.
 
-        Returns number of rows written.
+        Args:
+            snapshot_date: The trading date.
+            movers: List of MoverData sorted by IEV descending. rank is derived from position.
+
+        Returns:
+            Number of rows written.
         """
         rows = [
-            (snapshot_date.isoformat(), ticker.upper(), iev, rank + 1)
-            for rank, (ticker, iev) in enumerate(movers)
+            (snapshot_date.isoformat(), m.ticker.upper(), m.iev, rank + 1, m.iep)
+            for rank, m in enumerate(movers)
         ]
         with self._get_connection() as conn:
             conn.executemany(
                 """
-                INSERT INTO iev_snapshots (date, ticker, iev, rank)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO iev_snapshots (date, ticker, iev, rank, iep)
+                VALUES (?, ?, ?, ?, ?)
                 ON CONFLICT(date, ticker) DO UPDATE SET
-                    iev = excluded.iev,
-                    rank = excluded.rank,
+                    iev        = excluded.iev,
+                    rank       = excluded.rank,
+                    iep        = excluded.iep,
                     fetched_at = datetime('now')
                 """,
                 rows,
@@ -80,13 +97,13 @@ class SQLiteIEVRepository:
         return len(rows)
 
     def get_snapshot(self, snapshot_date: date, top_n: int | None = None) -> list[IEVSnapshot]:
-        """Return IEV movers for a date, ordered by rank ascending (rank 1 = best).
+        """Return IEV/IEP movers for a date, ordered by rank ascending (rank 1 = best).
 
         Args:
             snapshot_date: The trading date.
             top_n: If set, return only the top-N ranked movers.
         """
-        sql = "SELECT date, ticker, iev, rank FROM iev_snapshots WHERE date = ? ORDER BY rank ASC"
+        sql = "SELECT date, ticker, iev, rank, iep FROM iev_snapshots WHERE date = ? ORDER BY rank ASC"
         params: tuple = (snapshot_date.isoformat(),)
         if top_n is not None:
             sql += " LIMIT ?"
@@ -99,12 +116,13 @@ class SQLiteIEVRepository:
                 ticker=r["ticker"],
                 iev=r["iev"],
                 rank=r["rank"],
+                iep=r["iep"],
             )
             for r in rows
         ]
 
     def has_snapshot(self, snapshot_date: date) -> bool:
-        """Return True if at least one IEV row exists for this date."""
+        """Return True if at least one row exists for this date."""
         with self._get_connection() as conn:
             row = conn.execute(
                 "SELECT 1 FROM iev_snapshots WHERE date = ? LIMIT 1",
@@ -113,7 +131,7 @@ class SQLiteIEVRepository:
         return row is not None
 
     def get_snapshot_dates(self) -> list[date]:
-        """Return all dates that have IEV snapshot data, ascending."""
+        """Return all dates that have snapshot data, ascending."""
         with self._get_connection() as conn:
             rows = conn.execute(
                 "SELECT DISTINCT date FROM iev_snapshots ORDER BY date ASC"
@@ -121,21 +139,27 @@ class SQLiteIEVRepository:
         return [date.fromisoformat(r["date"]) for r in rows]
 
     def get_coverage(self) -> dict:
-        """Return summary: total dates, first date, last date, avg movers per day."""
+        """Return summary: total dates, first/last date, avg movers per day, IEP fill rate."""
         with self._get_connection() as conn:
             row = conn.execute("""
                 SELECT
-                    COUNT(DISTINCT date) as total_dates,
-                    MIN(date)            as first_date,
-                    MAX(date)            as last_date,
-                    COUNT(*) * 1.0 / NULLIF(COUNT(DISTINCT date), 0) as avg_movers_per_day
+                    COUNT(DISTINCT date)                                          AS total_dates,
+                    MIN(date)                                                     AS first_date,
+                    MAX(date)                                                     AS last_date,
+                    COUNT(*) * 1.0 / NULLIF(COUNT(DISTINCT date), 0)            AS avg_movers_per_day,
+                    SUM(CASE WHEN iep IS NOT NULL THEN 1 ELSE 0 END) * 1.0
+                        / NULLIF(COUNT(*), 0) * 100                              AS iep_fill_pct
                 FROM iev_snapshots
             """).fetchone()
         if not row or not row["total_dates"]:
-            return {"total_dates": 0, "first_date": None, "last_date": None, "avg_movers_per_day": 0}
+            return {
+                "total_dates": 0, "first_date": None, "last_date": None,
+                "avg_movers_per_day": 0, "iep_fill_pct": 0.0,
+            }
         return {
             "total_dates": row["total_dates"],
             "first_date": row["first_date"],
             "last_date": row["last_date"],
             "avg_movers_per_day": round(row["avg_movers_per_day"], 1),
+            "iep_fill_pct": round(row["iep_fill_pct"] or 0.0, 1),
         }

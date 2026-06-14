@@ -18,11 +18,13 @@ class MoverData:
 
     Attributes:
         ticker: IDX ticker symbol (e.g., 'BBCA')
-        iev: Intraday External Volume — proxy for institutional interest
+        iev: Intraday Expected Volume — proxy for institutional interest
+        iep: Indicative Equilibrium Price in IDR — expected auction clearing price (None if not captured)
     """
 
     ticker: str
     iev: int
+    iep: int | None = None
 
 
 @dataclass(frozen=True)

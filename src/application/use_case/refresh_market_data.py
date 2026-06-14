@@ -167,6 +167,8 @@ class RefreshMarketDataUseCase:
             if updated_range
             else 0
         )
+        if added_count == 0 and "refresh" in fetch_modes:
+            return f"refreshed/span={span_days}d"
         prefix = "backfill+" if "backfill" in fetch_modes else "+"
         return f"{prefix}{added_count}rows/span={span_days}d"
 

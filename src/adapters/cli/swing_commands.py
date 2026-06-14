@@ -690,12 +690,154 @@ def _broker_weight_quality(
     return "neutral detail"
 
 
+def _build_broker_detail_from_daily_flows(
+    ticker: str,
+    daily_flows: list,
+    window_sessions: int,
+    as_of_date: date | None,
+) -> BrokerDetail | None:
+    """Build BrokerDetail from real per-day per-broker flow records."""
+    # Determine the window: latest N distinct trading dates
+    all_dates = sorted({f.date for f in daily_flows}, reverse=True)
+    window_dates = set(all_dates[:window_sessions])
+    window_flows = [f for f in daily_flows if f.date in window_dates]
+    if not window_flows:
+        return None
+
+    buyer_values: dict[str, Decimal] = {}
+    buyer_names: dict[str, str] = {}
+    buyer_sessions: dict[str, set] = {}
+    seller_values: dict[str, Decimal] = {}
+    seller_names: dict[str, str] = {}
+    seller_sessions: dict[str, set] = {}
+    smart_flow = Decimal("0")
+    noise_flow = Decimal("0")
+    neutral_flow = Decimal("0")
+    weighted_net_flow = Decimal("0")
+
+    def add_weighted_flow(code: str, signed_value: Decimal) -> None:
+        nonlocal smart_flow, noise_flow, neutral_flow, weighted_net_flow
+        tier = _broker_tier(code)
+        if tier == "smart":
+            smart_flow += signed_value
+        elif tier == "noise":
+            noise_flow += signed_value
+        else:
+            neutral_flow += signed_value
+        weighted_net_flow += signed_value * _broker_weight(code)
+
+    for f in window_flows:
+        if f.net_value > Decimal("0"):
+            buyer_values[f.broker_code] = buyer_values.get(f.broker_code, Decimal("0")) + f.net_value
+            buyer_names[f.broker_code] = f.broker_name
+            buyer_sessions.setdefault(f.broker_code, set()).add(f.date)
+            add_weighted_flow(f.broker_code, f.net_value)
+        elif f.net_value < Decimal("0"):
+            seller_values[f.broker_code] = seller_values.get(f.broker_code, Decimal("0")) + abs(f.net_value)
+            seller_names[f.broker_code] = f.broker_name
+            seller_sessions.setdefault(f.broker_code, set()).add(f.date)
+            add_weighted_flow(f.broker_code, f.net_value)
+
+    buyers = tuple(sorted(
+        (
+            BrokerDetailLine(
+                broker_code=code,
+                broker_name=buyer_names.get(code, code),
+                broker_type="unknown",
+                net_value=value,
+                active_sessions=len(buyer_sessions.get(code, set())),
+            )
+            for code, value in buyer_values.items()
+        ),
+        key=_broker_line_sort_key,
+        reverse=True,
+    )[:5])
+    sellers = tuple(sorted(
+        (
+            BrokerDetailLine(
+                broker_code=code,
+                broker_name=seller_names.get(code, code),
+                broker_type="unknown",
+                net_value=-value,
+                active_sessions=len(seller_sessions.get(code, set())),
+            )
+            for code, value in seller_values.items()
+        ),
+        key=_broker_line_sort_key,
+        reverse=True,
+    )[:5])
+
+    total_buy = sum(buyer_values.values(), Decimal("0"))
+    total_sell = sum(seller_values.values(), Decimal("0"))
+    top_buyer_share = (
+        round(float(abs(buyers[0].net_value) / total_buy * Decimal("100")), 1)
+        if buyers and total_buy > Decimal("0") else None
+    )
+    top_seller_share = (
+        round(float(abs(sellers[0].net_value) / total_sell * Decimal("100")), 1)
+        if sellers and total_sell > Decimal("0") else None
+    )
+
+    through_date = max(f.date for f in window_flows)
+    smart_share = _smart_share_pct(smart_flow, noise_flow, neutral_flow)
+    broker_weight_quality = _broker_weight_quality(
+        smart_flow=smart_flow,
+        noise_flow=noise_flow,
+        neutral_flow=neutral_flow,
+        latest_net_flow=smart_flow + noise_flow + neutral_flow,
+        smart_share_pct=smart_share,
+    )
+
+    if not buyers:
+        quality = "no buyer detail"
+    elif top_buyer_share is not None and top_buyer_share >= 60:
+        quality = "concentrated accumulation"
+    elif len(buyers) >= 3 and len(window_dates) >= 3:
+        quality = "broad accumulation"
+    elif smart_flow < Decimal("0"):
+        quality = "recent distribution"
+    else:
+        quality = "limited accumulation detail"
+
+    return BrokerDetail(
+        window_sessions=window_sessions,
+        detail_sessions=len(window_dates),
+        through_date=through_date,
+        source="stockbit",
+        top_buyers=buyers,
+        top_sellers=sellers,
+        top_buyer_share_pct=top_buyer_share,
+        top_seller_share_pct=top_seller_share,
+        smart_flow=smart_flow,
+        noise_flow=noise_flow,
+        neutral_flow=neutral_flow,
+        weighted_net_flow=weighted_net_flow,
+        smart_share_pct=smart_share,
+        broker_weight_quality=broker_weight_quality,
+        quality=quality,
+    )
+
+
 def _build_broker_detail(
     ticker: str,
     broker_repo: SQLiteBrokerRepository,
     window_sessions: int = 5,
     as_of_date: date | None = None,
 ) -> BrokerDetail | None:
+    # Prefer broker_daily_flow — real per-day per-broker data, never aggregates.
+    # Fall back to broker_summaries only when daily flow is unavailable.
+    daily_flows = (
+        broker_repo.get_broker_daily_flows(ticker, end_date=as_of_date)
+        if hasattr(broker_repo, "get_broker_daily_flows")
+        else []
+    )
+
+    if daily_flows:
+        return _build_broker_detail_from_daily_flows(
+            ticker, daily_flows, window_sessions, as_of_date
+        )
+
+    # Legacy fallback: broker_summaries (period aggregates from marketdetectors)
     summaries = broker_repo.get_broker_summaries(ticker, end_date=as_of_date)
     detail_summaries = [
         summary
@@ -1199,12 +1341,12 @@ def _print_swing_output(
             fg=typer.colors.BRIGHT_BLACK,
             ))
 
-    # ── BROKER FLOW DETAIL ──────────────────────────────────────────────────
+    # ── BROKER FLOW DETAIL (institutional desk proxy — 10 codes, not all-foreign) ──────────
     typer.echo("")
     if flow_detail:
         _section_header(
             f"FLOW DETAIL ({flow_detail.window_sessions} sessions)",
-            f"through: {_fmt_date(flow_detail.through_date)}",
+            f"through: {_fmt_date(flow_detail.through_date)} · institutional desk",
         )
         typer.echo(
             f"  Range  {_fmt_date(flow_detail.from_date)} → "

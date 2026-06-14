@@ -289,7 +289,8 @@ def test_fetch_broker_uses_flow_points_for_stockbit_session_coverage(tmp_path: P
     today = date.today()
     flow_start = date.fromordinal(today.toordinal() - 90)
     requested_start = date.fromordinal(today.toordinal() - 365)
-    repo.save_broker_summary(_summary("BBCA", today, "stockbit"))
+    # Only stockbit flow_points exist — IDX summaries have no coverage.
+    # The backfill range should be derived from flow_points coverage, not summaries.
     repo.save_foreign_flow_points([
         ForeignFlowPoint(
             ticker="BBCA",
@@ -318,18 +319,21 @@ def test_fetch_broker_uses_flow_points_for_stockbit_session_coverage(tmp_path: P
             source="stockbit",
         )
     ]
-    provider = FakeBrokerProvider("stockbit", historical_points=historical_points)
+    stockbit_provider = FakeBrokerProvider("stockbit", historical_points=historical_points)
+    idx_provider = FakeBrokerProvider("idx")
 
     status = _fetch_broker(
         ticker="BBCA",
         days=365,
         db_path=db_path,
-        broker_provider=provider,
+        broker_provider=stockbit_provider,
         refresh=False,
+        _idx_summary_provider=idx_provider,
     )
 
     assert status.startswith("backfill+")
-    assert provider.requested_ranges == [
+    # Backfill range is determined by flow_points coverage, sent to IDX for summaries
+    assert idx_provider.requested_ranges == [
         (requested_start, date.fromordinal(flow_start.toordinal() - 1))
     ]
     assert repo.get_foreign_flow_date_range("BBCA", source="stockbit") == (
@@ -384,8 +388,9 @@ def test_fetch_broker_counts_only_new_local_dates(tmp_path: Path):
     today = date.today()
     latest = date.fromordinal(today.toordinal() - 10)
     requested_start = date.fromordinal(today.toordinal() - 365)
-    repo.save_broker_summary(_summary("BBCA", requested_start, "stockbit"))
-    repo.save_broker_summary(_summary("BBCA", latest, "stockbit"))
+    # Seed IDX summaries (broker_summaries always come from IDX now)
+    repo.save_broker_summary(_summary("BBCA", requested_start, "idx"))
+    repo.save_broker_summary(_summary("BBCA", latest, "idx"))
     repo.save_foreign_flow_points([
         ForeignFlowPoint(
             ticker="BBCA",
@@ -396,17 +401,20 @@ def test_fetch_broker_counts_only_new_local_dates(tmp_path: Path):
             source="stockbit",
         )
     ])
-    provider = EchoLatestBrokerProvider("stockbit", echo_date=latest)
+    stockbit_provider = FakeBrokerProvider("stockbit")
+    # IDX provider echoes back 'latest' so no new dates are added (up-to-date path)
+    idx_provider = EchoLatestBrokerProvider("idx", echo_date=latest)
 
     status = _fetch_broker(
         ticker="BBCA",
         days=365,
         db_path=db_path,
-        broker_provider=provider,
+        broker_provider=stockbit_provider,
         refresh=False,
+        _idx_summary_provider=idx_provider,
     )
 
     assert status == f"up-to-date({latest.isoformat()})"
-    assert provider.requested_ranges == [
+    assert idx_provider.requested_ranges == [
         (date.fromordinal(latest.toordinal() + 1), today)
     ]

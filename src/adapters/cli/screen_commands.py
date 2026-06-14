@@ -1894,23 +1894,29 @@ def collect_iev(
 
     today = date.today()
     repo = SQLiteIEVRepository(resolved_db)
-    written = repo.save_snapshot(today, [(m.ticker, m.iev) for m in movers])
+    written = repo.save_snapshot(today, movers)
 
-    typer.echo(f"Saved {written} movers for {today.isoformat()} to {resolved_db}")
+    iep_captured = sum(1 for m in movers if m.iep is not None)
+    typer.echo(
+        f"Saved {written} movers for {today.isoformat()} to {resolved_db} "
+        f"(IEP captured: {iep_captured}/{written})"
+    )
     typer.echo("")
-    typer.echo(f"  {'RANK':>4}  {'TICKER':<8}  {'IEV':>12}")
-    typer.echo(f"  {'-'*4}  {'-'*8}  {'-'*12}")
+    typer.echo(f"  {'RANK':>4}  {'TICKER':<8}  {'IEV':>12}  {'IEP':>8}")
+    typer.echo(f"  {'-'*4}  {'-'*8}  {'-'*12}  {'-'*8}")
     for i, m in enumerate(movers[:20], 1):
-        typer.echo(f"  {i:>4}  {m.ticker:<8}  {m.iev:>12,}")
+        iep_str = f"{m.iep:,}" if m.iep is not None else "—"
+        typer.echo(f"  {i:>4}  {m.ticker:<8}  {m.iev:>12,}  {iep_str:>8}")
     if len(movers) > 20:
         typer.echo(f"  ... and {len(movers) - 20} more stored in database")
 
     coverage = repo.get_coverage()
     typer.echo("")
     typer.echo(
-        f"IEV history: {coverage['total_dates']} days "
+        f"IEV/IEP history: {coverage['total_dates']} days "
         f"({coverage['first_date']} → {coverage['last_date']}), "
-        f"avg {coverage['avg_movers_per_day']:.0f} movers/day"
+        f"avg {coverage['avg_movers_per_day']:.0f} movers/day, "
+        f"IEP fill {coverage['iep_fill_pct']:.0f}%"
     )
 
 

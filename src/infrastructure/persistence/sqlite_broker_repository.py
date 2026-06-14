@@ -15,6 +15,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from src.domain.entities.broker_flow import (
+    BrokerDailyFlow,
     BrokerFlowPoint,
     BrokerSummary,
     BrokerTransaction,
@@ -36,6 +37,7 @@ class SQLiteBrokerRepository(BrokerDataRepository):
         broker_summaries(ticker, date, source, ...) PK (ticker, date, source)
         foreign_flow_points(ticker, date, source, ...) PK (ticker, date, source)
         foreign_flow_snapshots(ticker, snapshot_date, period_days, source) PK composite
+        broker_daily_flow(ticker, date, broker_code, source) PK — real per-day per-broker rows
     """
 
     def __init__(self, db_path: str | Path) -> None:
@@ -52,6 +54,8 @@ class SQLiteBrokerRepository(BrokerDataRepository):
         try:
             self._migrate_broker_summaries_if_needed()
             self._migrate_foreign_flow_points_if_needed()
+            self._migrate_broker_daily_flow_if_needed()
+            self._cleanup_stockbit_summaries_superseded_by_idx()
             with self._get_connection() as conn:
                 conn.execute("""
                     CREATE TABLE IF NOT EXISTS broker_summaries (
@@ -105,6 +109,36 @@ class SQLiteBrokerRepository(BrokerDataRepository):
                 conn.execute("""
                     CREATE INDEX IF NOT EXISTS idx_ffs_date_period
                     ON foreign_flow_snapshots(snapshot_date, period_days, source)
+                """)
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS broker_daily_flow (
+                        ticker          TEXT NOT NULL,
+                        date            TEXT NOT NULL,
+                        broker_code     TEXT NOT NULL,
+                        broker_name     TEXT NOT NULL DEFAULT '',
+                        source          TEXT NOT NULL DEFAULT 'stockbit',
+                        buy_lot         INTEGER NOT NULL DEFAULT 0,
+                        sell_lot        INTEGER NOT NULL DEFAULT 0,
+                        net_lot         INTEGER NOT NULL DEFAULT 0,
+                        buy_value       TEXT NOT NULL DEFAULT '0',
+                        sell_value      TEXT NOT NULL DEFAULT '0',
+                        net_value       TEXT NOT NULL DEFAULT '0',
+                        avg_buy_price   TEXT NOT NULL DEFAULT '0',
+                        avg_sell_price  TEXT NOT NULL DEFAULT '0',
+                        avg_price       TEXT NOT NULL DEFAULT '0',
+                        buy_pct         REAL NOT NULL DEFAULT 0,
+                        sell_pct        REAL NOT NULL DEFAULT 0,
+                        created_at      TEXT DEFAULT CURRENT_TIMESTAMP,
+                        PRIMARY KEY (ticker, date, broker_code, source)
+                    )
+                """)
+                conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_bdf_ticker_date
+                    ON broker_daily_flow(ticker, date)
+                """)
+                conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_bdf_ticker_broker
+                    ON broker_daily_flow(ticker, broker_code, date)
                 """)
                 conn.commit()
         except sqlite3.Error as e:
@@ -200,6 +234,64 @@ class SQLiteBrokerRepository(BrokerDataRepository):
         except sqlite3.Error as e:
             raise BrokerDataRepositoryError(
                 f"Failed to migrate foreign_flow_points: {e}"
+            ) from e
+
+    def _migrate_broker_daily_flow_if_needed(self) -> None:
+        """Add avg_buy_price and avg_sell_price columns if missing from broker_daily_flow."""
+        try:
+            self._db_path.parent.mkdir(parents=True, exist_ok=True)
+            conn = sqlite3.connect(str(self._db_path))
+            try:
+                row = conn.execute(
+                    "SELECT sql FROM sqlite_master WHERE type='table' AND name='broker_daily_flow'"
+                ).fetchone()
+                if row is None:
+                    return  # table doesn't exist yet — _ensure_schema will create it
+                existing_cols = {
+                    r[1] for r in conn.execute("PRAGMA table_info(broker_daily_flow)").fetchall()
+                }
+                if "avg_buy_price" not in existing_cols:
+                    conn.execute(
+                        "ALTER TABLE broker_daily_flow ADD COLUMN avg_buy_price TEXT NOT NULL DEFAULT '0'"
+                    )
+                if "avg_sell_price" not in existing_cols:
+                    conn.execute(
+                        "ALTER TABLE broker_daily_flow ADD COLUMN avg_sell_price TEXT NOT NULL DEFAULT '0'"
+                    )
+                conn.commit()
+            finally:
+                conn.close()
+        except sqlite3.Error as e:
+            raise BrokerDataRepositoryError(
+                f"Failed to migrate broker_daily_flow: {e}"
+            ) from e
+
+    def _cleanup_stockbit_summaries_superseded_by_idx(self) -> None:
+        """Remove broker_summaries rows with source='stockbit' where an IDX row exists.
+
+        Stockbit broker_summaries have a synthetic total_value (~72% of true turnover).
+        IDX rows are accurate. Where both exist for the same ticker+date, the Stockbit
+        row is strictly worse and should be removed so IDX data is used exclusively.
+        """
+        try:
+            with self._get_connection() as conn:
+                if conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='broker_summaries'"
+                ).fetchone() is None:
+                    return
+                conn.execute("""
+                    DELETE FROM broker_summaries
+                    WHERE source = 'stockbit'
+                      AND EXISTS (
+                        SELECT 1 FROM broker_summaries b2
+                        WHERE b2.ticker = broker_summaries.ticker
+                          AND b2.date   = broker_summaries.date
+                          AND b2.source = 'idx'
+                      )
+                """)
+        except sqlite3.Error as e:
+            raise BrokerDataRepositoryError(
+                f"Failed to clean up stockbit broker_summaries: {e}"
             ) from e
 
     # ── Serialization helpers ──────────────────────────────────────────────
@@ -305,7 +397,7 @@ class SQLiteBrokerRepository(BrokerDataRepository):
         """
         Retrieve summaries in date range.
 
-        source=None returns one row per date, preferring Stockbit ('stockbit' > 'idx').
+        source=None returns one row per date, preferring IDX ('idx' < 'stockbit').
         source='idx'|'stockbit' returns only that source.
         """
         try:
@@ -314,7 +406,7 @@ class SQLiteBrokerRepository(BrokerDataRepository):
                     query = """
                         SELECT bs.* FROM broker_summaries bs
                         INNER JOIN (
-                            SELECT ticker, date, MAX(source) AS best_src
+                            SELECT ticker, date, MIN(source) AS best_src
                             FROM broker_summaries
                             WHERE ticker = ?
                     """
@@ -604,3 +696,139 @@ class SQLiteBrokerRepository(BrokerDataRepository):
             ]
         except sqlite3.Error as e:
             raise BrokerDataRepositoryError(f"Failed to get foreign flow snapshots: {e}") from e
+
+    # ── BrokerDailyFlow persistence ───────────────────────────────────────
+
+    def save_broker_daily_flows(self, flows: list[BrokerDailyFlow]) -> None:
+        """Upsert real per-day per-broker flow records into broker_daily_flow."""
+        if not flows:
+            return
+        try:
+            with self._get_connection() as conn:
+                conn.executemany(
+                    """
+                    INSERT INTO broker_daily_flow
+                        (ticker, date, broker_code, broker_name, source,
+                         buy_lot, sell_lot, net_lot,
+                         buy_value, sell_value, net_value,
+                         avg_buy_price, avg_sell_price, avg_price,
+                         buy_pct, sell_pct)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(ticker, date, broker_code, source) DO UPDATE SET
+                        broker_name    = excluded.broker_name,
+                        buy_lot        = excluded.buy_lot,
+                        sell_lot       = excluded.sell_lot,
+                        net_lot        = excluded.net_lot,
+                        buy_value      = excluded.buy_value,
+                        sell_value     = excluded.sell_value,
+                        net_value      = excluded.net_value,
+                        avg_buy_price  = excluded.avg_buy_price,
+                        avg_sell_price = excluded.avg_sell_price,
+                        avg_price      = excluded.avg_price,
+                        buy_pct        = excluded.buy_pct,
+                        sell_pct       = excluded.sell_pct
+                    """,
+                    [
+                        (
+                            f.ticker.upper(),
+                            f.date.isoformat(),
+                            f.broker_code.upper(),
+                            f.broker_name,
+                            f.source,
+                            f.buy_lot,
+                            f.sell_lot,
+                            f.net_lot,
+                            str(f.buy_value),
+                            str(f.sell_value),
+                            str(f.net_value),
+                            str(f.avg_buy_price),
+                            str(f.avg_sell_price),
+                            str(f.avg_price),
+                            f.buy_pct,
+                            f.sell_pct,
+                        )
+                        for f in flows
+                    ],
+                )
+                conn.commit()
+        except sqlite3.Error as e:
+            raise BrokerDataRepositoryError(f"Failed to save broker daily flows: {e}") from e
+
+    def get_broker_daily_flows(
+        self,
+        ticker: str,
+        start_date: date | None = None,
+        end_date: date | None = None,
+        broker_codes: list[str] | None = None,
+        source: str | None = None,
+    ) -> list[BrokerDailyFlow]:
+        """Retrieve per-broker daily flow records sorted by (date, broker_code)."""
+        try:
+            with self._get_connection() as conn:
+                query = "SELECT * FROM broker_daily_flow WHERE ticker = ?"
+                params: list = [ticker.upper()]
+                if start_date:
+                    query += " AND date >= ?"
+                    params.append(start_date.isoformat())
+                if end_date:
+                    query += " AND date <= ?"
+                    params.append(end_date.isoformat())
+                if broker_codes:
+                    placeholders = ",".join("?" * len(broker_codes))
+                    query += f" AND broker_code IN ({placeholders})"
+                    params.extend(c.upper() for c in broker_codes)
+                if source:
+                    query += " AND source = ?"
+                    params.append(source)
+                query += " ORDER BY date ASC, broker_code ASC"
+                rows = conn.execute(query, params).fetchall()
+            return [
+                BrokerDailyFlow(
+                    ticker=r["ticker"],
+                    date=date.fromisoformat(r["date"]),
+                    broker_code=r["broker_code"],
+                    broker_name=r["broker_name"],
+                    source=r["source"],
+                    buy_lot=r["buy_lot"],
+                    sell_lot=r["sell_lot"],
+                    net_lot=r["net_lot"],
+                    buy_value=Decimal(r["buy_value"]),
+                    sell_value=Decimal(r["sell_value"]),
+                    net_value=Decimal(r["net_value"]),
+                    avg_buy_price=Decimal(r["avg_buy_price"] or "0"),
+                    avg_sell_price=Decimal(r["avg_sell_price"] or "0"),
+                    avg_price=Decimal(r["avg_price"]),
+                    buy_pct=r["buy_pct"],
+                    sell_pct=r["sell_pct"],
+                )
+                for r in rows
+            ]
+        except sqlite3.Error as e:
+            raise BrokerDataRepositoryError(f"Failed to get broker daily flows: {e}") from e
+
+    def get_broker_daily_flow_date_range(
+        self,
+        ticker: str,
+        source: str | None = None,
+    ) -> tuple[date, date] | None:
+        """Get earliest and latest date in broker_daily_flow for a ticker."""
+        try:
+            with self._get_connection() as conn:
+                params: list = [ticker.upper()]
+                where = "WHERE ticker = ?"
+                if source:
+                    where += " AND source = ?"
+                    params.append(source)
+                row = conn.execute(
+                    f"SELECT MIN(date) AS min_date, MAX(date) AS max_date "
+                    f"FROM broker_daily_flow {where}",
+                    params,
+                ).fetchone()
+            if not row or not row["min_date"]:
+                return None
+            return (
+                date.fromisoformat(row["min_date"]),
+                date.fromisoformat(row["max_date"]),
+            )
+        except sqlite3.Error as e:
+            raise BrokerDataRepositoryError(f"Failed to get broker daily flow date range: {e}") from e

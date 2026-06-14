@@ -254,3 +254,41 @@ class ForeignFlowPoint:
 # Backward-compatible alias for older code paths. The data represents aggregate
 # foreign flow, not all broker archetypes.
 BrokerFlowPoint = ForeignFlowPoint
+
+
+@dataclass(frozen=True)
+class BrokerDailyFlow:
+    """
+    Real per-day trading activity for a single named broker on a single stock.
+
+    Sourced from the Stockbit /order-trade/broker/activity/historical endpoint
+    with interval=INTERVAL_DAILY. One row per (ticker, date, broker_code).
+
+    This is NEVER an aggregate — each row represents exactly one trading session.
+    The accumulation screen uses this for accurate window-based broker analysis.
+    """
+
+    ticker: str
+    broker_code: str
+    broker_name: str
+    date: date
+    buy_lot: int
+    sell_lot: int
+    net_lot: int
+    buy_value: Decimal
+    sell_value: Decimal
+    net_value: Decimal
+    avg_buy_price: Decimal   # avg price at which broker bought (buy_summary.avg_price)
+    avg_sell_price: Decimal  # avg price at which broker sold (sell_summary.avg_price)
+    avg_price: Decimal       # net_summary.avg_price (dominant-side price; kept for compat)
+    buy_pct: float    # broker's buy lot as % of total market buy that day
+    sell_pct: float   # broker's sell lot as % of total market sell that day
+    source: str = "stockbit"
+
+    @property
+    def is_net_buyer(self) -> bool:
+        return self.net_value > Decimal("0")
+
+    @property
+    def is_net_seller(self) -> bool:
+        return self.net_value < Decimal("0")
