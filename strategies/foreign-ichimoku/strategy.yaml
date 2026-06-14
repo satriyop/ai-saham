@@ -1,0 +1,108 @@
+version: 1
+name: "Foreign Flow + Ichimoku"
+description: |
+  Smart money positioning (foreign flow) confirmed by Ichimoku cloud trend.
+  Two independent signal types: institutional accumulation + macro trend structure.
+
+  Foreign flow: detects when institutional investors are accumulating.
+  Ichimoku cloud: confirms the macro trend is genuinely bullish (green cloud).
+
+  Entry: price above green cloud AND foreigners accumulating 2+ days.
+  Exit: heavy foreign distribution OR price breaks below Kijun base line.
+
+  Requires broker flow data: saham update TICKER --broker-only
+  Minimum data: 78 candles (SpanB warmup).
+
+indicators:
+  span_a:
+    type: ICHIMOKU_SPAN_A
+    period: 26
+  span_b:
+    type: ICHIMOKU_SPAN_B
+    period: 52
+  kijun:
+    type: ICHIMOKU_KIJUN
+    period: 26
+  tenkan:
+    type: ICHIMOKU_TENKAN
+    period: 9
+  consecutive_buy:
+    type: CONSECUTIVE_FOREIGN_BUY
+    period: 1
+  foreign_flow_3d:
+    type: FOREIGN_FLOW
+    period: 3
+
+default_outcome: MODERATE
+
+signal_mapping:
+  LOW_RISK: ENTER_LONG
+  MODERATE: HOLD
+  HIGH_RISK: EXIT_LONG
+
+rules:
+  - name: green_cloud_with_foreign_buy
+    priority: 10
+    when:
+      all:
+        - left:
+            indicator: CLOSE
+          operator: ">"
+          right:
+            indicator: span_a
+        - left:
+            indicator: CLOSE
+          operator: ">"
+          right:
+            indicator: span_b
+        - left:
+            indicator: span_a
+          operator: ">"
+          right:
+            indicator: span_b
+        - left:
+            indicator: consecutive_buy
+          operator: ">="
+          right:
+            value: 2
+    outcome: LOW_RISK
+    rationale: "Price above green Ichimoku cloud with 2+ days of foreign accumulation"
+
+  - name: foreign_distribution_exit
+    priority: 10
+    when:
+      left:
+        indicator: foreign_flow_3d
+      operator: "<"
+      right:
+        value: -30000000000
+    outcome: HIGH_RISK
+    rationale: "Heavy foreign net selling >30B IDR — smart money exiting, follow"
+
+  - name: kijun_break_exit
+    priority: 20
+    when:
+      left:
+        indicator: CLOSE
+      operator: "<"
+      right:
+        indicator: kijun
+    outcome: HIGH_RISK
+    rationale: "Price broke below Kijun base line — cloud trend structure broken"
+
+  - name: tenkan_kijun_death_cross
+    priority: 30
+    when:
+      all:
+        - left:
+            indicator: tenkan
+          operator: "<"
+          right:
+            indicator: kijun
+        - left:
+            indicator: CLOSE
+          operator: "<"
+          right:
+            indicator: kijun
+    outcome: HIGH_RISK
+    rationale: "Tenkan/Kijun death cross with price below base line — confirmed bearish"

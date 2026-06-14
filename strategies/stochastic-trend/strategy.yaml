@@ -1,0 +1,73 @@
+version: 1
+name: "Stochastic + Trend"
+description: |
+  Stochastic oversold entry filtered by EMA(50) trend direction.
+  Only buys oversold dips inside an uptrend — avoids catching falling knives.
+
+  Stochastic < 20 = short-term momentum oversold.
+  Close > EMA(50) = price still in medium-term uptrend.
+  RSI < 40 = momentum confirmation of oversold condition.
+
+  Exit: Stochastic overbought (> 80) or price breaks below EMA(50).
+  Minimum data: 50 candles (EMA warmup).
+
+indicators:
+  ema_50:
+    type: EMA
+    period: 50
+  stochastic:
+    type: STOCHASTIC
+    period: 14
+  rsi:
+    type: RSI
+    period: 14
+
+default_outcome: MODERATE
+
+signal_mapping:
+  LOW_RISK: ENTER_LONG
+  MODERATE: HOLD
+  HIGH_RISK: EXIT_LONG
+
+rules:
+  - name: stochastic_oversold_uptrend
+    priority: 10
+    when:
+      all:
+        - left:
+            indicator: stochastic
+          operator: "<"
+          right:
+            value: 20
+        - left:
+            indicator: CLOSE
+          operator: ">"
+          right:
+            indicator: ema_50
+        - indicator: rsi
+          operator: "<"
+          value: 40
+    outcome: LOW_RISK
+    rationale: "Stochastic oversold (<20) while price above EMA(50) — dip in uptrend"
+
+  - name: stochastic_overbought_exit
+    priority: 10
+    when:
+      left:
+        indicator: stochastic
+      operator: ">"
+      right:
+        value: 80
+    outcome: HIGH_RISK
+    rationale: "Stochastic overbought (>80) — take profit"
+
+  - name: trend_break_exit
+    priority: 20
+    when:
+      left:
+        indicator: CLOSE
+      operator: "<"
+      right:
+        indicator: ema_50
+    outcome: HIGH_RISK
+    rationale: "Price broke below EMA(50) — uptrend invalidated, exit"

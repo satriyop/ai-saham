@@ -1,0 +1,85 @@
+version: 1
+name: "BB Breakout"
+description: |
+  Bollinger Band breakout strategy with MACD momentum confirmation.
+  Enters when price breaks above the upper band (volatility expansion)
+  with MACD confirming the move. Opposite of BB Mean Reversion.
+
+  BB breakout + MACD = sustained directional move, not just a spike.
+  RSI 50-75 filter: momentum is rising but not yet exhausted.
+
+  Exit: MACD bearish cross (momentum fades) or price collapses to lower band.
+  Minimum data: 20 candles (BB) + 26 candles (MACD signal).
+
+indicators:
+  bb_upper:
+    type: BB_UPPER
+    period: 20
+  bb_lower:
+    type: BB_LOWER
+    period: 20
+  bb_width:
+    type: BB_WIDTH
+    period: 20
+  macd:
+    type: MACD
+    period: 12
+  macd_signal:
+    type: MACD_SIGNAL
+    period: 9
+  rsi:
+    type: RSI
+    period: 14
+
+default_outcome: MODERATE
+
+signal_mapping:
+  LOW_RISK: ENTER_LONG
+  MODERATE: HOLD
+  HIGH_RISK: EXIT_LONG
+
+rules:
+  - name: bb_breakout_with_momentum
+    priority: 10
+    when:
+      all:
+        - left:
+            indicator: CLOSE
+          operator: ">"
+          right:
+            indicator: bb_upper
+        - left:
+            indicator: macd
+          operator: ">"
+          right:
+            indicator: macd_signal
+        - indicator: rsi
+          operator: ">"
+          value: 50
+        - indicator: rsi
+          operator: "<"
+          value: 75
+    outcome: LOW_RISK
+    rationale: "Price broke above upper BB with MACD confirmation and RSI showing rising momentum"
+
+  - name: macd_reversal_exit
+    priority: 10
+    when:
+      left:
+        indicator: macd
+      operator: "<"
+      right:
+        indicator: macd_signal
+    outcome: HIGH_RISK
+    rationale: "MACD bearish cross — breakout momentum exhausted, exit"
+
+  - name: bb_collapse_exit
+    priority: 20
+    when:
+      left:
+        indicator: CLOSE
+      operator: "<"
+      right:
+        indicator: bb_lower
+    outcome: HIGH_RISK
+    rationale: "Price collapsed to lower Bollinger Band — failed breakout, stop out"
