@@ -55,7 +55,7 @@ saham update --universe lq45 --candles-only  # Only price data, skip broker flow
 | `ERR:...` | Download failed — just re-run, usually rate limiting |
 
 **Which broker data source is used?**
-- If you have a Stockbit token configured → Stockbit (shows which specific broker bought/sold)
+- If you have a Stockbit login session → Stockbit (shows which specific broker bought/sold)
 - Otherwise → IDX public API (shows total aggregate foreign flow only, no auth needed)
 
 ---
@@ -454,8 +454,8 @@ saham screen accumulation --universe cached --multi
 
 To configure Stockbit:
 ```bash
-# Get your token: Stockbit app → Login → F12 → Network → any "exodus" request → Authorization header
-saham broker auth <your_token>
+# Login via browser (opens a Chromium window to authenticate with your Stockbit account)
+saham stockbit login
 
 # Now screener automatically uses Stockbit and shows institutional flags
 saham screen accumulation --universe lq45 --granular

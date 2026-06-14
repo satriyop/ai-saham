@@ -106,6 +106,17 @@ A stock that scores 75 on 7 sessions, 72 on 30 sessions, and 68 on 90 sessions i
 | `long-term only` | Was accumulating months ago, not now | Skip — may already be exiting |
 | `weak` | No window scores ≥ 60 | Skip |
 
+`BRK` appears in multi-window output when named Stockbit top-broker rows are cached:
+
+| BRK | Meaning |
+|---|---|
+| `smart+` | Smart-money tier is net buying in recent named-broker rows |
+| `noise+` | Noise/retail-heavy tier is net buying; treat fresh rotations cautiously |
+| `smart-` | Smart-money tier is net selling; do not upgrade the setup |
+| `noise-` | Noise/retail-heavy tier is net selling |
+| `mixed` | Named flow exists but is not led clearly by smart/noise tiers |
+| `n/a` | No named Stockbit broker detail in cache |
+
 **What you are looking for at this stage:** a shortlist of 3–5 tickers that score ≥ 60 on at least two windows. This feeds Step 4.
 
 **Window semantics:** `--window 7`, `--window 30`, and `--window 90` use the latest 7/30/90 broker sessions available as of the analysis date. Use `NET_DAYS` / `STREAK` to see how much of that session window was net foreign buying.
@@ -216,6 +227,14 @@ FLOW DETAIL (30 sessions)                          through: 2026-06-12
   Net    71.81B IDR   BUY/SELL  19/11   STREAK  6s
   Avg FLOW%  +18.40%   Latest  8.20B (+24.80%)
 
+BROKER DETAIL (5/5 sessions)            through: 2026-06-12 · stockbit
+  Top buyers       AK 18.20B (4s), CC 12.40B (3s), YP 8.10B (2s)
+  Top sellers      KZ -9.40B (2s), DB -6.70B (1s)
+  Smart flow       +14.10B IDR   Noise flow  +8.10B IDR
+  Weighted net     +20.45B IDR   Smart share  58.4%
+  Concentration    top buyer 38.0%; top seller 41.6%
+  Quality          broad accumulation; smart support
+
 PRESET — foreign-bounce                            final: ENTER
   PASS  score           actual=74.1    required=>= 70
   PASS  vwap_disc_pct   actual=4.2%    required=>= +3%
@@ -247,6 +266,17 @@ SUMMARY: Score 74.1 · LOW_RISK · 58% WR · positive news
 PLAN:  ENTER setup passed. Consider 4 lots at 4,840; TP 5,082; SL 4,598; max hold 10 trading days.
 ======================================================================
 ```
+
+`BROKER DETAIL` appears only when the cached broker summaries contain named per-broker transactions, typically from Stockbit. This is a named top-broker view, not the same as the aggregate foreign-flow time series in `FLOW DETAIL`. Use it as confirmation context:
+
+- `broad accumulation` supports the aggregate flow signal.
+- `concentrated accumulation` means one broker dominates the flow; downgrade confidence unless the chart is constructive.
+- `recent distribution` means the latest named-broker session is net foreign selling; do not upgrade a setup based only on older 30-session accumulation.
+- `Smart flow` / `Noise flow` classifies all named top-broker rows available in the Stockbit summary, including local brokers when Stockbit returns them.
+- The deterministic tier map is `AK`, `BK`, `KZ`, `ZP`, `RX`, `MS`, `DB`, `CS`, `ML`, `YU` = higher weight; `YP`, `PD`, `XL`, `XC` = lower/noise weight.
+- Absence of a broker code means it was not present in the cached top-broker rows, not that the broker had zero activity.
+- `Weighted net` is a measurement layer only. It does not change `ENTER/WATCH/AVOID` gates yet.
+- `Broker quality` notes under the preset block are confirmation/warning context only. `smart+` can support an `ENTER` or prioritize a `WATCH`, while `noise+` or `smart-` warns you to demand stronger chart confirmation or avoid upgrading the setup.
 
 ### All options
 
@@ -494,6 +524,16 @@ WEAK                7    -0.8%   43%  -1,200,000
 ```
 
 This tells you which market conditions the preset works best in. If WEAK regime consistently underperforms, restrict entries with `--allow-regimes SIDEWAYS,BULLISH`.
+
+### `saham swing audit` — Validate Signal Buckets
+
+Use audit before turning a confirmation signal into a hard rule:
+
+```bash
+saham swing audit --universe lq45 --preset foreign-bounce --start 2026-01-01
+```
+
+The grouped output includes `broker_quality` buckets (`smart+`, `noise+`, `smart-`, `noise-`, `mixed`, `no_detail`) with forward returns and win rate. Treat these rows as evidence for whether broker quality should stay a warning, become a downgrade, or become a future preset gate.
 
 ### `saham swing compare` — Regime filter variants side-by-side
 

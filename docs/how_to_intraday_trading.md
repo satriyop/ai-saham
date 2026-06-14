@@ -598,7 +598,7 @@ VERDICT    TICKER      IEV    GAP%     ENTRY-RANGE   STOP%   RSI  SIGNAL
 | `★ PRIME` | BULLISH + BACKED + FVWAP floor + range valid | Watchlist prioritas |
 | `◉ WATCH` | Bullish tapi belum semua sinyal hijau | Watchlist, konfirmasi di 09:00 |
 | `✗ SKIP` | BEARISH atau DISTRIBUTING atau gap di luar range | Tidak masuk |
-| `? NO_DATA` | Tidak ada data ATR lokal | `saham fetch TICKER` malam ini |
+| `? NO_DATA` | Tidak ada data ATR lokal | `saham update TICKER --days 365` malam ini |
 
 **Penjelasan kolom:**
 
@@ -1023,7 +1023,7 @@ Stop di 4,904 → harga turun ke 4,950 → kamu beli lagi karena "lebih murah". 
 
 **5. Trading saham yang tidak ada di database**
 
-Kalau output menunjukkan "No cached data", jalankan `saham fetch TICKER` dulu. Tanpa data historis, tidak ada ATR, tidak ada entry range.
+Kalau output menunjukkan "No cached data", jalankan `saham update TICKER --days 365` dulu. Tanpa data historis, tidak ada ATR, tidak ada entry range.
 
 **6. Tidak membaca context FVWAP negatif besar**
 

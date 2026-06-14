@@ -249,7 +249,7 @@ output menambahkan warning agar entry confirmation lebih ketat atau size dikuran
 ### Contoh Output Lengkap
 
 Output sekarang dimulai dengan ringkasan semua movers yang difetch — berguna untuk melihat
-saham di luar top 5 yang mungkin menarik keesokan harinya (misalnya untuk `saham fetch`).
+saham di luar top 5 yang mungkin menarik keesokan harinya (misalnya untuk `saham update`).
 
 ```
 Playwright session found — running autonomously...
@@ -288,7 +288,7 @@ WARNINGS
 ```
 
 Output dimulai dengan baris `Fetched 16 movers` — universe penuh dari Stockbit.
-Saham di luar top 5 (PPRO, ELTY, dll.) adalah kandidat untuk `saham fetch` malam ini.
+Saham di luar top 5 (PPRO, ELTY, dll.) adalah kandidat untuk `saham update` malam ini.
 
 **VERDICT** sudah mensintesis semua sinyal — kamu tidak perlu membaca setiap kolom secara manual.
 
@@ -303,7 +303,7 @@ VERDICT sudah mensintesis semua sinyal. Cukup baca kolom pertama:
 | `★ PRIME` | BULLISH + BACKED + FVWAP floor + range valid | Masuk WATCHLIST prioritas |
 | `◉ WATCH` | BULLISH tapi belum semua sinyal hijau | Masuk WATCHLIST, konfirmasi di 09:00 |
 | `✗ SKIP` | BEARISH atau DISTRIBUTING atau gap di luar range | Tidak masuk, tidak dipikirkan lagi |
-| `? NO_DATA` | Tidak ada data ATR lokal | Skip hari ini, `saham fetch TICKER` malam ini |
+| `? NO_DATA` | Tidak ada data ATR lokal | Skip hari ini, `saham update TICKER --days 365` malam ini |
 
 Kolom lain berguna untuk context, bukan untuk keputusan utama:
 - **GAP%** dan **ENTRY-RANGE** → dikonfirmasi oleh confirm-open di 09:00
@@ -319,7 +319,7 @@ Kolom lain berguna untuk context, bukan untuk keputusan utama:
 | `★ PRIME` | Semua sinyal selaras | Watchlist prioritas, sizing penuh |
 | `◉ WATCH` | Bullish tapi perlu konfirmasi | Watchlist, sizing lebih kecil |
 | `✗ SKIP` | Distributing/Bearish | Tidak masuk |
-| `? NO_DATA` | Tidak ada data historis | `saham fetch TICKER --days 365` malam ini |
+| `? NO_DATA` | Tidak ada data historis | `saham update TICKER --days 365` malam ini |
 
 ---
 
@@ -566,7 +566,7 @@ Potong dan tempel di terminal kamu.
 │    ★ PRIME   → watchlist prioritas                          │
 │    ◉ WATCH   → watchlist, konfirmasi di 09:00               │
 │    ✗ SKIP    → tidak masuk, tidak dipikirkan lagi           │
-│    ? NO_DATA → saham fetch TICKER malam ini                 │
+│    ? NO_DATA → saham update TICKER --days 365 malam ini                 │
 ├─────────────────────────────────────────────────────────────┤
 │  09:00  Isi opening prices dari WATCHLIST template          │
 │    saham intraday confirm-open \                            │
@@ -637,15 +637,14 @@ Setelah login, tool otomatis warm-up token (navigasi headless ke orderbook page)
 ### Saham Muncul dengan "No cached data"
 
 ```
-! BUMI: No cached data — run 'saham fetch BUMI' first
+! BUMI: No cached data — run 'saham update BUMI --days 365' first
 ```
 
 Untuk hari ini: skip saham itu, gunakan kandidat lain yang punya data.
 Untuk hari berikutnya:
 
 ```bash
-saham fetch BUMI --days 365
-saham broker fetch BUMI --days 90
+saham update BUMI --days 365
 ```
 
 ### Pre-Open Screener Tidak Ada Kandidat yang Muncul

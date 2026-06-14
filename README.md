@@ -37,7 +37,7 @@ A **local-first, production-grade CLI application** for stock analysis focused o
 
 ```bash
 # Fetch stock data
-saham fetch BBCA
+saham update BBCA --days 365
 
 # View all indicators
 saham indicators BBCA
@@ -121,25 +121,7 @@ saham version
 
 ## CLI Commands
 
-### `saham fetch` - Fetch Market Data
 
-Fetch daily OHLCV data for an IDX stock ticker from Yahoo Finance or IDX.
-
-```bash
-saham fetch BBCA                    # Fetch 1 year of data (Yahoo)
-saham fetch BBRI --days 730         # Fetch 2 years
-saham fetch TLKM --refresh          # Force refresh cache
-saham fetch BBCA --provider idx     # Use IDX public API directly
-```
-
-| Option | Short | Default | Description |
-|--------|-------|---------|-------------|
-| `--days` | `-d` | 365 | Days of history to fetch |
-| `--refresh` | `-r` | false | Bypass cache, fetch fresh data |
-| `--provider` | | yahoo | Data provider: `yahoo` or `idx` |
-| `--db` | | ./data.db | Custom database path |
-
----
 
 ### `saham sma` - Simple Moving Average
 
@@ -375,7 +357,7 @@ saham backtest BBCA -S momentum --format json
 - Winning/Losing Trades
 - Average Win/Loss
 
-**Note:** Requires cached data. Run `saham fetch TICKER` first.
+**Note:** Requires cached data. Run `saham update TICKER --days 365` first.
 
 ---
 
@@ -448,8 +430,8 @@ Track foreign investor activity on IDX stocks.
 saham broker fetch BBCA --days 30
 
 # Or use Stockbit for broker-level detail
-saham broker auth "your-stockbit-token"
-saham broker fetch BBCA --provider stockbit
+saham stockbit login
+saham broker fetch BBCA --provider stockbit-session
 
 # View foreign flow summary
 saham broker flow BBCA --days 20
@@ -1074,6 +1056,7 @@ src/
 ├── application/                      # Use cases & application services
 │   ├── use_case/
 │   │   ├── fetch_market_data.py
+│   │   ├── refresh_market_data.py
 │   │   ├── compute_sma.py
 │   │   ├── compute_ema.py
 │   │   ├── compute_rsi.py
@@ -1245,7 +1228,7 @@ make format
 make clean
 ```
 
-**Project Stats:** 176 source files, 94 test files
+**Project Stats:** 178 source files (~38k LOC), 98 test files (~26k LOC) | 1328 passing, 19 failing
 
 ---
 

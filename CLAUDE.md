@@ -7,6 +7,40 @@
 - When execute test code, use subagent, do not pollute context
 - Offer to create skills if you find some insight that will potentially help you to work more effectively in upcoming task, skills should be project scope not user scope. Use Skill creator plugin to create the skill.
 
+## Required Pre-Implementation Workflow
+
+Before Claude writes or modifies code, Claude MUST read and comply with:
+
+- `README.md`
+- `PROMPT_CONTRACT.md`
+- `DEFINITION_OF_DONE.md`
+- `TASK_TEMPLATE.md`
+- `AI_AGENT_CHECKLIST.md`
+- `ARCHITECTURE_DECISIONS.md`
+- This `CLAUDE.md`
+
+Claude must then state:
+
+```md
+Layer plan:
+- Domain:
+- Application:
+- Infrastructure:
+- Adapter:
+```
+
+Each touched layer must have a concrete reason. If a layer is not touched, state `not touched`.
+
+Claude must stop before implementation if:
+
+- The task does not satisfy `TASK_TEMPLATE.md`
+- The layer plan is unclear
+- The implementation would place workflow or policy inside an adapter
+- The implementation would bypass deterministic-first behavior
+- The implementation would bypass risk, persistence, AI, or architecture guardrails
+
+Do not proceed by silently making a "small" exception. Ask for clarification or request an explicit architecture decision update.
+
 ## Purpose
 This file instructs **Claude Code** how to behave as a disciplined senior engineer while developing this project. Claude should treat this repository as a **real financial software product**, not a prototype or demo.
 
@@ -16,6 +50,7 @@ Do not:
 - put AI logic in rules
 - let adapters talk to databases directly
 - skip configs and hardcode behavior
+- put cache freshness, fetch/backfill/refresh decisions, persistence orchestration, or business status calculation in adapters
 
 ---
 
@@ -59,8 +94,11 @@ In our project:
 * CLI, AI, database, and data providers are adapters
 * No adapter may leak into the domain
 * Registry as Single Authority: The registry already knows how to dispatch to built-in, plugin, or formula.
+* Non-trivial workflow belongs in `application/use_case`, not in adapters
 
 **Rule:** If domain logic depends on an external library, the design is wrong.
+
+**Adapter thinness rule:** CLI, bot, web, and AI adapters may parse input, select dependencies, call use cases, format output, and map errors. They must not own cache policy, fetch strategy, backfill strategy, retry decisions, persistence decisions, business status calculation, or analysis policy. If such logic is needed, create or reuse an application use case.
 
 ```
 User Intent
@@ -145,6 +183,28 @@ No hidden state. No silent decisions.
 
 ## Development Rules for Claude
 
+### Before Coding
+
+Claude MUST:
+
+1. Confirm the task's scope and non-goals.
+2. Confirm `AI_AGENT_CHECKLIST.md` compliance.
+3. State the layer plan.
+4. Identify whether adapters are touched.
+5. If adapters are touched, explicitly state why the adapter remains thin.
+6. Identify persistence, determinism, AI, and risk-profile impact.
+
+### Layer Placement
+
+Claude MUST place behavior according to these boundaries:
+
+* Domain: pure business logic, entities, value objects, indicators, rule primitives.
+* Application: use cases, orchestration, cache/fetch policy, workflow decisions, deterministic analysis flow.
+* Infrastructure: provider, repository, browser, filesystem, API, database, and AI implementations behind ports.
+* Adapter: CLI/UI/API parsing, dependency wiring, use-case calls, output formatting, and error mapping.
+
+If code decides what data to fetch, when to fetch it, whether cached data is fresh, how to backfill, or what a persistence result means, it belongs in application, not the adapter.
+
 ### Code Quality
 
 * Prefer clarity over cleverness
@@ -154,8 +214,10 @@ No hidden state. No silent decisions.
 ### Testing
 
 * Domain logic MUST be unit-tested
+* Application workflow/policy MUST be unit-tested when changed
 * Adapters may be lightly tested
 * Do not skip tests for "speed"
+* CLI tests do not replace application use-case tests for workflow behavior
 
 ### Incremental Delivery
 
@@ -194,7 +256,6 @@ If uncertain, Claude should choose the **simpler, safer** design.
 ## Guiding Principle
 
 > "If AI disappears tomorrow, this system must still be valuable."
-
 
 
 

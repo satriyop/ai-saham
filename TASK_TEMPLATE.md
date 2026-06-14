@@ -84,8 +84,23 @@ Answer explicitly:
 
 * Does this indicator require warm-up data? (Yes / No)
 
+* Does this place orchestration or policy inside an adapter? (Yes / No)
+
+  Default answer should be No. If Yes, explain why it cannot live in
+  `application/use_case`.
+
 
 If "Yes" appears anywhere, explain why.
+
+State the implementation layer plan before coding:
+
+```md
+Layer plan:
+- Domain:
+- Application:
+- Infrastructure:
+- Adapter:
+```
 
 ---
 
@@ -138,6 +153,7 @@ A task is acceptable when:
 * [ ] Complies with DoD
 * [ ] No non-goals violated
 * [ ] relevant ADRs considered
+* [ ] Adapter thinness reviewed; workflow/policy lives in application
 
 ---
 
@@ -164,8 +180,9 @@ Skipping tests requires justification.
 Before implementation, the agent must:
 
 * Confirm understanding of the task
-* Confirm compliance with AI_AGENT_CHECKLIST.md
+* Confirm compliance with `AI_AGENT_CHECKLIST.md`
 * State any risks or ambiguities
+* State the layer plan
 
 Only then may implementation begin.
 

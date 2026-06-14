@@ -1,8 +1,8 @@
  Phase 1 — Get Market Data (do this first, once)
 
- saham fetch BBCA --days 730        # Downloads 2yr OHLCV, cached to data.db
+ saham update BBCA --days 730        # Downloads 2yr OHLCV + broker flow, cached to data.db
  saham broker fetch BBCA --days 90  # Foreign flow via IDX public API (no auth)
- saham broker fetch BBCA --provider stockbit --days 90  # Richer per-broker detail (auth needed)
+ saham broker fetch BBCA --provider stockbit-session --days 90  # Richer per-broker detail (session needed)
 
  ---
  Phase 2 — Technical Indicators

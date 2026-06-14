@@ -41,6 +41,10 @@ A feature is done only if:
 * Adapters (CLI, bot, web, etc.) depend on the core — never the reverse
 * AI modules are optional and swappable
 * Rule-based logic continues to function independently
+* Adapters remain thin: non-trivial workflow, cache policy, fetch strategy,
+  persistence decisions, and business status calculations live in the
+  application layer
+* Application behavior is testable without invoking the CLI/UI adapter
 
 ---
 

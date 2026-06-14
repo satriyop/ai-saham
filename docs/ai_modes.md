@@ -1,18 +1,58 @@
 # AI Modes
 
-AI Saham is designed with AI as an **optional enhancement**, not a requirement. The system must be fully functional and valuable without any AI integration.
+AI Saham uses AI as an **optional enhancement**, not a requirement. Every feature works fully without AI.
 
 ---
 
-## Current State: AI is OFF
+## Current State: AI is Optional
 
-**Version 0.1.0 operates entirely without AI.**
+AI is integrated as a **read-only research assistant** in specific commands. It never influences deterministic signals, entries, stops, or trading decisions.
 
-All analysis is:
-- **Deterministic** - Same input always produces same output
-- **Rule-based** - Uses proven technical indicator calculations
-- **Transparent** - Every signal has clear rationale
-- **Reproducible** - Results can be audited and verified
+### Where AI is Available
+
+| Command | Flag | What AI Adds |
+|---------|------|-------------|
+| `saham intraday pre-open` | `--with-ai` | Per-ticker research summary via Claude |
+| `saham risk <ticker>` | `--with-sentiment` | News sentiment context |
+| `saham screen accumulation` | `--with-ai` | Accumulation pattern analysis |
+| `saham swing analyze` | `--with-ai` (implied by `--news-provider`) | News sentiment + setup analysis |
+
+Global override:
+```bash
+saham <command> --no-ai    # Disable AI even if a subcommand enables it by default
+saham <command> --news-provider none   # Same effect
+```
+
+### Default AI Provider
+
+The default provider is **DeepSeek** (configured in `src/application/services/factory.py` `DEFAULT_PROVIDER`). Switch at runtime:
+
+```bash
+saham <command> --provider claude    # Use Anthropic Claude
+saham <command> --provider deepseek  # Use DeepSeek (default)
+saham <command> --provider none      # No AI (same as --no-ai)
+```
+
+### How AI Integrates
+
+```
+Deterministic Pipeline ──> ScreenerCandidate ──> Display
+                              │
+                              ▼ (if --with-ai)
+                         AIExplainer (port)
+                              │
+                              ▼
+                         ClaudeAPI / DeepSeekAdapter (infrastructure)
+                              │
+                              ▼
+                         AI summary appended to output (read-only)
+```
+
+Key rules:
+- **AI never modifies** Scores, decisions, entries, or stops
+- **AI only appends** Explanatory text to the output display
+- **AI is opt-in** — `--with-ai` or `--news-provider` must be explicitly passed
+- **No network = still works** — `--no-ai` mode runs fully offline
 
 ---
 
@@ -28,85 +68,55 @@ This principle ensures:
 
 ---
 
-## Planned AI Integration (Future)
-
-When AI is added, it will follow strict architectural rules:
-
-### AI as Advisor, Not Decision Maker
-
-```
-Rule-Based Analysis --> AI Advisor --> Enhanced Output
-                           |
-                           v
-                    Explanation Layer
-```
-
-AI will **augment** rule-based analysis, not replace it:
-- Provide natural language explanations
-- Suggest additional context
-- Identify patterns across multiple stocks
-- Generate research summaries
-
-### Opt-In Only
-
-AI features will require explicit activation:
-
-```bash
-# Default: No AI
-saham risk BBCA
-
-# Future: With AI enhancement
-saham risk BBCA --ai
-```
-
-### Traceable Contributions
-
-Every AI contribution will be:
-- Clearly labeled as AI-generated
-- Logged for audit purposes
-- Separate from deterministic signals
-
----
-
-## Future AI Features (Roadmap)
-
-### Phase 1: Explanation Enhancement
-
-- Natural language summaries of technical analysis
-- Context about why indicators matter
-- Educational insights for beginners
-
-### Phase 2: Pattern Recognition
-
-- Multi-stock correlation analysis
-- Sector trend identification
-- Anomaly detection in price movements
-
-### Phase 3: Research Assistant
-
-- News sentiment summary
-- Earnings report highlights
-- Competitor comparison
-
----
-
 ## AI Provider Strategy
 
-The system will support multiple AI providers through adapter pattern:
+The system supports multiple AI providers through an adapter pattern:
 
-| Provider | Use Case |
-|----------|----------|
-| Claude (Anthropic) | Primary analysis assistant |
-| Gemini (Google) | Alternative provider |
-| Local LLM | Offline AI capability |
+| Provider | Status | Use Case |
+|----------|--------|----------|
+| DeepSeek | **Default** | Primary analysis, free-tier capable |
+| Claude (Anthropic) | Supported | Alternative, stronger reasoning |
+| Gemini (Google) | Planned | Future alternative |
+| Local LLM | Planned | Offline AI capability |
 
-Provider selection will be configurable, not hardcoded.
+Provider selection is configurable, not hardcoded. The `AIExplainer` domain port defines what the system needs; infrastructure provides it.
 
 ---
 
-## Why Not Full AI?
+## For Developers
 
-Some stock analysis tools are "AI-first". Here's why we're different:
+Extending AI capabilities:
+
+1. **AI goes in infrastructure** — Never in domain
+2. **AI adapter implements domain port** — `AIExplainer` protocol in domain layer
+3. **AI is always optional** — Feature works without it
+4. **Log AI contributions** — For debugging and audit
+5. **Test without AI** — Don't break core functionality
+
+### Adding a New AI Provider
+
+```python
+# In src/infrastructure/ai/
+class MyProviderExplainer(AIExplainer):
+    def __init__(self, api_key: str, model: str = "default"):
+        ...
+
+    def research(self, ticker: str) -> AIContribution:
+        ...
+```
+
+Register in `factory.py` under the provider switch. The `--provider` flag selects at runtime.
+
+### Adding AI to a New Command
+
+1. Add `--with-ai` / `--no-ai` CLI flag via `_build_ai_researcher()` helper
+2. Pass `AIExplainer` into the use case (optional parameter)
+3. In the use case, call `ai_explainer.research(ticker)` if provided
+4. Append result to output — never use it in decision logic
+
+---
+
+## Why Not AI-First?
 
 | Concern | Our Approach |
 |---------|--------------|
@@ -116,26 +126,4 @@ Some stock analysis tools are "AI-first". Here's why we're different:
 | **Speed** | Local computation is instant; AI has latency |
 | **Privacy** | Data stays local; AI requires sending data |
 
----
-
-## For Developers
-
-If you're extending AI Saham with AI features:
-
-1. **Put AI in infrastructure layer** - Never in domain
-2. **AI adapter implements domain port** - Domain defines interface
-3. **Make AI optional** - Feature works without it
-4. **Log AI contributions** - For debugging and audit
-5. **Test without AI** - Don't break core functionality
-
-Example port (future):
-
-```python
-# In src/domain/ports/ai_advisor.py
-class AIAdvisor(Protocol):
-    def enhance_analysis(self, snapshot: IndicatorSnapshot) -> str:
-        """Return AI-enhanced explanation."""
-        ...
-```
-
-The domain defines what it needs; infrastructure provides it.
+AI augments. It does not decide.

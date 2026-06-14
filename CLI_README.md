@@ -38,7 +38,7 @@ Verify installation and run your first analysis:
 saham version
 
 # Step 2: Download stock data
-saham fetch BBCA
+saham update BBCA --days 365
 
 # Step 3: See risk assessment across all profiles
 saham risk BBCA --all
@@ -64,9 +64,9 @@ You now have a local copy of BBCA's data and can analyze it offline anytime.
 
 ---
 
-## 3. Understanding Stock Data - The `fetch` Command
+## 3. Understanding Stock Data
 
-Before analyzing, you need data. The `fetch` command downloads **OHLCV data** (Open, High, Low, Close, Volume) from Yahoo Finance.
+Before analyzing, you need data. The `update` command downloads **OHLCV data** (Open, High, Low, Close, Volume) and **broker flow data** (foreign buy/sell) in one pass. See section 21 for the full `update` reference.
 
 ### What is OHLCV?
 
@@ -80,30 +80,18 @@ Each trading day produces these 5 values:
 | **Close** | Last trade price | Most important - where it ended |
 | **Volume** | Shares traded | Shows conviction behind moves |
 
-### Basic Usage
+### Batch Update
 
 ```bash
-# Fetch 1 year of data (default, Yahoo Finance)
-saham fetch BBCA
+# Fetch 1 year of data + broker flow for an entire universe (recommended)
+saham update --universe lq45 --days 365
 
-# Fetch 2 years for longer analysis
-saham fetch BBRI --days 730
+# Single ticker
+saham update BBCA --days 365
 
-# Force re-download (ignore cache)
-saham fetch TLKM --refresh
-
-# Use IDX public API directly
-saham fetch BBCA --provider idx
+# Use IDX public API directly (no Yahoo)
+saham update BBCA --days 365 --provider idx
 ```
-
-### When to Use Each Option
-
-| Option | When to Use | Example Scenario |
-|--------|-------------|------------------|
-| `--days 730` | Need longer history | "Analyze 2-year trend" |
-| `--refresh` | Data seems stale | "Stock moved but data unchanged" |
-| `--provider idx` | Yahoo is unreliable | "Use IDX public API" |
-| `--db path/to/file.db` | Multiple portfolios | Separate DBs for different accounts |
 
 ### Output Explained
 
@@ -589,7 +577,7 @@ saham broker fetch BBCA
 
 # Explicitly specify provider
 saham broker fetch BBCA --provider idx
-saham broker fetch BBCA --provider stockbit
+saham broker fetch BBCA --provider stockbit-session
 
 # Fetch 90 days of history
 saham broker fetch BBRI --days 90
@@ -609,7 +597,7 @@ saham broker fetch BBCA --refresh
 | `--start` | `-s` | — | Start date (YYYY-MM-DD) |
 | `--end` | `-e` | — | End date (YYYY-MM-DD) |
 | `--refresh` | `-r` | false | Force refresh from provider |
-| `--provider` | `-P` | idx | Data provider (idx, stockbit) |
+| `--provider` | `-P` | idx | Data provider (idx, stockbit-session) |
 | `--db` | | ./data.db | Database path |
 
 ### Setting Up Stockbit (Optional)
@@ -634,8 +622,6 @@ saham stockbit status
 # Step 3: Smoke test the adapter
 saham stockbit test
 ```
-
-**Legacy token auth** is still supported via `saham broker auth <token>` but the browser session method is recommended as it avoids manual token extraction.
 
 **Note:** Browser sessions may expire. Run `saham stockbit status` to check, and `saham stockbit login` to refresh.
 
@@ -866,8 +852,8 @@ rules:
 ### Complete Workflow
 
 ```bash
-# 1. Set up authentication (once per day)
-saham broker auth "your-token-here"
+# 1. Set up Stockbit browser session when broker-level detail is needed
+saham stockbit login
 
 # 2. Fetch broker data
 saham broker fetch BBCA --days 90
@@ -1806,7 +1792,7 @@ saham update --universe lq45 --broker-only
 saham update --universe lq45 --days 30
 ```
 
-**Why use this?** Instead of running `saham fetch TICKER` and `saham broker fetch TICKER` for every stock, this fetches everything for an entire universe in one pass. Run daily before morning screening.
+**Why use this?** This replaces the old `saham fetch TICKER` and `saham broker fetch TICKER` workflow for every stock — fetches everything for an entire universe in one pass. Run daily before morning screening.
 
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
@@ -2109,7 +2095,7 @@ Goal: Identify low-risk entry points for long-term holdings.
 
 ```bash
 # Step 1: Get data (2 years for perspective)
-saham fetch BBCA --days 730
+saham update BBCA --days 730
 
 # Step 2: Check long-term trend
 saham sma BBCA --period 200
@@ -2135,7 +2121,7 @@ Goal: Find short-term momentum opportunities.
 
 ```bash
 # Step 1: Fresh data
-saham fetch BBRI --refresh
+saham update BBRI --days 365 --refresh
 
 # Step 2: Fast indicators
 saham indicators BBRI --sma 10 --ema 9 --rsi 7
@@ -2156,7 +2142,7 @@ Goal: Build and test a custom trading strategy.
 
 ```bash
 # Step 1: Get enough historical data
-saham fetch TLKM --days 730
+saham update TLKM --days 730
 
 # Step 2: Create a strategy package
 saham strategy init my_strategy
@@ -2247,13 +2233,13 @@ saham broker fetch BMRI --days 90
 saham broker flow BBCA --days 20
 saham broker flow BBRI --days 20
 
-# Step 3: Check top brokers (requires Stockbit provider)
-saham broker fetch BBCA --provider stockbit --days 30
+# Step 3: Check top brokers (requires Stockbit session provider)
+saham broker fetch BBCA --provider stockbit-session --days 30
 saham broker top BBCA --date 2025-01-27
 
 # Step 4: Fetch price data for backtesting
-saham fetch BBCA --days 365
-saham fetch BBRI --days 365
+saham update BBCA --days 365
+saham update BBRI --days 365
 
 # Step 5: Use the pre-built foreign accumulation strategy
 saham backtest BBCA --strategy foreign-accumulation --verbose
@@ -2279,8 +2265,7 @@ saham backtest BBCA --strategy my_flow_strategy
 | Command | Purpose | Key Options |
 |---------|---------|-------------|
 | `saham version` | Show version | — |
-| `saham fetch TICKER` | Download OHLCV data | `--days`, `--refresh`, `--provider`, `--db` |
-| `saham update` | Batch data update for universe | `--universe`, `--days`, `--broker-only`, `--refresh` |
+| `saham update` | Batch data update (candles + broker) | `--universe`, `--days`, `--broker-provider`, `--refresh` |
 | `saham sma TICKER` | Simple Moving Average | `--period`, `--field`, `--days` |
 | `saham ema TICKER` | Exponential Moving Average | `--period`, `--field`, `--days` |
 | `saham rsi TICKER` | Relative Strength Index | `--period`, `--days` |
@@ -2290,7 +2275,6 @@ saham backtest BBCA --strategy my_flow_strategy
 | `saham risk TICKER` | Risk assessment | `--profile`, `--all`, `--rules-file`, `--explain`, `--with-sentiment`, `--trend`, `--format` |
 | `saham sentiment TICKER` | News sentiment | `--days`, `--max`, `--ai-classify`, `--news-provider`, `--no-ai` |
 | `saham sentiment-audit` | Audit sentiment accuracy | — |
-| `saham broker auth TOKEN` | Configure Stockbit token | `--validate/--no-validate` |
 | `saham broker status` | Check all provider status | — |
 | `saham broker fetch TICKER` | Fetch broker summary data | `--days`, `--start`, `--end`, `--refresh`, `--provider` |
 | `saham broker flow TICKER` | View foreign flow summary | `--days` |
@@ -2370,10 +2354,10 @@ Data is cached at `./data.db` (configurable with `--db`). Use `--refresh` to upd
 
 ```
 Error: No cached data found for BBCA
-Tip: Run 'saham fetch BBCA' first to download data.
+Tip: Run 'saham update BBCA --days 365' first to download data.
 ```
 
-**Solution:** Fetch data first with `saham fetch TICKER`
+**Solution:** Fetch data first with `saham update TICKER --days 365`
 
 ### "Database not found"
 
@@ -2381,7 +2365,7 @@ Tip: Run 'saham fetch BBCA' first to download data.
 Error: Database not found at /path/to/data.db
 ```
 
-**Solution:** Run `saham fetch` for any ticker to create the database
+**Solution:** Run `saham update` for any ticker to create the database
 
 ### "Network connection failed"
 
@@ -2511,8 +2495,6 @@ Run: saham stockbit login
 1. Install dependencies: `pip install -e ".[browser]" && playwright install chromium`
 2. Login: `saham stockbit login`
 3. Check: `saham stockbit status`
-
-The old JWT token method (`saham broker auth <token>`) is also still supported if you prefer.
 
 ### "Stockbit session expired"
 

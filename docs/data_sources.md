@@ -11,7 +11,7 @@ The system uses two port interfaces for data access, both following the port/ada
 | Port | Purpose | Implementations |
 |------|---------|-----------------|
 | `MarketDataProvider` | OHLCV candle data | YahooFinanceProvider, IdxMarketDataProvider |
-| `BrokerDataProvider` | Foreign flow + broker breakdown | IdxBrokerDataProvider, StockbitBrokerDataProvider |
+| `BrokerDataProvider` | Foreign flow + broker breakdown | IdxBrokerDataProvider, StockbitPlaywrightBrokerProvider |
 
 ```
 Domain Port                    Infrastructure Adapters
@@ -21,7 +21,7 @@ MarketDataProvider  <-------   YahooFinanceProvider
                     <-------   (Planned) AlphaVantageProvider
 
 BrokerDataProvider  <-------   IdxBrokerDataProvider
-                    <-------   StockbitBrokerDataProvider
+                    <-------   StockbitPlaywrightBrokerProvider
                     <-------   BrokerCsvAdapter (import only)
 ```
 
@@ -49,8 +49,8 @@ This allows:
 
 **Usage:**
 ```bash
-saham fetch BBCA          # Fetches BBCA.JK via Yahoo (default)
-saham fetch BBRI --days 730
+saham update BBCA --days 365          # Fetches BBCA.JK via Yahoo (default)
+saham update BBRI --days 730
 ```
 
 ### IDX Public API
@@ -72,8 +72,8 @@ saham fetch BBRI --days 730
 
 **Usage:**
 ```bash
-saham fetch BBCA --provider idx              # Uses IDX public API
-saham fetch BBCA --provider idx --days 30    # Faster for small ranges
+saham update BBCA --days 30 --provider idx              # Uses IDX public API
+saham update BBCA --days 30 --provider idx              # Faster for small ranges
 ```
 
 ---
@@ -82,7 +82,7 @@ saham fetch BBCA --provider idx --days 30    # Faster for small ranges
 
 ### IDX Public API
 
-**Provider:** `IdxBrokerDataProvider` (auto-selected when no Stockbit token found)
+**Provider:** `IdxBrokerDataProvider` (auto-selected when no Stockbit session found)
 
 - **Data type:** Foreign buy/sell lots, estimated foreign flow value
 - **Source:** IDX TradingSummary API (`idx.co.id`)
@@ -101,24 +101,21 @@ saham broker fetch BBCA --days 90
 
 ### Stockbit
 
-**Provider:** `StockbitBrokerDataProvider` (auto-selected if authenticated)
+**Provider:** `StockbitPlaywrightBrokerProvider` (auto-selected if authenticated)
 
 - **Data type:** Full per-broker breakdown (top 10 buyers + sellers), exact foreign flow values
 - **Source:** Stockbit Exodus API (undocumented)
-- **Auth:** JWT token from browser session (~24h validity)
+- **Auth:** Browser session profile from `saham stockbit login`
 
 **Setup:**
 ```bash
 # Browser-based login (recommended)
 saham stockbit login
-
-# Or set token directly
-saham broker auth "your-jwt-token"
 ```
 
 **Usage:**
 ```bash
-saham broker fetch BBCA --provider stockbit   # Richer per-broker detail
+saham broker fetch BBCA --provider stockbit-session   # Richer per-broker detail
 saham broker top BBCA --date 2024-01-15
 ```
 
@@ -174,7 +171,7 @@ ORDER BY date;
 ### Fetch Flow
 
 ```
-User: saham fetch BBCA --provider yahoo
+User: saham update BBCA --days 365 --provider yahoo
          |
          v
 CLI Adapter
@@ -223,10 +220,10 @@ FetchBrokerDataUseCase
          v
    Auto-select provider:
          |
-         +--- Stockbit token exists + valid?
+          +--- Stockbit session exists + valid?
          |       |
          |       v
-         |   StockbitBrokerDataProvider  (per-broker detail, exact values)
+         |   StockbitPlaywrightBrokerProvider  (per-broker detail, exact values)
          |
          +--- Otherwise:
                  |
@@ -277,22 +274,22 @@ Analysis commands **never** hit the network - they use cached data only.
 
 ```bash
 # Force re-download even if cached
-saham fetch BBCA --refresh
+saham update BBCA --days 365 --refresh
 ```
 
 ### Fetch Window
 
-By default, `saham fetch` downloads 365 days of history:
+By default, `saham update` downloads 90 days of history:
 
 ```bash
-# Default: 1 year
-saham fetch BBCA
+# Default: 90 days
+saham update BBCA
 
 # Extended: 2 years
-saham fetch BBCA --days 730
+saham update BBCA --days 730
 
 # Maximum practical: 5 years
-saham fetch BBCA --days 1825
+saham update BBCA --days 1825
 ```
 
 ---
@@ -366,7 +363,7 @@ else:
 ### Custom Path
 
 ```bash
-saham fetch BBCA --db /path/to/custom.db
+saham update BBCA --days 365 --db /path/to/custom.db
 saham sma BBCA --db /path/to/custom.db
 ```
 

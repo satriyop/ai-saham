@@ -60,12 +60,9 @@ Screener menghitung skor dari data broker flow yang tersimpan lokal. Tanpa ini, 
 saham update --universe lq45        # harga + broker flow LQ45 (~5 menit)
 
 # Saham di luar LQ45 yang ingin di-screen
-saham fetch BUMI --days 365
-saham fetch GOTO --days 365
-saham fetch BREN --days 365
-saham broker fetch BUMI --days 90
-saham broker fetch GOTO --days 90
-saham broker fetch BREN --days 90
+saham update BUMI --days 365
+saham update GOTO --days 365
+saham update BREN --days 365
 ```
 
 ### Seberapa Sering Refresh?
@@ -74,9 +71,9 @@ saham broker fetch BREN --days 90
 |-------|---------|
 | Setiap hari sebelum screen | `saham update --universe lq45` |
 | Mingguan untuk universe lebih luas | `saham update --universe idx80` |
-| Kalau ada saham baru masuk radar | `saham broker fetch TICKER --days 90` |
+| Kalau ada saham baru masuk radar | `saham update TICKER --days 90` |
 
-Data akan di-gap-fill otomatis kalau cache lokal belum mencapai tanggal hari ini. Output `cached-current` berarti cache sudah sampai hari ini, `+Nd` berarti ada baris baru tersimpan, dan `provider-no-new-data(latest=YYYY-MM-DD)` berarti provider sudah dicek tetapi belum punya data trading yang lebih baru.
+Data akan di-gap-fill otomatis kalau cache lokal belum mencapai tanggal hari ini. Output `cached-current` berarti cache sudah sampai hari ini, `+Nrows/span=Nd` berarti ada baris baru tersimpan, dan `up-to-date(YYYY-MM-DD)` berarti provider sudah dicek tetapi belum punya data trading yang lebih baru.
 
 Catatan: opsi `--window 7`, `--window 30`, dan `--window 90` memakai jumlah sesi broker terakhir yang tersedia. Selalu baca `NET_DAYS` / `STREAK` untuk mengetahui berapa sesi yang merupakan net buy asing.
 
@@ -223,15 +220,15 @@ Contoh output:
 ```
 FOREIGN ACCUMULATION — LQ45 | MULTI-WINDOW | 2026-06-13
 ══════════════════════════════════════════════════════════════════════════
-  # TICKER     7s    30s    90s  PATTERN            TREND
+  # TICKER     7s    30s    90s  PATTERN            TREND     BRK
 ────────────────────────────────────────────────────────────────────────
-  1 GGRM      72.4    78.0    69.8  sustained           SIDE
-  2 BBRI      68.1    52.3    38.4  building             SIDE
-  3 ASII      61.3    41.2    28.9  building             DOWN
-  4 TLKM      58.9    61.2    72.1  long-term only       SIDE
-  5 BMRI      54.2    38.1    22.0  fresh rotation       UP
-  6 UNVR      48.7    72.3    68.9  long-term only       SIDE
-  7 ICBP      42.1    38.4    41.2  sustained            UP
+  1 GGRM      72.4    78.0    69.8  sustained           SIDE  smart+
+  2 BBRI      68.1    52.3    38.4  building             SIDE  mixed
+  3 ASII      61.3    41.2    28.9  building             DOWN  noise+
+  4 TLKM      58.9    61.2    72.1  long-term only       SIDE  smart-
+  5 BMRI      54.2    38.1    22.0  fresh rotation       UP      n/a
+  6 UNVR      48.7    72.3    68.9  long-term only       SIDE  mixed
+  7 ICBP      42.1    38.4    41.2  sustained            UP    smart+
 ══════════════════════════════════════════════════════════════════════════
 ```
 
@@ -245,6 +242,17 @@ FOREIGN ACCUMULATION — LQ45 | MULTI-WINDOW | 2026-06-13
 | **long-term only** | Kuat 90s, lemah recent | Asing mungkin sudah mulai ambil profit | Waspada, cek FVWAP negatif |
 | **coiled spring** | Window apapun ≥ 60 + BB Width ≤ 20%ile | Volatilitas rendah + akumulasi = setup breakout | Entry prioritas tinggi |
 | **weak** | Tidak ada window ≥ 60 | Tidak ada pola yang jelas | Skip |
+
+`BRK` adalah ringkasan kualitas top-broker bernama dari cache Stockbit:
+
+| BRK | Arti |
+|-----|------|
+| `smart+` | Tier smart-money net buy di top-broker row terbaru |
+| `noise+` | Tier noise/retail-heavy net buy; hati-hati untuk fresh rotation |
+| `smart-` | Tier smart-money net sell; jangan upgrade setup |
+| `noise-` | Tier noise/retail-heavy net sell |
+| `mixed` | Ada named flow, tapi tidak jelas dipimpin smart/noise tier |
+| `n/a` | Tidak ada detail broker Stockbit bernama di cache |
 
 ---
 
@@ -332,6 +340,15 @@ FLOW DETAIL (30 sessions)
   Streak    :  6 sessions consecutive foreign net-buy
   Latest    :  +8.20 B IDR (+24.8%) on 2026-06-12
 
+BROKER DETAIL (5/5 sessions)
+─────────────────────────────────────────────────────────────────────────────
+  Top buyers     :  AK +18.20B (4s), CC +12.40B (3s), YP +8.10B (2s)
+  Top sellers    :  KZ -9.40B (2s), DB -6.70B (1s)
+  Smart flow    :  +14.10B IDR  |  Noise flow  +8.10B IDR
+  Weighted net  :  +20.45B IDR  |  Smart share 58.4%
+  Concentration  :  top buyer 38.0%; top seller 41.6%
+  Quality        :  broad accumulation; smart support
+
 PRESET — foreign-bounce
 ─────────────────────────────────────────────────────────────────────────────
   Gate              Required    Actual    Status
@@ -390,6 +407,17 @@ SUMMARY & PLAN
   ► Hold  : maks 10 hari trading
 ══════════════════════════════════════════════════════════════════════════════
 ```
+
+`BROKER DETAIL` hanya muncul kalau cache broker punya transaksi per-broker, biasanya dari Stockbit. Ini adalah view top broker bernama, bukan time-series aggregate foreign flow seperti `FLOW DETAIL`. Pakai blok ini sebagai konteks konfirmasi:
+
+- `broad accumulation` mendukung sinyal aggregate flow.
+- `concentrated accumulation` berarti satu broker terlalu dominan; turunkan confidence kecuali chart sangat konstruktif.
+- `recent distribution` berarti sesi broker-detail terbaru adalah net foreign selling; jangan upgrade setup hanya karena akumulasi 30 sesi masih positif.
+- `Smart flow` / `Noise flow` mengklasifikasikan semua top-broker row yang tersedia di summary Stockbit, termasuk broker lokal kalau Stockbit mengembalikannya.
+- Tier broker deterministik: `AK`, `BK`, `KZ`, `ZP`, `RX`, `MS`, `DB`, `CS`, `ML`, `YU` bobot lebih tinggi; `YP`, `PD`, `XL`, `XC` bobot noise lebih rendah.
+- Kalau kode broker tidak muncul, artinya tidak ada di top-broker row yang tersimpan, bukan berarti aktivitas broker itu nol.
+- `Weighted net` masih layer pengukuran saja. Belum mengubah gate `ENTER/WATCH/AVOID`.
+- Catatan `Broker quality` di bawah preset adalah konteks konfirmasi/warning saja. `smart+` bisa mendukung `ENTER` atau memprioritaskan `WATCH`, sedangkan `noise+` atau `smart-` berarti chart harus lebih kuat atau setup tidak boleh di-upgrade.
 
 ---
 
@@ -692,6 +720,27 @@ RECOMMENDATION
 ═══════════════════════════════════════════════════════════════════
 ```
 
+### Validasi Broker Quality Dengan Audit
+
+Sebelum `smart+`, `noise+`, atau `smart-` dijadikan gate, ukur dulu hasil historisnya:
+
+```bash
+saham swing audit --universe lq45 --preset foreign-bounce --start 2026-01-01
+```
+
+Output audit sekarang punya dimensi `broker_quality`:
+
+| Bucket | Makna |
+|--------|-------|
+| `smart+` | Top-broker smart-money net buy |
+| `noise+` | Top-broker noise/retail-heavy net buy |
+| `smart-` | Top-broker smart-money net sell |
+| `noise-` | Top-broker noise/retail-heavy net sell |
+| `mixed` | Ada detail broker, tapi tidak dominan jelas |
+| `no_detail` | Tidak ada top-broker detail di cache |
+
+Gunakan AVG10D, WIN10D, MAXUP, dan MAXDD untuk memutuskan apakah broker quality cukup kuat untuk tetap sebagai warning, menjadi downgrade, atau layak menjadi gate preset baru.
+
 ### Bandingkan Variant Regime Filter
 
 ```bash
@@ -857,7 +906,7 @@ saham swing screen TICKER1 TICKER2 --multi
 - `sustained` pattern lebih reliable dari `fresh rotation` — tapi lebih lambat terdeteksi
 - Paper trade minimal 20 setup menggunakan `saham swing log` + `saham swing review` sebelum sizing besar
 - Data broker IDX (default) adalah data T+0 — akurat tapi mungkin 1 hari delay di beberapa ticker
-- Gunakan `--provider stockbit` untuk `saham broker fetch` jika butuh data lebih granular per-broker (butuh auth)
+- Gunakan `--provider stockbit-session` untuk `saham broker fetch` jika butuh data lebih granular per-broker (butuh auth)
 
 ---
 

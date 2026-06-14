@@ -28,6 +28,10 @@ Before proposing or writing any code, the agent must:
 
 * Read `README.md`
 * Read `DEFINITION_OF_DONE.md`
+* Read `PROMPT_CONTRACT.md`
+* Read `TASK_TEMPLATE.md`
+* Read `AI_AGENT_CHECKLIST.md`
+* Read `ARCHITECTURE_DECISIONS.md`
 * Read its own agent contract (if present)
 
 If this has not been done, the agent must stop and say so.
@@ -41,6 +45,15 @@ For every task, the agent must:
 * Explicitly reason about DoD compliance
 * Call out any DoD items that are not met
 * Refuse to mark work as complete if DoD is violated
+* State the layer plan before implementation:
+
+```md
+Layer plan:
+- Domain:
+- Application:
+- Infrastructure:
+- Adapter:
+```
 
 No silent compromises are allowed.
 
@@ -68,6 +81,32 @@ Agents must not:
 * Bypass risk profiles or guardrails silently
 
 Any such change requires explicit approval.
+
+---
+
+## 5.1 Adapter Thinness Rule
+
+Adapters may:
+
+* Parse CLI, UI, bot, or API input
+* Construct application use-case requests
+* Select infrastructure implementations for dependency wiring
+* Call application use cases
+* Format output
+* Map exceptions to user-facing errors
+
+Adapters must not contain:
+
+* Cache freshness policy
+* Fetch, backfill, refresh, retry, or warm-up decision logic
+* Persistence orchestration beyond dependency wiring
+* Business status calculation
+* Provider-specific behavioral branching beyond adapter selection
+* Risk, indicator, sentiment, sizing, screening, or strategy policy
+
+If an adapter needs any forbidden logic, the agent must create or reuse an
+application use case instead. If there is uncertainty, stop and ask for
+clarification before writing code.
 
 ---
 

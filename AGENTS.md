@@ -7,16 +7,27 @@ Before we begin any task:
    - DEFINITION_OF_DONE.md
    - AI_AGENT_CHECKLIST.md
    - TASK_TEMPLATE.md
+   - ARCHITECTURE_DECISIONS.md
 
 2. Confirm explicitly:
    - You understand the system architecture and layer boundaries
    - You will follow deterministic-first principles
    - You will not bypass guardrails unless explicitly instructed
    - You will ask for clarification if a task violates the Task Template
+   - You will keep adapters thin and put workflow/policy in application use cases
 
 3. State:
    - Any risks, ambiguities, or missing information you detect
    - Any assumptions you must make (if unavoidable)
+   - The implementation layer plan before coding:
+
+     ```
+     Layer plan:
+     - Domain:
+     - Application:
+     - Infrastructure:
+     - Adapter:
+     ```
 
 Do NOT implement anything yet.
 Do NOT propose features.
