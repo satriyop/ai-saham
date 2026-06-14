@@ -16,6 +16,7 @@ import typer
 
 from src import __version__
 from src.application.services.bootstrap import create_indicator_registry
+from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.application.use_case.aggregate_indicators import (
     AggregateIndicatorsRequest,
     AggregateIndicatorsUseCase,
@@ -49,9 +50,9 @@ from src.application.use_case.explain_risk import (
     ExplainRiskRequest,
     ExplainRiskUseCase,
 )
-from src.application.use_case.fetch_market_data import (
-    FetchMarketDataRequest,
-    FetchMarketDataUseCase,
+from src.application.use_case.refresh_market_data import (
+    RefreshMarketDataRequest,
+    RefreshMarketDataUseCase,
 )
 from src.application.use_case.fetch_sentiment import (
     FetchSentimentRequest,
@@ -230,10 +231,10 @@ def fetch(
     ] = "yahoo",
 ) -> None:
     """
-    Fetch daily OHLCV data for an IDX stock ticker.
+    Deprecated: fetch daily OHLCV data for an IDX stock ticker.
 
-    Data is cached locally after first fetch. Subsequent calls use cached data
-    unless --refresh is specified.
+    Prefer `saham update TICKER --days N`, which refreshes both candles and
+    broker flow by default. This legacy command refreshes candles only.
 
     Examples:
         saham fetch BBCA
@@ -251,12 +252,18 @@ def fetch(
     else:
         provider = YahooFinanceProvider(market_suffix=DEFAULT_MARKET_SUFFIX)
     repository = SQLiteMarketRepository(db_path=resolved_db_path)
-    use_case = FetchMarketDataUseCase(provider=provider, repository=repository)
+    use_case = RefreshMarketDataUseCase(provider=provider, repository=repository)
 
     # Execute use case
-    request = FetchMarketDataRequest(ticker=ticker, days=days, refresh=refresh)
+    request = RefreshMarketDataRequest(ticker=ticker, days=days, refresh=refresh)
 
-    typer.echo(f"Fetching {ticker.upper()}...")
+    typer.echo(
+        "Deprecated: `saham fetch` is candle-only. "
+        f"Use `saham update {ticker.upper()} --days {days}` to refresh candles "
+        "and broker flow.",
+        err=True,
+    )
+    typer.echo(f"Fetching candles for {ticker.upper()}...")
 
     try:
         response = use_case.execute(request)
@@ -267,7 +274,7 @@ def fetch(
 
         # Display results
         typer.echo(f"\nTicker: {response.ticker}")
-        typer.echo(f"Source: {response.source} ({days}d requested)")
+        typer.echo(f"Status: {response.status} ({days}d requested)")
 
         if response.date_range:
             start, end = response.date_range
@@ -341,7 +348,7 @@ def sma(
     """
     Calculate Simple Moving Average (SMA) for an IDX stock.
 
-    Requires cached data (run 'saham fetch TICKER' first).
+    Requires cached data (run 'saham update TICKER --days 365' first).
 
     Examples:
         saham sma BBCA
@@ -373,7 +380,7 @@ def sma(
             typer.echo(f"\nInsufficient data for {ticker.upper()}", err=True)
             typer.echo(f"Candles available: {response.candle_count}", err=True)
             typer.echo(f"Required for SMA({period}): {period}", err=True)
-            typer.echo(f"\nRun: saham fetch {ticker.upper()}", err=True)
+            typer.echo(f"\nRun: saham update {ticker.upper()} --days {days}", err=True)
             raise typer.Exit(1)
 
         # Display summary
@@ -408,13 +415,13 @@ def sma(
         raise typer.Exit(1)
     except FileNotFoundError:
         typer.echo(f"Error: Database not found at {resolved_db_path}", err=True)
-        typer.echo(f"Tip: Run 'saham fetch {ticker.upper()}' first to download data.", err=True)
+        typer.echo(f"Tip: Run 'saham update {ticker.upper()} --days {days}' first.", err=True)
         raise typer.Exit(1)
     except Exception as e:
         error_msg = str(e).lower()
         if "no such table" in error_msg or "no data" in error_msg:
             typer.echo(f"Error: No cached data found for {ticker.upper()}", err=True)
-            typer.echo(f"Tip: Run 'saham fetch {ticker.upper()}' first to download data.", err=True)
+            typer.echo(f"Tip: Run 'saham update {ticker.upper()} --days {days}' first.", err=True)
         else:
             typer.echo(f"Failed to compute SMA: {e}", err=True)
         raise typer.Exit(1)
@@ -448,7 +455,7 @@ def ema(
     Uses SMA-seeded initialization (professional-grade, matches TradingView).
     Includes warm-up buffer handling to ensure converged values.
 
-    Requires cached data (run 'saham fetch TICKER' first).
+    Requires cached data (run 'saham update TICKER --days 365' first).
 
     Examples:
         saham ema BBCA
@@ -480,7 +487,7 @@ def ema(
             typer.echo(f"\nInsufficient data for {ticker.upper()}", err=True)
             typer.echo(f"Candles available: {response.candle_count}", err=True)
             typer.echo(f"Required for EMA({period}): {period}", err=True)
-            typer.echo(f"\nRun: saham fetch {ticker.upper()}", err=True)
+            typer.echo(f"\nRun: saham update {ticker.upper()} --days {days}", err=True)
             raise typer.Exit(1)
 
         # Display summary
@@ -515,13 +522,13 @@ def ema(
         raise typer.Exit(1)
     except FileNotFoundError:
         typer.echo(f"Error: Database not found at {resolved_db_path}", err=True)
-        typer.echo(f"Tip: Run 'saham fetch {ticker.upper()}' first to download data.", err=True)
+        typer.echo(f"Tip: Run 'saham update {ticker.upper()} --days {days}' first.", err=True)
         raise typer.Exit(1)
     except Exception as e:
         error_msg = str(e).lower()
         if "no such table" in error_msg or "no data" in error_msg:
             typer.echo(f"Error: No cached data found for {ticker.upper()}", err=True)
-            typer.echo(f"Tip: Run 'saham fetch {ticker.upper()}' first to download data.", err=True)
+            typer.echo(f"Tip: Run 'saham update {ticker.upper()} --days {days}' first.", err=True)
         else:
             typer.echo(f"Failed to compute EMA: {e}", err=True)
         raise typer.Exit(1)
@@ -553,7 +560,7 @@ def rsi(
     - Above 70: Potentially overbought
     - Below 30: Potentially oversold
 
-    Requires cached data (run 'saham fetch TICKER' first).
+    Requires cached data (run 'saham update TICKER --days 365' first).
 
     Examples:
         saham rsi BBCA
@@ -583,7 +590,7 @@ def rsi(
             typer.echo(f"\nInsufficient data for {ticker.upper()}", err=True)
             typer.echo(f"Candles available: {response.candle_count}", err=True)
             typer.echo(f"Required for RSI({period}): {period + 1}", err=True)
-            typer.echo(f"\nRun: saham fetch {ticker.upper()}", err=True)
+            typer.echo(f"\nRun: saham update {ticker.upper()} --days {days}", err=True)
             raise typer.Exit(1)
 
         # Display summary
@@ -626,13 +633,13 @@ def rsi(
         raise typer.Exit(1)
     except FileNotFoundError:
         typer.echo(f"Error: Database not found at {resolved_db_path}", err=True)
-        typer.echo(f"Tip: Run 'saham fetch {ticker.upper()}' first to download data.", err=True)
+        typer.echo(f"Tip: Run 'saham update {ticker.upper()} --days {days}' first.", err=True)
         raise typer.Exit(1)
     except Exception as e:
         error_msg = str(e).lower()
         if "no such table" in error_msg or "no data" in error_msg:
             typer.echo(f"Error: No cached data found for {ticker.upper()}", err=True)
-            typer.echo(f"Tip: Run 'saham fetch {ticker.upper()}' first to download data.", err=True)
+            typer.echo(f"Tip: Run 'saham update {ticker.upper()} --days {days}' first.", err=True)
         else:
             typer.echo(f"Failed to compute RSI: {e}", err=True)
         raise typer.Exit(1)
@@ -690,7 +697,10 @@ def compute(
     candles = repository.get_candles(ticker.upper())
 
     if not candles:
-        typer.echo(f"No data for {ticker.upper()}. Run: saham fetch {ticker.upper()}", err=True)
+        typer.echo(
+            f"No data for {ticker.upper()}. Run: saham update {ticker.upper()} --days {days}",
+            err=True,
+        )
         raise typer.Exit(1)
 
     typer.echo(f"Computing {indicator_upper} for {ticker.upper()}...")
@@ -738,13 +748,13 @@ def compute(
         raise typer.Exit(1)
     except FileNotFoundError:
         typer.echo(f"Error: Database not found at {resolved_db_path}", err=True)
-        typer.echo(f"Tip: Run 'saham fetch {ticker.upper()}' first to download data.", err=True)
+        typer.echo(f"Tip: Run 'saham update {ticker.upper()} --days {days}' first.", err=True)
         raise typer.Exit(1)
     except Exception as e:
         error_msg = str(e).lower()
         if "no such table" in error_msg or "no data" in error_msg:
             typer.echo(f"Error: No cached data found for {ticker.upper()}", err=True)
-            typer.echo(f"Tip: Run 'saham fetch {ticker.upper()}' first to download data.", err=True)
+            typer.echo(f"Tip: Run 'saham update {ticker.upper()} --days {days}' first.", err=True)
         else:
             typer.echo(f"Failed to compute indicator: {e}", err=True)
         raise typer.Exit(1)
@@ -784,7 +794,7 @@ def indicators(
     Provides a unified view of multiple indicators aligned by date.
     Only dates with all indicators present are shown.
 
-    Requires cached data (run 'saham fetch TICKER' first).
+    Requires cached data (run 'saham update TICKER --days 365' first).
 
     Examples:
         saham indicators BBCA
@@ -819,7 +829,7 @@ def indicators(
                 f"Required: SMA({sma_period}), EMA({ema_period}), RSI({rsi_period})",
                 err=True,
             )
-            typer.echo(f"\nRun: saham fetch {ticker.upper()}", err=True)
+            typer.echo(f"\nRun: saham update {ticker.upper()} --days {days}", err=True)
             raise typer.Exit(1)
 
         if fmt == "json":
@@ -886,13 +896,13 @@ def indicators(
         raise typer.Exit(1)
     except FileNotFoundError:
         typer.echo(f"Error: Database not found at {resolved_db_path}", err=True)
-        typer.echo(f"Tip: Run 'saham fetch {ticker.upper()}' first to download data.", err=True)
+        typer.echo(f"Tip: Run 'saham update {ticker.upper()} --days {days}' first.", err=True)
         raise typer.Exit(1)
     except Exception as e:
         error_msg = str(e).lower()
         if "no such table" in error_msg or "no data" in error_msg:
             typer.echo(f"Error: No cached data found for {ticker.upper()}", err=True)
-            typer.echo(f"Tip: Run 'saham fetch {ticker.upper()}' first to download data.", err=True)
+            typer.echo(f"Tip: Run 'saham update {ticker.upper()} --days {days}' first.", err=True)
         else:
             typer.echo(f"Failed to compute indicators: {e}", err=True)
         raise typer.Exit(1)
@@ -992,7 +1002,7 @@ def risk(
         This overrides the --profile option and uses your custom rules instead.
         See config/custom_rules.yaml.example for the YAML schema.
 
-    Requires cached data (run 'saham fetch TICKER' first).
+    Requires cached data (run 'saham update TICKER --days 365' first).
 
     AI Explanation (optional):
         Use --explain to get AI-generated insights about the assessment.
@@ -1021,8 +1031,8 @@ def risk(
 
     # Wire up dependencies
     repository = SQLiteMarketRepository(db_path=resolved_db_path)
-    # Create registry with plugins and formulas loaded for custom rules support
-    registry = create_indicator_registry()
+    broker_repository = SQLiteBrokerRepository(resolved_db_path)
+    registry = create_indicator_registry(broker_repository=broker_repository)
     use_case = AssessRiskUseCase(repository=repository, registry=registry)
 
     typer.echo(f"Assessing risk for {ticker.upper()}...")
@@ -1191,13 +1201,13 @@ def risk(
         raise typer.Exit(1)
     except FileNotFoundError:
         typer.echo(f"Error: Database not found at {resolved_db_path}", err=True)
-        typer.echo(f"Tip: Run 'saham fetch {ticker.upper()}' first to download data.", err=True)
+        typer.echo(f"Tip: Run 'saham update {ticker.upper()} --days {days}' first.", err=True)
         raise typer.Exit(1)
     except Exception as e:
         error_msg = str(e).lower()
         if "no such table" in error_msg or "no data" in error_msg:
             typer.echo(f"Error: No cached data found for {ticker.upper()}", err=True)
-            typer.echo(f"Tip: Run 'saham fetch {ticker.upper()}' first to download data.", err=True)
+            typer.echo(f"Tip: Run 'saham update {ticker.upper()} --days {days}' first.", err=True)
         else:
             typer.echo(f"Failed to assess risk: {e}", err=True)
         raise typer.Exit(1)
@@ -1278,7 +1288,7 @@ def backtest(
         2. ./strategies/NAME/strategy.yaml
         3. ./strategies/NAME/strategy.yaml
 
-    Requires cached data (run 'saham fetch TICKER' first).
+    Requires cached data (run 'saham update TICKER --days 365' first).
 
     Signal Mapping (customizable in YAML):
         LOW_RISK  -> ENTER_LONG (buy)
@@ -1323,9 +1333,11 @@ def backtest(
     resolved_rules_path: Path
     strategy_display: str
 
+    broker_repository = SQLiteBrokerRepository(resolved_db_path)
+
     if strategy:
         # Use StrategyLoader to resolve strategy name or path
-        registry = create_indicator_registry()
+        registry = create_indicator_registry(broker_repository=broker_repository)
         loader = StrategyLoader(registry=registry)
         try:
             resolved_rules_path = loader.resolve(strategy)
@@ -1343,10 +1355,7 @@ def backtest(
     try:
         # Wire up dependencies
         repository = SQLiteMarketRepository(db_path=resolved_db_path)
-        # Create registry with plugins and formulas loaded for custom indicator support
-        # Note: registry may already be created above for strategy resolution
-        if not strategy:
-            registry = create_indicator_registry()
+        registry = create_indicator_registry(broker_repository=broker_repository)
         use_case = BacktestUseCase(repository=repository, registry=registry)
 
         # Execute use case
@@ -1445,13 +1454,13 @@ def backtest(
         raise typer.Exit(1)
     except FileNotFoundError:
         typer.echo(f"Error: Database not found at {resolved_db_path}", err=True)
-        typer.echo(f"Tip: Run 'saham fetch {ticker.upper()}' first to download data.", err=True)
+        typer.echo(f"Tip: Run 'saham update {ticker.upper()} --days 365' first.", err=True)
         raise typer.Exit(1)
     except Exception as e:
         error_msg = str(e).lower()
         if "no such table" in error_msg or "no data" in error_msg:
             typer.echo(f"Error: No cached data found for {ticker.upper()}", err=True)
-            typer.echo(f"Tip: Run 'saham fetch {ticker.upper()}' first to download data.", err=True)
+            typer.echo(f"Tip: Run 'saham update {ticker.upper()} --days 365' first.", err=True)
         else:
             typer.echo(f"Failed to run backtest: {e}", err=True)
         raise typer.Exit(1)
@@ -1794,7 +1803,7 @@ def compare(
     """
     Side-by-side risk comparison for multiple IDX tickers.
 
-    Requires cached data for each ticker (run 'saham fetch TICKER' first).
+    Requires cached data for each ticker (run 'saham update TICKER --days 365' first).
 
     Examples:
         saham compare BBCA BBRI BMRI
