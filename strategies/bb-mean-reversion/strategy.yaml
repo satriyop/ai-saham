@@ -1,0 +1,66 @@
+version: 1
+name: "BB Mean Reversion"
+description: |
+  Bollinger Band mean reversion strategy.
+  Enters when price breaks below lower band AND RSI confirms oversold.
+  Exits when price reaches upper band (take profit) or RSI overbought.
+
+  Key difference from rsi-momentum: NO SMA trend filter.
+  Works in downtrends — catches sharp oversold bounces regardless of trend.
+  Best for volatile stocks with wide Bollinger Bands.
+
+  Minimum data: 20 candles (BB warmup) + 14 (RSI).
+
+indicators:
+  bb_upper:
+    type: BB_UPPER
+    period: 20
+  bb_lower:
+    type: BB_LOWER
+    period: 20
+  rsi:
+    type: RSI
+    period: 14
+
+default_outcome: MODERATE
+
+signal_mapping:
+  LOW_RISK: ENTER_LONG
+  MODERATE: HOLD
+  HIGH_RISK: EXIT_LONG
+
+rules:
+  - name: bb_oversold_entry
+    priority: 10
+    when:
+      all:
+        - left:
+            indicator: CLOSE
+          operator: "<"
+          right:
+            indicator: bb_lower
+        - indicator: rsi
+          operator: "<"
+          value: 35
+    outcome: LOW_RISK
+    rationale: "Price below lower Bollinger Band with RSI < 35 — statistical mean reversion setup"
+
+  - name: bb_upper_take_profit
+    priority: 10
+    when:
+      left:
+        indicator: CLOSE
+      operator: ">"
+      right:
+        indicator: bb_upper
+    outcome: HIGH_RISK
+    rationale: "Price above upper Bollinger Band — take profit at statistical extreme"
+
+  - name: rsi_overbought_exit
+    priority: 20
+    when:
+      indicator: rsi
+      operator: ">"
+      value: 70
+    outcome: HIGH_RISK
+    rationale: "RSI overbought — exit before reversal"

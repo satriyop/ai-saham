@@ -1,0 +1,76 @@
+version: 1
+name: "MACD + Foreign Flow"
+description: |
+  Dual-signal strategy combining price momentum with institutional flow.
+  Both signals must agree to enter — MACD crossover confirms trend,
+  consecutive foreign buying confirms smart money accumulation.
+
+  Signal types:
+  - MACD: price momentum (trend-following)
+  - CONSECUTIVE_FOREIGN_BUY: smart money / institutional flow
+
+  Entry: MACD bullish cross + foreigners accumulating 3+ consecutive days.
+  Exit: heavy foreign distribution OR MACD bearish cross.
+
+  Requires broker flow data: saham update --universe <list> --broker-only
+
+indicators:
+  macd:
+    type: MACD
+    period: 12
+  macd_signal:
+    type: MACD_SIGNAL
+    period: 9
+  consecutive_buy:
+    type: CONSECUTIVE_FOREIGN_BUY
+    period: 1
+  foreign_flow_3d:
+    type: FOREIGN_FLOW
+    period: 3
+
+default_outcome: MODERATE
+
+signal_mapping:
+  LOW_RISK: ENTER_LONG
+  MODERATE: HOLD
+  HIGH_RISK: EXIT_LONG
+
+rules:
+  - name: macd_cross_with_foreign_accumulation
+    priority: 10
+    when:
+      all:
+        - left:
+            indicator: macd
+          operator: ">"
+          right:
+            indicator: macd_signal
+        - left:
+            indicator: consecutive_buy
+          operator: ">="
+          right:
+            value: 3
+    outcome: LOW_RISK
+    rationale: "MACD bullish crossover confirmed by 3+ days of foreign accumulation"
+
+  - name: foreign_distribution_exit
+    priority: 10
+    when:
+      left:
+        indicator: foreign_flow_3d
+      operator: "<"
+      right:
+        value: -30000000000
+    outcome: HIGH_RISK
+    rationale: "Heavy foreign net selling >30B IDR over 3 days — distribution signal, exit"
+
+  - name: macd_bearish_cross_exit
+    priority: 20
+    when:
+      left:
+        indicator: macd
+      operator: "<"
+      right:
+        indicator: macd_signal
+    outcome: HIGH_RISK
+    rationale: "MACD crossed below signal line — momentum reversed, exit"
