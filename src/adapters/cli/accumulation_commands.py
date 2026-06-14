@@ -13,6 +13,7 @@ Layer: Adapter
 
 import csv
 import json
+from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -65,10 +66,36 @@ FOREIGN_BOUNCE_PRESET = "foreign-bounce"
 FOREIGN_BOUNCE_TAKE_PROFIT = Decimal("5")
 FOREIGN_BOUNCE_STOP_LOSS = Decimal("5")
 FOREIGN_BOUNCE_MAX_HOLD_DAYS = 10
+SMART_MONEY_BROKERS = {"AK", "BK", "KZ", "ZP", "RX", "MS", "DB", "CS", "ML", "YU"}
+NOISE_BROKERS = {"YP", "PD", "XL", "XC"}
 
 # Table widths
 _TABLE_WIDTH = 93
 _SEP_WIDTH = 91
+
+
+@dataclass(frozen=True)
+class ScreenBrokerQuality:
+    """Compact named-broker context for screener output."""
+
+    label: str
+    smart_flow: Decimal
+    noise_flow: Decimal
+    neutral_flow: Decimal
+    sessions: int
+    through_date: date
+    source: str
+
+    def to_dict(self) -> dict:
+        return {
+            "label": self.label,
+            "smart_flow": str(self.smart_flow),
+            "noise_flow": str(self.noise_flow),
+            "neutral_flow": str(self.neutral_flow),
+            "sessions": self.sessions,
+            "through": self.through_date.isoformat(),
+            "source": self.source,
+        }
 
 
 def _format_value(value: Decimal) -> str:
@@ -82,6 +109,118 @@ def _format_value(value: Decimal) -> str:
     if abs_v >= 1_000_000:
         return f"{sign}{abs_v / 1_000_000:.0f}M"
     return f"{sign}{abs_v:.0f}"
+
+
+def _broker_tier(code: str) -> str:
+    code_upper = code.upper()
+    if code_upper in SMART_MONEY_BROKERS:
+        return "smart"
+    if code_upper in NOISE_BROKERS:
+        return "noise"
+    return "neutral"
+
+
+def _screen_broker_quality_label(
+    smart_flow: Decimal,
+    noise_flow: Decimal,
+    neutral_flow: Decimal,
+) -> str:
+    """Return a compact label for named-broker flow composition."""
+    positive_total = sum(
+        value
+        for value in (smart_flow, noise_flow, neutral_flow)
+        if value > Decimal("0")
+    )
+    negative_total = sum(
+        abs(value)
+        for value in (smart_flow, noise_flow, neutral_flow)
+        if value < Decimal("0")
+    )
+
+    if negative_total > positive_total:
+        if smart_flow < Decimal("0") and abs(smart_flow) >= abs(noise_flow):
+            return "smart-"
+        if noise_flow < Decimal("0"):
+            return "noise-"
+        return "dist"
+
+    if smart_flow > Decimal("0") and smart_flow >= noise_flow and smart_flow >= neutral_flow:
+        return "smart+"
+    if noise_flow > Decimal("0") and noise_flow >= smart_flow and noise_flow >= neutral_flow:
+        return "noise+"
+    if neutral_flow != Decimal("0"):
+        return "mixed"
+    return "n/a"
+
+
+def _build_screen_broker_quality(
+    ticker: str,
+    broker_repo: SQLiteBrokerRepository,
+    as_of_date: date | None = None,
+    window_sessions: int = 5,
+) -> ScreenBrokerQuality | None:
+    """
+    Summarize named top-broker rows for screener context.
+
+    This uses all named top buyers/sellers returned by Stockbit summaries.
+    It is separate from aggregate foreign-flow scoring.
+    """
+    summaries = broker_repo.get_broker_summaries(ticker, end_date=as_of_date)
+    detail_summaries = [
+        summary for summary in summaries if summary.top_buyers or summary.top_sellers
+    ][-window_sessions:]
+    if not detail_summaries:
+        return None
+
+    smart_flow = Decimal("0")
+    noise_flow = Decimal("0")
+    neutral_flow = Decimal("0")
+
+    def add_flow(code: str, signed_value: Decimal) -> None:
+        nonlocal smart_flow, noise_flow, neutral_flow
+        tier = _broker_tier(code)
+        if tier == "smart":
+            smart_flow += signed_value
+        elif tier == "noise":
+            noise_flow += signed_value
+        else:
+            neutral_flow += signed_value
+
+    for summary in detail_summaries:
+        for tx in summary.top_buyers:
+            if tx.net_value > Decimal("0"):
+                add_flow(tx.broker_code, tx.net_value)
+        for tx in summary.top_sellers:
+            if tx.net_value < Decimal("0"):
+                add_flow(tx.broker_code, tx.net_value)
+
+    latest = detail_summaries[-1]
+    return ScreenBrokerQuality(
+        label=_screen_broker_quality_label(smart_flow, noise_flow, neutral_flow),
+        smart_flow=smart_flow,
+        noise_flow=noise_flow,
+        neutral_flow=neutral_flow,
+        sessions=len(detail_summaries),
+        through_date=latest.date,
+        source=latest.source,
+    )
+
+
+def _broker_quality_by_ticker(
+    tickers: list[str],
+    broker_repo: SQLiteBrokerRepository,
+    as_of_date: date | None,
+) -> dict[str, ScreenBrokerQuality]:
+    quality: dict[str, ScreenBrokerQuality] = {}
+    for ticker in tickers:
+        item = _build_screen_broker_quality(
+            ticker=ticker,
+            broker_repo=broker_repo,
+            as_of_date=as_of_date,
+        )
+        if item:
+            quality[ticker.upper()] = item
+    return quality
 
 
 def _fmt_score(s: float | None) -> str:
@@ -286,7 +425,7 @@ def _display_results(
     typer.echo(f"Provider: {response.provider} (aggregate foreign flow)")
     if response.provider == "idx":
         typer.echo(
-            "  For per-broker detail: set Stockbit token via `saham broker auth <token>`"
+            "  For per-broker detail: run `saham stockbit login`, then fetch with `--provider stockbit-session`"
         )
     typer.echo("")
     typer.echo("FLOW%: avg net foreign % of total daily turnover (positive = accumulating)")
@@ -326,6 +465,7 @@ def _display_multi(
     sort_by: str,
     squeeze_only: bool,
     screened_at: "date",
+    broker_quality: dict[str, ScreenBrokerQuality] | None = None,
 ) -> None:
     """Render multi-window side-by-side table."""
     windows = sorted(results.keys())
@@ -378,14 +518,16 @@ def _display_multi(
         return
 
     win_headers = "  ".join(f"{w:>4}s" for w in windows)
-    typer.echo(f"{'#':>3} {'TICKER':<7} {win_headers}  {'PATTERN':<18} {'TREND':>5}")
+    typer.echo(f"{'#':>3} {'TICKER':<7} {win_headers}  {'PATTERN':<18} {'TREND':>5} {'BRK':>7}")
     typer.echo("-" * _SEP_WIDTH)
 
     for i, (tk, pw) in enumerate(rows, 1):
         cells = "  ".join(_fmt_score(pw.get(w).score if pw.get(w) else None) for w in windows)
         pattern = _classify_pattern(windows, pw)
         trend = next((c.trend for w in sorted(windows) for c in [pw.get(w)] if c), "—")
-        typer.echo(f"{i:>3} {tk:<7} {cells}  {pattern:<18} {trend:>5}")
+        quality = (broker_quality or {}).get(tk)
+        brk = quality.label if quality else "n/a"
+        typer.echo(f"{i:>3} {tk:<7} {cells}  {pattern:<18} {trend:>5} {brk:>7}")
 
     sample_resp = next(iter(results.values()))
     typer.echo("-" * _SEP_WIDTH)
@@ -396,6 +538,7 @@ def _display_multi(
     )
     typer.echo("Score ≥70 green | ≥40 yellow | <40 white")
     typer.echo("Patterns: sustained | building | fresh rotation | long-term only | coiled spring | weak")
+    typer.echo("BRK: named top-broker quality; smart+/noise+ = buyer-led, smart-/noise- = seller-led, n/a = no detail")
     typer.echo("DISCLAIMER: Analysis only, not trading advice.")
     typer.echo("=" * _TABLE_WIDTH)
 
@@ -741,18 +884,26 @@ def accumulation_run(
     # --- Multi-window mode ---
     if multi:
         window_list = [int(w.strip()) for w in (windows or "7,30,90").split(",")]
-        typer.echo(
-            f"Screening {len(ticker_list)} tickers | windows: "
-            f"{', '.join(str(w) + ' sessions' for w in window_list)}..."
-        )
+        if output_format != "json":
+            typer.echo(
+                f"Screening {len(ticker_list)} tickers | windows: "
+                f"{', '.join(str(w) + ' sessions' for w in window_list)}..."
+            )
         multi_results = _run_multi(use_case, ticker_list, window_list, base_request)
         screened_at = next(iter(multi_results.values())).screened_at
+        broker_quality = _broker_quality_by_ticker(
+            tickers=ticker_list,
+            broker_repo=broker_repo,
+            as_of_date=screened_at,
+        )
 
         if output_format == "json":
             by_ticker: dict = {}
             for w, resp in multi_results.items():
                 for c in resp.candidates:
                     by_ticker.setdefault(c.ticker, {})[f"{w}_sessions"] = c.to_dict()
+            for ticker_key, quality in broker_quality.items():
+                by_ticker.setdefault(ticker_key, {})["broker_quality"] = quality.to_dict()
             typer.echo(json.dumps({
                 "mode": "multi",
                 "windows": [f"{w}_sessions" for w in sorted(multi_results.keys())],
@@ -768,15 +919,17 @@ def accumulation_run(
             sort_by=sort_by,
             squeeze_only=squeeze_only,
             screened_at=screened_at,
+            broker_quality=broker_quality,
         )
         if explain:
             _print_column_guide()
         return
 
     # --- Single-window mode ---
-    typer.echo(
-        f"Screening {len(ticker_list)} tickers | {window} sessions..."
-    )
+    if output_format != "json":
+        typer.echo(
+            f"Screening {len(ticker_list)} tickers | {window} sessions..."
+        )
     response = use_case.execute(base_request)
 
     # Apply streak filter post-scoring
@@ -938,7 +1091,7 @@ def _write_audit_csv(response: AccumulationAuditResponse, output_path: Path) -> 
     fieldnames = list(rows[0].keys()) if rows else [
         "signal_date", "ticker", "score", "streak", "net_buy_ratio",
         "total_net_value", "flow_pct", "vwap_disc_pct", "rsi", "bb_pctile",
-        "trend", "current_price", "return_5d_pct", "return_10d_pct",
+        "trend", "broker_quality", "current_price", "return_5d_pct", "return_10d_pct",
         "return_20d_pct", "max_upside_pct", "max_drawdown_pct",
     ]
     with output_path.open("w", newline="") as f:
@@ -1181,10 +1334,11 @@ def accumulation_audit(
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1)
 
-    typer.echo(
-        f"Auditing {len(ticker_list)} tickers | {start_date} to {end_date} | "
-        f"{window} sessions | min score {min_score:g}{filter_label}..."
-    )
+    if output_format != "json":
+        typer.echo(
+            f"Auditing {len(ticker_list)} tickers | {start_date} to {end_date} | "
+            f"{window} sessions | min score {min_score:g}{filter_label}..."
+        )
 
     use_case = AccumulationAuditUseCase(
         broker_repository=SQLiteBrokerRepository(resolved_db),

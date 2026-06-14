@@ -532,7 +532,7 @@ def _display_results(
     typer.echo("")
     typer.echo(
         "VERDICT: ★ PRIME=all signals green  ◉ WATCH=bullish, needs confirm  "
-        "✗ SKIP=bearish/distributing  ? NO_DATA=run 'saham fetch TICKER'"
+        "✗ SKIP=bearish/distributing  ? NO_DATA=run 'saham update TICKER --days 365'"
     )
     typer.echo(
         "SIGNAL: ACCUM tag × streak  |  FVWAP% (floor=asing underwater, sell=asing profit)  |  PH=Prev High"
@@ -1680,6 +1680,10 @@ def intraday_backtest(
         float,
         typer.Option("--rsi-overbought", help="RSI threshold for BEARISH classification"),
     ] = 75.0,
+    iev_top_n: Annotated[
+        int,
+        typer.Option("--iev-top-n", help="When IEV snapshots are available, only trade top-N movers", min=1),
+    ] = 5,
     show_trades: Annotated[
         int,
         typer.Option("--show-trades", help="Number of recent trades to display", min=0),
@@ -1696,10 +1700,10 @@ def intraday_backtest(
     """
     Walk-forward backtest of the intraday pre-open workflow (Option A: daily OHLC proxy).
 
-    Replays the same signals as the live workflow (ATR range, RSI, ACCUM, FVWAP,
-    confirm-open decision tree) on historical daily candles. IEV filter is skipped
-    — historical IEV is not stored. Entries/exits use candle.open/high/low/close.
-    All trades exit same day (no overnight holds).
+    When IEV snapshot data is available (collected via 'saham intraday collect-iev'),
+    only the top --iev-top-n movers per day are traded — matching the live workflow.
+    On days without a snapshot, the full universe is screened (with a warning).
+    Entries/exits use candle.open/high/low/close. All trades exit same day.
 
     Examples:
 
@@ -1748,10 +1752,29 @@ def intraday_backtest(
     broker_repo = SQLiteBrokerRepository(resolved_db)
     registry = create_indicator_registry()
 
+    from src.infrastructure.persistence.sqlite_iev_repository import SQLiteIEVRepository
+    iev_repo = SQLiteIEVRepository(resolved_db)
+    coverage = iev_repo.get_coverage()
+    if coverage["total_dates"] > 0:
+        typer.echo(
+            f"IEV snapshots: {coverage['total_dates']} days "
+            f"({coverage['first_date']} → {coverage['last_date']}) — "
+            f"top-{iev_top_n} filter will be applied where available.",
+            err=True,
+        )
+    else:
+        typer.echo(
+            "No IEV snapshots found. Screening full universe each day. "
+            "Run 'saham intraday collect-iev' at 08:50 WIB to start collecting.",
+            err=True,
+        )
+        iev_repo = None
+
     use_case = IntradayBacktestUseCase(
         market_repository=market_repo,
         broker_repository=broker_repo,
         indicator_registry=registry,
+        iev_repository=iev_repo,
     )
 
     try:
@@ -1767,6 +1790,7 @@ def intraday_backtest(
             include_wait=include_wait,
             atr_multiplier=Decimal(str(atr_mult)),
             rsi_overbought_threshold=Decimal(str(rsi_overbought)),
+            iev_top_n=iev_top_n,
         ))
     except ValueError as exc:
         typer.echo(f"Error: {exc}", err=True)
@@ -1813,6 +1837,81 @@ def intraday_backtest(
         return
 
     _display_intraday_backtest(response, show_trades=show_trades)
+
+
+@intraday_app.command("collect-iev")
+def collect_iev(
+    top_n: Annotated[
+        int,
+        typer.Option("--top-n", help="Max movers to capture (default 50)", min=5),
+    ] = 50,
+    db_path: Annotated[
+        Optional[Path],
+        typer.Option("--db", help="Path to SQLite database"),
+    ] = None,
+    no_headless: Annotated[
+        bool,
+        typer.Option("--no-headless", help="Show browser window"),
+    ] = False,
+) -> None:
+    """
+    Capture today's IEV mover ranking from Stockbit and store it locally.
+
+    Run this at 08:50 WIB each trading day (during the pre-open auction window)
+    to build a historical IEV dataset for backtesting. After a few months of
+    daily collection the intraday backtest can filter candidates by IEV rank,
+    matching live workflow behaviour.
+
+    Requires an active Stockbit session (saham stockbit login).
+
+    Examples:
+
+      saham intraday collect-iev
+
+      saham intraday collect-iev --top-n 30
+    """
+    from src.infrastructure.browser.playwright_stockbit import PlaywrightStockbitProvider
+    from src.infrastructure.persistence.sqlite_iev_repository import SQLiteIEVRepository
+
+    resolved_db = db_path or DEFAULT_DB_PATH
+
+    try:
+        provider = PlaywrightStockbitProvider(headless=not no_headless)
+    except Exception as exc:
+        typer.echo(f"Error initialising Stockbit provider: {exc}", err=True)
+        raise typer.Exit(1)
+
+    typer.echo(f"Fetching IEV snapshot (top {top_n} movers)...", err=True)
+    try:
+        movers = provider.fetch_iev_snapshot(top_n=top_n)
+    except RuntimeError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(1)
+
+    if not movers:
+        typer.echo("No movers returned — session may be expired. Run: saham stockbit login", err=True)
+        raise typer.Exit(1)
+
+    today = date.today()
+    repo = SQLiteIEVRepository(resolved_db)
+    written = repo.save_snapshot(today, [(m.ticker, m.iev) for m in movers])
+
+    typer.echo(f"Saved {written} movers for {today.isoformat()} to {resolved_db}")
+    typer.echo("")
+    typer.echo(f"  {'RANK':>4}  {'TICKER':<8}  {'IEV':>12}")
+    typer.echo(f"  {'-'*4}  {'-'*8}  {'-'*12}")
+    for i, m in enumerate(movers[:20], 1):
+        typer.echo(f"  {i:>4}  {m.ticker:<8}  {m.iev:>12,}")
+    if len(movers) > 20:
+        typer.echo(f"  ... and {len(movers) - 20} more stored in database")
+
+    coverage = repo.get_coverage()
+    typer.echo("")
+    typer.echo(
+        f"IEV history: {coverage['total_dates']} days "
+        f"({coverage['first_date']} → {coverage['last_date']}), "
+        f"avg {coverage['avg_movers_per_day']:.0f} movers/day"
+    )
 
 
 @intraday_app.command("save-session")

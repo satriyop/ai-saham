@@ -50,7 +50,7 @@ def _load_candles(ticker: str, days: int, db_path: Path):
 
     if not candles:
         typer.echo(f"No cached data for {ticker.upper()}.", err=True)
-        typer.echo(f"Run: saham fetch {ticker.upper()}", err=True)
+        typer.echo(f"Run: saham update {ticker.upper()} --days {days}", err=True)
         raise typer.Exit(1)
 
     return candles[-days:]

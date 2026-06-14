@@ -21,7 +21,7 @@ import json
 import logging
 from contextlib import contextmanager, nullcontext, redirect_stderr, redirect_stdout
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from io import StringIO
 from pathlib import Path
@@ -86,6 +86,13 @@ SWING_COMPARE_VARIANTS: dict[str, tuple[str, ...]] = {
     "weak_plus": ("WEAK", "SIDEWAYS", "BULLISH"),
 }
 
+SMART_MONEY_BROKERS = {"AK", "BK", "KZ", "ZP", "RX", "MS", "DB", "CS", "ML", "YU"}
+NOISE_BROKERS = {"YP", "PD", "XL", "XC"}
+BROKER_WEIGHTS: dict[str, Decimal] = {
+    **{code: Decimal("1.5") for code in SMART_MONEY_BROKERS},
+    **{code: Decimal("0.5") for code in NOISE_BROKERS},
+}
+
 
 @dataclass(frozen=True)
 class PresetGate:
@@ -102,6 +109,20 @@ class PresetEvaluation:
     classification: str
     gates: tuple[PresetGate, ...]
     failed_reasons: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class BrokerQualityNote:
+    """Non-authoritative named-broker confirmation note for preset review."""
+
+    level: str
+    message: str
+
+    def to_dict(self) -> dict:
+        return {
+            "level": self.level,
+            "message": self.message,
+        }
 
 
 @dataclass(frozen=True)
@@ -161,6 +182,64 @@ class FlowDetail:
             ),
             "latest_flow_ratio_pct": self.latest_flow_ratio_pct,
             "latest_date": self.latest_date.isoformat() if self.latest_date else None,
+        }
+
+
+@dataclass(frozen=True)
+class BrokerDetailLine:
+    broker_code: str
+    broker_name: str
+    broker_type: str
+    net_value: Decimal
+    active_sessions: int
+
+    def to_dict(self) -> dict:
+        return {
+            "broker_code": self.broker_code,
+            "broker_name": self.broker_name,
+            "broker_type": self.broker_type,
+            "net_value": str(self.net_value),
+            "active_sessions": self.active_sessions,
+        }
+
+
+@dataclass(frozen=True)
+class BrokerDetail:
+    """Named broker confirmation context from Stockbit-style broker summaries."""
+
+    window_sessions: int
+    detail_sessions: int
+    through_date: date
+    source: str
+    top_buyers: tuple[BrokerDetailLine, ...]
+    top_sellers: tuple[BrokerDetailLine, ...]
+    top_buyer_share_pct: float | None
+    top_seller_share_pct: float | None
+    smart_flow: Decimal
+    noise_flow: Decimal
+    neutral_flow: Decimal
+    weighted_net_flow: Decimal
+    smart_share_pct: float | None
+    broker_weight_quality: str
+    quality: str
+
+    def to_dict(self) -> dict:
+        return {
+            "window_sessions": self.window_sessions,
+            "detail_sessions": self.detail_sessions,
+            "through": self.through_date.isoformat(),
+            "source": self.source,
+            "top_buyers": [row.to_dict() for row in self.top_buyers],
+            "top_sellers": [row.to_dict() for row in self.top_sellers],
+            "top_buyer_share_pct": self.top_buyer_share_pct,
+            "top_seller_share_pct": self.top_seller_share_pct,
+            "smart_flow": str(self.smart_flow),
+            "noise_flow": str(self.noise_flow),
+            "neutral_flow": str(self.neutral_flow),
+            "weighted_net_flow": str(self.weighted_net_flow),
+            "smart_share_pct": self.smart_share_pct,
+            "broker_weight_quality": self.broker_weight_quality,
+            "quality": self.quality,
         }
 
 
@@ -341,6 +420,64 @@ def _style_classification(value: str) -> str:
     return typer.style(value, fg=typer.colors.RED, bold=True)
 
 
+def _format_failed_gates_summary(preset_eval: PresetEvaluation) -> str:
+    return "Failed gates: " + "; ".join(preset_eval.failed_reasons)
+
+
+def _build_broker_quality_note(
+    broker_detail: BrokerDetail | None,
+    preset_eval: PresetEvaluation | None,
+) -> BrokerQualityNote | None:
+    """Build a display-only broker-quality note without changing preset gates."""
+    if broker_detail is None or preset_eval is None:
+        return None
+
+    smart_flow = broker_detail.smart_flow
+    noise_flow = broker_detail.noise_flow
+    quality = broker_detail.broker_weight_quality
+
+    if smart_flow < Decimal("0"):
+        return BrokerQualityNote(
+            level="warning",
+            message=(
+                "Broker quality warning: smart-money selling conflicts with "
+                "the accumulation setup."
+            ),
+        )
+
+    if preset_eval.classification == "ENTER" and (
+        quality == "noisy accumulation"
+        or (noise_flow > Decimal("0") and noise_flow > smart_flow)
+    ):
+        return BrokerQualityNote(
+            level="warning",
+            message=(
+                "Broker quality warning: accumulation is noise-led; require "
+                "stronger chart confirmation."
+            ),
+        )
+
+    if preset_eval.classification == "WATCH" and smart_flow > Decimal("0"):
+        return BrokerQualityNote(
+            level="support",
+            message=(
+                "Broker quality support: smart-money buying supports "
+                "watchlist priority."
+            ),
+        )
+
+    if preset_eval.classification == "ENTER" and smart_flow > Decimal("0"):
+        return BrokerQualityNote(
+            level="support",
+            message=(
+                "Broker quality support: smart-money buying confirms the "
+                "preset setup."
+            ),
+        )
+
+    return None
+
+
 def _fmt_pct(value: float | None, signed: bool = False) -> str:
     if value is None:
         return "N/A"
@@ -364,10 +501,46 @@ def _fmt_money_short(value: Decimal) -> str:
     return f"{value:.2f}"
 
 
-def _days_lag(latest: date | None, as_of_date: date) -> int | None:
+def _fmt_money_short_signed(value: Decimal) -> str:
+    sign = "+" if value > Decimal("0") else ""
+    return f"{sign}{_fmt_money_short(value)}"
+
+
+def _fmt_broker_detail_lines(lines: tuple[BrokerDetailLine, ...]) -> str:
+    if not lines:
+        return "none"
+    parts = []
+    for line in lines[:3]:
+        parts.append(
+            f"{line.broker_code} {_fmt_money_short(line.net_value)} "
+            f"({line.active_sessions}s)"
+        )
+    return ", ".join(parts)
+
+
+def _expected_weekday_data_date(as_of_date: date) -> date:
+    """Latest regular weekday session expected for a given analysis date."""
+    if as_of_date.weekday() == 5:  # Saturday
+        return as_of_date - timedelta(days=1)
+    if as_of_date.weekday() == 6:  # Sunday
+        return as_of_date - timedelta(days=2)
+    return as_of_date
+
+
+def _weekday_session_lag(latest: date | None, as_of_date: date) -> int | None:
+    """Count regular weekday sessions from latest data through expected date."""
     if latest is None:
         return None
-    return (as_of_date - latest).days
+    expected = _expected_weekday_data_date(as_of_date)
+    if latest >= expected:
+        return 0
+    current = latest + timedelta(days=1)
+    lag = 0
+    while current <= expected:
+        if current.weekday() < 5:
+            lag += 1
+        current += timedelta(days=1)
+    return lag
 
 
 def _build_data_freshness(
@@ -386,19 +559,21 @@ def _build_data_freshness(
     if candle_end is None:
         warnings.append(f"No cached candle data for {ticker}.")
     else:
-        lag = _days_lag(candle_end, as_of_date)
+        lag = _weekday_session_lag(candle_end, as_of_date)
         if lag and lag > 0:
             warnings.append(
-                f"Latest candle is {lag} calendar day(s) before analysis date."
+                f"Latest candle is {lag} trading session(s) before expected data date "
+                f"({_expected_weekday_data_date(as_of_date)})."
             )
 
     if broker_end is None:
         warnings.append(f"No cached broker flow data for {ticker}.")
     else:
-        lag = _days_lag(broker_end, as_of_date)
+        lag = _weekday_session_lag(broker_end, as_of_date)
         if lag and lag > 0:
             warnings.append(
-                f"Latest broker flow is {lag} calendar day(s) before analysis date."
+                f"Latest broker flow is {lag} trading session(s) before expected data date "
+                f"({_expected_weekday_data_date(as_of_date)})."
             )
 
     if candle_end and broker_end and candle_end != broker_end:
@@ -463,6 +638,203 @@ def _build_flow_detail(
     )
 
 
+def _broker_line_sort_key(line: BrokerDetailLine) -> Decimal:
+    return abs(line.net_value)
+
+
+def _broker_tier(code: str) -> str:
+    code_upper = code.upper()
+    if code_upper in SMART_MONEY_BROKERS:
+        return "smart"
+    if code_upper in NOISE_BROKERS:
+        return "noise"
+    return "neutral"
+
+
+def _broker_weight(code: str) -> Decimal:
+    return BROKER_WEIGHTS.get(code.upper(), Decimal("1.0"))
+
+
+def _smart_share_pct(
+    smart_flow: Decimal,
+    noise_flow: Decimal,
+    neutral_flow: Decimal,
+) -> float | None:
+    total = abs(smart_flow) + abs(noise_flow) + abs(neutral_flow)
+    if total == Decimal("0"):
+        return None
+    return round(float(abs(smart_flow) / total * Decimal("100")), 1)
+
+
+def _broker_weight_quality(
+    smart_flow: Decimal,
+    noise_flow: Decimal,
+    neutral_flow: Decimal,
+    latest_net_flow: Decimal,
+    smart_share_pct: float | None,
+) -> str:
+    if latest_net_flow < Decimal("0") and smart_flow < Decimal("0"):
+        return "smart distribution"
+    if latest_net_flow < Decimal("0") and smart_flow > Decimal("0"):
+        return "smart distribution watch"
+    if smart_flow > Decimal("0") and (smart_share_pct or 0) >= 60:
+        return "smart accumulation"
+    if noise_flow > Decimal("0") and smart_flow <= Decimal("0"):
+        return "noisy accumulation"
+    if smart_flow > Decimal("0"):
+        return "smart support"
+    if smart_flow < Decimal("0"):
+        return "smart selling pressure"
+    if neutral_flow > Decimal("0"):
+        return "neutral accumulation"
+    return "neutral detail"
+
+
+def _build_broker_detail(
+    ticker: str,
+    broker_repo: SQLiteBrokerRepository,
+    window_sessions: int = 5,
+    as_of_date: date | None = None,
+) -> BrokerDetail | None:
+    summaries = broker_repo.get_broker_summaries(ticker, end_date=as_of_date)
+    detail_summaries = [
+        summary
+        for summary in summaries
+        if summary.top_buyers or summary.top_sellers
+    ][-window_sessions:]
+    if not detail_summaries:
+        return None
+
+    buyer_values: dict[str, Decimal] = {}
+    buyer_names: dict[str, str] = {}
+    buyer_types: dict[str, str] = {}
+    buyer_sessions: dict[str, set[date]] = {}
+    seller_values: dict[str, Decimal] = {}
+    seller_names: dict[str, str] = {}
+    seller_types: dict[str, str] = {}
+    seller_sessions: dict[str, set[date]] = {}
+    smart_flow = Decimal("0")
+    noise_flow = Decimal("0")
+    neutral_flow = Decimal("0")
+    weighted_net_flow = Decimal("0")
+
+    def add_weighted_flow(code: str, signed_value: Decimal) -> None:
+        nonlocal smart_flow, noise_flow, neutral_flow, weighted_net_flow
+        tier = _broker_tier(code)
+        if tier == "smart":
+            smart_flow += signed_value
+        elif tier == "noise":
+            noise_flow += signed_value
+        else:
+            neutral_flow += signed_value
+        weighted_net_flow += signed_value * _broker_weight(code)
+
+    for summary in detail_summaries:
+        for tx in summary.top_buyers:
+            if tx.net_value > Decimal("0"):
+                buyer_values[tx.broker_code] = (
+                    buyer_values.get(tx.broker_code, Decimal("0")) + tx.net_value
+                )
+                buyer_names[tx.broker_code] = tx.broker_name
+                buyer_types[tx.broker_code] = tx.broker_type.value
+                buyer_sessions.setdefault(tx.broker_code, set()).add(summary.date)
+                add_weighted_flow(tx.broker_code, tx.net_value)
+        for tx in summary.top_sellers:
+            if tx.net_value < Decimal("0"):
+                signed_value = tx.net_value
+                seller_values[tx.broker_code] = (
+                    seller_values.get(tx.broker_code, Decimal("0")) + abs(signed_value)
+                )
+                seller_names[tx.broker_code] = tx.broker_name
+                seller_types[tx.broker_code] = tx.broker_type.value
+                seller_sessions.setdefault(tx.broker_code, set()).add(summary.date)
+                add_weighted_flow(tx.broker_code, signed_value)
+
+    buyers = tuple(sorted(
+        (
+            BrokerDetailLine(
+                broker_code=code,
+                broker_name=buyer_names.get(code, code),
+                broker_type=buyer_types.get(code, "unknown"),
+                net_value=value,
+                active_sessions=len(buyer_sessions.get(code, set())),
+            )
+            for code, value in buyer_values.items()
+        ),
+        key=_broker_line_sort_key,
+        reverse=True,
+    )[:5])
+    sellers = tuple(sorted(
+        (
+            BrokerDetailLine(
+                broker_code=code,
+                broker_name=seller_names.get(code, code),
+                broker_type=seller_types.get(code, "unknown"),
+                net_value=-value,
+                active_sessions=len(seller_sessions.get(code, set())),
+            )
+            for code, value in seller_values.items()
+        ),
+        key=_broker_line_sort_key,
+        reverse=True,
+    )[:5])
+
+    total_buy = sum(buyer_values.values(), Decimal("0"))
+    total_sell = sum(seller_values.values(), Decimal("0"))
+    top_buyer_share = (
+        round(float(abs(buyers[0].net_value) / total_buy * Decimal("100")), 1)
+        if buyers and total_buy > Decimal("0")
+        else None
+    )
+    top_seller_share = (
+        round(float(abs(sellers[0].net_value) / total_sell * Decimal("100")), 1)
+        if sellers and total_sell > Decimal("0")
+        else None
+    )
+
+    latest = detail_summaries[-1]
+    smart_share = _smart_share_pct(
+        smart_flow=smart_flow,
+        noise_flow=noise_flow,
+        neutral_flow=neutral_flow,
+    )
+    broker_weight_quality = _broker_weight_quality(
+        smart_flow=smart_flow,
+        noise_flow=noise_flow,
+        neutral_flow=neutral_flow,
+        latest_net_flow=latest.foreign_net_value,
+        smart_share_pct=smart_share,
+    )
+    if latest.foreign_net_value < Decimal("0"):
+        quality = "recent distribution"
+    elif top_buyer_share is not None and top_buyer_share >= 60:
+        quality = "concentrated accumulation"
+    elif len(buyers) >= 3 and len(detail_summaries) >= 3:
+        quality = "broad accumulation"
+    elif buyers:
+        quality = "limited accumulation detail"
+    else:
+        quality = "no buyer detail"
+
+    return BrokerDetail(
+        window_sessions=window_sessions,
+        detail_sessions=len(detail_summaries),
+        through_date=latest.date,
+        source=latest.source,
+        top_buyers=buyers,
+        top_sellers=sellers,
+        top_buyer_share_pct=top_buyer_share,
+        top_seller_share_pct=top_seller_share,
+        smart_flow=smart_flow,
+        noise_flow=noise_flow,
+        neutral_flow=neutral_flow,
+        weighted_net_flow=weighted_net_flow,
+        smart_share_pct=smart_share,
+        broker_weight_quality=broker_weight_quality,
+        quality=quality,
+    )
+
+
 def _auto_refresh_swing_data(
     ticker: str,
     db_path: Path,
@@ -470,7 +842,7 @@ def _auto_refresh_swing_data(
 ) -> tuple[str, ...]:
     """Refresh only the requested ticker for swing analysis."""
     from src.adapters.cli.update_commands import (
-        _auto_broker_provider,
+        _create_broker_provider,
         _fetch_broker,
         _fetch_candles,
     )
@@ -485,7 +857,7 @@ def _auto_refresh_swing_data(
     )
     actions.append(f"candles={candles_status}")
 
-    broker_provider, broker_provider_name = _auto_broker_provider()
+    broker_provider, broker_provider_name = _create_broker_provider(None)
     broker_status = _fetch_broker(
         ticker=ticker,
         days=90,
@@ -740,6 +1112,7 @@ def _print_swing_output(
     strategy_name: str,
     data_freshness: DataFreshness,
     flow_detail: FlowDetail | None,
+    broker_detail: BrokerDetail | None,
     window: int,
     accum: "AccumulationCandidate | None",
     risk_resp,
@@ -747,6 +1120,7 @@ def _print_swing_output(
     sizing: "SizingResult | None",
     preset_eval: "PresetEvaluation | None",
     preset_sizing: "PercentSizingResult | None",
+    broker_quality_note: BrokerQualityNote | None,
     market_regime: "MarketRegimeResponse | None",
     capital: "int | None",
     backtest_result,
@@ -858,6 +1232,43 @@ def _print_swing_output(
             fg=typer.colors.BRIGHT_BLACK,
         ))
 
+    # ── NAMED BROKER DETAIL ────────────────────────────────────────────────
+    if broker_detail:
+        typer.echo("")
+        _section_header(
+            f"BROKER DETAIL ({broker_detail.detail_sessions}/{broker_detail.window_sessions} sessions)",
+            f"through: {_fmt_date(broker_detail.through_date)} · {broker_detail.source}",
+        )
+        typer.echo(f"  Top buyers       {_fmt_broker_detail_lines(broker_detail.top_buyers)}")
+        typer.echo(f"  Top sellers      {_fmt_broker_detail_lines(broker_detail.top_sellers)}")
+        typer.echo(
+            f"  Smart flow       {_fmt_money_short_signed(broker_detail.smart_flow)} IDR   "
+            f"Noise flow  {_fmt_money_short_signed(broker_detail.noise_flow)} IDR"
+        )
+        smart_share = (
+            f"{broker_detail.smart_share_pct:.1f}%"
+            if broker_detail.smart_share_pct is not None else "N/A"
+        )
+        typer.echo(
+            f"  Weighted net     {_fmt_money_short_signed(broker_detail.weighted_net_flow)} IDR   "
+            f"Smart share  {smart_share}"
+        )
+        buyer_share = (
+            f"{broker_detail.top_buyer_share_pct:.1f}%"
+            if broker_detail.top_buyer_share_pct is not None else "N/A"
+        )
+        seller_share = (
+            f"{broker_detail.top_seller_share_pct:.1f}%"
+            if broker_detail.top_seller_share_pct is not None else "N/A"
+        )
+        typer.echo(
+            f"  Concentration    top buyer {buyer_share}; top seller {seller_share}"
+        )
+        typer.echo(
+            f"  Quality          {broker_detail.quality}; "
+            f"{broker_detail.broker_weight_quality}"
+        )
+
     # ── PRESET GATES ────────────────────────────────────────────────────────
     if preset_eval is not None:
         typer.echo("")
@@ -877,8 +1288,18 @@ def _print_swing_output(
             ))
         else:
             typer.echo(typer.style(
-                "  Failed gates: " + "; ".join(preset_eval.failed_reasons[:3]),
+                f"  {_format_failed_gates_summary(preset_eval)}",
                 fg=typer.colors.BRIGHT_BLACK,
+            ))
+        if broker_quality_note is not None:
+            note_color = (
+                typer.colors.YELLOW
+                if broker_quality_note.level == "warning"
+                else typer.colors.CYAN
+            )
+            typer.echo(typer.style(
+                f"  {broker_quality_note.message}",
+                fg=note_color,
             ))
 
     # ── MARKET REGIME ───────────────────────────────────────────────────────
@@ -1027,7 +1448,7 @@ def _print_swing_output(
     elif not no_backtest:
         _section_header("HISTORY")
         typer.echo(typer.style(
-            f"  Could not run backtest. Run: saham fetch {ticker} --days 730",
+            f"  Could not run backtest. Run: saham update {ticker} --days 730",
             fg=typer.colors.BRIGHT_BLACK,
         ))
 
@@ -1106,7 +1527,10 @@ def _print_swing_output(
     elif sizing and sizing.lots == 0:
         typer.echo("PLAN:  Position too small for 1 lot — reduce entry or increase capital.")
     elif capital and not atr_value:
-        typer.echo("PLAN:  Fetch more data to enable position sizing (run saham fetch --days 90).")
+        typer.echo(
+            "PLAN:  Fetch more data to enable position sizing "
+            f"(run saham update {ticker} --days 90)."
+        )
 
     _sep("=")
     typer.echo(typer.style(
@@ -1272,11 +1696,18 @@ def swing(
         window_sessions=flow_window,
         as_of_date=today,
     )
+    broker_detail = _build_broker_detail(
+        ticker=ticker_upper,
+        broker_repo=broker_repo,
+        window_sessions=5,
+        as_of_date=today,
+    )
 
     candles = market_repo.get_candles(ticker_upper)
     if not candles:
         typer.echo(
-            f"No data for {ticker_upper}. Run: saham fetch {ticker_upper}", err=True
+            f"No data for {ticker_upper}. Run: saham update {ticker_upper} --days 365",
+            err=True,
         )
         raise typer.Exit(1)
 
@@ -1326,6 +1757,10 @@ def swing(
     preset_sizing: PercentSizingResult | None = None
     if preset_name == FOREIGN_BOUNCE_PRESET:
         preset_eval = _evaluate_foreign_bounce(accum_candidate)
+    broker_quality_note = _build_broker_quality_note(
+        broker_detail=broker_detail,
+        preset_eval=preset_eval,
+    )
 
     if capital is not None and preset_eval is not None and preset_eval.passed:
         try:
@@ -1409,6 +1844,10 @@ def swing(
             "profile": profile,
             "data": data_out,
             "flow_detail": flow_detail.to_dict() if flow_detail else None,
+            "broker_detail": broker_detail.to_dict() if broker_detail else None,
+            "broker_quality_note": (
+                broker_quality_note.to_dict() if broker_quality_note else None
+            ),
             "accumulation": {
                 "score": accum_candidate.score if accum_candidate else None,
                 "streak": accum_candidate.consecutive_streak if accum_candidate else None,
@@ -1493,6 +1932,7 @@ def swing(
         strategy_name=strategy,
         data_freshness=data_freshness,
         flow_detail=flow_detail,
+        broker_detail=broker_detail,
         window=window,
         accum=accum_candidate,
         risk_resp=risk_resp,
@@ -1500,6 +1940,7 @@ def swing(
         sizing=sizing,
         preset_eval=preset_eval,
         preset_sizing=preset_sizing,
+        broker_quality_note=broker_quality_note,
         market_regime=market_regime,
         capital=capital,
         backtest_result=backtest_result,
@@ -2032,7 +2473,8 @@ def size(
     candles = market_repo.get_candles(ticker_upper)
     if not candles:
         typer.echo(
-            f"No data for {ticker_upper}. Run: saham fetch {ticker_upper}", err=True
+            f"No data for {ticker_upper}. Run: saham update {ticker_upper} --days 365",
+            err=True,
         )
         raise typer.Exit(1)
 
@@ -2052,7 +2494,7 @@ def size(
         typer.echo(
             f"Cannot compute ATR({atr_period}) for {ticker_upper} — insufficient data.", err=True
         )
-        typer.echo(f"Tip: Run: saham fetch {ticker_upper} --days 90", err=True)
+        typer.echo(f"Tip: Run: saham update {ticker_upper} --days 90", err=True)
         raise typer.Exit(1)
 
     entry_dec = Decimal(str(entry_price)) if entry_price else latest_close

@@ -34,16 +34,12 @@ from src.domain.ports.csv_broker_parser import (
 )
 from src.infrastructure.csv import BrokerCsvAdapter, MappingLoader
 from src.infrastructure.data_providers.idx import IdxBrokerDataProvider
-from src.infrastructure.data_providers.stockbit import (
-    StockbitBrokerDataProvider,
-    validate_token,
-)
 from src.infrastructure.persistence.sqlite_broker_repository import (
     SQLiteBrokerRepository,
 )
 
 # Supported providers
-PROVIDERS = ("idx", "stockbit", "stockbit-session")
+PROVIDERS = ("idx", "stockbit-session")
 DEFAULT_PROVIDER = "idx"
 
 _DEFAULT_PROFILE_DIR = Path(".stockbit_profile")
@@ -53,8 +49,6 @@ def _create_provider(provider_name: str) -> BrokerDataProvider:
     """Create a broker data provider by name."""
     if provider_name == "idx":
         return IdxBrokerDataProvider()
-    elif provider_name == "stockbit":
-        return StockbitBrokerDataProvider()
     elif provider_name == "stockbit-session":
         from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
         return StockbitPlaywrightBrokerProvider()
@@ -87,53 +81,6 @@ def format_value(value: Decimal) -> str:
     return f"{value:.2f}"
 
 
-@broker_app.command("auth")
-def broker_auth(
-    token: Annotated[
-        str,
-        typer.Argument(
-            help="Stockbit JWT token from browser DevTools"
-        ),
-    ],
-    validate: Annotated[
-        bool,
-        typer.Option(
-            "--validate/--no-validate",
-            help="Validate token before saving",
-        ),
-    ] = True,
-) -> None:
-    """
-    Configure Stockbit authentication token.
-
-    To get your token:
-    1. Login to stockbit.com in your browser
-    2. Open DevTools (F12) -> Network tab
-    3. Click any stock ticker (e.g., BBCA)
-    4. Filter for "exodus" requests
-    5. Copy the Bearer token from Authorization header
-
-    Token expires in ~24 hours and needs to be refreshed.
-
-    Example:
-        saham broker auth "eyJhbGci..."
-    """
-    if validate:
-        typer.echo("Validating token...")
-        if not validate_token(token):
-            typer.echo(
-                typer.style("Token validation failed. ", fg=typer.colors.RED)
-                + "The token may be expired or invalid."
-            )
-            raise typer.Exit(1)
-        typer.echo(typer.style("Token is valid!", fg=typer.colors.GREEN))
-
-    # Save token
-    provider = StockbitBrokerDataProvider()
-    provider.save_token(token)
-    typer.echo(f"Token saved to stockbit_token.json")
-
-
 @broker_app.command("status")
 def broker_status() -> None:
     """
@@ -144,39 +91,6 @@ def broker_status() -> None:
     # IDX provider (always available)
     typer.echo("IDX provider: " + typer.style("Available", fg=typer.colors.GREEN)
                + " (public API, no auth required)")
-
-    # Stockbit manual-token provider
-    stockbit = StockbitBrokerDataProvider()
-    if stockbit.is_authenticated():
-        typer.echo("Stockbit provider: " + typer.style("Configured", fg=typer.colors.GREEN))
-        typer.echo("  Validating Stockbit token...")
-        try:
-            summary = stockbit.fetch_broker_summary("BBCA", date.today())
-            if summary:
-                typer.echo(
-                    "  " + typer.style("Status: ", fg=typer.colors.GREEN)
-                    + "Connected and working"
-                )
-            else:
-                typer.echo(
-                    "  " + typer.style("Status: ", fg=typer.colors.YELLOW)
-                    + "Connected (no data for today yet)"
-                )
-        except BrokerDataAuthError:
-            typer.echo(
-                "  " + typer.style("Token expired or invalid. ", fg=typer.colors.RED)
-                + "Please get a new token from stockbit.com"
-            )
-        except BrokerDataProviderError as e:
-            typer.echo(
-                "  " + typer.style("Connection error: ", fg=typer.colors.RED)
-                + str(e)
-            )
-    else:
-        typer.echo(
-            "Stockbit provider: " + typer.style("Not configured", fg=typer.colors.YELLOW)
-            + " (run 'saham broker auth <token>' to set up)"
-        )
 
     # Stockbit Playwright session provider
     try:
@@ -254,11 +168,11 @@ def broker_fetch(
 
     Providers:
         idx       - IDX public API (default, no auth required)
-        stockbit  - Stockbit API (requires auth token)
+        stockbit-session - Stockbit browser session (run 'saham stockbit login')
 
     Examples:
         saham broker fetch BBCA                       # IDX provider (default)
-        saham broker fetch BBCA --provider stockbit   # Stockbit provider
+        saham broker fetch BBCA --provider stockbit-session
         saham broker fetch BBCA --days 90             # Last 90 days
         saham broker fetch BBCA --refresh             # Force refresh
         saham broker fetch BBCA -s 2024-01-01 -e 2024-06-30
@@ -306,6 +220,14 @@ def broker_fetch(
                        fg=typer.colors.GREEN)
         )
 
+        # For Stockbit providers, also fetch exact historical foreign flow
+        # (avg_price) so the daily foreign-flow series is complete.
+        if not response.from_cache and provider_name == "stockbit-session":
+            points = provider.fetch_foreign_flow_history(ticker, days=days)
+            if points:
+                repository.save_foreign_flow_points(points)
+                typer.echo(typer.style(f"Saved {len(points)} exact foreign-flow points", fg=typer.colors.CYAN))
+
         # Show summary
         if response.summaries:
             total_foreign_flow = sum(
@@ -325,7 +247,7 @@ def broker_fetch(
 
     except BrokerDataAuthError as e:
         typer.echo(typer.style(f"Auth error: {e}", fg=typer.colors.RED))
-        typer.echo("Run 'saham broker auth <token>' to set your token.")
+        typer.echo("Run: saham stockbit login")
         raise typer.Exit(1)
     except BrokerDataProviderError as e:
         typer.echo(typer.style(f"Error: {e}", fg=typer.colors.RED))
@@ -522,6 +444,14 @@ def broker_top_foreign(
         str,
         typer.Option("--provider", help="Provider: stockbit-session"),
     ] = "stockbit-session",
+    db_path: Annotated[
+        Path,
+        typer.Option("--db", help="SQLite database path"),
+    ] = Path("data/broker_data.db"),
+    no_save: Annotated[
+        bool,
+        typer.Option("--no-save", help="Do not persist results to database"),
+    ] = False,
 ) -> None:
     """
     Show which stocks foreign brokers are most actively buying/selling.
@@ -530,6 +460,7 @@ def broker_top_foreign(
     given 10 known foreign broker codes, returns the stocks they traded
     most in the period. Useful as a complementary screening signal to IEV.
 
+    Results are automatically saved to the database for later querying.
     Requires an active Stockbit browser session (run 'saham stockbit login' first).
 
     Examples:
@@ -563,6 +494,15 @@ def broker_top_foreign(
         typer.echo("Run: saham stockbit spy --target broker-scan")
         return
 
+    # Auto-save to database
+    if not no_save:
+        try:
+            repo = SQLiteBrokerRepository(db_path)
+            repo.save_foreign_flow_snapshots(snapshots, snapshot_date=end, period_days=days)
+            typer.echo(typer.style(f"  Saved {len(snapshots)} snapshots → {db_path}", fg=typer.colors.CYAN))
+        except Exception as e:
+            typer.echo(typer.style(f"  Warning: could not save to DB: {e}", fg=typer.colors.YELLOW), err=True)
+
     typer.echo(f"  {'#':<4} {'TICKER':<8} {'NET VALUE':>14}  {'NET LOT':>10}  DIR")
     typer.echo("  " + "─" * 45)
     for rank, snap in enumerate(snapshots, 1):
@@ -576,6 +516,74 @@ def broker_top_foreign(
 
     typer.echo("")
     typer.echo(f"Showing {len(snapshots)} stocks. Use --limit to adjust.")
+
+
+@broker_app.command("history")
+def broker_history(
+    ticker: Annotated[str, typer.Argument(help="Stock ticker (e.g. BBCA)")],
+    days: Annotated[
+        int,
+        typer.Option("--days", help="How many trading days to fetch (1–365)", min=1, max=365),
+    ] = 365,
+    provider: Annotated[
+        str,
+        typer.Option("--provider", help="Provider: stockbit-session"),
+    ] = "stockbit-session",
+    db_path: Annotated[
+        Path,
+        typer.Option("--db", help="SQLite database path"),
+    ] = Path("data/broker_data.db"),
+) -> None:
+    """
+    Fetch and store daily foreign broker flow history for a stock (time-series).
+
+    Unlike 'broker fetch' (which stores full broker breakdown), this command
+    fetches the lightweight daily net-flow time-series with exact avg_price
+    from Stockbit's historical endpoint. Ideal for backtesting and trend analysis.
+
+    Results are stored in the foreign-flow time-series table with source='stockbit'.
+
+    Examples:
+        saham broker history BBCA
+        saham broker history BBCA --days 30
+    """
+    prov = _create_provider(provider)
+    if not prov.is_authenticated():
+        typer.echo(
+            typer.style("Not authenticated.", fg=typer.colors.RED)
+            + " Run: saham stockbit login"
+        )
+        raise typer.Exit(1)
+
+    ticker = ticker.upper()
+    typer.echo(f"\nFetching {days}-day flow history for {ticker}...")
+
+    try:
+        points = prov.fetch_foreign_flow_history(ticker, days=days)
+    except Exception as e:
+        typer.echo(typer.style(f"Error: {e}", fg=typer.colors.RED), err=True)
+        raise typer.Exit(1)
+
+    if not points:
+        typer.echo(typer.style("No historical data returned.", fg=typer.colors.YELLOW))
+        return
+
+    repo = SQLiteBrokerRepository(db_path)
+    repo.save_foreign_flow_points(points)
+
+    typer.echo(typer.style(f"Saved {len(points)} foreign-flow points for {ticker} → {db_path}", fg=typer.colors.GREEN))
+
+    # Show last 5 for quick confirmation
+    recent = sorted(points, key=lambda p: p.date, reverse=True)[:5]
+    typer.echo(f"\n  {'DATE':<12} {'NET VALUE':>14}  {'NET LOT':>10}  {'AVG PRICE':>10}")
+    typer.echo("  " + "─" * 52)
+    for p in recent:
+        direction_color = typer.colors.GREEN if p.net_val > 0 else typer.colors.RED
+        line = (
+            f"  {p.date.isoformat():<12} "
+            f"{format_value(p.net_val):>14}  {p.net_lot:>10,}  {float(p.avg_price):>10,.0f}"
+        )
+        typer.echo(typer.style(line, fg=direction_color))
 
 
 @broker_app.command("import")
