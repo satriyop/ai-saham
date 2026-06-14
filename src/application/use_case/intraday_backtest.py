@@ -65,6 +65,7 @@ class IntradayBacktestRequest:
     history_days: int = 60                         # min candle lookback per ticker
     include_wait: bool = False                     # treat WAIT as ENTER if True
     cost_bps: Decimal = Decimal("20")              # bps per side (round-trip = 2×)
+    iev_top_n: int = 5                             # when IEV data available, keep only top-N movers
 
 
 # ── Result DTOs ────────────────────────────────────────────────────────────────
@@ -469,10 +470,12 @@ class IntradayBacktestUseCase:
         market_repository: MarketDataRepository,
         broker_repository: BrokerDataRepository,
         indicator_registry: IndicatorRegistry,
+        iev_repository=None,   # SQLiteIEVRepository | None — optional for IEV filtering
     ) -> None:
         self._market_repo = market_repository
         self._broker_repo = broker_repository
         self._registry = indicator_registry
+        self._iev_repo = iev_repository
         self._confirm = ConfirmIntradayOpenUseCase()
 
     def execute(self, request: IntradayBacktestRequest) -> IntradayBacktestResponse:
@@ -505,6 +508,15 @@ class IntradayBacktestUseCase:
             if not candidates:
                 equity_curve.append(cash)
                 continue
+
+            # ── Step 1b: apply IEV filter when snapshot is available ──────────
+            if self._iev_repo is not None and self._iev_repo.has_snapshot(d):
+                snapshot = self._iev_repo.get_snapshot(d, top_n=request.iev_top_n)
+                iev_tickers = {s.ticker for s in snapshot}
+                candidates = [c for c in candidates if c.ticker in iev_tickers]
+                if not candidates:
+                    equity_curve.append(cash)
+                    continue
 
             # ── Step 2: fetch today's candles + simulate confirm-open ─────────
             conf_candidates = []
@@ -676,9 +688,25 @@ class IntradayBacktestUseCase:
                 if dd < max_dd:
                     max_dd = dd
 
+        if self._iev_repo is not None:
+            iev_dates = set(self._iev_repo.get_snapshot_dates())
+            covered = len([d for d in trading_dates if d in iev_dates])
+            warnings.append(
+                f"IEV filter active: snapshot data covers {covered}/{len(trading_dates)} "
+                f"trading days in this period (top-{request.iev_top_n} movers per day)."
+            )
+            if covered < len(trading_dates):
+                missing = len(trading_dates) - covered
+                warnings.append(
+                    f"IEV filter NOT applied on {missing} days (no snapshot). "
+                    "Full universe screened on those days — run collect-iev daily to close the gap."
+                )
+        else:
+            warnings.append(
+                "IEV filter NOT active — full universe screened every day. "
+                "Run 'saham intraday collect-iev' at 08:50 WIB each trading day to build history."
+            )
         warnings.extend([
-            "Backtest skips IEV filter — historical IEV is not stored. "
-            "Universe is the full --tickers/--universe list.",
             "Same-day H/L ordering is conservative: "
             "both-breached cases assume stop hit first.",
             "Opening price = candle.open (IDX 09:00 call-auction clearing price proxy).",

@@ -1,0 +1,469 @@
+# Intraday Trade — Building Block
+
+The intraday trade feature is an **end-to-end pre-open trading workflow** that screens morning movers, confirms entry at auction, journals decisions, records outcomes, and reviews performance — all backed by a deterministic rule engine with optional AI research.
+
+---
+
+## Command Family
+
+| Command | Phase | Purpose |
+|---------|-------|---------|
+| `saham intraday pre-open` | 1 | Screen IDX morning movers → entry range, stop, trend, accumulation, FVWAP |
+| `saham intraday pre-open-log` | 3a | Log pre-open candidates to paper trade journal |
+| `saham intraday pre-open-review` | 5 | Review journal hit-rate + direction accuracy |
+| `saham intraday confirm-open` | 2 | Confirm ENTER/WAIT/SKIP after opening auction clears |
+| `saham intraday confirm-log` (alias: `log`) | 3b | Log confirmation decisions to CSV journal |
+| `saham intraday confirm-review` (alias: `review`) | 5 | Review confirmation buckets by decision + context |
+| `saham intraday confirm-outcome` (alias: `outcome`) | 4 | Record actual trade result (target/stop/manual) |
+| `saham intraday backtest` | 6 | Walk-forward backtest of the pre-open workflow |
+| `saham intraday save-session` | — | Deprecated, redirects to `saham stockbit login` |
+
+---
+
+## Full Architecture Diagram
+
+```
+┌───────────────────────────────────────────────────────────────────────────┐
+│                         CLI LAYER (screen_commands.py, 1829 lines)        │
+│                                                                           │
+│  pre-open  │  confirm-open  │  confirm-log  │  confirm-review             │
+│  confirm-outcome  │  pre-open-log  │  pre-open-review  │  backtest        │
+│                                                                           │
+│  Display: _display_results, _display_confirmations, _display_review       │
+│           _display_intraday_backtest, _display_raw_movers, etc.           │
+│                                                                           │
+│  Helpers: _build_intraday_run_guard, _load_config, _build_data_freshness  │
+│           _verdict, _signal_col, _write_sidecar, _load_confirmation_...   │
+│           _build_ai_researcher, _build_market_regime, _decimal_or_none    │
+└────────────────────────────────┬──────────────────────────────────────────┘
+                                 │
+                                 ▼
+┌───────────────────────────────────────────────────────────────────────────┐
+│                        APPLICATION LAYER                                  │
+│                                                                           │
+│  ┌───────────────────────────────────────────────────────────────────┐   │
+│  │                         USE CASES (4)                             │   │
+│  │                                                                   │   │
+│  │  PreOpenScreenUseCase       10-step pre-open analysis pipeline    │   │
+│  │                               (fetch movers → context → entry →   │   │
+│  │                                stop → trend → accum → AI)          │   │
+│  │                                                                   │   │
+│  │  ConfirmIntradayOpenUseCase  8-gate deterministic confirmation    │   │
+│  │                               (deterministic, no AI, no network)  │   │
+│  │                                                                   │   │
+│  │  IntradayBacktestUseCase     Walk-forward replay over history     │   │
+│  │                               (uses ConfirmIntradayOpenUseCase)   │   │
+│  │                                                                   │   │
+│  │  MarketRegimeUseCase         Breadth + flow regime (shared)      │   │
+│  └───────────────────────────────────────────────────────────────────┘   │
+│                                    │                                      │
+│  ┌───────────────────────────────────────────────────────────────────┐   │
+│  │                       SERVICES (3)                                │   │
+│  │                                                                   │   │
+│  │  PaperTradeJournalService    Pre-open journal: log + review       │   │
+│  │  IntradayConfirmationJournal  Confirmation journal: log + review  │   │
+│  │                                + record_outcome                    │   │
+│  │  ClaudeTickerResearcher      AI research per ticker               │   │
+│  └───────────────────────────────────────────────────────────────────┘   │
+│                                                                           │
+│  ┌───────────────────────────────────────────────────────────────────┐   │
+│  │                     VALUE OBJECTS / DTOS                          │   │
+│  │                                                                   │   │
+│  │  PreOpenScreenConfig     YAML-loaded tuning parameters            │   │
+│  │  PreOpenScreenResult     screened_date + candidates               │   │
+│  │  ScreenerCandidate       ticker, iev, entry_range, stop, trend    │   │
+│  │                          rsi, sma, accum_*, foreign_vwap, ai      │   │
+│  │  IntradayConfirmation    decision + reasons + prices              │   │
+│  │  IntradayConfirmationResult  ENTER/WATCH/SKIP groups             │   │
+│  │  IntradayConfirmationJournalEntry  + outcome fields               │   │
+│  │  IntradayBacktestRequest/Response  portfolio metrics + trades    │   │
+│  │  IntradayDataFreshness    candle/broker recency + warnings        │   │
+│  └───────────────────────────────────────────────────────────────────┘   │
+└────────────────────────────────┬──────────────────────────────────────────┘
+                                 │
+                                 ▼
+┌───────────────────────────────────────────────────────────────────────────┐
+│                          DOMAIN LAYER (Pure Python)                      │
+│                                                                           │
+│  ┌───────────────────┐  ┌───────────────────────┐  ┌─────────────────┐  │
+│  │    Entities       │  │   Value Objects       │  │     Ports       │  │
+│  │                   │  │                       │  │                 │  │
+│  │  Candle           │  │  MoverData            │  │ BrowserDataProv │  │
+│  │  BrokerSummary    │  │  OrderBookBid         │  │ MarketDataRepo  │  │
+│  │                   │  │  MoverWithOrderBook   │  │ BrokerDataRepo  │  │
+│  │                   │  │  ScreenerCandidate    │  │ JournalStore    │  │
+│  │                   │  │  IntradayConfirmation │  │ AIExplainer     │  │
+│  │                   │  │  IntradayDecision(Enum)│  │                 │  │
+│  │                   │  │  JournalEntry         │  │                 │  │
+│  │                   │  │  IntradayOutcome      │  │                 │  │
+│  └───────────────────┘  └───────────────────────┘  └─────────────────┘  │
+└────────────────────────────────┬──────────────────────────────────────────┘
+                                 │
+                                 ▼
+┌───────────────────────────────────────────────────────────────────────────┐
+│                       INFRASTRUCTURE LAYER                                │
+│                                                                           │
+│  ┌───────────────────────┐  ┌──────────────────────┐  ┌───────────────┐  │
+│  │  Browser Providers   │  │  Persistence        │  │  AI           │  │
+│  │                      │  │                     │  │               │  │
+│  │  PlaywrightStockbit  │  │  JournalCsvWriter   │  │  ClaudeAPI    │  │
+│  │  (1848 lines)        │  │  (pre-open.csv)     │  │  (research)   │  │
+│  │                      │  │  IntradayConfirmCSV │  │               │  │
+│  │  ManualBrowserData   │  │  (intraday-         │  │               │  │
+│  │  (from JSON flags)   │  │   confirmations.csv)│  │               │  │
+│  │                      │  │                     │  │               │  │
+│  │  StockbitBrowserInst │  │  SQLiteMarketRepo   │  │               │  │
+│  │  (step-by-step plan) │  │  SQLiteBrokerRepo   │  │               │  │
+│  └───────────────────────┘  └────────────────────┘  └───────────────┘  │
+└───────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## End-to-End Workflow
+
+### Phase 1: Pre-Open Screening (08:45–09:00 WIB)
+
+```
+CLI: saham intraday pre-open [--movers-json ...] [--order-books-json ...]
+                              [--fast] [--with-ai] [--with-regime] [--headless/--no-headless]
+ │
+ ├─ _build_intraday_run_guard()
+ │    ├── Checks weekday → REJECT weekends
+ │    └── Checks time  → WARN if outside 08:45–09:00 WIB
+ │
+ ├─ DATA SOURCE SELECTION:
+ │    ├── If --movers-json provided:
+ │    │    └── ManualBrowserDataProvider.from_json(movers, order_books)
+ │    │
+ │    ├── Else if Playwright available + session exists:
+ │    │    └── PlaywrightStockbitProvider.fetch_preopen_movers(iev_min)
+ │    │         └── Opens headless Chromium → intercepts JWT → calls Exodus IEV API
+ │    │
+ │    └── Else:
+ │         └── StockbitBrowserInstructionsProvider → raises BrowserInteractionRequired
+ │              CLI catches → _print_browser_plan() → exit with instructions
+ │
+ ├─ PreOpenScreenUseCase.execute():
+ │    │
+ │    ├── fetch movers → filter by IEV → apply top-N cap
+ │    │
+ │    └── For each mover ticker (10 steps):
+ │         │
+ │         ├── 1. _assess_context()
+ │         │    ├── candles = MarketRepo.get_candles(ticker)
+ │         │    ├── ATR(14)  via registry (plugin)
+ │         │    ├── RSI(14)  via registry
+ │         │    ├── SMA(20)  via registry
+ │         │    └── prev close/high/low
+ │         │
+ │         ├── 2. _compute_entry_range()
+ │         │    ├── atr_pct = ATR / prev_close
+ │         │    ├── effective_band = clamp(atr_pct * 3, min=1%, max=5%)
+ │         │    ├── range_low  = prev_close * (1 - effective_band)
+ │         │    └── range_high = prev_close * (1 + effective_band)
+ │         │
+ │         ├── 3. fetch_order_book_best_bid()  [skip if --fast]
+ │         │    └── gap% = (bid - prev_close) / prev_close * 100
+ │         │
+ │         ├── 4. Entry price
+ │         │    ├── If bid available: entry_price_from_bid(bid, ticks_above)
+ │         │    └── Else: suggested_limit_from_close(prev_close, 0.5%)
+ │         │
+ │         ├── 5. ATR-based stop
+ │         │    └── stop = entry - (atr_mult * ATR)
+ │         │    └── floored at entry * (1 - max_stop_pct) from YAML
+ │         │
+ │         ├── 6. _classify_trend_v2()
+ │         │    ├── gap% vs effective_band → direction
+ │         │    ├── RSI > 75 → BEARISH override
+ │         │    ├── RSI 30-65 + gap in band → BULLISH
+ │         │    └── else → NEUTRAL
+ │         │
+ │         ├── 7. _assess_broker_signals()
+ │         │    ├── accum_score = consistency(40pts) + streak(30pts, exp τ=7)
+ │         │    ├── accum_tag = BACKED(≥50), DISTRIBUTING(ratio<0.3), UNCONFIRMED
+ │         │    ├── accum_streak = consecutive foreign-buy days
+ │         │    ├── Foreign VWAP via plugin indicator
+ │         │    └── fvwap_discount% = (vwap - price) / price * 100
+ │         │
+ │         ├── 8. AI research [if --with-ai]
+ │         │    └── ClaudeTickerResearcher.research(ticker)
+ │         │
+ │         └── 9. Build ScreenerCandidate → append to candidates[]
+ │
+ ├─ _build_data_freshness() → candle/broker recency warnings
+ ├─ _build_market_regime()  → if --with-regime
+ ├─ _display_results()
+ │    ├── Verdict per ticker: PRIME / WATCH / SKIP / NO_DATA
+ │    ├── Signal column: accum_tag + fvwap_discount% + prev high
+ │    ├── AI summaries (if --with-ai)
+ │    ├── Data freshness warnings
+ │    ├── Market regime context
+ │    └── Action summary with confirm-open command template
+ │
+ └─ _write_sidecar() → journals/.last-session.json
+```
+
+### Phase 2: Confirm at Opening Auction (09:00+)
+
+```
+CLI: saham intraday confirm-open --opening-json '{"BBCA":9050,"BBRI":4120}'
+ │
+ ├─ _load_confirmation_candidates()
+ │    └── Read journals/.last-session.json → IntradayConfirmationCandidate[]
+ │
+ ├─ ConfirmIntradayOpenUseCase.execute():
+ │    └── For each candidate with opening_price:
+ │         │
+ │         ├── 1. opening_price is None?     → SKIP_INSUFFICIENT_DATA
+ │         ├── 2. open > entry_range_high?   → SKIP_GAP_UP
+ │         ├── 3. open < entry_range_low?    → SKIP_GAP_DOWN
+ │         ├── 4. trend == BEARISH?          → SKIP_BEARISH_CONTEXT
+ │         ├── 5. accum_tag == DISTRIBUTING? → SKIP_BEARISH_CONTEXT
+ │         ├── 6. stop_pct > max_stop?       → SKIP_RISK_TOO_WIDE
+ │         ├── 7. trend == BULLISH?          → ENTER
+ │         └── 8. else                       → WAIT
+ │
+ ├─ _display_confirmations()
+ │    └── Groups: ENTER / WATCH / SKIP with price ranges
+ │
+ └─ _write_confirmation_sidecar() → journals/.last-confirmation.json
+```
+
+### Phase 3a: Log Pre-Open to Journal
+
+```
+CLI: saham intraday pre-open-log
+ │
+ └─ PaperTradeJournalService.log_session(candidates, screened_at)
+      └── For each candidate → JournalEntry → JournalStore.append()
+           └── JournalCsvWriter → journals/pre-open.csv
+```
+
+### Phase 3b: Log Confirmation to Journal
+
+```
+CLI: saham intraday confirm-log
+ │
+ └─ IntradayConfirmationCsvStore.append(confirmations)
+      └── Writes → journals/intraday-confirmations.csv
+```
+
+### Phase 4: Record Outcome
+
+```
+CLI: saham intraday confirm-outcome BBCA --entry 9050 --exit 9200 --result target
+ │
+ └─ IntradayConfirmationJournalService.record_outcome()
+      └── Matches row by (confirmed_at, ticker)
+      └── Updates: actual_entry_price, actual_exit_price, outcome_result, outcome_r, notes
+      └── Rewrites CSV row
+```
+
+### Phase 5: Review
+
+```
+CLI: saham intraday pre-open-review --horizon 5
+ │
+ └─ PaperTradeJournalService.review(horizon_days)
+      ├── Enriches each entry with actual_open, actual_close_1d, actual_close_5d
+      │    └── From SQLiteMarketRepository by date
+      └── Computes hit_rate_pct, direction_accuracy_1d, direction_accuracy_5d
+
+CLI: saham intraday confirm-review
+ │
+ └─ IntradayConfirmationJournalService.review()
+      ├── Decision buckets: ENTER / WAIT / SKIP_* (count + outcome stats)
+      └── Context buckets: gap (high/medium/low), RSI (high/neutral/low),
+           stop (tight/normal/wide), accum, fvwap
+```
+
+### Phase 6: Backtest (Offline Replay)
+
+```
+CLI: saham intraday backtest --universe lq45 --start 2026-01-01
+ │
+ └─ IntradayBacktestUseCase.execute()
+      │
+      └── For each trading date d (daily walk-forward):
+           │
+           ├── 1. Build _BacktestCandidate using data as of d-1
+           │    ├── candles up to d-1 from SQLiteMarketRepo
+           │    ├── broker flow up to d-1 from SQLiteBrokerRepo
+           │    ├── ATR(14), RSI(14), SMA(20) via IndicatorRegistry
+           │    ├── entry_range, stop, trend via same functions as pre-open
+           │    └── accum_score + FVWAP from broker signals
+           │
+           ├── 2. Simulate confirm-open using candle.open on date d
+           │    └── Reuses ConfirmIntradayOpenUseCase logic
+           │
+           ├── 3. Rank ENTER candidates by (accum_score desc, fvwap desc, stop asc)
+           │    └── Cap at max_daily_positions
+           │
+           └── 4. Simulate same-day exit:
+                ├── Check candle.low <= stop  → STOP_LOSS
+                ├── Check candle.high >= target → TAKE_PROFIT
+                └── Fallback → candle.close
+                     (conservative: if both breached, assume stop first)
+      │
+      Output: IntradayBacktestResponse
+        ├── initial/final equity, total return %, max DD %
+        ├── win_rate %, profit factor, trade_count
+        ├── avg r_multiple, avg hold bars
+        ├── breakdowns by exit_reason, accum_tag, fvwap, RSI, ticker
+        └── recent trades table
+```
+
+---
+
+## Confirmation Decision Gates
+
+The `ConfirmIntradayOpenUseCase` applies 8 deterministic gates in order:
+
+```
+┌─────────────────────┬──────────────────┬──────────────────────────────┐
+│ Gate                │ Pass Condition   │ Skip Reason                  │
+├─────────────────────┼──────────────────┼──────────────────────────────┤
+│ 1. Opening price    │ opening != None  │ SKIP_INSUFFICIENT_DATA       │
+│ 2. Entry plan       │ entry_range !=   │ SKIP_INSUFFICIENT_DATA       │
+│                       None             │                              │
+│ 3. Gap up           │ open <= range_hi │ SKIP_GAP_UP                  │
+│ 4. Gap down         │ open >= range_lo │ SKIP_GAP_DOWN                │
+│ 5. Trend            │ trend != BEARISH │ SKIP_BEARISH_CONTEXT         │
+│ 6. Accumulation     │ accum !=         │ SKIP_BEARISH_CONTEXT         │
+│                       DISTRIBUTING     │                              │
+│ 7. Stop distance    │ stop_pct <= max  │ SKIP_RISK_TOO_WIDE           │
+│ 8. Final decision   │ trend == BULLISH │ ENTER, else WAIT             │
+└─────────────────────┴──────────────────┴──────────────────────────────┘
+```
+
+---
+
+## Data Sources (Phase 1 Pre-Open)
+
+### Browser-Retrieved (via Stockbit Playwright)
+
+| Data | Source | Auth |
+|------|--------|------|
+| IEV movers | Exodus API: `/order-trade/market-mover?mover_type=IEV_TOP_GAINER` | JWT from browser |
+| Order book bids | Exodus API: `/company-price-feed/v2/orderbook/companies/{ticker}` | Same JWT |
+| Top-5 with orderbooks | Combined in one browser session | Same |
+
+### Database-Retrieved (from SQLite)
+
+| Data | Repository | Populated By |
+|------|-----------|-------------|
+| Candles (OHLCV) | SQLiteMarketRepository | `saham update` |
+| Broker flow | SQLiteBrokerRepository | `saham broker fetch` / `saham update` |
+
+### Computed (via IndicatorRegistry)
+
+| Indicator | Source | Purpose |
+|-----------|--------|---------|
+| ATR(14) | `plugins/indicators/atr.py` | Entry band, stop distance |
+| RSI(14) | `domain/indicators/rsi.py` | Trend classification, headroom |
+| SMA(20) | `domain/indicators/sma.py` | Trend baseline |
+| Foreign VWAP | `plugins/indicators/foreign_vwap.py` | Discount vs current price |
+| Accum score | `pre_open_screen.py` inline | Consistency + streak |
+
+---
+
+## Key Files
+
+| File | Lines | Role |
+|------|-------|------|
+| `adapters/cli/screen_commands.py` | 1829 | CLI entry point, 9 commands, display, helpers |
+| `application/use_case/pre_open_screen.py` | 533 | 10-step pre-open analysis pipeline |
+| `application/use_case/confirm_intraday_open.py` | 183 | 8-gate deterministic confirmation |
+| `application/use_case/intraday_backtest.py` | 921 | Walk-forward backtest over history |
+| `application/services/paper_trade_journal.py` | 184 | Pre-open journal log + review |
+| `application/services/intraday_confirmation_journal.py` | 305 | Confirmation journal log + review + outcome |
+| `application/services/ai_research.py` | 88 | Claude-based AI ticker research |
+| `infrastructure/browser/playwright_stockbit.py` | 1848 | Playwright browser automation for Stockbit |
+| `infrastructure/browser/stockbit_browser.py` | 181 | Manual + instruction-based browser providers |
+| `infrastructure/persistence/journal_csv_writer.py` | ~80 | Pre-open journal CSV persistence |
+| `infrastructure/persistence/intraday_confirmation_csv.py` | ~60 | Confirmation journal CSV persistence |
+| `domain/ports/browser_data_provider.py` | 73 | Browser data provider interface |
+| `domain/ports/journal_store.py` | 23 | Journal store interface |
+| `domain/value_objects/screener_result.py` | ~100 | MoverData, ScreenerCandidate, etc. |
+| `domain/value_objects/intraday_confirmation.py` | ~150 | IntradayDecision, Confirmation, Outcome |
+| `config/pre_open_screener.yaml` | ~60 | Tuning parameters (IEV, ATR, accum, FVWAP) |
+
+---
+
+## File Dependency Graph
+
+```
+screen_commands.py (CLI, 1829 lines)
+  │
+  ├── PreOpenScreenUseCase
+  │     ├── BrowserDataProvider (port)
+  │     │     ├── PlaywrightStockbitProvider  ← real browser automation
+  │     │     ├── ManualBrowserDataProvider   ← JSON flags
+  │     │     └── StockbitBrowserInstructionsProvider ← printed instructions
+  │     ├── MarketDataRepository (port) → SQLiteMarketRepository
+  │     ├── BrokerDataRepository  (port) → SQLiteBrokerRepository
+  │     ├── IndicatorRegistry → sma.py, rsi.py, atr.py, foreign_vwap.py
+  │     └── AIExplainer (port, optional) → ClaudeTickerResearcher
+  │
+  ├── ConfirmIntradayOpenUseCase (no deps)
+  │
+  ├── PaperTradeJournalService
+  │     ├── JournalStore (port) → JournalCsvWriter (journals/pre-open.csv)
+  │     └── MarketDataRepository → SQLiteMarketRepository
+  │
+  ├── IntradayConfirmationJournalService
+  │     ├── IntradayConfirmationStore (protocol) → IntradayConfirmationCsvStore
+  │     │                                             (journals/intraday-confirmations.csv)
+  │     └── MarketDataRepository → SQLiteMarketRepository
+  │
+  ├── IntradayBacktestUseCase
+  │     ├── MarketDataRepository
+  │     ├── BrokerDataRepository
+  │     ├── IndicatorRegistry
+  │     └── ConfirmIntradayOpenUseCase
+  │
+  └── MarketRegimeUseCase
+```
+
+---
+
+## Pre-Open Screen Config (`config/pre_open_screener.yaml`)
+
+All tuning parameters loaded into `PreOpenScreenConfig` at runtime:
+
+| Parameter | Default | Purpose |
+|-----------|---------|---------|
+| `iev_min` | — | Minimum IEV volume threshold |
+| `capital` | 10_000_000 | Planned position capital |
+| `stop_loss_pct` | 0.05 | Fixed stop loss (5%) |
+| `tick_above` | 1 | Ticks above best bid for entry |
+| `fast` | false | Skip order book fetches |
+| `max_gap_pct` | 0.05 | Max allowed gap % |
+| `atr_multiplier` | 1.0 | ATR multiplier for stop |
+| `max_stop_pct` | 0.07 | Max stop as % of entry |
+| `top_n` | — | Cap number of candidates |
+| `accum_min_score` | 50 | Min accum score for BACKED tag |
+| `accum_window_days` | 5 | Accumulation lookback |
+| `fvwap_threshold_discount` | 0.02 | Min FVWAP discount for signal |
+| `rsi_overbought` | 75 | RSI overbought gate |
+| `rsi_oversold` | 30 | RSI oversold gate |
+
+---
+
+## Architectural Rules Specific to Intraday
+
+1. **Time-bound execution** — Pre-open runs in a specific window (08:45–09:00 WIB). Run guard enforces weekday + time constraints.
+
+2. **Three browser data paths** — The system degrades gracefully: autonomous Playwright → manual JSON → printed browser instructions. Each path is handled by a separate implementation of `BrowserDataProvider`.
+
+3. **Confirmation is fully deterministic** — `ConfirmIntradayOpenUseCase` has zero AI, zero network, zero randomness. All 8 gates are hardcoded rules over pre-computed data.
+
+4. **AI is read-only auxiliary** — `--with-ai` appends research summaries but never influences entry/stop/trend decisions.
+
+5. **CSV-based journal persistence** — Pre-open and confirmation journals use CSV files, not SQLite. Allows manual inspection and editing.
+
+6. **Backtest reuses the same logic** — `IntradayBacktestUseCase` calls the same trend/accum/confirm functions as the live pipeline, ensuring backtest accuracy.
+
+7. **Sidecar files for state** — `journals/.last-session.json` and `journals/.last-confirmation.json` bridge the gap between phases (pre-open → confirm → log), avoiding database writes for transient state.

@@ -44,6 +44,11 @@ from src.application.use_case.fetch_sentiment import (
     FetchSentimentResponse,
     FetchSentimentUseCase,
 )
+from src.application.use_case.refresh_market_data import (
+    RefreshMarketDataRequest,
+    RefreshMarketDataResponse,
+    RefreshMarketDataUseCase,
+)
 
 __all__ = [
     "AggregateIndicatorsRequest",
@@ -74,4 +79,7 @@ __all__ = [
     "FetchSentimentRequest",
     "FetchSentimentResponse",
     "FetchSentimentUseCase",
+    "RefreshMarketDataRequest",
+    "RefreshMarketDataResponse",
+    "RefreshMarketDataUseCase",
 ]
