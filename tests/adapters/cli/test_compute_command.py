@@ -114,7 +114,7 @@ class TestComputeCommand:
         assert result.exit_code == 1
         output = result.output
         assert "No data for BBCA" in output or "No cached data" in output
-        assert "fetch BBCA" in output
+        assert "saham update BBCA --days 365" in output
 
     @patch("src.adapters.cli.main.SQLiteMarketRepository")
     @patch("src.adapters.cli.main.create_indicator_registry")

@@ -1,5 +1,6 @@
 """Tests for SQLite broker data repository."""
 
+import sqlite3
 import tempfile
 from datetime import date
 from decimal import Decimal
@@ -11,6 +12,7 @@ from src.domain.entities.broker_flow import (
     BrokerSummary,
     BrokerTransaction,
     BrokerType,
+    ForeignFlowPoint,
 )
 from src.infrastructure.persistence.sqlite_broker_repository import (
     SQLiteBrokerRepository,
@@ -243,6 +245,76 @@ class TestSQLiteBrokerRepository:
         """Should return None when no data exists."""
         result = repository.get_date_range("XXXX")
         assert result is None
+
+    def test_get_foreign_flow_date_range(self, repository):
+        """Should return date range for daily aggregate foreign flow points."""
+        repository.save_foreign_flow_points([
+            ForeignFlowPoint(
+                ticker="BBCA",
+                date=date(2024, 1, 10),
+                net_val=Decimal("1000"),
+                net_lot=10,
+                avg_price=Decimal("100"),
+                source="stockbit",
+            ),
+            ForeignFlowPoint(
+                ticker="BBCA",
+                date=date(2024, 1, 20),
+                net_val=Decimal("2000"),
+                net_lot=20,
+                avg_price=Decimal("100"),
+                source="stockbit",
+            ),
+        ])
+
+        assert repository.get_foreign_flow_date_range("BBCA", source="stockbit") == (
+            date(2024, 1, 10),
+            date(2024, 1, 20),
+        )
+        assert repository.get_foreign_flow_date_range("BBCA", source="idx") is None
+        assert repository.get_broker_flow_date_range("BBCA", source="stockbit") == (
+            date(2024, 1, 10),
+            date(2024, 1, 20),
+        )
+
+    def test_migrates_legacy_broker_flow_points_table(self, temp_db):
+        """Should migrate legacy broker_flow_points into foreign_flow_points."""
+        with sqlite3.connect(temp_db) as conn:
+            conn.execute("""
+                CREATE TABLE broker_flow_points (
+                    ticker     TEXT NOT NULL,
+                    date       TEXT NOT NULL,
+                    source     TEXT NOT NULL,
+                    net_val    TEXT NOT NULL,
+                    net_lot    INTEGER NOT NULL,
+                    avg_price  TEXT NOT NULL DEFAULT '0',
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (ticker, date, source)
+                )
+            """)
+            conn.execute(
+                """
+                INSERT INTO broker_flow_points
+                    (ticker, date, source, net_val, net_lot, avg_price)
+                VALUES ('BBCA', '2024-01-10', 'stockbit', '1000', 10, '100')
+                """
+            )
+            conn.commit()
+
+        repository = SQLiteBrokerRepository(temp_db)
+
+        points = repository.get_foreign_flow_points("BBCA", source="stockbit")
+        assert len(points) == 1
+        assert points[0].net_val == Decimal("1000")
+        with sqlite3.connect(temp_db) as conn:
+            old_table = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='broker_flow_points'"
+            ).fetchone()
+            new_table = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='foreign_flow_points'"
+            ).fetchone()
+        assert old_table is None
+        assert new_table is not None
 
     def test_ticker_case_insensitive(self, repository, sample_summary):
         """Should handle ticker case insensitively."""

@@ -11,7 +11,7 @@ from src.application.use_case.accumulation_audit import (
     AccumulationAuditRequest,
     AccumulationAuditUseCase,
 )
-from src.domain.entities.broker_flow import BrokerSummary
+from src.domain.entities.broker_flow import BrokerSummary, BrokerTransaction, BrokerType
 from src.domain.entities.candle import Candle
 from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.market_data_repository import MarketDataRepository
@@ -125,6 +125,48 @@ def _summary(ticker: str, day: date, close: Decimal) -> BrokerSummary:
         foreign_sell_lot=0,
         total_value=buy_value * Decimal("2"),
         total_lot=buy_lot * 2,
+    )
+
+
+def _tx(
+    code: str,
+    buy: str,
+    sell: str,
+    broker_type: BrokerType = BrokerType.FOREIGN,
+) -> BrokerTransaction:
+    return BrokerTransaction(
+        broker_code=code,
+        broker_name=code,
+        broker_type=broker_type,
+        buy_lot=1000,
+        sell_lot=500,
+        buy_value=Decimal(buy),
+        sell_value=Decimal(sell),
+        avg_buy_price=Decimal("1000"),
+        avg_sell_price=Decimal("1000"),
+    )
+
+
+def _summary_with_brokers(
+    ticker: str,
+    day: date,
+    close: Decimal,
+    top_buyers: tuple[BrokerTransaction, ...] = (),
+    top_sellers: tuple[BrokerTransaction, ...] = (),
+) -> BrokerSummary:
+    base = _summary(ticker, day, close)
+    return BrokerSummary(
+        ticker=base.ticker,
+        date=base.date,
+        top_buyers=top_buyers,
+        top_sellers=top_sellers,
+        foreign_buy_value=base.foreign_buy_value,
+        foreign_sell_value=base.foreign_sell_value,
+        foreign_buy_lot=base.foreign_buy_lot,
+        foreign_sell_lot=base.foreign_sell_lot,
+        total_value=base.total_value,
+        total_lot=base.total_lot,
+        source="stockbit",
     )
 
 
@@ -262,6 +304,78 @@ def test_accumulation_audit_strict_filters_keep_only_matching_candidates():
     assert response.records[0].flow_pct >= 5
     assert response.records[0].rsi is not None
     assert response.records[0].rsi <= 60
+
+
+def test_accumulation_audit_groups_outcomes_by_broker_quality():
+    base = date(2026, 1, 1)
+    signal_date = base + timedelta(days=24)
+    candles = _alternating_candles("BBCA", base, 25)
+    candles.extend(
+        _candle("BBCA", base + timedelta(days=i), Decimal("104"))
+        for i in range(25, 31)
+    )
+    candles.extend(_alternating_candles("BBRI", base, 25))
+    candles.extend(
+        _candle("BBRI", base + timedelta(days=i), Decimal("99"))
+        for i in range(25, 31)
+    )
+
+    summaries = [
+        _summary("BBCA", base + timedelta(days=i), Decimal("110"))
+        for i in range(18, 24)
+    ]
+    summaries.append(
+        _summary_with_brokers(
+            "BBCA",
+            signal_date,
+            Decimal("110"),
+            top_buyers=(_tx("AK", "90000000", "10000000"),),
+        )
+    )
+    summaries.extend(
+        _summary("BBRI", base + timedelta(days=i), Decimal("101"))
+        for i in range(18, 24)
+    )
+    summaries.append(
+        _summary_with_brokers(
+            "BBRI",
+            signal_date,
+            Decimal("101"),
+            top_buyers=(
+                _tx("YP", "90000000", "10000000", BrokerType.LOCAL),
+                _tx("XC", "50000000", "5000000", BrokerType.LOCAL),
+            ),
+        )
+    )
+
+    use_case = AccumulationAuditUseCase(
+        broker_repository=MockBrokerRepository(summaries),
+        market_repository=MockMarketRepository(candles),
+    )
+
+    response = use_case.execute(
+        AccumulationAuditRequest(
+            tickers=["BBCA", "BBRI"],
+            start_date=signal_date,
+            end_date=signal_date,
+            window_days=7,
+            min_net_buy_days=1,
+            min_score=0,
+            horizon_days=5,
+        )
+    )
+
+    by_ticker = {record.ticker: record for record in response.records}
+    assert by_ticker["BBCA"].broker_quality == "smart+"
+    assert by_ticker["BBRI"].broker_quality == "noise+"
+
+    broker_quality_stats = {
+        stat.bucket: stat
+        for stat in response.group_stats
+        if stat.dimension == "broker_quality"
+    }
+    assert broker_quality_stats["smart+"].count == 1
+    assert broker_quality_stats["noise+"].count == 1
 
 
 def test_accumulation_audit_exit_simulation_reports_target_and_max_hold_stats():
