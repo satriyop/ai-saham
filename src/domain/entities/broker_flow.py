@@ -143,6 +143,7 @@ class BrokerSummary:
     foreign_sell_lot: int
     total_value: Decimal
     total_lot: int
+    source: str = "idx"  # 'idx' | 'stockbit' | 'csv-idx' | 'csv-stockbit'
 
     def __post_init__(self) -> None:
         """Validate broker summary data."""
@@ -184,6 +185,7 @@ class BrokerSummary:
             "foreign_sell_lot": self.foreign_sell_lot,
             "total_value": str(self.total_value),
             "total_lot": self.total_lot,
+            "source": self.source,
         }
 
     @classmethod
@@ -208,6 +210,7 @@ class BrokerSummary:
             foreign_sell_lot=int(data["foreign_sell_lot"]),
             total_value=Decimal(data["total_value"]),
             total_lot=int(data["total_lot"]),
+            source=data.get("source", "idx"),
         )
 
 
@@ -232,9 +235,9 @@ class ForeignFlowSnapshot:
 
 
 @dataclass(frozen=True)
-class BrokerFlowPoint:
+class ForeignFlowPoint:
     """
-    Single data point in the historical broker flow time-series for a stock.
+    Single data point in the historical foreign flow time-series for a stock.
 
     Returned by the stock-centric historical endpoint (daily/weekly aggregate
     foreign flow). Used for backfilling and trend context.
@@ -244,4 +247,10 @@ class BrokerFlowPoint:
     date: date
     net_val: Decimal   # foreign net value (positive = net buy)
     net_lot: int
-    avg_price: Decimal  # average price for the period
+    avg_price: Decimal  # average price for the period; 'idx'=close price approx, 'stockbit'=exact
+    source: str = "stockbit"  # e.g. 'idx' | 'stockbit' | 'stockbit-session'
+
+
+# Backward-compatible alias for older code paths. The data represents aggregate
+# foreign flow, not all broker archetypes.
+BrokerFlowPoint = ForeignFlowPoint

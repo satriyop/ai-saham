@@ -9,8 +9,9 @@ Layer: Application
 
 from dataclasses import dataclass
 from datetime import date, timedelta
+from decimal import Decimal
 
-from src.domain.entities.broker_flow import BrokerSummary
+from src.domain.entities.broker_flow import ForeignFlowPoint, BrokerSummary
 from src.domain.ports.broker_data_provider import (
     BrokerDataProvider,
     BrokerDataProviderError,
@@ -78,28 +79,31 @@ class FetchBrokerDataUseCase:
             BrokerDataProviderError: If fetch fails
         """
         ticker = request.ticker.upper()
+        source = self._provider.provider_name
 
         # Check if we need to fetch from provider
         if not request.refresh:
-            if self._repository.has_data(ticker, request.start_date, request.end_date):
-                # Return cached data
+            if self._repository.has_data(
+                ticker, request.start_date, request.end_date, source=source
+            ):
                 summaries = self._repository.get_broker_summaries(
                     ticker,
                     request.start_date,
                     request.end_date,
+                    source=source,
                 )
                 return FetchBrokerDataResponse(
                     ticker=ticker,
                     summaries=summaries,
                     from_cache=True,
-                    message=f"Loaded {len(summaries)} days from cache",
+                    message=f"Loaded {len(summaries)} days from cache ({source})",
                 )
 
         # Check authentication
         if not self._provider.is_authenticated():
             raise BrokerDataProviderError(
-                "Stockbit token not configured. "
-                "Run 'saham broker auth <token>' to set your token."
+                "Broker provider is not authenticated. "
+                "For Stockbit session data, run 'saham stockbit login'."
             )
 
         # Fetch from provider
@@ -109,15 +113,27 @@ class FetchBrokerDataUseCase:
             request.end_date,
         )
 
-        # Save to repository
+        # Save summaries and derive aggregate flow points for time-series queries
         if summaries:
             self._repository.save_broker_summaries(summaries)
+            flow_points = [
+                ForeignFlowPoint(
+                    ticker=s.ticker,
+                    date=s.date,
+                    net_val=s.foreign_net_value,
+                    net_lot=s.foreign_net_lot,
+                    avg_price=Decimal("0"),
+                    source=source,
+                )
+                for s in summaries
+            ]
+            self._repository.save_foreign_flow_points(flow_points)
 
         return FetchBrokerDataResponse(
             ticker=ticker,
             summaries=summaries,
             from_cache=False,
-            message=f"Fetched {len(summaries)} days from Stockbit",
+            message=f"Fetched {len(summaries)} days from {source}",
         )
 
 

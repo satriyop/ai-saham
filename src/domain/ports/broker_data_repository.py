@@ -11,7 +11,12 @@ Dependencies: None (only domain entities)
 from abc import ABC, abstractmethod
 from datetime import date
 
-from src.domain.entities.broker_flow import BrokerSummary
+from src.domain.entities.broker_flow import (
+    BrokerFlowPoint,
+    BrokerSummary,
+    ForeignFlowPoint,
+    ForeignFlowSnapshot,
+)
 
 
 class BrokerDataRepository(ABC):
@@ -82,6 +87,7 @@ class BrokerDataRepository(ABC):
         ticker: str,
         start_date: date | None = None,
         end_date: date | None = None,
+        source: str | None = None,
     ) -> list[BrokerSummary]:
         """
         Retrieve broker summaries within a date range.
@@ -90,9 +96,11 @@ class BrokerDataRepository(ABC):
             ticker: Stock ticker symbol
             start_date: Optional start of date range (inclusive)
             end_date: Optional end of date range (inclusive)
+            source: Filter by source ('idx', 'stockbit'). None = best per date
+                    (Stockbit preferred over IDX — 'stockbit' > 'idx' lexicographically).
 
         Returns:
-            List of BrokerSummary entities, sorted by date ascending.
+            List of BrokerSummary entities, one per date, sorted by date ascending.
 
         Raises:
             BrokerDataRepositoryError: If retrieval fails.
@@ -105,6 +113,7 @@ class BrokerDataRepository(ABC):
         ticker: str,
         start_date: date,
         end_date: date,
+        source: str | None = None,
     ) -> bool:
         """
         Check if repository has data for the specified range.
@@ -113,6 +122,7 @@ class BrokerDataRepository(ABC):
             ticker: Stock ticker symbol
             start_date: Start of date range
             end_date: End of date range
+            source: Check only for this source. None = any source.
 
         Returns:
             True if data exists covering the range, False otherwise.
@@ -120,14 +130,105 @@ class BrokerDataRepository(ABC):
         pass
 
     @abstractmethod
-    def get_date_range(self, ticker: str) -> tuple[date, date] | None:
+    def get_date_range(
+        self,
+        ticker: str,
+        source: str | None = None,
+    ) -> tuple[date, date] | None:
         """
         Get the date range of stored data for a ticker.
+
+        Args:
+            source: Restrict to this source. None = any source.
 
         Returns:
             Tuple of (earliest_date, latest_date) or None if no data.
         """
         pass
+
+    # ── Optional capabilities (non-abstract — providers that don't support ──
+    # ── these return empty/no-op defaults)                                  ──
+
+    def save_foreign_flow_points(self, points: list[ForeignFlowPoint]) -> None:
+        """
+        Save daily foreign broker flow time-series points.
+
+        Each point has a source tag ('idx' or 'stockbit'). Both sources can
+        coexist for the same (ticker, date) — they are not overwritten.
+        IDX avg_price is approximate (close price); Stockbit is exact.
+        """
+
+    def get_foreign_flow_points(
+        self,
+        ticker: str,
+        start_date: date | None = None,
+        end_date: date | None = None,
+        source: str | None = None,
+    ) -> list[ForeignFlowPoint]:
+        """
+        Retrieve daily aggregate foreign flow points for a ticker.
+
+        source=None returns the best per date (Stockbit preferred).
+        source='idx' or 'stockbit' returns only that source.
+        """
+        return []
+
+    def get_foreign_flow_date_range(
+        self,
+        ticker: str,
+        source: str | None = None,
+    ) -> tuple[date, date] | None:
+        """
+        Get the date range of stored aggregate foreign flow points.
+
+        source=None returns any source. source='idx' or 'stockbit' restricts
+        the range to that source.
+        """
+        return None
+
+    def save_broker_flow_points(self, points: list[BrokerFlowPoint]) -> None:
+        """Deprecated alias for save_foreign_flow_points."""
+        return self.save_foreign_flow_points(points)
+
+    def get_broker_flow_points(
+        self,
+        ticker: str,
+        start_date: date | None = None,
+        end_date: date | None = None,
+        source: str | None = None,
+    ) -> list[BrokerFlowPoint]:
+        """Deprecated alias for get_foreign_flow_points."""
+        return self.get_foreign_flow_points(ticker, start_date, end_date, source)
+
+    def get_broker_flow_date_range(
+        self,
+        ticker: str,
+        source: str | None = None,
+    ) -> tuple[date, date] | None:
+        """Deprecated alias for get_foreign_flow_date_range."""
+        return self.get_foreign_flow_date_range(ticker, source=source)
+
+    def save_foreign_flow_snapshots(
+        self,
+        snapshots: list[ForeignFlowSnapshot],
+        snapshot_date: date,
+        period_days: int,
+    ) -> None:
+        """
+        Persist the result of a broker-centric universe scan.
+
+        snapshot_date: when the scan was run.
+        period_days: look-back window (1/3/7/30/90/365).
+        Upserts — re-running the same scan on the same date replaces prior results.
+        """
+
+    def get_foreign_flow_snapshots(
+        self,
+        snapshot_date: date,
+        period_days: int,
+    ) -> list[ForeignFlowSnapshot]:
+        """Return universe scan results for a specific date and period window."""
+        return []
 
 
 class BrokerDataRepositoryError(Exception):

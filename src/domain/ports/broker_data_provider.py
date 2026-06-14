@@ -11,7 +11,12 @@ Dependencies: None (only domain entities)
 from abc import ABC, abstractmethod
 from datetime import date
 
-from src.domain.entities.broker_flow import BrokerFlowPoint, BrokerSummary, ForeignFlowSnapshot
+from src.domain.entities.broker_flow import (
+    BrokerFlowPoint,
+    BrokerSummary,
+    ForeignFlowPoint,
+    ForeignFlowSnapshot,
+)
 
 
 class BrokerDataProvider(ABC):
@@ -24,6 +29,11 @@ class BrokerDataProvider(ABC):
 
     The domain layer depends on this interface, never on concrete providers.
     """
+
+    @property
+    def provider_name(self) -> str:
+        """Short identifier for this provider, used as the 'source' tag in storage."""
+        return "unknown"
 
     @abstractmethod
     def fetch_broker_summary(
@@ -96,11 +106,11 @@ class BrokerDataProvider(ABC):
         """
         return []
 
-    def fetch_broker_flow_history(
+    def fetch_foreign_flow_history(
         self,
         ticker: str,
         days: int = 365,
-    ) -> list[BrokerFlowPoint]:
+    ) -> list[ForeignFlowPoint]:
         """
         Return daily aggregate foreign broker flow for a stock, up to `days` back.
 
@@ -110,6 +120,14 @@ class BrokerDataProvider(ABC):
         Default: returns empty list (providers that don't support it are no-ops).
         """
         return []
+
+    def fetch_broker_flow_history(
+        self,
+        ticker: str,
+        days: int = 365,
+    ) -> list[BrokerFlowPoint]:
+        """Deprecated alias for fetch_foreign_flow_history."""
+        return self.fetch_foreign_flow_history(ticker, days)
 
 
 class BrokerDataProviderError(Exception):
