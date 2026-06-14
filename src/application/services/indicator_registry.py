@@ -22,6 +22,7 @@ from src.domain.indicators import calculate_ema, calculate_rsi, calculate_sma
 if TYPE_CHECKING:
     from src.application.formula.ast_nodes import ASTNode
     from src.domain.ports.broker_data_repository import BrokerDataRepository
+    from src.domain.ports.market_data_repository import MarketDataRepository
 
 # Type alias for indicator compute functions
 # Takes candles and period, returns date-aligned values
@@ -60,19 +61,16 @@ class IndicatorRegistry:
     def __init__(
         self,
         broker_repository: "BrokerDataRepository | None" = None,
+        market_repository: "MarketDataRepository | None" = None,
+        index_ticker: str = "^JKSE",
     ) -> None:
         """Initialize with empty plugin and formula registries."""
         self._plugins: dict[str, tuple[type[IndicatorPlugin], int]] = {}
-        # Maps name -> (plugin_class, default_period)
-
         self._formulas: dict[str, "ASTNode"] = {}
-        # Maps name -> parsed AST
-
         self._current_candles: list[Candle] | None = None
-        # Set during compute for formula evaluation context
-
         self._broker_repository: "BrokerDataRepository | None" = broker_repository
-        # Injected to support broker-aware plugins (FOREIGN_FLOW, etc.)
+        self._market_repository: "MarketDataRepository | None" = market_repository
+        self._index_ticker: str = index_ticker
 
     def register_plugin(self, plugin_class: type[IndicatorPlugin]) -> None:
         """
@@ -248,12 +246,16 @@ class IndicatorRegistry:
         """
         plugin = plugin_class()
 
-        # Broker-aware plugins (FOREIGN_FLOW, etc.) expose set_broker_data().
-        # Inject summaries from the repo if available so they compute real values.
+        # Broker-aware plugins (FOREIGN_FLOW etc.) expose set_broker_data().
         if hasattr(plugin, "set_broker_data") and self._broker_repository and candles:
             ticker = candles[0].ticker
             summaries = self._broker_repository.get_broker_summaries(ticker)
             plugin.set_broker_data(summaries)
+
+        # Index-aware plugins (RS_IHSG) expose set_index_candles().
+        if hasattr(plugin, "set_index_candles") and self._market_repository:
+            index_candles = self._market_repository.get_candles(self._index_ticker)
+            plugin.set_index_candles(index_candles)
 
         values = plugin.compute(candles, period)
 

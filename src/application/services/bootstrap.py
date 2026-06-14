@@ -17,6 +17,7 @@ from src.infrastructure.plugins.indicator_loader import IndicatorPluginLoader
 
 if TYPE_CHECKING:
     from src.domain.ports.broker_data_repository import BrokerDataRepository
+    from src.domain.ports.market_data_repository import MarketDataRepository
     from src.infrastructure.persistence.formula_storage import FormulaStorage
 
 logger = logging.getLogger(__name__)
@@ -27,6 +28,8 @@ def create_indicator_registry(
     formula_storage: "FormulaStorage | None" = None,
     load_formulas: bool = True,
     broker_repository: "BrokerDataRepository | None" = None,
+    market_repository: "MarketDataRepository | None" = None,
+    index_ticker: str = "^JKSE",
 ) -> IndicatorRegistry:
     """
     Create an IndicatorRegistry with plugins and formulas loaded.
@@ -45,7 +48,11 @@ def create_indicator_registry(
         IndicatorRegistry with built-in indicators, discovered plugins,
         and loaded formulas.
     """
-    registry = IndicatorRegistry(broker_repository=broker_repository)
+    registry = IndicatorRegistry(
+        broker_repository=broker_repository,
+        market_repository=market_repository,
+        index_ticker=index_ticker,
+    )
 
     # Load plugins
     loader = IndicatorPluginLoader(Path(plugin_dir) if plugin_dir else None)

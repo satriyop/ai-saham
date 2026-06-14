@@ -1032,7 +1032,10 @@ def risk(
     # Wire up dependencies
     repository = SQLiteMarketRepository(db_path=resolved_db_path)
     broker_repository = SQLiteBrokerRepository(resolved_db_path)
-    registry = create_indicator_registry(broker_repository=broker_repository)
+    registry = create_indicator_registry(
+        broker_repository=broker_repository,
+        market_repository=repository,
+    )
     use_case = AssessRiskUseCase(repository=repository, registry=registry)
 
     typer.echo(f"Assessing risk for {ticker.upper()}...")
@@ -1355,7 +1358,10 @@ def backtest(
     try:
         # Wire up dependencies
         repository = SQLiteMarketRepository(db_path=resolved_db_path)
-        registry = create_indicator_registry(broker_repository=broker_repository)
+        registry = create_indicator_registry(
+            broker_repository=broker_repository,
+            market_repository=repository,
+        )
         use_case = BacktestUseCase(repository=repository, registry=registry)
 
         # Execute use case

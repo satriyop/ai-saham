@@ -20,6 +20,11 @@ from plugins.indicators.ichimoku import (
     IchimokuSpanB,
     IchimokuChikou,
 )
+from plugins.indicators.volume_ratio import VolumeRatioIndicator
+from plugins.indicators.mfi import MoneyFlowIndexIndicator
+from plugins.indicators.obv import OnBalanceVolumeIndicator
+from plugins.indicators.williams_r import WilliamsRIndicator
+from plugins.indicators.relative_strength import RelativeStrengthIHSGIndicator
 
 __all__ = [
     "MACDIndicator",
@@ -34,4 +39,9 @@ __all__ = [
     "IchimokuSpanA",
     "IchimokuSpanB",
     "IchimokuChikou",
+    "VolumeRatioIndicator",
+    "MoneyFlowIndexIndicator",
+    "OnBalanceVolumeIndicator",
+    "WilliamsRIndicator",
+    "RelativeStrengthIHSGIndicator",
 ]
