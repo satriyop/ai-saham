@@ -309,6 +309,7 @@ class BrokerCsvAdapter(CsvBrokerParser):
             foreign_sell_lot=foreign_sell_lot,
             total_value=total_value,
             total_lot=total_lot,
+            source="csv-idx",
         )
 
     def _parse_detailed_format(
@@ -504,6 +505,7 @@ class BrokerCsvAdapter(CsvBrokerParser):
             foreign_sell_lot=foreign_sell_lot,
             total_value=total_value,
             total_lot=total_lot,
+            source="csv-stockbit",
         )
 
     def _build_header_map(

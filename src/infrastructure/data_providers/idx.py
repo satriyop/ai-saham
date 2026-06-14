@@ -86,6 +86,10 @@ class IdxBrokerDataProvider(BrokerDataProvider):
         self._timeout = timeout
         self._last_request_time: float = 0
 
+    @property
+    def provider_name(self) -> str:
+        return "idx"
+
     def is_authenticated(self) -> bool:
         """Public API - always available."""
         return True

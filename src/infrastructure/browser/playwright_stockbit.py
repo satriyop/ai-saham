@@ -32,6 +32,7 @@ from src.domain.entities.broker_flow import (
     BrokerSummary,
     BrokerTransaction,
     BrokerType,
+    ForeignFlowPoint,
     ForeignFlowSnapshot,
 )
 from src.domain.ports.broker_data_provider import (
@@ -345,7 +346,7 @@ def _exodus_get(url: str, token: str) -> dict | None:
     except StockbitSessionExpired:
         raise
     except Exception as e:
-        logger.warning("Exodus API call failed: %s — %s", url, e)
+        logger.debug("Exodus API call failed: %s — %s", url, e)
         return None
 
 
@@ -529,6 +530,50 @@ class PlaywrightStockbitProvider(BrowserDataProvider):
             finally:
                 ctx.close()
 
+    def fetch_iev_snapshot(self, top_n: int = 50) -> list[MoverData]:
+        """
+        Fetch IEV movers for storage — no orderbook, IEV ranks only.
+
+        Designed to be called at ~08:50 WIB to capture the pre-open mover list
+        for historical backtesting. Returns up to top_n movers sorted by IEV desc.
+
+        Much faster than fetch_top5_iev_with_orderbooks (~15s vs ~45s) because
+        it skips the per-ticker orderbook API calls.
+
+        Args:
+            top_n: Maximum movers to return (default 50 to capture a broad universe).
+        """
+        self._assert_session_fresh()
+        sync_playwright = _require_playwright()
+
+        with sync_playwright() as pw:
+            if self._use_persistent():
+                ctx, page = _persistent_context(pw, self._profile_dir, self._headless)
+            else:
+                session = _load_session(self._session_file)
+                _, ctx, page = _new_authenticated_context(pw, session, headless=self._headless)
+
+            try:
+                token_box = _intercept_token(page)
+                page.goto(ORDERBOOK_PAGE_URL, timeout=self._timeout, wait_until="domcontentloaded")
+                page.wait_for_timeout(SPA_SETTLE_MS)
+
+                token = _resolve_token(page, token_box)
+                if not token:
+                    logger.warning("Could not extract JWT for fetch_iev_snapshot")
+                    return []
+
+                logger.info("Fetching IEV movers for snapshot (top %d)...", top_n)
+                try:
+                    all_movers = _fetch_iev_all_boards(token)
+                except StockbitSessionExpired as e:
+                    raise RuntimeError(f"{e}\n\nRun: saham stockbit login") from None
+
+                return all_movers[:top_n]
+
+            finally:
+                ctx.close()
+
     def fetch_order_book_best_bid(self, ticker: str) -> OrderBookBid | None:
         """
         Fetch order book best bid from Exodus API.
@@ -603,14 +648,18 @@ class StockbitPlaywrightBrokerProvider(BrokerDataProvider):
         self._token_cache: str | None = None
         self._token_cached_at: float = 0
 
+    @property
+    def provider_name(self) -> str:
+        return "stockbit"
+
     def is_authenticated(self) -> bool:
-        """True if a persistent profile exists and its login marker is < 8h old."""
+        """True if a persistent profile exists and its login marker is < 72h old."""
         marker = self._profile_dir / ".logged_in_at"
         if not (self._profile_dir.exists() and marker.exists()):
             return False
         try:
             age_hours = (time.time() - float(marker.read_text())) / 3600
-            return age_hours < 8
+            return age_hours < 72
         except Exception:
             return False
 
@@ -652,6 +701,9 @@ class StockbitPlaywrightBrokerProvider(BrokerDataProvider):
 
         self._token_cache = token
         self._token_cached_at = time.time()
+        # Refresh the marker — successful token extraction proves the session is alive
+        marker = self._profile_dir / ".logged_in_at"
+        marker.write_text(str(time.time()))
         return token
 
     def fetch_broker_summary(
@@ -711,7 +763,7 @@ class StockbitPlaywrightBrokerProvider(BrokerDataProvider):
         if summaries:
             logger.info("Stockbit named broker data: %s → %d entry", ticker, len(summaries))
         else:
-            logger.warning(
+            logger.debug(
                 "marketdetectors/%s returned data but no parseable broker rows. "
                 "Run spy to inspect the response shape.",
                 ticker,
@@ -764,16 +816,16 @@ class StockbitPlaywrightBrokerProvider(BrokerDataProvider):
         logger.info("Foreign top stocks scan: %d stocks returned", len(snapshots))
         return snapshots
 
-    def fetch_broker_flow_history(
+    def fetch_foreign_flow_history(
         self,
         ticker: str,
         days: int = 365,
-    ) -> list[BrokerFlowPoint]:
+    ) -> list[ForeignFlowPoint]:
         """
         Return daily foreign broker flow for a stock, up to `days` back.
 
         Uses the stock-centric historical Exodus API. Returns daily N.Val/N.Lot
-        time-series for trend context and backfilling the broker_flow table.
+        time-series for trend context and backfilling the foreign-flow table.
         """
         token = self._get_token()
         codes_params = "&".join(f"broker_codes={c}" for c in _FOREIGN_BROKER_CODES)
@@ -788,11 +840,19 @@ class StockbitPlaywrightBrokerProvider(BrokerDataProvider):
         )
         body = _exodus_get(url, token)
         if not body:
-            logger.warning("No response from broker flow history endpoint for %s", ticker)
+            logger.debug("No response from foreign flow history endpoint for %s", ticker)
             return []
-        points = _parse_broker_flow_history(ticker, body)
-        logger.info("Broker flow history: %s → %d data points", ticker, len(points))
+        points = _parse_foreign_flow_history(ticker, body)
+        logger.info("Foreign flow history: %s → %d data points", ticker, len(points))
         return points
+
+    def fetch_broker_flow_history(
+        self,
+        ticker: str,
+        days: int = 365,
+    ) -> list[BrokerFlowPoint]:
+        """Deprecated alias for fetch_foreign_flow_history."""
+        return self.fetch_foreign_flow_history(ticker, days)
 
 
 def _dict_int(d: dict | None, *keys: str) -> int:
@@ -988,6 +1048,7 @@ def _parse_marketdetectors_response(
             foreign_sell_lot=foreign_sell_lot,
             total_value=total_val,
             total_lot=total_lot,
+            source="stockbit",
         )]
     except Exception as e:
         logger.debug("Could not build BrokerSummary for %s: %s", ticker, e)
@@ -1074,10 +1135,10 @@ def _parse_foreign_top_stocks(
     return sorted(snapshots, key=lambda s: abs(s.net_val), reverse=True)
 
 
-def _parse_broker_flow_history(
+def _parse_foreign_flow_history(
     ticker: str,
     body: dict,
-) -> list[BrokerFlowPoint]:
+) -> list[ForeignFlowPoint]:
     """
     Parse the stock-centric /order-trade/broker/activity/historical response.
 
@@ -1097,7 +1158,7 @@ def _parse_broker_flow_history(
         logger.debug("broker_flow_history/%s: no 'records' list in response", ticker)
         return []
 
-    points: list[BrokerFlowPoint] = []
+    points: list[ForeignFlowPoint] = []
     for item in rows:
         if not isinstance(item, dict):
             continue
@@ -1117,7 +1178,7 @@ def _parse_broker_flow_history(
         avg_price = _dict_dec(net, "avg_price") or _dict_dec(price_activity, "close_price")
 
         try:
-            points.append(BrokerFlowPoint(
+            points.append(ForeignFlowPoint(
                 ticker=ticker.upper(),
                 date=point_date,
                 net_val=net_val,
@@ -1128,6 +1189,14 @@ def _parse_broker_flow_history(
             logger.debug("Could not parse flow point for %s %s: %s", ticker, date_str, e)
 
     return sorted(points, key=lambda p: p.date)
+
+
+def _parse_broker_flow_history(
+    ticker: str,
+    body: dict,
+) -> list[BrokerFlowPoint]:
+    """Deprecated alias for _parse_foreign_flow_history."""
+    return _parse_foreign_flow_history(ticker, body)
 
 
 # ── Board-aware IEV fetcher ────────────────────────────────────────────────
