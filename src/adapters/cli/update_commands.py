@@ -43,18 +43,30 @@ from src.domain.ports.broker_data_provider import (
     BrokerDataAuthError,
     BrokerDataProviderError,
 )
+from src.application.use_case.fetch_stock_meta import (
+    FetchStockMetaRequest,
+    FetchStockMetaUseCase,
+)
 from src.infrastructure.data_providers.idx import IdxBrokerDataProvider
 from src.infrastructure.data_providers.yahoo import YahooFinanceProvider
+from src.infrastructure.data_providers.yahoo_stock_meta import YahooStockMetaProvider
 from src.infrastructure.persistence.sqlite_broker_repository import (
     SQLiteBrokerRepository,
 )
 from src.infrastructure.persistence.sqlite_market_repository import (
     SQLiteMarketRepository,
 )
+from src.infrastructure.persistence.sqlite_stock_meta_repository import (
+    SQLiteStockMetaRepository,
+)
 
 DEFAULT_DB_PATH = Path("data.db")
 DEFAULT_DAYS = 90
 STOCKBIT_PROFILE_DIR = Path(".stockbit_profile")
+
+# Benchmark ticker always included in every update run.
+# Required by: saham analyze regime, saham trade swing analyze (market context).
+_BENCHMARK_TICKER = "^JKSE"
 MARKET_START_TOLERANCE_DAYS = 7
 MARKET_END_TOLERANCE_DAYS = 7
 
@@ -408,6 +420,31 @@ def _fetch_broker(
         return f"ERR:{str(e)[:30]}"
 
 
+def _fetch_meta(ticker: str, db_path: Path) -> str:
+    """Fetch sector/industry metadata for one ticker. Returns a status string."""
+    if ticker.startswith("^"):
+        return "n/a:index"
+
+    try:
+        repo = SQLiteStockMetaRepository(db_path)
+        provider = YahooStockMetaProvider()
+        use_case = FetchStockMetaUseCase(provider=provider, repository=repo)
+        result = use_case.execute(FetchStockMetaRequest(ticker=ticker))
+
+        if result.status == "cached":
+            return f"cached({result.cached_days}d)"
+        if result.status == "new":
+            return f"new({result.sector or '?'})"
+        if result.status == "changed":
+            return f"changed→{result.sector or '?'}"
+        if result.status == "verified":
+            return "verified"
+        # error
+        return f"ERR:{(result.error or 'unknown')[:30]}"
+    except Exception as e:
+        return f"ERR:{str(e)[:30]}"
+
+
 def update(
     tickers: Annotated[
         Optional[list[str]],
@@ -447,17 +484,21 @@ def update(
         bool,
         typer.Option("--refresh", "-r", help="Force refresh even if cached"),
     ] = False,
+    no_meta: Annotated[
+        bool,
+        typer.Option("--no-meta", help="Skip sector/industry metadata fetch"),
+    ] = False,
     db_path: Annotated[
         Optional[Path],
         typer.Option("--db", help="SQLite database path"),
     ] = None,
 ) -> None:
     """
-    Fetch fresh candles + broker flow data for a stock universe.
+    Fetch fresh candles + broker flow + sector metadata for a stock universe.
 
-    Run this command once per day before screening to ensure fresh data.
-    Auto-selects Stockbit broker provider if token is configured,
-    otherwise falls back to IDX public API.
+    Always includes ^JKSE (benchmark) for regime analysis.
+    Sector/industry data is fetched via Yahoo Finance and cached for 30 days
+    (only re-fetched when stale). Use --no-meta to skip.
 
     Examples:
         saham data update --universe lq45
@@ -466,6 +507,7 @@ def update(
         saham data update --universe cached --refresh
         saham data update --universe lq45 --broker-only
         saham data update BBCA --broker-provider stockbit-session --days 30
+        saham data update --universe lq45 --no-meta
     """
     resolved_db = db_path or DEFAULT_DB_PATH
 
@@ -490,6 +532,10 @@ def update(
         )
         raise typer.Exit(1)
 
+    # Always include benchmark — required for regime and swing analysis.
+    if _BENCHMARK_TICKER not in ticker_list:
+        ticker_list = ticker_list + [_BENCHMARK_TICKER]
+
     # Determine broker provider
     try:
         broker_provider, broker_provider_name = _create_broker_provider(broker_provider)
@@ -503,6 +549,8 @@ def update(
         typer.echo(f"  Candles: {candles_provider}")
     if not candles_only:
         typer.echo(f"  Broker:  {broker_provider_name}")
+    if not no_meta:
+        typer.echo("  Meta:    yahoo (sector/industry, 30d TTL)")
     typer.echo("  Status: +Nrows = new rows stored; span = calendar cache coverage")
     typer.echo("")
 
@@ -511,11 +559,13 @@ def update(
     failures: list[str] = []
     candle_short_history: list[str] = []
     broker_backfills: list[str] = []
+    meta_changed: list[str] = []
 
     for i, ticker in enumerate(ticker_list, 1):
         progress = f"[{i:>3}/{len(ticker_list)}]"
         candles_status = "skip"
         broker_status = "skip"
+        meta_status = "skip"
 
         if not broker_only:
             candles_status = _fetch_candles(
@@ -527,8 +577,17 @@ def update(
                 ticker, days, resolved_db, broker_provider, refresh, broker_backfills
             )
 
+        if not no_meta:
+            meta_status = _fetch_meta(ticker, resolved_db)
+            if meta_status.startswith("changed"):
+                meta_changed.append(f"  {ticker}: {meta_status}")
+
         any_error = "ERR:" in candles_status or "ERR:" in broker_status
-        all_cached = _is_cached_status(candles_status) and _is_cached_status(broker_status)
+        all_cached = (
+            _is_cached_status(candles_status)
+            and _is_cached_status(broker_status)
+            and (no_meta or meta_status.startswith("cached"))
+        )
 
         if any_error:
             fail_count += 1
@@ -538,12 +597,13 @@ def update(
             ok_count += 1
             status_color = typer.colors.BRIGHT_BLACK if all_cached else typer.colors.GREEN
 
+        status_line = f"candles={candles_status} broker={broker_status}"
+        if not no_meta:
+            status_line += f" meta={meta_status}"
+
         typer.echo(
             f"  {progress} {ticker:<6} "
-            + typer.style(
-                f"candles={candles_status} broker={broker_status}",
-                fg=status_color,
-            )
+            + typer.style(status_line, fg=status_color)
         )
 
     # Summary
@@ -573,4 +633,9 @@ def update(
         else "",
         messages=broker_backfills,
         color=typer.colors.CYAN,
+    )
+    _echo_note_group(
+        title=f"Sector classification changed for {len(meta_changed)} ticker(s):" if meta_changed else "",
+        messages=meta_changed,
+        color=typer.colors.YELLOW,
     )
