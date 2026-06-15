@@ -13,6 +13,7 @@ in ConfirmIntradayOpenUseCase, so candles + indicator values are tuned so that:
 
 from datetime import date, timedelta
 from decimal import Decimal
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -25,6 +26,7 @@ from src.domain.entities.broker_flow import BrokerSummary
 from src.domain.entities.candle import Candle
 from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.market_data_repository import MarketDataRepository
+from src.infrastructure.persistence.sqlite_iev_repository import IEVSnapshot
 
 
 # ── Repository stubs ──────────────────────────────────────────────────────────
@@ -590,3 +592,63 @@ def test_ranking_picks_higher_accum_score_when_capped():
     # And BBCA should have a higher accum_score than what BBRI would have got
     assert chosen.accum_score is not None
     assert chosen.accum_tag == "BACKED"
+
+
+# ── NCP snapshot in backtest (Step 6) ────────────────────────────────────────
+
+
+def test_backtest_uses_get_ncp_snapshot():
+    """Backtest must call get_ncp_snapshot (not get_snapshot) to filter candidates.
+
+    Setup: two tickers BBCA and BBRI both have candle data, but the IEV repo's
+    NCP snapshot only contains BBCA. The backtest should filter BBRI out and only
+    trade BBCA.
+    """
+    tickers = ["BBCA", "BBRI"]
+    today_candles = [
+        _candle(t, TRADE_DAY, Decimal("100"), Decimal("106"), Decimal("99"), Decimal("101"))
+        for t in tickers
+    ]
+    history: list[Candle] = []
+    for t in tickers:
+        history.extend(_history_with_prev(t, PREV_DAY))
+
+    market = InMemoryMarketRepository(history + today_candles)
+    broker = InMemoryBrokerRepository(
+        _backed_summaries("BBCA", PREV_DAY) + _backed_summaries("BBRI", PREV_DAY)
+    )
+
+    # IEV repo stub: NCP snapshot contains BBCA only
+    iev_repo = MagicMock()
+    iev_repo.has_snapshot.return_value = True
+    iev_repo.get_ncp_snapshot.return_value = [
+        IEVSnapshot(date=TRADE_DAY, ticker="BBCA", iev=450_000, rank=1, iep=5_900)
+    ]
+    iev_repo.get_snapshot_dates.return_value = [TRADE_DAY]
+
+    uc = IntradayBacktestUseCase(
+        market_repository=market,
+        broker_repository=broker,
+        indicator_registry=StubIndicatorRegistry(),
+        iev_repository=iev_repo,
+    )
+
+    resp = uc.execute(IntradayBacktestRequest(
+        tickers=tickers,
+        start_date=TRADE_DAY,
+        end_date=TRADE_DAY,
+        capital=Decimal("100000000"),
+        risk_pct=Decimal("0.01"),
+        max_daily_positions=3,
+        cost_bps=Decimal("0"),
+        history_days=30,
+    ))
+
+    # get_ncp_snapshot must have been called (not the legacy get_snapshot)
+    iev_repo.get_ncp_snapshot.assert_called_once()
+    iev_repo.get_snapshot.assert_not_called()
+
+    # Only BBCA trades — BBRI filtered out by NCP snapshot
+    traded_tickers = {t.ticker for t in resp.trades}
+    assert "BBCA" in traded_tickers
+    assert "BBRI" not in traded_tickers

@@ -511,7 +511,7 @@ class IntradayBacktestUseCase:
 
             # ── Step 1b: apply IEV filter when snapshot is available ──────────
             if self._iev_repo is not None and self._iev_repo.has_snapshot(d):
-                snapshot = self._iev_repo.get_snapshot(d, top_n=request.iev_top_n)
+                snapshot = self._iev_repo.get_ncp_snapshot(d, top_n=request.iev_top_n)
                 iev_tickers = {s.ticker for s in snapshot}
                 candidates = [c for c in candidates if c.ticker in iev_tickers]
                 if not candidates:

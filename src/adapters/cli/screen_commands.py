@@ -160,6 +160,8 @@ def _load_config(config_path: Path, overrides: dict) -> PreOpenScreenConfig:
 
     if overrides.get("iev_min") is not None:
         config.iev_min = overrides["iev_min"]
+    if overrides.get("iep_min") is not None:
+        config.iep_min = overrides["iep_min"]
     if overrides.get("capital") is not None:
         config.capital = Decimal(str(overrides["capital"]))
     if overrides.get("stop_loss_pct") is not None:
@@ -844,6 +846,10 @@ def pre_open(
         typer.Option("--order-books-json", help='Pre-fetched order books JSON object'),
     ] = None,
     iev_min: Annotated[Optional[int], typer.Option("--iev-min", min=1)] = None,
+    iep_min: Annotated[
+        Optional[int],
+        typer.Option("--iep-min", min=1, help="IEP floor: exclude movers with IEP below this (IDR). E.g. --iep-min 50 drops penny stocks."),
+    ] = None,
     capital: Annotated[Optional[int], typer.Option("--capital", min=1)] = None,
     stop_loss: Annotated[Optional[float], typer.Option("--stop-loss")] = None,
     tick_above: Annotated[Optional[int], typer.Option("--tick-above", min=1)] = None,
@@ -939,6 +945,7 @@ def pre_open(
 
     overrides: dict = {
         "iev_min": iev_min,
+        "iep_min": iep_min,
         "capital": capital,
         "stop_loss_pct": stop_loss,
         "tick_above": tick_above,
@@ -1937,6 +1944,10 @@ def collect_iev(
 
     resolved_db = db_path or DEFAULT_DB_PATH
 
+    now_idx = _current_idx_datetime()
+    today = now_idx.date()
+    is_ncp = now_idx.time() >= time(8, 56)
+
     try:
         provider = PlaywrightStockbitProvider(headless=not no_headless)
     except Exception as exc:
@@ -1954,23 +1965,43 @@ def collect_iev(
         typer.echo("No movers returned — session may be expired. Run: saham stockbit login", err=True)
         raise typer.Exit(1)
 
-    today = date.today()
     repo = SQLiteIEVRepository(resolved_db)
-    written = repo.save_snapshot(today, movers)
+    # Strip tz for naive storage; repo computes is_ncp_locked from the time component.
+    written = repo.save_snapshot(today, movers, collected_at=now_idx.replace(tzinfo=None))
+    deltas = repo.get_iev_delta(today)
 
     iep_captured = sum(1 for m in movers if m.iep is not None)
+    ncp_badge = "[NCP LOCKED]" if is_ncp else "[PRE-NCP]"
     typer.echo(
         f"Saved {written} movers for {today.isoformat()} to {resolved_db} "
         f"(IEP captured: {iep_captured}/{written})"
     )
+    typer.echo(f"  Captured at {now_idx.strftime('%H:%M:%S')} WIB  {ncp_badge}")
     typer.echo("")
-    typer.echo(f"  {'RANK':>4}  {'TICKER':<8}  {'IEV':>12}  {'IEP':>8}")
-    typer.echo(f"  {'-'*4}  {'-'*8}  {'-'*12}  {'-'*8}")
+
+    show_delta = bool(deltas)
+    header = f"  {'RANK':>4}  {'TICKER':<8}  {'IEV':>12}  {'IEP':>8}"
+    sep    = f"  {'-'*4}  {'-'*8}  {'-'*12}  {'-'*8}"
+    if show_delta:
+        header += f"  {'ΔIEV':>10}"
+        sep    += f"  {'-'*10}"
+    typer.echo(header)
+    typer.echo(sep)
     for i, m in enumerate(movers[:20], 1):
         iep_str = f"{m.iep:,}" if m.iep is not None else "—"
-        typer.echo(f"  {i:>4}  {m.ticker:<8}  {m.iev:>12,}  {iep_str:>8}")
+        row = f"  {i:>4}  {m.ticker:<8}  {m.iev:>12,}  {iep_str:>8}"
+        if show_delta:
+            d = deltas.get(m.ticker.upper())
+            delta_str = f"{'+' if d and d > 0 else ''}{d:,}" if d is not None else "—"
+            row += f"  {delta_str:>10}"
+        typer.echo(row)
     if len(movers) > 20:
         typer.echo(f"  ... and {len(movers) - 20} more stored in database")
+
+    # Informational penny-stock count (IEP floor not enforced here — that is pre-open's job)
+    iep_floor = 50
+    passes_floor = sum(1 for m in movers if m.iep is not None and m.iep >= iep_floor)
+    typer.echo(f"\n  Movers with IEP >= {iep_floor}: {passes_floor}/{len(movers)}")
 
     coverage = repo.get_coverage()
     typer.echo("")

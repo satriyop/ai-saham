@@ -4,20 +4,33 @@ SQLite repository for IEV/IEP snapshots.
 Stores the ranked list of IEV movers and their IEP (Indicative Equilibrium Price)
 captured during the IDX pre-open auction window (08:45–09:00 WIB) each trading day.
 
-Two daily captures:
-  08:50 WIB — IEV rankings (early mover signal)
-  08:55 WIB — IEP refresh (more settled price, 5 min before auction close)
-Both upsert into the same row; the later run's IEP overwrites the earlier one.
+NCP (No Cancellation Period) — per Kep-00003/BEI/04-2025, effective 2025-12-15:
+  08:56–09:00 WIB: orders in the call auction cannot be amended or withdrawn.
+  Snapshots collected at or after 08:56 carry is_ncp_locked=1 and reflect
+  committed demand. Earlier snapshots are speculative (orders still cancellable).
+
+Two daily captures (typical workflow):
+  08:45–08:55 WIB — early IEV mover signal (pre-NCP, is_ncp_locked=0)
+  08:56–09:00 WIB — committed IEV/IEP (NCP-locked, is_ncp_locked=1)
+
+Every run appends a row to iev_snapshot_history. The canonical iev_snapshots
+table keeps one row per (date, ticker) — always the latest — for backward
+compatibility. The NCP flag on the canonical row is sticky: once set to 1 it
+cannot be downgraded by a later pre-NCP run.
 
 Layer: Infrastructure
 """
 
 import sqlite3
-from datetime import date
+from datetime import date, datetime, time
 from dataclasses import dataclass
 from pathlib import Path
 
 from src.domain.value_objects.screener_result import MoverData
+
+# IDX NCP boundary per Kep-00003/BEI/04-2025 (effective 2025-12-15).
+# Snapshots collected at or after this wall-clock time are NCP-locked.
+NCP_LOCK_TIME: time = time(8, 56)
 
 
 @dataclass(frozen=True)
@@ -48,12 +61,13 @@ class SQLiteIEVRepository:
         with self._get_connection() as conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS iev_snapshots (
-                    date       TEXT NOT NULL,
-                    ticker     TEXT NOT NULL,
-                    iev        INTEGER NOT NULL,
-                    rank       INTEGER NOT NULL,
-                    iep        INTEGER,
-                    fetched_at TEXT DEFAULT (datetime('now')),
+                    date          TEXT NOT NULL,
+                    ticker        TEXT NOT NULL,
+                    iev           INTEGER NOT NULL,
+                    rank          INTEGER NOT NULL,
+                    iep           INTEGER,
+                    fetched_at    TEXT DEFAULT (datetime('now')),
+                    is_ncp_locked INTEGER NOT NULL DEFAULT 0,
                     PRIMARY KEY (date, ticker)
                 )
             """)
@@ -66,31 +80,86 @@ class SQLiteIEVRepository:
                 conn.execute("ALTER TABLE iev_snapshots ADD COLUMN iep INTEGER")
             except Exception:
                 pass  # column already exists
+            # Migration: add is_ncp_locked to existing tables that lack it
+            try:
+                conn.execute(
+                    "ALTER TABLE iev_snapshots ADD COLUMN is_ncp_locked INTEGER NOT NULL DEFAULT 0"
+                )
+            except Exception:
+                pass  # column already exists
 
-    def save_snapshot(self, snapshot_date: date, movers: list[MoverData]) -> int:
-        """Upsert IEV+IEP movers for a date.
+            # Append-only history: every collect-iev run produces a new row here.
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS iev_snapshot_history (
+                    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                    date          TEXT    NOT NULL,
+                    ticker        TEXT    NOT NULL,
+                    iev           INTEGER NOT NULL,
+                    rank          INTEGER NOT NULL,
+                    iep           INTEGER,
+                    collected_at  TEXT    NOT NULL,
+                    is_ncp_locked INTEGER NOT NULL DEFAULT 0
+                )
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_iev_history_date
+                ON iev_snapshot_history (date)
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_iev_history_date_ncp
+                ON iev_snapshot_history (date, is_ncp_locked)
+            """)
+
+    def save_snapshot(
+        self,
+        snapshot_date: date,
+        movers: list[MoverData],
+        collected_at: datetime | None = None,
+    ) -> int:
+        """Upsert IEV+IEP movers for a date and append to history.
 
         Args:
             snapshot_date: The trading date.
             movers: List of MoverData sorted by IEV descending. rank is derived from position.
+            collected_at: Wall-clock time of collection (naive local). Defaults to now().
+                          Determines is_ncp_locked (>= 08:56 WIB = locked).
 
         Returns:
-            Number of rows written.
+            Number of canonical rows written.
         """
+        if not movers:
+            return 0
+
+        ts = collected_at or datetime.now()
+        is_ncp_locked = 1 if ts.time() >= NCP_LOCK_TIME else 0
+        ts_str = ts.isoformat(timespec="seconds")
+
         rows = [
-            (snapshot_date.isoformat(), m.ticker.upper(), m.iev, rank + 1, m.iep)
+            (snapshot_date.isoformat(), m.ticker.upper(), m.iev, rank + 1, m.iep, ts_str, is_ncp_locked)
             for rank, m in enumerate(movers)
         ]
+
         with self._get_connection() as conn:
+            # Canonical table: one row per (date, ticker); NCP flag is sticky (MAX).
             conn.executemany(
                 """
-                INSERT INTO iev_snapshots (date, ticker, iev, rank, iep)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO iev_snapshots (date, ticker, iev, rank, iep, fetched_at, is_ncp_locked)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(date, ticker) DO UPDATE SET
-                    iev        = excluded.iev,
-                    rank       = excluded.rank,
-                    iep        = excluded.iep,
-                    fetched_at = datetime('now')
+                    iev           = excluded.iev,
+                    rank          = excluded.rank,
+                    iep           = excluded.iep,
+                    fetched_at    = excluded.fetched_at,
+                    is_ncp_locked = MAX(iev_snapshots.is_ncp_locked, excluded.is_ncp_locked)
+                """,
+                rows,
+            )
+            # History table: append — every run is a separate row.
+            conn.executemany(
+                """
+                INSERT INTO iev_snapshot_history
+                    (date, ticker, iev, rank, iep, collected_at, is_ncp_locked)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 rows,
             )
@@ -120,6 +189,91 @@ class SQLiteIEVRepository:
             )
             for r in rows
         ]
+
+    def get_ncp_snapshot(
+        self,
+        snapshot_date: date,
+        top_n: int | None = None,
+    ) -> list[IEVSnapshot]:
+        """Return the latest NCP-locked history batch for snapshot_date.
+
+        Strategy:
+          1. Find the latest collected_at where is_ncp_locked=1 for this date.
+          2. Return all rows from that batch ordered by rank ASC.
+          3. If no NCP-locked history exists, fall back to get_snapshot()
+             (handles data collected before NCP tracking was added).
+
+        Args:
+            snapshot_date: The trading date.
+            top_n: If set, return only the top-N movers.
+        """
+        date_str = snapshot_date.isoformat()
+        sql = """
+            SELECT date, ticker, iev, rank, iep
+            FROM iev_snapshot_history
+            WHERE date = ?
+              AND is_ncp_locked = 1
+              AND collected_at = (
+                  SELECT MAX(collected_at)
+                  FROM iev_snapshot_history
+                  WHERE date = ? AND is_ncp_locked = 1
+              )
+            ORDER BY rank ASC
+        """
+        params: tuple = (date_str, date_str)
+        if top_n is not None:
+            sql += " LIMIT ?"
+            params = (date_str, date_str, top_n)
+
+        with self._get_connection() as conn:
+            rows = conn.execute(sql, params).fetchall()
+
+        if not rows:
+            return self.get_snapshot(snapshot_date, top_n)
+
+        return [
+            IEVSnapshot(
+                date=date.fromisoformat(r["date"]),
+                ticker=r["ticker"],
+                iev=r["iev"],
+                rank=r["rank"],
+                iep=r["iep"],
+            )
+            for r in rows
+        ]
+
+    def get_iev_delta(self, snapshot_date: date) -> dict[str, int]:
+        """Return ΔIEV per ticker for snapshot_date.
+
+        ΔIEV = last_history_iev - first_history_iev (chronological order).
+        Tickers with only one history row are omitted — no delta is meaningful.
+
+        Returns:
+            Dict mapping ticker → delta (positive = IEV grew, negative = faded).
+        """
+        date_str = snapshot_date.isoformat()
+        sql = """
+            WITH ranked AS (
+                SELECT
+                    ticker,
+                    iev,
+                    ROW_NUMBER() OVER (PARTITION BY ticker ORDER BY collected_at ASC)  AS rn_asc,
+                    ROW_NUMBER() OVER (PARTITION BY ticker ORDER BY collected_at DESC) AS rn_desc,
+                    COUNT(*)    OVER (PARTITION BY ticker)                             AS n
+                FROM iev_snapshot_history
+                WHERE date = ?
+            )
+            SELECT
+                ticker,
+                MAX(CASE WHEN rn_asc  = 1 THEN iev END) AS first_iev,
+                MAX(CASE WHEN rn_desc = 1 THEN iev END) AS last_iev
+            FROM ranked
+            WHERE n >= 2
+            GROUP BY ticker
+        """
+        with self._get_connection() as conn:
+            rows = conn.execute(sql, (date_str,)).fetchall()
+        return {r["ticker"]: r["last_iev"] - r["first_iev"] for r in rows}
 
     def has_snapshot(self, snapshot_date: date) -> bool:
         """Return True if at least one row exists for this date."""

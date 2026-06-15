@@ -63,6 +63,7 @@ class PreOpenScreenConfig:
     rsi_overbought_threshold: Decimal = Decimal("75")
     top_n: int | None = None
     fast_mode: bool = False
+    iep_min: int | None = None  # IEP floor — exclude movers with IEP below this; None disables
     # Improvement #3 — ATR-scaled entry range
     use_atr_range: bool = True
     atr_range_cap_min: Decimal = Decimal("0.01")  # never narrower than 1%
@@ -102,6 +103,7 @@ class PreOpenScreenConfig:
             ),
             top_n=int(top_n_raw) if top_n_raw is not None else None,
             fast_mode=bool(screener.get("fast_mode", False)),
+            iep_min=int(screener["iep_min"]) if screener.get("iep_min") is not None else None,
             use_atr_range=bool(analysis.get("use_atr_range", True)),
             atr_range_cap_min=Decimal(str(analysis.get("atr_range_cap_min", 0.01))),
             atr_range_cap_max=Decimal(str(analysis.get("atr_range_cap_max", 0.05))),
@@ -161,6 +163,15 @@ class PreOpenScreenUseCase:
         movers = raw_movers
         if config.top_n is not None:
             movers = movers[: config.top_n]
+
+        if config.iep_min is not None:
+            before = len(movers)
+            movers = [m for m in movers if m.iep is None or m.iep >= config.iep_min]
+            dropped = before - len(movers)
+            if dropped:
+                warnings.append(
+                    f"IEP floor: filtered out {dropped} movers with IEP < {config.iep_min:,}"
+                )
 
         candidates: list[ScreenerCandidate] = []
 
