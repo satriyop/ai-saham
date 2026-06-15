@@ -90,3 +90,6 @@ journals/
 
 # Jupyter (if used for analysis exploration)
 .ipynb_checkpoints/
+
+#AI
+.opencode/
