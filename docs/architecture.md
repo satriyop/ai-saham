@@ -273,7 +273,7 @@ saham create-indicator
 ```
 CLI Adapter            Application              Domain                Infrastructure
 -----------            -----------              ------                --------------
-saham backtest BBCA
+saham strategy backtest BBCA
      |
      v
   Create request

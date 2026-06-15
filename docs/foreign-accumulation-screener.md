@@ -16,13 +16,13 @@ This is a **swing trade watchlist**, not an intraday tool. Signals here are for 
 
 ```bash
 # Step 1: Download fresh data (run once per day, takes ~30 seconds after first run)
-saham update --universe lq45
+saham data update --universe lq45
 
 # Step 2: Screen all 45 LQ45 stocks for accumulation
-saham screen accumulation --universe lq45
+saham trade swing screen --universe lq45
 
 # Step 3: See all 3 time windows at once (recommended daily view)
-saham screen accumulation --universe lq45 --multi
+saham trade swing screen --universe lq45 --multi
 ```
 
 ---
@@ -32,15 +32,15 @@ saham screen accumulation --universe lq45 --multi
 The screener reads from a local database (`data.db`). You need to populate it first.
 
 ```bash
-saham update --universe lq45             # LQ45 — 45 most liquid IDX stocks
-saham update --universe idx80            # IDX80 — 80 stocks
-saham update --universe idxcomp100       # IDXComp100 — 80 stocks
-saham update BBCA BBRI BMRI              # Specific tickers only
+saham data update --universe lq45             # LQ45 — 45 most liquid IDX stocks
+saham data update --universe idx80            # IDX80 — 80 stocks
+saham data update --universe idxcomp100       # IDXComp100 — 80 stocks
+saham data update BBCA BBRI BMRI              # Specific tickers only
 
-saham update --universe lq45 --days 30  # Only fetch last 30 days (default: 90)
-saham update --universe lq45 --refresh  # Force full re-download, ignore cache
-saham update --universe lq45 --broker-only   # Only broker flow, skip price data
-saham update --universe lq45 --candles-only  # Only price data, skip broker flow
+saham data update --universe lq45 --days 30  # Only fetch last 30 days (default: 90)
+saham data update --universe lq45 --refresh  # Force full re-download, ignore cache
+saham data update --universe lq45 --broker-only   # Only broker flow, skip price data
+saham data update --universe lq45 --candles-only  # Only price data, skip broker flow
 ```
 
 **Incremental updates.** After the first run (which downloads 90 days of history), subsequent runs only download new data since your last update. Running it twice in a row is near-instant — already-current tickers show `fresh`.
@@ -66,37 +66,37 @@ saham update --universe lq45 --candles-only  # Only price data, skip broker flow
 
 ```bash
 # Default: last 7 days, show top 20
-saham screen accumulation --universe lq45
+saham trade swing screen --universe lq45
 
 # Change the lookback window
-saham screen accumulation --universe lq45 --window 30    # last 30 days
-saham screen accumulation --universe lq45 --window 90    # last 90 days
+saham trade swing screen --universe lq45 --window 30    # last 30 days
+saham trade swing screen --universe lq45 --window 90    # last 90 days
 
 # Filter results
-saham screen accumulation --universe lq45 --min-score 50     # only strong signals
-saham screen accumulation --universe lq45 --min-streak 3     # only 3+ consecutive buy days
-saham screen accumulation --universe lq45 --vwap-only        # only where foreigners are underwater
-saham screen accumulation --universe lq45 --squeeze-only     # only BB squeeze setups
-saham screen accumulation --universe lq45 --top 10           # show top 10 only
+saham trade swing screen --universe lq45 --min-score 50     # only strong signals
+saham trade swing screen --universe lq45 --min-streak 3     # only 3+ consecutive buy days
+saham trade swing screen --universe lq45 --vwap-only        # only where foreigners are underwater
+saham trade swing screen --universe lq45 --squeeze-only     # only BB squeeze setups
+saham trade swing screen --universe lq45 --top 10           # show top 10 only
 
 # More detail
-saham screen accumulation --universe lq45 --breakdown        # show score breakdown per row
-saham screen accumulation --universe lq45 --granular         # show which brokers bought (Stockbit only)
-saham screen accumulation --universe lq45 --format json      # machine-readable output
+saham trade swing screen --universe lq45 --breakdown        # show score breakdown per row
+saham trade swing screen --universe lq45 --granular         # show which brokers bought (Stockbit only)
+saham trade swing screen --universe lq45 --format json      # machine-readable output
 ```
 
 ### Multi-Window (Recommended)
 
 ```bash
 # See 7d / 30d / 90d scores side by side — one command
-saham screen accumulation --universe lq45 --multi
+saham trade swing screen --universe lq45 --multi
 
 # Sort by a specific window
-saham screen accumulation --universe lq45 --multi --sort-by 30d
+saham trade swing screen --universe lq45 --multi --sort-by 30d
 
 # Combine with filters
-saham screen accumulation --universe lq45 --multi --squeeze-only
-saham screen accumulation --universe lq45 --multi --top 15
+saham trade swing screen --universe lq45 --multi --squeeze-only
+saham trade swing screen --universe lq45 --multi --top 15
 ```
 
 ---
@@ -344,7 +344,7 @@ This shows GGRM earned:
 **Diagnostic use:** If a stock you expected to score high is ranked lower than expected, `--breakdown` immediately shows which signal is missing. Common patterns:
 - `vwap=0` — foreigners are in profit, no defense motive. Wait for a pullback.
 - `streak=0` — high consistency but the run broke. A single sell day reset it.
-- `bb=0` — not enough data for squeeze detection. Run `saham update` with more days.
+- `bb=0` — not enough data for squeeze detection. Run `saham data update` with more days.
 
 ---
 
@@ -369,14 +369,14 @@ This shows GGRM earned:
 
 ```bash
 # 1. Update data — fast after first run
-saham update --universe lq45
+saham data update --universe lq45
 
 # 2. Multi-window overview — the most informative single view
-saham screen accumulation --universe lq45 --multi
+saham trade swing screen --universe lq45 --multi
 
 # 3. Focus on high-conviction setups
-saham screen accumulation --universe lq45 --multi --squeeze-only   # coiled spring candidates
-saham screen accumulation --universe lq45 --vwap-only --min-score 50  # underwater + strong signal
+saham trade swing screen --universe lq45 --multi --squeeze-only   # coiled spring candidates
+saham trade swing screen --universe lq45 --vwap-only --min-score 50  # underwater + strong signal
 ```
 
 ### Deep-Dive on a Candidate
@@ -385,15 +385,15 @@ Once you find a ticker worth researching (e.g. BBRI):
 
 ```bash
 # How has the score changed over time?
-saham screen accumulation BBRI --window 7 --breakdown
-saham screen accumulation BBRI --window 30 --breakdown
+saham trade swing screen BBRI --window 7 --breakdown
+saham trade swing screen BBRI --window 30 --breakdown
 
 # What does the daily flow look like?
-saham broker flow BBRI --days 30
+saham data broker flow BBRI --days 30
 
 # Technical risk assessment
-saham risk BBRI --profile balanced
-saham risk BBRI --with-sentiment   # add news context
+saham analyze risk BBRI --profile balanced
+saham analyze risk BBRI --with-sentiment   # add news context
 ```
 
 ### What Makes a Strong Candidate?
@@ -415,7 +415,7 @@ No single signal is definitive. The score aggregates them all — but a stock wi
 ## Universe Management
 
 ```bash
-saham universe list
+saham data universe list
 ```
 
 Output:
@@ -433,8 +433,8 @@ Universe lists are stored in `config/universes.yaml`. IDX rebalances indices eve
 Use `cached` to screen all tickers you've ever downloaded, regardless of which universe they belong to:
 
 ```bash
-saham update --universe cached
-saham screen accumulation --universe cached --multi
+saham data update --universe cached
+saham trade swing screen --universe cached --multi
 ```
 
 ---
@@ -455,10 +455,10 @@ saham screen accumulation --universe cached --multi
 To configure Stockbit:
 ```bash
 # Login via browser (opens a Chromium window to authenticate with your Stockbit account)
-saham stockbit login
+saham data stockbit login
 
 # Now screener automatically uses Stockbit and shows institutional flags
-saham screen accumulation --universe lq45 --granular
+saham trade swing screen --universe lq45 --granular
 ```
 
 ---

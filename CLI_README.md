@@ -38,26 +38,26 @@ Verify installation and run your first analysis:
 saham version
 
 # Step 2: Download stock data
-saham update BBCA --days 365
+saham data update BBCA --days 365
 
 # Step 3: See risk assessment across all profiles
-saham risk BBCA --all
+saham analyze risk BBCA --all
 
 # Step 4: Create and test a strategy
 saham strategy init momentum
-saham backtest BBCA --strategy momentum
+saham strategy backtest BBCA --strategy momentum
 
 # Step 5: Or create a strategy from natural language!
 saham strategy create "RSI oversold strategy" --name my_rsi --provider mock
-saham backtest BBCA --strategy my_rsi
+saham strategy backtest BBCA --strategy my_rsi
 ```
 
 **What just happened?**
 1. `version` - Confirmed the CLI is installed
-2. `fetch` - Downloaded 1 year of daily price data for Bank Central Asia (BBCA)
-3. `risk --all` - Analyzed the stock using 3 different risk tolerance profiles
+2. `data update` - Downloaded 1 year of daily price data for Bank Central Asia (BBCA)
+3. `analyze risk --all` - Analyzed the stock using 3 different risk tolerance profiles
 4. `strategy init` - Created a reusable strategy package
-5. `backtest --strategy` - Tested the strategy on historical data
+5. `strategy backtest --strategy` - Tested the strategy on historical data
 6. `strategy create` - Used AI to generate a complete strategy from natural language
 
 You now have a local copy of BBCA's data and can analyze it offline anytime.
@@ -66,7 +66,7 @@ You now have a local copy of BBCA's data and can analyze it offline anytime.
 
 ## 3. Understanding Stock Data
 
-Before analyzing, you need data. The `update` command downloads **OHLCV data** (Open, High, Low, Close, Volume) and **broker flow data** (foreign buy/sell) in one pass. See section 21 for the full `update` reference.
+Before analyzing, you need data. The `data update` command downloads **OHLCV data** (Open, High, Low, Close, Volume) and **broker flow data** (foreign buy/sell) in one pass. See section 21 for the full `data update` reference.
 
 ### What is OHLCV?
 
@@ -84,13 +84,13 @@ Each trading day produces these 5 values:
 
 ```bash
 # Fetch 1 year of data + broker flow for an entire universe (recommended)
-saham update --universe lq45 --days 365
+saham data update --universe lq45 --days 365
 
 # Single ticker
-saham update BBCA --days 365
+saham data update BBCA --days 365
 
 # Use IDX public API directly (no Yahoo)
-saham update BBCA --days 365 --provider idx
+saham data update BBCA --days 365 --provider idx
 ```
 
 ### Output Explained
@@ -133,16 +133,16 @@ Technical indicators transform raw price data into actionable signals. AI Saham 
 
 ```bash
 # Default: 20-day SMA (approximately 1 month)
-saham sma BBCA
+saham indicator compute SMA BBCA
 
 # 50-day SMA (medium-term trend)
-saham sma BBCA --period 50
+saham indicator compute SMA BBCA --period 50
 
 # 200-day SMA (long-term trend)
-saham sma BBCA --period 200
+saham indicator compute SMA BBCA --period 200
 
 # SMA on a different price field
-saham sma BBCA --field high
+saham indicator compute SMA BBCA --field high
 ```
 
 **Period Guide:**
@@ -175,14 +175,14 @@ Summary:
 
 ```bash
 # Default: 20-day EMA
-saham ema BBCA
+saham indicator compute EMA BBCA
 
 # Faster EMA for active trading
-saham ema BBCA --period 9
+saham indicator compute EMA BBCA --period 9
 
 # Compare with SMA of same period
-saham sma BBCA --period 20
-saham ema BBCA --period 20
+saham indicator compute SMA BBCA --period 20
+saham indicator compute EMA BBCA --period 20
 ```
 
 **SMA vs EMA - When to Use Which:**
@@ -204,13 +204,13 @@ saham ema BBCA --period 20
 
 ```bash
 # Default: 14-day RSI (industry standard)
-saham rsi BBCA
+saham indicator compute RSI BBCA
 
 # Shorter period = more sensitive
-saham rsi BBCA --period 7
+saham indicator compute RSI BBCA --period 7
 
 # Longer period = smoother
-saham rsi BBCA --period 21
+saham indicator compute RSI BBCA --period 21
 ```
 
 **Psychology Behind RSI:**
@@ -237,23 +237,23 @@ Summary:
   Status: NEUTRAL (30 <= RSI <= 70)
 ```
 
-### 4.4 The `compute` Command - Universal Indicator Computation
+### 4.4 The `indicator compute` Command - Universal Indicator Computation
 
 Compute **any** indicator - built-in, plugin, or custom formula - for any stock.
 
 ```bash
 # Compute built-in indicators
-saham compute RSI BBCA
-saham compute SMA BBCA --period 50
+saham indicator compute RSI BBCA
+saham indicator compute SMA BBCA --period 50
 
 # Compute plugin indicators
-saham compute ATR BBCA --period 14
+saham indicator compute ATR BBCA --period 14
 
-# Compute custom formulas (created via create-indicator)
-saham compute SMOOTH_RSI BBCA --tail 10
+# Compute custom formulas (created via saham indicator create)
+saham indicator compute SMOOTH_RSI BBCA --tail 10
 
 # Control output
-saham compute EMA BBRI --period 20 --days 180 --tail 50
+saham indicator compute EMA BBRI --period 20 --days 180 --tail 50
 ```
 
 **Options:**
@@ -294,19 +294,19 @@ Summary:
 - Quick analysis without writing rules files
 - Explore plugin indicator behavior
 
-### 4.5 Combining Indicators - The `indicators` Command
+### 4.5 Combining Indicators - The `indicator snapshot` Command
 
 **Why combine?** Single indicators can give false signals. When multiple indicators agree, signals are stronger.
 
 ```bash
 # See all three indicators aligned by date
-saham indicators BBCA
+saham indicator snapshot BBCA
 
 # Custom periods for your strategy
-saham indicators BBRI --sma 50 --ema 50 --rsi 7
+saham indicator snapshot BBRI --sma 50 --ema 50 --rsi 7
 
 # JSON output for programmatic use
-saham indicators BBCA --format json
+saham indicator snapshot BBCA --format json
 ```
 
 **Reading Combined Output:**
@@ -329,9 +329,9 @@ Date         SMA            EMA            RSI
 
 ---
 
-## 5. Risk Assessment - The `risk` Command
+## 5. Risk Assessment - The `analyze risk` Command
 
-The `risk` command converts indicator values into actionable assessments using rule-based evaluation.
+The `analyze risk` command converts indicator values into actionable assessments using rule-based evaluation.
 
 ### Three Built-in Profiles
 
@@ -345,13 +345,13 @@ The `risk` command converts indicator values into actionable assessments using r
 
 ```bash
 # Balanced profile (default)
-saham risk BBCA
+saham analyze risk BBCA
 
 # Conservative for retirement accounts
-saham risk BBCA --profile conservative
+saham analyze risk BBCA --profile conservative
 
 # Compare all three profiles
-saham risk BBCA --all
+saham analyze risk BBCA --all
 ```
 
 ### Choosing the Right Profile
@@ -378,7 +378,7 @@ The assessment returns one of three levels:
 ### Full Output Example
 
 ```bash
-saham risk BBCA
+saham analyze risk BBCA
 ```
 
 ```
@@ -413,7 +413,7 @@ DISCLAIMER: Analysis only, not trading advice.
 ### Comparing All Profiles
 
 ```bash
-saham risk BBCA --all
+saham analyze risk BBCA --all
 ```
 
 ```
@@ -431,7 +431,7 @@ aggressive     LOW_RISK     65/100
 
 ---
 
-## 6. News Sentiment - The `sentiment` Command
+## 6. News Sentiment - The `analyze sentiment` Command
 
 Sentiment analysis adds context to price movements by analyzing news headlines.
 
@@ -441,19 +441,19 @@ Sentiment analysis adds context to price movements by analyzing news headlines.
 
 ```bash
 # Analyze last 3 days of news (default)
-saham sentiment BBCA
+saham analyze sentiment BBCA
 
 # Look back further
-saham sentiment BBCA --days 7
+saham analyze sentiment BBCA --days 7
 
 # Use AI for classification (more nuanced)
-saham sentiment BBCA --ai-classify
+saham analyze sentiment BBCA --ai-classify
 
 # Choose news source
-saham sentiment BBCA --news-provider google
+saham analyze sentiment BBCA --news-provider google
 
 # Offline keyword classification
-saham sentiment BBCA --no-ai
+saham analyze sentiment BBCA --no-ai
 ```
 
 ### Options Explained
@@ -501,7 +501,7 @@ Track how risk levels have been evolving:
 
 ```bash
 # Show risk history for last 20 days
-saham risk BBCA --trend 20
+saham analyze risk BBCA --trend 20
 ```
 
 Output shows the risk level and confidence for each day plus a trend direction (↑ IMPROVING, ↓ DETERIORATING, → STABLE).
@@ -509,7 +509,7 @@ Output shows the risk level and confidence for each day plus a trend direction (
 ### Adding Sentiment to Risk Assessment
 
 ```bash
-saham risk BBCA --with-sentiment
+saham analyze risk BBCA --with-sentiment
 ```
 
 This adds a sentiment section to the risk output, but remember: sentiment is contextual information only and does NOT change the risk level.
@@ -517,7 +517,7 @@ This adds a sentiment section to the risk output, but remember: sentiment is con
 ### JSON Output
 
 ```bash
-saham risk BBCA --format json
+saham analyze risk BBCA --format json
 ```
 
 Useful for programmatic consumption or piping to other tools.
@@ -536,16 +536,16 @@ Useful for programmatic consumption or piping to other tools.
 Audit past sentiment predictions against actual price moves:
 
 ```bash
-saham sentiment-audit
+saham analyze audit
 ```
 
 Uses logged sentiment data (stored automatically in SQLite) and checks whether POSITIVE/NEUTRAL/NEGATIVE classifications were correct after 1, 3, and 5 trading days.
 
 ---
 
-## 7. Broker Data & Foreign Flow - The `broker` Command
+## 7. Broker Data & Foreign Flow - The `data broker` Command
 
-Foreign investor flow is one of the most watched metrics in the Indonesian market. The `broker` command suite lets you fetch, cache, and analyze broker summary data.
+Foreign investor flow is one of the most watched metrics in the Indonesian market. The `data broker` command suite lets you fetch, cache, and analyze broker summary data.
 
 ### Data Providers
 
@@ -573,20 +573,20 @@ The **Stockbit provider** provides exact foreign flow values and per-broker brea
 
 ```bash
 # Fetch using IDX provider (default - no auth required)
-saham broker fetch BBCA
+saham data broker fetch BBCA
 
 # Explicitly specify provider
-saham broker fetch BBCA --provider idx
-saham broker fetch BBCA --provider stockbit-session
+saham data broker fetch BBCA --provider idx
+saham data broker fetch BBCA --provider stockbit-session
 
 # Fetch 90 days of history
-saham broker fetch BBRI --days 90
+saham data broker fetch BBRI --days 90
 
 # Specific date range
-saham broker fetch TLKM --start 2024-01-01 --end 2024-06-30
+saham data broker fetch TLKM --start 2024-01-01 --end 2024-06-30
 
 # Force refresh (ignore cache)
-saham broker fetch BBCA --refresh
+saham data broker fetch BBCA --refresh
 ```
 
 **Options:**
@@ -610,29 +610,29 @@ pip install -e ".[browser]"
 playwright install chromium
 
 # Step 1: Login via browser (opens a Chromium window)
-saham stockbit login
+saham data stockbit login
 
 # The browser stays open until you log in to stockbit.com.
 # Once logged in, cookies are saved automatically.
 # Use --timeout 300 if you have 2FA.
 
 # Step 2: Check session health
-saham stockbit status
+saham data stockbit status
 
 # Step 3: Smoke test the adapter
-saham stockbit test
+saham data stockbit test
 ```
 
-**Note:** Browser sessions may expire. Run `saham stockbit status` to check, and `saham stockbit login` to refresh.
+**Note:** Browser sessions may expire. Run `saham data stockbit status` to check, and `saham data stockbit login` to refresh.
 
 ### Viewing Foreign Flow
 
 ```bash
 # Show foreign flow summary
-saham broker flow BBCA
+saham data broker flow BBCA
 
 # Last 20 trading days
-saham broker flow BBRI --days 20
+saham data broker flow BBRI --days 20
 ```
 
 **Output Example:**
@@ -661,10 +661,10 @@ Date         Net Flow       Ratio  Top Buyer  Top Seller
 
 ```bash
 # Top brokers for latest date
-saham broker top BBCA
+saham data broker top BBCA
 
 # Top brokers for specific date
-saham broker top BBRI --date 2025-01-15
+saham data broker top BBRI --date 2025-01-15
 ```
 
 **Output Example:**
@@ -693,7 +693,7 @@ DB     Deutsche Bank        Foreign      -3.80B     -380,000
 ### Checking Provider Status
 
 ```bash
-saham broker status
+saham data broker status
 ```
 
 **Output:**
@@ -712,18 +712,18 @@ Don't have Stockbit access? Import broker data from any CSV source (RTI exports,
 
 ```bash
 # Auto-detect format and import
-saham broker import data.csv
+saham data broker import data.csv
 
 # Preview without importing
-saham broker import data.csv --preview
+saham data broker import data.csv --preview
 
 # Use custom column mapping
-saham broker import data.csv --mapping my_format
+saham data broker import data.csv --mapping my_format
 
 # Control error handling
-saham broker import data.csv --on-error skip    # Skip invalid rows (default)
-saham broker import data.csv --on-error fail    # Stop on first error
-saham broker import data.csv --on-error report  # Import valid rows, report all errors
+saham data broker import data.csv --on-error skip    # Skip invalid rows (default)
+saham data broker import data.csv --on-error fail    # Stop on first error
+saham data broker import data.csv --on-error report  # Import valid rows, report all errors
 ```
 
 **Supported CSV Formats:**
@@ -771,7 +771,7 @@ transforms:
 **Listing Available Mappings:**
 
 ```bash
-saham broker mappings
+saham data broker mappings
 ```
 
 **Output:**
@@ -782,7 +782,7 @@ Available CSV Mappings:
   rti_export
   stockbit_manual
 
-Use with: saham broker import data.csv --mapping <name>
+Use with: saham data broker import data.csv --mapping <name>
 ```
 
 ### Using Foreign Flow in Strategies
@@ -853,21 +853,21 @@ rules:
 
 ```bash
 # 1. Set up Stockbit browser session when broker-level detail is needed
-saham stockbit login
+saham data stockbit login
 
 # 2. Fetch broker data
-saham broker fetch BBCA --days 90
+saham data broker fetch BBCA --days 90
 
 # 3. View the flow
-saham broker flow BBCA
+saham data broker flow BBCA
 
 # 4. Use in backtest (requires broker data pre-loaded)
-saham backtest BBCA --strategy foreign-accumulation
+saham strategy backtest BBCA --strategy foreign-accumulation
 ```
 
 ---
 
-## 8. Backtesting - The `backtest` Command
+## 8. Backtesting - The `strategy backtest` Command
 
 Backtesting lets you test a strategy on historical data before risking real capital.
 
@@ -890,15 +890,15 @@ Backtesting lets you test a strategy on historical data before risking real capi
 
 ```bash
 # Recommended: Use strategy packages
-saham backtest BBCA --strategy momentum
-saham backtest BBRI -S momentum --start 2024-01-01 --end 2024-12-31
+saham strategy backtest BBCA --strategy momentum
+saham strategy backtest BBRI -S momentum --start 2024-01-01 --end 2024-12-31
 
 # Or use explicit path
-saham backtest TLKM -S ./strategies/my_strat/strategy.yaml --verbose
+saham strategy backtest TLKM -S ./strategies/my_strat/strategy.yaml --verbose
 
 # Backward compatible: Use rules file directly
-saham backtest BBCA --rules-file config/custom_rules.yaml.example
-saham backtest ASII -r rules.yaml --capital 50000000
+saham strategy backtest BBCA --rules-file config/custom_rules.yaml.example
+saham strategy backtest ASII -r rules.yaml --capital 50000000
 ```
 
 ### Key Options
@@ -1028,11 +1028,11 @@ These are always available without definition in your rules file:
 
 **Using Registered Formulas in Rules:**
 
-Any formula created via `create-indicator` and saved to `config/formulas.yaml` can be used directly in rules without re-defining them:
+Any formula created via `saham indicator create` and saved to `config/formulas.yaml` can be used directly in rules without re-defining them:
 
 ```yaml
 # First, create your formula once:
-# saham create-indicator "smoothed RSI" --name SMOOTH_RSI
+# saham indicator create "smoothed RSI" --name SMOOTH_RSI
 
 # Then use it in rules.yaml - no definition needed!
 version: 1
@@ -1193,10 +1193,10 @@ rules:
 
 ```bash
 # Use custom rules for risk assessment
-saham risk BBCA --rules-file config/my_rules.yaml
+saham analyze risk BBCA --rules-file config/my_rules.yaml
 
 # Backtest custom rules
-saham backtest BBCA --rules-file config/my_rules.yaml --verbose
+saham strategy backtest BBCA --rules-file config/my_rules.yaml --verbose
 ```
 
 ### Evaluation Order
@@ -1326,7 +1326,7 @@ Strategy saved to: ./strategies/momentum/strategy.yaml
 
 Next steps:
   1. Run: saham strategy validate momentum
-  2. Run: saham backtest BBCA --strategy momentum
+  2. Run: saham strategy backtest BBCA --strategy momentum
 ```
 
 **What you can describe:**
@@ -1390,7 +1390,7 @@ Found 3 strategies:
   broken_strat         broken_strat (invalid)
 
 Run 'saham strategy validate NAME' to check a strategy.
-Run 'saham backtest TICKER --strategy NAME' to use a strategy.
+Run 'saham strategy backtest TICKER --strategy NAME' to use a strategy.
 ```
 
 **Location Badges:**
@@ -1401,10 +1401,10 @@ Run 'saham backtest TICKER --strategy NAME' to use a strategy.
 
 ```bash
 # By name (recommended)
-saham backtest BBCA --strategy momentum
+saham strategy backtest BBCA --strategy momentum
 
 # By explicit path
-saham backtest BBCA -S ./strategies/momentum/strategy.yaml
+saham strategy backtest BBCA -S ./strategies/momentum/strategy.yaml
 ```
 
 ### Strategy Package vs Rules File
@@ -1601,13 +1601,13 @@ AI is **OFF by default**. The system works completely without AI. Use AI for:
 
 ```bash
 # Add --explain to risk assessment
-saham risk BBCA --explain
+saham analyze risk BBCA --explain
 
 # Specify provider
-saham risk BBCA --explain --provider ollama
+saham analyze risk BBCA --explain --provider ollama
 
 # Use specific model
-saham risk BBCA --explain --provider ollama --model llama3:8b
+saham analyze risk BBCA --explain --provider ollama --model llama3:8b
 ```
 
 ### AI Providers
@@ -1636,18 +1636,18 @@ ollama serve
 ollama pull llama3:8b
 
 # Use with saham
-saham risk BBCA --explain --provider ollama --model llama3:8b
+saham analyze risk BBCA --explain --provider ollama --model llama3:8b
 ```
 
 ### AI for Sentiment Classification
 
 ```bash
 # Default: keyword-based (faster, offline)
-saham sentiment BBCA
+saham analyze sentiment BBCA
 
 # AI-powered (more nuanced)
-saham sentiment BBCA --ai-classify
-saham sentiment BBCA --ai-classify --provider ollama
+saham analyze sentiment BBCA --ai-classify
+saham analyze sentiment BBCA --ai-classify --provider ollama
 ```
 
 ### AI Formula Translator (CLI)
@@ -1655,9 +1655,9 @@ saham sentiment BBCA --ai-classify --provider ollama
 Don't know formula syntax? Describe what you want in plain English:
 
 ```bash
-saham create-indicator "smoothed RSI with 14-period and 10-day smoothing" --name SMOOTH_RSI
-saham create-indicator "MACD line using 12 and 26 period EMAs" --name MACD --provider deepseek
-saham create-indicator "average true range over 14 days" --name ATR14 --no-save
+saham indicator create "smoothed RSI with 14-period and 10-day smoothing" --name SMOOTH_RSI
+saham indicator create "MACD line using 12 and 26 period EMAs" --name MACD --provider deepseek
+saham indicator create "average true range over 14 days" --name ATR14 --no-save
 ```
 
 **Examples of what you can ask:**
@@ -1680,22 +1680,22 @@ saham create-indicator "average true range over 14 days" --name ATR14 --no-save
 
 Create, list, and manage custom indicators from the command line.
 
-### `create-indicator` - Create from Natural Language
+### `indicator create` - Create from Natural Language
 
 Use AI to translate a description into a formula:
 
 ```bash
 # Basic usage (saves to config/formulas.yaml)
-saham create-indicator "smoothed RSI with 14-period and 10-day smoothing" --name SMOOTH_RSI
+saham indicator create "smoothed RSI with 14-period and 10-day smoothing" --name SMOOTH_RSI
 
 # Specify AI provider
-saham create-indicator "MACD line" --name MACD --provider claude
+saham indicator create "MACD line" --name MACD --provider claude
 
 # Use local Ollama
-saham create-indicator "average true range" --name ATR14 --provider ollama
+saham indicator create "average true range" --name ATR14 --provider ollama
 
 # Don't save (just see the formula)
-saham create-indicator "price distance from 50-day SMA" --no-save
+saham indicator create "price distance from 50-day SMA" --no-save
 ```
 
 | Option | Short | Default | Description |
@@ -1706,16 +1706,16 @@ saham create-indicator "price distance from 50-day SMA" --no-save
 | `--save/--no-save` | | save | Save formula to storage |
 | `--formulas` | | config/formulas.yaml | Custom storage path |
 
-### `list-indicators` - View All Indicators
+### `indicator list` - View All Indicators
 
 See built-in, plugin, and custom indicators:
 
 ```bash
 # List all indicators
-saham list-indicators
+saham indicator list
 
 # Show formula expressions
-saham list-indicators --formulas
+saham indicator list --formulas
 ```
 
 **Output example:**
@@ -1738,12 +1738,12 @@ Custom Formulas:
 Total available: 6
 ```
 
-### `show-formula` - View Formula Details
+### `indicator show-formula` - View Formula Details
 
 See the full details of a saved formula:
 
 ```bash
-saham show-formula SMOOTH_RSI
+saham indicator show SMOOTH_RSI
 ```
 
 **Output:**
@@ -1754,45 +1754,45 @@ Intent:  smoothed RSI with 14-period and 10-day smoothing
 Created: 2025-01-27 10:30:45
 ```
 
-### `delete-indicator` - Remove Custom Formula
+### `indicator delete` - Remove Custom Formula
 
 Delete a saved formula (built-ins cannot be deleted):
 
 ```bash
 # With confirmation prompt
-saham delete-indicator SMOOTH_RSI
+saham indicator delete SMOOTH_RSI
 
 # Skip confirmation
-saham delete-indicator SMOOTH_RSI --force
+saham indicator delete SMOOTH_RSI --force
 ```
 
 ---
 
-## 14. Batch Data Update - The `update` Command
+## 14. Batch Data Update - The `data update` Command
 
 Keep your local data fresh with a single command. Fetches candles + broker flow for an entire universe.
 
 ```bash
 # Update all LQ45 stocks (candles + broker flow)
-saham update --universe lq45
+saham data update --universe lq45
 
 # Update explicitly listed tickers
-saham update BBCA BBRI BMRI
+saham data update BBCA BBRI BMRI
 
 # Refresh only already-cached tickers
-saham update --universe cached
+saham data update --universe cached
 
 # Force refresh all (ignore cache)
-saham update --universe lq45 --refresh
+saham data update --universe lq45 --refresh
 
 # Broker flow only (skip candles)
-saham update --universe lq45 --broker-only
+saham data update --universe lq45 --broker-only
 
 # Use shorter history
-saham update --universe lq45 --days 30
+saham data update --universe lq45 --days 30
 ```
 
-**Why use this?** This replaces the old `saham fetch TICKER` and `saham broker fetch TICKER` workflow for every stock — fetches everything for an entire universe in one pass. Run daily before morning screening.
+**Why use this?** This replaces the old `saham fetch TICKER` and `saham data broker fetch TICKER` workflow for every stock — fetches everything for an entire universe in one pass. Run daily before morning screening.
 
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
@@ -1887,12 +1887,12 @@ saham screen accumulation audit --universe lq45 --window 7 --min-score 70
 ### Logging to Journal
 
 ```bash
-saham screen accumulation-log --ticker BBRI --window 7
+saham trade swing log --ticker BBRI --window 7
 ```
 
 ---
 
-## 16. Intraday Pre-Open Screener - The `intraday` Command
+## 16. Intraday Pre-Open Screener - The `trade intraday` Command
 
 A complete pre-market screening to opening-auction confirmation workflow.
 
@@ -1900,12 +1900,12 @@ A complete pre-market screening to opening-auction confirmation workflow.
 
 ```bash
 # Fast mode (no order book, ~15s)
-saham intraday pre-open \
+saham trade intraday pre-open \
   --movers-json '[{"ticker":"BBCA","iev":150000}]' \
   --fast
 
 # Normal mode with order book data
-saham intraday pre-open \
+saham trade intraday pre-open \
   --movers-json '[{"ticker":"BBCA","iev":150000}]' \
   --order-books-json '{"BBCA":{"price":8900,"volume":50000}}'
 ```
@@ -1915,7 +1915,7 @@ saham intraday pre-open \
 After the opening auction clears, check which candidates actually trigger:
 
 ```bash
-saham intraday confirm-open --opening-json '{"BBCA":9050,"BMRI":5875}'
+saham trade intraday confirm-open --opening-json '{"BBCA":9050,"BMRI":5875}'
 ```
 
 Emits deterministic ENTER / WAIT / SKIP decisions based on entry ranges from the pre-open screen.
@@ -1924,46 +1924,46 @@ Emits deterministic ENTER / WAIT / SKIP decisions based on entry ranges from the
 
 ```bash
 # Log to paper trade journal
-saham intraday log
+saham trade intraday log
 
 # Review hit rate
-saham intraday review --horizon 5
+saham trade intraday review --horizon 5
 
 # Record actual outcome
-saham intraday outcome BBCA --entry 9000 --exit 9500 --result target
+saham trade intraday outcome BBCA --entry 9000 --exit 9500 --result target
 ```
 
 ### Command Summary
 
 | Command | Purpose |
 |---------|---------|
-| `saham intraday pre-open` | Pre-market movers screener |
-| `saham intraday confirm-open` | Confirm against actual opening prices |
-| `saham intraday log` | Append to paper trade journal |
-| `saham intraday review` | Review journal accuracy |
-| `saham intraday outcome` | Record actual trade outcome |
+| `saham trade intraday pre-open` | Pre-market movers screener |
+| `saham trade intraday confirm-open` | Confirm against actual opening prices |
+| `saham trade intraday log` | Append to paper trade journal |
+| `saham trade intraday review` | Review journal accuracy |
+| `saham trade intraday outcome` | Record actual trade outcome |
 
 ---
 
-## 17. Swing Trade Workflow - The `swing` Command
+## 17. Swing Trade Workflow - The `trade swing` Command
 
 Unified analysis combining accumulation, risk, sizing, backtest, and sentiment in one command.
 
 ```bash
 # Full analysis
-saham swing BBRI
+saham trade swing BBRI
 
 # With position sizing
-saham swing BBRI --capital 10000000
+saham trade swing BBRI --capital 10000000
 
 # With preset strategy gates
-saham swing BBRI --preset foreign-bounce --capital 10000000
+saham trade swing BBRI --preset foreign-bounce --capital 10000000
 
 # Conservative profile, skip sentiment
-saham swing BBRI --profile conservative --no-sentiment
+saham trade swing BBRI --profile conservative --no-sentiment
 
 # Compare with market regime context
-saham swing BBRI --with-regime
+saham trade swing BBRI --with-regime
 ```
 
 | Option | Short | Default | Description |
@@ -1982,8 +1982,8 @@ saham swing BBRI --with-regime
 Walk-forward portfolio backtest for the swing workflow:
 
 ```bash
-saham swing backtest --universe idx80 --preset foreign-bounce
-saham swing backtest --universe lq45 --capital 50000000 --max-positions 3
+saham trade swing backtest --universe idx80 --preset foreign-bounce
+saham trade swing backtest --universe lq45 --capital 50000000 --max-positions 3
 ```
 
 ### Swing Compare
@@ -1991,8 +1991,8 @@ saham swing backtest --universe lq45 --capital 50000000 --max-positions 3
 Compare regime-filtered variants side-by-side:
 
 ```bash
-saham swing compare --universe idx80
-saham swing compare --universe lq45 --variants baseline,sideways_only
+saham trade swing compare --universe idx80
+saham trade swing compare --universe lq45 --variants baseline,sideways_only
 ```
 
 ### Swing Size
@@ -2000,25 +2000,25 @@ saham swing compare --universe lq45 --variants baseline,sideways_only
 ATR-based position sizing calculator:
 
 ```bash
-saham swing size BBRI --capital 10000000
-saham swing size BBRI --capital 10000000 --risk-pct 2 --entry 4825
+saham trade swing size BBRI --capital 10000000
+saham trade swing size BBRI --capital 10000000 --risk-pct 2 --entry 4825
 ```
 
 ---
 
-## 18. Market Regime - The `regime` Command
+## 18. Market Regime - The `analyze regime` Command
 
 Show deterministic IHSG market regime context for swing trading.
 
 ```bash
 # Today's regime
-saham regime
+saham analyze regime
 
 # Specific date
-saham regime --as-of 2026-06-01
+saham analyze regime --as-of 2026-06-01
 
 # Custom universe and benchmark
-saham regime --universe idx80 --benchmark ^JKSE
+saham analyze regime --universe idx80 --benchmark ^JKSE
 ```
 
 **Regime labels:** `BULLISH` (strong), `SIDEWAYS` (mixed), `WEAK` (declining), `RISK_OFF` (bearish)
@@ -2027,62 +2027,62 @@ Computed from: benchmark SMA20/SMA50 position, breadth (% of universe above SMA2
 
 ---
 
-## 19. Terminal Charts - The `chart` Command
+## 19. Terminal Charts - The `analyze chart` Command
 
 Plot ASCII charts in your terminal (requires `pip install plotext`).
 
 ```bash
 # Price chart with SMA overlay
-saham chart price BBCA
-saham chart price BBCA --sma 20 --ema 9 --days 120
+saham analyze chart price BBCA
+saham analyze chart price BBCA --sma 20 --ema 9 --days 120
 
 # RSI with overbought/oversold bands
-saham chart rsi BBCA
-saham chart rsi BBCA --period 9 --days 120
+saham analyze chart rsi BBCA
+saham analyze chart rsi BBCA --period 9 --days 120
 
 # Volume bars
-saham chart volume BBCA
-saham chart volume BBCA --days 30
+saham analyze chart volume BBCA
+saham analyze chart volume BBCA --days 30
 ```
 
 ---
 
-## 20. Stockbit Session Management - The `stockbit` Command
+## 20. Stockbit Session Management - The `data stockbit` Command
 
 Manage Stockbit browser sessions for automated data fetching.
 
 ```bash
 # Open browser to log in (saves session cookies)
-saham stockbit login
+saham data stockbit login
 
 # Check session health
-saham stockbit status
+saham data stockbit status
 
 # Capture API traffic to identify endpoints
-saham stockbit spy
-saham stockbit spy --target orderbook --ticker BBRI
+saham data stockbit spy
+saham data stockbit spy --target orderbook --ticker BBRI
 
 # Smoke-test the adapter
-saham stockbit test
-saham stockbit test --no-headless
+saham data stockbit test
+saham data stockbit test --no-headless
 ```
 
 | Command | Purpose |
 |---------|---------|
-| `saham stockbit login` | Save browser session (Playwright) |
-| `saham stockbit status` | Check session health |
-| `saham stockbit spy` | Capture API traffic for calibration |
-| `saham stockbit test` | Smoke-test live adapter |
+| `saham data stockbit login` | Save browser session (Playwright) |
+| `saham data stockbit status` | Check session health |
+| `saham data stockbit spy` | Capture API traffic for calibration |
+| `saham data stockbit test` | Smoke-test live adapter |
 
 ---
 
-## 21. Side-by-Side Comparison - The `compare` Command
+## 21. Side-by-Side Comparison - The `analyze compare` Command
 
 Quickly compare risk levels across multiple tickers:
 
 ```bash
-saham compare BBCA BBRI BMRI
-saham compare BBCA TLKM --profile conservative
+saham analyze compare BBCA BBRI BMRI
+saham analyze compare BBCA TLKM --profile conservative
 ```
 
 ---
@@ -2095,19 +2095,19 @@ Goal: Identify low-risk entry points for long-term holdings.
 
 ```bash
 # Step 1: Get data (2 years for perspective)
-saham update BBCA --days 730
+saham data update BBCA --days 730
 
 # Step 2: Check long-term trend
-saham sma BBCA --period 200
+saham indicator compute SMA BBCA --period 200
 
 # Step 3: Risk assessment with strict thresholds
-saham risk BBCA --profile conservative
+saham analyze risk BBCA --profile conservative
 
 # Step 4: Verify with all profiles
-saham risk BBCA --all
+saham analyze risk BBCA --all
 
 # Step 5: Check news context
-saham risk BBCA --with-sentiment
+saham analyze risk BBCA --with-sentiment
 ```
 
 **Decision Framework:**
@@ -2121,19 +2121,19 @@ Goal: Find short-term momentum opportunities.
 
 ```bash
 # Step 1: Fresh data
-saham update BBRI --days 365 --refresh
+saham data update BBRI --days 365 --refresh
 
 # Step 2: Fast indicators
-saham indicators BBRI --sma 10 --ema 9 --rsi 7
+saham indicator snapshot BBRI --sma 10 --ema 9 --rsi 7
 
 # Step 3: Aggressive profile for early signals
-saham risk BBRI --profile aggressive
+saham analyze risk BBRI --profile aggressive
 
 # Step 4: Get AI explanation
-saham risk BBRI --profile aggressive --explain --provider ollama
+saham analyze risk BBRI --profile aggressive --explain --provider ollama
 
 # Step 5: Current sentiment
-saham sentiment BBRI --days 1
+saham analyze sentiment BBRI --days 1
 ```
 
 ### Strategy Developer Workflow
@@ -2142,7 +2142,7 @@ Goal: Build and test a custom trading strategy.
 
 ```bash
 # Step 1: Get enough historical data
-saham update TLKM --days 730
+saham data update TLKM --days 730
 
 # Step 2: Create a strategy package
 saham strategy init my_strategy
@@ -2155,10 +2155,10 @@ vim strategies/my_strategy/strategy.yaml
 saham strategy validate my_strategy
 
 # Step 5: Test rules on current data
-saham risk TLKM --rules-file strategies/my_strategy/strategy.yaml
+saham analyze risk TLKM --rules-file strategies/my_strategy/strategy.yaml
 
 # Step 6: Backtest on historical data
-saham backtest TLKM --strategy my_strategy --start 2023-01-01 --verbose
+saham strategy backtest TLKM --strategy my_strategy --start 2023-01-01 --verbose
 
 # Step 7: Iterate until metrics are acceptable
 # Step 8: Share or version control your strategy
@@ -2172,11 +2172,11 @@ Goal: Create a custom indicator and use it in trading rules.
 
 ```bash
 # Step 1: Create custom formula using AI
-saham create-indicator "smoothed RSI with 14-period and 10-day smoothing" \
+saham indicator create "smoothed RSI with 14-period and 10-day smoothing" \
     --name SMOOTH_RSI --provider ollama
 
 # Step 2: Verify it works
-saham compute SMOOTH_RSI BBCA --tail 10
+saham indicator compute SMOOTH_RSI BBCA --tail 10
 
 # Step 3: Create a rules file that uses it (no definition needed!)
 cat > config/smooth_rules.yaml << 'EOF'
@@ -2208,16 +2208,16 @@ signal_mapping:
 EOF
 
 # Step 4: Run risk assessment
-saham risk BBCA --rules-file config/smooth_rules.yaml
+saham analyze risk BBCA --rules-file config/smooth_rules.yaml
 
 # Step 5: Backtest the strategy
-saham backtest BBCA --rules-file config/smooth_rules.yaml --verbose
+saham strategy backtest BBCA --rules-file config/smooth_rules.yaml --verbose
 
 # Step 6: List all your custom formulas
-saham list-indicators --formulas
+saham indicator list --formulas
 ```
 
-**Key insight:** Once you create a formula with `create-indicator`, it's saved globally and can be used in any rules file without redefining it.
+**Key insight:** Once you create a formula with `saham indicator create`, it's saved globally and can be used in any rules file without redefining it.
 
 ### Foreign Flow Analysis Workflow
 
@@ -2225,31 +2225,31 @@ Goal: Analyze foreign investor behavior and build a foreign flow strategy.
 
 ```bash
 # Step 1: Fetch broker data (IDX provider - no auth needed)
-saham broker fetch BBCA --days 90
-saham broker fetch BBRI --days 90
-saham broker fetch BMRI --days 90
+saham data broker fetch BBCA --days 90
+saham data broker fetch BBRI --days 90
+saham data broker fetch BMRI --days 90
 
 # Step 2: Analyze foreign flow patterns
-saham broker flow BBCA --days 20
-saham broker flow BBRI --days 20
+saham data broker flow BBCA --days 20
+saham data broker flow BBRI --days 20
 
 # Step 3: Check top brokers (requires Stockbit session provider)
-saham broker fetch BBCA --provider stockbit-session --days 30
-saham broker top BBCA --date 2025-01-27
+saham data broker fetch BBCA --provider stockbit-session --days 30
+saham data broker top BBCA --date 2025-01-27
 
 # Step 4: Fetch price data for backtesting
-saham update BBCA --days 365
-saham update BBRI --days 365
+saham data update BBCA --days 365
+saham data update BBRI --days 365
 
 # Step 5: Use the pre-built foreign accumulation strategy
-saham backtest BBCA --strategy foreign-accumulation --verbose
+saham strategy backtest BBCA --strategy foreign-accumulation --verbose
 
 # Step 6: Or create your own strategy
 saham strategy init my_flow_strategy
 # Edit to use FOREIGN_FLOW indicators
 vim strategies/my_flow_strategy/strategy.yaml
 saham strategy validate my_flow_strategy
-saham backtest BBCA --strategy my_flow_strategy
+saham strategy backtest BBCA --strategy my_flow_strategy
 ```
 
 **Key Insights:**
@@ -2265,22 +2265,22 @@ saham backtest BBCA --strategy my_flow_strategy
 | Command | Purpose | Key Options |
 |---------|---------|-------------|
 | `saham version` | Show version | — |
-| `saham update` | Batch data update (candles + broker) | `--universe`, `--days`, `--broker-provider`, `--refresh` |
-| `saham sma TICKER` | Simple Moving Average | `--period`, `--field`, `--days` |
-| `saham ema TICKER` | Exponential Moving Average | `--period`, `--field`, `--days` |
-| `saham rsi TICKER` | Relative Strength Index | `--period`, `--days` |
-| `saham compute INDICATOR TICKER` | Compute any indicator | `--period`, `--days`, `--tail`, `--db` |
-| `saham indicators TICKER` | All indicators combined | `--sma`, `--ema`, `--rsi`, `--days`, `--format` |
-| `saham compare TICKER TICKER...` | Side-by-side risk comparison | `--profile`, `--sma`, `--rsi` |
-| `saham risk TICKER` | Risk assessment | `--profile`, `--all`, `--rules-file`, `--explain`, `--with-sentiment`, `--trend`, `--format` |
-| `saham sentiment TICKER` | News sentiment | `--days`, `--max`, `--ai-classify`, `--news-provider`, `--no-ai` |
-| `saham sentiment-audit` | Audit sentiment accuracy | — |
-| `saham broker status` | Check all provider status | — |
-| `saham broker fetch TICKER` | Fetch broker summary data | `--days`, `--start`, `--end`, `--refresh`, `--provider` |
-| `saham broker flow TICKER` | View foreign flow summary | `--days` |
-| `saham broker top TICKER` | View top brokers | `--date` |
-| `saham broker import FILE` | Import broker data from CSV | `--preview`, `--mapping`, `--on-error` |
-| `saham broker mappings` | List available CSV mappings | — |
+| `saham data update` | Batch data update (candles + broker) | `--universe`, `--days`, `--broker-provider`, `--refresh` |
+| `saham indicator compute SMA TICKER` | Simple Moving Average | `--period`, `--field`, `--days` |
+| `saham indicator compute EMA TICKER` | Exponential Moving Average | `--period`, `--field`, `--days` |
+| `saham indicator compute RSI TICKER` | Relative Strength Index | `--period`, `--days` |
+| `saham indicator compute INDICATOR TICKER` | Compute any indicator | `--period`, `--days`, `--tail`, `--db` |
+| `saham indicator snapshot TICKER` | All indicators combined | `--sma`, `--ema`, `--rsi`, `--days`, `--format` |
+| `saham analyze compare TICKER TICKER...` | Side-by-side risk comparison | `--profile`, `--sma`, `--rsi` |
+| `saham analyze risk TICKER` | Risk assessment | `--profile`, `--all`, `--rules-file`, `--explain`, `--with-sentiment`, `--trend`, `--format` |
+| `saham analyze sentiment TICKER` | News sentiment | `--days`, `--max`, `--ai-classify`, `--news-provider`, `--no-ai` |
+| `saham analyze audit` | Audit sentiment accuracy | — |
+| `saham data broker status` | Check all provider status | — |
+| `saham data broker fetch TICKER` | Fetch broker summary data | `--days`, `--start`, `--end`, `--refresh`, `--provider` |
+| `saham data broker flow TICKER` | View foreign flow summary | `--days` |
+| `saham data broker top TICKER` | View top brokers | `--date` |
+| `saham data broker import FILE` | Import broker data from CSV | `--preview`, `--mapping`, `--on-error` |
+| `saham data broker mappings` | List available CSV mappings | — |
 | `saham strategy init NAME` | Create strategy package | `--dir`, `--force` |
 | `saham strategy create INTENT` | Create strategy from natural language | `--name`, `--provider`, `--save/--no-save` |
 | `saham strategy validate NAME` | Validate strategy (auto-generates SKILL.md) | `--strict` |
@@ -2288,30 +2288,30 @@ saham backtest BBCA --strategy my_flow_strategy
 | `saham skill generate NAME` | Generate SKILL.md for an artifact | `--type` (strategy/indicator/formula) |
 | `saham skill check` | Report stale/missing SKILL.md files | — |
 | `saham skill index` | Rebuild SKILLS_INDEX.md catalog | — |
-| `saham backtest TICKER` | Strategy backtesting | `--strategy`/`--rules-file`, `--start`, `--end`, `--capital`, `--verbose`, `--format` |
-| `saham create-indicator` | Create formula from natural language | `--name`, `--provider`, `--save/--no-save` |
-| `saham list-indicators` | List all indicators | `--formulas` |
-| `saham show-formula NAME` | Show formula details | — |
-| `saham delete-indicator NAME` | Delete custom formula | `--force` |
-| `saham screen accumulation` | Foreign accumulation screener | `--universe`, `--window`, `--multi`, `--format` |
-| `saham screen accumulation audit` | Historical accumulation audit | `--universe`, `--preset`, `--simulate-exits` |
-| `saham intraday pre-open` | Pre-open market screener | `--movers-json`, `--fast`, `--top` |
-| `saham intraday confirm-open` | Confirm at opening auction | `--opening-json` |
-| `saham intraday log` | Log confirmation to journal | — |
-| `saham intraday review` | Review paper trade journal | `--horizon` |
-| `saham intraday outcome` | Record actual trade outcome | `--entry`, `--exit`, `--result` |
-| `saham swing TICKER` | Unified swing analysis | `--capital`, `--preset`, `--with-regime` |
-| `saham swing backtest` | Portfolio walk-forward backtest | `--universe`, `--capital`, `--allow-regimes` |
-| `saham swing compare` | Compare regime variants | `--universe`, `--variants` |
-| `saham swing size TICKER` | ATR position sizing | `--capital`, `--risk-pct`, `--entry` |
-| `saham regime` | Market regime context | `--universe`, `--as-of`, `--format` |
-| `saham chart price TICKER` | Price chart with overlays | `--sma`, `--ema`, `--days`, `--width` |
-| `saham chart rsi TICKER` | RSI chart | `--period`, `--days` |
-| `saham chart volume TICKER` | Volume bar chart | `--days` |
-| `saham universe list` | List ticker universes | — |
-| `saham stockbit login` | Stockbit browser login | `--timeout` |
-| `saham stockbit status` | Check session health | — |
-| `saham stockbit test` | Smoke-test adapter | `--ticker`, `--no-headless` |
+| `saham strategy backtest TICKER` | Strategy backtesting | `--strategy`/`--rules-file`, `--start`, `--end`, `--capital`, `--verbose`, `--format` |
+| `saham indicator create` | Create formula from natural language | `--name`, `--provider`, `--save/--no-save` |
+| `saham indicator list` | List all indicators | `--formulas` |
+| `saham indicator show NAME` | Show formula details | — |
+| `saham indicator delete NAME` | Delete custom formula | `--force` |
+| `saham trade swing screen` | Foreign accumulation screener | `--universe`, `--window`, `--multi`, `--format` |
+| `saham trade swing audit` | Historical accumulation audit | `--universe`, `--preset`, `--simulate-exits` |
+| `saham trade intraday pre-open` | Pre-open market screener | `--movers-json`, `--fast`, `--top` |
+| `saham trade intraday confirm-open` | Confirm at opening auction | `--opening-json` |
+| `saham trade intraday log` | Log confirmation to journal | — |
+| `saham trade intraday review` | Review paper trade journal | `--horizon` |
+| `saham trade intraday outcome` | Record actual trade outcome | `--entry`, `--exit`, `--result` |
+| `saham trade swing analyze TICKER` | Unified swing analysis | `--capital`, `--preset`, `--with-regime` |
+| `saham trade swing backtest` | Portfolio walk-forward backtest | `--universe`, `--capital`, `--allow-regimes` |
+| `saham trade swing compare` | Compare regime variants | `--universe`, `--variants` |
+| `saham trade swing size TICKER` | ATR position sizing | `--capital`, `--risk-pct`, `--entry` |
+| `saham analyze regime` | Market regime context | `--universe`, `--as-of`, `--format` |
+| `saham analyze chart price TICKER` | Price chart with overlays | `--sma`, `--ema`, `--days`, `--width` |
+| `saham analyze chart rsi TICKER` | RSI chart | `--period`, `--days` |
+| `saham analyze chart volume TICKER` | Volume bar chart | `--days` |
+| `saham data universe list` | List ticker universes | — |
+| `saham data stockbit login` | Stockbit browser login | `--timeout` |
+| `saham data stockbit status` | Check session health | — |
+| `saham data stockbit test` | Smoke-test adapter | `--ticker`, `--no-headless` |
 
 ---
 
@@ -2354,10 +2354,10 @@ Data is cached at `./data.db` (configurable with `--db`). Use `--refresh` to upd
 
 ```
 Error: No cached data found for BBCA
-Tip: Run 'saham update BBCA --days 365' first to download data.
+Tip: Run 'saham data update BBCA --days 365' first to download data.
 ```
 
-**Solution:** Fetch data first with `saham update TICKER --days 365`
+**Solution:** Fetch data first with `saham data update TICKER --days 365`
 
 ### "Database not found"
 
@@ -2365,7 +2365,7 @@ Tip: Run 'saham update BBCA --days 365' first to download data.
 Error: Database not found at /path/to/data.db
 ```
 
-**Solution:** Run `saham update` for any ticker to create the database
+**Solution:** Run `saham data update` for any ticker to create the database
 
 ### "Network connection failed"
 
@@ -2422,7 +2422,7 @@ Tip: Use 'saham strategy init momentum' to create a new strategy.
 
 3. **Use explicit path:** If the file is elsewhere:
    ```bash
-   saham backtest BBCA --strategy ./path/to/strategy.yaml
+   saham strategy backtest BBCA --strategy ./path/to/strategy.yaml
    ```
 
 4. **List available strategies:**
@@ -2453,7 +2453,7 @@ Define it in the 'indicators' section, use a built-in, or register a formula.
 
 1. **Create and save the formula:**
    ```bash
-   saham create-indicator "smoothed RSI" --name SMOOTH_RSI --provider mock
+   saham indicator create "smoothed RSI" --name SMOOTH_RSI --provider mock
    ```
 
 2. **Define it in the rules file:**
@@ -2467,7 +2467,7 @@ Define it in the 'indicators' section, use a built-in, or register a formula.
 
 Check available indicators with:
 ```bash
-saham list-indicators
+saham indicator list
 ```
 
 ### "AI explanation unavailable"
@@ -2487,14 +2487,14 @@ Tip: Set the appropriate API key environment variable.
 
 ```
 No session found.
-Run: saham stockbit login
+Run: saham data stockbit login
 ```
 
 **Solution:** Stockbit browser session cookies are not saved. Use the new browser-based login:
 
 1. Install dependencies: `pip install -e ".[browser]" && playwright install chromium`
-2. Login: `saham stockbit login`
-3. Check: `saham stockbit status`
+2. Login: `saham data stockbit login`
+3. Check: `saham data stockbit status`
 
 ### "Stockbit session expired"
 
@@ -2504,12 +2504,12 @@ Session may be expired — re-run login.
 
 **Solution:** Browser sessions can expire. Refresh with:
 ```bash
-saham stockbit login
+saham data stockbit login
 ```
 
 Or use IDX provider (no auth needed):
 ```bash
-saham broker fetch BBCA
+saham data broker fetch BBCA
 ```
 
 ### "IDX API returned 403 Forbidden"
@@ -2523,15 +2523,17 @@ Error: IDX API returned 403 Forbidden.
 ### "No broker data found"
 
 ```
-No data found. Run 'saham broker fetch BBCA' first.
+No data found. Run 'saham data broker fetch BBCA' first.
 ```
 
 **Solution:** Fetch broker data before viewing:
 ```bash
-saham broker fetch BBCA --days 30
-saham broker flow BBCA
+saham data broker fetch BBCA --days 30
+saham data broker flow BBCA
 ```
 
 ---
 
 **DISCLAIMER:** This tool provides technical analysis only, not financial advice. Always do your own research and consult qualified professionals before making investment decisions.
+re making investment decisions.
+isions.

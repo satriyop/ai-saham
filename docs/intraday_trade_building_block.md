@@ -8,15 +8,15 @@ The intraday trade feature is an **end-to-end pre-open trading workflow** that s
 
 | Command | Phase | Purpose |
 |---------|-------|---------|
-| `saham intraday pre-open` | 1 | Screen IDX morning movers → entry range, stop, trend, accumulation, FVWAP |
-| `saham intraday pre-open-log` | 3a | Log pre-open candidates to paper trade journal |
-| `saham intraday pre-open-review` | 5 | Review journal hit-rate + direction accuracy |
-| `saham intraday confirm-open` | 2 | Confirm ENTER/WAIT/SKIP after opening auction clears |
-| `saham intraday confirm-log` (alias: `log`) | 3b | Log confirmation decisions to CSV journal |
-| `saham intraday confirm-review` (alias: `review`) | 5 | Review confirmation buckets by decision + context |
-| `saham intraday confirm-outcome` (alias: `outcome`) | 4 | Record actual trade result (target/stop/manual) |
-| `saham intraday backtest` | 6 | Walk-forward backtest of the pre-open workflow |
-| `saham intraday save-session` | — | Deprecated, redirects to `saham stockbit login` |
+| `saham trade intraday pre-open` | 1 | Screen IDX morning movers → entry range, stop, trend, accumulation, FVWAP |
+| `saham trade intraday pre-open-log` | 3a | Log pre-open candidates to paper trade journal |
+| `saham trade intraday pre-open-review` | 5 | Review journal hit-rate + direction accuracy |
+| `saham trade intraday confirm-open` | 2 | Confirm ENTER/WAIT/SKIP after opening auction clears |
+| `saham trade intraday confirm-log` (alias: `log`) | 3b | Log confirmation decisions to CSV journal |
+| `saham trade intraday confirm-review` (alias: `review`) | 5 | Review confirmation buckets by decision + context |
+| `saham trade intraday confirm-outcome` (alias: `outcome`) | 4 | Record actual trade result (target/stop/manual) |
+| `saham trade intraday backtest` | 6 | Walk-forward backtest of the pre-open workflow |
+| `saham trade intraday save-session` | — | Deprecated, redirects to `saham data stockbit login` |
 
 ---
 
@@ -125,7 +125,7 @@ The intraday trade feature is an **end-to-end pre-open trading workflow** that s
 ### Phase 1: Pre-Open Screening (08:45–09:00 WIB)
 
 ```
-CLI: saham intraday pre-open [--movers-json ...] [--order-books-json ...]
+CLI: saham trade intraday pre-open [--movers-json ...] [--order-books-json ...]
                               [--fast] [--with-ai] [--with-regime] [--headless/--no-headless]
  │
  ├─ _build_intraday_run_guard()
@@ -208,7 +208,7 @@ CLI: saham intraday pre-open [--movers-json ...] [--order-books-json ...]
 ### Phase 2: Confirm at Opening Auction (09:00+)
 
 ```
-CLI: saham intraday confirm-open --opening-json '{"BBCA":9050,"BBRI":4120}'
+CLI: saham trade intraday confirm-open --opening-json '{"BBCA":9050,"BBRI":4120}'
  │
  ├─ _load_confirmation_candidates()
  │    └── Read journals/.last-session.json → IntradayConfirmationCandidate[]
@@ -234,7 +234,7 @@ CLI: saham intraday confirm-open --opening-json '{"BBCA":9050,"BBRI":4120}'
 ### Phase 3a: Log Pre-Open to Journal
 
 ```
-CLI: saham intraday pre-open-log
+CLI: saham trade intraday pre-open-log
  │
  └─ PaperTradeJournalService.log_session(candidates, screened_at)
       └── For each candidate → JournalEntry → JournalStore.append()
@@ -244,7 +244,7 @@ CLI: saham intraday pre-open-log
 ### Phase 3b: Log Confirmation to Journal
 
 ```
-CLI: saham intraday confirm-log
+CLI: saham trade intraday confirm-log
  │
  └─ IntradayConfirmationCsvStore.append(confirmations)
       └── Writes → journals/intraday-confirmations.csv
@@ -253,7 +253,7 @@ CLI: saham intraday confirm-log
 ### Phase 4: Record Outcome
 
 ```
-CLI: saham intraday confirm-outcome BBCA --entry 9050 --exit 9200 --result target
+CLI: saham trade intraday confirm-outcome BBCA --entry 9050 --exit 9200 --result target
  │
  └─ IntradayConfirmationJournalService.record_outcome()
       └── Matches row by (confirmed_at, ticker)
@@ -264,14 +264,14 @@ CLI: saham intraday confirm-outcome BBCA --entry 9050 --exit 9200 --result targe
 ### Phase 5: Review
 
 ```
-CLI: saham intraday pre-open-review --horizon 5
+CLI: saham trade intraday pre-open-review --horizon 5
  │
  └─ PaperTradeJournalService.review(horizon_days)
       ├── Enriches each entry with actual_open, actual_close_1d, actual_close_5d
       │    └── From SQLiteMarketRepository by date
       └── Computes hit_rate_pct, direction_accuracy_1d, direction_accuracy_5d
 
-CLI: saham intraday confirm-review
+CLI: saham trade intraday confirm-review
  │
  └─ IntradayConfirmationJournalService.review()
       ├── Decision buckets: ENTER / WAIT / SKIP_* (count + outcome stats)
@@ -282,7 +282,7 @@ CLI: saham intraday confirm-review
 ### Phase 6: Backtest (Offline Replay)
 
 ```
-CLI: saham intraday backtest --universe lq45 --start 2026-01-01
+CLI: saham trade intraday backtest --universe lq45 --start 2026-01-01
  │
  └─ IntradayBacktestUseCase.execute()
       │
@@ -354,8 +354,8 @@ The `ConfirmIntradayOpenUseCase` applies 8 deterministic gates in order:
 
 | Data | Repository | Populated By |
 |------|-----------|-------------|
-| Candles (OHLCV) | SQLiteMarketRepository | `saham update` |
-| Broker flow | SQLiteBrokerRepository | `saham broker fetch` / `saham update` |
+| Candles (OHLCV) | SQLiteMarketRepository | `saham data update` |
+| Broker flow | SQLiteBrokerRepository | `saham data broker fetch` / `saham data update` |
 
 ### Computed (via IndicatorRegistry)
 

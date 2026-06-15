@@ -46,9 +46,15 @@ The same layers with their actual components visible:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                        CLI LAYER (11 modules)                       │
-│  main.py  │  broker  │  screen  │  swing  │  strategy  │  skill     │
-│  sentiment │  stockbit │  chart  │  update  │  accumulation         │
+│                        CLI LAYER (17 modules)                       │
+│  main.py (groups)                                                   │
+│  data_commands.py (update, broker, stockbit, universe)              │
+│  indicator_commands.py (compute, snapshot, create, list)            │
+│  analyze_commands.py (risk, compare, sentiment, audit, regime)      │
+│  trade_commands.py (swing, intraday)                                │
+│  strategy_commands.py (init, create, backtest, list)                │
+│  skill_commands.py (generate, index, check)                         │
+│  + implementation files (accumulation, broker, chart, screen, etc)  │
 └──────────────────────────┬──────────────────────────────────────────┘
                            │
 ┌──────────────────────────▼──────────────────────────────────────────┐
@@ -132,15 +138,15 @@ The same layers with their actual components visible:
 
 | # | Subsystem | Purpose | Entry Points | Key Files |
 |---|-----------|---------|--------------|-----------|
-| 1 | **CLI Router** | Routes user commands to use cases. Parses flags, wires dependencies, displays output. | `saham <command>` | `main.py` (1864 lines) + 10 typer apps |
-| 2 | **Data Ingestion** | Fetches, caches, and serves OHLCV + broker + news data from external sources. | `fetch`, `update`, `broker fetch`, `sentiment` | `yahoo.py`, `idx_market.py`, `idx.py`, `stockbit.py`, 6 sentiment providers, SQLite repos |
-| 3 | **Analysis Core** | Deterministic indicator computation, risk profiling, and composite analysis. | `sma`, `ema`, `rsi`, `compute`, `risk`, `indicators`, `compare` | `sma.py`, `ema.py`, `rsi.py`, `indicator_registry.py`, 3 rule profiles, `rule_engine.py` |
-| 4 | **Screening Suite** | Multi-dimensional stock screening for accumulation patterns, pre-open movers, and swing candidates. | `screen accumulation`, `swing screen`, `intraday pre-open` | `accumulation_screen.py`, `screen_commands.py`, `pre_open_screen.py` |
-| 5 | **Strategy System** | Authoring, validation, loading, and execution of versioned strategy packages. | `strategy init/create/validate/list`, `backtest` | `strategy_loader.py`, 3 strategy YAMLs, `strategy_commands.py` |
-| 6 | **Formula DSL** | Custom indicator language with tokenizer, parser, evaluator, and validator. Supports nesting and series operations. | `create-indicator`, `show-formula`, `compute <formula>` | 6 files in `application/formula/`, `formula_storage.py` |
-| 7 | **AI Integration** | 6 AI providers for explanation, formula translation, strategy creation, and sentiment classification. | `--explain`, `--ai-classify`, `create-indicator`, `strategy create` | `factory.py`, 6 explainers, 2 translators, `sentiment_analyzer.py` |
-| 8 | **Backtest Engine** | Signal generation from rules/strategies and portfolio simulation (single + walk-forward). | `backtest`, `swing backtest` | `backtest_engine.py` (domain), `swing_backtest.py` (app), `backtest.py` (use case) |
-| 9 | **Trading Workflow** | End-to-end trade lifecycle: pre-open screen → confirm at auction → journal → review → outcome. | `intraday *`, `swing analyze`, `swing size` | `screen_commands.py` (1532 lines), `position_sizer.py`, 3 journal services |
+| 1 | **CLI Router** | Routes user commands to use cases via nested groups. Parses flags, wires dependencies, displays output. | `saham <group> <cmd>` | `main.py`, `data_commands.py`, `trade_commands.py`, etc (17 files) |
+| 2 | **Data Ingestion** | Fetches, caches, and serves OHLCV + broker + news data from external sources. | `fetch`, `data update`, `data broker fetch`, `analyze sentiment` | `yahoo.py`, `idx_market.py`, `idx.py`, `stockbit.py`, 6 sentiment providers, SQLite repos |
+| 3 | **Analysis Core** | Deterministic indicator computation, risk profiling, and composite analysis. | `sma`, `ema`, `rsi`, `indicator compute`, `analyze risk`, `indicator snapshot`, `analyze compare` | `sma.py`, `ema.py`, `rsi.py`, `indicator_registry.py`, 3 rule profiles, `rule_engine.py` |
+| 4 | **Screening Suite** | Multi-dimensional stock screening for accumulation patterns, pre-open movers, and swing candidates. | `trade swing screen`, `trade intraday pre-open` | `accumulation_screen.py`, `screen_commands.py`, `pre_open_screen.py` |
+| 5 | **Strategy System** | Authoring, validation, loading, and execution of versioned strategy packages. | `strategy init/create/validate/list`, `strategy backtest` | `strategy_loader.py`, 3 strategy YAMLs, `strategy_commands.py` |
+| 6 | **Formula DSL** | Custom indicator language with tokenizer, parser, evaluator, and validator. Supports nesting and series operations. | `indicator create`, `show-formula`, `indicator compute <formula>` | 6 files in `application/formula/`, `formula_storage.py` |
+| 7 | **AI Integration** | 6 AI providers for explanation, formula translation, strategy creation, and sentiment classification. | `--explain`, `--ai-classify`, `indicator create`, `strategy create` | `factory.py`, 6 explainers, 2 translators, `sentiment_analyzer.py` |
+| 8 | **Backtest Engine** | Signal generation from rules/strategies and portfolio simulation (single + walk-forward). | `strategy backtest`, `trade swing backtest` | `backtest_engine.py` (domain), `swing_backtest.py` (app), `backtest.py` (use case) |
+| 9 | **Trading Workflow** | End-to-end trade lifecycle: pre-open screen → confirm at auction → journal → review → outcome. | `trade intraday *`, `trade swing analyze`, `trade swing size` | `screen_commands.py` (1532 lines), `position_sizer.py`, 3 journal services |
 | 10 | **Persistence** | All data storage: SQLite (market, broker, sentiment), CSV journals, YAML config, formula storage. | All commands via `--db`, `--formulas-file`, `--journal` | 3 SQLite repos, 3 CSV writers, `formula_storage.py`, `yaml_loader.py` |
 
 ---
@@ -472,21 +478,25 @@ Each Big block decomposes into Medium modules:
 |------|---------|
 | `plugins/indicator_loader.py` | Auto-discovers plugin indicators |
 
-#### Adapter CLI Modules (11)
+#### Adapter CLI Modules (17)
 
-| Module | File | Commands |
-|--------|------|----------|
-| Main | `cli/main.py` | fetch, sma, ema, rsi, compute, indicators, risk, backtest, create-indicator, list-indicators, show-formula, delete-indicator, compare, version (1864 lines) |
-| Broker | `cli/broker_commands.py` | broker status, fetch, flow, top, import, mappings |
-| Screen | `cli/screen_commands.py` | intraday pre-open, confirm-open, log, review, outcome, pre-open-log, pre-open-review (1532 lines) |
-| Swing | `cli/swing_commands.py` | swing analyze, size, backtest, compare, screen, audit, log, review + regime |
-| Strategy | `cli/strategy_commands.py` | strategy init, create, validate, list |
-| Sentiment | `cli/sentiment_commands.py` | sentiment, sentiment-audit |
-| Skill | `cli/skill_commands.py` | skill generate, check, index |
-| Stockbit | `cli/stockbit_commands.py` | stockbit login, status, spy, test |
-| Chart | `cli/chart_commands.py` | chart price, rsi, volume |
-| Update | `cli/update_commands.py` | update |
-| Accumulation | `cli/accumulation_commands.py` | universe list, update |
+| Module | File | Group / Commands |
+|--------|------|------------------|
+| Main | `cli/main.py` | Top-level group definitions (data, indicator, analyze, strategy, trade, skill) |
+| Data Router | `cli/data_commands.py` | `saham data [update, broker, stockbit, universe]` |
+| Indicator Router| `cli/indicator_commands.py` | `saham indicator [compute, snapshot, create, list, show, delete]` |
+| Analyze Router | `cli/analyze_commands.py` | `saham analyze [risk, compare, sentiment, audit, regime, chart]` |
+| Trade Router | `cli/trade_commands.py` | `saham trade [swing, intraday]` |
+| Strategy Router | `cli/strategy_commands.py` | `saham strategy [init, create, validate, list, backtest]` |
+| Skill Router | `cli/skill_commands.py` | `saham skill [generate, check, index]` |
+| Broker Impl | `cli/broker_commands.py` | Implementation of broker flow logic |
+| Screen Impl | `cli/screen_commands.py` | Implementation of intraday logic (1829 lines) |
+| Swing Impl | `cli/swing_commands.py` | Implementation of swing/unified logic |
+| Sentiment Impl | `cli/sentiment_commands.py` | Implementation of sentiment logic |
+| Stockbit Impl | `cli/stockbit_commands.py` | Implementation of session management |
+| Chart Impl | `cli/chart_commands.py` | Implementation of ASCII charts |
+| Update Impl | `cli/update_commands.py` | Implementation of batch update logic |
+| Accumulation | `cli/accumulation_commands.py` | Implementation of accumulation screen logic |
 
 #### Plugin Indicators (8)
 
@@ -581,7 +591,7 @@ CLI ───┬─── Use Case ─── Domain Port ─── Infrastructur
                                └─── Domain Entity/Value Object
 ```
 
-### Concrete example: `saham risk BBCA --explain`
+### Concrete example: `saham analyze risk BBCA --explain`
 
 Read-heavy flow — indicators from cache, AI optional.
 
@@ -609,7 +619,7 @@ UseCase: ExplainRiskUseCase
   └── Domain Entity: RiskAssessment
 ```
 
-### Concrete example: `saham update BBCA --days 365 --provider idx`
+### Concrete example: `saham data update BBCA --days 365 --provider idx`
 
 Write-heavy flow — external API → cache.
 
@@ -630,7 +640,7 @@ UseCase: FetchMarketDataUseCase
   └── Infra: SQLiteMarketRepository.save()    ← persist to cache
 ```
 
-### Concrete example: `saham create-indicator "RSI smoothed with EMA of period 3"`
+### Concrete example: `saham indicator create "RSI smoothed with EMA of period 3"`
 
 AI-heavy flow — NL → formula → validate → store.
 

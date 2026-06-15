@@ -8,15 +8,15 @@ The swing trade feature is a **unified composite workflow** that combines accumu
 
 | Command | Purpose | Delegates To |
 |---------|---------|-------------|
-| `saham swing analyze TICKER` | Unified 5-section composite view | Internal orchestration |
-| `saham swing size TICKER` | ATR-based position sizing calculator | `PositionSizer` service |
-| `saham swing backtest` | Portfolio walk-forward backtest | `SwingBacktestUseCase` |
-| `saham swing compare` | Compare variants across regimes | `SwingBacktestUseCase` × N variants |
-| `saham swing screen` | Accumulation screener (find candidates) | `AccumulationScreenUseCase` |
-| `saham swing audit` | Audit accumulation broker data | `AccumulationAuditUseCase` |
-| `saham swing log` | Log a candidate to journal | `AccumulationJournal` service |
-| `saham swing review` | Review journal performance | `AccumulationJournal` + SQLite |
-| `saham regime` | Market regime context (standalone) | `MarketRegimeUseCase` |
+| `saham trade swing analyze TICKER` | Unified multi-section composite view | Internal orchestration |
+| `saham trade swing size TICKER` | ATR-based position sizing calculator | `PositionSizer` service |
+| `saham trade swing backtest` | Portfolio walk-forward backtest | `SwingBacktestUseCase` |
+| `saham trade swing compare` | Compare variants across regimes | `SwingBacktestUseCase` × N variants |
+| `saham trade swing screen` | Accumulation screener (find candidates) | `AccumulationScreenUseCase` |
+| `saham trade swing audit` | Audit accumulation broker data | `AccumulationAuditUseCase` |
+| `saham trade swing log` | Log a candidate to journal | `AccumulationJournal` service |
+| `saham trade swing review` | Review journal performance | `AccumulationJournal` + SQLite |
+| `saham analyze regime` | Market regime context (standalone) | `MarketRegimeUseCase` |
 
 ---
 
@@ -26,13 +26,13 @@ The swing trade feature is a **unified composite workflow** that combines accumu
 ┌──────────────────────────────────────────────────────────────────────────┐
 │                          CLI LAYER (swing_commands.py, 2219 lines)       │
 │                                                                          │
-│  swing analyze    swing size    swing backtest    swing compare          │
-│  swing screen ───► accumulation_run (delegated)                         │
-│  swing audit  ───► accumulation_audit (delegated)                       │
-│  swing log    ───► accumulation_log (delegated)                         │
-│  swing review ───► accumulation_review (delegated)                      │
+│  trade swing analyze    trade swing size    trade swing backtest    trade swing compare          │
+│  trade swing screen ───► accumulation_run (delegated)                         │
+│  trade swing audit  ───► accumulation_audit (delegated)                       │
+│  trade swing log    ───► accumulation_log (delegated)                         │
+│  trade swing review ───► accumulation_review (delegated)                      │
 │                                                                          │
-│  regime (standalone command registered in main.py)                      │
+│  analyze regime (standalone command)                      │
 └────────────────────────────────┬─────────────────────────────────────────┘
                                  │
                                  ▼
@@ -43,7 +43,7 @@ The swing trade feature is a **unified composite workflow** that combines accumu
 │  │                     USE CASES (6)                        │          │
 │  │                                                          │          │
 │  │  SwingBacktestUseCase    Walk-forward portfolio sim      │          │
-│  │  AccumulationScreenUC    6-dimension accumulation score  │          │
+│  │  AccumulationScreenUC    7-dimension accumulation score  │          │
 │  │  AccumulationAuditUC     Accumulation pattern audit      │          │
 │  │  AssessRiskUseCase       Profile-based risk confirmation │          │
 │  │  FetchSentimentUseCase   News + keyword/AI classifier   │          │
@@ -114,11 +114,11 @@ The swing trade feature is a **unified composite workflow** that combines accumu
 
 ## `swing analyze` — Internal Flow (Composite)
 
-The single-ticker `saham swing analyze BBCA` command runs **7 data pipelines** sequentially and combines them into one output:
+The single-ticker `saham trade swing analyze BBCA` command runs **7 data pipelines** sequentially and combines them into one output:
 
 ```
 ┌─────────────┐
-│   ENTRY     │  saham swing analyze BBCA --capital 10000000 --with-regime
+│   ENTRY     │  saham trade swing analyze BBCA --capital 10000000 --with-regime
 └──────┬──────┘
        │
        ▼
@@ -141,7 +141,7 @@ The single-ticker `saham swing analyze BBCA` command runs **7 data pipelines** s
        │
        ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  STEP 3: Accumulation screening (6-dimension scoring)          │
+│  STEP 3: Accumulation screening (7-dimension scoring)          │
 │  AccumulationScreenUseCase                                     │
 │    ├── BrokerRepository.get_broker_summaries(window)           │
 │    ├── Compute score (net_buy_ratio + streak + VWAP +          │
@@ -248,7 +248,7 @@ The single-ticker `saham swing analyze BBCA` command runs **7 data pipelines** s
 
 ```
 ┌─────────────┐
-│   ENTRY     │  saham swing backtest --universe idx30 --capital 100000000
+│   ENTRY     │  saham trade swing backtest --universe idx30 --capital 100000000
 └──────┬──────┘
        │
        ▼
@@ -291,7 +291,7 @@ The single-ticker `saham swing analyze BBCA` command runs **7 data pipelines** s
 
 ```
 ┌─────────────┐
-│   ENTRY     │  saham swing compare --universe idx30 --variants baseline,sideways_only
+│   ENTRY     │  saham trade swing compare --universe idx30 --variants baseline,sideways_only
 └──────┬──────┘
        │
        ▼
@@ -316,7 +316,7 @@ The single-ticker `saham swing analyze BBCA` command runs **7 data pipelines** s
 
 ```
 ┌─────────────┐
-│   ENTRY     │  saham swing size BBCA --capital 10000000 --risk-pct 1
+│   ENTRY     │  saham trade swing size BBCA --capital 10000000 --risk-pct 1
 └──────┬──────┘
        │
        ▼
@@ -342,7 +342,7 @@ The single-ticker `saham swing analyze BBCA` command runs **7 data pipelines** s
 
 ## Scoring Components (Accumulation Screener)
 
-The `AccumulationScreenUseCase` scores each stock on 6 dimensions (total 0–120):
+The `AccumulationScreenUseCase` scores each stock on 7 dimensions (total 0–120):
 
 | Component | Max Pts | Logic | Threshold |
 |-----------|---------|-------|-----------|
@@ -386,7 +386,7 @@ Classification:
 |------|-------|------|
 | `adapters/cli/swing_commands.py` | 2219 | Entry point, 8 commands, display logic, preset eval |
 | `application/use_case/swing_backtest.py` | 664 | Walk-forward portfolio simulation |
-| `application/use_case/accumulation_screen.py` | 434 | 6-dimension accumulation scoring |
+| `application/use_case/accumulation_screen.py` | 434 | 7-dimension accumulation scoring |
 | `application/use_case/assess_risk.py` | ~150 | Risk profile confirmation |
 | `application/use_case/market_regime.py` | 313 | Breadth + flow regime detection |
 | `application/use_case/fetch_sentiment.py` | ~120 | News sentiment fetching |
@@ -403,17 +403,17 @@ Classification:
 ## Data Dependencies
 
 ```
-swing analyze BBCA needs in SQLite:
-  ├── candles.BBCA       (from: saham update)
-  └── broker_flow.BBCA   (from: saham broker fetch BBCA / saham update)
+trade swing analyze BBCA needs in SQLite:
+  ├── candles.BBCA       (from: saham data update)
+  └── broker_flow.BBCA   (from: saham data broker fetch BBCA / saham data update)
 
-swing backtest --universe idx30 needs:
+trade swing backtest --universe idx30 needs:
   ├── candles.*           (all universe tickers)
   └── broker_flow.*       (all universe tickers)
 
-swing screen  needs: broker_flow.*
-swing size    needs: candles.TICKER (for ATR)
-swing regime  needs: candles.* + broker_flow.* (for breadth)
+trade swing screen  needs: broker_flow.*
+trade swing size    needs: candles.TICKER (for ATR)
+analyze regime  needs: candles.* + broker_flow.* (for breadth)
 ```
 
 ---
@@ -425,4 +425,4 @@ swing regime  needs: candles.* + broker_flow.* (for breadth)
 3. **Regime awareness is a filter, not a signal** — market regime only blocks entries, it doesn't generate them.
 4. **Presets are hardcoded in the adapter** — `foreign-bounce` lives in `swing_commands.py`, not in a config file or domain logic.
 5. **Position sizer is pure math** — no I/O, no ports. Works purely from Decimal inputs.
-6. **Auto-refresh is the default** — every `swing analyze` refetches candles + broker data before analyzing, unless `--no-refresh`.
+6. **Auto-refresh is the default** — every `trade swing analyze` refetches candles + broker data before analyzing, unless `--no-refresh`.

@@ -57,21 +57,21 @@ Screener menghitung skor dari data broker flow yang tersimpan lokal. Tanpa ini, 
 
 ```bash
 # Pertama kali — unduh data universe + broker flow
-saham update --universe lq45        # harga + broker flow LQ45 (~5 menit)
+saham data update --universe lq45        # harga + broker flow LQ45 (~5 menit)
 
 # Saham di luar LQ45 yang ingin di-screen
-saham update BUMI --days 365
-saham update GOTO --days 365
-saham update BREN --days 365
+saham data update BUMI --days 365
+saham data update GOTO --days 365
+saham data update BREN --days 365
 ```
 
 ### Seberapa Sering Refresh?
 
 | Kapan | Perintah |
 |-------|---------|
-| Setiap hari sebelum screen | `saham update --universe lq45` |
-| Mingguan untuk universe lebih luas | `saham update --universe idx80` |
-| Kalau ada saham baru masuk radar | `saham update TICKER --days 90` |
+| Setiap hari sebelum screen | `saham data update --universe lq45` |
+| Mingguan untuk universe lebih luas | `saham data update --universe idx80` |
+| Kalau ada saham baru masuk radar | `saham data update TICKER --days 90` |
 
 Data akan di-gap-fill otomatis kalau cache lokal belum mencapai tanggal hari ini. Output `cached-current` berarti cache sudah sampai hari ini, `+Nrows/span=Nd` berarti ada baris baru tersimpan, dan `up-to-date(YYYY-MM-DD)` berarti provider sudah dicek tetapi belum punya data trading yang lebih baru.
 
@@ -84,14 +84,14 @@ Catatan: opsi `--window 7`, `--window 30`, dan `--window 90` memakai jumlah sesi
 ```
 FREKUENSI        AKTIVITAS                           PERINTAH
 ─────────────────────────────────────────────────────────────────────────
-Setiap hari      Refresh data harga + broker flow    saham update --universe lq45
-Setiap hari      Cek regime pasar                    saham regime
-Setiap hari      Jalankan screener                   saham swing screen --universe lq45 --multi
-Per kandidat     Analisis detail + sizing            saham swing analyze TICKER --preset foreign-bounce
-Saat entry       Log keputusan ke journal            saham swing log --ticker TICKER --from-analysis --with-regime
+Setiap hari      Refresh data harga + broker flow    saham data update --universe lq45
+Setiap hari      Cek regime pasar                    saham analyze regime
+Setiap hari      Jalankan screener                   saham trade swing screen --universe lq45 --multi
+Per kandidat     Analisis detail + sizing            saham trade swing analyze TICKER --preset foreign-bounce
+Saat entry       Log keputusan ke journal            saham trade swing log --ticker TICKER --from-analysis --with-regime
 Saat exit        Catat outcome                       (manual di journal)
-Mingguan         Review hit rate                     saham swing review --horizon 10
-Bulanan          Validasi dengan backtest             saham swing backtest --universe lq45 --start ...
+Mingguan         Review hit rate                     saham trade swing review --horizon 10
+Bulanan          Validasi dengan backtest             saham trade swing backtest --universe lq45 --start ...
 ```
 
 **Estimasi waktu harian: 15–20 menit** (update + screen + 2–3 analisis detail).
@@ -112,7 +112,7 @@ Sebelum menggunakan screener, pahami apa yang diukur tiap komponen skor.
 | **RSI Headroom** | 10 pts | Puncak di RSI=40, nol di ≤25 atau ≥75 | Momentum tapi ada ruang naik |
 | **Flow Ratio** | 10 pts | Linear: 0% → 0 pts, ≥20% → 10 pts | Dominansi volume asing vs total |
 | **BB Squeeze** | 10 pts | Bottom 20%ile: 5–10 pts; bottom 40%ile: 0–5 pts | Volatilitas rendah, siap breakout |
-| **Broker Institusional** | 5 pts | Bonus kalau ada broker institusional di top buyer | UBS, JP Morgan, dll. ada di sisi beli |
+| **Broker Institusional** | 5 pts | Bonus kalau ada broker institusional di top buyer | AK, BK, KZ, ZP, RX, MS, DB, ML, YU ada di sisi beli |
 
 ### Interpretasi Skor
 
@@ -143,7 +143,7 @@ Sebelum menggunakan screener, pahami apa yang diukur tiap komponen skor.
 Sebelum screening, tahu dulu sedang di regime apa. Sinyal akumulasi yang sama **jauh lebih reliable di SIDEWAYS dibanding RISK_OFF**.
 
 ```bash
-saham regime
+saham analyze regime
 ```
 
 Contoh output:
@@ -168,12 +168,23 @@ Foreign Flow Breadth: +23.4% stocks with net foreign buy
 
 ### Empat Regime dan Implikasinya
 
-| Regime | Artinya | Strategi Foreign Accumulation |
-|--------|---------|------------------------------|
-| **BULLISH** | Breadth > 60%, IHSG di atas SMA20+50 | Oke, tapi saham lebih mahal — VWAP Disc mungkin kecil |
-| **SIDEWAYS** | Breadth 40–60%, IHSG ranging | **Terbaik** — harga flat, asing masih mengumpulkan |
-| **WEAK** | Breadth < 40%, IHSG di bawah SMA20 | Hati-hati — masih bisa kerja, ukuran lebih kecil |
-| **RISK_OFF** | Breadth < 30%, IHSG turun kuat | Skip swing — tunggu stabilisasi |
+Sistem menghitung skor komposit **0–7** (7-point check) untuk menentukan kondisi pasar secara objektif.
+
+**Checklist Skor (+1 per item):**
+1. IHSG di atas SMA20
+2. IHSG di atas SMA50
+3. Return IHSG 5-hari positif
+4. Return IHSG 20-hari positif
+5. Universe Breadth >= 50% (saham di atas SMA20)
+6. Breadth membaik (5-day change >= 0)
+7. Foreign Flow Breadth >= 50% (saham dengan net-buy asing)
+
+| Regime | Skor | Artinya | Strategi Foreign Accumulation |
+|--------|------|---------|------------------------------|
+| **BULLISH** | 6–7 | Konfirmasi kuat di benchmark & breadth | Oke, tapi saham lebih mahal — VWAP Disc mungkin kecil |
+| **SIDEWAYS** | 4–5 | Kondisi normal, tidak ada tren dominan | **Terbaik** — harga flat, asing masih mengumpulkan |
+| **WEAK** | 2–3 | Tekanan jual meningkat, IHSG di bawah SMA | Hati-hati — gunakan `--min-score 70`, size 50% |
+| **RISK_OFF** | 0–1 | Penjualan massal (Panic/Crash) | **Skip swing** — tunggu stabilisasi |
 
 **Aturan praktis:**
 - `BULLISH` atau `SIDEWAYS` → jalankan screener normal
@@ -187,7 +198,7 @@ Foreign Flow Breadth: +23.4% stocks with net foreign buy
 ### Screening Dasar
 
 ```bash
-saham swing screen --universe lq45
+saham trade swing screen --universe lq45
 ```
 
 Contoh output (7 sesi broker):
@@ -213,7 +224,7 @@ Run with --guide for column explanations
 Tampilkan skor 7, 30, dan 90 sesi sekaligus — ini memberikan konteks apakah akumulasi baru mulai atau sudah berlangsung lama.
 
 ```bash
-saham swing screen --universe lq45 --multi
+saham trade swing screen --universe lq45 --multi
 ```
 
 Contoh output:
@@ -260,22 +271,22 @@ FOREIGN ACCUMULATION — LQ45 | MULTI-WINDOW | 2026-06-13
 
 ```bash
 # Hanya saham yang siap breakout (volatilitas rendah)
-saham swing screen --universe lq45 --squeeze-only
+saham trade swing screen --universe lq45 --squeeze-only
 
 # Hanya saham yang asing masih underwater (ada price floor)
-saham swing screen --universe lq45 --vwap-only
+saham trade swing screen --universe lq45 --vwap-only
 
 # Kombinasi: skor tinggi + squeeze + underwater
-saham swing screen --universe lq45 --vwap-only --squeeze-only --min-score 60
+saham trade swing screen --universe lq45 --vwap-only --squeeze-only --min-score 60
 
 # Tampilkan breakdown skor per komponen
-saham swing screen --universe lq45 --breakdown
+saham trade swing screen --universe lq45 --breakdown
 
 # Universe lebih luas
-saham swing screen --universe idx80 --multi --min-score 50 --top 15
+saham trade swing screen --universe idx80 --multi --min-score 50 --top 15
 
 # Saham spesifik (bukan universe)
-saham swing screen BBCA BBRI BMRI TLKM --multi
+saham trade swing screen BBCA BBRI BMRI TLKM --multi
 ```
 
 ---
@@ -297,7 +308,7 @@ Setelah screener, pilih 2–4 saham untuk analisis detail. Prioritas:
 Untuk setiap kandidat dari screener, jalankan analisis lengkap dengan preset `foreign-bounce`.
 
 ```bash
-saham swing analyze GGRM --preset foreign-bounce --capital 10000000 --with-regime
+saham trade swing analyze GGRM --preset foreign-bounce --capital 10000000 --with-regime
 ```
 
 Secara default, command ini akan mengecek dan refresh data harga + broker flow hanya untuk ticker tersebut kalau cache lokal stale atau belum ada. Gunakan `--no-refresh` untuk mode cached-only/offline, atau `--force-refresh` kalau ingin memaksa fetch ulang dari provider.
@@ -358,7 +369,8 @@ PRESET — foreign-bounce
   flow_pct          ≥ +5.0%     +24.8%    ✓ PASS
   rsi               ≤ 60        42.5      ✓ PASS
 
-  Signal: ENTER  (5/5 gates passed)
+  Signal: ENTER  (6/6 gates passed)
+
   Plan  : TP +5%  |  SL -5%  |  Max Hold 10 days
 
 MARKET REGIME
@@ -423,7 +435,7 @@ SUMMARY & PLAN
 
 ### Membaca Gate `foreign-bounce`
 
-Preset `foreign-bounce` mengevaluasi 5 gate secara deterministik:
+Preset `foreign-bounce` mengevaluasi 6 gate secara deterministik:
 
 | Gate | Requirement | Rationale |
 |------|-------------|-----------|
@@ -434,7 +446,7 @@ Preset `foreign-bounce` mengevaluasi 5 gate secara deterministik:
 | `rsi ≤ 60` | RSI tidak overbought | Masih ada ruang naik |
 
 **Output gate:**
-- `ENTER` — semua 5 gate pass
+- `ENTER` — semua 6 gate pass
 - `WATCH` — skor ≥ 70 ATAU ≤ 2 gate gagal — monitor, mungkin masuk besok
 - `AVOID` — terlalu banyak gate gagal
 
@@ -442,19 +454,19 @@ Preset `foreign-bounce` mengevaluasi 5 gate secara deterministik:
 
 ```bash
 # Tanpa preset — analisis lengkap dengan profil risiko
-saham swing analyze BBRI --profile conservative --capital 10000000
+saham trade swing analyze BBRI --profile conservative --capital 10000000
 
 # Aggressive profile dengan ATR stop lebih longgar
-saham swing analyze BBRI --profile aggressive --capital 10000000 --atr-mult 2.0
+saham trade swing analyze BBRI --profile aggressive --capital 10000000 --atr-mult 2.0
 
 # Dengan custom entry price
-saham swing analyze BBRI --preset foreign-bounce --capital 10000000 --entry 4825
+saham trade swing analyze BBRI --preset foreign-bounce --capital 10000000 --entry 4825
 
 # Tanpa backtest (lebih cepat)
-saham swing analyze BBRI --preset foreign-bounce --no-backtest
+saham trade swing analyze BBRI --preset foreign-bounce --no-backtest
 
 # Format JSON (untuk integrasi)
-saham swing analyze BBRI --preset foreign-bounce --format json
+saham trade swing analyze BBRI --preset foreign-bounce --format json
 ```
 
 ---
@@ -464,9 +476,9 @@ saham swing analyze BBRI --preset foreign-bounce --format json
 Sebelum sizing atau log paper entry, pastikan struktur harga mendukung gate numerik. Ini memakai command chart yang sudah ada dan tidak mengubah sinyal deterministik.
 
 ```bash
-saham chart price BBRI --sma 20 --days 90
-saham chart rsi BBRI --days 90
-saham chart volume BBRI --days 30
+saham analyze chart price BBRI --sma 20 --days 90
+saham analyze chart rsi BBRI --days 90
+saham analyze chart volume BBRI --days 30
 ```
 
 | Cek | Lebih Baik | Hindari |
@@ -477,7 +489,7 @@ saham chart volume BBRI --days 30
 
 Aturan praktis:
 
-- `ENTER` dari `saham swing analyze` + chart konstruktif = boleh lanjut sizing/logging.
+- `ENTER` dari `saham trade swing analyze` + chart konstruktif = boleh lanjut sizing/logging.
 - `ENTER` + chart breakdown = downgrade ke `WATCH`; tunggu struktur membaik.
 - `WATCH` + chart konstruktif = tetap di shortlist, cek ulang besok.
 - `AVOID` tetap `AVOID`; chart tidak dipakai untuk override gate deterministik.
@@ -489,7 +501,7 @@ Aturan praktis:
 ### Sizing Standalone (Kalau Sudah Tahu Entry)
 
 ```bash
-saham swing size BBRI --capital 10000000 --risk-pct 1 --entry 4825
+saham trade swing size BBRI --capital 10000000 --risk-pct 1 --entry 4825
 ```
 
 Contoh output:
@@ -533,7 +545,7 @@ POSITION
 ```
 TICKER: GGRM
 ──────────────────────────────────────────────
-Setup   : sustained pattern | ENTER (5/5 gates)
+Setup   : sustained pattern | ENTER (6/6 gates)
 Regime  : SIDEWAYS — kondisi optimal
 
 Entry   : Limit buy di 47,100 (atau 47,000 kalau mau lebih aman)
@@ -581,7 +593,7 @@ Setelah entry:
   ☐ Tanggal max hold sudah dicatat?
 
 Harian (cukup 5 menit):
-  ☐ Cek apakah streak asing masih berlanjut (saham swing screen TICKER)
+  ☐ Cek apakah streak asing masih berlanjut (saham trade swing screen TICKER)
   ☐ Kalau streak BERHENTI selama 2 hari → pertimbangkan exit lebih awal
 
 Saat Target 1 (Prev High) tercapai:
@@ -601,10 +613,10 @@ Kalau max hold tercapai (10 hari):
 
 ```bash
 # Cek apakah setup kandidat aktif masih valid
-saham swing screen GGRM BBRI --multi
+saham trade swing screen GGRM BBRI --multi
 
 # Kalau streak berhenti, cek detail
-saham broker flow GGRM --days 5
+saham data broker flow GGRM --days 5
 ```
 
 ---
@@ -616,10 +628,10 @@ saham broker flow GGRM --days 5
 Catat setiap kandidat yang kamu analisis (bukan hanya yang kamu masuki), tetapi simpan juga keputusan preset dan rencana trade. Ini membuat review bisa membedakan setup `ENTER`, `WATCH`, dan `AVOID`.
 
 ```bash
-saham swing log --ticker GGRM --window 7 --from-analysis --with-regime
+saham trade swing log --ticker GGRM --window 7 --from-analysis --with-regime
 
 # Dengan harga entry yang berbeda dari latest close
-saham swing log --ticker GGRM --window 7 --entry-price 47100 --from-analysis --with-regime
+saham trade swing log --ticker GGRM --window 7 --entry-price 47100 --from-analysis --with-regime
 ```
 
 Dengan `--from-analysis`, journal menyimpan:
@@ -637,10 +649,10 @@ Dengan `--from-analysis`, journal menyimpan:
 
 ```bash
 # Review return 10 hari setelah log
-saham swing review --horizon 10
+saham trade swing review --horizon 10
 
 # Review return 5 hari
-saham swing review --horizon 5
+saham trade swing review --horizon 5
 ```
 
 Contoh output:
@@ -684,14 +696,14 @@ Sebelum sizing besar atau mengubah parameter, validasi dengan backtest historis.
 ### Backtest Dasar
 
 ```bash
-saham swing backtest --universe lq45 --start 2025-01-01
+saham trade swing backtest --universe lq45 --start 2025-01-01
 ```
 
 ### Backtest dengan Regime Filter (Direkomendasikan)
 
 ```bash
 # Bandingkan performa berdasarkan regime entry
-saham swing backtest --universe lq45 --start 2025-01-01 --with-regime
+saham trade swing backtest --universe lq45 --start 2025-01-01 --with-regime
 ```
 
 Contoh output:
@@ -725,7 +737,7 @@ RECOMMENDATION
 Sebelum `smart+`, `noise+`, atau `smart-` dijadikan gate, ukur dulu hasil historisnya:
 
 ```bash
-saham swing audit --universe lq45 --preset foreign-bounce --start 2026-01-01
+saham trade swing audit --universe lq45 --preset foreign-bounce --start 2026-01-01
 ```
 
 Output audit sekarang punya dimensi `broker_quality`:
@@ -744,7 +756,7 @@ Gunakan AVG10D, WIN10D, MAXUP, dan MAXDD untuk memutuskan apakah broker quality 
 ### Bandingkan Variant Regime Filter
 
 ```bash
-saham swing compare --universe lq45 --start 2025-01-01
+saham trade swing compare --universe lq45 --start 2025-01-01
 ```
 
 Contoh output:
@@ -761,7 +773,7 @@ VARIANT COMPARISON — LQ45 | 2025-01-01 → today
 ### Backtest Saham Spesifik
 
 ```bash
-saham swing backtest BBCA BBRI BMRI --start 2025-01-01 --capital 50000000
+saham trade swing backtest BBCA BBRI BMRI --start 2025-01-01 --capital 50000000
 ```
 
 Default backtest biaya adalah `--cost-bps 20` one-way, diterapkan saat entry dan exit. Angka ini mendekati rata-rata fee retail Indonesia 0.15% buy / 0.25% sell. Pakai `--cost-bps 0` hanya untuk membandingkan hasil gross tanpa biaya.
@@ -787,15 +799,15 @@ Default backtest biaya adalah `--cost-bps 20` one-way, diterapkan saat entry dan
 │  SWING FOREIGN ACCUMULATION — QUICK REFERENCE                        │
 ├──────────────────────────────────────────────────────────────────────┤
 │  SETUP (sekali)                                                       │
-│    saham update --universe lq45                                       │
+│    saham data update --universe lq45                                       │
 ├──────────────────────────────────────────────────────────────────────┤
 │  SETIAP HARI (15–20 menit)                                            │
-│    saham update --universe lq45            ← refresh data            │
-│    saham regime                            ← cek konteks pasar       │
-│    saham swing screen --universe lq45 --multi ← scan universe        │
+│    saham data update --universe lq45            ← refresh data            │
+│    saham analyze regime                            ← cek konteks pasar       │
+│    saham trade swing screen --universe lq45 --multi ← scan universe        │
 ├──────────────────────────────────────────────────────────────────────┤
 │  PER KANDIDAT (5 menit/saham)                                         │
-│    saham swing analyze TICKER \                                       │
+│    saham trade swing analyze TICKER \                                       │
 │      --preset foreign-bounce \                                        │
 │      --capital 10000000 \                                             │
 │      --with-regime                                                    │
@@ -808,7 +820,7 @@ Default backtest biaya adalah `--cost-bps 20` one-way, diterapkan saat entry dan
 │    --breakdown        Skor per komponen                               │
 ├──────────────────────────────────────────────────────────────────────┤
 │  PRIORITAS ENTRY                                                      │
-│    ✓ Gate: ENTER (5/5 gates pass)                                    │
+│    ✓ Gate: ENTER (6/6 gates pass)                                    │
 │    ✓ Pattern: sustained atau coiled spring                            │
 │    ✓ VWAP_DISC > 0% (asing underwater)                               │
 │    ✓ TREND = SIDE (masuk sebelum move)                               │
@@ -829,13 +841,13 @@ Default backtest biaya adalah `--cost-bps 20` one-way, diterapkan saat entry dan
 │    Max hold: 10 hari trading                                          │
 ├──────────────────────────────────────────────────────────────────────┤
 │  JOURNAL                                                              │
-│    saham swing log --ticker TICKER --entry-price XXXX --from-analysis │
+│    saham trade swing log --ticker TICKER --entry-price XXXX --from-analysis │
 │                    --with-regime                                      │
-│    saham swing review --horizon 10                                    │
+│    saham trade swing review --horizon 10                                    │
 ├──────────────────────────────────────────────────────────────────────┤
 │  VALIDASI BERKALA (bulanan)                                           │
-│    saham swing backtest --universe lq45 --start 2025-01-01 --with-regime
-│    saham swing compare --universe lq45 --start 2025-01-01            │
+│    saham trade swing backtest --universe lq45 --start 2025-01-01 --with-regime
+│    saham trade swing compare --universe lq45 --start 2025-01-01            │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -846,23 +858,23 @@ Default backtest biaya adalah `--cost-bps 20` one-way, diterapkan saat entry dan
 ### Screener Tidak Menampilkan Skor (Semua N/A atau 0)
 
 ```
-! BBCA: No broker data — run 'saham broker fetch BBCA' first
+! BBCA: No broker data — run 'saham data broker fetch BBCA' first
 ```
 
 ```bash
-saham broker fetch BBCA --days 90
+saham data broker fetch BBCA --days 90
 ```
 
 Kalau sudah ada data tapi skor tetap 0, cek apakah data fresh:
 ```bash
-saham broker flow BBCA --days 7
+saham data broker flow BBCA --days 7
 ```
 
 ### Skor Tinggi Tapi `WATCH` atau `AVOID`
 
 Artinya satu gate spesifik gagal. Cek detail:
 ```bash
-saham swing analyze TICKER --preset foreign-bounce
+saham trade swing analyze TICKER --preset foreign-bounce
 ```
 
 Lihat gate mana yang `✗ FAIL` dan alasannya:
@@ -872,9 +884,9 @@ Lihat gate mana yang `✗ FAIL` dan alasannya:
 
 ### Pattern `long-term only` Tapi Skor Tinggi
 
-Artinya akumulasi kuat di 90 sesi tapi melemah di 30 dan 7 sesi. Ini warning: asing mungkin sudah mulai distribusi perlahan. Cek `FLOW DETAIL` di output `saham swing analyze`, atau jalankan breakdown harian bila perlu:
+Artinya akumulasi kuat di 90 sesi tapi melemah di 30 dan 7 sesi. Ini warning: asing mungkin sudah mulai distribusi perlahan. Cek `FLOW DETAIL` di output `saham trade swing analyze`, atau jalankan breakdown harian bila perlu:
 ```bash
-saham broker flow TICKER --days 30
+saham data broker flow TICKER --days 30
 ```
 
 Kalau trend berbalik (lebih banyak hari sell belakangan), skip.
@@ -886,15 +898,15 @@ Strategi tidak profitable untuk periode/universe itu. Coba:
 2. Perkecil universe: dari `idx80` ke `lq45`
 3. Naikkan `--min-score` di screener ke 60 atau 70
 
-### `saham regime` Menunjukkan RISK_OFF
+### `saham analyze regime` Menunjukkan RISK_OFF
 
 Jangan entry swing baru. Fokus ke:
 ```bash
 # Pantau regime setiap hari sampai membaik
-saham regime
+saham analyze regime
 
 # Kalau ada posisi terbuka, cek apakah masih valid
-saham swing screen TICKER1 TICKER2 --multi
+saham trade swing screen TICKER1 TICKER2 --multi
 ```
 
 ---
@@ -904,11 +916,11 @@ saham swing screen TICKER1 TICKER2 --multi
 - Strategi ini dirancang untuk holding 3–10 hari trading, bukan intraday
 - Sinyal akumulasi adalah **leading indicator** — terkadang harga belum bergerak saat entry
 - `sustained` pattern lebih reliable dari `fresh rotation` — tapi lebih lambat terdeteksi
-- Paper trade minimal 20 setup menggunakan `saham swing log` + `saham swing review` sebelum sizing besar
+- Paper trade minimal 20 setup menggunakan `saham trade swing log` + `saham trade swing review` sebelum sizing besar
 - Data broker IDX (default) adalah data T+0 — akurat tapi mungkin 1 hari delay di beberapa ticker
-- Gunakan `--provider stockbit-session` untuk `saham broker fetch` jika butuh data lebih granular per-broker (butuh auth)
+- Gunakan `--provider stockbit-session` untuk `saham data broker fetch` jika butuh data lebih granular per-broker (butuh auth)
 
 ---
 
 *Untuk penjelasan konsep dasar (ATR, RSI, FVWAP), lihat [`how_to_intraday_trading.md`](how_to_intraday_trading.md).*
-*Untuk data flow broker detail: `saham broker --help`.*
+*Untuk data flow broker detail: `saham data broker --help`.*

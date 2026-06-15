@@ -44,9 +44,10 @@ Intraday trading berarti kamu membuka dan menutup posisi di **hari yang sama**. 
 ## 2. Jam Bursa IDX yang Wajib Kamu Tahu
 
 ```
-08:45 – 09:00  PRE-OPEN AUCTION       ← saham intraday pre-open dijalankan di sini
-09:00          PASAR BUKA
-09:00 – 09:05  OPENING WINDOW         ← saham intraday confirm-open dijalankan di sini
+08:45 – 08:56  PRE-OPEN (order bisa diubah)   ← pre-open & order plan
+08:56 – 09:00  NON-CANCELLATION PERIOD        ← order TIDAK bisa diubah/dibatalkan
+09:00          PASAR BUKA (call auction)
+09:00 – 09:05  OPENING WINDOW                 ← confirm-open
 09:00 – 11:30  SESI 1
 11:30 – 13:30  ISTIRAHAT (Jumat: 11:30 – 14:00)
 13:30 – 15:49  SESI 2
@@ -54,16 +55,23 @@ Intraday trading berarti kamu membuka dan menutup posisi di **hari yang sama**. 
 16:00          HARGA PENUTUPAN RESMI
 ```
 
+**Non-Cancellation Period (08:56–09:00):** Mulai Desember 2025, BEI menerapkan
+aturan bahwa order pre-open tidak bisa diubah/dibatalkan dalam 4 menit terakhir
+sebelum pasar buka (Kep-00003/BEI/04-2025). Ini mencegah manipulasi harga
+detik-akhir dan menyelaraskan IDX dengan praktik bursa global. Order baru bisa
+dimasukkan, tapi order yang sudah ada tidak bisa di-amend. Pastikan kamu sudah
+yakin dengan harga dan jumlah lot sebelum pukul 08:56.
+
 ### Mengapa Ada Dua Step?
 
 Tool ini membagi keputusan menjadi dua fase:
 
-**Phase 1 — Pre-open (08:45–09:00): `saham intraday pre-open`**
+**Phase 1 — Pre-open (08:45–09:00): `saham trade intraday pre-open`**
 Identifikasi KANDIDAT berdasarkan IEV, ATR, RSI, ACCUM, dan FVWAP.
 Output: entry range, suggested limit, ATR stop, dan sinyal arah per saham.
 Kamu belum memutuskan masuk — kamu hanya menyiapkan daftar pantau.
 
-**Phase 2 — Post-open (09:00–09:05): `saham intraday confirm-open`**
+**Phase 2 — Post-open (09:00–09:05): `saham trade intraday confirm-open`**
 Setelah pasar buka dan opening price diketahui, kamu memasukkan harga pembukaan aktual.
 Tool memberikan keputusan deterministik: **ENTER / WAIT / SKIP** per saham.
 Ini yang membuat kamu tidak perlu menghitung ulang manual di saat paling kritis.
@@ -304,7 +312,7 @@ GOTO ACCUM: DISTRIBUTING 0pts
 **Mengapa penting:**
 IEV tinggi bisa karena *institusi yang lanjutkan posisi* atau *retail yang chase breakout*. ACCUM membedakan keduanya. Konfluensi IEV + BACKED → probabilitas lebih tinggi.
 
-**Catatan:** Membutuhkan data broker flow di database lokal. Jalankan `saham update --universe lq45` dulu.
+**Catatan:** Membutuhkan data broker flow di database lokal. Jalankan `saham data update --universe lq45` dulu.
 
 ---
 
@@ -381,17 +389,17 @@ Setelah kamu masukkan opening prices aktual:
 ### Malam Sebelumnya (10 menit, opsional tapi direkomendasikan)
 
 ```bash
-saham update --universe lq45
+saham data update --universe lq45
 ```
 
-Refresh data harga + broker flow. Kalau cache belum mencapai tanggal hari ini, `saham update` mencoba mengisi gap ke provider. `cached-current` berarti cache sudah sampai hari ini; `provider-no-new-data(latest=YYYY-MM-DD)` berarti provider sudah dicek tetapi belum punya data trading lebih baru.
+Refresh data harga + broker flow. Kalau cache belum mencapai tanggal hari ini, `saham data update` mencoba mengisi gap ke provider. `cached-current` berarti cache sudah sampai hari ini; `provider-no-new-data(latest=YYYY-MM-DD)` berarti provider sudah dicek tetapi belum punya data trading lebih baru.
 
 ---
 
 ### Setup Satu Kali — Login Stockbit (kalau belum pernah atau sesi expired)
 
 ```bash
-saham stockbit login
+saham data stockbit login
 ```
 
 Sesi tersimpan di `.stockbit_profile/`. Tidak perlu diulang setiap hari kecuali expired.
@@ -409,7 +417,7 @@ Ada tiga cara, pilih yang sesuai situasi:
 Satu perintah, tidak perlu buka browser manual:
 
 ```bash
-saham intraday pre-open --top 5
+saham trade intraday pre-open --top 5
 ```
 
 Tool otomatis fetch IEV movers + orderbook dari Stockbit, lalu tampilkan hasil screening. Butuh `.stockbit_profile/` valid (lihat login di atas).
@@ -422,7 +430,7 @@ Berguna kalau mau lihat raw data IEV + orderbook sebelum diproses:
 
 ```bash
 # Langkah 1: ambil top 5 IEV + orderbook
-saham stockbit fetch-top5
+saham data stockbit fetch-top5
 
 # Contoh output:
 #   1  BUMI   972,420   bid=156 (409K lots)   offer=157 (303K lots)
@@ -430,7 +438,7 @@ saham stockbit fetch-top5
 #   ...
 
 # Langkah 2: jalankan screener dengan data yang sudah terlihat
-saham intraday pre-open \
+saham trade intraday pre-open \
   --movers-json '[{"ticker":"BUMI","iev":972420},{"ticker":"BBRI","iev":373423}]' \
   --order-books-json '{"BUMI":{"price":156,"volume":409437},"BBRI":{"price":2850,"volume":219024}}'
 ```
@@ -442,7 +450,7 @@ saham intraday pre-open \
 Kalau Playwright tidak tersedia atau preferensi manual:
 
 ```bash
-saham intraday pre-open \
+saham trade intraday pre-open \
   --movers-json '[{"ticker":"BBCA","iev":450000},{"ticker":"BMRI","iev":320000}]' \
   --fast
 ```
@@ -454,23 +462,23 @@ Data IEV diambil manual dari Stockbit web (Movers → IEP/IEV tab). Fast mode ti
 #### Override Threshold
 
 ```bash
-saham intraday pre-open --top 3 --max-gap 0.05 --atr-mult 1.5
+saham trade intraday pre-open --top 3 --max-gap 0.05 --atr-mult 1.5
 ```
 
 Catat output: entry range, ATR stop, dan sinyal ACCUM/FVWAP per saham.
 
 Policy default disimpan di `config/pre_open_screener.yaml`. Ini adalah konfigurasi
-screener intraday, bukan strategy package untuk `saham backtest --strategy`.
+screener intraday, bukan strategy package untuk `saham strategy backtest --strategy`.
 Untuk eksperimen threshold yang reproducible:
 
 ```bash
-saham intraday pre-open --config config/pre_open_screener.yaml --top 3
+saham trade intraday pre-open --config config/pre_open_screener.yaml --top 3
 ```
 
 Untuk menambahkan konteks market regime deterministik:
 
 ```bash
-saham intraday pre-open --top 5 --with-regime
+saham trade intraday pre-open --top 5 --with-regime
 ```
 
 Default-nya memakai `--regime-universe idx80` dan `--benchmark ^JKSE`.
@@ -484,7 +492,7 @@ Secara default, tool menolak `pre-open` di weekend agar journal tidak terisi ses
 palsu. Untuk latihan atau backfill, pakai override eksplisit:
 
 ```bash
-saham intraday pre-open \
+saham trade intraday pre-open \
   --movers-json '[{"ticker":"BBCA","iev":450000}]' \
   --fast \
   --allow-non-trading-day
@@ -501,7 +509,7 @@ hasil sebagai dry-run, bukan sinyal live.
 Setelah pasar buka, lihat opening price aktual di Stockbit untuk setiap kandidat. Masukkan ke tool:
 
 ```bash
-saham intraday confirm-open \
+saham trade intraday confirm-open \
   --opening-json '{"BBCA":5175,"BMRI":4290,"TLKM":2820}'
 ```
 
@@ -523,20 +531,20 @@ TLKM → SKIP_GAP_UP  (open 2,820 di atas range high 2,789)
 
 ```bash
 # Log hasil pre-open screening
-saham intraday pre-open-log
+saham trade intraday pre-open-log
 
 # Log hasil confirmation (lebih detail, termasuk keputusan)
-saham intraday log
+saham trade intraday log
 ```
 
-`saham intraday log` adalah alias dari `saham intraday confirm-log`.
+`saham trade intraday log` adalah alias dari `saham trade intraday confirm-log`.
 
 ---
 
 ### Catat Hasil Aktual (setelah posisi ditutup)
 
 ```bash
-saham intraday outcome BBCA \
+saham trade intraday outcome BBCA \
   --entry 5200 \
   --exit 5375 \
   --notes "keluar jam 10:30, target tercapai di Prev H"
@@ -548,13 +556,13 @@ saham intraday outcome BBCA \
 
 ```bash
 # Evaluasi accuracy entry range
-saham intraday pre-open-review --horizon 5
+saham trade intraday pre-open-review --horizon 5
 
 # Evaluasi accuracy keputusan confirm-open
-saham intraday review
+saham trade intraday review
 ```
 
-`saham intraday review` adalah alias dari `saham intraday confirm-review`. Jika
+`saham trade intraday review` adalah alias dari `saham trade intraday confirm-review`. Jika
 manual outcome belum dicatat, review memakai daily OHLC lokal sebagai proxy; urutan
 stop/target intraday yang persis membutuhkan data menit/tick dan belum dimodelkan.
 
@@ -586,7 +594,7 @@ VERDICT    TICKER      IEV    GAP%     ENTRY-RANGE   STOP%   RSI  SIGNAL
  SKIP       TLKM
 
  At 09:00, fill opening prices and run:
-   saham intraday confirm-open \
+   saham trade intraday confirm-open \
      --opening-json '{"BBCA":___,"BBRI":___,"ASII":___,"BMRI":___}'
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
@@ -598,7 +606,7 @@ VERDICT    TICKER      IEV    GAP%     ENTRY-RANGE   STOP%   RSI  SIGNAL
 | `★ PRIME` | BULLISH + BACKED + FVWAP floor + range valid | Watchlist prioritas |
 | `◉ WATCH` | Bullish tapi belum semua sinyal hijau | Watchlist, konfirmasi di 09:00 |
 | `✗ SKIP` | BEARISH atau DISTRIBUTING atau gap di luar range | Tidak masuk |
-| `? NO_DATA` | Tidak ada data ATR lokal | `saham update TICKER --days 365` malam ini |
+| `? NO_DATA` | Tidak ada data ATR lokal | `saham data update TICKER --days 365` malam ini |
 
 **Penjelasan kolom:**
 
@@ -616,7 +624,7 @@ VERDICT    TICKER      IEV    GAP%     ENTRY-RANGE   STOP%   RSI  SIGNAL
 
 ## 8. Membaca Output Confirm-Open
 
-Setelah kamu jalankan `saham intraday confirm-open`, output dikelompokkan per aksi:
+Setelah kamu jalankan `saham trade intraday confirm-open`, output dikelompokkan per aksi:
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -638,7 +646,7 @@ Setelah kamu jalankan `saham intraday confirm-open`, output dikelompokkan per ak
    TLKM    broker context is DISTRIBUTING
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  saham intraday log   (record this session)
+  saham trade intraday log   (record this session)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
@@ -704,6 +712,13 @@ Pernah geser stop? Itu adalah awal dari kekalahan besar.
 **4. Ambil profit sebagian di Prev High**
 Jual 50% posisi di Prev High, sisanya biarkan jalan. Kalau tembus Prev High, trailing stop.
 
+**5. Waspada jeda istirahat 11:30–13:30**
+Posisi yang masuk di 30 menit pertama akan memasuki jeda 2 jam saat bursa
+istirahat. Selama jeda, stop-loss di JATS tetap aktif, tapi jika ada berita
+besar saat istirahat, harga bisa gap melampaui stop saat sesi 2 dibuka.
+Solusi: kurangi ukuran posisi untuk trade pagi, atau ambil profit sebelum
+istirahat kalau sudah cukup.
+
 ### Position Sizing dari Tool
 
 ```
@@ -730,20 +745,20 @@ Sebelum kamu tahu apakah screener ini bekerja untuk kondisi pasar saat ini, pape
 
 ```bash
 # Setelah pre-open run:
-saham intraday pre-open-log
+saham trade intraday pre-open-log
 
 # Setelah confirm-open run:
-saham intraday log
+saham trade intraday log
 
 # Setelah posisi ditutup (masukkan outcome aktual):
-saham intraday outcome BBCA --entry 5200 --exit 5375 --notes "target tercapai"
+saham trade intraday outcome BBCA --entry 5200 --exit 5375 --notes "target tercapai"
 
 # Evaluasi setelah 20+ sesi:
-saham intraday pre-open-review --horizon 1    # akurasi range 1 hari
-saham intraday review                          # akurasi keputusan confirm-open
+saham trade intraday pre-open-review --horizon 1    # akurasi range 1 hari
+saham trade intraday review                          # akurasi keputusan confirm-open
 ```
 
-### Membaca `saham intraday review`
+### Membaca `saham trade intraday review`
 
 ```
 DECISION BREAKDOWN:
@@ -766,7 +781,7 @@ Dari breakdown ini kamu tahu: BACKED + FVWAP floor meningkatkan win rate. Data i
 
 ### Review vs Backtest — Apa Bedanya?
 
-| Aspek | `saham intraday review` | `saham intraday backtest` |
+| Aspek | `saham trade intraday review` | `saham trade intraday backtest` |
 |-------|-------------------------|---------------------------|
 | **Sumber data** | Journal sesi nyata yang sudah kamu log | Data harian historis di `data.db` |
 | **Periode** | Hanya hari-hari yang sudah kamu jalankan live | Periode bebas yang kamu pilih |
@@ -775,7 +790,7 @@ Dari breakdown ini kamu tahu: BACKED + FVWAP floor meningkatkan win rate. Data i
 
 Singkatnya: **backtest melihat ke belakang sejauh data kamu**, sedangkan **review hanya tahu sesi-sesi yang sudah kamu log**. Backtest cocok untuk menjawab: "kalau workflow ini dijalankan setiap hari selama 6 bulan terakhir, hasilnya seperti apa?"
 
-### Cara Kerja `saham intraday backtest` (Option A — Daily OHLC Proxy)
+### Cara Kerja `saham trade intraday backtest` (Option A — Daily OHLC Proxy)
 
 Backtest ini menggunakan candle harian (open/high/low/close) sebagai pengganti data tick intraday:
 
@@ -808,19 +823,19 @@ Konsekuensi untuk backtest:
 
 ```bash
 # Default: LQ45, mulai Januari 2026
-saham intraday backtest --universe lq45 --start 2026-01-01
+saham trade intraday backtest --universe lq45 --start 2026-01-01
 
 # Subset eksplisit, 6 bulan ke belakang
-saham intraday backtest BBCA BBRI BMRI ASII TLKM --start 2025-12-01
+saham trade intraday backtest BBCA BBRI BMRI ASII TLKM --start 2025-12-01
 
 # Sertakan keputusan WAIT (lebih agresif)
-saham intraday backtest --universe lq45 --start 2025-12-01 --include-wait
+saham trade intraday backtest --universe lq45 --start 2025-12-01 --include-wait
 
 # Biaya lebih realistis (25bps), max 5 posisi per hari
-saham intraday backtest --universe lq45 --start 2025-12-01 --cost-bps 25 --max-daily-positions 5
+saham trade intraday backtest --universe lq45 --start 2025-12-01 --cost-bps 25 --max-daily-positions 5
 
 # Output JSON untuk analisis lanjut
-saham intraday backtest --universe idx80 --start 2025-09-01 --format json > bt.json
+saham trade intraday backtest --universe idx80 --start 2025-09-01 --format json > bt.json
 ```
 
 ### Parameter Lengkap
@@ -864,12 +879,12 @@ Output terdiri dari tiga blok utama:
 ### Rekomendasi Workflow Validasi
 
 ```
-1. saham intraday backtest --universe lq45 --start 2025-12-01
+1. saham trade intraday backtest --universe lq45 --start 2025-12-01
    → lihat apakah ada edge historis
 
-2. Paper trade 20+ sesi (saham intraday log + outcome)
+2. Paper trade 20+ sesi (saham trade intraday log + outcome)
 
-3. saham intraday review
+3. saham trade intraday review
    → bandingkan hasil paper dengan ekspektasi backtest
 
 4. Kalau aligned → naikkan modal secara bertahap
@@ -888,13 +903,13 @@ Adapter Stockbit menggunakan Playwright untuk mengakses Exodus API (API internal
 ### Setup Satu Kali — Login Stockbit
 
 ```bash
-saham stockbit login
+saham data stockbit login
 ```
 
 Ini membuka browser Chrome. Login manual seperti biasa (termasuk 2FA kalau ada). Setelah berhasil, sesi tersimpan di `.stockbit_profile/` dan **tidak perlu login ulang** selama sesi masih valid.
 
 ```bash
-saham stockbit status    # Cek apakah sesi masih valid
+saham data stockbit status    # Cek apakah sesi masih valid
 ```
 
 Output contoh:
@@ -912,35 +927,35 @@ Stockbit Session Status
 
 | Perintah | Fungsi |
 |----------|--------|
-| `saham stockbit login` | Login manual (satu kali, atau kalau sesi expired) |
-| `saham stockbit status` | Cek kesehatan sesi tanpa buka browser |
-| `saham stockbit fetch-top5` | Ambil top-N IEV + orderbook dalam satu sesi browser |
-| `saham stockbit test` | Smoke test: verifikasi movers + orderbook bekerja |
-| `saham stockbit spy` | Capture semua API traffic (debugging endpoint, bukan prasyarat harian) |
+| `saham data stockbit login` | Login manual (satu kali, atau kalau sesi expired) |
+| `saham data stockbit status` | Cek kesehatan sesi tanpa buka browser |
+| `saham data stockbit fetch-top5` | Ambil top-N IEV + orderbook dalam satu sesi browser |
+| `saham data stockbit test` | Smoke test: verifikasi movers + orderbook bekerja |
+| `saham data stockbit spy` | Capture semua API traffic (debugging endpoint, bukan prasyarat harian) |
 
 ### Perintah Intraday Lengkap
 
 | Perintah | Fungsi |
 |----------|--------|
-| `saham intraday pre-open` | Screen movers sebelum pembukaan |
-| `saham intraday confirm-open` | Konfirmasi opening price menjadi ENTER / WAIT / SKIP |
-| `saham intraday pre-open-log` | Log hasil pre-open ke `journals/pre-open.csv` |
-| `saham intraday pre-open-review` | Review akurasi entry range pre-open |
-| `saham intraday log` / `confirm-log` | Log hasil confirm-open ke `journals/intraday-confirmations.csv` |
-| `saham intraday review` / `confirm-review` | Review keputusan confirm-open dan context buckets |
-| `saham intraday outcome` / `confirm-outcome` | Catat hasil aktual trade untuk mengganti proxy daily OHLC |
-| `saham intraday backtest` | Walk-forward backtest pada data harian historis (lihat §12) |
+| `saham trade intraday pre-open` | Screen movers sebelum pembukaan |
+| `saham trade intraday confirm-open` | Konfirmasi opening price menjadi ENTER / WAIT / SKIP |
+| `saham trade intraday pre-open-log` | Log hasil pre-open ke `journals/pre-open.csv` |
+| `saham trade intraday pre-open-review` | Review akurasi entry range pre-open |
+| `saham trade intraday log` / `confirm-log` | Log hasil confirm-open ke `journals/intraday-confirmations.csv` |
+| `saham trade intraday review` / `confirm-review` | Review keputusan confirm-open dan context buckets |
+| `saham trade intraday outcome` / `confirm-outcome` | Catat hasil aktual trade untuk mengganti proxy daily OHLC |
+| `saham trade intraday backtest` | Walk-forward backtest pada data harian historis (lihat §12) |
 
 ---
 
-### `saham stockbit fetch-top5` — Siapkan Data Pre-Open Secara Otomatis
+### `saham data stockbit fetch-top5` — Siapkan Data Pre-Open Secara Otomatis
 
 Membuka browser sekali, mengambil token dari session aktif, memanggil Exodus API untuk IEV movers dari semua board, lalu mengambil orderbook untuk top-N ticker — semuanya dalam satu sesi.
 
 ```bash
-saham stockbit fetch-top5           # top 5 (default)
-saham stockbit fetch-top5 --top 10  # top 10
-saham stockbit fetch-top5 --no-headless  # lihat proses di browser
+saham data stockbit fetch-top5           # top 5 (default)
+saham data stockbit fetch-top5 --top 10  # top 10
+saham data stockbit fetch-top5 --no-headless  # lihat proses di browser
 ```
 
 Contoh output:
@@ -954,16 +969,16 @@ Contoh output:
   5    CUAN          281,822          715     2,923          720    21,487
 ```
 
-Gunakan output ini sebagai input ke `saham intraday pre-open` (lihat Workflow di Bagian 6).
+Gunakan output ini sebagai input ke `saham trade intraday pre-open` (lihat Workflow di Bagian 6).
 
 ---
 
-### Mode Autonomous `saham intraday pre-open`
+### Mode Autonomous `saham trade intraday pre-open`
 
 Kalau `.stockbit_profile/` ada dan valid, pre-open berjalan **sepenuhnya otomatis**:
 
 ```bash
-saham intraday pre-open --top 5
+saham trade intraday pre-open --top 5
 ```
 
 Output langsung:
@@ -994,12 +1009,12 @@ Field response yang digunakan:
 ### Debugging
 
 ```bash
-saham stockbit spy --wait 10                        # Lihat semua API request
-saham stockbit spy --target orderbook --ticker BBCA # Spy khusus orderbook
-saham intraday pre-open --no-headless --top 3       # Lihat browser saat berjalan
+saham data stockbit spy --wait 10                        # Lihat semua API request
+saham data stockbit spy --target orderbook --ticker BBCA # Spy khusus orderbook
+saham trade intraday pre-open --no-headless --top 3       # Lihat browser saat berjalan
 ```
 
-Kalau sesi expired: `saham stockbit login`.
+Kalau sesi expired: `saham data stockbit login`.
 
 ---
 
@@ -1023,7 +1038,7 @@ Stop di 4,904 → harga turun ke 4,950 → kamu beli lagi karena "lebih murah". 
 
 **5. Trading saham yang tidak ada di database**
 
-Kalau output menunjukkan "No cached data", jalankan `saham update TICKER --days 365` dulu. Tanpa data historis, tidak ada ATR, tidak ada entry range.
+Kalau output menunjukkan "No cached data", jalankan `saham data update TICKER --days 365` dulu. Tanpa data historis, tidak ada ATR, tidak ada entry range.
 
 **6. Tidak membaca context FVWAP negatif besar**
 
@@ -1074,17 +1089,17 @@ FVWAP -5.8% bukan hanya "kurang ideal" — artinya asing duduk di profit besar d
 Workflow lengkap intraday dengan tool ini:
 
 ```
-Setup (sekali)  : saham stockbit login
-Malam sebelum   : saham update --universe lq45
-08:45–08:55     : saham intraday pre-open --top 5          ← autonomous
-   atau          : saham stockbit fetch-top5                ← lihat data dulu
-                  saham intraday pre-open --movers-json '...' --order-books-json '...'
-09:00–09:05     : saham intraday confirm-open --opening-json '...'
-Setelah trading : saham intraday log && saham intraday outcome TICKER --entry X --exit Y
-Evaluasi berkala: saham intraday review
+Setup (sekali)  : saham data stockbit login
+Malam sebelum   : saham data update --universe lq45
+08:45–08:55     : saham trade intraday pre-open --top 5          ← autonomous
+   atau          : saham data stockbit fetch-top5                ← lihat data dulu
+                  saham trade intraday pre-open --movers-json '...' --order-books-json '...'
+09:00–09:05     : saham trade intraday confirm-open --opening-json '...'
+Setelah trading : saham trade intraday log && saham trade intraday outcome TICKER --entry X --exit Y
+Evaluasi berkala: saham trade intraday review
 ```
 
-Mulai dengan paper trade 20–30 sesi. Gunakan `saham intraday review` untuk evaluasi objektif. Data akurat lebih berharga dari keyakinan — ikuti angka, bukan perasaan.
+Mulai dengan paper trade 20–30 sesi. Gunakan `saham trade intraday review` untuk evaluasi objektif. Data akurat lebih berharga dari keyakinan — ikuti angka, bukan perasaan.
 
 > "Preserve capital first. Profits will follow discipline."
 

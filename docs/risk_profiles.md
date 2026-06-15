@@ -121,7 +121,7 @@ Indicators suggest favorable conditions:
 Use `--all` flag to see how a stock looks across all profiles:
 
 ```bash
-saham risk BBCA --all
+saham analyze risk BBCA --all
 ```
 
 This helps you understand:

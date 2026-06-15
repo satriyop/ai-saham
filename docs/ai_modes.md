@@ -12,10 +12,10 @@ AI is integrated as a **read-only research assistant** in specific commands. It 
 
 | Command | Flag | What AI Adds |
 |---------|------|-------------|
-| `saham intraday pre-open` | `--with-ai` | Per-ticker research summary via Claude |
-| `saham risk <ticker>` | `--with-sentiment` | News sentiment context |
-| `saham screen accumulation` | `--with-ai` | Accumulation pattern analysis |
-| `saham swing analyze` | `--with-ai` (implied by `--news-provider`) | News sentiment + setup analysis |
+| `saham trade intraday pre-open` | `--with-ai` | Per-ticker research summary via Claude |
+| `saham analyze risk <ticker>` | `--with-sentiment` | News sentiment context |
+| `saham trade swing screen` | `--with-ai` | Accumulation pattern analysis |
+| `saham trade swing analyze` | `--with-ai` (implied by `--news-provider`) | News sentiment + setup analysis |
 
 Global override:
 ```bash
