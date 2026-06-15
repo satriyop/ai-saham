@@ -1,5 +1,5 @@
 formulas:
   SMOOTH_RSI:
-    created: '2026-01-27T00:17:20.693470'
-    formula: RSI(14)
-    intent: smoothed RSI
+    created: '2026-06-15T07:14:46.357979'
+    formula: SMA(RSI(14), 10)
+    intent: 14-day smoothed RSI
