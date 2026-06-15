@@ -44,7 +44,7 @@ class TestCLICreateIndicatorWorkflow:
         result = runner.invoke(
             app,
             [
-                "create-indicator",
+                "indicator", "create",
                 "smoothed RSI",
                 "--name",
                 "TEST_SMOOTH_RSI",
@@ -70,7 +70,7 @@ class TestCLICreateIndicatorWorkflow:
         result = runner.invoke(
             app,
             [
-                "create-indicator",
+                "indicator", "create",
                 "14-day RSI",
                 "--name",
                 "TEMP_RSI",
@@ -221,7 +221,7 @@ class TestCLIBacktestWorkflow:
         """CLI: backtest fails without --strategy or --rules-file."""
         monkeypatch.chdir(temp_workspace)
 
-        result = runner.invoke(app, ["backtest", "BBCA"])
+        result = runner.invoke(app, ["strategy", "backtest", "BBCA"])
 
         assert result.exit_code == 1
         output = result.output or result.stdout
@@ -244,7 +244,7 @@ class TestCLIBacktestWorkflow:
         result = runner.invoke(
             app,
             [
-                "backtest",
+                "strategy", "backtest",
                 "BBCA",
                 "--rules-file",
                 str(strategy_file),
@@ -254,7 +254,7 @@ class TestCLIBacktestWorkflow:
         )
 
         assert result.exit_code == 0, f"Command failed: {result.stdout}"
-        assert "BACKTEST RESULTS" in result.stdout
+        assert "Backtest Results" in result.stdout
         assert "BBCA" in result.stdout
 
     def test_backtest_with_strategy_name(self, temp_workspace, monkeypatch):
@@ -273,7 +273,7 @@ class TestCLIBacktestWorkflow:
         result = runner.invoke(
             app,
             [
-                "backtest",
+                "strategy", "backtest",
                 "BBCA",
                 "--strategy",
                 "my_strat",
@@ -284,7 +284,7 @@ class TestCLIBacktestWorkflow:
 
         output = result.output or result.stdout
         assert result.exit_code == 0, f"Command failed: {output}"
-        assert "BACKTEST RESULTS" in output
+        assert "Backtest Results" in output
 
     def test_backtest_verbose_shows_trades(self, temp_workspace, monkeypatch):
         """CLI: backtest --verbose shows trade history."""
@@ -303,7 +303,7 @@ class TestCLIBacktestWorkflow:
         result = runner.invoke(
             app,
             [
-                "backtest",
+                "strategy", "backtest",
                 "TEST",
                 "--rules-file",
                 str(strategy_file),
@@ -315,7 +315,7 @@ class TestCLIBacktestWorkflow:
 
         assert result.exit_code == 0
         # Verbose output includes trade history section
-        assert "BACKTEST RESULTS" in result.stdout
+        assert "Backtest Results" in result.stdout
 
     def test_backtest_no_data_error(self, temp_workspace, monkeypatch):
         """CLI: backtest fails gracefully when no data exists."""
@@ -330,7 +330,7 @@ class TestCLIBacktestWorkflow:
         result = runner.invoke(
             app,
             [
-                "backtest",
+                "strategy", "backtest",
                 "XXXX",
                 "--rules-file",
                 str(strategy_file),
@@ -341,7 +341,7 @@ class TestCLIBacktestWorkflow:
 
         assert result.exit_code == 1
         output = result.output or result.stdout
-        assert "no data" in output.lower() or "fetch" in output.lower()
+        assert "no cached data" in output.lower() or "no data" in output.lower() or "fetch" in output.lower()
 
 
 class TestCLIComputeWorkflow:
@@ -360,7 +360,7 @@ class TestCLIComputeWorkflow:
         result = runner.invoke(
             app,
             [
-                "compute",
+                "indicator", "compute",
                 "RSI",
                 "BBCA",
                 "--period",
@@ -385,7 +385,7 @@ class TestCLIComputeWorkflow:
         result = runner.invoke(
             app,
             [
-                "compute",
+                "indicator", "compute",
                 "UNKNOWN_IND",
                 "BBCA",
                 "--db",
@@ -405,7 +405,7 @@ class TestCLIIndicatorListWorkflow:
         """CLI: list-indicators shows built-in indicators."""
         monkeypatch.chdir(temp_workspace)
 
-        result = runner.invoke(app, ["list-indicators"])
+        result = runner.invoke(app, ["indicator", "list"])
 
         assert result.exit_code == 0
         assert "SMA" in result.stdout
@@ -423,7 +423,7 @@ class TestCLIIndicatorListWorkflow:
         result = runner.invoke(
             app,
             [
-                "create-indicator",
+                "indicator", "create",
                 "smoothed RSI",
                 "--name",
                 "MY_RSI",
@@ -438,7 +438,7 @@ class TestCLIIndicatorListWorkflow:
         # Then list with --formulas
         result = runner.invoke(
             app,
-            ["list-indicators", "--formulas", "--formulas-file", str(formulas_path)],
+            ["indicator", "list", "--formulas", "--formulas-file", str(formulas_path)],
         )
 
         assert result.exit_code == 0
@@ -459,7 +459,7 @@ class TestCLIEndToEndWorkflow:
         result = runner.invoke(
             app,
             [
-                "create-indicator",
+                "indicator", "create",
                 "14-day RSI",
                 "--name",
                 "CUSTOM_RSI",
@@ -489,7 +489,7 @@ class TestCLIEndToEndWorkflow:
         result = runner.invoke(
             app,
             [
-                "backtest",
+                "strategy", "backtest",
                 "E2E",
                 "--strategy",
                 "e2e_test",
@@ -498,7 +498,7 @@ class TestCLIEndToEndWorkflow:
             ],
         )
         assert result.exit_code == 0, f"backtest failed: {result.stdout}"
-        assert "BACKTEST RESULTS" in result.stdout
+        assert "Backtest Results" in result.stdout
 
     def test_strategy_create_then_backtest(self, temp_workspace, monkeypatch):
         """Workflow: AI creates strategy → immediately backtest."""
@@ -529,7 +529,7 @@ class TestCLIEndToEndWorkflow:
         result = runner.invoke(
             app,
             [
-                "backtest",
+                "strategy", "backtest",
                 "AI_TEST",
                 "--strategy",
                 "ai_strat",
@@ -538,7 +538,7 @@ class TestCLIEndToEndWorkflow:
             ],
         )
         assert result.exit_code == 0, f"backtest failed: {result.stdout}"
-        assert "BACKTEST RESULTS" in result.stdout
+        assert "Backtest Results" in result.stdout
 
 
 class TestCLIRiskAssessment:
@@ -558,7 +558,7 @@ class TestCLIRiskAssessment:
         result = runner.invoke(
             app,
             [
-                "risk",
+                "analyze", "risk",
                 "RISK_TEST",
                 "--profile",
                 "balanced",
@@ -569,8 +569,8 @@ class TestCLIRiskAssessment:
 
         output = result.output or result.stdout
         assert result.exit_code == 0, f"risk failed: {output}"
-        assert "RISK ASSESSMENT" in output
-        assert "Risk Level:" in output
+        assert "Risk Assessment" in output
+        assert "Level:" in output
 
     def test_risk_all_profiles(self, temp_workspace, monkeypatch):
         """CLI: risk --all shows all profiles."""
@@ -585,7 +585,7 @@ class TestCLIRiskAssessment:
         result = runner.invoke(
             app,
             [
-                "risk",
+                "analyze", "risk",
                 "ALL_PROF",
                 "--all",
                 "--db",
@@ -617,7 +617,7 @@ class TestCLIRiskAssessment:
         result = runner.invoke(
             app,
             [
-                "risk",
+                "analyze", "risk",
                 "CUST_RISK",
                 "--rules-file",
                 str(rules_file),
@@ -627,7 +627,7 @@ class TestCLIRiskAssessment:
         )
 
         assert result.exit_code == 0, f"risk failed: {result.stdout}"
-        assert "RISK ASSESSMENT" in result.stdout
+        assert "Risk Assessment" in result.stdout
 
 
 class TestCLIEdgeCases:
@@ -656,9 +656,9 @@ class TestCLIEdgeCases:
         # Try to compute for non-existent ticker
         result = runner.invoke(
             app,
-            ["compute", "SMA", "NONEXISTENT", "--db", str(db_path)],
+            ["indicator", "compute", "SMA", "NONEXISTENT", "--db", str(db_path)],
         )
 
         assert result.exit_code == 1
         output = result.output or result.stdout
-        assert "no data" in output.lower() or "fetch" in output.lower()
+        assert "no cached data" in output.lower() or "no data" in output.lower() or "fetch" in output.lower()

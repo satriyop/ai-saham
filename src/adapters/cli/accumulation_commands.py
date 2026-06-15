@@ -1423,8 +1423,8 @@ def universe_list(
     typer.echo("")
     typer.echo(f"Config file: {resolved_config}")
     typer.echo("")
-    typer.echo("Usage: saham update --universe <name>")
-    typer.echo("       saham swing screen --universe <name>")
+    typer.echo("Usage: saham data update --universe <name>")
+    typer.echo("       saham trade swing screen --universe <name>")
 
 
 @universe_app.command("update")

@@ -104,7 +104,7 @@ def test_pre_open_strategy_alias_is_deprecated():
     result = runner.invoke(
         app,
         [
-            "intraday",
+            "trade", "intraday",
             "pre-open",
             "--movers-json",
             '[{"ticker":"BBCA","iev":150000}]',
@@ -216,7 +216,7 @@ def test_confirm_open_outputs_decisions_and_writes_sidecar(tmp_path):
     result = runner.invoke(
         app,
         [
-            "intraday",
+            "trade", "intraday",
             "confirm-open",
             "--session",
             str(session),
@@ -247,7 +247,7 @@ def test_confirm_open_rejects_non_object_opening_json(tmp_path):
     result = runner.invoke(
         app,
         [
-            "intraday",
+            "trade", "intraday",
             "confirm-open",
             "--session",
             str(session),
@@ -268,7 +268,7 @@ def test_intraday_confirm_open_works(tmp_path):
     result = runner.invoke(
         app,
         [
-            "intraday",
+            "trade", "intraday",
             "confirm-open",
             "--session",
             str(session),
@@ -316,7 +316,7 @@ def test_confirm_log_appends_confirmation_sidecar(tmp_path):
     result = runner.invoke(
         app,
         [
-            "intraday",
+            "trade", "intraday",
             "confirm-log",
             "--confirmation",
             str(confirmation),
@@ -363,7 +363,7 @@ def test_confirm_review_outputs_bucket_tables(tmp_path):
     runner.invoke(
         app,
         [
-            "intraday",
+            "trade", "intraday",
             "confirm-log",
             "--confirmation",
             str(confirmation),
@@ -390,7 +390,7 @@ def test_confirm_review_outputs_bucket_tables(tmp_path):
     result = runner.invoke(
         app,
         [
-            "intraday",
+            "trade", "intraday",
             "confirm-review",
             "--journal",
             str(journal),
@@ -430,7 +430,7 @@ def test_confirm_outcome_updates_logged_confirmation(tmp_path):
     runner.invoke(
         app,
         [
-            "intraday",
+            "trade", "intraday",
             "confirm-log",
             "--confirmation",
             str(confirmation),
@@ -442,7 +442,7 @@ def test_confirm_outcome_updates_logged_confirmation(tmp_path):
     result = runner.invoke(
         app,
         [
-            "intraday",
+            "trade", "intraday",
             "confirm-outcome",
             "BBCA",
             "--date",

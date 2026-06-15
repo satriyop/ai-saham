@@ -246,7 +246,7 @@ class TestBacktestWithStrategy:
         """Should error when neither --strategy nor --rules-file provided."""
         monkeypatch.chdir(temp_dir)
 
-        result = runner.invoke(app, ["backtest", "BBCA"])
+        result = runner.invoke(app, ["strategy", "backtest", "BBCA"])
 
         assert result.exit_code != 0
         output = result.output or result.stdout
@@ -261,7 +261,7 @@ class TestBacktestWithStrategy:
         # This will fail because no data, but it should resolve the strategy
         result = runner.invoke(
             app,
-            ["backtest", "BBCA", "--strategy", "test_strat"],
+            ["strategy", "backtest", "BBCA", "--strategy", "test_strat"],
         )
 
         # Should fail on "no data" not "strategy not found"
@@ -276,7 +276,7 @@ class TestBacktestWithStrategy:
 
         result = runner.invoke(
             app,
-            ["backtest", "BBCA", "--strategy", "nonexistent"],
+            ["strategy", "backtest", "BBCA", "--strategy", "nonexistent"],
         )
 
         assert result.exit_code != 0
@@ -291,7 +291,7 @@ class TestBacktestWithStrategy:
 
         result = runner.invoke(
             app,
-            ["backtest", "BBCA", "--rules-file", str(rules_file)],
+            ["strategy", "backtest", "BBCA", "--rules-file", str(rules_file)],
         )
 
         # Should fail on "no data" not "rules file not found"
@@ -528,4 +528,4 @@ class TestStrategyCreate:
 
         assert result.exit_code == 0
         assert "saham strategy validate" in result.stdout
-        assert "saham backtest" in result.stdout
+        assert "saham strategy backtest" in result.stdout

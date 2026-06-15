@@ -81,7 +81,7 @@ class TestComputeCommand:
         result = runner.invoke(
             app,
             [
-                "compute",
+                "indicator", "compute",
                 "UNKNOWN_INDICATOR",
                 "BBCA",
                 "--db",
@@ -102,7 +102,7 @@ class TestComputeCommand:
         result = runner.invoke(
             app,
             [
-                "compute",
+                "indicator", "compute",
                 "RSI",
                 "BBCA",
                 "--db",
@@ -114,10 +114,10 @@ class TestComputeCommand:
         assert result.exit_code == 1
         output = result.output
         assert "No data for BBCA" in output or "No cached data" in output
-        assert "saham update BBCA --days 365" in output
+        assert "saham data update BBCA --days 365" in output
 
-    @patch("src.adapters.cli.main.SQLiteMarketRepository")
-    @patch("src.adapters.cli.main.create_indicator_registry")
+    @patch("src.adapters.cli.indicator_commands.SQLiteMarketRepository")
+    @patch("src.adapters.cli.indicator_commands.create_indicator_registry")
     def test_compute_builtin_indicator_success(
         self, mock_registry_fn, mock_repo_cls, mock_candles, db_file
     ):
@@ -141,7 +141,7 @@ class TestComputeCommand:
         result = runner.invoke(
             app,
             [
-                "compute",
+                "indicator", "compute",
                 "RSI",
                 "BBCA",
                 "--period",
@@ -156,13 +156,13 @@ class TestComputeCommand:
         assert result.exit_code == 0
         assert "BBCA" in result.stdout
         assert "RSI" in result.stdout
-        assert "Period: 14" in result.stdout
-        assert "Summary:" in result.stdout
+        assert "RSI(14)" in result.stdout
+        assert "Summary" in result.stdout
         assert "Latest:" in result.stdout
         mock_registry.compute.assert_called_once()
 
-    @patch("src.adapters.cli.main.SQLiteMarketRepository")
-    @patch("src.adapters.cli.main.create_indicator_registry")
+    @patch("src.adapters.cli.indicator_commands.SQLiteMarketRepository")
+    @patch("src.adapters.cli.indicator_commands.create_indicator_registry")
     def test_compute_formula_hides_period(
         self, mock_registry_fn, mock_repo_cls, mock_candles, db_file
     ):
@@ -185,7 +185,7 @@ class TestComputeCommand:
         result = runner.invoke(
             app,
             [
-                "compute",
+                "indicator", "compute",
                 "SMOOTH_RSI",
                 "BBCA",
                 "--tail",
@@ -200,8 +200,8 @@ class TestComputeCommand:
         # Period should not be shown for formulas (default_period=0)
         assert "Period:" not in result.stdout
 
-    @patch("src.adapters.cli.main.SQLiteMarketRepository")
-    @patch("src.adapters.cli.main.create_indicator_registry")
+    @patch("src.adapters.cli.indicator_commands.SQLiteMarketRepository")
+    @patch("src.adapters.cli.indicator_commands.create_indicator_registry")
     def test_compute_insufficient_data(
         self, mock_registry_fn, mock_repo_cls, mock_candles, db_file
     ):
@@ -219,7 +219,7 @@ class TestComputeCommand:
         result = runner.invoke(
             app,
             [
-                "compute",
+                "indicator", "compute",
                 "SMA",
                 "BBCA",
                 "--period",
@@ -233,8 +233,8 @@ class TestComputeCommand:
         output = result.stdout + (result.stderr or "")
         assert "Insufficient data" in output
 
-    @patch("src.adapters.cli.main.SQLiteMarketRepository")
-    @patch("src.adapters.cli.main.create_indicator_registry")
+    @patch("src.adapters.cli.indicator_commands.SQLiteMarketRepository")
+    @patch("src.adapters.cli.indicator_commands.create_indicator_registry")
     def test_compute_respects_tail_option(
         self, mock_registry_fn, mock_repo_cls, mock_candles, db_file
     ):
@@ -258,7 +258,7 @@ class TestComputeCommand:
         result = runner.invoke(
             app,
             [
-                "compute",
+                "indicator", "compute",
                 "SMA",
                 "BBCA",
                 "--tail",
@@ -272,8 +272,8 @@ class TestComputeCommand:
         # Should show "80 (showing last 5)"
         assert "showing last 5" in result.stdout
 
-    @patch("src.adapters.cli.main.SQLiteMarketRepository")
-    @patch("src.adapters.cli.main.create_indicator_registry")
+    @patch("src.adapters.cli.indicator_commands.SQLiteMarketRepository")
+    @patch("src.adapters.cli.indicator_commands.create_indicator_registry")
     def test_compute_shows_summary_statistics(
         self, mock_registry_fn, mock_repo_cls, mock_candles, db_file
     ):
@@ -298,7 +298,7 @@ class TestComputeCommand:
         result = runner.invoke(
             app,
             [
-                "compute",
+                "indicator", "compute",
                 "RSI",
                 "BBCA",
                 "--db",
@@ -309,9 +309,9 @@ class TestComputeCommand:
         assert result.exit_code == 0
         assert "Latest:" in result.stdout
         assert "60" in result.stdout
-        assert "Highest:" in result.stdout
+        assert "Peak:" in result.stdout
         assert "70" in result.stdout
-        assert "Lowest:" in result.stdout
+        assert "Trough:" in result.stdout
         assert "30" in result.stdout
 
 
@@ -324,7 +324,7 @@ class TestComputeCommandIntegration:
         result = runner.invoke(
             app,
             [
-                "compute",
+                "indicator", "compute",
                 "rsi",  # lowercase
                 "bbca",  # lowercase ticker
                 "--db",
@@ -339,7 +339,7 @@ class TestComputeCommandIntegration:
 
     def test_compute_help_text(self):
         """Should show help text."""
-        result = runner.invoke(app, ["compute", "--help"])
+        result = runner.invoke(app, ["indicator", "compute", "--help"])
 
         assert result.exit_code == 0
         assert "Compute any indicator" in result.stdout

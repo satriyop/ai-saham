@@ -55,7 +55,7 @@ class TestCreateIndicator:
         result = runner.invoke(
             app,
             [
-                "create-indicator",
+                "indicator", "create",
                 "smoothed RSI with 14 period",
                 "--name",
                 "SMOOTH_RSI",
@@ -75,7 +75,7 @@ class TestCreateIndicator:
         runner.invoke(
             app,
             [
-                "create-indicator",
+                "indicator", "create",
                 "14-day RSI",
                 "--name",
                 "MY_RSI",
@@ -96,7 +96,7 @@ class TestCreateIndicator:
         runner.invoke(
             app,
             [
-                "create-indicator",
+                "indicator", "create",
                 "14-day RSI",
                 "--name",
                 "MY_RSI",
@@ -115,7 +115,7 @@ class TestCreateIndicator:
         result = runner.invoke(
             app,
             [
-                "create-indicator",
+                "indicator", "create",
                 "simple moving average",
                 "--provider",
                 "mock",
@@ -132,7 +132,7 @@ class TestCreateIndicator:
         result = runner.invoke(
             app,
             [
-                "create-indicator",
+                "indicator", "create",
                 "predict tomorrow price",  # mock returns UNSUPPORTED
                 "--provider",
                 "mock",
@@ -152,7 +152,7 @@ class TestListIndicators:
 
     def test_lists_builtin_indicators(self):
         """Should list built-in indicators."""
-        result = runner.invoke(app, ["list-indicators"])
+        result = runner.invoke(app, ["indicator", "list"])
 
         assert result.exit_code == 0
         assert "SMA" in result.stdout
@@ -165,7 +165,7 @@ class TestListIndicators:
 
         result = runner.invoke(
             app,
-            ["list-indicators", "--formulas-file", str(formulas_file)],
+            ["indicator", "list", "--formulas-file", str(formulas_file)],
         )
 
         assert result.exit_code == 0
@@ -177,7 +177,7 @@ class TestListIndicators:
 
         result = runner.invoke(
             app,
-            ["list-indicators", "--formulas", "--formulas-file", str(formulas_file)],
+            ["indicator", "list", "--formulas", "--formulas-file", str(formulas_file)],
         )
 
         assert result.exit_code == 0
@@ -193,7 +193,7 @@ class TestShowFormula:
 
         result = runner.invoke(
             app,
-            ["show-formula", "MY_RSI", "--formulas-file", str(formulas_file)],
+            ["indicator", "show", "MY_RSI", "--formulas-file", str(formulas_file)],
         )
 
         assert result.exit_code == 0
@@ -205,7 +205,7 @@ class TestShowFormula:
         """Should handle non-existent formula."""
         result = runner.invoke(
             app,
-            ["show-formula", "NONEXISTENT", "--formulas-file", str(formulas_file)],
+            ["indicator", "show", "NONEXISTENT", "--formulas-file", str(formulas_file)],
         )
 
         assert result.exit_code == 1
@@ -218,7 +218,7 @@ class TestShowFormula:
 
         result = runner.invoke(
             app,
-            ["show-formula", "my_rsi", "--formulas-file", str(formulas_file)],
+            ["indicator", "show", "my_rsi", "--formulas-file", str(formulas_file)],
         )
 
         assert result.exit_code == 0
@@ -234,7 +234,7 @@ class TestDeleteIndicator:
 
         result = runner.invoke(
             app,
-            ["delete-indicator", "MY_RSI", "--force", "--formulas-file", str(formulas_file)],
+            ["indicator", "delete", "MY_RSI", "--force", "--formulas-file", str(formulas_file)],
         )
 
         assert result.exit_code == 0
@@ -245,7 +245,7 @@ class TestDeleteIndicator:
         """Should handle non-existent formula."""
         result = runner.invoke(
             app,
-            ["delete-indicator", "NONEXISTENT", "--force", "--formulas-file", str(formulas_file)],
+            ["indicator", "delete", "NONEXISTENT", "--force", "--formulas-file", str(formulas_file)],
         )
 
         assert result.exit_code == 1
@@ -256,7 +256,7 @@ class TestDeleteIndicator:
         """Should reject deletion of built-in indicator."""
         result = runner.invoke(
             app,
-            ["delete-indicator", "SMA", "--force", "--formulas-file", str(formulas_file)],
+            ["indicator", "delete", "SMA", "--force", "--formulas-file", str(formulas_file)],
         )
 
         assert result.exit_code == 1
@@ -269,7 +269,7 @@ class TestDeleteIndicator:
 
         result = runner.invoke(
             app,
-            ["delete-indicator", "MY_RSI", "--formulas-file", str(formulas_file)],
+            ["indicator", "delete", "MY_RSI", "--formulas-file", str(formulas_file)],
             input="n\n",  # Decline confirmation
         )
 
@@ -282,7 +282,7 @@ class TestDeleteIndicator:
 
         result = runner.invoke(
             app,
-            ["delete-indicator", "MY_RSI", "--formulas-file", str(formulas_file)],
+            ["indicator", "delete", "MY_RSI", "--formulas-file", str(formulas_file)],
             input="y\n",  # Confirm
         )
 

@@ -460,12 +460,12 @@ def update(
     otherwise falls back to IDX public API.
 
     Examples:
-        saham update --universe lq45
-        saham update --universe lq45 --days 30
-        saham update BBCA BBRI BMRI
-        saham update --universe cached --refresh
-        saham update --universe lq45 --broker-only
-        saham update BBCA --broker-provider stockbit-session --days 30
+        saham data update --universe lq45
+        saham data update --universe lq45 --days 30
+        saham data update BBCA BBRI BMRI
+        saham data update --universe cached --refresh
+        saham data update --universe lq45 --broker-only
+        saham data update BBCA --broker-provider stockbit-session --days 30
     """
     resolved_db = db_path or DEFAULT_DB_PATH
 

@@ -528,7 +528,7 @@ def test_fetch_swing_sentiment_verbose_keeps_provider_details(
 
 
 def test_swing_backtest_unknown_preset_error():
-    result = runner.invoke(app, ["swing", "backtest", "--preset", "unknown"])
+    result = runner.invoke(app, ["trade", "swing", "backtest", "--preset", "unknown"])
 
     assert result.exit_code != 0
     assert "unknown swing preset" in result.output.lower()
@@ -539,6 +539,7 @@ def test_regime_command_accepts_explicit_ticker_with_empty_cache(tmp_path: Path)
     result = runner.invoke(
         app,
         [
+            "analyze",
             "regime",
             "BBCA",
             "--universe",
@@ -559,6 +560,7 @@ def test_swing_backtest_rejects_invalid_allowed_regime():
     result = runner.invoke(
         app,
         [
+            "trade",
             "swing",
             "backtest",
             "BBCA",
@@ -575,6 +577,7 @@ def test_swing_compare_rejects_unknown_variant():
     result = runner.invoke(
         app,
         [
+            "trade",
             "swing",
             "compare",
             "BBCA",
