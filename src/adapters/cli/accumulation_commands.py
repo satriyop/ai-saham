@@ -21,11 +21,14 @@ from typing import Annotated, Optional
 
 import typer
 
+from src.application.services.bootstrap import create_indicator_registry
+from src.application.services.strategy_loader import StrategyLoader, StrategyNotFoundError
 from src.application.services.universe_loader import (
     UniverseNotFoundError,
     load_universe_meta,
     resolve_tickers,
 )
+from src.application.use_case.assess_risk import AssessRiskRequest, AssessRiskUseCase
 from src.application.use_case.accumulation_audit import (
     AccumulationAuditRequest,
     AccumulationAuditResponse,
@@ -328,6 +331,14 @@ def _percent_plan(entry: Decimal) -> tuple[Decimal, Decimal]:
     return stop, target
 
 
+_STRAT_SYMBOL = {"LOW_RISK": "↑", "HIGH_RISK": "↓", "MODERATE": "~"}
+_STRAT_COLOR  = {
+    "LOW_RISK":  typer.colors.GREEN,
+    "HIGH_RISK": typer.colors.RED,
+    "MODERATE":  typer.colors.BRIGHT_BLACK,
+}
+
+
 def _display_results(
     response: AccumulationScreenResponse,
     universe_label: str,
@@ -336,6 +347,8 @@ def _display_results(
     vwap_only: bool,
     squeeze_only: bool,
     show_breakdown: bool,
+    strategy_signals: dict[str, str] | None = None,
+    strategy_name: str | None = None,
 ) -> None:
     """Render accumulation screener results as terminal table."""
     candidates = response.candidates
@@ -363,12 +376,15 @@ def _display_results(
         typer.echo("=" * _TABLE_WIDTH)
         return
 
+    strat_hdr = f" {'STRAT':>6}" if strategy_signals is not None else ""
+    sep_w = _SEP_WIDTH + (8 if strategy_signals is not None else 0)
     header = (
         f"{'#':>3} {'TICKER':<7} {'SCORE':>6} {'STREAK':>7} {'NET_DAYS':>9}"
         f" {'NET_VALUE':>12} {'FLOW%':>6} {'VWAP_DISC':>10} {'RSI':>6} {'BB%ILE':>7} {'TREND':>5}"
+        f"{strat_hdr}"
     )
     typer.echo(header)
-    typer.echo("-" * _SEP_WIDTH)
+    typer.echo("-" * sep_w)
 
     for i, c in enumerate(candidates, 1):
         net_days_str = f"{c.net_buy_days}/{c.total_days}"
@@ -393,11 +409,19 @@ def _display_results(
         else:
             score_color = typer.colors.WHITE
 
+        strat_col = ""
+        if strategy_signals is not None:
+            raw = strategy_signals.get(c.ticker, "?")
+            sym = _STRAT_SYMBOL.get(raw, raw)
+            col = _STRAT_COLOR.get(raw, typer.colors.WHITE)
+            strat_col = " " + typer.style(f"{sym:>6}", fg=col, bold=(raw == "LOW_RISK"))
+
         line = (
             f"{i:>3} {c.ticker:<7} "
             + typer.style(f"{c.score:>6.1f}", fg=score_color)
             + f" {streak_str:>7} {net_days_str:>9} {_format_value(c.total_net_value):>12}"
             + f" {flow_str:>6} {vwap_str:>10} {rsi_str:>6} {bb_str}  {c.trend:>5}"
+            + strat_col
         )
         typer.echo(line)
 
@@ -412,8 +436,12 @@ def _display_results(
 
         if granular and c.top_brokers:
             broker_line = "    " + "  ".join(c.top_brokers[:5])
-            if c.institutional_flag:
-                broker_line += "  " + typer.style("[★ INSTITUTIONAL]", fg=typer.colors.CYAN)
+            if c.bci_label == "CLUSTER":
+                broker_line += "  " + typer.style(f"[★ BCI:{c.bci_label}({c.bci_tier1_count}T1)]", fg=typer.colors.CYAN)
+            elif c.bci_label == "STABLE":
+                broker_line += "  " + typer.style(f"[BCI:{c.bci_label}({c.bci_tier1_count}T1)]", fg=typer.colors.GREEN)
+            elif c.bci_label == "RETAIL-LED":
+                broker_line += "  " + typer.style("[BCI:RETAIL-LED]", fg=typer.colors.WHITE)
             typer.echo(broker_line)
 
     typer.echo("-" * _SEP_WIDTH)
@@ -431,7 +459,11 @@ def _display_results(
     typer.echo("FLOW%: avg net foreign % of total daily turnover (positive = accumulating)")
     typer.echo("VWAP_DISC: positive = price < foreign avg buy (foreigners underwater)")
     typer.echo("BB%ILE: BB Width pctile vs last 60d — green(≤20%) = squeeze (coiled spring)")
-    typer.echo("Score 0–120 | consistency 40 | streak 30 | VWAP 20 | RSI 10 | flow 10 | BB 10 | inst 5")
+    typer.echo("Score 0–120 | consistency 40 | streak 30 | VWAP 20 | RSI 10 | flow 10 | BB 10 | BCI 0/5/15")
+    if strategy_signals is not None:
+        typer.echo(
+            f"STRAT ({strategy_name}): ↑=LOW_RISK(entry)  ~=MODERATE(hold)  ↓=HIGH_RISK(exit)"
+        )
     typer.echo("")
     typer.echo("Swing trade watchlist — cross-check with `saham intraday pre-open` for intraday entry timing.")
     typer.echo("DISCLAIMER: Analysis only, not trading advice.")
@@ -696,7 +728,7 @@ def _print_column_guide() -> None:
     _row("  rsi", "Up to 10 pts — RSI headroom (tent at 40)")
     _row("  flow", "Up to 10 pts — avg % of daily turnover that's foreign")
     _row("  bb", "Up to 10 pts — BB Width squeeze intensity")
-    _row("  inst", "Up to  5 pts — institutional broker detected (Stockbit only)")
+    _row("  inst", "0/5/15 pts — BCI: RETAIL-LED/STABLE/CLUSTER (Stockbit only)")
     typer.echo("")
     typer.echo("  If a stock scores lower than expected, breakdown shows which signal")
     typer.echo("  is missing. E.g. vwap=0 means foreigners are in profit — no defense motive.")
@@ -806,6 +838,13 @@ def accumulation_run(
         bool,
         typer.Option("--explain", help="Print column guide appended after results"),
     ] = False,
+    strategy: Annotated[
+        Optional[str],
+        typer.Option(
+            "--strategy", "-S",
+            help="Show strategy signal column alongside accum score (e.g. williams-r-bounce)",
+        ),
+    ] = None,
     db_path: Annotated[
         Optional[Path],
         typer.Option("--db", help="SQLite database path"),
@@ -950,6 +989,28 @@ def accumulation_run(
         typer.echo(json.dumps(data, indent=2, default=str))
         return
 
+    # Optional strategy signal column
+    strategy_signals: dict[str, str] = {}
+    if strategy:
+        registry = create_indicator_registry(
+            broker_repository=broker_repo,
+            market_repository=market_repo,
+        )
+        try:
+            strat_loader = StrategyLoader(registry=registry)
+            rules_path = strat_loader.resolve(strategy)
+            risk_uc = AssessRiskUseCase(repository=market_repo, registry=registry)
+            visible = response.candidates[:top]
+            for c in visible:
+                try:
+                    req = AssessRiskRequest(ticker=c.ticker, rules_file=rules_path)
+                    res = risk_uc.execute(req)
+                    strategy_signals[c.ticker] = res.assessment.risk_level_name
+                except Exception:
+                    strategy_signals[c.ticker] = "?"
+        except StrategyNotFoundError as e:
+            typer.echo(f"⚠ Strategy not found: {e}", err=True)
+
     _display_results(
         response=response,
         universe_label=universe_label,
@@ -958,6 +1019,8 @@ def accumulation_run(
         vwap_only=vwap_only,
         squeeze_only=squeeze_only,
         show_breakdown=show_breakdown,
+        strategy_signals=strategy_signals or None,
+        strategy_name=strategy,
     )
     if explain:
         _print_column_guide()
