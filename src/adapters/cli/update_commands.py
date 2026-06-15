@@ -420,6 +420,109 @@ def _fetch_broker(
         return f"ERR:{str(e)[:30]}"
 
 
+def _print_table_summary(
+    db_path: Path,
+    stock_tickers: list[str],
+    candles_provider: str,
+    broker_provider_name: str,
+    no_meta: bool,
+    candles_only: bool,
+    broker_only: bool,
+) -> None:
+    """Print a concise summary of each table written during this run."""
+    import sqlite3 as _sqlite3
+
+    # Tables, their source, and a plain-English description of what they store.
+    # Each entry: (table, source_label, description, query_fn)
+    # query_fn receives a cursor and the IN-clause placeholder string.
+    stock_ph = ",".join("?" * len(stock_tickers))
+
+    def _count(cur, sql, params=()):
+        row = cur.execute(sql, params).fetchone()
+        return row[0] if row else 0
+
+    try:
+        conn = _sqlite3.connect(db_path)
+        cur = conn.cursor()
+
+        rows_candles = _count(
+            cur,
+            f"SELECT COUNT(*) FROM candles WHERE ticker IN ({stock_ph})",
+            stock_tickers,
+        ) if not broker_only else None
+
+        rows_summaries = _count(
+            cur,
+            f"SELECT COUNT(*) FROM broker_summaries WHERE ticker IN ({stock_ph}) AND source='idx'",
+            stock_tickers,
+        ) if not candles_only else None
+
+        rows_flow_points = _count(
+            cur,
+            f"SELECT COUNT(*) FROM foreign_flow_points WHERE ticker IN ({stock_ph})",
+            stock_tickers,
+        ) if not candles_only else None
+
+        rows_daily_flow = _count(
+            cur,
+            f"SELECT COUNT(*) FROM broker_daily_flow WHERE ticker IN ({stock_ph})",
+            stock_tickers,
+        ) if not candles_only else None
+
+        rows_meta = _count(
+            cur,
+            f"SELECT COUNT(*) FROM stock_meta WHERE ticker IN ({stock_ph})",
+            stock_tickers,
+        ) if not no_meta else None
+
+        conn.close()
+    except Exception:
+        return  # summary is informational; never crash the run for it
+
+    W = 74
+    typer.echo(f"\n{'─' * W}")
+    typer.echo(f"  {'TABLE':<22} {'SOURCE':<18} {'ROWS':>7}   CONTAINS")
+    typer.echo(f"{'─' * W}")
+
+    def _row(table, source, rows, description):
+        if rows is None:
+            return
+        typer.echo(f"  {table:<22} {source:<18} {rows:>7,}   {description}")
+
+    _row(
+        "candles",
+        candles_provider,
+        rows_candles,
+        "Daily OHLCV price history per ticker",
+    )
+    _row(
+        "broker_summaries",
+        "idx",
+        rows_summaries,
+        "Foreign buy/sell totals + top named brokers per day",
+    )
+    _row(
+        "foreign_flow_points",
+        broker_provider_name,
+        rows_flow_points,
+        "Net foreign flow timeseries (IDR value + lots) per ticker",
+    )
+    _row(
+        "broker_daily_flow",
+        broker_provider_name,
+        rows_daily_flow,
+        "Per-broker named buy/sell amounts per ticker per day",
+    )
+    _row(
+        "stock_meta",
+        "yahoo",
+        rows_meta,
+        "Sector/industry classification (GICS, TTL-cached)",
+    )
+    typer.echo(f"{'─' * W}")
+    typer.echo(f"  Row counts are totals for the {len(stock_tickers)} stock ticker(s) in this run (all dates).")
+
+
 def _fetch_meta(ticker: str, db_path: Path) -> str:
     """Fetch sector/industry metadata for one ticker. Returns a status string."""
     if ticker.startswith("^"):
@@ -546,11 +649,14 @@ def update(
     # Header
     typer.echo(f"\nUpdating {len(ticker_list)} tickers | {days}d history")
     if not broker_only:
-        typer.echo(f"  Candles: {candles_provider}")
+        typer.echo(f"  Candles:          {candles_provider}")
     if not candles_only:
-        typer.echo(f"  Broker:  {broker_provider_name}")
+        # broker_summaries always route to IDX regardless of the selected provider;
+        # flow tables (foreign_flow_points, broker_daily_flow) use the chosen provider.
+        typer.echo(f"  Broker summaries: idx  (foreign totals + named brokers)")
+        typer.echo(f"  Broker flow:      {broker_provider_name}  (net flow timeseries + daily named breakdown)")
     if not no_meta:
-        typer.echo("  Meta:    yahoo (sector/industry, 30d TTL)")
+        typer.echo("  Meta:             yahoo  (sector/industry, 30d TTL)")
     typer.echo("  Status: +Nrows = new rows stored; span = calendar cache coverage")
     typer.echo("")
 
@@ -638,4 +744,16 @@ def update(
         title=f"Sector classification changed for {len(meta_changed)} ticker(s):" if meta_changed else "",
         messages=meta_changed,
         color=typer.colors.YELLOW,
+    )
+
+    # Table summary — exclude index tickers (^JKSE) since they have no broker/meta rows
+    stock_tickers_only = [t for t in ticker_list if not t.startswith("^")]
+    _print_table_summary(
+        db_path=resolved_db,
+        stock_tickers=stock_tickers_only,
+        candles_provider=candles_provider,
+        broker_provider_name=broker_provider_name,
+        no_meta=no_meta,
+        candles_only=candles_only,
+        broker_only=broker_only,
     )
