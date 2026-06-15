@@ -2,10 +2,10 @@
 CLI commands for Stockbit browser session management and adapter diagnostics.
 
 Commands:
-  saham stockbit login   — save browser session cookies (headed Chromium)
-  saham stockbit status  — check session health without opening a browser
-  saham stockbit spy     — capture all API traffic to identify real endpoints
-  saham stockbit test    — smoke-test the live adapter with saved session
+  saham data stockbit login   — save browser session cookies (headed Chromium)
+  saham data stockbit status  — check session health without opening a browser
+  saham data stockbit spy     — capture all API traffic to identify real endpoints
+  saham data stockbit test    — smoke-test the live adapter with saved session
 
 Layer: Adapter
 """
@@ -55,9 +55,9 @@ def login(
     Cookies are saved and reused by all subsequent Stockbit commands.
 
     Examples:
-        saham stockbit login
-        saham stockbit login --timeout 180
-        saham stockbit login --session .my-session.json
+        saham data stockbit login
+        saham data stockbit login --timeout 180
+        saham data stockbit login --session .my-session.json
     """
     _require_playwright_cli()
     from src.infrastructure.browser.playwright_stockbit import save_stockbit_session
@@ -83,7 +83,7 @@ def status(
     Shows cookie count, session age, and whether auth cookies are present.
 
     Example:
-        saham stockbit status
+        saham data stockbit status
     """
     from src.infrastructure.browser.playwright_stockbit import get_session_status
 
@@ -98,7 +98,7 @@ def status(
         typer.echo(typer.style("  No session found.", fg=typer.colors.RED))
         typer.echo(f"  Expected profile: {info['path']}")
         typer.echo("")
-        typer.echo("Run: saham stockbit login")
+        typer.echo("Run: saham data stockbit login")
         return
 
     session_type = info.get("type", "unknown")
@@ -132,10 +132,10 @@ def status(
 
     typer.echo("")
     if not valid:
-        typer.echo("Run: saham stockbit login")
+        typer.echo("Run: saham data stockbit login")
     else:
-        typer.echo("Next: saham stockbit spy  (discover API endpoints)")
-        typer.echo("      saham stockbit test (live smoke-test)")
+        typer.echo("Next: saham data stockbit spy  (discover API endpoints)")
+        typer.echo("      saham data stockbit test (live smoke-test)")
 
 
 @stockbit_app.command("spy")
@@ -178,11 +178,11 @@ def spy(
     this output when reporting adapter issues so selectors can be calibrated.
 
     Examples:
-        saham stockbit spy
-        saham stockbit spy --target orderbook --ticker BBRI
-        saham stockbit spy --target stock --ticker BBCA   (named broker breakdown)
-        saham stockbit spy --target broker-scan           (foreign top stocks)
-        saham stockbit spy --wait 10 --output journals/my-capture.json
+        saham data stockbit spy
+        saham data stockbit spy --target orderbook --ticker BBRI
+        saham data stockbit spy --target stock --ticker BBCA   (named broker breakdown)
+        saham data stockbit spy --target broker-scan           (foreign top stocks)
+        saham data stockbit spy --wait 10 --output journals/my-capture.json
     """
     _require_playwright_cli()
     from src.infrastructure.browser.playwright_stockbit import spy_stockbit_session
@@ -253,7 +253,7 @@ def spy(
     typer.echo("")
     typer.echo("Next steps:")
     typer.echo("  1. Share the URLs above (or the JSON file) to calibrate the adapter")
-    typer.echo("  2. Once endpoints are confirmed: saham stockbit test")
+    typer.echo("  2. Once endpoints are confirmed: saham data stockbit test")
 
 
 @stockbit_app.command("test")
@@ -282,9 +282,9 @@ def test(
     Use this to verify the adapter works after calibrating from spy output.
 
     Examples:
-        saham stockbit test
-        saham stockbit test --no-headless    (see the browser)
-        saham stockbit test --ticker BMRI
+        saham data stockbit test
+        saham data stockbit test --no-headless    (see the browser)
+        saham data stockbit test --ticker BMRI
     """
     _require_playwright_cli()
     from src.infrastructure.browser.playwright_stockbit import PlaywrightStockbitProvider
@@ -308,10 +308,11 @@ def test(
                 typer.style(f"  ✓ {len(movers)} movers returned", fg=typer.colors.GREEN)
             )
             typer.echo("")
-            typer.echo(f"  {'TICKER':<8} {'IEV':>12}")
-            typer.echo("  " + "-" * 22)
+            typer.echo(f"  {'TICKER':<8} {'IEV':>12} {'IEP':>10}")
+            typer.echo("  " + "-" * 33)
             for m in movers[:10]:
-                typer.echo(f"  {m.ticker:<8} {m.iev:>12,}")
+                iep_str = f"{m.iep:,}" if m.iep is not None else "—"
+                typer.echo(f"  {m.ticker:<8} {m.iev:>12,} {iep_str:>10}")
             if len(movers) > 10:
                 typer.echo(f"  ... and {len(movers) - 10} more")
         else:
@@ -320,7 +321,7 @@ def test(
             typer.echo("  Diagnosis:")
             typer.echo("    — API intercept: no URL matched movers patterns")
             typer.echo("    — DOM scrape:    no table rows found")
-            typer.echo("    — Next step:     saham stockbit spy --target screener")
+            typer.echo("    — Next step:     saham data stockbit spy --target screener")
     except Exception as e:
         typer.echo(typer.style(f"  ✗ Error: {e}", fg=typer.colors.RED))
 
@@ -341,7 +342,7 @@ def test(
         else:
             typer.echo(typer.style("  ✗ No bid returned", fg=typer.colors.RED))
             typer.echo("")
-            typer.echo(f"  Next step: saham stockbit spy --target orderbook --ticker {ticker}")
+            typer.echo(f"  Next step: saham data stockbit spy --target orderbook --ticker {ticker}")
     except Exception as e:
         typer.echo(typer.style(f"  ✗ Error: {e}", fg=typer.colors.RED))
 
@@ -371,9 +372,9 @@ def fetch_top5(
     Displays a ranked table with best bid and best offer.
 
     Examples:
-        saham stockbit fetch-top5
-        saham stockbit fetch-top5 --top 10
-        saham stockbit fetch-top5 --no-headless   (see the browser)
+        saham data stockbit fetch-top5
+        saham data stockbit fetch-top5 --top 10
+        saham data stockbit fetch-top5 --no-headless   (see the browser)
     """
     _require_playwright_cli()
     from src.infrastructure.browser.playwright_stockbit import PlaywrightStockbitProvider
@@ -397,23 +398,24 @@ def fetch_top5(
 
     if not results:
         typer.echo(typer.style("No results returned.", fg=typer.colors.YELLOW))
-        typer.echo("Try: saham stockbit login  (session may have expired)")
+        typer.echo("Try: saham data stockbit login  (session may have expired)")
         return
 
     typer.echo(
-        f"  {'#':<4} {'TICKER':<8} {'IEV':>12}   "
+        f"  {'#':<4} {'TICKER':<8} {'IEV':>12} {'IEP':>10}   "
         f"{'BEST BID':>10} {'LOTS':>8}   {'BEST OFFER':>10} {'LOTS':>8}"
     )
-    typer.echo("  " + "-" * 68)
+    typer.echo("  " + "-" * 79)
 
     for rank, r in enumerate(results, start=1):
+        iep_str = f"{r.iep:,}" if r.iep is not None else "—"
         bid_str = f"{r.best_bid:,.0f}" if r.best_bid is not None else "—"
         bid_lots_str = f"{r.best_bid_lots:,}" if r.best_bid_lots is not None else "—"
         offer_str = f"{r.best_offer:,.0f}" if r.best_offer is not None else "—"
         offer_lots_str = f"{r.best_offer_lots:,}" if r.best_offer_lots is not None else "—"
 
         line = (
-            f"  {rank:<4} {r.ticker:<8} {r.iev:>12,}   "
+            f"  {rank:<4} {r.ticker:<8} {r.iev:>12,} {iep_str:>10}   "
             f"{bid_str:>10} {bid_lots_str:>8}   {offer_str:>10} {offer_lots_str:>8}"
         )
         typer.echo(typer.style(line, fg=typer.colors.GREEN) if rank <= 3 else line)
