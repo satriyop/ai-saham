@@ -86,7 +86,7 @@ SWING_COMPARE_VARIANTS: dict[str, tuple[str, ...]] = {
     "weak_plus": ("WEAK", "SIDEWAYS", "BULLISH"),
 }
 
-SMART_MONEY_BROKERS = {"AK", "BK", "KZ", "ZP", "RX", "MS", "DB", "CS", "ML", "YU"}
+SMART_MONEY_BROKERS = {"AK", "BK", "KZ", "ZP", "RX", "MS", "DB", "ML", "YU"}
 NOISE_BROKERS = {"YP", "PD", "XL", "XC"}
 BROKER_WEIGHTS: dict[str, Decimal] = {
     **{code: Decimal("1.5") for code in SMART_MONEY_BROKERS},

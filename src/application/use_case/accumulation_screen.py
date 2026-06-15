@@ -28,9 +28,16 @@ from src.domain.ports.market_data_repository import MarketDataRepository
 
 SHARES_PER_LOT = 100
 
-# Institutional/foreign broker codes that signal smart-money accumulation.
-# CS excluded: Credit Suisse wound down Indonesian operations (confirmed 0 trades).
-INSTITUTIONAL_BROKERS = {"AK", "BK", "ZP", "MS", "DB", "RX", "ML", "YU", "KZ", "CP", "HD", "DR"}
+# Tier 1 — pure foreign institutional desks (custodian + prime brokerage).
+# These are the codes whose net_lot signal most reliably tracks foreign institutional intent.
+# YP (Indo Premier / Mirae) is domestic and excluded here even though it's in
+# _INSTITUTIONAL_PROXY_CODES for flow aggregation — it doesn't signal foreign custody.
+TIER1_FOREIGN_BROKERS = frozenset({"AK", "BK", "ZP", "KZ", "YU", "RX", "HD", "CP", "DR"})
+
+# Broker Concentration Index (BCI) tiers
+BCI_CLUSTER = "CLUSTER"    # 3+ Tier 1 codes in window top net-buyers → +15 pts
+BCI_STABLE  = "STABLE"     # 1–2 Tier 1 codes                         → +5 pts
+BCI_RETAIL  = "RETAIL-LED" # 0 Tier 1 codes                           → +0 pts
 
 
 @dataclass
@@ -72,6 +79,9 @@ class AccumulationCandidate:
     # Improvement #3: BB squeeze
     bb_width: float | None = None         # current BB Width %
     bb_width_pctile: float | None = None  # 0..1 vs last 60 days (lower = tighter)
+    # BCI — Broker Concentration Index
+    bci_label: str | None = None          # "CLUSTER" | "STABLE" | "RETAIL-LED" | None
+    bci_tier1_count: int = 0              # distinct Tier 1 foreign desks in net-buyers
 
     def to_dict(self) -> dict:
         return {
@@ -90,6 +100,8 @@ class AccumulationCandidate:
             "score": self.score,
             "top_brokers": self.top_brokers,
             "institutional_flag": self.institutional_flag,
+            "bci_label": self.bci_label,
+            "bci_tier1_count": self.bci_tier1_count,
             "avg_flow_ratio": round(self.avg_flow_ratio, 2) if self.avg_flow_ratio is not None else None,
             "score_breakdown": self.score_breakdown,
             "bb_width": round(self.bb_width, 2) if self.bb_width is not None else None,
@@ -119,7 +131,9 @@ def _score(candidate: AccumulationCandidate) -> tuple[float, dict]:
       10 pts — RSI headroom (tent peak at RSI=40, zero at ≤25 or ≥75)
       10 pts — avg foreign flow ratio (% of daily turnover, saturates at 20%)
       10 pts — BB Width squeeze (bottom 20th pctile vs last 60d)
-       5 pts — institutional broker present (Stockbit only)
+      15 pts — BCI CLUSTER (3+ Tier 1 foreign brokers, Stockbit only)
+       5 pts — BCI STABLE (1–2 Tier 1 foreign brokers, Stockbit only)
+       0 pts — BCI RETAIL-LED or no Stockbit data
     """
     # Consistency: 0..40
     s_consistency = candidate.net_buy_ratio * 40.0
@@ -146,8 +160,13 @@ def _score(candidate: AccumulationCandidate) -> tuple[float, dict]:
     fr = max(0.0, min(candidate.avg_flow_ratio or 0.0, 20.0))
     s_flow = fr / 20.0 * 10.0
 
-    # Institutional flag
-    s_inst = 5.0 if candidate.institutional_flag else 0.0
+    # BCI — tiered: CLUSTER = 3+ Tier 1 foreign desks, STABLE = 1–2, RETAIL-LED = 0
+    if candidate.bci_label == BCI_CLUSTER:
+        s_inst = 15.0
+    elif candidate.bci_label == BCI_STABLE:
+        s_inst = 5.0
+    else:
+        s_inst = 0.0
 
     # BB squeeze: low percentile rank = tighter band = coiled spring
     pctile = candidate.bb_width_pctile
@@ -325,6 +344,8 @@ class AccumulationScreenUseCase:
         # These are real daily rows — never period aggregates.
         top_brokers: list[str] | None = None
         institutional_flag = False
+        bci_label: str | None = None
+        bci_tier1_count: int = 0
 
         daily_flows = self._broker_repo.get_broker_daily_flows(
             ticker=ticker,
@@ -336,7 +357,7 @@ class AccumulationScreenUseCase:
             window_flows = [f for f in daily_flows if f.date in window_dates]
 
             if window_flows:
-                # Aggregate net_value per broker across the window
+                # Aggregate net_lot per broker across the window
                 from collections import defaultdict
                 broker_net: dict[str, int] = defaultdict(int)
                 for f in window_flows:
@@ -349,9 +370,16 @@ class AccumulationScreenUseCase:
                 )
                 if net_buyers:
                     top_brokers = [code for code, _ in net_buyers[:5]]
-                    institutional_flag = any(
-                        code in INSTITUTIONAL_BROKERS for code in top_brokers
-                    )
+                    # BCI: count all Tier 1 codes among any net-buyers (not just top 5)
+                    all_net_buyer_codes = {code for code, _ in net_buyers}
+                    bci_tier1_count = len(all_net_buyer_codes & TIER1_FOREIGN_BROKERS)
+                    if bci_tier1_count >= 3:
+                        bci_label = BCI_CLUSTER
+                    elif bci_tier1_count >= 1:
+                        bci_label = BCI_STABLE
+                    else:
+                        bci_label = BCI_RETAIL
+                    institutional_flag = bci_tier1_count > 0
 
         return AccumulationCandidate(
             ticker=ticker,
@@ -369,6 +397,8 @@ class AccumulationScreenUseCase:
             score=0.0,  # set after by _score()
             top_brokers=top_brokers,
             institutional_flag=institutional_flag,
+            bci_label=bci_label,
+            bci_tier1_count=bci_tier1_count,
             avg_flow_ratio=avg_flow_ratio,
             bb_width=bb_width,
             bb_width_pctile=bb_width_pctile,
