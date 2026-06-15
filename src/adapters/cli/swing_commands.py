@@ -1271,6 +1271,8 @@ def _print_swing_output(
     sentiment_verbose: bool,
     no_backtest: bool,
     no_sentiment: bool,
+    strategy_risk_level: str | None = None,
+    strategy_risk_name: str | None = None,
 ) -> None:
     typer.echo("")
     _sep("=")
@@ -1480,6 +1482,38 @@ def _print_swing_output(
             fg=typer.colors.BRIGHT_BLACK,
         ))
 
+    # ── STRATEGY RISK GATE ──────────────────────────────────────────────────
+    if strategy_risk_level is not None:
+        typer.echo("")
+        _strat_color = {
+            "LOW_RISK": typer.colors.GREEN,
+            "HIGH_RISK": typer.colors.RED,
+            "MODERATE": typer.colors.YELLOW,
+        }.get(strategy_risk_level, typer.colors.WHITE)
+        _strat_sym = {"LOW_RISK": "↑", "HIGH_RISK": "↓", "MODERATE": "~"}.get(
+            strategy_risk_level, "?"
+        )
+        _section_header(
+            f"STRATEGY GATE ({strategy_risk_name})",
+            typer.style(f"{_strat_sym} {strategy_risk_level}", fg=_strat_color, bold=True),
+        )
+        if strategy_risk_level == "HIGH_RISK":
+            typer.echo(typer.style(
+                f"  ⚠ Strategy '{strategy_risk_name}' signals HIGH_RISK — "
+                "overrides preset to AVOID.",
+                fg=typer.colors.RED,
+            ))
+        elif strategy_risk_level == "LOW_RISK":
+            typer.echo(typer.style(
+                f"  ✓ Strategy '{strategy_risk_name}' confirms entry signal.",
+                fg=typer.colors.GREEN,
+            ))
+        else:
+            typer.echo(typer.style(
+                f"  ~ Strategy '{strategy_risk_name}' is neutral — no override.",
+                fg=typer.colors.BRIGHT_BLACK,
+            ))
+
     # ── SIZING ───────────────────────────────────────────────────────────────
     show_sizing = capital is not None and not (
         preset_eval is not None and not preset_eval.passed
@@ -1642,8 +1676,22 @@ def _print_swing_output(
     else:
         typer.echo("SUMMARY: insufficient data for assessment")
 
+    # Strategy gate overrides ENTER → AVOID if HIGH_RISK
+    strategy_override = (
+        strategy_risk_level == "HIGH_RISK"
+        and preset_eval is not None
+        and preset_eval.passed
+    )
+
     if preset_eval is not None:
-        if preset_eval.passed and preset_sizing and preset_sizing.lots > 0:
+        if strategy_override:
+            typer.echo(typer.style(
+                f"PLAN:  AVOID (strategy gate: '{strategy_risk_name}' signals HIGH_RISK "
+                "— preset passed but technical signal says exit).",
+                fg=typer.colors.RED,
+                bold=True,
+            ))
+        elif preset_eval.passed and preset_sizing and preset_sizing.lots > 0:
             typer.echo(
                 f"PLAN:  ENTER setup passed. Consider {preset_sizing.lots} lots at "
                 f"{float(preset_sizing.entry_price):,.0f}; TP "
@@ -1765,6 +1813,17 @@ def swing(
         str,
         typer.Option("--benchmark", help="Benchmark ticker for regime context"),
     ] = "^JKSE",
+    risk_strategy: Annotated[
+        Optional[str],
+        typer.Option(
+            "--risk-strategy",
+            help=(
+                "Strategy to use as additional risk gate. "
+                "If strategy signals HIGH_RISK, overrides preset to AVOID. "
+                "Example: --risk-strategy williams-r-bounce"
+            ),
+        ),
+    ] = None,
     output_format: Annotated[
         str,
         typer.Option("--format", help="Output format: table or json"),
@@ -1813,7 +1872,10 @@ def swing(
 
     market_repo = SQLiteMarketRepository(db_path=resolved_db)
     broker_repo = SQLiteBrokerRepository(resolved_db)
-    registry = create_indicator_registry()
+    registry = create_indicator_registry(
+        broker_repository=broker_repo,
+        market_repository=market_repo,
+    )
 
     refresh_actions: tuple[str, ...] = ()
     if auto_refresh:
@@ -1883,6 +1945,24 @@ def swing(
         ))
     except Exception:
         pass
+
+    # ── Strategy risk gate ───────────────────────────────────────────────────
+    strategy_risk_level: str | None = None
+    strategy_risk_name: str | None = risk_strategy
+    if risk_strategy:
+        try:
+            strat_loader = StrategyLoader(registry=registry)
+            rules_path = strat_loader.resolve(risk_strategy)
+            strat_risk_uc = AssessRiskUseCase(repository=market_repo, registry=registry)
+            strat_resp = strat_risk_uc.execute(AssessRiskRequest(
+                ticker=ticker_upper,
+                rules_file=rules_path,
+            ))
+            strategy_risk_level = strat_resp.assessment.risk_level_name
+        except StrategyNotFoundError:
+            typer.echo(f"⚠ Risk strategy '{risk_strategy}' not found — gate skipped.", err=True)
+        except Exception:
+            pass
 
     # ── ATR ──────────────────────────────────────────────────────────────────
     atr_value: Decimal | None = None
@@ -2091,6 +2171,8 @@ def swing(
         sentiment_verbose=sentiment_verbose,
         no_backtest=no_backtest,
         no_sentiment=no_sentiment,
+        strategy_risk_level=strategy_risk_level,
+        strategy_risk_name=strategy_risk_name,
     )
 
 
