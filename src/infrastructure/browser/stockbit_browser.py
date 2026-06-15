@@ -118,11 +118,15 @@ class ManualBrowserDataProvider(BrowserDataProvider):
         """Construct from raw JSON-parsed dicts.
 
         Args:
-            movers_json: List of {"ticker": str, "iev": int}
+            movers_json: List of {"ticker": str, "iev": int, "iep": int | None}
             order_books_json: Map of ticker -> {"price": float, "volume": int}
         """
         movers = [
-            MoverData(ticker=m["ticker"].upper(), iev=int(m["iev"]))
+            MoverData(
+                ticker=m["ticker"].upper(),
+                iev=int(m["iev"]),
+                iep=int(m["iep"]) if m.get("iep") is not None else None,
+            )
             for m in movers_json
         ]
 

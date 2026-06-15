@@ -544,6 +544,7 @@ class PlaywrightStockbitProvider(BrowserDataProvider):
                         best_bid_lots=bid_lots,
                         best_offer=offer_price,
                         best_offer_lots=offer_lots,
+                        iep=mover.iep,
                     ))
                     logger.info(
                         "%s: bid=%s (%s lots)  offer=%s (%s lots)",
@@ -1375,7 +1376,7 @@ def _fetch_iev_all_boards(token: str) -> list[MoverData]:
 
     Raises StockbitSessionExpired if any call returns 401.
     """
-    seen: dict[str, int] = {}  # ticker → iev
+    seen: dict[str, MoverData] = {}
 
     for url in (_IEV_MOVER_URL_MAIN, _IEV_MOVER_URL_SPECIAL):
         body = _exodus_get(url, token)  # raises StockbitSessionExpired on 401
@@ -1384,11 +1385,12 @@ def _fetch_iev_all_boards(token: str) -> list[MoverData]:
             continue
         for mover in _parse_iev_response(body, iev_min=0):
             # Keep highest IEV if ticker appears in both boards
-            if mover.iev > seen.get(mover.ticker, -1):
-                seen[mover.ticker] = mover.iev
+            existing = seen.get(mover.ticker)
+            if existing is None or mover.iev > existing.iev:
+                seen[mover.ticker] = mover
 
     return sorted(
-        [MoverData(ticker=t, iev=v) for t, v in seen.items()],
+        seen.values(),
         key=lambda m: m.iev,
         reverse=True,
     )
@@ -1403,6 +1405,7 @@ def _parse_iev_response(body: dict, iev_min: int) -> list[MoverData]:
     Confirmed response shape (2026-06-13):
       data.mover_list[].stock_detail.code       → ticker
       data.mover_list[].iepiev_detail.iev.raw   → IEV as integer
+      data.mover_list[].iepiev_detail.iep.raw   → IEP as integer, when present
     """
     movers: list[MoverData] = []
 
@@ -1435,8 +1438,9 @@ def _parse_iev_response(body: dict, iev_min: int) -> list[MoverData]:
                 continue
             ticker = _extract_ticker(item)
             iev = _extract_iev_from_mover(item)
+            iep = _extract_iep_from_mover(item)
             if ticker and iev is not None and iev >= iev_min:
-                movers.append(MoverData(ticker=ticker, iev=iev))
+                movers.append(MoverData(ticker=ticker, iev=iev, iep=iep))
 
     return sorted(movers, key=lambda m: m.iev, reverse=True)
 
@@ -1472,6 +1476,24 @@ def _extract_iep_confirmed(item: dict) -> int | None:
             return int(raw)
         except (ValueError, TypeError):
             pass
+    return None
+
+
+def _extract_iep_from_mover(item: dict) -> int | None:
+    """Extract IEP value from generic mover payloads."""
+    for key in ("iep", "IEP", "indicative_equilibrium_price", "equilibrium_price"):
+        val = item.get(key)
+        if val is not None:
+            try:
+                return int(float(str(val).replace(",", "")))
+            except (ValueError, TypeError):
+                pass
+    for nested_key in ("stock", "data", "detail", "iepiev_detail"):
+        nested = item.get(nested_key)
+        if isinstance(nested, dict):
+            result = _extract_iep_from_mover(nested)
+            if result is not None:
+                return result
     return None
 
 

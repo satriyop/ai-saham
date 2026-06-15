@@ -51,6 +51,7 @@ class MoverWithOrderBook:
         best_bid_lots: Lots queued at best bid
         best_offer: Lowest offer price (None if orderbook unavailable)
         best_offer_lots: Lots queued at best offer
+        iep: Indicative Equilibrium Price in IDR (None if not captured)
     """
 
     ticker: str
@@ -59,6 +60,7 @@ class MoverWithOrderBook:
     best_bid_lots: int | None
     best_offer: Decimal | None
     best_offer_lots: int | None
+    iep: int | None = None
 
 
 @dataclass
