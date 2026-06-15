@@ -33,7 +33,9 @@ import typer
 import yaml
 
 from src.application.services.bootstrap import create_indicator_registry
+from src.application.services.strategy_loader import StrategyLoader, StrategyNotFoundError
 from src.application.services.universe_loader import UniverseNotFoundError, resolve_tickers
+from src.application.use_case.assess_risk import AssessRiskRequest, AssessRiskUseCase
 from src.application.use_case.intraday_backtest import (
     IntradayBacktestRequest,
     IntradayBacktestResponse,
@@ -316,9 +318,10 @@ def _display_raw_movers(raw_movers: list, top_n: int | None, iev_min: int) -> No
     typer.echo(f"Fetched {total} movers from Stockbit (top {cap} screened):")
 
     # Two rows of up to 10 tickers each, compact format
-    tickers_with_iev = [
-        f"{m.ticker} {m.iev / 1000:.0f}K" for m in raw_movers[:20]
-    ]
+    tickers_with_iev = []
+    for mover in raw_movers[:20]:
+        iep_suffix = f" @{mover.iep:,}" if mover.iep is not None else ""
+        tickers_with_iev.append(f"{mover.ticker} {mover.iev / 1000:.0f}K{iep_suffix}")
     row1 = "  " + "  |  ".join(tickers_with_iev[:10])
     typer.echo(row1)
     if len(tickers_with_iev) > 10:
@@ -405,6 +408,14 @@ def _print_browser_plan(config: PreOpenScreenConfig) -> None:
     typer.echo("=" * 60)
 
 
+_STRAT_SYMBOL = {"LOW_RISK": "↑", "HIGH_RISK": "↓", "MODERATE": "~"}
+_STRAT_COLOR  = {
+    "LOW_RISK":  typer.colors.GREEN,
+    "HIGH_RISK": typer.colors.RED,
+    "MODERATE":  typer.colors.BRIGHT_BLACK,
+}
+
+
 def _display_results(
     candidates: list[ScreenerCandidate],
     screened_date: date,
@@ -413,6 +424,8 @@ def _display_results(
     warnings: list[str],
     data_freshness: IntradayDataFreshness | None = None,
     market_regime: MarketRegimeResponse | None = None,
+    strategy_signals: dict[str, str] | None = None,
+    strategy_name: str | None = None,
 ) -> None:
     typer.echo("")
     typer.echo("=" * 90)
@@ -436,12 +449,15 @@ def _display_results(
     )
 
     # Header — compact 1-row-per-ticker layout
+    strat_header = f"  {'STRAT':>5}" if strategy_signals else ""
+    sep_width = 90 + (8 if strategy_signals else 0)
     header = (
         f"{'VERDICT':<10} {'TICKER':<7} {'IEV':>7}  {'GAP%':>6}  "
         f"{'ENTRY-RANGE':>16}  {'STOP%':>6}  {'RSI':>4}  {'SIGNAL'}"
+        f"{strat_header}"
     )
     typer.echo(header)
-    typer.echo("-" * 90)
+    typer.echo("-" * sep_width)
 
     _VERDICT_STYLE = {
         "PRIME":   (typer.colors.GREEN,       True,  "★ PRIME  "),
@@ -461,12 +477,19 @@ def _display_results(
         rsi_str = f"{float(c.rsi):.0f}" if c.rsi else "—"
         signal = _signal_col(c)
 
+        strat_col = ""
+        if strategy_signals is not None:
+            raw = strategy_signals.get(c.ticker, "?")
+            sym = _STRAT_SYMBOL.get(raw, raw)
+            col = _STRAT_COLOR.get(raw, typer.colors.WHITE)
+            strat_col = "  " + typer.style(f"{sym:>5}", fg=col, bold=(raw == "LOW_RISK"))
+
         typer.echo(
             f"{verdict_str} {c.ticker:<7} {c.iev:>7,}  {gap:>6}  "
-            f"{rng:>16}  {stop_pct:>6}  {rsi_str:>4}  {signal}"
+            f"{rng:>16}  {stop_pct:>6}  {rsi_str:>4}  {signal}{strat_col}"
         )
 
-    typer.echo("-" * 90)
+    typer.echo("-" * sep_width)
 
     # AI summaries (if any)
     has_ai = any(c.ai_summary for c in sorted_candidates)
@@ -538,6 +561,10 @@ def _display_results(
         "SIGNAL: ACCUM tag × streak  |  FVWAP% (floor=asing underwater, sell=asing profit)  |  PH=Prev High"
     )
     typer.echo("STOP%: max loss from entry (ATR-based, capped -7%)")
+    if strategy_signals is not None:
+        typer.echo(
+            f"STRAT ({strategy_name}): ↑=LOW_RISK(entry)  ~=MODERATE(hold)  ↓=HIGH_RISK(exit)"
+        )
     typer.echo("")
     typer.echo("DISCLAIMER: Analysis only. Not trading advice.")
     typer.echo("=" * 90)
@@ -877,6 +904,13 @@ def pre_open(
             help="Allow weekend/non-trading-day dry-runs that can write sidecars",
         ),
     ] = False,
+    signal_strategy: Annotated[
+        Optional[str],
+        typer.Option(
+            "--signal-strategy",
+            help="Strategy name to show as extra signal column (e.g. williams-r-bounce)",
+        ),
+    ] = None,
 ) -> None:
     """
     Run the pre-open market screener for IDX stocks.
@@ -973,8 +1007,11 @@ def pre_open(
         browser_provider = ManualBrowserDataProvider.from_json(movers_raw, order_books_raw)
 
     repository = SQLiteMarketRepository(db_path=resolved_db)
-    registry = create_indicator_registry()
     broker_repo = SQLiteBrokerRepository(resolved_db)
+    registry = create_indicator_registry(
+        broker_repository=broker_repo,
+        market_repository=repository,
+    )
 
     ai_explainer = None
     if with_ai:
@@ -995,6 +1032,27 @@ def pre_open(
         request = PreOpenScreenRequest(config=config, run_date=run_guard.run_at.date())
         response = use_case.execute(request)
         result = response.result
+
+        # Optional strategy signal column
+        strategy_signals: dict[str, str] = {}
+        strategy_warning: str | None = None
+        if signal_strategy:
+            try:
+                strat_loader = StrategyLoader(registry=registry)
+                rules_path = strat_loader.resolve(signal_strategy)
+                risk_uc = AssessRiskUseCase(repository=repository, registry=registry)
+                for candidate in result.candidates:
+                    try:
+                        req = AssessRiskRequest(
+                            ticker=candidate.ticker, rules_file=rules_path
+                        )
+                        res = risk_uc.execute(req)
+                        strategy_signals[candidate.ticker] = res.assessment.risk_level_name
+                    except Exception:
+                        strategy_signals[candidate.ticker] = "?"
+            except StrategyNotFoundError as e:
+                strategy_warning = f"Strategy '{signal_strategy}' not found: {e}"
+
         data_freshness = _build_data_freshness(
             candidates=result.candidates,
             analysis_date=result.screened_date,
@@ -1002,6 +1060,8 @@ def pre_open(
             broker_repo=broker_repo,
         )
         display_warnings = list(response.warnings) + list(run_guard.warnings)
+        if strategy_warning:
+            display_warnings.append(strategy_warning)
         market_regime: MarketRegimeResponse | None = None
         if with_regime:
             try:
@@ -1028,6 +1088,8 @@ def pre_open(
             warnings=display_warnings,
             data_freshness=data_freshness,
             market_regime=market_regime,
+            strategy_signals=strategy_signals or None,
+            strategy_name=signal_strategy,
         )
 
         # Write session sidecar for `saham intraday pre-open-log`
