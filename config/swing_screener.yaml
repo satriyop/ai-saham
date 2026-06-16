@@ -85,3 +85,48 @@ sector_breadth:
 
   # Set to false to disable sector breadth bonus entirely.
   sector_breadth_enabled: true
+
+broker_quality:
+  # Smart-money foreign desks — weighted at smart_weight in flow analysis.
+  # Update when institutional players enter or exit the Indonesian market.
+  smart_money:
+    brokers: [AK, BK, KZ, ZP, RX, MS, DB, ML, YU]
+    weight: 1.5    # multiplier applied to their net flow in weighted score
+
+  # Domestic retail noise brokers — weighted at noise_weight.
+  noise:
+    brokers: [YP, PD, XL, XC]
+    weight: 0.5    # reduced weight: retail flow is less directionally predictive
+
+  # Minimum % of weighted flow that must come from smart-money brokers
+  # to classify broker context as "smart accumulation" quality.
+  smart_share_threshold_pct: 60.0
+
+foreign_bounce:
+  # Gate thresholds for the foreign-bounce preset ENTER/WATCH/AVOID classification.
+  # A candidate must pass ALL gates for ENTER; partial pass = WATCH.
+  gates:
+    min_score: 70              # accumulation composite score gate (0–120 scale)
+    min_vwap_discount_pct: 3.0 # foreigners must be underwater ≥ 3% below VWAP
+    required_trend: SIDE       # pre-accumulation trend must be sideways (not trending up)
+    min_flow_ratio_pct: 5.0    # foreign flow ≥ 5% of daily turnover over window
+    max_rsi: 60                # not overbought — room to run
+
+  # Maximum number of failed gates allowed before downgrading from WATCH to AVOID.
+  # Also: if score ≥ min_score regardless of failed count → stays WATCH.
+  watch_max_failed_gates: 2
+
+verdicts:
+  # Score thresholds for ENTER/WATCH classifications in the screener output table.
+  # Also used to colour-code the score column (green ≥ enter, yellow ≥ watch).
+  enter_min_score: 70
+  watch_min_score: 40
+
+  # Signal label thresholds shown in the per-ticker detail view.
+  signals:
+    strong_min_score: 70       # "strong" — high score + sustained streak
+    strong_min_streak: 8
+    building_min_score: 60     # "building" — decent score + medium streak
+    building_min_streak: 5
+    coiled_spring_bb_pctile: 0.20  # "coiled spring" — BB width in bottom 20th pctile
+    coiled_spring_min_score: 60

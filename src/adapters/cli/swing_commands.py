@@ -27,6 +27,8 @@ from io import StringIO
 from pathlib import Path
 from typing import Annotated, Optional
 
+import yaml
+
 import typer
 
 from src.application.rules.exceptions import StrategyNotFoundError
@@ -103,11 +105,101 @@ SWING_COMPARE_VARIANTS: dict[str, tuple[str, ...]] = {
     "weak_plus": ("WEAK", "SIDEWAYS", "BULLISH"),
 }
 
-SMART_MONEY_BROKERS = {"AK", "BK", "KZ", "ZP", "RX", "MS", "DB", "ML", "YU"}
-NOISE_BROKERS = {"YP", "PD", "XL", "XC"}
+@dataclass(frozen=True)
+class _SwingConfig:
+    """Swing screener calibration params. All fields carry hardcoded defaults so
+    the system works even when config/swing_screener.yaml is absent or malformed."""
+
+    # broker quality
+    smart_money_brokers: tuple[str, ...] = ("AK", "BK", "KZ", "ZP", "RX", "MS", "DB", "ML", "YU")
+    noise_brokers: tuple[str, ...] = ("YP", "PD", "XL", "XC")
+    smart_weight: Decimal = Decimal("1.5")
+    noise_weight: Decimal = Decimal("0.5")
+    smart_share_threshold_pct: float = 60.0
+    # foreign_bounce preset gates
+    gate_min_score: float = 70.0
+    gate_min_vwap_discount_pct: float = 3.0
+    gate_required_trend: str = "SIDE"
+    gate_min_flow_ratio_pct: float = 5.0
+    gate_max_rsi: float = 60.0
+    watch_max_failed_gates: int = 2
+    # verdict + signal label thresholds
+    enter_min_score: float = 70.0
+    watch_min_score: float = 40.0
+    strong_min_score: float = 70.0
+    strong_min_streak: int = 8
+    building_min_score: float = 60.0
+    building_min_streak: int = 5
+    coiled_spring_bb_pctile: float = 0.20
+    coiled_spring_min_score: float = 60.0
+
+
+def _load_swing_screener_config_typed(
+    config_path: Path = _SWING_SCREENER_CONFIG_PATH,
+) -> _SwingConfig:
+    """Load swing screener calibration params from YAML. Returns defaults on any error."""
+    defaults = _SwingConfig()
+    try:
+        with open(config_path, encoding="utf-8") as fh:
+            data = yaml.safe_load(fh) or {}
+    except Exception:
+        return defaults
+    try:
+        bq = data.get("broker_quality") or {}
+        sm = bq.get("smart_money") or {}
+        ns = bq.get("noise") or {}
+        fb = data.get("foreign_bounce") or {}
+        fb_gates = fb.get("gates") or {}
+        vd = data.get("verdicts") or {}
+        vd_sig = vd.get("signals") or {}
+
+        def _f(d: dict, k: str, default: float) -> float:
+            return float(d[k]) if k in d else default
+
+        def _i(d: dict, k: str, default: int) -> int:
+            return int(d[k]) if k in d else default
+
+        def _s(d: dict, k: str, default: str) -> str:
+            return str(d[k]) if k in d else default
+
+        def _codes(d: dict, default: tuple[str, ...]) -> tuple[str, ...]:
+            raw = d.get("brokers") or []
+            parsed = tuple(str(c).strip().upper() for c in raw if c)
+            return parsed if parsed else default
+
+        return _SwingConfig(
+            smart_money_brokers=_codes(sm, defaults.smart_money_brokers),
+            noise_brokers=_codes(ns, defaults.noise_brokers),
+            smart_weight=Decimal(str(_f(sm, "weight", float(defaults.smart_weight)))),
+            noise_weight=Decimal(str(_f(ns, "weight", float(defaults.noise_weight)))),
+            smart_share_threshold_pct=_f(bq, "smart_share_threshold_pct", defaults.smart_share_threshold_pct),
+            gate_min_score=_f(fb_gates, "min_score", defaults.gate_min_score),
+            gate_min_vwap_discount_pct=_f(fb_gates, "min_vwap_discount_pct", defaults.gate_min_vwap_discount_pct),
+            gate_required_trend=_s(fb_gates, "required_trend", defaults.gate_required_trend),
+            gate_min_flow_ratio_pct=_f(fb_gates, "min_flow_ratio_pct", defaults.gate_min_flow_ratio_pct),
+            gate_max_rsi=_f(fb_gates, "max_rsi", defaults.gate_max_rsi),
+            watch_max_failed_gates=_i(fb, "watch_max_failed_gates", defaults.watch_max_failed_gates),
+            enter_min_score=_f(vd, "enter_min_score", defaults.enter_min_score),
+            watch_min_score=_f(vd, "watch_min_score", defaults.watch_min_score),
+            strong_min_score=_f(vd_sig, "strong_min_score", defaults.strong_min_score),
+            strong_min_streak=_i(vd_sig, "strong_min_streak", defaults.strong_min_streak),
+            building_min_score=_f(vd_sig, "building_min_score", defaults.building_min_score),
+            building_min_streak=_i(vd_sig, "building_min_streak", defaults.building_min_streak),
+            coiled_spring_bb_pctile=_f(vd_sig, "coiled_spring_bb_pctile", defaults.coiled_spring_bb_pctile),
+            coiled_spring_min_score=_f(vd_sig, "coiled_spring_min_score", defaults.coiled_spring_min_score),
+        )
+    except Exception:
+        return defaults
+
+
+# Load from config/swing_screener.yaml; fall back to _SwingConfig defaults on any error.
+_SC = _load_swing_screener_config_typed()
+
+SMART_MONEY_BROKERS = set(_SC.smart_money_brokers)
+NOISE_BROKERS       = set(_SC.noise_brokers)
 BROKER_WEIGHTS: dict[str, Decimal] = {
-    **{code: Decimal("1.5") for code in SMART_MONEY_BROKERS},
-    **{code: Decimal("0.5") for code in NOISE_BROKERS},
+    **{code: _SC.smart_weight for code in SMART_MONEY_BROKERS},
+    **{code: _SC.noise_weight for code in NOISE_BROKERS},
 }
 
 
@@ -287,9 +379,9 @@ def _style_sentiment_call(call: str) -> str:
 
 
 def _style_score(s: float) -> str:
-    if s >= 70:
+    if s >= _SC.enter_min_score:
         return typer.style(f"{s:.1f}", fg=typer.colors.GREEN, bold=True)
-    if s >= 40:
+    if s >= _SC.watch_min_score:
         return typer.style(f"{s:.1f}", fg=typer.colors.YELLOW)
     return typer.style(f"{s:.1f}", fg=typer.colors.WHITE)
 
@@ -326,15 +418,15 @@ def _section_header(title: str, right: str = "") -> None:
 
 
 def _signal_label(c: AccumulationCandidate) -> str:
-    if c.bb_width_pctile is not None and c.bb_width_pctile <= 0.20 and c.score >= 60:
+    if c.bb_width_pctile is not None and c.bb_width_pctile <= _SC.coiled_spring_bb_pctile and c.score >= _SC.coiled_spring_min_score:
         return "coiled spring"
-    if c.score >= 70 and c.consecutive_streak >= 8:
+    if c.score >= _SC.strong_min_score and c.consecutive_streak >= _SC.strong_min_streak:
         return "strong"
-    if c.score >= 60 and c.consecutive_streak >= 5:
+    if c.score >= _SC.building_min_score and c.consecutive_streak >= _SC.building_min_streak:
         return "building"
-    if c.score >= 70:
+    if c.score >= _SC.enter_min_score:
         return "high score"
-    if c.score >= 40:
+    if c.score >= _SC.watch_min_score:
         return "moderate"
     return "weak"
 
@@ -366,27 +458,27 @@ def _evaluate_foreign_bounce(
     gates = (
         PresetGate(
             label="score",
-            passed=accum.score >= 70,
+            passed=accum.score >= _SC.gate_min_score,
             actual=f"{accum.score:.1f}",
-            required=">= 70",
+            required=f">= {_SC.gate_min_score:.0f}",
         ),
         PresetGate(
             label="vwap_disc_pct",
-            passed=accum.vwap_discount_pct is not None and accum.vwap_discount_pct >= 3,
+            passed=accum.vwap_discount_pct is not None and accum.vwap_discount_pct >= _SC.gate_min_vwap_discount_pct,
             actual=_fmt_optional_float(accum.vwap_discount_pct, "%"),
-            required=">= +3%",
+            required=f">= +{_SC.gate_min_vwap_discount_pct:.0f}%",
         ),
         PresetGate(
             label="trend",
-            passed=accum.trend == "SIDE",
+            passed=accum.trend == _SC.gate_required_trend,
             actual=accum.trend,
-            required="SIDE",
+            required=_SC.gate_required_trend,
         ),
         PresetGate(
             label="flow_pct",
-            passed=accum.avg_flow_ratio is not None and accum.avg_flow_ratio >= 5,
+            passed=accum.avg_flow_ratio is not None and accum.avg_flow_ratio >= _SC.gate_min_flow_ratio_pct,
             actual=_fmt_optional_float(accum.avg_flow_ratio, "%"),
-            required=">= +5%",
+            required=f">= +{_SC.gate_min_flow_ratio_pct:.0f}%",
         ),
         PresetGate(
             label="RSI present",
@@ -396,9 +488,9 @@ def _evaluate_foreign_bounce(
         ),
         PresetGate(
             label="RSI",
-            passed=accum.rsi is not None and accum.rsi <= 60,
+            passed=accum.rsi is not None and accum.rsi <= _SC.gate_max_rsi,
             actual=_fmt_optional_float(accum.rsi),
-            required="<= 60",
+            required=f"<= {_SC.gate_max_rsi:.0f}",
         ),
     )
     failed = tuple(
@@ -409,7 +501,7 @@ def _evaluate_foreign_bounce(
     passed = not failed
     if passed:
         classification = "ENTER"
-    elif accum.score >= 70 or len(failed) <= 2:
+    elif accum.score >= _SC.gate_min_score or len(failed) <= _SC.watch_max_failed_gates:
         classification = "WATCH"
     else:
         classification = "AVOID"
@@ -694,7 +786,7 @@ def _broker_weight_quality(
         return "smart distribution"
     if latest_net_flow < Decimal("0") and smart_flow > Decimal("0"):
         return "smart distribution watch"
-    if smart_flow > Decimal("0") and (smart_share_pct or 0) >= 60:
+    if smart_flow > Decimal("0") and (smart_share_pct or 0) >= _SC.smart_share_threshold_pct:
         return "smart accumulation"
     if noise_flow > Decimal("0") and smart_flow <= Decimal("0"):
         return "noisy accumulation"
