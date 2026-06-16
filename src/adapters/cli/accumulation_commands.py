@@ -48,6 +48,9 @@ from src.infrastructure.persistence.sqlite_broker_repository import (
     SQLiteBrokerRepository,
 )
 from src.infrastructure.config.user_config import get_swing_default
+from src.infrastructure.config.swing_config import load_swing_config as _load_swing_screener_config_typed
+
+_SC = _load_swing_screener_config_typed()
 from src.infrastructure.persistence.sqlite_market_repository import (
     SQLiteMarketRepository,
 )
@@ -69,8 +72,8 @@ FOREIGN_BOUNCE_PRESET = "foreign-bounce"
 FOREIGN_BOUNCE_TAKE_PROFIT = Decimal("5")
 FOREIGN_BOUNCE_STOP_LOSS = Decimal("5")
 FOREIGN_BOUNCE_MAX_HOLD_DAYS = 10
-SMART_MONEY_BROKERS = {"AK", "BK", "KZ", "ZP", "RX", "MS", "DB", "CS", "ML", "YU"}
-NOISE_BROKERS = {"YP", "PD", "XL", "XC"}
+# Broker tier sets are loaded from config/swing_screener.yaml via _SC.
+# (Previously hardcoded here with stale CS entry — now driven by config.)
 
 # Table widths
 _TABLE_WIDTH = 93
@@ -116,9 +119,9 @@ def _format_value(value: Decimal) -> str:
 
 def _broker_tier(code: str) -> str:
     code_upper = code.upper()
-    if code_upper in SMART_MONEY_BROKERS:
+    if code_upper in _SC.smart_money_brokers:
         return "smart"
-    if code_upper in NOISE_BROKERS:
+    if code_upper in _SC.noise_brokers:
         return "noise"
     return "neutral"
 
@@ -230,9 +233,9 @@ def _fmt_score(s: float | None) -> str:
     """Format a score with color for table cells."""
     if s is None:
         return typer.style("   —  ", fg=typer.colors.BRIGHT_BLACK)
-    if s >= 70:
+    if s >= _SC.enter_min_score:
         return typer.style(f"{s:>6.1f}", fg=typer.colors.GREEN)
-    if s >= 40:
+    if s >= _SC.watch_min_score:
         return typer.style(f"{s:>6.1f}", fg=typer.colors.YELLOW)
     return typer.style(f"{s:>6.1f}", fg=typer.colors.WHITE)
 
@@ -242,13 +245,13 @@ def _classify_pattern(
     candidates_by_window: dict[int, "AccumulationCandidate | None"],
 ) -> str:
     """Label the multi-window pattern for a ticker."""
-    threshold = 60.0
+    threshold = _SC.coiled_spring_min_score
     hot = [w for w in windows if candidates_by_window.get(w) and candidates_by_window[w].score >= threshold]
 
     # Coiled spring: any window with squeeze + strong score
     for w in windows:
         c = candidates_by_window.get(w)
-        if c and c.score >= threshold and c.bb_width_pctile is not None and c.bb_width_pctile <= 0.20:
+        if c and c.score >= threshold and c.bb_width_pctile is not None and c.bb_width_pctile <= _SC.coiled_spring_bb_pctile:
             return "coiled spring"
 
     if not hot:
@@ -277,28 +280,28 @@ def _foreign_bounce_decision(
     gates = (
         (
             "score",
-            candidate.score >= 70,
+            candidate.score >= _SC.gate_min_score,
             f"{candidate.score:.1f}",
-            ">= 70",
+            f">= {_SC.gate_min_score:.0f}",
         ),
         (
             "vwap_disc_pct",
             candidate.vwap_discount_pct is not None
-            and candidate.vwap_discount_pct >= 3,
+            and candidate.vwap_discount_pct >= _SC.gate_min_vwap_discount_pct,
             _fmt_optional_float(candidate.vwap_discount_pct, "%"),
-            ">= +3%",
+            f">= +{_SC.gate_min_vwap_discount_pct:.0f}%",
         ),
         (
             "trend",
-            candidate.trend == "SIDE",
+            candidate.trend == _SC.gate_required_trend,
             candidate.trend,
-            "SIDE",
+            _SC.gate_required_trend,
         ),
         (
             "flow_pct",
-            candidate.avg_flow_ratio is not None and candidate.avg_flow_ratio >= 5,
+            candidate.avg_flow_ratio is not None and candidate.avg_flow_ratio >= _SC.gate_min_flow_ratio_pct,
             _fmt_optional_float(candidate.avg_flow_ratio, "%"),
-            ">= +5%",
+            f">= +{_SC.gate_min_flow_ratio_pct:.0f}%",
         ),
         (
             "RSI present",
@@ -308,9 +311,9 @@ def _foreign_bounce_decision(
         ),
         (
             "RSI",
-            candidate.rsi is not None and candidate.rsi <= 60,
+            candidate.rsi is not None and candidate.rsi <= _SC.gate_max_rsi,
             _fmt_optional_float(candidate.rsi),
-            "<= 60",
+            f"<= {_SC.gate_max_rsi:.0f}",
         ),
     )
     failed = tuple(
@@ -320,7 +323,7 @@ def _foreign_bounce_decision(
     )
     if not failed:
         return "ENTER", failed
-    if candidate.score >= 70 or len(failed) <= 2:
+    if candidate.score >= _SC.gate_min_score or len(failed) <= _SC.watch_max_failed_gates:
         return "WATCH", failed
     return "AVOID", failed
 
@@ -355,7 +358,7 @@ def _display_results(
     if vwap_only:
         candidates = [c for c in candidates if c.vwap_discount_pct and c.vwap_discount_pct > 0]
     if squeeze_only:
-        candidates = [c for c in candidates if c.bb_width_pctile is not None and c.bb_width_pctile <= 0.20]
+        candidates = [c for c in candidates if c.bb_width_pctile is not None and c.bb_width_pctile <= _SC.coiled_spring_bb_pctile]
 
     candidates = candidates[:top_n]
 
@@ -394,7 +397,7 @@ def _display_results(
         flow_str = f"{c.avg_flow_ratio:+.1f}" if c.avg_flow_ratio is not None else "   —"
         if c.bb_width_pctile is not None:
             pct_int = int(c.bb_width_pctile * 100)
-            bb_color = typer.colors.GREEN if c.bb_width_pctile <= 0.20 else (
+            bb_color = typer.colors.GREEN if c.bb_width_pctile <= _SC.coiled_spring_bb_pctile else (
                 typer.colors.YELLOW if c.bb_width_pctile <= 0.40 else typer.colors.WHITE
             )
             bb_str = typer.style(f"{pct_int:>4}%", fg=bb_color)
@@ -402,9 +405,9 @@ def _display_results(
             bb_str = typer.style("  — ", fg=typer.colors.BRIGHT_BLACK)
 
         # Color score
-        if c.score >= 70:
+        if c.score >= _SC.enter_min_score:
             score_color = typer.colors.GREEN
-        elif c.score >= 40:
+        elif c.score >= _SC.watch_min_score:
             score_color = typer.colors.YELLOW
         else:
             score_color = typer.colors.WHITE
@@ -485,6 +488,7 @@ def _run_multi(
             min_score=0.0,
             rsi_period=base_request.rsi_period,
             sma_period=base_request.sma_period,
+            tier1_broker_codes=base_request.tier1_broker_codes,
         ))
         for w in windows
     }
@@ -918,6 +922,7 @@ def accumulation_run(
         window_days=window,
         min_net_buy_days=max(1, min_streak),
         min_score=min_score,
+        tier1_broker_codes=_SC.tier1_broker_codes,
     )
 
     # --- Multi-window mode ---
@@ -1612,6 +1617,7 @@ def accumulation_log(
         window_days=window,
         min_score=0.0,
         min_net_buy_days=0,
+        tier1_broker_codes=_SC.tier1_broker_codes,
     ))
     candidate = next((c for c in response.candidates if c.ticker == ticker_upper), None)
 
@@ -1625,6 +1631,7 @@ def accumulation_log(
                 window_days=w,
                 min_score=0.0,
                 min_net_buy_days=0,
+                tier1_broker_codes=_SC.tier1_broker_codes,
             ))
             for w in windows
         }

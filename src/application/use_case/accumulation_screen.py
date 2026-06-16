@@ -102,6 +102,9 @@ class AccumulationScreenRequest:
     sector_breadth_threshold: float = 0.60   # min fraction of peers with net_buy_ratio > 0
     sector_breadth_bonus_pts: float = 10.0   # bonus pts when threshold is met
     sector_breadth_min_tickers: int = 3      # min peers in result set to compute breadth
+    # BCI — Tier 1 broker codes for Broker Concentration Index scoring.
+    # Default mirrors TIER1_FOREIGN_BROKERS; override via config to tune without code change.
+    tier1_broker_codes: frozenset[str] = field(default_factory=lambda: TIER1_FOREIGN_BROKERS)
 
 
 @dataclass
@@ -298,6 +301,7 @@ class AccumulationScreenUseCase:
                 min_net_buy_days=request.min_net_buy_days,
                 rsi_period=request.rsi_period,
                 sma_period=request.sma_period,
+                tier1_broker_codes=request.tier1_broker_codes,
             )
 
             if result is None:
@@ -354,6 +358,7 @@ class AccumulationScreenUseCase:
         min_net_buy_days: int,
         rsi_period: int,
         sma_period: int,
+        tier1_broker_codes: frozenset[str] = TIER1_FOREIGN_BROKERS,
     ) -> AccumulationCandidate | None:
         """Compute accumulation metrics for one ticker."""
         # Load all broker rows up to as_of_date, then select the latest N
@@ -472,7 +477,7 @@ class AccumulationScreenUseCase:
                     top_brokers = [code for code, _ in net_buyers[:5]]
                     # BCI: count all Tier 1 codes among any net-buyers (not just top 5)
                     all_net_buyer_codes = {code for code, _ in net_buyers}
-                    bci_tier1_count = len(all_net_buyer_codes & TIER1_FOREIGN_BROKERS)
+                    bci_tier1_count = len(all_net_buyer_codes & tier1_broker_codes)
                     if bci_tier1_count >= 3:
                         bci_label = BCI_CLUSTER
                     elif bci_tier1_count >= 1:

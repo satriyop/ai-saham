@@ -9,6 +9,7 @@ from src.application.use_case.accumulation_screen import (
     BCI_CLUSTER,
     BCI_STABLE,
     BCI_RETAIL,
+    TIER1_FOREIGN_BROKERS,
 )
 from src.domain.entities.broker_flow import BrokerDailyFlow, BrokerSummary
 from src.domain.entities.candle import Candle
@@ -322,3 +323,35 @@ def test_bci_counts_all_net_buyers_not_just_top5():
     # Both AK and DR are Tier 1 — STABLE (2 codes)
     assert c.bci_label == BCI_STABLE
     assert c.bci_tier1_count == 2
+
+
+# ── tier1_broker_codes passable via request ───────────────────────────────
+
+def test_tier1_codes_default_to_module_constant():
+    req = AccumulationScreenRequest(tickers=["BBCA"])
+    assert req.tier1_broker_codes == TIER1_FOREIGN_BROKERS
+
+
+def test_tier1_codes_override_changes_bci():
+    """Passing a custom tier1 set changes which brokers count for BCI."""
+    as_of = date(2026, 6, 1)
+    session_dates = [as_of - timedelta(days=i) for i in range(3)]
+    summaries = [_summary("BBCA", day, Decimal("110")) for day in session_dates]
+    # Only YP is a net buyer — YP is NOT in default TIER1_FOREIGN_BROKERS
+    daily_flows = [_daily_flow("BBCA", session_dates[0], "YP", 500)]
+    use_case, _ = _make_use_case(summaries, daily_flows)
+
+    # Default tier1: YP not included → BCI RETAIL
+    resp_default = use_case.execute(
+        AccumulationScreenRequest(tickers=["BBCA"], window_days=7, min_net_buy_days=1, as_of_date=as_of)
+    )
+    assert resp_default.candidates[0].bci_label == BCI_RETAIL
+
+    # Custom tier1 including YP → BCI STABLE
+    resp_custom = use_case.execute(
+        AccumulationScreenRequest(
+            tickers=["BBCA"], window_days=7, min_net_buy_days=1, as_of_date=as_of,
+            tier1_broker_codes=frozenset({"YP"}),
+        )
+    )
+    assert resp_custom.candidates[0].bci_label == BCI_STABLE

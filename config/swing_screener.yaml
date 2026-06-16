@@ -102,6 +102,28 @@ broker_quality:
   # to classify broker context as "smart accumulation" quality.
   smart_share_threshold_pct: 60.0
 
+  # Tier 1 foreign institutional desks used for BCI (Broker Concentration Index) scoring.
+  # BCI CLUSTER (>= cluster_min_count desks in net-buyers window) = +15 score pts.
+  # BCI STABLE  (>= stable_min_count desks)                       = +5 score pts.
+  # BCI RETAIL-LED (0 desks)                                      = +0 score pts.
+  # Overlaps with stockbit.yaml institutional_proxy but different membership —
+  # purely foreign desks; domestic proxies like YP are excluded.
+  tier1:
+    brokers: [AK, BK, ZP, KZ, YU, RX, HD, CP, DR]
+    cluster_min_count: 3
+    stable_min_count: 1
+
+regime:
+  # Moving average periods for market breadth and benchmark trend signals.
+  # breadth_sma_period: SMA window applied to the advance/decline ratio time-series.
+  # benchmark_sma_fast/slow: dual-MA crossover on the benchmark (e.g. ^JKSE).
+  breadth_sma_period: 20
+  benchmark_sma_fast: 20
+  benchmark_sma_slow: 50
+  # Fraction of universe above SMA20 required to score a bull breadth point.
+  # Applies to both price breadth and foreign-flow breadth signals.
+  breadth_threshold_pct: 50
+
 foreign_bounce:
   # Gate thresholds for the foreign-bounce preset ENTER/WATCH/AVOID classification.
   # A candidate must pass ALL gates for ENTER; partial pass = WATCH.

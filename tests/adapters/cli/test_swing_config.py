@@ -6,9 +6,8 @@ from pathlib import Path
 import pytest
 import yaml
 
+from src.infrastructure.config.swing_config import SwingConfig as _SwingConfig, load_swing_config as _load_swing_screener_config_typed
 from src.adapters.cli.swing_commands import (
-    _SwingConfig,
-    _load_swing_screener_config_typed,
     SMART_MONEY_BROKERS,
     NOISE_BROKERS,
     BROKER_WEIGHTS,
@@ -152,3 +151,59 @@ def test_broker_weights_derived_from_sc():
         assert BROKER_WEIGHTS[code] == _SC.smart_weight
     for code in NOISE_BROKERS:
         assert BROKER_WEIGHTS[code] == _SC.noise_weight
+
+
+# ── Tier1 broker codes ────────────────────────────────────────────────────
+
+def test_loads_tier1_brokers_from_yaml(tmp_path):
+    cfg = _write_yaml(tmp_path / "s.yaml", {
+        "broker_quality": {"tier1": {"brokers": ["AK", "BK"], "cluster_min_count": 3, "stable_min_count": 1}},
+    })
+    result = _load_swing_screener_config_typed(cfg)
+    assert result.tier1_broker_codes == frozenset({"AK", "BK"})
+
+
+def test_loads_bci_count_thresholds(tmp_path):
+    cfg = _write_yaml(tmp_path / "s.yaml", {
+        "broker_quality": {"tier1": {"brokers": ["AK"], "cluster_min_count": 4, "stable_min_count": 2}},
+    })
+    result = _load_swing_screener_config_typed(cfg)
+    assert result.bci_cluster_min_count == 4
+    assert result.bci_stable_min_count == 2
+
+
+def test_tier1_falls_back_to_defaults_when_empty(tmp_path):
+    cfg = _write_yaml(tmp_path / "s.yaml", {
+        "broker_quality": {"tier1": {"brokers": []}},
+    })
+    result = _load_swing_screener_config_typed(cfg)
+    assert result.tier1_broker_codes == _SwingConfig().tier1_broker_codes
+
+
+def test_cs_not_in_tier1_brokers():
+    """CS (Credit Suisse) was wound down — must not appear in any broker set."""
+    assert "CS" not in _SC.smart_money_brokers
+    assert "CS" not in _SC.noise_brokers
+    assert "CS" not in _SC.tier1_broker_codes
+
+
+# ── Market regime params ──────────────────────────────────────────────────
+
+def test_loads_regime_periods_from_yaml(tmp_path):
+    cfg = _write_yaml(tmp_path / "s.yaml", {
+        "regime": {"breadth_sma_period": 10, "benchmark_sma_fast": 10, "benchmark_sma_slow": 30,
+                   "breadth_threshold_pct": 40},
+    })
+    result = _load_swing_screener_config_typed(cfg)
+    assert result.regime_breadth_sma_period == 10
+    assert result.regime_benchmark_sma_fast == 10
+    assert result.regime_benchmark_sma_slow == 30
+    assert result.regime_breadth_threshold_pct == 40
+
+
+def test_live_config_loads_tier1_and_regime():
+    result = _load_swing_screener_config_typed(Path("config/swing_screener.yaml"))
+    assert "AK" in result.tier1_broker_codes
+    assert "CS" not in result.tier1_broker_codes
+    assert result.regime_benchmark_sma_slow == 50
+    assert result.bci_cluster_min_count == 3
