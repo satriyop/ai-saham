@@ -23,10 +23,49 @@ from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal, InvalidOperation
 
+from src.application.ports.corporate_action_repository import CorporateActionRepository
 from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.market_data_repository import MarketDataRepository
 
 SHARES_PER_LOT = 100
+
+# Default preset targets (1:1 R:R, regime-unaware fallback)
+_DEFAULT_TAKE_PROFIT = Decimal("5")
+_DEFAULT_STOP_LOSS = Decimal("5")
+
+# Regime-specific targets (validated direction: IHSG has documented regime cycles)
+_REGIME_TARGETS: dict[str, tuple[Decimal, Decimal]] = {
+    "BULLISH":  (Decimal("8"), Decimal("4")),   # 2:1 R:R — trending market
+    "SIDEWAYS": (Decimal("5"), Decimal("5")),   # 1:1 R:R — range-bound
+    "WEAK":     (Decimal("3"), Decimal("3")),   # tight — minimize exposure
+    "RISK_OFF": (Decimal("3"), Decimal("3")),   # capital preservation
+}
+
+
+def resolve_preset_targets(
+    regime: str | None,
+    config: dict | None = None,
+) -> tuple[Decimal, Decimal]:
+    """Return (take_profit_pct, stop_loss_pct) for the foreign-bounce preset.
+
+    Precedence: YAML config overrides > regime defaults > hardcoded fallback.
+    All values are in percentage points (e.g. Decimal("5") = 5%).
+    """
+    if config:
+        targets = config.get("preset_targets", {})
+        regime_key = (regime or "default").lower()
+        tier = targets.get(regime_key) or targets.get("default", {})
+        if tier:
+            tp = tier.get("take_profit_pct")
+            sl = tier.get("stop_loss_pct")
+            if tp is not None and sl is not None:
+                return Decimal(str(tp)), Decimal(str(sl))
+
+    if regime and regime.upper() in _REGIME_TARGETS:
+        return _REGIME_TARGETS[regime.upper()]
+
+    return _DEFAULT_TAKE_PROFIT, _DEFAULT_STOP_LOSS
+
 
 # Tier 1 — pure foreign institutional desks (custodian + prime brokerage).
 # These are the codes whose net_lot signal most reliably tracks foreign institutional intent.
@@ -51,6 +90,18 @@ class AccumulationScreenRequest:
     rsi_period: int = 14
     sma_period: int = 20
     as_of_date: date | None = None # deterministic replay date; defaults to today
+    # Phase 2.2 — resistance-proximity gate
+    resistance_gate_enabled: bool = True
+    resistance_headroom_min_pct: float = 5.0  # % headroom required to keep ENTER verdict
+    # Phase 2.3 — regime-adaptive TP/SL
+    regime: str | None = None      # BULLISH / SIDEWAYS / WEAK / RISK_OFF
+    # Phase 3.1 — dividend ex-date warning
+    ex_date_warning_days: int = 10  # flag DIVIDEND_RISK if ex-date within this many days
+    # Phase 3.2 — sector breadth confirmation
+    sector_breadth_enabled: bool = True
+    sector_breadth_threshold: float = 0.60   # min fraction of peers with net_buy_ratio > 0
+    sector_breadth_bonus_pts: float = 10.0   # bonus pts when threshold is met
+    sector_breadth_min_tickers: int = 3      # min peers in result set to compute breadth
 
 
 @dataclass
@@ -82,6 +133,16 @@ class AccumulationCandidate:
     # BCI — Broker Concentration Index
     bci_label: str | None = None          # "CLUSTER" | "STABLE" | "RETAIL-LED" | None
     bci_tier1_count: int = 0              # distinct Tier 1 foreign desks in net-buyers
+    # Phase 2.2 — resistance-proximity gate
+    ma200: Decimal | None = None          # 200-day SMA of close prices
+    week52_high: Decimal | None = None    # 52-week (252-day) highest high
+    nearest_resistance_pct: float | None = None  # % distance to nearest resistance above price
+    resistance_flag: bool = False         # True when nearest resistance < headroom_min_pct
+    # Phase 3.1 — dividend ex-date warning
+    dividend_risk: bool = False           # True when ex-date falls within hold window
+    # Phase 3.2 — sector breadth confirmation
+    sector_breadth_pct: float | None = None  # % of group peers with positive net_buy_ratio
+    sector_breadth_bonus: float = 0.0        # bonus pts applied (0 if threshold not met)
 
     def to_dict(self) -> dict:
         return {
@@ -207,9 +268,19 @@ class AccumulationScreenUseCase:
         self,
         broker_repository: BrokerDataRepository,
         market_repository: MarketDataRepository,
+        corporate_action_repo: "CorporateActionRepository | None" = None,
+        idx_groups: "dict[str, list[str]] | None" = None,
     ) -> None:
         self._broker_repo = broker_repository
         self._market_repo = market_repository
+        self._corp_action_repo = corporate_action_repo
+        # idx_groups: {group_name: [ticker, ...]} from config/idx_groups.yaml
+        # Build a reverse map: ticker → group_name for fast lookup
+        self._ticker_to_group: dict[str, str] = {}
+        if idx_groups:
+            for group_name, tickers in idx_groups.items():
+                for t in tickers:
+                    self._ticker_to_group[t.upper()] = group_name
 
     def execute(
         self, request: AccumulationScreenRequest
@@ -237,10 +308,34 @@ class AccumulationScreenUseCase:
                 uses_stockbit = True
 
             result.score, result.score_breakdown = _score(result)
+
+            # Phase 2.2: resistance-proximity flag
+            if (
+                request.resistance_gate_enabled
+                and result.nearest_resistance_pct is not None
+                and result.nearest_resistance_pct < request.resistance_headroom_min_pct
+            ):
+                result.resistance_flag = True
+
+            # Phase 3.1: dividend ex-date warning
+            if self._corp_action_repo is not None:
+                from datetime import timedelta
+                ex_dates = self._corp_action_repo.get_upcoming_ex_dates(
+                    ticker=result.ticker,
+                    from_date=today,
+                    to_date=today + timedelta(days=request.ex_date_warning_days),
+                )
+                if ex_dates:
+                    result.dividend_risk = True
+
             if result.score >= request.min_score:
                 candidates.append(result)
 
         candidates.sort(key=lambda c: c.score, reverse=True)
+
+        # Phase 3.2: sector breadth post-processing pass
+        if request.sector_breadth_enabled and self._ticker_to_group:
+            self._apply_sector_breadth(candidates, request)
 
         return AccumulationScreenResponse(
             candidates=candidates,
@@ -330,6 +425,11 @@ class AccumulationScreenUseCase:
             trend = self._compute_trend(candles, sma_period)
             bb_width, bb_width_pctile = self._compute_bb_squeeze(candles)
 
+        # Phase 2.2: Resistance proximity (MA200 and 52-week high)
+        ma200, week52_high, nearest_resistance_pct = self._compute_resistance(
+            candles, current_price
+        )
+
         # VWAP discount %
         vwap_discount_pct: float | None = None
         if foreign_vwap is not None and current_price > 0:
@@ -402,7 +502,50 @@ class AccumulationScreenUseCase:
             avg_flow_ratio=avg_flow_ratio,
             bb_width=bb_width,
             bb_width_pctile=bb_width_pctile,
+            ma200=ma200,
+            week52_high=week52_high,
+            nearest_resistance_pct=nearest_resistance_pct,
         )
+
+    def _apply_sector_breadth(
+        self,
+        candidates: list[AccumulationCandidate],
+        request: AccumulationScreenRequest,
+    ) -> None:
+        """Post-processing: compute sector breadth and apply bonus in-place.
+
+        Groups candidates by idx_groups mapping. For groups with enough members
+        (>= min_tickers_for_breadth), computes the fraction with net_buy_ratio > 0.
+        Applies sector_breadth_bonus_pts to ALL members of qualifying groups.
+        """
+        from collections import defaultdict
+
+        # Group candidates by their idx_groups group
+        group_candidates: dict[str, list[AccumulationCandidate]] = defaultdict(list)
+        for candidate in candidates:
+            group = self._ticker_to_group.get(candidate.ticker.upper())
+            if group:
+                group_candidates[group].append(candidate)
+
+        # For each group with enough members, compute breadth and apply bonus
+        for group, members in group_candidates.items():
+            if len(members) < request.sector_breadth_min_tickers:
+                # Set breadth_pct but no bonus (insufficient sample)
+                total = len(members)
+                positive = sum(1 for m in members if m.net_buy_ratio > 0)
+                breadth_pct = positive / total if total > 0 else 0.0
+                for m in members:
+                    m.sector_breadth_pct = breadth_pct
+                continue
+
+            positive = sum(1 for m in members if m.net_buy_ratio > 0)
+            breadth_pct = positive / len(members)
+
+            for m in members:
+                m.sector_breadth_pct = breadth_pct
+                if breadth_pct >= request.sector_breadth_threshold:
+                    m.score += request.sector_breadth_bonus_pts
+                    m.sector_breadth_bonus = request.sector_breadth_bonus_pts
 
     def _compute_rsi(self, candles: list, period: int) -> float | None:
         """Wilder's RSI from candle close prices."""
@@ -480,3 +623,34 @@ class AccumulationScreenUseCase:
         recent = widths[-history:]
         rank = sum(1 for w in recent if w <= bb_width_now) / len(recent)
         return bb_width_now, rank
+
+    @staticmethod
+    def _compute_resistance(
+        candles: list,
+        current_price: Decimal,
+    ) -> tuple[Decimal | None, Decimal | None, float | None]:
+        """Compute MA200, 52-week high, and % distance to nearest resistance above price.
+
+        Returns (ma200, week52_high, nearest_resistance_pct).
+        nearest_resistance_pct is None if no resistance level is above current price.
+        Positive value = resistance is X% above current price (more headroom = better).
+        """
+        if not candles or current_price <= 0:
+            return None, None, None
+
+        ma200: Decimal | None = None
+        if len(candles) >= 200:
+            ma200 = Decimal(str(sum(c.close for c in candles[-200:]) / 200))
+
+        week52_high: Decimal | None = None
+        if len(candles) >= 1:
+            week52_high = max(c.high for c in candles[-252:])
+
+        resistances: list[float] = []
+        for level in (ma200, week52_high):
+            if level is not None and level > current_price:
+                pct = float((level - current_price) / current_price * 100)
+                resistances.append(pct)
+
+        nearest_resistance_pct = min(resistances) if resistances else None
+        return ma200, week52_high, nearest_resistance_pct

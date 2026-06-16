@@ -67,6 +67,7 @@ from src.application.use_case.swing_backtest import (
     SwingBacktestResponse,
     SwingBacktestUseCase,
 )
+from src.application.use_case.accumulation_screen import resolve_preset_targets
 from src.infrastructure.config.user_config import get_swing_default
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
@@ -76,9 +77,25 @@ DEFAULT_DB_PATH = Path("data.db")
 _W = 70  # display width
 
 FOREIGN_BOUNCE_PRESET = "foreign-bounce"
+FOREIGN_BOUNCE_MAX_HOLD_DAYS = 10
+
+# Legacy constants kept for backtest use — actual analyze/screen uses resolve_preset_targets()
 FOREIGN_BOUNCE_TAKE_PROFIT = Decimal("5")
 FOREIGN_BOUNCE_STOP_LOSS = Decimal("5")
-FOREIGN_BOUNCE_MAX_HOLD_DAYS = 10
+
+_SWING_SCREENER_CONFIG_PATH = Path("config/swing_screener.yaml")
+
+
+def _load_swing_screener_config() -> dict:
+    """Load swing_screener.yaml if it exists; return empty dict on missing file."""
+    try:
+        import yaml
+        with open(_SWING_SCREENER_CONFIG_PATH) as f:
+            return yaml.safe_load(f) or {}
+    except FileNotFoundError:
+        return {}
+    except Exception:
+        return {}
 
 SWING_COMPARE_VARIANTS: dict[str, tuple[str, ...]] = {
     "baseline": (),
@@ -1984,18 +2001,11 @@ def swing(
         preset_eval=preset_eval,
     )
 
+    # Preset sizing is deferred — computed after market regime is fetched so
+    # resolve_preset_targets() can use the regime-specific TP/SL from swing_screener.yaml.
+    _preset_entry_dec: Decimal | None = None
     if capital is not None and preset_eval is not None and preset_eval.passed:
-        try:
-            entry_dec = Decimal(str(entry_price)) if entry_price else latest_close
-            preset_sizing = compute_percent_position_size(
-                entry=entry_dec,
-                capital=Decimal(str(capital)),
-                risk_pct=Decimal(str(risk_pct)) / Decimal("100"),
-                stop_loss_pct=FOREIGN_BOUNCE_STOP_LOSS,
-                take_profit_pct=FOREIGN_BOUNCE_TAKE_PROFIT,
-            )
-        except ValueError:
-            pass
+        _preset_entry_dec = Decimal(str(entry_price)) if entry_price else latest_close
     elif capital is not None and atr_value and preset_eval is None:
         try:
             entry_dec = Decimal(str(entry_price)) if entry_price else latest_close
@@ -2056,6 +2066,22 @@ def swing(
         except Exception:
             pass
 
+    # Deferred preset sizing: now that regime is known, resolve TP/SL and compute sizing.
+    _swing_config = _load_swing_screener_config()
+    _regime_label = market_regime.label if market_regime else None
+    _tp_pct, _sl_pct = resolve_preset_targets(_regime_label, _swing_config)
+    if _preset_entry_dec is not None and capital is not None:
+        try:
+            preset_sizing = compute_percent_position_size(
+                entry=_preset_entry_dec,
+                capital=Decimal(str(capital)),
+                risk_pct=Decimal(str(risk_pct)) / Decimal("100"),
+                stop_loss_pct=_sl_pct,
+                take_profit_pct=_tp_pct,
+            )
+        except ValueError:
+            pass
+
     if output_format == "json":
         data_out = data_freshness.to_dict()
         if market_regime is not None:
@@ -2084,10 +2110,9 @@ def swing(
                 "classification": preset_eval.classification if preset_eval else None,
                 "failed_reasons": list(preset_eval.failed_reasons) if preset_eval else [],
                 "plan": {
-                    "take_profit_pct": float(FOREIGN_BOUNCE_TAKE_PROFIT)
-                    if preset_eval else None,
-                    "stop_loss_pct": float(FOREIGN_BOUNCE_STOP_LOSS)
-                    if preset_eval else None,
+                    "take_profit_pct": float(_tp_pct) if preset_eval else None,
+                    "stop_loss_pct": float(_sl_pct) if preset_eval else None,
+                    "regime": _regime_label,
                     "max_hold_days": FOREIGN_BOUNCE_MAX_HOLD_DAYS
                     if preset_eval else None,
                 },

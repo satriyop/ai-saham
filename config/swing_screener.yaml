@@ -1,0 +1,87 @@
+version: 1
+name: "swing-screener"
+description: |
+  Swing trade accumulation screener policy for IDX stocks.
+  Controls resistance gates, regime-adaptive TP/SL, dividend risk
+  warnings, and sector breadth confirmation for the foreign-bounce
+  and accumulation-based swing workflow.
+
+  All thresholds are configurable here — adjust as IHSG volatility
+  regime and tick-size regulation evolves.
+
+resistance:
+  # Minimum % headroom between current price and nearest resistance
+  # (MA200 or 52-week high) required to keep ENTER verdict.
+  # If nearest resistance is closer than this, candidate is flagged
+  # with resistance_flag=True and the CLI downgrades to WATCH.
+  headroom_min_pct: 5.0
+
+  # Which resistance levels to check. Both use existing candle data
+  # (no new API calls).
+  #   ma200      — 200-day SMA of close prices
+  #   week52_high — 52-week (252 trading day) highest high
+  levels:
+    - ma200
+    - week52_high
+
+  # Set to false to disable the resistance gate entirely.
+  resistance_gate_enabled: true
+
+preset_targets:
+  # Regime-adaptive TP/SL for the foreign-bounce preset.
+  # Validated direction: IHSG has documented regime cycles.
+  # Exact thresholds are calibration starting points — adjust to your backtest.
+  bullish:
+    take_profit_pct: 8.0
+    stop_loss_pct: 4.0    # 2:1 R:R — trending market, let winners run
+
+  sideways:
+    take_profit_pct: 5.0
+    stop_loss_pct: 5.0    # 1:1 R:R — range-bound, take what the market gives
+
+  weak:
+    take_profit_pct: 3.0
+    stop_loss_pct: 3.0    # Tight — minimize exposure in downtrend
+
+  risk_off:
+    take_profit_pct: 3.0
+    stop_loss_pct: 3.0    # Capital preservation mode
+
+  default:
+    take_profit_pct: 5.0
+    stop_loss_pct: 5.0    # Fallback when regime data is unavailable
+
+corporate_actions:
+  # Primary: "stockbit" uses Playwright session to fetch ex-dates.
+  # Fallback: "csv" reads the file at csv_path.
+  # "disabled" turns off the filter entirely.
+  source: "csv"
+
+  # Path to CSV with corporate action data.
+  # Columns: ticker,ex_date (YYYY-MM-DD)
+  # If file does not exist, filter is silently skipped (graceful degradation).
+  csv_path: "data/corporate_actions.csv"
+
+  # Flag as DIVIDEND_RISK if ex-date falls within this many trading days.
+  # Based on max hold period of swing strategy.
+  ex_date_warning_days: 10
+
+  enabled: true
+
+sector_breadth:
+  # If >= this fraction of sector peers show positive net_buy_ratio over
+  # the screening window, apply a rotation bonus to all tickers in that sector.
+  # Note: 60% threshold has no empirical backing — calibrate to your backtest.
+  breadth_threshold: 0.60
+
+  # Bonus points awarded when breadth threshold is met.
+  # Also uncalibrated — tune after running backtests.
+  bonus_pts: 10
+
+  # Minimum tickers from the same idx_groups.yaml group that must appear
+  # in the screened result set for breadth calculation to apply.
+  # Below this count, sector_breadth_pct is None (insufficient sample).
+  min_tickers_for_breadth: 3
+
+  # Set to false to disable sector breadth bonus entirely.
+  sector_breadth_enabled: true
