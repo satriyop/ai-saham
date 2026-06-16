@@ -93,13 +93,17 @@ class SQLiteStockMetaRepository(StockMetaRepository):
             )
 
     def needs_refresh(self, ticker: str, ttl_days: int) -> bool:
-        """True when ticker is missing or fetched_at is older than ttl_days."""
+        """True when ticker is missing or fetched_at is older than ttl_days.
+        Tickers with source='manual' are never refreshed automatically."""
         with self._connect() as conn:
             row = conn.execute(
                 """
                 SELECT 1 FROM stock_meta
                 WHERE ticker = ?
-                  AND fetched_at >= datetime('now', ? || ' days')
+                  AND (
+                      source = 'manual'
+                      OR fetched_at >= datetime('now', ? || ' days')
+                  )
                 """,
                 (ticker.upper(), f"-{ttl_days}"),
             ).fetchone()
