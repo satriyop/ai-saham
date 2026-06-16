@@ -526,7 +526,13 @@ def _fetch_broker(
         updated_summ_range = repo.get_date_range(ticker, source='idx')
         updated_flow_range = repo.get_foreign_flow_date_range(ticker, source=source)
 
-        summ_status = _broker_update_status(added_summary_count, updated_summ_range, fetch_modes)
+        # If the flow fetch ran but summaries were already current (0 new rows),
+        # show ✓(DATE) rather than the misleading "+0rows/span=Nd".
+        if added_summary_count == 0 and updated_summ_range is not None:
+            summ_status = f"✓({updated_summ_range[1]})"
+        else:
+            summ_status = _broker_update_status(added_summary_count, updated_summ_range, fetch_modes)
+
         flow_status = _flow_status(
             daily_resp, added_flow_count, updated_flow_range, fetch_modes,
             latest_date=updated_flow_range[1] if updated_flow_range else None,
