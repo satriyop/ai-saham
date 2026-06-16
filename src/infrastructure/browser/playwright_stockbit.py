@@ -22,10 +22,13 @@ import json
 import logging
 import re
 import time
+from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
+
+import yaml
 
 from src.domain.entities.broker_flow import (
     BrokerDailyFlow,
@@ -60,60 +63,99 @@ ORDERBOOK_PAGE_URL = "https://stockbit.com/orderbook"
 LOGIN_URL = "https://stockbit.com/login"
 EXODUS_API = "https://exodus.stockbit.com"
 
-# ── Confirmed Exodus API endpoints (from DevTools spy, 2026-06-13) ─────────
-# IEV movers: two separate board groups, mirroring how Stockbit frontend calls them.
-# mover_type confirmed via DevTools: MOVER_TYPE_IEV_TOP_GAINER (NOT MOVER_CATEGORY_IEPIEV_MOVER)
-_IEV_MOVER_URL_MAIN = (
-    "https://exodus.stockbit.com/order-trade/market-mover"
-    "?mover_type=MOVER_TYPE_IEV_TOP_GAINER"
-    "&filter_stocks=FILTER_STOCKS_TYPE_MAIN_BOARD"
-    "&filter_stocks=FILTER_STOCKS_TYPE_DEVELOPMENT_BOARD"
-    "&filter_stocks=FILTER_STOCKS_TYPE_ACCELERATION_BOARD"
-    "&filter_stocks=FILTER_STOCKS_TYPE_NEW_ECONOMY_BOARD"
-)
-_IEV_MOVER_URL_SPECIAL = (
-    "https://exodus.stockbit.com/order-trade/market-mover"
-    "?mover_type=MOVER_TYPE_IEV_TOP_GAINER"
-    "&filter_stocks=FILTER_STOCKS_TYPE_SPECIAL_MONITORING_BOARD"
-)
-# Orderbook confirmed via DevTools: company-price-feed/v2/orderbook/companies/{TICKER}
-_ORDER_BOOK_API = "https://exodus.stockbit.com/company-price-feed/v2/orderbook/companies/{ticker}"
+# ── Stockbit API config — driven by config/stockbit.yaml ─────────────────
+# Edit config/stockbit.yaml to update endpoints or broker codes without
+# touching Python source. Run `saham stockbit spy` to discover new endpoints.
 
-# ── Broker data endpoints (confirmed from DevTools 2026-06-13) ────────────
-# Stock-centric named breakdown: stockbit.com/broker-analysis/stock → fires on load
-_MARKETDETECTORS_API = "https://exodus.stockbit.com/marketdetectors"
-# Broker-centric universe scan: stockbit.com/broker-analysis/broker → fires on load
-_BROKER_ACTIVITY_API = "https://exodus.stockbit.com/order-trade/broker/activity"
-# Stock-centric daily time-series for backfilling
-_BROKER_HISTORICAL_API = "https://exodus.stockbit.com/order-trade/broker/activity/historical"
+@dataclass(frozen=True)
+class _StockbitConfig:
+    """Runtime config for Stockbit API. All fields carry hardcoded defaults so
+    the system works even when config/stockbit.yaml is absent or malformed."""
 
-# 10 institutional proxy codes used for foreign_flow_points aggregate.
-# These are NOT all foreign investors — they are major institutional desks that concentrate
-# most foreign-style flow. YP (Indo Premier) is domestic but mirrors institutional orders.
-# For true all-foreign aggregate, use broker_summaries.foreign_net_value (IDX source).
-# historical endpoint uses broker_codes= (plural); activity scan uses broker_code= (singular).
-_INSTITUTIONAL_PROXY_CODES = ["AK", "ZP", "YP", "BK", "YU", "CP", "KZ", "HD", "RX", "DR"]
+    iev_movers_main_url: str = (
+        "https://exodus.stockbit.com/order-trade/market-mover"
+        "?mover_type=MOVER_TYPE_IEV_TOP_GAINER"
+        "&filter_stocks=FILTER_STOCKS_TYPE_MAIN_BOARD"
+        "&filter_stocks=FILTER_STOCKS_TYPE_DEVELOPMENT_BOARD"
+        "&filter_stocks=FILTER_STOCKS_TYPE_ACCELERATION_BOARD"
+        "&filter_stocks=FILTER_STOCKS_TYPE_NEW_ECONOMY_BOARD"
+    )
+    iev_movers_special_url: str = (
+        "https://exodus.stockbit.com/order-trade/market-mover"
+        "?mover_type=MOVER_TYPE_IEV_TOP_GAINER"
+        "&filter_stocks=FILTER_STOCKS_TYPE_SPECIAL_MONITORING_BOARD"
+    )
+    orderbook_url: str = (
+        "https://exodus.stockbit.com/company-price-feed/v2/orderbook/companies/{ticker}"
+    )
+    marketdetectors_url: str = "https://exodus.stockbit.com/marketdetectors"
+    broker_activity_url: str = "https://exodus.stockbit.com/order-trade/broker/activity"
+    broker_historical_url: str = "https://exodus.stockbit.com/order-trade/broker/activity/historical"
+    # 10 institutional proxy codes for foreign_flow_points aggregate.
+    # YP (Indo Premier) is domestic but mirrors institutional orders.
+    # For true all-foreign aggregate, use broker_summaries.foreign_net_value (IDX source).
+    institutional_proxy_codes: tuple[str, ...] = (
+        "AK", "ZP", "YP", "BK", "YU", "CP", "KZ", "HD", "RX", "DR"
+    )
+    # Per-identity broker codes. Call historical endpoint ONCE PER CODE.
+    # CS excluded: Credit Suisse wound down Indonesian operations (confirmed 0 trades).
+    tracked_broker_codes: tuple[str, ...] = (
+        "AK", "ZP", "YP", "BK", "YU", "CP", "KZ", "HD", "RX", "DR",
+        "XL", "PD", "MS", "DB", "ML",
+    )
 
-# Broker codes to fetch individually for per-day named-broker analysis.
-# Call the historical endpoint ONCE PER CODE — multi-code calls aggregate and lose identity.
-# CS excluded: Credit Suisse wound down Indonesian operations (confirmed 0 trades).
-TRACKED_BROKER_CODES = [
-    "AK",   # UBS Sekuritas Indonesia (foreign)
-    "ZP",   # Macquarie Sekuritas Indonesia (foreign)
-    "YP",   # Indo Premier Sekuritas (domestic, high foreign flow proxy)
-    "BK",   # J.P. Morgan Sekuritas Indonesia (foreign)
-    "YU",   # Deutsche Sekuritas Indonesia (foreign)
-    "CP",   # Valbury Asia Securities (foreign)
-    "KZ",   # CIMB Sekuritas Indonesia (foreign)
-    "HD",   # HD Capital Securities (foreign)
-    "RX",   # Macquarie Capital Securities (foreign)
-    "DR",   # OSO Securities (foreign)
-    "XL",   # Stockbit Sekuritas Digital (domestic retail)
-    "PD",   # Phintraco Sekuritas (domestic retail)
-    "MS",   # Morgan Stanley Sekuritas Indonesia (institutional)
-    "DB",   # Deutsche Bank Sekuritas Indonesia (institutional)
-    "ML",   # Merrill Lynch Sekuritas Indonesia (institutional)
-]
+
+def _load_stockbit_config(
+    config_path: Path = Path("config/stockbit.yaml"),
+) -> _StockbitConfig:
+    """Load Stockbit API config from YAML. Returns hardcoded defaults on any error."""
+    defaults = _StockbitConfig()
+    try:
+        with open(config_path, encoding="utf-8") as fh:
+            data = yaml.safe_load(fh) or {}
+    except Exception:
+        return defaults
+
+    try:
+        eps = data.get("endpoints") or {}
+        codes = data.get("broker_codes") or {}
+
+        def _url(key: str, default: str) -> str:
+            raw = (eps.get(key) or {}).get("url", "")
+            return str(raw).strip() if raw else default
+
+        def _codes(key: str, default: tuple[str, ...]) -> tuple[str, ...]:
+            raw = codes.get(key) or []
+            parsed = tuple(str(c).strip().upper() for c in raw if c)
+            return parsed if parsed else default
+
+        return _StockbitConfig(
+            iev_movers_main_url=_url("iev_movers_main", defaults.iev_movers_main_url),
+            iev_movers_special_url=_url("iev_movers_special", defaults.iev_movers_special_url),
+            orderbook_url=_url("orderbook", defaults.orderbook_url),
+            marketdetectors_url=_url("broker_marketdetectors", defaults.marketdetectors_url),
+            broker_activity_url=_url("broker_activity", defaults.broker_activity_url),
+            broker_historical_url=_url("broker_historical", defaults.broker_historical_url),
+            institutional_proxy_codes=_codes("institutional_proxy", defaults.institutional_proxy_codes),
+            tracked_broker_codes=_codes("tracked", defaults.tracked_broker_codes),
+        )
+    except Exception:
+        return defaults
+
+
+# Populate module-level constants from config (falls back to _StockbitConfig defaults).
+_sb = _load_stockbit_config()
+
+# Confirmed Exodus API endpoints (originally from DevTools spy, 2026-06-13).
+# Update via config/stockbit.yaml after running `saham stockbit spy`.
+_IEV_MOVER_URL_MAIN    = _sb.iev_movers_main_url
+_IEV_MOVER_URL_SPECIAL = _sb.iev_movers_special_url
+_ORDER_BOOK_API        = _sb.orderbook_url        # supports {ticker} placeholder
+_MARKETDETECTORS_API   = _sb.marketdetectors_url
+_BROKER_ACTIVITY_API   = _sb.broker_activity_url
+_BROKER_HISTORICAL_API = _sb.broker_historical_url
+_INSTITUTIONAL_PROXY_CODES = list(_sb.institutional_proxy_codes)
+TRACKED_BROKER_CODES       = list(_sb.tracked_broker_codes)
 
 # Spy navigation pages — each fires its respective endpoint immediately on load
 _STOCK_BROKER_PAGE_URL = "https://stockbit.com/broker-analysis/stock"
@@ -1986,6 +2028,55 @@ def spy_stockbit_session(
         "broker_candidates": broker_hits,
         "output_file": str(output_file),
     }
+
+
+# ── Browse (interactive session) ─────────────────────────────────────────────
+
+def browse_stockbit_session(
+    session_file: Path = DEFAULT_SESSION_FILE,
+    profile_dir: Path = DEFAULT_PROFILE_DIR,
+    url: str = STREAM_URL,
+) -> None:
+    """
+    Open a headed browser with the saved Stockbit session and keep it open.
+
+    Uses the persistent profile (.stockbit_profile/) if available, otherwise
+    falls back to cookie injection from stockbit_session.json.
+
+    The browser stays open until you press Ctrl+C or close it manually.
+
+    Args:
+        session_file: Legacy cookie file path (fallback if no profile)
+        profile_dir: Persistent browser profile directory
+        url: Stockbit page to open (default: stream/home)
+    """
+    sync_playwright = _require_playwright()
+    profile_exists = profile_dir.exists() and any(profile_dir.iterdir())
+
+    if profile_exists:
+        print(f"Using persistent profile: {profile_dir}/")
+    else:
+        print(f"Using cookie session: {session_file}")
+
+    print(f"Opening {url}")
+    print("The browser will stay open until you press Ctrl+C.\n")
+
+    with sync_playwright() as pw:
+        if profile_exists:
+            ctx, page = _persistent_context(pw, profile_dir, headless=False)
+        else:
+            session = _load_session(session_file)
+            _, ctx, page = _new_authenticated_context(pw, session, headless=False)
+
+        page.goto(url, timeout=NAV_TIMEOUT, wait_until="domcontentloaded")
+
+        try:
+            while True:
+                page.wait_for_timeout(10_000)
+        except KeyboardInterrupt:
+            print("\nClosing browser...")
+        finally:
+            ctx.close()
 
 
 # ── Login / session management ─────────────────────────────────────────────
