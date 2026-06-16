@@ -114,14 +114,16 @@ class FakeMarketProvider:
 
 
 def test_cached_status_reports_exact_cache_age():
-    assert _cached_status(date(2026, 6, 13), date(2026, 6, 13)) == "cached-current"
+    assert _cached_status(date(2026, 6, 13), date(2026, 6, 13)) == "✓(2026-06-13)"
 
 
 def test_is_cached_status_matches_explicit_cache_statuses():
-    assert _is_cached_status("cached-current") is True
+    assert _is_cached_status("✓(2026-06-13)") is True
+    assert _is_cached_status("✓(2026-06-10)") is True
     assert _is_cached_status("provider-no-new-data(latest=2026-06-10)") is False
     assert _is_cached_status("+2d") is False
     assert _is_cached_status("ERR:timeout") is False
+    assert _is_cached_status("cached-current") is False  # old format no longer valid
 
 
 def test_no_new_data_status_reports_provider_check_result():
@@ -228,7 +230,7 @@ def test_fetch_candles_treats_small_leading_non_trading_gap_as_current(
         short_history=notes,
     )
 
-    assert status == "cached-current"
+    assert status.startswith("✓(")
     assert FakeMarketProvider.instances[0].requested_ranges == []
     assert notes == []
 
@@ -242,6 +244,9 @@ def test_fetch_candles_treats_recent_trading_day_as_current(monkeypatch, tmp_pat
     repo.save_candles([
         _candle("BBCA", requested_start),
         _candle("BBCA", latest),
+        # ^JKSE candle on `latest` sets the last known trading day, so the
+        # staleness check considers BBCA data current (not stale).
+        _candle("^JKSE", latest),
     ])
     FakeMarketProvider.instances.clear()
     monkeypatch.setattr(
@@ -257,7 +262,7 @@ def test_fetch_candles_treats_recent_trading_day_as_current(monkeypatch, tmp_pat
         refresh=False,
     )
 
-    assert status == "cached-current"
+    assert status.startswith("✓(")
     assert FakeMarketProvider.instances[0].requested_ranges == []
 
 
@@ -370,6 +375,10 @@ def test_fetch_broker_treats_recent_trading_day_as_current(tmp_path: Path):
             source="stockbit",
         ),
     ])
+    # Seed ^JKSE candles so _last_known_trading_day returns `latest`,
+    # making the broker data considered current (not stale).
+    market_repo = SQLiteMarketRepository(db_path)
+    market_repo.save_candles([_candle("^JKSE", latest)])
     provider = FakeBrokerProvider("stockbit")
 
     result = _fetch_broker(
@@ -380,8 +389,8 @@ def test_fetch_broker_treats_recent_trading_day_as_current(tmp_path: Path):
         refresh=False,
     )
 
-    assert result.summaries == "cached-current"
-    assert result.flow == "cached-current"
+    assert result.summaries.startswith("✓(")
+    assert result.flow.startswith("✓(")
     assert provider.requested_ranges == []
 
 
@@ -417,7 +426,7 @@ def test_fetch_broker_counts_only_new_local_dates(tmp_path: Path):
         _idx_summary_provider=idx_provider,
     )
 
-    assert result.summaries == f"up-to-date({latest.isoformat()})"
+    assert result.summaries == f"up-to-date({latest.isoformat()})"  # _fmt_status maps to ✓(DATE) at display
     assert result.flow == f"up-to-date({latest.isoformat()})"
     assert idx_provider.requested_ranges == [
         (date.fromordinal(latest.toordinal() + 1), today)

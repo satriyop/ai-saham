@@ -64,19 +64,51 @@ DEFAULT_DB_PATH = Path("data.db")
 DEFAULT_DAYS = 90
 STOCKBIT_PROFILE_DIR = Path(".stockbit_profile")
 
-# Benchmark ticker always included in every update run.
+# Benchmark ticker always included in every update run (first in list).
 # Required by: saham analyze regime, saham trade swing analyze (market context).
+# Also used as ground truth for last IDX trading day (see _last_known_trading_day).
 _BENCHMARK_TICKER = "^JKSE"
+
+# How many calendar days of gap at the START of a requested range is tolerable
+# before triggering a backfill. 7 covers cases where IDX simply has no data
+# for the first few days of a very old historical range.
 MARKET_START_TOLERANCE_DAYS = 7
-MARKET_END_TOLERANCE_DAYS = 7
+
+
+def _last_known_trading_day(db_path: Path) -> date | None:
+    """
+    Return the latest date in the ^JKSE candle cache.
+
+    Yahoo Finance only includes actual IDX trading sessions, so this date
+    is the last known trading day — correctly excluding weekends and IDX
+    public holidays without any heuristic or API call.
+
+    Returns None on first run before ^JKSE has been cached.
+    """
+    repo = SQLiteMarketRepository(db_path=db_path)
+    date_range = repo.get_date_range("^JKSE")
+    return date_range[1] if date_range else None
+
+
+def _last_weekday(as_of: date) -> date:
+    """
+    Fallback: most recent Mon–Fri on or before as_of.
+    Used only when ^JKSE candles are not yet cached (first run).
+    Does NOT account for IDX holidays — use _last_known_trading_day() when possible.
+    """
+    if as_of.weekday() == 5:   # Saturday → Friday
+        return as_of - timedelta(days=1)
+    if as_of.weekday() == 6:   # Sunday → Friday
+        return as_of - timedelta(days=2)
+    return as_of
 
 
 def _fmt_status(s: str) -> str:
     """Map internal status strings to concise display labels."""
-    if s in ("cached-current", "n/a:index", "skip"):
-        return s.replace("cached-current", "✓")
     if s.startswith("up-to-date("):
-        return "✓"   # provider confirmed no new data — cache is current
+        # e.g. "up-to-date(2026-06-13)" → "✓(2026-06-13)"
+        date_part = s[len("up-to-date("):-1]
+        return f"✓({date_part})"
     return s
 
 
@@ -84,7 +116,7 @@ def _cached_status(latest: date, end_date: date) -> str:
     """Return an explicit cache status for update output."""
     lag_days = (end_date - latest).days
     if lag_days <= 0:
-        return "cached-current"
+        return f"✓({latest})"
     return f"cached({lag_days}d lag)"
 
 
@@ -95,7 +127,7 @@ def _no_new_data_status(latest: date | None) -> str:
 
 
 def _is_cached_status(status: str) -> bool:
-    return status == "cached-current"
+    return status.startswith("✓(")
 
 
 def _broker_update_status(
@@ -252,17 +284,33 @@ def _fetch_candles(
     use_case = RefreshMarketDataUseCase(provider=provider, repository=repo)
 
     try:
+        # End tolerance: how many calendar days old can cached data be and still
+        # be considered current? Derived from the last known IDX trading day
+        # (^JKSE candles). For the benchmark itself, use weekday fallback to
+        # break the circular dependency (^JKSE can't use its own stale data
+        # to decide if it needs updating).
+        today = date.today()
+        if ticker.upper() == _BENCHMARK_TICKER:
+            last_trading = _last_weekday(today)
+        else:
+            last_trading = _last_known_trading_day(db_path) or _last_weekday(today)
+        end_tolerance = max(0, (today - last_trading).days)
+
         response = use_case.execute(
             RefreshMarketDataRequest(
                 ticker=ticker,
                 days=days,
                 refresh=refresh,
                 start_tolerance_days=MARKET_START_TOLERANCE_DAYS,
-                end_tolerance_days=MARKET_END_TOLERANCE_DAYS,
+                end_tolerance_days=end_tolerance,
             )
         )
         if short_history is not None and response.short_history_note:
             short_history.append(response.short_history_note)
+
+        # Embed the latest date into "cached-current" for display clarity
+        if response.status == "cached-current" and response.date_range:
+            return f"✓({response.date_range[1]})"
         return response.status
     except Exception as e:
         return f"ERR:{str(e)[:30]}"
@@ -280,7 +328,7 @@ class BrokerFetchResult:
     flow      — foreign_flow_points + broker_daily_flow (via Stockbit or IDX)
 
     Status values:
-      "cached-current"     data is up-to-date, no rows needed
+      "✓(DATE)"            data is up-to-date through DATE, no rows needed
       "up-to-date(DATE)"   provider confirmed nothing new since DATE
       "+Nrows/span=Nd"     new rows stored
       "daily:+Nrows/..."   broker_daily_flow rows stored
@@ -296,6 +344,7 @@ def _flow_status(
     added_flow_count: int,
     flow_range: "tuple[date, date] | None",
     fetch_modes: set[str],
+    latest_date: "date | None" = None,
 ) -> str:
     """Build the display status for foreign_flow_points + broker_daily_flow."""
     daily_part: str | None = None
@@ -318,7 +367,7 @@ def _flow_status(
         return daily_part
     if flow_part:
         return flow_part
-    return "cached-current"
+    return f"✓({latest_date})" if latest_date else "✓"
 
 
 def _fetch_broker(
@@ -367,9 +416,12 @@ def _fetch_broker(
             earliest, latest = existing
             previous_latest = latest
             tolerated_start = requested_start + timedelta(days=MARKET_START_TOLERANCE_DAYS)
-            tolerated_end = end_date - timedelta(days=MARKET_END_TOLERANCE_DAYS)
+            # Use the last known IDX trading day (from ^JKSE candles) as the end
+            # boundary. Yahoo Finance only stores actual trading sessions, so this
+            # accurately reflects weekends AND IDX public holidays without guessing.
+            last_trading = _last_known_trading_day(db_path) or _last_weekday(end_date)
             needs_older_backfill = earliest > tolerated_start
-            needs_forward_fill = latest < tolerated_end
+            needs_forward_fill = latest < last_trading
             if short_history is not None and needs_older_backfill:
                 cached_days = (latest - earliest).days
                 short_history.append(
@@ -385,10 +437,10 @@ def _fetch_broker(
                         else 0
                     )
                     return BrokerFetchResult(
-                        summaries="cached-current",
+                        summaries=f"✓({latest})",
                         flow=f"daily:+{daily_resp.fetched_count}rows/{daily_resp.active_codes}codes/{span}d",
                     )
-                return BrokerFetchResult(summaries="cached-current", flow="cached-current")
+                return BrokerFetchResult(summaries=f"✓({latest})", flow=f"✓({latest})")
             if needs_older_backfill:
                 # Cache is current or partly current but shorter than requested;
                 # fill only the older missing window.
@@ -475,7 +527,10 @@ def _fetch_broker(
         updated_flow_range = repo.get_foreign_flow_date_range(ticker, source=source)
 
         summ_status = _broker_update_status(added_summary_count, updated_summ_range, fetch_modes)
-        flow_status = _flow_status(daily_resp, added_flow_count, updated_flow_range, fetch_modes)
+        flow_status = _flow_status(
+            daily_resp, added_flow_count, updated_flow_range, fetch_modes,
+            latest_date=updated_flow_range[1] if updated_flow_range else None,
+        )
 
         return BrokerFetchResult(summaries=summ_status, flow=flow_status)
     except BrokerDataAuthError:
@@ -703,9 +758,11 @@ def update(
         )
         raise typer.Exit(1)
 
-    # Always include benchmark — required for regime and swing analysis.
-    if _BENCHMARK_TICKER not in ticker_list:
-        ticker_list = ticker_list + [_BENCHMARK_TICKER]
+    # Benchmark is always first: its candles set the last known trading day,
+    # which _fetch_candles and _fetch_broker use for staleness detection.
+    if _BENCHMARK_TICKER in ticker_list:
+        ticker_list = [t for t in ticker_list if t != _BENCHMARK_TICKER]
+    ticker_list = [_BENCHMARK_TICKER] + ticker_list
 
     # Determine broker provider
     try:
@@ -725,7 +782,7 @@ def update(
         typer.echo(f"  Broker flow:      {broker_provider_name}  (net flow timeseries + daily named breakdown)")
     if not no_meta:
         typer.echo("  Meta:             yahoo  (sector/industry, 30d TTL)")
-    typer.echo("  Legend:  ✓ = up-to-date  +N = new rows stored  ERR: = failed  skip = not requested")
+    typer.echo("  Legend:  ✓(DATE) = up-to-date through DATE  +N = new rows stored  ERR: = failed")
     typer.echo("")
 
     ok_count = 0
