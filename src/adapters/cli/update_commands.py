@@ -71,6 +71,15 @@ MARKET_START_TOLERANCE_DAYS = 7
 MARKET_END_TOLERANCE_DAYS = 7
 
 
+def _fmt_status(s: str) -> str:
+    """Map internal status strings to concise display labels."""
+    if s in ("cached-current", "n/a:index", "skip"):
+        return s.replace("cached-current", "✓")
+    if s.startswith("up-to-date("):
+        return "✓"   # provider confirmed no new data — cache is current
+    return s
+
+
 def _cached_status(latest: date, end_date: date) -> str:
     """Return an explicit cache status for update output."""
     lag_days = (end_date - latest).days
@@ -259,6 +268,59 @@ def _fetch_candles(
         return f"ERR:{str(e)[:30]}"
 
 
+from dataclasses import dataclass as _dataclass
+
+
+@_dataclass(frozen=True)
+class BrokerFetchResult:
+    """
+    Split status for the two broker data streams written by _fetch_broker.
+
+    summaries — broker_summaries table (always via IDX public API)
+    flow      — foreign_flow_points + broker_daily_flow (via Stockbit or IDX)
+
+    Status values:
+      "cached-current"     data is up-to-date, no rows needed
+      "up-to-date(DATE)"   provider confirmed nothing new since DATE
+      "+Nrows/span=Nd"     new rows stored
+      "daily:+Nrows/..."   broker_daily_flow rows stored
+      "n/a:index"          not applicable (index ticker)
+      "ERR:..."            fetch failed
+    """
+    summaries: str
+    flow: str
+
+
+def _flow_status(
+    daily_resp: "FetchBrokerDailyFlowsResponse | None",
+    added_flow_count: int,
+    flow_range: "tuple[date, date] | None",
+    fetch_modes: set[str],
+) -> str:
+    """Build the display status for foreign_flow_points + broker_daily_flow."""
+    daily_part: str | None = None
+    if daily_resp is not None and daily_resp.fetched_count > 0:
+        span = (
+            (daily_resp.cached_range[1] - daily_resp.cached_range[0]).days + 1
+            if daily_resp.cached_range else 0
+        )
+        daily_part = f"daily:+{daily_resp.fetched_count}rows/{daily_resp.active_codes}codes/{span}d"
+
+    flow_part: str | None = None
+    if added_flow_count > 0 and flow_range:
+        span = (flow_range[1] - flow_range[0]).days + 1
+        prefix = "backfill+" if "backfill" in fetch_modes else "+"
+        flow_part = f"flow:{prefix}{added_flow_count}rows/{span}d"
+
+    if daily_part and flow_part:
+        return f"{daily_part} {flow_part}"
+    if daily_part:
+        return daily_part
+    if flow_part:
+        return flow_part
+    return "cached-current"
+
+
 def _fetch_broker(
     ticker: str,
     days: int,
@@ -267,10 +329,10 @@ def _fetch_broker(
     refresh: bool,
     short_history: list[str] | None = None,
     _idx_summary_provider=None,  # injectable for testing; production code uses IdxBrokerDataProvider
-) -> str:
-    """Fetch broker flow for one ticker. Returns status string."""
+) -> BrokerFetchResult:
+    """Fetch broker flow for one ticker. Returns split status for summaries and flow tables."""
     if ticker.startswith("^"):
-        return "n/a:index"
+        return BrokerFetchResult(summaries="n/a:index", flow="n/a:index")
 
     end_date = date.today()
     requested_start = end_date - timedelta(days=days)
@@ -315,18 +377,18 @@ def _fetch_broker(
                     f"requested {days}d — backfilling older gap"
                 )
             if not needs_forward_fill and not needs_older_backfill:
-                # Daily flow may have fetched new rows even when aggregate is current
+                # Aggregate is current; daily flow may still have fetched new named-broker rows.
                 if daily_resp is not None and daily_resp.fetched_count > 0:
                     span = (
                         (daily_resp.cached_range[1] - daily_resp.cached_range[0]).days + 1
                         if daily_resp.cached_range
                         else 0
                     )
-                    return (
-                        f"daily:+{daily_resp.fetched_count}rows"
-                        f"/{daily_resp.active_codes}codes/{span}d"
+                    return BrokerFetchResult(
+                        summaries="cached-current",
+                        flow=f"daily:+{daily_resp.fetched_count}rows/{daily_resp.active_codes}codes/{span}d",
                     )
-                return "cached-current"
+                return BrokerFetchResult(summaries="cached-current", flow="cached-current")
             if needs_older_backfill:
                 # Cache is current or partly current but shorter than requested;
                 # fill only the older missing window.
@@ -394,30 +456,36 @@ def _fetch_broker(
         added_count = max(added_summary_count, added_flow_count)
 
         if previous_latest is not None and added_count == 0:
-            # Aggregate had nothing new — but daily flow may have fetched rows
+            # Aggregate had nothing new — but daily flow may still have fetched named-broker rows.
+            no_new = _no_new_data_status(previous_latest)
             if daily_resp is not None and daily_resp.fetched_count > 0:
                 span = (
                     (daily_resp.cached_range[1] - daily_resp.cached_range[0]).days + 1
                     if daily_resp.cached_range
                     else 0
                 )
-                return (
-                    f"daily:+{daily_resp.fetched_count}rows"
-                    f"/{daily_resp.active_codes}codes/{span}d"
+                return BrokerFetchResult(
+                    summaries=no_new,
+                    flow=f"daily:+{daily_resp.fetched_count}rows/{daily_resp.active_codes}codes/{span}d",
                 )
-            return _no_new_data_status(previous_latest)
+            return BrokerFetchResult(summaries=no_new, flow=no_new)
 
-        updated_range = (
-            repo.get_foreign_flow_date_range(ticker, source=source)
-            or repo.get_date_range(ticker, source='idx')
-        )
-        return _broker_status_with_daily(daily_resp, added_count, updated_range, fetch_modes)
+        # New rows were stored — report summaries and flow separately.
+        updated_summ_range = repo.get_date_range(ticker, source='idx')
+        updated_flow_range = repo.get_foreign_flow_date_range(ticker, source=source)
+
+        summ_status = _broker_update_status(added_summary_count, updated_summ_range, fetch_modes)
+        flow_status = _flow_status(daily_resp, added_flow_count, updated_flow_range, fetch_modes)
+
+        return BrokerFetchResult(summaries=summ_status, flow=flow_status)
     except BrokerDataAuthError:
-        return "ERR:auth"
+        return BrokerFetchResult(summaries="ERR:auth", flow="ERR:auth")
     except BrokerDataProviderError as e:
-        return f"ERR:{str(e)[:30]}"
+        err = f"ERR:{str(e)[:30]}"
+        return BrokerFetchResult(summaries=err, flow=err)
     except Exception as e:
-        return f"ERR:{str(e)[:30]}"
+        err = f"ERR:{str(e)[:30]}"
+        return BrokerFetchResult(summaries=err, flow=err)
 
 
 def _print_table_summary(
@@ -657,7 +725,7 @@ def update(
         typer.echo(f"  Broker flow:      {broker_provider_name}  (net flow timeseries + daily named breakdown)")
     if not no_meta:
         typer.echo("  Meta:             yahoo  (sector/industry, 30d TTL)")
-    typer.echo("  Status: +Nrows = new rows stored; span = calendar cache coverage")
+    typer.echo("  Legend:  ✓ = up-to-date  +N = new rows stored  ERR: = failed  skip = not requested")
     typer.echo("")
 
     ok_count = 0
@@ -670,7 +738,7 @@ def update(
     for i, ticker in enumerate(ticker_list, 1):
         progress = f"[{i:>3}/{len(ticker_list)}]"
         candles_status = "skip"
-        broker_status = "skip"
+        broker_result = BrokerFetchResult(summaries="skip", flow="skip")
         meta_status = "skip"
 
         if not broker_only:
@@ -679,7 +747,7 @@ def update(
             )
 
         if not candles_only:
-            broker_status = _fetch_broker(
+            broker_result = _fetch_broker(
                 ticker, days, resolved_db, broker_provider, refresh, broker_backfills
             )
 
@@ -688,10 +756,15 @@ def update(
             if meta_status.startswith("changed"):
                 meta_changed.append(f"  {ticker}: {meta_status}")
 
-        any_error = "ERR:" in candles_status or "ERR:" in broker_status
+        any_error = (
+            "ERR:" in candles_status
+            or "ERR:" in broker_result.summaries
+            or "ERR:" in broker_result.flow
+        )
         all_cached = (
             _is_cached_status(candles_status)
-            and _is_cached_status(broker_status)
+            and _is_cached_status(broker_result.summaries)
+            and _is_cached_status(broker_result.flow)
             and (no_meta or meta_status.startswith("cached"))
         )
 
@@ -703,9 +776,13 @@ def update(
             ok_count += 1
             status_color = typer.colors.BRIGHT_BLACK if all_cached else typer.colors.GREEN
 
-        status_line = f"candles={candles_status} broker={broker_status}"
+        status_line = (
+            f"candles={_fmt_status(candles_status)}"
+            f"  summ={_fmt_status(broker_result.summaries)}"
+            f"  flow={_fmt_status(broker_result.flow)}"
+        )
         if not no_meta:
-            status_line += f" meta={meta_status}"
+            status_line += f"  meta={meta_status}"
 
         typer.echo(
             f"  {progress} {ticker:<6} "

@@ -5,6 +5,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from src.adapters.cli.update_commands import (
+    BrokerFetchResult,
     _broker_update_status,
     _cached_status,
     _fetch_candles,
@@ -150,7 +151,7 @@ def test_range_update_status_distinguishes_rows_from_calendar_span():
 
 
 def test_fetch_broker_skips_index_ticker(tmp_path: Path):
-    status = _fetch_broker(
+    result = _fetch_broker(
         ticker="^JKSE",
         days=90,
         db_path=tmp_path / "data.db",
@@ -158,7 +159,8 @@ def test_fetch_broker_skips_index_ticker(tmp_path: Path):
         refresh=False,
     )
 
-    assert status == "n/a:index"
+    assert result.summaries == "n/a:index"
+    assert result.flow == "n/a:index"
 
 
 def test_fetch_candles_backfills_older_gap(monkeypatch, tmp_path: Path):
@@ -269,7 +271,7 @@ def test_fetch_broker_backfills_older_summary_gap(tmp_path: Path):
     repo.save_broker_summary(_summary("BBCA", today, "idx"))
     provider = FakeBrokerProvider("idx")
 
-    status = _fetch_broker(
+    result = _fetch_broker(
         ticker="BBCA",
         days=365,
         db_path=db_path,
@@ -277,7 +279,7 @@ def test_fetch_broker_backfills_older_summary_gap(tmp_path: Path):
         refresh=False,
     )
 
-    assert status.startswith("backfill+")
+    assert result.summaries.startswith("backfill+")
     assert provider.requested_ranges == [
         (requested_start, date.fromordinal(cached_start.toordinal() - 1))
     ]
@@ -322,7 +324,7 @@ def test_fetch_broker_uses_flow_points_for_stockbit_session_coverage(tmp_path: P
     stockbit_provider = FakeBrokerProvider("stockbit", historical_points=historical_points)
     idx_provider = FakeBrokerProvider("idx")
 
-    status = _fetch_broker(
+    result = _fetch_broker(
         ticker="BBCA",
         days=365,
         db_path=db_path,
@@ -331,7 +333,7 @@ def test_fetch_broker_uses_flow_points_for_stockbit_session_coverage(tmp_path: P
         _idx_summary_provider=idx_provider,
     )
 
-    assert status.startswith("backfill+")
+    assert result.summaries.startswith("backfill+")
     # Backfill range is determined by flow_points coverage, sent to IDX for summaries
     assert idx_provider.requested_ranges == [
         (requested_start, date.fromordinal(flow_start.toordinal() - 1))
@@ -370,7 +372,7 @@ def test_fetch_broker_treats_recent_trading_day_as_current(tmp_path: Path):
     ])
     provider = FakeBrokerProvider("stockbit")
 
-    status = _fetch_broker(
+    result = _fetch_broker(
         ticker="BBCA",
         days=365,
         db_path=db_path,
@@ -378,7 +380,8 @@ def test_fetch_broker_treats_recent_trading_day_as_current(tmp_path: Path):
         refresh=False,
     )
 
-    assert status == "cached-current"
+    assert result.summaries == "cached-current"
+    assert result.flow == "cached-current"
     assert provider.requested_ranges == []
 
 
@@ -405,7 +408,7 @@ def test_fetch_broker_counts_only_new_local_dates(tmp_path: Path):
     # IDX provider echoes back 'latest' so no new dates are added (up-to-date path)
     idx_provider = EchoLatestBrokerProvider("idx", echo_date=latest)
 
-    status = _fetch_broker(
+    result = _fetch_broker(
         ticker="BBCA",
         days=365,
         db_path=db_path,
@@ -414,7 +417,8 @@ def test_fetch_broker_counts_only_new_local_dates(tmp_path: Path):
         _idx_summary_provider=idx_provider,
     )
 
-    assert status == f"up-to-date({latest.isoformat()})"
+    assert result.summaries == f"up-to-date({latest.isoformat()})"
+    assert result.flow == f"up-to-date({latest.isoformat()})"
     assert idx_provider.requested_ranges == [
         (date.fromordinal(latest.toordinal() + 1), today)
     ]
