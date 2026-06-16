@@ -4,10 +4,11 @@ ConfirmIntradayOpenUseCase — convert pre-open candidates into post-open decisi
 Layer: Application
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
 
+from src.domain.value_objects import tick_size as tick_size_module
 from src.domain.value_objects.intraday_confirmation import (
     IntradayConfirmation,
     IntradayConfirmationCandidate,
@@ -23,6 +24,16 @@ class ConfirmIntradayOpenRequest:
     candidates: list[IntradayConfirmationCandidate]
     run_date: date | None = None
     max_stop_pct: Decimal = Decimal("0.07")
+    # Tick-friction gate (Phase 1.2)
+    tick_friction_gate: bool = True
+    min_target_ticks: int = 3
+    min_stop_ticks: int = 2
+    # Regime gate (Phase 1.3)
+    regime: str | None = None
+    regime_gate_enabled: bool = True
+    tighten_in_regimes: tuple[str, ...] = ("WEAK", "RISK_OFF")
+    gap_pct_tightening_factor: Decimal = Decimal("0.5")
+    require_backed_in_weak: bool = True
 
 
 class ConfirmIntradayOpenUseCase:
@@ -31,7 +42,7 @@ class ConfirmIntradayOpenUseCase:
     def execute(self, request: ConfirmIntradayOpenRequest) -> IntradayConfirmationResult:
         confirmed_date = request.run_date or date.today()
         confirmations = tuple(
-            self._confirm_candidate(candidate, request.max_stop_pct)
+            self._confirm_candidate(candidate, request)
             for candidate in request.candidates
         )
         return IntradayConfirmationResult(
@@ -43,8 +54,9 @@ class ConfirmIntradayOpenUseCase:
     def _confirm_candidate(
         self,
         candidate: IntradayConfirmationCandidate,
-        max_stop_pct: Decimal,
+        request: ConfirmIntradayOpenRequest,
     ) -> IntradayConfirmation:
+        max_stop_pct = request.max_stop_pct
         reasons: list[str] = []
 
         if candidate.opening_price is None:
@@ -71,25 +83,57 @@ class ConfirmIntradayOpenUseCase:
             )
 
         opening = candidate.opening_price
-        if opening > candidate.entry_range_high:
+
+        # Regime gate: in WEAK/RISK_OFF, tighten entry band and require BACKED accumulation
+        effective_range_low = candidate.entry_range_low
+        effective_range_high = candidate.entry_range_high
+        regime_tightening_active = (
+            request.regime_gate_enabled
+            and request.regime is not None
+            and request.regime.upper() in request.tighten_in_regimes
+        )
+        if regime_tightening_active:
+            midpoint = (candidate.entry_range_high + candidate.entry_range_low) / Decimal("2")
+            half_band = (candidate.entry_range_high - midpoint) * request.gap_pct_tightening_factor
+            effective_range_high = midpoint + half_band
+            effective_range_low = midpoint - half_band
+            reasons.append(
+                f"regime {request.regime}: entry band tightened to"
+                f" {effective_range_low:,.0f}–{effective_range_high:,.0f}"
+            )
+            if request.require_backed_in_weak and candidate.accum_tag not in ("BACKED",):
+                return self._result(
+                    candidate,
+                    IntradayDecision.SKIP_BEARISH_CONTEXT,
+                    planned_entry=opening,
+                    stop_pct=self._stop_pct(opening, candidate.atr_stop),
+                    reasons=tuple(
+                        reasons + [
+                            f"regime {request.regime}: BACKED accumulation required"
+                            f" (got {candidate.accum_tag or 'None'})"
+                        ]
+                    ),
+                )
+
+        if opening > effective_range_high:
             return self._result(
                 candidate,
                 IntradayDecision.SKIP_GAP_UP,
                 planned_entry=opening,
                 stop_pct=self._stop_pct(opening, candidate.atr_stop),
-                reasons=(
-                    f"open {opening} above range high {candidate.entry_range_high}",
+                reasons=tuple(
+                    reasons + [f"open {opening} above range high {effective_range_high}"]
                 ),
             )
 
-        if opening < candidate.entry_range_low:
+        if opening < effective_range_low:
             return self._result(
                 candidate,
                 IntradayDecision.SKIP_GAP_DOWN,
                 planned_entry=opening,
                 stop_pct=self._stop_pct(opening, candidate.atr_stop),
-                reasons=(
-                    f"open {opening} below range low {candidate.entry_range_low}",
+                reasons=tuple(
+                    reasons + [f"open {opening} below range low {effective_range_low}"]
                 ),
             )
 
@@ -136,6 +180,28 @@ class ConfirmIntradayOpenUseCase:
             )
 
         reasons.append(f"stop {stop_pct:.1f}% within max {max_stop_pct * 100:.1f}%")
+
+        # Tick-friction gate: target and stop must cover minimum ticks (IDX round-trip cost).
+        # IDX actual round-trip: ~0.41% (Stockbit) to ~0.65% (IPOT) incl. 0.10% PPh on sell.
+        if request.tick_friction_gate and candidate.atr_stop is not None:
+            atr_distance = opening - candidate.atr_stop
+            implied_target = opening + atr_distance  # symmetric 1:1 projection
+            stop_ticks = tick_size_module.ticks_between(candidate.atr_stop, opening)
+            target_ticks = tick_size_module.ticks_between(opening, implied_target)
+            if stop_ticks < request.min_stop_ticks or target_ticks < request.min_target_ticks:
+                return self._result(
+                    candidate,
+                    IntradayDecision.SKIP_LOW_VOLATILITY,
+                    planned_entry=opening,
+                    stop_pct=stop_pct,
+                    reasons=tuple(
+                        reasons + [
+                            f"tick-friction: stop={stop_ticks}t target={target_ticks}t"
+                            f" (min stop={request.min_stop_ticks}t"
+                            f" target={request.min_target_ticks}t)"
+                        ]
+                    ),
+                )
 
         if candidate.trend == "BULLISH":
             decision = IntradayDecision.ENTER

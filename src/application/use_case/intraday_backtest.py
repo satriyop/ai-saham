@@ -556,6 +556,10 @@ class IntradayBacktestUseCase:
                 candidates=conf_candidates,
                 run_date=d,
                 max_stop_pct=request.max_stop_pct,
+                # Tick-friction and regime gates apply to forward trading only.
+                # Backtests replay historical decisions without these forward-looking filters.
+                tick_friction_gate=False,
+                regime_gate_enabled=False,
             ))
 
             # ── Step 3: filter, rank, and cap ────────────────────────────────
