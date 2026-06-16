@@ -9,7 +9,7 @@ Layer: Domain
 
 from abc import ABC, abstractmethod
 
-from src.domain.value_objects.screener_result import MoverData, OrderBookBid
+from src.domain.value_objects.screener_result import MoverData, OrderBookBid, OrderBookTopOfBook
 
 
 class BrowserDataProvider(ABC):
@@ -46,6 +46,23 @@ class BrowserDataProvider(ABC):
             BrowserDataProviderError: On any other fetch failure
         """
         pass
+
+    def fetch_order_book_top_of_book(self, ticker: str) -> OrderBookTopOfBook | None:
+        """Fetch best bid and best offer for a ticker.
+
+        Default implementation delegates to fetch_order_book_best_bid() and returns
+        offer=None. Override in providers that have offer-side data available.
+
+        Args:
+            ticker: IDX ticker symbol
+
+        Returns:
+            OrderBookTopOfBook with bid and offer sides, or None if unavailable
+        """
+        bid = self.fetch_order_book_best_bid(ticker)
+        if bid is None:
+            return None
+        return OrderBookTopOfBook(bid=bid, offer=None)
 
 
 class BrowserDataProviderError(Exception):

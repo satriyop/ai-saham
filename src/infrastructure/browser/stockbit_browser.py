@@ -20,7 +20,7 @@ from src.domain.ports.browser_data_provider import (
     BrowserDataProvider,
     BrowserInteractionRequired,
 )
-from src.domain.value_objects.screener_result import MoverData, OrderBookBid
+from src.domain.value_objects.screener_result import MoverData, OrderBookBid, OrderBookTopOfBook
 
 # IDX tick size bands (IDX Rule: Bapepam-LK No. II-A)
 _TICK_BANDS: list[tuple[int, int]] = [
@@ -146,6 +146,12 @@ class ManualBrowserDataProvider(BrowserDataProvider):
 
     def fetch_order_book_best_bid(self, ticker: str) -> OrderBookBid | None:
         return self._order_books.get(ticker.upper())
+
+    def fetch_order_book_top_of_book(self, ticker: str) -> OrderBookTopOfBook | None:
+        bid = self.fetch_order_book_best_bid(ticker)
+        if bid is None:
+            return None
+        return OrderBookTopOfBook(bid=bid, offer=None)
 
 
 class StockbitBrowserInstructionsProvider(BrowserDataProvider):

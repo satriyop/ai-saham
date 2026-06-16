@@ -41,6 +41,19 @@ class OrderBookBid:
 
 
 @dataclass(frozen=True)
+class OrderBookTopOfBook:
+    """Best bid and best offer from a pre-open order book snapshot.
+
+    Attributes:
+        bid: Best bid side (None if unavailable)
+        offer: Best offer side (None if unavailable or not fetched)
+    """
+
+    bid: OrderBookBid | None
+    offer: OrderBookBid | None
+
+
+@dataclass(frozen=True)
 class MoverWithOrderBook:
     """Top IEV mover combined with its live orderbook top-of-book snapshot.
 
@@ -109,6 +122,14 @@ class ScreenerCandidate:
     # Improvement #2 — foreign VWAP floor signal
     foreign_vwap: Decimal | None = None
     fvwap_discount_pct: float | None = None  # positive = foreigners underwater (bullish floor)
+    # Phase 2.1 — IEV intensity (unusual interest signal)
+    iev_intensity: float | None = None   # IEV / avg_5min_volume; high = unusual interest
+    unusual_volume: bool = False         # True when iev_intensity > configured threshold
+    # Offer-side order book (available in normal mode, None in fast mode)
+    best_offer: Decimal | None = None          # best offer price (IDR)
+    best_offer_lots: int | None = None         # lots queued at best offer
+    spread_pct: Decimal | None = None          # (offer - bid) / bid * 100
+    bid_offer_imbalance: float | None = None   # bid_lots / (bid_lots + offer_lots); >0.6 = buyers dominate
 
     @property
     def has_entry_plan(self) -> bool:
@@ -134,6 +155,12 @@ class ScreenerCandidate:
             return "—"
         sign = "+" if self.gap_pct >= 0 else ""
         return f"{sign}{float(self.gap_pct):.1f}%"
+
+    @property
+    def spread_label(self) -> str:
+        if self.spread_pct is None:
+            return "—"
+        return f"{float(self.spread_pct):.2f}%"
 
 
 @dataclass

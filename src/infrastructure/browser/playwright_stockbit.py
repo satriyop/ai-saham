@@ -42,7 +42,7 @@ from src.domain.ports.broker_data_provider import (
     BrokerDataProviderError,
 )
 from src.domain.ports.browser_data_provider import BrowserDataProvider
-from src.domain.value_objects.screener_result import MoverData, MoverWithOrderBook, OrderBookBid
+from src.domain.value_objects.screener_result import MoverData, MoverWithOrderBook, OrderBookBid, OrderBookTopOfBook
 
 logger = logging.getLogger(__name__)
 
@@ -600,12 +600,8 @@ class PlaywrightStockbitProvider(BrowserDataProvider):
             finally:
                 ctx.close()
 
-    def fetch_order_book_best_bid(self, ticker: str) -> OrderBookBid | None:
-        """
-        Fetch order book best bid from Exodus API.
-
-        Reuses the JWT from the stream page — only navigates if no token cached.
-        """
+    def _fetch_order_book_raw(self, ticker: str) -> OrderBookTopOfBook | None:
+        """Single browser session: fetch orderbook and return both bid and offer."""
         sync_playwright = _require_playwright()
 
         with sync_playwright() as pw:
@@ -620,7 +616,7 @@ class PlaywrightStockbitProvider(BrowserDataProvider):
             try:
                 token_box = _intercept_token(page)
                 page.goto(ORDERBOOK_PAGE_URL, timeout=self._timeout, wait_until="domcontentloaded")
-                page.wait_for_timeout(2_000)
+                page.wait_for_timeout(SPA_SETTLE_MS)
 
                 token = _resolve_token(page, token_box)
                 if not token:
@@ -629,18 +625,34 @@ class PlaywrightStockbitProvider(BrowserDataProvider):
 
                 ob_url = _ORDER_BOOK_API.format(ticker=ticker.upper())
                 body = _exodus_get(ob_url, token)
-                if body:
-                    bid = _parse_order_book_response(body)
-                    if bid:
-                        logger.info("Order book: %s best bid = %s", ticker, bid.price)
-                        return bid
-                    logger.warning("Order book response parsed but no bid found for %s", ticker)
-                    logger.debug("Response: %s", str(body)[:500])
+                if not body:
+                    return None
 
-                return None
+                bid_price, bid_lots, offer_price, offer_lots = _parse_top_of_book(body)
+                if bid_price is None and offer_price is None:
+                    logger.warning("Order book response parsed but no bid/offer found for %s", ticker)
+                    logger.debug("Response: %s", str(body)[:500])
+                    return None
+
+                bid = OrderBookBid(price=bid_price, volume=bid_lots) if bid_price and bid_lots else None
+                offer = OrderBookBid(price=offer_price, volume=offer_lots) if offer_price and offer_lots else None
+                logger.info(
+                    "Order book %s: bid=%s (%s lots)  offer=%s (%s lots)",
+                    ticker, bid_price, bid_lots, offer_price, offer_lots,
+                )
+                return OrderBookTopOfBook(bid=bid, offer=offer)
 
             finally:
                 ctx.close()
+
+    def fetch_order_book_best_bid(self, ticker: str) -> OrderBookBid | None:
+        """Fetch order book best bid. Delegates to _fetch_order_book_raw()."""
+        tob = self._fetch_order_book_raw(ticker)
+        return tob.bid if tob else None
+
+    def fetch_order_book_top_of_book(self, ticker: str) -> OrderBookTopOfBook | None:
+        """Fetch order book best bid and best offer in one browser session."""
+        return self._fetch_order_book_raw(ticker)
 
 
 # ── Playwright-backed BrokerDataProvider ──────────────────────────────────
@@ -1516,15 +1528,18 @@ def _extract_iev_from_mover(item: dict) -> int | None:
     return None
 
 
-def _parse_order_book_response(body: dict) -> OrderBookBid | None:
+def _parse_order_book_response(body: dict) -> OrderBookTopOfBook | None:
     """
     Parse order book API response from Exodus.
     Uses confirmed company-price-feed/v2/orderbook response shape.
+    Returns both bid and offer sides.
     """
-    bid_price, bid_lots, _, _ = _parse_top_of_book(body)
-    if bid_price is not None and bid_lots is not None:
-        return OrderBookBid(price=bid_price, volume=bid_lots)
-    return None
+    bid_price, bid_lots, offer_price, offer_lots = _parse_top_of_book(body)
+    bid = OrderBookBid(price=bid_price, volume=bid_lots) if bid_price and bid_lots else None
+    offer = OrderBookBid(price=offer_price, volume=offer_lots) if offer_price and offer_lots else None
+    if bid is None and offer is None:
+        return None
+    return OrderBookTopOfBook(bid=bid, offer=offer)
 
 
 def _parse_top_of_book(
@@ -1891,6 +1906,12 @@ def spy_stockbit_session(
     elif target == "stock":
         # Named broker breakdown: loads marketdetectors/{ticker} on page open
         url = _STOCK_BROKER_PAGE_URL
+    elif target == "stock-profile":
+        # Company overview page — fires corporate action, financials, and price API calls.
+        # Use this to discover the Exodus endpoint for dividend ex-date data.
+        # Run: saham stockbit spy --target stock-profile --ticker BBCA
+        # Then inspect journals/stockbit-spy.json for corporate-action / dividen patterns.
+        url = f"https://stockbit.com/stocks/{ticker.upper()}"
     elif target == "broker-scan":
         # Broker-centric universe scan: loads /order-trade/broker/activity on page open
         url = _BROKER_ANALYSIS_PAGE_URL

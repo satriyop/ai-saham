@@ -1,0 +1,157 @@
+# Stockbit / Exodus API configuration
+#
+# This file contains the two things that change due to market structure or
+# Stockbit frontend updates — not implementation details like timeouts.
+#
+# To update an endpoint URL: run `saham stockbit spy` to discover the new URL
+# from DevTools, then update the value here. Note: if the response SHAPE also
+# changed, the paired parser in playwright_stockbit.py must be updated too.
+#
+# Last verified: 2026-06-13 via DevTools spy session.
+
+# ── Exodus API endpoints ───────────────────────────────────────────────────
+#
+# All endpoints require a Bearer JWT extracted from an active browser session.
+# The JWT is obtained by navigating to a Stockbit page that fires authenticated
+# requests, then intercepting the Authorization header.
+
+endpoints:
+
+  iev_movers_main:
+    url: "https://exodus.stockbit.com/order-trade/market-mover\
+?mover_type=MOVER_TYPE_IEV_TOP_GAINER\
+&filter_stocks=FILTER_STOCKS_TYPE_MAIN_BOARD\
+&filter_stocks=FILTER_STOCKS_TYPE_DEVELOPMENT_BOARD\
+&filter_stocks=FILTER_STOCKS_TYPE_ACCELERATION_BOARD\
+&filter_stocks=FILTER_STOCKS_TYPE_NEW_ECONOMY_BOARD"
+    trigger_page: "https://stockbit.com/orderbook"
+    # Returns: ranked list of pre-open movers for main + development + acceleration + new economy boards.
+    # Response shape: data.mover_list[].stock_detail.code  → ticker
+    #                 data.mover_list[].iepiev_detail.iev.raw → IEV (lots, integer)
+    #                 data.mover_list[].iepiev_detail.iep.raw → IEP (IDR, integer, may be absent)
+    # Extracted and stored: ticker, IEV, IEP → iev_snapshots + iev_snapshot_history tables
+
+  iev_movers_special:
+    url: "https://exodus.stockbit.com/order-trade/market-mover\
+?mover_type=MOVER_TYPE_IEV_TOP_GAINER\
+&filter_stocks=FILTER_STOCKS_TYPE_SPECIAL_MONITORING_BOARD"
+    trigger_page: "https://stockbit.com/orderbook"
+    # Returns: same shape as iev_movers_main but for the Special Monitoring Board only.
+    # Both endpoints are called every collect-iev run; results are merged and deduplicated
+    # (highest IEV wins if a ticker appears in both). Stored identically.
+    # Extracted and stored: ticker, IEV, IEP → iev_snapshots + iev_snapshot_history tables
+
+  orderbook:
+    url: "https://exodus.stockbit.com/company-price-feed/v2/orderbook/companies/{ticker}"
+    trigger_page: "https://stockbit.com/orderbook"
+    # Returns: full order book for one ticker at the moment of the call.
+    # Response shape:
+    #   data.iepiev.best_bid_offer.bid.price.raw      → best bid price (IDR)
+    #   data.iepiev.best_bid_offer.bid.quantity.raw   → best bid lots (already in lots)
+    #   data.iepiev.best_bid_offer.offer.price.raw    → best offer price (IDR)
+    #   data.iepiev.best_bid_offer.offer.quantity.raw → best offer lots (already in lots)
+    #   data.bid[]                                    → full bid depth (price as string, volume in shares)
+    #   data.offer[]                                  → full offer depth (price as string, volume in shares)
+    #
+    # Currently extracted: best bid price + lots → OrderBookBid (used for gap% in pre-open screener)
+    # Currently NOT stored: best offer price/lots (parsed but discarded), full depth arrays
+    # Opportunity: offer side is already parsed — storing it costs nothing extra per API call
+
+  broker_marketdetectors:
+    url: "https://exodus.stockbit.com/marketdetectors"
+    trigger_page: "https://stockbit.com/broker-analysis/stock"
+    # Returns: stock-centric named broker breakdown for one ticker on the current trading day.
+    # Response shape:
+    #   data.broker_summary.brokers_buy[].netbs_broker_code → broker code
+    #   data.broker_summary.brokers_buy[].blot              → net buy lots
+    #   data.broker_summary.brokers_buy[].bval              → net buy value (IDR)
+    #   data.broker_summary.brokers_buy[].netbs_buy_avg_price → avg buy price
+    #   data.broker_summary.brokers_buy[].type              → "Asing" (foreign) or local
+    #   data.broker_summary.brokers_buy[].netbs_date        → date (YYYYMMDD)
+    #   data.broker_summary.brokers_sell[]                  → same shape, negative values
+    #
+    # Extracted and stored: top 10 buyers + top 10 sellers (broker_code, lots, value, avg_price,
+    # foreign/local flag), aggregated foreign_buy_value, foreign_sell_value, foreign_buy_lot,
+    # foreign_sell_lot, total_value, total_lot → broker_summaries table
+
+  broker_activity:
+    url: "https://exodus.stockbit.com/order-trade/broker/activity"
+    trigger_page: "https://stockbit.com/broker-analysis/broker"
+    # Returns: broker-centric universe scan — for a given broker code, which stocks it is
+    # net buying or net selling today.
+    # Response shape:
+    #   data.broker_activity_transaction.brokers_buy[].stock_code → ticker
+    #   data.broker_activity_transaction.brokers_buy[].value      → net value (IDR)
+    #   data.broker_activity_transaction.brokers_buy[].lot        → net lots
+    #   data.broker_activity_transaction.brokers_buy[].avg_price  → average price
+    #   data.broker_activity_transaction.brokers_buy[].type       → investor type
+    #   data.broker_activity_transaction.brokers_sell[]           → same shape, negative values
+    #
+    # Extracted and stored: ticker, net_val, net_lot per stock → ForeignFlowSnapshot
+    # Used for: foreign accumulation screener (which stocks are institutions net buying today)
+
+  broker_historical:
+    url: "https://exodus.stockbit.com/order-trade/broker/activity/historical"
+    trigger_page: "https://stockbit.com/broker-analysis/broker"
+    # Returns: per-broker, per-ticker daily time-series (up to 1 year, paginated 100/page).
+    # Called once per broker code — multi-code calls aggregate and lose per-broker identity.
+    # Response shape:
+    #   data.records[].date                                → "YYYY-MM-DD"
+    #   data.records[].trade_activity.buy_summary.lot      → buy lots
+    #   data.records[].trade_activity.buy_summary.value    → buy value (IDR)
+    #   data.records[].trade_activity.buy_summary.avg_price → avg buy price
+    #   data.records[].trade_activity.sell_summary.lot     → sell lots
+    #   data.records[].trade_activity.sell_summary.value   → sell value (IDR)
+    #   data.records[].trade_activity.sell_summary.avg_price → avg sell price
+    #   data.records[].trade_activity.net_summary.lot      → net lots (negative = net sell)
+    #   data.records[].trade_activity.net_summary.value    → net value (negative = net sell)
+    #   data.records[].trade_activity.net_summary.avg_price → avg net price
+    #   data.records[].trade_activity.total_buy_lot.pct    → broker's market share of buy volume (%)
+    #   data.records[].trade_activity.total_sell_lot.pct   → broker's market share of sell volume (%)
+    #   data.records[].price_activity.close_price          → closing price (fallback for avg_price)
+    #   data.pagination.has_next                           → pagination flag
+    #
+    # Extracted and stored: date, broker_code, broker_name, buy_lot, sell_lot, net_lot,
+    # buy_value, sell_value, net_value, avg_buy_price, avg_sell_price, avg_price,
+    # buy_pct, sell_pct → broker_daily_flows table (source="stockbit")
+
+# ── Broker codes ───────────────────────────────────────────────────────────
+
+broker_codes:
+
+  # Subset used to compute the foreign_flow_points aggregate signal.
+  # These are NOT all foreign brokers — they are major institutional desks that
+  # concentrate most foreign-style order flow. YP (Indo Premier) is domestic but
+  # consistently mirrors institutional behaviour.
+  # For true all-foreign aggregate, use broker_summaries.foreign_net_value (IDX source).
+  institutional_proxy:
+    - AK   # UBS Sekuritas Indonesia
+    - ZP   # Macquarie Sekuritas Indonesia
+    - YP   # Indo Premier Sekuritas (domestic, high foreign-flow proxy)
+    - BK   # J.P. Morgan Sekuritas Indonesia
+    - YU   # Deutsche Sekuritas Indonesia
+    - CP   # Valbury Asia Securities
+    - KZ   # CIMB Sekuritas Indonesia
+    - HD   # HD Capital Securities
+    - RX   # Macquarie Capital Securities
+    - DR   # OSO Securities
+
+  # Brokers fetched individually via broker_historical for per-identity daily tracking.
+  # Call the historical endpoint ONCE PER CODE — multi-code calls aggregate and lose identity.
+  # CS (Credit Suisse) excluded: wound down Indonesian operations (confirmed 0 trades).
+  tracked:
+    - AK   # UBS Sekuritas Indonesia (foreign)
+    - ZP   # Macquarie Sekuritas Indonesia (foreign)
+    - YP   # Indo Premier Sekuritas (domestic, high foreign-flow proxy)
+    - BK   # J.P. Morgan Sekuritas Indonesia (foreign)
+    - YU   # Deutsche Sekuritas Indonesia (foreign)
+    - CP   # Valbury Asia Securities (foreign)
+    - KZ   # CIMB Sekuritas Indonesia (foreign)
+    - HD   # HD Capital Securities (foreign)
+    - RX   # Macquarie Capital Securities (foreign)
+    - DR   # OSO Securities (foreign)
+    - XL   # Stockbit Sekuritas Digital (domestic retail)
+    - PD   # Phintraco Sekuritas (domestic retail)
+    - MS   # Morgan Stanley Sekuritas Indonesia (institutional)
+    - DB   # Deutsche Bank Sekuritas Indonesia (institutional)
+    - ML   # Merrill Lynch Sekuritas Indonesia (institutional)

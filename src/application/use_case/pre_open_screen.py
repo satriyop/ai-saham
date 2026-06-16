@@ -20,6 +20,7 @@ Layer: Application
 """
 
 import math
+import re
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
@@ -73,6 +74,13 @@ class PreOpenScreenConfig:
     accum_backed_threshold: float = 50.0
     # Improvement #2 — foreign VWAP
     fvwap_period: int = 20
+    # Speculative symbol filter (Phase 1.1)
+    exclude_suffix_pattern: str = r"-(W|R|L)$"
+    min_history_days: int = 20
+    # IEV intensity signal (Phase 2.1)
+    iev_intensity_enabled: bool = True
+    iev_intensity_unusual_threshold: float = 5.0
+    iev_intensity_auto_downgrade: bool = False
 
     @classmethod
     def from_yaml(cls, data: dict) -> "PreOpenScreenConfig":
@@ -110,6 +118,17 @@ class PreOpenScreenConfig:
             accum_window_days=int(analysis.get("accum_window_days", 7)),
             accum_backed_threshold=float(analysis.get("accum_backed_threshold", 50.0)),
             fvwap_period=int(analysis.get("fvwap_period", 20)),
+            exclude_suffix_pattern=str(
+                data.get("filters", {}).get("exclude_suffix_pattern", r"-(W|R|L)$")
+            ),
+            min_history_days=int(data.get("filters", {}).get("min_history_days", 20)),
+            iev_intensity_enabled=bool(analysis.get("iev_intensity_enabled", True)),
+            iev_intensity_unusual_threshold=float(
+                analysis.get("iev_intensity_unusual_threshold", 5.0)
+            ),
+            iev_intensity_auto_downgrade=bool(
+                analysis.get("iev_intensity_auto_downgrade", False)
+            ),
         )
 
 
@@ -178,6 +197,13 @@ class PreOpenScreenUseCase:
         for mover in movers:
             ticker = mover.ticker
 
+            # Speculative symbol filter: skip warrants (-W), rights (-R), bonds (-L)
+            if config.exclude_suffix_pattern and re.search(
+                config.exclude_suffix_pattern, ticker, re.IGNORECASE
+            ):
+                warnings.append(f"{ticker}: SKIP_SPECULATIVE — matches excluded suffix pattern")
+                continue
+
             # Step 4: Technical context — ATR, RSI, SMA, prev OHLC + candles
             ctx = self._assess_context(
                 ticker=ticker,
@@ -197,6 +223,27 @@ class PreOpenScreenUseCase:
             atr_val = ctx["atr"]
             candles = ctx["candles"]
 
+            # Speculative symbol filter: skip stocks with insufficient history for ATR/RSI
+            if len(candles) < config.min_history_days:
+                warnings.append(
+                    f"{ticker}: SKIP_SPECULATIVE — only {len(candles)} days history"
+                    f" (min {config.min_history_days})"
+                )
+                continue
+
+            # Phase 2.1: IEV intensity — compares mover IEV to the stock's typical 5-min volume
+            # Formula: IEV_Intensity = IEV / (ADV_20d / 78)  where 78 ≈ 5-min bars per day
+            # High intensity (> threshold) = unusual interest; NOT necessarily manipulation.
+            iev_intensity: float | None = None
+            unusual_volume = False
+            if config.iev_intensity_enabled and candles:
+                avg_daily_volume = sum(c.volume for c in candles[-20:]) / min(len(candles), 20)
+                avg_5min_volume = avg_daily_volume / 78
+                if avg_5min_volume > 0:
+                    iev_intensity = mover.iev / avg_5min_volume
+                    if iev_intensity > config.iev_intensity_unusual_threshold:
+                        unusual_volume = True
+
             # Step 5 (Improvement #3): ATR-scaled entry range
             effective_band, entry_range_low, entry_range_high = self._compute_entry_range(
                 prev_close=prev_close,
@@ -204,12 +251,17 @@ class PreOpenScreenUseCase:
                 config=config,
             )
 
-            # Step 6: Order book bid → gap% (skipped in fast mode)
+            # Step 6: Order book bid+offer → gap%, spread%, bid/offer imbalance (skipped in fast mode)
             gap_pct: Decimal | None = None
             ob = None
+            best_offer: Decimal | None = None
+            best_offer_lots: int | None = None
+            spread_pct: Decimal | None = None
+            bid_offer_imbalance: float | None = None
 
             if not config.fast_mode:
-                ob = self._browser.fetch_order_book_best_bid(ticker)
+                tob = self._browser.fetch_order_book_top_of_book(ticker)
+                ob = tob.bid if tob else None
                 if ob is not None:
                     if prev_close is not None and prev_close > 0:
                         gap_pct = (
@@ -219,6 +271,15 @@ class PreOpenScreenUseCase:
                             warnings.append(
                                 f"{ticker}: Gap {gap_pct:+.1f}% exceeds ±{float(effective_band*100):.1f}% ATR band"
                             )
+                    if tob and tob.offer:
+                        best_offer = tob.offer.price
+                        best_offer_lots = tob.offer.volume
+                        spread_pct = (
+                            (tob.offer.price - ob.price) / ob.price * 100
+                        ).quantize(Decimal("0.01"))
+                        total_lots = ob.volume + tob.offer.volume
+                        if total_lots > 0:
+                            bid_offer_imbalance = round(ob.volume / total_lots, 3)
                 else:
                     warnings.append(
                         f"{ticker}: No order book data — gap% not computed"
@@ -303,6 +364,12 @@ class PreOpenScreenUseCase:
                     accum_streak=accum_streak,
                     foreign_vwap=foreign_vwap,
                     fvwap_discount_pct=fvwap_discount_pct,
+                    iev_intensity=iev_intensity,
+                    unusual_volume=unusual_volume,
+                    best_offer=best_offer,
+                    best_offer_lots=best_offer_lots,
+                    spread_pct=spread_pct,
+                    bid_offer_imbalance=bid_offer_imbalance,
                 )
             )
 

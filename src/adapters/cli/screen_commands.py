@@ -451,10 +451,13 @@ def _display_results(
     )
 
     # Header — compact 1-row-per-ticker layout
+    show_spread = any(c.spread_pct is not None for c in sorted_candidates)
     strat_header = f"  {'STRAT':>5}" if strategy_signals else ""
-    sep_width = 90 + (8 if strategy_signals else 0)
+    sprd_header = f"  {'SPRD%':>6}" if show_spread else ""
+    sep_width = 90 + (8 if strategy_signals else 0) + (9 if show_spread else 0)
     header = (
-        f"{'VERDICT':<10} {'TICKER':<7} {'IEV':>7}  {'GAP%':>6}  "
+        f"{'VERDICT':<10} {'TICKER':<7} {'IEV':>7}  {'GAP%':>6}"
+        f"{sprd_header}  "
         f"{'ENTRY-RANGE':>16}  {'STOP%':>6}  {'RSI':>4}  {'SIGNAL'}"
         f"{strat_header}"
     )
@@ -474,6 +477,7 @@ def _display_results(
         verdict_str = typer.style(label, fg=color, bold=bold)
 
         gap = c.gap_label
+        sprd_col = f"  {c.spread_label:>6}" if show_spread else ""
         rng = c.entry_range_label
         stop_pct = c.risk_reward_label
         rsi_str = f"{float(c.rsi):.0f}" if c.rsi else "—"
@@ -487,7 +491,8 @@ def _display_results(
             strat_col = "  " + typer.style(f"{sym:>5}", fg=col, bold=(raw == "LOW_RISK"))
 
         typer.echo(
-            f"{verdict_str} {c.ticker:<7} {c.iev:>7,}  {gap:>6}  "
+            f"{verdict_str} {c.ticker:<7} {c.iev:>7,}  {gap:>6}"
+            f"{sprd_col}  "
             f"{rng:>16}  {stop_pct:>6}  {rsi_str:>4}  {signal}{strat_col}"
         )
 
