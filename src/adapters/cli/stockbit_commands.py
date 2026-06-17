@@ -349,6 +349,39 @@ def test(
     typer.echo("")
 
 
+@stockbit_app.command("browse")
+def browse(
+    url: Annotated[
+        Optional[str],
+        typer.Option("--url", "-u", help="Stockbit page to open"),
+    ] = None,
+    session: Annotated[
+        Optional[Path],
+        typer.Option("--session", help="Path to session file"),
+    ] = None,
+) -> None:
+    """
+    Open a headed browser with the saved session and keep it open for browsing.
+
+    Uses the persistent profile (.stockbit_profile/) if available. The browser
+    stays open until you press Ctrl+C.
+
+    Examples:
+        saham data stockbit browse
+        saham data stockbit browse --url https://stockbit.com/stocks/BBCA
+    """
+    _require_playwright_cli()
+    from src.infrastructure.browser.playwright_stockbit import browse_stockbit_session
+
+    resolved = session or DEFAULT_SESSION_FILE
+    target = url or "https://stockbit.com/stream"
+    try:
+        browse_stockbit_session(session_file=resolved, url=target)
+    except Exception as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+
 @stockbit_app.command("fetch-top5")
 def fetch_top5(
     top: Annotated[
