@@ -22,6 +22,7 @@ A **local-first, production-grade CLI application** for stock analysis focused o
 - **Backtesting** - Test strategies on historical data with detailed metrics
 - **Foreign Accumulation Screener** - Detect institutional accumulation across LQ45/IDX80
 - **Intraday Pre-Open Screener** - Pre-market movers + order book confirmation workflow
+- **Opening Session Learning Loop** - Automated snapshot→track→grade→tune cycle for opening scalping
 - **Swing Trade Workflow** - Unified screen → analyze → size → backtest → journal
 - **Market Regime Detection** - Deterministic IHSG regime context (BULLISH/SIDEWAYS/WEAK/RISK_OFF)
 - **Terminal Charts** - ASCII price/RSI/volume charts in-terminal
@@ -39,8 +40,10 @@ A **local-first, production-grade CLI application** for stock analysis focused o
 # 1. Start the day: Update market data for your universe (e.g., LQ45)
 saham data update --universe lq45
 
-# 2. Morning (08:50 WIB): Scan for pre-open movers
-saham trade intraday pre-open
+# 2. Morning (08:50 WIB): Pre-open screening + opening learning loop
+saham trade opening snapshot          # NCP-locked prediction at 08:57
+saham trade opening track             # 5-min orderbook tracking 09:00-09:30
+saham trade opening grade             # Accuracy report post-track
 
 # 3. Afternoon: Screen for swing trade candidates (foreign accumulation)
 saham trade swing screen --universe lq45 --multi
@@ -48,7 +51,10 @@ saham trade swing screen --universe lq45 --multi
 # 4. Deep Dive: Analyze a specific ticker (unified view: risk + flow + sentiment)
 saham trade swing analyze BBRI --capital 10000000
 
-# 5. Visual Check: View terminal chart
+# 5. Tune: Let AI recommend config improvements from today's accuracy
+saham trade opening tune
+
+# 6. Visual Check: View terminal chart
 saham analyze chart price BBRI --sma 20 --ema 50
 ```
 
@@ -60,11 +66,11 @@ saham analyze chart price BBRI --sma 20 --ema 50
 
 | Group | Purpose | Key Sub-commands |
 | :--- | :--- | :--- |
-| **`saham data`** | Data Ingestion | `update`, `broker`, `stockbit`, `universe` |
+| **`saham data`** | Data Ingestion | `update`, `status`, `broker`, `stockbit`, `universe` |
 | **`saham indicator`**| Technical Math | `compute`, `snapshot`, `create`, `list` |
 | **`saham analyze`** | Insights & Charts | `risk`, `sentiment`, `regime`, `chart`, `compare` |
 | **`saham strategy`** | Strategy Lifecycle| `init`, `validate`, `create`, `backtest` |
-| **`saham trade`** | Active Workflows | `swing`, `intraday` |
+| **`saham trade`** | Active Workflows | `swing`, `intraday`, `opening` |
 | **`saham skill`** | AI Documentation | `generate`, `check`, `index` |
 
 ---
@@ -561,6 +567,41 @@ saham trade intraday outcome BBCA --entry 9000 --exit 9500 --result target
 
 ---
 
+### `saham trade opening` - Opening Session Learning Loop
+
+Automated pre-open prediction → intraday tracking → accuracy grading → AI tuning loop.
+Designed for the opening auction window (08:45–09:30 WIB).
+
+```bash
+# Step 1: Capture NCP-locked predictions at 08:57
+saham trade opening snapshot
+
+# Step 2: Track orderbook every 5 minutes 09:00-09:30
+saham trade opening track
+
+# Step 3: Grade accuracy after track completes
+saham trade opening grade
+
+# Step 4: Generate AI tuning prompt
+saham trade opening prompt
+
+# Step 5: Tune thresholds via AI recommendations
+saham trade opening tune
+```
+
+| Command | Time | Purpose |
+|---------|------|---------|
+| `saham trade opening snapshot` | 08:57 | Pre-open screen → save predictions |
+| `saham trade opening track` | 09:00–09:30 | 5-min orderbook snapshots |
+| `saham trade opening grade` | 09:30+ | Compute accuracy: entry range hit, gap band, stop distance |
+| `saham trade opening prompt` | anytime | Generate AI prompt from session data |
+| `saham trade opening tune` | anytime | LLM-driven config recommendations |
+
+All data stored in `data/opening/YYYYMMDD/`. The learning loop runs daily and
+improves threshold calibration over time.
+
+---
+
 ### `saham trade swing` - Swing Trade Workflow
 
 Unified composite swing trade analysis combining accumulation, risk, sizing, backtest, sentiment, and market regime.
@@ -685,6 +726,19 @@ saham analyze chart volume BBCA --days 30
 
 ---
 
+### `saham data status` - Data Health Check
+
+Check provider health and database freshness in one command:
+
+```bash
+saham data status
+```
+
+Reports latest data dates, row counts across all tables, IDX/Yahoo/Stockbit
+provider status, and data staleness warnings.
+
+---
+
 ### `saham data stockbit` - Stockbit Session Management
 
 Manage Stockbit browser sessions for automated data fetching.
@@ -696,6 +750,8 @@ saham data stockbit status                   # Check session health
 saham data stockbit spy                      # Capture API traffic
 saham data stockbit spy --target orderbook --ticker BBRI
 saham data stockbit test                     # Smoke-test the adapter
+saham data stockbit fetch-top5 --top 5       # Top IEV movers + orderbooks
+saham data stockbit browse                   # Interactive browser session
 ```
 
 | Command | Purpose |
@@ -704,6 +760,8 @@ saham data stockbit test                     # Smoke-test the adapter
 | `saham data stockbit status` | Check session health |
 | `saham data stockbit spy` | Capture all API traffic to identify endpoints |
 | `saham data stockbit test` | Smoke-test live adapter with saved session |
+| `saham data stockbit fetch-top5` | Top IEV movers + live orderbook snapshots |
+| `saham data stockbit browse` | Open headed browser with saved session |
 
 ---
 
@@ -1202,7 +1260,7 @@ make format
 make clean
 ```
 
-**Project Stats:** 178 source files (~38k LOC), 98 test files (~26k LOC) | 1328 passing, 19 failing
+**Project Stats:** 180+ source files (~40k LOC), 98 test files (~26k LOC) | 1328+ passing, 19 failing
 
 ---
 
@@ -1216,10 +1274,11 @@ make clean
 
 ## Limitations
 
-- **Daily data only** - No intraday or real-time streaming
 - **IDX market focus** - Designed for Indonesia Stock Exchange
 - **Yahoo Finance / IDX source** - Data may be delayed; unofficial sources
 - **Internet required** for first fetch and sentiment (offline for cached analysis)
+- **Intraday data via yfinance 5-min candles** — opening session tracking uses
+  Yahoo Finance intraday data, not real-time IDX feeds
 
 ---
 

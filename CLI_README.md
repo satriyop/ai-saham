@@ -1945,7 +1945,118 @@ saham trade intraday outcome BBCA --entry 9000 --exit 9500 --result target
 
 ---
 
-## 17. Swing Trade Workflow - The `trade swing` Command
+## 17. Opening Session Learning Loop - The `trade opening` Command
+
+A daily learning loop for opening scalping: snapshot predictions at 08:57, track
+orderbook prices every 5 minutes from 09:00–09:30, grade accuracy, and tune
+thresholds via AI.
+
+### Why This Exists
+
+The pre-open screener (`trade intraday pre-open`) makes predictions about where
+stocks will open. The opening session loop closes the feedback cycle by
+measuring how accurate those predictions were and recommending config changes.
+
+### Step 1: Capture Pre-Open Snapshot
+
+```bash
+# Live at 08:57 WIB (auto-window)
+saham trade opening snapshot
+
+# Manual dry-run anytime
+saham trade opening snapshot --force --date 2026-06-17
+```
+
+Saves to `data/opening/YYYYMMDD/snapshot.json`:
+- IEV, IEP, gap%, entry range, ATR-based stop for each candidate
+- Market regime and NCP lock status
+- Pre-computed verdict and reason codes
+
+### Step 2: Track Every 5 Minutes
+
+```bash
+# Live loop 09:00–09:30 (auto-window)
+saham trade opening track
+
+# Manual dry-run with explicit tickers
+saham trade opening track --force BBCA BBRI BMRI
+```
+
+Saves to `data/opening/YYYYMMDD/track_HHMM.json`:
+- Best bid/offer price and volume each interval
+- Gap% relative to prev close over time
+- In-range / out-of-range status per ticker
+
+### Step 3: Grade Accuracy
+
+```bash
+saham trade opening grade
+```
+
+Produces `grade.json` with deterministic accuracy report:
+- Entry range hit-rate (% of tickers opening inside predicted range)
+- Gap band accuracy: was the ATR band correctly calibrated?
+- Stop distance safety: were stops wide enough?
+- Trend classification accuracy: BULLISH/NEUTRAL/BEARISH vs actual move
+- Overall grade: A/B/C/D/F with per-ticker breakdown
+
+### Step 4: Generate AI Prompt
+
+```bash
+# Save to file
+saham trade opening prompt
+
+# Print to stdout (pipe to pbcopy on macOS)
+saham trade opening prompt --print | pbcopy
+```
+
+Generates a structured AI prompt containing today's predictions, actual outcomes,
+and accuracy metrics — ready to paste into Claude, ChatGPT, or DeepSeek.
+
+### Step 5: Tune via AI
+
+```bash
+# Requires DEEPSEEK_API_KEY
+saham trade opening tune
+
+# With explicit API key
+saham trade opening tune --api-key sk-...
+```
+
+Calls DeepSeek with today's grade and the current config. Returns:
+- Recommended threshold changes (min_history_days, gap thresholds, RSI bands)
+- Per-ticker specific tuning suggestions
+- Updated YAML config snippet ready to apply
+
+### Data Structure
+
+```
+data/opening/
+└── 2026-06-17/
+    ├── snapshot.json     # 08:57 predictions
+    ├── track_0900.json   # 09:00 orderbook
+    ├── track_0905.json   # 09:05 orderbook
+    ├── ...
+    ├── track_0930.json   # 09:30 orderbook
+    ├── grade.json        # Accuracy report
+    ├── prompt.md         # AI prompt
+    ├── tune.json         # AI recommendations
+    └── tune.md           # Human-readable recommendations
+```
+
+### Command Summary
+
+| Command | Timing | Purpose |
+|---------|--------|---------|
+| `saham trade opening snapshot` | 08:57 | Capture predictions |
+| `saham trade opening track` | 09:00–09:30 | Track price convergence |
+| `saham trade opening grade` | 09:30+ | Compute accuracy |
+| `saham trade opening prompt` | anytime | Generate AI prompt |
+| `saham trade opening tune` | anytime | Recommend config changes |
+
+---
+
+## 18. Swing Trade Workflow - The `trade swing` Command
 
 Unified analysis combining accumulation, risk, sizing, backtest, and sentiment in one command.
 
@@ -2006,7 +2117,7 @@ saham trade swing size BBRI --capital 10000000 --risk-pct 2 --entry 4825
 
 ---
 
-## 18. Market Regime - The `analyze regime` Command
+## 19. Market Regime - The `analyze regime` Command
 
 Show deterministic IHSG market regime context for swing trading.
 
@@ -2027,7 +2138,7 @@ Computed from: benchmark SMA20/SMA50 position, breadth (% of universe above SMA2
 
 ---
 
-## 19. Terminal Charts - The `analyze chart` Command
+## 20. Terminal Charts - The `analyze chart` Command
 
 Plot ASCII charts in your terminal (requires `pip install plotext`).
 
@@ -2047,7 +2158,23 @@ saham analyze chart volume BBCA --days 30
 
 ---
 
-## 20. Stockbit Session Management - The `data stockbit` Command
+## 21. Data Health Check - The `data status` Command
+
+Quick health probe for all data providers and tables:
+
+```bash
+saham data status
+```
+
+Reports:
+- Latest data dates for IDX, Yahoo, broker, Stockbit
+- Row counts across all database tables
+- Provider health checks (IDX, Yahoo, Stockbit sessions)
+- Data staleness warnings (e.g., "last IDX update: 5 days ago")
+
+---
+
+## 22. Stockbit Session Management - The `data stockbit` Command
 
 Manage Stockbit browser sessions for automated data fetching.
 
@@ -2065,6 +2192,12 @@ saham data stockbit spy --target orderbook --ticker BBRI
 # Smoke-test the adapter
 saham data stockbit test
 saham data stockbit test --no-headless
+
+# Fetch top IEV movers + live orderbook snapshots
+saham data stockbit fetch-top5 --top 5
+
+# Open interactive headed browser with saved session
+saham data stockbit browse
 ```
 
 | Command | Purpose |
@@ -2073,10 +2206,12 @@ saham data stockbit test --no-headless
 | `saham data stockbit status` | Check session health |
 | `saham data stockbit spy` | Capture API traffic for calibration |
 | `saham data stockbit test` | Smoke-test live adapter |
+| `saham data stockbit fetch-top5` | Top IEV movers + orderbook snapshots |
+| `saham data stockbit browse` | Interactive headed browser session |
 
 ---
 
-## 21. Side-by-Side Comparison - The `analyze compare` Command
+## 22. Side-by-Side Comparison - The `analyze compare` Command
 
 Quickly compare risk levels across multiple tickers:
 
@@ -2087,7 +2222,7 @@ saham analyze compare BBCA TLKM --profile conservative
 
 ---
 
-## 22. Complete Workflow Examples
+## 23. Complete Workflow Examples
 
 ### Conservative Investor Workflow
 
@@ -2260,7 +2395,7 @@ saham strategy backtest BBCA --strategy my_flow_strategy
 
 ---
 
-## 23. Command Reference (Quick Lookup)
+## 24. Command Reference (Quick Lookup)
 
 | Command | Purpose | Key Options |
 |---------|---------|-------------|
