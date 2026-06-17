@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
 if TYPE_CHECKING:
+    from src.domain.ports.order_book_provider import OrderBookProvider
     from src.domain.ports.running_trade_provider import RunningTradeProvider
 
 IDX_TIMEZONE = ZoneInfo("Asia/Jakarta")
@@ -38,6 +39,7 @@ class OpeningTrackRequest:
     force: bool = False
     broker_confirm: bool = False
     institutional_broker_codes: frozenset[str] = frozenset()
+    order_book: bool = False    # embed full order book depth + live foreign net per snapshot
 
 
 class OpeningTrackUseCase:
@@ -49,9 +51,15 @@ class OpeningTrackUseCase:
                                  Only used when request.broker_confirm is True.
     """
 
-    def __init__(self, browser, running_trade_provider: "RunningTradeProvider | None" = None) -> None:
+    def __init__(
+        self,
+        browser,
+        running_trade_provider: "RunningTradeProvider | None" = None,
+        order_book_provider: "OrderBookProvider | None" = None,
+    ) -> None:
         self._browser = browser
         self._running_trade_provider = running_trade_provider
+        self._order_book_provider = order_book_provider
 
     def execute(self, request: OpeningTrackRequest) -> list[dict]:
         now = datetime.now(IDX_TIMEZONE)
@@ -135,6 +143,14 @@ class OpeningTrackUseCase:
                     entry["broker_signal"] = signal.to_dict() if signal else None
                 except Exception:
                     entry["broker_signal"] = None
+
+            # Optional order book depth — bid pressure + live foreign net
+            if request.order_book and self._order_book_provider is not None and not entry.get("error"):
+                try:
+                    ob = self._order_book_provider.fetch_snapshot(ticker)
+                    entry["order_book"] = ob.to_dict() if ob else None
+                except Exception:
+                    entry["order_book"] = None
 
             ticker_data[ticker] = entry if entry else None
 

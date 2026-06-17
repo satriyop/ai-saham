@@ -146,6 +146,23 @@ def compute_grade(run_date: date | None = None) -> dict:
             if sides:
                 broker_dominant_side = max(set(sides), key=sides.count)
 
+        # Order book depth signal — read from track files if --order-book was used
+        ob_series: list[dict] = []
+        for track in tracks:
+            tdata = track.get("tickers", {}).get(ticker)
+            if isinstance(tdata, dict) and isinstance(tdata.get("order_book"), dict):
+                ob_series.append(tdata["order_book"])
+
+        ob_bid_pressure_T0 = ob_series[0].get("bid_pressure_ratio") if ob_series else None
+        ob_bid_pressure_T5 = ob_series[1].get("bid_pressure_ratio") if len(ob_series) > 1 else None
+        ob_bid_momentum = (
+            round(ob_bid_pressure_T5 - ob_bid_pressure_T0, 4)
+            if ob_bid_pressure_T0 is not None and ob_bid_pressure_T5 is not None
+            else None
+        )
+        ob_fnet_T0 = ob_series[0].get("fnet_intraday") if ob_series else None
+        ob_fnet_latest = ob_series[-1].get("fnet_intraday") if ob_series else None
+
         per_ticker.append({
             "ticker": ticker,
             "verdict": verdict,
@@ -170,6 +187,12 @@ def compute_grade(run_date: date | None = None) -> dict:
             # broker confirmation (present only when --broker-confirm was used during track)
             "institutional_absorption_rate": institutional_absorption_rate,
             "broker_dominant_side": broker_dominant_side,
+            # order book depth (present only when --order-book was used during track)
+            "ob_bid_pressure_T0": ob_bid_pressure_T0,
+            "ob_bid_pressure_T5": ob_bid_pressure_T5,
+            "ob_bid_momentum": ob_bid_momentum,        # T5 - T0 (sustained buying pressure?)
+            "ob_fnet_T0": ob_fnet_T0,                  # live foreign net at 09:00
+            "ob_fnet_latest": ob_fnet_latest,           # live foreign net at latest snapshot
             "price_series": price_series,
         })
 
