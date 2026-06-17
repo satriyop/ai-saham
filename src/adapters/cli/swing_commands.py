@@ -381,7 +381,7 @@ def _evaluate_foreign_bounce(
             required=f">= {_SC.gate_min_score:.0f}",
         ),
         PresetGate(
-            label="vwap_disc_pct",
+            label="fvwap%",
             passed=accum.vwap_discount_pct is not None and accum.vwap_discount_pct >= _SC.gate_min_vwap_discount_pct,
             actual=_fmt_optional_float(accum.vwap_discount_pct, "%"),
             required=f">= +{_SC.gate_min_vwap_discount_pct:.0f}%",
@@ -1337,9 +1337,14 @@ def _print_swing_output(
             f"{accum.avg_flow_ratio:+.1f}%"
             if accum.avg_flow_ratio is not None else "—"
         )
-        vwap_str = (
+        fvwap_str = (
             f"{accum.vwap_discount_pct:+.1f}%"
             if accum.vwap_discount_pct is not None else "—"
+        )
+        vwap_pct_str = (
+            typer.style(f"{accum.vwap_pct:+.1f}%", fg=typer.colors.GREEN)
+            if accum.vwap_pct is not None and accum.vwap_pct < 0
+            else (f"{accum.vwap_pct:+.1f}%" if accum.vwap_pct is not None else "—")
         )
         bb_str = _style_bb(accum.bb_width_pctile) if accum.bb_width_pctile is not None else "—"
         net_str = f"{accum.net_buy_days}/{accum.total_days}"
@@ -1351,7 +1356,8 @@ def _print_swing_output(
             f"FLOW%  {flow_str}"
         )
         typer.echo(
-            f"  VWAP   {vwap_str}    "
+            f"  F_VWAP%  {fvwap_str}    "
+            f"VWAP%  {vwap_pct_str}    "
             f"BB%ILE  {bb_str}    "
             f"TREND  {_style_trend(accum.trend)}"
         )

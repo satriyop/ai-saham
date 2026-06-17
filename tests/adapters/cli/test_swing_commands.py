@@ -153,7 +153,7 @@ def test_failed_gates_summary_includes_all_failed_reasons():
     summary = _format_failed_gates_summary(evaluation)
 
     assert "score: 26.8" in summary
-    assert "vwap_disc_pct: -0.7%" in summary
+    assert "fvwap%: -0.7%" in summary
     assert "trend: DOWN" in summary
     assert "flow_pct: -3.0%" in summary
 

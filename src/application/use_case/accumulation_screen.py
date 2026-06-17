@@ -136,6 +136,7 @@ class AccumulationCandidate:
     # BCI — Broker Concentration Index
     bci_label: str | None = None          # "CLUSTER" | "STABLE" | "RETAIL-LED" | None
     bci_tier1_count: int = 0              # distinct Tier 1 foreign desks in net-buyers
+    vwap_pct: float | None = None         # (price - VWAP20) / VWAP20 * 100; negative = below VWAP
     # Phase 2.2 — resistance-proximity gate
     ma200: Decimal | None = None          # 200-day SMA of close prices
     week52_high: Decimal | None = None    # 52-week (252-day) highest high
@@ -166,6 +167,7 @@ class AccumulationCandidate:
             "institutional_flag": self.institutional_flag,
             "bci_label": self.bci_label,
             "bci_tier1_count": self.bci_tier1_count,
+            "vwap_pct": round(self.vwap_pct, 2) if self.vwap_pct is not None else None,
             "avg_flow_ratio": round(self.avg_flow_ratio, 2) if self.avg_flow_ratio is not None else None,
             "score_breakdown": self.score_breakdown,
             "bb_width": round(self.bb_width, 2) if self.bb_width is not None else None,
@@ -435,13 +437,31 @@ class AccumulationScreenUseCase:
             candles, current_price
         )
 
-        # VWAP discount %
+        # Foreign VWAP discount % — how far foreigners' avg buy is above current price
         vwap_discount_pct: float | None = None
         if foreign_vwap is not None and current_price > 0:
             try:
                 vwap_discount_pct = float(
                     (foreign_vwap - current_price) / current_price * 100
                 )
+            except (InvalidOperation, ZeroDivisionError):
+                pass
+
+        # Market VWAP % — how far current price is from 20-day all-participant VWAP
+        # Negative = price below VWAP (constructive; entering below market average cost basis)
+        vwap_pct: float | None = None
+        if candles:
+            try:
+                window_20 = candles[-20:]
+                total_vol = sum(c.volume for c in window_20)
+                if total_vol > 0:
+                    total_tpv = sum(
+                        (c.high + c.low + c.close) / Decimal("3") * c.volume
+                        for c in window_20
+                    )
+                    market_vwap = total_tpv / total_vol
+                    if market_vwap > 0:
+                        vwap_pct = float((current_price - market_vwap) / market_vwap * 100)
             except (InvalidOperation, ZeroDivisionError):
                 pass
 
@@ -504,6 +524,7 @@ class AccumulationScreenUseCase:
             institutional_flag=institutional_flag,
             bci_label=bci_label,
             bci_tier1_count=bci_tier1_count,
+            vwap_pct=vwap_pct,
             avg_flow_ratio=avg_flow_ratio,
             bb_width=bb_width,
             bb_width_pctile=bb_width_pctile,

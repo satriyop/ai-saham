@@ -383,7 +383,7 @@ def _display_results(
     sep_w = _SEP_WIDTH + (8 if strategy_signals is not None else 0)
     header = (
         f"{'#':>3} {'TICKER':<7} {'SCORE':>6} {'STREAK':>7} {'NET_DAYS':>9}"
-        f" {'NET_VALUE':>12} {'FLOW%':>6} {'VWAP_DISC':>10} {'RSI':>6} {'BB%ILE':>7} {'TREND':>5}"
+        f" {'NET_VALUE':>12} {'FLOW%':>6} {'F_VWAP%':>8} {'RSI':>6} {'BB%ILE':>7} {'TREND':>5}"
         f"{strat_hdr}"
     )
     typer.echo(header)
@@ -391,7 +391,7 @@ def _display_results(
 
     for i, c in enumerate(candidates, 1):
         net_days_str = f"{c.net_buy_days}/{c.total_days}"
-        vwap_str = f"{c.vwap_discount_pct:+.1f}%" if c.vwap_discount_pct is not None else "    —  "
+        vwap_str = f"{c.vwap_discount_pct:+.1f}%" if c.vwap_discount_pct is not None else "   —  "
         rsi_str = f"{c.rsi:.1f}" if c.rsi is not None else "  —"
         streak_str = f"{c.consecutive_streak}s"
         flow_str = f"{c.avg_flow_ratio:+.1f}" if c.avg_flow_ratio is not None else "   —"
@@ -423,7 +423,7 @@ def _display_results(
             f"{i:>3} {c.ticker:<7} "
             + typer.style(f"{c.score:>6.1f}", fg=score_color)
             + f" {streak_str:>7} {net_days_str:>9} {_format_value(c.total_net_value):>12}"
-            + f" {flow_str:>6} {vwap_str:>10} {rsi_str:>6} {bb_str}  {c.trend:>5}"
+            + f" {flow_str:>6} {vwap_str:>8} {rsi_str:>6} {bb_str}  {c.trend:>5}"
             + strat_col
         )
         typer.echo(line)
@@ -460,7 +460,7 @@ def _display_results(
         )
     typer.echo("")
     typer.echo("FLOW%: avg net foreign % of total daily turnover (positive = accumulating)")
-    typer.echo("VWAP_DISC: positive = price < foreign avg buy (foreigners underwater)")
+    typer.echo("F_VWAP%: positive = price < foreign avg buy cost basis (foreigners underwater)")
     typer.echo("BB%ILE: BB Width pctile vs last 60d — green(≤20%) = squeeze (coiled spring)")
     typer.echo("Score 0–120 | consistency 40 | streak 30 | VWAP 20 | RSI 10 | flow 10 | BB 10 | BCI 0/5/15")
     if strategy_signals is not None:
@@ -656,8 +656,8 @@ def _print_column_guide() -> None:
     typer.echo("")
     typer.echo("  Scoring: contributes up to 10 pts, saturates at 20% flow ratio.")
 
-    # ── VWAP_DISC ──
-    _h("VWAP_DISC  — Foreigners' Profit / Loss on Position")
+    # ── F_VWAP% ──
+    _h("F_VWAP%  — Foreigners' Profit / Loss on Position")
     typer.echo("  Compares foreigners' average buy price (VWAP) to today's price.")
     typer.echo("")
     typer.echo("  POSITIVE (+8.4%) = foreigners bought HIGHER than today's price.")
@@ -742,7 +742,7 @@ def _print_column_guide() -> None:
     typer.echo("  In priority order:")
     typer.echo("    1. PATTERN = sustained or coiled spring  (multi-window confirms)")
     typer.echo("    2. STREAK ≥ 5d                          (systematic, not opportunistic)")
-    typer.echo("    3. VWAP_DISC > 0%                       (foreigners defending position)")
+    typer.echo("    3. F_VWAP% > 0%                         (foreigners defending position)")
     typer.echo("    4. BB%ILE ≤ 20% (green)                 (compressed, spring loaded)")
     typer.echo("    5. RSI between 30–50                    (room to run)")
     typer.echo("    6. FLOW% > 15%                          (foreigners dominating volume)")
