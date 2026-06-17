@@ -48,12 +48,32 @@ from src.infrastructure.persistence.sqlite_broker_repository import (
     SQLiteBrokerRepository,
 )
 from src.infrastructure.config.user_config import get_swing_default
+from src.infrastructure.browser.stockbit_corp_action import StockbitCorporateActionRepository
+from src.infrastructure.browser.stockbit_seasonality import StockbitSeasonalityProvider
 from src.infrastructure.config.swing_config import load_swing_config as _load_swing_screener_config_typed
 
 _SC = _load_swing_screener_config_typed()
 from src.infrastructure.persistence.sqlite_market_repository import (
     SQLiteMarketRepository,
 )
+
+def _make_stockbit_providers(db_path: Path) -> "tuple[StockbitCorporateActionRepository | None, StockbitSeasonalityProvider | None]":
+    """Return (corp_action_repo, seasonality_provider) sharing one Stockbit session.
+
+    Both return None when no authenticated session exists — screener degrades gracefully.
+    Single provider instance ensures the token is fetched once and cached for 30 minutes.
+    """
+    try:
+        from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
+        provider = StockbitPlaywrightBrokerProvider()
+        if not provider.is_authenticated():
+            return None, None
+        corp_repo = StockbitCorporateActionRepository(broker_provider=provider, db_path=db_path)
+        season_prov = StockbitSeasonalityProvider(broker_provider=provider)
+        return corp_repo, season_prov
+    except Exception:
+        return None, None
+
 
 accumulation_app = typer.Typer(
     name="accumulation",
@@ -436,6 +456,16 @@ def _display_results(
                 f" flow={bd.get('flow', 0):.1f} bb={bd.get('bb', 0):.1f}"
                 f" inst={bd.get('inst', 0):.1f}]"
             )
+
+        if c.seasonal_edge is not None:
+            se = c.seasonal_edge
+            se_color = typer.colors.GREEN if se.is_tailwind else (typer.colors.RED if se.is_headwind else typer.colors.WHITE)
+            typer.echo(typer.style(f"    SEASONAL {se.label} (score {se.score:+.2f})", fg=se_color))
+
+        if c.dividend_risk:
+            typer.echo(typer.style("    ⚠ DIVIDEND RISK", fg=typer.colors.YELLOW))
+        if c.rights_issue_risk:
+            typer.echo(typer.style("    ⚠ RIGHTS ISSUE", fg=typer.colors.YELLOW))
 
         if granular and c.top_brokers:
             broker_line = "    " + "  ".join(c.top_brokers[:5])
@@ -912,9 +942,12 @@ def accumulation_run(
 
     broker_repo = SQLiteBrokerRepository(resolved_db)
     market_repo = SQLiteMarketRepository(db_path=resolved_db)
+    _corp_repo, _season_prov = _make_stockbit_providers(resolved_db)
     use_case = AccumulationScreenUseCase(
         broker_repository=broker_repo,
         market_repository=market_repo,
+        corporate_action_repo=_corp_repo,
+        seasonality_provider=_season_prov,
     )
 
     base_request = AccumulationScreenRequest(
@@ -1606,11 +1639,14 @@ def accumulation_log(
 
     broker_repo = SQLiteBrokerRepository(resolved_db)
     market_repo = SQLiteMarketRepository(db_path=resolved_db)
+    _corp_repo, _season_prov = _make_stockbit_providers(resolved_db)
 
     # Run single-ticker screen to get candidate
     use_case = AccumulationScreenUseCase(
         broker_repository=broker_repo,
         market_repository=market_repo,
+        corporate_action_repo=_corp_repo,
+        seasonality_provider=_season_prov,
     )
     response = use_case.execute(AccumulationScreenRequest(
         tickers=[ticker_upper],

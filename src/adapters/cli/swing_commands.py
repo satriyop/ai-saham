@@ -74,6 +74,8 @@ from src.infrastructure.config.user_config import get_swing_default
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 from src.infrastructure.sentiment import SentimentFactory
+from src.infrastructure.browser.stockbit_corp_action import StockbitCorporateActionRepository
+from src.infrastructure.browser.stockbit_seasonality import StockbitSeasonalityProvider
 
 DEFAULT_DB_PATH = Path("data.db")
 _W = 70  # display width
@@ -115,6 +117,20 @@ _SC = _load_swing_screener_config_typed()
 
 SMART_MONEY_BROKERS = set(_SC.smart_money_brokers)
 NOISE_BROKERS       = set(_SC.noise_brokers)
+
+
+def _make_stockbit_providers(db_path: Path) -> "tuple[StockbitCorporateActionRepository | None, StockbitSeasonalityProvider | None]":
+    """Return (corp_action_repo, seasonality_provider) sharing one Stockbit session."""
+    try:
+        from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
+        provider = StockbitPlaywrightBrokerProvider()
+        if not provider.is_authenticated():
+            return None, None
+        corp_repo = StockbitCorporateActionRepository(broker_provider=provider, db_path=db_path)
+        season_prov = StockbitSeasonalityProvider(broker_provider=provider)
+        return corp_repo, season_prov
+    except Exception:
+        return None, None
 BROKER_WEIGHTS: dict[str, Decimal] = {
     **{code: _SC.smart_weight for code in SMART_MONEY_BROKERS},
     **{code: _SC.noise_weight for code in NOISE_BROKERS},
@@ -1369,6 +1385,21 @@ def _print_swing_output(
                 f" flow={bd.get('flow',0):.1f} bb={bd.get('bb',0):.1f}]",
                 fg=typer.colors.BRIGHT_BLACK,
             ))
+        # Corp action risk flags
+        if accum.dividend_risk:
+            typer.echo(typer.style("  ⚠ DIVIDEND RISK — ex-date within hold window", fg=typer.colors.YELLOW))
+        if accum.rights_issue_risk:
+            typer.echo(typer.style("  ⚠ RIGHTS ISSUE — dilution risk within hold window", fg=typer.colors.YELLOW))
+        for rups_detail in accum.upcoming_rups:
+            typer.echo(typer.style(f"  ★ RUPS upcoming — {rups_detail}", fg=typer.colors.CYAN))
+        # Seasonality signal
+        if accum.seasonal_edge is not None:
+            se = accum.seasonal_edge
+            se_color = typer.colors.GREEN if se.is_tailwind else (typer.colors.RED if se.is_headwind else typer.colors.WHITE)
+            typer.echo(typer.style(
+                f"  SEASONAL  {se.label}  (score {se.score:+.2f})",
+                fg=se_color,
+            ))
     else:
         _section_header(f"ACCUMULATION ({window} sessions)")
         typer.echo(typer.style(
@@ -1953,9 +1984,12 @@ def swing(
     # ── Accumulation ─────────────────────────────────────────────────────────
     accum_candidate: AccumulationCandidate | None = None
     try:
+        _corp_repo, _season_prov = _make_stockbit_providers(resolved_db)
         accum_uc = AccumulationScreenUseCase(
             broker_repository=broker_repo,
             market_repository=market_repo,
+            corporate_action_repo=_corp_repo,
+            seasonality_provider=_season_prov,
         )
         accum_resp = accum_uc.execute(AccumulationScreenRequest(
             tickers=[ticker_upper],
@@ -2123,6 +2157,17 @@ def swing(
                 "flow_pct": accum_candidate.avg_flow_ratio if accum_candidate else None,
                 "vwap_disc_pct": accum_candidate.vwap_discount_pct if accum_candidate else None,
                 "bb_width_pctile": accum_candidate.bb_width_pctile if accum_candidate else None,
+                "dividend_risk": accum_candidate.dividend_risk if accum_candidate else False,
+                "rights_issue_risk": accum_candidate.rights_issue_risk if accum_candidate else False,
+                "upcoming_rups": accum_candidate.upcoming_rups if accum_candidate else [],
+                "seasonal_score": (
+                    accum_candidate.seasonal_edge.score
+                    if accum_candidate and accum_candidate.seasonal_edge else None
+                ),
+                "seasonal_label": (
+                    accum_candidate.seasonal_edge.label
+                    if accum_candidate and accum_candidate.seasonal_edge else None
+                ),
             },
             "preset": {
                 "name": preset_eval.name if preset_eval else None,

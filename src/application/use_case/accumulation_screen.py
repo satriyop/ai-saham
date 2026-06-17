@@ -22,10 +22,15 @@ import math
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal, InvalidOperation
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.domain.value_objects.seasonal_edge import SeasonalEdge
 
 from src.application.ports.corporate_action_repository import CorporateActionRepository
 from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.market_data_repository import MarketDataRepository
+from src.domain.ports.seasonality_provider import SeasonalityProvider
 
 SHARES_PER_LOT = 100
 
@@ -95,8 +100,8 @@ class AccumulationScreenRequest:
     resistance_headroom_min_pct: float = 5.0  # % headroom required to keep ENTER verdict
     # Phase 2.3 — regime-adaptive TP/SL
     regime: str | None = None      # BULLISH / SIDEWAYS / WEAK / RISK_OFF
-    # Phase 3.1 — dividend ex-date warning
-    ex_date_warning_days: int = 10  # flag DIVIDEND_RISK if ex-date within this many days
+    # Phase 3.1 — corporate action risk window
+    ex_date_warning_days: int = 10  # flag risk if ex/cum/event date within this many days
     # Phase 3.2 — sector breadth confirmation
     sector_breadth_enabled: bool = True
     sector_breadth_threshold: float = 0.60   # min fraction of peers with net_buy_ratio > 0
@@ -142,8 +147,12 @@ class AccumulationCandidate:
     week52_high: Decimal | None = None    # 52-week (252-day) highest high
     nearest_resistance_pct: float | None = None  # % distance to nearest resistance above price
     resistance_flag: bool = False         # True when nearest resistance < headroom_min_pct
-    # Phase 3.1 — dividend ex-date warning
+    # Phase 3.1 — corporate action risk flags (sourced from Stockbit live calendar)
     dividend_risk: bool = False           # True when ex-date falls within hold window
+    rights_issue_risk: bool = False       # True when rights issue in hold window (dilution risk)
+    upcoming_rups: list[str] = field(default_factory=list)  # RUPS event detail strings
+    # Phase 3.3 — seasonality signal (sourced from Stockbit 5-year monthly stats)
+    seasonal_edge: "SeasonalEdge | None" = None   # current-month statistical edge
     # Phase 3.2 — sector breadth confirmation
     sector_breadth_pct: float | None = None  # % of group peers with positive net_buy_ratio
     sector_breadth_bonus: float = 0.0        # bonus pts applied (0 if threshold not met)
@@ -172,6 +181,11 @@ class AccumulationCandidate:
             "score_breakdown": self.score_breakdown,
             "bb_width": round(self.bb_width, 2) if self.bb_width is not None else None,
             "bb_width_pctile": round(self.bb_width_pctile, 3) if self.bb_width_pctile is not None else None,
+            "dividend_risk": self.dividend_risk,
+            "rights_issue_risk": self.rights_issue_risk,
+            "upcoming_rups": self.upcoming_rups,
+            "seasonal_score": round(self.seasonal_edge.score, 2) if self.seasonal_edge else None,
+            "seasonal_label": self.seasonal_edge.label if self.seasonal_edge else None,
         }
 
 
@@ -274,11 +288,13 @@ class AccumulationScreenUseCase:
         broker_repository: BrokerDataRepository,
         market_repository: MarketDataRepository,
         corporate_action_repo: "CorporateActionRepository | None" = None,
+        seasonality_provider: "SeasonalityProvider | None" = None,
         idx_groups: "dict[str, list[str]] | None" = None,
     ) -> None:
         self._broker_repo = broker_repository
         self._market_repo = market_repository
         self._corp_action_repo = corporate_action_repo
+        self._seasonality_provider = seasonality_provider
         # idx_groups: {group_name: [ticker, ...]} from config/idx_groups.yaml
         # Build a reverse map: ticker → group_name for fast lookup
         self._ticker_to_group: dict[str, str] = {}
@@ -323,21 +339,38 @@ class AccumulationScreenUseCase:
             ):
                 result.resistance_flag = True
 
-            # Phase 3.1: dividend ex-date warning
+            # Phase 3.1: corporate action risk flags (dividend, rights issue, RUPS)
             if self._corp_action_repo is not None:
                 from datetime import timedelta
-                ex_dates = self._corp_action_repo.get_upcoming_ex_dates(
+                events = self._corp_action_repo.get_upcoming_events(
                     ticker=result.ticker,
                     from_date=today,
                     to_date=today + timedelta(days=request.ex_date_warning_days),
                 )
-                if ex_dates:
-                    result.dividend_risk = True
+                for event in events:
+                    if event.is_dividend:
+                        result.dividend_risk = True
+                    elif event.is_rights_issue:
+                        result.rights_issue_risk = True
+                    elif event.is_rups:
+                        result.upcoming_rups.append(event.detail or "RUPS")
+
+            # Phase 3.3: seasonality signal
+            if self._seasonality_provider is not None:
+                result.seasonal_edge = self._seasonality_provider.get_seasonal_edge(
+                    ticker=result.ticker,
+                    year=today.year,
+                    month=today.month,
+                )
 
             if result.score >= request.min_score:
                 candidates.append(result)
 
-        candidates.sort(key=lambda c: c.score, reverse=True)
+        # Primary sort: composite score; tiebreaker: seasonal_score (additive, not a veto)
+        candidates.sort(
+            key=lambda c: (c.score, c.seasonal_edge.score if c.seasonal_edge else 0.0),
+            reverse=True,
+        )
 
         # Phase 3.2: sector breadth post-processing pass
         if request.sector_breadth_enabled and self._ticker_to_group:

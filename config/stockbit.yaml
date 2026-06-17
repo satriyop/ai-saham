@@ -115,6 +115,27 @@ endpoints:
     # buy_value, sell_value, net_value, avg_buy_price, avg_sell_price, avg_price,
     # buy_pct, sell_pct → broker_daily_flows table (source="stockbit")
 
+  corp_action:
+    url: "https://exodus.stockbit.com/corpaction/{ticker}?limit=50"
+    trigger_page: "https://stockbit.com/stocks/{ticker}"
+    # Returns: upcoming and recent corporate actions for one ticker.
+    # Response shape (exact field names to confirm via saham stockbit spy --target stock-profile):
+    #   data[].action_type / type       → action category string (e.g. "dividend", "rightissue")
+    #   data[].ex_date / exDate         → ex-date (YYYY-MM-DD or DD/MM/YYYY)
+    #   data[].cum_date / cumDate       → cum-date
+    #   data[].record_date / recordDate → recording date
+    #   data[].payment_date             → payment / distribution date
+    #   data[].announcement_date        → announcement date
+    #   data[].dividend_amount / amount → cash per share (dividend)
+    #   data[].ratio / split_ratio      → ratio (split / rights)
+    #   data[].subscription_price       → HMETD subscription price (rights issue)
+    #   data[].agenda / rups_agenda     → RUPS meeting agenda text
+    #   data[].status                   → "announced" | "completed" | "cancelled"
+    #
+    # Extracted and stored: event_type, ex_date, cum_date, record_date, payment_date,
+    # announcement_date, detail → corp_action_cache table (SQLite daily cache, TTL = calendar day)
+    # Used for: dividend_risk, rights_issue_risk, upcoming_rups flags on AccumulationCandidate
+
 # ── Broker codes ───────────────────────────────────────────────────────────
 
 broker_codes:

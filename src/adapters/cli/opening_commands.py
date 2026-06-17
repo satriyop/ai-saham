@@ -1,0 +1,432 @@
+"""
+CLI commands for the opening session learning loop.
+
+Commands (all under `saham trade opening`):
+  snapshot  — 08:57 WIB: NCP-locked pre-open screener capture
+  track     — 09:00–09:30 WIB: 5-min orderbook loop for all screened tickers
+  grade     — 09:35+ WIB: deterministic accuracy report (no network)
+  tune      — 09:40+ WIB: DeepSeek AI config recommendations
+  prompt    — on-demand: copy-paste AI prompt for any AI assistant
+
+All commands accept --date YYYY-MM-DD for retrospective runs
+and --force to bypass IDX trading-hour guards.
+
+Layer: Adapter
+"""
+
+import json
+import os
+from datetime import date, datetime
+from pathlib import Path
+from typing import Annotated, Optional
+from zoneinfo import ZoneInfo
+
+import typer
+
+IDX_TIMEZONE = ZoneInfo("Asia/Jakarta")
+OPENING_DATA_DIR = Path("data/opening")
+DEFAULT_DB_PATH = Path("data.db")
+DEFAULT_SESSION_FILE = Path("stockbit_session.json")
+DEFAULT_PRE_OPEN_CONFIG = Path("config/pre_open_screener.yaml")
+
+opening_app = typer.Typer(
+    name="opening",
+    help="Opening session learning loop — capture, track, grade, tune.",
+    no_args_is_help=True,
+)
+
+
+def _today_dir(run_date: date | None = None) -> Path:
+    d = run_date or datetime.now(IDX_TIMEZONE).date()
+    return OPENING_DATA_DIR / d.strftime("%Y%m%d")
+
+
+def _parse_date(s: str | None) -> date | None:
+    if not s:
+        return None
+    try:
+        return date.fromisoformat(s)
+    except ValueError:
+        typer.echo(f"Invalid date format: {s} (expected YYYY-MM-DD)", err=True)
+        raise typer.Exit(1)
+
+
+# ── snapshot ──────────────────────────────────────────────────────────────────
+
+@opening_app.command("snapshot")
+def snapshot(
+    force: Annotated[bool, typer.Option("--force", help="Run outside 08:55–09:00 WIB window")] = False,
+    date_str: Annotated[Optional[str], typer.Option("--date", help="Date YYYY-MM-DD")] = None,
+    db_path: Annotated[Optional[Path], typer.Option("--db")] = None,
+    config_path: Annotated[Optional[Path], typer.Option("--config", "-c")] = None,
+    headless: Annotated[bool, typer.Option("--headless/--no-headless")] = True,
+) -> None:
+    """
+    Capture NCP-locked pre-open screener signals at 08:57 WIB.
+
+    Runs the full screener pipeline and saves all prediction signals to
+    data/opening/YYYYMMDD/snapshot.json for later accuracy grading.
+
+    Also writes the standard .last-session.json sidecar so confirm-open still works.
+
+    Examples:
+        saham trade opening snapshot               # live at 08:57 WIB
+        saham trade opening snapshot --force       # manual dry-run anytime
+        saham trade opening snapshot --date 2026-06-18 --force
+    """
+    run_date = _parse_date(date_str)
+    resolved_db = db_path or DEFAULT_DB_PATH
+    resolved_config = config_path or DEFAULT_PRE_OPEN_CONFIG
+
+    now = datetime.now(IDX_TIMEZONE)
+    hour, minute = now.hour, now.minute
+    in_window = (hour == 8 and minute >= 55) or (hour == 9 and minute == 0)
+
+    if not force and not in_window:
+        typer.echo(
+            f"Not in NCP window (08:55–09:00 WIB). Current: {now.strftime('%H:%M')} WIB.\n"
+            "Use --force to run outside the window.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    try:
+        import yaml
+        from src.adapters.cli.screen_commands import (
+            _load_config,
+            _playwright_available,
+            _write_sidecar,
+        )
+        from src.application.services.bootstrap import create_indicator_registry
+        from src.application.use_case.opening_snapshot import OpeningSnapshotUseCase, OpeningSnapshotRequest
+        from src.infrastructure.browser.playwright_stockbit import PlaywrightStockbitProvider
+        from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
+        from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
+        from src.infrastructure.persistence.sqlite_iev_repository import SQLiteIEVRepository
+    except ImportError as e:
+        typer.echo(f"Import error: {e}", err=True)
+        raise typer.Exit(1)
+
+    if not _playwright_available() or not DEFAULT_SESSION_FILE.exists():
+        typer.echo("No Playwright session. Run: saham stockbit login", err=True)
+        raise typer.Exit(1)
+
+    config = _load_config(resolved_config, {})
+    repository = SQLiteMarketRepository(db_path=resolved_db)
+    broker_repo = SQLiteBrokerRepository(resolved_db)
+    registry = create_indicator_registry(broker_repository=broker_repo, market_repository=repository)
+    browser = PlaywrightStockbitProvider(session_file=DEFAULT_SESSION_FILE, headless=headless)
+
+    # Load today's NCP-locked IEP values for enrichment
+    iev_repo = SQLiteIEVRepository(resolved_db)
+    today_date = run_date or now.date()
+    iep_lookup: dict[str, int] = {}
+    try:
+        ncp_snaps = iev_repo.get_ncp_snapshot(snapshot_date=today_date)
+        iep_lookup = {s.ticker: s.iep for s in ncp_snaps if s.iep}
+    except Exception:
+        pass
+
+    use_case = OpeningSnapshotUseCase(
+        browser=browser,
+        repository=repository,
+        registry=registry,
+        broker_repository=broker_repo,
+    )
+
+    typer.echo(f"Running NCP-locked screener snapshot at {now.strftime('%H:%M:%S')} WIB...")
+    result = use_case.execute(OpeningSnapshotRequest(
+        config=config,
+        run_date=run_date,
+        iep_lookup=iep_lookup,
+    ))
+
+    # Also write standard sidecar for confirm-open compatibility
+    from src.domain.value_objects.screener_result import ScreenerCandidate
+    # sidecar already written inside PreOpenScreenUseCase via screen_commands._write_sidecar
+    # we just notify the user of the output path
+    out_dir = _today_dir(run_date)
+    n = len(result.get("candidates", []))
+    typer.echo(f"Saved {n} candidates → {out_dir}/snapshot.json")
+    for c in result.get("candidates", []):
+        verdict = c.get("verdict", "?")
+        typer.echo(f"  {c['ticker']:8s}  {verdict:5s}  trend={c.get('trend','?'):8s}  IEP={c.get('iep','?')}")
+
+
+# ── track ─────────────────────────────────────────────────────────────────────
+
+@opening_app.command("track")
+def track(
+    force: Annotated[bool, typer.Option("--force", help="Run single snapshot immediately (bypass window)")] = False,
+    tickers: Annotated[Optional[list[str]], typer.Argument(help="Explicit tickers (overrides snapshot)")] = None,
+    date_str: Annotated[Optional[str], typer.Option("--date")] = None,
+    headless: Annotated[bool, typer.Option("--headless/--no-headless")] = True,
+    broker_confirm: Annotated[bool, typer.Option("--broker-confirm", help="Also fetch running-trade ticks for broker confirmation (~2s per ticker)")] = False,
+) -> None:
+    """
+    Track orderbook every 5 minutes from 09:00–09:30 WIB for all screened tickers.
+
+    Reads tickers from today's snapshot.json. Saves track_HHMM.json per interval.
+
+    Use --force with explicit tickers for manual dry-runs outside market hours.
+    Use --broker-confirm to embed institutional broker absorption data per tick interval.
+
+    Examples:
+        saham trade opening track                               # live 09:00–09:30 loop
+        saham trade opening track --force BBCA BBRI BMRI       # manual dry-run
+        saham trade opening track --broker-confirm              # with broker attribution
+    """
+    run_date = _parse_date(date_str)
+    today = run_date or datetime.now(IDX_TIMEZONE).date()
+
+    # Resolve tickers
+    if tickers:
+        resolved_tickers = list(tickers)
+    else:
+        snap_path = _today_dir(run_date) / "snapshot.json"
+        if not snap_path.exists():
+            typer.echo(f"No snapshot found at {snap_path}. Run `opening snapshot` first.", err=True)
+            raise typer.Exit(1)
+        with open(snap_path) as f:
+            snap = json.load(f)
+        resolved_tickers = [c["ticker"] for c in snap.get("candidates", [])]
+
+    if not resolved_tickers:
+        typer.echo("No tickers to track.", err=True)
+        raise typer.Exit(1)
+
+    try:
+        from src.application.use_case.opening_track import OpeningTrackUseCase, OpeningTrackRequest
+        from src.infrastructure.browser.playwright_stockbit import PlaywrightStockbitProvider
+    except ImportError as e:
+        typer.echo(f"Import error: {e}", err=True)
+        raise typer.Exit(1)
+
+    if not DEFAULT_SESSION_FILE.exists():
+        typer.echo("No Stockbit session. Run: saham stockbit login", err=True)
+        raise typer.Exit(1)
+
+    browser = PlaywrightStockbitProvider(session_file=DEFAULT_SESSION_FILE, headless=headless)
+
+    # Optionally wire broker confirmation provider
+    running_trade_provider = None
+    institutional_codes: frozenset[str] = frozenset()
+    if broker_confirm:
+        try:
+            import yaml
+            from src.infrastructure.browser.stockbit_running_trade import StockbitRunningTradeProvider
+            from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
+            broker_provider = StockbitPlaywrightBrokerProvider()
+            if broker_provider.is_authenticated():
+                running_trade_provider = StockbitRunningTradeProvider(broker_provider=broker_provider)
+                with open("config/stockbit.yaml") as f:
+                    stockbit_cfg = yaml.safe_load(f) or {}
+                institutional_codes = frozenset(
+                    stockbit_cfg.get("broker_codes", {}).get("institutional_proxy", [])
+                )
+                typer.echo(
+                    f"Broker confirm enabled — {len(institutional_codes)} institutional codes loaded"
+                )
+            else:
+                typer.echo("Stockbit session not authenticated — --broker-confirm disabled", err=True)
+        except Exception as e:
+            typer.echo(f"Broker confirm setup failed: {e} — continuing without it", err=True)
+
+    use_case = OpeningTrackUseCase(browser=browser, running_trade_provider=running_trade_provider)
+
+    typer.echo(f"Tracking {len(resolved_tickers)} tickers: {', '.join(resolved_tickers)}")
+    if force:
+        typer.echo("Force mode — single immediate snapshot")
+    else:
+        typer.echo("Live mode — looping every 5 min from 09:00–09:30 WIB")
+
+    snapshots = use_case.execute(OpeningTrackRequest(
+        tickers=resolved_tickers,
+        run_date=run_date,
+        force=force,
+        broker_confirm=broker_confirm and running_trade_provider is not None,
+        institutional_broker_codes=institutional_codes,
+    ))
+
+    out_dir = _today_dir(run_date)
+    typer.echo(f"Captured {len(snapshots)} snapshots → {out_dir}/track_*.json")
+    for snap in snapshots:
+        at = snap.get("captured_at", "?")[:19]
+        n_ok = sum(1 for v in snap.get("tickers", {}).values() if v and "error" not in v)
+        n_broker = sum(
+            1 for v in snap.get("tickers", {}).values()
+            if isinstance(v, dict) and v.get("broker_signal")
+        )
+        confirm_str = f"  broker_confirm={n_broker}/{len(resolved_tickers)}" if broker_confirm else ""
+        typer.echo(f"  {at}  {n_ok}/{len(resolved_tickers)} tickers OK{confirm_str}")
+
+
+# ── grade ─────────────────────────────────────────────────────────────────────
+
+@opening_app.command("grade")
+def grade(
+    date_str: Annotated[Optional[str], typer.Option("--date")] = None,
+) -> None:
+    """
+    Compute deterministic accuracy report from today's snapshot + track data.
+
+    Requires: snapshot.json and at least one track_*.json from today.
+
+    Examples:
+        saham trade opening grade
+        saham trade opening grade --date 2026-06-17
+    """
+    run_date = _parse_date(date_str)
+
+    try:
+        from src.application.use_case.opening_grade import compute_grade
+    except ImportError as e:
+        typer.echo(f"Import error: {e}", err=True)
+        raise typer.Exit(1)
+
+    try:
+        result = compute_grade(run_date)
+    except FileNotFoundError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+    out_dir = _today_dir(run_date)
+    typer.echo(f"Grade saved → {out_dir}/grade.json + grade.md")
+    typer.echo("")
+    typer.echo(f"  Entry range hit rate:   {_pct(result.get('entry_range_hit_rate'))}")
+    typer.echo(f"  Trend accuracy T+5m:    {_pct(result.get('trend_accuracy_T5'))}")
+    typer.echo(f"  Trend accuracy T+30m:   {_pct(result.get('trend_accuracy_T30'))}")
+    typer.echo(f"  Clean trade rate:       {_pct(result.get('clean_trade_rate'))}")
+    typer.echo("")
+    for verdict in ("PRIME", "WATCH", "SKIP"):
+        v = result.get("by_verdict", {}).get(verdict, {})
+        if v.get("count", 0) > 0:
+            typer.echo(
+                f"  {verdict:5s}  n={v['count']}  "
+                f"entry_hit={_pct(v.get('entry_range_hit_rate'))}  "
+                f"clean={_pct(v.get('clean_trade_rate'))}"
+            )
+
+    # Show broker confirmation data if present (--broker-confirm was used during track)
+    broker_tickers = [
+        t for t in result.get("per_ticker", [])
+        if t.get("institutional_absorption_rate") is not None
+    ]
+    if broker_tickers:
+        typer.echo("")
+        typer.echo("  Broker Confirmation (institutional absorption):")
+        for t in broker_tickers:
+            side = t.get("broker_dominant_side", "?")
+            abs_rate = t.get("institutional_absorption_rate")
+            typer.echo(
+                f"    {t['ticker']:8s}  {side:7s}  abs={_pct(abs_rate)}"
+            )
+
+
+# ── tune ──────────────────────────────────────────────────────────────────────
+
+@opening_app.command("tune")
+def tune(
+    date_str: Annotated[Optional[str], typer.Option("--date")] = None,
+    api_key: Annotated[Optional[str], typer.Option("--api-key", help="DeepSeek API key (overrides env)")] = None,
+) -> None:
+    """
+    Call DeepSeek AI with today's accuracy grade and save config recommendations.
+
+    Requires: grade.json from today (run `opening grade` first).
+    Reads DEEPSEEK_API_KEY from environment if --api-key not provided.
+
+    Saves: data/opening/YYYYMMDD/tune.json + tune.md
+
+    Examples:
+        saham trade opening tune
+        saham trade opening tune --date 2026-06-17
+    """
+    run_date = _parse_date(date_str)
+    resolved_key = api_key or os.environ.get("DEEPSEEK_API_KEY")
+
+    if not resolved_key:
+        typer.echo("No DeepSeek API key. Set DEEPSEEK_API_KEY or pass --api-key.", err=True)
+        raise typer.Exit(1)
+
+    try:
+        from src.application.use_case.opening_tune import OpeningTuneUseCase, OpeningTuneRequest
+    except ImportError as e:
+        typer.echo(f"Import error: {e}", err=True)
+        raise typer.Exit(1)
+
+    use_case = OpeningTuneUseCase()
+    typer.echo("Calling DeepSeek for config recommendations...")
+
+    result = use_case.execute(OpeningTuneRequest(
+        run_date=run_date,
+        deepseek_api_key=resolved_key,
+    ))
+
+    if result.get("skipped"):
+        typer.echo(f"Skipped: {result.get('reason')}", err=True)
+        raise typer.Exit(1)
+
+    out_dir = _today_dir(run_date)
+    typer.echo(f"Saved → {out_dir}/tune.json + tune.md  ({result.get('tokens_used', 0)} tokens)")
+    if result.get("summary"):
+        typer.echo(f"\nSummary: {result['summary']}")
+    if result.get("top_finding"):
+        typer.echo(f"Top finding: {result['top_finding']}")
+
+    recs = result.get("config_recommendations", {})
+    if recs:
+        typer.echo("\nRecommended changes:")
+        for file_key, params in recs.items():
+            typer.echo(f"  [{file_key}]")
+            for param, change in params.items():
+                typer.echo(
+                    f"    {param}: {change.get('current')} → {change.get('suggested')}"
+                    f"  # {change.get('reason','')}"
+                )
+
+
+# ── prompt ────────────────────────────────────────────────────────────────────
+
+@opening_app.command("prompt")
+def prompt(
+    date_str: Annotated[Optional[str], typer.Option("--date")] = None,
+    print_output: Annotated[bool, typer.Option("--print", help="Print prompt to stdout")] = False,
+) -> None:
+    """
+    Generate a copy-pasteable AI prompt from today's session data.
+
+    Includes screener predictions, actual price outcomes, and accuracy metrics
+    in a format ready to paste into Claude, ChatGPT, or any AI assistant.
+
+    Saves: data/opening/YYYYMMDD/prompt.md
+
+    Examples:
+        saham trade opening prompt
+        saham trade opening prompt --print | pbcopy   # copy to clipboard (macOS)
+    """
+    run_date = _parse_date(date_str)
+
+    try:
+        from src.application.use_case.opening_prompt import build_prompt
+    except ImportError as e:
+        typer.echo(f"Import error: {e}", err=True)
+        raise typer.Exit(1)
+
+    try:
+        content = build_prompt(run_date)
+    except FileNotFoundError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+    out_dir = _today_dir(run_date)
+    typer.echo(f"Prompt saved → {out_dir}/prompt.md")
+
+    if print_output:
+        typer.echo(content)
+
+
+# ── helpers ───────────────────────────────────────────────────────────────────
+
+def _pct(v) -> str:
+    return f"{v*100:.1f}%" if v is not None else "N/A"
