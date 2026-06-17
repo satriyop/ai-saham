@@ -4,6 +4,10 @@ OpeningTrackUseCase — 5-minute orderbook tracker for the opening session (09:0
 For every ticker in today's snapshot, fetches bid/offer from Stockbit every 5 minutes
 and saves to data/opening/YYYYMMDD/track_HHMM.json. Loops internally until 09:31 WIB.
 
+Each tick entry always includes full order book depth (bid_pressure_ratio, depth_ratio_5,
+fnet_intraday) when order_book_provider is wired — this replaces the old naive top-of-book
+bid_pressure field which only covered 1 price level.
+
 Optional --broker-confirm mode: also fetches running-trade ticks per ticker each interval
 and embeds a RunningTradeSignal in the track JSON under tickers[ticker]["broker_signal"].
 
@@ -39,16 +43,19 @@ class OpeningTrackRequest:
     force: bool = False
     broker_confirm: bool = False
     institutional_broker_codes: frozenset[str] = frozenset()
-    order_book: bool = False    # embed full order book depth + live foreign net per snapshot
 
 
 class OpeningTrackUseCase:
-    """Fetch orderbook top-of-book every 5 min from 09:00–09:30 WIB for tracked tickers.
+    """Fetch orderbook every 5 min from 09:00–09:30 WIB for tracked tickers.
 
     Args:
-        browser:                 Playwright Stockbit browser for orderbook fetches.
+        browser:                 Playwright Stockbit browser for top-of-book fetches
+                                 (best_bid, best_offer, mid_price, spread).
         running_trade_provider:  Optional provider for broker confirmation ticks.
                                  Only used when request.broker_confirm is True.
+        order_book_provider:     Optional provider for full order book depth.
+                                 When wired, embeds bid_pressure_ratio (all levels),
+                                 depth_ratio_5, fnet_intraday per snapshot.
     """
 
     def __init__(
@@ -70,7 +77,6 @@ class OpeningTrackUseCase:
         snapshots: list[dict] = []
 
         if request.force:
-            # Manual/dry-run: single immediate snapshot
             snapshot = self._capture(request.tickers, request)
             label = datetime.now(IDX_TIMEZONE).strftime("%H%M")
             self._save(out_dir, label, snapshot)
@@ -91,7 +97,6 @@ class OpeningTrackUseCase:
                 self._save(out_dir, label, snapshot)
                 snapshots.append(snapshot)
 
-            # Wait until the next 5-minute mark
             seconds_to_next = self._seconds_to_next_interval(now)
             if seconds_to_next > 0 and datetime.now(IDX_TIMEZONE).time() < TRACK_END:
                 time_module.sleep(min(seconds_to_next, 30))
@@ -110,24 +115,26 @@ class OpeningTrackUseCase:
                 if tob and tob.bid and tob.offer:
                     bid = float(tob.bid.price)
                     offer = float(tob.offer.price)
-                    bid_lots = tob.bid.volume or 0
-                    offer_lots = tob.offer.volume or 0
-                    total_lots = bid_lots + offer_lots
                     entry = {
                         "best_bid": bid,
                         "best_offer": offer,
-                        "bid_lots": bid_lots,
-                        "offer_lots": offer_lots,
                         "mid_price": round((bid + offer) / 2, 2),
                         "spread": round(offer - bid, 2),
-                        "bid_pressure": round(bid_lots / total_lots, 4) if total_lots > 0 else None,
                     }
                 else:
                     entry = {}
             except Exception as e:
                 entry = {"error": str(e)}
 
-            # Optional broker confirmation — embed RunningTradeSignal if provider available
+            # Full order book depth — bid_pressure_ratio (all levels), fnet_intraday
+            if self._order_book_provider is not None and not entry.get("error"):
+                try:
+                    ob = self._order_book_provider.fetch_snapshot(ticker)
+                    entry["order_book"] = ob.to_dict() if ob else None
+                except Exception:
+                    entry["order_book"] = None
+
+            # Optional broker confirmation — RunningTradeSignal
             if request.broker_confirm and self._running_trade_provider is not None and not entry.get("error"):
                 try:
                     from src.application.use_case.analyze_running_trade import (
@@ -143,14 +150,6 @@ class OpeningTrackUseCase:
                     entry["broker_signal"] = signal.to_dict() if signal else None
                 except Exception:
                     entry["broker_signal"] = None
-
-            # Optional order book depth — bid pressure + live foreign net
-            if request.order_book and self._order_book_provider is not None and not entry.get("error"):
-                try:
-                    ob = self._order_book_provider.fetch_snapshot(ticker)
-                    entry["order_book"] = ob.to_dict() if ob else None
-                except Exception:
-                    entry["order_book"] = None
 
             ticker_data[ticker] = entry if entry else None
 

@@ -162,23 +162,20 @@ def track(
     date_str: Annotated[Optional[str], typer.Option("--date")] = None,
     headless: Annotated[bool, typer.Option("--headless/--no-headless")] = True,
     broker_confirm: Annotated[bool, typer.Option("--broker-confirm", help="Also fetch running-trade ticks for broker confirmation (~2s per ticker)")] = False,
-    order_book: Annotated[bool, typer.Option("--order-book", help="Embed full order book depth + live foreign net per snapshot (~1s per ticker)")] = False,
 ) -> None:
     """
     Track orderbook every 5 minutes from 09:00–09:30 WIB for all screened tickers.
 
     Reads tickers from today's snapshot.json. Saves track_HHMM.json per interval.
+    Full order book depth (bid_pressure_ratio, fnet_intraday) is always captured.
 
     Use --force with explicit tickers for manual dry-runs outside market hours.
     Use --broker-confirm to embed institutional broker absorption data per tick interval.
-    Use --order-book to embed full bid/offer depth + live foreign net per snapshot.
 
     Examples:
         saham trade opening track                               # live 09:00–09:30 loop
         saham trade opening track --force BBCA BBRI BMRI       # manual dry-run
         saham trade opening track --broker-confirm              # with broker attribution
-        saham trade opening track --order-book                  # with full depth + live F.Net
-        saham trade opening track --broker-confirm --order-book # both combined
     """
     run_date = _parse_date(date_str)
     today = run_date or datetime.now(IDX_TIMEZONE).date()
@@ -236,20 +233,19 @@ def track(
         except Exception as e:
             typer.echo(f"Broker confirm setup failed: {e} — continuing without it", err=True)
 
-    # Optionally wire order book provider
+    # Always wire order book provider — full depth replaces naive top-of-book bid_pressure
     order_book_provider = None
-    if order_book:
-        try:
-            from src.infrastructure.browser.stockbit_order_book import StockbitOrderBookProvider
-            from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
-            ob_broker = StockbitPlaywrightBrokerProvider()
-            if ob_broker.is_authenticated():
-                order_book_provider = StockbitOrderBookProvider(broker_provider=ob_broker)
-                typer.echo("Order book enabled — bid/offer depth + live F.Net per snapshot")
-            else:
-                typer.echo("Stockbit session not authenticated — --order-book disabled", err=True)
-        except Exception as e:
-            typer.echo(f"Order book setup failed: {e} — continuing without it", err=True)
+    try:
+        from src.infrastructure.browser.stockbit_order_book import StockbitOrderBookProvider
+        from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
+        ob_broker = StockbitPlaywrightBrokerProvider()
+        if ob_broker.is_authenticated():
+            order_book_provider = StockbitOrderBookProvider(broker_provider=ob_broker)
+            typer.echo("Order book depth enabled — bid_pressure_ratio + live F.Net per snapshot")
+        else:
+            typer.echo("Stockbit session not authenticated — order book disabled", err=True)
+    except Exception as e:
+        typer.echo(f"Order book setup failed: {e} — continuing without it", err=True)
 
     use_case = OpeningTrackUseCase(
         browser=browser,
@@ -269,7 +265,6 @@ def track(
         force=force,
         broker_confirm=broker_confirm and running_trade_provider is not None,
         institutional_broker_codes=institutional_codes,
-        order_book=order_book and order_book_provider is not None,
     ))
 
     out_dir = _today_dir(run_date)
@@ -285,13 +280,10 @@ def track(
             1 for v in snap.get("tickers", {}).values()
             if isinstance(v, dict) and v.get("order_book")
         )
-        extras = []
+        extras = [f"ob={n_ob}/{len(resolved_tickers)}"]
         if broker_confirm:
             extras.append(f"broker={n_broker}/{len(resolved_tickers)}")
-        if order_book:
-            extras.append(f"ob={n_ob}/{len(resolved_tickers)}")
-        extra_str = "  " + "  ".join(extras) if extras else ""
-        typer.echo(f"  {at}  {n_ok}/{len(resolved_tickers)} tickers OK{extra_str}")
+        typer.echo(f"  {at}  {n_ok}/{len(resolved_tickers)} tickers OK  " + "  ".join(extras))
 
 
 # ── grade ─────────────────────────────────────────────────────────────────────
@@ -355,19 +347,19 @@ def grade(
                 f"    {t['ticker']:8s}  {side:7s}  abs={_pct(abs_rate)}"
             )
 
-    # Show order book depth data if present (--order-book was used during track)
+    # Show order book depth data (always captured when session is authenticated)
     ob_tickers = [
         t for t in result.get("per_ticker", [])
-        if t.get("ob_bid_pressure_T0") is not None
+        if t.get("bid_pressure_T0") is not None
     ]
     if ob_tickers:
         typer.echo("")
-        typer.echo("  Order Book Depth (bid pressure + live F.Net):")
+        typer.echo("  Order Book Depth (bid pressure ratio + live F.Net):")
         for t in ob_tickers:
-            bp_t0 = t.get("ob_bid_pressure_T0")
-            bp_t5 = t.get("ob_bid_pressure_T5")
-            momentum = t.get("ob_bid_momentum")
-            fnet = t.get("ob_fnet_latest")
+            bp_t0 = t.get("bid_pressure_T0")
+            bp_t5 = t.get("bid_pressure_T5")
+            momentum = t.get("bid_momentum")
+            fnet = t.get("fnet_latest")
             fnet_str = f"{fnet/1e9:+.1f}B" if fnet is not None else "?"
             momentum_str = f"{momentum:+.3f}" if momentum is not None else "?"
             bp_t5_str = _pct(bp_t5) if bp_t5 is not None else "?"
