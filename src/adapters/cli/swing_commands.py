@@ -74,9 +74,11 @@ from src.infrastructure.config.user_config import get_swing_default
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 from src.infrastructure.sentiment import SentimentFactory
+from src.infrastructure.browser.stockbit_analyst import StockbitAnalystConsensusProvider
 from src.infrastructure.browser.stockbit_corp_action import StockbitCorporateActionRepository
 from src.infrastructure.browser.stockbit_insider import StockbitInsiderActivityProvider
 from src.infrastructure.browser.stockbit_seasonality import StockbitSeasonalityProvider
+from src.infrastructure.browser.stockbit_shareholding import StockbitShareholdingProvider
 
 DEFAULT_DB_PATH = Path("data.db")
 _W = 70  # display width
@@ -132,6 +134,8 @@ def _make_stockbit_providers(db_path: Path) -> "StockbitProviders":
             corp_repo=StockbitCorporateActionRepository(broker_provider=provider, db_path=db_path),
             season_prov=StockbitSeasonalityProvider(broker_provider=provider),
             insider_prov=StockbitInsiderActivityProvider(broker_provider=provider),
+            analyst_prov=StockbitAnalystConsensusProvider(broker_provider=provider),
+            shareholding_prov=StockbitShareholdingProvider(broker_provider=provider, db_path=db_path),
         )
     except Exception:
         return StockbitProviders.unavailable()
@@ -1408,6 +1412,23 @@ def _print_swing_output(
         if accum.insider_buying:
             for label in accum.recent_insider_buys:
                 typer.echo(typer.style(f"  ⭐ INSIDER BUY — {label}", fg=typer.colors.CYAN))
+
+        # Analyst consensus
+        if accum.analyst_consensus is not None:
+            ac = accum.analyst_consensus
+            if ac.is_bullish and (ac.upside_pct or 0) >= 10:
+                ac_color = typer.colors.GREEN
+            elif ac.sell_count > ac.buy_count:
+                ac_color = typer.colors.RED
+            else:
+                ac_color = typer.colors.WHITE
+            typer.echo(typer.style(f"  📊 ANALYST: {ac.label}", fg=ac_color))
+
+        # Shareholding composition
+        if accum.shareholding is not None:
+            sh = accum.shareholding
+            sh_color = typer.colors.CYAN if sh.institution_pct >= 30.0 else typer.colors.WHITE
+            typer.echo(typer.style(f"  🏦 HOLDING: {sh.label}", fg=sh_color))
     else:
         _section_header(f"ACCUMULATION ({window} sessions)")
         typer.echo(typer.style(
@@ -1999,6 +2020,8 @@ def swing(
             corporate_action_repo=_sb.corp_repo,
             seasonality_provider=_sb.season_prov,
             insider_activity_provider=_sb.insider_prov,
+            analyst_consensus_provider=_sb.analyst_prov,
+            shareholding_provider=_sb.shareholding_prov,
         )
         accum_resp = accum_uc.execute(AccumulationScreenRequest(
             tickers=[ticker_upper],
@@ -2179,6 +2202,14 @@ def swing(
                 ),
                 "insider_buying": accum_candidate.insider_buying if accum_candidate else False,
                 "recent_insider_buys": accum_candidate.recent_insider_buys if accum_candidate else [],
+                "analyst_consensus": (
+                    accum_candidate.analyst_consensus.to_dict()
+                    if accum_candidate and accum_candidate.analyst_consensus else None
+                ),
+                "shareholding": (
+                    accum_candidate.shareholding.to_dict()
+                    if accum_candidate and accum_candidate.shareholding else None
+                ),
             },
             "preset": {
                 "name": preset_eval.name if preset_eval else None,

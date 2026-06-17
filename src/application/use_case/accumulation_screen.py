@@ -25,13 +25,17 @@ from decimal import Decimal, InvalidOperation
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from src.domain.value_objects.analyst_consensus import AnalystConsensus
     from src.domain.value_objects.seasonal_edge import SeasonalEdge
+    from src.domain.value_objects.shareholding_composition import ShareholdingComposition
 
 from src.application.ports.corporate_action_repository import CorporateActionRepository
+from src.domain.ports.analyst_consensus_provider import AnalystConsensusProvider
 from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.insider_activity_provider import InsiderActivityProvider
 from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.ports.seasonality_provider import SeasonalityProvider
+from src.domain.ports.shareholding_provider import ShareholdingProvider
 
 SHARES_PER_LOT = 100
 
@@ -157,6 +161,10 @@ class AccumulationCandidate:
     # Insider activity — IDX-filed director/commissioner buy transactions
     insider_buying: bool = False          # True when insider bought within lookback window
     recent_insider_buys: list[str] = field(default_factory=list)  # human-readable labels
+    # Analyst consensus — aggregated analyst buy/hold/sell + price target
+    analyst_consensus: "AnalystConsensus | None" = None
+    # Shareholding composition — institutional %, individual %, top controlling holder
+    shareholding: "ShareholdingComposition | None" = None
     # Phase 3.2 — sector breadth confirmation
     sector_breadth_pct: float | None = None  # % of group peers with positive net_buy_ratio
     sector_breadth_bonus: float = 0.0        # bonus pts applied (0 if threshold not met)
@@ -192,6 +200,8 @@ class AccumulationCandidate:
             "seasonal_label": self.seasonal_edge.label if self.seasonal_edge else None,
             "insider_buying": self.insider_buying,
             "recent_insider_buys": self.recent_insider_buys,
+            "analyst_consensus": self.analyst_consensus.to_dict() if self.analyst_consensus else None,
+            "shareholding": self.shareholding.to_dict() if self.shareholding else None,
         }
 
 
@@ -296,6 +306,8 @@ class AccumulationScreenUseCase:
         corporate_action_repo: "CorporateActionRepository | None" = None,
         seasonality_provider: "SeasonalityProvider | None" = None,
         insider_activity_provider: "InsiderActivityProvider | None" = None,
+        analyst_consensus_provider: "AnalystConsensusProvider | None" = None,
+        shareholding_provider: "ShareholdingProvider | None" = None,
         idx_groups: "dict[str, list[str]] | None" = None,
     ) -> None:
         self._broker_repo = broker_repository
@@ -303,6 +315,8 @@ class AccumulationScreenUseCase:
         self._corp_action_repo = corporate_action_repo
         self._seasonality_provider = seasonality_provider
         self._insider_provider = insider_activity_provider
+        self._analyst_provider = analyst_consensus_provider
+        self._shareholding_provider = shareholding_provider
         # idx_groups: {group_name: [ticker, ...]} from config/idx_groups.yaml
         # Build a reverse map: ticker → group_name for fast lookup
         self._ticker_to_group: dict[str, str] = {}
@@ -384,6 +398,18 @@ class AccumulationScreenUseCase:
                 if txns:
                     result.insider_buying = True
                     result.recent_insider_buys = [t.label for t in txns[:3]]
+
+            # Analyst consensus: aggregated buy/hold/sell + price target
+            if self._analyst_provider is not None:
+                result.analyst_consensus = self._analyst_provider.get_consensus(
+                    ticker=result.ticker,
+                )
+
+            # Shareholding composition: institutional %, individual %, top holder
+            if self._shareholding_provider is not None:
+                result.shareholding = self._shareholding_provider.get_composition(
+                    ticker=result.ticker,
+                )
 
             if result.score >= request.min_score:
                 candidates.append(result)

@@ -48,9 +48,11 @@ from src.infrastructure.persistence.sqlite_broker_repository import (
     SQLiteBrokerRepository,
 )
 from src.infrastructure.config.user_config import get_swing_default
+from src.infrastructure.browser.stockbit_analyst import StockbitAnalystConsensusProvider
 from src.infrastructure.browser.stockbit_corp_action import StockbitCorporateActionRepository
 from src.infrastructure.browser.stockbit_insider import StockbitInsiderActivityProvider
 from src.infrastructure.browser.stockbit_seasonality import StockbitSeasonalityProvider
+from src.infrastructure.browser.stockbit_shareholding import StockbitShareholdingProvider
 from src.infrastructure.config.swing_config import load_swing_config as _load_swing_screener_config_typed
 
 _SC = _load_swing_screener_config_typed()
@@ -61,21 +63,25 @@ from src.infrastructure.persistence.sqlite_market_repository import (
 
 class StockbitProviders:
     """Holds all optional Stockbit providers sharing one authenticated session."""
-    __slots__ = ("corp_repo", "season_prov", "insider_prov")
+    __slots__ = ("corp_repo", "season_prov", "insider_prov", "analyst_prov", "shareholding_prov")
 
     def __init__(
         self,
         corp_repo: "StockbitCorporateActionRepository | None",
         season_prov: "StockbitSeasonalityProvider | None",
         insider_prov: "StockbitInsiderActivityProvider | None",
+        analyst_prov: "StockbitAnalystConsensusProvider | None" = None,
+        shareholding_prov: "StockbitShareholdingProvider | None" = None,
     ) -> None:
         self.corp_repo = corp_repo
         self.season_prov = season_prov
         self.insider_prov = insider_prov
+        self.analyst_prov = analyst_prov
+        self.shareholding_prov = shareholding_prov
 
     @classmethod
     def unavailable(cls) -> "StockbitProviders":
-        return cls(corp_repo=None, season_prov=None, insider_prov=None)
+        return cls(corp_repo=None, season_prov=None, insider_prov=None, analyst_prov=None, shareholding_prov=None)
 
 
 def _make_stockbit_providers(db_path: Path) -> "StockbitProviders":
@@ -94,6 +100,8 @@ def _make_stockbit_providers(db_path: Path) -> "StockbitProviders":
             corp_repo=StockbitCorporateActionRepository(broker_provider=provider, db_path=db_path),
             season_prov=StockbitSeasonalityProvider(broker_provider=provider),
             insider_prov=StockbitInsiderActivityProvider(broker_provider=provider),
+            analyst_prov=StockbitAnalystConsensusProvider(broker_provider=provider),
+            shareholding_prov=StockbitShareholdingProvider(broker_provider=provider, db_path=db_path),
         )
     except Exception:
         return StockbitProviders.unavailable()
@@ -493,6 +501,21 @@ def _display_results(
         if c.insider_buying:
             for label in c.recent_insider_buys:
                 typer.echo(typer.style(f"    ⭐ INSIDER BUY — {label}", fg=typer.colors.CYAN))
+
+        if c.analyst_consensus is not None:
+            ac = c.analyst_consensus
+            if ac.is_bullish and (ac.upside_pct or 0) >= 10:
+                ac_color = typer.colors.GREEN
+            elif ac.sell_count > ac.buy_count:
+                ac_color = typer.colors.RED
+            else:
+                ac_color = typer.colors.WHITE
+            typer.echo(typer.style(f"    📊 ANALYST: {ac.label}", fg=ac_color))
+
+        if c.shareholding is not None:
+            sh = c.shareholding
+            sh_color = typer.colors.CYAN if sh.institution_pct >= 30.0 else typer.colors.WHITE
+            typer.echo(typer.style(f"    🏦 HOLDING: {sh.label}", fg=sh_color))
 
         if granular and c.top_brokers:
             broker_line = "    " + "  ".join(c.top_brokers[:5])
@@ -976,6 +999,8 @@ def accumulation_run(
         corporate_action_repo=_sb.corp_repo,
         seasonality_provider=_sb.season_prov,
         insider_activity_provider=_sb.insider_prov,
+        analyst_consensus_provider=_sb.analyst_prov,
+        shareholding_provider=_sb.shareholding_prov,
     )
 
     base_request = AccumulationScreenRequest(
@@ -1676,6 +1701,8 @@ def accumulation_log(
         corporate_action_repo=_sb.corp_repo,
         seasonality_provider=_sb.season_prov,
         insider_activity_provider=_sb.insider_prov,
+        analyst_consensus_provider=_sb.analyst_prov,
+        shareholding_provider=_sb.shareholding_prov,
     )
     response = use_case.execute(AccumulationScreenRequest(
         tickers=[ticker_upper],
