@@ -75,6 +75,7 @@ from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBroker
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 from src.infrastructure.sentiment import SentimentFactory
 from src.infrastructure.browser.stockbit_corp_action import StockbitCorporateActionRepository
+from src.infrastructure.browser.stockbit_insider import StockbitInsiderActivityProvider
 from src.infrastructure.browser.stockbit_seasonality import StockbitSeasonalityProvider
 
 DEFAULT_DB_PATH = Path("data.db")
@@ -119,18 +120,21 @@ SMART_MONEY_BROKERS = set(_SC.smart_money_brokers)
 NOISE_BROKERS       = set(_SC.noise_brokers)
 
 
-def _make_stockbit_providers(db_path: Path) -> "tuple[StockbitCorporateActionRepository | None, StockbitSeasonalityProvider | None]":
-    """Return (corp_action_repo, seasonality_provider) sharing one Stockbit session."""
+def _make_stockbit_providers(db_path: Path) -> "StockbitProviders":
+    """Return all Stockbit providers sharing one authenticated session."""
+    from src.adapters.cli.accumulation_commands import StockbitProviders
     try:
         from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
         provider = StockbitPlaywrightBrokerProvider()
         if not provider.is_authenticated():
-            return None, None
-        corp_repo = StockbitCorporateActionRepository(broker_provider=provider, db_path=db_path)
-        season_prov = StockbitSeasonalityProvider(broker_provider=provider)
-        return corp_repo, season_prov
+            return StockbitProviders.unavailable()
+        return StockbitProviders(
+            corp_repo=StockbitCorporateActionRepository(broker_provider=provider, db_path=db_path),
+            season_prov=StockbitSeasonalityProvider(broker_provider=provider),
+            insider_prov=StockbitInsiderActivityProvider(broker_provider=provider),
+        )
     except Exception:
-        return None, None
+        return StockbitProviders.unavailable()
 BROKER_WEIGHTS: dict[str, Decimal] = {
     **{code: _SC.smart_weight for code in SMART_MONEY_BROKERS},
     **{code: _SC.noise_weight for code in NOISE_BROKERS},
@@ -1400,6 +1404,10 @@ def _print_swing_output(
                 f"  SEASONAL  {se.label}  (score {se.score:+.2f})",
                 fg=se_color,
             ))
+        # Insider buying flag
+        if accum.insider_buying:
+            for label in accum.recent_insider_buys:
+                typer.echo(typer.style(f"  ⭐ INSIDER BUY — {label}", fg=typer.colors.CYAN))
     else:
         _section_header(f"ACCUMULATION ({window} sessions)")
         typer.echo(typer.style(
@@ -1984,12 +1992,13 @@ def swing(
     # ── Accumulation ─────────────────────────────────────────────────────────
     accum_candidate: AccumulationCandidate | None = None
     try:
-        _corp_repo, _season_prov = _make_stockbit_providers(resolved_db)
+        _sb = _make_stockbit_providers(resolved_db)
         accum_uc = AccumulationScreenUseCase(
             broker_repository=broker_repo,
             market_repository=market_repo,
-            corporate_action_repo=_corp_repo,
-            seasonality_provider=_season_prov,
+            corporate_action_repo=_sb.corp_repo,
+            seasonality_provider=_sb.season_prov,
+            insider_activity_provider=_sb.insider_prov,
         )
         accum_resp = accum_uc.execute(AccumulationScreenRequest(
             tickers=[ticker_upper],
@@ -2168,6 +2177,8 @@ def swing(
                     accum_candidate.seasonal_edge.label
                     if accum_candidate and accum_candidate.seasonal_edge else None
                 ),
+                "insider_buying": accum_candidate.insider_buying if accum_candidate else False,
+                "recent_insider_buys": accum_candidate.recent_insider_buys if accum_candidate else [],
             },
             "preset": {
                 "name": preset_eval.name if preset_eval else None,

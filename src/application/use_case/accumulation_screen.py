@@ -29,6 +29,7 @@ if TYPE_CHECKING:
 
 from src.application.ports.corporate_action_repository import CorporateActionRepository
 from src.domain.ports.broker_data_repository import BrokerDataRepository
+from src.domain.ports.insider_activity_provider import InsiderActivityProvider
 from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.ports.seasonality_provider import SeasonalityProvider
 
@@ -153,6 +154,9 @@ class AccumulationCandidate:
     upcoming_rups: list[str] = field(default_factory=list)  # RUPS event detail strings
     # Phase 3.3 — seasonality signal (sourced from Stockbit 5-year monthly stats)
     seasonal_edge: "SeasonalEdge | None" = None   # current-month statistical edge
+    # Insider activity — IDX-filed director/commissioner buy transactions
+    insider_buying: bool = False          # True when insider bought within lookback window
+    recent_insider_buys: list[str] = field(default_factory=list)  # human-readable labels
     # Phase 3.2 — sector breadth confirmation
     sector_breadth_pct: float | None = None  # % of group peers with positive net_buy_ratio
     sector_breadth_bonus: float = 0.0        # bonus pts applied (0 if threshold not met)
@@ -186,6 +190,8 @@ class AccumulationCandidate:
             "upcoming_rups": self.upcoming_rups,
             "seasonal_score": round(self.seasonal_edge.score, 2) if self.seasonal_edge else None,
             "seasonal_label": self.seasonal_edge.label if self.seasonal_edge else None,
+            "insider_buying": self.insider_buying,
+            "recent_insider_buys": self.recent_insider_buys,
         }
 
 
@@ -289,12 +295,14 @@ class AccumulationScreenUseCase:
         market_repository: MarketDataRepository,
         corporate_action_repo: "CorporateActionRepository | None" = None,
         seasonality_provider: "SeasonalityProvider | None" = None,
+        insider_activity_provider: "InsiderActivityProvider | None" = None,
         idx_groups: "dict[str, list[str]] | None" = None,
     ) -> None:
         self._broker_repo = broker_repository
         self._market_repo = market_repository
         self._corp_action_repo = corporate_action_repo
         self._seasonality_provider = seasonality_provider
+        self._insider_provider = insider_activity_provider
         # idx_groups: {group_name: [ticker, ...]} from config/idx_groups.yaml
         # Build a reverse map: ticker → group_name for fast lookup
         self._ticker_to_group: dict[str, str] = {}
@@ -362,6 +370,20 @@ class AccumulationScreenUseCase:
                     year=today.year,
                     month=today.month,
                 )
+
+            # Insider activity: director/commissioner buys in last 90 days
+            if self._insider_provider is not None:
+                from datetime import timedelta
+                insider_lookback = 90
+                txns = self._insider_provider.get_insider_transactions(
+                    ticker=result.ticker,
+                    from_date=today - timedelta(days=insider_lookback),
+                    to_date=today,
+                    action_type="BUY",
+                )
+                if txns:
+                    result.insider_buying = True
+                    result.recent_insider_buys = [t.label for t in txns[:3]]
 
             if result.score >= request.min_score:
                 candidates.append(result)
