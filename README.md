@@ -24,12 +24,18 @@ A **local-first, production-grade CLI application** for stock analysis focused o
 - **Intraday Pre-Open Screener** - Pre-market movers + order book confirmation workflow
 - **Opening Session Learning Loop** - Automated snapshot→track→grade→tune cycle for opening scalping
 - **Swing Trade Workflow** - Unified screen → analyze → size → backtest → journal
+- **Corporate Action Risk** - Dividend/RUPS/rights issue flags from live Stockbit calendar
+- **Seasonality Signal** - Monthly return % and win rate ranking per ticker (5-year history)
+- **Running Trade Broker Attribution** - Real-time absorption ratio and institutional flow via `--broker-confirm`
+- **Insider Activity Signal** - ⭐ INSIDER BUY flags from Stockbit director/commissioner transactions
+- **Analyst Consensus** - 📊 Buy/Hold/Sell counts + price target upside from Stockbit analyst ratings
+- **Shareholding Composition** - 🏦 Institutional/individual split + top controlling holder from IDX filings
+- **Bandar Detector** - 🔍 Stockbit institutional operator accumulation/distribution signal (-9 to +9 score)
+- **Company Fundamentals** - 📈 P/E, ROE, Piotroski F-Score, quality gate with dividend yield + YoY growth
 - **Market Regime Detection** - Deterministic IHSG regime context (BULLISH/SIDEWAYS/WEAK/RISK_OFF)
 - **Terminal Charts** - ASCII price/RSI/volume charts in-terminal
 - **Batch Update** - Single command to refresh candles + broker flow for entire universes
 - **Broker & Foreign Flow** - Track foreign investor activity from IDX (public, no auth) or Stockbit
-- **Offline-First** - Works without internet after initial data fetch
-- **Local Storage** - SQLite database for cached market data
 - **Hexagonal Architecture** - Clean separation of domain, application, and infrastructure
 
 ---
@@ -544,7 +550,10 @@ saham trade intraday pre-open \
   --movers-json '[{"ticker":"BBCA","iev":150000}]' \
   --order-books-json '{"BBCA":{"price":8900,"volume":50000}}'
 
-# Step 2: Confirm after opening auction
+# Step 2: Confirm after opening auction (auto via Stockbit session)
+saham trade intraday confirm-open
+
+# Or override prices manually
 saham trade intraday confirm-open --opening-json '{"BBCA":9050,"BMRI":5875}'
 
 # Step 3: Log to journal
@@ -576,8 +585,11 @@ Designed for the opening auction window (08:45–09:30 WIB).
 # Step 1: Capture NCP-locked predictions at 08:57
 saham trade opening snapshot
 
-# Step 2: Track orderbook every 5 minutes 09:00-09:30
+# Step 2: Track orderbook depth + foreign net every 5 minutes 09:00-09:30
 saham trade opening track
+
+# With broker attribution (requires Stockbit login)
+saham trade opening track --broker-confirm
 
 # Step 3: Grade accuracy after track completes
 saham trade opening grade
@@ -592,13 +604,14 @@ saham trade opening tune
 | Command | Time | Purpose |
 |---------|------|---------|
 | `saham trade opening snapshot` | 08:57 | Pre-open screen → save predictions |
-| `saham trade opening track` | 09:00–09:30 | 5-min orderbook snapshots |
-| `saham trade opening grade` | 09:30+ | Compute accuracy: entry range hit, gap band, stop distance |
+| `saham trade opening track` | 09:00–09:30 | 5-min orderbook + optional broker attribution (`--broker-confirm`) |
+| `saham trade opening grade` | 09:30+ | Compute accuracy: entry range hit, gap band, stop distance, institutional absorption |
 | `saham trade opening prompt` | anytime | Generate AI prompt from session data |
 | `saham trade opening tune` | anytime | LLM-driven config recommendations |
 
 All data stored in `data/opening/YYYYMMDD/`. The learning loop runs daily and
-improves threshold calibration over time.
+improves threshold calibration over time. Use `--broker-confirm` on `track` to
+embed real-time institutional absorption ratios from Stockbit (requires login).
 
 ---
 

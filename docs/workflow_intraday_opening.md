@@ -64,11 +64,33 @@ data/opening/
       "offer_price": 6400,
       "offer_volume": 20000,
       "gap_pct": 2.81,
-      "in_range": true
+      "in_range": true,
+      "bid_pressure_ratio": 0.42,
+      "depth_ratio_5": 1.15,
+      "fnet_intraday": 12500000000,
+      "fbuy_intraday": 87500000000,
+      "fsell_intraday": 75000000000,
+      "iep": 6400,
+      "broker_signal": {
+        "absorption_ratio": 0.67,
+        "dominant_side": "buy",
+        "institutional_net_lot": 1250,
+        "top_brokers": [
+          {"broker": "MANDIRI SEKURITAS", "side": "buy", "volume": 50000},
+          {"broker": "BRI DANAREKSA", "side": "sell", "volume": 35000}
+        ]
+      }
     }
   ]
 }
 ```
+
+Order book depth fields (`bid_pressure_ratio`, `depth_ratio_5`, `fnet_intraday`,
+`fbuy_intraday`, `fsell_intraday`, `iep`) are always captured — no flag needed.
+They come from Stockbit's full-depth orderbook endpoint (20+ price levels).
+
+`broker_signal` is present only when `--broker-confirm` is used during `track`.
+It captures real-time institutional absorption from Stockbit's running trade API.
 
 ### Grade Format
 
@@ -120,17 +142,30 @@ saham trade opening snapshot --force --date 2026-06-17
 
 ### Step 2: Track (09:00–09:30 WIB)
 
-Checks orderbook prices every 5 minutes after opening auction:
+Checks full-orderbook depth every 5 minutes after opening auction:
 
 ```bash
 saham trade opening track
 ```
 
 **What happens:**
-1. Fetches 5-min intraday candles from Yahoo Finance
-2. Computes current gap % vs previous close
-3. Checks if price is inside/outside predicted entry range
-4. Saves per-interval snapshot to `data/opening/YYYYMMDD/track_HHMM.json`
+1. Fetches Stockbit full-depth orderbook (20+ levels): `bid_pressure_ratio`, `depth_ratio_5`
+2. Captures live foreign net for the session: `fnet_intraday`, `fbuy_intraday`, `fsell_intraday`
+3. Computes current gap % vs previous close
+4. Checks if price is inside/outside predicted entry range
+5. Optionally fetches real-time running trade ticks via `--broker-confirm`
+6. Saves per-interval snapshot to `data/opening/YYYYMMDD/track_HHMM.json`
+
+Order book depth and foreign net are always captured (no flag needed). The
+`bid_pressure_ratio` measures total bid lots vs (bid + offer) across ALL levels,
+not just top-of-book — institutional bids often sit 2–3 ticks below last price.
+
+**With broker attribution (requires Stockbit login):**
+```bash
+saham trade opening track --broker-confirm
+```
+Embeds institutional absorption ratio, dominant side, and net lot per ticker
+from Stockbit's running trade API. Data appears as `broker_signal` in track JSON.
 
 **Manual run with specific tickers:**
 ```bash
@@ -154,6 +189,13 @@ saham trade opening grade
 | Stop distance adequacy | Were stops wide enough to avoid false exits? | A (100%) → F (<80%) |
 | Trend classification | BULLISH/NEUTRAL/BEARISH vs actual move | A (>80%) → F (<40%) |
 | Overall | Weighted composite | A (≥90%) → F (<50%) |
+
+If order book data was captured (always-on), grade additionally reports:
+- `ob_bid_pressure_T0`: bid pressure ratio at first track interval
+- `ob_bid_pressure_T5`: bid pressure ratio at last track interval  
+- `ob_bid_momentum`: change in bid pressure over the tracking window
+- `ob_fnet_T0`: foreign net at first track interval (IDR)
+- `ob_fnet_latest`: foreign net at last track interval (IDR)
 
 The per-ticker breakdown tags critical errors:
 - `FALSE_NEGATIVE`: verdict was SKIP but stock opened in entry range
@@ -214,10 +256,16 @@ thresholds:
 | Command | Timing | Purpose | Output file |
 |---------|--------|---------|-------------|
 | `saham trade opening snapshot` | 08:57 | Pre-open predictions | `snapshot.json` |
-| `saham trade opening track` | 09:00–09:30 | 5-min orderbook | `track_HHMM.json` |
-| `saham trade opening grade` | 09:30+ | Accuracy report | `grade.json` |
+| `saham trade opening track` | 09:00–09:30 | 5-min full-depth orderbook + foreign net + opt-in broker attribution | `track_HHMM.json` |
+| `saham trade opening grade` | 09:30+ | Accuracy report (incl. bid pressure momentum + institutional absorption) | `grade.json` |
 | `saham trade opening prompt` | anytime | AI prompt | `prompt.md` |
 | `saham trade opening tune` | anytime | Config recommendations | `tune.json` + `tune.md` |
+
+| Flag | Applies to | Effect |
+|------|-----------|--------|
+| `--broker-confirm` | `track` | Fetch running trade ticks from Stockbit for institutional absorption analysis (~2s/ticker) |
+
+Order book depth and foreign net are always captured — no flag required.
 
 ## Auto-Window
 

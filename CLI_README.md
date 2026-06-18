@@ -1770,7 +1770,8 @@ saham indicator delete SMOOTH_RSI --force
 
 ## 14. Batch Data Update - The `data update` Command
 
-Keep your local data fresh with a single command. Fetches candles + broker flow for an entire universe.
+Keep your local data fresh with a single command. Fetches candles + broker flow
+for an entire universe and pre-warms all Stockbit enrichment caches.
 
 ```bash
 # Update all LQ45 stocks (candles + broker flow)
@@ -1792,7 +1793,25 @@ saham data update --universe lq45 --broker-only
 saham data update --universe lq45 --days 30
 ```
 
-**Why use this?** This replaces the old `saham fetch TICKER` and `saham data broker fetch TICKER` workflow for every stock — fetches everything for an entire universe in one pass. Run daily before morning screening.
+**Why use this?** This replaces the old `saham fetch TICKER` workflow — fetches
+everything for an entire universe in one pass. Run daily before morning screening.
+
+**Pre-warms all Stockbit caches:**
+- Analyst consensus (buy/hold/sell counts, price targets)
+- Insider activity (director/commissioner transactions, 90-day window)
+- Seasonality (monthly return %, win rate, 5-year history)
+- Corporate action calendar (dividend, rights issue, RUPS dates)
+- Shareholding composition (institutional/individual split)
+- Bandar detector (institutional operator accumulation/distribution score)
+- Company fundamentals (P/E, ROE, Piotroski F-Score, quality gate)
+
+Each provider respects its own TTL (daily, 7-day, or session-based). No cache
+is re-fetched unless stale — `saham data update` is safe to run multiple times.
+
+**Design rule:** Analysis commands (`swing analyze`, `swing screen`) are
+read-only — they never call external APIs. Only `saham data update` fetches live
+data. This guarantees consistent results: running analysis twice with the same
+cached data produces identical output.
 
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
@@ -1838,6 +1857,28 @@ saham screen accumulation --universe lq45 --multi --sort-by 30d
 - `coiled spring` — Squeeze + score ≥60 (compressed, ready to break)
 - `long-term only` — Strong 90d, weak recent
 - `weak` — No window scores ≥60
+
+### Enhanced Output Signals
+
+The screener enriches every candidate with additional signals from live Stockbit
+data (requires login). Run `saham data update --universe lq45` to pre-warm the
+cache for all signals in one pass.
+
+| Signal | Indicator | Source | Example |
+|--------|-----------|--------|---------|
+| Corporate Action Risk | ⚠ DIVIDEND RISK / ⚠ RIGHTS ISSUE / ⚠ RUPS | Stockbit corp action calendar | `⚠ DIVIDEND RISK` |
+| Seasonality | Monthly avg return + win rate (5-year) | Stockbit seasonality API | `SEASONAL +0.9% (60%wr, 5y)` |
+| Insider Activity | ⭐ INSIDER BUY — director/commissioner transactions (90d) | Stockbit insider API | `⭐ INSIDER BUY: John Doe (Comm) BUY 500,000 @ 1,200` |
+| Analyst Consensus | 📊 Buy/Hold/Sell counts + price target upside | Stockbit analyst ratings | `📊 ANALYST: 35B 2H \| target Rp8,827 (+40.7%)` |
+| Shareholding Composition | 🏦 Institutional/individual split + top holder | Stockbit shareholder API | `🏦 HOLDING: DWIMURIA 54.9% \| Inst 31.9% \| Individual 8.7%` |
+| Bandar Detector | 🔍 Institutional operator accumulation/distribution signal (-9 to +9) | Stockbit market detectors | `🔍 BANDAR: Score +5 (Acc, top1 47%)` |
+| Company Fundamentals | 📈 P/E, ROE, Piotroski F-Score, quality gate | Stockbit keystats | `📈 FUNDAM: P/E 18.3, ROE 21.2%, F-Score 7, quality=True` |
+| Broker Detail | Per-broker buy/sell attribution | Stockbit broker data | `─ MANDIRI SEKURITAS BUY 50.0B` |
+
+Corporate action flags, insider activity, analyst consensus, shareholding
+composition, bandar detection, and fundamentals appear in the screener table
+and `swing analyze` output. Seasonality scores are used as tiebreakers when
+accumulation scores are equal.
 
 ### Filters
 
@@ -1978,6 +2019,9 @@ Saves to `data/opening/YYYYMMDD/snapshot.json`:
 # Live loop 09:00–09:30 (auto-window)
 saham trade opening track
 
+# With real-time broker attribution (requires Stockbit login)
+saham trade opening track --broker-confirm
+
 # Manual dry-run with explicit tickers
 saham trade opening track --force BBCA BBRI BMRI
 ```
@@ -1986,6 +2030,12 @@ Saves to `data/opening/YYYYMMDD/track_HHMM.json`:
 - Best bid/offer price and volume each interval
 - Gap% relative to prev close over time
 - In-range / out-of-range status per ticker
+- Full order book depth: `bid_pressure_ratio` (total bid/offer across all levels), `depth_ratio_5` (top-5 levels)
+- Live foreign net: `fnet_intraday` (IDR), `fbuy_intraday`, `fsell_intraday` for the session
+- `broker_signal` (if `--broker-confirm`): institutional absorption ratio, dominant side, net lot
+
+Order book data is always captured (no flag needed). Use `--broker-confirm` to
+also fetch institutional running-trade ticks (~2s per ticker).
 
 ### Step 3: Grade Accuracy
 
@@ -1998,6 +2048,7 @@ Produces `grade.json` with deterministic accuracy report:
 - Gap band accuracy: was the ATR band correctly calibrated?
 - Stop distance safety: were stops wide enough?
 - Trend classification accuracy: BULLISH/NEUTRAL/BEARISH vs actual move
+- Institutional absorption rate (if `--broker-confirm` was used during track)
 - Overall grade: A/B/C/D/F with per-ticker breakdown
 
 ### Step 4: Generate AI Prompt
