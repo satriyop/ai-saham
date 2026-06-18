@@ -2139,6 +2139,25 @@ saham trade swing BBRI --with-regime
 | `--no-backtest` | | false | Skip backtest |
 | `--with-regime` | | false | Add regime context |
 
+### Swing Analyze Output Signals
+
+`swing analyze` displays the same enrichment lines as the accumulation screener
+below the score table:
+
+```
+📊 ANALYST: 35B 2H | target Rp8,827 (+40.7%)
+🏦 HOLDING: DWIMURIA 54.9% | Inst 31.9% | Individual 8.7%
+🔍 BANDAR: Score +5 (Acc, top1 47%)
+📈 FUNDAM: P/E 18.3, ROE 21.2%, F-Score 7, quality=True
+⭐ INSIDER BUY — John Doe (Comm) BUY 500,000 @ 1,200
+⚠ DIVIDEND RISK
+SEASONAL +0.9% (60%wr, 5y)
+─ MANDIRI SEKURITAS BUY 50.0B | BRI DANAREKSA SELL 35.0B
+```
+
+These come from cached Stockbit data (pre-warmed by `saham data update`).
+Analysis commands are read-only — they never call external APIs.
+
 ### Swing Backtest
 
 Walk-forward portfolio backtest for the swing workflow:
