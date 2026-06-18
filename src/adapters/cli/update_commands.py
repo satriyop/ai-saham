@@ -652,6 +652,107 @@ def _print_table_summary(
     typer.echo(f"  Row counts are totals for the {len(stock_tickers)} stock ticker(s) in this run (all dates).")
 
 
+def _fetch_enrichment(ticker: str, db_path: Path, broker_provider) -> str:
+    """Pre-fetch Stockbit enrichment data for one ticker into SQLite cache.
+
+    Fetches analyst consensus, insider activity (last 365 days ALL actions),
+    monthly seasonality, corporate actions, shareholding composition, bandar
+    detector signal, and fundamental ratios (KeyStats). Each provider checks
+    its own SQLite cache and skips the API call if data is already fresh.
+
+    Returns a compact status string, e.g. "analyst+bandar+fundam  ✓(insider,season,corp,holding)"
+    on partial cache hit, or "✓(all)" if all providers had fresh data, or
+    "skip" if provider is unavailable.
+    """
+    from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
+
+    if not isinstance(broker_provider, StockbitPlaywrightBrokerProvider):
+        return "skip:no-stockbit"
+    if ticker.startswith("^"):
+        return "n/a:index"
+
+    from datetime import timedelta
+
+    from src.infrastructure.browser.stockbit_analyst import StockbitAnalystConsensusProvider
+    from src.infrastructure.browser.stockbit_bandar import StockbitBandarDetectorProvider
+    from src.infrastructure.browser.stockbit_corp_action import StockbitCorporateActionRepository
+    from src.infrastructure.browser.stockbit_fundamentals import StockbitFundamentalsProvider
+    from src.infrastructure.browser.stockbit_insider import StockbitInsiderActivityProvider
+    from src.infrastructure.browser.stockbit_seasonality import StockbitSeasonalityProvider
+    from src.infrastructure.browser.stockbit_shareholding import StockbitShareholdingProvider
+
+    today = date.today()
+    insider_from = today - timedelta(days=365)
+
+    analyst_prov = StockbitAnalystConsensusProvider(broker_provider=broker_provider, db_path=db_path)
+    insider_prov = StockbitInsiderActivityProvider(broker_provider=broker_provider, db_path=db_path)
+    season_prov = StockbitSeasonalityProvider(broker_provider=broker_provider, db_path=db_path)
+    corp_repo = StockbitCorporateActionRepository(broker_provider=broker_provider, db_path=db_path)
+    shareholding_prov = StockbitShareholdingProvider(broker_provider=broker_provider, db_path=db_path)
+    bandar_prov = StockbitBandarDetectorProvider(broker_provider=broker_provider, db_path=db_path)
+    fundamentals_prov = StockbitFundamentalsProvider(broker_provider=broker_provider, db_path=db_path)
+
+    fetched: list[str] = []
+    cached: list[str] = []
+    errors: list[str] = []
+
+    def _run(label: str, fn):
+        try:
+            fn()
+            return True
+        except Exception as e:
+            errors.append(f"{label}:{str(e)[:20]}")
+            return False
+
+    # Analyst consensus
+    if analyst_prov._is_cache_fresh(ticker):
+        cached.append("analyst")
+    elif _run("analyst", lambda: analyst_prov.get_consensus(ticker)):
+        fetched.append("analyst")
+
+    # Insider (fetch ALL actions for last 365 days so swing analyze hits cache regardless of range)
+    if insider_prov._is_cache_fresh(ticker):
+        cached.append("insider")
+    elif _run("insider", lambda: insider_prov.get_insider_transactions(ticker, insider_from, today, "ALL")):
+        fetched.append("insider")
+
+    # Seasonality for current month
+    if season_prov._is_cache_fresh(ticker, today.year, today.month):
+        cached.append("season")
+    elif _run("season", lambda: season_prov.get_seasonal_edge(ticker, today.year, today.month)):
+        fetched.append("season")
+
+    # Corp actions for the next 90 days
+    if corp_repo._is_cache_fresh(ticker):
+        cached.append("corp")
+    elif _run("corp", lambda: corp_repo.get_upcoming_events(ticker, today, today + timedelta(days=90))):
+        fetched.append("corp")
+
+    # Shareholding composition (7-day TTL — quarterly filings)
+    if shareholding_prov._is_cache_fresh(ticker):
+        cached.append("holding")
+    elif _run("holding", lambda: shareholding_prov.get_composition(ticker)):
+        fetched.append("holding")
+
+    # Bandar detector (daily — fixed after session close)
+    if bandar_prov._is_cache_fresh(ticker):
+        cached.append("bandar")
+    elif _run("bandar", lambda: bandar_prov.get_snapshot(ticker)):
+        fetched.append("bandar")
+
+    # Fundamentals / KeyStats (7-day TTL — quarterly metrics)
+    if fundamentals_prov._is_cache_fresh(ticker):
+        cached.append("fundam")
+    elif _run("fundam", lambda: fundamentals_prov.get_fundamentals(ticker)):
+        fetched.append("fundam")
+
+    if errors:
+        return "ERR:" + ",".join(errors)
+    if not fetched:
+        return f"✓({','.join(cached)})"
+    return "+".join(fetched) + (f"  ✓({','.join(cached)})" if cached else "")
+
+
 def _fetch_meta(ticker: str, db_path: Path) -> str:
     """Fetch sector/industry metadata for one ticker. Returns a status string."""
     if ticker.startswith("^"):
@@ -720,6 +821,10 @@ def update(
         bool,
         typer.Option("--no-meta", help="Skip sector/industry metadata fetch"),
     ] = False,
+    no_enrichment: Annotated[
+        bool,
+        typer.Option("--no-enrichment", help="Skip Stockbit enrichment fetch (analyst/insider/seasonality/corp)"),
+    ] = False,
     db_path: Annotated[
         Optional[Path],
         typer.Option("--db", help="SQLite database path"),
@@ -732,6 +837,11 @@ def update(
     Sector/industry data is fetched via Yahoo Finance and cached for 30 days
     (only re-fetched when stale). Use --no-meta to skip.
 
+    When a Stockbit session is available, also pre-fetches analyst consensus,
+    insider activity, seasonality, and corporate actions into SQLite so that
+    `saham trade swing analyze` runs without needing Playwright at analysis time.
+    Use --no-enrichment to skip this step.
+
     Examples:
         saham data update --universe lq45
         saham data update --universe lq45 --days 30
@@ -740,6 +850,7 @@ def update(
         saham data update --universe lq45 --broker-only
         saham data update BBCA --broker-provider stockbit-session --days 30
         saham data update --universe lq45 --no-meta
+        saham data update BBCA --no-enrichment
     """
     resolved_db = db_path or DEFAULT_DB_PATH
 
@@ -788,6 +899,12 @@ def update(
         typer.echo(f"  Broker flow:      {broker_provider_name}  (net flow timeseries + daily named breakdown)")
     if not no_meta:
         typer.echo("  Meta:             yahoo  (sector/industry, 30d TTL)")
+    _enrichment_available = (
+        not no_enrichment
+        and broker_provider_name == "stockbit-session"
+    )
+    if _enrichment_available:
+        typer.echo("  Enrichment:       stockbit  (analyst/insider/seasonality/corp, daily SQLite cache)")
     typer.echo("  Legend:  ✓(DATE) = up-to-date through DATE  +N = new rows stored  ERR: = failed")
     typer.echo("")
 
@@ -803,6 +920,7 @@ def update(
         candles_status = "skip"
         broker_result = BrokerFetchResult(summaries="skip", flow="skip")
         meta_status = "skip"
+        enrichment_status = "skip"
 
         if not broker_only:
             candles_status = _fetch_candles(
@@ -819,16 +937,21 @@ def update(
             if meta_status.startswith("changed"):
                 meta_changed.append(f"  {ticker}: {meta_status}")
 
+        if _enrichment_available:
+            enrichment_status = _fetch_enrichment(ticker, resolved_db, broker_provider)
+
         any_error = (
             "ERR:" in candles_status
             or "ERR:" in broker_result.summaries
             or "ERR:" in broker_result.flow
+            or "ERR:" in enrichment_status
         )
         all_cached = (
             _is_cached_status(candles_status)
             and _is_cached_status(broker_result.summaries)
             and _is_cached_status(broker_result.flow)
             and (no_meta or meta_status.startswith("cached"))
+            and (not _enrichment_available or enrichment_status.startswith("✓"))
         )
 
         if any_error:
@@ -846,6 +969,8 @@ def update(
         )
         if not no_meta:
             status_line += f"  meta={meta_status}"
+        if _enrichment_available:
+            status_line += f"  enrich={enrichment_status}"
 
         typer.echo(
             f"  {progress} {ticker:<6} "

@@ -141,6 +141,18 @@ class StockbitBandarDetectorProvider(BandarDetectorProvider):
         except Exception as e:
             logger.warning("bandar_detector: failed to create cache table: %s", e)
 
+    def _is_cache_fresh(self, ticker: str) -> bool:
+        """True if a row exists for today's date (data is fixed after session close)."""
+        try:
+            with sqlite3.connect(self._db_path) as conn:
+                row = conn.execute(
+                    "SELECT 1 FROM bandar_detector WHERE ticker=? AND session_date=? LIMIT 1",
+                    (ticker.upper(), date.today().isoformat()),
+                ).fetchone()
+            return row is not None
+        except Exception:
+            return False
+
     def get_snapshot(
         self, ticker: str, session_date: date | None = None
     ) -> BandarDetectorSnapshot | None:

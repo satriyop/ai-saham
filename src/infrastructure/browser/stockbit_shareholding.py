@@ -159,6 +159,21 @@ class StockbitShareholdingProvider(ShareholdingProvider):
         except Exception as e:
             logger.warning("shareholding: failed to create cache table: %s", e)
 
+    def _is_cache_fresh(self, ticker: str) -> bool:
+        """True if a row exists within the 7-day TTL window."""
+        try:
+            with sqlite3.connect(self._db_path) as conn:
+                row = conn.execute(
+                    "SELECT fetched_date FROM shareholding_composition WHERE ticker=?",
+                    (ticker.upper(),),
+                ).fetchone()
+            if not row:
+                return False
+            fetched = _parse_date(row[0])
+            return fetched is not None and (date.today() - fetched).days <= _CACHE_TTL_DAYS
+        except Exception:
+            return False
+
     def get_composition(self, ticker: str) -> ShareholdingComposition | None:
         key = ticker.upper()
         if key in self._mem_cache:

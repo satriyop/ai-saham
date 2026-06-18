@@ -106,9 +106,9 @@ def _make_stockbit_providers(db_path: Path) -> "StockbitProviders":
             return StockbitProviders.unavailable()
         return StockbitProviders(
             corp_repo=StockbitCorporateActionRepository(broker_provider=provider, db_path=db_path),
-            season_prov=StockbitSeasonalityProvider(broker_provider=provider),
-            insider_prov=StockbitInsiderActivityProvider(broker_provider=provider),
-            analyst_prov=StockbitAnalystConsensusProvider(broker_provider=provider),
+            season_prov=StockbitSeasonalityProvider(broker_provider=provider, db_path=db_path),
+            insider_prov=StockbitInsiderActivityProvider(broker_provider=provider, db_path=db_path),
+            analyst_prov=StockbitAnalystConsensusProvider(broker_provider=provider, db_path=db_path),
             shareholding_prov=StockbitShareholdingProvider(broker_provider=provider, db_path=db_path),
             bandar_prov=StockbitBandarDetectorProvider(broker_provider=provider, db_path=db_path),
             fundamentals_prov=StockbitFundamentalsProvider(broker_provider=provider, db_path=db_path),

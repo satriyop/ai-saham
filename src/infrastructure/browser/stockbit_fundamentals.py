@@ -144,6 +144,21 @@ class StockbitFundamentalsProvider(FundamentalsProvider):
         except Exception as e:
             logger.warning("company_fundamentals: failed to create cache table: %s", e)
 
+    def _is_cache_fresh(self, ticker: str) -> bool:
+        """True if a row exists with fetched_date within the 7-day TTL window."""
+        try:
+            with sqlite3.connect(self._db_path) as conn:
+                row = conn.execute(
+                    "SELECT fetched_date FROM company_fundamentals WHERE ticker=? LIMIT 1",
+                    (ticker.upper(),),
+                ).fetchone()
+            if not row:
+                return False
+            fetched = date.fromisoformat(row[0])
+            return (date.today() - fetched).days <= _CACHE_TTL_DAYS
+        except Exception:
+            return False
+
     def get_fundamentals(self, ticker: str) -> CompanyFundamentals | None:
         key = ticker.upper()
         if key in self._mem_cache:
