@@ -128,6 +128,10 @@ def _make_stockbit_providers(db_path: Path) -> "StockbitProviders":
     """Return all Stockbit providers sharing one authenticated session."""
     from src.adapters.cli.accumulation_commands import StockbitProviders
     try:
+        import playwright  # noqa: F401 — fast availability check before touching browser
+    except ImportError:
+        return StockbitProviders.unavailable()
+    try:
         from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
         provider = StockbitPlaywrightBrokerProvider()
         if not provider.is_authenticated():
