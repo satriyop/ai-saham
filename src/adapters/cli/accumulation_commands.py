@@ -51,6 +51,7 @@ from src.infrastructure.config.user_config import get_swing_default
 from src.infrastructure.browser.stockbit_analyst import StockbitAnalystConsensusProvider
 from src.infrastructure.browser.stockbit_bandar import StockbitBandarDetectorProvider
 from src.infrastructure.browser.stockbit_corp_action import StockbitCorporateActionRepository
+from src.infrastructure.browser.stockbit_fundamentals import StockbitFundamentalsProvider
 from src.infrastructure.browser.stockbit_insider import StockbitInsiderActivityProvider
 from src.infrastructure.browser.stockbit_seasonality import StockbitSeasonalityProvider
 from src.infrastructure.browser.stockbit_shareholding import StockbitShareholdingProvider
@@ -64,7 +65,7 @@ from src.infrastructure.persistence.sqlite_market_repository import (
 
 class StockbitProviders:
     """Holds all optional Stockbit providers sharing one authenticated session."""
-    __slots__ = ("corp_repo", "season_prov", "insider_prov", "analyst_prov", "shareholding_prov", "bandar_prov")
+    __slots__ = ("corp_repo", "season_prov", "insider_prov", "analyst_prov", "shareholding_prov", "bandar_prov", "fundamentals_prov")
 
     def __init__(
         self,
@@ -74,6 +75,7 @@ class StockbitProviders:
         analyst_prov: "StockbitAnalystConsensusProvider | None" = None,
         shareholding_prov: "StockbitShareholdingProvider | None" = None,
         bandar_prov: "StockbitBandarDetectorProvider | None" = None,
+        fundamentals_prov: "StockbitFundamentalsProvider | None" = None,
     ) -> None:
         self.corp_repo = corp_repo
         self.season_prov = season_prov
@@ -81,11 +83,13 @@ class StockbitProviders:
         self.analyst_prov = analyst_prov
         self.shareholding_prov = shareholding_prov
         self.bandar_prov = bandar_prov
+        self.fundamentals_prov = fundamentals_prov
 
     @classmethod
     def unavailable(cls) -> "StockbitProviders":
         return cls(corp_repo=None, season_prov=None, insider_prov=None,
-                   analyst_prov=None, shareholding_prov=None, bandar_prov=None)
+                   analyst_prov=None, shareholding_prov=None, bandar_prov=None,
+                   fundamentals_prov=None)
 
 
 def _make_stockbit_providers(db_path: Path) -> "StockbitProviders":
@@ -107,6 +111,7 @@ def _make_stockbit_providers(db_path: Path) -> "StockbitProviders":
             analyst_prov=StockbitAnalystConsensusProvider(broker_provider=provider),
             shareholding_prov=StockbitShareholdingProvider(broker_provider=provider, db_path=db_path),
             bandar_prov=StockbitBandarDetectorProvider(broker_provider=provider, db_path=db_path),
+            fundamentals_prov=StockbitFundamentalsProvider(broker_provider=provider, db_path=db_path),
         )
     except Exception:
         return StockbitProviders.unavailable()
@@ -533,6 +538,16 @@ def _display_results(
             else:
                 bd_color = typer.colors.WHITE
             typer.echo(typer.style(f"    🔍 BANDAR: {bd.label}", fg=bd_color))
+
+        if c.fundamentals is not None:
+            fund = c.fundamentals
+            if fund.is_quality:
+                fund_color = typer.colors.GREEN
+            elif fund.roe_ttm is not None and fund.roe_ttm >= 10.0:
+                fund_color = typer.colors.YELLOW
+            else:
+                fund_color = typer.colors.RED
+            typer.echo(typer.style(f"    📈 FUNDAM: {fund.label}", fg=fund_color))
 
         if granular and c.top_brokers:
             broker_line = "    " + "  ".join(c.top_brokers[:5])
@@ -1019,6 +1034,7 @@ def accumulation_run(
         analyst_consensus_provider=_sb.analyst_prov,
         shareholding_provider=_sb.shareholding_prov,
         bandar_detector_provider=_sb.bandar_prov,
+        fundamentals_provider=_sb.fundamentals_prov,
     )
 
     base_request = AccumulationScreenRequest(
@@ -1722,6 +1738,7 @@ def accumulation_log(
         analyst_consensus_provider=_sb.analyst_prov,
         shareholding_provider=_sb.shareholding_prov,
         bandar_detector_provider=_sb.bandar_prov,
+        fundamentals_provider=_sb.fundamentals_prov,
     )
     response = use_case.execute(AccumulationScreenRequest(
         tickers=[ticker_upper],
