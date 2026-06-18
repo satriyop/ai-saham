@@ -464,13 +464,18 @@ Batas aman: tidak lebih dari 2 posisi simultaan.
 
 ## 9. 09:00 — Pasar Buka, Konfirmasi Entry
 
-Tepat saat pasar buka (09:00 WIB), lihat opening price aktual di Stockbit untuk setiap kandidat di watchlist. Tunggu 1–2 menit agar harga stabil.
-
-Masukkan opening prices ke tool:
+Tepat saat pasar buka (09:00 WIB), tool otomatis mengambil opening price aktual dari Stockbit untuk setiap kandidat. Tidak perlu input manual lagi.
 
 ```bash
+# Auto-resolve — baca opening price dari Stockbit running trade + order book
+saham trade intraday confirm-open
+```
+
+Kalau mau override harga tertentu (misalnya karena delay data):
+```bash
+# Manual override untuk ticker tertentu, sisanya auto-resolve
 saham trade intraday confirm-open \
-  --opening-json '{"BNBR": 110, "BUMI": 158}'
+  --opening-json '{"BUMI": 158}'
 ```
 
 ### Regime-Gate dan Tick-Friction Gate

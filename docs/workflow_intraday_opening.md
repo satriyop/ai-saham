@@ -32,7 +32,10 @@ data/opening/
 ```json
 {
   "date": "2026-06-17",
-  "timestamp": "2026-06-17T08:57:00+07:00",
+  "captured_at": "2026-06-17T08:57:00+07:00",
+  "capture_phase": "NCP_LOCKED",
+  "capture_valid_for_opening_prediction": true,
+  "capture_confidence": "HIGH",
   "regime": "SIDEWAYS",
   "candidates": [
     {
@@ -65,6 +68,9 @@ data/opening/
       "offer_volume": 20000,
       "gap_pct": 2.81,
       "in_range": true,
+      "opening_price": 6400,
+      "opening_price_source": "order_book_lastprice",
+      "opening_price_confidence": "MEDIUM",
       "bid_pressure_ratio": 0.42,
       "depth_ratio_5": 1.15,
       "fnet_intraday": 12500000000,
@@ -89,6 +95,12 @@ Order book depth fields (`bid_pressure_ratio`, `depth_ratio_5`, `fnet_intraday`,
 `fbuy_intraday`, `fsell_intraday`, `iep`) are always captured — no flag needed.
 They come from Stockbit's full-depth orderbook endpoint (20+ price levels).
 
+Opening price resolution fields (`opening_price`, `opening_price_source`,
+`opening_price_confidence`) are also always captured. Sources include:
+- `order_book_lastprice` — last traded price from Stockbit order book (MEDIUM confidence)
+- `top_of_book_midpoint` — midpoint of best bid/offer (LOW confidence)
+- `manual_entry` — user-supplied via `--opening-json` (HIGH confidence)
+
 `broker_signal` is present only when `--broker-confirm` is used during `track`.
 It captures real-time institutional absorption from Stockbit's running trade API.
 
@@ -97,7 +109,19 @@ It captures real-time institutional absorption from Stockbit's running trade API
 ```json
 {
   "date": "2026-06-17",
+  "capture_phase": "NCP_LOCKED",
+  "capture_valid_for_opening_prediction": true,
+  "capture_confidence": "HIGH",
   "regime": "SIDEWAYS",
+  "data_quality": {
+    "capture_phase": "NCP_LOCKED",
+    "capture_valid_for_opening_prediction": true,
+    "capture_confidence": "HIGH",
+    "high_confidence_price_count": 3,
+    "medium_confidence_price_count": 2,
+    "low_confidence_price_count": 0,
+    "invalid_snapshot": false
+  },
   "entries": { "correct": 1, "total": 5 },
   "gap_band": { "correct": 3, "total": 5 },
   "trend": { "correct": 3, "total": 5 },
@@ -108,6 +132,9 @@ It captures real-time institutional absorption from Stockbit's running trade API
       "ticker": "BBCA",
       "verdict": "SKIP",
       "actual_open": 6400,
+      "opening_price_source": "order_book_lastprice",
+      "opening_price_confidence": "MEDIUM",
+      "capture_phase": "NCP_LOCKED",
       "in_entry_range": true,
       "gap_band_correct": true,
       "trend_correct": false,
@@ -132,8 +159,10 @@ saham trade opening snapshot
 1. Runs the pre-open screener with movers from IDX/Stockbit
 2. Computes gap %, entry range, ATR-based stop for each candidate
 3. Classifies trend (BULLISH/NEUTRAL/BEARISH)
-4. Saves deterministic verdict with reason codes
-5. Writes to `data/opening/YYYYMMDD/snapshot.json`
+4. Classifies capture phase (PRE_NCP / NCP_LOCKED / OPEN / POST_OPEN / OUT_OF_SESSION)
+5. Assigns capture confidence (HIGH if NCP-locked, MEDIUM if pre-NCP, LOW otherwise)
+6. Saves deterministic verdict with reason codes
+7. Writes to `data/opening/YYYYMMDD/snapshot.json`
 
 **Manual run with historical date:**
 ```bash
@@ -264,6 +293,7 @@ thresholds:
 | Flag | Applies to | Effect |
 |------|-----------|--------|
 | `--broker-confirm` | `track` | Fetch running trade ticks from Stockbit for institutional absorption analysis (~2s/ticker) |
+| `--allow-invalid-snapshot` | `tune` | Allow AI tuning from low-confidence or out-of-window snapshot data |
 
 Order book depth and foreign net are always captured — no flag required.
 
@@ -271,16 +301,21 @@ Order book depth and foreign net are always captured — no flag required.
 
 All commands auto-detect the current market phase:
 
-| Current time (WIB) | Behavior |
-|--------------------|----------|
-| Before 08:45 | "Market not open yet" |
-| 08:45–08:57 | Pre-open in progress → run normally |
-| 08:57–09:15 | Snapshot available → track ready |
-| 09:15–09:30 | Track in progress → skip snapshot |
-| 09:30–10:00 | Track complete → grade + prompt available |
-| After 10:00 | Full cycle complete → tune available |
+| Current time (WIB) | Phase | Behavior |
+|--------------------|-------|----------|
+| Before 08:45 | OUT_OF_SESSION | "Market not open yet" |
+| 08:45–08:56 | PRE_NCP | Capture available (MEDIUM confidence) |
+| 08:56–09:00 | NCP_LOCKED | Capture with HIGH confidence |
+| 09:00–09:30 | OPEN | Track ready |
+| 09:30–10:00 | POST_OPEN | Grade + prompt available |
+| After 10:00 | POST_OPEN | Full cycle complete → tune available |
 
 Use `--force` to bypass auto-window for testing or historical runs.
+
+Snapshot confidence drives behavior:
+- `HIGH` (NCP_LOCKED) — normal operation, tuning allowed
+- `MEDIUM` (PRE_NCP) — data valid but may shift before NCP locks
+- `LOW` (OPEN/POST_OPEN) — snapshot not valid for opening prediction; `tune` requires `--allow-invalid-snapshot`
 
 ## Integration with Other Workflows
 

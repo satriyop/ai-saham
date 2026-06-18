@@ -2011,6 +2011,9 @@ saham trade opening snapshot --force --date 2026-06-17
 Saves to `data/opening/YYYYMMDD/snapshot.json`:
 - IEV, IEP, gap%, entry range, ATR-based stop for each candidate
 - Market regime and NCP lock status
+- Capture phase (`PRE_NCP`, `NCP_LOCKED`, `OPEN`, `POST_OPEN`, `OUT_OF_SESSION`)
+- Capture confidence (`HIGH` if NCP-locked, `MEDIUM` if pre-NCP, `LOW` otherwise)
+- `capture_valid_for_opening_prediction` boolean
 - Pre-computed verdict and reason codes
 
 ### Step 2: Track Every 5 Minutes
@@ -2049,7 +2052,11 @@ Produces `grade.json` with deterministic accuracy report:
 - Stop distance safety: were stops wide enough?
 - Trend classification accuracy: BULLISH/NEUTRAL/BEARISH vs actual move
 - Institutional absorption rate (if `--broker-confirm` was used during track)
+- Data quality assessment: capture phase, price source/confidence distribution
 - Overall grade: A/B/C/D/F with per-ticker breakdown
+
+Each ticker now includes `opening_price_source` (order_book_lastprice, top_of_book_midpoint,
+manual_entry), `opening_price_confidence` (HIGH/MEDIUM/LOW), and `capture_phase`.
 
 ### Step 4: Generate AI Prompt
 
@@ -2072,9 +2079,18 @@ saham trade opening tune
 
 # With explicit API key
 saham trade opening tune --api-key sk-...
+
+# Allow tuning from low-confidence or out-of-window snapshot
+saham trade opening tune --allow-invalid-snapshot
 ```
 
 Calls DeepSeek with today's grade and the current config. Returns:
+
+**Safety guard:** By default, `tune` refuses to run if the snapshot was captured
+outside the NCP window (confidence < HIGH). Use `--allow-invalid-snapshot` to
+override — useful for post-market retrospective analysis.
+
+Returns:
 - Recommended threshold changes (min_history_days, gap thresholds, RSI bands)
 - Per-ticker specific tuning suggestions
 - Updated YAML config snippet ready to apply
@@ -2099,11 +2115,11 @@ data/opening/
 
 | Command | Timing | Purpose |
 |---------|--------|---------|
-| `saham trade opening snapshot` | 08:57 | Capture predictions |
+| `saham trade opening snapshot` | 08:45–08:56 (PRE_NCP), 08:56–09:00 (NCP_LOCKED) | Capture predictions |
 | `saham trade opening track` | 09:00–09:30 | Track price convergence |
 | `saham trade opening grade` | 09:30+ | Compute accuracy |
 | `saham trade opening prompt` | anytime | Generate AI prompt |
-| `saham trade opening tune` | anytime | Recommend config changes |
+| `saham trade opening tune` | anytime | Recommend config changes (requires HIGH confidence or `--allow-invalid-snapshot`) |
 
 ---
 
