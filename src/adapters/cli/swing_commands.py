@@ -75,6 +75,7 @@ from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBroker
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 from src.infrastructure.sentiment import SentimentFactory
 from src.infrastructure.browser.stockbit_analyst import StockbitAnalystConsensusProvider
+from src.infrastructure.browser.stockbit_bandar import StockbitBandarDetectorProvider
 from src.infrastructure.browser.stockbit_corp_action import StockbitCorporateActionRepository
 from src.infrastructure.browser.stockbit_insider import StockbitInsiderActivityProvider
 from src.infrastructure.browser.stockbit_seasonality import StockbitSeasonalityProvider
@@ -136,6 +137,7 @@ def _make_stockbit_providers(db_path: Path) -> "StockbitProviders":
             insider_prov=StockbitInsiderActivityProvider(broker_provider=provider),
             analyst_prov=StockbitAnalystConsensusProvider(broker_provider=provider),
             shareholding_prov=StockbitShareholdingProvider(broker_provider=provider, db_path=db_path),
+            bandar_prov=StockbitBandarDetectorProvider(broker_provider=provider, db_path=db_path),
         )
     except Exception:
         return StockbitProviders.unavailable()
@@ -1429,6 +1431,19 @@ def _print_swing_output(
             sh = accum.shareholding
             sh_color = typer.colors.CYAN if sh.institution_pct >= 30.0 else typer.colors.WHITE
             typer.echo(typer.style(f"  🏦 HOLDING: {sh.label}", fg=sh_color))
+
+        # Bandar detector — Stockbit's institutional operator accumulation signal
+        if accum.bandar_detector is not None:
+            bd = accum.bandar_detector
+            if bd.accumulation_score >= 4:
+                bd_color = typer.colors.GREEN
+            elif bd.is_accumulating:
+                bd_color = typer.colors.YELLOW
+            elif bd.is_distributing:
+                bd_color = typer.colors.RED
+            else:
+                bd_color = typer.colors.WHITE
+            typer.echo(typer.style(f"  🔍 BANDAR: {bd.label}", fg=bd_color))
     else:
         _section_header(f"ACCUMULATION ({window} sessions)")
         typer.echo(typer.style(
@@ -2022,6 +2037,7 @@ def swing(
             insider_activity_provider=_sb.insider_prov,
             analyst_consensus_provider=_sb.analyst_prov,
             shareholding_provider=_sb.shareholding_prov,
+            bandar_detector_provider=_sb.bandar_prov,
         )
         accum_resp = accum_uc.execute(AccumulationScreenRequest(
             tickers=[ticker_upper],
@@ -2209,6 +2225,10 @@ def swing(
                 "shareholding": (
                     accum_candidate.shareholding.to_dict()
                     if accum_candidate and accum_candidate.shareholding else None
+                ),
+                "bandar_detector": (
+                    accum_candidate.bandar_detector.to_dict()
+                    if accum_candidate and accum_candidate.bandar_detector else None
                 ),
             },
             "preset": {

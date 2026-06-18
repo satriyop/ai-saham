@@ -26,11 +26,13 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from src.domain.value_objects.analyst_consensus import AnalystConsensus
+    from src.domain.value_objects.bandar_detector_snapshot import BandarDetectorSnapshot
     from src.domain.value_objects.seasonal_edge import SeasonalEdge
     from src.domain.value_objects.shareholding_composition import ShareholdingComposition
 
 from src.application.ports.corporate_action_repository import CorporateActionRepository
 from src.domain.ports.analyst_consensus_provider import AnalystConsensusProvider
+from src.domain.ports.bandar_detector_provider import BandarDetectorProvider
 from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.insider_activity_provider import InsiderActivityProvider
 from src.domain.ports.market_data_repository import MarketDataRepository
@@ -165,6 +167,8 @@ class AccumulationCandidate:
     analyst_consensus: "AnalystConsensus | None" = None
     # Shareholding composition — institutional %, individual %, top controlling holder
     shareholding: "ShareholdingComposition | None" = None
+    # Bandar detector — Stockbit's proprietary institutional operator accumulation signal
+    bandar_detector: "BandarDetectorSnapshot | None" = None
     # Phase 3.2 — sector breadth confirmation
     sector_breadth_pct: float | None = None  # % of group peers with positive net_buy_ratio
     sector_breadth_bonus: float = 0.0        # bonus pts applied (0 if threshold not met)
@@ -202,6 +206,7 @@ class AccumulationCandidate:
             "recent_insider_buys": self.recent_insider_buys,
             "analyst_consensus": self.analyst_consensus.to_dict() if self.analyst_consensus else None,
             "shareholding": self.shareholding.to_dict() if self.shareholding else None,
+            "bandar_detector": self.bandar_detector.to_dict() if self.bandar_detector else None,
         }
 
 
@@ -308,6 +313,7 @@ class AccumulationScreenUseCase:
         insider_activity_provider: "InsiderActivityProvider | None" = None,
         analyst_consensus_provider: "AnalystConsensusProvider | None" = None,
         shareholding_provider: "ShareholdingProvider | None" = None,
+        bandar_detector_provider: "BandarDetectorProvider | None" = None,
         idx_groups: "dict[str, list[str]] | None" = None,
     ) -> None:
         self._broker_repo = broker_repository
@@ -317,6 +323,7 @@ class AccumulationScreenUseCase:
         self._insider_provider = insider_activity_provider
         self._analyst_provider = analyst_consensus_provider
         self._shareholding_provider = shareholding_provider
+        self._bandar_provider = bandar_detector_provider
         # idx_groups: {group_name: [ticker, ...]} from config/idx_groups.yaml
         # Build a reverse map: ticker → group_name for fast lookup
         self._ticker_to_group: dict[str, str] = {}
@@ -409,6 +416,13 @@ class AccumulationScreenUseCase:
             if self._shareholding_provider is not None:
                 result.shareholding = self._shareholding_provider.get_composition(
                     ticker=result.ticker,
+                )
+
+            # Bandar detector: Stockbit's institutional operator accumulation signal
+            if self._bandar_provider is not None:
+                result.bandar_detector = self._bandar_provider.get_snapshot(
+                    ticker=result.ticker,
+                    session_date=request.as_of_date,
                 )
 
             if result.score >= request.min_score:

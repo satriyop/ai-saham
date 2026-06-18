@@ -49,6 +49,7 @@ from src.infrastructure.persistence.sqlite_broker_repository import (
 )
 from src.infrastructure.config.user_config import get_swing_default
 from src.infrastructure.browser.stockbit_analyst import StockbitAnalystConsensusProvider
+from src.infrastructure.browser.stockbit_bandar import StockbitBandarDetectorProvider
 from src.infrastructure.browser.stockbit_corp_action import StockbitCorporateActionRepository
 from src.infrastructure.browser.stockbit_insider import StockbitInsiderActivityProvider
 from src.infrastructure.browser.stockbit_seasonality import StockbitSeasonalityProvider
@@ -63,7 +64,7 @@ from src.infrastructure.persistence.sqlite_market_repository import (
 
 class StockbitProviders:
     """Holds all optional Stockbit providers sharing one authenticated session."""
-    __slots__ = ("corp_repo", "season_prov", "insider_prov", "analyst_prov", "shareholding_prov")
+    __slots__ = ("corp_repo", "season_prov", "insider_prov", "analyst_prov", "shareholding_prov", "bandar_prov")
 
     def __init__(
         self,
@@ -72,16 +73,19 @@ class StockbitProviders:
         insider_prov: "StockbitInsiderActivityProvider | None",
         analyst_prov: "StockbitAnalystConsensusProvider | None" = None,
         shareholding_prov: "StockbitShareholdingProvider | None" = None,
+        bandar_prov: "StockbitBandarDetectorProvider | None" = None,
     ) -> None:
         self.corp_repo = corp_repo
         self.season_prov = season_prov
         self.insider_prov = insider_prov
         self.analyst_prov = analyst_prov
         self.shareholding_prov = shareholding_prov
+        self.bandar_prov = bandar_prov
 
     @classmethod
     def unavailable(cls) -> "StockbitProviders":
-        return cls(corp_repo=None, season_prov=None, insider_prov=None, analyst_prov=None, shareholding_prov=None)
+        return cls(corp_repo=None, season_prov=None, insider_prov=None,
+                   analyst_prov=None, shareholding_prov=None, bandar_prov=None)
 
 
 def _make_stockbit_providers(db_path: Path) -> "StockbitProviders":
@@ -102,6 +106,7 @@ def _make_stockbit_providers(db_path: Path) -> "StockbitProviders":
             insider_prov=StockbitInsiderActivityProvider(broker_provider=provider),
             analyst_prov=StockbitAnalystConsensusProvider(broker_provider=provider),
             shareholding_prov=StockbitShareholdingProvider(broker_provider=provider, db_path=db_path),
+            bandar_prov=StockbitBandarDetectorProvider(broker_provider=provider, db_path=db_path),
         )
     except Exception:
         return StockbitProviders.unavailable()
@@ -516,6 +521,18 @@ def _display_results(
             sh = c.shareholding
             sh_color = typer.colors.CYAN if sh.institution_pct >= 30.0 else typer.colors.WHITE
             typer.echo(typer.style(f"    🏦 HOLDING: {sh.label}", fg=sh_color))
+
+        if c.bandar_detector is not None:
+            bd = c.bandar_detector
+            if bd.accumulation_score >= 4:
+                bd_color = typer.colors.GREEN
+            elif bd.is_accumulating:
+                bd_color = typer.colors.YELLOW
+            elif bd.is_distributing:
+                bd_color = typer.colors.RED
+            else:
+                bd_color = typer.colors.WHITE
+            typer.echo(typer.style(f"    🔍 BANDAR: {bd.label}", fg=bd_color))
 
         if granular and c.top_brokers:
             broker_line = "    " + "  ".join(c.top_brokers[:5])
@@ -1001,6 +1018,7 @@ def accumulation_run(
         insider_activity_provider=_sb.insider_prov,
         analyst_consensus_provider=_sb.analyst_prov,
         shareholding_provider=_sb.shareholding_prov,
+        bandar_detector_provider=_sb.bandar_prov,
     )
 
     base_request = AccumulationScreenRequest(
@@ -1703,6 +1721,7 @@ def accumulation_log(
         insider_activity_provider=_sb.insider_prov,
         analyst_consensus_provider=_sb.analyst_prov,
         shareholding_provider=_sb.shareholding_prov,
+        bandar_detector_provider=_sb.bandar_prov,
     )
     response = use_case.execute(AccumulationScreenRequest(
         tickers=[ticker_upper],
