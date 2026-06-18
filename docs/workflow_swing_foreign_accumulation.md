@@ -102,7 +102,7 @@ Bulanan          Validasi dengan backtest             saham trade swing backtest
 
 Sebelum menggunakan screener, pahami apa yang diukur tiap komponen skor.
 
-### Komponen Skor (Total Maks ~120, Soft Cap)
+### Komponen Skor (Total 0–120, +10 Bonus)
 
 | Komponen | Maks Poin | Formula | Artinya |
 |----------|-----------|---------|---------|
@@ -112,7 +112,12 @@ Sebelum menggunakan screener, pahami apa yang diukur tiap komponen skor.
 | **RSI Headroom** | 10 pts | Puncak di RSI=40, nol di ≤25 atau ≥75 | Momentum tapi ada ruang naik |
 | **Flow Ratio** | 10 pts | Linear: 0% → 0 pts, ≥20% → 10 pts | Dominansi volume asing vs total |
 | **BB Squeeze** | 10 pts | Bottom 20%ile: 5–10 pts; bottom 40%ile: 0–5 pts | Volatilitas rendah, siap breakout |
-| **Broker Institusional** | 5 pts | Bonus kalau ada broker institusional di top buyer | AK, BK, KZ, ZP, RX, MS, DB, ML, YU ada di sisi beli |
+| **BCI CLUSTER** | 15 pts | 3+ Tier 1 foreign desks (AK/BK/ZP/KZ/YU/RX/HD/CP/DR) di top net-buyers | Broker institusional asing dominan |
+| **BCI STABLE** | 5 pts | 1–2 Tier 1 foreign desks di top net-buyers | Ada institusional asing |
+| **BCI RETAIL-LED** | 0 pts | 0 Tier 1 foreign desks | Didominasi retail/noise |
+| **Sektor Breadth** | +10 | Bonus ke SEMUA anggota grup kalau ≥60% peers sektor positif | Konfirmasi rotasi sektor |
+
+Skor di-cap di 120 lalu ditambah bonus sektor (sehingga bisa >120). Breakdown per komponen bisa dilihat dengan `--breakdown`.
 
 ### Interpretasi Skor
 
@@ -148,22 +153,23 @@ saham analyze regime
 
 Contoh output:
 ```
-MARKET REGIME — 2026-06-13
-═══════════════════════════════════════════════════════
-Regime: SIDEWAYS
+══════════════════════════════════════════════════════════════════════════════
+MARKET REGIME
+══════════════════════════════════════════════════════════════════════════════
+Date: 2026-06-13 | Label: SIDEWAYS | Score: 5/7
 
-Breadth (IDX80):
-  Above SMA20 : 54.2%
-  5d change   : -2.1%
-
-Benchmark (^JKSE):
-  Price       : 6,892
-  vs SMA20    : -0.8%
-  vs SMA50    : +1.2%
-  20d return  : -1.4%
-
-Foreign Flow Breadth: +23.4% stocks with net foreign buy
-═══════════════════════════════════════════════════════
+METRIC                                    VALUE
+────────────────────────────────────────────────
+^JKSE close                            6,892.34
+Benchmark SMA20                         6,941.50
+Benchmark SMA50                         6,847.80
+Benchmark 5d return                        -0.8%
+Benchmark 20d return                       -1.4%
+Breadth above SMA20                        54.2%
+Breadth change 5d                          -2.1%
+Foreign flow breadth                       23.4%
+Universe evaluated                       62/80
+Flow evaluated                           58/80
 ```
 
 ### Empat Regime dan Implikasinya
@@ -214,6 +220,7 @@ FOREIGN ACCUMULATION — LQ45 | 7 sessions | 2026-06-13
   5 BMRI      54.2      2d       4/7       +67.8B  +11.7      -0.3%   61.4     55%  UP
   ...
 ══════════════════════════════════════════════════════════════════════════════
+Score 0–120 | consistency 40 | streak 30 | VWAP 20 | RSI 10 | flow 10 | BB 10 | BCI 0/5/15
 Run with --guide for column explanations
 ```
 
@@ -319,104 +326,65 @@ Sentiment/news hanya konteks tambahan. Error provider RSS disembunyikan menjadi 
 
 ```
 ══════════════════════════════════════════════════════════════════════════════
-SWING ANALYSIS — GGRM  |  2026-06-13  |  balanced profile
+SWING VIEW — GGRM · 2026-06-13 · profile=balanced
 ══════════════════════════════════════════════════════════════════════════════
 
 DATA
-─────────────────────────────────────────────────────────────────────────────
-  Analysis date       :  2026-06-13
-  Candles through     :  2026-06-12
-  Broker flow through :  2026-06-12
-  Regime as of        :  2026-06-13
-  Refresh             :  candles=cached-current; broker(idx)=cached-current
+  Analysis date  2026-06-13   Candles through  2026-06-12   Broker flow through  2026-06-12
+  Regime as of   2026-06-13
+  Refresh        candles=cached-current; broker(idx)=cached-current
 
-ACCUMULATION (7 sessions)
-─────────────────────────────────────────────────────────────────────────────
-  Score     :  72.4 / 120
-  Streak    :  4d consecutive foreign net-buy
-  Net Days  :  4/7 (57%)
-  Net Value :  +19.4 B IDR
-  Flow %    :  +24.8% of daily volume
-  VWAP Disc :  +3.2%  (foreigners underwater — price floor)
-  BB %ile   :  15%    (coiled spring — bottom 20th pctile)
-  RSI       :  42.5
-  Trend     :  SIDE   (vs SMA20)
+ACCUMULATION (7 sessions)                          signal: building
+  Score  72.4   STREAK  4s   NET_DAYS  4/7   FLOW%  +24.8%
+  VWAP   +3.2%    BB%ILE  15%    TREND  SIDE
+  [cons=22.9 streak=15.3 vwap=6.4 rsi=5.8 flow=10.0 bb=8.5]
 
-FLOW DETAIL (30 sessions)
-─────────────────────────────────────────────────────────────────────────────
-  Range     :  2026-05-04 -> 2026-06-12
-  Sessions  :  30/30
-  Net Flow  :  +71.81 B IDR
-  Buy/Sell  :  19/11 sessions
-  Streak    :  6 sessions consecutive foreign net-buy
-  Latest    :  +8.20 B IDR (+24.8%) on 2026-06-12
+FLOW DETAIL (30 sessions)                          through: 2026-06-12 · institutional desk
+  Range  2026-05-04 → 2026-06-12   Sessions  30/30
+  Net    +71.81B IDR   BUY/SELL  19/11   STREAK  6s
+  Avg FLOW%  +18.40%   Latest  +8.20B (+24.80%)
 
-BROKER DETAIL (5/5 sessions)
-─────────────────────────────────────────────────────────────────────────────
-  Top buyers     :  AK +18.20B (4s), CC +12.40B (3s), YP +8.10B (2s)
-  Top sellers    :  KZ -9.40B (2s), DB -6.70B (1s)
-  Smart flow    :  +14.10B IDR  |  Noise flow  +8.10B IDR
-  Weighted net  :  +20.45B IDR  |  Smart share 58.4%
-  Concentration  :  top buyer 38.0%; top seller 41.6%
-  Quality        :  broad accumulation; smart support
+BROKER DETAIL (5/5 sessions)            through: 2026-06-12 · stockbit
+  Top buyers       AK +18.20B (4s), CC +12.40B (3s), YP +8.10B (2s)
+  Top sellers      KZ -9.40B (2s), DB -6.70B (1s)
+  Smart flow       +14.10B IDR   Noise flow  +8.10B IDR
+  Weighted net     +20.45B IDR   Smart share  58.4%
+  Concentration    top buyer 38.0%; top seller 41.6%
+  Quality          broad accumulation; smart support
 
-PRESET — foreign-bounce
-─────────────────────────────────────────────────────────────────────────────
-  Gate              Required    Actual    Status
-  score             ≥ 70        72.4      ✓ PASS
-  vwap_disc_pct     ≥ +3.0%     +3.2%     ✓ PASS
-  trend             SIDE        SIDE      ✓ PASS
-  flow_pct          ≥ +5.0%     +24.8%    ✓ PASS
-  rsi               ≤ 60        42.5      ✓ PASS
+PRESET — foreign-bounce                            final: ENTER
+  PASS            score           actual=72.4       required=>= 70
+  PASS            vwap_disc_pct   actual=+3.2%      required=>= +3%
+  PASS            trend           actual=SIDE        required=SIDE
+  PASS            flow_pct        actual=+24.8%      required=>= +5%
+  PASS            RSI present     actual=42.5        required=present
+  PASS            RSI             actual=42.5        required=<= 60
+  Tested plan: TP +5%, SL -5%, max hold 10 trading days.
 
-  Signal: ENTER  (6/6 gates passed)
+MARKET REGIME                                     SIDEWAYS
+  Breadth SMA20  54.2%   5d change  -2.1%
+  Benchmark 20d  -1.4%   Foreign flow breadth  23.1%
 
-  Plan  : TP +5%  |  SL -5%  |  Max Hold 10 days
+RISK CONFIRMATION                                 verdict: LOW_RISK  conf: 71/100
+  SMA20    47,200   EMA20    47,050   RSI14   42.5
+  · MAs are aligned — bullish structure
+  · RSI below 50 — room to run
 
-MARKET REGIME
-─────────────────────────────────────────────────────────────────────────────
-  Regime    : SIDEWAYS
-  Breadth   : 54.2% above SMA20  (5d Δ: -2.1%)
-  IHSG      : 6,892  |  vs SMA20: -0.8%  |  vs SMA50: +1.2%
-  Context   : Ranging market — foreign-bounce has historically performed
-              better in SIDEWAYS vs BULLISH (less noise, cleaner setups)
+PRESET SIZING
+  Entry    47,100   Stop  44,745  (-5.00%)   Target   49,455  (+5.00%)
+  Position  2 lots = 200 shares   Cost  9,420,000 IDR  (94.2% of capital)
+  Risk        94,000 IDR   Max hold  10 trading days
+  (5% stop = 1.50× ATR14)
 
-RISK CONFIRMATION
-─────────────────────────────────────────────────────────────────────────────
-  SMA20     :  47,200  |  Price 47,100 — just below, neutral
-  EMA20     :  47,050  |  Price slightly above — mild bullish
-  RSI(14)   :  42.5    |  Room to run before overbought
-  Verdict   :  CONFIRMING — no contradicting signals
+HISTORY  (foreign-accumulation)  8 trades
+  Win rate  62.5%   Profit factor  1.84   Max DD  -8.2%
 
-PRESET SIZING  (capital: Rp 10,000,000 | risk: 1.0% = Rp 100,000)
-─────────────────────────────────────────────────────────────────────────────
-  Entry     :  47,100  (latest close)
-  Stop      :  44,745  (-5.0%)
-  Target    :  49,455  (+5.0%)
-  Reward/Risk:  1.0 : 1.0
-  Max Lots  :  0 lots  (low capital for price; consider reducing entry)
+SENTIMENT (3d)                                     call: NEUTRAL
+  4 headlines   (+1 / =2 / -1)   confidence  62%
 
-HISTORY  (strategy: foreign-accumulation | GGRM | since 2024-01-01)
-─────────────────────────────────────────────────────────────────────────────
-  Trades    :  8
-  Win Rate  :  62.5%  (5/8)
-  Profit Factor: 1.84
-  Max DD    :  -8.2%
-  Avg Hold  :  6.2d
-
-SENTIMENT
-─────────────────────────────────────────────────────────────────────────────
-  Call      :  NEUTRAL
-  Confidence:  0.62
-  Headlines :  2 neutral, 1 positive (last 7d)
-
-SUMMARY & PLAN
-─────────────────────────────────────────────────────────────────────────────
-  ► ENTER — all preset gates pass, regime supports, sentiment neutral
-  ► Entry : 47,100  (atau limit di support terdekat)
-  ► Stop  : 44,745  (preset -5%)
-  ► Target: 49,455  (preset +5%, consider Prev H as partial exit)
-  ► Hold  : maks 10 hari trading
+══════════════════════════════════════════════════════════════════════════════
+SUMMARY: Score 72.4 · LOW_RISK · 62% WR · neutral news
+PLAN:  ENTER setup passed. Consider 2 lots at 47,100; TP 49,455; SL 44,745; max hold 10 trading days.
 ══════════════════════════════════════════════════════════════════════════════
 ```
 
@@ -435,7 +403,7 @@ SUMMARY & PLAN
 
 ### Membaca Gate `foreign-bounce`
 
-Preset `foreign-bounce` mengevaluasi 6 gate secara deterministik:
+Preset `foreign-bounce` mengevaluasi **6 gate** secara deterministik:
 
 | Gate | Requirement | Rationale |
 |------|-------------|-----------|
@@ -443,12 +411,23 @@ Preset `foreign-bounce` mengevaluasi 6 gate secara deterministik:
 | `vwap_disc_pct ≥ +3%` | Asing underwater ≥ 3% | Price floor aktif — mereka defend posisi |
 | `trend = SIDE` | Harga ranging vs SMA20 | Masuk sebelum move, bukan saat sudah trending |
 | `flow_pct ≥ +5%` | Asing dominasi ≥ 5% volume harian | Bukan noise — ada aksi nyata setiap hari |
+| `RSI present` | Data RSI harus tersedia | Validasi indikator bisa dihitung |
 | `rsi ≤ 60` | RSI tidak overbought | Masih ada ruang naik |
 
 **Output gate:**
 - `ENTER` — semua 6 gate pass
 - `WATCH` — skor ≥ 70 ATAU ≤ 2 gate gagal — monitor, mungkin masuk besok
 - `AVOID` — terlalu banyak gate gagal
+
+**Regime-adaptive TP/SL:** TP dan SL preset bervariasi berdasarkan regime entry, di-load dari `config/swing_screener.yaml`:
+
+| Regime | TP | SL | R:R |
+|--------|----|----|-----|
+| BULLISH | +8% | -4% | 2:1 |
+| SIDEWAYS | +5% | -5% | 1:1 |
+| WEAK | +3% | -3% | 1:1 |
+| RISK_OFF | +3% | -3% | 1:1 |
+| Default | +5% | -5% | 1:1 |
 
 ### Opsi Analisis Lainnya
 
@@ -506,29 +485,37 @@ saham trade swing size BBRI --capital 10000000 --risk-pct 1 --entry 4825
 
 Contoh output:
 ```
-POSITION SIZING — BBRI
-══════════════════════════════════════════════════════
+══════════════════════════════════════════════════════════════════
+POSITION SIZE — BBRI · 2026-06-13
+══════════════════════════════════════════════════════════════════
+
 INPUTS
-  Capital        : Rp 10,000,000
-  Risk %         : 1.0%  (Rp 100,000 at risk)
-  Entry          : 4,825
-  ATR(14)        : 128.4
-  ATR Mult       : 1.5×
+  Capital                   10,000,000 IDR
+  Risk per trade                 1.00 %  =     100,000 IDR
+  Entry (latest close)           4,825
+  ATR(14)                       128.40
+  ATR multiplier                   1.5×
+  Reward : Risk                    2.0
 
 STOP
-  Stop Price     : 4,633  (4,825 - 1.5 × 128.4)
-  Distance       : 192 per share
-  Stop %         : -3.98%
+  Stop price                    4,633
+  Stop distance                   192  per share
+  Stop %                       -3.98 %
 
 TARGET
-  Target Price   : 5,209  (2.0 : 1.0 R/R)
-  Target %       : +7.96%
+  Target price                  5,178
+  Target %                     +7.32 %
 
 POSITION
-  Max Lots       : 5 lots  (500 shares)
-  Estimated Cost : Rp 2,412,500
-  Actual Risk    : Rp 96,000  (0.96%)
-══════════════════════════════════════════════════════
+  Raw shares                      520
+  Round lots                        5  lots = 500 shares
+  Position cost            2,412,500  IDR  (24.1% of capital)
+  Actual risk                 96,000  IDR  (vs target 100,000)
+  Actual reward              192,000  IDR
+
+══════════════════════════════════════════════════════════════════
+ACTION: Buy 5 lots at 4,825.  Stop 4,633.  Target 5,178.
+══════════════════════════════════════════════════════════════════
 ```
 
 ### Parameter Sizing
@@ -657,34 +644,41 @@ saham trade swing review --horizon 5
 
 Contoh output:
 ```
-SWING REVIEW — horizon: 10d | 2026-06-13
-═══════════════════════════════════════════════════════════════════
-BY SCORE BUCKET
-  Score ≥ 70  :  12 entries | avg +3.8%  | win rate 66.7%
+══════════════════════════════════════════════════════════════════
+ACCUMULATION TRADE JOURNAL REVIEW
+══════════════════════════════════════════════════════════════════
+Journal  : journals/accumulation.csv
+Entries  : 24 total | 20 with 10d+ data
+Horizon  : 10 trading days | min_score filter: 0.0
 
-BY PRESET DECISION
-  ENTER        :   8 entries | avg +5.4%  | win rate 62.5%
-  WATCH        :   6 entries | avg +1.7%  | win rate 50.0%
-  AVOID        :   3 entries | avg -2.4%  | win rate 33.3%
-  Score 40–69 :   8 entries | avg +1.2%  | win rate 50.0%
-  Score < 40  :   4 entries | avg -0.8%  | win rate 25.0%
+PERFORMANCE BY SCORE BUCKET
+  BUCKET       N    AVG_5D    AVG_10D   WIN_RATE_10D
+  --------------------------------------------------
+  Score ≥ 70   12    +3.2%     +5.1%           67%
+  Score 40–69   8    +1.1%     +1.8%           50%
+  Score 0–39    5    -0.8%     -2.1%           40%
 
-BY PATTERN
-  sustained       :  7 entries | avg +4.2%  | win rate 71.4%
-  building        :  6 entries | avg +2.8%  | win rate 66.7%
-  fresh rotation  :  4 entries | avg +0.9%  | win rate 50.0%
-  long-term only  :  3 entries | avg -1.1%  | win rate 33.3%
+PERFORMANCE BY PRESET DECISION
+  DECISION       N   AVG_10D   WIN_RATE  AVG_MAX_UP   AVG_MAX_DD
+  --------------------------------------------------------------
+  ENTER          8    +5.4%       62%       +8.9%       -3.8%
+  WATCH          6    +1.7%       50%       +5.2%       -5.9%
+  AVOID          3    -2.4%       33%       +2.1%       -7.4%
 
-SIGNAL DELTA ANALYSIS
-  streak (higher → better return):  r = +0.41  ✓ predictive
-  vwap_disc (higher → better):      r = +0.38  ✓ predictive
-  bb_pctile (lower → better):       r = -0.29  ✓ predictive
-  flow_pct (higher → better):       r = +0.22  ~ weak signal
+PERFORMANCE BY PATTERN
+  PATTERN              N   AVG_10D   WIN_RATE  AVG_MAX_UP   AVG_MAX_DD
+  ----------------------------------------------------------------------
+  sustained            7    +6.2%       71%      +10.1%       -3.2%
+  building             5    +4.8%       60%       +8.3%       -4.1%
+  fresh rotation       3    +0.4%       33%       +5.0%       -6.7%
 
-RECOMMENDATION
-  Focus on: sustained + building patterns, streak ≥ 3d, vwap_disc ≥ 3%
-  Reduce: long-term only (negative avg return)
-═══════════════════════════════════════════════════════════════════
+SIGNAL DELTA (correlation with 10d return)
+  SIGNAL         GROUP A                 N_A  AVG_A  GROUP B                 N_B  AVG_B
+  ----------------------------------------------------------------------------------
+  streak         ≥5d                      12  +5.8%  <5d                      8  +0.9%
+  vwap_disc      >0 (underwater)          15  +4.2%  ≤0 (in profit)          5  -1.8%
+  bb_pctile      ≤20% (squeeze)            6  +7.1%  >40%                   14  +2.1%
+  flow_pct       ≥15%                      9  +6.0%  <15%                   11  +1.3%
 ```
 
 ---
@@ -708,28 +702,34 @@ saham trade swing backtest --universe lq45 --start 2025-01-01 --with-regime
 
 Contoh output:
 ```
-SWING BACKTEST — foreign-bounce | LQ45 | 2025-01-01 → 2026-06-13
-═══════════════════════════════════════════════════════════════════
-SUMMARY
-  Initial Capital  : Rp 100,000,000
-  Final Equity     : Rp 118,420,000
-  Total Return     : +18.4%
-  Max Drawdown     : -12.3%
-  Trade Count      : 87
-  Win Rate         : 59.8%
-  Profit Factor    : 1.72
-  Exposure %       : 34.2%
+══════════════════════════════════════════════════════════════════════════════
+WALK-FORWARD SWING BACKTEST
+══════════════════════════════════════════════════════════════════════════════
+Preset: foreign-bounce | Period: 2025-01-01 to 2026-06-13
+Cost: 20 bps one-way, applied on entry and exit
+Read as: the workflow scans each replay date, opens eligible signals within
+portfolio limits, then exits by TP/SL/max-hold.
+
+METRIC                             VALUE
+──────────────────────────────────────────────
+Initial capital               100,000,000
+Final equity                  118,400,000
+Total return                       +18.40%
+Max drawdown                        -8.20%
+Trades                                  47
+Win rate                             57.4%
+Avg trade return                     +1.84%
+Profit factor                          1.72
+Exposure days                        38.5%
+
+Skipped: no_cash=0, duplicate=0, no_forward_data=5, regime=8
 
 PERFORMANCE BY ENTRY REGIME
-  BULLISH  : 22 trades | win 63.6% | avg +3.1% | PF 1.91
-  SIDEWAYS : 41 trades | win 65.9% | avg +3.8% | PF 2.14  ← best
-  WEAK     : 18 trades | win 50.0% | avg +1.2% | PF 1.28
-  RISK_OFF :  6 trades | win 33.3% | avg -2.1% | PF 0.61  ← avoid
-
-RECOMMENDATION
-  Filter to BULLISH + SIDEWAYS for better risk-adjusted returns
-  Command: --allow-regimes BULLISH,SIDEWAYS
-═══════════════════════════════════════════════════════════════════
+──────────────────────────────────────────────────────────────────────────────
+REGIME        TRADES    AVG_RET       WIN       TOTAL_PNL
+BULLISH           18     +3.1%       67%      12,400,000
+SIDEWAYS          22     +1.4%       55%       7,300,000
+WEAK               7     -0.8%       43%      -1,200,000
 ```
 
 ### Validasi Broker Quality Dengan Audit
@@ -761,13 +761,16 @@ saham trade swing compare --universe lq45 --start 2025-01-01
 
 Contoh output:
 ```
-VARIANT COMPARISON — LQ45 | 2025-01-01 → today
-════════════════════════════════════════════════════════
-  Variant           Return   MaxDD   Trades  WinRate  PF
-  baseline          +18.4%  -12.3%      87    59.8%  1.72
-  sideways_only     +21.2%   -8.9%      41    65.9%  2.14  ← best
-  weak_plus         +19.1%  -11.2%      59    61.0%  1.83
-════════════════════════════════════════════════════════
+══════════════════════════════════════════════════════════════════════════════
+SWING BACKTEST COMPARISON
+══════════════════════════════════════════════════════════════════════════════
+Universe: lq45 | Period: 2025-01-01 to 2026-06-13 | Cost: 20 bps one-way
+
+VARIANT          REGIMES                   TRADES    RETURN    MAX_DD       WIN       PF   SKIP_REG   EXPOSURE
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+baseline         all                           47   +18.4%    -8.2%     57.4%     1.72          0     38.5%
+sideways_only    SIDEWAYS,BULLISH              39   +21.2%    -5.8%     61.5%     1.94          8     32.1%
+weak_plus        WEAK,SIDEWAYS,BULLISH         44   +19.8%    -7.1%     58.0%     1.81          3     36.4%
 ```
 
 ### Backtest Saham Spesifik
@@ -844,6 +847,12 @@ Default backtest biaya adalah `--cost-bps 20` one-way, diterapkan saat entry dan
 │    saham trade swing log --ticker TICKER --entry-price XXXX --from-analysis │
 │                    --with-regime                                      │
 │    saham trade swing review --horizon 10                                    │
+├──────────────────────────────────────────────────────────────────────┤
+│  REGIME-ADAPTIVE TP/SL                                                  │
+│    BULLISH: TP+8% / SL-4% (2:1 R:R)                                    │
+│    SIDEWAYS: TP+5% / SL-5% (1:1 R:R) — default dalam preset            │
+│    WEAK: TP+3% / SL-3%                                                  │
+│    RISK_OFF: TP+3% / SL-3%                                              │
 ├──────────────────────────────────────────────────────────────────────┤
 │  VALIDASI BERKALA (bulanan)                                           │
 │    saham trade swing backtest --universe lq45 --start 2025-01-01 --with-regime
