@@ -231,6 +231,15 @@ ACCUMULATION (7 sessions)                          signal: building
   VWAP   +4.2%    BB%ILE  15%    TREND  SIDE
   [cons=28.6 streak=20.1 vwap=8.4 rsi=6.2 flow=9.2 bb=8.5]
 
+ENRICHMENT (stockbit, cached by `saham data update`)
+  📊 ANALYST: 35B 2H | target Rp8,827 (+40.7%)
+  🏦 HOLDING: DWIMURIA 54.9% | Inst 31.9% | Individual 8.7%
+  🔍 BANDAR: Score +5 (Acc, top1 47%)
+  📈 FUNDAM: P/E 18.3, ROE 21.2%, F-Score 7, quality=True
+  ⭐ INSIDER BUY — John Doe (Comm) BUY 500,000 @ 1,200
+  ⚠ DIVIDEND RISK
+  SEASONAL +0.9% (60%wr, 5y)
+
 FLOW DETAIL (30 sessions)                          through: 2026-06-12 · institutional desk
   Range  2026-05-04 → 2026-06-12   Sessions  30/30
   Net    +71.81B IDR   BUY/SELL  19/11   STREAK  6s
@@ -289,6 +298,22 @@ PLAN:  ENTER setup passed. Consider 4 lots at 4,840; TP 5,082; SL 4,598; max hol
 - Absence of a broker code means it was not present in the cached top-broker rows, not that the broker had zero activity.
 - `Weighted net` is a measurement layer only. It does not change `ENTER/WATCH/AVOID` gates yet.
 - `Broker quality` notes under the preset block are confirmation/warning context only. `smart+` can support an `ENTER` or prioritize a `WATCH`, while `noise+` or `smart-` warns you to demand stronger chart confirmation or avoid upgrading the setup.
+
+### Enrichment signals explanation
+
+The `ENRICHMENT` section shows live Stockbit enrichment signals (cached by `saham data update`). These are read-only — no API calls from analysis commands.
+
+| Signal | Color rule | What it tells you |
+|--------|-----------|-------------------|
+| 📊 ANALYST | Green if bullish + ≥10% upside target | Analyst consensus direction and price target |
+| 🏦 HOLDING | Cyan if institutional ≥30% | Who owns the stock — institutional vs retail domination |
+| 🔍 BANDAR | Green if score ≥4, Yellow if Acc, Red if Dis | Stockbit's proprietary institutional operator signal (-9 to +9) |
+| 📈 FUNDAM | Green if quality (ROE≥15% + F-Score≥5 + profit) | Fundamental health check: P/E, ROE, Piotroski F-Score |
+| ⭐ INSIDER BUY | Cyan | Director/commissioner buying in last 90 days |
+| ⚠ DIVIDEND RISK | Yellow | Upcoming ex-dividend date — price may gap down |
+| SEASONAL | Green if positive return | Historical monthly return % and win rate (5 years) |
+
+All signals are pre-warmed by `saham data update --universe lq45` and served from SQLite cache during analysis.
 
 ### All options
 

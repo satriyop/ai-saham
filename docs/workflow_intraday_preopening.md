@@ -71,6 +71,15 @@ Semua threshold screener ada di `config/pre_open_screener.yaml`:
 
 File lengkap: `config/pre_open_screener.yaml` — semua bisa diubah tanpa kode.
 
+### Cek Kesehatan Data
+
+```bash
+saham data status
+```
+
+Menampilkan tanggal data terbaru untuk setiap provider (IDX, Yahoo, Stockbit),
+jumlah baris di tiap tabel database, dan peringatan data kadaluarsa.
+
 ---
 
 ## 2. Peta Waktu Pagi Hari
@@ -136,6 +145,13 @@ Output kalau sesi sudah expired (> 8 jam):
 
 Run: saham data stockbit login
 ```
+
+Untuk inspeksi manual sesi (browser interaktif):
+```bash
+saham data stockbit browse
+```
+Membuka browser headed dengan sesi yang sudah login — berguna untuk debugging
+endpoint atau melihat data mentah langsung di Stockbit.
 
 **Kalau status `possibly expired`:** jalankan `saham data stockbit login` sekarang. Tool akan otomatis warm-up token setelah login — tidak perlu langkah ekstra.
 

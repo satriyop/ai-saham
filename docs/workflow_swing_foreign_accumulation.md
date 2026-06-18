@@ -272,6 +272,30 @@ FOREIGN ACCUMULATION — LQ45 | MULTI-WINDOW | 2026-06-13
 | `mixed` | Ada named flow, tapi tidak jelas dipimpin smart/noise tier |
 | `n/a` | Tidak ada detail broker Stockbit bernama di cache |
 
+### Enrichment Signals (Stockbit)
+
+Di bawah tabel screener dan output `swing analyze`, muncul baris-baris enrichment
+dari cache Stockbit (di-prewarm oleh `saham data update`):
+
+| Signal | Contoh Tampilan | Sumber |
+|--------|----------------|--------|
+| **Analyst Consensus** | `📊 ANALYST: 35B 2H \| target Rp8,827 (+40.7%)` | Stockbit analyst ratings |
+| **Shareholding** | `🏦 HOLDING: DWIMURIA 54.9% \| Inst 31.9% \| Individual 8.7%` | Stockbit shareholder API |
+| **Bandar Detector** | `🔍 BANDAR: Score +5 (Acc, top1 47%)` | Stockbit market detectors |
+| **Fundamentals** | `📈 FUNDAM: P/E 18.3, ROE 21.2%, F-Score 7, quality=True` | Stockbit keystats |
+| **Insider Activity** | `⭐ INSIDER BUY — John Doe (Comm) BUY 500,000 @ 1,200` | Stockbit insider API |
+| **Corp Action Risk** | `⚠ DIVIDEND RISK` atau `⚠ RIGHTS ISSUE` | Stockbit corp action calendar |
+| **Seasonality** | `SEASONAL +0.9% (60%wr, 5y)` | Stockbit seasonality API |
+
+Warna indikatif:
+- **Hijau** — bullish/buy sinyal (analyst bullish+upside≥10%, bandar score≥4, quality fundamentals)
+- **Kuning** — netral atau akumulasi awal
+- **Merah** — bearish/sell sinyal (bandar distributing, analyst sell > buy)
+- **Putih** — netral atau data terbatas
+
+Semua sinyal ini read-only — analysis commands tidak pernah memanggil API.
+Data di-fetch sekali oleh `saham data update`, cache di SQLite.
+
 ---
 
 ### Filter Tambahan
