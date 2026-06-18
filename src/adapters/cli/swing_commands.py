@@ -125,28 +125,22 @@ NOISE_BROKERS       = set(_SC.noise_brokers)
 
 
 def _make_stockbit_providers(db_path: Path) -> "StockbitProviders":
-    """Return all Stockbit providers sharing one authenticated session."""
+    """Return read-only Stockbit providers backed by SQLite cache.
+
+    No API calls are made here. broker_provider=None means each provider
+    reads from SQLite and returns None on a cache miss. The only command
+    that fetches live data from Stockbit is `saham data update`.
+    """
     from src.adapters.cli.accumulation_commands import StockbitProviders
-    try:
-        import playwright  # noqa: F401 — fast availability check before touching browser
-    except ImportError:
-        return StockbitProviders.unavailable()
-    try:
-        from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
-        provider = StockbitPlaywrightBrokerProvider()
-        if not provider.is_authenticated():
-            return StockbitProviders.unavailable()
-        return StockbitProviders(
-            corp_repo=StockbitCorporateActionRepository(broker_provider=provider, db_path=db_path),
-            season_prov=StockbitSeasonalityProvider(broker_provider=provider, db_path=db_path),
-            insider_prov=StockbitInsiderActivityProvider(broker_provider=provider, db_path=db_path),
-            analyst_prov=StockbitAnalystConsensusProvider(broker_provider=provider, db_path=db_path),
-            shareholding_prov=StockbitShareholdingProvider(broker_provider=provider, db_path=db_path),
-            bandar_prov=StockbitBandarDetectorProvider(broker_provider=provider, db_path=db_path),
-            fundamentals_prov=StockbitFundamentalsProvider(broker_provider=provider, db_path=db_path),
-        )
-    except Exception:
-        return StockbitProviders.unavailable()
+    return StockbitProviders(
+        corp_repo=StockbitCorporateActionRepository(broker_provider=None, db_path=db_path),
+        season_prov=StockbitSeasonalityProvider(broker_provider=None, db_path=db_path),
+        insider_prov=StockbitInsiderActivityProvider(broker_provider=None, db_path=db_path),
+        analyst_prov=StockbitAnalystConsensusProvider(broker_provider=None, db_path=db_path),
+        shareholding_prov=StockbitShareholdingProvider(broker_provider=None, db_path=db_path),
+        bandar_prov=StockbitBandarDetectorProvider(broker_provider=None, db_path=db_path),
+        fundamentals_prov=StockbitFundamentalsProvider(broker_provider=None, db_path=db_path),
+    )
 BROKER_WEIGHTS: dict[str, Decimal] = {
     **{code: _SC.smart_weight for code in SMART_MONEY_BROKERS},
     **{code: _SC.noise_weight for code in NOISE_BROKERS},

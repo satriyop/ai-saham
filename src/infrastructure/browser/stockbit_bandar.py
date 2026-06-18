@@ -225,6 +225,8 @@ class StockbitBandarDetectorProvider(BandarDetectorProvider):
             logger.warning("bandar_detector: cache write failed for %s: %s", snap.ticker, e)
 
     def _fetch(self, ticker: str, session_date: date) -> BandarDetectorSnapshot | None:
+        if self._provider is None:
+            return None
         try:
             from src.infrastructure.browser.playwright_stockbit import _exodus_get
             token = self._provider._get_token()

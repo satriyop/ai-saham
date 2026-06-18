@@ -319,6 +319,8 @@ class StockbitCorporateActionRepository(CorporateActionRepository):
 
     def _fetch_from_api(self, ticker: str) -> list[CorporateActionEvent]:
         """Call Exodus /corpaction/{ticker} and parse the response."""
+        if self._provider is None:
+            return []
         try:
             from src.infrastructure.browser.playwright_stockbit import _exodus_get
             token = self._provider._get_token()

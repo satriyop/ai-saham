@@ -13,7 +13,7 @@ Actual API shape (confirmed 2026-06):
   data.price_target.current_price  → int (IDR)
   data.last_updated     → "15 Jun 26" (DD Mon YY)
 
-Caching: in-memory per ticker — data changes at most daily; static within session.
+Caching: SQLite daily cache (table: analyst_cache, TTL = 1 calendar day).
 
 Layer: Infrastructure
 """
@@ -21,7 +21,9 @@ Layer: Infrastructure
 from __future__ import annotations
 
 import logging
+import sqlite3
 from datetime import date, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from src.domain.ports.analyst_consensus_provider import AnalystConsensusProvider
@@ -78,23 +80,144 @@ def _parse_consensus(ticker: str, body: dict) -> AnalystConsensus | None:
 class StockbitAnalystConsensusProvider(AnalystConsensusProvider):
     """Fetches analyst consensus from Stockbit Exodus API.
 
-    In-memory cache keyed by ticker — analyst data changes at most daily;
-    static within a CLI session.
+    SQLite daily cache (table: analyst_cache, TTL = 1 calendar day).
+    Analyst data changes at most daily, so a fresh cache is served directly
+    without hitting the API on every swing analyze invocation.
+
+    Args:
+        broker_provider: Authenticated StockbitPlaywrightBrokerProvider for token access.
+        db_path: Path to the SQLite database (same data.db used by other repos).
     """
 
-    def __init__(self, broker_provider: "StockbitPlaywrightBrokerProvider") -> None:
+    def __init__(
+        self,
+        broker_provider: "StockbitPlaywrightBrokerProvider",
+        db_path: str | Path = Path("data.db"),
+    ) -> None:
         self._provider = broker_provider
-        self._cache: dict[str, AnalystConsensus | None] = {}
+        self._db_path = Path(db_path).expanduser()
+        self._ensure_schema()
+
+    # ── Schema ───────────────────────────────────────────────────────────────
+
+    def _get_conn(self) -> sqlite3.Connection:
+        self._db_path.parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(str(self._db_path))
+        conn.row_factory = sqlite3.Row
+        return conn
+
+    def _ensure_schema(self) -> None:
+        try:
+            with self._get_conn() as conn:
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS analyst_cache (
+                        ticker           TEXT NOT NULL PRIMARY KEY,
+                        buy_count        INTEGER NOT NULL DEFAULT 0,
+                        hold_count       INTEGER NOT NULL DEFAULT 0,
+                        sell_count       INTEGER NOT NULL DEFAULT 0,
+                        avg_price_target REAL,
+                        current_price    REAL,
+                        last_updated     TEXT,
+                        fetched_date     TEXT NOT NULL
+                    )
+                """)
+                conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_analyst_ticker_fetched
+                    ON analyst_cache(ticker, fetched_date)
+                """)
+        except Exception as e:
+            logger.warning("analyst_cache schema error: %s", e)
+
+    # ── Cache ─────────────────────────────────────────────────────────────────
+
+    def _is_cache_fresh(self, ticker: str) -> bool:
+        today_str = date.today().isoformat()
+        try:
+            with self._get_conn() as conn:
+                row = conn.execute(
+                    "SELECT 1 FROM analyst_cache WHERE ticker=? AND fetched_date=? LIMIT 1",
+                    (ticker.upper(), today_str),
+                ).fetchone()
+            return row is not None
+        except Exception:
+            return False
+
+    def _read_cache(self, ticker: str) -> AnalystConsensus | None:
+        try:
+            with self._get_conn() as conn:
+                row = conn.execute(
+                    """
+                    SELECT buy_count, hold_count, sell_count,
+                           avg_price_target, current_price, last_updated
+                    FROM analyst_cache
+                    WHERE ticker=?
+                    """,
+                    (ticker.upper(),),
+                ).fetchone()
+        except Exception as e:
+            logger.debug("analyst_cache read error for %s: %s", ticker, e)
+            return None
+
+        if row is None:
+            return None
+        if row["buy_count"] + row["hold_count"] + row["sell_count"] == 0:
+            return None  # sentinel for "fetched but no data"
+
+        return AnalystConsensus(
+            ticker=ticker.upper(),
+            buy_count=row["buy_count"],
+            hold_count=row["hold_count"],
+            sell_count=row["sell_count"],
+            avg_price_target=row["avg_price_target"],
+            current_price=row["current_price"],
+            last_updated=_parse_date(row["last_updated"] or ""),
+        )
+
+    def _write_cache(self, ticker: str, consensus: AnalystConsensus | None) -> None:
+        today_str = date.today().isoformat()
+        try:
+            with self._get_conn() as conn:
+                conn.execute(
+                    """
+                    INSERT OR REPLACE INTO analyst_cache
+                        (ticker, buy_count, hold_count, sell_count,
+                         avg_price_target, current_price, last_updated, fetched_date)
+                    VALUES (?,?,?,?,?,?,?,?)
+                    """,
+                    (
+                        ticker.upper(),
+                        consensus.buy_count if consensus else 0,
+                        consensus.hold_count if consensus else 0,
+                        consensus.sell_count if consensus else 0,
+                        consensus.avg_price_target if consensus else None,
+                        consensus.current_price if consensus else None,
+                        consensus.last_updated.isoformat() if consensus and consensus.last_updated else None,
+                        today_str,
+                    ),
+                )
+        except Exception as e:
+            logger.debug("analyst_cache write error for %s: %s", ticker, e)
+
+    # ── Port implementation ───────────────────────────────────────────────────
 
     def get_consensus(self, ticker: str) -> AnalystConsensus | None:
-        key = ticker.upper()
-        if key in self._cache:
-            return self._cache[key]
+        """Return analyst consensus for ticker.
+
+        Checks SQLite cache first (TTL = today). On cache miss, calls the
+        Stockbit API and writes results before returning.
+        """
+        ticker = ticker.upper()
+
+        if self._is_cache_fresh(ticker):
+            return self._read_cache(ticker)
+
         result = self._fetch(ticker)
-        self._cache[key] = result
+        self._write_cache(ticker, result)
         return result
 
     def _fetch(self, ticker: str) -> AnalystConsensus | None:
+        if self._provider is None:
+            return None
         try:
             from src.infrastructure.browser.playwright_stockbit import _exodus_get
             token = self._provider._get_token()

@@ -93,33 +93,21 @@ class StockbitProviders:
 
 
 def _make_stockbit_providers(db_path: Path) -> "StockbitProviders":
-    """Return all Stockbit providers sharing one authenticated session.
+    """Return read-only Stockbit providers backed by SQLite cache.
 
-    All providers return None when Playwright is not installed or no
-    authenticated session exists — screener degrades gracefully.
-    Single provider instance ensures the token is fetched once and cached
-    for 30 minutes across all enrichment calls.
+    No API calls are made here. broker_provider=None means each provider
+    reads from SQLite and returns None on a cache miss. The only command
+    that fetches live data from Stockbit is `saham data update`.
     """
-    try:
-        import playwright  # noqa: F401 — fast availability check before touching browser
-    except ImportError:
-        return StockbitProviders.unavailable()
-    try:
-        from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
-        provider = StockbitPlaywrightBrokerProvider()
-        if not provider.is_authenticated():
-            return StockbitProviders.unavailable()
-        return StockbitProviders(
-            corp_repo=StockbitCorporateActionRepository(broker_provider=provider, db_path=db_path),
-            season_prov=StockbitSeasonalityProvider(broker_provider=provider, db_path=db_path),
-            insider_prov=StockbitInsiderActivityProvider(broker_provider=provider, db_path=db_path),
-            analyst_prov=StockbitAnalystConsensusProvider(broker_provider=provider, db_path=db_path),
-            shareholding_prov=StockbitShareholdingProvider(broker_provider=provider, db_path=db_path),
-            bandar_prov=StockbitBandarDetectorProvider(broker_provider=provider, db_path=db_path),
-            fundamentals_prov=StockbitFundamentalsProvider(broker_provider=provider, db_path=db_path),
-        )
-    except Exception:
-        return StockbitProviders.unavailable()
+    return StockbitProviders(
+        corp_repo=StockbitCorporateActionRepository(broker_provider=None, db_path=db_path),
+        season_prov=StockbitSeasonalityProvider(broker_provider=None, db_path=db_path),
+        insider_prov=StockbitInsiderActivityProvider(broker_provider=None, db_path=db_path),
+        analyst_prov=StockbitAnalystConsensusProvider(broker_provider=None, db_path=db_path),
+        shareholding_prov=StockbitShareholdingProvider(broker_provider=None, db_path=db_path),
+        bandar_prov=StockbitBandarDetectorProvider(broker_provider=None, db_path=db_path),
+        fundamentals_prov=StockbitFundamentalsProvider(broker_provider=None, db_path=db_path),
+    )
 
 
 accumulation_app = typer.Typer(
@@ -1624,28 +1612,159 @@ def universe_list(
 def universe_update(
     universe_name: Annotated[
         Optional[str],
-        typer.Option("--universe", "-u", help="Universe to update (lq45, idx80, idxcomp100)"),
+        typer.Option("--universe", "-u", help="Universe(s) to update, comma-separated (e.g. lq45,idx80). Omit for all."),
+    ] = None,
+    discover: Annotated[
+        bool,
+        typer.Option("--discover", help="List all available universes from Stockbit without updating"),
+    ] = False,
+    config_path: Annotated[
+        Optional[Path],
+        typer.Option("--config", help="Path to universes.yaml"),
     ] = None,
 ) -> None:
     """
-    Refresh universe ticker lists from IDX website.
+    Refresh universe ticker lists from Stockbit Exodus API.
 
-    Currently prints instructions — automatic scraping from IDX
-    will be implemented in a future release.
+    Discovers all IDX index universes (LQ45, IDX30, IDX80, IDXComp100, JII,
+    MBX, BUMN20) by querying the Stockbit sector/subsector API, then fetches
+    the live constituent lists and updates config/universes.yaml.
 
-    Example:
-        saham universe update --universe lq45
+    Requires an active Stockbit session (run `saham stockbit login` first).
+
+    Examples:
+        saham universe update                     # update all known universes
+        saham universe update --universe lq45     # update only LQ45
+        saham universe update --universe lq45,idx80
+        saham universe update --discover          # list available without updating
     """
+    import yaml
+    from datetime import date
+    from pathlib import Path as _Path
+
+    resolved_config = config_path or _Path("config/universes.yaml")
+
+    # Check Stockbit session
+    profile_dir = _Path(".stockbit_profile")
+    if not profile_dir.exists():
+        typer.echo("")
+        typer.echo("No Stockbit session found. Run `saham stockbit login` first.")
+        typer.echo("")
+        typer.echo("Manual alternative:")
+        typer.echo("  1. Visit https://www.idx.co.id/en/market-data/indexes/")
+        typer.echo("  2. Edit config/universes.yaml with updated tickers")
+        raise typer.Exit(1)
+
+    try:
+        from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
+        from src.infrastructure.browser.stockbit_universe import StockbitUniverseProvider
+
+        provider = StockbitPlaywrightBrokerProvider()
+        if not provider.is_authenticated():
+            typer.echo("Stockbit session expired. Run `saham stockbit login` to refresh.")
+            raise typer.Exit(1)
+
+        universe_prov = StockbitUniverseProvider(broker_provider=provider)
+    except ImportError as e:
+        typer.echo(f"Playwright not installed: {e}")
+        raise typer.Exit(1)
+
+    # Discover available subsectors
     typer.echo("")
-    typer.echo("Universe auto-update from IDX website is not yet implemented.")
+    typer.echo("Discovering IDX index universes from Stockbit...")
+    available = universe_prov.list_available()
+
+    if discover:
+        typer.echo("")
+        typer.echo(f"{'UNIVERSE KEY':<16} {'SUBSECTOR ID'}")
+        typer.echo("─" * 35)
+        for key, sid in sorted(available.items()):
+            typer.echo(f"  {key:<14} {sid}")
+        typer.echo("")
+        typer.echo(f"Total: {len(available)} universe(s) available")
+        return
+
+    # Determine which universes to update
+    if universe_name:
+        targets = [u.strip().lower() for u in universe_name.split(",")]
+        unknown = [t for t in targets if t not in available]
+        if unknown:
+            typer.echo(f"Unknown universe(s): {', '.join(unknown)}")
+            typer.echo(f"Available: {', '.join(sorted(available.keys()))}")
+            raise typer.Exit(1)
+    else:
+        # Default: update the main analysis universes (skip ihsg — too many tickers)
+        default_targets = ["lq45", "idx30", "idx80", "idxcomp100", "jii", "bumn20"]
+        targets = [t for t in default_targets if t in available]
+
+    # Load existing YAML to preserve structure and any manually curated entries
+    existing: dict = {}
+    if resolved_config.exists():
+        try:
+            with open(resolved_config) as f:
+                existing = yaml.safe_load(f) or {}
+        except Exception as e:
+            typer.echo(f"Warning: could not read {resolved_config}: {e}")
+
+    today_str = date.today().isoformat()
+    updated: dict[str, list[str]] = {}
+    failed: list[str] = []
+
+    typer.echo(f"Fetching {len(targets)} universe(s): {', '.join(targets)}")
     typer.echo("")
-    typer.echo("To update manually:")
-    typer.echo("  1. Visit https://www.idx.co.id/en/market-data/indexes/")
-    typer.echo("  2. Download the latest LQ45 / IDX80 constituent list")
-    typer.echo("  3. Edit config/universes.yaml with the new tickers")
-    typer.echo("  4. Update the 'updated' date field")
-    typer.echo("")
-    typer.echo("IDX rebalances indices every February and August.")
+
+    for key in targets:
+        typer.echo(f"  {key}...", nl=False)
+        tickers = universe_prov.fetch(key)
+        if tickers:
+            updated[key] = tickers
+            prev_count = len((existing.get(key) or {}).get("tickers") or [])
+            delta = len(tickers) - prev_count
+            delta_str = f"+{delta}" if delta > 0 else str(delta) if delta < 0 else "="
+            typer.echo(
+                typer.style(f" {len(tickers)} tickers ({delta_str} vs prev)", fg=typer.colors.GREEN)
+            )
+        else:
+            failed.append(key)
+            typer.echo(typer.style(" FAILED", fg=typer.colors.RED))
+
+    if not updated:
+        typer.echo("")
+        typer.echo("No universes updated — all fetches failed.")
+        raise typer.Exit(1)
+
+    # Merge into existing YAML, preserving universes we didn't update
+    for key, tickers in updated.items():
+        existing[key] = {
+            "updated": today_str,
+            "tickers": tickers,
+        }
+
+    # Write YAML with a header comment
+    header = (
+        "# IDX Stock Universe Lists\n"
+        "#\n"
+        "# These lists are used by `saham update` and `saham swing screen`\n"
+        "# to define which tickers to scan.\n"
+        "#\n"
+        "# IDX rebalances LQ45 and IDX80 every February and August.\n"
+        "# Auto-updated via: saham universe update (Stockbit Exodus API)\n"
+        "#\n"
+        f"# Last updated: {today_str}\n\n"
+    )
+
+    try:
+        resolved_config.parent.mkdir(parents=True, exist_ok=True)
+        with open(resolved_config, "w") as f:
+            f.write(header)
+            yaml.dump(existing, f, default_flow_style=False, allow_unicode=True, sort_keys=True)
+        typer.echo("")
+        typer.echo(f"Updated {resolved_config}  ({len(updated)} universe(s))")
+        if failed:
+            typer.echo(typer.style(f"Failed: {', '.join(failed)}", fg=typer.colors.YELLOW))
+    except Exception as e:
+        typer.echo(f"Error writing {resolved_config}: {e}", err=True)
+        raise typer.Exit(1)
 
 
 # ---------------------------------------------------------------------------

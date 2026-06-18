@@ -4,8 +4,8 @@ StockbitSeasonalityProvider — monthly seasonality data from Stockbit Exodus AP
 Calls /company-price-feed/seasonality/{ticker}?year={year}&back_year={back_years}
 and extracts the avg monthly return and win-rate for the requested month.
 
-Caching: in-memory per (ticker, year, month) — data is static within a month,
-so SQLite is overkill. Cache survives the process lifetime (one CLI run).
+Caching: SQLite monthly cache (table: seasonality_cache). TTL = current calendar
+month, since seasonality data only changes when the month rolls over.
 
 Token: Reuses RS256 Bearer token from StockbitPlaywrightBrokerProvider._get_token().
 
@@ -16,6 +16,9 @@ Depends on: playwright_stockbit (for token), SeasonalityProvider port
 from __future__ import annotations
 
 import logging
+import sqlite3
+from datetime import date
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from src.domain.ports.seasonality_provider import SeasonalityProvider
@@ -112,16 +115,136 @@ class StockbitSeasonalityProvider(SeasonalityProvider):
     """
     Fetches monthly seasonality from Stockbit.
 
-    Uses in-memory cache keyed by (ticker, year, month) — static within a
-    CLI session since seasonality data only changes when the month rolls over.
+    SQLite daily cache (table: seasonality_cache). TTL = current calendar month,
+    since Stockbit aggregates across historical years and the result only changes
+    when a new month completes.
 
     Args:
         broker_provider: Authenticated StockbitPlaywrightBrokerProvider for token access.
+        db_path: Path to the SQLite database (same data.db used by other repos).
     """
 
-    def __init__(self, broker_provider: "StockbitPlaywrightBrokerProvider") -> None:
+    def __init__(
+        self,
+        broker_provider: "StockbitPlaywrightBrokerProvider",
+        db_path: str | Path = Path("data.db"),
+    ) -> None:
         self._provider = broker_provider
-        self._cache: dict[tuple[str, int, int], SeasonalEdge | None] = {}
+        self._db_path = Path(db_path).expanduser()
+        self._ensure_schema()
+
+    # ── Schema ───────────────────────────────────────────────────────────────
+
+    def _get_conn(self) -> sqlite3.Connection:
+        self._db_path.parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(str(self._db_path))
+        conn.row_factory = sqlite3.Row
+        return conn
+
+    def _ensure_schema(self) -> None:
+        try:
+            with self._get_conn() as conn:
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS seasonality_cache (
+                        ticker           TEXT NOT NULL,
+                        year             INTEGER NOT NULL,
+                        month            INTEGER NOT NULL,
+                        avg_return_pct   REAL,
+                        win_rate_pct     REAL,
+                        positive_years   INTEGER,
+                        total_years      INTEGER,
+                        back_years       INTEGER,
+                        source           TEXT,
+                        fetched_month    TEXT NOT NULL,
+                        PRIMARY KEY (ticker, year, month)
+                    )
+                """)
+                conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_seasonality_ticker_month
+                    ON seasonality_cache(ticker, fetched_month)
+                """)
+        except Exception as e:
+            logger.warning("seasonality_cache schema error: %s", e)
+
+    # ── Cache ─────────────────────────────────────────────────────────────────
+
+    def _current_month_key(self) -> str:
+        """Return YYYY-MM string for the current calendar month."""
+        today = date.today()
+        return f"{today.year:04d}-{today.month:02d}"
+
+    def _is_cache_fresh(self, ticker: str, year: int, month: int) -> bool:
+        month_key = self._current_month_key()
+        try:
+            with self._get_conn() as conn:
+                row = conn.execute(
+                    "SELECT 1 FROM seasonality_cache WHERE ticker=? AND year=? AND month=? AND fetched_month=? LIMIT 1",
+                    (ticker.upper(), year, month, month_key),
+                ).fetchone()
+            return row is not None
+        except Exception:
+            return False
+
+    def _read_cache(self, ticker: str, year: int, month: int) -> SeasonalEdge | None:
+        try:
+            with self._get_conn() as conn:
+                row = conn.execute(
+                    """
+                    SELECT avg_return_pct, win_rate_pct, positive_years,
+                           total_years, back_years, source
+                    FROM seasonality_cache
+                    WHERE ticker=? AND year=? AND month=?
+                    """,
+                    (ticker.upper(), year, month),
+                ).fetchone()
+        except Exception as e:
+            logger.debug("seasonality_cache read error for %s: %s", ticker, e)
+            return None
+
+        if row is None:
+            return None
+        if row["avg_return_pct"] is None:
+            return None  # sentinel for "fetched but no data"
+
+        return SeasonalEdge(
+            ticker=ticker.upper(),
+            month=month,
+            avg_monthly_return_pct=row["avg_return_pct"],
+            win_rate_pct=row["win_rate_pct"] or 0.0,
+            positive_years=row["positive_years"] or 0,
+            total_years=row["total_years"] or 0,
+            back_years=row["back_years"] or 5,
+            source=row["source"] or "stockbit",
+        )
+
+    def _write_cache(self, ticker: str, year: int, month: int, edge: SeasonalEdge | None) -> None:
+        month_key = self._current_month_key()
+        try:
+            with self._get_conn() as conn:
+                conn.execute(
+                    """
+                    INSERT OR REPLACE INTO seasonality_cache
+                        (ticker, year, month, avg_return_pct, win_rate_pct,
+                         positive_years, total_years, back_years, source, fetched_month)
+                    VALUES (?,?,?,?,?,?,?,?,?,?)
+                    """,
+                    (
+                        ticker.upper(),
+                        year,
+                        month,
+                        edge.avg_monthly_return_pct if edge else None,
+                        edge.win_rate_pct if edge else None,
+                        edge.positive_years if edge else None,
+                        edge.total_years if edge else None,
+                        edge.back_years if edge else None,
+                        edge.source if edge else None,
+                        month_key,
+                    ),
+                )
+        except Exception as e:
+            logger.debug("seasonality_cache write error for %s: %s", ticker, e)
+
+    # ── Port implementation ───────────────────────────────────────────────────
 
     def get_seasonal_edge(
         self,
@@ -130,16 +253,23 @@ class StockbitSeasonalityProvider(SeasonalityProvider):
         month: int,
         back_years: int = 5,
     ) -> SeasonalEdge | None:
-        """Return SeasonalEdge for ticker in given year/month, using in-memory cache."""
-        key = (ticker.upper(), year, month)
-        if key in self._cache:
-            return self._cache[key]
+        """Return SeasonalEdge for ticker in given year/month.
+
+        Checks SQLite cache first (TTL = current calendar month). On cache miss,
+        calls the Stockbit API and writes results before returning.
+        """
+        ticker = ticker.upper()
+
+        if self._is_cache_fresh(ticker, year, month):
+            return self._read_cache(ticker, year, month)
 
         result = self._fetch(ticker, year, month, back_years)
-        self._cache[key] = result
+        self._write_cache(ticker, year, month, result)
         return result
 
     def _fetch(self, ticker: str, year: int, month: int, back_years: int) -> SeasonalEdge | None:
+        if self._provider is None:
+            return None
         try:
             from src.infrastructure.browser.playwright_stockbit import _exodus_get
             token = self._provider._get_token()

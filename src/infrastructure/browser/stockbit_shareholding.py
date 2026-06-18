@@ -236,6 +236,8 @@ class StockbitShareholdingProvider(ShareholdingProvider):
             logger.warning("shareholding: cache write failed for %s: %s", comp.ticker, e)
 
     def _fetch(self, ticker: str) -> ShareholdingComposition | None:
+        if self._provider is None:
+            return None
         try:
             from src.infrastructure.browser.playwright_stockbit import _exodus_get
             token = self._provider._get_token()

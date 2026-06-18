@@ -238,6 +238,8 @@ class StockbitFundamentalsProvider(FundamentalsProvider):
             logger.warning("company_fundamentals: cache write failed for %s: %s", fund.ticker, e)
 
     def _fetch(self, ticker: str) -> CompanyFundamentals | None:
+        if self._provider is None:
+            return None
         try:
             from src.infrastructure.browser.playwright_stockbit import _exodus_get
             token = self._provider._get_token()
