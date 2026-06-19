@@ -29,6 +29,9 @@ def _candle(ticker: str, day: date) -> Candle:
 class FakeMarketProvider(MarketDataProvider):
     def __init__(self) -> None:
         self.requested_ranges: list[tuple[date, date]] = []
+        self.provider_name = "fake"
+        self.volume_unit = "shares"
+        self.price_adjustment_policy = "raw"
 
     def fetch_daily_ohlcv(
         self,
@@ -54,8 +57,15 @@ class EmptyMarketProvider(FakeMarketProvider):
 class MemoryMarketRepository(MarketDataRepository):
     def __init__(self) -> None:
         self._storage: dict[str, list[Candle]] = {}
+        self.saved_metadata: list[dict[str, str]] = []
 
-    def save_candles(self, candles: list[Candle]) -> None:
+    def save_candles(
+        self,
+        candles: list[Candle],
+        **metadata: str,
+    ) -> None:
+        if metadata:
+            self.saved_metadata.append(metadata)
         for candle in candles:
             ticker = candle.ticker.upper()
             existing = [
@@ -164,6 +174,28 @@ def test_refresh_reports_up_to_date_when_provider_adds_no_new_rows():
 
     assert response.status == "up-to-date(2026-06-01)"
     assert provider.requested_ranges == [(date(2026, 6, 2), end_date)]
+
+
+def test_refresh_passes_provider_metadata_when_repository_supports_it():
+    repo = MemoryMarketRepository()
+    provider = FakeMarketProvider()
+    end_date = date(2026, 6, 14)
+
+    RefreshMarketDataUseCase(provider, repo).execute(
+        RefreshMarketDataRequest(
+            ticker="BBCA",
+            days=30,
+            end_date=end_date,
+        )
+    )
+
+    assert repo.saved_metadata == [
+        {
+            "source": "fake",
+            "volume_unit": "shares",
+            "price_adjustment_policy": "raw",
+        }
+    ]
 
 
 def test_refresh_rejects_empty_ticker():

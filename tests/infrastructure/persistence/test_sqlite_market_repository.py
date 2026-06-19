@@ -10,6 +10,7 @@ These tests verify:
 Uses temporary in-memory database for isolation.
 """
 
+import sqlite3
 import tempfile
 from datetime import date
 from decimal import Decimal
@@ -207,3 +208,69 @@ class TestSQLiteMarketRepository:
         assert result[0].high == Decimal("9999.99")
         assert result[0].low == Decimal("9000.01")
         assert result[0].close == Decimal("9543.21")
+
+    def test_schema_includes_candle_provenance_columns(self, temp_db):
+        """Should create candle provenance columns for new databases."""
+        SQLiteMarketRepository(db_path=temp_db)
+
+        with sqlite3.connect(temp_db) as conn:
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(candles)")}
+
+        assert {"source", "volume_unit", "price_adjustment_policy"}.issubset(columns)
+
+    def test_migrates_legacy_candles_table_with_unknown_provenance(self, temp_db):
+        """Should add provenance columns to existing candle tables conservatively."""
+        with sqlite3.connect(temp_db) as conn:
+            conn.execute("""
+                CREATE TABLE candles (
+                    ticker TEXT NOT NULL,
+                    date TEXT NOT NULL,
+                    open TEXT NOT NULL,
+                    high TEXT NOT NULL,
+                    low TEXT NOT NULL,
+                    close TEXT NOT NULL,
+                    volume INTEGER NOT NULL,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (ticker, date)
+                )
+            """)
+            conn.execute(
+                """
+                INSERT INTO candles (ticker, date, open, high, low, close, volume)
+                VALUES ('BBCA', '2024-01-01', '100', '110', '90', '105', 1000)
+                """
+            )
+            conn.commit()
+
+        SQLiteMarketRepository(db_path=temp_db)
+
+        with sqlite3.connect(temp_db) as conn:
+            row = conn.execute(
+                """
+                SELECT source, volume_unit, price_adjustment_policy
+                FROM candles
+                WHERE ticker = 'BBCA'
+                """
+            ).fetchone()
+
+        assert row == ("unknown", "unknown", "unknown")
+
+    def test_save_candles_persists_provenance_metadata(self, repository, temp_db):
+        """Should persist provider source, volume unit, and adjustment policy."""
+        repository.save_candles(
+            [make_candle("BBCA", 1)],
+            source="idx",
+            volume_unit="shares",
+            price_adjustment_policy="raw",
+        )
+
+        with sqlite3.connect(temp_db) as conn:
+            row = conn.execute(
+                """
+                SELECT source, volume_unit, price_adjustment_policy
+                FROM candles
+                WHERE ticker = 'BBCA'
+                """
+            ).fetchone()
+
+        assert row == ("idx", "shares", "raw")
