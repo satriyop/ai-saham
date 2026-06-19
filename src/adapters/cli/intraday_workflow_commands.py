@@ -419,6 +419,24 @@ def _display_pre_open_summary_panel(
     )
 
 
+
+def _notation_label(snapshot) -> str:
+    if snapshot is None:
+        return "-"
+    parts = []
+    if getattr(snapshot, "codes", None):
+        parts.append(",".join(snapshot.codes))
+    if getattr(snapshot, "tradeable", None) is False:
+        parts.append("NO-TRADE")
+    status = getattr(snapshot, "status", None)
+    if status and status != "STATUS_ACTIVE":
+        parts.append(status.replace("STATUS_", ""))
+    if getattr(snapshot, "suspend_info", None):
+        parts.append("SUSP")
+    if getattr(snapshot, "has_uma", None):
+        parts.append("UMA")
+    return "+".join(parts) if parts else "-"
+
 def _display_results(
     candidates: list[ScreenerCandidate],
     screened_date: date,
@@ -465,12 +483,14 @@ def _display_results(
     show_spread = any(c.spread_pct is not None for c in sorted_candidates)
     strat_header = f"  {'STRAT':>5}" if strategy_signals else ""
     sprd_header = f"  {'SPRD%':>6}" if show_spread else ""
-    sep_width = 90 + (8 if strategy_signals else 0) + (9 if show_spread else 0)
+    show_notation = any(_notation_label(c.ticker_notation) != "-" for c in sorted_candidates)
+    note_header = f"  {'NOTE':<10}" if show_notation else ""
+    sep_width = 90 + (8 if strategy_signals else 0) + (9 if show_spread else 0) + (12 if show_notation else 0)
     header = (
         f"{'VERDICT':<10} {'TICKER':<7} {'IEV':>7}  {'GAP%':>6}"
         f"{sprd_header}  "
         f"{'ENTRY-RANGE':>16}  {'STOP%':>6}  {'RSI':>4}  {'SIGNAL'}"
-        f"{strat_header}"
+        f"{note_header}{strat_header}"
     )
     typer.echo(header)
     typer.echo("-" * sep_width)
@@ -494,6 +514,8 @@ def _display_results(
         rsi_str = f"{float(c.rsi):.0f}" if c.rsi else "—"
         signal = _signal_col(c)
 
+        note_col = f"  {_notation_label(c.ticker_notation):<10}" if show_notation else ""
+
         strat_col = ""
         if strategy_signals is not None:
             raw = strategy_signals.get(c.ticker, "?")
@@ -504,7 +526,7 @@ def _display_results(
         typer.echo(
             f"{verdict_str} {c.ticker:<7} {c.iev:>7,}  {gap:>6}"
             f"{sprd_col}  "
-            f"{rng:>16}  {stop_pct:>6}  {rsi_str:>4}  {signal}{strat_col}"
+            f"{rng:>16}  {stop_pct:>6}  {rsi_str:>4}  {signal}{note_col}{strat_col}"
         )
 
     typer.echo("-" * sep_width)
@@ -619,6 +641,7 @@ def _write_sidecar(
                 ),
                 "prev_high": float(c.prev_high) if c.prev_high else None,
                 "prev_low": float(c.prev_low) if c.prev_low else None,
+                "ticker_notation": c.ticker_notation.to_dict() if c.ticker_notation else None,
             }
             for c in candidates
         ],
@@ -1109,12 +1132,17 @@ def pre_open(
         except Exception as e:
             typer.echo(f"Warning: Could not initialize AI research: {e}", err=True)
 
+    from src.infrastructure.browser.stockbit_ticker_notation import StockbitTickerNotationProvider
+
+    notation_provider = StockbitTickerNotationProvider(broker_provider=None, db_path=resolved_db)
+
     use_case = PreOpenScreenUseCase(
         browser=browser_provider,
         repository=repository,
         registry=registry,
         broker_repository=broker_repo,
         ai_explainer=ai_explainer,
+        ticker_notation_provider=notation_provider,
     )
     workflow = PreOpenWorkflowUseCase(
         screen_use_case=use_case,

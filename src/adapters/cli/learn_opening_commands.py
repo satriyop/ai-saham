@@ -121,6 +121,7 @@ def snapshot(
             OpeningSnapshotUseCase,
         )
         from src.infrastructure.browser.playwright_stockbit import PlaywrightStockbitProvider
+        from src.infrastructure.browser.stockbit_ticker_notation import StockbitTickerNotationProvider
         from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
         from src.infrastructure.persistence.sqlite_iev_repository import SQLiteIEVRepository
         from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
@@ -148,11 +149,13 @@ def snapshot(
     except Exception:
         pass
 
+    notation_provider = StockbitTickerNotationProvider(broker_provider=None, db_path=resolved_db)
     use_case = OpeningSnapshotUseCase(
         browser=browser,
         repository=repository,
         registry=registry,
         broker_repository=broker_repo,
+        ticker_notation_provider=notation_provider,
     )
 
     typer.echo(f"Running NCP-locked screener snapshot at {now.strftime('%H:%M:%S')} WIB...")

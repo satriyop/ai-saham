@@ -28,6 +28,7 @@ from decimal import Decimal
 from src.application.services.indicator_registry import IndicatorRegistry
 from src.domain.ports.browser_data_provider import BrowserDataProvider
 from src.domain.ports.market_data_repository import MarketDataRepository
+from src.domain.ports.ticker_notation_provider import TickerNotationProvider
 from src.domain.value_objects.screener_result import (
     PreOpenScreenResult,
     ScreenerCandidate,
@@ -163,12 +164,14 @@ class PreOpenScreenUseCase:
         registry: IndicatorRegistry,
         broker_repository: "BrokerDataRepository | None" = None,
         ai_explainer=None,
+        ticker_notation_provider: "TickerNotationProvider | None" = None,
     ) -> None:
         self._browser = browser
         self._repository = repository
         self._registry = registry
         self._broker_repository = broker_repository
         self._ai_explainer = ai_explainer
+        self._ticker_notation_provider = ticker_notation_provider
 
     def execute(self, request: PreOpenScreenRequest) -> PreOpenScreenResponse:
         config = request.config
@@ -337,6 +340,10 @@ class PreOpenScreenUseCase:
                 foreign_vwap = broker_ctx["foreign_vwap"]
                 fvwap_discount_pct = broker_ctx["fvwap_discount_pct"]
 
+            ticker_notation = None
+            if self._ticker_notation_provider is not None:
+                ticker_notation = self._ticker_notation_provider.get_notation(ticker)
+
             # Step 9: AI research (optional)
             ai_summary = self._research_ticker(ticker)
 
@@ -370,6 +377,7 @@ class PreOpenScreenUseCase:
                     best_offer_lots=best_offer_lots,
                     spread_pct=spread_pct,
                     bid_offer_imbalance=bid_offer_imbalance,
+                    ticker_notation=ticker_notation,
                 )
             )
 

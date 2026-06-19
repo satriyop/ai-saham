@@ -15,7 +15,6 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from datetime import date, datetime, time
-from decimal import Decimal
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -53,12 +52,14 @@ class OpeningSnapshotUseCase:
         repository: MarketDataRepository,
         registry: IndicatorRegistry,
         broker_repository=None,
+        ticker_notation_provider=None,
     ) -> None:
         self._screen_uc = PreOpenScreenUseCase(
             browser=browser,
             repository=repository,
             registry=registry,
             broker_repository=broker_repository,
+            ticker_notation_provider=ticker_notation_provider,
         )
 
     def execute(self, request: OpeningSnapshotRequest) -> dict:
@@ -99,6 +100,7 @@ class OpeningSnapshotUseCase:
                 # bid_lots / (bid_lots + offer_lots) at 08:57
                 # >0.6 = buyers dominating (committed demand), <0.4 = sellers dominating
                 "bid_pressure_preopen": c.bid_offer_imbalance,
+                "ticker_notation": c.ticker_notation.to_dict() if c.ticker_notation else None,
                 "verdict": self._verdict(c),
             })
 

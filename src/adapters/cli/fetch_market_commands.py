@@ -410,6 +410,7 @@ def _fetch_enrichment(ticker: str, db_path: Path, broker_provider) -> str:
     from src.infrastructure.browser.stockbit_insider import StockbitInsiderActivityProvider
     from src.infrastructure.browser.stockbit_seasonality import StockbitSeasonalityProvider
     from src.infrastructure.browser.stockbit_shareholding import StockbitShareholdingProvider
+    from src.infrastructure.browser.stockbit_ticker_notation import StockbitTickerNotationProvider
 
     today = date.today()
     insider_from = today - timedelta(days=365)
@@ -421,6 +422,7 @@ def _fetch_enrichment(ticker: str, db_path: Path, broker_provider) -> str:
     shareholding_prov = StockbitShareholdingProvider(broker_provider=broker_provider, db_path=db_path)
     bandar_prov = StockbitBandarDetectorProvider(broker_provider=broker_provider, db_path=db_path)
     fundamentals_prov = StockbitFundamentalsProvider(broker_provider=broker_provider, db_path=db_path)
+    notation_prov = StockbitTickerNotationProvider(broker_provider=broker_provider, db_path=db_path)
 
     fetched: list[str] = []
     cached: list[str] = []
@@ -433,6 +435,12 @@ def _fetch_enrichment(ticker: str, db_path: Path, broker_provider) -> str:
         except Exception as e:
             errors.append(f"{label}:{str(e)[:20]}")
             return False
+
+    # Ticker status / special notation
+    if notation_prov.is_cache_fresh(ticker):
+        cached.append("notation")
+    elif _run("notation", lambda: notation_prov.get_notation(ticker)):
+        fetched.append("notation")
 
     # Analyst consensus
     if analyst_prov._is_cache_fresh(ticker):
@@ -567,8 +575,8 @@ def fetch_market(
     Sector/industry data is fetched via Yahoo Finance and cached for 30 days
     (only re-fetched when stale). Use --no-meta to skip.
 
-    When a Stockbit session is available, also pre-fetches analyst consensus,
-    insider activity, seasonality, and corporate actions into SQLite so that
+    When a Stockbit session is available, also pre-fetches ticker notation/status,
+    analyst consensus, insider activity, seasonality, and corporate actions into SQLite so that
     `saham analyze swing` runs without needing Playwright at analysis time.
     Use --no-enrichment to skip this step.
 
@@ -646,7 +654,7 @@ def fetch_market(
     if not no_meta:
         typer.echo("  Meta:             yahoo  (sector/industry, 30d TTL)")
     if response.enrichment_available:
-        typer.echo("  Enrichment:       stockbit  (analyst/insider/seasonality/corp, daily SQLite cache)")
+        typer.echo("  Enrichment:       stockbit  (notation/analyst/insider/seasonality/corp, daily SQLite cache)")
     typer.echo("  Legend:  ✓(DATE) = up-to-date through DATE  +N = new rows stored  ERR: = failed")
     typer.echo("")
 
