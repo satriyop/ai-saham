@@ -34,10 +34,7 @@ from zoneinfo import ZoneInfo
 
 import typer
 import yaml
-from rich.console import Group
-from rich.text import Text
 
-from src.adapters.cli.rich_display import compact_table, console, panel
 from src.application.services.bootstrap import create_indicator_registry
 from src.application.services.universe_loader import UniverseNotFoundError, resolve_tickers
 from src.application.use_case.confirm_intraday_open import (
@@ -203,158 +200,48 @@ def _load_config(config_path: Path, overrides: dict) -> PreOpenScreenConfig:
     return config
 
 def _display_data_freshness(freshness: PreOpenDataFreshness | None) -> None:
-    if freshness is None:
-        return
-
-    candle = freshness.candle_end.isoformat() if freshness.candle_end else "N/A"
-    broker = freshness.broker_end.isoformat() if freshness.broker_end else "N/A"
-    typer.echo("")
-    typer.echo(
-        "DATA: "
-        f"Analysis date {freshness.analysis_date.isoformat()}   "
-        f"Candles through {candle}   "
-        f"Broker flow through {broker}"
-    )
+    from src.adapters.cli.intraday_pre_open_display import display_data_freshness
+    display_data_freshness(freshness)
 
 
 def _fmt_pct(value: float | None, signed: bool = False) -> str:
-    if value is None:
-        return "N/A"
-    sign = "+" if signed else ""
-    return f"{value:{sign}.2f}%"
+    from src.adapters.cli.intraday_pre_open_display import fmt_pct
+    return fmt_pct(value, signed)
 
 
 def _format_market_regime(response: MarketRegimeResponse) -> str:
-    return (
-        f"REGIME: {response.label} score={response.score}/7   "
-        f"{response.benchmark_ticker} 20d {_fmt_pct(response.benchmark_return_20d_pct, True)}   "
-        f"Breadth SMA20 {_fmt_pct(response.breadth_above_sma20_pct)}   "
-        f"Foreign breadth {_fmt_pct(response.foreign_flow_breadth_pct)}"
-    )
+    from src.adapters.cli.intraday_pre_open_display import format_market_regime
+    return format_market_regime(response)
 
 
 def _market_regime_warning(response: MarketRegimeResponse) -> str | None:
-    if response.label == "RISK_OFF":
-        return "Market regime is RISK_OFF; avoid marginal long scalps or cut size."
-    if response.label == "WEAK":
-        return "Market regime is WEAK; require cleaner opening confirmation or reduce size."
-    return None
+    from src.adapters.cli.intraday_pre_open_display import market_regime_warning
+    return market_regime_warning(response)
 
 
 def _display_market_regime(response: MarketRegimeResponse | None) -> None:
-    if response is None:
-        return
-    typer.echo(_format_market_regime(response))
+    from src.adapters.cli.intraday_pre_open_display import display_market_regime
+    display_market_regime(response)
 
 
 def _display_raw_movers(raw_movers: list, top_n: int | None, iev_min: int) -> None:
-    """Print a compact summary of all movers fetched from IEV API before screener filtering."""
-    if not raw_movers:
-        return
-    total = len(raw_movers)
-    shown = top_n if top_n else total
-    cap = min(shown, total)
-
-    typer.echo("")
-    typer.echo(f"Fetched {total} movers from Stockbit (top {cap} screened):")
-
-    # Two rows of up to 10 tickers each, compact format
-    tickers_with_iev = []
-    for mover in raw_movers[:20]:
-        iep_suffix = f" @{mover.iep:,}" if mover.iep is not None else ""
-        tickers_with_iev.append(f"{mover.ticker} {mover.iev / 1000:.0f}K{iep_suffix}")
-    row1 = "  " + "  |  ".join(tickers_with_iev[:10])
-    typer.echo(row1)
-    if len(tickers_with_iev) > 10:
-        row2 = "  " + "  |  ".join(tickers_with_iev[10:])
-        typer.echo(row2)
-    if total > 20:
-        typer.echo(f"  ... and {total - 20} more below threshold")
-    typer.echo("")
-
-
-_VERDICT_ORDER = {"PRIME": 0, "WATCH": 1, "NO_DATA": 2, "SKIP": 3}
+    from src.adapters.cli.intraday_pre_open_display import display_raw_movers
+    display_raw_movers(raw_movers=raw_movers, top_n=top_n, iev_min=iev_min)
 
 
 def _verdict(c: "ScreenerCandidate") -> str:
-    """Synthesise all signals into a single action verdict."""
-    if c.entry_range_low is None:
-        return "NO_DATA"
-    if c.trend_signal == "BEARISH" or c.accum_tag == "DISTRIBUTING":
-        return "SKIP"
-    if c.trend_signal == "NEUTRAL":
-        return "SKIP"
-    # BULLISH from here
-    backed = c.accum_tag == "BACKED"
-    floor = c.fvwap_discount_pct is not None and c.fvwap_discount_pct > 0
-    if backed and floor:
-        return "PRIME"
-    return "WATCH"
+    from src.adapters.cli.intraday_pre_open_display import verdict
+    return verdict(c)
 
 
 def _signal_col(c: "ScreenerCandidate") -> str:
-    """Compact ACCUM tag + FVWAP into a single SIGNAL string."""
-    parts: list[str] = []
-    if c.accum_tag is not None:
-        tag = c.accum_tag[:8]  # truncate UNCONFIRMED → UNCONFIRM
-        streak = f"×{c.accum_streak}d" if c.accum_streak else ""
-        parts.append(f"{tag}{streak}")
-    if c.fvwap_discount_pct is not None:
-        note = " floor" if c.fvwap_discount_pct > 0 else (" sell" if c.fvwap_discount_pct < -3 else "")
-        parts.append(f"{c.fvwap_discount_pct:+.1f}%{note}")
-    if c.prev_high:
-        parts.append(f"PH:{c.prev_high:,.0f}")
-    return "  ".join(parts) if parts else "—"
+    from src.adapters.cli.intraday_pre_open_display import signal_col
+    return signal_col(c)
 
 
 def _print_browser_plan(config: PreOpenScreenConfig) -> None:
-    typer.echo("")
-    typer.echo("=" * 60)
-    typer.echo("BROWSER ACTION PLAN — Pre-Open Screener")
-    typer.echo("=" * 60)
-    typer.echo("")
-    typer.echo("Claude Code: execute these steps, then re-run this command")
-    typer.echo("with --movers-json and --order-books-json flags.")
-    typer.echo("")
-    typer.echo("STEP 1 — Fetch IEV Movers from Stockbit")
-    typer.echo("-" * 40)
-    typer.echo("  URL: https://stockbit.com/#/screener")
-    typer.echo('  1. Go to Screener → Movers section, click "Selengkapnya"')
-    typer.echo("  2. Sort by IEV column, descending")
-    top_label = f"top {config.top_n}" if config.top_n else "all rows"
-    typer.echo(f"  3. Collect {top_label} with IEV >= {config.iev_min:,}")
-    typer.echo("  4. Build JSON array:")
-    typer.echo('     [{"ticker": "BBCA", "iev": 150000}, ...]')
-    typer.echo("")
-    if not config.fast_mode:
-        typer.echo("STEP 2 — Fetch Order Books (for each ticker from Step 1)")
-        typer.echo("-" * 40)
-        typer.echo("  URL: https://stockbit.com/#/stock/{TICKER}/orderbook")
-        typer.echo("  1. For each ticker: open order book tab")
-        typer.echo("  2. Find the BID row with the LARGEST volume (lots)")
-        typer.echo("  3. Record price and volume")
-        typer.echo("  4. Build JSON object:")
-        typer.echo('     {"BBCA": {"price": 8900, "volume": 50000}, ...}')
-        typer.echo("")
-        typer.echo("STEP 3 — Re-run with collected data")
-        typer.echo("-" * 40)
-        typer.echo("  saham screen pre-open \\")
-        typer.echo("    --movers-json '<step1_json>' \\")
-        typer.echo("    --order-books-json '<step2_json>'")
-    else:
-        typer.echo("STEP 2 — Re-run with movers data (fast mode — no order book needed)")
-        typer.echo("-" * 40)
-        typer.echo("  saham screen pre-open --fast --movers-json '<step1_json>'")
-    typer.echo("")
-    typer.echo("=" * 60)
-
-
-_STRAT_SYMBOL = {"LOW_RISK": "↑", "HIGH_RISK": "↓", "MODERATE": "~"}
-_STRAT_COLOR  = {
-    "LOW_RISK":  typer.colors.GREEN,
-    "HIGH_RISK": typer.colors.RED,
-    "MODERATE":  typer.colors.BRIGHT_BLACK,
-}
+    from src.adapters.cli.intraday_pre_open_display import print_browser_plan
+    print_browser_plan(config)
 
 
 def _display_pre_open_summary_panel(
@@ -366,76 +253,22 @@ def _display_pre_open_summary_panel(
     data_freshness: PreOpenDataFreshness | None,
     market_regime: MarketRegimeResponse | None,
 ) -> None:
-    sorted_candidates = sorted(
-        candidates,
-        key=lambda c: (_VERDICT_ORDER.get(_verdict(c), 99), -c.iev),
+    from src.adapters.cli.intraday_pre_open_display import display_pre_open_summary_panel
+    display_pre_open_summary_panel(
+        candidates=candidates,
+        screened_date=screened_date,
+        iev_min=iev_min,
+        total_movers_seen=total_movers_seen,
+        warnings=warnings,
+        data_freshness=data_freshness,
+        market_regime=market_regime,
     )
-    watchlist = [c for c in sorted_candidates if _verdict(c) in ("PRIME", "WATCH")]
-    skipped = [c for c in sorted_candidates if _verdict(c) not in ("PRIME", "WATCH")]
-
-    summary = compact_table(show_header=False)
-    summary.add_column("Metric", style="bold")
-    summary.add_column("Value")
-    summary.add_row("Date", screened_date.isoformat())
-    summary.add_row("IEV threshold", f">= {iev_min:,}")
-    summary.add_row("Movers evaluated", str(total_movers_seen))
-    summary.add_row("Candidates", str(len(candidates)))
-    summary.add_row("Watchlist", str(len(watchlist)))
-    summary.add_row("Skipped", str(len(skipped)))
-    if data_freshness is not None:
-        candle = data_freshness.candle_end.isoformat() if data_freshness.candle_end else "N/A"
-        broker = data_freshness.broker_end.isoformat() if data_freshness.broker_end else "N/A"
-        summary.add_row("Candles through", candle)
-        summary.add_row("Broker flow through", broker)
-    if market_regime is not None:
-        summary.add_row("Market regime", f"{market_regime.label} ({market_regime.score}/7)")
-
-    sections = [Text("Session Summary", style="bold cyan"), summary]
-    if watchlist:
-        sections.append(Text("Watchlist", style="bold green"))
-        sections.append(Text("  ".join(c.ticker for c in watchlist), style="bold green"))
-    else:
-        sections.append(Text("Next", style="bold yellow"))
-        sections.append(Text("Run: saham fetch iev, or retry with --iev-min 50000", style="yellow"))
-
-    all_warnings = list(warnings)
-    if data_freshness is not None:
-        all_warnings.extend(data_freshness.warnings)
-    if market_regime is not None:
-        all_warnings.extend(market_regime.warnings)
-    if all_warnings:
-        warning_table = compact_table(show_header=False)
-        warning_table.add_column("Warning")
-        for warning in all_warnings[:5]:
-            warning_table.add_row(f"- {warning}")
-        sections.extend([Text("Warnings", style="bold yellow"), warning_table])
-
-    console().print(
-        panel(
-            Group(*sections),
-            title="Pre-Open Screener",
-            subtitle=screened_date.isoformat(),
-        )
-    )
-
 
 
 def _notation_label(snapshot) -> str:
-    if snapshot is None:
-        return "-"
-    parts = []
-    if getattr(snapshot, "codes", None):
-        parts.append(",".join(snapshot.codes))
-    if getattr(snapshot, "tradeable", None) is False:
-        parts.append("NO-TRADE")
-    status = getattr(snapshot, "status", None)
-    if status and status != "STATUS_ACTIVE":
-        parts.append(status.replace("STATUS_", ""))
-    if getattr(snapshot, "suspend_info", None):
-        parts.append("SUSP")
-    if getattr(snapshot, "has_uma", None):
-        parts.append("UMA")
-    return "+".join(parts) if parts else "-"
+    from src.adapters.cli.intraday_pre_open_display import notation_label
+    return notation_label(snapshot)
+
 
 def _display_results(
     candidates: list[ScreenerCandidate],
@@ -448,7 +281,8 @@ def _display_results(
     strategy_signals: dict[str, str] | None = None,
     strategy_name: str | None = None,
 ) -> None:
-    _display_pre_open_summary_panel(
+    from src.adapters.cli.intraday_pre_open_display import display_results
+    display_results(
         candidates=candidates,
         screened_date=screened_date,
         iev_min=iev_min,
@@ -456,158 +290,9 @@ def _display_results(
         warnings=warnings,
         data_freshness=data_freshness,
         market_regime=market_regime,
+        strategy_signals=strategy_signals,
+        strategy_name=strategy_name,
     )
-
-    typer.echo("")
-    typer.echo("=" * 90)
-    typer.echo("PRE-OPEN SCREENER RESULTS")
-    typer.echo("=" * 90)
-    typer.echo(f"Date: {screened_date}   IEV filter: >= {iev_min:,}")
-    typer.echo(f"Movers evaluated: {total_movers_seen}   Candidates: {len(candidates)}")
-    _display_data_freshness(data_freshness)
-    _display_market_regime(market_regime)
-    typer.echo("")
-
-    if not candidates:
-        typer.echo("No candidates passed the IEV filter.")
-        typer.echo("=" * 90)
-        return
-
-    # Sort: PRIME → WATCH → NO_DATA → SKIP, then by IEV descending within group
-    sorted_candidates = sorted(
-        candidates,
-        key=lambda c: (_VERDICT_ORDER.get(_verdict(c), 99), -c.iev),
-    )
-
-    # Header — compact 1-row-per-ticker layout
-    show_spread = any(c.spread_pct is not None for c in sorted_candidates)
-    strat_header = f"  {'STRAT':>5}" if strategy_signals else ""
-    sprd_header = f"  {'SPRD%':>6}" if show_spread else ""
-    show_notation = any(_notation_label(c.ticker_notation) != "-" for c in sorted_candidates)
-    note_header = f"  {'NOTE':<10}" if show_notation else ""
-    sep_width = 90 + (8 if strategy_signals else 0) + (9 if show_spread else 0) + (12 if show_notation else 0)
-    header = (
-        f"{'VERDICT':<10} {'TICKER':<7} {'IEV':>7}  {'GAP%':>6}"
-        f"{sprd_header}  "
-        f"{'ENTRY-RANGE':>16}  {'STOP%':>6}  {'RSI':>4}  {'SIGNAL'}"
-        f"{note_header}{strat_header}"
-    )
-    typer.echo(header)
-    typer.echo("-" * sep_width)
-
-    _VERDICT_STYLE = {
-        "PRIME":   (typer.colors.GREEN,       True,  "★ PRIME  "),
-        "WATCH":   (typer.colors.YELLOW,      False, "◉ WATCH  "),
-        "NO_DATA": (typer.colors.BRIGHT_BLACK, False, "? NO_DATA"),
-        "SKIP":    (typer.colors.RED,         False, "✗ SKIP   "),
-    }
-
-    for c in sorted_candidates:
-        v = _verdict(c)
-        color, bold, label = _VERDICT_STYLE.get(v, (typer.colors.WHITE, False, v))
-        verdict_str = typer.style(label, fg=color, bold=bold)
-
-        gap = c.gap_label
-        sprd_col = f"  {c.spread_label:>6}" if show_spread else ""
-        rng = c.entry_range_label
-        stop_pct = c.risk_reward_label
-        rsi_str = f"{float(c.rsi):.0f}" if c.rsi else "—"
-        signal = _signal_col(c)
-
-        note_col = f"  {_notation_label(c.ticker_notation):<10}" if show_notation else ""
-
-        strat_col = ""
-        if strategy_signals is not None:
-            raw = strategy_signals.get(c.ticker, "?")
-            sym = _STRAT_SYMBOL.get(raw, raw)
-            col = _STRAT_COLOR.get(raw, typer.colors.WHITE)
-            strat_col = "  " + typer.style(f"{sym:>5}", fg=col, bold=(raw == "LOW_RISK"))
-
-        typer.echo(
-            f"{verdict_str} {c.ticker:<7} {c.iev:>7,}  {gap:>6}"
-            f"{sprd_col}  "
-            f"{rng:>16}  {stop_pct:>6}  {rsi_str:>4}  {signal}{note_col}{strat_col}"
-        )
-
-    typer.echo("-" * sep_width)
-
-    # AI summaries (if any)
-    has_ai = any(c.ai_summary for c in sorted_candidates)
-    if has_ai:
-        typer.echo("")
-        typer.echo("AI RESEARCH SUMMARIES")
-        typer.echo("-" * 90)
-        for c in sorted_candidates:
-            if c.ai_summary:
-                typer.echo(f"\n[{c.ticker}]")
-                typer.echo(c.ai_summary)
-
-    all_warnings = list(warnings)
-    if data_freshness is not None:
-        all_warnings.extend(data_freshness.warnings)
-    if market_regime is not None:
-        all_warnings.extend(market_regime.warnings)
-        regime_warning = _market_regime_warning(market_regime)
-        if regime_warning:
-            all_warnings.append(regime_warning)
-
-    if all_warnings:
-        typer.echo("")
-        typer.echo("WARNINGS")
-        typer.echo("-" * 40)
-        for w in all_warnings:
-            typer.echo(f"  ! {w}")
-
-    # Action summary — watchlist + ready-to-run opening confirmation command
-    watchlist = [c for c in sorted_candidates if _verdict(c) in ("PRIME", "WATCH")]
-    skipped   = [c for c in sorted_candidates if _verdict(c) not in ("PRIME", "WATCH")]
-
-    typer.echo("")
-    typer.echo("━" * 60)
-    if watchlist:
-        watch_labels = []
-        for c in watchlist:
-            prefix = "★" if _verdict(c) == "PRIME" else "◉"
-            watch_labels.append(f"{prefix} {c.ticker}")
-        skip_labels = "  ".join(c.ticker for c in skipped) or "—"
-        typer.echo(
-            " WATCHLIST  " + typer.style("  ".join(watch_labels), fg=typer.colors.GREEN, bold=True)
-        )
-        typer.echo(
-            " SKIP       " + typer.style(skip_labels, fg=typer.colors.BRIGHT_BLACK)
-        )
-        # Build opening confirmation command template
-        tickers_json = ",".join(f'"{c.ticker}":___' for c in watchlist)
-        typer.echo("")
-        typer.echo(" At 09:00, fill opening prices and run:")
-        typer.echo(
-            typer.style(
-                f"   saham trade confirm \\\n"
-                f"     --opening-json '{{{tickers_json}}}'",
-                fg=typer.colors.CYAN,
-            )
-        )
-    else:
-        typer.echo(" No candidates meet criteria today.")
-        typer.echo(" Consider: --iev-min 50000 or run 'saham fetch iev'")
-    typer.echo("━" * 60)
-
-    typer.echo("")
-    typer.echo(
-        "VERDICT: ★ PRIME=all signals green  ◉ WATCH=bullish, needs confirm  "
-        "✗ SKIP=bearish/distributing  ? NO_DATA=run 'saham fetch market TICKER --days 365'"
-    )
-    typer.echo(
-        "SIGNAL: ACCUM tag × streak  |  FVWAP% (floor=asing underwater, sell=asing profit)  |  PH=Prev High"
-    )
-    typer.echo("STOP%: max loss from entry (ATR-based, capped -7%)")
-    if strategy_signals is not None:
-        typer.echo(
-            f"STRAT ({strategy_name}): ↑=LOW_RISK(entry)  ~=MODERATE(hold)  ↓=HIGH_RISK(exit)"
-        )
-    typer.echo("")
-    typer.echo("DISCLAIMER: Analysis only. Not trading advice.")
-    typer.echo("=" * 90)
 
 
 def _write_sidecar(
@@ -723,17 +408,18 @@ def _load_confirmation_tickers(session_path: Path) -> tuple[date, list[str]]:
 
 
 def _format_ticker_preview(tickers: list[str], *, limit: int = 8) -> str:
-    visible = tickers[:limit]
-    suffix = f", +{len(tickers) - limit} more" if len(tickers) > limit else ""
-    return ", ".join(visible) + suffix
+    from src.adapters.cli.intraday_confirmation_display import format_ticker_preview
+    return format_ticker_preview(tickers, limit=limit)
 
 
 def _fmt_price(value: Decimal | None) -> str:
-    return f"{value:,.0f}" if value is not None else "-"
+    from src.adapters.cli.intraday_confirmation_display import fmt_price
+    return fmt_price(value)
 
 
 def _fmt_signed_decimal(value: Decimal | None, suffix: str = "") -> str:
-    return f"{value:+.2f}{suffix}" if value is not None else "-"
+    from src.adapters.cli.intraday_confirmation_display import fmt_signed_decimal
+    return fmt_signed_decimal(value, suffix)
 
 
 def _format_opening_observation_status(
@@ -741,15 +427,8 @@ def _format_opening_observation_status(
     total: int,
     observation: OpeningPriceObservation,
 ) -> str:
-    prefix = f"[{index}/{total}] {observation.ticker}"
-    if observation.price is not None:
-        source = observation.source or "unknown"
-        return (
-            f"{prefix}: {_fmt_price(observation.price)} "
-            f"via {source}/{observation.confidence}"
-        )
-    reason = observation.reason or "unresolved"
-    return f"{prefix}: unresolved - {reason}"
+    from src.adapters.cli.intraday_confirmation_display import format_opening_observation_status
+    return format_opening_observation_status(index, total, observation)
 
 
 def _display_confirmations(
@@ -758,83 +437,18 @@ def _display_confirmations(
     max_stop_pct: Decimal,
     extras: dict[str, dict] | None = None,
 ) -> None:
-    extras = extras or {}
-
-    if not confirmations:
-        empty = compact_table(show_header=False)
-        empty.add_column("Label")
-        empty.add_column("Value")
-        empty.add_row("Date", confirmed_date.isoformat())
-        empty.add_row("Candidates", "0")
-        empty.add_row("Next", "Run saham screen pre-open first")
-        console().print(panel(empty, title="INTRADAY CONFIRMATION"))
-        return
-
-    enters = [c for c in confirmations if c.decision.value == "ENTER"]
-    waits  = [c for c in confirmations if c.decision.value == "WAIT"]
-    skips  = [c for c in confirmations if c.decision.value not in ("ENTER", "WAIT")]
-
-    summary = compact_table(show_header=False)
-    summary.add_column("Metric", style="bold")
-    summary.add_column("Value")
-    summary.add_row("Date", confirmed_date.isoformat())
-    summary.add_row("Candidates", str(len(confirmations)))
-    summary.add_row("ENTER", str(len(enters)))
-    summary.add_row("WAIT", str(len(waits)))
-    summary.add_row("SKIP", str(len(skips)))
-    summary.add_row("Max stop", f"{max_stop_pct:.2%}")
-    summary.add_row("Next", "saham trade log intraday")
-
-    sections = [Text("Session Summary", style="bold cyan"), summary]
-
-    def add_decision_table(title: str, rows: list[IntradayConfirmation]) -> None:
-        if not rows:
-            return
-        table = compact_table()
-        table.add_column("Ticker", style="bold")
-        table.add_column("Open", justify="right")
-        table.add_column("Entry", justify="right")
-        table.add_column("Stop", justify="right")
-        table.add_column("Stop%", justify="right")
-        table.add_column("Source")
-        table.add_column("Reason")
-        for c in rows:
-            ex = extras.get(c.ticker, {})
-            source = ex.get("opening_price_source") or c.opening_price_source or "-"
-            confidence = ex.get("opening_price_confidence") or c.opening_price_confidence
-            source_text = f"{source}/{confidence}" if confidence else source
-            reason = c.reasons[-1] if c.reasons else c.decision.value.lower().replace("_", " ")
-            table.add_row(
-                c.ticker,
-                _fmt_price(c.opening_price),
-                _fmt_price(c.planned_entry),
-                _fmt_price(c.stop_loss_price),
-                _fmt_signed_decimal(c.stop_pct, "%"),
-                source_text,
-                reason,
-            )
-        sections.extend([Text(title, style="bold"), table])
-
-    add_decision_table("ENTER - act now", enters)
-    add_decision_table("WAIT - monitor first 15 min", waits)
-    add_decision_table("SKIP - do not enter", skips)
-
-    unresolved = [c.ticker for c in confirmations if c.opening_price is None]
-    if unresolved:
-        warning_table = compact_table(show_header=False)
-        warning_table.add_column("Warning")
-        warning_table.add_row(
-            "Unresolved opening prices: " + _format_ticker_preview(unresolved)
-        )
-        sections.extend([Text("Warnings", style="bold yellow"), warning_table])
-
-    console().print(
-        panel(
-            Group(*sections),
-            title="INTRADAY CONFIRMATION",
-            subtitle=confirmed_date.isoformat(),
-        )
+    from src.adapters.cli.intraday_confirmation_display import display_confirmations
+    display_confirmations(
+        confirmations=confirmations,
+        confirmed_date=confirmed_date,
+        max_stop_pct=max_stop_pct,
+        extras=extras,
     )
+
+
+def _display_intraday_review(report, journal_path: Path) -> None:
+    from src.adapters.cli.intraday_confirmation_display import display_intraday_review
+    display_intraday_review(report=report, journal_path=journal_path)
 
 
 def _write_confirmation_sidecar(
@@ -877,66 +491,6 @@ def _write_confirmation_sidecar(
     }
     with open(output_path, "w") as f:
         json.dump(data, f, indent=2)
-
-
-def _display_intraday_review(report, journal_path: Path) -> None:
-    summary = compact_table(show_header=False)
-    summary.add_column("Metric", style="bold")
-    summary.add_column("Value")
-    summary.add_row("Journal", str(journal_path))
-    summary.add_row("Total logged entries", str(report.total_entries))
-    summary.add_row("Entries with outcome", str(report.entries_with_data))
-
-    if report.total_entries == 0:
-        summary.add_row("Next", "saham trade log intraday")
-        console().print(panel(summary, title="INTRADAY CONFIRMATION REVIEW"))
-        return
-
-    sections = [Text("Review Summary", style="bold cyan"), summary]
-
-    def add_bucket_table(title: str, rows) -> None:
-        if not rows:
-            return
-        table = compact_table()
-        table.add_column("Bucket", style="bold")
-        table.add_column("Total", justify="right")
-        table.add_column("Data", justify="right")
-        table.add_column("ENTER", justify="right")
-        table.add_column("UP", justify="right")
-        table.add_column("STOP", justify="right")
-        table.add_column("TGT1R", justify="right")
-        table.add_column("Avg R", justify="right")
-        for row in rows:
-            avg_r = f"{row.avg_close_r:+.2f}" if row.avg_close_r is not None else "-"
-            table.add_row(
-                row.bucket,
-                str(row.total),
-                str(row.with_data),
-                str(row.enter_count),
-                str(row.up_count),
-                str(row.stop_hit_count),
-                str(row.target_1r_hit_count),
-                avg_r,
-            )
-        sections.extend([Text(title, style="bold"), table])
-
-    add_bucket_table("By decision", report.decision_buckets)
-    for label, rows in report.context_buckets.items():
-        add_bucket_table(f"By {label}", rows)
-
-    sections.append(
-        Text(
-            "Note: manual outcomes are used first. Rows without manual outcomes use "
-            "daily OHLC as a proxy; exact intraday sequence requires minute/tick data.",
-            style="dim",
-        )
-    )
-    console().print(
-        panel(
-            Group(*sections),
-            title="INTRADAY CONFIRMATION REVIEW",
-        )
-    )
 
 
 def pre_open(
@@ -1594,110 +1148,8 @@ def _build_ai_researcher(provider: Optional[str] = None):
 
 
 def _display_intraday_backtest(response: IntradayBacktestResponse, show_trades: int) -> None:
-    """Print walk-forward intraday backtest results to the console."""
-    W = 72
-    typer.echo("")
-    typer.echo(typer.style("=" * W, fg=typer.colors.CYAN))
-    typer.echo(typer.style("INTRADAY WALK-FORWARD BACKTEST (Option A — daily OHLC proxy)", fg=typer.colors.CYAN, bold=True))
-    typer.echo(typer.style("=" * W, fg=typer.colors.CYAN))
-    typer.echo(f"Period : {response.start_date} to {response.end_date}")
-    typer.echo(
-        f"Config : cost={float(response.cost_bps):g} bps/side | "
-        f"max_daily={response.max_daily_positions} | "
-        f"include_wait={response.include_wait}"
-    )
-    typer.echo(
-        "Entry  : candle.open (IDX 09:00 call-auction clearing price)\n"
-        "Exit   : H/L/close same day. Both-breached → stop (conservative).\n"
-        "IEV    : not replayed — all universe tickers screened each day."
-    )
-    typer.echo("")
-
-    # ── Equity & trade stats ──────────────────────────────────────────────────
-    typer.echo(f"{'METRIC':<30} {'VALUE':>20}")
-    typer.echo("-" * 54)
-    typer.echo(f"{'Initial capital':<30} {float(response.initial_capital):>20,.0f}")
-    typer.echo(f"{'Final equity':<30} {float(response.final_equity):>20,.0f}")
-    typer.echo(f"{'Total return':<30} {_fmt_pct(response.total_return_pct, True):>20}")
-    typer.echo(f"{'Max drawdown':<30} {_fmt_pct(response.max_drawdown_pct, True):>20}")
-    typer.echo(f"{'Trades':<30} {response.trade_count:>20}")
-    typer.echo(f"{'Win rate':<30} {_fmt_pct(response.win_rate_pct):>20}")
-    typer.echo(f"{'Avg trade return (net)':<30} {_fmt_pct(response.avg_trade_return_pct, True):>20}")
-    typer.echo(f"{'Avg winner':<30} {_fmt_pct(response.avg_winner_pct, True):>20}")
-    typer.echo(f"{'Avg loser':<30} {_fmt_pct(response.avg_loser_pct, True):>20}")
-    pf_str = (
-        "INF" if response.profit_factor == float("inf")
-        else "N/A" if response.profit_factor is None
-        else f"{response.profit_factor:.2f}"
-    )
-    typer.echo(f"{'Profit factor':<30} {pf_str:>20}")
-    exp_str = _fmt_pct(response.expectancy_pct, signed=True) if response.expectancy_pct is not None else "N/A"
-    typer.echo(f"{'Expectancy':<30} {exp_str:>20}")
-    r_str = f"{response.avg_r_multiple:.3f}R" if response.avg_r_multiple is not None else "N/A"
-    typer.echo(f"{'Avg R-multiple':<30} {r_str:>20}")
-    typer.echo(f"{'Trading days':<30} {response.trading_days:>20}")
-    typer.echo(f"{'Days with trades':<30} {response.days_with_trades:>20}")
-    typer.echo("")
-
-    # ── Exit reasons ──────────────────────────────────────────────────────────
-    if response.exit_reason_counts:
-        typer.echo("EXIT REASONS")
-        total_trades = response.trade_count
-        for reason, count in sorted(response.exit_reason_counts.items(), key=lambda x: -x[1]):
-            pct = count / total_trades * 100 if total_trades else 0
-            flag = ""
-            if reason == "both_assume_stop" and total_trades > 0 and count / total_trades > 0.15:
-                flag = " ← H/L ambiguity HIGH (>15%)"
-            typer.echo(f"  {reason:<22} {count:>5}  ({pct:.0f}%){flag}")
-        typer.echo("")
-
-    # ── Signal-quality breakdowns ─────────────────────────────────────────────
-    def _print_breakdown(title: str, rows: list[dict]) -> None:
-        if not rows:
-            return
-        typer.echo(title)
-        typer.echo(f"  {'LABEL':<22} {'TRADES':>7} {'WIN%':>7} {'AVG_RET':>9} {'TOTAL_PNL':>14}")
-        typer.echo("  " + "-" * 63)
-        for row in rows:
-            pnl = float(row["total_pnl"])
-            pnl_str = f"{pnl:+,.0f}"
-            wr = _fmt_pct(row["win_rate_pct"])
-            ar = _fmt_pct(row["avg_return_pct"], signed=True)
-            typer.echo(f"  {row['label']:<22} {row['count']:>7} {wr:>7} {ar:>9} {pnl_str:>14}")
-        typer.echo("")
-
-    _print_breakdown("BY ACCUM TAG", response.by_accum_tag)
-    _print_breakdown("BY FVWAP SIGN", response.by_fvwap_sign)
-    _print_breakdown("BY RSI BUCKET", response.by_rsi_bucket)
-    _print_breakdown("TOP TICKERS (by trade count)", response.by_ticker)
-
-    # ── Recent trades ─────────────────────────────────────────────────────────
-    if show_trades > 0 and response.trades:
-        display = response.trades[-show_trades:]
-        typer.echo(f"RECENT {len(display)} TRADES (of {response.trade_count} total)")
-        typer.echo(
-            f"  {'DATE':<12} {'TICKER':<6} {'DEC':<6} {'OPEN':>7} "
-            f"{'STOP':>7} {'TARGET':>7} {'EXIT':>7} {'REASON':<18} {'RET%':>7} {'PNL':>10}"
-        )
-        typer.echo("  " + "-" * 100)
-        for t in display:
-            pnl_col = f"{float(t.pnl):+,.0f}"
-            ret_col = _fmt_pct(t.net_return_pct, signed=True)
-            typer.echo(
-                f"  {t.trade_date.isoformat():<12} {t.ticker:<6} {t.decision:<6} "
-                f"{float(t.entry_price):>7,.0f} {float(t.stop_price):>7,.0f} "
-                f"{float(t.target_price):>7,.0f} {float(t.exit_price):>7,.0f} "
-                f"{t.exit_reason:<18} {ret_col:>7} {pnl_col:>10}"
-            )
-        typer.echo("")
-
-    # ── Warnings ──────────────────────────────────────────────────────────────
-    for warning in response.warnings:
-        prefix = "  ⚠ " if "WARNING" in warning else "  ! "
-        typer.echo(typer.style(prefix + warning, fg=typer.colors.YELLOW))
-    typer.echo("")
-    typer.echo("DISCLAIMER: Historical simulation only. Not trading advice.")
-    typer.echo(typer.style("=" * W, fg=typer.colors.CYAN))
+    from src.adapters.cli.intraday_backtest_display import display_intraday_backtest
+    display_intraday_backtest(response=response, show_trades=show_trades)
 
 
 def intraday_backtest(

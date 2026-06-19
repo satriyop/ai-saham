@@ -20,10 +20,7 @@ from pathlib import Path
 from typing import Annotated, Optional
 
 import typer
-from rich.console import Group
-from rich.text import Text
 
-from src.adapters.cli.rich_display import compact_table, console, panel
 from src.application.services.bootstrap import create_indicator_registry
 from src.application.services.strategy_loader import StrategyLoader, StrategyNotFoundError
 from src.application.services.universe_loader import (
@@ -414,15 +411,6 @@ def _percent_plan(entry: Decimal) -> tuple[Decimal, Decimal]:
     target = entry * (Decimal("1") + FOREIGN_BOUNCE_TAKE_PROFIT / Decimal("100"))
     return stop, target
 
-
-_STRAT_SYMBOL = {"LOW_RISK": "↑", "HIGH_RISK": "↓", "MODERATE": "~"}
-_STRAT_COLOR  = {
-    "LOW_RISK":  typer.colors.GREEN,
-    "HIGH_RISK": typer.colors.RED,
-    "MODERATE":  typer.colors.BRIGHT_BLACK,
-}
-
-
 def _display_results(
     response: AccumulationScreenResponse,
     universe_label: str,
@@ -434,202 +422,45 @@ def _display_results(
     strategy_signals: dict[str, str] | None = None,
     strategy_name: str | None = None,
 ) -> None:
-    """Render accumulation screener results as terminal table."""
-    candidates = response.candidates
-    if vwap_only:
-        candidates = [c for c in candidates if c.vwap_discount_pct and c.vwap_discount_pct > 0]
-    if squeeze_only:
-        candidates = [c for c in candidates if c.bb_width_pctile is not None and c.bb_width_pctile <= _SC.coiled_spring_bb_pctile]
-
-    candidates = candidates[:top_n]
-
-    if not candidates:
-        empty = compact_table(show_header=False)
-        empty.add_column("Message")
-        empty.add_row("No candidates found matching the criteria.")
-        empty.add_row(
-            f"Checked {response.total_tickers_checked} tickers; "
-            f"skipped {response.tickers_skipped} with insufficient data."
-        )
-        empty.add_row(f"Next: saham fetch market --universe {universe_label}")
-        console().print(
-            panel(
-                empty,
-                title=f"Foreign Accumulation - {universe_label.upper()}",
-                subtitle=f"{response.window_days} sessions / {response.screened_at}",
-            )
-        )
-        return
-
-    table = compact_table()
-    table.add_column("#", justify="right")
-    table.add_column("Ticker", style="bold")
-    table.add_column("Score", justify="right")
-    table.add_column("Streak", justify="right")
-    table.add_column("Net Days", justify="right")
-    table.add_column("Net Value", justify="right")
-    table.add_column("Flow%", justify="right")
-    table.add_column("F_VWAP%", justify="right")
-    table.add_column("RSI", justify="right")
-    table.add_column("BB%ile", justify="right")
-    table.add_column("Trend")
-    if strategy_signals is not None:
-        table.add_column("Strat")
-
-    detail_lines: list[Text] = []
-
-    for i, c in enumerate(candidates, 1):
-        net_days_str = f"{c.net_buy_days}/{c.total_days}"
-        vwap_str = f"{c.vwap_discount_pct:+.1f}%" if c.vwap_discount_pct is not None else "   —  "
-        rsi_str = f"{c.rsi:.1f}" if c.rsi is not None else "  —"
-        streak_str = f"{c.consecutive_streak}s"
-        flow_str = f"{c.avg_flow_ratio:+.1f}" if c.avg_flow_ratio is not None else "   —"
-        if c.bb_width_pctile is not None:
-            pct_int = int(c.bb_width_pctile * 100)
-            bb_style = "green" if c.bb_width_pctile <= _SC.coiled_spring_bb_pctile else (
-                "yellow" if c.bb_width_pctile <= 0.40 else ""
-            )
-            bb_cell = Text(f"{pct_int}%", style=bb_style)
-        else:
-            bb_cell = Text("—", style="bright_black")
-
-        # Color score
-        if c.score >= _SC.enter_min_score:
-            score_style = "green"
-        elif c.score >= _SC.watch_min_score:
-            score_style = "yellow"
-        else:
-            score_style = ""
-
-        row = [
-            str(i),
-            c.ticker,
-            Text(f"{c.score:.1f}", style=score_style),
-            streak_str,
-            net_days_str,
-            _format_value(c.total_net_value),
-            flow_str,
-            vwap_str,
-            rsi_str,
-            bb_cell,
-            c.trend,
-        ]
-        if strategy_signals is not None:
-            raw = strategy_signals.get(c.ticker, "?")
-            sym = _STRAT_SYMBOL.get(raw, raw)
-            strat_style = "green" if raw == "LOW_RISK" else ("red" if raw == "HIGH_RISK" else "bright_black")
-            row.append(Text(sym, style=strat_style))
-        table.add_row(*row)
-
-        if show_breakdown and c.score_breakdown:
-            bd = c.score_breakdown
-            detail_lines.append(Text(
-                f"    [cons={bd.get('cons', 0):.1f} streak={bd.get('streak', 0):.1f}"
-                f" vwap={bd.get('vwap', 0):.1f} rsi={bd.get('rsi', 0):.1f}"
-                f" flow={bd.get('flow', 0):.1f} bb={bd.get('bb', 0):.1f}"
-                f" inst={bd.get('inst', 0):.1f}]"
-            ))
-
-        notation_detail = _notation_detail(c.ticker_notation)
-        if notation_detail:
-            detail_lines.append(Text(f"    {c.ticker} NOTATION: {notation_detail}", style="yellow" if c.ticker_notation and c.ticker_notation.has_warning else ""))
-
-        if c.seasonal_edge is not None:
-            se = c.seasonal_edge
-            se_style = "green" if se.is_tailwind else ("red" if se.is_headwind else "")
-            detail_lines.append(Text(f"    {c.ticker} SEASONAL {se.label} (score {se.score:+.2f})", style=se_style))
-
-        if c.dividend_risk:
-            detail_lines.append(Text(f"    {c.ticker} DIVIDEND RISK", style="yellow"))
-        if c.rights_issue_risk:
-            detail_lines.append(Text(f"    {c.ticker} RIGHTS ISSUE", style="yellow"))
-        if c.insider_buying:
-            for label in c.recent_insider_buys:
-                detail_lines.append(Text(f"    {c.ticker} INSIDER BUY - {label}", style="cyan"))
-
-        if c.analyst_consensus is not None:
-            ac = c.analyst_consensus
-            if ac.is_bullish and (ac.upside_pct or 0) >= 10:
-                ac_style = "green"
-            elif ac.sell_count > ac.buy_count:
-                ac_style = "red"
-            else:
-                ac_style = ""
-            detail_lines.append(Text(f"    {c.ticker} ANALYST: {ac.label}", style=ac_style))
-
-        if c.shareholding is not None:
-            sh = c.shareholding
-            sh_style = "cyan" if sh.institution_pct >= 30.0 else ""
-            detail_lines.append(Text(f"    {c.ticker} HOLDING: {sh.label}", style=sh_style))
-
-        if c.bandar_detector is not None:
-            bd = c.bandar_detector
-            if bd.accumulation_score >= 4:
-                bd_style = "green"
-            elif bd.is_accumulating:
-                bd_style = "yellow"
-            elif bd.is_distributing:
-                bd_style = "red"
-            else:
-                bd_style = ""
-            detail_lines.append(Text(f"    {c.ticker} BANDAR: {bd.label}", style=bd_style))
-
-        if c.fundamentals is not None:
-            fund = c.fundamentals
-            if fund.is_quality:
-                fund_style = "green"
-            elif fund.roe_ttm is not None and fund.roe_ttm >= 10.0:
-                fund_style = "yellow"
-            else:
-                fund_style = "red"
-            detail_lines.append(Text(f"    {c.ticker} FUNDAM: {fund.label}", style=fund_style))
-
-        if granular and c.top_brokers:
-            broker_line = "    " + "  ".join(c.top_brokers[:5])
-            if c.bci_label == "CLUSTER":
-                broker_line += f"  [BCI:{c.bci_label}({c.bci_tier1_count}T1)]"
-            elif c.bci_label == "STABLE":
-                broker_line += f"  [BCI:{c.bci_label}({c.bci_tier1_count}T1)]"
-            elif c.bci_label == "RETAIL-LED":
-                broker_line += "  [BCI:RETAIL-LED]"
-            detail_lines.append(Text(broker_line))
-
-    sections = [table]
-    if detail_lines:
-        sections.append(Text("\nDetails", style="bold cyan"))
-        sections.extend(detail_lines)
-
-    console().print(
-        panel(
-            Group(*sections),
-            title=f"Foreign Accumulation - {universe_label.upper()}",
-            subtitle=f"{response.window_days} sessions / {response.screened_at}",
-        )
+    from src.adapters.cli.accumulation_display import display_results
+    display_results(
+        response=response,
+        universe_label=universe_label,
+        top_n=top_n,
+        granular=granular,
+        vwap_only=vwap_only,
+        squeeze_only=squeeze_only,
+        show_breakdown=show_breakdown,
+        strategy_signals=strategy_signals,
+        strategy_name=strategy_name,
     )
 
-    typer.echo(
-        f"Checked: {response.total_tickers_checked} | "
-        f"Shown: {len(candidates)} | "
-        f"Skipped (no data): {response.tickers_skipped}"
+
+def _display_multi(
+    results: dict[int, AccumulationScreenResponse],
+    universe_label: str,
+    top_n: int,
+    sort_by: str,
+    squeeze_only: bool,
+    screened_at: "date",
+    broker_quality: dict[str, ScreenBrokerQuality] | None = None,
+) -> None:
+    from src.adapters.cli.accumulation_display import display_multi
+    display_multi(
+        results=results,
+        universe_label=universe_label,
+        top_n=top_n,
+        sort_by=sort_by,
+        squeeze_only=squeeze_only,
+        screened_at=screened_at,
+        broker_quality=broker_quality,
     )
-    typer.echo(f"Provider: {response.provider} (aggregate foreign flow)")
-    if response.provider == "idx":
-        typer.echo(
-            "  For per-broker detail: run `saham fetch stockbit login`, then fetch with `--provider stockbit-session`"
-        )
-    typer.echo("")
-    typer.echo("FLOW%: avg net foreign % of total daily turnover (positive = accumulating)")
-    typer.echo("F_VWAP%: positive = price < foreign avg buy cost basis (foreigners underwater)")
-    typer.echo("BB%ILE: BB Width pctile vs last 60d — green(≤20%) = squeeze (coiled spring)")
-    typer.echo("Score 0–120 | consistency 40 | streak 30 | VWAP 20 | RSI 10 | flow 10 | BB 10 | BCI 0/5/15")
-    if strategy_signals is not None:
-        typer.echo(
-            f"STRAT ({strategy_name}): ↑=LOW_RISK(entry)  ~=MODERATE(hold)  ↓=HIGH_RISK(exit)"
-        )
-    typer.echo("")
-    typer.echo("Swing trade watchlist — cross-check with `saham screen pre-open` for intraday entry timing.")
-    typer.echo("DISCLAIMER: Analysis only, not trading advice.")
-    typer.echo("=" * _TABLE_WIDTH)
+
+
+def _print_column_guide() -> None:
+    from src.adapters.cli.accumulation_display import print_column_guide
+    print_column_guide()
+
 
 
 def _run_multi(
@@ -651,295 +482,6 @@ def _run_multi(
         ))
         for w in windows
     }
-
-
-def _display_multi(
-    results: dict[int, AccumulationScreenResponse],
-    universe_label: str,
-    top_n: int,
-    sort_by: str,
-    squeeze_only: bool,
-    screened_at: "date",
-    broker_quality: dict[str, ScreenBrokerQuality] | None = None,
-) -> None:
-    """Render multi-window side-by-side table."""
-    windows = sorted(results.keys())
-
-    # Build per-ticker dict: ticker -> {window -> candidate}
-    by_ticker: dict[str, dict[int, AccumulationCandidate]] = {}
-    for w, resp in results.items():
-        for c in resp.candidates:
-            by_ticker.setdefault(c.ticker, {})[w] = c
-
-    # Apply squeeze filter
-    if squeeze_only:
-        by_ticker = {
-            tk: pw for tk, pw in by_ticker.items()
-            if any(
-                c.bb_width_pctile is not None and c.bb_width_pctile <= 0.20
-                for c in pw.values()
-            )
-        }
-
-    def sort_key(item: tuple) -> float:
-        pw = item[1]
-        scores = [c.score for c in pw.values()]
-        if not scores:
-            return 0.0
-        if sort_by == "avg":
-            return sum(scores) / len(scores)
-        if sort_by == "max":
-            return max(scores)
-        try:
-            w = int(sort_by.rstrip("ds"))
-            c = pw.get(w)
-            return c.score if c else 0.0
-        except (ValueError, AttributeError):
-            return sum(scores) / len(scores)
-
-    rows = sorted(by_ticker.items(), key=sort_key, reverse=True)[:top_n]
-
-    if not rows:
-        empty = compact_table(show_header=False)
-        empty.add_column("Message")
-        empty.add_row("No candidates found matching the criteria.")
-        empty.add_row(f"Next: saham fetch market --universe {universe_label}")
-        console().print(
-            panel(
-                empty,
-                title=f"Foreign Accumulation - {universe_label.upper()}",
-                subtitle=f"multi-window / {screened_at}",
-            )
-        )
-        return
-
-    table = compact_table()
-    table.add_column("#", justify="right")
-    table.add_column("Ticker", style="bold")
-    for w in windows:
-        table.add_column(f"{w}s", justify="right")
-    table.add_column("Pattern")
-    table.add_column("Trend")
-    table.add_column("BRK")
-
-    for i, (tk, pw) in enumerate(rows, 1):
-        score_cells = []
-        for w in windows:
-            candidate = pw.get(w)
-            if candidate is None:
-                score_cells.append(Text("—", style="bright_black"))
-                continue
-            style = "green" if candidate.score >= 70 else ("yellow" if candidate.score >= 40 else "")
-            score_cells.append(Text(f"{candidate.score:.0f}", style=style))
-        pattern = _classify_pattern(windows, pw)
-        trend = next((c.trend for w in sorted(windows) for c in [pw.get(w)] if c), "—")
-        quality = (broker_quality or {}).get(tk)
-        brk = quality.label if quality else "n/a"
-        table.add_row(str(i), tk, *score_cells, pattern, trend, brk)
-
-    console().print(
-        panel(
-            table,
-            title=f"Foreign Accumulation - {universe_label.upper()}",
-            subtitle=f"multi-window / {screened_at}",
-        )
-    )
-
-    sample_resp = next(iter(results.values()))
-    typer.echo(
-        f"Checked: {sample_resp.total_tickers_checked} | "
-        f"Shown: {len(rows)} | "
-        f"Provider: {sample_resp.provider}"
-    )
-    typer.echo("Score ≥70 green | ≥40 yellow | <40 white")
-    typer.echo("Patterns: sustained | building | fresh rotation | long-term only | coiled spring | weak")
-    typer.echo("BRK: named top-broker quality; smart+/noise+ = buyer-led, smart-/noise- = seller-led, n/a = no detail")
-    typer.echo("DISCLAIMER: Analysis only, not trading advice.")
-    typer.echo("=" * _TABLE_WIDTH)
-
-
-def _print_column_guide() -> None:
-    """Print a terminal-friendly reference guide for every column and signal."""
-
-    def _h(text: str) -> None:
-        typer.echo("")
-        typer.echo(typer.style(f"  {text}", fg=typer.colors.CYAN, bold=True))
-        typer.echo(typer.style("  " + "─" * (len(text) + 2), fg=typer.colors.BRIGHT_BLACK))
-
-    def _row(label: str, value: str) -> None:
-        typer.echo(f"    {typer.style(label, fg=typer.colors.YELLOW):<30} {value}")
-
-    typer.echo("")
-    typer.echo(typer.style("=" * 70, fg=typer.colors.CYAN))
-    typer.echo(typer.style("  FOREIGN ACCUMULATION SCREENER — COLUMN GUIDE", fg=typer.colors.CYAN, bold=True))
-    typer.echo(typer.style("=" * 70, fg=typer.colors.CYAN))
-    typer.echo("")
-    typer.echo("  Detects stocks being quietly bought by foreign institutions over")
-    typer.echo("  multiple days. When foreigners accumulate consistently AND are")
-    typer.echo("  'underwater' (bought higher than today's price), IHSG stocks")
-    typer.echo("  resolve upward 65–70% of the time within 10–20 trading days.")
-    typer.echo("  This is a swing trade watchlist (5–20 day horizon).")
-
-    # ── SCORE ──
-    _h("SCORE  (0–120)")
-    typer.echo("  Composite signal strength. Combines all signals below into one number.")
-    typer.echo("  Higher = more confident that accumulation is real and setup is clean.")
-    _row("≥ 70 (green)", "Strong signal — worth researching")
-    _row("40–69 (yellow)", "Moderate — watch, wait for confirmation")
-    _row("< 40 (white)", "Weak — likely noise, skip")
-    typer.echo("")
-    typer.echo("  Use --breakdown to see exactly how each component contributed.")
-
-    # ── STREAK ──
-    _h("STREAK  — Consecutive Buy Days")
-    typer.echo("  How many trading days IN A ROW foreigners ended up as net buyers,")
-    typer.echo("  counting backwards from today. A streak means systematic intent.")
-    _row("1–2d", "Inconclusive")
-    _row("3–4d", "Noteworthy — watch this ticker")
-    _row("5–7d", "Strong — likely intentional accumulation")
-    _row("8d+", "Very strong — institution is committed")
-    typer.echo("")
-    typer.echo("  Scoring: exponential curve (τ=7d). 7d streak ≈ 63% of max,")
-    typer.echo("  14d ≈ 86%. Longer streaks always score higher — no hard cap.")
-
-    # ── NET_DAYS ──
-    _h("NET_DAYS  — Consistency Ratio  (e.g. 5/7)")
-    typer.echo("  Net buy days / total broker sessions in the window. 5/7 =")
-    typer.echo("  foreigners bought on 5 of the last 7 broker sessions. This is")
-    typer.echo("  the highest-weight signal (40 pts).")
-    _row("100% (4/4, 7/7)", "Every day was a buy — strong conviction")
-    _row("70–99%", "Most days positive — healthy trend")
-    _row("50–69%", "Mixed — watch for deterioration")
-    _row("< 50%", "More sell days than buy — not accumulation")
-    typer.echo("")
-    typer.echo("  A stock with 4/4 is stronger than 10/30 even if the streak looks similar.")
-
-    # ── NET_VALUE ──
-    _h("NET_VALUE  — Total Net Foreign Flow (IDR)")
-    typer.echo("  Total (foreign buys − foreign sells) over the broker-session window in IDR.")
-    typer.echo("  Confirms real money is behind the consistency signal.")
-    _row("+19.4B", "Net bought Rp 19.4 billion — meaningful size")
-    _row("+10M", "Net bought Rp 10 million — may be too small")
-    typer.echo("")
-    typer.echo("  T = trillion  |  B = billion  |  M = million  (IDR)")
-
-    # ── FLOW% ──
-    _h("FLOW%  — Foreign Dominance of Daily Volume")
-    typer.echo("  Average % of total daily turnover that was net foreign buying.")
-    typer.echo("  Unlike NET_VALUE (absolute IDR), this is relative — a mid-cap")
-    typer.echo("  at 35% FLOW% is a stronger signal than a large-cap at 3%.")
-    _row("0–5%", "Minor participation")
-    _row("5–15%", "Meaningful foreign interest")
-    _row("15–30%", "Foreigners are a major force in this stock")
-    _row("30%+", "Foreigners dominating — very strong signal")
-    typer.echo("")
-    typer.echo("  Scoring: contributes up to 10 pts, saturates at 20% flow ratio.")
-
-    # ── F_VWAP% ──
-    _h("F_VWAP%  — Foreigners' Profit / Loss on Position")
-    typer.echo("  Compares foreigners' average buy price (VWAP) to today's price.")
-    typer.echo("")
-    typer.echo("  POSITIVE (+8.4%) = foreigners bought HIGHER than today's price.")
-    typer.echo("  They are underwater (in a paper loss) and motivated to defend.")
-    typer.echo("  When they keep buying despite a loss, they expect a recovery.")
-    typer.echo("  This creates a price floor — they absorb selling to protect position.")
-    typer.echo("")
-    typer.echo("  NEGATIVE (−1.9%) = foreigners are in profit. Less urgency to defend.")
-    _row("  > +5%", "Meaningfully underwater — strong defense motive")
-    _row("  +1% to +5%", "Slightly underwater — moderate signal")
-    _row("  < 0%", "In profit — less motivated to defend")
-    _row("  — (dash)", "Insufficient buy data to compute VWAP")
-    typer.echo("")
-    typer.echo("  Scoring: linear ramp. 10% underwater = full 20 pts. 5% = 10 pts.")
-
-    # ── RSI ──
-    _h("RSI  — Room Left to Run  (14-day)")
-    typer.echo("  Relative Strength Index — measures price momentum (0–100).")
-    typer.echo("  For accumulation, you want to enter BEFORE a move, not after.")
-    _row("  > 70", "Overbought — most of the move already happened")
-    _row("  55–70", "Building momentum — getting stretched")
-    _row("  40–55", "Healthy — moving but not overextended")
-    _row("  25–40", "Weak/recovering — ideal entry zone")
-    _row("  < 25", "Severe panic — high risk, possible capitulation")
-    typer.echo("")
-    typer.echo("  Scoring: tent peak at RSI=40 (10 pts). Zero at RSI≤25 or ≥75.")
-    typer.echo("  RSI 40 with a 5-day streak = smart money re-entering during weakness.")
-
-    # ── BB%ILE ──
-    _h("BB%ILE  — Bollinger Band Squeeze  (green ≤ 20%)")
-    typer.echo("  Percentile rank of today's Bollinger Band width vs last 60 days.")
-    typer.echo("  BB Width measures price channel size — narrow = compressed volatility.")
-    typer.echo("")
-    typer.echo("  LOW BB%ILE = the band is TIGHTER than usual = SQUEEZE.")
-    typer.echo("  When a stock trades flat (low vol) while foreigners accumulate,")
-    typer.echo("  it is a 'coiled spring'. Compression releases suddenly on a catalyst.")
-    _row("  ≤ 20% (green)", "Squeeze — coiled spring, watch closely")
-    _row("  21–40% (yellow)", "Moderately tight — building")
-    _row("  > 40%", "Normal or expanding volatility")
-    _row("  — (dash)", "< 60 days of price data in local DB")
-    typer.echo("")
-    typer.echo("  Scoring: bottom 20th pctile earns 5–10 pts; 40th pctile earns 0–5 pts.")
-    typer.echo("  Use --squeeze-only to filter exclusively for these setups.")
-
-    # ── TREND ──
-    _h("TREND  — Price vs SMA20")
-    typer.echo("  Whether the stock is above or below its 20-day moving average.")
-    _row("  UP", "> 2% above SMA20 — uptrend")
-    _row("  DOWN", "> 2% below SMA20 — downtrend")
-    _row("  SIDE", "Within ±2% of SMA20 — ranging")
-    typer.echo("")
-    typer.echo("  For accumulation setups, DOWN or SIDE is often ideal — you want to")
-    typer.echo("  enter BEFORE the trend turns UP, not after the move has started.")
-
-    # ── PATTERN (multi-window) ──
-    _h("PATTERN  — Multi-Window Summary  (--multi only)")
-    typer.echo("  Labels what the 7d/30d/90d score comparison reveals.")
-    _row("  sustained", "Score ≥60 on all 3 windows — months of buildup, highest conviction")
-    _row("  building", "Strong 7d+30d, weaker 90d — accumulation intensifying recently")
-    _row("  fresh rotation", "Strong 7d only — very recent, needs time to confirm")
-    _row("  long-term only", "Strong 90d, weak recent — may be complete, watch for exit")
-    _row("  coiled spring", "Squeeze + score ≥60 on any window — compressed, ready to break")
-    _row("  weak", "No window scores ≥60 — not a meaningful setup")
-
-    # ── BREAKDOWN ──
-    _h("SCORE BREAKDOWN  (--breakdown flag)")
-    typer.echo("  Shows exactly how each component contributed to the total score.")
-    typer.echo("  Format: [cons=X streak=X vwap=X rsi=X flow=X bb=X inst=X]")
-    _row("  cons", "Up to 40 pts — net buy day consistency")
-    _row("  streak", "Up to 30 pts — consecutive buy days (exponential)")
-    _row("  vwap", "Up to 20 pts — how underwater foreigners are")
-    _row("  rsi", "Up to 10 pts — RSI headroom (tent at 40)")
-    _row("  flow", "Up to 10 pts — avg % of daily turnover that's foreign")
-    _row("  bb", "Up to 10 pts — BB Width squeeze intensity")
-    _row("  inst", "0/5/15 pts — BCI: RETAIL-LED/STABLE/CLUSTER (Stockbit only)")
-    typer.echo("")
-    typer.echo("  If a stock scores lower than expected, breakdown shows which signal")
-    typer.echo("  is missing. E.g. vwap=0 means foreigners are in profit — no defense motive.")
-
-    # ── IDEAL SETUP ──
-    _h("IDEAL CANDIDATE CHECKLIST")
-    typer.echo("  In priority order:")
-    typer.echo("    1. PATTERN = sustained or coiled spring  (multi-window confirms)")
-    typer.echo("    2. STREAK ≥ 5d                          (systematic, not opportunistic)")
-    typer.echo("    3. F_VWAP% > 0%                         (foreigners defending position)")
-    typer.echo("    4. BB%ILE ≤ 20% (green)                 (compressed, spring loaded)")
-    typer.echo("    5. RSI between 30–50                    (room to run)")
-    typer.echo("    6. FLOW% > 15%                          (foreigners dominating volume)")
-    typer.echo("    7. NET_DAYS ≥ 70%                       (consistent, not just a streak)")
-    typer.echo("")
-    typer.echo("  No single signal is definitive. A stock meeting 5 of 7 criteria is")
-    typer.echo("  a much stronger candidate than one barely crossing a score threshold.")
-
-    # ── TIPS ──
-    _h("QUICK TIPS")
-    typer.echo("  Run --multi first for the daily overview — one command, three windows.")
-    typer.echo("  Use --squeeze-only to surface 'coiled spring' setups.")
-    typer.echo("  Deep-dive: saham view broker flow <TICKER> --days 30")
-    typer.echo("             saham risk <TICKER> --profile balanced --with-sentiment")
-    typer.echo("")
-    typer.echo(typer.style("  DISCLAIMER: Analysis only. Not financial advice.", fg=typer.colors.BRIGHT_BLACK))
-    typer.echo(typer.style("=" * 70, fg=typer.colors.CYAN))
-    typer.echo("")
 
 
 def accumulation_run(
@@ -1219,125 +761,8 @@ def accumulation_run(
 
 
 def _display_audit_summary(response: AccumulationAuditResponse, top_groups: int) -> None:
-    typer.echo("")
-    typer.echo(typer.style("=" * 96, fg=typer.colors.CYAN))
-    typer.echo(
-        typer.style(
-            "FOREIGN ACCUMULATION HISTORICAL AUDIT",
-            fg=typer.colors.CYAN,
-            bold=True,
-        )
-    )
-    typer.echo(typer.style("=" * 96, fg=typer.colors.CYAN))
-    typer.echo(
-        f"Period: {response.start_date} to {response.end_date} | "
-        f"window: {response.window_days} sessions | replay dates: {response.total_replay_dates} | "
-        f"tickers: {response.total_tickers}"
-    )
-    typer.echo(
-        f"Signals: {response.total_records} | "
-        f"Skipped no forward data: {response.skipped_no_forward_data}"
-    )
-    typer.echo(
-        "Read fixed-hold rows as: if you bought every matching signal at the signal-date "
-        "close, what happened after 5/10/20 trading days."
-    )
-    typer.echo("")
-
-    if not response.records:
-        typer.echo("No replayed signals matched the audit filters.")
-        return
-
-    typer.echo(
-        f"{'DIMENSION':<14} {'BUCKET':<12} {'N':>6} "
-        f"{'AVG5D':>9} {'AVG10D':>9} {'WIN10D':>9} "
-        f"{'AVG20D':>9} {'MAXUP':>9} {'MAXDD':>9}"
-    )
-    typer.echo("-" * 96)
-    for stat in response.group_stats[:top_groups]:
-        def fmt(v: float | None) -> str:
-            return "—" if v is None else f"{v:+.2f}%"
-
-        win = "—" if stat.win_rate_10d_pct is None else f"{stat.win_rate_10d_pct:.1f}%"
-        typer.echo(
-            f"{stat.dimension:<14} {stat.bucket:<12} {stat.count:>6} "
-            f"{fmt(stat.avg_return_5d_pct):>9} {fmt(stat.avg_return_10d_pct):>9} "
-            f"{win:>9} {fmt(stat.avg_return_20d_pct):>9} "
-            f"{fmt(stat.avg_max_upside_pct):>9} {fmt(stat.avg_max_drawdown_pct):>9}"
-        )
-
-    if response.exit_simulations:
-        typer.echo("")
-        typer.echo("EXIT SIMULATION")
-        typer.echo("-" * 96)
-        best = response.exit_simulations[0]
-        avg_ret = (
-            "N/A" if best.avg_return_pct is None
-            else f"{best.avg_return_pct:+.2f}%"
-        )
-        win = "N/A" if best.win_rate_pct is None else f"{best.win_rate_pct:.1f}%"
-        avg_days = (
-            "N/A" if best.avg_holding_days is None
-            else f"{best.avg_holding_days:.1f}d"
-        )
-        typer.echo(
-            "Rows below simulate managed exits using daily high/low: stop is checked "
-            "first, then target, otherwise exit at max-hold close."
-        )
-        typer.echo(
-            f"Best by AVG_RET: TP {best.take_profit_pct:g}%, "
-            f"SL {best.stop_loss_pct:g}%, max hold {best.max_hold_days}d -> "
-            f"avg {avg_ret}, win {win}, avg hold {avg_days}."
-        )
-        if response.total_records < 30:
-            typer.echo(
-                "Caution: sample is small (<30 signals). Treat this as a hypothesis "
-                "to retest on more dates/universes, not a final rule."
-            )
-        typer.echo("")
-        typer.echo(
-            f"{'TP%':>6} {'SL%':>6} {'HOLD':>6} {'N':>6} "
-            f"{'AVG_RET':>9} {'WIN':>8} {'AVG_DAYS':>9} "
-            f"{'STOP':>8} {'TARGET':>8} {'MAXHOLD':>8} {'AVG_DD':>9}"
-        )
-        for stat in response.exit_simulations[:top_groups]:
-            def fmt_pct(v: float | None, signed: bool = False) -> str:
-                if v is None:
-                    return "—"
-                return f"{v:+.2f}%" if signed else f"{v:.1f}%"
-
-            avg_days = "—" if stat.avg_holding_days is None else f"{stat.avg_holding_days:.1f}"
-            typer.echo(
-                f"{stat.take_profit_pct:>6.1f} {stat.stop_loss_pct:>6.1f} "
-                f"{stat.max_hold_days:>6} {stat.count:>6} "
-                f"{fmt_pct(stat.avg_return_pct, signed=True):>9} "
-                f"{fmt_pct(stat.win_rate_pct):>8} {avg_days:>9} "
-                f"{fmt_pct(stat.stop_rate_pct):>8} "
-                f"{fmt_pct(stat.target_rate_pct):>8} "
-                f"{fmt_pct(stat.max_hold_rate_pct):>8} "
-                f"{fmt_pct(stat.avg_max_drawdown_pct, signed=True):>9}"
-            )
-
-    typer.echo("")
-    typer.echo("COLUMN GUIDE")
-    typer.echo("-" * 40)
-    typer.echo("AVG5D/10D/20D: passive close-to-close return after that many trading days.")
-    typer.echo("MAXUP/MAXDD: average best/worst close-to-close move inside the horizon.")
-    typer.echo("AVG_RET: simulated exit return after TP/SL/max-hold rules.")
-    typer.echo("WIN: percent of simulated exits with positive return.")
-    typer.echo("STOP/TARGET/MAXHOLD: how often each exit reason happened.")
-    typer.echo("AVG_DD: average intratrade drawdown using daily low before exit.")
-
-    if response.warnings:
-        typer.echo("")
-        typer.echo("WARNINGS")
-        typer.echo("-" * 40)
-        for warning in response.warnings:
-            typer.echo(f"  ! {warning}")
-
-    typer.echo("")
-    typer.echo("DISCLAIMER: Historical audit only. Not trading advice.")
-    typer.echo(typer.style("=" * 96, fg=typer.colors.CYAN))
+    from src.adapters.cli.accumulation_audit_display import display_audit_summary
+    display_audit_summary(response=response, top_groups=top_groups)
 
 
 def _write_audit_csv(response: AccumulationAuditResponse, output_path: Path) -> None:
@@ -1938,92 +1363,11 @@ def accumulation_review(
     typer.echo(f"Reviewing journal ({journal_path}) | horizon={horizon}d ...")
     report = service.review(horizon_days=horizon)
 
-    _W = 70
+    from src.adapters.cli.accumulation_journal_display import display_journal_review
 
-    typer.echo("")
-    typer.echo("=" * _W)
-    typer.echo("ACCUMULATION TRADE JOURNAL REVIEW")
-    typer.echo("=" * _W)
-    typer.echo(f"Journal  : {journal_path}")
-    typer.echo(f"Entries  : {report.total_entries} total | {report.enriched_entries} with {horizon}d+ data")
-    typer.echo(f"Horizon  : {horizon} trading days | min_score filter: {min_score}")
-
-    if report.enriched_entries == 0:
-        typer.echo("")
-        typer.echo("No enriched entries yet — check back after market data covers the horizon.")
-        typer.echo("=" * _W)
-        return
-
-    # Apply min_score filter to the enriched entries for display
-    # (report already computed; we just filter display)
-    def _pct(v: float | None) -> str:
-        return f"{v:+.1f}%" if v is not None else "  N/A"
-
-    def _wr(v: float | None) -> str:
-        return f"{v:.0f}%" if v is not None else " N/A"
-
-    # ── PERFORMANCE BY SCORE BUCKET ──
-    typer.echo("")
-    typer.echo(typer.style("PERFORMANCE BY SCORE BUCKET", fg=typer.colors.CYAN, bold=True))
-    typer.echo(f"  {'BUCKET':<10} {'N':>4}  {'AVG_5D':>8}  {'AVG_10D':>8}  {'WIN_RATE_10D':>13}")
-    typer.echo("  " + "-" * 50)
-    for stat in report.score_buckets:
-        if stat.n == 0 and min_score > 0:
-            continue
-        typer.echo(
-            f"  {stat.bucket:<10} {stat.n:>4}  {_pct(stat.avg_return_5d):>8}  "
-            f"{_pct(stat.avg_return_10d):>8}  {_wr(stat.win_rate_10d):>13}"
-        )
-
-    # ── PERFORMANCE BY PRESET DECISION ──
-    if report.by_decision:
-        typer.echo("")
-        typer.echo(typer.style("PERFORMANCE BY PRESET DECISION", fg=typer.colors.CYAN, bold=True))
-        typer.echo(
-            f"  {'DECISION':<12} {'N':>4}  {'AVG_10D':>8}  {'WIN_RATE':>9}  "
-            f"{'AVG_MAX_UP':>11}  {'AVG_MAX_DD':>11}"
-        )
-        typer.echo("  " + "-" * 62)
-        for stat in report.by_decision:
-            typer.echo(
-                f"  {stat.decision:<12} {stat.n:>4}  {_pct(stat.avg_return_10d):>8}  "
-                f"{_wr(stat.win_rate_10d):>9}  {_pct(stat.avg_max_upside):>11}  "
-                f"{_pct(stat.avg_max_drawdown):>11}"
-            )
-
-    # ── PERFORMANCE BY PATTERN ──
-    if report.by_pattern:
-        typer.echo("")
-        typer.echo(typer.style("PERFORMANCE BY PATTERN", fg=typer.colors.CYAN, bold=True))
-        typer.echo(
-            f"  {'PATTERN':<18} {'N':>4}  {'AVG_10D':>8}  {'WIN_RATE':>9}  "
-            f"{'AVG_MAX_UP':>11}  {'AVG_MAX_DD':>11}"
-        )
-        typer.echo("  " + "-" * 70)
-        for stat in report.by_pattern:
-            typer.echo(
-                f"  {stat.pattern:<18} {stat.n:>4}  {_pct(stat.avg_return_10d):>8}  "
-                f"{_wr(stat.win_rate_10d):>9}  {_pct(stat.avg_max_upside):>11}  "
-                f"{_pct(stat.avg_max_drawdown):>11}"
-            )
-
-    # ── SIGNAL DELTA ──
-    if report.signal_deltas:
-        typer.echo("")
-        typer.echo(typer.style("SIGNAL DELTA (correlation with 10d return)", fg=typer.colors.CYAN, bold=True))
-        typer.echo(
-            f"  {'SIGNAL':<12}  {'GROUP A':<20}  {'N_A':>4}  {'AVG_A':>7}  "
-            f"{'GROUP B':<20}  {'N_B':>4}  {'AVG_B':>7}"
-        )
-        typer.echo("  " + "-" * 82)
-        for d in report.signal_deltas:
-            typer.echo(
-                f"  {d.signal:<12}  {d.group_a_label:<20}  {d.group_a_n:>4}  "
-                f"{_pct(d.group_a_avg_10d):>7}  {d.group_b_label:<20}  "
-                f"{d.group_b_n:>4}  {_pct(d.group_b_avg_10d):>7}"
-            )
-
-    typer.echo("")
-    typer.echo("Note: 20+ entries needed for statistically meaningful results.")
-    typer.echo("DISCLAIMER: Past performance does not predict future returns.")
-    typer.echo("=" * _W)
+    display_journal_review(
+        report=report,
+        journal_path=journal_path,
+        horizon=horizon,
+        min_score=min_score,
+    )
