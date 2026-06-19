@@ -23,6 +23,7 @@ from __future__ import annotations
 import logging
 import time as _time_module
 from datetime import datetime, time
+from pathlib import Path
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
@@ -244,20 +245,129 @@ class StockbitMarketTimeProvider(MarketStatusProvider):
         )
 
 
+# ── File cache ───────────────────────────────────────────────────────────────
+
+_CACHE_FILE = Path(".market_status.json")
+_CACHE_MAX_AGE_SECONDS = 300  # 5 minutes — sessions change on minute boundaries
+
+
+def read_cached_market_status(max_age_seconds: int = _CACHE_MAX_AGE_SECONDS) -> MarketStatus | None:
+    """Read market status from the file cache written by `saham today`.
+
+    Returns None if the cache file is missing, unreadable, or older than max_age_seconds.
+    Never raises.
+    """
+    import json
+    try:
+        if not _CACHE_FILE.exists():
+            return None
+        raw = json.loads(_CACHE_FILE.read_text())
+        fetched_at_str = raw.get("fetched_at", "")
+        fetched_at = datetime.fromisoformat(fetched_at_str)
+        age = (datetime.now(_IDX_TZ) - fetched_at).total_seconds()
+        if age > max_age_seconds:
+            return None
+        return MarketStatus(
+            status=raw["status"],
+            session_name=raw["session_name"],
+            is_open=raw["is_open"],
+            session_open=raw.get("session_open"),
+            session_close=raw.get("session_close"),
+            fetched_at=fetched_at,
+            source=raw["source"],
+        )
+    except Exception:
+        return None
+
+
+def write_market_status_cache(status: MarketStatus) -> None:
+    """Write a Stockbit-confirmed MarketStatus to the file cache.
+
+    Only call this when status.source == 'stockbit'. Never raises.
+    """
+    import json
+    try:
+        data = {
+            "status": status.status,
+            "session_name": status.session_name,
+            "is_open": status.is_open,
+            "session_open": status.session_open,
+            "session_close": status.session_close,
+            "fetched_at": status.fetched_at.isoformat(),
+            "source": status.source,
+        }
+        _CACHE_FILE.write_text(json.dumps(data, indent=2))
+    except Exception:
+        pass
+
+
 # ── Module-level convenience functions ───────────────────────────────────────
 
-def get_current_market_status() -> MarketStatus:
-    """Return current IDX market status — Stockbit when session available, else local clock.
+def get_display_market_status() -> MarketStatus:
+    """Return market status for display in command headers — instant, no network.
 
-    Never raises. Safe to call from any command at startup.
+    Read order:
+      1. File cache (written by `saham today`) — if present and < 5 min old
+      2. Local clock fallback
+
+    Never tries Stockbit directly. All commands that only need a status line
+    for display context should use this.
     """
+    cached = read_cached_market_status()
+    if cached:
+        return cached
+    return LocalClockMarketStatusProvider().get_status()
+
+
+def fetch_and_cache_market_status() -> MarketStatus | None:
+    """Fetch market status from Stockbit and write to cache on success.
+
+    Returns the MarketStatus on success (source='stockbit'), or None if
+    Stockbit is unavailable or the response could not be parsed.
+    Does NOT fall back to local clock — callers handle the None case explicitly
+    so they can show a clear message to the user.
+    """
+    try:
+        from pathlib import Path
+        from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
+        if not Path(".stockbit_profile").exists():
+            return None
+        provider = StockbitPlaywrightBrokerProvider()
+        if not provider.is_authenticated():
+            return None
+        result = StockbitMarketTimeProvider(broker_provider=provider).get_status()
+        if result and result.source == "stockbit":
+            write_market_status_cache(result)
+            return result
+        return None
+    except Exception:
+        return None
+
+
+def get_current_market_status() -> MarketStatus:
+    """Return current IDX market status for commands that already hold a Stockbit token.
+
+    Read order:
+      1. File cache (fresh < 5 min)
+      2. Stockbit live (token already cached in-process from earlier in the same command)
+      3. Local clock
+
+    Use this in commands that already use Stockbit (pre-open, learn snapshot)
+    where the token acquisition cost is already paid.
+    """
+    cached = read_cached_market_status()
+    if cached:
+        return cached
     try:
         from pathlib import Path
         from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
         if Path(".stockbit_profile").exists():
             provider = StockbitPlaywrightBrokerProvider()
             if provider.is_authenticated():
-                return StockbitMarketTimeProvider(broker_provider=provider).get_status()
+                result = StockbitMarketTimeProvider(broker_provider=provider).get_status()
+                if result.source == "stockbit":
+                    write_market_status_cache(result)
+                    return result
     except Exception:
         pass
     return LocalClockMarketStatusProvider().get_status()

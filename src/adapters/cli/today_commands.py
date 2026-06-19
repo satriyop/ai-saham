@@ -71,10 +71,20 @@ def today(
     )
 
     from src.infrastructure.browser.stockbit_market_time import (
+        fetch_and_cache_market_status,
         format_market_status_line,
-        get_current_market_status,
+        get_display_market_status,
     )
-    market_status = get_current_market_status()
+    # Attempt Stockbit-confirmed status and cache it for all other commands.
+    stockbit_status = fetch_and_cache_market_status()
+    if stockbit_status is None:
+        typer.echo(
+            "⚠  Market status: could not confirm via Stockbit "
+            "(no session or fetch failed). Run `saham fetch stockbit login` "
+            "to enable canonical market status.",
+            err=True,
+        )
+    market_status = stockbit_status or get_display_market_status()
 
     fresh_count = response.universe_count - response.stale_count
     summary = compact_table(show_header=False)

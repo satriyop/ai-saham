@@ -98,15 +98,22 @@ def _check_stockbit_session() -> dict:
 
 
 def _check_market_status() -> dict:
-    """Return current IDX market status via Stockbit API or local clock."""
+    """Return IDX market status — Stockbit confirmed if available, else cached or local clock."""
     import time as _t
     start = _t.time()
     try:
-        from src.infrastructure.browser.stockbit_market_time import get_current_market_status
-        status = get_current_market_status()
+        from src.infrastructure.browser.stockbit_market_time import (
+            fetch_and_cache_market_status,
+            get_display_market_status,
+        )
+        # Try live Stockbit probe (also refreshes the cache for other commands)
+        live = fetch_and_cache_market_status()
         elapsed = round(_t.time() - start, 1)
-        label = f"{status.session_name} [{status.source}]"
-        return {"ok": True, "label": label, "ms": elapsed}
+        if live:
+            return {"ok": True, "label": f"{live.session_name} [stockbit ✓]", "ms": elapsed}
+        # Fall back to cache or local clock — show source clearly
+        fallback = get_display_market_status()
+        return {"ok": True, "label": f"{fallback.session_name} [{fallback.source}]", "ms": elapsed}
     except Exception as e:
         elapsed = round(_t.time() - start, 1)
         return {"ok": False, "label": str(e)[:55], "ms": elapsed}

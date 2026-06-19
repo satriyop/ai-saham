@@ -121,7 +121,7 @@ def _get_market_status() -> "MarketStatus":
     """Return current IDX market status from Stockbit if session available,
     else from local wall-clock. Never raises."""
     from src.infrastructure.browser.stockbit_market_time import get_current_market_status
-    return get_current_market_status()
+    return get_current_market_status()  # reads cache first, then tries Stockbit (token already held in-process)
 
 
 def _build_intraday_run_guard(

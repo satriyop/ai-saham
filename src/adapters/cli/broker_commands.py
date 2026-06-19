@@ -192,9 +192,9 @@ def broker_fetch(
 
     from src.infrastructure.browser.stockbit_market_time import (
         format_market_status_line,
-        get_current_market_status,
+        get_display_market_status,
     )
-    typer.echo(format_market_status_line(get_current_market_status()))
+    typer.echo(format_market_status_line(get_display_market_status()))
     typer.echo(f"Fetching broker data for {ticker.upper()}...")
     typer.echo(f"Provider: {provider_name} | Date range: {start_date} to {end_date}")
 
@@ -651,10 +651,10 @@ def broker_top_foreign(
 
     from src.infrastructure.browser.stockbit_market_time import (
         format_market_status_line,
-        get_current_market_status,
+        get_display_market_status,
     )
     typer.echo("")
-    typer.echo(format_market_status_line(get_current_market_status()))
+    typer.echo(format_market_status_line(get_display_market_status()))
     typer.echo(f"Foreign broker accumulation scan ({start} → {end})")
     typer.echo("─" * 55)
 

@@ -631,9 +631,9 @@ def fetch_market(
     # Header
     from src.infrastructure.browser.stockbit_market_time import (
         format_market_status_line,
-        get_current_market_status,
+        get_display_market_status,
     )
-    _mstatus = get_current_market_status()
+    _mstatus = get_display_market_status()
     typer.echo(f"\n{format_market_status_line(_mstatus)}")
     typer.echo(f"Updating {len(response.ticker_list)} tickers | {days}d history")
     if not broker_only:
