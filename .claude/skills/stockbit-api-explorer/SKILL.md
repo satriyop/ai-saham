@@ -144,7 +144,7 @@ Analysis commands (`swing analyze`, `swing screen`, `accumulation screen`) must
 **never** call external APIs. They only read from SQLite.
 
 ```
-saham data update  →  creates providers WITH broker_provider  →  can fetch from API
+saham fetch market  →  creates providers WITH broker_provider  →  can fetch from API
 swing analyze      →  creates providers WITH broker_provider=None  →  SQLite only
 ```
 
@@ -152,7 +152,7 @@ swing analyze      →  creates providers WITH broker_provider=None  →  SQLite
 `broker_provider=None`. The `if self._provider is None: return None` guard in
 every provider's `_fetch()` enforces this at runtime.
 
-If data isn't in SQLite (user hasn't run `saham data update`), enrichment fields
+If data isn't in SQLite (user hasn't run `saham fetch market`), enrichment fields
 show as `None` silently. No errors, no API calls.
 
 ---
