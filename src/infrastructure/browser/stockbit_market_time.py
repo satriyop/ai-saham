@@ -3,8 +3,7 @@ Market status providers for IDX.
 
 LocalClockMarketStatusProvider — offline fallback; derives status from
   wall-clock time in Asia/Jakarta. Consolidates the time-based logic that
-  was previously duplicated across intraday_workflow_commands.py,
-  learn_opening_commands.py, and collect_iev().
+  was previously duplicated across CLI workflow helpers.
 
 StockbitMarketTimeProvider — canonical live implementation; calls
   GET /company-price-feed/market-time and returns STATUS_OPEN / STATUS_CLOSE
