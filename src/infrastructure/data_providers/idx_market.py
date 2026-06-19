@@ -59,9 +59,6 @@ IDX_HEADERS = {
     "sec-ch-ua-platform": '"Windows"',
 }
 
-SHARES_PER_LOT = 100
-
-
 class IdxMarketDataProvider(MarketDataProvider):
     """
     IDX-native OHLCV provider using the public TradingSummary API.
@@ -77,6 +74,9 @@ class IdxMarketDataProvider(MarketDataProvider):
     def __init__(self, timeout: float = 30.0) -> None:
         self._timeout = timeout
         self._last_request_time: float = 0
+        self.provider_name = "idx"
+        self.volume_unit = "shares"
+        self.price_adjustment_policy = "raw"
 
     def _rate_limit(self) -> None:
         elapsed = time.time() - self._last_request_time
@@ -170,12 +170,13 @@ class IdxMarketDataProvider(MarketDataProvider):
         date_str = data["Date"][:10]  # "2025-01-24T00:00:00" → "2025-01-24"
         trading_date = date.fromisoformat(date_str)
 
-        open_price = Decimal(str(data.get("OpenPrice") or data.get("Previous") or data.get("Close", 0)))
+        open_price = Decimal(
+            str(data.get("OpenPrice") or data.get("Previous") or data.get("Close", 0))
+        )
         high = Decimal(str(data.get("High") or data.get("Close", 0)))
         low = Decimal(str(data.get("Low") or data.get("Close", 0)))
         close = Decimal(str(data.get("Close", 0)))
         volume_shares = int(data.get("Volume", 0))
-        volume_lots = volume_shares // SHARES_PER_LOT
 
         return Candle(
             ticker=ticker,
@@ -184,7 +185,7 @@ class IdxMarketDataProvider(MarketDataProvider):
             high=high,
             low=low,
             close=close,
-            volume=volume_lots,
+            volume=volume_shares,
         )
 
     def fetch_daily_ohlcv(

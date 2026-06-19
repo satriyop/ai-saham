@@ -31,7 +31,10 @@ class SQLiteMarketRepository(MarketDataRepository):
     - Stores prices as TEXT to preserve Decimal precision
 
     Schema:
-        candles(ticker, date, open, high, low, close, volume)
+        candles(
+            ticker, date, open, high, low, close, volume,
+            source, volume_unit, price_adjustment_policy
+        )
         Primary key: (ticker, date)
     """
 
@@ -66,10 +69,14 @@ class SQLiteMarketRepository(MarketDataRepository):
                         low TEXT NOT NULL,
                         close TEXT NOT NULL,
                         volume INTEGER NOT NULL,
+                        source TEXT NOT NULL DEFAULT 'unknown',
+                        volume_unit TEXT NOT NULL DEFAULT 'unknown',
+                        price_adjustment_policy TEXT NOT NULL DEFAULT 'unknown',
                         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                         PRIMARY KEY (ticker, date)
                     )
                 """)
+                self._ensure_metadata_columns(conn)
                 conn.execute("""
                     CREATE INDEX IF NOT EXISTS idx_candles_ticker_date
                     ON candles(ticker, date)
@@ -78,12 +85,41 @@ class SQLiteMarketRepository(MarketDataRepository):
         except sqlite3.Error as e:
             raise MarketDataRepositoryError(f"Failed to create schema: {e}") from e
 
-    def save_candles(self, candles: list[Candle]) -> None:
+    def _ensure_metadata_columns(self, conn: sqlite3.Connection) -> None:
+        """Add candle provenance columns to legacy databases."""
+        existing_cols = {
+            row[1] for row in conn.execute("PRAGMA table_info(candles)").fetchall()
+        }
+        if "source" not in existing_cols:
+            conn.execute(
+                "ALTER TABLE candles ADD COLUMN source TEXT NOT NULL DEFAULT 'unknown'"
+            )
+        if "volume_unit" not in existing_cols:
+            conn.execute(
+                "ALTER TABLE candles ADD COLUMN volume_unit TEXT NOT NULL DEFAULT 'unknown'"
+            )
+        if "price_adjustment_policy" not in existing_cols:
+            conn.execute(
+                "ALTER TABLE candles ADD COLUMN "
+                "price_adjustment_policy TEXT NOT NULL DEFAULT 'unknown'"
+            )
+
+    def save_candles(
+        self,
+        candles: list[Candle],
+        *,
+        source: str = "unknown",
+        volume_unit: str = "unknown",
+        price_adjustment_policy: str = "unknown",
+    ) -> None:
         """
         Save candles to SQLite. Uses upsert to handle duplicates.
 
         Args:
             candles: List of Candle entities to persist.
+            source: Data provider label, e.g. 'yahoo' or 'idx'.
+            volume_unit: Unit stored in Candle.volume, e.g. 'shares'.
+            price_adjustment_policy: Provider price adjustment policy.
 
         Raises:
             MarketDataRepositoryError: If save fails.
@@ -95,14 +131,20 @@ class SQLiteMarketRepository(MarketDataRepository):
             with self._get_connection() as conn:
                 conn.executemany(
                     """
-                    INSERT INTO candles (ticker, date, open, high, low, close, volume)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO candles (
+                        ticker, date, open, high, low, close, volume,
+                        source, volume_unit, price_adjustment_policy
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(ticker, date) DO UPDATE SET
                         open = excluded.open,
                         high = excluded.high,
                         low = excluded.low,
                         close = excluded.close,
-                        volume = excluded.volume
+                        volume = excluded.volume,
+                        source = excluded.source,
+                        volume_unit = excluded.volume_unit,
+                        price_adjustment_policy = excluded.price_adjustment_policy
                     """,
                     [
                         (
@@ -113,6 +155,9 @@ class SQLiteMarketRepository(MarketDataRepository):
                             str(c.low),
                             str(c.close),
                             c.volume,
+                            source,
+                            volume_unit,
+                            price_adjustment_policy,
                         )
                         for c in candles
                     ],
