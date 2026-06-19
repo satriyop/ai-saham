@@ -60,7 +60,7 @@ htmlcov/
 *.duckdb
 
 # Project-specific: Market data cache
-data/cache/
+data/
 *.csv.cache
 
 # Project-specific: Analysis outputs (reproducible, shouldn't be committed)
