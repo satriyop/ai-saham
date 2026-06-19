@@ -82,6 +82,34 @@ def snapshot(
         )
         raise typer.Exit(1)
 
+    # Secondary check via Stockbit market-time API: warn if not in Pre-Open session
+    # (catches IDX holidays where in_window is true but market is closed).
+    if not force:
+        try:
+            from src.infrastructure.browser.stockbit_market_time import (
+                LocalClockMarketStatusProvider,
+                StockbitMarketTimeProvider,
+            )
+            from pathlib import Path as _Path
+            _mstatus = None
+            if _Path(".stockbit_profile").exists():
+                from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
+                _bp = StockbitPlaywrightBrokerProvider()
+                if _bp.is_authenticated():
+                    _mstatus = StockbitMarketTimeProvider(broker_provider=_bp).get_status()
+            if _mstatus and _mstatus.source == "stockbit" and not _mstatus.is_pre_open:
+                typer.echo(
+                    f"Warning: Stockbit reports session='{_mstatus.session_name}' "
+                    f"(status={_mstatus.status}), not Pre-Open. "
+                    "This may be an IDX holiday. Use --force to proceed anyway.",
+                    err=True,
+                )
+                raise typer.Exit(1)
+        except typer.Exit:
+            raise
+        except Exception:
+            pass  # Never block on market-status probe failure
+
     try:
         from src.adapters.cli.screen_pre_open_commands import (
             _load_config,

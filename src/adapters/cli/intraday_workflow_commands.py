@@ -26,12 +26,18 @@ from dataclasses import dataclass
 from datetime import date, datetime, time
 from decimal import Decimal
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import TYPE_CHECKING, Annotated, Optional
+
+if TYPE_CHECKING:
+    from src.domain.value_objects.market_status import MarketStatus
 from zoneinfo import ZoneInfo
 
 import typer
 import yaml
+from rich.console import Group
+from rich.text import Text
 
+from src.adapters.cli.rich_display import compact_table, console, panel
 from src.application.services.bootstrap import create_indicator_registry
 from src.application.services.universe_loader import UniverseNotFoundError, resolve_tickers
 from src.application.use_case.confirm_intraday_open import (
@@ -111,23 +117,63 @@ def _current_idx_datetime() -> datetime:
     return datetime.now(IDX_TIMEZONE)
 
 
+def _get_market_status() -> "MarketStatus":
+    """Return current IDX market status from Stockbit if session available,
+    else from local wall-clock. Never raises."""
+    from src.infrastructure.browser.stockbit_market_time import (
+        LocalClockMarketStatusProvider,
+        StockbitMarketTimeProvider,
+    )
+    try:
+        from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
+        if Path(".stockbit_profile").exists():
+            provider = StockbitPlaywrightBrokerProvider()
+            if provider.is_authenticated():
+                return StockbitMarketTimeProvider(broker_provider=provider).get_status()
+    except Exception:
+        pass
+    return LocalClockMarketStatusProvider().get_status()
+
+
 def _build_intraday_run_guard(
     run_at: datetime,
     allow_non_trading_day: bool = False,
+    market_status: "MarketStatus | None" = None,
 ) -> IntradayRunGuard:
-    """Build deterministic timing warnings/errors for the pre-open workflow."""
+    """Build deterministic timing warnings/errors for the pre-open workflow.
+
+    When market_status comes from Stockbit (source='stockbit'), the weekend
+    check is replaced by the API's is_open / session_name — this correctly
+    handles IDX public holidays that fall on weekdays.
+    """
     warnings: list[str] = []
-
     local_run_at = run_at.astimezone(IDX_TIMEZONE)
-    if local_run_at.weekday() >= 5:
-        message = (
-            f"{local_run_at.date()} is a weekend in Asia/Jakarta. "
-            "Use --allow-non-trading-day only for dry-runs/backfills."
-        )
-        if not allow_non_trading_day:
-            return IntradayRunGuard(run_at=local_run_at, error=message)
-        warnings.append(message)
 
+    # Non-trading day check
+    status = market_status or _get_market_status()
+    if status.source == "stockbit":
+        # Canonical: trust the API — closed AND not pre-open = non-trading day
+        if not status.is_open and not status.is_pre_open:
+            message = (
+                f"{local_run_at.date()} is a non-trading day "
+                f"({status.session_name} per Stockbit). "
+                "Use --allow-non-trading-day only for dry-runs/backfills."
+            )
+            if not allow_non_trading_day:
+                return IntradayRunGuard(run_at=local_run_at, error=message)
+            warnings.append(message)
+    else:
+        # Fallback: wall-clock weekend check
+        if local_run_at.weekday() >= 5:
+            message = (
+                f"{local_run_at.date()} is a weekend in Asia/Jakarta. "
+                "Use --allow-non-trading-day only for dry-runs/backfills."
+            )
+            if not allow_non_trading_day:
+                return IntradayRunGuard(run_at=local_run_at, error=message)
+            warnings.append(message)
+
+    # Pre-open window timing warning
     current_time = local_run_at.time()
     if not (PRE_OPEN_START <= current_time < PRE_OPEN_END):
         warnings.append(
@@ -322,6 +368,68 @@ _STRAT_COLOR  = {
 }
 
 
+def _display_pre_open_summary_panel(
+    candidates: list[ScreenerCandidate],
+    screened_date: date,
+    iev_min: int,
+    total_movers_seen: int,
+    warnings: list[str],
+    data_freshness: PreOpenDataFreshness | None,
+    market_regime: MarketRegimeResponse | None,
+) -> None:
+    sorted_candidates = sorted(
+        candidates,
+        key=lambda c: (_VERDICT_ORDER.get(_verdict(c), 99), -c.iev),
+    )
+    watchlist = [c for c in sorted_candidates if _verdict(c) in ("PRIME", "WATCH")]
+    skipped = [c for c in sorted_candidates if _verdict(c) not in ("PRIME", "WATCH")]
+
+    summary = compact_table(show_header=False)
+    summary.add_column("Metric", style="bold")
+    summary.add_column("Value")
+    summary.add_row("Date", screened_date.isoformat())
+    summary.add_row("IEV threshold", f">= {iev_min:,}")
+    summary.add_row("Movers evaluated", str(total_movers_seen))
+    summary.add_row("Candidates", str(len(candidates)))
+    summary.add_row("Watchlist", str(len(watchlist)))
+    summary.add_row("Skipped", str(len(skipped)))
+    if data_freshness is not None:
+        candle = data_freshness.candle_end.isoformat() if data_freshness.candle_end else "N/A"
+        broker = data_freshness.broker_end.isoformat() if data_freshness.broker_end else "N/A"
+        summary.add_row("Candles through", candle)
+        summary.add_row("Broker flow through", broker)
+    if market_regime is not None:
+        summary.add_row("Market regime", f"{market_regime.label} ({market_regime.score}/7)")
+
+    sections = [Text("Session Summary", style="bold cyan"), summary]
+    if watchlist:
+        sections.append(Text("Watchlist", style="bold green"))
+        sections.append(Text("  ".join(c.ticker for c in watchlist), style="bold green"))
+    else:
+        sections.append(Text("Next", style="bold yellow"))
+        sections.append(Text("Run: saham fetch iev, or retry with --iev-min 50000", style="yellow"))
+
+    all_warnings = list(warnings)
+    if data_freshness is not None:
+        all_warnings.extend(data_freshness.warnings)
+    if market_regime is not None:
+        all_warnings.extend(market_regime.warnings)
+    if all_warnings:
+        warning_table = compact_table(show_header=False)
+        warning_table.add_column("Warning")
+        for warning in all_warnings[:5]:
+            warning_table.add_row(f"- {warning}")
+        sections.extend([Text("Warnings", style="bold yellow"), warning_table])
+
+    console().print(
+        panel(
+            Group(*sections),
+            title="Pre-Open Screener",
+            subtitle=screened_date.isoformat(),
+        )
+    )
+
+
 def _display_results(
     candidates: list[ScreenerCandidate],
     screened_date: date,
@@ -333,6 +441,16 @@ def _display_results(
     strategy_signals: dict[str, str] | None = None,
     strategy_name: str | None = None,
 ) -> None:
+    _display_pre_open_summary_panel(
+        candidates=candidates,
+        screened_date=screened_date,
+        iev_min=iev_min,
+        total_movers_seen=total_movers_seen,
+        warnings=warnings,
+        data_freshness=data_freshness,
+        market_regime=market_regime,
+    )
+
     typer.echo("")
     typer.echo("=" * 90)
     typer.echo("PRE-OPEN SCREENER RESULTS")
@@ -460,7 +578,7 @@ def _display_results(
         )
     else:
         typer.echo(" No candidates meet criteria today.")
-        typer.echo(" Consider: --iev-min 50000 or check 'saham fetch stockbit fetch-top5'")
+        typer.echo(" Consider: --iev-min 50000 or run 'saham fetch iev'")
     typer.echo("━" * 60)
 
     typer.echo("")
@@ -590,6 +708,12 @@ def _load_confirmation_tickers(session_path: Path) -> tuple[date, list[str]]:
     screened_at = date.fromisoformat(data["screened_at"])
     tickers = [str(row["ticker"]).upper() for row in data.get("candidates", [])]
     return screened_at, tickers
+
+
+def _format_ticker_preview(tickers: list[str], *, limit: int = 8) -> str:
+    visible = tickers[:limit]
+    suffix = f", +{len(tickers) - limit} more" if len(tickers) > limit else ""
+    return ", ".join(visible) + suffix
 
 
 def _display_confirmations(
@@ -1115,9 +1239,22 @@ def confirm_open(
     screened_at, tickers = _load_confirmation_tickers(sidecar_path)
     running_trade_provider = None
     order_book_provider = None
-    auto_needed = any(ticker not in manual_prices for ticker in tickers)
+    missing_manual = [ticker for ticker in tickers if ticker not in manual_prices]
+    auto_needed = bool(missing_manual)
+
+    typer.echo(
+        f"Confirming {len(tickers)} pre-open candidate(s) from {sidecar_path} "
+        f"for {screened_at}."
+    )
+    if manual_prices:
+        typer.echo(f"Manual opening prices supplied: {len(manual_prices)}")
 
     if auto_needed:
+        typer.echo(
+            "Resolving missing opening prices from Stockbit: "
+            f"{_format_ticker_preview(missing_manual)}"
+        )
+        typer.echo("Tip: pass --opening-json to skip browser-backed auto resolution.")
         try:
             from src.infrastructure.browser.playwright_stockbit import (
                 StockbitPlaywrightBrokerProvider,
@@ -1157,6 +1294,8 @@ def confirm_open(
             manual_prices=manual_prices,
         )
     )
+    resolved_count = sum(1 for obs in observations.values() if obs.price is not None)
+    typer.echo(f"Opening prices resolved: {resolved_count}/{len(tickers)}")
     opening_prices = {
         ticker: obs.price for ticker, obs in observations.items() if obs.price is not None
     }
@@ -1524,7 +1663,7 @@ def intraday_backtest(
     ] = None,
     universe: Annotated[
         Optional[str],
-        typer.Option("--universe", "-u", help="Universe: lq45, idx80, bumn20, cached"),
+        typer.Option("--universe", "-u", help="Universe name or 'cached' — see `saham fetch universe list`"),
     ] = None,
     start: Annotated[
         str,
@@ -1763,7 +1902,9 @@ def collect_iev(
 
     now_idx = _current_idx_datetime()
     today = now_idx.date()
-    is_ncp = now_idx.time() >= time(8, 56)
+    # Prefer Stockbit market-time API for is_ncp; fall back to wall-clock 08:56 heuristic
+    _mstatus = _get_market_status()
+    is_ncp = _mstatus.is_pre_open if _mstatus.source == "stockbit" else now_idx.time() >= time(8, 56)
 
     try:
         provider = PlaywrightStockbitProvider(headless=not no_headless)
