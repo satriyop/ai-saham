@@ -32,21 +32,21 @@ echo "Project : $PROJECT_DIR"
 echo "Logs    : $LOG_DIR"
 echo ""
 
-# ── Cron entries (all times in UTC; IDX = UTC+7) ─────────────────────
-# IDX pre-open session: 08:45–09:00 WIB = 01:45–02:00 UTC
-# Opening session ends: 09:30 WIB = 02:30 UTC
+# ── Cron entries (host local time; expected host timezone: Asia/Jakarta) ─────
+# IDX pre-open session: 08:45–09:00 WIB
+# Opening session ends: 09:30 WIB
 read -r -d '' SAHAM_CRON << ENTRIES || true
 # --- saham-cron-begin ---
-# IEV collector — 08:55 WIB (01:55 UTC)
-55 1 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && source .venv/bin/activate && saham fetch iev' >> $LOG_DIR/iev-collector.log 2>&1
-# Opening learning loop — NCP-locked snapshot 08:57 WIB (01:57 UTC)
-57 1 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && source .venv/bin/activate && saham learn snapshot' >> $LOG_DIR/opening-snapshot.log 2>&1
-# Opening learning loop — orderbook tracker 09:00–09:30 WIB (02:00 UTC)
-0 2 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && source .venv/bin/activate && saham learn track' >> $LOG_DIR/opening-track.log 2>&1
-# Opening learning loop — accuracy grade 09:35 WIB (02:35 UTC)
-35 2 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && source .venv/bin/activate && saham learn grade' >> $LOG_DIR/opening-grade.log 2>&1
-# Opening learning loop — AI tuning 09:40 WIB (02:40 UTC)
-40 2 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && source .venv/bin/activate && saham learn tune' >> $LOG_DIR/opening-tune.log 2>&1
+# IEV collector — 08:55 WIB
+55 8 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && source .venv/bin/activate && saham fetch iev' >> $LOG_DIR/iev-collector.log 2>&1
+# Opening learning loop — NCP-locked snapshot 08:57 WIB
+57 8 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && source .venv/bin/activate && saham learn snapshot' >> $LOG_DIR/opening-snapshot.log 2>&1
+# Opening learning loop — orderbook tracker 09:00–09:30 WIB
+0 9 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && source .venv/bin/activate && saham learn track' >> $LOG_DIR/opening-track.log 2>&1
+# Opening learning loop — accuracy grade 09:35 WIB
+35 9 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && source .venv/bin/activate && saham learn grade' >> $LOG_DIR/opening-grade.log 2>&1
+# Opening learning loop — AI tuning 09:40 WIB
+40 9 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && source .venv/bin/activate && saham learn tune' >> $LOG_DIR/opening-tune.log 2>&1
 # --- saham-cron-end ---
 ENTRIES
 

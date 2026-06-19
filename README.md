@@ -132,15 +132,16 @@ after cloning and installing the package:
 ./install_cron.sh /opt/ai-saham     # explicit path (for non-default deploy locations)
 ```
 
-This installs 5 cron jobs (Mon–Fri, IDX calendar):
+This installs 5 cron jobs (Mon–Fri, IDX calendar). The host crontab is expected
+to run in `Asia/Jakarta` local time:
 
-| Time (WIB) | UTC | Command | Purpose |
-|-----------|-----|---------|---------|
-| 08:55 | 01:55 | `saham fetch iev` | Collect IEV pre-open snapshot |
-| 08:57 | 01:57 | `saham learn snapshot` | NCP-locked screener prediction |
-| 09:00 | 02:00 | `saham learn track` | 5-min orderbook tracking until 09:30 |
-| 09:35 | 02:35 | `saham learn grade` | Compute accuracy report |
-| 09:40 | 02:40 | `saham learn tune` | AI config recommendations |
+| Time (WIB) | Command | Purpose |
+|-----------|---------|---------|
+| 08:55 | `saham fetch iev` | Collect IEV pre-open snapshot |
+| 08:57 | `saham learn snapshot` | NCP-locked screener prediction |
+| 09:00 | `saham learn track` | 5-min orderbook tracking until 09:30 |
+| 09:35 | `saham learn grade` | Compute accuracy report |
+| 09:40 | `saham learn tune` | AI config recommendations |
 
 Logs are written to `logs/` in the project directory.
 
