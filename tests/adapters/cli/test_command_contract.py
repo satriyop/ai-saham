@@ -145,6 +145,7 @@ REMOVED_HELP_SNIPPETS: tuple[str, ...] = (
     "saham broker",
     "saham chart",
     "saham status",
+    "broker fetch",
 )
 
 

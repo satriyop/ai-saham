@@ -266,7 +266,7 @@ def broker_flow(
     """
     Show foreign flow summary for a stock.
 
-    Displays cached broker data. Use 'broker fetch' first to load data.
+    Displays cached broker data. Use 'saham fetch broker' first to load data.
 
     Example:
         saham view broker flow BBCA --days 20
@@ -676,7 +676,7 @@ def broker_history(
     """
     Fetch and store daily foreign broker flow history for a stock (time-series).
 
-    Unlike 'broker fetch' (which stores full broker breakdown), this command
+    Unlike 'saham fetch broker' (which stores full broker breakdown), this command
     fetches the lightweight daily net-flow time-series with exact avg_price
     from Stockbit's historical endpoint. Ideal for backtesting and trend analysis.
 
