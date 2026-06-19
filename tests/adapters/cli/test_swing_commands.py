@@ -8,17 +8,20 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
+from src.adapters.cli import swing_commands as swing_cli
 from src.adapters.cli.main import app
+from src.adapters.cli.swing_broker_display import (
+    build_broker_detail as _build_broker_detail_base,
+    build_broker_quality_note as _build_broker_quality_note,
+    build_flow_detail as _build_flow_detail,
+)
 from src.adapters.cli.swing_commands import (
     DataFreshness,
     FOREIGN_BOUNCE_PRESET,
     PresetEvaluation,
     PresetGate,
     _auto_refresh_swing_data,
-    _build_broker_detail,
-    _build_broker_quality_note,
     _build_data_freshness,
-    _build_flow_detail,
     _evaluate_foreign_bounce,
     _fetch_swing_sentiment,
     _format_failed_gates_summary,
@@ -28,6 +31,17 @@ from src.application.use_case.accumulation_screen import AccumulationCandidate
 from src.domain.entities.broker_flow import BrokerSummary, BrokerTransaction, BrokerType
 
 runner = CliRunner()
+
+
+def _build_broker_detail(*args, **kwargs):
+    return _build_broker_detail_base(
+        *args,
+        **kwargs,
+        smart_money_brokers=swing_cli.SMART_MONEY_BROKERS,
+        noise_brokers=swing_cli.NOISE_BROKERS,
+        broker_weights=swing_cli.BROKER_WEIGHTS,
+        smart_share_threshold_pct=swing_cli._SC.smart_share_threshold_pct,
+    )
 
 
 class FakeRangeRepository:

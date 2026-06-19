@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     from src.domain.value_objects.company_fundamentals import CompanyFundamentals
     from src.domain.value_objects.seasonal_edge import SeasonalEdge
     from src.domain.value_objects.shareholding_composition import ShareholdingComposition
+    from src.domain.value_objects.ticker_notation import TickerNotationSnapshot
 
 from src.application.ports.corporate_action_repository import CorporateActionRepository
 from src.domain.ports.analyst_consensus_provider import AnalystConsensusProvider
@@ -40,6 +41,7 @@ from src.domain.ports.insider_activity_provider import InsiderActivityProvider
 from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.ports.seasonality_provider import SeasonalityProvider
 from src.domain.ports.shareholding_provider import ShareholdingProvider
+from src.domain.ports.ticker_notation_provider import TickerNotationProvider
 
 SHARES_PER_LOT = 100
 
@@ -173,6 +175,8 @@ class AccumulationCandidate:
     bandar_detector: "BandarDetectorSnapshot | None" = None
     # Company fundamentals — P/E, ROE, Net Profit Margin, Piotroski F-Score (quarterly)
     fundamentals: "CompanyFundamentals | None" = None
+    # Ticker status / special notation — display-only Stockbit context
+    ticker_notation: "TickerNotationSnapshot | None" = None
     # Phase 3.2 — sector breadth confirmation
     sector_breadth_pct: float | None = None  # % of group peers with positive net_buy_ratio
     sector_breadth_bonus: float = 0.0        # bonus pts applied (0 if threshold not met)
@@ -212,6 +216,7 @@ class AccumulationCandidate:
             "shareholding": self.shareholding.to_dict() if self.shareholding else None,
             "bandar_detector": self.bandar_detector.to_dict() if self.bandar_detector else None,
             "fundamentals": self.fundamentals.to_dict() if self.fundamentals else None,
+            "ticker_notation": self.ticker_notation.to_dict() if self.ticker_notation else None,
         }
 
 
@@ -320,6 +325,7 @@ class AccumulationScreenUseCase:
         shareholding_provider: "ShareholdingProvider | None" = None,
         bandar_detector_provider: "BandarDetectorProvider | None" = None,
         fundamentals_provider: "FundamentalsProvider | None" = None,
+        ticker_notation_provider: "TickerNotationProvider | None" = None,
         idx_groups: "dict[str, list[str]] | None" = None,
     ) -> None:
         self._broker_repo = broker_repository
@@ -331,6 +337,7 @@ class AccumulationScreenUseCase:
         self._shareholding_provider = shareholding_provider
         self._bandar_provider = bandar_detector_provider
         self._fundamentals_provider = fundamentals_provider
+        self._ticker_notation_provider = ticker_notation_provider
         # idx_groups: {group_name: [ticker, ...]} from config/idx_groups.yaml
         # Build a reverse map: ticker → group_name for fast lookup
         self._ticker_to_group: dict[str, str] = {}
@@ -435,6 +442,11 @@ class AccumulationScreenUseCase:
             # Company fundamentals: P/E, ROE, Net Profit Margin, Piotroski F-Score
             if self._fundamentals_provider is not None:
                 result.fundamentals = self._fundamentals_provider.get_fundamentals(
+                    ticker=result.ticker,
+                )
+
+            if self._ticker_notation_provider is not None:
+                result.ticker_notation = self._ticker_notation_provider.get_notation(
                     ticker=result.ticker,
                 )
 

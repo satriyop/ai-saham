@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 
+from src.domain.value_objects.ticker_notation import TickerNotationSnapshot
+
 
 @dataclass(frozen=True)
 class MoverData:
@@ -130,6 +132,7 @@ class ScreenerCandidate:
     best_offer_lots: int | None = None         # lots queued at best offer
     spread_pct: Decimal | None = None          # (offer - bid) / bid * 100
     bid_offer_imbalance: float | None = None   # bid_lots / (bid_lots + offer_lots); >0.6 = buyers dominate
+    ticker_notation: TickerNotationSnapshot | None = None  # display-only status/special notation context
 
     @property
     def has_entry_plan(self) -> bool:

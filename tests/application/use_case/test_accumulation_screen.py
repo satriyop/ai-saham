@@ -15,6 +15,7 @@ from src.domain.entities.broker_flow import BrokerDailyFlow, BrokerSummary
 from src.domain.entities.candle import Candle
 from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.market_data_repository import MarketDataRepository
+from src.domain.value_objects.ticker_notation import TickerNotation, TickerNotationSnapshot
 
 
 class MockMarketRepository(MarketDataRepository):
@@ -355,3 +356,54 @@ def test_tier1_codes_override_changes_bci():
         )
     )
     assert resp_custom.candidates[0].bci_label == BCI_STABLE
+
+
+class MockTickerNotationProvider:
+    def get_notation(self, ticker: str) -> TickerNotationSnapshot | None:
+        return TickerNotationSnapshot(
+            ticker=ticker.upper(),
+            status="STATUS_ACTIVE",
+            listing_board="Papan Pemantauan Khusus",
+            haircut_percentage="100%",
+            notations=[TickerNotation(code="X", description="Special monitoring")],
+        )
+
+
+def test_screen_attaches_ticker_notation_without_changing_score():
+    session_dates = _weekdays(date(2026, 1, 1), 7)
+    as_of = session_dates[-1]
+    candles = [
+        _candle("BTEK", date(2025, 12, 1) + timedelta(days=i), Decimal("100"))
+        for i in range(45)
+    ]
+    summaries = [_summary("BTEK", day, Decimal("110")) for day in session_dates]
+
+    base = AccumulationScreenUseCase(
+        broker_repository=MockBrokerRepository(summaries),
+        market_repository=MockMarketRepository(candles),
+    ).execute(
+        AccumulationScreenRequest(
+            tickers=["BTEK"],
+            window_days=7,
+            min_net_buy_days=1,
+            as_of_date=as_of,
+        )
+    )
+
+    enriched = AccumulationScreenUseCase(
+        broker_repository=MockBrokerRepository(summaries),
+        market_repository=MockMarketRepository(candles),
+        ticker_notation_provider=MockTickerNotationProvider(),
+    ).execute(
+        AccumulationScreenRequest(
+            tickers=["BTEK"],
+            window_days=7,
+            min_net_buy_days=1,
+            as_of_date=as_of,
+        )
+    )
+
+    assert enriched.candidates[0].ticker_notation is not None
+    assert enriched.candidates[0].ticker_notation.codes == ["X"]
+    assert enriched.candidates[0].score == base.candidates[0].score
+    assert enriched.candidates[0].to_dict()["ticker_notation"]["notations"][0]["code"] == "X"

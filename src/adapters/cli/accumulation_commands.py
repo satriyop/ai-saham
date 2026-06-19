@@ -57,6 +57,7 @@ from src.infrastructure.browser.stockbit_fundamentals import StockbitFundamental
 from src.infrastructure.browser.stockbit_insider import StockbitInsiderActivityProvider
 from src.infrastructure.browser.stockbit_seasonality import StockbitSeasonalityProvider
 from src.infrastructure.browser.stockbit_shareholding import StockbitShareholdingProvider
+from src.infrastructure.browser.stockbit_ticker_notation import StockbitTickerNotationProvider
 from src.infrastructure.config.swing_config import load_swing_config as _load_swing_screener_config_typed
 
 _SC = _load_swing_screener_config_typed()
@@ -67,7 +68,7 @@ from src.infrastructure.persistence.sqlite_market_repository import (
 
 class StockbitProviders:
     """Holds all optional Stockbit providers sharing one authenticated session."""
-    __slots__ = ("corp_repo", "season_prov", "insider_prov", "analyst_prov", "shareholding_prov", "bandar_prov", "fundamentals_prov")
+    __slots__ = ("corp_repo", "season_prov", "insider_prov", "analyst_prov", "shareholding_prov", "bandar_prov", "fundamentals_prov", "notation_prov")
 
     def __init__(
         self,
@@ -78,6 +79,7 @@ class StockbitProviders:
         shareholding_prov: "StockbitShareholdingProvider | None" = None,
         bandar_prov: "StockbitBandarDetectorProvider | None" = None,
         fundamentals_prov: "StockbitFundamentalsProvider | None" = None,
+        notation_prov: "StockbitTickerNotationProvider | None" = None,
     ) -> None:
         self.corp_repo = corp_repo
         self.season_prov = season_prov
@@ -86,12 +88,13 @@ class StockbitProviders:
         self.shareholding_prov = shareholding_prov
         self.bandar_prov = bandar_prov
         self.fundamentals_prov = fundamentals_prov
+        self.notation_prov = notation_prov
 
     @classmethod
     def unavailable(cls) -> "StockbitProviders":
         return cls(corp_repo=None, season_prov=None, insider_prov=None,
                    analyst_prov=None, shareholding_prov=None, bandar_prov=None,
-                   fundamentals_prov=None)
+                   fundamentals_prov=None, notation_prov=None)
 
 
 def _make_stockbit_providers(db_path: Path) -> "StockbitProviders":
@@ -109,6 +112,7 @@ def _make_stockbit_providers(db_path: Path) -> "StockbitProviders":
         shareholding_prov=StockbitShareholdingProvider(broker_provider=None, db_path=db_path),
         bandar_prov=StockbitBandarDetectorProvider(broker_provider=None, db_path=db_path),
         fundamentals_prov=StockbitFundamentalsProvider(broker_provider=None, db_path=db_path),
+        notation_prov=StockbitTickerNotationProvider(broker_provider=None, db_path=db_path),
     )
 
 
@@ -312,6 +316,38 @@ def _classify_pattern(
     return "mixed"
 
 
+
+def _notation_label(snapshot) -> str:
+    if snapshot is None:
+        return "-"
+    parts = []
+    if getattr(snapshot, "codes", None):
+        parts.append(",".join(snapshot.codes))
+    if getattr(snapshot, "tradeable", None) is False:
+        parts.append("NO-TRADE")
+    status = getattr(snapshot, "status", None)
+    if status and status != "STATUS_ACTIVE":
+        parts.append(status.replace("STATUS_", ""))
+    if getattr(snapshot, "suspend_info", None):
+        parts.append("SUSP")
+    if getattr(snapshot, "has_uma", None):
+        parts.append("UMA")
+    return "+".join(parts) if parts else "-"
+
+
+def _notation_detail(snapshot) -> str:
+    if snapshot is None:
+        return ""
+    bits = []
+    label = _notation_label(snapshot)
+    if label != "-":
+        bits.append(label)
+    if snapshot.listing_board:
+        bits.append(snapshot.listing_board)
+    if snapshot.haircut_percentage:
+        bits.append(f"haircut={snapshot.haircut_percentage}")
+    return " | ".join(bits)
+
 def _fmt_optional_float(value: float | None, suffix: str = "") -> str:
     return "missing" if value is None else f"{value:.1f}{suffix}"
 
@@ -493,6 +529,10 @@ def _display_results(
                 f" flow={bd.get('flow', 0):.1f} bb={bd.get('bb', 0):.1f}"
                 f" inst={bd.get('inst', 0):.1f}]"
             ))
+
+        notation_detail = _notation_detail(c.ticker_notation)
+        if notation_detail:
+            detail_lines.append(Text(f"    {c.ticker} NOTATION: {notation_detail}", style="yellow" if c.ticker_notation and c.ticker_notation.has_warning else ""))
 
         if c.seasonal_edge is not None:
             se = c.seasonal_edge
@@ -1061,6 +1101,7 @@ def accumulation_run(
         shareholding_provider=_sb.shareholding_prov,
         bandar_detector_provider=_sb.bandar_prov,
         fundamentals_provider=_sb.fundamentals_prov,
+        ticker_notation_provider=_sb.notation_prov,
     )
 
     base_request = AccumulationScreenRequest(
@@ -1696,6 +1737,7 @@ def accumulation_log(
         shareholding_provider=_sb.shareholding_prov,
         bandar_detector_provider=_sb.bandar_prov,
         fundamentals_provider=_sb.fundamentals_prov,
+        ticker_notation_provider=_sb.notation_prov,
     )
     response = use_case.execute(AccumulationScreenRequest(
         tickers=[ticker_upper],
