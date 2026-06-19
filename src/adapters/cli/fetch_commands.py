@@ -6,15 +6,16 @@ Layer: Adapter
 
 import typer
 
-from src.adapters.cli.fetch_universe_commands import universe_app
 from src.adapters.cli.broker_commands import (
     broker_fetch,
     broker_history,
     broker_import,
     broker_top_foreign,
 )
+from src.adapters.cli.data_quality_commands import data_quality_audit
 from src.adapters.cli.fetch_iev_commands import collect_iev
 from src.adapters.cli.fetch_market_commands import fetch_market
+from src.adapters.cli.fetch_universe_commands import universe_app
 from src.adapters.cli.status_commands import status
 from src.adapters.cli.stockbit_commands import stockbit_app
 
@@ -32,5 +33,6 @@ fetch_app.command("broker-history")(broker_history)
 fetch_app.command("broker-top-foreign")(broker_top_foreign)
 fetch_app.command("iev")(collect_iev)
 fetch_app.command("status")(status)
+fetch_app.command("audit")(data_quality_audit)
 fetch_app.add_typer(stockbit_app, name="stockbit")
 fetch_app.add_typer(universe_app, name="universe")
