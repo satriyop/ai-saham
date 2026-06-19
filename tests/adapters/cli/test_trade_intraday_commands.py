@@ -188,6 +188,13 @@ def test_intraday_confirm_open_auto_uses_stockbit_provider_stubs(tmp_path, monke
     )
 
     assert result.exit_code == 0, result.output
+    assert "Confirming 2 pre-open candidate(s)" in result.stdout
+    assert "Resolving missing opening prices from Stockbit: BBCA, GOTO" in result.stdout
+    assert "[1/2] BBCA: 9,050 via running_trade_first_tick/HIGH" in result.stdout
+    assert "[2/2] GOTO: unresolved - no regular-board trade tick at or after 09:00" in result.stdout
+    assert "Opening prices resolved: 1/2" in result.stdout
+    assert "Unresolved opening prices:" in result.stdout
+    assert "GOTO: no regular-board trade tick at or after 09:00" in result.stdout
     saved = json.loads(output.read_text())
     first = saved["confirmations"][0]
     assert first["ticker"] == "BBCA"

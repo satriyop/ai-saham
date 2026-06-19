@@ -3,7 +3,15 @@
 from datetime import date
 from decimal import Decimal
 
-from src.adapters.cli.accumulation_commands import _build_screen_broker_quality
+from src.adapters.cli.accumulation_commands import (
+    _build_screen_broker_quality,
+    _display_multi,
+    _display_results,
+)
+from src.application.use_case.accumulation_screen import (
+    AccumulationCandidate,
+    AccumulationScreenResponse,
+)
 from src.domain.entities.broker_flow import BrokerSummary, BrokerTransaction, BrokerType
 
 
@@ -60,6 +68,29 @@ def _summary(
     )
 
 
+def _candidate(**overrides) -> AccumulationCandidate:
+    values = {
+        "ticker": "BBCA",
+        "window_days": 7,
+        "net_buy_days": 5,
+        "total_days": 7,
+        "net_buy_ratio": 5 / 7,
+        "total_net_value": Decimal("10000000000"),
+        "consecutive_streak": 3,
+        "foreign_vwap": Decimal("1030"),
+        "current_price": Decimal("1000"),
+        "vwap_discount_pct": 3.0,
+        "rsi": 55.0,
+        "trend": "SIDE",
+        "score": 70.0,
+        "top_brokers": None,
+        "institutional_flag": False,
+        "avg_flow_ratio": 5.0,
+    }
+    values.update(overrides)
+    return AccumulationCandidate(**values)
+
+
 def test_screen_broker_quality_counts_local_noise_brokers():
     quality = _build_screen_broker_quality(
         ticker="BBCA",
@@ -99,3 +130,66 @@ def test_screen_broker_quality_marks_smart_selling_pressure():
     assert quality is not None
     assert quality.label == "smart-"
     assert quality.smart_flow == Decimal("-85000000")
+
+
+def test_display_results_renders_rich_accumulation_panel(capsys):
+    response = AccumulationScreenResponse(
+        candidates=[_candidate()],
+        screened_at=date(2026, 6, 19),
+        window_days=7,
+        total_tickers_checked=1,
+        tickers_skipped=0,
+        provider="stockbit",
+    )
+
+    _display_results(
+        response=response,
+        universe_label="lq45",
+        top_n=10,
+        granular=False,
+        vwap_only=False,
+        squeeze_only=False,
+        show_breakdown=True,
+    )
+
+    out = capsys.readouterr().out
+    assert "Foreign Accumulation - LQ45" in out
+    assert "BBCA" in out
+    assert "Score 0" in out
+    assert "Swing trade watchlist" in out
+
+
+def test_display_multi_renders_rich_accumulation_panel(capsys):
+    results = {
+        7: AccumulationScreenResponse(
+            candidates=[_candidate(score=72.0, window_days=7)],
+            screened_at=date(2026, 6, 19),
+            window_days=7,
+            total_tickers_checked=1,
+            tickers_skipped=0,
+            provider="stockbit",
+        ),
+        30: AccumulationScreenResponse(
+            candidates=[_candidate(score=55.0, window_days=30)],
+            screened_at=date(2026, 6, 19),
+            window_days=30,
+            total_tickers_checked=1,
+            tickers_skipped=0,
+            provider="stockbit",
+        ),
+    }
+
+    _display_multi(
+        results=results,
+        universe_label="lq45",
+        top_n=10,
+        sort_by="avg",
+        squeeze_only=False,
+        screened_at=date(2026, 6, 19),
+    )
+
+    out = capsys.readouterr().out
+    assert "Foreign Accumulation - LQ45" in out
+    assert "multi-window" in out
+    assert "BBCA" in out
+    assert "Patterns:" in out

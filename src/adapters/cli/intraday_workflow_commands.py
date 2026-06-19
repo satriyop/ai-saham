@@ -705,6 +705,30 @@ def _format_ticker_preview(tickers: list[str], *, limit: int = 8) -> str:
     return ", ".join(visible) + suffix
 
 
+def _fmt_price(value: Decimal | None) -> str:
+    return f"{value:,.0f}" if value is not None else "-"
+
+
+def _fmt_signed_decimal(value: Decimal | None, suffix: str = "") -> str:
+    return f"{value:+.2f}{suffix}" if value is not None else "-"
+
+
+def _format_opening_observation_status(
+    index: int,
+    total: int,
+    observation: OpeningPriceObservation,
+) -> str:
+    prefix = f"[{index}/{total}] {observation.ticker}"
+    if observation.price is not None:
+        source = observation.source or "unknown"
+        return (
+            f"{prefix}: {_fmt_price(observation.price)} "
+            f"via {source}/{observation.confidence}"
+        )
+    reason = observation.reason or "unresolved"
+    return f"{prefix}: unresolved - {reason}"
+
+
 def _display_confirmations(
     confirmations: tuple[IntradayConfirmation, ...],
     confirmed_date: date,
@@ -713,102 +737,81 @@ def _display_confirmations(
 ) -> None:
     extras = extras or {}
 
-    typer.echo("")
-    typer.echo("━" * 60)
-    typer.echo(f" {confirmed_date}  INTRADAY CONFIRMATION")
-    typer.echo("━" * 60)
-
     if not confirmations:
-        typer.echo(" No candidates found in session sidecar.")
-        typer.echo("━" * 60)
+        empty = compact_table(show_header=False)
+        empty.add_column("Label")
+        empty.add_column("Value")
+        empty.add_row("Date", confirmed_date.isoformat())
+        empty.add_row("Candidates", "0")
+        empty.add_row("Next", "Run saham screen pre-open first")
+        console().print(panel(empty, title="INTRADAY CONFIRMATION"))
         return
 
     enters = [c for c in confirmations if c.decision.value == "ENTER"]
     waits  = [c for c in confirmations if c.decision.value == "WAIT"]
     skips  = [c for c in confirmations if c.decision.value not in ("ENTER", "WAIT")]
 
-    # ── ENTER ──────────────────────────────────────────────────────────────
-    if enters:
-        typer.echo("")
-        typer.echo(typer.style(" ▶ ENTER  (act now)", fg=typer.colors.GREEN, bold=True))
-        for c in enters:
-            ex        = extras.get(c.ticker, {})
-            open_str  = f"{c.opening_price:,.0f}" if c.opening_price else "?"
-            rng_low   = ex.get("entry_range_low")
-            rng_high  = ex.get("entry_range_high")
-            rng_str   = f"{float(rng_low):,.0f}–{float(rng_high):,.0f}" if rng_low and rng_high else "—"
-            entry_str = f"{c.planned_entry:,.0f}" if c.planned_entry else "—"
-            stop_str  = f"{c.stop_loss_price:,.0f}" if c.stop_loss_price else "—"
-            stop_pct  = f"-{c.stop_pct:.1f}%" if c.stop_pct is not None else ""
-            prev_h    = ex.get("prev_high")
-            target    = f"  |  Target: Prev H {prev_h:,.0f}" if prev_h else ""
-            source = ex.get("opening_price_source")
-            confidence = ex.get("opening_price_confidence")
-            source_str = f"  [{source}/{confidence}]" if source else ""
+    summary = compact_table(show_header=False)
+    summary.add_column("Metric", style="bold")
+    summary.add_column("Value")
+    summary.add_row("Date", confirmed_date.isoformat())
+    summary.add_row("Candidates", str(len(confirmations)))
+    summary.add_row("ENTER", str(len(enters)))
+    summary.add_row("WAIT", str(len(waits)))
+    summary.add_row("SKIP", str(len(skips)))
+    summary.add_row("Max stop", f"{max_stop_pct:.2%}")
+    summary.add_row("Next", "saham trade log intraday")
 
-            typer.echo(
-                typer.style(
-                    f"   {c.ticker:<6}  open {open_str}  in range {rng_str}{source_str}",
-                    fg=typer.colors.GREEN,
-                )
-            )
-            typer.echo(
-                typer.style(
-                    f"   → Limit BUY {entry_str}  |  Stop {stop_str} ({stop_pct}){target}",
-                    fg=typer.colors.GREEN, bold=True,
-                )
-            )
+    sections = [Text("Session Summary", style="bold cyan"), summary]
 
-    # ── WAIT ───────────────────────────────────────────────────────────────
-    if waits:
-        typer.echo("")
-        typer.echo(typer.style(" ◎ WAIT  (monitor 15 min — skip if no direction)", fg=typer.colors.YELLOW, bold=True))
-        for c in waits:
-            ex       = extras.get(c.ticker, {})
-            open_str = f"{c.opening_price:,.0f}" if c.opening_price else "?"
-            rng_low  = ex.get("entry_range_low")
-            rng_high = ex.get("entry_range_high")
-            rng_str  = f"{float(rng_low):,.0f}–{float(rng_high):,.0f}" if rng_low and rng_high else "—"
-            floor    = float(rng_low) if rng_low else None
-            trigger  = f"holds above {floor:,.0f}" if floor else "shows directional move up"
-            source = ex.get("opening_price_source")
-            confidence = ex.get("opening_price_confidence")
-            source_str = f"  [{source}/{confidence}]" if source else ""
-
-            typer.echo(
-                typer.style(
-                    f"   {c.ticker:<6}  open {open_str}  in range {rng_str}{source_str}",
-                    fg=typer.colors.YELLOW,
-                )
-            )
-            typer.echo(
-                typer.style(
-                    f"   → Watch volume. Enter only if price {trigger} with uptick.",
-                    fg=typer.colors.YELLOW,
-                )
-            )
-
-    # ── SKIP ───────────────────────────────────────────────────────────────
-    if skips:
-        typer.echo("")
-        typer.echo(typer.style(" ✗ SKIP  (do not enter)", fg=typer.colors.BRIGHT_BLACK))
-        for c in skips:
-            # Last reason is the actual skip cause; first is often "open inside entry range"
-            reason = c.reasons[-1] if c.reasons else c.decision.value.lower().replace("_", " ")
+    def add_decision_table(title: str, rows: list[IntradayConfirmation]) -> None:
+        if not rows:
+            return
+        table = compact_table()
+        table.add_column("Ticker", style="bold")
+        table.add_column("Open", justify="right")
+        table.add_column("Entry", justify="right")
+        table.add_column("Stop", justify="right")
+        table.add_column("Stop%", justify="right")
+        table.add_column("Source")
+        table.add_column("Reason")
+        for c in rows:
             ex = extras.get(c.ticker, {})
-            source = ex.get("opening_price_source")
-            confidence = ex.get("opening_price_confidence")
-            source_str = f" [{source}/{confidence}]" if source else ""
-            typer.echo(
-                typer.style(f"   {c.ticker:<6}  {reason}{source_str}", fg=typer.colors.BRIGHT_BLACK)
+            source = ex.get("opening_price_source") or c.opening_price_source or "-"
+            confidence = ex.get("opening_price_confidence") or c.opening_price_confidence
+            source_text = f"{source}/{confidence}" if confidence else source
+            reason = c.reasons[-1] if c.reasons else c.decision.value.lower().replace("_", " ")
+            table.add_row(
+                c.ticker,
+                _fmt_price(c.opening_price),
+                _fmt_price(c.planned_entry),
+                _fmt_price(c.stop_loss_price),
+                _fmt_signed_decimal(c.stop_pct, "%"),
+                source_text,
+                reason,
             )
+        sections.extend([Text(title, style="bold"), table])
 
-    typer.echo("")
-    typer.echo("━" * 60)
-    typer.echo(
-        typer.style("  saham trade log intraday   (record this session)", fg=typer.colors.BRIGHT_BLACK)
+    add_decision_table("ENTER - act now", enters)
+    add_decision_table("WAIT - monitor first 15 min", waits)
+    add_decision_table("SKIP - do not enter", skips)
+
+    unresolved = [c.ticker for c in confirmations if c.opening_price is None]
+    if unresolved:
+        warning_table = compact_table(show_header=False)
+        warning_table.add_column("Warning")
+        warning_table.add_row(
+            "Unresolved opening prices: " + _format_ticker_preview(unresolved)
+        )
+        sections.extend([Text("Warnings", style="bold yellow"), warning_table])
+
+    console().print(
+        panel(
+            Group(*sections),
+            title="INTRADAY CONFIRMATION",
+            subtitle=confirmed_date.isoformat(),
+        )
     )
-    typer.echo("━" * 60)
 
 
 def _write_confirmation_sidecar(
@@ -854,47 +857,63 @@ def _write_confirmation_sidecar(
 
 
 def _display_intraday_review(report, journal_path: Path) -> None:
-    typer.echo("")
-    typer.echo("=" * 78)
-    typer.echo("INTRADAY CONFIRMATION REVIEW")
-    typer.echo("=" * 78)
-    typer.echo(f"Journal: {journal_path}")
-    typer.echo(f"Total logged entries : {report.total_entries}")
-    typer.echo(f"Entries with outcome : {report.entries_with_data}")
+    summary = compact_table(show_header=False)
+    summary.add_column("Metric", style="bold")
+    summary.add_column("Value")
+    summary.add_row("Journal", str(journal_path))
+    summary.add_row("Total logged entries", str(report.total_entries))
+    summary.add_row("Entries with outcome", str(report.entries_with_data))
 
     if report.total_entries == 0:
-        typer.echo("\nNo confirmation entries logged yet.")
-        typer.echo("=" * 78)
+        summary.add_row("Next", "saham trade log intraday")
+        console().print(panel(summary, title="INTRADAY CONFIRMATION REVIEW"))
         return
 
-    def print_bucket_table(title: str, rows) -> None:
+    sections = [Text("Review Summary", style="bold cyan"), summary]
+
+    def add_bucket_table(title: str, rows) -> None:
         if not rows:
             return
-        typer.echo("")
-        typer.echo(title)
-        typer.echo("-" * 78)
-        typer.echo(
-            f"{'BUCKET':<24} {'TOTAL':>6} {'DATA':>6} {'ENTER':>7} "
-            f"{'UP':>5} {'STOP':>6} {'TGT1R':>6} {'AVG_R':>7}"
-        )
+        table = compact_table()
+        table.add_column("Bucket", style="bold")
+        table.add_column("Total", justify="right")
+        table.add_column("Data", justify="right")
+        table.add_column("ENTER", justify="right")
+        table.add_column("UP", justify="right")
+        table.add_column("STOP", justify="right")
+        table.add_column("TGT1R", justify="right")
+        table.add_column("Avg R", justify="right")
         for row in rows:
             avg_r = f"{row.avg_close_r:+.2f}" if row.avg_close_r is not None else "-"
-            typer.echo(
-                f"{row.bucket:<24} {row.total:>6} {row.with_data:>6} "
-                f"{row.enter_count:>7} {row.up_count:>5} "
-                f"{row.stop_hit_count:>6} {row.target_1r_hit_count:>6} {avg_r:>7}"
+            table.add_row(
+                row.bucket,
+                str(row.total),
+                str(row.with_data),
+                str(row.enter_count),
+                str(row.up_count),
+                str(row.stop_hit_count),
+                str(row.target_1r_hit_count),
+                avg_r,
             )
+        sections.extend([Text(title, style="bold"), table])
 
-    print_bucket_table("By decision", report.decision_buckets)
+    add_bucket_table("By decision", report.decision_buckets)
     for label, rows in report.context_buckets.items():
-        print_bucket_table(f"By {label}", rows)
+        add_bucket_table(f"By {label}", rows)
 
-    typer.echo("")
-    typer.echo(
-        "Note: manual outcomes are used first. Rows without manual outcomes use "
-        "daily OHLC as a proxy; exact intraday sequence requires minute/tick data."
+    sections.append(
+        Text(
+            "Note: manual outcomes are used first. Rows without manual outcomes use "
+            "daily OHLC as a proxy; exact intraday sequence requires minute/tick data.",
+            style="dim",
+        )
     )
-    typer.echo("=" * 78)
+    console().print(
+        panel(
+            Group(*sections),
+            title="INTRADAY CONFIRMATION REVIEW",
+        )
+    )
 
 
 def pre_open(
@@ -1275,6 +1294,9 @@ def confirm_open(
     resolver = ResolveOpeningPricesUseCase(
         running_trade_provider=running_trade_provider,
         order_book_provider=order_book_provider,
+        on_observation=lambda index, total, observation: typer.echo(
+            _format_opening_observation_status(index, total, observation)
+        ),
     )
     observations = resolver.execute(
         ResolveOpeningPricesRequest(
@@ -1285,6 +1307,11 @@ def confirm_open(
     )
     resolved_count = sum(1 for obs in observations.values() if obs.price is not None)
     typer.echo(f"Opening prices resolved: {resolved_count}/{len(tickers)}")
+    unresolved = [obs for obs in observations.values() if obs.price is None]
+    if unresolved:
+        typer.echo("Unresolved opening prices:")
+        for obs in unresolved:
+            typer.echo(f"  - {obs.ticker}: {obs.reason or 'no usable opening price'}")
     opening_prices = {
         ticker: obs.price for ticker, obs in observations.items() if obs.price is not None
     }

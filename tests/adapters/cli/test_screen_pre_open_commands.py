@@ -18,6 +18,8 @@ from src.adapters.cli.screen_pre_open_commands import (
 from src.adapters.cli.screen_pre_open_commands import (
     _write_sidecar as write_pre_open_sidecar,
 )
+from src.adapters.cli.intraday_workflow_commands import _display_results
+from src.application.use_case.pre_open_workflow import PreOpenDataFreshness
 from src.application.use_case.market_regime import MarketRegimeResponse
 from src.domain.value_objects.screener_result import ScreenerCandidate
 
@@ -140,3 +142,42 @@ def test_pre_open_sidecar_persists_market_regime_context(tmp_path):
     assert saved["market_regime"]["score"] == 1
     assert saved["candidates"][0]["ticker"] == "BBCA"
 
+
+def test_pre_open_results_render_rich_summary_panel(capsys):
+    _display_results(
+        candidates=[_candidate("BBCA")],
+        screened_date=date(2026, 6, 12),
+        iev_min=100_000,
+        total_movers_seen=3,
+        warnings=["manual smoke warning"],
+        data_freshness=PreOpenDataFreshness(
+            analysis_date=date(2026, 6, 12),
+            candle_end=date(2026, 6, 11),
+            broker_end=date(2026, 6, 10),
+            warnings=("freshness warning",),
+        ),
+    )
+
+    out = capsys.readouterr().out
+    assert "Pre-Open Screener" in out
+    assert "Session Summary" in out
+    assert "Watchlist" in out
+    assert "BBCA" in out
+    assert "manual smoke warning" in out
+    assert "Candles through" in out
+    assert "2026-06-11" in out
+    assert "freshness warning" in out
+
+
+def test_pre_open_empty_results_points_to_fetch_iev(capsys):
+    _display_results(
+        candidates=[],
+        screened_date=date(2026, 6, 12),
+        iev_min=100_000,
+        total_movers_seen=3,
+        warnings=[],
+    )
+
+    out = capsys.readouterr().out
+    assert "Run: saham fetch iev" in out
+    assert "fetch-top5" not in out

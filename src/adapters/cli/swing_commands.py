@@ -21,7 +21,10 @@ from pathlib import Path
 from typing import Annotated, Any, Optional
 
 import typer
+from rich.console import Group
+from rich.text import Text
 
+from src.adapters.cli.rich_display import compact_table, console, panel
 from src.application.services.bootstrap import create_indicator_registry
 from src.application.services.position_sizer import (
     PercentSizingResult,
@@ -465,6 +468,209 @@ def _style_classification(value: str) -> str:
 
 def _format_failed_gates_summary(preset_eval: PresetEvaluation) -> str:
     return "Failed gates: " + "; ".join(preset_eval.failed_reasons)
+
+
+def _swing_summary_parts(
+    accum: AccumulationCandidate | None,
+    risk_resp,
+    backtest_result,
+    sentiment_resp,
+) -> list[str]:
+    parts = []
+    if accum:
+        parts.append(f"Score {accum.score:.1f}")
+    if risk_resp:
+        parts.append(risk_resp.assessment.risk_level_name)
+    if backtest_result and backtest_result.trade_count > 0:
+        parts.append(f"{float(backtest_result.win_rate):.0f}% WR")
+    if sentiment_resp and not sentiment_resp.warning:
+        parts.append(sentiment_resp.snapshot.overall_sentiment.value.lower() + " news")
+    return parts
+
+
+def _swing_plan_text(
+    ticker: str,
+    capital: int | None,
+    atr_value: Decimal | None,
+    sizing: SizingResult | None,
+    preset_eval: PresetEvaluation | None,
+    preset_sizing: PercentSizingResult | None,
+    strategy_risk_level: str | None,
+    strategy_risk_name: str | None,
+) -> tuple[str, str]:
+    strategy_override = (
+        strategy_risk_level == "HIGH_RISK"
+        and preset_eval is not None
+        and preset_eval.passed
+    )
+
+    if preset_eval is not None:
+        if strategy_override:
+            return (
+                f"AVOID (strategy gate: '{strategy_risk_name}' signals HIGH_RISK; preset passed but technical signal says exit).",
+                "red",
+            )
+        if preset_eval.passed and preset_sizing and preset_sizing.lots > 0:
+            return (
+                f"ENTER setup passed. Consider {preset_sizing.lots} lots at "
+                f"{float(preset_sizing.entry_price):,.0f}; TP "
+                f"{float(preset_sizing.target_price):,.0f}; SL "
+                f"{float(preset_sizing.stop_price):,.0f}; max hold "
+                f"{FOREIGN_BOUNCE_MAX_HOLD_DAYS} trading days.",
+                "green",
+            )
+        if preset_eval.passed:
+            return ("ENTER setup passed. Add --capital to compute lot size.", "green")
+        if preset_eval.classification == "WATCH":
+            return (
+                "WATCH only. Preset is close but not fully confirmed; wait for failed gates to improve.",
+                "yellow",
+            )
+        return ("AVOID. Preset gates are not aligned.", "red")
+    if sizing and sizing.lots > 0:
+        return (
+            f"Sized scenario: {sizing.lots} lots at {float(sizing.entry_price):,.0f}. "
+            f"Stop {float(sizing.stop_price):,.0f}. Target {float(sizing.target_price):,.0f}.",
+            "cyan",
+        )
+    if sizing and sizing.lots == 0:
+        return ("Position too small for 1 lot; reduce entry or increase capital.", "red")
+    if capital and not atr_value:
+        return (
+            f"Fetch more data to enable position sizing (run saham fetch market {ticker} --days 90).",
+            "yellow",
+        )
+    return ("No action plan available from current inputs.", "bright_black")
+
+
+def _print_swing_rich_overview(
+    ticker: str,
+    today: date,
+    profile: str,
+    strategy_name: str,
+    data_freshness: DataFreshness,
+    broker_detail: BrokerDetail | None,
+    accum: AccumulationCandidate | None,
+    risk_resp,
+    atr_value: Decimal | None,
+    sizing: SizingResult | None,
+    preset_eval: PresetEvaluation | None,
+    preset_sizing: PercentSizingResult | None,
+    broker_quality_note: BrokerQualityNote | None,
+    market_regime: MarketRegimeResponse | None,
+    capital: int | None,
+    backtest_result,
+    sentiment_resp,
+    sentiment_warning: str | None,
+    strategy_risk_level: str | None,
+    strategy_risk_name: str | None,
+) -> None:
+    summary_parts = _swing_summary_parts(accum, risk_resp, backtest_result, sentiment_resp)
+    summary_text = " · ".join(summary_parts) if summary_parts else "insufficient data for assessment"
+    plan_text, plan_style = _swing_plan_text(
+        ticker,
+        capital,
+        atr_value,
+        sizing,
+        preset_eval,
+        preset_sizing,
+        strategy_risk_level,
+        strategy_risk_name,
+    )
+
+    data_table = compact_table(show_header=False)
+    data_table.add_column("Metric", style="bold")
+    data_table.add_column("Value")
+    data_table.add_row("Analysis date", str(today))
+    data_table.add_row("Profile", profile)
+    data_table.add_row("Strategy", strategy_name)
+    data_table.add_row("Candles through", _fmt_date(data_freshness.candle_end))
+    data_table.add_row("Broker flow through", _fmt_date(data_freshness.broker_end))
+    if market_regime is not None:
+        data_table.add_row("Market regime", f"{market_regime.label} ({market_regime.score}/7)")
+
+    decision = compact_table(show_header=False)
+    decision.add_column("Label", style="bold")
+    decision.add_column("Value")
+    decision.add_row("SUMMARY", Text(summary_text, style="bold"))
+    decision.add_row("PLAN", Text(plan_text, style=f"bold {plan_style}"))
+
+    signals = compact_table()
+    signals.add_column("Signal", style="bold")
+    signals.add_column("Status")
+    signals.add_column("Detail")
+    if accum is not None:
+        signals.add_row(
+            "Accumulation",
+            f"{accum.score:.1f}",
+            f"streak {accum.consecutive_streak}s; trend {accum.trend}; flow {_fmt_pct(accum.avg_flow_ratio, True)}",
+        )
+    else:
+        signals.add_row("Accumulation", "missing", f"Run: saham fetch broker {ticker}")
+    if preset_eval is not None:
+        failed = "; ".join(preset_eval.failed_reasons[:2]) if preset_eval.failed_reasons else "all gates passed"
+        signals.add_row("Preset", preset_eval.classification, failed)
+    if risk_resp is not None:
+        r = risk_resp.assessment
+        signals.add_row("Risk", r.risk_level_name, f"confidence {r.confidence}/100")
+    if broker_detail is not None:
+        signals.add_row("Broker quality", broker_detail.quality, broker_detail.broker_weight_quality)
+    if broker_quality_note is not None:
+        signals.add_row("Broker note", broker_quality_note.level, broker_quality_note.message)
+    if sentiment_resp and not sentiment_resp.warning:
+        snap = sentiment_resp.snapshot
+        signals.add_row(
+            "Sentiment",
+            snap.overall_sentiment.value.upper(),
+            f"{snap.total_count} headlines; confidence {snap.confidence_pct}%",
+        )
+    elif sentiment_warning:
+        signals.add_row("Sentiment", "unavailable", sentiment_warning)
+    if backtest_result is not None and backtest_result.trade_count > 0:
+        signals.add_row(
+            "History",
+            f"{backtest_result.trade_count} trades",
+            f"WR {float(backtest_result.win_rate):.1f}%; PF {float(backtest_result.profit_factor):.2f}",
+        )
+
+    sections = [
+        Text("Decision", style="bold cyan"),
+        decision,
+        Text("Data Freshness", style="bold cyan"),
+        data_table,
+        Text("Signal Snapshot", style="bold cyan"),
+        signals,
+    ]
+
+    chosen_sizing = preset_sizing or sizing
+    if capital is not None and chosen_sizing is not None:
+        sizing_table = compact_table(show_header=False)
+        sizing_table.add_column("Metric", style="bold")
+        sizing_table.add_column("Value")
+        sizing_table.add_row("Capital", f"{capital:,.0f} IDR")
+        sizing_table.add_row("Entry", f"{float(chosen_sizing.entry_price):,.0f}")
+        sizing_table.add_row("Stop", f"{float(chosen_sizing.stop_price):,.0f}")
+        sizing_table.add_row("Target", f"{float(chosen_sizing.target_price):,.0f}")
+        sizing_table.add_row("Lots", f"{chosen_sizing.lots:,}")
+        sections.extend([Text("Sizing", style="bold cyan"), sizing_table])
+
+    warnings = list(data_freshness.warnings)
+    if market_regime is not None:
+        warnings.extend(market_regime.warnings)
+    if warnings:
+        warning_table = compact_table(show_header=False)
+        warning_table.add_column("Warning")
+        for warning in warnings[:5]:
+            warning_table.add_row(f"- {warning}")
+        sections.extend([Text("Warnings", style="bold yellow"), warning_table])
+
+    console().print(
+        panel(
+            Group(*sections),
+            title=f"Swing Decision - {ticker}",
+            subtitle=f"{today.isoformat()} / {profile}",
+        )
+    )
 
 
 def _build_broker_quality_note(
@@ -1317,6 +1523,29 @@ def _print_swing_output(
     strategy_risk_level: str | None = None,
     strategy_risk_name: str | None = None,
 ) -> None:
+    _print_swing_rich_overview(
+        ticker=ticker,
+        today=today,
+        profile=profile,
+        strategy_name=strategy_name,
+        data_freshness=data_freshness,
+        broker_detail=broker_detail,
+        accum=accum,
+        risk_resp=risk_resp,
+        atr_value=atr_value,
+        sizing=sizing,
+        preset_eval=preset_eval,
+        preset_sizing=preset_sizing,
+        broker_quality_note=broker_quality_note,
+        market_regime=market_regime,
+        capital=capital,
+        backtest_result=backtest_result,
+        sentiment_resp=sentiment_resp,
+        sentiment_warning=sentiment_warning,
+        strategy_risk_level=strategy_risk_level,
+        strategy_risk_name=strategy_risk_name,
+    )
+
     typer.echo("")
     _sep("=")
     typer.echo(typer.style(
@@ -1768,68 +1997,24 @@ def _print_swing_output(
     # ── SUMMARY ──────────────────────────────────────────────────────────────
     typer.echo("")
     _sep("=")
-    summary_parts = []
-    if accum:
-        summary_parts.append(f"Score {accum.score:.1f}")
-    if risk_resp:
-        summary_parts.append(risk_resp.assessment.risk_level_name)
-    if backtest_result and backtest_result.trade_count > 0:
-        summary_parts.append(f"{float(backtest_result.win_rate):.0f}% WR")
-    if sentiment_resp and not sentiment_resp.warning:
-        summary_parts.append(
-            sentiment_resp.snapshot.overall_sentiment.value.lower() + " news"
-        )
+    summary_parts = _swing_summary_parts(accum, risk_resp, backtest_result, sentiment_resp)
 
     if summary_parts:
         typer.echo("SUMMARY: " + typer.style(" · ".join(summary_parts), bold=True))
     else:
         typer.echo("SUMMARY: insufficient data for assessment")
 
-    # Strategy gate overrides ENTER → AVOID if HIGH_RISK
-    strategy_override = (
-        strategy_risk_level == "HIGH_RISK"
-        and preset_eval is not None
-        and preset_eval.passed
+    plan_text, plan_style = _swing_plan_text(
+        ticker,
+        capital,
+        atr_value,
+        sizing,
+        preset_eval,
+        preset_sizing,
+        strategy_risk_level,
+        strategy_risk_name,
     )
-
-    if preset_eval is not None:
-        if strategy_override:
-            typer.echo(typer.style(
-                f"PLAN:  AVOID (strategy gate: '{strategy_risk_name}' signals HIGH_RISK "
-                "— preset passed but technical signal says exit).",
-                fg=typer.colors.RED,
-                bold=True,
-            ))
-        elif preset_eval.passed and preset_sizing and preset_sizing.lots > 0:
-            typer.echo(
-                f"PLAN:  ENTER setup passed. Consider {preset_sizing.lots} lots at "
-                f"{float(preset_sizing.entry_price):,.0f}; TP "
-                f"{float(preset_sizing.target_price):,.0f}; SL "
-                f"{float(preset_sizing.stop_price):,.0f}; max hold "
-                f"{FOREIGN_BOUNCE_MAX_HOLD_DAYS} trading days."
-            )
-        elif preset_eval.passed:
-            typer.echo("PLAN:  ENTER setup passed. Add --capital to compute lot size.")
-        elif preset_eval.classification == "WATCH":
-            typer.echo(
-                "PLAN:  WATCH only. Preset is close but not fully confirmed; "
-                "wait for failed gates to improve."
-            )
-        else:
-            typer.echo("PLAN:  AVOID. Preset gates are not aligned.")
-    elif sizing and sizing.lots > 0:
-        typer.echo(
-            f"PLAN:  Sized scenario: {sizing.lots} lots at {float(sizing.entry_price):,.0f}.  "
-            f"Stop {float(sizing.stop_price):,.0f}.  "
-            f"Target {float(sizing.target_price):,.0f}."
-        )
-    elif sizing and sizing.lots == 0:
-        typer.echo("PLAN:  Position too small for 1 lot — reduce entry or increase capital.")
-    elif capital and not atr_value:
-        typer.echo(
-            "PLAN:  Fetch more data to enable position sizing "
-            f"(run saham fetch market {ticker} --days 90)."
-        )
+    typer.echo(typer.style(f"PLAN:  {plan_text}", fg=plan_style, bold=plan_style in {"green", "red"}))
 
     _sep("=")
     typer.echo(typer.style(
@@ -2236,7 +2421,7 @@ def swing_backtest(
     ] = None,
     universe: Annotated[
         Optional[str],
-        typer.Option("--universe", "-u", help="Universe: lq45, idx80, bumn20, cached"),
+        typer.Option("--universe", "-u", help="Universe name or 'cached' — see `saham fetch universe list`"),
     ] = None,
     preset: Annotated[
         str,
@@ -2427,7 +2612,7 @@ def swing_compare(
     ] = None,
     universe: Annotated[
         Optional[str],
-        typer.Option("--universe", "-u", help="Universe: lq45, idx80, bumn20, cached"),
+        typer.Option("--universe", "-u", help="Universe name or 'cached' — see `saham fetch universe list`"),
     ] = None,
     variants: Annotated[
         str,
@@ -2609,7 +2794,7 @@ def regime(
     ] = None,
     universe: Annotated[
         Optional[str],
-        typer.Option("--universe", "-u", help="Universe: lq45, idx80, bumn20, cached"),
+        typer.Option("--universe", "-u", help="Universe name or 'cached' — see `saham fetch universe list`"),
     ] = "idx80",
     benchmark: Annotated[
         str,

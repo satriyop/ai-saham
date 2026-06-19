@@ -10,7 +10,10 @@ from typer.testing import CliRunner
 
 from src.adapters.cli.main import app
 from src.adapters.cli.swing_commands import (
+    DataFreshness,
     FOREIGN_BOUNCE_PRESET,
+    PresetEvaluation,
+    PresetGate,
     _auto_refresh_swing_data,
     _build_broker_detail,
     _build_broker_quality_note,
@@ -19,6 +22,7 @@ from src.adapters.cli.swing_commands import (
     _evaluate_foreign_bounce,
     _fetch_swing_sentiment,
     _format_failed_gates_summary,
+    _print_swing_output,
 )
 from src.application.use_case.accumulation_screen import AccumulationCandidate
 from src.domain.entities.broker_flow import BrokerSummary, BrokerTransaction, BrokerType
@@ -587,3 +591,57 @@ def test_swing_compare_rejects_unknown_variant():
     assert result.exit_code != 0
     assert "unknown" in result.output.lower()
     assert "baseline" in result.output
+
+
+def test_swing_output_renders_rich_decision_overview(capsys):
+    preset = PresetEvaluation(
+        name=FOREIGN_BOUNCE_PRESET,
+        passed=False,
+        classification="WATCH",
+        gates=(
+            PresetGate("score", True, "70.0", ">= 55"),
+            PresetGate("trend", False, "DOWN", "SIDE"),
+        ),
+        failed_reasons=("trend: DOWN (required SIDE)",),
+    )
+
+    _print_swing_output(
+        ticker="BBCA",
+        today=date(2026, 6, 19),
+        profile="balanced",
+        strategy_name="foreign-accumulation",
+        data_freshness=DataFreshness(
+            as_of_date=date(2026, 6, 19),
+            candle_start=date(2026, 1, 1),
+            candle_end=date(2026, 6, 18),
+            broker_start=date(2026, 1, 1),
+            broker_end=date(2026, 6, 18),
+            warnings=("Latest candle is stale",),
+        ),
+        flow_detail=None,
+        broker_detail=None,
+        window=7,
+        accum=_candidate(score=70.0, trend="DOWN"),
+        risk_resp=None,
+        atr_value=None,
+        sizing=None,
+        preset_eval=preset,
+        preset_sizing=None,
+        broker_quality_note=None,
+        market_regime=None,
+        capital=None,
+        backtest_result=None,
+        sentiment_resp=None,
+        sentiment_warning=None,
+        sentiment_verbose=False,
+        no_backtest=True,
+        no_sentiment=True,
+    )
+
+    out = capsys.readouterr().out
+    assert "Swing Decision - BBCA" in out
+    assert "Decision" in out
+    assert "Signal Snapshot" in out
+    assert "PLAN" in out
+    assert "WATCH only" in out
+    assert "SUMMARY:" in out

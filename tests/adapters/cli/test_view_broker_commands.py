@@ -1,5 +1,6 @@
 """Tests for read-only broker browsing commands."""
 
+import json
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -53,6 +54,50 @@ def test_view_broker_history_reads_cached_points_only(monkeypatch, tmp_path: Pat
     assert "2024-01-16" in result.stdout
 
 
+def test_view_broker_history_json_output_stays_machine_readable(tmp_path: Path):
+    db_path = tmp_path / "broker.db"
+    repo = SQLiteBrokerRepository(db_path)
+    repo.save_foreign_flow_points([
+        ForeignFlowPoint(
+            ticker="BBCA",
+            date=date(2024, 1, 15),
+            net_val=Decimal("1000000"),
+            net_lot=100,
+            avg_price=Decimal("10000"),
+            source="stockbit",
+        ),
+    ])
+
+    result = runner.invoke(
+        app,
+        [
+            "view",
+            "broker",
+            "history",
+            "BBCA",
+            "--source",
+            "stockbit",
+            "--format",
+            "json",
+            "--db",
+            str(db_path),
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload == [
+        {
+            "ticker": "BBCA",
+            "date": "2024-01-15",
+            "source": "stockbit",
+            "net_val": "1000000",
+            "net_lot": 100,
+            "avg_price": "10000",
+        }
+    ]
+
+
 def test_view_broker_top_foreign_reads_cached_snapshots_only(monkeypatch, tmp_path: Path):
     from src.adapters.cli import broker_commands
 
@@ -104,3 +149,51 @@ def test_view_broker_top_foreign_reads_cached_snapshots_only(monkeypatch, tmp_pa
     assert "Cached Foreign Broker Top Stocks" in result.stdout
     assert "BBCA" in result.stdout
     assert "BBRI" in result.stdout
+
+
+def test_view_broker_top_foreign_json_output_stays_machine_readable(tmp_path: Path):
+    db_path = tmp_path / "broker.db"
+    snapshot_date = date(2024, 1, 16)
+    repo = SQLiteBrokerRepository(db_path)
+    repo.save_foreign_flow_snapshots(
+        [
+            ForeignFlowSnapshot(
+                ticker="BBCA",
+                date=snapshot_date,
+                net_val=Decimal("1000000"),
+                net_lot=100,
+            ),
+        ],
+        snapshot_date=snapshot_date,
+        period_days=7,
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "view",
+            "broker",
+            "top-foreign",
+            "--date",
+            snapshot_date.isoformat(),
+            "--days",
+            "7",
+            "--format",
+            "json",
+            "--db",
+            str(db_path),
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload == [
+        {
+            "ticker": "BBCA",
+            "snapshot_date": "2024-01-16",
+            "period_days": 7,
+            "net_val": "1000000",
+            "net_lot": 100,
+            "direction": "buy",
+        }
+    ]

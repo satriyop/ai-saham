@@ -20,12 +20,14 @@ from pathlib import Path
 from typing import Annotated, Optional
 
 import typer
+from rich.console import Group
+from rich.text import Text
 
+from src.adapters.cli.rich_display import compact_table, console, panel
 from src.application.services.bootstrap import create_indicator_registry
 from src.application.services.strategy_loader import StrategyLoader, StrategyNotFoundError
 from src.application.services.universe_loader import (
     UniverseNotFoundError,
-    load_universe_meta,
     resolve_tickers,
 )
 from src.application.use_case.assess_risk import AssessRiskRequest, AssessRiskUseCase
@@ -109,13 +111,6 @@ def _make_stockbit_providers(db_path: Path) -> "StockbitProviders":
         fundamentals_prov=StockbitFundamentalsProvider(broker_provider=None, db_path=db_path),
     )
 
-
-universe_app = typer.Typer(
-    name="universe",
-    help="Manage stock universe lists (LQ45, IDX80, IDX30, JII, BUMN20)",
-    no_args_is_help=True,
-    context_settings={"help_option_names": ["-h", "--help"]},
-)
 
 DEFAULT_DB_PATH = Path("data.db")
 FOREIGN_BOUNCE_PRESET = "foreign-bounce"
@@ -412,32 +407,40 @@ def _display_results(
 
     candidates = candidates[:top_n]
 
-    typer.echo("")
-    typer.echo("=" * _TABLE_WIDTH)
-    typer.echo(
-        f"FOREIGN ACCUMULATION — {universe_label.upper()} "
-        f"| {response.window_days} sessions | {response.screened_at}"
-    )
-    typer.echo("=" * _TABLE_WIDTH)
-
     if not candidates:
-        typer.echo("No candidates found matching the criteria.")
-        typer.echo(
-            f"Checked {response.total_tickers_checked} tickers, "
-            f"skipped {response.tickers_skipped} (insufficient data)."
+        empty = compact_table(show_header=False)
+        empty.add_column("Message")
+        empty.add_row("No candidates found matching the criteria.")
+        empty.add_row(
+            f"Checked {response.total_tickers_checked} tickers; "
+            f"skipped {response.tickers_skipped} with insufficient data."
         )
-        typer.echo("=" * _TABLE_WIDTH)
+        empty.add_row(f"Next: saham fetch market --universe {universe_label}")
+        console().print(
+            panel(
+                empty,
+                title=f"Foreign Accumulation - {universe_label.upper()}",
+                subtitle=f"{response.window_days} sessions / {response.screened_at}",
+            )
+        )
         return
 
-    strat_hdr = f" {'STRAT':>6}" if strategy_signals is not None else ""
-    sep_w = _SEP_WIDTH + (8 if strategy_signals is not None else 0)
-    header = (
-        f"{'#':>3} {'TICKER':<7} {'SCORE':>6} {'STREAK':>7} {'NET_DAYS':>9}"
-        f" {'NET_VALUE':>12} {'FLOW%':>6} {'F_VWAP%':>8} {'RSI':>6} {'BB%ILE':>7} {'TREND':>5}"
-        f"{strat_hdr}"
-    )
-    typer.echo(header)
-    typer.echo("-" * sep_w)
+    table = compact_table()
+    table.add_column("#", justify="right")
+    table.add_column("Ticker", style="bold")
+    table.add_column("Score", justify="right")
+    table.add_column("Streak", justify="right")
+    table.add_column("Net Days", justify="right")
+    table.add_column("Net Value", justify="right")
+    table.add_column("Flow%", justify="right")
+    table.add_column("F_VWAP%", justify="right")
+    table.add_column("RSI", justify="right")
+    table.add_column("BB%ile", justify="right")
+    table.add_column("Trend")
+    if strategy_signals is not None:
+        table.add_column("Strat")
+
+    detail_lines: list[Text] = []
 
     for i, c in enumerate(candidates, 1):
         net_days_str = f"{c.net_buy_days}/{c.total_days}"
@@ -447,107 +450,123 @@ def _display_results(
         flow_str = f"{c.avg_flow_ratio:+.1f}" if c.avg_flow_ratio is not None else "   —"
         if c.bb_width_pctile is not None:
             pct_int = int(c.bb_width_pctile * 100)
-            bb_color = typer.colors.GREEN if c.bb_width_pctile <= _SC.coiled_spring_bb_pctile else (
-                typer.colors.YELLOW if c.bb_width_pctile <= 0.40 else typer.colors.WHITE
+            bb_style = "green" if c.bb_width_pctile <= _SC.coiled_spring_bb_pctile else (
+                "yellow" if c.bb_width_pctile <= 0.40 else ""
             )
-            bb_str = typer.style(f"{pct_int:>4}%", fg=bb_color)
+            bb_cell = Text(f"{pct_int}%", style=bb_style)
         else:
-            bb_str = typer.style("  — ", fg=typer.colors.BRIGHT_BLACK)
+            bb_cell = Text("—", style="bright_black")
 
         # Color score
         if c.score >= _SC.enter_min_score:
-            score_color = typer.colors.GREEN
+            score_style = "green"
         elif c.score >= _SC.watch_min_score:
-            score_color = typer.colors.YELLOW
+            score_style = "yellow"
         else:
-            score_color = typer.colors.WHITE
+            score_style = ""
 
-        strat_col = ""
+        row = [
+            str(i),
+            c.ticker,
+            Text(f"{c.score:.1f}", style=score_style),
+            streak_str,
+            net_days_str,
+            _format_value(c.total_net_value),
+            flow_str,
+            vwap_str,
+            rsi_str,
+            bb_cell,
+            c.trend,
+        ]
         if strategy_signals is not None:
             raw = strategy_signals.get(c.ticker, "?")
             sym = _STRAT_SYMBOL.get(raw, raw)
-            col = _STRAT_COLOR.get(raw, typer.colors.WHITE)
-            strat_col = " " + typer.style(f"{sym:>6}", fg=col, bold=(raw == "LOW_RISK"))
-
-        line = (
-            f"{i:>3} {c.ticker:<7} "
-            + typer.style(f"{c.score:>6.1f}", fg=score_color)
-            + f" {streak_str:>7} {net_days_str:>9} {_format_value(c.total_net_value):>12}"
-            + f" {flow_str:>6} {vwap_str:>8} {rsi_str:>6} {bb_str}  {c.trend:>5}"
-            + strat_col
-        )
-        typer.echo(line)
+            strat_style = "green" if raw == "LOW_RISK" else ("red" if raw == "HIGH_RISK" else "bright_black")
+            row.append(Text(sym, style=strat_style))
+        table.add_row(*row)
 
         if show_breakdown and c.score_breakdown:
             bd = c.score_breakdown
-            typer.echo(
+            detail_lines.append(Text(
                 f"    [cons={bd.get('cons', 0):.1f} streak={bd.get('streak', 0):.1f}"
                 f" vwap={bd.get('vwap', 0):.1f} rsi={bd.get('rsi', 0):.1f}"
                 f" flow={bd.get('flow', 0):.1f} bb={bd.get('bb', 0):.1f}"
                 f" inst={bd.get('inst', 0):.1f}]"
-            )
+            ))
 
         if c.seasonal_edge is not None:
             se = c.seasonal_edge
-            se_color = typer.colors.GREEN if se.is_tailwind else (typer.colors.RED if se.is_headwind else typer.colors.WHITE)
-            typer.echo(typer.style(f"    SEASONAL {se.label} (score {se.score:+.2f})", fg=se_color))
+            se_style = "green" if se.is_tailwind else ("red" if se.is_headwind else "")
+            detail_lines.append(Text(f"    {c.ticker} SEASONAL {se.label} (score {se.score:+.2f})", style=se_style))
 
         if c.dividend_risk:
-            typer.echo(typer.style("    ⚠ DIVIDEND RISK", fg=typer.colors.YELLOW))
+            detail_lines.append(Text(f"    {c.ticker} DIVIDEND RISK", style="yellow"))
         if c.rights_issue_risk:
-            typer.echo(typer.style("    ⚠ RIGHTS ISSUE", fg=typer.colors.YELLOW))
+            detail_lines.append(Text(f"    {c.ticker} RIGHTS ISSUE", style="yellow"))
         if c.insider_buying:
             for label in c.recent_insider_buys:
-                typer.echo(typer.style(f"    ⭐ INSIDER BUY — {label}", fg=typer.colors.CYAN))
+                detail_lines.append(Text(f"    {c.ticker} INSIDER BUY - {label}", style="cyan"))
 
         if c.analyst_consensus is not None:
             ac = c.analyst_consensus
             if ac.is_bullish and (ac.upside_pct or 0) >= 10:
-                ac_color = typer.colors.GREEN
+                ac_style = "green"
             elif ac.sell_count > ac.buy_count:
-                ac_color = typer.colors.RED
+                ac_style = "red"
             else:
-                ac_color = typer.colors.WHITE
-            typer.echo(typer.style(f"    📊 ANALYST: {ac.label}", fg=ac_color))
+                ac_style = ""
+            detail_lines.append(Text(f"    {c.ticker} ANALYST: {ac.label}", style=ac_style))
 
         if c.shareholding is not None:
             sh = c.shareholding
-            sh_color = typer.colors.CYAN if sh.institution_pct >= 30.0 else typer.colors.WHITE
-            typer.echo(typer.style(f"    🏦 HOLDING: {sh.label}", fg=sh_color))
+            sh_style = "cyan" if sh.institution_pct >= 30.0 else ""
+            detail_lines.append(Text(f"    {c.ticker} HOLDING: {sh.label}", style=sh_style))
 
         if c.bandar_detector is not None:
             bd = c.bandar_detector
             if bd.accumulation_score >= 4:
-                bd_color = typer.colors.GREEN
+                bd_style = "green"
             elif bd.is_accumulating:
-                bd_color = typer.colors.YELLOW
+                bd_style = "yellow"
             elif bd.is_distributing:
-                bd_color = typer.colors.RED
+                bd_style = "red"
             else:
-                bd_color = typer.colors.WHITE
-            typer.echo(typer.style(f"    🔍 BANDAR: {bd.label}", fg=bd_color))
+                bd_style = ""
+            detail_lines.append(Text(f"    {c.ticker} BANDAR: {bd.label}", style=bd_style))
 
         if c.fundamentals is not None:
             fund = c.fundamentals
             if fund.is_quality:
-                fund_color = typer.colors.GREEN
+                fund_style = "green"
             elif fund.roe_ttm is not None and fund.roe_ttm >= 10.0:
-                fund_color = typer.colors.YELLOW
+                fund_style = "yellow"
             else:
-                fund_color = typer.colors.RED
-            typer.echo(typer.style(f"    📈 FUNDAM: {fund.label}", fg=fund_color))
+                fund_style = "red"
+            detail_lines.append(Text(f"    {c.ticker} FUNDAM: {fund.label}", style=fund_style))
 
         if granular and c.top_brokers:
             broker_line = "    " + "  ".join(c.top_brokers[:5])
             if c.bci_label == "CLUSTER":
-                broker_line += "  " + typer.style(f"[★ BCI:{c.bci_label}({c.bci_tier1_count}T1)]", fg=typer.colors.CYAN)
+                broker_line += f"  [BCI:{c.bci_label}({c.bci_tier1_count}T1)]"
             elif c.bci_label == "STABLE":
-                broker_line += "  " + typer.style(f"[BCI:{c.bci_label}({c.bci_tier1_count}T1)]", fg=typer.colors.GREEN)
+                broker_line += f"  [BCI:{c.bci_label}({c.bci_tier1_count}T1)]"
             elif c.bci_label == "RETAIL-LED":
-                broker_line += "  " + typer.style("[BCI:RETAIL-LED]", fg=typer.colors.WHITE)
-            typer.echo(broker_line)
+                broker_line += "  [BCI:RETAIL-LED]"
+            detail_lines.append(Text(broker_line))
 
-    typer.echo("-" * _SEP_WIDTH)
+    sections = [table]
+    if detail_lines:
+        sections.append(Text("\nDetails", style="bold cyan"))
+        sections.extend(detail_lines)
+
+    console().print(
+        panel(
+            Group(*sections),
+            title=f"Foreign Accumulation - {universe_label.upper()}",
+            subtitle=f"{response.window_days} sessions / {response.screened_at}",
+        )
+    )
+
     typer.echo(
         f"Checked: {response.total_tickers_checked} | "
         f"Shown: {len(candidates)} | "
@@ -640,33 +659,53 @@ def _display_multi(
 
     rows = sorted(by_ticker.items(), key=sort_key, reverse=True)[:top_n]
 
-    typer.echo("")
-    typer.echo("=" * _TABLE_WIDTH)
-    typer.echo(
-        f"FOREIGN ACCUMULATION — {universe_label.upper()} "
-        f"| MULTI-WINDOW | {screened_at}"
-    )
-    typer.echo("=" * _TABLE_WIDTH)
-
     if not rows:
-        typer.echo("No candidates found matching the criteria.")
-        typer.echo("=" * _TABLE_WIDTH)
+        empty = compact_table(show_header=False)
+        empty.add_column("Message")
+        empty.add_row("No candidates found matching the criteria.")
+        empty.add_row(f"Next: saham fetch market --universe {universe_label}")
+        console().print(
+            panel(
+                empty,
+                title=f"Foreign Accumulation - {universe_label.upper()}",
+                subtitle=f"multi-window / {screened_at}",
+            )
+        )
         return
 
-    win_headers = "  ".join(f"{w:>4}s" for w in windows)
-    typer.echo(f"{'#':>3} {'TICKER':<7} {win_headers}  {'PATTERN':<18} {'TREND':>5} {'BRK':>7}")
-    typer.echo("-" * _SEP_WIDTH)
+    table = compact_table()
+    table.add_column("#", justify="right")
+    table.add_column("Ticker", style="bold")
+    for w in windows:
+        table.add_column(f"{w}s", justify="right")
+    table.add_column("Pattern")
+    table.add_column("Trend")
+    table.add_column("BRK")
 
     for i, (tk, pw) in enumerate(rows, 1):
-        cells = "  ".join(_fmt_score(pw.get(w).score if pw.get(w) else None) for w in windows)
+        score_cells = []
+        for w in windows:
+            candidate = pw.get(w)
+            if candidate is None:
+                score_cells.append(Text("—", style="bright_black"))
+                continue
+            style = "green" if candidate.score >= 70 else ("yellow" if candidate.score >= 40 else "")
+            score_cells.append(Text(f"{candidate.score:.0f}", style=style))
         pattern = _classify_pattern(windows, pw)
         trend = next((c.trend for w in sorted(windows) for c in [pw.get(w)] if c), "—")
         quality = (broker_quality or {}).get(tk)
         brk = quality.label if quality else "n/a"
-        typer.echo(f"{i:>3} {tk:<7} {cells}  {pattern:<18} {trend:>5} {brk:>7}")
+        table.add_row(str(i), tk, *score_cells, pattern, trend, brk)
+
+    console().print(
+        panel(
+            table,
+            title=f"Foreign Accumulation - {universe_label.upper()}",
+            subtitle=f"multi-window / {screened_at}",
+        )
+    )
 
     sample_resp = next(iter(results.values()))
-    typer.echo("-" * _SEP_WIDTH)
     typer.echo(
         f"Checked: {sample_resp.total_tickers_checked} | "
         f"Shown: {len(rows)} | "
@@ -872,7 +911,7 @@ def accumulation_run(
         Optional[str],
         typer.Option(
             "--universe", "-u",
-            help="Universe: lq45, idx80, bumn20, cached",
+            help="Universe name or 'cached' — see `saham fetch universe list`",
         ),
     ] = None,
     window: Annotated[
@@ -1321,7 +1360,7 @@ def accumulation_audit(
     ] = None,
     universe: Annotated[
         Optional[str],
-        typer.Option("--universe", "-u", help="Universe: lq45, idx80, bumn20, cached"),
+        typer.Option("--universe", "-u", help="Universe name or 'cached' — see `saham fetch universe list`"),
     ] = None,
     preset: Annotated[
         Optional[str],
@@ -1559,205 +1598,6 @@ def accumulation_audit(
         return
 
     _display_audit_summary(response, top_groups=top_groups)
-
-
-# ---------------------------------------------------------------------------
-# Universe management commands
-# ---------------------------------------------------------------------------
-
-@universe_app.command("list")
-def universe_list(
-    config_path: Annotated[
-        Optional[Path],
-        typer.Option("--config", help="Path to universes.yaml"),
-    ] = None,
-) -> None:
-    """
-    List configured ticker universes with last-updated date and ticker count.
-
-    Example:
-        saham fetch universe list
-    """
-    from src.application.services.universe_loader import UNIVERSE_CONFIG_PATH
-
-    resolved_config = config_path or UNIVERSE_CONFIG_PATH
-    meta = load_universe_meta(resolved_config)
-
-    if not meta:
-        typer.echo(f"No universe config found at '{resolved_config}'.")
-        typer.echo("Expected: config/universes.yaml")
-        raise typer.Exit(1)
-
-    typer.echo("")
-    typer.echo("Configured universes:")
-    typer.echo(f"  {'NAME':<14} {'TICKERS':>8}  {'LAST UPDATED'}")
-    typer.echo("  " + "-" * 40)
-    for name, info in meta.items():
-        typer.echo(f"  {name:<14} {info['count']:>8}  {info['updated']}")
-    typer.echo("")
-    typer.echo(f"Config file: {resolved_config}")
-    typer.echo("")
-    typer.echo("Usage: saham fetch market --universe <name>")
-    typer.echo("       saham screen accum --universe <name>")
-
-
-@universe_app.command("update")
-def universe_update(
-    universe_name: Annotated[
-        Optional[str],
-        typer.Option("--universe", "-u", help="Universe(s) to update, comma-separated (e.g. lq45,idx80). Omit for all."),
-    ] = None,
-    discover: Annotated[
-        bool,
-        typer.Option("--discover", help="List all available universes from Stockbit without updating"),
-    ] = False,
-    config_path: Annotated[
-        Optional[Path],
-        typer.Option("--config", help="Path to universes.yaml"),
-    ] = None,
-) -> None:
-    """
-    Refresh universe ticker lists from Stockbit Exodus API.
-
-    Discovers all IDX index universes (LQ45, IDX30, IDX80, JII,
-    MBX, BUMN20) by querying the Stockbit sector/subsector API, then fetches
-    the live constituent lists and updates config/universes.yaml.
-
-    Requires an active Stockbit session (run `saham fetch stockbit login` first).
-
-    Examples:
-        saham fetch universe update                     # update all known universes
-        saham fetch universe update --universe lq45     # update only LQ45
-        saham fetch universe update --universe lq45,idx80
-        saham fetch universe update --discover          # list available without updating
-    """
-    import yaml
-    from datetime import date
-    from pathlib import Path as _Path
-
-    resolved_config = config_path or _Path("config/universes.yaml")
-
-    # Check Stockbit session
-    profile_dir = _Path(".stockbit_profile")
-    if not profile_dir.exists():
-        typer.echo("")
-        typer.echo("No Stockbit session found. Run `saham fetch stockbit login` first.")
-        typer.echo("")
-        typer.echo("Manual alternative:")
-        typer.echo("  1. Visit https://www.idx.co.id/en/market-data/indexes/")
-        typer.echo("  2. Edit config/universes.yaml with updated tickers")
-        raise typer.Exit(1)
-
-    try:
-        from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
-        from src.infrastructure.browser.stockbit_universe import StockbitUniverseProvider
-
-        provider = StockbitPlaywrightBrokerProvider()
-        if not provider.is_authenticated():
-            typer.echo("Stockbit session expired. Run `saham fetch stockbit login` to refresh.")
-            raise typer.Exit(1)
-
-        universe_prov = StockbitUniverseProvider(broker_provider=provider)
-    except ImportError as e:
-        typer.echo(f"Playwright not installed: {e}")
-        raise typer.Exit(1)
-
-    # Discover available subsectors
-    typer.echo("")
-    typer.echo("Discovering IDX index universes from Stockbit...")
-    available = universe_prov.list_available()
-
-    if discover:
-        typer.echo("")
-        typer.echo(f"{'UNIVERSE KEY':<16} {'SUBSECTOR ID'}")
-        typer.echo("─" * 35)
-        for key, sid in sorted(available.items()):
-            typer.echo(f"  {key:<14} {sid}")
-        typer.echo("")
-        typer.echo(f"Total: {len(available)} universe(s) available")
-        return
-
-    # Determine which universes to update
-    if universe_name:
-        targets = [u.strip().lower() for u in universe_name.split(",")]
-        unknown = [t for t in targets if t not in available]
-        if unknown:
-            typer.echo(f"Unknown universe(s): {', '.join(unknown)}")
-            typer.echo(f"Available: {', '.join(sorted(available.keys()))}")
-            raise typer.Exit(1)
-    else:
-        # Default: update the main analysis universes (skip ihsg — too many tickers)
-        default_targets = ["lq45", "idx30", "idx80", "jii", "bumn20"]
-        targets = [t for t in default_targets if t in available]
-
-    # Load existing YAML to preserve structure and any manually curated entries
-    existing: dict = {}
-    if resolved_config.exists():
-        try:
-            with open(resolved_config) as f:
-                existing = yaml.safe_load(f) or {}
-        except Exception as e:
-            typer.echo(f"Warning: could not read {resolved_config}: {e}")
-
-    today_str = date.today().isoformat()
-    updated: dict[str, list[str]] = {}
-    failed: list[str] = []
-
-    typer.echo(f"Fetching {len(targets)} universe(s): {', '.join(targets)}")
-    typer.echo("")
-
-    for key in targets:
-        typer.echo(f"  {key}...", nl=False)
-        tickers = universe_prov.fetch(key)
-        if tickers:
-            updated[key] = tickers
-            prev_count = len((existing.get(key) or {}).get("tickers") or [])
-            delta = len(tickers) - prev_count
-            delta_str = f"+{delta}" if delta > 0 else str(delta) if delta < 0 else "="
-            typer.echo(
-                typer.style(f" {len(tickers)} tickers ({delta_str} vs prev)", fg=typer.colors.GREEN)
-            )
-        else:
-            failed.append(key)
-            typer.echo(typer.style(" FAILED", fg=typer.colors.RED))
-
-    if not updated:
-        typer.echo("")
-        typer.echo("No universes updated — all fetches failed.")
-        raise typer.Exit(1)
-
-    # Merge into existing YAML, preserving universes we didn't update
-    for key, tickers in updated.items():
-        existing[key] = {
-            "updated": today_str,
-            "tickers": tickers,
-        }
-
-    # Write YAML with a header comment
-    header = (
-        "# IDX Stock Universe Lists\n"
-        "#\n"
-        "# These lists are used by `saham fetch market` and `saham screen accum`\n"
-        "# to define which tickers to scan.\n"
-        "#\n"
-        "# IDX rebalances LQ45 and IDX80 every February and August.\n"
-        "# Auto-updated via: saham fetch universe update (Stockbit Exodus API)\n"
-        "#\n"
-        f"# Last updated: {today_str}\n\n"
-    )
-
-    try:
-        resolved_config.parent.mkdir(parents=True, exist_ok=True)
-        with open(resolved_config, "w") as f:
-            f.write(header)
-            yaml.dump(existing, f, default_flow_style=False, allow_unicode=True, sort_keys=True)
-        typer.echo("")
-        typer.echo(f"Updated {resolved_config}  ({len(updated)} universe(s))")
-        if failed:
-            typer.echo(typer.style(f"Failed: {', '.join(failed)}", fg=typer.colors.YELLOW))
-    except Exception as e:
-        typer.echo(f"Error writing {resolved_config}: {e}", err=True)
-        raise typer.Exit(1)
 
 
 # ---------------------------------------------------------------------------

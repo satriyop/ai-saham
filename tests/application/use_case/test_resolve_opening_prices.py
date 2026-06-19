@@ -119,3 +119,26 @@ def test_resolver_manual_price_overrides_providers():
     assert obs.confidence == "HIGH"
     assert obs.auto_confirmed is False
     assert obs.manual_override is True
+
+
+def test_resolver_reports_progress_for_each_observation():
+    progress = []
+    uc = ResolveOpeningPricesUseCase(
+        running_trade_provider=StubRunningTradeProvider({
+            "BBCA": [_tick("BBCA", "09:01:00", 6410)],
+            "GOTO": [],
+        }),
+        order_book_provider=StubOrderBookProvider({}),
+        on_observation=lambda index, total, obs: progress.append((index, total, obs)),
+    )
+
+    result = uc.execute(ResolveOpeningPricesRequest(["BBCA", "GOTO"], date(2026, 6, 18)))
+
+    assert list(result) == ["BBCA", "GOTO"]
+    assert [(item[0], item[1], item[2].ticker) for item in progress] == [
+        (1, 2, "BBCA"),
+        (2, 2, "GOTO"),
+    ]
+    assert progress[0][2].price == Decimal("6410")
+    assert progress[1][2].price is None
+    assert progress[1][2].reason == "no regular-board trade tick at or after 09:00"

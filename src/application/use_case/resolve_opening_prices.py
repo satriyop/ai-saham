@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, time
 from decimal import Decimal
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 from zoneinfo import ZoneInfo
 
 if TYPE_CHECKING:
@@ -58,9 +58,11 @@ class ResolveOpeningPricesUseCase:
         self,
         running_trade_provider: "RunningTradeProvider | None" = None,
         order_book_provider: "OrderBookProvider | None" = None,
+        on_observation: Callable[[int, int, OpeningPriceObservation], None] | None = None,
     ) -> None:
         self._running_trade_provider = running_trade_provider
         self._order_book_provider = order_book_provider
+        self._on_observation = on_observation
 
     def execute(
         self,
@@ -68,10 +70,11 @@ class ResolveOpeningPricesUseCase:
     ) -> dict[str, OpeningPriceObservation]:
         manual = {k.upper(): v for k, v in (request.manual_prices or {}).items()}
         observations: dict[str, OpeningPriceObservation] = {}
-        for ticker_raw in request.tickers:
+        total = len(request.tickers)
+        for index, ticker_raw in enumerate(request.tickers, start=1):
             ticker = ticker_raw.upper()
             if ticker in manual:
-                observations[ticker] = OpeningPriceObservation(
+                observation = OpeningPriceObservation(
                     ticker=ticker,
                     price=manual[ticker],
                     source="manual",
@@ -80,9 +83,22 @@ class ResolveOpeningPricesUseCase:
                     auto_confirmed=False,
                     manual_override=True,
                 )
+                observations[ticker] = observation
+                self._notify(index, total, observation)
                 continue
-            observations[ticker] = self._resolve_auto(ticker, request.run_date)
+            observation = self._resolve_auto(ticker, request.run_date)
+            observations[ticker] = observation
+            self._notify(index, total, observation)
         return observations
+
+    def _notify(
+        self,
+        index: int,
+        total: int,
+        observation: OpeningPriceObservation,
+    ) -> None:
+        if self._on_observation is not None:
+            self._on_observation(index, total, observation)
 
     def _resolve_auto(self, ticker: str, run_date: date) -> OpeningPriceObservation:
         tick_obs = self._from_running_trade(ticker, run_date)
