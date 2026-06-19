@@ -11,37 +11,37 @@ This document explains the conceptual building blocks of the trading system — 
          (the "what" — end-to-end user workflows)
 
   ┌─────────────────────────────────────────────────────────────────────┐
-  │  DATA INGESTION                    single │ universe │ batch         │
-  │  saham fetch market TICKER --days N                                      │
-  │  saham fetch market --universe lq45 --days N                             │
-  │  saham fetch broker TICKER --provider stockbit                     │
-  │             ↓ stores into ↓                                        │
-  │  ┌─────────────────────────────────────────────────────────┐       │
-  │  │  SQLite: candles + broker_summaries + broker_flow_points│       │
-  │  └─────────────────────────────────────────────────────────┘       │
+  │  DATA INGESTION                    single │ universe │ batch        │
+  │  saham fetch market TICKER --days N                                 │
+  │  saham fetch market --universe lq45 --days N                        │
+  │  saham fetch broker TICKER --provider stockbit                      │
+  │             ↓ stores into ↓                                         │
+  │  ┌─────────────────────────────────────────────────────────┐        │
+  │  │  SQLite: candles + broker_summaries + broker_flow_points│        │
+  │  └─────────────────────────────────────────────────────────┘        │
   └─────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
-  ┌─────────────────────────────────────────────────────────────────────┐
-  │  COMPUTE — raw indicator values from stored data                    │
-  │                                                                     │
-  │  saham indicator compute ATR BBCA          (any registered indicator)         │
-  │  saham indicator compute SMA/EMA/RSI BBCA  (dedicated compute commands)         │
-  │  saham indicator snapshot BBCA          (all three built-ins at once)       │
-  │  saham indicator list           (show all available)               │
-  │  saham indicator create          (AI-generate formula expression)   │
-  │                                                                     │
-  │          unified via IndicatorRegistry.compute()                    │
-  │  ┌────────────────┬────────────────┬────────────────────────┐      │
-  │  │ BUILT-IN       │ PLUGIN         │ FORMULA (DSL)          │      │
-  │  │ SMA, EMA, RSI  │ ATR, MACD, BB, │ user AST expressions   │      │
-  │  │ Domain funcs   │ Ichimoku,      │ e.g. "RSI(14)*2"      │      │
-  │  │ No deps        │ Stoch,         │ persisted in config/   │      │
-  │  │                │ ForeignFlow,   │                        │      │
-  │  │                │ ForeignVWAP    │                        │      │
-  │  │                │ Broker-aware   │                        │      │
-  │  └────────────────┴────────────────┴────────────────────────┘      │
-  └─────────────────────────────────────────────────────────────────────┘
+  ┌─────────────────────────────────────────────────────────────────-----────┐
+  │  COMPUTE — raw indicator values from stored data                         │
+  │                                                                          │
+  │  saham indicator compute ATR BBCA          (any registered indicator)    │
+  │  saham indicator compute SMA/EMA/RSI BBCA  (dedicated compute commands)  │
+  │  saham indicator snapshot BBCA          (all three built-ins at once)    │
+  │  saham indicator list           (show all available)                     │
+  │  saham indicator create          (AI-generate formula expression)        │
+  │                                                                          │
+  │          unified via IndicatorRegistry.compute()                         │
+  │  ┌────────────────┬────────────────┬────────────────────────┐            │
+  │  │ BUILT-IN       │ PLUGIN         │ FORMULA (DSL)          │            │
+  │  │ SMA, EMA, RSI  │ ATR, MACD, BB, │ user AST expressions   │            │
+  │  │ Domain funcs   │ Ichimoku,      │ e.g. "RSI(14)*2"       │            │
+  │  │ No deps        │ Stoch,         │ persisted in config/   │            │
+  │  │                │ ForeignFlow,   │                        │            │
+  │  │                │ ForeignVWAP    │                        │            │
+  │  │                │ Broker-aware   │                        │            │
+  │  └────────────────┴────────────────┴────────────────────────┘            │
+  └────────────────────────────────────────────────────────────────────-----─┘
                                     │
                                     ▼
   ┌─────────────────────────────────────────────────────────────────────┐
@@ -57,41 +57,41 @@ This document explains the conceptual building blocks of the trading system — 
   │                                                                     │
   │  Each YAML defines:                                                 │
   │   • which indicators to compute  (IndicatorDefinition)              │
-  │   • entry/exit rules             (if X > Y → LOW_RISK)             │
-  │   • signal mapping               (LOW_RISK → ENTER_LONG)           │
+  │   • entry/exit rules             (if X > Y → LOW_RISK)              │
+  │   • signal mapping               (LOW_RISK → ENTER_LONG)            │
   └─────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
-  ┌─────────────────────────────────────────────────────────────────────┐
-  │  RISK ASSESSMENT — evaluate rules against current state             │
-  │                                                                     │
+  ┌───────────────────────────────────────────────────────────────────--------──┐
+  │  RISK ASSESSMENT — evaluate rules against current state                     │
+  │                                                                             │
   │  saham analyze risk BBCA                      (built-in profiles)           │
   │  saham analyze risk BBCA --profile aggressive                               │
   │  saham analyze risk BBCA --rules-file custom.yaml (any strategy YAML)       │
   │  saham analyze risk BBCA --all               (all 3 profiles side-by-side)  │
   │  saham analyze risk BBCA --with-sentiment    (adds news AI context)         │
   │  saham analyze compare BBCA BBRI BMRI        (side-by-side across tickers)  │
-  │                                                                     │
-  │  Three built-in profiles (hardcoded RuleSets, no YAML needed):      │
-  │  ┌──────────────┬────────────┬──────────────┐                      │
-  │  │ conservative │  balanced  │  aggressive  │                      │
-  │  │ RSI>75=OB    │  RSI>70=OB │  RSI>65=OB   │                      │
-  │  │ RSI<25=OS    │  RSI<30=OS │  RSI<35=OS   │                      │
-  │  └──────────────┴────────────┴──────────────┘                      │
-  │                                                                     │
-  │  Key insight: Risk and Strategy share the SAME rule schema.         │
-  │  A strategy YAML works as --rules-file for risk, and a rules        │
-  │  YAML works as --strategy for backtest. Same parser, same           │
-  │  interpreter (YamlRuleInterpreter).                                 │
-  └─────────────────────────────────────────────────────────────────────┘
+  │                                                                             │
+  │  Three built-in profiles (hardcoded RuleSets, no YAML needed):              │
+  │  ┌──────────────┬────────────┬──────────────┐                               │
+  │  │ conservative │  balanced  │  aggressive  │                               │
+  │  │ RSI>75=OB    │  RSI>70=OB │  RSI>65=OB   │                               │
+  │  │ RSI<25=OS    │  RSI<30=OS │  RSI<35=OS   │                               │
+  │  └──────────────┴────────────┴──────────────┘                               │
+  │                                                                             │
+  │  Key insight: Risk and Strategy share the SAME rule schema.                 │
+  │  A strategy YAML works as --rules-file for risk, and a rules                │
+  │  YAML works as --strategy for backtest. Same parser, same                   │
+  │  interpreter (YamlRuleInterpreter).                                         │
+  └─────────────────────────────────────────────────────────────────────--------┘
                                     │
                                     ▼
   ┌─────────────────────────────────────────────────────────────────────┐
   │  BACKTEST — walk-forward replay of rules on historical data         │
   │                                                                     │
-  │  saham strategy backtest BBCA --strategy foreign-accumulation                │
-  │  saham strategy backtest BBRI --strategy ichimoku-trend                      │
-  │  saham strategy backtest TLKM --strategy rsi-momentum                        │
+  │  saham strategy backtest BBCA --strategy foreign-accumulation       │
+  │  saham strategy backtest BBRI --strategy ichimoku-trend             │
+  │  saham strategy backtest TLKM --strategy rsi-momentum               │
   │                                                                     │
   │  Flow: load YAML → resolve indicators via registry →                │
   │  compute all indicator series → evaluate each candle date →         │
@@ -102,53 +102,53 @@ This document explains the conceptual building blocks of the trading system — 
   ┌─────────────────────────────────────────────────────────────────────┐
   │  SENTIMENT — news analysis (separate data pipeline)                 │
   │                                                                     │
-  │  saham analyze sentiment BBCA               (fetch + classify news)         │
-  │  saham analyze sentiment BBCA --ai-classify (AI sentiment analysis)         │
-  │  saham analyze audit              (compare AI vs keyword rules)   │
+  │  saham analyze sentiment BBCA               (fetch + classify news) │
+  │  saham analyze sentiment BBCA --ai-classify (AI sentiment analysis) │
+  │  saham analyze audit              (compare AI vs keyword rules)     │
   │                                                                     │
   │  Outputs that strategies can reference:                             │
-  │  SENTIMENT_SCORE, SENTIMENT_LABEL, SENTIMENT_CATALYST              │
+  │  SENTIMENT_SCORE, SENTIMENT_LABEL, SENTIMENT_CATALYST               │
   │  → registered as built-in indicators in the strategy schema         │
   └─────────────────────────────────────────────────────────────────────┘
                                     │
                                     ├──────────────────────────────────┐
                                     │                                  │
                                     ▼                                  ▼
-  ┌────────────────────────────────────────┐  ┌──────────────────────────┐
-  │  END-TO-END WORKFLOWS (multi-step)      │  │  MANAGEMENT / UTILITY   │
-  │                                         │  │                         │
-  │  SWING (5-20 day horizon)               │  │  SESSION / PROVIDER     │
-  │  saham analyze swing BBCA               │  │  saham fetch stockbit login   │
-  │    → accumulation screen                │  │  saham fetch stockbit test    │
-  │    → risk assessment                    │  │  saham fetch stockbit status  │
-  │    → backtest (foreign-accum preset)    │  │                             │
-  │    → regime context                     │  │                         │
-  │    → position sizing (ATR)              │  │  UNIVERSE               │
-  │    → sentiment                          │  │  saham fetch universe list    │
-  │  saham trade backtest-swing (walk-forward)    │  │                         │
-  │  saham analyze swing-compare (side-by-side)     │  │  REGIME                 │
-  │  saham screen accum (accum CLI)         │  │  saham analyze regime           │
-  │  saham trade size (position sizing)     │  │                         │
-  │                                         │  │  CHART                  │
-  │  INTRADAY (minutes horizon)             │  │  saham analyze chart            │
-  │  saham screen pre-open                │  │                         │
-  │    → 10-step pipeline (IEV → entry →    │  │  VERSION                │
-  │      stop → trend → accum → AI)         │  │  saham version          │
-  │    → borrows ATR, RSI, FVWAP from       │  │                         │
-  │      registry (NOT strategies)          │  └──────────────────────────┘
-  │  saham trade confirm            │
-  │    → 8-gate deterministic decision      │
-  │  saham trade log intraday / review            │
-  │  saham trade outcome         │
-  │  saham trade backtest-intraday                │
-  │                                         │
-  │  ACCUMULATION SCREEN                    │
-  │  saham screen accum              │
-  │    → proprietary 120-pt scoring         │
-  │    → does NOT use registry or strategies│
-  │    → direct SQLite queries              │
-  │  saham screen accum --multi      │
-  └─────────────────────────────────────────┘  └──────────────────────────┘
+  ┌─────────────────────────────────────-──---─-┐           ┌─────────────────────────-----─┐
+  │  END-TO-END WORKFLOWS (multi-step)          │           │  MANAGEMENT / UTILITY         │
+  │                                             │           │                               │
+  │  SWING (5-20 day horizon)                   │           │  SESSION / PROVIDER           │
+  │  saham analyze swing BBCA                   │           │  saham fetch stockbit login   │
+  │    → accumulation screen                    │           │  saham fetch stockbit test    │
+  │    → risk assessment                        │           │  saham fetch stockbit status  │
+  │    → backtest (foreign-accum preset)        │           │                               │
+  │    → regime context                         │           │                               │
+  │    → position sizing (ATR)                  │           │  UNIVERSE                     │
+  │    → sentiment                              │           │  saham fetch universe list    │
+  │  saham trade backtest-swing (walk-forward)  │           │                               │
+  │  saham analyze swing-compare (side-by-side) │           │  REGIME                       │
+  │  saham screen accum (accum CLI)             │           │  saham analyze regime         │
+  │  saham trade size (position sizing)         │           │                               │
+  │                                             │           │  CHART                        │
+  │  INTRADAY (minutes horizon)                 │           │  saham analyze chart          │
+  │  saham screen pre-open                      │           │                               │
+  │    → 10-step pipeline (IEV → entry →        │           │  VERSION                      │
+  │      stop → trend → accum → AI)             │           │  saham version                │
+  │    → borrows ATR, RSI, FVWAP from           │           │                               │
+  │      registry (NOT strategies)              │           └───────────────-----───────────┘
+  │  saham trade confirm                        │ 
+  │    → 8-gate deterministic decision          │
+  │  saham trade log intraday / review          │
+  │  saham trade outcome                        │
+  │  saham trade backtest-intraday              │
+  │                                             │
+  │  ACCUMULATION SCREEN                        │
+  │  saham screen accum                         │
+  │    → proprietary 120-pt scoring             │
+  │    → does NOT use registry or strategies    │
+  │    → direct SQLite queries                  │
+  │  saham screen accum --multi                 │
+  └─────────────────────────────────────────----┘  
 ```
 
 ---

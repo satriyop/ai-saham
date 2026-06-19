@@ -169,7 +169,7 @@ fetch BBCA
 ```
 CLI Adapter            Application              Domain                Infrastructure
 -----------            -----------              ------                --------------
-saham broker fetch BBCA
+saham fetch broker BBCA
      |
      v
   Create request
@@ -200,7 +200,7 @@ saham broker fetch BBCA
 ```
 CLI Adapter            Application              Domain                Infrastructure
 -----------            -----------              ------                --------------
-saham sentiment BBCA
+saham analyze sentiment BBCA
      |
      v
   Create request
@@ -239,7 +239,7 @@ saham sentiment BBCA
 ```
 CLI Adapter            Application              Domain                Infrastructure
 -----------            -----------              ------                --------------
-saham create-indicator
+saham indicator create
      |
      v
   Create request

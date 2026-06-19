@@ -15,9 +15,9 @@ This document maps every component of AI Saham into a three-tier hierarchy: **Bi
                                     v
                     +---------------------------------------+
                     |        Application Layer              |
-|  38 use cases | 10 services | 5 ports |
-|  Formula DSL (6 files) | Rules (3)    |
-                    |  DTOs (2)                              |
+                    |  38 use cases | 10 services | 5 ports |
+                    |  Formula DSL (6 files) | Rules (3)    |
+                    |  DTOs (2)                             |
                     +---------------------------------------+
                                     |
                                     v
@@ -25,7 +25,7 @@ This document maps every component of AI Saham into a three-tier hierarchy: **Bi
                     |         Domain Layer (Pure Python)    |
                     |  7 entities | 21 value objects        |
                     |  5 indicators | 2 services (1 stub)   |
-                    |  24 ports | 6 rules                    |
+                    |  24 ports | 6 rules                   |
                     +---------------------------------------+
                                     ^
                                     |
@@ -151,10 +151,10 @@ The same layers with their actual components visible:
 |---|-----------|---------|--------------|-----------|
 | 1 | **CLI Router** | Routes user commands to use cases via lifecycle groups. Parses flags, wires dependencies, displays output. | `saham <group> <cmd>` | `main.py`, `fetch_commands.py`, `trade_commands.py`, etc |
 | 2 | **Data Ingestion** | Fetches, caches, and serves OHLCV + broker + news data from external sources. | `fetch market`, `fetch broker`, `fetch stockbit`, `fetch iev`, `analyze sentiment` | `yahoo.py`, `idx_market.py`, `idx.py`, `stockbit.py`, `playwright_stockbit.py`, 6 sentiment providers, SQLite repos |
-| 3 | **Analysis Core** | Deterministic indicator computation, risk profiling, and composite analysis. | `sma`, `ema`, `rsi`, `indicator compute`, `analyze risk`, `indicator snapshot`, `analyze compare` | `sma.py`, `ema.py`, `rsi.py`, `indicator_registry.py`, 3 rule profiles, `rule_engine.py` |
+| 3 | **Analysis Core** | Deterministic indicator computation, risk profiling, and composite analysis. | `indicator compute`, `indicator snapshot`, `analyze risk`, `analyze compare` | `sma.py`, `ema.py`, `rsi.py`, `indicator_registry.py`, 3 rule profiles, `rule_engine.py` |
 | 4 | **Screening Suite** | Multi-dimensional stock screening for accumulation patterns, pre-open movers, and swing candidates. | `screen accum`, `screen pre-open` | `accumulation_screen.py`, `intraday_workflow_commands.py`, `pre_open_screen.py` |
 | 5 | **Strategy System** | Authoring, validation, loading, and execution of versioned strategy packages. | `strategy init/create/validate/list`, `strategy backtest` | `strategy_loader.py`, 3 strategy YAMLs, `strategy_commands.py` |
-| 6 | **Formula DSL** | Custom indicator language with tokenizer, parser, evaluator, and validator. Supports nesting and series operations. | `indicator create`, `show-formula`, `indicator compute <formula>` | 6 files in `application/formula/`, `formula_storage.py` |
+| 6 | **Formula DSL** | Custom indicator language with tokenizer, parser, evaluator, and validator. Supports nesting and series operations. | `indicator create`, `indicator show`, `indicator compute <formula>` | 6 files in `application/formula/`, `formula_storage.py` |
 | 7 | **AI Integration** | 6 AI providers for explanation, formula translation, strategy creation, and sentiment classification. | `--explain`, `--ai-classify`, `indicator create`, `strategy create` | `factory.py`, 6 explainers, 2 translators, `sentiment_analyzer.py` |
 | 8 | **Backtest Engine** | Signal generation from rules/strategies and portfolio simulation (single + walk-forward). | `strategy backtest`, `trade backtest-swing` | `backtest_engine.py` (domain), `swing_backtest.py` (app), `backtest.py` (use case) |
 | 9 | **Trading Workflow** | End-to-end trade lifecycle: pre-open screen → confirm at auction → journal → review → outcome. | `screen pre-open`, `trade confirm`, `trade log`, `trade review`, `analyze swing`, `trade size` | `intraday_workflow_commands.py`, `position_sizer.py`, 3 journal services |
@@ -529,19 +529,19 @@ Each Big block decomposes into Medium modules:
 | Module | File | Group / Commands |
 |--------|------|------------------|
 | Main | `cli/main.py` | Top-level lifecycle group definitions |
-| Fetch Router | `cli/fetch_commands.py` | `saham fetch [market, broker, broker-import, stockbit, universe, status]` |
+| Fetch Router | `cli/fetch_commands.py` | `saham fetch [market, broker, broker-import, broker-history, broker-top-foreign, iev, stockbit, universe, status]` |
 | Data Fetch (market) | `cli/fetch_market_commands.py` | Implementation of market data fetch |
 | IEV Capture | `cli/fetch_iev_commands.py` | Implementation of IEV snapshot capture |
-| View Router | `cli/view_commands.py` | `saham view broker [flow, top, mappings, status]` |
+| View Router | `cli/view_commands.py` | `saham view broker [flow, top, history, top-foreign, mappings, status]` |
 | Learn Router | `cli/learn_commands.py` | `saham learn [snapshot, track, grade, prompt, tune]` |
 | Learn (opening) | `cli/learn_opening_commands.py` | Implementation of opening learning loop commands |
 | Today Briefing | `cli/today_commands.py` | `saham today` daily briefing |
 | Status Impl | `cli/status_commands.py` | `saham fetch status` |
 | Indicator Router| `cli/indicator_commands.py` | `saham indicator [compute, snapshot, create, list, show, delete]` |
-| Analyze Router | `cli/analyze_commands.py` | `saham analyze [risk, compare, sentiment, audit, regime, chart, swing]` |
+| Analyze Router | `cli/analyze_commands.py` | `saham analyze [risk, compare, sentiment, audit, regime, chart, swing, accum-audit, swing-compare]` |
 | Trade Router | `cli/trade_commands.py` | `saham trade [confirm, log, review, size, outcome, backtest-swing, backtest-intraday]` |
 | Trade (intraday) | `cli/trade_intraday_commands.py` | Implementation of intraday trade CLI |
-| Strategy Router | `cli/strategy_commands.py` | `saham strategy [init, create, validate, list, backtest]` |
+| Strategy Router | `cli/strategy_commands.py` | `saham strategy [init, create, validate, list, backtest, skill]` |
 | Skill Impl | `cli/skill_commands.py` | `saham strategy skill [generate, check, index]` |
 | Screen Lifecycle | `cli/screen_lifecycle_commands.py` | Screen lifecycle management helper |
 | Screen (pre-open) | `cli/screen_pre_open_commands.py` | Implementation of pre-open screen CLI |

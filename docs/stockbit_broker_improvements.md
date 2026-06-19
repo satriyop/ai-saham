@@ -45,7 +45,7 @@ The `total_value` field is a synthetic sum of those rows — NOT total market tu
 - `pre_open_screen.py:417` — pre-open scoring
 - `intraday_backtest.py:275` — backtest context
 - `accumulation_audit.py:504` — audit classification
-- `broker_commands.py:379` — `saham broker show`
+- `broker_commands.py:379` — `saham view broker`
 - `fetch_broker_data.py:174` — `GetBrokerDataUseCase`
 
 **Fix applied**: Changed `MAX(source)` → `MIN(source)` in `sqlite_broker_repository.py`.
