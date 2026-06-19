@@ -56,7 +56,7 @@ EXPECTED_COMMANDS: dict[tuple[str, ...], tuple[str, ...]] = {
     ),
     ("analyze", "chart"): ("price", "rsi", "volume"),
     ("view",): ("broker",),
-    ("view", "broker"): ("status", "flow", "top", "mappings"),
+    ("view", "broker"): ("status", "flow", "top", "history", "top-foreign", "mappings"),
     ("trade",): (
         "confirm",
         "log",
@@ -121,6 +121,8 @@ HELP_PATHS: tuple[tuple[str, ...], ...] = (
     ("view", "broker"),
     ("view", "broker", "flow"),
     ("view", "broker", "top"),
+    ("view", "broker", "history"),
+    ("view", "broker", "top-foreign"),
     ("strategy",),
     ("strategy", "skill"),
 )

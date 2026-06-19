@@ -1756,6 +1756,7 @@ def collect_iev(
       saham fetch iev --top-n 30
     """
     from src.infrastructure.browser.playwright_stockbit import PlaywrightStockbitProvider
+    from src.infrastructure.persistence.iev_json_sidecar import IEVJsonSidecarWriter
     from src.infrastructure.persistence.sqlite_iev_repository import SQLiteIEVRepository
 
     resolved_db = db_path or DEFAULT_DB_PATH
@@ -1784,6 +1785,19 @@ def collect_iev(
     repo = SQLiteIEVRepository(resolved_db)
     # Strip tz for naive storage; repo computes is_ncp_locked from the time component.
     written = repo.save_snapshot(today, movers, collected_at=now_idx.replace(tzinfo=None))
+    try:
+        sidecar_path = IEVJsonSidecarWriter().write_snapshot(
+            today,
+            movers,
+            captured_at=now_idx,
+            top_n=top_n,
+        )
+    except OSError as exc:
+        sidecar_path = None
+        typer.echo(
+            typer.style(f"Warning: could not write IEV JSON sidecar: {exc}", fg=typer.colors.YELLOW),
+            err=True,
+        )
     deltas = repo.get_iev_delta(today)
 
     iep_captured = sum(1 for m in movers if m.iep is not None)
@@ -1792,6 +1806,8 @@ def collect_iev(
         f"Saved {written} movers for {today.isoformat()} to {resolved_db} "
         f"(IEP captured: {iep_captured}/{written})"
     )
+    if sidecar_path is not None:
+        typer.echo(f"  JSON sidecar: {sidecar_path}")
     typer.echo(f"  Captured at {now_idx.strftime('%H:%M:%S')} WIB  {ncp_badge}")
     typer.echo("")
 

@@ -419,6 +419,158 @@ def broker_top(
         )
 
 
+def broker_history_view(
+    ticker: Annotated[str, typer.Argument(help="Stock ticker (e.g. BBCA)")],
+    days: Annotated[
+        int,
+        typer.Option("--days", help="How many recent trading days to show", min=1, max=365),
+    ] = 30,
+    source: Annotated[
+        str,
+        typer.Option("--source", help="Cached source to read: stockbit, idx, or auto"),
+    ] = "auto",
+    db_path: Annotated[
+        Path,
+        typer.Option("--db", help="SQLite database path"),
+    ] = Path("data/broker_data.db"),
+    fmt: Annotated[
+        str,
+        typer.Option("--format", help="Output format: table or json"),
+    ] = "table",
+) -> None:
+    """
+    Show cached daily foreign broker flow history for a stock.
+
+    This is a read-only view of data already stored by 'saham fetch broker-history'
+    or market refresh commands. It never calls remote providers.
+
+    Examples:
+        saham view broker history BBCA --days 30
+        saham view broker history BBCA --source stockbit --format json
+    """
+    selected_source = None if source == "auto" else source
+    if source not in {"auto", "stockbit", "idx"}:
+        typer.echo(typer.style("Unknown source. Use: auto, stockbit, or idx", fg=typer.colors.RED))
+        raise typer.Exit(1)
+
+    repo = SQLiteBrokerRepository(db_path)
+    points = repo.get_foreign_flow_points(ticker, source=selected_source)
+    if not points:
+        typer.echo(
+            typer.style("No cached history found. ", fg=typer.colors.YELLOW)
+            + f"Run 'saham fetch broker-history {ticker.upper()}' first."
+        )
+        raise typer.Exit(1)
+
+    points = points[-days:]
+    if fmt == "json":
+        import json as _json
+        payload = [
+            {
+                "ticker": p.ticker,
+                "date": p.date.isoformat(),
+                "source": p.source,
+                "net_val": str(p.net_val),
+                "net_lot": p.net_lot,
+                "avg_price": str(p.avg_price),
+            }
+            for p in points
+        ]
+        typer.echo(_json.dumps(payload, indent=2))
+        return
+    if fmt != "table":
+        typer.echo(typer.style("Unknown format. Use: table or json", fg=typer.colors.RED))
+        raise typer.Exit(1)
+
+    typer.echo(f"\nCached Foreign Flow History for {ticker.upper()} (last {len(points)} trading days)")
+    typer.echo("=" * 68)
+    typer.echo(f"{'Date':<12} {'Source':<9} {'Net Value':>14}  {'Net Lot':>10}  {'Avg Price':>10}")
+    typer.echo("-" * 68)
+    for p in points:
+        color = typer.colors.GREEN if p.net_val > 0 else typer.colors.RED
+        line = (
+            f"{p.date.isoformat():<12} {p.source:<9} "
+            f"{format_value(p.net_val):>14}  {p.net_lot:>10,}  {float(p.avg_price):>10,.0f}"
+        )
+        typer.echo(typer.style(line, fg=color))
+
+
+def broker_top_foreign_view(
+    snapshot_date: Annotated[
+        Optional[str],
+        typer.Option("--date", "-d", help="Snapshot date (YYYY-MM-DD), default: today"),
+    ] = None,
+    days: Annotated[
+        int,
+        typer.Option("--days", help="Cached look-back window used by fetch", min=1, max=365),
+    ] = 7,
+    limit: Annotated[
+        int,
+        typer.Option("--limit", help="Max stocks to show", min=1, max=50),
+    ] = 20,
+    db_path: Annotated[
+        Path,
+        typer.Option("--db", help="SQLite database path"),
+    ] = Path("data/broker_data.db"),
+    fmt: Annotated[
+        str,
+        typer.Option("--format", help="Output format: table or json"),
+    ] = "table",
+) -> None:
+    """
+    Show cached foreign-broker top stock snapshots.
+
+    This is a read-only view of data already stored by
+    'saham fetch broker-top-foreign'. It never calls remote providers.
+
+    Examples:
+        saham view broker top-foreign --days 7
+        saham view broker top-foreign --date 2024-01-15 --limit 10
+    """
+    query_date = date.fromisoformat(snapshot_date) if snapshot_date else date.today()
+    repo = SQLiteBrokerRepository(db_path)
+    snapshots = repo.get_foreign_flow_snapshots(query_date, period_days=days)
+    if not snapshots:
+        typer.echo(
+            typer.style("No cached top-foreign snapshot found. ", fg=typer.colors.YELLOW)
+            + "Run 'saham fetch broker-top-foreign' first."
+        )
+        raise typer.Exit(1)
+
+    snapshots = snapshots[:limit]
+    if fmt == "json":
+        import json as _json
+        payload = [
+            {
+                "ticker": s.ticker,
+                "snapshot_date": query_date.isoformat(),
+                "period_days": days,
+                "net_val": str(s.net_val),
+                "net_lot": s.net_lot,
+                "direction": "buy" if s.is_accumulating else "sell",
+            }
+            for s in snapshots
+        ]
+        typer.echo(_json.dumps(payload, indent=2))
+        return
+    if fmt != "table":
+        typer.echo(typer.style("Unknown format. Use: table or json", fg=typer.colors.RED))
+        raise typer.Exit(1)
+
+    typer.echo(f"\nCached Foreign Broker Top Stocks for {query_date} ({days} days)")
+    typer.echo("=" * 55)
+    typer.echo(f"  {'#':<4} {'TICKER':<8} {'NET VALUE':>14}  {'NET LOT':>10}  DIR")
+    typer.echo("  " + "-" * 45)
+    for rank, snap in enumerate(snapshots, 1):
+        direction = "BUY" if snap.is_accumulating else "SELL"
+        color = typer.colors.GREEN if snap.is_accumulating else typer.colors.RED
+        line = (
+            f"  {rank:<4} {snap.ticker:<8} "
+            f"{format_value(snap.net_val):>14}  {snap.net_lot:>10,}  {direction}"
+        )
+        typer.echo(typer.style(line, fg=color))
+
+
 def broker_top_foreign(
     days: Annotated[
         int,
