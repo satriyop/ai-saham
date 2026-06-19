@@ -74,7 +74,7 @@ saham analyze chart price BBRI --sma 20 --ema 50
 | Group | Purpose | Key Sub-commands |
 | :--- | :--- | :--- |
 | **`saham today`** | Daily briefing | read-only regime + candidate summary |
-| **`saham fetch`** | Data Ingestion | `market`, `broker`, `broker-import`, `broker-history`, `broker-top-foreign`, `iev`, `status`, `stockbit`, `universe` |
+| **`saham fetch`** | Data Ingestion | `market`, `broker`, `broker-import`, `broker-history`, `broker-top-foreign`, `iev`, `status`, `audit`, `stockbit`, `universe` |
 | **`saham screen`** | Candidate Discovery | `pre-open`, `accum` |
 | **`saham learn`** | Feedback Loop | `snapshot`, `track`, `grade`, `prompt`, `tune` |
 | **`saham view`** | Read-only Browsing | `broker status`, `broker flow`, `broker top`, `broker history`, `broker top-foreign`, `broker mappings` |
@@ -799,6 +799,21 @@ saham fetch status
 
 Reports latest data dates, row counts across all tables, IDX/Yahoo/Stockbit
 provider status, and data staleness warnings.
+
+---
+
+### `saham fetch audit` - Local Data Quality Audit
+
+Audit cached SQLite data without network access or data mutation:
+
+```bash
+saham fetch audit
+saham fetch audit BBCA BBRI
+```
+
+Reports stale core data, degraded Stockbit broker summary rows, unsafe broker
+denominators, candle provenance gaps, and enrichment coverage. It is a
+diagnostic report only; it does not repair or refresh data.
 
 ---
 
