@@ -51,10 +51,10 @@ _DEFAULT_STOP_LOSS = Decimal("5")
 
 # Regime-specific targets (validated direction: IHSG has documented regime cycles)
 _REGIME_TARGETS: dict[str, tuple[Decimal, Decimal]] = {
-    "BULLISH":  (Decimal("8"), Decimal("4")),   # 2:1 R:R — trending market
-    "SIDEWAYS": (Decimal("5"), Decimal("5")),   # 1:1 R:R — range-bound
-    "WEAK":     (Decimal("3"), Decimal("3")),   # tight — minimize exposure
-    "RISK_OFF": (Decimal("3"), Decimal("3")),   # capital preservation
+    "BULLISH": (Decimal("8"), Decimal("4")),  # 2:1 R:R — trending market
+    "SIDEWAYS": (Decimal("5"), Decimal("5")),  # 1:1 R:R — range-bound
+    "WEAK": (Decimal("3"), Decimal("3")),  # tight — minimize exposure
+    "RISK_OFF": (Decimal("3"), Decimal("3")),  # capital preservation
 }
 
 
@@ -83,6 +83,16 @@ def resolve_preset_targets(
     return _DEFAULT_TAKE_PROFIT, _DEFAULT_STOP_LOSS
 
 
+def _is_usable_broker_summary(summary) -> bool:
+    """Return True when a broker summary is safe for accumulation metrics."""
+    return (
+        summary.total_value > Decimal("0")
+        and summary.total_lot >= 0
+        and summary.foreign_buy_lot >= 0
+        and summary.foreign_sell_lot >= 0
+    )
+
+
 # Tier 1 — pure foreign institutional desks (custodian + prime brokerage).
 # These are the codes whose net_lot signal most reliably tracks foreign institutional intent.
 # YP (Indo Premier / Mirae) is domestic and excluded here even though it's in
@@ -90,9 +100,9 @@ def resolve_preset_targets(
 TIER1_FOREIGN_BROKERS = frozenset({"AK", "BK", "ZP", "KZ", "YU", "RX", "HD", "CP", "DR"})
 
 # Broker Concentration Index (BCI) tiers
-BCI_CLUSTER = "CLUSTER"    # 3+ Tier 1 codes in window top net-buyers → +15 pts
-BCI_STABLE  = "STABLE"     # 1–2 Tier 1 codes                         → +5 pts
-BCI_RETAIL  = "RETAIL-LED" # 0 Tier 1 codes                           → +0 pts
+BCI_CLUSTER = "CLUSTER"  # 3+ Tier 1 codes in window top net-buyers → +15 pts
+BCI_STABLE = "STABLE"  # 1–2 Tier 1 codes                         → +5 pts
+BCI_RETAIL = "RETAIL-LED"  # 0 Tier 1 codes                           → +0 pts
 
 
 @dataclass
@@ -100,24 +110,24 @@ class AccumulationScreenRequest:
     """Input parameters for the screener."""
 
     tickers: list[str]
-    window_days: int = 7           # latest broker sessions: 7, 30, or 90
-    min_net_buy_days: int = 2      # skip tickers with fewer qualifying days
-    min_score: float = 0.0         # filter: only include scores >= this
+    window_days: int = 7  # latest broker sessions: 7, 30, or 90
+    min_net_buy_days: int = 2  # skip tickers with fewer qualifying days
+    min_score: float = 0.0  # filter: only include scores >= this
     rsi_period: int = 14
     sma_period: int = 20
-    as_of_date: date | None = None # deterministic replay date; defaults to today
+    as_of_date: date | None = None  # deterministic replay date; defaults to today
     # Phase 2.2 — resistance-proximity gate
     resistance_gate_enabled: bool = True
     resistance_headroom_min_pct: float = 5.0  # % headroom required to keep ENTER verdict
     # Phase 2.3 — regime-adaptive TP/SL
-    regime: str | None = None      # BULLISH / SIDEWAYS / WEAK / RISK_OFF
+    regime: str | None = None  # BULLISH / SIDEWAYS / WEAK / RISK_OFF
     # Phase 3.1 — corporate action risk window
     ex_date_warning_days: int = 10  # flag risk if ex/cum/event date within this many days
     # Phase 3.2 — sector breadth confirmation
     sector_breadth_enabled: bool = True
-    sector_breadth_threshold: float = 0.60   # min fraction of peers with net_buy_ratio > 0
-    sector_breadth_bonus_pts: float = 10.0   # bonus pts when threshold is met
-    sector_breadth_min_tickers: int = 3      # min peers in result set to compute breadth
+    sector_breadth_threshold: float = 0.60  # min fraction of peers with net_buy_ratio > 0
+    sector_breadth_bonus_pts: float = 10.0  # bonus pts when threshold is met
+    sector_breadth_min_tickers: int = 3  # min peers in result set to compute breadth
     # BCI — Tier 1 broker codes for Broker Concentration Index scoring.
     # Default mirrors TIER1_FOREIGN_BROKERS; override via config to tune without code change.
     tier1_broker_codes: frozenset[str] = field(default_factory=lambda: TIER1_FOREIGN_BROKERS)
@@ -129,43 +139,43 @@ class AccumulationCandidate:
 
     ticker: str
     window_days: int
-    net_buy_days: int              # days with positive net foreign value
-    total_days: int                # total days with broker data in window
-    net_buy_ratio: float           # net_buy_days / total_days (0–1)
-    total_net_value: Decimal       # cumulative net foreign IDR
-    consecutive_streak: int        # current run of consecutive buy days
-    foreign_vwap: Decimal | None   # volume-weighted avg foreign buy price
-    current_price: Decimal         # latest close price
+    net_buy_days: int  # days with positive net foreign value
+    total_days: int  # total days with broker data in window
+    net_buy_ratio: float  # net_buy_days / total_days (0–1)
+    total_net_value: Decimal  # cumulative net foreign IDR
+    consecutive_streak: int  # current run of consecutive buy days
+    foreign_vwap: Decimal | None  # volume-weighted avg foreign buy price
+    current_price: Decimal  # latest close price
     vwap_discount_pct: float | None  # (vwap - price) / price * 100
-                                     # positive = foreigners are underwater
+    # positive = foreigners are underwater
     rsi: float | None
-    trend: str                     # "UP" | "DOWN" | "SIDE"
-    score: float                   # 0–120 composite score
+    trend: str  # "UP" | "DOWN" | "SIDE"
+    score: float  # 0–120 composite score
     top_brokers: list[str] | None  # per-broker codes (Stockbit only)
-    institutional_flag: bool       # True if major institutional broker present
+    institutional_flag: bool  # True if major institutional broker present
     # Improvement #1: flow ratio signal
-    avg_flow_ratio: float | None = None   # avg % of daily turnover that's foreign
+    avg_flow_ratio: float | None = None  # avg % of daily turnover that's foreign
     score_breakdown: dict = field(default_factory=dict)  # per-component pts
     # Improvement #3: BB squeeze
-    bb_width: float | None = None         # current BB Width %
+    bb_width: float | None = None  # current BB Width %
     bb_width_pctile: float | None = None  # 0..1 vs last 60 days (lower = tighter)
     # BCI — Broker Concentration Index
-    bci_label: str | None = None          # "CLUSTER" | "STABLE" | "RETAIL-LED" | None
-    bci_tier1_count: int = 0              # distinct Tier 1 foreign desks in net-buyers
-    vwap_pct: float | None = None         # (price - VWAP20) / VWAP20 * 100; negative = below VWAP
+    bci_label: str | None = None  # "CLUSTER" | "STABLE" | "RETAIL-LED" | None
+    bci_tier1_count: int = 0  # distinct Tier 1 foreign desks in net-buyers
+    vwap_pct: float | None = None  # (price - VWAP20) / VWAP20 * 100; negative = below VWAP
     # Phase 2.2 — resistance-proximity gate
-    ma200: Decimal | None = None          # 200-day SMA of close prices
-    week52_high: Decimal | None = None    # 52-week (252-day) highest high
+    ma200: Decimal | None = None  # 200-day SMA of close prices
+    week52_high: Decimal | None = None  # 52-week (252-day) highest high
     nearest_resistance_pct: float | None = None  # % distance to nearest resistance above price
-    resistance_flag: bool = False         # True when nearest resistance < headroom_min_pct
+    resistance_flag: bool = False  # True when nearest resistance < headroom_min_pct
     # Phase 3.1 — corporate action risk flags (sourced from Stockbit live calendar)
-    dividend_risk: bool = False           # True when ex-date falls within hold window
-    rights_issue_risk: bool = False       # True when rights issue in hold window (dilution risk)
+    dividend_risk: bool = False  # True when ex-date falls within hold window
+    rights_issue_risk: bool = False  # True when rights issue in hold window (dilution risk)
     upcoming_rups: list[str] = field(default_factory=list)  # RUPS event detail strings
     # Phase 3.3 — seasonality signal (sourced from Stockbit 5-year monthly stats)
-    seasonal_edge: "SeasonalEdge | None" = None   # current-month statistical edge
+    seasonal_edge: "SeasonalEdge | None" = None  # current-month statistical edge
     # Insider activity — IDX-filed director/commissioner buy transactions
-    insider_buying: bool = False          # True when insider bought within lookback window
+    insider_buying: bool = False  # True when insider bought within lookback window
     recent_insider_buys: list[str] = field(default_factory=list)  # human-readable labels
     # Analyst consensus — aggregated analyst buy/hold/sell + price target
     analyst_consensus: "AnalystConsensus | None" = None
@@ -179,7 +189,7 @@ class AccumulationCandidate:
     ticker_notation: "TickerNotationSnapshot | None" = None
     # Phase 3.2 — sector breadth confirmation
     sector_breadth_pct: float | None = None  # % of group peers with positive net_buy_ratio
-    sector_breadth_bonus: float = 0.0        # bonus pts applied (0 if threshold not met)
+    sector_breadth_bonus: float = 0.0  # bonus pts applied (0 if threshold not met)
 
     def to_dict(self) -> dict:
         return {
@@ -192,7 +202,9 @@ class AccumulationCandidate:
             "consecutive_streak": self.consecutive_streak,
             "foreign_vwap": str(self.foreign_vwap) if self.foreign_vwap else None,
             "current_price": str(self.current_price),
-            "vwap_discount_pct": round(self.vwap_discount_pct, 2) if self.vwap_discount_pct is not None else None,
+            "vwap_discount_pct": round(self.vwap_discount_pct, 2)
+            if self.vwap_discount_pct is not None
+            else None,
             "rsi": round(self.rsi, 2) if self.rsi is not None else None,
             "trend": self.trend,
             "score": self.score,
@@ -201,10 +213,14 @@ class AccumulationCandidate:
             "bci_label": self.bci_label,
             "bci_tier1_count": self.bci_tier1_count,
             "vwap_pct": round(self.vwap_pct, 2) if self.vwap_pct is not None else None,
-            "avg_flow_ratio": round(self.avg_flow_ratio, 2) if self.avg_flow_ratio is not None else None,
+            "avg_flow_ratio": round(self.avg_flow_ratio, 2)
+            if self.avg_flow_ratio is not None
+            else None,
             "score_breakdown": self.score_breakdown,
             "bb_width": round(self.bb_width, 2) if self.bb_width is not None else None,
-            "bb_width_pctile": round(self.bb_width_pctile, 3) if self.bb_width_pctile is not None else None,
+            "bb_width_pctile": round(self.bb_width_pctile, 3)
+            if self.bb_width_pctile is not None
+            else None,
             "dividend_risk": self.dividend_risk,
             "rights_issue_risk": self.rights_issue_risk,
             "upcoming_rups": self.upcoming_rups,
@@ -212,7 +228,9 @@ class AccumulationCandidate:
             "seasonal_label": self.seasonal_edge.label if self.seasonal_edge else None,
             "insider_buying": self.insider_buying,
             "recent_insider_buys": self.recent_insider_buys,
-            "analyst_consensus": self.analyst_consensus.to_dict() if self.analyst_consensus else None,
+            "analyst_consensus": self.analyst_consensus.to_dict()
+            if self.analyst_consensus
+            else None,
             "shareholding": self.shareholding.to_dict() if self.shareholding else None,
             "bandar_detector": self.bandar_detector.to_dict() if self.bandar_detector else None,
             "fundamentals": self.fundamentals.to_dict() if self.fundamentals else None,
@@ -224,12 +242,12 @@ class AccumulationCandidate:
 class AccumulationScreenResponse:
     """Screener output."""
 
-    candidates: list[AccumulationCandidate]   # sorted by score descending
+    candidates: list[AccumulationCandidate]  # sorted by score descending
     screened_at: date
     window_days: int
     total_tickers_checked: int
-    tickers_skipped: int           # insufficient data
-    provider: str                  # "idx" or "stockbit"
+    tickers_skipped: int  # insufficient data
+    provider: str  # "idx" or "stockbit"
 
 
 def _score(candidate: AccumulationCandidate) -> tuple[float, dict]:
@@ -259,7 +277,7 @@ def _score(candidate: AccumulationCandidate) -> tuple[float, dict]:
     # RSI: tent function peaking at 40 (room to run without panic)
     rsi = candidate.rsi
     if rsi is None:
-        s_rsi = 5.0          # neutral when data missing
+        s_rsi = 5.0  # neutral when data missing
     elif rsi <= 25 or rsi >= 75:
         s_rsi = 0.0
     elif rsi <= 40:
@@ -284,7 +302,7 @@ def _score(candidate: AccumulationCandidate) -> tuple[float, dict]:
     if pctile is None:
         s_squeeze = 0.0
     elif pctile <= 0.20:
-        s_squeeze = 10.0 - pctile / 0.20 * 5.0   # 10..5 pts
+        s_squeeze = 10.0 - pctile / 0.20 * 5.0  # 10..5 pts
     elif pctile <= 0.40:
         s_squeeze = 5.0 - (pctile - 0.20) / 0.20 * 5.0  # 5..0 pts
     else:
@@ -346,9 +364,7 @@ class AccumulationScreenUseCase:
                 for t in tickers:
                     self._ticker_to_group[t.upper()] = group_name
 
-    def execute(
-        self, request: AccumulationScreenRequest
-    ) -> AccumulationScreenResponse:
+    def execute(self, request: AccumulationScreenRequest) -> AccumulationScreenResponse:
         today = request.as_of_date or date.today()
         candidates: list[AccumulationCandidate] = []
         skipped = 0
@@ -385,6 +401,7 @@ class AccumulationScreenUseCase:
             # Phase 3.1: corporate action risk flags (dividend, rights issue, RUPS)
             if self._corp_action_repo is not None:
                 from datetime import timedelta
+
                 events = self._corp_action_repo.get_upcoming_events(
                     ticker=result.ticker,
                     from_date=today,
@@ -409,6 +426,7 @@ class AccumulationScreenUseCase:
             # Insider activity: director/commissioner buys in last 90 days
             if self._insider_provider is not None:
                 from datetime import timedelta
+
                 insider_lookback = 90
                 txns = self._insider_provider.get_insider_transactions(
                     ticker=result.ticker,
@@ -495,6 +513,10 @@ class AccumulationScreenUseCase:
         if not summaries:
             return None
 
+        summaries = [s for s in summaries if _is_usable_broker_summary(s)]
+        if not summaries:
+            return None
+
         window_summaries = sorted(summaries, key=lambda s: s.date)[-window_days:]
 
         if len(window_summaries) < min_net_buy_days:
@@ -504,9 +526,7 @@ class AccumulationScreenUseCase:
         net_buy_days = sum(1 for s in window_summaries if s.is_foreign_accumulating)
         total_days = len(window_summaries)
         net_buy_ratio = net_buy_days / total_days if total_days > 0 else 0.0
-        total_net_value = sum(
-            (s.foreign_net_value for s in window_summaries), Decimal("0")
-        )
+        total_net_value = sum((s.foreign_net_value for s in window_summaries), Decimal("0"))
 
         # Consecutive buy streak (counting backwards from most recent)
         streak = 0
@@ -517,25 +537,19 @@ class AccumulationScreenUseCase:
                 break
 
         # Foreign VWAP
-        total_buy_value = sum(
-            (s.foreign_buy_value for s in window_summaries), Decimal("0")
-        )
+        total_buy_value = sum((s.foreign_buy_value for s in window_summaries), Decimal("0"))
         total_buy_lots = sum(s.foreign_buy_lot for s in window_summaries)
         foreign_vwap: Decimal | None = None
         if total_buy_lots > 0:
             try:
-                foreign_vwap = (
-                    total_buy_value / (total_buy_lots * SHARES_PER_LOT)
-                ).quantize(Decimal("0.01"))
+                foreign_vwap = (total_buy_value / (total_buy_lots * SHARES_PER_LOT)).quantize(
+                    Decimal("0.01")
+                )
             except InvalidOperation:
                 foreign_vwap = None
 
         # Avg foreign flow ratio (% of total daily turnover, already in BrokerSummary)
-        flow_ratios = [
-            float(s.foreign_flow_ratio)
-            for s in window_summaries
-            if s.total_value > 0
-        ]
+        flow_ratios = [float(s.foreign_flow_ratio) for s in window_summaries if s.total_value > 0]
         avg_flow_ratio = sum(flow_ratios) / len(flow_ratios) if flow_ratios else None
 
         # Load candles for price + RSI + trend + BB squeeze
@@ -561,9 +575,7 @@ class AccumulationScreenUseCase:
         vwap_discount_pct: float | None = None
         if foreign_vwap is not None and current_price > 0:
             try:
-                vwap_discount_pct = float(
-                    (foreign_vwap - current_price) / current_price * 100
-                )
+                vwap_discount_pct = float((foreign_vwap - current_price) / current_price * 100)
             except (InvalidOperation, ZeroDivisionError):
                 pass
 
@@ -576,8 +588,7 @@ class AccumulationScreenUseCase:
                 total_vol = sum(c.volume for c in window_20)
                 if total_vol > 0:
                     total_tpv = sum(
-                        (c.high + c.low + c.close) / Decimal("3") * c.volume
-                        for c in window_20
+                        (c.high + c.low + c.close) / Decimal("3") * c.volume for c in window_20
                     )
                     market_vwap = total_tpv / total_vol
                     if market_vwap > 0:
@@ -604,6 +615,7 @@ class AccumulationScreenUseCase:
             if window_flows:
                 # Aggregate net_lot per broker across the window
                 from collections import defaultdict
+
                 broker_net: dict[str, int] = defaultdict(int)
                 for f in window_flows:
                     broker_net[f.broker_code] += f.net_lot
@@ -743,7 +755,7 @@ class AccumulationScreenUseCase:
             return []
         out = []
         for i in range(period - 1, len(closes)):
-            window = closes[i - period + 1: i + 1]
+            window = closes[i - period + 1 : i + 1]
             mid = sum(window) / period
             if mid <= 0:
                 out.append(0.0)
