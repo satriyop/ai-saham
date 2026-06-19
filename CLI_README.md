@@ -554,11 +554,11 @@ Two providers are available for fetching broker/foreign flow data:
 | Provider | Auth Required | Data | Best For |
 |----------|--------------|------|----------|
 | **`idx`** (default) | None | Foreign flow (lots + estimated values), OHLCV, total volume | Quick setup, no auth hassle |
-| **`stockbit`** | JWT token (~24h expiry) | Foreign flow (exact values) + top broker breakdown | Per-broker analysis |
+| **`stockbit-session`** | Browser session (Playwright) | Foreign flow (exact values) + top broker breakdown | Per-broker analysis |
 
 The **IDX provider** uses the public idx.co.id API — no registration or token needed. It provides per-stock foreign buy/sell data in lots (values are estimated from volume × closing price).
 
-The **Stockbit provider** provides exact foreign flow values and per-broker breakdowns (top buyers/sellers), but requires a JWT token that expires every ~24 hours.
+The **Stockbit provider** provides exact foreign flow values and per-broker breakdowns (top buyers/sellers), but requires an active browser session (Playwright-based, managed via `saham fetch stockbit login`).
 
 ### Why Foreign Flow Matters in IDX
 
@@ -1798,12 +1798,13 @@ everything for an entire universe in one pass. Run daily before morning screenin
 
 **Pre-warms all Stockbit caches:**
 - Analyst consensus (buy/hold/sell counts, price targets)
-- Insider activity (director/commissioner transactions, 90-day window)
-- Seasonality (monthly return %, win rate, 5-year history)
+- Insider activity (director/commissioner transactions, 365-day window)
+- Seasonality (monthly return %, win rate, up to 5-year history)
 - Corporate action calendar (dividend, rights issue, RUPS dates)
 - Shareholding composition (institutional/individual split)
 - Bandar detector (institutional operator accumulation/distribution score)
 - Company fundamentals (P/E, ROE, Piotroski F-Score, quality gate)
+- Ticker notation (listing board, UMA flag, suspension info)
 
 Each provider respects its own TTL (daily, 7-day, or session-based). No cache
 is re-fetched unless stale — `saham fetch market` is safe to run multiple times.
@@ -2297,7 +2298,31 @@ saham fetch stockbit browse
 
 ---
 
-## 22. Side-by-Side Comparison - The `analyze compare` Command
+## 23. Local Data Quality Audit - The `fetch audit` Command
+
+Audit cached candle data against the IDX source of truth to detect inconsistencies:
+
+```bash
+# Audit all cached tickers
+saham fetch audit
+
+# Audit specific tickers
+saham fetch audit BBCA BBRI
+```
+
+Checks:
+- **Volume unit consistency** — flags tickers where different providers stored volume in different units (shares vs lots)
+- **Candle provenance** — identifies rows with unknown or missing provider metadata
+- **Date gaps** — detects missing trading days in cached data
+- **Value integrity** — compares cached candles against fresh IDX API data for the same dates
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--db` | ./data.db | Database path |
+
+---
+
+## 24. Side-by-Side Comparison - The `analyze compare` Command
 
 Quickly compare risk levels across multiple tickers:
 
@@ -2308,7 +2333,7 @@ saham analyze compare BBCA TLKM --profile conservative
 
 ---
 
-## 23. Complete Workflow Examples
+## 25. Complete Workflow Examples
 
 ### Conservative Investor Workflow
 
@@ -2481,7 +2506,7 @@ saham strategy backtest BBCA --strategy my_flow_strategy
 
 ---
 
-## 24. Command Reference (Quick Lookup)
+## 26. Command Reference (Quick Lookup)
 
 | Command | Purpose | Key Options |
 |---------|---------|-------------|
@@ -2497,9 +2522,15 @@ saham strategy backtest BBCA --strategy my_flow_strategy
 | `saham analyze sentiment TICKER` | News sentiment | `--days`, `--max`, `--ai-classify`, `--news-provider`, `--no-ai` |
 | `saham analyze audit` | Audit sentiment accuracy | — |
 | `saham view broker status` | Check all provider status | — |
+| `saham fetch audit` | Local data quality audit | `--db` |
 | `saham fetch broker TICKER` | Fetch broker summary data | `--days`, `--start`, `--end`, `--refresh`, `--provider` |
+| `saham fetch broker-history TICKER` | Fetch foreign flow history (Stockbit) | `--days` |
+| `saham fetch broker-top-foreign` | Universe scan for top foreign flow stocks | — |
+| `saham fetch iev` | Capture pre-open IEV mover rankings | `--top-n`, `--no-headless` |
 | `saham view broker flow TICKER` | View foreign flow summary | `--days` |
 | `saham view broker top TICKER` | View top brokers | `--date` |
+| `saham view broker history TICKER` | View foreign flow time-series | `--days`, `--source` |
+| `saham view broker top-foreign` | View top foreign flow stocks by period | `--days`, `--date`, `--limit` |
 | `saham fetch broker-import FILE` | Import broker data from CSV | `--preview`, `--mapping`, `--on-error` |
 | `saham view broker mappings` | List available CSV mappings | — |
 | `saham strategy init NAME` | Create strategy package | `--dir`, `--force` |
