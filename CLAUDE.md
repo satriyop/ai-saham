@@ -15,7 +15,7 @@ Before Claude writes or modifies code, Claude MUST read and comply with:
 - `PROMPT_CONTRACT.md`
 - `DEFINITION_OF_DONE.md`
 - `TASK_TEMPLATE.md`
-- `AI_AGENT_CHECKLIST.md`
+- `AI_AGENTS_CHECKLIST.md`
 - `ARCHITECTURE_DECISIONS.md`
 - This `CLAUDE.md`
 

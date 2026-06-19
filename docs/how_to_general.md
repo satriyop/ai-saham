@@ -1,8 +1,8 @@
  Phase 1 — Get Market Data (do this first, once)
 
- saham data update BBCA --days 730        # Downloads 2yr OHLCV + broker flow, cached to data.db
- saham data broker fetch BBCA --days 90  # Foreign flow via IDX public API (no auth)
- saham data broker fetch BBCA --provider stockbit-session --days 90  # Richer per-broker detail (session needed)
+ saham fetch market BBCA --days 730        # Downloads 2yr OHLCV + broker flow, cached to data.db
+ saham fetch broker BBCA --days 90  # Foreign flow via IDX public API (no auth)
+ saham fetch broker BBCA --provider stockbit-session --days 90  # Richer per-broker detail (session needed)
 
  ---
  Phase 2 — Technical Indicators
@@ -50,9 +50,9 @@
  ---
  Phase 4 — Broker & Foreign Flow Analysis
 
- saham data broker flow BBCA --days 30    # Daily foreign net flow table
- saham data broker top BBCA               # Top 5 buyers + sellers today
- saham data broker top BBCA --date 2024-01-15  # Historical snapshot
+ saham view broker flow BBCA --days 30    # Daily foreign net flow table
+ saham view broker top BBCA               # Top 5 buyers + sellers today
+ saham view broker top BBCA --date 2024-01-15  # Historical snapshot
 
  ---
  Phase 5 — Sentiment
@@ -73,15 +73,15 @@
  Phase 7 — Intraday Pre-Open Screening (if BBCA appears in morning movers)
 
  # Step 1: Run screener with browser automation
- saham trade intraday pre-open --with-ai
+ saham screen pre-open --with-ai
 
  # Step 2: Pass JSON data directly (skip browser)
- saham trade intraday pre-open \
+ saham screen pre-open \
    --movers-json '[{"ticker":"BBCA","iev":180000}]' \
    --order-books-json '{"BBCA":{"price":8875,"volume":300000}}'
 
  # Step 3: After opening auction, confirm entry decision
- saham trade intraday confirm-open \
+ saham trade confirm \
    --opening-json '{"BBCA":{"open":8875,"high":8925,"low":8850,"close":8900}}'
 
  ---
@@ -97,19 +97,19 @@
  Phase 9 — Swing Trade Analysis
 
  # Full composite view (accumulation + risk + sizing + backtest + sentiment)
- saham trade swing analyze BBCA --capital 100000000
+ saham analyze swing BBCA --capital 100000000
 
  # Position sizing based on ATR
- saham trade swing size BBCA --capital 100000000 --risk-pct 1 --entry 8875
+ saham trade size BBCA --capital 100000000 --risk-pct 1 --entry 8875
 
  # Walk-forward backtest across universe
- saham trade swing backtest --universe idx30 --capital 100000000 --with-regime
+ saham trade backtest-swing --universe idx30 --capital 100000000 --with-regime
 
  # Compare regime variants side-by-side
- saham trade swing compare --universe idx30 --variants bull,neutral,bear
+ saham analyze swing-compare --universe idx30 --variants bull,neutral,bear
 
  # Accumulation screener (same as screen accumulation)
- saham trade swing screen --universe idx30 --window 5
+ saham screen accum --universe idx30 --window 5
 
  ---
  Phase 10 — Market Regime Context
@@ -130,10 +130,10 @@
  ---
  Phase 12 — Batch Data & Universe Management
 
- saham data update --universe idx30 --days 365      # Batch fetch all idx30 tickers
- saham data update --broker-only                    # Update broker data only
- saham data universe list                           # List available universes
- saham data universe update --universe custom       # Update universe stock list
+ saham fetch market --universe idx30 --days 365      # Batch fetch all idx30 tickers
+ saham fetch market --broker-only                    # Update broker data only
+ saham fetch universe list                           # List available universes
+ saham fetch universe update --universe custom       # Update universe stock list
 
  ---
 

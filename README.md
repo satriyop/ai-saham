@@ -44,21 +44,21 @@ A **local-first, production-grade CLI application** for stock analysis focused o
 
 ```bash
 # 1. Start the day: Update market data for your universe (e.g., LQ45)
-saham data update --universe lq45
+saham fetch market --universe lq45
 
 # 2. Morning (08:50 WIB): Pre-open screening + opening learning loop
-saham trade opening snapshot          # NCP-locked prediction at 08:57
-saham trade opening track             # 5-min orderbook tracking 09:00-09:30
-saham trade opening grade             # Accuracy report post-track
+saham learn snapshot                  # NCP-locked prediction at 08:57
+saham learn track                     # 5-min orderbook tracking 09:00-09:30
+saham learn grade                     # Accuracy report post-track
 
 # 3. Afternoon: Screen for swing trade candidates (foreign accumulation)
-saham trade swing screen --universe lq45 --multi
+saham screen accum --universe lq45 --multi
 
 # 4. Deep Dive: Analyze a specific ticker (unified view: risk + flow + sentiment)
-saham trade swing analyze BBRI --capital 10000000
+saham analyze swing BBRI --capital 10000000
 
 # 5. Tune: Let AI recommend config improvements from today's accuracy
-saham trade opening tune
+saham learn tune
 
 # 6. Visual Check: View terminal chart
 saham analyze chart price BBRI --sma 20 --ema 50
@@ -68,16 +68,20 @@ saham analyze chart price BBRI --sma 20 --ema 50
 
 ## CLI Command Hierarchy
 
-`ai-saham` is organized into 6 main command groups for better discoverability:
+`ai-saham` is organized around the daily analysis lifecycle.
 
 | Group | Purpose | Key Sub-commands |
 | :--- | :--- | :--- |
-| **`saham data`** | Data Ingestion | `update`, `status`, `broker`, `stockbit`, `universe` |
+| **`saham today`** | Daily briefing | read-only regime + candidate summary |
+| **`saham fetch`** | Data Ingestion | `market`, `broker`, `broker-history`, `iev`, `stockbit`, `universe` |
+| **`saham screen`** | Candidate Discovery | `pre-open`, `accum` |
+| **`saham learn`** | Feedback Loop | `snapshot`, `track`, `grade`, `prompt`, `tune` |
+| **`saham view`** | Read-only Browsing | `broker flow`, `broker top`, `broker status` |
 | **`saham indicator`**| Technical Math | `compute`, `snapshot`, `create`, `list` |
-| **`saham analyze`** | Insights & Charts | `risk`, `sentiment`, `regime`, `chart`, `compare` |
+| **`saham analyze`** | Insights & Charts | `risk`, `sentiment`, `regime`, `chart`, `compare`, `swing` |
 | **`saham strategy`** | Strategy Lifecycle| `init`, `validate`, `create`, `backtest` |
-| **`saham trade`** | Active Workflows | `swing`, `intraday`, `opening` |
-| **`saham skill`** | AI Documentation | `generate`, `check`, `index` |
+| **`saham trade`** | Paper Trade Workspace | `confirm`, `log`, `review`, `outcome`, `size`, `backtest-swing`, `backtest-intraday` |
+| **`saham strategy skill`** | AI Documentation | `generate`, `check`, `index` |
 
 ---
 
@@ -115,6 +119,51 @@ playwright install chromium
 ```bash
 saham version
 ```
+
+---
+
+### Server Deployment
+
+To deploy the automated IDX morning session on a server, run the install script once
+after cloning and installing the package:
+
+```bash
+./install_cron.sh                    # uses current directory as project root
+./install_cron.sh /opt/ai-saham     # explicit path (for non-default deploy locations)
+```
+
+This installs 5 cron jobs (Mon–Fri, IDX calendar):
+
+| Time (WIB) | UTC | Command | Purpose |
+|-----------|-----|---------|---------|
+| 08:55 | 01:55 | `saham fetch iev` | Collect IEV pre-open snapshot |
+| 08:57 | 01:57 | `saham learn snapshot` | NCP-locked screener prediction |
+| 09:00 | 02:00 | `saham learn track` | 5-min orderbook tracking until 09:30 |
+| 09:35 | 02:35 | `saham learn grade` | Compute accuracy report |
+| 09:40 | 02:40 | `saham learn tune` | AI config recommendations |
+
+Logs are written to `logs/` in the project directory.
+
+The script is **idempotent** — safe to re-run after upgrades or path changes.
+It removes any previous saham cron entries before installing fresh ones.
+
+**Prerequisite:** Stockbit session must be active before the first cron run.
+Run `saham fetch stockbit login` once on the server to authenticate.
+
+---
+
+### Manual Session Script
+
+For interactive monitoring at the keyboard (not required for server deployments):
+
+```bash
+./loop_intraday.sh
+```
+
+This script owns Playwright from 08:45–08:55 (screen pre-open loop), then hands off
+to the crontab. After 09:00 it runs `saham trade confirm` every 30s until 09:05.
+The crontab and this script are designed to not conflict on the shared Stockbit
+browser profile.
 
 ---
 
@@ -339,7 +388,7 @@ saham strategy backtest BBCA -S momentum --format json
 - Winning/Losing Trades
 - Average Win/Loss
 
-**Note:** Requires cached data. Run `saham data update TICKER --days 365` first.
+**Note:** Requires cached data. Run `saham fetch market TICKER --days 365` first.
 
 ---
 
@@ -403,44 +452,44 @@ saham strategy list --all            # Include invalid strategies
 
 ---
 
-### `saham data broker` - Broker & Foreign Flow Data
+### `saham fetch broker` / `saham view broker` - Broker & Foreign Flow Data
 
 Track foreign investor activity on IDX stocks.
 
 ```bash
 # Fetch foreign flow (IDX - no auth needed)
-saham data broker fetch BBCA --days 30
+saham fetch broker BBCA --days 30
 
 # Or use Stockbit for broker-level detail
-saham data stockbit login
-saham data broker fetch BBCA --provider stockbit-session
+saham fetch stockbit login
+saham fetch broker BBCA --provider stockbit-session
 
 # View foreign flow summary
-saham data broker flow BBCA --days 20
+saham view broker flow BBCA --days 20
 
 # Check top brokers (requires Stockbit data)
-saham data broker top BBCA
+saham view broker top BBCA
 
-# Import from CSV
-saham data broker import data.csv --preview
+# Import from CSV (legacy path during CLI migration)
+saham fetch broker-import data.csv --preview
 
 # Check provider status
-saham data broker status
+saham view broker status
 ```
 
 ---
 
-### `saham data update` - Batch Data Update
+### `saham fetch market` - Batch Data Update
 
 Fetch fresh candles + broker flow data for an entire universe in one command.
 
 ```bash
-saham data update --universe lq45              # All LQ45 stocks
-saham data update --universe cached            # Refresh already-cached tickers
-saham data update BBCA BBRI BMRI               # Explicit tickers
-saham data update --universe lq45 --days 30    # Shorter history
-saham data update --universe lq45 --broker-only
-saham data update --universe lq45 --refresh    # Force refresh all
+saham fetch market --universe lq45              # All LQ45 stocks
+saham fetch market --universe cached            # Refresh already-cached tickers
+saham fetch market BBCA BBRI BMRI               # Explicit tickers
+saham fetch market --universe lq45 --days 30    # Shorter history
+saham fetch market --universe lq45 --broker-only
+saham fetch market --universe lq45 --refresh    # Force refresh all
 ```
 
 | Option | Short | Default | Description |
@@ -454,13 +503,13 @@ saham data update --universe lq45 --refresh    # Force refresh all
 
 ---
 
-### `saham data universe` - Universe Management
+### `saham fetch universe` - Universe Management
 
 Manage stock universe ticker lists.
 
 ```bash
-saham data universe list                      # List configured universes
-saham data universe update --universe lq45    # Instructions to update universe
+saham fetch universe list                      # List configured universes
+saham fetch universe update --universe lq45    # Instructions to update universe
 ```
 
 | Option | Short | Default | Description |
@@ -471,32 +520,32 @@ saham data universe update --universe lq45    # Instructions to update universe
 
 ---
 
-### `saham trade swing screen` - Foreign Accumulation Screener
+### `saham screen accum` - Foreign Accumulation Screener
 
 Screen stocks for institutional foreign accumulation patterns.
 
 ```bash
 # Single window
-saham trade swing screen --universe lq45
-saham trade swing screen --universe lq45 --window 30
-saham trade swing screen BBCA BBRI BMRI --window 7
+saham screen accum --universe lq45
+saham screen accum --universe lq45 --window 30
+saham screen accum BBCA BBRI BMRI --window 7
 
 # Multi-window (7, 30, 90 broker sessions side-by-side)
-saham trade swing screen --universe lq45 --multi
-saham trade swing screen --universe lq45 --multi --sort-by 30s
+saham screen accum --universe lq45 --multi
+saham screen accum --universe lq45 --multi --sort-by 30s
 
 # Filters
-saham trade swing screen --universe lq45 --min-score 50 --top 10
-saham trade swing screen --universe lq45 --vwap-only
-saham trade swing screen --universe lq45 --squeeze-only
-saham trade swing screen --universe lq45 --granular
-saham trade swing screen --universe lq45 --breakdown
+saham screen accum --universe lq45 --min-score 50 --top 10
+saham screen accum --universe lq45 --vwap-only
+saham screen accum --universe lq45 --squeeze-only
+saham screen accum --universe lq45 --granular
+saham screen accum --universe lq45 --breakdown
 
 # Column reference guide
-saham trade swing screen --guide
+saham screen accum --guide
 
 # JSON output
-saham trade swing screen --universe lq45 --format json
+saham screen accum --universe lq45 --format json
 ```
 
 | Option | Short | Default | Description |
@@ -519,95 +568,95 @@ saham trade swing screen --universe lq45 --format json
 
 **Score components (0-120 total):** consistency (40) + streak (30) + VWAP discount (20) + RSI headroom (10) + flow % (10) + BB squeeze (10) + institutional flag (5)
 
-#### `saham trade swing audit` - Historical Audit
+#### `saham analyze accum-audit` - Historical Audit
 
 Replay accumulation signals historically and measure forward returns.
 
 ```bash
-saham trade swing audit --universe idx80 --preset foreign-bounce
-saham trade swing audit --universe idx80 --window 7 --min-score 70
-saham trade swing audit --universe lq45 --simulate-exits
+saham analyze accum-audit --universe idx80 --preset foreign-bounce
+saham analyze accum-audit --universe idx80 --window 7 --min-score 70
+saham analyze accum-audit --universe lq45 --simulate-exits
 ```
 
-#### `saham trade swing log` - Log to Journal
+#### `saham trade log swing` - Log to Journal
 
 ```bash
-saham trade swing log --ticker BBRI --window 7 --from-analysis --with-regime
+saham trade log swing --ticker BBRI --window 7 --from-analysis --with-regime
 ```
 
 ---
 
-### `saham trade intraday` - Pre-Open Intraday Screener
+### `saham screen pre-open` - Pre-Open Intraday Screener
 
 Pre-market screening and opening-auction confirmation workflow.
 
 ```bash
 # Step 1: Run pre-open screen (browser-based or manual data)
-saham trade intraday pre-open --movers-json '[{"ticker":"BBCA","iev":150000}]' --fast
+saham screen pre-open --movers-json '[{"ticker":"BBCA","iev":150000}]' --fast
 
 # With order book data
-saham trade intraday pre-open \
+saham screen pre-open \
   --movers-json '[{"ticker":"BBCA","iev":150000}]' \
   --order-books-json '{"BBCA":{"price":8900,"volume":50000}}'
 
 # Step 2: Confirm after opening auction (auto via Stockbit session)
-saham trade intraday confirm-open
+saham trade confirm
 
 # Or override prices manually
-saham trade intraday confirm-open --opening-json '{"BBCA":9050,"BMRI":5875}'
+saham trade confirm --opening-json '{"BBCA":9050,"BMRI":5875}'
 
 # Step 3: Log to journal
-saham trade intraday log
+saham trade log intraday
 
 # Step 4: Review performance
-saham trade intraday review --horizon 5
+saham trade review intraday --horizon 5
 
 # Record actual outcome
-saham trade intraday outcome BBCA --entry 9000 --exit 9500 --result target
+saham trade outcome BBCA --entry 9000 --exit 9500 --result target
 ```
 
 | Command | Purpose |
 |---------|---------|
-| `saham trade intraday pre-open` | Screen movers before market open |
-| `saham trade intraday confirm-open` | Confirm after opening price known |
-| `saham trade intraday log` | Append to paper trade journal |
-| `saham trade intraday review` | Review journal hit rate |
-| `saham trade intraday outcome` | Record actual trade outcome |
+| `saham screen pre-open` | Screen movers before market open |
+| `saham trade confirm` | Confirm after opening price known |
+| `saham trade log intraday` | Append to paper trade journal |
+| `saham trade review intraday` | Review journal hit rate |
+| `saham trade outcome` | Record actual trade outcome |
 
 ---
 
-### `saham trade opening` - Opening Session Learning Loop
+### `saham learn` - Opening Session Learning Loop
 
 Automated pre-open prediction → intraday tracking → accuracy grading → AI tuning loop.
 Designed for the opening auction window (08:45–09:30 WIB).
 
 ```bash
 # Step 1: Capture NCP-locked predictions at 08:57
-saham trade opening snapshot
+saham learn snapshot
 
 # Step 2: Track orderbook depth + foreign net every 5 minutes 09:00-09:30
-saham trade opening track
+saham learn track
 
 # With broker attribution (requires Stockbit login)
-saham trade opening track --broker-confirm
+saham learn track --broker-confirm
 
 # Step 3: Grade accuracy after track completes
-saham trade opening grade
+saham learn grade
 
 # Step 4: Generate AI tuning prompt
-saham trade opening prompt
+saham learn prompt
 
 # Step 5: Tune thresholds via AI recommendations
-saham trade opening tune
+saham learn tune
 ```
 
 | Command | Time | Purpose |
 |---------|------|---------|
-| `saham trade opening snapshot` | 08:57 | Pre-open screen → save predictions |
-| `saham trade opening track` | 09:00–09:30 | 5-min orderbook + optional broker attribution (`--broker-confirm`) |
-| `saham trade opening grade` | 09:30+ | Compute accuracy: entry range hit, gap band, stop distance, institutional absorption |
-| `saham trade opening prompt` | anytime | Generate AI prompt from session data |
-| `saham trade opening tune` | anytime | LLM-driven config recommendations |
+| `saham learn snapshot` | 08:57 | Pre-open screen → save predictions |
+| `saham learn track` | 09:00–09:30 | 5-min orderbook + optional broker attribution (`--broker-confirm`) |
+| `saham learn grade` | 09:30+ | Compute accuracy: entry range hit, gap band, stop distance, institutional absorption |
+| `saham learn prompt` | anytime | Generate AI prompt from session data |
+| `saham learn tune` | anytime | LLM-driven config recommendations |
 
 All data stored in `data/opening/YYYYMMDD/`. The learning loop runs daily and
 improves threshold calibration over time. Use `--broker-confirm` on `track` to
@@ -615,21 +664,21 @@ embed real-time institutional absorption ratios from Stockbit (requires login).
 
 ---
 
-### `saham trade swing` - Swing Trade Workflow
+### `saham analyze swing` - Swing Trade Workflow
 
 Unified composite swing trade analysis combining accumulation, risk, sizing, backtest, sentiment, and market regime.
 
 ```bash
 # Full analysis
-saham trade swing analyze BBRI
-saham trade swing analyze BBRI --capital 10000000
-saham trade swing analyze BBRI --preset foreign-bounce --capital 10000000
-saham trade swing analyze BBRI --capital 10000000 --risk-pct 1
-saham trade swing analyze BBRI --profile conservative --no-sentiment
-saham trade swing analyze BBRI --no-refresh --no-backtest --no-sentiment
-saham trade swing analyze BBRI --force-refresh
-saham trade swing analyze BBRI --with-regime
-saham trade swing analyze BBRI --format json
+saham analyze swing BBRI
+saham analyze swing BBRI --capital 10000000
+saham analyze swing BBRI --preset foreign-bounce --capital 10000000
+saham analyze swing BBRI --capital 10000000 --risk-pct 1
+saham analyze swing BBRI --profile conservative --no-sentiment
+saham analyze swing BBRI --no-refresh --no-backtest --no-sentiment
+saham analyze swing BBRI --force-refresh
+saham analyze swing BBRI --with-regime
+saham analyze swing BBRI --format json
 ```
 
 | Option | Short | Default | Description |
@@ -652,41 +701,41 @@ saham trade swing analyze BBRI --format json
 | `--with-regime` | | false | Add market regime context |
 | `--format` | | table | Output format: table or json |
 
-#### `saham trade swing backtest` - Portfolio Walk-Forward Backtest
+#### `saham trade backtest-swing` - Portfolio Walk-Forward Backtest
 
 ```bash
-saham trade swing backtest --universe idx80 --preset foreign-bounce
-saham trade swing backtest --universe lq45 --capital 50000000 --max-positions 3
-saham trade swing backtest --universe idx80 --with-regime --allow-regimes BULLISH,SIDEWAYS
-saham trade swing backtest --universe idx80 --cost-bps 0  # gross/no-cost comparison
+saham trade backtest-swing --universe idx80 --preset foreign-bounce
+saham trade backtest-swing --universe lq45 --capital 50000000 --max-positions 3
+saham trade backtest-swing --universe idx80 --with-regime --allow-regimes BULLISH,SIDEWAYS
+saham trade backtest-swing --universe idx80 --cost-bps 0  # gross/no-cost comparison
 ```
 
 Default backtests include `--cost-bps 20` one-way transaction cost. Override explicitly
 when testing a different broker fee assumption.
 
-#### `saham trade swing compare` - Compare Regime Variants
+#### `saham analyze swing-compare` - Compare Regime Variants
 
 ```bash
-saham trade swing compare --universe idx80
-saham trade swing compare --universe lq45 --variants baseline,sideways_only
+saham analyze swing-compare --universe idx80
+saham analyze swing-compare --universe lq45 --variants baseline,sideways_only
 ```
 
-#### `saham trade swing size` - ATR Position Sizing
+#### `saham trade size` - ATR Position Sizing
 
 ```bash
-saham trade swing size BBRI --capital 10000000
-saham trade swing size BBRI --capital 10000000 --risk-pct 2 --entry 4825
+saham trade size BBRI --capital 10000000
+saham trade size BBRI --capital 10000000 --risk-pct 2 --entry 4825
 ```
 
-#### `saham trade swing screen` - Accumulation Screener
+#### `saham screen accum` - Accumulation Screener
 
 Alias for the accumulation screener.
 
-#### `saham trade swing audit` - Accumulation Audit
+#### `saham analyze accum-audit` - Accumulation Audit
 
 Alias for the accumulation audit.
 
-#### `saham trade swing log` / `saham trade swing review`
+#### `saham trade log swing` / `saham trade review swing`
 
 Aliases for accumulation journal commands.
 
@@ -739,12 +788,12 @@ saham analyze chart volume BBCA --days 30
 
 ---
 
-### `saham data status` - Data Health Check
+### `saham fetch status` - Data Health Check
 
 Check provider health and database freshness in one command:
 
 ```bash
-saham data status
+saham fetch status
 ```
 
 Reports latest data dates, row counts across all tables, IDX/Yahoo/Stockbit
@@ -752,43 +801,43 @@ provider status, and data staleness warnings.
 
 ---
 
-### `saham data stockbit` - Stockbit Session Management
+### `saham fetch stockbit` - Stockbit Session Management
 
 Manage Stockbit browser sessions for automated data fetching.
 
 ```bash
-saham data stockbit login                    # Open browser for manual login
-saham data stockbit login --timeout 180      # Longer timeout for 2FA
-saham data stockbit status                   # Check session health
-saham data stockbit spy                      # Capture API traffic
-saham data stockbit spy --target orderbook --ticker BBRI
-saham data stockbit test                     # Smoke-test the adapter
-saham data stockbit fetch-top5 --top 5       # Top IEV movers + orderbooks
-saham data stockbit browse                   # Interactive browser session
+saham fetch stockbit login                    # Open browser for manual login
+saham fetch stockbit login --timeout 180      # Longer timeout for 2FA
+saham fetch stockbit status                   # Check session health
+saham fetch stockbit spy                      # Capture API traffic
+saham fetch stockbit spy --target orderbook --ticker BBRI
+saham fetch stockbit test                     # Smoke-test the adapter
+saham fetch stockbit fetch-top5 --top 5       # Top IEV movers + orderbooks
+saham fetch stockbit browse                   # Interactive browser session
 ```
 
 | Command | Purpose |
 |---------|---------|
-| `saham data stockbit login` | Save browser session cookies |
-| `saham data stockbit status` | Check session health |
-| `saham data stockbit spy` | Capture all API traffic to identify endpoints |
-| `saham data stockbit test` | Smoke-test live adapter with saved session |
-| `saham data stockbit fetch-top5` | Top IEV movers + live orderbook snapshots |
-| `saham data stockbit browse` | Open headed browser with saved session |
+| `saham fetch stockbit login` | Save browser session cookies |
+| `saham fetch stockbit status` | Check session health |
+| `saham fetch stockbit spy` | Capture all API traffic to identify endpoints |
+| `saham fetch stockbit test` | Smoke-test live adapter with saved session |
+| `saham fetch stockbit fetch-top5` | Top IEV movers + live orderbook snapshots |
+| `saham fetch stockbit browse` | Open headed browser with saved session |
 
 ---
 
-### `saham skill` - Skill Documentation
+### `saham strategy skill` - Skill Documentation
 
 Auto-generate SKILL.md files for strategies, indicators, and formulas.
 
 ```bash
 saham strategy validate rsi-momentum    # Auto-generates SKILL.md
-saham skill generate rsi-momentum       # Explicit generation
-saham skill generate atr --type indicator
-saham skill generate SMOOTH_RSI --type formula
-saham skill check                       # Check for stale docs
-saham skill index                       # Rebuild SKILLS_INDEX.md
+saham strategy skill generate rsi-momentum       # Explicit generation
+saham strategy skill generate atr --type indicator
+saham strategy skill generate SMOOTH_RSI --type formula
+saham strategy skill check                       # Check for stale docs
+saham strategy skill index                       # Rebuild SKILLS_INDEX.md
 ```
 
 ### `saham indicator create` - Create Custom Formula
@@ -1129,7 +1178,6 @@ src/
 │   │   ├── skill_generator.py
 │   │   ├── universe_loader.py
 │   │   ├── position_sizer.py
-│   │   ├── paper_trade_journal.py
 │   │   ├── accumulation_journal.py
 │   │   ├── ai_research.py
 │   │   └── group_mapping.py
@@ -1190,19 +1238,29 @@ src/
 ├── adapters/                         # User interfaces
 │   ├── cli/
 │   │   ├── main.py                   # Main CLI entry point (group definitions)
-│   │   ├── data_commands.py          # Data group (update, broker, stockbit, universe)
+│   │   ├── fetch_commands.py         # Fetch group router
+│   │   ├── fetch_market_commands.py  # (impl) Market data fetch
+│   │   ├── fetch_iev_commands.py     # (impl) IEV snapshot capture
+│   │   ├── view_commands.py          # View group (read-only broker views)
+│   │   ├── learn_commands.py         # Learn group router
+│   │   ├── learn_opening_commands.py # (impl) Opening learning loop
+│   │   ├── status_commands.py        # Data health and freshness
+│   │   ├── today_commands.py         # Daily briefing
 │   │   ├── analyze_commands.py       # Analyze group (risk, sentiment, regime, chart)
-│   │   ├── trade_commands.py         # Trade group (swing, intraday)
+│   │   ├── trade_commands.py         # Trade workspace router
+│   │   ├── trade_intraday_commands.py# (impl) Intraday trade CLI
 │   │   ├── indicator_commands.py     # Indicator group (compute, snapshot, create)
 │   │   ├── strategy_commands.py      # Strategy group (init, validate, backtest)
-│   │   ├── skill_commands.py         # Skill group (generate, index)
-│   │   ├── accumulation_commands.py  # (impl) Screen logic
+│   │   ├── skill_commands.py         # Strategy skill implementation
+│   │   ├── screen_lifecycle_commands.py   # (impl) Screen lifecycle management
+│   │   ├── screen_pre_open_commands.py    # (impl) Pre-open screen CLI
+│   │   ├── accumulation_commands.py  # (impl) Accumulation screen logic
 │   │   ├── broker_commands.py        # (impl) Broker data logic
 │   │   ├── chart_commands.py         # (impl) Chart rendering
-│   │   ├── screen_commands.py        # (impl) Intraday logic
+│   │   ├── intraday_workflow_commands.py  # (impl) Shared intraday logic
 │   │   ├── sentiment_commands.py     # (impl) Sentiment logic
-│   │   ├── stockbit_commands.py      # (impl) Session management
-│   │   ├── swing_commands.py         # (impl) Unified analysis
+│   │   ├── stockbit_commands.py      # (impl) Stockbit session management
+│   │   ├── swing_commands.py         # (impl) Swing/unified analysis
 │   │   └── update_commands.py        # (impl) Batch update logic
 │   ├── bot/                          # Telegram, WhatsApp (stubs)
 │   └── web/                          # REST API (stub)
@@ -1281,7 +1339,7 @@ make clean
 
 - **Location:** `./data.db` (SQLite, configurable via `--db`)
 - **Content:** Cached OHLCV candles, broker summaries, sentiment logs, journals
-- **Refresh:** Use `--refresh` flag or `saham data update --universe <name>` to batch update
+- **Refresh:** Use `--refresh` flag or `saham fetch market --universe <name>` to batch update
 
 ---
 

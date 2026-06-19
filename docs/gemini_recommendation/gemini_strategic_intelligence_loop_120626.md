@@ -74,7 +74,7 @@ By implementing the **Strategic Intelligence Loop**, `ai-saham` ceases to be a t
 ## Implementation Status (Audit June 2026)
 
 - **Market Regime Contextualization:** **MET.** Implemented as `MarketRegimeUseCase`, calculating IHSG benchmark trends and universe-wide breadth (Price vs SMA20 and Foreign Flow breadth).
-- **Broker Archetype Clustering:** **NOT MET.** The transaction quality weighting based on "Smart Money" vs "Retail" brokers is not yet implemented.
+- **Broker Archetype Clustering:** **PARTIALLY MET.** The system successfully implements this via the **Broker Concentration Index (BCI)** in the accumulation screener (awarding points for Tier 1 institutional clusters) and via the `Weighted Net Flow` calculation in `saham trade swing analyze` (which uses a 1.5x multiplier for smart money and 0.5x for retail noise). The "predictive power tracking" (Learning Loop) is not yet automated.
 - **Signal-to-Outcome Feedback:** **PARTIALLY MET.** The `accumulation_review` command (via `saham swing review`) implements the "Audit" and "Correlate" steps by matching journaled signals to actual 5/10/20d returns. However, the automated "Strategy Modification Proposal" generation (the "Auto-Tuning" part) is still a manual analytical process.
 
 **Conclusion:**

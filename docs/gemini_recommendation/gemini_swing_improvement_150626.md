@@ -80,10 +80,13 @@ Introduce a **Corporate Action Filter**.
 
 ---
 
-## Implementation Priority
+## Implementation Status (Audit 16 June 2026)
 
-1.  **Resistance-Proximity Filtering:** Highest impact on reducing "False Enter" setups that stall at resistance.
-2.  **Regime-Adaptive Targets:** Improves the overall Profit Factor of the strategy.
-3.  **Broker Clustering:** Refines the "Quality" of the Bandarmology signal.
-4.  **Dividend Filter:** Essential for avoiding "Black Swan" gap-downs in blue-chips.
-5.  **Sector Breadth:** Powerful secondary confirmation for high-conviction trades.
+- **Sector Breadth Confirmation:** **NOT MET.** The `AccumulationScreenUseCase` currently processes tickers in isolation. Sector-level aggregation and "Rotation Bonuses" are not yet implemented.
+- **Foreign Broker Clustering (BCI):** **MET.** The system implements a **Broker Concentration Index (BCI)** in `AccumulationScreenUseCase.py`. It counts Tier 1 foreign brokers (AK, BK, ZP, etc.) in the Top 5 Buyers and assigns labels: `CLUSTER` (+15 pts), `STABLE` (+5 pts), or `RETAIL-LED` (0 pts). This matches the recommendation exactly.
+- **Resistance-Proximity Filtering:** **NOT MET.** The `foreign-bounce` preset and Risk Engine do not currently calculate distance to major resistance levels (MA200, 52-week High) as a decision gate.
+- **Regime-Adaptive TP/SL:** **NOT MET.** The `foreign-bounce` preset in `swing_commands.py` uses fixed `Decimal("5")` constants for take-profit and stop-loss, regardless of the current market regime.
+- **Dividend-Cycle Awareness:** **NOT MET.** Corporate action data and dividend ex-date filtering are not yet integrated into the analysis pipeline.
+
+**Conclusion:**
+The recommendation to refine Bandarmology signals through **Broker Clustering (BCI)** has been **successfully implemented and verified** in both the screener logic and the CLI display. This provides a significant edge in identifying high-conviction institutional moves. The remaining recommendations—particularly Resistance Filtering and Adaptive Targets—remain high-value targets for the next development phase to further improve the win rate and profit factor of the swing trading workflow.

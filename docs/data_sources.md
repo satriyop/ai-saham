@@ -50,8 +50,8 @@ This allows:
 
 **Usage:**
 ```bash
-saham data update BBCA --days 365          # Fetches BBCA.JK via Yahoo (default)
-saham data update BBRI --days 730
+saham fetch market BBCA --days 365          # Fetches BBCA.JK via Yahoo (default)
+saham fetch market BBRI --days 730
 ```
 
 ### IDX Public API
@@ -73,8 +73,8 @@ saham data update BBRI --days 730
 
 **Usage:**
 ```bash
-saham data update BBCA --days 30 --provider idx              # Uses IDX public API
-saham data update BBCA --days 30 --provider idx              # Faster for small ranges
+saham fetch market BBCA --days 30 --provider idx              # Uses IDX public API
+saham fetch market BBCA --days 30 --provider idx              # Faster for small ranges
 ```
 
 ---
@@ -96,8 +96,8 @@ saham data update BBCA --days 30 --provider idx              # Faster for small 
 
 **Usage:**
 ```bash
-saham data broker fetch BBCA                # Defaults to IDX (no auth, --provider idx)
-saham data broker fetch BBCA --days 90
+saham fetch broker BBCA                # Defaults to IDX (no auth, --provider idx)
+saham fetch broker BBCA --days 90
 ```
 
 ### Stockbit
@@ -106,23 +106,23 @@ saham data broker fetch BBCA --days 90
 
 - **Data type:** Full per-broker breakdown (top 10 buyers + sellers), exact foreign flow values
 - **Source:** Stockbit Exodus API (undocumented)
-- **Auth:** Browser session profile from `saham data stockbit login`
+- **Auth:** Browser session profile from `saham fetch stockbit login`
 
 **Setup:**
 ```bash
 # Browser-based login (recommended)
-saham data stockbit login
+saham fetch stockbit login
 ```
 
 **Usage:**
 ```bash
-saham data broker fetch BBCA --provider stockbit-session   # Richer per-broker detail
-saham data broker top BBCA --date 2024-01-15
+saham fetch broker BBCA --provider stockbit-session   # Richer per-broker detail
+saham view broker top BBCA --date 2024-01-15
 ```
 
 ### CSV Import
 
-**Provider:** `BrokerCsvAdapter` (via `saham data broker import`)
+**Provider:** `BrokerCsvAdapter` (via `saham fetch broker-import`)
 
 - **Data type:** Broker summary data from external sources
 - **Formats:** SIMPLE (aggregate) or DETAILED (per-broker)
@@ -132,9 +132,9 @@ saham data broker top BBCA --date 2024-01-15
 
 **Usage:**
 ```bash
-saham data broker import data.csv               # Auto-detect format
-saham data broker import data.csv --preview     # Validate before import
-saham data broker mappings                      # List available column mappings
+saham fetch broker-import data.csv               # Auto-detect format
+saham fetch broker-import data.csv --preview     # Validate before import
+saham view broker mappings                      # List available column mappings
 ```
 
 ---
@@ -167,19 +167,19 @@ ORDER BY date;
 
 ### Data Source Reference
 
-> `saham data update` has two independent provider flags:
+> `saham fetch market` has two independent provider flags:
 > - `--provider` → candles source (default: `yahoo`)
 > - `--broker-provider` → broker flow source (default: auto-detect Stockbit → IDX)
 
 | Data | Default Source | Command | Table |
 |------|---------------|---------|-------|
-| **Daily OHLCV prices** | Yahoo Finance | `saham data update TICKER` | `candles` |
-| **Daily OHLCV prices (IDX)** | IDX TradingSummary API | `saham data update TICKER --provider idx` | `candles` |
-| **Foreign flow aggregate** | IDX (always uses IDX for accurate `total_value`) | `saham data update --broker-provider …` / `saham data broker fetch` | `broker_summaries` |
-| **Per-broker daily flow** | Stockbit Exodus API (only source with per-broker data) | `saham data update` (auto when Stockbit available) / `saham data broker fetch --provider stockbit-session` | `broker_daily_flow` |
-| **Foreign flow time-series** | IDX (broker_summaries) / Stockbit (historical API) | `saham data update` / `saham data broker fetch` | `foreign_flow_points` |
-| **Foreign flow N-day snapshot** | Stockbit Exodus API (top foreign stocks) | `saham data broker top-foreign` | `foreign_flow_snapshots` |
-| **Pre-open IEV + order books** | Stockbit Exodus API (Playwright) | `saham trade intraday pre-open` | `iev_snapshots` |
+| **Daily OHLCV prices** | Yahoo Finance | `saham fetch market TICKER` | `candles` |
+| **Daily OHLCV prices (IDX)** | IDX TradingSummary API | `saham fetch market TICKER --provider idx` | `candles` |
+| **Foreign flow aggregate** | IDX (always uses IDX for accurate `total_value`) | `saham fetch market --broker-provider …` / `saham fetch broker` | `broker_summaries` |
+| **Per-broker daily flow** | Stockbit Exodus API (only source with per-broker data) | `saham fetch market` (auto when Stockbit available) / `saham fetch broker --provider stockbit-session` | `broker_daily_flow` |
+| **Foreign flow time-series** | IDX (broker_summaries) / Stockbit (historical API) | `saham fetch market` / `saham fetch broker` | `foreign_flow_points` |
+| **Foreign flow N-day snapshot** | Stockbit Exodus API (top foreign stocks) | `saham fetch broker-top-foreign` | `foreign_flow_snapshots` |
+| **Pre-open IEV + order books** | Stockbit Exodus API (Playwright) | `saham screen pre-open` | `iev_snapshots` |
 | **AI sentiment classification** | DeepSeek/Claude classifier | `saham analyze sentiment` | `sentiment_logs` |
 | **Sentiment price outcome** | Computed from sentiment_logs + candles | `saham analyze audit` | `sentiment_audits` |
 
@@ -198,18 +198,18 @@ ORDER BY date;
 
 | Table | Default Source | Controlled By | Command(s) |
 |-------|---------------|--------------|------------|
-| `candles` | Yahoo Finance | `--provider` | `saham data update TICKER` (use `--provider idx` for IDX) |
-| `broker_summaries` | IDX (always accurate `total_value`) | `--broker-provider` (IDX always used for summaries regardless) | `saham data update` / `saham data broker fetch` |
-| `broker_daily_flow` | Stockbit Exodus API (IDX has no per-broker data) | `--broker-provider` | `saham data update` (auto when Stockbit available) / `saham data broker fetch --provider stockbit-session` |
-| `foreign_flow_points` | IDX (from summaries) or Stockbit (historical API) | `--broker-provider` | `saham data update` / `saham data broker fetch` |
-| `foreign_flow_snapshots` | Stockbit Exodus API | (dedicated command) | `saham data broker top-foreign` |
-| `iev_snapshots` | Stockbit Exodus API (Playwright) | (dedicated command) | `saham trade intraday pre-open` |
+| `candles` | Yahoo Finance | `--provider` | `saham fetch market TICKER` (use `--provider idx` for IDX) |
+| `broker_summaries` | IDX (always accurate `total_value`) | `--broker-provider` (IDX always used for summaries regardless) | `saham fetch market` / `saham fetch broker` |
+| `broker_daily_flow` | Stockbit Exodus API (IDX has no per-broker data) | `--broker-provider` | `saham fetch market` (auto when Stockbit available) / `saham fetch broker --provider stockbit-session` |
+| `foreign_flow_points` | IDX (from summaries) or Stockbit (historical API) | `--broker-provider` | `saham fetch market` / `saham fetch broker` |
+| `foreign_flow_snapshots` | Stockbit Exodus API | (dedicated command) | `saham fetch broker-top-foreign` |
+| `iev_snapshots` | Stockbit Exodus API (Playwright) | (dedicated command) | `saham screen pre-open` |
 | `sentiment_logs` | DeepSeek / Claude classifier | (dedicated command) | `saham analyze sentiment` |
 | `sentiment_audits` | Derived from sentiment_logs + candles | (dedicated command) | `saham analyze audit` |
 
 > [!NOTE]
 > `foreign_flow_points` is populated by **two independent code paths** that run during
-> `saham data update`:
+> `saham fetch market`:
 >
 > 1. **Path A — Derived from broker_summaries** (`fetch_broker_data.py:119-130`): Every
 >    time broker_summaries are fetched and saved, a `ForeignFlowPoint` is created from
@@ -235,7 +235,7 @@ ORDER BY date;
 ### Fetch Flow
 
 ```
-User: saham data update BBCA --days 365 --provider yahoo
+User: saham fetch market BBCA --days 365 --provider yahoo
          |
          v
 CLI Adapter
@@ -272,10 +272,10 @@ FetchMarketDataUseCase
 
 ### Broker Fetch Flow
 
-For `saham data update` (auto-detects provider):
+For `saham fetch market` (auto-detects provider):
 
 ```
-User: saham data update BBCA --days 90
+User: saham fetch market BBCA --days 90
          |
          v
 CLI Adapter
@@ -303,10 +303,10 @@ FetchBrokerDataUseCase
    Return BrokerSummary[]
 ```
 
-For `saham data broker fetch` (uses explicit `--provider` flag):
+For `saham fetch broker` (uses explicit `--provider` flag):
 
 ```
-User: saham data broker fetch BBCA --provider stockbit-session
+User: saham fetch broker BBCA --provider stockbit-session
          |
          v
    Provider selected by --provider flag:
@@ -326,7 +326,7 @@ User: saham data broker fetch BBCA --provider stockbit-session
    Return BrokerSummary[]
 ```
 
-Default for `saham data broker fetch` is `--provider idx` (no auth, estimated values).
+Default for `saham fetch broker` is `--provider idx` (no auth, estimated values).
 Use `--provider stockbit-session` for per-broker detail and exact values.
 
 ### Analysis Flow
@@ -366,22 +366,22 @@ Analysis commands **never** hit the network - they use cached data only.
 
 ```bash
 # Force re-download even if cached
-saham data update BBCA --days 365 --refresh
+saham fetch market BBCA --days 365 --refresh
 ```
 
 ### Fetch Window
 
-By default, `saham data update` downloads 90 days of history:
+By default, `saham fetch market` downloads 90 days of history:
 
 ```bash
 # Default: 90 days
-saham data update BBCA
+saham fetch market BBCA
 
 # Extended: 2 years
-saham data update BBCA --days 730
+saham fetch market BBCA --days 730
 
 # Maximum practical: 5 years
-saham data update BBCA --days 1825
+saham fetch market BBCA --days 1825
 ```
 
 ---
@@ -461,7 +461,7 @@ else:
 ### Custom Path
 
 ```bash
-saham data update BBCA --days 365 --db /path/to/custom.db
+saham fetch market BBCA --days 365 --db /path/to/custom.db
 saham indicator compute SMA BBCA --db /path/to/custom.db
 ```
 

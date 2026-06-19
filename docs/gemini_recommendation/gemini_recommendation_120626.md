@@ -75,9 +75,9 @@ Protects users from "value traps" and "liquidity traps" caused by regulatory cha
 
 ---
 
-## Implementation Status (Audit June 2026)
+## Implementation Status (Audit 16 June 2026)
 
-- **Broker-Weighted Flow:** **NOT MET.** The system currently calculates foreign/broker flow as an aggregate block without per-broker institutional weights.
+- **Broker-Weighted Flow:** **PARTIALLY MET.** The system implements a **Broker Concentration Index (BCI)** in the `AccumulationScreenUseCase`, awarding bonus points (+15 for CLUSTER, +5 for STABLE) based on Tier 1 institutional presence. Additionally, `saham trade swing analyze` calculates and displays a `Weighted Net Flow` using institutional (1.5x) and retail (0.5x) multipliers.
 - **Live Scraper Bridge:** **MET.** Implemented via `StockbitPlaywrightBrokerProvider` in `src/infrastructure/browser/playwright_stockbit.py`. This allows automated fetching of IEV movers and orderbooks during the pre-open window without manual JSON entry.
 - **Microstructure Awareness (FCA/Notasi):** **NOT MET.** Regulatory notations (X, E, etc.) and Full Call Auction (FCA) logic are not yet integrated into the domain or risk engine.
 

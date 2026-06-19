@@ -8,7 +8,7 @@ This document maps every component of AI Saham into a three-tier hierarchy: **Bi
 
 ```
                     +---------------------------------------+
-                    |             Adapters  (11 modules)    |
+                    |             Adapters  (21 modules)    |
                     |  CLI | Bot (stub) | Web (stub)        |
                     +---------------------------------------+
                                     |
@@ -46,15 +46,26 @@ The same layers with their actual components visible:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                        CLI LAYER (17 modules)                       │
+│                        CLI LAYER (21 modules)                       │
 │  main.py (groups)                                                   │
-│  data_commands.py (update, broker, stockbit, universe)              │
+│  fetch_commands.py (fetch group router)                             │
+│  fetch_market_commands.py (market data fetch impl)                  │
+│  fetch_iev_commands.py (IEV snapshot capture impl)                  │
+│  view_commands.py (read-only broker views)                          │
+│  learn_commands.py (learn group router)                             │
+│  learn_opening_commands.py (opening learning loop impl)             │
+│  today_commands.py (daily briefing)                                  │
+│  status_commands.py (data health check)                             │
 │  indicator_commands.py (compute, snapshot, create, list)            │
 │  analyze_commands.py (risk, compare, sentiment, audit, regime)      │
-│  trade_commands.py (swing, intraday)                                │
+│  trade_commands.py (trade group router)                             │
+│  trade_intraday_commands.py (intraday trade CLI impl)               │
 │  strategy_commands.py (init, create, backtest, list)                │
-│  skill_commands.py (generate, index, check)                         │
-│  + implementation files (accumulation, broker, chart, screen, etc)  │
+│  skill_commands.py (strategy skill implementation)                  │
+│  screen_lifecycle_commands.py (screen lifecycle helper)             │
+│  screen_pre_open_commands.py (pre-open screen CLI impl)             │
+│  + impl files (accumulation, broker, chart, intraday_workflow,      │
+│    sentiment, stockbit, swing, update)                              │
 └──────────────────────────┬──────────────────────────────────────────┘
                            │
 ┌──────────────────────────▼──────────────────────────────────────────┐
@@ -84,10 +95,10 @@ The same layers with their actual components visible:
 │  │  Candle       │  │  RiskAssessment    │  │  MarketDataProv. │    │
 │  │  BacktestTrade│  │  RiskSignal        │  │  BrokerDataProv. │    │
 │  │  BrokerSumm.  │  │  IndicatorSnapshot │  │  AIExplainer     │    │
-│  │  BrokerTrans. │  │  JournalEntry      │  │  NewsProvider    │    │
+│  │  BrokerTrans. │  │  AccumJournalEntry │  │  NewsProvider    │    │
 │  │               │  │  BacktestResult    │  │  HeadlineClassif │    │
 │  │               │  │  TradeAction       │  │  SentimentRepo   │    │
-│  │               │  │  ScreenerResult    │  │  JournalStore    │    │
+│  │               │  │  ScreenerResult    │  │  AccumJournalStore│    │
 │  │               │  │  Sentiment         │  │  CsvBrokerParser │    │
 │  │               │  │  SkillAnnotation   │  │  ...             │    │
 │  └──────────────-┘  └────────────────────┘  └──────────────────┘    │
@@ -138,15 +149,15 @@ The same layers with their actual components visible:
 
 | # | Subsystem | Purpose | Entry Points | Key Files |
 |---|-----------|---------|--------------|-----------|
-| 1 | **CLI Router** | Routes user commands to use cases via nested groups. Parses flags, wires dependencies, displays output. | `saham <group> <cmd>` | `main.py`, `data_commands.py`, `trade_commands.py`, etc (17 files) |
-| 2 | **Data Ingestion** | Fetches, caches, and serves OHLCV + broker + news data from external sources. | `fetch`, `data update`, `data broker fetch`, `analyze sentiment` | `yahoo.py`, `idx_market.py`, `idx.py`, `stockbit.py`, 6 sentiment providers, SQLite repos |
+| 1 | **CLI Router** | Routes user commands to use cases via lifecycle groups. Parses flags, wires dependencies, displays output. | `saham <group> <cmd>` | `main.py`, `fetch_commands.py`, `trade_commands.py`, etc |
+| 2 | **Data Ingestion** | Fetches, caches, and serves OHLCV + broker + news data from external sources. | `fetch market`, `fetch broker`, `fetch stockbit`, `analyze sentiment` | `yahoo.py`, `idx_market.py`, `idx.py`, `stockbit.py`, 6 sentiment providers, SQLite repos |
 | 3 | **Analysis Core** | Deterministic indicator computation, risk profiling, and composite analysis. | `sma`, `ema`, `rsi`, `indicator compute`, `analyze risk`, `indicator snapshot`, `analyze compare` | `sma.py`, `ema.py`, `rsi.py`, `indicator_registry.py`, 3 rule profiles, `rule_engine.py` |
-| 4 | **Screening Suite** | Multi-dimensional stock screening for accumulation patterns, pre-open movers, and swing candidates. | `trade swing screen`, `trade intraday pre-open` | `accumulation_screen.py`, `screen_commands.py`, `pre_open_screen.py` |
+| 4 | **Screening Suite** | Multi-dimensional stock screening for accumulation patterns, pre-open movers, and swing candidates. | `screen accum`, `screen pre-open` | `accumulation_screen.py`, `intraday_workflow_commands.py`, `pre_open_screen.py` |
 | 5 | **Strategy System** | Authoring, validation, loading, and execution of versioned strategy packages. | `strategy init/create/validate/list`, `strategy backtest` | `strategy_loader.py`, 3 strategy YAMLs, `strategy_commands.py` |
 | 6 | **Formula DSL** | Custom indicator language with tokenizer, parser, evaluator, and validator. Supports nesting and series operations. | `indicator create`, `show-formula`, `indicator compute <formula>` | 6 files in `application/formula/`, `formula_storage.py` |
 | 7 | **AI Integration** | 6 AI providers for explanation, formula translation, strategy creation, and sentiment classification. | `--explain`, `--ai-classify`, `indicator create`, `strategy create` | `factory.py`, 6 explainers, 2 translators, `sentiment_analyzer.py` |
-| 8 | **Backtest Engine** | Signal generation from rules/strategies and portfolio simulation (single + walk-forward). | `strategy backtest`, `trade swing backtest` | `backtest_engine.py` (domain), `swing_backtest.py` (app), `backtest.py` (use case) |
-| 9 | **Trading Workflow** | End-to-end trade lifecycle: pre-open screen → confirm at auction → journal → review → outcome. | `trade intraday *`, `trade swing analyze`, `trade swing size` | `screen_commands.py` (1532 lines), `position_sizer.py`, 3 journal services |
+| 8 | **Backtest Engine** | Signal generation from rules/strategies and portfolio simulation (single + walk-forward). | `strategy backtest`, `trade backtest-swing` | `backtest_engine.py` (domain), `swing_backtest.py` (app), `backtest.py` (use case) |
+| 9 | **Trading Workflow** | End-to-end trade lifecycle: pre-open screen → confirm at auction → journal → review → outcome. | `screen pre-open`, `trade confirm`, `trade log`, `trade review`, `analyze swing`, `trade size` | `intraday_workflow_commands.py`, `position_sizer.py`, 3 journal services |
 | 10 | **Persistence** | All data storage: SQLite (market, broker, sentiment), CSV journals, YAML config, formula storage. | All commands via `--db`, `--formulas-file`, `--journal` | 3 SQLite repos, 3 CSV writers, `formula_storage.py`, `yaml_loader.py` |
 
 ---
@@ -231,7 +242,6 @@ Each Big block decomposes into Medium modules:
 | Pre-Open Screen Use Case | `application/use_case/pre_open_screen.py` | ~400 | 10-step pre-open analysis |
 | Intraday Confirm Use Case | `application/use_case/confirm_intraday_open.py` | ~100 | Opening auction confirmation |
 | Position Sizer | `application/services/position_sizer.py` | ~150 | ATR-based position sizing |
-| Paper Trade Journal | `application/services/paper_trade_journal.py` | ~120 | Trade journal management |
 | Intraday Conf Journal | `application/services/intraday_confirmation_journal.py` | ~80 | Confirmation journal |
 | Accumulation Journal | `application/services/accumulation_journal.py` | ~80 | Accumulation candidate journal |
 | Intraday Backtest | `application/use_case/intraday_backtest.py` | ~100 | Intraday strategy evaluation |
@@ -243,7 +253,6 @@ Each Big block decomposes into Medium modules:
 | SQLite Market Repository | `infrastructure/persistence/sqlite_market_repository.py` | ~200 | Candle CRUD |
 | SQLite Broker Repository | `infrastructure/persistence/sqlite_broker_repository.py` | ~250 | BrokerSummary CRUD |
 | Sentiment Repository | `infrastructure/persistence/sentiment_repository.py` | ~120 | Sentiment record persistence |
-| Journal CSV Writer | `infrastructure/persistence/journal_csv_writer.py` | ~80 | Trade journal CSV |
 | Accumulation CSV Writer | `infrastructure/persistence/accumulation_journal_csv_writer.py` | ~80 | Accumulation journal CSV |
 | Intraday Conf CSV | `infrastructure/persistence/intraday_confirmation_csv.py` | ~60 | Confirmation CSV |
 | SQLite Base | `infrastructure/persistence/sqlite.py` | ~60 | DB setup + schema |
@@ -293,7 +302,6 @@ Each Big block decomposes into Medium modules:
 | `RiskAssessment` | `domain/value_objects/risk_assessment.py` | Risk profile evaluation result |
 | `RiskSignal` | `domain/value_objects/risk_signal.py` | Individual rule signal |
 | `IndicatorSnapshot` | `domain/value_objects/indicator_snapshot.py` | Point-in-time indicator state |
-| `JournalEntry` | `domain/value_objects/journal_entry.py` | Paper trade record |
 | `AccumulationJournalEntry` | `domain/value_objects/accumulation_journal_entry.py` | Accumulation candidate record |
 | `BacktestResult` | `domain/value_objects/backtest_result.py` | Aggregate backtest metrics |
 | `TradeAction` | `domain/value_objects/trade_action.py` | Buy/sell/hold signal |
@@ -315,7 +323,6 @@ Each Big block decomposes into Medium modules:
 | `NewsProvider` | `domain/ports/news_provider.py` | GoogleNews, CNBC, Kontan |
 | `HeadlineClassifier` | `domain/ports/headline_classifier.py` | KeywordClassifier, AIClassifier |
 | `SentimentRepository` | `domain/ports/sentiment_repository.py` | SentimentRepository (SQLite) |
-| `JournalStore` | `domain/ports/journal_store.py` | PaperTradeJournal |
 | `AccumulationJournalStore` | `domain/ports/accumulation_journal_store.py` | AccumulationJournal |
 | `CsvBrokerParser` | `domain/ports/csv_broker_parser.py` | BrokerCsvAdapter |
 | `Persistence` | `domain/ports/persistence.py` | *(stub)* |
@@ -356,7 +363,6 @@ Each Big block decomposes into Medium modules:
 | `StrategyLoader` | `services/strategy_loader.py` | Loads and validates strategy YAML files |
 | `PositionSizer` | `services/position_sizer.py` | ATR-based position sizing |
 | `SkillGenerator` | `services/skill_generator.py` | Auto-generates SKILL.md from artifacts |
-| `PaperTradeJournal` | `services/paper_trade_journal.py` | CSV-based trade journal management |
 | `AccumulationJournal` | `services/accumulation_journal.py` | CSV-based accumulation candidate journal |
 | `IntradayConfirmationJournal` | `services/intraday_confirmation_journal.py` | CSV-based confirmation journal |
 | `Bootstrap` | `services/bootstrap.py` | System initialization |
@@ -441,7 +447,6 @@ Each Big block decomposes into Medium modules:
 | `persistence/sqlite_market_repository.py` | Candle CRUD |
 | `persistence/sqlite_broker_repository.py` | BrokerSummary CRUD |
 | `persistence/sentiment_repository.py` | Sentiment record persistence |
-| `persistence/journal_csv_writer.py` | Trade journal CSV |
 | `persistence/accumulation_journal_csv_writer.py` | Accumulation CSV |
 | `persistence/intraday_confirmation_csv.py` | Confirmation CSV |
 | `persistence/formula_storage.py` | Formula YAML persistence |
@@ -478,19 +483,29 @@ Each Big block decomposes into Medium modules:
 |------|---------|
 | `plugins/indicator_loader.py` | Auto-discovers plugin indicators |
 
-#### Adapter CLI Modules (17)
+#### Adapter CLI Modules (21)
 
 | Module | File | Group / Commands |
 |--------|------|------------------|
-| Main | `cli/main.py` | Top-level group definitions (data, indicator, analyze, strategy, trade, skill) |
-| Data Router | `cli/data_commands.py` | `saham data [update, broker, stockbit, universe]` |
+| Main | `cli/main.py` | Top-level lifecycle group definitions |
+| Fetch Router | `cli/fetch_commands.py` | `saham fetch [market, broker, broker-import, stockbit, universe, status]` |
+| Data Fetch (market) | `cli/fetch_market_commands.py` | Implementation of market data fetch |
+| IEV Capture | `cli/fetch_iev_commands.py` | Implementation of IEV snapshot capture |
+| View Router | `cli/view_commands.py` | `saham view broker [flow, top, mappings, status]` |
+| Learn Router | `cli/learn_commands.py` | `saham learn [snapshot, track, grade, prompt, tune]` |
+| Learn (opening) | `cli/learn_opening_commands.py` | Implementation of opening learning loop commands |
+| Today Briefing | `cli/today_commands.py` | `saham today` daily briefing |
+| Status Impl | `cli/status_commands.py` | `saham fetch status` |
 | Indicator Router| `cli/indicator_commands.py` | `saham indicator [compute, snapshot, create, list, show, delete]` |
-| Analyze Router | `cli/analyze_commands.py` | `saham analyze [risk, compare, sentiment, audit, regime, chart]` |
-| Trade Router | `cli/trade_commands.py` | `saham trade [swing, intraday]` |
+| Analyze Router | `cli/analyze_commands.py` | `saham analyze [risk, compare, sentiment, audit, regime, chart, swing]` |
+| Trade Router | `cli/trade_commands.py` | `saham trade [confirm, log, review, size, outcome, backtest-swing, backtest-intraday]` |
+| Trade (intraday) | `cli/trade_intraday_commands.py` | Implementation of intraday trade CLI |
 | Strategy Router | `cli/strategy_commands.py` | `saham strategy [init, create, validate, list, backtest]` |
-| Skill Router | `cli/skill_commands.py` | `saham skill [generate, check, index]` |
+| Skill Impl | `cli/skill_commands.py` | `saham strategy skill [generate, check, index]` |
+| Screen Lifecycle | `cli/screen_lifecycle_commands.py` | Screen lifecycle management helper |
+| Screen (pre-open) | `cli/screen_pre_open_commands.py` | Implementation of pre-open screen CLI |
 | Broker Impl | `cli/broker_commands.py` | Implementation of broker flow logic |
-| Screen Impl | `cli/screen_commands.py` | Implementation of intraday logic (1829 lines) |
+| Screen Impl | `cli/intraday_workflow_commands.py` | Shared intraday workflow implementation |
 | Swing Impl | `cli/swing_commands.py` | Implementation of swing/unified logic |
 | Sentiment Impl | `cli/sentiment_commands.py` | Implementation of sentiment logic |
 | Stockbit Impl | `cli/stockbit_commands.py` | Implementation of session management |
@@ -619,7 +634,7 @@ UseCase: ExplainRiskUseCase
   └── Domain Entity: RiskAssessment
 ```
 
-### Concrete example: `saham data update BBCA --days 365 --provider idx`
+### Concrete example: `saham fetch market BBCA --days 365 --provider idx`
 
 Write-heavy flow — external API → cache.
 
@@ -672,7 +687,7 @@ UseCase: CreateIndicatorFromIntentUseCase
 | Domain | 42 | ~2,500 |
 | Application | 37 | ~6,500 |
 | Infrastructure | 53 | ~9,000 |
-| Adapters | 14 | ~6,500 |
+| Adapters | 21 | ~7,500 |
 | Plugins | 9 | ~600 |
 | Strategies | 5 | ~300 |
 | **Total** | **160+** | **~25,400** |

@@ -5,7 +5,7 @@ Closes the feedback gap between pre-open predictions and actual market outcomes.
 
 ## Motivation
 
-The `saham trade intraday pre-open` screener produces deterministic predictions
+The `saham screen pre-open` screener produces deterministic predictions
 (gap %, entry range, ATR stop) for stocks moving in the 08:45–08:57 WIB pre-open
 window. But without measuring whether those predictions were correct, thresholds
 drift and false negatives go undetected.
@@ -152,7 +152,7 @@ It captures real-time institutional absorption from Stockbit's running trade API
 Captures pre-open predictions after NCP locks:
 
 ```bash
-saham trade opening snapshot
+saham learn snapshot
 ```
 
 **What happens:**
@@ -166,7 +166,7 @@ saham trade opening snapshot
 
 **Manual run with historical date:**
 ```bash
-saham trade opening snapshot --force --date 2026-06-17
+saham learn snapshot --force --date 2026-06-17
 ```
 
 ### Step 2: Track (09:00–09:30 WIB)
@@ -174,7 +174,7 @@ saham trade opening snapshot --force --date 2026-06-17
 Checks full-orderbook depth every 5 minutes after opening auction:
 
 ```bash
-saham trade opening track
+saham learn track
 ```
 
 **What happens:**
@@ -191,14 +191,14 @@ not just top-of-book — institutional bids often sit 2–3 ticks below last pri
 
 **With broker attribution (requires Stockbit login):**
 ```bash
-saham trade opening track --broker-confirm
+saham learn track --broker-confirm
 ```
 Embeds institutional absorption ratio, dominant side, and net lot per ticker
 from Stockbit's running trade API. Data appears as `broker_signal` in track JSON.
 
 **Manual run with specific tickers:**
 ```bash
-saham trade opening track --force BBCA BBRI BMRI
+saham learn track --force BBCA BBRI BMRI
 ```
 
 ### Step 3: Grade (09:30+ WIB)
@@ -206,7 +206,7 @@ saham trade opening track --force BBCA BBRI BMRI
 Produces deterministic accuracy report from snapshot + track data:
 
 ```bash
-saham trade opening grade
+saham learn grade
 ```
 
 **Metrics computed:**
@@ -238,10 +238,10 @@ Generates an AI prompt from the session data:
 
 ```bash
 # Save to file
-saham trade opening prompt
+saham learn prompt
 
 # Print to stdout (pipe to clipboard)
-saham trade opening prompt --print | pbcopy
+saham learn prompt --print | pbcopy
 ```
 
 The prompt includes:
@@ -258,10 +258,10 @@ Calls DeepSeek with the grade + config to get actionable tuning recommendations:
 
 ```bash
 # Uses DEEPSEEK_API_KEY from environment
-saham trade opening tune
+saham learn tune
 
 # Explicit key
-saham trade opening tune --api-key sk-...
+saham learn tune --api-key sk-...
 ```
 
 **What you get back:**
@@ -284,11 +284,11 @@ thresholds:
 
 | Command | Timing | Purpose | Output file |
 |---------|--------|---------|-------------|
-| `saham trade opening snapshot` | 08:57 | Pre-open predictions | `snapshot.json` |
-| `saham trade opening track` | 09:00–09:30 | 5-min full-depth orderbook + foreign net + opt-in broker attribution | `track_HHMM.json` |
-| `saham trade opening grade` | 09:30+ | Accuracy report (incl. bid pressure momentum + institutional absorption) | `grade.json` |
-| `saham trade opening prompt` | anytime | AI prompt | `prompt.md` |
-| `saham trade opening tune` | anytime | Config recommendations | `tune.json` + `tune.md` |
+| `saham learn snapshot` | 08:57 | Pre-open predictions | `snapshot.json` |
+| `saham learn track` | 09:00–09:30 | 5-min full-depth orderbook + foreign net + opt-in broker attribution | `track_HHMM.json` |
+| `saham learn grade` | 09:30+ | Accuracy report (incl. bid pressure momentum + institutional absorption) | `grade.json` |
+| `saham learn prompt` | anytime | AI prompt | `prompt.md` |
+| `saham learn tune` | anytime | Config recommendations | `tune.json` + `tune.md` |
 
 | Flag | Applies to | Effect |
 |------|-----------|--------|
@@ -319,7 +319,7 @@ Snapshot confidence drives behavior:
 
 ## Integration with Other Workflows
 
-### → `saham trade intraday`
+### → `saham trade`
 
 The opening snapshot uses the same screener under the hood. Results are
 independent: `trade intraday` for manual decision-making, `trade opening` for
@@ -330,8 +330,8 @@ automated learning loop.
 Opening session data is stored standalone. For trade journal integration, use:
 
 ```bash
-saham trade intraday log      # paper trade log from opening signals
-saham trade intraday outcome  # record actual outcome
+saham trade log intraday      # paper trade log from opening signals
+saham trade outcome  # record actual outcome
 ```
 
 ### → `docs/deepseek_preopen_recommendation_170626.md`

@@ -12,9 +12,9 @@ This document explains the conceptual building blocks of the trading system — 
 
   ┌─────────────────────────────────────────────────────────────────────┐
   │  DATA INGESTION                    single │ universe │ batch         │
-  │  saham data update TICKER --days N                                      │
-  │  saham data update --universe lq45 --days N                             │
-  │  saham data broker fetch TICKER --provider stockbit                     │
+  │  saham fetch market TICKER --days N                                      │
+  │  saham fetch market --universe lq45 --days N                             │
+  │  saham fetch broker TICKER --provider stockbit                     │
   │             ↓ stores into ↓                                        │
   │  ┌─────────────────────────────────────────────────────────┐       │
   │  │  SQLite: candles + broker_summaries + broker_flow_points│       │
@@ -118,36 +118,36 @@ This document explains the conceptual building blocks of the trading system — 
   │  END-TO-END WORKFLOWS (multi-step)      │  │  MANAGEMENT / UTILITY   │
   │                                         │  │                         │
   │  SWING (5-20 day horizon)               │  │  SESSION / PROVIDER     │
-  │  saham trade swing analyze BBCA               │  │  saham data stockbit login   │
-  │    → accumulation screen                │  │  saham data stockbit test    │
-  │    → risk assessment                    │  │  saham data stockbit status  │
+  │  saham analyze swing BBCA               │  │  saham fetch stockbit login   │
+  │    → accumulation screen                │  │  saham fetch stockbit test    │
+  │    → risk assessment                    │  │  saham fetch stockbit status  │
   │    → backtest (foreign-accum preset)    │  │                             │
   │    → regime context                     │  │                         │
   │    → position sizing (ATR)              │  │  UNIVERSE               │
-  │    → sentiment                          │  │  saham data universe list    │
-  │  saham trade swing backtest (walk-forward)    │  │                         │
-  │  saham trade swing compare (side-by-side)     │  │  REGIME                 │
-  │  saham trade swing screen (accum CLI)         │  │  saham analyze regime           │
-  │  saham trade swing size (position sizing)     │  │                         │
+  │    → sentiment                          │  │  saham fetch universe list    │
+  │  saham trade backtest-swing (walk-forward)    │  │                         │
+  │  saham analyze swing-compare (side-by-side)     │  │  REGIME                 │
+  │  saham screen accum (accum CLI)         │  │  saham analyze regime           │
+  │  saham trade size (position sizing)     │  │                         │
   │                                         │  │  CHART                  │
   │  INTRADAY (minutes horizon)             │  │  saham analyze chart            │
-  │  saham trade intraday pre-open                │  │                         │
+  │  saham screen pre-open                │  │                         │
   │    → 10-step pipeline (IEV → entry →    │  │  VERSION                │
   │      stop → trend → accum → AI)         │  │  saham version          │
   │    → borrows ATR, RSI, FVWAP from       │  │                         │
   │      registry (NOT strategies)          │  └──────────────────────────┘
-  │  saham trade intraday confirm-open            │
+  │  saham trade confirm            │
   │    → 8-gate deterministic decision      │
-  │  saham trade intraday log / review            │
-  │  saham trade intraday confirm-outcome         │
-  │  saham trade intraday backtest                │
+  │  saham trade log intraday / review            │
+  │  saham trade outcome         │
+  │  saham trade backtest-intraday                │
   │                                         │
   │  ACCUMULATION SCREEN                    │
-  │  saham trade swing screen              │
+  │  saham screen accum              │
   │    → proprietary 120-pt scoring         │
   │    → does NOT use registry or strategies│
   │    → direct SQLite queries              │
-  │  saham trade swing screen --multi      │
+  │  saham screen accum --multi      │
   └─────────────────────────────────────────┘  └──────────────────────────┘
 ```
 
@@ -159,9 +159,9 @@ This document explains the conceptual building blocks of the trading system — 
 
 | Command | What it fetches | Default days |
 |---------|----------------|--------------|
-| `saham data update TICKER` | Candles + broker flow | 90 |
-| `saham data update --universe lq45` | Same, for 45 stocks at once | 90 |
-| `saham data broker fetch TICKER` | Broker flow only (legacy) | 90 |
+| `saham fetch market TICKER` | Candles + broker flow | 90 |
+| `saham fetch market --universe lq45` | Same, for 45 stocks at once | 90 |
+| `saham fetch broker TICKER` | Broker flow only (legacy) | 90 |
 
 Stores into SQLite tables: `candles` (one row per date per ticker), `broker_summaries` (per date per ticker per source), `broker_flow_points` (time-series net flow). No pre-computed aggregates — everything computed at query time.
 
@@ -233,7 +233,7 @@ These can be referenced in strategy YAML rules just like SMA or RSI.
 
 These are the three multi-step workflows that combine multiple building blocks. Critically, **each has its own independent decision logic** — they are NOT powered by the strategy engine.
 
-#### Swing (`saham trade swing analyze`)
+#### Swing (`saham analyze swing`)
 
 Composite 7-section view that calls:
 1. **Accumulation screen** — direct SQLite + inline scoring
@@ -246,13 +246,13 @@ Composite 7-section view that calls:
 
 Does NOT use strategies for its main decision. The backtest panel uses the strategy, but only as a historical reference view.
 
-#### Intraday (`saham trade intraday pre-open` → confirm-open → log → outcome → review)
+#### Intraday (`saham screen pre-open` → opening confirmation → log → outcome → review)
 
 Pre-open pipeline has its own **10-step screening** (IEV → context → entry → stop → trend → accum → AI) and **8-gate deterministic confirmation** (trend, gap, accum, stop distance). It borrows only ATR, RSI, and FVWAP from the indicator registry. Does NOT use strategies at all.
 
 Config comes from `config/pre_open_screener.yaml` (not a strategy YAML).
 
-#### Accumulation Screen (`saham trade swing screen`)
+#### Accumulation Screen (`saham screen accum`)
 
 Proprietary 120-point scoring system:
 | Component | Max pts | What it measures |

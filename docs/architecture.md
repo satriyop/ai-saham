@@ -17,7 +17,7 @@ The architecture enforces a strict dependency rule: **inner layers know nothing 
 ```
                     +---------------------------------------+
                     |             Adapters                  |
-                    |  CLI (10 modules) | Bot | Web (stub)  |
+                    |  CLI (21 modules) | Bot | Web (stub)  |
                     +---------------------------------------+
                                    |
                                    v
@@ -59,10 +59,10 @@ The innermost layer contains pure business logic with **zero external dependenci
 | Directory | Responsibility | Key Files |
 |-----------|----------------|-----------|
 | `entities/` | Core business objects | `Candle`, `BacktestTrade`, `BrokerTransaction`, `BrokerSummary` |
-| `value_objects/` | Immutable value types | `IndicatorSnapshot`, `RiskAssessment`, `RiskSignal`, `JournalEntry`, `BacktestResult`, `TradeAction`, `ScreenerResult`, `Sentiment` |
+| `value_objects/` | Immutable value types | `IndicatorSnapshot`, `RiskAssessment`, `RiskSignal`, `BacktestResult`, `TradeAction`, `ScreenerResult`, `Sentiment` |
 | `indicators/` | Pure indicator calculations | `sma.py`, `ema.py`, `rsi.py` (pure functions over lists of floats) |
 | `services/` | Domain orchestration without I/O | `analyze_stock.py`, `backtest_engine.py` |
-| `ports/` | Interfaces for external systems | `MarketDataProvider`, `BrokerDataProvider`, `BrowserDataProvider`, `AIExplainer`, `NewsProvider`, `HeadlineClassifier`, `MarketDataRepository`, `BrokerDataRepository`, `SentimentRepository`, `JournalStore`, `AccumulationJournalStore`, `CsvBrokerParser` |
+| `ports/` | Interfaces for external systems | `MarketDataProvider`, `BrokerDataProvider`, `BrowserDataProvider`, `AIExplainer`, `NewsProvider`, `HeadlineClassifier`, `MarketDataRepository`, `BrokerDataRepository`, `SentimentRepository`, `AccumulationJournalStore`, `CsvBrokerParser` |
 | `rules/` | Risk assessment profiles | Conservative, Balanced, Aggressive profiles + `RuleEngine` |
 
 **Key rule:** Domain code must be testable without any infrastructure.
@@ -74,7 +74,7 @@ Orchestrates domain logic to fulfill user requests. All I/O is abstracted behind
 | Directory | Responsibility | Key Files |
 |-----------|----------------|-----------|
 | `use_case/` | Business operations (22 use cases) | `FetchMarketData`, `ComputeSMA/EMA/RSI`, `AssessRisk`, `ExplainRisk`, `Backtest`, `SwingBacktest`, `MarketRegime`, `PreOpenScreen`, `FetchSentiment`, `AuditSentiment`, `FetchBrokerData`, `AccumulationScreen`, `AccumulationAudit`, `CreateIndicatorFromIntent`, `CreateStrategyFromIntent`, etc. |
-| `services/` | Cross-cutting application logic | `indicator_registry.py`, `strategy_loader.py`, `universe_loader.py`, `position_sizer.py`, `skill_generator.py`, `paper_trade_journal.py`, `intraday_confirmation_journal.py`, `bootstrap.py` |
+| `services/` | Cross-cutting application logic | `indicator_registry.py`, `strategy_loader.py`, `universe_loader.py`, `position_sizer.py`, `skill_generator.py`, `intraday_confirmation_journal.py`, `accumulation_journal.py`, `bootstrap.py` |
 | `ports/` | Application-level interfaces | `formula_translator.py`, `strategy_translator.py`, `indicator_plugin.py`, `skill_writer.py` |
 | `formula/` | Formula DSL engine | `ast_nodes.py`, `tokenizer.py`, `parser.py`, `evaluator.py`, `validator.py` |
 | `rules/` | Formula-based rule system | `schema.py`, `interpreter.py`, `exceptions.py` |
@@ -106,7 +106,7 @@ Entry points for user interaction. Thin — no business logic, only wiring.
 
 | Directory | Responsibility | Key Files |
 |-----------|----------------|-----------|
-| `cli/` | Typer-based CLI (11 modules) | `main.py` (entry point, fetch, indicators, risk, sentiment, backtest), `broker_commands.py`, `screen_commands.py`, `swing_commands.py`, `strategy_commands.py`, `skill_commands.py`, `chart_commands.py`, `stockbit_commands.py`, `update_commands.py`, `accumulation_commands.py` |
+| `cli/` | Typer-based CLI (21 modules) | `main.py`, `fetch_commands.py`, `fetch_market_commands.py`, `fetch_iev_commands.py`, `view_commands.py`, `learn_commands.py`, `learn_opening_commands.py`, `today_commands.py`, `status_commands.py`, `screen_lifecycle_commands.py`, `screen_pre_open_commands.py`, `accumulation_commands.py`, `broker_commands.py`, `chart_commands.py`, `intraday_workflow_commands.py`, `sentiment_commands.py`, `stockbit_commands.py`, `swing_commands.py`, `trade_commands.py`, `trade_intraday_commands.py`, `strategy_commands.py`, `skill_commands.py`, `update_commands.py` |
 | `bot/` | Chat bot stubs | `telegram.py`, `whatsapp.py` (docstrings only) |
 | `web/` | REST API stub | `api.py` (docstring only) |
 

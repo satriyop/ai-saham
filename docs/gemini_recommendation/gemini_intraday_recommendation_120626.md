@@ -81,8 +81,8 @@ Automates the critical "Go/No-Go" decision, allowing the trader to focus exclusi
 ## Implementation Status (Audit June 2026)
 
 - **ARA/ARB Metrics:** **NOT MET.** Calculation of Auto-Rejection limits is not yet present in the `ScreenerCandidate` or Risk Engine.
-- **IEV Delta (Δ) Tracking:** **NOT MET.** The `.iev_delta.json` cache and delta calculation logic are currently missing.
+- **IEV Delta (Δ) Tracking:** **MET.** Implemented via `SQLiteIEVRepository` (`src/infrastructure/persistence/sqlite_iev_repository.py`). The system tracks historical IEV snapshots and calculates `ΔIEV` between the first and last collection times within the pre-open window, providing a velocity signal.
 - **Flash Validation:** **MET.** Implemented as `saham intraday confirm-open`. This command realizes the goal of "Flash Validation" by grouping candidates into ENTER/WAIT/SKIP based on actual opening prices, reducing 09:00 AM cognitive load.
 
 **Conclusion:**
-Work on the intraday workflow has focused on the "Phase 2" execution logic (Confirm-Open). While safety guardrails (ARA/ARB) and velocity tracking (IEV Delta) are still pending, the core bottleneck of manual opening-price validation has been successfully solved.
+Work on the intraday workflow has successfully delivered two of the three major recommendations. The "Phase 2" execution logic (Confirm-Open) and the data fidelity layer (IEV Delta Tracking via SQLite) are fully operational. Safety guardrails (ARA/ARB limits) are still pending, but the core bottlenecks of manual opening-price validation and blind IEV snapshots have been solved.
