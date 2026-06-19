@@ -242,3 +242,39 @@ class StockbitMarketTimeProvider(MarketStatusProvider):
             fetched_at=datetime.now(_IDX_TZ),
             source="stockbit",
         )
+
+
+# ── Module-level convenience functions ───────────────────────────────────────
+
+def get_current_market_status() -> MarketStatus:
+    """Return current IDX market status — Stockbit when session available, else local clock.
+
+    Never raises. Safe to call from any command at startup.
+    """
+    try:
+        from pathlib import Path
+        from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
+        if Path(".stockbit_profile").exists():
+            provider = StockbitPlaywrightBrokerProvider()
+            if provider.is_authenticated():
+                return StockbitMarketTimeProvider(broker_provider=provider).get_status()
+    except Exception:
+        pass
+    return LocalClockMarketStatusProvider().get_status()
+
+
+def format_market_status_line(status: MarketStatus) -> str:
+    """Return a compact one-line market status string for command output headers.
+
+    Examples:
+      Market: Pre-Open    08:47 WIB  [stockbit]
+      Market: Regular     09:15 WIB  [stockbit]  ⚠ open — EOD data not final
+      Market: Post-Market 16:32 WIB  [local_clock]
+    """
+    now_wib = datetime.now(_IDX_TZ)
+    time_str = now_wib.strftime("%H:%M WIB")
+    source_tag = f"[{status.source}]"
+    line = f"Market: {status.session_name:<14} {time_str}  {source_tag}"
+    if status.is_open and status.is_regular:
+        line += "  ⚠ open — EOD data not yet final"
+    return line

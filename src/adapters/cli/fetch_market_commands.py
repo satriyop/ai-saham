@@ -629,7 +629,13 @@ def fetch_market(
         raise typer.Exit(1)
 
     # Header
-    typer.echo(f"\nUpdating {len(response.ticker_list)} tickers | {days}d history")
+    from src.infrastructure.browser.stockbit_market_time import (
+        format_market_status_line,
+        get_current_market_status,
+    )
+    _mstatus = get_current_market_status()
+    typer.echo(f"\n{format_market_status_line(_mstatus)}")
+    typer.echo(f"Updating {len(response.ticker_list)} tickers | {days}d history")
     if not broker_only:
         typer.echo(f"  Candles:          {candles_provider}")
     if not candles_only:

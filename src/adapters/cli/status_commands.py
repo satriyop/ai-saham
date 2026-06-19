@@ -49,7 +49,7 @@ def _check_idx_api() -> dict:
             data = resp.json().get("data", [])
             return {"ok": True, "label": f"200 ({len(data)} stocks)", "ms": elapsed}
         if resp.status_code == 403:
-            return {"ok": True, "label": "403 (non-trading day)", "ms": elapsed}
+            return {"ok": True, "label": "403 (no data — possible non-trading day)", "ms": elapsed}
         return {"ok": False, "label": f"HTTP {resp.status_code}", "ms": elapsed}
     except Exception as e:
         elapsed = round(time.time() - start, 1)
@@ -95,6 +95,21 @@ def _check_stockbit_session() -> dict:
         return {"ok": False, "label": "playwright not installed", "ms": 0}
     except Exception as e:
         return {"ok": False, "label": str(e)[:55], "ms": 0}
+
+
+def _check_market_status() -> dict:
+    """Return current IDX market status via Stockbit API or local clock."""
+    import time as _t
+    start = _t.time()
+    try:
+        from src.infrastructure.browser.stockbit_market_time import get_current_market_status
+        status = get_current_market_status()
+        elapsed = round(_t.time() - start, 1)
+        label = f"{status.session_name} [{status.source}]"
+        return {"ok": True, "label": label, "ms": elapsed}
+    except Exception as e:
+        elapsed = round(_t.time() - start, 1)
+        return {"ok": False, "label": str(e)[:55], "ms": elapsed}
 
 
 def _check_ai_api() -> dict:
@@ -144,6 +159,7 @@ def status(
 
     typer.echo("")
     typer.echo("  ╭─ Data Provider Health " + "─" * (content_width - 23) + "╮")
+    typer.echo(_health_line("IDX market", _check_market_status()))
     typer.echo(_health_line("IDX API", _check_idx_api()))
     typer.echo(_health_line("Yahoo Finance", _check_yahoo()))
     typer.echo(_health_line("Stockbit session", _check_stockbit_session()))

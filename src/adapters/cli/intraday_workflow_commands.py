@@ -120,19 +120,8 @@ def _current_idx_datetime() -> datetime:
 def _get_market_status() -> "MarketStatus":
     """Return current IDX market status from Stockbit if session available,
     else from local wall-clock. Never raises."""
-    from src.infrastructure.browser.stockbit_market_time import (
-        LocalClockMarketStatusProvider,
-        StockbitMarketTimeProvider,
-    )
-    try:
-        from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
-        if Path(".stockbit_profile").exists():
-            provider = StockbitPlaywrightBrokerProvider()
-            if provider.is_authenticated():
-                return StockbitMarketTimeProvider(broker_provider=provider).get_status()
-    except Exception:
-        pass
-    return LocalClockMarketStatusProvider().get_status()
+    from src.infrastructure.browser.stockbit_market_time import get_current_market_status
+    return get_current_market_status()
 
 
 def _build_intraday_run_guard(

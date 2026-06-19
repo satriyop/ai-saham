@@ -13,7 +13,10 @@ from pathlib import Path
 from typing import Annotated, Optional
 
 import typer
+from rich.console import Group
+from rich.text import Text
 
+from src.adapters.cli.rich_display import compact_table, console, panel
 from src.application.use_case.fetch_broker_data import (
     FetchBrokerDataRequest,
     FetchBrokerDataUseCase,
@@ -187,6 +190,11 @@ def broker_fetch(
     else:
         end_date = date.today()
 
+    from src.infrastructure.browser.stockbit_market_time import (
+        format_market_status_line,
+        get_current_market_status,
+    )
+    typer.echo(format_market_status_line(get_current_market_status()))
     typer.echo(f"Fetching broker data for {ticker.upper()}...")
     typer.echo(f"Provider: {provider_name} | Date range: {start_date} to {end_date}")
 
@@ -482,17 +490,28 @@ def broker_history_view(
         typer.echo(typer.style("Unknown format. Use: table or json", fg=typer.colors.RED))
         raise typer.Exit(1)
 
-    typer.echo(f"\nCached Foreign Flow History for {ticker.upper()} (last {len(points)} trading days)")
-    typer.echo("=" * 68)
-    typer.echo(f"{'Date':<12} {'Source':<9} {'Net Value':>14}  {'Net Lot':>10}  {'Avg Price':>10}")
-    typer.echo("-" * 68)
+    table = compact_table()
+    table.add_column("Date")
+    table.add_column("Source")
+    table.add_column("Net Value", justify="right")
+    table.add_column("Net Lot", justify="right")
+    table.add_column("Avg Price", justify="right")
     for p in points:
-        color = typer.colors.GREEN if p.net_val > 0 else typer.colors.RED
-        line = (
-            f"{p.date.isoformat():<12} {p.source:<9} "
-            f"{format_value(p.net_val):>14}  {p.net_lot:>10,}  {float(p.avg_price):>10,.0f}"
+        flow_style = "green" if p.net_val > 0 else "red"
+        table.add_row(
+            p.date.isoformat(),
+            p.source,
+            Text(format_value(p.net_val), style=flow_style),
+            f"{p.net_lot:,}",
+            f"{float(p.avg_price):,.0f}",
         )
-        typer.echo(typer.style(line, fg=color))
+    console().print(
+        panel(
+            table,
+            title=f"Cached Foreign Flow History for {ticker.upper()}",
+            subtitle=f"last {len(points)} trading days",
+        )
+    )
 
 
 def broker_top_foreign_view(
@@ -557,18 +576,29 @@ def broker_top_foreign_view(
         typer.echo(typer.style("Unknown format. Use: table or json", fg=typer.colors.RED))
         raise typer.Exit(1)
 
-    typer.echo(f"\nCached Foreign Broker Top Stocks for {query_date} ({days} days)")
-    typer.echo("=" * 55)
-    typer.echo(f"  {'#':<4} {'TICKER':<8} {'NET VALUE':>14}  {'NET LOT':>10}  DIR")
-    typer.echo("  " + "-" * 45)
+    table = compact_table()
+    table.add_column("#", justify="right")
+    table.add_column("Ticker", style="bold")
+    table.add_column("Net Value", justify="right")
+    table.add_column("Net Lot", justify="right")
+    table.add_column("Direction")
     for rank, snap in enumerate(snapshots, 1):
         direction = "BUY" if snap.is_accumulating else "SELL"
-        color = typer.colors.GREEN if snap.is_accumulating else typer.colors.RED
-        line = (
-            f"  {rank:<4} {snap.ticker:<8} "
-            f"{format_value(snap.net_val):>14}  {snap.net_lot:>10,}  {direction}"
+        flow_style = "green" if snap.is_accumulating else "red"
+        table.add_row(
+            str(rank),
+            snap.ticker,
+            Text(format_value(snap.net_val), style=flow_style),
+            f"{snap.net_lot:,}",
+            Text(direction, style=flow_style),
         )
-        typer.echo(typer.style(line, fg=color))
+    console().print(
+        panel(
+            Group(table),
+            title="Cached Foreign Broker Top Stocks",
+            subtitle=f"{query_date.isoformat()} / {days} days",
+        )
+    )
 
 
 def broker_top_foreign(
@@ -619,7 +649,12 @@ def broker_top_foreign(
     end = date.today()
     start = end - timedelta(days=days)
 
+    from src.infrastructure.browser.stockbit_market_time import (
+        format_market_status_line,
+        get_current_market_status,
+    )
     typer.echo("")
+    typer.echo(format_market_status_line(get_current_market_status()))
     typer.echo(f"Foreign broker accumulation scan ({start} → {end})")
     typer.echo("─" * 55)
 
