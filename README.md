@@ -33,6 +33,7 @@ A **local-first, production-grade CLI application** for stock analysis focused o
 - **Bandar Detector** - 🔍 Stockbit institutional operator accumulation/distribution signal (-9 to +9 score)
 - **Company Fundamentals** - 📈 P/E, ROE, Piotroski F-Score, quality gate with dividend yield + YoY growth
 - **Market Regime Detection** - Deterministic IHSG regime context (BULLISH/SIDEWAYS/WEAK/RISK_OFF)
+- **Ticker Notation Context** - Stockbit special notation/status badges cached locally for swing and pre-open views
 - **Terminal Charts** - ASCII price/RSI/volume charts in-terminal
 - **Batch Update** - Single command to refresh candles + broker flow for entire universes
 - **Broker & Foreign Flow** - Track foreign investor activity from IDX (public, no auth) or Stockbit
