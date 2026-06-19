@@ -2,7 +2,7 @@
 
 Base URL: `https://exodus.stockbit.com`  
 Auth: Bearer RS256 token (intercepted from browser session, not extractable from localStorage).  
-Run `saham stockbit login` then `saham stockbit spy` to capture live responses.
+Run `saham fetch stockbit login` then `saham fetch stockbit spy` to capture live responses.
 
 ---
 
@@ -12,7 +12,7 @@ Run `saham stockbit login` then `saham stockbit spy` to capture live responses.
 - Token is RS256 JWT issued by Stockbit identity server — NOT the HS256 token stored in localStorage
 - Reliable extraction: intercept from outgoing requests after navigating to `https://stockbit.com/orderbook`
 - Token TTL: ~8–12 hours. In-process cache safe for ~30 minutes between batch calls
-- 401 response → session expired → run `saham stockbit login`
+- 401 response → session expired → run `saham fetch stockbit login`
 
 ---
 

@@ -322,7 +322,7 @@ Snapshot confidence drives behavior:
 ### → `saham trade`
 
 The opening snapshot uses the same screener under the hood. Results are
-independent: `trade intraday` for manual decision-making, `trade opening` for
+independent: `screen pre-open` for manual decision-making, `learn` for
 automated learning loop.
 
 ### → `data/opening/` + Journals
