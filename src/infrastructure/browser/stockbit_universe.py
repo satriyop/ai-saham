@@ -2,16 +2,18 @@
 StockbitUniverseProvider — live IDX index universe lists from Stockbit Exodus API.
 
 Discovery flow:
-  1. GET /emitten/sectors/88/subsectors  → map subsector name → id
-  2. GET /emitten/v3/sector/88/subsector/{id}/company → ticker list
+  1. GET /emitten/sectors/88/subsectors  → broad index universes (LQ45, IDX30, IDX80, etc.)
+     GET /emitten/sectors/70/subsectors  → sectoral index universes (Finance, Energy, etc.)
+  2. GET /emitten/v3/sector/{sector}/subsector/{id}/company → ticker list
 
-Sector 88 = "Indonesia Index Universes" on Stockbit.
+Sector 88 = "Indonesia Index Universes" (LQ45, IDX30, IDX80, JII, MBX, BUMN20, IHSG)
+Sector 70 = "Indeks Sektoral" (11 official IDX sectoral indices)
 
 Known subsector IDs (from docs/stockbit_api_end_point.md):
   LQ45   → 550    IDX30  → 559    JII  → 551
   MBX    → 552    BUMN20 → 1000000011    IHSG → 467
 
-IDX80 ID is discovered at runtime via the subsectors endpoint.
+IDX80 and sectoral IDs are discovered at runtime via the subsectors endpoints.
 
 Layer: Infrastructure
 Depends on: playwright_stockbit (for token)
@@ -20,51 +22,97 @@ Depends on: playwright_stockbit (for token)
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
     from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
 
 logger = logging.getLogger(__name__)
 
-_SUBSECTORS_URL = "https://exodus.stockbit.com/emitten/sectors/88/subsectors"
-_COMPANY_URL = "https://exodus.stockbit.com/emitten/v3/sector/88/subsector/{id}/company"
+_SECTOR_88_URL = "https://exodus.stockbit.com/emitten/sectors/88/subsectors"
+_SECTOR_70_URL = "https://exodus.stockbit.com/emitten/sectors/70/subsectors"
+_COMPANY_URL = "https://exodus.stockbit.com/emitten/v3/sector/{sector}/subsector/{id}/company"
 
-# Known subsector IDs — used as fast-path fallback if discovery fails.
+# Known subsector IDs for sector 88 — used as fast-path fallback if discovery fails.
 _KNOWN_IDS: dict[str, int | str] = {
-    "lq45":       550,
-    "idx30":      559,
-    "jii":        551,
-    "mbx":        552,
-    "bumn20":     1000000011,
-    "ihsg":       467,
+    "lq45":   550,
+    "idx30":  559,
+    "jii":    551,
+    "mbx":    552,
+    "bumn20": 1000000011,
+    "ihsg":   467,
 }
 
-# Name fragments used for fuzzy matching against Stockbit's subsector names.
-# Key = our universe key, value = substrings to match (case-insensitive, any match wins).
-_NAME_HINTS: dict[str, list[str]] = {
-    "lq45":       ["lq45", "lq 45"],
-    "idx30":      ["idx30", "idx 30"],
-    "idx80":      ["idx80", "idx 80"],
-    "jii":        ["jii", "jakarta islamic"],
-    "mbx":        ["mbx"],
-    "bumn20":     ["bumn20", "bumn 20"],
-    "ihsg":       ["ihsg", "composite", "issi"],
+# Universe type by key — used for display in update command.
+_UNIVERSE_TYPE: dict[str, str] = {
+    "lq45":       "broad",
+    "idx30":      "broad",
+    "idx80":      "broad",
+    "jii":        "broad",
+    "mbx":        "broad",
+    "bumn20":     "broad",
+    "ihsg":       "broad",
+    "finance":    "sectoral",
+    "energy":     "sectoral",
+    "basic":      "sectoral",
+    "industrial": "sectoral",
+    "infra":      "sectoral",
+    "tech":       "sectoral",
+    "health":     "sectoral",
+    "noncyc":     "sectoral",
+    "cyclic":     "sectoral",
+    "property":   "sectoral",
+    "transport":  "sectoral",
+}
+
+# Broad index name hints — sector 88 (case-insensitive substring match)
+_BROAD_NAME_HINTS: dict[str, list[str]] = {
+    "lq45":   ["lq45", "lq 45"],
+    "idx30":  ["idx30", "idx 30"],
+    "idx80":  ["idx80", "idx 80"],
+    "jii":    ["jii", "jakarta islamic"],
+    "mbx":    ["mbx"],
+    "bumn20": ["bumn20", "bumn 20"],
+    "ihsg":   ["ihsg", "composite", "issi"],
+}
+
+# Sectoral index name hints — sector 70 (Indonesian + English, case-insensitive)
+_SECTORAL_NAME_HINTS: dict[str, list[str]] = {
+    "finance":    ["keuangan", "finance"],
+    "energy":     ["energi", "energy"],
+    "basic":      ["barang baku", "basic material"],
+    "industrial": ["perindustrian", "industrial"],
+    "infra":      ["infrastruktur", "infrastructure"],
+    "tech":       ["teknologi", "technology", "techno"],
+    "health":     ["kesehatan", "health"],
+    "noncyc":     ["kebutuhan primer", "non-cyclic", "noncyc"],
+    "cyclic":     ["barang konsumen", "cyclic", "consumer cycl"],
+    "property":   ["properti", "property", "real estate"],
+    "transport":  ["transportasi", "transport", "logistik"],
 }
 
 
-def _match_subsector(name: str) -> str | None:
-    """Return our universe key if name matches any hint, else None."""
+def _match_hints(name: str, hints: dict[str, list[str]]) -> str | None:
+    """Return universe key if name matches any hint in the given dict, else None."""
     lower = name.lower()
-    for key, hints in _NAME_HINTS.items():
-        if any(h in lower for h in hints):
+    for key, fragments in hints.items():
+        if any(f in lower for f in fragments):
             return key
     return None
+
+
+def universe_type(key: str) -> Literal["broad", "sectoral", "unknown"]:
+    """Return the type label for a universe key."""
+    return _UNIVERSE_TYPE.get(key.lower(), "unknown")  # type: ignore[return-value]
 
 
 class StockbitUniverseProvider:
     """
     Fetches live IDX index universe constituent lists from Stockbit.
+
+    Discovers universes from two sectors:
+      - Sector 88: broad market indices (LQ45, IDX30, IDX80, JII, MBX, BUMN20)
+      - Sector 70: sectoral indices (Finance, Energy, Healthcare, etc.)
 
     Args:
         broker_provider: Authenticated StockbitPlaywrightBrokerProvider for token access.
@@ -72,7 +120,7 @@ class StockbitUniverseProvider:
 
     def __init__(self, broker_provider: "StockbitPlaywrightBrokerProvider") -> None:
         self._provider = broker_provider
-        self._subsector_map: dict[str, int | str] | None = None  # universe key → id
+        self._subsector_map: dict[str, tuple[int | str, int]] | None = None  # key → (id, sector)
 
     # ── Internal helpers ────────────────────────────────────────────────────
 
@@ -81,67 +129,74 @@ class StockbitUniverseProvider:
         token = self._provider._get_token()
         return _exodus_get(url, token)
 
-    def _discover_subsectors(self) -> dict[str, int | str]:
-        """Call /emitten/sectors/88/subsectors and build universe_key → subsector_id map.
+    def _parse_subsector_items(self, body: dict | None) -> list[dict]:
+        """Extract the list of subsector items from a sectors API response."""
+        if not body:
+            return []
+        items: list = []
+        data = body.get("data")
+        if isinstance(data, list):
+            items = data
+        elif isinstance(data, dict):
+            for key in ("subsectors", "list", "items", "results"):
+                if isinstance(data.get(key), list):
+                    items = data[key]
+                    break
+        return [i for i in items if isinstance(i, dict)]
 
-        Falls back to _KNOWN_IDS for any universe not found via discovery.
-        """
-        result: dict[str, int | str] = dict(_KNOWN_IDS)
-
+    def _discover_sector(
+        self,
+        url: str,
+        sector_num: int,
+        hints: dict[str, list[str]],
+        result: dict[str, tuple[int | str, int]],
+    ) -> None:
+        """Discover subsectors for one sector URL and merge matches into result."""
         try:
-            body = self._get(_SUBSECTORS_URL)
-            if not body:
-                logger.debug("Empty subsectors response — using known IDs only")
-                return result
-
-            # Try common response shapes
-            items: list = []
-            data = body.get("data")
-            if isinstance(data, list):
-                items = data
-            elif isinstance(data, dict):
-                # Some endpoints nest further: data.subsectors[]
-                for key in ("subsectors", "list", "items", "results"):
-                    if isinstance(data.get(key), list):
-                        items = data[key]
-                        break
-
+            body = self._get(url)
+            items = self._parse_subsector_items(body)
             if not items:
-                logger.debug("Could not extract subsector list from response: %s", list(body.keys()))
-                return result
-
+                logger.debug("No subsector items from %s", url)
+                return
             for item in items:
-                if not isinstance(item, dict):
-                    continue
-                subsector_id = item.get("id") or item.get("subsector_id")
+                sid = item.get("id") or item.get("subsector_id")
                 name = str(item.get("name") or item.get("subsector_name") or "")
-                if not subsector_id or not name:
+                if not sid or not name:
                     continue
-
-                key = _match_subsector(name)
-                if key:
-                    result[key] = subsector_id
-                    logger.debug("Discovered subsector: %s → id=%s (%s)", key, subsector_id, name)
-
-            # Log any discovered universes we didn't know before
-            for key, sid in result.items():
-                if key not in _KNOWN_IDS:
-                    logger.info("New universe discovered via API: %s → %s", key, sid)
-
+                key = _match_hints(name, hints)
+                if key and key not in result:
+                    result[key] = (sid, sector_num)
+                    logger.debug("Discovered [sector %d] %s → id=%s (%s)", sector_num, key, sid, name)
         except Exception as e:
-            logger.warning("Subsector discovery failed: %s — using known IDs", e)
+            logger.warning("Sector %d discovery failed: %s", sector_num, e)
+
+    def _discover_subsectors(self) -> dict[str, tuple[int | str, int]]:
+        """Discover all available universes from sectors 88 and 70.
+
+        Returns:
+            dict mapping universe_key → (subsector_id, sector_number)
+        """
+        # Seed with known IDs for sector 88 (broad indices)
+        result: dict[str, tuple[int | str, int]] = {
+            k: (v, 88) for k, v in _KNOWN_IDS.items()
+        }
+
+        # Discover broad indices (sector 88)
+        self._discover_sector(_SECTOR_88_URL, 88, _BROAD_NAME_HINTS, result)
+
+        # Discover sectoral indices (sector 70)
+        self._discover_sector(_SECTOR_70_URL, 70, _SECTORAL_NAME_HINTS, result)
 
         return result
 
-    def _fetch_tickers(self, subsector_id: int | str) -> list[str]:
+    def _fetch_tickers(self, subsector_id: int | str, sector_num: int) -> list[str]:
         """Fetch all ticker symbols for a given subsector ID."""
-        url = _COMPANY_URL.format(id=subsector_id)
+        url = _COMPANY_URL.format(sector=sector_num, id=subsector_id)
         try:
             body = self._get(url)
             if not body:
                 return []
 
-            # Try common response shapes for company lists
             items: list = []
             data = body.get("data")
             if isinstance(data, list):
@@ -156,7 +211,6 @@ class StockbitUniverseProvider:
             for item in items:
                 if not isinstance(item, dict):
                     continue
-                # Stockbit uses various field names for ticker symbol
                 code = (
                     item.get("ticker")
                     or item.get("code")
@@ -175,8 +229,8 @@ class StockbitUniverseProvider:
 
     # ── Public API ───────────────────────────────────────────────────────────
 
-    def list_available(self) -> dict[str, int | str]:
-        """Return the discovered universe_key → subsector_id map.
+    def list_available(self) -> dict[str, tuple[int | str, int]]:
+        """Return the discovered universe_key → (subsector_id, sector_number) map.
 
         Runs discovery once and caches the result for the lifetime of this instance.
         """
@@ -188,27 +242,25 @@ class StockbitUniverseProvider:
         """Return sorted list of ticker symbols for the named universe.
 
         Args:
-            universe_key: One of 'lq45', 'idx30', 'idx80', 'jii', 'mbx',
-                          'bumn20', or any key from list_available().
+            universe_key: Any key from list_available() — broad (lq45, idx80, …)
+                          or sectoral (finance, energy, health, …).
 
         Returns:
             Sorted list of ticker symbols, or [] if unavailable.
         """
         available = self.list_available()
-        subsector_id = available.get(universe_key.lower())
-        if not subsector_id:
+        entry = available.get(universe_key.lower())
+        if not entry:
             logger.warning("No subsector ID for universe '%s' — run discovery first", universe_key)
             return []
 
-        tickers = self._fetch_tickers(subsector_id)
+        subsector_id, sector_num = entry
+        tickers = self._fetch_tickers(subsector_id, sector_num)
         logger.info("Universe '%s': %d tickers", universe_key, len(tickers))
         return tickers
 
-    def fetch_all(
-        self,
-        keys: list[str] | None = None,
-    ) -> dict[str, list[str]]:
-        """Fetch ticker lists for multiple universes in one call.
+    def fetch_all(self, keys: list[str] | None = None) -> dict[str, list[str]]:
+        """Fetch ticker lists for multiple universes.
 
         Args:
             keys: Universe keys to fetch. Defaults to all discovered universes.

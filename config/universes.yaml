@@ -1,12 +1,12 @@
 # IDX Stock Universe Lists
 #
-# These lists are used by `saham data update` and `saham swing screen`
+# These lists are used by `saham fetch market` and `saham screen accum`
 # to define which tickers to scan.
 #
 # IDX rebalances LQ45 and IDX80 every February and August.
-# Run `saham data universe update` to refresh from Stockbit API.
+# Auto-updated via: saham fetch universe update (Stockbit Exodus API)
 #
-# Last updated: 2026-02-01
+# Last updated: 2026-06-19
 
 bumn20:
   tickers:
@@ -30,84 +30,558 @@ bumn20:
   - SMBR
   - SMGR
   - TLKM
-  updated: '2026-06-18'
-idx80:
+  updated: '2026-06-19'
+cyclic:
   tickers:
-  - AALI
+  - ABBA
   - ACES
+  - ACRO
+  - AKKU
+  - ARGO
+  - ARTA
+  - ASLC
+  - AUTO
+  - BABY
+  - BAIK
+  - BATA
+  - BAUT
+  - BAYU
+  - BELL
+  - BIKE
+  - BIMA
+  - BLTZ
+  - BMTR
+  - BOGA
+  - BOLA
+  - BOLT
+  - BRAM
+  - BUVA
+  - CARS
+  - CBMF
+  - CINT
+  - CLAY
+  - CNMA
+  - CNTX
+  - CSAP
+  - CSMI
+  - DEPO
+  - DFAM
+  - DIGI
+  - DOOH
+  - DOSS
+  - DRMA
+  - DUCK
+  - EAST
+  - ECII
+  - ENAK
+  - ERAA
+  - ERAL
+  - ERTX
+  - ESTA
+  - ESTI
+  - FAST
+  - FILM
+  - FITT
+  - FORU
+  - FUTR
+  - GDYR
+  - GEMA
+  - GJTL
+  - GLOB
+  - GOLF
+  - GRPH
+  - GWSA
+  - HOME
+  - HOTL
+  - HRME
+  - HRTA
+  - IIKP
+  - IMAS
+  - INDR
+  - INDS
+  - INOV
+  - IPTV
+  - JGLE
+  - JIHD
+  - JSPT
+  - KAQI
+  - KDTN
+  - KICI
+  - KOTA
+  - KPIG
+  - LIVE
+  - LMPI
+  - LPIN
+  - LPPF
+  - MABA
+  - MAPA
+  - MAPB
+  - MAPI
+  - MARI
+  - MDIA
+  - MDIY
+  - MERI
+  - MGNA
+  - MICE
+  - MINA
+  - MKNT
+  - MNCN
+  - MPMX
+  - MSIN
+  - MSKY
+  - MYTX
+  - NATO
+  - NETV
+  - NUSA
+  - PANR
+  - PART
+  - PBRX
+  - PDES
+  - PGLI
+  - PJAA
+  - PMJS
+  - PMUI
+  - PNSE
+  - POLU
+  - POLY
+  - PSKT
+  - PTSP
+  - PZZA
+  - RAAM
+  - RAFI
+  - RALS
+  - RICY
+  - SBAT
+  - SCMA
+  - SCNP
+  - SHID
+  - SLIS
+  - SMSM
+  - SNLK
+  - SONA
+  - SOTS
+  - SRIL
+  - SSTM
+  - SWID
+  - TELE
+  - TFCO
+  - TMPO
+  - TOOL
+  - TOYS
+  - TRIO
+  - TRIS
+  - TYRE
+  - UFOE
+  - UNIT
+  - UNTD
+  - VERN
+  - VIVA
+  - VKTR
+  - WOOD
+  - YELO
+  - ZATA
+  - ZONE
+  updated: '2026-06-19'
+energy:
+  tickers:
+  - AADI
+  - ABMM
+  - ADMR
   - ADRO
+  - AIMS
   - AKRA
+  - ALII
+  - APEX
+  - ARII
+  - ARTI
+  - ATLA
+  - BBRM
+  - BESS
+  - BIPI
+  - BOAT
+  - BOSS
+  - BSML
+  - BSSR
+  - BULL
+  - BUMI
+  - BYAN
+  - CANI
+  - CBRE
+  - CGAS
+  - CNKO
+  - COAL
+  - CUAN
+  - DEWA
+  - DOID
+  - DSSA
+  - DWGL
+  - ELSA
+  - ENRG
+  - FIRE
+  - GEMS
+  - GTBO
+  - GTSI
+  - HILL
+  - HITS
+  - HRUM
+  - HUMI
+  - IATA
+  - INDY
+  - INPS
+  - ITMA
+  - ITMG
+  - JSKY
+  - KKGI
+  - KOPI
+  - LEAD
+  - MAHA
+  - MBAP
+  - MBSS
+  - MCOL
+  - MEDC
+  - MKAP
+  - MTFN
+  - MYOH
+  - PGAS
+  - PKPK
+  - PSAT
+  - PSSI
+  - PTBA
+  - PTIS
+  - PTRO
+  - RAJA
+  - RATU
+  - RGAS
+  - RIGS
+  - RMKE
+  - RMKO
+  - RUIS
+  - SEMA
+  - SGER
+  - SHIP
+  - SICO
+  - SMMT
+  - SMRU
+  - SOCI
+  - SUGI
+  - SUNI
+  - SURE
+  - TAMU
+  - TCPI
+  - TEBE
+  - TOBA
+  - TPMA
+  - TRAM
+  - UNIQ
+  - WINS
+  - WOWS
+  updated: '2026-06-19'
+finance:
+  tickers:
+  - ABDA
+  - ADMF
+  - AGRO
+  - AGRS
+  - AHAP
+  - AMAG
+  - AMAR
+  - AMOR
+  - APIC
+  - ARTO
+  - ASBI
+  - ASDM
+  - ASJT
+  - ASMI
+  - ASRM
+  - BABP
+  - BACA
+  - BANK
+  - BBCA
+  - BBHI
+  - BBKP
+  - BBLD
+  - BBMD
+  - BBNI
+  - BBRI
+  - BBSI
+  - BBTN
+  - BBYB
+  - BCAP
+  - BCIC
+  - BDMN
+  - BEKS
+  - BFIN
+  - BGTG
+  - BHAT
+  - BINA
+  - BJBR
+  - BJTM
+  - BKSW
+  - BMAS
+  - BMRI
+  - BNBA
+  - BNGA
+  - BNII
+  - BNLI
+  - BPFI
+  - BPII
+  - BRIS
+  - BSIM
+  - BSWD
+  - BTPN
+  - BTPS
+  - BVIC
+  - CASA
+  - CFIN
+  - COIN
+  - DEFI
+  - DNAR
+  - DNET
+  - FUJI
+  - GSMF
+  - HDFA
+  - INPC
+  - JMAS
+  - LIFE
+  - LPGI
+  - LPPS
+  - MASB
+  - MAYA
+  - MCOR
+  - MEGA
+  - MREI
+  - MTWI
+  - NICK
+  - NISP
+  - NOBU
+  - OCAP
+  - PADI
+  - PALM
+  - PANS
+  - PEGE
+  - PLAS
+  - PNBN
+  - PNBS
+  - PNIN
+  - PNLF
+  - POLA
+  - POOL
+  - RELI
+  - SDRA
+  - SFAN
+  - SMMA
+  - SRTG
+  - STAR
+  - SUPA
+  - TIFA
+  - TRIM
+  - TRUS
+  - TUGU
+  - VICO
+  - VINS
+  - VRNA
+  - VTNY
+  - WOMF
+  - YOII
+  - YULE
+  updated: '2026-06-19'
+health:
+  tickers:
+  - BMHS
+  - CARE
+  - CHEK
+  - DGNS
+  - DKHH
+  - DVLA
+  - HALO
+  - HEAL
+  - IKPM
+  - INAF
+  - IRRA
+  - KAEF
+  - KLBF
+  - LABS
+  - MDLA
+  - MEDS
+  - MERK
+  - MIKA
+  - MMIX
+  - MTMH
+  - OBAT
+  - OMED
+  - PEHA
+  - PEVE
+  - PRAY
+  - PRDA
+  - PRIM
+  - PYFA
+  - RSCH
+  - RSGK
+  - SAME
+  - SCPI
+  - SIDO
+  - SILO
+  - SOHO
+  - SRAJ
+  - SURI
+  - TSPC
+  updated: '2026-06-19'
+idx30:
+  tickers:
+  - AADI
+  - ADMR
+  - ADRO
   - AMRT
   - ANTM
-  - ARNA
   - ASII
-  - ASRI
+  - BBCA
+  - BBNI
+  - BBRI
+  - BMRI
+  - BRPT
+  - BUMI
+  - CPIN
+  - EMTK
+  - GOTO
+  - ICBP
+  - INCO
+  - INDF
+  - INKP
+  - JPFA
+  - KLBF
+  - MBMA
+  - MDKA
+  - MEDC
+  - PGAS
+  - PGEO
+  - PTBA
+  - TLKM
+  - UNTR
+  - UNVR
+  updated: '2026-06-19'
+idx80:
+  tickers:
+  - AADI
+  - ACES
+  - ADMR
+  - ADRO
+  - AKRA
+  - AMMN
+  - AMRT
+  - ANTM
+  - ARTO
+  - ASII
   - BBCA
   - BBNI
   - BBRI
   - BBTN
-  - BDMN
-  - BFIN
-  - BJBR
-  - BJTM
+  - BKSL
   - BMRI
-  - BRIS
+  - BRMS
   - BRPT
   - BSDE
   - BUKA
+  - BUMI
+  - CBDK
+  - CMRY
   - CPIN
   - CTRA
-  - DMAS
-  - DOID
+  - CUAN
+  - DEWA
+  - DSNG
+  - ELSA
   - EMTK
+  - ENRG
   - ERAA
   - ESSA
   - EXCL
   - GGRM
   - GOTO
   - HEAL
-  - HMSP
+  - HRTA
   - HRUM
   - ICBP
   - INCO
   - INDF
+  - INDY
   - INKP
   - INTP
   - ISAT
   - ITMG
   - JPFA
   - JSMR
+  - KIJA
   - KLBF
+  - KPIG
+  - MAPA
   - MAPI
   - MBMA
   - MDKA
   - MEDC
   - MIKA
-  - MNCN
   - MYOR
-  - NCKL
-  - NISP
+  - PANI
   - PGAS
+  - PGEO
+  - PNLF
   - PTBA
-  - PTPP
+  - PTRO
   - PWON
+  - RAJA
+  - RATU
+  - SCMA
   - SIDO
   - SMGR
   - SMRA
-  - TBIG
-  - TKIM
+  - SSIA
+  - TAPG
   - TLKM
   - TOWR
+  - TPIA
   - UNTR
   - UNVR
-  - WSKT
-  updated: '2026-02-01'
+  - WIFI
+  updated: '2026-06-19'
+jii:
+  tickers:
+  - AADI
+  - ADMR
+  - ADRO
+  - ANTM
+  - ARCI
+  - BKSL
+  - BRIS
+  - BRMS
+  - BUMI
+  - CPIN
+  - DEWA
+  - ENRG
+  - EXCL
+  - ICBP
+  - INDF
+  - INKP
+  - JPFA
+  - KLBF
+  - MBMA
+  - MDKA
+  - MEDC
+  - PGAS
+  - PTBA
+  - RAJA
+  - RATU
+  - TLKM
+  - TPIA
+  - UNTR
+  - UNVR
+  - WIFI
+  updated: '2026-06-19'
 lq45:
   tickers:
-  - AALI
-  - ACES
+  - AADI
+  - ADMR
   - ADRO
   - AKRA
+  - AMMN
   - AMRT
   - ANTM
   - ASII
@@ -115,38 +589,480 @@ lq45:
   - BBNI
   - BBRI
   - BBTN
-  - BDMN
   - BMRI
-  - BRIS
   - BRPT
-  - BUKA
+  - BUMI
   - CPIN
+  - CUAN
+  - DEWA
   - EMTK
+  - ESSA
   - EXCL
-  - GGRM
   - GOTO
-  - HEAL
-  - HMSP
-  - HRUM
+  - HRTA
   - ICBP
   - INCO
   - INDF
   - INKP
-  - INTP
+  - ISAT
   - ITMG
   - JPFA
   - KLBF
   - MAPI
   - MBMA
+  - MDKA
   - MEDC
-  - MIKA
   - PGAS
+  - PGEO
   - PTBA
-  - SIDO
+  - SCMA
   - SMGR
   - TLKM
   - TOWR
   - UNTR
   - UNVR
-  - WSKT
-  updated: '2026-02-01'
+  - WIFI
+  updated: '2026-06-19'
+mbx:
+  tickers:
+  - AADI
+  - AALI
+  - ABMM
+  - ACES
+  - ADES
+  - ADHI
+  - ADMR
+  - ADRO
+  - AGRO
+  - AISA
+  - AKRA
+  - ALDO
+  - ALII
+  - AMAG
+  - AMAR
+  - AMMN
+  - AMRT
+  - ANTM
+  - APLN
+  - ARNA
+  - ARTO
+  - ASGR
+  - ASII
+  - ASRI
+  - ASSA
+  - AUTO
+  - AVIA
+  - BACA
+  - BALI
+  - BAYU
+  - BBCA
+  - BBHI
+  - BBMD
+  - BBNI
+  - BBRI
+  - BBSI
+  - BBTN
+  - BBYB
+  - BCAP
+  - BDKR
+  - BDMN
+  - BEST
+  - BFIN
+  - BGTG
+  - BINA
+  - BIRD
+  - BISI
+  - BJBR
+  - BJTM
+  - BKSL
+  - BLOG
+  - BMHS
+  - BMRI
+  - BMTR
+  - BNGA
+  - BNII
+  - BNLI
+  - BOLA
+  - BREN
+  - BRIS
+  - BRMS
+  - BRPT
+  - BSDE
+  - BSIM
+  - BSSR
+  - BTPN
+  - BTPS
+  - BUDI
+  - BUKA
+  - BUMI
+  - BVIC
+  - BWPT
+  - BYAN
+  - CARS
+  - CASS
+  - CBDK
+  - CBUT
+  - CFIN
+  - CITA
+  - CLEO
+  - CMNP
+  - CMRY
+  - CPIN
+  - CTRA
+  - CUAN
+  - DAAZ
+  - DEWA
+  - DGWG
+  - DILD
+  - DKFT
+  - DLTA
+  - DMAS
+  - DMND
+  - DNET
+  - DRMA
+  - DSNG
+  - DSSA
+  - ELPI
+  - ELSA
+  - EMTK
+  - ENRG
+  - EPMT
+  - ERAA
+  - ERAL
+  - ESSA
+  - EXCL
+  - FILM
+  - FISH
+  - GEMS
+  - GGRM
+  - GJTL
+  - GLVA
+  - GOLF
+  - GOOD
+  - GZCO
+  - HATM
+  - HEAL
+  - HERO
+  - HEXA
+  - HMSP
+  - HRTA
+  - HRUM
+  - ICBP
+  - IMAS
+  - IMPC
+  - INCO
+  - INDF
+  - INDY
+  - INKP
+  - INPC
+  - INTP
+  - IPCC
+  - IPCM
+  - ISAT
+  - ISSP
+  - ITMG
+  - JARR
+  - JIHD
+  - JKON
+  - JPFA
+  - JRPT
+  - JSMR
+  - JSPT
+  - JTPE
+  - KBLI
+  - KEEN
+  - KEJU
+  - KIJA
+  - KKGI
+  - KLBF
+  - KOTA
+  - KPIG
+  - LPCK
+  - LPKR
+  - LPPF
+  - LSIP
+  - LTLS
+  - MAHA
+  - MAIN
+  - MAPA
+  - MAPI
+  - MARK
+  - MASB
+  - MAYA
+  - MBMA
+  - MBSS
+  - MCOL
+  - MCOR
+  - MDIY
+  - MDKA
+  - MDLA
+  - MEDC
+  - MEGA
+  - MERK
+  - MIDI
+  - MIKA
+  - MKTR
+  - MLBI
+  - MLPL
+  - MNCN
+  - MORA
+  - MPMX
+  - MSIN
+  - MSTI
+  - MTDL
+  - MTEL
+  - MTLA
+  - MTMH
+  - MYOR
+  - NISP
+  - NOBU
+  - OMED
+  - PALM
+  - PANI
+  - PANS
+  - PBID
+  - PGAS
+  - PGEO
+  - PNBN
+  - PNGO
+  - PNIN
+  - PNLF
+  - PORT
+  - POWR
+  - PRAY
+  - PRDA
+  - PSGO
+  - PSSI
+  - PTBA
+  - PTPP
+  - PTRO
+  - PWON
+  - RAAM
+  - RAJA
+  - RALS
+  - RBMS
+  - RMKE
+  - SAME
+  - SAMF
+  - SCMA
+  - SGER
+  - SGRO
+  - SHIP
+  - SIDO
+  - SILO
+  - SIMP
+  - SKRN
+  - SMAR
+  - SMBR
+  - SMDR
+  - SMGR
+  - SMIL
+  - SMRA
+  - SMSM
+  - SPTO
+  - SRTG
+  - SSIA
+  - SSMS
+  - STAA
+  - SUNI
+  - TAPG
+  - TBIG
+  - TBLA
+  - TEBE
+  - TINS
+  - TKIM
+  - TLDN
+  - TLKM
+  - TMAS
+  - TOBA
+  - TOTL
+  - TOTO
+  - TOWR
+  - TPIA
+  - TPMA
+  - TRGU
+  - TRIM
+  - TSPC
+  - TUGU
+  - UCID
+  - ULTJ
+  - UNIC
+  - UNTR
+  - UNVR
+  - VICI
+  - VICO
+  - WIIM
+  - WINS
+  - WOOD
+  - WTON
+  - YUPI
+  updated: '2026-06-19'
+noncyc:
+  tickers:
+  - AALI
+  - ADES
+  - AGAR
+  - AISA
+  - ALTO
+  - AMRT
+  - ANDI
+  - ANJT
+  - ASHA
+  - AYAM
+  - BEEF
+  - BEER
+  - BISI
+  - BOBA
+  - BRRC
+  - BTEK
+  - BUAH
+  - BUDI
+  - BWPT
+  - CAMP
+  - CBUT
+  - CEKA
+  - CLEO
+  - CMRY
+  - COCO
+  - CPIN
+  - CPRO
+  - CRAB
+  - CSRA
+  - DAYA
+  - DEWI
+  - DLTA
+  - DMND
+  - DPUM
+  - DSFI
+  - DSNG
+  - ENZO
+  - EPMT
+  - FAPA
+  - FISH
+  - FOOD
+  - FORE
+  - GGRM
+  - GOLL
+  - GOOD
+  - GULA
+  - GUNA
+  - GZCO
+  - HERO
+  - HMSP
+  - HOKI
+  - ICBP
+  - IKAN
+  - INDF
+  - IPPE
+  - ISEA
+  - ITIC
+  - JARR
+  - JAWA
+  - JPFA
+  - KEJU
+  - KINO
+  - KMDS
+  - LAPD
+  - LSIP
+  - MAGP
+  - MAIN
+  - MAXI
+  - MBTO
+  - MGRO
+  - MIDI
+  - MKTR
+  - MLBI
+  - MLPL
+  - MPPA
+  - MRAT
+  - MSJA
+  - MYOR
+  - NASI
+  - NEST
+  - NSSS
+  - OILS
+  - PCAR
+  - PGUN
+  - PMMP
+  - PNGO
+  - PSDN
+  - PSGO
+  - PTPS
+  - RANC
+  - RLCO
+  - ROTI
+  - SDPC
+  - SGRO
+  - SIMP
+  - SIPD
+  - SKBM
+  - SKLT
+  - SMAR
+  - SSMS
+  - STAA
+  - STRK
+  - STTP
+  - TAPG
+  - TAYS
+  - TBLA
+  - TCID
+  - TGKA
+  - TGUK
+  - TLDN
+  - TRGU
+  - UCID
+  - ULTJ
+  - UNSP
+  - UNVR
+  - VICI
+  - WAPO
+  - WICO
+  - WIIM
+  - WINE
+  - WMPP
+  - WMUU
+  - YUPI
+  updated: '2026-06-19'
+tech:
+  tickers:
+  - AREA
+  - ATIC
+  - AWAN
+  - AXIO
+  - BELI
+  - BUKA
+  - CYBR
+  - DCII
+  - DIVA
+  - DMMX
+  - EDGE
+  - ELIT
+  - EMTK
+  - ENVY
+  - GLVA
+  - GOTO
+  - HDIT
+  - IOTF
+  - IRSX
+  - JATI
+  - KIOS
+  - KREN
+  - LMAS
+  - LUCK
+  - MCAS
+  - MLPT
+  - MPIX
+  - MSTI
+  - MTDL
+  - NFCX
+  - PTSN
+  - SKYB
+  - TECH
+  - TFAS
+  - TOSK
+  - TRON
+  - UVCR
+  - WIFI
+  - WIRG
+  - ZYRX
+  updated: '2026-06-19'

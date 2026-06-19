@@ -6,7 +6,7 @@ Layer: Adapter
 
 import typer
 
-from src.adapters.cli.accumulation_commands import universe_app
+from src.adapters.cli.fetch_universe_commands import universe_app
 from src.adapters.cli.broker_commands import (
     broker_fetch,
     broker_history,

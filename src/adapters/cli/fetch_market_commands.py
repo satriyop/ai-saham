@@ -517,7 +517,7 @@ def fetch_market(
         Optional[str],
         typer.Option(
             "--universe", "-u",
-            help="Named universe: lq45, idx80, bumn20, cached",
+            help="Universe name or 'cached' — see `saham fetch universe list`",
         ),
     ] = None,
     days: Annotated[
