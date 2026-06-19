@@ -67,7 +67,7 @@ class IdxMarketDataProvider(MarketDataProvider):
     IDX-native OHLCV provider using the public TradingSummary API.
 
     Fetches one trading day per request, iterating over the requested date range.
-    Non-trading days (weekends, holidays) return 403 and are silently skipped.
+    Dates with no data (IDX returns 403 or empty response) are silently skipped.
 
     Usage:
         provider = IdxMarketDataProvider()
@@ -88,7 +88,7 @@ class IdxMarketDataProvider(MarketDataProvider):
         """
         Fetch market summary for one trading day.
 
-        Returns None for non-trading days (403 from IDX).
+        Returns None when IDX has no data for the date (403 or empty).
         Raises MarketDataProviderError on network errors.
         """
         self._rate_limit()
@@ -113,7 +113,7 @@ class IdxMarketDataProvider(MarketDataProvider):
                     )
 
                     if response.status_code == 403:
-                        # Non-trading day (holiday or weekend)
+                        # No data available for this date — do not assume holiday.
                         return None
 
                     if response.status_code == 429:

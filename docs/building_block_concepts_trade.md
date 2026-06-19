@@ -186,11 +186,14 @@ A strategy is a **YAML file** that defines:
 
 Why YAML instead of Python? Non-developer traders can write or modify strategies without coding. The `saham strategy create` command can also generate them from natural language via AI, and `saham strategy init` scaffolds from a template.
 
-Strategies live in `./strategies/NAME/strategy.yaml`. Current inventory:
+Strategies live in `./strategies/NAME/strategy.yaml` (16 packaged strategies). Current inventory includes:
 - `foreign-accumulation` — foreign flow + RSI + trend rules
 - `ichimoku-trend` — Ichimoku cloud crossover rules
 - `rsi-momentum` — RSI oversold/overbought momentum
+- `williams-r-bounce` — Williams %R oversold bounce
+- `volume-spike` — Volume spike breakout
 - `test-sentiment` — sentiment-based rules
+- Plus 10 more (bb-breakout, ema-crossover, foreign-ichimoku, etc.)
 
 ### 4. Risk Assessment
 

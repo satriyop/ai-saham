@@ -361,17 +361,17 @@ The `ConfirmIntradayOpenUseCase` applies 8 deterministic gates in order:
 |------|-------|------|
 | `adapters/cli/trade_intraday_commands.py` | ~600 | Intraday trade CLI entry points (confirm, log, review, outcome) |
 | `adapters/cli/intraday_workflow_commands.py` | ~1200 | Shared display and workflow helpers behind lifecycle command modules |
-| `application/use_case/pre_open_screen.py` | 533 | 10-step pre-open analysis pipeline |
-| `application/use_case/confirm_intraday_open.py` | 183 | 8-gate deterministic confirmation |
-| `application/use_case/intraday_backtest.py` | 921 | Walk-forward backtest over history |
+| `application/use_case/pre_open_screen.py` | 611 | 10-step pre-open analysis pipeline |
+| `application/use_case/confirm_intraday_open.py` | 254 | 8-gate deterministic confirmation |
+| `application/use_case/intraday_backtest.py` | 953 | Walk-forward backtest over history |
 | `application/services/intraday_confirmation_journal.py` | 305 | Confirmation journal log + review + outcome |
 | `application/services/ai_research.py` | 88 | Claude-based AI ticker research |
-| `infrastructure/browser/playwright_stockbit.py` | 1848 | Playwright browser automation for Stockbit |
-| `infrastructure/browser/stockbit_browser.py` | 181 | Manual + instruction-based browser providers |
-| `infrastructure/persistence/intraday_confirmation_csv.py` | ~60 | Confirmation journal CSV persistence |
-| `domain/ports/browser_data_provider.py` | 73 | Browser data provider interface |
-| `domain/value_objects/screener_result.py` | ~100 | MoverData, ScreenerCandidate, etc. |
-| `domain/value_objects/intraday_confirmation.py` | ~150 | IntradayDecision, Confirmation, Outcome |
+| `infrastructure/browser/playwright_stockbit.py` | 2232 | Playwright browser automation for Stockbit |
+| `infrastructure/browser/stockbit_browser.py` | 191 | Manual + instruction-based browser providers |
+| `infrastructure/persistence/intraday_confirmation_csv.py` | 229 | Confirmation journal CSV persistence |
+| `domain/ports/browser_data_provider.py` | 90 | Browser data provider interface |
+| `domain/value_objects/screener_result.py` | 184 | MoverData, ScreenerCandidate, etc. |
+| `domain/value_objects/intraday_confirmation.py` | 149 | IntradayDecision, Confirmation, Outcome |
 | `config/pre_open_screener.yaml` | ~60 | Tuning parameters (IEV, ATR, accum, FVWAP) |
 
 ---

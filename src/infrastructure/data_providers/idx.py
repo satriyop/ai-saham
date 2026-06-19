@@ -145,12 +145,9 @@ class IdxBrokerDataProvider(BrokerDataProvider):
                         continue
 
                     if response.status_code == 403:
-                        # IDX returns 403 for non-trading days (holidays).
-                        # Treat as empty data, not an error.
-                        logger.debug(
-                            "IDX returned 403 for %s (likely non-trading day)",
-                            target_date,
-                        )
+                        # IDX returns 403 when no data is available for this date.
+                        # Do NOT assume holiday — 403 has multiple causes.
+                        logger.debug("IDX 403 for %s — no data available", target_date)
                         return {"data": [], "recordsTotal": 0}
 
                     if response.status_code >= 500:

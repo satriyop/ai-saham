@@ -104,6 +104,34 @@ Recommended: 1 request/second. IDX may return 429 if requests are too frequent. 
 ### No Stock-Level Filtering
 The `search[value]` parameter returns 403. Always fetch all stocks (`length=9999`) and filter client-side.
 
+### 403 Has Multiple Causes — Do NOT Assume Holiday
+IDX returns 403 in at least three situations:
+1. Missing or wrong browser headers (`sec-ch-ua`, `Referer`)
+2. `search[value]` filtering attempt
+3. No data published for the queried date
+
+**Never interpret IDX 403 as "non-trading day" or "holiday"** — live probes confirm trading days can also return 403 from GetStockSummary while GetIndexSummary returns valid data for the same date.
+
+### Canonical Market Open/Closed Check
+Use Stockbit `GET /company-price-feed/market-time` (requires Bearer token):
+
+```python
+# Response shape:
+{
+  "data": {
+    "market": {"status": "STATUS_OPEN"},      # or "STATUS_CLOSE"
+    "iepiev_regular": {"status": "STATUS_CLOSE"},
+    "iepiev_fca": {"status": "STATUS_OPEN"}
+  }
+}
+```
+
+`data.market.status == "STATUS_OPEN"` is the canonical trading-day signal.
+
+Existing implementation: `src/infrastructure/browser/stockbit_market_time.py`
+Domain value object: `src/domain/value_objects/market_status.py`
+Port: `src/domain/ports/market_status_provider.py`
+
 ## Implementation Reference
 
 The IDX provider is implemented at: `src/infrastructure/data_providers/idx.py`

@@ -15,25 +15,25 @@ This document maps every component of AI Saham into a three-tier hierarchy: **Bi
                                     v
                     +---------------------------------------+
                     |        Application Layer              |
-                    |  22 use cases | 11 services | 4 ports |
-                    |  Formula DSL (6 files) | Rules (3)    |
+|  38 use cases | 10 services | 5 ports |
+|  Formula DSL (6 files) | Rules (3)    |
                     |  DTOs (2)                              |
                     +---------------------------------------+
                                     |
                                     v
                     +---------------------------------------+
                     |         Domain Layer (Pure Python)    |
-                    |  5 entities | 11 value objects        |
+                    |  7 entities | 21 value objects        |
                     |  5 indicators | 2 services (1 stub)   |
-                    |  13 ports | 5 rules                    |
+                    |  24 ports | 6 rules                    |
                     +---------------------------------------+
                                     ^
                                     |
                     +---------------------------------------+
                     |      Infrastructure Layer             |
-                    |  4 data providers | 8 persistence     |
-                    |  15 AI files | 8 sentiment            |
-                    |  2 browser | 3 config/csv             |
+                    |  5 data providers | 11 persistence    |
+                    |  15 AI files | 11 sentiment           |
+                    |  13 browser | 3 config + 3 csv        |
                     |  1 plugin loader | 4 skill            |
                     +---------------------------------------+
 ```
@@ -150,7 +150,7 @@ The same layers with their actual components visible:
 | # | Subsystem | Purpose | Entry Points | Key Files |
 |---|-----------|---------|--------------|-----------|
 | 1 | **CLI Router** | Routes user commands to use cases via lifecycle groups. Parses flags, wires dependencies, displays output. | `saham <group> <cmd>` | `main.py`, `fetch_commands.py`, `trade_commands.py`, etc |
-| 2 | **Data Ingestion** | Fetches, caches, and serves OHLCV + broker + news data from external sources. | `fetch market`, `fetch broker`, `fetch stockbit`, `analyze sentiment` | `yahoo.py`, `idx_market.py`, `idx.py`, `stockbit.py`, 6 sentiment providers, SQLite repos |
+| 2 | **Data Ingestion** | Fetches, caches, and serves OHLCV + broker + news data from external sources. | `fetch market`, `fetch broker`, `fetch stockbit`, `fetch iev`, `analyze sentiment` | `yahoo.py`, `idx_market.py`, `idx.py`, `stockbit.py`, `playwright_stockbit.py`, 6 sentiment providers, SQLite repos |
 | 3 | **Analysis Core** | Deterministic indicator computation, risk profiling, and composite analysis. | `sma`, `ema`, `rsi`, `indicator compute`, `analyze risk`, `indicator snapshot`, `analyze compare` | `sma.py`, `ema.py`, `rsi.py`, `indicator_registry.py`, 3 rule profiles, `rule_engine.py` |
 | 4 | **Screening Suite** | Multi-dimensional stock screening for accumulation patterns, pre-open movers, and swing candidates. | `screen accum`, `screen pre-open` | `accumulation_screen.py`, `intraday_workflow_commands.py`, `pre_open_screen.py` |
 | 5 | **Strategy System** | Authoring, validation, loading, and execution of versioned strategy packages. | `strategy init/create/validate/list`, `strategy backtest` | `strategy_loader.py`, 3 strategy YAMLs, `strategy_commands.py` |
@@ -285,7 +285,7 @@ Each Big block decomposes into Medium modules:
 
 ### 🧩 SMALL — Individual Components
 
-#### Domain Entities (5)
+#### Domain Entities (7)
 
 | Entity | File | Fields | Purpose |
 |--------|------|--------|---------|
@@ -294,8 +294,10 @@ Each Big block decomposes into Medium modules:
 | `BrokerSummary` | `domain/entities/broker_flow.py` | ticker, date, foreign_buy, foreign_sell, total_volume, top_buyers, top_sellers | Foreign flow snapshot |
 | `AnalysisResult` | `domain/entities/analysis_result.py` | *(stub)* | Placeholder |
 | `Stock` | `domain/entities/stock.py` | *(stub)* | Placeholder |
+| `StockMeta` | `domain/entities/stock_meta.py` | ticker, sector, industry, exchange | Stock metadata |
+| `TradeTick` | `domain/entities/trade_tick.py` | time, price, volume, side | Intraday trade tick |
 
-#### Domain Value Objects (11)
+#### Domain Value Objects (21)
 
 | Value Object | File | Purpose |
 |-------------|------|---------|
@@ -309,8 +311,19 @@ Each Big block decomposes into Medium modules:
 | `IntradayConfirmation` | `domain/value_objects/intraday_confirmation.py` | Confirmation decision |
 | `Sentiment` | `domain/value_objects/sentiment.py` | Classified headline + score |
 | `SkillAnnotation` | `domain/value_objects/skill_annotation.py` | Skill metadata from code |
+| `AnalystConsensus` | `domain/value_objects/analyst_consensus.py` | Analyst ratings + price target |
+| `BandarDetectorSnapshot` | `domain/value_objects/bandar_detector_snapshot.py` | Bandar accumulation/distribution signal |
+| `CompanyFundamentals` | `domain/value_objects/company_fundamentals.py` | P/E, ROE, Piotroski F-Score |
+| `CorporateActionEvent` | `domain/value_objects/corporate_action_event.py` | Dividend/RUPS/rights issue |
+| `InsiderTransaction` | `domain/value_objects/insider_transaction.py` | Director/commissioner trades |
+| `MarketStatus` | `domain/value_objects/market_status.py` | Market operating status |
+| `OrderBookSnapshot` | `domain/value_objects/order_book_snapshot.py` | Order book level 2 data |
+| `RunningTradeSignal` | `domain/value_objects/running_trade_signal.py` | Real-time institutional absorption |
+| `SeasonalEdge` | `domain/value_objects/seasonal_edge.py` | Monthly return/win rate ranking |
+| `ShareholdingComposition` | `domain/value_objects/shareholding_composition.py` | Institutional/individual split |
+| `TickSize` | `domain/value_objects/tick_size.py` | IDX tick size table |
 
-#### Domain Ports (13)
+#### Domain Ports (24)
 
 | Port | File | Implemented By |
 |------|------|---------------|
@@ -326,8 +339,19 @@ Each Big block decomposes into Medium modules:
 | `AccumulationJournalStore` | `domain/ports/accumulation_journal_store.py` | AccumulationJournal |
 | `CsvBrokerParser` | `domain/ports/csv_broker_parser.py` | BrokerCsvAdapter |
 | `Persistence` | `domain/ports/persistence.py` | *(stub)* |
+| `AnalystConsensusProvider` | `domain/ports/analyst_consensus_provider.py` | StockbitAnalyst |
+| `BandarDetectorProvider` | `domain/ports/bandar_detector_provider.py` | StockbitBandar |
+| `FundamentalsProvider` | `domain/ports/fundamentals_provider.py` | StockbitFundamentals |
+| `InsiderActivityProvider` | `domain/ports/insider_activity_provider.py` | StockbitInsider |
+| `MarketStatusProvider` | `domain/ports/market_status_provider.py` | StockbitMarketTime |
+| `OrderBookProvider` | `domain/ports/order_book_provider.py` | StockbitOrderBook |
+| `RunningTradeProvider` | `domain/ports/running_trade_provider.py` | StockbitRunningTrade |
+| `SeasonalityProvider` | `domain/ports/seasonality_provider.py` | StockbitSeasonality |
+| `ShareholdingProvider` | `domain/ports/shareholding_provider.py` | StockbitShareholding |
+| `StockMetaProvider` | `domain/ports/stock_meta_provider.py` | YahooStockMeta |
+| `StockMetaRepository` | `domain/ports/stock_meta_repository.py` | SQLiteStockMeta |
 
-#### Application Use Cases (22)
+#### Application Use Cases (38)
 
 | Use Case | File | Input | Output |
 |----------|------|-------|--------|
@@ -353,8 +377,24 @@ Each Big block decomposes into Medium modules:
 | `CreateIndicatorFromIntentUseCase` | `use_case/create_indicator_from_intent.py` | intent, provider | Formula string |
 | `CreateStrategyFromIntentUseCase` | `use_case/create_strategy_from_intent.py` | intent, provider | Strategy YAML |
 | `IntradayBacktestUseCase` | `use_case/intraday_backtest.py` | ticker, strategy | Performance report |
+| `RefreshMarketDataUseCase` | `use_case/refresh_market_data.py` | ticker, days | Refreshed candles |
+| `FetchMarketRefreshUseCase` | `use_case/fetch_market_refresh.py` | universe, days | Batch refresh |
+| `RefreshBrokerDataUseCase` | `use_case/refresh_broker_data.py` | ticker, date range | Refreshed broker data |
+| `FetchBrokerDailyFlowsUseCase` | `use_case/fetch_broker_daily_flows.py` | ticker, days | Foreign flow time-series |
+| `OpeningSnapshotUseCase` | `use_case/opening_snapshot.py` | — | NCP-locked predictions |
+| `OpeningTrackUseCase` | `use_case/opening_track.py` | — | Orderbook tracking |
+| `OpeningGradeUseCase` | `use_case/opening_grade.py` | — | Accuracy report |
+| `OpeningPromptUseCase` | `use_case/opening_prompt.py` | session | AI prompt |
+| `OpeningTuneUseCase` | `use_case/opening_tune.py` | — | Config recommendations |
+| `DailyBriefingUseCase` | `use_case/daily_briefing.py` | universe, date | Briefing summary |
+| `SwingAnalysisWorkflowUseCase` | `use_case/swing_analysis_workflow.py` | ticker, capital | Composite swing view |
+| `PreOpenWorkflowUseCase` | `use_case/pre_open_workflow.py` | movers, config | Pre-open orchestration |
+| `ResolveOpeningPricesUseCase` | `use_case/resolve_opening_prices.py` | session | Opening prices |
+| `DataUpdateStatusUseCase` | `use_case/data_update_status.py` | — | Health check |
+| `FetchStockMetaUseCase` | `use_case/fetch_stock_meta.py` | ticker | Sector/industry metadata |
+| `AnalyzeRunningTradeUseCase` | `use_case/analyze_running_trade.py` | ticker | Running trade attribution |
 
-#### Application Services (11)
+#### Application Services (10)
 
 | Service | File | Purpose |
 |---------|------|---------|
@@ -369,7 +409,7 @@ Each Big block decomposes into Medium modules:
 | `GroupMapping` | `services/group_mapping.py` | Stock sector/group classification |
 | `AIResearch` | `services/ai_research.py` | AI research orchestration |
 
-#### Application Ports (4)
+#### Application Ports (5)
 
 | Port | File | Purpose |
 |------|------|---------|
@@ -377,6 +417,7 @@ Each Big block decomposes into Medium modules:
 | `StrategyTranslator` | `ports/strategy_translator.py` | NL-to-strategy interface |
 | `IndicatorPlugin` | `ports/indicator_plugin.py` | Plugin indicator interface |
 | `SkillWriter` | `ports/skill_writer.py` | Skill file writing interface |
+| `CorporateActionRepository` | `ports/corporate_action_repository.py` | Corporate action event persistence |
 
 #### Application Formula DSL (6)
 
@@ -513,7 +554,7 @@ Each Big block decomposes into Medium modules:
 | Update Impl | `cli/update_commands.py` | Implementation of batch update logic |
 | Accumulation | `cli/accumulation_commands.py` | Implementation of accumulation screen logic |
 
-#### Plugin Indicators (8)
+#### Plugin Indicators (13)
 
 | Plugin | File | What It Computes |
 |--------|------|-----------------|
@@ -524,15 +565,34 @@ Each Big block decomposes into Medium modules:
 | Stochastic | `plugins/indicators/stochastic.py` | %K, %D lines |
 | Foreign Flow | `plugins/indicators/foreign_flow.py` | Foreign buy ratio, streak, consecutive buys |
 | Foreign VWAP | `plugins/indicators/foreign_vwap.py` | Foreign VWAP vs current price |
+| MFI | `plugins/indicators/mfi.py` | Money Flow Index |
+| OBV | `plugins/indicators/obv.py` | On-Balance Volume |
+| Relative Strength | `plugins/indicators/relative_strength.py` | RS rating vs benchmark |
+| Volume Ratio | `plugins/indicators/volume_ratio.py` | Volume vs average ratio |
+| VWAP | `plugins/indicators/vwap.py` | Volume-Weighted Average Price |
+| Williams %R | `plugins/indicators/williams_r.py` | Williams %R oscillator |
 | Template | `plugins/indicators/_template.py` | Plugin authoring template |
 
-#### Strategies (3)
+#### Strategies (16)
 
 | Strategy | File | Approach |
 |----------|------|----------|
-| RSI Momentum | `strategies/rsi-momentum/strategy.yaml` | RSI extremes + SMA trend filter |
+| BB Breakout | `strategies/bb-breakout/strategy.yaml` | Bollinger Band breakout |
+| BB Mean Reversion | `strategies/bb-mean-reversion/strategy.yaml` | Bollinger Band reversion |
+| EMA Crossover | `strategies/ema-crossover/strategy.yaml` | EMA 9/21 crossover |
 | Foreign Accumulation | `strategies/foreign-accumulation/strategy.yaml` | Foreign flow patterns + RSI confirmation |
+| Foreign Ichimoku | `strategies/foreign-ichimoku/strategy.yaml` | Foreign flow + Ichimoku cloud |
+| Ichimoku MACD | `strategies/ichimoku-macd/strategy.yaml` | Ichimoku + MACD confluence |
+| Ichimoku Trend | `strategies/ichimoku-trend/strategy.yaml` | Ichimoku cloud crossover |
+| MACD Foreign Flow | `strategies/macd-foreign-flow/strategy.yaml` | MACD + foreign flow divergence |
+| MFI Oversold | `strategies/mfi-oversold/strategy.yaml` | MFI oversold bounce |
+| OBV Trend | `strategies/obv-trend/strategy.yaml` | OBV divergence trend |
+| RS Momentum | `strategies/rs-momentum/strategy.yaml` | Relative strength momentum |
+| RSI Momentum | `strategies/rsi-momentum/strategy.yaml` | RSI extremes + SMA trend filter |
+| Stochastic Trend | `strategies/stochastic-trend/strategy.yaml` | Stochastic + trend filter |
 | Test Sentiment | `strategies/test-sentiment/strategy.yaml` | Sentiment rule integration test |
+| Volume Spike | `strategies/volume-spike/strategy.yaml` | Volume spike breakout |
+| Williams %R Bounce | `strategies/williams-r-bounce/strategy.yaml` | Williams %R oversold bounce |
 
 #### Stubs (3)
 
@@ -684,13 +744,13 @@ UseCase: CreateIndicatorFromIntentUseCase
 
 | Layer | Files | Lines (approx) |
 |-------|-------|----------------|
-| Domain | 42 | ~2,500 |
-| Application | 37 | ~6,500 |
-| Infrastructure | 53 | ~9,000 |
-| Adapters | 21 | ~7,500 |
-| Plugins | 9 | ~600 |
-| Strategies | 5 | ~300 |
-| **Total** | **160+** | **~25,400** |
+| Domain | 64 | ~5,200 |
+| Application | 64 | ~16,300 |
+| Infrastructure | 63 | ~15,800 |
+| Adapters | 29 | ~13,300 |
+| Plugins | 13 | ~1,300 |
+| Strategies | 16 | ~1,200 |
+| **Total** | **~250** | **~53,000** |
 
 ---
 

@@ -73,15 +73,14 @@ saham analyze chart price BBRI --sma 20 --ema 50
 | Group | Purpose | Key Sub-commands |
 | :--- | :--- | :--- |
 | **`saham today`** | Daily briefing | read-only regime + candidate summary |
-| **`saham fetch`** | Data Ingestion | `market`, `broker`, `broker-history`, `iev`, `stockbit`, `universe` |
+| **`saham fetch`** | Data Ingestion | `market`, `broker`, `broker-import`, `broker-history`, `broker-top-foreign`, `iev`, `status`, `stockbit`, `universe` |
 | **`saham screen`** | Candidate Discovery | `pre-open`, `accum` |
 | **`saham learn`** | Feedback Loop | `snapshot`, `track`, `grade`, `prompt`, `tune` |
-| **`saham view`** | Read-only Browsing | `broker flow`, `broker top`, `broker status` |
-| **`saham indicator`**| Technical Math | `compute`, `snapshot`, `create`, `list` |
-| **`saham analyze`** | Insights & Charts | `risk`, `sentiment`, `regime`, `chart`, `compare`, `swing` |
-| **`saham strategy`** | Strategy Lifecycle| `init`, `validate`, `create`, `backtest` |
-| **`saham trade`** | Paper Trade Workspace | `confirm`, `log`, `review`, `outcome`, `size`, `backtest-swing`, `backtest-intraday` |
-| **`saham strategy skill`** | AI Documentation | `generate`, `check`, `index` |
+| **`saham view`** | Read-only Browsing | `broker status`, `broker flow`, `broker top`, `broker history`, `broker top-foreign`, `broker mappings` |
+| **`saham indicator`**| Technical Math | `compute`, `snapshot`, `create`, `list`, `show`, `delete` |
+| **`saham analyze`** | Insights & Charts | `risk`, `compare`, `sentiment`, `audit`, `regime`, `chart`, `swing`, `accum-audit`, `swing-compare` |
+| **`saham strategy`** | Strategy Lifecycle| `init`, `validate`, `list`, `create`, `backtest`, `skill` |
+| **`saham trade`** | Paper Trade Workspace | `confirm`, `outcome`, `size`, `backtest-swing`, `backtest-intraday`, `log intraday/swing`, `review intraday/swing` |
 
 ---
 
@@ -1332,7 +1331,7 @@ make format
 make clean
 ```
 
-**Project Stats:** 180+ source files (~40k LOC), 98 test files (~26k LOC) | 1328+ passing, 19 failing
+**Project Stats:** ~250 source files (~53k LOC), 98 test files (~26k LOC)
 
 ---
 
