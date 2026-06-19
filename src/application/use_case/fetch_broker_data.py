@@ -103,7 +103,7 @@ class FetchBrokerDataUseCase:
         if not self._provider.is_authenticated():
             raise BrokerDataProviderError(
                 "Broker provider is not authenticated. "
-                "For Stockbit session data, run 'saham stockbit login'."
+                "For Stockbit session data, run 'saham fetch stockbit login'."
             )
 
         # Fetch from provider

@@ -246,4 +246,9 @@ class ConfirmIntradayOpenUseCase:
             gap_pct=candidate.gap_pct,
             accum_tag=candidate.accum_tag,
             fvwap_discount_pct=candidate.fvwap_discount_pct,
+            opening_price_source=candidate.opening_price_source,
+            opening_price_confidence=candidate.opening_price_confidence,
+            opening_price_timestamp=candidate.opening_price_timestamp,
+            auto_confirmed=candidate.auto_confirmed,
+            manual_override=candidate.manual_override,
         )

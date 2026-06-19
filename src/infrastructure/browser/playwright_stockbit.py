@@ -7,10 +7,10 @@ Two modes:
   2. DOM-scrape mode (fallback): parses rendered HTML tables.
 
 Flow:
-  saham stockbit login   → saves browser session cookies
-  saham stockbit spy     → captures all API traffic to identify endpoints
-  saham stockbit test    → smoke-tests the adapter with live data
-  saham intraday pre-open → uses saved session for autonomous screening
+  saham fetch stockbit login   → saves browser session cookies
+  saham fetch stockbit spy     → captures all API traffic to identify endpoints
+  saham fetch stockbit test    → smoke-tests the adapter with live data
+  saham screen pre-open → uses saved session for autonomous screening
 
 Layer: Infrastructure
 Depends on: playwright (optional), BrowserDataProvider port
@@ -65,7 +65,7 @@ EXODUS_API = "https://exodus.stockbit.com"
 
 # ── Stockbit API config — driven by config/stockbit.yaml ─────────────────
 # Edit config/stockbit.yaml to update endpoints or broker codes without
-# touching Python source. Run `saham stockbit spy` to discover new endpoints.
+# touching Python source. Run `saham fetch stockbit spy` to discover new endpoints.
 
 @dataclass(frozen=True)
 class _StockbitConfig:
@@ -147,7 +147,7 @@ def _load_stockbit_config(
 _sb = _load_stockbit_config()
 
 # Confirmed Exodus API endpoints (originally from DevTools spy, 2026-06-13).
-# Update via config/stockbit.yaml after running `saham stockbit spy`.
+# Update via config/stockbit.yaml after running `saham fetch stockbit spy`.
 _IEV_MOVER_URL_MAIN    = _sb.iev_movers_main_url
 _IEV_MOVER_URL_SPECIAL = _sb.iev_movers_special_url
 _ORDER_BOOK_API        = _sb.orderbook_url        # supports {ticker} placeholder
@@ -208,14 +208,14 @@ def _load_session(session_file: Path) -> dict:
     if not session_file.exists():
         raise RuntimeError(
             f"No session file at '{session_file}'.\n"
-            "Run: saham stockbit login"
+            "Run: saham fetch stockbit login"
         )
     with open(session_file) as f:
         data = json.load(f)
     if not data.get("cookies") and not data.get("local_storage"):
         raise RuntimeError(
             f"Session file '{session_file}' appears empty.\n"
-            "Run: saham stockbit login to refresh."
+            "Run: saham fetch stockbit login to refresh."
         )
     return data
 
@@ -406,7 +406,7 @@ def _exodus_get(url: str, token: str) -> dict | None:
         resp = httpx.get(url, headers=headers, timeout=15)
         if resp.status_code == 401:
             raise StockbitSessionExpired(
-                "Stockbit API session expired (401). Run: saham stockbit login"
+                "Stockbit API session expired (401). Run: saham fetch stockbit login"
             )
         resp.raise_for_status()
         return resp.json()
@@ -468,7 +468,7 @@ class PlaywrightStockbitProvider(BrowserDataProvider):
         if age_hours >= 8:
             raise RuntimeError(
                 f"Stockbit session is {age_hours:.1f}h old — likely expired.\n"
-                "Run: saham stockbit login"
+                "Run: saham fetch stockbit login"
             )
 
     def fetch_preopen_movers(self, iev_min: int) -> list[MoverData]:
@@ -510,7 +510,7 @@ class PlaywrightStockbitProvider(BrowserDataProvider):
                     all_movers = _fetch_iev_all_boards(resolved)
                 except StockbitSessionExpired as e:
                     raise RuntimeError(
-                        f"{e}\n\nRun: saham stockbit login"
+                        f"{e}\n\nRun: saham fetch stockbit login"
                     ) from None
 
                 filtered = [m for m in all_movers if m.iev >= iev_min]
@@ -570,7 +570,7 @@ class PlaywrightStockbitProvider(BrowserDataProvider):
                 try:
                     all_movers = _fetch_iev_all_boards(token)
                 except StockbitSessionExpired as e:
-                    raise RuntimeError(f"{e}\n\nRun: saham stockbit login") from None
+                    raise RuntimeError(f"{e}\n\nRun: saham fetch stockbit login") from None
                 top_movers = all_movers[:top_n]
                 logger.info("Top %d movers: %s", len(top_movers), [m.ticker for m in top_movers])
 
@@ -635,7 +635,7 @@ class PlaywrightStockbitProvider(BrowserDataProvider):
                 try:
                     all_movers = _fetch_iev_all_boards(token)
                 except StockbitSessionExpired as e:
-                    raise RuntimeError(f"{e}\n\nRun: saham stockbit login") from None
+                    raise RuntimeError(f"{e}\n\nRun: saham fetch stockbit login") from None
 
                 return all_movers[:top_n]
 
@@ -758,7 +758,7 @@ class StockbitPlaywrightBrokerProvider(BrokerDataProvider):
 
         if not (self._profile_dir.exists() and any(self._profile_dir.iterdir())):
             raise BrokerDataAuthError(
-                "No Stockbit session found.\nRun: saham stockbit login"
+                "No Stockbit session found.\nRun: saham fetch stockbit login"
             )
 
         sync_playwright = _require_playwright()
@@ -776,7 +776,7 @@ class StockbitPlaywrightBrokerProvider(BrokerDataProvider):
         if not token:
             raise BrokerDataAuthError(
                 "Could not extract auth token — session may be expired.\n"
-                "Run: saham stockbit login"
+                "Run: saham fetch stockbit login"
             )
 
         self._token_cache = token
@@ -834,7 +834,7 @@ class StockbitPlaywrightBrokerProvider(BrokerDataProvider):
         if not body:
             logger.warning(
                 "No broker data for %s (%s–%s). "
-                "Run: saham stockbit spy --target stock --ticker %s",
+                "Run: saham fetch stockbit spy --target stock --ticker %s",
                 ticker, start_date, end_date, ticker,
             )
             return []
@@ -1679,7 +1679,7 @@ def _parse_movers_from_api(
     """
     Attempt to extract MoverData from captured API responses.
 
-    Tries common response shapes. Run `saham stockbit spy` to see the
+    Tries common response shapes. Run `saham fetch stockbit spy` to see the
     actual shape and update this function accordingly.
     """
     movers: list[MoverData] = []
@@ -1712,7 +1712,7 @@ def _parse_best_bid_from_api(
     """
     Attempt to extract best bid from captured order book API responses.
 
-    Tries common response shapes. Run `saham stockbit spy` to see the
+    Tries common response shapes. Run `saham fetch stockbit spy` to see the
     actual shape and update this function accordingly.
     """
     for resp in responses:
@@ -1837,7 +1837,7 @@ def _extract_volume(item: dict) -> int | None:
 def _scrape_movers_from_dom(page: Any, iev_min: int) -> list[MoverData]:
     """
     DOM fallback for movers. Tries multiple selector strategies.
-    Needs calibration against actual Stockbit DOM after `saham stockbit spy`.
+    Needs calibration against actual Stockbit DOM after `saham fetch stockbit spy`.
     """
     movers: list[MoverData] = []
 
@@ -1867,7 +1867,7 @@ def _scrape_movers_from_dom(page: Any, iev_min: int) -> list[MoverData]:
     # (handles div-based layouts)
     logger.warning(
         "DOM scrape: no table rows found. "
-        "Run 'saham stockbit spy' to identify the correct selectors."
+        "Run 'saham fetch stockbit spy' to identify the correct selectors."
     )
     return []
 
@@ -1899,7 +1899,7 @@ def _scrape_best_bid_from_dom(page: Any, ticker: str) -> OrderBookBid | None:
 
     logger.warning(
         "DOM scrape: no order book data found for %s. "
-        "Run 'saham stockbit spy --url orderbook --ticker %s'",
+        "Run 'saham fetch stockbit spy --url orderbook --ticker %s'",
         ticker, ticker,
     )
     return None
@@ -1951,7 +1951,7 @@ def spy_stockbit_session(
     elif target == "stock-profile":
         # Company overview page — fires corporate action, financials, and price API calls.
         # Use this to discover the Exodus endpoint for dividend ex-date data.
-        # Run: saham stockbit spy --target stock-profile --ticker BBCA
+        # Run: saham fetch stockbit spy --target stock-profile --ticker BBCA
         # Then inspect journals/stockbit-spy.json for corporate-action / dividen patterns.
         url = f"https://stockbit.com/stocks/{ticker.upper()}"
     elif target == "broker-scan":
@@ -2160,11 +2160,11 @@ def save_stockbit_session(
                 f"  The browser profile stores all cookies and tokens.\n"
                 f"  It will stay logged in across runs (like a Chrome profile)."
             )
-            print("Run 'saham stockbit status' to verify.")
-            print("Run 'saham stockbit spy' to discover API endpoints.")
+            print("Run 'saham fetch stockbit status' to verify.")
+            print("Run 'saham fetch stockbit spy' to discover API endpoints.")
         else:
             print("\nTimeout — login not detected. Session NOT saved.")
-            print("Run 'saham stockbit login' again and complete login within the time limit.")
+            print("Run 'saham fetch stockbit login' again and complete login within the time limit.")
 
 
 def get_session_status(

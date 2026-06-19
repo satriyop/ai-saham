@@ -409,7 +409,7 @@ class PreOpenScreenUseCase:
             candles = self._repository.get_candles(ticker.upper())
             if not candles:
                 empty["warning"] = (
-                    f"{ticker}: No cached data - run 'saham update {ticker} --days 365' first"
+                    f"{ticker}: No cached data - run 'saham fetch market {ticker} --days 365' first"
                 )
                 return empty
 

@@ -4,19 +4,19 @@ CLI commands for the intraday trading command family.
 Usage patterns:
 
   # Autonomous (playwright + saved session):
-  saham intraday pre-open
+  saham screen pre-open
 
   # Fast mode (no order book, ~15s):
-  saham intraday pre-open --movers-json '[{"ticker":"BBCA","iev":150000}]' --fast
+  saham screen pre-open --movers-json '[{"ticker":"BBCA","iev":150000}]' --fast
 
   # Normal mode with order book data:
-  saham intraday pre-open \\
+  saham screen pre-open \\
     --movers-json '[{"ticker":"BBCA","iev":150000}]' \\
     --order-books-json '{"BBCA":{"price":8900,"volume":50000}}'
 
   # Paper trade journal:
-  saham intraday pre-open-log
-  saham intraday pre-open-review --horizon 5
+  saham trade confirm
+  saham trade log intraday
 
 Layer: Adapter
 """
@@ -33,27 +33,32 @@ import typer
 import yaml
 
 from src.application.services.bootstrap import create_indicator_registry
-from src.application.services.strategy_loader import StrategyLoader, StrategyNotFoundError
 from src.application.services.universe_loader import UniverseNotFoundError, resolve_tickers
-from src.application.use_case.assess_risk import AssessRiskRequest, AssessRiskUseCase
+from src.application.use_case.confirm_intraday_open import (
+    ConfirmIntradayOpenRequest,
+    ConfirmIntradayOpenUseCase,
+)
 from src.application.use_case.intraday_backtest import (
     IntradayBacktestRequest,
     IntradayBacktestResponse,
     IntradayBacktestUseCase,
 )
-from src.application.use_case.confirm_intraday_open import (
-    ConfirmIntradayOpenRequest,
-    ConfirmIntradayOpenUseCase,
-)
 from src.application.use_case.market_regime import (
-    MarketRegimeRequest,
     MarketRegimeResponse,
-    MarketRegimeUseCase,
 )
 from src.application.use_case.pre_open_screen import (
     PreOpenScreenConfig,
-    PreOpenScreenRequest,
     PreOpenScreenUseCase,
+)
+from src.application.use_case.pre_open_workflow import (
+    PreOpenDataFreshness,
+    PreOpenWorkflowRequest,
+    PreOpenWorkflowUseCase,
+)
+from src.application.use_case.resolve_opening_prices import (
+    OpeningPriceObservation,
+    ResolveOpeningPricesRequest,
+    ResolveOpeningPricesUseCase,
 )
 from src.domain.ports.browser_data_provider import BrowserInteractionRequired
 from src.domain.value_objects.intraday_confirmation import (
@@ -68,19 +73,12 @@ from src.infrastructure.browser.stockbit_browser import (
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
-intraday_app = typer.Typer(
-    name="intraday",
-    help="Intraday screening, confirmation, journal, and audit workflow",
-    no_args_is_help=True,
-)
-
 DEFAULT_DB_PATH = Path("data.db")
 DEFAULT_PRE_OPEN_CONFIG_PATH = Path("config/pre_open_screener.yaml")
 DEFAULT_SESSION_FILE = Path("stockbit_session.json")
 DEFAULT_SIDECAR_PATH = Path("journals/.last-session.json")
 DEFAULT_CONFIRMATION_PATH = Path("journals/.last-confirmation.json")
 DEFAULT_CONFIRMATION_JOURNAL_PATH = Path("journals/intraday-confirmations.csv")
-DEFAULT_JOURNAL_PATH = Path("journals/pre-open.csv")
 DEFAULT_REGIME_UNIVERSE = "idx80"
 DEFAULT_REGIME_BENCHMARK = "^JKSE"
 IDX_TIMEZONE = ZoneInfo("Asia/Jakarta")
@@ -95,16 +93,6 @@ class IntradayRunGuard:
     run_at: datetime
     warnings: tuple[str, ...] = ()
     error: str | None = None
-
-
-@dataclass(frozen=True)
-class IntradayDataFreshness:
-    """Data-source dates used by the pre-open screen."""
-
-    analysis_date: date
-    candle_end: date | None
-    broker_end: date | None
-    warnings: tuple[str, ...] = ()
 
 
 def _playwright_available() -> bool:
@@ -179,65 +167,7 @@ def _load_config(config_path: Path, overrides: dict) -> PreOpenScreenConfig:
 
     return config
 
-
-def _min_latest_date(dates: list[date]) -> date | None:
-    if not dates:
-        return None
-    return min(dates)
-
-
-def _build_data_freshness(
-    candidates: list[ScreenerCandidate],
-    analysis_date: date,
-    market_repo: SQLiteMarketRepository,
-    broker_repo: SQLiteBrokerRepository,
-) -> IntradayDataFreshness:
-    tickers = sorted({c.ticker.upper() for c in candidates})
-    candle_dates: list[date] = []
-    broker_dates: list[date] = []
-
-    for ticker in tickers:
-        candle_range = market_repo.get_date_range(ticker)
-        if candle_range:
-            candle_dates.append(candle_range[1])
-        broker_range = broker_repo.get_date_range(ticker)
-        if broker_range:
-            broker_dates.append(broker_range[1])
-
-    candle_end = _min_latest_date(candle_dates)
-    broker_end = _min_latest_date(broker_dates)
-    warnings: list[str] = []
-
-    if candle_end is None:
-        warnings.append("No cached candle date found for screened candidates.")
-    elif candle_end < analysis_date:
-        lag = (analysis_date - candle_end).days
-        warnings.append(
-            f"Latest candle date is {candle_end}, {lag} calendar day(s) before analysis date."
-        )
-
-    if broker_end is None:
-        warnings.append("No cached broker-flow date found for screened candidates.")
-    elif broker_end < analysis_date:
-        lag = (analysis_date - broker_end).days
-        warnings.append(
-            f"Latest broker-flow date is {broker_end}, {lag} calendar day(s) before analysis date."
-        )
-
-    if candle_end and broker_end and candle_end != broker_end:
-        warnings.append(
-            f"Candle and broker-flow dates differ ({candle_end} vs {broker_end})."
-        )
-
-    return IntradayDataFreshness(
-        analysis_date=analysis_date,
-        candle_end=candle_end,
-        broker_end=broker_end,
-        warnings=tuple(warnings),
-    )
-
-
-def _display_data_freshness(freshness: IntradayDataFreshness | None) -> None:
+def _display_data_freshness(freshness: PreOpenDataFreshness | None) -> None:
     if freshness is None:
         return
 
@@ -274,32 +204,6 @@ def _market_regime_warning(response: MarketRegimeResponse) -> str | None:
     if response.label == "WEAK":
         return "Market regime is WEAK; require cleaner opening confirmation or reduce size."
     return None
-
-
-def _build_market_regime(
-    market_repo: SQLiteMarketRepository,
-    broker_repo: SQLiteBrokerRepository,
-    db_path: Path,
-    as_of_date: date,
-    universe: str,
-    benchmark: str,
-) -> MarketRegimeResponse:
-    tickers = resolve_tickers(
-        universe=universe,
-        explicit=[],
-        db_path=db_path,
-    )
-    use_case = MarketRegimeUseCase(
-        market_repository=market_repo,
-        broker_repository=broker_repo,
-    )
-    return use_case.execute(
-        MarketRegimeRequest(
-            universe=tickers,
-            benchmark_ticker=benchmark,
-            as_of_date=as_of_date,
-        )
-    )
 
 
 def _display_market_regime(response: MarketRegimeResponse | None) -> None:
@@ -399,13 +303,13 @@ def _print_browser_plan(config: PreOpenScreenConfig) -> None:
         typer.echo("")
         typer.echo("STEP 3 — Re-run with collected data")
         typer.echo("-" * 40)
-        typer.echo("  saham intraday pre-open \\")
+        typer.echo("  saham screen pre-open \\")
         typer.echo("    --movers-json '<step1_json>' \\")
         typer.echo("    --order-books-json '<step2_json>'")
     else:
         typer.echo("STEP 2 — Re-run with movers data (fast mode — no order book needed)")
         typer.echo("-" * 40)
-        typer.echo("  saham intraday pre-open --fast --movers-json '<step1_json>'")
+        typer.echo("  saham screen pre-open --fast --movers-json '<step1_json>'")
     typer.echo("")
     typer.echo("=" * 60)
 
@@ -424,7 +328,7 @@ def _display_results(
     iev_min: int,
     total_movers_seen: int,
     warnings: list[str],
-    data_freshness: IntradayDataFreshness | None = None,
+    data_freshness: PreOpenDataFreshness | None = None,
     market_regime: MarketRegimeResponse | None = None,
     strategy_signals: dict[str, str] | None = None,
     strategy_name: str | None = None,
@@ -525,7 +429,7 @@ def _display_results(
         for w in all_warnings:
             typer.echo(f"  ! {w}")
 
-    # Action summary — watchlist + ready-to-run confirm-open command
+    # Action summary — watchlist + ready-to-run opening confirmation command
     watchlist = [c for c in sorted_candidates if _verdict(c) in ("PRIME", "WATCH")]
     skipped   = [c for c in sorted_candidates if _verdict(c) not in ("PRIME", "WATCH")]
 
@@ -543,26 +447,26 @@ def _display_results(
         typer.echo(
             " SKIP       " + typer.style(skip_labels, fg=typer.colors.BRIGHT_BLACK)
         )
-        # Build confirm-open command template
+        # Build opening confirmation command template
         tickers_json = ",".join(f'"{c.ticker}":___' for c in watchlist)
         typer.echo("")
         typer.echo(" At 09:00, fill opening prices and run:")
         typer.echo(
             typer.style(
-                f"   saham intraday confirm-open \\\n"
+                f"   saham trade confirm \\\n"
                 f"     --opening-json '{{{tickers_json}}}'",
                 fg=typer.colors.CYAN,
             )
         )
     else:
         typer.echo(" No candidates meet criteria today.")
-        typer.echo(" Consider: --iev-min 50000 or check 'saham stockbit fetch-top5'")
+        typer.echo(" Consider: --iev-min 50000 or check 'saham fetch stockbit fetch-top5'")
     typer.echo("━" * 60)
 
     typer.echo("")
     typer.echo(
         "VERDICT: ★ PRIME=all signals green  ◉ WATCH=bullish, needs confirm  "
-        "✗ SKIP=bearish/distributing  ? NO_DATA=run 'saham update TICKER --days 365'"
+        "✗ SKIP=bearish/distributing  ? NO_DATA=run 'saham fetch market TICKER --days 365'"
     )
     typer.echo(
         "SIGNAL: ACCUM tag × streak  |  FVWAP% (floor=asing underwater, sell=asing profit)  |  PH=Prev High"
@@ -583,7 +487,7 @@ def _write_sidecar(
     sidecar_path: Path,
     market_regime: MarketRegimeResponse | None = None,
 ) -> None:
-    """Write session sidecar JSON so `saham intraday pre-open-log` can read it."""
+    """Write session sidecar JSON so `saham trade confirm` can read it."""
     sidecar_path.parent.mkdir(parents=True, exist_ok=True)
     data = {
         "screened_at": str(screened_date),
@@ -625,6 +529,7 @@ def _decimal_or_none(value) -> Decimal | None:
 def _load_confirmation_candidates(
     session_path: Path,
     opening_prices: dict[str, Decimal],
+    observations: dict[str, OpeningPriceObservation] | None = None,
 ) -> tuple[date, list[IntradayConfirmationCandidate], dict[str, dict]]:
     with open(session_path) as f:
         data = json.load(f)
@@ -632,9 +537,11 @@ def _load_confirmation_candidates(
     screened_at = date.fromisoformat(data["screened_at"])
     candidates: list[IntradayConfirmationCandidate] = []
     extras: dict[str, dict] = {}  # {ticker: {prev_high, prev_low, entry_range_low}}
+    observations = observations or {}
 
     for row in data.get("candidates", []):
         ticker = str(row["ticker"]).upper()
+        observation = observations.get(ticker)
         candidates.append(
             IntradayConfirmationCandidate(
                 ticker=ticker,
@@ -649,6 +556,15 @@ def _load_confirmation_candidates(
                 gap_pct=_decimal_or_none(row.get("gap_pct")),
                 accum_tag=row.get("accum_tag"),
                 fvwap_discount_pct=_decimal_or_none(row.get("fvwap_discount_pct")),
+                opening_price_source=observation.source if observation else None,
+                opening_price_confidence=observation.confidence if observation else None,
+                opening_price_timestamp=(
+                    observation.timestamp.isoformat()
+                    if observation and observation.timestamp
+                    else None
+                ),
+                auto_confirmed=observation.auto_confirmed if observation else False,
+                manual_override=observation.manual_override if observation else False,
             )
         )
         extras[ticker] = {
@@ -658,9 +574,22 @@ def _load_confirmation_candidates(
             "entry_range_high": row.get("entry_range_high"),
             "accum_tag": row.get("accum_tag"),
             "fvwap_discount_pct": row.get("fvwap_discount_pct"),
+            "opening_price_source": observation.source if observation else None,
+            "opening_price_confidence": observation.confidence if observation else None,
+            "opening_price_reason": observation.reason if observation else None,
+            "auto_confirmed": observation.auto_confirmed if observation else False,
+            "manual_override": observation.manual_override if observation else False,
         }
 
     return screened_at, candidates, extras
+
+
+def _load_confirmation_tickers(session_path: Path) -> tuple[date, list[str]]:
+    with open(session_path) as f:
+        data = json.load(f)
+    screened_at = date.fromisoformat(data["screened_at"])
+    tickers = [str(row["ticker"]).upper() for row in data.get("candidates", [])]
+    return screened_at, tickers
 
 
 def _display_confirmations(
@@ -700,10 +629,13 @@ def _display_confirmations(
             stop_pct  = f"-{c.stop_pct:.1f}%" if c.stop_pct is not None else ""
             prev_h    = ex.get("prev_high")
             target    = f"  |  Target: Prev H {prev_h:,.0f}" if prev_h else ""
+            source = ex.get("opening_price_source")
+            confidence = ex.get("opening_price_confidence")
+            source_str = f"  [{source}/{confidence}]" if source else ""
 
             typer.echo(
                 typer.style(
-                    f"   {c.ticker:<6}  open {open_str}  in range {rng_str}",
+                    f"   {c.ticker:<6}  open {open_str}  in range {rng_str}{source_str}",
                     fg=typer.colors.GREEN,
                 )
             )
@@ -726,10 +658,13 @@ def _display_confirmations(
             rng_str  = f"{float(rng_low):,.0f}–{float(rng_high):,.0f}" if rng_low and rng_high else "—"
             floor    = float(rng_low) if rng_low else None
             trigger  = f"holds above {floor:,.0f}" if floor else "shows directional move up"
+            source = ex.get("opening_price_source")
+            confidence = ex.get("opening_price_confidence")
+            source_str = f"  [{source}/{confidence}]" if source else ""
 
             typer.echo(
                 typer.style(
-                    f"   {c.ticker:<6}  open {open_str}  in range {rng_str}",
+                    f"   {c.ticker:<6}  open {open_str}  in range {rng_str}{source_str}",
                     fg=typer.colors.YELLOW,
                 )
             )
@@ -747,14 +682,18 @@ def _display_confirmations(
         for c in skips:
             # Last reason is the actual skip cause; first is often "open inside entry range"
             reason = c.reasons[-1] if c.reasons else c.decision.value.lower().replace("_", " ")
+            ex = extras.get(c.ticker, {})
+            source = ex.get("opening_price_source")
+            confidence = ex.get("opening_price_confidence")
+            source_str = f" [{source}/{confidence}]" if source else ""
             typer.echo(
-                typer.style(f"   {c.ticker:<6}  {reason}", fg=typer.colors.BRIGHT_BLACK)
+                typer.style(f"   {c.ticker:<6}  {reason}{source_str}", fg=typer.colors.BRIGHT_BLACK)
             )
 
     typer.echo("")
     typer.echo("━" * 60)
     typer.echo(
-        typer.style("  saham intraday log   (record this session)", fg=typer.colors.BRIGHT_BLACK)
+        typer.style("  saham trade log intraday   (record this session)", fg=typer.colors.BRIGHT_BLACK)
     )
     typer.echo("━" * 60)
 
@@ -788,6 +727,11 @@ def _write_confirmation_sidecar(
                     if c.fvwap_discount_pct is not None
                     else None
                 ),
+                "opening_price_source": c.opening_price_source,
+                "opening_price_confidence": c.opening_price_confidence,
+                "opening_price_timestamp": c.opening_price_timestamp,
+                "auto_confirmed": c.auto_confirmed,
+                "manual_override": c.manual_override,
             }
             for c in confirmations
         ],
@@ -840,7 +784,6 @@ def _display_intraday_review(report, journal_path: Path) -> None:
     typer.echo("=" * 78)
 
 
-@intraday_app.command("pre-open")
 def pre_open(
     movers_json: Annotated[
         Optional[str],
@@ -932,18 +875,20 @@ def pre_open(
 
     Examples:
         # Fast mode (no order book, ~15s):
-        saham intraday pre-open --movers-json '[{"ticker":"BBCA","iev":150000}]' --fast
+        saham screen pre-open --movers-json '[{"ticker":"BBCA","iev":150000}]' --fast
 
         # Normal mode with order book:
-        saham intraday pre-open \\
+        saham screen pre-open \\
           --movers-json '[{"ticker":"BBCA","iev":150000}]' \\
           --order-books-json '{"BBCA":{"price":8900,"volume":50000}}'
 
         # Top 3 only, wider gap tolerance:
-        saham intraday pre-open --movers-json '...' --top 3 --max-gap 0.05
+        saham screen pre-open --movers-json '...' --top 3 --max-gap 0.05
 
-        # Log results after run:
-        saham intraday pre-open --movers-json '...' && saham intraday pre-open-log
+        # Confirm and log results after run:
+        saham screen pre-open --movers-json '...'
+        saham trade confirm --opening-json '{"BBCA":9050}'
+        saham trade log intraday
     """
     resolved_config = config_path or legacy_strategy_path or DEFAULT_PRE_OPEN_CONFIG_PATH
     resolved_db = db_path or DEFAULT_DB_PATH
@@ -984,7 +929,7 @@ def pre_open(
         else:
             if _playwright_available() and not _session_exists():
                 typer.echo("Playwright installed but no session found.")
-                typer.echo("Run: saham stockbit login")
+                typer.echo("Run: saham fetch stockbit login")
             typer.echo("")
             typer.echo(f"Config: {resolved_config}")
             typer.echo(f"IEV threshold: {config.iev_min:,}")
@@ -1039,54 +984,27 @@ def pre_open(
         broker_repository=broker_repo,
         ai_explainer=ai_explainer,
     )
+    workflow = PreOpenWorkflowUseCase(
+        screen_use_case=use_case,
+        market_repository=repository,
+        broker_repository=broker_repo,
+        registry=registry,
+    )
 
     try:
-        request = PreOpenScreenRequest(config=config, run_date=run_guard.run_at.date())
-        response = use_case.execute(request)
-        result = response.result
-
-        # Optional strategy signal column
-        strategy_signals: dict[str, str] = {}
-        strategy_warning: str | None = None
-        if signal_strategy:
-            try:
-                strat_loader = StrategyLoader(registry=registry)
-                rules_path = strat_loader.resolve(signal_strategy)
-                risk_uc = AssessRiskUseCase(repository=repository, registry=registry)
-                for candidate in result.candidates:
-                    try:
-                        req = AssessRiskRequest(
-                            ticker=candidate.ticker, rules_file=rules_path
-                        )
-                        res = risk_uc.execute(req)
-                        strategy_signals[candidate.ticker] = res.assessment.risk_level_name
-                    except Exception:
-                        strategy_signals[candidate.ticker] = "?"
-            except StrategyNotFoundError as e:
-                strategy_warning = f"Strategy '{signal_strategy}' not found: {e}"
-
-        data_freshness = _build_data_freshness(
-            candidates=result.candidates,
-            analysis_date=result.screened_date,
-            market_repo=repository,
-            broker_repo=broker_repo,
+        response = workflow.execute(
+            PreOpenWorkflowRequest(
+                config=config,
+                run_date=run_guard.run_at.date(),
+                guard_warnings=run_guard.warnings,
+                with_regime=with_regime,
+                regime_universe=regime_universe,
+                benchmark=benchmark,
+                db_path=resolved_db,
+                signal_strategy=signal_strategy,
+            )
         )
-        display_warnings = list(response.warnings) + list(run_guard.warnings)
-        if strategy_warning:
-            display_warnings.append(strategy_warning)
-        market_regime: MarketRegimeResponse | None = None
-        if with_regime:
-            try:
-                market_regime = _build_market_regime(
-                    market_repo=repository,
-                    broker_repo=broker_repo,
-                    db_path=resolved_db,
-                    as_of_date=result.screened_date,
-                    universe=regime_universe,
-                    benchmark=benchmark,
-                )
-            except Exception as e:
-                display_warnings.append(f"Market regime unavailable: {e}")
+        result = response.result
 
         # Show raw IEV fetch summary so users can see what came in before filtering
         if not movers_json and getattr(response, "raw_movers", None):
@@ -1097,19 +1015,19 @@ def pre_open(
             screened_date=result.screened_date,
             iev_min=result.iev_min,
             total_movers_seen=result.total_movers_seen,
-            warnings=display_warnings,
-            data_freshness=data_freshness,
-            market_regime=market_regime,
-            strategy_signals=strategy_signals or None,
-            strategy_name=signal_strategy,
+            warnings=response.warnings,
+            data_freshness=response.data_freshness,
+            market_regime=response.market_regime,
+            strategy_signals=response.strategy_signals,
+            strategy_name=response.strategy_name,
         )
 
-        # Write session sidecar for `saham intraday pre-open-log`
+        # Write session sidecar for `saham trade confirm`
         _write_sidecar(
             result.candidates,
             result.screened_date,
             DEFAULT_SIDECAR_PATH,
-            market_regime=market_regime,
+            market_regime=response.market_regime,
         )
 
     except BrowserInteractionRequired as e:
@@ -1122,15 +1040,14 @@ def pre_open(
         raise typer.Exit(1)
 
 
-@intraday_app.command("confirm-open")
 def confirm_open(
     opening_json: Annotated[
-        str,
+        Optional[str],
         typer.Option(
             "--opening-json",
-            help='Actual opening prices JSON object, e.g. {"BBCA":9050}',
+            help='Manual opening prices JSON override, e.g. {"BBCA":9050}',
         ),
-    ],
+    ] = None,
     session: Annotated[
         Optional[Path],
         typer.Option("--session", help="Path to pre-open sidecar JSON"),
@@ -1143,15 +1060,20 @@ def confirm_open(
         float,
         typer.Option("--max-stop", help="Max stop distance as decimal, e.g. 0.07 for 7%"),
     ] = 0.07,
+    headless: Annotated[
+        bool,
+        typer.Option("--headless/--no-headless", help="Use headless browser for Stockbit auto-confirm"),
+    ] = True,
 ) -> None:
     """
     Confirm pre-open candidates after the opening auction clears.
 
-    Reads the last `saham intraday pre-open` sidecar and actual opening prices,
+    Reads the last `saham screen pre-open` sidecar and resolves opening prices,
     then emits deterministic ENTER / WAIT / SKIP decisions. No AI is used.
 
     Example:
-        saham intraday confirm-open --opening-json '{"BBCA":9050,"BMRI":5875}'
+        saham trade confirm
+        saham trade confirm --opening-json '{"BBCA":9050,"BMRI":5875}'
     """
     sidecar_path = session or DEFAULT_SIDECAR_PATH
     output_path = output or DEFAULT_CONFIRMATION_PATH
@@ -1159,36 +1081,91 @@ def confirm_open(
     if not sidecar_path.exists():
         typer.echo(
             f"No session sidecar found at '{sidecar_path}'.\n"
-            "Run `saham intraday pre-open` first.",
+            "Run `saham screen pre-open` first.",
             err=True,
         )
         raise typer.Exit(1)
 
-    try:
-        raw_opening = json.loads(opening_json)
-    except json.JSONDecodeError as e:
-        typer.echo(f"Error: Invalid JSON in --opening-json: {e}", err=True)
-        raise typer.Exit(1)
+    manual_prices: dict[str, Decimal] = {}
+    if opening_json:
+        try:
+            raw_opening = json.loads(opening_json)
+        except json.JSONDecodeError as e:
+            typer.echo(f"Error: Invalid JSON in --opening-json: {e}", err=True)
+            raise typer.Exit(1)
 
-    if not isinstance(raw_opening, dict):
-        typer.echo("Error: --opening-json must be a JSON object.", err=True)
-        raise typer.Exit(1)
+        if not isinstance(raw_opening, dict):
+            typer.echo("Error: --opening-json must be a JSON object.", err=True)
+            raise typer.Exit(1)
 
-    try:
-        opening_prices = {
-            str(ticker).upper(): Decimal(str(price))
-            for ticker, price in raw_opening.items()
-            if price is not None
-        }
-    except Exception as e:
-        typer.echo(f"Error: opening prices must be numeric: {e}", err=True)
-        raise typer.Exit(1)
+        try:
+            manual_prices = {
+                str(ticker).upper(): Decimal(str(price))
+                for ticker, price in raw_opening.items()
+                if price is not None
+            }
+        except Exception as e:
+            typer.echo(f"Error: opening prices must be numeric: {e}", err=True)
+            raise typer.Exit(1)
 
     if max_stop <= 0:
         typer.echo("Error: --max-stop must be positive.", err=True)
         raise typer.Exit(1)
 
-    screened_at, candidates, extras = _load_confirmation_candidates(sidecar_path, opening_prices)
+    screened_at, tickers = _load_confirmation_tickers(sidecar_path)
+    running_trade_provider = None
+    order_book_provider = None
+    auto_needed = any(ticker not in manual_prices for ticker in tickers)
+
+    if auto_needed:
+        try:
+            from src.infrastructure.browser.playwright_stockbit import (
+                StockbitPlaywrightBrokerProvider,
+            )
+            from src.infrastructure.browser.stockbit_order_book import StockbitOrderBookProvider
+            from src.infrastructure.browser.stockbit_running_trade import (
+                StockbitRunningTradeProvider,
+            )
+
+            broker_provider = StockbitPlaywrightBrokerProvider(headless=headless)
+            if not broker_provider.is_authenticated():
+                typer.echo(
+                    "No authenticated Stockbit profile for auto confirm. "
+                    "Run `saham fetch stockbit login` or pass --opening-json.",
+                    err=True,
+                )
+                raise typer.Exit(1)
+            running_trade_provider = StockbitRunningTradeProvider(broker_provider=broker_provider)
+            order_book_provider = StockbitOrderBookProvider(broker_provider=broker_provider)
+        except typer.Exit:
+            raise
+        except Exception as e:
+            typer.echo(
+                f"Auto confirm setup failed: {e}. Pass --opening-json to confirm manually.",
+                err=True,
+            )
+            raise typer.Exit(1)
+
+    resolver = ResolveOpeningPricesUseCase(
+        running_trade_provider=running_trade_provider,
+        order_book_provider=order_book_provider,
+    )
+    observations = resolver.execute(
+        ResolveOpeningPricesRequest(
+            tickers=tickers,
+            run_date=screened_at,
+            manual_prices=manual_prices,
+        )
+    )
+    opening_prices = {
+        ticker: obs.price for ticker, obs in observations.items() if obs.price is not None
+    }
+
+    screened_at, candidates, extras = _load_confirmation_candidates(
+        sidecar_path,
+        opening_prices,
+        observations,
+    )
     use_case = ConfirmIntradayOpenUseCase()
     result = use_case.execute(
         ConfirmIntradayOpenRequest(
@@ -1212,8 +1189,6 @@ def confirm_open(
     )
 
 
-@intraday_app.command("confirm-log")
-@intraday_app.command("log")
 def confirm_log(
     confirmation: Annotated[
         Optional[Path],
@@ -1231,7 +1206,7 @@ def confirm_log(
     ] = None,
 ) -> None:
     """
-    Append the latest `confirm-open` result to the intraday confirmation journal.
+    Append the latest `saham trade confirm` result to the intraday confirmation journal.
 
     The journal is idempotent by (confirmed_at, ticker), so repeated logs for the
     same confirmation run do not duplicate rows.
@@ -1246,7 +1221,7 @@ def confirm_log(
     if not confirmation_path.exists():
         typer.echo(
             f"No confirmation sidecar found at '{confirmation_path}'.\n"
-            "Run `saham intraday confirm-open` first.",
+            "Run `saham trade confirm` first.",
             err=True,
         )
         raise typer.Exit(1)
@@ -1285,8 +1260,6 @@ def confirm_log(
         typer.echo(f"Logged {count} confirmation(s) for {confirmed_at} → {journal_path}")
 
 
-@intraday_app.command("confirm-review")
-@intraday_app.command("review")
 def confirm_review(
     journal: Annotated[
         Optional[Path],
@@ -1316,7 +1289,7 @@ def confirm_review(
     if not journal_path.exists():
         typer.echo(
             f"No confirmation journal found at '{journal_path}'.\n"
-            "Run `saham intraday confirm-log` after confirming opens first.",
+            "Run `saham trade log intraday` after confirming opens first.",
             err=True,
         )
         raise typer.Exit(1)
@@ -1328,8 +1301,6 @@ def confirm_review(
     _display_intraday_review(report, journal_path)
 
 
-@intraday_app.command("confirm-outcome")
-@intraday_app.command("outcome")
 def confirm_outcome(
     ticker: Annotated[str, typer.Argument(help="Ticker to update (e.g. BBCA)")],
     entry: Annotated[
@@ -1388,7 +1359,7 @@ def confirm_outcome(
     if not journal_path.exists():
         typer.echo(
             f"No confirmation journal found at '{journal_path}'.\n"
-            "Run `saham intraday confirm-log` first.",
+            "Run `saham trade log intraday` first.",
             err=True,
         )
         raise typer.Exit(1)
@@ -1427,164 +1398,6 @@ def confirm_outcome(
     )
 
 
-@intraday_app.command("pre-open-log")
-def log_session(
-    session: Annotated[
-        Optional[Path],
-        typer.Option(
-            "--session",
-            help="Path to session sidecar JSON (default: journals/.last-session.json)",
-        ),
-    ] = None,
-    journal: Annotated[
-        Optional[Path],
-        typer.Option("--journal", help="Path to journal CSV (default: journals/pre-open.csv)"),
-    ] = None,
-) -> None:
-    """
-    Append last screener run to the paper trade journal.
-
-    Reads the session sidecar written by `saham intraday pre-open` and
-    appends one row per candidate to the journal CSV. Idempotent:
-    re-running for the same date never duplicates rows.
-
-    Example:
-        saham intraday pre-open --movers-json '...'
-        saham intraday pre-open-log
-        saham intraday pre-open-review --horizon 5
-    """
-    from src.application.services.paper_trade_journal import PaperTradeJournalService
-    from src.domain.value_objects.screener_result import ScreenerCandidate
-    from src.infrastructure.persistence.journal_csv_writer import JournalCsvWriter
-
-    sidecar_path = session or DEFAULT_SIDECAR_PATH
-    journal_path = journal or DEFAULT_JOURNAL_PATH
-
-    if not sidecar_path.exists():
-        typer.echo(
-            f"No session sidecar found at '{sidecar_path}'.\n"
-            "Run `saham intraday pre-open` first.",
-            err=True,
-        )
-        raise typer.Exit(1)
-
-    with open(sidecar_path) as f:
-        data = json.load(f)
-
-    screened_at = date.fromisoformat(data["screened_at"])
-
-    # Reconstruct minimal ScreenerCandidate objects for the journal service
-    candidates = []
-    for row in data["candidates"]:
-        candidates.append(
-            ScreenerCandidate(
-                ticker=row["ticker"],
-                iev=row["iev"],
-                entry_price=Decimal(row["suggested_entry"]) if row.get("suggested_entry") else None,
-                stop_loss_price=Decimal(row["atr_stop"]) if row.get("atr_stop") else None,
-                capital=Decimal("0"),
-                trend_signal=row.get("trend"),
-                rsi=Decimal(row["rsi"]) if row.get("rsi") else None,
-                gap_pct=Decimal(row["gap_pct"]) if row.get("gap_pct") else None,
-                entry_range_low=(
-                    Decimal(row["entry_range_low"]) if row.get("entry_range_low") else None
-                ),
-                entry_range_high=(
-                    Decimal(row["entry_range_high"]) if row.get("entry_range_high") else None
-                ),
-            )
-        )
-
-    store = JournalCsvWriter(journal_path)
-    repository = SQLiteMarketRepository(db_path=DEFAULT_DB_PATH)
-    service = PaperTradeJournalService(store=store, repository=repository)
-
-    count = service.log_session(candidates, screened_at)
-    if count == 0:
-        typer.echo(f"Already logged for {screened_at} — no new rows added ({journal_path})")
-    else:
-        typer.echo(f"Logged {count} candidate(s) for {screened_at} → {journal_path}")
-
-
-@intraday_app.command("pre-open-review")
-def review(
-    journal: Annotated[
-        Optional[Path],
-        typer.Option("--journal", help="Path to journal CSV"),
-    ] = None,
-    db_path: Annotated[Optional[Path], typer.Option("--db")] = None,
-    horizon: Annotated[
-        int,
-        typer.Option(
-            "--horizon",
-            help="Trading days after screen date to check close price",
-            min=1,
-        ),
-    ] = 5,
-) -> None:
-    """
-    Review paper trade journal: hit-rate and direction accuracy.
-
-    Fetches actual opening prices and N-day closes from the local database
-    and computes what % of entry ranges were accurate.
-
-    Example:
-        saham intraday pre-open-review --horizon 5
-    """
-    from src.application.services.paper_trade_journal import PaperTradeJournalService
-    from src.infrastructure.persistence.journal_csv_writer import JournalCsvWriter
-
-    journal_path = journal or DEFAULT_JOURNAL_PATH
-    resolved_db = db_path or DEFAULT_DB_PATH
-
-    if not journal_path.exists():
-        typer.echo(
-            f"No journal found at '{journal_path}'.\n"
-            "Run `saham intraday pre-open-log` after a screening session first.",
-            err=True,
-        )
-        raise typer.Exit(1)
-
-    store = JournalCsvWriter(journal_path)
-    repository = SQLiteMarketRepository(db_path=resolved_db)
-    service = PaperTradeJournalService(store=store, repository=repository)
-
-    report = service.review(horizon_days=horizon)
-
-    typer.echo("")
-    typer.echo("=" * 55)
-    typer.echo("PAPER TRADE JOURNAL REVIEW")
-    typer.echo("=" * 55)
-    typer.echo(f"Journal: {journal_path}")
-    typer.echo(f"Total logged entries : {report.total_entries}")
-    typer.echo(f"Entries with DB data : {report.entries_with_data}")
-
-    if report.hit_rate_pct is not None:
-        typer.echo(f"\nEntry range hit rate : {report.hit_rate_pct:.1f}%")
-        typer.echo("  (% of sessions where opening price fell within entry range)")
-    else:
-        typer.echo("\nEntry range hit rate : N/A (no actual open prices yet)")
-
-    if report.direction_accuracy_1d is not None:
-        typer.echo(f"Direction accuracy 1d: {report.direction_accuracy_1d:.1f}%")
-        typer.echo(f"Direction accuracy {horizon}d: {report.direction_accuracy_5d:.1f}%"
-                   if report.direction_accuracy_5d else "")
-    else:
-        typer.echo("Direction accuracy   : N/A (need BULLISH calls + 1d close data)")
-
-    if report.per_trend_breakdown:
-        typer.echo("\nPer-trend breakdown:")
-        typer.echo(f"  {'TREND':<10} {'TOTAL':>6} {'IN_RANGE':>9} {'UP_1D':>7}")
-        typer.echo("  " + "-" * 35)
-        for trend, stats in report.per_trend_breakdown.items():
-            typer.echo(
-                f"  {trend:<10} {stats['total']:>6} {stats['in_range']:>9} {stats['up_1d']:>7}"
-            )
-
-    typer.echo("")
-    typer.echo("Note: hit-rate measures ENTRY RANGE accuracy, not trade profitability.")
-    typer.echo("After 20+ sessions this becomes statistically meaningful.")
-    typer.echo("=" * 55)
 
 
 def _build_ai_researcher(provider: Optional[str] = None):
@@ -1704,7 +1517,6 @@ def _display_intraday_backtest(response: IntradayBacktestResponse, show_trades: 
     typer.echo(typer.style("=" * W, fg=typer.colors.CYAN))
 
 
-@intraday_app.command("backtest")
 def intraday_backtest(
     tickers: Annotated[
         Optional[list[str]],
@@ -1712,7 +1524,7 @@ def intraday_backtest(
     ] = None,
     universe: Annotated[
         Optional[str],
-        typer.Option("--universe", "-u", help="Universe: lq45, idx80, idxcomp100, cached"),
+        typer.Option("--universe", "-u", help="Universe: lq45, idx80, bumn20, cached"),
     ] = None,
     start: Annotated[
         str,
@@ -1774,20 +1586,20 @@ def intraday_backtest(
     """
     Walk-forward backtest of the intraday pre-open workflow (Option A: daily OHLC proxy).
 
-    When IEV snapshot data is available (collected via 'saham intraday collect-iev'),
+    When IEV snapshot data is available (collected via 'saham fetch iev'),
     only the top --iev-top-n movers per day are traded — matching the live workflow.
     On days without a snapshot, the full universe is screened (with a warning).
     Entries/exits use candle.open/high/low/close. All trades exit same day.
 
     Examples:
 
-      saham intraday backtest --universe lq45 --start 2025-12-01
+      saham trade backtest-intraday --universe lq45 --start 2025-12-01
 
-      saham intraday backtest BBCA BBRI BMRI ASII TLKM --start 2025-09-01
+      saham trade backtest-intraday BBCA BBRI BMRI ASII TLKM --start 2025-09-01
 
-      saham intraday backtest --universe lq45 --start 2025-12-01 --include-wait
+      saham trade backtest-intraday --universe lq45 --start 2025-12-01 --include-wait
 
-      saham intraday backtest --universe idx80 --start 2025-09-01 --format json
+      saham trade backtest-intraday --universe idx80 --start 2025-09-01 --format json
     """
     try:
         start_date = date.fromisoformat(start)
@@ -1839,7 +1651,7 @@ def intraday_backtest(
     else:
         typer.echo(
             "No IEV snapshots found. Screening full universe each day. "
-            "Run 'saham intraday collect-iev' at 08:50 WIB to start collecting.",
+            "Run 'saham fetch iev' at 08:50 WIB to start collecting.",
             err=True,
         )
         iev_repo = None
@@ -1913,7 +1725,6 @@ def intraday_backtest(
     _display_intraday_backtest(response, show_trades=show_trades)
 
 
-@intraday_app.command("collect-iev")
 def collect_iev(
     top_n: Annotated[
         int,
@@ -1936,13 +1747,13 @@ def collect_iev(
     daily collection the intraday backtest can filter candidates by IEV rank,
     matching live workflow behaviour.
 
-    Requires an active Stockbit session (saham stockbit login).
+    Requires an active Stockbit session (saham fetch stockbit login).
 
     Examples:
 
-      saham intraday collect-iev
+      saham fetch iev
 
-      saham intraday collect-iev --top-n 30
+      saham fetch iev --top-n 30
     """
     from src.infrastructure.browser.playwright_stockbit import PlaywrightStockbitProvider
     from src.infrastructure.persistence.sqlite_iev_repository import SQLiteIEVRepository
@@ -1967,7 +1778,7 @@ def collect_iev(
         raise typer.Exit(1)
 
     if not movers:
-        typer.echo("No movers returned — session may be expired. Run: saham stockbit login", err=True)
+        typer.echo("No movers returned — session may be expired. Run: saham fetch stockbit login", err=True)
         raise typer.Exit(1)
 
     repo = SQLiteIEVRepository(resolved_db)
@@ -2016,17 +1827,3 @@ def collect_iev(
         f"avg {coverage['avg_movers_per_day']:.0f} movers/day, "
         f"IEP fill {coverage['iep_fill_pct']:.0f}%"
     )
-
-
-@intraday_app.command("save-session")
-def save_session() -> None:
-    """
-    Deprecated. Use: saham stockbit login
-    """
-    typer.echo(
-        "This command has moved. Use:\n\n"
-        "  saham stockbit login\n\n"
-        "Run 'saham stockbit --help' for all Stockbit session commands.",
-        err=True,
-    )
-    raise typer.Exit(1)

@@ -4,7 +4,7 @@ OpeningSnapshotUseCase — NCP-locked pre-open screener capture for the learning
 Runs the full PreOpenScreenUseCase once at the NCP-locked window (08:57 WIB) and
 saves the result to data/opening/YYYYMMDD/snapshot.json for later accuracy grading.
 
-Also writes the standard .last-session.json sidecar so the existing confirm-open
+Also writes the standard .last-session.json sidecar so the `saham trade confirm`
 workflow is unaffected.
 
 Layer: Application
@@ -29,7 +29,10 @@ from src.domain.ports.browser_data_provider import BrowserDataProvider
 from src.domain.ports.market_data_repository import MarketDataRepository
 
 IDX_TIMEZONE = ZoneInfo("Asia/Jakarta")
+PRE_NCP_START = time(8, 45)
 NCP_LOCK_TIME = time(8, 56)
+REGULAR_OPEN_TIME = time(9, 0)
+OPEN_SESSION_END = time(9, 30)
 
 OPENING_DATA_DIR = Path("data/opening")
 
@@ -61,7 +64,8 @@ class OpeningSnapshotUseCase:
     def execute(self, request: OpeningSnapshotRequest) -> dict:
         now = datetime.now(IDX_TIMEZONE)
         run_date = request.run_date or now.date()
-        is_ncp = now.time() >= NCP_LOCK_TIME
+        phase = classify_opening_capture_phase(now)
+        is_ncp = phase == "NCP_LOCKED"
 
         response = self._screen_uc.execute(
             PreOpenScreenRequest(config=request.config, run_date=run_date)
@@ -101,6 +105,9 @@ class OpeningSnapshotUseCase:
         snapshot = {
             "captured_at": now.isoformat(),
             "date": str(run_date),
+            "capture_phase": phase,
+            "capture_valid_for_opening_prediction": phase in ("PRE_NCP", "NCP_LOCKED"),
+            "capture_confidence": _capture_confidence(phase),
             "is_ncp_locked": is_ncp,
             "candidates": candidates_out,
             "warnings": response.warnings,
@@ -124,3 +131,26 @@ class OpeningSnapshotUseCase:
         if trend in ("BULLISH", "NEUTRAL") and accum != "DISTRIBUTING":
             return "WATCH"
         return "SKIP"
+
+
+def classify_opening_capture_phase(captured_at: datetime) -> str:
+    """Classify a capture timestamp into deterministic IDX opening phases."""
+    local = captured_at.astimezone(IDX_TIMEZONE)
+    current = local.time()
+    if PRE_NCP_START <= current < NCP_LOCK_TIME:
+        return "PRE_NCP"
+    if NCP_LOCK_TIME <= current < REGULAR_OPEN_TIME:
+        return "NCP_LOCKED"
+    if REGULAR_OPEN_TIME <= current <= OPEN_SESSION_END:
+        return "OPEN"
+    if current > OPEN_SESSION_END:
+        return "POST_OPEN"
+    return "OUT_OF_SESSION"
+
+
+def _capture_confidence(phase: str) -> str:
+    if phase == "NCP_LOCKED":
+        return "HIGH"
+    if phase == "PRE_NCP":
+        return "MEDIUM"
+    return "LOW"

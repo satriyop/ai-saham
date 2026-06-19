@@ -143,7 +143,7 @@ class BacktestUseCase:
         if not candles:
             raise ValueError(
                 f"No data available for {ticker}. "
-                f"Run 'saham update {ticker} --days 365' first."
+                f"Run 'saham fetch market {ticker} --days 365' first."
             )
 
         # 3. Get required indicators

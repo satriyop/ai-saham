@@ -1,0 +1,142 @@
+"""Tests for pre-open screen CLI helpers."""
+
+import json
+from datetime import date, datetime
+from decimal import Decimal
+from pathlib import Path
+from zoneinfo import ZoneInfo
+
+from typer.testing import CliRunner
+
+from src.adapters.cli.main import app
+from src.adapters.cli.screen_pre_open_commands import (
+    DEFAULT_PRE_OPEN_CONFIG_PATH,
+    _build_intraday_run_guard,
+    _format_market_regime,
+    _market_regime_warning,
+)
+from src.adapters.cli.screen_pre_open_commands import (
+    _write_sidecar as write_pre_open_sidecar,
+)
+from src.application.use_case.market_regime import MarketRegimeResponse
+from src.domain.value_objects.screener_result import ScreenerCandidate
+
+runner = CliRunner()
+
+
+def _candidate(ticker: str) -> ScreenerCandidate:
+    return ScreenerCandidate(
+        ticker=ticker,
+        iev=150000,
+        entry_price=Decimal("1000"),
+        stop_loss_price=Decimal("950"),
+        capital=Decimal("3000000"),
+    )
+
+
+def test_pre_open_guard_blocks_weekends_without_override():
+    guard = _build_intraday_run_guard(
+        datetime(2026, 6, 13, 8, 50, tzinfo=ZoneInfo("Asia/Jakarta")),
+        allow_non_trading_day=False,
+    )
+
+    assert guard.error is not None
+    assert "weekend" in guard.error
+
+
+def test_pre_open_guard_allows_weekend_dry_run_with_warning():
+    guard = _build_intraday_run_guard(
+        datetime(2026, 6, 13, 8, 50, tzinfo=ZoneInfo("Asia/Jakarta")),
+        allow_non_trading_day=True,
+    )
+
+    assert guard.error is None
+    assert any("weekend" in warning for warning in guard.warnings)
+
+
+def test_pre_open_guard_warns_outside_pre_open_window():
+    guard = _build_intraday_run_guard(
+        datetime(2026, 6, 12, 10, 15, tzinfo=ZoneInfo("Asia/Jakarta")),
+        allow_non_trading_day=False,
+    )
+
+    assert guard.error is None
+    assert any("outside IDX pre-open window" in warning for warning in guard.warnings)
+
+
+def test_default_pre_open_config_lives_under_config():
+    assert DEFAULT_PRE_OPEN_CONFIG_PATH == Path("config/pre_open_screener.yaml")
+    assert DEFAULT_PRE_OPEN_CONFIG_PATH.exists()
+
+
+def test_pre_open_strategy_alias_is_deprecated():
+    result = runner.invoke(
+        app,
+        [
+            "screen", "pre-open",
+            "--movers-json",
+            '[{"ticker":"BBCA","iev":150000}]',
+            "--fast",
+            "--strategy",
+            str(DEFAULT_PRE_OPEN_CONFIG_PATH),
+        ],
+    )
+
+    assert "Warning: --strategy is deprecated" in result.output
+
+
+def test_market_regime_format_and_warning_are_intraday_context():
+    response = MarketRegimeResponse(
+        as_of_date=date(2026, 6, 12),
+        label="WEAK",
+        score=2,
+        benchmark_ticker="^JKSE",
+        benchmark_close=Decimal("7050"),
+        benchmark_sma20=Decimal("7150"),
+        benchmark_sma50=Decimal("7250"),
+        benchmark_return_5d_pct=-1.25,
+        benchmark_return_20d_pct=-4.75,
+        breadth_above_sma20_pct=23.5294,
+        breadth_change_5d_pct=-10.0,
+        foreign_flow_breadth_pct=39.7059,
+        universe_count=80,
+        breadth_count=68,
+        foreign_flow_count=68,
+    )
+
+    line = _format_market_regime(response)
+
+    assert "REGIME: WEAK score=2/7" in line
+    assert "^JKSE 20d -4.75%" in line
+    assert "Breadth SMA20 23.53%" in line
+    assert "Foreign breadth 39.71%" in line
+    assert "reduce size" in _market_regime_warning(response)
+
+
+def test_pre_open_sidecar_persists_market_regime_context(tmp_path):
+    sidecar = tmp_path / "last-session.json"
+    response = MarketRegimeResponse(
+        as_of_date=date(2026, 6, 12),
+        label="RISK_OFF",
+        score=1,
+        benchmark_ticker="^JKSE",
+        benchmark_close=None,
+        benchmark_sma20=None,
+        benchmark_sma50=None,
+        benchmark_return_5d_pct=None,
+        benchmark_return_20d_pct=None,
+        breadth_above_sma20_pct=20.0,
+        breadth_change_5d_pct=-15.0,
+        foreign_flow_breadth_pct=25.0,
+        universe_count=80,
+        breadth_count=70,
+        foreign_flow_count=70,
+    )
+
+    write_pre_open_sidecar([_candidate("BBCA")], date(2026, 6, 12), sidecar, response)
+
+    saved = json.loads(sidecar.read_text())
+    assert saved["market_regime"]["label"] == "RISK_OFF"
+    assert saved["market_regime"]["score"] == 1
+    assert saved["candidates"][0]["ticker"] == "BBCA"
+

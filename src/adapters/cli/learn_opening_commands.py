@@ -1,7 +1,7 @@
 """
 CLI commands for the opening session learning loop.
 
-Commands (all under `saham trade opening`):
+Commands (all under `saham learn`):
   snapshot  — 08:57 WIB: NCP-locked pre-open screener capture
   track     — 09:00–09:30 WIB: 5-min orderbook loop for all screened tickers
   grade     — 09:35+ WIB: deterministic accuracy report (no network)
@@ -29,13 +29,6 @@ DEFAULT_DB_PATH = Path("data.db")
 DEFAULT_SESSION_FILE = Path("stockbit_session.json")
 DEFAULT_PRE_OPEN_CONFIG = Path("config/pre_open_screener.yaml")
 
-opening_app = typer.Typer(
-    name="opening",
-    help="Opening session learning loop — capture, track, grade, tune.",
-    no_args_is_help=True,
-)
-
-
 def _today_dir(run_date: date | None = None) -> Path:
     d = run_date or datetime.now(IDX_TIMEZONE).date()
     return OPENING_DATA_DIR / d.strftime("%Y%m%d")
@@ -53,7 +46,6 @@ def _parse_date(s: str | None) -> date | None:
 
 # ── snapshot ──────────────────────────────────────────────────────────────────
 
-@opening_app.command("snapshot")
 def snapshot(
     force: Annotated[bool, typer.Option("--force", help="Run outside 08:55–09:00 WIB window")] = False,
     date_str: Annotated[Optional[str], typer.Option("--date", help="Date YYYY-MM-DD")] = None,
@@ -67,12 +59,12 @@ def snapshot(
     Runs the full screener pipeline and saves all prediction signals to
     data/opening/YYYYMMDD/snapshot.json for later accuracy grading.
 
-    Also writes the standard .last-session.json sidecar so confirm-open still works.
+    Also writes the standard .last-session.json sidecar so `saham trade confirm` still works.
 
     Examples:
-        saham trade opening snapshot               # live at 08:57 WIB
-        saham trade opening snapshot --force       # manual dry-run anytime
-        saham trade opening snapshot --date 2026-06-18 --force
+        saham learn snapshot               # live at 08:57 WIB
+        saham learn snapshot --force       # manual dry-run anytime
+        saham learn snapshot --date 2026-06-18 --force
     """
     run_date = _parse_date(date_str)
     resolved_db = db_path or DEFAULT_DB_PATH
@@ -91,24 +83,25 @@ def snapshot(
         raise typer.Exit(1)
 
     try:
-        import yaml
-        from src.adapters.cli.screen_commands import (
+        from src.adapters.cli.screen_pre_open_commands import (
             _load_config,
             _playwright_available,
-            _write_sidecar,
         )
         from src.application.services.bootstrap import create_indicator_registry
-        from src.application.use_case.opening_snapshot import OpeningSnapshotUseCase, OpeningSnapshotRequest
+        from src.application.use_case.opening_snapshot import (
+            OpeningSnapshotRequest,
+            OpeningSnapshotUseCase,
+        )
         from src.infrastructure.browser.playwright_stockbit import PlaywrightStockbitProvider
         from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
-        from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
         from src.infrastructure.persistence.sqlite_iev_repository import SQLiteIEVRepository
+        from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
     except ImportError as e:
         typer.echo(f"Import error: {e}", err=True)
         raise typer.Exit(1)
 
     if not _playwright_available() or not DEFAULT_SESSION_FILE.exists():
-        typer.echo("No Playwright session. Run: saham stockbit login", err=True)
+        typer.echo("No Playwright session. Run: saham fetch stockbit login", err=True)
         raise typer.Exit(1)
 
     config = _load_config(resolved_config, {})
@@ -141,10 +134,7 @@ def snapshot(
         iep_lookup=iep_lookup,
     ))
 
-    # Also write standard sidecar for confirm-open compatibility
-    from src.domain.value_objects.screener_result import ScreenerCandidate
-    # sidecar already written inside PreOpenScreenUseCase via screen_commands._write_sidecar
-    # we just notify the user of the output path
+    # Sidecar already written inside PreOpenScreenUseCase; notify user of output path.
     out_dir = _today_dir(run_date)
     n = len(result.get("candidates", []))
     typer.echo(f"Saved {n} candidates → {out_dir}/snapshot.json")
@@ -155,7 +145,6 @@ def snapshot(
 
 # ── track ─────────────────────────────────────────────────────────────────────
 
-@opening_app.command("track")
 def track(
     force: Annotated[bool, typer.Option("--force", help="Run single snapshot immediately (bypass window)")] = False,
     tickers: Annotated[Optional[list[str]], typer.Argument(help="Explicit tickers (overrides snapshot)")] = None,
@@ -173,12 +162,11 @@ def track(
     Use --broker-confirm to embed institutional broker absorption data per tick interval.
 
     Examples:
-        saham trade opening track                               # live 09:00–09:30 loop
-        saham trade opening track --force BBCA BBRI BMRI       # manual dry-run
-        saham trade opening track --broker-confirm              # with broker attribution
+        saham learn track                               # live 09:00–09:30 loop
+        saham learn track --force BBCA BBRI BMRI       # manual dry-run
+        saham learn track --broker-confirm              # with broker attribution
     """
     run_date = _parse_date(date_str)
-    today = run_date or datetime.now(IDX_TIMEZONE).date()
 
     # Resolve tickers
     if tickers:
@@ -186,7 +174,7 @@ def track(
     else:
         snap_path = _today_dir(run_date) / "snapshot.json"
         if not snap_path.exists():
-            typer.echo(f"No snapshot found at {snap_path}. Run `opening snapshot` first.", err=True)
+            typer.echo(f"No snapshot found at {snap_path}. Run `saham learn snapshot` first.", err=True)
             raise typer.Exit(1)
         with open(snap_path) as f:
             snap = json.load(f)
@@ -197,14 +185,14 @@ def track(
         raise typer.Exit(1)
 
     try:
-        from src.application.use_case.opening_track import OpeningTrackUseCase, OpeningTrackRequest
+        from src.application.use_case.opening_track import OpeningTrackRequest, OpeningTrackUseCase
         from src.infrastructure.browser.playwright_stockbit import PlaywrightStockbitProvider
     except ImportError as e:
         typer.echo(f"Import error: {e}", err=True)
         raise typer.Exit(1)
 
     if not DEFAULT_SESSION_FILE.exists():
-        typer.echo("No Stockbit session. Run: saham stockbit login", err=True)
+        typer.echo("No Stockbit session. Run: saham fetch stockbit login", err=True)
         raise typer.Exit(1)
 
     browser = PlaywrightStockbitProvider(session_file=DEFAULT_SESSION_FILE, headless=headless)
@@ -215,8 +203,13 @@ def track(
     if broker_confirm:
         try:
             import yaml
-            from src.infrastructure.browser.stockbit_running_trade import StockbitRunningTradeProvider
-            from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
+
+            from src.infrastructure.browser.playwright_stockbit import (
+                StockbitPlaywrightBrokerProvider,
+            )
+            from src.infrastructure.browser.stockbit_running_trade import (
+                StockbitRunningTradeProvider,
+            )
             broker_provider = StockbitPlaywrightBrokerProvider()
             if broker_provider.is_authenticated():
                 running_trade_provider = StockbitRunningTradeProvider(broker_provider=broker_provider)
@@ -236,8 +229,8 @@ def track(
     # Always wire order book provider — full depth replaces naive top-of-book bid_pressure
     order_book_provider = None
     try:
-        from src.infrastructure.browser.stockbit_order_book import StockbitOrderBookProvider
         from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
+        from src.infrastructure.browser.stockbit_order_book import StockbitOrderBookProvider
         ob_broker = StockbitPlaywrightBrokerProvider()
         if ob_broker.is_authenticated():
             order_book_provider = StockbitOrderBookProvider(broker_provider=ob_broker)
@@ -288,7 +281,6 @@ def track(
 
 # ── grade ─────────────────────────────────────────────────────────────────────
 
-@opening_app.command("grade")
 def grade(
     date_str: Annotated[Optional[str], typer.Option("--date")] = None,
 ) -> None:
@@ -298,8 +290,8 @@ def grade(
     Requires: snapshot.json and at least one track_*.json from today.
 
     Examples:
-        saham trade opening grade
-        saham trade opening grade --date 2026-06-17
+        saham learn grade
+        saham learn grade --date 2026-06-17
     """
     run_date = _parse_date(date_str)
 
@@ -371,22 +363,28 @@ def grade(
 
 # ── tune ──────────────────────────────────────────────────────────────────────
 
-@opening_app.command("tune")
 def tune(
     date_str: Annotated[Optional[str], typer.Option("--date")] = None,
     api_key: Annotated[Optional[str], typer.Option("--api-key", help="DeepSeek API key (overrides env)")] = None,
+    allow_invalid_snapshot: Annotated[
+        bool,
+        typer.Option(
+            "--allow-invalid-snapshot",
+            help="Allow AI tuning from low-confidence or out-of-window snapshot data",
+        ),
+    ] = False,
 ) -> None:
     """
     Call DeepSeek AI with today's accuracy grade and save config recommendations.
 
-    Requires: grade.json from today (run `opening grade` first).
+    Requires: grade.json from today (run `saham learn grade` first).
     Reads DEEPSEEK_API_KEY from environment if --api-key not provided.
 
     Saves: data/opening/YYYYMMDD/tune.json + tune.md
 
     Examples:
-        saham trade opening tune
-        saham trade opening tune --date 2026-06-17
+        saham learn tune
+        saham learn tune --date 2026-06-17
     """
     run_date = _parse_date(date_str)
     resolved_key = api_key or os.environ.get("DEEPSEEK_API_KEY")
@@ -396,7 +394,7 @@ def tune(
         raise typer.Exit(1)
 
     try:
-        from src.application.use_case.opening_tune import OpeningTuneUseCase, OpeningTuneRequest
+        from src.application.use_case.opening_tune import OpeningTuneRequest, OpeningTuneUseCase
     except ImportError as e:
         typer.echo(f"Import error: {e}", err=True)
         raise typer.Exit(1)
@@ -407,6 +405,7 @@ def tune(
     result = use_case.execute(OpeningTuneRequest(
         run_date=run_date,
         deepseek_api_key=resolved_key,
+        allow_invalid_snapshot=allow_invalid_snapshot,
     ))
 
     if result.get("skipped"):
@@ -434,7 +433,6 @@ def tune(
 
 # ── prompt ────────────────────────────────────────────────────────────────────
 
-@opening_app.command("prompt")
 def prompt(
     date_str: Annotated[Optional[str], typer.Option("--date")] = None,
     print_output: Annotated[bool, typer.Option("--print", help="Print prompt to stdout")] = False,
@@ -448,8 +446,8 @@ def prompt(
     Saves: data/opening/YYYYMMDD/prompt.md
 
     Examples:
-        saham trade opening prompt
-        saham trade opening prompt --print | pbcopy   # copy to clipboard (macOS)
+        saham learn prompt
+        saham learn prompt --print | pbcopy   # copy to clipboard (macOS)
     """
     run_date = _parse_date(date_str)
 

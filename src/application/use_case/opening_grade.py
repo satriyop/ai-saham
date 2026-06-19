@@ -28,7 +28,9 @@ def compute_grade(run_date: date | None = None) -> dict:
 
     snapshot_path = day_dir / "snapshot.json"
     if not snapshot_path.exists():
-        raise FileNotFoundError(f"No snapshot found at {snapshot_path}. Run `opening snapshot` first.")
+        raise FileNotFoundError(
+            f"No snapshot found at {snapshot_path}. Run `saham learn snapshot` first."
+        )
 
     with open(snapshot_path) as f:
         snapshot = json.load(f)
@@ -36,7 +38,9 @@ def compute_grade(run_date: date | None = None) -> dict:
     # Load all track files sorted by time
     track_files = sorted(day_dir.glob("track_*.json"))
     if not track_files:
-        raise FileNotFoundError(f"No track files found in {day_dir}. Run `opening track` first.")
+        raise FileNotFoundError(
+            f"No track files found in {day_dir}. Run `saham learn track` first."
+        )
 
     tracks: list[dict] = []
     for tf in track_files:
@@ -58,12 +62,15 @@ def compute_grade(run_date: date | None = None) -> dict:
         verdict = cand.get("verdict", "SKIP")
         bid_pressure_preopen = cand.get("bid_pressure_preopen")  # NCP-locked 08:57
 
-        # Time-series of mid_prices for this ticker
-        price_series: list[tuple[str, float]] = []
+        # Time-series of observed prices. Prefer explicit execution/last-price fields;
+        # midpoint is only a low-confidence fallback.
+        price_series: list[tuple[str, float, str, str]] = []
         for track in tracks:
             tdata = track.get("tickers", {}).get(ticker)
-            if tdata and isinstance(tdata, dict) and "mid_price" in tdata:
-                price_series.append((track["captured_at"], tdata["mid_price"]))
+            observed = _extract_observed_price(tdata)
+            if observed is not None:
+                price, source, confidence = observed
+                price_series.append((track["captured_at"], price, source, confidence))
 
         if not price_series:
             per_ticker.append({
@@ -75,7 +82,9 @@ def compute_grade(run_date: date | None = None) -> dict:
             continue
 
         opening_price = price_series[0][1]
-        prices = [p for _, p in price_series]
+        opening_price_source = price_series[0][2]
+        opening_price_confidence = price_series[0][3]
+        prices = [p for _, p, _, _ in price_series]
         peak = max(prices)
         trough = min(prices)
 
@@ -158,6 +167,9 @@ def compute_grade(run_date: date | None = None) -> dict:
             "trend": trend,
             "iep": iep,
             "opening_price": opening_price,
+            "opening_price_source": opening_price_source,
+            "opening_price_confidence": opening_price_confidence,
+            "capture_phase": snapshot.get("capture_phase"),
             "peak_09_30": round(peak, 2),
             "trough_09_30": round(trough, 2),
             "entry_range_hit": entry_range_hit,
@@ -178,7 +190,15 @@ def compute_grade(run_date: date | None = None) -> dict:
             # broker confirmation (present only when --broker-confirm was used during track)
             "institutional_absorption_rate": institutional_absorption_rate,
             "broker_dominant_side": broker_dominant_side,
-            "price_series": price_series,
+            "price_series": [
+                {
+                    "captured_at": captured_at,
+                    "price": price,
+                    "source": source,
+                    "confidence": confidence,
+                }
+                for captured_at, price, source, confidence in price_series
+            ],
         })
 
     # Session-level aggregates
@@ -200,12 +220,17 @@ def compute_grade(run_date: date | None = None) -> dict:
 
     tracked = [t for t in per_ticker if not t.get("no_track_data")]
     iep_errors = [t["iep_error_pct"] for t in tracked if t.get("iep_error_pct") is not None]
+    data_quality = _compute_data_quality(snapshot, tracked)
 
     # Load current config snapshot
     config_snapshot = _load_config_snapshot()
 
     grade = {
         "date": str(today),
+        "capture_phase": snapshot.get("capture_phase"),
+        "capture_valid_for_opening_prediction": snapshot.get("capture_valid_for_opening_prediction"),
+        "capture_confidence": snapshot.get("capture_confidence"),
+        "data_quality": data_quality,
         "tickers_screened": len(candidates),
         "tickers_tracked": len(tracked),
         "entry_range_hit_rate": rate(tracked, "entry_range_hit"),
@@ -233,6 +258,62 @@ def compute_grade(run_date: date | None = None) -> dict:
     _write_grade_md(grade, day_dir / "grade.md")
 
     return grade
+
+
+def _compute_data_quality(snapshot: dict, tracked: list[dict]) -> dict:
+    source_counts: dict[str, int] = {}
+    confidence_counts: dict[str, int] = {}
+    for row in tracked:
+        source = row.get("opening_price_source") or "missing"
+        confidence = row.get("opening_price_confidence") or "NONE"
+        source_counts[source] = source_counts.get(source, 0) + 1
+        confidence_counts[confidence] = confidence_counts.get(confidence, 0) + 1
+
+    capture_valid = snapshot.get("capture_valid_for_opening_prediction")
+    if capture_valid is None:
+        capture_valid = snapshot.get("is_ncp_locked")
+
+    return {
+        "capture_phase": snapshot.get("capture_phase"),
+        "capture_valid_for_opening_prediction": bool(capture_valid),
+        "capture_confidence": snapshot.get("capture_confidence"),
+        "price_source_counts": source_counts,
+        "price_confidence_counts": confidence_counts,
+        "high_confidence_price_count": confidence_counts.get("HIGH", 0),
+        "medium_confidence_price_count": confidence_counts.get("MEDIUM", 0),
+        "low_confidence_price_count": confidence_counts.get("LOW", 0),
+        "none_confidence_price_count": confidence_counts.get("NONE", 0),
+        "invalid_snapshot": capture_valid is False,
+    }
+
+
+def _extract_observed_price(tdata) -> tuple[float, str, str] | None:
+    if not isinstance(tdata, dict):
+        return None
+
+    if tdata.get("opening_price") is not None:
+        return (
+            float(tdata["opening_price"]),
+            tdata.get("opening_price_source") or "opening_price",
+            tdata.get("opening_price_confidence") or "MEDIUM",
+        )
+
+    order_book = tdata.get("order_book")
+    if isinstance(order_book, dict) and order_book.get("last_price") is not None:
+        return (
+            float(order_book["last_price"]),
+            "order_book_lastprice",
+            "MEDIUM",
+        )
+
+    if tdata.get("mid_price") is not None:
+        return (
+            float(tdata["mid_price"]),
+            tdata.get("mid_price_source") or "top_of_book_midpoint",
+            tdata.get("mid_price_confidence") or "LOW",
+        )
+
+    return None
 
 
 def _load_config_snapshot() -> dict:
@@ -271,6 +352,9 @@ def _write_grade_md(grade: dict, path: Path) -> None:
         f"| Trend accuracy T+30m | {_pct(grade.get('trend_accuracy_T30'))} |",
         f"| Clean trade rate | {_pct(grade.get('clean_trade_rate'))} |",
         f"| IEP mean error | {grade['iep_accuracy'].get('mean_error_pct', 'N/A')}% |",
+        f"| Snapshot phase | {grade.get('data_quality', {}).get('capture_phase', 'N/A')} |",
+        f"| High-confidence prices | {grade.get('data_quality', {}).get('high_confidence_price_count', 0)} |",
+        f"| Low-confidence prices | {grade.get('data_quality', {}).get('low_confidence_price_count', 0)} |",
         "",
         "## By Verdict",
         "",

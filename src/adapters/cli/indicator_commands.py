@@ -41,6 +41,7 @@ indicator_app = typer.Typer(
     name="indicator",
     help="Technical indicators — compute, snapshot, manage custom formulas.",
     no_args_is_help=True,
+    context_settings={"help_option_names": ["-h", "--help"]},
 )
 
 DEFAULT_DB_PATH = Path("data.db")
@@ -67,12 +68,12 @@ def _rsi_signal(value: Decimal) -> str:
 
 def _no_data_error(ticker: str, days: int) -> None:
     typer.echo(f"[error] No cached data for {ticker.upper()}.", err=True)
-    typer.echo(f"        Fix:   saham data update {ticker.upper()} --days {days}", err=True)
+    typer.echo(f"        Fix:   saham fetch market {ticker.upper()} --days {days}", err=True)
 
 
 def _db_not_found_error(db_path: Path, ticker: str, days: int) -> None:
     typer.echo(f"[error] Database not found at {db_path}.", err=True)
-    typer.echo(f"        Fix:   saham data update {ticker.upper()} --days {days}", err=True)
+    typer.echo(f"        Fix:   saham fetch market {ticker.upper()} --days {days}", err=True)
 
 
 @indicator_app.command()
@@ -142,7 +143,7 @@ def compute(
                 err=True,
             )
             typer.echo(
-                f"        Fix:   saham data update {ticker_upper} --days {days}", err=True
+                f"        Fix:   saham fetch market {ticker_upper} --days {days}", err=True
             )
             raise typer.Exit(1)
 
@@ -223,7 +224,7 @@ def snapshot(
     Multi-indicator view: SMA, EMA, and RSI aligned by date.
 
     Shows only dates where all three indicators have values.
-    Requires cached data (run `saham data update TICKER` first).
+    Requires cached data (run `saham fetch market TICKER` first).
 
     Examples:
         saham indicator snapshot BBCA
@@ -252,7 +253,7 @@ def snapshot(
                 f" need at least {max(sma_period, ema_period, rsi_period)}.",
                 err=True,
             )
-            typer.echo(f"        Fix:   saham data update {ticker_upper} --days {days}", err=True)
+            typer.echo(f"        Fix:   saham fetch market {ticker_upper} --days {days}", err=True)
             raise typer.Exit(1)
 
         if fmt == "json":

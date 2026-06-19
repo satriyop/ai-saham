@@ -24,6 +24,7 @@ skill_app = typer.Typer(
     name="skill",
     help="Manage skill documentation (generate, check, index)",
     no_args_is_help=True,
+    context_settings={"help_option_names": ["-h", "--help"]},
 )
 
 
@@ -57,10 +58,10 @@ def generate(
     projection with auto-detected metadata.
 
     Examples:
-        saham skill generate rsi-momentum
-        saham skill generate foreign-accumulation
-        saham skill generate atr --type indicator
-        saham skill generate SMOOTH_RSI --type formula
+        saham strategy skill generate rsi-momentum
+        saham strategy skill generate foreign-accumulation
+        saham strategy skill generate atr --type indicator
+        saham strategy skill generate SMOOTH_RSI --type formula
     """
     generator = _create_skill_generator()
 
@@ -122,7 +123,7 @@ def check() -> None:
     artifacts with existing SKILL.md files and reports which ones are stale.
 
     Examples:
-        saham skill check
+        saham strategy skill check
     """
     hasher = RulesHasher()
     stale_count = 0
@@ -145,12 +146,12 @@ def check() -> None:
             checked_count += 1
 
             if not skill_md.exists():
-                typer.echo(f"  {strategy_dir.name}: no SKILL.md (run: saham skill generate {strategy_dir.name})")
+                typer.echo(f"  {strategy_dir.name}: no SKILL.md (run: saham strategy skill generate {strategy_dir.name})")
                 stale_count += 1
                 continue
 
             if hasher.is_stale(strategy_yaml, skill_md):
-                typer.echo(f"  {strategy_dir.name}: STALE (run: saham skill generate {strategy_dir.name})")
+                typer.echo(f"  {strategy_dir.name}: STALE (run: saham strategy skill generate {strategy_dir.name})")
                 stale_count += 1
             else:
                 typer.echo(f"  {strategy_dir.name}: up to date")
@@ -165,7 +166,7 @@ def check() -> None:
             checked_count += 1
             skill_md = plugins_dir / f"{plugin_path.stem}.SKILL.md"
             if not skill_md.exists():
-                typer.echo(f"  {plugin_path.stem}: no SKILL.md (run: saham skill generate {plugin_path.stem} --type indicator)")
+                typer.echo(f"  {plugin_path.stem}: no SKILL.md (run: saham strategy skill generate {plugin_path.stem} --type indicator)")
                 stale_count += 1
             else:
                 typer.echo(f"  {plugin_path.stem}: up to date")
@@ -204,8 +205,8 @@ def index(
     index at the project root.
 
     Examples:
-        saham skill index
-        saham skill index --root /path/to/project
+        saham strategy skill index
+        saham strategy skill index --root /path/to/project
     """
     root = project_root or Path(".")
 

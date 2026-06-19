@@ -119,6 +119,8 @@ class OpeningTrackUseCase:
                         "best_bid": bid,
                         "best_offer": offer,
                         "mid_price": round((bid + offer) / 2, 2),
+                        "mid_price_source": "top_of_book_midpoint",
+                        "mid_price_confidence": "LOW",
                         "spread": round(offer - bid, 2),
                     }
                 else:
@@ -131,6 +133,10 @@ class OpeningTrackUseCase:
                 try:
                     ob = self._order_book_provider.fetch_snapshot(ticker)
                     entry["order_book"] = ob.to_dict() if ob else None
+                    if ob and ob.last_price:
+                        entry["opening_price"] = ob.last_price
+                        entry["opening_price_source"] = "order_book_lastprice"
+                        entry["opening_price_confidence"] = "MEDIUM"
                 except Exception:
                     entry["order_book"] = None
 

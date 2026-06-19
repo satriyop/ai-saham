@@ -58,6 +58,7 @@ Then add a markdown narrative section after the JSON block.
 class OpeningTuneRequest:
     run_date: date | None = None
     deepseek_api_key: str | None = None
+    allow_invalid_snapshot: bool = False
 
 
 class OpeningTuneUseCase:
@@ -73,6 +74,14 @@ class OpeningTuneUseCase:
 
         with open(grade_path) as f:
             grade = json.load(f)
+
+        invalid_reason = _invalid_snapshot_reason(grade)
+        if invalid_reason and not request.allow_invalid_snapshot:
+            return {
+                "skipped": True,
+                "reason": invalid_reason,
+                "requires_override": "--allow-invalid-snapshot",
+            }
 
         user_prompt = _build_user_prompt(grade)
 
@@ -103,6 +112,38 @@ class OpeningTuneUseCase:
         (day_dir / "tune.md").write_text(markdown_narrative or raw_text)
 
         return tune
+
+
+def _invalid_snapshot_reason(grade: dict) -> str | None:
+    quality = grade.get("data_quality") or {}
+    capture_valid = quality.get("capture_valid_for_opening_prediction")
+    if capture_valid is None:
+        capture_valid = grade.get("capture_valid_for_opening_prediction")
+
+    capture_confidence = quality.get("capture_confidence")
+    if capture_confidence is None:
+        capture_confidence = grade.get("capture_confidence")
+
+    capture_phase = quality.get("capture_phase")
+    if capture_phase is None:
+        capture_phase = grade.get("capture_phase")
+
+    if capture_valid is False:
+        return (
+            "grade uses an invalid opening snapshot "
+            f"(phase={capture_phase or 'unknown'}, confidence={capture_confidence or 'unknown'})"
+        )
+
+    if capture_confidence == "LOW":
+        return (
+            "grade uses a low-confidence opening snapshot "
+            f"(phase={capture_phase or 'unknown'})"
+        )
+
+    if capture_phase in {"OPEN", "POST_OPEN", "OUT_OF_SESSION"}:
+        return f"grade capture phase is not valid for tuning: {capture_phase}"
+
+    return None
 
 
 def _build_user_prompt(grade: dict) -> str:

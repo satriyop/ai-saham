@@ -1,9 +1,9 @@
 """
 Universe loader service.
 
-Resolves ticker lists from named universes (lq45, idx80, idxcomp100)
-or explicit ticker arguments. Used by `saham update` and
-`saham screen accumulation` to determine which stocks to process.
+Resolves ticker lists from named universes or explicit ticker arguments.
+Universe lists are stored in config/universes.yaml and refreshed via
+`saham fetch universe update` (Stockbit Exodus API).
 
 Layer: Application
 """
@@ -13,7 +13,6 @@ from pathlib import Path
 import yaml
 
 UNIVERSE_CONFIG_PATH = Path("config/universes.yaml")
-SUPPORTED_UNIVERSES = ("lq45", "idx80", "idxcomp100")
 
 
 class UniverseNotFoundError(Exception):
@@ -27,7 +26,7 @@ def load_universe(
     """Return sorted list of tickers for a named universe.
 
     Args:
-        name: Universe name — one of lq45, idx80, idxcomp100
+        name: Universe name — one of lq45, idx80, idx30, jii, bumn20
         config_path: Path to universes.yaml
 
     Raises:
@@ -37,7 +36,7 @@ def load_universe(
     if not config_path.exists():
         raise FileNotFoundError(
             f"Universe config not found at '{config_path}'. "
-            "Run: saham universe update"
+            "Run: saham fetch universe update"
         )
 
     with open(config_path) as f:

@@ -12,7 +12,7 @@ patterns. Scores each ticker using a composite signal:
 
 Intraday vs Swing usage:
   This screener produces a SWING WATCHLIST (5–20 day horizon).
-  For intraday timing, cross-reference with `saham intraday pre-open`.
+  For intraday timing, cross-reference with `saham screen pre-open`.
 
 Layer: Application
 Depends on: Domain ports only — no infrastructure imports
@@ -306,7 +306,7 @@ class AccumulationScreenUseCase:
     Scan multiple tickers for foreign accumulation patterns.
 
     Reads from local repositories only — no network calls.
-    All data must be fetched beforehand via `saham update`.
+    All data must be fetched beforehand via `saham fetch market`.
     """
 
     def __init__(

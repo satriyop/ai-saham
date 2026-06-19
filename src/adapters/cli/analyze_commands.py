@@ -40,6 +40,7 @@ analyze_app = typer.Typer(
     name="analyze",
     help="Analysis and insights — risk, sentiment, market regime, charts.",
     no_args_is_help=True,
+    context_settings={"help_option_names": ["-h", "--help"]},
 )
 
 # Register chart as a nested sub-group
@@ -60,7 +61,7 @@ def _validate_profile(value: str) -> str:
 
 def _no_data_error(ticker: str) -> None:
     typer.echo(f"[error] No cached data for {ticker.upper()}.", err=True)
-    typer.echo(f"        Fix:   saham data update {ticker.upper()} --days 365", err=True)
+    typer.echo(f"        Fix:   saham fetch market {ticker.upper()} --days 365", err=True)
 
 
 def _display_ai_explanation(
@@ -293,7 +294,7 @@ def risk(
         raise typer.Exit(1)
     except FileNotFoundError:
         typer.echo(f"[error] Database not found at {resolved_db}.", err=True)
-        typer.echo(f"        Fix:   saham data update {ticker.upper()} --days 365", err=True)
+        typer.echo(f"        Fix:   saham fetch market {ticker.upper()} --days 365", err=True)
         raise typer.Exit(1)
     except Exception as e:
         msg = str(e).lower()
@@ -319,7 +320,7 @@ def compare(
     """
     Side-by-side risk comparison for multiple IDX tickers.
 
-    Requires cached data for each ticker (`saham data update TICKERS` first).
+    Requires cached data for each ticker (`saham fetch market TICKERS` first).
 
     Examples:
         saham analyze compare BBCA BBRI BMRI
@@ -372,8 +373,14 @@ def compare(
 # Register sentiment and audit from sentiment_commands (no logic duplication)
 from src.adapters.cli.sentiment_commands import sentiment as _sentiment_fn
 from src.adapters.cli.sentiment_commands import sentiment_audit as _sentiment_audit_fn
+from src.adapters.cli.accumulation_commands import accumulation_audit as _accumulation_audit_fn
 from src.adapters.cli.swing_commands import regime as _regime_fn
+from src.adapters.cli.swing_commands import swing as _swing_fn
+from src.adapters.cli.swing_commands import swing_compare as _swing_compare_fn
 
 analyze_app.command("sentiment")(_sentiment_fn)
 analyze_app.command("audit")(_sentiment_audit_fn)
 analyze_app.command("regime")(_regime_fn)
+analyze_app.command("swing")(_swing_fn)
+analyze_app.command("accum-audit")(_accumulation_audit_fn)
+analyze_app.command("swing-compare")(_swing_compare_fn)

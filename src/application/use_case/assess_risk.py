@@ -194,7 +194,7 @@ class AssessRiskUseCase:
             if not agg_response.has_values:
                 raise ValueError(
                     f"Insufficient data for {request.ticker.upper()}. "
-                    f"Run 'saham update {request.ticker.upper()} --days 365' first."
+                    f"Run 'saham fetch market {request.ticker.upper()} --days 365' first."
                 )
 
             latest_snapshot = agg_response.snapshots[-1]
@@ -242,7 +242,7 @@ class AssessRiskUseCase:
         if not candles:
             raise ValueError(
                 f"Insufficient data for {ticker}. "
-                f"Run 'saham update {ticker} --days 365' first."
+                f"Run 'saham fetch market {ticker} --days 365' first."
             )
 
         # Compute each required indicator using registry
@@ -349,7 +349,7 @@ class AssessRiskUseCase:
         if not agg_response.has_values:
             raise ValueError(
                 f"Insufficient data for {request.ticker.upper()}. "
-                f"Run 'saham update {request.ticker.upper()} --days 365' first."
+                f"Run 'saham fetch market {request.ticker.upper()} --days 365' first."
             )
 
         # Extract latest snapshot
@@ -395,7 +395,7 @@ class AssessRiskUseCase:
         if not agg_response.has_values:
             raise ValueError(
                 f"Insufficient data for {request.ticker.upper()}. "
-                f"Run 'saham update {request.ticker.upper()} --days 365' first."
+                f"Run 'saham fetch market {request.ticker.upper()} --days 365' first."
             )
 
         profile = RiskProfile.from_string(request.profile)

@@ -39,6 +39,11 @@ class IntradayConfirmationCandidate:
     gap_pct: Decimal | None = None
     accum_tag: str | None = None
     fvwap_discount_pct: Decimal | None = None
+    opening_price_source: str | None = None
+    opening_price_confidence: str | None = None
+    opening_price_timestamp: str | None = None
+    auto_confirmed: bool = False
+    manual_override: bool = False
 
 
 @dataclass(frozen=True)
@@ -58,6 +63,11 @@ class IntradayConfirmation:
     gap_pct: Decimal | None = None
     accum_tag: str | None = None
     fvwap_discount_pct: Decimal | None = None
+    opening_price_source: str | None = None
+    opening_price_confidence: str | None = None
+    opening_price_timestamp: str | None = None
+    auto_confirmed: bool = False
+    manual_override: bool = False
 
 
 @dataclass(frozen=True)

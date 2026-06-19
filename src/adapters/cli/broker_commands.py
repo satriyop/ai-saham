@@ -55,13 +55,6 @@ def _create_provider(provider_name: str) -> BrokerDataProvider:
     else:
         raise ValueError(f"Unknown provider: {provider_name}. Choose from: {', '.join(PROVIDERS)}")
 
-# Create Typer sub-app for broker commands
-broker_app = typer.Typer(
-    name="broker",
-    help="Manage broker flow data (fetch, auth, view)",
-    no_args_is_help=True,
-)
-
 # Default configuration
 DEFAULT_DB_PATH = Path("data.db")
 DEFAULT_DAYS = 30
@@ -81,7 +74,6 @@ def format_value(value: Decimal) -> str:
     return f"{value:.2f}"
 
 
-@broker_app.command("status")
 def broker_status() -> None:
     """
     Check broker data provider status.
@@ -115,7 +107,7 @@ def broker_status() -> None:
             typer.echo(
                 "Stockbit-Session provider: "
                 + typer.style("No session", fg=typer.colors.YELLOW)
-                + " (run 'saham stockbit login' to set up)"
+                + " (run 'saham fetch stockbit login' to set up)"
             )
     except ImportError:
         typer.echo(
@@ -126,7 +118,6 @@ def broker_status() -> None:
     typer.echo(f"\nDefault provider: {DEFAULT_PROVIDER}")
 
 
-@broker_app.command("fetch")
 def broker_fetch(
     ticker: Annotated[
         str,
@@ -168,14 +159,14 @@ def broker_fetch(
 
     Providers:
         idx       - IDX public API (default, no auth required)
-        stockbit-session - Stockbit browser session (run 'saham stockbit login')
+        stockbit-session - Stockbit browser session (run 'saham fetch stockbit login')
 
     Examples:
-        saham broker fetch BBCA                       # IDX provider (default)
-        saham broker fetch BBCA --provider stockbit-session
-        saham broker fetch BBCA --days 90             # Last 90 days
-        saham broker fetch BBCA --refresh             # Force refresh
-        saham broker fetch BBCA -s 2024-01-01 -e 2024-06-30
+        saham fetch broker BBCA                       # IDX provider (default)
+        saham fetch broker BBCA --provider stockbit-session
+        saham fetch broker BBCA --days 90             # Last 90 days
+        saham fetch broker BBCA --refresh             # Force refresh
+        saham fetch broker BBCA -s 2024-01-01 -e 2024-06-30
     """
     # Validate provider
     if provider_name not in PROVIDERS:
@@ -247,14 +238,13 @@ def broker_fetch(
 
     except BrokerDataAuthError as e:
         typer.echo(typer.style(f"Auth error: {e}", fg=typer.colors.RED))
-        typer.echo("Run: saham stockbit login")
+        typer.echo("Run: saham fetch stockbit login")
         raise typer.Exit(1)
     except BrokerDataProviderError as e:
         typer.echo(typer.style(f"Error: {e}", fg=typer.colors.RED))
         raise typer.Exit(1)
 
 
-@broker_app.command("flow")
 def broker_flow(
     ticker: Annotated[
         str,
@@ -279,8 +269,8 @@ def broker_flow(
     Displays cached broker data. Use 'broker fetch' first to load data.
 
     Example:
-        saham broker flow BBCA --days 20
-        saham broker flow BBCA --format json
+        saham view broker flow BBCA --days 20
+        saham view broker flow BBCA --format json
     """
     repository = SQLiteBrokerRepository(db_path)
     use_case = GetBrokerDataUseCase(repository)
@@ -293,7 +283,7 @@ def broker_flow(
     if not summaries:
         typer.echo(
             typer.style("No data found. ", fg=typer.colors.YELLOW)
-            + f"Run 'saham broker fetch {ticker}' first."
+            + f"Run 'saham fetch broker {ticker}' first."
         )
         raise typer.Exit(1)
 
@@ -347,7 +337,6 @@ def broker_flow(
         )
 
 
-@broker_app.command("top")
 def broker_top(
     ticker: Annotated[
         str,
@@ -366,8 +355,8 @@ def broker_top(
     Show top brokers for a stock on a specific date.
 
     Example:
-        saham broker top BBCA
-        saham broker top BBCA --date 2024-01-15
+        saham view broker top BBCA
+        saham view broker top BBCA --date 2024-01-15
     """
     repository = SQLiteBrokerRepository(db_path)
 
@@ -380,7 +369,7 @@ def broker_top(
         if not summaries:
             typer.echo(
                 typer.style("No data found. ", fg=typer.colors.YELLOW)
-                + f"Run 'saham broker fetch {ticker}' first."
+                + f"Run 'saham fetch broker {ticker}' first."
             )
             raise typer.Exit(1)
         summary = summaries[-1]
@@ -430,7 +419,6 @@ def broker_top(
         )
 
 
-@broker_app.command("top-foreign")
 def broker_top_foreign(
     days: Annotated[
         int,
@@ -461,18 +449,18 @@ def broker_top_foreign(
     most in the period. Useful as a complementary screening signal to IEV.
 
     Results are automatically saved to the database for later querying.
-    Requires an active Stockbit browser session (run 'saham stockbit login' first).
+    Requires an active Stockbit browser session (run 'saham fetch stockbit login' first).
 
     Examples:
-        saham broker top-foreign
-        saham broker top-foreign --days 7 --limit 20
-        saham broker top-foreign --days 365
+        saham fetch broker-top-foreign
+        saham fetch broker-top-foreign --days 7 --limit 20
+        saham fetch broker-top-foreign --days 365
     """
     prov = _create_provider(provider)
     if not prov.is_authenticated():
         typer.echo(
             typer.style("Not authenticated.", fg=typer.colors.RED)
-            + " Run: saham stockbit login"
+            + " Run: saham fetch stockbit login"
         )
         raise typer.Exit(1)
 
@@ -491,7 +479,7 @@ def broker_top_foreign(
 
     if not snapshots:
         typer.echo(typer.style("No data returned.", fg=typer.colors.YELLOW))
-        typer.echo("Run: saham stockbit spy --target broker-scan")
+        typer.echo("Run: saham fetch stockbit spy --target broker-scan")
         return
 
     # Auto-save to database
@@ -518,7 +506,6 @@ def broker_top_foreign(
     typer.echo(f"Showing {len(snapshots)} stocks. Use --limit to adjust.")
 
 
-@broker_app.command("history")
 def broker_history(
     ticker: Annotated[str, typer.Argument(help="Stock ticker (e.g. BBCA)")],
     days: Annotated[
@@ -544,14 +531,14 @@ def broker_history(
     Results are stored in the foreign-flow time-series table with source='stockbit'.
 
     Examples:
-        saham broker history BBCA
-        saham broker history BBCA --days 30
+        saham fetch broker-history BBCA
+        saham fetch broker-history BBCA --days 30
     """
     prov = _create_provider(provider)
     if not prov.is_authenticated():
         typer.echo(
             typer.style("Not authenticated.", fg=typer.colors.RED)
-            + " Run: saham stockbit login"
+            + " Run: saham fetch stockbit login"
         )
         raise typer.Exit(1)
 
@@ -586,7 +573,6 @@ def broker_history(
         typer.echo(typer.style(line, fg=direction_color))
 
 
-@broker_app.command("import")
 def broker_import(
     file_path: Annotated[
         Path,
@@ -640,10 +626,10 @@ def broker_import(
       buy_value,sell_value
 
     Examples:
-        saham broker import data.csv                  # Auto-detect format
-        saham broker import data.csv --preview        # Preview without saving
-        saham broker import data.csv --mapping rti    # Use custom mapping
-        saham broker import data.csv --on-error fail  # Stop on first error
+        saham fetch broker-import data.csv                  # Auto-detect format
+        saham fetch broker-import data.csv --preview        # Preview without saving
+        saham fetch broker-import data.csv --mapping rti    # Use custom mapping
+        saham fetch broker-import data.csv --on-error fail  # Stop on first error
     """
     # Parse error strategy
     error_strategies = {
@@ -785,7 +771,6 @@ def broker_import(
         raise typer.Exit(1)
 
 
-@broker_app.command("mappings")
 def broker_mappings() -> None:
     """
     List available CSV mapping configurations.
@@ -806,5 +791,5 @@ def broker_mappings() -> None:
             typer.echo(f"  {name}")
 
     typer.echo("-" * 40)
-    typer.echo(f"\nUse with: saham broker import data.csv --mapping <name>")
+    typer.echo(f"\nUse with: saham fetch broker-import data.csv --mapping <name>")
     typer.echo(f"Custom mappings: config/csv_mappings/<name>.yaml")

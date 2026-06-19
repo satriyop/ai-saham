@@ -1,18 +1,11 @@
 """
-CLI commands for the swing trade command family.
+CLI implementation functions for swing analysis and sizing commands.
 
-Commands (all under `saham swing`):
-  saham swing analyze TICKER   — unified 5-section composite view
-  saham swing size    TICKER   — ATR-based position sizing calculator
-  saham swing backtest         — portfolio walk-forward backtest
-  saham swing compare          — compare variants across market regimes
-  saham swing screen           — accumulation screener (find candidates)
-  saham swing audit            — audit accumulation broker data
-  saham swing log              — log a candidate to the journal
-  saham swing review           — review journal performance
-
-Top-level:
-  saham regime                 — market regime (standalone)
+Public command registration lives in lifecycle routers:
+  saham analyze swing
+  saham analyze swing-compare
+  saham trade size
+  saham trade backtest-swing
 
 Layer: Adapter
 """
@@ -25,21 +18,16 @@ from datetime import date, timedelta
 from decimal import Decimal
 from io import StringIO
 from pathlib import Path
-from typing import Annotated, Optional
-
-import yaml
+from typing import Annotated, Any, Optional
 
 import typer
 
-from src.application.rules.exceptions import StrategyNotFoundError
 from src.application.services.bootstrap import create_indicator_registry
 from src.application.services.position_sizer import (
     PercentSizingResult,
     SizingResult,
-    compute_percent_position_size,
     compute_position_size,
 )
-from src.application.services.strategy_loader import StrategyLoader
 from src.application.services.universe_loader import (
     UniverseNotFoundError,
     resolve_tickers,
@@ -48,9 +36,8 @@ from src.application.use_case.accumulation_screen import (
     AccumulationCandidate,
     AccumulationScreenRequest,
     AccumulationScreenUseCase,
+    resolve_preset_targets,
 )
-from src.application.use_case.assess_risk import AssessRiskRequest, AssessRiskUseCase
-from src.application.use_case.backtest import BacktestRequest, BacktestUseCase
 from src.application.use_case.fetch_sentiment import (
     FetchSentimentRequest,
     FetchSentimentUseCase,
@@ -60,20 +47,20 @@ from src.application.use_case.market_regime import (
     MarketRegimeResponse,
     MarketRegimeUseCase,
 )
-from src.application.use_case.swing_backtest import (
-    DEFAULT_SWING_COST_BPS,
-    FOREIGN_BOUNCE_PRESET as BACKTEST_FOREIGN_BOUNCE_PRESET,
+from src.application.use_case.swing_analysis_workflow import (
+    SwingAnalysisDataUnavailable,
+    SwingAnalysisWorkflowRequest,
+    SwingAnalysisWorkflowUseCase,
 )
 from src.application.use_case.swing_backtest import (
+    DEFAULT_SWING_COST_BPS,
     SwingBacktestRequest,
     SwingBacktestResponse,
     SwingBacktestUseCase,
 )
-from src.application.use_case.accumulation_screen import resolve_preset_targets
-from src.infrastructure.config.user_config import get_swing_default
-from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
-from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
-from src.infrastructure.sentiment import SentimentFactory
+from src.application.use_case.swing_backtest import (
+    FOREIGN_BOUNCE_PRESET as BACKTEST_FOREIGN_BOUNCE_PRESET,
+)
 from src.infrastructure.browser.stockbit_analyst import StockbitAnalystConsensusProvider
 from src.infrastructure.browser.stockbit_bandar import StockbitBandarDetectorProvider
 from src.infrastructure.browser.stockbit_corp_action import StockbitCorporateActionRepository
@@ -81,6 +68,10 @@ from src.infrastructure.browser.stockbit_fundamentals import StockbitFundamental
 from src.infrastructure.browser.stockbit_insider import StockbitInsiderActivityProvider
 from src.infrastructure.browser.stockbit_seasonality import StockbitSeasonalityProvider
 from src.infrastructure.browser.stockbit_shareholding import StockbitShareholdingProvider
+from src.infrastructure.config.user_config import get_swing_default
+from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
+from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
+from src.infrastructure.sentiment import SentimentFactory
 
 DEFAULT_DB_PATH = Path("data.db")
 _W = 70  # display width
@@ -112,10 +103,9 @@ SWING_COMPARE_VARIANTS: dict[str, tuple[str, ...]] = {
     "weak_plus": ("WEAK", "SIDEWAYS", "BULLISH"),
 }
 
-# _SwingConfig and loader live in infrastructure to avoid circular imports.
-from src.infrastructure.config.swing_config import SwingConfig as _SwingConfig  # noqa: E402
-from src.infrastructure.config.swing_config import load_swing_config as _load_swing_screener_config_typed  # noqa: E402
-
+from src.infrastructure.config.swing_config import (  # noqa: E402
+    load_swing_config as _load_swing_screener_config_typed,
+)
 
 # Load from config/swing_screener.yaml; fall back to _SwingConfig defaults on any error.
 _SC = _load_swing_screener_config_typed()
@@ -124,12 +114,12 @@ SMART_MONEY_BROKERS = set(_SC.smart_money_brokers)
 NOISE_BROKERS       = set(_SC.noise_brokers)
 
 
-def _make_stockbit_providers(db_path: Path) -> "StockbitProviders":
+def _make_stockbit_providers(db_path: Path) -> Any:
     """Return read-only Stockbit providers backed by SQLite cache.
 
     No API calls are made here. broker_provider=None means each provider
     reads from SQLite and returns None on a cache miss. The only command
-    that fetches live data from Stockbit is `saham data update`.
+    that fetches live data from Stockbit is `saham fetch market`.
     """
     from src.adapters.cli.accumulation_commands import StockbitProviders
     return StockbitProviders(
@@ -1036,7 +1026,7 @@ def _auto_refresh_swing_data(
     force_refresh: bool,
 ) -> tuple[str, ...]:
     """Refresh only the requested ticker for swing analysis."""
-    from src.adapters.cli.update_commands import (
+    from src.adapters.cli.fetch_market_commands import (
         _create_broker_provider,
         _fetch_broker,
         _fetch_candles,
@@ -1458,7 +1448,7 @@ def _print_swing_output(
     else:
         _section_header(f"ACCUMULATION ({window} sessions)")
         typer.echo(typer.style(
-            f"  No broker flow data. Run: saham broker fetch {ticker}",
+            f"  No broker flow data. Run: saham fetch broker {ticker}",
             fg=typer.colors.BRIGHT_BLACK,
             ))
 
@@ -1491,7 +1481,7 @@ def _print_swing_output(
     else:
         _section_header("FLOW DETAIL")
         typer.echo(typer.style(
-            f"  No broker flow data. Run: saham broker fetch {ticker}",
+            f"  No broker flow data. Run: saham fetch broker {ticker}",
             fg=typer.colors.BRIGHT_BLACK,
         ))
 
@@ -1743,7 +1733,7 @@ def _print_swing_output(
     elif not no_backtest:
         _section_header("HISTORY")
         typer.echo(typer.style(
-            f"  Could not run backtest. Run: saham update {ticker} --days 730",
+            f"  Could not run backtest. Run: saham fetch market {ticker} --days 730",
             fg=typer.colors.BRIGHT_BLACK,
         ))
 
@@ -1838,7 +1828,7 @@ def _print_swing_output(
     elif capital and not atr_value:
         typer.echo(
             "PLAN:  Fetch more data to enable position sizing "
-            f"(run saham update {ticker} --days 90)."
+            f"(run saham fetch market {ticker} --days 90)."
         )
 
     _sep("=")
@@ -1958,19 +1948,19 @@ def swing(
     Combines: accumulation signal, risk confirmation, position sizing,
     historical backtest, and news sentiment in one command.
 
-    Replaces the 5–6 command morning workflow:
-      saham swing screen, saham risk, saham compute ATR,
-      saham backtest, saham sentiment — all in one.
+    Replaces the multi-command morning workflow:
+      saham screen accum, saham analyze risk, saham indicator compute,
+      saham trade backtest-swing, saham analyze sentiment — all in one.
 
     Examples:
-        saham swing analyze BBRI
-        saham swing analyze BBRI --preset foreign-bounce --capital 10000000
-        saham swing analyze BBRI --capital 10000000 --risk-pct 1
-        saham swing analyze BBRI --profile conservative --no-sentiment
-        saham swing analyze BBRI --no-refresh --no-backtest --no-sentiment
-        saham swing analyze BBRI --no-backtest --no-sentiment
-        saham swing analyze BBRI --force-refresh
-        saham swing analyze BBRI --capital 10000000 --entry 4825 --rr 2.5
+        saham analyze swing BBRI
+        saham analyze swing BBRI --preset foreign-bounce --capital 10000000
+        saham analyze swing BBRI --capital 10000000 --risk-pct 1
+        saham analyze swing BBRI --profile conservative --no-sentiment
+        saham analyze swing BBRI --no-refresh --no-backtest --no-sentiment
+        saham analyze swing BBRI --no-backtest --no-sentiment
+        saham analyze swing BBRI --force-refresh
+        saham analyze swing BBRI --capital 10000000 --entry 4825 --rr 2.5
     """
     resolved_db = db_path or DEFAULT_DB_PATH
     ticker_upper = ticker.upper()
@@ -1996,49 +1986,7 @@ def swing(
         market_repository=market_repo,
     )
 
-    refresh_actions: tuple[str, ...] = ()
-    if auto_refresh:
-        refresh_actions = _auto_refresh_swing_data(
-            ticker=ticker_upper,
-            db_path=resolved_db,
-            force_refresh=force_refresh,
-        )
-    else:
-        refresh_actions = ("disabled",)
-
-    data_freshness = _build_data_freshness(
-        ticker=ticker_upper,
-        as_of_date=today,
-        market_repo=market_repo,
-        broker_repo=broker_repo,
-        refresh_actions=refresh_actions,
-    )
-    flow_detail = _build_flow_detail(
-        ticker=ticker_upper,
-        broker_repo=broker_repo,
-        window_sessions=flow_window,
-        as_of_date=today,
-    )
-    broker_detail = _build_broker_detail(
-        ticker=ticker_upper,
-        broker_repo=broker_repo,
-        window_sessions=5,
-        as_of_date=today,
-    )
-
-    candles = market_repo.get_candles(ticker_upper)
-    if not candles:
-        typer.echo(
-            f"No data for {ticker_upper}. Run: saham update {ticker_upper} --days 365",
-            err=True,
-        )
-        raise typer.Exit(1)
-
-    latest_close = candles[-1].close
-
-    # ── Accumulation ─────────────────────────────────────────────────────────
-    accum_candidate: AccumulationCandidate | None = None
-    try:
+    def _build_accumulation_candidate(ticker: str, window: int):
         _sb = _make_stockbit_providers(resolved_db)
         accum_uc = AccumulationScreenUseCase(
             broker_repository=broker_repo,
@@ -2051,150 +1999,85 @@ def swing(
             bandar_detector_provider=_sb.bandar_prov,
             fundamentals_provider=_sb.fundamentals_prov,
         )
-        accum_resp = accum_uc.execute(AccumulationScreenRequest(
-            tickers=[ticker_upper],
-            window_days=window,
-            min_net_buy_days=0,
-            min_score=0.0,
-            tier1_broker_codes=_SC.tier1_broker_codes,
-        ))
-        if accum_resp.candidates:
-            accum_candidate = accum_resp.candidates[0]
-    except Exception:
-        pass
-
-    # ── Risk ─────────────────────────────────────────────────────────────────
-    risk_resp = None
-    try:
-        risk_uc = AssessRiskUseCase(repository=market_repo, registry=registry)
-        risk_resp = risk_uc.execute(AssessRiskRequest(
-            ticker=ticker_upper,
-            profile=profile,
-        ))
-    except Exception:
-        pass
-
-    # ── Strategy risk gate ───────────────────────────────────────────────────
-    strategy_risk_level: str | None = None
-    strategy_risk_name: str | None = risk_strategy
-    if risk_strategy:
-        try:
-            strat_loader = StrategyLoader(registry=registry)
-            rules_path = strat_loader.resolve(risk_strategy)
-            strat_risk_uc = AssessRiskUseCase(repository=market_repo, registry=registry)
-            strat_resp = strat_risk_uc.execute(AssessRiskRequest(
-                ticker=ticker_upper,
-                rules_file=rules_path,
-            ))
-            strategy_risk_level = strat_resp.assessment.risk_level_name
-        except StrategyNotFoundError:
-            typer.echo(f"⚠ Risk strategy '{risk_strategy}' not found — gate skipped.", err=True)
-        except Exception:
-            pass
-
-    # ── ATR ──────────────────────────────────────────────────────────────────
-    atr_value: Decimal | None = None
-    try:
-        atr_values = registry.compute("ATR", candles, 14)
-        if atr_values:
-            atr_value = atr_values[-1][1]  # registry returns (date, value) tuples
-    except Exception:
-        pass
-
-    # ── Position sizing ───────────────────────────────────────────────────────
-    sizing: SizingResult | None = None
-    preset_eval: PresetEvaluation | None = None
-    preset_sizing: PercentSizingResult | None = None
-    if preset_name == FOREIGN_BOUNCE_PRESET:
-        preset_eval = _evaluate_foreign_bounce(accum_candidate)
-    broker_quality_note = _build_broker_quality_note(
-        broker_detail=broker_detail,
-        preset_eval=preset_eval,
-    )
-
-    # Preset sizing is deferred — computed after market regime is fetched so
-    # resolve_preset_targets() can use the regime-specific TP/SL from swing_screener.yaml.
-    _preset_entry_dec: Decimal | None = None
-    if capital is not None and preset_eval is not None and preset_eval.passed:
-        _preset_entry_dec = Decimal(str(entry_price)) if entry_price else latest_close
-    elif capital is not None and atr_value and preset_eval is None:
-        try:
-            entry_dec = Decimal(str(entry_price)) if entry_price else latest_close
-            sizing = compute_position_size(
-                entry=entry_dec,
-                atr=atr_value,
-                capital=Decimal(str(capital)),
-                risk_pct=Decimal(str(risk_pct)) / Decimal("100"),
-                atr_multiplier=Decimal(str(atr_mult)),
-                reward_risk=Decimal(str(rr)),
+        accum_resp = accum_uc.execute(
+            AccumulationScreenRequest(
+                tickers=[ticker],
+                window_days=window,
+                min_net_buy_days=0,
+                min_score=0.0,
+                tier1_broker_codes=_SC.tier1_broker_codes,
             )
-        except ValueError:
-            pass
-
-    # ── Backtest ─────────────────────────────────────────────────────────────
-    backtest_result = None
-    if not no_backtest:
-        try:
-            loader = StrategyLoader(registry=registry)
-            rules_path = loader.resolve(strategy)
-            bt_uc = BacktestUseCase(repository=market_repo, registry=registry)
-            bt_resp = bt_uc.execute(BacktestRequest(
-                ticker=ticker_upper,
-                rules_file=rules_path,
-                initial_capital=Decimal("100000000"),
-            ))
-            backtest_result = bt_resp.result
-        except (StrategyNotFoundError, Exception):
-            pass
-
-    # ── Sentiment ─────────────────────────────────────────────────────────────
-    sentiment_resp = None
-    sentiment_warning: str | None = None
-    if not no_sentiment:
-        sentiment_resp, sentiment_warning = _fetch_swing_sentiment(
-            ticker=ticker_upper,
-            sentiment_verbose=sentiment_verbose,
         )
+        return accum_resp.candidates[0] if accum_resp.candidates else None
 
-    # ── Market regime ───────────────────────────────────────────────────────
-    market_regime: MarketRegimeResponse | None = None
-    if with_regime:
-        try:
-            regime_tickers = resolve_tickers(
-                universe=regime_universe,
-                explicit=[],
+    workflow = SwingAnalysisWorkflowUseCase(
+        market_repository=market_repo,
+        broker_repository=broker_repo,
+        registry=registry,
+        refresh_data=_auto_refresh_swing_data,
+        build_data_freshness=_build_data_freshness,
+        build_flow_detail=_build_flow_detail,
+        build_broker_detail=_build_broker_detail,
+        build_accumulation_candidate=_build_accumulation_candidate,
+        evaluate_preset=_evaluate_foreign_bounce,
+        build_broker_quality_note=_build_broker_quality_note,
+        fetch_sentiment=_fetch_swing_sentiment,
+        load_swing_config=_load_swing_screener_config,
+        resolve_preset_targets=resolve_preset_targets,
+    )
+    try:
+        workflow_response = workflow.execute(
+            SwingAnalysisWorkflowRequest(
+                ticker=ticker_upper,
+                today=today,
+                profile=profile,
+                strategy=strategy,
+                preset_name=preset_name,
+                window=window,
+                flow_window=flow_window,
+                capital=capital,
+                risk_pct=risk_pct,
+                entry_price=entry_price,
+                atr_mult=atr_mult,
+                rr=rr,
+                no_sentiment=no_sentiment,
+                sentiment_verbose=sentiment_verbose,
+                no_backtest=no_backtest,
+                auto_refresh=auto_refresh,
+                force_refresh=force_refresh,
+                with_regime=with_regime,
+                regime_universe=regime_universe,
+                benchmark=benchmark,
+                risk_strategy=risk_strategy,
                 db_path=resolved_db,
             )
-            regime_uc = MarketRegimeUseCase(
-                market_repository=market_repo,
-                broker_repository=broker_repo,
-            )
-            market_regime = regime_uc.execute(MarketRegimeRequest(
-                universe=regime_tickers,
-                benchmark_ticker=benchmark,
-                as_of_date=today,
-                breadth_sma_period=_SC.regime_breadth_sma_period,
-                benchmark_sma_fast=_SC.regime_benchmark_sma_fast,
-                benchmark_sma_slow=_SC.regime_benchmark_sma_slow,
-            ))
-        except Exception:
-            pass
+        )
+    except SwingAnalysisDataUnavailable:
+        typer.echo(
+            f"No data for {ticker_upper}. Run: saham fetch market {ticker_upper} --days 365",
+            err=True,
+        )
+        raise typer.Exit(1)
 
-    # Deferred preset sizing: now that regime is known, resolve TP/SL and compute sizing.
-    _swing_config = _load_swing_screener_config()
-    _regime_label = market_regime.label if market_regime else None
-    _tp_pct, _sl_pct = resolve_preset_targets(_regime_label, _swing_config)
-    if _preset_entry_dec is not None and capital is not None:
-        try:
-            preset_sizing = compute_percent_position_size(
-                entry=_preset_entry_dec,
-                capital=Decimal(str(capital)),
-                risk_pct=Decimal(str(risk_pct)) / Decimal("100"),
-                stop_loss_pct=_sl_pct,
-                take_profit_pct=_tp_pct,
-            )
-        except ValueError:
-            pass
+    data_freshness = workflow_response.data_freshness
+    flow_detail = workflow_response.flow_detail
+    broker_detail = workflow_response.broker_detail
+    accum_candidate = workflow_response.accumulation_candidate
+    risk_resp = workflow_response.risk_response
+    strategy_risk_level = workflow_response.strategy_risk_level
+    strategy_risk_name = workflow_response.strategy_risk_name
+    atr_value = workflow_response.atr_value
+    sizing = workflow_response.sizing
+    preset_eval = workflow_response.preset_eval
+    preset_sizing = workflow_response.preset_sizing
+    broker_quality_note = workflow_response.broker_quality_note
+    backtest_result = workflow_response.backtest_result
+    sentiment_resp = workflow_response.sentiment_response
+    sentiment_warning = workflow_response.sentiment_warning
+    market_regime = workflow_response.market_regime
+    _tp_pct = workflow_response.take_profit_pct
+    _sl_pct = workflow_response.stop_loss_pct
+    _regime_label = workflow_response.regime_label
 
     if output_format == "json":
         data_out = data_freshness.to_dict()
@@ -2353,7 +2236,7 @@ def swing_backtest(
     ] = None,
     universe: Annotated[
         Optional[str],
-        typer.Option("--universe", "-u", help="Universe: lq45, idx80, idxcomp100, cached"),
+        typer.Option("--universe", "-u", help="Universe: lq45, idx80, bumn20, cached"),
     ] = None,
     preset: Annotated[
         str,
@@ -2544,7 +2427,7 @@ def swing_compare(
     ] = None,
     universe: Annotated[
         Optional[str],
-        typer.Option("--universe", "-u", help="Universe: lq45, idx80, idxcomp100, cached"),
+        typer.Option("--universe", "-u", help="Universe: lq45, idx80, bumn20, cached"),
     ] = None,
     variants: Annotated[
         str,
@@ -2613,7 +2496,7 @@ def swing_compare(
     """
     Compare swing backtest regime variants side-by-side.
 
-    Variants use the same portfolio simulation as `saham swing-backtest`;
+    Variants use the same portfolio simulation as `saham trade backtest-swing`;
     only the allowed entry regimes differ.
     """
     preset_name = preset.lower()
@@ -2726,7 +2609,7 @@ def regime(
     ] = None,
     universe: Annotated[
         Optional[str],
-        typer.Option("--universe", "-u", help="Universe: lq45, idx80, idxcomp100, cached"),
+        typer.Option("--universe", "-u", help="Universe: lq45, idx80, bumn20, cached"),
     ] = "idx80",
     benchmark: Annotated[
         str,
@@ -2842,10 +2725,10 @@ def size(
     and exact lot count from fixed-fractional capital risk.
 
     Examples:
-        saham swing size BBRI --capital 10000000
-        saham swing size BBRI --capital 10000000 --risk-pct 2 --entry 4825
-        saham swing size BBRI --capital 50000000 --risk-pct 1 --rr 2.5
-        saham swing size BBRI --capital 10000000 --atr-mult 2.0
+        saham trade size BBRI --capital 10000000
+        saham trade size BBRI --capital 10000000 --risk-pct 2 --entry 4825
+        saham trade size BBRI --capital 50000000 --risk-pct 1 --rr 2.5
+        saham trade size BBRI --capital 10000000 --atr-mult 2.0
     """
     resolved_db = db_path or DEFAULT_DB_PATH
     ticker_upper = ticker.upper()
@@ -2868,7 +2751,7 @@ def size(
     candles = market_repo.get_candles(ticker_upper)
     if not candles:
         typer.echo(
-            f"No data for {ticker_upper}. Run: saham update {ticker_upper} --days 365",
+            f"No data for {ticker_upper}. Run: saham fetch market {ticker_upper} --days 365",
             err=True,
         )
         raise typer.Exit(1)
@@ -2889,7 +2772,7 @@ def size(
         typer.echo(
             f"Cannot compute ATR({atr_period}) for {ticker_upper} — insufficient data.", err=True
         )
-        typer.echo(f"Tip: Run: saham update {ticker_upper} --days 90", err=True)
+        typer.echo(f"Tip: Run: saham fetch market {ticker_upper} --days 90", err=True)
         raise typer.Exit(1)
 
     entry_dec = Decimal(str(entry_price)) if entry_price else latest_close
@@ -3030,27 +2913,3 @@ def size(
         fg=typer.colors.BRIGHT_BLACK,
     ))
     typer.echo("")
-
-
-# ─── swing typer family ──────────────────────────────────────────────────────
-
-from src.adapters.cli.accumulation_commands import (  # noqa: E402
-    accumulation_audit,
-    accumulation_log,
-    accumulation_review,
-    accumulation_run,
-)
-
-swing_app = typer.Typer(
-    name="swing",
-    help="Swing trading workflow — screen, analyze, size, backtest, and journal.",
-    no_args_is_help=True,
-)
-swing_app.command("analyze")(swing)
-swing_app.command("backtest")(swing_backtest)
-swing_app.command("compare")(swing_compare)
-swing_app.command("size")(size)
-swing_app.command("screen")(accumulation_run)
-swing_app.command("audit")(accumulation_audit)
-swing_app.command("log")(accumulation_log)
-swing_app.command("review")(accumulation_review)

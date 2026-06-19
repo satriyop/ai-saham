@@ -25,6 +25,7 @@ from src.application.use_case.create_strategy_from_intent import (
     CreateStrategyFromIntentRequest,
     CreateStrategyFromIntentUseCase,
 )
+from src.adapters.cli.skill_commands import skill_app
 from src.infrastructure.ai.strategy_translator import StrategyTranslatorAdapter
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
@@ -34,7 +35,9 @@ strategy_app = typer.Typer(
     name="strategy",
     help="Manage strategy packages (init, validate, list)",
     no_args_is_help=True,
+    context_settings={"help_option_names": ["-h", "--help"]},
 )
+strategy_app.add_typer(skill_app, name="skill")
 
 # Template for new strategy.yaml
 STRATEGY_TEMPLATE = '''version: 1
@@ -745,13 +748,13 @@ def backtest(
         raise typer.Exit(1)
     except FileNotFoundError:
         typer.echo(f"[error] Database not found at {resolved_db}.", err=True)
-        typer.echo(f"        Fix:   saham data update {ticker.upper()} --days 365", err=True)
+        typer.echo(f"        Fix:   saham fetch market {ticker.upper()} --days 365", err=True)
         raise typer.Exit(1)
     except Exception as e:
         msg = str(e).lower()
         if "no such table" in msg or "no data" in msg:
             typer.echo(f"[error] No cached data for {ticker.upper()}.", err=True)
-            typer.echo(f"        Fix:   saham data update {ticker.upper()} --days 365", err=True)
+            typer.echo(f"        Fix:   saham fetch market {ticker.upper()} --days 365", err=True)
         else:
             typer.echo(f"[error] Backtest failed: {e}", err=True)
         raise typer.Exit(1)

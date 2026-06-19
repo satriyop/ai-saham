@@ -85,6 +85,3 @@ regime_gate:
 
   # Set to false to disable regime gating entirely.
   regime_gate_enabled: true
-
-journal:
-  path: "journals/pre-open.csv"  # Paper trade log path

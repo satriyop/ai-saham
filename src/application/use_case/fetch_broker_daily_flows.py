@@ -11,14 +11,11 @@ Layer: Application
 """
 
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date
 
 from src.domain.entities.broker_flow import BrokerDailyFlow
 from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.broker_data_provider import BrokerDataProvider
-
-TOLERANCE_DAYS = 7
-
 
 @dataclass(frozen=True)
 class FetchBrokerDailyFlowsRequest:
@@ -26,6 +23,7 @@ class FetchBrokerDailyFlowsRequest:
     days: int = 365
     broker_codes: list[str] | None = None  # None = use provider default
     refresh: bool = False
+    expected_latest_date: date | None = None
 
 
 @dataclass(frozen=True)
@@ -60,8 +58,7 @@ class FetchBrokerDailyFlowsUseCase:
     def execute(self, request: FetchBrokerDailyFlowsRequest) -> FetchBrokerDailyFlowsResponse:
         ticker = request.ticker.upper()
         source = self._provider.provider_name
-        end_date = date.today()
-        tolerated_end = end_date - timedelta(days=TOLERANCE_DAYS)
+        expected_latest = request.expected_latest_date or date.today()
 
         if not hasattr(self._provider, "fetch_broker_daily_flows"):
             return FetchBrokerDailyFlowsResponse(
@@ -74,7 +71,7 @@ class FetchBrokerDailyFlowsUseCase:
 
         if not request.refresh:
             cached = self._repository.get_broker_daily_flow_date_range(ticker, source=source)
-            if cached and cached[1] >= tolerated_end:
+            if cached and cached[1] >= expected_latest:
                 return FetchBrokerDailyFlowsResponse(
                     ticker=ticker,
                     added_count=0,

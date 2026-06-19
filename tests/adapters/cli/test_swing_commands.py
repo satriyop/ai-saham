@@ -227,15 +227,15 @@ def test_auto_refresh_swing_data_uses_update_provider_factory(monkeypatch, tmp_p
         return "cached-current"
 
     monkeypatch.setattr(
-        "src.adapters.cli.update_commands._fetch_candles",
+        "src.adapters.cli.fetch_market_commands._fetch_candles",
         fake_fetch_candles,
     )
     monkeypatch.setattr(
-        "src.adapters.cli.update_commands._create_broker_provider",
+        "src.adapters.cli.fetch_market_commands._create_broker_provider",
         fake_create_broker_provider,
     )
     monkeypatch.setattr(
-        "src.adapters.cli.update_commands._fetch_broker",
+        "src.adapters.cli.fetch_market_commands._fetch_broker",
         fake_fetch_broker,
     )
 
@@ -528,7 +528,7 @@ def test_fetch_swing_sentiment_verbose_keeps_provider_details(
 
 
 def test_swing_backtest_unknown_preset_error():
-    result = runner.invoke(app, ["trade", "swing", "backtest", "--preset", "unknown"])
+    result = runner.invoke(app, ["trade", "backtest-swing", "--preset", "unknown"])
 
     assert result.exit_code != 0
     assert "unknown swing preset" in result.output.lower()
@@ -561,8 +561,7 @@ def test_swing_backtest_rejects_invalid_allowed_regime():
         app,
         [
             "trade",
-            "swing",
-            "backtest",
+            "backtest-swing",
             "BBCA",
             "--allow-regimes",
             "CALM",
@@ -577,9 +576,8 @@ def test_swing_compare_rejects_unknown_variant():
     result = runner.invoke(
         app,
         [
-            "trade",
-            "swing",
-            "compare",
+            "analyze",
+            "swing-compare",
             "BBCA",
             "--variants",
             "baseline,unknown",

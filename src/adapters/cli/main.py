@@ -4,12 +4,15 @@ CLI adapter for stock analysis.
 Entry point for the command-line interface.
 
 Command groups:
-  saham data       — market data (update, broker, stockbit, universe)
+  saham today      — read-only daily briefing
+  saham fetch      — data ingestion lifecycle commands
+  saham screen     — candidate discovery
+  saham learn      — opening learning loop
+  saham view       — read-only local data browsing
   saham indicator  — technical indicators (compute, snapshot, create, list, show, delete)
   saham analyze    — analysis and insights (risk, compare, sentiment, audit, regime, chart)
   saham strategy   — strategy management (init, validate, list, create, backtest)
-  saham trade      — trading workflows (swing, intraday)
-  saham skill      — skill documentation (generate, check, index)
+  saham trade      — paper trading workspace
   saham version    — version information
 
 Layer: Adapter
@@ -18,28 +21,34 @@ Layer: Adapter
 import typer
 
 from src import __version__
+from src.adapters.cli.analyze_commands import analyze_app
+from src.adapters.cli.fetch_commands import fetch_app
+from src.adapters.cli.indicator_commands import indicator_app
+from src.adapters.cli.learn_commands import learn_app
+from src.adapters.cli.screen_lifecycle_commands import screen_app
+from src.adapters.cli.strategy_commands import strategy_app
+from src.adapters.cli.today_commands import today
+from src.adapters.cli.trade_commands import trade_app
+from src.adapters.cli.view_commands import view_app
 
 app = typer.Typer(
     name="saham",
     help="Local-first stock analysis CLI for Indonesia Stock Exchange (IDX)",
     no_args_is_help=True,
+    context_settings={"help_option_names": ["-h", "--help"]},
 )
 
 # ── Command groups ─────────────────────────────────────────────────────────────
 
-from src.adapters.cli.data_commands import data_app
-from src.adapters.cli.indicator_commands import indicator_app
-from src.adapters.cli.analyze_commands import analyze_app
-from src.adapters.cli.strategy_commands import strategy_app
-from src.adapters.cli.trade_commands import trade_app
-from src.adapters.cli.skill_commands import skill_app
-
-app.add_typer(data_app, name="data")
+app.command("today")(today)
+app.add_typer(fetch_app, name="fetch")
+app.add_typer(screen_app, name="screen")
+app.add_typer(learn_app, name="learn")
+app.add_typer(view_app, name="view")
 app.add_typer(indicator_app, name="indicator")
 app.add_typer(analyze_app, name="analyze")
 app.add_typer(strategy_app, name="strategy")
 app.add_typer(trade_app, name="trade")
-app.add_typer(skill_app, name="skill")
 
 
 # ── Flat commands ──────────────────────────────────────────────────────────────

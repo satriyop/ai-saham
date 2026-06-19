@@ -106,7 +106,7 @@ class MarketRegimeUseCase:
             warnings.append(
                 f"No benchmark candles for {request.benchmark_ticker}; "
                 "regime uses universe breadth only. "
-                f"Run: saham update {request.benchmark_ticker} --provider yahoo"
+                f"Run: saham fetch market {request.benchmark_ticker} --provider yahoo"
             )
 
         breadth_now, breadth_count = self._breadth_above_sma(

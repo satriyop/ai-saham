@@ -2,11 +2,11 @@
 CLI commands for foreign accumulation screening and universe management.
 
 Commands:
-  saham swing screen  — scan stocks for foreign accumulation patterns
-  saham swing log     — log a candidate to the trade journal
-  saham swing review  — review journal forward returns
-  saham universe list              — show configured ticker universes
-  saham universe update            — refresh universe lists from IDX (future)
+  saham screen accum  — scan stocks for foreign accumulation patterns
+  saham trade log swing     — log a candidate to the trade journal
+  saham trade review swing  — review journal forward returns
+  saham fetch universe list              — show configured ticker universes
+  saham fetch universe update            — refresh universe lists from IDX (future)
 
 Layer: Adapter
 """
@@ -97,7 +97,7 @@ def _make_stockbit_providers(db_path: Path) -> "StockbitProviders":
 
     No API calls are made here. broker_provider=None means each provider
     reads from SQLite and returns None on a cache miss. The only command
-    that fetches live data from Stockbit is `saham data update`.
+    that fetches live data from Stockbit is `saham fetch market`.
     """
     return StockbitProviders(
         corp_repo=StockbitCorporateActionRepository(broker_provider=None, db_path=db_path),
@@ -110,16 +110,11 @@ def _make_stockbit_providers(db_path: Path) -> "StockbitProviders":
     )
 
 
-accumulation_app = typer.Typer(
-    name="accumulation",
-    help="Foreign accumulation screener",
-    no_args_is_help=True,
-)
-
 universe_app = typer.Typer(
     name="universe",
-    help="Manage stock universe lists (LQ45, IDX80, IDXComp100)",
+    help="Manage stock universe lists (LQ45, IDX80, IDX30, JII, BUMN20)",
     no_args_is_help=True,
+    context_settings={"help_option_names": ["-h", "--help"]},
 )
 
 DEFAULT_DB_PATH = Path("data.db")
@@ -561,7 +556,7 @@ def _display_results(
     typer.echo(f"Provider: {response.provider} (aggregate foreign flow)")
     if response.provider == "idx":
         typer.echo(
-            "  For per-broker detail: run `saham stockbit login`, then fetch with `--provider stockbit-session`"
+            "  For per-broker detail: run `saham fetch stockbit login`, then fetch with `--provider stockbit-session`"
         )
     typer.echo("")
     typer.echo("FLOW%: avg net foreign % of total daily turnover (positive = accumulating)")
@@ -573,7 +568,7 @@ def _display_results(
             f"STRAT ({strategy_name}): ↑=LOW_RISK(entry)  ~=MODERATE(hold)  ↓=HIGH_RISK(exit)"
         )
     typer.echo("")
-    typer.echo("Swing trade watchlist — cross-check with `saham intraday pre-open` for intraday entry timing.")
+    typer.echo("Swing trade watchlist — cross-check with `saham screen pre-open` for intraday entry timing.")
     typer.echo("DISCLAIMER: Analysis only, not trading advice.")
     typer.echo("=" * _TABLE_WIDTH)
 
@@ -860,7 +855,7 @@ def _print_column_guide() -> None:
     _h("QUICK TIPS")
     typer.echo("  Run --multi first for the daily overview — one command, three windows.")
     typer.echo("  Use --squeeze-only to surface 'coiled spring' setups.")
-    typer.echo("  Deep-dive: saham broker flow <TICKER> --days 30")
+    typer.echo("  Deep-dive: saham view broker flow <TICKER> --days 30")
     typer.echo("             saham risk <TICKER> --profile balanced --with-sentiment")
     typer.echo("")
     typer.echo(typer.style("  DISCLAIMER: Analysis only. Not financial advice.", fg=typer.colors.BRIGHT_BLACK))
@@ -868,7 +863,6 @@ def _print_column_guide() -> None:
     typer.echo("")
 
 
-@accumulation_app.command("run")
 def accumulation_run(
     tickers: Annotated[
         Optional[list[str]],
@@ -878,7 +872,7 @@ def accumulation_run(
         Optional[str],
         typer.Option(
             "--universe", "-u",
-            help="Universe: lq45, idx80, idxcomp100, cached",
+            help="Universe: lq45, idx80, bumn20, cached",
         ),
     ] = None,
     window: Annotated[
@@ -966,22 +960,22 @@ def accumulation_run(
     consecutive buy streak, whether foreigners are underwater (VWAP vs price),
     RSI headroom, foreign flow as % of total turnover, and BB Width squeeze.
 
-    Run `saham update --universe lq45` first to ensure fresh data.
+    Run `saham fetch market --universe lq45` first to ensure fresh data.
 
     Examples:
-        saham swing screen --universe lq45
-        saham swing screen --universe lq45 --window 30
-        saham swing screen --universe lq45 --multi
-        saham swing screen --universe lq45 --multi --sort-by 30s
-        saham swing screen --universe lq45 --min-score 50 --top 10
-        saham swing screen BBCA BBRI BMRI --window 7
-        saham swing screen --universe lq45 --vwap-only
-        saham swing screen --universe lq45 --squeeze-only
-        saham swing screen --universe lq45 --granular
-        saham swing screen --universe lq45 --breakdown
-        saham swing screen --universe lq45 --explain
-        saham swing screen --guide
-        saham swing screen --universe lq45 --format json
+        saham screen accum --universe lq45
+        saham screen accum --universe lq45 --window 30
+        saham screen accum --universe lq45 --multi
+        saham screen accum --universe lq45 --multi --sort-by 30s
+        saham screen accum --universe lq45 --min-score 50 --top 10
+        saham screen accum BBCA BBRI BMRI --window 7
+        saham screen accum --universe lq45 --vwap-only
+        saham screen accum --universe lq45 --squeeze-only
+        saham screen accum --universe lq45 --granular
+        saham screen accum --universe lq45 --breakdown
+        saham screen accum --universe lq45 --explain
+        saham screen accum --guide
+        saham screen accum --universe lq45 --format json
     """
     if guide:
         _print_column_guide()
@@ -1320,7 +1314,6 @@ AUDIT_PRESETS = {
 }
 
 
-@accumulation_app.command("audit")
 def accumulation_audit(
     tickers: Annotated[
         Optional[list[str]],
@@ -1328,7 +1321,7 @@ def accumulation_audit(
     ] = None,
     universe: Annotated[
         Optional[str],
-        typer.Option("--universe", "-u", help="Universe: lq45, idx80, idxcomp100, cached"),
+        typer.Option("--universe", "-u", help="Universe: lq45, idx80, bumn20, cached"),
     ] = None,
     preset: Annotated[
         Optional[str],
@@ -1418,7 +1411,7 @@ def accumulation_audit(
     Replay accumulation signals historically and measure forward returns.
 
     This command is deterministic and offline. It uses cached local candles and
-    broker summaries only; run `saham update --universe <name>` first.
+    broker summaries only; run `saham fetch market --universe <name>` first.
     """
     resolved_db = db_path or DEFAULT_DB_PATH
 
@@ -1583,7 +1576,7 @@ def universe_list(
     List configured ticker universes with last-updated date and ticker count.
 
     Example:
-        saham universe list
+        saham fetch universe list
     """
     from src.application.services.universe_loader import UNIVERSE_CONFIG_PATH
 
@@ -1604,8 +1597,8 @@ def universe_list(
     typer.echo("")
     typer.echo(f"Config file: {resolved_config}")
     typer.echo("")
-    typer.echo("Usage: saham data update --universe <name>")
-    typer.echo("       saham trade swing screen --universe <name>")
+    typer.echo("Usage: saham fetch market --universe <name>")
+    typer.echo("       saham screen accum --universe <name>")
 
 
 @universe_app.command("update")
@@ -1626,17 +1619,17 @@ def universe_update(
     """
     Refresh universe ticker lists from Stockbit Exodus API.
 
-    Discovers all IDX index universes (LQ45, IDX30, IDX80, IDXComp100, JII,
+    Discovers all IDX index universes (LQ45, IDX30, IDX80, JII,
     MBX, BUMN20) by querying the Stockbit sector/subsector API, then fetches
     the live constituent lists and updates config/universes.yaml.
 
-    Requires an active Stockbit session (run `saham stockbit login` first).
+    Requires an active Stockbit session (run `saham fetch stockbit login` first).
 
     Examples:
-        saham universe update                     # update all known universes
-        saham universe update --universe lq45     # update only LQ45
-        saham universe update --universe lq45,idx80
-        saham universe update --discover          # list available without updating
+        saham fetch universe update                     # update all known universes
+        saham fetch universe update --universe lq45     # update only LQ45
+        saham fetch universe update --universe lq45,idx80
+        saham fetch universe update --discover          # list available without updating
     """
     import yaml
     from datetime import date
@@ -1648,7 +1641,7 @@ def universe_update(
     profile_dir = _Path(".stockbit_profile")
     if not profile_dir.exists():
         typer.echo("")
-        typer.echo("No Stockbit session found. Run `saham stockbit login` first.")
+        typer.echo("No Stockbit session found. Run `saham fetch stockbit login` first.")
         typer.echo("")
         typer.echo("Manual alternative:")
         typer.echo("  1. Visit https://www.idx.co.id/en/market-data/indexes/")
@@ -1661,7 +1654,7 @@ def universe_update(
 
         provider = StockbitPlaywrightBrokerProvider()
         if not provider.is_authenticated():
-            typer.echo("Stockbit session expired. Run `saham stockbit login` to refresh.")
+            typer.echo("Stockbit session expired. Run `saham fetch stockbit login` to refresh.")
             raise typer.Exit(1)
 
         universe_prov = StockbitUniverseProvider(broker_provider=provider)
@@ -1694,7 +1687,7 @@ def universe_update(
             raise typer.Exit(1)
     else:
         # Default: update the main analysis universes (skip ihsg — too many tickers)
-        default_targets = ["lq45", "idx30", "idx80", "idxcomp100", "jii", "bumn20"]
+        default_targets = ["lq45", "idx30", "idx80", "jii", "bumn20"]
         targets = [t for t in default_targets if t in available]
 
     # Load existing YAML to preserve structure and any manually curated entries
@@ -1744,11 +1737,11 @@ def universe_update(
     header = (
         "# IDX Stock Universe Lists\n"
         "#\n"
-        "# These lists are used by `saham update` and `saham swing screen`\n"
+        "# These lists are used by `saham fetch market` and `saham screen accum`\n"
         "# to define which tickers to scan.\n"
         "#\n"
         "# IDX rebalances LQ45 and IDX80 every February and August.\n"
-        "# Auto-updated via: saham universe update (Stockbit Exodus API)\n"
+        "# Auto-updated via: saham fetch universe update (Stockbit Exodus API)\n"
         "#\n"
         f"# Last updated: {today_str}\n\n"
     )
@@ -1827,9 +1820,9 @@ def accumulation_log(
     never duplicates rows.
 
     Example:
-        saham swing log --ticker BBRI --window 7
-        saham swing log --ticker BBCA --entry-price 9450
-        saham swing log --ticker BBRI --from-analysis --with-regime
+        saham trade log swing --ticker BBRI --window 7
+        saham trade log swing --ticker BBCA --entry-price 9450
+        saham trade log swing --ticker BBRI --from-analysis --with-regime
     """
     from src.application.services.accumulation_journal import AccumulationJournalService
     from src.infrastructure.persistence.accumulation_journal_csv_writer import (
@@ -2037,8 +2030,8 @@ def accumulation_review(
     what the accumulation score thresholds actually delivered.
 
     Example:
-        saham swing review
-        saham swing review --horizon 10 --min-score 70
+        saham trade review swing
+        saham trade review swing --horizon 10 --min-score 70
     """
     from src.application.services.accumulation_journal import AccumulationJournalService
     from src.infrastructure.persistence.accumulation_journal_csv_writer import (
@@ -2051,7 +2044,7 @@ def accumulation_review(
     if not journal_path.exists():
         typer.echo(
             f"No journal found at '{journal_path}'.\n"
-            "Run `saham swing log --ticker BBRI` first.",
+            "Run `saham trade log swing --ticker BBRI` first.",
             err=True,
         )
         raise typer.Exit(1)

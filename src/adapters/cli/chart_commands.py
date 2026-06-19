@@ -1,7 +1,7 @@
 """
 CLI commands for terminal ASCII charting.
 
-Provides the 'saham chart' command group with three sub-commands:
+Provides the 'saham analyze chart' command group with three sub-commands:
   price   — Close price line with optional SMA/EMA overlays
   rsi     — RSI line with overbought/oversold bands
   volume  — Daily volume bar chart
@@ -23,6 +23,7 @@ chart_app = typer.Typer(
     name="chart",
     help="Terminal ASCII charts for IDX stocks",
     no_args_is_help=True,
+    context_settings={"help_option_names": ["-h", "--help"]},
 )
 
 DEFAULT_DB_PATH = Path("data.db")
@@ -50,7 +51,7 @@ def _load_candles(ticker: str, days: int, db_path: Path):
 
     if not candles:
         typer.echo(f"No cached data for {ticker.upper()}.", err=True)
-        typer.echo(f"Run: saham update {ticker.upper()} --days {days}", err=True)
+        typer.echo(f"Run: saham fetch market {ticker.upper()} --days {days}", err=True)
         raise typer.Exit(1)
 
     return candles[-days:]
@@ -76,9 +77,9 @@ def chart_price(
     Plot close price with SMA/EMA overlays.
 
     Examples:
-        saham chart price BBCA
-        saham chart price BBCA --sma 20 --ema 9 --days 120
-        saham chart price BBCA --sma 50 --days 365
+        saham analyze chart price BBCA
+        saham analyze chart price BBCA --sma 20 --ema 9 --days 120
+        saham analyze chart price BBCA --sma 50 --days 365
     """
     plt = _require_plotext()
     resolved_db = db_path or DEFAULT_DB_PATH
@@ -134,8 +135,8 @@ def chart_rsi(
     Plot RSI with overbought (70) and oversold (30) reference lines.
 
     Examples:
-        saham chart rsi BBCA
-        saham chart rsi BBCA --period 9 --days 120
+        saham analyze chart rsi BBCA
+        saham analyze chart rsi BBCA --period 9 --days 120
     """
     plt = _require_plotext()
     resolved_db = db_path or DEFAULT_DB_PATH
@@ -185,8 +186,8 @@ def chart_volume(
     Plot daily volume as a bar chart.
 
     Examples:
-        saham chart volume BBCA
-        saham chart volume BBCA --days 30
+        saham analyze chart volume BBCA
+        saham analyze chart volume BBCA --days 30
     """
     plt = _require_plotext()
     resolved_db = db_path or DEFAULT_DB_PATH

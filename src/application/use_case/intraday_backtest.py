@@ -1,5 +1,5 @@
 """
-Walk-forward backtest for the deterministic intraday pre-open + confirm-open workflow.
+Walk-forward backtest for the deterministic intraday pre-open + opening confirmation workflow.
 
 Uses daily OHLC as a proxy for intraday execution (Option A):
   - Screening reuses pre-open math (ATR/RSI/SMA, entry range, ATR stop, ACCUM, FVWAP).
@@ -459,7 +459,7 @@ class IntradayBacktestUseCase:
 
     For each trading date d in [start_date, end_date]:
       1. Build pre-open candidates as of d-1 (yesterday's data → today's plan)
-      2. Simulate confirm-open with opening_price = candle.open on d
+      2. Simulate opening confirmation with opening_price = candle.open on d
       3. Rank and cap entries at max_daily_positions
       4. Simulate same-day exit via candle.high / candle.low / candle.close
       5. Update cash and equity; no overnight holds
@@ -518,7 +518,7 @@ class IntradayBacktestUseCase:
                     equity_curve.append(cash)
                     continue
 
-            # ── Step 2: fetch today's candles + simulate confirm-open ─────────
+            # ── Step 2: fetch today's candles + simulate opening confirmation ─
             conf_candidates = []
             candidate_map: dict[str, _BacktestCandidate] = {}
             today_candles: dict[str, Candle] = {}
@@ -708,7 +708,7 @@ class IntradayBacktestUseCase:
         else:
             warnings.append(
                 "IEV filter NOT active — full universe screened every day. "
-                "Run 'saham intraday collect-iev' at 08:50 WIB each trading day to build history."
+                "Run 'saham fetch iev' at 08:50 WIB each trading day to build history."
             )
         warnings.extend([
             "Same-day H/L ordering is conservative: "
