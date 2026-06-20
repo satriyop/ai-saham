@@ -204,9 +204,16 @@ Commits: 313c134 (fix), 803ef69 (config separation)
 fetch path. The audit no longer reports a universal unknown-provenance warning.
 New fetches continue to write correct provenance automatically via `refresh_market_data.py`.
 
-### Priority 4 — Enrichment Missing vs Neutral (Finding 7)
+### Priority 4 — Enrichment Missing vs Neutral (Finding 7) ✅ DONE (2026-06-20)
 
-Annotate per-candidate output with missing enrichment context. Medium effort, medium value.
+A dim `MISSING: seasonal  analyst  bandar  ...` line now appears per candidate in
+`screen accum` output listing whichever of the five enrichment fields
+(seasonal, analyst, holding, bandar, fundam) are absent. Always shown — not behind a flag.
+
+Prevents a score that excluded bandar context from looking identical to one that received
+a neutral bandar reading. Display-only change in `accumulation_display.py`.
+
+Commit: d6c5e61
 
 ### Priority 5 — Broker Summary Quality Labels (Finding 4)
 
@@ -246,7 +253,7 @@ All feature expansion should follow after Priority 1–3 above.
 | 4. Broker row quality | Open | Policy exists — `_is_usable_broker_summary` gates correctly; labels only |
 | 5. Candle provenance | Open | **Done** — 21,420 rows tagged `yahoo_inferred`; new fetches write `yahoo` |
 | 6. Flow labeling | Open | Partial — swing only, not accumulation |
-| 7. Enrichment display | Open | Open — missing shown as neutral |
+| 7. Enrichment display | Open | **Done** (d6c5e61) — dim MISSING line per candidate lists absent fields |
 | 8. Adapter thinness | Open | Open — 735-line adapter, no enrichment use case |
 | Broker concentration | Proposed | Already built as `bandar_detector` |
 | Per-analyst history | Proposed | Endpoint shape unverified; do not build schema yet |
