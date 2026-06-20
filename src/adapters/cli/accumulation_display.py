@@ -272,6 +272,22 @@ def display_results(
                 fund_style = "red"
             detail_lines.append(Text(f"    {c.ticker} FUNDAM: {fund.label}", style=fund_style))
 
+        missing = [
+            label for label, val in [
+                ("seasonal",  c.seasonal_edge),
+                ("analyst",   c.analyst_consensus),
+                ("holding",   c.shareholding),
+                ("bandar",    c.bandar_detector),
+                ("fundam",    c.fundamentals),
+            ]
+            if val is None
+        ]
+        if missing:
+            detail_lines.append(Text(
+                f"    {c.ticker} MISSING: {('  '.join(missing))}",
+                style="dim",
+            ))
+
         if granular and c.top_brokers:
             broker_line = "    " + "  ".join(c.top_brokers[:5])
             if c.bci_label == "CLUSTER":
