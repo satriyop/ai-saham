@@ -4,69 +4,22 @@ Data provider health and freshness commands.
 Layer: Adapter
 """
 
-import re
 from pathlib import Path
 
 import typer
+from rich.box import ROUNDED
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
 
 from src.application.use_case.get_system_status import (
-    FreshnessItem,
     GetSystemStatusUseCase,
 )
-from src.domain.ports.system_status_provider import ProviderStatusDto
 from src.infrastructure.persistence.sqlite_system_status_provider import (
     SQLiteSystemStatusProvider,
 )
 
 DEFAULT_DB_PATH = Path("data.db")
-
-_ICON_OK = typer.style(" ✅", fg=typer.colors.GREEN, bold=True)
-_ICON_WARN = typer.style(" ⚠", fg=typer.colors.YELLOW, bold=True)
-_ICON_FAIL = typer.style(" ✗", fg=typer.colors.RED, bold=True)
-
-
-def _display_width(s: str) -> int:
-    """Calculate visual display width of a string, treating common unicode symbols as double-width."""
-    # Strip ANSI escape codes first to get clean raw text
-    ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
-    raw_text = ansi_escape.sub("", s)
-
-    width = 0
-    for char in raw_text:
-        # Check standard double-width characters used in status output
-        if char in ("✓", "⚠", "✅", "✗"):
-            width += 2
-        else:
-            width += 1
-    return width
-
-
-def _pad_visual(text: str, width: int, align: str = "<") -> str:
-    """Pad a string to a target visual width, ignoring ANSI escape codes and accounting for double-width chars."""
-    dw = _display_width(text)
-    padding = max(0, width - dw)
-    if align == "<":
-        return text + (" " * padding)
-    elif align == ">":
-        return (" " * padding) + text
-    else:
-        # center
-        left = padding // 2
-        right = padding - left
-        return (" " * left) + text + (" " * right)
-
-
-def _health_line(dto: ProviderStatusDto) -> str:
-    """Format a health check line with perfect alignment."""
-    warning = "key" in dto.label or "expired" in dto.label
-    icon = _ICON_OK if dto.ok else (_ICON_WARN if warning else _ICON_FAIL)
-    ms_str = f"{dto.ms}s" if dto.ms else ""
-
-    name_col = _pad_visual(dto.name, 18)
-    label_col = _pad_visual(dto.label, 52)
-    ms_col = _pad_visual(ms_str, 6, align=">")
-
-    return f"  │ {name_col} {icon}  {label_col} {ms_col} │"
 
 
 def status(
@@ -87,88 +40,77 @@ def status(
     use_case = GetSystemStatusUseCase(provider=provider)
     response = use_case.execute()
 
-    # The inner visual width of the health line is 83 cells.
-    # Therefore, content_width (dashes inside the top box) is 83.
-    content_width = 83
+    # Local Rich Console for fully colored interactive CLI table outputs
+    console = Console()
 
-    typer.echo("")
-    typer.echo("  ╭─ Data Provider Health " + "─" * (content_width - 23) + "╮")
-    for provider_status in response.providers:
-        typer.echo(_health_line(provider_status))
-    typer.echo("  ╰" + "─" * content_width + "╯")
-    typer.echo("")
-
-    _show_data_freshness(db_path, response.freshness)
-
-
-def _show_data_freshness(db_path: Path, freshness_items: list[FreshnessItem]) -> None:
-    """Display data freshness table."""
-    # Columns: TABLE (22), SOURCE (12), LATEST (14), ROWS (8), STATUS (16)
-    # Spacing: 1 (space) + 1 (space) + 1 (space) + 2 (spaces) = 5 spaces
-    # Inner visual width is 22+12+14+8+16+5 = 77 cells.
-    # Total visual width with borders: 4 (left) + 77 (inner) + 2 (right) = 83 cells.
-    content_width = 77
-
-    if not db_path.exists():
-        typer.echo("  ╭─ Data Freshness " + "─" * (content_width - 17) + "╮")
-        line1 = f"  │  No database at {db_path}"
-        typer.echo(_pad_visual(line1, 81) + " │")
-        line2 = "  │  Run: saham fetch market <TICKER>"
-        typer.echo(_pad_visual(line2, 81) + " │")
-        typer.echo("  ╰" + "─" * content_width + "╯")
-        return
-
-    if not freshness_items:
-        typer.echo("  No data found.")
-        return
-
-    _print_freshness_table(freshness_items)
-
-
-def _print_freshness_table(items: list[FreshnessItem]) -> None:
-    """Print a formatted freshness table with age warnings."""
-    content_width = 77
-
-    typer.echo("  ╭─ Data Freshness " + "─" * (content_width - 17) + "╮")
-
-    tbl_hdr = _pad_visual("TABLE", 22)
-    src_hdr = _pad_visual("SOURCE", 12)
-    lat_hdr = _pad_visual("LATEST", 14)
-    rows_hdr = _pad_visual("ROWS", 8, align=">")
-    status_hdr = _pad_visual("STATUS", 16)
-
-    typer.echo(
-        f"  │ {tbl_hdr} {src_hdr} {lat_hdr} {rows_hdr}  {status_hdr} │"
+    # 1. Data Provider Health Table
+    health_table = Table(
+        title="[bold cyan]Data Provider Health[/bold cyan]",
+        box=ROUNDED,
+        show_header=True,
+        header_style="bold cyan",
+        expand=True,
     )
-    typer.echo("  │ " + "─" * (content_width - 2) + " │")
+    health_table.add_column("Provider", ratio=3)
+    health_table.add_column("Status", justify="center", ratio=1)
+    health_table.add_column("Details", ratio=6)
+    health_table.add_column("Latency", justify="right", ratio=1)
 
-    for item in items:
+    for p in response.providers:
+        warning = "key" in p.label or "expired" in p.label
+        icon = "[green]✅[/green]" if p.ok else ("[yellow]⚠[/yellow]" if warning else "[red]✗[/red]")
+        ms_str = f"{p.ms}s" if p.ms else ""
+        health_table.add_row(p.name, icon, p.label, ms_str)
+
+    console.print("")
+    console.print(health_table)
+    console.print("")
+
+    # 2. Data Freshness Table
+    if not db_path.exists():
+        panel = Panel(
+            f"[yellow]No database found at [bold]{db_path}[/bold].[/yellow]\n\n"
+            "Run: [bold cyan]saham fetch market <TICKER>[/bold cyan] to initialize.",
+            title="[bold cyan]Data Freshness[/bold cyan]",
+            border_style="yellow",
+            expand=True,
+        )
+        console.print(panel)
+        return
+
+    if not response.freshness:
+        console.print("[yellow]No database table freshness data found.[/yellow]")
+        return
+
+    freshness_table = Table(
+        title="[bold cyan]Data Freshness[/bold cyan]",
+        box=ROUNDED,
+        show_header=True,
+        header_style="bold cyan",
+        expand=True,
+    )
+    freshness_table.add_column("Table", ratio=3)
+    freshness_table.add_column("Source", ratio=2)
+    freshness_table.add_column("Latest", ratio=2)
+    freshness_table.add_column("Rows", justify="right", ratio=2)
+    freshness_table.add_column("Status", ratio=3)
+
+    for item in response.freshness:
         count_str = f"{item.count:,}" if item.count else "0"
 
         if item.status == "stale":
-            raw_text = f"⚠ {item.days_behind}d behind"
-            styled_text = typer.style(raw_text, fg=typer.colors.YELLOW)
+            status_str = f"[yellow]⚠ {item.days_behind}d behind[/yellow]"
         elif item.status == "today":
-            raw_text = "✓ today"
-            styled_text = typer.style(raw_text, fg=typer.colors.GREEN)
+            status_str = "[green]✓ today[/green]"
         elif item.status == "yesterday":
-            raw_text = "✓ yesterday"
-            styled_text = typer.style(raw_text, fg=typer.colors.GREEN)
+            status_str = "[green]✓ yesterday[/green]"
         elif item.status == "current":
-            raw_text = "✓ current"
-            styled_text = typer.style(raw_text, fg=typer.colors.GREEN)
+            status_str = "[green]✓ current[/green]"
         else:
-            raw_text = "—"
-            styled_text = typer.style(raw_text, fg=typer.colors.BRIGHT_BLACK)
+            status_str = "[bright_black]—[/bright_black]"
 
-        tbl_col = _pad_visual(item.table, 22)
-        src_col = _pad_visual(item.source, 12)
-        lat_col = _pad_visual(item.latest, 14)
-        rows_col = _pad_visual(count_str, 8, align=">")
-        status_col = _pad_visual(styled_text, 16)
-
-        typer.echo(
-            f"  │ {tbl_col} {src_col} {lat_col} {rows_col}  {status_col} │"
+        freshness_table.add_row(
+            item.table, item.source, item.latest, count_str, status_str
         )
 
-    typer.echo("  ╰" + "─" * content_width + "╯")
+    console.print(freshness_table)
