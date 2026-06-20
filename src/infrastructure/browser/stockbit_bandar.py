@@ -5,13 +5,18 @@ Calls /marketdetectors/{ticker}?transaction_type=TRANSACTION_TYPE_NET
       &market_board=MARKET_BOARD_REGULER&investor_type=INVESTOR_TYPE_ALL
       &limit=25&period=BROKER_SUMMARY_PERIOD_LATEST
 
-Actual API shape (confirmed 2026-06-18, BBCA):
+Actual API shape (confirmed 2026-06-20, BBCA):
   data.bandar_detector.broker_accdist       → "Acc" | "Dis" | "Neutral"
   data.bandar_detector.avg.accdist          → today's intensity label
   data.bandar_detector.avg5.accdist         → 5-session intensity label
-  data.bandar_detector.top1.accdist         → top operator's label
-  data.bandar_detector.top1.percent         → float — concentration %
-  data.bandar_detector.avg.percent          → float — avg net % of total volume
+  data.bandar_detector.top1.accdist         → top operator's label (+ .percent)
+  data.bandar_detector.top3.accdist         → top-3 brokers smoothed signal
+  data.bandar_detector.top5.accdist         → top-5 brokers smoothed signal
+  data.bandar_detector.top10.accdist        → top-10 brokers smoothed signal
+  data.bandar_detector.number_broker_buysell → int (negative = more sellers)
+  data.bandar_detector.average              → float VWAP
+  data.bandar_detector.value                → int total traded value (IDR)
+  data.bandar_detector.volume               → int total traded volume (lots)
   data.bandar_detector.total_buyer          → int
   data.bandar_detector.total_seller         → int
 
@@ -29,6 +34,8 @@ import sqlite3
 from datetime import date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+from decimal import Decimal
 
 from src.domain.ports.bandar_detector_provider import BandarDetectorProvider
 from src.domain.value_objects.bandar_detector_snapshot import BandarDetectorSnapshot
@@ -49,19 +56,37 @@ _MARKET_DETECTOR_URL = (
 
 _CREATE_TABLE = """
 CREATE TABLE IF NOT EXISTS bandar_detector (
-    ticker           TEXT NOT NULL,
-    session_date     TEXT NOT NULL,
-    broker_accdist   TEXT,
-    today_accdist    TEXT,
-    five_day_accdist TEXT,
-    top1_accdist     TEXT,
-    top1_percent     REAL,
-    today_percent    REAL,
-    total_buyer      INTEGER,
-    total_seller     INTEGER,
+    ticker                TEXT NOT NULL,
+    session_date          TEXT NOT NULL,
+    broker_accdist        TEXT,
+    today_accdist         TEXT,
+    five_day_accdist      TEXT,
+    top1_accdist          TEXT,
+    top1_percent          REAL,
+    today_percent         REAL,
+    total_buyer           INTEGER,
+    total_seller          INTEGER,
+    top3_accdist          TEXT,
+    top5_accdist          TEXT,
+    top10_accdist         TEXT,
+    number_broker_buysell INTEGER,
+    vwap                  REAL,
+    total_value           REAL,
+    total_volume          INTEGER,
     PRIMARY KEY (ticker, session_date)
 )
 """
+
+# Columns added after initial schema — applied via ALTER TABLE on existing DBs
+_MIGRATE_COLUMNS = [
+    "ALTER TABLE bandar_detector ADD COLUMN top3_accdist TEXT",
+    "ALTER TABLE bandar_detector ADD COLUMN top5_accdist TEXT",
+    "ALTER TABLE bandar_detector ADD COLUMN top10_accdist TEXT",
+    "ALTER TABLE bandar_detector ADD COLUMN number_broker_buysell INTEGER",
+    "ALTER TABLE bandar_detector ADD COLUMN vwap REAL",
+    "ALTER TABLE bandar_detector ADD COLUMN total_value REAL",
+    "ALTER TABLE bandar_detector ADD COLUMN total_volume INTEGER",
+]
 
 
 def _sub(d: dict | None, key: str) -> dict:
@@ -82,6 +107,9 @@ def _parse_snapshot(ticker: str, session_date: date, body: dict) -> BandarDetect
     today_accdist = str(_sub(bd, "avg").get("accdist") or "Neutral").strip()
     five_day_accdist = str(_sub(bd, "avg5").get("accdist") or "Neutral").strip()
     top1_accdist = str(_sub(bd, "top1").get("accdist") or "Neutral").strip()
+    top3_accdist = str(_sub(bd, "top3").get("accdist") or "").strip() or None
+    top5_accdist = str(_sub(bd, "top5").get("accdist") or "").strip() or None
+    top10_accdist = str(_sub(bd, "top10").get("accdist") or "").strip() or None
 
     try:
         top1_percent = float(_sub(bd, "top1").get("percent") or 0)
@@ -103,6 +131,28 @@ def _parse_snapshot(ticker: str, session_date: date, body: dict) -> BandarDetect
     except (TypeError, ValueError):
         total_seller = 0
 
+    try:
+        number_broker_buysell = int(bd.get("number_broker_buysell") or 0)
+    except (TypeError, ValueError):
+        number_broker_buysell = None
+
+    try:
+        _vwap_raw = bd.get("average")
+        vwap = Decimal(str(_vwap_raw)) if _vwap_raw else None
+    except Exception:
+        vwap = None
+
+    try:
+        _val_raw = bd.get("value")
+        total_value = Decimal(str(_val_raw)) if _val_raw else None
+    except Exception:
+        total_value = None
+
+    try:
+        total_volume = int(bd.get("volume") or 0) or None
+    except (TypeError, ValueError):
+        total_volume = None
+
     return BandarDetectorSnapshot(
         ticker=ticker.upper(),
         session_date=session_date,
@@ -114,6 +164,13 @@ def _parse_snapshot(ticker: str, session_date: date, body: dict) -> BandarDetect
         today_percent=round(today_percent, 4),
         total_buyer=total_buyer,
         total_seller=total_seller,
+        top3_accdist=top3_accdist,
+        top5_accdist=top5_accdist,
+        top10_accdist=top10_accdist,
+        number_broker_buysell=number_broker_buysell,
+        vwap=vwap,
+        total_value=total_value,
+        total_volume=total_volume,
     )
 
 
@@ -138,6 +195,11 @@ class StockbitBandarDetectorProvider(BandarDetectorProvider):
         try:
             with sqlite3.connect(self._db_path) as conn:
                 conn.execute(_CREATE_TABLE)
+                for col_sql in _MIGRATE_COLUMNS:
+                    try:
+                        conn.execute(col_sql)
+                    except sqlite3.OperationalError:
+                        pass  # column already exists
         except Exception as e:
             logger.warning("bandar_detector: failed to create cache table: %s", e)
 
@@ -178,7 +240,9 @@ class StockbitBandarDetectorProvider(BandarDetectorProvider):
             with sqlite3.connect(self._db_path) as conn:
                 row = conn.execute(
                     "SELECT broker_accdist, today_accdist, five_day_accdist, top1_accdist, "
-                    "top1_percent, today_percent, total_buyer, total_seller "
+                    "top1_percent, today_percent, total_buyer, total_seller, "
+                    "top3_accdist, top5_accdist, top10_accdist, "
+                    "number_broker_buysell, vwap, total_value, total_volume "
                     "FROM bandar_detector WHERE ticker=? AND session_date=?",
                     (ticker, target_date.isoformat()),
                 ).fetchone()
@@ -195,6 +259,13 @@ class StockbitBandarDetectorProvider(BandarDetectorProvider):
                 today_percent=float(row[5] or 0),
                 total_buyer=int(row[6] or 0),
                 total_seller=int(row[7] or 0),
+                top3_accdist=str(row[8]) if row[8] else None,
+                top5_accdist=str(row[9]) if row[9] else None,
+                top10_accdist=str(row[10]) if row[10] else None,
+                number_broker_buysell=int(row[11]) if row[11] is not None else None,
+                vwap=Decimal(str(row[12])) if row[12] is not None else None,
+                total_value=Decimal(str(row[13])) if row[13] is not None else None,
+                total_volume=int(row[14]) if row[14] is not None else None,
             )
         except Exception as e:
             logger.warning("bandar_detector: cache read failed for %s: %s", ticker, e)
@@ -206,8 +277,10 @@ class StockbitBandarDetectorProvider(BandarDetectorProvider):
                 conn.execute(
                     "INSERT OR REPLACE INTO bandar_detector "
                     "(ticker, session_date, broker_accdist, today_accdist, five_day_accdist, "
-                    "top1_accdist, top1_percent, today_percent, total_buyer, total_seller) "
-                    "VALUES (?,?,?,?,?,?,?,?,?,?)",
+                    "top1_accdist, top1_percent, today_percent, total_buyer, total_seller, "
+                    "top3_accdist, top5_accdist, top10_accdist, "
+                    "number_broker_buysell, vwap, total_value, total_volume) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     (
                         snap.ticker,
                         snap.session_date.isoformat(),
@@ -219,6 +292,13 @@ class StockbitBandarDetectorProvider(BandarDetectorProvider):
                         snap.today_percent,
                         snap.total_buyer,
                         snap.total_seller,
+                        snap.top3_accdist,
+                        snap.top5_accdist,
+                        snap.top10_accdist,
+                        snap.number_broker_buysell,
+                        float(snap.vwap) if snap.vwap is not None else None,
+                        float(snap.total_value) if snap.total_value is not None else None,
+                        snap.total_volume,
                     ),
                 )
         except Exception as e:

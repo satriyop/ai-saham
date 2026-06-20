@@ -182,63 +182,51 @@ class StockbitMarketTimeProvider(MarketStatusProvider):
             return None
 
     def _parse(self, body: dict) -> MarketStatus | None:
-        """Parse Stockbit market-time response defensively.
+        """Parse Stockbit /company-price-feed/market-time response.
 
-        The exact field names are not yet confirmed from a live probe —
-        this implementation tries common variants. Run `saham fetch stockbit spy`
-        and check /company-price-feed/market-time to confirm and tighten.
+        Confirmed response shape (probe 2026-06-20, BBCA):
+          data.market.status         → "STATUS_CLOSE" | "STATUS_OPEN" | "STATUS_PRE_OPEN" | ...
+          data.iepiev_regular.status → sub-session for regular board
+          data.iepiev_fca.status     → sub-session for FCA (pre-open call auction)
         """
-        # Unwrap common envelope shapes
-        data = body.get("data") if isinstance(body.get("data"), dict) else body
+        data = body.get("data")
+        if not isinstance(data, dict):
+            logger.debug("market-time: unexpected body shape: %s", type(body.get("data")))
+            return None
 
-        # status field — try several names
-        raw_status = (
-            data.get("status")
-            or data.get("market_status")
-            or data.get("marketStatus")
-            or ""
-        )
-        raw_status = str(raw_status).upper()
-        is_open = "OPEN" in raw_status and "CLOSE" not in raw_status
+        market = data.get("market") or {}
+        iepiev_fca = data.get("iepiev_fca") or {}
 
-        # Normalise to canonical strings
+        raw_status = str(market.get("status") or "").upper()
+        if not raw_status:
+            logger.debug("market-time: market.status missing; data keys: %s", list(data.keys()))
+            return None
+
+        is_open = raw_status == "STATUS_OPEN"
         status = "STATUS_OPEN" if is_open else "STATUS_CLOSE"
 
-        # session name — Stockbit may use various field names
-        session_name = (
-            data.get("session_name")
-            or data.get("sessionName")
-            or data.get("session")
-            or data.get("market_session")
-            or data.get("name")
-            or "Unknown"
-        )
-        session_name = str(session_name)
+        # iepiev_fca is STATUS_OPEN during pre-open call auction (market still CLOSE)
+        fca_open = str(iepiev_fca.get("status") or "").upper() == "STATUS_OPEN"
 
-        # Session times — optional
-        session_open = (
-            data.get("open_time")
-            or data.get("openTime")
-            or data.get("session_open")
-            or None
-        )
-        session_close = (
-            data.get("close_time")
-            or data.get("closeTime")
-            or data.get("session_close")
-            or None
-        )
-
-        if not raw_status:
-            logger.debug("market-time: could not extract status from %s", list(body.keys()))
-            return None
+        if is_open:
+            # Use local clock to distinguish Regular vs Pre-Closing (sub-minute precision)
+            local = self._fallback.get_status()
+            session_name = (
+                local.session_name
+                if local.session_name in ("Regular", "Pre-Closing")
+                else "Regular"
+            )
+        elif fca_open:
+            session_name = "Pre-Open"
+        else:
+            session_name = "Post-Market"
 
         return MarketStatus(
             status=status,
             session_name=session_name,
             is_open=is_open,
-            session_open=str(session_open) if session_open else None,
-            session_close=str(session_close) if session_close else None,
+            session_open=None,
+            session_close=None,
             fetched_at=datetime.now(_IDX_TZ),
             source="stockbit",
         )

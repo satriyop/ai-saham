@@ -21,6 +21,7 @@ from src.adapters.cli.screen_pre_open_commands import (
 from src.adapters.cli.intraday_workflow_commands import _display_results
 from src.application.use_case.pre_open_workflow import PreOpenDataFreshness
 from src.application.use_case.market_regime import MarketRegimeResponse
+from src.domain.value_objects.market_status import MarketStatus
 from src.domain.value_objects.screener_result import ScreenerCandidate
 
 runner = CliRunner()
@@ -36,10 +37,25 @@ def _candidate(ticker: str) -> ScreenerCandidate:
     )
 
 
+def _local_clock_status(session_name: str, is_open: bool, dt: datetime) -> MarketStatus:
+    """Build a local_clock MarketStatus for guard tests — isolated from file cache."""
+    return MarketStatus(
+        status="STATUS_OPEN" if is_open else "STATUS_CLOSE",
+        session_name=session_name,
+        is_open=is_open,
+        session_open=None,
+        session_close=None,
+        fetched_at=dt,
+        source="local_clock",
+    )
+
+
 def test_pre_open_guard_blocks_weekends_without_override():
+    dt = datetime(2026, 6, 13, 8, 50, tzinfo=ZoneInfo("Asia/Jakarta"))
     guard = _build_intraday_run_guard(
-        datetime(2026, 6, 13, 8, 50, tzinfo=ZoneInfo("Asia/Jakarta")),
+        dt,
         allow_non_trading_day=False,
+        market_status=_local_clock_status("Weekend", False, dt),
     )
 
     assert guard.error is not None
@@ -47,9 +63,11 @@ def test_pre_open_guard_blocks_weekends_without_override():
 
 
 def test_pre_open_guard_allows_weekend_dry_run_with_warning():
+    dt = datetime(2026, 6, 13, 8, 50, tzinfo=ZoneInfo("Asia/Jakarta"))
     guard = _build_intraday_run_guard(
-        datetime(2026, 6, 13, 8, 50, tzinfo=ZoneInfo("Asia/Jakarta")),
+        dt,
         allow_non_trading_day=True,
+        market_status=_local_clock_status("Weekend", False, dt),
     )
 
     assert guard.error is None
@@ -57,9 +75,11 @@ def test_pre_open_guard_allows_weekend_dry_run_with_warning():
 
 
 def test_pre_open_guard_warns_outside_pre_open_window():
+    dt = datetime(2026, 6, 12, 10, 15, tzinfo=ZoneInfo("Asia/Jakarta"))
     guard = _build_intraday_run_guard(
-        datetime(2026, 6, 12, 10, 15, tzinfo=ZoneInfo("Asia/Jakarta")),
+        dt,
         allow_non_trading_day=False,
+        market_status=_local_clock_status("Regular", True, dt),
     )
 
     assert guard.error is None
