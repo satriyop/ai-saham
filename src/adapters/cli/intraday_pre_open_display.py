@@ -72,21 +72,26 @@ def display_raw_movers(raw_movers: list, top_n: int | None, iev_min: int) -> Non
     shown = top_n if top_n else total
     cap = min(shown, total)
 
-    typer.echo("")
-    typer.echo(f"Fetched {total} movers from Stockbit (top {cap} screened):")
-
     tickers_with_iev = []
     for mover in raw_movers[:20]:
         iep_suffix = f" @{mover.iep:,}" if mover.iep is not None else ""
         tickers_with_iev.append(f"{mover.ticker} {mover.iev / 1000:.0f}K{iep_suffix}")
-    row1 = "  " + "  |  ".join(tickers_with_iev[:10])
-    typer.echo(row1)
-    if len(tickers_with_iev) > 10:
-        row2 = "  " + "  |  ".join(tickers_with_iev[10:])
-        typer.echo(row2)
+
+    movers_text = []
+    for i in range(0, len(tickers_with_iev), 5):
+        chunk = tickers_with_iev[i:i+5]
+        movers_text.append(Text("  |  ".join(chunk)))
+
     if total > 20:
-        typer.echo(f"  ... and {total - 20} more below threshold")
-    typer.echo("")
+        movers_text.append(Text(f"... and {total - 20} more below threshold", style="dim"))
+
+    console().print("")
+    console().print(
+        panel(
+            Group(*movers_text),
+            title=f"Fetched {total} movers from Stockbit (top {cap} screened)"
+        )
+    )
 
 
 VERDICT_ORDER = {"PRIME": 0, "WATCH": 1, "NO_DATA": 2, "SKIP": 3}
@@ -125,45 +130,44 @@ def signal_col(candidate: ScreenerCandidate) -> str:
 
 
 def print_browser_plan(config: PreOpenScreenConfig) -> None:
-    typer.echo("")
-    typer.echo("=" * 60)
-    typer.echo("BROWSER ACTION PLAN — Pre-Open Screener")
-    typer.echo("=" * 60)
-    typer.echo("")
-    typer.echo("Claude Code: execute these steps, then re-run this command")
-    typer.echo("with --movers-json and --order-books-json flags.")
-    typer.echo("")
-    typer.echo("STEP 1 — Fetch IEV Movers from Stockbit")
-    typer.echo("-" * 40)
-    typer.echo("  URL: https://stockbit.com/#/screener")
-    typer.echo('  1. Go to Screener → Movers section, click "Selengkapnya"')
-    typer.echo("  2. Sort by IEV column, descending")
     top_label = f"top {config.top_n}" if config.top_n else "all rows"
-    typer.echo(f"  3. Collect {top_label} with IEV >= {config.iev_min:,}")
-    typer.echo("  4. Build JSON array:")
-    typer.echo('     [{"ticker": "BBCA", "iev": 150000}, ...]')
-    typer.echo("")
+    steps = [
+        Text("Claude Code: execute these steps, then re-run this command\n"
+             "with --movers-json and --order-books-json flags.\n", style="bold yellow"),
+        Text("STEP 1 — Fetch IEV Movers from Stockbit", style="bold cyan"),
+        Text("  URL: https://stockbit.com/#/screener\n"
+             "  1. Go to Screener → Movers section, click \"Selengkapnya\"\n"
+             "  2. Sort by IEV column, descending\n"
+             f"  3. Collect {top_label} with IEV >= {config.iev_min:,}\n"
+             "  4. Build JSON array: [{\"ticker\": \"BBCA\", \"iev\": 150000}, ...]\n"),
+    ]
     if not config.fast_mode:
-        typer.echo("STEP 2 — Fetch Order Books (for each ticker from Step 1)")
-        typer.echo("-" * 40)
-        typer.echo("  URL: https://stockbit.com/#/stock/{TICKER}/orderbook")
-        typer.echo("  1. For each ticker: open order book tab")
-        typer.echo("  2. Find the BID row with the LARGEST volume (lots)")
-        typer.echo("  3. Record price and volume")
-        typer.echo("  4. Build JSON object:")
-        typer.echo('     {"BBCA": {"price": 8900, "volume": 50000}, ...}')
-        typer.echo("")
-        typer.echo("STEP 3 — Re-run with collected data")
-        typer.echo("-" * 40)
-        typer.echo("  saham screen pre-open \\")
-        typer.echo("    --movers-json '<step1_json>' \\")
-        typer.echo("    --order-books-json '<step2_json>'")
+        steps.extend([
+            Text("STEP 2 — Fetch Order Books (for each ticker from Step 1)", style="bold cyan"),
+            Text("  URL: https://stockbit.com/#/stock/{TICKER}/orderbook\n"
+                 "  1. For each ticker: open order book tab\n"
+                 "  2. Find the BID row with the LARGEST volume (lots)\n"
+                 "  3. Record price and volume\n"
+                 "  4. Build JSON object: {\"BBCA\": {\"price\": 8900, \"volume\": 50000}, ...}\n"),
+            Text("STEP 3 — Re-run with collected data", style="bold cyan"),
+            Text("  saham screen pre-open \\\n"
+                 "    --movers-json '<step1_json>' \\\n"
+                 "    --order-books-json '<step2_json>'", style="cyan")
+        ])
     else:
-        typer.echo("STEP 2 — Re-run with movers data (fast mode — no order book needed)")
-        typer.echo("-" * 40)
-        typer.echo("  saham screen pre-open --fast --movers-json '<step1_json>'")
-    typer.echo("")
-    typer.echo("=" * 60)
+        steps.extend([
+            Text("STEP 2 — Re-run with movers data (fast mode — no order book needed)", style="bold cyan"),
+            Text("  saham screen pre-open --fast --movers-json '<step1_json>'", style="cyan")
+        ])
+
+    console().print("")
+    console().print(
+        panel(
+            Group(*steps),
+            title="BROWSER ACTION PLAN — Pre-Open Screener"
+        )
+    )
+    console().print("")
 
 
 STRAT_SYMBOL = {"LOW_RISK": "↑", "HIGH_RISK": "↓", "MODERATE": "~"}
@@ -265,6 +269,7 @@ def display_results(
     strategy_signals: dict[str, str] | None = None,
     strategy_name: str | None = None,
 ) -> None:
+    # 1. Summary Panel
     display_pre_open_summary_panel(
         candidates=candidates,
         screened_date=screened_date,
@@ -275,19 +280,14 @@ def display_results(
         market_regime=market_regime,
     )
 
-    typer.echo("")
-    typer.echo("=" * 90)
-    typer.echo("PRE-OPEN SCREENER RESULTS")
-    typer.echo("=" * 90)
-    typer.echo(f"Date: {screened_date}   IEV filter: >= {iev_min:,}")
-    typer.echo(f"Movers evaluated: {total_movers_seen}   Candidates: {len(candidates)}")
-    display_data_freshness(data_freshness)
-    display_market_regime(market_regime)
-    typer.echo("")
-
     if not candidates:
-        typer.echo("No candidates passed the IEV filter.")
-        typer.echo("=" * 90)
+        console().print("")
+        console().print(
+            panel(
+                Text("No candidates passed the IEV filter.", style="yellow"),
+                title="Screener Results"
+            )
+        )
         return
 
     sorted_candidates = sorted(
@@ -296,126 +296,155 @@ def display_results(
     )
 
     show_spread = any(c.spread_pct is not None for c in sorted_candidates)
-    strat_header = f"  {'STRAT':>5}" if strategy_signals else ""
-    sprd_header = f"  {'SPRD%':>6}" if show_spread else ""
     show_notation = any(notation_label(c.ticker_notation) != "-" for c in sorted_candidates)
-    note_header = f"  {'NOTE':<10}" if show_notation else ""
-    sep_width = 90 + (8 if strategy_signals else 0) + (9 if show_spread else 0) + (12 if show_notation else 0)
-    header = (
-        f"{'VERDICT':<10} {'TICKER':<7} {'IEV':>7}  {'GAP%':>6}"
-        f"{sprd_header}  "
-        f"{'ENTRY-RANGE':>16}  {'STOP%':>6}  {'RSI':>4}  {'SIGNAL'}"
-        f"{note_header}{strat_header}"
-    )
-    typer.echo(header)
-    typer.echo("-" * sep_width)
 
-    verdict_style = {
-        "PRIME": (typer.colors.GREEN, True, "★ PRIME  "),
-        "WATCH": (typer.colors.YELLOW, False, "◉ WATCH  "),
-        "NO_DATA": (typer.colors.BRIGHT_BLACK, False, "? NO_DATA"),
-        "SKIP": (typer.colors.RED, False, "✗ SKIP   "),
-    }
+    # 2. Results Table
+    results_table = compact_table()
+    results_table.add_column("Verdict")
+    results_table.add_column("Ticker", style="bold")
+    results_table.add_column("IEV", justify="right")
+    results_table.add_column("Gap%", justify="right")
+    if show_spread:
+        results_table.add_column("Spread%", justify="right")
+    results_table.add_column("Entry Range", justify="right")
+    results_table.add_column("Stop%", justify="right")
+    results_table.add_column("RSI", justify="right")
+    results_table.add_column("Signal")
+    if show_notation:
+        results_table.add_column("Note")
+    if strategy_signals is not None:
+        results_table.add_column("Strat", justify="right")
 
     for candidate in sorted_candidates:
         current_verdict = verdict(candidate)
-        color, bold, label = verdict_style.get(current_verdict, (typer.colors.WHITE, False, current_verdict))
-        verdict_str = typer.style(label, fg=color, bold=bold)
+        
+        # Colorize verdict
+        if current_verdict == "PRIME":
+            verdict_text = "[green]★ PRIME[/]"
+        elif current_verdict == "WATCH":
+            verdict_text = "[yellow]◉ WATCH[/]"
+        elif current_verdict == "NO_DATA":
+            verdict_text = "[dim]? NO_DATA[/]"
+        else:
+            verdict_text = "[red]✗ SKIP[/]"
 
-        gap = candidate.gap_label
-        sprd_col = f"  {candidate.spread_label:>6}" if show_spread else ""
+        # Format gap
+        gap_val = float(candidate.gap_pct) if candidate.gap_pct is not None else 0.0
+        gap_color = "green" if gap_val > 0 else "red" if gap_val < 0 else "white"
+        gap_text = f"[{gap_color}]{candidate.gap_label}[/]"
+
         rng = candidate.entry_range_label
         stop_pct = candidate.risk_reward_label
         rsi_str = f"{float(candidate.rsi):.0f}" if candidate.rsi else "-"
         signal = signal_col(candidate)
-        note_col = f"  {notation_label(candidate.ticker_notation):<10}" if show_notation else ""
 
-        strat_col = ""
+        row_cells = [
+            verdict_text,
+            candidate.ticker,
+            f"{candidate.iev:,}",
+            gap_text,
+        ]
+        
+        if show_spread:
+            row_cells.append(candidate.spread_label)
+        
+        row_cells.extend([
+            rng,
+            stop_pct,
+            rsi_str,
+            signal,
+        ])
+        
+        if show_notation:
+            row_cells.append(notation_label(candidate.ticker_notation))
+        
         if strategy_signals is not None:
             raw = strategy_signals.get(candidate.ticker, "?")
             sym = STRAT_SYMBOL.get(raw, raw)
-            col = STRAT_COLOR.get(raw, typer.colors.WHITE)
-            strat_col = "  " + typer.style(f"{sym:>5}", fg=col, bold=(raw == "LOW_RISK"))
+            if raw == "LOW_RISK":
+                strat_text = "[green]↑[/]"
+            elif raw == "HIGH_RISK":
+                strat_text = "[red]↓[/]"
+            else:
+                strat_text = "[dim]~[/]"
+            row_cells.append(strat_text)
 
-        typer.echo(
-            f"{verdict_str} {candidate.ticker:<7} {candidate.iev:>7,}  {gap:>6}"
-            f"{sprd_col}  "
-            f"{rng:>16}  {stop_pct:>6}  {rsi_str:>4}  {signal}{note_col}{strat_col}"
+        results_table.add_row(*row_cells)
+
+    console().print("")
+    console().print(
+        panel(
+            results_table,
+            title="PRE-OPEN SCREENER RESULTS"
         )
+    )
 
-    typer.echo("-" * sep_width)
-
+    # 3. AI Research Summaries
     has_ai = any(c.ai_summary for c in sorted_candidates)
     if has_ai:
-        typer.echo("")
-        typer.echo("AI RESEARCH SUMMARIES")
-        typer.echo("-" * 90)
+        ai_elements = []
         for candidate in sorted_candidates:
             if candidate.ai_summary:
-                typer.echo(f"\n[{candidate.ticker}]")
-                typer.echo(candidate.ai_summary)
+                ai_elements.append(Text(f"\n[{candidate.ticker}]", style="bold cyan"))
+                ai_elements.append(Text(candidate.ai_summary))
+        
+        console().print("")
+        console().print(
+            panel(
+                Group(*ai_elements),
+                title="AI RESEARCH SUMMARIES"
+            )
+        )
 
-    all_warnings = list(warnings)
-    if data_freshness is not None:
-        all_warnings.extend(data_freshness.warnings)
-    if market_regime is not None:
-        all_warnings.extend(market_regime.warnings)
-        regime_warning = market_regime_warning(market_regime)
-        if regime_warning:
-            all_warnings.append(regime_warning)
-
-    if all_warnings:
-        typer.echo("")
-        typer.echo("WARNINGS")
-        typer.echo("-" * 40)
-        for warning in all_warnings:
-            typer.echo(f"  ! {warning}")
-
+    # 4. Next Action Panel
     watchlist = [c for c in sorted_candidates if verdict(c) in ("PRIME", "WATCH")]
     skipped = [c for c in sorted_candidates if verdict(c) not in ("PRIME", "WATCH")]
 
-    typer.echo("")
-    typer.echo("━" * 60)
+    footer_elements = []
     if watchlist:
         watch_labels = []
         for candidate in watchlist:
             prefix = "★" if verdict(candidate) == "PRIME" else "◉"
             watch_labels.append(f"{prefix} {candidate.ticker}")
         skip_labels = "  ".join(c.ticker for c in skipped) or "—"
-        typer.echo(
-            " WATCHLIST  " + typer.style("  ".join(watch_labels), fg=typer.colors.GREEN, bold=True)
-        )
-        typer.echo(
-            " SKIP       " + typer.style(skip_labels, fg=typer.colors.BRIGHT_BLACK)
-        )
+        
+        footer_elements.append(Text("WATCHLIST", style="bold green"))
+        footer_elements.append(Text("  " + "  ".join(watch_labels), style="green"))
+        footer_elements.append(Text("\nSKIP", style="bold dim"))
+        footer_elements.append(Text("  " + skip_labels, style="dim"))
+        
         tickers_json = ",".join(f'"{c.ticker}":___' for c in watchlist)
-        typer.echo("")
-        typer.echo(" At 09:00, fill opening prices and run:")
-        typer.echo(
-            typer.style(
-                f"   saham trade confirm \\\n"
-                f"     --opening-json '{{{tickers_json}}}'",
-                fg=typer.colors.CYAN,
-            )
-        )
+        footer_elements.append(Text("\nAt 09:00, fill opening prices and run:", style="bold"))
+        footer_elements.append(Text(f"   saham trade confirm \\\n     --opening-json '{{{tickers_json}}}'", style="cyan"))
     else:
-        typer.echo(" No candidates meet criteria today.")
-        typer.echo(" Consider: --iev-min 50000 or run 'saham fetch iev'")
-    typer.echo("━" * 60)
+        footer_elements.append(Text("No candidates meet criteria today.", style="yellow"))
+        footer_elements.append(Text("Consider: --iev-min 50000 or run 'saham fetch iev'", style="dim"))
 
-    typer.echo("")
-    typer.echo(
-        "VERDICT: ★ PRIME=all signals green  ◉ WATCH=bullish, needs confirm  "
-        "✗ SKIP=bearish/distributing  ? NO_DATA=run 'saham fetch market TICKER --days 365'"
-    )
-    typer.echo(
-        "SIGNAL: ACCUM tag × streak  |  FVWAP% (floor=asing underwater, sell=asing profit)  |  PH=Prev High"
-    )
-    typer.echo("STOP%: max loss from entry (ATR-based, capped -7%)")
-    if strategy_signals is not None:
-        typer.echo(
-            f"STRAT ({strategy_name}): ↑=LOW_RISK(entry)  ~=MODERATE(hold)  ↓=HIGH_RISK(exit)"
+    console().print("")
+    console().print(
+        panel(
+            Group(*footer_elements),
+            title="NEXT ACTION & TRACKING WATCHLIST"
         )
-    typer.echo("")
-    typer.echo("DISCLAIMER: Analysis only. Not trading advice.")
-    typer.echo("=" * 90)
+    )
+
+    # 5. Explanations & Disclaimers
+    legends = [
+        Text("VERDICT: ★ PRIME = all signals green | ◉ WATCH = bullish, needs confirm | ✗ SKIP = bearish/distributing | ? NO_DATA = run 'saham fetch market TICKER --days 365'", style="dim"),
+        Text("SIGNAL: ACCUM tag × streak | FVWAP% (floor=asing underwater, sell=asing profit) | PH=Prev High", style="dim"),
+        Text("STOP%: max loss from entry (ATR-based, capped -7%)", style="dim"),
+    ]
+    if strategy_signals is not None:
+        legends.append(
+            Text(f"STRAT ({strategy_name}): ↑ = LOW_RISK(entry) | ~ = MODERATE(hold) | ↓ = HIGH_RISK(exit)", style="dim")
+        )
+    legends.append(Text("\nDISCLAIMER: Analysis only. Not trading advice.", style="dim italic"))
+
+    console().print("")
+    console().print(
+        panel(
+            Group(*legends),
+            title="Reference & Explanation"
+        )
+    )
+    console().print("")
