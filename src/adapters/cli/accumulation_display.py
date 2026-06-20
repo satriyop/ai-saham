@@ -336,10 +336,16 @@ def display_results(
         f"Shown: {len(candidates)} | "
         f"Skipped (no data): {response.tickers_skipped}"
     )
-    typer.echo(f"Provider: {response.provider} (aggregate foreign flow)")
-    if response.provider == "idx":
+    if response.provider == "stockbit":
         typer.echo(
-            "  For per-broker detail: run `saham fetch stockbit login`, then fetch with `--provider stockbit-session`"
+            "Provider: stockbit  ·  foreign aggregate from IDX"
+            "  ·  broker detail: inst desk proxy (10 codes, not all-foreign)"
+        )
+    else:
+        typer.echo(f"Provider: {response.provider} (aggregate foreign flow)")
+        typer.echo(
+            "  For per-broker detail: run `saham fetch stockbit login`,"
+            " then fetch with `--provider stockbit-session`"
         )
     typer.echo("")
     typer.echo("FLOW%: avg net foreign % of total daily turnover (positive = accumulating)")
