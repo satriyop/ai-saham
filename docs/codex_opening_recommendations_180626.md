@@ -13,19 +13,28 @@ This document reviews the current `saham trade opening` and related
 Initial review was documentation-only. Critical fixes were later implemented
 after the review; status is tracked below.
 
+## Deletion Verdict
+
+**Not safe to delete.** Items 3–10 are unimplemented and represent the only
+written specification for IEP-first scoring, opening signal score, richer
+confirmation gates, grade split, IEV velocity, board filters, regime in
+confirmation, and constrained AI tuning. This doc is the backlog for that work.
+
+Safe to delete when Items 3–10 are implemented or converted to tracked tasks.
+
 ## Implementation Status
 
-Last updated: 18 Jun 2026
+Last updated: 18 Jun 2026 (re-vetted against code 20 Jun 2026)
 
-| Item | Status | Notes |
-|------|--------|-------|
-| 1. Separate auction/open price from midpoint | **Implemented (core)** | `opening_track` now labels midpoint as low-confidence fallback, records orderbook `lastprice` as `opening_price`, and `opening_grade` prefers explicit observed price / orderbook `last_price` before midpoint. Full-depth bid pressure remains primary liquidity context. |
-| 1A. Automate confirm-open from Stockbit session | **Implemented (core)** | `saham trade intraday confirm-open` now auto-resolves prices by default via running trade first tick after 09:00, then orderbook `lastprice`, then midpoint fallback. `--opening-json` remains a manual override. |
-| 2. Fix NCP window validation | **Implemented** | `OpeningSnapshotUseCase` now writes `capture_phase`, `capture_valid_for_opening_prediction`, and `capture_confidence`; `is_ncp_locked` is only true during the NCP window. `opening tune` now skips invalid/low-confidence snapshots unless `--allow-invalid-snapshot` is passed. |
-| Critical gap: auto/manual confirmation metadata | **Implemented** | Confirmation outputs now include `auto_confirmed` and `manual_override` alongside price source, confidence, and timestamp. |
-| Critical gap: grade data-quality counts | **Implemented** | `opening grade` now reports price source/confidence counts and snapshot validity metadata under `data_quality`. |
+| Item | Status | Verified |
+|------|--------|---------|
+| 1. Separate auction/open price from midpoint | **Implemented (core)** | ✅ Code-verified: `opening_track.py` writes `mid_price_source="top_of_book_midpoint"`, `mid_price_confidence="LOW"`; `opening_grade.py:290–316` priority chain: explicit `opening_price` → `order_book.last_price` → `mid_price` LOW. |
+| 1A. Automate confirm-open from Stockbit session | **Implemented (core)** | ✅ Code-verified: `ResolveOpeningPricesUseCase` (`resolve_opening_prices.py:54`) implements running-trade → orderbook lastprice → midpoint chain with source/confidence/timestamp. `confirm-open` auto-resolves by default (`intraday_workflow_commands.py:842–874`). |
+| 2. Fix NCP window validation | **Implemented** | ✅ Code-verified: `classify_opening_capture_phase()` in `opening_snapshot.py` correctly bounds the NCP window (`NCP_LOCK_TIME <= current < REGULAR_OPEN_TIME`). Snapshot writes `capture_phase`, `capture_valid_for_opening_prediction`, `capture_confidence`. `opening_tune.py:78–84` gates tuning on validity and confidence. Note: on-disk files under `data/opening/20260617/` are stale (generated before this implementation) — a fresh `saham learn snapshot && saham learn grade` will produce files with the new fields. |
+| Critical gap: auto/manual confirmation metadata | **Implemented** | ✅ Code-verified: live `.last-confirmation.json` contains `opening_price_source`, `opening_price_confidence`, `opening_price_timestamp`, `auto_confirmed`, `manual_override`. |
+| Critical gap: grade data-quality counts | **Implemented** | ✅ Code-verified: `opening_grade.py:263–288` computes `data_quality` with phase, validity, and price source/confidence counts. Existing `grade.json` files are stale; new runs will include the section. |
 | 3. Make IEP first-class entry anchor | **Pending** | IEP is still captured/enriched, but it has not yet been promoted into first-class scoring/gating. |
-| 4-10. High/medium recommendations | **Pending** | These remain future tasks after the critical data-quality fixes. |
+| 4–10. High/medium recommendations | **Pending** | These remain future tasks. See sections below for full specifications. |
 
 Known remaining gaps from the critical set:
 
