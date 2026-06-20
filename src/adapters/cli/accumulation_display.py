@@ -18,6 +18,7 @@ from src.application.use_case.accumulation_screen import (
     AccumulationCandidate,
     AccumulationScreenResponse,
 )
+from src.domain.services.trading_calendar import trading_sessions_apart
 from src.infrastructure.config.swing_config import load_swing_config as _load_swing_screener_config_typed
 
 _SC = _load_swing_screener_config_typed()
@@ -280,6 +281,26 @@ def display_results(
             elif c.bci_label == "RETAIL-LED":
                 broker_line += "  [BCI:RETAIL-LED]"
             detail_lines.append(Text(broker_line))
+
+        if c.latest_candle_date is not None and c.latest_broker_date is not None:
+            if c.latest_broker_date < c.latest_candle_date:
+                lag = trading_sessions_apart(c.latest_broker_date, c.latest_candle_date)
+                if lag > 0:
+                    detail_lines.append(Text(
+                        f"    {c.ticker} DATA LAG: broker as of {c.latest_broker_date}"
+                        f" (+{lag} session{'s' if lag > 1 else ''} behind candle {c.latest_candle_date})"
+                        f" → saham fetch market {c.ticker} --broker-only",
+                        style="yellow",
+                    ))
+            elif c.latest_candle_date < c.latest_broker_date:
+                lag = trading_sessions_apart(c.latest_candle_date, c.latest_broker_date)
+                if lag > 0:
+                    detail_lines.append(Text(
+                        f"    {c.ticker} DATA LAG: candle as of {c.latest_candle_date}"
+                        f" (+{lag} session{'s' if lag > 1 else ''} behind broker {c.latest_broker_date})"
+                        f" → saham fetch market {c.ticker} --candles-only",
+                        style="yellow",
+                    ))
 
     sections = [table]
     if detail_lines:

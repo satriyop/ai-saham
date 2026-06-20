@@ -190,6 +190,9 @@ class AccumulationCandidate:
     # Phase 3.2 — sector breadth confirmation
     sector_breadth_pct: float | None = None  # % of group peers with positive net_buy_ratio
     sector_breadth_bonus: float = 0.0  # bonus pts applied (0 if threshold not met)
+    # Data currency — dates of the most recent loaded records; None if no data
+    latest_candle_date: date | None = None
+    latest_broker_date: date | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -235,6 +238,8 @@ class AccumulationCandidate:
             "bandar_detector": self.bandar_detector.to_dict() if self.bandar_detector else None,
             "fundamentals": self.fundamentals.to_dict() if self.fundamentals else None,
             "ticker_notation": self.ticker_notation.to_dict() if self.ticker_notation else None,
+            "latest_candle_date": self.latest_candle_date.isoformat() if self.latest_candle_date else None,
+            "latest_broker_date": self.latest_broker_date.isoformat() if self.latest_broker_date else None,
         }
 
 
@@ -552,6 +557,8 @@ class AccumulationScreenUseCase:
         flow_ratios = [float(s.foreign_flow_ratio) for s in window_summaries if s.total_value > 0]
         avg_flow_ratio = sum(flow_ratios) / len(flow_ratios) if flow_ratios else None
 
+        latest_broker_date = window_summaries[-1].date if window_summaries else None
+
         # Load candles for price + RSI + trend + BB squeeze
         candles = self._market_repo.get_candles(ticker, end_date=today)
         if not candles:
@@ -560,8 +567,10 @@ class AccumulationScreenUseCase:
             trend = "SIDE"
             bb_width = None
             bb_width_pctile = None
+            latest_candle_date = None
         else:
             current_price = candles[-1].close
+            latest_candle_date = candles[-1].date
             rsi = self._compute_rsi(candles, rsi_period)
             trend = self._compute_trend(candles, sma_period)
             bb_width, bb_width_pctile = self._compute_bb_squeeze(candles)
@@ -663,6 +672,8 @@ class AccumulationScreenUseCase:
             ma200=ma200,
             week52_high=week52_high,
             nearest_resistance_pct=nearest_resistance_pct,
+            latest_candle_date=latest_candle_date,
+            latest_broker_date=latest_broker_date,
         )
 
     def _apply_sector_breadth(
