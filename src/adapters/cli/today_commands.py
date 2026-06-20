@@ -71,39 +71,40 @@ def today(
     )
 
     from src.infrastructure.browser.stockbit_market_time import (
-        fetch_and_cache_market_status,
-        format_market_status_line,
         get_display_market_status,
     )
-    # Attempt Stockbit-confirmed status and cache it for all other commands.
-    stockbit_status = fetch_and_cache_market_status()
-    if stockbit_status is None:
-        typer.echo(
-            "⚠  Market status: could not confirm via Stockbit "
-            "(no session or fetch failed). Run `saham fetch stockbit login` "
-            "to enable canonical market status.",
-            err=True,
-        )
-    market_status = stockbit_status or get_display_market_status()
+    market_status = get_display_market_status()
 
     fresh_count = response.universe_count - response.stale_count
     summary = compact_table(show_header=False)
     summary.add_column("Metric", style="bold")
     summary.add_column("Value")
-    summary.add_row(
-        "Market",
-        f"{market_status.session_name}  [{market_status.source}]"
-        + ("  ⚠ open" if market_status.is_open else ""),
-    )
+
+    # Style market status value
+    market_style = "green" if market_status.is_open else "yellow"
+    market_text = f"[{market_style}]{market_status.session_name}[/{market_style}]  [{market_status.source}]"
+    if market_status.is_open:
+        market_text += "  ⚠ open"
+    summary.add_row("Market", market_text)
+
     summary.add_row("Universe", f"{response.universe.upper()} ({response.universe_count} tickers)")
     summary.add_row("Cached candles current", f"{fresh_count}/{response.universe_count}")
+
     if response.regime is not None:
         regime = response.regime
-        summary.add_row("Market regime", f"{regime.label} ({regime.score}/7)")
+        if regime.score >= 6:
+            regime_style = "green"
+        elif regime.score >= 4:
+            regime_style = "yellow"
+        else:
+            regime_style = "red"
+        regime_text = f"[{regime_style}]{regime.label} ({regime.score}/7)[/{regime_style}]"
+        summary.add_row("Market regime", regime_text)
+
         if regime.breadth_above_sma20_pct is not None:
-            summary.add_row("Breadth above SMA20", f"{regime.breadth_above_sma20_pct:.0%}")
+            summary.add_row("Breadth above SMA20", f"{regime.breadth_above_sma20_pct / 100:.0%}")
         if regime.foreign_flow_breadth_pct is not None:
-            summary.add_row("Foreign flow breadth", f"{regime.foreign_flow_breadth_pct:.0%}")
+            summary.add_row("Foreign flow breadth", f"{regime.foreign_flow_breadth_pct / 100:.0%}")
 
     opening = compact_table()
     opening.add_column("Ticker", style="bold")
@@ -115,7 +116,16 @@ def today(
         for candidate in response.opening_candidates:
             iev = f"{candidate.iev:,}" if candidate.iev is not None else "-"
             iep = f"{candidate.iep:,}" if candidate.iep is not None else "-"
-            opening.add_row(candidate.ticker, candidate.verdict, iev, iep, candidate.trend or "-")
+
+            # Color trend and verdict
+            verdict_style = "green" if "BUY" in candidate.verdict.upper() else ("red" if "SELL" in candidate.verdict.upper() else "white")
+            verdict_text = f"[{verdict_style}]{candidate.verdict}[/{verdict_style}]"
+
+            trend_map = {"UP": "green", "DOWN": "red", "SIDE": "yellow"}
+            trend_style = trend_map.get(str(candidate.trend).upper(), "white")
+            trend_text = f"[{trend_style}]{candidate.trend or '-'}[/{trend_style}]"
+
+            opening.add_row(candidate.ticker, verdict_text, iev, iep, trend_text)
     else:
         opening.add_row("-", "No saved opening snapshot", "-", "-", "Run: saham learn snapshot --force")
 
@@ -126,11 +136,24 @@ def today(
     accumulation.add_column("Trend")
     if response.accumulation_candidates:
         for candidate in response.accumulation_candidates:
+            trend_map = {"UP": "green", "DOWN": "red", "SIDE": "yellow"}
+            trend_style = trend_map.get(str(candidate.trend).upper(), "white")
+            trend_text = f"[{trend_style}]{candidate.trend or '-'}[/{trend_style}]"
+
+            # Color score
+            if candidate.score >= 80:
+                score_style = "green"
+            elif candidate.score >= 60:
+                score_style = "yellow"
+            else:
+                score_style = "white"
+            score_text = f"[{score_style}]{candidate.score:.1f}[/{score_style}]"
+
             accumulation.add_row(
                 candidate.ticker,
-                f"{candidate.score:.1f}",
+                score_text,
                 str(candidate.consecutive_streak),
-                candidate.trend,
+                trend_text,
             )
     else:
         accumulation.add_row("-", "-", "-", "Run: saham screen accum --universe lq45")

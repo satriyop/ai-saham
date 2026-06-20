@@ -73,7 +73,12 @@ class DailyBriefingUseCase:
         self._accumulation_uc = accumulation_use_case
 
     def execute(self, request: DailyBriefingRequest) -> DailyBriefingResponse:
+        from datetime import timedelta
         as_of = request.as_of_date or date.today()
+        # Roll back to the most recent trading session if it's a weekend and date was defaulted
+        if request.as_of_date is None:
+            while as_of.weekday() >= 5:
+                as_of -= timedelta(days=1)
         warnings: list[str] = []
 
         try:
