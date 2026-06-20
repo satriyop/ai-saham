@@ -41,6 +41,7 @@ EXPECTED_COMMANDS: dict[tuple[str, ...], tuple[str, ...]] = {
         "status",
         "stockbit",
         "universe",
+        "audit",
     ),
     ("fetch", "stockbit"): ("login", "status", "spy", "test", "browse", "fetch-top5"),
     ("fetch", "universe"): ("list", "update", "inspect"),

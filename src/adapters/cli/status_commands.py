@@ -4,13 +4,18 @@ Data provider health and freshness commands.
 Layer: Adapter
 """
 
-import os
-import sqlite3
-import time
-from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import typer
+
+from src.application.use_case.get_system_status import (
+    FreshnessItem,
+    GetSystemStatusUseCase,
+)
+from src.domain.ports.system_status_provider import ProviderStatusDto
+from src.infrastructure.persistence.sqlite_system_status_provider import (
+    SQLiteSystemStatusProvider,
+)
 
 DEFAULT_DB_PATH = Path("data.db")
 
@@ -20,133 +25,12 @@ _ICON_FAIL = typer.style(" ✗", fg=typer.colors.RED, bold=True)
 _W = 80
 
 
-def _check_idx_api() -> dict:
-    """Probe IDX GetStockSummary endpoint. Returns status dict."""
-    import httpx
-
-    from src.infrastructure.data_providers.idx import (
-        IDX_API_BASE,
-        IDX_HEADERS,
-        STOCK_SUMMARY_ENDPOINT,
-    )
-
-    target = date.today() - timedelta(days=1)
-    url = f"{IDX_API_BASE}{STOCK_SUMMARY_ENDPOINT}"
-    params = {"start": 0, "length": 1, "date": target.strftime("%Y%m%d")}
-
-    start = time.time()
-    try:
-        with httpx.Client(timeout=10) as client:
-            resp = client.get(
-                url,
-                params=params,
-                headers=IDX_HEADERS,
-                follow_redirects=True,
-            )
-        elapsed = round(time.time() - start, 1)
-
-        if resp.status_code == 200:
-            data = resp.json().get("data", [])
-            return {"ok": True, "label": f"200 ({len(data)} stocks)", "ms": elapsed}
-        if resp.status_code == 403:
-            return {"ok": True, "label": "403 (no data — possible non-trading day)", "ms": elapsed}
-        return {"ok": False, "label": f"HTTP {resp.status_code}", "ms": elapsed}
-    except Exception as e:
-        elapsed = round(time.time() - start, 1)
-        return {"ok": False, "label": str(e)[:55], "ms": elapsed}
-
-
-def _check_yahoo() -> dict:
-    """Probe Yahoo Finance ^JKSE. Returns status dict."""
-    import yfinance as yf
-
-    start = time.time()
-    try:
-        hist = yf.download("^JKSE", period="5d", progress=False, auto_adjust=True)
-        elapsed = round(time.time() - start, 1)
-
-        if hist is not None and not hist.empty:
-            return {"ok": True, "label": f"{len(hist)} days (^JKSE)", "ms": elapsed}
-        return {"ok": True, "label": "empty response", "ms": elapsed}
-    except Exception as e:
-        elapsed = round(time.time() - start, 1)
-        return {"ok": False, "label": str(e)[:55], "ms": elapsed}
-
-
-def _check_stockbit_session() -> dict:
-    """Check Stockbit session without opening a browser."""
-    try:
-        from src.infrastructure.browser.playwright_stockbit import get_session_status
-
-        start = time.time()
-        info = get_session_status()
-        elapsed = round(time.time() - start, 1)
-
-        if not info.get("exists"):
-            return {"ok": False, "label": "no session found", "ms": elapsed}
-
-        likely = info.get("likely_valid", False)
-        age = info.get("age_hours")
-        age_str = f" ({age}h old)" if age is not None else ""
-        if likely:
-            return {"ok": True, "label": f"valid{age_str}", "ms": elapsed}
-        return {"ok": False, "label": f"expired{age_str}", "ms": elapsed}
-    except ImportError:
-        return {"ok": False, "label": "playwright not installed", "ms": 0}
-    except Exception as e:
-        return {"ok": False, "label": str(e)[:55], "ms": 0}
-
-
-def _check_market_status() -> dict:
-    """Return IDX market status — Stockbit confirmed if available, else cached or local clock."""
-    import time as _t
-    start = _t.time()
-    try:
-        from src.infrastructure.browser.stockbit_market_time import (
-            fetch_and_cache_market_status,
-            get_display_market_status,
-        )
-        # Try live Stockbit probe (also refreshes the cache for other commands)
-        live = fetch_and_cache_market_status()
-        elapsed = round(_t.time() - start, 1)
-        if live:
-            return {"ok": True, "label": f"{live.session_name} [stockbit ✓]", "ms": elapsed}
-        # Fall back to cache or local clock — show source clearly
-        fallback = get_display_market_status()
-        return {"ok": True, "label": f"{fallback.session_name} [{fallback.source}]", "ms": elapsed}
-    except Exception as e:
-        elapsed = round(_t.time() - start, 1)
-        return {"ok": False, "label": str(e)[:55], "ms": elapsed}
-
-
-def _check_ai_api() -> dict:
-    """Check if AI API keys are configured."""
-    configured = []
-    if os.environ.get("DEEPSEEK_API_KEY"):
-        configured.append("DeepSeek")
-    if os.environ.get("ANTHROPIC_API_KEY"):
-        configured.append("Claude")
-    if os.environ.get("OPENAI_API_KEY"):
-        configured.append("OpenAI")
-    if os.environ.get("GEMINI_API_KEY"):
-        configured.append("Gemini")
-
-    if not configured:
-        return {
-            "ok": False,
-            "label": "no API key (set DEEPSEEK_API_KEY or ANTHROPIC_API_KEY)",
-        }
-    return {"ok": True, "label": f"{', '.join(configured)} key(s) set", "ms": 0}
-
-
-def _health_line(name: str, result: dict) -> str:
+def _health_line(dto: ProviderStatusDto) -> str:
     """Format a health check line."""
-    warning = "key" in result.get("label", "") or "expired" in result.get("label", "")
-    icon = _ICON_OK if result["ok"] else (_ICON_WARN if warning else _ICON_FAIL)
-    ms = result.get("ms", 0)
-    ms_str = f"{ms}s" if ms else ""
-    label = result.get("label", "?")
-    return f"  │ {name:<18s} {icon}  {label:<52s} {ms_str:>6s} │"
+    warning = "key" in dto.label or "expired" in dto.label
+    icon = _ICON_OK if dto.ok else (_ICON_WARN if warning else _ICON_FAIL)
+    ms_str = f"{dto.ms}s" if dto.ms else ""
+    return f"  │ {dto.name:<18s} {icon}  {dto.label:<52s} {ms_str:>6s} │"
 
 
 def status(
@@ -164,21 +48,23 @@ def status(
     """
     content_width = _W - 4
 
+    # Inject dependencies and execute use case
+    provider = SQLiteSystemStatusProvider(db_path=db_path)
+    use_case = GetSystemStatusUseCase(provider=provider)
+    response = use_case.execute()
+
     typer.echo("")
     typer.echo("  ╭─ Data Provider Health " + "─" * (content_width - 23) + "╮")
-    typer.echo(_health_line("IDX market", _check_market_status()))
-    typer.echo(_health_line("IDX API", _check_idx_api()))
-    typer.echo(_health_line("Yahoo Finance", _check_yahoo()))
-    typer.echo(_health_line("Stockbit session", _check_stockbit_session()))
-    typer.echo(_health_line("AI classifier", _check_ai_api()))
+    for provider_status in response.providers:
+        typer.echo(_health_line(provider_status))
     typer.echo("  ╰" + "─" * content_width + "╯")
     typer.echo("")
 
-    _show_data_freshness(db_path)
+    _show_data_freshness(db_path, response.freshness)
 
 
-def _show_data_freshness(db_path: Path) -> None:
-    """Query DB and display data freshness table."""
+def _show_data_freshness(db_path: Path, freshness_items: list[FreshnessItem]) -> None:
+    """Display data freshness table."""
     content_width = _W - 4
 
     if not db_path.exists():
@@ -188,53 +74,15 @@ def _show_data_freshness(db_path: Path) -> None:
         typer.echo("  ╰" + "─" * content_width + "╯")
         return
 
-    queries = [
-        (
-            "broker_summaries",
-            "SELECT source, MAX(date), COUNT(*) FROM broker_summaries GROUP BY source",
-        ),
-        (
-            "foreign_flow_points",
-            "SELECT source, MAX(date), COUNT(*) FROM foreign_flow_points GROUP BY source",
-        ),
-        (
-            "broker_daily_flow",
-            "SELECT source, MAX(date), COUNT(*) FROM broker_daily_flow GROUP BY source",
-        ),
-        ("candles", "SELECT '—', MAX(date), COUNT(*) FROM candles"),
-    ]
-
-    rows: list[dict] = []
-    try:
-        conn = sqlite3.connect(str(db_path))
-        for table, sql in queries:
-            try:
-                for row in conn.execute(sql).fetchall():
-                    rows.append(
-                        {
-                            "table": table,
-                            "source": row[0],
-                            "latest": row[1],
-                            "count": row[2],
-                        }
-                    )
-            except sqlite3.OperationalError:
-                pass
-        conn.close()
-    except sqlite3.OperationalError as e:
-        typer.echo(f"  DB error: {e}")
-        return
-
-    if not rows:
+    if not freshness_items:
         typer.echo("  No data found.")
         return
 
-    _print_freshness_table(rows)
+    _print_freshness_table(freshness_items)
 
 
-def _print_freshness_table(rows: list[dict]) -> None:
+def _print_freshness_table(items: list[FreshnessItem]) -> None:
     """Print a formatted freshness table with age warnings."""
-    today = date.today()
     content_width = _W - 4
 
     typer.echo("  ╭─ Data Freshness " + "─" * (content_width - 17) + "╮")
@@ -244,38 +92,26 @@ def _print_freshness_table(rows: list[dict]) -> None:
     )
     typer.echo("  │ " + "─" * (content_width - 2) + " │")
 
-    for row in sorted(rows, key=lambda x: (x["table"], x["source"])):
-        latest_str = row["latest"] or "—"
-        count_str = f"{row['count']:,}" if row["count"] else "0"
+    for item in items:
+        count_str = f"{item.count:,}" if item.count else "0"
 
-        if row["latest"]:
-            try:
-                latest = datetime.strptime(row["latest"], "%Y-%m-%d").date()
-                days_behind = (today - latest).days
-            except ValueError:
-                days_behind = 0
-            stale = days_behind > 5
-        else:
-            days_behind = 999
-            stale = False
-
-        if stale:
+        if item.status == "stale":
             status_text = typer.style(
-                f"⚠ {days_behind}d behind",
+                f"⚠ {item.days_behind}d behind",
                 fg=typer.colors.YELLOW,
             )
-        elif days_behind == 0 and row["latest"]:
+        elif item.status == "today":
             status_text = typer.style("✓ today", fg=typer.colors.GREEN)
-        elif days_behind == 1:
+        elif item.status == "yesterday":
             status_text = typer.style("✓ yesterday", fg=typer.colors.GREEN)
-        elif days_behind <= 5:
+        elif item.status == "current":
             status_text = typer.style("✓ current", fg=typer.colors.GREEN)
         else:
             status_text = typer.style("—", fg=typer.colors.BRIGHT_BLACK)
 
         typer.echo(
-            f"  │ {row['table']:<22s} {row['source']:<12s} "
-            f"{latest_str:<14s} {count_str:>8s}  {status_text:<16s} │"
+            f"  │ {item.table:<22s} {item.source:<12s} "
+            f"{item.latest:<14s} {count_str:>8s}  {status_text:<16s} │"
         )
 
     typer.echo("  ╰" + "─" * content_width + "╯")
