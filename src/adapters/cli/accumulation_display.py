@@ -331,35 +331,53 @@ def display_results(
         )
     )
 
-    typer.echo(
+    # Render metadata guide cleanly in a second panel
+    meta_table = compact_table(show_header=False)
+    meta_table.add_column("Key", style="bold cyan")
+    meta_table.add_column("Value")
+
+    meta_table.add_row(
+        "Stats",
         f"Checked: {response.total_tickers_checked} | "
         f"Shown: {len(candidates)} | "
         f"Skipped (no data): {response.tickers_skipped}"
     )
+
     if response.provider == "stockbit":
-        typer.echo(
-            "Provider: stockbit  ·  foreign aggregate from IDX"
-            "  ·  broker detail: inst desk proxy (10 codes, not all-foreign)"
+        meta_table.add_row(
+            "Provider",
+            "stockbit  ·  foreign aggregate from IDX  ·  broker detail: inst desk proxy (10 codes, not all-foreign)"
         )
     else:
-        typer.echo(f"Provider: {response.provider} (aggregate foreign flow)")
-        typer.echo(
-            "  For per-broker detail: run `saham fetch stockbit login`,"
-            " then fetch with `--provider stockbit`"
+        meta_table.add_row(
+            "Provider",
+            f"{response.provider} (aggregate foreign flow)\n"
+            "For per-broker detail: run `saham fetch stockbit login`, then fetch with `--provider stockbit`"
         )
-    typer.echo("")
-    typer.echo("FLOW%: avg net foreign % of total daily turnover (positive = accumulating)")
-    typer.echo("F_VWAP%: positive = price < foreign avg buy cost basis (foreigners underwater)")
-    typer.echo("BB%ILE: BB Width pctile vs last 60d — green(≤20%) = squeeze (coiled spring)")
-    typer.echo("Score 0–120 | consistency 40 | streak 30 | VWAP 20 | RSI 10 | flow 10 | BB 10 | BCI 0/5/15")
+
+    explain_lines = [
+        "FLOW%: avg net foreign % of total daily turnover (positive = accumulating)",
+        "F_VWAP%: positive = price < foreign avg buy cost basis (foreigners underwater)",
+        "BB%ILE: BB Width pctile vs last 60d — green(≤20%) = squeeze (coiled spring)",
+        "Score 0–120 | consistency 40 | streak 30 | VWAP 20 | RSI 10 | flow 10 | BB 10 | BCI 0/5/15"
+    ]
     if strategy_signals is not None:
-        typer.echo(
-            f"STRAT ({strategy_name}): ↑=LOW_RISK(entry)  ~=MODERATE(hold)  ↓=HIGH_RISK(exit)"
+        explain_lines.append(f"STRAT ({strategy_name}): ↑=LOW_RISK(entry)  ~=MODERATE(hold)  ↓=HIGH_RISK(exit)")
+
+    meta_table.add_row("Definitions", "\n".join(explain_lines))
+    meta_table.add_row(
+        "Disclaimer",
+        "Swing trade watchlist — cross-check with `saham screen pre-open` for intraday entry timing.\n"
+        "DISCLAIMER: Analysis only, not trading advice."
+    )
+
+    console().print(
+        panel(
+            meta_table,
+            title="Metadata & Guide",
         )
-    typer.echo("")
-    typer.echo("Swing trade watchlist — cross-check with `saham screen pre-open` for intraday entry timing.")
-    typer.echo("DISCLAIMER: Analysis only, not trading advice.")
-    typer.echo("=" * _TABLE_WIDTH)
+    )
+
 
 def display_multi(
     results: dict[int, AccumulationScreenResponse],
@@ -453,198 +471,154 @@ def display_multi(
         )
     )
 
+    # Render metadata guide cleanly in a second panel
+    meta_table = compact_table(show_header=False)
+    meta_table.add_column("Key", style="bold cyan")
+    meta_table.add_column("Value")
+
     sample_resp = next(iter(results.values()))
-    typer.echo(
+    meta_table.add_row(
+        "Stats",
         f"Checked: {sample_resp.total_tickers_checked} | "
         f"Shown: {len(rows)} | "
         f"Provider: {sample_resp.provider}"
     )
-    typer.echo("Score ≥70 green | ≥40 yellow | <40 white")
-    typer.echo("Patterns: sustained | building | fresh rotation | long-term only | coiled spring | weak")
-    typer.echo("BRK: named top-broker quality; smart+/noise+ = buyer-led, smart-/noise- = seller-led, n/a = no detail")
-    typer.echo("DISCLAIMER: Analysis only, not trading advice.")
-    typer.echo("=" * _TABLE_WIDTH)
+
+    meta_table.add_row(
+        "Score Range",
+        "Score ≥70 green | ≥40 yellow | <40 white"
+    )
+
+    meta_table.add_row(
+        "Patterns:",
+        "sustained | building | fresh rotation | long-term only | coiled spring | weak"
+    )
+
+    meta_table.add_row(
+        "Broker Quality (BRK)",
+        "named top-broker quality; smart+/noise+ = buyer-led, smart-/noise- = seller-led, n/a = no detail"
+    )
+
+    meta_table.add_row(
+        "Disclaimer",
+        "DISCLAIMER: Analysis only, not trading advice."
+    )
+
+    console().print(
+        panel(
+            meta_table,
+            title="Metadata & Guide",
+        )
+    )
+
 
 
 def print_column_guide() -> None:
     """Print a terminal-friendly reference guide for every column and signal."""
+    # Top introductory text
+    intro = Text(
+        "Detects stocks being quietly bought by foreign institutions over\n"
+        "multiple days. When foreigners accumulate consistently AND are\n"
+        "'underwater' (bought higher than today's price), IHSG stocks\n"
+        "resolve upward 65–70% of the time within 10–20 trading days.\n"
+        "This is a swing trade watchlist (5–20 day horizon).\n",
+        style="italic"
+    )
 
-    def _h(text: str) -> None:
-        typer.echo("")
-        typer.echo(typer.style(f"  {text}", fg=typer.colors.CYAN, bold=True))
-        typer.echo(typer.style("  " + "─" * (len(text) + 2), fg=typer.colors.BRIGHT_BLACK))
+    # Aligned Guide Table
+    guide_table = compact_table()
+    guide_table.add_column("Signal / Metric", style="bold yellow", width=22)
+    guide_table.add_column("Value / Bench", style="cyan", width=20)
+    guide_table.add_column("Details & Mechanics")
 
-    def _row(label: str, value: str) -> None:
-        typer.echo(f"    {typer.style(label, fg=typer.colors.YELLOW):<30} {value}")
+    guide_table.add_row(
+        "SCORE (0–120)",
+        "≥ 70 (green)\n40-69 (yellow)\n< 40 (white)",
+        "Composite signal strength. Combines net days, streak, VWAP, RSI, flow, BB width, and BCI into a single score.\n- Green: Strong signal, worth research.\n- Yellow: Moderate watch, wait for confirmation.\n- White: Weak, likely noise, skip."
+    )
+    guide_table.add_row(
+        "STREAK",
+        "1-2d\n3-4d\n5-7d\n8d+",
+        "Consecutive trading days foreigners were net buyers.\n- 5-7d: Strong, likely intentional.\n- 8d+: Very strong, committed.\nScoring: exponential curve (τ=7d). 7d ≈ 63%, 14d ≈ 86%."
+    )
+    guide_table.add_row(
+        "NET_DAYS",
+        "100%\n70-99%\n50-69%\n< 50%",
+        "Consistency Ratio (net buy days / total sessions in window).\n- 100%: Every day was positive buy.\n- 70-99%: Most days positive.\n- < 50%: More sells than buys (not accumulating)."
+    )
+    guide_table.add_row(
+        "NET_VALUE",
+        "+19.4B\n+10M",
+        "Total net foreign flow (buys − sells) in IDR over the window.\nConfirms real capital size behind the streak.\nT = trillion | B = billion | M = million (IDR)."
+    )
+    guide_table.add_row(
+        "FLOW%",
+        "0-5%\n5-15%\n15-30%\n30%+",
+        "Average net foreign % of total daily turnover.\nA mid-cap at 35% FLOW% is a stronger signal than a large-cap at 3%.\nScoring: up to 10 pts, saturates at 20% flow ratio."
+    )
+    guide_table.add_row(
+        "F_VWAP%",
+        "> +5% (green)\n+1% to +5%\n< 0%",
+        "Foreigners' VWAP to today's close price percentage.\n- Positive: foreigners bought higher than today's price (underwater, motivated to defend position).\n- Negative: foreigners in profit.\nScoring: 10% underwater = 20 pts."
+    )
+    guide_table.add_row(
+        "RSI (14-day)",
+        "> 70\n55-70\n40-55\n25-40\n< 25",
+        "Relative Strength Index (0–100).\n- 25-40: Ideal entry zone.\n- > 70: Overbought.\nScoring: peak at RSI=40 (10 pts), zero at RSI≤25 or ≥75."
+    )
+    guide_table.add_row(
+        "BB%ILE",
+        "≤ 20% (green)\n21-40% (yellow)\n> 40%",
+        "Bollinger Band width percentile vs last 60 days.\n- ≤ 20%: Squeeze (coiled spring, volatility compressed, ready to break).\nScoring: bottom 20th pctile earns 5–10 pts."
+    )
+    guide_table.add_row(
+        "TREND",
+        "UP\nDOWN\nSIDE",
+        "Price relative to SMA20 (UP = >2% above, DOWN = >2% below, SIDE = within ±2%).\nDOWN or SIDE is often ideal to enter before the breakout."
+    )
+    guide_table.add_row(
+        "PATTERN",
+        "sustained\nbuilding\nfresh rotation\ncoiled spring",
+        "Multi-window 7d/30d/90d evaluation.\n- sustained: score ≥60 on all windows.\n- building: strong 7d+30d, weak 90d.\n- coiled spring: BB squeeze + score ≥60 on any window."
+    )
+    guide_table.add_row(
+        "BREAKDOWN",
+        "cons / streak / vwap\nrsi / flow / bb / inst",
+        "Score components: cons (40 pts), streak (30 pts), vwap (20 pts), rsi (10 pts), flow (10 pts), bb (10 pts), inst (15 pts BCI)."
+    )
 
-    typer.echo("")
-    typer.echo(typer.style("=" * 70, fg=typer.colors.CYAN))
-    typer.echo(typer.style("  FOREIGN ACCUMULATION SCREENER — COLUMN GUIDE", fg=typer.colors.CYAN, bold=True))
-    typer.echo(typer.style("=" * 70, fg=typer.colors.CYAN))
-    typer.echo("")
-    typer.echo("  Detects stocks being quietly bought by foreign institutions over")
-    typer.echo("  multiple days. When foreigners accumulate consistently AND are")
-    typer.echo("  'underwater' (bought higher than today's price), IHSG stocks")
-    typer.echo("  resolve upward 65–70% of the time within 10–20 trading days.")
-    typer.echo("  This is a swing trade watchlist (5–20 day horizon).")
+    checklist_text = Text(
+        "  1. PATTERN = sustained or coiled spring  (multi-window confirms)\n"
+        "  2. STREAK ≥ 5d                          (systematic, not opportunistic)\n"
+        "  3. F_VWAP% > 0%                         (foreigners defending position)\n"
+        "  4. BB%ILE ≤ 20% (green)                 (compressed, spring loaded)\n"
+        "  5. RSI between 30–50                    (room to run)\n"
+        "  6. FLOW% > 15%                          (foreigners dominating volume)\n"
+        "  7. NET_DAYS ≥ 70%                       (consistent, not just a streak)",
+        style="green"
+    )
 
-    # ── SCORE ──
-    _h("SCORE  (0–120)")
-    typer.echo("  Composite signal strength. Combines all signals below into one number.")
-    typer.echo("  Higher = more confident that accumulation is real and setup is clean.")
-    _row("≥ 70 (green)", "Strong signal — worth researching")
-    _row("40–69 (yellow)", "Moderate — watch, wait for confirmation")
-    _row("< 40 (white)", "Weak — likely noise, skip")
-    typer.echo("")
-    typer.echo("  Use --breakdown to see exactly how each component contributed.")
+    tips_text = Text(
+        "  • Run --multi first for the daily overview — one command, three windows.\n"
+        "  • Use --squeeze-only to surface 'coiled spring' setups.\n"
+        "  • Deep-dive: saham view broker flow <TICKER> --days 30\n"
+        "               saham risk <TICKER> --profile balanced --with-sentiment",
+        style="cyan"
+    )
 
-    # ── STREAK ──
-    _h("STREAK  — Consecutive Buy Days")
-    typer.echo("  How many trading days IN A ROW foreigners ended up as net buyers,")
-    typer.echo("  counting backwards from today. A streak means systematic intent.")
-    _row("1–2d", "Inconclusive")
-    _row("3–4d", "Noteworthy — watch this ticker")
-    _row("5–7d", "Strong — likely intentional accumulation")
-    _row("8d+", "Very strong — institution is committed")
-    typer.echo("")
-    typer.echo("  Scoring: exponential curve (τ=7d). 7d streak ≈ 63% of max,")
-    typer.echo("  14d ≈ 86%. Longer streaks always score higher — no hard cap.")
+    console().print(
+        panel(
+            Group(
+                intro,
+                Text("Signals & Metrics Breakdown", style="bold cyan"),
+                guide_table,
+                Text("\nIdeal Candidate Checklist (Priority Order)", style="bold cyan"),
+                checklist_text,
+                Text("\nQuick Tips", style="bold cyan"),
+                tips_text,
+                Text("\nDISCLAIMER: Analysis only. Not financial advice.", style="dim italic")
+            ),
+            title="FOREIGN ACCUMULATION SCREENER — COLUMN GUIDE",
+        )
+    )
 
-    # ── NET_DAYS ──
-    _h("NET_DAYS  — Consistency Ratio  (e.g. 5/7)")
-    typer.echo("  Net buy days / total broker sessions in the window. 5/7 =")
-    typer.echo("  foreigners bought on 5 of the last 7 broker sessions. This is")
-    typer.echo("  the highest-weight signal (40 pts).")
-    _row("100% (4/4, 7/7)", "Every day was a buy — strong conviction")
-    _row("70–99%", "Most days positive — healthy trend")
-    _row("50–69%", "Mixed — watch for deterioration")
-    _row("< 50%", "More sell days than buy — not accumulation")
-    typer.echo("")
-    typer.echo("  A stock with 4/4 is stronger than 10/30 even if the streak looks similar.")
-
-    # ── NET_VALUE ──
-    _h("NET_VALUE  — Total Net Foreign Flow (IDR)")
-    typer.echo("  Total (foreign buys − foreign sells) over the broker-session window in IDR.")
-    typer.echo("  Confirms real money is behind the consistency signal.")
-    _row("+19.4B", "Net bought Rp 19.4 billion — meaningful size")
-    _row("+10M", "Net bought Rp 10 million — may be too small")
-    typer.echo("")
-    typer.echo("  T = trillion  |  B = billion  |  M = million  (IDR)")
-
-    # ── FLOW% ──
-    _h("FLOW%  — Foreign Dominance of Daily Volume")
-    typer.echo("  Average % of total daily turnover that was net foreign buying.")
-    typer.echo("  Unlike NET_VALUE (absolute IDR), this is relative — a mid-cap")
-    typer.echo("  at 35% FLOW% is a stronger signal than a large-cap at 3%.")
-    _row("0–5%", "Minor participation")
-    _row("5–15%", "Meaningful foreign interest")
-    _row("15–30%", "Foreigners are a major force in this stock")
-    _row("30%+", "Foreigners dominating — very strong signal")
-    typer.echo("")
-    typer.echo("  Scoring: contributes up to 10 pts, saturates at 20% flow ratio.")
-
-    # ── F_VWAP% ──
-    _h("F_VWAP%  — Foreigners' Profit / Loss on Position")
-    typer.echo("  Compares foreigners' average buy price (VWAP) to today's price.")
-    typer.echo("")
-    typer.echo("  POSITIVE (+8.4%) = foreigners bought HIGHER than today's price.")
-    typer.echo("  They are underwater (in a paper loss) and motivated to defend.")
-    typer.echo("  When they keep buying despite a loss, they expect a recovery.")
-    typer.echo("  This creates a price floor — they absorb selling to protect position.")
-    typer.echo("")
-    typer.echo("  NEGATIVE (−1.9%) = foreigners are in profit. Less urgency to defend.")
-    _row("  > +5%", "Meaningfully underwater — strong defense motive")
-    _row("  +1% to +5%", "Slightly underwater — moderate signal")
-    _row("  < 0%", "In profit — less motivated to defend")
-    _row("  — (dash)", "Insufficient buy data to compute VWAP")
-    typer.echo("")
-    typer.echo("  Scoring: linear ramp. 10% underwater = full 20 pts. 5% = 10 pts.")
-
-    # ── RSI ──
-    _h("RSI  — Room Left to Run  (14-day)")
-    typer.echo("  Relative Strength Index — measures price momentum (0–100).")
-    typer.echo("  For accumulation, you want to enter BEFORE a move, not after.")
-    _row("  > 70", "Overbought — most of the move already happened")
-    _row("  55–70", "Building momentum — getting stretched")
-    _row("  40–55", "Healthy — moving but not overextended")
-    _row("  25–40", "Weak/recovering — ideal entry zone")
-    _row("  < 25", "Severe panic — high risk, possible capitulation")
-    typer.echo("")
-    typer.echo("  Scoring: tent peak at RSI=40 (10 pts). Zero at RSI≤25 or ≥75.")
-    typer.echo("  RSI 40 with a 5-day streak = smart money re-entering during weakness.")
-
-    # ── BB%ILE ──
-    _h("BB%ILE  — Bollinger Band Squeeze  (green ≤ 20%)")
-    typer.echo("  Percentile rank of today's Bollinger Band width vs last 60 days.")
-    typer.echo("  BB Width measures price channel size — narrow = compressed volatility.")
-    typer.echo("")
-    typer.echo("  LOW BB%ILE = the band is TIGHTER than usual = SQUEEZE.")
-    typer.echo("  When a stock trades flat (low vol) while foreigners accumulate,")
-    typer.echo("  it is a 'coiled spring'. Compression releases suddenly on a catalyst.")
-    _row("  ≤ 20% (green)", "Squeeze — coiled spring, watch closely")
-    _row("  21–40% (yellow)", "Moderately tight — building")
-    _row("  > 40%", "Normal or expanding volatility")
-    _row("  — (dash)", "< 60 days of price data in local DB")
-    typer.echo("")
-    typer.echo("  Scoring: bottom 20th pctile earns 5–10 pts; 40th pctile earns 0–5 pts.")
-    typer.echo("  Use --squeeze-only to filter exclusively for these setups.")
-
-    # ── TREND ──
-    _h("TREND  — Price vs SMA20")
-    typer.echo("  Whether the stock is above or below its 20-day moving average.")
-    _row("  UP", "> 2% above SMA20 — uptrend")
-    _row("  DOWN", "> 2% below SMA20 — downtrend")
-    _row("  SIDE", "Within ±2% of SMA20 — ranging")
-    typer.echo("")
-    typer.echo("  For accumulation setups, DOWN or SIDE is often ideal — you want to")
-    typer.echo("  enter BEFORE the trend turns UP, not after the move has started.")
-
-    # ── PATTERN (multi-window) ──
-    _h("PATTERN  — Multi-Window Summary  (--multi only)")
-    typer.echo("  Labels what the 7d/30d/90d score comparison reveals.")
-    _row("  sustained", "Score ≥60 on all 3 windows — months of buildup, highest conviction")
-    _row("  building", "Strong 7d+30d, weaker 90d — accumulation intensifying recently")
-    _row("  fresh rotation", "Strong 7d only — very recent, needs time to confirm")
-    _row("  long-term only", "Strong 90d, weak recent — may be complete, watch for exit")
-    _row("  coiled spring", "Squeeze + score ≥60 on any window — compressed, ready to break")
-    _row("  weak", "No window scores ≥60 — not a meaningful setup")
-
-    # ── BREAKDOWN ──
-    _h("SCORE BREAKDOWN  (--breakdown flag)")
-    typer.echo("  Shows exactly how each component contributed to the total score.")
-    typer.echo("  Format: [cons=X streak=X vwap=X rsi=X flow=X bb=X inst=X]")
-    _row("  cons", "Up to 40 pts — net buy day consistency")
-    _row("  streak", "Up to 30 pts — consecutive buy days (exponential)")
-    _row("  vwap", "Up to 20 pts — how underwater foreigners are")
-    _row("  rsi", "Up to 10 pts — RSI headroom (tent at 40)")
-    _row("  flow", "Up to 10 pts — avg % of daily turnover that's foreign")
-    _row("  bb", "Up to 10 pts — BB Width squeeze intensity")
-    _row("  inst", "0/5/15 pts — BCI: RETAIL-LED/STABLE/CLUSTER (Stockbit only)")
-    typer.echo("")
-    typer.echo("  If a stock scores lower than expected, breakdown shows which signal")
-    typer.echo("  is missing. E.g. vwap=0 means foreigners are in profit — no defense motive.")
-
-    # ── IDEAL SETUP ──
-    _h("IDEAL CANDIDATE CHECKLIST")
-    typer.echo("  In priority order:")
-    typer.echo("    1. PATTERN = sustained or coiled spring  (multi-window confirms)")
-    typer.echo("    2. STREAK ≥ 5d                          (systematic, not opportunistic)")
-    typer.echo("    3. F_VWAP% > 0%                         (foreigners defending position)")
-    typer.echo("    4. BB%ILE ≤ 20% (green)                 (compressed, spring loaded)")
-    typer.echo("    5. RSI between 30–50                    (room to run)")
-    typer.echo("    6. FLOW% > 15%                          (foreigners dominating volume)")
-    typer.echo("    7. NET_DAYS ≥ 70%                       (consistent, not just a streak)")
-    typer.echo("")
-    typer.echo("  No single signal is definitive. A stock meeting 5 of 7 criteria is")
-    typer.echo("  a much stronger candidate than one barely crossing a score threshold.")
-
-    # ── TIPS ──
-    _h("QUICK TIPS")
-    typer.echo("  Run --multi first for the daily overview — one command, three windows.")
-    typer.echo("  Use --squeeze-only to surface 'coiled spring' setups.")
-    typer.echo("  Deep-dive: saham view broker flow <TICKER> --days 30")
-    typer.echo("             saham risk <TICKER> --profile balanced --with-sentiment")
-    typer.echo("")
-    typer.echo(typer.style("  DISCLAIMER: Analysis only. Not financial advice.", fg=typer.colors.BRIGHT_BLACK))
-    typer.echo(typer.style("=" * 70, fg=typer.colors.CYAN))
-    typer.echo("")

@@ -308,8 +308,8 @@ def print_swing_rich_overview(
     decision = compact_table(show_header=False)
     decision.add_column("Label", style="bold")
     decision.add_column("Value")
-    decision.add_row("SUMMARY", Text(summary_text, style="bold"))
-    decision.add_row("PLAN", Text(plan_text, style=f"bold {plan_style}"))
+    decision.add_row("SUMMARY:", Text(summary_text, style="bold"))
+    decision.add_row("PLAN:", Text(plan_text, style=f"bold {plan_style}"))
 
     signals = compact_table()
     signals.add_column("Signal", style="bold")
@@ -435,6 +435,7 @@ def print_swing_output(
         building_min_streak=2,
         foreign_bounce_max_hold_days=10,
     )
+    # Print the primary Decision Dashboard Panel (Panel 1)
     print_swing_rich_overview(
         ticker=ticker,
         today=today,
@@ -459,485 +460,335 @@ def print_swing_output(
         config=config,
     )
 
-    typer.echo("")
-    sep("=")
-    typer.echo(typer.style(
-        f"SWING VIEW — {ticker} · {today} · profile={profile}",
-        fg=typer.colors.BRIGHT_WHITE, bold=True,
-    ))
-    sep("=")
-
-    # ── DATA FRESHNESS ──────────────────────────────────────────────────────
-    typer.echo("")
-    section_header("DATA")
-    typer.echo(
-        f"  Analysis date  {fmt_date(data_freshness.as_of_date)}   "
-        f"Candles through  {fmt_date(data_freshness.candle_end)}   "
-        f"Broker flow through  {fmt_date(data_freshness.broker_end)}"
-    )
+    # ── Panel 2: DETAILED MARKET & RISK CONTEXT ─────────────────────────────
+    regime_text = []
     if market_regime is not None:
-        typer.echo(f"  Regime as of   {fmt_date(market_regime.as_of_date)}")
-    if data_freshness.refresh_actions:
-        typer.echo("  Refresh        " + "; ".join(data_freshness.refresh_actions))
-    if data_freshness.warnings:
-        for warning in data_freshness.warnings[:3]:
-            typer.echo(typer.style(f"  ! {warning}", fg=typer.colors.YELLOW))
+        regime_text.append(Text(f"Market Regime: {market_regime.label} ({market_regime.score}/7)", style="bold cyan"))
+        regime_table = compact_table()
+        regime_table.add_column("Breadth SMA20")
+        regime_table.add_column("5d Change")
+        regime_table.add_column("Benchmark 20d")
+        regime_table.add_column("Flow Breadth")
+        regime_table.add_row(
+            fmt_pct(market_regime.breadth_above_sma20_pct),
+            fmt_pct(market_regime.breadth_change_5d_pct, True),
+            fmt_pct(market_regime.benchmark_return_20d_pct, True),
+            fmt_pct(market_regime.foreign_flow_breadth_pct),
+        )
+        regime_text.append(regime_table)
 
-    # ── ACCUMULATION ─────────────────────────────────────────────────────────
-    typer.echo("")
-    if accum:
-        label = signal_label(accum, config)
-        section_header(
-            f"ACCUMULATION ({window} sessions)",
-            f"signal: {typer.style(label, bold=label in ('strong', 'coiled spring'))}",
-        )
-        flow_str = (
-            f"{accum.avg_flow_ratio:+.1f}%"
-            if accum.avg_flow_ratio is not None else "—"
-        )
-        fvwap_str = (
-            f"{accum.vwap_discount_pct:+.1f}%"
-            if accum.vwap_discount_pct is not None else "—"
-        )
-        vwap_pct_str = (
-            typer.style(f"{accum.vwap_pct:+.1f}%", fg=typer.colors.GREEN)
-            if accum.vwap_pct is not None and accum.vwap_pct < 0
-            else (f"{accum.vwap_pct:+.1f}%" if accum.vwap_pct is not None else "—")
-        )
-        bb_str = style_bb(accum.bb_width_pctile) if accum.bb_width_pctile is not None else "—"
-        net_str = f"{accum.net_buy_days}/{accum.total_days}"
-
-        typer.echo(
-            f"  Score  {style_score(accum.score, config)}   "
-            f"STREAK  {accum.consecutive_streak}s   "
-            f"NET_DAYS  {net_str}   "
-            f"FLOW%  {flow_str}"
-        )
-        typer.echo(
-            f"  F_VWAP%  {fvwap_str}    "
-            f"VWAP%  {vwap_pct_str}    "
-            f"BB%ILE  {bb_str}    "
-            f"TREND  {style_trend(accum.trend)}"
-        )
-        if accum.score_breakdown:
-            bd = accum.score_breakdown
-            typer.echo(typer.style(
-                f"  [cons={bd.get('cons',0):.1f} streak={bd.get('streak',0):.1f}"
-                f" vwap={bd.get('vwap',0):.1f} rsi={bd.get('rsi',0):.1f}"
-                f" flow={bd.get('flow',0):.1f} bb={bd.get('bb',0):.1f}]",
-                fg=typer.colors.BRIGHT_BLACK,
-            ))
-        notation_text = notation_detail(accum.ticker_notation)
-        if notation_text:
-            color = typer.colors.YELLOW if accum.ticker_notation and accum.ticker_notation.has_warning else typer.colors.WHITE
-            typer.echo(typer.style(f"  NOTATION  {notation_text}", fg=color))
-
-        # Corp action risk flags
-        if accum.dividend_risk:
-            typer.echo(typer.style("  ⚠ DIVIDEND RISK — ex-date within hold window", fg=typer.colors.YELLOW))
-        if accum.rights_issue_risk:
-            typer.echo(typer.style("  ⚠ RIGHTS ISSUE — dilution risk within hold window", fg=typer.colors.YELLOW))
-        for rups_detail in accum.upcoming_rups:
-            typer.echo(typer.style(f"  ★ RUPS upcoming — {rups_detail}", fg=typer.colors.CYAN))
-        # Seasonality signal
-        if accum.seasonal_edge is not None:
-            se = accum.seasonal_edge
-            se_color = typer.colors.GREEN if se.is_tailwind else (typer.colors.RED if se.is_headwind else typer.colors.WHITE)
-            typer.echo(typer.style(
-                f"  SEASONAL  {se.label}  (score {se.score:+.2f})",
-                fg=se_color,
-            ))
-        # Insider buying flag
-        if accum.insider_buying:
-            for label in accum.recent_insider_buys:
-                typer.echo(typer.style(f"  ⭐ INSIDER BUY — {label}", fg=typer.colors.CYAN))
-
-        # Analyst consensus
-        if accum.analyst_consensus is not None:
-            ac = accum.analyst_consensus
-            if ac.is_bullish and (ac.upside_pct or 0) >= 10:
-                ac_color = typer.colors.GREEN
-            elif ac.sell_count > ac.buy_count:
-                ac_color = typer.colors.RED
-            else:
-                ac_color = typer.colors.WHITE
-            typer.echo(typer.style(f"  📊 ANALYST: {ac.label}", fg=ac_color))
-
-        # Shareholding composition
-        if accum.shareholding is not None:
-            sh = accum.shareholding
-            sh_color = typer.colors.CYAN if sh.institution_pct >= 30.0 else typer.colors.WHITE
-            typer.echo(typer.style(f"  🏦 HOLDING: {sh.label}", fg=sh_color))
-
-        # Bandar detector — Stockbit's institutional operator accumulation signal
-        if accum.bandar_detector is not None:
-            bd = accum.bandar_detector
-            if bd.accumulation_score >= 4:
-                bd_color = typer.colors.GREEN
-            elif bd.is_accumulating:
-                bd_color = typer.colors.YELLOW
-            elif bd.is_distributing:
-                bd_color = typer.colors.RED
-            else:
-                bd_color = typer.colors.WHITE
-            typer.echo(typer.style(f"  🔍 BANDAR: {bd.label}", fg=bd_color))
-
-        # Company fundamentals — P/E, ROE, NPM, Piotroski F-Score
-        if accum.fundamentals is not None:
-            fund = accum.fundamentals
-            if fund.is_quality:
-                fund_color = typer.colors.GREEN
-            elif fund.roe_ttm is not None and fund.roe_ttm >= 10.0:
-                fund_color = typer.colors.YELLOW
-            else:
-                fund_color = typer.colors.RED
-            typer.echo(typer.style(f"  📈 FUNDAM: {fund.label}", fg=fund_color))
-    else:
-        section_header(f"ACCUMULATION ({window} sessions)")
-        typer.echo(typer.style(
-            f"  No broker flow data. Run: saham fetch broker {ticker}",
-            fg=typer.colors.BRIGHT_BLACK,
-            ))
-
-    # ── BROKER FLOW DETAIL (institutional desk proxy — 10 codes, not all-foreign) ──────────
-    typer.echo("")
-    if flow_detail:
-        section_header(
-            f"FLOW DETAIL ({flow_detail.window_sessions} sessions)",
-            f"through: {fmt_date(flow_detail.through_date)} · institutional desk",
-        )
-        typer.echo(
-            f"  Range  {fmt_date(flow_detail.from_date)} → "
-            f"{fmt_date(flow_detail.through_date)}   "
-            f"Sessions  {flow_detail.available_sessions}/{flow_detail.window_sessions}"
-        )
-        typer.echo(
-            f"  Net    {fmt_money_short(flow_detail.total_net_flow)} IDR   "
-            f"BUY/SELL  {flow_detail.buy_sessions}/{flow_detail.sell_sessions}   "
-            f"STREAK  {flow_detail.consecutive_buy_sessions}s"
-        )
-        latest_flow = (
-            fmt_money_short(flow_detail.latest_net_flow)
-            if flow_detail.latest_net_flow is not None else "N/A"
-        )
-        typer.echo(
-            f"  Avg FLOW%  {fmt_pct(flow_detail.avg_flow_ratio_pct, True)}   "
-            f"Latest  {latest_flow} "
-            f"({fmt_pct(flow_detail.latest_flow_ratio_pct, True)})"
-        )
-    else:
-        section_header("FLOW DETAIL")
-        typer.echo(typer.style(
-            f"  No broker flow data. Run: saham fetch broker {ticker}",
-            fg=typer.colors.BRIGHT_BLACK,
-        ))
-
-    # ── NAMED BROKER DETAIL ────────────────────────────────────────────────
-    if broker_detail:
-        typer.echo("")
-        section_header(
-            f"BROKER DETAIL ({broker_detail.detail_sessions}/{broker_detail.window_sessions} sessions)",
-            f"through: {fmt_date(broker_detail.through_date)} · {broker_detail.source}",
-        )
-        typer.echo(f"  Top buyers       {fmt_broker_detail_lines(broker_detail.top_buyers)}")
-        typer.echo(f"  Top sellers      {fmt_broker_detail_lines(broker_detail.top_sellers)}")
-        typer.echo(
-            f"  Smart flow       {fmt_money_short_signed(broker_detail.smart_flow)} IDR   "
-            f"Noise flow  {fmt_money_short_signed(broker_detail.noise_flow)} IDR"
-        )
-        smart_share = (
-            f"{broker_detail.smart_share_pct:.1f}%"
-            if broker_detail.smart_share_pct is not None else "N/A"
-        )
-        typer.echo(
-            f"  Weighted net     {fmt_money_short_signed(broker_detail.weighted_net_flow)} IDR   "
-            f"Smart share  {smart_share}"
-        )
-        buyer_share = (
-            f"{broker_detail.top_buyer_share_pct:.1f}%"
-            if broker_detail.top_buyer_share_pct is not None else "N/A"
-        )
-        seller_share = (
-            f"{broker_detail.top_seller_share_pct:.1f}%"
-            if broker_detail.top_seller_share_pct is not None else "N/A"
-        )
-        typer.echo(
-            f"  Concentration    top buyer {buyer_share}; top seller {seller_share}"
-        )
-        typer.echo(
-            f"  Quality          {broker_detail.quality}; "
-            f"{broker_detail.broker_weight_quality}"
-        )
-
-    # ── PRESET GATES ────────────────────────────────────────────────────────
-    if preset_eval is not None:
-        typer.echo("")
-        section_header(
-            f"PRESET — {preset_eval.name}",
-            f"final: {style_classification(preset_eval.classification)}",
-        )
-        for gate in preset_eval.gates:
-            typer.echo(
-                f"  {style_gate(gate.passed):<14} "
-                f"{gate.label:<15} actual={gate.actual:<10} required={gate.required}"
-            )
-        if preset_eval.passed:
-            typer.echo(typer.style(
-                "  Tested plan: TP +5%, SL -5%, max hold 10 trading days.",
-                fg=typer.colors.BRIGHT_BLACK,
-            ))
-        else:
-            typer.echo(typer.style(
-                f"  {format_failed_gates_summary(preset_eval)}",
-                fg=typer.colors.BRIGHT_BLACK,
-            ))
-        if broker_quality_note is not None:
-            note_color = (
-                typer.colors.YELLOW
-                if broker_quality_note.level == "warning"
-                else typer.colors.CYAN
-            )
-            typer.echo(typer.style(
-                f"  {broker_quality_note.message}",
-                fg=note_color,
-            ))
-
-    # ── MARKET REGIME ───────────────────────────────────────────────────────
-    if market_regime is not None:
-        typer.echo("")
-        section_header("MARKET REGIME", market_regime.label)
-        typer.echo(
-            f"  Breadth SMA20  {fmt_pct(market_regime.breadth_above_sma20_pct)}   "
-            f"5d change  {fmt_pct(market_regime.breadth_change_5d_pct, True)}"
-        )
-        typer.echo(
-            f"  Benchmark 20d  {fmt_pct(market_regime.benchmark_return_20d_pct, True)}   "
-            f"Foreign flow breadth  {fmt_pct(market_regime.foreign_flow_breadth_pct)}"
-        )
-
-    # ── RISK CONFIRMATION ────────────────────────────────────────────────────
-    typer.echo("")
+    risk_text = []
     if risk_resp:
         r = risk_resp.assessment
         snap = r.indicators
-        section_header(
-            "RISK CONFIRMATION",
-            f"verdict: {style_risk(r.risk_level_name)}  conf: {r.confidence}/100",
+        risk_text.append(Text(f"Risk Confirmation Verdict: {r.risk_level_name} (Confidence: {r.confidence}/100)", style="bold cyan"))
+        risk_table = compact_table()
+        risk_table.add_column("SMA20")
+        risk_table.add_column("EMA20")
+        risk_table.add_column("RSI14")
+        risk_table.add_row(
+            f"{float(snap.sma):,.0f}",
+            f"{float(snap.ema):,.0f}",
+            f"{float(snap.rsi):.1f}"
         )
-        typer.echo(
-            f"  SMA20  {float(snap.sma):>10,.0f}   "
-            f"EMA20  {float(snap.ema):>10,.0f}   "
-            f"RSI14  {float(snap.rsi):>5.1f}"
-        )
+        risk_text.append(risk_table)
         for reason in r.rationale_list[:3]:
-            typer.echo(typer.style(f"  · {reason}", fg=typer.colors.BRIGHT_BLACK))
+            risk_text.append(Text(f"• {reason}", style="dim"))
     else:
-        section_header("RISK CONFIRMATION")
-        typer.echo(typer.style(
-            "  Insufficient candle data for risk assessment.",
-            fg=typer.colors.BRIGHT_BLACK,
-        ))
+        risk_text.append(Text("Insufficient candle data for risk assessment.", style="dim"))
 
-    # ── STRATEGY RISK GATE ──────────────────────────────────────────────────
+    strat_text = []
     if strategy_risk_level is not None:
-        typer.echo("")
         _strat_color = {
-            "LOW_RISK": typer.colors.GREEN,
-            "HIGH_RISK": typer.colors.RED,
-            "MODERATE": typer.colors.YELLOW,
-        }.get(strategy_risk_level, typer.colors.WHITE)
+            "LOW_RISK": "green",
+            "HIGH_RISK": "red",
+            "MODERATE": "yellow",
+        }.get(strategy_risk_level, "white")
         _strat_sym = {"LOW_RISK": "↑", "HIGH_RISK": "↓", "MODERATE": "~"}.get(
             strategy_risk_level, "?"
         )
-        section_header(
-            f"STRATEGY GATE ({strategy_risk_name})",
-            typer.style(f"{_strat_sym} {strategy_risk_level}", fg=_strat_color, bold=True),
-        )
+        strat_text.append(Text(f"Strategy Gate ({strategy_risk_name}): {_strat_sym} {strategy_risk_level}", style=f"bold {_strat_color}"))
         if strategy_risk_level == "HIGH_RISK":
-            typer.echo(typer.style(
-                f"  ⚠ Strategy '{strategy_risk_name}' signals HIGH_RISK — "
-                "overrides preset to AVOID.",
-                fg=typer.colors.RED,
-            ))
+            strat_text.append(Text(f"⚠ Strategy '{strategy_risk_name}' signals HIGH_RISK — overrides preset to AVOID.", style="red"))
         elif strategy_risk_level == "LOW_RISK":
-            typer.echo(typer.style(
-                f"  ✓ Strategy '{strategy_risk_name}' confirms entry signal.",
-                fg=typer.colors.GREEN,
-            ))
+            strat_text.append(Text(f"✓ Strategy '{strategy_risk_name}' confirms entry signal.", style="green"))
         else:
-            typer.echo(typer.style(
-                f"  ~ Strategy '{strategy_risk_name}' is neutral — no override.",
-                fg=typer.colors.BRIGHT_BLACK,
-            ))
+            strat_text.append(Text(f"~ Strategy '{strategy_risk_name}' is neutral — no override.", style="dim"))
 
-    # ── SIZING ───────────────────────────────────────────────────────────────
-    show_sizing = capital is not None and not (
-        preset_eval is not None and not preset_eval.passed
-    )
-    if show_sizing:
-        typer.echo("")
-        if preset_sizing and preset_sizing.lots > 0:
-            section_header("PRESET SIZING")
-            typer.echo(
-                f"  Entry   {float(preset_sizing.entry_price):>10,.0f}   "
-                f"Stop  {float(preset_sizing.stop_price):>10,.0f}  "
-                f"({float(preset_sizing.stop_pct):+.2f}%)   "
-                f"Target  {float(preset_sizing.target_price):>10,.0f}  "
-                f"({float(preset_sizing.target_pct):+.2f}%)"
+    context_group = []
+    if regime_text:
+        context_group.extend(regime_text)
+    if risk_text:
+        if context_group:
+            context_group.append(Text(""))
+        context_group.extend(risk_text)
+    if strat_text:
+        if context_group:
+            context_group.append(Text(""))
+        context_group.extend(strat_text)
+
+    if context_group:
+        console().print("")
+        console().print(
+            panel(
+                Group(*context_group),
+                title="DETAILED MARKET & RISK CONTEXT",
             )
-            actual_risk = Decimal(str(preset_sizing.shares)) * preset_sizing.stop_distance
-            typer.echo(
-                f"  Position  {preset_sizing.lots} lots = "
-                f"{preset_sizing.shares:,} shares   "
-                f"Cost  {float(preset_sizing.position_cost):,.0f} IDR  "
-                f"({float(preset_sizing.capital_used_pct):.1f}% of capital)"
+        )
+
+    # ── Panel 3: DETAILED FOREIGN FLOW & BROKER ATTRIBUTION ────────────────
+    flow_group = []
+    if accum:
+        label = signal_label(accum, config)
+        flow_group.append(Text(f"Accumulation Signal ({window} sessions): {label.upper()}", style="bold cyan"))
+        
+        flow_table = compact_table()
+        flow_table.add_column("Score")
+        flow_table.add_column("Streak")
+        flow_table.add_column("Net Days")
+        flow_table.add_column("Flow Ratio")
+        flow_table.add_column("F_VWAP%")
+        flow_table.add_column("VWAP%")
+        flow_table.add_column("BB%ile")
+        flow_table.add_column("Trend")
+        
+        flow_str = f"{accum.avg_flow_ratio:+.1f}%" if accum.avg_flow_ratio is not None else "—"
+        fvwap_str = f"{accum.vwap_discount_pct:+.1f}%" if accum.vwap_discount_pct is not None else "—"
+        vwap_pct_str = f"{accum.vwap_pct:+.1f}%" if accum.vwap_pct is not None else "—"
+        bb_str = f"{int(accum.bb_width_pctile * 100)}%" if accum.bb_width_pctile is not None else "—"
+        net_str = f"{accum.net_buy_days}/{accum.total_days}"
+        
+        flow_table.add_row(
+            f"{accum.score:.1f}",
+            f"{accum.consecutive_streak}s",
+            net_str,
+            flow_str,
+            fvwap_str,
+            vwap_pct_str,
+            bb_str,
+            accum.trend
+        )
+        flow_group.append(flow_table)
+        
+        # Corp action risks & flags
+        corp_flags = []
+        if accum.dividend_risk:
+            corp_flags.append(Text("⚠ DIVIDEND RISK — ex-date within hold window", style="yellow"))
+        if accum.rights_issue_risk:
+            corp_flags.append(Text("⚠ RIGHTS ISSUE — dilution risk within hold window", style="yellow"))
+        for rups_detail in accum.upcoming_rups:
+            corp_flags.append(Text(f"★ RUPS upcoming — {rups_detail}", style="cyan"))
+        if accum.seasonal_edge is not None:
+            se = accum.seasonal_edge
+            se_color = "green" if se.is_tailwind else ("red" if se.is_headwind else "white")
+            corp_flags.append(Text(f"★ SEASONAL {se.label} (score {se.score:+.2f})", style=se_color))
+        if accum.insider_buying:
+            for label_in in accum.recent_insider_buys:
+                corp_flags.append(Text(f"⭐ INSIDER BUY — {label_in}", style="cyan"))
+        if accum.analyst_consensus is not None:
+            ac = accum.analyst_consensus
+            ac_color = "green" if ac.is_bullish and (ac.upside_pct or 0) >= 10 else ("red" if ac.sell_count > ac.buy_count else "white")
+            corp_flags.append(Text(f"📊 ANALYST: {ac.label}", style=ac_color))
+        if accum.shareholding is not None:
+            sh = accum.shareholding
+            sh_color = "cyan" if sh.institution_pct >= 30.0 else "white"
+            corp_flags.append(Text(f"🏦 HOLDING: {sh.label}", style=sh_color))
+        if accum.bandar_detector is not None:
+            bd = accum.bandar_detector
+            bd_color = "green" if bd.accumulation_score >= 4 else ("yellow" if bd.is_accumulating else ("red" if bd.is_distributing else "white"))
+            corp_flags.append(Text(f"🔍 BANDAR: {bd.label}", style=bd_color))
+        if accum.fundamentals is not None:
+            fund = accum.fundamentals
+            fund_color = "green" if fund.is_quality else ("yellow" if fund.roe_ttm is not None and fund.roe_ttm >= 10.0 else "red")
+            corp_flags.append(Text(f"📈 FUNDAM: {fund.label}", style=fund_color))
+            
+        if corp_flags:
+            flow_group.append(Text("\nAdditional Signals & Flags", style="bold cyan"))
+            for flag in corp_flags:
+                flow_group.append(flag)
+
+    if flow_detail:
+        if flow_group:
+            flow_group.append(Text(""))
+        flow_group.append(Text(f"Detailed Flow Context ({flow_detail.window_sessions} sessions) through {fmt_date(flow_detail.through_date)}", style="bold cyan"))
+        
+        detail_flow_table = compact_table()
+        detail_flow_table.add_column("Range")
+        detail_flow_table.add_column("Sessions")
+        detail_flow_table.add_column("Net Flow Value")
+        detail_flow_table.add_column("Buy/Sell Ratio")
+        detail_flow_table.add_column("Streak")
+        detail_flow_table.add_column("Avg FLOW%")
+        detail_flow_table.add_column("Latest FLOW%")
+        
+        latest_flow = fmt_money_short(flow_detail.latest_net_flow) if flow_detail.latest_net_flow is not None else "N/A"
+        detail_flow_table.add_row(
+            f"{fmt_date(flow_detail.from_date)} → {fmt_date(flow_detail.through_date)}",
+            f"{flow_detail.available_sessions}/{flow_detail.window_sessions}",
+            f"{fmt_money_short(flow_detail.total_net_flow)} IDR",
+            f"{flow_detail.buy_sessions}B / {flow_detail.sell_sessions}S",
+            f"{flow_detail.consecutive_buy_sessions}s",
+            fmt_pct(flow_detail.avg_flow_ratio_pct, True),
+            f"{latest_flow} ({fmt_pct(flow_detail.latest_flow_ratio_pct, True)})"
+        )
+        flow_group.append(detail_flow_table)
+
+    if broker_detail:
+        if flow_group:
+            flow_group.append(Text(""))
+        flow_group.append(Text(f"Attribution ({broker_detail.detail_sessions}/{broker_detail.window_sessions} sessions) via {broker_detail.source}", style="bold cyan"))
+        
+        # Side-by-side Buyer/Seller tables
+        attribution_table = compact_table()
+        attribution_table.add_column("Top Buyers", style="green")
+        attribution_table.add_column("Top Sellers", style="red")
+        
+        max_len = max(len(broker_detail.top_buyers), len(broker_detail.top_sellers))
+        for j in range(max_len):
+            buy_str = ""
+            if j < len(broker_detail.top_buyers):
+                b = broker_detail.top_buyers[j]
+                buy_str = f"{b.broker_code}: {fmt_money_short(b.net_value)} ({b.active_sessions}s)"
+            
+            sell_str = ""
+            if j < len(broker_detail.top_sellers):
+                s = broker_detail.top_sellers[j]
+                sell_str = f"{s.broker_code}: {fmt_money_short(abs(s.net_value))} ({s.active_sessions}s)"
+                
+            attribution_table.add_row(buy_str, sell_str)
+        flow_group.append(attribution_table)
+
+        smart_share = f"{broker_detail.smart_share_pct:.1f}%" if broker_detail.smart_share_pct is not None else "N/A"
+        buyer_share = f"{broker_detail.top_buyer_share_pct:.1f}%" if broker_detail.top_buyer_share_pct is not None else "N/A"
+        seller_share = f"{broker_detail.top_seller_share_pct:.1f}%" if broker_detail.top_seller_share_pct is not None else "N/A"
+
+        metrics_table = compact_table(show_header=False)
+        metrics_table.add_column("Metric", style="bold")
+        metrics_table.add_column("Value")
+        metrics_table.add_row("Smart Money Flow", f"{fmt_money_short_signed(broker_detail.smart_flow)} IDR")
+        metrics_table.add_row("Noise Flow", f"{fmt_money_short_signed(broker_detail.noise_flow)} IDR")
+        metrics_table.add_row("Weighted Net Flow", f"{fmt_money_short_signed(broker_detail.weighted_net_flow)} IDR")
+        metrics_table.add_row("Smart Share %", smart_share)
+        metrics_table.add_row("Concentration", f"Top Buyer: {buyer_share} | Top Seller: {seller_share}")
+        metrics_table.add_row("Quality Profile", f"{broker_detail.quality} ({broker_detail.broker_weight_quality})")
+        flow_group.append(metrics_table)
+
+    if flow_group:
+        console().print("")
+        console().print(
+            panel(
+                Group(*flow_group),
+                title="DETAILED FOREIGN FLOW & BROKER ATTRIBUTION",
             )
-            typer.echo(
-                f"  Risk    {float(actual_risk):>12,.0f} IDR   "
-                f"Max hold  {config.foreign_bounce_max_hold_days} trading days"
+        )
+
+    # ── Panel 4: PRESET RULE AUDITS & GATES ───────────────────────────────────
+    if preset_eval is not None:
+        gates_group = []
+        gates_group.append(Text(f"Preset Rules Evaluation: {preset_eval.name}", style="bold cyan"))
+        
+        gates_table = compact_table()
+        gates_table.add_column("Status")
+        gates_table.add_column("Gate Rule", style="bold")
+        gates_table.add_column("Actual Value")
+        gates_table.add_column("Required Threshold")
+        
+        for gate in preset_eval.gates:
+            status_str = f"[green]PASS[/]" if gate.passed else f"[red]FAIL[/]"
+            gates_table.add_row(
+                status_str,
+                gate.label,
+                str(gate.actual),
+                str(gate.required)
             )
-            if atr_value is not None and atr_value > 0:
-                stop_to_atr = preset_sizing.stop_distance / atr_value
-                note = f"5% stop = {float(stop_to_atr):.2f}× ATR14"
-                if stop_to_atr < Decimal("1"):
-                    note += " (tight vs daily volatility)"
-                typer.echo(typer.style(f"  ({note})", fg=typer.colors.BRIGHT_BLACK))
-        elif preset_sizing and preset_sizing.lots == 0:
-            section_header("PRESET SIZING")
-            typer.echo(typer.style(
-                "  INSUFFICIENT CAPITAL: cannot fill 1 lot with 5% stop sizing.",
-                fg=typer.colors.RED,
-            ))
-        elif sizing and sizing.lots > 0:
-            section_header("SIZING")
-            typer.echo(
-                f"  Entry   {float(sizing.entry_price):>10,.0f}   "
-                f"Stop  {float(sizing.stop_price):>10,.0f}  ({float(sizing.stop_pct):+.2f}%)   "
-                f"Target  {float(sizing.target_price):>10,.0f}  ({float(sizing.target_pct):+.2f}%)"
-            )
-            actual_risk = Decimal(str(sizing.shares)) * sizing.stop_distance
-            actual_reward = actual_risk * sizing.reward_risk_ratio
-            typer.echo(
-                f"  Position  {sizing.lots} lots = {sizing.shares:,} shares   "
-                f"Cost  {float(sizing.position_cost):,.0f} IDR  "
-                f"({float(sizing.capital_used_pct):.1f}% of capital)"
-            )
-            typer.echo(
-                f"  Risk    {float(actual_risk):>12,.0f} IDR   "
-                f"Reward  {float(actual_reward):>12,.0f} IDR"
-            )
-            typer.echo(typer.style(
-                f"  (ATR14={float(atr_value):.0f} · stop={float(sizing.atr_multiplier):.1f}×ATR"
-                f" · RR={float(sizing.reward_risk_ratio):.1f})",
-                fg=typer.colors.BRIGHT_BLACK,
-            ))
-        elif sizing and sizing.lots == 0:
-            section_header("SIZING")
-            typer.echo(typer.style(
-                "  INSUFFICIENT CAPITAL: cannot fill 1 lot at this position size.",
-                fg=typer.colors.RED,
-            ))
-            typer.echo(typer.style(
-                f"  (Need ≥ {sizing.shares + 100} shares × {float(sizing.entry_price):,.0f} = "
-                f"{float((Decimal(str(sizing.shares + 100)) * sizing.entry_price)):,.0f} IDR)",
-                fg=typer.colors.BRIGHT_BLACK,
-            ))
+        gates_group.append(gates_table)
+
+        if preset_eval.passed:
+            gates_group.append(Text("✓ All gates successfully passed. Tested plan: TP +5%, SL -5%, max hold 10 trading days.", style="green"))
         else:
-            section_header("SIZING")
-            typer.echo(typer.style(
-                "  Cannot size position — ATR unavailable.",
-                fg=typer.colors.BRIGHT_BLACK,
-            ))
+            gates_group.append(Text(f"⚠ {format_failed_gates_summary(preset_eval)}", style="red"))
 
-    # ── HISTORY ──────────────────────────────────────────────────────────────
-    typer.echo("")
+        if broker_quality_note is not None:
+            note_style = "yellow" if broker_quality_note.level == "warning" else "cyan"
+            gates_group.append(Text(f"★ {broker_quality_note.message}", style=note_style))
+
+        console().print("")
+        console().print(
+            panel(
+                Group(*gates_group),
+                title="PRESET RULE AUDITS & GATES",
+            )
+        )
+
+    # ── Panel 5: DETAILED HISTORY & SENTIMENT ─────────────────────────────────
+    history_sentiment_group = []
+    
+    # Backtest segment
+    history_group = []
     if backtest_result is not None and backtest_result.trade_count > 0:
         r = backtest_result
-        section_header(
-            "HISTORY",
-            f"({strategy_name})  {r.trade_count} trades",
+        history_group.append(Text(f"Historical Backtest ({strategy_name}): {r.trade_count} trades", style="bold cyan"))
+        hist_table = compact_table()
+        hist_table.add_column("Win Rate")
+        hist_table.add_column("Profit Factor")
+        hist_table.add_column("Max Drawdown")
+        hist_table.add_column("Avg Win")
+        hist_table.add_column("Avg Loss")
+        
+        win_style = "green" if float(r.win_rate) >= 55 else ("yellow" if float(r.win_rate) >= 45 else "red")
+        avg_win_val = f"{float(r.avg_win):,.0f} IDR" if r.avg_win else "—"
+        avg_loss_val = f"{float(r.avg_loss):,.0f} IDR" if r.avg_loss else "—"
+        
+        hist_table.add_row(
+            f"[{win_style}]{float(r.win_rate):.1f}%[/]",
+            f"{float(r.profit_factor):.2f}",
+            f"{float(r.max_drawdown_pct):.1f}%",
+            avg_win_val,
+            avg_loss_val
         )
-        typer.echo(
-            f"  Win rate  {style_winrate(r.win_rate)}   "
-            f"Profit factor  {float(r.profit_factor):.2f}   "
-            f"Max DD  {float(r.max_drawdown_pct):.1f}%"
-        )
-        if r.avg_win and r.avg_loss:
-            typer.echo(
-                f"  Avg win  {float(r.avg_win):>12,.0f} IDR   "
-                f"Avg loss  {float(r.avg_loss):>12,.0f} IDR"
-            )
+        history_group.append(hist_table)
     elif backtest_result is not None and backtest_result.trade_count == 0:
-        section_header("HISTORY", f"({strategy_name})")
-        typer.echo(typer.style(
-            "  No trades triggered in available history (needs more broker data).",
-            fg=typer.colors.BRIGHT_BLACK,
-        ))
-        typer.echo(typer.style(
-            f"  Tip: saham backtest {ticker} --strategy {strategy_name} --verbose",
-            fg=typer.colors.BRIGHT_BLACK,
-        ))
+        history_group.append(Text(f"Historical Backtest ({strategy_name})", style="bold cyan"))
+        history_group.append(Text("No trades triggered in available history (needs more broker data).", style="dim"))
+        history_group.append(Text(f"Tip: run `saham backtest {ticker} --strategy {strategy_name} --verbose`", style="dim italic"))
     elif not no_backtest:
-        section_header("HISTORY")
-        typer.echo(typer.style(
-            f"  Could not run backtest. Run: saham fetch market {ticker} --days 730",
-            fg=typer.colors.BRIGHT_BLACK,
-        ))
+        history_group.append(Text("Historical Backtest", style="bold cyan"))
+        history_group.append(Text(f"Could not run backtest. Run: `saham fetch market {ticker} --days 730`", style="dim yellow"))
 
-    # ── SENTIMENT ────────────────────────────────────────────────────────────
+    if history_group:
+        history_sentiment_group.extend(history_group)
+
+    # Sentiment segment
     if not no_sentiment:
-        typer.echo("")
+        if history_sentiment_group:
+            history_sentiment_group.append(Text(""))
+        sentiment_group = []
         if sentiment_resp and not sentiment_resp.warning:
             snap = sentiment_resp.snapshot
-            call = snap.overall_sentiment.value.upper()
-            section_header(
-                "SENTIMENT (3d)",
-                f"call: {style_sentiment_call(call)}",
-            )
-            typer.echo(
-                f"  {snap.total_count} headlines   "
-                f"(+{snap.positive_count} / ={snap.neutral_count} / -{snap.negative_count})   "
-                f"confidence  {snap.confidence_pct}%"
-            )
-        else:
-            section_header("SENTIMENT (3d)")
-            message = sentiment_warning or "News unavailable (no network or fetch failed)."
-            typer.echo(typer.style(
-                f"  {message}",
-                fg=typer.colors.BRIGHT_BLACK,
+            call_val = snap.overall_sentiment.value.upper()
+            call_style = "green" if call_val == "POSITIVE" else ("red" if call_val == "NEGATIVE" else "yellow")
+            
+            sentiment_group.append(Text(f"News Sentiment (3d): [{call_style}]{call_val}[/]", style="bold cyan"))
+            sentiment_group.append(Text(
+                f"Headlines scanned: {snap.total_count} (+{snap.positive_count} / ={snap.neutral_count} / -{snap.negative_count}) | "
+                f"Confidence: {snap.confidence_pct}%"
             ))
+        else:
+            sentiment_group.append(Text("News Sentiment (3d)", style="bold cyan"))
+            msg = sentiment_warning or "News unavailable (no network or fetch failed)."
+            sentiment_group.append(Text(msg, style="dim"))
             if not sentiment_verbose:
-                typer.echo(typer.style(
-                    "  Use --sentiment-verbose to show provider details.",
-                    fg=typer.colors.BRIGHT_BLACK,
-                ))
+                sentiment_group.append(Text("Use --sentiment-verbose to show provider details.", style="dim italic"))
 
-    # ── SUMMARY ──────────────────────────────────────────────────────────────
-    typer.echo("")
-    sep("=")
-    summary_parts = swing_summary_parts(accum, risk_resp, backtest_result, sentiment_resp)
+        history_sentiment_group.extend(sentiment_group)
 
-    if summary_parts:
-        typer.echo("SUMMARY: " + typer.style(" · ".join(summary_parts), bold=True))
-    else:
-        typer.echo("SUMMARY: insufficient data for assessment")
+    if history_sentiment_group:
+        console().print("")
+        console().print(
+            panel(
+                Group(*history_sentiment_group),
+                title="DETAILED HISTORY & SENTIMENT",
+            )
+        )
+    console().print("")
 
-    plan_text, plan_style = swing_plan_text(
-        ticker,
-        capital,
-        atr_value,
-        sizing,
-        preset_eval,
-        preset_sizing,
-        strategy_risk_level,
-        strategy_risk_name,
-        config,
-    )
-    typer.echo(typer.style(f"PLAN:  {plan_text}", fg=plan_style, bold=plan_style in {"green", "red"}))
-
-    sep("=")
-    typer.echo(typer.style(
-        "DISCLAIMER: Analysis only, not trading advice.",
-        fg=typer.colors.BRIGHT_BLACK,
-    ))
-    typer.echo("")

@@ -11,7 +11,7 @@ from rich.table import Table
 
 def console() -> Console:
     """Return a deterministic console for test-friendly CLI rendering."""
-    return Console(color_system=None, highlight=False, width=100)
+    return Console(highlight=False, width=100)
 
 
 def panel(renderable, title: str, subtitle: str | None = None) -> Panel:
