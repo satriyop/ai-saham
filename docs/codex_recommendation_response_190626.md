@@ -236,10 +236,13 @@ one SQLite read per ticker, no API call. No future suspended-stock rows will acc
 `_is_usable_broker_summary()` remains as a defence-in-depth guard for any future zero-value
 rows from sources not covered by notation (e.g. IDX public holidays returning empty data).
 
-### Priority 6 — Flow Label Consistency (Finding 6)
+### Priority 6 — Flow Label Consistency (Finding 6) ✅ DONE (2026-06-20)
 
-Complete the "institutional desk proxy" label in accumulation display to match swing.
-Low effort, can be bundled with any display pass.
+Provider line in `accumulation_display.py` now branches on `response.provider`:
+- `stockbit`: `"Provider: stockbit  ·  foreign aggregate from IDX  ·  broker detail: inst desk proxy (10 codes, not all-foreign)"`
+- `idx`: unchanged — existing stockbit login hint still shown
+
+Matches the label already present in `swing_analysis_display.py:607`. Commit: 1e78819
 
 ### Priority 7 — Adapter Thinness (Finding 8)
 
@@ -269,7 +272,7 @@ All feature expansion should follow after Priority 1–3 above.
 | 3. Candle freshness | Open | **Done** (8e7b148) — DATA LAG per candidate with trading-session accuracy |
 | 4. Broker row quality | Open | **Done** (c1f5704) — fetch gate on tradeable=False; 774 zero-lot rows deleted; guard retained |
 | 5. Candle provenance | Open | **Done** — 21,420 rows tagged `yahoo_inferred`; new fetches write `yahoo` |
-| 6. Flow labeling | Open | Partial — swing only, not accumulation |
+| 6. Flow labeling | Open | **Done** (1e78819) — inst desk proxy label on accumulation provider line |
 | 7. Enrichment display | Open | **Done** (d6c5e61) — dim MISSING line per candidate lists absent fields |
 | 8. Adapter thinness | Open | Open — 735-line adapter, no enrichment use case |
 | Broker concentration | Proposed | Already built as `bandar_detector` |
