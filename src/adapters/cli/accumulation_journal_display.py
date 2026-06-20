@@ -9,7 +9,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-import typer
+from rich.console import Group
+from rich.text import Text
+
+from src.adapters.cli.rich_display import compact_table, console, panel
 
 
 def display_journal_review(
@@ -18,92 +21,174 @@ def display_journal_review(
     horizon: int,
     min_score: float,
 ) -> None:
-    _W = 70
+    # 1. Info Header
+    info_table = compact_table(show_header=False)
+    info_table.add_column("Key", style="bold cyan")
+    info_table.add_column("Value")
+    info_table.add_row("Journal", str(journal_path))
+    info_table.add_row(
+        "Entries",
+        f"{report.total_entries} total | {report.enriched_entries} with {horizon}d+ data"
+    )
+    info_table.add_row(
+        "Horizon",
+        f"{horizon} trading days | min_score filter: {min_score}"
+    )
 
-    typer.echo("")
-    typer.echo("=" * _W)
-    typer.echo("ACCUMULATION TRADE JOURNAL REVIEW")
-    typer.echo("=" * _W)
-    typer.echo(f"Journal  : {journal_path}")
-    typer.echo(f"Entries  : {report.total_entries} total | {report.enriched_entries} with {horizon}d+ data")
-    typer.echo(f"Horizon  : {horizon} trading days | min_score filter: {min_score}")
+    console().print("")
+    console().print(
+        panel(
+            info_table,
+            title="ACCUMULATION TRADE JOURNAL REVIEW"
+        )
+    )
 
     if report.enriched_entries == 0:
-        typer.echo("")
-        typer.echo("No enriched entries yet — check back after market data covers the horizon.")
-        typer.echo("=" * _W)
+        console().print("")
+        console().print(
+            panel(
+                Text("No enriched entries yet — check back after market data covers the horizon.", style="yellow"),
+                title="Status"
+            )
+        )
         return
 
-    # Apply min_score filter to the enriched entries for display
-    # (report already computed; we just filter display)
+    # Colorized return helpers
     def _pct(v: float | None) -> str:
-        return f"{v:+.1f}%" if v is not None else "  N/A"
+        if v is None:
+            return "N/A"
+        color = "green" if v >= 0 else "red"
+        return f"[{color}]{v:+.1f}%[/]"
 
     def _wr(v: float | None) -> str:
-        return f"{v:.0f}%" if v is not None else " N/A"
+        if v is None:
+            return "N/A"
+        color = "green" if v >= 50 else "red" if v < 40 else "white"
+        return f"[{color}]{v:.0f}%[/]"
 
-    # ── PERFORMANCE BY SCORE BUCKET ──
-    typer.echo("")
-    typer.echo(typer.style("PERFORMANCE BY SCORE BUCKET", fg=typer.colors.CYAN, bold=True))
-    typer.echo(f"  {'BUCKET':<10} {'N':>4}  {'AVG_5D':>8}  {'AVG_10D':>8}  {'WIN_RATE_10D':>13}")
-    typer.echo("  " + "-" * 50)
+    # 2. Performance By Score Bucket
+    bucket_table = compact_table()
+    bucket_table.add_column("Bucket", style="bold cyan")
+    bucket_table.add_column("N", justify="right")
+    bucket_table.add_column("Avg 5D", justify="right")
+    bucket_table.add_column("Avg 10D", justify="right")
+    bucket_table.add_column("Win Rate 10D", justify="right")
+
     for stat in report.score_buckets:
         if stat.n == 0 and min_score > 0:
             continue
-        typer.echo(
-            f"  {stat.bucket:<10} {stat.n:>4}  {_pct(stat.avg_return_5d):>8}  "
-            f"{_pct(stat.avg_return_10d):>8}  {_wr(stat.win_rate_10d):>13}"
+        bucket_table.add_row(
+            stat.bucket,
+            str(stat.n),
+            _pct(stat.avg_return_5d),
+            _pct(stat.avg_return_10d),
+            _wr(stat.win_rate_10d)
         )
 
-    # ── PERFORMANCE BY PRESET DECISION ──
+    console().print("")
+    console().print(
+        panel(
+            bucket_table,
+            title="PERFORMANCE BY SCORE BUCKET"
+        )
+    )
+
+    # 3. Performance By Preset Decision
     if report.by_decision:
-        typer.echo("")
-        typer.echo(typer.style("PERFORMANCE BY PRESET DECISION", fg=typer.colors.CYAN, bold=True))
-        typer.echo(
-            f"  {'DECISION':<12} {'N':>4}  {'AVG_10D':>8}  {'WIN_RATE':>9}  "
-            f"{'AVG_MAX_UP':>11}  {'AVG_MAX_DD':>11}"
-        )
-        typer.echo("  " + "-" * 62)
+        decision_table = compact_table()
+        decision_table.add_column("Decision", style="bold cyan")
+        decision_table.add_column("N", justify="right")
+        decision_table.add_column("Avg 10D", justify="right")
+        decision_table.add_column("Win Rate", justify="right")
+        decision_table.add_column("Avg Max Up", justify="right")
+        decision_table.add_column("Avg Max DD", justify="right")
+
         for stat in report.by_decision:
-            typer.echo(
-                f"  {stat.decision:<12} {stat.n:>4}  {_pct(stat.avg_return_10d):>8}  "
-                f"{_wr(stat.win_rate_10d):>9}  {_pct(stat.avg_max_upside):>11}  "
-                f"{_pct(stat.avg_max_drawdown):>11}"
+            decision_table.add_row(
+                stat.decision,
+                str(stat.n),
+                _pct(stat.avg_return_10d),
+                _wr(stat.win_rate_10d),
+                _pct(stat.avg_max_upside),
+                _pct(stat.avg_max_drawdown)
             )
 
-    # ── PERFORMANCE BY PATTERN ──
+        console().print("")
+        console().print(
+            panel(
+                decision_table,
+                title="PERFORMANCE BY PRESET DECISION"
+            )
+        )
+
+    # 4. Performance By Pattern
     if report.by_pattern:
-        typer.echo("")
-        typer.echo(typer.style("PERFORMANCE BY PATTERN", fg=typer.colors.CYAN, bold=True))
-        typer.echo(
-            f"  {'PATTERN':<18} {'N':>4}  {'AVG_10D':>8}  {'WIN_RATE':>9}  "
-            f"{'AVG_MAX_UP':>11}  {'AVG_MAX_DD':>11}"
-        )
-        typer.echo("  " + "-" * 70)
+        pattern_table = compact_table()
+        pattern_table.add_column("Pattern", style="bold cyan")
+        pattern_table.add_column("N", justify="right")
+        pattern_table.add_column("Avg 10D", justify="right")
+        pattern_table.add_column("Win Rate", justify="right")
+        pattern_table.add_column("Avg Max Up", justify="right")
+        pattern_table.add_column("Avg Max DD", justify="right")
+
         for stat in report.by_pattern:
-            typer.echo(
-                f"  {stat.pattern:<18} {stat.n:>4}  {_pct(stat.avg_return_10d):>8}  "
-                f"{_wr(stat.win_rate_10d):>9}  {_pct(stat.avg_max_upside):>11}  "
-                f"{_pct(stat.avg_max_drawdown):>11}"
+            pattern_table.add_row(
+                stat.pattern,
+                str(stat.n),
+                _pct(stat.avg_return_10d),
+                _wr(stat.win_rate_10d),
+                _pct(stat.avg_max_upside),
+                _pct(stat.avg_max_drawdown)
             )
 
-    # ── SIGNAL DELTA ──
-    if report.signal_deltas:
-        typer.echo("")
-        typer.echo(typer.style("SIGNAL DELTA (correlation with 10d return)", fg=typer.colors.CYAN, bold=True))
-        typer.echo(
-            f"  {'SIGNAL':<12}  {'GROUP A':<20}  {'N_A':>4}  {'AVG_A':>7}  "
-            f"{'GROUP B':<20}  {'N_B':>4}  {'AVG_B':>7}"
+        console().print("")
+        console().print(
+            panel(
+                pattern_table,
+                title="PERFORMANCE BY PATTERN"
+            )
         )
-        typer.echo("  " + "-" * 82)
+
+    # 5. Signal Delta
+    if report.signal_deltas:
+        delta_table = compact_table()
+        delta_table.add_column("Signal", style="bold cyan")
+        delta_table.add_column("Group A")
+        delta_table.add_column("N A", justify="right")
+        delta_table.add_column("Avg A", justify="right")
+        delta_table.add_column("Group B")
+        delta_table.add_column("N B", justify="right")
+        delta_table.add_column("Avg B", justify="right")
+
         for d in report.signal_deltas:
-            typer.echo(
-                f"  {d.signal:<12}  {d.group_a_label:<20}  {d.group_a_n:>4}  "
-                f"{_pct(d.group_a_avg_10d):>7}  {d.group_b_label:<20}  "
-                f"{d.group_b_n:>4}  {_pct(d.group_b_avg_10d):>7}"
+            delta_table.add_row(
+                d.signal,
+                d.group_a_label,
+                str(d.group_a_n),
+                _pct(d.group_a_avg_10d),
+                d.group_b_label,
+                str(d.group_b_n),
+                _pct(d.group_b_avg_10d)
             )
 
-    typer.echo("")
-    typer.echo("Note: 20+ entries needed for statistically meaningful results.")
-    typer.echo("DISCLAIMER: Past performance does not predict future returns.")
-    typer.echo("=" * _W)
+        console().print("")
+        console().print(
+            panel(
+                delta_table,
+                title="SIGNAL DELTA (correlation with 10d return)"
+            )
+        )
+
+    # 6. Warnings & Footer
+    footer_elements = [
+        Text("Note: 20+ entries needed for statistically meaningful results.", style="yellow"),
+        Text("DISCLAIMER: Past performance does not predict future returns.", style="dim italic")
+    ]
+    console().print("")
+    console().print(
+        panel(
+            Group(*footer_elements),
+            title="Reference Notes"
+        )
+    )
+    console().print("")
