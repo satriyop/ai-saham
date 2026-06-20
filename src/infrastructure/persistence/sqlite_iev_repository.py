@@ -6,8 +6,8 @@ captured during the IDX pre-open auction window (08:45–09:00 WIB) each trading
 
 NCP (No Cancellation Period) — per Kep-00003/BEI/04-2025, effective 2025-12-15:
   08:56–09:00 WIB: orders in the call auction cannot be amended or withdrawn.
-  Snapshots collected at or after 08:56 carry is_ncp_locked=1 and reflect
-  committed demand. Earlier snapshots are speculative (orders still cancellable).
+  Snapshots collected inside [08:56, 09:00) carry is_ncp_locked=1 and reflect
+  committed demand. Earlier or later snapshots are not NCP-locked.
 
 Two daily captures (typical workflow):
   08:45–08:55 WIB — early IEV mover signal (pre-NCP, is_ncp_locked=0)
@@ -28,9 +28,10 @@ from pathlib import Path
 
 from src.domain.value_objects.screener_result import MoverData
 
-# IDX NCP boundary per Kep-00003/BEI/04-2025 (effective 2025-12-15).
-# Snapshots collected at or after this wall-clock time are NCP-locked.
+# IDX NCP window per Kep-00003/BEI/04-2025 (effective 2025-12-15).
+# Snapshots collected inside [08:56, 09:00) are NCP-locked.
 NCP_LOCK_TIME: time = time(8, 56)
+REGULAR_OPEN_TIME: time = time(9, 0)
 
 
 @dataclass(frozen=True)
@@ -122,7 +123,7 @@ class SQLiteIEVRepository:
             snapshot_date: The trading date.
             movers: List of MoverData sorted by IEV descending. rank is derived from position.
             collected_at: Wall-clock time of collection (naive local). Defaults to now().
-                          Determines is_ncp_locked (>= 08:56 WIB = locked).
+                          Determines is_ncp_locked (08:56 ≤ time < 09:00 WIB = locked).
 
         Returns:
             Number of canonical rows written.
@@ -131,7 +132,7 @@ class SQLiteIEVRepository:
             return 0
 
         ts = collected_at or datetime.now()
-        is_ncp_locked = 1 if ts.time() >= NCP_LOCK_TIME else 0
+        is_ncp_locked = 1 if NCP_LOCK_TIME <= ts.time() < REGULAR_OPEN_TIME else 0
         ts_str = ts.isoformat(timespec="seconds")
 
         rows = [
