@@ -96,22 +96,28 @@ def _print_freshness_table(items: list[FreshnessItem]) -> None:
         count_str = f"{item.count:,}" if item.count else "0"
 
         if item.status == "stale":
-            status_text = typer.style(
-                f"⚠ {item.days_behind}d behind",
-                fg=typer.colors.YELLOW,
-            )
+            raw_text = f"⚠ {item.days_behind}d behind"
+            styled_text = typer.style(raw_text, fg=typer.colors.YELLOW)
         elif item.status == "today":
-            status_text = typer.style("✓ today", fg=typer.colors.GREEN)
+            raw_text = "✓ today"
+            styled_text = typer.style(raw_text, fg=typer.colors.GREEN)
         elif item.status == "yesterday":
-            status_text = typer.style("✓ yesterday", fg=typer.colors.GREEN)
+            raw_text = "✓ yesterday"
+            styled_text = typer.style(raw_text, fg=typer.colors.GREEN)
         elif item.status == "current":
-            status_text = typer.style("✓ current", fg=typer.colors.GREEN)
+            raw_text = "✓ current"
+            styled_text = typer.style(raw_text, fg=typer.colors.GREEN)
         else:
-            status_text = typer.style("—", fg=typer.colors.BRIGHT_BLACK)
+            raw_text = "—"
+            styled_text = typer.style(raw_text, fg=typer.colors.BRIGHT_BLACK)
+
+        # Pad manually based on raw text length (excluding ANSI escape codes)
+        padding_len = max(0, 16 - len(raw_text))
+        status_column = styled_text + (" " * padding_len)
 
         typer.echo(
             f"  │ {item.table:<22s} {item.source:<12s} "
-            f"{item.latest:<14s} {count_str:>8s}  {status_text:<16s} │"
+            f"{item.latest:<14s} {count_str:>8s}  {status_column} │"
         )
 
     typer.echo("  ╰" + "─" * content_width + "╯")

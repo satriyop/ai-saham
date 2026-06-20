@@ -6,6 +6,24 @@ Run `saham fetch stockbit login` then `saham fetch stockbit spy` to capture live
 
 ---
 
+## Response Shape Source Legend
+
+Response shapes in this doc come from two different sources. Always check which label applies
+before trusting a field name:
+
+| Label | Meaning |
+|-------|---------|
+| **`[live-probed YYYY-MM-DD]`** | Field names captured directly from a real API response (via `saham fetch stockbit spy` or network interception). Highest confidence. |
+| **`[from-parser YYYY-MM]`** | Field names extracted by reading the Python parser source code in `src/infrastructure/browser/`. The parser may only access a subset of fields the API actually returns. Confidence = as good as the parser implementation. |
+| **`[unconfirmed]`** | No parser and no live probe exists. Shape is inferred or unknown — do not rely on it. |
+
+**Note:** Sections added in the 2026-06 doc revision use `[from-parser]`. The original five
+sections that already had "Confirmed response shape (2026-06-13)" tags were carried forward from
+a prior version of this doc — their original confirmation source is unknown (likely live-probed,
+but not verified).
+
+---
+
 ## Authentication Notes
 
 - All endpoints require `Authorization: Bearer <token>` header
@@ -13,6 +31,36 @@ Run `saham fetch stockbit login` then `saham fetch stockbit spy` to capture live
 - Reliable extraction: intercept from outgoing requests after navigating to `https://stockbit.com/orderbook`
 - Token TTL: ~8–12 hours. In-process cache safe for ~30 minutes between batch calls
 - 401 response → session expired → run `saham fetch stockbit login`
+
+Required headers for all Exodus API requests:
+```
+Authorization: Bearer {RS256_TOKEN}
+accept: application/json, text/plain, */*
+x-platform: web
+origin: https://stockbit.com
+referer: https://stockbit.com/
+```
+
+---
+
+## Parser Gotchas
+
+These traps have bitten real parsers in this codebase — read before writing a new one.
+
+| Field | Issue | Fix |
+|-------|-------|-----|
+| `price` in running trade | Comma-string: `"6,400"` | `int(s.replace(",",""))` |
+| `lot` in running trade | Fractional string: `"0.98"` | `float(s)` then round |
+| `date` in insider, `last_updated` in analyst | `"25 Mar 26"` (DD Mon YY, not ISO 8601) | `strptime(s, "%d %b %y")` |
+| Broker sell `lot`/`value` in marketdetectors | May be negative in response | `abs()` when storing |
+| `iep.raw` during regular session (09:00–15:49 WIB) | Returns `0` (no call auction) | Guard: `if iep > 0` |
+| Notation field name | Stockbit sends `"notation"` OR `"notations"` | `data.get("notation") or data.get("notations")` |
+| `fitem.value` in keystats | String with `%` and commas: `"14.3%"` | Strip `%` and `,` then cast float |
+| `data` in corp action response | Flat list, not `data.items` or `data.records` | `data = body["data"]; assert isinstance(data, list)` |
+| `changes.value` in insider | Signed comma-string: `"+147,933"` | Strip `+`, `-`, `,` then `int()` |
+| `total_bid_offer.bid.lot` in order book | Comma-string: `"49,960,400"` | Strip commas |
+| Running trade tick date | Time only, no date: `"09:15:32"` | Combine with current IDX market date |
+| `type` in marketdetectors broker row | `"Asing"` = foreign, `"Lokal"` = domestic | Map explicitly |
 
 ---
 
@@ -22,14 +70,27 @@ Run `saham fetch stockbit login` then `saham fetch stockbit spy` to capture live
 ```
 GET /emitten/{ticker}/info
 ```
-**Data available:**
-- Company name, short name, ticker/code
-- ISIN, listing date, board type (Main/Development/Acceleration)
-- Industry, sub-industry classification
-- Market capitalization, shares outstanding, free float
-- Company status (active, delisted, suspended)
-- Registered address, website, phone, email
-- NPWPnumber, NPWP date
+**Response shape [from-parser 2026-06]:**
+```
+data.status                               → trading status string (e.g. "active", "suspended")
+data.tradeable                            → bool
+data.sector                               → sector name (string)
+data.sub_sector                           → sub-sector name (string)
+data.trading_limit_info.haircut_percentage→ margin haircut % (string or null)
+data.notation[] / data.notations[]        → list (try both key names):
+  [].notation_code / [].code             → notation code (e.g. "E", "B", "X")
+  [].notation_desc / [].description      → human-readable label
+data.market_hour.status                   → per-stock market status string
+data.market_hour.suspend_info             → suspension reason string (null if not suspended)
+data.corp_action.active / data.corpaction.active → bool (upcoming corp action flag)
+data.has_uma / data.uma                   → bool (UMA — Unusual Market Activity)
+data.catalogs[]                           → list of index/board memberships:
+  [].catalog_name / [].company_symbol    → catalog or index name
+  [].company_type                        → "listing-board" for board type entries
+  [].show                                → bool (false = hidden, skip when rendering)
+```
+**Implementation:** `src/infrastructure/browser/stockbit_ticker_notation.py`  
+**Cache:** SQLite `ticker_notation_cache`, 1-day TTL.
 
 ---
 
@@ -37,13 +98,8 @@ GET /emitten/{ticker}/info
 ```
 GET /emitten/{ticker}/profile
 ```
-**Data available:**
-- Long-form company description / business overview
-- Management board (directors, commissioners) with names and positions
-- Company subsidiaries list
-- Business activities (main and secondary)
-- Employee count
-- Key milestones / company history snippet
+**Not yet implemented — JSON shape unknown.**  
+To capture: `saham fetch stockbit spy`, then navigate to a company profile page in Stockbit.
 
 ---
 
@@ -51,46 +107,102 @@ GET /emitten/{ticker}/profile
 ```
 GET /insider/shareholding/composition/companies/{ticker}
 ```
-**Data available:**
-- Ownership breakdown by investor type (public, institutional, government, foreign)
-- Percentage held by each category
-- Top shareholders: name, share count, ownership percentage
-- Source type (KSEIDirect / IDX reporting)
-- Report date
+**Response shape [from-parser 2026-06]:**
+```
+data.periods[]                            → list of reporting periods (newest first, use [0])
+  [0].report_date                        → "YYYY-MM-DD" (IDX filing date)
+  [0].compositions[]                     → ownership breakdown list:
+    [].label                             → category name (string):
+                                           Named entity: e.g. "DWIMURIA INVESTAMA ANDALAN"
+                                           Category values: "Mutual Funds", "Individual",
+                                           "Pension Funds", "Insurance", "Bank",
+                                           "Exchange Traded Funds", "Hedge Fund",
+                                           "Government", "State Owned Enterprises",
+                                           "Securities Company", "Corporate",
+                                           "Investment Manager", "Private Equity",
+                                           "Foundation", "Cooperatives", etc.
+    [].percentage.raw                    → float (ownership %, e.g. 54.3)
+```
+**Aggregation pattern:** `institution_pct` = sum of all known category labels. Entries whose
+label is NOT in the known-category set are treated as named controlling shareholders.  
+**Implementation:** `src/infrastructure/browser/stockbit_shareholding.py`  
+**Cache:** SQLite `shareholding_composition`, 7-day TTL (filings land quarterly).
 
 ---
 
 ### 4. Corporate Action (Per Ticker)
 ```
-GET /corpaction/{ticker}?limit=30
+GET /corpaction/{ticker}?limit=50
 ```
-**Data available:**
-- Action type: dividend, stock split, rights issue, warrant, bonus share, tender offer, RUPS, IPO
-- Announcement date, cum date, ex date, recording date, payment/distribution date
-- Cash dividend: amount per share (IDR), yield percentage
-- Stock split ratio (e.g., 1:5)
-- Rights issue: subscription price, ratio, proceeds
-- Action status (announced, completed)
+**Response shape [from-parser 2026-06]:**
+```
+data[]                                    → FLAT list of action objects (not data.items or data.records)
+  [].action_type                         → "dividend" | "rups" | "rightissue" | "split" |
+                                           "bonus" | "warrant" | "ipo" | "tenderoffer"
+                                           (also: "dividen", "hmetd" in the wild)
+  [].action_info                         → dict keyed by action_type string:
+
+    # Dividend
+    .dividend.dividend_exdate            → "YYYY-MM-DD"
+    .dividend.dividend_cumdate           → "YYYY-MM-DD"
+    .dividend.dividend_recdate           → "YYYY-MM-DD"
+    .dividend.dividend_paydate           → "YYYY-MM-DD"
+    .dividend.dividend_created           → "YYYY-MM-DD" (announcement date)
+    .dividend.dividend_value             → IDR per share (string or number)
+    .dividend.corp_action_active         → bool
+
+    # RUPS (General Meeting)
+    .rups.rups_date                      → "YYYY-MM-DD" (AGM date — stored as ex_date)
+    .rups.rups_time                      → "HH:MM" string
+    .rups.rups_venue                     → venue name string
+    .rups.rups_created                   → "YYYY-MM-DD"
+    .rups.corp_action_active             → bool
+
+    # Rights Issue (HMETD)
+    .rightissue.rightissue_exdate        → "YYYY-MM-DD" (also try "ex_date")
+    .rightissue.rightissue_cumdate       → "YYYY-MM-DD" (also try "cum_date")
+    .rightissue.rightissue_recdate       → "YYYY-MM-DD"
+    .rightissue.rightissue_paydate       → "YYYY-MM-DD"
+    .rightissue.rightissue_price         → IDR subscription price (also "subscription_price")
+
+    # Split
+    .split.split_exdate                  → "YYYY-MM-DD" (also try "ex_date")
+    .split.split_ratio                   → ratio string, e.g. "1:5" (also "ratio")
+```
+**Gotcha:** `data` is a flat list — parse with `items = body["data"] if isinstance(body["data"], list)`.  
+**Implementation:** `src/infrastructure/browser/stockbit_corp_action.py`  
+**Cache:** SQLite `corp_action_cache`, 1-day TTL.
 
 ---
 
 ### 5. Major Holder / Insider Activity (Per Ticker)
 ```
-GET /insider/company/majorholder?symbols={ticker}&date_start=...&date_end=...&page=1&limit=20&action_type=ACTION_TYPE_UNSPECIFIED&source_type=SOURCE_TYPE_UNSPECIFIED
+GET /insider/company/majorholder?symbols={ticker}&date_start=YYYY-MM-DD&date_end=YYYY-MM-DD
+    &page=1&limit=50&action_type=ACTION_TYPE_UNSPECIFIED&source_type=SOURCE_TYPE_UNSPECIFIED
 ```
 **Params:**
-- `period_type`: `PERIOD_TYPE_1_YEAR`, `PERIOD_TYPE_6_MONTH`, etc.
 - `action_type`: `ACTION_TYPE_BUY`, `ACTION_TYPE_SELL`, `ACTION_TYPE_UNSPECIFIED`
-- `source_type`: IDX filing source filter
+- `source_type`: `SOURCE_TYPE_UNSPECIFIED` (IDX filing source filter)
 
-**Data available:**
-- Insider name and role (director, commissioner, >5% holder)
-- Transaction type: buy / sell
-- Transaction date
-- Number of shares transacted
-- Price per share (if disclosed)
-- Percentage ownership before and after transaction
-- Filing source (IDX / KSEI)
+**Response shape [from-parser 2026-06]:**
+```
+data.movement[]                           → list of transactions (newest first):
+  [].name                                → insider full name (string)
+  [].symbol                              → ticker (string)
+  [].date                                → "25 Mar 26"  ← DD Mon YY — NOT ISO 8601
+  [].action_type                         → "ACTION_TYPE_BUY" | "ACTION_TYPE_SELL"
+  [].changes.value                       → "+147,933" (signed, comma-formatted shares string)
+  [].changes.formatted_value             → same value (fallback field name)
+  [].price_formatted                     → "6,982" (IDR per share, comma-formatted string)
+  [].previous.percentage                 → "0.0002" (ownership % before, as string)
+  [].current.percentage                  → "0.0003" (ownership % after, as string)
+  [].badges[]                            → ["SHAREHOLDER_BADGE_DIREKTUR"] |
+                                           ["SHAREHOLDER_BADGE_KOMISARIS"] | []
+```
+**Gotcha:** Date format is `"%d %b %y"` — e.g. `"25 Mar 26"`.  
+**Gotcha:** All numeric values (shares, price, percentages) arrive as comma-formatted strings.  
+**Implementation:** `src/infrastructure/browser/stockbit_insider.py`  
+**Cache:** SQLite `insider_cache`, 1-day TTL.
 
 ---
 
@@ -98,44 +210,41 @@ GET /insider/company/majorholder?symbols={ticker}&date_start=...&date_end=...&pa
 ```
 GET /company-price-feed/v2/orderbook/companies/{ticker}
 ```
-**Confirmed response shape (2026-06-13):**
+**Response shape [prior-doc, source unknown — likely live-probed 2026-06-13]:**
 ```
 data.iepiev.best_bid_offer.bid.price.raw      → best bid price (int, IDR)
-data.iepiev.best_bid_offer.bid.quantity.raw   → best bid quantity (lots)
+data.iepiev.best_bid_offer.bid.quantity.raw   → best bid quantity (int, already in lots)
 data.iepiev.best_bid_offer.offer.price.raw    → best offer price (int, IDR)
-data.iepiev.best_bid_offer.offer.quantity.raw → best offer quantity (lots)
-data.bid[]                                    → full bid depth list
-  .price  (string, IDR)
-  .volume (int, shares — divide by 100 for lots)
-data.offer[]                                  → full offer depth list
-  .price  (string, IDR)
-  .volume (int, shares)
+data.iepiev.best_bid_offer.offer.quantity.raw → best offer quantity (int, lots)
+data.iepiev.iep.raw                           → IEP (int, IDR; 0 during regular session)
+data.iepiev.iev.raw                           → IEV (int, lots; 0 during regular session)
+data.bid[]                                    → full bid depth list:
+  [].price                                   → price (string, IDR)
+  [].volume                                  → volume (int, SHARES — divide by 100 for lots)
+  [].que_num                                 → queue order number (int)
+  [].change_percentage                       → price change % (string)
+data.offer[]                                  → full offer depth list (same shape as bid[])
+data.total_bid_offer.bid.lot                  → total bid lots (comma-string: "49,960,400")
+data.total_bid_offer.offer.lot                → total offer lots (comma-string)
+data.lastprice                                → last traded price (int, IDR)
+data.fnet                                     → running foreign net value today (float, IDR)
+data.fbuy                                     → running foreign buy value today (float, IDR)
+data.fsell                                    → running foreign sell value today (float, IDR)
 ```
-**Data available:**
-- Best bid price and quantity (top of book, pre-open IEP)
-- Best offer price and quantity
-- Full bid depth (5–10 price levels)
-- Full offer depth (5–10 price levels)
-- IEP (Indicative Equilibrium Price) — expected call-auction clearing price
-- IEV (Indicative Equivalent Volume) — via iepiev_detail (see market-mover endpoint)
+**Gotcha:** `bid[].volume` is in SHARES — divide by 100 for lots. `best_bid_offer.quantity.raw` is already in lots.  
+**Implementation:** `src/infrastructure/browser/stockbit_order_book.py`
 
 ---
 
 ### 7. Historical Price Summary (OHLCV)
 ```
-GET /company-price-feed/historical/summary/{ticker}?period=HS_PERIOD_DAILY&start_date=...&end_date=...&limit=12&page=1
+GET /company-price-feed/historical/summary/{ticker}?period=HS_PERIOD_DAILY&start_date=YYYY-MM-DD&end_date=YYYY-MM-DD&limit=12&page=1
 ```
 **Params:**
 - `period`: `HS_PERIOD_DAILY`, `HS_PERIOD_WEEKLY`, `HS_PERIOD_MONTHLY`
 
-**Data available:**
-- Date
-- Open, High, Low, Close prices (IDR)
-- Volume (shares or lots)
-- Value (IDR, total traded value)
-- Frequency (number of trades)
-- Adjusted close (for splits/dividends)
-- Foreign net buy/sell volume (sometimes included)
+**Not yet implemented — JSON shape unknown.**  
+Likely follows standard paginated shape: `data.list[]` with OHLCV fields and `data.pagination.has_next`.
 
 ---
 
@@ -143,12 +252,24 @@ GET /company-price-feed/historical/summary/{ticker}?period=HS_PERIOD_DAILY&start
 ```
 GET /order-trade/running-trade?symbols[]={ticker}&sort=DESC&limit=80&order_by=RUNNING_TRADE_ORDER_BY_TIME
 ```
-**Data available:**
-- Individual trade ticks: price, lot size, time
-- Buyer broker code, seller broker code
-- Trade type (regular/negotiated/cash)
-- Investor type (foreign/domestic)
-- Sequence number / trade ID
+**Response shape [from-parser 2026-06]:**
+```
+data.running_trade[]                      → list of tick objects (newest first):
+  [].time                                → "HH:MM:SS"  ← time only, NO date
+  [].price                               → "6,400"  ← IDR, comma-formatted STRING
+  [].lot                                 → "0.98"  ← STRING, may be fractional (NG board)
+  [].code                                → ticker (string)
+  [].buyer                               → buyer broker code ("" when is_broker_exists=false)
+  [].seller                              → seller broker code (string)
+  [].buyer_type                          → "BROKER_TYPE_UNSPECIFIED" or broker code
+  [].seller_type                         → broker code
+  [].is_broker_exists                    → bool (false = anonymous tick)
+  [].market_board                        → "RG" (regular) | "NG" (negotiated) | "TN" (tunai/cash)
+  [].value.raw                           → int (IDR trade value)
+```
+**Gotcha:** `price` and `lot` are strings — cast after stripping commas. No cache — real-time only.  
+**Gotcha:** Ticks have no date — combine `time` with today's IDX market date.  
+**Implementation:** `src/infrastructure/browser/stockbit_running_trade.py`
 
 ---
 
@@ -160,12 +281,7 @@ GET /order-trade/running-trade/chart/{ticker}?period=RT_PERIOD_LAST_1_DAY&invest
 - `investor_type`: `INVESTOR_TYPE_ALL`, `INVESTOR_TYPE_FOREIGN`, `INVESTOR_TYPE_LOCAL`
 - `market_board`: `BOARD_TYPE_REGULAR`, `BOARD_TYPE_NEGOTIATED`
 
-**Data available:**
-- Time-bucketed intraday chart (OHLCV per interval)
-- Buy volume vs. sell volume per bucket
-- Foreign buy vs. domestic buy split per bucket
-- Price trend chart data points (for candlestick or line chart)
-- Cumulative net value over the day
+**Not yet implemented — JSON shape unknown.**
 
 ---
 
@@ -177,28 +293,49 @@ GET /marketdetectors/{ticker}?transaction_type=TRANSACTION_TYPE_NET&market_board
 - `period`: `BROKER_SUMMARY_PERIOD_LATEST`, `BROKER_SUMMARY_PERIOD_LAST_7_DAYS`, `BROKER_SUMMARY_PERIOD_LAST_1_MONTH`, `BROKER_SUMMARY_PERIOD_LAST_3_MONTHS`, `BROKER_SUMMARY_PERIOD_LAST_6_MONTHS`, `BROKER_SUMMARY_PERIOD_LAST_1_YEAR`
 - `transaction_type`: `TRANSACTION_TYPE_NET`, `TRANSACTION_TYPE_BUY`, `TRANSACTION_TYPE_SELL`
 
-**Confirmed response shape (2026-06-13):**
+**Response shape [prior-doc, source unknown — likely live-probed 2026-06-13]:**
 ```
-data.broker_summary.brokers_buy[]
-  netbs_broker_code   → broker code (e.g. "AK")
-  blot                → buy lots (int)
-  bval                → buy value (IDR)
-  netbs_buy_avg_price → average buy price (IDR)
-  type                → "Asing" (foreign) or "Lokal" (domestic)
-  netbs_date          → trading date (YYYYMMDD)
+data.broker_summary.brokers_buy[]         → top net buyer brokers:
+  [].netbs_broker_code                   → broker code (e.g. "AK")
+  [].blot                                → net buy lots (int)
+  [].bval                                → net buy value (IDR, Decimal)
+  [].netbs_buy_avg_price                 → average buy price (IDR, Decimal)
+  [].type                                → "Asing" (foreign) | "Lokal" (domestic)
+  [].netbs_date                          → trading date (YYYYMMDD string)
 
-data.broker_summary.brokers_sell[]
-  netbs_broker_code   → broker code
-  slot                → sell lots (int, negative)
-  sval                → sell value (IDR, negative)
-  netbs_sell_avg_price→ average sell price
-  type                → "Asing" / "Lokal"
+data.broker_summary.brokers_sell[]        → top net seller brokers:
+  [].netbs_broker_code                   → broker code
+  [].slot                                → sell lots (int, may be negative)
+  [].sval                                → sell value (IDR, may be negative)
+  [].netbs_sell_avg_price                → average sell price
+  [].type                                → "Asing" | "Lokal"
+  [].netbs_date                          → trading date (YYYYMMDD)
 ```
-**Data available:**
-- Top 25 net buyer brokers for the stock: code, lots, value, avg price, type
-- Top 25 net seller brokers: code, lots, value, avg price, type
-- Broker type classification (foreign / domestic)
-- Period-aggregated (not per-day) — use historical endpoint for daily series
+**Note:** This same endpoint also carries `data.bandar_detector.*` — see §10b below.  
+**Implementation:** `src/infrastructure/browser/playwright_stockbit.py` (`_parse_marketdetectors_response`)  
+**Cache:** SQLite `broker_summaries`.
+
+---
+
+### 10b. Bandar Detector Signal
+```
+GET /marketdetectors/{ticker}?transaction_type=TRANSACTION_TYPE_NET&market_board=MARKET_BOARD_REGULER&investor_type=INVESTOR_TYPE_ALL&limit=25&period=BROKER_SUMMARY_PERIOD_LATEST
+```
+Same URL as §10 — different response path within the same JSON body.
+
+**Response shape [from-parser 2026-06]:**
+```
+data.bandar_detector.broker_accdist       → "Acc" | "Dis" | "Neutral"
+data.bandar_detector.avg.accdist          → today's intensity label (string)
+data.bandar_detector.avg.percent          → float (avg net % of total daily volume)
+data.bandar_detector.avg5.accdist         → 5-session intensity label (string)
+data.bandar_detector.top1.accdist         → top operator's label (string)
+data.bandar_detector.top1.percent         → float (top operator concentration %)
+data.bandar_detector.total_buyer          → int (number of net buying brokers)
+data.bandar_detector.total_seller         → int (number of net selling brokers)
+```
+**Implementation:** `src/infrastructure/browser/stockbit_bandar.py`  
+**Cache:** SQLite keyed by `(ticker, session_date)` — fixed after market close.
 
 ---
 
@@ -210,44 +347,35 @@ GET /order-trade/broker/distribution?date=&symbol={ticker}&investor_type=INVESTO
 - `data_type`: `BROKER_DISTRIBUTION_DATA_TYPE_VALUE`, `BROKER_DISTRIBUTION_DATA_TYPE_VOLUME`
 - `period`: `TB_PERIOD_LAST_1_DAY`, `TB_PERIOD_LAST_1_WEEK`, `TB_PERIOD_LAST_1_MONTH`
 
-**Data available:**
-- Broker-level distribution chart data for one stock
-- Each broker's share of total value or volume (pie/bar chart source)
-- Investor type breakdown (foreign vs. domestic per broker)
-- Concentration metric: top-5 broker dominance
+**Not yet implemented — JSON shape unknown.**
 
 ---
 
 ### 12. Broker Activity Historical (Per Ticker, Per Broker, Daily Series)
 ```
-GET /order-trade/broker/activity/historical?interval=INTERVAL_DAILY&broker_codes={code}&symbols={ticker}&market_board=BOARD_TYPE_REGULAR&investor_type=INVESTOR_TYPE_ALL&pagination.page=1&pagination.limit=100
+GET /order-trade/broker/activity/historical?interval=INTERVAL_DAILY&broker_codes={code}&symbols={ticker}&market_board=BOARD_TYPE_REGULAR&investor_type=INVESTOR_TYPE_ALL&period=RT_PERIOD_LAST_1_YEAR&pagination.page=1&pagination.limit=100
 ```
-**Confirmed response shape (2026-06-13):**
+**Response shape [prior-doc, source unknown — likely live-probed 2026-06-13]:**
 ```
-data.broker_name                    → full broker name
-data.records[].date                 → "YYYY-MM-DD"
-data.records[].trade_activity
-  .buy_summary.lot                  → buy lots
-  .buy_summary.value                → buy value (IDR)
-  .buy_summary.avg_price            → avg buy price
-  .sell_summary.lot                 → sell lots
-  .sell_summary.value               → sell value (IDR)
-  .sell_summary.avg_price           → avg sell price
-  .net_summary.lot                  → net lots (positive=net buy, negative=net sell)
-  .net_summary.value                → net value (IDR)
-  .net_summary.avg_price            → avg net price
-  .total_buy_lot.pct                → this broker's share of total market buy (%)
-  .total_sell_lot.pct               → this broker's share of total market sell (%)
-data.records[].price_activity
-  .close_price                      → stock close price that day (fallback)
-data.pagination.has_next            → boolean, for pagination
+data.broker_name                          → full broker name (string; only when single code)
+data.records[]                            → daily records (paginated, 100/page):
+  [].date                                → "YYYY-MM-DD"
+  [].trade_activity.buy_summary.lot      → buy lots (int)
+  [].trade_activity.buy_summary.value    → buy value (IDR, Decimal)
+  [].trade_activity.buy_summary.avg_price→ avg buy price (Decimal)
+  [].trade_activity.sell_summary.lot     → sell lots (int)
+  [].trade_activity.sell_summary.value   → sell value (IDR, Decimal)
+  [].trade_activity.sell_summary.avg_price→ avg sell price (Decimal)
+  [].trade_activity.net_summary.lot      → net lots (positive=net buy, negative=net sell)
+  [].trade_activity.net_summary.value    → net value (IDR, can be negative)
+  [].trade_activity.net_summary.avg_price→ avg net price (Decimal)
+  [].trade_activity.total_buy_lot.pct    → broker's share of total market buy volume (%)
+  [].trade_activity.total_sell_lot.pct   → broker's share of total market sell volume (%)
+  [].price_activity.close_price          → stock close price that day (fallback for avg_price)
+data.pagination.has_next                  → bool (true = more pages available)
 ```
-**Data available:**
-- Daily buy/sell/net lots and values per broker per stock — full time series
-- Average buy and sell price per day
-- Broker market share percentage (buy and sell)
-- Pagination support (100 records/page, up to 365 days back)
-- Multiple broker codes supported (separate API calls per code)
+**Implementation:** `src/infrastructure/browser/playwright_stockbit.py` (`_parse_foreign_flow_history`)  
+**Cache:** SQLite `broker_daily_flows`.
 
 ---
 
@@ -255,12 +383,18 @@ data.pagination.has_next            → boolean, for pagination
 ```
 GET /company-price-feed/seasonality/{ticker}?year=2026&back_year=5
 ```
-**Data available:**
-- Monthly average return over the past N years
-- Best and worst performing months historically
-- Monthly win-rate (% of years with positive return in that month)
-- Average return per month: Jan–Dec
-- Year-by-year monthly breakdown
+**Response shape [from-parser 2026-06]:**
+```
+data.avg.columns[]                        → avg monthly return: [{name: "Jun", value: "0.87"}]
+data.prob.columns[]                       → win rate %:         [{name: "Jun", value: "60"}]
+data.up.columns[]                         → positive year count: [{name: "Jun", value: "3"}]
+data.total_months.columns[]               → total year count:    [{name: "Jun", value: "5"}]
+data.default_last_year                    → int (back years actually used)
+```
+Each section has `columns[]` with 12 entries, one per month. Each entry: `{name: "<3-letter abbrev>", value: "<number as string>"}`.  
+**Pattern:** A single API call returns all 12 months — extract the target month by matching `name`.  
+**Implementation:** `src/infrastructure/browser/stockbit_seasonality.py`  
+**Cache:** SQLite `seasonality_cache`, monthly TTL (data only changes when a new month completes).
 
 ---
 
@@ -268,28 +402,28 @@ GET /company-price-feed/seasonality/{ticker}?year=2026&back_year=5
 ```
 GET /analyst-ratings/{ticker}/consensus
 ```
-**Data available:**
-- Consensus rating: Strong Buy / Buy / Hold / Sell / Strong Sell
-- Number of analysts (total, buy, hold, sell count)
-- Consensus target price (average, median, high, low)
-- Implied upside/downside from current price (%)
-- Rating distribution breakdown
-- Last updated date
+**Not yet implemented — JSON shape unknown.** See §15 for the implemented individual-ratings endpoint.
 
 ---
 
-### 15. Analyst Ratings (Individual)
+### 15. Analyst Ratings
 ```
 GET /analyst-ratings/{ticker}
 ```
-**Data available:**
-- Per-analyst ratings list
-- Analyst name, firm/institution
-- Rating (Buy/Hold/Sell)
-- Target price (IDR)
-- Rating date
-- Research note title/link (if available)
-- Previous rating and price target for comparison
+**Response shape [from-parser 2026-06]:**
+```
+data.recommendation                       → "Buy" | "Hold" | "Sell" (string)
+data.total_buy                            → int (number of buy-rated analysts)
+data.total_hold                           → int
+data.total_sell                           → int
+data.total_analyst                        → int
+data.price_target.best_target             → int (IDR, consensus average target price)
+data.price_target.current_price           → int (IDR, last price at fetch time)
+data.last_updated                         → "15 Jun 26"  ← DD Mon YY format
+```
+**Gotcha:** `last_updated` uses `"%d %b %y"` format — same quirk as insider `date` field.  
+**Implementation:** `src/infrastructure/browser/stockbit_analyst.py`  
+**Cache:** SQLite, 1-day TTL.
 
 ---
 
@@ -298,16 +432,11 @@ GET /analyst-ratings/{ticker}
 GET /findata-view/company/financial?symbol={ticker}&data_type=1&report_type=1&statement_type=1
 ```
 **Params:**
-- `data_type`: 1=Annual, 2=Quarterly, 3=TTM
-- `report_type`: 1=IDR, 2=USD
-- `statement_type`: 1=Income Statement, 2=Balance Sheet, 3=Cash Flow
+- `data_type`: `1`=Annual, `2`=Quarterly, `3`=TTM
+- `report_type`: `1`=IDR, `2`=USD
+- `statement_type`: `1`=Income Statement, `2`=Balance Sheet, `3`=Cash Flow
 
-**Data available:**
-- Income Statement: Revenue, COGS, Gross Profit, EBITDA, EBIT, Net Income, EPS
-- Balance Sheet: Total Assets, Total Liabilities, Total Equity, Cash, Debt
-- Cash Flow: Operating CF, Investing CF, Financing CF, Free Cash Flow
-- Multi-period data (annual: 5–10 years; quarterly: 12–20 quarters)
-- Growth rates YoY / QoQ (sometimes computed server-side)
+**Not yet implemented — JSON shape unknown.**
 
 ---
 
@@ -315,14 +444,25 @@ GET /findata-view/company/financial?symbol={ticker}&data_type=1&report_type=1&st
 ```
 GET /keystats/ratio/v1/{ticker}?year_limit=10
 ```
-**Data available:**
-- Valuation ratios: P/E, P/B, P/S, EV/EBITDA, EV/Revenue
-- Profitability: ROE, ROA, ROIC, Net Margin, Operating Margin, Gross Margin
-- Leverage: Debt/Equity, Debt/EBITDA, Current Ratio, Quick Ratio
-- Growth: Revenue Growth YoY, Net Income Growth, EPS Growth
-- Dividend: DPS, Dividend Yield, Payout Ratio
-- Per-share: BVS (Book Value per Share), EPS, DPS
-- Historical ratio series (up to 10 years)
+**Response shape [from-parser 2026-06]:**
+```
+data.closure_fin_items_results[]          → list of financial category groups:
+  [].fin_name_results[]                  → list of individual metrics:
+    [].fitem.name                        → metric name (string):
+                                           "Return on Equity (TTM)"
+                                           "Current PE Ratio (TTM)"
+                                           "Net Profit Margin (Quarter)"
+                                           "Revenue (Quarter YoY Growth)"
+                                           "Piotroski F-Score"
+                                           "Dividend Yield"
+                                           "52 Week High"
+                                           "52 Week Low"
+                                           "Rank (Near 52 Weeks High)"
+    [].fitem.value                       → metric value (STRING — may contain "%" and ",")
+```
+**Extraction pattern:** Flatten `closure_fin_items_results[].fin_name_results[]` and match on `fitem.name`. Value is always a string — cast to float after stripping `%` and `,`.  
+**Implementation:** `src/infrastructure/browser/stockbit_fundamentals.py`  
+**Cache:** SQLite, 7-day TTL.
 
 ---
 
@@ -330,14 +470,7 @@ GET /keystats/ratio/v1/{ticker}?year_limit=10
 ```
 GET /earnings?search={ticker}&quarter=4&year=2025&sort_column=4&order=desc&page=1
 ```
-**Data available:**
-- Quarterly EPS: actual vs. estimate (if consensus available)
-- EPS surprise (actual minus estimate, %)
-- Revenue: actual vs. estimate
-- Earnings announcement date
-- Fiscal quarter/year
-- YoY EPS growth
-- Earnings beat/miss/meet classification
+**Not yet implemented — JSON shape unknown.**
 
 ---
 
@@ -347,11 +480,15 @@ GET /earnings?search={ticker}&quarter=4&year=2025&sort_column=4&order=desc&page=
 ```
 GET /company-price-feed/market-time
 ```
-**Data available:**
-- Current market session: Pre-Open, Opening Call Auction, Regular, Pre-Closing, Closing, Post-Market
-- Session open and close times (WIB)
-- Market open/closed status (boolean)
-- Next session timing
+**Partial — exact field names not confirmed via spy.** Implementation falls back to wall-clock when API unavailable.
+```
+data.status / market_status / marketStatus  → session status string (naming uncertain)
+data.session_name / sessionName / session   → session label (naming uncertain)
+data.open_time / openTime / session_open    → session open time (naming uncertain)
+data.close_time / closeTime / session_close → session close time (naming uncertain)
+```
+**Action:** Run `saham fetch stockbit spy` and navigate to orderbook page to capture exact field names.  
+**Implementation:** `src/infrastructure/browser/stockbit_market_time.py`
 
 ---
 
@@ -361,19 +498,18 @@ GET /emitten/sectors
 GET /emitten/sectors/{sector_id}/subsectors
 GET /emitten/v3/sector/{sector_id}/subsector/{subsector_id}/company
 ```
-**Data available (sectors):**
-- Sector ID, sector name
-- Number of listed companies in sector
-- Sector index code and current index value
+**Partially confirmed (2026-06):**
+```
+# Sector list
+data[]                                    → list of sector objects:
+  [].id                                  → sector id (int)
+  [].name                                → sector name (string)
 
-**Data available (subsectors):**
-- Subsector ID, subsector name, parent sector
-- Company count in subsector
-
-**Data available (company list per subsector):**
-- Ticker, company name, board type
-- Current price, change, % change
-- Market cap rank within subsector
+# Company list per subsector
+data.companies[]                          → list of companies:
+  [].symbol                             → ticker (string)
+  [].company_name                       → full company name (string)
+```
 
 **Known sector IDs:**
 | Sector | ID |
@@ -393,6 +529,8 @@ GET /emitten/v3/sector/{sector_id}/subsector/{subsector_id}/company
 | MBX | 552 |
 | BUMN20 | 1000000011 |
 
+**Implementation:** `src/infrastructure/browser/stockbit_universe.py`
+
 ---
 
 ### 21. Corporate Action Calendar (Market-Wide)
@@ -407,12 +545,7 @@ GET /corpaction/rups
 GET /corpaction/pubex
 GET /corpaction/ipo
 ```
-**Data available (all types):**
-- Ticker, company name
-- Action type
-- Announcement date, cum date, ex date, recording date, payment date
-- Amount (IDR for dividend, ratio for split/rights)
-- Action status
+**Not yet implemented — JSON shape unknown.** Likely same shape as §4 per-ticker endpoint but without ticker filter.
 
 ---
 
@@ -424,30 +557,25 @@ GET /order-trade/market-mover?mover_type=MOVER_TYPE_IEV_TOP_GAINER&filter_stocks
 - `mover_type`: `MOVER_TYPE_IEV_TOP_GAINER`, `MOVER_TYPE_TOP_GAINER`, `MOVER_TYPE_TOP_LOSER`, `MOVER_TYPE_MOST_ACTIVE_VOLUME`, `MOVER_TYPE_MOST_ACTIVE_VALUE`
 - `filter_stocks`: `FILTER_STOCKS_TYPE_MAIN_BOARD`, `FILTER_STOCKS_TYPE_DEVELOPMENT_BOARD`, `FILTER_STOCKS_TYPE_ACCELERATION_BOARD`, `FILTER_STOCKS_TYPE_NEW_ECONOMY_BOARD`, `FILTER_STOCKS_TYPE_SPECIAL_MONITORING_BOARD`
 
-**Confirmed response shape (2026-06-13):**
+**Note:** Main boards and Special Monitoring Board must be separate API calls — they cannot be combined in one request.
+
+**Response shape [prior-doc, source unknown — likely live-probed 2026-06-13]:**
 ```
-data.mover_list[].stock_detail.code         → ticker symbol
-data.mover_list[].iepiev_detail.iev.raw     → IEV (Indicative Equivalent Volume, lots)
-data.mover_list[].iepiev_detail.iep.raw     → IEP (Indicative Equilibrium Price, IDR)
+data.mover_list[]                         → ranked list:
+  [].stock_detail.code                   → ticker symbol (string)
+  [].iepiev_detail.iev.raw               → IEV (Indicative Equivalent Volume, int, lots)
+  [].iepiev_detail.iep.raw               → IEP (Indicative Equilibrium Price, int, IDR; may be absent)
 ```
-**Data available:**
-- Ranked list of stocks by IEV (pre-open order imbalance signal)
-- IEV: total lots queued at the indicated opening price (higher = more interest)
-- IEP: expected call-auction clearing price at 09:00 WIB
-- Board type classification per ticker
-- Supports separate calls for main boards and special monitoring board
+**Implementation:** `src/infrastructure/browser/playwright_stockbit.py` (`_parse_iev_response`)
 
 ---
 
 ### 23. Insider Activity (All Tickers, Market-Wide)
 ```
-GET /insider/company/majorholder?date_start=...&date_end=...&page=1&limit=20&action_type=ACTION_TYPE_UNSPECIFIED&source_type=SOURCE_TYPE_UNSPECIFIED
+GET /insider/company/majorholder?date_start=YYYY-MM-DD&date_end=YYYY-MM-DD&page=1&limit=20&action_type=ACTION_TYPE_UNSPECIFIED&source_type=SOURCE_TYPE_UNSPECIFIED
 ```
-**Data available:**
-- All insider transactions across all tickers in date range
-- Insider name, company, role
-- Transaction type (buy/sell), shares, price, date
-- Sorted by date descending — useful for scanning recent insider buying
+Same response shape as §5 (per-ticker insider) — same `data.movement[]` structure.  
+**Not yet implemented as a standalone market-wide scan.**
 
 ---
 
@@ -456,31 +584,16 @@ GET /insider/company/majorholder?date_start=...&date_end=...&page=1&limit=20&act
 GET /earnings?sort_column=4&order=desc&page=1
 GET /earnings?quarter=4&year=2025&sort_column=4&order=desc&page=1
 ```
-**Data available:**
-- Market-wide EPS results sorted by column (e.g., surprise magnitude)
-- Ticker, company name, quarter, year
-- EPS actual, estimate, surprise
-- Revenue actual, estimate
-- Earnings release date
-- YoY growth
+**Not yet implemented — JSON shape unknown.**
 
 ---
 
 ### 25. Valuation Tool
 ```
-GET /valuation/company/{ticker}/metrics   → inputs
-GET /valuation/company/{ticker}           → computed result
+GET /valuation/company/{ticker}/metrics   → DCF input assumptions
+GET /valuation/company/{ticker}           → computed intrinsic value result
 ```
-**Data available (metrics):**
-- DCF inputs: risk-free rate, market risk premium, beta, WACC
-- Growth assumptions: short-term, long-term revenue growth
-- Margin assumptions
-
-**Data available (result):**
-- Intrinsic value estimate (IDR per share)
-- Bull / base / bear scenario values
-- Implied P/E, EV/EBITDA at each scenario
-- Margin of safety vs. current price
+**Not yet implemented — JSON shape unknown.**
 
 ---
 
@@ -488,12 +601,8 @@ GET /valuation/company/{ticker}           → computed result
 ```
 GET /findata-view/marketdetectors/brokers?page=1&limit=150
 ```
-**Data available:**
-- Full list of active IDX brokers
-- Broker code (2-3 letter), broker name
-- Investor type classification (domestic, foreign, state-owned)
-- License status
-- Up to 150 brokers per page
+**Not yet implemented — JSON shape unknown.**  
+Up to 150 brokers per page. Broker codes are 2–3 uppercase letters.
 
 ---
 
@@ -506,13 +615,7 @@ GET /order-trade/broker/top?sort=TB_SORT_BY_TOTAL_VALUE&order=ORDER_BY_DESC&peri
 - `period`: `TB_PERIOD_LAST_1_DAY`, `TB_PERIOD_LAST_1_WEEK`, `TB_PERIOD_LAST_1_MONTH`
 - `market_type`: `MARKET_TYPE_ALL`, `MARKET_TYPE_REGULER`
 
-**Data available:**
-- Market-wide broker ranking by value/volume
-- Broker code, name
-- Total buy value, sell value, net value
-- Total buy lots, sell lots, net lots
-- Market share percentage
-- Ranking position
+**Not yet implemented — JSON shape unknown.**
 
 ---
 
@@ -521,58 +624,61 @@ GET /order-trade/broker/top?sort=TB_SORT_BY_TOTAL_VALUE&order=ORDER_BY_DESC&peri
 GET /order-trade/broker/activity?broker_code={code}&transaction_type=TRANSACTION_TYPE_NET&investor_type=INVESTOR_TYPE_ALL&limit=20&market_board=MARKET_TYPE_REGULER&page=1&period=RT_PERIOD_LAST_1_DAY&net_val_period=NET_VAL_PERIOD_7D
 ```
 **Params:**
-- `broker_code`: multiple values supported (e.g., `broker_code=AK&broker_code=ZP`)
+- `broker_code`: multiple values supported — e.g. `broker_code=AK&broker_code=ZP&broker_code=YP`
 - `period`: `RT_PERIOD_LAST_1_DAY`, `RT_PERIOD_LAST_3_DAYS`, `RT_PERIOD_LAST_7_DAYS`, `RT_PERIOD_LAST_1_MONTH`, `RT_PERIOD_LAST_3_MONTHS`, `RT_PERIOD_YEAR_TO_DATE`, `RT_PERIOD_LAST_1_YEAR`
 - `net_val_period`: `NET_VAL_PERIOD_7D`, `NET_VAL_PERIOD_30D`
-- Can also use `from` and `to` date params instead of `period`
+- Alternative to `period`: use `from=YYYY-MM-DD&to=YYYY-MM-DD` for exact date range
 
-**Confirmed response shape (2026-06-13):**
+**Response shape [prior-doc, source unknown — likely live-probed 2026-06-13]:**
 ```
-data.broker_activity_transaction.brokers_buy[]
-  stock_code   → ticker
-  value        → net buy value (IDR, positive)
-  lot          → net buy lots (positive)
-  avg_price    → average buy price (IDR)
-  type         → investor type
-  date         → ISO date string
+data.broker_activity_transaction.brokers_buy[]  → net buying stocks:
+  [].stock_code                              → ticker (string)
+  [].value                                   → net buy value (IDR, positive, Decimal)
+  [].lot                                     → net buy lots (positive, int)
+  [].avg_price                               → average buy price (IDR, Decimal)
+  [].type                                    → investor type string
+  [].date                                    → ISO date string
 
-data.broker_activity_transaction.brokers_sell[]
-  stock_code   → ticker
-  value        → net sell value (IDR, negative)
-  lot          → net sell lots (negative)
-  avg_price    → average sell price
+data.broker_activity_transaction.brokers_sell[] → net selling stocks:
+  [].stock_code                              → ticker (string)
+  [].value                                   → net sell value (IDR, negative)
+  [].lot                                     → net sell lots (negative)
+  [].avg_price                               → average sell price
 ```
-**Data available:**
-- Which stocks a set of brokers collectively bought/sold the most (universe scan)
-- Net value and lots per stock for the broker group
-- Average price of transactions
-- Supports aggregating multiple broker codes in one call (foreign flow proxy)
-- Most useful for: "what stocks are foreign/institutional brokers accumulating?"
+**Use case:** "What stocks are foreign/institutional brokers collectively accumulating?"  
+**Implementation:** `src/infrastructure/browser/playwright_stockbit.py` (`_parse_foreign_top_stocks`)
 
 ---
 
 ## Summary: Use Case → Endpoint Mapping
 
-| Use Case | Endpoint |
-|----------|----------|
-| Pre-open screener (IEV ranking) | `/order-trade/market-mover` |
-| Live order book depth + IEP | `/company-price-feed/v2/orderbook/companies/{ticker}` |
-| Which brokers bought/sold a stock | `/marketdetectors/{ticker}` |
-| Which stocks foreign brokers are buying | `/order-trade/broker/activity` (multi broker_code) |
-| Daily broker flow time-series for a stock | `/order-trade/broker/activity/historical` |
-| Live trade tape (tick data) | `/order-trade/running-trade` |
-| Historical OHLCV | `/company-price-feed/historical/summary/{ticker}` |
-| Fundamental financials | `/findata-view/company/financial` |
-| Key ratios (P/E, ROE, etc.) | `/keystats/ratio/v1/{ticker}` |
-| Analyst consensus + target price | `/analyst-ratings/{ticker}/consensus` |
-| Dividend / split calendar | `/corpaction/{ticker}` or `/corpaction/dividend` |
-| Insider buying activity | `/insider/company/majorholder` |
-| Shareholder ownership breakdown | `/insider/shareholding/composition/companies/{ticker}` |
-| Current market session status | `/company-price-feed/market-time` |
-| Stock universe (LQ45, IDX30, etc.) | `/emitten/v3/sector/88/subsector/{id}/company` |
-| Sector classification | `/emitten/sectors` → `/emitten/sectors/{id}/subsectors` |
-| Market-wide broker ranking | `/order-trade/broker/top` |
-| Full broker list (codes + names) | `/findata-view/marketdetectors/brokers` |
-| Earnings surprise screening | `/earnings` |
-| Seasonal pattern analysis | `/company-price-feed/seasonality/{ticker}` |
-| Intrinsic value estimate | `/valuation/company/{ticker}` |
+| Use Case | Endpoint | Status |
+|----------|----------|--------|
+| Pre-open screener (IEV ranking) | `/order-trade/market-mover` | ✓ Implemented |
+| Live order book depth + IEP | `/company-price-feed/v2/orderbook/companies/{ticker}` | ✓ Implemented |
+| Which brokers bought/sold a stock | `/marketdetectors/{ticker}` | ✓ Implemented |
+| Bandar detector (operator concentration) | `/marketdetectors/{ticker}` (different response path) | ✓ Implemented |
+| Which stocks foreign brokers are buying | `/order-trade/broker/activity` (multi broker_code) | ✓ Implemented |
+| Daily broker flow time-series for a stock | `/order-trade/broker/activity/historical` | ✓ Implemented |
+| Live trade tape (tick data) | `/order-trade/running-trade` | ✓ Implemented |
+| Stock notation/status/UMA flags | `/emitten/{ticker}/info` | ✓ Implemented |
+| Shareholding composition | `/insider/shareholding/composition/companies/{ticker}` | ✓ Implemented |
+| Corporate actions (per ticker) | `/corpaction/{ticker}` | ✓ Implemented |
+| Insider buying activity (per ticker) | `/insider/company/majorholder` | ✓ Implemented |
+| Analyst ratings + target price | `/analyst-ratings/{ticker}` | ✓ Implemented |
+| Key ratios (P/E, ROE, etc.) | `/keystats/ratio/v1/{ticker}` | ✓ Implemented |
+| Seasonal return pattern | `/company-price-feed/seasonality/{ticker}` | ✓ Implemented |
+| Current market session status | `/company-price-feed/market-time` | ✓ Implemented (partial) |
+| Stock universe (LQ45, IDX30, etc.) | `/emitten/v3/sector/88/subsector/{id}/company` | ✓ Implemented |
+| Historical OHLCV | `/company-price-feed/historical/summary/{ticker}` | ✗ Not implemented |
+| Intraday volume profile chart | `/order-trade/running-trade/chart/{ticker}` | ✗ Not implemented |
+| Broker distribution (pie chart data) | `/order-trade/broker/distribution` | ✗ Not implemented |
+| Analyst consensus (separate endpoint) | `/analyst-ratings/{ticker}/consensus` | ✗ Not implemented |
+| Company profile (management, description) | `/emitten/{ticker}/profile` | ✗ Not implemented |
+| Financial statements (IS/BS/CF) | `/findata-view/company/financial` | ✗ Not implemented |
+| Earnings surprise screening | `/earnings` | ✗ Not implemented |
+| Intrinsic value estimate | `/valuation/company/{ticker}` | ✗ Not implemented |
+| Market-wide broker ranking | `/order-trade/broker/top` | ✗ Not implemented |
+| Full broker list (codes + names) | `/findata-view/marketdetectors/brokers` | ✗ Not implemented |
+| Dividend / split calendar (market-wide) | `/corpaction/dividend` etc. | ✗ Not implemented |
+| Insider buying scan (all tickers) | `/insider/company/majorholder` (no symbols param) | ✗ Not implemented |
