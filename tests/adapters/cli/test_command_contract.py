@@ -70,8 +70,8 @@ EXPECTED_COMMANDS: dict[tuple[str, ...], tuple[str, ...]] = {
         "size",
         "backtest-swing",
         "backtest-intraday",
+        "migrate-journal",
     ),
-    ("trade", "log"): ("intraday", "swing"),
     ("trade", "review"): ("intraday", "swing"),
     ("strategy",): ("skill", "init", "validate", "list", "create", "backtest"),
     ("strategy", "skill"): ("generate", "check", "index"),
@@ -94,7 +94,6 @@ REMOVED_PATHS: tuple[tuple[str, ...], ...] = (
     ("trade", "swing"),
     ("trade", "intraday"),
     ("trade", "opening"),
-    ("trade", "log", "pre-open"),
     ("trade", "review", "pre-open"),
 )
 
@@ -257,7 +256,6 @@ def test_lifecycle_routers_import_expected_command_modules():
     assert fetch_commands.collect_iev is fetch_iev_commands.collect_iev
 
     assert trade_commands.confirm_open is trade_intraday_commands.confirm_open
-    assert trade_commands.confirm_log is trade_intraday_commands.confirm_log
     assert trade_commands.confirm_review is trade_intraday_commands.confirm_review
     assert trade_commands.confirm_outcome is trade_intraday_commands.confirm_outcome
     assert trade_commands.intraday_backtest is trade_intraday_commands.intraday_backtest

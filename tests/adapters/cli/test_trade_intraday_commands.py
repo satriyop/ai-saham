@@ -213,7 +213,7 @@ def test_trade_log_intraday_writes_confirmation_sidecar(tmp_path):
     result = runner.invoke(
         app,
         [
-            "trade", "log", "intraday",
+            "trade", "log", "--type", "intraday",
             "--confirmation", str(confirmation),
             "--journal", str(journal),
         ],
@@ -233,7 +233,7 @@ def test_confirm_review_outputs_bucket_tables(tmp_path):
     runner.invoke(
         app,
         [
-            "trade", "log", "intraday",
+            "trade", "log", "--type", "intraday",
             "--confirmation", str(confirmation),
             "--journal", str(journal),
         ],
@@ -276,7 +276,7 @@ def test_trade_outcome_updates_logged_confirmation(tmp_path):
     runner.invoke(
         app,
         [
-            "trade", "log", "intraday",
+            "trade", "log", "--type", "intraday",
             "--confirmation", str(confirmation),
             "--journal", str(journal),
         ],
