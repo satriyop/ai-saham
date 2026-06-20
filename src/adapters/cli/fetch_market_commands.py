@@ -307,10 +307,15 @@ def _fetch_broker(
     else:
         idx_summary_provider = IdxBrokerDataProvider()
 
+    from src.infrastructure.browser.stockbit_ticker_notation import StockbitTickerNotationProvider
+
+    notation_repo = StockbitTickerNotationProvider(broker_provider=None, db_path=db_path)
+
     response = RefreshBrokerDataUseCase(
         broker_provider=broker_provider,
         idx_summary_provider=idx_summary_provider,
         repository=repo,
+        notation_repository=notation_repo,
     ).execute(
         RefreshBrokerDataRequest(
             ticker=ticker,

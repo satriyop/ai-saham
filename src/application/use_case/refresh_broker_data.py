@@ -10,6 +10,7 @@ Owns deterministic broker refresh policy:
 Layer: Application
 """
 
+import logging
 from dataclasses import dataclass
 from datetime import date, timedelta
 
@@ -28,6 +29,9 @@ from src.domain.ports.broker_data_provider import (
     BrokerDataProviderError,
 )
 from src.domain.ports.broker_data_repository import BrokerDataRepository
+from src.domain.ports.ticker_notation_repository import TickerNotationRepository
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -56,10 +60,12 @@ class RefreshBrokerDataUseCase:
         broker_provider: BrokerDataProvider,
         idx_summary_provider: BrokerDataProvider,
         repository: BrokerDataRepository,
+        notation_repository: TickerNotationRepository | None = None,
     ) -> None:
         self._broker_provider = broker_provider
         self._idx_summary_provider = idx_summary_provider
         self._repository = repository
+        self._notation_repository = notation_repository
 
     def execute(self, request: RefreshBrokerDataRequest) -> RefreshBrokerDataResponse:
         ticker = request.ticker.upper().strip()
@@ -69,6 +75,12 @@ class RefreshBrokerDataUseCase:
             raise ValueError("Days must be at least 1")
         if ticker.startswith("^"):
             return RefreshBrokerDataResponse(ticker, "n/a:index", "n/a:index")
+
+        if self._notation_repository is not None:
+            notation = self._notation_repository.get_notation(ticker)
+            if notation is not None and notation.tradeable is False:
+                logger.info("Skipping broker fetch for %s — tradeable=False (suspended)", ticker)
+                return RefreshBrokerDataResponse(ticker, "skip:suspended", "skip:suspended")
 
         end_date = request.end_date or date.today()
         requested_start = end_date - timedelta(days=request.days)

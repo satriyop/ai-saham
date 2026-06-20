@@ -9,7 +9,24 @@ from src.application.use_case.refresh_broker_data import (
     RefreshBrokerDataUseCase,
 )
 from src.domain.entities.broker_flow import BrokerDailyFlow, BrokerSummary, ForeignFlowPoint
+from src.domain.value_objects.ticker_notation import TickerNotationSnapshot
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
+
+
+class FakeNotationRepository:
+    """Read-only notation stub for gating tests."""
+
+    def __init__(self, snapshots: dict[str, TickerNotationSnapshot | None]) -> None:
+        self._snapshots = {k.upper(): v for k, v in snapshots.items()}
+
+    def get_notation(self, ticker: str) -> TickerNotationSnapshot | None:
+        return self._snapshots.get(ticker.upper())
+
+    def save_notation(self, snapshot: TickerNotationSnapshot) -> None:
+        pass
+
+    def is_cache_fresh(self, ticker: str) -> bool:
+        return ticker.upper() in self._snapshots
 
 
 def _summary(ticker: str, day: date, source: str = "idx") -> BrokerSummary:
@@ -226,3 +243,80 @@ def test_refresh_broker_fetches_daily_flow_until_expected_latest_trading_day(tmp
         stale_daily,
         expected_latest,
     )
+
+
+def test_suspended_ticker_skipped_when_notation_says_not_tradeable(tmp_path: Path):
+    db_path = tmp_path / "data.db"
+    repo = SQLiteBrokerRepository(db_path)
+    idx_provider = FakeBrokerProvider("idx")
+
+    notation_repo = FakeNotationRepository({
+        "WSKT": TickerNotationSnapshot(ticker="WSKT", tradeable=False),
+    })
+
+    response = RefreshBrokerDataUseCase(
+        broker_provider=idx_provider,
+        idx_summary_provider=idx_provider,
+        repository=repo,
+        notation_repository=notation_repo,
+    ).execute(
+        RefreshBrokerDataRequest(
+            ticker="WSKT",
+            days=90,
+            end_date=date(2026, 6, 20),
+        )
+    )
+
+    assert response.summaries_status == "skip:suspended"
+    assert response.flow_status == "skip:suspended"
+    assert idx_provider.requested_ranges == [], "No fetch should have been made"
+
+
+def test_active_ticker_proceeds_when_notation_says_tradeable(tmp_path: Path):
+    db_path = tmp_path / "data.db"
+    repo = SQLiteBrokerRepository(db_path)
+    idx_provider = FakeBrokerProvider("idx")
+
+    notation_repo = FakeNotationRepository({
+        "BBCA": TickerNotationSnapshot(ticker="BBCA", tradeable=True),
+    })
+
+    response = RefreshBrokerDataUseCase(
+        broker_provider=idx_provider,
+        idx_summary_provider=idx_provider,
+        repository=repo,
+        notation_repository=notation_repo,
+    ).execute(
+        RefreshBrokerDataRequest(
+            ticker="BBCA",
+            days=7,
+            end_date=date(2026, 6, 20),
+        )
+    )
+
+    assert response.summaries_status != "skip:suspended"
+    assert len(idx_provider.requested_ranges) == 1, "Fetch should have been called"
+
+
+def test_ticker_proceeds_when_notation_not_in_cache(tmp_path: Path):
+    db_path = tmp_path / "data.db"
+    repo = SQLiteBrokerRepository(db_path)
+    idx_provider = FakeBrokerProvider("idx")
+
+    notation_repo = FakeNotationRepository({})  # empty — ticker not known yet
+
+    response = RefreshBrokerDataUseCase(
+        broker_provider=idx_provider,
+        idx_summary_provider=idx_provider,
+        repository=repo,
+        notation_repository=notation_repo,
+    ).execute(
+        RefreshBrokerDataRequest(
+            ticker="NEWIPO",
+            days=7,
+            end_date=date(2026, 6, 20),
+        )
+    )
+
+    assert response.summaries_status != "skip:suspended", "Unknown notation must not block fetch"
+    assert len(idx_provider.requested_ranges) == 1
