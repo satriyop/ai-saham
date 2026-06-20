@@ -174,7 +174,14 @@ def today(
             warnings.add_row(f"- {warning}")
         sections.extend([Text("Warnings", style="bold yellow"), warnings])
 
-    sections.append(Text("Next: saham screen accum --universe lq45 | saham analyze swing TICKER", style="bold"))
+    if response.stale_count > 0:
+        next_action = f"Next: Run 'saham fetch market --universe {response.universe}' to fetch latest data."
+        next_style = "bold yellow"
+    else:
+        next_action = f"Next: saham screen accum --universe {response.universe} | saham analyze swing TICKER"
+        next_style = "bold"
+
+    sections.append(Text(next_action, style=next_style))
     console().print(
         panel(
             Group(*sections),

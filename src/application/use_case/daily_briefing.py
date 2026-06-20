@@ -90,6 +90,12 @@ class DailyBriefingUseCase:
         freshness = self._data_freshness(universe_tickers, as_of)
         stale_count = sum(1 for item in freshness if item.latest_date != as_of)
 
+        if stale_count > 0:
+            warnings.append(
+                f"Local cache is stale for {stale_count}/{len(universe_tickers)} tickers. "
+                f"Run 'saham fetch market --universe {request.universe}' to fetch latest data."
+            )
+
         regime = None
         if universe_tickers:
             try:
