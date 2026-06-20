@@ -1,7 +1,7 @@
 # Database ERD — data.db
 
 18 tables total. All `Decimal` values stored as `TEXT` to avoid floating-point precision loss.
-Shares are stored as lots (÷100) throughout.
+OHLCV volumes are stored in raw shares. Broker/foreign flow lots are stored as lots (÷100) in `_lot` columns.
 
 ```mermaid
 erDiagram

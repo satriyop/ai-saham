@@ -25,7 +25,6 @@ Layer plan for future implementation:
 
 ## Current Data Observations
 
-The active application database is `data.db`, not `docs/data.db`.
 
 Observed active `data.db` state:
 
@@ -46,7 +45,7 @@ Observed active `data.db` state:
 | `bandar_detector` | 68 tickers |
 | `company_fundamentals` | 68 tickers |
 
-`docs/data.db` appears to be an old or sample database. It only has `candles` and an old `broker_summaries` schema without `source`. It should not be treated as representative of current runtime state.
+
 
 ## Findings
 
