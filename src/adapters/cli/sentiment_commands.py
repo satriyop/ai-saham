@@ -13,6 +13,10 @@ from pathlib import Path
 from typing import Annotated, Optional
 
 import typer
+from rich.console import Console, Group
+from rich.panel import Panel
+from rich.table import Table
+from rich.text import Text
 
 from src.application.services.group_mapping import GroupMappingService
 from src.application.use_case.audit_sentiment import AuditSentimentRequest, AuditSentimentUseCase
@@ -145,30 +149,60 @@ def sentiment_audit(
 
         response = use_case.execute(AuditSentimentRequest())
 
-        typer.echo(f"Logs audited:   {response.logs_audited}")
-        typer.echo(f"Audits saved:   {response.audits_saved}")
+        console = Console()
+        console.print(f"Logs audited:   {response.logs_audited}")
+        console.print(f"Audits saved:   {response.audits_saved}")
 
         stats = response.stats
         if stats["audited_logs"] > 0:
-            typer.echo("\n" + "=" * 50)
-            typer.echo("SENTIMENT ACCURACY REPORT (5-Day Horizon)")
-            typer.echo("=" * 50)
+            console.print("")
+            summary_text = Text()
+            summary_text.append("Total Audited: ", style="bold")
+            summary_text.append(str(stats["audited_logs"]), style="bold cyan")
+            
+            panel = Panel(
+                summary_text,
+                title="[bold]SENTIMENT ACCURACY REPORT (5-Day Horizon)[/bold]",
+                border_style="cyan",
+                expand=False,
+            )
+            console.print(panel)
+            console.print("")
 
-            typer.echo(f"\nTotal Audited: {stats['audited_logs']}")
-
-            typer.echo("\nBy Sentiment:")
+            console.print("[bold]Accuracy By Sentiment[/bold]")
+            sent_table = Table(show_header=True, header_style="bold magenta")
+            sent_table.add_column("Sentiment", style="cyan")
+            sent_table.add_column("Win Rate", justify="right")
+            sent_table.add_column("Wins/Total", justify="right")
+            
             for sent, s_stats in stats["by_sentiment"].items():
                 win_rate = (s_stats["wins"] / s_stats["total"]) * 100
-                typer.echo(f"  {sent.upper():<10}: {win_rate:>5.1f}%  ({s_stats['wins']}/{s_stats['total']})")
+                color = "green" if win_rate >= 50 else "yellow"
+                sent_table.add_row(
+                    sent.upper(),
+                    f"[{color}]{win_rate:.1f}%[/{color}]",
+                    f"{s_stats['wins']}/{s_stats['total']}",
+                )
+            console.print(sent_table)
+            console.print("")
 
-            typer.echo("\nBy Catalyst:")
+            console.print("[bold]Accuracy By Catalyst[/bold]")
+            cat_table = Table(show_header=True, header_style="bold magenta")
+            cat_table.add_column("Catalyst", style="cyan")
+            cat_table.add_column("Win Rate", justify="right")
+            cat_table.add_column("Wins/Total", justify="right")
+
             for cat, c_stats in stats["by_catalyst"].items():
                 win_rate = (c_stats["wins"] / c_stats["total"]) * 100
-                typer.echo(f"  {cat.upper():<15}: {win_rate:>5.1f}%  ({c_stats['wins']}/{c_stats['total']})")
-
-            typer.echo("=" * 50)
+                color = "green" if win_rate >= 50 else "yellow"
+                cat_table.add_row(
+                    cat.upper(),
+                    f"[{color}]{win_rate:.1f}%[/{color}]",
+                    f"{c_stats['wins']}/{c_stats['total']}",
+                )
+            console.print(cat_table)
         else:
-            typer.echo("\nNo audited data available yet. Audits require logs at least 1-5 days old.")
+            console.print("\nNo audited data available yet. Audits require logs at least 1-5 days old.")
 
     except Exception as e:
         typer.echo(f"Failed to audit sentiment: {e}", err=True)
@@ -182,21 +216,22 @@ def _display_sentiment_full(
     warning: str | None = None,
 ) -> None:
     """Display full sentiment snapshot output with catalysts."""
+    console = Console()
     if warning:
-        typer.echo(f"\nWarning: {warning}")
+        console.print(f"\n[yellow]Warning:[/yellow] {warning}")
         return
 
     # Sentiment symbol map
     sentiment_symbols = {
-        Sentiment.POSITIVE: "+",
-        Sentiment.NEUTRAL: "=",
-        Sentiment.NEGATIVE: "-",
+        Sentiment.POSITIVE: "▲",
+        Sentiment.NEUTRAL: "■",
+        Sentiment.NEGATIVE: "▼",
     }
-
-    # Overall sentiment display
-    typer.echo(f"\n{'-' * 39}")
-    typer.echo("SENTIMENT SNAPSHOT")
-    typer.echo(f"{'-' * 39}")
+    sentiment_colors = {
+        Sentiment.POSITIVE: "green",
+        Sentiment.NEUTRAL: "yellow",
+        Sentiment.NEGATIVE: "red",
+    }
 
     # Get the count for the winning sentiment
     sentiment_counts = {
@@ -205,41 +240,72 @@ def _display_sentiment_full(
         Sentiment.NEGATIVE: snapshot.negative_count,
     }
     winning_count = sentiment_counts[snapshot.overall_sentiment]
-
-    typer.echo(f"\nOverall: {snapshot.overall_sentiment.value.upper()}")
-    typer.echo(
-        f"Confidence: {winning_count}/{snapshot.total_count} headlines ({snapshot.confidence_pct}%)"
-    )
+    overall_color = sentiment_colors.get(snapshot.overall_sentiment, "white")
 
     # Catalyst Summary
     cat_counts = {}
     for h in snapshot.headlines:
         cat_counts[h.catalyst] = cat_counts.get(h.catalyst, 0) + 1
+    top_catalyst_name = max(cat_counts, key=cat_counts.get).name if cat_counts else "-"
 
-    if cat_counts:
-        top_catalyst = max(cat_counts, key=cat_counts.get)
-        typer.echo(f"Primary Catalyst: {top_catalyst.name}")
+    console.print("")
+    summary_text = Text()
+    summary_text.append("Overall: ", style="bold")
+    summary_text.append(snapshot.overall_sentiment.value.upper(), style=f"bold {overall_color}")
+    summary_text.append(f" | Confidence: {winning_count}/{snapshot.total_count} ({snapshot.confidence_pct}%)")
+    summary_text.append(f" | Primary Catalyst: {top_catalyst_name}")
 
-    typer.echo("\nBreakdown:")
+    panel = Panel(
+        summary_text,
+        title="[bold]SENTIMENT SNAPSHOT[/bold]",
+        border_style=overall_color,
+        expand=False,
+    )
+    console.print(panel)
+
+    console.print("\n[bold]Sentiment Breakdown[/bold]")
     total = snapshot.total_count or 1
     pos_pct = int(snapshot.positive_count / total * 100)
     neu_pct = int(snapshot.neutral_count / total * 100)
     neg_pct = int(snapshot.negative_count / total * 100)
-    typer.echo(f"  Positive:  {snapshot.positive_count} ({pos_pct}%)")
-    typer.echo(f"  Neutral:   {snapshot.neutral_count} ({neu_pct}%)")
-    typer.echo(f"  Negative:  {snapshot.negative_count} ({neg_pct}%)")
+
+    # Let's show breakdown as a table
+    breakdown_table = Table(show_header=True, header_style="bold magenta")
+    breakdown_table.add_column("Sentiment", style="cyan")
+    breakdown_table.add_column("Count", justify="right")
+    breakdown_table.add_column("Percentage", justify="right")
+    breakdown_table.add_column("Ratio Bar", style="dim white")
+
+    # Construct simple ASCII/Unicode progress bars
+    def _make_bar(pct: int, color: str) -> str:
+        blocks = int(pct / 10)
+        return f"[{color}]" + "█" * blocks + "░" * (10 - blocks) + "[/" + color + "]"
+
+    breakdown_table.add_row("Positive", str(snapshot.positive_count), f"{pos_pct}%", _make_bar(pos_pct, "green"))
+    breakdown_table.add_row("Neutral", str(snapshot.neutral_count), f"{neu_pct}%", _make_bar(neu_pct, "yellow"))
+    breakdown_table.add_row("Negative", str(snapshot.negative_count), f"{neg_pct}%", _make_bar(neg_pct, "red"))
+    console.print(breakdown_table)
 
     # Show recent headlines (max 8)
     if snapshot.headlines:
-        typer.echo("\nRecent Headlines:")
+        console.print("\n[bold]Recent Headlines[/bold]")
+        headlines_table = Table(show_header=True, header_style="bold magenta")
+        headlines_table.add_column("Dir", justify="center")
+        headlines_table.add_column("Catalyst", style="yellow")
+        headlines_table.add_column("Headline Title", style="white")
+
         for headline in snapshot.headlines[:8]:
             symbol = sentiment_symbols.get(headline.sentiment, "?")
-            title = headline.title[:65]
-            suffix = "..." if len(headline.title) > 65 else ""
-            cat_label = f"[{headline.catalyst.name[:4]}]"
-            typer.echo(f"  [{symbol}] {cat_label:<6} {title}{suffix}")
+            color = sentiment_colors.get(headline.sentiment, "white")
+            cat_label = headline.catalyst.name
+            headlines_table.add_row(
+                f"[{color}]{symbol}[/{color}]",
+                cat_label,
+                headline.title,
+            )
+        console.print(headlines_table)
 
-    typer.echo(f"\n[Provider: {provider} | Classifier: {classifier}]")
+    console.print(f"\n[dim][Provider: {provider} | Classifier: {classifier}][/dim]")
 
 
 def _display_sentiment_brief(
@@ -252,27 +318,47 @@ def _display_sentiment_brief(
         snapshot: The sentiment snapshot to display
         warning: Optional warning message
     """
-    typer.echo(f"\n{'-' * 39}")
-    typer.echo("NEWS SENTIMENT")
-    typer.echo(f"{'-' * 39}")
+    console = Console()
+    console.print("")
 
     if warning:
-        typer.echo(f"\nWarning: {warning}")
-        typer.echo("\nNote: Sentiment is contextual information only.")
-        typer.echo("      It does NOT affect the risk assessment above.")
+        summary_text = Text()
+        summary_text.append(f"Warning: {warning}\n\n", style="bold yellow")
+        summary_text.append("Note: Sentiment is contextual information only.\n")
+        summary_text.append("      It does NOT affect the risk assessment above.")
+        panel = Panel(
+            summary_text,
+            title="[bold yellow]NEWS SENTIMENT[/bold yellow]",
+            border_style="yellow",
+            expand=False,
+        )
+        console.print(panel)
         return
 
-    typer.echo(
-        f"\nOverall: {snapshot.overall_sentiment.value.upper()} "
-        f"({snapshot.confidence_pct}% confidence)"
-    )
+    sentiment_colors = {
+        Sentiment.POSITIVE: "green",
+        Sentiment.NEUTRAL: "yellow",
+        Sentiment.NEGATIVE: "red",
+    }
+    overall_color = sentiment_colors.get(snapshot.overall_sentiment, "white")
 
     # Catalyst if available
     cat_counts = {}
     for h in snapshot.headlines:
         cat_counts[h.catalyst] = cat_counts.get(h.catalyst, 0) + 1
-    if cat_counts:
-        top_catalyst = max(cat_counts, key=cat_counts.get)
-        typer.echo(f"Catalyst: {top_catalyst.name}")
+    top_catalyst_name = max(cat_counts, key=cat_counts.get).name if cat_counts else "-"
 
-    typer.echo(f"Breakdown: +{snapshot.positive_count} / ={snapshot.neutral_count} / -{snapshot.negative_count}")
+    summary_text = Text()
+    summary_text.append("Overall: ", style="bold")
+    summary_text.append(snapshot.overall_sentiment.value.upper(), style=f"bold {overall_color}")
+    summary_text.append(f" ({snapshot.confidence_pct}% confidence)\n")
+    summary_text.append(f"Catalyst: {top_catalyst_name}\n")
+    summary_text.append(f"Breakdown: [green]+{snapshot.positive_count}[/green] / [yellow]={snapshot.neutral_count}[/yellow] / [red]-{snapshot.negative_count}[/red]")
+
+    panel = Panel(
+        summary_text,
+        title="[bold]NEWS SENTIMENT[/bold]",
+        border_style=overall_color,
+        expand=False,
+    )
+    console.print(panel)
