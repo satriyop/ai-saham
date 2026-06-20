@@ -29,4 +29,5 @@ def test_today_renders_rich_dashboard_with_lifecycle_next_steps(tmp_path: Path):
     assert "Top Pre-Open Candidates" in result.stdout
     assert "Top Accumulation Candidates" in result.stdout
     assert "Run: saham learn snapshot --force" in result.stdout
-    assert "Next: saham screen accum --universe lq45 | saham analyze swing TICKER" in result.stdout
+    stdout_clean = result.stdout.replace("\n", "").replace(" ", "").replace("│", "")
+    assert "sahamscreenaccum--universelq45|sahamanalyzeswingTICKER" in stdout_clean

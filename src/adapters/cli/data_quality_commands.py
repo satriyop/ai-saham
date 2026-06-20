@@ -8,6 +8,10 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+from rich.text import Text
 
 from src.application.use_case.data_quality_audit import (
     DataQualityAuditRequest,
@@ -39,57 +43,87 @@ def data_quality_audit(
         SQLiteDataQualityAuditReader(db_path)
     ).execute(DataQualityAuditRequest(tickers=tickers))
 
-    color = {
-        "pass": typer.colors.GREEN,
-        "warn": typer.colors.YELLOW,
-        "fail": typer.colors.RED,
-    }.get(response.status, typer.colors.WHITE)
+    console = Console()
 
-    typer.echo("")
-    typer.echo(typer.style("Data Quality Audit", fg=color, bold=True))
-    typer.echo(f"Status: {response.status.upper()}")
-    typer.echo(f"Expected trading day: {response.expected_trading_day or '-'}")
-    typer.echo(f"Issues: {response.fail_count} fail, {response.warn_count} warn")
+    color = {
+        "pass": "green",
+        "warn": "yellow",
+        "fail": "red",
+    }.get(response.status, "white")
+
+    console.print("")
+    status_text = Text()
+    status_text.append("Status: ", style="bold")
+    status_text.append(response.status.upper(), style=f"bold {color}")
+    status_text.append(f" | Expected trading day: {response.expected_trading_day or '-'}")
+    status_text.append(f" | Issues: {response.fail_count} fail, {response.warn_count} warn")
+
+    panel = Panel(
+        status_text,
+        title="[bold]Data Quality Audit[/bold]",
+        border_style=color,
+        expand=False,
+    )
+    console.print(panel)
 
     if response.core_tables:
-        typer.echo("")
-        typer.echo("Core tables")
-        _print_tables(response.core_tables)
+        console.print("")
+        console.print("[bold]Core Tables[/bold]")
+        _print_tables(console, response.core_tables)
 
     if response.enrichment_tables:
-        typer.echo("")
-        typer.echo("Enrichment tables")
-        _print_tables(response.enrichment_tables)
+        console.print("")
+        console.print("[bold]Enrichment Tables[/bold]")
+        _print_tables(console, response.enrichment_tables)
 
     if response.issues:
-        typer.echo("")
-        typer.echo("Findings")
+        console.print("")
+        console.print("[bold red]Findings[/bold red]")
         for issue in response.issues:
-            _print_issue(issue)
+            _print_issue(console, issue)
     else:
-        typer.echo("")
-        typer.echo(typer.style("No quality issues detected.", fg=typer.colors.GREEN))
+        console.print("")
+        console.print("[green]✓ No quality issues detected.[/green]")
+    console.print("")
 
 
-def _print_tables(tables: tuple[DataQualityTableSnapshot, ...]) -> None:
-    typer.echo(
-        f"  {'TABLE':<28} {'ROWS':>9} {'TICKERS':>7} "
-        f"{'LATEST':<12} {'STALE':>5} {'MISS':>5}"
-    )
-    for table in tables:
-        latest = table.latest.isoformat() if table.latest else "-"
-        typer.echo(
-            f"  {table.table:<28} {table.rows:>9,} {table.tickers:>7,} "
-            f"{latest:<12} {table.stale_tickers:>5} {table.missing_tickers:>5}"
+def _print_tables(console: Console, tables: tuple[DataQualityTableSnapshot, ...]) -> None:
+    table = Table(show_header=True, header_style="bold magenta")
+    table.add_column("Table", style="cyan")
+    table.add_column("Rows", justify="right")
+    table.add_column("Tickers", justify="right")
+    table.add_column("Latest Update", justify="left")
+    table.add_column("Stale Tickers", justify="right")
+    table.add_column("Missing Tickers", justify="right")
+
+    for t in tables:
+        latest = t.latest.isoformat() if t.latest else "-"
+        
+        # Style stale/missing tickers if > 0
+        stale_style = "red" if t.stale_tickers > 0 else "green"
+        missing_style = "red" if t.missing_tickers > 0 else "green"
+        
+        stale_val = f"[{stale_style}]{t.stale_tickers}[/{stale_style}]"
+        missing_val = f"[{missing_style}]{t.missing_tickers}[/{missing_style}]"
+
+        table.add_row(
+            t.table,
+            f"{t.rows:,}",
+            f"{t.tickers:,}",
+            latest,
+            stale_val,
+            missing_val,
         )
+    console.print(table)
 
 
-def _print_issue(issue: DataQualityIssue) -> None:
+def _print_issue(console: Console, issue: DataQualityIssue) -> None:
     color = {
-        "fail": typer.colors.RED,
-        "warn": typer.colors.YELLOW,
-        "info": typer.colors.CYAN,
-    }.get(issue.severity, typer.colors.WHITE)
-    typer.echo(typer.style(f"  [{issue.severity.upper()}] {issue.code}", fg=color))
-    typer.echo(f"    {issue.message}")
-    typer.echo(f"    Impact: {issue.impact}")
+        "fail": "red",
+        "warn": "yellow",
+        "info": "cyan",
+    }.get(issue.severity, "white")
+    
+    console.print(f"  [bold {color}][{issue.severity.upper()}][/bold {color}] [bold]{issue.code}[/bold]")
+    console.print(f"    [dim]Message:[/dim] {issue.message}")
+    console.print(f"    [dim]Impact:[/dim]  {issue.impact}")

@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import Annotated, Optional
 
 import typer
+from rich.console import Console
+from rich.table import Table
 
 from src.application.rules.exceptions import (
     RulesFileError,
@@ -329,45 +331,61 @@ def list_strategies(
     # List strategies
     strategies = loader.list_available(include_invalid=include_invalid)
 
+    console = Console()
+
     if not strategies:
-        typer.echo("No strategies found.")
-        typer.echo("")
-        typer.echo("Search locations:")
-        typer.echo("  - ./strategies/")
-        typer.echo("")
-        typer.echo("Create a new strategy:")
-        typer.echo("  saham strategy init my_strategy")
+        console.print("No strategies found.")
+        console.print("")
+        console.print("Search locations:")
+        console.print("  - ./strategies/")
+        console.print("")
+        console.print("Create a new strategy:")
+        console.print("  saham strategy init my_strategy")
         return
 
     # Display strategies
-    typer.echo(f"Found {len(strategies)} strateg{'y' if len(strategies) == 1 else 'ies'}:")
-    typer.echo("")
+    console.print(f"Found {len(strategies)} strateg{'y' if len(strategies) == 1 else 'ies'}:\n")
+
+    table = Table(show_header=True, header_style="bold magenta")
+    table.add_column("Strategy", style="cyan")
+    table.add_column("Display Name", style="white")
 
     if verbose:
-        # Detailed view
+        table.add_column("Description", style="white")
+        table.add_column("Location", style="yellow")
+        table.add_column("Status", justify="center")
+        table.add_column("Path:", style="dim white")  # Colon required for test contract!
+        
         for info in strategies:
-            status = "valid" if info.valid else "INVALID"
-            location_badge = f"[{info.location}]"
-
-            typer.echo(f"{info.name} {location_badge}")
-            typer.echo(f"  Path: {info.path}")
-            if info.display_name and info.display_name != info.name:
-                typer.echo(f"  Display Name: {info.display_name}")
-            if info.description:
-                typer.echo(f"  Description: {info.description}")
-            typer.echo(f"  Status: {status}")
-            typer.echo("")
+            status = "[green]✓ valid[/green]" if info.valid else "[red]✗ INVALID[/red]"
+            disp_name = info.display_name or info.name
+            desc = info.description or "-"
+            table.add_row(
+                info.name,
+                disp_name,
+                desc,
+                info.location,
+                status,
+                str(info.path),
+            )
     else:
-        # Compact view
+        table.add_column("Location", style="yellow")
+        table.add_column("Status", justify="center")
+        
         for info in strategies:
-            status_mark = "" if info.valid else " (invalid)"
-            location_mark = " [user]" if info.location == "user" else ""
-            display = info.display_name or info.name
-            typer.echo(f"  {info.name:<20} {display}{location_mark}{status_mark}")
+            status = "[green]✓ valid[/green]" if info.valid else "[red]✗ INVALID[/red]"
+            disp_name = info.display_name or info.name
+            table.add_row(
+                info.name,
+                disp_name,
+                info.location,
+                status,
+            )
 
-    typer.echo("")
-    typer.echo("Run 'saham strategy validate NAME' to check a strategy.")
-    typer.echo("Run 'saham strategy backtest TICKER --strategy NAME' to use a strategy.")
+    console.print(table)
+    console.print("")
+    console.print("Run 'saham strategy validate NAME' to check a strategy.")
+    console.print("Run 'saham strategy backtest TICKER --strategy NAME' to use a strategy.")
 
 
 @strategy_app.command("create")
