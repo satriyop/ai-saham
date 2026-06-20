@@ -160,13 +160,17 @@ shape is verified — otherwise the table cannot be populated.
 
 ## Verified Priority Order
 
-### Priority 1 — Staleness Visibility in Rankings (Finding 3)
+### Priority 1 — Staleness Visibility in Rankings (Finding 3) ✅ DONE (2026-06-20)
 
-Add `latest_candle_date` and `latest_broker_date` to `AccumulationCandidate`. Populate from
-data already loaded in `_build_candidate()`. Display a staleness flag in accumulation output.
+`latest_candle_date` and `latest_broker_date` added to `AccumulationCandidate` and populated
+from data already loaded in `_build_candidate()`. When the gap is one or more trading sessions,
+a yellow DATA LAG line appears in the detail output with the exact fetch command to resolve it.
 
-No new queries. No schema changes. Affects every daily `screen accum` session.
-61 of 87 tickers currently show no staleness indicator despite having mismatched data dates.
+Weekend gaps (Friday→Monday) correctly produce zero sessions and no warning.
+Shared utility `src/domain/services/trading_calendar.py` introduced with `trading_sessions_apart()`
+and `is_same_trading_session()` for reuse across any module.
+
+Commit: 8e7b148
 
 ### Priority 2 — Legacy 9 Stockbit Broker Rows (Finding 2)
 
@@ -225,7 +229,7 @@ All feature expansion should follow after Priority 1–3 above.
 |---|---|---|
 | 1. Broker source preference | Open | Closed — `ORDER BY source ASC` already correct |
 | 2. Legacy Stockbit rows | Open | Open — 9 rows on 2025-06-12 with no IDX equivalent |
-| 3. Candle freshness | Open | Open — 61 tickers, no staleness field in candidate output |
+| 3. Candle freshness | Open | **Done** (8e7b148) — DATA LAG per candidate with trading-session accuracy |
 | 4. Broker row quality | Open | Policy exists — `_is_usable_broker_summary` gates correctly; labels only |
 | 5. Candle provenance | Open | Columns exist; 21,420 rows all 'unknown'; no volume unit bug |
 | 6. Flow labeling | Open | Partial — swing only, not accumulation |
