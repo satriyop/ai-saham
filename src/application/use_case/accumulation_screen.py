@@ -131,6 +131,8 @@ class AccumulationScreenRequest:
     # BCI — Tier 1 broker codes for Broker Concentration Index scoring.
     # Default mirrors TIER1_FOREIGN_BROKERS; override via config to tune without code change.
     tier1_broker_codes: frozenset[str] = field(default_factory=lambda: TIER1_FOREIGN_BROKERS)
+    # Market cap floor — tickers below this IDR value are excluded (0 = disabled)
+    min_market_cap_idr: int = 0
 
 
 @dataclass
@@ -467,6 +469,22 @@ class AccumulationScreenUseCase:
                 result.fundamentals = self._fundamentals_provider.get_fundamentals(
                     ticker=result.ticker,
                 )
+
+            # Market cap floor — skip nano-caps that inflate IEV due to low float
+            if (
+                request.min_market_cap_idr > 0
+                and result.fundamentals is not None
+                and result.fundamentals.market_cap_idr is not None
+                and result.fundamentals.market_cap_idr < request.min_market_cap_idr
+            ):
+                logger.debug(
+                    "Skip %s: market_cap %dB IDR < floor %dB IDR",
+                    result.ticker,
+                    result.fundamentals.market_cap_idr // 1_000_000_000,
+                    request.min_market_cap_idr // 1_000_000_000,
+                )
+                skipped += 1
+                continue
 
             if self._ticker_notation_provider is not None:
                 result.ticker_notation = self._ticker_notation_provider.get_notation(

@@ -652,6 +652,7 @@ def accumulation_run(
         min_net_buy_days=max(1, min_streak),
         min_score=min_score,
         tier1_broker_codes=_SC.tier1_broker_codes,
+        min_market_cap_idr=_SC.min_market_cap_idr,
     )
 
     # --- Multi-window mode ---

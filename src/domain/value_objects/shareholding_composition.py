@@ -25,6 +25,8 @@ class ShareholdingComposition:
     individual_pct: float          # "Individual" retail category
     top_holder_name: str           # largest single named entity (not a category)
     top_holder_pct: float          # its ownership %
+    total_shares: int | None = None             # periods[0].total_shares.raw (total issued shares)
+    total_shares_formatted: str | None = None   # e.g. "123.28 B"
 
     @property
     def is_institutionally_held(self) -> bool:
@@ -43,10 +45,15 @@ class ShareholdingComposition:
         return " | ".join(parts) if parts else "N/A"
 
     def to_dict(self) -> dict:
-        return {
+        d = {
             "report_date": self.report_date.isoformat() if self.report_date else None,
             "institution_pct": round(self.institution_pct, 2),
             "individual_pct": round(self.individual_pct, 2),
             "top_holder_name": self.top_holder_name,
             "top_holder_pct": round(self.top_holder_pct, 2),
         }
+        if self.total_shares is not None:
+            d["total_shares"] = self.total_shares
+        if self.total_shares_formatted is not None:
+            d["total_shares_formatted"] = self.total_shares_formatted
+        return d

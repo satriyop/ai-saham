@@ -5,8 +5,10 @@ Calls /insider/shareholding/composition/companies/{ticker} and returns
 a ShareholdingComposition object with aggregated institution/individual/top-holder data.
 
 Actual API shape (confirmed 2026-06):
-  data.periods[0].report_date       → "2026-05-29"
-  data.periods[0].compositions[]    → list of {label, percentage.raw, ...}
+  data.periods[0].report_date                    → "2026-05-29"
+  data.periods[0].total_shares.raw               → "123275050000" (string, total issued shares)
+  data.periods[0].total_shares.formatted         → "123.28 B"
+  data.periods[0].compositions[]                 → list of {label, percentage.raw, ...}
 
 Category labels fall into two kinds:
   - Named entities (controlling shareholders, e.g. "DWIMURIA INVESTAMA ANDALAN")
@@ -77,9 +79,16 @@ CREATE TABLE IF NOT EXISTS shareholding_composition (
     institution_pct REAL,
     individual_pct REAL,
     top_holder_name TEXT,
-    top_holder_pct REAL
+    top_holder_pct REAL,
+    total_shares INTEGER,
+    total_shares_formatted TEXT
 )
 """
+
+_MIGRATE_COLUMNS = [
+    "ALTER TABLE shareholding_composition ADD COLUMN total_shares INTEGER",
+    "ALTER TABLE shareholding_composition ADD COLUMN total_shares_formatted TEXT",
+]
 
 
 def _parse_date(raw: str) -> date | None:
@@ -105,6 +114,17 @@ def _parse_composition(ticker: str, body: dict) -> ShareholdingComposition | Non
     compositions = period.get("compositions") or []
     if not isinstance(compositions, list):
         return None
+
+    total_shares: int | None = None
+    total_shares_formatted: str | None = None
+    ts = period.get("total_shares") or {}
+    if isinstance(ts, dict):
+        ts_raw = ts.get("raw")
+        try:
+            total_shares = int(str(ts_raw).replace(",", "")) if ts_raw is not None else None
+        except (ValueError, TypeError):
+            pass
+        total_shares_formatted = str(ts.get("formatted") or "") or None
 
     institution_pct = 0.0
     individual_pct = 0.0
@@ -133,6 +153,8 @@ def _parse_composition(ticker: str, body: dict) -> ShareholdingComposition | Non
         individual_pct=round(individual_pct, 2),
         top_holder_name=top_holder_name,
         top_holder_pct=round(top_holder_pct, 2),
+        total_shares=total_shares,
+        total_shares_formatted=total_shares_formatted,
     )
 
 
@@ -156,6 +178,11 @@ class StockbitShareholdingProvider(ShareholdingProvider):
         try:
             with sqlite3.connect(self._db_path) as conn:
                 conn.execute(_CREATE_TABLE)
+                for col_sql in _MIGRATE_COLUMNS:
+                    try:
+                        conn.execute(col_sql)
+                    except Exception:
+                        pass  # column already exists
         except Exception as e:
             logger.warning("shareholding: failed to create cache table: %s", e)
 
@@ -195,7 +222,8 @@ class StockbitShareholdingProvider(ShareholdingProvider):
             with sqlite3.connect(self._db_path) as conn:
                 row = conn.execute(
                     "SELECT fetched_date, report_date, institution_pct, individual_pct, "
-                    "top_holder_name, top_holder_pct FROM shareholding_composition WHERE ticker=?",
+                    "top_holder_name, top_holder_pct, total_shares, total_shares_formatted "
+                    "FROM shareholding_composition WHERE ticker=?",
                     (ticker,),
                 ).fetchone()
             if not row:
@@ -210,6 +238,8 @@ class StockbitShareholdingProvider(ShareholdingProvider):
                 individual_pct=float(row[3] or 0),
                 top_holder_name=str(row[4] or ""),
                 top_holder_pct=float(row[5] or 0),
+                total_shares=int(row[6]) if row[6] is not None else None,
+                total_shares_formatted=row[7],
             )
         except Exception as e:
             logger.warning("shareholding: cache read failed for %s: %s", ticker, e)
@@ -221,7 +251,8 @@ class StockbitShareholdingProvider(ShareholdingProvider):
                 conn.execute(
                     "INSERT OR REPLACE INTO shareholding_composition "
                     "(ticker, fetched_date, report_date, institution_pct, individual_pct, "
-                    "top_holder_name, top_holder_pct) VALUES (?,?,?,?,?,?,?)",
+                    "top_holder_name, top_holder_pct, total_shares, total_shares_formatted) "
+                    "VALUES (?,?,?,?,?,?,?,?,?)",
                     (
                         comp.ticker,
                         date.today().isoformat(),
@@ -230,6 +261,8 @@ class StockbitShareholdingProvider(ShareholdingProvider):
                         comp.individual_pct,
                         comp.top_holder_name,
                         comp.top_holder_pct,
+                        comp.total_shares,
+                        comp.total_shares_formatted,
                     ),
                 )
         except Exception as e:

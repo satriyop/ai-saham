@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 _SECTOR_88_URL = "https://exodus.stockbit.com/emitten/sectors/88/subsectors"
 _SECTOR_70_URL = "https://exodus.stockbit.com/emitten/sectors/70/subsectors"
 _COMPANY_URL = "https://exodus.stockbit.com/emitten/v3/sector/{sector}/subsector/{id}/company"
+_SCREENER_UNIVERSE_URL = "https://exodus.stockbit.com/screener/universe"
 
 # Known subsector IDs for sector 88 — used as fast-path fallback if discovery fails.
 _KNOWN_IDS: dict[str, int | str] = {
@@ -258,6 +259,39 @@ class StockbitUniverseProvider:
         tickers = self._fetch_tickers(subsector_id, sector_num)
         logger.info("Universe '%s': %d tickers", universe_key, len(tickers))
         return tickers
+
+    def fetch_universe_map(self) -> dict[str, int]:
+        """Fetch universe ID map from /screener/universe in a single call.
+
+        Returns:
+            dict mapping canonical universe name (lowercased) → subsector_id.
+            Empty dict on failure or unexpected response shape.
+
+        Note: Response shape is unconfirmed — this probes and logs the result.
+        Expected shape: {"data": [{"id": 550, "name": "LQ45", "sector_id": 88}, ...]}
+        """
+        try:
+            body = self._get(_SCREENER_UNIVERSE_URL)
+            if not body:
+                logger.debug("Empty response from screener/universe")
+                return {}
+            data = body.get("data")
+            if not isinstance(data, list):
+                logger.info("screener/universe: unexpected shape — data is %s: %r", type(data).__name__, str(body)[:300])
+                return {}
+            result: dict[str, int] = {}
+            for item in data:
+                if not isinstance(item, dict):
+                    continue
+                sid = item.get("id")
+                name = str(item.get("name") or "").strip()
+                if sid is not None and name:
+                    result[name.lower()] = int(sid)
+            logger.info("screener/universe: found %d universes: %s", len(result), list(result.keys())[:10])
+            return result
+        except Exception as e:
+            logger.warning("screener/universe fetch failed: %s", e)
+            return {}
 
     def fetch_all(self, keys: list[str] | None = None) -> dict[str, list[str]]:
         """Fetch ticker lists for multiple universes.

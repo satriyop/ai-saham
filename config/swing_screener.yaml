@@ -9,6 +9,12 @@ description: |
   All thresholds are configurable here — adjust as IHSG volatility
   regime and tick-size regulation evolves.
 
+screener:
+  # Market cap floor in IDR. Tickers with market_cap_idr below this are excluded.
+  # Set to 0 to disable. Example: 500_000_000_000 = 500B IDR (~mid-cap floor for IDX).
+  # Requires fundamentals_provider (Stockbit keystats) to be active.
+  min_market_cap_idr: 0
+
 resistance:
   # Minimum % headroom between current price and nearest resistance
   # (MA200 or 52-week high) required to keep ENTER verdict.

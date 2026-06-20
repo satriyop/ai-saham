@@ -42,6 +42,8 @@ class SwingConfig:
     building_min_streak: int = 5
     coiled_spring_bb_pctile: float = 0.20
     coiled_spring_min_score: float = 60.0
+    # screener: market cap floor (0 = disabled; e.g. 500_000_000_000 = 500B IDR)
+    min_market_cap_idr: int = 0
     # tier1 broker codes for BCI (Broker Concentration Index) scoring
     tier1_broker_codes: frozenset[str] = frozenset({"AK", "BK", "ZP", "KZ", "YU", "RX", "HD", "CP", "DR"})
     bci_cluster_min_count: int = 3
@@ -88,7 +90,10 @@ def load_swing_config(
             parsed = tuple(str(c).strip().upper() for c in raw if c)
             return parsed if parsed else default
 
+        sc = data.get("screener") or {}
+
         return SwingConfig(
+            min_market_cap_idr=_i(sc, "min_market_cap_idr", defaults.min_market_cap_idr),
             smart_money_brokers=_codes(sm, defaults.smart_money_brokers),
             noise_brokers=_codes(ns, defaults.noise_brokers),
             smart_weight=Decimal(str(_f(sm, "weight", float(defaults.smart_weight)))),
