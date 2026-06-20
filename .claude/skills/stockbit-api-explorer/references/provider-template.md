@@ -312,7 +312,7 @@ Repeat same display addition in `swing_commands.py` `_print_swing_output()`.
 
 ---
 
-## Layer 6 — Pre-warm in saham data update
+## Layer 6 — Pre-warm in saham fetch market
 
 `src/adapters/cli/update_commands.py` → `_fetch_enrichment()`
 

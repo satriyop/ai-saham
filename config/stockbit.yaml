@@ -3,7 +3,7 @@
 # This file contains the two things that change due to market structure or
 # Stockbit frontend updates — not implementation details like timeouts.
 #
-# To update an endpoint URL: run `saham stockbit spy` to discover the new URL
+# To update an endpoint URL: run `saham fetch stockbit spy` to discover the new URL
 # from DevTools, then update the value here. Note: if the response SHAPE also
 # changed, the paired parser in playwright_stockbit.py must be updated too.
 #
@@ -119,7 +119,7 @@ endpoints:
     url: "https://exodus.stockbit.com/corpaction/{ticker}?limit=50"
     trigger_page: "https://stockbit.com/stocks/{ticker}"
     # Returns: upcoming and recent corporate actions for one ticker.
-    # Response shape (exact field names to confirm via saham stockbit spy --target stock-profile):
+    # Response shape (exact field names to confirm via saham fetch stockbit spy --target stock-profile):
     #   data[].action_type / type       → action category string (e.g. "dividend", "rightissue")
     #   data[].ex_date / exDate         → ex-date (YYYY-MM-DD or DD/MM/YYYY)
     #   data[].cum_date / cumDate       → cum-date

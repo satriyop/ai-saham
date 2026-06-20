@@ -441,7 +441,7 @@ saham screen accum --universe cached --multi
 
 | | IDX public API | Stockbit |
 |---|---|---|
-| Auth required | No | JWT token |
+| Auth required | No | Browser session |
 | Foreign buy/sell totals | ✓ | ✓ |
 | Per-broker detail | ✗ | ✓ |
 | Which institution bought | ✗ | ✓ |

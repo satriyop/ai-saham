@@ -19,7 +19,6 @@ from src.domain.entities.broker_flow import (
     BrokerFlowPoint,
     BrokerSummary,
     BrokerTransaction,
-    BrokerType,
     ForeignFlowPoint,
     ForeignFlowSnapshot,
 )
@@ -252,11 +251,13 @@ class SQLiteBrokerRepository(BrokerDataRepository):
                 }
                 if "avg_buy_price" not in existing_cols:
                     conn.execute(
-                        "ALTER TABLE broker_daily_flow ADD COLUMN avg_buy_price TEXT NOT NULL DEFAULT '0'"
+                        "ALTER TABLE broker_daily_flow "
+                        "ADD COLUMN avg_buy_price TEXT NOT NULL DEFAULT '0'"
                     )
                 if "avg_sell_price" not in existing_cols:
                     conn.execute(
-                        "ALTER TABLE broker_daily_flow ADD COLUMN avg_sell_price TEXT NOT NULL DEFAULT '0'"
+                        "ALTER TABLE broker_daily_flow "
+                        "ADD COLUMN avg_sell_price TEXT NOT NULL DEFAULT '0'"
                     )
                 conn.commit()
             finally:
@@ -371,14 +372,14 @@ class SQLiteBrokerRepository(BrokerDataRepository):
             raise BrokerDataRepositoryError(f"Failed to save broker summaries: {e}") from e
 
     def get_broker_summary(self, ticker: str, target_date: date) -> BrokerSummary | None:
-        """Return single summary for a date; prefers Stockbit over IDX."""
+        """Return single summary for a date; prefers IDX over Stockbit."""
         try:
             with self._get_connection() as conn:
                 row = conn.execute(
                     """
                     SELECT * FROM broker_summaries
                     WHERE ticker = ? AND date = ?
-                    ORDER BY source DESC
+                    ORDER BY source ASC
                     LIMIT 1
                     """,
                     [ticker.upper(), target_date.isoformat()],
@@ -494,7 +495,9 @@ class SQLiteBrokerRepository(BrokerDataRepository):
             with self._get_connection() as conn:
                 conn.executemany(
                     """
-                    INSERT INTO foreign_flow_points (ticker, date, source, net_val, net_lot, avg_price)
+                    INSERT INTO foreign_flow_points (
+                        ticker, date, source, net_val, net_lot, avg_price
+                    )
                     VALUES (?, ?, ?, ?, ?, ?)
                     ON CONFLICT(ticker, date, source) DO UPDATE SET
                         net_val   = excluded.net_val,
@@ -831,4 +834,6 @@ class SQLiteBrokerRepository(BrokerDataRepository):
                 date.fromisoformat(row["max_date"]),
             )
         except sqlite3.Error as e:
-            raise BrokerDataRepositoryError(f"Failed to get broker daily flow date range: {e}") from e
+            raise BrokerDataRepositoryError(
+                f"Failed to get broker daily flow date range: {e}"
+            ) from e

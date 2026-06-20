@@ -12,6 +12,7 @@ Layer: Application
 
 from dataclasses import dataclass
 from datetime import date, timedelta
+from inspect import Parameter, signature
 
 from src.domain.entities.candle import Candle
 from src.domain.ports.market_data_provider import MarketDataProvider
@@ -128,7 +129,7 @@ class RefreshMarketDataUseCase:
             fetch_modes.add(fetch_mode)
             candles = self._provider.fetch_daily_ohlcv(ticker, start_date, fetch_end_date)
             if candles:
-                self._repository.save_candles(candles)
+                self._save_candles(candles)
 
         after_dates = {c.date for c in self._repository.get_candles(ticker)}
         added_count = len(after_dates - before_dates)
@@ -176,3 +177,23 @@ class RefreshMarketDataUseCase:
         if not candles:
             return None
         return candles[0].date, candles[-1].date
+
+    def _save_candles(self, candles: list[Candle]) -> None:
+        """Persist candles with provider metadata when the repository supports it."""
+        metadata = {
+            "source": getattr(self._provider, "provider_name", "unknown"),
+            "volume_unit": getattr(self._provider, "volume_unit", "unknown"),
+            "price_adjustment_policy": getattr(
+                self._provider,
+                "price_adjustment_policy",
+                "unknown",
+            ),
+        }
+        params = signature(self._repository.save_candles).parameters
+        accepts_metadata = "source" in params or any(
+            param.kind == Parameter.VAR_KEYWORD for param in params.values()
+        )
+        if accepts_metadata:
+            self._repository.save_candles(candles, **metadata)
+        else:
+            self._repository.save_candles(candles)

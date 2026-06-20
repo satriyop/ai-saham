@@ -41,6 +41,9 @@ class YahooFinanceProvider(MarketDataProvider):
             market_suffix: Suffix for ticker symbols (e.g., '.JK' for IDX)
         """
         self._market_suffix = market_suffix
+        self.provider_name = "yahoo"
+        self.volume_unit = "shares"
+        self.price_adjustment_policy = "yfinance_default"
 
     def fetch_daily_ohlcv(
         self,

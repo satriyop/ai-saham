@@ -18,7 +18,6 @@ Domain Port                    Infrastructure Adapters
 -----------                    -----------------------
 MarketDataProvider  <-------   YahooFinanceProvider 
                     <-------   IdxMarketDataProvider
-                    <-------   (Planned) AlphaVantageProvider
 
 BrokerDataProvider  <-------   IdxBrokerDataProvider
                     <-------   StockbitPlaywrightBrokerProvider
@@ -70,6 +69,7 @@ saham fetch market BBRI --days 730
 **Tradeoffs:**
 - Slower for large date ranges (one HTTP request per trading day, rate-limited to 1s delay)
 - Non-trading days return 403 (handled silently)
+- Volume is normalized to raw shares before persistence, matching Yahoo's stored unit.
 
 **Usage:**
 ```bash
@@ -81,18 +81,31 @@ saham fetch market BBCA --days 30 --provider idx              # Faster for small
 
 ## Broker Data Providers (Foreign Flow)
 
+The system has **two tiers** of broker/foreign-flow data with different granularity and accuracy.
+All four SQLite broker tables and their exact column schemas are documented below.
+
+### Provider Comparison
+
+| Capability | IDX (`IdxBrokerDataProvider`) | Stockbit (`StockbitPlaywrightBrokerProvider`) | CSV Import (`BrokerCsvAdapter`) |
+|---|---|---|---|
+| Auth required | None | Browser session (`saham fetch stockbit login`) | None (file-based) |
+| Foreign buy/sell lots | **Exact** (from `ForeignBuy`/`ForeignSell` fields, ÷100 for lots) | **Exact** | If provided |
+| Foreign buy/sell value | **Estimated** (volume × closing price × 100) | **Exact** (from broker transactions) | If provided |
+| Total trading value | **Exact** (from `Value` field) | **Synthetic** (sum of broker values, ~72% of true) | If provided |
+| Per-broker breakdown | **Not available** (empty top_buyers/top_sellers) | **Yes** (up to 25 per side, top 10 stored in JSON) | SIMPLE=no, DETAILED=yes |
+| Per-day per-broker time-series | **Not available** | **Yes** (15 tracked brokers, 365d history via paginated API) | **Not available** |
+| Source tag written to DB | `"idx"` | `"stockbit"` | `"csv-idx"` / `"csv-stockbit"` |
+
 ### IDX Public API
 
-**Provider:** `IdxBrokerDataProvider` (auto-selected when no Stockbit session found)
+**Provider:** `IdxBrokerDataProvider`
 
-- **Data type:** Foreign buy/sell lots, estimated foreign flow value
-- **Source:** IDX TradingSummary API (`idx.co.id`)
-- **Auth:** None required
-
-**Limitations:**
-- Per-broker breakdown (`top_buyers` / `top_sellers`) is not available
-- Foreign flow values are estimated as `volume * closing price` (IDX provides share volumes, not transaction values)
-- Foreign flow lots are exact (from `ForeignBuy` / `ForeignSell` fields)
+- **Endpoint:** `https://www.idx.co.id/primary/TradingSummary/GetStockSummary?date=YYYYMMDD`
+- **Rate limit:** 1s between requests, 3 retries with backoff
+- **Data for each ticker on each date:** `ForeignBuy` (shares), `ForeignSell` (shares), `Value` (IDR), `Volume` (shares)
+- **Foreign flow value is estimated** because IDX only provides share counts, not transaction values. The provider computes `foreign_buy_value = ForeignBuy × ClosePrice` and `foreign_sell_value = ForeignSell × ClosePrice`.
+- **Foreign flow lots are exact** (`ForeignBuy / 100`, `ForeignSell / 100`).
+- **Per-broker breakdown NOT available** — `top_buyers` and `top_sellers` are always empty tuples `()`.
 
 **Usage:**
 ```bash
@@ -102,15 +115,20 @@ saham fetch broker BBCA --days 90
 
 ### Stockbit
 
-**Provider:** `StockbitPlaywrightBrokerProvider` (auto-selected if authenticated)
+**Provider:** `StockbitPlaywrightBrokerProvider`
 
-- **Data type:** Full per-broker breakdown (top 10 buyers + sellers), exact foreign flow values
-- **Source:** Stockbit Exodus API (undocumented)
-- **Auth:** Browser session profile from `saham fetch stockbit login`
+- **Data source:** Stockbit Exodus API (`exodus.stockbit.com`), accessed via Bearer token extracted from browser session
+- **Auth:** Playwright persistent browser profile (`.stockbit_profile/`). Token TTL ~8-12h, in-process cache 30min.
+- **3 distinct API endpoints** used, each serving different data:
+
+| Endpoint | Used For | Writes Table |
+|---|---|---|
+| `/marketdetectors/{ticker}` | Per-stock top 25 net buyers/sellers | `broker_summaries` (source=`"stockbit"`) |
+| `/order-trade/broker/activity/historical?broker_codes={code}&symbols={ticker}` | Per-broker per-day timeseries (15 tracked brokers) | `broker_daily_flow` (source=`"stockbit"`) |
+| Same historical endpoint, but aggregated across 10 institutional proxy broker codes | Daily net foreign flow time-series | `foreign_flow_points` (source=`"stockbit"`) |
 
 **Setup:**
 ```bash
-# Browser-based login (recommended)
 saham fetch stockbit login
 ```
 
@@ -122,13 +140,12 @@ saham view broker top BBCA --date 2024-01-15
 
 ### CSV Import
 
-**Provider:** `BrokerCsvAdapter` (via `saham fetch broker-import`)
+**Provider:** `BrokerCsvAdapter` (via `saham fetch broker-import FILE`)
 
-- **Data type:** Broker summary data from external sources
-- **Formats:** SIMPLE (aggregate) or DETAILED (per-broker)
-- **Auto-detection:** Format + column mapping via `FormatDetector`
-
-**Supported date formats:** ISO, DD/MM/YYYY, MM/DD/YYYY, DD-MM-YYYY, YYYYMMDD
+- **Formats:** SIMPLE (aggregate flow) or DETAILED (per-broker transactions)
+- **Auto-detection:** FormatDetector compares header sets against known patterns
+- **Source tag:** `"csv-idx"` for SIMPLE, `"csv-stockbit"` for DETAILED
+- **Date formats supported:** ISO, DD/MM/YYYY, MM/DD/YYYY, DD-MM-YYYY, YYYYMMDD
 
 **Usage:**
 ```bash
@@ -171,163 +188,409 @@ ORDER BY date;
 > - `--provider` → candles source (default: `yahoo`)
 > - `--broker-provider` → broker flow source (default: auto-detect Stockbit → IDX)
 
-| Data | Default Source | Command | Table |
-|------|---------------|---------|-------|
-| **Daily OHLCV prices** | Yahoo Finance | `saham fetch market TICKER` | `candles` |
-| **Daily OHLCV prices (IDX)** | IDX TradingSummary API | `saham fetch market TICKER --provider idx` | `candles` |
-| **Foreign flow aggregate** | IDX (always uses IDX for accurate `total_value`) | `saham fetch market --broker-provider …` / `saham fetch broker` | `broker_summaries` |
-| **Per-broker daily flow** | Stockbit Exodus API (only source with per-broker data) | `saham fetch market` (auto when Stockbit available) / `saham fetch broker --provider stockbit-session` | `broker_daily_flow` |
-| **Foreign flow time-series** | IDX (broker_summaries) / Stockbit (historical API) | `saham fetch market` / `saham fetch broker` | `foreign_flow_points` |
-| **Foreign flow N-day snapshot** | Stockbit Exodus API (top foreign stocks) | `saham fetch broker-top-foreign` | `foreign_flow_snapshots` |
-| **Pre-open IEV + order books** | Stockbit Exodus API (Playwright) | `saham screen pre-open` | `iev_snapshots` |
-| **AI sentiment classification** | DeepSeek/Claude classifier | `saham analyze sentiment` | `sentiment_logs` |
-| **Sentiment price outcome** | Computed from sentiment_logs + candles | `saham analyze audit` | `sentiment_audits` |
+| Data | Written By (Command) | Written By | Table |
+|------|---------------------|------------|-------|
+| **Daily OHLCV prices** | `saham fetch market` | `RefreshMarketDataUseCase` | `candles` |
+| **Daily OHLCV prices (IDX)** | `saham fetch market --provider idx` | `RefreshMarketDataUseCase` | `candles` |
+| **Aggregated foreign flow + summary** | `saham fetch market` / `saham fetch broker TICKER` | `RefreshBrokerDataUseCase` / `FetchBrokerDataUseCase` | `broker_summaries` |
+| **Per-broker per-day time-series** | `saham fetch market` (auto) / `saham fetch broker TICKER --provider stockbit-session` | `FetchBrokerDailyFlowsUseCase` | `broker_daily_flow` |
+| **Net foreign flow time-series** | `saham fetch market` / `saham fetch broker TICKER` / `saham fetch broker-history TICKER` | Derived from summaries (Path A) + Stockbit historical (Path B) | `foreign_flow_points` |
+| **Foreign broker universe scan** | `saham fetch broker-top-foreign` | `StockbitPlaywrightBrokerProvider.fetch_foreign_top_stocks()` | `foreign_flow_snapshots` |
+| **Pre-open IEV snapshot (latest)** | `saham fetch iev` | `collect_iev()` (CLI adapter calls infrastructure directly) | `iev_snapshots` |
+| **IEV snapshot history (append log)** | `saham fetch iev` | `collect_iev()` (appended on every run) | `iev_snapshot_history` |
+| **Sector/industry metadata** | `saham fetch market` | `FetchMarketRefreshUseCase._fetch_meta()` | `stock_meta` |
+| **Ticker notation, listing board, UMA** | `saham fetch market` (enrichment) | `StockbitTickerNotationProvider` | `ticker_notation_cache` |
+| **Analyst consensus (buy/hold/sell)** | `saham fetch market` (enrichment) | `StockbitAnalystConsensusProvider` | `analyst_cache` |
+| **Insider transactions** | `saham fetch market` (enrichment) | `StockbitInsiderActivityProvider` | `insider_cache` |
+| **Seasonality (monthly return patterns)** | `saham fetch market` (enrichment) | `StockbitSeasonalityProvider` | `seasonality_cache` |
+| **Corporate action calendar** | `saham fetch market` (enrichment) | `StockbitCorporateActionRepository` | `corp_action_cache` |
+| **Shareholding composition** | `saham fetch market` (enrichment) | `StockbitShareholdingProvider` | `shareholding_composition` |
+| **Bandar detector (acc/dist scores)** | `saham fetch market` (enrichment) | `StockbitBandarDetectorProvider` | `bandar_detector` |
+| **Fundamental ratios (P/E, ROE, etc.)** | `saham fetch market` (enrichment) | `StockbitFundamentalsProvider` | `company_fundamentals` |
+| **AI sentiment classification** | `saham analyze sentiment` | `SentimentAnalysisUseCase` | `sentiment_logs` |
+| **Sentiment price outcome** | `saham analyze audit` | `SentimentAuditUseCase` | `sentiment_audits` |
 
-| SQLite Table | Columns | Sample Row |
-|-------------|---------|------------|
-| `candles` | `ticker, date, open, high, low, close, volume, created_at` | `BBCA\|2025-12-30\|7950\|8175\|7950\|8075\|101995600\|2026-01-25 19:19:09` |
-| `broker_summaries` | `ticker, date, source, foreign_buy_value, foreign_sell_value, foreign_buy_lot, foreign_sell_lot, total_value, total_lot, top_buyers_json, top_sellers_json, created_at` | `BBCA\|2026-01-26\|idx\|546023340000\|1338621480000\|713756\|1749832\|1617763560000\|2130441\|[]\|[]\|2026-01-27 07:20:14` |
-| `broker_daily_flow` | `ticker, date, broker_code, broker_name, source, buy_lot, sell_lot, net_lot, buy_value, sell_value, net_value, avg_price, buy_pct, sell_pct, created_at, avg_buy_price, avg_sell_price` | `BBCA\|2026-06-12\|AK\|UBS Sekuritas Indonesia\|stockbit\|943983\|848655\|95328\|567271847500\|510120457500\|57151390000\|6009.34\|52.66\|47.34\|2026-06-14 11:39:12\|6009.34\|6010.93` |
-| `foreign_flow_points` | `ticker, date, source, net_val, net_lot, avg_price, created_at` | `AALI\|2026-06-12\|stockbit\|-8654047500\|-13975\|6185.62\|2026-06-13 23:18:26` |
-| `foreign_flow_snapshots` | `ticker, snapshot_date, period_days, source, net_val, net_lot, created_at` | (populated on demand) |
-| `iev_snapshots` | `date, ticker, iev, rank, iep, fetched_at` | `2026-06-15\|BUMI\|1602630\|1\|165\|2026-06-15 05:53:44` |
-| `sentiment_logs` | `id, date, ticker, sentiment, catalyst, score` | `1\|2026-06-12\|AUDIT\|neutral\|general\|1.0` |
-| `sentiment_audits` | `log_id, days_after, price_delta_pct, audited_at` | (populated on demand) |
+---
 
-### Default Source per Table
+## Broker Data Flow — Detailed Trace
 
-| Table | Default Source | Controlled By | Command(s) |
-|-------|---------------|--------------|------------|
-| `candles` | Yahoo Finance | `--provider` | `saham fetch market TICKER` (use `--provider idx` for IDX) |
-| `broker_summaries` | IDX (always accurate `total_value`) | `--broker-provider` (IDX always used for summaries regardless) | `saham fetch market` / `saham fetch broker` |
-| `broker_daily_flow` | Stockbit Exodus API (IDX has no per-broker data) | `--broker-provider` | `saham fetch market` (auto when Stockbit available) / `saham fetch broker --provider stockbit-session` |
-| `foreign_flow_points` | IDX (from summaries) or Stockbit (historical API) | `--broker-provider` | `saham fetch market` / `saham fetch broker` |
-| `foreign_flow_snapshots` | Stockbit Exodus API | (dedicated command) | `saham fetch broker-top-foreign` |
-| `iev_snapshots` | Stockbit Exodus API (Playwright) | (dedicated command) | `saham screen pre-open` |
-| `sentiment_logs` | DeepSeek / Claude classifier | (dedicated command) | `saham analyze sentiment` |
-| `sentiment_audits` | Derived from sentiment_logs + candles | (dedicated command) | `saham analyze audit` |
+### Four SQLite Tables for Broker Data
 
-> [!NOTE]
-> `foreign_flow_points` is populated by **two independent code paths** that run during
-> `saham fetch market`:
->
-> 1. **Path A — Derived from broker_summaries** (`fetch_broker_data.py:119-130`): Every
->    time broker_summaries are fetched and saved, a `ForeignFlowPoint` is created from
->    each `BrokerSummary.foreign_net_value` and `foreign_net_lot`. Summaries always use
->    the IDX provider (accurate `total_value`), so Path A always writes **IDX-sourced**
->    points.
->
-> 2. **Path B — Direct historical fetch** (`update_commands.py:365-369`): If the active
->    broker provider implements `fetch_foreign_flow_history()`, the CLI calls it to get
->    richer per-date data (buy_vol, sell_vol, etc.). Only Stockbit provides this, so
->    Path B writes **Stockbit-sourced** points.
->
-> **Result:** The table holds data from both sources keyed by `(ticker, date, source)`.
-> IDX points (`source='idx'`) exist for every date summaries were fetched; Stockbit
-> points (`source='stockbit'`) exist only when Stockbit was the active provider. The
-> repository stores both — no overwrite, no merge. Downstream consumers (VWAP, trend
-> analysis) can pick by source or prefer one over the other.
+#### 1. `broker_summaries` — Daily Aggregated Foreign Flow
+
+**PK:** `(ticker, date, source)` — multiple sources can coexist for same (ticker, date)
+
+| Column | Type | Content | Source Detail |
+|--------|------|---------|---------------|
+| `ticker` | TEXT | Stock code | |
+| `date` | TEXT | Trading date (ISO) | |
+| `source` | TEXT | `"idx"` / `"stockbit"` / `"csv-idx"` / `"csv-stockbit"` | **IDX** = public API; **stockbit** = Stockbit marketdetectors endpoint (source=`"stockbit"` via `provider_name`) |
+| `foreign_buy_value` | TEXT (Decimal) | Total foreign buy IDR | IDX: estimated (shares * close); Stockbit: exact |
+| `foreign_sell_value` | TEXT (Decimal) | Total foreign sell IDR | Same estimation difference |
+| `foreign_buy_lot` | INTEGER | Foreign buy lots (shares/100) | Both exact |
+| `foreign_sell_lot` | INTEGER | Foreign sell lots | |
+| `total_value` | TEXT (Decimal) | Total market trade value IDR | IDX: **exact**; Stockbit: synthetic (sum of broker values, ~72% accuracy) |
+| `total_lot` | INTEGER | Total lots | |
+| `top_buyers_json` | TEXT (JSON null) | Top 10 net buyers `[BrokerTransaction]` | IDX: **null** (no per-broker data); Stockbit: populated |
+| `top_sellers_json` | TEXT (JSON null) | Top 10 net sellers | Same |
+| `created_at` | TEXT | Insert/update timestamp | Auto |
+
+**Writes to this table:**
+
+| Command | Provider | Source | top_buyers_json |
+|---------|----------|--------|-----------------|
+| `saham fetch market` (via `RefreshBrokerDataUseCase`) | `IdxBrokerDataProvider` **always** | `"idx"` | `null` |
+| `saham fetch broker TICKER` (via `FetchBrokerDataUseCase`) | `--provider idx` | `"idx"` | `null` |
+| `saham fetch broker TICKER --provider stockbit-session` | `StockbitPlaywrightBrokerProvider` | `"stockbit"` | populated |
+| `saham fetch broker-import FILE` (SIMPLE) | `BrokerCsvAdapter` | `"csv-idx"` | `null` |
+| `saham fetch broker-import FILE` (DETAILED) | `BrokerCsvAdapter` | `"csv-stockbit"` | populated |
+
+**Reads from this table:**
+
+| Command / Use Case | How | What Columns/Fields Used |
+|--------------------|-----|--------------------------|
+| `saham screen accum` (via `AccumulationScreenUseCase`) | `get_broker_summaries(ticker)` with `source=None` → dedup to 1 row per date, prefers IDX (`MIN(source)` = `"idx"`) | `foreign_buy_value`, `foreign_sell_value` → **foreign_net_value** (for streak, ratio, VWAP); `foreign_buy_lot` → VWAP denom; `total_value` → flow ratio; `date` → window filter |
+| `saham analyze swing TICKER` (via `build_flow_detail`) | `get_broker_summaries(ticker, end_date=as_of)` | `foreign_net_value` → total net flow, buy/sell session count, streak; `foreign_flow_ratio` → avg ratio |
+| `saham analyze swing TICKER` (via `build_broker_detail`, **fallback**) | `get_broker_summaries(ticker)` if `broker_daily_flow` empty | `top_buyers_json`, `top_sellers_json` → deserialized to `BrokerTransaction[]` for per-broker attribution |
+| `saham view broker flow TICKER` (via `GetBrokerDataUseCase`) | `get_broker_summaries(ticker, ...)` | All columns → display |
+| `saham view broker top TICKER` | `get_broker_summary(ticker, target_date)` | `top_buyers_json`, `top_sellers_json` → top buyers/sellers list |
+| `saham analyze regime` (via `MarketRegimeUseCase._foreign_flow_breadth`) | `get_broker_summaries(ticker)` for each universe ticker | Only `summaries[-1].foreign_net_value` (latest date only) for foreign flow breadth % |
+| `saham screen pre-open` (via `PreOpenScreenUseCase._assess_broker_signals`) | `get_broker_summaries(ticker, start=cutoff)` | `is_foreign_accumulating` → buy day count & streak tag; `foreign_buy_value` + `foreign_buy_lot` → Foreign VWAP |
+
+**Source preference when reading:** IDX (`"idx"`) is preferred over Stockbit because IDX `total_value` is exact. The repository uses `MIN(source)` per (ticker, date) — alphabetically `"csv-idx"` < `"idx"` < `"stockbit"`. Stockbit rows are **deleted** when a matching IDX row exists for the same (ticker, date).
+
+---
+
+#### 2. `broker_daily_flow` — Per-Broker Per-Day Time-Series
+
+**PK:** `(ticker, date, broker_code, source)`
+
+| Column | Type | Content |
+|--------|------|---------|
+| `ticker` | TEXT | Stock code |
+| `date` | TEXT | Trading date (ISO) |
+| `broker_code` | TEXT | Broker identifier (e.g. `"AK"`, `"YP"`, `"MS"`) |
+| `broker_name` | TEXT | Human-readable name |
+| `source` | TEXT | Always `"stockbit"` |
+| `buy_lot` | INTEGER | Lots bought by this broker |
+| `sell_lot` | INTEGER | Lots sold |
+| `net_lot` | INTEGER | Net lots (positive = net buyer) |
+| `buy_value` | TEXT (Decimal) | Buy value IDR |
+| `sell_value` | TEXT (Decimal) | Sell value IDR |
+| `net_value` | TEXT (Decimal) | Net value IDR |
+| `avg_buy_price` | TEXT (Decimal) | Avg buy price per share |
+| `avg_sell_price` | TEXT (Decimal) | Avg sell price per share |
+| `avg_price` | TEXT (Decimal) | Avg net price (dominant side) |
+| `buy_pct` | REAL | Broker's buy lots as % of total market buy lots |
+| `sell_pct` | REAL | Broker's sell lots as % of total market sell lots |
+| `created_at` | TEXT | Timestamp |
+
+**Writes:** ONLY `StockbitPlaywrightBrokerProvider` via `FetchBrokerDailyFlowsUseCase`. Triggered by:
+- `saham fetch market` (auto when Stockbit provider active)
+- `saham analyze swing TICKER --auto-refresh` (same path)
+- NOT available from standalone `saham fetch broker TICKER` (which only writes `broker_summaries`)
+
+The provider queries `/order-trade/broker/activity/historical` once per tracked broker code (15 codes), paginated (100 records/page), up to 365 days. Source=`"stockbit"`.
+
+**Reads:**
+
+| Command / Use Case | How | What Used |
+|--------------------|-----|-----------|
+| `saham screen accum` (via `AccumulationScreenUseCase._broker_quality_by_ticker`) | `get_broker_daily_flows(ticker, end_date)` | `broker_code` → BCI tier classification (CLUSTER/STABLE/RETAIL); `net_lot` → per-broker net aggregation |
+| `saham analyze swing TICKER` (via `build_broker_detail`, **preferred path**) | `get_broker_daily_flows(ticker, end_date)` | `broker_code`, `broker_name`, `net_value` → classified as "smart money", "noise", or "neutral" via named broker sets; `buy_value`, `sell_value` → buyer/seller detail display |
+
+---
+
+#### 3. `foreign_flow_points` — Net Foreign Flow Time-Series
+
+**PK:** `(ticker, date, source)`
+
+| Column | Type | Content |
+|--------|------|---------|
+| `ticker` | TEXT | Stock code |
+| `date` | TEXT | Trading date (ISO) |
+| `source` | TEXT | `"idx"` or `"stockbit"` |
+| `net_val` | TEXT (Decimal) | Net foreign value (positive = net buy) |
+| `net_lot` | INTEGER | Net foreign lots |
+| `avg_price` | TEXT (Decimal) | Average price. IDX: always `0`; Stockbit: exact from API |
+| `created_at` | TEXT | Timestamp |
+
+**Populated by TWO independent code paths:**
+
+| Path | Trigger | Source | avg_price | Description |
+|------|---------|--------|-----------|-------------|
+| **A (Derived from summaries)** | Every `FetchBrokerDataUseCase.execute()` — always runs when `broker_summaries` are saved | `"idx"` (from IDX provider) | `0` | `ForeignFlowPoint(ticker, date, net_val=foreign_buy_value-foreign_sell_value, net_lot=foreign_buy_lot-foreign_sell_lot, avg_price=0, source="idx")` |
+| **B (Stockbit historical)** | `RefreshBrokerDataUseCase._refresh_foreign_flow_history()` — runs during `saham fetch market` and `saham fetch broker-history TICKER` | `"stockbit"` (from Stockbit provider name) | **Exact** | Fetched from Stockbit `/order-trade/broker/activity/historical?broker_codes=AK,ZP,...&symbols={ticker}` aggregated across 10 institutional proxy codes |
+
+When called via standalone `saham fetch broker TICKER --provider stockbit-session`, the derived path (A) writes with source=`"stockbit"` (drawn from `StockbitPlaywrightBrokerProvider.provider_name`).
+
+**Reads from this table:**
+- `saham view broker history TICKER` — the **only** reader. Displays cached flow time-series.
+- `RefreshBrokerDataUseCase` — reads it only for status reporting (count rows before/after).
+
+**No analysis/screening command directly reads `foreign_flow_points`.** All accumulation, swing, regime, and pre-open analysis reads from `broker_summaries` instead.
+
+---
+
+#### 4. `foreign_flow_snapshots` — Universe Scan Cache
+
+**PK:** `(ticker, snapshot_date, period_days, source)`
+
+| Column | Type | Content |
+|--------|------|---------|
+| `ticker` | TEXT | Stock code |
+| `snapshot_date` | TEXT | Date of snapshot |
+| `period_days` | INTEGER | Lookback window (e.g. 7) |
+| `source` | TEXT | Always `"stockbit"` |
+| `net_val` | TEXT (Decimal) | Net foreign flow in period |
+| `net_lot` | INTEGER | Net foreign lots |
+| `created_at` | TEXT | Timestamp |
+
+**Writes:** `saham fetch broker-top-foreign` → `StockbitPlaywrightBrokerProvider.fetch_foreign_top_stocks()` → queries `/order-trade/broker/activity?broker_code=AK,ZP,...` for top foreign-broker traded stocks across the universe.
+
+**Reads:** `saham view broker top-foreign` — displays cached snapshot.
+
+---
+
+### Summary: Which Tables Each Analysis Command Reads
+
+| Command | `broker_summaries` | `broker_daily_flow` | `foreign_flow_points` | `foreign_flow_snapshots` |
+|---------|:---:|:---:|:---:|:---:|
+| `saham screen accum` | **CORE** — net_buy_days, streak, VWAP, flow_ratio | **BCI** — per-broker tier analysis | — | — |
+| `saham analyze swing TICKER` | **CORE** — flow detail stats | **PREFERRED** — per-broker attribution | — | — |
+| `saham analyze regime` | **YES** — latest foreign_net_value per ticker | — | — | — |
+| `saham screen pre-open` | **YES** — accumulation tag + Foreign VWAP | — | — | — |
+| `saham trade backtest-swing` | **CORE** (via AccumulationScreenUseCase) | **BCI** (via AccumulationScreenUseCase) | — | — |
+| `saham analyze swing-compare` | (via SwingBacktestUseCase) | (via SwingBacktestUseCase) | — | — |
+| `saham analyze accum-audit` | (via AccumulationAuditUseCase) | — | — | — |
+| `saham view broker flow` | **YES** — display | — | — | — |
+| `saham view broker top` | **YES** — display top_buyers/sellers | — | — | — |
+| `saham view broker history` | — | — | **YES** — display | — |
+| `saham view broker top-foreign` | — | — | — | **YES** — display |
+
+### Source Preference When Reading
+
+| Table | Preferred Source | Why |
+|-------|----------------|-----|
+| `broker_summaries` | **IDX** (`MIN(source)` → `"idx"`) | IDX `total_value` is exact; Stockbit synthetic ~72% of true. Stockbit rows are deleted when IDX row exists for same (ticker,date). |
+| `foreign_flow_points` | **Stockbit** (`MAX(source)` → `"stockbit"`) | Stockbit `avg_price` is exact; IDX `avg_price` is always 0. Both sources coexist per (ticker,date). |
+
+### Staleness Detection
+
+The only TTL check is in `RefreshBrokerDataUseCase._summary_fetch_ranges()`:
+1. Reads `get_date_range(ticker, source="idx")` → earliest and latest cached summary dates
+2. If `earliest > requested_start + 7 days`: triggers **backfill** fetch from `requested_start` to `earliest - 1`
+3. If `latest < last_trading_day` (determined from `^JKSE` candles): triggers **forward-fill** from `latest + 1` to `end_date`
+4. If no data at all: **initial** full-range fetch
+
+Analysis commands (`screen accum`, `analyze swing`, `screen pre-open`) have **no TTL checks** — they always read cached data only. Staleness is the caller's responsibility:
+- `saham analyze swing` auto-refreshes by default (`--auto-refresh`)
+- `saham screen accum` reads only — requires pre-warming via `saham fetch market`
+
+### Foreign Flow Data Paths Diagram
+
+For `saham fetch market BBCA` (the primary write path):
+
+```
+RefreshMarketDataUseCase::execute()
+  │
+  ├─ _fetch_candles() ─── YahooFinanceProvider ───→ candles table
+  │
+  └─ _fetch_broker() ─── RefreshBrokerDataUseCase::execute()
+       │
+       ├─ 1. _refresh_daily_flow() ─── FetchBrokerDailyFlowsUseCase
+       │    └─ StockbitPlaywrightBrokerProvider.fetch_broker_daily_flows()
+       │         └─ /order-trade/broker/activity/historical (15 broker codes)
+       │         └─ UPSERT INTO broker_daily_flow (source="stockbit")
+       │                      ↓
+       │              [ONLY when Stockbit available]
+       │
+       ├─ 2. _summary_fetch_ranges() ─── checks broker_summaries date range for source="idx"
+       │    └─ Computes backfill/forward/initial ranges
+       │    └─ For each range: FetchBrokerDataUseCase(self._idx_summary_provider, repo)
+       │         ├─ IdxBrokerDataProvider.fetch_broker_summaries()
+       │         │    └─ GET /GetStockSummary?date=YYYYMMDD (1s rate-limited)
+       │         ├─ UPSERT INTO broker_summaries (source="idx")
+       │         └─ Derive ForeignFlowPoint from each summary
+       │              └─ UPSERT INTO foreign_flow_points (source="idx", avg_price=0)
+       │
+       └─ 3. _refresh_foreign_flow_history() ─── StockbitPlaywrightBrokerProvider
+            └─ fetch_foreign_flow_history(ticker, days)
+                 └─ /order-trade/broker/activity/historical (10 institutional codes)
+                 └─ UPSERT INTO foreign_flow_points (source="stockbit", avg_price=exact)
+```
+
+For standalone `saham fetch broker BBCA --provider stockbit-session`:
+
+```
+FetchBrokerDataUseCase::execute()
+  │
+  ├─ StockbitPlaywrightBrokerProvider.fetch_broker_summaries()
+  │    └─ /marketdetectors/{ticker}?period=BROKER_SUMMARY_PERIOD_...
+  │    └─ Returns BrokerSummary with top_buyers[10] + top_sellers[10]
+  │
+  ├─ UPSERT INTO broker_summaries (source="stockbit", top_buyers_json=populated)
+  │
+  └─ Derive ForeignFlowPoint from each summary
+       └─ UPSERT INTO foreign_flow_points (source="stockbit", avg_price=0)
+```
+
+For standalone `saham fetch broker BBCA` (default, IDX):
+
+```
+FetchBrokerDataUseCase::execute()
+  │
+  ├─ IdxBrokerDataProvider.fetch_broker_summaries()
+  │    └─ GET /GetStockSummary?date=YYYYMMDD
+  │    └─ Returns BrokerSummary with empty top_buyers/top_sellers
+  │
+  ├─ UPSERT INTO broker_summaries (source="idx", top_buyers_json=null)
+  │
+  └─ Derive ForeignFlowPoint from each summary
+       └─ UPSERT INTO foreign_flow_points (source="idx", avg_price=0)
+```
 
 ---
 
 ## Data Flow
 
-### Fetch Flow
+### Candle Fetch Flow
 
 ```
 User: saham fetch market BBCA --days 365 --provider yahoo
          |
          v
-CLI Adapter
+CLI Adapter → FetchMarketRefreshUseCase
          |
          v
-FetchMarketDataUseCase
+   RefreshMarketDataUseCase._fetch_candles()
          |
          +---> Check cache (SQLiteRepository)
          |           |
          |           v
-         |     Has recent data?
+         |     Has recent data + not --refresh?
          |           |
-         |     No    |    Yes (and not --refresh)
-         |           |           |
-         v           v           v
+         |     No    |    Yes
+         |           |        |
+         v           v        v
    Provider selected by --provider flag
          |
-         +--- Yahoo? ---> YahooFinanceProvider
-         |                     |
-         |                     v
-         |              Download from Yahoo
+         +--- Yahoo? ---> YahooFinanceProvider (Yahoo Finance API, .JK suffix)
          |
-         +--- IDX?   ---> IdxMarketDataProvider
-                               |
-                               v
-                        Download from IDX API
+         +--- IDX?   ---> IdxMarketDataProvider (IDX TradingSummary API)
          |
          v
-   Save to cache (SQLiteRepository)
+   Save to candles table (SQLiteRepository)
          |
          v
-   Return data
+   Return Candle[]
 ```
 
-### Broker Fetch Flow
-
-For `saham fetch market` (auto-detects provider):
+### Broker Fetch Flow — `saham fetch market` (orchestrated batch)
 
 ```
-User: saham fetch market BBCA --days 90
+User: saham fetch market BBCA --days 90 --broker-provider auto
          |
          v
 CLI Adapter
          |
          v
-FetchBrokerDataUseCase
+RefreshBrokerDataUseCase (3 independent streams)
          |
-         v
-   Auto-select provider:
-         |
-          +--- Stockbit session exists + valid?
-         |       |
-         |       v
-         |   StockbitPlaywrightBrokerProvider  (per-broker detail, exact values)
-         |
-         +--- Otherwise:
-                 |
-                 v
-             IdxBrokerDataProvider  (no auth, estimated values)
-         |
-         v
-   Save to cache (SQLiteBrokerRepository)
-         |
-         v
-   Return BrokerSummary[]
+         ├── 1. Daily per-broker flow ─── FetchBrokerDailyFlowsUseCase
+         │        │
+         │        └── StockbitPlaywrightBrokerProvider.fetch_broker_daily_flows()
+         │             (15 broker codes, paginated to 365d)
+         │             └── UPSERT broker_daily_flow (source="stockbit")
+         │             [skipped if Stockbit not available]
+         │
+         ├── 2. IDX summaries ─── FetchBrokerDataUseCase(self._idx_summary_provider)
+         │        │               ALWAYS uses IdxBrokerDataProvider
+         │        │               Checks gaps: backfill old + forward-fill recent
+         │        │
+         │        └── IdxBrokerDataProvider.fetch_broker_summaries()
+         │             (GET /GetStockSummary, 1s rate-limit, 3 retries)
+         │             │
+         │             ├── UPSERT broker_summaries (source="idx", top_buyers=null)
+         │             └── Derive ForeignFlowPoint → UPSERT foreign_flow_points (source="idx", avg_price=0)
+         │
+         └── 3. Stockbit flow history ─── fetch_foreign_flow_history()
+                  │
+                  └── StockbitPlaywrightBrokerProvider.fetch_foreign_flow_history()
+                       (10 institutional proxy codes, aggregated)
+                       └── UPSERT foreign_flow_points (source="stockbit", avg_price=exact)
+                       [skipped if Stockbit not available]
 ```
 
-For `saham fetch broker` (uses explicit `--provider` flag):
+For `saham fetch broker TICKER` (standalone, single provider):
 
 ```
 User: saham fetch broker BBCA --provider stockbit-session
          |
          v
-   Provider selected by --provider flag:
+FetchBrokerDataUseCase.execute()
          |
-          +--- --provider idx (default)?
-         |       v
-         |   IdxBrokerDataProvider
-         |
-          +--- --provider stockbit-session?
-                 v
-             StockbitPlaywrightBrokerProvider
-         |
-         v
-   Save to cache (SQLiteBrokerRepository)
-         |
-         v
-   Return BrokerSummary[]
+          ├── 1. Check cache for source="stockbit"
+         │       └── Cached + not --refresh? Return from cache
+         │
+         ├── 2. Check auth
+         │       └── is_authenticated() — Stockbit: browser session check
+         │
+         ├── 3. Fetch from provider
+         │       └── StockbitPlaywrightBrokerProvider.fetch_broker_summaries()
+         │            (/marketdetectors/{ticker}, top 25 buyers/sellers)
+         │
+          ├── 4. Save summaries
+          │       └── UPSERT broker_summaries (source="stockbit",
+          │            top_buyers_json=populated, top_sellers_json=populated)
+          │
+          └── 5. Derive flow points
+                   └── UPSERT foreign_flow_points (source="stockbit", avg_price=0)
 ```
 
-Default for `saham fetch broker` is `--provider idx` (no auth, estimated values).
-Use `--provider stockbit-session` for per-broker detail and exact values.
+Default for `saham fetch broker TICKER` is `--provider idx` (no auth, estimated values, no per-broker detail).
+Use `--provider stockbit-session` for per-broker detail and exact foreign values.
+
+Note: `saham fetch market` and `saham fetch broker` use **different write paths**:
+- `fetch market` always uses `IdxBrokerDataProvider` for summaries → source=`"idx"`
+- `fetch broker` uses the selected provider → source varies by `--provider` flag
+
+---
+
+## IEV / Pre-Open Data
+
+**Two related tables** store IEV (Indicative Equilibrium Value) mover rankings captured during the IDX pre-open auction window (08:45–09:00 WIB).
+
+| Table | Type | Purpose |
+|-------|------|---------|
+| `iev_snapshots` | Upsert (canonical) | One row per (date, ticker) — always the latest snapshot. Backward-compatible reader table. |
+| `iev_snapshot_history` | Append-only log | New row inserted on every `saham fetch iev` run. Used for NCP-locked delta computation via `get_ncp_snapshot()` and intraday session deltas via `get_iev_delta()`. |
+
+Both tables share the same columns: `date`, `ticker`, `iev` (volume), `rank`, `iep` (price, nullable), `is_ncp_locked` (1 if captured at/after 08:56 WIB per Kep-00003/BEI/04-2025). The history table adds an auto-increment `id` and `collected_at` timestamp.
+
+**NCP sticky rule:** Once `is_ncp_locked` is set to 1 for a (date, ticker) in the canonical table, later pre-NCP runs cannot downgrade it to 0.
+
+**Write path:** `saham fetch iev` calls `collect_iev()` in `intraday_workflow_commands.py` — no application use case layer; the CLI adapter instantiates `PlaywrightStockbitProvider` (infrastructure) and `SQLiteIEVRepository` (infrastructure) directly.
+
+---
+
+## Stockbit Enrichment Caches
+
+When `saham fetch market` runs with a Stockbit provider available, `_fetch_enrichment()` pre-populates 8 cache tables per ticker. These are **read-only** by analysis commands and have provider-specific TTL logic. An additional `stock_meta` table is populated by `_fetch_meta()`.
+
+| Table | Populated By | TTL | Content |
+|-------|-------------|-----|---------|
+| `stock_meta` | `FetchMarketRefreshUseCase._fetch_meta()` | — | Sector/industry classification from Yahoo or IDX |
+| `ticker_notation_cache` | `StockbitTickerNotationProvider` | Varies | Listing board (Main/Development/Acceleration), UMA flag, suspension info, corporate action status |
+| `analyst_cache` | `StockbitAnalystConsensusProvider` | Varies | Buy/hold/sell counts + average price target |
+| `insider_cache` | `StockbitInsiderActivityProvider` | Varies | Director/commissioner transactions (last 365 days) |
+| `seasonality_cache` | `StockbitSeasonalityProvider` | Varies | Monthly average return %, win rate %, backtest window |
+| `corp_action_cache` | `StockbitCorporateActionRepository` | Varies | Dividend/split/rights/warrant/bonus/tender events |
+| `shareholding_composition` | `StockbitShareholdingProvider` | 7 days | Institutional vs individual ownership %, top holder |
+| `bandar_detector` | `StockbitBandarDetectorProvider` | Daily | Broker accumulation/distribution scores |
+| `company_fundamentals` | `StockbitFundamentalsProvider` | 7 days | P/E TTM, ROE, net profit margin, Piotroski F-Score, 52w high/low |
+
+All enrichment tables are **per-ticker** caches. They are fetched during `saham fetch market` enrichment phase and consumed by analysis commands (`saham analyze swing`, `saham screen accum`, etc.) without network calls.
 
 ### Analysis Flow
 
@@ -403,6 +666,7 @@ The system validates incoming data:
 | Yahoo delays | Data may be 15-20min delayed | Accept for daily analysis |
 | Split adjustments | Historical prices adjusted | Use adjusted close |
 | Missing days | Holidays/weekends excluded | Expected behavior |
+| Legacy candle provenance | Older databases may contain candle rows written before `source`, `volume_unit`, and `price_adjustment_policy` existed. Those rows are migrated with `unknown` provenance until refreshed. | Run `saham fetch audit` to identify unknown provenance, then refresh affected tickers. New Yahoo and IDX candle fetches persist volume in raw shares with explicit provider metadata. |
 
 ---
 

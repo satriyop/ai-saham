@@ -19,3 +19,11 @@ def test_yahoo_provider_preserves_qualified_ticker():
     provider = YahooFinanceProvider()
 
     assert provider._to_yahoo_ticker("BBCA.JK") == "BBCA.JK"
+
+
+def test_yahoo_provider_exposes_candle_provenance_metadata():
+    provider = YahooFinanceProvider()
+
+    assert provider.provider_name == "yahoo"
+    assert provider.volume_unit == "shares"
+    assert provider.price_adjustment_policy == "yfinance_default"

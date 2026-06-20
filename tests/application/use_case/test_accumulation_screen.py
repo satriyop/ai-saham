@@ -4,12 +4,12 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from src.application.use_case.accumulation_screen import (
+    BCI_CLUSTER,
+    BCI_RETAIL,
+    BCI_STABLE,
+    TIER1_FOREIGN_BROKERS,
     AccumulationScreenRequest,
     AccumulationScreenUseCase,
-    BCI_CLUSTER,
-    BCI_STABLE,
-    BCI_RETAIL,
-    TIER1_FOREIGN_BROKERS,
 )
 from src.domain.entities.broker_flow import BrokerDailyFlow, BrokerSummary
 from src.domain.entities.candle import Candle
@@ -132,8 +132,7 @@ def test_screen_window_uses_latest_broker_sessions_not_calendar_days():
     session_dates = _weekdays(date(2026, 1, 1), 9)
     as_of = session_dates[-1]
     candles = [
-        _candle("BBCA", date(2025, 12, 1) + timedelta(days=i), Decimal("100"))
-        for i in range(45)
+        _candle("BBCA", date(2025, 12, 1) + timedelta(days=i), Decimal("100")) for i in range(45)
     ]
     summaries = [_summary("BBCA", day, Decimal("110")) for day in session_dates]
 
@@ -156,6 +155,49 @@ def test_screen_window_uses_latest_broker_sessions_not_calendar_days():
     assert candidate.net_buy_days == 7
     assert candidate.consecutive_streak == 7
     assert candidate.window_days == 7
+
+
+def test_screen_ignores_unsafe_broker_summary_rows():
+    session_dates = _weekdays(date(2026, 1, 1), 8)
+    as_of = session_dates[-1]
+    candles = [
+        _candle("BBCA", date(2025, 12, 1) + timedelta(days=i), Decimal("100")) for i in range(45)
+    ]
+    valid_summaries = [_summary("BBCA", day, Decimal("110")) for day in session_dates[:-1]]
+    unsafe_latest = BrokerSummary(
+        ticker="BBCA",
+        date=session_dates[-1],
+        top_buyers=(),
+        top_sellers=(),
+        foreign_buy_value=Decimal("999999999999"),
+        foreign_sell_value=Decimal("0"),
+        foreign_buy_lot=10_000,
+        foreign_sell_lot=0,
+        total_value=Decimal("0"),
+        total_lot=0,
+    )
+
+    use_case = AccumulationScreenUseCase(
+        broker_repository=MockBrokerRepository([*valid_summaries, unsafe_latest]),
+        market_repository=MockMarketRepository(candles),
+    )
+
+    response = use_case.execute(
+        AccumulationScreenRequest(
+            tickers=["BBCA"],
+            window_days=7,
+            min_net_buy_days=1,
+            as_of_date=as_of,
+        )
+    )
+
+    candidate = response.candidates[0]
+    assert candidate.total_days == 7
+    assert candidate.net_buy_days == 7
+    assert candidate.total_net_value == sum(
+        (s.foreign_net_value for s in valid_summaries),
+        Decimal("0"),
+    )
 
 
 def _daily_flow(ticker: str, day: date, broker_code: str, net_lot: int) -> BrokerDailyFlow:
@@ -208,8 +250,7 @@ class MockBrokerRepositoryWithDaily(MockBrokerRepository):
 def _make_use_case(summaries, daily_flows=None):
     session_dates = _weekdays(date(2026, 1, 1), 10)
     candles = [
-        _candle("BBCA", date(2025, 12, 1) + timedelta(days=i), Decimal("100"))
-        for i in range(45)
+        _candle("BBCA", date(2025, 12, 1) + timedelta(days=i), Decimal("100")) for i in range(45)
     ]
     return (
         AccumulationScreenUseCase(
@@ -234,7 +275,9 @@ def test_bci_cluster_when_three_or_more_tier1_codes_are_net_buyers():
     use_case, _ = _make_use_case(summaries, daily_flows)
 
     response = use_case.execute(
-        AccumulationScreenRequest(tickers=["BBCA"], window_days=7, min_net_buy_days=1, as_of_date=as_of)
+        AccumulationScreenRequest(
+            tickers=["BBCA"], window_days=7, min_net_buy_days=1, as_of_date=as_of
+        )
     )
     c = response.candidates[0]
 
@@ -255,7 +298,9 @@ def test_bci_stable_when_one_or_two_tier1_codes_are_net_buyers():
     use_case, _ = _make_use_case(summaries, daily_flows)
 
     response = use_case.execute(
-        AccumulationScreenRequest(tickers=["BBCA"], window_days=7, min_net_buy_days=1, as_of_date=as_of)
+        AccumulationScreenRequest(
+            tickers=["BBCA"], window_days=7, min_net_buy_days=1, as_of_date=as_of
+        )
     )
     c = response.candidates[0]
 
@@ -275,7 +320,9 @@ def test_bci_retail_when_no_tier1_codes_are_net_buyers():
     use_case, _ = _make_use_case(summaries, daily_flows)
 
     response = use_case.execute(
-        AccumulationScreenRequest(tickers=["BBCA"], window_days=7, min_net_buy_days=1, as_of_date=as_of)
+        AccumulationScreenRequest(
+            tickers=["BBCA"], window_days=7, min_net_buy_days=1, as_of_date=as_of
+        )
     )
     c = response.candidates[0]
 
@@ -291,7 +338,9 @@ def test_bci_none_when_no_daily_flow_data():
     use_case, _ = _make_use_case(summaries, daily_flows=None)
 
     response = use_case.execute(
-        AccumulationScreenRequest(tickers=["BBCA"], window_days=7, min_net_buy_days=1, as_of_date=as_of)
+        AccumulationScreenRequest(
+            tickers=["BBCA"], window_days=7, min_net_buy_days=1, as_of_date=as_of
+        )
     )
     c = response.candidates[0]
 
@@ -312,12 +361,14 @@ def test_bci_counts_all_net_buyers_not_just_top5():
         _daily_flow("BBCA", session_dates[0], "XL", 800),
         _daily_flow("BBCA", session_dates[0], "XC", 700),
         _daily_flow("BBCA", session_dates[0], "DR", 600),  # DR is Tier 1
-        _daily_flow("BBCA", session_dates[0], "AK", 50),   # AK Tier 1, rank 6
+        _daily_flow("BBCA", session_dates[0], "AK", 50),  # AK Tier 1, rank 6
     ]
     use_case, _ = _make_use_case(summaries, daily_flows)
 
     response = use_case.execute(
-        AccumulationScreenRequest(tickers=["BBCA"], window_days=7, min_net_buy_days=1, as_of_date=as_of)
+        AccumulationScreenRequest(
+            tickers=["BBCA"], window_days=7, min_net_buy_days=1, as_of_date=as_of
+        )
     )
     c = response.candidates[0]
 
@@ -327,6 +378,7 @@ def test_bci_counts_all_net_buyers_not_just_top5():
 
 
 # ── tier1_broker_codes passable via request ───────────────────────────────
+
 
 def test_tier1_codes_default_to_module_constant():
     req = AccumulationScreenRequest(tickers=["BBCA"])
@@ -344,14 +396,19 @@ def test_tier1_codes_override_changes_bci():
 
     # Default tier1: YP not included → BCI RETAIL
     resp_default = use_case.execute(
-        AccumulationScreenRequest(tickers=["BBCA"], window_days=7, min_net_buy_days=1, as_of_date=as_of)
+        AccumulationScreenRequest(
+            tickers=["BBCA"], window_days=7, min_net_buy_days=1, as_of_date=as_of
+        )
     )
     assert resp_default.candidates[0].bci_label == BCI_RETAIL
 
     # Custom tier1 including YP → BCI STABLE
     resp_custom = use_case.execute(
         AccumulationScreenRequest(
-            tickers=["BBCA"], window_days=7, min_net_buy_days=1, as_of_date=as_of,
+            tickers=["BBCA"],
+            window_days=7,
+            min_net_buy_days=1,
+            as_of_date=as_of,
             tier1_broker_codes=frozenset({"YP"}),
         )
     )
@@ -373,8 +430,7 @@ def test_screen_attaches_ticker_notation_without_changing_score():
     session_dates = _weekdays(date(2026, 1, 1), 7)
     as_of = session_dates[-1]
     candles = [
-        _candle("BTEK", date(2025, 12, 1) + timedelta(days=i), Decimal("100"))
-        for i in range(45)
+        _candle("BTEK", date(2025, 12, 1) + timedelta(days=i), Decimal("100")) for i in range(45)
     ]
     summaries = [_summary("BTEK", day, Decimal("110")) for day in session_dates]
 

@@ -195,6 +195,46 @@ class TestSQLiteBrokerRepository:
         result = repository.get_broker_summary("XXXX", date(2024, 1, 15))
         assert result is None
 
+    def test_get_summary_prefers_idx_when_multiple_sources_exist(self, repository):
+        """Single-date summary reads should use the same IDX-first policy as range reads."""
+        repository.save_broker_summaries([
+            BrokerSummary(
+                ticker="BBCA",
+                date=date(2024, 1, 15),
+                top_buyers=(),
+                top_sellers=(),
+                foreign_buy_value=Decimal("100000000"),
+                foreign_sell_value=Decimal("50000000"),
+                foreign_buy_lot=1000,
+                foreign_sell_lot=500,
+                total_value=Decimal("1000000000"),
+                total_lot=10000,
+                source="stockbit",
+            ),
+            BrokerSummary(
+                ticker="BBCA",
+                date=date(2024, 1, 15),
+                top_buyers=(),
+                top_sellers=(),
+                foreign_buy_value=Decimal("200000000"),
+                foreign_sell_value=Decimal("50000000"),
+                foreign_buy_lot=2000,
+                foreign_sell_lot=500,
+                total_value=Decimal("2000000000"),
+                total_lot=20000,
+                source="idx",
+            ),
+        ])
+
+        single = repository.get_broker_summary("BBCA", date(2024, 1, 15))
+        ranged = repository.get_broker_summaries("BBCA")
+
+        assert single is not None
+        assert single.source == "idx"
+        assert single.total_value == Decimal("2000000000")
+        assert len(ranged) == 1
+        assert ranged[0].source == "idx"
+
     def test_has_data_returns_true_when_covered(self, repository, sample_summary):
         """Should return True when date range is covered."""
         repository.save_broker_summary(sample_summary)
