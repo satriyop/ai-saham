@@ -926,34 +926,15 @@ def confirm_open(
     )
 
 
-def confirm_log(
-    confirmation: Annotated[
-        Optional[Path],
-        typer.Option(
-            "--confirmation",
-            help="Path to confirmation sidecar JSON",
-        ),
-    ] = None,
-    journal: Annotated[
-        Optional[Path],
-        typer.Option(
-            "--journal",
-            help="Path to intraday confirmation CSV journal",
-        ),
-    ] = None,
-) -> None:
-    """
-    Append the latest `saham trade confirm` result to the intraday confirmation journal.
-
-    The journal is idempotent by (confirmed_at, ticker), so repeated logs for the
-    same confirmation run do not duplicate rows.
-    """
+def _confirm_log_impl(confirmation_path: Path, journal_path: Path) -> None:
+    """Core intraday log logic — called by both the legacy subcommand and the unified trade log."""
     from src.infrastructure.persistence.intraday_confirmation_csv import (
         IntradayConfirmationCsvStore,
     )
-
-    confirmation_path = confirmation or DEFAULT_CONFIRMATION_PATH
-    journal_path = journal or DEFAULT_CONFIRMATION_JOURNAL_PATH
+    from src.infrastructure.persistence.trade_journal_jsonl_writer import (
+        TradeJournalJsonlWriter,
+        intraday_entry_to_record,
+    )
 
     if not confirmation_path.exists():
         typer.echo(
@@ -987,14 +968,47 @@ def confirm_log(
         for row in data.get("confirmations", [])
     ]
 
-    store = IntradayConfirmationCsvStore(journal_path)
-    count = store.append(entries)
+    csv_store = IntradayConfirmationCsvStore(journal_path)
+    count = csv_store.append(entries)
+
     if count == 0:
         typer.echo(
             f"Already logged for {confirmed_at} — no new rows added ({journal_path})"
         )
     else:
+        # Dual-write to unified trades.jsonl
+        jsonl_store = TradeJournalJsonlWriter(journal_path.parent / "trades.jsonl")
+        for entry in entries:
+            jsonl_store.append(intraday_entry_to_record(entry))
         typer.echo(f"Logged {count} confirmation(s) for {confirmed_at} → {journal_path}")
+
+
+def confirm_log(
+    confirmation: Annotated[
+        Optional[Path],
+        typer.Option(
+            "--confirmation",
+            help="Path to confirmation sidecar JSON",
+        ),
+    ] = None,
+    journal: Annotated[
+        Optional[Path],
+        typer.Option(
+            "--journal",
+            help="Path to intraday confirmation CSV journal",
+        ),
+    ] = None,
+) -> None:
+    """
+    Append the latest `saham trade confirm` result to the intraday confirmation journal.
+
+    The journal is idempotent by (confirmed_at, ticker), so repeated logs for the
+    same confirmation run do not duplicate rows.
+    """
+    _confirm_log_impl(
+        confirmation_path=confirmation or DEFAULT_CONFIRMATION_PATH,
+        journal_path=journal or DEFAULT_CONFIRMATION_JOURNAL_PATH,
+    )
 
 
 def confirm_review(
