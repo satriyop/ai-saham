@@ -172,24 +172,37 @@ and `is_same_trading_session()` for reuse across any module.
 
 Commit: 8e7b148
 
-### Priority 2 — Legacy 9 Stockbit Broker Rows (Finding 2)
+### Priority 2 — Legacy 9 Stockbit Broker Rows (Finding 2) ✅ DONE (2026-06-20)
 
-Delete or reclassify the 9 `source='stockbit'` rows from 2025-06-12 that have no IDX
-equivalent. These are the only broker summary rows where a Stockbit synthetic total is the
-sole source. Low effort, removes a known data quality ambiguity.
+9 `source='stockbit'` rows from 2025-06-12 deleted directly from `broker_summaries`.
+These had no IDX equivalent and carried synthetic total_value. `broker_summaries` is now
+100% `source='idx'`.
 
-### Priority 3 — Candle Provenance Backfill (Finding 5)
+### Priority 2b — Stockbit Synthetic total_value (not in original Codex findings) ✅ DONE (2026-06-20)
 
-21,420 rows with `source/volume_unit='unknown'` make the provenance audit report a universal
-warning with no actionable resolution. Two options:
-- Re-fetch candle history with provenance columns enabled (slow but clean)
-- Write a best-effort migration that assigns `source='yahoo'` and `volume_unit='shares'` to
-  existing rows where the volume scale matches share-level magnitude (cross-validate against
-  broker `total_value` as shown above)
+`_parse_marketdetectors_response()` was summing only the top 25 net-buyer/seller rows,
+producing a synthetic `total_value` covering ~72% of true market turnover (BBCA cross-check).
 
-The migration approach is reasonable given the cross-check confirms shares-scale consistency
-across the entire dataset. Tag historical rows as `source='yahoo_inferred'` to preserve
-auditability.
+Fixed by adding `_fetch_historical_summary_totals()` which calls
+`/company-price-feed/historical/summary/{ticker}` for true IDR turnover. Verified:
+Stockbit and IDX now return identical `total_value`/`total_lot` for BBCA 2026-06-17
+(exact match, 0% divergence).
+
+Broker summary source made config-driven via `config/data_sources.yaml`
+(`broker_summary_source: idx | stockbit`) — no code change needed to swap providers.
+
+Commits: 313c134 (fix), 803ef69 (config separation)
+
+### Priority 3 — Candle Provenance Backfill (Finding 5) ✅ DONE (2026-06-20)
+
+21,420 historical candle rows tagged via one-time SQL migration:
+- `source='yahoo_inferred'` (distinguished from `'yahoo'` written by live fetch path)
+- `volume_unit='shares'` (confirmed by cross-check: `close × volume ≈ IDX total_value`)
+- `price_adjustment_policy='yfinance_default'`
+
+152 new rows added by the same-day refresh carry `source='yahoo'` directly from the
+fetch path. The audit no longer reports a universal unknown-provenance warning.
+New fetches continue to write correct provenance automatically via `refresh_market_data.py`.
 
 ### Priority 4 — Enrichment Missing vs Neutral (Finding 7)
 
@@ -228,12 +241,14 @@ All feature expansion should follow after Priority 1–3 above.
 | Finding | Codex Status | Actual Status |
 |---|---|---|
 | 1. Broker source preference | Open | Closed — `ORDER BY source ASC` already correct |
-| 2. Legacy Stockbit rows | Open | Open — 9 rows on 2025-06-12 with no IDX equivalent |
+| 2. Legacy Stockbit rows | Open | **Done** — 9 rows deleted; `broker_summaries` 100% idx |
 | 3. Candle freshness | Open | **Done** (8e7b148) — DATA LAG per candidate with trading-session accuracy |
 | 4. Broker row quality | Open | Policy exists — `_is_usable_broker_summary` gates correctly; labels only |
-| 5. Candle provenance | Open | Columns exist; 21,420 rows all 'unknown'; no volume unit bug |
+| 5. Candle provenance | Open | **Done** — 21,420 rows tagged `yahoo_inferred`; new fetches write `yahoo` |
 | 6. Flow labeling | Open | Partial — swing only, not accumulation |
 | 7. Enrichment display | Open | Open — missing shown as neutral |
 | 8. Adapter thinness | Open | Open — 735-line adapter, no enrichment use case |
 | Broker concentration | Proposed | Already built as `bandar_detector` |
 | Per-analyst history | Proposed | Endpoint shape unverified; do not build schema yet |
+| Stockbit synthetic total | Not in Codex | **Done** (313c134) — real total from `/historical/summary`; 0% IDX divergence |
+| Data source config | Not in Codex | **Done** (803ef69) — `config/data_sources.yaml` controls broker/candle source |
