@@ -244,10 +244,26 @@ Provider line in `accumulation_display.py` now branches on `response.provider`:
 
 Matches the label already present in `swing_analysis_display.py:607`. Commit: 1e78819
 
-### Priority 7 — Adapter Thinness (Finding 8)
+### Priority 7 — Adapter Thinness (Finding 8) ✅ DONE (2026-06-20)
 
-Architecture refactor. No correctness risk today. Address when `fetch_market_commands.py`
-needs extension — do not refactor proactively.
+`_fetch_enrichment()` in `fetch_market_commands.py` was 107 lines owning cache-freshness
+policy, fetch orchestration, error handling, and status aggregation for 8 Stockbit enrichment
+providers — all adapter-layer policy violations per CLAUDE.md.
+
+Extracted to `src/application/use_case/refresh_stockbit_enrichment.py`:
+- `EnrichmentTask` dataclass: `(label, is_fresh: Callable[[], bool], fetch: Callable[[], Any])`
+- `RefreshStockbitEnrichmentUseCase.execute()` owns the policy loop — no infrastructure imports
+- Status string format unchanged: `"analyst+bandar  ✓(insider,season,...)"` / `"ERR:..."`
+
+`_fetch_enrichment()` in the adapter is now a 50-line thin wrapper: builds the 8 `EnrichmentTask`
+objects from provider lambdas, delegates to use case, returns `.status`. Guard clauses
+(Stockbit provider check, index ticker skip) remain in the adapter — those decide *whether* to
+call, which is legitimately an adapter decision.
+
+`EnrichmentTask` callable design decouples the use case from all 8 concrete provider types.
+Tests use plain lambdas — no Playwright, SQLite, or provider infrastructure needed.
+
+Commit: 298c5e7
 
 ---
 
@@ -274,7 +290,7 @@ All feature expansion should follow after Priority 1–3 above.
 | 5. Candle provenance | Open | **Done** — 21,420 rows tagged `yahoo_inferred`; new fetches write `yahoo` |
 | 6. Flow labeling | Open | **Done** (1e78819) — inst desk proxy label on accumulation provider line |
 | 7. Enrichment display | Open | **Done** (d6c5e61) — dim MISSING line per candidate lists absent fields |
-| 8. Adapter thinness | Open | Open — 735-line adapter, no enrichment use case |
+| 8. Adapter thinness | Open | **Done** (298c5e7) — `RefreshStockbitEnrichmentUseCase` extracted; adapter now thin |
 | Broker concentration | Proposed | Already built as `bandar_detector` |
 | Per-analyst history | Proposed | Endpoint shape unverified; do not build schema yet |
 | Stockbit synthetic total | Not in Codex | **Done** (313c134) — real total from `/historical/summary`; 0% IDX divergence |
