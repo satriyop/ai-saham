@@ -14,7 +14,7 @@ This document explains the conceptual building blocks of the trading system — 
   │  DATA INGESTION                    single │ universe │ batch        │
   │  saham fetch market TICKER --days N                                 │
   │  saham fetch market --universe lq45 --days N                        │
-  │  saham fetch broker TICKER --provider stockbit-session                      │
+  │  saham fetch broker TICKER --provider stockbit                      │
   │             ↓ stores into ↓                                         │
   │  ┌─────────────────────────────────────────────────────────┐        │
   │  │  SQLite: candles + broker_summaries + broker_flow_points│        │

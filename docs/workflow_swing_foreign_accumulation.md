@@ -951,7 +951,7 @@ saham screen accum TICKER1 TICKER2 --multi
 - `sustained` pattern lebih reliable dari `fresh rotation` — tapi lebih lambat terdeteksi
 - Paper trade minimal 20 setup menggunakan `saham trade log swing` + `saham trade review swing` sebelum sizing besar
 - Data broker IDX (default) adalah data T+0 — akurat tapi mungkin 1 hari delay di beberapa ticker
-- Gunakan `--provider stockbit-session` untuk `saham fetch broker` jika butuh data lebih granular per-broker (butuh auth)
+- Gunakan `--provider stockbit` untuk `saham fetch broker` jika butuh data lebih granular per-broker (butuh auth)
 
 ---
 

@@ -50,7 +50,7 @@ from src.infrastructure.persistence.sqlite_broker_repository import (
 )
 
 # Supported providers
-PROVIDERS = ("idx", "stockbit-session")
+PROVIDERS = ("idx", "stockbit")
 DEFAULT_PROVIDER = "idx"
 
 _DEFAULT_PROFILE_DIR = Path(".stockbit_profile")
@@ -60,7 +60,7 @@ def _create_provider(provider_name: str) -> BrokerDataProvider:
     """Create a broker data provider by name."""
     if provider_name == "idx":
         return IdxBrokerDataProvider()
-    elif provider_name == "stockbit-session":
+    elif provider_name == "stockbit":
         from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
         return StockbitPlaywrightBrokerProvider()
     else:
@@ -98,7 +98,7 @@ def broker_status() -> None:
             typer.echo(
                 "Stockbit-Session provider: "
                 + typer.style(f"Active{age_str}", fg=typer.colors.GREEN)
-                + " — use --provider stockbit-session"
+                + " — use --provider stockbit"
             )
         else:
             typer.echo(
@@ -156,11 +156,11 @@ def broker_fetch(
 
     Providers:
         idx       - IDX public API (default, no auth required)
-        stockbit-session - Stockbit browser session (run 'saham fetch stockbit login')
+        stockbit - Stockbit browser session (run 'saham fetch stockbit login')
 
     Examples:
         saham fetch broker BBCA                       # IDX provider (default)
-        saham fetch broker BBCA --provider stockbit-session
+        saham fetch broker BBCA --provider stockbit
         saham fetch broker BBCA --days 90             # Last 90 days
         saham fetch broker BBCA --refresh             # Force refresh
         saham fetch broker BBCA -s 2024-01-01 -e 2024-06-30
@@ -215,7 +215,7 @@ def broker_fetch(
 
         # For Stockbit providers, also fetch exact historical foreign flow
         # (avg_price) so the daily foreign-flow series is complete.
-        if not response.from_cache and provider_name == "stockbit-session":
+        if not response.from_cache and provider_name == "stockbit":
             points = provider.fetch_foreign_flow_history(ticker, days=days)
             if points:
                 repository.save_foreign_flow_points(points)
@@ -475,8 +475,8 @@ def broker_top_foreign(
     ] = 20,
     provider: Annotated[
         str,
-        typer.Option("--provider", help="Provider: stockbit-session"),
-    ] = "stockbit-session",
+        typer.Option("--provider", help="Provider: stockbit"),
+    ] = "stockbit",
     db_path: Annotated[
         Path,
         typer.Option("--db", help="SQLite database path"),
@@ -555,8 +555,8 @@ def broker_history(
     ] = 365,
     provider: Annotated[
         str,
-        typer.Option("--provider", help="Provider: stockbit-session"),
-    ] = "stockbit-session",
+        typer.Option("--provider", help="Provider: stockbit"),
+    ] = "stockbit",
     db_path: Annotated[
         Path,
         typer.Option("--db", help="SQLite database path"),

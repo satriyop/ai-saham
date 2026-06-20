@@ -442,7 +442,7 @@ def test_print_table_summary_does_not_truncate_impact(monkeypatch, tmp_path: Pat
         lambda **_: [
             DataUpdateTableStatus(
                 table="foreign_flow_points",
-                source="stockbit-session",
+                source="stockbit",
                 rows=4532,
                 tickers=44,
                 range_label="2025-06-12..2026-06-17",
@@ -458,7 +458,7 @@ def test_print_table_summary_does_not_truncate_impact(monkeypatch, tmp_path: Pat
         db_path=tmp_path / "data.db",
         stock_tickers=["BBCA"],
         candles_provider="yahoo",
-        broker_provider_name="stockbit-session",
+        broker_provider_name="stockbit",
         no_meta=False,
         candles_only=False,
         broker_only=False,

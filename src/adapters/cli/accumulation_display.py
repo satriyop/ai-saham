@@ -345,7 +345,7 @@ def display_results(
         typer.echo(f"Provider: {response.provider} (aggregate foreign flow)")
         typer.echo(
             "  For per-broker detail: run `saham fetch stockbit login`,"
-            " then fetch with `--provider stockbit-session`"
+            " then fetch with `--provider stockbit`"
         )
     typer.echo("")
     typer.echo("FLOW%: avg net foreign % of total daily turnover (positive = accumulating)")

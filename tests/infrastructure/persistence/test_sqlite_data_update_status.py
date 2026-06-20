@@ -94,7 +94,7 @@ def test_status_reports_independent_touched_tables(tmp_path: Path):
         db_path,
         ["BBCA"],
         candles_provider="yahoo",
-        broker_provider_name="stockbit-session",
+        broker_provider_name="stockbit",
         no_meta=False,
         candles_only=False,
         broker_only=False,
@@ -107,7 +107,7 @@ def test_status_reports_independent_touched_tables(tmp_path: Path):
     assert by_table["candles"].status == "ready"
     assert by_table["broker_summaries"].status == "ready"
     assert by_table["foreign_flow_points"].status == "ready"
-    assert by_table["foreign_flow_points"].source == "stockbit-session"
+    assert by_table["foreign_flow_points"].source == "stockbit"
     assert by_table["analyst_cache"].status == "ready"
     assert by_table["stock_meta"].status == "missing"
     assert by_table["broker_daily_flow"].status == "missing"

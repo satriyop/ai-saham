@@ -554,7 +554,7 @@ Two providers are available for fetching broker/foreign flow data:
 | Provider | Auth Required | Data | Best For |
 |----------|--------------|------|----------|
 | **`idx`** (default) | None | Foreign flow (lots + estimated values), OHLCV, total volume | Quick setup, no auth hassle |
-| **`stockbit-session`** | Browser session (Playwright) | Foreign flow (exact values) + top broker breakdown | Per-broker analysis |
+| **`stockbit`** | Browser session (Playwright) | Foreign flow (exact values) + top broker breakdown | Per-broker analysis |
 
 The **IDX provider** uses the public idx.co.id API — no registration or token needed. It provides per-stock foreign buy/sell data in lots (values are estimated from volume × closing price).
 
@@ -577,7 +577,7 @@ saham fetch broker BBCA
 
 # Explicitly specify provider
 saham fetch broker BBCA --provider idx
-saham fetch broker BBCA --provider stockbit-session
+saham fetch broker BBCA --provider stockbit
 
 # Fetch 90 days of history
 saham fetch broker BBRI --days 90
@@ -597,7 +597,7 @@ saham fetch broker BBCA --refresh
 | `--start` | `-s` | — | Start date (YYYY-MM-DD) |
 | `--end` | `-e` | — | End date (YYYY-MM-DD) |
 | `--refresh` | `-r` | false | Force refresh from provider |
-| `--provider` | `-P` | idx | Data provider (idx, stockbit-session) |
+| `--provider` | `-P` | idx | Data provider (idx, stockbit) |
 | `--db` | | ./data.db | Database path |
 
 ### Setting Up Stockbit (Optional)
@@ -2480,7 +2480,7 @@ saham view broker flow BBCA --days 20
 saham view broker flow BBRI --days 20
 
 # Step 3: Check top brokers (requires Stockbit session provider)
-saham fetch broker BBCA --provider stockbit-session --days 30
+saham fetch broker BBCA --provider stockbit --days 30
 saham view broker top BBCA --date 2025-01-27
 
 # Step 4: Fetch price data for backtesting

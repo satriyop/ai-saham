@@ -216,7 +216,7 @@ def test_data_freshness_does_not_warn_for_friday_data_on_sunday():
         broker_repo=FakeRangeRepository((date(2026, 1, 1), date(2026, 6, 12))),
         refresh_actions=(
             "candles=cached-current",
-            "broker(stockbit-session)=cached-current",
+            "broker(stockbit)=cached-current",
         ),
     )
 

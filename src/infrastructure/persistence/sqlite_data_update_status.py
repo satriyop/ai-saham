@@ -48,9 +48,7 @@ def build_data_update_table_statuses(
     """
     today = today or date.today()
     stock_tickers = [t.upper() for t in tickers if not t.startswith("^")]
-    broker_source_value = (
-        "stockbit" if broker_provider_name == "stockbit-session" else broker_provider_name
-    )
+    broker_source_value = broker_provider_name
 
     specs = [
         _TableSpec(
@@ -88,7 +86,7 @@ def build_data_update_table_statuses(
             "date",
             source_column="source",
             source_value=broker_source_value,
-            applicable=not candles_only and broker_provider_name == "stockbit-session",
+            applicable=not candles_only and broker_provider_name == "stockbit",
             skipped_reason="provider has no per-broker daily flow",
         ),
         _TableSpec(

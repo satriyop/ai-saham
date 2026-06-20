@@ -248,7 +248,7 @@ class ForeignFlowPoint:
     net_val: Decimal   # foreign net value (positive = net buy)
     net_lot: int
     avg_price: Decimal  # average price for the period; 'idx'=close price approx, 'stockbit'=exact
-    source: str = "stockbit"  # e.g. 'idx' | 'stockbit' | 'stockbit-session'
+    source: str = "stockbit"  # e.g. 'idx' | 'stockbit'
 
 
 # Backward-compatible alias for older code paths. The data represents aggregate

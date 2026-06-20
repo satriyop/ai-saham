@@ -463,7 +463,7 @@ saham fetch broker BBCA --days 30
 
 # Or use Stockbit for broker-level detail
 saham fetch stockbit login
-saham fetch broker BBCA --provider stockbit-session
+saham fetch broker BBCA --provider stockbit
 
 # View foreign flow summary
 saham view broker flow BBCA --days 20

@@ -100,7 +100,7 @@ class FetchMarketRefreshUseCase:
         ticker_list = self._with_benchmark_first(ticker_list)
         enrichment_available = (
             not request.no_enrichment
-            and request.broker_provider_name == "stockbit-session"
+            and request.broker_provider_name == "stockbit"
         )
 
         ok_count = 0

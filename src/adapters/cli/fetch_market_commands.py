@@ -211,15 +211,15 @@ def _create_broker_provider(name: str | None):
       1. Playwright session (.stockbit_profile/) — preferred; no token file needed
       2. IDX public API — always available fallback
     """
-    if name == "stockbit-session":
+    if name == "stockbit":
         from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
-        return StockbitPlaywrightBrokerProvider(), "stockbit-session"
+        return StockbitPlaywrightBrokerProvider(), "stockbit"
     if name == "idx":
         return IdxBrokerDataProvider(), "idx"
     if name is not None:
         raise ValueError(
             "Unknown broker provider: "
-            f"{name}. Choose from: idx, stockbit-session"
+            f"{name}. Choose from: idx, stockbit"
         )
 
     # Auto-detect
@@ -227,7 +227,7 @@ def _create_broker_provider(name: str | None):
         from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
         provider = StockbitPlaywrightBrokerProvider()
         if provider.is_authenticated():
-            return provider, "stockbit-session"
+            return provider, "stockbit"
     return IdxBrokerDataProvider(), "idx"
 
 
@@ -569,7 +569,7 @@ def fetch_market(
         Optional[str],
         typer.Option(
             "--broker-provider",
-            help="Broker provider: idx or stockbit-session. Auto-detects if omitted.",
+            help="Broker provider: idx or stockbit. Auto-detects if omitted.",
         ),
     ] = None,
     refresh: Annotated[
@@ -607,7 +607,7 @@ def fetch_market(
         saham fetch market BBCA BBRI BMRI
         saham fetch market --universe cached --refresh
         saham fetch market --universe lq45 --broker-only
-        saham fetch market BBCA --broker-provider stockbit-session --days 30
+        saham fetch market BBCA --broker-provider stockbit --days 30
         saham fetch market --universe lq45 --no-meta
         saham fetch market BBCA --no-enrichment
     """

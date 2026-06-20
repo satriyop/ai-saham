@@ -134,7 +134,7 @@ saham fetch stockbit login
 
 **Usage:**
 ```bash
-saham fetch broker BBCA --provider stockbit-session   # Richer per-broker detail
+saham fetch broker BBCA --provider stockbit   # Richer per-broker detail
 saham view broker top BBCA --date 2024-01-15
 ```
 
@@ -193,7 +193,7 @@ ORDER BY date;
 | **Daily OHLCV prices** | `saham fetch market` | `RefreshMarketDataUseCase` | `candles` |
 | **Daily OHLCV prices (IDX)** | `saham fetch market --provider idx` | `RefreshMarketDataUseCase` | `candles` |
 | **Aggregated foreign flow + summary** | `saham fetch market` / `saham fetch broker TICKER` | `RefreshBrokerDataUseCase` / `FetchBrokerDataUseCase` | `broker_summaries` |
-| **Per-broker per-day time-series** | `saham fetch market` (auto) / `saham fetch broker TICKER --provider stockbit-session` | `FetchBrokerDailyFlowsUseCase` | `broker_daily_flow` |
+| **Per-broker per-day time-series** | `saham fetch market` (auto) / `saham fetch broker TICKER --provider stockbit` | `FetchBrokerDailyFlowsUseCase` | `broker_daily_flow` |
 | **Net foreign flow time-series** | `saham fetch market` / `saham fetch broker TICKER` / `saham fetch broker-history TICKER` | Derived from summaries (Path A) + Stockbit historical (Path B) | `foreign_flow_points` |
 | **Foreign broker universe scan** | `saham fetch broker-top-foreign` | `StockbitPlaywrightBrokerProvider.fetch_foreign_top_stocks()` | `foreign_flow_snapshots` |
 | **Pre-open IEV snapshot (latest)** | `saham fetch iev` | `collect_iev()` (CLI adapter calls infrastructure directly) | `iev_snapshots` |
@@ -241,7 +241,7 @@ ORDER BY date;
 |---------|----------|--------|-----------------|
 | `saham fetch market` (via `RefreshBrokerDataUseCase`) | `IdxBrokerDataProvider` **always** | `"idx"` | `null` |
 | `saham fetch broker TICKER` (via `FetchBrokerDataUseCase`) | `--provider idx` | `"idx"` | `null` |
-| `saham fetch broker TICKER --provider stockbit-session` | `StockbitPlaywrightBrokerProvider` | `"stockbit"` | populated |
+| `saham fetch broker TICKER --provider stockbit` | `StockbitPlaywrightBrokerProvider` | `"stockbit"` | populated |
 | `saham fetch broker-import FILE` (SIMPLE) | `BrokerCsvAdapter` | `"csv-idx"` | `null` |
 | `saham fetch broker-import FILE` (DETAILED) | `BrokerCsvAdapter` | `"csv-stockbit"` | populated |
 
@@ -322,7 +322,7 @@ The provider queries `/order-trade/broker/activity/historical` once per tracked 
 | **A (Derived from summaries)** | Every `FetchBrokerDataUseCase.execute()` — always runs when `broker_summaries` are saved | `"idx"` (from IDX provider) | `0` | `ForeignFlowPoint(ticker, date, net_val=foreign_buy_value-foreign_sell_value, net_lot=foreign_buy_lot-foreign_sell_lot, avg_price=0, source="idx")` |
 | **B (Stockbit historical)** | `RefreshBrokerDataUseCase._refresh_foreign_flow_history()` — runs during `saham fetch market` and `saham fetch broker-history TICKER` | `"stockbit"` (from Stockbit provider name) | **Exact** | Fetched from Stockbit `/order-trade/broker/activity/historical?broker_codes=AK,ZP,...&symbols={ticker}` aggregated across 10 institutional proxy codes |
 
-When called via standalone `saham fetch broker TICKER --provider stockbit-session`, the derived path (A) writes with source=`"stockbit"` (drawn from `StockbitPlaywrightBrokerProvider.provider_name`).
+When called via standalone `saham fetch broker TICKER --provider stockbit`, the derived path (A) writes with source=`"stockbit"` (drawn from `StockbitPlaywrightBrokerProvider.provider_name`).
 
 **Reads from this table:**
 - `saham view broker history TICKER` — the **only** reader. Displays cached flow time-series.
@@ -420,7 +420,7 @@ RefreshMarketDataUseCase::execute()
                  └─ UPSERT INTO foreign_flow_points (source="stockbit", avg_price=exact)
 ```
 
-For standalone `saham fetch broker BBCA --provider stockbit-session`:
+For standalone `saham fetch broker BBCA --provider stockbit`:
 
 ```
 FetchBrokerDataUseCase::execute()
@@ -525,7 +525,7 @@ RefreshBrokerDataUseCase (3 independent streams)
 For `saham fetch broker TICKER` (standalone, single provider):
 
 ```
-User: saham fetch broker BBCA --provider stockbit-session
+User: saham fetch broker BBCA --provider stockbit
          |
          v
 FetchBrokerDataUseCase.execute()
@@ -549,7 +549,7 @@ FetchBrokerDataUseCase.execute()
 ```
 
 Default for `saham fetch broker TICKER` is `--provider idx` (no auth, estimated values, no per-broker detail).
-Use `--provider stockbit-session` for per-broker detail and exact foreign values.
+Use `--provider stockbit` for per-broker detail and exact foreign values.
 
 Note: `saham fetch market` and `saham fetch broker` use **different write paths**:
 - `fetch market` always uses `IdxBrokerDataProvider` for summaries → source=`"idx"`

@@ -2,7 +2,7 @@
 
  saham fetch market BBCA --days 730        # Downloads 2yr OHLCV + broker flow, cached to data.db
  saham fetch broker BBCA --days 90  # Foreign flow via IDX public API (no auth)
- saham fetch broker BBCA --provider stockbit-session --days 90  # Richer per-broker detail (session needed)
+ saham fetch broker BBCA --provider stockbit --days 90  # Richer per-broker detail (session needed)
 
  ---
  Phase 2 — Technical Indicators
