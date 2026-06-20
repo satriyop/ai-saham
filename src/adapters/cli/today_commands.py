@@ -176,7 +176,10 @@ def today(
         sections.extend([Text("Warnings", style="bold yellow"), warnings])
 
     if response.stale_count > 0:
-        next_action = f"Next: Run 'saham fetch market --universe {response.universe}' to fetch latest data."
+        next_action = (
+            f"Next: Run 'saham fetch market --universe {response.universe}' to update, "
+            f"then: saham screen accum --universe {response.universe} | saham analyze swing TICKER"
+        )
         next_style = "bold yellow"
     else:
         next_action = f"Next: saham screen accum --universe {response.universe} | saham analyze swing TICKER"
