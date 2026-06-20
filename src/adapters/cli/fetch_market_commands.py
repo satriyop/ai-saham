@@ -425,7 +425,9 @@ def _fetch_enrichment(ticker: str, db_path: Path, broker_provider) -> str:
     )
     from src.infrastructure.browser.stockbit_analyst import StockbitAnalystConsensusProvider
     from src.infrastructure.browser.stockbit_bandar import StockbitBandarDetectorProvider
+    from src.infrastructure.browser.stockbit_company_profile import StockbitCompanyProfileProvider
     from src.infrastructure.browser.stockbit_corp_action import StockbitCorporateActionRepository
+    from src.infrastructure.browser.stockbit_forward_estimates import StockbitForwardEstimatesProvider
     from src.infrastructure.browser.stockbit_fundamentals import StockbitFundamentalsProvider
     from src.infrastructure.browser.stockbit_insider import StockbitInsiderActivityProvider
     from src.infrastructure.browser.stockbit_seasonality import StockbitSeasonalityProvider
@@ -443,6 +445,8 @@ def _fetch_enrichment(ticker: str, db_path: Path, broker_provider) -> str:
     bandar_prov = StockbitBandarDetectorProvider(broker_provider=broker_provider, db_path=db_path)
     fundamentals_prov = StockbitFundamentalsProvider(broker_provider=broker_provider, db_path=db_path)
     notation_prov = StockbitTickerNotationProvider(broker_provider=broker_provider, db_path=db_path)
+    fwd_est_prov = StockbitForwardEstimatesProvider(broker_provider=broker_provider, db_path=db_path)
+    profile_prov = StockbitCompanyProfileProvider(broker_provider=broker_provider, db_path=db_path)
 
     tasks = [
         EnrichmentTask("notation", lambda: notation_prov.is_cache_fresh(ticker),   lambda: notation_prov.get_notation(ticker)),
@@ -453,6 +457,8 @@ def _fetch_enrichment(ticker: str, db_path: Path, broker_provider) -> str:
         EnrichmentTask("holding",  lambda: shareholding_prov._is_cache_fresh(ticker), lambda: shareholding_prov.get_composition(ticker)),
         EnrichmentTask("bandar",   lambda: bandar_prov._is_cache_fresh(ticker),    lambda: bandar_prov.get_snapshot(ticker)),
         EnrichmentTask("fundam",   lambda: fundamentals_prov._is_cache_fresh(ticker), lambda: fundamentals_prov.get_fundamentals(ticker)),
+        EnrichmentTask("fwd_est",  lambda: fwd_est_prov._read_cache(ticker) is not None, lambda: fwd_est_prov.get_forward_estimates(ticker)),
+        EnrichmentTask("profile",  lambda: profile_prov._read_cache(ticker) is not None, lambda: profile_prov.get_profile(ticker)),
     ]
     return RefreshStockbitEnrichmentUseCase().execute(
         RefreshStockbitEnrichmentRequest(ticker=ticker, tasks=tasks)
