@@ -3,15 +3,17 @@ StockbitAnalystConsensusProvider — analyst buy/hold/sell ratings from Stockbit
 
 Calls /analyst-ratings/{ticker} and returns an AnalystConsensus object.
 
-Actual API shape (confirmed 2026-06):
-  data.recommendation   → "Buy" | "Hold" | "Sell"
-  data.total_buy        → int
-  data.total_hold       → int
-  data.total_sell       → int
-  data.total_analyst    → int
-  data.price_target.best_target    → int (IDR)
+Actual API shape (confirmed 2026-06-20, BBCA):
+  data.recommendation             → "Buy" | "Hold" | "Sell"
+  data.total_buy                  → int
+  data.total_hold                 → int
+  data.total_sell                 → int
+  data.total_analyst              → int
+  data.price_target.best_target    → int (IDR; consensus average)
+  data.price_target.best_low_target  → int (IDR; most bearish analyst)
+  data.price_target.best_high_target → int (IDR; most bullish analyst)
   data.price_target.current_price  → int (IDR)
-  data.last_updated     → "15 Jun 26" (DD Mon YY)
+  data.last_updated               → "15 Jun 26" (DD Mon YY)
 
 Caching: SQLite daily cache (table: analyst_cache, TTL = 1 calendar day).
 
@@ -59,6 +61,8 @@ def _parse_consensus(ticker: str, body: dict) -> AnalystConsensus | None:
 
     pt = data.get("price_target") or {}
     avg_target = float(pt.get("best_target") or 0) or None
+    target_low = float(pt.get("best_low_target") or 0) or None
+    target_high = float(pt.get("best_high_target") or 0) or None
     current = float(pt.get("current_price") or 0) or None
 
     last_updated = _parse_date(str(data.get("last_updated") or ""))
@@ -74,6 +78,8 @@ def _parse_consensus(ticker: str, body: dict) -> AnalystConsensus | None:
         avg_price_target=avg_target,
         current_price=current,
         last_updated=last_updated,
+        price_target_low=target_low,
+        price_target_high=target_high,
     )
 
 
@@ -106,25 +112,37 @@ class StockbitAnalystConsensusProvider(AnalystConsensusProvider):
         conn.row_factory = sqlite3.Row
         return conn
 
+    _MIGRATE_COLUMNS = [
+        "ALTER TABLE analyst_cache ADD COLUMN price_target_low REAL",
+        "ALTER TABLE analyst_cache ADD COLUMN price_target_high REAL",
+    ]
+
     def _ensure_schema(self) -> None:
         try:
             with self._get_conn() as conn:
                 conn.execute("""
                     CREATE TABLE IF NOT EXISTS analyst_cache (
-                        ticker           TEXT NOT NULL PRIMARY KEY,
-                        buy_count        INTEGER NOT NULL DEFAULT 0,
-                        hold_count       INTEGER NOT NULL DEFAULT 0,
-                        sell_count       INTEGER NOT NULL DEFAULT 0,
-                        avg_price_target REAL,
-                        current_price    REAL,
-                        last_updated     TEXT,
-                        fetched_date     TEXT NOT NULL
+                        ticker             TEXT NOT NULL PRIMARY KEY,
+                        buy_count          INTEGER NOT NULL DEFAULT 0,
+                        hold_count         INTEGER NOT NULL DEFAULT 0,
+                        sell_count         INTEGER NOT NULL DEFAULT 0,
+                        avg_price_target   REAL,
+                        current_price      REAL,
+                        last_updated       TEXT,
+                        fetched_date       TEXT NOT NULL,
+                        price_target_low   REAL,
+                        price_target_high  REAL
                     )
                 """)
                 conn.execute("""
                     CREATE INDEX IF NOT EXISTS idx_analyst_ticker_fetched
                     ON analyst_cache(ticker, fetched_date)
                 """)
+                for col_sql in self._MIGRATE_COLUMNS:
+                    try:
+                        conn.execute(col_sql)
+                    except Exception:
+                        pass  # column already exists
         except Exception as e:
             logger.warning("analyst_cache schema error: %s", e)
 
@@ -148,7 +166,8 @@ class StockbitAnalystConsensusProvider(AnalystConsensusProvider):
                 row = conn.execute(
                     """
                     SELECT buy_count, hold_count, sell_count,
-                           avg_price_target, current_price, last_updated
+                           avg_price_target, current_price, last_updated,
+                           price_target_low, price_target_high
                     FROM analyst_cache
                     WHERE ticker=?
                     """,
@@ -171,6 +190,8 @@ class StockbitAnalystConsensusProvider(AnalystConsensusProvider):
             avg_price_target=row["avg_price_target"],
             current_price=row["current_price"],
             last_updated=_parse_date(row["last_updated"] or ""),
+            price_target_low=row["price_target_low"],
+            price_target_high=row["price_target_high"],
         )
 
     def _write_cache(self, ticker: str, consensus: AnalystConsensus | None) -> None:
@@ -181,8 +202,9 @@ class StockbitAnalystConsensusProvider(AnalystConsensusProvider):
                     """
                     INSERT OR REPLACE INTO analyst_cache
                         (ticker, buy_count, hold_count, sell_count,
-                         avg_price_target, current_price, last_updated, fetched_date)
-                    VALUES (?,?,?,?,?,?,?,?)
+                         avg_price_target, current_price, last_updated, fetched_date,
+                         price_target_low, price_target_high)
+                    VALUES (?,?,?,?,?,?,?,?,?,?)
                     """,
                     (
                         ticker.upper(),
@@ -193,6 +215,8 @@ class StockbitAnalystConsensusProvider(AnalystConsensusProvider):
                         consensus.current_price if consensus else None,
                         consensus.last_updated.isoformat() if consensus and consensus.last_updated else None,
                         today_str,
+                        consensus.price_target_low if consensus else None,
+                        consensus.price_target_high if consensus else None,
                     ),
                 )
         except Exception as e:

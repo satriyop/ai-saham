@@ -938,6 +938,36 @@ class StockbitPlaywrightBrokerProvider(BrokerDataProvider):
         logger.info("Foreign flow history: %s → %d data points", ticker, len(points))
         return points
 
+    def fetch_foreign_flow_from_summary(
+        self,
+        ticker: str,
+        start_date: date,
+        end_date: date,
+    ) -> list[ForeignFlowPoint]:
+        """
+        Fetch per-day foreign flow from the historical summary endpoint.
+
+        One API call vs. many calls on the broker/activity/historical path.
+        Use for bulk date-range backfills; reserve broker/activity/historical for
+        per-broker detail or when you need net_lot accuracy.
+        """
+        try:
+            token = self._get_token()
+            url = (
+                f"{_HISTORICAL_SUMMARY_API.format(ticker=ticker.upper())}"
+                f"?period=HS_PERIOD_DAILY"
+                f"&start_date={start_date.isoformat()}"
+                f"&end_date={end_date.isoformat()}"
+                f"&limit=400&page=1"
+            )
+            body = _exodus_get(url, token)
+            if not body:
+                return []
+            return _parse_historical_summary_flow(ticker, body)
+        except Exception as e:
+            logger.warning("fetch_foreign_flow_from_summary %s failed: %s", ticker, e)
+            return []
+
     def fetch_broker_flow_history(
         self,
         ticker: str,
@@ -1165,6 +1195,44 @@ def _parse_broker_tx(item: dict) -> BrokerTransaction | None:
         return None
 
 
+def _parse_historical_summary_flow(
+    ticker: str,
+    body: dict,
+) -> list[ForeignFlowPoint]:
+    """
+    Extract per-day ForeignFlowPoint from /company-price-feed/historical/summary response.
+
+    Confirmed response shape (2026-06-20):
+      data.result[].date         → "YYYY-MM-DD"
+      data.result[].foreign_buy  → int IDR
+      data.result[].foreign_sell → int IDR
+      data.result[].net_foreign  → int IDR
+      data.result[].volume       → int lots (total volume, used as proxy for net_lot)
+      data.result[].close        → float (close price)
+    """
+    rows = (body.get("data") or {}).get("result") or []
+    points: list[ForeignFlowPoint] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        try:
+            d = date.fromisoformat(str(row.get("date") or "")[:10])
+        except (ValueError, TypeError):
+            continue
+        net_val = Decimal(str(row.get("net_foreign") or 0))
+        net_lot = int(row.get("volume") or 0)
+        close_price = Decimal(str(row.get("close") or 0))
+        points.append(ForeignFlowPoint(
+            ticker=ticker.upper(),
+            date=d,
+            net_val=net_val,
+            net_lot=net_lot,
+            avg_price=close_price,
+            source="stockbit_summary",
+        ))
+    return sorted(points, key=lambda p: p.date)
+
+
 def _fetch_historical_summary_totals(
     ticker: str,
     start_date: date,
@@ -1338,6 +1406,29 @@ def _parse_marketdetectors_response(
         return []
 
 
+def _parse_nval_trend(ticker: str, trend_raw: list) -> tuple[ForeignFlowPoint, ...]:
+    """Parse nval_trend[] array embedded in broker activity universe scan items."""
+    points: list[ForeignFlowPoint] = []
+    for row in trend_raw or []:
+        if not isinstance(row, dict):
+            continue
+        try:
+            d = date.fromisoformat(str(row.get("date") or "")[:10])
+            net_val = Decimal(str(row.get("nval") or 0))
+            net_lot = int(row.get("nvol") or 0)
+            points.append(ForeignFlowPoint(
+                ticker=ticker,
+                date=d,
+                net_val=net_val,
+                net_lot=net_lot,
+                avg_price=Decimal(str(row.get("close") or 0)),
+                source="stockbit_trend",
+            ))
+        except Exception:
+            pass
+    return tuple(sorted(points, key=lambda p: p.date))
+
+
 def _parse_foreign_top_stocks(
     snapshot_date: date,
     body: dict,
@@ -1347,9 +1438,9 @@ def _parse_foreign_top_stocks(
 
     Confirmed response shape (2026-06-13):
       data.broker_activity_transaction.brokers_buy[]  — net buyer stocks
-        stock_code, value (net val), lot, avg_price, type
+        stock_code, value (net val), lot, avg_price, type, nval_trend[]
       data.broker_activity_transaction.brokers_sell[] — net seller stocks
-        stock_code, value (negative), lot (negative), avg_price, type
+        stock_code, value (negative), lot (negative), avg_price, type, nval_trend[]
     """
     data = body.get("data") if isinstance(body, dict) else body
     if not isinstance(data, dict):
@@ -1381,11 +1472,13 @@ def _parse_foreign_top_stocks(
                 item_date = date.fromisoformat(item_date_str[:10])
             except (ValueError, TypeError):
                 item_date = snapshot_date
+            nval_trend = _parse_nval_trend(ticker, item.get("nval_trend") or [])
             snapshots.append(ForeignFlowSnapshot(
                 ticker=ticker,
                 date=item_date,
                 net_val=net_val,
                 net_lot=net_lot,
+                nval_trend=nval_trend,
             ))
         except Exception as e:
             logger.debug("Could not parse foreign flow snapshot for %s: %s", ticker, e)
@@ -1406,11 +1499,13 @@ def _parse_foreign_top_stocks(
                 item_date = date.fromisoformat(item_date_str[:10])
             except (ValueError, TypeError):
                 item_date = snapshot_date
+            nval_trend = _parse_nval_trend(ticker, item.get("nval_trend") or [])
             snapshots.append(ForeignFlowSnapshot(
                 ticker=ticker,
                 date=item_date,
                 net_val=net_val,
                 net_lot=net_lot,
+                nval_trend=nval_trend,
             ))
         except Exception as e:
             logger.debug("Could not parse foreign flow snapshot for %s: %s", ticker, e)

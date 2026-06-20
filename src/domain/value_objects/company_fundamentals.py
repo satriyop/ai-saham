@@ -29,6 +29,8 @@ class CompanyFundamentals:
     week52_high: float | None
     week52_low: float | None
     near_52w_high_rank: float | None  # Rank (Near 52 Weeks High), 0–100 percentile
+    market_cap_idr: int | None = None  # data.info.market_cap.raw (IDR)
+    pbv: float | None = None           # data.info.pbv.raw
 
     @property
     def is_quality(self) -> bool:
@@ -55,7 +57,7 @@ class CompanyFundamentals:
         return " | ".join(parts) if parts else "N/A"
 
     def to_dict(self) -> dict:
-        return {
+        d = {
             "fetched_date": self.fetched_date.isoformat(),
             "pe_ratio_ttm": self.pe_ratio_ttm,
             "roe_ttm": self.roe_ttm,
@@ -68,3 +70,8 @@ class CompanyFundamentals:
             "near_52w_high_rank": self.near_52w_high_rank,
             "is_quality": self.is_quality,
         }
+        if self.market_cap_idr is not None:
+            d["market_cap_idr"] = self.market_cap_idr
+        if self.pbv is not None:
+            d["pbv"] = self.pbv
+        return d

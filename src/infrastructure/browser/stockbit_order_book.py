@@ -4,7 +4,7 @@ StockbitOrderBookProvider — full order book from Stockbit Exodus API.
 Calls /company-price-feed/v2/orderbook/companies/{ticker} and returns an
 OrderBookSnapshot with aggregate bid/offer depth, live foreign flow, and IEP/IEV.
 
-Actual API shape (confirmed 2026-06):
+Actual API shape (confirmed 2026-06-20, BBCA):
   data.bid[]           → [{price, que_num, volume, change_percentage}, ...]  (bid side)
   data.offer[]         → same shape (offer/ask side)
   data.total_bid_offer → {bid: {freq, lot}, offer: {freq, lot}}  (totals, comma strings)
@@ -12,6 +12,10 @@ Actual API shape (confirmed 2026-06):
   data.fnet            → int  (running foreign net IDR today)
   data.fbuy            → int  (running foreign buy IDR today)
   data.fsell           → int  (running foreign sell IDR today)
+  data.foreign         → str  (e.g. "78.11" — % of daily value from foreign investors)
+  data.domestic        → str  (e.g. "21.89")
+  data.ara             → {"value": "7,550", "visible": true}  (auto-reject ceiling)
+  data.arb             → {"value": "5,375", "visible": true}  (auto-reject floor)
   data.iepiev.iep.raw  → int  (IEP, 0 during regular session)
   data.iepiev.iev.raw  → int  (IEV lots, 0 during regular session)
   data.iepiev.best_bid_offer.bid.price.raw   → int  (best bid price)
@@ -92,10 +96,16 @@ def _parse_snapshot(ticker: str, body: dict) -> OrderBookSnapshot | None:
     bid_depth_5 = _depth_volume(bid_levels, _DEPTH_LEVELS)
     offer_depth_5 = _depth_volume(offer_levels, _DEPTH_LEVELS)
 
-    # Live foreign flow
+    # Live foreign flow totals
     fnet = float(data.get("fnet") or 0) or None
     fbuy = float(data.get("fbuy") or 0) or None
     fsell = float(data.get("fsell") or 0) or None
+
+    # Foreign/domestic % split and ARA/ARB limits (same call, previously ignored)
+    foreign_pct = _parse_float(data.get("foreign")) or None
+    domestic_pct = _parse_float(data.get("domestic")) or None
+    ara_price = _parse_float((data.get("ara") or {}).get("value")) or None
+    arb_price = _parse_float((data.get("arb") or {}).get("value")) or None
 
     # IEP/IEV — non-zero only during pre-open session
     iepiev = data.get("iepiev") or {}
@@ -134,6 +144,10 @@ def _parse_snapshot(ticker: str, body: dict) -> OrderBookSnapshot | None:
         fsell_intraday=fsell,
         iep=iep,
         iev=iev,
+        ara_price=ara_price,
+        arb_price=arb_price,
+        foreign_pct=foreign_pct,
+        domestic_pct=domestic_pct,
     )
 
 

@@ -22,6 +22,8 @@ class AnalystConsensus:
     avg_price_target: float | None    # IDR; Stockbit's "best_target"
     current_price: float | None       # IDR at time of last update
     last_updated: date | None
+    price_target_low: float | None = None   # best_low_target — most bearish analyst
+    price_target_high: float | None = None  # best_high_target — most bullish analyst
 
     @property
     def analyst_count(self) -> int:
@@ -31,6 +33,15 @@ class AnalystConsensus:
     def upside_pct(self) -> float | None:
         if self.avg_price_target and self.current_price and self.current_price > 0:
             return (self.avg_price_target - self.current_price) / self.current_price * 100
+        return None
+
+    @property
+    def target_range_pct(self) -> float | None:
+        """Width of analyst target range as % of avg target. Wider = lower conviction."""
+        if self.price_target_low and self.price_target_high and self.avg_price_target:
+            return round(
+                (self.price_target_high - self.price_target_low) / self.avg_price_target * 100, 1
+            )
         return None
 
     @property
@@ -61,11 +72,14 @@ class AnalystConsensus:
         rating = " ".join(parts) if parts else "0"
         if self.avg_price_target and self.upside_pct is not None:
             target_k = int(self.avg_price_target)
-            return f"{rating} | target Rp{target_k:,} ({self.upside_pct:+.1f}%)"
+            base = f"{rating} | target Rp{target_k:,} ({self.upside_pct:+.1f}%)"
+            if self.target_range_pct is not None:
+                return f"{base} ±{self.target_range_pct:.0f}%"
+            return base
         return rating
 
     def to_dict(self) -> dict:
-        return {
+        d = {
             "buy_count": self.buy_count,
             "hold_count": self.hold_count,
             "sell_count": self.sell_count,
@@ -75,3 +89,10 @@ class AnalystConsensus:
             "upside_pct": round(self.upside_pct, 1) if self.upside_pct is not None else None,
             "last_updated": self.last_updated.isoformat() if self.last_updated else None,
         }
+        if self.price_target_low is not None:
+            d["price_target_low"] = self.price_target_low
+        if self.price_target_high is not None:
+            d["price_target_high"] = self.price_target_high
+        if self.target_range_pct is not None:
+            d["target_range_pct"] = self.target_range_pct
+        return d

@@ -4,10 +4,12 @@ StockbitFundamentalsProvider — fundamental ratios from Stockbit KeyStats API.
 Calls /keystats/ratio/v1/{ticker}?year_limit=10 and returns a CompanyFundamentals
 object with key ratios extracted by name from the flat metric list.
 
-Actual API shape (confirmed 2026-06-18, BBCA):
+Actual API shape (confirmed 2026-06-20, BBCA):
   data.closure_fin_items_results[].fin_name_results[].fitem.{name, value}
   name examples: "Return on Equity (TTM)", "Current PE Ratio (TTM)", ...
   value examples: "22.41%", "13.32", "5.00" (always strings, may include % and ,)
+  data.info.market_cap.raw → int IDR (e.g. 776634150000000)
+  data.info.pbv.raw        → float (e.g. 3.0)
 
 Caching: SQLite table `company_fundamentals` keyed by ticker with 7-day TTL.
 ROE, Net Profit Margin, Piotroski F-Score, Revenue YoY Growth are quarterly metrics.
@@ -47,9 +49,16 @@ CREATE TABLE IF NOT EXISTS company_fundamentals (
     dividend_yield      REAL,
     week52_high         REAL,
     week52_low          REAL,
-    near_52w_high_rank  REAL
+    near_52w_high_rank  REAL,
+    market_cap_idr      INTEGER,
+    pbv                 REAL
 )
 """
+
+_MIGRATE_COLUMNS = [
+    "ALTER TABLE company_fundamentals ADD COLUMN market_cap_idr INTEGER",
+    "ALTER TABLE company_fundamentals ADD COLUMN pbv REAL",
+]
 
 
 def _strip(raw: str | None) -> str:
@@ -105,6 +114,22 @@ def _parse_fundamentals(ticker: str, body: dict) -> CompanyFundamentals | None:
     if all(v is None for v in [pe, roe, npm, rev_yoy, f_score]):
         return None
 
+    data_raw = body.get("data") if isinstance(body, dict) else {}
+    info = (data_raw or {}).get("info") or {}
+    market_cap_idr: int | None = None
+    pbv: float | None = None
+    if isinstance(info, dict):
+        mc = (info.get("market_cap") or {}).get("raw")
+        try:
+            market_cap_idr = int(mc) if mc is not None else None
+        except (TypeError, ValueError):
+            pass
+        pbv_raw = (info.get("pbv") or {}).get("raw")
+        try:
+            pbv = float(pbv_raw) if pbv_raw is not None else None
+        except (TypeError, ValueError):
+            pass
+
     return CompanyFundamentals(
         ticker=ticker.upper(),
         fetched_date=date.today(),
@@ -117,6 +142,8 @@ def _parse_fundamentals(ticker: str, body: dict) -> CompanyFundamentals | None:
         week52_high=hi52,
         week52_low=lo52,
         near_52w_high_rank=near52,
+        market_cap_idr=market_cap_idr,
+        pbv=pbv,
     )
 
 
@@ -141,6 +168,11 @@ class StockbitFundamentalsProvider(FundamentalsProvider):
         try:
             with sqlite3.connect(self._db_path) as conn:
                 conn.execute(_CREATE_TABLE)
+                for col_sql in _MIGRATE_COLUMNS:
+                    try:
+                        conn.execute(col_sql)
+                    except Exception:
+                        pass  # column already exists
         except Exception as e:
             logger.warning("company_fundamentals: failed to create cache table: %s", e)
 
@@ -181,7 +213,7 @@ class StockbitFundamentalsProvider(FundamentalsProvider):
                 row = conn.execute(
                     "SELECT fetched_date, pe_ratio_ttm, roe_ttm, net_profit_margin, "
                     "revenue_yoy_growth, piotroski_f_score, dividend_yield, "
-                    "week52_high, week52_low, near_52w_high_rank "
+                    "week52_high, week52_low, near_52w_high_rank, market_cap_idr, pbv "
                     "FROM company_fundamentals WHERE ticker=?",
                     (ticker,),
                 ).fetchone()
@@ -206,6 +238,8 @@ class StockbitFundamentalsProvider(FundamentalsProvider):
                 week52_high=row[7],
                 week52_low=row[8],
                 near_52w_high_rank=row[9],
+                market_cap_idr=int(row[10]) if row[10] is not None else None,
+                pbv=float(row[11]) if row[11] is not None else None,
             )
         except Exception as e:
             logger.warning("company_fundamentals: cache read failed for %s: %s", ticker, e)
@@ -218,8 +252,8 @@ class StockbitFundamentalsProvider(FundamentalsProvider):
                     "INSERT OR REPLACE INTO company_fundamentals "
                     "(ticker, fetched_date, pe_ratio_ttm, roe_ttm, net_profit_margin, "
                     "revenue_yoy_growth, piotroski_f_score, dividend_yield, "
-                    "week52_high, week52_low, near_52w_high_rank) "
-                    "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                    "week52_high, week52_low, near_52w_high_rank, market_cap_idr, pbv) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     (
                         fund.ticker,
                         fund.fetched_date.isoformat(),
@@ -232,6 +266,8 @@ class StockbitFundamentalsProvider(FundamentalsProvider):
                         fund.week52_high,
                         fund.week52_low,
                         fund.near_52w_high_rank,
+                        fund.market_cap_idr,
+                        fund.pbv,
                     ),
                 )
         except Exception as e:

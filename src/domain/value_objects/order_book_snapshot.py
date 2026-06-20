@@ -36,6 +36,10 @@ class OrderBookSnapshot:
     fsell_intraday: float | None      # live foreign sell value today
     iep: float | None = None          # Indicative Equilibrium Price (pre-open only)
     iev: int | None = None            # Indicative Equilibrium Volume lots (pre-open only)
+    ara_price: float | None = None    # auto-reject ceiling (IDR; hard daily price cap)
+    arb_price: float | None = None    # auto-reject floor (IDR; hard daily price floor)
+    foreign_pct: float | None = None  # % of total daily value from foreign investors
+    domestic_pct: float | None = None # % of total daily value from domestic investors
 
     @property
     def bid_pressure_ratio(self) -> float | None:
@@ -68,7 +72,7 @@ class OrderBookSnapshot:
         return " | ".join(parts) if parts else "N/A"
 
     def to_dict(self) -> dict:
-        return {
+        d = {
             "last_price": self.last_price,
             "best_bid": self.best_bid_price,
             "best_offer": self.best_offer_price,
@@ -85,3 +89,12 @@ class OrderBookSnapshot:
             "iep": self.iep,
             "iev": self.iev,
         }
+        if self.ara_price is not None:
+            d["ara_price"] = self.ara_price
+        if self.arb_price is not None:
+            d["arb_price"] = self.arb_price
+        if self.foreign_pct is not None:
+            d["foreign_pct"] = self.foreign_pct
+        if self.domestic_pct is not None:
+            d["domestic_pct"] = self.domestic_pct
+        return d

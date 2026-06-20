@@ -215,26 +215,6 @@ class BrokerSummary:
 
 
 @dataclass(frozen=True)
-class ForeignFlowSnapshot:
-    """
-    Lightweight snapshot of foreign broker aggregate flow for a stock.
-
-    Returned by the broker-centric universe scan (which stocks are foreign
-    brokers accumulating?). Does NOT include named broker breakdown.
-    Use BrokerSummary for the full named breakdown.
-    """
-
-    ticker: str
-    date: date
-    net_val: Decimal  # positive = net buy, negative = net sell
-    net_lot: int
-
-    @property
-    def is_accumulating(self) -> bool:
-        return self.net_val > Decimal("0")
-
-
-@dataclass(frozen=True)
 class ForeignFlowPoint:
     """
     Single data point in the historical foreign flow time-series for a stock.
@@ -249,6 +229,27 @@ class ForeignFlowPoint:
     net_lot: int
     avg_price: Decimal  # average price for the period; 'idx'=close price approx, 'stockbit'=exact
     source: str = "stockbit"  # e.g. 'idx' | 'stockbit'
+
+
+@dataclass(frozen=True)
+class ForeignFlowSnapshot:
+    """
+    Lightweight snapshot of foreign broker aggregate flow for a stock.
+
+    Returned by the broker-centric universe scan (which stocks are foreign
+    brokers accumulating?). Does NOT include named broker breakdown.
+    Use BrokerSummary for the full named breakdown.
+    """
+
+    ticker: str
+    date: date
+    net_val: Decimal  # positive = net buy, negative = net sell
+    net_lot: int
+    nval_trend: tuple[ForeignFlowPoint, ...] = ()  # 7-day embedded trend from universe scan
+
+    @property
+    def is_accumulating(self) -> bool:
+        return self.net_val > Decimal("0")
 
 
 # Backward-compatible alias for older code paths. The data represents aggregate
