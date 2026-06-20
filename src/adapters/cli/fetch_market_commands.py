@@ -406,14 +406,8 @@ def _print_table_summary(
 def _fetch_enrichment(ticker: str, db_path: Path, broker_provider) -> str:
     """Pre-fetch Stockbit enrichment data for one ticker into SQLite cache.
 
-    Fetches analyst consensus, insider activity (last 365 days ALL actions),
-    monthly seasonality, corporate actions, shareholding composition, bandar
-    detector signal, and fundamental ratios (KeyStats). Each provider checks
-    its own SQLite cache and skips the API call if data is already fresh.
-
-    Returns a compact status string, e.g. "analyst+bandar+fundam  ✓(insider,season,corp,holding)"
-    on partial cache hit, or "✓(all)" if all providers had fresh data, or
-    "skip" if provider is unavailable.
+    Delegates cache-freshness-then-fetch policy to RefreshStockbitEnrichmentUseCase.
+    Returns a compact status string, e.g. "analyst+bandar  ✓(insider,season,corp,holding)".
     """
     from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
 
@@ -424,6 +418,11 @@ def _fetch_enrichment(ticker: str, db_path: Path, broker_provider) -> str:
 
     from datetime import timedelta
 
+    from src.application.use_case.refresh_stockbit_enrichment import (
+        EnrichmentTask,
+        RefreshStockbitEnrichmentRequest,
+        RefreshStockbitEnrichmentUseCase,
+    )
     from src.infrastructure.browser.stockbit_analyst import StockbitAnalystConsensusProvider
     from src.infrastructure.browser.stockbit_bandar import StockbitBandarDetectorProvider
     from src.infrastructure.browser.stockbit_corp_action import StockbitCorporateActionRepository
@@ -445,71 +444,19 @@ def _fetch_enrichment(ticker: str, db_path: Path, broker_provider) -> str:
     fundamentals_prov = StockbitFundamentalsProvider(broker_provider=broker_provider, db_path=db_path)
     notation_prov = StockbitTickerNotationProvider(broker_provider=broker_provider, db_path=db_path)
 
-    fetched: list[str] = []
-    cached: list[str] = []
-    errors: list[str] = []
-
-    def _run(label: str, fn):
-        try:
-            fn()
-            return True
-        except Exception as e:
-            errors.append(f"{label}:{str(e)[:20]}")
-            return False
-
-    # Ticker status / special notation
-    if notation_prov.is_cache_fresh(ticker):
-        cached.append("notation")
-    elif _run("notation", lambda: notation_prov.get_notation(ticker)):
-        fetched.append("notation")
-
-    # Analyst consensus
-    if analyst_prov._is_cache_fresh(ticker):
-        cached.append("analyst")
-    elif _run("analyst", lambda: analyst_prov.get_consensus(ticker)):
-        fetched.append("analyst")
-
-    # Insider (fetch ALL actions for last 365 days so swing analyze hits cache regardless of range)
-    if insider_prov._is_cache_fresh(ticker):
-        cached.append("insider")
-    elif _run("insider", lambda: insider_prov.get_insider_transactions(ticker, insider_from, today, "ALL")):
-        fetched.append("insider")
-
-    # Seasonality for current month
-    if season_prov._is_cache_fresh(ticker, today.year, today.month):
-        cached.append("season")
-    elif _run("season", lambda: season_prov.get_seasonal_edge(ticker, today.year, today.month)):
-        fetched.append("season")
-
-    # Corp actions for the next 90 days
-    if corp_repo._is_cache_fresh(ticker):
-        cached.append("corp")
-    elif _run("corp", lambda: corp_repo.get_upcoming_events(ticker, today, today + timedelta(days=90))):
-        fetched.append("corp")
-
-    # Shareholding composition (7-day TTL — quarterly filings)
-    if shareholding_prov._is_cache_fresh(ticker):
-        cached.append("holding")
-    elif _run("holding", lambda: shareholding_prov.get_composition(ticker)):
-        fetched.append("holding")
-
-    # Bandar detector (daily — fixed after session close)
-    if bandar_prov._is_cache_fresh(ticker):
-        cached.append("bandar")
-    elif _run("bandar", lambda: bandar_prov.get_snapshot(ticker)):
-        fetched.append("bandar")
-
-    # Fundamentals / KeyStats (7-day TTL — quarterly metrics)
-    if fundamentals_prov._is_cache_fresh(ticker):
-        cached.append("fundam")
-    elif _run("fundam", lambda: fundamentals_prov.get_fundamentals(ticker)):
-        fetched.append("fundam")
-
-    if errors:
-        return "ERR:" + ",".join(errors)
-    if not fetched:
-        return f"✓({','.join(cached)})"
-    return "+".join(fetched) + (f"  ✓({','.join(cached)})" if cached else "")
+    tasks = [
+        EnrichmentTask("notation", lambda: notation_prov.is_cache_fresh(ticker),   lambda: notation_prov.get_notation(ticker)),
+        EnrichmentTask("analyst",  lambda: analyst_prov._is_cache_fresh(ticker),   lambda: analyst_prov.get_consensus(ticker)),
+        EnrichmentTask("insider",  lambda: insider_prov._is_cache_fresh(ticker),   lambda: insider_prov.get_insider_transactions(ticker, insider_from, today, "ALL")),
+        EnrichmentTask("season",   lambda: season_prov._is_cache_fresh(ticker, today.year, today.month), lambda: season_prov.get_seasonal_edge(ticker, today.year, today.month)),
+        EnrichmentTask("corp",     lambda: corp_repo._is_cache_fresh(ticker),      lambda: corp_repo.get_upcoming_events(ticker, today, today + timedelta(days=90))),
+        EnrichmentTask("holding",  lambda: shareholding_prov._is_cache_fresh(ticker), lambda: shareholding_prov.get_composition(ticker)),
+        EnrichmentTask("bandar",   lambda: bandar_prov._is_cache_fresh(ticker),    lambda: bandar_prov.get_snapshot(ticker)),
+        EnrichmentTask("fundam",   lambda: fundamentals_prov._is_cache_fresh(ticker), lambda: fundamentals_prov.get_fundamentals(ticker)),
+    ]
+    return RefreshStockbitEnrichmentUseCase().execute(
+        RefreshStockbitEnrichmentRequest(ticker=ticker, tasks=tasks)
+    ).status
 
 
 def _fetch_meta(ticker: str, db_path: Path) -> str:
