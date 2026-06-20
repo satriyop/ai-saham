@@ -9,10 +9,10 @@ from pathlib import Path
 from typing import Annotated, Optional
 
 import typer
-from rich.console import Group
+from rich.console import Console, Group
 from rich.text import Text
 
-from src.adapters.cli.rich_display import compact_table, console, panel
+from src.adapters.cli.rich_display import compact_table, panel
 from src.application.use_case.accumulation_screen import AccumulationScreenUseCase
 from src.application.use_case.daily_briefing import DailyBriefingRequest, DailyBriefingUseCase
 from src.application.use_case.market_regime import MarketRegimeUseCase
@@ -47,6 +47,7 @@ def today(
     This command does not fetch, tune, or write data. Use `saham fetch ...` and
     `saham screen ...` when you need to update inputs.
     """
+    console = Console()
     as_of = _parse_date(date_str)
     market_repo = SQLiteMarketRepository(db_path)
     broker_repo = SQLiteBrokerRepository(db_path)
@@ -182,7 +183,7 @@ def today(
         next_style = "bold"
 
     sections.append(Text(next_action, style=next_style))
-    console().print(
+    console.print(
         panel(
             Group(*sections),
             title=f"Daily Briefing - {response.as_of_date.isoformat()}",
