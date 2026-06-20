@@ -91,6 +91,9 @@ class _StockbitConfig:
     marketdetectors_url: str = "https://exodus.stockbit.com/marketdetectors"
     broker_activity_url: str = "https://exodus.stockbit.com/order-trade/broker/activity"
     broker_historical_url: str = "https://exodus.stockbit.com/order-trade/broker/activity/historical"
+    historical_summary_url: str = (
+        "https://exodus.stockbit.com/company-price-feed/historical/summary/{ticker}"
+    )
     # 10 institutional proxy codes for foreign_flow_points aggregate.
     # YP (Indo Premier) is domestic but mirrors institutional orders.
     # For true all-foreign aggregate, use broker_summaries.foreign_net_value (IDX source).
@@ -136,6 +139,7 @@ def _load_stockbit_config(
             marketdetectors_url=_url("broker_marketdetectors", defaults.marketdetectors_url),
             broker_activity_url=_url("broker_activity", defaults.broker_activity_url),
             broker_historical_url=_url("broker_historical", defaults.broker_historical_url),
+            historical_summary_url=_url("historical_summary", defaults.historical_summary_url),
             institutional_proxy_codes=_codes("institutional_proxy", defaults.institutional_proxy_codes),
             tracked_broker_codes=_codes("tracked", defaults.tracked_broker_codes),
         )
@@ -153,7 +157,8 @@ _IEV_MOVER_URL_SPECIAL = _sb.iev_movers_special_url
 _ORDER_BOOK_API        = _sb.orderbook_url        # supports {ticker} placeholder
 _MARKETDETECTORS_API   = _sb.marketdetectors_url
 _BROKER_ACTIVITY_API   = _sb.broker_activity_url
-_BROKER_HISTORICAL_API = _sb.broker_historical_url
+_BROKER_HISTORICAL_API  = _sb.broker_historical_url
+_HISTORICAL_SUMMARY_API = _sb.historical_summary_url  # supports {ticker} placeholder
 _INSTITUTIONAL_PROXY_CODES = list(_sb.institutional_proxy_codes)
 TRACKED_BROKER_CODES       = list(_sb.tracked_broker_codes)
 
@@ -839,7 +844,14 @@ class StockbitPlaywrightBrokerProvider(BrokerDataProvider):
             )
             return []
 
-        summaries = _parse_marketdetectors_response(ticker, end_date, body)
+        real_total = _fetch_historical_summary_totals(ticker, start_date, end_date, token)
+        if real_total is None:
+            logger.warning(
+                "fetch_broker_summaries/%s: historical/summary unavailable, "
+                "total_value will be synthetic (top-broker subset only)",
+                ticker,
+            )
+        summaries = _parse_marketdetectors_response(ticker, end_date, body, real_total=real_total)
         if summaries:
             logger.info("Stockbit named broker data: %s → %d entry", ticker, len(summaries))
         else:
@@ -1153,10 +1165,53 @@ def _parse_broker_tx(item: dict) -> BrokerTransaction | None:
         return None
 
 
+def _fetch_historical_summary_totals(
+    ticker: str,
+    start_date: date,
+    end_date: date,
+    token: str,
+) -> tuple[Decimal, int] | None:
+    """
+    Return (total_value_IDR, total_lot) from /company-price-feed/historical/summary/{ticker}.
+
+    Sums all daily rows in [start_date, end_date]. Returns None on any failure so
+    the caller can fall back to the synthetic marketdetectors total.
+
+    Confirmed response shape (live probe 2026-06-20):
+      data.result[].value  → total traded value (IDR, int)
+      data.result[].volume → total traded lots (int, already in lots — NOT shares)
+    """
+    url = (
+        f"{_HISTORICAL_SUMMARY_API.format(ticker=ticker.upper())}"
+        f"?period=HS_PERIOD_DAILY"
+        f"&start_date={start_date.isoformat()}"
+        f"&end_date={end_date.isoformat()}"
+        f"&limit=400&page=1"
+    )
+    try:
+        body = _exodus_get(url, token)
+        if not body:
+            return None
+        rows = (body.get("data") or {}).get("result") or []
+        if not rows:
+            return None
+        total_value = sum(
+            Decimal(str(r.get("value") or 0)) for r in rows if isinstance(r, dict)
+        )
+        total_lot = sum(int(r.get("volume") or 0) for r in rows if isinstance(r, dict))
+        if total_value <= 0:
+            return None
+        return total_value, total_lot
+    except Exception as e:
+        logger.debug("historical/summary totals failed for %s: %s", ticker, e)
+        return None
+
+
 def _parse_marketdetectors_response(
     ticker: str,
     trading_date: date,
     body: dict,
+    real_total: tuple[Decimal, int] | None = None,
 ) -> list[BrokerSummary]:
     """
     Parse the stock-centric /marketdetectors/{ticker} response into a BrokerSummary.
@@ -1253,8 +1308,16 @@ def _parse_marketdetectors_response(
     foreign_sell_val = sum((t.sell_value for t in foreign_txns), Decimal("0"))
     foreign_buy_lot = sum(t.buy_lot for t in foreign_txns)
     foreign_sell_lot = sum(t.sell_lot for t in foreign_txns)
-    total_val = sum((t.buy_value + t.sell_value for t in all_txns), Decimal("0"))
-    total_lot = sum(t.buy_lot + t.sell_lot for t in all_txns)
+
+    if real_total is not None:
+        total_val, total_lot = real_total
+    else:
+        total_val = sum((t.buy_value + t.sell_value for t in all_txns), Decimal("0"))
+        total_lot = sum(t.buy_lot + t.sell_lot for t in all_txns)
+        logger.warning(
+            "marketdetectors/%s: using synthetic total_value (historical/summary unavailable)",
+            ticker,
+        )
 
     try:
         return [BrokerSummary(

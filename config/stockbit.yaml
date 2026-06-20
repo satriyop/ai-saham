@@ -74,6 +74,17 @@ endpoints:
     # foreign/local flag), aggregated foreign_buy_value, foreign_sell_value, foreign_buy_lot,
     # foreign_sell_lot, total_value, total_lot → broker_summaries table
 
+  historical_summary:
+    url: "https://exodus.stockbit.com/company-price-feed/historical/summary/{ticker}"
+    # Returns: daily OHLCV + true total traded value for one ticker.
+    # Called once per fetch_broker_summaries() call to replace the synthetic total.
+    # Response shape (confirmed 2026-06-20, BBCA):
+    #   data.result[].date    → "YYYY-MM-DD"
+    #   data.result[].value   → total traded value (IDR) — true market turnover
+    #   data.result[].volume  → total traded lots (already in lots, NOT shares)
+    #   data.result[].foreign_buy / foreign_sell / net_foreign → foreign flow (IDR)
+    # Params: period=HS_PERIOD_DAILY, start_date, end_date, limit=400, page=1
+
   broker_activity:
     url: "https://exodus.stockbit.com/order-trade/broker/activity"
     trigger_page: "https://stockbit.com/broker-analysis/broker"
@@ -135,6 +146,20 @@ endpoints:
     # Extracted and stored: event_type, ex_date, cum_date, record_date, payment_date,
     # announcement_date, detail → corp_action_cache table (SQLite daily cache, TTL = calendar day)
     # Used for: dividend_risk, rights_issue_risk, upcoming_rups flags on AccumulationCandidate
+
+# ── Source preferences ────────────────────────────────────────────────────
+#
+# Controls which provider is used for each data type.
+# Both IDX and Stockbit now return accurate total_value for broker_summaries
+# (Stockbit uses /company-price-feed/historical/summary for true market turnover).
+# Switch here without any code changes.
+
+preferences:
+  # Provider for broker_summaries (total_value, foreign flow aggregates).
+  # "idx"     — IDX public API (no auth, exchange-authoritative)
+  # "stockbit" — Stockbit Exodus API (requires active browser session, uses
+  #              /company-price-feed/historical/summary for true total_value)
+  broker_summary_source: idx
 
 # ── Broker codes ───────────────────────────────────────────────────────────
 

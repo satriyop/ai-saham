@@ -62,6 +62,18 @@ from src.infrastructure.persistence.sqlite_stock_meta_repository import (
 DEFAULT_DB_PATH = Path("data.db")
 DEFAULT_DAYS = 90
 STOCKBIT_PROFILE_DIR = Path(".stockbit_profile")
+_STOCKBIT_CONFIG_PATH = Path("config/stockbit.yaml")
+
+
+def _broker_summary_source() -> str:
+    """Read preferences.broker_summary_source from config/stockbit.yaml. Defaults to 'idx'."""
+    try:
+        import yaml
+        with open(_STOCKBIT_CONFIG_PATH, encoding="utf-8") as fh:
+            data = yaml.safe_load(fh) or {}
+        return str((data.get("preferences") or {}).get("broker_summary_source") or "idx").strip()
+    except Exception:
+        return "idx"
 
 # Benchmark ticker always included in every market refresh run (first in list).
 # Required by: saham analyze regime, saham analyze swing (market context).
@@ -190,8 +202,10 @@ def _create_broker_provider(name: str | None):
     """
     Create broker provider by explicit name, or auto-detect if name is None.
 
-    The returned provider is used ONLY for broker_daily_flow and foreign_flow_points.
-    broker_summaries always go through IdxBrokerDataProvider (accurate total_value).
+    The returned provider is used for broker_daily_flow, foreign_flow_points, and optionally
+    broker_summaries. Summary source is controlled by preferences.broker_summary_source in
+    config/stockbit.yaml (default: idx). Stockbit is valid since it now uses
+    /company-price-feed/historical/summary for true total_value.
 
     Auto-detect order:
       1. Playwright session (.stockbit_profile/) — preferred; no token file needed
@@ -288,6 +302,8 @@ def _fetch_broker(
         idx_summary_provider = _idx_summary_provider
     elif broker_provider.provider_name == "idx":
         idx_summary_provider = broker_provider
+    elif _broker_summary_source() == "stockbit":
+        idx_summary_provider = broker_provider  # Stockbit now returns accurate total_value
     else:
         idx_summary_provider = IdxBrokerDataProvider()
 
