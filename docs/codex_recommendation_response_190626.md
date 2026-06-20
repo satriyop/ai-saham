@@ -215,9 +215,26 @@ a neutral bandar reading. Display-only change in `accumulation_display.py`.
 
 Commit: d6c5e61
 
-### Priority 5 — Broker Summary Quality Labels (Finding 4)
+### Priority 5 — Broker Summary Quality Labels (Finding 4) ✅ DONE (2026-06-20)
 
-The policy works correctly. Labels are a reporting improvement only. Add after Priorities 1–4.
+Root cause investigated: the 774 "unusable" rows were zero-value broker summaries for suspended
+stocks (WSKT, WIKA — STATUS_SUSPENDED/tradeable=False) and thin no-trade days (FILM, KAEF —
+currently STATUS_ACTIVE but had specific days with zero volume).
+
+Two fixes applied:
+
+**Fetch gate** (`c1f5704`): `RefreshBrokerDataUseCase` now accepts an optional
+`TickerNotationRepository`. When the notation cache confirms `tradeable=False`, the entire broker
+fetch for that ticker is skipped with status `skip:suspended` before calling any provider. Wired
+via a read-only `StockbitTickerNotationProvider(broker_provider=None)` in `_fetch_broker()` —
+one SQLite read per ticker, no API call. No future suspended-stock rows will accumulate.
+
+**Database cleanup**: 774 existing zero-lot rows deleted directly from `broker_summaries`
+(WSKT: 447, WIKA: 288, FILM: 30, KAEF: 9). `broker_summaries` now has 35,299 rows, all with
+`total_lot > 0`. `foreign_flow_points` had no matching zero rows — no cleanup needed there.
+
+`_is_usable_broker_summary()` remains as a defence-in-depth guard for any future zero-value
+rows from sources not covered by notation (e.g. IDX public holidays returning empty data).
 
 ### Priority 6 — Flow Label Consistency (Finding 6)
 
@@ -250,7 +267,7 @@ All feature expansion should follow after Priority 1–3 above.
 | 1. Broker source preference | Open | Closed — `ORDER BY source ASC` already correct |
 | 2. Legacy Stockbit rows | Open | **Done** — 9 rows deleted; `broker_summaries` 100% idx |
 | 3. Candle freshness | Open | **Done** (8e7b148) — DATA LAG per candidate with trading-session accuracy |
-| 4. Broker row quality | Open | Policy exists — `_is_usable_broker_summary` gates correctly; labels only |
+| 4. Broker row quality | Open | **Done** (c1f5704) — fetch gate on tradeable=False; 774 zero-lot rows deleted; guard retained |
 | 5. Candle provenance | Open | **Done** — 21,420 rows tagged `yahoo_inferred`; new fetches write `yahoo` |
 | 6. Flow labeling | Open | Partial — swing only, not accumulation |
 | 7. Enrichment display | Open | **Done** (d6c5e61) — dim MISSING line per candidate lists absent fields |
