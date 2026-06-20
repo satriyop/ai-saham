@@ -1,0 +1,27 @@
+# Data source preferences for ai-saham
+#
+# Controls which provider is used for each data type.
+# This file is the single place to swap data sources — no code changes needed.
+#
+# Changing a value here takes effect on the next fetch run.
+
+# ── Broker summaries ──────────────────────────────────────────────────────
+#
+# Which provider supplies broker_summaries (total_value, foreign flow aggregates).
+# Both providers now return accurate total_value:
+#   - idx:      IDX public API — no auth required, exchange-authoritative source
+#   - stockbit: Stockbit Exodus API — requires active browser session
+#               Uses /company-price-feed/historical/summary for true market turnover
+#               (confirmed accurate: matches IDX exactly for BBCA 2026-06-17)
+#
+# Default: idx (no auth required, always available)
+broker_summary_source: idx
+
+# ── Candle data ───────────────────────────────────────────────────────────
+#
+# Which provider supplies OHLCV candle data.
+#   - yahoo: Yahoo Finance — adjusted prices, global coverage, no auth
+#   - idx:   IDX public API — unadjusted, Indonesia only
+#
+# Default: yahoo
+candle_source: yahoo

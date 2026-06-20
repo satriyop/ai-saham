@@ -62,16 +62,16 @@ from src.infrastructure.persistence.sqlite_stock_meta_repository import (
 DEFAULT_DB_PATH = Path("data.db")
 DEFAULT_DAYS = 90
 STOCKBIT_PROFILE_DIR = Path(".stockbit_profile")
-_STOCKBIT_CONFIG_PATH = Path("config/stockbit.yaml")
+_DATA_SOURCES_CONFIG_PATH = Path("config/data_sources.yaml")
 
 
 def _broker_summary_source() -> str:
-    """Read preferences.broker_summary_source from config/stockbit.yaml. Defaults to 'idx'."""
+    """Read broker_summary_source from config/data_sources.yaml. Defaults to 'idx'."""
     try:
         import yaml
-        with open(_STOCKBIT_CONFIG_PATH, encoding="utf-8") as fh:
+        with open(_DATA_SOURCES_CONFIG_PATH, encoding="utf-8") as fh:
             data = yaml.safe_load(fh) or {}
-        return str((data.get("preferences") or {}).get("broker_summary_source") or "idx").strip()
+        return str(data.get("broker_summary_source") or "idx").strip()
     except Exception:
         return "idx"
 
