@@ -129,21 +129,60 @@ def _clean_row_span(s: str) -> str:
     return s
 
 
+def _clean_flow_status(s: str) -> str:
+    import re
+    # Remove up-to-date prefix and extract dates
+    s = _fmt_status(s)
+    # Remove year
+    s = re.sub(r'\b\d{4}-', '', s)
+    # Map daily=✓(06-19) -> d:✓(06-19)
+    s = re.sub(r'daily=✓\(([^)]+)\)', r'd:✓(\1)', s)
+    # Map daily=✓ -> d:✓
+    s = re.sub(r'daily=✓', r'd:✓', s)
+    # Map daily:+648rows/12codes/96d -> d:+648r(96d)
+    s = re.sub(r'daily:\+(\d+)rows/\d+codes/(\d+)d', r'd:+\1r(\2d)', s)
+    # Map daily:+648rows/96d -> d:+648r(96d)
+    s = re.sub(r'daily:\+(\d+)rows/(\d+)d', r'd:+\1r(\2d)', s)
+    
+    # Map agg=✓(06-19) -> a:✓(06-19)
+    s = re.sub(r'agg=✓\(([^)]+)\)', r'a:✓(\1)', s)
+    # Map agg=✓ -> a:✓
+    s = re.sub(r'agg=✓', r'a:✓', s)
+    # Map agg:+90rows/260d -> a:+90r(260d)
+    s = re.sub(r'agg:\+(\d+)rows/(\d+)d', r'a:+\1r(\2d)', s)
+    # General agg: -> a:
+    s = re.sub(r'agg:', r'a:', s)
+    return s
+
+
 def _fmt_broker_column(summaries: str, flow: str) -> str:
     import re
     # Get clean formats
     summ_clean = _clean_row_span(summaries)
-    flow_clean = _clean_row_span(flow)
+    flow_clean = _clean_flow_status(flow)
     
     # Drop year from date patterns to save space inside broker columns
     summ_clean = re.sub(r'\b\d{4}-', '', summ_clean)
-    flow_clean = re.sub(r'\b\d{4}-', '', flow_clean)
     
     # If they are identical (e.g. "skip", "n/a:index", or "✓(06-19)")
     if summ_clean == flow_clean:
         return summ_clean
         
-    # Otherwise combine
+    # If the clean flow status is just d:✓(DATE) or d:✓ and summaries is ✓(DATE)
+    summ_date_match = re.search(r'✓\(([^)]+)\)', summ_clean)
+    flow_date_match = re.search(r'✓\(([^)]+)\)', flow_clean)
+    
+    if summ_date_match and flow_date_match:
+        if summ_date_match.group(1) == flow_date_match.group(1):
+            # If dates match, simplify by removing d:✓(DATE) from flow
+            # e.g., "d:✓(06-19) a:+90r(260d)" -> "a:+90r(260d)"
+            extra = flow_clean.replace(f"d:✓({summ_date_match.group(1)})", "").strip()
+            extra = extra.replace(f"✓({summ_date_match.group(1)})", "").strip()
+            extra = extra.strip("/").strip()
+            if not extra:
+                return summ_clean
+            return f"{summ_clean}/{extra}"
+            
     return f"{summ_clean}/{flow_clean}"
 
 
@@ -453,8 +492,8 @@ def _print_table_summary(
         typer.echo(typer.style(f"Database status unavailable: {str(e)[:80]}", fg=typer.colors.YELLOW))
         return
 
-    W = 112
-    prefix_width = 91
+    W = 140
+    prefix_width = 95
     impact_width = W - prefix_width
     typer.echo(f"\n{'─' * W}")
     typer.echo("  Database status after command (scoped to this run's stock tickers)")
@@ -720,8 +759,8 @@ def fetch_market(
     typer.echo("")
 
     # Print table header
-    header_line = f"  {'[Index] Ticker':<15}  {'Candles':<13}  {'Broker':<18}"
-    sep_line    = f"  {'─────── ──────':<15}  {'─────────────':<13}  {'──────────────────':<18}"
+    header_line = f"  {'[Index] Ticker':<15}  {'Candles':<13}  {'Broker':<28}"
+    sep_line    = f"  {'─────── ──────':<15}  {'─────────────':<13}  {'────────────────────────────':<28}"
     if not no_meta:
         header_line += f"  {'Meta':<18}"
         sep_line    += f"  {'──────────────────':<18}"
@@ -749,12 +788,12 @@ def fetch_market(
 
         # Format column values
         candles_col = _clean_row_span(result.candles_status)[:13]
-        broker_col = _fmt_broker_column(result.broker_result.summaries, result.broker_result.flow)[:18]
+        broker_col = _fmt_broker_column(result.broker_result.summaries, result.broker_result.flow)[:28]
         
         line_parts = [
             f"  {progress:<9} {result.ticker:<5}",
             f"{candles_col:<13}",
-            f"{broker_col:<18}"
+            f"{broker_col:<28}"
         ]
         
         if not no_meta:
