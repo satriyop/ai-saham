@@ -14,7 +14,7 @@ This file is the canonical phase-by-phase state for the post-`claude_stockbit_da
 | 2 | Earnings Data Integration | ✅ Done | see commits below |
 | 3 | Stockbit OHLC Fallback | ✅ Done | see commits below |
 | 4 | CLI Adapter Thinness Phase 1 | 🔲 Not Started | — |
-| 5 | Piotroski Quality Gate | 🔲 Not Started | — |
+| 5 | Piotroski Quality Gate | ✅ Done | see commits below |
 | 6 | Broker Distribution Matrix | 🔲 Not Started | — |
 | 7 | Split playwright_stockbit.py | 🔲 Not Started | — |
 | 8 | Watchlist + Saved Screener | 🔲 Not Started | — |
@@ -137,12 +137,21 @@ This file is the canonical phase-by-phase state for the post-`claude_stockbit_da
 
 **Goal:** `--min-piotroski INT` flag in `saham screen accum`. Filter candidates below threshold before display.
 
-**Status:** 🔲 Not Started
+**Status:** ✅ Done
 
 ### Sub-steps
-- [ ] 5.1 Add `--min-piotroski` option to `screen_commands.py`
-- [ ] 5.2 Pass threshold to `AccumulationScreenUseCase` (or filter in adapter)
-- [ ] 5.3 Validate Piotroski field path in `fundamentals_cache`
+- [x] 5.1 Add `--min-piotroski` option to `accumulation_commands.py` (0–9, default 0 = disabled)
+- [x] 5.2 Add `min_piotroski: int = 0` to `AccumulationScreenRequest`; filter in use-case `execute()` before `candidates.append()`
+- [x] 5.3 Gate also excludes tickers with `None` fundamentals when min_piotroski > 0
+- [x] 5.4 5 unit tests; 1659 total pass
+
+### Files Changed
+- `src/application/use_case/accumulation_screen.py` — `min_piotroski` field on request; filter block in execute()
+- `src/adapters/cli/accumulation_commands.py` — `--min-piotroski` option wired to request
+
+### Key Design Notes
+- Filter applied AFTER composite score computation — it's an inclusion gate, not a scoring adjustment
+- `min_piotroski=0` (default) is a no-op; no fundamentals provider = excluded if gate > 0
 
 ---
 

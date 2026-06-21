@@ -521,6 +521,10 @@ def accumulation_run(
         Optional[float],
         typer.Option("--min-score", help="Minimum composite score (0–120, default: 70)", min=0),
     ] = None,
+    min_piotroski: Annotated[
+        int,
+        typer.Option("--min-piotroski", help="Minimum Piotroski F-Score 0–9 (0 = disabled)", min=0, max=9),
+    ] = 0,
     vwap_only: Annotated[
         bool,
         typer.Option("--vwap-only", help="Only show stocks where foreigners are underwater"),
@@ -661,6 +665,7 @@ def accumulation_run(
         window_days=window,
         min_net_buy_days=max(1, min_streak),
         min_score=min_score,
+        min_piotroski=min_piotroski,
         tier1_broker_codes=_SC.tier1_broker_codes,
         min_market_cap_idr=_SC.min_market_cap_idr,
         sector_breadth_enabled=_SC.sector_breadth_enabled,

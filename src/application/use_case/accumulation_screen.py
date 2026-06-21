@@ -45,8 +45,7 @@ from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.ports.seasonality_provider import SeasonalityProvider
 from src.domain.ports.shareholding_provider import ShareholdingProvider
 from src.domain.ports.ticker_notation_provider import TickerNotationProvider
-
-SHARES_PER_LOT = 100
+from src.domain.value_objects.idx_market import SHARES_PER_LOT
 
 # Default preset targets (1:1 R:R, regime-unaware fallback)
 _DEFAULT_TAKE_PROFIT = Decimal("5")
@@ -136,6 +135,8 @@ class AccumulationScreenRequest:
     tier1_broker_codes: frozenset[str] = field(default_factory=lambda: TIER1_FOREIGN_BROKERS)
     # Market cap floor — tickers below this IDR value are excluded (0 = disabled)
     min_market_cap_idr: int = 0
+    # Piotroski F-Score floor (0–9). Tickers below this are excluded (0 = disabled)
+    min_piotroski: int = 0
 
 
 @dataclass
@@ -624,8 +625,17 @@ class AccumulationScreenUseCase:
             # Composite signal — computed after all enrichment is attached
             result.composite_signal = _composite_score(result)
 
-            if result.score >= request.min_score:
-                candidates.append(result)
+            if result.score < request.min_score:
+                continue
+            if request.min_piotroski > 0:
+                fscore = (
+                    result.fundamentals.piotroski_f_score
+                    if result.fundamentals is not None
+                    else None
+                )
+                if fscore is None or fscore < request.min_piotroski:
+                    continue
+            candidates.append(result)
 
         # Primary sort: composite score (when available); tiebreaker: flow score + seasonal
         candidates.sort(

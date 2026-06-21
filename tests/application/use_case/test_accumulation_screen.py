@@ -589,3 +589,79 @@ def test_composite_high_conviction_requires_four_above_60():
     cs = _composite_score(c)
     assert cs.is_high_conviction
     assert cs.total > 70.0
+
+
+# ── Piotroski quality gate ────────────────────────────────────────────────────
+
+def _make_use_case_with_fundamentals(piotroski_score: int | None):
+    """Build a use case with a fundamentals_provider stub returning the given F-Score."""
+    from unittest.mock import MagicMock
+    from src.domain.value_objects.company_fundamentals import CompanyFundamentals
+
+    session_dates = _weekdays(date(2026, 1, 1), 7)
+    as_of = session_dates[-1]
+    candles = [_candle("BBCA", date(2025, 12, 1) + timedelta(days=i), _Decimal("100")) for i in range(45)]
+    summaries = [_summary("BBCA", day, _Decimal("110")) for day in session_dates]
+
+    fund_prov = MagicMock()
+    if piotroski_score is not None:
+        fund_prov.get_fundamentals.return_value = CompanyFundamentals(
+            ticker="BBCA", pe_ratio_ttm=12.0, roe_ttm=15.0, net_profit_margin=12.0,
+            revenue_yoy_growth=8.0, piotroski_f_score=piotroski_score,
+            dividend_yield=2.0, week52_high=1200.0, week52_low=800.0,
+            near_52w_high_rank=50.0,
+        )
+    else:
+        fund_prov.get_fundamentals.return_value = None
+
+    use_case = AccumulationScreenUseCase(
+        broker_repository=MockBrokerRepository(summaries),
+        market_repository=MockMarketRepository(candles),
+        fundamentals_provider=fund_prov,
+    )
+    return use_case, as_of
+
+
+def test_min_piotroski_zero_does_not_filter():
+    use_case, as_of = _make_use_case_with_fundamentals(piotroski_score=3)
+    response = use_case.execute(AccumulationScreenRequest(
+        tickers=["BBCA"], window_days=7, min_net_buy_days=1,
+        as_of_date=as_of, min_piotroski=0,
+    ))
+    assert len(response.candidates) == 1
+
+
+def test_min_piotroski_excludes_below_threshold():
+    use_case, as_of = _make_use_case_with_fundamentals(piotroski_score=3)
+    response = use_case.execute(AccumulationScreenRequest(
+        tickers=["BBCA"], window_days=7, min_net_buy_days=1,
+        as_of_date=as_of, min_piotroski=5,
+    ))
+    assert len(response.candidates) == 0
+
+
+def test_min_piotroski_includes_at_threshold():
+    use_case, as_of = _make_use_case_with_fundamentals(piotroski_score=5)
+    response = use_case.execute(AccumulationScreenRequest(
+        tickers=["BBCA"], window_days=7, min_net_buy_days=1,
+        as_of_date=as_of, min_piotroski=5,
+    ))
+    assert len(response.candidates) == 1
+
+
+def test_min_piotroski_excludes_when_no_fundamentals():
+    use_case, as_of = _make_use_case_with_fundamentals(piotroski_score=None)
+    response = use_case.execute(AccumulationScreenRequest(
+        tickers=["BBCA"], window_days=7, min_net_buy_days=1,
+        as_of_date=as_of, min_piotroski=4,
+    ))
+    assert len(response.candidates) == 0
+
+
+def test_min_piotroski_passes_when_no_fundamentals_and_gate_disabled():
+    use_case, as_of = _make_use_case_with_fundamentals(piotroski_score=None)
+    response = use_case.execute(AccumulationScreenRequest(
+        tickers=["BBCA"], window_days=7, min_net_buy_days=1,
+        as_of_date=as_of, min_piotroski=0,
+    ))
+    assert len(response.candidates) == 1
