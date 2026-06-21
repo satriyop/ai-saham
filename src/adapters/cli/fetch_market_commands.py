@@ -24,6 +24,7 @@ import typer
 
 from src.application.services.universe_loader import (
     UniverseNotFoundError,
+    resolve_tickers,
 )
 from src.application.use_case.fetch_market_refresh import (
     BENCHMARK_TICKER,
@@ -59,10 +60,10 @@ from src.infrastructure.persistence.sqlite_stock_meta_repository import (
     SQLiteStockMetaRepository,
 )
 
-DEFAULT_DB_PATH = Path("data.db")
-DEFAULT_DAYS = 90
+DEFAULT_DAYS = 90  # fetch-specific window — not the full analysis history depth
 STOCKBIT_PROFILE_DIR = Path(".stockbit_profile")
 
+from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.config.data_sources_config import (
     broker_summary_source as _broker_summary_source,
     candle_source as _candle_source,
@@ -567,6 +568,86 @@ def fetch_market(
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1)
 
+    # Resolve tickers first for header printing
+    try:
+        ticker_list = resolve_tickers(
+            universe=universe,
+            explicit=list(tickers) if tickers else [],
+            db_path=resolved_db,
+        )
+    except UniverseNotFoundError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+    except FileNotFoundError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+    if not ticker_list:
+        typer.echo(
+            "No tickers to update. Specify --universe or provide ticker arguments.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    # Include benchmark first
+    without_benchmark = [t for t in ticker_list if t != _BENCHMARK_TICKER]
+    full_ticker_list = [_BENCHMARK_TICKER] + without_benchmark
+
+    enrichment_available = (
+        not no_enrichment
+        and broker_provider_name == "stockbit"
+    )
+
+    # Header
+    from src.infrastructure.browser.stockbit_market_time import (
+        fetch_and_cache_market_status,
+        format_market_status_line,
+        get_display_market_status,
+    )
+    # Attempt to query live market status first, updating the local session cache
+    _mstatus = fetch_and_cache_market_status() or get_display_market_status()
+    typer.echo(f"\n{format_market_status_line(_mstatus)}")
+    typer.echo(f"Updating {len(full_ticker_list)} tickers | {days}d history")
+    if not broker_only:
+        typer.echo(f"  Candles:          {candles_provider}")
+    if not candles_only:
+        # broker_summaries always route to IDX regardless of the selected provider;
+        # flow tables (foreign_flow_points, broker_daily_flow) use the chosen provider.
+        typer.echo("  Broker summaries: idx  (foreign totals + named brokers)")
+        typer.echo(f"  Broker flow:      {broker_provider_name}  (net flow timeseries + daily named breakdown)")
+    if not no_meta:
+        typer.echo("  Meta:             yahoo  (sector/industry, 30d TTL)")
+    if enrichment_available:
+        typer.echo("  Enrichment:       stockbit  (notation/analyst/insider/seasonality/corp, daily SQLite cache)")
+    typer.echo("  Legend:  ✓(DATE) = up-to-date through DATE  +N = new rows stored  ERR: = failed")
+    typer.echo("")
+
+    # Progress streaming callback
+    def on_ticker_complete(result, index: int, total: int) -> None:
+        progress = f"[{index:>3}/{total}]"
+        status_color = typer.colors.RED
+        if not result.any_error:
+            status_color = (
+                typer.colors.BRIGHT_BLACK
+                if result.all_cached
+                else typer.colors.GREEN
+            )
+
+        status_line = (
+            f"candles={_fmt_status(result.candles_status)}"
+            f"  summ={_fmt_status(result.broker_result.summaries)}"
+            f"  flow={_fmt_status(result.broker_result.flow)}"
+        )
+        if not no_meta:
+            status_line += f"  meta={result.meta_status}"
+        if enrichment_available:
+            status_line += f"  enrich={result.enrichment_status}"
+
+        typer.echo(
+            f"  {progress} {result.ticker:<6} "
+            + typer.style(status_line, fg=status_color)
+        )
+
     use_case = FetchMarketRefreshUseCase(
         fetch_candles=_fetch_candles,
         fetch_broker=_fetch_broker,
@@ -588,7 +669,8 @@ def fetch_market(
                 broker_only=broker_only,
                 no_meta=no_meta,
                 no_enrichment=no_enrichment,
-            )
+            ),
+            on_ticker_complete=on_ticker_complete,
         )
     except UniverseNotFoundError as e:
         typer.echo(f"Error: {e}", err=True)
@@ -596,62 +678,6 @@ def fetch_market(
     except FileNotFoundError as e:
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1)
-
-    if not response.ticker_list:
-        typer.echo(
-            "No tickers to update. Specify --universe or provide ticker arguments.",
-            err=True,
-        )
-        raise typer.Exit(1)
-
-    # Header
-    from src.infrastructure.browser.stockbit_market_time import (
-        fetch_and_cache_market_status,
-        format_market_status_line,
-        get_display_market_status,
-    )
-    # Attempt to query live market status first, updating the local session cache
-    _mstatus = fetch_and_cache_market_status() or get_display_market_status()
-    typer.echo(f"\n{format_market_status_line(_mstatus)}")
-    typer.echo(f"Updating {len(response.ticker_list)} tickers | {days}d history")
-    if not broker_only:
-        typer.echo(f"  Candles:          {candles_provider}")
-    if not candles_only:
-        # broker_summaries always route to IDX regardless of the selected provider;
-        # flow tables (foreign_flow_points, broker_daily_flow) use the chosen provider.
-        typer.echo("  Broker summaries: idx  (foreign totals + named brokers)")
-        typer.echo(f"  Broker flow:      {broker_provider_name}  (net flow timeseries + daily named breakdown)")
-    if not no_meta:
-        typer.echo("  Meta:             yahoo  (sector/industry, 30d TTL)")
-    if response.enrichment_available:
-        typer.echo("  Enrichment:       stockbit  (notation/analyst/insider/seasonality/corp, daily SQLite cache)")
-    typer.echo("  Legend:  ✓(DATE) = up-to-date through DATE  +N = new rows stored  ERR: = failed")
-    typer.echo("")
-
-    for i, result in enumerate(response.ticker_results, 1):
-        progress = f"[{i:>3}/{len(response.ticker_list)}]"
-        status_color = typer.colors.RED
-        if not result.any_error:
-            status_color = (
-                typer.colors.BRIGHT_BLACK
-                if result.all_cached
-                else typer.colors.GREEN
-            )
-
-        status_line = (
-            f"candles={_fmt_status(result.candles_status)}"
-            f"  summ={_fmt_status(result.broker_result.summaries)}"
-            f"  flow={_fmt_status(result.broker_result.flow)}"
-        )
-        if not no_meta:
-            status_line += f"  meta={result.meta_status}"
-        if response.enrichment_available:
-            status_line += f"  enrich={result.enrichment_status}"
-
-        typer.echo(
-            f"  {progress} {result.ticker:<6} "
-            + typer.style(status_line, fg=status_color)
-        )
 
     # Summary
     typer.echo("")

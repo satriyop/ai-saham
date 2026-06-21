@@ -82,6 +82,7 @@ class FetchMarketRefreshUseCase:
     def execute(
         self,
         request: FetchMarketRefreshRequest,
+        on_ticker_complete: Callable[[FetchMarketTickerResult, int, int], None] | None = None,
     ) -> FetchMarketRefreshResponse:
         ticker_list = resolve_tickers(
             universe=request.universe,
@@ -169,17 +170,19 @@ class FetchMarketRefreshUseCase:
             else:
                 ok_count += 1
 
-            ticker_results.append(
-                FetchMarketTickerResult(
-                    ticker=ticker,
-                    candles_status=candles_status,
-                    broker_result=broker_result,
-                    meta_status=meta_status,
-                    enrichment_status=enrichment_status,
-                    any_error=any_error,
-                    all_cached=all_cached,
-                )
+            result_item = FetchMarketTickerResult(
+                ticker=ticker,
+                candles_status=candles_status,
+                broker_result=broker_result,
+                meta_status=meta_status,
+                enrichment_status=enrichment_status,
+                any_error=any_error,
+                all_cached=all_cached,
             )
+            ticker_results.append(result_item)
+
+            if on_ticker_complete is not None:
+                on_ticker_complete(result_item, len(ticker_results), len(ticker_list))
 
         stock_tickers_only = [ticker for ticker in ticker_list if not ticker.startswith("^")]
         return FetchMarketRefreshResponse(
