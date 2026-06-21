@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -100,6 +100,18 @@ def _parse_date(raw: str) -> date | None:
         return None
 
 
+def _parse_fetched_at(raw: str | None) -> datetime | None:
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw)
+    except ValueError:
+        try:
+            return datetime.combine(date.fromisoformat(raw), time.min)
+        except (ValueError, TypeError):
+            return None
+
+
 def _parse_composition(ticker: str, body: dict) -> ShareholdingComposition | None:
     data = body.get("data") if isinstance(body, dict) else None
     if not isinstance(data, dict):
@@ -155,6 +167,7 @@ def _parse_composition(ticker: str, body: dict) -> ShareholdingComposition | Non
         top_holder_pct=round(top_holder_pct, 2),
         total_shares=total_shares,
         total_shares_formatted=total_shares_formatted,
+        fetched_at=datetime.now(),
     )
 
 
@@ -196,8 +209,8 @@ class StockbitShareholdingProvider(ShareholdingProvider):
                 ).fetchone()
             if not row:
                 return False
-            fetched = _parse_date(row[0])
-            return fetched is not None and (date.today() - fetched).days <= _CACHE_TTL_DAYS
+            fetched_at = _parse_fetched_at(row[0])
+            return fetched_at is not None and (datetime.now() - fetched_at).days <= _CACHE_TTL_DAYS
         except Exception:
             return False
 
@@ -228,8 +241,8 @@ class StockbitShareholdingProvider(ShareholdingProvider):
                 ).fetchone()
             if not row:
                 return None
-            fetched = _parse_date(row[0])
-            if fetched is None or (date.today() - fetched).days > _CACHE_TTL_DAYS:
+            fetched_at = _parse_fetched_at(row[0])
+            if fetched_at is None or (datetime.now() - fetched_at).days > _CACHE_TTL_DAYS:
                 return None
             return ShareholdingComposition(
                 ticker=ticker,
@@ -240,12 +253,16 @@ class StockbitShareholdingProvider(ShareholdingProvider):
                 top_holder_pct=float(row[5] or 0),
                 total_shares=int(row[6]) if row[6] is not None else None,
                 total_shares_formatted=row[7],
+                fetched_at=fetched_at,
             )
         except Exception as e:
             logger.warning("shareholding: cache read failed for %s: %s", ticker, e)
             return None
 
     def _write_cache(self, comp: ShareholdingComposition) -> None:
+        fetched_str = (
+            comp.fetched_at.isoformat() if comp.fetched_at else datetime.now().isoformat()
+        )
         try:
             with sqlite3.connect(self._db_path) as conn:
                 conn.execute(
@@ -255,7 +272,7 @@ class StockbitShareholdingProvider(ShareholdingProvider):
                     "VALUES (?,?,?,?,?,?,?,?,?)",
                     (
                         comp.ticker,
-                        date.today().isoformat(),
+                        fetched_str,
                         comp.report_date.isoformat() if comp.report_date else None,
                         comp.institution_pct,
                         comp.individual_pct,

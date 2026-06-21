@@ -14,7 +14,7 @@ Layer: Domain
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 
 
 @dataclass(frozen=True)
@@ -27,6 +27,7 @@ class ShareholdingComposition:
     top_holder_pct: float          # its ownership %
     total_shares: int | None = None             # periods[0].total_shares.raw (total issued shares)
     total_shares_formatted: str | None = None   # e.g. "123.28 B"
+    fetched_at: datetime | None = None
 
     @property
     def is_institutionally_held(self) -> bool:
@@ -56,4 +57,6 @@ class ShareholdingComposition:
             d["total_shares"] = self.total_shares
         if self.total_shares_formatted is not None:
             d["total_shares_formatted"] = self.total_shares_formatted
+        if self.fetched_at is not None:
+            d["fetched_at"] = self.fetched_at.isoformat()
         return d

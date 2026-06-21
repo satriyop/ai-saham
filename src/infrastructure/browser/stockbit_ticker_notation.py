@@ -118,7 +118,6 @@ def _parse_snapshot(ticker: str, body: dict) -> TickerNotationSnapshot | None:
         has_uma=_parse_bool(data.get("has_uma") or data.get("uma")),
         catalogs=_visible_catalog_names(data),
         source="stockbit",
-        fetched_date=date.today(),
         fetched_at=datetime.now(),
     )
 
@@ -199,8 +198,8 @@ class StockbitTickerNotationProvider(TickerNotationProvider, TickerNotationRepos
         return self._read_cache(key)
 
     def save_notation(self, snapshot: TickerNotationSnapshot) -> None:
-        fetched_date = snapshot.fetched_date or date.today()
         fetched_at = snapshot.fetched_at or datetime.now()
+        fetched_date = fetched_at.date()
         try:
             with self._connect() as conn:
                 conn.execute(
@@ -267,12 +266,6 @@ class StockbitTickerNotationProvider(TickerNotationProvider, TickerNotationRepos
             catalogs = []
         catalogs = [str(item) for item in catalogs if item]
 
-        fetched_date = None
-        try:
-            fetched_date = date.fromisoformat(row["fetched_date"])
-        except (TypeError, ValueError):
-            pass
-
         return TickerNotationSnapshot(
             ticker=row["ticker"],
             status=row["status"],
@@ -288,7 +281,6 @@ class StockbitTickerNotationProvider(TickerNotationProvider, TickerNotationRepos
             has_uma=_int_to_bool(row["has_uma"]),
             catalogs=catalogs,
             source=row["source"],
-            fetched_date=fetched_date,
             fetched_at=_parse_timestamp(row["fetched_at"]),
         )
 

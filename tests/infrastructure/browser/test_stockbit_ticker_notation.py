@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 
 from src.infrastructure.browser.stockbit_ticker_notation import (
     StockbitTickerNotationProvider,
@@ -83,7 +83,9 @@ def test_sqlite_cache_round_trip(tmp_path):
 
     cached = provider.get_notation("MTFN")
     assert cached is not None
-    assert cached.fetched_date == date.today()
+    assert cached.fetched_at is not None
+    assert isinstance(cached.fetched_at, datetime)
+    assert cached.fetched_at.date() == date.today()
     assert cached.codes == ["E", "L", "X"]
     assert cached.listing_board == "Papan Pemantauan Khusus"
     assert cached.haircut_percentage == "100%"

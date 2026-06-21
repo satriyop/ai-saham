@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from datetime import date
+from datetime import date, datetime, time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -108,6 +108,7 @@ def _parse_seasonality(ticker: str, month: int, back_years: int, body: dict) -> 
         total_years=total_years,
         back_years=back_years,
         source="stockbit",
+        fetched_at=datetime.now(),
     )
 
 
@@ -156,6 +157,7 @@ class StockbitSeasonalityProvider(SeasonalityProvider):
                         back_years       INTEGER,
                         source           TEXT,
                         fetched_month    TEXT NOT NULL,
+                        fetched_at       TEXT,
                         PRIMARY KEY (ticker, year, month)
                     )
                 """)
@@ -163,6 +165,10 @@ class StockbitSeasonalityProvider(SeasonalityProvider):
                     CREATE INDEX IF NOT EXISTS idx_seasonality_ticker_month
                     ON seasonality_cache(ticker, fetched_month)
                 """)
+                try:
+                    conn.execute("ALTER TABLE seasonality_cache ADD COLUMN fetched_at TEXT")
+                except Exception:
+                    pass  # column already exists
         except Exception as e:
             logger.warning("seasonality_cache schema error: %s", e)
 
@@ -191,7 +197,7 @@ class StockbitSeasonalityProvider(SeasonalityProvider):
                 row = conn.execute(
                     """
                     SELECT avg_return_pct, win_rate_pct, positive_years,
-                           total_years, back_years, source
+                           total_years, back_years, source, fetched_at
                     FROM seasonality_cache
                     WHERE ticker=? AND year=? AND month=?
                     """,
@@ -206,6 +212,14 @@ class StockbitSeasonalityProvider(SeasonalityProvider):
         if row["avg_return_pct"] is None:
             return None  # sentinel for "fetched but no data"
 
+        fetched_at: datetime | None = None
+        raw_fa = row["fetched_at"]
+        if raw_fa:
+            try:
+                fetched_at = datetime.fromisoformat(raw_fa)
+            except (ValueError, TypeError):
+                pass
+
         return SeasonalEdge(
             ticker=ticker.upper(),
             month=month,
@@ -215,18 +229,22 @@ class StockbitSeasonalityProvider(SeasonalityProvider):
             total_years=row["total_years"] or 0,
             back_years=row["back_years"] or 5,
             source=row["source"] or "stockbit",
+            fetched_at=fetched_at,
         )
 
     def _write_cache(self, ticker: str, year: int, month: int, edge: SeasonalEdge | None) -> None:
         month_key = self._current_month_key()
+        fetched_str = (
+            edge.fetched_at.isoformat() if edge and edge.fetched_at else datetime.now().isoformat()
+        )
         try:
             with self._get_conn() as conn:
                 conn.execute(
                     """
                     INSERT OR REPLACE INTO seasonality_cache
                         (ticker, year, month, avg_return_pct, win_rate_pct,
-                         positive_years, total_years, back_years, source, fetched_month)
-                    VALUES (?,?,?,?,?,?,?,?,?,?)
+                         positive_years, total_years, back_years, source, fetched_month, fetched_at)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?)
                     """,
                     (
                         ticker.upper(),
@@ -239,6 +257,7 @@ class StockbitSeasonalityProvider(SeasonalityProvider):
                         edge.back_years if edge else None,
                         edge.source if edge else None,
                         month_key,
+                        fetched_str,
                     ),
                 )
         except Exception as e:

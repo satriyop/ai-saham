@@ -87,8 +87,8 @@ def _identity_panel(ticker: str, notation) -> object:
         lines.append(Text(f"  Notations: {notation.codes_label}", style="yellow"))
     if notation.suspend_info:
         lines.append(Text(f"  Suspend: {notation.suspend_info}", style="red"))
-    if notation.fetched_date:
-        lines.append(Text(f"  Fetched: {notation.fetched_date}", style="dim"))
+    if notation.fetched_at:
+        lines.append(Text(f"  Fetched: {notation.fetched_at.date()}", style="dim"))
 
     title = f"[bold]{ticker}[/bold]"
     if notation.listing_board:
@@ -128,7 +128,7 @@ def _valuation_panel(fund, fwd, latest_close: Decimal | None) -> object:
         tbl.add_row(
             "Rev YoY",  _pct(fund.revenue_yoy_growth),
             "Div Yield", _pct(fund.dividend_yield),
-            "Fetched",  str(fund.fetched_date) if fund.fetched_date else "—",
+            "Fetched",  str(fund.fetched_at.date()) if fund.fetched_at else "—",
         )
 
     if fwd is not None:
@@ -164,6 +164,8 @@ def _analyst_panel(ac) -> object:
     meta: list[str] = []
     if ac.last_updated:
         meta.append(f"Updated {ac.last_updated}")
+    if ac.fetched_at:
+        meta.append(f"Fetched {ac.fetched_at.date()}")
     if meta:
         lines.append(Text("  " + "  ·  ".join(meta), style="dim"))
 
@@ -185,6 +187,8 @@ def _ownership_panel(sh) -> object:
         tbl.add_row("Total Shares", sh.total_shares_formatted)
     if sh.report_date:
         tbl.add_row("Report Date", str(sh.report_date))
+    if sh.fetched_at:
+        tbl.add_row("Fetched", str(sh.fetched_at.date()))
 
     return panel(tbl, title="Ownership")
 
@@ -250,8 +254,8 @@ def _profile_panel(prof) -> object:
         lines.append(Text("  ─────────────────────────────────────────", style="dim"))
         lines.append(Text(f"  {bg}", style="dim"))
 
-    if prof.fetched_date:
-        lines.append(Text(f"  Fetched: {prof.fetched_date}", style="dim"))
+    if prof.fetched_at:
+        lines.append(Text(f"  Fetched: {prof.fetched_at.date()}", style="dim"))
 
     return panel(Group(*lines), title="Company Profile")
 

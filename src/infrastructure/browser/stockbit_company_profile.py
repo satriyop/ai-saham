@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -79,7 +79,6 @@ def _parse_profile(ticker: str, body: dict) -> CompanyProfile | None:
 
     return CompanyProfile(
         ticker=ticker.upper(),
-        fetched_date=date.today(),
         background=background,
         listing_board=listing_board,
         ipo_date=ipo_date,
@@ -88,7 +87,20 @@ def _parse_profile(ticker: str, body: dict) -> CompanyProfile | None:
         website=website,
         email=email,
         office_address=office_address,
+        fetched_at=datetime.now(),
     )
+
+
+def _parse_fetched_at(raw: str | None) -> datetime | None:
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw)
+    except ValueError:
+        try:
+            return datetime.combine(date.fromisoformat(raw), time.min)
+        except (ValueError, TypeError):
+            return None
 
 
 class StockbitCompanyProfileProvider(CompanyProfileProvider):
@@ -134,15 +146,11 @@ class StockbitCompanyProfileProvider(CompanyProfileProvider):
                 ).fetchone()
             if not row:
                 return None
-            try:
-                fetched = date.fromisoformat(row[0])
-            except (ValueError, TypeError):
-                return None
-            if (date.today() - fetched).days > _CACHE_TTL_DAYS:
+            fetched_at = _parse_fetched_at(row[0])
+            if fetched_at is None or (datetime.now() - fetched_at).days > _CACHE_TTL_DAYS:
                 return None
             return CompanyProfile(
                 ticker=ticker,
-                fetched_date=fetched,
                 background=row[1],
                 listing_board=row[2],
                 ipo_date=row[3],
@@ -151,12 +159,14 @@ class StockbitCompanyProfileProvider(CompanyProfileProvider):
                 website=row[6],
                 email=row[7],
                 office_address=row[8],
+                fetched_at=fetched_at,
             )
         except Exception as e:
             logger.debug("company_profile_cache read failed for %s: %s", ticker, e)
             return None
 
     def _write_cache(self, profile: CompanyProfile) -> None:
+        fetched_str = profile.fetched_at.isoformat() if profile.fetched_at else datetime.now().isoformat()
         try:
             with sqlite3.connect(str(self._db_path)) as conn:
                 conn.execute(
@@ -165,7 +175,7 @@ class StockbitCompanyProfileProvider(CompanyProfileProvider):
                     "ipo_amount, website, email, office_address) VALUES (?,?,?,?,?,?,?,?,?,?)",
                     (
                         profile.ticker,
-                        profile.fetched_date.isoformat(),
+                        fetched_str,
                         profile.background,
                         profile.listing_board,
                         profile.ipo_date,

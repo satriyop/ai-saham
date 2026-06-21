@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import datetime
 
 
 @dataclass(frozen=True)
@@ -34,7 +34,6 @@ class TickerNotationSnapshot:
     has_uma: bool | None = None
     catalogs: list[str] = field(default_factory=list)
     source: str = "stockbit"
-    fetched_date: date | None = None
     fetched_at: datetime | None = None
 
     @property
@@ -71,6 +70,5 @@ class TickerNotationSnapshot:
             "has_uma": self.has_uma,
             "catalogs": self.catalogs,
             "source": self.source,
-            "fetched_date": self.fetched_date.isoformat() if self.fetched_date else None,
             "fetched_at": self.fetched_at.isoformat() if self.fetched_at else None,
         }

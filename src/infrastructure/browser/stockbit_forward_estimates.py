@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from datetime import date
+from datetime import date, datetime, time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -127,11 +127,23 @@ def _parse_consensus_estimates(ticker: str, body: dict) -> ForwardEstimates | No
 
     return ForwardEstimates.compute(
         ticker=ticker.upper(),
-        fetched_date=date.today(),
         forward_eps_1y=forward_eps,
         revenue_forward_1y=revenue_fwd,
         current_price=None,  # caller may enrich from AnalystConsensus.current_price
+        fetched_at=datetime.now(),
     )
+
+
+def _parse_fetched_at(raw: str | None) -> datetime | None:
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw)
+    except ValueError:
+        try:
+            return datetime.combine(date.fromisoformat(raw), time.min)
+        except (ValueError, TypeError):
+            return None
 
 
 class StockbitForwardEstimatesProvider(ForwardEstimatesProvider):
@@ -178,25 +190,23 @@ class StockbitForwardEstimatesProvider(ForwardEstimatesProvider):
                 ).fetchone()
             if not row:
                 return None
-            try:
-                fetched = date.fromisoformat(row[0])
-            except (ValueError, TypeError):
-                return None
-            if fetched < date.today():
+            fetched_at = _parse_fetched_at(row[0])
+            if fetched_at is None or fetched_at.date() < date.today():
                 return None
             return ForwardEstimates(
                 ticker=ticker,
-                fetched_date=fetched,
                 forward_eps_1y=row[1],
                 revenue_forward_1y=row[2],
                 current_price=row[3],
                 forward_pe=row[4],
+                fetched_at=fetched_at,
             )
         except Exception as e:
             logger.debug("forward_estimates_cache read failed for %s: %s", ticker, e)
             return None
 
     def _write_cache(self, est: ForwardEstimates) -> None:
+        fetched_str = est.fetched_at.isoformat() if est.fetched_at else datetime.now().isoformat()
         try:
             with sqlite3.connect(str(self._db_path)) as conn:
                 conn.execute(
@@ -205,7 +215,7 @@ class StockbitForwardEstimatesProvider(ForwardEstimatesProvider):
                     "current_price, forward_pe) VALUES (?,?,?,?,?,?)",
                     (
                         est.ticker,
-                        est.fetched_date.isoformat(),
+                        fetched_str,
                         est.forward_eps_1y,
                         est.revenue_forward_1y,
                         est.current_price,

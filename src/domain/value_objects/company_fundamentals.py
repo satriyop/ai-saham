@@ -13,13 +13,12 @@ Layer: Domain
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import datetime
 
 
 @dataclass(frozen=True)
 class CompanyFundamentals:
     ticker: str
-    fetched_date: date
     pe_ratio_ttm: float | None        # Current PE Ratio (TTM)
     roe_ttm: float | None             # Return on Equity (TTM), in %
     net_profit_margin: float | None   # Net Profit Margin (Quarter), in %
@@ -31,6 +30,7 @@ class CompanyFundamentals:
     near_52w_high_rank: float | None  # Rank (Near 52 Weeks High), 0–100 percentile
     market_cap_idr: int | None = None  # data.info.market_cap.raw (IDR)
     pbv: float | None = None           # data.info.pbv.raw
+    fetched_at: datetime | None = None
 
     @property
     def is_quality(self) -> bool:
@@ -58,7 +58,7 @@ class CompanyFundamentals:
 
     def to_dict(self) -> dict:
         d = {
-            "fetched_date": self.fetched_date.isoformat(),
+            "fetched_at": self.fetched_at.isoformat() if self.fetched_at else None,
             "pe_ratio_ttm": self.pe_ratio_ttm,
             "roe_ttm": self.roe_ttm,
             "net_profit_margin": self.net_profit_margin,

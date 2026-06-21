@@ -10,6 +10,7 @@ Layer: Domain
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 
 
 @dataclass(frozen=True)
@@ -25,6 +26,7 @@ class SeasonalEdge:
         total_years:          Total years of history used
         back_years:           Number of years looked back when fetching
         source:               Data source tag (default "stockbit")
+        fetched_at:           When this data was last retrieved from the API
     """
 
     ticker: str
@@ -35,6 +37,7 @@ class SeasonalEdge:
     total_years: int
     back_years: int
     source: str = "stockbit"
+    fetched_at: datetime | None = None
 
     @property
     def score(self) -> float:

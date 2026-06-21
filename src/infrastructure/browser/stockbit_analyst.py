@@ -50,6 +50,19 @@ def _parse_date(raw: str) -> date | None:
     return None
 
 
+def _parse_fetched_at(raw: str | None) -> datetime | None:
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw)
+    except ValueError:
+        try:
+            from datetime import date as _date
+            return datetime.combine(_date.fromisoformat(raw), datetime.min.time())
+        except (ValueError, TypeError):
+            return None
+
+
 def _parse_consensus(ticker: str, body: dict) -> AnalystConsensus | None:
     data = body.get("data") if isinstance(body, dict) else None
     if not isinstance(data, dict):
@@ -80,6 +93,7 @@ def _parse_consensus(ticker: str, body: dict) -> AnalystConsensus | None:
         last_updated=last_updated,
         price_target_low=target_low,
         price_target_high=target_high,
+        fetched_at=datetime.now(),
     )
 
 
@@ -153,7 +167,7 @@ class StockbitAnalystConsensusProvider(AnalystConsensusProvider):
         try:
             with self._get_conn() as conn:
                 row = conn.execute(
-                    "SELECT 1 FROM analyst_cache WHERE ticker=? AND fetched_date=? LIMIT 1",
+                    "SELECT 1 FROM analyst_cache WHERE ticker=? AND substr(fetched_date,1,10)=? LIMIT 1",
                     (ticker.upper(), today_str),
                 ).fetchone()
             return row is not None
@@ -167,7 +181,7 @@ class StockbitAnalystConsensusProvider(AnalystConsensusProvider):
                     """
                     SELECT buy_count, hold_count, sell_count,
                            avg_price_target, current_price, last_updated,
-                           price_target_low, price_target_high
+                           price_target_low, price_target_high, fetched_date
                     FROM analyst_cache
                     WHERE ticker=?
                     """,
@@ -182,6 +196,7 @@ class StockbitAnalystConsensusProvider(AnalystConsensusProvider):
         if row["buy_count"] + row["hold_count"] + row["sell_count"] == 0:
             return None  # sentinel for "fetched but no data"
 
+        fetched_at = _parse_fetched_at(row["fetched_date"])
         return AnalystConsensus(
             ticker=ticker.upper(),
             buy_count=row["buy_count"],
@@ -192,10 +207,14 @@ class StockbitAnalystConsensusProvider(AnalystConsensusProvider):
             last_updated=_parse_date(row["last_updated"] or ""),
             price_target_low=row["price_target_low"],
             price_target_high=row["price_target_high"],
+            fetched_at=fetched_at,
         )
 
     def _write_cache(self, ticker: str, consensus: AnalystConsensus | None) -> None:
-        today_str = date.today().isoformat()
+        fetched_str = (
+            consensus.fetched_at.isoformat() if consensus and consensus.fetched_at
+            else datetime.now().isoformat()
+        )
         try:
             with self._get_conn() as conn:
                 conn.execute(
@@ -214,7 +233,7 @@ class StockbitAnalystConsensusProvider(AnalystConsensusProvider):
                         consensus.avg_price_target if consensus else None,
                         consensus.current_price if consensus else None,
                         consensus.last_updated.isoformat() if consensus and consensus.last_updated else None,
-                        today_str,
+                        fetched_str,
                         consensus.price_target_low if consensus else None,
                         consensus.price_target_high if consensus else None,
                     ),

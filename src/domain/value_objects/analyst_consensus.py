@@ -10,7 +10,7 @@ Layer: Domain
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 
 
 @dataclass(frozen=True)
@@ -24,6 +24,7 @@ class AnalystConsensus:
     last_updated: date | None
     price_target_low: float | None = None   # best_low_target — most bearish analyst
     price_target_high: float | None = None  # best_high_target — most bullish analyst
+    fetched_at: datetime | None = None
 
     @property
     def analyst_count(self) -> int:
@@ -95,4 +96,6 @@ class AnalystConsensus:
             d["price_target_high"] = self.price_target_high
         if self.target_range_pct is not None:
             d["target_range_pct"] = self.target_range_pct
+        if self.fetched_at is not None:
+            d["fetched_at"] = self.fetched_at.isoformat()
         return d

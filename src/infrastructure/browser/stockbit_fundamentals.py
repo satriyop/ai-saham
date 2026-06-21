@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -80,6 +80,18 @@ def _parse_int(raw: str | None) -> int | None:
     return int(round(f)) if f is not None else None
 
 
+def _parse_fetched_at(raw: str | None) -> datetime | None:
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw)
+    except ValueError:
+        try:
+            return datetime.combine(date.fromisoformat(raw), time.min)
+        except (ValueError, TypeError):
+            return None
+
+
 def _build_metrics(body: dict) -> dict[str, str]:
     """Flatten the nested fin_name_results list into a name → value dict."""
     metrics: dict[str, str] = {}
@@ -132,7 +144,6 @@ def _parse_fundamentals(ticker: str, body: dict) -> CompanyFundamentals | None:
 
     return CompanyFundamentals(
         ticker=ticker.upper(),
-        fetched_date=date.today(),
         pe_ratio_ttm=pe,
         roe_ttm=roe,
         net_profit_margin=npm,
@@ -144,6 +155,7 @@ def _parse_fundamentals(ticker: str, body: dict) -> CompanyFundamentals | None:
         near_52w_high_rank=near52,
         market_cap_idr=market_cap_idr,
         pbv=pbv,
+        fetched_at=datetime.now(),
     )
 
 
@@ -186,8 +198,8 @@ class StockbitFundamentalsProvider(FundamentalsProvider):
                 ).fetchone()
             if not row:
                 return False
-            fetched = date.fromisoformat(row[0])
-            return (date.today() - fetched).days <= _CACHE_TTL_DAYS
+            fetched_at = _parse_fetched_at(row[0])
+            return fetched_at is not None and (datetime.now() - fetched_at).days <= _CACHE_TTL_DAYS
         except Exception:
             return False
 
@@ -219,16 +231,12 @@ class StockbitFundamentalsProvider(FundamentalsProvider):
                 ).fetchone()
             if not row:
                 return None
-            try:
-                fetched = date.fromisoformat(row[0])
-            except (ValueError, TypeError):
-                return None
-            if (date.today() - fetched).days > _CACHE_TTL_DAYS:
+            fetched_at = _parse_fetched_at(row[0])
+            if fetched_at is None or (datetime.now() - fetched_at).days > _CACHE_TTL_DAYS:
                 return None
             f_score_raw = row[5]
             return CompanyFundamentals(
                 ticker=ticker,
-                fetched_date=fetched,
                 pe_ratio_ttm=row[1],
                 roe_ttm=row[2],
                 net_profit_margin=row[3],
@@ -240,12 +248,14 @@ class StockbitFundamentalsProvider(FundamentalsProvider):
                 near_52w_high_rank=row[9],
                 market_cap_idr=int(row[10]) if row[10] is not None else None,
                 pbv=float(row[11]) if row[11] is not None else None,
+                fetched_at=fetched_at,
             )
         except Exception as e:
             logger.warning("company_fundamentals: cache read failed for %s: %s", ticker, e)
             return None
 
     def _write_cache(self, fund: CompanyFundamentals) -> None:
+        fetched_str = fund.fetched_at.isoformat() if fund.fetched_at else datetime.now().isoformat()
         try:
             with sqlite3.connect(self._db_path) as conn:
                 conn.execute(
@@ -256,7 +266,7 @@ class StockbitFundamentalsProvider(FundamentalsProvider):
                     "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     (
                         fund.ticker,
-                        fund.fetched_date.isoformat(),
+                        fetched_str,
                         fund.pe_ratio_ttm,
                         fund.roe_ttm,
                         fund.net_profit_margin,

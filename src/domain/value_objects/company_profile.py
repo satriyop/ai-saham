@@ -10,13 +10,12 @@ Layer: Domain
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import datetime
 
 
 @dataclass(frozen=True)
 class CompanyProfile:
     ticker: str
-    fetched_date: date
     background: str | None          # company description (Indonesian)
     listing_board: str | None       # "Papan Utama" | "Papan Pengembangan" | "Papan Akselerasi"
     ipo_date: str | None            # "31 May 2000" (kept as-is — locale format)
@@ -25,9 +24,10 @@ class CompanyProfile:
     website: str | None
     email: str | None               # primary investor relations email
     office_address: str | None
+    fetched_at: datetime | None = None
 
     def to_dict(self) -> dict:
-        d: dict = {"fetched_date": self.fetched_date.isoformat()}
+        d: dict = {"fetched_at": self.fetched_at.isoformat() if self.fetched_at else None}
         if self.background is not None:
             d["background"] = self.background[:200] + "..." if len(self.background or "") > 200 else self.background
         if self.listing_board is not None:
