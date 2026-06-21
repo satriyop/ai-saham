@@ -24,4 +24,4 @@ broker_summary_source: idx
 #   - idx:   IDX public API — unadjusted, Indonesia only
 #
 # Default: yahoo
-candle_source: yahoo  # TODO: implement candle_source routing — this key is not yet read by any Python code
+candle_source: yahoo

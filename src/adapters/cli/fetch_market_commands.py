@@ -63,7 +63,10 @@ DEFAULT_DB_PATH = Path("data.db")
 DEFAULT_DAYS = 90
 STOCKBIT_PROFILE_DIR = Path(".stockbit_profile")
 
-from src.infrastructure.config.data_sources_config import broker_summary_source as _broker_summary_source
+from src.infrastructure.config.data_sources_config import (
+    broker_summary_source as _broker_summary_source,
+    candle_source as _candle_source,
+)
 
 # Benchmark ticker always included in every market refresh run (first in list).
 # Required by: saham analyze regime, saham analyze swing (market context).
@@ -505,9 +508,9 @@ def fetch_market(
         typer.Option("--broker-only", help="Skip candles fetch"),
     ] = False,
     candles_provider: Annotated[
-        str,
-        typer.Option("--provider", help="Candles provider: yahoo or idx"),
-    ] = "yahoo",
+        Optional[str],
+        typer.Option("--provider", help="Candles provider: yahoo or idx (default from config/data_sources.yaml)"),
+    ] = None,
     broker_provider: Annotated[
         Optional[str],
         typer.Option(
@@ -555,6 +558,7 @@ def fetch_market(
         saham fetch market BBCA --no-enrichment
     """
     resolved_db = db_path or DEFAULT_DB_PATH
+    candles_provider = candles_provider or _candle_source()
 
     # Determine broker provider
     try:
