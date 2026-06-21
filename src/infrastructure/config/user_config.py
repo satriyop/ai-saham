@@ -1,24 +1,12 @@
-"""User-local CLI defaults loaded from config/user.yaml (gitignored)."""
+"""
+Backward-compatible shim — delegates to AppConfig so existing call sites keep working.
 
-from pathlib import Path
+config/user.yaml values now flow through the unified merge pipeline in app_config.py.
+"""
 
-import yaml
-
-_CONFIG_PATH = Path(__file__).parents[4] / "config" / "user.yaml"
-_cache: dict | None = None
-
-
-def _load() -> dict:
-    global _cache
-    if _cache is None:
-        if _CONFIG_PATH.exists():
-            with open(_CONFIG_PATH) as f:
-                _cache = yaml.safe_load(f) or {}
-        else:
-            _cache = {}
-    return _cache
+from src.infrastructure.config.app_config import APP_CFG
 
 
 def get_swing_default(key: str, fallback=None):
-    """Return swing.<key> from config/user.yaml, or fallback if absent."""
-    return _load().get("swing", {}).get(key, fallback)
+    """Return swing.<key> from the merged config (default.yaml + user.yaml)."""
+    return getattr(APP_CFG.swing, key, fallback)

@@ -76,14 +76,16 @@ from src.infrastructure.browser.stockbit_browser import (
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
-DEFAULT_DB_PATH = Path("data.db")
+from src.infrastructure.config.app_config import APP_CFG
+
+DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 DEFAULT_PRE_OPEN_CONFIG_PATH = Path("config/pre_open_screener.yaml")
 DEFAULT_SESSION_FILE = Path("stockbit_session.json")
 DEFAULT_SIDECAR_PATH = Path("journals/.last-session.json")
 DEFAULT_CONFIRMATION_PATH = Path("journals/.last-confirmation.json")
 DEFAULT_CONFIRMATION_JOURNAL_PATH = Path("journals/intraday-confirmations.csv")
-DEFAULT_REGIME_UNIVERSE = "idx80"
-DEFAULT_REGIME_BENCHMARK = "^JKSE"
+DEFAULT_REGIME_UNIVERSE = APP_CFG.analysis.regime_universe
+DEFAULT_REGIME_BENCHMARK = APP_CFG.analysis.benchmark
 IDX_TIMEZONE = ZoneInfo("Asia/Jakarta")
 PRE_OPEN_START = time(8, 45)
 PRE_OPEN_END = time(9, 0)

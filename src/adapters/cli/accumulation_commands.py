@@ -46,6 +46,7 @@ from src.application.use_case.market_regime import (
 from src.infrastructure.persistence.sqlite_broker_repository import (
     SQLiteBrokerRepository,
 )
+from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.config.user_config import get_swing_default
 from src.infrastructure.browser.stockbit_analyst import StockbitAnalystConsensusProvider
 from src.infrastructure.browser.stockbit_bandar import StockbitBandarDetectorProvider
@@ -113,7 +114,7 @@ def _make_stockbit_providers(db_path: Path) -> "StockbitProviders":
     )
 
 
-DEFAULT_DB_PATH = Path("data.db")
+DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 FOREIGN_BOUNCE_PRESET = "foreign-bounce"
 FOREIGN_BOUNCE_TAKE_PROFIT = Decimal("5")
 FOREIGN_BOUNCE_STOP_LOSS = Decimal("5")

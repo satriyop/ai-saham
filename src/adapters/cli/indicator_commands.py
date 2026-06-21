@@ -46,9 +46,11 @@ indicator_app = typer.Typer(
     context_settings={"help_option_names": ["-h", "--help"]},
 )
 
-DEFAULT_DB_PATH = Path("data.db")
+from src.infrastructure.config.app_config import APP_CFG
+
+DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 DEFAULT_FORMULAS_PATH = Path("config/formulas.yaml")
-DEFAULT_DAYS = 365
+DEFAULT_DAYS = APP_CFG.market.default_days
 VALID_FIELDS = ["open", "high", "low", "close"]
 
 

@@ -19,7 +19,9 @@ from src.application.use_case.market_regime import MarketRegimeUseCase
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
-DEFAULT_DB_PATH = Path("data.db")
+from src.infrastructure.config.app_config import APP_CFG
+
+DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 
 
 def _parse_date(value: str | None) -> date | None:
@@ -33,7 +35,7 @@ def _parse_date(value: str | None) -> date | None:
 
 
 def today(
-    universe: Annotated[str, typer.Option("--universe", "-u", help="Universe to brief")] = "lq45",
+    universe: Annotated[str, typer.Option("--universe", "-u", help="Universe to brief")] = APP_CFG.analysis.universe,
     top: Annotated[int, typer.Option("--top", help="Number of candidates per section", min=1)] = 3,
     date_str: Annotated[Optional[str], typer.Option("--date", help="Date YYYY-MM-DD")] = None,
     db_path: Annotated[

@@ -89,7 +89,9 @@ from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBroker
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 from src.infrastructure.sentiment import SentimentFactory
 
-DEFAULT_DB_PATH = Path("data.db")
+from src.infrastructure.config.app_config import APP_CFG
+
+DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 _W = 70  # display width
 
 FOREIGN_BOUNCE_PRESET = "foreign-bounce"
@@ -552,8 +554,8 @@ def swing(
     ] = "foreign-bounce",
     window: Annotated[
         int,
-        typer.Option("--window", "-w", help="Accumulation analysis window in broker sessions (default: 7)"),
-    ] = 7,
+        typer.Option("--window", "-w", help="Accumulation analysis window in broker sessions"),
+    ] = APP_CFG.swing.window,
     flow_window: Annotated[
         int,
         typer.Option("--flow-window", help="Broker-flow detail window in broker sessions", min=1),
@@ -564,20 +566,20 @@ def swing(
     ] = None,
     risk_pct: Annotated[
         float,
-        typer.Option("--risk-pct", help="% of capital at risk per trade (default: 1.0)"),
-    ] = 1.0,
+        typer.Option("--risk-pct", help="% of capital at risk per trade"),
+    ] = APP_CFG.swing.risk_pct,
     entry_price: Annotated[
         Optional[float],
         typer.Option("--entry", help="Entry price in IDR (default: latest close)"),
     ] = None,
     atr_mult: Annotated[
         float,
-        typer.Option("--atr-mult", help="ATR multiplier for stop distance (default: 1.5)"),
-    ] = 1.5,
+        typer.Option("--atr-mult", help="ATR multiplier for stop distance"),
+    ] = APP_CFG.swing.atr_mult,
     rr: Annotated[
         float,
-        typer.Option("--rr", help="Reward:risk ratio for target (default: 2.0)"),
-    ] = 2.0,
+        typer.Option("--rr", help="Reward:risk ratio for target"),
+    ] = APP_CFG.swing.rr,
     no_sentiment: Annotated[
         bool,
         typer.Option("--no-sentiment", help="Skip news sentiment (offline mode)"),
@@ -608,11 +610,11 @@ def swing(
     regime_universe: Annotated[
         str,
         typer.Option("--regime-universe", help="Universe for breadth context"),
-    ] = "idx80",
+    ] = APP_CFG.analysis.regime_universe,
     benchmark: Annotated[
         str,
         typer.Option("--benchmark", help="Benchmark ticker for regime context"),
-    ] = "^JKSE",
+    ] = APP_CFG.analysis.benchmark,
     risk_strategy: Annotated[
         Optional[str],
         typer.Option(
@@ -958,11 +960,11 @@ def swing_backtest(
     capital: Annotated[
         int,
         typer.Option("--capital", "-c", help="Initial capital in IDR", min=1),
-    ] = 100_000_000,
+    ] = APP_CFG.trading.capital,
     risk_pct: Annotated[
         float,
         typer.Option("--risk-pct", help="% of capital risked per trade", min=0.01),
-    ] = 1.0,
+    ] = APP_CFG.swing.risk_pct,
     max_positions: Annotated[
         int,
         typer.Option("--max-positions", help="Maximum concurrent open positions", min=1),
@@ -970,15 +972,15 @@ def swing_backtest(
     take_profit: Annotated[
         float,
         typer.Option("--take-profit", help="Take-profit percentage", min=0.01),
-    ] = 5.0,
+    ] = APP_CFG.swing.take_profit,
     stop_loss: Annotated[
         float,
         typer.Option("--stop-loss", help="Stop-loss percentage", min=0.01),
-    ] = 5.0,
+    ] = APP_CFG.swing.stop_loss,
     max_hold: Annotated[
         int,
         typer.Option("--max-hold", help="Maximum holding period in trading days", min=1),
-    ] = 10,
+    ] = APP_CFG.swing.max_hold,
     cost_bps: Annotated[
         float,
         typer.Option(
@@ -1001,7 +1003,7 @@ def swing_backtest(
     benchmark: Annotated[
         str,
         typer.Option("--benchmark", help="Benchmark ticker for regime context"),
-    ] = "^JKSE",
+    ] = APP_CFG.analysis.benchmark,
     show_trades: Annotated[
         int,
         typer.Option("--show-trades", help="Number of recent trades to print", min=0),
@@ -1156,11 +1158,11 @@ def swing_compare(
     capital: Annotated[
         int,
         typer.Option("--capital", "-c", help="Initial capital in IDR", min=1),
-    ] = 100_000_000,
+    ] = APP_CFG.trading.capital,
     risk_pct: Annotated[
         float,
         typer.Option("--risk-pct", help="% of capital risked per trade", min=0.01),
-    ] = 1.0,
+    ] = APP_CFG.swing.risk_pct,
     max_positions: Annotated[
         int,
         typer.Option("--max-positions", help="Maximum concurrent open positions", min=1),
@@ -1168,15 +1170,15 @@ def swing_compare(
     take_profit: Annotated[
         float,
         typer.Option("--take-profit", help="Take-profit percentage", min=0.01),
-    ] = 5.0,
+    ] = APP_CFG.swing.take_profit,
     stop_loss: Annotated[
         float,
         typer.Option("--stop-loss", help="Stop-loss percentage", min=0.01),
-    ] = 5.0,
+    ] = APP_CFG.swing.stop_loss,
     max_hold: Annotated[
         int,
         typer.Option("--max-hold", help="Maximum holding period in trading days", min=1),
-    ] = 10,
+    ] = APP_CFG.swing.max_hold,
     cost_bps: Annotated[
         float,
         typer.Option(
@@ -1188,7 +1190,7 @@ def swing_compare(
     benchmark: Annotated[
         str,
         typer.Option("--benchmark", help="Benchmark ticker for regime context"),
-    ] = "^JKSE",
+    ] = APP_CFG.analysis.benchmark,
     output_format: Annotated[
         str,
         typer.Option("--format", help="Output format: table or json"),
@@ -1316,11 +1318,11 @@ def regime(
     universe: Annotated[
         Optional[str],
         typer.Option("--universe", "-u", help="Universe name or 'cached' — see `saham fetch universe list`"),
-    ] = "idx80",
+    ] = APP_CFG.analysis.regime_universe,
     benchmark: Annotated[
         str,
         typer.Option("--benchmark", help="Benchmark ticker, e.g. ^JKSE"),
-    ] = "^JKSE",
+    ] = APP_CFG.analysis.benchmark,
     as_of: Annotated[
         Optional[str],
         typer.Option("--as-of", help="Regime date, YYYY-MM-DD (default: today)"),
@@ -1397,20 +1399,20 @@ def size(
     ] = None,
     risk_pct: Annotated[
         float,
-        typer.Option("--risk-pct", help="% of capital at risk per trade (default: 1.0)"),
-    ] = 1.0,
+        typer.Option("--risk-pct", help="% of capital at risk per trade"),
+    ] = APP_CFG.swing.risk_pct,
     entry_price: Annotated[
         Optional[float],
         typer.Option("--entry", help="Entry price in IDR (default: latest close)"),
     ] = None,
     atr_mult: Annotated[
         float,
-        typer.Option("--atr-mult", help="ATR multiplier for stop distance (default: 1.5)"),
-    ] = 1.5,
+        typer.Option("--atr-mult", help="ATR multiplier for stop distance"),
+    ] = APP_CFG.swing.atr_mult,
     rr: Annotated[
         float,
-        typer.Option("--rr", help="Reward:risk ratio for target (default: 2.0)"),
-    ] = 2.0,
+        typer.Option("--rr", help="Reward:risk ratio for target"),
+    ] = APP_CFG.swing.rr,
     atr_period: Annotated[
         int,
         typer.Option("--atr-period", help="ATR period (default: 14)", min=2),

@@ -1,29 +1,53 @@
 # Default configuration for ai-saham
-# This file defines sensible defaults. Override via CLI flags or environment.
-#
-# !! NOT YET LOADED !!
-# No Python code currently reads this file. The system uses hardcoded defaults
-# in each component. When this file is wired up, remove this warning.
+# This file defines shipped defaults for the IDX market.
+# Override any key in config/user.yaml (gitignored) — user.yaml wins key-by-key.
+# Override individual options with CLI flags — flags beat everything.
 
-# Market data settings
+# ── Market ────────────────────────────────────────────────────────────────
 market:
-  # Default data provider
-  provider: yahoo
-  # Market suffix for ticker symbols (IDX = .JK)
-  suffix: ".JK"
-  # Default number of days to fetch
-  default_days: 365
+  provider: yahoo        # candle data source: yahoo | idx
+  suffix: ".JK"         # ticker suffix for IDX symbols
+  default_days: 365      # history depth for indicator/analyze commands
 
-# Persistence settings
+# ── Storage ───────────────────────────────────────────────────────────────
 storage:
-  # SQLite database path (supports ~ for home directory)
-  db_path: "~/.ai-saham/data.db"
+  db_path: "data.db"     # SQLite path (relative to CWD, or absolute with ~)
 
-# Analysis settings (future use)
+# ── Broker ────────────────────────────────────────────────────────────────
+broker:
+  provider: idx          # broker summary provider: idx | stockbit
+  default_days: 30       # broker fetch look-back window (sessions)
+
+# ── Analysis ──────────────────────────────────────────────────────────────
 analysis:
-  # Default risk profile
-  risk_profile: balanced
+  risk_profile: balanced # conservative | balanced | aggressive
+  benchmark: "^JKSE"     # benchmark ticker for regime / return comparison
+  universe: lq45         # default universe for daily briefings
+  regime_universe: idx80 # universe used for market regime detection
+  format: table          # output format: table | json
 
-# AI settings (future use, disabled by default)
+# ── Trading ───────────────────────────────────────────────────────────────
+trading:
+  capital: 100_000_000   # IDR — position sizing baseline (personal, override in user.yaml)
+  risk_pct: 1.0          # % of capital at risk per trade
+
+# ── Swing ─────────────────────────────────────────────────────────────────
+swing:
+  window: 7              # accumulation look-back (sessions)
+  take_profit: 5.0       # TP % for backtest / audit exit grid
+  stop_loss: 5.0         # SL %
+  max_hold: 10           # max hold days before forced exit
+  atr_mult: 1.5          # ATR multiplier for stop-loss placement
+  rr: 2.0                # reward:risk ratio for take-profit calculation
+  min_score: 70.0        # accumulation score floor for screening
+  capital: null          # IDR — personal capital, set in user.yaml; null disables position sizing
+  risk_pct: 1.0          # % of capital at risk per trade
+
+# ── Backtest ──────────────────────────────────────────────────────────────
+backtest:
+  start_date: "2026-01-01"  # default audit / backtest start date
+  cost_bps: 20.0            # transaction cost in basis points (buy + sell combined)
+
+# ── AI ────────────────────────────────────────────────────────────────────
 ai:
-  enabled: false
+  enabled: false         # AI-assisted analysis is OFF by default

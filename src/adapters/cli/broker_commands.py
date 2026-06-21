@@ -49,9 +49,11 @@ from src.infrastructure.persistence.sqlite_broker_repository import (
     SQLiteBrokerRepository,
 )
 
+from src.infrastructure.config.app_config import APP_CFG
+
 # Supported providers
 PROVIDERS = ("idx", "stockbit")
-DEFAULT_PROVIDER = "idx"
+DEFAULT_PROVIDER = APP_CFG.broker.provider
 
 _DEFAULT_PROFILE_DIR = Path(".stockbit_profile")
 
@@ -67,8 +69,8 @@ def _create_provider(provider_name: str) -> BrokerDataProvider:
         raise ValueError(f"Unknown provider: {provider_name}. Choose from: {', '.join(PROVIDERS)}")
 
 # Default configuration
-DEFAULT_DB_PATH = Path("data.db")
-DEFAULT_DAYS = 30
+DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
+DEFAULT_DAYS = APP_CFG.broker.default_days
 
 
 def broker_status() -> None:

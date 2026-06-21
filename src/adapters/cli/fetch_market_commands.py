@@ -59,15 +59,14 @@ from src.infrastructure.persistence.sqlite_market_repository import (
 from src.infrastructure.persistence.sqlite_stock_meta_repository import (
     SQLiteStockMetaRepository,
 )
-
-DEFAULT_DAYS = 90  # fetch-specific window — not the full analysis history depth
-STOCKBIT_PROFILE_DIR = Path(".stockbit_profile")
-
 from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.config.data_sources_config import (
     broker_summary_source as _broker_summary_source,
     candle_source as _candle_source,
 )
+
+DEFAULT_DAYS = 90  # fetch-specific window — not the full analysis history depth
+STOCKBIT_PROFILE_DIR = Path(".stockbit_profile")
 
 # Benchmark ticker always included in every market refresh run (first in list).
 # Required by: saham analyze regime, saham analyze swing (market context).
@@ -558,7 +557,7 @@ def fetch_market(
         saham fetch market --universe lq45 --no-meta
         saham fetch market BBCA --no-enrichment
     """
-    resolved_db = db_path or DEFAULT_DB_PATH
+    resolved_db = db_path or Path(APP_CFG.storage.db_path)
     candles_provider = candles_provider or _candle_source()
 
     # Determine broker provider

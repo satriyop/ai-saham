@@ -1,8 +1,21 @@
 # Personal defaults for saham CLI.
 # Copy this file to config/user.yaml and fill in your values.
 # config/user.yaml is gitignored — safe to store personal capital amounts.
+#
+# Any key here overrides the matching key in config/default.yaml.
+# You only need to list keys you want to change.
 
 swing:
-  capital: 10000000      # IDR — default --capital for swing analyze and swing size
+  capital: 10000000      # IDR — your total swing trading capital
   risk_pct: 1.0          # % of capital to risk per trade (1 = 1%)
   min_score: 70          # minimum accumulation score for swing screen (0–120)
+
+# trading:
+#   capital: 100_000_000  # IDR — initial capital for backtests / simulations
+
+# analysis:
+#   benchmark: "^JKSE"   # benchmark for regime / return comparison
+#   universe: lq45        # default universe for daily briefing
+
+# storage:
+#   db_path: "~/.ai-saham/data.db"  # move database to home dir

@@ -22,10 +22,14 @@ def broker_summary_source() -> str:
 
 
 def candle_source() -> str:
-    """Return candle_source preference. Defaults to 'yahoo'."""
+    """Return candle_source preference. Falls back to APP_CFG.market.provider if absent."""
     try:
         with open(_DATA_SOURCES_CONFIG_PATH, encoding="utf-8") as fh:
             data = yaml.safe_load(fh) or {}
-        return str(data.get("candle_source") or "yahoo").strip()
+        value = data.get("candle_source")
+        if value:
+            return str(value).strip()
     except Exception:
-        return "yahoo"
+        pass
+    from src.infrastructure.config.app_config import APP_CFG
+    return APP_CFG.market.provider

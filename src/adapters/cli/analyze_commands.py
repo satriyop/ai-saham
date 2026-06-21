@@ -47,7 +47,10 @@ analyze_app = typer.Typer(
 from src.adapters.cli.chart_commands import chart_app
 analyze_app.add_typer(chart_app, name="chart")
 
-DEFAULT_DB_PATH = Path("data.db")
+from src.infrastructure.config.app_config import APP_CFG
+
+DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
+DEFAULT_RISK_PROFILE = APP_CFG.analysis.risk_profile
 VALID_PROFILES = ["conservative", "balanced", "aggressive"]
 
 
@@ -100,7 +103,7 @@ def risk(
     profile: Annotated[
         str,
         typer.Option("--profile", "-p", help="Risk profile (conservative/balanced/aggressive)", callback=_validate_profile),
-    ] = "balanced",
+    ] = DEFAULT_RISK_PROFILE,
     all_profiles: Annotated[bool, typer.Option("--all", "-a", help="Show assessment for all profiles")] = False,
     rules_file: Annotated[Optional[Path], typer.Option("--rules-file", "-r", help="Path to custom YAML rules file")] = None,
     sma_period: Annotated[int, typer.Option("--sma", help="SMA period", min=1)] = 20,
@@ -311,7 +314,7 @@ def compare(
     profile: Annotated[
         str,
         typer.Option("--profile", "-p", help="Risk profile (conservative/balanced/aggressive)", callback=_validate_profile),
-    ] = "balanced",
+    ] = DEFAULT_RISK_PROFILE,
     sma_period: Annotated[int, typer.Option("--sma", help="SMA period", min=1)] = 20,
     rsi_period: Annotated[int, typer.Option("--rsi", help="RSI period", min=1)] = 14,
     days: Annotated[int, typer.Option("--days", "-d", help="Days of history", min=30)] = 365,

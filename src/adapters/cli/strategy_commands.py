@@ -29,6 +29,7 @@ from src.application.use_case.create_strategy_from_intent import (
 )
 from src.adapters.cli.skill_commands import skill_app
 from src.infrastructure.ai.strategy_translator import StrategyTranslatorAdapter
+from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
@@ -600,7 +601,7 @@ def _handle_connection_error(provider: str) -> None:
         typer.echo("Check your internet connection.", err=True)
 
 
-DEFAULT_DB_PATH = Path("data.db")
+DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 
 
 @strategy_app.command("backtest")
@@ -618,8 +619,8 @@ def backtest(
     end: Annotated[Optional[str], typer.Option("--end", "-e", help="End date (YYYY-MM-DD)")] = None,
     capital: Annotated[
         int,
-        typer.Option("--capital", "-c", help="Initial capital in IDR (default: 100,000,000)", min=1),
-    ] = 100_000_000,
+        typer.Option("--capital", "-c", help="Initial capital in IDR", min=1),
+    ] = APP_CFG.trading.capital,
     verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Show trade-by-trade output")] = False,
     db_path: Annotated[Optional[Path], typer.Option("--db", help="Path to SQLite database")] = None,
     fmt: Annotated[str, typer.Option("--format", help="Output format: table or json")] = "table",
