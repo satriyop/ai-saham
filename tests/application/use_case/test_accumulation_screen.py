@@ -463,3 +463,129 @@ def test_screen_attaches_ticker_notation_without_changing_score():
     assert enriched.candidates[0].ticker_notation.codes == ["X"]
     assert enriched.candidates[0].score == base.candidates[0].score
     assert enriched.candidates[0].to_dict()["ticker_notation"]["notations"][0]["code"] == "X"
+
+
+# ─── Composite Signal Score ─────────────────────────────────────────────────
+
+from datetime import date as _date
+from decimal import Decimal as _Decimal
+
+from src.application.use_case.accumulation_screen import _composite_score
+from src.domain.value_objects.analyst_consensus import AnalystConsensus
+from src.domain.value_objects.bandar_detector_snapshot import BandarDetectorSnapshot
+from src.domain.value_objects.company_fundamentals import CompanyFundamentals
+from src.domain.value_objects.forward_estimates import ForwardEstimates
+from src.domain.value_objects.seasonal_edge import SeasonalEdge
+
+
+def _minimal_candidate(score: float = 80.0) -> "AccumulationCandidate":
+    from src.application.use_case.accumulation_screen import AccumulationCandidate
+    return AccumulationCandidate(
+        ticker="TEST",
+        window_days=7,
+        net_buy_days=5,
+        total_days=7,
+        net_buy_ratio=5 / 7,
+        total_net_value=_Decimal("1_000_000_000"),
+        consecutive_streak=5,
+        foreign_vwap=_Decimal("1000"),
+        current_price=_Decimal("950"),
+        vwap_discount_pct=5.0,
+        rsi=42.0,
+        trend="UP",
+        score=score,
+        top_brokers=["ZP", "AK"],
+        institutional_flag=True,
+    )
+
+
+def test_composite_score_all_neutral_when_no_enrichment():
+    c = _minimal_candidate(score=60.0)
+    cs = _composite_score(c)
+    # With no enrichment data: bandar=50, piotroski=50, seasonality=50, analyst=50, fwd=50
+    # Only foreign_flow from score=60 → 60/120*100=50.0
+    # Total = 0.20*50 + 0.20*50 + 0.20*50 + 0.15*50 + 0.15*50 + 0.10*50 = 50.0
+    assert cs.total == 50.0
+    assert not cs.has_bandar
+    assert not cs.has_piotroski
+    assert not cs.has_seasonality
+    assert not cs.has_analyst
+    assert not cs.has_forward_eps
+
+
+def test_composite_score_piotroski_8_raises_score():
+    c = _minimal_candidate(score=60.0)
+    c.fundamentals = CompanyFundamentals(
+        ticker="TEST", pe_ratio_ttm=12.0, roe_ttm=18.0, net_profit_margin=15.0,
+        revenue_yoy_growth=10.0, piotroski_f_score=8, dividend_yield=2.0,
+        week52_high=1200.0, week52_low=800.0, near_52w_high_rank=70.0,
+    )
+    cs = _composite_score(c)
+    # piotroski_component = 8/9*100 = 88.9
+    assert cs.has_piotroski
+    assert abs(cs.piotroski - 88.9) < 0.5
+    assert cs.total > 50.0
+
+
+def test_composite_score_analyst_all_buy_full_upside():
+    c = _minimal_candidate(score=60.0)
+    c.analyst_consensus = AnalystConsensus(
+        ticker="TEST", buy_count=5, hold_count=0, sell_count=0,
+        avg_price_target=1300.0, current_price=1000.0, last_updated=_date.today(),
+    )
+    cs = _composite_score(c)
+    # buy_pct=100% → buy_score=60; upside=30% → upside_score=40; total=100
+    assert cs.has_analyst
+    assert cs.analyst == 100.0
+    assert cs.total > 50.0
+
+
+def test_composite_score_seasonality_tailwind_uses_win_rate():
+    c = _minimal_candidate(score=60.0)
+    c.seasonal_edge = SeasonalEdge(
+        ticker="TEST", month=6, avg_monthly_return_pct=2.5,
+        win_rate_pct=80.0, positive_years=4, total_years=5, back_years=5,
+    )
+    cs = _composite_score(c)
+    assert cs.has_seasonality
+    assert cs.seasonality == 80.0  # is_tailwind → win_rate_pct directly
+
+
+def test_composite_score_bandar_full_accumulation():
+    c = _minimal_candidate(score=60.0)
+    c.bandar_detector = BandarDetectorSnapshot(
+        ticker="TEST", session_date=_date.today(),
+        broker_accdist="Acc", today_accdist="Big Acc", five_day_accdist="Big Acc",
+        top1_accdist="Big Acc", top1_percent=65.0, today_percent=12.0,
+        total_buyer=8, total_seller=3,
+        top3_accdist="Big Acc", top5_accdist="Small Acc", top10_accdist="Small Acc",
+    )
+    cs = _composite_score(c)
+    assert cs.has_bandar
+    assert cs.bandar > 85.0  # all signals positive → near top of range
+
+
+def test_composite_high_conviction_requires_four_above_60():
+    c = _minimal_candidate(score=110.0)  # foreign_flow = 91.7
+    c.fundamentals = CompanyFundamentals(
+        ticker="TEST", pe_ratio_ttm=10.0, roe_ttm=22.0, net_profit_margin=18.0,
+        revenue_yoy_growth=15.0, piotroski_f_score=9, dividend_yield=2.0,
+        week52_high=1200.0, week52_low=800.0, near_52w_high_rank=70.0,
+    )
+    c.analyst_consensus = AnalystConsensus(
+        ticker="TEST", buy_count=4, hold_count=1, sell_count=0,
+        avg_price_target=1200.0, current_price=1000.0, last_updated=_date.today(),
+    )
+    c.seasonal_edge = SeasonalEdge(
+        ticker="TEST", month=6, avg_monthly_return_pct=1.5,
+        win_rate_pct=75.0, positive_years=3, total_years=4, back_years=5,
+    )
+    c.bandar_detector = BandarDetectorSnapshot(
+        ticker="TEST", session_date=_date.today(),
+        broker_accdist="Acc", today_accdist="Big Acc", five_day_accdist="Small Acc",
+        top1_accdist="Big Acc", top1_percent=55.0, today_percent=10.0,
+        total_buyer=6, total_seller=2,
+    )
+    cs = _composite_score(c)
+    assert cs.is_high_conviction
+    assert cs.total > 70.0

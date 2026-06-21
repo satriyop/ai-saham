@@ -51,6 +51,7 @@ from src.infrastructure.config.user_config import get_swing_default
 from src.infrastructure.browser.stockbit_analyst import StockbitAnalystConsensusProvider
 from src.infrastructure.browser.stockbit_bandar import StockbitBandarDetectorProvider
 from src.infrastructure.browser.stockbit_corp_action import StockbitCorporateActionRepository
+from src.infrastructure.browser.stockbit_forward_estimates import StockbitForwardEstimatesProvider
 from src.infrastructure.browser.stockbit_fundamentals import StockbitFundamentalsProvider
 from src.infrastructure.browser.stockbit_insider import StockbitInsiderActivityProvider
 from src.infrastructure.browser.stockbit_seasonality import StockbitSeasonalityProvider
@@ -66,7 +67,7 @@ from src.infrastructure.persistence.sqlite_market_repository import (
 
 class StockbitProviders:
     """Holds all optional Stockbit providers sharing one authenticated session."""
-    __slots__ = ("corp_repo", "season_prov", "insider_prov", "analyst_prov", "shareholding_prov", "bandar_prov", "fundamentals_prov", "notation_prov")
+    __slots__ = ("corp_repo", "season_prov", "insider_prov", "analyst_prov", "shareholding_prov", "bandar_prov", "fundamentals_prov", "notation_prov", "forward_estimates_prov")
 
     def __init__(
         self,
@@ -78,6 +79,7 @@ class StockbitProviders:
         bandar_prov: "StockbitBandarDetectorProvider | None" = None,
         fundamentals_prov: "StockbitFundamentalsProvider | None" = None,
         notation_prov: "StockbitTickerNotationProvider | None" = None,
+        forward_estimates_prov: "StockbitForwardEstimatesProvider | None" = None,
     ) -> None:
         self.corp_repo = corp_repo
         self.season_prov = season_prov
@@ -87,12 +89,13 @@ class StockbitProviders:
         self.bandar_prov = bandar_prov
         self.fundamentals_prov = fundamentals_prov
         self.notation_prov = notation_prov
+        self.forward_estimates_prov = forward_estimates_prov
 
     @classmethod
     def unavailable(cls) -> "StockbitProviders":
         return cls(corp_repo=None, season_prov=None, insider_prov=None,
                    analyst_prov=None, shareholding_prov=None, bandar_prov=None,
-                   fundamentals_prov=None, notation_prov=None)
+                   fundamentals_prov=None, notation_prov=None, forward_estimates_prov=None)
 
 
 def _make_stockbit_providers(db_path: Path) -> "StockbitProviders":
@@ -111,6 +114,7 @@ def _make_stockbit_providers(db_path: Path) -> "StockbitProviders":
         bandar_prov=StockbitBandarDetectorProvider(broker_provider=None, db_path=db_path),
         fundamentals_prov=StockbitFundamentalsProvider(broker_provider=None, db_path=db_path),
         notation_prov=StockbitTickerNotationProvider(broker_provider=None, db_path=db_path),
+        forward_estimates_prov=StockbitForwardEstimatesProvider(broker_provider=None, db_path=db_path),
     )
 
 
@@ -649,6 +653,7 @@ def accumulation_run(
         bandar_detector_provider=_sb.bandar_prov,
         fundamentals_provider=_sb.fundamentals_prov,
         ticker_notation_provider=_sb.notation_prov,
+        forward_estimates_provider=_sb.forward_estimates_prov,
     )
 
     base_request = AccumulationScreenRequest(
@@ -1132,6 +1137,7 @@ def _accumulation_log_impl(
         bandar_detector_provider=_sb.bandar_prov,
         fundamentals_provider=_sb.fundamentals_prov,
         ticker_notation_provider=_sb.notation_prov,
+        forward_estimates_provider=_sb.forward_estimates_prov,
     )
     response = use_case.execute(AccumulationScreenRequest(
         tickers=[ticker_upper],

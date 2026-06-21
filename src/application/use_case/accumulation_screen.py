@@ -28,6 +28,8 @@ if TYPE_CHECKING:
     from src.domain.value_objects.analyst_consensus import AnalystConsensus
     from src.domain.value_objects.bandar_detector_snapshot import BandarDetectorSnapshot
     from src.domain.value_objects.company_fundamentals import CompanyFundamentals
+    from src.domain.value_objects.composite_signal_score import CompositeSignalScore
+    from src.domain.value_objects.forward_estimates import ForwardEstimates
     from src.domain.value_objects.seasonal_edge import SeasonalEdge
     from src.domain.value_objects.shareholding_composition import ShareholdingComposition
     from src.domain.value_objects.ticker_notation import TickerNotationSnapshot
@@ -36,6 +38,7 @@ from src.application.ports.corporate_action_repository import CorporateActionRep
 from src.domain.ports.analyst_consensus_provider import AnalystConsensusProvider
 from src.domain.ports.bandar_detector_provider import BandarDetectorProvider
 from src.domain.ports.broker_data_repository import BrokerDataRepository
+from src.domain.ports.forward_estimates_provider import ForwardEstimatesProvider
 from src.domain.ports.fundamentals_provider import FundamentalsProvider
 from src.domain.ports.insider_activity_provider import InsiderActivityProvider
 from src.domain.ports.market_data_repository import MarketDataRepository
@@ -195,6 +198,10 @@ class AccumulationCandidate:
     # Data currency — dates of the most recent loaded records; None if no data
     latest_candle_date: date | None = None
     latest_broker_date: date | None = None
+    # Forward EPS/Revenue estimates (Stockbit analyst consensus endpoint)
+    forward_estimates: "ForwardEstimates | None" = None
+    # Composite signal — all enrichment dimensions combined into 0–100 score
+    composite_signal: "CompositeSignalScore | None" = None
 
     def to_dict(self) -> dict:
         return {
@@ -242,6 +249,8 @@ class AccumulationCandidate:
             "ticker_notation": self.ticker_notation.to_dict() if self.ticker_notation else None,
             "latest_candle_date": self.latest_candle_date.isoformat() if self.latest_candle_date else None,
             "latest_broker_date": self.latest_broker_date.isoformat() if self.latest_broker_date else None,
+            "forward_estimates": self.forward_estimates.to_dict() if self.forward_estimates else None,
+            "composite_signal": self.composite_signal.to_dict() if self.composite_signal else None,
         }
 
 
@@ -331,6 +340,119 @@ def _score(candidate: AccumulationCandidate) -> tuple[float, dict]:
     return total, breakdown
 
 
+def _composite_score(candidate: "AccumulationCandidate") -> "CompositeSignalScore":
+    """Combine 6 enrichment dimensions into a weighted 0–100 composite.
+
+    Missing data defaults to 50 (neutral) so partial data still ranks meaningfully.
+    Called after all enrichment is attached to the candidate.
+    """
+    from src.domain.value_objects.composite_signal_score import CompositeSignalScore
+
+    # ─── Foreign flow: normalize existing flow score (0–120 soft cap → 0–100) ───
+    foreign_component = min(candidate.score, 120.0) / 120.0 * 100.0
+
+    # ─── Bandar detector ───
+    has_bandar = candidate.bandar_detector is not None
+    if has_bandar:
+        bd = candidate.bandar_detector
+        num_optional = sum(
+            1 for x in [bd.top3_accdist, bd.top5_accdist, bd.top10_accdist]
+            if x is not None
+        )
+        max_range = (3 + num_optional) * 2  # 6 without top3/5/10, 12 with all
+        bandar_component = (bd.broad_score + max_range) / (2 * max_range) * 100.0
+        bandar_component = max(0.0, min(100.0, bandar_component))
+    else:
+        bandar_component = 50.0
+
+    # ─── Piotroski F-Score (0–9 → 0–100) ───
+    has_piotroski = (
+        candidate.fundamentals is not None
+        and candidate.fundamentals.piotroski_f_score is not None
+    )
+    piotroski_component = (
+        candidate.fundamentals.piotroski_f_score / 9.0 * 100.0
+        if has_piotroski
+        else 50.0
+    )
+
+    # ─── Seasonality: win rate weighted by direction ───
+    has_seasonality = candidate.seasonal_edge is not None
+    if has_seasonality:
+        se = candidate.seasonal_edge
+        if se.is_tailwind:
+            seasonality_component = se.win_rate_pct          # 50–100 range
+        elif se.is_headwind:
+            seasonality_component = 100.0 - se.win_rate_pct  # 0–50 range
+        else:
+            seasonality_component = 50.0
+    else:
+        seasonality_component = 50.0
+
+    # ─── Analyst consensus: buy% (60 pts) + target upside (40 pts, capped 30%) ───
+    has_analyst = (
+        candidate.analyst_consensus is not None
+        and candidate.analyst_consensus.analyst_count > 0
+    )
+    if has_analyst:
+        ac = candidate.analyst_consensus
+        buy_pct = ac.buy_count / ac.analyst_count * 100.0
+        upside = ac.upside_pct or 0.0
+        buy_score = buy_pct / 100.0 * 60.0
+        upside_score = max(0.0, min(30.0, upside)) / 30.0 * 40.0
+        analyst_component = min(100.0, buy_score + upside_score)
+    else:
+        analyst_component = 50.0
+
+    # ─── Forward P/E valuation (lower P/E = higher score) ───
+    has_forward_eps = (
+        candidate.forward_estimates is not None
+        and candidate.forward_estimates.forward_pe is not None
+    )
+    if has_forward_eps:
+        fpe = candidate.forward_estimates.forward_pe
+        if fpe <= 0:
+            fwd_component = 50.0  # loss-making / negative P/E → neutral
+        elif fpe <= 10:
+            fwd_component = 95.0
+        elif fpe <= 15:
+            fwd_component = 95.0 - (fpe - 10) / 5.0 * 20.0   # 75–95
+        elif fpe <= 20:
+            fwd_component = 75.0 - (fpe - 15) / 5.0 * 25.0   # 50–75
+        elif fpe <= 30:
+            fwd_component = 50.0 - (fpe - 20) / 10.0 * 25.0  # 25–50
+        else:
+            fwd_component = max(0.0, 25.0 - (fpe - 30) / 10.0 * 15.0)  # 0–25
+    else:
+        fwd_component = 50.0
+
+    total = round(
+        bandar_component * 0.20
+        + foreign_component * 0.20
+        + piotroski_component * 0.20
+        + seasonality_component * 0.15
+        + analyst_component * 0.15
+        + fwd_component * 0.10,
+        1,
+    )
+
+    return CompositeSignalScore(
+        ticker=candidate.ticker,
+        bandar=round(bandar_component, 1),
+        foreign_flow=round(foreign_component, 1),
+        piotroski=round(piotroski_component, 1),
+        seasonality=round(seasonality_component, 1),
+        analyst=round(analyst_component, 1),
+        forward_eps=round(fwd_component, 1),
+        has_bandar=has_bandar,
+        has_piotroski=has_piotroski,
+        has_seasonality=has_seasonality,
+        has_analyst=has_analyst,
+        has_forward_eps=has_forward_eps,
+        total=total,
+    )
+
+
 class AccumulationScreenUseCase:
     """
     Scan multiple tickers for foreign accumulation patterns.
@@ -347,6 +469,7 @@ class AccumulationScreenUseCase:
         seasonality_provider: "SeasonalityProvider | None" = None,
         insider_activity_provider: "InsiderActivityProvider | None" = None,
         analyst_consensus_provider: "AnalystConsensusProvider | None" = None,
+        forward_estimates_provider: "ForwardEstimatesProvider | None" = None,
         shareholding_provider: "ShareholdingProvider | None" = None,
         bandar_detector_provider: "BandarDetectorProvider | None" = None,
         fundamentals_provider: "FundamentalsProvider | None" = None,
@@ -359,6 +482,7 @@ class AccumulationScreenUseCase:
         self._seasonality_provider = seasonality_provider
         self._insider_provider = insider_activity_provider
         self._analyst_provider = analyst_consensus_provider
+        self._forward_estimates_provider = forward_estimates_provider
         self._shareholding_provider = shareholding_provider
         self._bandar_provider = bandar_detector_provider
         self._fundamentals_provider = fundamentals_provider
@@ -491,12 +615,25 @@ class AccumulationScreenUseCase:
                     ticker=result.ticker,
                 )
 
+            # Forward EPS estimates — used in composite score
+            if self._forward_estimates_provider is not None:
+                result.forward_estimates = self._forward_estimates_provider.get_forward_estimates(
+                    ticker=result.ticker,
+                )
+
+            # Composite signal — computed after all enrichment is attached
+            result.composite_signal = _composite_score(result)
+
             if result.score >= request.min_score:
                 candidates.append(result)
 
-        # Primary sort: composite score; tiebreaker: seasonal_score (additive, not a veto)
+        # Primary sort: composite score (when available); tiebreaker: flow score + seasonal
         candidates.sort(
-            key=lambda c: (c.score, c.seasonal_edge.score if c.seasonal_edge else 0.0),
+            key=lambda c: (
+                c.composite_signal.total if c.composite_signal else 0.0,
+                c.score,
+                c.seasonal_edge.score if c.seasonal_edge else 0.0,
+            ),
             reverse=True,
         )
 

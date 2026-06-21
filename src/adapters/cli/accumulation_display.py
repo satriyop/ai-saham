@@ -152,6 +152,7 @@ def display_results(
     table = compact_table()
     table.add_column("#", justify="right")
     table.add_column("Ticker", style="bold")
+    table.add_column("Cmp", justify="right")
     table.add_column("Score", justify="right")
     table.add_column("Streak", justify="right")
     table.add_column("Net Days", justify="right")
@@ -181,7 +182,7 @@ def display_results(
         else:
             bb_cell = Text("—", style="bright_black")
 
-        # Color score
+        # Color flow score
         if c.score >= _SC.enter_min_score:
             score_style = "green"
         elif c.score >= _SC.watch_min_score:
@@ -189,9 +190,26 @@ def display_results(
         else:
             score_style = ""
 
+        # Composite score cell
+        if c.composite_signal is not None:
+            cs = c.composite_signal.total
+            conviction = "★" if c.composite_signal.is_high_conviction else " "
+            if cs >= 70:
+                cmp_style = "bold green"
+            elif cs >= 55:
+                cmp_style = "green"
+            elif cs >= 45:
+                cmp_style = "yellow"
+            else:
+                cmp_style = "red"
+            cmp_cell = Text(f"{cs:.0f}{conviction}", style=cmp_style)
+        else:
+            cmp_cell = Text("—", style="bright_black")
+
         row = [
             str(i),
             c.ticker,
+            cmp_cell,
             Text(f"{c.score:.1f}", style=score_style),
             streak_str,
             net_days_str,
@@ -216,6 +234,11 @@ def display_results(
                 f" vwap={bd.get('vwap', 0):.1f} rsi={bd.get('rsi', 0):.1f}"
                 f" flow={bd.get('flow', 0):.1f} bb={bd.get('bb', 0):.1f}"
                 f" inst={bd.get('inst', 0):.1f}]"
+            ))
+        if show_breakdown and c.composite_signal is not None:
+            detail_lines.append(Text(
+                f"    {c.ticker} COMPOSITE: {c.composite_signal.breakdown_label()}",
+                style="dim",
             ))
 
         notation_text = notation_detail(c.ticker_notation)
@@ -279,6 +302,7 @@ def display_results(
                 ("holding",   c.shareholding),
                 ("bandar",    c.bandar_detector),
                 ("fundam",    c.fundamentals),
+                ("fwd_eps",   c.forward_estimates),
             ]
             if val is None
         ]
