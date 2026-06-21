@@ -17,8 +17,8 @@ This file is the canonical phase-by-phase state for the post-`claude_stockbit_da
 | 5 | Piotroski Quality Gate | ✅ Done | see commits below |
 | 6 | Broker Distribution Matrix | ✅ Done | see commits below |
 | 7 | Split playwright_stockbit.py | 🔲 Not Started | — |
-| 8 | Watchlist + Saved Screener | 🔲 Not Started | — |
-| 9 | Valuation Metrics | 🔲 Not Started | — |
+| 8 | Watchlist + Saved Screener | ✅ Done | 04a9996 |
+| 9 | Valuation Metrics | ✅ Done | 8ea18a2 |
 
 **Status legend:** 🔲 Not Started · 🔄 In Progress · ✅ Done · ⏸️ Deferred
 
@@ -190,9 +190,27 @@ This file is the canonical phase-by-phase state for the post-`claude_stockbit_da
 
 ## Phase 8: Watchlist + Saved Screener
 
-**Goal:** `saham screen save`, `saham screen compare`, `saham view watchlist` commands.
+**Goal:** `saham screen accum --save NAME`, `saham screen watchlist`, `saham screen compare NAME` commands.
 
-**Status:** 🔲 Not Started
+**Status:** ✅ Done — commit `04a9996`
+
+### Sub-steps
+- [x] 8.1 `ScreenSnapshotEntry` frozen dataclass in `src/domain/value_objects/screen_snapshot.py`
+- [x] 8.2 `SQLiteWatchlistRepository` — flat rows (`screen_snapshots` table), `get_latest_snapshot` by MAX(saved_at)
+- [x] 8.3 `compare_screen_snapshots` application use case — new/dropped/changed buckets; `SignalChange` with rank_delta, composite_delta, strengthening flag
+- [x] 8.4 `saham screen accum --save NAME` — persists ranked results after display
+- [x] 8.5 `saham screen watchlist [NAME]` — lists all saved watchlists or shows a named one
+- [x] 8.6 `saham screen compare NAME` — reruns screen silently via `_make_use_case_for_compare()`, diffs against saved
+- [x] 8.7 12 new unit tests in `tests/infrastructure/persistence/test_sqlite_watchlist.py`; suite at 1689
+
+### Files Changed
+- `src/domain/value_objects/screen_snapshot.py` — new
+- `src/application/use_case/compare_screen_snapshots.py` — new
+- `src/infrastructure/persistence/sqlite_watchlist_repository.py` — new
+- `src/adapters/cli/accumulation_commands.py` — `--save` flag, `_save_watchlist()`, `_make_use_case_for_compare()`
+- `src/adapters/cli/screen_lifecycle_commands.py` — `watchlist` + `compare` commands
+- `tests/infrastructure/persistence/test_sqlite_watchlist.py` — new; 12 tests
+- `tests/adapters/cli/test_command_contract.py` — added watchlist/compare to screen tree
 
 ---
 
@@ -200,7 +218,31 @@ This file is the canonical phase-by-phase state for the post-`claude_stockbit_da
 
 **Goal:** New provider for `/valuation/company/{ticker}/metrics`. Wire into `saham analyze swing TICKER`.
 
-**Status:** 🔲 Not Started
+**Status:** ✅ Done — commit `8ea18a2`
+
+### Sub-steps
+- [x] 9.1 Add `valuation_metrics_url` to `StockbitConfig` + `load_stockbit_config()`
+- [x] 9.2 `ValuationMetrics` frozen dataclass — `raw: dict[int, float]`, named properties for known IDs, `labeled` list, `is_empty`
+- [x] 9.3 `KNOWN_METRIC_LABELS` hard-coded map: {12635: "P/E", 13200: "EPS (TTM)", 12623: "+1σ PE", 12626: "+2σ PE"}
+- [x] 9.4 `ValuationProvider` ABC port
+- [x] 9.5 `StockbitValuationProvider` — SQLite cache (1-day TTL, JSON blob), `_parse_response` filters id=0 and zero values
+- [x] 9.6 Wire `EnrichmentTask("valuation", ...)` into `fetch_market_commands.py`
+- [x] 9.7 `💲 VALUATION` panel in `swing_analysis_display.py` (cache-read only, guarded by try/except)
+- [x] 9.8 17 unit tests; suite at 1706
+
+### Files Changed
+- `src/domain/value_objects/valuation_metrics.py` — new
+- `src/domain/ports/valuation_provider.py` — new
+- `src/infrastructure/browser/stockbit_valuation.py` — new
+- `src/infrastructure/config/stockbit_config.py` — added `valuation_metrics_url`
+- `src/adapters/cli/fetch_market_commands.py` — wired `EnrichmentTask("valuation", ...)`
+- `src/adapters/cli/swing_analysis_display.py` — valuation panel in corp_flags block
+- `tests/infrastructure/browser/test_stockbit_valuation.py` — new; 17 tests
+
+### Key Design Notes
+- Opaque ID→label mapping: endpoint returns no labels; empirical lookup table is the only practical approach without a separate `/screener/metric` call
+- Zero values filtered on ingest (id=0 is Stockbit's placeholder pattern)
+- Display read-only: `broker_provider=None` so no network call from display layer
 
 ---
 
