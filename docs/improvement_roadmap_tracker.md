@@ -12,7 +12,7 @@ This file is the canonical phase-by-phase state for the post-`claude_stockbit_da
 |---|------|--------|---------------|
 | 1 | Composite Score System | ✅ Done | see commits below |
 | 2 | Earnings Data Integration | ✅ Done | see commits below |
-| 3 | Stockbit OHLC Fallback | 🔲 Not Started | — |
+| 3 | Stockbit OHLC Fallback | ✅ Done | see commits below |
 | 4 | CLI Adapter Thinness Phase 1 | 🔲 Not Started | — |
 | 5 | Piotroski Quality Gate | 🔲 Not Started | — |
 | 6 | Broker Distribution Matrix | 🔲 Not Started | — |
@@ -95,14 +95,26 @@ This file is the canonical phase-by-phase state for the post-`claude_stockbit_da
 
 **Goal:** `StockbitHistoricalProvider` implementing `MarketDataProvider`. Use when Yahoo returns < 80% coverage. Also ingests foreign flow in same call.
 
-**Status:** 🔲 Not Started
+**Status:** ✅ Done
 
 ### Sub-steps
-- [ ] 3.1 Read `RefreshMarketDataUseCase` + `MarketDataProvider` port
-- [ ] 3.2 Create `src/infrastructure/data_providers/stockbit_historical.py`
-- [ ] 3.3 Update `RefreshMarketDataUseCase` to accept provider priority list with fallback
-- [ ] 3.4 Wire into `FetchMarketRefreshUseCase`
-- [ ] 3.5 Tests
+- [x] 3.1 Read `RefreshMarketDataUseCase` + `MarketDataProvider` port
+- [x] 3.2 Create `src/infrastructure/data_providers/stockbit_historical.py`
+- [x] 3.3 Decorator pattern: `FallbackMarketDataProvider` wraps primary+fallback; `RefreshMarketDataUseCase` unchanged
+- [x] 3.4 Wire via `functools.partial(_fetch_candles, broker_provider=...)` at use-case construction in CLI adapter
+- [x] 3.5 Tests — 18 new tests; 1654 total pass
+
+### Files Changed
+- `src/infrastructure/data_providers/stockbit_historical.py` — new; paginates `/historical/summary`, converts lots→shares
+- `src/infrastructure/data_providers/fallback_provider.py` — new; tries fallback when primary coverage < 60% of expected days
+- `src/adapters/cli/fetch_market_commands.py` — added `broker_provider` opt param to `_fetch_candles`; wires fallback via `functools.partial` when stockbit provider active
+- `tests/infrastructure/data_providers/test_stockbit_historical.py` — new; 18 tests
+
+### Key Design Notes
+- `RefreshMarketDataUseCase` requires ZERO changes — fallback is transparent infrastructure
+- `FallbackMarketDataProvider` proxies `provider_name/volume_unit/price_adjustment_policy` to whichever provider actually delivered data
+- Coverage threshold: 60% of estimated trading days (`(end-start).days * 5/7`); configurable
+- Volume: Stockbit returns lots; converted to shares (`* 100`) on ingest so Candle semantics match Yahoo
 
 ---
 

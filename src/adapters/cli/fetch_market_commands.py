@@ -16,9 +16,13 @@ Usage:
 Layer: Adapter
 """
 
+import functools
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import TYPE_CHECKING, Annotated, Optional
+
+if TYPE_CHECKING:
+    from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
 
 import typer
 
@@ -44,7 +48,9 @@ from src.application.use_case.refresh_market_data import (
     RefreshMarketDataRequest,
     RefreshMarketDataUseCase,
 )
+from src.infrastructure.data_providers.fallback_provider import FallbackMarketDataProvider
 from src.infrastructure.data_providers.idx import IdxBrokerDataProvider
+from src.infrastructure.data_providers.stockbit_historical import StockbitHistoricalProvider
 from src.infrastructure.data_providers.yahoo import YahooFinanceProvider
 from src.infrastructure.data_providers.yahoo_stock_meta import YahooStockMetaProvider
 from src.infrastructure.persistence.sqlite_broker_repository import (
@@ -65,7 +71,7 @@ from src.infrastructure.config.data_sources_config import (
     candle_source as _candle_source,
 )
 
-DEFAULT_DAYS = 90  # fetch-specific window — not the full analysis history depth
+DEFAULT_DAYS: int = APP_CFG.fetch.default_days
 STOCKBIT_PROFILE_DIR = Path(".stockbit_profile")
 
 # Benchmark ticker always included in every market refresh run (first in list).
@@ -76,7 +82,7 @@ _BENCHMARK_TICKER = BENCHMARK_TICKER
 # How many calendar days of gap at the START of a requested range is tolerable
 # before triggering a backfill. 7 covers cases where IDX simply has no data
 # for the first few days of a very old historical range.
-MARKET_START_TOLERANCE_DAYS = 7
+MARKET_START_TOLERANCE_DAYS: int = APP_CFG.fetch.start_tolerance_days
 
 
 def _last_known_trading_day(db_path: Path) -> date | None:
@@ -361,12 +367,18 @@ def _fetch_candles(
     provider_name: str,
     refresh: bool,
     short_history: list[str] | None = None,
+    broker_provider: "StockbitPlaywrightBrokerProvider | None" = None,
 ) -> str:
     """Fetch candles for one ticker. Returns status string."""
     from src.infrastructure.data_providers.idx_market import IdxMarketDataProvider
 
     if provider_name == "idx":
         provider = IdxMarketDataProvider()
+    elif broker_provider is not None:
+        provider = FallbackMarketDataProvider(
+            primary=YahooFinanceProvider(),
+            fallback=StockbitHistoricalProvider(broker_provider=broker_provider),
+        )
     else:
         provider = YahooFinanceProvider()
 
@@ -812,8 +824,13 @@ def fetch_market(
         status_line = "  ".join(line_parts)
         typer.echo(typer.style(status_line, fg=status_color))
 
+    _candles_fn = (
+        functools.partial(_fetch_candles, broker_provider=broker_provider)
+        if broker_provider_name == "stockbit"
+        else _fetch_candles
+    )
     use_case = FetchMarketRefreshUseCase(
-        fetch_candles=_fetch_candles,
+        fetch_candles=_candles_fn,
         fetch_broker=_fetch_broker,
         fetch_meta=_fetch_meta,
         fetch_enrichment=_fetch_enrichment,
