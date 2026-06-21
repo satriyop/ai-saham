@@ -119,6 +119,7 @@ def _make_stockbit_providers(db_path: Path) -> "StockbitProviders":
 
 
 DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
+DEFAULT_ACCUM_DB_PATH = DEFAULT_DB_PATH  # alias for external imports
 FOREIGN_BOUNCE_PRESET = "foreign-bounce"
 FOREIGN_BOUNCE_TAKE_PROFIT = Decimal("5")
 FOREIGN_BOUNCE_STOP_LOSS = Decimal("5")
@@ -586,6 +587,10 @@ def accumulation_run(
         Optional[Path],
         typer.Option("--db", help="SQLite database path"),
     ] = None,
+    save_name: Annotated[
+        Optional[str],
+        typer.Option("--save", help="Save results to watchlist under this name (e.g. morning-watch)"),
+    ] = None,
 ) -> None:
     """
     Screen stocks for foreign accumulation patterns.
@@ -778,6 +783,90 @@ def accumulation_run(
     )
     if explain:
         _print_column_guide()
+
+    if save_name:
+        _save_watchlist(
+            name=save_name,
+            candidates=response.candidates[:top],
+            universe=str(universe or ""),
+            window_days=window,
+            db_path=resolved_db,
+        )
+
+
+def _save_watchlist(
+    name: str,
+    candidates: list,
+    universe: str,
+    window_days: int,
+    db_path: "Path",
+) -> None:
+    from datetime import datetime
+    from src.domain.value_objects.screen_snapshot import ScreenSnapshotEntry
+    from src.infrastructure.persistence.sqlite_watchlist_repository import SQLiteWatchlistRepository
+
+    now = datetime.now()
+    entries = [
+        ScreenSnapshotEntry(
+            name=name,
+            saved_at=now,
+            universe=universe,
+            window_days=window_days,
+            ticker=c.ticker,
+            rank=i + 1,
+            flow_score=c.score,
+            composite_score=c.composite_signal.total if c.composite_signal else None,
+            consecutive_streak=c.consecutive_streak,
+            net_buy_ratio=c.net_buy_ratio,
+            bci_label=c.bci_label,
+        )
+        for i, c in enumerate(candidates)
+    ]
+    repo = SQLiteWatchlistRepository(db_path)
+    repo.save_snapshot(entries)
+    typer.echo(
+        typer.style(f"\n  ✓ Saved {len(entries)} tickers to watchlist '{name}'", fg=typer.colors.GREEN)
+    )
+
+
+def _make_use_case_for_compare(
+    universe: str,
+    window: int,
+    top: int,
+    db_path: "Path",
+) -> "list | None":
+    """Run the accumulation screen silently and return the top candidates.
+
+    Used by `saham screen compare`. Returns None on failure.
+    """
+    try:
+        from src.application.services.universe_loader import resolve_tickers
+        ticker_list = resolve_tickers(universe=universe, explicit=[], db_path=db_path)
+        if not ticker_list:
+            return None
+
+        broker_repo = SQLiteBrokerRepository(db_path)
+        market_repo = SQLiteMarketRepository(db_path=db_path)
+        _sb = _make_stockbit_providers(db_path)
+
+        use_case = AccumulationScreenUseCase(
+            broker_repository=broker_repo,
+            market_repository=market_repo,
+            seasonality_provider=_sb.season_prov,
+            analyst_consensus_provider=_sb.analyst_prov,
+            bandar_detector_provider=_sb.bandar_prov,
+            fundamentals_provider=_sb.fundamentals_prov,
+            forward_estimates_provider=_sb.forward_estimates_prov,
+        )
+        response = use_case.execute(AccumulationScreenRequest(
+            tickers=ticker_list,
+            window_days=window,
+            min_net_buy_days=1,
+            min_score=0.0,
+        ))
+        return response.candidates[:top]
+    except Exception:
+        return None
 
 
 def _display_audit_summary(response: AccumulationAuditResponse, top_groups: int) -> None:

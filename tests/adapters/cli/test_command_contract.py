@@ -45,7 +45,7 @@ EXPECTED_COMMANDS: dict[tuple[str, ...], tuple[str, ...]] = {
     ),
     ("fetch", "stockbit"): ("login", "status", "spy", "test", "browse", "fetch-top5"),
     ("fetch", "universe"): ("list", "update", "inspect", "create"),
-    ("screen",): ("pre-open", "accum"),
+    ("screen",): ("pre-open", "accum", "watchlist", "compare"),
     ("learn",): ("snapshot", "track", "grade", "prompt", "tune"),
     ("indicator",): ("compute", "snapshot", "create", "list", "show", "delete"),
     ("analyze",): (
@@ -122,6 +122,8 @@ HELP_PATHS: tuple[tuple[str, ...], ...] = (
     ("screen",),
     ("screen", "pre-open"),
     ("screen", "accum"),
+    ("screen", "watchlist"),
+    ("screen", "compare"),
     ("learn",),
     ("indicator",),
     ("analyze",),
