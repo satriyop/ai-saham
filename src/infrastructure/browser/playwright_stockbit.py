@@ -868,22 +868,37 @@ class StockbitPlaywrightBrokerProvider(BrokerDataProvider):
         Use for bulk date-range backfills; reserve broker/activity/historical for
         per-broker detail or when you need net_lot accuracy.
         """
+        all_points: list[ForeignFlowPoint] = []
+        page = 1
         try:
             token = self._get_token()
-            url = (
-                f"{_HISTORICAL_SUMMARY_API.format(ticker=ticker.upper())}"
-                f"?period=HS_PERIOD_DAILY"
-                f"&start_date={start_date.isoformat()}"
-                f"&end_date={end_date.isoformat()}"
-                f"&limit=400&page=1"
-            )
-            body = _exodus_get(url, token)
-            if not body:
-                return []
-            return _parse_historical_summary_flow(ticker, body)
+            while True:
+                url = (
+                    f"{_HISTORICAL_SUMMARY_API.format(ticker=ticker.upper())}"
+                    f"?period=HS_PERIOD_DAILY"
+                    f"&start_date={start_date.isoformat()}"
+                    f"&end_date={end_date.isoformat()}"
+                    f"&limit=50&page={page}"
+                )
+                body = _exodus_get(url, token)
+                if not body:
+                    break
+                rows = (body.get("data") or {}).get("result") or []
+                if not rows:
+                    break
+                
+                points = _parse_historical_summary_flow(ticker, body)
+                all_points.extend(points)
+                
+                if len(rows) < 50:
+                    break
+                page += 1
+                
+            return sorted(all_points, key=lambda p: p.date)
         except Exception as e:
             logger.warning("fetch_foreign_flow_from_summary %s failed: %s", ticker, e)
             return []
+
 
     def fetch_broker_flow_history(
         self,
@@ -1166,30 +1181,42 @@ def _fetch_historical_summary_totals(
       data.result[].value  → total traded value (IDR, int)
       data.result[].volume → total traded lots (int, already in lots — NOT shares)
     """
-    url = (
-        f"{_HISTORICAL_SUMMARY_API.format(ticker=ticker.upper())}"
-        f"?period=HS_PERIOD_DAILY"
-        f"&start_date={start_date.isoformat()}"
-        f"&end_date={end_date.isoformat()}"
-        f"&limit=400&page=1"
-    )
+    total_value = Decimal("0")
+    total_lot = 0
+    page = 1
+    has_rows = False
+
     try:
-        body = _exodus_get(url, token)
-        if not body:
-            return None
-        rows = (body.get("data") or {}).get("result") or []
-        if not rows:
-            return None
-        total_value = sum(
-            Decimal(str(r.get("value") or 0)) for r in rows if isinstance(r, dict)
-        )
-        total_lot = sum(int(r.get("volume") or 0) for r in rows if isinstance(r, dict))
-        if total_value <= 0:
+        while True:
+            url = (
+                f"{_HISTORICAL_SUMMARY_API.format(ticker=ticker.upper())}"
+                f"?period=HS_PERIOD_DAILY"
+                f"&start_date={start_date.isoformat()}"
+                f"&end_date={end_date.isoformat()}"
+                f"&limit=50&page={page}"
+            )
+            body = _exodus_get(url, token)
+            if not body:
+                break
+            rows = (body.get("data") or {}).get("result") or []
+            if not rows:
+                break
+            has_rows = True
+            for r in rows:
+                if isinstance(r, dict):
+                    total_value += Decimal(str(r.get("value") or 0))
+                    total_lot += int(r.get("volume") or 0)
+            if len(rows) < 50:
+                break
+            page += 1
+
+        if not has_rows or total_value <= 0:
             return None
         return total_value, total_lot
     except Exception as e:
         logger.debug("historical/summary totals failed for %s: %s", ticker, e)
         return None
+
 
 
 def _parse_marketdetectors_response(

@@ -14,8 +14,9 @@ from src.adapters.cli.fetch_market_commands import (
     _print_table_summary,
     _range_update_status,
     _clean_row_span,
-    _clean_flow_status,
-    _fmt_broker_column,
+    _split_flow_parts,
+    _fmt_tracked_flow_column,
+    _fmt_inst_flow_column,
     _fmt_meta_column,
     _fmt_enrichment_column,
 )
@@ -482,19 +483,25 @@ def test_clean_row_span():
     assert _clean_row_span("refreshed/span=260d") == "ref(260d)"
 
 
-def test_fmt_broker_column():
-    assert _fmt_broker_column("up-to-date(2026-06-19)", "up-to-date(2026-06-19)") == "✓(06-19)"
-    assert _fmt_broker_column("up-to-date(2026-06-17)", "up-to-date(2026-06-19)") == "✓(06-17)/✓(06-19)"
-    assert _fmt_broker_column("+26rows/span=84d", "up-to-date(2026-06-19)") == "+26r(84d)/✓(06-19)"
-    assert _fmt_broker_column("skip", "skip") == "skip"
-    # Smart merge
-    assert _fmt_broker_column("up-to-date(2026-06-19)", "daily=✓(2026-06-19)") == "✓(06-19)"
-    assert _fmt_broker_column("+26rows/span=84d", "daily:+648rows/12codes/96d agg:+2rows/373d") == "+26r(84d)/d:+648r(96d) a:+2r(373d)"
+def test_split_flow_parts():
+    assert _split_flow_parts("daily=✓(2026-06-19)") == ("daily=✓(2026-06-19)", "skip")
+    assert _split_flow_parts("daily=✓(2026-06-19) agg=✓(2026-06-19)") == ("daily=✓(2026-06-19)", "agg=✓(2026-06-19)")
+    assert _split_flow_parts("daily:+648rows/12codes/96d agg:+2rows/373d") == ("daily:+648rows/12codes/96d", "agg:+2rows/373d")
+    assert _split_flow_parts("skip") == ("skip", "skip")
+    assert _split_flow_parts("ERR:auth") == ("ERR:auth", "ERR:auth")
 
 
-def test_clean_flow_status():
-    assert _clean_flow_status("daily=✓(2026-06-19)") == "d:✓(06-19)"
-    assert _clean_flow_status("daily:+648rows/12codes/96d agg:+2rows/373d") == "d:+648r(96d) a:+2r(373d)"
+def test_fmt_tracked_flow_column():
+    assert _fmt_tracked_flow_column("daily=✓(2026-06-19)") == "✓(06-19)"
+    assert _fmt_tracked_flow_column("daily:+648rows/12codes/96d") == "+648r(96d)"
+    assert _fmt_tracked_flow_column("skip") == "skip"
+
+
+def test_fmt_inst_flow_column():
+    assert _fmt_inst_flow_column("agg=✓(2026-06-19)") == "✓(06-19)"
+    assert _fmt_inst_flow_column("agg:+2rows/373d") == "+2r(373d)"
+    assert _fmt_inst_flow_column("skip") == "skip"
+
 
 
 def test_fmt_meta_column():

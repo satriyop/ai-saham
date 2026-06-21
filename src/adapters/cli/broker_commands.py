@@ -344,7 +344,7 @@ def broker_history_view(
     db_path: Annotated[
         Path,
         typer.Option("--db", help="SQLite database path"),
-    ] = Path("data/broker_data.db"),
+    ] = DEFAULT_DB_PATH,
     fmt: Annotated[
         str,
         typer.Option("--format", help="Output format: table or json"),
@@ -413,7 +413,7 @@ def broker_top_foreign_view(
     db_path: Annotated[
         Path,
         typer.Option("--db", help="SQLite database path"),
-    ] = Path("data/broker_data.db"),
+    ] = DEFAULT_DB_PATH,
     fmt: Annotated[
         str,
         typer.Option("--format", help="Output format: table or json"),
@@ -482,7 +482,7 @@ def broker_top_foreign(
     db_path: Annotated[
         Path,
         typer.Option("--db", help="SQLite database path"),
-    ] = Path("data/broker_data.db"),
+    ] = DEFAULT_DB_PATH,
     no_save: Annotated[
         bool,
         typer.Option("--no-save", help="Do not persist results to database"),
@@ -562,7 +562,7 @@ def broker_history(
     db_path: Annotated[
         Path,
         typer.Option("--db", help="SQLite database path"),
-    ] = Path("data/broker_data.db"),
+    ] = DEFAULT_DB_PATH,
 ) -> None:
     """
     Fetch and store daily foreign broker flow history for a stock (time-series).

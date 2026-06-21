@@ -129,61 +129,54 @@ def _clean_row_span(s: str) -> str:
     return s
 
 
-def _clean_flow_status(s: str) -> str:
+def _split_flow_parts(flow_str: str) -> tuple[str, str]:
     import re
-    # Remove up-to-date prefix and extract dates
-    s = _fmt_status(s)
-    # Remove year
-    s = re.sub(r'\b\d{4}-', '', s)
-    # Map daily=✓(06-19) -> d:✓(06-19)
-    s = re.sub(r'daily=✓\(([^)]+)\)', r'd:✓(\1)', s)
-    # Map daily=✓ -> d:✓
-    s = re.sub(r'daily=✓', r'd:✓', s)
-    # Map daily:+648rows/12codes/96d -> d:+648r(96d)
-    s = re.sub(r'daily:\+(\d+)rows/\d+codes/(\d+)d', r'd:+\1r(\2d)', s)
-    # Map daily:+648rows/96d -> d:+648r(96d)
-    s = re.sub(r'daily:\+(\d+)rows/(\d+)d', r'd:+\1r(\2d)', s)
+    daily_part = "skip"
+    agg_part = "skip"
     
-    # Map agg=✓(06-19) -> a:✓(06-19)
-    s = re.sub(r'agg=✓\(([^)]+)\)', r'a:✓(\1)', s)
-    # Map agg=✓ -> a:✓
-    s = re.sub(r'agg=✓', r'a:✓', s)
-    # Map agg:+90rows/260d -> a:+90r(260d)
-    s = re.sub(r'agg:\+(\d+)rows/(\d+)d', r'a:+\1r(\2d)', s)
-    # General agg: -> a:
-    s = re.sub(r'agg:', r'a:', s)
+    # Extract daily part
+    daily_match = re.search(r'(daily=✓\([^)]+\)|daily=[^ ]+|daily:\+[^ ]+)', flow_str)
+    if daily_match:
+        daily_part = daily_match.group(1)
+        
+    # Extract agg part
+    agg_match = re.search(r'(agg=✓\([^)]+\)|agg=[^ ]+|agg:\+[^ ]+)', flow_str)
+    if agg_match:
+        agg_part = agg_match.group(1)
+        
+    # If it's a fallback single status (e.g. no daily or agg keys, like "✓(2026-06-19)" or "skip" or "ERR:...")
+    if not daily_match and not agg_match:
+        if "ERR:" in flow_str:
+            return flow_str, flow_str
+        return flow_str, flow_str
+        
+    return daily_part, agg_part
+
+
+def _fmt_tracked_flow_column(daily_part: str) -> str:
+    import re
+    s = _fmt_status(daily_part)
+    s = re.sub(r'\b\d{4}-', '', s)
+    s = re.sub(r'daily=✓\(([^)]+)\)', r'✓(\1)', s)
+    s = re.sub(r'daily=✓', '✓', s)
+    s = re.sub(r'daily:\+(\d+)rows/\d+codes/(\d+)d', r'+\1r(\2d)', s)
+    s = re.sub(r'daily:\+(\d+)rows/(\d+)d', r'+\1r(\2d)', s)
+    s = re.sub(r'daily:', '', s)
     return s
 
 
-def _fmt_broker_column(summaries: str, flow: str) -> str:
+def _fmt_inst_flow_column(agg_part: str) -> str:
     import re
-    # Get clean formats
-    summ_clean = _clean_row_span(summaries)
-    flow_clean = _clean_flow_status(flow)
-    
-    # Drop year from date patterns to save space inside broker columns
-    summ_clean = re.sub(r'\b\d{4}-', '', summ_clean)
-    
-    # If they are identical (e.g. "skip", "n/a:index", or "✓(06-19)")
-    if summ_clean == flow_clean:
-        return summ_clean
-        
-    # If the clean flow status is just d:✓(DATE) or d:✓ and summaries is ✓(DATE)
-    summ_date_match = re.search(r'✓\(([^)]+)\)', summ_clean)
-    flow_date_match = re.search(r'✓\(([^)]+)\)', flow_clean)
-    
-    if summ_date_match and flow_date_match:
-        if summ_date_match.group(1) == flow_date_match.group(1):
-            # If dates match, simplify by removing d:✓(DATE) from flow
-            # e.g., "d:✓(06-19) a:+90r(260d)" -> "a:+90r(260d)"
-            extra = flow_clean.replace(f"d:✓({summ_date_match.group(1)})", "").strip()
-            extra = extra.replace(f"✓({summ_date_match.group(1)})", "").strip()
-            extra = extra.strip("/").strip()
-            if not extra:
-                return summ_clean
-            return f"{summ_clean}/{extra}"
-            
-    return f"{summ_clean}/{flow_clean}"
+    s = _fmt_status(agg_part)
+    s = re.sub(r'\b\d{4}-', '', s)
+    s = re.sub(r'agg=✓\(([^)]+)\)', r'✓(\1)', s)
+    s = re.sub(r'agg=✓', '✓', s)
+    s = re.sub(r'agg:\+(\d+)rows/(\d+)d', r'+\1r(\2d)', s)
+    s = re.sub(r'agg:', '', s)
+    return s
+
+
+
 
 
 def _fmt_meta_column(s: str) -> str:
@@ -747,10 +740,14 @@ def fetch_market(
     if not broker_only:
         typer.echo(f"  Candles:          {candles_provider}")
     if not candles_only:
-        # broker_summaries always route to IDX regardless of the selected provider;
-        # flow tables (foreign_flow_points, broker_daily_flow) use the chosen provider.
-        typer.echo("  Broker summaries: idx  (foreign totals + named brokers)")
-        typer.echo(f"  Broker flow:      {broker_provider_name}  (net flow timeseries + daily named breakdown)")
+        if broker_provider_name == "stockbit":
+            typer.echo("  Summaries:        idx  (true daily totals + top 10 brokers list populated via stockbit)")
+            typer.echo("  Tracked Flow:     stockbit  (daily activity for 15 tracked brokers)")
+            typer.echo("  Inst. Flow:       stockbit  (net flow proxy for 10 institutional desks)")
+        else:
+            typer.echo("  Summaries:        idx  (true daily totals; top 10 brokers list NOT available without stockbit)")
+            typer.echo("  Tracked Flow:     skip  (requires stockbit login)")
+            typer.echo("  Inst. Flow:       skip  (requires stockbit login)")
     if not no_meta:
         typer.echo("  Meta:             yahoo  (sector/industry, 30d TTL)")
     if enrichment_available:
@@ -759,8 +756,8 @@ def fetch_market(
     typer.echo("")
 
     # Print table header
-    header_line = f"  {'[Index] Ticker':<15}  {'Candles':<13}  {'Broker':<28}"
-    sep_line    = f"  {'─────── ──────':<15}  {'─────────────':<13}  {'────────────────────────────':<28}"
+    header_line = f"  {'[Index] Ticker':<15}  {'Candles':<13}  {'Summaries':<18}  {'Tracked Flow':<18}  {'Inst. Flow':<18}"
+    sep_line    = f"  {'─────── ──────':<15}  {'─────────────':<13}  {'──────────────────':<18}  {'──────────────────':<18}  {'──────────────────':<18}"
     if not no_meta:
         header_line += f"  {'Meta':<18}"
         sep_line    += f"  {'──────────────────':<18}"
@@ -788,12 +785,18 @@ def fetch_market(
 
         # Format column values
         candles_col = _clean_row_span(result.candles_status)[:13]
-        broker_col = _fmt_broker_column(result.broker_result.summaries, result.broker_result.flow)[:28]
+        summaries_col = _clean_row_span(result.broker_result.summaries)[:18]
+        
+        daily_flow, agg_flow = _split_flow_parts(result.broker_result.flow)
+        tracked_col = _fmt_tracked_flow_column(daily_flow)[:18]
+        inst_col = _fmt_inst_flow_column(agg_flow)[:18]
         
         line_parts = [
             f"  {progress:<9} {result.ticker:<5}",
             f"{candles_col:<13}",
-            f"{broker_col:<28}"
+            f"{summaries_col:<18}",
+            f"{tracked_col:<18}",
+            f"{inst_col:<18}"
         ]
         
         if not no_meta:
