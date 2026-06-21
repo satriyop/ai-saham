@@ -378,3 +378,152 @@ def universe_inspect(
         console().print(panel(table, title=f"COMPANIES IN SUBSECTOR {subsector_id} (Sector {sector_id})"))
         console().print(f"Total: {len(items)} company(ies)")
         console().print("")
+
+
+@universe_app.command("create")
+def universe_create(
+    name: Annotated[
+        str,
+        typer.Argument(help="Name of the new universe (e.g. food_beverage)"),
+    ],
+    sector_id: Annotated[
+        int,
+        typer.Option("--sector", "-s", help="Sector ID to query"),
+    ],
+    subsector_id: Annotated[
+        int,
+        typer.Option("--subsector", "-b", help="Subsector ID to query"),
+    ],
+    config_path: Annotated[
+        Optional[Path],
+        typer.Option("--config", help="Path to universes.yaml"),
+    ] = None,
+) -> None:
+    """
+    Create a custom universe from a Stockbit subsector and save/sync it to universes.yaml.
+
+    Requires an active Stockbit session (run `saham fetch stockbit login` first).
+
+    Example:
+        saham fetch universe create food_retail -s 1 -b 10
+    """
+    import yaml
+    from datetime import date
+
+    resolved_config = config_path or Path("config/universes.yaml")
+    universe_key = name.strip().lower()
+
+    if not _STOCKBIT_PROFILE_DIR.exists():
+        typer.echo("No Stockbit session. Run `saham fetch stockbit login` first.")
+        raise typer.Exit(1)
+
+    try:
+        from src.infrastructure.browser.playwright_stockbit import (
+            StockbitPlaywrightBrokerProvider,
+            _exodus_get,
+        )
+        provider = StockbitPlaywrightBrokerProvider()
+        if not provider.is_authenticated():
+            typer.echo("Session expired. Run `saham fetch stockbit login` to refresh.")
+            raise typer.Exit(1)
+        token = provider._get_token()
+    except ImportError as e:
+        typer.echo(f"Playwright not installed: {e}")
+        raise typer.Exit(1)
+
+    def _get(url: str) -> dict | None:
+        return _exodus_get(url, token)
+
+    def _extract_list(body: dict | None, *keys: str) -> list[dict]:
+        if not body:
+            return []
+        data = body.get("data")
+        if isinstance(data, list):
+            return [i for i in data if isinstance(i, dict)]
+        if isinstance(data, dict):
+            for k in keys:
+                if isinstance(data.get(k), list):
+                    return [i for i in data[k] if isinstance(i, dict)]
+        return []
+
+    console().print("")
+    console().print(f"Fetching companies for sector {sector_id} subsector {subsector_id}...")
+    url = f"https://exodus.stockbit.com/emitten/v3/sector/{sector_id}/subsector/{subsector_id}/company"
+    comp_body = _get(url)
+    items = _extract_list(comp_body, "companies", "list", "items", "stocks")
+
+    if not items:
+        typer.echo(f"No companies found in sector {sector_id} subsector {subsector_id}.", err=True)
+        raise typer.Exit(1)
+
+    tickers = []
+    for item in items:
+        code = (
+            item.get("ticker")
+            or item.get("code")
+            or item.get("stock_code")
+            or item.get("symbol")
+            or (item.get("stock_detail") or {}).get("code")
+        )
+        if code and isinstance(code, str) and code.strip():
+            tickers.append(code.strip().upper())
+
+    tickers = sorted(set(tickers))
+    if not tickers:
+        typer.echo("No valid company tickers extracted from subsector.", err=True)
+        raise typer.Exit(1)
+
+    # Load existing config
+    existing: dict = {}
+    if resolved_config.exists():
+        try:
+            with open(resolved_config) as f:
+                existing = yaml.safe_load(f) or {}
+        except Exception as e:
+            typer.echo(f"Warning: could not read {resolved_config}: {e}")
+
+    today_str = date.today().isoformat()
+    existing[universe_key] = {
+        "updated": today_str,
+        "tickers": tickers,
+    }
+
+    # Write config back
+    header = (
+        "# IDX Stock Universe Lists\n"
+        "#\n"
+        "# These lists are used by `saham fetch market` and `saham screen accum`\n"
+        "# to define which tickers to scan.\n"
+        "#\n"
+        "# IDX rebalances LQ45 and IDX80 every February and August.\n"
+        "# Auto-updated via: saham fetch universe update (Stockbit Exodus API)\n"
+        "#\n"
+        f"# Last updated: {today_str}\n\n"
+    )
+
+    try:
+        resolved_config.parent.mkdir(parents=True, exist_ok=True)
+        with open(resolved_config, "w") as f:
+            f.write(header)
+            yaml.dump(existing, f, default_flow_style=False, allow_unicode=True, sort_keys=True)
+        
+        console().print("")
+        table = compact_table(show_header=False)
+        table.add_column("Key", style="bold cyan")
+        table.add_column("Value")
+        table.add_row("Universe Name", universe_key)
+        table.add_row("Tickers Count", str(len(tickers)))
+        table.add_row("Tickers", ", ".join(tickers[:10]) + (f", ... (+{len(tickers) - 10} more)" if len(tickers) > 10 else ""))
+        table.add_row("Config File", str(resolved_config))
+
+        console().print(
+            panel(
+                table,
+                title="CUSTOM UNIVERSE CREATED & SYNCED"
+            )
+        )
+        console().print("")
+    except Exception as e:
+        typer.echo(f"Error writing {resolved_config}: {e}", err=True)
+        raise typer.Exit(1)
+
