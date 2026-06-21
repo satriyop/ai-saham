@@ -14,6 +14,7 @@ from typing import Annotated, Optional
 
 import typer
 
+from src.adapters.cli.rich_display import compact_table, console, panel
 from src.application.services.universe_loader import load_universe_meta
 
 universe_app = typer.Typer(
@@ -218,27 +219,36 @@ def universe_inspect(
         Optional[int],
         typer.Option("--sector", "-s", help="Drill into a specific sector ID to show its subsectors"),
     ] = None,
+    subsector_id: Annotated[
+        Optional[int],
+        typer.Option("--subsector", "-b", help="Drill into a specific subsector ID to show its companies"),
+    ] = None,
     with_count: Annotated[
         bool,
         typer.Option("--count", "-c", help="Fetch company count for each subsector (slower)"),
     ] = False,
 ) -> None:
     """
-    Inspect available Stockbit sectors and subsectors.
+    Inspect available Stockbit sectors and subsectors, and drill down to companies.
 
-    Without --sector: lists all top-level sectors with their IDs.
+    Without parameters: lists all top-level sectors with their IDs.
     With --sector ID: lists all subsectors inside that sector, optionally
     with company counts per subsector (--count).
+    With --sector ID and --subsector ID: lists all companies inside that subsector.
 
     Requires an active Stockbit session (run `saham fetch stockbit login` first).
 
     Examples:
-        saham fetch universe inspect                # list all sectors
-        saham fetch universe inspect --sector 5     # subsectors of sector 5
-        saham fetch universe inspect --sector 5 --count
+        saham fetch universe inspect                            # list all sectors
+        saham fetch universe inspect --sector 5                 # subsectors of sector 5
+        saham fetch universe inspect --sector 5 --subsector 49  # companies in subsector 49 of sector 5
     """
     if not _STOCKBIT_PROFILE_DIR.exists():
         typer.echo("No Stockbit session. Run `saham fetch stockbit login` first.")
+        raise typer.Exit(1)
+
+    if subsector_id is not None and sector_id is None:
+        typer.echo("Error: --sector (-s) ID is required when specifying --subsector (-b) ID.", err=True)
         raise typer.Exit(1)
 
     try:
@@ -271,8 +281,8 @@ def universe_inspect(
         return []
 
     if sector_id is None:
-        typer.echo("")
-        typer.echo("Fetching all sectors from Stockbit...")
+        console().print("")
+        console().print("Fetching all sectors from Stockbit...")
         body = _get("https://exodus.stockbit.com/emitten/sectors")
         sectors = _extract_list(body, "sectors", "list", "items")
 
@@ -280,25 +290,26 @@ def universe_inspect(
             typer.echo("No sectors returned. Check session or response shape.")
             raise typer.Exit(1)
 
-        typer.echo("")
-        typer.echo(f"  {'ID':<8} {'SECTOR NAME'}")
-        typer.echo("  " + "─" * 40)
+        table = compact_table()
+        table.add_column("ID", style="bold cyan")
+        table.add_column("Sector Name")
+        table.add_column("Companies", justify="right")
+
         for s in sectors:
             sid = s.get("id") or s.get("sector_id") or "?"
             name = s.get("name") or s.get("sector_name") or "?"
             count = s.get("total_company") or s.get("company_count") or ""
-            count_str = f"  ({count} companies)" if count else ""
-            typer.echo(f"  {str(sid):<8} {name}{count_str}")
+            table.add_row(str(sid), name, str(count) if count else "—")
 
-        typer.echo("")
-        typer.echo(f"Total: {len(sectors)} sector(s)")
-        typer.echo("")
-        typer.echo("Tip: drill into a sector with --sector <ID>")
-        typer.echo("     Known useful IDs: 88=Broad Indices  70=Sectoral Indices")
+        console().print("")
+        console().print(panel(table, title="STOCKBIT SECTORS"))
+        console().print("Tip: drill into a sector with --sector <ID> (e.g., -s 70)")
+        console().print("     Known useful IDs: 88=Broad Indices  70=Sectoral Indices")
+        console().print("")
 
-    else:
-        typer.echo("")
-        typer.echo(f"Fetching subsectors for sector {sector_id}...")
+    elif subsector_id is None:
+        console().print("")
+        console().print(f"Fetching subsectors for sector {sector_id}...")
         body = _get(f"https://exodus.stockbit.com/emitten/sectors/{sector_id}/subsectors")
         subsectors = _extract_list(body, "subsectors", "list", "items")
 
@@ -306,9 +317,10 @@ def universe_inspect(
             typer.echo(f"No subsectors found for sector {sector_id}.")
             raise typer.Exit(1)
 
-        typer.echo("")
-        typer.echo(f"  {'SUB-ID':<12} {'SUBSECTOR NAME':<35} {'COMPANIES':>9}")
-        typer.echo("  " + "─" * 58)
+        table = compact_table()
+        table.add_column("Sub-ID", style="bold cyan")
+        table.add_column("Subsector Name")
+        table.add_column("Companies", justify="right")
 
         for sub in subsectors:
             sub_id = sub.get("id") or sub.get("subsector_id") or "?"
@@ -322,10 +334,47 @@ def universe_inspect(
                 count = len(items)
 
             count_str = str(count) if count != "" else "?"
-            typer.echo(f"  {str(sub_id):<12} {name:<35} {count_str:>9}")
+            table.add_row(str(sub_id), name, count_str)
 
-        typer.echo("")
-        typer.echo(f"Total: {len(subsectors)} subsector(s)")
-        typer.echo("")
-        typer.echo(f"Tip: fetch company list with:")
-        typer.echo(f"     curl .../emitten/v3/sector/{sector_id}/subsector/<SUB-ID>/company")
+        console().print("")
+        console().print(panel(table, title=f"SUBSECTORS OF SECTOR {sector_id}"))
+        console().print(f"Tip: drill into a subsector with: --sector {sector_id} --subsector <SUB-ID>")
+        console().print("")
+
+    else:
+        console().print("")
+        console().print(f"Fetching companies for sector {sector_id} subsector {subsector_id}...")
+        url = f"https://exodus.stockbit.com/emitten/v3/sector/{sector_id}/subsector/{subsector_id}/company"
+        comp_body = _get(url)
+        items = _extract_list(comp_body, "companies", "list", "items", "stocks")
+
+        if not items:
+            typer.echo(f"No companies found in sector {sector_id} subsector {subsector_id}.")
+            raise typer.Exit(1)
+
+        table = compact_table()
+        table.add_column("Ticker", style="bold cyan")
+        table.add_column("Company Name")
+
+        for item in items:
+            code = (
+                item.get("ticker")
+                or item.get("code")
+                or item.get("stock_code")
+                or item.get("symbol")
+                or (item.get("stock_detail") or {}).get("code")
+                or "?"
+            )
+            name = (
+                item.get("name")
+                or item.get("company_name")
+                or item.get("company")
+                or (item.get("stock_detail") or {}).get("name")
+                or "Unknown Name"
+            )
+            table.add_row(str(code).upper(), name)
+
+        console().print("")
+        console().print(panel(table, title=f"COMPANIES IN SUBSECTOR {subsector_id} (Sector {sector_id})"))
+        console().print(f"Total: {len(items)} company(ies)")
+        console().print("")

@@ -213,11 +213,11 @@ def test_ncp_flag_true_at_0856(tmp_path):
     assert hist[0]["is_ncp_locked"] == 1
 
 
-def test_ncp_flag_true_after_0856(tmp_path):
+def test_ncp_flag_false_after_0900(tmp_path):
     repo = SQLiteIEVRepository(tmp_path / "t.db")
     repo.save_snapshot(D1, [MoverData("BBCA", 100_000)], collected_at=AT_0905)
     hist = _history_rows(tmp_path / "t.db", D1)
-    assert hist[0]["is_ncp_locked"] == 1
+    assert hist[0]["is_ncp_locked"] == 0
 
 
 def test_canonical_ncp_flag_sticky(tmp_path):
