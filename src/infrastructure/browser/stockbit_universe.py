@@ -79,17 +79,17 @@ _BROAD_NAME_HINTS: dict[str, list[str]] = {
 
 # Sectoral index name hints — sector 70 (Indonesian + English, case-insensitive)
 _SECTORAL_NAME_HINTS: dict[str, list[str]] = {
-    "finance":    ["keuangan", "finance"],
-    "energy":     ["energi", "energy"],
-    "basic":      ["barang baku", "basic material"],
-    "industrial": ["perindustrian", "industrial"],
-    "infra":      ["infrastruktur", "infrastructure"],
-    "tech":       ["teknologi", "technology", "techno"],
-    "health":     ["kesehatan", "health"],
-    "noncyc":     ["kebutuhan primer", "non-cyclic", "noncyc"],
-    "cyclic":     ["barang konsumen", "cyclic", "consumer cycl"],
-    "property":   ["properti", "property", "real estate"],
-    "transport":  ["transportasi", "transport", "logistik"],
+    "finance":    ["keuangan", "finance", "idxfinance"],
+    "energy":     ["energi", "energy", "idxenergy"],
+    "basic":      ["barang baku", "basic material", "basic", "idxbasic"],
+    "industrial": ["perindustrian", "industrial", "indust", "idxindust"],
+    "infra":      ["infrastruktur", "infrastructure", "infra", "idxinfra"],
+    "tech":       ["teknologi", "technology", "techno", "idxtechno"],
+    "health":     ["kesehatan", "health", "idxhealth"],
+    "noncyc":     ["kebutuhan primer", "non-cyclic", "noncyc", "idxnoncyc"],
+    "cyclic":     ["barang konsumen", "cyclic", "consumer cycl", "idxcyclic"],
+    "property":   ["properti", "property", "real estate", "propert", "idxpropert"],
+    "transport":  ["transportasi", "transport", "logistik", "trans", "idxtrans"],
 }
 
 
