@@ -15,7 +15,7 @@ This file is the canonical phase-by-phase state for the post-`claude_stockbit_da
 | 3 | Stockbit OHLC Fallback | ✅ Done | see commits below |
 | 4 | CLI Adapter Thinness Phase 1 | 🔲 Not Started | — |
 | 5 | Piotroski Quality Gate | ✅ Done | see commits below |
-| 6 | Broker Distribution Matrix | 🔲 Not Started | — |
+| 6 | Broker Distribution Matrix | ✅ Done | see commits below |
 | 7 | Split playwright_stockbit.py | 🔲 Not Started | — |
 | 8 | Watchlist + Saved Screener | 🔲 Not Started | — |
 | 9 | Valuation Metrics | 🔲 Not Started | — |
@@ -159,7 +159,24 @@ This file is the canonical phase-by-phase state for the post-`claude_stockbit_da
 
 **Goal:** New provider for `/order-trade/broker/distribution`. ASCII heatmap in `saham view broker`.
 
-**Status:** 🔲 Not Started
+**Status:** ✅ Done
+
+### Files Changed
+- `src/domain/value_objects/broker_distribution.py` — new; frozen dataclasses: `BrokerCounterparty`, `BrokerDistributionEntry`, `BrokerDistributionSnapshot` with `foreign_buying_from_domestic` / `net_foreign_buyer_dominance` signal properties
+- `src/domain/ports/broker_distribution_provider.py` — new; ABC port
+- `src/infrastructure/config/stockbit_config.py` — added `broker_distribution_url`
+- `src/infrastructure/browser/stockbit_broker_distribution.py` — new; SQLite cache (1-day TTL), JSON blob serialization for counterparty tree
+- `src/adapters/cli/broker_commands.py` — `broker_distribution_view` command + `_display_distribution` ASCII renderer
+- `src/adapters/cli/view_commands.py` — registered `distribution` subcommand under `view broker`
+- `src/adapters/cli/fetch_market_commands.py` — wired `EnrichmentTask("brdist", ...)` into enrichment pass
+- `tests/infrastructure/browser/test_stockbit_broker_distribution.py` — new; 21 tests
+- `tests/adapters/cli/test_command_contract.py` — added `distribution` to expected broker view commands
+
+### Key Design Notes
+- Counterparties serialized as JSON blob (not normalized rows) — avoids a complex 3-table schema for a read-mostly cache
+- `distribute_to` direction: "who the broker traded AGAINST" (not who they directed flow to)
+- `foreign_buying_from_domestic`: top foreign buyer has >50% domestic counterparties = smart-money accumulation signal
+- Display color: domestic counterparties yellow (retail), foreign counterparties dim
 
 ---
 

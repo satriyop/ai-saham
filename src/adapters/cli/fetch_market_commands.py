@@ -562,6 +562,7 @@ def _fetch_enrichment(ticker: str, db_path: Path, broker_provider) -> str:
     from src.infrastructure.browser.stockbit_bandar import StockbitBandarDetectorProvider
     from src.infrastructure.browser.stockbit_company_profile import StockbitCompanyProfileProvider
     from src.infrastructure.browser.stockbit_corp_action import StockbitCorporateActionRepository
+    from src.infrastructure.browser.stockbit_broker_distribution import StockbitBrokerDistributionProvider
     from src.infrastructure.browser.stockbit_earnings import StockbitEarningsProvider
     from src.infrastructure.browser.stockbit_forward_estimates import StockbitForwardEstimatesProvider
     from src.infrastructure.browser.stockbit_fundamentals import StockbitFundamentalsProvider
@@ -584,6 +585,7 @@ def _fetch_enrichment(ticker: str, db_path: Path, broker_provider) -> str:
     fwd_est_prov = StockbitForwardEstimatesProvider(broker_provider=broker_provider, db_path=db_path)
     profile_prov = StockbitCompanyProfileProvider(broker_provider=broker_provider, db_path=db_path)
     earnings_prov = StockbitEarningsProvider(broker_provider=broker_provider, db_path=db_path)
+    distribution_prov = StockbitBrokerDistributionProvider(broker_provider=broker_provider, db_path=db_path)
 
     tasks = [
         EnrichmentTask("notation", lambda: notation_prov.is_cache_fresh(ticker),   lambda: notation_prov.get_notation(ticker)),
@@ -597,6 +599,7 @@ def _fetch_enrichment(ticker: str, db_path: Path, broker_provider) -> str:
         EnrichmentTask("fwd_est",  lambda: fwd_est_prov._read_cache(ticker) is not None, lambda: fwd_est_prov.get_forward_estimates(ticker)),
         EnrichmentTask("profile",  lambda: profile_prov._read_cache(ticker) is not None, lambda: profile_prov.get_profile(ticker)),
         EnrichmentTask("earnings", lambda: earnings_prov.is_cache_fresh(ticker),   lambda: earnings_prov.get_earnings_history(ticker)),
+        EnrichmentTask("brdist",   lambda: distribution_prov.is_cache_fresh(ticker), lambda: distribution_prov.get_distribution(ticker)),
     ]
     return RefreshStockbitEnrichmentUseCase().execute(
         RefreshStockbitEnrichmentRequest(ticker=ticker, tasks=tasks)

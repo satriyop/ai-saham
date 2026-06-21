@@ -61,7 +61,7 @@ EXPECTED_COMMANDS: dict[tuple[str, ...], tuple[str, ...]] = {
     ),
     ("analyze", "chart"): ("price", "rsi", "volume"),
     ("view",): ("broker", "universe"),
-    ("view", "broker"): ("status", "flow", "top", "history", "top-foreign", "mappings"),
+    ("view", "broker"): ("status", "flow", "top", "history", "top-foreign", "distribution", "mappings"),
     ("trade",): (
         "confirm",
         "log",

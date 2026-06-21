@@ -12,6 +12,7 @@ import typer
 from typer.core import TyperGroup
 
 from src.adapters.cli.broker_commands import (
+    broker_distribution_view,
     broker_flow,
     broker_history_view,
     broker_mappings,
@@ -54,6 +55,7 @@ broker_view_app.command("flow")(broker_flow)
 broker_view_app.command("top")(broker_top)
 broker_view_app.command("history")(broker_history_view)
 broker_view_app.command("top-foreign")(broker_top_foreign_view)
+broker_view_app.command("distribution")(broker_distribution_view)
 broker_view_app.command("mappings")(broker_mappings)
 
 view_app.add_typer(broker_view_app, name="broker")

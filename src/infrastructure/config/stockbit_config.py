@@ -45,6 +45,14 @@ class StockbitConfig:
     marketdetectors_url: str = "https://exodus.stockbit.com/marketdetectors"  # broker-level
     broker_activity_url: str = "https://exodus.stockbit.com/order-trade/broker/activity"
     broker_historical_url: str = "https://exodus.stockbit.com/order-trade/broker/activity/historical"
+    broker_distribution_url: str = (
+        "https://exodus.stockbit.com/order-trade/broker/distribution"
+        "?date=&symbol={ticker}"
+        "&investor_type=INVESTOR_TYPE_ALL"
+        "&market_board=MARKET_TYPE_REGULER"
+        "&data_type=BROKER_DISTRIBUTION_DATA_TYPE_VALUE"
+        "&period=TB_PERIOD_LAST_1_DAY"
+    )
     historical_summary_url: str = (
         "https://exodus.stockbit.com/company-price-feed/historical/summary/{ticker}"
     )
@@ -98,6 +106,10 @@ class StockbitConfig:
         "https://exodus.stockbit.com/emitten/v3/sector/{sector}/subsector/{id}/company"
     )
     universe_screener_url: str = "https://exodus.stockbit.com/screener/universe"
+    # ── Browser scraper cache TTLs (days) ─────────────────────────────────
+    cache_ttl_days_company_profile: int = 30
+    cache_ttl_days_fundamentals: int = 7
+    cache_ttl_days_shareholding: int = 7
     # ── Browser timeouts (ms) ──────────────────────────────────────────────
     nav_timeout_ms: int = 30_000
     element_timeout_ms: int = 15_000
@@ -127,6 +139,7 @@ def load_stockbit_config(
         eps = data.get("endpoints") or {}
         codes = data.get("broker_codes") or {}
         tmo = data.get("timeouts") or {}
+        ttl = data.get("cache_ttl_days") or {}
 
         def _url(key: str, default: str) -> str:
             raw = (eps.get(key) or {}).get("url", "")
@@ -140,6 +153,9 @@ def load_stockbit_config(
         def _ms(key: str, default: int) -> int:
             return int(tmo[key]) if key in tmo else default
 
+        def _days(key: str, default: int) -> int:
+            return int(ttl[key]) if key in ttl else default
+
         return StockbitConfig(
             iev_movers_main_url=_url("iev_movers_main", defaults.iev_movers_main_url),
             iev_movers_special_url=_url("iev_movers_special", defaults.iev_movers_special_url),
@@ -147,6 +163,7 @@ def load_stockbit_config(
             marketdetectors_url=_url("broker_marketdetectors", defaults.marketdetectors_url),
             broker_activity_url=_url("broker_activity", defaults.broker_activity_url),
             broker_historical_url=_url("broker_historical", defaults.broker_historical_url),
+            broker_distribution_url=_url("broker_distribution", defaults.broker_distribution_url),
             historical_summary_url=_url("historical_summary", defaults.historical_summary_url),
             bandar_detector_url=_url("bandar_detector", defaults.bandar_detector_url),
             corp_action_url=_url("corp_action", defaults.corp_action_url),
@@ -167,6 +184,9 @@ def load_stockbit_config(
             universe_sector_70_url=_url("universe_sector_70", defaults.universe_sector_70_url),
             universe_company_url=_url("universe_company", defaults.universe_company_url),
             universe_screener_url=_url("universe_screener", defaults.universe_screener_url),
+            cache_ttl_days_company_profile=_days("company_profile", defaults.cache_ttl_days_company_profile),
+            cache_ttl_days_fundamentals=_days("fundamentals", defaults.cache_ttl_days_fundamentals),
+            cache_ttl_days_shareholding=_days("shareholding", defaults.cache_ttl_days_shareholding),
             nav_timeout_ms=_ms("nav_ms", defaults.nav_timeout_ms),
             element_timeout_ms=_ms("element_ms", defaults.element_timeout_ms),
             spa_settle_ms=_ms("spa_settle_ms", defaults.spa_settle_ms),
