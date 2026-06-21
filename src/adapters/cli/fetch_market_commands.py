@@ -116,6 +116,104 @@ def _fmt_status(s: str) -> str:
     return s
 
 
+def _clean_row_span(s: str) -> str:
+    import re
+    # Remove up-to-date prefix
+    s = _fmt_status(s)
+    # Replace backfill+Nrows/span=Kd -> bf+Nr(Kd)
+    s = re.sub(r'backfill\+(\d+)rows/span=(\d+)d', r'bf+\1r(\2d)', s)
+    # Replace +Nrows/span=Kd -> +Nr(Kd)
+    s = re.sub(r'\+(\d+)rows/span=(\d+)d', r'+\1r(\2d)', s)
+    # Replace refreshed/span=Kd -> ref(Kd)
+    s = re.sub(r'refreshed/span=(\d+)d', r'ref(\1d)', s)
+    return s
+
+
+def _fmt_broker_column(summaries: str, flow: str) -> str:
+    import re
+    # Get clean formats
+    summ_clean = _clean_row_span(summaries)
+    flow_clean = _clean_row_span(flow)
+    
+    # Drop year from date patterns to save space inside broker columns
+    summ_clean = re.sub(r'\b\d{4}-', '', summ_clean)
+    flow_clean = re.sub(r'\b\d{4}-', '', flow_clean)
+    
+    # If they are identical (e.g. "skip", "n/a:index", or "✓(06-19)")
+    if summ_clean == flow_clean:
+        return summ_clean
+        
+    # Otherwise combine
+    return f"{summ_clean}/{flow_clean}"
+
+
+def _fmt_meta_column(s: str) -> str:
+    # E.g. "new(Financial Services)" or "cached(5d)" or "skip"
+    if len(s) <= 18:
+        return s
+    
+    import re
+    match = re.match(r'(\w+)\((.+)\)', s)
+    if match:
+        prefix, content = match.groups()
+        # Truncate content so total length is 18
+        max_content_len = 18 - len(prefix) - 2  # -2 for "(" and ")"
+        if max_content_len > 3:
+            truncated = content[:max_content_len-2] + ".."
+            return f"{prefix}({truncated})"
+    return s[:18]
+
+
+def _fmt_enrichment_column(s: str) -> str:
+    # E.g. "✓(notation,analyst,insider,season,corp,holding,bandar,fundam,fwd_est,profile)"
+    # or "notation+analyst  ✓(insider,season,corp,holding,bandar,fundam,fwd_est,profile)"
+    # or "ERR:insider:Playwright error,corp:timeout"
+    # or "skip"
+    if s == "skip":
+        return "skip"
+        
+    if s.startswith("ERR:"):
+        errors_part = s[4:]
+        err_tokens = errors_part.split(",")
+        err_labels = []
+        for token in err_tokens:
+            parts = token.split(":")
+            if parts:
+                err_labels.append(parts[0])
+        failed_count = len(err_labels)
+        success_count = max(0, 10 - failed_count)
+        return f"{success_count}/10 (ERR: {', '.join(err_labels)})"
+        
+    fetched_part = ""
+    cached_part = ""
+    
+    if "  ✓(" in s:
+        parts = s.split("  ✓(")
+        fetched_part = parts[0].strip()
+        cached_part = parts[1].rstrip(")")
+    elif s.startswith("✓("):
+        cached_part = s[2:].rstrip(")")
+    else:
+        fetched_part = s.strip()
+        
+    fetched_list = [x for x in fetched_part.split("+") if x]
+    cached_list = [x for x in cached_part.split(",") if x]
+    
+    fetched_count = len(fetched_list)
+    cached_count = len(cached_list)
+    total_count = fetched_count + cached_count
+    
+    if total_count == 0:
+        return s
+        
+    if fetched_count == 0:
+        return f"{total_count}/{total_count} ✓"
+        
+    if fetched_count <= 2:
+        return f"{total_count}/{total_count} (+{fetched_count}: {', '.join(fetched_list)})"
+    return f"{total_count}/{total_count} (+{fetched_count})"
+
+
 def _cached_status(latest: date, end_date: date) -> str:
     """Return an explicit cache status for update output."""
     lag_days = (end_date - latest).days
@@ -621,31 +719,53 @@ def fetch_market(
     typer.echo("  Legend:  ✓(DATE) = up-to-date through DATE  +N = new rows stored  ERR: = failed")
     typer.echo("")
 
+    # Print table header
+    header_line = f"  {'[Index] Ticker':<15}  {'Candles':<13}  {'Broker':<18}"
+    sep_line    = f"  {'─────── ──────':<15}  {'─────────────':<13}  {'──────────────────':<18}"
+    if not no_meta:
+        header_line += f"  {'Meta':<18}"
+        sep_line    += f"  {'──────────────────':<18}"
+    if enrichment_available:
+        header_line += f"  {'Enrichment':<26}"
+        sep_line    += f"  {'──────────────────────────':<26}"
+    typer.echo(header_line)
+    typer.echo(sep_line)
+
     # Progress streaming callback
     def on_ticker_complete(result, index: int, total: int) -> None:
         progress = f"[{index:>3}/{total}]"
-        status_color = typer.colors.RED
-        if not result.any_error:
-            status_color = (
-                typer.colors.BRIGHT_BLACK
-                if result.all_cached
-                else typer.colors.GREEN
-            )
+        
+        has_critical_error = "ERR:" in result.candles_status or "ERR:" in result.broker_result.summaries or "ERR:" in result.broker_result.flow
+        has_enrich_error = "ERR:" in result.enrichment_status
+        
+        if has_critical_error:
+            status_color = typer.colors.RED
+        elif has_enrich_error:
+            status_color = typer.colors.YELLOW
+        elif result.all_cached:
+            status_color = typer.colors.BRIGHT_BLACK
+        else:
+            status_color = typer.colors.GREEN
 
-        status_line = (
-            f"candles={_fmt_status(result.candles_status)}"
-            f"  summ={_fmt_status(result.broker_result.summaries)}"
-            f"  flow={_fmt_status(result.broker_result.flow)}"
-        )
+        # Format column values
+        candles_col = _clean_row_span(result.candles_status)[:13]
+        broker_col = _fmt_broker_column(result.broker_result.summaries, result.broker_result.flow)[:18]
+        
+        line_parts = [
+            f"  {progress:<9} {result.ticker:<5}",
+            f"{candles_col:<13}",
+            f"{broker_col:<18}"
+        ]
+        
         if not no_meta:
-            status_line += f"  meta={result.meta_status}"
+            meta_col = _fmt_meta_column(result.meta_status)[:18]
+            line_parts.append(f"{meta_col:<18}")
         if enrichment_available:
-            status_line += f"  enrich={result.enrichment_status}"
-
-        typer.echo(
-            f"  {progress} {result.ticker:<6} "
-            + typer.style(status_line, fg=status_color)
-        )
+            enrich_col = _fmt_enrichment_column(result.enrichment_status)[:26]
+            line_parts.append(f"{enrich_col:<26}")
+            
+        status_line = "  ".join(line_parts)
+        typer.echo(typer.style(status_line, fg=status_color))
 
     use_case = FetchMarketRefreshUseCase(
         fetch_candles=_fetch_candles,

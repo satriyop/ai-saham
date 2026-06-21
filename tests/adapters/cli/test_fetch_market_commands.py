@@ -13,6 +13,10 @@ from src.adapters.cli.fetch_market_commands import (
     _no_new_data_status,
     _print_table_summary,
     _range_update_status,
+    _clean_row_span,
+    _fmt_broker_column,
+    _fmt_meta_column,
+    _fmt_enrichment_column,
 )
 from src.domain.entities.broker_flow import BrokerSummary, ForeignFlowPoint
 from src.domain.entities.candle import Candle
@@ -468,3 +472,35 @@ def test_print_table_summary_does_not_truncate_impact(monkeypatch, tmp_path: Pat
     output = capsys.readouterr().out
     assert "Some requested tickers are missing." in output
     assert "Some requested ti\n" not in output
+
+
+def test_clean_row_span():
+    assert _clean_row_span("up-to-date(2026-06-19)") == "✓(2026-06-19)"
+    assert _clean_row_span("+26rows/span=84d") == "+26r(84d)"
+    assert _clean_row_span("backfill+90rows/span=260d") == "bf+90r(260d)"
+    assert _clean_row_span("refreshed/span=260d") == "ref(260d)"
+
+
+def test_fmt_broker_column():
+    assert _fmt_broker_column("up-to-date(2026-06-19)", "up-to-date(2026-06-19)") == "✓(06-19)"
+    assert _fmt_broker_column("up-to-date(2026-06-17)", "up-to-date(2026-06-19)") == "✓(06-17)/✓(06-19)"
+    assert _fmt_broker_column("+26rows/span=84d", "up-to-date(2026-06-19)") == "+26r(84d)/✓(06-19)"
+    assert _fmt_broker_column("skip", "skip") == "skip"
+
+
+def test_fmt_meta_column():
+    assert _fmt_meta_column("cached(5d)") == "cached(5d)"
+    assert _fmt_meta_column("new(Financial Services)") == "new(Financial S..)"
+    assert _fmt_meta_column("skip") == "skip"
+
+
+def test_fmt_enrichment_column():
+    assert _fmt_enrichment_column("skip") == "skip"
+    # All cached
+    assert _fmt_enrichment_column("✓(notation,analyst,insider,season,corp,holding,bandar,fundam,fwd_est,profile)") == "10/10 ✓"
+    # Some fetched
+    assert _fmt_enrichment_column("notation+analyst  ✓(insider,season,corp,holding,bandar,fundam,fwd_est,profile)") == "10/10 (+2: notation, analyst)"
+    # More fetched
+    assert _fmt_enrichment_column("notation+analyst+insider  ✓(season,corp,holding,bandar,fundam,fwd_est,profile)") == "10/10 (+3)"
+    # Errors
+    assert _fmt_enrichment_column("ERR:insider:Playwright error,corp:timeout") == "8/10 (ERR: insider, corp)"
