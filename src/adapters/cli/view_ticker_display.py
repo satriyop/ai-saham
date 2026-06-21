@@ -10,6 +10,7 @@ Layer: Adapter
 
 from __future__ import annotations
 
+import sqlite3
 from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -287,6 +288,141 @@ def _candles_panel(candles: list) -> object:
     return panel(tbl, title="Recent Candles")
 
 
+# ── New panels ───────────────────────────────────────────────────────────────
+
+def _corp_action_panel(events: list) -> object:
+    if not events:
+        return panel(_not_cached(), title="Corporate Actions")
+
+    events_sorted = sorted(
+        [e for e in events if e.event_type != "__NONE__"],
+        key=lambda e: (e.ex_date or e.cum_date or e.announcement_date or date.min),
+        reverse=True,
+    )
+    if not events_sorted:
+        return panel(_not_cached(), title="Corporate Actions")
+
+    tbl = compact_table()
+    tbl.add_column("Type",    style="dim", min_width=10)
+    tbl.add_column("Ex-date", min_width=11)
+    tbl.add_column("Cum",     min_width=11, style="dim")
+    tbl.add_column("Detail")
+    tbl.add_column("Status",  min_width=8)
+
+    for e in events_sorted[:8]:
+        status_style = "green" if e.status == "active" else "dim"
+        tbl.add_row(
+            e.event_type.replace("_", " ").title(),
+            str(e.ex_date) if e.ex_date else "—",
+            str(e.cum_date) if e.cum_date else "—",
+            e.detail or "—",
+            Text(e.status or "—", style=status_style),
+        )
+
+    return panel(tbl, title="Corporate Actions")
+
+
+def _insider_panel(txns: list) -> object:
+    if not txns:
+        return panel(_not_cached(), title="Insider Activity")
+
+    tbl = compact_table()
+    tbl.add_column("Date",    style="dim", min_width=11)
+    tbl.add_column("Name",    min_width=18)
+    tbl.add_column("Role",    style="dim", min_width=10)
+    tbl.add_column("Action",  min_width=5)
+    tbl.add_column("Shares",  justify="right")
+    tbl.add_column("Price",   justify="right", style="dim")
+
+    for t in txns[:8]:
+        action_style = "green" if t.is_buy else "red"
+        role_short = {"DIREKTUR": "Dir", "KOMISARIS": "Kom"}.get(t.role, t.role[:3] if t.role else "—")
+        tbl.add_row(
+            str(t.transaction_date),
+            t.name,
+            role_short,
+            Text(t.action_type, style=f"bold {action_style}"),
+            f"{t.shares:,}",
+            f"Rp{t.price:,.0f}" if t.price > 0 else "—",
+        )
+
+    return panel(tbl, title="Insider Activity (90d)")
+
+
+def _seasonality_panel(edge, month: int) -> object:
+    _MONTH_NAMES = {
+        1: "Jan", 2: "Feb", 3: "Mar", 4: "Apr", 5: "May", 6: "Jun",
+        7: "Jul", 8: "Aug", 9: "Sep", 10: "Oct", 11: "Nov", 12: "Dec",
+    }
+    month_name = _MONTH_NAMES.get(month, str(month))
+
+    if edge is None:
+        return panel(_not_cached(), title=f"Seasonality — {month_name}")
+
+    if edge.is_tailwind:
+        edge_label, edge_style = "Tailwind", "green"
+    elif edge.is_headwind:
+        edge_label, edge_style = "Headwind", "red"
+    else:
+        edge_label, edge_style = "Neutral", "yellow"
+
+    sign = "+" if edge.avg_monthly_return_pct >= 0 else ""
+    lines: list[Text] = [
+        Text("  ") + Text(edge_label, style=f"bold {edge_style}") +
+        Text(f"   {sign}{edge.avg_monthly_return_pct:.1f}% avg   {edge.win_rate_pct:.0f}% win-rate", style="default"),
+        Text(f"  {edge.positive_years} up / {edge.total_years} years of history", style="dim"),
+    ]
+    return panel(Group(*lines), title=f"Seasonality — {month_name}")
+
+
+def _iev_panel(iev_rows: list) -> object:
+    if not iev_rows:
+        return panel(_not_cached(), title="IEV / Pre-open")
+
+    tbl = compact_table()
+    tbl.add_column("Date",  style="dim", min_width=11)
+    tbl.add_column("IEV",   justify="right", min_width=10)
+    tbl.add_column("Rank",  justify="right", min_width=5)
+    tbl.add_column("IEP",   justify="right", min_width=8)
+    tbl.add_column("NCP",   min_width=4)
+
+    for row in iev_rows[:5]:
+        ncp = Text("✓", style="green") if row["is_ncp_locked"] else Text("—", style="dim")
+        tbl.add_row(
+            str(row["date"]),
+            _fmt_vol(row["iev"]),
+            f"#{row['rank']}",
+            f"Rp{row['iep']:,}" if row["iep"] else "—",
+            ncp,
+        )
+
+    return panel(tbl, title="IEV / Pre-open")
+
+
+def _sentiment_panel(logs: list) -> object:
+    if not logs:
+        return panel(_not_cached(), title="News Sentiment")
+
+    tbl = compact_table()
+    tbl.add_column("Date",      style="dim", min_width=11)
+    tbl.add_column("Sentiment", min_width=10)
+    tbl.add_column("Catalyst",  style="dim")
+    tbl.add_column("Score",     justify="right", min_width=5, style="dim")
+
+    _SENTIMENT_STYLE = {"positive": "green", "negative": "red", "neutral": "yellow"}
+
+    for log in logs[:8]:
+        style = _SENTIMENT_STYLE.get(log["sentiment"], "default")
+        tbl.add_row(
+            log["date"],
+            Text(log["sentiment"].title(), style=style),
+            log["catalyst"].replace("_", " ").title() if log["catalyst"] else "—",
+            f"{log['score']:.2f}",
+        )
+
+    return panel(tbl, title="News Sentiment")
+
+
 # ── Main entry point ─────────────────────────────────────────────────────────
 
 def show_ticker_view(ticker: str, db_path: Path = DEFAULT_DB_PATH) -> None:
@@ -294,33 +430,78 @@ def show_ticker_view(ticker: str, db_path: Path = DEFAULT_DB_PATH) -> None:
     from src.infrastructure.browser.stockbit_analyst import StockbitAnalystConsensusProvider
     from src.infrastructure.browser.stockbit_bandar import StockbitBandarDetectorProvider
     from src.infrastructure.browser.stockbit_company_profile import StockbitCompanyProfileProvider
+    from src.infrastructure.browser.stockbit_corp_action import StockbitCorporateActionRepository
     from src.infrastructure.browser.stockbit_forward_estimates import StockbitForwardEstimatesProvider
     from src.infrastructure.browser.stockbit_fundamentals import StockbitFundamentalsProvider
+    from src.infrastructure.browser.stockbit_insider import StockbitInsiderActivityProvider
+    from src.infrastructure.browser.stockbit_seasonality import StockbitSeasonalityProvider
     from src.infrastructure.browser.stockbit_shareholding import StockbitShareholdingProvider
     from src.infrastructure.browser.stockbit_ticker_notation import StockbitTickerNotationProvider
     from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
     db = Path(db_path)
 
-    notation_prov  = StockbitTickerNotationProvider(broker_provider=None, db_path=db)  # type: ignore[arg-type]
-    fund_prov      = StockbitFundamentalsProvider(broker_provider=None, db_path=db)    # type: ignore[arg-type]
-    analyst_prov   = StockbitAnalystConsensusProvider(broker_provider=None, db_path=db)# type: ignore[arg-type]
-    sh_prov        = StockbitShareholdingProvider(broker_provider=None, db_path=db)    # type: ignore[arg-type]
-    bandar_prov    = StockbitBandarDetectorProvider(broker_provider=None, db_path=db)  # type: ignore[arg-type]
-    fwd_prov       = StockbitForwardEstimatesProvider(broker_provider=None, db_path=db)# type: ignore[arg-type]
-    profile_prov   = StockbitCompanyProfileProvider(broker_provider=None, db_path=db)  # type: ignore[arg-type]
-    market_repo    = SQLiteMarketRepository(db)
+    notation_prov    = StockbitTickerNotationProvider(broker_provider=None, db_path=db)    # type: ignore[arg-type]
+    fund_prov        = StockbitFundamentalsProvider(broker_provider=None, db_path=db)      # type: ignore[arg-type]
+    analyst_prov     = StockbitAnalystConsensusProvider(broker_provider=None, db_path=db)  # type: ignore[arg-type]
+    sh_prov          = StockbitShareholdingProvider(broker_provider=None, db_path=db)      # type: ignore[arg-type]
+    bandar_prov      = StockbitBandarDetectorProvider(broker_provider=None, db_path=db)    # type: ignore[arg-type]
+    fwd_prov         = StockbitForwardEstimatesProvider(broker_provider=None, db_path=db)  # type: ignore[arg-type]
+    profile_prov     = StockbitCompanyProfileProvider(broker_provider=None, db_path=db)    # type: ignore[arg-type]
+    corp_action_repo = StockbitCorporateActionRepository(broker_provider=None, db_path=db) # type: ignore[arg-type]
+    insider_prov     = StockbitInsiderActivityProvider(broker_provider=None, db_path=db)   # type: ignore[arg-type]
+    seasonality_prov = StockbitSeasonalityProvider(broker_provider=None, db_path=db)       # type: ignore[arg-type]
+    market_repo      = SQLiteMarketRepository(db)
 
-    notation   = notation_prov._read_cache(ticker)
-    fund       = fund_prov._read_cache(ticker)
-    analyst    = analyst_prov._read_cache(ticker)
-    sh         = sh_prov._read_cache(ticker)
-    # Bandar: try today first, then yesterday (handles weekends / post-close)
     today = date.today()
-    bandar = bandar_prov._read_cache(ticker, today) or bandar_prov._read_cache(ticker, today - timedelta(1))
-    fwd        = fwd_prov._read_cache(ticker)
-    profile    = profile_prov._read_cache(ticker)
-    candles    = market_repo.get_candles(ticker, start_date=today - timedelta(14), end_date=today)
+
+    notation      = notation_prov._read_cache(ticker)
+    fund          = fund_prov._read_cache(ticker)
+    analyst       = analyst_prov._read_cache(ticker)
+    sh            = sh_prov._read_cache(ticker)
+    bandar        = bandar_prov._read_cache(ticker, today) or bandar_prov._read_cache(ticker, today - timedelta(1))
+    fwd           = fwd_prov._read_cache(ticker)
+    profile       = profile_prov._read_cache(ticker)
+    candles       = market_repo.get_candles(ticker, start_date=today - timedelta(14), end_date=today)
+    corp_actions  = corp_action_repo._read_cache(ticker, today - timedelta(180), today + timedelta(180))
+    insider_txns  = insider_prov._read_cache(ticker, today - timedelta(90), today, "ALL")
+    seasonality   = seasonality_prov._read_cache(ticker, today.year, today.month)
+
+    # IEV: query directly — no by-ticker method on repository
+    iev_rows: list = []
+    try:
+        with sqlite3.connect(str(db)) as _conn:
+            _conn.row_factory = sqlite3.Row
+            iev_rows = _conn.execute(
+                """
+                SELECT date, iev, rank, iep, is_ncp_locked
+                FROM iev_snapshots
+                WHERE ticker = ?
+                ORDER BY date DESC
+                LIMIT 5
+                """,
+                (ticker.upper(),),
+            ).fetchall()
+    except Exception:
+        pass
+
+    # Sentiment: query directly — repository has no by-ticker read
+    sentiment_logs: list = []
+    try:
+        with sqlite3.connect(str(db)) as _conn:
+            _conn.row_factory = sqlite3.Row
+            sentiment_logs = _conn.execute(
+                """
+                SELECT date, sentiment, catalyst, score
+                FROM sentiment_logs
+                WHERE ticker = ?
+                ORDER BY date DESC
+                LIMIT 8
+                """,
+                (ticker.upper(),),
+            ).fetchall()
+    except Exception:
+        pass
 
     latest_close: Decimal | None = candles[-1].close if candles else None
 
@@ -331,6 +512,11 @@ def show_ticker_view(ticker: str, db_path: Path = DEFAULT_DB_PATH) -> None:
     c.print(_analyst_panel(analyst))
     c.print(_ownership_panel(sh))
     c.print(_bandar_panel(bandar))
+    c.print(_corp_action_panel(corp_actions))
+    c.print(_insider_panel(insider_txns))
+    c.print(_seasonality_panel(seasonality, today.month))
+    c.print(_iev_panel(iev_rows))
+    c.print(_sentiment_panel(sentiment_logs))
     c.print(_profile_panel(profile))
     c.print(_candles_panel(candles))
     c.print(Text(f"  Run `saham fetch market {ticker}` to refresh stale or missing data.", style="dim"))
