@@ -48,6 +48,14 @@ backtest:
   start_date: "2026-01-01"  # default audit / backtest start date
   cost_bps: 20.0            # transaction cost in basis points (buy + sell combined)
 
+# ── Fetch (write / refresh policy) ───────────────────────────────────────
+fetch:
+  default_days: 90          # fetch window (distinct from analysis default_days: 365)
+  meta_ttl_days: 30         # stock-meta cache freshness (days)
+  start_tolerance_days: 7   # acceptable gap at start of a cached date range
+  end_tolerance_days: 7     # acceptable gap at end of a cached date range
+
 # ── AI ────────────────────────────────────────────────────────────────────
 ai:
   enabled: false         # AI-assisted analysis is OFF by default
+  provider: deepseek     # default provider: deepseek | claude | openai | gemini | ollama

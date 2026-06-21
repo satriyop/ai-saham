@@ -35,8 +35,7 @@ logger = logging.getLogger(__name__)
 
 from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
 _KEYSTATS_URL = STOCKBIT_CFG.keystats_url
-
-_CACHE_TTL_DAYS = 7
+_CACHE_TTL_DAYS = STOCKBIT_CFG.cache_ttl_days_fundamentals
 
 _CREATE_TABLE = """
 CREATE TABLE IF NOT EXISTS company_fundamentals (

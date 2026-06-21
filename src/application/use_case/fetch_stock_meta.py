@@ -15,9 +15,9 @@ from typing import Literal
 
 from src.domain.ports.stock_meta_provider import StockMetaProvider
 from src.domain.ports.stock_meta_repository import StockMetaRepository
+from src.infrastructure.config.app_config import APP_CFG
 
-# TODO: move to settings file or env var (e.g. SAHAM_META_TTL_DAYS)
-META_TTL_DAYS = 30
+META_TTL_DAYS: int = APP_CFG.fetch.meta_ttl_days
 
 MetaStatus = Literal["cached", "new", "verified", "changed", "error"]
 

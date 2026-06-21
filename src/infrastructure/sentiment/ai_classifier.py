@@ -13,8 +13,11 @@ import time
 
 from src.domain.ports.headline_classifier import HeadlineClassifierError
 from src.domain.value_objects.sentiment import CatalystType, Classification, Sentiment
+from src.infrastructure.config.app_config import APP_CFG
 
 logger = logging.getLogger("ai_saham.sentiment")
+
+_DEFAULT_AI_PROVIDER: str = APP_CFG.ai.provider
 
 # LLM Configuration
 LLM_TIMEOUT_SECONDS = 10
@@ -78,7 +81,7 @@ class AIClassifier:
     @property
     def classifier_name(self) -> str:
         """Return classifier identifier."""
-        provider = self._provider or os.getenv("AI_PROVIDER", "deepseek")
+        provider = self._provider or os.getenv("AI_PROVIDER", _DEFAULT_AI_PROVIDER)
         return f"ai:{provider}"
 
     def classify(self, ticker: str, headline: str) -> Classification:
@@ -120,7 +123,7 @@ class AIClassifier:
         if self._client is not None:
             return self._client
 
-        provider = (self._provider or os.getenv("AI_PROVIDER", "deepseek")).lower()
+        provider = (self._provider or os.getenv("AI_PROVIDER", _DEFAULT_AI_PROVIDER)).lower()
 
         if provider == "deepseek":
             self._client = self._create_deepseek_client()
@@ -218,7 +221,7 @@ class AIClassifier:
         headline = headline[:500]
         user_prompt = USER_PROMPT.format(ticker=ticker, headline=headline)
 
-        provider = (self._provider or os.getenv("AI_PROVIDER", "deepseek")).lower()
+        provider = (self._provider or os.getenv("AI_PROVIDER", _DEFAULT_AI_PROVIDER)).lower()
 
         start_time = time.time()
         logger.debug(f"AI classify request: provider={provider}")

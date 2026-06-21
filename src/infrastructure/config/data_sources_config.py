@@ -21,6 +21,22 @@ def broker_summary_source() -> str:
         return "idx"
 
 
+def idx_client_tuning() -> tuple[float, int, float]:
+    """Return (request_delay_seconds, max_retries, retry_backoff_base) for IDX API clients."""
+    defaults: tuple[float, int, float] = (1.0, 3, 2.0)
+    try:
+        with open(_DATA_SOURCES_CONFIG_PATH, encoding="utf-8") as fh:
+            data = yaml.safe_load(fh) or {}
+        idx = data.get("idx") or {}
+        return (
+            float(idx.get("request_delay_seconds", defaults[0])),
+            int(idx.get("max_retries", defaults[1])),
+            float(idx.get("retry_backoff_base", defaults[2])),
+        )
+    except Exception:
+        return defaults
+
+
 def candle_source() -> str:
     """Return candle_source preference. Falls back to APP_CFG.market.provider if absent."""
     try:

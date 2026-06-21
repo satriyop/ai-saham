@@ -216,6 +216,15 @@ endpoints:
     # announcement_date, detail → corp_action_cache table (SQLite daily cache, TTL = calendar day)
     # Used for: dividend_risk, rights_issue_risk, upcoming_rups flags on AccumulationCandidate
 
+# ── Browser scraper cache TTLs (days) ────────────────────────────────────
+#
+# Controls how long fetched data is kept before the next full refresh.
+# Increase any value if you prefer less frequent re-fetches.
+cache_ttl_days:
+  company_profile: 30   # sector, listing date, shares outstanding
+  fundamentals: 7       # annual ratios (PBV, PER, ROE, EPS, etc.)
+  shareholding: 7       # shareholding composition (institution %, top holders)
+
 # ── Browser timeouts ──────────────────────────────────────────────────────
 
 timeouts:

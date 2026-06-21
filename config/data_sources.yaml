@@ -17,6 +17,16 @@
 # Default: idx (no auth required, always available)
 broker_summary_source: idx
 
+# ── IDX public API client tuning ──────────────────────────────────────────
+#
+# Controls rate-limiting and retry behaviour for the IDX public API.
+# Applies to both the broker-summary provider (idx.py) and the market
+# candle provider (idx_market.py).
+idx:
+  request_delay_seconds: 1.0   # min spacing between requests (rate-limit courtesy)
+  max_retries: 3               # attempts before giving up
+  retry_backoff_base: 2.0      # exponential back-off base in seconds (2s, 4s, 8s)
+
 # ── Candle data ───────────────────────────────────────────────────────────
 #
 # Which provider supplies OHLCV candle data.

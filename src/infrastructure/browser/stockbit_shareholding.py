@@ -43,8 +43,7 @@ logger = logging.getLogger(__name__)
 
 from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
 _COMPOSITION_URL = STOCKBIT_CFG.shareholding_url
-
-_CACHE_TTL_DAYS = 7
+_CACHE_TTL_DAYS = STOCKBIT_CFG.cache_ttl_days_shareholding
 
 # All known category labels from Stockbit shareholding API
 _ALL_CATEGORIES = {

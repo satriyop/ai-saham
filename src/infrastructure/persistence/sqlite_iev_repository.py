@@ -26,12 +26,8 @@ from datetime import date, datetime, time
 from dataclasses import dataclass
 from pathlib import Path
 
+from src.domain.value_objects.idx_market import NCP_LOCK_TIME, REGULAR_OPEN as REGULAR_OPEN_TIME
 from src.domain.value_objects.screener_result import MoverData
-
-# IDX NCP window per Kep-00003/BEI/04-2025 (effective 2025-12-15).
-# Snapshots collected inside [08:56, 09:00) are NCP-locked.
-NCP_LOCK_TIME: time = time(8, 56)
-REGULAR_OPEN_TIME: time = time(9, 0)
 
 
 @dataclass(frozen=True)

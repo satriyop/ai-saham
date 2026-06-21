@@ -10,14 +10,12 @@ from dataclasses import dataclass
 from datetime import date, datetime, time
 from decimal import Decimal
 from typing import TYPE_CHECKING, Callable
-from zoneinfo import ZoneInfo
 
 if TYPE_CHECKING:
     from src.domain.ports.order_book_provider import OrderBookProvider
     from src.domain.ports.running_trade_provider import RunningTradeProvider
 
-IDX_TIMEZONE = ZoneInfo("Asia/Jakarta")
-REGULAR_OPEN_TIME = time(9, 0)
+from src.domain.value_objects.idx_market import IDX_TIMEZONE, REGULAR_OPEN as REGULAR_OPEN_TIME
 
 
 @dataclass(frozen=True)

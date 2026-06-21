@@ -28,11 +28,13 @@ from src.infrastructure.ai.formula_translator_prompt import (
     build_user_prompt,
 )
 
+from src.infrastructure.config.app_config import APP_CFG
+
 logger = logging.getLogger("ai_saham.ai.translator")
 
 # Supported providers
 SUPPORTED_PROVIDERS = ("claude", "openai", "gemini", "ollama", "mock")
-DEFAULT_PROVIDER = "claude"
+DEFAULT_PROVIDER: str = APP_CFG.ai.provider
 
 # Pattern for function names in formulas
 FUNCTION_NAME_PATTERN = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(")

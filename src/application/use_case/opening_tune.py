@@ -270,5 +270,5 @@ def _parse_response(raw: str) -> tuple[dict, str]:
 
 def _now_iso() -> str:
     from datetime import datetime
-    from zoneinfo import ZoneInfo
-    return datetime.now(ZoneInfo("Asia/Jakarta")).isoformat()
+    from src.domain.value_objects.idx_market import IDX_TIMEZONE
+    return datetime.now(IDX_TIMEZONE).isoformat()

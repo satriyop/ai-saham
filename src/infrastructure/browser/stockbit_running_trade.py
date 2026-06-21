@@ -46,8 +46,7 @@ def _parse_ticks(ticker: str, body: dict) -> list[TradeTick]:
         market_board  → "RG" (regular) | "NG" (negotiated) | "TN" (tunai)
         value.raw     → int, IDR value of the trade
     """
-    from zoneinfo import ZoneInfo
-    IDX_TZ = ZoneInfo("Asia/Jakarta")
+    from src.domain.value_objects.idx_market import IDX_TIMEZONE as IDX_TZ
     today = datetime.now(IDX_TZ).date()
 
     data = body.get("data") if isinstance(body, dict) else None

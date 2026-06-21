@@ -24,8 +24,8 @@ from src.application.use_case.market_regime import (
 from src.domain.entities.candle import Candle
 from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.market_data_repository import MarketDataRepository
+from src.domain.value_objects.idx_market import SHARES_PER_LOT
 
-SHARES_PER_LOT = 100
 FOREIGN_BOUNCE_PRESET = "foreign-bounce"
 DEFAULT_SWING_COST_BPS = Decimal("20")
 

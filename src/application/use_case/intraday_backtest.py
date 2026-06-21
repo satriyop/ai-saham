@@ -29,12 +29,11 @@ from src.application.use_case.confirm_intraday_open import (
 from src.domain.entities.candle import Candle
 from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.market_data_repository import MarketDataRepository
+from src.domain.value_objects.idx_market import SHARES_PER_LOT
 from src.domain.value_objects.intraday_confirmation import (
     IntradayConfirmationCandidate,
     IntradayDecision,
 )
-
-SHARES_PER_LOT = 100
 PER_TRADE_CAPITAL_CAP_PCT = Decimal("0.10")  # at most 10% of capital per trade
 
 

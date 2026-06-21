@@ -23,8 +23,7 @@ from decimal import Decimal
 from src.application.ports.indicator_plugin import IndicatorPlugin
 from src.domain.entities.broker_flow import BrokerSummary
 from src.domain.entities.candle import Candle
-
-SHARES_PER_LOT = 100
+from src.domain.value_objects.idx_market import SHARES_PER_LOT
 
 
 class ForeignVWAPIndicator(IndicatorPlugin):

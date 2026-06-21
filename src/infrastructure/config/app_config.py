@@ -77,6 +77,20 @@ class BacktestConfig:
 
 
 @dataclass(frozen=True)
+class FetchConfig:
+    default_days: int = 90          # fetch window (distinct from analysis default_days)
+    meta_ttl_days: int = 30         # stock-meta cache freshness (days)
+    start_tolerance_days: int = 7   # acceptable gap at start of a cached date range
+    end_tolerance_days: int = 7     # acceptable gap at end of a cached date range
+
+
+@dataclass(frozen=True)
+class AiConfig:
+    enabled: bool = False
+    provider: str = "deepseek"  # deepseek | claude | openai | gemini | ollama
+
+
+@dataclass(frozen=True)
 class AppConfig:
     market: MarketConfig = field(default_factory=MarketConfig)
     storage: StorageConfig = field(default_factory=StorageConfig)
@@ -85,6 +99,8 @@ class AppConfig:
     trading: TradingConfig = field(default_factory=TradingConfig)
     swing: SwingDefaults = field(default_factory=SwingDefaults)
     backtest: BacktestConfig = field(default_factory=BacktestConfig)
+    fetch: FetchConfig = field(default_factory=FetchConfig)
+    ai: AiConfig = field(default_factory=AiConfig)
 
 
 # ── Loader ─────────────────────────────────────────────────────────────────
@@ -131,6 +147,8 @@ def load_app_config() -> AppConfig:
         trading=_build(cfg.get("trading", {}), TradingConfig),
         swing=_build(cfg.get("swing", {}), SwingDefaults),
         backtest=_build(cfg.get("backtest", {}), BacktestConfig),
+        fetch=_build(cfg.get("fetch", {}), FetchConfig),
+        ai=_build(cfg.get("ai", {}), AiConfig),
     )
 
 

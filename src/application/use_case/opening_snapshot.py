@@ -16,7 +16,6 @@ import json
 from dataclasses import dataclass
 from datetime import date, datetime, time
 from pathlib import Path
-from zoneinfo import ZoneInfo
 
 from src.application.services.indicator_registry import IndicatorRegistry
 from src.application.use_case.pre_open_screen import (
@@ -26,12 +25,13 @@ from src.application.use_case.pre_open_screen import (
 )
 from src.domain.ports.browser_data_provider import BrowserDataProvider
 from src.domain.ports.market_data_repository import MarketDataRepository
-
-IDX_TIMEZONE = ZoneInfo("Asia/Jakarta")
-PRE_NCP_START = time(8, 45)
-NCP_LOCK_TIME = time(8, 56)
-REGULAR_OPEN_TIME = time(9, 0)
-OPEN_SESSION_END = time(9, 30)
+from src.domain.value_objects.idx_market import (
+    IDX_TIMEZONE,
+    NCP_LOCK_TIME,
+    OPEN_SESSION_END,
+    PRE_OPEN_START as PRE_NCP_START,
+    REGULAR_OPEN as REGULAR_OPEN_TIME,
+)
 
 OPENING_DATA_DIR = Path("data/opening")
 

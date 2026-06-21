@@ -31,6 +31,7 @@ from src.domain.ports.market_data_provider import (
     MarketDataProvider,
     MarketDataProviderError,
 )
+from src.infrastructure.config.data_sources_config import idx_client_tuning
 
 logger = logging.getLogger(__name__)
 
@@ -41,10 +42,8 @@ STOCK_SUMMARY_ENDPOINT = "/GetStockSummary"
 # Chunk size for date ranges (to limit memory and API load)
 CHUNK_DAYS = 90
 
-# Rate limiting and retry settings
-REQUEST_DELAY_SECONDS = 1.0
-MAX_RETRIES = 3
-RETRY_BACKOFF_BASE = 2.0
+# Rate limiting and retry settings — tunable in config/data_sources.yaml
+REQUEST_DELAY_SECONDS, MAX_RETRIES, RETRY_BACKOFF_BASE = idx_client_tuning()
 
 IDX_HEADERS = {
     "Accept": "application/json",

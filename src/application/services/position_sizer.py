@@ -11,7 +11,7 @@ Layer: Application (service, not use case — no ports, no orchestration)
 from dataclasses import dataclass
 from decimal import Decimal
 
-SHARES_PER_LOT = 100
+from src.domain.value_objects.idx_market import SHARES_PER_LOT
 
 
 @dataclass(frozen=True)

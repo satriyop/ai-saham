@@ -30,7 +30,6 @@ from typing import TYPE_CHECKING, Annotated, Optional
 
 if TYPE_CHECKING:
     from src.domain.value_objects.market_status import MarketStatus
-from zoneinfo import ZoneInfo
 
 import typer
 import yaml
@@ -77,6 +76,11 @@ from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBroker
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
 from src.infrastructure.config.app_config import APP_CFG
+from src.domain.value_objects.idx_market import (
+    IDX_TIMEZONE,
+    PRE_OPEN_START,
+    REGULAR_OPEN as PRE_OPEN_END,
+)
 
 DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 DEFAULT_PRE_OPEN_CONFIG_PATH = Path("config/pre_open_screener.yaml")
@@ -86,9 +90,6 @@ DEFAULT_CONFIRMATION_PATH = Path("journals/.last-confirmation.json")
 DEFAULT_CONFIRMATION_JOURNAL_PATH = Path("journals/intraday-confirmations.csv")
 DEFAULT_REGIME_UNIVERSE = APP_CFG.analysis.regime_universe
 DEFAULT_REGIME_BENCHMARK = APP_CFG.analysis.benchmark
-IDX_TIMEZONE = ZoneInfo("Asia/Jakarta")
-PRE_OPEN_START = time(8, 45)
-PRE_OPEN_END = time(9, 0)
 
 
 @dataclass(frozen=True)

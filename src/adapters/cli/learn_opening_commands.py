@@ -19,11 +19,10 @@ import os
 from datetime import date, datetime
 from pathlib import Path
 from typing import Annotated, Optional
-from zoneinfo import ZoneInfo
 
 import typer
 
-IDX_TIMEZONE = ZoneInfo("Asia/Jakarta")
+from src.domain.value_objects.idx_market import IDX_TIMEZONE
 OPENING_DATA_DIR = Path("data/opening")
 DEFAULT_DB_PATH = Path("data.db")
 DEFAULT_SESSION_FILE = Path("stockbit_session.json")

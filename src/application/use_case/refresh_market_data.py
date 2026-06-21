@@ -17,9 +17,10 @@ from inspect import Parameter, signature
 from src.domain.entities.candle import Candle
 from src.domain.ports.market_data_provider import MarketDataProvider
 from src.domain.ports.market_data_repository import MarketDataRepository
+from src.infrastructure.config.app_config import APP_CFG
 
-DEFAULT_START_TOLERANCE_DAYS = 7
-DEFAULT_END_TOLERANCE_DAYS = 7
+DEFAULT_START_TOLERANCE_DAYS: int = APP_CFG.fetch.start_tolerance_days
+DEFAULT_END_TOLERANCE_DAYS: int = APP_CFG.fetch.end_tolerance_days
 
 
 @dataclass(frozen=True)

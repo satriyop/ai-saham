@@ -22,16 +22,15 @@ from dataclasses import dataclass
 from datetime import date, datetime, time
 from pathlib import Path
 from typing import TYPE_CHECKING
-from zoneinfo import ZoneInfo
 
 if TYPE_CHECKING:
     from src.domain.ports.order_book_provider import OrderBookProvider
     from src.domain.ports.running_trade_provider import RunningTradeProvider
 
-IDX_TIMEZONE = ZoneInfo("Asia/Jakarta")
+from src.domain.value_objects.idx_market import IDX_TIMEZONE, REGULAR_OPEN as TRACK_START
+
 OPENING_DATA_DIR = Path("data/opening")
 
-TRACK_START = time(9, 0)
 TRACK_END = time(9, 31)
 INTERVAL_MINUTES = 5
 

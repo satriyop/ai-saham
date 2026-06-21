@@ -29,6 +29,8 @@ from src.domain.ports.broker_data_provider import (
     BrokerDataProvider,
     BrokerDataProviderError,
 )
+from src.domain.value_objects.idx_market import SHARES_PER_LOT
+from src.infrastructure.config.data_sources_config import idx_client_tuning
 
 logger = logging.getLogger(__name__)
 
@@ -36,15 +38,8 @@ logger = logging.getLogger(__name__)
 IDX_API_BASE = "https://www.idx.co.id/primary/TradingSummary"
 STOCK_SUMMARY_ENDPOINT = "/GetStockSummary"
 
-# IDX standard lot size
-SHARES_PER_LOT = 100
-
-# Rate limiting - be respectful to IDX servers
-REQUEST_DELAY_SECONDS = 1.0
-
-# Retry configuration
-MAX_RETRIES = 3
-RETRY_BACKOFF_BASE = 2.0  # Exponential backoff: 2s, 4s, 8s
+# Rate limiting and retry settings — tunable in config/data_sources.yaml
+REQUEST_DELAY_SECONDS, MAX_RETRIES, RETRY_BACKOFF_BASE = idx_client_tuning()
 
 # Browser-like headers required by IDX
 IDX_HEADERS = {

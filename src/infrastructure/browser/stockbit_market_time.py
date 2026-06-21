@@ -24,9 +24,15 @@ import time as _time_module
 from datetime import datetime, time
 from pathlib import Path
 from typing import TYPE_CHECKING
-from zoneinfo import ZoneInfo
 
 from src.domain.ports.market_status_provider import MarketStatusProvider
+from src.domain.value_objects.idx_market import (
+    IDX_TIMEZONE as _IDX_TZ,
+    MARKET_CLOSE as _MARKET_CLOSE,
+    PRE_CLOSE_START as _PRE_CLOSE_START,
+    PRE_OPEN_START as _PRE_OPEN_START,
+    REGULAR_OPEN as _REGULAR_START,
+)
 from src.domain.value_objects.market_status import MarketStatus
 
 if TYPE_CHECKING:
@@ -34,16 +40,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_IDX_TZ = ZoneInfo("Asia/Jakarta")
 from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
 _MARKET_TIME_URL = STOCKBIT_CFG.market_time_url
 _CACHE_TTL_SECONDS = 60
-
-# Wall-clock boundaries used by LocalClockMarketStatusProvider
-_PRE_OPEN_START = time(8, 45)
-_REGULAR_START  = time(9, 0)
-_PRE_CLOSE_START = time(15, 50)
-_MARKET_CLOSE   = time(16, 0)
 
 
 class LocalClockMarketStatusProvider(MarketStatusProvider):

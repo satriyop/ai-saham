@@ -16,10 +16,11 @@ from src.domain.ports.ai_explainer import (
 )
 from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 from src.domain.value_objects.risk_assessment import RiskAssessment
+from src.infrastructure.config.app_config import APP_CFG
 
 # Supported providers
 SUPPORTED_PROVIDERS = ("deepseek", "claude", "openai", "gemini", "ollama", "mock")
-DEFAULT_PROVIDER = "deepseek"
+DEFAULT_PROVIDER: str = APP_CFG.ai.provider
 DEFAULT_RATE_LIMIT = 10  # calls per minute
 
 

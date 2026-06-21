@@ -27,11 +27,13 @@ from src.infrastructure.ai.strategy_translator_prompt import (
     build_user_prompt,
 )
 
+from src.infrastructure.config.app_config import APP_CFG
+
 logger = logging.getLogger("ai_saham.ai.strategy_translator")
 
 # Supported providers
 SUPPORTED_PROVIDERS = ("claude", "openai", "gemini", "ollama", "mock")
-DEFAULT_PROVIDER = "claude"
+DEFAULT_PROVIDER: str = APP_CFG.ai.provider
 
 
 def canonicalize_yaml(raw: str) -> str:
