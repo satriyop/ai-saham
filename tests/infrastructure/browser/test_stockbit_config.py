@@ -1,13 +1,15 @@
-"""Tests for _StockbitConfig YAML loader in playwright_stockbit."""
+"""Tests for StockbitConfig YAML loader in stockbit_config."""
 
 from pathlib import Path
 
 import pytest
 import yaml
 
+from src.infrastructure.config.stockbit_config import (
+    StockbitConfig as _StockbitConfig,
+    load_stockbit_config as _load_stockbit_config,
+)
 from src.infrastructure.browser.playwright_stockbit import (
-    _StockbitConfig,
-    _load_stockbit_config,
     _INSTITUTIONAL_PROXY_CODES,
     TRACKED_BROKER_CODES,
     _IEV_MOVER_URL_MAIN,

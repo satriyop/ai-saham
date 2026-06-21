@@ -40,13 +40,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_CHART_URL = (
-    "https://exodus.stockbit.com/order-trade/broker/activity-chart"
-    "?period=RT_PERIOD_LAST_1_DAY"
-    "&brokers_code={broker_code}"
-    "&investor_type=INVESTOR_TYPE_ALL"
-    "&market_board=MARKET_TYPE_REGULER"
-)
+from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+_CHART_URL = STOCKBIT_CFG.intraday_broker_chart_url
 
 
 def _parse_chart(broker_code: str, body: dict) -> IntradayBrokerChart | None:

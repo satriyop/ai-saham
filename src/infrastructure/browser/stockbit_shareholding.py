@@ -41,9 +41,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_COMPOSITION_URL = (
-    "https://exodus.stockbit.com/insider/shareholding/composition/companies/{ticker}"
-)
+from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+_COMPOSITION_URL = STOCKBIT_CFG.shareholding_url
 
 _CACHE_TTL_DAYS = 7
 

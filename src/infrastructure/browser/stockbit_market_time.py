@@ -35,7 +35,8 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _IDX_TZ = ZoneInfo("Asia/Jakarta")
-_MARKET_TIME_URL = "https://exodus.stockbit.com/company-price-feed/market-time"
+from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+_MARKET_TIME_URL = STOCKBIT_CFG.market_time_url
 _CACHE_TTL_SECONDS = 60
 
 # Wall-clock boundaries used by LocalClockMarketStatusProvider

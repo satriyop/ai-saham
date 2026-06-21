@@ -29,10 +29,11 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_SECTOR_88_URL = "https://exodus.stockbit.com/emitten/sectors/88/subsectors"
-_SECTOR_70_URL = "https://exodus.stockbit.com/emitten/sectors/70/subsectors"
-_COMPANY_URL = "https://exodus.stockbit.com/emitten/v3/sector/{sector}/subsector/{id}/company"
-_SCREENER_UNIVERSE_URL = "https://exodus.stockbit.com/screener/universe"
+from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+_SECTOR_88_URL = STOCKBIT_CFG.universe_sector_88_url
+_SECTOR_70_URL = STOCKBIT_CFG.universe_sector_70_url
+_COMPANY_URL = STOCKBIT_CFG.universe_company_url
+_SCREENER_UNIVERSE_URL = STOCKBIT_CFG.universe_screener_url
 
 # Known subsector IDs for sector 88 — used as fast-path fallback if discovery fails.
 _KNOWN_IDS: dict[str, int | str] = {

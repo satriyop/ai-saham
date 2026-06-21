@@ -33,7 +33,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_KEYSTATS_URL = "https://exodus.stockbit.com/keystats/ratio/v1/{ticker}?year_limit=10"
+from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+_KEYSTATS_URL = STOCKBIT_CFG.keystats_url
 
 _CACHE_TTL_DAYS = 7
 

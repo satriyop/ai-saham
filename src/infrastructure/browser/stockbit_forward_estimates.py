@@ -35,7 +35,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_CONSENSUS_URL = "https://exodus.stockbit.com/analyst-ratings/{ticker}/consensus"
+from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+_CONSENSUS_URL = STOCKBIT_CFG.analyst_consensus_url
 
 _CREATE_TABLE = """
 CREATE TABLE IF NOT EXISTS forward_estimates_cache (

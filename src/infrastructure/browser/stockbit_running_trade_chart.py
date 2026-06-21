@@ -39,7 +39,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_CHART_URL = "https://exodus.stockbit.com/order-trade/running-trade/chart/{ticker}"
+from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+_CHART_URL = STOCKBIT_CFG.running_trade_chart_url
 
 
 def _raw_int(obj: dict | None, key: str = "raw") -> int | None:

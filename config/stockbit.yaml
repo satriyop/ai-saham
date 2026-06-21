@@ -126,6 +126,75 @@ endpoints:
     # buy_value, sell_value, net_value, avg_buy_price, avg_sell_price, avg_price,
     # buy_pct, sell_pct → broker_daily_flows table (source="stockbit")
 
+  bandar_detector:
+    url: "https://exodus.stockbit.com/marketdetectors/{ticker}?transaction_type=TRANSACTION_TYPE_NET&market_board=MARKET_BOARD_REGULER&investor_type=INVESTOR_TYPE_ALL&limit=25&period=BROKER_SUMMARY_PERIOD_LATEST"
+    # Returns: per-ticker bandar detector signal (acc/dist classification + operator analysis).
+    # Different from broker_marketdetectors (which is broker-centric); this is stock-centric.
+
+  running_trade:
+    url: "https://exodus.stockbit.com/order-trade/running-trade?symbols[]={ticker}&sort=DESC&limit={limit}&order_by=RUNNING_TRADE_ORDER_BY_TIME"
+    # Returns: real-time executed trade ticks (time, price, vol, buyer/seller flag).
+
+  running_trade_chart:
+    url: "https://exodus.stockbit.com/order-trade/running-trade/chart/{ticker}"
+    # Returns: minute-level intraday OHLC + per-broker cumulative net value lines.
+
+  intraday_broker_chart:
+    url: "https://exodus.stockbit.com/order-trade/broker/activity-chart?period=RT_PERIOD_LAST_1_DAY&brokers_code={broker_code}&investor_type=INVESTOR_TYPE_ALL&market_board=MARKET_TYPE_REGULER"
+    # Returns: broker-centric intraday buy/sell bar chart for a given broker code.
+
+  company_profile:
+    url: "https://exodus.stockbit.com/emitten/{ticker}/profile"
+    # Returns: company description, sector, listing date, shares outstanding.
+
+  seasonality:
+    url: "https://exodus.stockbit.com/company-price-feed/seasonality/{ticker}?year={year}&back_year={back_years}"
+    # Returns: avg monthly return + win-rate per month over N historical years.
+
+  analyst_ratings:
+    url: "https://exodus.stockbit.com/analyst-ratings/{ticker}"
+    # Returns: analyst buy/hold/sell recommendations with target prices.
+
+  analyst_consensus:
+    url: "https://exodus.stockbit.com/analyst-ratings/{ticker}/consensus"
+    # Returns: aggregated consensus (mean target, rating distribution).
+
+  emitten_info:
+    url: "https://exodus.stockbit.com/emitten/{ticker}/info"
+    # Returns: ticker notation metadata (listing board, trading unit, lot size).
+
+  keystats:
+    url: "https://exodus.stockbit.com/keystats/ratio/v1/{ticker}?year_limit=10"
+    # Returns: annual fundamental ratios (PBV, PER, ROE, DER, EPS, market cap, etc.)
+
+  shareholding:
+    url: "https://exodus.stockbit.com/insider/shareholding/composition/companies/{ticker}"
+    # Returns: latest shareholding composition (institution %, individual %, top holders).
+
+  insider:
+    url: "https://exodus.stockbit.com/insider/company/majorholder?symbols={ticker}&date_start={from_date}&date_end={to_date}&page=1&limit=50&action_type={action_param}&source_type=SOURCE_TYPE_UNSPECIFIED"
+    # Returns: insider buy/sell transactions (name, role, shares, value).
+
+  market_time:
+    url: "https://exodus.stockbit.com/company-price-feed/market-time"
+    # Returns: current exchange session state (pre-open, regular, post-close, etc.)
+
+  universe_sector_88:
+    url: "https://exodus.stockbit.com/emitten/sectors/88/subsectors"
+    # Returns: subsector list for sector code 88 (used in universe screener).
+
+  universe_sector_70:
+    url: "https://exodus.stockbit.com/emitten/sectors/70/subsectors"
+    # Returns: subsector list for sector code 70.
+
+  universe_company:
+    url: "https://exodus.stockbit.com/emitten/v3/sector/{sector}/subsector/{id}/company"
+    # Returns: list of companies in a given sector/subsector.
+
+  universe_screener:
+    url: "https://exodus.stockbit.com/screener/universe"
+    # Returns: full universe ticker list from Stockbit screener.
+
   corp_action:
     url: "https://exodus.stockbit.com/corpaction/{ticker}?limit=50"
     trigger_page: "https://stockbit.com/stocks/{ticker}"
@@ -146,6 +215,13 @@ endpoints:
     # Extracted and stored: event_type, ex_date, cum_date, record_date, payment_date,
     # announcement_date, detail → corp_action_cache table (SQLite daily cache, TTL = calendar day)
     # Used for: dividend_risk, rights_issue_risk, upcoming_rups flags on AccumulationCandidate
+
+# ── Browser timeouts ──────────────────────────────────────────────────────
+
+timeouts:
+  nav_ms: 30000       # Playwright page.goto() timeout
+  element_ms: 15000   # Playwright element wait timeout
+  spa_settle_ms: 4000 # Extra wait after navigation for React to render
 
 # ── Broker codes ───────────────────────────────────────────────────────────
 

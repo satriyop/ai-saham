@@ -479,6 +479,10 @@ def _run_multi(
             rsi_period=base_request.rsi_period,
             sma_period=base_request.sma_period,
             tier1_broker_codes=base_request.tier1_broker_codes,
+            sector_breadth_enabled=base_request.sector_breadth_enabled,
+            sector_breadth_threshold=base_request.sector_breadth_threshold,
+            sector_breadth_bonus_pts=base_request.sector_breadth_bonus_pts,
+            sector_breadth_min_tickers=base_request.sector_breadth_min_tickers,
         ))
         for w in windows
     }
@@ -653,6 +657,10 @@ def accumulation_run(
         min_score=min_score,
         tier1_broker_codes=_SC.tier1_broker_codes,
         min_market_cap_idr=_SC.min_market_cap_idr,
+        sector_breadth_enabled=_SC.sector_breadth_enabled,
+        sector_breadth_threshold=_SC.sector_breadth_threshold,
+        sector_breadth_bonus_pts=_SC.sector_breadth_bonus_pts,
+        sector_breadth_min_tickers=_SC.sector_breadth_min_tickers,
     )
 
     # --- Multi-window mode ---
@@ -1130,6 +1138,10 @@ def _accumulation_log_impl(
         min_score=0.0,
         min_net_buy_days=0,
         tier1_broker_codes=_SC.tier1_broker_codes,
+        sector_breadth_enabled=_SC.sector_breadth_enabled,
+        sector_breadth_threshold=_SC.sector_breadth_threshold,
+        sector_breadth_bonus_pts=_SC.sector_breadth_bonus_pts,
+        sector_breadth_min_tickers=_SC.sector_breadth_min_tickers,
     ))
     candidate = next((c for c in response.candidates if c.ticker == ticker_upper), None)
 
@@ -1144,6 +1156,10 @@ def _accumulation_log_impl(
                 min_score=0.0,
                 min_net_buy_days=0,
                 tier1_broker_codes=_SC.tier1_broker_codes,
+                sector_breadth_enabled=_SC.sector_breadth_enabled,
+                sector_breadth_threshold=_SC.sector_breadth_threshold,
+                sector_breadth_bonus_pts=_SC.sector_breadth_bonus_pts,
+                sector_breadth_min_tickers=_SC.sector_breadth_min_tickers,
             ))
             for w in windows
         }

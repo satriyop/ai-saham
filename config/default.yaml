@@ -1,5 +1,9 @@
 # Default configuration for ai-saham
 # This file defines sensible defaults. Override via CLI flags or environment.
+#
+# !! NOT YET LOADED !!
+# No Python code currently reads this file. The system uses hardcoded defaults
+# in each component. When this file is wired up, remove this warning.
 
 # Market data settings
 market:

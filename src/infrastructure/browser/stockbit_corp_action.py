@@ -30,7 +30,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_CORPACTION_URL = "https://exodus.stockbit.com/corpaction/{ticker}?limit=50"
+from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+_CORPACTION_URL = STOCKBIT_CFG.corp_action_url
 
 # Map raw Stockbit action type strings → CorporateActionEvent.TYPE_* constants
 _TYPE_MAP: dict[str, str] = {

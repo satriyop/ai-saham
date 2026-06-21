@@ -29,10 +29,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_SEASONALITY_URL = (
-    "https://exodus.stockbit.com/company-price-feed/seasonality/{ticker}"
-    "?year={year}&back_year={back_years}"
-)
+from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+_SEASONALITY_URL = STOCKBIT_CFG.seasonality_url
 
 # Stockbit uses abbreviated English month names as column keys
 _MONTH_TO_NAME = {

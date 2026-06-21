@@ -62,18 +62,8 @@ from src.infrastructure.persistence.sqlite_stock_meta_repository import (
 DEFAULT_DB_PATH = Path("data.db")
 DEFAULT_DAYS = 90
 STOCKBIT_PROFILE_DIR = Path(".stockbit_profile")
-_DATA_SOURCES_CONFIG_PATH = Path("config/data_sources.yaml")
 
-
-def _broker_summary_source() -> str:
-    """Read broker_summary_source from config/data_sources.yaml. Defaults to 'idx'."""
-    try:
-        import yaml
-        with open(_DATA_SOURCES_CONFIG_PATH, encoding="utf-8") as fh:
-            data = yaml.safe_load(fh) or {}
-        return str(data.get("broker_summary_source") or "idx").strip()
-    except Exception:
-        return "idx"
+from src.infrastructure.config.data_sources_config import broker_summary_source as _broker_summary_source
 
 # Benchmark ticker always included in every market refresh run (first in list).
 # Required by: saham analyze regime, saham analyze swing (market context).

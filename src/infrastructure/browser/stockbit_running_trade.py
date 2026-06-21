@@ -25,10 +25,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_RUNNING_TRADE_URL = (
-    "https://exodus.stockbit.com/order-trade/running-trade"
-    "?symbols[]={ticker}&sort=DESC&limit={limit}&order_by=RUNNING_TRADE_ORDER_BY_TIME"
-)
+from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+_RUNNING_TRADE_URL = STOCKBIT_CFG.running_trade_url
 
 
 def _parse_ticks(ticker: str, body: dict) -> list[TradeTick]:

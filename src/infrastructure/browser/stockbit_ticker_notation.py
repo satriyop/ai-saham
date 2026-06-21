@@ -27,7 +27,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_EMITTEN_INFO_URL = "https://exodus.stockbit.com/emitten/{ticker}/info"
+from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+_EMITTEN_INFO_URL = STOCKBIT_CFG.emitten_info_url
 
 
 def _parse_bool(raw) -> bool | None:

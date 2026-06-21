@@ -36,7 +36,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_ANALYST_URL = "https://exodus.stockbit.com/analyst-ratings/{ticker}"
+from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+_ANALYST_URL = STOCKBIT_CFG.analyst_url
 
 
 def _parse_date(raw: str) -> date | None:

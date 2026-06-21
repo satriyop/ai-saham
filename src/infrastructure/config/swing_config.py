@@ -53,6 +53,11 @@ class SwingConfig:
     regime_benchmark_sma_fast: int = 20
     regime_benchmark_sma_slow: int = 50
     regime_breadth_threshold_pct: int = 50
+    # sector breadth confirmation (sector_breadth section in swing_screener.yaml)
+    sector_breadth_enabled: bool = True
+    sector_breadth_threshold: float = 0.60
+    sector_breadth_bonus_pts: float = 10.0
+    sector_breadth_min_tickers: int = 3
 
 
 def load_swing_config(
@@ -91,6 +96,7 @@ def load_swing_config(
             return parsed if parsed else default
 
         sc = data.get("screener") or {}
+        sb = data.get("sector_breadth") or {}
 
         return SwingConfig(
             min_market_cap_idr=_i(sc, "min_market_cap_idr", defaults.min_market_cap_idr),
@@ -120,6 +126,13 @@ def load_swing_config(
             regime_benchmark_sma_fast=_i(rg, "benchmark_sma_fast", defaults.regime_benchmark_sma_fast),
             regime_benchmark_sma_slow=_i(rg, "benchmark_sma_slow", defaults.regime_benchmark_sma_slow),
             regime_breadth_threshold_pct=_i(rg, "breadth_threshold_pct", defaults.regime_breadth_threshold_pct),
+            sector_breadth_enabled=bool(
+                sb["sector_breadth_enabled"] if "sector_breadth_enabled" in sb
+                else defaults.sector_breadth_enabled
+            ),
+            sector_breadth_threshold=_f(sb, "breadth_threshold", defaults.sector_breadth_threshold),
+            sector_breadth_bonus_pts=_f(sb, "bonus_pts", defaults.sector_breadth_bonus_pts),
+            sector_breadth_min_tickers=_i(sb, "min_tickers_for_breadth", defaults.sector_breadth_min_tickers),
         )
     except Exception:
         return defaults

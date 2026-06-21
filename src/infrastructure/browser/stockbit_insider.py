@@ -30,11 +30,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_INSIDER_URL = (
-    "https://exodus.stockbit.com/insider/company/majorholder"
-    "?symbols={ticker}&date_start={from_date}&date_end={to_date}"
-    "&page=1&limit=50&action_type={action_param}&source_type=SOURCE_TYPE_UNSPECIFIED"
-)
+from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+_INSIDER_URL = STOCKBIT_CFG.insider_url
 
 _ACTION_MAP = {
     "BUY": "ACTION_TYPE_BUY",

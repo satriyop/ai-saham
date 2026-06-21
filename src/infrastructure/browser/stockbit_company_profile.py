@@ -33,7 +33,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_PROFILE_URL = "https://exodus.stockbit.com/emitten/{ticker}/profile"
+from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+_PROFILE_URL = STOCKBIT_CFG.company_profile_url
 _CACHE_TTL_DAYS = 30
 
 _CREATE_TABLE = """

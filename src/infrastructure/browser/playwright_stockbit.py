@@ -22,13 +22,10 @@ import json
 import logging
 import re
 import time
-from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
-
-import yaml
 
 from src.domain.entities.broker_flow import (
     BrokerDailyFlow,
@@ -66,89 +63,9 @@ EXODUS_API = "https://exodus.stockbit.com"
 # ── Stockbit API config — driven by config/stockbit.yaml ─────────────────
 # Edit config/stockbit.yaml to update endpoints or broker codes without
 # touching Python source. Run `saham fetch stockbit spy` to discover new endpoints.
+from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
 
-@dataclass(frozen=True)
-class _StockbitConfig:
-    """Runtime config for Stockbit API. All fields carry hardcoded defaults so
-    the system works even when config/stockbit.yaml is absent or malformed."""
-
-    iev_movers_main_url: str = (
-        "https://exodus.stockbit.com/order-trade/market-mover"
-        "?mover_type=MOVER_TYPE_IEV_TOP_GAINER"
-        "&filter_stocks=FILTER_STOCKS_TYPE_MAIN_BOARD"
-        "&filter_stocks=FILTER_STOCKS_TYPE_DEVELOPMENT_BOARD"
-        "&filter_stocks=FILTER_STOCKS_TYPE_ACCELERATION_BOARD"
-        "&filter_stocks=FILTER_STOCKS_TYPE_NEW_ECONOMY_BOARD"
-    )
-    iev_movers_special_url: str = (
-        "https://exodus.stockbit.com/order-trade/market-mover"
-        "?mover_type=MOVER_TYPE_IEV_TOP_GAINER"
-        "&filter_stocks=FILTER_STOCKS_TYPE_SPECIAL_MONITORING_BOARD"
-    )
-    orderbook_url: str = (
-        "https://exodus.stockbit.com/company-price-feed/v2/orderbook/companies/{ticker}"
-    )
-    marketdetectors_url: str = "https://exodus.stockbit.com/marketdetectors"
-    broker_activity_url: str = "https://exodus.stockbit.com/order-trade/broker/activity"
-    broker_historical_url: str = "https://exodus.stockbit.com/order-trade/broker/activity/historical"
-    historical_summary_url: str = (
-        "https://exodus.stockbit.com/company-price-feed/historical/summary/{ticker}"
-    )
-    # 10 institutional proxy codes for foreign_flow_points aggregate.
-    # YP (Indo Premier) is domestic but mirrors institutional orders.
-    # For true all-foreign aggregate, use broker_summaries.foreign_net_value (IDX source).
-    institutional_proxy_codes: tuple[str, ...] = (
-        "AK", "ZP", "YP", "BK", "YU", "CP", "KZ", "HD", "RX", "DR"
-    )
-    # Per-identity broker codes. Call historical endpoint ONCE PER CODE.
-    # CS excluded: Credit Suisse wound down Indonesian operations (confirmed 0 trades).
-    tracked_broker_codes: tuple[str, ...] = (
-        "AK", "ZP", "YP", "BK", "YU", "CP", "KZ", "HD", "RX", "DR",
-        "XL", "PD", "MS", "DB", "ML",
-    )
-
-
-def _load_stockbit_config(
-    config_path: Path = Path("config/stockbit.yaml"),
-) -> _StockbitConfig:
-    """Load Stockbit API config from YAML. Returns hardcoded defaults on any error."""
-    defaults = _StockbitConfig()
-    try:
-        with open(config_path, encoding="utf-8") as fh:
-            data = yaml.safe_load(fh) or {}
-    except Exception:
-        return defaults
-
-    try:
-        eps = data.get("endpoints") or {}
-        codes = data.get("broker_codes") or {}
-
-        def _url(key: str, default: str) -> str:
-            raw = (eps.get(key) or {}).get("url", "")
-            return str(raw).strip() if raw else default
-
-        def _codes(key: str, default: tuple[str, ...]) -> tuple[str, ...]:
-            raw = codes.get(key) or []
-            parsed = tuple(str(c).strip().upper() for c in raw if c)
-            return parsed if parsed else default
-
-        return _StockbitConfig(
-            iev_movers_main_url=_url("iev_movers_main", defaults.iev_movers_main_url),
-            iev_movers_special_url=_url("iev_movers_special", defaults.iev_movers_special_url),
-            orderbook_url=_url("orderbook", defaults.orderbook_url),
-            marketdetectors_url=_url("broker_marketdetectors", defaults.marketdetectors_url),
-            broker_activity_url=_url("broker_activity", defaults.broker_activity_url),
-            broker_historical_url=_url("broker_historical", defaults.broker_historical_url),
-            historical_summary_url=_url("historical_summary", defaults.historical_summary_url),
-            institutional_proxy_codes=_codes("institutional_proxy", defaults.institutional_proxy_codes),
-            tracked_broker_codes=_codes("tracked", defaults.tracked_broker_codes),
-        )
-    except Exception:
-        return defaults
-
-
-# Populate module-level constants from config (falls back to _StockbitConfig defaults).
-_sb = _load_stockbit_config()
+_sb = STOCKBIT_CFG
 
 # Confirmed Exodus API endpoints (originally from DevTools spy, 2026-06-13).
 # Update via config/stockbit.yaml after running `saham fetch stockbit spy`.
@@ -168,10 +85,10 @@ _BROKER_ANALYSIS_PAGE_URL = "https://stockbit.com/broker-analysis/broker"
 
 _BROKER_URL_PATTERNS = ["marketdetectors", "broker/activity", "activity/historical"]
 
-# ── Timeouts (ms) ─────────────────────────────────────────────────────────
-NAV_TIMEOUT = 30_000
-ELEMENT_TIMEOUT = 15_000
-SPA_SETTLE_MS = 4_000   # extra wait for React to render after navigation
+# ── Timeouts (ms) — driven by config/stockbit.yaml timeouts section ───────
+NAV_TIMEOUT = STOCKBIT_CFG.nav_timeout_ms
+ELEMENT_TIMEOUT = STOCKBIT_CFG.element_timeout_ms
+SPA_SETTLE_MS = STOCKBIT_CFG.spa_settle_ms
 
 # ── API endpoint patterns ──────────────────────────────────────────────────
 # Base: exodus.stockbit.com (confirmed by spy session)

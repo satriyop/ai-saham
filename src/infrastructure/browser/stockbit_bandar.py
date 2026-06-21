@@ -45,14 +45,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_MARKET_DETECTOR_URL = (
-    "https://exodus.stockbit.com/marketdetectors/{ticker}"
-    "?transaction_type=TRANSACTION_TYPE_NET"
-    "&market_board=MARKET_BOARD_REGULER"
-    "&investor_type=INVESTOR_TYPE_ALL"
-    "&limit=25"
-    "&period=BROKER_SUMMARY_PERIOD_LATEST"
-)
+from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+_MARKET_DETECTOR_URL = STOCKBIT_CFG.bandar_detector_url
 
 _CREATE_TABLE = """
 CREATE TABLE IF NOT EXISTS bandar_detector (
