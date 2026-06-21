@@ -164,8 +164,6 @@ def _analyst_panel(ac) -> object:
     meta: list[str] = []
     if ac.last_updated:
         meta.append(f"Updated {ac.last_updated}")
-    if ac.fetched_date:
-        meta.append(f"Fetched {ac.fetched_date}")
     if meta:
         lines.append(Text("  " + "  ·  ".join(meta), style="dim"))
 
