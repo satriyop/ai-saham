@@ -95,6 +95,7 @@ def universe_update(
         saham fetch universe update --discover          # list available without updating
     """
     import yaml
+    import time
     from datetime import date
 
     resolved_config = config_path or Path("config/universes.yaml")
@@ -108,6 +109,14 @@ def universe_update(
         typer.echo("  2. Edit config/universes.yaml with updated tickers")
         raise typer.Exit(1)
 
+    existing: dict = {}
+    if resolved_config.exists():
+        try:
+            with open(resolved_config) as f:
+                existing = yaml.safe_load(f) or {}
+        except Exception as e:
+            typer.echo(f"Warning: could not read {resolved_config}: {e}")
+
     try:
         from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
         from src.infrastructure.browser.stockbit_universe import (
@@ -120,10 +129,27 @@ def universe_update(
             typer.echo("Stockbit session expired. Run `saham fetch stockbit login` to refresh.")
             raise typer.Exit(1)
 
+        token = provider._get_token()
         universe_prov = StockbitUniverseProvider(broker_provider=provider)
     except ImportError as e:
         typer.echo(f"Playwright not installed: {e}")
         raise typer.Exit(1)
+
+    def _get(url: str) -> dict | None:
+        from src.infrastructure.browser.playwright_stockbit import _exodus_get
+        return _exodus_get(url, token)
+
+    def _extract_list(body: dict | None, *keys: str) -> list[dict]:
+        if not body:
+            return []
+        data = body.get("data")
+        if isinstance(data, list):
+            return [i for i in data if isinstance(i, dict)]
+        if isinstance(data, dict):
+            for k in keys:
+                if isinstance(data.get(k), list):
+                    return [i for i in data[k] if isinstance(i, dict)]
+        return []
 
     typer.echo("")
     typer.echo("Discovering IDX index universes from Stockbit...")
@@ -141,22 +167,20 @@ def universe_update(
 
     if universe_name:
         targets = [u.strip().lower() for u in universe_name.split(",")]
-        unknown = [t for t in targets if t not in available]
+        unknown = [
+            t for t in targets 
+            if t not in available and not (t in existing and isinstance(existing[t], dict) and "sector_id" in existing[t])
+        ]
         if unknown:
             typer.echo(f"Unknown universe(s): {', '.join(unknown)}")
             typer.echo(f"Available: {', '.join(sorted(available.keys()))}")
             raise typer.Exit(1)
     else:
-        # Default: all discovered universes except ihsg (full market, too large)
+        # Default: all discovered universes except ihsg, plus custom ones
         targets = [k for k in available if k != "ihsg"]
-
-    existing: dict = {}
-    if resolved_config.exists():
-        try:
-            with open(resolved_config) as f:
-                existing = yaml.safe_load(f) or {}
-        except Exception as e:
-            typer.echo(f"Warning: could not read {resolved_config}: {e}")
+        for k, v in existing.items():
+            if isinstance(v, dict) and "sector_id" in v and k not in targets:
+                targets.append(k)
 
     today_str = date.today().isoformat()
     updated: dict[str, list[str]] = {}
@@ -166,9 +190,65 @@ def universe_update(
     typer.echo("")
 
     for key in targets:
-        utype = _utype(key)
+        is_custom = key in existing and isinstance(existing[key], dict) and "sector_id" in existing[key]
+        utype = "custom" if is_custom else _utype(key)
         typer.echo(f"  {key:<14} [{utype}]...", nl=False)
-        tickers = universe_prov.fetch(key)
+        
+        tickers = []
+        if is_custom:
+            cfg = existing[key]
+            sector_id = cfg["sector_id"]
+            subsector_id = cfg.get("subsector_id")
+            
+            try:
+                if subsector_id is not None:
+                    url = f"https://exodus.stockbit.com/emitten/v3/sector/{sector_id}/subsector/{subsector_id}/company"
+                    comp_body = _get(url)
+                    if comp_body is not None:
+                        items = _extract_list(comp_body, "companies", "list", "items", "stocks")
+                        for item in items:
+                            code = (
+                                item.get("ticker")
+                                or item.get("code")
+                                or item.get("stock_code")
+                                or item.get("symbol")
+                                or (item.get("stock_detail") or {}).get("code")
+                            )
+                            if code and isinstance(code, str) and code.strip():
+                                tickers.append(code.strip().upper())
+                else:
+                    body = _get(f"https://exodus.stockbit.com/emitten/sectors/{sector_id}/subsectors")
+                    if body is not None:
+                        subsectors = _extract_list(body, "subsectors", "list", "items")
+                        for i, sub in enumerate(subsectors):
+                            sub_id = sub.get("id") or sub.get("subsector_id")
+                            if sub_id is None:
+                                continue
+                            if i > 0:
+                                time.sleep(0.2)
+                            url = f"https://exodus.stockbit.com/emitten/v3/sector/{sector_id}/subsector/{sub_id}/company"
+                            comp_body = _get(url)
+                            if comp_body is None:
+                                tickers = []
+                                break
+                            items = _extract_list(comp_body, "companies", "list", "items", "stocks")
+                            for item in items:
+                                code = (
+                                    item.get("ticker")
+                                    or item.get("code")
+                                    or item.get("stock_code")
+                                    or item.get("symbol")
+                                    or (item.get("stock_detail") or {}).get("code")
+                                )
+                                if code and isinstance(code, str) and code.strip():
+                                    tickers.append(code.strip().upper())
+            except Exception:
+                tickers = []
+            
+            tickers = sorted(set(tickers))
+        else:
+            tickers = universe_prov.fetch(key)
+
         if tickers:
             updated[key] = tickers
             prev_count = len((existing.get(key) or {}).get("tickers") or [])
@@ -185,7 +265,11 @@ def universe_update(
         raise typer.Exit(1)
 
     for key, tickers in updated.items():
-        existing[key] = {"updated": today_str, "tickers": tickers}
+        if key in existing and isinstance(existing[key], dict):
+            existing[key]["updated"] = today_str
+            existing[key]["tickers"] = tickers
+        else:
+            existing[key] = {"updated": today_str, "tickers": tickers}
 
     header = (
         "# IDX Stock Universe Lists\n"
@@ -535,7 +619,10 @@ def universe_create(
     existing[universe_key] = {
         "updated": today_str,
         "tickers": tickers,
+        "sector_id": sector_id,
     }
+    if subsector_id is not None:
+        existing[universe_key]["subsector_id"] = subsector_id
 
     # Write config back
     header = (
