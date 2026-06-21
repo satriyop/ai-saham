@@ -8,7 +8,7 @@ Layer: Domain
 """
 
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import datetime
 from enum import Enum
 
 
@@ -72,12 +72,12 @@ class SentimentSnapshot:
     """
 
     ticker: str
-    fetch_date: date
     headlines: tuple[HeadlineResult, ...]
     positive_count: int
     neutral_count: int
     negative_count: int
     overall_sentiment: Sentiment
+    fetched_at: datetime | None = None
 
     def __post_init__(self) -> None:
         """Validate snapshot data."""
@@ -129,12 +129,12 @@ class SentimentSnapshot:
         """Create empty snapshot for when no news found."""
         return cls(
             ticker=ticker.upper(),
-            fetch_date=date.today(),
             headlines=(),
             positive_count=0,
             neutral_count=0,
             negative_count=0,
             overall_sentiment=Sentiment.NEUTRAL,
+            fetched_at=datetime.now(),
         )
 
     @classmethod
@@ -169,10 +169,10 @@ class SentimentSnapshot:
 
         return cls(
             ticker=ticker.upper(),
-            fetch_date=date.today(),
             headlines=tuple(headlines),
             positive_count=positive,
             neutral_count=neutral,
             negative_count=negative,
             overall_sentiment=overall,
+            fetched_at=datetime.now(),
         )

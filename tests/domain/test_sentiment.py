@@ -130,7 +130,6 @@ class TestSentimentSnapshot:
         """Valid snapshot should be created successfully."""
         snapshot = SentimentSnapshot(
             ticker="BBCA",
-            fetch_date=date.today(),
             headlines=(),
             positive_count=5,
             neutral_count=3,
@@ -156,8 +155,7 @@ class TestSentimentSnapshot:
         with pytest.raises(ValueError, match="Ticker cannot be empty"):
             SentimentSnapshot(
                 ticker="",
-                fetch_date=date.today(),
-                headlines=(),
+                    headlines=(),
                 positive_count=0,
                 neutral_count=0,
                 negative_count=0,
@@ -169,8 +167,7 @@ class TestSentimentSnapshot:
         with pytest.raises(ValueError, match="cannot be negative"):
             SentimentSnapshot(
                 ticker="BBCA",
-                fetch_date=date.today(),
-                headlines=(),
+                    headlines=(),
                 positive_count=-1,
                 neutral_count=0,
                 negative_count=0,
@@ -185,7 +182,6 @@ class TestSentimentSnapshotTotalCount:
         """Total count should be sum of all sentiment counts."""
         snapshot = SentimentSnapshot(
             ticker="BBCA",
-            fetch_date=date.today(),
             headlines=(),
             positive_count=5,
             neutral_count=3,
@@ -208,7 +204,6 @@ class TestSentimentSnapshotConfidence:
         """Confidence should be percentage of majority sentiment."""
         snapshot = SentimentSnapshot(
             ticker="BBCA",
-            fetch_date=date.today(),
             headlines=(),
             positive_count=8,
             neutral_count=1,
@@ -232,7 +227,8 @@ class TestSentimentSnapshotEmpty:
         snapshot = SentimentSnapshot.empty("BBCA")
 
         assert snapshot.ticker == "BBCA"
-        assert snapshot.fetch_date == date.today()
+        assert snapshot.fetched_at is not None
+        assert snapshot.fetched_at.date() == date.today()
         assert snapshot.headlines == ()
         assert snapshot.positive_count == 0
         assert snapshot.neutral_count == 0

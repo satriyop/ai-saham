@@ -100,7 +100,7 @@ def sentiment(
 
         # Display header
         typer.echo(f"\nTicker: {response.ticker}")
-        typer.echo(f"Date: {response.snapshot.fetch_date}")
+        typer.echo(f"Date: {response.snapshot.fetched_at.date() if response.snapshot.fetched_at else 'N/A'}")
         typer.echo(f"Headlines Analyzed: {response.snapshot.total_count}")
 
         # Display sentiment
