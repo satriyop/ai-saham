@@ -391,23 +391,25 @@ def universe_create(
         typer.Option("--sector", "-s", help="Sector ID to query"),
     ],
     subsector_id: Annotated[
-        int,
+        Optional[int],
         typer.Option("--subsector", "-b", help="Subsector ID to query"),
-    ],
+    ] = None,
     config_path: Annotated[
         Optional[Path],
         typer.Option("--config", help="Path to universes.yaml"),
     ] = None,
 ) -> None:
     """
-    Create a custom universe from a Stockbit subsector and save/sync it to universes.yaml.
+    Create a custom universe from a Stockbit sector/subsector and save/sync it to universes.yaml.
 
     Requires an active Stockbit session (run `saham fetch stockbit login` first).
 
-    Example:
+    Examples:
         saham fetch universe create food_retail -s 1 -b 10
+        saham fetch universe create consumer_primer -s 1
     """
     import yaml
+    import time
     from datetime import date
 
     resolved_config = config_path or Path("config/universes.yaml")
@@ -446,31 +448,78 @@ def universe_create(
                     return [i for i in data[k] if isinstance(i, dict)]
         return []
 
-    console().print("")
-    console().print(f"Fetching companies for sector {sector_id} subsector {subsector_id}...")
-    url = f"https://exodus.stockbit.com/emitten/v3/sector/{sector_id}/subsector/{subsector_id}/company"
-    comp_body = _get(url)
-    items = _extract_list(comp_body, "companies", "list", "items", "stocks")
-
-    if not items:
-        typer.echo(f"No companies found in sector {sector_id} subsector {subsector_id}.", err=True)
-        raise typer.Exit(1)
-
     tickers = []
-    for item in items:
-        code = (
-            item.get("ticker")
-            or item.get("code")
-            or item.get("stock_code")
-            or item.get("symbol")
-            or (item.get("stock_detail") or {}).get("code")
-        )
-        if code and isinstance(code, str) and code.strip():
-            tickers.append(code.strip().upper())
+
+    if subsector_id is not None:
+        console().print("")
+        console().print(f"Fetching companies for sector {sector_id} subsector {subsector_id}...")
+        url = f"https://exodus.stockbit.com/emitten/v3/sector/{sector_id}/subsector/{subsector_id}/company"
+        comp_body = _get(url)
+        if comp_body is None:
+            typer.echo(f"Error: Failed to fetch data for sector {sector_id} subsector {subsector_id}.", err=True)
+            raise typer.Exit(1)
+
+        items = _extract_list(comp_body, "companies", "list", "items", "stocks")
+        if not items:
+            typer.echo(f"No companies found in sector {sector_id} subsector {subsector_id}.", err=True)
+            raise typer.Exit(1)
+
+        for item in items:
+            code = (
+                item.get("ticker")
+                or item.get("code")
+                or item.get("stock_code")
+                or item.get("symbol")
+                or (item.get("stock_detail") or {}).get("code")
+            )
+            if code and isinstance(code, str) and code.strip():
+                tickers.append(code.strip().upper())
+    else:
+        console().print("")
+        console().print(f"Fetching subsectors for sector {sector_id}...")
+        body = _get(f"https://exodus.stockbit.com/emitten/sectors/{sector_id}/subsectors")
+        if body is None:
+            typer.echo(f"Error: Failed to fetch subsectors for sector {sector_id}.", err=True)
+            raise typer.Exit(1)
+
+        subsectors = _extract_list(body, "subsectors", "list", "items")
+        if not subsectors:
+            typer.echo(f"No subsectors found for sector {sector_id}.", err=True)
+            raise typer.Exit(1)
+
+        console().print(f"Found {len(subsectors)} subsector(s). Fetching constituents...")
+
+        for i, sub in enumerate(subsectors):
+            sub_id = sub.get("id") or sub.get("subsector_id")
+            sub_name = sub.get("name") or sub.get("subsector_name") or f"Subsector {sub_id}"
+            if sub_id is None:
+                continue
+
+            if i > 0:
+                time.sleep(0.2)
+
+            console().print(f"  [{i+1}/{len(subsectors)}] Fetching subsector {sub_id} ({sub_name})...")
+            url = f"https://exodus.stockbit.com/emitten/v3/sector/{sector_id}/subsector/{sub_id}/company"
+            comp_body = _get(url)
+            if comp_body is None:
+                typer.echo(f"Error: Failed to fetch data for sector {sector_id} subsector {sub_id}. Aborting transaction to keep config safe.", err=True)
+                raise typer.Exit(1)
+
+            items = _extract_list(comp_body, "companies", "list", "items", "stocks")
+            for item in items:
+                code = (
+                    item.get("ticker")
+                    or item.get("code")
+                    or item.get("stock_code")
+                    or item.get("symbol")
+                    or (item.get("stock_detail") or {}).get("code")
+                )
+                if code and isinstance(code, str) and code.strip():
+                    tickers.append(code.strip().upper())
 
     tickers = sorted(set(tickers))
     if not tickers:
-        typer.echo("No valid company tickers extracted from subsector.", err=True)
+        typer.echo("No valid company tickers extracted.", err=True)
         raise typer.Exit(1)
 
     # Load existing config
@@ -506,7 +555,7 @@ def universe_create(
         with open(resolved_config, "w") as f:
             f.write(header)
             yaml.dump(existing, f, default_flow_style=False, allow_unicode=True, sort_keys=True)
-        
+
         console().print("")
         table = compact_table(show_header=False)
         table.add_column("Key", style="bold cyan")
