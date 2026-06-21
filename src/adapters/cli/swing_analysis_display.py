@@ -624,6 +624,21 @@ def print_swing_output(
         except Exception:
             pass
 
+        # Valuation metrics — read from cache only
+        try:
+            from src.infrastructure.browser.stockbit_valuation import StockbitValuationProvider
+            from src.infrastructure.config.app_config import APP_CFG as _app_cfg2
+            from pathlib import Path as _Path2
+            _db2 = _Path2(_app_cfg2.storage.db_path)
+            _vp = StockbitValuationProvider(broker_provider=None, db_path=_db2)
+            _val = _vp.get_valuation(accum.ticker)
+            if _val and not _val.is_empty:
+                _parts = [f"{label} {v:.2f}" for label, v in _val.labeled]
+                if _parts:
+                    corp_flags.append(Text(f"💲 VALUATION: {' | '.join(_parts)}", style="cyan"))
+        except Exception:
+            pass
+
         if corp_flags:
             flow_group.append(Text("\nAdditional Signals & Flags", style="bold cyan"))
             for flag in corp_flags:
