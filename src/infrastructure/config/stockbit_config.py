@@ -79,6 +79,7 @@ class StockbitConfig:
     )
     analyst_url: str = "https://exodus.stockbit.com/analyst-ratings/{ticker}"
     analyst_consensus_url: str = "https://exodus.stockbit.com/analyst-ratings/{ticker}/consensus"
+    earnings_url: str = "https://exodus.stockbit.com/earnings?keyword={ticker}&quarter={quarter}&year={year}"
     emitten_info_url: str = "https://exodus.stockbit.com/emitten/{ticker}/info"
     keystats_url: str = "https://exodus.stockbit.com/keystats/ratio/v1/{ticker}?year_limit=10"
     shareholding_url: str = (
@@ -156,6 +157,7 @@ def load_stockbit_config(
             seasonality_url=_url("seasonality", defaults.seasonality_url),
             analyst_url=_url("analyst_ratings", defaults.analyst_url),
             analyst_consensus_url=_url("analyst_consensus", defaults.analyst_consensus_url),
+            earnings_url=_url("earnings", defaults.earnings_url),
             emitten_info_url=_url("emitten_info", defaults.emitten_info_url),
             keystats_url=_url("keystats", defaults.keystats_url),
             shareholding_url=_url("shareholding", defaults.shareholding_url),

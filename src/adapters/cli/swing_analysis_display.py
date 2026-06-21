@@ -601,7 +601,29 @@ def print_swing_output(
             fund = accum.fundamentals
             fund_color = "green" if fund.is_quality else ("yellow" if fund.roe_ttm is not None and fund.roe_ttm >= 10.0 else "red")
             corp_flags.append(Text(f"📈 FUNDAM: {fund.label}", style=fund_color))
-            
+
+        # Earnings history — read from cache only (no live fetch in display layer)
+        try:
+            from src.infrastructure.browser.stockbit_earnings import StockbitEarningsProvider
+            from src.infrastructure.config.app_config import APP_CFG as _app_cfg
+            from pathlib import Path as _Path
+            _db = _Path(_app_cfg.storage.db_path)
+            _ep = StockbitEarningsProvider(broker_provider=None, db_path=_db)
+            _earnings = _ep.get_earnings_history(accum.ticker, quarters=4)
+            if _earnings:
+                beat_streak = sum(1 for r in _earnings if r.beat is True)
+                miss_streak = sum(1 for r in _earnings if r.beat is False)
+                _labels = "  |  ".join(r.label for r in _earnings[:4])
+                if beat_streak >= 3:
+                    e_color = "green"
+                elif miss_streak >= 3:
+                    e_color = "red"
+                else:
+                    e_color = "white"
+                corp_flags.append(Text(f"💰 EARNINGS ({beat_streak}/{len(_earnings)} beat): {_labels}", style=e_color))
+        except Exception:
+            pass
+
         if corp_flags:
             flow_group.append(Text("\nAdditional Signals & Flags", style="bold cyan"))
             for flag in corp_flags:

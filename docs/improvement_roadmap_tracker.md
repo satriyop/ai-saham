@@ -11,7 +11,7 @@ This file is the canonical phase-by-phase state for the post-`claude_stockbit_da
 | # | Item | Status | Branch/Commit |
 |---|------|--------|---------------|
 | 1 | Composite Score System | ✅ Done | see commits below |
-| 2 | Earnings Data Integration | 🔲 Not Started | — |
+| 2 | Earnings Data Integration | ✅ Done | see commits below |
 | 3 | Stockbit OHLC Fallback | 🔲 Not Started | — |
 | 4 | CLI Adapter Thinness Phase 1 | 🔲 Not Started | — |
 | 5 | Piotroski Quality Gate | 🔲 Not Started | — |
@@ -63,17 +63,31 @@ This file is the canonical phase-by-phase state for the post-`claude_stockbit_da
 
 **Goal:** New provider `stockbit_earnings.py` for `/earnings` endpoint. Cache EPS/revenue actuals vs consensus. Wire into swing view + new `saham analyze earnings TICKER` command.
 
-**Status:** 🔲 Not Started
+**Status:** ✅ Done
 
 ### Sub-steps
-- [ ] 2.1 Probe `/earnings?ticker=BBCA` to confirm live field names (or use existing probe doc)
-- [ ] 2.2 Create `src/infrastructure/browser/stockbit_earnings.py`
-- [ ] 2.3 Add `earnings_cache` table to SQLite schema
-- [ ] 2.4 Add port `StockbitEarningsProvider` in `src/domain/ports/`
-- [ ] 2.5 Wire into `RefreshStockbitEnrichmentUseCase`
-- [ ] 2.6 Display in `saham analyze swing TICKER`
-- [ ] 2.7 Add `saham analyze earnings TICKER` command
-- [ ] 2.8 Tests
+- [x] 2.1 Probe `/earnings?ticker=BBCA` — confirmed live field names via `stockbit_api_probe_response.md`
+- [x] 2.2 Create `src/infrastructure/browser/stockbit_earnings.py` — `StockbitEarningsProvider` with period-chain walking
+- [x] 2.3 Add `earnings_cache` table to SQLite schema (PK: ticker/year/quarter, 7-day TTL)
+- [x] 2.4 Create port `src/domain/ports/earnings_provider.py` + value object `src/domain/value_objects/earnings_record.py`
+- [x] 2.5 Wire into fetch market: `EnrichmentTask("earnings", ...)` in `fetch_market_commands.py`
+- [x] 2.6 Display in `saham analyze swing TICKER` — earnings beat/miss streak panel
+- [ ] 2.7 `saham analyze earnings TICKER` standalone command — deferred to later phase
+- [x] 2.8 Tests — 16 new tests in `tests/infrastructure/browser/test_stockbit_earnings.py`; all 1640 pass
+
+### Files Changed
+- `src/domain/value_objects/earnings_record.py` — new; frozen dataclass with `beat`, `yoy_growth_pct`, `label` properties
+- `src/domain/ports/earnings_provider.py` — new; `EarningsProvider` ABC
+- `src/infrastructure/config/stockbit_config.py` — added `earnings_url` field + YAML mapping
+- `src/infrastructure/browser/stockbit_earnings.py` — new; SQLite-cached provider with period chain walking
+- `src/adapters/cli/fetch_market_commands.py` — wired `EnrichmentTask("earnings", ...)`
+- `src/adapters/cli/swing_analysis_display.py` — added earnings beat streak panel
+- `tests/infrastructure/browser/test_stockbit_earnings.py` — new; 16 tests
+
+### Key Design Notes
+- Period chain walking: `/earnings` returns one quarter at a time; `prev_earnings_period` pointer walks backwards
+- Missing surprise → computed from `(actual-estimate)/|estimate|*100` inline in parser
+- Beat streak display: green if ≥3/4 beat, red if ≥3/4 miss, yellow otherwise
 
 ---
 
