@@ -51,6 +51,35 @@ def load_universe(
     return list(data[name]["tickers"])
 
 
+def load_universe_entry(
+    name: str,
+    config_path: Path = UNIVERSE_CONFIG_PATH,
+) -> tuple[list[str], str]:
+    """Return (tickers, updated_str) for a named universe in a single file read.
+
+    Avoids the double parse that calling load_universe() then load_universe_meta()
+    would incur.
+
+    Raises:
+        UniverseNotFoundError: If universe name is not in config.
+        FileNotFoundError: If config file does not exist.
+    """
+    if not config_path.exists():
+        raise FileNotFoundError(
+            f"Universe config not found at '{config_path}'. "
+            "Run: saham fetch universe update"
+        )
+    with open(config_path) as f:
+        data = yaml.safe_load(f)
+    if name not in data:
+        available = ", ".join(data.keys())
+        raise UniverseNotFoundError(
+            f"Universe '{name}' not found. Available: {available}"
+        )
+    entry = data[name]
+    return list(entry.get("tickers", [])), str(entry.get("updated", "unknown"))
+
+
 def load_universe_meta(
     config_path: Path = UNIVERSE_CONFIG_PATH,
 ) -> dict[str, dict]:
