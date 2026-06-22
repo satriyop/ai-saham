@@ -284,9 +284,17 @@ class PreOpenScreenUseCase:
                         if total_lots > 0:
                             bid_offer_imbalance = round(ob.volume / total_lots, 3)
                 else:
-                    warnings.append(
-                        f"{ticker}: No order book data — gap% not computed"
-                    )
+                    if mover.iep is not None and prev_close is not None and prev_close > 0:
+                        gap_pct = (
+                            (Decimal(mover.iep) - prev_close) / prev_close * 100
+                        ).quantize(Decimal("0.01"))
+                        warnings.append(
+                            f"{ticker}: No order book bid — gap% from IEP ({mover.iep})"
+                        )
+                    else:
+                        warnings.append(
+                            f"{ticker}: No order book data — gap% not computed"
+                        )
 
             # Suggested limit order price
             entry_price: Decimal | None = None
@@ -587,7 +595,7 @@ class PreOpenScreenUseCase:
             return "BEARISH"
 
         if rsi is not None and Decimal("30") < rsi < Decimal("65"):
-            if gap_pct is None or abs(gap_pct) <= Decimal("2"):
+            if gap_pct is not None and abs(gap_pct) <= Decimal("2"):
                 return "BULLISH"
 
         # Legacy SMA fallback for fast mode (no gap data)
