@@ -10,7 +10,7 @@ from typing import Annotated, Optional
 
 import typer
 
-from src.adapters.cli.accumulation_commands import accumulation_run, DEFAULT_ACCUM_DB_PATH
+from src.adapters.cli.screen_accum_commands import accumulation_run, DEFAULT_ACCUM_DB_PATH
 from src.adapters.cli.screen_pre_open_commands import pre_open
 
 screen_app = typer.Typer(
@@ -138,7 +138,7 @@ def screen_compare(
     typer.echo(f"\n  Comparing '{name}' (saved {saved_at_str}) against fresh screen on '{run_universe}'...")
 
     # Run a fresh screen inline (reuse accumulation_run logic via use case)
-    from src.adapters.cli.accumulation_commands import (
+    from src.adapters.cli.screen_accum_commands import (
         _make_use_case_for_compare,
     )
 

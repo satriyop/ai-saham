@@ -23,7 +23,7 @@ import typer
 
 from src.infrastructure.config.app_config import APP_CFG
 
-from src.adapters.cli.accumulation_commands import (
+from src.adapters.cli.trade_accum_commands import (
     DEFAULT_ACCUM_JOURNAL_PATH,
     DEFAULT_DB_PATH,
     FOREIGN_BOUNCE_PRESET,
