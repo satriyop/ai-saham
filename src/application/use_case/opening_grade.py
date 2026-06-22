@@ -117,14 +117,17 @@ def compute_grade(run_date: date | None = None) -> dict:
         trend_T15 = trend_correct(price_at(3))
         trend_T30 = trend_correct(price_at(6))
 
-        # 1R metrics
+        # 1R metrics — evaluated from opening_price (actual entry opportunity),
+        # not suggested_entry (pre-open limit that may never be reached).
+        # effective_stop mirrors the stop symmetrically below opening_price.
         one_r_available = None
         stop_hit = None
         clean_trade = None
-        if suggested_entry and one_r and atr_stop:
-            target = suggested_entry + one_r
+        if opening_price and one_r:
+            target = opening_price + one_r
+            effective_stop = opening_price - one_r
             one_r_available = peak >= target
-            stop_hit = trough <= atr_stop
+            stop_hit = trough <= effective_stop
             clean_trade = one_r_available and not stop_hit
 
         # Broker confirmation signal — read from track files if --broker-confirm was used

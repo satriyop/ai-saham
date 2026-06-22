@@ -82,6 +82,8 @@ class PreOpenScreenConfig:
     iev_intensity_enabled: bool = True
     iev_intensity_unusual_threshold: float = 5.0
     iev_intensity_auto_downgrade: bool = False
+    # Pre-open bid pressure filter
+    min_bid_pressure_preopen: float = 0.0  # 0.0 = disabled; 0.40 = require 40% bid dominance
 
     @classmethod
     def from_yaml(cls, data: dict) -> "PreOpenScreenConfig":
@@ -130,6 +132,7 @@ class PreOpenScreenConfig:
             iev_intensity_auto_downgrade=bool(
                 analysis.get("iev_intensity_auto_downgrade", False)
             ),
+            min_bid_pressure_preopen=float(screener.get("min_bid_pressure_preopen", 0.0)),
         )
 
 

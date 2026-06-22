@@ -101,7 +101,7 @@ class OpeningSnapshotUseCase:
                 # >0.6 = buyers dominating (committed demand), <0.4 = sellers dominating
                 "bid_pressure_preopen": c.bid_offer_imbalance,
                 "ticker_notation": c.ticker_notation.to_dict() if c.ticker_notation else None,
-                "verdict": self._verdict(c),
+                "verdict": self._verdict(c, request.config.min_bid_pressure_preopen),
             })
 
         snapshot = {
@@ -123,11 +123,14 @@ class OpeningSnapshotUseCase:
         return snapshot
 
     @staticmethod
-    def _verdict(candidate) -> str:
+    def _verdict(candidate, min_bp: float = 0.0) -> str:
         """Derive PRIME/WATCH/SKIP from existing candidate signals."""
         trend = candidate.trend_signal or ""
         accum = candidate.accum_tag or ""
         unusual = getattr(candidate, "unusual_volume", False)
+        # Weak pre-open bid pressure → insufficient conviction for a WATCH entry
+        if min_bp > 0 and (candidate.bid_offer_imbalance or 0) < min_bp:
+            return "SKIP"
         if trend == "BULLISH" and accum == "BACKED" and not unusual:
             return "PRIME"
         if trend in ("BULLISH", "NEUTRAL") and accum != "DISTRIBUTING":
