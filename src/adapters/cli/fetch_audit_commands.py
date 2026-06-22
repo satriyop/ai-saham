@@ -1,6 +1,7 @@
 """
-Data quality audit CLI.
-
+CLI implementation for saham fetch audit command.
+Public command registration lives in lifecycle routers:
+  saham fetch audit
 Layer: Adapter
 """
 

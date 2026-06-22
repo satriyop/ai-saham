@@ -20,7 +20,7 @@ from typing import Annotated, Any, Optional
 
 import typer
 
-from src.adapters.cli.swing_broker_display import (
+from src.adapters.cli.analyze_swing_broker_display import (
     BrokerDetail,
     BrokerQualityNote,
     FlowDetail,
@@ -28,11 +28,11 @@ from src.adapters.cli.swing_broker_display import (
     build_broker_quality_note,
     build_flow_detail,
 )
-from src.adapters.cli.swing_analysis_display import (
+from src.adapters.cli.analyze_swing_display import (
     SwingDisplayConfig,
     format_failed_gates_summary as _format_failed_gates_summary,
 )
-from src.adapters.cli.swing_display import display_swing_compare
+from src.adapters.cli.analyze_swing_display import display_swing_compare
 from src.application.services.bootstrap import create_indicator_registry
 from src.application.services.universe_loader import (
     UniverseNotFoundError,
@@ -474,7 +474,7 @@ def _print_swing_output(
     strategy_risk_level: str | None = None,
     strategy_risk_name: str | None = None,
 ) -> None:
-    from src.adapters.cli.swing_analysis_display import print_swing_output
+    from src.adapters.cli.analyze_swing_display import print_swing_output
 
     print_swing_output(
         ticker=ticker,

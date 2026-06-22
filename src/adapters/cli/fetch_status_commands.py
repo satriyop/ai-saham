@@ -1,6 +1,7 @@
 """
-Data provider health and freshness commands.
-
+CLI implementation for saham fetch status command.
+Public command registration lives in lifecycle routers:
+  saham fetch status
 Layer: Adapter
 """
 

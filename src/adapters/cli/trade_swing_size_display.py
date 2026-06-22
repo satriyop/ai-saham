@@ -1,5 +1,5 @@
 """
-Display helpers for swing position sizing CLI output.
+Display helpers for saham trade size command.
 
 Layer: Adapter
 """

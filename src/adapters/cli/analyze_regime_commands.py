@@ -26,7 +26,7 @@ from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.config.swing_config import load_swing_config
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
-from src.adapters.cli.swing_display import display_regime
+from src.adapters.cli.analyze_regime_display import display_regime
 
 DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 _SC = load_swing_config()

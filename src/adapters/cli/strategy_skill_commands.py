@@ -1,9 +1,9 @@
 """
-CLI commands for skill documentation management.
-
-Provides commands to generate, check, and index skill documentation
-for strategies, indicators, and formulas.
-
+CLI implementation for saham strategy skill commands.
+Public command registration lives in lifecycle routers:
+  saham strategy skill generate
+  saham strategy skill check
+  saham strategy skill index
 Layer: Adapter
 """
 

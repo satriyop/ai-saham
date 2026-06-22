@@ -27,7 +27,7 @@ from src.application.use_case.create_strategy_from_intent import (
     CreateStrategyFromIntentRequest,
     CreateStrategyFromIntentUseCase,
 )
-from src.adapters.cli.skill_commands import skill_app
+from src.adapters.cli.strategy_skill_commands import skill_app
 from src.infrastructure.ai.strategy_translator import StrategyTranslatorAdapter
 from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository

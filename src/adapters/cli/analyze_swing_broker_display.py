@@ -1,5 +1,5 @@
 """
-Broker-flow display helpers for swing CLI commands.
+Broker-flow display helpers for saham analyze swing commands.
 
 Layer: Adapter
 """

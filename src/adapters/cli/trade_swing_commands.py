@@ -34,7 +34,7 @@ from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.config.user_config import get_swing_default
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
-from src.adapters.cli.swing_display import display_swing_backtest
+from src.adapters.cli.trade_swing_display import display_swing_backtest
 
 DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 
@@ -381,7 +381,7 @@ def size(
         typer.echo(json.dumps(out, indent=2))
         return
 
-    from src.adapters.cli.swing_size_display import display_position_size
+    from src.adapters.cli.trade_swing_size_display import display_position_size
 
     display_position_size(
         ticker=ticker_upper,

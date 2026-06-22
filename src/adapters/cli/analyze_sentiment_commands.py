@@ -1,11 +1,9 @@
 """
-CLI commands for news sentiment analysis and impact auditing.
-
-Commands:
-  saham sentiment TICKER — Fetch and analyze news sentiment
-  saham sentiment audit  — Audit past sentiment accuracy vs price moves
-
-Layer: Adapter (CLI)
+CLI implementation functions for saham analyze sentiment commands.
+Public command registration lives in lifecycle routers:
+  saham analyze sentiment
+  saham analyze audit
+Layer: Adapter
 """
 
 from datetime import datetime

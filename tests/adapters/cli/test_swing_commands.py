@@ -10,7 +10,7 @@ from typer.testing import CliRunner
 
 from src.adapters.cli import analyze_swing_commands as swing_cli
 from src.adapters.cli.main import app
-from src.adapters.cli.swing_broker_display import (
+from src.adapters.cli.analyze_swing_broker_display import (
     build_broker_detail as _build_broker_detail_base,
     build_broker_quality_note as _build_broker_quality_note,
     build_flow_detail as _build_flow_detail,
@@ -497,7 +497,7 @@ def test_broker_quality_note_skips_warn_on_minor_smart_selling():
 
     AK sells 5M, HD (neutral) buys 100M → smart sell share ~5% → below threshold.
     """
-    from src.adapters.cli.swing_broker_display import build_broker_quality_note
+    from src.adapters.cli.analyze_swing_broker_display import build_broker_quality_note
 
     detail = _build_broker_detail(
         ticker="BBCA",

@@ -44,7 +44,7 @@ analyze_app = typer.Typer(
 )
 
 # Register chart as a nested sub-group
-from src.adapters.cli.chart_commands import chart_app
+from src.adapters.cli.analyze_chart_commands import chart_app
 analyze_app.add_typer(chart_app, name="chart")
 
 from src.infrastructure.config.app_config import APP_CFG
@@ -278,7 +278,7 @@ def risk(
                 typer.echo(f"\nTrend unavailable: {e}", err=True)
 
         if with_sentiment and sentiment_snapshot:
-            from src.adapters.cli.sentiment_commands import _display_sentiment_brief
+            from src.adapters.cli.analyze_sentiment_commands import _display_sentiment_brief
             _display_sentiment_brief(snapshot=sentiment_snapshot)
 
         typer.echo("\nDISCLAIMER: Analysis only, not trading advice.")
@@ -373,9 +373,9 @@ def compare(
     typer.echo("\nDISCLAIMER: Analysis only, not trading advice.")
 
 
-# Register sentiment and audit from sentiment_commands (no logic duplication)
-from src.adapters.cli.sentiment_commands import sentiment as _sentiment_fn
-from src.adapters.cli.sentiment_commands import sentiment_audit as _sentiment_audit_fn
+# Register sentiment and audit from analyze_sentiment_commands (no logic duplication)
+from src.adapters.cli.analyze_sentiment_commands import sentiment as _sentiment_fn
+from src.adapters.cli.analyze_sentiment_commands import sentiment_audit as _sentiment_audit_fn
 from src.adapters.cli.accumulation_commands import accumulation_audit as _accumulation_audit_fn
 from src.adapters.cli.analyze_regime_commands import regime as _regime_fn
 from src.adapters.cli.analyze_swing_commands import swing as _swing_fn
