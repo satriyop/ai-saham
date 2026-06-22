@@ -908,7 +908,7 @@ saham fetch stockbit browse                   # Interactive browser session
 
 | Command | Purpose |
 |---------|---------|
-| `saham fetch stockbit login` | Save browser session cookies |
+| `saham fetch stockbit login` | Create persistent browser session profile |
 | `saham fetch stockbit status` | Check session health |
 | `saham fetch stockbit spy` | Capture all API traffic to identify endpoints |
 | `saham fetch stockbit test` | Smoke-test live adapter with saved session |
@@ -1317,8 +1317,9 @@ src/
 │   │   ├── yahoo_stock_meta.py       # Yahoo stock metadata
 │   │   ├── idx.py                    # IDX broker data
 │   │   └── idx_market.py             # IDX market data
-│   ├── browser/                      # Stockbit enrichment providers (20 files)
-│   │   ├── playwright_stockbit.py    # Broker provider + Playwright automation
+│   ├── browser/                      # Stockbit enrichment providers (22 files)
+│   │   ├── playwright_stockbit.py    # Broker provider (delegates to browser module)
+│   │   ├── playwright_stockbit_browser.py  # Browser lifecycle + session management
 │   │   ├── stockbit_analyst.py
 │   │   ├── stockbit_bandar.py
 │   │   ├── stockbit_company_profile.py
@@ -1339,7 +1340,7 @@ src/
 │   │   ├── stockbit_browser.py
 │   │   ├── stockbit_market_time.py
 │   │   ├── stockbit_universe.py
-│   │   └── ... (23 specialized providers)
+│   │   └── ... (20 specialized providers)
 │   ├── persistence/
 │   │   ├── sqlite.py                 # Core SQLite repository
 │   │   ├── sqlite_market_repository.py
@@ -1391,17 +1392,26 @@ src/
 │   │   ├── fetch_market_commands.py
 │   │   ├── fetch_iev_commands.py
 │   │   ├── fetch_universe_commands.py
+│   │   ├── fetch_status_commands.py
+│   │   ├── fetch_audit_commands.py
+│   │   ├── fetch_stockbit_commands.py
 │   │   ├── view_commands.py          # Read-only broker views + ticker dashboard
 │   │   ├── view_ticker_display.py    # Read-only ticker dashboard display
+│   │   ├── view_universe_display.py
 │   │   ├── broker_commands.py / broker_display.py
 │   │   ├── learn_commands.py / learn_opening_commands.py
-│   │   ├── status_commands.py
 │   │   ├── today_commands.py
 │   │   ├── analyze_commands.py
+│   │   ├── analyze_swing_commands.py / analyze_swing_display.py
+│   │   ├── analyze_swing_broker_display.py
+│   │   ├── analyze_chart_commands.py
+│   │   ├── analyze_sentiment_commands.py
+│   │   ├── analyze_regime_commands.py / analyze_regime_display.py
 │   │   ├── trade_commands.py / trade_intraday_commands.py
+│   │   ├── trade_swing_commands.py / trade_swing_display.py
+│   │   ├── trade_swing_size_display.py
 │   │   ├── indicator_commands.py
-│   │   ├── strategy_commands.py / skill_commands.py
-│   │   ├── stockbit_commands.py
+│   │   ├── strategy_commands.py / strategy_skill_commands.py
 │   │   ├── screen_pre_open_commands.py
 │   │   ├── screen_lifecycle_commands.py
 │   │   ├── accumulation_commands.py
@@ -1411,14 +1421,6 @@ src/
 │   │   ├── intraday_pre_open_display.py
 │   │   ├── intraday_confirmation_display.py
 │   │   ├── intraday_backtest_display.py
-│   │   ├── swing_commands.py
-│   │   ├── swing_display.py
-│   │   ├── swing_broker_display.py
-│   │   ├── swing_analysis_display.py
-│   │   ├── swing_size_display.py
-│   │   ├── chart_commands.py
-│   │   ├── sentiment_commands.py
-│   │   ├── data_quality_commands.py
 │   │   ├── intraday_workflow_commands.py
 │   │   └── rich_display.py           # Shared Rich rendering
 │   ├── bot/                          # Telegram, WhatsApp (stubs)

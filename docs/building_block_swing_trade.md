@@ -385,7 +385,7 @@ Classification:
 
 | File | Lines | Role |
 |------|-------|------|
-| `adapters/cli/swing_commands.py` | 2219 | Entry point, 8 commands, display logic, preset eval |
+| `adapters/cli/analyze_swing_commands.py` + `adapters/cli/trade_swing_commands.py` | ~2000 combined | Analyze (screening + signals) and Trade (backtest + sizing + journal) sub-groups |
 | `application/use_case/swing_backtest.py` | 664 | Walk-forward portfolio simulation |
 | `application/use_case/accumulation_screen.py` | 434 | 7-dimension accumulation scoring |
 | `application/use_case/assess_risk.py` | ~150 | Risk profile confirmation |
@@ -424,6 +424,6 @@ analyze regime  needs: candles.* + broker_flow.* (for breadth)
 1. **Swing is not a single use case** — it's an **adapter-level orchestration** that calls 6+ use cases sequentially.
 2. **Every pipeline is optional and fault-tolerant** — each step is wrapped in `try/except`, so missing data doesn't crash the whole command.
 3. **Regime awareness is a filter, not a signal** — market regime only blocks entries, it doesn't generate them.
-4. **Preset logic is in the adapter, calibration is in config** — the `foreign-bounce` gate logic lives in `swing_commands.py`, but calibration parameters (TP/SL per regime, smart-money broker codes, noise broker filters) load from `config/swing_screener.yaml`.
+4. **Preset logic is in the adapter, calibration is in config** — the `foreign-bounce` gate logic lives in `analyze_swing_commands.py`, but calibration parameters (TP/SL per regime, smart-money broker codes, noise broker filters) load from `config/swing_screener.yaml`.
 5. **Position sizer is pure math** — no I/O, no ports. Works purely from Decimal inputs.
 6. **Auto-refresh is the default** — every `analyze swing` refetches candles + broker data before analyzing, unless `--no-refresh`.

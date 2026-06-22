@@ -55,17 +55,17 @@ The same layers with their actual components visible:
 │  learn_commands.py (learn group router)                             │
 │  learn_opening_commands.py (opening learning loop impl)             │
 │  today_commands.py (daily briefing)                                  │
-│  status_commands.py (data health check)                             │
+│  fetch_status_commands.py (data health check)                        │
 │  indicator_commands.py (compute, snapshot, create, list)            │
 │  analyze_commands.py (risk, compare, sentiment, audit, regime)      │
 │  trade_commands.py (trade group router)                             │
 │  trade_intraday_commands.py (intraday trade CLI impl)               │
 │  strategy_commands.py (init, create, backtest, list)                │
-│  skill_commands.py (strategy skill implementation)                  │
+│  strategy_skill_commands.py (strategy skill implementation)         │
 │  screen_lifecycle_commands.py (screen lifecycle helper)             │
 │  screen_pre_open_commands.py (pre-open screen CLI impl)             │
-│  + impl files (accumulation, broker, chart, intraday_workflow,      │
-│    sentiment, stockbit, swing, update)                              │
+│  + impl files (accumulation, broker, analyze_chart, intraday_workflow,│
+│    analyze_sentiment, fetch_stockbit, analyze_swing, trade_swing)    │
 └──────────────────────────┬──────────────────────────────────────────┘
                            │
 ┌──────────────────────────▼──────────────────────────────────────────┐
@@ -150,7 +150,7 @@ The same layers with their actual components visible:
 | # | Subsystem | Purpose | Entry Points | Key Files |
 |---|-----------|---------|--------------|-----------|
 | 1 | **CLI Router** | Routes user commands to use cases via lifecycle groups. Parses flags, wires dependencies, displays output. | `saham <group> <cmd>` | `main.py`, `fetch_commands.py`, `trade_commands.py`, etc |
-| 2 | **Data Ingestion** | Fetches, caches, and serves OHLCV + broker + news data from external sources. | `fetch market`, `fetch broker`, `fetch stockbit`, `fetch iev`, `analyze sentiment` | `yahoo.py`, `idx_market.py`, `idx.py`, `playwright_stockbit.py`, 19 Stockbit specialized providers, 6 sentiment providers, SQLite repos |
+| 2 | **Data Ingestion** | Fetches, caches, and serves OHLCV + broker + news data from external sources. | `fetch market`, `fetch broker`, `fetch stockbit`, `fetch iev`, `analyze sentiment` | `yahoo.py`, `idx_market.py`, `idx.py`, `playwright_stockbit.py`, `playwright_stockbit_browser.py`, 20 Stockbit specialized providers, 6 sentiment providers, SQLite repos |
 | 3 | **Analysis Core** | Deterministic indicator computation, risk profiling, and composite analysis. | `indicator compute`, `indicator snapshot`, `analyze risk`, `analyze compare` | `sma.py`, `ema.py`, `rsi.py`, `indicator_registry.py`, 3 rule profiles, `rule_engine.py` |
 | 4 | **Screening Suite** | Multi-dimensional stock screening for accumulation patterns, pre-open movers, and swing candidates. | `screen accum`, `screen pre-open` | `accumulation_screen.py`, `intraday_workflow_commands.py`, `pre_open_screen.py` |
 | 5 | **Strategy System** | Authoring, validation, loading, and execution of versioned strategy packages. | `strategy init/create/validate/list`, `strategy backtest` | `strategy_loader.py`, 3 strategy YAMLs, `strategy_commands.py` |
@@ -173,7 +173,7 @@ Each Big block decomposes into Medium modules:
 | Yahoo Finance Provider | `infrastructure/data_providers/yahoo.py` | ~80 | OHLCV via yfinance, auto-appends `.JK` |
 | IDX Market Provider | `infrastructure/data_providers/idx_market.py` | ~120 | OHLCV via IDX TradingSummary API |
 | IDX Broker Provider | `infrastructure/data_providers/idx.py` | ~322 | Foreign flow from IDX (estimated values) |
-| Stockbit Playwright Broker Provider | `infrastructure/browser/playwright_stockbit.py` | ~2000 | Broker provider + Playwright automation for Stockbit session |
+| Stockbit Playwright Broker Provider | `infrastructure/browser/playwright_stockbit.py` (delegates browser lifecycle to `playwright_stockbit_browser.py`) | ~2000 | Broker provider + browser session management for Stockbit |
 | Stockbit Analyst Consensus | `infrastructure/browser/stockbit_analyst.py` | ~86 | Analyst ratings + price targets |
 | Stockbit Bandar Detector | `infrastructure/browser/stockbit_bandar.py` | ~177 | Institutional operator accumulation signal |
 | Stockbit Company Profile | `infrastructure/browser/stockbit_company_profile.py` | ~94 | Sector, industry, market cap |
@@ -459,7 +459,7 @@ Each Big block decomposes into Medium modules:
 | `YahooFinanceProvider` | `data_providers/yahoo.py` | MarketDataProvider | No | OHLCV |
 | `IdxMarketDataProvider` | `data_providers/idx_market.py` | MarketDataProvider | No | OHLCV |
 | `IdxBrokerDataProvider` | `data_providers/idx.py` | BrokerDataProvider | No | Foreign flow (estimated) |
-| `StockbitPlaywrightBrokerProvider` | `browser/playwright_stockbit.py` | BrokerDataProvider | Browser session | Foreign flow (exact + per-broker) |
+| `StockbitPlaywrightBrokerProvider` | `browser/playwright_stockbit.py` | BrokerDataProvider | Browser session (via `playwright_stockbit_browser.py`) | Foreign flow (exact + per-broker) |
 
 #### Infrastructure AI (15 files)
 
@@ -513,16 +513,19 @@ Each Big block decomposes into Medium modules:
 | `persistence/iev_json_sidecar.py` | IEV JSON sidecar management |
 | `persistence/trade_journal_jsonl_writer.py` | Unified trade journal (JSONL) |
 
-#### Infrastructure Browser (17 files)
+#### Infrastructure Browser (22 files)
 
 | File | Purpose |
 |------|---------|
-| `browser/playwright_stockbit.py` | Playwright automation + broker provider |
+| `browser/playwright_stockbit.py` | Broker provider (delegates browser lifecycle) |
+| `browser/playwright_stockbit_browser.py` | Browser automation + session management |
 | `browser/stockbit_browser.py` | Manual browser session management |
 | `browser/stockbit_analyst.py` | Analyst ratings + price targets |
 | `browser/stockbit_bandar.py` | Institutional operator accumulation signal |
+| `browser/stockbit_broker_distribution.py` | Cross-broker counterparty matrix |
 | `browser/stockbit_company_profile.py` | Sector, industry, market cap |
 | `browser/stockbit_corp_action.py` | Dividend/RUPS/rights issue calendar |
+| `browser/stockbit_earnings.py` | Quarterly earnings beat/miss history |
 | `browser/stockbit_forward_estimates.py` | EPS estimates, revenue forecasts |
 | `browser/stockbit_fundamentals.py` | P/E, ROE, Piotroski F-Score |
 | `browser/stockbit_insider.py` | Director/commissioner transaction flags |
@@ -535,6 +538,7 @@ Each Big block decomposes into Medium modules:
 | `browser/stockbit_shareholding.py` | Institutional/individual split |
 | `browser/stockbit_ticker_notation.py` | Special notation/status badges |
 | `browser/stockbit_universe.py` | Ticker universe definitions |
+| `browser/stockbit_valuation.py` | P/E TTM, EPS TTM valuation metrics |
 
 #### Infrastructure Config/CSV (4 files)
 
@@ -569,34 +573,38 @@ Each Big block decomposes into Medium modules:
 | Fetch Router | `cli/fetch_commands.py` | `saham fetch [market, broker, broker-import, broker-history, broker-top-foreign, iev, stockbit, universe (list/update/create/inspect), status]` |
 | Data Fetch (market) | `cli/fetch_market_commands.py` | Implementation of market data fetch |
 | IEV Capture | `cli/fetch_iev_commands.py` | Implementation of IEV snapshot capture |
-| View Router | `cli/view_commands.py` | `saham view broker [flow, top, history, top-foreign, mappings, status]` plus `saham view TICKER` (shorthand: `saham view BBCA`) |
+| View Router | `cli/view_commands.py` | `saham view broker [flow, top, history, top-foreign, distribution, mappings, status]` plus `saham view TICKER` (shorthand: `saham view BBCA`), `saham view universe` |
 | Learn Router | `cli/learn_commands.py` | `saham learn [snapshot, track, grade, prompt, tune]` |
 | Learn (opening) | `cli/learn_opening_commands.py` | Implementation of opening learning loop commands |
 | Today Briefing | `cli/today_commands.py` | `saham today` daily briefing |
-| Status Impl | `cli/status_commands.py` | `saham fetch status` |
+| Status Impl | `cli/fetch_status_commands.py` | `saham fetch status` |
 | Indicator Router| `cli/indicator_commands.py` | `saham indicator [compute, snapshot, create, list, show, delete]` |
 | Analyze Router | `cli/analyze_commands.py` | `saham analyze [risk, compare, sentiment, audit, regime, chart, swing, accum-audit, swing-compare]` |
 | Trade Router | `cli/trade_commands.py` | `saham trade [confirm, log, review, size, outcome, backtest-swing, backtest-intraday]` |
 | Trade (intraday) | `cli/trade_intraday_commands.py` | Implementation of intraday trade CLI |
 | Strategy Router | `cli/strategy_commands.py` | `saham strategy [init, create, validate, list, backtest, skill]` |
-| Skill Impl | `cli/skill_commands.py` | `saham strategy skill [generate, check, index]` |
-| Screen Lifecycle | `cli/screen_lifecycle_commands.py` | Screen lifecycle management helper |
+| Skill Impl | `cli/strategy_skill_commands.py` | `saham strategy skill [generate, check, index]` |
+| Screen Lifecycle | `cli/screen_lifecycle_commands.py` | Screen lifecycle management helper (watchlist, compare) |
 | Screen (pre-open) | `cli/screen_pre_open_commands.py` | Implementation of pre-open screen CLI |
 | Broker Impl | `cli/broker_commands.py` | Implementation of broker flow logic |
 | Screen Impl | `cli/intraday_workflow_commands.py` | Shared intraday workflow implementation |
-| Swing Impl | `cli/swing_commands.py` | Implementation of swing/unified logic |
-| Sentiment Impl | `cli/sentiment_commands.py` | Implementation of sentiment logic |
-| Stockbit Impl | `cli/stockbit_commands.py` | Implementation of session management |
-| Chart Impl | `cli/chart_commands.py` | Implementation of ASCII charts |
-| Data Quality | `cli/data_quality_commands.py` | `saham fetch audit` data quality diagnostic |
+| Swing Analyze | `cli/analyze_swing_commands.py` | Swing analysis commands (includes analyze_swing_display.py, analyze_swing_broker_display.py) |
+| Swing Trade | `cli/trade_swing_commands.py` | Swing trade lifecycle (includes trade_swing_display.py, trade_swing_size_display.py) |
+| Sentiment Impl | `cli/analyze_sentiment_commands.py` | Implementation of sentiment logic |
+| Stockbit Impl | `cli/fetch_stockbit_commands.py` | Implementation of session management |
+| Chart Impl | `cli/analyze_chart_commands.py` | Implementation of ASCII charts |
+| Data Quality | `cli/fetch_audit_commands.py` | `saham fetch audit` data quality diagnostic |
 | Accumulation | `cli/accumulation_commands.py` | Implementation of accumulation screen logic |
 | Accumulation Display | `cli/accumulation_display.py` | Rich-formatted accumulation output |
 | Accumulation Audit Display | `cli/accumulation_audit_display.py` | Rich-formatted audit output |
 | Broker Display | `cli/broker_display.py` | Rich-formatted broker tables |
-| Swing Display | `cli/swing_display.py` | Rich-formatted swing analysis output |
-| Swing Analysis Display | `cli/swing_analysis_display.py` | Rich-formatted swing comparison |
-| Swing Broker Display | `cli/swing_broker_display.py` | Rich-formatted broker attribution |
-| Swing Size Display | `cli/swing_size_display.py` | Rich-formatted position sizing |
+| Swing Analyze Display | `cli/analyze_swing_display.py` | Rich-formatted swing analysis output |
+| Swing Broker Display | `cli/analyze_swing_broker_display.py` | Rich-formatted broker attribution |
+| Swing Trade Display | `cli/trade_swing_display.py` | Rich-formatted swing trade output |
+| Swing Size Display | `cli/trade_swing_size_display.py` | Rich-formatted position sizing |
+| Regime Display | `cli/analyze_regime_display.py` | Rich-formatted market regime output |
+| View Ticker Display | `cli/view_ticker_display.py` | Rich-formatted ticker dashboard |
+| View Universe Display | `cli/view_universe_display.py` | Rich-formatted universe overview |
 | Intraday Pre-Open Display | `cli/intraday_pre_open_display.py` | Rich-formatted pre-open table |
 | Intraday Confirmation Display | `cli/intraday_confirmation_display.py` | Rich-formatted confirmation view |
 | Intraday Backtest Display | `cli/intraday_backtest_display.py` | Rich-formatted intraday backtest |

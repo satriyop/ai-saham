@@ -602,7 +602,7 @@ saham fetch broker BBCA --refresh
 
 ### Setting Up Stockbit (Optional)
 
-Only needed if you want per-broker breakdown data (top buyers/sellers). Stockbit now uses **browser session cookies** (Playwright-based) instead of JWT tokens:
+Only needed if you want per-broker breakdown data (top buyers/sellers). Stockbit uses **Playwright persistent browser profile** to maintain an authenticated session:
 
 ```bash
 # Install browser automation dependencies
@@ -613,7 +613,7 @@ playwright install chromium
 saham fetch stockbit login
 
 # The browser stays open until you log in to stockbit.com.
-# Once logged in, cookies are saved automatically.
+# Once logged in, the session profile is saved to `.stockbit_profile/`.
 # Use --timeout 300 if you have 2FA.
 
 # Step 2: Check session health
@@ -2373,7 +2373,7 @@ Reports:
 Manage Stockbit browser sessions for automated data fetching.
 
 ```bash
-# Open browser to log in (saves session cookies)
+# Open browser to log in (saves persistent session profile)
 saham fetch stockbit login
 
 # Check session health
@@ -2858,7 +2858,7 @@ No session found.
 Run: saham fetch stockbit login
 ```
 
-**Solution:** Stockbit browser session cookies are not saved. Use the new browser-based login:
+**Solution:** Stockbit browser session is missing. Run `saham fetch stockbit login` to create a persistent profile:
 
 1. Install dependencies: `pip install -e ".[browser]" && playwright install chromium`
 2. Login: `saham fetch stockbit login`
