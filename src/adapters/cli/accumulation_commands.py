@@ -940,15 +940,16 @@ def _accumulation_log_impl(
     journal_path: Path,
     db_path: Path,
 ) -> None:
-    """Core swing log logic — called by both the legacy subcommand and the unified trade log."""
+    """Thin adapter wrapper: wires repos → calls LogSwingCandidateUseCase → formats output."""
     from src.application.services.accumulation_journal import AccumulationJournalService
+    from src.application.use_case.log_swing_candidate import (
+        LogSwingCandidateRequest,
+        LogSwingCandidateUseCase,
+    )
     from src.infrastructure.persistence.accumulation_journal_csv_writer import (
         AccumulationJournalCsvWriter,
     )
-    from src.infrastructure.persistence.trade_journal_jsonl_writer import (
-        TradeJournalJsonlWriter,
-        swing_candidate_to_record,
-    )
+    from src.infrastructure.persistence.trade_journal_jsonl_writer import TradeJournalJsonlWriter
 
     ticker_upper = ticker.upper()
     logged_at = date.today()
@@ -963,9 +964,7 @@ def _accumulation_log_impl(
     broker_repo = SQLiteBrokerRepository(db_path)
     market_repo = SQLiteMarketRepository(db_path=db_path)
     _sb = _make_stockbit_providers(db_path)
-
-    # Run single-ticker screen to get candidate
-    use_case = AccumulationScreenUseCase(
+    screen_uc = AccumulationScreenUseCase(
         broker_repository=broker_repo,
         market_repository=market_repo,
         corporate_action_repo=_sb.corp_repo,
@@ -978,195 +977,87 @@ def _accumulation_log_impl(
         ticker_notation_provider=_sb.notation_prov,
         forward_estimates_provider=_sb.forward_estimates_prov,
     )
-    response = use_case.execute(AccumulationScreenRequest(
-        tickers=[ticker_upper],
+    journal_svc = AccumulationJournalService(
+        store=AccumulationJournalCsvWriter(journal_path),
+        repository=market_repo,
+    )
+    regime_uc = None
+    regime_tickers: list[str] = []
+    if with_regime:
+        try:
+            regime_tickers = resolve_tickers(universe=regime_universe, explicit=[], db_path=db_path)
+            regime_uc = MarketRegimeUseCase(market_repository=market_repo, broker_repository=broker_repo)
+        except Exception as exc:
+            typer.echo(f"Warning: could not resolve regime universe: {exc}", err=True)
+
+    log_uc = LogSwingCandidateUseCase(
+        screen_use_case=screen_uc,
+        journal_service=journal_svc,
+        market_repository=market_repo,
+        trade_journal_store=TradeJournalJsonlWriter(journal_path.parent / "trades.jsonl"),
+        regime_use_case=regime_uc,
+    )
+    result = log_uc.execute(LogSwingCandidateRequest(
+        ticker=ticker_upper,
         window_days=window,
-        min_score=0.0,
-        min_net_buy_days=0,
+        entry_price=Decimal(str(entry_price)) if entry_price is not None else None,
+        from_analysis=from_analysis,
+        preset=preset_name if from_analysis else None,
+        with_regime=with_regime,
+        regime_universe=regime_tickers,
+        benchmark_ticker=benchmark,
+        logged_at=logged_at,
         tier1_broker_codes=_SC.tier1_broker_codes,
         sector_breadth_enabled=_SC.sector_breadth_enabled,
         sector_breadth_threshold=_SC.sector_breadth_threshold,
         sector_breadth_bonus_pts=_SC.sector_breadth_bonus_pts,
         sector_breadth_min_tickers=_SC.sector_breadth_min_tickers,
+        gate_min_score=_SC.gate_min_score,
+        gate_min_vwap_discount_pct=_SC.gate_min_vwap_discount_pct,
+        gate_required_trend=_SC.gate_required_trend,
+        gate_min_flow_ratio_pct=_SC.gate_min_flow_ratio_pct,
+        gate_max_rsi=_SC.gate_max_rsi,
+        watch_max_failed_gates=_SC.watch_max_failed_gates,
+        take_profit_pct=FOREIGN_BOUNCE_TAKE_PROFIT,
+        stop_loss_pct=FOREIGN_BOUNCE_STOP_LOSS,
+        max_hold_days=FOREIGN_BOUNCE_MAX_HOLD_DAYS,
     ))
-    candidate = next((c for c in response.candidates if c.ticker == ticker_upper), None)
 
-    # Compute multi-window pattern (7, 30, 90)
-    pattern: str | None = None
-    try:
-        windows = [7, 30, 90]
-        multi = {
-            w: use_case.execute(AccumulationScreenRequest(
-                tickers=[ticker_upper],
-                window_days=w,
-                min_score=0.0,
-                min_net_buy_days=0,
-                tier1_broker_codes=_SC.tier1_broker_codes,
-                sector_breadth_enabled=_SC.sector_breadth_enabled,
-                sector_breadth_threshold=_SC.sector_breadth_threshold,
-                sector_breadth_bonus_pts=_SC.sector_breadth_bonus_pts,
-                sector_breadth_min_tickers=_SC.sector_breadth_min_tickers,
-            ))
-            for w in windows
-        }
-        candidates_by_window = {
-            w: next((c for c in resp.candidates if c.ticker == ticker_upper), None)
-            for w, resp in multi.items()
-        }
-        pattern = classify_multi_window_pattern(
-            windows, candidates_by_window,
-            _SC.coiled_spring_min_score,
-            _SC.coiled_spring_bb_pctile,
-        )
-    except Exception:
-        pass  # pattern stays None if multi-window fails
-
-    # Resolve entry price
-    resolved_entry: Decimal
-    if entry_price is not None:
-        resolved_entry = Decimal(str(entry_price))
-    elif candidate is not None:
-        try:
-            today = date.today()
-            candles = market_repo.get_candles(
-                ticker_upper,
-                start_date=today.replace(month=1, day=1),
-                end_date=today,
-            )
-            resolved_entry = candles[-1].close if candles else Decimal("0")
-        except Exception:
-            resolved_entry = Decimal("0")
-    else:
+    if result.candidate_score is None and entry_price is None:
         typer.echo(
             f"Warning: no accumulation data for {ticker_upper} in the last {window} broker sessions. "
             "Logging with score=0.",
             err=True,
         )
-        resolved_entry = Decimal("0")
 
-    classification: str | None = None
-    failed_gates: tuple[str, ...] = ()
-    planned_entry: Decimal | None = None
-    planned_stop: Decimal | None = None
-    planned_target: Decimal | None = None
-    max_hold_days: int | None = None
-    regime: str | None = None
-    journal_preset: str | None = None
-
-    if from_analysis:
-        journal_preset = preset_name
-        if candidate is None:
-            classification, failed_gates = "AVOID", ("No accumulation/broker-flow candidate available",)
-        else:
-            classification, failed_gates = evaluate_foreign_bounce_gates(
-                candidate=candidate,
-                gate_min_score=_SC.gate_min_score,
-                gate_min_vwap_discount_pct=_SC.gate_min_vwap_discount_pct,
-                gate_required_trend=_SC.gate_required_trend,
-                gate_min_flow_ratio_pct=_SC.gate_min_flow_ratio_pct,
-                gate_max_rsi=_SC.gate_max_rsi,
-                watch_max_failed_gates=_SC.watch_max_failed_gates,
-            )
-        planned_entry = resolved_entry
-        planned_stop, planned_target = compute_percent_plan(
-            resolved_entry, FOREIGN_BOUNCE_STOP_LOSS, FOREIGN_BOUNCE_TAKE_PROFIT
-        )
-        max_hold_days = FOREIGN_BOUNCE_MAX_HOLD_DAYS
-
-        if with_regime:
-            try:
-                regime_tickers = resolve_tickers(
-                    universe=regime_universe,
-                    explicit=[],
-                    db_path=db_path,
-                )
-                regime_uc = MarketRegimeUseCase(
-                    market_repository=market_repo,
-                    broker_repository=broker_repo,
-                )
-                regime_response = regime_uc.execute(MarketRegimeRequest(
-                    universe=regime_tickers,
-                    benchmark_ticker=benchmark,
-                    as_of_date=logged_at,
-                ))
-                regime = regime_response.label
-            except Exception as exc:
-                typer.echo(
-                    f"Warning: could not compute market regime for journal row: {exc}",
-                    err=True,
-                )
-
-    store = AccumulationJournalCsvWriter(journal_path)
-    service = AccumulationJournalService(store=store, repository=market_repo)
-
-    count = service.log_candidate(
-        ticker=ticker_upper,
-        entry_price=resolved_entry,
-        window_days=window,
-        candidate=candidate,
-        logged_at=logged_at,
-        pattern=pattern,
-        preset=journal_preset,
-        classification=classification,
-        failed_gates=failed_gates,
-        regime=regime,
-        planned_entry=planned_entry,
-        planned_stop=planned_stop,
-        planned_target=planned_target,
-        max_hold_days=max_hold_days,
-    )
-
-    if count == 0:
+    if not result.written:
         typer.echo(
             f"Already logged {ticker_upper} for {logged_at} (window={window} sessions) — "
             f"no new row added ({journal_path})"
         )
-    else:
-        # Dual-write to unified trades.jsonl
-        jsonl_store = TradeJournalJsonlWriter(journal_path.parent / "trades.jsonl")
-        jsonl_store.append(swing_candidate_to_record(
-            ticker=ticker_upper,
-            logged_at=logged_at,
-            window_days=window,
-            entry_price=resolved_entry,
-            candidate=candidate,
-            pattern=pattern,
-            preset=journal_preset,
-            decision=classification,
-            failed_gates=failed_gates,
-            regime=regime,
-            planned_entry=planned_entry,
-            planned_stop=planned_stop,
-            planned_target=planned_target,
-            max_hold_days=max_hold_days,
-        ))
+        return
 
-        score_str = f"{candidate.score:.1f}" if candidate else "0.0"
-        pattern_str = f" | pattern: {pattern}" if pattern else ""
-        decision_str = (
-            f" | preset={journal_preset} | decision={classification}"
-            if from_analysis
-            else ""
-        )
-        plan_str = (
-            f" | plan entry={planned_entry:,.0f} stop={planned_stop:,.0f} "
-            f"target={planned_target:,.0f} hold={max_hold_days}d"
-            if from_analysis
-            and planned_entry is not None
-            and planned_stop is not None
-            and planned_target is not None
-            and max_hold_days is not None
-            else ""
-        )
-        regime_str = f" | regime={regime}" if regime else ""
-        typer.echo(
-            f"Logged {ticker_upper} | {logged_at} | window={window} sessions | "
-            f"score={score_str}{pattern_str}{decision_str}{regime_str}{plan_str} → {journal_path}"
-        )
-        if from_analysis and failed_gates:
-            typer.echo("Failed gates:")
-            for gate in failed_gates:
-                typer.echo(f"  - {gate}")
+    score_str = f"{result.candidate_score:.1f}" if result.candidate_score is not None else "0.0"
+    pattern_str = f" | pattern: {result.pattern}" if result.pattern else ""
+    decision_str = (
+        f" | preset={preset_name} | decision={result.classification}"
+        if from_analysis else ""
+    )
+    plan_str = (
+        f" | plan entry={result.entry_price:,.0f} stop={result.planned_stop:,.0f} "
+        f"target={result.planned_target:,.0f} hold={FOREIGN_BOUNCE_MAX_HOLD_DAYS}d"
+        if from_analysis and result.planned_stop is not None and result.planned_target is not None
+        else ""
+    )
+    regime_str = f" | regime={result.regime}" if result.regime else ""
+    typer.echo(
+        f"Logged {ticker_upper} | {logged_at} | window={window} sessions | "
+        f"score={score_str}{pattern_str}{decision_str}{regime_str}{plan_str} → {journal_path}"
+    )
+    if from_analysis and result.failed_gates:
+        typer.echo("Failed gates:")
+        for gate in result.failed_gates:
+            typer.echo(f"  - {gate}")
 
 
 def accumulation_log(
