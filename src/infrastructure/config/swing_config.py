@@ -26,6 +26,7 @@ class SwingConfig:
     smart_weight: Decimal = Decimal("1.5")
     noise_weight: Decimal = Decimal("0.5")
     smart_share_threshold_pct: float = 60.0
+    smart_sell_min_share_pct: float = 15.0
     # foreign_bounce preset gates
     gate_min_score: float = 70.0
     gate_min_vwap_discount_pct: float = 3.0
@@ -105,6 +106,7 @@ def load_swing_config(
             smart_weight=Decimal(str(_f(sm, "weight", float(defaults.smart_weight)))),
             noise_weight=Decimal(str(_f(ns, "weight", float(defaults.noise_weight)))),
             smart_share_threshold_pct=_f(bq, "smart_share_threshold_pct", defaults.smart_share_threshold_pct),
+            smart_sell_min_share_pct=_f(bq, "smart_sell_min_share_pct", defaults.smart_sell_min_share_pct),
             gate_min_score=_f(fb_gates, "min_score", defaults.gate_min_score),
             gate_min_vwap_discount_pct=_f(fb_gates, "min_vwap_discount_pct", defaults.gate_min_vwap_discount_pct),
             gate_required_trend=_s(fb_gates, "required_trend", defaults.gate_required_trend),

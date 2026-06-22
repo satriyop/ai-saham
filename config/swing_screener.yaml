@@ -108,6 +108,12 @@ broker_quality:
   # to classify broker context as "smart accumulation" quality.
   smart_share_threshold_pct: 60.0
 
+  # Minimum % of total absolute tracked flow that smart-money net selling
+  # must represent before the "smart-money selling conflicts" warning fires.
+  # Prevents spurious warnings when smart brokers are minor sellers
+  # (e.g. DB selling 2M while noise buys 100M → 2% share, no warning).
+  smart_sell_min_share_pct: 15.0
+
   # Tier 1 foreign institutional desks used for BCI (Broker Concentration Index) scoring.
   # BCI CLUSTER (>= cluster_min_count desks in net-buyers window) = +15 score pts.
   # BCI STABLE  (>= stable_min_count desks)                       = +5 score pts.

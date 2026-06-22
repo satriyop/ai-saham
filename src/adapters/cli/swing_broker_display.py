@@ -121,6 +121,8 @@ class BrokerDetail:
 def build_broker_quality_note(
     broker_detail: BrokerDetail | None,
     preset_eval: Any | None,
+    *,
+    smart_sell_min_share_pct: float = 15.0,
 ) -> BrokerQualityNote | None:
     """Build a display-only broker-quality note without changing preset gates."""
     if broker_detail is None or preset_eval is None:
@@ -131,13 +133,17 @@ def build_broker_quality_note(
     quality = broker_detail.broker_weight_quality
 
     if smart_flow < Decimal("0"):
-        return BrokerQualityNote(
-            level="warning",
-            message=(
-                "Broker quality warning: smart-money selling conflicts with "
-                "the accumulation setup."
-            ),
-        )
+        total_abs = abs(smart_flow) + abs(noise_flow) + abs(broker_detail.neutral_flow)
+        smart_sell_share = abs(smart_flow) / total_abs if total_abs > Decimal("0") else Decimal("0")
+        if smart_sell_share >= Decimal(str(smart_sell_min_share_pct)) / Decimal("100"):
+            pct_str = f"{float(smart_sell_share) * 100:.0f}%"
+            return BrokerQualityNote(
+                level="warning",
+                message=(
+                    f"Broker quality warning: smart-money net selling "
+                    f"({pct_str} of tracked flow) conflicts with the accumulation setup."
+                ),
+            )
 
     if preset_eval.classification == "ENTER" and (
         quality == "noisy accumulation"

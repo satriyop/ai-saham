@@ -488,7 +488,36 @@ def test_broker_quality_note_warns_on_smart_selling():
 
     assert note is not None
     assert note.level == "warning"
-    assert "smart-money selling" in note.message
+    assert "smart-money net selling" in note.message
+    assert "%" in note.message
+
+
+def test_broker_quality_note_skips_warn_on_minor_smart_selling():
+    """Smart selling below 15% share threshold must not fire the smart-selling warning.
+
+    AK sells 5M, HD (neutral) buys 100M → smart sell share ~5% → below threshold.
+    """
+    from src.adapters.cli.swing_broker_display import build_broker_quality_note
+
+    detail = _build_broker_detail(
+        ticker="BBCA",
+        broker_repo=FakeBrokerSummaryRepository([
+            _summary(
+                date(2026, 6, 1),
+                "100000000",
+                "5000000",
+                top_buyers=(_tx("HD", "Mandiri", "100000000", "0"),),
+                top_sellers=(_tx("AK", "UBS", "0", "5000000"),),
+            ),
+        ]),
+        window_sessions=5,
+        as_of_date=date(2026, 6, 1),
+    )
+    preset = _evaluate_foreign_bounce(_candidate(score=75, trend="SIDE"))
+
+    note = build_broker_quality_note(detail, preset, smart_sell_min_share_pct=15.0)
+
+    assert note is None or "smart-money net selling" not in (note.message or "")
 
 
 class NoisyNewsProvider:

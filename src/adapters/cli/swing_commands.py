@@ -723,7 +723,11 @@ def swing(
         ),
         build_accumulation_candidate=_build_accumulation_candidate,
         evaluate_preset=_evaluate_foreign_bounce,
-        build_broker_quality_note=build_broker_quality_note,
+        build_broker_quality_note=lambda broker_detail, preset_eval: build_broker_quality_note(
+            broker_detail,
+            preset_eval,
+            smart_sell_min_share_pct=_SC.smart_sell_min_share_pct,
+        ),
         fetch_sentiment=_fetch_swing_sentiment,
         load_swing_config=_load_swing_screener_config,
         resolve_preset_targets=resolve_preset_targets,
