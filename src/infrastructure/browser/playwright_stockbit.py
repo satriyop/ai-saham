@@ -594,8 +594,23 @@ class PlaywrightStockbitProvider(BrowserDataProvider):
 
                 bid_price, bid_lots, offer_price, offer_lots = _parse_top_of_book(body)
                 if bid_price is None and offer_price is None:
-                    logger.warning("Order book response parsed but no bid/offer found for %s", ticker)
-                    logger.debug("Response: %s", str(body)[:500])
+                    data_block = body.get("data") if isinstance(body, dict) else None
+                    iepiev = (data_block or {}).get("iepiev") or {}
+                    bbo = iepiev.get("best_bid_offer") or {}
+                    bid_list = (data_block or {}).get("bid") or []
+                    offer_list = (data_block or {}).get("offer") or []
+                    logger.warning(
+                        "Order book no bid/offer for %s — "
+                        "bbo=%s  bbo.bid.price=%s  bid_list_len=%d  "
+                        "offer_list_len=%d  iep=%s  lastprice=%s",
+                        ticker,
+                        "present" if bbo else "MISSING",
+                        (bbo.get("bid") or {}).get("price", {}).get("raw", "MISSING"),
+                        len(bid_list),
+                        len(offer_list),
+                        iepiev.get("iep", {}).get("raw", "N/A"),
+                        (data_block or {}).get("lastprice", "N/A"),
+                    )
                     return None
 
                 bid = OrderBookBid(price=bid_price, volume=bid_lots) if bid_price and bid_lots else None
@@ -1737,6 +1752,15 @@ def _parse_top_of_book(
             offer_price = _safe_decimal(entry.get("price"))
             shares = _safe_int(entry.get("volume"))
             offer_lots = (shares // 100) if shares else None
+
+    # Fallback 3: NCP call auction — bid/offer lists empty while exchange locks orders.
+    # iepiev.iep.raw is the exchange's own clearing price; use it as synthetic bid.
+    # Safe: iep.raw is 0 outside NCP, so _safe_decimal rejects it → no effect.
+    if bid_price is None or bid_price == 0:
+        iep_raw = (data.get("iepiev") or {}).get("iep", {}).get("raw")
+        iep_price = _safe_decimal(iep_raw)
+        if iep_price:
+            bid_price = iep_price
 
     return bid_price, bid_lots, offer_price, offer_lots
 
