@@ -1,13 +1,17 @@
 """
 Playwright-based Stockbit browser provider.
 
-Two modes:
+Contains the two provider classes and all response parsers.
+Browser session utilities (login, spy, browse, JWT extraction) live in
+playwright_stockbit_browser.py and are re-exported from here for backward compat.
+
+Two modes for IEV/orderbook:
   1. API-intercept mode (preferred): hooks Playwright's network layer to
      capture JSON responses, bypassing fragile DOM selectors entirely.
   2. DOM-scrape mode (fallback): parses rendered HTML tables.
 
 Flow:
-  saham fetch stockbit login   → saves browser session cookies
+  saham fetch stockbit login   → saves persistent browser profile
   saham fetch stockbit spy     → captures all API traffic to identify endpoints
   saham fetch stockbit test    → smoke-tests the adapter with live data
   saham screen pre-open → uses saved session for autonomous screening
@@ -46,298 +50,44 @@ from src.domain.value_objects.screener_result import MoverData, MoverWithOrderBo
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_SESSION_FILE = Path("stockbit_session.json")  # legacy cookie file
-DEFAULT_PROFILE_DIR = Path(".stockbit_profile")        # persistent browser profile
-
-# ── Stockbit URLs ──────────────────────────────────────────────────────────
-BASE_URL = "https://stockbit.com"
-STREAM_URL = "https://stockbit.com/stream"       # kept for spy
-SCREENER_URL = "https://stockbit.com/screener"   # kept for spy fallback
-ORDER_BOOK_URL = "https://stockbit.com/stock/{ticker}/orderbook"
-# Confirmed to fire Bearer-authenticated Exodus API calls immediately on load.
-# stockbit.com/stream does NOT reliably fire Bearer requests within the settle window.
-ORDERBOOK_PAGE_URL = "https://stockbit.com/orderbook"
-LOGIN_URL = "https://stockbit.com/login"
-EXODUS_API = "https://exodus.stockbit.com"
+# ── Session utilities — live in playwright_stockbit_browser, imported here ──
+from src.infrastructure.browser.playwright_stockbit_browser import (
+    DEFAULT_PROFILE_DIR,
+    ORDERBOOK_PAGE_URL,
+    NAV_TIMEOUT,
+    SPA_SETTLE_MS,
+    StockbitSessionExpired,
+    _exodus_get,
+    _intercept_token,
+    _persistent_context,
+    _require_playwright,
+    _resolve_token,
+    _url_matches,
+    browse_stockbit_session,
+    get_session_status,
+    save_stockbit_session,
+    spy_stockbit_session,
+)
 
 # ── Stockbit API config — driven by config/stockbit.yaml ─────────────────
-# Edit config/stockbit.yaml to update endpoints or broker codes without
-# touching Python source. Run `saham fetch stockbit spy` to discover new endpoints.
 from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
 
 _sb = STOCKBIT_CFG
 
-# Confirmed Exodus API endpoints (originally from DevTools spy, 2026-06-13).
-# Update via config/stockbit.yaml after running `saham fetch stockbit spy`.
 _IEV_MOVER_URL_MAIN    = _sb.iev_movers_main_url
 _IEV_MOVER_URL_SPECIAL = _sb.iev_movers_special_url
-_ORDER_BOOK_API        = _sb.orderbook_url        # supports {ticker} placeholder
+_ORDER_BOOK_API        = _sb.orderbook_url
 _MARKETDETECTORS_API   = _sb.marketdetectors_url
 _BROKER_ACTIVITY_API   = _sb.broker_activity_url
 _BROKER_HISTORICAL_API  = _sb.broker_historical_url
-_HISTORICAL_SUMMARY_API = _sb.historical_summary_url  # supports {ticker} placeholder
+_HISTORICAL_SUMMARY_API = _sb.historical_summary_url
 _INSTITUTIONAL_PROXY_CODES = list(_sb.institutional_proxy_codes)
 TRACKED_BROKER_CODES       = list(_sb.tracked_broker_codes)
 
-# Spy navigation pages — each fires its respective endpoint immediately on load
-_STOCK_BROKER_PAGE_URL = "https://stockbit.com/broker-analysis/stock"
-_BROKER_ANALYSIS_PAGE_URL = "https://stockbit.com/broker-analysis/broker"
-
-_BROKER_URL_PATTERNS = ["marketdetectors", "broker/activity", "activity/historical"]
-
-# ── Timeouts (ms) — driven by config/stockbit.yaml timeouts section ───────
-NAV_TIMEOUT = STOCKBIT_CFG.nav_timeout_ms
 ELEMENT_TIMEOUT = STOCKBIT_CFG.element_timeout_ms
-SPA_SETTLE_MS = STOCKBIT_CFG.spa_settle_ms
-
-# ── API endpoint patterns ──────────────────────────────────────────────────
-# Base: exodus.stockbit.com (confirmed by spy session)
-# IEV/movers endpoint still unknown — needs spy with valid Pro session.
-_MOVERS_URL_PATTERNS = [
-    "exodus.stockbit.com/screener",
-    "exodus.stockbit.com/market/mover",
-    "exodus.stockbit.com/pre-open",
-    "exodus.stockbit.com/iev",
-    "exodus.stockbit.com/stock/mover",
-    "mover", "iev", "preopen",
-]
-_ORDERBOOK_URL_PATTERNS = [
-    "company-price-feed/v2/orderbook",   # confirmed endpoint
-    "exodus.stockbit.com/orderbook",
-    "exodus.stockbit.com/order-book",
-    "exodus.stockbit.com/stock",
-    "orderbook", "order-book",
-]
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────
-
-def _require_playwright():
-    """Import playwright or raise with install instructions."""
-    try:
-        from playwright.sync_api import sync_playwright
-        return sync_playwright
-    except ImportError:
-        raise RuntimeError(
-            "playwright not installed. Run:\n"
-            "  pip install playwright\n"
-            "  playwright install chromium"
-        )
-
-
-def _load_session(session_file: Path) -> dict:
-    """Load cookies + localStorage from saved session file."""
-    if not session_file.exists():
-        raise RuntimeError(
-            f"No session file at '{session_file}'.\n"
-            "Run: saham fetch stockbit login"
-        )
-    with open(session_file) as f:
-        data = json.load(f)
-    if not data.get("cookies") and not data.get("local_storage"):
-        raise RuntimeError(
-            f"Session file '{session_file}' appears empty.\n"
-            "Run: saham fetch stockbit login to refresh."
-        )
-    return data
-
-
-def _persistent_context(pw, profile_dir: Path, headless: bool = True):
-    """
-    Launch a persistent Chromium context using a saved browser profile.
-
-    The profile directory stores ALL browser state (cookies, localStorage,
-    IndexedDB, cache) exactly like a real Chrome profile. No cookie extraction
-    or injection needed — the browser is simply already logged in.
-
-    Args:
-        pw: sync_playwright instance
-        profile_dir: Path to the browser profile directory
-        headless: Whether to run the browser headlessly
-
-    Returns:
-        (context, page) — context IS the browser; call context.close() when done.
-    """
-    profile_dir.mkdir(parents=True, exist_ok=True)
-    ctx = pw.chromium.launch_persistent_context(
-        str(profile_dir),
-        headless=headless,
-        args=["--no-first-run", "--no-default-browser-check"],
-    )
-    page = ctx.pages[0] if ctx.pages else ctx.new_page()
-    return ctx, page
-
-
-def _new_authenticated_context(pw, session_data: dict, headless: bool = True):
-    """
-    Create a Playwright browser + context with session pre-loaded.
-
-    Cookies are injected into the context BEFORE any navigation so the first
-    request to stockbit.com already carries auth cookies. localStorage is
-    injected after a lightweight navigation to the domain.
-
-    Returns (browser, context, page) — caller is responsible for browser.close().
-    """
-    cookies = session_data.get("cookies", [])
-    local_storage = session_data.get("local_storage", {})
-    session_storage = session_data.get("session_storage", {})
-
-    browser = pw.chromium.launch(headless=headless)
-    ctx = browser.new_context()
-
-    # Step 1: inject cookies onto context BEFORE any navigation
-    if cookies:
-        ctx.add_cookies(cookies)
-
-    page = ctx.new_page()
-
-    # Step 2: navigate to domain so localStorage can be written
-    if local_storage or session_storage:
-        page.goto(BASE_URL, timeout=NAV_TIMEOUT, wait_until="domcontentloaded")
-        if local_storage:
-            try:
-                page.evaluate(
-                    """(data) => {
-                        for (const [k, v] of Object.entries(data)) {
-                            try { localStorage.setItem(k, v); } catch(e) {}
-                        }
-                    }""",
-                    local_storage,
-                )
-            except Exception as e:
-                logger.debug("Could not inject localStorage: %s", e)
-        if session_storage:
-            try:
-                page.evaluate(
-                    """(data) => {
-                        for (const [k, v] of Object.entries(data)) {
-                            try { sessionStorage.setItem(k, v); } catch(e) {}
-                        }
-                    }""",
-                    session_storage,
-                )
-            except Exception as e:
-                logger.debug("Could not inject sessionStorage: %s", e)
-
-    return browser, ctx, page
-
-
-def _url_matches(url: str, patterns: list[str]) -> bool:
-    url_lower = url.lower()
-    return any(p in url_lower for p in patterns)
-
-
-def _intercept_token(page) -> list[str]:
-    """
-    Register a request interceptor on page BEFORE navigation to capture
-    the RS256 Bearer token Stockbit sends to exodus.stockbit.com.
-
-    Returns a mutable list that will be populated as requests fire.
-    Call _resolve_token() after the page settles to read it.
-    """
-    captured: list[str] = []
-
-    def _on_req(request):
-        auth = request.headers.get("authorization", "")
-        if auth.startswith("Bearer ") and "exodus.stockbit.com" in request.url:
-            token = auth.removeprefix("Bearer ")
-            if token not in captured:
-                captured.append(token)
-
-    try:
-        page.on("request", _on_req)
-    except Exception as e:
-        logger.debug("Could not register token interceptor: %s", e)
-
-    return captured
-
-
-def _resolve_token(page, token_box: list[str]) -> str | None:
-    """
-    Return the first token captured by _intercept_token, falling back to
-    _extract_jwt (localStorage) if no request-based token was captured yet.
-    """
-    if token_box:
-        logger.debug("RS256 token from intercepted request (%d chars)", len(token_box[0]))
-        return token_box[0]
-    logger.debug("No intercepted token yet — trying localStorage fallback")
-    return _extract_jwt(page)
-
-
-def _extract_jwt(page) -> str | None:
-    """
-    Extract the API Bearer token by intercepting an outgoing Exodus request.
-
-    The app uses two different JWTs: an HS256 token stored in localStorage
-    (for in-app use) and an RS256 Bearer token sent to the Exodus API. Only
-    the latter works for direct httpx calls, so we capture it from request headers.
-    """
-    captured: list[str] = []
-
-    def _on_req(request):
-        auth = request.headers.get("authorization", "")
-        if auth.startswith("Bearer ") and "exodus.stockbit.com" in request.url:
-            captured.append(auth.removeprefix("Bearer "))
-
-    try:
-        page.on("request", _on_req)
-        # Small wait for any pending requests already in-flight to arrive
-        page.wait_for_timeout(2_000)
-    except Exception as e:
-        logger.debug("JWT intercept setup failed: %s", e)
-
-    if captured:
-        token = captured[0]
-        logger.debug("JWT intercepted from request headers (%d chars)", len(token))
-        return token
-
-    # Fallback: localStorage HS256 token (may not work for all endpoints)
-    try:
-        token = page.evaluate("""
-            () => {
-                for (const key of Object.keys(localStorage)) {
-                    const val = localStorage.getItem(key);
-                    if (val && val.startsWith('eyJ')) return val;
-                }
-                return null;
-            }
-        """)
-        if token:
-            logger.debug("JWT from localStorage (HS256 — may be rejected by some endpoints)")
-        return token
-    except Exception as e:
-        logger.debug("JWT localStorage fallback failed: %s", e)
-        return None
-
-
-class StockbitSessionExpired(RuntimeError):
-    """Raised when the Exodus API rejects our token with 401."""
-
-
-def _exodus_get(url: str, token: str) -> dict | None:
-    """Make an authenticated GET to the Exodus API using httpx."""
-    import httpx
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "accept": "application/json, text/plain, */*",
-        "x-platform": "web",
-        "origin": "https://stockbit.com",
-        "referer": "https://stockbit.com/",
-    }
-    try:
-        resp = httpx.get(url, headers=headers, timeout=15)
-        if resp.status_code == 401:
-            raise StockbitSessionExpired(
-                "Stockbit API session expired (401). Run: saham fetch stockbit login"
-            )
-        resp.raise_for_status()
-        return resp.json()
-    except StockbitSessionExpired:
-        raise
-    except Exception as e:
-        logger.debug("Exodus API call failed: %s — %s", url, e)
-        return None
-
 
 def _parse_number(text: str) -> int | None:
     """Parse a formatted number string like '1.234.567' or '1,234,567'."""
@@ -362,27 +112,21 @@ class PlaywrightStockbitProvider(BrowserDataProvider):
 
     def __init__(
         self,
-        session_file: Path = DEFAULT_SESSION_FILE,
         profile_dir: Path = DEFAULT_PROFILE_DIR,
         headless: bool = True,
         timeout: int = NAV_TIMEOUT,
         api_patterns_file: Path | None = None,
     ) -> None:
-        self._session_file = session_file
         self._profile_dir = profile_dir
         self._headless = headless
         self._timeout = timeout
         self._api_patterns = _load_api_patterns(api_patterns_file) if api_patterns_file else {}
 
-    def _use_persistent(self) -> bool:
-        """Prefer persistent profile if it exists, fall back to cookie file."""
-        return self._profile_dir.exists() and any(self._profile_dir.iterdir())
-
     def _assert_session_fresh(self) -> None:
         """Raise before launching a browser if the session marker is too old."""
         marker = self._profile_dir / ".logged_in_at"
         if not marker.exists():
-            return  # no marker → let the browser try (legacy flow)
+            return  # no marker yet — first run after login
         try:
             age_hours = (time.time() - float(marker.read_text())) / 3600
         except Exception:
@@ -407,13 +151,7 @@ class PlaywrightStockbitProvider(BrowserDataProvider):
         sync_playwright = _require_playwright()
 
         with sync_playwright() as pw:
-            if self._use_persistent():
-                ctx, page = _persistent_context(pw, self._profile_dir, self._headless)
-            else:
-                session = _load_session(self._session_file)
-                _, ctx, page = _new_authenticated_context(
-                    pw, session, headless=self._headless
-                )
+            ctx, page = _persistent_context(pw, self._profile_dir, self._headless)
 
             try:
                 token = _intercept_token(page)
@@ -470,13 +208,7 @@ class PlaywrightStockbitProvider(BrowserDataProvider):
         sync_playwright = _require_playwright()
 
         with sync_playwright() as pw:
-            if self._use_persistent():
-                ctx, page = _persistent_context(pw, self._profile_dir, self._headless)
-            else:
-                session = _load_session(self._session_file)
-                _, ctx, page = _new_authenticated_context(
-                    pw, session, headless=self._headless
-                )
+            ctx, page = _persistent_context(pw, self._profile_dir, self._headless)
 
             try:
                 token_box = _intercept_token(page)
@@ -537,11 +269,7 @@ class PlaywrightStockbitProvider(BrowserDataProvider):
         sync_playwright = _require_playwright()
 
         with sync_playwright() as pw:
-            if self._use_persistent():
-                ctx, page = _persistent_context(pw, self._profile_dir, self._headless)
-            else:
-                session = _load_session(self._session_file)
-                _, ctx, page = _new_authenticated_context(pw, session, headless=self._headless)
+            ctx, page = _persistent_context(pw, self._profile_dir, self._headless)
 
             try:
                 token_box = _intercept_token(page)
@@ -569,13 +297,7 @@ class PlaywrightStockbitProvider(BrowserDataProvider):
         sync_playwright = _require_playwright()
 
         with sync_playwright() as pw:
-            if self._use_persistent():
-                ctx, page = _persistent_context(pw, self._profile_dir, self._headless)
-            else:
-                session = _load_session(self._session_file)
-                _, ctx, page = _new_authenticated_context(
-                    pw, session, headless=self._headless
-                )
+            ctx, page = _persistent_context(pw, self._profile_dir, self._headless)
 
             try:
                 token_box = _intercept_token(page)
@@ -2040,319 +1762,3 @@ def _load_api_patterns(path: Path) -> dict:
     with open(path) as f:
         return json.load(f)
 
-
-# ── Spy session ────────────────────────────────────────────────────────────
-
-def spy_stockbit_session(
-    session_file: Path = DEFAULT_SESSION_FILE,
-    profile_dir: Path = DEFAULT_PROFILE_DIR,
-    target: str = "screener",
-    ticker: str = "BBCA",
-    output_file: Path = Path("journals/stockbit-spy.json"),
-    settle_ms: int = 6_000,
-) -> dict:
-    """
-    Open Stockbit with the saved session, capture ALL API responses.
-
-    Saves full request/response log to output_file for analysis.
-    Use this to identify the correct API endpoints for movers and order book.
-
-    Args:
-        session_file: Path to saved session cookies
-        target: 'screener' or 'orderbook'
-        ticker: Ticker to use for order book target
-        output_file: Where to save captured requests
-        settle_ms: Milliseconds to wait for SPA to settle
-
-    Returns:
-        Summary dict with total_responses, unique_urls, output_file path
-    """
-    sync_playwright = _require_playwright()
-
-    if target == "orderbook":
-        url = ORDER_BOOK_URL.format(ticker=ticker.upper())
-    elif target == "stock":
-        # Named broker breakdown: loads marketdetectors/{ticker} on page open
-        url = _STOCK_BROKER_PAGE_URL
-    elif target == "stock-profile":
-        # Company overview page — fires corporate action, financials, and price API calls.
-        # Use this to discover the Exodus endpoint for dividend ex-date data.
-        # Run: saham fetch stockbit spy --target stock-profile --ticker BBCA
-        # Then inspect journals/stockbit-spy.json for corporate-action / dividen patterns.
-        url = f"https://stockbit.com/stocks/{ticker.upper()}"
-    elif target == "broker-scan":
-        # Broker-centric universe scan: loads /order-trade/broker/activity on page open
-        url = _BROKER_ANALYSIS_PAGE_URL
-    elif target == "broker":
-        # Legacy alias for stock (pre-2026-06-13)
-        url = _STOCK_BROKER_PAGE_URL
-    else:
-        url = SCREENER_URL
-
-    captured: list[dict] = []
-    profile_exists = profile_dir.exists() and any(profile_dir.iterdir())
-
-    with sync_playwright() as pw:
-        if profile_exists:
-            ctx, page = _persistent_context(pw, profile_dir, headless=False)
-        else:
-            session = _load_session(session_file)
-            _, ctx, page = _new_authenticated_context(pw, session, headless=False)
-
-        def on_response(response):
-            ct = response.headers.get("content-type", "")
-            entry: dict = {
-                "url": response.url,
-                "status": response.status,
-                "content_type": ct,
-                "body": None,
-            }
-            if "json" in ct:
-                try:
-                    entry["body"] = response.json()
-                except Exception:
-                    entry["body"] = "<parse error>"
-            captured.append(entry)
-
-        page.on("response", on_response)
-
-        print(f"\nNavigating to: {url}")
-        print(f"Capturing all network responses for {settle_ms // 1000}s...")
-        print("The browser will open visibly so you can interact if needed.")
-        print("Press Ctrl+C to stop early.\n")
-
-        try:
-            page.goto(url, timeout=NAV_TIMEOUT, wait_until="domcontentloaded")
-            # Don't wait for networkidle — SPA pages never fully settle.
-            # Just wait a fixed duration for API calls to fire.
-            page.wait_for_timeout(settle_ms)
-        except KeyboardInterrupt:
-            pass
-        finally:
-            ctx.close()
-
-    # Save full capture
-    output_file.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_file, "w") as f:
-        json.dump(captured, f, indent=2, default=str)
-
-    # Build summary
-    json_responses = [c for c in captured if "json" in c.get("content_type", "")]
-    unique_urls = sorted(set(c["url"] for c in json_responses))
-
-    # Flag URLs that might be relevant
-    movers_hits = [u for u in unique_urls if _url_matches(u, _MOVERS_URL_PATTERNS)]
-    orderbook_hits = [u for u in unique_urls if _url_matches(u, _ORDERBOOK_URL_PATTERNS)]
-    broker_hits = [u for u in unique_urls if _url_matches(u, _BROKER_URL_PATTERNS)]
-
-    return {
-        "total_responses": len(captured),
-        "json_responses": len(json_responses),
-        "unique_json_urls": unique_urls,
-        "movers_candidates": movers_hits,
-        "orderbook_candidates": orderbook_hits,
-        "broker_candidates": broker_hits,
-        "output_file": str(output_file),
-    }
-
-
-# ── Browse (interactive session) ─────────────────────────────────────────────
-
-def browse_stockbit_session(
-    session_file: Path = DEFAULT_SESSION_FILE,
-    profile_dir: Path = DEFAULT_PROFILE_DIR,
-    url: str = STREAM_URL,
-) -> None:
-    """
-    Open a headed browser with the saved Stockbit session and keep it open.
-
-    Uses the persistent profile (.stockbit_profile/) if available, otherwise
-    falls back to cookie injection from stockbit_session.json.
-
-    The browser stays open until you press Ctrl+C or close it manually.
-
-    Args:
-        session_file: Legacy cookie file path (fallback if no profile)
-        profile_dir: Persistent browser profile directory
-        url: Stockbit page to open (default: stream/home)
-    """
-    sync_playwright = _require_playwright()
-    profile_exists = profile_dir.exists() and any(profile_dir.iterdir())
-
-    if profile_exists:
-        print(f"Using persistent profile: {profile_dir}/")
-    else:
-        print(f"Using cookie session: {session_file}")
-
-    print(f"Opening {url}")
-    print("The browser will stay open until you press Ctrl+C.\n")
-
-    with sync_playwright() as pw:
-        if profile_exists:
-            ctx, page = _persistent_context(pw, profile_dir, headless=False)
-        else:
-            session = _load_session(session_file)
-            _, ctx, page = _new_authenticated_context(pw, session, headless=False)
-
-        page.goto(url, timeout=NAV_TIMEOUT, wait_until="domcontentloaded")
-
-        try:
-            while True:
-                page.wait_for_timeout(10_000)
-        except KeyboardInterrupt:
-            print("\nClosing browser...")
-        finally:
-            ctx.close()
-
-
-# ── Login / session management ─────────────────────────────────────────────
-
-def save_stockbit_session(
-    session_file: Path = DEFAULT_SESSION_FILE,
-    profile_dir: Path = DEFAULT_PROFILE_DIR,
-    timeout: int = 300,
-) -> None:
-    """
-    Launch headed Chromium for manual Stockbit login.
-
-    Uses a PERSISTENT browser profile (.stockbit_profile/) so all browser
-    state (cookies, localStorage, IndexedDB) is preserved across runs —
-    no cookie extraction/injection needed. The browser "stays logged in"
-    exactly like a regular Chrome profile.
-
-    Args:
-        session_file: Legacy cookie file path (kept for backward compat)
-        profile_dir: Persistent browser profile directory
-        timeout: Seconds to wait for login completion
-    """
-    sync_playwright = _require_playwright()
-
-    print("Opening Stockbit login page in a browser window.")
-    print(f"Please log in manually. You have {timeout} seconds.")
-    if timeout < 180:
-        print("Tip: use --timeout 300 if you have 2FA enabled.")
-    print(f"Browser profile: {profile_dir}  (stays logged in across runs)\n")
-
-    with sync_playwright() as pw:
-        ctx, page = _persistent_context(pw, profile_dir, headless=False)
-        # domcontentloaded avoids hanging on SPA navigation
-        page.goto(LOGIN_URL, timeout=NAV_TIMEOUT, wait_until="domcontentloaded")
-
-        logged_in = False
-
-        # Pages that are part of the auth flow — keep waiting while on any of these
-        _AUTH_FLOW_FRAGMENTS = (
-            "/login", "/register", "/forgot",
-            "/verify", "/otp", "/2fa", "/two-factor",
-            "/email-verification", "/phone-verification",
-            "/trusted-device",
-        )
-
-        print("Waiting for login to complete (including 2FA if enabled)...")
-        print(f"  Current page: {LOGIN_URL}\n")
-
-        def _is_logged_in(url: str) -> bool:
-            in_auth_flow = any(f in url for f in _AUTH_FLOW_FRAGMENTS)
-            return "stockbit.com" in url and not in_auth_flow
-
-        try:
-            # event-driven wait — fires as soon as the URL predicate matches
-            page.wait_for_url(_is_logged_in, timeout=timeout * 1_000)
-            print(f"  Logged in → {page.url}")
-            page.wait_for_timeout(2_000)  # let app shell settle + localStorage populate
-            logged_in = True
-        except Exception as e:
-            if "Timeout" in str(e):
-                print(f"\nTimeout reached ({timeout}s). Last URL: {page.url}")
-            else:
-                print(f"\nLogin detection error: {e}")
-
-        if logged_in:
-            # Wait for the app to finish persisting credentials to the profile
-            # (IndexedDB writes are async — 2s is not always enough).
-            page.wait_for_timeout(3_000)
-
-        # Close the headed browser BEFORE writing the marker or doing anything else.
-        # Opening a second browser on the same profile dir while this one is still
-        # running causes Chromium to corrupt or reset the credential storage.
-        ctx.close()
-
-        if logged_in:
-            profile_dir.mkdir(parents=True, exist_ok=True)
-            marker = profile_dir / ".logged_in_at"
-            marker.write_text(str(time.time()))
-            print(
-                f"\nSession saved → {profile_dir}/\n"
-                f"  The browser profile stores all cookies and tokens.\n"
-                f"  It will stay logged in across runs (like a Chrome profile)."
-            )
-            print("Run 'saham fetch stockbit status' to verify.")
-            print("Run 'saham fetch stockbit spy' to discover API endpoints.")
-        else:
-            print("\nTimeout — login not detected. Session NOT saved.")
-            print("Run 'saham fetch stockbit login' again and complete login within the time limit.")
-
-
-def get_session_status(
-    session_file: Path = DEFAULT_SESSION_FILE,
-    profile_dir: Path = DEFAULT_PROFILE_DIR,
-) -> dict:
-    """Return info about the saved session without opening a browser."""
-    marker = profile_dir / ".logged_in_at"
-
-    # Prefer persistent profile
-    if profile_dir.exists() and any(profile_dir.iterdir()):
-        age_hours: float | None = None
-        if marker.exists():
-            try:
-                age_hours = round((time.time() - float(marker.read_text())) / 3600, 1)
-            except Exception:
-                pass
-        # Stockbit API tokens typically expire within 8–12 hours.
-        # Flag sessions older than 8h as needing re-login.
-        likely_valid = age_hours is None or age_hours < 8
-        return {
-            "exists": True,
-            "type": "persistent_profile",
-            "path": str(profile_dir),
-            "age_hours": age_hours,
-            "likely_valid": likely_valid,
-        }
-
-    # Fall back to legacy cookie file
-    if not session_file.exists():
-        return {"exists": False, "path": str(session_file), "type": "none"}
-
-    with open(session_file) as f:
-        data = json.load(f)
-
-    cookies = data.get("cookies", [])
-    local_storage = data.get("local_storage", {})
-    saved_at = data.get("saved_at")
-
-    age_hours = None
-    if saved_at:
-        try:
-            age_hours = round((time.time() - float(saved_at)) / 3600, 1)
-        except Exception:
-            pass
-
-    auth_cookies = [c for c in cookies if any(
-        kw in c.get("name", "").lower()
-        for kw in ("session", "token", "auth", "jwt", "sid", "user")
-    )]
-    auth_ls_keys = [k for k in local_storage if any(
-        kw in k.lower() for kw in ("token", "auth", "jwt", "user", "session", "access")
-    )]
-
-    return {
-        "exists": True,
-        "type": "cookie_file",
-        "path": str(session_file),
-        "cookie_count": len(cookies),
-        "auth_cookie_count": len(auth_cookies),
-        "local_storage_keys": len(local_storage),
-        "auth_local_storage_keys": auth_ls_keys[:5],
-        "age_hours": age_hours,
-        "likely_valid": len(auth_ls_keys) > 0 or len(auth_cookies) > 0,
-    }

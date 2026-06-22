@@ -22,7 +22,6 @@ stockbit_app = typer.Typer(
     context_settings={"help_option_names": ["-h", "--help"]},
 )
 
-DEFAULT_SESSION_FILE = Path("stockbit_session.json")
 DEFAULT_SPY_OUTPUT = Path("journals/stockbit-spy.json")
 
 
@@ -40,56 +39,44 @@ def _require_playwright_cli() -> None:
 
 @stockbit_app.command("login")
 def login(
-    session: Annotated[
-        Optional[Path],
-        typer.Option("--session", help="Path to save session cookies"),
-    ] = None,
     timeout: Annotated[
         int,
         typer.Option("--timeout", help="Seconds to wait for manual login (use 300+ if you have 2FA)", min=30),
     ] = 300,
 ) -> None:
     """
-    Open a browser window for manual Stockbit login. Saves session cookies.
+    Open a browser window for manual Stockbit login. Saves browser profile.
 
     The browser stays open until you log in or the timeout expires.
-    Cookies are saved and reused by all subsequent Stockbit commands.
+    The persistent profile (.stockbit_profile/) is reused by all subsequent commands.
 
     Examples:
         saham fetch stockbit login
         saham fetch stockbit login --timeout 180
-        saham fetch stockbit login --session .my-session.json
     """
     _require_playwright_cli()
     from src.infrastructure.browser.playwright_stockbit import save_stockbit_session
 
-    resolved = session or DEFAULT_SESSION_FILE
     try:
-        save_stockbit_session(session_file=resolved, timeout=timeout)
+        save_stockbit_session(timeout=timeout)
     except Exception as e:
         typer.echo(f"Login failed: {e}", err=True)
         raise typer.Exit(1)
 
 
 @stockbit_app.command("status")
-def status(
-    session: Annotated[
-        Optional[Path],
-        typer.Option("--session", help="Path to session file"),
-    ] = None,
-) -> None:
+def status() -> None:
     """
     Check the health of the saved Stockbit session without opening a browser.
 
-    Shows cookie count, session age, and whether auth cookies are present.
+    Shows profile age and whether the session is likely still valid.
 
     Example:
         saham fetch stockbit status
     """
     from src.infrastructure.browser.playwright_stockbit import get_session_status
 
-    resolved = session or DEFAULT_SESSION_FILE
-    info = get_session_status(resolved)
+    info = get_session_status()
 
     typer.echo("")
     typer.echo("Stockbit Session Status")
@@ -102,19 +89,8 @@ def status(
         typer.echo("Run: saham fetch stockbit login")
         return
 
-    session_type = info.get("type", "unknown")
-    if session_type == "persistent_profile":
-        typer.echo(f"  Type            : persistent browser profile (recommended)")
-        typer.echo(f"  Profile dir     : {info['path']}")
-    else:
-        typer.echo(f"  Type            : legacy cookie file")
-        typer.echo(f"  File            : {info['path']}")
-        typer.echo(f"  Cookies         : {info.get('cookie_count', '?')}")
-        typer.echo(f"  Auth cookies    : {info.get('auth_cookie_count', '?')}")
-        typer.echo(f"  localStorage    : {info.get('local_storage_keys', '?')} keys")
-        auth_ls = info.get("auth_local_storage_keys", [])
-        if auth_ls:
-            typer.echo(f"  Auth LS keys    : {', '.join(auth_ls)}")
+    typer.echo(f"  Type            : persistent browser profile")
+    typer.echo(f"  Profile dir     : {info['path']}")
 
     if info.get("age_hours") is not None:
         age = info["age_hours"]
@@ -164,10 +140,6 @@ def spy(
         int,
         typer.Option("--wait", help="Seconds to wait for SPA to settle", min=2),
     ] = 6,
-    session: Annotated[
-        Optional[Path],
-        typer.Option("--session", help="Path to session file"),
-    ] = None,
 ) -> None:
     """
     Capture all API traffic from a Stockbit page to identify real endpoints.
@@ -188,7 +160,6 @@ def spy(
     _require_playwright_cli()
     from src.infrastructure.browser.playwright_stockbit import spy_stockbit_session
 
-    resolved_session = session or DEFAULT_SESSION_FILE
     resolved_output = output or DEFAULT_SPY_OUTPUT
 
     typer.echo(f"Target  : {target}" + (f" ({ticker})" if target in ("orderbook", "stock") else ""))
@@ -198,7 +169,6 @@ def spy(
 
     try:
         result = spy_stockbit_session(
-            session_file=resolved_session,
             target=target,
             ticker=ticker,
             output_file=resolved_output,
@@ -267,10 +237,6 @@ def test(
         str,
         typer.Option("--ticker", help="Ticker for orderbook smoke test"),
     ] = "BBCA",
-    session: Annotated[
-        Optional[Path],
-        typer.Option("--session", help="Path to session file"),
-    ] = None,
     headless: Annotated[
         bool,
         typer.Option("--headless/--no-headless", help="Run browser headless"),
@@ -290,12 +256,7 @@ def test(
     _require_playwright_cli()
     from src.infrastructure.browser.playwright_stockbit import PlaywrightStockbitProvider
 
-    resolved_session = session or DEFAULT_SESSION_FILE
-
-    provider = PlaywrightStockbitProvider(
-        session_file=resolved_session,
-        headless=headless,
-    )
+    provider = PlaywrightStockbitProvider(headless=headless)
 
     # ── Test 1: movers ────────────────────────────────────────────────────
     typer.echo("")
@@ -356,16 +317,12 @@ def browse(
         Optional[str],
         typer.Option("--url", "-u", help="Stockbit page to open"),
     ] = None,
-    session: Annotated[
-        Optional[Path],
-        typer.Option("--session", help="Path to session file"),
-    ] = None,
 ) -> None:
     """
-    Open a headed browser with the saved session and keep it open for browsing.
+    Open a headed browser with the saved profile and keep it open for browsing.
 
-    Uses the persistent profile (.stockbit_profile/) if available. The browser
-    stays open until you press Ctrl+C.
+    Uses the persistent profile (.stockbit_profile/). The browser stays open
+    until you press Ctrl+C.
 
     Examples:
         saham fetch stockbit browse
@@ -374,10 +331,9 @@ def browse(
     _require_playwright_cli()
     from src.infrastructure.browser.playwright_stockbit import browse_stockbit_session
 
-    resolved = session or DEFAULT_SESSION_FILE
     target = url or "https://stockbit.com/stream"
     try:
-        browse_stockbit_session(session_file=resolved, url=target)
+        browse_stockbit_session(url=target)
     except Exception as e:
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1)
@@ -389,10 +345,6 @@ def fetch_top5(
         int,
         typer.Option("--top", help="How many top IEV movers to fetch", min=1, max=20),
     ] = 5,
-    session: Annotated[
-        Optional[Path],
-        typer.Option("--session", help="Path to session file"),
-    ] = None,
     headless: Annotated[
         bool,
         typer.Option("--headless/--no-headless", help="Run browser headless"),
@@ -413,11 +365,7 @@ def fetch_top5(
     _require_playwright_cli()
     from src.infrastructure.browser.playwright_stockbit import PlaywrightStockbitProvider
 
-    resolved_session = session or DEFAULT_SESSION_FILE
-    provider = PlaywrightStockbitProvider(
-        session_file=resolved_session,
-        headless=headless,
-    )
+    provider = PlaywrightStockbitProvider(headless=headless)
 
     typer.echo("")
     typer.echo(f"Fetching top {top} IEV movers + orderbooks...")

@@ -16,7 +16,7 @@ This file is the canonical phase-by-phase state for the post-`claude_stockbit_da
 | 4 | CLI Adapter Thinness Phase 1 | 🔲 Not Started | — |
 | 5 | Piotroski Quality Gate | ✅ Done | see commits below |
 | 6 | Broker Distribution Matrix | ✅ Done | see commits below |
-| 7 | Split playwright_stockbit.py | ⏸️ Dropped | cookie-based auth removed; only Playwright remains — split no longer needed |
+| 7 | Split playwright_stockbit.py | ✅ Done | see commit below |
 | 8 | Watchlist + Saved Screener | ✅ Done | 04a9996 |
 | 9 | Valuation Metrics | ✅ Done | 8ea18a2 |
 
@@ -184,7 +184,23 @@ This file is the canonical phase-by-phase state for the post-`claude_stockbit_da
 
 **Goal:** Separate browser lifecycle from JSON parsers. Target: `playwright_stockbit_browser.py` + `playwright_stockbit_broker.py`.
 
-**Status:** ⏸️ Dropped — cookie-based auth was removed; only Playwright remains as the single auth/browser mechanism. The original motivation (isolating the cookie path from the browser path) no longer applies. The per-data-type parsers already live in dedicated `stockbit_*.py` files, so no further split is warranted.
+**Status:** ✅ Done
+
+### Sub-steps
+- [x] 7.1 Extract browser session utilities to `playwright_stockbit_browser.py` — `_persistent_context`, `_intercept_token`, `_resolve_token`, `_extract_jwt`, `_exodus_get`, `StockbitSessionExpired`, all URL/timeout constants, and session management functions (`save_stockbit_session`, `browse_stockbit_session`, `spy_stockbit_session`, `get_session_status`)
+- [x] 7.2 Remove all cookie-based fallback code (`_load_session`, `_new_authenticated_context`, `DEFAULT_SESSION_FILE`, `_use_persistent()`) — unreachable dead code since `saham fetch stockbit login` always creates a persistent profile
+- [x] 7.3 `playwright_stockbit.py` imports from browser module and re-exports for backward compat (15+ callers unaffected)
+- [x] 7.4 `stockbit_commands.py` — removed all `--session` options and `DEFAULT_SESSION_FILE`; all commands call updated signatures
+- [x] 7.5 1707 tests pass
+
+### Files Changed
+- `src/infrastructure/browser/playwright_stockbit_browser.py` — new; all browser lifecycle + session management
+- `src/infrastructure/browser/playwright_stockbit.py` — removed dead cookie code (~350 lines), imports from browser module
+- `src/adapters/cli/stockbit_commands.py` — removed `DEFAULT_SESSION_FILE`, removed `--session` flag from login/status/spy/test/browse/fetch-top5
+
+### Key Design Notes
+- `_use_persistent()` always returned `True` in practice — `saham fetch stockbit login` always creates `.stockbit_profile/`. Cookie fallback was unreachable.
+- Re-export pattern at top of `playwright_stockbit.py` preserves backward compat for all 15+ files that import session utilities from the original module.
 
 ---
 
