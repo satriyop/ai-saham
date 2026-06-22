@@ -1,13 +1,13 @@
 """
-CLI commands for foreign accumulation screening and universe management.
+CLI commands for foreign accumulation screening and swing trade journaling.
 
-Commands:
-  saham screen accum  — scan stocks for foreign accumulation patterns
-  saham trade log swing     — log a candidate to the trade journal
-  saham trade review swing  — review journal forward returns
-  saham fetch universe list              — show configured ticker universes
-  saham fetch universe update            — refresh universe lists from IDX (future)
+Commands served by this module (routing lives in group routers):
+  saham screen accum            — scan stocks for foreign accumulation patterns
+  saham analyze accum-audit     — audit past accumulation candidates vs forward returns
+  saham trade log --type swing  — log a candidate to the trade journal
+  saham trade review swing      — review journal forward returns
 
+Cross-group: this module is grandfathered — it serves three top-level groups.
 Layer: Adapter
 """
 
@@ -154,17 +154,6 @@ def _format_value(value: Decimal) -> str:
         return f"{sign}{abs_v / 1_000_000:.0f}M"
     return f"{sign}{abs_v:.0f}"
 
-
-
-def _fmt_score(s: float | None) -> str:
-    """Format a score with color for table cells."""
-    if s is None:
-        return typer.style("   —  ", fg=typer.colors.BRIGHT_BLACK)
-    if s >= _SC.enter_min_score:
-        return typer.style(f"{s:>6.1f}", fg=typer.colors.GREEN)
-    if s >= _SC.watch_min_score:
-        return typer.style(f"{s:>6.1f}", fg=typer.colors.YELLOW)
-    return typer.style(f"{s:>6.1f}", fg=typer.colors.WHITE)
 
 
 def _classify_pattern(
