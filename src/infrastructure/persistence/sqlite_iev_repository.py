@@ -22,11 +22,12 @@ Layer: Infrastructure
 """
 
 import sqlite3
-from datetime import date, datetime, time
 from dataclasses import dataclass
+from datetime import date, datetime
 from pathlib import Path
 
-from src.domain.value_objects.idx_market import NCP_LOCK_TIME, REGULAR_OPEN as REGULAR_OPEN_TIME
+from src.domain.value_objects.idx_market import NCP_LOCK_TIME
+from src.domain.value_objects.idx_market import REGULAR_OPEN as REGULAR_OPEN_TIME
 from src.domain.value_objects.screener_result import MoverData
 
 
@@ -37,8 +38,9 @@ class IEVSnapshot:
     date: date
     ticker: str
     iev: int
-    rank: int               # 1 = highest IEV mover that day
+    rank: int  # 1 = highest IEV mover that day
     iep: int | None = None  # Indicative Equilibrium Price in IDR (None if not captured)
+    is_ncp_locked: int = 0
 
 
 class SQLiteIEVRepository:
@@ -132,7 +134,15 @@ class SQLiteIEVRepository:
         ts_str = ts.isoformat(timespec="seconds")
 
         rows = [
-            (snapshot_date.isoformat(), m.ticker.upper(), m.iev, rank + 1, m.iep, ts_str, is_ncp_locked)
+            (
+                snapshot_date.isoformat(),
+                m.ticker.upper(),
+                m.iev,
+                rank + 1,
+                m.iep,
+                ts_str,
+                is_ncp_locked,
+            )
             for rank, m in enumerate(movers)
         ]
 
@@ -169,7 +179,10 @@ class SQLiteIEVRepository:
             snapshot_date: The trading date.
             top_n: If set, return only the top-N ranked movers.
         """
-        sql = "SELECT date, ticker, iev, rank, iep FROM iev_snapshots WHERE date = ? ORDER BY rank ASC"
+        sql = (
+            "SELECT date, ticker, iev, rank, iep, is_ncp_locked "
+            "FROM iev_snapshots WHERE date = ? ORDER BY rank ASC"
+        )
         params: tuple = (snapshot_date.isoformat(),)
         if top_n is not None:
             sql += " LIMIT ?"
@@ -183,6 +196,7 @@ class SQLiteIEVRepository:
                 iev=r["iev"],
                 rank=r["rank"],
                 iep=r["iep"],
+                is_ncp_locked=r["is_ncp_locked"],
             )
             for r in rows
         ]
@@ -304,8 +318,11 @@ class SQLiteIEVRepository:
             """).fetchone()
         if not row or not row["total_dates"]:
             return {
-                "total_dates": 0, "first_date": None, "last_date": None,
-                "avg_movers_per_day": 0, "iep_fill_pct": 0.0,
+                "total_dates": 0,
+                "first_date": None,
+                "last_date": None,
+                "avg_movers_per_day": 0,
+                "iep_fill_pct": 0.0,
             }
         return {
             "total_dates": row["total_dates"],
@@ -314,3 +331,31 @@ class SQLiteIEVRepository:
             "avg_movers_per_day": round(row["avg_movers_per_day"], 1),
             "iep_fill_pct": round(row["iep_fill_pct"] or 0.0, 1),
         }
+
+    def get_ticker_history(self, ticker: str, limit: int = 5) -> list[IEVSnapshot]:
+        """Return the latest snapshots for a specific ticker.
+
+        Args:
+            ticker: Stock ticker symbol.
+            limit: Maximum number of rows to return.
+        """
+        sql = """
+            SELECT date, ticker, iev, rank, iep, is_ncp_locked
+            FROM iev_snapshots
+            WHERE ticker = ?
+            ORDER BY date DESC
+            LIMIT ?
+        """
+        with self._get_connection() as conn:
+            rows = conn.execute(sql, (ticker.upper(), limit)).fetchall()
+        return [
+            IEVSnapshot(
+                date=date.fromisoformat(r["date"]),
+                ticker=r["ticker"],
+                iev=r["iev"],
+                rank=r["rank"],
+                iep=r["iep"],
+                is_ncp_locked=r["is_ncp_locked"],
+            )
+            for r in rows
+        ]

@@ -8,9 +8,7 @@ Layer: Infrastructure (Persistence)
 
 import sqlite3
 from datetime import date
-from decimal import Decimal
 from pathlib import Path
-from typing import Optional
 
 from src.domain.ports.sentiment_repository import SentimentAudit, SentimentLog, SentimentRepository
 from src.domain.value_objects.sentiment import CatalystType, Sentiment
@@ -58,7 +56,13 @@ class SQLiteSentimentRepository(SentimentRepository):
         with sqlite3.connect(self._db_path) as conn:
             cursor = conn.execute(
                 "INSERT INTO sentiment_logs (date, ticker, sentiment, catalyst, score) VALUES (?, ?, ?, ?, ?)",
-                (log.date.isoformat(), log.ticker.upper(), log.sentiment.value, log.catalyst.value, log.score)
+                (
+                    log.date.isoformat(),
+                    log.ticker.upper(),
+                    log.sentiment.value,
+                    log.catalyst.value,
+                    log.score,
+                ),
             )
             conn.commit()
             return cursor.lastrowid
@@ -75,7 +79,7 @@ class SQLiteSentimentRepository(SentimentRepository):
                 WHERE a.log_id IS NULL
                 AND l.date <= date('now', '-' || ? || ' days')
                 """,
-                (days_ago, days_ago)
+                (days_ago, days_ago),
             )
             rows = cursor.fetchall()
 
@@ -86,7 +90,7 @@ class SQLiteSentimentRepository(SentimentRepository):
                 ticker=row[2],
                 sentiment=Sentiment(row[3]),
                 catalyst=CatalystType(row[4]),
-                score=row[5]
+                score=row[5],
             )
             for row in rows
         ]
@@ -96,18 +100,18 @@ class SQLiteSentimentRepository(SentimentRepository):
         with sqlite3.connect(self._db_path) as conn:
             conn.execute(
                 "INSERT OR REPLACE INTO sentiment_audits (log_id, days_after, price_delta_pct, audited_at) VALUES (?, ?, ?, ?)",
-                (audit.log_id, audit.days_after, float(audit.price_delta_pct), audit.audited_at.isoformat())
+                (
+                    audit.log_id,
+                    audit.days_after,
+                    float(audit.price_delta_pct),
+                    audit.audited_at.isoformat(),
+                ),
             )
             conn.commit()
 
     def get_stats(self) -> dict:
         """Get summary statistics for sentiment accuracy."""
-        stats = {
-            "total_logs": 0,
-            "audited_logs": 0,
-            "by_sentiment": {},
-            "by_catalyst": {}
-        }
+        stats = {"total_logs": 0, "audited_logs": 0, "by_sentiment": {}, "by_catalyst": {}}
 
         with sqlite3.connect(self._db_path) as conn:
             # Total logs
@@ -148,3 +152,30 @@ class SQLiteSentimentRepository(SentimentRepository):
                     stats["by_catalyst"][catalyst_val]["wins"] += 1
 
         return stats
+
+    def get_ticker_logs(self, ticker: str, limit: int = 8) -> list[SentimentLog]:
+        """Get recent sentiment logs for a specific ticker."""
+        with sqlite3.connect(self._db_path) as conn:
+            cursor = conn.execute(
+                """
+                SELECT id, date, ticker, sentiment, catalyst, score
+                FROM sentiment_logs
+                WHERE ticker = ?
+                ORDER BY date DESC
+                LIMIT ?
+                """,
+                (ticker.upper(), limit),
+            )
+            rows = cursor.fetchall()
+
+        return [
+            SentimentLog(
+                id=row[0],
+                date=date.fromisoformat(row[1]),
+                ticker=row[2],
+                sentiment=Sentiment(row[3]),
+                catalyst=CatalystType(row[4]),
+                score=row[5],
+            )
+            for row in rows
+        ]

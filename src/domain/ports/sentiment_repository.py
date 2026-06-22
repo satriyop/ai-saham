@@ -77,3 +77,15 @@ class SentimentRepository(Protocol):
             Dict with win rates per sentiment and catalyst
         """
         ...
+
+    def get_ticker_logs(self, ticker: str, limit: int = 8) -> list[SentimentLog]:
+        """Get recent sentiment logs for a specific ticker.
+
+        Args:
+            ticker: Stock ticker symbol (e.g. BBCA)
+            limit: Maximum number of records to return
+
+        Returns:
+            List of matching sentiment logs, latest first
+        """
+        ...
