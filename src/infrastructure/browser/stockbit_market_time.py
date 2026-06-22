@@ -196,6 +196,7 @@ class StockbitMarketTimeProvider(MarketStatusProvider):
 
         market = data.get("market") or {}
         iepiev_fca = data.get("iepiev_fca") or {}
+        iepiev_regular = data.get("iepiev_regular") or {}
 
         raw_status = str(market.get("status") or "").upper()
         if not raw_status:
@@ -205,8 +206,9 @@ class StockbitMarketTimeProvider(MarketStatusProvider):
         is_open = raw_status == "STATUS_OPEN"
         status = "STATUS_OPEN" if is_open else "STATUS_CLOSE"
 
-        # iepiev_fca is STATUS_OPEN during pre-open call auction (market still CLOSE)
+        # iepiev_regular and iepiev_fca are STATUS_OPEN during pre-open call auction (market still CLOSE)
         fca_open = str(iepiev_fca.get("status") or "").upper() == "STATUS_OPEN"
+        regular_open = str(iepiev_regular.get("status") or "").upper() == "STATUS_OPEN"
 
         if is_open:
             # Use local clock to distinguish Regular vs Pre-Closing (sub-minute precision)
@@ -216,7 +218,7 @@ class StockbitMarketTimeProvider(MarketStatusProvider):
                 if local.session_name in ("Regular", "Pre-Closing")
                 else "Regular"
             )
-        elif fca_open:
+        elif fca_open or regular_open:
             session_name = "Pre-Open"
         else:
             session_name = "Post-Market"
