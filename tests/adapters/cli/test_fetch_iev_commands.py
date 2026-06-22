@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 
 from typer.testing import CliRunner
 
-from src.adapters.cli import intraday_workflow_commands
+from src.adapters.cli import fetch_iev_commands
 from src.adapters.cli.main import app
 from src.domain.value_objects.screener_result import MoverData
 from src.infrastructure.persistence.sqlite_iev_repository import SQLiteIEVRepository
@@ -39,7 +39,7 @@ def test_fetch_iev_writes_sqlite_and_json_sidecar(monkeypatch, tmp_path: Path):
 
     fixed_now = datetime(2026, 6, 19, 8, 57, 3, tzinfo=ZoneInfo("Asia/Jakarta"))
     monkeypatch.setattr(playwright_stockbit, "PlaywrightStockbitProvider", FakeStockbitProvider)
-    monkeypatch.setattr(intraday_workflow_commands, "_current_idx_datetime", lambda: fixed_now)
+    monkeypatch.setattr(fetch_iev_commands, "_current_idx_datetime", lambda: fixed_now)
     monkeypatch.chdir(tmp_path)
 
     db_path = tmp_path / "iev.db"

@@ -10,10 +10,9 @@ import typer
 from rich.console import Group
 from rich.text import Text
 
-from src.adapters.cli.intraday_pre_open_display import fmt_pct
+from src.adapters.cli.screen_pre_open_display import fmt_pct
 from src.adapters.cli.rich_display import compact_table, console, panel
 from src.application.use_case.intraday_backtest import IntradayBacktestResponse
-
 
 
 def display_intraday_backtest(response: IntradayBacktestResponse, show_trades: int) -> None:
@@ -227,4 +226,3 @@ def display_intraday_backtest(response: IntradayBacktestResponse, show_trades: i
         )
     )
     console().print("")
-
