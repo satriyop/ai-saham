@@ -47,7 +47,7 @@ AUDIT_PRESETS = {
 
 
 def _display_audit_summary(response: AccumulationAuditResponse, top_groups: int) -> None:
-    from src.adapters.cli.accumulation_audit_display import display_audit_summary
+    from src.adapters.cli.analyze_accum_display import display_audit_summary
     display_audit_summary(response=response, top_groups=top_groups)
 
 

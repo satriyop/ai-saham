@@ -129,7 +129,7 @@ def _display_results(
     strategy_signals: dict[str, str] | None = None,
     strategy_name: str | None = None,
 ) -> None:
-    from src.adapters.cli.accumulation_display import display_results
+    from src.adapters.cli.screen_accum_display import display_results
     display_results(
         response=response,
         universe_label=universe_label,
@@ -152,7 +152,7 @@ def _display_multi(
     screened_at: "date",
     broker_quality: dict[str, ScreenBrokerQuality] | None = None,
 ) -> None:
-    from src.adapters.cli.accumulation_display import display_multi
+    from src.adapters.cli.screen_accum_display import display_multi
     display_multi(
         results=results,
         universe_label=universe_label,
@@ -165,7 +165,7 @@ def _display_multi(
 
 
 def _print_column_guide() -> None:
-    from src.adapters.cli.accumulation_display import print_column_guide
+    from src.adapters.cli.screen_accum_display import print_column_guide
     print_column_guide()
 
 

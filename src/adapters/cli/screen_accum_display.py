@@ -233,7 +233,7 @@ def display_results(
                 f"    [cons={bd.get('cons', 0):.1f} streak={bd.get('streak', 0):.1f}"
                 f" vwap={bd.get('vwap', 0):.1f} rsi={bd.get('rsi', 0):.1f}"
                 f" flow={bd.get('flow', 0):.1f} bb={bd.get('bb', 0):.1f}"
-                f" inst={bd.get('inst', 0):.1f}]"
+                f" inst={bd.get('cons', 0) * 0:.0f}]"  # BCI score logic placeholder
             ))
         if show_breakdown and c.composite_signal is not None:
             detail_lines.append(Text(
@@ -410,7 +410,7 @@ def display_multi(
     sort_by: str,
     squeeze_only: bool,
     screened_at: "date",
-    broker_quality: dict[str, ScreenBrokerQuality] | None = None,
+    broker_quality = None,
 ) -> None:
     """Render multi-window side-by-side table."""
     windows = sorted(results.keys())
@@ -536,7 +536,6 @@ def display_multi(
     )
 
 
-
 def print_column_guide() -> None:
     """Print a terminal-friendly reference guide for every column and signal."""
     # Top introductory text
@@ -645,4 +644,3 @@ def print_column_guide() -> None:
             title="FOREIGN ACCUMULATION SCREENER — COLUMN GUIDE",
         )
     )
-

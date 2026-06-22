@@ -13,7 +13,7 @@ from typer.core import TyperGroup
 
 from src.infrastructure.config.app_config import APP_CFG
 
-from src.adapters.cli.broker_commands import (
+from src.adapters.cli.view_broker_commands import (
     broker_distribution_view,
     broker_flow,
     broker_history_view,

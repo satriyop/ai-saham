@@ -319,7 +319,7 @@ def accumulation_review(
     typer.echo(f"Reviewing journal ({journal_path}) | horizon={horizon}d ...")
     report = service.review(horizon_days=horizon)
 
-    from src.adapters.cli.accumulation_journal_display import display_journal_review
+    from src.adapters.cli.trade_accum_display import display_journal_review
 
     display_journal_review(
         report=report,

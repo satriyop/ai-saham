@@ -6,7 +6,7 @@ Layer: Adapter
 
 import typer
 
-from src.adapters.cli.broker_commands import (
+from src.adapters.cli.fetch_broker_commands import (
     broker_fetch,
     broker_history,
     broker_import,

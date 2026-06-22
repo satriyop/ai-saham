@@ -15,12 +15,12 @@ runner = CliRunner()
 
 
 def test_view_broker_history_reads_cached_points_only(monkeypatch, tmp_path: Path):
-    from src.adapters.cli import broker_commands
+    from src.adapters.cli import view_broker_commands
 
     def fail_provider_factory(provider_name: str):
         raise AssertionError(f"provider should not be created: {provider_name}")
 
-    monkeypatch.setattr(broker_commands, "_create_provider", fail_provider_factory)
+    monkeypatch.setattr(view_broker_commands, "_create_provider", fail_provider_factory)
 
     db_path = tmp_path / "broker.db"
     repo = SQLiteBrokerRepository(db_path)
@@ -99,12 +99,12 @@ def test_view_broker_history_json_output_stays_machine_readable(tmp_path: Path):
 
 
 def test_view_broker_top_foreign_reads_cached_snapshots_only(monkeypatch, tmp_path: Path):
-    from src.adapters.cli import broker_commands
+    from src.adapters.cli import view_broker_commands
 
     def fail_provider_factory(provider_name: str):
         raise AssertionError(f"provider should not be created: {provider_name}")
 
-    monkeypatch.setattr(broker_commands, "_create_provider", fail_provider_factory)
+    monkeypatch.setattr(view_broker_commands, "_create_provider", fail_provider_factory)
 
     db_path = tmp_path / "broker.db"
     snapshot_date = date(2024, 1, 16)
