@@ -27,6 +27,39 @@ if ! "$PROJECT_DIR/.venv/bin/saham" --help > /dev/null 2>&1; then
     exit 1
 fi
 
+# ── Manage Environment Secrets (.env) ──────────────────────────────────
+ENV_FILE="$PROJECT_DIR/.env"
+KEYS_TO_EXPORT=(
+    "DEEPSEEK_API_KEY"
+    "ANTHROPIC_API_KEY"
+    "OPENAI_API_KEY"
+    "GEMINI_API_KEY"
+    "OLLAMA_HOST"
+)
+
+for KEY in "${KEYS_TO_EXPORT[@]}"; do
+    VAL=$(eval echo \${$KEY:-})
+    if [[ -n "$VAL" ]]; then
+        if [[ ! -f "$ENV_FILE" ]]; then
+            echo "Creating $ENV_FILE..."
+            touch "$ENV_FILE"
+            chmod 600 "$ENV_FILE"
+        fi
+        if ! grep -q "^${KEY}=" "$ENV_FILE" 2>/dev/null; then
+            echo "Saving $KEY from active shell environment to $ENV_FILE"
+            echo "${KEY}=${VAL}" >> "$ENV_FILE"
+        fi
+    fi
+done
+
+if [[ ! -f "$ENV_FILE" ]] || ! grep -q "^DEEPSEEK_API_KEY=" "$ENV_FILE" 2>/dev/null; then
+    if [[ -z "${DEEPSEEK_API_KEY:-}" ]]; then
+        echo "NOTICE: DEEPSEEK_API_KEY is not set in current environment or $ENV_FILE."
+        echo "        You can add it to $ENV_FILE to configure AI tuning."
+        echo ""
+    fi
+fi
+
 mkdir -p "$LOG_DIR"
 echo "Project : $PROJECT_DIR"
 echo "Logs    : $LOG_DIR"
@@ -38,15 +71,15 @@ echo ""
 read -r -d '' SAHAM_CRON << ENTRIES || true
 # --- saham-cron-begin ---
 # IEV collector — 08:55 WIB
-55 8 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && source .venv/bin/activate && saham fetch iev' >> $LOG_DIR/iev-collector.log 2>&1
+55 8 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham fetch iev' >> $LOG_DIR/iev-collector.log 2>&1
 # Opening learning loop — NCP-locked snapshot 08:57 WIB
-57 8 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && source .venv/bin/activate && saham learn snapshot' >> $LOG_DIR/opening-snapshot.log 2>&1
+57 8 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham learn snapshot' >> $LOG_DIR/opening-snapshot.log 2>&1
 # Opening learning loop — orderbook tracker 09:00–09:30 WIB
-0 9 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && source .venv/bin/activate && saham learn track' >> $LOG_DIR/opening-track.log 2>&1
+0 9 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham learn track' >> $LOG_DIR/opening-track.log 2>&1
 # Opening learning loop — accuracy grade 09:35 WIB
-35 9 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && source .venv/bin/activate && saham learn grade' >> $LOG_DIR/opening-grade.log 2>&1
+35 9 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham learn grade' >> $LOG_DIR/opening-grade.log 2>&1
 # Opening learning loop — AI tuning 09:40 WIB
-40 9 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && source .venv/bin/activate && saham learn tune' >> $LOG_DIR/opening-tune.log 2>&1
+40 9 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham learn tune' >> $LOG_DIR/opening-tune.log 2>&1
 # --- saham-cron-end ---
 ENTRIES
 
@@ -83,6 +116,52 @@ else
 fi
 
 echo "$NEW_CRONTAB" | crontab -
+
+# ── Timezone Synchronization ──────────────────────────────────────────
+echo "Attempting to synchronize cron daemon timezone..."
+if [[ "$(uname)" == "Darwin" ]]; then
+    echo "Restarting macOS cron daemon (requires sudo)..."
+    if sudo launchctl kickstart -k system/com.vix.cron 2>/dev/null; then
+        echo "Successfully restarted macOS cron daemon (com.vix.cron)."
+    elif sudo launchctl kickstart -k system/com.apple.cron 2>/dev/null; then
+        echo "Successfully restarted macOS cron daemon (com.apple.cron)."
+    else
+        # Fallback to unload/load
+        if [[ -f /System/Library/LaunchDaemons/com.vix.cron.plist ]]; then
+            (sudo launchctl unload /System/Library/LaunchDaemons/com.vix.cron.plist 2>/dev/null && \
+             sudo launchctl load /System/Library/LaunchDaemons/com.vix.cron.plist 2>/dev/null && \
+             echo "Successfully restarted macOS cron daemon via unload/load (com.vix.cron.plist).") || {
+                echo "WARNING: Failed to restart macOS cron daemon. Timezone caching issues may persist."
+                echo "         You can manually run: sudo launchctl kickstart -k system/com.vix.cron"
+             }
+        elif [[ -f /System/Library/LaunchDaemons/com.apple.cron.plist ]]; then
+            (sudo launchctl unload /System/Library/LaunchDaemons/com.apple.cron.plist 2>/dev/null && \
+             sudo launchctl load /System/Library/LaunchDaemons/com.apple.cron.plist 2>/dev/null && \
+             echo "Successfully restarted macOS cron daemon via unload/load (com.apple.cron.plist).") || {
+                echo "WARNING: Failed to restart macOS cron daemon. Timezone caching issues may persist."
+                echo "         You can manually run: sudo launchctl kickstart -k system/com.vix.cron"
+             }
+        else
+            echo "WARNING: Failed to restart macOS cron daemon. Timezone caching issues may persist."
+            echo "         You can manually run: sudo launchctl kickstart -k system/com.vix.cron"
+        fi
+    fi
+elif [[ "$(uname)" == "Linux" ]]; then
+    if systemctl is-active --quiet cron 2>/dev/null; then
+        echo "Restarting Linux cron service (requires sudo)..."
+        sudo systemctl restart cron || {
+            echo "WARNING: Failed to restart Linux cron service. You may need to run: sudo systemctl restart cron"
+        }
+    elif systemctl is-active --quiet crond 2>/dev/null; then
+        echo "Restarting Linux crond service (requires sudo)..."
+        sudo systemctl restart crond || {
+            echo "WARNING: Failed to restart Linux crond service. You may need to run: sudo systemctl restart crond"
+        }
+    else
+        echo "WARNING: Could not detect active cron/crond systemd service to restart."
+    fi
+fi
+echo ""
 
 # ── Verify ────────────────────────────────────────────────────────────
 echo "Installed cron jobs:"
