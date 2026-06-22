@@ -1,4 +1,15 @@
 # Personal defaults for saham CLI.
+#
+# Impacted CLI Commands:
+#   This file overrides default parameters mapped to APP_CFG. It affects:
+#   - saham screen accum / watchlist / compare
+#   - saham today (reads analysis default universe and benchmark)
+#   - saham fetch market / broker / universe
+#   - saham indicator compute / snapshot / list / show / delete
+#   - saham analyze risk / swing / swing-compare / compare / regime
+#   - saham strategy backtest
+#   - saham trade size / backtest-swing
+#
 # Copy this file to config/user.yaml and fill in your values.
 # config/user.yaml is gitignored — safe to store personal capital amounts.
 #

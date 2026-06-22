@@ -1,5 +1,10 @@
 # Data source preferences for ai-saham
 #
+# Impacted CLI Commands:
+#   - saham fetch market (uses candle_source fallback and idx rates configuration)
+#   - saham fetch broker (uses broker_summary_source to select provider)
+#   - saham fetch broker-history (uses broker summaries from configured sources)
+#
 # Controls which provider is used for each data type.
 # This file is the single place to swap data sources — no code changes needed.
 #

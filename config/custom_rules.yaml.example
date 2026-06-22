@@ -1,6 +1,11 @@
 # Custom Rules DSL Example
 # ========================
 #
+# Impacted CLI Commands:
+#   - saham analyze risk TICKER (when passed via --rules-file / -r)
+#   - saham strategy backtest TICKER (when passed via --rules-file / -r)
+#   - Note: config/custom_rules.yaml is also evaluated as the default custom rules location if rules_file is None/not specified.
+#
 # This file demonstrates the YAML schema for defining custom risk assessment rules.
 # Copy this file to config/custom_rules.yaml or ~/.ai-saham/rules.yaml and modify as needed.
 #

@@ -6,8 +6,8 @@ Closes the feedback gap between pre-open predictions and actual market outcomes.
 ## Motivation
 
 The `saham screen pre-open` screener produces deterministic predictions
-(gap %, entry range, ATR stop) for stocks moving in the 08:45–08:57 WIB pre-open
-window. But without measuring whether those predictions were correct, thresholds
+(gap %, entry range, ATR stop) for stocks moving in the 08:45–09:00 WIB pre-open
+window (NCP snapshots taken at ~08:57 within the [08:56, 09:00) lock window). But without measuring whether those predictions were correct, thresholds
 drift and false negatives go undetected.
 
 This workflow captures the feedback loop: predict → track → measure → tune.

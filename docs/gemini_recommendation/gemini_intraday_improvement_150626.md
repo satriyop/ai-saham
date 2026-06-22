@@ -9,7 +9,7 @@ Based on a research-driven analysis of Indonesian trading behavior and the uniqu
 ## 1. IEV Intensity Filter (The "Fake Bid" Detector)
 
 ### The Behavior
-In the IDX, market makers ("Bandars") and retail speculators often place large, non-committal bids during the Pre-Open session (08:45–08:59) to artificially inflate the **IEV (Intraday Expected Volume)**. These bids are frequently cancelled seconds before 09:00, luring retail into "chasing the open" only for the liquidity to vanish.
+In the IDX, market makers ("Bandars") and retail speculators often place large, non-committal bids during the Pre-Open session (08:45–09:00, NCP locked 08:56–09:00) to artificially inflate the **IEV (Intraday Expected Volume)**. These bids are frequently cancelled seconds before 09:00, luring retail into "chasing the open" only for the liquidity to vanish.
 
 ### Recommendation
 Incorporate **IEV Intensity** to distinguish genuine institutional interest from manipulative bid-layering.

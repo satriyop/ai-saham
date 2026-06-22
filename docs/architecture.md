@@ -17,7 +17,7 @@ The architecture enforces a strict dependency rule: **inner layers know nothing 
 ```
                     +---------------------------------------+
                     |             Adapters                  |
-                    |  CLI (21 modules) | Bot | Web (stub)  |
+                     |  CLI (35+ modules) | Bot | Web (stub)  |
                     +---------------------------------------+
                                    |
                                    v
@@ -39,11 +39,11 @@ The architecture enforces a strict dependency rule: **inner layers know nothing 
                                    |
                     +---------------------------------------+
                     |           Infrastructure              |
-                    |  data_providers/ (Yahoo, IDX, SB)     |
-                    |  persistence/ (SQLite + CSV)          |
-                    |  ai/ (6 providers + translators)      |
-                    |  sentiment/ (3 providers + 2 classif) |
-                    |  browser/ (Playwright)                |
+                     |  data_providers/ (Yahoo, IDX)          |
+                     |  browser/ (19 Stockbit providers)     |
+                     |  persistence/ (SQLite + CSV + JSONL)  |
+                     |  ai/ (6 providers + translators)      |
+                     |  sentiment/ (3 providers + 2 classif) |
                     |  config/ | csv/ | plugins/ | skill/   |
                     +---------------------------------------+
 ```
@@ -88,11 +88,11 @@ Implements domain and application ports with concrete external systems.
 
 | Directory | Responsibility | Key Files |
 |-----------|----------------|-----------|
-| `data_providers/` | Market data fetching | `yahoo.py` (Yahoo Finance), `idx.py` + `idx_market.py` (IDX public API), `stockbit.py` (Stockbit) |
+| `data_providers/` | Market data fetching | `yahoo.py` (Yahoo Finance), `yahoo_stock_meta.py` (stock metadata), `idx.py` + `idx_market.py` (IDX public API) |
 | `persistence/` | Data storage | `sqlite_market_repository.py`, `sqlite_broker_repository.py`, `sentiment_repository.py`, `formula_storage.py`, CSV journal writers |
 | `ai/` | AI adapters | 6 explainers (`deepseek_explainer`, `claude_explainer`, `openai_explainer`, `gemini_explainer`, `ollama_explainer`, `mock_explainer`) + `factory.py`, `formula_translator.py`, `strategy_translator.py`, `sentiment_analyzer.py` |
 | `sentiment/` | News pipeline | `google_news_provider.py`, `cnbc_indonesia_provider.py`, `kontan_provider.py`, `composite_provider.py`, `keyword_classifier.py`, `ai_classifier.py`, `factory.py`, `deduplication.py` |
-| `browser/` | Headless browser scraping | `playwright_stockbit.py`, `stockbit_browser.py` |
+| `browser/` | Stockbit providers (19 files) | `playwright_stockbit.py` (broker + automation), `stockbit_browser.py`, `stockbit_analyst.py`, `stockbit_bandar.py`, `stockbit_company_profile.py`, `stockbit_corp_action.py`, `stockbit_forward_estimates.py`, `stockbit_fundamentals.py`, `stockbit_insider.py`, `stockbit_order_book.py`, `stockbit_running_trade.py`, `stockbit_seasonality.py`, `stockbit_shareholding.py`, `stockbit_ticker_notation.py`, `stockbit_market_time.py`, `stockbit_universe.py` |
 | `config/` | Configuration loading | `yaml_loader.py` |
 | `csv/` | CSV import pipeline | `format_detector.py`, `mapping_loader.py`, `broker_csv_adapter.py` |
 | `plugins/` | Plugin indicator loader | `indicator_loader.py` |
@@ -106,7 +106,7 @@ Entry points for user interaction. Thin — no business logic, only wiring.
 
 | Directory | Responsibility | Key Files |
 |-----------|----------------|-----------|
-| `cli/` | Typer-based CLI (21 modules) | `main.py`, `fetch_commands.py`, `fetch_market_commands.py`, `fetch_iev_commands.py`, `view_commands.py`, `learn_commands.py`, `learn_opening_commands.py`, `today_commands.py`, `status_commands.py`, `screen_lifecycle_commands.py`, `screen_pre_open_commands.py`, `accumulation_commands.py`, `broker_commands.py`, `chart_commands.py`, `intraday_workflow_commands.py`, `sentiment_commands.py`, `stockbit_commands.py`, `swing_commands.py`, `trade_commands.py`, `trade_intraday_commands.py`, `strategy_commands.py`, `skill_commands.py`, `update_commands.py` |
+| `cli/` | Typer-based CLI (35+ modules) | `main.py`, `fetch_commands.py`, `fetch_market_commands.py`, `fetch_iev_commands.py`, `fetch_universe_commands.py`, `view_commands.py`, `learn_commands.py`, `learn_opening_commands.py`, `today_commands.py`, `status_commands.py`, `screen_lifecycle_commands.py`, `screen_pre_open_commands.py`, `accumulation_commands.py`, `broker_commands.py`, `chart_commands.py`, `data_quality_commands.py`, `intraday_workflow_commands.py`, `sentiment_commands.py`, `stockbit_commands.py`, `swing_commands.py`, `trade_commands.py`, `trade_intraday_commands.py`, `strategy_commands.py`, `skill_commands.py`, plus 10 display modules (`accumulation_display.py`, `broker_display.py`, `swing_display.py`, `rich_display.py`, ...) |
 | `bot/` | Chat bot stubs | `telegram.py`, `whatsapp.py` (docstrings only) |
 | `web/` | REST API stub | `api.py` (docstring only) |
 
@@ -174,25 +174,43 @@ saham fetch broker BBCA
      v
   Create request
      |
-     +------------> FetchBrokerDataUseCase
+      +------------> FetchBrokerDataUseCase
+      |                   |
+      |                   v
+      |             broker_provider.fetch()
+      |                   |
+      |                   +--------------------------------> IDXProvider
+      |                   |
+      |                   v
+      |             broker_repository.save()
+      |                   |
+      |                   v
+      |             Return BrokerSummary[]
+      |
+saham fetch broker BBCA --provider stockbit
+      |
+      v
+  Create request
+     |
+      +------------> FetchBrokerDailyFlowsUseCase
                           |
                           v
-                    broker_provider.fetch()
+                    broker_provider.fetch_broker_daily_flows()
                           |
-                          +--------------------------------> IDXProvider / StockbitProvider
+                          +--------------------------------> StockbitPlaywrightBrokerProvider
                           |                                        |
                           |                                        v
-                          |                                 HTTP request
+                          |                                 Playwright HTTP
                           |                                        |
                           v                                        |
-                    broker_repository.save()
+                    broker_repository.save_broker_daily_flows()
                           |
                           v
-                    Return BrokerSummary[]
+                    Return foreign flow time-series[]
                           |
      <-------------------+
      |
-  Display foreign/local flow tables
+  Display per-broker daily detail tables
 ```
 
 ### Sentiment Analysis Pipeline

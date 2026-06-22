@@ -1,3 +1,9 @@
+# Pre-open Screener Configuration
+#
+# Impacted CLI Commands:
+#   - saham screen pre-open (runs pre-open screener scan)
+#   - saham learn snapshot / track / grade / prompt / tune (manages opening learning loop parameters defined here)
+#
 version: 1
 name: "pre-open-screener"
 description: |

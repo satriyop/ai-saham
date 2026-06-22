@@ -150,7 +150,7 @@ The same layers with their actual components visible:
 | # | Subsystem | Purpose | Entry Points | Key Files |
 |---|-----------|---------|--------------|-----------|
 | 1 | **CLI Router** | Routes user commands to use cases via lifecycle groups. Parses flags, wires dependencies, displays output. | `saham <group> <cmd>` | `main.py`, `fetch_commands.py`, `trade_commands.py`, etc |
-| 2 | **Data Ingestion** | Fetches, caches, and serves OHLCV + broker + news data from external sources. | `fetch market`, `fetch broker`, `fetch stockbit`, `fetch iev`, `analyze sentiment` | `yahoo.py`, `idx_market.py`, `idx.py`, `stockbit.py`, `playwright_stockbit.py`, 6 sentiment providers, SQLite repos |
+| 2 | **Data Ingestion** | Fetches, caches, and serves OHLCV + broker + news data from external sources. | `fetch market`, `fetch broker`, `fetch stockbit`, `fetch iev`, `analyze sentiment` | `yahoo.py`, `idx_market.py`, `idx.py`, `playwright_stockbit.py`, 19 Stockbit specialized providers, 6 sentiment providers, SQLite repos |
 | 3 | **Analysis Core** | Deterministic indicator computation, risk profiling, and composite analysis. | `indicator compute`, `indicator snapshot`, `analyze risk`, `analyze compare` | `sma.py`, `ema.py`, `rsi.py`, `indicator_registry.py`, 3 rule profiles, `rule_engine.py` |
 | 4 | **Screening Suite** | Multi-dimensional stock screening for accumulation patterns, pre-open movers, and swing candidates. | `screen accum`, `screen pre-open` | `accumulation_screen.py`, `intraday_workflow_commands.py`, `pre_open_screen.py` |
 | 5 | **Strategy System** | Authoring, validation, loading, and execution of versioned strategy packages. | `strategy init/create/validate/list`, `strategy backtest` | `strategy_loader.py`, 3 strategy YAMLs, `strategy_commands.py` |
@@ -173,8 +173,22 @@ Each Big block decomposes into Medium modules:
 | Yahoo Finance Provider | `infrastructure/data_providers/yahoo.py` | ~80 | OHLCV via yfinance, auto-appends `.JK` |
 | IDX Market Provider | `infrastructure/data_providers/idx_market.py` | ~120 | OHLCV via IDX TradingSummary API |
 | IDX Broker Provider | `infrastructure/data_providers/idx.py` | ~322 | Foreign flow from IDX (estimated values) |
-| Stockbit Session Broker Provider | `infrastructure/browser/playwright_stockbit.py` | ~170 | Foreign flow via Stockbit browser session |
-| Stockbit Browser | `infrastructure/browser/playwright_stockbit.py` | ~1828 | Playwright automation for Stockbit session |
+| Stockbit Playwright Broker Provider | `infrastructure/browser/playwright_stockbit.py` | ~2000 | Broker provider + Playwright automation for Stockbit session |
+| Stockbit Analyst Consensus | `infrastructure/browser/stockbit_analyst.py` | ~86 | Analyst ratings + price targets |
+| Stockbit Bandar Detector | `infrastructure/browser/stockbit_bandar.py` | ~177 | Institutional operator accumulation signal |
+| Stockbit Company Profile | `infrastructure/browser/stockbit_company_profile.py` | ~94 | Sector, industry, market cap |
+| Stockbit Forward Estimates | `infrastructure/browser/stockbit_forward_estimates.py` | ~137 | EPS estimates, revenue forecasts |
+| Stockbit Fundamentals | `infrastructure/browser/stockbit_fundamentals.py` | ~150 | P/E, ROE, Piotroski F-Score |
+| Stockbit Insider Activity | `infrastructure/browser/stockbit_insider.py` | ~152 | Director/commissioner transaction flags |
+| Stockbit Seasonality | `infrastructure/browser/stockbit_seasonality.py` | ~114 | Monthly return/win rate |
+| Stockbit Shareholding | `infrastructure/browser/stockbit_shareholding.py` | ~161 | Institutional/individual split |
+| Stockbit Corp Action | `infrastructure/browser/stockbit_corp_action.py` | ~171 | Dividend/RUPS/rights issue calendar |
+| Stockbit Ticker Notation | `infrastructure/browser/stockbit_ticker_notation.py` | ~126 | Special notation/status badges |
+| Stockbit Order Book | `infrastructure/browser/stockbit_order_book.py` | ~154 | Level 2 order book data |
+| Stockbit Running Trade | `infrastructure/browser/stockbit_running_trade.py` | ~144 | Real-time institutional absorption |
+| Stockbit Market Time | `infrastructure/browser/stockbit_market_time.py` | ~135 | Market operating status |
+| Stockbit Universe | `infrastructure/browser/stockbit_universe.py` | ~110 | Ticker universe definitions |
+| Stockbit Browser | `infrastructure/browser/stockbit_browser.py` | ~157 | Manual browser session management |
 | Google News Provider | `infrastructure/sentiment/google_news_provider.py` | ~251 | RSS news fetcher with ID context |
 | CNBC Indonesia Provider | `infrastructure/sentiment/cnbc_indonesia_provider.py` | ~129 | RSS news fetcher ticker-filtered |
 | Kontan Provider | `infrastructure/sentiment/kontan_provider.py` | ~133 | RSS news fetcher from kontan.co.id |
@@ -480,24 +494,47 @@ Each Big block decomposes into Medium modules:
 | `sentiment/deduplication.py` | Headline deduplication |
 | `sentiment/mock_provider.py` | Mock for testing |
 
-#### Infrastructure Persistence (8 files)
+#### Infrastructure Persistence (14 files)
 
 | File | Purpose |
 |------|---------|
-| `persistence/sqlite.py` | DB setup + schema migration |
+| `persistence/sqlite.py` | Core SQLite repository (DB setup + schema) |
 | `persistence/sqlite_market_repository.py` | Candle CRUD |
 | `persistence/sqlite_broker_repository.py` | BrokerSummary CRUD |
+| `persistence/sqlite_stock_meta_repository.py` | Stock metadata CRUD |
+| `persistence/sqlite_data_quality_audit.py` | Data quality diagnostic queries |
+| `persistence/sqlite_data_update_status.py` | Last-refresh tracking per ticker |
+| `persistence/sqlite_iev_repository.py` | IEV snapshot read/write |
+| `persistence/sqlite_system_status_provider.py` | Provider health + staleness |
 | `persistence/sentiment_repository.py` | Sentiment record persistence |
 | `persistence/accumulation_journal_csv_writer.py` | Accumulation CSV |
 | `persistence/intraday_confirmation_csv.py` | Confirmation CSV |
 | `persistence/formula_storage.py` | Formula YAML persistence |
+| `persistence/iev_json_sidecar.py` | IEV JSON sidecar management |
+| `persistence/trade_journal_jsonl_writer.py` | Unified trade journal (JSONL) |
 
-#### Infrastructure Browser (2 files)
+#### Infrastructure Browser (17 files)
 
 | File | Purpose |
 |------|---------|
-| `browser/playwright_stockbit.py` | Playwright automation for Stockbit (1828 lines) |
-| `browser/stockbit_browser.py` | Browser session management |
+| `browser/playwright_stockbit.py` | Playwright automation + broker provider |
+| `browser/stockbit_browser.py` | Manual browser session management |
+| `browser/stockbit_analyst.py` | Analyst ratings + price targets |
+| `browser/stockbit_bandar.py` | Institutional operator accumulation signal |
+| `browser/stockbit_company_profile.py` | Sector, industry, market cap |
+| `browser/stockbit_corp_action.py` | Dividend/RUPS/rights issue calendar |
+| `browser/stockbit_forward_estimates.py` | EPS estimates, revenue forecasts |
+| `browser/stockbit_fundamentals.py` | P/E, ROE, Piotroski F-Score |
+| `browser/stockbit_insider.py` | Director/commissioner transaction flags |
+| `browser/stockbit_intraday_broker_chart.py` | Intraday broker chart data |
+| `browser/stockbit_market_time.py` | Market operating status |
+| `browser/stockbit_order_book.py` | Level 2 order book data |
+| `browser/stockbit_running_trade.py` | Real-time institutional absorption |
+| `browser/stockbit_running_trade_chart.py` | Running trade chart data |
+| `browser/stockbit_seasonality.py` | Monthly return/win rate |
+| `browser/stockbit_shareholding.py` | Institutional/individual split |
+| `browser/stockbit_ticker_notation.py` | Special notation/status badges |
+| `browser/stockbit_universe.py` | Ticker universe definitions |
 
 #### Infrastructure Config/CSV (4 files)
 
@@ -529,10 +566,10 @@ Each Big block decomposes into Medium modules:
 | Module | File | Group / Commands |
 |--------|------|------------------|
 | Main | `cli/main.py` | Top-level lifecycle group definitions |
-| Fetch Router | `cli/fetch_commands.py` | `saham fetch [market, broker, broker-import, broker-history, broker-top-foreign, iev, stockbit, universe, status]` |
+| Fetch Router | `cli/fetch_commands.py` | `saham fetch [market, broker, broker-import, broker-history, broker-top-foreign, iev, stockbit, universe (list/update/create/inspect), status]` |
 | Data Fetch (market) | `cli/fetch_market_commands.py` | Implementation of market data fetch |
 | IEV Capture | `cli/fetch_iev_commands.py` | Implementation of IEV snapshot capture |
-| View Router | `cli/view_commands.py` | `saham view broker [flow, top, history, top-foreign, mappings, status]` |
+| View Router | `cli/view_commands.py` | `saham view broker [flow, top, history, top-foreign, mappings, status]` plus `saham view TICKER` (shorthand: `saham view BBCA`) |
 | Learn Router | `cli/learn_commands.py` | `saham learn [snapshot, track, grade, prompt, tune]` |
 | Learn (opening) | `cli/learn_opening_commands.py` | Implementation of opening learning loop commands |
 | Today Briefing | `cli/today_commands.py` | `saham today` daily briefing |
@@ -551,8 +588,21 @@ Each Big block decomposes into Medium modules:
 | Sentiment Impl | `cli/sentiment_commands.py` | Implementation of sentiment logic |
 | Stockbit Impl | `cli/stockbit_commands.py` | Implementation of session management |
 | Chart Impl | `cli/chart_commands.py` | Implementation of ASCII charts |
-| Update Impl | `cli/update_commands.py` | Implementation of batch update logic |
+| Data Quality | `cli/data_quality_commands.py` | `saham fetch audit` data quality diagnostic |
 | Accumulation | `cli/accumulation_commands.py` | Implementation of accumulation screen logic |
+| Accumulation Display | `cli/accumulation_display.py` | Rich-formatted accumulation output |
+| Accumulation Audit Display | `cli/accumulation_audit_display.py` | Rich-formatted audit output |
+| Broker Display | `cli/broker_display.py` | Rich-formatted broker tables |
+| Swing Display | `cli/swing_display.py` | Rich-formatted swing analysis output |
+| Swing Analysis Display | `cli/swing_analysis_display.py` | Rich-formatted swing comparison |
+| Swing Broker Display | `cli/swing_broker_display.py` | Rich-formatted broker attribution |
+| Swing Size Display | `cli/swing_size_display.py` | Rich-formatted position sizing |
+| Intraday Pre-Open Display | `cli/intraday_pre_open_display.py` | Rich-formatted pre-open table |
+| Intraday Confirmation Display | `cli/intraday_confirmation_display.py` | Rich-formatted confirmation view |
+| Intraday Backtest Display | `cli/intraday_backtest_display.py` | Rich-formatted intraday backtest |
+| Accumulation Journal Display | `cli/accumulation_journal_display.py` | Rich-formatted journal review |
+| Rich Display Utilities | `cli/rich_display.py` | Shared Rich render helpers |
+| Fetch Universe | `cli/fetch_universe_commands.py` | Universe management commands |
 
 #### Plugin Indicators (13)
 

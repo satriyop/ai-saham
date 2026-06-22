@@ -1,5 +1,12 @@
 # Stockbit / Exodus API configuration
 #
+# Impacted CLI Commands:
+#   - saham fetch stockbit login / status / spy / test / browse / fetch-top5
+#   - saham fetch market (when loading company profiles, fundamentals, shareholdings, insider info, or corporate actions)
+#   - saham fetch broker (when summary source is configured as stockbit)
+#   - saham screen pre-open (requests orderbook/IEV data via Exodus API endpoints defined here)
+#   - saham learn snapshot / track (requests market session state/running trades)
+#
 # This file contains the two things that change due to market structure or
 # Stockbit frontend updates — not implementation details like timeouts.
 #

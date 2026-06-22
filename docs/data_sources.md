@@ -695,11 +695,11 @@ class NewProvider(MarketDataProvider):
 
 2. **Wire in CLI** - Add provider option to the appropriate command file. Provider selection logic lives in:
 
-   - **Candle data:** `src/adapters/cli/update_commands.py` (search for `_fetch_candles`)
-   - **Broker data:** `src/adapters/cli/update_commands.py` (search for `_create_broker_provider`)
+   - **Candle data:** `src/adapters/cli/fetch_market_commands.py` (search for `_fetch_candles`)
+   - **Broker data:** `src/adapters/cli/broker_commands.py` (search for `_create_broker_provider`)
    - **Explicit broker fetch:** `src/adapters/cli/broker_commands.py` (search for `_create_provider`)
 
-   Example pattern (from `update_commands.py`):
+   Example pattern (from `fetch_market_commands.py`):
 
 ```python
 if provider_name == "yahoo":

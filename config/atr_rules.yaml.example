@@ -1,5 +1,9 @@
 # Example rules file using ATR (Average True Range) plugin indicator
 #
+# Impacted CLI Commands:
+#   - saham analyze risk TICKER (when passed via --rules-file / -r)
+#   - saham strategy backtest TICKER (when passed via --rules-file / -r)
+#
 # This demonstrates how to use plugin indicators in your rules.
 # The ATR indicator must be available in plugins/indicators/atr.py
 #

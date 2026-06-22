@@ -269,7 +269,7 @@ Commit: 298c5e7
 
 ## Deferred (Feature Expansion — Not Infrastructure)
 
-- **Analyst rating history**: valid intent, unverified endpoint. Probe first.
+- **Analyst rating history**: verified as aggregate-only. Probed on June 20, 2026; endpoint does not return individual analyst ratings.
 - **Earnings surprises**: valid intent, unverified endpoint. Probe first.
 - **DCF valuation cache**: valid intent, unverified endpoint. Probe first.
 - **Dynamic broker directory**: low urgency; config-driven YAML already handles the core case.
@@ -292,6 +292,6 @@ All feature expansion should follow after Priority 1–3 above.
 | 7. Enrichment display | Open | **Done** (d6c5e61) — dim MISSING line per candidate lists absent fields |
 | 8. Adapter thinness | Open | **Done** (298c5e7) — `RefreshStockbitEnrichmentUseCase` extracted; adapter now thin |
 | Broker concentration | Proposed | Already built as `bandar_detector` |
-| Per-analyst history | Proposed | Endpoint shape unverified; do not build schema yet |
+| Per-analyst history | Proposed | Probed (2026-06-20); endpoint only has aggregate counts, no schema built |
 | Stockbit synthetic total | Not in Codex | **Done** (313c134) — real total from `/historical/summary`; 0% IDX divergence |
 | Data source config | Not in Codex | **Done** (803ef69) — `config/data_sources.yaml` controls broker/candle source |

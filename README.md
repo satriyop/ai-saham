@@ -37,6 +37,18 @@ A **local-first, production-grade CLI application** for stock analysis focused o
 - **Terminal Charts** - ASCII price/RSI/volume charts in-terminal
 - **Batch Update** - Single command to refresh candles + broker flow for entire universes
 - **Broker & Foreign Flow** - Track foreign investor activity from IDX (public, no auth) or Stockbit
+- **Broker History & Top Foreign** - View broker-level flow history and top foreign traders across tickers
+- **Candle Provenance** - Each candle records its source provider (yahoo/idx) with idempotent deduplication
+- **Enrichment Cache** - Analyst consensus, insider trades, fundamentals, corporate actions, forward estimates, company profiles, and earnings history cached with TTL-based refresh
+- **Data Quality Audit** - `saham fetch audit` detects stale data, degraded broker summaries, candle provenance gaps, and enrichment coverage (read-only)
+- **Accumulation Audit** - Replay accumulation signals historically and measure forward returns
+- **Ticker Dashboard** - Read-only, cached-data dashboard via `saham view BBCA` showing notation, valuation, consensus, ownership, bandar signal, company profile, recent candles, corporate actions, insider activity, seasonality, IEV, and sentiment
+- **Universe Overview** - Market-wide view via `saham view universe lq45` showing price, foreign flow, and sector context per ticker
+- **Composite Signal Score** - `saham screen accum` now includes a 0–100 composite score combining enrichment, broker flow, technical, and valuation signals
+- **Earnings History** - Quarterly earnings beat/miss streak from Stockbit `/earnings` endpoint, surfaced in swing analysis and enrichment cache
+- **Valuation Metrics** - P/E and EPS TTM from Stockbit, cached alongside fundamentals
+- **Watchlist Persistence** - `saham screen accum --save NAME` persists screener results; `saham screen watchlist` / `saham screen compare` to review and diff against fresh runs
+- **Cross-Broker Distribution** - `saham view broker distribution TICKER` shows counterparty flow breakdown across brokers
 - **Hexagonal Architecture** - Clean separation of domain, application, and infrastructure
 
 ---
@@ -74,10 +86,10 @@ saham analyze chart price BBRI --sma 20 --ema 50
 | Group | Purpose | Key Sub-commands |
 | :--- | :--- | :--- |
 | **`saham today`** | Daily briefing | read-only regime + candidate summary |
-| **`saham fetch`** | Data Ingestion | `market`, `broker`, `broker-import`, `broker-history`, `broker-top-foreign`, `iev`, `status`, `audit`, `stockbit`, `universe` |
-| **`saham screen`** | Candidate Discovery | `pre-open`, `accum` |
+| **`saham fetch`** | Data Ingestion | `market`, `broker`, `broker-import`, `broker-history`, `broker-top-foreign`, `iev`, `status`, `audit`, `stockbit`, `universe list/update/create/inspect` |
+| **`saham screen`** | Candidate Discovery | `pre-open`, `accum`, `watchlist`, `compare` |
 | **`saham learn`** | Feedback Loop | `snapshot`, `track`, `grade`, `prompt`, `tune` |
-| **`saham view`** | Read-only Browsing | `broker status`, `broker flow`, `broker top`, `broker history`, `broker top-foreign`, `broker mappings` |
+| **`saham view`** | Read-only Browsing | `broker status`, `broker flow`, `broker top`, `broker history`, `broker top-foreign`, `broker distribution`, `broker mappings`, `ticker TICKER` (or just `BBCA`), `universe` |
 | **`saham indicator`**| Technical Math | `compute`, `snapshot`, `create`, `list`, `show`, `delete` |
 | **`saham analyze`** | Insights & Charts | `risk`, `compare`, `sentiment`, `audit`, `regime`, `chart`, `swing`, `accum-audit`, `swing-compare` |
 | **`saham strategy`** | Strategy Lifecycle| `init`, `validate`, `list`, `create`, `backtest`, `skill` |
@@ -465,24 +477,46 @@ saham fetch broker BBCA --days 30
 saham fetch stockbit login
 saham fetch broker BBCA --provider stockbit
 
+# Fetch broker-level flow history (Stockbit, requires auth)
+saham fetch broker-history BBCA --days 60
+
+# Universe scan for top foreign-flow stocks (Stockbit)
+saham fetch broker-top-foreign
+
 # View foreign flow summary
 saham view broker flow BBCA --days 20
+saham view broker history BBCA          # Per-broker time series
+saham view broker top-foreign           # Top foreign stocks across universe
 
 # Check top brokers (requires Stockbit data)
 saham view broker top BBCA
+
+# Cross-broker distribution matrix (Stockbit data)
+saham view broker distribution BBCA
 
 # Import from CSV (legacy path during CLI migration)
 saham fetch broker-import data.csv --preview
 
 # Check provider status
 saham view broker status
+
+# Ticker dashboard — read-only view of all cached data
+saham view BBCA                     # Everything we know about BBCA
+saham view ticker BBCA              # Explicit syntax (same as above)
+
+# Universe overview — price, flow, and sector at a glance
+saham view universe                 # List all universes with ticker counts
+saham view universe lq45            # Market-wide view for LQ45
+saham view universe lq45 --sort flow  # Sort by net foreign flow
+saham view universe lq45 --top 10    # Top 10 tickers only
+saham view universe lq45 --date 2026-06-01  # Show data as of a specific date
 ```
 
 ---
 
 ### `saham fetch market` - Batch Data Update
 
-Fetch fresh candles + broker flow data for an entire universe in one command.
+Fetch fresh candles + broker flow data for an entire universe in one command. Progress is streamed in real-time with per-ticker status callbacks.
 
 ```bash
 saham fetch market --universe lq45              # All LQ45 stocks
@@ -506,24 +540,42 @@ saham fetch market --universe lq45 --refresh    # Force refresh all
 
 ### `saham fetch universe` - Universe Management
 
-Manage stock universe ticker lists.
+Manage stock universe ticker lists. Requires an active Stockbit session for `update`, `inspect`, and `create`.
 
 ```bash
-saham fetch universe list                      # List configured universes
-saham fetch universe update --universe lq45    # Instructions to update universe
+# List configured universes with ticker counts and last-updated dates
+saham fetch universe list
+
+# Update from Stockbit Exodus API
+saham fetch universe update --universe lq45          # Specific universe
+saham fetch universe update                          # All universes
+saham fetch universe update --discover               # List available universes without updating
+
+# Explore Stockbit sectors and create custom universes
+saham fetch universe inspect                         # List all sectors
+saham fetch universe inspect --sector 5              # Subsectors of sector 5
+saham fetch universe inspect --sector 5 --subsector 49  # Companies in subsector 49
+
+# Create a custom universe from a sector/subsector
+saham fetch universe create food_retail -s 1 -b 10
+saham fetch universe create consumer_primer -s 1
 ```
 
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
 | `--config` | | config/universes.yaml | Path to universes.yaml |
+| `--universe`/`-u` | | all | Universe name for update |
+| `--discover` | | false | List available universes from Stockbit |
+| `--sector`/`-s` | | required | Sector ID for inspect/create |
+| `--subsector`/`-b` | | none | Subsector ID for inspect/create |
 
-**Configured universes:** `lq45`, `idx80`, `idxcomp100`, `cached`
+**Configured universes:** `lq45`, `idx80`, `idxcomp100`, `cached`, plus any custom universes created via `fetch universe create`
 
 ---
 
 ### `saham screen accum` - Foreign Accumulation Screener
 
-Screen stocks for institutional foreign accumulation patterns.
+Screen stocks for institutional foreign accumulation patterns. Each result includes a **CompositeSignalScore** (0–100) combining enrichment signals (analyst consensus, insider activity, bandar, fundamentals, earnings beat streak, forward estimates) with broker flow and technical/valuation context.
 
 ```bash
 # Single window
@@ -541,6 +593,9 @@ saham screen accum --universe lq45 --vwap-only
 saham screen accum --universe lq45 --squeeze-only
 saham screen accum --universe lq45 --granular
 saham screen accum --universe lq45 --breakdown
+
+# Save to watchlist for later comparison
+saham screen accum --universe lq45 --save morning-watch
 
 # Column reference guide
 saham screen accum --guide
@@ -564,10 +619,29 @@ saham screen accum --universe lq45 --format json
 | `--windows` | | 7,30,90 | Comma-separated broker-session windows for --multi |
 | `--sort-by` | | avg | Sort by: avg, max, 7s, 30s, 90s. Legacy 7d/30d/90d labels are also accepted. |
 | `--format` | | table | Output format: table or json |
+| `--save` | | none | Save results to watchlist (e.g. `--save morning-watch`) |
 | `--guide` | | false | Print column reference guide |
 | `--explain` | | false | Print column guide after results |
 
 **Score components (0-120 total):** consistency (40) + streak (30) + VWAP discount (20) + RSI headroom (10) + flow % (10) + BB squeeze (10) + institutional flag (5)
+
+#### `saham screen watchlist` - Saved Snapshots
+
+List all saved watchlists or show tickers in a named list. Watchlists are created via `saham screen accum --save NAME`.
+
+```bash
+saham screen watchlist                  # List all saved watchlists
+saham screen watchlist morning-watch    # Show tickers in 'morning-watch'
+```
+
+#### `saham screen compare` - Diff Against Fresh Run
+
+Compare a saved watchlist against a fresh screener run. Shows: new entries, dropped tickers, and signal strength changes.
+
+```bash
+saham screen compare morning-watch                          # Compare using saved universe
+saham screen compare morning-watch --universe lq45 --top 30  # Override universe and limit
+```
 
 #### `saham analyze accum-audit` - Historical Audit
 
@@ -1129,65 +1203,95 @@ saham strategy backtest BBCA --strategy momentum
 ```
 src/
 ├── domain/                          # Pure business logic
-│   ├── entities/                    # Stock, Candle, BacktestTrade
+│   ├── entities/                    # Stock, Candle, BrokerFlow, StockMeta
 │   ├── indicators/                  # SMA, EMA, RSI calculations
-│   ├── ports/                       # Interfaces
+│   ├── ports/                       # Interfaces (37+ provider/repository ports)
+│   │   ├── broker_data_provider.py
+│   │   ├── broker_data_repository.py
 │   │   ├── market_data_provider.py
 │   │   ├── market_data_repository.py
 │   │   ├── ai_explainer.py
 │   │   ├── news_provider.py
-│   │   ├── headline_classifier.py
-│   │   ├── sentiment_repository.py
-│   │   ├── broker_data_provider.py
-│   │   ├── browser_data_provider.py
-│   │   └── csv_broker_parser.py
+│   │   ├── analyst_consensus_provider.py
+│   │   ├── bandar_detector_provider.py
+│   │   ├── company_profile_provider.py
+│   │   ├── earnings_provider.py
+│   │   ├── forward_estimates_provider.py
+│   │   ├── fundamentals_provider.py
+│   │   ├── insider_activity_provider.py
+│   │   ├── intraday_broker_chart_provider.py
+│   │   ├── order_book_provider.py
+│   │   ├── running_trade_chart_provider.py
+│   │   ├── running_trade_provider.py
+│   │   ├── seasonality_provider.py
+│   │   ├── shareholding_provider.py
+│   │   ├── ticker_notation_provider.py
+│   │   ├── valuation_provider.py
+│   │   └── ... (37+ total port interfaces)
 │   ├── rules/                       # Risk assessment rules
 │   │   ├── rule_engine.py
 │   │   ├── conservative.py
 │   │   ├── balanced.py
 │   │   └── aggressive.py
-│   ├── value_objects/               # Immutable domain objects
-│   │   ├── indicator_snapshot.py
-│   │   ├── risk_assessment.py
-│   │   ├── backtest_result.py
-│   │   ├── trade_action.py
-│   │   ├── skill_annotation.py
-│   │   ├── sentiment.py
-│   │   ├── broker_summary.py
-│   │   ├── screener_result.py
-│   │   └── intraday_confirmation.py
-│   └── services/
-│       └── backtest_engine.py
+│   ├── services/
+│   │   ├── analyze_stock.py
+│   │   ├── backtest_engine.py
+│   │   └── trading_calendar.py
+│   └── value_objects/               # Immutable domain objects
+│       ├── risk_assessment.py
+│       ├── backtest_result.py
+│       ├── screener_result.py
+│       ├── sentiment.py
+│       ├── indicator_snapshot.py
+│       ├── intraday_confirmation.py
+│       ├── analyst_consensus.py
+│       ├── company_fundamentals.py
+│       ├── company_profile.py
+│       ├── composite_signal_score.py
+│       ├── earnings_record.py
+│       ├── forward_estimates.py
+│       ├── insider_transaction.py
+│       ├── intraday_broker_chart.py
+│       ├── market_status.py
+│       ├── order_book_snapshot.py
+│       ├── running_trade_chart.py
+│       ├── running_trade_signal.py
+│       ├── screen_snapshot.py
+│       ├── shareholding_composition.py
+│       ├── ticker_notation.py
+│       ├── valuation_metrics.py
+│       ├── broker_distribution.py
+│       └── ... (33+ total value objects)
 │
 ├── application/                      # Use cases & application services
 │   ├── use_case/
 │   │   ├── fetch_market_data.py
 │   │   ├── refresh_market_data.py
-│   │   ├── compute_sma.py
-│   │   ├── compute_ema.py
-│   │   ├── compute_rsi.py
-│   │   ├── aggregate_indicators.py
-│   │   ├── assess_risk.py
-│   │   ├── explain_risk.py
-│   │   ├── fetch_sentiment.py
-│   │   ├── audit_sentiment.py
-│   │   ├── backtest.py
 │   │   ├── fetch_broker_data.py
-│   │   ├── import_broker_data.py
-│   │   ├── pre_open_screen.py
-│   │   ├── confirm_intraday_open.py
-│   │   ├── accumulation_screen.py
-│   │   ├── accumulation_audit.py
+│   │   ├── fetch_broker_daily_flows.py
+│   │   ├── fetch_market_refresh.py
+│   │   ├── refresh_broker_data.py
+│   │   ├── refresh_stockbit_enrichment.py
+│   │   ├── compute_sma.py / compute_ema.py / compute_rsi.py
+│   │   ├── aggregate_indicators.py
+│   │   ├── assess_risk.py / explain_risk.py
+│   │   ├── fetch_sentiment.py / audit_sentiment.py
+│   │   ├── backtest.py / swing_backtest.py
+│   │   ├── pre_open_screen.py / pre_open_workflow.py
+│   │   ├── confirm_intraday_open.py / intraday_backtest.py
+│   │   ├── accumulation_screen.py / accumulation_audit.py
 │   │   ├── market_regime.py
-│   │   ├── swing_backtest.py
+│   │   ├── data_quality_audit.py
+│   │   ├── data_update_status.py
+│   │   ├── daily_briefing.py
+│   │   ├── analyze_running_trade.py
+│   │   ├── swing_analysis_workflow.py
+│   │   ├── opening_snapshot/track/grade/prompt/tune.py
 │   │   ├── create_indicator_from_intent.py
 │   │   └── create_strategy_from_intent.py
 │   ├── formula/                      # Formula DSL engine
-│   │   ├── tokenizer.py
-│   │   ├── parser.py
-│   │   ├── ast_nodes.py
-│   │   ├── validator.py
-│   │   └── evaluator.py
+│   │   ├── tokenizer.py / parser.py / ast_nodes.py
+│   │   ├── validator.py / evaluator.py
 │   ├── services/
 │   │   ├── indicator_registry.py
 │   │   ├── strategy_loader.py
@@ -1200,7 +1304,8 @@ src/
 │   ├── ports/
 │   │   ├── formula_translator.py
 │   │   ├── strategy_translator.py
-│   │   └── skill_writer.py
+│   │   ├── skill_writer.py
+│   │   └── corporate_action_repository.py
 │   ├── rules/
 │   │   ├── schema.py
 │   │   └── interpreter.py
@@ -1209,19 +1314,48 @@ src/
 ├── infrastructure/                   # External implementations
 │   ├── data_providers/
 │   │   ├── yahoo.py                  # Yahoo Finance
-│   │   ├── idx_market.py             # IDX market data
+│   │   ├── yahoo_stock_meta.py       # Yahoo stock metadata
 │   │   ├── idx.py                    # IDX broker data
-│   │   └── stockbit.py               # Stockbit broker data
-│   ├── browser/
-│   │   ├── playwright_stockbit.py    # Playwright-based automation
-│   │   └── stockbit_browser.py       # Manual browser provider
+│   │   └── idx_market.py             # IDX market data
+│   ├── browser/                      # Stockbit enrichment providers (20 files)
+│   │   ├── playwright_stockbit.py    # Broker provider + Playwright automation
+│   │   ├── stockbit_analyst.py
+│   │   ├── stockbit_bandar.py
+│   │   ├── stockbit_company_profile.py
+│   │   ├── stockbit_corp_action.py
+│   │   ├── stockbit_earnings.py
+│   │   ├── stockbit_forward_estimates.py
+│   │   ├── stockbit_fundamentals.py
+│   │   ├── stockbit_insider.py
+│   │   ├── stockbit_intraday_broker_chart.py
+│   │   ├── stockbit_order_book.py
+│   │   ├── stockbit_running_trade.py
+│   │   ├── stockbit_running_trade_chart.py
+│   │   ├── stockbit_seasonality.py
+│   │   ├── stockbit_shareholding.py
+│   │   ├── stockbit_ticker_notation.py
+│   │   ├── stockbit_valuation.py
+│   │   ├── stockbit_broker_distribution.py
+│   │   ├── stockbit_browser.py
+│   │   ├── stockbit_market_time.py
+│   │   ├── stockbit_universe.py
+│   │   └── ... (23 specialized providers)
 │   ├── persistence/
+│   │   ├── sqlite.py                 # Core SQLite repository
 │   │   ├── sqlite_market_repository.py
 │   │   ├── sqlite_broker_repository.py
+│   │   ├── sqlite_stock_meta_repository.py
+│   │   ├── sqlite_data_quality_audit.py
+│   │   ├── sqlite_data_update_status.py
+│   │   ├── sqlite_iev_repository.py
+│   │   ├── sqlite_watchlist_repository.py
+│   │   ├── sqlite_system_status_provider.py
 │   │   ├── formula_storage.py
 │   │   ├── sentiment_repository.py
 │   │   ├── intraday_confirmation_csv.py
-│   │   └── accumulation_journal_csv_writer.py
+│   │   ├── accumulation_journal_csv_writer.py
+│   │   ├── iev_json_sidecar.py
+│   │   └── trade_journal_jsonl_writer.py
 │   ├── ai/
 │   │   ├── factory.py
 │   │   ├── deepseek_explainer.py
@@ -1229,10 +1363,8 @@ src/
 │   │   ├── openai_explainer.py
 │   │   ├── gemini_explainer.py
 │   │   ├── ollama_explainer.py
-│   │   ├── formula_translator.py
-│   │   ├── formula_translator_prompt.py
-│   │   ├── strategy_translator.py
-│   │   ├── strategy_translator_prompt.py
+│   │   ├── formula_translator.py / prompt.py
+│   │   ├── strategy_translator.py / prompt.py
 │   │   └── mock_explainer.py
 │   ├── sentiment/
 │   │   ├── factory.py
@@ -1249,35 +1381,46 @@ src/
 │   ├── csv/
 │   │   └── adapter.py                # CSV broker data import
 │   └── config/
+│       ├── swing_config.py           # Swing screener configuration
 │       └── yaml_loader.py
 │
 ├── adapters/                         # User interfaces
 │   ├── cli/
-│   │   ├── main.py                   # Main CLI entry point (group definitions)
+│   │   ├── main.py                   # CLI entry point (group definitions)
 │   │   ├── fetch_commands.py         # Fetch group router
-│   │   ├── fetch_market_commands.py  # (impl) Market data fetch
-│   │   ├── fetch_iev_commands.py     # (impl) IEV snapshot capture
-│   │   ├── view_commands.py          # View group (read-only broker views)
-│   │   ├── learn_commands.py         # Learn group router
-│   │   ├── learn_opening_commands.py # (impl) Opening learning loop
-│   │   ├── status_commands.py        # Data health and freshness
-│   │   ├── today_commands.py         # Daily briefing
-│   │   ├── analyze_commands.py       # Analyze group (risk, sentiment, regime, chart)
-│   │   ├── trade_commands.py         # Trade workspace router
-│   │   ├── trade_intraday_commands.py# (impl) Intraday trade CLI
-│   │   ├── indicator_commands.py     # Indicator group (compute, snapshot, create)
-│   │   ├── strategy_commands.py      # Strategy group (init, validate, backtest)
-│   │   ├── skill_commands.py         # Strategy skill implementation
-│   │   ├── screen_lifecycle_commands.py   # (impl) Screen lifecycle management
-│   │   ├── screen_pre_open_commands.py    # (impl) Pre-open screen CLI
-│   │   ├── accumulation_commands.py  # (impl) Accumulation screen logic
-│   │   ├── broker_commands.py        # (impl) Broker data logic
-│   │   ├── chart_commands.py         # (impl) Chart rendering
-│   │   ├── intraday_workflow_commands.py  # (impl) Shared intraday logic
-│   │   ├── sentiment_commands.py     # (impl) Sentiment logic
-│   │   ├── stockbit_commands.py      # (impl) Stockbit session management
-│   │   ├── swing_commands.py         # (impl) Swing/unified analysis
-│   │   └── update_commands.py        # (impl) Batch update logic
+│   │   ├── fetch_market_commands.py
+│   │   ├── fetch_iev_commands.py
+│   │   ├── fetch_universe_commands.py
+│   │   ├── view_commands.py          # Read-only broker views + ticker dashboard
+│   │   ├── view_ticker_display.py    # Read-only ticker dashboard display
+│   │   ├── broker_commands.py / broker_display.py
+│   │   ├── learn_commands.py / learn_opening_commands.py
+│   │   ├── status_commands.py
+│   │   ├── today_commands.py
+│   │   ├── analyze_commands.py
+│   │   ├── trade_commands.py / trade_intraday_commands.py
+│   │   ├── indicator_commands.py
+│   │   ├── strategy_commands.py / skill_commands.py
+│   │   ├── stockbit_commands.py
+│   │   ├── screen_pre_open_commands.py
+│   │   ├── screen_lifecycle_commands.py
+│   │   ├── accumulation_commands.py
+│   │   ├── accumulation_display.py
+│   │   ├── accumulation_audit_display.py
+│   │   ├── accumulation_journal_display.py
+│   │   ├── intraday_pre_open_display.py
+│   │   ├── intraday_confirmation_display.py
+│   │   ├── intraday_backtest_display.py
+│   │   ├── swing_commands.py
+│   │   ├── swing_display.py
+│   │   ├── swing_broker_display.py
+│   │   ├── swing_analysis_display.py
+│   │   ├── swing_size_display.py
+│   │   ├── chart_commands.py
+│   │   ├── sentiment_commands.py
+│   │   ├── data_quality_commands.py
+│   │   ├── intraday_workflow_commands.py
+│   │   └── rich_display.py           # Shared Rich rendering
 │   ├── bot/                          # Telegram, WhatsApp (stubs)
 │   └── web/                          # REST API (stub)
 │
@@ -1313,7 +1456,7 @@ src/
 
 | File | Description |
 |------|-------------|
-| `config/default.yaml` | Base configuration |
+| `config/default.yaml` | Authoritative CLI defaults source (overridable by `config/user.yaml` and CLI flags) |
 | `config/conservative.yaml` | Conservative profile |
 | `config/balanced.yaml` | Balanced profile |
 | `config/aggressive.yaml` | Aggressive profile |
@@ -1321,6 +1464,7 @@ src/
 | `config/formulas.yaml` | Persisted custom formulas |
 | `config/universes.yaml` | Ticker universe definitions |
 | `config/idx_groups.yaml` | IDX sector/industry group mappings |
+| `config/swing_screener.yaml` | Swing screener calibration (smart money brokers, noise brokers, preset gates) |
 | `config/csv_mappings/` | CSV import column mapping definitions |
 
 ---
@@ -1354,8 +1498,9 @@ make clean
 ## Data Storage
 
 - **Location:** `./data.db` (SQLite, configurable via `--db`)
-- **Content:** Cached OHLCV candles, broker summaries, sentiment logs, journals
+- **Content:** Cached OHLCV candles (with source provenance), broker summaries, sentiment logs, trade journals, Stockbit enrichment cache (analyst consensus, insider trades, fundamentals, corporate actions, forward estimates, company profiles, shareholding, seasonality)
 - **Refresh:** Use `--refresh` flag or `saham fetch market --universe <name>` to batch update
+- **Enrichment TTL:** Enrichment data auto-refreshes on a per-column TTL basis (daily for price data, weekly for fundamentals, monthly for shareholding)
 
 ---
 

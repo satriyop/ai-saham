@@ -690,6 +690,17 @@ DB     Deutsche Bank        Foreign      -3.80B     -380,000
 ...
 ```
 
+### Cross-Broker Distribution
+
+Shows how brokers trade against each other — which brokers are buying from which sellers (counterparty matrix). Requires cached Stockbit data (fetched as part of `saham fetch market` enrichment cycle).
+
+```bash
+saham view broker distribution BBCA
+saham view broker distribution GOTO
+```
+
+The matrix reveals counterparty flows (e.g., foreign broker buying from local broker) and can highlight coordinated accumulation or distribution patterns.
+
 ### Checking Provider Status
 
 ```bash
@@ -867,7 +878,72 @@ saham strategy backtest BBCA --strategy foreign-accumulation
 
 ---
 
-## 8. Backtesting - The `strategy backtest` Command
+## 8. Ticker Dashboard - The `saham view TICKER` Command
+
+The ticker dashboard gives you **everything we know about a stock** in one read-only view. It never fetches from the network — only displays cached data.
+
+```bash
+saham view BBCA              # Shorthand syntax
+saham view ticker BBCA       # Explicit syntax (identical)
+```
+
+**What it displays (12 panels):**
+- Identity & Ticker Notation — stock name, sector, exchange, Stockbit special badges
+- Price & Valuation — latest close, SMA(20), EMA(20), RSI(14), ATR
+- Analyst Consensus — buy/hold/sell counts and price target upside
+- Ownership — institutional/individual split, top controlling holder
+- Bandar/Institutional Signal — Stockbit operator accumulation score (-9 to +9)
+- Company Profile — sector, industry, market cap, listing date
+- Recent Candles — last 5 trading sessions (open, high, low, close, volume)
+- Corporate Actions — upcoming dividend, RUPS, rights issue dates
+- Insider Activity — recent director/commissioner transactions
+- Seasonality — monthly return % and win rate (5-year history)
+- IEV Snapshots — recent pre-open indicative equilibrium volume/price
+- Sentiment — latest news sentiment snapshot (keyword or AI classified)
+
+**Prerequisites** (run once to populate caches):
+```bash
+saham fetch market BBCA --days 365   # Candles + broker data
+saham fetch stockbit login           # Auth for enrichment data
+saham fetch market BBCA --refresh    # Trigger enrichment refresh
+```
+
+Any panel will show **"not cached — run fetch market ..."** for missing data. The dashboard is always safe to run.
+
+---
+
+## 9. Universe Overview - The `saham view universe` Command
+
+The universe overview gives you a **market-wide snapshot** for all tickers in a named universe — price change, foreign flow, and sector context in a compact table.
+
+```bash
+saham view universe               # List all universes with ticker counts
+saham view universe lq45          # Market-wide view for LQ45
+saham view universe lq45 --sort flow  # Sort by net foreign flow
+saham view universe lq45 --top 10    # Top 10 tickers only
+saham view universe idx80 --date 2026-06-01  # As of a specific date
+```
+
+**Columns shown:**
+- Ticker, Sector, Industry Group
+- Last Price & Net Change (%)
+- Foreign Net Volume & Value (latest broker session)
+- Foreign Flow Ratio (% of total)
+
+**Options:**
+
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `name` | (positional) | — | Universe name to view (omit to list all) |
+| `--sort` | `-s` | flow | Sort by: flow, change, volume, ticker |
+| `--top` | `-n` | all | Show only top N rows |
+| `--date` | `-d` | latest | Show data as of this cached date (YYYY-MM-DD) |
+
+**Prerequisite:** `saham fetch market --universe <name>` must have been run to populate candles and broker data.
+
+---
+
+## 10. Backtesting - The `strategy backtest` Command
 
 Backtesting lets you test a strategy on historical data before risking real capital.
 
@@ -971,7 +1047,7 @@ Avg Loss:                   1,500,000 IDR
 
 ---
 
-## 9. Custom Rules DSL
+## 11. Custom Rules DSL
 
 The Custom Rules DSL lets you encode YOUR investment philosophy into YAML.
 
@@ -1208,7 +1284,7 @@ saham strategy backtest BBCA --rules-file config/my_rules.yaml --verbose
 
 ---
 
-## 10. Strategy Packages - The `strategy` Command
+## 12. Strategy Packages - The `strategy` Command
 
 Strategy packages make strategies **first-class artifacts** - versionable, portable, and shareable.
 
@@ -1438,7 +1514,7 @@ cp -r strategies/momentum ~/.ai-saham/strategies/
 
 ---
 
-## 11. Skill Documentation - The `skill` Command
+## 13. Skill Documentation - The `skill` Command
 
 The skill system generates machine-readable documentation (SKILL.md) for strategies, indicators, and formulas. These files power the project's SKILLS_INDEX.md catalog and enable drift detection when rules change.
 
@@ -1589,7 +1665,7 @@ To add skill documentation to any strategy:
 
 ---
 
-## 12. AI-Enhanced Analysis (Optional)
+## 14. AI-Enhanced Analysis (Optional)
 
 AI is **OFF by default**. The system works completely without AI. Use AI for:
 - Learning what indicators mean
@@ -1676,7 +1752,7 @@ saham indicator create "average true range over 14 days" --name ATR14 --no-save
 
 ---
 
-## 13. Indicator Management Commands
+## 15. Indicator Management Commands
 
 Create, list, and manage custom indicators from the command line.
 
@@ -1768,10 +1844,11 @@ saham indicator delete SMOOTH_RSI --force
 
 ---
 
-## 14. Fetch Market Data - The `fetch market` Command
+## 16. Fetch Market Data - The `fetch market` Command
 
 Keep your local data fresh with a single command. Fetches candles + broker flow
-for an entire universe and pre-warms all Stockbit enrichment caches.
+for an entire universe and pre-warms all Stockbit enrichment caches. Progress is
+streamed in real-time with per-ticker status callbacks.
 
 ```bash
 # Update all LQ45 stocks (candles + broker flow)
@@ -1825,9 +1902,9 @@ cached data produces identical output.
 
 ---
 
-## 15. Foreign Accumulation Screener - The `screen accum` Command
+## 17. Foreign Accumulation Screener - The `screen accum` Command
 
-Screen stocks for institutional foreign accumulation patterns. Detects stocks being quietly bought by foreign investors over multiple days.
+Screen stocks for institutional foreign accumulation patterns. Detects stocks being quietly bought by foreign investors over multiple days. Each result includes a **CompositeSignalScore** (0–100) combining enrichment signals (analyst consensus, insider activity, bandar, fundamentals, earnings beat streak, forward estimates) with broker flow and technical/valuation context.
 
 ### Single-Window Mode
 
@@ -1874,6 +1951,8 @@ cache for all signals in one pass.
 | Shareholding Composition | 🏦 Institutional/individual split + top holder | Stockbit shareholder API | `🏦 HOLDING: DWIMURIA 54.9% \| Inst 31.9% \| Individual 8.7%` |
 | Bandar Detector | 🔍 Institutional operator accumulation/distribution signal (-9 to +9) | Stockbit market detectors | `🔍 BANDAR: Score +5 (Acc, top1 47%)` |
 | Company Fundamentals | 📈 P/E, ROE, Piotroski F-Score, quality gate | Stockbit keystats | `📈 FUNDAM: P/E 18.3, ROE 21.2%, F-Score 7, quality=True` |
+| Valuation Metrics | 🏷 P/E TTM, EPS TTM | Stockbit valuation API | `🏷 VALUATION: P/E 18.3, EPS 245` |
+| Earnings History | 💰 Quarterly earnings beat/miss streak | Stockbit earnings API | `💰 EARNINGS (3/4 beat): BEAT +33% ... MISS -12%` |
 | Broker Detail | Per-broker buy/sell attribution | Stockbit broker data | `─ MANDIRI SEKURITAS BUY 50.0B` |
 
 Corporate action flags, insider activity, analyst consensus, shareholding
@@ -1901,6 +1980,9 @@ saham screen accum --universe lq45 --breakdown
 
 # Column reference guide
 saham screen accum --guide
+
+# Save results to a named watchlist
+saham screen accum --universe lq45 --save morning-watch
 ```
 
 | Option | Short | Default | Description |
@@ -1915,6 +1997,7 @@ saham screen accum --guide
 | `--multi` | | false | Multi-window side-by-side |
 | `--sort-by` | | avg | Sort: avg, max, 7d, 30d, 90d |
 | `--format` | | table | Output format: table or json |
+| `--save` | | none | Persist results to watchlist (e.g. `--save morning-watch`) |
 | `--guide` | | false | Column reference guide |
 
 ### Historical Audit
@@ -1932,9 +2015,33 @@ saham screen accum audit --universe lq45 --window 7 --min-score 70
 saham trade log swing --ticker BBRI --window 7
 ```
 
+### Watchlist Persistence
+
+Save screener results to a named watchlist for later review and comparison:
+
+```bash
+# Save current screener results
+saham screen accum --universe lq45 --save morning-watch
+
+# List all saved watchlists
+saham screen watchlist
+
+# Show tickers in a specific watchlist
+saham screen watchlist morning-watch
+```
+
+### Comparing Watchlists
+
+Diff a saved watchlist against a fresh screener run. Shows new entries, dropped tickers, and signal strength changes:
+
+```bash
+saham screen compare morning-watch
+saham screen compare morning-watch --universe lq45 --top 30
+```
+
 ---
 
-## 16. Pre-Open Screener - The `screen pre-open` Command
+## 18. Pre-Open Screener - The `screen pre-open` Command
 
 A complete pre-market screening to opening-auction confirmation workflow.
 
@@ -1987,7 +2094,7 @@ saham trade outcome BBCA --entry 9000 --exit 9500 --result target
 
 ---
 
-## 17. Opening Session Learning Loop - The `learn` Command
+## 19. Opening Session Learning Loop - The `learn` Command
 
 A daily learning loop for opening scalping: snapshot predictions at 08:57, track
 orderbook prices every 5 minutes from 09:00–09:30, grade accuracy, and tune
@@ -2124,7 +2231,7 @@ data/opening/
 
 ---
 
-## 18. Swing Analyze Workflow - The `analyze swing` Command
+## 20. Swing Analyze Workflow - The `analyze swing` Command
 
 Unified analysis combining accumulation, risk, sizing, backtest, and sentiment in one command.
 
@@ -2204,7 +2311,7 @@ saham trade size BBRI --capital 10000000 --risk-pct 2 --entry 4825
 
 ---
 
-## 19. Market Regime - The `analyze regime` Command
+## 21. Market Regime - The `analyze regime` Command
 
 Show deterministic IHSG market regime context for swing trading.
 
@@ -2225,7 +2332,7 @@ Computed from: benchmark SMA20/SMA50 position, breadth (% of universe above SMA2
 
 ---
 
-## 20. Terminal Charts - The `analyze chart` Command
+## 22. Terminal Charts - The `analyze chart` Command
 
 Plot ASCII charts in your terminal (requires `pip install plotext`).
 
@@ -2245,7 +2352,7 @@ saham analyze chart volume BBCA --days 30
 
 ---
 
-## 21. Data Health Check - The `fetch status` Command
+## 23. Data Health Check - The `fetch status` Command
 
 Quick health probe for all data providers and tables:
 
@@ -2261,7 +2368,7 @@ Reports:
 
 ---
 
-## 22. Stockbit Session Management - The `fetch stockbit` Command
+## 24. Stockbit Session Management - The `fetch stockbit` Command
 
 Manage Stockbit browser sessions for automated data fetching.
 
@@ -2298,7 +2405,7 @@ saham fetch stockbit browse
 
 ---
 
-## 23. Local Data Quality Audit - The `fetch audit` Command
+## 25. Local Data Quality Audit - The `fetch audit` Command
 
 Audit cached candle data against the IDX source of truth to detect inconsistencies:
 
@@ -2322,7 +2429,7 @@ Checks:
 
 ---
 
-## 24. Side-by-Side Comparison - The `analyze compare` Command
+## 26. Side-by-Side Comparison - The `analyze compare` Command
 
 Quickly compare risk levels across multiple tickers:
 
@@ -2333,7 +2440,7 @@ saham analyze compare BBCA TLKM --profile conservative
 
 ---
 
-## 25. Complete Workflow Examples
+## 27. Complete Workflow Examples
 
 ### Conservative Investor Workflow
 
@@ -2506,7 +2613,7 @@ saham strategy backtest BBCA --strategy my_flow_strategy
 
 ---
 
-## 26. Command Reference (Quick Lookup)
+## 28. Command Reference (Quick Lookup)
 
 | Command | Purpose | Key Options |
 |---------|---------|-------------|
@@ -2521,6 +2628,9 @@ saham strategy backtest BBCA --strategy my_flow_strategy
 | `saham analyze risk TICKER` | Risk assessment | `--profile`, `--all`, `--rules-file`, `--explain`, `--with-sentiment`, `--trend`, `--format` |
 | `saham analyze sentiment TICKER` | News sentiment | `--days`, `--max`, `--ai-classify`, `--news-provider`, `--no-ai` |
 | `saham analyze audit` | Audit sentiment accuracy | — |
+| `saham view TICKER` | Read-only ticker data dashboard (all cached data) | — |
+| `saham view universe` | List all universes with ticker counts | — |
+| `saham view universe NAME` | Market-wide overview (price, flow, sector) | `--sort`, `--top`, `--date` |
 | `saham view broker status` | Check all provider status | — |
 | `saham fetch audit` | Local data quality audit | `--db` |
 | `saham fetch broker TICKER` | Fetch broker summary data | `--days`, `--start`, `--end`, `--refresh`, `--provider` |
@@ -2530,6 +2640,7 @@ saham strategy backtest BBCA --strategy my_flow_strategy
 | `saham view broker flow TICKER` | View foreign flow summary | `--days` |
 | `saham view broker top TICKER` | View top brokers | `--date` |
 | `saham view broker history TICKER` | View foreign flow time-series | `--days`, `--source` |
+| `saham view broker distribution TICKER` | Cross-broker counterparty matrix | — |
 | `saham view broker top-foreign` | View top foreign flow stocks by period | `--days`, `--date`, `--limit` |
 | `saham fetch broker-import FILE` | Import broker data from CSV | `--preview`, `--mapping`, `--on-error` |
 | `saham view broker mappings` | List available CSV mappings | — |
@@ -2545,7 +2656,9 @@ saham strategy backtest BBCA --strategy my_flow_strategy
 | `saham indicator list` | List all indicators | `--formulas` |
 | `saham indicator show NAME` | Show formula details | — |
 | `saham indicator delete NAME` | Delete custom formula | `--force` |
-| `saham screen accum` | Foreign accumulation screener | `--universe`, `--window`, `--multi`, `--format` |
+| `saham screen accum` | Foreign accumulation screener (CompositeSignalScore 0–100) | `--universe`, `--window`, `--multi`, `--format`, `--breakdown`, `--save` |
+| `saham screen watchlist` | List saved watchlists / show tickers in a named one | — |
+| `saham screen compare NAME` | Diff saved watchlist against fresh screener run | `--universe`, `--top` |
 | `saham analyze accum-audit` | Historical accumulation audit | `--universe`, `--preset`, `--simulate-exits` |
 | `saham screen pre-open` | Pre-open market screener | `--movers-json`, `--fast`, `--top` |
 | `saham trade confirm` | Confirm at opening auction | `--opening-json` |
@@ -2560,7 +2673,10 @@ saham strategy backtest BBCA --strategy my_flow_strategy
 | `saham analyze chart price TICKER` | Price chart with overlays | `--sma`, `--ema`, `--days`, `--width` |
 | `saham analyze chart rsi TICKER` | RSI chart | `--period`, `--days` |
 | `saham analyze chart volume TICKER` | Volume bar chart | `--days` |
-| `saham fetch universe list` | List ticker universes | — |
+| `saham fetch universe list` | List configured universes w/ ticker counts | — |
+| `saham fetch universe update` | Refresh universe from Stockbit Exodus API | `--universe`, `--discover` |
+| `saham fetch universe inspect` | Explore Stockbit sectors/subsectors | `--sector`, `--subsector` |
+| `saham fetch universe create NAME` | Create custom universe from sector | `--sector`, `--subsector` |
 | `saham fetch stockbit login` | Stockbit browser login | `--timeout` |
 | `saham fetch stockbit status` | Check session health | — |
 | `saham fetch stockbit test` | Smoke-test adapter | `--ticker`, `--no-headless` |

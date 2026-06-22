@@ -1,3 +1,11 @@
+# Swing Screener Configuration
+#
+# Impacted CLI Commands:
+#   - saham screen accum / saham screen swing (runs accumulation screening using parameters defined here)
+#   - saham analyze swing / swing-compare (uses screen gates, BCI profiles, corporate actions, and preset targets)
+#   - saham trade size (uses swing ATR multipliers / preset targets to size positions)
+#   - saham trade backtest-swing (backtests swing strategies using preset targets and regime-adaptive TP/SL)
+#
 version: 1
 name: "swing-screener"
 description: |

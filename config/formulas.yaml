@@ -1,3 +1,11 @@
+# Custom Indicator Formulas Configuration
+#
+# Impacted CLI Commands:
+#   - saham indicator compute (runs computation of custom formulas saved here)
+#   - saham indicator create (translates natural language to formulas and saves them here)
+#   - saham indicator list / show / delete (manages formulas saved here)
+#   - saham analyze risk / strategy backtest (can reference custom formulas via rule/strategy files)
+#
 formulas:
   SMOOTH_RSI:
     created: '2026-06-15T07:14:46.357979'

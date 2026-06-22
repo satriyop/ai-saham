@@ -1,4 +1,9 @@
 # Example CSV Mapping Configuration
+#
+# Impacted CLI Commands:
+#   - saham fetch broker-import (imports transaction CSV file using custom mappings)
+#   - saham view broker mappings (lists available mapping files under config/csv_mappings/)
+#
 # Copy this file and modify for your custom CSV format
 #
 # Save as: ~/.ai-saham/csv_mappings/my_format.yaml

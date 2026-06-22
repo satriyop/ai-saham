@@ -1,3 +1,11 @@
+ Phase 0 — Ticker Data Dashboard (read-only, uses cache)
+
+ saham view BBCA                  # 12 panels: notation, valuation, consensus, ownership, bandar,
+                                  #   corporate actions, insider activity, seasonality, IEV,
+                                  #   sentiment, company profile, recent candles
+ saham view ticker BBCA           # Explicit syntax (same output)
+
+ ---
  Phase 1 — Get Market Data (do this first, once)
 
  saham fetch market BBCA --days 730        # Downloads 2yr OHLCV + broker flow, cached to data.db
@@ -133,7 +141,9 @@
  saham fetch market --universe idx30 --days 365      # Batch fetch all idx30 tickers
  saham fetch market --broker-only                    # Update broker data only
  saham fetch universe list                           # List available universes
- saham fetch universe update --universe custom       # Update universe stock list
+ saham fetch universe update -u lq45                 # Refresh universe from Stockbit
+ saham fetch universe inspect -s 5                   # Explore sector 5 subsectors
+ saham fetch universe create food_retail -s 1 -b 10  # Create custom universe from subsector
 
  ---
 
