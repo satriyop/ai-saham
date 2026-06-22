@@ -19,11 +19,12 @@ from src.application.use_case.data_quality_audit import (
     DataQualityIssue,
     DataQualityTableSnapshot,
 )
+from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.persistence.sqlite_data_quality_audit import (
     SQLiteDataQualityAuditReader,
 )
 
-DEFAULT_DB_PATH = Path("data.db")
+DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 
 
 def data_quality_audit(

@@ -23,10 +23,12 @@ from typing import Annotated, Optional
 import typer
 
 from src.domain.value_objects.idx_market import IDX_TIMEZONE
-OPENING_DATA_DIR = Path("data/opening")
-DEFAULT_DB_PATH = Path("data.db")
-DEFAULT_SESSION_FILE = Path("stockbit_session.json")
-DEFAULT_PRE_OPEN_CONFIG = Path("config/pre_open_screener.yaml")
+from src.infrastructure.config.app_config import APP_CFG
+
+OPENING_DATA_DIR = Path(APP_CFG.storage.opening_data_dir)
+DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
+DEFAULT_SESSION_FILE = Path(APP_CFG.storage.stockbit_session_file)
+DEFAULT_PRE_OPEN_CONFIG = Path(APP_CFG.storage.pre_open_config)
 
 def _today_dir(run_date: date | None = None) -> Path:
     d = run_date or datetime.now(IDX_TIMEZONE).date()
@@ -91,7 +93,7 @@ def snapshot(
             )
             from pathlib import Path as _Path
             _mstatus = None
-            if _Path(".stockbit_profile").exists():
+            if _Path(APP_CFG.storage.stockbit_profile_dir).exists():
                 from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
                 _bp = StockbitPlaywrightBrokerProvider()
                 if _bp.is_authenticated():

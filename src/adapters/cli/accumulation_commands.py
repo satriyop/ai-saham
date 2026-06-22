@@ -991,8 +991,8 @@ def accumulation_audit(
 # Accumulation trade journal commands
 # ---------------------------------------------------------------------------
 
-DEFAULT_ACCUM_JOURNAL_PATH = Path("journals/accumulation.csv")
-DEFAULT_TRADE_JOURNAL_PATH = Path("journals/trades.jsonl")
+DEFAULT_ACCUM_JOURNAL_PATH = Path(APP_CFG.storage.accum_journal)
+DEFAULT_TRADE_JOURNAL_PATH = Path(APP_CFG.storage.trade_journal)
 
 
 def _accumulation_log_impl(

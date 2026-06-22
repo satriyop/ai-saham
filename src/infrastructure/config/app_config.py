@@ -34,6 +34,16 @@ class MarketConfig:
 @dataclass(frozen=True)
 class StorageConfig:
     db_path: str = "data.db"
+    accum_journal: str = "journals/accumulation.csv"
+    trade_journal: str = "journals/trades.jsonl"
+    stockbit_profile_dir: str = ".stockbit_profile"
+    stockbit_session_file: str = "stockbit_session.json"
+    intraday_sidecar: str = "journals/.last-session.json"
+    intraday_confirmation: str = "journals/.last-confirmation.json"
+    intraday_confirmation_journal: str = "journals/intraday-confirmations.csv"
+    opening_data_dir: str = "data/opening"
+    pre_open_config: str = "config/pre_open_screener.yaml"
+    swing_config: str = "config/swing_screener.yaml"
 
 
 @dataclass(frozen=True)

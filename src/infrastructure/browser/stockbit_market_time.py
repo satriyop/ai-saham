@@ -318,8 +318,9 @@ def fetch_and_cache_market_status() -> MarketStatus | None:
     """
     try:
         from pathlib import Path
+        from src.infrastructure.config.app_config import APP_CFG
         from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
-        if not Path(".stockbit_profile").exists():
+        if not Path(APP_CFG.storage.stockbit_profile_dir).exists():
             return None
         provider = StockbitPlaywrightBrokerProvider()
         if not provider.is_authenticated():
@@ -349,8 +350,9 @@ def get_current_market_status() -> MarketStatus:
         return cached
     try:
         from pathlib import Path
+        from src.infrastructure.config.app_config import APP_CFG
         from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
-        if Path(".stockbit_profile").exists():
+        if Path(APP_CFG.storage.stockbit_profile_dir).exists():
             provider = StockbitPlaywrightBrokerProvider()
             if provider.is_authenticated():
                 result = StockbitMarketTimeProvider(broker_provider=provider).get_status()

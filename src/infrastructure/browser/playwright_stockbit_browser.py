@@ -23,9 +23,10 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+from src.infrastructure.config.app_config import APP_CFG
 
 # ── Defaults ───────────────────────────────────────────────────────────────
-DEFAULT_PROFILE_DIR = Path(".stockbit_profile")
+DEFAULT_PROFILE_DIR = Path(APP_CFG.storage.stockbit_profile_dir)
 
 # ── Stockbit URLs ──────────────────────────────────────────────────────────
 BASE_URL = "https://stockbit.com"

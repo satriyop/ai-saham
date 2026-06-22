@@ -101,7 +101,7 @@ FOREIGN_BOUNCE_MAX_HOLD_DAYS = 10
 FOREIGN_BOUNCE_TAKE_PROFIT = Decimal("5")
 FOREIGN_BOUNCE_STOP_LOSS = Decimal("5")
 
-_SWING_SCREENER_CONFIG_PATH = Path("config/swing_screener.yaml")
+_SWING_SCREENER_CONFIG_PATH = Path(APP_CFG.storage.swing_config)
 
 
 def _load_swing_screener_config() -> dict:

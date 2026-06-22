@@ -17,6 +17,7 @@ from typing import Annotated, Optional
 import typer
 
 from src.application.services.bootstrap import create_indicator_registry
+from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
 chart_app = typer.Typer(
@@ -26,7 +27,7 @@ chart_app = typer.Typer(
     context_settings={"help_option_names": ["-h", "--help"]},
 )
 
-DEFAULT_DB_PATH = Path("data.db")
+DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 
 
 def _require_plotext():

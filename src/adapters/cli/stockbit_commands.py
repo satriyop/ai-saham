@@ -2,7 +2,7 @@
 CLI commands for Stockbit browser session management and adapter diagnostics.
 
 Commands:
-  saham fetch stockbit login   — save browser session cookies (headed Chromium)
+  saham fetch stockbit login   — create persistent browser session profile
   saham fetch stockbit status  — check session health without opening a browser
   saham fetch stockbit spy     — capture all API traffic to identify real endpoints
   saham fetch stockbit test    — smoke-test the live adapter with saved session

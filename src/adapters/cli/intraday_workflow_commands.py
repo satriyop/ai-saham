@@ -83,11 +83,11 @@ from src.domain.value_objects.idx_market import (
 )
 
 DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
-DEFAULT_PRE_OPEN_CONFIG_PATH = Path("config/pre_open_screener.yaml")
-DEFAULT_SESSION_FILE = Path("stockbit_session.json")
-DEFAULT_SIDECAR_PATH = Path("journals/.last-session.json")
-DEFAULT_CONFIRMATION_PATH = Path("journals/.last-confirmation.json")
-DEFAULT_CONFIRMATION_JOURNAL_PATH = Path("journals/intraday-confirmations.csv")
+DEFAULT_PRE_OPEN_CONFIG_PATH = Path(APP_CFG.storage.pre_open_config)
+DEFAULT_SESSION_FILE = Path(APP_CFG.storage.stockbit_session_file)
+DEFAULT_SIDECAR_PATH = Path(APP_CFG.storage.intraday_sidecar)
+DEFAULT_CONFIRMATION_PATH = Path(APP_CFG.storage.intraday_confirmation)
+DEFAULT_CONFIRMATION_JOURNAL_PATH = Path(APP_CFG.storage.intraday_confirmation_journal)
 DEFAULT_REGIME_UNIVERSE = APP_CFG.analysis.regime_universe
 DEFAULT_REGIME_BENCHMARK = APP_CFG.analysis.benchmark
 

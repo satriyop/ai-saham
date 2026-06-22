@@ -72,7 +72,7 @@ from src.infrastructure.config.data_sources_config import (
 )
 
 DEFAULT_DAYS: int = APP_CFG.fetch.default_days
-STOCKBIT_PROFILE_DIR = Path(".stockbit_profile")
+STOCKBIT_PROFILE_DIR = Path(APP_CFG.storage.stockbit_profile_dir)
 
 # Benchmark ticker always included in every market refresh run (first in list).
 # Required by: saham analyze regime, saham analyze swing (market context).

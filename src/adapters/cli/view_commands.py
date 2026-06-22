@@ -11,6 +11,8 @@ from typing import Annotated, Optional
 import typer
 from typer.core import TyperGroup
 
+from src.infrastructure.config.app_config import APP_CFG
+
 from src.adapters.cli.broker_commands import (
     broker_distribution_view,
     broker_flow,
@@ -67,7 +69,7 @@ def view_ticker(
 ) -> None:
     """Show all cached data for a ticker."""
     from src.adapters.cli.view_ticker_display import show_ticker_view
-    show_ticker_view(ticker.upper(), db_path=Path("data.db"))
+    show_ticker_view(ticker.upper(), db_path=Path(APP_CFG.storage.db_path))
 
 
 @view_app.command("universe")
@@ -91,7 +93,7 @@ def view_universe(
     db_path: Annotated[
         Path,
         typer.Option("--db", hidden=True),
-    ] = Path("data.db"),
+    ] = Path(APP_CFG.storage.db_path),
 ) -> None:
     """Show a market overview for all tickers in a named universe.
 

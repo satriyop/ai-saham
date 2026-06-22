@@ -21,6 +21,8 @@ from typing import Annotated, Optional
 
 import typer
 
+from src.infrastructure.config.app_config import APP_CFG
+
 from src.adapters.cli.accumulation_commands import (
     DEFAULT_ACCUM_JOURNAL_PATH,
     DEFAULT_DB_PATH,
@@ -198,7 +200,7 @@ def trade_migrate_journal(
         intraday_entry_to_record,
     )
 
-    output_path = trades_journal or Path("journals/trades.jsonl")
+    output_path = trades_journal or Path(APP_CFG.storage.trade_journal)
     accum_path = accum_csv or DEFAULT_ACCUM_JOURNAL_PATH
     intraday_path = intraday_csv or DEFAULT_CONFIRMATION_JOURNAL_PATH
 

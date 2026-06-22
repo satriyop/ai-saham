@@ -24,7 +24,9 @@ universe_app = typer.Typer(
     context_settings={"help_option_names": ["-h", "--help"]},
 )
 
-_STOCKBIT_PROFILE_DIR = Path(".stockbit_profile")
+from src.infrastructure.config.app_config import APP_CFG
+
+_STOCKBIT_PROFILE_DIR = Path(APP_CFG.storage.stockbit_profile_dir)
 
 
 @universe_app.command("list")

@@ -25,9 +25,10 @@ from src.domain.ports.sentiment_repository import SentimentLog
 from src.domain.value_objects.sentiment import CatalystType, Sentiment, SentimentSnapshot
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 from src.infrastructure.persistence.sentiment_repository import SQLiteSentimentRepository
+from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.sentiment import SentimentFactory
 
-DEFAULT_DB_PATH = Path("data.db")
+DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 
 
 def sentiment(

@@ -55,7 +55,7 @@ from src.infrastructure.config.app_config import APP_CFG
 PROVIDERS = ("idx", "stockbit")
 DEFAULT_PROVIDER = APP_CFG.broker.provider
 
-_DEFAULT_PROFILE_DIR = Path(".stockbit_profile")
+_DEFAULT_PROFILE_DIR = Path(APP_CFG.storage.stockbit_profile_dir)
 
 
 def _create_provider(provider_name: str) -> BrokerDataProvider:

@@ -22,7 +22,17 @@ market:
 
 # ── Storage ───────────────────────────────────────────────────────────────
 storage:
-  db_path: "data.db"     # SQLite path (relative to CWD, or absolute with ~)
+  db_path: "data.db"                         # SQLite path (relative to CWD, or absolute with ~)
+  accum_journal: "journals/accumulation.csv"  # Accumulation screener results log
+  trade_journal: "journals/trades.jsonl"     # Portfolio trade log (JSON Lines format)
+  stockbit_profile_dir: ".stockbit_profile"   # Playwright browser profile directory
+  stockbit_session_file: "stockbit_session.json"  # Session marker and credentials file
+  intraday_sidecar: "journals/.last-session.json"  # Last intraday session state sidecar
+  intraday_confirmation: "journals/.last-confirmation.json"  # Last intraday order confirmation temp file
+  intraday_confirmation_journal: "journals/intraday-confirmations.csv"  # Intraday trades execution journal
+  opening_data_dir: "data/opening"           # Intraday learning loop data directory
+  pre_open_config: "config/pre_open_screener.yaml"  # Pre-open screener rule definitions
+  swing_config: "config/swing_screener.yaml"  # Swing screener rule definitions
 
 # ── Broker ────────────────────────────────────────────────────────────────
 broker:
