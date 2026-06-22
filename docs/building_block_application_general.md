@@ -52,8 +52,7 @@ The same layers with their actual components visible:
 │  fetch_market_commands.py (market data fetch impl)                  │
 │  fetch_iev_commands.py (IEV snapshot capture impl)                  │
 │  view_commands.py (read-only broker views)                          │
-│  learn_commands.py (learn group router)                             │
-│  learn_opening_commands.py (opening learning loop impl)             │
+│  learn_commands.py (opening learning loop impl)                     │
 │  today_commands.py (daily briefing)                                  │
 │  fetch_status_commands.py (data health check)                        │
 │  indicator_commands.py (compute, snapshot, create, list)            │
@@ -64,8 +63,8 @@ The same layers with their actual components visible:
 │  strategy_skill_commands.py (strategy skill implementation)         │
 │  screen_lifecycle_commands.py (screen lifecycle helper)             │
 │  screen_pre_open_commands.py (pre-open screen CLI impl)             │
-│  + impl files (accumulation, broker, analyze_chart, intraday_workflow,│
-│    analyze_sentiment, fetch_stockbit, analyze_swing, trade_swing)    │
+│  + impl files (analyze_chart, analyze_sentiment, fetch_stockbit,       │
+│    analyze_swing, trade_swing)                                       │
 └──────────────────────────┬──────────────────────────────────────────┘
                            │
 ┌──────────────────────────▼──────────────────────────────────────────┐
@@ -574,8 +573,7 @@ Each Big block decomposes into Medium modules:
 | Data Fetch (market) | `cli/fetch_market_commands.py` | Implementation of market data fetch |
 | IEV Capture | `cli/fetch_iev_commands.py` | Implementation of IEV snapshot capture |
 | View Router | `cli/view_commands.py` | `saham view broker [flow, top, history, top-foreign, distribution, mappings, status]` plus `saham view TICKER` (shorthand: `saham view BBCA`), `saham view universe` |
-| Learn Router | `cli/learn_commands.py` | `saham learn [snapshot, track, grade, prompt, tune]` |
-| Learn (opening) | `cli/learn_opening_commands.py` | Implementation of opening learning loop commands |
+| Learn (opening) | `cli/learn_commands.py` | Implementation of opening learning loop commands (`snapshot`, `track`, `grade`, `prompt`, `tune`) |
 | Today Briefing | `cli/today_commands.py` | `saham today` daily briefing |
 | Status Impl | `cli/fetch_status_commands.py` | `saham fetch status` |
 | Indicator Router| `cli/indicator_commands.py` | `saham indicator [compute, snapshot, create, list, show, delete]` |

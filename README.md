@@ -1395,11 +1395,12 @@ src/
 │   │   ├── fetch_status_commands.py
 │   │   ├── fetch_audit_commands.py
 │   │   ├── fetch_stockbit_commands.py
+│   │   ├── fetch_broker_commands.py / fetch_broker_display.py
 │   │   ├── view_commands.py          # Read-only broker views + ticker dashboard
 │   │   ├── view_ticker_display.py    # Read-only ticker dashboard display
 │   │   ├── view_universe_display.py
-│   │   ├── broker_commands.py / broker_display.py
-│   │   ├── learn_commands.py / learn_opening_commands.py
+│   │   ├── view_broker_commands.py / view_broker_display.py
+│   │   ├── learn_commands.py         # Learning loop group commands
 │   │   ├── today_commands.py
 │   │   ├── analyze_commands.py
 │   │   ├── analyze_swing_commands.py / analyze_swing_display.py
@@ -1407,21 +1408,18 @@ src/
 │   │   ├── analyze_chart_commands.py
 │   │   ├── analyze_sentiment_commands.py
 │   │   ├── analyze_regime_commands.py / analyze_regime_display.py
-│   │   ├── trade_commands.py / trade_intraday_commands.py
+│   │   ├── analyze_accum_commands.py / analyze_accum_display.py
+│   │   ├── trade_commands.py
 │   │   ├── trade_swing_commands.py / trade_swing_display.py
 │   │   ├── trade_swing_size_display.py
+│   │   ├── trade_intraday_commands.py / trade_intraday_display.py
+│   │   ├── trade_intraday_backtest_display.py
+│   │   ├── trade_accum_commands.py / trade_accum_display.py
 │   │   ├── indicator_commands.py
 │   │   ├── strategy_commands.py / strategy_skill_commands.py
-│   │   ├── screen_pre_open_commands.py
+│   │   ├── screen_pre_open_commands.py / screen_pre_open_display.py
 │   │   ├── screen_lifecycle_commands.py
-│   │   ├── accumulation_commands.py
-│   │   ├── accumulation_display.py
-│   │   ├── accumulation_audit_display.py
-│   │   ├── accumulation_journal_display.py
-│   │   ├── intraday_pre_open_display.py
-│   │   ├── intraday_confirmation_display.py
-│   │   ├── intraday_backtest_display.py
-│   │   ├── intraday_workflow_commands.py
+│   │   ├── screen_accum_commands.py / screen_accum_display.py
 │   │   └── rich_display.py           # Shared Rich rendering
 │   ├── bot/                          # Telegram, WhatsApp (stubs)
 │   └── web/                          # REST API (stub)
