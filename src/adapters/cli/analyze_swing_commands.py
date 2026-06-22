@@ -137,7 +137,7 @@ def _make_stockbit_providers(db_path: Path) -> Any:
     reads from SQLite and returns None on a cache miss. The only command
     that fetches live data from Stockbit is `saham fetch market`.
     """
-    from src.adapters.cli.accumulation_commands import StockbitProviders
+    from src.infrastructure.browser.stockbit_providers import StockbitProviders
     return StockbitProviders(
         corp_repo=StockbitCorporateActionRepository(broker_provider=None, db_path=db_path),
         season_prov=StockbitSeasonalityProvider(broker_provider=None, db_path=db_path),

@@ -71,37 +71,7 @@ from src.infrastructure.persistence.sqlite_market_repository import (
 )
 
 
-class StockbitProviders:
-    """Holds all optional Stockbit providers sharing one authenticated session."""
-    __slots__ = ("corp_repo", "season_prov", "insider_prov", "analyst_prov", "shareholding_prov", "bandar_prov", "fundamentals_prov", "notation_prov", "forward_estimates_prov")
-
-    def __init__(
-        self,
-        corp_repo: "StockbitCorporateActionRepository | None",
-        season_prov: "StockbitSeasonalityProvider | None",
-        insider_prov: "StockbitInsiderActivityProvider | None",
-        analyst_prov: "StockbitAnalystConsensusProvider | None" = None,
-        shareholding_prov: "StockbitShareholdingProvider | None" = None,
-        bandar_prov: "StockbitBandarDetectorProvider | None" = None,
-        fundamentals_prov: "StockbitFundamentalsProvider | None" = None,
-        notation_prov: "StockbitTickerNotationProvider | None" = None,
-        forward_estimates_prov: "StockbitForwardEstimatesProvider | None" = None,
-    ) -> None:
-        self.corp_repo = corp_repo
-        self.season_prov = season_prov
-        self.insider_prov = insider_prov
-        self.analyst_prov = analyst_prov
-        self.shareholding_prov = shareholding_prov
-        self.bandar_prov = bandar_prov
-        self.fundamentals_prov = fundamentals_prov
-        self.notation_prov = notation_prov
-        self.forward_estimates_prov = forward_estimates_prov
-
-    @classmethod
-    def unavailable(cls) -> "StockbitProviders":
-        return cls(corp_repo=None, season_prov=None, insider_prov=None,
-                   analyst_prov=None, shareholding_prov=None, bandar_prov=None,
-                   fundamentals_prov=None, notation_prov=None, forward_estimates_prov=None)
+from src.infrastructure.browser.stockbit_providers import StockbitProviders
 
 
 def _make_stockbit_providers(db_path: Path) -> "StockbitProviders":
