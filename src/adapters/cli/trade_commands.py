@@ -30,7 +30,7 @@ from src.adapters.cli.accumulation_commands import (
     _accumulation_log_impl,
     accumulation_review,
 )
-from src.adapters.cli.swing_commands import size, swing_backtest
+from src.adapters.cli.trade_swing_commands import size, swing_backtest
 from src.adapters.cli.trade_intraday_commands import (
     confirm_open,
     confirm_outcome,

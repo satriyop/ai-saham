@@ -1,4 +1,4 @@
-"""Tests for _SwingConfig YAML loader in swing_commands."""
+"""Tests for _SwingConfig YAML loader in analyze_swing_commands."""
 
 from decimal import Decimal
 from pathlib import Path
@@ -7,7 +7,7 @@ import pytest
 import yaml
 
 from src.infrastructure.config.swing_config import SwingConfig as _SwingConfig, load_swing_config as _load_swing_screener_config_typed
-from src.adapters.cli.swing_commands import (
+from src.adapters.cli.analyze_swing_commands import (
     SMART_MONEY_BROKERS,
     NOISE_BROKERS,
     BROKER_WEIGHTS,

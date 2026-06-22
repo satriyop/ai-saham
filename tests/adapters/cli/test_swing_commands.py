@@ -8,14 +8,14 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from src.adapters.cli import swing_commands as swing_cli
+from src.adapters.cli import analyze_swing_commands as swing_cli
 from src.adapters.cli.main import app
 from src.adapters.cli.swing_broker_display import (
     build_broker_detail as _build_broker_detail_base,
     build_broker_quality_note as _build_broker_quality_note,
     build_flow_detail as _build_flow_detail,
 )
-from src.adapters.cli.swing_commands import (
+from src.adapters.cli.analyze_swing_commands import (
     DataFreshness,
     FOREIGN_BOUNCE_PRESET,
     PresetEvaluation,
@@ -535,11 +535,11 @@ def test_fetch_swing_sentiment_suppresses_provider_noise_by_default(
     capsys,
 ):
     monkeypatch.setattr(
-        "src.adapters.cli.swing_commands.SentimentFactory.create_news_provider",
+        "src.adapters.cli.analyze_swing_commands.SentimentFactory.create_news_provider",
         lambda: NoisyNewsProvider(),
     )
     monkeypatch.setattr(
-        "src.adapters.cli.swing_commands.SentimentFactory.create_classifier",
+        "src.adapters.cli.analyze_swing_commands.SentimentFactory.create_classifier",
         lambda use_ai=False: object(),
     )
 
@@ -557,11 +557,11 @@ def test_fetch_swing_sentiment_verbose_keeps_provider_details(
     capsys,
 ):
     monkeypatch.setattr(
-        "src.adapters.cli.swing_commands.SentimentFactory.create_news_provider",
+        "src.adapters.cli.analyze_swing_commands.SentimentFactory.create_news_provider",
         lambda: NoisyNewsProvider(),
     )
     monkeypatch.setattr(
-        "src.adapters.cli.swing_commands.SentimentFactory.create_classifier",
+        "src.adapters.cli.analyze_swing_commands.SentimentFactory.create_classifier",
         lambda use_ai=False: object(),
     )
 

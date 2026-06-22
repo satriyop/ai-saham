@@ -377,9 +377,9 @@ def compare(
 from src.adapters.cli.sentiment_commands import sentiment as _sentiment_fn
 from src.adapters.cli.sentiment_commands import sentiment_audit as _sentiment_audit_fn
 from src.adapters.cli.accumulation_commands import accumulation_audit as _accumulation_audit_fn
-from src.adapters.cli.swing_commands import regime as _regime_fn
-from src.adapters.cli.swing_commands import swing as _swing_fn
-from src.adapters.cli.swing_commands import swing_compare as _swing_compare_fn
+from src.adapters.cli.analyze_regime_commands import regime as _regime_fn
+from src.adapters.cli.analyze_swing_commands import swing as _swing_fn
+from src.adapters.cli.analyze_swing_commands import swing_compare as _swing_compare_fn
 
 analyze_app.command("sentiment")(_sentiment_fn)
 analyze_app.command("audit")(_sentiment_audit_fn)
