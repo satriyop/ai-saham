@@ -16,7 +16,7 @@ This file is the canonical phase-by-phase state for the post-`claude_stockbit_da
 | 4 | CLI Adapter Thinness Phase 1 | 🔲 Not Started | — |
 | 5 | Piotroski Quality Gate | ✅ Done | see commits below |
 | 6 | Broker Distribution Matrix | ✅ Done | see commits below |
-| 7 | Split playwright_stockbit.py | 🔲 Not Started | — |
+| 7 | Split playwright_stockbit.py | ⏸️ Dropped | cookie-based auth removed; only Playwright remains — split no longer needed |
 | 8 | Watchlist + Saved Screener | ✅ Done | 04a9996 |
 | 9 | Valuation Metrics | ✅ Done | 8ea18a2 |
 
@@ -184,7 +184,7 @@ This file is the canonical phase-by-phase state for the post-`claude_stockbit_da
 
 **Goal:** Separate browser lifecycle from JSON parsers. Target: `playwright_stockbit_browser.py` + `playwright_stockbit_broker.py`.
 
-**Status:** 🔲 Not Started
+**Status:** ⏸️ Dropped — cookie-based auth was removed; only Playwright remains as the single auth/browser mechanism. The original motivation (isolating the cookie path from the browser path) no longer applies. The per-data-type parsers already live in dedicated `stockbit_*.py` files, so no further split is warranted.
 
 ---
 
