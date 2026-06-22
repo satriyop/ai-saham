@@ -665,3 +665,89 @@ def test_min_piotroski_passes_when_no_fundamentals_and_gate_disabled():
         as_of_date=as_of, min_piotroski=0,
     ))
     assert len(response.candidates) == 1
+
+
+# ---------------------------------------------------------------------------
+# classify_multi_window_pattern
+# ---------------------------------------------------------------------------
+
+from src.application.use_case.accumulation_screen import (
+    AccumulationCandidate,
+    classify_multi_window_pattern,
+)
+
+
+def _make_candidate(score: float, bb_width_pctile: float | None = None) -> AccumulationCandidate:
+    return AccumulationCandidate(
+        ticker="TEST",
+        window_days=7,
+        net_buy_days=4,
+        total_days=5,
+        net_buy_ratio=0.8,
+        total_net_value=Decimal("1000000"),
+        consecutive_streak=3,
+        foreign_vwap=Decimal("1000"),
+        current_price=Decimal("1000"),
+        vwap_discount_pct=0.0,
+        rsi=50.0,
+        trend="UP",
+        score=score,
+        top_brokers=None,
+        institutional_flag=False,
+        bb_width_pctile=bb_width_pctile,
+    )
+
+
+_WINDOWS = [7, 30, 90]
+_MIN_SCORE = 60.0
+_BB_PCTILE = 0.20
+
+
+def test_classify_all_windows_hot_is_sustained():
+    candidates = {w: _make_candidate(score=70.0) for w in _WINDOWS}
+    assert classify_multi_window_pattern(_WINDOWS, candidates, _MIN_SCORE, _BB_PCTILE) == "sustained"
+
+
+def test_classify_only_short_window_hot_is_fresh_rotation():
+    candidates = {
+        7: _make_candidate(score=70.0),
+        30: _make_candidate(score=40.0),
+        90: _make_candidate(score=40.0),
+    }
+    assert classify_multi_window_pattern(_WINDOWS, candidates, _MIN_SCORE, _BB_PCTILE) == "fresh rotation"
+
+
+def test_classify_only_long_window_hot_is_long_term_only():
+    candidates = {
+        7: _make_candidate(score=40.0),
+        30: _make_candidate(score=40.0),
+        90: _make_candidate(score=70.0),
+    }
+    assert classify_multi_window_pattern(_WINDOWS, candidates, _MIN_SCORE, _BB_PCTILE) == "long-term only"
+
+
+def test_classify_short_and_long_hot_but_not_all_is_building():
+    # "building" fires when min hot AND max hot but not all windows hot.
+    # If max is NOT hot, "fresh rotation" takes priority (checked first).
+    windows = [7, 30, 90, 180]
+    candidates = {
+        7: _make_candidate(score=70.0),
+        30: _make_candidate(score=40.0),
+        90: _make_candidate(score=40.0),
+        180: _make_candidate(score=70.0),
+    }
+    assert classify_multi_window_pattern(windows, candidates, _MIN_SCORE, _BB_PCTILE) == "building"
+
+
+def test_classify_coiled_spring_when_squeeze_and_high_score():
+    candidates = {
+        7: _make_candidate(score=70.0, bb_width_pctile=0.10),
+        30: _make_candidate(score=40.0),
+        90: _make_candidate(score=40.0),
+    }
+    assert classify_multi_window_pattern(_WINDOWS, candidates, _MIN_SCORE, _BB_PCTILE) == "coiled spring"
+
+
+def test_classify_weak_when_no_windows_hot():
+    candidates = {w: _make_candidate(score=30.0) for w in _WINDOWS}
+    assert classify_multi_window_pattern(_WINDOWS, candidates, _MIN_SCORE, _BB_PCTILE) == "weak"

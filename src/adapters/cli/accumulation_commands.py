@@ -42,6 +42,7 @@ from src.application.use_case.accumulation_screen import (
     AccumulationScreenRequest,
     AccumulationScreenResponse,
     AccumulationScreenUseCase,
+    classify_multi_window_pattern,
     compute_percent_plan,
     evaluate_foreign_bounce_gates,
 )
@@ -124,33 +125,6 @@ def _format_value(value: Decimal) -> str:
         return f"{sign}{abs_v / 1_000_000:.0f}M"
     return f"{sign}{abs_v:.0f}"
 
-
-
-def _classify_pattern(
-    windows: list[int],
-    candidates_by_window: dict[int, "AccumulationCandidate | None"],
-) -> str:
-    """Label the multi-window pattern for a ticker."""
-    threshold = _SC.coiled_spring_min_score
-    hot = [w for w in windows if candidates_by_window.get(w) and candidates_by_window[w].score >= threshold]
-
-    # Coiled spring: any window with squeeze + strong score
-    for w in windows:
-        c = candidates_by_window.get(w)
-        if c and c.score >= threshold and c.bb_width_pctile is not None and c.bb_width_pctile <= _SC.coiled_spring_bb_pctile:
-            return "coiled spring"
-
-    if not hot:
-        return "weak"
-    if set(hot) == set(windows):
-        return "sustained"
-    if min(windows) in hot and max(windows) not in hot:
-        return "fresh rotation"
-    if max(windows) in hot and min(windows) not in hot:
-        return "long-term only"
-    if min(windows) in hot and len(hot) >= 2:
-        return "building"
-    return "mixed"
 
 
 
@@ -1039,7 +1013,11 @@ def _accumulation_log_impl(
             w: next((c for c in resp.candidates if c.ticker == ticker_upper), None)
             for w, resp in multi.items()
         }
-        pattern = _classify_pattern(windows, candidates_by_window)
+        pattern = classify_multi_window_pattern(
+            windows, candidates_by_window,
+            _SC.coiled_spring_min_score,
+            _SC.coiled_spring_bb_pctile,
+        )
     except Exception:
         pass  # pattern stays None if multi-window fails
 
