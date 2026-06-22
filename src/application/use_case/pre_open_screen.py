@@ -307,6 +307,11 @@ class PreOpenScreenUseCase:
                         entry_price * (1 - config.stop_loss_pct)
                     ).quantize(Decimal("1"))
 
+            # Floor-price guard: discard tickers with no profit room entirely
+            if entry_price is not None and stop_loss_price is not None and entry_price <= stop_loss_price:
+                warnings.append(f"{ticker}: SKIP_FLOOR — entry <= stop (one_r=0, at price floor)")
+                continue
+
             # Trend classification — uses effective ATR-based band as gap threshold
             trend_signal = self._classify_trend_v2(
                 gap_pct=gap_pct,

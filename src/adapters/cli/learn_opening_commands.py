@@ -282,31 +282,45 @@ def track(
     else:
         typer.echo("Live mode — looping every 5 min from 09:00–09:30 WIB")
 
-    snapshots = use_case.execute(OpeningTrackRequest(
-        tickers=resolved_tickers,
-        run_date=run_date,
-        force=force,
-        broker_confirm=broker_confirm and running_trade_provider is not None,
-        institutional_broker_codes=institutional_codes,
-    ))
-
     out_dir = _today_dir(run_date)
-    typer.echo(f"Captured {len(snapshots)} snapshots → {out_dir}/track_*.json")
-    for snap in snapshots:
-        at = snap.get("captured_at", "?")[:19]
-        n_ok = sum(1 for v in snap.get("tickers", {}).values() if v and "error" not in v)
-        n_broker = sum(
-            1 for v in snap.get("tickers", {}).values()
-            if isinstance(v, dict) and v.get("broker_signal")
-        )
-        n_ob = sum(
-            1 for v in snap.get("tickers", {}).values()
-            if isinstance(v, dict) and v.get("order_book")
-        )
-        extras = [f"ob={n_ob}/{len(resolved_tickers)}"]
-        if broker_confirm:
-            extras.append(f"broker={n_broker}/{len(resolved_tickers)}")
-        typer.echo(f"  {at}  {n_ok}/{len(resolved_tickers)} tickers OK  " + "  ".join(extras))
+    out_dir.mkdir(parents=True, exist_ok=True)
+    lock_file = out_dir / ".track.lock"
+    if lock_file.exists():
+        try:
+            pid = int(lock_file.read_text().strip())
+            os.kill(pid, 0)
+            typer.echo(f"saham learn track already running (PID {pid}). Exiting.")
+            raise typer.Exit()
+        except (ProcessLookupError, PermissionError):
+            lock_file.unlink(missing_ok=True)
+    lock_file.write_text(str(os.getpid()))
+    try:
+        snapshots = use_case.execute(OpeningTrackRequest(
+            tickers=resolved_tickers,
+            run_date=run_date,
+            force=force,
+            broker_confirm=broker_confirm and running_trade_provider is not None,
+            institutional_broker_codes=institutional_codes,
+        ))
+
+        typer.echo(f"Captured {len(snapshots)} snapshots → {out_dir}/track_*.json")
+        for snap in snapshots:
+            at = snap.get("captured_at", "?")[:19]
+            n_ok = sum(1 for v in snap.get("tickers", {}).values() if v and "error" not in v)
+            n_broker = sum(
+                1 for v in snap.get("tickers", {}).values()
+                if isinstance(v, dict) and v.get("broker_signal")
+            )
+            n_ob = sum(
+                1 for v in snap.get("tickers", {}).values()
+                if isinstance(v, dict) and v.get("order_book")
+            )
+            extras = [f"ob={n_ob}/{len(resolved_tickers)}"]
+            if broker_confirm:
+                extras.append(f"broker={n_broker}/{len(resolved_tickers)}")
+            typer.echo(f"  {at}  {n_ok}/{len(resolved_tickers)} tickers OK  " + "  ".join(extras))
+    finally:
+        lock_file.unlink(missing_ok=True)
 
 
 # ── grade ─────────────────────────────────────────────────────────────────────

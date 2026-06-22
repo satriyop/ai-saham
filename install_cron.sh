@@ -75,7 +75,7 @@ read -r -d '' SAHAM_CRON << ENTRIES || true
 # Opening learning loop — NCP-locked snapshot 08:57 WIB
 57 8 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham learn snapshot' >> $LOG_DIR/opening-snapshot.log 2>&1
 # Opening learning loop — orderbook tracker 09:00–09:30 WIB
-0 9 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham learn track' >> $LOG_DIR/opening-track.log 2>&1
+0 9 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && PYTHONUNBUFFERED=1 saham learn track --broker-confirm' >> $LOG_DIR/opening-track.log 2>&1
 # Opening learning loop — accuracy grade 09:35 WIB
 35 9 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham learn grade' >> $LOG_DIR/opening-grade.log 2>&1
 # Opening learning loop — AI tuning 09:40 WIB
