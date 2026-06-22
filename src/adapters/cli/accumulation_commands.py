@@ -22,6 +22,10 @@ from typing import Annotated, Optional
 import typer
 
 from src.application.services.bootstrap import create_indicator_registry
+from src.application.services.broker_quality import (
+    BrokerQualitySnapshot,
+    compute_broker_quality_batch,
+)
 from src.application.services.strategy_loader import StrategyLoader, StrategyNotFoundError
 from src.application.services.universe_loader import (
     UniverseNotFoundError,
@@ -38,6 +42,8 @@ from src.application.use_case.accumulation_screen import (
     AccumulationScreenRequest,
     AccumulationScreenResponse,
     AccumulationScreenUseCase,
+    compute_percent_plan,
+    evaluate_foreign_bounce_gates,
 )
 from src.application.use_case.market_regime import (
     MarketRegimeRequest,
@@ -132,28 +138,8 @@ _TABLE_WIDTH = 93
 _SEP_WIDTH = 91
 
 
-@dataclass(frozen=True)
-class ScreenBrokerQuality:
-    """Compact named-broker context for screener output."""
-
-    label: str
-    smart_flow: Decimal
-    noise_flow: Decimal
-    neutral_flow: Decimal
-    sessions: int
-    through_date: date
-    source: str
-
-    def to_dict(self) -> dict:
-        return {
-            "label": self.label,
-            "smart_flow": str(self.smart_flow),
-            "noise_flow": str(self.noise_flow),
-            "neutral_flow": str(self.neutral_flow),
-            "sessions": self.sessions,
-            "through": self.through_date.isoformat(),
-            "source": self.source,
-        }
+# Backward-compat alias — callers use BrokerQualitySnapshot from Application layer.
+ScreenBrokerQuality = BrokerQualitySnapshot
 
 
 def _format_value(value: Decimal) -> str:
@@ -168,117 +154,6 @@ def _format_value(value: Decimal) -> str:
         return f"{sign}{abs_v / 1_000_000:.0f}M"
     return f"{sign}{abs_v:.0f}"
 
-
-def _broker_tier(code: str) -> str:
-    code_upper = code.upper()
-    if code_upper in _SC.smart_money_brokers:
-        return "smart"
-    if code_upper in _SC.noise_brokers:
-        return "noise"
-    return "neutral"
-
-
-def _screen_broker_quality_label(
-    smart_flow: Decimal,
-    noise_flow: Decimal,
-    neutral_flow: Decimal,
-) -> str:
-    """Return a compact label for named-broker flow composition."""
-    positive_total = sum(
-        value
-        for value in (smart_flow, noise_flow, neutral_flow)
-        if value > Decimal("0")
-    )
-    negative_total = sum(
-        abs(value)
-        for value in (smart_flow, noise_flow, neutral_flow)
-        if value < Decimal("0")
-    )
-
-    if negative_total > positive_total:
-        if smart_flow < Decimal("0") and abs(smart_flow) >= abs(noise_flow):
-            return "smart-"
-        if noise_flow < Decimal("0"):
-            return "noise-"
-        return "dist"
-
-    if smart_flow > Decimal("0") and smart_flow >= noise_flow and smart_flow >= neutral_flow:
-        return "smart+"
-    if noise_flow > Decimal("0") and noise_flow >= smart_flow and noise_flow >= neutral_flow:
-        return "noise+"
-    if neutral_flow != Decimal("0"):
-        return "mixed"
-    return "n/a"
-
-
-def _build_screen_broker_quality(
-    ticker: str,
-    broker_repo: SQLiteBrokerRepository,
-    as_of_date: date | None = None,
-    window_sessions: int = 5,
-) -> ScreenBrokerQuality | None:
-    """
-    Summarize named top-broker rows for screener context.
-
-    This uses all named top buyers/sellers returned by Stockbit summaries.
-    It is separate from aggregate foreign-flow scoring.
-    """
-    summaries = broker_repo.get_broker_summaries(ticker, end_date=as_of_date)
-    detail_summaries = [
-        summary for summary in summaries if summary.top_buyers or summary.top_sellers
-    ][-window_sessions:]
-    if not detail_summaries:
-        return None
-
-    smart_flow = Decimal("0")
-    noise_flow = Decimal("0")
-    neutral_flow = Decimal("0")
-
-    def add_flow(code: str, signed_value: Decimal) -> None:
-        nonlocal smart_flow, noise_flow, neutral_flow
-        tier = _broker_tier(code)
-        if tier == "smart":
-            smart_flow += signed_value
-        elif tier == "noise":
-            noise_flow += signed_value
-        else:
-            neutral_flow += signed_value
-
-    for summary in detail_summaries:
-        for tx in summary.top_buyers:
-            if tx.net_value > Decimal("0"):
-                add_flow(tx.broker_code, tx.net_value)
-        for tx in summary.top_sellers:
-            if tx.net_value < Decimal("0"):
-                add_flow(tx.broker_code, tx.net_value)
-
-    latest = detail_summaries[-1]
-    return ScreenBrokerQuality(
-        label=_screen_broker_quality_label(smart_flow, noise_flow, neutral_flow),
-        smart_flow=smart_flow,
-        noise_flow=noise_flow,
-        neutral_flow=neutral_flow,
-        sessions=len(detail_summaries),
-        through_date=latest.date,
-        source=latest.source,
-    )
-
-
-def _broker_quality_by_ticker(
-    tickers: list[str],
-    broker_repo: SQLiteBrokerRepository,
-    as_of_date: date | None,
-) -> dict[str, ScreenBrokerQuality]:
-    quality: dict[str, ScreenBrokerQuality] = {}
-    for ticker in tickers:
-        item = _build_screen_broker_quality(
-            ticker=ticker,
-            broker_repo=broker_repo,
-            as_of_date=as_of_date,
-        )
-        if item:
-            quality[ticker.upper()] = item
-    return quality
 
 
 def _fmt_score(s: float | None) -> str:
@@ -351,71 +226,6 @@ def _notation_detail(snapshot) -> str:
         bits.append(f"haircut={snapshot.haircut_percentage}")
     return " | ".join(bits)
 
-def _fmt_optional_float(value: float | None, suffix: str = "") -> str:
-    return "missing" if value is None else f"{value:.1f}{suffix}"
-
-
-def _foreign_bounce_decision(
-    candidate: AccumulationCandidate | None,
-) -> tuple[str, tuple[str, ...]]:
-    if candidate is None:
-        return "AVOID", ("No accumulation/broker-flow candidate available",)
-
-    gates = (
-        (
-            "score",
-            candidate.score >= _SC.gate_min_score,
-            f"{candidate.score:.1f}",
-            f">= {_SC.gate_min_score:.0f}",
-        ),
-        (
-            "vwap_disc_pct",
-            candidate.vwap_discount_pct is not None
-            and candidate.vwap_discount_pct >= _SC.gate_min_vwap_discount_pct,
-            _fmt_optional_float(candidate.vwap_discount_pct, "%"),
-            f">= +{_SC.gate_min_vwap_discount_pct:.0f}%",
-        ),
-        (
-            "trend",
-            candidate.trend == _SC.gate_required_trend,
-            candidate.trend,
-            _SC.gate_required_trend,
-        ),
-        (
-            "flow_pct",
-            candidate.avg_flow_ratio is not None and candidate.avg_flow_ratio >= _SC.gate_min_flow_ratio_pct,
-            _fmt_optional_float(candidate.avg_flow_ratio, "%"),
-            f">= +{_SC.gate_min_flow_ratio_pct:.0f}%",
-        ),
-        (
-            "RSI present",
-            candidate.rsi is not None,
-            _fmt_optional_float(candidate.rsi),
-            "present",
-        ),
-        (
-            "RSI",
-            candidate.rsi is not None and candidate.rsi <= _SC.gate_max_rsi,
-            _fmt_optional_float(candidate.rsi),
-            f"<= {_SC.gate_max_rsi:.0f}",
-        ),
-    )
-    failed = tuple(
-        f"{label}: {actual} (required {required})"
-        for label, passed, actual, required in gates
-        if not passed
-    )
-    if not failed:
-        return "ENTER", failed
-    if candidate.score >= _SC.gate_min_score or len(failed) <= _SC.watch_max_failed_gates:
-        return "WATCH", failed
-    return "AVOID", failed
-
-
-def _percent_plan(entry: Decimal) -> tuple[Decimal, Decimal]:
-    stop = entry * (Decimal("1") - FOREIGN_BOUNCE_STOP_LOSS / Decimal("100"))
-    target = entry * (Decimal("1") + FOREIGN_BOUNCE_TAKE_PROFIT / Decimal("100"))
-    return stop, target
 
 def _display_results(
     response: AccumulationScreenResponse,
@@ -689,9 +499,11 @@ def accumulation_run(
             )
         multi_results = _run_multi(use_case, ticker_list, window_list, base_request)
         screened_at = next(iter(multi_results.values())).screened_at
-        broker_quality = _broker_quality_by_ticker(
+        broker_quality = compute_broker_quality_batch(
             tickers=ticker_list,
             broker_repo=broker_repo,
+            smart_money_brokers=_SC.smart_money_brokers,
+            noise_brokers=_SC.noise_brokers,
             as_of_date=screened_at,
         )
 
@@ -1306,9 +1118,22 @@ def _accumulation_log_impl(
 
     if from_analysis:
         journal_preset = preset_name
-        classification, failed_gates = _foreign_bounce_decision(candidate)
+        if candidate is None:
+            classification, failed_gates = "AVOID", ("No accumulation/broker-flow candidate available",)
+        else:
+            classification, failed_gates = evaluate_foreign_bounce_gates(
+                candidate=candidate,
+                gate_min_score=_SC.gate_min_score,
+                gate_min_vwap_discount_pct=_SC.gate_min_vwap_discount_pct,
+                gate_required_trend=_SC.gate_required_trend,
+                gate_min_flow_ratio_pct=_SC.gate_min_flow_ratio_pct,
+                gate_max_rsi=_SC.gate_max_rsi,
+                watch_max_failed_gates=_SC.watch_max_failed_gates,
+            )
         planned_entry = resolved_entry
-        planned_stop, planned_target = _percent_plan(resolved_entry)
+        planned_stop, planned_target = compute_percent_plan(
+            resolved_entry, FOREIGN_BOUNCE_STOP_LOSS, FOREIGN_BOUNCE_TAKE_PROFIT
+        )
         max_hold_days = FOREIGN_BOUNCE_MAX_HOLD_DAYS
 
         if with_regime:

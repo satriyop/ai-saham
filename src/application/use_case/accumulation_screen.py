@@ -988,3 +988,93 @@ class AccumulationScreenUseCase:
 
         nearest_resistance_pct = min(resistances) if resistances else None
         return ma200, week52_high, nearest_resistance_pct
+
+
+# ── Foreign-bounce gate evaluation ────────────────────────────────────────────
+# Application-layer policy: decides ENTER / WATCH / AVOID for the foreign-bounce
+# preset.  Lives here so the decision is testable independent of CLI plumbing.
+
+def _fmt_gate_value(value: float | None, suffix: str = "") -> str:
+    """Format a numeric gate value for failure messages (stored in journal CSV)."""
+    if value is None:
+        return "None"
+    return f"{value:.1f}{suffix}"
+
+
+def evaluate_foreign_bounce_gates(
+    candidate: "AccumulationCandidate",
+    gate_min_score: float,
+    gate_min_vwap_discount_pct: float,
+    gate_required_trend: str,
+    gate_min_flow_ratio_pct: float,
+    gate_max_rsi: float,
+    watch_max_failed_gates: int,
+) -> tuple[str, tuple[str, ...]]:
+    """
+    Apply the foreign-bounce entry gates to a candidate.
+
+    Returns (classification, failed_gates) where classification is one of
+    "ENTER", "WATCH", or "AVOID", and failed_gates is a tuple of human-readable
+    strings describing each gate that was not met (stored in the trade journal).
+    """
+    gates = (
+        (
+            "score",
+            candidate.score >= gate_min_score,
+            _fmt_gate_value(candidate.score),
+            f">= {gate_min_score:.0f}",
+        ),
+        (
+            "vwap_disc_pct",
+            candidate.vwap_discount_pct is not None
+            and candidate.vwap_discount_pct >= gate_min_vwap_discount_pct,
+            _fmt_gate_value(candidate.vwap_discount_pct, "%"),
+            f">= +{gate_min_vwap_discount_pct:.0f}%",
+        ),
+        (
+            "trend",
+            candidate.trend == gate_required_trend,
+            candidate.trend,
+            gate_required_trend,
+        ),
+        (
+            "flow_pct",
+            candidate.avg_flow_ratio is not None
+            and candidate.avg_flow_ratio >= gate_min_flow_ratio_pct,
+            _fmt_gate_value(candidate.avg_flow_ratio, "%"),
+            f">= +{gate_min_flow_ratio_pct:.0f}%",
+        ),
+        (
+            "RSI present",
+            candidate.rsi is not None,
+            _fmt_gate_value(candidate.rsi),
+            "present",
+        ),
+        (
+            "RSI",
+            candidate.rsi is not None and candidate.rsi <= gate_max_rsi,
+            _fmt_gate_value(candidate.rsi),
+            f"<= {gate_max_rsi:.0f}",
+        ),
+    )
+    failed = tuple(
+        f"{label}: {actual} (required {required})"
+        for label, passed, actual, required in gates
+        if not passed
+    )
+    if not failed:
+        return "ENTER", failed
+    if candidate.score >= gate_min_score or len(failed) <= watch_max_failed_gates:
+        return "WATCH", failed
+    return "AVOID", failed
+
+
+def compute_percent_plan(
+    entry: "Decimal",
+    stop_pct: "Decimal",
+    target_pct: "Decimal",
+) -> "tuple[Decimal, Decimal]":
+    """Compute stop and target prices from a percentage plan."""
+    stop = entry * (Decimal("1") - stop_pct / Decimal("100"))
+    target = entry * (Decimal("1") + target_pct / Decimal("100"))
+    return stop, target

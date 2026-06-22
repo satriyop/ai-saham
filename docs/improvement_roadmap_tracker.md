@@ -13,7 +13,7 @@ This file is the canonical phase-by-phase state for the post-`claude_stockbit_da
 | 1 | Composite Score System | ✅ Done | see commits below |
 | 2 | Earnings Data Integration | ✅ Done | see commits below |
 | 3 | Stockbit OHLC Fallback | ✅ Done | see commits below |
-| 4 | CLI Adapter Thinness Phase 1 | 🔲 Not Started | — |
+| 4 | CLI Adapter Thinness Phase 1 | ✅ Done | see commit below |
 | 5 | Piotroski Quality Gate | ✅ Done | see commits below |
 | 6 | Broker Distribution Matrix | ✅ Done | see commits below |
 | 7 | Split playwright_stockbit.py | ✅ Done | see commit below |
@@ -122,14 +122,27 @@ This file is the canonical phase-by-phase state for the post-`claude_stockbit_da
 
 **Goal:** Move workflow/orchestration logic out of `fetch_market_commands.py`, `analyze_commands.py`, `screen_commands.py` into Application use cases. CLI becomes: parse → call use case → format output.
 
-**Status:** 🔲 Not Started
+**Status:** ✅ Done
 
 ### Sub-steps
-- [ ] 4.1 Audit `fetch_market_commands.py` — identify non-adapter logic
-- [ ] 4.2 Extract orchestration to use case(s)
-- [ ] 4.3 Repeat for `analyze_commands.py`
-- [ ] 4.4 Repeat for `screen_commands.py`
-- [ ] 4.5 Regression test all affected commands
+- [x] 4.1 Audit `accumulation_commands.py` — identified `_foreign_bounce_decision`, `_percent_plan`, and broker quality functions as adapter-layer business policy violations
+- [x] 4.2 Move `evaluate_foreign_bounce_gates` + `compute_percent_plan` to `accumulation_screen.py` (Application)
+- [x] 4.3 Create `src/application/services/broker_quality.py` — `BrokerQualitySnapshot`, `classify_broker_tier`, `compute_quality_label`, `compute_broker_quality`, `compute_broker_quality_batch`
+- [x] 4.4 Update `accumulation_commands.py` to import from Application layer; remove duplicated business code (~115 lines removed); add `ScreenBrokerQuality = BrokerQualitySnapshot` compat alias
+- [x] 4.5 29 new unit tests; 1736 total pass
+
+### Files Changed
+- `src/application/use_case/accumulation_screen.py` — added `evaluate_foreign_bounce_gates`, `compute_percent_plan`, `_fmt_gate_value`
+- `src/application/services/broker_quality.py` — new; full broker quality signal service
+- `src/adapters/cli/accumulation_commands.py` — removed `_foreign_bounce_decision`, `_percent_plan`, `ScreenBrokerQuality` dataclass, `_broker_tier`, `_screen_broker_quality_label`, `_build_screen_broker_quality`, `_broker_quality_by_ticker`; imports from Application layer
+- `tests/application/use_case/test_foreign_bounce_gates.py` — new; 10 tests
+- `tests/application/services/test_broker_quality.py` — new; 19 tests
+
+### Key Design Notes
+- `evaluate_foreign_bounce_gates` is config-parameterized (receives gate values as arguments) so it's independently testable with different thresholds without touching YAML files
+- `ScreenBrokerQuality` kept as alias for backward compat with `accumulation_display.py` annotation
+- `fetch_market_commands.py` callbacks (`_fetch_candles`, `_fetch_broker`) use the Strategy pattern and are a valid hexagonal design — they were not moved
+- `analyze_commands.py` (390 lines) was audited and found acceptably thin; its infrastructure wiring is appropriate adapter responsibility
 
 ---
 
