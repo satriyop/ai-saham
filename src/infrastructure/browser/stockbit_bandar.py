@@ -40,7 +40,7 @@ from src.domain.ports.bandar_detector_provider import BandarDetectorProvider
 from src.domain.value_objects.bandar_detector_snapshot import BandarDetectorSnapshot
 
 if TYPE_CHECKING:
-    from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
+    from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
 
 logger = logging.getLogger(__name__)
 
@@ -302,7 +302,7 @@ class StockbitBandarDetectorProvider(BandarDetectorProvider):
         if self._provider is None:
             return None
         try:
-            from src.infrastructure.browser.playwright_stockbit import _exodus_get
+            from src.infrastructure.browser.playwright_stockbit_provider import _exodus_get
             token = self._provider._get_token()
             url = _MARKET_DETECTOR_URL.format(ticker=ticker)
             body = _exodus_get(url, token)

@@ -29,7 +29,7 @@ from src.domain.ports.company_profile_provider import CompanyProfileProvider
 from src.domain.value_objects.company_profile import CompanyProfile
 
 if TYPE_CHECKING:
-    from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
+    from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
 
 logger = logging.getLogger(__name__)
 
@@ -195,7 +195,7 @@ class StockbitCompanyProfileProvider(CompanyProfileProvider):
         if self._provider is None:
             return None
         try:
-            from src.infrastructure.browser.playwright_stockbit import _exodus_get
+            from src.infrastructure.browser.playwright_stockbit_provider import _exodus_get
             token = self._provider._get_token()
             url = _PROFILE_URL.format(ticker=ticker)
             body = _exodus_get(url, token)

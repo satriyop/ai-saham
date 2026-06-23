@@ -4,7 +4,7 @@ from datetime import date
 from decimal import Decimal
 from unittest.mock import patch
 
-from src.infrastructure.browser.playwright_stockbit import (
+from src.infrastructure.browser.playwright_stockbit_provider import (
     _fetch_historical_summary_totals,
     _parse_marketdetectors_response,
 )
@@ -135,7 +135,7 @@ def test_foreign_fields_unaffected_by_real_total():
 
 def test_fetch_totals_single_day():
     with patch(
-        "src.infrastructure.browser.playwright_stockbit._exodus_get",
+        "src.infrastructure.browser.playwright_stockbit_provider._exodus_get",
         return_value=_historical_summary_body_single_day(),
     ):
         result = _fetch_historical_summary_totals(
@@ -149,7 +149,7 @@ def test_fetch_totals_single_day():
 
 def test_fetch_totals_sums_multiple_days():
     with patch(
-        "src.infrastructure.browser.playwright_stockbit._exodus_get",
+        "src.infrastructure.browser.playwright_stockbit_provider._exodus_get",
         return_value=_historical_summary_body_two_days(),
     ):
         result = _fetch_historical_summary_totals(
@@ -163,7 +163,7 @@ def test_fetch_totals_sums_multiple_days():
 
 def test_fetch_totals_returns_none_on_empty_response():
     with patch(
-        "src.infrastructure.browser.playwright_stockbit._exodus_get",
+        "src.infrastructure.browser.playwright_stockbit_provider._exodus_get",
         return_value=None,
     ):
         result = _fetch_historical_summary_totals(
@@ -174,7 +174,7 @@ def test_fetch_totals_returns_none_on_empty_response():
 
 def test_fetch_totals_returns_none_on_empty_result_list():
     with patch(
-        "src.infrastructure.browser.playwright_stockbit._exodus_get",
+        "src.infrastructure.browser.playwright_stockbit_provider._exodus_get",
         return_value={"data": {"result": []}},
     ):
         result = _fetch_historical_summary_totals(
@@ -185,7 +185,7 @@ def test_fetch_totals_returns_none_on_empty_result_list():
 
 def test_fetch_totals_returns_none_on_zero_value():
     with patch(
-        "src.infrastructure.browser.playwright_stockbit._exodus_get",
+        "src.infrastructure.browser.playwright_stockbit_provider._exodus_get",
         return_value={"data": {"result": [{"date": "2026-06-18", "value": 0, "volume": 100}]}},
     ):
         result = _fetch_historical_summary_totals(

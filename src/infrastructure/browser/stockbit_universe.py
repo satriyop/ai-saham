@@ -25,7 +25,7 @@ import logging
 from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
-    from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
+    from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
 
 logger = logging.getLogger(__name__)
 
@@ -128,7 +128,7 @@ class StockbitUniverseProvider:
     # ── Internal helpers ────────────────────────────────────────────────────
 
     def _get(self, url: str) -> dict | None:
-        from src.infrastructure.browser.playwright_stockbit import _exodus_get
+        from src.infrastructure.browser.playwright_stockbit_provider import _exodus_get
         token = self._provider._get_token()
         return _exodus_get(url, token)
 

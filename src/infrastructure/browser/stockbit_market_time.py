@@ -44,7 +44,7 @@ from src.domain.value_objects.idx_market import (
 from src.domain.value_objects.market_status import MarketStatus
 
 if TYPE_CHECKING:
-    from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
+    from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
 
 logger = logging.getLogger(__name__)
 
@@ -179,7 +179,7 @@ class StockbitMarketTimeProvider(MarketStatusProvider):
 
     def _fetch(self) -> MarketStatus | None:
         try:
-            from src.infrastructure.browser.playwright_stockbit import _exodus_get
+            from src.infrastructure.browser.playwright_stockbit_provider import _exodus_get
             token = self._provider._get_token()
             body = _exodus_get(_MARKET_TIME_URL, token)
             if not body:
@@ -328,7 +328,7 @@ def fetch_and_cache_market_status() -> MarketStatus | None:
     try:
         from pathlib import Path
 
-        from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
+        from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
         from src.infrastructure.config.app_config import APP_CFG
         if not Path(APP_CFG.storage.stockbit_profile_dir).exists():
             return None
@@ -361,7 +361,7 @@ def get_current_market_status() -> MarketStatus:
     try:
         from pathlib import Path
 
-        from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
+        from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
         from src.infrastructure.config.app_config import APP_CFG
         if Path(APP_CFG.storage.stockbit_profile_dir).exists():
             provider = StockbitPlaywrightBrokerProvider()

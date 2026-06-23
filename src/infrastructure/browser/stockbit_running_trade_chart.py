@@ -35,7 +35,7 @@ from src.domain.value_objects.running_trade_chart import (
 )
 
 if TYPE_CHECKING:
-    from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
+    from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
 
 logger = logging.getLogger(__name__)
 
@@ -131,7 +131,7 @@ class StockbitRunningTradeChartProvider(RunningTradeChartProvider):
 
     def fetch_chart(self, ticker: str) -> RunningTradeChart | None:
         try:
-            from src.infrastructure.browser.playwright_stockbit import _exodus_get
+            from src.infrastructure.browser.playwright_stockbit_provider import _exodus_get
             token = self._provider._get_token()
             url = _CHART_URL.format(ticker=ticker.upper())
             body = _exodus_get(url, token)

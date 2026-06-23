@@ -55,7 +55,7 @@ def login(
         saham fetch stockbit login --timeout 180
     """
     _require_playwright_cli()
-    from src.infrastructure.browser.playwright_stockbit import save_stockbit_session
+    from src.infrastructure.browser.playwright_stockbit_provider import save_stockbit_session
 
     try:
         save_stockbit_session(timeout=timeout)
@@ -74,7 +74,7 @@ def status() -> None:
     Example:
         saham fetch stockbit status
     """
-    from src.infrastructure.browser.playwright_stockbit import get_session_status
+    from src.infrastructure.browser.playwright_stockbit_provider import get_session_status
 
     info = get_session_status()
 
@@ -158,7 +158,7 @@ def spy(
         saham fetch stockbit spy --wait 10 --output journals/my-capture.json
     """
     _require_playwright_cli()
-    from src.infrastructure.browser.playwright_stockbit import spy_stockbit_session
+    from src.infrastructure.browser.playwright_stockbit_provider import spy_stockbit_session
 
     resolved_output = output or DEFAULT_SPY_OUTPUT
 
@@ -254,7 +254,7 @@ def test(
         saham fetch stockbit test --ticker BMRI
     """
     _require_playwright_cli()
-    from src.infrastructure.browser.playwright_stockbit import PlaywrightStockbitProvider
+    from src.infrastructure.browser.playwright_stockbit_provider import PlaywrightStockbitProvider
 
     provider = PlaywrightStockbitProvider(headless=headless)
 
@@ -329,7 +329,7 @@ def browse(
         saham fetch stockbit browse --url https://stockbit.com/stocks/BBCA
     """
     _require_playwright_cli()
-    from src.infrastructure.browser.playwright_stockbit import browse_stockbit_session
+    from src.infrastructure.browser.playwright_stockbit_provider import browse_stockbit_session
 
     target = url or "https://stockbit.com/stream"
     try:
@@ -363,7 +363,7 @@ def fetch_top5(
         saham fetch stockbit fetch-top5 --no-headless   (see the browser)
     """
     _require_playwright_cli()
-    from src.infrastructure.browser.playwright_stockbit import PlaywrightStockbitProvider
+    from src.infrastructure.browser.playwright_stockbit_provider import PlaywrightStockbitProvider
 
     provider = PlaywrightStockbitProvider(headless=headless)
 

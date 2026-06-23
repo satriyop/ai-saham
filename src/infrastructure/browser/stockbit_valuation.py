@@ -33,7 +33,7 @@ from src.domain.ports.valuation_provider import ValuationProvider
 from src.domain.value_objects.valuation_metrics import ValuationMetrics
 
 if TYPE_CHECKING:
-    from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
+    from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
 
 logger = logging.getLogger(__name__)
 

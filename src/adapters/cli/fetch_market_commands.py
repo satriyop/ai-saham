@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Optional
 
 if TYPE_CHECKING:
-    from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
+    from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
 
 import typer
 
@@ -343,7 +343,7 @@ def _create_broker_provider(name: str | None):
       2. IDX public API — always available fallback
     """
     if name == "stockbit":
-        from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
+        from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
         return StockbitPlaywrightBrokerProvider(), "stockbit"
     if name == "idx":
         return IdxBrokerDataProvider(), "idx"
@@ -355,7 +355,7 @@ def _create_broker_provider(name: str | None):
 
     # Auto-detect
     if STOCKBIT_PROFILE_DIR.exists():
-        from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
+        from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
         provider = StockbitPlaywrightBrokerProvider()
         if provider.is_authenticated():
             return provider, "stockbit"
@@ -546,7 +546,7 @@ def _fetch_enrichment(ticker: str, db_path: Path, broker_provider) -> str:
     Delegates cache-freshness-then-fetch policy to RefreshStockbitEnrichmentUseCase.
     Returns a compact status string, e.g. "analyst+bandar  ✓(insider,season,corp,holding)".
     """
-    from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
+    from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
 
     if not isinstance(broker_provider, StockbitPlaywrightBrokerProvider):
         return "skip:no-stockbit"

@@ -31,7 +31,7 @@ from src.domain.ports.forward_estimates_provider import ForwardEstimatesProvider
 from src.domain.value_objects.forward_estimates import ForwardEstimates
 
 if TYPE_CHECKING:
-    from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
+    from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
 
 logger = logging.getLogger(__name__)
 
@@ -231,7 +231,7 @@ class StockbitForwardEstimatesProvider(ForwardEstimatesProvider):
         if self._provider is None:
             return None
         try:
-            from src.infrastructure.browser.playwright_stockbit import _exodus_get
+            from src.infrastructure.browser.playwright_stockbit_provider import _exodus_get
             token = self._provider._get_token()
             url = _CONSENSUS_URL.format(ticker=ticker)
             body = _exodus_get(url, token)

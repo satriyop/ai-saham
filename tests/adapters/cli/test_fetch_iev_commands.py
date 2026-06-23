@@ -24,7 +24,7 @@ def test_fetch_iev_help_is_registered():
 
 
 def test_fetch_iev_writes_sqlite_and_json_sidecar(monkeypatch, tmp_path: Path):
-    from src.infrastructure.browser import playwright_stockbit
+    from src.infrastructure.browser import playwright_stockbit_provider as playwright_stockbit
 
     class FakeStockbitProvider:
         def __init__(self, headless: bool = True) -> None:

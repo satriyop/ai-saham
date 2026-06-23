@@ -107,7 +107,7 @@ def snapshot(
 
             _mstatus = None
             if _Path(APP_CFG.storage.stockbit_profile_dir).exists():
-                from src.infrastructure.browser.playwright_stockbit import (
+                from src.infrastructure.browser.playwright_stockbit_provider import (
                     StockbitPlaywrightBrokerProvider,
                 )
 
@@ -137,7 +137,7 @@ def snapshot(
             OpeningSnapshotRequest,
             OpeningSnapshotUseCase,
         )
-        from src.infrastructure.browser.playwright_stockbit import PlaywrightStockbitProvider
+        from src.infrastructure.browser.playwright_stockbit_provider import PlaywrightStockbitProvider
         from src.infrastructure.browser.stockbit_ticker_notation import (
             StockbitTickerNotationProvider,
         )
@@ -259,7 +259,7 @@ def track(
 
     try:
         from src.application.use_case.opening_track_use_case import OpeningTrackRequest, OpeningTrackUseCase
-        from src.infrastructure.browser.playwright_stockbit import PlaywrightStockbitProvider
+        from src.infrastructure.browser.playwright_stockbit_provider import PlaywrightStockbitProvider
     except ImportError as e:
         typer.echo(f"Import error: {e}", err=True)
         raise typer.Exit(1)
@@ -279,7 +279,7 @@ def track(
         try:
             import yaml
 
-            from src.infrastructure.browser.playwright_stockbit import (
+            from src.infrastructure.browser.playwright_stockbit_provider import (
                 StockbitPlaywrightBrokerProvider,
             )
             from src.infrastructure.browser.stockbit_running_trade import (
@@ -310,7 +310,7 @@ def track(
     # Always wire order book provider — full depth replaces naive top-of-book bid_pressure
     order_book_provider = None
     try:
-        from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
+        from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
         from src.infrastructure.browser.stockbit_order_book import StockbitOrderBookProvider
 
         ob_broker = StockbitPlaywrightBrokerProvider()

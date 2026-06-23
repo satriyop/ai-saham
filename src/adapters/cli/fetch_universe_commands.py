@@ -121,7 +121,7 @@ def universe_update(
             typer.echo(f"Warning: could not read {resolved_config}: {e}")
 
     try:
-        from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
+        from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
         from src.infrastructure.browser.stockbit_universe import (
             StockbitUniverseProvider,
         )
@@ -141,7 +141,7 @@ def universe_update(
         raise typer.Exit(1)
 
     def _get(url: str) -> dict | None:
-        from src.infrastructure.browser.playwright_stockbit import _exodus_get
+        from src.infrastructure.browser.playwright_stockbit_provider import _exodus_get
         return _exodus_get(url, token)
 
     def _extract_list(body: dict | None, *keys: str) -> list[dict]:
@@ -341,7 +341,7 @@ def universe_inspect(
         raise typer.Exit(1)
 
     try:
-        from src.infrastructure.browser.playwright_stockbit import (
+        from src.infrastructure.browser.playwright_stockbit_provider import (
             StockbitPlaywrightBrokerProvider,
             _exodus_get,
         )
@@ -510,7 +510,7 @@ def universe_create(
         raise typer.Exit(1)
 
     try:
-        from src.infrastructure.browser.playwright_stockbit import (
+        from src.infrastructure.browser.playwright_stockbit_provider import (
             StockbitPlaywrightBrokerProvider,
             _exodus_get,
         )

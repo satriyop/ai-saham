@@ -36,7 +36,7 @@ from src.domain.ports.order_book_provider import OrderBookProvider
 from src.domain.value_objects.order_book_snapshot import OrderBookSnapshot
 
 if TYPE_CHECKING:
-    from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
+    from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
 
 logger = logging.getLogger(__name__)
 
@@ -162,7 +162,7 @@ class StockbitOrderBookProvider(OrderBookProvider):
 
     def fetch_snapshot(self, ticker: str) -> OrderBookSnapshot | None:
         try:
-            from src.infrastructure.browser.playwright_stockbit import _exodus_get
+            from src.infrastructure.browser.playwright_stockbit_provider import _exodus_get
             token = self._provider._get_token()
             url = _ORDERBOOK_URL.format(ticker=ticker.upper())
             body = _exodus_get(url, token)

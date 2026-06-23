@@ -1,4 +1,4 @@
-from src.infrastructure.browser.playwright_stockbit import PlaywrightStockbitProvider
+from src.infrastructure.browser.playwright_stockbit_provider import PlaywrightStockbitProvider
 
 
 def main():

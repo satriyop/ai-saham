@@ -4,7 +4,7 @@ from pathlib import Path
 
 import yaml
 
-from src.infrastructure.browser.playwright_stockbit import (
+from src.infrastructure.browser.playwright_stockbit_provider import (
     _IEV_MOVER_URL_MAIN,
     _INSTITUTIONAL_PROXY_CODES,
     _ORDER_BOOK_API,

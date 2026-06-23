@@ -276,7 +276,7 @@ def test_gap_pct_unchanged_uses_bid():
 
 def test_manual_provider_top_of_book_returns_bid_no_offer():
     """ManualBrowserDataProvider.fetch_order_book_top_of_book wraps bid with offer=None."""
-    from src.infrastructure.browser.stockbit_browser import ManualBrowserDataProvider
+    from src.infrastructure.browser.stockbit_browser_provider import ManualBrowserDataProvider
 
     movers_json = [{"ticker": "BBCA", "iev": 300_000}]
     order_books_json = {"BBCA": {"price": 5000, "volume": 200}}
@@ -291,7 +291,7 @@ def test_manual_provider_top_of_book_returns_bid_no_offer():
 
 
 def test_manual_provider_top_of_book_returns_none_when_no_bid():
-    from src.infrastructure.browser.stockbit_browser import ManualBrowserDataProvider
+    from src.infrastructure.browser.stockbit_browser_provider import ManualBrowserDataProvider
 
     provider = ManualBrowserDataProvider.from_json([{"ticker": "BBCA", "iev": 300_000}])
     assert provider.fetch_order_book_top_of_book("BBCA") is None

@@ -56,7 +56,7 @@ def _create_provider(provider_name: str) -> BrokerDataProvider:
     if provider_name == "idx":
         return IdxBrokerDataProvider()
     elif provider_name == "stockbit":
-        from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
+        from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
         return StockbitPlaywrightBrokerProvider()
     else:
         raise ValueError(f"Unknown provider: {provider_name}. Choose from: {', '.join(PROVIDERS)}")

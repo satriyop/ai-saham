@@ -38,7 +38,7 @@ from src.domain.value_objects.idx_market import (
     REGULAR_OPEN as PRE_OPEN_END,
 )
 from src.domain.value_objects.screener_result import ScreenerCandidate
-from src.infrastructure.browser.stockbit_browser import ManualBrowserDataProvider
+from src.infrastructure.browser.stockbit_browser_provider import ManualBrowserDataProvider
 from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
@@ -325,7 +325,7 @@ def pre_open(
     if not movers_json:
         if _playwright_available() and _session_exists():
             typer.echo("Playwright session found — running autonomously...")
-            from src.infrastructure.browser.playwright_stockbit import PlaywrightStockbitProvider
+            from src.infrastructure.browser.playwright_stockbit_provider import PlaywrightStockbitProvider
 
             browser_provider = PlaywrightStockbitProvider(
                 profile_dir=Path(APP_CFG.storage.stockbit_profile_dir),

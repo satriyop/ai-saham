@@ -26,7 +26,7 @@ from src.domain.ports.insider_activity_provider import InsiderActivityProvider
 from src.domain.value_objects.insider_transaction import InsiderTransaction
 
 if TYPE_CHECKING:
-    from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
+    from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
 
 logger = logging.getLogger(__name__)
 
@@ -341,7 +341,7 @@ class StockbitInsiderActivityProvider(InsiderActivityProvider):
         if self._provider is None:
             return []
         try:
-            from src.infrastructure.browser.playwright_stockbit import _exodus_get
+            from src.infrastructure.browser.playwright_stockbit_provider import _exodus_get
             token = self._provider._get_token()
             action_param = _ACTION_MAP.get(action_type.upper(), "ACTION_TYPE_BUY")
             url = _INSIDER_URL.format(

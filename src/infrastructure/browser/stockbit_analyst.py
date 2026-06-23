@@ -32,7 +32,7 @@ from src.domain.ports.analyst_consensus_provider import AnalystConsensusProvider
 from src.domain.value_objects.analyst_consensus import AnalystConsensus
 
 if TYPE_CHECKING:
-    from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
+    from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
 
 logger = logging.getLogger(__name__)
 
@@ -264,7 +264,7 @@ class StockbitAnalystConsensusProvider(AnalystConsensusProvider):
         if self._provider is None:
             return None
         try:
-            from src.infrastructure.browser.playwright_stockbit import _exodus_get
+            from src.infrastructure.browser.playwright_stockbit_provider import _exodus_get
             token = self._provider._get_token()
             url = _ANALYST_URL.format(ticker=ticker.upper())
             body = _exodus_get(url, token)

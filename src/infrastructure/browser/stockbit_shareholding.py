@@ -37,7 +37,7 @@ from src.domain.ports.shareholding_provider import ShareholdingProvider
 from src.domain.value_objects.shareholding_composition import ShareholdingComposition
 
 if TYPE_CHECKING:
-    from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
+    from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
 
 logger = logging.getLogger(__name__)
 
@@ -288,7 +288,7 @@ class StockbitShareholdingProvider(ShareholdingProvider):
         if self._provider is None:
             return None
         try:
-            from src.infrastructure.browser.playwright_stockbit import _exodus_get
+            from src.infrastructure.browser.playwright_stockbit_provider import _exodus_get
             token = self._provider._get_token()
             url = _COMPOSITION_URL.format(ticker=ticker)
             body = _exodus_get(url, token)

@@ -34,7 +34,7 @@ from src.domain.ports.earnings_provider import EarningsProvider
 from src.domain.value_objects.earnings_record import EarningsRecord
 
 if TYPE_CHECKING:
-    from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
+    from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
 
 logger = logging.getLogger(__name__)
 
@@ -321,7 +321,7 @@ class StockbitEarningsProvider(EarningsProvider):
 
     def _do_get(self, ticker: str, quarter: int, year: int, token: str) -> dict | None:
         try:
-            from src.infrastructure.browser.playwright_stockbit import _exodus_get
+            from src.infrastructure.browser.playwright_stockbit_provider import _exodus_get
             url = _EARNINGS_URL.format(ticker=ticker, quarter=quarter, year=year)
             return _exodus_get(url, token)
         except Exception as e:

@@ -26,7 +26,7 @@ from src.application.ports.corporate_action_repository import CorporateActionRep
 from src.domain.value_objects.corporate_action_event import CorporateActionEvent
 
 if TYPE_CHECKING:
-    from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
+    from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
 
 logger = logging.getLogger(__name__)
 
@@ -324,7 +324,7 @@ class StockbitCorporateActionRepository(CorporateActionRepository):
         if self._provider is None:
             return []
         try:
-            from src.infrastructure.browser.playwright_stockbit import _exodus_get
+            from src.infrastructure.browser.playwright_stockbit_provider import _exodus_get
             token = self._provider._get_token()
             url = _CORPACTION_URL.format(ticker=ticker.upper())
             body = _exodus_get(url, token)

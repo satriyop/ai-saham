@@ -47,7 +47,7 @@ def test_universe_create_with_subsector(monkeypatch, tmp_path: Path):
     monkeypatch.chdir(tmp_path)
 
     # Mock provider
-    import src.infrastructure.browser.playwright_stockbit as playwright_stockbit
+    import src.infrastructure.browser.playwright_stockbit_provider as playwright_stockbit
     monkeypatch.setattr(playwright_stockbit, "StockbitPlaywrightBrokerProvider", MockBrokerProvider)
 
     # Mock API call
@@ -102,7 +102,7 @@ def test_universe_create_sector_level(monkeypatch, tmp_path: Path):
     monkeypatch.chdir(tmp_path)
 
     # Mock provider
-    import src.infrastructure.browser.playwright_stockbit as playwright_stockbit
+    import src.infrastructure.browser.playwright_stockbit_provider as playwright_stockbit
     monkeypatch.setattr(playwright_stockbit, "StockbitPlaywrightBrokerProvider", MockBrokerProvider)
 
     # Mock API calls and capture sleep times
@@ -181,7 +181,7 @@ def test_universe_create_sector_level_fail_fast(monkeypatch, tmp_path: Path):
     monkeypatch.chdir(tmp_path)
 
     # Mock provider
-    import src.infrastructure.browser.playwright_stockbit as playwright_stockbit
+    import src.infrastructure.browser.playwright_stockbit_provider as playwright_stockbit
     monkeypatch.setattr(playwright_stockbit, "StockbitPlaywrightBrokerProvider", MockBrokerProvider)
 
     # Mock API calls where the second subsector fetch fails
@@ -237,7 +237,7 @@ def test_universe_update_handles_custom_universe(monkeypatch, tmp_path: Path):
     monkeypatch.chdir(tmp_path)
 
     # Mock provider & universe provider
-    import src.infrastructure.browser.playwright_stockbit as playwright_stockbit
+    import src.infrastructure.browser.playwright_stockbit_provider as playwright_stockbit
     import src.infrastructure.browser.stockbit_universe as stockbit_universe
     monkeypatch.setattr(playwright_stockbit, "StockbitPlaywrightBrokerProvider", MockBrokerProvider)
     monkeypatch.setattr(stockbit_universe, "StockbitUniverseProvider", MockUniverseProvider)
@@ -304,7 +304,7 @@ def test_universe_update_all_includes_custom_universes(monkeypatch, tmp_path: Pa
     (tmp_path / ".stockbit_profile").mkdir()
     monkeypatch.chdir(tmp_path)
 
-    import src.infrastructure.browser.playwright_stockbit as playwright_stockbit
+    import src.infrastructure.browser.playwright_stockbit_provider as playwright_stockbit
     import src.infrastructure.browser.stockbit_universe as stockbit_universe
     monkeypatch.setattr(playwright_stockbit, "StockbitPlaywrightBrokerProvider", MockBrokerProvider)
     monkeypatch.setattr(stockbit_universe, "StockbitUniverseProvider", MockUniverseProvider)

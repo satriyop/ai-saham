@@ -23,7 +23,7 @@ from src.domain.value_objects.ticker_notation import (
 )
 
 if TYPE_CHECKING:
-    from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
+    from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
 
 logger = logging.getLogger(__name__)
 
@@ -289,7 +289,7 @@ class StockbitTickerNotationProvider(TickerNotationProvider, TickerNotationRepos
     def _fetch(self, ticker: str) -> TickerNotationSnapshot | None:
         if self._provider is None:
             return None
-        from src.infrastructure.browser.playwright_stockbit import _exodus_get
+        from src.infrastructure.browser.playwright_stockbit_provider import _exodus_get
 
         token = self._provider._get_token()
         body = _exodus_get(_EMITTEN_INFO_URL.format(ticker=ticker.upper()), token)

@@ -317,7 +317,7 @@ def confirm_open(
             "skip browser-backed auto resolution."
         )
         try:
-            from src.infrastructure.browser.playwright_stockbit import (
+            from src.infrastructure.browser.playwright_stockbit_provider import (
                 StockbitPlaywrightBrokerProvider,
             )
             from src.infrastructure.browser.stockbit_order_book import StockbitOrderBookProvider

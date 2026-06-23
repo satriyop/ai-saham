@@ -25,7 +25,7 @@ from src.domain.ports.seasonality_provider import SeasonalityProvider
 from src.domain.value_objects.seasonal_edge import SeasonalEdge
 
 if TYPE_CHECKING:
-    from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
+    from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
 
 logger = logging.getLogger(__name__)
 
@@ -289,7 +289,7 @@ class StockbitSeasonalityProvider(SeasonalityProvider):
         if self._provider is None:
             return None
         try:
-            from src.infrastructure.browser.playwright_stockbit import _exodus_get
+            from src.infrastructure.browser.playwright_stockbit_provider import _exodus_get
             token = self._provider._get_token()
             url = _SEASONALITY_URL.format(
                 ticker=ticker.upper(),

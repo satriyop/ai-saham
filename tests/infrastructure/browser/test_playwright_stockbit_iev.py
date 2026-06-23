@@ -1,6 +1,6 @@
 """Tests for Stockbit IEV/IEP mover parsing."""
 
-from src.infrastructure.browser import playwright_stockbit as stockbit
+from src.infrastructure.browser import playwright_stockbit_provider as stockbit
 
 
 def _body(ticker: str, iev: int, iep: int | None) -> dict:

@@ -29,7 +29,7 @@ from src.domain.ports.market_data_provider import MarketDataProvider
 from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
 
 if TYPE_CHECKING:
-    from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
+    from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
 
 logger = logging.getLogger(__name__)
 
@@ -118,7 +118,7 @@ class StockbitHistoricalProvider(MarketDataProvider):
             return []
 
         try:
-            from src.infrastructure.browser.playwright_stockbit import _exodus_get
+            from src.infrastructure.browser.playwright_stockbit_provider import _exodus_get
             token = self._provider._get_token()
         except Exception as exc:
             logger.debug("StockbitHistoricalProvider: token fetch failed for %s: %s", ticker, exc)

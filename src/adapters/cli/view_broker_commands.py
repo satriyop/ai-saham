@@ -55,7 +55,7 @@ def broker_status() -> None:
 
     # Stockbit Playwright session provider
     try:
-        from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
+        from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
         session_provider = StockbitPlaywrightBrokerProvider()
         if session_provider.is_authenticated():
             marker = _DEFAULT_PROFILE_DIR / ".logged_in_at"

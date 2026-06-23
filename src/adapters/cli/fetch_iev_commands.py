@@ -59,7 +59,7 @@ def collect_iev(
 
       saham fetch iev --top-n 30
     """
-    from src.infrastructure.browser.playwright_stockbit import PlaywrightStockbitProvider
+    from src.infrastructure.browser.playwright_stockbit_provider import PlaywrightStockbitProvider
     from src.infrastructure.persistence.iev_json_sidecar import IEVJsonSidecarWriter
     from src.infrastructure.persistence.sqlite_iev_repository import SQLiteIEVRepository
 

@@ -209,7 +209,7 @@ class SQLiteSystemStatusProvider(SystemStatusProvider):
     def _check_stockbit_session(self) -> ProviderStatusDto:
         start = time.time()
         try:
-            from src.infrastructure.browser.playwright_stockbit import get_session_status
+            from src.infrastructure.browser.playwright_stockbit_provider import get_session_status
 
             info = get_session_status()
             elapsed = round(time.time() - start, 1)

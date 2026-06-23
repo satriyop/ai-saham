@@ -166,7 +166,7 @@ def test_intraday_confirm_open_auto_uses_stockbit_provider_stubs(tmp_path, monke
         def fetch_snapshot(self, ticker: str):
             return None
 
-    import src.infrastructure.browser.playwright_stockbit as playwright_stockbit
+    import src.infrastructure.browser.playwright_stockbit_provider as playwright_stockbit
     import src.infrastructure.browser.stockbit_order_book as stockbit_order_book
     import src.infrastructure.browser.stockbit_running_trade as stockbit_running_trade
 
