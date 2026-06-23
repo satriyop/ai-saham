@@ -19,6 +19,9 @@ market:
   provider: yahoo        # candle data source: yahoo | idx
   suffix: ".JK"         # ticker suffix for IDX symbols
   default_days: 365      # history depth for indicator/analyze commands
+  idx_request_delay_seconds: 1.0   # min spacing between requests (rate-limit courtesy)
+  idx_max_retries: 3               # attempts before giving up
+  idx_retry_backoff_base: 2.0      # exponential back-off base in seconds (2s, 4s, 8s)
 
 # ── Storage ───────────────────────────────────────────────────────────────
 storage:

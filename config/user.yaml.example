@@ -40,3 +40,8 @@ swing:
 #   opening_data_dir: "~/.ai-saham/data/opening"
 #   pre_open_config: "~/.ai-saham/config/pre_open_screener.yaml"
 #   swing_config: "~/.ai-saham/config/swing_screener.yaml"
+
+# market:
+#   idx_request_delay_seconds: 1.0
+#   idx_max_retries: 3
+#   idx_retry_backoff_base: 2.0

@@ -29,6 +29,9 @@ class MarketConfig:
     provider: str = "yahoo"
     suffix: str = ".JK"
     default_days: int = 365
+    idx_request_delay_seconds: float = 1.0
+    idx_max_retries: int = 3
+    idx_retry_backoff_base: float = 2.0
 
 
 @dataclass(frozen=True)
