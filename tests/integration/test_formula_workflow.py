@@ -19,7 +19,7 @@ import pytest
 
 from src.application.services.bootstrap import create_indicator_registry
 from src.application.services.indicator_registry import IndicatorRegistry
-from src.application.use_case.create_indicator_from_intent import (
+from src.application.use_case.create_indicator_from_intent_use_case import (
     CreateIndicatorFromIntentRequest,
     CreateIndicatorFromIntentUseCase,
 )

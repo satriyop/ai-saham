@@ -1,8 +1,8 @@
 import json
 from datetime import date
 
-from src.application.use_case import opening_tune
-from src.application.use_case.opening_tune import OpeningTuneRequest, OpeningTuneUseCase
+from src.application.use_case import opening_tune_use_case as opening_tune
+from src.application.use_case.opening_tune_use_case import OpeningTuneRequest, OpeningTuneUseCase
 
 
 def _write_grade(day_dir, *, phase="POST_OPEN", valid=False, confidence="LOW"):

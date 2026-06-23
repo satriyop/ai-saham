@@ -12,13 +12,13 @@ from pathlib import Path
 from src.application.services.indicator_registry import IndicatorRegistry
 from src.application.services.strategy_loader import StrategyLoader, StrategyNotFoundError
 from src.application.services.universe_loader import resolve_tickers
-from src.application.use_case.assess_risk import AssessRiskRequest, AssessRiskUseCase
-from src.application.use_case.market_regime import (
+from src.application.use_case.assess_risk_use_case import AssessRiskRequest, AssessRiskUseCase
+from src.application.use_case.market_regime_use_case import (
     MarketRegimeRequest,
     MarketRegimeResponse,
     MarketRegimeUseCase,
 )
-from src.application.use_case.pre_open_screen import (
+from src.application.use_case.pre_open_screen_use_case import (
     PreOpenScreenConfig,
     PreOpenScreenRequest,
     PreOpenScreenUseCase,

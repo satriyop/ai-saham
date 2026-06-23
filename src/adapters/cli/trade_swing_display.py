@@ -10,7 +10,7 @@ from rich.console import Group
 from rich.text import Text
 
 from src.adapters.cli.rich_display import compact_table, console, panel
-from src.application.use_case.swing_backtest import SwingBacktestResponse
+from src.application.use_case.swing_backtest_use_case import SwingBacktestResponse
 
 
 def _fmt_pct(value: float | None, signed: bool = False) -> str:

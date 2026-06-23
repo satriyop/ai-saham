@@ -23,7 +23,7 @@ from src.application.rules.exceptions import (
     RulesValidationError,
 )
 from src.application.services.bootstrap import create_indicator_registry
-from src.application.use_case.assess_risk import (
+from src.application.use_case.assess_risk_use_case import (
     AssessRiskRequest,
     AssessRiskUseCase,
 )
@@ -78,7 +78,7 @@ def _display_ai_explanation(
     typer.echo(f"{'─'*50}")
 
     try:
-        from src.application.use_case.explain_risk import ExplainRiskRequest, ExplainRiskUseCase
+        from src.application.use_case.explain_risk_use_case import ExplainRiskRequest, ExplainRiskUseCase
         explainer = ExplainerFactory.create(provider=provider, model=model)
         explain_use_case = ExplainRiskUseCase(explainer=explainer)
         explain_response = explain_use_case.execute(
@@ -161,7 +161,7 @@ def risk(
         sentiment_snapshot = None
         if with_sentiment:
             try:
-                from src.application.use_case.fetch_sentiment import (
+                from src.application.use_case.fetch_sentiment_use_case import (
                     FetchSentimentRequest,
                     FetchSentimentUseCase,
                 )

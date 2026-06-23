@@ -16,7 +16,7 @@ from decimal import Decimal
 
 import pytest
 
-from src.application.use_case.compute_rsi import (
+from src.application.use_case.compute_rsi_use_case import (
     ComputeRSIRequest,
     ComputeRSIResponse,
     ComputeRSIUseCase,

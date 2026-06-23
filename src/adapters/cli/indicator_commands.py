@@ -21,11 +21,11 @@ from rich.console import Console
 from rich.table import Table
 
 from src.application.services.bootstrap import create_indicator_registry
-from src.application.use_case.aggregate_indicators import (
+from src.application.use_case.aggregate_indicators_use_case import (
     AggregateIndicatorsRequest,
     AggregateIndicatorsUseCase,
 )
-from src.application.use_case.create_indicator_from_intent import (
+from src.application.use_case.create_indicator_from_intent_use_case import (
     CreateIndicatorFromIntentRequest,
     CreateIndicatorFromIntentUseCase,
 )

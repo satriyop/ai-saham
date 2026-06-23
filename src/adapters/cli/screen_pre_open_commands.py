@@ -20,12 +20,12 @@ from src.adapters.cli.screen_pre_open_display import (
     display_results,
 )
 from src.application.services.bootstrap import create_indicator_registry
-from src.application.use_case.market_regime import MarketRegimeResponse
-from src.application.use_case.pre_open_screen import (
+from src.application.use_case.market_regime_use_case import MarketRegimeResponse
+from src.application.use_case.pre_open_screen_use_case import (
     PreOpenScreenConfig,
     PreOpenScreenUseCase,
 )
-from src.application.use_case.pre_open_workflow import (
+from src.application.use_case.pre_open_workflow_use_case import (
     PreOpenWorkflowRequest,
     PreOpenWorkflowUseCase,
 )

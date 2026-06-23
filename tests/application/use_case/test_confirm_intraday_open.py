@@ -3,7 +3,7 @@
 from datetime import date
 from decimal import Decimal
 
-from src.application.use_case.confirm_intraday_open import (
+from src.application.use_case.confirm_intraday_open_use_case import (
     ConfirmIntradayOpenRequest,
     ConfirmIntradayOpenUseCase,
 )

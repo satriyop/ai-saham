@@ -14,7 +14,7 @@ from rich.console import Group
 from rich.text import Text
 
 from src.adapters.cli.rich_display import compact_table, console, panel
-from src.application.use_case.resolve_opening_prices import OpeningPriceObservation
+from src.application.use_case.resolve_opening_prices_use_case import OpeningPriceObservation
 from src.domain.value_objects.intraday_confirmation import IntradayConfirmation
 
 

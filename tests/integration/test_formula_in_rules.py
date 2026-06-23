@@ -31,8 +31,8 @@ from src.application.rules.schema import (
     RuleSet,
 )
 from src.application.services.indicator_registry import IndicatorRegistry
-from src.application.use_case.assess_risk import AssessRiskRequest, AssessRiskUseCase
-from src.application.use_case.backtest import BacktestRequest, BacktestUseCase
+from src.application.use_case.assess_risk_use_case import AssessRiskRequest, AssessRiskUseCase
+from src.application.use_case.backtest_use_case import BacktestRequest, BacktestUseCase
 from src.domain.entities.candle import Candle
 
 # --- Fixtures ---

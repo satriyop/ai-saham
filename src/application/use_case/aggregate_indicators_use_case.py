@@ -15,9 +15,9 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 
-from src.application.use_case.compute_ema import ComputeEMARequest, ComputeEMAUseCase
-from src.application.use_case.compute_rsi import ComputeRSIRequest, ComputeRSIUseCase
-from src.application.use_case.compute_sma import ComputeSMARequest, ComputeSMAUseCase
+from src.application.use_case.compute_ema_use_case import ComputeEMARequest, ComputeEMAUseCase
+from src.application.use_case.compute_rsi_use_case import ComputeRSIRequest, ComputeRSIUseCase
+from src.application.use_case.compute_sma_use_case import ComputeSMARequest, ComputeSMAUseCase
 from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 

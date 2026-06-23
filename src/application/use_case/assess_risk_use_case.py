@@ -17,7 +17,7 @@ from typing import Union
 from src.application.ports.rules_loader import RulesLoader
 from src.application.rules.schema import BUILTIN_INDICATORS, IndicatorType
 from src.application.services.indicator_registry import IndicatorRegistry
-from src.application.use_case.aggregate_indicators import (
+from src.application.use_case.aggregate_indicators_use_case import (
     AggregateIndicatorsRequest,
     AggregateIndicatorsUseCase,
 )

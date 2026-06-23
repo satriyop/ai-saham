@@ -25,8 +25,8 @@ from src.adapters.cli.screen_pre_open_display import (
 from src.adapters.cli.screen_pre_open_display import (
     market_regime_warning as _market_regime_warning,
 )
-from src.application.use_case.market_regime import MarketRegimeResponse
-from src.application.use_case.pre_open_workflow import PreOpenDataFreshness
+from src.application.use_case.market_regime_use_case import MarketRegimeResponse
+from src.application.use_case.pre_open_workflow_use_case import PreOpenDataFreshness
 from src.domain.value_objects.market_status import MarketStatus
 from src.domain.value_objects.screener_result import ScreenerCandidate
 

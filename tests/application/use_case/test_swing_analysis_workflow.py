@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from src.application.use_case.swing_analysis_workflow import (
+from src.application.use_case.swing_analysis_workflow_use_case import (
     SwingAnalysisDataUnavailable,
     SwingAnalysisWorkflowRequest,
     SwingAnalysisWorkflowUseCase,

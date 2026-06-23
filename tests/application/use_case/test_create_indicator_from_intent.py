@@ -13,7 +13,7 @@ from src.application.ports.formula_translator import (
     TranslatorRateLimitError,
     TranslatorTimeoutError,
 )
-from src.application.use_case.create_indicator_from_intent import (
+from src.application.use_case.create_indicator_from_intent_use_case import (
     CreateIndicatorFromIntentRequest,
     CreateIndicatorFromIntentResponse,
     CreateIndicatorFromIntentUseCase,

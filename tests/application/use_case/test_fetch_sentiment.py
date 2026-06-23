@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from src.application.use_case.fetch_sentiment import (
+from src.application.use_case.fetch_sentiment_use_case import (
     FetchSentimentRequest,
     FetchSentimentResponse,
     FetchSentimentUseCase,

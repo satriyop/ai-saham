@@ -33,7 +33,7 @@ from src.adapters.cli.analyze_swing_display import (
     format_failed_gates_summary as _format_failed_gates_summary,
 )
 from src.adapters.cli.main import app
-from src.application.use_case.accumulation_screen import AccumulationCandidate
+from src.application.use_case.accumulation_screen_use_case import AccumulationCandidate
 from src.domain.entities.broker_flow import BrokerSummary, BrokerTransaction, BrokerType
 
 runner = CliRunner()

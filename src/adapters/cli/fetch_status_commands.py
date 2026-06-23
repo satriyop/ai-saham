@@ -13,7 +13,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from src.application.use_case.get_system_status import (
+from src.application.use_case.get_system_status_use_case import (
     GetSystemStatusUseCase,
 )
 from src.infrastructure.persistence.sqlite_system_status_provider import (

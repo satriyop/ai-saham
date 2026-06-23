@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.application.use_case.pre_open_screen import (
+from src.application.use_case.pre_open_screen_use_case import (
     PreOpenScreenConfig,
     PreOpenScreenRequest,
     PreOpenScreenUseCase,

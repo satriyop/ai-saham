@@ -8,7 +8,7 @@ handles errors gracefully.
 from datetime import date
 from decimal import Decimal
 
-from src.application.use_case.explain_risk import (
+from src.application.use_case.explain_risk_use_case import (
     ExplainRiskRequest,
     ExplainRiskResponse,
     ExplainRiskUseCase,

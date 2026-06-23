@@ -21,16 +21,16 @@ from src.adapters.cli.trade_intraday_display import (
     format_ticker_preview,
 )
 from src.application.services.bootstrap import create_indicator_registry
-from src.application.services.universe_loader import resolve_tickers
-from src.application.use_case.confirm_intraday_open import (
+from src.application.services.universe_loader import UniverseNotFoundError, resolve_tickers
+from src.application.use_case.confirm_intraday_open_use_case import (
     ConfirmIntradayOpenRequest,
     ConfirmIntradayOpenUseCase,
 )
-from src.application.use_case.intraday_backtest import (
+from src.application.use_case.intraday_backtest_use_case import (
     IntradayBacktestRequest,
     IntradayBacktestUseCase,
 )
-from src.application.use_case.resolve_opening_prices import (
+from src.application.use_case.resolve_opening_prices_use_case import (
     OpeningPriceObservation,
     ResolveOpeningPricesRequest,
     ResolveOpeningPricesUseCase,
@@ -174,6 +174,13 @@ def confirm_open(
             help='Manual opening prices JSON override, e.g. {"BBCA":9050}',
         ),
     ] = None,
+    track_file: Annotated[
+        Optional[Path],
+        typer.Option(
+            "--track-file",
+            help="Path to track_*.json tracking file to resolve opening prices offline",
+        ),
+    ] = None,
     session: Annotated[
         Optional[Path],
         typer.Option("--session", help="Path to pre-open sidecar JSON"),
@@ -188,7 +195,10 @@ def confirm_open(
     ] = 0.07,
     headless: Annotated[
         bool,
-        typer.Option("--headless/--no-headless", help="Use headless browser for Stockbit auto-confirm"),
+        typer.Option(
+            "--headless/--no-headless",
+            help="Use headless browser for Stockbit auto-confirm",
+        ),
     ] = True,
 ) -> None:
     """
@@ -235,10 +245,58 @@ def confirm_open(
         raise typer.Exit(1)
 
     screened_at, tickers = _load_confirmation_tickers(sidecar_path)
+    track_prices: dict[str, OpeningPriceObservation] = {}
+
+    if track_file:
+        if not track_file.exists():
+            typer.echo(f"Error: Track file not found at '{track_file}'", err=True)
+            raise typer.Exit(1)
+        try:
+            with open(track_file) as f:
+                track_data = json.load(f)
+        except Exception as e:
+            typer.echo(f"Error parsing track file '{track_file}': {e}", err=True)
+            raise typer.Exit(1)
+
+        captured_at_str = track_data.get("captured_at")
+        captured_at_dt = None
+        if captured_at_str:
+            try:
+                from datetime import datetime
+                captured_at_dt = datetime.fromisoformat(captured_at_str)
+            except Exception:
+                pass
+
+        from src.application.use_case.opening_grade_use_case import _extract_observed_price
+
+        track_tickers = track_data.get("tickers", {})
+        for ticker in tickers:
+            tdata = track_tickers.get(ticker)
+            observed = _extract_observed_price(tdata)
+            if observed is not None:
+                price_val, source_val, confidence_val = observed
+                track_prices[ticker] = OpeningPriceObservation(
+                    ticker=ticker,
+                    price=Decimal(str(price_val)),
+                    source=source_val,
+                    confidence=confidence_val,
+                    timestamp=captured_at_dt,
+                    reason=f"Resolved offline from track file {track_file.name}",
+                    auto_confirmed=True,
+                    manual_override=False,
+                )
+
     running_trade_provider = None
     order_book_provider = None
-    missing_manual = [ticker for ticker in tickers if ticker not in manual_prices]
-    auto_needed = bool(missing_manual)
+    missing_resolved = [
+        ticker for ticker in tickers
+        if ticker not in manual_prices and ticker not in track_prices
+    ]
+
+    if track_file:
+        auto_needed = False
+    else:
+        auto_needed = bool(missing_resolved)
 
     typer.echo(
         f"Confirming {len(tickers)} pre-open candidate(s) from {sidecar_path} "
@@ -246,13 +304,18 @@ def confirm_open(
     )
     if manual_prices:
         typer.echo(f"Manual opening prices supplied: {len(manual_prices)}")
+    if track_prices:
+        typer.echo(f"Track file opening prices resolved: {len(track_prices)}")
 
     if auto_needed:
         typer.echo(
             "Resolving missing opening prices from Stockbit: "
-            f"{format_ticker_preview(missing_manual)}"
+            f"{format_ticker_preview(missing_resolved)}"
         )
-        typer.echo("Tip: pass --opening-json to skip browser-backed auto resolution.")
+        typer.echo(
+            "Tip: pass --opening-json or --track-file to "
+            "skip browser-backed auto resolution."
+        )
         try:
             from src.infrastructure.browser.playwright_stockbit import (
                 StockbitPlaywrightBrokerProvider,
@@ -262,11 +325,15 @@ def confirm_open(
                 StockbitRunningTradeProvider,
             )
 
-            broker_provider = StockbitPlaywrightBrokerProvider(headless=headless)
+            broker_provider = StockbitPlaywrightBrokerProvider(
+                profile_dir=Path(APP_CFG.storage.stockbit_profile_dir),
+                headless=headless,
+            )
             if not broker_provider.is_authenticated():
                 typer.echo(
                     "No authenticated Stockbit profile for auto confirm. "
-                    "Run `saham fetch stockbit login` or pass --opening-json.",
+                    "Run `saham fetch stockbit login` or "
+                    "pass --opening-json / --track-file.",
                     err=True,
                 )
                 raise typer.Exit(1)
@@ -276,7 +343,8 @@ def confirm_open(
             raise
         except Exception as e:
             typer.echo(
-                f"Auto confirm setup failed: {e}. Pass --opening-json to confirm manually.",
+                f"Auto confirm setup failed: {e}. "
+                "Pass --opening-json or --track-file to confirm manually.",
                 err=True,
             )
             raise typer.Exit(1)
@@ -293,6 +361,7 @@ def confirm_open(
             tickers=tickers,
             run_date=screened_at,
             manual_prices=manual_prices,
+            track_prices=track_prices,
         )
     )
     resolved_count = sum(1 for obs in observations.values() if obs.price is not None)

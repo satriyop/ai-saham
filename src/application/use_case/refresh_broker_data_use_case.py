@@ -14,12 +14,12 @@ import logging
 from dataclasses import dataclass
 from datetime import date, timedelta
 
-from src.application.use_case.fetch_broker_daily_flows import (
+from src.application.use_case.fetch_broker_daily_flows_use_case import (
     FetchBrokerDailyFlowsRequest,
     FetchBrokerDailyFlowsResponse,
     FetchBrokerDailyFlowsUseCase,
 )
-from src.application.use_case.fetch_broker_data import (
+from src.application.use_case.fetch_broker_data_use_case import (
     FetchBrokerDataRequest,
     FetchBrokerDataUseCase,
 )

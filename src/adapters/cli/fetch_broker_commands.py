@@ -20,11 +20,11 @@ from src.adapters.cli.fetch_broker_display import (
     display_import_preview,
     display_recent_fetch_summary,
 )
-from src.application.use_case.fetch_broker_data import (
+from src.application.use_case.fetch_broker_data_use_case import (
     FetchBrokerDataRequest,
     FetchBrokerDataUseCase,
 )
-from src.application.use_case.import_broker_data import (
+from src.application.use_case.import_broker_data_use_case import (
     ImportBrokerDataRequest,
     ImportBrokerDataUseCase,
 )

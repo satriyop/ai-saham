@@ -18,7 +18,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from src.application.services.indicator_registry import IndicatorRegistry
-from src.application.use_case.intraday_backtest import (
+from src.application.use_case.intraday_backtest_use_case import (
     IntradayBacktestRequest,
     IntradayBacktestUseCase,
 )

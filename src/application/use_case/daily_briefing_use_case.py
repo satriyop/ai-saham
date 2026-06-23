@@ -11,12 +11,12 @@ from datetime import date, datetime
 from pathlib import Path
 
 from src.application.services.universe_loader import load_universe
-from src.application.use_case.accumulation_screen import (
+from src.application.use_case.accumulation_screen_use_case import (
     AccumulationCandidate,
     AccumulationScreenRequest,
     AccumulationScreenUseCase,
 )
-from src.application.use_case.market_regime import MarketRegimeRequest, MarketRegimeResponse
+from src.application.use_case.market_regime_use_case import MarketRegimeRequest, MarketRegimeResponse
 from src.domain.ports.market_data_repository import MarketDataRepository
 
 

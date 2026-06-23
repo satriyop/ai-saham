@@ -116,7 +116,7 @@ def view_universe(
         UniverseNotFoundError,
         load_universe_meta,
     )
-    from src.application.use_case.view_universe_summary import build_universe_view
+    from src.application.use_case.view_universe_summary_use_case import build_universe_view
 
     _valid_sorts = {"flow", "change", "volume", "ticker"}
     if sort_by not in _valid_sorts:

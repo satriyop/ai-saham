@@ -1,6 +1,6 @@
 """Tests for RefreshStockbitEnrichmentUseCase — no infrastructure imports needed."""
 
-from src.application.use_case.refresh_stockbit_enrichment import (
+from src.application.use_case.refresh_stockbit_enrichment_use_case import (
     EnrichmentTask,
     RefreshStockbitEnrichmentRequest,
     RefreshStockbitEnrichmentUseCase,

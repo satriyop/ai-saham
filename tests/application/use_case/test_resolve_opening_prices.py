@@ -2,7 +2,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
-from src.application.use_case.resolve_opening_prices import (
+from src.application.use_case.resolve_opening_prices_use_case import (
     ResolveOpeningPricesRequest,
     ResolveOpeningPricesUseCase,
 )

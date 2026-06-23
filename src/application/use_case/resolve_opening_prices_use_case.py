@@ -48,6 +48,7 @@ class ResolveOpeningPricesRequest:
     tickers: list[str]
     run_date: date
     manual_prices: dict[str, Decimal] | None = None
+    track_prices: dict[str, OpeningPriceObservation] | None = None
 
 
 class ResolveOpeningPricesUseCase:
@@ -82,6 +83,11 @@ class ResolveOpeningPricesUseCase:
                     auto_confirmed=False,
                     manual_override=True,
                 )
+                observations[ticker] = observation
+                self._notify(index, total, observation)
+                continue
+            if request.track_prices and ticker in request.track_prices:
+                observation = request.track_prices[ticker]
                 observations[ticker] = observation
                 self._notify(index, total, observation)
                 continue

@@ -18,7 +18,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 from src.application.services.indicator_registry import IndicatorRegistry
-from src.application.use_case.pre_open_screen import (
+from src.application.use_case.pre_open_screen_use_case import (
     PreOpenScreenConfig,
     PreOpenScreenRequest,
     PreOpenScreenUseCase,

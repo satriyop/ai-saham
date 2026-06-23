@@ -7,7 +7,7 @@ The audit must be deterministic, offline, and free from future data leakage.
 from datetime import date, timedelta
 from decimal import Decimal
 
-from src.application.use_case.accumulation_audit import (
+from src.application.use_case.accumulation_audit_use_case import (
     AccumulationAuditRequest,
     AccumulationAuditUseCase,
 )

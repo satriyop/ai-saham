@@ -14,7 +14,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from statistics import mean
 
-from src.application.use_case.accumulation_screen import (
+from src.application.use_case.accumulation_screen_use_case import (
     AccumulationCandidate,
     AccumulationScreenRequest,
     AccumulationScreenUseCase,

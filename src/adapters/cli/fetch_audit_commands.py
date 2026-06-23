@@ -14,7 +14,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-from src.application.use_case.data_quality_audit import (
+from src.application.use_case.data_quality_audit_use_case import (
     DataQualityAuditRequest,
     DataQualityAuditUseCase,
     DataQualityIssue,

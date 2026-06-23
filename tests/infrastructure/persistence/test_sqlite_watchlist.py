@@ -4,7 +4,7 @@ from datetime import datetime
 
 import pytest
 
-from src.application.use_case.compare_screen_snapshots import (
+from src.application.use_case.compare_screen_snapshots_use_case import (
     compare_screen_snapshots,
 )
 from src.domain.value_objects.screen_snapshot import ScreenSnapshotEntry
@@ -146,7 +146,7 @@ def test_compare_changed_tracks_movement():
 
 
 def test_compare_strengthening_flag():
-    from src.application.use_case.compare_screen_snapshots import SignalChange
+    from src.application.use_case.compare_screen_snapshots_use_case import SignalChange
     change = SignalChange(
         ticker="BBCA", old_rank=8, new_rank=2,
         old_composite=60.0, new_composite=75.0,

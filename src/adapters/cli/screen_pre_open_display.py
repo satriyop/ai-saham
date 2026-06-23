@@ -13,9 +13,9 @@ from rich.console import Group
 from rich.text import Text
 
 from src.adapters.cli.rich_display import compact_table, console, panel
-from src.application.use_case.market_regime import MarketRegimeResponse
-from src.application.use_case.pre_open_screen import PreOpenScreenConfig
-from src.application.use_case.pre_open_workflow import PreOpenDataFreshness
+from src.application.use_case.market_regime_use_case import MarketRegimeResponse
+from src.application.use_case.pre_open_screen_use_case import PreOpenScreenConfig
+from src.application.use_case.pre_open_workflow_use_case import PreOpenDataFreshness
 from src.domain.value_objects.screener_result import ScreenerCandidate
 
 

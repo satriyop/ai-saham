@@ -23,12 +23,12 @@ from src.application.services.universe_loader import (
     UniverseNotFoundError,
     resolve_tickers,
 )
-from src.application.use_case.swing_backtest import (
+from src.application.use_case.swing_backtest_use_case import (
     DEFAULT_SWING_COST_BPS,
     SwingBacktestRequest,
     SwingBacktestUseCase,
 )
-from src.application.use_case.swing_backtest import (
+from src.application.use_case.swing_backtest_use_case import (
     FOREIGN_BOUNCE_PRESET as BACKTEST_FOREIGN_BOUNCE_PRESET,
 )
 from src.infrastructure.config.app_config import APP_CFG

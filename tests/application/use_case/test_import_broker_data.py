@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from src.application.use_case.import_broker_data import (
+from src.application.use_case.import_broker_data_use_case import (
     DetectCsvFormatUseCase,
     ImportBrokerDataRequest,
     ImportBrokerDataUseCase,

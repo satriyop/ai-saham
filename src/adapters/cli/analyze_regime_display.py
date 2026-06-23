@@ -10,7 +10,7 @@ from rich.console import Group
 from rich.text import Text
 
 from src.adapters.cli.rich_display import compact_table, console, panel
-from src.application.use_case.market_regime import MarketRegimeResponse
+from src.application.use_case.market_regime_use_case import MarketRegimeResponse
 
 
 def _fmt_pct(value: float | None, signed: bool = False) -> str:

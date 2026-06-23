@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
 
-from src.application.use_case.data_update_status import DataUpdateTableStatus
+from src.application.use_case.data_update_status_use_case import DataUpdateTableStatus
 
 
 @dataclass(frozen=True)

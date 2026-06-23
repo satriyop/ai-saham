@@ -143,7 +143,7 @@ class OpeningTrackUseCase:
             # Optional broker confirmation — RunningTradeSignal
             if request.broker_confirm and self._running_trade_provider is not None and not entry.get("error"):
                 try:
-                    from src.application.use_case.analyze_running_trade import (
+                    from src.application.use_case.analyze_running_trade_use_case import (
                         AnalyzeRunningTradeRequest,
                         analyze_running_trade,
                     )

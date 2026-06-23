@@ -11,7 +11,7 @@ from rich.text import Text
 
 from src.adapters.cli.rich_display import compact_table, console, panel
 from src.adapters.cli.screen_pre_open_display import fmt_pct
-from src.application.use_case.intraday_backtest import IntradayBacktestResponse
+from src.application.use_case.intraday_backtest_use_case import IntradayBacktestResponse
 
 
 def display_intraday_backtest(response: IntradayBacktestResponse, show_trades: int) -> None:

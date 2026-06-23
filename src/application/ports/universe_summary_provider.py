@@ -9,7 +9,7 @@ from datetime import date
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from src.application.use_case.view_universe_summary import UniverseViewResult
+    from src.application.use_case.view_universe_summary_use_case import UniverseViewResult
 
 
 class UniverseSummaryProvider(ABC):

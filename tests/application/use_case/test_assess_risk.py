@@ -15,7 +15,7 @@ from decimal import Decimal
 
 import pytest
 
-from src.application.use_case.assess_risk import (
+from src.application.use_case.assess_risk_use_case import (
     AssessAllProfilesResponse,
     AssessRiskRequest,
     AssessRiskResponse,

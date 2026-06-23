@@ -10,7 +10,7 @@ from rich.console import Group
 from rich.text import Text
 
 from src.adapters.cli.rich_display import compact_table, console, panel
-from src.application.use_case.accumulation_audit import AccumulationAuditResponse
+from src.application.use_case.accumulation_audit_use_case import AccumulationAuditResponse
 
 
 def display_audit_summary(response: AccumulationAuditResponse, top_groups: int) -> None:

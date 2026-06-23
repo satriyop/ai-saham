@@ -16,7 +16,7 @@ from decimal import Decimal
 
 import pytest
 
-from src.application.use_case.compute_ema import (
+from src.application.use_case.compute_ema_use_case import (
     ComputeEMARequest,
     ComputeEMAResponse,
     ComputeEMAUseCase,

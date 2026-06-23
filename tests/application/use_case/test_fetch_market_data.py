@@ -14,7 +14,7 @@ from decimal import Decimal
 
 import pytest
 
-from src.application.use_case.fetch_market_data import (
+from src.application.use_case.fetch_market_data_use_case import (
     FetchMarketDataRequest,
     FetchMarketDataUseCase,
 )

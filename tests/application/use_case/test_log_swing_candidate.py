@@ -7,12 +7,12 @@ from decimal import Decimal
 from types import SimpleNamespace
 from typing import Any
 
-from src.application.use_case.accumulation_screen import (
+from src.application.use_case.accumulation_screen_use_case import (
     AccumulationCandidate,
     AccumulationScreenRequest,
     AccumulationScreenResponse,
 )
-from src.application.use_case.log_swing_candidate import (
+from src.application.use_case.log_swing_candidate_use_case import (
     LogSwingCandidateRequest,
     LogSwingCandidateUseCase,
 )

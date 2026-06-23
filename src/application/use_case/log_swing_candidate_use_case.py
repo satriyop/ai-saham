@@ -15,7 +15,7 @@ from datetime import date
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from src.application.use_case.accumulation_screen import (
+from src.application.use_case.accumulation_screen_use_case import (
     AccumulationScreenRequest,
     classify_multi_window_pattern,
     compute_percent_plan,
@@ -24,11 +24,11 @@ from src.application.use_case.accumulation_screen import (
 
 if TYPE_CHECKING:
     from src.application.services.accumulation_journal import AccumulationJournalService
-    from src.application.use_case.accumulation_screen import (
+    from src.application.use_case.accumulation_screen_use_case import (
         AccumulationCandidate,
         AccumulationScreenUseCase,
     )
-    from src.application.use_case.market_regime import MarketRegimeUseCase
+    from src.application.use_case.market_regime_use_case import MarketRegimeUseCase
     from src.domain.ports.market_data_repository import MarketDataRepository
     from src.domain.ports.trade_journal_store import TradeJournalStore
 
@@ -195,7 +195,7 @@ class LogSwingCandidateUseCase:
         regime: str | None = None
         if request.from_analysis and request.with_regime and self._regime is not None:
             try:
-                from src.application.use_case.market_regime import MarketRegimeRequest
+                from src.application.use_case.market_regime_use_case import MarketRegimeRequest
                 regime_response = self._regime.execute(MarketRegimeRequest(
                     universe=request.regime_universe,
                     benchmark_ticker=request.benchmark_ticker,

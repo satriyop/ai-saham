@@ -25,12 +25,12 @@ from src.application.services.universe_loader import (
     UniverseNotFoundError,
     resolve_tickers,
 )
-from src.application.use_case.accumulation_screen import (
+from src.application.use_case.accumulation_screen_use_case import (
     AccumulationScreenRequest,
     AccumulationScreenResponse,
     AccumulationScreenUseCase,
 )
-from src.application.use_case.assess_risk import AssessRiskRequest, AssessRiskUseCase
+from src.application.use_case.assess_risk_use_case import AssessRiskRequest, AssessRiskUseCase
 from src.infrastructure.browser.stockbit_analyst import StockbitAnalystConsensusProvider
 from src.infrastructure.browser.stockbit_bandar import StockbitBandarDetectorProvider
 from src.infrastructure.browser.stockbit_corp_action import StockbitCorporateActionRepository

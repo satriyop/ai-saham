@@ -20,7 +20,7 @@ from src.adapters.cli.view_broker_display import (
     display_broker_top,
     display_broker_top_foreign_snapshots,
 )
-from src.application.use_case.fetch_broker_data import (
+from src.application.use_case.fetch_broker_data_use_case import (
     GetBrokerDataUseCase,
 )
 from src.domain.ports.broker_data_provider import (

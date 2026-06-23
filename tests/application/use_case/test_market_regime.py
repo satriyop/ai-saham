@@ -3,7 +3,7 @@
 from datetime import date, timedelta
 from decimal import Decimal
 
-from src.application.use_case.market_regime import (
+from src.application.use_case.market_regime_use_case import (
     MarketRegimeRequest,
     MarketRegimeUseCase,
 )

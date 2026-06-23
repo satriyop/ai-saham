@@ -7,7 +7,7 @@ The backtest must be deterministic, offline, and portfolio-aware.
 from datetime import date, timedelta
 from decimal import Decimal
 
-from src.application.use_case.swing_backtest import (
+from src.application.use_case.swing_backtest_use_case import (
     DEFAULT_SWING_COST_BPS,
     SwingBacktestRequest,
     SwingBacktestUseCase,

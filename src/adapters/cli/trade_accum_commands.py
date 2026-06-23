@@ -16,10 +16,10 @@ from typing import Annotated, Optional
 import typer
 
 from src.application.services.universe_loader import resolve_tickers
-from src.application.use_case.accumulation_screen import (
+from src.application.use_case.accumulation_screen_use_case import (
     AccumulationScreenUseCase,
 )
-from src.application.use_case.market_regime import MarketRegimeUseCase
+from src.application.use_case.market_regime_use_case import MarketRegimeUseCase
 from src.infrastructure.browser.stockbit_analyst import StockbitAnalystConsensusProvider
 from src.infrastructure.browser.stockbit_bandar import StockbitBandarDetectorProvider
 from src.infrastructure.browser.stockbit_corp_action import StockbitCorporateActionRepository
@@ -75,7 +75,7 @@ def _accumulation_log_impl(
 ) -> None:
     """Thin adapter wrapper: wires repos → calls LogSwingCandidateUseCase → formats output."""
     from src.application.services.accumulation_journal import AccumulationJournalService
-    from src.application.use_case.log_swing_candidate import (
+    from src.application.use_case.log_swing_candidate_use_case import (
         LogSwingCandidateRequest,
         LogSwingCandidateUseCase,
     )

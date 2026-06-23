@@ -16,7 +16,7 @@ from decimal import Decimal
 
 import pytest
 
-from src.application.use_case.aggregate_indicators import (
+from src.application.use_case.aggregate_indicators_use_case import (
     AggregateIndicatorsRequest,
     AggregateIndicatorsResponse,
     AggregateIndicatorsUseCase,

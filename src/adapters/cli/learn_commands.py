@@ -133,7 +133,7 @@ def snapshot(
             _playwright_available,
         )
         from src.application.services.bootstrap import create_indicator_registry
-        from src.application.use_case.opening_snapshot import (
+        from src.application.use_case.opening_snapshot_use_case import (
             OpeningSnapshotRequest,
             OpeningSnapshotUseCase,
         )
@@ -258,7 +258,7 @@ def track(
         raise typer.Exit(1)
 
     try:
-        from src.application.use_case.opening_track import OpeningTrackRequest, OpeningTrackUseCase
+        from src.application.use_case.opening_track_use_case import OpeningTrackRequest, OpeningTrackUseCase
         from src.infrastructure.browser.playwright_stockbit import PlaywrightStockbitProvider
     except ImportError as e:
         typer.echo(f"Import error: {e}", err=True)
@@ -398,7 +398,7 @@ def grade(
     run_date = _parse_date(date_str)
 
     try:
-        from src.application.use_case.opening_grade import compute_grade
+        from src.application.use_case.opening_grade_use_case import compute_grade
     except ImportError as e:
         typer.echo(f"Import error: {e}", err=True)
         raise typer.Exit(1)
@@ -496,7 +496,7 @@ def tune(
         raise typer.Exit(1)
 
     try:
-        from src.application.use_case.opening_tune import OpeningTuneRequest, OpeningTuneUseCase
+        from src.application.use_case.opening_tune_use_case import OpeningTuneRequest, OpeningTuneUseCase
     except ImportError as e:
         typer.echo(f"Import error: {e}", err=True)
         raise typer.Exit(1)
@@ -558,7 +558,7 @@ def prompt(
     run_date = _parse_date(date_str)
 
     try:
-        from src.application.use_case.opening_prompt import build_prompt
+        from src.application.use_case.opening_prompt_use_case import build_prompt
     except ImportError as e:
         typer.echo(f"Import error: {e}", err=True)
         raise typer.Exit(1)

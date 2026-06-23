@@ -1,7 +1,7 @@
 import json
 from datetime import date
 
-from src.application.use_case import opening_grade
+from src.application.use_case import opening_grade_use_case as opening_grade
 
 
 def test_opening_grade_prefers_orderbook_lastprice_over_midpoint(tmp_path, monkeypatch):

@@ -30,21 +30,21 @@ from src.application.services.universe_loader import (
     UniverseNotFoundError,
     resolve_tickers,
 )
-from src.application.use_case.fetch_market_refresh import (
+from src.application.use_case.fetch_market_refresh_use_case import (
     BENCHMARK_TICKER,
     BrokerFetchResult,
     FetchMarketRefreshRequest,
     FetchMarketRefreshUseCase,
 )
-from src.application.use_case.fetch_stock_meta import (
+from src.application.use_case.fetch_stock_meta_use_case import (
     FetchStockMetaRequest,
     FetchStockMetaUseCase,
 )
-from src.application.use_case.refresh_broker_data import (
+from src.application.use_case.refresh_broker_data_use_case import (
     RefreshBrokerDataRequest,
     RefreshBrokerDataUseCase,
 )
-from src.application.use_case.refresh_market_data import (
+from src.application.use_case.refresh_market_data_use_case import (
     RefreshMarketDataRequest,
     RefreshMarketDataUseCase,
 )
@@ -555,7 +555,7 @@ def _fetch_enrichment(ticker: str, db_path: Path, broker_provider) -> str:
 
     from datetime import timedelta
 
-    from src.application.use_case.refresh_stockbit_enrichment import (
+    from src.application.use_case.refresh_stockbit_enrichment_use_case import (
         EnrichmentTask,
         RefreshStockbitEnrichmentRequest,
         RefreshStockbitEnrichmentUseCase,

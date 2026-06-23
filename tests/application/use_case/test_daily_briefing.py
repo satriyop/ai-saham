@@ -3,7 +3,7 @@
 from datetime import date
 from unittest.mock import MagicMock, patch
 
-from src.application.use_case.daily_briefing import (
+from src.application.use_case.daily_briefing_use_case import (
     DailyBriefingRequest,
     DailyBriefingUseCase,
 )
@@ -26,7 +26,7 @@ def test_daily_briefing_rolls_back_weekends():
     )
 
     # Mocking date.today() via patch of daily_briefing's imported date class
-    with patch("src.application.use_case.daily_briefing.date") as mock_date:
+    with patch("src.application.use_case.daily_briefing_use_case.date") as mock_date:
         # Saturday, June 20, 2026
         mock_date.today.return_value = date(2026, 6, 20)
         # Ensure side_effect allows creating new date instances in the code

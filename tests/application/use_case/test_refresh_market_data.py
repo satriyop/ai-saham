@@ -5,7 +5,7 @@ from decimal import Decimal
 
 import pytest
 
-from src.application.use_case.refresh_market_data import (
+from src.application.use_case.refresh_market_data_use_case import (
     RefreshMarketDataRequest,
     RefreshMarketDataUseCase,
 )

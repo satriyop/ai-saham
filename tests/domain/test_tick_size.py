@@ -74,7 +74,7 @@ class TestTickFrictionGateIntegration:
         )
 
     def _run(self, opening, atr_stop, tick_friction_gate=True, min_target_ticks=3, min_stop_ticks=2):
-        from src.application.use_case.confirm_intraday_open import (
+        from src.application.use_case.confirm_intraday_open_use_case import (
             ConfirmIntradayOpenRequest,
             ConfirmIntradayOpenUseCase,
         )

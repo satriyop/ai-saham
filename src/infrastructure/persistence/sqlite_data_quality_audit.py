@@ -10,7 +10,7 @@ import sqlite3
 from datetime import date
 from pathlib import Path
 
-from src.application.use_case.data_quality_audit import (
+from src.application.use_case.data_quality_audit_use_case import (
     DataQualityRawSnapshot,
     DataQualityTableSnapshot,
 )

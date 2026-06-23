@@ -14,7 +14,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from src.application.ports.universe_summary_provider import UniverseSummaryProvider
-from src.application.use_case.view_universe_summary import (
+from src.application.use_case.view_universe_summary_use_case import (
     UniverseTickerRow,
     UniverseViewResult,
 )

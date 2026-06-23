@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.application.use_case.audit_sentiment import (
+from src.application.use_case.audit_sentiment_use_case import (
     AuditSentimentRequest,
     AuditSentimentUseCase,
 )

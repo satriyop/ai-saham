@@ -37,29 +37,29 @@ from src.application.services.universe_loader import (
     UniverseNotFoundError,
     resolve_tickers,
 )
-from src.application.use_case.accumulation_screen import (
+from src.application.use_case.accumulation_screen_use_case import (
     AccumulationCandidate,
     AccumulationScreenRequest,
     AccumulationScreenUseCase,
     resolve_preset_targets,
 )
-from src.application.use_case.fetch_sentiment import (
+from src.application.use_case.fetch_sentiment_use_case import (
     FetchSentimentRequest,
     FetchSentimentUseCase,
 )
-from src.application.use_case.market_regime import MarketRegimeResponse
-from src.application.use_case.swing_analysis_workflow import (
+from src.application.use_case.market_regime_use_case import MarketRegimeResponse
+from src.application.use_case.swing_analysis_workflow_use_case import (
     SwingAnalysisDataUnavailable,
     SwingAnalysisWorkflowRequest,
     SwingAnalysisWorkflowUseCase,
 )
-from src.application.use_case.swing_backtest import (
+from src.application.use_case.swing_backtest_use_case import (
     DEFAULT_SWING_COST_BPS,
     SwingBacktestRequest,
     SwingBacktestResponse,
     SwingBacktestUseCase,
 )
-from src.application.use_case.swing_backtest import (
+from src.application.use_case.swing_backtest_use_case import (
     FOREIGN_BOUNCE_PRESET as BACKTEST_FOREIGN_BOUNCE_PRESET,
 )
 from src.infrastructure.browser.stockbit_analyst import StockbitAnalystConsensusProvider

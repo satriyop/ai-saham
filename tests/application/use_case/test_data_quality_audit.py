@@ -1,6 +1,6 @@
 from datetime import date
 
-from src.application.use_case.data_quality_audit import (
+from src.application.use_case.data_quality_audit_use_case import (
     DataQualityAuditRequest,
     DataQualityAuditUseCase,
     DataQualityRawSnapshot,

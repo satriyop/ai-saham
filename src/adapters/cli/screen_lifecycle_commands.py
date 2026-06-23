@@ -116,7 +116,7 @@ def screen_compare(
         saham screen compare morning-watch
         saham screen compare morning-watch --universe lq45 --top 30
     """
-    from src.application.use_case.compare_screen_snapshots import compare_screen_snapshots
+    from src.application.use_case.compare_screen_snapshots_use_case import compare_screen_snapshots
     from src.infrastructure.persistence.sqlite_watchlist_repository import SQLiteWatchlistRepository
 
     resolved_db = db_path or DEFAULT_ACCUM_DB_PATH
@@ -171,7 +171,7 @@ def screen_compare(
 
 
 def _display_compare_result(result: "ScreenCompareResult") -> None:
-    from src.application.use_case.compare_screen_snapshots import ScreenCompareResult  # noqa: F401
+    from src.application.use_case.compare_screen_snapshots_use_case import ScreenCompareResult  # noqa: F401
 
     typer.echo(
         f"\n  Snapshot: {result.snapshot_name} ({result.snapshot_count} tickers)  →  "

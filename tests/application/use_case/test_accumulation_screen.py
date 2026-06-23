@@ -3,7 +3,7 @@
 from datetime import date, timedelta
 from decimal import Decimal
 
-from src.application.use_case.accumulation_screen import (
+from src.application.use_case.accumulation_screen_use_case import (
     BCI_CLUSTER,
     BCI_RETAIL,
     BCI_STABLE,
@@ -470,7 +470,7 @@ def test_screen_attaches_ticker_notation_without_changing_score():
 from datetime import date as _date
 from decimal import Decimal as _Decimal
 
-from src.application.use_case.accumulation_screen import _composite_score
+from src.application.use_case.accumulation_screen_use_case import _composite_score
 from src.domain.value_objects.analyst_consensus import AnalystConsensus
 from src.domain.value_objects.bandar_detector_snapshot import BandarDetectorSnapshot
 from src.domain.value_objects.company_fundamentals import CompanyFundamentals
@@ -478,7 +478,7 @@ from src.domain.value_objects.seasonal_edge import SeasonalEdge
 
 
 def _minimal_candidate(score: float = 80.0) -> "AccumulationCandidate":
-    from src.application.use_case.accumulation_screen import AccumulationCandidate
+    from src.application.use_case.accumulation_screen_use_case import AccumulationCandidate
     return AccumulationCandidate(
         ticker="TEST",
         window_days=7,
@@ -671,7 +671,7 @@ def test_min_piotroski_passes_when_no_fundamentals_and_gate_disabled():
 # classify_multi_window_pattern
 # ---------------------------------------------------------------------------
 
-from src.application.use_case.accumulation_screen import (
+from src.application.use_case.accumulation_screen_use_case import (
     AccumulationCandidate,
     classify_multi_window_pattern,
 )

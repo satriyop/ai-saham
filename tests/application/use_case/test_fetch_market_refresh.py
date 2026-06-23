@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from src.application.use_case.fetch_market_refresh import (
+from src.application.use_case.fetch_market_refresh_use_case import (
     BENCHMARK_TICKER,
     BrokerFetchResult,
     FetchMarketRefreshRequest,

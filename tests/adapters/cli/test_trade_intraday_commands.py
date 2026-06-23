@@ -302,3 +302,53 @@ def test_trade_outcome_updates_logged_confirmation(tmp_path):
     csv_text = journal.read_text()
     assert "manual exit" in csv_text
     assert "target" in csv_text
+
+
+def test_confirm_open_with_track_file(tmp_path):
+    session = tmp_path / "last-session.json"
+    output = tmp_path / "last-confirmation.json"
+    track_file = tmp_path / "track_0900.json"
+    _write_sidecar(session)
+
+    # Let's write the track file
+    track_file.write_text(json.dumps({
+        "captured_at": "2026-06-12T09:00:05+07:00",
+        "tickers": {
+            "BBCA": {
+                "mid_price": 9000,
+                "order_book": {
+                    "last_price": 9050,
+                    "bid_pressure_ratio": 0.7,
+                    "fnet_intraday": 1000000,
+                }
+            },
+            "GOTO": {
+                "mid_price": 245,
+                "order_book": {
+                    "last_price": 245,
+                }
+            }
+        }
+    }))
+
+    result = runner.invoke(
+        app,
+        [
+            "trade", "confirm",
+            "--session", str(session),
+            "--output", str(output),
+            "--track-file", str(track_file),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "INTRADAY CONFIRMATION" in result.stdout
+    assert "BBCA" in result.stdout
+    assert "ENTER" in result.stdout
+    assert "GOTO" in result.stdout
+    assert "SKIP" in result.stdout
+
+    saved = json.loads(output.read_text())
+    assert saved["confirmed_at"] == "2026-06-12"
+    assert saved["confirmations"][0]["decision"] == "ENTER"
+    assert saved["confirmations"][1]["decision"] == "SKIP_GAP_UP"

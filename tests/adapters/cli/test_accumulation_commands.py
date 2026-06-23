@@ -8,7 +8,7 @@ from src.adapters.cli.screen_accum_commands import (
     _display_results,
 )
 from src.application.services.broker_quality import compute_broker_quality_batch
-from src.application.use_case.accumulation_screen import (
+from src.application.use_case.accumulation_screen_use_case import (
     AccumulationCandidate,
     AccumulationScreenResponse,
 )

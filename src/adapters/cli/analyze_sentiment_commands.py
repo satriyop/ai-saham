@@ -16,8 +16,8 @@ from rich.table import Table
 from rich.text import Text
 
 from src.application.services.group_mapping import GroupMappingService
-from src.application.use_case.audit_sentiment import AuditSentimentRequest, AuditSentimentUseCase
-from src.application.use_case.fetch_sentiment import FetchSentimentRequest, FetchSentimentUseCase
+from src.application.use_case.audit_sentiment_use_case import AuditSentimentRequest, AuditSentimentUseCase
+from src.application.use_case.fetch_sentiment_use_case import FetchSentimentRequest, FetchSentimentUseCase
 from src.domain.value_objects.sentiment import Sentiment, SentimentSnapshot
 from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.persistence.sentiment_repository import SQLiteSentimentRepository

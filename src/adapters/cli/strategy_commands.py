@@ -23,8 +23,8 @@ from src.application.rules.exceptions import (
 )
 from src.application.services.bootstrap import create_indicator_registry
 from src.application.services.strategy_loader import StrategyLoader
-from src.application.use_case.backtest import BacktestRequest, BacktestUseCase
-from src.application.use_case.create_strategy_from_intent import (
+from src.application.use_case.backtest_use_case import BacktestRequest, BacktestUseCase
+from src.application.use_case.create_strategy_from_intent_use_case import (
     CreateStrategyFromIntentRequest,
     CreateStrategyFromIntentUseCase,
 )

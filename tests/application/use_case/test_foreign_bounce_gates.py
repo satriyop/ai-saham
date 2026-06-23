@@ -4,7 +4,7 @@ from decimal import Decimal
 
 import pytest
 
-from src.application.use_case.accumulation_screen import (
+from src.application.use_case.accumulation_screen_use_case import (
     AccumulationCandidate,
     compute_percent_plan,
     evaluate_foreign_bounce_gates,

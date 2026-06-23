@@ -441,7 +441,7 @@ def test_fetch_broker_counts_only_new_local_dates(tmp_path: Path):
 
 
 def test_print_table_summary_does_not_truncate_impact(monkeypatch, tmp_path: Path, capsys):
-    from src.application.use_case.data_update_status import DataUpdateTableStatus
+    from src.application.use_case.data_update_status_use_case import DataUpdateTableStatus
 
     monkeypatch.setattr(
         "src.adapters.cli.fetch_market_commands.build_data_update_table_statuses",

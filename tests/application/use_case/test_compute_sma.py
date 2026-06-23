@@ -15,7 +15,7 @@ from decimal import Decimal
 
 import pytest
 
-from src.application.use_case.compute_sma import (
+from src.application.use_case.compute_sma_use_case import (
     ComputeSMARequest,
     ComputeSMAResponse,
     ComputeSMAUseCase,

@@ -23,7 +23,7 @@ from src.adapters.cli.analyze_swing_broker_display import (
     fmt_money_short_signed,
 )
 from src.adapters.cli.rich_display import compact_table, console, panel
-from src.application.use_case.swing_backtest import SwingBacktestResponse
+from src.application.use_case.swing_backtest_use_case import SwingBacktestResponse
 
 
 @dataclass(frozen=True)

@@ -11,7 +11,7 @@ from decimal import Decimal
 from rich.text import Text
 
 from src.adapters.cli.rich_display import compact_table, console, panel
-from src.application.use_case.view_universe_summary import (
+from src.application.use_case.view_universe_summary_use_case import (
     UniverseTickerRow,
     UniverseViewResult,
 )

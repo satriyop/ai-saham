@@ -18,11 +18,11 @@ from src.application.formula.parser import parse
 from src.application.rules.interpreter import YamlRuleInterpreter
 from src.application.services.bootstrap import create_indicator_registry
 from src.application.services.indicator_registry import IndicatorRegistry
-from src.application.use_case.create_indicator_from_intent import (
+from src.application.use_case.create_indicator_from_intent_use_case import (
     CreateIndicatorFromIntentRequest,
     CreateIndicatorFromIntentUseCase,
 )
-from src.application.use_case.create_strategy_from_intent import (
+from src.application.use_case.create_strategy_from_intent_use_case import (
     CreateStrategyFromIntentRequest,
     CreateStrategyFromIntentUseCase,
 )

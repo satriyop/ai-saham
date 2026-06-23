@@ -15,7 +15,7 @@ from src.application.ports.strategy_translator import (
 )
 from src.application.rules.schema import RuleSet
 from src.application.services.bootstrap import create_indicator_registry
-from src.application.use_case.create_strategy_from_intent import (
+from src.application.use_case.create_strategy_from_intent_use_case import (
     CreateStrategyFromIntentRequest,
     CreateStrategyFromIntentResponse,
     CreateStrategyFromIntentUseCase,

@@ -16,7 +16,7 @@ from typing import Annotated, Optional
 import typer
 
 from src.application.services.universe_loader import UniverseNotFoundError, resolve_tickers
-from src.application.use_case.accumulation_audit import (
+from src.application.use_case.accumulation_audit_use_case import (
     AccumulationAuditRequest,
     AccumulationAuditResponse,
     AccumulationAuditUseCase,

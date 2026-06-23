@@ -19,7 +19,7 @@ from src.application.services.universe_loader import (
     UniverseNotFoundError,
     resolve_tickers,
 )
-from src.application.use_case.market_regime import (
+from src.application.use_case.market_regime_use_case import (
     MarketRegimeRequest,
     MarketRegimeUseCase,
 )

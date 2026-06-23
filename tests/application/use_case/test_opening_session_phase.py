@@ -1,7 +1,7 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from src.application.use_case.opening_snapshot import classify_opening_capture_phase
+from src.application.use_case.opening_snapshot_use_case import classify_opening_capture_phase
 
 IDX_TZ = ZoneInfo("Asia/Jakarta")
 
