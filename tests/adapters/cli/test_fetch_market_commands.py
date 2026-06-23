@@ -434,7 +434,7 @@ def test_fetch_broker_counts_only_new_local_dates(tmp_path: Path):
     )
 
     assert result.summaries == f"up-to-date({latest.isoformat()})"  # _fmt_status maps to ✓(DATE) at display
-    assert result.flow == f"agg=up-to-date({latest.isoformat()})"
+    assert result.flow == f"agg=✓({latest.isoformat()})"
     assert idx_provider.requested_ranges == [
         (date.fromordinal(latest.toordinal() + 1), today)
     ]

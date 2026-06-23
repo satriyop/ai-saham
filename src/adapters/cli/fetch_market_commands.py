@@ -117,10 +117,11 @@ def _last_weekday(as_of: date) -> date:
 
 def _fmt_status(s: str) -> str:
     """Map internal status strings to concise display labels."""
-    if s.startswith("up-to-date("):
-        # e.g. "up-to-date(2026-06-13)" → "✓(2026-06-13)"
-        date_part = s[len("up-to-date("):-1]
-        return f"✓({date_part})"
+    for prefix in ("agg=up-to-date(", "daily=up-to-date(", "up-to-date("):
+        if s.startswith(prefix):
+            tag = prefix[: prefix.index("up-to-date(")]  # "" | "agg=" | "daily="
+            date_part = s[len(prefix):-1]
+            return f"{tag}✓({date_part})"
     return s
 
 
@@ -783,7 +784,7 @@ def fetch_market(
         typer.echo("  Meta:             yahoo  (sector/industry, 30d TTL)")
     if enrichment_available:
         typer.echo("  Enrichment:       stockbit  (notation/analyst/insider/seasonality/corp, daily SQLite cache)")
-    typer.echo("  Legend:  ✓(DATE) = up-to-date through DATE  +N = new rows stored  bf+N = backfilled older gap  ERR: = failed")
+    typer.echo("  Legend:  ✓(DATE) = up-to-date through DATE  +N = new rows stored  bf+N = backfilled older gap  agg = inst. flow  ERR: = failed")
     typer.echo("")
 
     # Print table header

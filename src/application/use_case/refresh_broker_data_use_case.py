@@ -270,8 +270,6 @@ class RefreshBrokerDataUseCase:
         refresh: bool,
     ) -> str:
         if added_flow_count == 0 and previous_flow_latest is not None and daily_resp is None:
-            if not refresh and previous_flow_latest < last_trading:
-                return f"agg={_no_new_data_status(previous_flow_latest)}"
             return f"agg=✓({previous_flow_latest})"
 
         daily_part: str | None = None
@@ -287,10 +285,8 @@ class RefreshBrokerDataUseCase:
                     f"daily:+{daily_resp.fetched_count}rows/"
                     f"{daily_resp.active_codes}codes/{span}d"
                 )
-            elif daily_resp.status == "cached" and latest_daily is not None:
-                daily_part = f"daily=✓({latest_daily})"
             elif latest_daily is not None:
-                daily_part = f"daily=up-to-date({latest_daily})"
+                daily_part = f"daily=✓({latest_daily})"
             else:
                 daily_part = f"daily={daily_resp.status}"
 
@@ -300,10 +296,7 @@ class RefreshBrokerDataUseCase:
             prefix = "backfill+" if "backfill" in fetch_modes else "+"
             flow_part = f"agg:{prefix}{added_flow_count}rows/{span}d"
         elif latest_date is not None:
-            if not refresh and latest_date < last_trading:
-                flow_part = f"agg=up-to-date({latest_date})"
-            else:
-                flow_part = f"agg=✓({latest_date})"
+            flow_part = f"agg=✓({latest_date})"
 
         if daily_part and flow_part:
             return f"{daily_part} {flow_part}"
