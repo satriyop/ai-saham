@@ -22,10 +22,11 @@ from src.application.use_case.aggregate_indicators_use_case import (
     AggregateIndicatorsUseCase,
 )
 from src.domain.ports.market_data_repository import MarketDataRepository
+from src.domain.rules.risk_gate import GateContext, RiskGate
 from src.domain.rules.rule_engine import RuleEngine
 from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 from src.domain.value_objects.risk_assessment import RiskAssessment
-from src.domain.value_objects.risk_signal import RiskProfile
+from src.domain.value_objects.risk_signal import RiskLevel, RiskProfile
 from src.domain.value_objects.sentiment import SentimentSnapshot
 
 
@@ -40,6 +41,10 @@ class AssessRiskRequest:
     rsi_period: int = 14
     rules_file: Path | str | None = None  # Custom YAML rules file
     sentiment: SentimentSnapshot | None = None  # Optional sentiment context
+    # Phase B: pre-loaded non-technical data for gate evaluation.
+    # If provided and the use case has gates configured, gates run before
+    # the technical rule engine (structural) and after (execution).
+    gate_context: GateContext | None = None
 
 
 @dataclass
@@ -52,6 +57,11 @@ class AssessRiskResponse:
     ema_period: int
     rsi_period: int
     coverage_warning: str | None = None
+
+    @property
+    def gate_triggered(self) -> str | None:
+        """Delegates to RiskAssessment — single source of truth."""
+        return self.assessment.gate_triggered
 
     @property
     def risk_level(self) -> str:
@@ -112,15 +122,24 @@ class AssessRiskUseCase:
         repository: MarketDataRepository,
         registry: IndicatorRegistry | None = None,
         rules_loader: RulesLoader | None = None,
+        structural_gates: list[RiskGate] | None = None,
+        execution_gates: list[RiskGate] | None = None,
     ) -> None:
         """
-        Initialize with repository, optional registry, and optional rules loader.
+        Initialize with repository, optional registry, optional rules loader,
+        and optional risk gates.
 
         Args:
             repository: MarketDataRepository for fetching cached candles
             registry: IndicatorRegistry for computing indicators.
                      If None, creates default registry (built-ins only).
             rules_loader: RulesLoader port interface.
+            structural_gates: Gates run BEFORE the rule engine (e.g. FundamentalGate,
+                             LiquidityGate). If any fires, the rule engine is skipped.
+                             Requires gate_context on the request.
+            execution_gates: Gates run AFTER the rule engine (e.g. BandarGate).
+                            Can downgrade but not upgrade the technical result.
+                            Requires gate_context on the request.
         """
         self._repository = repository
         self._registry = registry if registry is not None else IndicatorRegistry()
@@ -130,6 +149,8 @@ class AssessRiskUseCase:
 
             rules_loader = YamlConfigLoader()
         self._rules_loader = rules_loader
+        self._structural_gates: list[RiskGate] = structural_gates or []
+        self._execution_gates: list[RiskGate] = execution_gates or []
 
     def execute(self, request: AssessRiskRequest) -> AssessRiskResponse:
         """
@@ -208,8 +229,60 @@ class AssessRiskUseCase:
 
             latest_snapshot = agg_response.snapshots[-1]
 
+            # Phase B: gate evaluation — build enriched context, then run gates.
+            # Structural gates short-circuit before the rule engine;
+            # execution gates may downgrade after.
+            gate_ctx = self._build_gate_context(request, latest_snapshot.date)
+
+            if gate_ctx is not None and self._structural_gates:
+                for gate in self._structural_gates:
+                    gate_result = gate.evaluate(gate_ctx, RiskLevel.MODERATE)
+                    if gate_result.triggered and gate_result.override_risk is not None:
+                        # Tier 1/2 structural gates: gate name propagates into the
+                        # domain value object so ExplainRiskUseCase can narrate it.
+                        assessment = RiskAssessment(
+                            profile=RiskProfile.from_string(request.profile),
+                            risk_level=gate_result.override_risk,
+                            confidence=gate_result.confidence,
+                            rationale=(gate_result.reason,),
+                            snapshot_date=latest_snapshot.date,
+                            indicators=latest_snapshot,
+                            gate_triggered=type(gate).__name__,
+                        )
+                        return AssessRiskResponse(
+                            ticker=agg_response.ticker,
+                            assessment=assessment,
+                            sma_period=request.sma_period,
+                            ema_period=request.ema_period,
+                            rsi_period=request.rsi_period,
+                            coverage_warning=agg_response.coverage_warning,
+                        )
+
             profile = RiskProfile.from_string(request.profile)
             assessment = self._rule_engine.evaluate(latest_snapshot, profile)
+
+            if gate_ctx is not None and self._execution_gates:
+                for gate in self._execution_gates:
+                    gate_result = gate.evaluate(gate_ctx, assessment.risk_level)
+                    if gate_result.triggered and gate_result.override_risk is not None:
+                        # Tier 3 execution gates: downgrade; preserve prior rationale.
+                        assessment = RiskAssessment(
+                            profile=assessment.profile,
+                            risk_level=gate_result.override_risk,
+                            confidence=gate_result.confidence,
+                            rationale=(*assessment.rationale, gate_result.reason),
+                            snapshot_date=assessment.snapshot_date,
+                            indicators=assessment.indicators,
+                            gate_triggered=type(gate).__name__,
+                        )
+                        return AssessRiskResponse(
+                            ticker=agg_response.ticker,
+                            assessment=assessment,
+                            sma_period=request.sma_period,
+                            ema_period=request.ema_period,
+                            rsi_period=request.rsi_period,
+                            coverage_warning=agg_response.coverage_warning,
+                        )
 
             return AssessRiskResponse(
                 ticker=agg_response.ticker,
@@ -219,6 +292,32 @@ class AssessRiskUseCase:
                 rsi_period=request.rsi_period,
                 coverage_warning=agg_response.coverage_warning,
             )
+
+    def _build_gate_context(
+        self,
+        request: AssessRiskRequest,
+        snapshot_date: date,
+    ) -> GateContext | None:
+        """
+        Return an enriched GateContext for gate evaluation.
+
+        If request.gate_context is None or no gates are configured, returns None.
+        Enriches the caller-provided context with recent candles (for LiquidityGate)
+        from the repository.
+        """
+        if request.gate_context is None:
+            return None
+        if not self._structural_gates and not self._execution_gates:
+            return None
+
+        ctx = request.gate_context
+        # Enrich with candles for LiquidityGate only if not already provided
+        if not ctx.recent_candles:
+            from dataclasses import replace
+
+            candles = self._repository.get_candles(request.ticker.upper())
+            ctx = replace(ctx, recent_candles=tuple(candles[-20:]))
+        return ctx
 
     def _build_snapshot_for_rules(
         self,

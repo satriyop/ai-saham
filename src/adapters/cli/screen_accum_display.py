@@ -164,6 +164,7 @@ def display_results(
     table.add_column("RSI", justify="right")
     table.add_column("BB%ile", justify="right")
     table.add_column("Trend")
+    table.add_column("Risk")
     if strategy_signals is not None:
         table.add_column("Strat")
 
@@ -208,6 +209,17 @@ def display_results(
         else:
             cmp_cell = Text("—", style="bright_black")
 
+        if c.risk_assessment is not None:
+            rl = c.risk_assessment.risk_level_name
+            if rl == "HIGH_RISK":
+                risk_cell = Text("HI", style="bold red")
+            elif rl == "MODERATE":
+                risk_cell = Text("MID", style="yellow")
+            else:
+                risk_cell = Text("LO", style="green")
+        else:
+            risk_cell = Text("—", style="bright_black")
+
         row = [
             str(i),
             c.ticker,
@@ -221,6 +233,7 @@ def display_results(
             rsi_str,
             bb_cell,
             c.trend,
+            risk_cell,
         ]
         if strategy_signals is not None:
             raw = strategy_signals.get(c.ticker, "?")
@@ -296,6 +309,14 @@ def display_results(
             else:
                 fund_style = "red"
             detail_lines.append(Text(f"    {c.ticker} FUNDAM: {fund.label}", style=fund_style))
+
+        if c.risk_assessment is not None and c.risk_assessment.gate_triggered:
+            gate_style = "bold red" if c.risk_assessment.risk_level_name == "HIGH_RISK" else "yellow"
+            detail_lines.append(Text(
+                f"    {c.ticker} RISK GATE: {c.risk_assessment.gate_triggered}"
+                f" → {c.risk_assessment.risk_level_name}",
+                style=gate_style,
+            ))
 
         missing = [
             label for label, val in [

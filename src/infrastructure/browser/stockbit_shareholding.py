@@ -213,15 +213,26 @@ class StockbitShareholdingProvider(ShareholdingProvider):
         except Exception:
             return False
 
-    def get_composition(self, ticker: str) -> ShareholdingComposition | None:
+    def get_composition(
+        self,
+        ticker: str,
+        as_of_date: date | None = None,
+    ) -> ShareholdingComposition | None:
         key = ticker.upper()
-        if key in self._mem_cache:
+        # Bypass in-memory cache in backtest mode: report_date gates on historical
+        # filing availability, which varies per as_of_date.
+        if as_of_date is None and key in self._mem_cache:
             return self._mem_cache[key]
 
-        cached = self._read_cache(key)
+        cached = self._read_cache(key, as_of_date=as_of_date)
         if cached is not None:
-            self._mem_cache[key] = cached
+            if as_of_date is None:
+                self._mem_cache[key] = cached
             return cached
+
+        if as_of_date is not None:
+            # In backtest mode never fetch live data — would introduce look-ahead.
+            return None
 
         result = self._fetch(key)
         self._mem_cache[key] = result
@@ -229,7 +240,9 @@ class StockbitShareholdingProvider(ShareholdingProvider):
             self._write_cache(result)
         return result
 
-    def _read_cache(self, ticker: str) -> ShareholdingComposition | None:
+    def _read_cache(
+        self, ticker: str, as_of_date: date | None = None
+    ) -> ShareholdingComposition | None:
         try:
             with sqlite3.connect(self._db_path) as conn:
                 row = conn.execute(
@@ -241,7 +254,17 @@ class StockbitShareholdingProvider(ShareholdingProvider):
             if not row:
                 return None
             fetched_at = _parse_fetched_at(row[0])
-            if fetched_at is None or (datetime.now() - fetched_at).days > _CACHE_TTL_DAYS:
+            if fetched_at is None:
+                return None
+            if as_of_date is not None:
+                # Backtest guard: prefer report_date (the IDX filing date) as the
+                # boundary — it is semantically more accurate than fetched_date.
+                # Fall back to fetched_date when report_date is absent.
+                row_report_date = _parse_date(row[1] or "")
+                boundary_date = row_report_date or fetched_at.date()
+                if boundary_date > as_of_date:
+                    return None
+            elif (datetime.now() - fetched_at).days > _CACHE_TTL_DAYS:
                 return None
             return ShareholdingComposition(
                 ticker=ticker,

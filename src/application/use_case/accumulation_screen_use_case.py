@@ -18,18 +18,23 @@ Layer: Application
 Depends on: Domain ports only — no infrastructure imports
 """
 
+import logging
 import math
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import TYPE_CHECKING
 
+logger = logging.getLogger(__name__)
+
 if TYPE_CHECKING:
+    from src.application.use_case.assess_risk_use_case import AssessRiskUseCase
     from src.domain.value_objects.analyst_consensus import AnalystConsensus
     from src.domain.value_objects.bandar_detector_snapshot import BandarDetectorSnapshot
     from src.domain.value_objects.company_fundamentals import CompanyFundamentals
     from src.domain.value_objects.composite_signal_score import CompositeSignalScore
     from src.domain.value_objects.forward_estimates import ForwardEstimates
+    from src.domain.value_objects.risk_assessment import RiskAssessment
     from src.domain.value_objects.seasonal_edge import SeasonalEdge
     from src.domain.value_objects.shareholding_composition import ShareholdingComposition
     from src.domain.value_objects.ticker_notation import TickerNotationSnapshot
@@ -139,6 +144,8 @@ class AccumulationScreenRequest:
     min_market_cap_idr: int = 0
     # Piotroski F-Score floor (0–9). Tickers below this are excluded (0 = disabled)
     min_piotroski: int = 0
+    # Phase E: risk profile for post-screening risk funnel (ignored when no risk_use_case)
+    risk_profile: str = "balanced"
 
 
 @dataclass
@@ -205,6 +212,8 @@ class AccumulationCandidate:
     forward_estimates: "ForwardEstimates | None" = None
     # Composite signal — all enrichment dimensions combined into 0–100 score
     composite_signal: "CompositeSignalScore | None" = None
+    # Phase E: post-screening risk assessment (populated by risk funnel when configured)
+    risk_assessment: "RiskAssessment | None" = None
 
     def to_dict(self) -> dict:
         return {
@@ -254,6 +263,9 @@ class AccumulationCandidate:
             "latest_broker_date": self.latest_broker_date.isoformat() if self.latest_broker_date else None,
             "forward_estimates": self.forward_estimates.to_dict() if self.forward_estimates else None,
             "composite_signal": self.composite_signal.to_dict() if self.composite_signal else None,
+            "risk_level": self.risk_assessment.risk_level_name if self.risk_assessment else None,
+            "risk_confidence": self.risk_assessment.confidence if self.risk_assessment else None,
+            "risk_gate": self.risk_assessment.gate_triggered if self.risk_assessment else None,
         }
 
 
@@ -478,6 +490,7 @@ class AccumulationScreenUseCase:
         fundamentals_provider: "FundamentalsProvider | None" = None,
         ticker_notation_provider: "TickerNotationProvider | None" = None,
         idx_groups: "dict[str, list[str]] | None" = None,
+        risk_use_case: "AssessRiskUseCase | None" = None,
     ) -> None:
         self._broker_repo = broker_repository
         self._market_repo = market_repository
@@ -490,6 +503,7 @@ class AccumulationScreenUseCase:
         self._bandar_provider = bandar_detector_provider
         self._fundamentals_provider = fundamentals_provider
         self._ticker_notation_provider = ticker_notation_provider
+        self._risk_use_case = risk_use_case
         # idx_groups: {group_name: [ticker, ...]} from config/idx_groups.yaml
         # Build a reverse map: ticker → group_name for fast lookup
         self._ticker_to_group: dict[str, str] = {}
@@ -523,6 +537,53 @@ class AccumulationScreenUseCase:
 
             if result.top_brokers is not None:
                 uses_stockbit = True
+
+            # Early pruning: fetch fundamentals first when market_cap or piotroski
+            # gates are active. Avoids 6+ enrichment queries for tickers that will
+            # be skipped by these structural filters.
+            fundamentals_fetched = False
+            if self._fundamentals_provider is not None and (
+                request.min_market_cap_idr > 0 or request.min_piotroski > 0
+            ):
+                result.fundamentals = self._fundamentals_provider.get_fundamentals(
+                    ticker=result.ticker,
+                    as_of_date=request.as_of_date,
+                )
+                fundamentals_fetched = True
+
+                # Market cap floor gate
+                if (
+                    request.min_market_cap_idr > 0
+                    and (
+                        result.fundamentals is None
+                        or result.fundamentals.market_cap_idr is None
+                        or result.fundamentals.market_cap_idr < request.min_market_cap_idr
+                    )
+                ):
+                    cap_b = (
+                        result.fundamentals.market_cap_idr // 1_000_000_000
+                        if result.fundamentals and result.fundamentals.market_cap_idr
+                        else None
+                    )
+                    logger.debug(
+                        "Skip %s: market_cap %sB IDR < floor %dB IDR",
+                        result.ticker,
+                        cap_b,
+                        request.min_market_cap_idr // 1_000_000_000,
+                    )
+                    skipped += 1
+                    continue
+
+                # Piotroski floor gate
+                if request.min_piotroski > 0:
+                    fscore = (
+                        result.fundamentals.piotroski_f_score
+                        if result.fundamentals is not None
+                        else None
+                    )
+                    if fscore is None or fscore < request.min_piotroski:
+                        skipped += 1
+                        continue
 
             result.score, result.score_breakdown = _score(result)
 
@@ -584,6 +645,7 @@ class AccumulationScreenUseCase:
             if self._shareholding_provider is not None:
                 result.shareholding = self._shareholding_provider.get_composition(
                     ticker=result.ticker,
+                    as_of_date=request.as_of_date,
                 )
 
             # Bandar detector: Stockbit's institutional operator accumulation signal
@@ -593,27 +655,12 @@ class AccumulationScreenUseCase:
                     session_date=request.as_of_date,
                 )
 
-            # Company fundamentals: P/E, ROE, Net Profit Margin, Piotroski F-Score
-            if self._fundamentals_provider is not None:
+            # Company fundamentals (skip if already fetched by early gate above)
+            if self._fundamentals_provider is not None and not fundamentals_fetched:
                 result.fundamentals = self._fundamentals_provider.get_fundamentals(
                     ticker=result.ticker,
+                    as_of_date=request.as_of_date,
                 )
-
-            # Market cap floor — skip nano-caps that inflate IEV due to low float
-            if (
-                request.min_market_cap_idr > 0
-                and result.fundamentals is not None
-                and result.fundamentals.market_cap_idr is not None
-                and result.fundamentals.market_cap_idr < request.min_market_cap_idr
-            ):
-                logger.debug(
-                    "Skip %s: market_cap %dB IDR < floor %dB IDR",
-                    result.ticker,
-                    result.fundamentals.market_cap_idr // 1_000_000_000,
-                    request.min_market_cap_idr // 1_000_000_000,
-                )
-                skipped += 1
-                continue
 
             if self._ticker_notation_provider is not None:
                 result.ticker_notation = self._ticker_notation_provider.get_notation(
@@ -631,14 +678,6 @@ class AccumulationScreenUseCase:
 
             if result.score < request.min_score:
                 continue
-            if request.min_piotroski > 0:
-                fscore = (
-                    result.fundamentals.piotroski_f_score
-                    if result.fundamentals is not None
-                    else None
-                )
-                if fscore is None or fscore < request.min_piotroski:
-                    continue
             candidates.append(result)
 
         # Primary sort: composite score (when available); tiebreaker: flow score + seasonal
@@ -655,6 +694,12 @@ class AccumulationScreenUseCase:
         if request.sector_breadth_enabled and self._ticker_to_group:
             self._apply_sector_breadth(candidates, request)
 
+        # Phase E (Rec 14): post-screening risk funnel — runs only on survivors,
+        # not on all 800+ tickers. Reuses already-loaded fundamentals + bandar
+        # data from candidates (Rec 15 data sharing — zero extra provider queries).
+        if self._risk_use_case is not None:
+            self._run_risk_funnel(candidates, today, request.risk_profile)
+
         return AccumulationScreenResponse(
             candidates=candidates,
             screened_at=today,
@@ -663,6 +708,53 @@ class AccumulationScreenUseCase:
             tickers_skipped=skipped,
             provider="stockbit" if uses_stockbit else "idx",
         )
+
+    def _run_risk_funnel(
+        self,
+        candidates: list[AccumulationCandidate],
+        as_of_date: date,
+        risk_profile: str,
+    ) -> None:
+        """Run AssessRiskUseCase on each survivor and attach the result in-place.
+
+        Builds GateContext from already-loaded candidate data — no duplicate
+        provider calls (Rec 15: share data snapshots).
+        """
+        from src.application.use_case.assess_risk_use_case import AssessRiskRequest
+        from src.domain.rules.risk_gate import GateContext
+
+        for candidate in candidates:
+            try:
+                gate_ctx = GateContext(
+                    ticker=candidate.ticker,
+                    snapshot_date=as_of_date,
+                    piotroski_f_score=(
+                        candidate.fundamentals.piotroski_f_score
+                        if candidate.fundamentals else None
+                    ),
+                    market_cap_idr=(
+                        candidate.fundamentals.market_cap_idr
+                        if candidate.fundamentals else None
+                    ),
+                    five_day_accdist=(
+                        candidate.bandar_detector.five_day_accdist
+                        if candidate.bandar_detector else None
+                    ),
+                    bandar_is_distributing=(
+                        candidate.bandar_detector.is_distributing
+                        if candidate.bandar_detector else False
+                    ),
+                )
+                resp = self._risk_use_case.execute(  # type: ignore[union-attr]
+                    AssessRiskRequest(
+                        ticker=candidate.ticker,
+                        profile=risk_profile,
+                        gate_context=gate_ctx,
+                    )
+                )
+                candidate.risk_assessment = resp.assessment
+            except Exception as exc:
+                logger.debug("Risk funnel: assessment failed for %s: %s", candidate.ticker, exc)
 
     def _evaluate_ticker(
         self,

@@ -667,6 +667,122 @@ def test_min_piotroski_passes_when_no_fundamentals_and_gate_disabled():
     assert len(response.candidates) == 1
 
 
+# ── Early-pruning gate tests ──────────────────────────────────────────────────
+# Verify that enrichment providers are NOT queried for tickers that fail the
+# market_cap or piotroski gates (Rec 13: early market_cap floor pruning).
+
+def _make_use_case_with_all_providers(market_cap_idr: int | None, piotroski_score: int | None):
+    """Build a use case with all enrichment providers mocked so we can assert call counts."""
+    from unittest.mock import MagicMock
+
+    from src.domain.value_objects.company_fundamentals import CompanyFundamentals
+
+    session_dates = _weekdays(date(2026, 1, 1), 7)
+    as_of = session_dates[-1]
+    candles = [_candle("BBCA", date(2025, 12, 1) + timedelta(days=i), _Decimal("100")) for i in range(45)]
+    summaries = [_summary("BBCA", day, _Decimal("110")) for day in session_dates]
+
+    fund_prov = MagicMock()
+    fund_prov.get_fundamentals.return_value = CompanyFundamentals(
+        ticker="BBCA", pe_ratio_ttm=12.0, roe_ttm=15.0, net_profit_margin=12.0,
+        revenue_yoy_growth=8.0, piotroski_f_score=piotroski_score,
+        dividend_yield=2.0, week52_high=1200.0, week52_low=800.0,
+        near_52w_high_rank=50.0,
+        market_cap_idr=market_cap_idr,
+    ) if piotroski_score is not None or market_cap_idr is not None else None
+
+    seasonality_prov = MagicMock()
+    seasonality_prov.get_seasonal_edge.return_value = None
+    bandar_prov = MagicMock()
+    bandar_prov.get_snapshot.return_value = None
+    analyst_prov = MagicMock()
+    analyst_prov.get_consensus.return_value = None
+
+    use_case = AccumulationScreenUseCase(
+        broker_repository=MockBrokerRepository(summaries),
+        market_repository=MockMarketRepository(candles),
+        fundamentals_provider=fund_prov,
+        seasonality_provider=seasonality_prov,
+        bandar_detector_provider=bandar_prov,
+        analyst_consensus_provider=analyst_prov,
+    )
+    return use_case, as_of, fund_prov, seasonality_prov, bandar_prov, analyst_prov
+
+
+def test_market_cap_floor_excludes_below_threshold():
+    use_case, as_of, fund_prov, *_ = _make_use_case_with_all_providers(
+        market_cap_idr=500_000_000_000, piotroski_score=8,  # 500B IDR < 1T floor
+    )
+    response = use_case.execute(AccumulationScreenRequest(
+        tickers=["BBCA"], window_days=7, min_net_buy_days=1,
+        as_of_date=as_of, min_market_cap_idr=1_000_000_000_000,
+    ))
+    assert len(response.candidates) == 0
+    assert response.tickers_skipped == 1
+
+
+def test_market_cap_floor_includes_at_or_above_threshold():
+    use_case, as_of, *_ = _make_use_case_with_all_providers(
+        market_cap_idr=2_000_000_000_000, piotroski_score=8,  # 2T IDR >= 1T floor
+    )
+    response = use_case.execute(AccumulationScreenRequest(
+        tickers=["BBCA"], window_days=7, min_net_buy_days=1,
+        as_of_date=as_of, min_market_cap_idr=1_000_000_000_000,
+    ))
+    assert len(response.candidates) == 1
+
+
+def test_market_cap_floor_skips_enrichment_for_rejected_ticker():
+    """Enrichment providers must NOT be called when market cap gate rejects the ticker."""
+    use_case, as_of, fund_prov, seasonality_prov, bandar_prov, analyst_prov = (
+        _make_use_case_with_all_providers(
+            market_cap_idr=100_000_000_000, piotroski_score=8,  # 100B IDR < 1T floor
+        )
+    )
+    use_case.execute(AccumulationScreenRequest(
+        tickers=["BBCA"], window_days=7, min_net_buy_days=1,
+        as_of_date=as_of, min_market_cap_idr=1_000_000_000_000,
+    ))
+    # Fundamentals fetched once for the gate check
+    fund_prov.get_fundamentals.assert_called_once()
+    # All other enrichment skipped
+    seasonality_prov.get_seasonal_edge.assert_not_called()
+    bandar_prov.get_snapshot.assert_not_called()
+    analyst_prov.get_consensus.assert_not_called()
+
+
+def test_piotroski_gate_skips_enrichment_for_rejected_ticker():
+    """Enrichment providers must NOT be called when piotroski gate rejects the ticker."""
+    use_case, as_of, fund_prov, seasonality_prov, bandar_prov, analyst_prov = (
+        _make_use_case_with_all_providers(
+            market_cap_idr=5_000_000_000_000, piotroski_score=2,  # f-score 2 < floor 5
+        )
+    )
+    use_case.execute(AccumulationScreenRequest(
+        tickers=["BBCA"], window_days=7, min_net_buy_days=1,
+        as_of_date=as_of, min_piotroski=5,
+    ))
+    fund_prov.get_fundamentals.assert_called_once()
+    seasonality_prov.get_seasonal_edge.assert_not_called()
+    bandar_prov.get_snapshot.assert_not_called()
+    analyst_prov.get_consensus.assert_not_called()
+
+
+def test_no_gate_active_fundamentals_fetched_in_enrichment_pass():
+    """When no gate is active, fundamentals are fetched once in the normal enrichment pass."""
+    use_case, as_of, fund_prov, *_ = _make_use_case_with_all_providers(
+        market_cap_idr=5_000_000_000_000, piotroski_score=8,
+    )
+    response = use_case.execute(AccumulationScreenRequest(
+        tickers=["BBCA"], window_days=7, min_net_buy_days=1,
+        as_of_date=as_of,
+        # No gate — min_market_cap_idr=0 and min_piotroski=0 (defaults)
+    ))
+    assert len(response.candidates) == 1
+    # Fundamentals still fetched exactly once (in enrichment pass, not gate pass)
+    fund_prov.get_fundamentals.assert_called_once()
+
+
 # ---------------------------------------------------------------------------
 # classify_multi_window_pattern
 # ---------------------------------------------------------------------------

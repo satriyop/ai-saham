@@ -204,15 +204,26 @@ class StockbitFundamentalsProvider(FundamentalsProvider):
         except Exception:
             return False
 
-    def get_fundamentals(self, ticker: str) -> CompanyFundamentals | None:
+    def get_fundamentals(
+        self,
+        ticker: str,
+        as_of_date: date | None = None,
+    ) -> CompanyFundamentals | None:
         key = ticker.upper()
-        if key in self._mem_cache:
+        # Bypass in-memory cache in backtest mode: same ticker may be valid at
+        # one historical date but not another within a single backtest run.
+        if as_of_date is None and key in self._mem_cache:
             return self._mem_cache[key]
 
-        cached = self._read_cache(key)
+        cached = self._read_cache(key, as_of_date=as_of_date)
         if cached is not None:
-            self._mem_cache[key] = cached
+            if as_of_date is None:
+                self._mem_cache[key] = cached
             return cached
+
+        if as_of_date is not None:
+            # In backtest mode never fetch live data — would introduce look-ahead.
+            return None
 
         result = self._fetch(key)
         self._mem_cache[key] = result
@@ -220,7 +231,9 @@ class StockbitFundamentalsProvider(FundamentalsProvider):
             self._write_cache(result)
         return result
 
-    def _read_cache(self, ticker: str) -> CompanyFundamentals | None:
+    def _read_cache(
+        self, ticker: str, as_of_date: date | None = None
+    ) -> CompanyFundamentals | None:
         try:
             with sqlite3.connect(self._db_path) as conn:
                 row = conn.execute(
@@ -233,7 +246,16 @@ class StockbitFundamentalsProvider(FundamentalsProvider):
             if not row:
                 return None
             fetched_at = _parse_fetched_at(row[0])
-            if fetched_at is None or (datetime.now() - fetched_at).days > _CACHE_TTL_DAYS:
+            if fetched_at is None:
+                return None
+            if as_of_date is not None:
+                # Backtest guard: only use data that was fetched on or before the
+                # historical replay date. Data fetched after as_of_date is future
+                # information relative to the backtest — return None to prevent
+                # look-ahead bias.
+                if fetched_at.date() > as_of_date:
+                    return None
+            elif (datetime.now() - fetched_at).days > _CACHE_TTL_DAYS:
                 return None
             f_score_raw = row[5]
             return CompanyFundamentals(
