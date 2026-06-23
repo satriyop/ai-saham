@@ -68,14 +68,15 @@ def _tickers(response) -> list[str]:
 
 # ── IEP floor filter (Step 5) ────────────────────────────────────────────────
 
+
 def test_iep_floor_filters_movers_below_threshold():
     movers = [
         MoverData("BBCA", 300_000, iep=5_900),
-        MoverData("PPRO", 450_000, iep=15),
-        MoverData("TAXI", 350_000, iep=15),
+        MoverData("PPRO", 450_000, iep=75),
+        MoverData("TAXI", 350_000, iep=60),
     ]
     uc = _make_use_case(movers)
-    response = uc.execute(PreOpenScreenRequest(_config(iep_min=50)))
+    response = uc.execute(PreOpenScreenRequest(_config(iep_min=100)))
 
     assert _tickers(response) == ["BBCA"]
     assert any("IEP floor" in w and "filtered out 2" in w for w in response.warnings)
@@ -85,10 +86,10 @@ def test_iep_floor_passes_none_iep():
     """Movers with iep=None are not penalised — IEP not captured ≠ low price."""
     movers = [
         MoverData("BBCA", 300_000, iep=None),
-        MoverData("BBRI", 200_000, iep=10),
+        MoverData("BBRI", 200_000, iep=75),
     ]
     uc = _make_use_case(movers)
-    response = uc.execute(PreOpenScreenRequest(_config(iep_min=50)))
+    response = uc.execute(PreOpenScreenRequest(_config(iep_min=100)))
 
     assert "BBCA" in _tickers(response)
     assert "BBRI" not in _tickers(response)
@@ -99,7 +100,7 @@ def test_iep_floor_disabled_when_none():
     """iep_min=None means no floor — all movers reach the candidate loop."""
     movers = [
         MoverData("BBCA", 300_000, iep=5_900),
-        MoverData("PPRO", 450_000, iep=15),
+        MoverData("PPRO", 450_000, iep=75),
     ]
     uc = _make_use_case(movers)
     response = uc.execute(PreOpenScreenRequest(_config(iep_min=None)))
@@ -111,6 +112,7 @@ def test_iep_floor_disabled_when_none():
 
 
 # ── Speculative symbol filter ─────────────────────────────────────────────────
+
 
 def test_speculative_filter_excludes_warrants():
     """Warrants (-W suffix) are excluded from the pipeline."""
@@ -173,7 +175,9 @@ def test_speculative_filter_disabled_via_pattern():
 # ── Offer-side order book (Step 5 — offer gap closure) ───────────────────────
 
 
-def _make_use_case_normal_mode(movers: list[MoverData], tob: OrderBookTopOfBook | None) -> PreOpenScreenUseCase:
+def _make_use_case_normal_mode(
+    movers: list[MoverData], tob: OrderBookTopOfBook | None
+) -> PreOpenScreenUseCase:
     """Build use case in normal mode (not fast) with a stubbed fetch_order_book_top_of_book."""
     browser = MagicMock()
     browser.fetch_preopen_movers.return_value = movers
@@ -269,6 +273,7 @@ def test_gap_pct_unchanged_uses_bid():
 
 # ── ManualBrowserDataProvider offer fallback ──────────────────────────────────
 
+
 def test_manual_provider_top_of_book_returns_bid_no_offer():
     """ManualBrowserDataProvider.fetch_order_book_top_of_book wraps bid with offer=None."""
     from src.infrastructure.browser.stockbit_browser import ManualBrowserDataProvider
@@ -290,3 +295,44 @@ def test_manual_provider_top_of_book_returns_none_when_no_bid():
 
     provider = ManualBrowserDataProvider.from_json([{"ticker": "BBCA", "iev": 300_000}])
     assert provider.fetch_order_book_top_of_book("BBCA") is None
+
+
+def test_floor_price_guard_filters_out_goto_at_fifty():
+    """Movers with prev_close <= 50 (such as GOTO at 50) have entry_price <= stop_loss_price
+
+    (capped at 50) and are skipped entirely.
+    """
+    movers = [MoverData("GOTO", 300_000, iep=50)]
+
+    market_repo = MagicMock()
+    market_repo.get_candles.return_value = [
+        Candle(
+            ticker="GOTO",
+            date=date(2026, 1, 1),
+            open=Decimal("50"),
+            high=Decimal("50"),
+            low=Decimal("50"),
+            close=Decimal("50"),
+            volume=1_000_000,
+        )
+    ]
+
+    browser = MagicMock()
+    browser.fetch_preopen_movers.return_value = movers
+    browser.fetch_order_book_best_bid.return_value = None
+
+    registry = MagicMock()
+    registry.compute.return_value = []
+
+    uc = PreOpenScreenUseCase(
+        browser=browser,
+        repository=market_repo,
+        registry=registry,
+        broker_repository=None,
+    )
+
+    config = PreOpenScreenConfig(fast_mode=True, min_history_days=1)
+    response = uc.execute(PreOpenScreenRequest(config))
+
+    assert "GOTO" not in [c.ticker for c in response.result.candidates]
+    assert any("GOTO: SKIP_FLOOR" in w for w in response.warnings)

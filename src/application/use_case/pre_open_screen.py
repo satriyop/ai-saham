@@ -51,8 +51,8 @@ class PreOpenScreenConfig:
 
     iev_min: int = 100_000
     capital: Decimal = Decimal("3000000")
-    tick_above: int = 1                          # legacy reference only
-    stop_loss_pct: Decimal = Decimal("0.20")     # legacy fallback
+    tick_above: int = 1  # legacy reference only
+    stop_loss_pct: Decimal = Decimal("0.20")  # legacy fallback
     sma_period: int = 20
     rsi_period: int = 14
     history_days: int = 365
@@ -60,7 +60,7 @@ class PreOpenScreenConfig:
     atr_multiplier: Decimal = Decimal("1.0")
     max_stop_pct: Decimal = Decimal("0.07")
     use_atr_stop: bool = True
-    max_gap_pct: Decimal = Decimal("0.03")       # fallback when no ATR
+    max_gap_pct: Decimal = Decimal("0.03")  # fallback when no ATR
     suggested_limit_pct: Decimal = Decimal("0.005")
     rsi_overbought_threshold: Decimal = Decimal("75")
     top_n: int | None = None
@@ -109,9 +109,7 @@ class PreOpenScreenConfig:
             use_atr_stop=bool(risk.get("use_atr_stop", True)),
             max_gap_pct=Decimal(str(entry.get("max_gap_pct", 0.03))),
             suggested_limit_pct=Decimal(str(entry.get("suggested_limit_pct", 0.005))),
-            rsi_overbought_threshold=Decimal(
-                str(analysis.get("rsi_overbought_threshold", 75))
-            ),
+            rsi_overbought_threshold=Decimal(str(analysis.get("rsi_overbought_threshold", 75))),
             top_n=int(top_n_raw) if top_n_raw is not None else None,
             fast_mode=bool(screener.get("fast_mode", False)),
             iep_min=int(screener["iep_min"]) if screener.get("iep_min") is not None else None,
@@ -129,9 +127,7 @@ class PreOpenScreenConfig:
             iev_intensity_unusual_threshold=float(
                 analysis.get("iev_intensity_unusual_threshold", 5.0)
             ),
-            iev_intensity_auto_downgrade=bool(
-                analysis.get("iev_intensity_auto_downgrade", False)
-            ),
+            iev_intensity_auto_downgrade=bool(analysis.get("iev_intensity_auto_downgrade", False)),
             min_bid_pressure_preopen=float(screener.get("min_bid_pressure_preopen", 0.0)),
         )
 
@@ -229,6 +225,16 @@ class PreOpenScreenUseCase:
             atr_val = ctx["atr"]
             candles = ctx["candles"]
 
+            # Floor-price filter: skip if previous close or IEP is at or below IDX floor price (50)
+            if prev_close is not None and prev_close <= 50:
+                warnings.append(
+                    f"{ticker}: SKIP_FLOOR — previous close is at the IDX floor price (50)"
+                )
+                continue
+            if mover.iep is not None and mover.iep <= 50:
+                warnings.append(f"{ticker}: SKIP_FLOOR — IEP is at the IDX floor price (50)")
+                continue
+
             # Speculative symbol filter: skip stocks with insufficient history for ATR/RSI
             if len(candles) < config.min_history_days:
                 warnings.append(
@@ -257,7 +263,8 @@ class PreOpenScreenUseCase:
                 config=config,
             )
 
-            # Step 6: Order book bid+offer → gap%, spread%, bid/offer imbalance (skipped in fast mode)
+            # Step 6: Order book bid+offer → gap%, spread%, bid/offer imbalance
+            # (skipped in fast mode)
             gap_pct: Decimal | None = None
             ob = None
             best_offer: Decimal | None = None
@@ -270,34 +277,33 @@ class PreOpenScreenUseCase:
                 ob = tob.bid if tob else None
                 if ob is not None:
                     if prev_close is not None and prev_close > 0:
-                        gap_pct = (
-                            (ob.price - prev_close) / prev_close * 100
-                        ).quantize(Decimal("0.01"))
+                        gap_pct = ((ob.price - prev_close) / prev_close * 100).quantize(
+                            Decimal("0.01")
+                        )
                         if abs(gap_pct) > effective_band * 100:
                             warnings.append(
-                                f"{ticker}: Gap {gap_pct:+.1f}% exceeds ±{float(effective_band*100):.1f}% ATR band"
+                                f"{ticker}: Gap {gap_pct:+.1f}% exceeds "
+                                f"±{float(effective_band * 100):.1f}% ATR band"
                             )
                     if tob and tob.offer:
                         best_offer = tob.offer.price
                         best_offer_lots = tob.offer.volume
-                        spread_pct = (
-                            (tob.offer.price - ob.price) / ob.price * 100
-                        ).quantize(Decimal("0.01"))
+                        spread_pct = ((tob.offer.price - ob.price) / ob.price * 100).quantize(
+                            Decimal("0.01")
+                        )
                         total_lots = ob.volume + tob.offer.volume
                         if total_lots > 0:
                             bid_offer_imbalance = round(ob.volume / total_lots, 3)
                 else:
                     if mover.iep is not None and prev_close is not None and prev_close > 0:
-                        gap_pct = (
-                            (Decimal(mover.iep) - prev_close) / prev_close * 100
-                        ).quantize(Decimal("0.01"))
+                        gap_pct = ((Decimal(mover.iep) - prev_close) / prev_close * 100).quantize(
+                            Decimal("0.01")
+                        )
                         warnings.append(
                             f"{ticker}: No order book bid — gap% from IEP ({mover.iep})"
                         )
                     else:
-                        warnings.append(
-                            f"{ticker}: No order book data — gap% not computed"
-                        )
+                        warnings.append(f"{ticker}: No order book data — gap% not computed")
 
             # Suggested limit order price
             entry_price: Decimal | None = None
@@ -312,14 +318,21 @@ class PreOpenScreenUseCase:
                 if config.use_atr_stop and atr_val is not None:
                     raw_stop = entry_price - (config.atr_multiplier * atr_val)
                     floor_stop = entry_price * (1 - config.max_stop_pct)
-                    stop_loss_price = max(raw_stop, floor_stop).quantize(Decimal("1"))
+                    stop_loss_price = max(raw_stop, floor_stop, Decimal("50")).quantize(
+                        Decimal("1")
+                    )
                 else:
-                    stop_loss_price = (
-                        entry_price * (1 - config.stop_loss_pct)
+                    stop_loss_price = max(
+                        entry_price * (1 - config.stop_loss_pct),
+                        Decimal("50"),
                     ).quantize(Decimal("1"))
 
             # Floor-price guard: discard tickers with no profit room entirely
-            if entry_price is not None and stop_loss_price is not None and entry_price <= stop_loss_price:
+            if (
+                entry_price is not None
+                and stop_loss_price is not None
+                and entry_price <= stop_loss_price
+            ):
                 warnings.append(f"{ticker}: SKIP_FLOOR — entry <= stop (one_r=0, at price floor)")
                 continue
 
@@ -424,9 +437,14 @@ class PreOpenScreenUseCase:
         candles (list), warning. All indicator values default to None on failure.
         """
         empty = {
-            "prev_close": None, "prev_high": None, "prev_low": None,
-            "rsi": None, "sma": None, "atr": None,
-            "candles": [], "warning": None,
+            "prev_close": None,
+            "prev_high": None,
+            "prev_low": None,
+            "rsi": None,
+            "sma": None,
+            "atr": None,
+            "candles": [],
+            "warning": None,
         }
 
         try:
@@ -473,12 +491,7 @@ class PreOpenScreenUseCase:
         Returns (effective_band, range_low, range_high).
         """
         # Determine the effective band
-        if (
-            config.use_atr_range
-            and atr is not None
-            and prev_close is not None
-            and prev_close > 0
-        ):
+        if config.use_atr_range and atr is not None and prev_close is not None and prev_close > 0:
             atr_pct = atr / prev_close
             effective_band = max(
                 config.atr_range_cap_min,
@@ -509,8 +522,11 @@ class PreOpenScreenUseCase:
         foreign_vwap, fvwap_discount_pct. All None on failure or missing data.
         """
         empty = {
-            "accum_score": None, "accum_tag": None, "accum_streak": None,
-            "foreign_vwap": None, "fvwap_discount_pct": None,
+            "accum_score": None,
+            "accum_tag": None,
+            "accum_streak": None,
+            "foreign_vwap": None,
+            "fvwap_discount_pct": None,
         }
 
         try:
@@ -564,10 +580,11 @@ class PreOpenScreenUseCase:
         if candles and current_price is not None and current_price > 0:
             try:
                 from plugins.indicators.foreign_vwap import ForeignVWAPIndicator
+
                 indicator = ForeignVWAPIndicator()
                 indicator.set_broker_data(summaries)
                 vwap_values = indicator.compute(
-                    candles[-max(len(candles), fvwap_period):], fvwap_period
+                    candles[-max(len(candles), fvwap_period) :], fvwap_period
                 )
                 if vwap_values:
                     fvwap = vwap_values[-1]

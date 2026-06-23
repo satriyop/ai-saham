@@ -392,4 +392,36 @@ A flat CLI adapter directory becomes unreadable as the command surface grows. Em
 
 ---
 
+## ADR-021: Strict Boundary Enforcement & Infrastructure Decoupling (Hexagonal Audit Clean-Up)
+
+**Decision**
+Strictly decouple pure business logic in domain and application layers from concrete infrastructure libraries (such as `sqlite3`, `PyYAML`, news scrapers, and filesystem annotation readers) by placing all database access and system-level operations behind abstract port interfaces.
+
+**Implications**
+
+* Domain and application use cases must never directly import database drivers, read config files from the filesystem, or hash rules directory files directly.
+* Introduce dedicated port interfaces inside `application/ports/` and `domain/ports/` (e.g. `RulesLoader`, `UniverseSummaryProvider`, `AnnotationReader`, `RulesHasher`, `UniverseLoader`).
+* Keep concrete library drivers encapsulated inside `infrastructure/` implementations mapping to these ports.
+
+**Rationale**
+Ensures that workflow and policy definitions remain pure and unpolluted by third-party drivers or implementation decisions. It protects the system from vendor lock-in, enables easy mocking in test suites, and lets us swap out persistence providers (e.g., SQLite to DuckDB) without modifying core business rules.
+
+---
+
+## ADR-022: IDX Regular Market Price Floor (Rp 50) Enforcements
+
+**Decision**
+Enforce the absolute Rp 50 regular market price floor in all pre-open and intraday trade calculations.
+
+**Implications**
+
+* Calculated stop losses are capped at Rp 50.
+* Candidate pre-open screening must automatically filter out and skip tickers whose previous closing price is <= 50 or projected Indicative Equilibrium Price (IEP) <= 50.
+* Ensure warning logs are generated when a candidate is excluded due to the price floor.
+
+**Rationale**
+Stocks trading at the Rp 50 floor price (e.g. GOTO) represent highly illiquid tickers ("gocian" stocks) with large seller queues and no committed buyers. Filtering them out at the start of the screening loop prevents the model from generating impossible stop-loss prices, preserves the mathematical validity of target risk-reward metrics, and reduces risk exposure to illiquid floor-locked assets.
+
+---
+
 *End of Architecture Decisions Record.*
