@@ -21,6 +21,7 @@ from src.application.services.position_sizer import (
 from src.application.services.strategy_loader import StrategyLoader, StrategyNotFoundError
 from src.application.services.universe_loader import resolve_tickers
 from src.application.use_case.assess_risk_use_case import AssessRiskRequest, AssessRiskUseCase
+from src.domain.rules.risk_gate import GateContext, RiskGate
 from src.application.use_case.backtest_use_case import BacktestRequest, BacktestUseCase
 from src.application.use_case.market_regime_use_case import (
     MarketRegimeRequest,
@@ -104,6 +105,8 @@ class SwingAnalysisWorkflowUseCase:
         fetch_sentiment: Callable[..., tuple[Any | None, str | None]],
         load_swing_config: Callable[[], dict],
         resolve_preset_targets: Callable[[str | None, dict], tuple[Decimal, Decimal]],
+        structural_gates: list[RiskGate] | None = None,
+        execution_gates: list[RiskGate] | None = None,
     ) -> None:
         self._market_repo = market_repository
         self._broker_repo = broker_repository
@@ -118,6 +121,8 @@ class SwingAnalysisWorkflowUseCase:
         self._fetch_sentiment = fetch_sentiment
         self._load_swing_config = load_swing_config
         self._resolve_preset_targets = resolve_preset_targets
+        self._structural_gates: list[RiskGate] = structural_gates or []
+        self._execution_gates: list[RiskGate] = execution_gates or []
 
     def execute(
         self,
@@ -172,11 +177,26 @@ class SwingAnalysisWorkflowUseCase:
             risk_use_case = AssessRiskUseCase(
                 repository=self._market_repo,
                 registry=self._registry,
+                structural_gates=self._structural_gates or None,
+                execution_gates=self._execution_gates or None,
             )
+            gate_ctx: GateContext | None = None
+            if (self._structural_gates or self._execution_gates) and accumulation_candidate is not None:
+                fund = accumulation_candidate.fundamentals
+                bandar = accumulation_candidate.bandar_detector
+                gate_ctx = GateContext(
+                    ticker=request.ticker,
+                    snapshot_date=request.today,
+                    piotroski_f_score=fund.piotroski_f_score if fund else None,
+                    market_cap_idr=fund.market_cap_idr if fund else None,
+                    five_day_accdist=bandar.five_day_accdist if bandar else None,
+                    bandar_is_distributing=bandar.is_distributing if bandar else False,
+                )
             risk_response = risk_use_case.execute(
                 AssessRiskRequest(
                     ticker=request.ticker,
                     profile=request.profile,
+                    gate_context=gate_ctx,
                 )
             )
         except Exception as exc:
