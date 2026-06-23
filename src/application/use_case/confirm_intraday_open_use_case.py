@@ -139,13 +139,13 @@ class ConfirmIntradayOpenUseCase:
 
         reasons.append("open inside entry range")
 
-        if candidate.trend == "BEARISH":
+        if candidate.trend in ("BEARISH", "GAP_OUT"):
             return self._result(
                 candidate,
                 IntradayDecision.SKIP_BEARISH_CONTEXT,
                 planned_entry=opening,
                 stop_pct=self._stop_pct(opening, candidate.atr_stop),
-                reasons=tuple(reasons + ["pre-open trend is BEARISH"]),
+                reasons=tuple(reasons + [f"pre-open trend is {candidate.trend}"]),
             )
 
         if candidate.accum_tag == "DISTRIBUTING":

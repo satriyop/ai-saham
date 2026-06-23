@@ -101,7 +101,7 @@ def verdict(candidate: ScreenerCandidate) -> str:
     """Synthesise all signals into a single action verdict."""
     if candidate.entry_range_low is None:
         return "NO_DATA"
-    if candidate.trend_signal == "BEARISH" or candidate.accum_tag == "DISTRIBUTING":
+    if candidate.trend_signal in ("BEARISH", "GAP_OUT") or candidate.accum_tag == "DISTRIBUTING":
         return "SKIP"
     if candidate.trend_signal == "NEUTRAL":
         return "SKIP"

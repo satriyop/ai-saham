@@ -88,7 +88,7 @@ class ScreenerCandidate:
         entry_price: Suggested limit = prev_close * 1.005 (0.5% above yesterday's close)
         stop_loss_price: ATR-based stop (or legacy fixed-pct fallback)
         capital: Planned position size in IDR
-        trend_signal: Signal from gap% + RSI gate (BULLISH/BEARISH/NEUTRAL)
+        trend_signal: Signal from gap% + RSI gate (BULLISH/BEARISH/GAP_OUT/NEUTRAL)
         rsi: Latest RSI value if available
         sma: Latest SMA value if available (kept for backward compat, not used for trend)
         ai_summary: AI research summary (news, sentiment, affiliate tickers)

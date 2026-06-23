@@ -612,7 +612,7 @@ class PreOpenScreenUseCase:
             return "BEARISH"
 
         if gap_pct is not None and abs(gap_pct) > effective_band * 100:
-            return "BEARISH"
+            return "GAP_OUT"
 
         if rsi is not None and Decimal("30") < rsi < Decimal("65"):
             if gap_pct is not None and abs(gap_pct) <= Decimal("2"):

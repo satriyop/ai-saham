@@ -48,7 +48,7 @@ def build_prompt(run_date: date | None = None) -> str:
         "The screener runs at 08:57 WIB (NCP-locked window) and predicts:",
         "- Which stocks to watch at the 09:00 WIB opening auction",
         "- Entry price ranges based on ATR (Average True Range)",
-        "- Trend direction (BULLISH/BEARISH/NEUTRAL)",
+        "- Trend direction (BULLISH/BEARISH/GAP_OUT/NEUTRAL)",
         "- Verdict: PRIME (highest conviction) / WATCH / SKIP",
         "",
         "**1R = entry_price - atr_stop** (risk unit). clean_trade = 1R available without stop being hit first.",
