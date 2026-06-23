@@ -615,7 +615,7 @@ def backtest(
         Optional[Path],
         typer.Option("--rules-file", "-r", help="Path to YAML rules file (backward-compatible)"),
     ] = None,
-    start: Annotated[Optional[str], typer.Option("--start", "-s", help="Start date (YYYY-MM-DD)")] = None,
+    start: Annotated[Optional[str], typer.Option("--start", "-s", help="Start date (YYYY-MM-DD)")] = APP_CFG.backtest.start_date,
     end: Annotated[Optional[str], typer.Option("--end", "-e", help="End date (YYYY-MM-DD)")] = None,
     capital: Annotated[
         int,
@@ -623,7 +623,7 @@ def backtest(
     ] = APP_CFG.trading.capital,
     verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Show trade-by-trade output")] = False,
     db_path: Annotated[Optional[Path], typer.Option("--db", help="Path to SQLite database")] = None,
-    fmt: Annotated[str, typer.Option("--format", help="Output format: table or json")] = "table",
+    fmt: Annotated[str, typer.Option("--format", help="Output format: table or json")] = APP_CFG.analysis.format,
 ) -> None:
     """
     Backtest a strategy against historical data.

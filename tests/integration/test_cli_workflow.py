@@ -242,6 +242,8 @@ class TestCLIBacktestWorkflow:
                 str(strategy_file),
                 "--db",
                 str(db_path),
+                "--start",
+                "2024-01-01",
             ],
         )
 
@@ -271,6 +273,8 @@ class TestCLIBacktestWorkflow:
                 "my_strat",
                 "--db",
                 str(db_path),
+                "--start",
+                "2024-01-01",
             ],
         )
 
@@ -302,6 +306,8 @@ class TestCLIBacktestWorkflow:
                 "--db",
                 str(db_path),
                 "--verbose",
+                "--start",
+                "2024-01-01",
             ],
         )
 
@@ -487,6 +493,8 @@ class TestCLIEndToEndWorkflow:
                 "e2e_test",
                 "--db",
                 str(db_path),
+                "--start",
+                "2024-01-01",
             ],
         )
         assert result.exit_code == 0, f"backtest failed: {result.stdout}"
@@ -527,6 +535,8 @@ class TestCLIEndToEndWorkflow:
                 "ai_strat",
                 "--db",
                 str(db_path),
+                "--start",
+                "2024-01-01",
             ],
         )
         assert result.exit_code == 0, f"backtest failed: {result.stdout}"

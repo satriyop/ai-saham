@@ -229,7 +229,7 @@ def snapshot(
     rsi_period: Annotated[int, typer.Option("--rsi", help="RSI period (default: 14)", min=1)] = 14,
     days: Annotated[int, typer.Option("--days", "-d", help="Days of history to load", min=1)] = DEFAULT_DAYS,
     db_path: Annotated[Optional[Path], typer.Option("--db", help="Path to SQLite database")] = None,
-    fmt: Annotated[str, typer.Option("--format", help="Output format: table or json")] = "table",
+    fmt: Annotated[str, typer.Option("--format", help="Output format: table or json")] = APP_CFG.analysis.format,
 ) -> None:
     """
     Multi-indicator view: SMA, EMA, and RSI aligned by date.

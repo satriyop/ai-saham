@@ -1264,31 +1264,42 @@ src/
 │       └── ... (33+ total value objects)
 │
 ├── application/                      # Use cases & application services
-│   ├── use_case/
-│   │   ├── fetch_market_data.py
-│   │   ├── refresh_market_data.py
-│   │   ├── fetch_broker_data.py
-│   │   ├── fetch_broker_daily_flows.py
-│   │   ├── fetch_market_refresh.py
-│   │   ├── refresh_broker_data.py
-│   │   ├── refresh_stockbit_enrichment.py
-│   │   ├── compute_sma.py / compute_ema.py / compute_rsi.py
-│   │   ├── aggregate_indicators.py
-│   │   ├── assess_risk.py / explain_risk.py
-│   │   ├── fetch_sentiment.py / audit_sentiment.py
-│   │   ├── backtest.py / swing_backtest.py
-│   │   ├── pre_open_screen.py / pre_open_workflow.py
-│   │   ├── confirm_intraday_open.py / intraday_backtest.py
-│   │   ├── accumulation_screen.py / accumulation_audit.py
-│   │   ├── market_regime.py
-│   │   ├── data_quality_audit.py
-│   │   ├── data_update_status.py
-│   │   ├── daily_briefing.py
-│   │   ├── analyze_running_trade.py
-│   │   ├── swing_analysis_workflow.py
-│   │   ├── opening_snapshot/track/grade/prompt/tune.py
-│   │   ├── create_indicator_from_intent.py
-│   │   └── create_strategy_from_intent.py
+│   ├── ports/                         # Application port interfaces
+│   │   ├── annotation_reader.py
+│   │   ├── rules_hasher.py
+│   │   ├── rules_loader.py
+│   │   └── universe_summary_provider.py
+│   ├── use_case/                      # All use cases follow *_use_case.py naming
+│   │   ├── fetch_market_data_use_case.py
+│   │   ├── refresh_market_data_use_case.py
+│   │   ├── fetch_broker_data_use_case.py
+│   │   ├── fetch_broker_daily_flows_use_case.py
+│   │   ├── fetch_market_refresh_use_case.py
+│   │   ├── refresh_broker_data_use_case.py
+│   │   ├── refresh_stockbit_enrichment_use_case.py
+│   │   ├── compute_sma_use_case.py / compute_ema_use_case.py / compute_rsi_use_case.py
+│   │   ├── aggregate_indicators_use_case.py
+│   │   ├── assess_risk_use_case.py / explain_risk_use_case.py
+│   │   ├── fetch_sentiment_use_case.py / audit_sentiment_use_case.py
+│   │   ├── backtest_use_case.py / swing_backtest_use_case.py
+│   │   ├── pre_open_screen_use_case.py / pre_open_workflow_use_case.py
+│   │   ├── confirm_intraday_open_use_case.py / intraday_backtest_use_case.py
+│   │   ├── accumulation_screen_use_case.py / accumulation_audit_use_case.py
+│   │   ├── market_regime_use_case.py
+│   │   ├── data_quality_audit_use_case.py
+│   │   ├── data_update_status_use_case.py
+│   │   ├── daily_briefing_use_case.py
+│   │   ├── analyze_running_trade_use_case.py
+│   │   ├── swing_analysis_workflow_use_case.py
+│   │   ├── opening_snapshot/track/grade/prompt/tune_use_case.py
+│   │   ├── create_indicator_from_intent_use_case.py
+│   │   ├── create_strategy_from_intent_use_case.py
+│   │   ├── import_broker_data_use_case.py
+│   │   ├── log_swing_candidate_use_case.py
+│   │   ├── compare_screen_snapshots_use_case.py
+│   │   ├── resolve_opening_prices_use_case.py
+│   │   ├── fetch_stock_meta_use_case.py
+│   │   └── view_universe_summary_use_case.py
 │   ├── formula/                      # Formula DSL engine
 │   │   ├── tokenizer.py / parser.py / ast_nodes.py
 │   │   ├── validator.py / evaluator.py
@@ -1317,11 +1328,13 @@ src/
 │   │   ├── yahoo_stock_meta.py       # Yahoo stock metadata
 │   │   ├── idx.py                    # IDX broker data
 │   │   └── idx_market.py             # IDX market data
-│   ├── browser/                      # Stockbit enrichment providers (22 files)
-│   │   ├── playwright_stockbit.py    # Broker provider (delegates to browser module)
-│   │   ├── playwright_stockbit_browser.py  # Browser lifecycle + session management
+│   ├── browser/                      # Stockbit enrichment providers (24 files)
+│   │   ├── playwright_stockbit_provider.py  # Broker provider (delegates to browser module)
+│   │   ├── playwright_stockbit_browser.py   # Browser lifecycle + session management
 │   │   ├── stockbit_analyst.py
 │   │   ├── stockbit_bandar.py
+│   │   ├── stockbit_browser_provider.py
+│   │   ├── stockbit_broker_distribution.py
 │   │   ├── stockbit_company_profile.py
 │   │   ├── stockbit_corp_action.py
 │   │   ├── stockbit_earnings.py
@@ -1329,18 +1342,16 @@ src/
 │   │   ├── stockbit_fundamentals.py
 │   │   ├── stockbit_insider.py
 │   │   ├── stockbit_intraday_broker_chart.py
+│   │   ├── stockbit_market_time.py
 │   │   ├── stockbit_order_book.py
+│   │   ├── stockbit_providers.py
 │   │   ├── stockbit_running_trade.py
 │   │   ├── stockbit_running_trade_chart.py
 │   │   ├── stockbit_seasonality.py
 │   │   ├── stockbit_shareholding.py
 │   │   ├── stockbit_ticker_notation.py
-│   │   ├── stockbit_valuation.py
-│   │   ├── stockbit_broker_distribution.py
-│   │   ├── stockbit_browser.py
-│   │   ├── stockbit_market_time.py
 │   │   ├── stockbit_universe.py
-│   │   └── ... (20 specialized providers)
+│   │   └── stockbit_valuation.py
 │   ├── persistence/
 │   │   ├── sqlite.py                 # Core SQLite repository
 │   │   ├── sqlite_market_repository.py

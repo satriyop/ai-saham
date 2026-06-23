@@ -52,7 +52,7 @@ def regime(
     output_format: Annotated[
         str,
         typer.Option("--format", help="Output format: table or json"),
-    ] = "table",
+    ] = APP_CFG.analysis.format,
     db_path: Annotated[
         Optional[Path],
         typer.Option("--db", help="SQLite database path"),
@@ -99,6 +99,7 @@ def regime(
             breadth_sma_period=_SC.regime_breadth_sma_period,
             benchmark_sma_fast=_SC.regime_benchmark_sma_fast,
             benchmark_sma_slow=_SC.regime_benchmark_sma_slow,
+            breadth_threshold_pct=_SC.regime_breadth_threshold_pct,
         ))
     except ValueError as e:
         typer.echo(f"Error: {e}", err=True)

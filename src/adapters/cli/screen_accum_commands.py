@@ -266,7 +266,7 @@ def accumulation_run(
     output_format: Annotated[
         str,
         typer.Option("--format", help="Output format: table or json"),
-    ] = "table",
+    ] = APP_CFG.analysis.format,
     guide: Annotated[
         bool,
         typer.Option("--guide", help="Print column reference guide and exit (no screen needed)"),
@@ -370,6 +370,8 @@ def accumulation_run(
         min_score=min_score,
         min_piotroski=min_piotroski,
         tier1_broker_codes=_SC.tier1_broker_codes,
+        bci_cluster_min_count=_SC.bci_cluster_min_count,
+        bci_stable_min_count=_SC.bci_stable_min_count,
         min_market_cap_idr=_SC.min_market_cap_idr,
         sector_breadth_enabled=_SC.sector_breadth_enabled,
         sector_breadth_threshold=_SC.sector_breadth_threshold,
@@ -560,6 +562,9 @@ def _make_use_case_for_compare(
             window_days=window,
             min_net_buy_days=1,
             min_score=0.0,
+            tier1_broker_codes=_SC.tier1_broker_codes,
+            bci_cluster_min_count=_SC.bci_cluster_min_count,
+            bci_stable_min_count=_SC.bci_stable_min_count,
         ))
         return response.candidates[:top]
     except Exception:

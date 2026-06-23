@@ -601,7 +601,7 @@ def swing(
     output_format: Annotated[
         str,
         typer.Option("--format", help="Output format: table or json"),
-    ] = "table",
+    ] = APP_CFG.analysis.format,
     db_path: Annotated[
         Optional[Path],
         typer.Option("--db", help="SQLite database path"),
@@ -933,7 +933,7 @@ def swing_compare(
     start: Annotated[
         str,
         typer.Option("--start", help="Backtest start date, YYYY-MM-DD"),
-    ] = "2026-01-01",
+    ] = APP_CFG.backtest.start_date,
     end: Annotated[
         Optional[str],
         typer.Option("--end", help="Backtest end date, YYYY-MM-DD (default: today)"),
@@ -969,7 +969,7 @@ def swing_compare(
             help="One-way transaction cost in basis points (20 ~= 0.20%)",
             min=0,
         ),
-    ] = float(DEFAULT_SWING_COST_BPS),
+    ] = APP_CFG.backtest.cost_bps,
     benchmark: Annotated[
         str,
         typer.Option("--benchmark", help="Benchmark ticker for regime context"),
@@ -977,7 +977,7 @@ def swing_compare(
     output_format: Annotated[
         str,
         typer.Option("--format", help="Output format: table or json"),
-    ] = "table",
+    ] = APP_CFG.analysis.format,
     db_path: Annotated[
         Optional[Path],
         typer.Option("--db", help="SQLite database path"),

@@ -186,6 +186,18 @@ endpoints:
     url: "https://exodus.stockbit.com/company-price-feed/market-time"
     # Returns: current exchange session state (pre-open, regular, post-close, etc.)
 
+  earnings:
+    url: "https://exodus.stockbit.com/earnings?keyword={ticker}&quarter={quarter}&year={year}"
+    # Returns: quarterly EPS history.
+
+  valuation_metrics:
+    url: "https://exodus.stockbit.com/valuation/company/{ticker}/metrics"
+    # Returns: P/E, EPS TTM, and basic valuation multiples.
+
+  broker_distribution:
+    url: "https://exodus.stockbit.com/order-trade/broker/distribution?date=&symbol={ticker}&investor_type=INVESTOR_TYPE_ALL&market_board=MARKET_TYPE_REGULER&data_type=BROKER_DISTRIBUTION_DATA_TYPE_VALUE&period=TB_PERIOD_LAST_1_DAY"
+    # Returns: broker buy/sell volume and value distribution matrix.
+
   universe_sector_88:
     url: "https://exodus.stockbit.com/emitten/sectors/88/subsectors"
     # Returns: subsector list for sector code 88 (used in universe screener).

@@ -380,12 +380,42 @@ def confirm_open(
         opening_prices,
         observations,
     )
+
+    import yaml
+    from src.application.use_case.pre_open_screen_use_case import PreOpenScreenConfig
+    config_path = Path(APP_CFG.storage.pre_open_config)
+    if config_path.exists():
+        with open(config_path) as f:
+            yaml_data = yaml.safe_load(f) or {}
+        po_config = PreOpenScreenConfig.from_yaml(yaml_data)
+    else:
+        po_config = PreOpenScreenConfig()
+
+    regime_val = None
+    if sidecar_path.exists():
+        try:
+            with open(sidecar_path) as f:
+                sidecar_data = json.load(f)
+            regime_dict = sidecar_data.get("market_regime")
+            if regime_dict and isinstance(regime_dict, dict):
+                regime_val = regime_dict.get("label")
+        except Exception:
+            pass
+
     use_case = ConfirmIntradayOpenUseCase()
     result = use_case.execute(
         ConfirmIntradayOpenRequest(
             candidates=candidates,
             run_date=screened_at,
             max_stop_pct=Decimal(str(max_stop)),
+            tick_friction_gate=po_config.tick_friction_gate,
+            min_target_ticks=po_config.min_target_ticks,
+            min_stop_ticks=po_config.min_stop_ticks,
+            regime=regime_val,
+            regime_gate_enabled=po_config.regime_gate_enabled,
+            tighten_in_regimes=tuple(po_config.tighten_in_regimes),
+            gap_pct_tightening_factor=Decimal(str(po_config.gap_pct_tightening_factor)),
+            require_backed_in_weak=po_config.require_backed_in_weak,
         )
     )
 
@@ -629,7 +659,7 @@ def intraday_backtest(
     start: Annotated[
         str,
         typer.Option("--start", help="Backtest start date YYYY-MM-DD"),
-    ] = "2026-01-01",
+    ] = APP_CFG.backtest.start_date,
     end: Annotated[
         Optional[str],
         typer.Option("--end", help="Backtest end date YYYY-MM-DD"),
@@ -637,11 +667,11 @@ def intraday_backtest(
     capital: Annotated[
         int,
         typer.Option("--capital", "-c", help="Initial capital in IDR", min=1),
-    ] = 100_000_000,
+    ] = APP_CFG.trading.capital,
     risk_pct: Annotated[
         float,
         typer.Option("--risk-pct", help="% of capital at risk per trade", min=0.01),
-    ] = 1.0,
+    ] = APP_CFG.swing.risk_pct,
     max_daily_positions: Annotated[
         int,
         typer.Option("--max-daily-positions", help="Max simultaneous trades per day", min=1),
@@ -653,7 +683,7 @@ def intraday_backtest(
     cost_bps: Annotated[
         float,
         typer.Option("--cost-bps", help="Transaction cost in basis points per side", min=0),
-    ] = 20.0,
+    ] = APP_CFG.backtest.cost_bps,
     include_wait: Annotated[
         bool,
         typer.Option("--include-wait/--no-include-wait", help="Treat WAIT decisions as ENTER"),
@@ -677,7 +707,7 @@ def intraday_backtest(
     output_format: Annotated[
         str,
         typer.Option("--format", help="Output format: table or json"),
-    ] = "table",
+    ] = APP_CFG.analysis.format,
     db_path: Annotated[
         Optional[Path],
         typer.Option("--db", help="Path to SQLite database"),

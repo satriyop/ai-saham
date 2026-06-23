@@ -53,7 +53,6 @@ analysis:
 # ── Trading ───────────────────────────────────────────────────────────────
 trading:
   capital: 100_000_000   # IDR — position sizing baseline (personal, override in user.yaml)
-  risk_pct: 1.0          # % of capital at risk per trade
 
 # ── Swing ─────────────────────────────────────────────────────────────────
 swing:
@@ -75,9 +74,7 @@ backtest:
 # ── Fetch (write / refresh policy) ───────────────────────────────────────
 fetch:
   default_days: 365         # matches analysis window; use --days 30 for a quick daily refresh
-  meta_ttl_days: 30         # stock-meta cache freshness (days)
   start_tolerance_days: 7   # acceptable gap at start of a cached date range
-  end_tolerance_days: 7     # acceptable gap at end of a cached date range
 
 # ── AI ────────────────────────────────────────────────────────────────────
 ai:

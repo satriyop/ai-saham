@@ -21,7 +21,7 @@ Layer: Application
 
 import math
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -84,6 +84,15 @@ class PreOpenScreenConfig:
     iev_intensity_auto_downgrade: bool = False
     # Pre-open bid pressure filter
     min_bid_pressure_preopen: float = 0.0  # 0.0 = disabled; 0.40 = require 40% bid dominance
+    # Tick-friction gate
+    tick_friction_gate: bool = True
+    min_target_ticks: int = 3
+    min_stop_ticks: int = 2
+    # Regime-gate parameters
+    tighten_in_regimes: list[str] = field(default_factory=lambda: ["WEAK", "RISK_OFF"])
+    gap_pct_tightening_factor: float = 0.5
+    require_backed_in_weak: bool = True
+    regime_gate_enabled: bool = True
 
     @classmethod
     def from_yaml(cls, data: dict) -> "PreOpenScreenConfig":
@@ -92,6 +101,7 @@ class PreOpenScreenConfig:
         entry = data.get("entry", {})
         risk = data.get("risk", {})
         analysis = data.get("analysis", {})
+        regime_gate = data.get("regime_gate") or {}
 
         top_n_raw = screener.get("top_n", None)
 
@@ -129,6 +139,13 @@ class PreOpenScreenConfig:
             ),
             iev_intensity_auto_downgrade=bool(analysis.get("iev_intensity_auto_downgrade", False)),
             min_bid_pressure_preopen=float(screener.get("min_bid_pressure_preopen", 0.0)),
+            tick_friction_gate=bool(risk.get("tick_friction_gate", True)),
+            min_target_ticks=int(risk.get("min_target_ticks", 3)),
+            min_stop_ticks=int(risk.get("min_stop_ticks", 2)),
+            tighten_in_regimes=list(regime_gate.get("tighten_in_regimes", ["WEAK", "RISK_OFF"])),
+            gap_pct_tightening_factor=float(regime_gate.get("gap_pct_tightening_factor", 0.5)),
+            require_backed_in_weak=bool(regime_gate.get("require_backed_in_weak", True)),
+            regime_gate_enabled=bool(regime_gate.get("regime_gate_enabled", True)),
         )
 
 

@@ -67,7 +67,6 @@ class AnalysisConfig:
 @dataclass(frozen=True)
 class TradingConfig:
     capital: int = 100_000_000
-    risk_pct: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -91,10 +90,8 @@ class BacktestConfig:
 
 @dataclass(frozen=True)
 class FetchConfig:
-    default_days: int = 365         # matches analysis window; use --days 30 for quick refresh
-    meta_ttl_days: int = 30         # stock-meta cache freshness (days)
+    default_days: int = 90          # fetch window (distinct from analysis default_days)
     start_tolerance_days: int = 7   # acceptable gap at start of a cached date range
-    end_tolerance_days: int = 7     # acceptable gap at end of a cached date range
 
 
 @dataclass(frozen=True)

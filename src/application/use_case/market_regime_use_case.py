@@ -27,6 +27,7 @@ class MarketRegimeRequest:
     benchmark_sma_slow: int = 50
     breadth_lookback_days: int = 5
     foreign_flow_lookback_days: int = 5
+    breadth_threshold_pct: int = 50
 
 
 @dataclass(frozen=True)
@@ -141,6 +142,7 @@ class MarketRegimeUseCase:
             breadth_now=breadth_now,
             breadth_change=breadth_change,
             foreign_breadth=foreign_breadth,
+            breadth_threshold_pct=request.breadth_threshold_pct,
         )
 
         return MarketRegimeResponse(
@@ -267,6 +269,7 @@ class MarketRegimeUseCase:
         breadth_now: float | None,
         breadth_change: float | None,
         foreign_breadth: float | None,
+        breadth_threshold_pct: int = 50,
     ) -> int:
         score = 0
         if benchmark_close is not None and benchmark_sma20 is not None:
@@ -278,11 +281,11 @@ class MarketRegimeUseCase:
         if benchmark_return_20d is not None:
             score += int(benchmark_return_20d > 0)
         if breadth_now is not None:
-            score += int(breadth_now >= 50)
+            score += int(breadth_now >= breadth_threshold_pct)
         if breadth_change is not None:
             score += int(breadth_change >= 0)
         if foreign_breadth is not None:
-            score += int(foreign_breadth >= 50)
+            score += int(foreign_breadth >= breadth_threshold_pct)
         return score
 
     @staticmethod

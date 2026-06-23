@@ -2064,10 +2064,16 @@ saham screen pre-open \
 After the opening auction clears, check which candidates actually trigger:
 
 ```bash
+# Confirm with JSON opening prices
 saham trade confirm --opening-json '{"BBCA":9050,"BMRI":5875}'
+
+# Confirm using a learn track file (offline mode)
+saham trade confirm --track-file data/opening/20260617/track_0900.json
 ```
 
 Emits deterministic ENTER / WAIT / SKIP decisions based on entry ranges from the pre-open screen.
+
+`--opening-json` provides explicit price overrides; `--track-file` resolves opening prices from an existing learn tracking file automatically (fallback chain: opening price → orderbook last price → mid price).
 
 ### Step 3: Log & Review
 

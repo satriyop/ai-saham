@@ -33,13 +33,16 @@ class YahooFinanceProvider(MarketDataProvider):
         market_suffix: Suffix to append (default: '.JK' for IDX)
     """
 
-    def __init__(self, market_suffix: str = ".JK") -> None:
+    def __init__(self, market_suffix: str | None = None) -> None:
         """
         Initialize Yahoo Finance provider.
 
         Args:
             market_suffix: Suffix for ticker symbols (e.g., '.JK' for IDX)
         """
+        if market_suffix is None:
+            from src.infrastructure.config.app_config import APP_CFG
+            market_suffix = APP_CFG.market.suffix
         self._market_suffix = market_suffix
         self.provider_name = "yahoo"
         self.volume_unit = "shares"

@@ -133,6 +133,8 @@ class AccumulationScreenRequest:
     # BCI — Tier 1 broker codes for Broker Concentration Index scoring.
     # Default mirrors TIER1_FOREIGN_BROKERS; override via config to tune without code change.
     tier1_broker_codes: frozenset[str] = field(default_factory=lambda: TIER1_FOREIGN_BROKERS)
+    bci_cluster_min_count: int = 3
+    bci_stable_min_count: int = 1
     # Market cap floor — tickers below this IDR value are excluded (0 = disabled)
     min_market_cap_idr: int = 0
     # Piotroski F-Score floor (0–9). Tickers below this are excluded (0 = disabled)
@@ -511,6 +513,8 @@ class AccumulationScreenUseCase:
                 rsi_period=request.rsi_period,
                 sma_period=request.sma_period,
                 tier1_broker_codes=request.tier1_broker_codes,
+                bci_cluster_min_count=request.bci_cluster_min_count,
+                bci_stable_min_count=request.bci_stable_min_count,
             )
 
             if result is None:
@@ -669,6 +673,8 @@ class AccumulationScreenUseCase:
         rsi_period: int,
         sma_period: int,
         tier1_broker_codes: frozenset[str] = TIER1_FOREIGN_BROKERS,
+        bci_cluster_min_count: int = 3,
+        bci_stable_min_count: int = 1,
     ) -> AccumulationCandidate | None:
         """Compute accumulation metrics for one ticker."""
         # Load all broker rows up to as_of_date, then select the latest N
@@ -804,9 +810,9 @@ class AccumulationScreenUseCase:
                     # BCI: count all Tier 1 codes among any net-buyers (not just top 5)
                     all_net_buyer_codes = {code for code, _ in net_buyers}
                     bci_tier1_count = len(all_net_buyer_codes & tier1_broker_codes)
-                    if bci_tier1_count >= 3:
+                    if bci_tier1_count >= bci_cluster_min_count:
                         bci_label = BCI_CLUSTER
-                    elif bci_tier1_count >= 1:
+                    elif bci_tier1_count >= bci_stable_min_count:
                         bci_label = BCI_STABLE
                     else:
                         bci_label = BCI_RETAIL

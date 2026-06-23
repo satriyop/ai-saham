@@ -109,14 +109,14 @@ def risk(
     ema_period: Annotated[int, typer.Option("--ema", help="EMA period", min=1)] = 20,
     rsi_period: Annotated[int, typer.Option("--rsi", help="RSI period", min=1)] = 14,
     db_path: Annotated[Optional[Path], typer.Option("--db", help="Path to SQLite database")] = None,
-    explain: Annotated[bool, typer.Option("--explain", "-e", help="Generate AI explanation")] = False,
+    explain: Annotated[bool, typer.Option("--explain", "-e", help="Generate AI explanation")] = APP_CFG.ai.enabled,
     provider: Annotated[Optional[str], typer.Option("--provider", help="AI provider (deepseek/claude/openai/gemini/ollama/mock)")] = None,
     model: Annotated[Optional[str], typer.Option("--model", "-m", help="Model name for AI provider")] = None,
     with_sentiment: Annotated[bool, typer.Option("--with-sentiment", "-s", help="Include news sentiment context")] = False,
     news_provider_name: Annotated[str, typer.Option("--news-provider", help="News source: composite, google, kontan, cnbc, mock")] = "composite",
     no_ai: Annotated[bool, typer.Option("--no-ai", help="Disable AI sentiment classifier (uses keyword fallback)")] = False,
     trend: Annotated[int, typer.Option("--trend", help="Show risk trend over last N days (0=off)", min=0)] = 0,
-    fmt: Annotated[str, typer.Option("--format", help="Output format: table or json")] = "table",
+    fmt: Annotated[str, typer.Option("--format", help="Output format: table or json")] = APP_CFG.analysis.format,
 ) -> None:
     """
     Assess risk for an IDX stock based on technical indicators.

@@ -169,7 +169,7 @@ def accumulation_audit(
     output_format: Annotated[
         str,
         typer.Option("--format", help="Output format: table or json"),
-    ] = "table",
+    ] = APP_CFG.analysis.format,
     top_groups: Annotated[
         int,
         typer.Option("--top-groups", help="Number of grouped summary rows to print", min=1),

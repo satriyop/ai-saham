@@ -103,7 +103,7 @@ def broker_flow(
     fmt: Annotated[
         str,
         typer.Option("--format", help="Output format: table or json"),
-    ] = "table",
+    ] = APP_CFG.analysis.format,
 ) -> None:
     """
     Show foreign flow summary for a stock.
@@ -201,7 +201,7 @@ def broker_history_view(
     fmt: Annotated[
         str,
         typer.Option("--format", help="Output format: table or json"),
-    ] = "table",
+    ] = APP_CFG.analysis.format,
 ) -> None:
     """
     Show cached daily foreign broker flow history for a stock.
@@ -270,7 +270,7 @@ def broker_top_foreign_view(
     fmt: Annotated[
         str,
         typer.Option("--format", help="Output format: table or json"),
-    ] = "table",
+    ] = APP_CFG.analysis.format,
 ) -> None:
     """
     Show cached foreign-broker top stock snapshots.

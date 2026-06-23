@@ -70,7 +70,7 @@ def swing_backtest(
     start: Annotated[
         str,
         typer.Option("--start", help="Backtest start date, YYYY-MM-DD"),
-    ] = "2026-01-01",
+    ] = APP_CFG.backtest.start_date,
     end: Annotated[
         Optional[str],
         typer.Option("--end", help="Backtest end date, YYYY-MM-DD (default: today)"),
@@ -106,7 +106,7 @@ def swing_backtest(
             help="One-way transaction cost in basis points (20 ~= 0.20%)",
             min=0,
         ),
-    ] = float(DEFAULT_SWING_COST_BPS),
+    ] = APP_CFG.backtest.cost_bps,
     with_regime: Annotated[
         bool,
         typer.Option("--with-regime", help="Group trades by entry-date market regime"),
@@ -129,7 +129,7 @@ def swing_backtest(
     output_format: Annotated[
         str,
         typer.Option("--format", help="Output format: table or json"),
-    ] = "table",
+    ] = APP_CFG.analysis.format,
     db_path: Annotated[
         Optional[Path],
         typer.Option("--db", help="SQLite database path"),
@@ -187,6 +187,15 @@ def swing_backtest(
         f"preset={preset_name} | max positions={max_positions}..."
     )
 
+    preset_targets = None
+    try:
+        import yaml
+        with open("config/swing_screener.yaml", encoding="utf-8") as fh:
+            yaml_data = yaml.safe_load(fh) or {}
+            preset_targets = yaml_data.get("preset_targets")
+    except Exception:
+        pass
+
     use_case = SwingBacktestUseCase(
         broker_repository=SQLiteBrokerRepository(resolved_db),
         market_repository=SQLiteMarketRepository(db_path=resolved_db),
@@ -207,6 +216,7 @@ def swing_backtest(
             include_regime=with_regime or bool(allowed_regimes),
             benchmark_ticker=benchmark,
             allowed_regimes=allowed_regimes,
+            preset_targets=preset_targets,
         ))
     except ValueError as e:
         typer.echo(f"Error: {e}", err=True)
@@ -276,7 +286,7 @@ def size(
     output_format: Annotated[
         str,
         typer.Option("--format", help="Output format: table or json"),
-    ] = "table",
+    ] = APP_CFG.analysis.format,
     db_path: Annotated[
         Optional[Path],
         typer.Option("--db", help="SQLite database path"),

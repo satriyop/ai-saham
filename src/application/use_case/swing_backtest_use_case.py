@@ -55,6 +55,7 @@ class SwingBacktestRequest:
     include_regime: bool = False
     benchmark_ticker: str = "^JKSE"
     allowed_regimes: tuple[str, ...] = ()
+    preset_targets: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -470,11 +471,17 @@ class SwingBacktestUseCase:
         if candle is None:
             return None
 
+        tp_pct = request.take_profit_pct
+        sl_pct = request.stop_loss_pct
+        if request.preset_targets:
+            from src.application.use_case.accumulation_screen_use_case import resolve_preset_targets
+            tp_pct, sl_pct = resolve_preset_targets(position.regime, {"preset_targets": request.preset_targets})
+
         target = position.entry_price * (
-            Decimal("1") + request.take_profit_pct / Decimal("100")
+            Decimal("1") + tp_pct / Decimal("100")
         )
         stop = position.entry_price * (
-            Decimal("1") - request.stop_loss_pct / Decimal("100")
+            Decimal("1") - sl_pct / Decimal("100")
         )
         holding_days = self._holding_days(position.ticker, position.entry_date, current_date)
 
