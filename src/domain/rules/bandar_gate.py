@@ -49,7 +49,7 @@ class BandarGate(RiskGate):
                 reason="no bandar flow data — gate skipped",
                 confidence=0,
             )
-        if context.bandar_is_distributing:
+        if context.five_day_accdist in _DISTRIBUTION_LABELS:
             return GateResult(
                 triggered=True,
                 override_risk=RiskLevel.MODERATE,

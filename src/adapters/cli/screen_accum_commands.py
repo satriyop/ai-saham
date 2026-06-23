@@ -31,6 +31,9 @@ from src.application.use_case.accumulation_screen_use_case import (
     AccumulationScreenUseCase,
 )
 from src.application.use_case.assess_risk_use_case import AssessRiskRequest, AssessRiskUseCase
+from src.domain.rules.bandar_gate import BandarGate
+from src.domain.rules.fundamental_gate import FundamentalGate
+from src.domain.rules.liquidity_gate import LiquidityGate
 from src.infrastructure.browser.stockbit_analyst import StockbitAnalystConsensusProvider
 from src.infrastructure.browser.stockbit_bandar import StockbitBandarDetectorProvider
 from src.infrastructure.browser.stockbit_corp_action import StockbitCorporateActionRepository
@@ -349,6 +352,11 @@ def accumulation_run(
     broker_repo = SQLiteBrokerRepository(resolved_db)
     market_repo = SQLiteMarketRepository(db_path=resolved_db)
     _sb = _make_stockbit_providers(resolved_db)
+    _risk_uc = AssessRiskUseCase(
+        repository=market_repo,
+        structural_gates=[FundamentalGate(), LiquidityGate()],
+        execution_gates=[BandarGate()],
+    )
     use_case = AccumulationScreenUseCase(
         broker_repository=broker_repo,
         market_repository=market_repo,
@@ -361,6 +369,7 @@ def accumulation_run(
         fundamentals_provider=_sb.fundamentals_prov,
         ticker_notation_provider=_sb.notation_prov,
         forward_estimates_provider=_sb.forward_estimates_prov,
+        risk_use_case=_risk_uc,
     )
 
     base_request = AccumulationScreenRequest(
