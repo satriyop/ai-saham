@@ -39,6 +39,7 @@ def build_data_update_table_statuses(
     enrichment_available: bool,
     expected_trading_day: date | None,
     today: date | None = None,
+    market_is_open: bool = False,
 ) -> list[DataUpdateTableStatus]:
     """
     Return dynamic status for every table `saham fetch market` may touch.
@@ -189,6 +190,7 @@ def build_data_update_table_statuses(
                 stock_tickers,
                 expected_trading_day=expected_trading_day,
                 today=today,
+                market_is_open=market_is_open,
             )
             for spec in specs
         ]
@@ -201,6 +203,7 @@ def _status_for_spec(
     *,
     expected_trading_day: date | None,
     today: date,
+    market_is_open: bool = False,
 ) -> DataUpdateTableStatus:
     if not spec.applicable:
         return DataUpdateTableStatus(
@@ -271,6 +274,7 @@ def _status_for_spec(
         max_raw,
         expected_trading_day=expected_trading_day,
         today=today,
+        market_is_open=market_is_open,
     )
 
     return DataUpdateTableStatus(
@@ -311,6 +315,7 @@ def _freshness_status(
     *,
     expected_trading_day: date | None,
     today: date,
+    market_is_open: bool = False,
 ) -> tuple[str, str, str | None]:
     if rows <= 0:
         return (
@@ -329,6 +334,12 @@ def _freshness_status(
 
     if spec.freshness == "range" and expected_trading_day is not None:
         if max_date is None or max_date < expected_trading_day:
+            if market_is_open and max_date is not None and (expected_trading_day - max_date).days <= 3:
+                return (
+                    "pending-eod",
+                    f"EOD data not yet published for {expected_trading_day}. Re-fetch after market close (~15:30 WIB).",
+                    None,
+                )
             return (
                 "stale",
                 f"Latest stored date is before expected trading day {expected_trading_day}.",

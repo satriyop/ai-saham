@@ -480,6 +480,7 @@ def _print_table_summary(
     candles_only: bool,
     broker_only: bool,
     enrichment_available: bool = False,
+    market_is_open: bool = False,
 ) -> None:
     """Print a dynamic post-run database status for tables touched by update."""
     try:
@@ -493,6 +494,7 @@ def _print_table_summary(
             broker_only=broker_only,
             enrichment_available=enrichment_available,
             expected_trading_day=_last_known_trading_day(db_path) or _last_weekday(date.today()),
+            market_is_open=market_is_open,
         )
     except Exception as e:
         typer.echo("")
@@ -515,6 +517,8 @@ def _print_table_summary(
         color = typer.colors.GREEN
         if status.status in {"skipped", "n/a"}:
             color = typer.colors.BRIGHT_BLACK
+        elif status.status == "pending-eod":
+            color = typer.colors.CYAN
         elif status.status in {"partial", "stale", "empty", "missing", "missing-db"}:
             color = typer.colors.YELLOW
         prefix = (
@@ -526,7 +530,7 @@ def _print_table_summary(
         else:
             typer.echo(typer.style(prefix, fg=color))
             typer.echo(typer.style(f"  {'':<{prefix_width - 2}}{status.impact}", fg=color))
-        if status.issue:
+        if status.issue and status.status != "pending-eod":
             issues.append(f"  {status.table}: {status.issue}")
 
     typer.echo(f"{'─' * W}")
@@ -921,4 +925,5 @@ def fetch_market(
         candles_only=candles_only,
         broker_only=broker_only,
         enrichment_available=response.enrichment_available,
+        market_is_open=_mstatus.is_open if _mstatus else False,
     )
