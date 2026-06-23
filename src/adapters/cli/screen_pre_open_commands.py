@@ -63,6 +63,7 @@ class IntradayRunGuard:
 def _playwright_available() -> bool:
     try:
         import playwright  # noqa: F401
+
         return True
     except ImportError:
         return False
@@ -80,13 +81,14 @@ def _get_market_status():
     """Return current IDX market status from Stockbit if session available,
     else from local wall-clock. Never raises."""
     from src.infrastructure.browser.stockbit_market_time import get_current_market_status
+
     return get_current_market_status()
 
 
 def _build_intraday_run_guard(
     run_at: datetime,
     allow_non_trading_day: bool = False,
-    market_status = None,
+    market_status=None,
 ) -> IntradayRunGuard:
     warnings: list[str] = []
     local_run_at = run_at.astimezone(IDX_TIMEZONE)
@@ -163,6 +165,7 @@ def _write_sidecar(
 ) -> None:
     """Write session sidecar JSON so `saham trade confirm` can read it."""
     import json
+
     sidecar_path.parent.mkdir(parents=True, exist_ok=True)
     data = {
         "screened_at": str(screened_date),
@@ -199,11 +202,11 @@ def _write_sidecar(
 def pre_open(
     movers_json: Annotated[
         Optional[str],
-        typer.Option("--movers-json", help='Pre-fetched movers JSON array'),
+        typer.Option("--movers-json", help="Pre-fetched movers JSON array"),
     ] = None,
     order_books_json: Annotated[
         Optional[str],
-        typer.Option("--order-books-json", help='Pre-fetched order books JSON object'),
+        typer.Option("--order-books-json", help="Pre-fetched order books JSON object"),
     ] = None,
     iev_min: Annotated[Optional[int], typer.Option("--iev-min", min=1)] = None,
     iep_min: Annotated[
@@ -290,6 +293,7 @@ def pre_open(
     the displayed range.
     """
     import json
+
     resolved_config = config_path or legacy_strategy_path or DEFAULT_PRE_OPEN_CONFIG_PATH
     resolved_db = db_path or DEFAULT_DB_PATH
 
@@ -322,8 +326,9 @@ def pre_open(
         if _playwright_available() and _session_exists():
             typer.echo("Playwright session found — running autonomously...")
             from src.infrastructure.browser.playwright_stockbit import PlaywrightStockbitProvider
+
             browser_provider = PlaywrightStockbitProvider(
-                session_file=DEFAULT_SESSION_FILE,
+                profile_dir=Path(APP_CFG.storage.stockbit_profile_dir),
                 headless=headless,
             )
         else:
@@ -336,6 +341,7 @@ def pre_open(
             for warning in run_guard.warnings:
                 typer.echo(f"Warning: {warning}")
             from src.adapters.cli.screen_pre_open_display import print_browser_plan
+
             print_browser_plan(config)
             raise typer.Exit(0)
     else:
@@ -375,6 +381,7 @@ def pre_open(
     if with_ai:
         try:
             from src.application.services.ai_research import ClaudeTickerResearcher
+
             if provider and provider not in ("claude", None):
                 typer.echo(
                     "Warning: AI research only supports 'claude' provider. Falling back.",

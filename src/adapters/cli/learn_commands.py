@@ -158,7 +158,9 @@ def snapshot(
     registry = create_indicator_registry(
         broker_repository=broker_repo, market_repository=repository
     )
-    browser = PlaywrightStockbitProvider(session_file=DEFAULT_SESSION_FILE, headless=headless)
+    browser = PlaywrightStockbitProvider(
+        profile_dir=Path(APP_CFG.storage.stockbit_profile_dir), headless=headless
+    )
 
     # Load today's NCP-locked IEP values for enrichment
     iev_repo = SQLiteIEVRepository(resolved_db)
@@ -266,7 +268,9 @@ def track(
         typer.echo("No Stockbit session. Run: saham fetch stockbit login", err=True)
         raise typer.Exit(1)
 
-    browser = PlaywrightStockbitProvider(session_file=DEFAULT_SESSION_FILE, headless=headless)
+    browser = PlaywrightStockbitProvider(
+        profile_dir=Path(APP_CFG.storage.stockbit_profile_dir), headless=headless
+    )
 
     # Optionally wire broker confirmation provider
     running_trade_provider = None
