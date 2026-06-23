@@ -783,7 +783,7 @@ def fetch_market(
         typer.echo("  Meta:             yahoo  (sector/industry, 30d TTL)")
     if enrichment_available:
         typer.echo("  Enrichment:       stockbit  (notation/analyst/insider/seasonality/corp, daily SQLite cache)")
-    typer.echo("  Legend:  ✓(DATE) = up-to-date through DATE  +N = new rows stored  ERR: = failed")
+    typer.echo("  Legend:  ✓(DATE) = up-to-date through DATE  +N = new rows stored  bf+N = backfilled older gap  ERR: = failed")
     typer.echo("")
 
     # Print table header
