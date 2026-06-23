@@ -337,7 +337,7 @@ def _freshness_status(
             if market_is_open and max_date is not None and (expected_trading_day - max_date).days <= 3:
                 return (
                     "pending-eod",
-                    f"EOD data not yet published for {expected_trading_day}. Re-fetch after market close (~15:30 WIB).",
+                    "EOD not yet available. Re-fetch after close.",
                     None,
                 )
             return (
@@ -347,7 +347,7 @@ def _freshness_status(
             )
         if partial_issue:
             return "partial", "Some requested tickers are missing.", partial_issue
-        return "ready", f"Current through {expected_trading_day}.", None
+        return "ready", "Current through today.", None
 
     if spec.freshness == "today":
         if max_date != today:
