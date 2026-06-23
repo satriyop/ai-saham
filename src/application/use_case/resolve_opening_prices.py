@@ -7,7 +7,7 @@ Layer: Application
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime, time
+from datetime import date, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, Callable
 
@@ -15,7 +15,8 @@ if TYPE_CHECKING:
     from src.domain.ports.order_book_provider import OrderBookProvider
     from src.domain.ports.running_trade_provider import RunningTradeProvider
 
-from src.domain.value_objects.idx_market import IDX_TIMEZONE, REGULAR_OPEN as REGULAR_OPEN_TIME
+from src.domain.value_objects.idx_market import IDX_TIMEZONE
+from src.domain.value_objects.idx_market import REGULAR_OPEN as REGULAR_OPEN_TIME
 
 
 @dataclass(frozen=True)

@@ -17,7 +17,6 @@ from pathlib import Path
 
 import pytest
 
-from src.application.formula.parser import parse
 from src.application.services.bootstrap import create_indicator_registry
 from src.application.services.indicator_registry import IndicatorRegistry
 from src.application.use_case.create_indicator_from_intent import (
@@ -27,7 +26,6 @@ from src.application.use_case.create_indicator_from_intent import (
 from src.domain.entities.candle import Candle
 from src.infrastructure.ai.formula_translator import FormulaTranslatorAdapter
 from src.infrastructure.persistence.formula_storage import FormulaStorage
-
 
 # --- Fixtures ---
 

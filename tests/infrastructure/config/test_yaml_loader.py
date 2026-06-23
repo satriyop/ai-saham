@@ -24,12 +24,10 @@ from src.application.rules.exceptions import (
 from src.application.rules.schema import (
     ConditionIndicatorVsIndicator,
     ConditionIndicatorVsValue,
-    Indicator,
     Operator,
     Outcome,
 )
 from src.infrastructure.config.yaml_loader import YamlConfigLoader
-
 
 # --- Test Fixtures ---
 

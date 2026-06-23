@@ -6,7 +6,6 @@ Layer: Adapter
 
 from __future__ import annotations
 
-import typer
 from rich.console import Group
 from rich.text import Text
 

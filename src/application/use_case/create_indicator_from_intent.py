@@ -11,6 +11,7 @@ Depends on: FormulaTranslator port, Formula parser/validator
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from src.application.formula.ast_nodes import SERIES_FIELDS
 from src.application.formula.exceptions import FormulaError, FormulaValidationError
 from src.application.formula.parser import parse
 from src.application.formula.validator import validate_formula_references
@@ -21,7 +22,8 @@ from src.application.ports.formula_translator import (
     TranslatorRateLimitError,
     TranslatorTimeoutError,
 )
-from src.infrastructure.ai.formula_translator_prompt import DEFAULT_SERIES
+
+DEFAULT_SERIES = frozenset(f.upper() for f in SERIES_FIELDS)
 
 if TYPE_CHECKING:
     from src.application.formula.ast_nodes import ASTNode

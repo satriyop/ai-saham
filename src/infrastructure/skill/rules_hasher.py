@@ -13,8 +13,10 @@ from pathlib import Path
 
 import yaml
 
+from src.application.ports.rules_hasher import RulesHasher as RulesHasherPort
 
-class RulesHasher:
+
+class RulesHasher(RulesHasherPort):
     """Computes and compares hashes of strategy rules for drift detection."""
 
     _HASH_COMMENT_PATTERN = re.compile(r"<!--\s*rules_hash:\s*(\w+)\s*-->")

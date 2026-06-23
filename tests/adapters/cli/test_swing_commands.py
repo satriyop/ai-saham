@@ -9,24 +9,30 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from src.adapters.cli import analyze_swing_commands as swing_cli
-from src.adapters.cli.main import app
 from src.adapters.cli.analyze_swing_broker_display import (
     build_broker_detail as _build_broker_detail_base,
+)
+from src.adapters.cli.analyze_swing_broker_display import (
     build_broker_quality_note as _build_broker_quality_note,
+)
+from src.adapters.cli.analyze_swing_broker_display import (
     build_flow_detail as _build_flow_detail,
 )
 from src.adapters.cli.analyze_swing_commands import (
-    DataFreshness,
     FOREIGN_BOUNCE_PRESET,
+    DataFreshness,
     PresetEvaluation,
     PresetGate,
     _auto_refresh_swing_data,
     _build_data_freshness,
     _evaluate_foreign_bounce,
     _fetch_swing_sentiment,
-    _format_failed_gates_summary,
     _print_swing_output,
 )
+from src.adapters.cli.analyze_swing_display import (
+    format_failed_gates_summary as _format_failed_gates_summary,
+)
+from src.adapters.cli.main import app
 from src.application.use_case.accumulation_screen import AccumulationCandidate
 from src.domain.entities.broker_flow import BrokerSummary, BrokerTransaction, BrokerType
 
@@ -148,9 +154,7 @@ def test_foreign_bounce_passes_all_gates():
 
 
 def test_foreign_bounce_reports_failed_gates():
-    evaluation = _evaluate_foreign_bounce(
-        _candidate(score=70.0, trend="DOWN")
-    )
+    evaluation = _evaluate_foreign_bounce(_candidate(score=70.0, trend="DOWN"))
 
     assert evaluation.passed is False
     assert evaluation.classification == "WATCH"
@@ -270,12 +274,14 @@ def test_auto_refresh_swing_data_uses_update_provider_factory(monkeypatch, tmp_p
 def test_flow_detail_uses_latest_broker_sessions():
     detail = _build_flow_detail(
         ticker="BBCA",
-        broker_repo=FakeBrokerSummaryRepository([
-            _summary(date(2026, 6, 1), "120000000", "20000000"),
-            _summary(date(2026, 6, 2), "10000000", "50000000"),
-            _summary(date(2026, 6, 3), "80000000", "10000000"),
-            _summary(date(2026, 6, 4), "90000000", "10000000"),
-        ]),
+        broker_repo=FakeBrokerSummaryRepository(
+            [
+                _summary(date(2026, 6, 1), "120000000", "20000000"),
+                _summary(date(2026, 6, 2), "10000000", "50000000"),
+                _summary(date(2026, 6, 3), "80000000", "10000000"),
+                _summary(date(2026, 6, 4), "90000000", "10000000"),
+            ]
+        ),
         window_sessions=3,
         as_of_date=date(2026, 6, 4),
     )
@@ -295,42 +301,40 @@ def test_flow_detail_uses_latest_broker_sessions():
 def test_broker_detail_aggregates_named_brokers_across_investor_types():
     detail = _build_broker_detail(
         ticker="BBCA",
-        broker_repo=FakeBrokerSummaryRepository([
-            _summary(
-                date(2026, 6, 1),
-                "120000000",
-                "20000000",
-                top_buyers=(
-                    _tx("AK", "UBS", "70000000", "10000000"),
-                    _tx("CC", "Mandiri", "40000000", "5000000"),
+        broker_repo=FakeBrokerSummaryRepository(
+            [
+                _summary(
+                    date(2026, 6, 1),
+                    "120000000",
+                    "20000000",
+                    top_buyers=(
+                        _tx("AK", "UBS", "70000000", "10000000"),
+                        _tx("CC", "Mandiri", "40000000", "5000000"),
+                    ),
+                    top_sellers=(_tx("KZ", "CLSA", "5000000", "30000000"),),
                 ),
-                top_sellers=(
-                    _tx("KZ", "CLSA", "5000000", "30000000"),
+                _summary(
+                    date(2026, 6, 2),
+                    "100000000",
+                    "20000000",
+                    top_buyers=(
+                        _tx("AK", "UBS", "50000000", "10000000"),
+                        _tx("YP", "Mirae", "35000000", "5000000", BrokerType.LOCAL),
+                    ),
+                    top_sellers=(_tx("DB", "Deutsche", "5000000", "25000000"),),
                 ),
-            ),
-            _summary(
-                date(2026, 6, 2),
-                "100000000",
-                "20000000",
-                top_buyers=(
-                    _tx("AK", "UBS", "50000000", "10000000"),
-                    _tx("YP", "Mirae", "35000000", "5000000", BrokerType.LOCAL),
+                _summary(
+                    date(2026, 6, 3),
+                    "90000000",
+                    "20000000",
+                    top_buyers=(
+                        _tx("CC", "Mandiri", "45000000", "5000000"),
+                        _tx("YP", "Mirae", "30000000", "5000000", BrokerType.LOCAL),
+                    ),
+                    top_sellers=(),
                 ),
-                top_sellers=(
-                    _tx("DB", "Deutsche", "5000000", "25000000"),
-                ),
-            ),
-            _summary(
-                date(2026, 6, 3),
-                "90000000",
-                "20000000",
-                top_buyers=(
-                    _tx("CC", "Mandiri", "45000000", "5000000"),
-                    _tx("YP", "Mirae", "30000000", "5000000", BrokerType.LOCAL),
-                ),
-                top_sellers=(),
-            ),
-        ]),
+            ]
+        ),
         window_sessions=5,
         as_of_date=date(2026, 6, 3),
     )
@@ -351,10 +355,7 @@ def test_broker_detail_aggregates_named_brokers_across_investor_types():
     assert detail.broker_weight_quality == "smart support"
     assert detail.quality == "broad accumulation"
     assert detail.to_dict()["top_buyers"][0]["broker_code"] == "AK"
-    buyer_rows = {
-        row["broker_code"]: row
-        for row in detail.to_dict()["top_buyers"]
-    }
+    buyer_rows = {row["broker_code"]: row for row in detail.to_dict()["top_buyers"]}
     assert buyer_rows["YP"]["broker_type"] == "local"
     assert detail.to_dict()["smart_flow"] == "55000000"
     assert detail.to_dict()["broker_weight_quality"] == "smart support"
@@ -363,21 +364,23 @@ def test_broker_detail_aggregates_named_brokers_across_investor_types():
 def test_broker_detail_marks_latest_selling_as_recent_distribution():
     detail = _build_broker_detail(
         ticker="BBCA",
-        broker_repo=FakeBrokerSummaryRepository([
-            _summary(
-                date(2026, 6, 1),
-                "120000000",
-                "20000000",
-                top_buyers=(_tx("AK", "UBS", "90000000", "10000000"),),
-            ),
-            _summary(
-                date(2026, 6, 2),
-                "10000000",
-                "80000000",
-                top_buyers=(_tx("CC", "Mandiri", "20000000", "5000000"),),
-                top_sellers=(_tx("AK", "UBS", "5000000", "70000000"),),
-            ),
-        ]),
+        broker_repo=FakeBrokerSummaryRepository(
+            [
+                _summary(
+                    date(2026, 6, 1),
+                    "120000000",
+                    "20000000",
+                    top_buyers=(_tx("AK", "UBS", "90000000", "10000000"),),
+                ),
+                _summary(
+                    date(2026, 6, 2),
+                    "10000000",
+                    "80000000",
+                    top_buyers=(_tx("CC", "Mandiri", "20000000", "5000000"),),
+                    top_sellers=(_tx("AK", "UBS", "5000000", "70000000"),),
+                ),
+            ]
+        ),
         window_sessions=5,
         as_of_date=date(2026, 6, 2),
     )
@@ -392,19 +395,21 @@ def test_broker_detail_marks_latest_selling_as_recent_distribution():
 def test_broker_detail_marks_noise_led_buying():
     detail = _build_broker_detail(
         ticker="BBCA",
-        broker_repo=FakeBrokerSummaryRepository([
-            _summary(
-                date(2026, 6, 1),
-                "180000000",
-                "20000000",
-                top_buyers=(
-                    _tx("YP", "CGS-CIMB", "100000000", "10000000", BrokerType.LOCAL),
-                    _tx("XL", "Stockbit", "40000000", "10000000", BrokerType.LOCAL),
-                    _tx("XC", "Ajaib", "35000000", "5000000", BrokerType.LOCAL),
+        broker_repo=FakeBrokerSummaryRepository(
+            [
+                _summary(
+                    date(2026, 6, 1),
+                    "180000000",
+                    "20000000",
+                    top_buyers=(
+                        _tx("YP", "CGS-CIMB", "100000000", "10000000", BrokerType.LOCAL),
+                        _tx("XL", "Stockbit", "40000000", "10000000", BrokerType.LOCAL),
+                        _tx("XC", "Ajaib", "35000000", "5000000", BrokerType.LOCAL),
+                    ),
+                    top_sellers=(_tx("AK", "UBS", "5000000", "20000000"),),
                 ),
-                top_sellers=(_tx("AK", "UBS", "5000000", "20000000"),),
-            ),
-        ]),
+            ]
+        ),
         window_sessions=5,
         as_of_date=date(2026, 6, 1),
     )
@@ -419,18 +424,20 @@ def test_broker_detail_marks_noise_led_buying():
 def test_broker_quality_note_warns_when_enter_is_noise_led():
     detail = _build_broker_detail(
         ticker="BBCA",
-        broker_repo=FakeBrokerSummaryRepository([
-            _summary(
-                date(2026, 6, 1),
-                "180000000",
-                "20000000",
-                top_buyers=(
-                    _tx("YP", "CGS-CIMB", "100000000", "10000000", BrokerType.LOCAL),
-                    _tx("XL", "Stockbit", "40000000", "10000000", BrokerType.LOCAL),
+        broker_repo=FakeBrokerSummaryRepository(
+            [
+                _summary(
+                    date(2026, 6, 1),
+                    "180000000",
+                    "20000000",
+                    top_buyers=(
+                        _tx("YP", "CGS-CIMB", "100000000", "10000000", BrokerType.LOCAL),
+                        _tx("XL", "Stockbit", "40000000", "10000000", BrokerType.LOCAL),
+                    ),
+                    top_sellers=(),
                 ),
-                top_sellers=(),
-            ),
-        ]),
+            ]
+        ),
         window_sessions=5,
         as_of_date=date(2026, 6, 1),
     )
@@ -446,15 +453,17 @@ def test_broker_quality_note_warns_when_enter_is_noise_led():
 def test_broker_quality_note_supports_watch_when_smart_buying():
     detail = _build_broker_detail(
         ticker="BBCA",
-        broker_repo=FakeBrokerSummaryRepository([
-            _summary(
-                date(2026, 6, 1),
-                "120000000",
-                "20000000",
-                top_buyers=(_tx("AK", "UBS", "90000000", "10000000"),),
-                top_sellers=(),
-            ),
-        ]),
+        broker_repo=FakeBrokerSummaryRepository(
+            [
+                _summary(
+                    date(2026, 6, 1),
+                    "120000000",
+                    "20000000",
+                    top_buyers=(_tx("AK", "UBS", "90000000", "10000000"),),
+                    top_sellers=(),
+                ),
+            ]
+        ),
         window_sessions=5,
         as_of_date=date(2026, 6, 1),
     )
@@ -470,15 +479,17 @@ def test_broker_quality_note_supports_watch_when_smart_buying():
 def test_broker_quality_note_warns_on_smart_selling():
     detail = _build_broker_detail(
         ticker="BBCA",
-        broker_repo=FakeBrokerSummaryRepository([
-            _summary(
-                date(2026, 6, 1),
-                "20000000",
-                "120000000",
-                top_buyers=(_tx("CC", "Mandiri", "20000000", "5000000"),),
-                top_sellers=(_tx("AK", "UBS", "5000000", "90000000"),),
-            ),
-        ]),
+        broker_repo=FakeBrokerSummaryRepository(
+            [
+                _summary(
+                    date(2026, 6, 1),
+                    "20000000",
+                    "120000000",
+                    top_buyers=(_tx("CC", "Mandiri", "20000000", "5000000"),),
+                    top_sellers=(_tx("AK", "UBS", "5000000", "90000000"),),
+                ),
+            ]
+        ),
         window_sessions=5,
         as_of_date=date(2026, 6, 1),
     )
@@ -501,15 +512,17 @@ def test_broker_quality_note_skips_warn_on_minor_smart_selling():
 
     detail = _build_broker_detail(
         ticker="BBCA",
-        broker_repo=FakeBrokerSummaryRepository([
-            _summary(
-                date(2026, 6, 1),
-                "100000000",
-                "5000000",
-                top_buyers=(_tx("HD", "Mandiri", "100000000", "0"),),
-                top_sellers=(_tx("AK", "UBS", "0", "5000000"),),
-            ),
-        ]),
+        broker_repo=FakeBrokerSummaryRepository(
+            [
+                _summary(
+                    date(2026, 6, 1),
+                    "100000000",
+                    "5000000",
+                    top_buyers=(_tx("HD", "Mandiri", "100000000", "0"),),
+                    top_sellers=(_tx("AK", "UBS", "0", "5000000"),),
+                ),
+            ]
+        ),
         window_sessions=5,
         as_of_date=date(2026, 6, 1),
     )

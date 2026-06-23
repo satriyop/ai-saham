@@ -9,7 +9,7 @@ Layer: Infrastructure
 import os
 import sqlite3
 import time
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from pathlib import Path
 from typing import List
 
@@ -124,6 +124,7 @@ class SQLiteSystemStatusProvider(SystemStatusProvider):
 
     def _check_idx_api(self) -> ProviderStatusDto:
         import httpx
+
         from src.infrastructure.data_providers.idx import (
             IDX_API_BASE,
             IDX_HEADERS,

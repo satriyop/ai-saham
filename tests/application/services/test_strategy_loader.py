@@ -17,14 +17,12 @@ import pytest
 
 from src.application.rules.exceptions import (
     StrategyNotFoundError,
-    RulesSchemaError,
 )
 from src.application.services.strategy_loader import (
+    StrategyInfo,
     StrategyLoader,
     ValidationResult,
-    StrategyInfo,
 )
-
 
 # ============================================================================
 # Test Fixtures

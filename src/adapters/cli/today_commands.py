@@ -16,10 +16,9 @@ from src.adapters.cli.rich_display import compact_table, panel
 from src.application.use_case.accumulation_screen import AccumulationScreenUseCase
 from src.application.use_case.daily_briefing import DailyBriefingRequest, DailyBriefingUseCase
 from src.application.use_case.market_regime import MarketRegimeUseCase
+from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
-
-from src.infrastructure.config.app_config import APP_CFG
 
 DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 

@@ -1,6 +1,7 @@
 """Tests for GetSystemStatusUseCase."""
 
 from datetime import date, timedelta
+
 from src.application.use_case.get_system_status import GetSystemStatusUseCase
 from src.domain.ports.system_status_provider import (
     ProviderStatusDto,

@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from datetime import date, datetime, time
+from datetime import date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -30,6 +30,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+
 _SEASONALITY_URL = STOCKBIT_CFG.seasonality_url
 
 # Stockbit uses abbreviated English month names as column keys

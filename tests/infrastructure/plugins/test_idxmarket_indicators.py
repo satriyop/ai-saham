@@ -8,8 +8,6 @@ Tests for IDX-market-specific indicator plugins:
 from datetime import date, timedelta
 from decimal import Decimal
 
-import pytest
-
 from plugins.indicators.mfi import MoneyFlowIndexIndicator
 from plugins.indicators.obv import OnBalanceVolumeIndicator
 from plugins.indicators.relative_strength import RelativeStrengthIHSGIndicator
@@ -17,7 +15,6 @@ from plugins.indicators.volume_ratio import VolumeRatioIndicator
 from plugins.indicators.williams_r import WilliamsRIndicator
 from src.application.services.bootstrap import create_indicator_registry
 from src.domain.entities.candle import Candle
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

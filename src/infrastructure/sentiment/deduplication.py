@@ -48,7 +48,7 @@ def deduplicate_headlines(
                 # Only append source if it's not already in the string (to avoid 'Kontan, Kontan')
                 if new_headline.source not in existing_headline.source:
                     merged_source = f"{existing_headline.source}, {new_headline.source}"
-                    
+
                     # Create a new RawHeadline with the merged source
                     merged_headline = RawHeadline(
                         title=existing_headline.title,

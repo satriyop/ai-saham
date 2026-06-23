@@ -4,8 +4,6 @@ from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock
 
-import pytest
-
 from src.domain.entities.candle import Candle
 from src.infrastructure.data_providers.fallback_provider import (
     FallbackMarketDataProvider,
@@ -15,7 +13,6 @@ from src.infrastructure.data_providers.stockbit_historical import (
     StockbitHistoricalProvider,
     _parse_ohlcv_rows,
 )
-
 
 # ── Parser unit tests ─────────────────────────────────────────────────────────
 

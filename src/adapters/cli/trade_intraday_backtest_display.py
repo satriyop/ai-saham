@@ -6,12 +6,11 @@ Layer: Adapter
 
 from __future__ import annotations
 
-import typer
 from rich.console import Group
 from rich.text import Text
 
-from src.adapters.cli.screen_pre_open_display import fmt_pct
 from src.adapters.cli.rich_display import compact_table, console, panel
+from src.adapters.cli.screen_pre_open_display import fmt_pct
 from src.application.use_case.intraday_backtest import IntradayBacktestResponse
 
 
@@ -55,16 +54,16 @@ def display_intraday_backtest(response: IntradayBacktestResponse, show_trades: i
     metrics_table.add_column("Value", justify="right")
 
     metrics_table.add_row("Initial capital", f"{float(response.initial_capital):,.0f}")
-    
+
     equity_color = "green" if response.final_equity >= response.initial_capital else "red"
     metrics_table.add_row("Final equity", f"[{equity_color}]{float(response.final_equity):,.0f}[/]")
 
     ret_color = "green" if response.total_return_pct >= 0 else "red"
     metrics_table.add_row("Total return", f"[{ret_color}]{fmt_pct(response.total_return_pct, True)}[/]")
-    
+
     metrics_table.add_row("Max drawdown", f"[red]{fmt_pct(response.max_drawdown_pct, True)}[/]")
     metrics_table.add_row("Trades", str(response.trade_count))
-    
+
     win_rate_color = "green" if response.win_rate_pct >= 50 else "red" if response.win_rate_pct < 40 else "white"
     metrics_table.add_row("Win rate", f"[{win_rate_color}]{fmt_pct(response.win_rate_pct)}[/]")
 
@@ -95,7 +94,7 @@ def display_intraday_backtest(response: IntradayBacktestResponse, show_trades: i
 
     r_str = f"{response.avg_r_multiple:.3f}R" if response.avg_r_multiple is not None else "N/A"
     metrics_table.add_row("Avg R-multiple", r_str)
-    
+
     metrics_table.add_row("Trading days", str(response.trading_days))
     metrics_table.add_row("Days with trades", str(response.days_with_trades))
 

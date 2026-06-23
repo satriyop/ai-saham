@@ -1,8 +1,8 @@
-import yaml
 import time
 from pathlib import Path
+
+import yaml
 from typer.testing import CliRunner
-import pytest
 
 from src.adapters.cli.main import app
 

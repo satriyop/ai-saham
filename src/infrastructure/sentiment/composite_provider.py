@@ -36,7 +36,7 @@ class CompositeNewsProvider(NewsProvider):
                                 than this threshold, Tier 2 (Google) is triggered.
         """
         self._fallback_threshold = fallback_threshold
-        
+
         # Instantiate underlying providers
         self._kontan = KontanNewsProvider()
         self._cnbc = CNBCIndonesiaNewsProvider()
@@ -63,13 +63,13 @@ class CompositeNewsProvider(NewsProvider):
 
         # TIER 1: Concurrent fetch from premium local sources
         tier1_providers = [self._kontan, self._cnbc]
-        
+
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(tier1_providers)) as executor:
             future_to_provider = {
                 executor.submit(p.fetch_headlines, ticker, max_headlines, days): p
                 for p in tier1_providers
             }
-            
+
             for future in concurrent.futures.as_completed(future_to_provider):
                 provider = future_to_provider[future]
                 try:
@@ -92,7 +92,7 @@ class CompositeNewsProvider(NewsProvider):
                 logger.debug(f"Fetched {len(google_results)} headlines from {self._google.provider_name}")
             except Exception as e:
                 logger.warning(f"Error fetching from {self._google.provider_name}: {e}")
-            
+
             # Deduplicate the combined pool (Tier 1 + Tier 2)
             deduplicated = deduplicate_headlines(pooled_headlines)
             logger.debug(f"Tier 1 + Tier 2 complete: {len(deduplicated)} deduplicated headlines")

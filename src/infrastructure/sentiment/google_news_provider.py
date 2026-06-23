@@ -8,11 +8,12 @@ Layer: Infrastructure
 """
 
 import logging
-import defusedxml.ElementTree as ET
 from datetime import datetime, timedelta
 from html import unescape
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+
+import defusedxml.ElementTree as ET
 
 from src.domain.ports.news_provider import RawHeadline
 

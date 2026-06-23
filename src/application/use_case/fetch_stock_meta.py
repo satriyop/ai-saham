@@ -15,9 +15,8 @@ from typing import Literal
 
 from src.domain.ports.stock_meta_provider import StockMetaProvider
 from src.domain.ports.stock_meta_repository import StockMetaRepository
-from src.infrastructure.config.app_config import APP_CFG
 
-META_TTL_DAYS: int = APP_CFG.fetch.meta_ttl_days
+META_TTL_DAYS: int = 30
 
 MetaStatus = Literal["cached", "new", "verified", "changed", "error"]
 

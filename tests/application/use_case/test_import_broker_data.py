@@ -8,7 +8,6 @@ Tests:
 - Integration with repository
 """
 
-import tempfile
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -18,10 +17,8 @@ import pytest
 from src.application.use_case.import_broker_data import (
     DetectCsvFormatUseCase,
     ImportBrokerDataRequest,
-    ImportBrokerDataResponse,
     ImportBrokerDataUseCase,
 )
-from src.domain.entities.broker_flow import BrokerSummary
 from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.csv_broker_parser import (
     CsvBrokerParserError,

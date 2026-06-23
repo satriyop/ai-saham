@@ -31,6 +31,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+
 _CORPACTION_URL = STOCKBIT_CFG.corp_action_url
 
 # Map raw Stockbit action type strings → CorporateActionEvent.TYPE_* constants

@@ -36,7 +36,6 @@ from src.application.formula.ast_nodes import (
 from src.application.formula.exceptions import FormulaEvaluationError
 
 if TYPE_CHECKING:
-    from datetime import date
 
     from src.domain.entities.candle import Candle
 

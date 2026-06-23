@@ -31,11 +31,10 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from datetime import date, datetime
+from datetime import date
+from decimal import Decimal
 from pathlib import Path
 from typing import TYPE_CHECKING
-
-from decimal import Decimal
 
 from src.domain.ports.bandar_detector_provider import BandarDetectorProvider
 from src.domain.value_objects.bandar_detector_snapshot import BandarDetectorSnapshot
@@ -46,6 +45,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+
 _MARKET_DETECTOR_URL = STOCKBIT_CFG.bandar_detector_url
 
 _CREATE_TABLE = """

@@ -12,14 +12,12 @@ Commands (all under `saham analyze`):
 Layer: Adapter
 """
 
-from decimal import Decimal
 from pathlib import Path
 from typing import Annotated, Optional
 
 import typer
 
 from src.application.rules.exceptions import (
-    RulesError,
     RulesFileError,
     RulesSchemaError,
     RulesValidationError,
@@ -45,6 +43,7 @@ analyze_app = typer.Typer(
 
 # Register chart as a nested sub-group
 from src.adapters.cli.analyze_chart_commands import chart_app
+
 analyze_app.add_typer(chart_app, name="chart")
 
 from src.infrastructure.config.app_config import APP_CFG
@@ -162,7 +161,10 @@ def risk(
         sentiment_snapshot = None
         if with_sentiment:
             try:
-                from src.application.use_case.fetch_sentiment import FetchSentimentRequest, FetchSentimentUseCase
+                from src.application.use_case.fetch_sentiment import (
+                    FetchSentimentRequest,
+                    FetchSentimentUseCase,
+                )
                 from src.infrastructure.sentiment import SentimentFactory
                 news_provider = SentimentFactory.create_news_provider(news_provider_name)
                 classifier = SentimentFactory.create_classifier(use_ai=not no_ai)
@@ -230,18 +232,18 @@ def risk(
             typer.echo(f"{'='*50}\n")
             typer.echo(f"Data Date: {assessment.snapshot_date}")
 
-            typer.echo(f"\nIndicators")
+            typer.echo("\nIndicators")
             typer.echo(f"{'─'*30}")
             typer.echo(f"  SMA({response.sma_period}):  {snapshot.sma:>12,.2f}")
             typer.echo(f"  EMA({response.ema_period}):  {snapshot.ema:>12,.2f}")
             typer.echo(f"  RSI({response.rsi_period}):  {snapshot.rsi:>12.2f}")
 
-            typer.echo(f"\nRisk Result")
+            typer.echo("\nRisk Result")
             typer.echo(f"{'─'*30}")
             typer.echo(f"  Level:      {assessment.risk_level_name}")
             typer.echo(f"  Confidence: {assessment.confidence}/100")
 
-            typer.echo(f"\nTriggered Rules")
+            typer.echo("\nTriggered Rules")
             typer.echo(f"{'─'*30}")
             for reason in assessment.rationale_list:
                 typer.echo(f"  · {reason}")
@@ -374,10 +376,10 @@ def compare(
 
 
 # Register sentiment and audit from analyze_sentiment_commands (no logic duplication)
-from src.adapters.cli.analyze_sentiment_commands import sentiment as _sentiment_fn
-from src.adapters.cli.analyze_sentiment_commands import sentiment_audit as _sentiment_audit_fn
 from src.adapters.cli.analyze_accum_commands import accumulation_audit as _accumulation_audit_fn
 from src.adapters.cli.analyze_regime_commands import regime as _regime_fn
+from src.adapters.cli.analyze_sentiment_commands import sentiment as _sentiment_fn
+from src.adapters.cli.analyze_sentiment_commands import sentiment_audit as _sentiment_audit_fn
 from src.adapters.cli.analyze_swing_commands import swing as _swing_fn
 from src.adapters.cli.analyze_swing_commands import swing_compare as _swing_compare_fn
 

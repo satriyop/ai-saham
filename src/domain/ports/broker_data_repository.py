@@ -147,6 +147,15 @@ class BrokerDataRepository(ABC):
         """
         pass
 
+    def get_cached_tickers(self) -> list[str]:
+        """
+        Retrieve a list of all tickers that have cached broker summary data.
+
+        Returns:
+            Sorted list of ticker symbols.
+        """
+        return []
+
     # ── Optional capabilities (non-abstract — providers that don't support ──
     # ── these return empty/no-op defaults)                                  ──
 

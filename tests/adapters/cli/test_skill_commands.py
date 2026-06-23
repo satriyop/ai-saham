@@ -19,7 +19,6 @@ from typer.testing import CliRunner
 
 from src.adapters.cli.strategy_skill_commands import skill_app
 
-
 runner = CliRunner()
 
 

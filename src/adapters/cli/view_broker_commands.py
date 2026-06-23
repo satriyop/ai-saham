@@ -26,11 +26,11 @@ from src.application.use_case.fetch_broker_data import (
 from src.domain.ports.broker_data_provider import (
     BrokerDataProvider,
 )
+from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.csv import MappingLoader
 from src.infrastructure.persistence.sqlite_broker_repository import (
     SQLiteBrokerRepository,
 )
-from src.infrastructure.config.app_config import APP_CFG
 
 DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 _DEFAULT_PROFILE_DIR = Path(APP_CFG.storage.stockbit_profile_dir)
@@ -372,7 +372,9 @@ def _broker_label(code: str, btype: str) -> str:
 
 def _display_distribution(snapshot: "BrokerDistributionSnapshot") -> None:
     """Render ASCII cross-broker distribution table."""
-    from src.domain.value_objects.broker_distribution import BrokerDistributionSnapshot  # noqa: F401
+    from src.domain.value_objects.broker_distribution import (
+        BrokerDistributionSnapshot,  # noqa: F401
+    )
 
     acc_signal = ""
     if snapshot.foreign_buying_from_domestic:
@@ -434,5 +436,5 @@ def broker_mappings() -> None:
             typer.echo(f"  {name}")
 
     typer.echo("-" * 40)
-    typer.echo(f"\nUse with: saham fetch broker-import data.csv --mapping <name>")
-    typer.echo(f"Custom mappings: config/csv_mappings/<name>.yaml")
+    typer.echo("\nUse with: saham fetch broker-import data.csv --mapping <name>")
+    typer.echo("Custom mappings: config/csv_mappings/<name>.yaml")

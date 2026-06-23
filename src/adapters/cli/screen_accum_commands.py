@@ -25,15 +25,12 @@ from src.application.services.universe_loader import (
     UniverseNotFoundError,
     resolve_tickers,
 )
-from src.application.use_case.assess_risk import AssessRiskRequest, AssessRiskUseCase
 from src.application.use_case.accumulation_screen import (
-    AccumulationCandidate,
     AccumulationScreenRequest,
     AccumulationScreenResponse,
     AccumulationScreenUseCase,
 )
-from src.infrastructure.config.app_config import APP_CFG
-from src.infrastructure.config.user_config import get_swing_default
+from src.application.use_case.assess_risk import AssessRiskRequest, AssessRiskUseCase
 from src.infrastructure.browser.stockbit_analyst import StockbitAnalystConsensusProvider
 from src.infrastructure.browser.stockbit_bandar import StockbitBandarDetectorProvider
 from src.infrastructure.browser.stockbit_corp_action import StockbitCorporateActionRepository
@@ -44,7 +41,9 @@ from src.infrastructure.browser.stockbit_providers import StockbitProviders
 from src.infrastructure.browser.stockbit_seasonality import StockbitSeasonalityProvider
 from src.infrastructure.browser.stockbit_shareholding import StockbitShareholdingProvider
 from src.infrastructure.browser.stockbit_ticker_notation import StockbitTickerNotationProvider
+from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.config.swing_config import load_swing_config as _load_swing_config
+from src.infrastructure.config.user_config import get_swing_default
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
@@ -499,6 +498,7 @@ def _save_watchlist(
     db_path: "Path",
 ) -> None:
     from datetime import datetime
+
     from src.domain.value_objects.screen_snapshot import ScreenSnapshotEntry
     from src.infrastructure.persistence.sqlite_watchlist_repository import SQLiteWatchlistRepository
 

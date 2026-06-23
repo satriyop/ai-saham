@@ -21,7 +21,6 @@ from src.application.services.indicator_registry import IndicatorRegistry
 from src.domain.entities.candle import Candle
 from src.infrastructure.persistence.formula_storage import FormulaStorage
 
-
 # --- Workspace Fixtures ---
 
 

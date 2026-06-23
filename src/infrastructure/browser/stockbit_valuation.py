@@ -38,6 +38,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+
 _VALUATION_URL = STOCKBIT_CFG.valuation_metrics_url
 
 _TTL_DAYS = 1

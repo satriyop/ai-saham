@@ -1,12 +1,12 @@
 """Tests for Stockbit broker summary parsing — real vs synthetic total_value."""
 
-from decimal import Decimal
 from datetime import date
+from decimal import Decimal
 from unittest.mock import patch
 
 from src.infrastructure.browser.playwright_stockbit import (
-    _parse_marketdetectors_response,
     _fetch_historical_summary_totals,
+    _parse_marketdetectors_response,
 )
 
 

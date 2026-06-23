@@ -41,6 +41,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+
 _ORDERBOOK_URL = STOCKBIT_CFG.orderbook_url
 
 _DEPTH_LEVELS = 5  # top N levels for depth_ratio computation

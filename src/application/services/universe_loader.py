@@ -12,6 +12,8 @@ from pathlib import Path
 
 import yaml
 
+from src.domain.ports.broker_data_repository import BrokerDataRepository
+
 UNIVERSE_CONFIG_PATH = Path("config/universes.yaml")
 
 
@@ -103,31 +105,37 @@ def load_universe_meta(
     }
 
 
-def load_cached_tickers(db_path: Path) -> list[str]:
+def load_cached_tickers(
+    db_path: Path,
+    repository: BrokerDataRepository | None = None,
+) -> list[str]:
     """Return all tickers that have broker flow data in the local DB.
 
+    Prefers using the passed BrokerDataRepository. Falls back to dynamic
+    instantiation of SQLiteBrokerRepository to keep backwards compatibility.
+
     Args:
-        db_path: Path to SQLite database
+        db_path: Path to SQLite database (fallback)
+        repository: BrokerDataRepository port instance
 
     Returns:
         Sorted list of ticker strings
     """
-    import sqlite3
+    if repository is not None:
+        try:
+            return repository.get_cached_tickers()
+        except Exception:
+            return []
 
     if not db_path.exists():
         return []
 
     try:
-        conn = sqlite3.connect(db_path)
-        cur = conn.cursor()
-        cur.execute(
-            "SELECT DISTINCT ticker FROM broker_summaries ORDER BY ticker"
-        )
-        return [row[0] for row in cur.fetchall()]
+        from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
+        repo = SQLiteBrokerRepository(db_path)
+        return repo.get_cached_tickers()
     except Exception:
         return []
-    finally:
-        conn.close()
 
 
 def resolve_tickers(
@@ -135,6 +143,7 @@ def resolve_tickers(
     explicit: list[str],
     db_path: Path,
     config_path: Path = UNIVERSE_CONFIG_PATH,
+    repository: BrokerDataRepository | None = None,
 ) -> list[str]:
     """Combine universe and explicit tickers into a deduplicated list.
 
@@ -143,6 +152,7 @@ def resolve_tickers(
         explicit: Explicit ticker symbols passed as arguments
         db_path: Path to SQLite DB (used when universe="cached")
         config_path: Path to universes.yaml
+        repository: Optional BrokerDataRepository port instance
 
     Returns:
         Deduplicated sorted list of ticker strings
@@ -154,7 +164,7 @@ def resolve_tickers(
     tickers: list[str] = []
 
     if universe == "cached":
-        tickers.extend(load_cached_tickers(db_path))
+        tickers.extend(load_cached_tickers(db_path, repository))
     elif universe is not None:
         tickers.extend(load_universe(universe, config_path))
 

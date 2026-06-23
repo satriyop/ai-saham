@@ -21,7 +21,6 @@ from src.domain.services.backtest_engine import BacktestEngine
 from src.domain.value_objects.backtest_result import BacktestResult
 from src.domain.value_objects.trade_action import TradeAction
 
-
 # ============================================================================
 # Test Helpers
 # ============================================================================

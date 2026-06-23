@@ -6,18 +6,18 @@ Layer: Adapter
 
 import typer
 
+from src.adapters.cli.fetch_audit_commands import data_quality_audit
 from src.adapters.cli.fetch_broker_commands import (
     broker_fetch,
     broker_history,
     broker_import,
     broker_top_foreign,
 )
-from src.adapters.cli.fetch_audit_commands import data_quality_audit
 from src.adapters.cli.fetch_iev_commands import collect_iev
 from src.adapters.cli.fetch_market_commands import fetch_market
-from src.adapters.cli.fetch_universe_commands import universe_app
 from src.adapters.cli.fetch_status_commands import status
 from src.adapters.cli.fetch_stockbit_commands import stockbit_app
+from src.adapters.cli.fetch_universe_commands import universe_app
 
 fetch_app = typer.Typer(
     name="fetch",

@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from src.application.ports.rules_loader import RulesLoader
 from src.application.rules.exceptions import (
     RulesError,
     RulesFileError,
@@ -28,7 +29,6 @@ from src.application.rules.exceptions import (
     RulesValidationError,
     StrategyNotFoundError,
 )
-from src.infrastructure.config.yaml_loader import YamlConfigLoader
 
 if TYPE_CHECKING:
     from src.application.rules.schema import RuleSet
@@ -98,13 +98,23 @@ class StrategyLoader:
     3. ./strategies/NAME/strategy.yaml
     """
 
-    def __init__(self, registry: "IndicatorRegistry | None" = None) -> None:
+    def __init__(
+        self,
+        registry: "IndicatorRegistry | None" = None,
+        rules_loader: RulesLoader | None = None,
+    ) -> None:
         """Initialize strategy loader.
 
         Args:
             registry: Optional IndicatorRegistry for validating indicator references
+            rules_loader: Optional RulesLoader port interface
         """
         self._registry = registry
+        if rules_loader is None:
+            from src.infrastructure.config.yaml_loader import YamlConfigLoader
+
+            rules_loader = YamlConfigLoader()
+        self._rules_loader = rules_loader
 
     def resolve(self, name_or_path: str) -> Path:
         """Resolve a strategy name or path to an actual file path.
@@ -180,7 +190,7 @@ class StrategyLoader:
 
         # Try to load and validate
         try:
-            rule_set = YamlConfigLoader.load(path, registry=self._registry)
+            rule_set = self._rules_loader.load(path, registry=self._registry)
             strategy_name = rule_set.name
 
             # Check for missing optional components
@@ -228,7 +238,7 @@ class StrategyLoader:
             RulesValidationError: If rule content is invalid
         """
         path = self.resolve(name_or_path)
-        return YamlConfigLoader.load(path, registry=self._registry)
+        return self._rules_loader.load(path, registry=self._registry)
 
     def list_available(self, include_invalid: bool = False) -> list[StrategyInfo]:
         """List all available strategies.
@@ -313,7 +323,7 @@ class StrategyLoader:
             valid = False
 
             try:
-                rule_set = YamlConfigLoader.load(strategy_yaml, registry=self._registry)
+                rule_set = self._rules_loader.load(strategy_yaml, registry=self._registry)
                 display_name = rule_set.name
                 description = rule_set.description
                 valid = True

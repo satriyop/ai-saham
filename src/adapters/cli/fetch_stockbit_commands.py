@@ -89,7 +89,7 @@ def status() -> None:
         typer.echo("Run: saham fetch stockbit login")
         return
 
-    typer.echo(f"  Type            : persistent browser profile")
+    typer.echo("  Type            : persistent browser profile")
     typer.echo(f"  Profile dir     : {info['path']}")
 
     if info.get("age_hours") is not None:
@@ -100,7 +100,7 @@ def status() -> None:
             age_str += " (may need refresh)"
         else:
             age_color = typer.colors.GREEN
-        typer.echo(f"  Saved      : " + typer.style(age_str, fg=age_color))
+        typer.echo("  Saved      : " + typer.style(age_str, fg=age_color))
 
     valid = info.get("likely_valid", False)
     validity_str = "likely valid" if valid else "possibly expired — re-run login"

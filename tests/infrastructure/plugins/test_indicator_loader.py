@@ -11,11 +11,7 @@ Tests cover:
 import tempfile
 from pathlib import Path
 
-import pytest
-
-from src.application.ports.indicator_plugin import IndicatorPlugin
 from src.infrastructure.plugins.indicator_loader import IndicatorPluginLoader
-
 
 # ============================================================================
 # Plugin Discovery Tests

@@ -39,6 +39,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+
 _EARNINGS_URL = STOCKBIT_CFG.earnings_url
 
 _TTL_DAYS = 7
@@ -285,7 +286,6 @@ class StockbitEarningsProvider(EarningsProvider):
             return []
 
         try:
-            from src.infrastructure.browser.playwright_stockbit import _exodus_get
             token = self._provider._get_token()
         except Exception as e:
             logger.debug("Earnings: token fetch failed for %s: %s", ticker, e)

@@ -96,9 +96,10 @@ def universe_update(
         saham fetch universe update --universe lq45,idx80
         saham fetch universe update --discover          # list available without updating
     """
-    import yaml
     import time
     from datetime import date
+
+    import yaml
 
     resolved_config = config_path or Path("config/universes.yaml")
 
@@ -123,6 +124,8 @@ def universe_update(
         from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
         from src.infrastructure.browser.stockbit_universe import (
             StockbitUniverseProvider,
+        )
+        from src.infrastructure.browser.stockbit_universe import (
             universe_type as _utype,
         )
 
@@ -170,7 +173,7 @@ def universe_update(
     if universe_name:
         targets = [u.strip().lower() for u in universe_name.split(",")]
         unknown = [
-            t for t in targets 
+            t for t in targets
             if t not in available and not (t in existing and isinstance(existing[t], dict) and "sector_id" in existing[t])
         ]
         if unknown:
@@ -195,13 +198,13 @@ def universe_update(
         is_custom = key in existing and isinstance(existing[key], dict) and "sector_id" in existing[key]
         utype = "custom" if is_custom else _utype(key)
         typer.echo(f"  {key:<14} [{utype}]...", nl=False)
-        
+
         tickers = []
         if is_custom:
             cfg = existing[key]
             sector_id = cfg["sector_id"]
             subsector_id = cfg.get("subsector_id")
-            
+
             try:
                 if subsector_id is not None:
                     url = f"https://exodus.stockbit.com/emitten/v3/sector/{sector_id}/subsector/{subsector_id}/company"
@@ -246,7 +249,7 @@ def universe_update(
                                     tickers.append(code.strip().upper())
             except Exception:
                 tickers = []
-            
+
             tickers = sorted(set(tickers))
         else:
             tickers = universe_prov.fetch(key)
@@ -494,9 +497,10 @@ def universe_create(
         saham fetch universe create food_retail -s 1 -b 10
         saham fetch universe create consumer_primer -s 1
     """
-    import yaml
     import time
     from datetime import date
+
+    import yaml
 
     resolved_config = config_path or Path("config/universes.yaml")
     universe_key = name.strip().lower()

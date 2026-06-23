@@ -16,14 +16,13 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 import time
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
 from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
 
 # ── Defaults ───────────────────────────────────────────────────────────────
 DEFAULT_PROFILE_DIR = Path(APP_CFG.storage.stockbit_profile_dir)

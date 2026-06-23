@@ -7,18 +7,18 @@ from pathlib import Path
 from src.adapters.cli.fetch_market_commands import (
     _broker_update_status,
     _cached_status,
+    _clean_row_span,
     _fetch_broker,
     _fetch_candles,
+    _fmt_enrichment_column,
+    _fmt_inst_flow_column,
+    _fmt_meta_column,
+    _fmt_tracked_flow_column,
     _is_cached_status,
     _no_new_data_status,
     _print_table_summary,
     _range_update_status,
-    _clean_row_span,
     _split_flow_parts,
-    _fmt_tracked_flow_column,
-    _fmt_inst_flow_column,
-    _fmt_meta_column,
-    _fmt_enrichment_column,
 )
 from src.domain.entities.broker_flow import BrokerSummary, ForeignFlowPoint
 from src.domain.entities.candle import Candle

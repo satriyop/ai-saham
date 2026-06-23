@@ -9,7 +9,7 @@ Layer: Domain
 
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal, ROUND_DOWN
+from decimal import ROUND_DOWN, Decimal
 
 from src.domain.entities.backtest_trade import BacktestTrade
 from src.domain.entities.candle import Candle

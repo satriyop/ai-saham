@@ -27,7 +27,8 @@ if TYPE_CHECKING:
     from src.domain.ports.order_book_provider import OrderBookProvider
     from src.domain.ports.running_trade_provider import RunningTradeProvider
 
-from src.domain.value_objects.idx_market import IDX_TIMEZONE, REGULAR_OPEN as TRACK_START
+from src.domain.value_objects.idx_market import IDX_TIMEZONE
+from src.domain.value_objects.idx_market import REGULAR_OPEN as TRACK_START
 
 OPENING_DATA_DIR = Path("data/opening")
 

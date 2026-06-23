@@ -43,18 +43,22 @@ from src.domain.entities.broker_flow import (
 from src.domain.ports.broker_data_provider import (
     BrokerDataAuthError,
     BrokerDataProvider,
-    BrokerDataProviderError,
 )
 from src.domain.ports.browser_data_provider import BrowserDataProvider
-from src.domain.value_objects.screener_result import MoverData, MoverWithOrderBook, OrderBookBid, OrderBookTopOfBook
+from src.domain.value_objects.screener_result import (
+    MoverData,
+    MoverWithOrderBook,
+    OrderBookBid,
+    OrderBookTopOfBook,
+)
 
 logger = logging.getLogger(__name__)
 
 # ── Session utilities — live in playwright_stockbit_browser, imported here ──
 from src.infrastructure.browser.playwright_stockbit_browser import (
     DEFAULT_PROFILE_DIR,
-    ORDERBOOK_PAGE_URL,
     NAV_TIMEOUT,
+    ORDERBOOK_PAGE_URL,
     SPA_SETTLE_MS,
     StockbitSessionExpired,
     _exodus_get,
@@ -62,11 +66,6 @@ from src.infrastructure.browser.playwright_stockbit_browser import (
     _persistent_context,
     _require_playwright,
     _resolve_token,
-    _url_matches,
-    browse_stockbit_session,
-    get_session_status,
-    save_stockbit_session,
-    spy_stockbit_session,
 )
 
 # ── Stockbit API config — driven by config/stockbit.yaml ─────────────────
@@ -623,14 +622,14 @@ class StockbitPlaywrightBrokerProvider(BrokerDataProvider):
                 rows = (body.get("data") or {}).get("result") or []
                 if not rows:
                     break
-                
+
                 points = _parse_historical_summary_flow(ticker, body)
                 all_points.extend(points)
-                
+
                 if len(rows) < 50:
                     break
                 page += 1
-                
+
             return sorted(all_points, key=lambda p: p.date)
         except Exception as e:
             logger.warning("fetch_foreign_flow_from_summary %s failed: %s", ticker, e)
@@ -694,7 +693,8 @@ def _fetch_broker_daily_flows_for_code(
     to determine when to stop. Stops early if the oldest returned date is older
     than `days` back from today.
     """
-    from datetime import date as date_type, timedelta
+    from datetime import date as date_type
+    from datetime import timedelta
 
     cutoff = date_type.today() - timedelta(days=days)
     page = 1

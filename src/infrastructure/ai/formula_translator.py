@@ -27,7 +27,6 @@ from src.infrastructure.ai.formula_translator_prompt import (
     build_system_prompt,
     build_user_prompt,
 )
-
 from src.infrastructure.config.app_config import APP_CFG
 
 logger = logging.getLogger("ai_saham.ai.translator")

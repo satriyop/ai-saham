@@ -21,8 +21,6 @@ from typing import Annotated, Optional
 
 import typer
 
-from src.infrastructure.config.app_config import APP_CFG
-
 from src.adapters.cli.trade_accum_commands import (
     DEFAULT_ACCUM_JOURNAL_PATH,
     DEFAULT_DB_PATH,
@@ -30,7 +28,6 @@ from src.adapters.cli.trade_accum_commands import (
     _accumulation_log_impl,
     accumulation_review,
 )
-from src.adapters.cli.trade_swing_commands import size, swing_backtest
 from src.adapters.cli.trade_intraday_commands import (
     DEFAULT_CONFIRMATION_JOURNAL_PATH,
     DEFAULT_CONFIRMATION_PATH,
@@ -40,6 +37,8 @@ from src.adapters.cli.trade_intraday_commands import (
     confirm_review,
     intraday_backtest,
 )
+from src.adapters.cli.trade_swing_commands import size, swing_backtest
+from src.infrastructure.config.app_config import APP_CFG
 
 trade_app = typer.Typer(
     name="trade",

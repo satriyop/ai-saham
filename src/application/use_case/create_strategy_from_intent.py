@@ -11,6 +11,7 @@ Depends on: StrategyTranslator port, YamlConfigLoader, IndicatorRegistry
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from src.application.ports.rules_loader import RulesLoader
 from src.application.ports.strategy_translator import (
     StrategyTranslator,
     StrategyTranslatorAuthError,
@@ -23,7 +24,6 @@ from src.application.rules.exceptions import (
     RulesSchemaError,
     RulesValidationError,
 )
-from src.infrastructure.config.yaml_loader import YamlConfigLoader
 
 if TYPE_CHECKING:
     from src.application.rules.schema import RuleSet
@@ -202,17 +202,24 @@ class CreateStrategyFromIntentUseCase:
         self,
         translator: StrategyTranslator,
         registry: "IndicatorRegistry",
+        rules_loader: RulesLoader | None = None,
     ) -> None:
         """
-        Initialize with translator and indicator registry.
+        Initialize with translator, indicator registry, and optional rules loader.
 
         Args:
             translator: StrategyTranslator adapter for AI translation.
             registry: IndicatorRegistry for getting available indicators
                      and validating generated YAML.
+            rules_loader: RulesLoader port interface.
         """
         self._translator = translator
         self._registry = registry
+        if rules_loader is None:
+            from src.infrastructure.config.yaml_loader import YamlConfigLoader
+
+            rules_loader = YamlConfigLoader()
+        self._rules_loader = rules_loader
 
     def execute(
         self, request: CreateStrategyFromIntentRequest
@@ -272,7 +279,7 @@ class CreateStrategyFromIntentUseCase:
 
             # Step 4: Validate YAML by parsing it
             try:
-                rule_set = YamlConfigLoader.load_from_string(
+                rule_set = self._rules_loader.load_from_string(
                     content=yaml_content,
                     registry=self._registry,
                     source_name=f"<generated:{strategy_name}>",

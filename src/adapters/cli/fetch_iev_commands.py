@@ -12,8 +12,8 @@ from typing import Annotated, Optional
 
 import typer
 
-from src.infrastructure.config.app_config import APP_CFG
 from src.domain.value_objects.idx_market import IDX_TIMEZONE
+from src.infrastructure.config.app_config import APP_CFG
 
 DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 

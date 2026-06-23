@@ -5,7 +5,6 @@ Verifies the use case orchestrates AI translation correctly and
 handles all error cases gracefully.
 """
 
-import pytest
 
 from src.application.formula.ast_nodes import FunctionCallNode
 from src.application.ports.formula_translator import (

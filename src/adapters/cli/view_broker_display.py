@@ -34,7 +34,7 @@ def format_value(value: Decimal) -> str:
 def display_broker_flow(ticker: str, summaries: list) -> None:
     console_obj = Console()
     console_obj.print("")
-    
+
     total_flow = sum(summary.foreign_net_value for summary in summaries)
     buy_days = sum(1 for summary in summaries if summary.is_foreign_accumulating)
     sell_days = len(summaries) - buy_days
@@ -94,7 +94,7 @@ def display_broker_top(ticker: str, summary) -> None:
 
     flow = summary.foreign_net_value
     flow_color = "green" if flow > 0 else "red"
-    
+
     summary_text = Text()
     summary_text.append("Foreign Net Flow: ", style="bold")
     summary_text.append(f"{format_value(flow)} ({summary.foreign_flow_ratio:.1f}%)", style=f"bold {flow_color}")

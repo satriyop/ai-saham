@@ -5,8 +5,6 @@ from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock
 
-import pytest
-
 from src.application.services.broker_quality import (
     BrokerQualitySnapshot,
     classify_broker_tier,

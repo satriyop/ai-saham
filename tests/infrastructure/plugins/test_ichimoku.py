@@ -8,8 +8,6 @@ minimum-candle edge cases, and registry integration.
 from datetime import date, timedelta
 from decimal import Decimal
 
-import pytest
-
 from plugins.indicators.ichimoku import (
     IchimokuChikou,
     IchimokuKijun,
@@ -19,7 +17,6 @@ from plugins.indicators.ichimoku import (
 )
 from src.application.services.bootstrap import create_indicator_registry
 from src.domain.entities.candle import Candle
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

@@ -14,6 +14,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Union
 
+from src.application.ports.rules_loader import RulesLoader
 from src.application.rules.schema import BUILTIN_INDICATORS, IndicatorType
 from src.application.services.indicator_registry import IndicatorRegistry
 from src.application.use_case.aggregate_indicators import (
@@ -108,18 +109,25 @@ class AssessRiskUseCase:
         self,
         repository: MarketDataRepository,
         registry: IndicatorRegistry | None = None,
+        rules_loader: RulesLoader | None = None,
     ) -> None:
         """
-        Initialize with repository and optional registry.
+        Initialize with repository, optional registry, and optional rules loader.
 
         Args:
             repository: MarketDataRepository for fetching cached candles
             registry: IndicatorRegistry for computing indicators.
                      If None, creates default registry (built-ins only).
+            rules_loader: RulesLoader port interface.
         """
         self._repository = repository
         self._registry = registry if registry is not None else IndicatorRegistry()
         self._rule_engine = RuleEngine()
+        if rules_loader is None:
+            from src.infrastructure.config.yaml_loader import YamlConfigLoader
+
+            rules_loader = YamlConfigLoader()
+        self._rules_loader = rules_loader
 
     def execute(self, request: AssessRiskRequest) -> AssessRiskResponse:
         """
@@ -143,10 +151,9 @@ class AssessRiskUseCase:
         if request.rules_file is not None:
             # Load and evaluate custom rules
             from src.application.rules.interpreter import YamlRuleInterpreter
-            from src.infrastructure.config.yaml_loader import YamlConfigLoader
 
             # Load rules with registry for indicator validation
-            rule_set = YamlConfigLoader.load(request.rules_file, registry=self._registry)
+            rule_set = self._rules_loader.load(request.rules_file, registry=self._registry)
             interpreter = YamlRuleInterpreter(rule_set)
 
             # Get required indicators from the rule set

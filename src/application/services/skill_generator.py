@@ -12,6 +12,8 @@ from pathlib import Path
 
 import yaml
 
+from src.application.ports.annotation_reader import AnnotationReader
+from src.application.ports.rules_hasher import RulesHasher
 from src.application.ports.skill_writer import SkillWriter
 from src.domain.value_objects.skill_annotation import (
     ArtifactType,
@@ -19,8 +21,6 @@ from src.domain.value_objects.skill_annotation import (
     SkillAnnotation,
     SkillMetadata,
 )
-from src.infrastructure.skill.annotation_reader import AnnotationReader
-from src.infrastructure.skill.rules_hasher import RulesHasher
 
 # Indicators that require broker flow data
 _BROKER_INDICATORS = {"FOREIGN_FLOW", "FOREIGN_FLOW_RATIO", "CONSECUTIVE_FOREIGN_BUY"}

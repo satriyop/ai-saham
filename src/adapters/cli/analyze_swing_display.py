@@ -15,15 +15,14 @@ import typer
 from rich.console import Group
 from rich.text import Text
 
-from src.adapters.cli.rich_display import compact_table, console, panel
 from src.adapters.cli.analyze_swing_broker_display import (
     BrokerDetail,
     BrokerQualityNote,
     FlowDetail,
-    fmt_broker_detail_lines,
     fmt_money_short,
     fmt_money_short_signed,
 )
+from src.adapters.cli.rich_display import compact_table, console, panel
 from src.application.use_case.swing_backtest import SwingBacktestResponse
 
 
@@ -542,7 +541,7 @@ def print_swing_output(
     if accum:
         label = signal_label(accum, config)
         flow_group.append(Text(f"Accumulation Signal ({window} sessions): {label.upper()}", style="bold cyan"))
-        
+
         flow_table = compact_table()
         flow_table.add_column("Score")
         flow_table.add_column("Streak")
@@ -552,13 +551,13 @@ def print_swing_output(
         flow_table.add_column("VWAP%")
         flow_table.add_column("BB%ile")
         flow_table.add_column("Trend")
-        
+
         flow_str = f"{accum.avg_flow_ratio:+.1f}%" if accum.avg_flow_ratio is not None else "—"
         fvwap_str = f"{accum.vwap_discount_pct:+.1f}%" if accum.vwap_discount_pct is not None else "—"
         vwap_pct_str = f"{accum.vwap_pct:+.1f}%" if accum.vwap_pct is not None else "—"
         bb_str = f"{int(accum.bb_width_pctile * 100)}%" if accum.bb_width_pctile is not None else "—"
         net_str = f"{accum.net_buy_days}/{accum.total_days}"
-        
+
         flow_table.add_row(
             f"{accum.score:.1f}",
             f"{accum.consecutive_streak}s",
@@ -570,7 +569,7 @@ def print_swing_output(
             accum.trend
         )
         flow_group.append(flow_table)
-        
+
         # Corp action risks & flags
         corp_flags = []
         if accum.dividend_risk:
@@ -605,9 +604,10 @@ def print_swing_output(
 
         # Earnings history — read from cache only (no live fetch in display layer)
         try:
+            from pathlib import Path as _Path
+
             from src.infrastructure.browser.stockbit_earnings import StockbitEarningsProvider
             from src.infrastructure.config.app_config import APP_CFG as _app_cfg
-            from pathlib import Path as _Path
             _db = _Path(_app_cfg.storage.db_path)
             _ep = StockbitEarningsProvider(broker_provider=None, db_path=_db)
             _earnings = _ep.get_earnings_history(accum.ticker, quarters=4)
@@ -627,9 +627,10 @@ def print_swing_output(
 
         # Valuation metrics — read from cache only
         try:
+            from pathlib import Path as _Path2
+
             from src.infrastructure.browser.stockbit_valuation import StockbitValuationProvider
             from src.infrastructure.config.app_config import APP_CFG as _app_cfg2
-            from pathlib import Path as _Path2
             _db2 = _Path2(_app_cfg2.storage.db_path)
             _vp = StockbitValuationProvider(broker_provider=None, db_path=_db2)
             _val = _vp.get_valuation(accum.ticker)
@@ -649,7 +650,7 @@ def print_swing_output(
         if flow_group:
             flow_group.append(Text(""))
         flow_group.append(Text(f"Detailed Flow Context ({flow_detail.window_sessions} sessions) through {fmt_date(flow_detail.through_date)}", style="bold cyan"))
-        
+
         detail_flow_table = compact_table()
         detail_flow_table.add_column("Range")
         detail_flow_table.add_column("Sessions")
@@ -658,7 +659,7 @@ def print_swing_output(
         detail_flow_table.add_column("Streak")
         detail_flow_table.add_column("Avg FLOW%")
         detail_flow_table.add_column("Latest FLOW%")
-        
+
         latest_flow = fmt_money_short(flow_detail.latest_net_flow) if flow_detail.latest_net_flow is not None else "N/A"
         detail_flow_table.add_row(
             f"{fmt_date(flow_detail.from_date)} → {fmt_date(flow_detail.through_date)}",
@@ -675,24 +676,24 @@ def print_swing_output(
         if flow_group:
             flow_group.append(Text(""))
         flow_group.append(Text(f"Attribution ({broker_detail.detail_sessions}/{broker_detail.window_sessions} sessions) via {broker_detail.source}", style="bold cyan"))
-        
+
         # Side-by-side Buyer/Seller tables
         attribution_table = compact_table()
         attribution_table.add_column("Top Buyers", style="green")
         attribution_table.add_column("Top Sellers", style="red")
-        
+
         max_len = max(len(broker_detail.top_buyers), len(broker_detail.top_sellers))
         for j in range(max_len):
             buy_str = ""
             if j < len(broker_detail.top_buyers):
                 b = broker_detail.top_buyers[j]
                 buy_str = f"{b.broker_code}: {fmt_money_short(b.net_value)} ({b.active_sessions}s)"
-            
+
             sell_str = ""
             if j < len(broker_detail.top_sellers):
                 s = broker_detail.top_sellers[j]
                 sell_str = f"{s.broker_code}: {fmt_money_short(abs(s.net_value))} ({s.active_sessions}s)"
-                
+
             attribution_table.add_row(buy_str, sell_str)
         flow_group.append(attribution_table)
 
@@ -724,15 +725,15 @@ def print_swing_output(
     if preset_eval is not None:
         gates_group = []
         gates_group.append(Text(f"Preset Rules Evaluation: {preset_eval.name}", style="bold cyan"))
-        
+
         gates_table = compact_table()
         gates_table.add_column("Status")
         gates_table.add_column("Gate Rule", style="bold")
         gates_table.add_column("Actual Value")
         gates_table.add_column("Required Threshold")
-        
+
         for gate in preset_eval.gates:
-            status_str = f"[green]PASS[/]" if gate.passed else f"[red]FAIL[/]"
+            status_str = "[green]PASS[/]" if gate.passed else "[red]FAIL[/]"
             gates_table.add_row(
                 status_str,
                 gate.label,
@@ -760,7 +761,7 @@ def print_swing_output(
 
     # ── Panel 5: DETAILED HISTORY & SENTIMENT ─────────────────────────────────
     history_sentiment_group = []
-    
+
     # Backtest segment
     history_group = []
     if backtest_result is not None and backtest_result.trade_count > 0:
@@ -772,11 +773,11 @@ def print_swing_output(
         hist_table.add_column("Max Drawdown")
         hist_table.add_column("Avg Win")
         hist_table.add_column("Avg Loss")
-        
+
         win_style = "green" if float(r.win_rate) >= 55 else ("yellow" if float(r.win_rate) >= 45 else "red")
         avg_win_val = f"{float(r.avg_win):,.0f} IDR" if r.avg_win else "—"
         avg_loss_val = f"{float(r.avg_loss):,.0f} IDR" if r.avg_loss else "—"
-        
+
         hist_table.add_row(
             f"[{win_style}]{float(r.win_rate):.1f}%[/]",
             f"{float(r.profit_factor):.2f}",
@@ -805,7 +806,7 @@ def print_swing_output(
             snap = sentiment_resp.snapshot
             call_val = snap.overall_sentiment.value.upper()
             call_style = "green" if call_val == "POSITIVE" else ("red" if call_val == "NEGATIVE" else "yellow")
-            
+
             sentiment_group.append(Text(f"News Sentiment (3d): [{call_style}]{call_val}[/]", style="bold cyan"))
             sentiment_group.append(Text(
                 f"Headlines scanned: {snap.total_count} (+{snap.positive_count} / ={snap.neutral_count} / -{snap.negative_count}) | "

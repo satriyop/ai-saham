@@ -10,7 +10,6 @@ from src.application.use_case.accumulation_screen import (
     evaluate_foreign_bounce_gates,
 )
 
-
 # ── helpers ────────────────────────────────────────────────────────────────────
 
 def _candidate(**kwargs) -> AccumulationCandidate:

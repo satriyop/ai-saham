@@ -6,12 +6,11 @@ Public command registration lives in lifecycle routers:
 Layer: Adapter
 """
 
-from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Optional
 
 import typer
-from rich.console import Console, Group
+from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
@@ -19,11 +18,10 @@ from rich.text import Text
 from src.application.services.group_mapping import GroupMappingService
 from src.application.use_case.audit_sentiment import AuditSentimentRequest, AuditSentimentUseCase
 from src.application.use_case.fetch_sentiment import FetchSentimentRequest, FetchSentimentUseCase
-from src.domain.ports.sentiment_repository import SentimentLog
-from src.domain.value_objects.sentiment import CatalystType, Sentiment, SentimentSnapshot
-from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
-from src.infrastructure.persistence.sentiment_repository import SQLiteSentimentRepository
+from src.domain.value_objects.sentiment import Sentiment, SentimentSnapshot
 from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.persistence.sentiment_repository import SQLiteSentimentRepository
+from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 from src.infrastructure.sentiment import SentimentFactory
 
 DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
@@ -158,7 +156,7 @@ def sentiment_audit(
             summary_text = Text()
             summary_text.append("Total Audited: ", style="bold")
             summary_text.append(str(stats["audited_logs"]), style="bold cyan")
-            
+
             panel = Panel(
                 summary_text,
                 title="[bold]SENTIMENT ACCURACY REPORT (5-Day Horizon)[/bold]",
@@ -173,7 +171,7 @@ def sentiment_audit(
             sent_table.add_column("Sentiment", style="cyan")
             sent_table.add_column("Win Rate", justify="right")
             sent_table.add_column("Wins/Total", justify="right")
-            
+
             for sent, s_stats in stats["by_sentiment"].items():
                 win_rate = (s_stats["wins"] / s_stats["total"]) * 100
                 color = "green" if win_rate >= 50 else "yellow"

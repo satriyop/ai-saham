@@ -17,13 +17,9 @@ import typer
 
 from src.application.services.universe_loader import resolve_tickers
 from src.application.use_case.accumulation_screen import (
-    AccumulationScreenRequest,
     AccumulationScreenUseCase,
-    classify_multi_window_pattern,
-    compute_percent_plan,
-    evaluate_foreign_bounce_gates,
 )
-from src.application.use_case.market_regime import MarketRegimeRequest, MarketRegimeUseCase
+from src.application.use_case.market_regime import MarketRegimeUseCase
 from src.infrastructure.browser.stockbit_analyst import StockbitAnalystConsensusProvider
 from src.infrastructure.browser.stockbit_bandar import StockbitBandarDetectorProvider
 from src.infrastructure.browser.stockbit_corp_action import StockbitCorporateActionRepository

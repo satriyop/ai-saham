@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import date, datetime, time
+from datetime import date, datetime
 from pathlib import Path
 
 from src.application.services.indicator_registry import IndicatorRegistry
@@ -29,7 +29,11 @@ from src.domain.value_objects.idx_market import (
     IDX_TIMEZONE,
     NCP_LOCK_TIME,
     OPEN_SESSION_END,
+)
+from src.domain.value_objects.idx_market import (
     PRE_OPEN_START as PRE_NCP_START,
+)
+from src.domain.value_objects.idx_market import (
     REGULAR_OPEN as REGULAR_OPEN_TIME,
 )
 

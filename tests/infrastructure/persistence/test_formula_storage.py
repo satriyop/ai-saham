@@ -19,10 +19,8 @@ import yaml
 
 from src.infrastructure.persistence.formula_storage import (
     FormulaStorage,
-    FormulaStorageError,
     StoredFormula,
 )
-
 
 # --- Fixtures ---
 

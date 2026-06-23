@@ -25,9 +25,6 @@ from src.application.use_case.aggregate_indicators import (
     AggregateIndicatorsRequest,
     AggregateIndicatorsUseCase,
 )
-from src.application.use_case.compute_ema import ComputeEMARequest, ComputeEMAUseCase
-from src.application.use_case.compute_rsi import ComputeRSIRequest, ComputeRSIUseCase
-from src.application.use_case.compute_sma import ComputeSMARequest, ComputeSMAUseCase
 from src.application.use_case.create_indicator_from_intent import (
     CreateIndicatorFromIntentRequest,
     CreateIndicatorFromIntentUseCase,
@@ -462,7 +459,7 @@ def list_indicators(
         "EMA": "Exponential Moving Average",
         "RSI": "Relative Strength Index",
     }
-    
+
     builtin_table = Table(show_header=True, header_style="bold magenta")
     builtin_table.add_column("Indicator", style="cyan")
     builtin_table.add_column("Description", style="white")
@@ -493,7 +490,7 @@ def list_indicators(
         custom_table.add_column("Indicator", style="cyan")
         if show_formulas:
             custom_table.add_column("Formula Expression", style="green")
-        
+
         for ind_name, stored in sorted(stored_formulas.items()):
             if show_formulas:
                 custom_table.add_row(ind_name, stored.formula)
@@ -574,7 +571,7 @@ def delete(
 
     if not force:
         stored = storage.get(name_upper)
-        typer.echo(f"\nFormula to delete:")
+        typer.echo("\nFormula to delete:")
         typer.echo(f"  Name:    {stored.name}")
         typer.echo(f"  Formula: {stored.formula}")
         confirm = typer.confirm("\nDelete this formula?")

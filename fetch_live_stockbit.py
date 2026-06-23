@@ -1,15 +1,16 @@
 from src.infrastructure.browser.playwright_stockbit import PlaywrightStockbitProvider
 
+
 def main():
     print("Initializing Playwright Stockbit Provider...")
     provider = PlaywrightStockbitProvider()
     tickers = ["BUMI", "BBCA", "BNBR", "GOTO"]
-    
+
     print("\nLive Order Books (09:05 WIB+)")
     print("=" * 60)
     print(f"{'TICKER':<6} | {'BEST BID':>10} | {'BEST OFFER':>10} | {'PRE-OPEN IEP':>12}")
     print("-" * 60)
-    
+
     # These were the IEP values captured at 08:58:54 WIB
     iep_map = {
         "BUMI": "175",

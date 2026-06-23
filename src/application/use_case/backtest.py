@@ -14,6 +14,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Union
 
+from src.application.ports.rules_loader import RulesLoader
 from src.application.rules.interpreter import YamlRuleInterpreter
 from src.application.rules.schema import (
     BUILTIN_INDICATORS,
@@ -27,7 +28,6 @@ from src.domain.services.backtest_engine import BacktestEngine
 from src.domain.value_objects.backtest_result import BacktestResult
 from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 from src.domain.value_objects.trade_action import TradeAction
-from src.infrastructure.config.yaml_loader import YamlConfigLoader
 
 
 @dataclass
@@ -96,17 +96,24 @@ class BacktestUseCase:
         self,
         repository: MarketDataRepository,
         registry: IndicatorRegistry | None = None,
+        rules_loader: RulesLoader | None = None,
     ) -> None:
         """
-        Initialize with repository and optional registry.
+        Initialize with repository, optional registry, and optional rules loader.
 
         Args:
             repository: MarketDataRepository for fetching cached candles
             registry: IndicatorRegistry for computing indicators.
                      If None, creates default registry (built-ins only).
+            rules_loader: RulesLoader port interface.
         """
         self._repository = repository
         self._registry = registry if registry is not None else IndicatorRegistry()
+        if rules_loader is None:
+            from src.infrastructure.config.yaml_loader import YamlConfigLoader
+
+            rules_loader = YamlConfigLoader()
+        self._rules_loader = rules_loader
 
     def execute(self, request: BacktestRequest) -> BacktestResponse:
         """
@@ -129,7 +136,7 @@ class BacktestUseCase:
             raise ValueError("Ticker cannot be empty")
 
         # 1. Load rules and get signal mapping (pass registry for indicator validation)
-        rule_set = YamlConfigLoader.load(request.rules_file, registry=self._registry)
+        rule_set = self._rules_loader.load(request.rules_file, registry=self._registry)
         interpreter = YamlRuleInterpreter(rule_set)
         signal_mapping = rule_set.signal_mapping or SignalMapping()
 

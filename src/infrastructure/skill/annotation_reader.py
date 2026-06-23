@@ -12,6 +12,7 @@ from pathlib import Path
 
 import yaml
 
+from src.application.ports.annotation_reader import AnnotationReader as AnnotationReaderPort
 from src.domain.value_objects.skill_annotation import SkillAnnotation
 
 logger = logging.getLogger(__name__)
@@ -25,7 +26,7 @@ class AnnotationSchemaError(Exception):
     """Raised when a .skill.yaml file has invalid schema."""
 
 
-class AnnotationReader:
+class AnnotationReader(AnnotationReaderPort):
     """Reads and validates .skill.yaml sidecar files."""
 
     def read(self, path: Path) -> SkillAnnotation | None:

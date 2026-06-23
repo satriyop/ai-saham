@@ -94,7 +94,7 @@ class ComputeSMAUseCase:
         # Determine date range for query
         # Use the actual data range from the repository, not an absolute date range
         date_range = self._repository.get_date_range(ticker)
-        
+
         if not date_range:
             # No data available for this ticker
             return ComputeSMAResponse(
@@ -106,9 +106,9 @@ class ComputeSMAUseCase:
                 sma_count=0,
                 date_range=None,
             )
-        
+
         earliest_date, latest_date = date_range
-        
+
         # Calculate how far back we need to go, but don't go beyond available data
         days_back = min(request.days, (latest_date - earliest_date).days + 1)
         start_date = latest_date - timedelta(days=days_back - 1)

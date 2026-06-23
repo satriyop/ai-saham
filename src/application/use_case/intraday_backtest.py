@@ -34,6 +34,7 @@ from src.domain.value_objects.intraday_confirmation import (
     IntradayConfirmationCandidate,
     IntradayDecision,
 )
+
 PER_TRADE_CAPITAL_CAP_PCT = Decimal("0.10")  # at most 10% of capital per trade
 
 

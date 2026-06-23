@@ -62,6 +62,7 @@ htmlcov/
 # Project-specific: Market data cache
 data/
 *.csv.cache
+.market_status.json
 
 # Project-specific: Analysis outputs (reproducible, shouldn't be committed)
 output/

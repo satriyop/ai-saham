@@ -1,11 +1,13 @@
 from datetime import date
+
 from src.infrastructure.data_providers.yahoo import YahooFinanceProvider
+
 
 def main():
     provider = YahooFinanceProvider()
     tickers = ["BBCA", "GOTO", "BUMI", "BNBR"]
     today = date.today()
-    
+
     print("Fetching live prices...")
     for ticker in tickers:
         try:

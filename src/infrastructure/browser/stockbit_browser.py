@@ -13,7 +13,6 @@ Two concrete implementations of BrowserDataProvider:
 Layer: Infrastructure
 """
 
-import json
 from decimal import Decimal
 
 from src.domain.ports.browser_data_provider import (
@@ -21,71 +20,6 @@ from src.domain.ports.browser_data_provider import (
     BrowserInteractionRequired,
 )
 from src.domain.value_objects.screener_result import MoverData, OrderBookBid, OrderBookTopOfBook
-
-# IDX tick size bands (IDX Rule: Bapepam-LK No. II-A)
-_TICK_BANDS: list[tuple[int, int]] = [
-    (200, 1),
-    (500, 2),
-    (2_000, 5),
-    (5_000, 10),
-    (int(1e12), 25),  # sentinel for any price >= 5000
-]
-
-
-def idx_tick_size(price: Decimal) -> Decimal:
-    """Return the IDX tick size for a given price level.
-
-    Args:
-        price: Current price in IDR
-
-    Returns:
-        Tick size (1, 2, 5, 10, or 25 IDR)
-    """
-    for threshold, tick in _TICK_BANDS:
-        if price < threshold:
-            return Decimal(str(tick))
-    return Decimal("25")
-
-
-def entry_price_from_bid(best_bid: Decimal, ticks_above: int = 1) -> Decimal:
-    """Compute entry price as best_bid + N ticks (IDX-compliant tick sizing).
-
-    Args:
-        best_bid: Best bid price from order book
-        ticks_above: Number of ticks above the best bid
-
-    Returns:
-        Entry price rounded to nearest valid tick
-    """
-    tick = idx_tick_size(best_bid)
-    return best_bid + (tick * ticks_above)
-
-
-def suggested_limit_from_close(
-    prev_close: Decimal,
-    suggested_limit_pct: Decimal = Decimal("0.005"),
-) -> Decimal:
-    """Compute a suggested limit order price from yesterday's close.
-
-    Used as the entry_price in the call-auction-aware model:
-    the trader places this limit AFTER the opening price is known,
-    only if the open falls within the entry range.
-
-    Args:
-        prev_close: Yesterday's closing price
-        suggested_limit_pct: Fraction above prev_close (default 0.5%)
-
-    Returns:
-        Suggested limit price rounded to the nearest valid IDX tick
-    """
-    raw = prev_close * (1 + suggested_limit_pct)
-    tick = idx_tick_size(raw)
-    # Round up to nearest tick
-    ticks = int(raw / tick)
-    rounded = tick * ticks
-    if rounded < raw:
-        rounded += tick
-    return rounded
 
 
 class ManualBrowserDataProvider(BrowserDataProvider):

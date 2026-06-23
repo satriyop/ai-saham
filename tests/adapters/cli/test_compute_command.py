@@ -21,7 +21,6 @@ from typer.testing import CliRunner
 
 from src.adapters.cli.main import app
 from src.domain.entities.candle import Candle
-from src.infrastructure.persistence.formula_storage import FormulaStorage
 
 runner = CliRunner()
 

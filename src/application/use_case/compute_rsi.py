@@ -102,7 +102,7 @@ class ComputeRSIUseCase:
 
         # Determine date range from the repository
         date_range = self._repository.get_date_range(ticker)
-        
+
         if not date_range:
             # No data available for this ticker
             return ComputeRSIResponse(
@@ -113,16 +113,16 @@ class ComputeRSIUseCase:
                 rsi_count=0,
                 date_range=None,
             )
-        
+
         earliest_date, latest_date = date_range
-        
+
         # Calculate warm-up buffer (3× period for RSI convergence)
         warm_up_days = request.period * self.WARM_UP_MULTIPLIER
-        
+
         # Calculate how far back we need to go, but don't go beyond available data
         total_days_needed = min(request.days + warm_up_days, (latest_date - earliest_date).days + 1)
         fetch_start_date = latest_date - timedelta(days=total_days_needed - 1)
-        
+
         # User cutoff: after excluding warm-up buffer
         user_cutoff_date = latest_date - timedelta(days=request.days - 1)
 

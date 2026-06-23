@@ -41,17 +41,17 @@ from src.application.formula.ast_nodes import (
     NumberNode,
     SeriesNode,
 )
+from src.application.formula.evaluator import (
+    FormulaEvaluator,
+    RegistrySeriesProvider,
+    SeriesProvider,
+)
 from src.application.formula.exceptions import (
     FormulaError,
     FormulaEvaluationError,
     FormulaParseError,
     FormulaTokenError,
     FormulaValidationError,
-)
-from src.application.formula.evaluator import (
-    FormulaEvaluator,
-    RegistrySeriesProvider,
-    SeriesProvider,
 )
 from src.application.formula.parser import Parser, parse
 from src.application.formula.tokenizer import Token, TokenType, tokenize

@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -42,6 +42,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+
 _COMPOSITION_URL = STOCKBIT_CFG.shareholding_url
 _CACHE_TTL_DAYS = STOCKBIT_CFG.cache_ttl_days_shareholding
 

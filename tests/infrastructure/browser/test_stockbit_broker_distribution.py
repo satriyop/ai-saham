@@ -16,7 +16,6 @@ from src.infrastructure.browser.stockbit_broker_distribution import (
     _parse_response,
 )
 
-
 # ── Fixtures / helpers ────────────────────────────────────────────────────────
 
 def _make_body(

@@ -8,9 +8,7 @@ Layer: Application
 """
 
 from decimal import Decimal
-from typing import Callable, Union
-
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable, Union
 
 from src.application.rules.schema import (
     BUILTIN_INDICATORS,
@@ -18,7 +16,6 @@ from src.application.rules.schema import (
     Condition,
     ConditionIndicatorVsIndicator,
     ConditionIndicatorVsValue,
-    IndicatorDefinition,
     IndicatorRef,
     IndicatorType,
     Operator,
@@ -147,7 +144,7 @@ class YamlRuleInterpreter:
         """
         indicator_value = self._get_indicator_value(condition.indicator_name, snapshot)
         compare_func = self._OPERATOR_FUNCS[condition.operator]
-        
+
         # If comparing mixed types (e.g. str vs Decimal), try casting or use strict equality
         if type(indicator_value) != type(condition.value):
             if condition.operator in (Operator.EQ, Operator.NE):

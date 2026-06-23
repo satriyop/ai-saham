@@ -45,7 +45,7 @@ class IchimokuBase:
             lowest = min(c.low for c in window)
             midpoint = (highest + lowest) / Decimal("2")
             results.append(midpoint)
-        
+
         return results
 
 
@@ -102,7 +102,7 @@ class IchimokuSpanA(IchimokuBase, IndicatorPlugin):
         # To align with current candles, we return the series shifted
         if len(leading_span_a) <= displacement:
             return []
-            
+
         return leading_span_a[:-displacement]
 
 
@@ -115,14 +115,14 @@ class IchimokuSpanB(IchimokuBase, IndicatorPlugin):
 
     def compute(self, candles: List[Candle], period: int) -> List[Decimal]:
         displacement = 26
-        
+
         # 1. Compute midpoint of lookback (default 52)
         midpoint = self._compute_midpoint(candles, period)
-        
+
         # 2. Displace
         if len(midpoint) <= displacement:
             return []
-            
+
         return midpoint[:-displacement]
 
 
@@ -138,7 +138,7 @@ class IchimokuChikou(IndicatorPlugin):
         displacement = period
         if len(candles) <= displacement:
             return []
-        
+
         # The Chikou Span value for 'today' is actually the close from 'displacement' days ago
         # (Since today's close is plotted 26 days back, 26 days ago's close is what sits on today's candle)
         closes = [c.close for c in candles]

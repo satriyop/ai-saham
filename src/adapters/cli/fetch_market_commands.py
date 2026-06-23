@@ -48,6 +48,13 @@ from src.application.use_case.refresh_market_data import (
     RefreshMarketDataRequest,
     RefreshMarketDataUseCase,
 )
+from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.data_sources_config import (
+    broker_summary_source as _broker_summary_source,
+)
+from src.infrastructure.config.data_sources_config import (
+    candle_source as _candle_source,
+)
 from src.infrastructure.data_providers.fallback_provider import FallbackMarketDataProvider
 from src.infrastructure.data_providers.idx import IdxBrokerDataProvider
 from src.infrastructure.data_providers.stockbit_historical import StockbitHistoricalProvider
@@ -64,11 +71,6 @@ from src.infrastructure.persistence.sqlite_market_repository import (
 )
 from src.infrastructure.persistence.sqlite_stock_meta_repository import (
     SQLiteStockMetaRepository,
-)
-from src.infrastructure.config.app_config import APP_CFG
-from src.infrastructure.config.data_sources_config import (
-    broker_summary_source as _broker_summary_source,
-    candle_source as _candle_source,
 )
 
 DEFAULT_DAYS: int = APP_CFG.fetch.default_days
@@ -139,23 +141,23 @@ def _split_flow_parts(flow_str: str) -> tuple[str, str]:
     import re
     daily_part = "skip"
     agg_part = "skip"
-    
+
     # Extract daily part
     daily_match = re.search(r'(daily=✓\([^)]+\)|daily=[^ ]+|daily:\+[^ ]+)', flow_str)
     if daily_match:
         daily_part = daily_match.group(1)
-        
+
     # Extract agg part
     agg_match = re.search(r'(agg=✓\([^)]+\)|agg=[^ ]+|agg:\+[^ ]+)', flow_str)
     if agg_match:
         agg_part = agg_match.group(1)
-        
+
     # If it's a fallback single status (e.g. no daily or agg keys, like "✓(2026-06-19)" or "skip" or "ERR:...")
     if not daily_match and not agg_match:
         if "ERR:" in flow_str:
             return flow_str, flow_str
         return flow_str, flow_str
-        
+
     return daily_part, agg_part
 
 
@@ -189,7 +191,7 @@ def _fmt_meta_column(s: str) -> str:
     # E.g. "new(Financial Services)" or "cached(5d)" or "skip"
     if len(s) <= 18:
         return s
-    
+
     import re
     match = re.match(r'(\w+)\((.+)\)', s)
     if match:
@@ -209,7 +211,7 @@ def _fmt_enrichment_column(s: str) -> str:
     # or "skip"
     if s == "skip":
         return "skip"
-        
+
     if s.startswith("ERR:"):
         errors_part = s[4:]
         err_tokens = errors_part.split(",")
@@ -221,10 +223,10 @@ def _fmt_enrichment_column(s: str) -> str:
         failed_count = len(err_labels)
         success_count = max(0, 10 - failed_count)
         return f"{success_count}/10 (ERR: {', '.join(err_labels)})"
-        
+
     fetched_part = ""
     cached_part = ""
-    
+
     if "  ✓(" in s:
         parts = s.split("  ✓(")
         fetched_part = parts[0].strip()
@@ -233,20 +235,20 @@ def _fmt_enrichment_column(s: str) -> str:
         cached_part = s[2:].rstrip(")")
     else:
         fetched_part = s.strip()
-        
+
     fetched_list = [x for x in fetched_part.split("+") if x]
     cached_list = [x for x in cached_part.split(",") if x]
-    
+
     fetched_count = len(fetched_list)
     cached_count = len(cached_list)
     total_count = fetched_count + cached_count
-    
+
     if total_count == 0:
         return s
-        
+
     if fetched_count == 0:
         return f"{total_count}/{total_count} ✓"
-        
+
     if fetched_count <= 2:
         return f"{total_count}/{total_count} (+{fetched_count}: {', '.join(fetched_list)})"
     return f"{total_count}/{total_count} (+{fetched_count})"
@@ -560,17 +562,21 @@ def _fetch_enrichment(ticker: str, db_path: Path, broker_provider) -> str:
     )
     from src.infrastructure.browser.stockbit_analyst import StockbitAnalystConsensusProvider
     from src.infrastructure.browser.stockbit_bandar import StockbitBandarDetectorProvider
+    from src.infrastructure.browser.stockbit_broker_distribution import (
+        StockbitBrokerDistributionProvider,
+    )
     from src.infrastructure.browser.stockbit_company_profile import StockbitCompanyProfileProvider
     from src.infrastructure.browser.stockbit_corp_action import StockbitCorporateActionRepository
-    from src.infrastructure.browser.stockbit_broker_distribution import StockbitBrokerDistributionProvider
     from src.infrastructure.browser.stockbit_earnings import StockbitEarningsProvider
-    from src.infrastructure.browser.stockbit_valuation import StockbitValuationProvider
-    from src.infrastructure.browser.stockbit_forward_estimates import StockbitForwardEstimatesProvider
+    from src.infrastructure.browser.stockbit_forward_estimates import (
+        StockbitForwardEstimatesProvider,
+    )
     from src.infrastructure.browser.stockbit_fundamentals import StockbitFundamentalsProvider
     from src.infrastructure.browser.stockbit_insider import StockbitInsiderActivityProvider
     from src.infrastructure.browser.stockbit_seasonality import StockbitSeasonalityProvider
     from src.infrastructure.browser.stockbit_shareholding import StockbitShareholdingProvider
     from src.infrastructure.browser.stockbit_ticker_notation import StockbitTickerNotationProvider
+    from src.infrastructure.browser.stockbit_valuation import StockbitValuationProvider
 
     today = date.today()
     insider_from = today - timedelta(days=365)
@@ -791,10 +797,10 @@ def fetch_market(
     # Progress streaming callback
     def on_ticker_complete(result, index: int, total: int) -> None:
         progress = f"[{index:>3}/{total}]"
-        
+
         has_critical_error = "ERR:" in result.candles_status or "ERR:" in result.broker_result.summaries or "ERR:" in result.broker_result.flow
         has_enrich_error = "ERR:" in result.enrichment_status
-        
+
         if has_critical_error:
             status_color = typer.colors.RED
         elif has_enrich_error:
@@ -807,11 +813,11 @@ def fetch_market(
         # Format column values
         candles_col = _clean_row_span(result.candles_status)[:13]
         summaries_col = _clean_row_span(result.broker_result.summaries)[:18]
-        
+
         daily_flow, agg_flow = _split_flow_parts(result.broker_result.flow)
         tracked_col = _fmt_tracked_flow_column(daily_flow)[:18]
         inst_col = _fmt_inst_flow_column(agg_flow)[:18]
-        
+
         line_parts = [
             f"  {progress:<9} {result.ticker:<5}",
             f"{candles_col:<13}",
@@ -819,14 +825,14 @@ def fetch_market(
             f"{tracked_col:<18}",
             f"{inst_col:<18}"
         ]
-        
+
         if not no_meta:
             meta_col = _fmt_meta_column(result.meta_status)[:18]
             line_parts.append(f"{meta_col:<18}")
         if enrichment_available:
             enrich_col = _fmt_enrichment_column(result.enrichment_status)[:26]
             line_parts.append(f"{enrich_col:<26}")
-            
+
         status_line = "  ".join(line_parts)
         typer.echo(typer.style(status_line, fg=status_color))
 

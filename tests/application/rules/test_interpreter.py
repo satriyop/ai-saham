@@ -14,10 +14,9 @@ Tests cover:
 
 from datetime import date
 from decimal import Decimal
+from unittest.mock import MagicMock
 
 import pytest
-
-from unittest.mock import MagicMock
 
 from src.application.rules.interpreter import YamlRuleInterpreter
 from src.application.rules.schema import (
@@ -33,7 +32,6 @@ from src.application.rules.schema import (
 )
 from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 from src.domain.value_objects.risk_signal import RiskLevel
-
 
 # --- Test Fixtures ---
 

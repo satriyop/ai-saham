@@ -23,7 +23,6 @@ from src.application.rules.schema import (
     RuleSet,
 )
 
-
 # --- Indicator Enum Tests ---
 
 

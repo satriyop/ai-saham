@@ -14,7 +14,6 @@ from __future__ import annotations
 import os
 from typing import Protocol
 
-
 RESEARCH_SYSTEM_PROMPT = """\
 You are a concise stock research assistant for Indonesia's IDX market.
 Summarize key pre-open signals for a given ticker in plain language.

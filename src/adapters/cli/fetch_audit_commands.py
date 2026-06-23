@@ -100,11 +100,11 @@ def _print_tables(console: Console, tables: tuple[DataQualityTableSnapshot, ...]
 
     for t in tables:
         latest = t.latest.isoformat() if t.latest else "-"
-        
+
         # Style stale/missing tickers if > 0
         stale_style = "red" if t.stale_tickers > 0 else "green"
         missing_style = "red" if t.missing_tickers > 0 else "green"
-        
+
         stale_val = f"[{stale_style}]{t.stale_tickers}[/{stale_style}]"
         missing_val = f"[{missing_style}]{t.missing_tickers}[/{missing_style}]"
 
@@ -125,7 +125,7 @@ def _print_issue(console: Console, issue: DataQualityIssue) -> None:
         "warn": "yellow",
         "info": "cyan",
     }.get(issue.severity, "white")
-    
+
     console.print(f"  [bold {color}][{issue.severity.upper()}][/bold {color}] [bold]{issue.code}[/bold]")
     console.print(f"    [dim]Message:[/dim] {issue.message}")
     console.print(f"    [dim]Impact:[/dim]  {issue.impact}")

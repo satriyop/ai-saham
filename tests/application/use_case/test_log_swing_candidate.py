@@ -14,10 +14,8 @@ from src.application.use_case.accumulation_screen import (
 )
 from src.application.use_case.log_swing_candidate import (
     LogSwingCandidateRequest,
-    LogSwingCandidateResponse,
     LogSwingCandidateUseCase,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fakes / stubs

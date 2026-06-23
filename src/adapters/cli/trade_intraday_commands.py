@@ -7,13 +7,19 @@ Layer: Adapter
 from __future__ import annotations
 
 import json
-from datetime import date, datetime
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 from typing import Annotated, Optional
 
 import typer
 
+from src.adapters.cli.trade_intraday_display import (
+    display_confirmations,
+    display_intraday_review,
+    format_opening_observation_status,
+    format_ticker_preview,
+)
 from src.application.services.bootstrap import create_indicator_registry
 from src.application.services.universe_loader import resolve_tickers
 from src.application.use_case.confirm_intraday_open import (
@@ -34,16 +40,9 @@ from src.domain.value_objects.intraday_confirmation import (
     IntradayConfirmationCandidate,
     IntradayConfirmationJournalEntry,
 )
+from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
-from src.infrastructure.config.app_config import APP_CFG
-
-from src.adapters.cli.trade_intraday_display import (
-    format_ticker_preview,
-    format_opening_observation_status,
-    display_confirmations,
-    display_intraday_review,
-)
 
 DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 DEFAULT_SIDECAR_PATH = Path(APP_CFG.storage.intraday_sidecar)

@@ -2,7 +2,6 @@
 Tests for group mapping service.
 """
 
-from pathlib import Path
 
 import pytest
 import yaml

@@ -16,6 +16,7 @@ from typing import Annotated, Optional
 
 import typer
 
+from src.adapters.cli.trade_swing_display import display_swing_backtest
 from src.application.services.bootstrap import create_indicator_registry
 from src.application.services.position_sizer import compute_position_size
 from src.application.services.universe_loader import (
@@ -34,7 +35,6 @@ from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.config.user_config import get_swing_default
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
-from src.adapters.cli.trade_swing_display import display_swing_backtest
 
 DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 

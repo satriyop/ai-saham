@@ -30,7 +30,6 @@ from src.application.rules.schema import (
 )
 from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 
-
 # --- IndicatorType Enum Tests ---
 
 

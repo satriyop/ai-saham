@@ -16,6 +16,7 @@ from src.application.use_case.view_universe_summary import (
     UniverseViewResult,
 )
 
+
 def display_universe_view(
     result: UniverseViewResult,
     sort_by: str = "flow",

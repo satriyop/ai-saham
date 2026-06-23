@@ -10,7 +10,6 @@ Layer: Application
 from __future__ import annotations
 
 import json
-import re
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -270,5 +269,6 @@ def _parse_response(raw: str) -> tuple[dict, str]:
 
 def _now_iso() -> str:
     from datetime import datetime
+
     from src.domain.value_objects.idx_market import IDX_TIMEZONE
     return datetime.now(IDX_TIMEZONE).isoformat()

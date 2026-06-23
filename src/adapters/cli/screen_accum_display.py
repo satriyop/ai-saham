@@ -19,7 +19,9 @@ from src.application.use_case.accumulation_screen import (
     AccumulationScreenResponse,
 )
 from src.domain.services.trading_calendar import trading_sessions_apart
-from src.infrastructure.config.swing_config import load_swing_config as _load_swing_screener_config_typed
+from src.infrastructure.config.swing_config import (
+    load_swing_config as _load_swing_screener_config_typed,
+)
 
 _SC = _load_swing_screener_config_typed()
 _TABLE_WIDTH = 93

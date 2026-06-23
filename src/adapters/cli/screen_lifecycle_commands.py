@@ -4,13 +4,12 @@ Lifecycle-oriented candidate discovery commands.
 Layer: Adapter
 """
 
-from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Optional
 
 import typer
 
-from src.adapters.cli.screen_accum_commands import accumulation_run, DEFAULT_ACCUM_DB_PATH
+from src.adapters.cli.screen_accum_commands import DEFAULT_ACCUM_DB_PATH, accumulation_run
 from src.adapters.cli.screen_pre_open_commands import pre_open
 
 screen_app = typer.Typer(

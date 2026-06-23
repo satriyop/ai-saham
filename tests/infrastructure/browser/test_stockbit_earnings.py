@@ -1,8 +1,5 @@
 """Tests for StockbitEarningsProvider parser and cache logic."""
 
-import sqlite3
-import tempfile
-from pathlib import Path
 
 import pytest
 
@@ -13,7 +10,6 @@ from src.infrastructure.browser.stockbit_earnings import (
     _parse_float,
     _parse_period_record,
 )
-
 
 # ── Parser unit tests ──────────────────────────────────────────────────────────
 

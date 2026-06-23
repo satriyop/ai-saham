@@ -21,7 +21,6 @@ from src.application.services.indicator_registry import (
 )
 from src.domain.entities.candle import Candle
 
-
 # ============================================================================
 # Test Fixtures
 # ============================================================================

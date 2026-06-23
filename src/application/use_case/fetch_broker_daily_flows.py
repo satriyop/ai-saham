@@ -13,9 +13,9 @@ Layer: Application
 from dataclasses import dataclass
 from datetime import date
 
-from src.domain.entities.broker_flow import BrokerDailyFlow
-from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.broker_data_provider import BrokerDataProvider
+from src.domain.ports.broker_data_repository import BrokerDataRepository
+
 
 @dataclass(frozen=True)
 class FetchBrokerDailyFlowsRequest:

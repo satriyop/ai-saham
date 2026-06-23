@@ -19,11 +19,11 @@ from pathlib import Path
 
 import pytest
 
+from src.domain.value_objects.skill_annotation import SkillAnnotation
 from src.infrastructure.skill.annotation_reader import (
     AnnotationReader,
     AnnotationSchemaError,
 )
-from src.domain.value_objects.skill_annotation import SkillAnnotation
 
 
 class TestAnnotationReaderSingleArtifact:

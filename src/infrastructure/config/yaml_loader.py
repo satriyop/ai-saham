@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 import yaml
 
+from src.application.ports.rules_loader import RulesLoader
 from src.application.rules.exceptions import (
     RulesFileError,
     RulesSchemaError,
@@ -44,7 +45,7 @@ DEFAULT_LOCATIONS = [
 ]
 
 
-class YamlConfigLoader:
+class YamlConfigLoader(RulesLoader):
     """Loads and validates YAML rule configuration files.
 
     Handles file reading, YAML parsing, schema validation, and

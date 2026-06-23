@@ -1,17 +1,10 @@
 """Tests for the formula evaluator."""
 
 from decimal import Decimal
-from typing import Any
 
 import pytest
 
-from src.application.formula.ast_nodes import (
-    BinaryOpNode,
-    FunctionCallNode,
-    NumberNode,
-    SeriesNode,
-)
-from src.application.formula.evaluator import FormulaEvaluator, SeriesProvider
+from src.application.formula.evaluator import FormulaEvaluator
 from src.application.formula.exceptions import FormulaEvaluationError
 from src.application.formula.parser import parse
 

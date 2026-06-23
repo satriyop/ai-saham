@@ -11,8 +11,6 @@ from typing import Annotated, Optional
 import typer
 from typer.core import TyperGroup
 
-from src.infrastructure.config.app_config import APP_CFG
-
 from src.adapters.cli.view_broker_commands import (
     broker_distribution_view,
     broker_flow,
@@ -22,6 +20,7 @@ from src.adapters.cli.view_broker_commands import (
     broker_top,
     broker_top_foreign_view,
 )
+from src.infrastructure.config.app_config import APP_CFG
 
 
 class _ViewGroup(TyperGroup):
@@ -144,10 +143,16 @@ def view_universe(
             raise typer.Exit(1)
 
     try:
+        from src.infrastructure.persistence.sqlite_universe_summary_provider import (
+            SQLiteUniverseSummaryProvider,
+        )
+
+        provider = SQLiteUniverseSummaryProvider(db_path)
         result = build_universe_view(
             universe_name=name.lower(),
             db_path=db_path,
             as_of_date=as_of_date,
+            provider=provider,
         )
     except FileNotFoundError as e:
         typer.echo(str(e), err=True)

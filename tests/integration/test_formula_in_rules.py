@@ -17,7 +17,7 @@ import tempfile
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -29,14 +29,11 @@ from src.application.rules.schema import (
     Outcome,
     Rule,
     RuleSet,
-    SignalMapping,
 )
 from src.application.services.indicator_registry import IndicatorRegistry
 from src.application.use_case.assess_risk import AssessRiskRequest, AssessRiskUseCase
 from src.application.use_case.backtest import BacktestRequest, BacktestUseCase
 from src.domain.entities.candle import Candle
-from src.domain.value_objects.trade_action import TradeAction
-
 
 # --- Fixtures ---
 

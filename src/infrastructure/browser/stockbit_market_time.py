@@ -21,16 +21,24 @@ from __future__ import annotations
 
 import logging
 import time as _time_module
-from datetime import datetime, time
+from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from src.domain.ports.market_status_provider import MarketStatusProvider
 from src.domain.value_objects.idx_market import (
     IDX_TIMEZONE as _IDX_TZ,
+)
+from src.domain.value_objects.idx_market import (
     MARKET_CLOSE as _MARKET_CLOSE,
+)
+from src.domain.value_objects.idx_market import (
     PRE_CLOSE_START as _PRE_CLOSE_START,
+)
+from src.domain.value_objects.idx_market import (
     PRE_OPEN_START as _PRE_OPEN_START,
+)
+from src.domain.value_objects.idx_market import (
     REGULAR_OPEN as _REGULAR_START,
 )
 from src.domain.value_objects.market_status import MarketStatus
@@ -41,6 +49,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+
 _MARKET_TIME_URL = STOCKBIT_CFG.market_time_url
 _CACHE_TTL_SECONDS = 60
 
@@ -318,8 +327,9 @@ def fetch_and_cache_market_status() -> MarketStatus | None:
     """
     try:
         from pathlib import Path
-        from src.infrastructure.config.app_config import APP_CFG
+
         from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
+        from src.infrastructure.config.app_config import APP_CFG
         if not Path(APP_CFG.storage.stockbit_profile_dir).exists():
             return None
         provider = StockbitPlaywrightBrokerProvider()
@@ -350,8 +360,9 @@ def get_current_market_status() -> MarketStatus:
         return cached
     try:
         from pathlib import Path
-        from src.infrastructure.config.app_config import APP_CFG
+
         from src.infrastructure.browser.playwright_stockbit import StockbitPlaywrightBrokerProvider
+        from src.infrastructure.config.app_config import APP_CFG
         if Path(APP_CFG.storage.stockbit_profile_dir).exists():
             provider = StockbitPlaywrightBrokerProvider()
             if provider.is_authenticated():

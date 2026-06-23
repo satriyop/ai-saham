@@ -8,10 +8,10 @@ Layer: Application
 """
 
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date
 from decimal import Decimal
 
-from src.domain.entities.broker_flow import ForeignFlowPoint, BrokerSummary
+from src.domain.entities.broker_flow import BrokerSummary, ForeignFlowPoint
 from src.domain.ports.broker_data_provider import (
     BrokerDataProvider,
     BrokerDataProviderError,

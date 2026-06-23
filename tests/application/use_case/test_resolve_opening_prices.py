@@ -9,7 +9,6 @@ from src.application.use_case.resolve_opening_prices import (
 from src.domain.entities.trade_tick import TradeTick
 from src.domain.value_objects.order_book_snapshot import OrderBookSnapshot
 
-
 IDX_TZ = ZoneInfo("Asia/Jakarta")
 
 

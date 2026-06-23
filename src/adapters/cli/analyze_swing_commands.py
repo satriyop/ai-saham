@@ -30,9 +30,8 @@ from src.adapters.cli.analyze_swing_broker_display import (
 )
 from src.adapters.cli.analyze_swing_display import (
     SwingDisplayConfig,
-    format_failed_gates_summary as _format_failed_gates_summary,
+    display_swing_compare,
 )
-from src.adapters.cli.analyze_swing_display import display_swing_compare
 from src.application.services.bootstrap import create_indicator_registry
 from src.application.services.universe_loader import (
     UniverseNotFoundError,
@@ -71,12 +70,11 @@ from src.infrastructure.browser.stockbit_insider import StockbitInsiderActivityP
 from src.infrastructure.browser.stockbit_seasonality import StockbitSeasonalityProvider
 from src.infrastructure.browser.stockbit_shareholding import StockbitShareholdingProvider
 from src.infrastructure.browser.stockbit_ticker_notation import StockbitTickerNotationProvider
+from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.config.user_config import get_swing_default
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 from src.infrastructure.sentiment import SentimentFactory
-
-from src.infrastructure.config.app_config import APP_CFG
 
 DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 _W = 70  # display width

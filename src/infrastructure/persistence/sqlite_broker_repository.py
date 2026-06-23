@@ -486,6 +486,16 @@ class SQLiteBrokerRepository(BrokerDataRepository):
         except sqlite3.Error as e:
             raise BrokerDataRepositoryError(f"Failed to get date range: {e}") from e
 
+    def get_cached_tickers(self) -> list[str]:
+        try:
+            with self._get_connection() as conn:
+                rows = conn.execute(
+                    "SELECT DISTINCT ticker FROM broker_summaries ORDER BY ticker"
+                ).fetchall()
+                return [row["ticker"] for row in rows]
+        except sqlite3.Error as e:
+            raise BrokerDataRepositoryError(f"Failed to get cached tickers: {e}") from e
+
     # ── ForeignFlowPoint persistence ───────────────────────────────────────
 
     def save_foreign_flow_points(self, points: list[ForeignFlowPoint]) -> None:

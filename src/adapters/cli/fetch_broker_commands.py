@@ -37,12 +37,12 @@ from src.domain.ports.csv_broker_parser import (
     CsvBrokerParserError,
     ErrorStrategy,
 )
+from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.csv import BrokerCsvAdapter, MappingLoader
 from src.infrastructure.data_providers.idx import IdxBrokerDataProvider
 from src.infrastructure.persistence.sqlite_broker_repository import (
     SQLiteBrokerRepository,
 )
-from src.infrastructure.config.app_config import APP_CFG
 
 # Supported providers
 PROVIDERS = ("idx", "stockbit")

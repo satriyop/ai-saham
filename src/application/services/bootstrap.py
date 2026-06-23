@@ -13,7 +13,6 @@ from typing import TYPE_CHECKING
 
 from src.application.formula.parser import parse
 from src.application.services.indicator_registry import IndicatorRegistry
-from src.infrastructure.plugins.indicator_loader import IndicatorPluginLoader
 
 if TYPE_CHECKING:
     from src.domain.ports.broker_data_repository import BrokerDataRepository
@@ -55,6 +54,8 @@ def create_indicator_registry(
     )
 
     # Load plugins
+    from src.infrastructure.plugins.indicator_loader import IndicatorPluginLoader
+
     loader = IndicatorPluginLoader(Path(plugin_dir) if plugin_dir else None)
     plugins = loader.discover()
 

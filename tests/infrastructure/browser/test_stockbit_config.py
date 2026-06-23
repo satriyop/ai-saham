@@ -2,18 +2,19 @@
 
 from pathlib import Path
 
-import pytest
 import yaml
 
+from src.infrastructure.browser.playwright_stockbit import (
+    _IEV_MOVER_URL_MAIN,
+    _INSTITUTIONAL_PROXY_CODES,
+    _ORDER_BOOK_API,
+    TRACKED_BROKER_CODES,
+)
 from src.infrastructure.config.stockbit_config import (
     StockbitConfig as _StockbitConfig,
-    load_stockbit_config as _load_stockbit_config,
 )
-from src.infrastructure.browser.playwright_stockbit import (
-    _INSTITUTIONAL_PROXY_CODES,
-    TRACKED_BROKER_CODES,
-    _IEV_MOVER_URL_MAIN,
-    _ORDER_BOOK_API,
+from src.infrastructure.config.stockbit_config import (
+    load_stockbit_config as _load_stockbit_config,
 )
 
 

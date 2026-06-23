@@ -1,17 +1,13 @@
 """Unit tests for AccumulationJournalService."""
 
-from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock
-
-import pytest
 
 from src.application.services.accumulation_journal import AccumulationJournalService
 from src.application.use_case.accumulation_screen import AccumulationCandidate
 from src.domain.entities.candle import Candle
 from src.domain.value_objects.accumulation_journal_entry import AccumulationJournalEntry
-
 
 # ── helpers ─────────────────────────────────────────────────────────────────
 
@@ -401,7 +397,6 @@ class TestReviewEnrichment:
         logged_at = date(2026, 4, 1)
         entry = _make_entry(logged_at=logged_at, actual_close_10d=None)
 
-        from datetime import timedelta
         # 1 same-day candle + 10 forward candles
         same_day = _make_candle(logged_at, 4800.0)
         forward = self._make_forward_candles(logged_at, 10, start_price=5000.0)

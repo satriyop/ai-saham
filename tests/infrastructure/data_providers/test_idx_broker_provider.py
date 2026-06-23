@@ -19,10 +19,9 @@ import pytest
 
 from src.domain.ports.broker_data_provider import BrokerDataProviderError
 from src.infrastructure.data_providers.idx import (
-    IdxBrokerDataProvider,
     SHARES_PER_LOT,
+    IdxBrokerDataProvider,
 )
-
 
 # --- Fixtures ---
 

@@ -317,7 +317,7 @@ def display_results(
 
     for candidate in sorted_candidates:
         current_verdict = verdict(candidate)
-        
+
         # Colorize verdict
         if current_verdict == "PRIME":
             verdict_text = "[green]★ PRIME[/]"
@@ -344,20 +344,20 @@ def display_results(
             f"{candidate.iev:,}",
             gap_text,
         ]
-        
+
         if show_spread:
             row_cells.append(candidate.spread_label)
-        
+
         row_cells.extend([
             rng,
             stop_pct,
             rsi_str,
             signal,
         ])
-        
+
         if show_notation:
             row_cells.append(notation_label(candidate.ticker_notation))
-        
+
         if strategy_signals is not None:
             raw = strategy_signals.get(candidate.ticker, "?")
             sym = STRAT_SYMBOL.get(raw, raw)
@@ -387,7 +387,7 @@ def display_results(
             if candidate.ai_summary:
                 ai_elements.append(Text(f"\n[{candidate.ticker}]", style="bold cyan"))
                 ai_elements.append(Text(candidate.ai_summary))
-        
+
         console().print("")
         console().print(
             panel(
@@ -407,12 +407,12 @@ def display_results(
             prefix = "★" if verdict(candidate) == "PRIME" else "◉"
             watch_labels.append(f"{prefix} {candidate.ticker}")
         skip_labels = "  ".join(c.ticker for c in skipped) or "—"
-        
+
         footer_elements.append(Text("WATCHLIST", style="bold green"))
         footer_elements.append(Text("  " + "  ".join(watch_labels), style="green"))
         footer_elements.append(Text("\nSKIP", style="bold dim"))
         footer_elements.append(Text("  " + skip_labels, style="dim"))
-        
+
         tickers_json = ",".join(f'"{c.ticker}":___' for c in watchlist)
         footer_elements.append(Text("\nAt 09:00, fill opening prices and run:", style="bold"))
         footer_elements.append(Text(f"   saham trade confirm \\\n     --opening-json '{{{tickers_json}}}'", style="cyan"))

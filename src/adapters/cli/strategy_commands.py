@@ -14,6 +14,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from src.adapters.cli.strategy_skill_commands import skill_app
 from src.application.rules.exceptions import (
     RulesFileError,
     RulesSchemaError,
@@ -27,7 +28,6 @@ from src.application.use_case.create_strategy_from_intent import (
     CreateStrategyFromIntentRequest,
     CreateStrategyFromIntentUseCase,
 )
-from src.adapters.cli.strategy_skill_commands import skill_app
 from src.infrastructure.ai.strategy_translator import StrategyTranslatorAdapter
 from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
@@ -356,7 +356,7 @@ def list_strategies(
         table.add_column("Location", style="yellow")
         table.add_column("Status", justify="center")
         table.add_column("Path:", style="dim white")  # Colon required for test contract!
-        
+
         for info in strategies:
             status = "[green]✓ valid[/green]" if info.valid else "[red]✗ INVALID[/red]"
             disp_name = info.display_name or info.name
@@ -372,7 +372,7 @@ def list_strategies(
     else:
         table.add_column("Location", style="yellow")
         table.add_column("Status", justify="center")
-        
+
         for info in strategies:
             status = "[green]✓ valid[/green]" if info.valid else "[red]✗ INVALID[/red]"
             disp_name = info.display_name or info.name
@@ -433,7 +433,7 @@ def create(
         # Create a simple slug from intent
         name = _slugify_intent(intent)
 
-    typer.echo(f"Creating strategy from intent...")
+    typer.echo("Creating strategy from intent...")
     typer.echo("")
 
     try:
@@ -710,14 +710,14 @@ def backtest(
         typer.echo(f"{'='*52}\n")
         typer.echo(f"Period: {result.start_date} → {result.end_date}")
 
-        typer.echo(f"\nPerformance")
+        typer.echo("\nPerformance")
         typer.echo(f"{'─'*40}")
         typer.echo(f"  Initial Capital:  {result.initial_capital:>18,.0f} IDR")
         typer.echo(f"  Final Capital:    {result.final_capital:>18,.0f} IDR")
         typer.echo(f"  Total Return:     {result.total_return_pct:>18.2f}%")
         typer.echo(f"  Max Drawdown:     {result.max_drawdown_pct:>18.2f}%")
 
-        typer.echo(f"\nTrade Statistics")
+        typer.echo("\nTrade Statistics")
         typer.echo(f"{'─'*40}")
         typer.echo(f"  Total Trades:     {result.trade_count:>18}")
         typer.echo(f"  Winning Trades:   {result.winning_trades:>18}")
@@ -729,7 +729,7 @@ def backtest(
             typer.echo(f"  Avg Loss:         {result.avg_loss:>18,.0f} IDR")
 
         if verbose and result.trades:
-            typer.echo(f"\nTrade History")
+            typer.echo("\nTrade History")
             typer.echo("─" * 80)
             typer.echo(
                 f"{'#':<4} {'Entry':<12} {'Exit':<12} {'Entry Price':>12}"

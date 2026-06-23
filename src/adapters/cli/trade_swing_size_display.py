@@ -9,7 +9,6 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
-import typer
 from rich.console import Group
 from rich.text import Text
 

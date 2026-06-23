@@ -14,14 +14,14 @@ import logging
 from dataclasses import dataclass
 from datetime import date, timedelta
 
-from src.application.use_case.fetch_broker_data import (
-    FetchBrokerDataRequest,
-    FetchBrokerDataUseCase,
-)
 from src.application.use_case.fetch_broker_daily_flows import (
     FetchBrokerDailyFlowsRequest,
     FetchBrokerDailyFlowsResponse,
     FetchBrokerDailyFlowsUseCase,
+)
+from src.application.use_case.fetch_broker_data import (
+    FetchBrokerDataRequest,
+    FetchBrokerDataUseCase,
 )
 from src.domain.ports.broker_data_provider import (
     BrokerDataAuthError,

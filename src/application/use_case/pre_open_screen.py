@@ -25,6 +25,9 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
 
+# TYPE_CHECKING import to avoid circular dependency
+from typing import TYPE_CHECKING
+
 from src.application.services.indicator_registry import IndicatorRegistry
 from src.domain.ports.browser_data_provider import BrowserDataProvider
 from src.domain.ports.market_data_repository import MarketDataRepository
@@ -33,13 +36,10 @@ from src.domain.value_objects.screener_result import (
     PreOpenScreenResult,
     ScreenerCandidate,
 )
-from src.infrastructure.browser.stockbit_browser import (
+from src.domain.value_objects.tick_size import (
     entry_price_from_bid,
     suggested_limit_from_close,
 )
-
-# TYPE_CHECKING import to avoid circular dependency
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from src.domain.ports.broker_data_repository import BrokerDataRepository

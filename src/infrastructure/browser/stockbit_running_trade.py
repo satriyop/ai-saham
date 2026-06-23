@@ -14,7 +14,7 @@ Depends on: playwright_stockbit (for token), RunningTradeProvider port
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from src.domain.entities.trade_tick import TradeTick
@@ -26,6 +26,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+
 _RUNNING_TRADE_URL = STOCKBIT_CFG.running_trade_url
 
 

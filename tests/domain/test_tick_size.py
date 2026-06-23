@@ -1,7 +1,8 @@
 """Tests for IDX tick size domain value object."""
 
-import pytest
 from decimal import Decimal
+
+import pytest
 
 from src.domain.value_objects import tick_size as ts
 
@@ -59,6 +60,7 @@ class TestTickFrictionGateIntegration:
 
     def _make_candidate(self, opening, atr_stop):
         from decimal import Decimal
+
         from src.domain.value_objects.intraday_confirmation import IntradayConfirmationCandidate
         return IntradayConfirmationCandidate(
             ticker="BBCA",
@@ -76,7 +78,6 @@ class TestTickFrictionGateIntegration:
             ConfirmIntradayOpenRequest,
             ConfirmIntradayOpenUseCase,
         )
-        from src.domain.value_objects.intraday_confirmation import IntradayDecision
         uc = ConfirmIntradayOpenUseCase()
         request = ConfirmIntradayOpenRequest(
             candidates=[self._make_candidate(opening, atr_stop)],

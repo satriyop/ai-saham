@@ -25,7 +25,7 @@ from decimal import Decimal, InvalidOperation
 from typing import TYPE_CHECKING
 
 from src.domain.entities.candle import Candle
-from src.domain.ports.market_data_provider import MarketDataProvider, MarketDataProviderError
+from src.domain.ports.market_data_provider import MarketDataProvider
 from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
 
 if TYPE_CHECKING:

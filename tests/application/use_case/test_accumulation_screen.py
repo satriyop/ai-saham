@@ -474,7 +474,6 @@ from src.application.use_case.accumulation_screen import _composite_score
 from src.domain.value_objects.analyst_consensus import AnalystConsensus
 from src.domain.value_objects.bandar_detector_snapshot import BandarDetectorSnapshot
 from src.domain.value_objects.company_fundamentals import CompanyFundamentals
-from src.domain.value_objects.forward_estimates import ForwardEstimates
 from src.domain.value_objects.seasonal_edge import SeasonalEdge
 
 
@@ -596,6 +595,7 @@ def test_composite_high_conviction_requires_four_above_60():
 def _make_use_case_with_fundamentals(piotroski_score: int | None):
     """Build a use case with a fundamentals_provider stub returning the given F-Score."""
     from unittest.mock import MagicMock
+
     from src.domain.value_objects.company_fundamentals import CompanyFundamentals
 
     session_dates = _weekdays(date(2026, 1, 1), 7)

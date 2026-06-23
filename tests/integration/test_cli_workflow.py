@@ -10,25 +10,17 @@ Tests complete CLI command workflows:
 Uses Typer's CliRunner for isolated testing without affecting real files.
 """
 
-import os
-from decimal import Decimal
-from pathlib import Path
 
-import pytest
 from typer.testing import CliRunner
 
 from src.adapters.cli.main import app
-from src.domain.entities.candle import Candle
 from src.infrastructure.persistence.sqlite_market_repository import (
     SQLiteMarketRepository,
 )
-
 from tests.integration.conftest import (
-    generate_test_candles,
     create_rsi_oversold_strategy,
-    create_custom_indicator_strategy,
+    generate_test_candles,
 )
-
 
 runner = CliRunner()
 

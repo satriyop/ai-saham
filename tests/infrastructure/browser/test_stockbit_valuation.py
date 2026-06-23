@@ -4,12 +4,11 @@ from datetime import datetime
 
 import pytest
 
-from src.domain.value_objects.valuation_metrics import ValuationMetrics, KNOWN_METRIC_LABELS
+from src.domain.value_objects.valuation_metrics import ValuationMetrics
 from src.infrastructure.browser.stockbit_valuation import (
-    _parse_response,
     StockbitValuationProvider,
+    _parse_response,
 )
-
 
 # ── _parse_response ────────────────────────────────────────────────────────────
 

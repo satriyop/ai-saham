@@ -3,15 +3,17 @@
 from decimal import Decimal
 from pathlib import Path
 
-import pytest
 import yaml
 
-from src.infrastructure.config.swing_config import SwingConfig as _SwingConfig, load_swing_config as _load_swing_screener_config_typed
 from src.adapters.cli.analyze_swing_commands import (
-    SMART_MONEY_BROKERS,
-    NOISE_BROKERS,
-    BROKER_WEIGHTS,
     _SC,
+    BROKER_WEIGHTS,
+    NOISE_BROKERS,
+    SMART_MONEY_BROKERS,
+)
+from src.infrastructure.config.swing_config import SwingConfig as _SwingConfig
+from src.infrastructure.config.swing_config import (
+    load_swing_config as _load_swing_screener_config_typed,
 )
 
 

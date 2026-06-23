@@ -16,7 +16,6 @@ Layer: Application
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Literal
 
 from src.domain.entities.trade_tick import TradeTick

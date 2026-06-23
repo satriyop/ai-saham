@@ -30,6 +30,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+
 _SECTOR_88_URL = STOCKBIT_CFG.universe_sector_88_url
 _SECTOR_70_URL = STOCKBIT_CFG.universe_sector_70_url
 _COMPANY_URL = STOCKBIT_CFG.universe_company_url

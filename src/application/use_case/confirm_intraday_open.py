@@ -4,7 +4,7 @@ ConfirmIntradayOpenUseCase — convert pre-open candidates into post-open decisi
 Layer: Application
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 

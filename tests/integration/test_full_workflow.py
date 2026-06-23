@@ -11,7 +11,6 @@ These tests verify that all features work together, not just in isolation.
 """
 
 from decimal import Decimal
-from pathlib import Path
 
 import pytest
 
@@ -34,13 +33,11 @@ from src.infrastructure.ai.formula_translator import FormulaTranslatorAdapter
 from src.infrastructure.ai.strategy_translator import StrategyTranslatorAdapter
 from src.infrastructure.config.yaml_loader import YamlConfigLoader
 from src.infrastructure.persistence.formula_storage import FormulaStorage
-
 from tests.integration.conftest import (
     create_custom_indicator_strategy,
     create_ema_crossover_strategy,
     create_rsi_oversold_strategy,
     create_strategy_yaml,
-    generate_test_candles,
 )
 
 

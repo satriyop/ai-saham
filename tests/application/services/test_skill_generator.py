@@ -17,13 +17,10 @@ Layer: Application
 
 from pathlib import Path
 
-import pytest
-
 from src.application.services.skill_generator import (
-    SkillGeneratorService,
     SkillGenerationResult,
+    SkillGeneratorService,
 )
-from src.domain.value_objects.skill_annotation import ArtifactType
 from src.infrastructure.skill.annotation_reader import AnnotationReader
 from src.infrastructure.skill.markdown_writer import MarkdownSkillWriter
 from src.infrastructure.skill.rules_hasher import RulesHasher

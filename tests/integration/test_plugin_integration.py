@@ -9,13 +9,9 @@ from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
 
-import pytest
-
 from src.application.services.bootstrap import create_indicator_registry
-from src.application.services.indicator_registry import IndicatorRegistry
 from src.domain.entities.candle import Candle
 from src.infrastructure.plugins.indicator_loader import IndicatorPluginLoader
-
 
 # ============================================================================
 # Test Fixtures
