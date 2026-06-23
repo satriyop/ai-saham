@@ -263,6 +263,9 @@ def risk(
                 err=True,
             )
 
+        if response.coverage_warning:
+            typer.echo(f"\n[warning] {response.coverage_warning}", err=True)
+
         if trend > 0 and not all_profiles and not rules_file:
             try:
                 trend_resp = use_case.execute_trend(request, days=trend)

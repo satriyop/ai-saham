@@ -45,6 +45,7 @@ class AggregateIndicatorsResponse:
     candle_count: int
     snapshot_count: int
     date_range: tuple[date, date] | None
+    coverage_warning: str | None = None
 
     @property
     def has_values(self) -> bool:
@@ -172,6 +173,12 @@ class AggregateIndicatorsUseCase:
             rsi_response.candle_count,
         )
 
+        coverage_warning = (
+            sma_response.coverage_warning
+            or ema_response.coverage_warning
+            or rsi_response.coverage_warning
+        )
+
         return AggregateIndicatorsResponse(
             ticker=ticker,
             sma_period=request.sma_period,
@@ -181,4 +188,5 @@ class AggregateIndicatorsUseCase:
             candle_count=candle_count,
             snapshot_count=len(snapshots),
             date_range=date_range,
+            coverage_warning=coverage_warning,
         )

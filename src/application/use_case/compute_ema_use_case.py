@@ -30,6 +30,9 @@ class ComputeEMARequest:
     days: int = 365  # How many days of history to return
 
 
+_COVERAGE_TOLERANCE_DAYS = 7  # acceptable shortfall before emitting a warning
+
+
 @dataclass
 class ComputeEMAResponse:
     """Response DTO containing EMA calculation results."""
@@ -41,6 +44,7 @@ class ComputeEMAResponse:
     candle_count: int
     ema_count: int
     date_range: tuple[date, date] | None
+    coverage_warning: str | None = None
 
     @property
     def has_values(self) -> bool:
@@ -119,11 +123,19 @@ class ComputeEMAUseCase:
 
         earliest_date, latest_date = date_range
 
+        available_days = (latest_date - earliest_date).days + 1
+        coverage_warning: str | None = None
+        if available_days < request.days - _COVERAGE_TOLERANCE_DAYS:
+            coverage_warning = (
+                f"Only {available_days}d cached, {request.days}d requested. "
+                f"Run: saham fetch market {ticker} --days {request.days}"
+            )
+
         # Calculate warm-up buffer (2× period for EMA convergence)
         warm_up_days = request.period * self.WARM_UP_MULTIPLIER
 
         # Calculate how far back we need to go, but don't go beyond available data
-        total_days_needed = min(request.days + warm_up_days, (latest_date - earliest_date).days + 1)
+        total_days_needed = min(request.days + warm_up_days, available_days)
         fetch_start_date = latest_date - timedelta(days=total_days_needed - 1)
 
         # User cutoff: after excluding warm-up buffer
@@ -168,4 +180,5 @@ class ComputeEMAUseCase:
             candle_count=len(candles),
             ema_count=len(converged_values),
             date_range=date_range_result,
+            coverage_warning=coverage_warning,
         )

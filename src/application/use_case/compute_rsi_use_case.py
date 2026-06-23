@@ -29,6 +29,9 @@ class ComputeRSIRequest:
     days: int = 365  # How many days of history to return
 
 
+_COVERAGE_TOLERANCE_DAYS = 7  # acceptable shortfall before emitting a warning
+
+
 @dataclass
 class ComputeRSIResponse:
     """Response DTO containing RSI calculation results."""
@@ -39,6 +42,7 @@ class ComputeRSIResponse:
     candle_count: int
     rsi_count: int
     date_range: tuple[date, date] | None
+    coverage_warning: str | None = None
 
     @property
     def has_values(self) -> bool:
@@ -116,6 +120,14 @@ class ComputeRSIUseCase:
 
         earliest_date, latest_date = date_range
 
+        available_days = (latest_date - earliest_date).days + 1
+        coverage_warning: str | None = None
+        if available_days < request.days - _COVERAGE_TOLERANCE_DAYS:
+            coverage_warning = (
+                f"Only {available_days}d cached, {request.days}d requested. "
+                f"Run: saham fetch market {ticker} --days {request.days}"
+            )
+
         # Calculate warm-up buffer (3× period for RSI convergence)
         warm_up_days = request.period * self.WARM_UP_MULTIPLIER
 
@@ -159,4 +171,5 @@ class ComputeRSIUseCase:
             candle_count=len(candles),
             rsi_count=len(converged_values),
             date_range=date_range_result,
+            coverage_warning=coverage_warning,
         )

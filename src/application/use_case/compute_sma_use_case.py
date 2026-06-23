@@ -29,6 +29,9 @@ class ComputeSMARequest:
     days: int = 365  # How many days of history to load
 
 
+_COVERAGE_TOLERANCE_DAYS = 7  # acceptable shortfall before emitting a warning
+
+
 @dataclass
 class ComputeSMAResponse:
     """Response DTO containing SMA calculation results."""
@@ -40,6 +43,7 @@ class ComputeSMAResponse:
     candle_count: int
     sma_count: int
     date_range: tuple[date, date] | None
+    coverage_warning: str | None = None
 
     @property
     def has_values(self) -> bool:
@@ -109,8 +113,16 @@ class ComputeSMAUseCase:
 
         earliest_date, latest_date = date_range
 
+        available_days = (latest_date - earliest_date).days + 1
+        coverage_warning: str | None = None
+        if available_days < request.days - _COVERAGE_TOLERANCE_DAYS:
+            coverage_warning = (
+                f"Only {available_days}d cached, {request.days}d requested. "
+                f"Run: saham fetch market {ticker} --days {request.days}"
+            )
+
         # Calculate how far back we need to go, but don't go beyond available data
-        days_back = min(request.days, (latest_date - earliest_date).days + 1)
+        days_back = min(request.days, available_days)
         start_date = latest_date - timedelta(days=days_back - 1)
         end_date = latest_date
 
@@ -147,4 +159,5 @@ class ComputeSMAUseCase:
             candle_count=len(candles),
             sma_count=len(sma_values),
             date_range=date_range_result,
+            coverage_warning=coverage_warning,
         )

@@ -132,6 +132,16 @@ def compute(
             _no_data_error(ticker_upper, days)
             raise typer.Exit(1)
 
+        if len(candles) < days - 7:
+            typer.echo(
+                f"[warning] Only {len(candles)} trading days cached, {days} requested.",
+                err=True,
+            )
+            typer.echo(
+                f"           Run: saham fetch market {ticker_upper} --days {days}",
+                err=True,
+            )
+
         if len(candles) > days:
             candles = candles[-days:]
 
@@ -256,6 +266,9 @@ def snapshot(
             )
             typer.echo(f"        Fix:   saham fetch market {ticker_upper} --days {days}", err=True)
             raise typer.Exit(1)
+
+        if response.coverage_warning:
+            typer.echo(f"[warning] {response.coverage_warning}", err=True)
 
         if fmt == "json":
             import json as _json

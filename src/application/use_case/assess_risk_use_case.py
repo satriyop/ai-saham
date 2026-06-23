@@ -51,6 +51,7 @@ class AssessRiskResponse:
     sma_period: int
     ema_period: int
     rsi_period: int
+    coverage_warning: str | None = None
 
     @property
     def risk_level(self) -> str:
@@ -77,6 +78,7 @@ class AssessAllProfilesResponse:
     sma_period: int
     ema_period: int
     rsi_period: int
+    coverage_warning: str | None = None
 
 
 @dataclass
@@ -215,6 +217,7 @@ class AssessRiskUseCase:
                 sma_period=request.sma_period,
                 ema_period=request.ema_period,
                 rsi_period=request.rsi_period,
+                coverage_warning=agg_response.coverage_warning,
             )
 
     def _build_snapshot_for_rules(
@@ -371,6 +374,7 @@ class AssessRiskUseCase:
             sma_period=request.sma_period,
             ema_period=request.ema_period,
             rsi_period=request.rsi_period,
+            coverage_warning=agg_response.coverage_warning,
         )
 
     def execute_trend(
