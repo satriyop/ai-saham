@@ -446,4 +446,38 @@ Standardizing use case suffixes prevents namespace collisions, preserves hexagon
 
 ---
 
+## ADR-024: Signal Engine and Risk Engine as First-Class Application Services
+
+_Date: 2026-06-23 · Context: crystallised from AGY risk methodology improvements (Phases A–E)_
+
+**Decision**
+Signal Engine and Risk Engine are designated first-class application services with distinct, orthogonal responsibilities. Neither is an implementation detail of a CLI adapter or a use-case function body.
+
+**Signal Engine** answers: "What is the market telling us about this stock right now?"
+- Owns: accumulation score (0–120), broker quality classification, bandar accumulation intensity as a positive entry signal, seasonality edge, preset gate evaluation
+- Output cadence: per session
+
+**Risk Engine** answers: "How risky is this stock as a holding?"
+- Owns: technical risk rules (RSI overbought/oversold, EMA/SMA trend via built-in rule sets), FundamentalGate (Piotroski F-score ≤ threshold), LiquidityGate (market cap + 20d median transaction value), BandarGate (distribution conflict with LOW_RISK technical signal)
+- Output cadence: per week / quarter
+
+A strong signal does NOT imply low risk. Low risk does NOT imply a good entry signal. Both are evaluated independently. CLI commands compose their outputs to produce a recommendation.
+
+**Implications**
+
+* `src/application/services/risk_engine.py` — `RiskEngine` class with four entry points:
+  - `assess(ticker, profile, as_of_date)` — self-fetches enrichment via injected providers
+  - `assess_with_context(ticker, profile, gate_context)` — pipeline path to avoid N+1 in screener
+  - `assess_request(request)` — advanced path accepting full `AssessRiskRequest` (sentiment, rules_file, periods)
+  - `assess_all_profiles(request)` / `assess_trend(request, days)` — delegating to underlying use case
+* `src/application/services/bootstrap.py` — `create_risk_engine(db_path, with_enrichment)` factory; all gate configuration is owned here; callers never instantiate `RiskGate` subclasses or `GateContext`
+* CLI adapters call `engine.assess_request(request)` instead of manually wiring `AssessRiskUseCase(...gates...)`
+* `assess_with_context()` MUST be used by screening pipelines (800+ tickers) to avoid N+1 provider fetches — callers pass the pre-loaded `GateContext` built from candidate data
+* The accumulation score logic stays in `AccumulationScreenUseCase` until a future `SignalEngine` service is formalised
+
+**Rationale**
+AGY risk Phases A–E revealed that per-adapter gate wiring produces silent failure modes: two commands (`analyze risk`, `analyze compare`) had no gates wired at all; one command (`screen accum`) always showed Risk=`—` because the adapter forgot to pass `risk_use_case`. A centralised `RiskEngine` service with a factory eliminates this entire class of bug. The orthogonality principle (strong signal ≠ low risk) must be visible in the architecture, not buried as implementation details inside two separate use cases.
+
+---
+
 *End of Architecture Decisions Record.*

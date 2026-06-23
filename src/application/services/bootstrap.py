@@ -74,6 +74,58 @@ def create_indicator_registry(
     return registry
 
 
+def create_risk_engine(
+    db_path: "str | Path",
+    with_enrichment: bool = False,
+) -> "RiskEngine":
+    """
+    Create a fully-configured RiskEngine with all three gates wired.
+
+    Args:
+        db_path: Path to the SQLite database (e.g. data/db/data.db).
+        with_enrichment: When True, inject FundamentalsProvider and
+            BandarDetectorProvider so FundamentalGate and BandarGate
+            can fire from the engine's own assess() call.
+            When False (default), LiquidityGate still fires from candle
+            data; the other gates skip gracefully.
+    """
+    from pathlib import Path as _Path
+
+    from src.application.services.risk_engine import RiskEngine
+    from src.domain.rules.bandar_gate import BandarGate
+    from src.domain.rules.fundamental_gate import FundamentalGate
+    from src.domain.rules.liquidity_gate import LiquidityGate
+    from src.infrastructure.persistence.sqlite_market_repository import (
+        SQLiteMarketRepository,
+    )
+
+    resolved = _Path(db_path)
+    repository = SQLiteMarketRepository(db_path=resolved)
+    registry = create_indicator_registry(market_repository=repository)
+
+    fund_prov = None
+    bandar_prov = None
+    if with_enrichment:
+        from src.infrastructure.browser.stockbit_fundamentals import (
+            StockbitFundamentalsProvider,
+        )
+        from src.infrastructure.browser.stockbit_bandar import (
+            StockbitBandarDetectorProvider,
+        )
+
+        fund_prov = StockbitFundamentalsProvider(broker_provider=None, db_path=resolved)
+        bandar_prov = StockbitBandarDetectorProvider(broker_provider=None, db_path=resolved)
+
+    return RiskEngine(
+        repository=repository,
+        registry=registry,
+        structural_gates=[FundamentalGate(), LiquidityGate()],
+        execution_gates=[BandarGate()],
+        fundamentals_provider=fund_prov,
+        bandar_provider=bandar_prov,
+    )
+
+
 def _load_formulas_into_registry(
     registry: IndicatorRegistry,
     formula_storage: "FormulaStorage | None" = None,

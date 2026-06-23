@@ -22,16 +22,12 @@ from src.application.rules.exceptions import (
     RulesSchemaError,
     RulesValidationError,
 )
-from src.application.services.bootstrap import create_indicator_registry
-from src.application.use_case.assess_risk_use_case import (
-    AssessRiskRequest,
-    AssessRiskUseCase,
-)
+from src.application.services.bootstrap import create_indicator_registry, create_risk_engine
+from src.application.use_case.assess_risk_use_case import AssessRiskRequest
 from src.domain.ports.ai_explainer import ExplainerAuthError
 from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 from src.domain.value_objects.risk_assessment import RiskAssessment
 from src.infrastructure.ai import ExplainerFactory
-from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
 analyze_app = typer.Typer(
@@ -150,13 +146,7 @@ def risk(
     typer.echo(f"Assessing risk for {ticker.upper()} [{profile}]...")
 
     try:
-        repository = SQLiteMarketRepository(db_path=resolved_db)
-        broker_repository = SQLiteBrokerRepository(resolved_db)
-        registry = create_indicator_registry(
-            broker_repository=broker_repository,
-            market_repository=repository,
-        )
-        use_case = AssessRiskUseCase(repository=repository, registry=registry)
+        engine = create_risk_engine(resolved_db, with_enrichment=True)
 
         sentiment_snapshot = None
         if with_sentiment:
@@ -187,7 +177,7 @@ def risk(
         )
 
         if all_profiles and not rules_file:
-            response = use_case.execute_all_profiles(request)
+            response = engine.assess_all_profiles(request)
             snapshot = response.assessments[0].indicators
 
             typer.echo(f"\n{'='*50}")
@@ -207,7 +197,7 @@ def risk(
                 )
 
         else:
-            response = use_case.execute(request)
+            response = engine.assess_request(request)
             assessment = response.assessment
             snapshot = assessment.indicators
 
@@ -268,7 +258,7 @@ def risk(
 
         if trend > 0 and not all_profiles and not rules_file:
             try:
-                trend_resp = use_case.execute_trend(request, days=trend)
+                trend_resp = engine.assess_trend(request, days=trend)
                 typer.echo(f"\n{'─'*50}")
                 typer.echo(f"Risk Trend (last {trend} days)")
                 typer.echo(f"{'─'*50}")
@@ -340,8 +330,7 @@ def compare(
 
     resolved_db = db_path or DEFAULT_DB_PATH
     repository = SQLiteMarketRepository(db_path=resolved_db)
-    registry = create_indicator_registry()
-    use_case = AssessRiskUseCase(repository=repository, registry=registry)
+    engine = create_risk_engine(resolved_db, with_enrichment=True)
 
     typer.echo(f"\n{'='*60}")
     typer.echo(f" Risk Comparison  ·  Profile: {profile}")
@@ -361,7 +350,7 @@ def compare(
                 ema_period=sma_period,
                 rsi_period=rsi_period,
             )
-            resp = use_case.execute(req)
+            resp = engine.assess_request(req)
             assessment = resp.assessment
             snap = assessment.indicators
             candles = repository.get_candles(t.upper())

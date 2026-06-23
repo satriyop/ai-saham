@@ -270,7 +270,7 @@ class AssessRiskUseCase:
                             profile=assessment.profile,
                             risk_level=gate_result.override_risk,
                             confidence=gate_result.confidence,
-                            rationale=(*assessment.rationale, gate_result.reason),
+                            rationale=(gate_result.reason, *assessment.rationale),
                             snapshot_date=assessment.snapshot_date,
                             indicators=assessment.indicators,
                             gate_triggered=type(gate).__name__,
