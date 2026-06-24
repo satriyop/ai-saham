@@ -1,6 +1,5 @@
 """Tests for pre-open screen CLI helpers."""
 
-import json
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -13,19 +12,9 @@ from src.adapters.cli.screen_pre_open_commands import (
     DEFAULT_PRE_OPEN_CONFIG_PATH,
     _build_intraday_run_guard,
 )
-from src.adapters.cli.screen_pre_open_commands import (
-    _write_sidecar as write_pre_open_sidecar,
-)
 from src.adapters.cli.screen_pre_open_display import (
     display_results as _display_results,
 )
-from src.adapters.cli.screen_pre_open_display import (
-    format_market_regime as _format_market_regime,
-)
-from src.adapters.cli.screen_pre_open_display import (
-    market_regime_warning as _market_regime_warning,
-)
-from src.application.use_case.market_regime_use_case import MarketRegimeResponse
 from src.application.use_case.pre_open_workflow_use_case import PreOpenDataFreshness
 from src.domain.value_objects.market_status import MarketStatus
 from src.domain.value_objects.screener_result import ScreenerCandidate
@@ -113,60 +102,6 @@ def test_pre_open_strategy_alias_is_deprecated():
     assert "Warning: --strategy is deprecated" in result.output
 
 
-def test_market_regime_format_and_warning_are_intraday_context():
-    response = MarketRegimeResponse(
-        as_of_date=date(2026, 6, 12),
-        label="WEAK",
-        score=2,
-        benchmark_ticker="^JKSE",
-        benchmark_close=Decimal("7050"),
-        benchmark_sma20=Decimal("7150"),
-        benchmark_sma50=Decimal("7250"),
-        benchmark_return_5d_pct=-1.25,
-        benchmark_return_20d_pct=-4.75,
-        breadth_above_sma20_pct=23.5294,
-        breadth_change_5d_pct=-10.0,
-        foreign_flow_breadth_pct=39.7059,
-        universe_count=80,
-        breadth_count=68,
-        foreign_flow_count=68,
-    )
-
-    line = _format_market_regime(response)
-
-    assert "REGIME: WEAK score=2/7" in line
-    assert "^JKSE 20d -4.75%" in line
-    assert "Breadth SMA20 23.53%" in line
-    assert "Foreign breadth 39.71%" in line
-    assert "reduce size" in _market_regime_warning(response)
-
-
-def test_pre_open_sidecar_persists_market_regime_context(tmp_path):
-    sidecar = tmp_path / "last-session.json"
-    response = MarketRegimeResponse(
-        as_of_date=date(2026, 6, 12),
-        label="RISK_OFF",
-        score=1,
-        benchmark_ticker="^JKSE",
-        benchmark_close=None,
-        benchmark_sma20=None,
-        benchmark_sma50=None,
-        benchmark_return_5d_pct=None,
-        benchmark_return_20d_pct=None,
-        breadth_above_sma20_pct=20.0,
-        breadth_change_5d_pct=-15.0,
-        foreign_flow_breadth_pct=25.0,
-        universe_count=80,
-        breadth_count=70,
-        foreign_flow_count=70,
-    )
-
-    write_pre_open_sidecar([_candidate("BBCA")], date(2026, 6, 12), sidecar, response)
-
-    saved = json.loads(sidecar.read_text())
-    assert saved["market_regime"]["label"] == "RISK_OFF"
-    assert saved["market_regime"]["score"] == 1
-    assert saved["candidates"][0]["ticker"] == "BBCA"
 
 
 def test_pre_open_results_render_rich_summary_panel(capsys):

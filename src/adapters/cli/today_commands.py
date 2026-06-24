@@ -15,7 +15,13 @@ from rich.text import Text
 from src.adapters.cli.rich_display import compact_table, panel
 from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
 from src.application.use_case.daily_briefing_use_case import DailyBriefingRequest, DailyBriefingUseCase
-from src.application.use_case.market_regime_use_case import MarketRegimeUseCase
+from src.application.services.market_context_engine import MarketContextEngine
+from src.adapters.cli.view_market_context_display import (
+    REGIME_DISPLAY_LABEL,
+    context_conviction_score,
+    context_factor_value,
+    context_regime_style,
+)
 from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
@@ -54,7 +60,7 @@ def today(
     broker_repo = SQLiteBrokerRepository(db_path)
     use_case = DailyBriefingUseCase(
         market_repository=market_repo,
-        regime_use_case=MarketRegimeUseCase(
+        regime_use_case=MarketContextEngine(
             market_repository=market_repo,
             broker_repository=broker_repo,
         ),
@@ -93,20 +99,16 @@ def today(
     summary.add_row("Cached candles current", f"{fresh_count}/{response.universe_count}")
 
     if response.regime is not None:
-        regime = response.regime
-        if regime.score >= 6:
-            regime_style = "green"
-        elif regime.score >= 4:
-            regime_style = "yellow"
-        else:
-            regime_style = "red"
-        regime_text = f"[{regime_style}]{regime.label} ({regime.score}/7)[/{regime_style}]"
+        ctx = response.regime
+        label = REGIME_DISPLAY_LABEL.get(ctx.regime.value, ctx.regime.value)
+        score = context_conviction_score(ctx)
+        style = context_regime_style(ctx)
+        regime_text = f"[{style}]{label} ({score}/7)[/{style}]"
         summary.add_row("Market regime", regime_text)
 
-        if regime.breadth_above_sma20_pct is not None:
-            summary.add_row("Breadth above SMA20", f"{regime.breadth_above_sma20_pct / 100:.0%}")
-        if regime.foreign_flow_breadth_pct is not None:
-            summary.add_row("Foreign flow breadth", f"{regime.foreign_flow_breadth_pct / 100:.0%}")
+        breadth = context_factor_value(ctx, "idx_breadth")
+        if breadth is not None:
+            summary.add_row("Breadth above SMA20", f"{breadth:.1f}%")
 
     opening = compact_table()
     opening.add_column("Ticker", style="bold")

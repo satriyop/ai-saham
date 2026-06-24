@@ -47,7 +47,7 @@ from src.application.use_case.fetch_sentiment_use_case import (
     FetchSentimentRequest,
     FetchSentimentUseCase,
 )
-from src.application.use_case.market_regime_use_case import MarketRegimeResponse
+from src.domain.value_objects.market_context import MarketContext
 from src.application.use_case.swing_analysis_workflow_use_case import (
     SwingAnalysisDataUnavailable,
     SwingAnalysisWorkflowRequest,
@@ -465,7 +465,7 @@ def _print_swing_output(
     preset_eval: "PresetEvaluation | None",
     preset_sizing: "PercentSizingResult | None",
     broker_quality_note: BrokerQualityNote | None,
-    market_regime: "MarketRegimeResponse | None",
+    market_regime: "MarketContext | None",
     capital: "int | None",
     backtest_result,
     sentiment_resp,

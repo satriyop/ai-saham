@@ -19,7 +19,7 @@ from src.application.services.universe_loader import resolve_tickers
 from src.application.use_case.accumulation_screen_use_case import (
     AccumulationScreenUseCase,
 )
-from src.application.use_case.market_regime_use_case import MarketRegimeUseCase
+from src.application.services.market_context_engine import MarketContextEngine
 from src.infrastructure.browser.stockbit_analyst import StockbitAnalystConsensusProvider
 from src.infrastructure.browser.stockbit_bandar import StockbitBandarDetectorProvider
 from src.infrastructure.browser.stockbit_corp_action import StockbitCorporateActionRepository
@@ -119,7 +119,11 @@ def _accumulation_log_impl(
     if with_regime:
         try:
             regime_tickers = resolve_tickers(universe=regime_universe, explicit=[], db_path=db_path)
-            regime_uc = MarketRegimeUseCase(market_repository=market_repo, broker_repository=broker_repo)
+            regime_uc = MarketContextEngine(
+                market_repository=market_repo,
+                broker_repository=broker_repo,
+                universe=regime_tickers,
+            )
         except Exception as exc:
             typer.echo(f"Warning: could not resolve regime universe: {exc}", err=True)
 

@@ -28,7 +28,7 @@ if TYPE_CHECKING:
         AccumulationCandidate,
         AccumulationScreenUseCase,
     )
-    from src.application.use_case.market_regime_use_case import MarketRegimeUseCase
+    from src.application.services.market_context_engine import MarketContextEngine
     from src.domain.ports.market_data_repository import MarketDataRepository
     from src.domain.ports.trade_journal_store import TradeJournalStore
 
@@ -88,7 +88,7 @@ class LogSwingCandidateUseCase:
         journal_service: "AccumulationJournalService",
         market_repository: "MarketDataRepository",
         trade_journal_store: "TradeJournalStore | None" = None,
-        regime_use_case: "MarketRegimeUseCase | None" = None,
+        regime_use_case: "MarketContextEngine | None" = None,
     ) -> None:
         self._screen = screen_use_case
         self._journal = journal_service
@@ -195,13 +195,8 @@ class LogSwingCandidateUseCase:
         regime: str | None = None
         if request.from_analysis and request.with_regime and self._regime is not None:
             try:
-                from src.application.use_case.market_regime_use_case import MarketRegimeRequest
-                regime_response = self._regime.execute(MarketRegimeRequest(
-                    universe=request.regime_universe,
-                    benchmark_ticker=request.benchmark_ticker,
-                    as_of_date=request.logged_at,
-                ))
-                regime = regime_response.label
+                ctx = self._regime.evaluate(as_of_date=request.logged_at)
+                regime = ctx.regime.value
             except Exception:
                 pass
 

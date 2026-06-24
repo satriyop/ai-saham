@@ -16,7 +16,10 @@ from src.application.use_case.accumulation_screen_use_case import (
     AccumulationScreenRequest,
     AccumulationScreenUseCase,
 )
-from src.application.use_case.market_regime_use_case import MarketRegimeRequest, MarketRegimeResponse
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.domain.value_objects.market_context import MarketContext
 from src.domain.ports.market_data_repository import MarketDataRepository
 
 
@@ -53,7 +56,7 @@ class DailyBriefingResponse:
     universe_count: int
     data_freshness: list[DataFreshnessItem]
     stale_count: int
-    regime: MarketRegimeResponse | None = None
+    regime: "MarketContext | None" = None
     opening_candidates: list[OpeningBriefingCandidate] = field(default_factory=list)
     accumulation_candidates: list[AccumulationCandidate] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
@@ -99,12 +102,7 @@ class DailyBriefingUseCase:
         regime = None
         if universe_tickers:
             try:
-                regime = self._regime_uc.execute(
-                    MarketRegimeRequest(
-                        universe=universe_tickers,
-                        as_of_date=as_of,
-                    )
-                )
+                regime = self._regime_uc.evaluate(as_of_date=as_of)
             except Exception as exc:
                 warnings.append(f"Regime unavailable: {exc}")
 

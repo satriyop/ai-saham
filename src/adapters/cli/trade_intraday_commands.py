@@ -398,7 +398,8 @@ def confirm_open(
                 sidecar_data = json.load(f)
             regime_dict = sidecar_data.get("market_regime")
             if regime_dict and isinstance(regime_dict, dict):
-                regime_val = regime_dict.get("label")
+                # New MCE format uses "regime" key; old format used "label"
+                regime_val = regime_dict.get("regime") or regime_dict.get("label")
         except Exception:
             pass
 

@@ -27,11 +27,10 @@ from src.application.services.universe_loader import resolve_tickers
 from src.application.use_case.assess_risk_use_case import AssessRiskRequest, AssessRiskUseCase
 from src.domain.rules.risk_gate import GateContext, RiskGate
 from src.application.use_case.backtest_use_case import BacktestRequest, BacktestUseCase
-from src.application.use_case.market_regime_use_case import (
-    MarketRegimeRequest,
-    MarketRegimeResponse,
-    MarketRegimeUseCase,
-)
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.domain.value_objects.market_context import MarketContext
 from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.market_data_repository import MarketDataRepository
 
@@ -84,7 +83,7 @@ class SwingAnalysisWorkflowResponse:
     backtest_result: Any | None
     sentiment_response: Any | None
     sentiment_warning: str | None
-    market_regime: MarketRegimeResponse | None
+    market_regime: "MarketContext | None"
     take_profit_pct: Decimal
     stop_loss_pct: Decimal
     regime_label: str | None
@@ -351,7 +350,7 @@ class SwingAnalysisWorkflowUseCase:
                 warnings.append(f"Market regime unavailable: {exc}")
 
         swing_config = self._load_swing_config()
-        regime_label = market_regime.label if market_regime else None
+        regime_label = market_regime.regime.value if market_regime else None
         take_profit_pct, stop_loss_pct = self._resolve_preset_targets(
             regime_label,
             swing_config,
@@ -409,23 +408,26 @@ class SwingAnalysisWorkflowUseCase:
     def _build_market_regime(
         self,
         request: SwingAnalysisWorkflowRequest,
-    ) -> MarketRegimeResponse:
+    ) -> "MarketContext":
+        from src.application.services.market_context_engine import MarketContextEngine
+        from src.infrastructure.config.market_context_config import load_market_context_config
+        from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
+        from src.infrastructure.persistence.sqlite_market_context_repository import SQLiteMarketContextRepository
+        from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
+
         tickers = resolve_tickers(
             universe=request.regime_universe,
             explicit=[],
             db_path=request.db_path,
         )
-        use_case = MarketRegimeUseCase(
-            market_repository=self._market_repo,
-            broker_repository=self._broker_repo,
+        engine = MarketContextEngine(
+            market_repository=SQLiteMarketRepository(db_path=request.db_path),
+            config=load_market_context_config(),
+            universe=tickers,
+            broker_repository=SQLiteBrokerRepository(db_path=request.db_path),
+            context_repository=SQLiteMarketContextRepository(db_path=request.db_path),
         )
-        return use_case.execute(
-            MarketRegimeRequest(
-                universe=tickers,
-                benchmark_ticker=request.benchmark,
-                as_of_date=request.today,
-            )
-        )
+        return engine.evaluate(as_of_date=request.today)
 
 
 class SwingAnalysisDataUnavailable(Exception):

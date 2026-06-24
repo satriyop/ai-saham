@@ -20,7 +20,7 @@ from src.adapters.cli.screen_pre_open_display import (
     display_results,
 )
 from src.application.services.bootstrap import create_indicator_registry
-from src.application.use_case.market_regime_use_case import MarketRegimeResponse
+from src.domain.value_objects.market_context import MarketContext
 from src.application.use_case.pre_open_screen_use_case import (
     PreOpenScreenConfig,
     PreOpenScreenUseCase,
@@ -161,7 +161,7 @@ def _write_sidecar(
     candidates: list[ScreenerCandidate],
     screened_date: date,
     sidecar_path: Path,
-    market_regime: MarketRegimeResponse | None = None,
+    market_regime: "MarketContext | None" = None,
 ) -> None:
     """Write session sidecar JSON so `saham trade confirm` can read it."""
     import json

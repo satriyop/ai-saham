@@ -189,11 +189,13 @@ REMOVED_SOURCE_REFERENCE_PATTERNS: tuple[str, ...] = (
     "src.adapters.cli.opening_commands",
     "src.adapters.cli.screen_commands",
     "src.adapters.cli.analyze_regime_display",
+    "src.application.use_case.market_regime_use_case",
     "data_commands.py",
     "update_commands.py",
     "opening_commands.py",
     "screen_commands.py",
     "analyze_regime_display.py",
+    "market_regime_use_case.py",
     "test_update_commands.py",
     "test_screen_commands.py",
 )

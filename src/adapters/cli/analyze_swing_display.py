@@ -23,7 +23,14 @@ from src.adapters.cli.analyze_swing_broker_display import (
     fmt_money_short_signed,
 )
 from src.adapters.cli.rich_display import compact_table, console, panel
+from src.adapters.cli.view_market_context_display import (
+    REGIME_DISPLAY_LABEL,
+    context_conviction_score,
+    context_factor_value,
+    context_warnings,
+)
 from src.application.use_case.swing_backtest_use_case import SwingBacktestResponse
+from src.domain.value_objects.market_context import MarketContext
 
 
 @dataclass(frozen=True)
@@ -268,7 +275,7 @@ def print_swing_rich_overview(
     preset_eval: PresetEvaluation | None,
     preset_sizing: PercentSizingResult | None,
     broker_quality_note: BrokerQualityNote | None,
-    market_regime: MarketRegimeResponse | None,
+    market_regime: MarketContext | None,
     capital: int | None,
     backtest_result,
     sentiment_resp,
@@ -300,7 +307,9 @@ def print_swing_rich_overview(
     data_table.add_row("Candles through", fmt_date(data_freshness.candle_end))
     data_table.add_row("Broker flow through", fmt_date(data_freshness.broker_end))
     if market_regime is not None:
-        data_table.add_row("Market regime", f"{market_regime.label} ({market_regime.score}/7)")
+        _label = REGIME_DISPLAY_LABEL.get(market_regime.regime.value, market_regime.regime.value)
+        _score = context_conviction_score(market_regime)
+        data_table.add_row("Market regime", f"{_label} ({_score}/7)")
     notation_text = notation_detail(accum.ticker_notation) if accum is not None else ""
     if notation_text:
         data_table.add_row("Notation", notation_text)
@@ -376,7 +385,7 @@ def print_swing_rich_overview(
 
     warnings = list(data_freshness.warnings)
     if market_regime is not None:
-        warnings.extend(market_regime.warnings)
+        warnings.extend(context_warnings(market_regime))
     if warnings:
         warning_table = compact_table(show_header=False)
         warning_table.add_column("Warning")
@@ -412,7 +421,7 @@ def print_swing_output(
     preset_eval: "PresetEvaluation | None",
     preset_sizing: "PercentSizingResult | None",
     broker_quality_note: BrokerQualityNote | None,
-    market_regime: "MarketRegimeResponse | None",
+    market_regime: "MarketContext | None",
     capital: "int | None",
     backtest_result,
     sentiment_resp,
@@ -464,17 +473,18 @@ def print_swing_output(
     # ── Panel 2: DETAILED MARKET & RISK CONTEXT ─────────────────────────────
     regime_text = []
     if market_regime is not None:
-        regime_text.append(Text(f"Market Regime: {market_regime.label} ({market_regime.score}/7)", style="bold cyan"))
+        _rlabel = REGIME_DISPLAY_LABEL.get(market_regime.regime.value, market_regime.regime.value)
+        _rscore = context_conviction_score(market_regime)
+        regime_text.append(Text(f"Market Regime: {_rlabel} ({_rscore}/7)", style="bold cyan"))
         regime_table = compact_table()
         regime_table.add_column("Breadth SMA20")
-        regime_table.add_column("5d Change")
-        regime_table.add_column("Benchmark 20d")
-        regime_table.add_column("Flow Breadth")
+        regime_table.add_column("Conviction")
+        regime_table.add_column("Regime")
+        breadth = context_factor_value(market_regime, "idx_breadth")
         regime_table.add_row(
-            fmt_pct(market_regime.breadth_above_sma20_pct),
-            fmt_pct(market_regime.breadth_change_5d_pct, True),
-            fmt_pct(market_regime.benchmark_return_20d_pct, True),
-            fmt_pct(market_regime.foreign_flow_breadth_pct),
+            fmt_pct(breadth),
+            f"{market_regime.conviction:.2f}",
+            market_regime.regime.value,
         )
         regime_text.append(regime_table)
 

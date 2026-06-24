@@ -13,11 +13,10 @@ from src.application.services.indicator_registry import IndicatorRegistry
 from src.application.services.strategy_loader import StrategyLoader, StrategyNotFoundError
 from src.application.services.universe_loader import resolve_tickers
 from src.application.use_case.assess_risk_use_case import AssessRiskRequest, AssessRiskUseCase
-from src.application.use_case.market_regime_use_case import (
-    MarketRegimeRequest,
-    MarketRegimeResponse,
-    MarketRegimeUseCase,
-)
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.domain.value_objects.market_context import MarketContext
 from src.application.use_case.pre_open_screen_use_case import (
     PreOpenScreenConfig,
     PreOpenScreenRequest,
@@ -59,7 +58,7 @@ class PreOpenWorkflowResponse:
     warnings: list[str]
     raw_movers: list
     data_freshness: PreOpenDataFreshness
-    market_regime: MarketRegimeResponse | None = None
+    market_regime: "MarketContext | None" = None
     strategy_signals: dict[str, str] | None = None
     strategy_name: str | None = None
 
@@ -73,11 +72,13 @@ class PreOpenWorkflowUseCase:
         market_repository: MarketDataRepository,
         broker_repository: BrokerDataRepository,
         registry: IndicatorRegistry,
+        market_context_engine=None,
     ) -> None:
         self._screen_use_case = screen_use_case
         self._market_repo = market_repository
         self._broker_repo = broker_repository
         self._registry = registry
+        self._mce = market_context_engine
 
     def execute(self, request: PreOpenWorkflowRequest) -> PreOpenWorkflowResponse:
         screen_response = self._screen_use_case.execute(
@@ -212,23 +213,26 @@ class PreOpenWorkflowUseCase:
         as_of_date: date,
         universe: str,
         benchmark: str,
-    ) -> MarketRegimeResponse:
-        tickers = resolve_tickers(
-            universe=universe,
-            explicit=[],
-            db_path=db_path,
+    ) -> "MarketContext":
+        if self._mce is not None:
+            return self._mce.evaluate(as_of_date=as_of_date)
+
+        # Fallback: construct MCE on demand when not injected
+        from src.application.services.market_context_engine import MarketContextEngine
+        from src.infrastructure.config.market_context_config import load_market_context_config
+        from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
+        from src.infrastructure.persistence.sqlite_market_context_repository import SQLiteMarketContextRepository
+        from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
+
+        tickers = resolve_tickers(universe=universe, explicit=[], db_path=db_path)
+        engine = MarketContextEngine(
+            market_repository=SQLiteMarketRepository(db_path=db_path),
+            config=load_market_context_config(),
+            universe=tickers,
+            broker_repository=SQLiteBrokerRepository(db_path=db_path),
+            context_repository=SQLiteMarketContextRepository(db_path=db_path),
         )
-        use_case = MarketRegimeUseCase(
-            market_repository=self._market_repo,
-            broker_repository=self._broker_repo,
-        )
-        return use_case.execute(
-            MarketRegimeRequest(
-                universe=tickers,
-                benchmark_ticker=benchmark,
-                as_of_date=as_of_date,
-            )
-        )
+        return engine.evaluate(as_of_date=as_of_date)
 
 
 def _min_latest_date(dates: list[date]) -> date | None:

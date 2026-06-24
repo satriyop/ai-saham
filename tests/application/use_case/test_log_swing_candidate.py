@@ -16,6 +16,7 @@ from src.application.use_case.log_swing_candidate_use_case import (
     LogSwingCandidateRequest,
     LogSwingCandidateUseCase,
 )
+from src.domain.value_objects.market_context import MarketRegime, MarketContext
 
 # ---------------------------------------------------------------------------
 # Fakes / stubs
@@ -73,11 +74,20 @@ class FakeMarketRepository:
 
 
 class FakeRegimeUseCase:
-    def __init__(self, label: str = "BULLISH"):
-        self._label = label
+    def __init__(self, regime: str = "RISK_ON"):
+        self._regime = regime
 
-    def execute(self, request: Any):
-        return SimpleNamespace(label=self._label)
+    def evaluate(self, as_of_date: date | None = None) -> MarketContext:
+        """Return a minimal MarketContext with the specified regime."""
+        regime_enum = MarketRegime(self._regime)
+        return MarketContext(
+            regime=regime_enum,
+            conviction=0.5,
+            factors=(),
+            signal_multiplier=1.0,
+            gate_tightening=False,
+            as_of_date=as_of_date or date.today(),
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -218,7 +228,7 @@ def test_with_regime_populates_regime_label():
     screen = FakeScreenUseCase({("BBCA", 7): candidate, ("BBCA", 30): None, ("BBCA", 90): None})
     journal = FakeJournalService()
     market = FakeMarketRepository(close=Decimal("10000"))
-    regime_uc = FakeRegimeUseCase(label="BULLISH")
+    regime_uc = FakeRegimeUseCase(regime="RISK_ON")
 
     uc = LogSwingCandidateUseCase(
         screen_use_case=screen,
@@ -228,8 +238,8 @@ def test_with_regime_populates_regime_label():
     )
     result = uc.execute(_make_request(with_regime=True))
 
-    assert result.regime == "BULLISH"
-    assert journal.calls[0]["regime"] == "BULLISH"
+    assert result.regime == "RISK_ON"
+    assert journal.calls[0]["regime"] == "RISK_ON"
 
 
 def test_no_candidate_found_produces_avoid_and_zero_score():

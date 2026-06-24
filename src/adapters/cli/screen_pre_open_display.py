@@ -13,7 +13,13 @@ from rich.console import Group
 from rich.text import Text
 
 from src.adapters.cli.rich_display import compact_table, console, panel
-from src.application.use_case.market_regime_use_case import MarketRegimeResponse
+from src.adapters.cli.view_market_context_display import (
+    REGIME_DISPLAY_LABEL,
+    context_conviction_score,
+    context_factor_value,
+    context_warnings,
+)
+from src.domain.value_objects.market_context import MarketContext
 from src.application.use_case.pre_open_screen_use_case import PreOpenScreenConfig
 from src.application.use_case.pre_open_workflow_use_case import PreOpenDataFreshness
 from src.domain.value_objects.screener_result import ScreenerCandidate
@@ -41,24 +47,23 @@ def fmt_pct(value: float | None, signed: bool = False) -> str:
     return f"{value:{sign}.2f}%"
 
 
-def format_market_regime(response: MarketRegimeResponse) -> str:
-    return (
-        f"REGIME: {response.label} score={response.score}/7   "
-        f"{response.benchmark_ticker} 20d {fmt_pct(response.benchmark_return_20d_pct, True)}   "
-        f"Breadth SMA20 {fmt_pct(response.breadth_above_sma20_pct)}   "
-        f"Foreign breadth {fmt_pct(response.foreign_flow_breadth_pct)}"
-    )
+def format_market_regime(response: MarketContext) -> str:
+    label = REGIME_DISPLAY_LABEL.get(response.regime.value, response.regime.value)
+    score = context_conviction_score(response)
+    breadth = context_factor_value(response, "idx_breadth")
+    breadth_str = fmt_pct(breadth) if breadth is not None else "N/A"
+    return f"REGIME: {label} score={score}/7   Breadth SMA20 {breadth_str}"
 
 
-def market_regime_warning(response: MarketRegimeResponse) -> str | None:
-    if response.label == "RISK_OFF":
+def market_regime_warning(response: MarketContext) -> str | None:
+    if response.regime.value == "RISK_OFF":
         return "Market regime is RISK_OFF; avoid marginal long scalps or cut size."
-    if response.label == "WEAK":
-        return "Market regime is WEAK; require cleaner opening confirmation or reduce size."
+    if response.regime.value == "VOLATILE":
+        return "Market regime is VOLATILE; require cleaner opening confirmation or reduce size."
     return None
 
 
-def display_market_regime(response: MarketRegimeResponse | None) -> None:
+def display_market_regime(response: MarketContext | None) -> None:
     if response is None:
         return
     typer.echo(format_market_regime(response))
@@ -185,7 +190,7 @@ def display_pre_open_summary_panel(
     total_movers_seen: int,
     warnings: list[str],
     data_freshness: PreOpenDataFreshness | None,
-    market_regime: MarketRegimeResponse | None,
+    market_regime: MarketContext | None,
 ) -> None:
     sorted_candidates = sorted(
         candidates,
@@ -209,7 +214,9 @@ def display_pre_open_summary_panel(
         summary.add_row("Candles through", candle)
         summary.add_row("Broker flow through", broker)
     if market_regime is not None:
-        summary.add_row("Market regime", f"{market_regime.label} ({market_regime.score}/7)")
+        label = REGIME_DISPLAY_LABEL.get(market_regime.regime.value, market_regime.regime.value)
+        score = context_conviction_score(market_regime)
+        summary.add_row("Market regime", f"{label} ({score}/7)")
 
     sections = [Text("Session Summary", style="bold cyan"), summary]
     if watchlist:
@@ -223,7 +230,7 @@ def display_pre_open_summary_panel(
     if data_freshness is not None:
         all_warnings.extend(data_freshness.warnings)
     if market_regime is not None:
-        all_warnings.extend(market_regime.warnings)
+        all_warnings.extend(context_warnings(market_regime))
     if all_warnings:
         warning_table = compact_table(show_header=False)
         warning_table.add_column("Warning")
@@ -265,7 +272,7 @@ def display_results(
     total_movers_seen: int,
     warnings: list[str],
     data_freshness: PreOpenDataFreshness | None = None,
-    market_regime: MarketRegimeResponse | None = None,
+    market_regime: MarketContext | None = None,
     strategy_signals: dict[str, str] | None = None,
     strategy_name: str | None = None,
 ) -> None:

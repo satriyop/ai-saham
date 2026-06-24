@@ -17,6 +17,15 @@ from src.domain.value_objects.market_context import MarketContext, MarketRegime
 
 _CONSOLE = Console()
 
+# Display-compatible label map: MCE regime → legacy-style label for callers
+# that previously showed BULLISH/SIDEWAYS/RISK_OFF labels.
+REGIME_DISPLAY_LABEL: dict[str, str] = {
+    "RISK_ON":  "BULLISH",
+    "NEUTRAL":  "SIDEWAYS",
+    "RISK_OFF": "RISK_OFF",
+    "VOLATILE": "VOLATILE",
+}
+
 _REGIME_STYLE = {
     MarketRegime.RISK_ON:  ("bold green", "RISK_ON"),
     MarketRegime.NEUTRAL:  ("bold yellow", "NEUTRAL"),
@@ -133,3 +142,32 @@ def _score_bar(score: float) -> str:
 def _styled_label(label: str) -> Text:
     style = _LABEL_STYLE.get(label, "")
     return Text(label, style=style)
+
+
+# ── Shared helpers for callers migrated from MarketRegimeUseCase ──────────────
+
+def context_factor_value(context: MarketContext, name: str) -> float | None:
+    """Return the raw .value of a named ContextFactor, or None if not found/unavailable."""
+    for f in context.factors:
+        if f.name == name:
+            return f.value
+    return None
+
+
+def context_warnings(context: MarketContext) -> list[str]:
+    """Collect staleness and coverage warnings from a MarketContext."""
+    return [w for w in (context.staleness_warning, context.coverage_warning) if w]
+
+
+def context_conviction_score(context: MarketContext) -> int:
+    """Map conviction (0.0–1.0) to a 0–7 integer for display parity with old regime score."""
+    return round(context.conviction * 7)
+
+
+def context_regime_style(context: MarketContext) -> str:
+    """Return Rich colour style for the regime conviction level."""
+    if context.conviction >= 0.65:
+        return "green"
+    if context.conviction >= 0.35:
+        return "yellow"
+    return "red"

@@ -16,11 +16,8 @@ from src.application.use_case.accumulation_screen_use_case import (
     AccumulationScreenRequest,
     AccumulationScreenUseCase,
 )
-from src.application.use_case.market_regime_use_case import (
-    MarketRegimeRequest,
-    MarketRegimeResponse,
-    MarketRegimeUseCase,
-)
+from src.application.services.market_context_engine import MarketContextEngine
+from src.domain.value_objects.market_context import MarketContext
 from src.domain.entities.candle import Candle
 from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.market_data_repository import MarketDataRepository
@@ -168,7 +165,7 @@ class SwingBacktestResponse:
     trades: list[SwingBacktestTrade] = field(default_factory=list)
     equity_curve: list[SwingBacktestDailyEquity] = field(default_factory=list)
     regime_stats: list[SwingBacktestRegimeStat] = field(default_factory=list)
-    regime_by_date: dict[date, MarketRegimeResponse] = field(default_factory=dict)
+    regime_by_date: dict[date, MarketContext] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
 
 
@@ -208,7 +205,7 @@ class SwingBacktestUseCase:
             broker_repository=broker_repository,
             market_repository=market_repository,
         )
-        self._regime = MarketRegimeUseCase(
+        self._regime = MarketContextEngine(
             market_repository=market_repository,
             broker_repository=broker_repository,
         )
@@ -259,7 +256,7 @@ class SwingBacktestUseCase:
                         skipped_duplicate += 1
                         continue
                     regime = regime_by_date.get(current_date)
-                    regime_label = regime.label if regime is not None else None
+                    regime_label = regime.regime.value if regime is not None else None
                     if not self._passes_regime_filter(regime_label, request):
                         skipped_by_regime += 1
                         continue
@@ -354,11 +351,11 @@ class SwingBacktestUseCase:
             raise ValueError("max_hold_days must be positive")
         if request.cost_bps < 0:
             raise ValueError("cost_bps cannot be negative")
-        valid_regimes = {"BULLISH", "SIDEWAYS", "WEAK", "RISK_OFF"}
+        valid_regimes = {"RISK_ON", "NEUTRAL", "RISK_OFF", "VOLATILE"}
         invalid = [r for r in request.allowed_regimes if r.upper() not in valid_regimes]
         if invalid:
             raise ValueError(
-                "allowed_regimes must contain only: BULLISH, SIDEWAYS, WEAK, RISK_OFF"
+                "allowed_regimes must contain only: RISK_ON, NEUTRAL, RISK_OFF, VOLATILE"
             )
 
     def _signals_for_date(
@@ -560,17 +557,18 @@ class SwingBacktestUseCase:
         tickers: list[str],
         replay_dates: list[date],
         request: SwingBacktestRequest,
-    ) -> dict[date, MarketRegimeResponse]:
+    ) -> dict[date, MarketContext]:
         if not request.include_regime and not request.allowed_regimes:
             return {}
 
-        regimes: dict[date, MarketRegimeResponse] = {}
+        engine = MarketContextEngine(
+            market_repository=self._market_repo,
+            universe=tickers,
+            broker_repository=self._broker_repo,
+        )
+        regimes: dict[date, MarketContext] = {}
         for replay_date in replay_dates:
-            regimes[replay_date] = self._regime.execute(MarketRegimeRequest(
-                universe=tickers,
-                benchmark_ticker=request.benchmark_ticker,
-                as_of_date=replay_date,
-            ))
+            regimes[replay_date] = engine.evaluate(as_of_date=replay_date)
         return regimes
 
     def _has_forward_data(self, ticker: str, signal_date: date) -> bool:
