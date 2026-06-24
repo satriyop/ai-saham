@@ -481,7 +481,7 @@ Signal Engine and Risk Engine are designated first-class application services wi
 
 ### Risk Engine
 
-**Answers:** "How risky is this stock as a holding?"
+**Answers:** "Are there conditions that block or disqualify acting on this stock?"
 
 Owns: 3-tier gate pipeline (structural → technical rules → execution), Piotroski-based fundamental quality, liquidity screening, float structure, bandar distribution conflict detection.
 
@@ -501,7 +501,7 @@ Output cadence: per week / per quarter (gate inputs are slow-moving).
 
 ### Signal Engine
 
-**Answers:** "What is the market telling us about this stock right now?"
+**Answers:** "How strong and well-aligned are the factors supporting entry?"
 
 Owns: composite signal score (weighted sum of 6 factors: bandar intensity, foreign flow quality, Piotroski F-score as quality signal, seasonality edge, analyst consensus, forward EPS valuation), preset gate evaluation, entry quality classification.
 
