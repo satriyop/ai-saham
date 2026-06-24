@@ -58,6 +58,11 @@ class GateContext:
     piotroski_f_score: int | None = None
     market_cap_idr: int | None = None
 
+    # Structural: sourced from ShareholdingComposition (quarterly refresh)
+    # Computed as individual_pct + institution_pct from IDX disclosure.
+    # Upper-bound proxy: institution_pct may include some strategic holders.
+    free_float_pct: float | None = None
+
     # Execution: sourced from BandarDetectorSnapshot (daily)
     five_day_accdist: str | None = None   # "Big Acc" | "Small Acc" | "Neutral" | "Small Dist" | "Big Dist"
     bandar_is_distributing: bool = False  # True when five_day score < 0

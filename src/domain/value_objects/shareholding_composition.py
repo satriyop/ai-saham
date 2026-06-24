@@ -30,6 +30,11 @@ class ShareholdingComposition:
     fetched_at: datetime | None = None
 
     @property
+    def free_float_pct(self) -> float:
+        """Estimated publicly tradable float: individual_pct + institution_pct. Clamped [0, 100]."""
+        return round(min(max(self.individual_pct + self.institution_pct, 0.0), 100.0), 2)
+
+    @property
     def is_institutionally_held(self) -> bool:
         return self.institution_pct >= 30.0
 

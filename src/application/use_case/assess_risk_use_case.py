@@ -8,7 +8,7 @@ Layer: Application
 Depends on: Domain rules, Domain value objects, AggregateIndicatorsUseCase
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -313,8 +313,6 @@ class AssessRiskUseCase:
         ctx = request.gate_context
         # Enrich with candles for LiquidityGate only if not already provided
         if not ctx.recent_candles:
-            from dataclasses import replace
-
             candles = self._repository.get_candles(request.ticker.upper())
             ctx = replace(ctx, recent_candles=tuple(candles[-20:]))
         return ctx
@@ -463,9 +461,54 @@ class AssessRiskUseCase:
 
         # Extract latest snapshot
         latest_snapshot = agg_response.snapshots[-1]
+        gate_ctx = self._build_gate_context(request, latest_snapshot.date)
+
+        # Structural gates short-circuit all profiles to the same override.
+        if gate_ctx is not None and self._structural_gates:
+            for gate in self._structural_gates:
+                gate_result = gate.evaluate(gate_ctx, RiskLevel.MODERATE)
+                if gate_result.triggered and gate_result.override_risk is not None:
+                    proto_assessments = self._rule_engine.evaluate_all_profiles(latest_snapshot)
+                    assessments = [
+                        replace(
+                            a,
+                            risk_level=gate_result.override_risk,
+                            confidence=gate_result.confidence,
+                            rationale=(gate_result.reason,),
+                            gate_triggered=type(gate).__name__,
+                        )
+                        for a in proto_assessments
+                    ]
+                    return AssessAllProfilesResponse(
+                        ticker=agg_response.ticker,
+                        assessments=assessments,
+                        sma_period=request.sma_period,
+                        ema_period=request.ema_period,
+                        rsi_period=request.rsi_period,
+                        coverage_warning=agg_response.coverage_warning,
+                    )
 
         # Evaluate all profiles
         assessments = self._rule_engine.evaluate_all_profiles(latest_snapshot)
+
+        # Execution gates are per-assessment: downgrade where current_risk qualifies.
+        # First-gate-wins to match the semantics of the single-profile execute() path.
+        if gate_ctx is not None and self._execution_gates:
+            upgraded: list[RiskAssessment] = []
+            for assessment in assessments:
+                for gate in self._execution_gates:
+                    gate_result = gate.evaluate(gate_ctx, assessment.risk_level)
+                    if gate_result.triggered and gate_result.override_risk is not None:
+                        assessment = replace(
+                            assessment,
+                            risk_level=gate_result.override_risk,
+                            confidence=gate_result.confidence,
+                            rationale=(gate_result.reason, *assessment.rationale),
+                            gate_triggered=type(gate).__name__,
+                        )
+                        break  # first-gate-wins: consistent with execute()
+                upgraded.append(assessment)
+            assessments = upgraded
 
         return AssessAllProfilesResponse(
             ticker=agg_response.ticker,

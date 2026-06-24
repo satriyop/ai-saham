@@ -356,25 +356,21 @@ class BacktestUseCase:
         """
         Extract rule name from rationale list.
 
-        Args:
-            rationale: List of rationale strings from rule evaluation
-
-        Returns:
-            Rule name or "default" if no rule matched
+        Scans all items (not just index 0) so gate reasons prepended at index 0
+        by the rationale-order fix don't shadow the matched rule string.
         """
         if not rationale:
             return "default"
 
-        # First item typically contains rule name
-        first = rationale[0]
-        if "rule '" in first.lower():
-            # Extract name from "Custom rule 'rule_name' matched"
-            start = first.find("'") + 1
-            end = first.find("'", start)
-            if start > 0 and end > start:
-                return first[start:end]
+        for item in rationale:
+            if "rule '" in item.lower():
+                start = item.find("'") + 1
+                end = item.find("'", start)
+                if start > 0 and end > start:
+                    return item[start:end]
 
-        if "default" in first.lower():
-            return "default"
+        for item in rationale:
+            if "default" in item.lower():
+                return "default"
 
         return "unknown"

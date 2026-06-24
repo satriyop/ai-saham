@@ -736,6 +736,10 @@ class AccumulationScreenUseCase:
                         candidate.fundamentals.market_cap_idr
                         if candidate.fundamentals else None
                     ),
+                    free_float_pct=(
+                        candidate.shareholding.free_float_pct
+                        if candidate.shareholding is not None else None
+                    ),
                     five_day_accdist=(
                         candidate.bandar_detector.five_day_accdist
                         if candidate.bandar_detector else None

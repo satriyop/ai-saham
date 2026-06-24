@@ -40,7 +40,7 @@ A **local-first, production-grade CLI application** for stock analysis focused o
 - **Broker History & Top Foreign** - View broker-level flow history and top foreign traders across tickers
 - **Candle Provenance** - Each candle records its source provider (yahoo/idx) with idempotent deduplication
 - **Enrichment Cache** - Analyst consensus, insider trades, fundamentals, corporate actions, forward estimates, company profiles, and earnings history cached with TTL-based refresh
-- **Data Quality Audit** - `saham fetch audit` detects stale data, degraded broker summaries, candle provenance gaps, and enrichment coverage (read-only)
+- **Data Quality Audit** - `saham fetch audit` detects degraded broker summaries, candle provenance gaps, enrichment coverage gaps, and stale core data (using `pending-eod`/`ready`/`bf+` status labels; read-only)
 - **Accumulation Audit** - Replay accumulation signals historically and measure forward returns
 - **Ticker Dashboard** - Read-only, cached-data dashboard via `saham view BBCA` showing notation, valuation, consensus, ownership, bandar signal, company profile, recent candles, corporate actions, insider activity, seasonality, IEV, and sentiment
 - **Universe Overview** - Market-wide view via `saham view universe lq45` showing price, foreign flow, and sector context per ticker
@@ -49,6 +49,10 @@ A **local-first, production-grade CLI application** for stock analysis focused o
 - **Valuation Metrics** - P/E and EPS TTM from Stockbit, cached alongside fundamentals
 - **Watchlist Persistence** - `saham screen accum --save NAME` persists screener results; `saham screen watchlist` / `saham screen compare` to review and diff against fresh runs
 - **Cross-Broker Distribution** - `saham view broker distribution TICKER` shows counterparty flow breakdown across brokers
+- **Risk Engine** - Application-layer `RiskEngine` service wrapping rule-based risk gates (fundamental, bandar, liquidity) with self-contained enrichment fetch; used by both `analyze risk` and `screen accum` for candidate filtering
+- **Data Status Labels** - Staleness replaced with contextual labels (`pending-eod` during market hours, `ready`, `bf+` for backfill, `✓` for aggregation up-to-date)
+- **Regime-Adaptive Backtest Exits** - Backtest exits adjust dynamically based on IHSG market regime (BULLISH/SIDEWAYS/WEAK/RISK_OFF)
+- **IDX Floor Price Filter** - Rp 50 minimum price filter applied during IDX data ingestion
 - **Hexagonal Architecture** - Clean separation of domain, application, and infrastructure
 
 ---
@@ -1205,31 +1209,40 @@ src/
 ├── domain/                          # Pure business logic
 │   ├── entities/                    # Stock, Candle, BrokerFlow, StockMeta
 │   ├── indicators/                  # SMA, EMA, RSI calculations
-│   ├── ports/                       # Interfaces (37+ provider/repository ports)
-│   │   ├── broker_data_provider.py
-│   │   ├── broker_data_repository.py
-│   │   ├── market_data_provider.py
-│   │   ├── market_data_repository.py
-│   │   ├── ai_explainer.py
-│   │   ├── news_provider.py
+│   ├── ports/                       # Interfaces (38 provider/repository ports)
+│   │   ├── broker_data_provider.py / broker_data_repository.py
+│   │   ├── market_data_provider.py / market_data_repository.py
+│   │   ├── ai_explainer.py / ai_analyzer.py
+│   │   ├── news_provider.py / headline_classifier.py
 │   │   ├── analyst_consensus_provider.py
 │   │   ├── bandar_detector_provider.py
+│   │   ├── broker_distribution_provider.py
+│   │   ├── browser_data_provider.py
 │   │   ├── company_profile_provider.py
-│   │   ├── earnings_provider.py
-│   │   ├── forward_estimates_provider.py
+│   │   ├── earnings_provider.py / forward_estimates_provider.py
 │   │   ├── fundamentals_provider.py
 │   │   ├── insider_activity_provider.py
 │   │   ├── intraday_broker_chart_provider.py
+│   │   ├── market_status_provider.py
 │   │   ├── order_book_provider.py
-│   │   ├── running_trade_chart_provider.py
-│   │   ├── running_trade_provider.py
+│   │   ├── running_trade_provider.py / running_trade_chart_provider.py
 │   │   ├── seasonality_provider.py
 │   │   ├── shareholding_provider.py
-│   │   ├── ticker_notation_provider.py
+│   │   ├── stock_meta_provider.py / stock_meta_repository.py
+│   │   ├── system_status_provider.py
+│   │   ├── ticker_notation_provider.py / ticker_notation_repository.py
 │   │   ├── valuation_provider.py
-│   │   └── ... (37+ total port interfaces)
-│   ├── rules/                       # Risk assessment rules
-│   │   ├── rule_engine.py
+│   │   ├── accumulation_journal_store.py / trade_journal_store.py
+│   │   ├── csv_broker_parser.py / persistence.py
+│   │   └── sentiment_repository.py
+│   ├── rules/                       # Risk assessment rules + gates
+│   │   ├── rule_engine.py           # Core rule engine
+│   │   ├── risk_gate.py             # Abstract gate interface + context
+│   │   ├── fundamental_gate.py      # P/E, ROE, Piotroski F-Score, quality gate
+│   │   ├── bandar_gate.py           # Stockbit operator accumulation/distribution score
+│   │   ├── liquidity_gate.py        # Volume + turnover ratio checks
+│   │   ├── free_float_gate.py       # Free float ratio filter
+│   │   ├── base_rule.py
 │   │   ├── conservative.py
 │   │   ├── balanced.py
 │   │   └── aggressive.py
@@ -1237,31 +1250,26 @@ src/
 │   │   ├── analyze_stock.py
 │   │   ├── backtest_engine.py
 │   │   └── trading_calendar.py
-│   └── value_objects/               # Immutable domain objects
-│       ├── risk_assessment.py
-│       ├── backtest_result.py
-│       ├── screener_result.py
+│   └── value_objects/               # Immutable domain objects (34)
+│       ├── risk_assessment.py / risk_signal.py
+│       ├── backtest_result.py / screener_result.py
 │       ├── sentiment.py
-│       ├── indicator_snapshot.py
-│       ├── intraday_confirmation.py
-│       ├── analyst_consensus.py
-│       ├── company_fundamentals.py
+│       ├── indicator_snapshot.py / intraday_confirmation.py
+│       ├── analyst_consensus.py / company_fundamentals.py
 │       ├── company_profile.py
 │       ├── composite_signal_score.py
-│       ├── earnings_record.py
-│       ├── forward_estimates.py
-│       ├── insider_transaction.py
+│       ├── earnings_record.py / forward_estimates.py
+│       ├── insider_transaction.py / bandar_detector_snapshot.py
 │       ├── intraday_broker_chart.py
-│       ├── market_status.py
+│       ├── market_status.py / idx_market.py
 │       ├── order_book_snapshot.py
-│       ├── running_trade_chart.py
-│       ├── running_trade_signal.py
-│       ├── screen_snapshot.py
-│       ├── shareholding_composition.py
-│       ├── ticker_notation.py
-│       ├── valuation_metrics.py
-│       ├── broker_distribution.py
-│       └── ... (33+ total value objects)
+│       ├── running_trade_chart.py / running_trade_signal.py
+│       ├── screen_snapshot.py / accumulation_journal_entry.py
+│       ├── seasonal_edge.py / ticker_notation.py
+│       ├── shareholding_composition.py / corporate_action_event.py
+│       ├── tick_size.py / trade_action.py
+│       ├── valuation_metrics.py / broker_distribution.py
+│       └── skill_annotation.py
 │
 ├── application/                      # Use cases & application services
 │   ├── ports/                         # Application port interfaces
@@ -1304,6 +1312,7 @@ src/
 │   │   ├── tokenizer.py / parser.py / ast_nodes.py
 │   │   ├── validator.py / evaluator.py
 │   ├── services/
+│   │   ├── risk_engine.py            # First-class risk assessment (ADR-024)
 │   │   ├── indicator_registry.py
 │   │   ├── strategy_loader.py
 │   │   ├── skill_generator.py
@@ -1311,7 +1320,10 @@ src/
 │   │   ├── position_sizer.py
 │   │   ├── accumulation_journal.py
 │   │   ├── ai_research.py
-│   │   └── group_mapping.py
+│   │   ├── bootstrap.py              # App initialization + plugin loading
+│   │   ├── broker_quality.py
+│   │   ├── group_mapping.py
+│   │   └── intraday_confirmation_journal.py
 │   ├── ports/
 │   │   ├── formula_translator.py
 │   │   ├── strategy_translator.py
@@ -1327,7 +1339,9 @@ src/
 │   │   ├── yahoo.py                  # Yahoo Finance
 │   │   ├── yahoo_stock_meta.py       # Yahoo stock metadata
 │   │   ├── idx.py                    # IDX broker data
-│   │   └── idx_market.py             # IDX market data
+│   │   ├── idx_market.py             # IDX market data
+│   │   ├── stockbit_historical.py    # Stockbit historical candles
+│   │   └── fallback_provider.py      # Provider fallback chain
 │   ├── browser/                      # Stockbit enrichment providers (24 files)
 │   │   ├── playwright_stockbit_provider.py  # Broker provider (delegates to browser module)
 │   │   ├── playwright_stockbit_browser.py   # Browser lifecycle + session management
@@ -1369,7 +1383,7 @@ src/
 │   │   ├── iev_json_sidecar.py
 │   │   └── trade_journal_jsonl_writer.py
 │   ├── ai/
-│   │   ├── factory.py
+│   │   ├── factory.py                # AI provider factory + rate limiter wrapper
 │   │   ├── deepseek_explainer.py
 │   │   ├── claude_explainer.py
 │   │   ├── openai_explainer.py
@@ -1377,12 +1391,18 @@ src/
 │   │   ├── ollama_explainer.py
 │   │   ├── formula_translator.py / prompt.py
 │   │   ├── strategy_translator.py / prompt.py
+│   │   ├── sentiment_analyzer.py
 │   │   └── mock_explainer.py
 │   ├── sentiment/
-│   │   ├── factory.py
+│   │   ├── factory.py                # Multi-source provider factory
 │   │   ├── google_news_provider.py
+│   │   ├── cnbc_indonesia_provider.py
+│   │   ├── kontan_provider.py
+│   │   ├── composite_provider.py     # Composite across sources
+│   │   ├── deduplication.py
 │   │   ├── keyword_classifier.py
-│   │   └── ai_classifier.py
+│   │   ├── ai_classifier.py
+│   │   └── mock_provider.py
 │   ├── plugins/
 │   │   └── indicator_loader.py       # Plugin discovery
 │   ├── skill/
@@ -1443,6 +1463,8 @@ src/
 **Key Principles:**
 - Domain logic is pure and framework-agnostic
 - External systems never leak into the domain
+- Rule-first, AI-optional — risk gates and rules do the work; AI explains
+- Risk Engine is the single entry point for risk assessment (ADR-024)
 - AI is always optional and swappable (DeepSeek default)
 - Plugins extend functionality without modifying core
 
@@ -1468,14 +1490,14 @@ src/
 | File | Description |
 |------|-------------|
 | `config/default.yaml` | Authoritative CLI defaults source (overridable by `config/user.yaml` and CLI flags) |
-| `config/conservative.yaml` | Conservative profile |
-| `config/balanced.yaml` | Balanced profile |
-| `config/aggressive.yaml` | Aggressive profile |
-| `config/custom_rules.yaml.example` | Custom rules template |
+| `config/user.yaml.example` | Template for personal config overrides |
+| `config/stockbit.yaml` | Stockbit browser profile and session configuration |
+| `config/custom_rules.yaml.example` | Custom rules DSL template |
 | `config/formulas.yaml` | Persisted custom formulas |
 | `config/universes.yaml` | Ticker universe definitions |
 | `config/idx_groups.yaml` | IDX sector/industry group mappings |
 | `config/swing_screener.yaml` | Swing screener calibration (smart money brokers, noise brokers, preset gates) |
+| `config/pre_open_screener.yaml` | Pre-open screener rules and thresholds |
 | `config/csv_mappings/` | CSV import column mapping definitions |
 
 ---
@@ -1502,13 +1524,13 @@ make format
 make clean
 ```
 
-**Project Stats:** ~250 source files (~53k LOC), 98 test files (~26k LOC)
+**Project Stats:** 325 source files (~62k LOC), 148 test files (~36k LOC)
 
 ---
 
 ## Data Storage
 
-- **Location:** `./data.db` (SQLite, configurable via `--db`)
+- **Location:** `data/db/data.db` (SQLite, configurable via `--db` or `config/default.yaml`)
 - **Content:** Cached OHLCV candles (with source provenance), broker summaries, sentiment logs, trade journals, Stockbit enrichment cache (analyst consensus, insider trades, fundamentals, corporate actions, forward estimates, company profiles, shareholding, seasonality)
 - **Refresh:** Use `--refresh` flag or `saham fetch market --universe <name>` to batch update
 - **Enrichment TTL:** Enrichment data auto-refreshes on a per-column TTL basis (daily for price data, weekly for fundamentals, monthly for shareholding)

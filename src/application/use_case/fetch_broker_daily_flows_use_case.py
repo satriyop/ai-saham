@@ -30,7 +30,7 @@ class FetchBrokerDailyFlowsRequest:
 class FetchBrokerDailyFlowsResponse:
     ticker: str
     added_count: int       # new (date, broker_code) pairs stored
-    fetched_count: int     # rows returned by the API call (0 if cached or unsupported)
+    fetched_count: int     # rows actually saved (0 if cached or unsupported)
     cached_range: tuple[date, date] | None
     status: str            # 'fetched' | 'cached' | 'no-data' | 'unsupported'
     active_codes: int = 0  # distinct broker codes in the fetched batch
@@ -69,38 +69,25 @@ class FetchBrokerDailyFlowsUseCase:
                 status="unsupported",
             )
 
+        # Single DB call serves both the freshness check and the before_max_date anchor.
+        before_range = self._repository.get_broker_daily_flow_date_range(ticker, source=source)
         if not request.refresh:
-            cached = self._repository.get_broker_daily_flow_date_range(ticker, source=source)
-            if cached and cached[1] >= expected_latest:
+            if before_range and before_range[1] >= expected_latest:
                 return FetchBrokerDailyFlowsResponse(
                     ticker=ticker,
                     added_count=0,
                     fetched_count=0,
-                    cached_range=cached,
+                    cached_range=before_range,
                     status="cached",
                 )
 
-        before_range = self._repository.get_broker_daily_flow_date_range(ticker, source=source)
-        before_dates: set[tuple[date, str]] = {
-            (f.date, f.broker_code)
-            for f in self._repository.get_broker_daily_flows(ticker, source=source)
-        }
+        before_max_date = before_range[1] if before_range else None
 
         flows = self._provider.fetch_broker_daily_flows(  # type: ignore[attr-defined]
             ticker=ticker,
             broker_codes=request.broker_codes,
             days=request.days,
         )
-
-        if flows:
-            self._repository.save_broker_daily_flows(flows)
-
-        after_dates: set[tuple[date, str]] = {
-            (f.date, f.broker_code)
-            for f in self._repository.get_broker_daily_flows(ticker, source=source)
-        }
-        added_count = len(after_dates - before_dates)
-        cached_range = self._repository.get_broker_daily_flow_date_range(ticker, source=source)
 
         if not flows and not before_range:
             return FetchBrokerDailyFlowsResponse(
@@ -111,11 +98,25 @@ class FetchBrokerDailyFlowsUseCase:
                 status="no-data",
             )
 
-        active_codes = len({f.broker_code for f in flows}) if flows else 0
+        # Save all on first fetch; otherwise only append rows newer than what we have.
+        if before_max_date is None:
+            new_flows = flows or []
+        else:
+            new_flows = [f for f in flows if f.date > before_max_date] if flows else []
+
+        if new_flows:
+            self._repository.save_broker_daily_flows(new_flows)
+            cached_range = self._repository.get_broker_daily_flow_date_range(ticker, source=source)
+        else:
+            cached_range = before_range
+
+        added_count = len(new_flows)
+        active_codes = len({f.broker_code for f in new_flows}) if new_flows else 0
+
         return FetchBrokerDailyFlowsResponse(
             ticker=ticker,
             added_count=added_count,
-            fetched_count=len(flows) if flows else 0,
+            fetched_count=len(new_flows),
             cached_range=cached_range,
             status="fetched",
             active_codes=active_codes,

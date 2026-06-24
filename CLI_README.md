@@ -1894,7 +1894,7 @@ cached data produces identical output.
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
 | `--universe` | `-u` | | Named universe: lq45, idx80, idxcomp100, cached |
-| `--days` | `-d` | 90 | Days of history to fetch |
+| `--days` | `-d` | 365 | Days of history to fetch |
 | `--candles-only` | | false | Skip broker flow fetch |
 | `--broker-only` | | false | Skip candles fetch |
 | `--provider` | | yahoo | Candles provider: yahoo or idx |

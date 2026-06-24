@@ -33,6 +33,7 @@ if TYPE_CHECKING:
     from src.application.services.indicator_registry import IndicatorRegistry
     from src.domain.ports.fundamentals_provider import FundamentalsProvider
     from src.domain.ports.bandar_detector_provider import BandarDetectorProvider
+    from src.domain.ports.shareholding_provider import ShareholdingProvider
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +55,7 @@ class RiskEngine:
         execution_gates: list[RiskGate],
         fundamentals_provider: "FundamentalsProvider | None" = None,
         bandar_provider: "BandarDetectorProvider | None" = None,
+        shareholding_provider: "ShareholdingProvider | None" = None,
     ) -> None:
         self._use_case = AssessRiskUseCase(
             repository=repository,
@@ -63,6 +65,7 @@ class RiskEngine:
         )
         self._fundamentals_provider = fundamentals_provider
         self._bandar_provider = bandar_provider
+        self._shareholding_provider = shareholding_provider
 
     def assess(
         self,
@@ -95,8 +98,9 @@ class RiskEngine:
         """
         Pipeline path: caller supplies pre-loaded GateContext.
 
-        Used by AccumulationScreenUseCase._run_risk_funnel() where candidate
-        data is already loaded — avoids N+1 provider fetches across 800+ tickers.
+        Intended for screener loops (800+ tickers) where candidate data is
+        already loaded — avoids N+1 provider fetches per ticker.
+        Wire up by passing this engine to the screener instead of AssessRiskUseCase.
         """
         return self._use_case.execute(
             AssessRiskRequest(ticker=ticker, profile=profile, gate_context=gate_context)
@@ -107,9 +111,11 @@ class RiskEngine:
         Advanced path: caller provides a full AssessRiskRequest.
 
         Injects gate_context automatically when the caller hasn't supplied one.
-        Use this when the caller needs control over sma_period, ema_period,
-        rsi_period, rules_file, or sentiment fields.
+        Skips gate injection when rules_file is set — the custom-rules branch
+        in the use case returns before gate evaluation, so the fetch is wasted.
         """
+        if request.rules_file is not None:
+            return self._use_case.execute(request)
         return self._use_case.execute(self._inject_gate_context(request))
 
     def assess_all_profiles(self, request: AssessRiskRequest) -> "AssessAllProfilesResponse":
@@ -155,10 +161,20 @@ class RiskEngine:
             except Exception as exc:
                 logger.debug("RiskEngine: bandar snapshot unavailable for %s: %s", ticker, exc)
 
+        free_float: float | None = None
+        if self._shareholding_provider is not None:
+            try:
+                comp = self._shareholding_provider.get_composition(ticker)
+                if comp is not None:
+                    free_float = comp.free_float_pct
+            except Exception as exc:
+                logger.debug("RiskEngine: shareholding unavailable for %s: %s", ticker, exc)
+
         return GateContext(
             ticker=ticker,
             snapshot_date=today,
             piotroski_f_score=piotroski,
             market_cap_idr=market_cap,
+            free_float_pct=free_float,
             five_day_accdist=five_day,
         )

@@ -93,18 +93,28 @@ def create_risk_engine(
 
     from src.application.services.risk_engine import RiskEngine
     from src.domain.rules.bandar_gate import BandarGate
+    from src.domain.rules.free_float_gate import FreeFloatGate
     from src.domain.rules.fundamental_gate import FundamentalGate
     from src.domain.rules.liquidity_gate import LiquidityGate
     from src.infrastructure.persistence.sqlite_market_repository import (
         SQLiteMarketRepository,
     )
 
+    from src.infrastructure.persistence.sqlite_broker_repository import (
+        SQLiteBrokerRepository,
+    )
+
     resolved = _Path(db_path)
     repository = SQLiteMarketRepository(db_path=resolved)
-    registry = create_indicator_registry(market_repository=repository)
+    broker_repository = SQLiteBrokerRepository(db_path=resolved)
+    registry = create_indicator_registry(
+        market_repository=repository,
+        broker_repository=broker_repository,
+    )
 
     fund_prov = None
     bandar_prov = None
+    shareholding_prov = None
     if with_enrichment:
         from src.infrastructure.browser.stockbit_fundamentals import (
             StockbitFundamentalsProvider,
@@ -112,17 +122,22 @@ def create_risk_engine(
         from src.infrastructure.browser.stockbit_bandar import (
             StockbitBandarDetectorProvider,
         )
+        from src.infrastructure.browser.stockbit_shareholding import (
+            StockbitShareholdingProvider,
+        )
 
         fund_prov = StockbitFundamentalsProvider(broker_provider=None, db_path=resolved)
         bandar_prov = StockbitBandarDetectorProvider(broker_provider=None, db_path=resolved)
+        shareholding_prov = StockbitShareholdingProvider(broker_provider=None, db_path=resolved)
 
     return RiskEngine(
         repository=repository,
         registry=registry,
-        structural_gates=[FundamentalGate(), LiquidityGate()],
+        structural_gates=[FundamentalGate(), LiquidityGate(), FreeFloatGate()],
         execution_gates=[BandarGate()],
         fundamentals_provider=fund_prov,
         bandar_provider=bandar_prov,
+        shareholding_provider=shareholding_prov,
     )
 
 

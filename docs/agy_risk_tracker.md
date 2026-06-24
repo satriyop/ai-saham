@@ -16,7 +16,8 @@ This file is the canonical state tracker for the AGY risk methodology improvemen
 | C | Rec 11 | ✅ Done | gate_triggered moved to RiskAssessment; 6 new tests; 1810 total pass |
 | D | Rec 16, 12 | ✅ Done | as_of_date on both ports + infra guards; 18 new tests; 1828 total pass |
 | E | Rec 14 | ✅ Done | risk funnel on survivors; Risk col in display; 9 new tests; 1835 total pass |
-| — | Rec 1, 3, 7, 8, 9, 10 | ⏸️ Deferred | See deferred reasons below |
+| F | Rec 7 | ✅ Done | FreeFloatGate — individual_pct + institution_pct < 15%; 20 new tests; 1855 total pass |
+| — | Rec 1, 3, 8, 9, 10 | ⏸️ Deferred | See deferred reasons below |
 
 **Status legend:** 🔲 Not Started · 🔄 In Progress · ✅ Done · ⏸️ Deferred
 
@@ -32,7 +33,7 @@ This file is the canonical state tracker for the AGY risk methodology improvemen
 | 4 | Piotroski F-Score Safeguard | ✅ Done | FundamentalGate |
 | 5 | Bandarmology Divergence Filter | ✅ Done | BandarGate |
 | 6 | Dynamic Liquidity & Size Gates (market cap tiering) | ✅ Done | LiquidityGate (market cap check) |
-| 7 | Ownership Stability Filter (individual_pct > 70%) | ⏸️ Deferred | verify shareholding_composition data quality first |
+| 7 | Free Float Gate (individual_pct + institution_pct < 15%) | ✅ Done | FreeFloatGate — structural gate, MSCI-aligned threshold |
 | 8 | Z-Score Normalization | ⏸️ Deferred | full domain rewrite — needs ADR; v2 feature |
 | 9 | Factor Decorrelation | ⏸️ Deferred | premature — only 2 indicators; revisit at 5+ |
 | 10 | Alpha vs. Risk Model Separation | ⏸️ Deferred | low payoff; existing separation is adequate |
@@ -189,7 +190,6 @@ This file is the canonical state tracker for the AGY risk methodology improvemen
 |-----|-------------|
 | 1 | Adaptive Regime Tuning needs a win/loss attribution pipeline to generate meaningful `regime_overrides.yaml` — that's a separate data science project |
 | 3 | DXY/USD-IDR macro signals require an offline-capable external data provider; violates local-first mandate until one exists |
-| 7 | Ownership stability filter — verify `shareholding_composition` data completeness for the IDX universe before building logic on it |
 | 8 | Z-scoring replaces the entire `domain/rules/` thresholding model — full domain rewrite; needs ADR and v2 feature flag |
 | 9 | Factor decorrelation is premature with only 2 indicators (RSI + EMA/SMA divergence); revisit when 5+ signals are wired in |
 | 10 | Alpha vs. Risk model separation — existing `AssessRiskUseCase` + `ExplainRiskUseCase` split is adequate; low payoff refactor |
@@ -213,4 +213,5 @@ _Append decisions, blockers, or scope changes here as they come up._
 - 2026-06-23: Phase sequence approved. Tracker created. Implementation begins with Phase A.
 - 2026-06-23: Rec 13 done (1755 tests pass). Rec 15 deferred — AssessRiskUseCase not yet wired into screener. Phase A complete. Next: Phase B.
 - 2026-06-23: Phase B done (1804 tests pass). RiskGate ABC + FundamentalGate + BandarGate + LiquidityGate. Gates opt-in via constructor; all existing callers unchanged. Next: Phase C.
+- 2026-06-23: Phase F done (1855 tests pass). FreeFloatGate — structural gate using individual_pct + institution_pct < 15% (MSCI threshold). Rec 7 complete. ShareholdingProvider wired into RiskEngine; screener funnel zero N+1.
 
