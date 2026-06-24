@@ -32,6 +32,7 @@ from src.application.use_case.accumulation_screen_use_case import (
 )
 from src.application.use_case.assess_risk_use_case import AssessRiskRequest, AssessRiskUseCase
 from src.domain.rules.bandar_gate import BandarGate
+from src.domain.rules.free_float_gate import FreeFloatGate
 from src.domain.rules.fundamental_gate import FundamentalGate
 from src.domain.rules.liquidity_gate import LiquidityGate
 from src.infrastructure.browser.stockbit_analyst import StockbitAnalystConsensusProvider
@@ -354,7 +355,7 @@ def accumulation_run(
     _sb = _make_stockbit_providers(resolved_db)
     _risk_uc = AssessRiskUseCase(
         repository=market_repo,
-        structural_gates=[FundamentalGate(), LiquidityGate()],
+        structural_gates=[FundamentalGate(), LiquidityGate(), FreeFloatGate()],
         execution_gates=[BandarGate()],
     )
     use_case = AccumulationScreenUseCase(

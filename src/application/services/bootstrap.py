@@ -18,6 +18,8 @@ if TYPE_CHECKING:
     from src.domain.ports.broker_data_repository import BrokerDataRepository
     from src.domain.ports.market_data_repository import MarketDataRepository
     from src.infrastructure.persistence.formula_storage import FormulaStorage
+    from src.application.services.risk_engine import RiskEngine
+    from src.application.services.signal_engine import SignalEngine
 
 logger = logging.getLogger(__name__)
 
@@ -138,6 +140,48 @@ def create_risk_engine(
         fundamentals_provider=fund_prov,
         bandar_provider=bandar_prov,
         shareholding_provider=shareholding_prov,
+    )
+
+
+def create_signal_engine(
+    db_path: "str | Path",
+    with_enrichment: bool = False,
+) -> "SignalEngine":
+    """
+    Create a fully-configured SignalEngine.
+
+    Args:
+        db_path: Path to the SQLite database (e.g. data/db/data.db).
+        with_enrichment: When True, inject all 5 Stockbit enrichment providers
+            (bandar, fundamentals, seasonality, analyst, forward_estimates) using
+            the SQLite cache so evaluate() works without a live broker session.
+            When False (default), all providers are None and all factors fall
+            back to neutral (50.0) — useful for testing the engine wiring.
+    """
+    from pathlib import Path as _Path
+
+    from src.application.services.signal_engine import SignalEngine
+
+    if not with_enrichment:
+        return SignalEngine()
+
+    from src.infrastructure.browser.stockbit_bandar import StockbitBandarDetectorProvider
+    from src.infrastructure.browser.stockbit_fundamentals import StockbitFundamentalsProvider
+    from src.infrastructure.browser.stockbit_seasonality import StockbitSeasonalityProvider
+    from src.infrastructure.browser.stockbit_analyst import StockbitAnalystConsensusProvider
+    from src.infrastructure.browser.stockbit_forward_estimates import (
+        StockbitForwardEstimatesProvider,
+    )
+
+    resolved = _Path(db_path)
+    return SignalEngine(
+        bandar_provider=StockbitBandarDetectorProvider(broker_provider=None, db_path=resolved),
+        fundamentals_provider=StockbitFundamentalsProvider(broker_provider=None, db_path=resolved),
+        seasonality_provider=StockbitSeasonalityProvider(broker_provider=None, db_path=resolved),
+        analyst_provider=StockbitAnalystConsensusProvider(broker_provider=None, db_path=resolved),
+        forward_estimates_provider=StockbitForwardEstimatesProvider(
+            broker_provider=None, db_path=resolved
+        ),
     )
 
 

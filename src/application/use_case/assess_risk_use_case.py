@@ -311,9 +311,13 @@ class AssessRiskUseCase:
             return None
 
         ctx = request.gate_context
-        # Enrich with candles for LiquidityGate only if not already provided
+        # Enrich with candles for LiquidityGate only if not already provided.
+        # Use snapshot_date as end_date to prevent look-ahead in backtests.
         if not ctx.recent_candles:
-            candles = self._repository.get_candles(request.ticker.upper())
+            candles = self._repository.get_candles(
+                request.ticker.upper(),
+                end_date=snapshot_date,
+            )
             ctx = replace(ctx, recent_candles=tuple(candles[-20:]))
         return ctx
 
@@ -474,7 +478,7 @@ class AssessRiskUseCase:
                             a,
                             risk_level=gate_result.override_risk,
                             confidence=gate_result.confidence,
-                            rationale=(gate_result.reason,),
+                            rationale=(gate_result.reason, *a.rationale),
                             gate_triggered=type(gate).__name__,
                         )
                         for a in proto_assessments

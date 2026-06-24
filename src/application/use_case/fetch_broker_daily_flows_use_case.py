@@ -98,11 +98,15 @@ class FetchBrokerDailyFlowsUseCase:
                 status="no-data",
             )
 
-        # Save all on first fetch; otherwise only append rows newer than what we have.
-        if before_max_date is None:
+        # Determine which rows to save:
+        # - refresh=True: save everything so existing rows can be corrected (upsert)
+        # - no prior data: save all
+        # - incremental: save rows on-or-after before_max_date (>= not > catches new
+        #   broker codes for a date that's already the max in the DB)
+        if request.refresh or before_max_date is None:
             new_flows = flows or []
         else:
-            new_flows = [f for f in flows if f.date > before_max_date] if flows else []
+            new_flows = [f for f in flows if f.date >= before_max_date] if flows else []
 
         if new_flows:
             self._repository.save_broker_daily_flows(new_flows)
@@ -111,7 +115,9 @@ class FetchBrokerDailyFlowsUseCase:
             cached_range = before_range
 
         added_count = len(new_flows)
-        active_codes = len({f.broker_code for f in new_flows}) if new_flows else 0
+        # Count from the full provider response, not just newly-added rows, so
+        # the caller sees all active broker codes in the fetched window.
+        active_codes = len({f.broker_code for f in flows}) if flows else 0
 
         return FetchBrokerDailyFlowsResponse(
             ticker=ticker,

@@ -54,6 +54,7 @@ from src.application.use_case.swing_analysis_workflow_use_case import (
     SwingAnalysisWorkflowUseCase,
 )
 from src.domain.rules.bandar_gate import BandarGate
+from src.domain.rules.free_float_gate import FreeFloatGate
 from src.domain.rules.fundamental_gate import FundamentalGate
 from src.domain.rules.liquidity_gate import LiquidityGate
 from src.application.use_case.swing_backtest_use_case import (
@@ -706,7 +707,7 @@ def swing(
         fetch_sentiment=_fetch_swing_sentiment,
         load_swing_config=_load_swing_screener_config,
         resolve_preset_targets=resolve_preset_targets,
-        structural_gates=[FundamentalGate(), LiquidityGate()],
+        structural_gates=[FundamentalGate(), LiquidityGate(), FreeFloatGate()],
         execution_gates=[BandarGate()],
     )
     try:

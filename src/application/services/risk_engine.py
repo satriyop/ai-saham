@@ -82,7 +82,7 @@ class RiskEngine:
           - LiquidityGate:   always fires (uses candles from repository)
           - BandarGate:      skips if five_day_accdist is None
         """
-        gate_ctx = self._build_gate_context(ticker)
+        gate_ctx = self._build_gate_context(ticker, as_of_date)
         if as_of_date is not None:
             gate_ctx = replace(gate_ctx, snapshot_date=as_of_date)
         return self._use_case.execute(
@@ -137,15 +137,19 @@ class RiskEngine:
         gate_ctx = self._build_gate_context(request.ticker)
         return replace(request, gate_context=gate_ctx)
 
-    def _build_gate_context(self, ticker: str) -> GateContext:
-        """Fetch enrichment data from injected providers and build a GateContext."""
+    def _build_gate_context(self, ticker: str, as_of_date: date | None = None) -> GateContext:
+        """Fetch enrichment data from injected providers and build a GateContext.
+
+        as_of_date: when set (backtest mode), providers return only data available
+        on or before that date, preventing look-ahead bias.
+        """
         today = date.today()
 
         piotroski: int | None = None
         market_cap: int | None = None
         if self._fundamentals_provider is not None:
             try:
-                fund = self._fundamentals_provider.get_fundamentals(ticker)
+                fund = self._fundamentals_provider.get_fundamentals(ticker, as_of_date)
                 if fund is not None:
                     piotroski = fund.piotroski_f_score
                     market_cap = fund.market_cap_idr
@@ -164,7 +168,7 @@ class RiskEngine:
         free_float: float | None = None
         if self._shareholding_provider is not None:
             try:
-                comp = self._shareholding_provider.get_composition(ticker)
+                comp = self._shareholding_provider.get_composition(ticker, as_of_date)
                 if comp is not None:
                     free_float = comp.free_float_pct
             except Exception as exc:

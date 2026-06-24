@@ -184,11 +184,13 @@ class SwingAnalysisWorkflowUseCase:
             if (self._structural_gates or self._execution_gates) and accumulation_candidate is not None:
                 fund = accumulation_candidate.fundamentals
                 bandar = accumulation_candidate.bandar_detector
+                shareholding = accumulation_candidate.shareholding
                 gate_ctx = GateContext(
                     ticker=request.ticker,
                     snapshot_date=request.today,
                     piotroski_f_score=fund.piotroski_f_score if fund else None,
                     market_cap_idr=fund.market_cap_idr if fund else None,
+                    free_float_pct=shareholding.free_float_pct if shareholding else None,
                     five_day_accdist=bandar.five_day_accdist if bandar else None,
                     bandar_is_distributing=bandar.is_distributing if bandar else False,
                 )

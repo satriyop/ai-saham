@@ -25,16 +25,26 @@ Trustworthy financial analysis requires reproducibility and auditability.
 ## ADR-002: Rule-First, AI-Optional Design
 
 **Decision**
-Rule-based logic is the primary decision mechanism. AI is an optional enhancement layer.
+Rule-based logic is the primary decision mechanism. AI is an optional enhancement layer operating in three distinct tiers.
+
+**AI Tiers**
+
+| Tier | Role | Scope | Status |
+|------|------|-------|--------|
+| T1 Explainer | Narrate pre-computed engine results in natural language | `ExplainRiskUseCase`, `ExplainSignalUseCase` | Implemented |
+| T2 Tuner | Propose engine parameter changes from historical attribution data | `SwingSignalTunerUseCase` | Planned (ADR-027) |
+| T3 Proposer | Generate new strategy/formula/gate artifacts from natural language | `CreateStrategyFromIntentUseCase`, `CreateIndicatorFromIntentUseCase` | Implemented |
 
 **Implications**
 
-* System must work fully without AI enabled.
-* AI may assist explanation, exploration, or augmentation.
-* AI must not be the sole source of truth.
+* System must work fully without AI enabled. All tiers are optional and must fail gracefully without propagating exceptions to the caller.
+* T1 Explainer: AI reads a pre-computed `RiskAssessment` or `SignalAssessment` and returns a narrative. It does not influence scores or levels.
+* T2 Tuner: AI reads historical attribution summaries (gate hit rates, signal accuracy, forward return correlations) and proposes a YAML config diff. Proposed changes require explicit human approval (`--apply` flag + confirmation). AI never applies changes autonomously.
+* T3 Proposer: AI generates YAML artifacts (strategies, formulas). Artifacts are validated by the engine before use. AI output is not trusted until it passes engine validation.
+* AI must not be the sole source of truth for any engine output.
 
 **Rationale**
-Prevents hallucinated or non-auditable decisions.
+Prevents hallucinated or non-auditable decisions. The three-tier model captures the legitimate spectrum of AI assistance — from passive narration to active-but-human-gated parameter suggestion — without opening the door to autonomous decisions. See ADR-014 (REJECTED) for why "Full-AI Mode" (unconstrained bypass) was rejected.
 
 ---
 
@@ -153,15 +163,27 @@ Promotes flexibility without branching logic.
 ## ADR-010: Risk Profiles as Policy Layer
 
 **Decision**
-Risk profiles map analysis results to qualitative interpretation.
+Risk profiles map analysis results to qualitative interpretation. Three built-in profiles exist: Conservative, Balanced, Aggressive. All profile thresholds and gate trigger levels must be config-driven, not hardcoded.
+
+**Built-in Profiles**
+
+| Profile | RSI High-Risk | RSI Low-Risk | EMA/SMA Min Divergence | Decision Logic |
+|---------|--------------|-------------|----------------------|----------------|
+| Conservative | > 75 | < 25 | ≥ 1.0% | Both RSI and trend must agree |
+| Balanced | > 70 | < 30 | ≥ 0% | Majority rules |
+| Aggressive | > 60 | < 40 | ≥ 0.1% | Either can signal |
 
 **Implications**
 
-* Conservative, Balanced, Aggressive.
-* No prediction or trading execution.
+* No prediction or trading execution — profiles are interpretive policy only.
+* Profile thresholds (RSI high/low, EMA/SMA divergence minimum) MUST be readable from `config/swing_screener.yaml`. Python constants are compile-time defaults only; YAML values override at startup.
+* Gate trigger thresholds (Piotroski F-score cutoff, market cap floor, liquidity floor, free float minimum, bandar distribution score threshold) MUST be configurable per profile in `config/swing_screener.yaml`.
+* A profile configuration YAML schema MUST be validated at startup via `yaml_loader.py`. Invalid config aborts startup with a clear error, not a silent fallback.
+* Custom profiles (user-defined YAML) are supported. Custom profile names are strings; built-in profiles use the `RiskProfile` enum.
+* Gate thresholds may be tightened based on market regime (RISK_OFF/WEAK) — see ADR-026 for regime integration rules.
 
 **Rationale**
-Separates math from policy.
+Separates math from policy. Config-driven thresholds enable the learning loop (ADR-027) to propose adjustments without requiring code changes, and enable calibration for IDX market specifics (ADR-028) without forking profiles.
 
 ---
 
@@ -208,22 +230,24 @@ Prevents drift and chaos.
 
 ---
 
-## ADR-014: Full-AI Mode (Explicit Bypass Mode) — DEFERRED
+## ADR-014: Full-AI Mode (Explicit Bypass Mode) — REJECTED
 
-**Status:** Deferred — not implemented. Config stub at `config/full_ai.yaml` is empty (1 line, filename only). No code references exist.
+**Status:** Rejected — 2026-06-24. Config stub `config/full_ai.yaml` deleted. No code references existed.
 
-**Decision**
-The system may support a future **Full-AI Mode** where AI-generated analysis can bypass rule-based logic.
+**Original decision (withdrawn)**
+The system would support a future Full-AI Mode where AI-generated analysis could bypass rule-based logic.
 
-**Implications**
+**Why rejected**
+"Bypass rule-based logic" contradicts the project's foundational philosophy: AI is the Author, the engine is the Validator+Executor, and YAML is the contract between them. A bypass mode collapses this separation. The legitimate use case this ADR was trying to address — AI-enhanced analysis — is fully covered by:
+* ADR-002 T2 Tuner: AI proposes config parameter changes from historical attribution data; human approves before application
+* ADR-027 Learning Loop: systematic feedback from backtest outcomes to engine parameters
+* ADR-003 T3 Proposer: AI generates new strategy/formula YAML artifacts that are validated before use
 
-* Full-AI Mode must be explicitly enabled via configuration.
-* Default mode remains deterministic, rule-first.
-* Full-AI output must be clearly labeled as probabilistic.
-* Rule-based and Full-AI modes must coexist without breaking architecture.
+**Rule**
+No code path may allow AI output to bypass the deterministic rule engine. AI output is always input to a validator, never a direct output to the user as a risk or signal decision.
 
-**Rationale**
-Allows experimentation with advanced AI reasoning while preserving system trust and stability.
+**Superseded by**
+ADR-002 (T2 Tuner tier), ADR-027 (Learning Loop), ADR-003 (Hexagonal validation boundary).
 
 ---
 
@@ -448,35 +472,352 @@ Standardizing use case suffixes prevents namespace collisions, preserves hexagon
 
 ## ADR-024: Signal Engine and Risk Engine as First-Class Application Services
 
-_Date: 2026-06-23 · Context: crystallised from AGY risk methodology improvements (Phases A–E)_
+_Date: 2026-06-23 · Revised: 2026-06-24 · Context: crystallised from AGY risk methodology improvements (Phases A–E); Signal Engine architecture added in revision_
 
 **Decision**
-Signal Engine and Risk Engine are designated first-class application services with distinct, orthogonal responsibilities. Neither is an implementation detail of a CLI adapter or a use-case function body.
+Signal Engine and Risk Engine are designated first-class application services with distinct, orthogonal responsibilities. Neither is an implementation detail of a CLI adapter or a use-case function body. Both must exist as symmetric, injectable, independently testable services.
 
-**Signal Engine** answers: "What is the market telling us about this stock right now?"
-- Owns: accumulation score (0–120), broker quality classification, bandar accumulation intensity as a positive entry signal, seasonality edge, preset gate evaluation
-- Output cadence: per session
+---
 
-**Risk Engine** answers: "How risky is this stock as a holding?"
-- Owns: technical risk rules (RSI overbought/oversold, EMA/SMA trend via built-in rule sets), FundamentalGate (Piotroski F-score ≤ threshold), LiquidityGate (market cap + 20d median transaction value), BandarGate (distribution conflict with LOW_RISK technical signal)
-- Output cadence: per week / quarter
+### Risk Engine
 
-A strong signal does NOT imply low risk. Low risk does NOT imply a good entry signal. Both are evaluated independently. CLI commands compose their outputs to produce a recommendation.
+**Answers:** "How risky is this stock as a holding?"
+
+Owns: 3-tier gate pipeline (structural → technical rules → execution), Piotroski-based fundamental quality, liquidity screening, float structure, bandar distribution conflict detection.
+
+Output cadence: per week / per quarter (gate inputs are slow-moving).
+
+**Interface (`src/application/services/risk_engine.py`):**
+- `assess(ticker, profile, as_of_date)` — self-fetches enrichment via injected providers
+- `assess_with_context(ticker, profile, gate_context)` — pipeline path, avoids N+1 in screener loops
+- `assess_request(request)` — advanced path accepting full `AssessRiskRequest`
+- `assess_all_profiles(request)` / `assess_trend(request, days)` — multi-profile and trend views
+
+**Factory:** `create_risk_engine(db_path, with_enrichment)` in `src/application/services/bootstrap.py`. All gate instantiation and configuration is owned by the factory. Callers never instantiate `RiskGate` subclasses directly.
+
+**Output:** `RiskAssessment` — `risk_level`, `confidence`, `gate_triggered`, `rationale: tuple[str, ...]`, `snapshot_date`
+
+---
+
+### Signal Engine
+
+**Answers:** "What is the market telling us about this stock right now?"
+
+Owns: composite signal score (weighted sum of 6 factors: bandar intensity, foreign flow quality, Piotroski F-score as quality signal, seasonality edge, analyst consensus, forward EPS valuation), preset gate evaluation, entry quality classification.
+
+Output cadence: per session (signal factors are fast-moving).
+
+**Interface (`src/application/services/signal_engine.py`):**
+- `evaluate(ticker, as_of_date)` — self-fetches enrichment via injected providers
+- `evaluate_with_context(ticker, signal_context)` — pipeline path, avoids N+1 in screener loops
+- `evaluate_request(request)` — advanced path accepting full `AssessSignalRequest`
+
+**Factory:** `create_signal_engine(db_path, with_enrichment)` in `src/application/services/bootstrap.py`. All provider injection and weight configuration is owned by the factory.
+
+**Output:** `SignalAssessment` — `score: int (0–100)`, `strength: SignalStrength (STRONG/MODERATE/WEAK)`, `entry_quality: EntryQuality (ENTER/WATCH/AVOID)`, `breakdown: dict[str, float]`, `rationale: tuple[str, ...]`
+
+**Signal weights** are read from `config/swing_screener.yaml` (see ADR-010). Default weights: bandar 20%, foreign flow 20%, Piotroski 20%, seasonality 15%, analyst consensus 15%, forward EPS 10%.
+
+---
+
+### Orthogonality Rule
+
+A strong signal does NOT imply low risk. Low risk does NOT imply a strong signal. Both engines are evaluated independently. A combined recommendation is derived by `CombinedAssessment` (see ADR-026) — neither engine reads the other's output.
+
+---
 
 **Implications**
 
-* `src/application/services/risk_engine.py` — `RiskEngine` class with four entry points:
-  - `assess(ticker, profile, as_of_date)` — self-fetches enrichment via injected providers
-  - `assess_with_context(ticker, profile, gate_context)` — pipeline path to avoid N+1 in screener
-  - `assess_request(request)` — advanced path accepting full `AssessRiskRequest` (sentiment, rules_file, periods)
-  - `assess_all_profiles(request)` / `assess_trend(request, days)` — delegating to underlying use case
-* `src/application/services/bootstrap.py` — `create_risk_engine(db_path, with_enrichment)` factory; all gate configuration is owned here; callers never instantiate `RiskGate` subclasses or `GateContext`
-* CLI adapters call `engine.assess_request(request)` instead of manually wiring `AssessRiskUseCase(...gates...)`
-* `assess_with_context()` MUST be used by screening pipelines (800+ tickers) to avoid N+1 provider fetches — callers pass the pre-loaded `GateContext` built from candidate data
-* The accumulation score logic stays in `AccumulationScreenUseCase` until a future `SignalEngine` service is formalised
+* `AccumulationScreenUseCase` MUST delegate signal scoring to `signal_engine.evaluate_with_context()` — inline `_composite_score()` at line ~358 is a migration target, not a long-term design.
+* `SwingAnalysisWorkflowUseCase` MUST accept both engines via injection, not instantiate gates directly.
+* CLI adapters call `engine.assess_request()` / `engine.evaluate_request()`, never manually wire gates or providers.
+* `*_with_context()` MUST be used by all screening pipelines to avoid N+1 provider fetches. Callers build the context once from pre-loaded candidate data.
+* The unified display layer (`risk_display.py`, `signal_display.py`) is the only place either engine's output is formatted for CLI. Use cases and engines return domain objects, not strings.
 
 **Rationale**
-AGY risk Phases A–E revealed that per-adapter gate wiring produces silent failure modes: two commands (`analyze risk`, `analyze compare`) had no gates wired at all; one command (`screen accum`) always showed Risk=`—` because the adapter forgot to pass `risk_use_case`. A centralised `RiskEngine` service with a factory eliminates this entire class of bug. The orthogonality principle (strong signal ≠ low risk) must be visible in the architecture, not buried as implementation details inside two separate use cases.
+AGY risk Phases A–E revealed that per-adapter gate wiring produces silent failure modes (missing gates, `Risk=—` display). A centralised `RiskEngine` service with factory eliminated this class of bug. The same pattern must apply to the Signal Engine to prevent a parallel class of silent failures where signal scoring logic silently diverges across `AccumulationScreenUseCase`, `SwingAnalysisWorkflowUseCase`, and future commands. See ADR-025 for full Signal Engine specification.
+
+---
+
+## ADR-025: SignalEngine Architecture
+
+_Date: 2026-06-24 · Context: Signal Engine formalized as first-class service, parallel to RiskEngine (ADR-024)_
+
+**Decision**
+`SignalEngine` is a first-class application service in `src/application/services/signal_engine.py`. It is the sole owner of all signal scoring logic. No use case, adapter, or CLI command may compute a composite signal score outside this service.
+
+**Value Object: `SignalAssessment`** (`src/domain/value_objects/signal_assessment.py`)
+
+```python
+@dataclass(frozen=True)
+class SignalAssessment:
+    ticker: str
+    score: int                         # 0–100 weighted composite
+    strength: SignalStrength           # STRONG / MODERATE / WEAK
+    entry_quality: EntryQuality        # ENTER / WATCH / AVOID
+    breakdown: dict[str, float]        # factor name → contribution (0–1)
+    rationale: tuple[str, ...]         # ordered explanations
+    snapshot_date: date
+```
+
+```python
+class SignalStrength(Enum):
+    STRONG = "STRONG"
+    MODERATE = "MODERATE"
+    WEAK = "WEAK"
+
+class EntryQuality(Enum):
+    ENTER = "ENTER"       # score ≥ enter_threshold (default 65) AND strength STRONG
+    WATCH = "WATCH"       # score ≥ watch_threshold (default 40) OR strength MODERATE
+    AVOID = "AVOID"       # score < watch_threshold OR strength WEAK
+```
+
+**Signal Context: `SignalContext`** (parallel to `GateContext` for RiskEngine)
+
+```python
+@dataclass(frozen=True)
+class SignalContext:
+    ticker: str
+    snapshot_date: date
+    bandar_five_day_score: int | None           # -9 to +9 (Stockbit)
+    foreign_flow_quality: float | None          # 0.0–1.0 (from accumulation stream)
+    piotroski_f_score: int | None               # 0–9 (as quality signal, NOT gate)
+    seasonality_monthly_win_rate: float | None  # 0.0–1.0
+    analyst_buy_pct: float | None               # 0.0–1.0
+    analyst_price_target_upside: float | None   # e.g. 0.15 = 15% upside
+    forward_eps_growth: float | None            # e.g. 0.20 = 20% projected growth
+    sentiment: SentimentSnapshot | None         # optional: from FetchSentimentUseCase
+```
+
+**Signal Factors and Default Weights** (configurable via `config/swing_screener.yaml`):
+
+| Factor | Weight | Source |
+|--------|--------|--------|
+| `bandar_intensity` | 20% | `bandar_five_day_score` mapped to 0–1 |
+| `foreign_flow_quality` | 20% | accumulation stream `flow_quality` |
+| `piotroski_quality` | 20% | `piotroski_f_score` / 9 |
+| `seasonality_edge` | 15% | `seasonality_monthly_win_rate` |
+| `analyst_consensus` | 15% | `analyst_buy_pct` × weight + `price_target_upside` × weight |
+| `forward_valuation` | 10% | normalized `forward_eps_growth` |
+
+**Implications**
+
+* `src/application/use_case/accumulation_screen_use_case.py` — `_composite_score()` (line ~358) and `evaluate_foreign_bounce_gates()` (line ~1106) are migration targets. After migration, these functions are deleted.
+* `src/application/use_case/swing_analysis_workflow_use_case.py` — signal assembly must delegate to `signal_engine.evaluate_with_context()`.
+* `create_signal_engine(db_path, with_enrichment)` factory in `src/application/services/bootstrap.py` injects providers and loads weights from YAML.
+* `evaluate_with_context(ticker, SignalContext)` MUST be used by screening loops to avoid N+1 provider fetches.
+* Unit tests must test `SignalEngine` in isolation with injected mock providers — no Stockbit browser in tests.
+* `signal_display.py` in `src/adapters/cli/` is the only place `SignalAssessment` is formatted for CLI output.
+
+**Implementation reference:** `docs/claude_signal_risk_230626.md` R1–R4 plan.
+
+---
+
+## ADR-026: Risk+Signal Pipeline Composition
+
+_Date: 2026-06-24 · Context: Defines how SignalEngine and RiskEngine outputs combine into an action recommendation_
+
+**Decision**
+Features presenting a complete trade recommendation MUST compose both engine outputs through a `CombinedAssessment` domain value object. The composition rule is deterministic and lives in the domain layer.
+
+**Value Object: `CombinedAssessment`** (`src/domain/value_objects/combined_assessment.py`)
+
+```python
+@dataclass(frozen=True)
+class CombinedAssessment:
+    signal: SignalAssessment
+    risk: RiskAssessment
+    action: ActionRecommendation
+    reason: str
+```
+
+**Enum: `ActionRecommendation`** (`src/domain/value_objects/action_recommendation.py`)
+
+```python
+class ActionRecommendation(Enum):
+    ENTER = "ENTER"     # STRONG signal + LOW_RISK
+    WATCH = "WATCH"     # MODERATE signal OR MODERATE risk
+    AVOID = "AVOID"     # WEAK signal
+    BLOCKED = "BLOCKED" # HIGH_RISK (gate fired) — overrides any signal strength
+```
+
+**Composition Rule** (deterministic, no I/O):
+
+```
+if risk.risk_level == HIGH_RISK:
+    → BLOCKED  (gate overrides; signal strength is irrelevant)
+elif signal.strength == STRONG and risk.risk_level == LOW_RISK:
+    → ENTER
+elif signal.strength == WEAK:
+    → AVOID
+else:
+    → WATCH
+```
+
+**Regime Modifier**
+When `market_regime` is RISK_OFF or WEAK:
+- ENTER is downgraded to WATCH (no new entries in a falling market)
+- Gate thresholds in `RiskEngine` tighten per ADR-010 profile config
+
+**Implications**
+
+* `SwingAnalysisWorkflowUseCase` computes both assessments and calls `CombinedAssessment.compose(signal, risk, regime)` to produce the action.
+* `AccumulationScreenUseCase` computes `CombinedAssessment` per candidate and uses it for the final ranking/display column.
+* Neither engine reads the other's output. The composition is always performed by the use case, never inside an engine.
+* `market_regime_use_case.py` output is fetched by the use case layer and passed as `regime: MarketRegime | None` to both engines and the composer.
+* The `BLOCKED` state is the highest-priority output. No signal strength, no AI explanation, no config override can change a BLOCKED result without changing the underlying gate data.
+* CLI display of `CombinedAssessment` uses `rich_display.action_cell()` — a single consistent formatter for all commands.
+
+**Rationale**
+Without a formal composition rule, every CLI command that shows both signal and risk invents its own merging logic — creating divergent action columns in `screen accum`, `analyze swing`, and future commands. A domain-level `CombinedAssessment` ensures the same ENTER/WATCH/AVOID/BLOCKED logic everywhere.
+
+---
+
+## ADR-027: Risk/Signal Learning Loop
+
+_Date: 2026-06-24 · Context: Extends the pre-open learning loop pattern (already implemented) to the swing domain_
+
+**Decision**
+The system provides a four-phase learning loop for the swing domain that records engine outputs, grades forward outcomes, attributes performance to engine components, and produces AI-assisted parameter suggestions. Human approval is required at every change boundary.
+
+**Phases**
+
+| Phase | CLI Command | What it does |
+|-------|-------------|-------------|
+| Record | `swing learn record` | At trade entry, persist `CombinedAssessment` snapshot to journal |
+| Grade | `swing learn grade --days N` | Fetch forward return for each recorded entry; compute WIN/LOSS/NEUTRAL |
+| Attribute | `swing learn attribute` | Correlate outcomes with gate triggers and signal factor breakdown |
+| Tune | `swing learn tune [--apply]` | AI T2 Tuner proposes YAML threshold diff; `--apply` writes after confirmation |
+
+**Journal:** `journals/swing_signal_outcomes.jsonl`
+
+```json
+{
+  "ticker": "BBCA",
+  "entry_date": "2026-06-24",
+  "entry_price": 9100,
+  "signal_score": 72,
+  "signal_strength": "STRONG",
+  "signal_breakdown": {"bandar_intensity": 0.85, "foreign_flow_quality": 0.70, ...},
+  "risk_level": "LOW_RISK",
+  "risk_confidence": 100,
+  "gate_triggered": null,
+  "action": "ENTER",
+  "outcome_date": null,
+  "exit_price": null,
+  "return_pct": null,
+  "outcome": null
+}
+```
+
+**Attribution Rules**
+- Attribution requires minimum 30 graded outcomes before generating suggestions (enforce in `SwingSignalTunerUseCase`).
+- Attribution is statistical correlation, not causal proof. AI tuner output must include a confidence note.
+- Gate attribution: for each gate, compute `gated_win_rate` (forward return of gated candidates) vs. `passed_win_rate`. If `gated_win_rate > passed_win_rate + 10%`, the gate is being too aggressive and the threshold should consider relaxing.
+
+**AI Tuner (T2) Constraints**
+- Input: attribution summary JSON (not raw candles, not raw journal entries)
+- Output: proposed YAML diff to `config/swing_screener.yaml`
+- AI never reads current config directly — the use case provides a structured summary
+- `--apply` flag writes proposed changes after user confirmation prompt; without `--apply`, proposals are printed only
+- Applied changes are recorded in `journals/swing_tuning_log.jsonl` with timestamp, source attribution, and which parameters changed
+
+**Implications**
+
+* `src/application/services/swing_signal_journal.py` — new service, owns journal read/write
+* `src/application/use_case/swing_signal_tuner_use_case.py` — new use case, AI T2 Tuner
+* CLI: `src/adapters/cli/swing_learn_commands.py`, `swing_learn_display.py`
+* Persistence: `journals/swing_signal_outcomes.jsonl`, `journals/swing_tuning_log.jsonl`
+* `SwingBacktestUseCase` must apply `RiskEngine` gate evaluation during walk-forward simulation (see also ADR-026) to produce gate attribution data in `BacktestResult`
+* The `grade` phase fetches forward returns from cached candle data — no new network calls required
+* Minimum sample size of 30 outcomes is a domain rule, not a config value
+
+**Rationale**
+The pre-open learning loop (`learn snapshot → track → grade → tune`) is the best adaptive infrastructure in the codebase. The same four-phase pattern applied to the swing domain closes the gap between backtested performance and live engine calibration. AI's T2 Tuner role (propose, not apply) keeps humans in the loop while leveraging AI's ability to read statistical patterns across many trades.
+
+---
+
+## ADR-028: IDX Market Microstructure Rules
+
+_Date: 2026-06-24 · Context: Indonesia Stock Exchange structural constraints that must be enforced in domain logic_
+
+**Decision**
+Domain and application layer logic must respect six IDX-specific market microstructure constraints. These are enforced as domain value object functions or gate context fields, never as adapter-layer heuristics.
+
+---
+
+### Rule 1: Tick Size Compliance
+
+**IDX tick table (Regulation No. KEP-00066/BEI/07-2020):**
+
+| Price Range (Rp) | Tick Size (Rp) |
+|------------------|----------------|
+| < 200 | 1 |
+| 200 – 499 | 2 |
+| 500 – 1,999 | 5 |
+| 2,000 – 4,999 | 10 |
+| ≥ 5,000 | 25 |
+
+**Rule:** All computed price levels (entry, stop loss, target) from `PositionSizer` MUST be rounded to the nearest valid tick using `round_to_tick(price)` (round down for stops, round up for targets to be conservative).
+
+**Implementation:** `src/domain/value_objects/tick_size.py` — pure function, no I/O. Used by `src/application/services/position_sizer.py`.
+
+---
+
+### Rule 2: Price Floor (existing — ADR-022)
+
+Rp 50 absolute floor. No changes — already enforced.
+
+---
+
+### Rule 3: Auto-Rejection Band Proximity
+
+**IDX rule:** Orders outside ±35% of previous close are auto-rejected (price ≥ Rp 200) or ±25% (price < Rp 200).
+
+**Rule:** `GateContext` MUST carry `price_vs_upper_rejection_pct: float | None` (% distance to upper rejection band). When a stock has moved ≥ 25% intraday, `LiquidityGate` adds an advisory rationale note (non-blocking). Proximity ≥ 30% of the band is a MODERATE downgrade advisory.
+
+---
+
+### Rule 4: Foreign Ownership Cap Saturation
+
+**IDX rule:** Most stocks cap foreign ownership at 49%. Banking and strategic sectors have lower sector-specific caps.
+
+**Rule:** `SignalContext` MUST carry `foreign_ownership_pct: float | None` and `foreign_ownership_cap_pct: float | None`. When `foreign_ownership_pct / foreign_ownership_cap_pct > 0.92` (within 8% of cap) AND the primary signal driver is foreign flow (`foreign_flow_quality` is the top-contributing factor), the `SignalEngine` attenuates the foreign flow weight by 50% and adds a cap-proximity note to rationale.
+
+**Source:** `StockbitShareholdingProvider` → `foreign_ownership_pct`. `foreign_ownership_cap_pct` is a sector lookup table (hardcoded: 49% default, 33% for media/banking where applicable).
+
+---
+
+### Rule 5: Bandar Score Granularity
+
+**Current gap:** `BandarGate` uses `bandar_is_distributing: bool` (any score < 0 = distributing). Stockbit provides a -9 to +9 score; a -1 and a -9 carry very different implications.
+
+**Rule:** `GateContext.bandar_is_distributing: bool` is replaced by `GateContext.bandar_five_day_score: int | None` (-9 to +9). `BandarGate` compares `bandar_five_day_score ≤ distribution_threshold` where `distribution_threshold` is configurable per profile in `config/swing_screener.yaml` (default: -2). Score of -1 is treated as noise and does not trigger the gate.
+
+**Migration:** `StockbitBandarDetectorProvider` already returns the numeric score. `GateContext` construction in `bootstrap.py` must pass the score, not the boolean.
+
+---
+
+### Rule 6: T+2 Settlement Risk
+
+**IDX rule:** Settlement is T+2. For thin-float stocks with high foreign ownership near the cap, large foreign exits at T can create forced selling at T+2 as counterparties scramble to cover.
+
+**Rule:** When `free_float_pct < 20%` AND `foreign_ownership_pct > 35%`, `FreeFloatGate` adds a settlement-risk advisory to rationale (non-blocking, informational). It does not change `risk_level` unless `free_float_pct < 15%` (which already triggers HIGH_RISK).
+
+---
+
+**Implications**
+
+* `src/domain/value_objects/tick_size.py` — new pure domain function
+* `src/application/services/position_sizer.py` — apply `round_to_tick()` to all price levels
+* `src/domain/rules/risk_gate.py` — `GateContext` adds `bandar_five_day_score`, `price_vs_upper_rejection_pct`; removes `bandar_is_distributing`
+* `src/domain/rules/bandar_gate.py` — updated to compare score vs. threshold
+* `src/domain/value_objects/signal_assessment.py` — `SignalContext` adds `foreign_ownership_pct`, `foreign_ownership_cap_pct`
+* `src/application/services/bootstrap.py` — construct updated `GateContext` from enrichment data
+* All tests referencing `GateContext(bandar_is_distributing=...)` must be updated to `bandar_five_day_score=...`
+
+**Rationale**
+Professional-grade IDX tools (Bloomberg PORT with IDX data, local tools like RTI Business, Stockbit Pro) all respect these structural constraints. Ignoring tick sizes causes computed stop-loss levels to be invalid on exchange. Ignoring auto-rejection bands creates unrealistic exit scenarios in backtest. Ignoring foreign cap saturation overstates the longevity of foreign flow signals in near-cap stocks.
 
 ---
 

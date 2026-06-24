@@ -14,6 +14,7 @@ from decimal import Decimal
 import pytest
 
 from src.application.use_case.assess_risk_use_case import (
+    AssessAllProfilesResponse,
     AssessRiskRequest,
     AssessRiskUseCase,
 )
@@ -287,3 +288,27 @@ def test_structural_gate_fires_before_execution_gate():
     resp = uc.execute(req)
     assert resp.gate_triggered == "FundamentalGate"
     assert resp.assessment.risk_level == RiskLevel.HIGH_RISK
+
+
+# ─── execute_all_profiles rationale preservation (Fix #8) ────────────────────
+
+def test_structural_gate_preserves_technical_rationale_in_all_profiles():
+    """Structural gate override must prepend gate reason, not replace all rationale."""
+    uc = _make_use_case(structural_gates=[FundamentalGate()])
+    req = AssessRiskRequest(
+        ticker="BBCA",
+        gate_context=_ctx(piotroski=1),  # triggers FundamentalGate (F-score ≤ 3)
+    )
+    resp = uc.execute_all_profiles(req)
+    assert isinstance(resp, AssessAllProfilesResponse)
+    for assessment in resp.assessments:
+        # Gate must have fired
+        assert assessment.gate_triggered == "FundamentalGate"
+        assert assessment.risk_level == RiskLevel.HIGH_RISK
+        # Rationale must include gate reason AND profile-specific technical lines
+        assert len(assessment.rationale) > 1, (
+            f"Profile {assessment.profile}: expected gate reason + technical rationale, "
+            f"got only: {assessment.rationale}"
+        )
+        # First element is the gate reason
+        assert "Piotroski" in assessment.rationale[0] or "F-score" in assessment.rationale[0]
