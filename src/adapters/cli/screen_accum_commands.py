@@ -524,7 +524,7 @@ def _save_watchlist(
             ticker=c.ticker,
             rank=i + 1,
             flow_score=c.score,
-            composite_score=c.composite_signal.total if c.composite_signal else None,
+            composite_score=c.signal_assessment.assessment.score if c.signal_assessment else None,
             consecutive_streak=c.consecutive_streak,
             net_buy_ratio=c.net_buy_ratio,
             bci_label=c.bci_label,

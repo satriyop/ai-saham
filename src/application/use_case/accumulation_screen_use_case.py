@@ -28,11 +28,12 @@ from typing import TYPE_CHECKING
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
+    from src.application.services.signal_engine import SignalEngine
     from src.application.use_case.assess_risk_use_case import AssessRiskUseCase
+    from src.application.use_case.assess_signal_use_case import AssessSignalResponse
     from src.domain.value_objects.analyst_consensus import AnalystConsensus
     from src.domain.value_objects.bandar_detector_snapshot import BandarDetectorSnapshot
     from src.domain.value_objects.company_fundamentals import CompanyFundamentals
-    from src.domain.value_objects.composite_signal_score import CompositeSignalScore
     from src.domain.value_objects.forward_estimates import ForwardEstimates
     from src.domain.value_objects.risk_assessment import RiskAssessment
     from src.domain.value_objects.seasonal_edge import SeasonalEdge
@@ -211,7 +212,7 @@ class AccumulationCandidate:
     # Forward EPS/Revenue estimates (Stockbit analyst consensus endpoint)
     forward_estimates: "ForwardEstimates | None" = None
     # Composite signal — all enrichment dimensions combined into 0–100 score
-    composite_signal: "CompositeSignalScore | None" = None
+    signal_assessment: "AssessSignalResponse | None" = None
     # Phase E: post-screening risk assessment (populated by risk funnel when configured)
     risk_assessment: "RiskAssessment | None" = None
 
@@ -262,7 +263,13 @@ class AccumulationCandidate:
             "latest_candle_date": self.latest_candle_date.isoformat() if self.latest_candle_date else None,
             "latest_broker_date": self.latest_broker_date.isoformat() if self.latest_broker_date else None,
             "forward_estimates": self.forward_estimates.to_dict() if self.forward_estimates else None,
-            "composite_signal": self.composite_signal.to_dict() if self.composite_signal else None,
+            "signal_assessment": {
+                "score": self.signal_assessment.assessment.score,
+                "strength": self.signal_assessment.assessment.strength.value,
+                "entry_quality": self.signal_assessment.assessment.entry_quality.value,
+                "breakdown": self.signal_assessment.assessment.breakdown_dict,
+                "coverage_warning": self.signal_assessment.coverage_warning,
+            } if self.signal_assessment else None,
             "risk_level": self.risk_assessment.risk_level_name if self.risk_assessment else None,
             "risk_confidence": self.risk_assessment.confidence if self.risk_assessment else None,
             "risk_gate": self.risk_assessment.gate_triggered if self.risk_assessment else None,
@@ -355,119 +362,6 @@ def _score(candidate: AccumulationCandidate) -> tuple[float, dict]:
     return total, breakdown
 
 
-def _composite_score(candidate: "AccumulationCandidate") -> "CompositeSignalScore":
-    """Combine 6 enrichment dimensions into a weighted 0–100 composite.
-
-    Missing data defaults to 50 (neutral) so partial data still ranks meaningfully.
-    Called after all enrichment is attached to the candidate.
-    """
-    from src.domain.value_objects.composite_signal_score import CompositeSignalScore
-
-    # ─── Foreign flow: normalize existing flow score (0–120 soft cap → 0–100) ───
-    foreign_component = min(candidate.score, 120.0) / 120.0 * 100.0
-
-    # ─── Bandar detector ───
-    has_bandar = candidate.bandar_detector is not None
-    if has_bandar:
-        bd = candidate.bandar_detector
-        num_optional = sum(
-            1 for x in [bd.top3_accdist, bd.top5_accdist, bd.top10_accdist]
-            if x is not None
-        )
-        max_range = (3 + num_optional) * 2  # 6 without top3/5/10, 12 with all
-        bandar_component = (bd.broad_score + max_range) / (2 * max_range) * 100.0
-        bandar_component = max(0.0, min(100.0, bandar_component))
-    else:
-        bandar_component = 50.0
-
-    # ─── Piotroski F-Score (0–9 → 0–100) ───
-    has_piotroski = (
-        candidate.fundamentals is not None
-        and candidate.fundamentals.piotroski_f_score is not None
-    )
-    piotroski_component = (
-        candidate.fundamentals.piotroski_f_score / 9.0 * 100.0
-        if has_piotroski
-        else 50.0
-    )
-
-    # ─── Seasonality: win rate weighted by direction ───
-    has_seasonality = candidate.seasonal_edge is not None
-    if has_seasonality:
-        se = candidate.seasonal_edge
-        if se.is_tailwind:
-            seasonality_component = se.win_rate_pct          # 50–100 range
-        elif se.is_headwind:
-            seasonality_component = 100.0 - se.win_rate_pct  # 0–50 range
-        else:
-            seasonality_component = 50.0
-    else:
-        seasonality_component = 50.0
-
-    # ─── Analyst consensus: buy% (60 pts) + target upside (40 pts, capped 30%) ───
-    has_analyst = (
-        candidate.analyst_consensus is not None
-        and candidate.analyst_consensus.analyst_count > 0
-    )
-    if has_analyst:
-        ac = candidate.analyst_consensus
-        buy_pct = ac.buy_count / ac.analyst_count * 100.0
-        upside = ac.upside_pct or 0.0
-        buy_score = buy_pct / 100.0 * 60.0
-        upside_score = max(0.0, min(30.0, upside)) / 30.0 * 40.0
-        analyst_component = min(100.0, buy_score + upside_score)
-    else:
-        analyst_component = 50.0
-
-    # ─── Forward P/E valuation (lower P/E = higher score) ───
-    has_forward_eps = (
-        candidate.forward_estimates is not None
-        and candidate.forward_estimates.forward_pe is not None
-    )
-    if has_forward_eps:
-        fpe = candidate.forward_estimates.forward_pe
-        if fpe <= 0:
-            fwd_component = 50.0  # loss-making / negative P/E → neutral
-        elif fpe <= 10:
-            fwd_component = 95.0
-        elif fpe <= 15:
-            fwd_component = 95.0 - (fpe - 10) / 5.0 * 20.0   # 75–95
-        elif fpe <= 20:
-            fwd_component = 75.0 - (fpe - 15) / 5.0 * 25.0   # 50–75
-        elif fpe <= 30:
-            fwd_component = 50.0 - (fpe - 20) / 10.0 * 25.0  # 25–50
-        else:
-            fwd_component = max(0.0, 25.0 - (fpe - 30) / 10.0 * 15.0)  # 0–25
-    else:
-        fwd_component = 50.0
-
-    total = round(
-        bandar_component * 0.20
-        + foreign_component * 0.20
-        + piotroski_component * 0.20
-        + seasonality_component * 0.15
-        + analyst_component * 0.15
-        + fwd_component * 0.10,
-        1,
-    )
-
-    return CompositeSignalScore(
-        ticker=candidate.ticker,
-        bandar=round(bandar_component, 1),
-        foreign_flow=round(foreign_component, 1),
-        piotroski=round(piotroski_component, 1),
-        seasonality=round(seasonality_component, 1),
-        analyst=round(analyst_component, 1),
-        forward_eps=round(fwd_component, 1),
-        has_bandar=has_bandar,
-        has_piotroski=has_piotroski,
-        has_seasonality=has_seasonality,
-        has_analyst=has_analyst,
-        has_forward_eps=has_forward_eps,
-        total=total,
-    )
-
-
 class AccumulationScreenUseCase:
     """
     Scan multiple tickers for foreign accumulation patterns.
@@ -491,7 +385,10 @@ class AccumulationScreenUseCase:
         ticker_notation_provider: "TickerNotationProvider | None" = None,
         idx_groups: "dict[str, list[str]] | None" = None,
         risk_use_case: "AssessRiskUseCase | None" = None,
+        signal_engine: "SignalEngine | None" = None,
     ) -> None:
+        from src.application.services.signal_engine import SignalEngine as _SignalEngine
+
         self._broker_repo = broker_repository
         self._market_repo = market_repository
         self._corp_action_repo = corporate_action_repo
@@ -504,6 +401,7 @@ class AccumulationScreenUseCase:
         self._fundamentals_provider = fundamentals_provider
         self._ticker_notation_provider = ticker_notation_provider
         self._risk_use_case = risk_use_case
+        self._signal_engine = signal_engine or _SignalEngine()
         # idx_groups: {group_name: [ticker, ...]} from config/idx_groups.yaml
         # Build a reverse map: ticker → group_name for fast lookup
         self._ticker_to_group: dict[str, str] = {}
@@ -673,17 +571,44 @@ class AccumulationScreenUseCase:
                     ticker=result.ticker,
                 )
 
-            # Composite signal — computed after all enrichment is attached
-            result.composite_signal = _composite_score(result)
+            # Signal assessment — delegates to SignalEngine (first-class service, ADR-025)
+            from src.domain.value_objects.signal_assessment import SignalContext
+
+            bd = result.bandar_detector
+            se = result.seasonal_edge
+            ac = result.analyst_consensus
+            fe = result.forward_estimates
+            fund = result.fundamentals
+            num_optional = sum(
+                1 for x in [bd.top3_accdist, bd.top5_accdist, bd.top10_accdist]
+                if x is not None
+            ) if bd is not None else 0
+
+            signal_ctx = SignalContext(
+                ticker=result.ticker,
+                snapshot_date=today,
+                foreign_flow_quality=min(result.score, 120.0) / 120.0,
+                bandar_broad_score=bd.broad_score if bd else None,
+                bandar_max_range=(3 + num_optional) * 2 if bd else 6,
+                piotroski_f_score=fund.piotroski_f_score if fund else None,
+                seasonality_win_rate=se.win_rate_pct if se else None,
+                seasonality_avg_return_pct=se.avg_monthly_return_pct if se else None,
+                analyst_buy_pct=(ac.buy_count / ac.analyst_count) if ac and ac.analyst_count > 0 else None,
+                analyst_upside_pct=ac.upside_pct if ac else None,
+                forward_pe=fe.forward_pe if fe else None,
+            )
+            result.signal_assessment = self._signal_engine.evaluate_with_context(
+                result.ticker, signal_ctx
+            )
 
             if result.score < request.min_score:
                 continue
             candidates.append(result)
 
-        # Primary sort: composite score (when available); tiebreaker: flow score + seasonal
+        # Primary sort: signal score (when available); tiebreaker: flow score + seasonal
         candidates.sort(
             key=lambda c: (
-                c.composite_signal.total if c.composite_signal else 0.0,
+                c.signal_assessment.assessment.score if c.signal_assessment else 0,
                 c.score,
                 c.seasonal_edge.score if c.seasonal_edge else 0.0,
             ),

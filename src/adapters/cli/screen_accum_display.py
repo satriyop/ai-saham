@@ -193,10 +193,10 @@ def display_results(
         else:
             score_style = ""
 
-        # Composite score cell
-        if c.composite_signal is not None:
-            cs = c.composite_signal.total
-            conviction = "★" if c.composite_signal.is_high_conviction else " "
+        # Signal assessment cell
+        if c.signal_assessment is not None:
+            sa = c.signal_assessment.assessment
+            cs = sa.score
             if cs >= 70:
                 cmp_style = "bold green"
             elif cs >= 55:
@@ -205,7 +205,7 @@ def display_results(
                 cmp_style = "yellow"
             else:
                 cmp_style = "red"
-            cmp_cell = Text(f"{cs:.0f}{conviction}", style=cmp_style)
+            cmp_cell = Text(sa.score_label, style=cmp_style)
         else:
             cmp_cell = Text("—", style="bright_black")
 
@@ -250,9 +250,15 @@ def display_results(
                 f" flow={bd.get('flow', 0):.1f} bb={bd.get('bb', 0):.1f}"
                 f" inst={bd.get('cons', 0) * 0:.0f}]"  # BCI score logic placeholder
             ))
-        if show_breakdown and c.composite_signal is not None:
+        if show_breakdown and c.signal_assessment is not None:
+            bd = c.signal_assessment.assessment.breakdown_dict
             detail_lines.append(Text(
-                f"    {c.ticker} COMPOSITE: {c.composite_signal.breakdown_label()}",
+                f"    {c.ticker} SIGNAL: [ban={bd.get('bandar_intensity', 0):.0f}"
+                f" ff={bd.get('foreign_flow_quality', 0):.0f}"
+                f" pio={bd.get('piotroski_quality', 0):.0f}"
+                f" sea={bd.get('seasonality_edge', 0):.0f}"
+                f" ana={bd.get('analyst_consensus', 0):.0f}"
+                f" fwd={bd.get('forward_valuation', 0):.0f}]",
                 style="dim",
             ))
 

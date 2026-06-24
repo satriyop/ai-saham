@@ -10,7 +10,11 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from src.application.services.signal_engine import SignalEngine
+    from src.application.use_case.assess_signal_use_case import AssessSignalResponse
 
 from src.application.services.position_sizer import (
     PercentSizingResult,
@@ -84,6 +88,7 @@ class SwingAnalysisWorkflowResponse:
     take_profit_pct: Decimal
     stop_loss_pct: Decimal
     regime_label: str | None
+    signal_assessment: "AssessSignalResponse | None" = None
     warnings: tuple[str, ...] = ()
 
 
@@ -107,6 +112,7 @@ class SwingAnalysisWorkflowUseCase:
         resolve_preset_targets: Callable[[str | None, dict], tuple[Decimal, Decimal]],
         structural_gates: list[RiskGate] | None = None,
         execution_gates: list[RiskGate] | None = None,
+        signal_engine: "SignalEngine | None" = None,
     ) -> None:
         self._market_repo = market_repository
         self._broker_repo = broker_repository
@@ -123,6 +129,7 @@ class SwingAnalysisWorkflowUseCase:
         self._resolve_preset_targets = resolve_preset_targets
         self._structural_gates: list[RiskGate] = structural_gates or []
         self._execution_gates: list[RiskGate] = execution_gates or []
+        self._signal_engine = signal_engine
 
     def execute(
         self,
@@ -203,6 +210,49 @@ class SwingAnalysisWorkflowUseCase:
             )
         except Exception as exc:
             warnings.append(f"Risk assessment unavailable: {exc}")
+
+        signal_assessment = None
+        if self._signal_engine is not None:
+            try:
+                if accumulation_candidate is not None and accumulation_candidate.signal_assessment is not None:
+                    # Fast path: reuse screener's already-computed result — no recomputation
+                    signal_assessment = accumulation_candidate.signal_assessment
+                elif accumulation_candidate is not None:
+                    # Fallback: candidate exists but screener ran without a signal_engine
+                    from src.domain.value_objects.signal_assessment import SignalContext
+                    bd = accumulation_candidate.bandar_detector
+                    se = accumulation_candidate.seasonal_edge
+                    ac = accumulation_candidate.analyst_consensus
+                    fe = accumulation_candidate.forward_estimates
+                    fund = accumulation_candidate.fundamentals
+                    num_optional = sum(
+                        1 for x in [bd.top3_accdist, bd.top5_accdist, bd.top10_accdist]
+                        if x is not None
+                    ) if bd is not None else 0
+                    signal_ctx = SignalContext(
+                        ticker=request.ticker,
+                        snapshot_date=request.today,
+                        foreign_flow_quality=min(accumulation_candidate.score, 120.0) / 120.0,
+                        bandar_broad_score=bd.broad_score if bd else None,
+                        bandar_max_range=(3 + num_optional) * 2 if bd else 6,
+                        piotroski_f_score=fund.piotroski_f_score if fund else None,
+                        seasonality_win_rate=se.win_rate_pct if se else None,
+                        seasonality_avg_return_pct=se.avg_monthly_return_pct if se else None,
+                        analyst_buy_pct=(ac.buy_count / ac.analyst_count)
+                            if ac and ac.analyst_count > 0 else None,
+                        analyst_upside_pct=ac.upside_pct if ac else None,
+                        forward_pe=fe.forward_pe if fe else None,
+                    )
+                    signal_assessment = self._signal_engine.evaluate_with_context(
+                        request.ticker, signal_ctx
+                    )
+                else:
+                    # No candidate — provider-based standalone evaluation
+                    signal_assessment = self._signal_engine.evaluate(
+                        request.ticker, request.today
+                    )
+            except Exception as exc:
+                warnings.append(f"Signal assessment unavailable: {exc}")
 
         strategy_risk_level = None
         strategy_risk_name = request.risk_strategy
@@ -343,6 +393,7 @@ class SwingAnalysisWorkflowUseCase:
             take_profit_pct=take_profit_pct,
             stop_loss_pct=stop_loss_pct,
             regime_label=regime_label,
+            signal_assessment=signal_assessment,
             warnings=tuple(warnings),
         )
 

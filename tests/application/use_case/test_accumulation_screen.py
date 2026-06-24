@@ -465,129 +465,134 @@ def test_screen_attaches_ticker_notation_without_changing_score():
     assert enriched.candidates[0].to_dict()["ticker_notation"]["notations"][0]["code"] == "X"
 
 
-# ─── Composite Signal Score ─────────────────────────────────────────────────
+# ─── Signal Assessment (migrated from _composite_score) ──────────────────────
+#
+# These tests verify behavioral parity with the deleted _composite_score().
+# They now use AssessSignalUseCase + SignalContext directly (the public API)
+# instead of the removed internal function.
 
 from datetime import date as _date
 from decimal import Decimal as _Decimal
 
-from src.application.use_case.accumulation_screen_use_case import _composite_score
-from src.domain.value_objects.analyst_consensus import AnalystConsensus
-from src.domain.value_objects.bandar_detector_snapshot import BandarDetectorSnapshot
-from src.domain.value_objects.company_fundamentals import CompanyFundamentals
-from src.domain.value_objects.seasonal_edge import SeasonalEdge
+from src.application.use_case.assess_signal_use_case import AssessSignalRequest, AssessSignalUseCase
+from src.domain.value_objects.signal_assessment import SignalContext, SignalStrength
 
 
-def _minimal_candidate(score: float = 80.0) -> "AccumulationCandidate":
-    from src.application.use_case.accumulation_screen_use_case import AccumulationCandidate
-    return AccumulationCandidate(
+def _assess(
+    flow_score: float = 60.0,
+    bandar_broad_score: int | None = None,
+    bandar_max_range: int = 6,
+    piotroski_f_score: int | None = None,
+    seasonality_win_rate: float | None = None,
+    seasonality_avg_return_pct: float | None = None,
+    analyst_buy_pct: float | None = None,
+    analyst_upside_pct: float | None = None,
+    forward_pe: float | None = None,
+):
+    """Build a SignalContext from screener-path data and run AssessSignalUseCase."""
+    ctx = SignalContext(
         ticker="TEST",
-        window_days=7,
-        net_buy_days=5,
-        total_days=7,
-        net_buy_ratio=5 / 7,
-        total_net_value=_Decimal("1_000_000_000"),
-        consecutive_streak=5,
-        foreign_vwap=_Decimal("1000"),
-        current_price=_Decimal("950"),
-        vwap_discount_pct=5.0,
-        rsi=42.0,
-        trend="UP",
-        score=score,
-        top_brokers=["ZP", "AK"],
-        institutional_flag=True,
+        snapshot_date=_date.today(),
+        foreign_flow_quality=min(flow_score, 120.0) / 120.0,
+        bandar_broad_score=bandar_broad_score,
+        bandar_max_range=bandar_max_range,
+        piotroski_f_score=piotroski_f_score,
+        seasonality_win_rate=seasonality_win_rate,
+        seasonality_avg_return_pct=seasonality_avg_return_pct,
+        analyst_buy_pct=analyst_buy_pct,
+        analyst_upside_pct=analyst_upside_pct,
+        forward_pe=forward_pe,
     )
+    return AssessSignalUseCase().execute(AssessSignalRequest(ticker="TEST", signal_context=ctx))
 
 
-def test_composite_score_all_neutral_when_no_enrichment():
-    c = _minimal_candidate(score=60.0)
-    cs = _composite_score(c)
-    # With no enrichment data: bandar=50, piotroski=50, seasonality=50, analyst=50, fwd=50
-    # Only foreign_flow from score=60 → 60/120*100=50.0
-    # Total = 0.20*50 + 0.20*50 + 0.20*50 + 0.15*50 + 0.15*50 + 0.10*50 = 50.0
-    assert cs.total == 50.0
-    assert not cs.has_bandar
-    assert not cs.has_piotroski
-    assert not cs.has_seasonality
-    assert not cs.has_analyst
-    assert not cs.has_forward_eps
+def test_signal_all_neutral_when_no_enrichment():
+    # score=60 → foreign_quality=0.5 → foreign component=50.0; all others neutral=50
+    # total = 50 (all factors neutral) → score=50
+    sa = _assess(flow_score=60.0)
+    assert sa.assessment.score == 50
+    bd = sa.assessment.breakdown_dict
+    # All components should be 50 (neutral)
+    assert bd["bandar_intensity"] == 50.0
+    assert bd["piotroski_quality"] == 50.0
+    assert bd["seasonality_edge"] == 50.0
+    assert bd["analyst_consensus"] == 50.0
+    assert bd["forward_valuation"] == 50.0
 
 
-def test_composite_score_piotroski_8_raises_score():
-    c = _minimal_candidate(score=60.0)
-    c.fundamentals = CompanyFundamentals(
-        ticker="TEST", pe_ratio_ttm=12.0, roe_ttm=18.0, net_profit_margin=15.0,
-        revenue_yoy_growth=10.0, piotroski_f_score=8, dividend_yield=2.0,
-        week52_high=1200.0, week52_low=800.0, near_52w_high_rank=70.0,
-    )
-    cs = _composite_score(c)
+def test_signal_piotroski_8_raises_score():
+    sa = _assess(flow_score=60.0, piotroski_f_score=8)
     # piotroski_component = 8/9*100 = 88.9
-    assert cs.has_piotroski
-    assert abs(cs.piotroski - 88.9) < 0.5
-    assert cs.total > 50.0
+    bd = sa.assessment.breakdown_dict
+    assert abs(bd["piotroski_quality"] - 88.9) < 0.5
+    assert sa.assessment.score > 50
 
 
-def test_composite_score_analyst_all_buy_full_upside():
-    c = _minimal_candidate(score=60.0)
-    c.analyst_consensus = AnalystConsensus(
-        ticker="TEST", buy_count=5, hold_count=0, sell_count=0,
-        avg_price_target=1300.0, current_price=1000.0, last_updated=_date.today(),
+def test_signal_analyst_all_buy_full_upside():
+    # buy_pct=1.0 → buy_score=60; upside=30% → upside_score=40; analyst=100
+    sa = _assess(flow_score=60.0, analyst_buy_pct=1.0, analyst_upside_pct=30.0)
+    bd = sa.assessment.breakdown_dict
+    assert bd["analyst_consensus"] == 100.0
+    assert sa.assessment.score > 50
+
+
+def test_signal_seasonality_tailwind_uses_win_rate():
+    # is_tailwind (avg>0 and win>50) → component = win_rate_pct = 80.0
+    sa = _assess(flow_score=60.0, seasonality_win_rate=80.0, seasonality_avg_return_pct=2.5)
+    bd = sa.assessment.breakdown_dict
+    assert bd["seasonality_edge"] == 80.0
+
+
+def test_signal_bandar_full_accumulation():
+    # All 3 optional present → max_range=12; broad_score near top
+    # If broad_score=12 (max), normalized = (12+12)/(2*12)*100 = 100
+    sa = _assess(flow_score=60.0, bandar_broad_score=10, bandar_max_range=12)
+    bd = sa.assessment.breakdown_dict
+    assert bd["bandar_intensity"] > 85.0
+
+
+def test_signal_strong_when_multiple_factors_elevated():
+    # score=110 → foreign=91.7; piotroski=9 → 100; analyst all-buy → 100; seasonality tailwind 75%
+    sa = _assess(
+        flow_score=110.0,
+        piotroski_f_score=9,
+        analyst_buy_pct=0.8,
+        analyst_upside_pct=20.0,
+        seasonality_win_rate=75.0,
+        seasonality_avg_return_pct=1.5,
+        bandar_broad_score=4,
+        bandar_max_range=6,
     )
-    cs = _composite_score(c)
-    # buy_pct=100% → buy_score=60; upside=30% → upside_score=40; total=100
-    assert cs.has_analyst
-    assert cs.analyst == 100.0
-    assert cs.total > 50.0
+    assert sa.assessment.strength == SignalStrength.STRONG
+    assert sa.assessment.score > 70
 
 
-def test_composite_score_seasonality_tailwind_uses_win_rate():
-    c = _minimal_candidate(score=60.0)
-    c.seasonal_edge = SeasonalEdge(
-        ticker="TEST", month=6, avg_monthly_return_pct=2.5,
-        win_rate_pct=80.0, positive_years=4, total_years=5, back_years=5,
-    )
-    cs = _composite_score(c)
-    assert cs.has_seasonality
-    assert cs.seasonality == 80.0  # is_tailwind → win_rate_pct directly
+# ─── Behavioral parity: screener integration ─────────────────────────────────
 
+def test_screener_populates_signal_assessment():
+    """AccumulationScreenUseCase must populate signal_assessment on each candidate."""
+    session_dates = _weekdays(date(2026, 1, 1), 7)
+    as_of = session_dates[-1]
+    candles = [_candle("BBCA", date(2025, 12, 1) + timedelta(days=i), Decimal("100")) for i in range(45)]
+    summaries = [_summary("BBCA", day, Decimal("110")) for day in session_dates]
 
-def test_composite_score_bandar_full_accumulation():
-    c = _minimal_candidate(score=60.0)
-    c.bandar_detector = BandarDetectorSnapshot(
-        ticker="TEST", session_date=_date.today(),
-        broker_accdist="Acc", today_accdist="Big Acc", five_day_accdist="Big Acc",
-        top1_accdist="Big Acc", top1_percent=65.0, today_percent=12.0,
-        total_buyer=8, total_seller=3,
-        top3_accdist="Big Acc", top5_accdist="Small Acc", top10_accdist="Small Acc",
+    uc = AccumulationScreenUseCase(
+        broker_repository=MockBrokerRepository(summaries),
+        market_repository=MockMarketRepository(candles),
     )
-    cs = _composite_score(c)
-    assert cs.has_bandar
-    assert cs.bandar > 85.0  # all signals positive → near top of range
-
-
-def test_composite_high_conviction_requires_four_above_60():
-    c = _minimal_candidate(score=110.0)  # foreign_flow = 91.7
-    c.fundamentals = CompanyFundamentals(
-        ticker="TEST", pe_ratio_ttm=10.0, roe_ttm=22.0, net_profit_margin=18.0,
-        revenue_yoy_growth=15.0, piotroski_f_score=9, dividend_yield=2.0,
-        week52_high=1200.0, week52_low=800.0, near_52w_high_rank=70.0,
+    resp = uc.execute(
+        AccumulationScreenRequest(
+            tickers=["BBCA"],
+            window_days=7,
+            min_net_buy_days=0,
+            min_score=0.0,
+            as_of_date=as_of,
+        )
     )
-    c.analyst_consensus = AnalystConsensus(
-        ticker="TEST", buy_count=4, hold_count=1, sell_count=0,
-        avg_price_target=1200.0, current_price=1000.0, last_updated=_date.today(),
-    )
-    c.seasonal_edge = SeasonalEdge(
-        ticker="TEST", month=6, avg_monthly_return_pct=1.5,
-        win_rate_pct=75.0, positive_years=3, total_years=4, back_years=5,
-    )
-    c.bandar_detector = BandarDetectorSnapshot(
-        ticker="TEST", session_date=_date.today(),
-        broker_accdist="Acc", today_accdist="Big Acc", five_day_accdist="Small Acc",
-        top1_accdist="Big Acc", top1_percent=55.0, today_percent=10.0,
-        total_buyer=6, total_seller=2,
-    )
-    cs = _composite_score(c)
-    assert cs.is_high_conviction
-    assert cs.total > 70.0
+    assert resp.candidates, "expected at least one candidate"
+    c = resp.candidates[0]
+    assert c.signal_assessment is not None, "signal_assessment must be populated"
+    assert 0 <= c.signal_assessment.assessment.score <= 100
 
 
 # ── Piotroski quality gate ────────────────────────────────────────────────────

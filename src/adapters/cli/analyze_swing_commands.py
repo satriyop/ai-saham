@@ -32,7 +32,7 @@ from src.adapters.cli.analyze_swing_display import (
     SwingDisplayConfig,
     display_swing_compare,
 )
-from src.application.services.bootstrap import create_indicator_registry
+from src.application.services.bootstrap import create_indicator_registry, create_signal_engine
 from src.application.services.universe_loader import (
     UniverseNotFoundError,
     resolve_tickers,
@@ -475,6 +475,7 @@ def _print_swing_output(
     no_sentiment: bool,
     strategy_risk_level: str | None = None,
     strategy_risk_name: str | None = None,
+    signal_assessment=None,
 ) -> None:
     from src.adapters.cli.analyze_swing_display import print_swing_output
 
@@ -504,6 +505,7 @@ def _print_swing_output(
         no_sentiment=no_sentiment,
         strategy_risk_level=strategy_risk_level,
         strategy_risk_name=strategy_risk_name,
+        signal_assessment=signal_assessment,
         config=_DISPLAY_CONFIG,
     )
 
@@ -709,6 +711,7 @@ def swing(
         resolve_preset_targets=resolve_preset_targets,
         structural_gates=[FundamentalGate(), LiquidityGate(), FreeFloatGate()],
         execution_gates=[BandarGate()],
+        signal_engine=create_signal_engine(db_path=resolved_db, with_enrichment=True),
     )
     try:
         workflow_response = workflow.execute(
@@ -883,6 +886,13 @@ def swing(
                 ),
             },
             "market_regime": market_regime.to_dict() if market_regime else None,
+            "signal_assessment": {
+                "score": workflow_response.signal_assessment.assessment.score,
+                "strength": workflow_response.signal_assessment.assessment.strength.value,
+                "entry_quality": workflow_response.signal_assessment.assessment.entry_quality.value,
+                "breakdown": workflow_response.signal_assessment.assessment.breakdown_dict,
+                "coverage_warning": workflow_response.signal_assessment.coverage_warning,
+            } if workflow_response.signal_assessment else None,
         }
         typer.echo(json.dumps(out, indent=2, default=str))
         return
@@ -913,6 +923,7 @@ def swing(
         no_sentiment=no_sentiment,
         strategy_risk_level=strategy_risk_level,
         strategy_risk_name=strategy_risk_name,
+        signal_assessment=workflow_response.signal_assessment,
     )
 
 

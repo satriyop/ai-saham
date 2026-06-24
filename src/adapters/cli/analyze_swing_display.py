@@ -422,6 +422,7 @@ def print_swing_output(
     no_sentiment: bool,
     strategy_risk_level: str | None = None,
     strategy_risk_name: str | None = None,
+    signal_assessment=None,
     config: SwingDisplayConfig | None = None,
 ) -> None:
     config = config or SwingDisplayConfig(
@@ -515,6 +516,23 @@ def print_swing_output(
         else:
             strat_text.append(Text(f"~ Strategy '{strategy_risk_name}' is neutral — no override.", style="dim"))
 
+    signal_text = []
+    if signal_assessment is not None:
+        sa = signal_assessment.assessment
+        _sig_style = {
+            "STRONG": "bold green",
+            "MODERATE": "yellow",
+            "WEAK": "red",
+        }.get(sa.strength.value, "white")
+        signal_text.append(Text(
+            f"Signal Assessment: {sa.score_label} {sa.strength.value} → {sa.entry_quality.value}",
+            style=_sig_style,
+        ))
+        for line in sa.rationale[-3:]:
+            signal_text.append(Text(f"  {line}", style="dim"))
+        if signal_assessment.coverage_warning:
+            signal_text.append(Text(f"  ⚠ {signal_assessment.coverage_warning}", style="dim yellow"))
+
     context_group = []
     if regime_text:
         context_group.extend(regime_text)
@@ -526,6 +544,10 @@ def print_swing_output(
         if context_group:
             context_group.append(Text(""))
         context_group.extend(strat_text)
+    if signal_text:
+        if context_group:
+            context_group.append(Text(""))
+        context_group.extend(signal_text)
 
     if context_group:
         console().print("")

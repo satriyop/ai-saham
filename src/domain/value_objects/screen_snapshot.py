@@ -22,7 +22,7 @@ class ScreenSnapshotEntry:
     ticker: str
     rank: int            # 1-based position in the screener results
     flow_score: float    # AccumulationCandidate.score (0–120)
-    composite_score: float | None    # CompositeSignalScore.total (0–100); None if not available
+    composite_score: float | None    # SignalAssessment.assessment.score (0–100); None if not available
     consecutive_streak: int
     net_buy_ratio: float
     bci_label: str | None

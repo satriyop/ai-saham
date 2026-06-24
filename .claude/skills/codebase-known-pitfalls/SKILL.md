@@ -2,14 +2,16 @@
 name: codebase-known-pitfalls
 description: >
   Repeatable bug patterns and their correct solutions, learned from real bugs
-  found in ai-saham code reviews (commits 87c24bd and post-R1 2026-06-24).
+  found in ai-saham code reviews (commits 87c24bd, post-R1 2026-06-24, R3 2026-06-24).
   Use this skill whenever you are about to: write or modify a fetch/cache use
   case, build or extend GateContext, add a new risk gate, thread as_of_date
   through a service, design a frozen dataclass value object, write profile-
-  override logic in assess_all_profiles, or add counts to a fetch response DTO.
+  override logic in assess_all_profiles, add counts to a fetch response DTO,
+  inject a service into a use case, or build enrichment-result workflows.
   Also trigger for: "gate not firing in screener but fires in analyze risk",
   "backtest results look too good", "free_float_pct over 100", "active_codes
-  lower than expected", "CLOSE always shows dash", "profile list out of sync".
+  lower than expected", "CLOSE always shows dash", "profile list out of sync",
+  "signal computed twice for same ticker", "should I inject AssessSignalUseCase".
 ---
 
 # Codebase Known Pitfalls
@@ -498,6 +500,27 @@ class SignalAssessment:
 Unsafe: `list`, `dict`, `set`, any mutable container. If you need mutable-access
 semantics, expose it via a `@property` that constructs the mutable type on demand.
 
+### §10b. Use the domain-defined accessor, not a re-derived equivalent
+
+When a domain object exposes a typed accessor (property or method), always use it
+instead of re-deriving the same value at the call site. Using `dict(obj.breakdown)`
+where the domain offers `obj.breakdown_dict` is both redundant and fragile: if the
+property ever adds logic (caching, conversion, validation), call-site re-derivations
+silently diverge.
+
+**Anti-pattern:**
+```python
+"breakdown": dict(self.signal_assessment.assessment.breakdown),
+```
+
+**Correct pattern — use the property the domain explicitly defines:**
+```python
+"breakdown": self.signal_assessment.assessment.breakdown_dict,
+```
+
+The domain docstring (`breakdown uses tuple-of-tuples … Use breakdown_dict property
+for dict access`) is the signal. When a docstring says "use X for Y access", use X.
+
 ---
 
 ## 11. Dead Constants Shadowed by Enum Dispatch Mislead Future Agents
@@ -535,6 +558,100 @@ or keeping such constants.
 
 ---
 
+## 12. First-Class Service Injection Boundary (ADR-025)
+
+**Context:** `SignalEngine` and `RiskEngine` are first-class application services.
+`AssessSignalUseCase` and `AssessRiskUseCase` are their internal implementation details.
+
+**The violation:** injecting `AssessSignalUseCase` directly into a peer use case
+(e.g., `AccumulationScreenUseCase(signal_use_case=AssessSignalUseCase())`) creates a
+coupling between two application-layer components at the wrong level. It bypasses the
+first-class service boundary and makes future changes to `SignalEngine`'s internals
+invisible to callers.
+
+**Anti-pattern:**
+```python
+# WRONG — exposes internal implementation detail as a peer dependency
+class AccumulationScreenUseCase:
+    def __init__(self, signal_use_case: "AssessSignalUseCase | None" = None):
+        self._signal_use_case = signal_use_case or AssessSignalUseCase()
+
+    def _compute_signal(self, ctx):
+        return self._signal_use_case.execute(AssessSignalRequest(..., signal_context=ctx))
+```
+
+**Correct pattern — inject the first-class service:**
+```python
+# CORRECT — SignalEngine is the public boundary; AssessSignalUseCase is hidden inside it
+class AccumulationScreenUseCase:
+    def __init__(self, signal_engine: "SignalEngine | None" = None):
+        from src.application.services.signal_engine import SignalEngine as _SE
+        self._signal_engine = signal_engine or _SE()   # lightweight: no providers needed
+                                                        # when screener builds SignalContext itself
+
+    def _compute_signal(self, ticker, ctx):
+        return self._signal_engine.evaluate_with_context(ticker, ctx)
+```
+
+**Rule:** never inject `AssessSignalUseCase` or `AssessRiskUseCase` into any class outside
+`signal_engine.py` / `risk_engine.py`. The first-class service is the contract; its internal
+use case is an implementation detail. Callers hold `SignalEngine` / `RiskEngine` references.
+
+**When `SignalEngine()` with no providers is correct:** the screener path calls
+`evaluate_with_context(ticker, ctx)`, which passes `SignalContext` directly to the use case —
+providers are bypassed entirely. Only `evaluate(ticker, date)` uses injected providers.
+So a lightweight `SignalEngine()` is correct for callers that build their own `SignalContext`.
+
+---
+
+## 13. Fast-Path Reuse of Enrichment Results — Avoid Double Computation
+
+**Context:** `SwingAnalysisWorkflowUseCase` delegates to `AccumulationScreenUseCase` to build
+`accumulation_candidate`. The screener already computes `signal_assessment` on each candidate.
+
+**The violation:** the workflow rebuilds `SignalContext` from the same candidate fields and
+calls `evaluate_with_context()` again — identical inputs, identical output, wasted computation.
+
+**Anti-pattern:**
+```python
+# WRONG — candidate.signal_assessment is already populated; this recomputes it
+if accumulation_candidate is not None:
+    bd = accumulation_candidate.bandar_detector
+    ...  # 15-line SignalContext build
+    signal_assessment = self._signal_engine.evaluate_with_context(request.ticker, signal_ctx)
+```
+
+**Correct pattern — 3-branch structure:**
+```python
+signal_assessment = None
+if self._signal_engine is not None:
+    try:
+        if accumulation_candidate is not None and accumulation_candidate.signal_assessment is not None:
+            # Fast path: screener already paid the cost — just reuse it
+            signal_assessment = accumulation_candidate.signal_assessment
+        elif accumulation_candidate is not None:
+            # Fallback: candidate exists but screener ran without a signal_engine
+            # (e.g. compare mode, test isolation). Recompute from candidate data.
+            signal_ctx = _build_signal_ctx_from_candidate(accumulation_candidate, request)
+            signal_assessment = self._signal_engine.evaluate_with_context(request.ticker, signal_ctx)
+        else:
+            # No candidate — use provider-based standalone evaluation
+            signal_assessment = self._signal_engine.evaluate(request.ticker, request.today)
+    except Exception as exc:
+        warnings.append(f"Signal assessment unavailable: {exc}")
+```
+
+**Why the fallback branch matters:** some callers construct the screener without a
+`signal_engine` (compare mode, lightweight tests). `candidate.signal_assessment` is then
+`None`. The fallback branch handles this gracefully without breaking the fast path.
+
+**General rule:** when a workflow passes an enriched object (candidate, response DTO) to a
+downstream step, the downstream step should check whether the relevant computed field is
+already populated before recomputing it from the same source data. This is structural
+(single-computation invariant), not caching — no TTL, no invalidation needed.
+
+---
+
 ## Quick Reference — Component → Pitfall
 
 | Component / scenario | Read section |
@@ -554,4 +671,9 @@ or keeping such constants.
 | Adding `as_of_date` to a service that calls providers | §8 |
 | Fetching candles for gate/signal evaluation in backtest | §9 |
 | Designing a frozen dataclass value object | §10 |
+| Using a domain value object property for dict access | §10b |
 | Naming threshold constants near enum dispatch logic | §11 |
+| Injecting a dependency into a use case (service vs internal) | §12 |
+| "Should I inject AssessSignalUseCase?" | §12 |
+| Signal computed twice for the same ticker in workflow | §13 |
+| Workflow receives enriched candidate — recompute or reuse? | §13 |
