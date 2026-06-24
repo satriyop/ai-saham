@@ -235,7 +235,7 @@ class SwingAnalysisWorkflowUseCase:
                         foreign_flow_quality=min(accumulation_candidate.score, 120.0) / 120.0,
                         bandar_broad_score=bd.broad_score if bd else None,
                         bandar_max_range=(3 + num_optional) * 2 if bd else 6,
-                        piotroski_f_score=fund.piotroski_f_score if fund else None,
+                        insider_net_buy_ratio=None,
                         seasonality_win_rate=se.win_rate_pct if se else None,
                         seasonality_avg_return_pct=se.avg_monthly_return_pct if se else None,
                         analyst_buy_pct=(ac.buy_count / ac.analyst_count)

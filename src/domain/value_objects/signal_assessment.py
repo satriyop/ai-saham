@@ -66,8 +66,11 @@ class SignalContext:
     # Pre-computed by AccumulationScreenUseCase; None in self-fetch path.
     foreign_flow_quality: float | None = None   # 0.0–1.0
 
-    # ── Fundamental quality (quarterly, from CompanyFundamentals) ─────────────
-    piotroski_f_score: int | None = None        # 0–9
+    # ── Insider activity ──────────────────────────────────────────────────────
+    # Net insider buy direction: -1.0 (full selling) → 0.0 (neutral) → +1.0 (full buying).
+    # None until an insider data provider is wired; gracefully defaults to neutral 50.0.
+    # Replaces piotroski_f_score which belonged in GateContext (RiskEngine path only).
+    insider_net_buy_ratio: float | None = None  # -1.0 to +1.0
 
     # ── Seasonality (monthly, from SeasonalEdge) ──────────────────────────────
     # Both fields needed: win_rate_pct drives the score;

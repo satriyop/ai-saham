@@ -11,6 +11,8 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import yaml
+
 from src.application.formula.parser import parse
 from src.application.services.indicator_registry import IndicatorRegistry
 
@@ -23,6 +25,79 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+
+# ── Engine config helpers ─────────────────────────────────────────────────────
+
+def _load_engine_config(path: Path) -> dict:
+    """Load a YAML engine config file. Returns empty dict if file is absent."""
+    if path.exists():
+        with path.open() as f:
+            return yaml.safe_load(f) or {}
+    return {}
+
+
+def _resolve_signal_weights(cfg: dict) -> dict[str, float] | None:
+    """
+    Parse enabled signal factors and return renormalized weights.
+
+    Returns None when config is absent/empty so AssessSignalUseCase falls back
+    to its built-in _DEFAULT_WEIGHTS (identical to historical behavior).
+    """
+    factors = cfg.get("signal_engine", {}).get("factors", {})
+    active = {
+        name: data["weight"]
+        for name, data in factors.items()
+        if data.get("enabled", True)
+    }
+    if not active:
+        return None
+    total = sum(active.values())
+    return {name: w / total for name, w in active.items()}
+
+
+def _resolve_risk_gates(cfg: dict) -> tuple[list, list]:
+    """
+    Parse enabled risk gates and return (structural_gates, execution_gates).
+
+    When config is absent/empty, defaults match the previous hardcoded values.
+    """
+    from src.domain.rules.bandar_gate import BandarGate
+    from src.domain.rules.free_float_gate import FreeFloatGate
+    from src.domain.rules.fundamental_gate import FundamentalGate
+    from src.domain.rules.liquidity_gate import LiquidityGate
+
+    gates = cfg.get("risk_engine", {}).get("gates", {})
+
+    structural = []
+    fund = gates.get("fundamental", {})
+    if fund.get("enabled", True):
+        structural.append(FundamentalGate(
+            distress_threshold=fund.get("piotroski_min", 3),
+        ))
+
+    liq = gates.get("liquidity", {})
+    if liq.get("enabled", True):
+        structural.append(LiquidityGate(
+            third_liner_cap_idr=liq.get("market_cap_floor_idr", 1_000_000_000_000),
+            liquidity_floor_idr=liq.get("median_tx_floor_idr", 5_000_000_000),
+            lookback_days=liq.get("lookback_days", 20),
+        ))
+
+    ff = gates.get("free_float", {})
+    if ff.get("enabled", True):
+        structural.append(FreeFloatGate(
+            min_free_float_pct=ff.get("min_free_float_pct", 15.0),
+        ))
+
+    execution = []
+    bandar = gates.get("bandar", {})
+    if bandar.get("enabled", True):
+        execution.append(BandarGate())
+
+    return structural, execution
+
+
+# ── Factory functions ─────────────────────────────────────────────────────────
 
 def create_indicator_registry(
     plugin_dir: str | None = None,
@@ -94,14 +169,9 @@ def create_risk_engine(
     from pathlib import Path as _Path
 
     from src.application.services.risk_engine import RiskEngine
-    from src.domain.rules.bandar_gate import BandarGate
-    from src.domain.rules.free_float_gate import FreeFloatGate
-    from src.domain.rules.fundamental_gate import FundamentalGate
-    from src.domain.rules.liquidity_gate import LiquidityGate
     from src.infrastructure.persistence.sqlite_market_repository import (
         SQLiteMarketRepository,
     )
-
     from src.infrastructure.persistence.sqlite_broker_repository import (
         SQLiteBrokerRepository,
     )
@@ -113,6 +183,9 @@ def create_risk_engine(
         market_repository=repository,
         broker_repository=broker_repository,
     )
+
+    cfg = _load_engine_config(Path("config/risk_engine.yaml"))
+    structural_gates, execution_gates = _resolve_risk_gates(cfg)
 
     fund_prov = None
     bandar_prov = None
@@ -135,8 +208,8 @@ def create_risk_engine(
     return RiskEngine(
         repository=repository,
         registry=registry,
-        structural_gates=[FundamentalGate(), LiquidityGate(), FreeFloatGate()],
-        execution_gates=[BandarGate()],
+        structural_gates=structural_gates,
+        execution_gates=execution_gates,
         fundamentals_provider=fund_prov,
         bandar_provider=bandar_prov,
         shareholding_provider=shareholding_prov,
@@ -162,11 +235,13 @@ def create_signal_engine(
 
     from src.application.services.signal_engine import SignalEngine
 
+    cfg = _load_engine_config(Path("config/signal_engine.yaml"))
+    weights = _resolve_signal_weights(cfg)
+
     if not with_enrichment:
-        return SignalEngine()
+        return SignalEngine(weights=weights)
 
     from src.infrastructure.browser.stockbit_bandar import StockbitBandarDetectorProvider
-    from src.infrastructure.browser.stockbit_fundamentals import StockbitFundamentalsProvider
     from src.infrastructure.browser.stockbit_seasonality import StockbitSeasonalityProvider
     from src.infrastructure.browser.stockbit_analyst import StockbitAnalystConsensusProvider
     from src.infrastructure.browser.stockbit_forward_estimates import (
@@ -176,12 +251,12 @@ def create_signal_engine(
     resolved = _Path(db_path)
     return SignalEngine(
         bandar_provider=StockbitBandarDetectorProvider(broker_provider=None, db_path=resolved),
-        fundamentals_provider=StockbitFundamentalsProvider(broker_provider=None, db_path=resolved),
         seasonality_provider=StockbitSeasonalityProvider(broker_provider=None, db_path=resolved),
         analyst_provider=StockbitAnalystConsensusProvider(broker_provider=None, db_path=resolved),
         forward_estimates_provider=StockbitForwardEstimatesProvider(
             broker_provider=None, db_path=resolved
         ),
+        weights=weights,
     )
 
 

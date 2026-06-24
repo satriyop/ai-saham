@@ -176,8 +176,9 @@ Risk profiles map analysis results to qualitative interpretation. Three built-in
 **Implications**
 
 * No prediction or trading execution — profiles are interpretive policy only.
-* Profile thresholds (RSI high/low, EMA/SMA divergence minimum) MUST be readable from `config/swing_screener.yaml`. Python constants are compile-time defaults only; YAML values override at startup.
-* Gate trigger thresholds (Piotroski F-score cutoff, market cap floor, liquidity floor, free float minimum, bandar distribution score threshold) MUST be configurable per profile in `config/swing_screener.yaml`.
+* Profile thresholds (RSI high/low, EMA/SMA divergence minimum) MUST be readable from `config/risk_engine.yaml`. Python constants are compile-time defaults only; YAML values override at startup.
+* Gate trigger thresholds (Piotroski F-score cutoff, market cap floor, liquidity floor, free float minimum, bandar distribution score threshold) MUST be configurable per profile in `config/risk_engine.yaml`.
+* Each gate MUST declare an `enabled: bool` field in the YAML config. A gate with `enabled: false` is skipped entirely from the pipeline — no evaluation, no block decision. This supports backtesting, A/B comparison, and T2 Tuner proposals without code changes. See ADR-024 Engine Configurability Contract for the full gate YAML schema.
 * A profile configuration YAML schema MUST be validated at startup via `yaml_loader.py`. Invalid config aborts startup with a clear error, not a silent fallback.
 * Custom profiles (user-defined YAML) are supported. Custom profile names are strings; built-in profiles use the `RiskProfile` enum.
 * Gate thresholds may be tightened based on market regime (RISK_OFF/WEAK) — see ADR-026 for regime integration rules.
@@ -503,7 +504,7 @@ Output cadence: per week / per quarter (gate inputs are slow-moving).
 
 **Answers:** "How strong and well-aligned are the factors supporting entry?"
 
-Owns: composite signal score (weighted sum of 6 factors: bandar intensity, foreign flow quality, Piotroski F-score as quality signal, seasonality edge, analyst consensus, forward EPS valuation), preset gate evaluation, entry quality classification.
+Owns: composite signal score (weighted sum of 6 factors: bandar intensity, foreign flow quality, insider activity (net buy direction), seasonality edge, analyst consensus, forward EPS valuation), preset gate evaluation, entry quality classification.
 
 Output cadence: per session (signal factors are fast-moving).
 
@@ -516,13 +517,92 @@ Output cadence: per session (signal factors are fast-moving).
 
 **Output:** `SignalAssessment` — `score: int (0–100)`, `strength: SignalStrength (STRONG/MODERATE/WEAK)`, `entry_quality: EntryQuality (ENTER/WATCH/AVOID)`, `breakdown: dict[str, float]`, `rationale: tuple[str, ...]`
 
-**Signal weights** are read from `config/swing_screener.yaml` (see ADR-010). Default weights: bandar 20%, foreign flow 20%, Piotroski 20%, seasonality 15%, analyst consensus 15%, forward EPS 10%.
+**Signal weights** are read from `config/signal_engine.yaml`. Default weights: bandar 20%, foreign flow 20%, insider activity 20%, seasonality 15%, analyst consensus 15%, forward EPS 10%. See Engine Configurability Contract below for on/off toggle semantics.
 
 ---
 
 ### Orthogonality Rule
 
 A strong signal does NOT imply low risk. Low risk does NOT imply a strong signal. Both engines are evaluated independently. A combined recommendation is derived by `CombinedAssessment` (see ADR-026) — neither engine reads the other's output.
+
+---
+
+### Engine Configurability Contract
+
+Every component of both engines — signal factors and risk gates — MUST support individual on/off toggling and full parameter configuration via dedicated engine config files. Signal factors live in `config/signal_engine.yaml`; risk gates and profiles live in `config/risk_engine.yaml`. Screener-specific policy (resistance gates, preset TP/SL targets, corporate actions, sector breadth) stays in `config/swing_screener.yaml` — it is NOT engine config. This is what makes the engines tunable by the T2 Learning Loop (ADR-027) without code changes.
+
+#### YAML Schema
+
+**`config/signal_engine.yaml`**
+
+```yaml
+signal_engine:
+  factors:
+    bandar_intensity:
+      enabled: true
+      weight: 0.20
+    foreign_flow_quality:
+      enabled: true
+      weight: 0.20
+    insider_activity:
+      enabled: true
+      weight: 0.20
+    seasonality_edge:
+      enabled: true
+      weight: 0.15
+    analyst_consensus:
+      enabled: true
+      weight: 0.15
+    forward_valuation:
+      enabled: true
+      weight: 0.10
+```
+
+**`config/risk_engine.yaml`**
+
+```yaml
+risk_engine:
+  gates:
+    fundamental:
+      enabled: true
+      piotroski_min: 4
+      market_cap_floor_idr: 1_000_000_000_000
+    liquidity:
+      enabled: true
+      median_tx_floor_idr: 5_000_000_000
+    free_float:
+      enabled: true
+      min_free_float_pct: 15.0
+    bandar:
+      enabled: true
+```
+
+#### On/Off Semantics
+
+| Engine | Component disabled | Effect |
+|--------|--------------------|--------|
+| Signal | factor `enabled: false` | Factor excluded from scoring; its weight redistributes to remaining enabled factors (see renormalization rule) |
+| Risk | gate `enabled: false` | Gate skipped entirely; pipeline continues to the next gate as if the gate does not exist |
+
+**`enabled: false` is NOT the same as `weight: 0`.** A weight-zero factor still participates in normalization, consuming 0% of the score range but affecting no outcome. A disabled factor is removed from the active set entirely, allowing the remaining factors to own the full 0–100 range.
+
+#### Weight Renormalization Rule (Signal Engine)
+
+When one or more signal factors are disabled, the engine renormalizes the declared weights of the active factors so their sum equals 1.0:
+
+```
+effective_weight(f) = declared_weight(f) / sum(declared_weight(g) for g in enabled_factors)
+```
+
+**Example:** If `forward_valuation` (10%) is disabled, the remaining five factors divide by 0.90 — bandar becomes 22.2%, foreign flow 22.2%, insider activity 22.2%, seasonality 16.7%, analyst consensus 16.7%. Score range stays 0–100.
+
+#### Factory Responsibility
+
+`create_signal_engine()` and `create_risk_engine()` in `src/application/services/bootstrap.py` are the sole owners of config loading. They parse the YAML, apply `enabled` filtering, compute renormalized weights, and inject resolved configuration into the engine. No use case or adapter reads engine config YAML directly.
+
+#### Swappability Rule
+
+A new signal factor is added to `AssessSignalUseCase` as a scoring method and declared in the YAML schema. Enabling it via `enabled: true` brings it into the scoring pipeline without any other code change. Factors are swappable at the YAML level; their implementation is in the use case.
 
 ---
 
@@ -579,32 +659,38 @@ class EntryQuality(Enum):
 class SignalContext:
     ticker: str
     snapshot_date: date
-    bandar_five_day_score: int | None           # -9 to +9 (Stockbit)
+    bandar_broad_score: float | None            # 0–(6+optional)*2, mapped to 0–1 by engine
+    bandar_max_range: int                       # denominator for bandar_broad_score normalization
     foreign_flow_quality: float | None          # 0.0–1.0 (from accumulation stream)
-    piotroski_f_score: int | None               # 0–9 (as quality signal, NOT gate)
-    seasonality_monthly_win_rate: float | None  # 0.0–1.0
+    insider_net_buy_ratio: float | None         # -1.0 to 1.0 (negative = net selling, positive = net buying)
+    seasonality_win_rate: float | None          # 0.0–1.0 (pct of months positive for this ticker)
+    seasonality_avg_return_pct: float | None    # e.g. 2.5 = 2.5% avg monthly return this season
     analyst_buy_pct: float | None               # 0.0–1.0
-    analyst_price_target_upside: float | None   # e.g. 0.15 = 15% upside
-    forward_eps_growth: float | None            # e.g. 0.20 = 20% projected growth
+    analyst_upside_pct: float | None            # e.g. 15.0 = 15% upside to consensus price target
+    forward_pe: float | None                    # forward P/E ratio for valuation normalization
     sentiment: SentimentSnapshot | None         # optional: from FetchSentimentUseCase
 ```
 
-**Signal Factors and Default Weights** (configurable via `config/swing_screener.yaml`):
+**`piotroski_f_score` is intentionally absent from `SignalContext`.** It remains in `GateContext` (RiskEngine path only). Passing it to SignalEngine would re-introduce the double-counting problem that `insider_activity` was added to solve.
 
-| Factor | Weight | Source |
-|--------|--------|--------|
-| `bandar_intensity` | 20% | `bandar_five_day_score` mapped to 0–1 |
-| `foreign_flow_quality` | 20% | accumulation stream `flow_quality` |
-| `piotroski_quality` | 20% | `piotroski_f_score` / 9 |
-| `seasonality_edge` | 15% | `seasonality_monthly_win_rate` |
-| `analyst_consensus` | 15% | `analyst_buy_pct` × weight + `price_target_upside` × weight |
-| `forward_valuation` | 10% | normalized `forward_eps_growth` |
+**Signal Factors and Default Weights** (configurable via `config/signal_engine.yaml`; full on/off toggle semantics in ADR-024 Engine Configurability Contract):
+
+| Factor | Default Weight | Enabled | Source |
+|--------|---------------|---------|--------|
+| `bandar_intensity` | 20% | true | `bandar_broad_score` mapped to 0–1 |
+| `foreign_flow_quality` | 20% | true | accumulation stream `flow_quality` (0.0–1.0) |
+| `insider_activity` | 20% | true | `insider_net_buy_ratio`: net insider buy value / total tx value (positive = accumulating) |
+| `seasonality_edge` | 15% | true | `seasonality_win_rate` and `seasonality_avg_return_pct` |
+| `analyst_consensus` | 15% | true | `analyst_buy_pct` × 0.6 + `analyst_upside_pct` normalized × 0.4 |
+| `forward_valuation` | 10% | true | `forward_pe` normalized against sector median |
+
+**Why `piotroski_quality` was removed:** The Piotroski F-score already gates at the `fundamental_gate` in RiskEngine (F-score ≤ 3 → HIGH_RISK). Using the same score as a 20% quality factor in SignalEngine double-counts the same underlying data across both engines. `insider_activity` replaces it — insider net buy direction is a distinct entry-opportunity signal not captured by any RiskEngine gate, providing genuine additive signal.
 
 **Implications**
 
 * `src/application/use_case/accumulation_screen_use_case.py` — `_composite_score()` (line ~358) and `evaluate_foreign_bounce_gates()` (line ~1106) are migration targets. After migration, these functions are deleted.
 * `src/application/use_case/swing_analysis_workflow_use_case.py` — signal assembly must delegate to `signal_engine.evaluate_with_context()`.
-* `create_signal_engine(db_path, with_enrichment)` factory in `src/application/services/bootstrap.py` injects providers and loads weights from YAML.
+* `create_signal_engine(db_path, with_enrichment)` factory in `src/application/services/bootstrap.py` injects providers, parses `config/signal_engine.yaml` (`signal_engine.factors` block), applies `enabled` filtering, and computes renormalized weights before constructing the engine. See ADR-024 Engine Configurability Contract for the full schema and renormalization rule.
 * `evaluate_with_context(ticker, SignalContext)` MUST be used by screening loops to avoid N+1 provider fetches.
 * Unit tests must test `SignalEngine` in isolation with injected mock providers — no Stockbit browser in tests.
 * `signal_display.py` in `src/adapters/cli/` is the only place `SignalAssessment` is formatted for CLI output.
@@ -713,12 +799,14 @@ The system provides a four-phase learning loop for the swing domain that records
 **Attribution Rules**
 - Attribution requires minimum 30 graded outcomes before generating suggestions (enforce in `SwingSignalTunerUseCase`).
 - Attribution is statistical correlation, not causal proof. AI tuner output must include a confidence note.
-- Gate attribution: for each gate, compute `gated_win_rate` (forward return of gated candidates) vs. `passed_win_rate`. If `gated_win_rate > passed_win_rate + 10%`, the gate is being too aggressive and the threshold should consider relaxing.
+- Gate attribution: for each gate, compute `gated_win_rate` (forward return of gated candidates) vs. `passed_win_rate`. If `gated_win_rate > passed_win_rate + 10%`, the gate is being too aggressive and the threshold should consider relaxing. If a gate is routinely not triggered across 30+ outcomes and shows no correlation with outcomes, the Tuner may propose `enabled: false`.
+- Factor attribution: for each factor in `signal_breakdown`, compute correlation of the factor's per-trade score with the forward return. If a factor shows consistently near-neutral contribution (factor score within ±0.1 of the 0.5 neutral baseline across 30+ outcomes), the Tuner may propose `enabled: false` to remove it from scoring. If a previously disabled factor is re-enabled and outcomes improve, the Tuner may propose keeping it enabled and increasing its weight.
 
 **AI Tuner (T2) Constraints**
 - Input: attribution summary JSON (not raw candles, not raw journal entries)
-- Output: proposed YAML diff to `config/swing_screener.yaml`
+- Output: proposed YAML diff targeting `config/signal_engine.yaml` (for signal factor changes) or `config/risk_engine.yaml` (for gate changes) — never `config/swing_screener.yaml` (screener policy is not engine tuning)
 - AI never reads current config directly — the use case provides a structured summary
+- Proposed diffs may include: numeric threshold adjustments (gate thresholds, signal weights), and component enable/disable toggles (`enabled: true/false` per factor or gate). The full Engine Configurability Contract in ADR-024 defines all valid diff targets.
 - `--apply` flag writes proposed changes after user confirmation prompt; without `--apply`, proposals are printed only
 - Applied changes are recorded in `journals/swing_tuning_log.jsonl` with timestamp, source attribution, and which parameters changed
 
@@ -792,7 +880,7 @@ Rp 50 absolute floor. No changes — already enforced.
 
 **Current gap:** `BandarGate` uses `bandar_is_distributing: bool` (any score < 0 = distributing). Stockbit provides a -9 to +9 score; a -1 and a -9 carry very different implications.
 
-**Rule:** `GateContext.bandar_is_distributing: bool` is replaced by `GateContext.bandar_five_day_score: int | None` (-9 to +9). `BandarGate` compares `bandar_five_day_score ≤ distribution_threshold` where `distribution_threshold` is configurable per profile in `config/swing_screener.yaml` (default: -2). Score of -1 is treated as noise and does not trigger the gate.
+**Rule:** `GateContext.bandar_is_distributing: bool` is replaced by `GateContext.bandar_five_day_score: int | None` (-9 to +9). `BandarGate` compares `bandar_five_day_score ≤ distribution_threshold` where `distribution_threshold` is configurable per profile in `config/risk_engine.yaml` (default: -2). Score of -1 is treated as noise and does not trigger the gate.
 
 **Migration:** `StockbitBandarDetectorProvider` already returns the numeric score. `GateContext` construction in `bootstrap.py` must pass the score, not the boolean.
 

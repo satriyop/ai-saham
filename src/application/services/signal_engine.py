@@ -45,10 +45,10 @@ class SignalEngine:
 
     All providers are optional:
       - bandar_provider:            BandarDetectorProvider (broad_score)
-      - fundamentals_provider:      FundamentalsProvider (piotroski_f_score)
       - seasonality_provider:       SeasonalityProvider (win_rate_pct, avg_monthly_return_pct)
       - analyst_provider:           AnalystConsensusProvider (buy_count, upside_pct)
       - forward_estimates_provider: ForwardEstimatesProvider (forward_pe)
+      - fundamentals_provider:      accepted but unused (piotroski moved to GateContext/RiskEngine)
 
     Missing providers → neutral (50.0) defaults for those factors.
     A coverage_warning is emitted when ≥ 3/6 factors fall back to neutral.
@@ -61,8 +61,9 @@ class SignalEngine:
         seasonality_provider: "SeasonalityProvider | None" = None,
         analyst_provider: "AnalystConsensusProvider | None" = None,
         forward_estimates_provider: "ForwardEstimatesProvider | None" = None,
+        weights: "dict[str, float] | None" = None,
     ) -> None:
-        self._use_case = AssessSignalUseCase()
+        self._use_case = AssessSignalUseCase(weights=weights)
         self._bandar = bandar_provider
         self._fundamentals = fundamentals_provider
         self._seasonality = seasonality_provider
@@ -126,8 +127,6 @@ class SignalEngine:
         bandar_score: int | None = None
         bandar_max_range: int = 6  # default: 3 mandatory signals × ±2
 
-        piotroski: int | None = None
-
         win_rate: float | None = None
         avg_return: float | None = None
 
@@ -151,14 +150,9 @@ class SignalEngine:
             except Exception as exc:
                 logger.debug("SignalEngine: bandar unavailable for %s: %s", ticker, exc)
 
-        # ── fundamentals ─────────────────────────────────────────────────────
-        if self._fundamentals is not None:
-            try:
-                fund = self._fundamentals.get_fundamentals(ticker)
-                if fund is not None:
-                    piotroski = fund.piotroski_f_score
-            except Exception as exc:
-                logger.debug("SignalEngine: fundamentals unavailable for %s: %s", ticker, exc)
+        # ── insider activity ──────────────────────────────────────────────────
+        # No provider implemented yet; insider_net_buy_ratio stays None → neutral 50.0.
+        # When an InsiderActivityProvider is added, fetch it here.
 
         # ── seasonality ──────────────────────────────────────────────────────
         if self._seasonality is not None:
@@ -194,7 +188,7 @@ class SignalEngine:
             snapshot_date=today,
             bandar_broad_score=bandar_score,
             bandar_max_range=bandar_max_range,
-            piotroski_f_score=piotroski,
+            insider_net_buy_ratio=None,
             seasonality_win_rate=win_rate,
             seasonality_avg_return_pct=avg_return,
             analyst_buy_pct=buy_pct,

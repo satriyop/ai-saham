@@ -1,0 +1,27 @@
+# Risk Engine Configuration
+#
+# Controls which gates participate in the risk pipeline and at what thresholds.
+# A disabled gate is completely skipped — pipeline continues to the next gate.
+#
+# enabled: false  removes the gate from the pipeline entirely
+# Threshold fields map directly to gate constructor parameters.
+#
+# See ADR-024 Engine Configurability Contract for full semantics.
+# Gate order: fundamental → liquidity → free_float (structural), bandar (execution).
+#
+version: 1
+risk_engine:
+  gates:
+    fundamental:
+      enabled: true
+      piotroski_min: 3          # F-score <= this → HIGH_RISK (FundamentalGate.distress_threshold)
+      market_cap_floor_idr: 1_000_000_000_000   # 1T IDR — passed to LiquidityGate
+    liquidity:
+      enabled: true
+      median_tx_floor_idr: 5_000_000_000        # 5B IDR median 20-day tx value floor
+      lookback_days: 20
+    free_float:
+      enabled: true
+      min_free_float_pct: 15.0
+    bandar:
+      enabled: true

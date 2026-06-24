@@ -1,0 +1,31 @@
+# Signal Engine Configuration
+#
+# Controls which factors participate in the composite signal score and at what weight.
+# Weights are renormalized automatically when factors are disabled — score stays 0–100.
+#
+# enabled: false  removes the factor from the active pool entirely (weight redistributes)
+# enabled: false  ≠ weight: 0  (zero-weight keeps the factor in normalization math)
+#
+# See ADR-024 Engine Configurability Contract for full semantics.
+#
+version: 1
+signal_engine:
+  factors:
+    bandar_intensity:
+      enabled: true
+      weight: 0.20
+    foreign_flow_quality:
+      enabled: true
+      weight: 0.20
+    insider_activity:
+      enabled: true
+      weight: 0.20
+    seasonality_edge:
+      enabled: true
+      weight: 0.15
+    analyst_consensus:
+      enabled: true
+      weight: 0.15
+    forward_valuation:
+      enabled: true
+      weight: 0.10

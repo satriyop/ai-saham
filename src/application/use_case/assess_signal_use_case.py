@@ -33,6 +33,16 @@ _MODERATE_THRESHOLD = 45
 # Minimum data coverage below which a warning is issued
 _COVERAGE_WARNING_THRESHOLD = 3  # out of 6 factors
 
+# Default weights — used when no YAML config is provided (identical to historical hardcoded values)
+_DEFAULT_WEIGHTS: dict[str, float] = {
+    "bandar_intensity": 0.20,
+    "foreign_flow_quality": 0.20,
+    "insider_activity": 0.20,
+    "seasonality_edge": 0.15,
+    "analyst_consensus": 0.15,
+    "forward_valuation": 0.10,
+}
+
 
 @dataclass
 class AssessSignalRequest:
@@ -68,7 +78,13 @@ class AssessSignalUseCase:
     Callers are responsible for populating SignalContext from enrichment
     providers before calling execute(). When signal_context is None, the
     use case creates an empty context (all factors neutral).
+
+    weights: renormalized factor weights loaded from config/signal_engine.yaml by the
+    factory. When None, _DEFAULT_WEIGHTS are used (preserves historical behavior).
     """
+
+    def __init__(self, weights: dict[str, float] | None = None) -> None:
+        self._weights = weights or _DEFAULT_WEIGHTS.copy()
 
     def execute(self, request: AssessSignalRequest) -> AssessSignalResponse:
         ctx = request.signal_context or SignalContext(
@@ -88,18 +104,19 @@ class AssessSignalUseCase:
     def _compute(self, ctx: SignalContext) -> SignalAssessment:
         bandar, bandar_has = self._score_bandar(ctx)
         foreign, foreign_has = self._score_foreign(ctx)
-        piotroski, piotroski_has = self._score_piotroski(ctx)
+        insider, insider_has = self._score_insider_activity(ctx)
         seasonality, seasonality_has = self._score_seasonality(ctx)
         analyst, analyst_has = self._score_analyst(ctx)
         fwd, fwd_has = self._score_forward_pe(ctx)
 
+        w = self._weights
         total = (
-            bandar * 0.20
-            + foreign * 0.20
-            + piotroski * 0.20
-            + seasonality * 0.15
-            + analyst * 0.15
-            + fwd * 0.10
+            bandar * w.get("bandar_intensity", 0)
+            + foreign * w.get("foreign_flow_quality", 0)
+            + insider * w.get("insider_activity", 0)
+            + seasonality * w.get("seasonality_edge", 0)
+            + analyst * w.get("analyst_consensus", 0)
+            + fwd * w.get("forward_valuation", 0)
         )
         score = max(0, min(100, round(total)))
 
@@ -109,7 +126,7 @@ class AssessSignalUseCase:
         breakdown = (
             ("bandar_intensity", round(bandar, 2)),
             ("foreign_flow_quality", round(foreign, 2)),
-            ("piotroski_quality", round(piotroski, 2)),
+            ("insider_activity", round(insider, 2)),
             ("seasonality_edge", round(seasonality, 2)),
             ("analyst_consensus", round(analyst, 2)),
             ("forward_valuation", round(fwd, 2)),
@@ -118,7 +135,7 @@ class AssessSignalUseCase:
         rationale = self._build_rationale(
             ctx, score, strength, entry_quality,
             breakdown,
-            has_flags=(bandar_has, foreign_has, piotroski_has, seasonality_has, analyst_has, fwd_has),
+            has_flags=(bandar_has, foreign_has, insider_has, seasonality_has, analyst_has, fwd_has),
         )
 
         return SignalAssessment(
@@ -153,11 +170,16 @@ class AssessSignalUseCase:
             return _NEUTRAL, False
         return max(0.0, min(100.0, ctx.foreign_flow_quality * 100.0)), True
 
-    def _score_piotroski(self, ctx: SignalContext) -> tuple[float, bool]:
-        """Piotroski F-score (0–9) → 0–100."""
-        if ctx.piotroski_f_score is None:
+    def _score_insider_activity(self, ctx: SignalContext) -> tuple[float, bool]:
+        """
+        Insider net buy ratio (-1.0 to +1.0) → 0–100.
+
+        -1.0 (full selling) → 0, 0.0 (neutral) → 50, +1.0 (full buying) → 100.
+        Returns neutral 50.0 when no insider data is available (no provider yet).
+        """
+        if ctx.insider_net_buy_ratio is None:
             return _NEUTRAL, False
-        return max(0.0, min(100.0, ctx.piotroski_f_score / 9.0 * 100.0)), True
+        return max(0.0, min(100.0, (ctx.insider_net_buy_ratio + 1.0) / 2.0 * 100.0)), True
 
     def _score_seasonality(self, ctx: SignalContext) -> tuple[float, bool]:
         """
@@ -254,7 +276,7 @@ class AssessSignalUseCase:
         missing = sum([
             ctx.bandar_broad_score is None,
             ctx.foreign_flow_quality is None,
-            ctx.piotroski_f_score is None,
+            ctx.insider_net_buy_ratio is None,
             ctx.seasonality_win_rate is None,
             ctx.analyst_buy_pct is None,
             ctx.forward_pe is None,
@@ -280,13 +302,13 @@ class AssessSignalUseCase:
         labels = {
             "bandar_intensity": "Bandar accumulation",
             "foreign_flow_quality": "Foreign flow",
-            "piotroski_quality": "Fundamental quality (Piotroski)",
+            "insider_activity": "Insider activity",
             "seasonality_edge": "Seasonal edge",
             "analyst_consensus": "Analyst consensus",
             "forward_valuation": "Forward valuation",
         }
         has_map = dict(zip(
-            ["bandar_intensity", "foreign_flow_quality", "piotroski_quality",
+            ["bandar_intensity", "foreign_flow_quality", "insider_activity",
              "seasonality_edge", "analyst_consensus", "forward_valuation"],
             has_flags,
         ))

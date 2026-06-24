@@ -87,7 +87,7 @@ class TestAssessSignalUseCaseScoring:
         resp = self._run(_ctx(
             bandar_broad_score=6, bandar_max_range=6,
             foreign_flow_quality=1.0,
-            piotroski_f_score=9,
+            insider_net_buy_ratio=1.0,
             seasonality_win_rate=90.0, seasonality_avg_return_pct=3.0,
             analyst_buy_pct=1.0, analyst_upside_pct=30.0,
             forward_pe=8.0,
@@ -102,7 +102,7 @@ class TestAssessSignalUseCaseScoring:
         resp = self._run(_ctx(
             bandar_broad_score=-6, bandar_max_range=6,
             foreign_flow_quality=0.0,
-            piotroski_f_score=0,
+            insider_net_buy_ratio=-1.0,
             analyst_buy_pct=0.0, analyst_upside_pct=0.0,
         ))
         # Expected: (0*.20 + 0*.20 + 0*.20 + 50*.15 + 0*.15 + 50*.10) = 12.5
@@ -131,19 +131,22 @@ class TestAssessSignalUseCaseScoring:
         resp = self._run(_ctx(bandar_broad_score=6, bandar_max_range=12))
         assert resp.assessment.breakdown_dict["bandar_intensity"] == pytest.approx(75.0)
 
-    # piotroski
+    # insider activity
 
-    def test_piotroski_9_maps_to_100(self):
-        resp = self._run(_ctx(piotroski_f_score=9))
-        assert resp.assessment.breakdown_dict["piotroski_quality"] == pytest.approx(100.0)
+    def test_insider_full_buy_maps_to_100(self):
+        # ratio=+1.0 (full buying) → (1.0+1.0)/2*100 = 100
+        resp = self._run(_ctx(insider_net_buy_ratio=1.0))
+        assert resp.assessment.breakdown_dict["insider_activity"] == pytest.approx(100.0)
 
-    def test_piotroski_0_maps_to_0(self):
-        resp = self._run(_ctx(piotroski_f_score=0))
-        assert resp.assessment.breakdown_dict["piotroski_quality"] == pytest.approx(0.0)
+    def test_insider_full_sell_maps_to_0(self):
+        # ratio=-1.0 (full selling) → (-1.0+1.0)/2*100 = 0
+        resp = self._run(_ctx(insider_net_buy_ratio=-1.0))
+        assert resp.assessment.breakdown_dict["insider_activity"] == pytest.approx(0.0)
 
-    def test_piotroski_5_maps_to_approximately_56(self):
-        resp = self._run(_ctx(piotroski_f_score=5))
-        assert resp.assessment.breakdown_dict["piotroski_quality"] == pytest.approx(100 * 5 / 9, rel=0.01)
+    def test_insider_neutral_maps_to_50(self):
+        # ratio=0.0 (neutral) → (0.0+1.0)/2*100 = 50
+        resp = self._run(_ctx(insider_net_buy_ratio=0.0))
+        assert resp.assessment.breakdown_dict["insider_activity"] == pytest.approx(50.0)
 
     # seasonality
 
@@ -223,34 +226,34 @@ class TestAssessSignalUseCaseScoring:
 
     # strength classification
 
-    def test_piotroski_9_plus_bandar_max_gives_score_70_strong(self):
-        # bandar=100, piotroski=100, others neutral:
+    def test_insider_full_buy_plus_bandar_max_gives_score_70_strong(self):
+        # bandar=100, insider=100, others neutral:
         # total = 100*.20 + 50*.20 + 100*.20 + 50*.15 + 50*.15 + 50*.10 = 70.0
-        resp = self._run(_ctx(bandar_broad_score=6, bandar_max_range=6, piotroski_f_score=9))
+        resp = self._run(_ctx(bandar_broad_score=6, bandar_max_range=6, insider_net_buy_ratio=1.0))
         assert resp.score == 70
         assert resp.assessment.strength == SignalStrength.STRONG
         assert resp.assessment.entry_quality == EntryQuality.ENTER
 
-    def test_piotroski_8_plus_bandar_max_gives_moderate(self):
-        # bandar=100, piotroski=8→88.89, others neutral:
+    def test_insider_high_plus_bandar_max_gives_moderate(self):
+        # insider_net_buy_ratio=7/9 → score=(7/9+1)/2*100=88.89; bandar=100, others neutral:
         # total = 100*.20 + 50*.20 + 88.89*.20 + 50*.15 + 50*.15 + 50*.10
         # = 20 + 10 + 17.78 + 7.5 + 7.5 + 5 = 67.78 → 68
-        resp = self._run(_ctx(bandar_broad_score=6, bandar_max_range=6, piotroski_f_score=8))
+        resp = self._run(_ctx(bandar_broad_score=6, bandar_max_range=6, insider_net_buy_ratio=7/9))
         assert resp.score == 68
         assert resp.assessment.strength == SignalStrength.MODERATE
 
     def test_score_below_45_is_weak(self):
-        # piotroski=0, others neutral: total=50*.20+50*.20+0*.20+50*.15+50*.15+50*.10=40
-        resp = self._run(_ctx(piotroski_f_score=0))
+        # insider=-1.0→0, others neutral: total=50*.20+50*.20+0*.20+50*.15+50*.15+50*.10=40
+        resp = self._run(_ctx(insider_net_buy_ratio=-1.0))
         assert resp.score == 40
         assert resp.assessment.strength == SignalStrength.WEAK
         assert resp.assessment.entry_quality == EntryQuality.AVOID
 
     def test_strength_and_entry_quality_are_consistent(self):
         for kwargs in [
-            dict(bandar_broad_score=6, bandar_max_range=6, piotroski_f_score=9),
+            dict(bandar_broad_score=6, bandar_max_range=6, insider_net_buy_ratio=1.0),
             dict(),
-            dict(piotroski_f_score=0),
+            dict(insider_net_buy_ratio=-1.0),
         ]:
             resp = self._run(_ctx(**kwargs))
             if resp.assessment.strength == SignalStrength.STRONG:
@@ -267,7 +270,7 @@ class TestAssessSignalUseCaseScoring:
         assert set(resp.assessment.breakdown_dict.keys()) == {
             "bandar_intensity",
             "foreign_flow_quality",
-            "piotroski_quality",
+            "insider_activity",
             "seasonality_edge",
             "analyst_consensus",
             "forward_valuation",
@@ -276,7 +279,7 @@ class TestAssessSignalUseCaseScoring:
     # determinism
 
     def test_score_is_deterministic(self):
-        ctx = _ctx(bandar_broad_score=3, bandar_max_range=6, piotroski_f_score=7)
+        ctx = _ctx(bandar_broad_score=3, bandar_max_range=6, insider_net_buy_ratio=0.556)
         req = AssessSignalRequest(ticker="BBCA", signal_context=ctx)
         r1 = self.uc.execute(req)
         r2 = self.uc.execute(req)
@@ -300,7 +303,7 @@ class TestAssessSignalUseCaseScoring:
     # rationale
 
     def test_rationale_contains_summary_line(self):
-        resp = self._run(_ctx(piotroski_f_score=9))
+        resp = self._run(_ctx(insider_net_buy_ratio=1.0))
         summary = resp.assessment.rationale[-1]
         assert "score" in summary.lower()
         assert str(resp.score) in summary
@@ -322,7 +325,7 @@ class TestAssessSignalUseCaseScoring:
         resp = self._run(_ctx(
             bandar_broad_score=3, bandar_max_range=6,
             foreign_flow_quality=0.7,
-            piotroski_f_score=7,
+            insider_net_buy_ratio=0.556,
             seasonality_win_rate=65.0, seasonality_avg_return_pct=1.5,
         ))
         assert resp.coverage_warning is None
@@ -385,13 +388,13 @@ class TestSignalAssessmentValueObject:
         a = SignalAssessment(
             ticker="BBCA", score=60, strength=SignalStrength.MODERATE,
             entry_quality=EntryQuality.WATCH,
-            breakdown=(("bandar_intensity", 75.0), ("piotroski_quality", 44.0)),
+            breakdown=(("bandar_intensity", 75.0), ("insider_activity", 44.0)),
             rationale=(), snapshot_date=date.today()
         )
         d = a.breakdown_dict
         assert isinstance(d, dict)
         assert d["bandar_intensity"] == pytest.approx(75.0)
-        assert d["piotroski_quality"] == pytest.approx(44.0)
+        assert d["insider_activity"] == pytest.approx(44.0)
 
     def test_to_dict_includes_all_fields(self):
         a = self._make()
@@ -415,7 +418,7 @@ class TestSignalContext:
         assert ctx.bandar_broad_score is None
         assert ctx.bandar_max_range == 6
         assert ctx.foreign_flow_quality is None
-        assert ctx.piotroski_f_score is None
+        assert ctx.insider_net_buy_ratio is None
         assert ctx.seasonality_win_rate is None
         assert ctx.seasonality_avg_return_pct is None
         assert ctx.analyst_buy_pct is None

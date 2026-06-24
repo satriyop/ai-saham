@@ -3,6 +3,8 @@
 from datetime import date, timedelta
 from decimal import Decimal
 
+import pytest
+
 from src.application.use_case.accumulation_screen_use_case import (
     BCI_CLUSTER,
     BCI_RETAIL,
@@ -482,7 +484,7 @@ def _assess(
     flow_score: float = 60.0,
     bandar_broad_score: int | None = None,
     bandar_max_range: int = 6,
-    piotroski_f_score: int | None = None,
+    insider_net_buy_ratio: float | None = None,
     seasonality_win_rate: float | None = None,
     seasonality_avg_return_pct: float | None = None,
     analyst_buy_pct: float | None = None,
@@ -496,7 +498,7 @@ def _assess(
         foreign_flow_quality=min(flow_score, 120.0) / 120.0,
         bandar_broad_score=bandar_broad_score,
         bandar_max_range=bandar_max_range,
-        piotroski_f_score=piotroski_f_score,
+        insider_net_buy_ratio=insider_net_buy_ratio,
         seasonality_win_rate=seasonality_win_rate,
         seasonality_avg_return_pct=seasonality_avg_return_pct,
         analyst_buy_pct=analyst_buy_pct,
@@ -514,17 +516,17 @@ def test_signal_all_neutral_when_no_enrichment():
     bd = sa.assessment.breakdown_dict
     # All components should be 50 (neutral)
     assert bd["bandar_intensity"] == 50.0
-    assert bd["piotroski_quality"] == 50.0
+    assert bd["insider_activity"] == 50.0
     assert bd["seasonality_edge"] == 50.0
     assert bd["analyst_consensus"] == 50.0
     assert bd["forward_valuation"] == 50.0
 
 
-def test_signal_piotroski_8_raises_score():
-    sa = _assess(flow_score=60.0, piotroski_f_score=8)
-    # piotroski_component = 8/9*100 = 88.9
+def test_signal_insider_full_buy_raises_score():
+    sa = _assess(flow_score=60.0, insider_net_buy_ratio=1.0)
+    # insider_component = (+1.0+1.0)/2*100 = 100.0
     bd = sa.assessment.breakdown_dict
-    assert abs(bd["piotroski_quality"] - 88.9) < 0.5
+    assert bd["insider_activity"] == pytest.approx(100.0)
     assert sa.assessment.score > 50
 
 
@@ -552,10 +554,10 @@ def test_signal_bandar_full_accumulation():
 
 
 def test_signal_strong_when_multiple_factors_elevated():
-    # score=110 → foreign=91.7; piotroski=9 → 100; analyst all-buy → 100; seasonality tailwind 75%
+    # score=110 → foreign=91.7; insider=+1.0 → 100; analyst all-buy → 100; seasonality tailwind 75%
     sa = _assess(
         flow_score=110.0,
-        piotroski_f_score=9,
+        insider_net_buy_ratio=1.0,
         analyst_buy_pct=0.8,
         analyst_upside_pct=20.0,
         seasonality_win_rate=75.0,
