@@ -28,12 +28,14 @@ from src.application.use_case.assess_risk_use_case import (
 )
 from src.domain.rules.risk_gate import GateContext, RiskGate
 from src.domain.ports.market_data_repository import MarketDataRepository
+from src.domain.value_objects.risk_signal import RiskLevel
 
 if TYPE_CHECKING:
     from src.application.services.indicator_registry import IndicatorRegistry
     from src.domain.ports.fundamentals_provider import FundamentalsProvider
     from src.domain.ports.bandar_detector_provider import BandarDetectorProvider
     from src.domain.ports.shareholding_provider import ShareholdingProvider
+    from src.domain.value_objects.market_context import MarketContext
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +74,7 @@ class RiskEngine:
         ticker: str,
         profile: str = "balanced",
         as_of_date: date | None = None,
+        market_context: "MarketContext | None" = None,
     ) -> AssessRiskResponse:
         """
         Full self-contained assessment.
@@ -81,19 +84,24 @@ class RiskEngine:
           - FundamentalGate: skips if piotroski_f_score is None
           - LiquidityGate:   always fires (uses candles from repository)
           - BandarGate:      skips if five_day_accdist is None
+
+        market_context: when gate_tightening=True, HIGH_RISK assessments are
+        additionally blocked by a regime gate.
         """
         gate_ctx = self._build_gate_context(ticker, as_of_date)
         if as_of_date is not None:
             gate_ctx = replace(gate_ctx, snapshot_date=as_of_date)
-        return self._use_case.execute(
+        response = self._use_case.execute(
             AssessRiskRequest(ticker=ticker, profile=profile, gate_context=gate_ctx)
         )
+        return _apply_regime_gate(response, market_context)
 
     def assess_with_context(
         self,
         ticker: str,
         profile: str,
         gate_context: GateContext,
+        market_context: "MarketContext | None" = None,
     ) -> AssessRiskResponse:
         """
         Pipeline path: caller supplies pre-loaded GateContext.
@@ -102,11 +110,16 @@ class RiskEngine:
         already loaded — avoids N+1 provider fetches per ticker.
         Wire up by passing this engine to the screener instead of AssessRiskUseCase.
         """
-        return self._use_case.execute(
+        response = self._use_case.execute(
             AssessRiskRequest(ticker=ticker, profile=profile, gate_context=gate_context)
         )
+        return _apply_regime_gate(response, market_context)
 
-    def assess_request(self, request: AssessRiskRequest) -> AssessRiskResponse:
+    def assess_request(
+        self,
+        request: AssessRiskRequest,
+        market_context: "MarketContext | None" = None,
+    ) -> AssessRiskResponse:
         """
         Advanced path: caller provides a full AssessRiskRequest.
 
@@ -116,7 +129,8 @@ class RiskEngine:
         """
         if request.rules_file is not None:
             return self._use_case.execute(request)
-        return self._use_case.execute(self._inject_gate_context(request))
+        response = self._use_case.execute(self._inject_gate_context(request))
+        return _apply_regime_gate(response, market_context)
 
     def assess_all_profiles(self, request: AssessRiskRequest) -> "AssessAllProfilesResponse":
         """Run assessment across all risk profiles (conservative/balanced/aggressive)."""
@@ -182,3 +196,30 @@ class RiskEngine:
             free_float_pct=free_float,
             five_day_accdist=five_day,
         )
+
+
+# ── Market context post-processing ───────────────────────────────────────────
+
+def _apply_regime_gate(
+    response: AssessRiskResponse,
+    market_context: "MarketContext | None",
+) -> AssessRiskResponse:
+    """
+    Apply regime gate tightening to a risk assessment.
+
+    When gate_tightening=True and the assessment is HIGH_RISK, injects a
+    regime gate trigger so the stock is blocked at the gate layer.
+    No-op when market_context is None or gate_tightening is False.
+    """
+    if market_context is None or not market_context.gate_tightening:
+        return response
+    if response.assessment.risk_level != RiskLevel.HIGH_RISK:
+        return response
+    if response.assessment.gate_triggered is not None:
+        # already gated by a domain gate — don't overwrite
+        return response
+
+    regime = market_context.regime.value
+    gate_label = f"regime:{regime}"
+    new_assessment = replace(response.assessment, gate_triggered=gate_label)
+    return replace(response, assessment=new_assessment)

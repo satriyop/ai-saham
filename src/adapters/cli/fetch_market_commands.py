@@ -645,6 +645,61 @@ def _fetch_meta(ticker: str, db_path: Path) -> str:
         return f"ERR:{str(e)[:30]}"
 
 
+def _fetch_global_context_tickers(db_path: Path, days: int = 180) -> None:
+    """
+    Fetch MCE global context tickers (^VIX, EIDO, IDR=X, etc.) via Yahoo Finance
+    with no market suffix — these are not IDX stocks.
+
+    Called automatically at the end of `saham fetch market` (candles path only).
+    Tickers are read from config/market_context_engine.yaml so disabling a factor
+    also stops fetching its ticker.
+    """
+    from src.infrastructure.config.market_context_config import load_market_context_config
+    from src.application.use_case.refresh_market_data_use_case import (
+        RefreshMarketDataRequest,
+        RefreshMarketDataUseCase,
+    )
+
+    cfg = load_market_context_config()
+    global_tickers: list[tuple[str, str]] = []  # (ticker, factor_name)
+
+    if cfg.vix.enabled:
+        global_tickers.append((cfg.vix.ticker, "vix"))
+    if cfg.eido.enabled:
+        global_tickers.append((cfg.eido.ticker, "eido"))
+    if cfg.usd_idr.enabled:
+        global_tickers.append((cfg.usd_idr.ticker, "usd_idr"))
+
+    if not global_tickers:
+        return
+
+    provider = YahooFinanceProvider(market_suffix="")
+    repo = SQLiteMarketRepository(db_path=db_path)
+    use_case = RefreshMarketDataUseCase(provider=provider, repository=repo)
+
+    results: list[str] = []
+    for ticker, factor in global_tickers:
+        try:
+            resp = use_case.execute(
+                RefreshMarketDataRequest(
+                    ticker=ticker,
+                    days=days,
+                    refresh=False,
+                    start_tolerance_days=MARKET_START_TOLERANCE_DAYS,
+                    end_tolerance_days=3,   # global markets close at US hours; allow 3d tolerance
+                )
+            )
+            if resp.status.startswith("cached"):
+                status = f"✓"
+            else:
+                status = resp.status
+            results.append(f"{ticker}({factor}):{status}")
+        except Exception as e:
+            results.append(f"{ticker}({factor}):ERR:{str(e)[:20]}")
+
+    typer.echo(f"  Context tickers: {', '.join(results)}")
+
+
 def fetch_market(
     tickers: Annotated[
         Optional[list[str]],
@@ -928,3 +983,7 @@ def fetch_market(
         enrichment_available=response.enrichment_available,
         market_is_open=_mstatus.is_open if _mstatus else False,
     )
+
+    # Fetch MCE global context tickers (VIX, EIDO, USD/IDR) using no-suffix Yahoo provider
+    if not broker_only:
+        _fetch_global_context_tickers(resolved_db, days=days)

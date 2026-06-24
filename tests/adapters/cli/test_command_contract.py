@@ -60,8 +60,9 @@ EXPECTED_COMMANDS: dict[tuple[str, ...], tuple[str, ...]] = {
         "chart",
     ),
     ("analyze", "chart"): ("price", "rsi", "volume"),
-    ("view",): ("broker", "universe"),
+    ("view",): ("broker", "universe", "market-context"),
     ("view", "broker"): ("status", "flow", "top", "history", "top-foreign", "distribution", "mappings"),
+    ("view", "market-context"): (),
     ("trade",): (
         "confirm",
         "log",
@@ -173,6 +174,7 @@ REMOVED_ADAPTER_FILES: tuple[str, ...] = (
     "src/adapters/cli/update_commands.py",
     "src/adapters/cli/opening_commands.py",
     "src/adapters/cli/screen_commands.py",
+    "src/adapters/cli/analyze_regime_display.py",
 )
 
 
@@ -186,10 +188,12 @@ REMOVED_SOURCE_REFERENCE_PATTERNS: tuple[str, ...] = (
     "src.adapters.cli.update_commands",
     "src.adapters.cli.opening_commands",
     "src.adapters.cli.screen_commands",
+    "src.adapters.cli.analyze_regime_display",
     "data_commands.py",
     "update_commands.py",
     "opening_commands.py",
     "screen_commands.py",
+    "analyze_regime_display.py",
     "test_update_commands.py",
     "test_screen_commands.py",
 )

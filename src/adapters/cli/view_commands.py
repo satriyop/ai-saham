@@ -20,6 +20,7 @@ from src.adapters.cli.view_broker_commands import (
     broker_top,
     broker_top_foreign_view,
 )
+from src.adapters.cli.view_market_context_commands import market_context_show
 from src.infrastructure.config.app_config import APP_CFG
 
 
@@ -60,6 +61,19 @@ broker_view_app.command("distribution")(broker_distribution_view)
 broker_view_app.command("mappings")(broker_mappings)
 
 view_app.add_typer(broker_view_app, name="broker")
+
+# ── Market Context sub-group (3-word exception — documented in ADR-029) ───────
+market_context_view_app = typer.Typer(
+    name="market-context",
+    help="Show cross-market regime context (VIX, EIDO, USD/IDR, IDX breadth).",
+    no_args_is_help=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+)
+
+market_context_view_app.command("show", hidden=True)(market_context_show)
+market_context_view_app.callback(invoke_without_command=True)(market_context_show)
+
+view_app.add_typer(market_context_view_app, name="market-context")
 
 
 @view_app.command("ticker", hidden=True)

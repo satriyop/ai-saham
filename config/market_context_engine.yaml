@@ -1,0 +1,88 @@
+market_context_engine:
+
+  factors:
+
+    vix:
+      enabled: true
+      weight: 0.20
+      ticker: "^VIX"
+      thresholds:
+        very_low: 15.0      # VIX ≤ 15 → score 1.0 (risk appetite strong)
+        low: 20.0           # VIX 15–20 → score 0.75
+        elevated: 25.0      # VIX 20–25 → score 0.50; VIX 25–35 → score 0.25
+        high: 35.0          # VIX > 35 → score 0.0 + VOLATILE regime override
+
+    eido:
+      enabled: true
+      weight: 0.20
+      ticker: "EIDO"        # iShares MSCI Indonesia ETF (NYSE) — leads IHSG
+      thresholds:
+        premium_pct: 1.0    # EIDO 5d return outperforms IHSG 5d by > 1% → score 1.0
+        discount_pct: -2.0  # EIDO underperforms IHSG by > 2% → score 0.0
+        lookback_days: 5
+
+    usd_idr:
+      enabled: true
+      weight: 0.15
+      ticker: "IDR=X"       # USD/IDR rate (higher = weaker Rupiah = outflow risk)
+      thresholds:
+        strengthen_pct: -1.0  # Rupiah strengthens > 1% over lookback → score 1.0
+        weaken_pct: 2.5       # Rupiah weakens > 2.5% over lookback → score 0.0
+        lookback_days: 5
+
+    idx_trend:
+      enabled: true
+      weight: 0.15
+      benchmark_ticker: "^JKSE"
+      thresholds:
+        sma_fast: 20
+        sma_slow: 50
+        above_pct_strong: 3.0   # IHSG > SMA50 by ≥ 3% → score 1.0
+        below_pct_strong: -5.0  # IHSG < SMA50 by ≥ 5% → score 0.0
+
+    idx_breadth:
+      enabled: true
+      weight: 0.15
+      thresholds:
+        above_sma_period: 20
+        bullish_pct: 65.0   # ≥ 65% of universe above SMA20 → score 1.0
+        bearish_pct: 35.0   # ≤ 35% of universe above SMA20 → score 0.0
+
+    foreign_flow:
+      enabled: true
+      weight: 0.15
+      thresholds:
+        lookback_days: 5    # recent net foreign flow window
+        reference_days: 20  # rolling average comparison baseline
+
+    commodity_composite:
+      enabled: false        # off by default — toggle to true when commodity data available
+      weight: 0.05
+      components:
+        - ticker: "KO=F"   # CPO (crude palm oil) futures
+          weight: 0.60
+        - ticker: "MTF=F"  # Newcastle coal futures
+          weight: 0.40
+      thresholds:
+        lookback_days: 20
+        drawdown_risk_off_pct: -5.0   # composite 20d return < -5% → score 0.0
+        rally_risk_on_pct: 5.0        # composite 20d return > +5% → score 1.0
+
+  regime_thresholds:
+    risk_on_min_score: 0.65    # conviction ≥ 0.65 → RISK_ON
+    risk_off_max_score: 0.35   # conviction ≤ 0.35 → RISK_OFF; between → NEUTRAL
+    volatile_vix_override: 35.0  # VIX > 35 → VOLATILE (overrides weighted sum)
+
+  regime_effects:
+    RISK_ON:
+      signal_multiplier: 1.0
+      gate_tightening: false
+    NEUTRAL:
+      signal_multiplier: 1.0
+      gate_tightening: false
+    RISK_OFF:
+      signal_multiplier: 0.60
+      gate_tightening: true
+    VOLATILE:
+      signal_multiplier: 0.50
+      gate_tightening: true

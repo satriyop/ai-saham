@@ -23,7 +23,11 @@ from src.application.use_case.assess_signal_use_case import (
     AssessSignalResponse,
     AssessSignalUseCase,
 )
-from src.domain.value_objects.signal_assessment import SignalContext
+from src.domain.value_objects.signal_assessment import (
+    EntryQuality,
+    SignalContext,
+    SignalStrength,
+)
 
 if TYPE_CHECKING:
     from src.domain.ports.bandar_detector_provider import BandarDetectorProvider
@@ -32,6 +36,11 @@ if TYPE_CHECKING:
     from src.domain.ports.seasonality_provider import SeasonalityProvider
     from src.domain.ports.analyst_consensus_provider import AnalystConsensusProvider
     from src.domain.ports.forward_estimates_provider import ForwardEstimatesProvider
+    from src.domain.value_objects.market_context import MarketContext
+
+# Mirror thresholds from AssessSignalUseCase — must stay in sync
+_STRONG_THRESHOLD = 70
+_MODERATE_THRESHOLD = 45
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +86,7 @@ class SignalEngine:
         self,
         ticker: str,
         as_of_date: date | None = None,
+        market_context: "MarketContext | None" = None,
     ) -> AssessSignalResponse:
         """
         Full self-contained evaluation.
@@ -84,18 +94,23 @@ class SignalEngine:
         Fetches enrichment from injected providers. Providers that are absent
         or that raise exceptions are silently skipped — their factors fall back
         to neutral (50.0).
+
+        market_context: when provided, applies signal_multiplier to the raw score
+        and downgrades ENTER→WATCH when gate_tightening is active.
         """
         ctx = self._build_signal_context(ticker)
         if as_of_date is not None:
             ctx = replace(ctx, snapshot_date=as_of_date)
-        return self._use_case.execute(
+        response = self._use_case.execute(
             AssessSignalRequest(ticker=ticker, signal_context=ctx)
         )
+        return _apply_market_context(response, market_context)
 
     def evaluate_with_context(
         self,
         ticker: str,
         signal_context: SignalContext,
+        market_context: "MarketContext | None" = None,
     ) -> AssessSignalResponse:
         """
         Pipeline path: caller supplies pre-loaded SignalContext.
@@ -103,17 +118,23 @@ class SignalEngine:
         Intended for screener loops (800+ tickers) where enrichment data is
         already fetched per candidate — avoids N+1 provider calls.
         """
-        return self._use_case.execute(
+        response = self._use_case.execute(
             AssessSignalRequest(ticker=ticker, signal_context=signal_context)
         )
+        return _apply_market_context(response, market_context)
 
-    def evaluate_request(self, request: AssessSignalRequest) -> AssessSignalResponse:
+    def evaluate_request(
+        self,
+        request: AssessSignalRequest,
+        market_context: "MarketContext | None" = None,
+    ) -> AssessSignalResponse:
         """
         Advanced path: caller provides a full AssessSignalRequest.
 
         Injects signal_context automatically when the caller hasn't supplied one.
         """
-        return self._use_case.execute(self._inject_signal_context(request))
+        response = self._use_case.execute(self._inject_signal_context(request))
+        return _apply_market_context(response, market_context)
 
     # ── internals ────────────────────────────────────────────────────────────
 
@@ -210,3 +231,61 @@ class SignalEngine:
             analyst_upside_pct=upside_pct,
             forward_pe=forward_pe,
         )
+
+
+# ── Market context post-processing ───────────────────────────────────────────
+
+def _apply_market_context(
+    response: AssessSignalResponse,
+    market_context: "MarketContext | None",
+) -> AssessSignalResponse:
+    """
+    Apply regime adjustment to a signal assessment.
+
+    score × signal_multiplier → re-classified strength/entry.
+    gate_tightening=True → ENTER is capped to WATCH.
+    No-op when market_context is None or multiplier=1.0 and no tightening.
+    """
+    if market_context is None:
+        return response
+
+    multiplier = market_context.signal_multiplier
+    tighten = market_context.gate_tightening
+
+    if multiplier == 1.0 and not tighten:
+        return response
+
+    base = response.assessment.score
+    adjusted = max(0, min(100, round(base * multiplier)))
+
+    if adjusted >= _STRONG_THRESHOLD:
+        new_strength = SignalStrength.STRONG
+    elif adjusted >= _MODERATE_THRESHOLD:
+        new_strength = SignalStrength.MODERATE
+    else:
+        new_strength = SignalStrength.WEAK
+
+    if new_strength == SignalStrength.STRONG:
+        new_entry = EntryQuality.ENTER
+    elif new_strength == SignalStrength.MODERATE:
+        new_entry = EntryQuality.WATCH
+    else:
+        new_entry = EntryQuality.AVOID
+
+    if tighten and new_entry == EntryQuality.ENTER:
+        new_entry = EntryQuality.WATCH
+
+    regime = market_context.regime.value
+    note = f" [regime:{regime} ×{multiplier:.2f} {base}→{adjusted}"
+    if tighten and new_entry != response.assessment.entry_quality:
+        note += " ENTER→WATCH"
+    note += "]"
+
+    new_assessment = replace(
+        response.assessment,
+        score=adjusted,
+        strength=new_strength,
+        entry_quality=new_entry,
+        rationale=response.assessment.rationale + note,
+    )
+    return replace(response, assessment=new_assessment)

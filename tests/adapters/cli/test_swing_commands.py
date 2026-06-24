@@ -612,8 +612,7 @@ def test_regime_command_accepts_explicit_ticker_with_empty_cache(tmp_path: Path)
     )
 
     assert result.exit_code == 0, result.output
-    assert "MARKET REGIME" in result.output
-    assert "RISK_OFF" in result.output
+    assert "Market Context" in result.output
 
 
 def test_swing_backtest_rejects_invalid_allowed_regime():

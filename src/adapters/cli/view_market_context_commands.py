@@ -1,15 +1,14 @@
 """
-CLI implementation for saham analyze regime command.
+CLI commands for saham view market-context.
 
-Delegates to MarketContextEngine (ADR-029). The old MarketRegimeUseCase
-(7 binary signals, IDX-internal only) has been replaced.
+Reads cached market data from SQLite (no network calls).
+Data must be pre-fetched via `saham fetch market`.
 
 Layer: Adapter
 """
 
 from __future__ import annotations
 
-import json
 from datetime import date
 from pathlib import Path
 from typing import Annotated, Optional
@@ -34,22 +33,14 @@ from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarket
 DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 
 
-def regime(
-    tickers: Annotated[
-        Optional[list[str]],
-        typer.Argument(help="Explicit ticker symbols for breadth context"),
+def market_context_show(
+    as_of: Annotated[
+        Optional[str],
+        typer.Option("--date", help="Context date, YYYY-MM-DD (default: today)"),
     ] = None,
     universe: Annotated[
         Optional[str],
-        typer.Option("--universe", "-u", help="Universe name or 'cached'"),
-    ] = None,
-    benchmark: Annotated[
-        str,
-        typer.Option("--benchmark", help="Benchmark ticker (overrides config idx_trend.benchmark_ticker)"),
-    ] = APP_CFG.analysis.benchmark,
-    as_of: Annotated[
-        Optional[str],
-        typer.Option("--as-of", help="Context date, YYYY-MM-DD (default: today)"),
+        typer.Option("--universe", "-u", help="Universe for idx_breadth factor (default: regime_universe config)"),
     ] = None,
     verbose: Annotated[
         bool,
@@ -65,12 +56,9 @@ def regime(
     ] = None,
 ) -> None:
     """
-    Show market regime context powered by the Market Context Engine (ADR-029).
+    Show current market regime context (cross-market + IDX-internal factors).
 
-    Cross-market factors (VIX, EIDO, USD/IDR) and IDX-internal factors (IHSG
-    trend, breadth) are scored 0.0–1.0 and combined into a weighted regime.
-
-    For a focused context view: saham view market-context [--verbose]
+    Reads cached candles — run `saham fetch market` first to ensure fresh data.
     """
     resolved_db = db_path or DEFAULT_DB_PATH
 
@@ -80,17 +68,15 @@ def regime(
         typer.echo(f"Error: invalid date format: {e}", err=True)
         raise typer.Exit(1)
 
-    # Explicit tickers take precedence; only fall back to universe when no tickers given
-    resolved_universe = universe or (APP_CFG.analysis.regime_universe if not tickers else None)
+    resolved_universe = universe or APP_CFG.analysis.regime_universe
     try:
         ticker_list = resolve_tickers(
             universe=resolved_universe,
-            explicit=list(tickers) if tickers else [],
+            explicit=[],
             db_path=resolved_db,
         )
-    except (UniverseNotFoundError, FileNotFoundError) as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1)
+    except (UniverseNotFoundError, FileNotFoundError):
+        ticker_list = []
 
     cfg = load_market_context_config()
     engine = MarketContextEngine(

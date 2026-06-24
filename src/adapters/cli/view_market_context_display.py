@@ -1,0 +1,135 @@
+"""
+Display helpers for saham view market-context output.
+
+Layer: Adapter
+"""
+
+from __future__ import annotations
+
+import json
+
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+from rich.text import Text
+
+from src.domain.value_objects.market_context import MarketContext, MarketRegime
+
+_CONSOLE = Console()
+
+_REGIME_STYLE = {
+    MarketRegime.RISK_ON:  ("bold green", "RISK_ON"),
+    MarketRegime.NEUTRAL:  ("bold yellow", "NEUTRAL"),
+    MarketRegime.RISK_OFF: ("bold red", "RISK_OFF"),
+    MarketRegime.VOLATILE: ("bold magenta", "VOLATILE"),
+}
+
+_LABEL_STYLE = {
+    "FAVORABLE":   "green",
+    "NEUTRAL":     "yellow",
+    "STRESSED":    "red",
+    "UNAVAILABLE": "dim",
+    "DISABLED":    "dim",
+}
+
+_SCORE_BAR_WIDTH = 10
+
+
+def display_market_context(context: MarketContext, verbose: bool = False) -> None:
+    """Render MarketContext to terminal."""
+    _CONSOLE.print()
+
+    regime_style, regime_text = _REGIME_STYLE.get(context.regime, ("bold white", context.regime.value))
+
+    # ── Header ───────────────────────────────────────────────────────────────
+    header = Text()
+    header.append(f"Market Context — {context.as_of_date}   ", style="bold")
+    header.append(regime_text, style=regime_style)
+    header.append(f"  (conviction: {context.conviction:.2f})", style="dim")
+
+    # ── Factor table ─────────────────────────────────────────────────────────
+    table = Table(show_header=True, header_style="bold cyan", box=None, pad_edge=False, padding=(0, 1))
+    table.add_column("Factor", style="bold", width=14)
+    table.add_column("Score", justify="right", width=6)
+    table.add_column("Weight", justify="right", width=7)
+    table.add_column("Label", width=12)
+    table.add_column("Detail")
+
+    for factor in context.factors:
+        if not factor.enabled:
+            if verbose:
+                table.add_row(
+                    factor.name,
+                    "—",
+                    f"{factor.weight:.2f}",
+                    _styled_label("DISABLED"),
+                    Text("disabled in config", style="dim"),
+                )
+            continue
+
+        score_str = f"{factor.score:.2f}" if factor.score is not None else "—"
+        score_bar = _score_bar(factor.score) if factor.score is not None else ""
+
+        if verbose:
+            detail = Text()
+            detail.append(score_bar + " ", style="dim")
+            detail.append(factor.rationale)
+        else:
+            detail = Text(factor.rationale[:70])
+
+        table.add_row(
+            factor.name,
+            score_str,
+            f"{factor.weight:.2f}",
+            _styled_label(factor.label),
+            detail,
+        )
+
+    # ── Footer ───────────────────────────────────────────────────────────────
+    footer = Text()
+    mult = context.signal_multiplier
+    tighten = "ON" if context.gate_tightening else "off"
+
+    if mult < 1.0:
+        footer.append(f"signal_multiplier: {mult:.2f}", style="bold red")
+        footer.append("  (ENTER signals will be downgraded to WATCH)", style="dim red")
+    else:
+        footer.append(f"signal_multiplier: {mult:.2f}", style="green")
+
+    footer.append(f"   gate_tightening: ", style="")
+    if context.gate_tightening:
+        footer.append(tighten, style="bold red")
+    else:
+        footer.append(tighten, style="dim")
+
+    # ── Warnings ──────────────────────────────────────────────────────────────
+    warnings = []
+    if context.staleness_warning:
+        warnings.append(Text(f"⚠ {context.staleness_warning}", style="yellow"))
+    if context.coverage_warning:
+        warnings.append(Text(f"⚠ {context.coverage_warning}", style="yellow"))
+
+    from rich.console import Group as RGroup
+    from rich.rule import Rule
+
+    parts = [header, Rule(style="dim"), table, Rule(style="dim"), footer]
+    for w in warnings:
+        parts.append(w)
+
+    panel = Panel(RGroup(*parts), border_style=regime_style.replace("bold ", ""))
+    _CONSOLE.print(panel)
+    _CONSOLE.print()
+
+
+def display_market_context_json(context: MarketContext) -> None:
+    print(json.dumps(context.to_dict(), indent=2))
+
+
+def _score_bar(score: float) -> str:
+    filled = round(score * _SCORE_BAR_WIDTH)
+    return "█" * filled + "░" * (_SCORE_BAR_WIDTH - filled)
+
+
+def _styled_label(label: str) -> Text:
+    style = _LABEL_STYLE.get(label, "")
+    return Text(label, style=style)
