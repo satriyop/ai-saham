@@ -31,7 +31,7 @@ class ConfirmIntradayOpenRequest:
     # Regime gate (Phase 1.3)
     regime: str | None = None
     regime_gate_enabled: bool = True
-    tighten_in_regimes: tuple[str, ...] = ("WEAK", "RISK_OFF")
+    tighten_in_regimes: tuple[str, ...] = ("VOLATILE", "RISK_OFF")
     gap_pct_tightening_factor: Decimal = Decimal("0.5")
     require_backed_in_weak: bool = True
 

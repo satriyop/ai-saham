@@ -80,7 +80,7 @@ regime_gate:
   # When market regime is in this list, tighten intraday entry rules.
   # IHSG Big Four (BBCA/BBRI/BMRI/BBNI) dominate index weight — when index opens
   # down sharply, second-liner bids evaporate regardless of individual signals.
-  tighten_in_regimes: ["WEAK", "RISK_OFF"]
+  tighten_in_regimes: ["VOLATILE", "RISK_OFF"]
 
   # max_gap_pct is scaled by this factor in tighten_in_regimes.
   # 0.5 = halve the entry band (e.g., ±3% → ±1.5%).

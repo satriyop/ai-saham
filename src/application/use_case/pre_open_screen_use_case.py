@@ -89,7 +89,7 @@ class PreOpenScreenConfig:
     min_target_ticks: int = 3
     min_stop_ticks: int = 2
     # Regime-gate parameters
-    tighten_in_regimes: list[str] = field(default_factory=lambda: ["WEAK", "RISK_OFF"])
+    tighten_in_regimes: list[str] = field(default_factory=lambda: ["VOLATILE", "RISK_OFF"])
     gap_pct_tightening_factor: float = 0.5
     require_backed_in_weak: bool = True
     regime_gate_enabled: bool = True
@@ -142,7 +142,7 @@ class PreOpenScreenConfig:
             tick_friction_gate=bool(risk.get("tick_friction_gate", True)),
             min_target_ticks=int(risk.get("min_target_ticks", 3)),
             min_stop_ticks=int(risk.get("min_stop_ticks", 2)),
-            tighten_in_regimes=list(regime_gate.get("tighten_in_regimes", ["WEAK", "RISK_OFF"])),
+            tighten_in_regimes=list(regime_gate.get("tighten_in_regimes", ["VOLATILE", "RISK_OFF"])),
             gap_pct_tightening_factor=float(regime_gate.get("gap_pct_tightening_factor", 0.5)),
             require_backed_in_weak=bool(regime_gate.get("require_backed_in_weak", True)),
             regime_gate_enabled=bool(regime_gate.get("regime_gate_enabled", True)),

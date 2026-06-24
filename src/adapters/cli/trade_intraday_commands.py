@@ -391,6 +391,8 @@ def confirm_open(
     else:
         po_config = PreOpenScreenConfig()
 
+    _KNOWN_REGIMES = {"RISK_ON", "NEUTRAL", "RISK_OFF", "VOLATILE",
+                      "BULLISH", "SIDEWAYS", "WEAK"}  # legacy compat
     regime_val = None
     if sidecar_path.exists():
         try:
@@ -399,7 +401,16 @@ def confirm_open(
             regime_dict = sidecar_data.get("market_regime")
             if regime_dict and isinstance(regime_dict, dict):
                 # New MCE format uses "regime" key; old format used "label"
-                regime_val = regime_dict.get("regime") or regime_dict.get("label")
+                raw = regime_dict.get("regime") or regime_dict.get("label")
+                if raw is not None and raw.upper() not in _KNOWN_REGIMES:
+                    # Unrecognized regime: fail closed — treat as RISK_OFF to activate gates
+                    typer.echo(
+                        f"Warning: unrecognized regime '{raw}' in sidecar; "
+                        "treating as RISK_OFF (fail-closed).",
+                        err=True,
+                    )
+                    raw = "RISK_OFF"
+                regime_val = raw
         except Exception:
             pass
 

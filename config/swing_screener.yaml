@@ -43,19 +43,21 @@ resistance:
 
 preset_targets:
   # Regime-adaptive TP/SL for the foreign-bounce preset.
+  # Keys use MCE vocabulary (RISK_ON/NEUTRAL/VOLATILE/RISK_OFF).
+  # Legacy keys (bullish/sideways/weak) kept for old sidecars and backcompat.
   # Validated direction: IHSG has documented regime cycles.
   # Exact thresholds are calibration starting points — adjust to your backtest.
-  bullish:
+  risk_on:
     take_profit_pct: 8.0
     stop_loss_pct: 4.0    # 2:1 R:R — trending market, let winners run
 
-  sideways:
+  neutral:
     take_profit_pct: 5.0
     stop_loss_pct: 5.0    # 1:1 R:R — range-bound, take what the market gives
 
-  weak:
+  volatile:
     take_profit_pct: 3.0
-    stop_loss_pct: 3.0    # Tight — minimize exposure in downtrend
+    stop_loss_pct: 3.0    # Tight — minimize exposure in volatile conditions
 
   risk_off:
     take_profit_pct: 3.0
@@ -64,6 +66,17 @@ preset_targets:
   default:
     take_profit_pct: 5.0
     stop_loss_pct: 5.0    # Fallback when regime data is unavailable
+
+  # Legacy labels — kept for backward compat with old sidecars
+  bullish:
+    take_profit_pct: 8.0
+    stop_loss_pct: 4.0
+  sideways:
+    take_profit_pct: 5.0
+    stop_loss_pct: 5.0
+  weak:
+    take_profit_pct: 3.0
+    stop_loss_pct: 3.0
 
 corporate_actions:
   # Primary: "stockbit" uses Playwright session to fetch ex-dates.

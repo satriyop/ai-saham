@@ -43,11 +43,11 @@ def _parse_regime_filter(value: str | None) -> tuple[str, ...]:
     if not value:
         return ()
     regimes = tuple(part.strip().upper() for part in value.split(",") if part.strip())
-    valid = {"BULLISH", "SIDEWAYS", "WEAK", "RISK_OFF"}
+    valid = {"RISK_ON", "NEUTRAL", "RISK_OFF", "VOLATILE"}
     invalid = [regime for regime in regimes if regime not in valid]
     if invalid:
         raise typer.BadParameter(
-            "--allow-regimes must contain only: BULLISH, SIDEWAYS, WEAK, RISK_OFF"
+            "--allow-regimes must contain only: RISK_ON, NEUTRAL, RISK_OFF, VOLATILE"
         )
     return regimes
 

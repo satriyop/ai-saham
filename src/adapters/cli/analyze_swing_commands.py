@@ -106,8 +106,8 @@ def _load_swing_screener_config() -> dict:
 
 SWING_COMPARE_VARIANTS: dict[str, tuple[str, ...]] = {
     "baseline": (),
-    "sideways_only": ("SIDEWAYS", "BULLISH"),
-    "weak_plus": ("WEAK", "SIDEWAYS", "BULLISH"),
+    "sideways_only": ("NEUTRAL", "RISK_ON"),
+    "weak_plus": ("VOLATILE", "NEUTRAL", "RISK_ON"),
 }
 
 from src.infrastructure.config.swing_config import (  # noqa: E402

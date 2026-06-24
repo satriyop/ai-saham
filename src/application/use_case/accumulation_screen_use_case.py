@@ -58,11 +58,17 @@ _DEFAULT_TAKE_PROFIT = Decimal("5")
 _DEFAULT_STOP_LOSS = Decimal("5")
 
 # Regime-specific targets (validated direction: IHSG has documented regime cycles)
+# MCE vocabulary (RISK_ON/NEUTRAL/VOLATILE/RISK_OFF) is primary;
+# legacy labels kept for backward-compat with old sidecars and explicit CLI flags.
 _REGIME_TARGETS: dict[str, tuple[Decimal, Decimal]] = {
-    "BULLISH": (Decimal("8"), Decimal("4")),  # 2:1 R:R — trending market
-    "SIDEWAYS": (Decimal("5"), Decimal("5")),  # 1:1 R:R — range-bound
-    "WEAK": (Decimal("3"), Decimal("3")),  # tight — minimize exposure
-    "RISK_OFF": (Decimal("3"), Decimal("3")),  # capital preservation
+    "RISK_ON":  (Decimal("8"), Decimal("4")),   # 2:1 R:R — trending market
+    "NEUTRAL":  (Decimal("5"), Decimal("5")),   # 1:1 R:R — range-bound
+    "VOLATILE": (Decimal("3"), Decimal("3")),   # tight — minimize exposure
+    "RISK_OFF": (Decimal("3"), Decimal("3")),   # capital preservation
+    # legacy labels
+    "BULLISH":  (Decimal("8"), Decimal("4")),
+    "SIDEWAYS": (Decimal("5"), Decimal("5")),
+    "WEAK":     (Decimal("3"), Decimal("3")),
 }
 
 
