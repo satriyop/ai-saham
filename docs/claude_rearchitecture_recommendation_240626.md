@@ -9,6 +9,10 @@
 
 **R1 Status:** ✅ SignalEngine first-class service complete (2026-06-24). 50 unit tests, full suite 1913/1913 green. Section 2.2 updated to reflect the new state.
 
+**R2 Status:** ✅ Use-case migration complete (2026-06-24, commit 3d79500). `AccumulationScreenUseCase._composite_score()` deleted; `SwingAnalysisWorkflowUseCase` gains `signal_assessment` field. `CompositeSignalScore` VO removed. 1914 tests green.
+
+**R3 (Code Review) Status:** ✅ All 4 post-R2 code review findings fixed (2026-06-24, commit 3d79500). ADR compliance: `AccumulationScreenUseCase` now injects `SignalEngine` directly. Double computation eliminated (fast-path reuse). `breakdown_dict` consistency fix. `coverage_warning` surfaced in swing display.
+
 **Code Review Status:** ✅ All 10 confirmed findings fixed (2026-06-24). See Section 5b for the fix record.
 
 ---
@@ -32,7 +36,9 @@ Six IDX-specific market microstructure items are also missing from the professio
 
 **R1 is complete.** `SignalEngine`, `SignalAssessment`, `SignalContext`, `AssessSignalUseCase`, and `create_signal_engine()` factory are all implemented and tested (2026-06-24). The remaining use-case migration work (R2: delegate `AccumulationScreenUseCase._composite_score()` and `SwingAnalysisWorkflowUseCase` inline assembly to `SignalEngine`) is the immediate next priority.
 
-**Recommended next action (R2):** migrate `AccumulationScreenUseCase._composite_score()` (lines ~358–468) and the inline signal assembly in `SwingAnalysisWorkflowUseCase` to call `SignalEngine.evaluate()`. Then compose both engine outputs into `CombinedAssessment` per ADR-026.
+**R2 complete (2026-06-24):** `AccumulationScreenUseCase._composite_score()` deleted; both use cases delegate to `SignalEngine`. `CompositeSignalScore` removed. R3 code review fixes also applied (ADR compliance, double computation, `breakdown_dict`, `coverage_warning` display).
+
+**Recommended next action:** Phase 2 — Risk+Signal Pipeline Composition (`CombinedAssessment`, `ActionRecommendation`, ADR-026). See Section 5 Phase 2.
 
 ---
 
@@ -112,10 +118,12 @@ The Signal Engine is now a first-class application service parallel to RiskEngin
 - Coverage warning fires at ≥3/6 factors missing (neutral 50 applied)
 - `bandar_max_range` is dynamic: `(3 + num_optional) * 2` where num_optional counts non-None `top3/5/10_accdist` fields
 
-**What remains (R2 — migration targets, not yet delegated):**
-- `AccumulationScreenUseCase._composite_score()` (lines ~358–468) still contains inline signal scoring — should call `SignalEngine.evaluate()` instead
-- `SwingAnalysisWorkflowUseCase` still manually assembles gate context without signal context — should use `SignalEngine` for signal evaluation
-- Two scoring systems still exist in parallel (`CompositeSignalScore` in screener vs. new `SignalAssessment`) — R2 unifies them
+**R2 complete — all migration targets resolved (2026-06-24, commit 3d79500):**
+- ✅ `AccumulationScreenUseCase._composite_score()` deleted; `signal_engine.evaluate_with_context()` is the call site
+- ✅ `SwingAnalysisWorkflowUseCase` injects `SignalEngine`; response carries `signal_assessment` field
+- ✅ `CompositeSignalScore` VO deleted; single scoring system via `SignalAssessment`
+- ✅ ADR compliance fix (R3): `AccumulationScreenUseCase` injects `SignalEngine` (not `AssessSignalUseCase`)
+- ✅ Double computation eliminated (R3): workflow fast-path reuses `candidate.signal_assessment`
 
 ---
 
@@ -125,9 +133,9 @@ The table below maps every major CLI command group to whether it routes through 
 
 | Feature / Command | Routes through SignalEngine | Routes through RiskEngine | Verdict |
 |-------------------|--------------------------|--------------------------|---------|
-| `analyze risk` | ✗ | ✅ (via `create_risk_engine()`) | Partial — R2 |
-| `analyze swing` | ✗ (manual assembly) | ✅ (all 3 gates, fixed 2026-06-24) | Partial — R2 |
-| `screen accum` | ✗ (inline `_composite_score()`) | ✅ (post-screen funnel, all 3 gates) | Partial — R2 |
+| `analyze risk` | ✗ | ✅ (via `create_risk_engine()`) | Partial — Phase 2 |
+| `analyze swing` | ✅ (R2 done, 2026-06-24) | ✅ (all 3 gates, fixed 2026-06-24) | ✅ Both aligned |
+| `screen accum` | ✅ (R2 done, 2026-06-24) | ✅ (post-screen funnel, all 3 gates) | ✅ Both aligned |
 | `screen pre-open` | ✗ (own scoring system) | ✗ | ❌ Not aligned |
 | `analyze regime` | ✗ (standalone) | ✗ | ❌ Not aligned |
 | `analyze sentiment` | ✗ (standalone) | ✗ | ❌ Not aligned |
@@ -138,9 +146,9 @@ The table below maps every major CLI command group to whether it routes through 
 | `indicator compute/snapshot` | ✗ (raw math only) | ✗ | Deliberate (fine) |
 | `strategy backtest` | ✗ | ✗ (no gate integration) | Partial gap |
 | `view ticker` | ✗ | ✗ (cached data view) | Deliberate (fine) |
-| `analyze compare` | ✗ | ✅ (via `create_risk_engine()`) | Partial — R2 |
+| `analyze compare` | ✗ | ✅ (via `create_risk_engine()`) | Partial — Phase 2 |
 
-**Interpretation:** "R2" means the engine exists but the use case has not yet been migrated to delegate to it — that's the R2 migration task. "Not aligned" means the feature has its own parallel logic with no delegation path yet. "Partial" means one engine is wired but not both. Gate wiring is now parity-complete across all 3 CLI command sites (2026-06-24 code review fix).
+**Interpretation:** "Phase 2" means the engine is wired but the use case has not yet been migrated to compose both engine outputs via `CombinedAssessment` (ADR-026). "Not aligned" means the feature has its own parallel logic with no delegation path. "`analyze swing`" and "`screen accum`" are now fully aligned (R2+R3, 2026-06-24).
 
 ---
 
@@ -159,10 +167,11 @@ The table below maps every major CLI command group to whether it routes through 
 - `src/application/services/bootstrap.py` — `create_signal_engine()` factory
 - `tests/application/use_case/test_assess_signal.py` — 50 unit tests
 
-**Remaining (R2 — use-case migration):**
-- `AccumulationScreenUseCase._composite_score()` still inline — should delegate to `SignalEngine.evaluate()`
-- `SwingAnalysisWorkflowUseCase` still manually assembles signal context — should use `SignalEngine`
-- Until R2 completes, two signal scoring code paths exist in parallel
+**R2+R3 complete (2026-06-24, commit 3d79500):**
+- ✅ `AccumulationScreenUseCase._composite_score()` deleted; delegates to `SignalEngine.evaluate_with_context()`
+- ✅ `SwingAnalysisWorkflowUseCase` injects `SignalEngine`; fast-path reuses `candidate.signal_assessment`
+- ✅ Single scoring system: `CompositeSignalScore` removed, `SignalAssessment` is the single source of truth
+- ✅ ADR compliance: both use cases inject `SignalEngine` (not `AssessSignalUseCase`)
 
 ---
 
@@ -674,7 +683,7 @@ Also: delete `config/full_ai.yaml` (1-line empty stub, formally rejected by ADR-
 
 ### Phase 1 — Signal Engine (R1) — DONE ✅ (2026-06-24)
 
-**Reference:** `docs/claude_signal_risk_230626.md` (R1 implemented; R2–R4 remain)
+**Reference:** `docs/claude_signal_risk_230626.md` (R1–R3 complete)
 
 | Step | Task | Status |
 |------|------|--------|
@@ -683,18 +692,13 @@ Also: delete `config/full_ai.yaml` (1-line empty stub, formally rejected by ADR-
 | R1-3 | Add `create_signal_engine()` factory | ✅ `src/application/services/bootstrap.py` |
 | R1-4 | Write `AssessSignalUseCase` (pure scoring) | ✅ `src/application/use_case/assess_signal_use_case.py` |
 | R1-5 | 50 unit tests, full suite green | ✅ `tests/application/use_case/test_assess_signal.py` |
+| R2-1 | Migrate `AccumulationScreenUseCase._composite_score()` to delegate | ✅ commit 3d79500 |
+| R2-2 | Migrate `SwingAnalysisWorkflowUseCase` signal assembly to delegate | ✅ commit 3d79500 |
+| R3-1 | ADR compliance: inject `SignalEngine` (not `AssessSignalUseCase`) | ✅ commit 3d79500 |
+| R3-2 | Eliminate double computation (fast-path reuse pattern) | ✅ commit 3d79500 |
+| R3-3 | `breakdown_dict` consistency + `coverage_warning` display | ✅ commit 3d79500 |
 
-**Remaining (R2–R4):**
-
-| Step | Task | File |
-|------|------|------|
-| R2-1 | Migrate `AccumulationScreenUseCase._composite_score()` to delegate | `src/application/use_case/accumulation_screen_use_case.py:358` |
-| R2-2 | Migrate `SwingAnalysisWorkflowUseCase` signal assembly to delegate | `src/application/use_case/swing_analysis_workflow_use_case.py` |
-| R3-1 | Create `risk_display.py` unified display | `src/adapters/cli/risk_display.py` |
-| R3-2 | Create `signal_display.py` unified display | `src/adapters/cli/signal_display.py` |
-
-**Estimated effort for R2–R4:** 1.5–2 sessions  
-**R2 is the immediate next priority.**
+**Next:** Phase 2 — Risk+Signal Pipeline Composition (`CombinedAssessment`, ADR-026)
 
 ### Phase 2 — Risk+Signal Pipeline Composition — IMMEDIATE NEXT
 
