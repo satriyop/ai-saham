@@ -518,20 +518,23 @@ class AccumulationScreenUseCase:
                     month=today.month,
                 )
 
-            # Insider activity: director/commissioner buys in last 90 days
+            # Insider activity: director/commissioner transactions in last 90 days
+            insider_txns: list = []
             if self._insider_provider is not None:
                 from datetime import timedelta
+                from src.domain.value_objects.insider_transaction import compute_net_buy_ratio
 
                 insider_lookback = 90
-                txns = self._insider_provider.get_insider_transactions(
+                insider_txns = self._insider_provider.get_insider_transactions(
                     ticker=result.ticker,
                     from_date=today - timedelta(days=insider_lookback),
                     to_date=today,
-                    action_type="BUY",
+                    action_type="ALL",
                 )
-                if txns:
+                buy_txns = [t for t in insider_txns if t.is_buy]
+                if buy_txns:
                     result.insider_buying = True
-                    result.recent_insider_buys = [t.label for t in txns[:3]]
+                    result.recent_insider_buys = [t.label for t in buy_txns[:3]]
 
             # Analyst consensus: aggregated buy/hold/sell + price target
             if self._analyst_provider is not None:
@@ -590,7 +593,7 @@ class AccumulationScreenUseCase:
                 foreign_flow_quality=min(result.score, 120.0) / 120.0,
                 bandar_broad_score=bd.broad_score if bd else None,
                 bandar_max_range=(3 + num_optional) * 2 if bd else 6,
-                insider_net_buy_ratio=None,
+                insider_net_buy_ratio=compute_net_buy_ratio(insider_txns) if insider_txns else None,
                 seasonality_win_rate=se.win_rate_pct if se else None,
                 seasonality_avg_return_pct=se.avg_monthly_return_pct if se else None,
                 analyst_buy_pct=(ac.buy_count / ac.analyst_count) if ac and ac.analyst_count > 0 else None,

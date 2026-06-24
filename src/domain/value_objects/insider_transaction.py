@@ -55,3 +55,17 @@ class InsiderTransaction:
         price_str = f" @ Rp{self.price:,.0f}" if self.price > 0 else ""
         role_str = f" ({self.role[:3].title()})" if self.role else ""
         return f"{self.name}{role_str} {action} {shares_str}{price_str}"
+
+
+def compute_net_buy_ratio(transactions: list["InsiderTransaction"]) -> float | None:
+    """Return share-weighted net buy ratio in [-1.0, +1.0].
+
+    +1.0 = all insider volume is buying; -1.0 = all volume is selling.
+    Returns None when there are no transactions (degrades to neutral 50.0 in scoring).
+    """
+    buy_shares = sum(t.shares for t in transactions if t.is_buy)
+    sell_shares = sum(t.shares for t in transactions if not t.is_buy)
+    total = buy_shares + sell_shares
+    if total == 0:
+        return None
+    return (buy_shares - sell_shares) / total

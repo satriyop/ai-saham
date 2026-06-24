@@ -28,6 +28,7 @@ from src.domain.value_objects.signal_assessment import SignalContext
 if TYPE_CHECKING:
     from src.domain.ports.bandar_detector_provider import BandarDetectorProvider
     from src.domain.ports.fundamentals_provider import FundamentalsProvider
+    from src.domain.ports.insider_activity_provider import InsiderActivityProvider
     from src.domain.ports.seasonality_provider import SeasonalityProvider
     from src.domain.ports.analyst_consensus_provider import AnalystConsensusProvider
     from src.domain.ports.forward_estimates_provider import ForwardEstimatesProvider
@@ -58,6 +59,7 @@ class SignalEngine:
         self,
         bandar_provider: "BandarDetectorProvider | None" = None,
         fundamentals_provider: "FundamentalsProvider | None" = None,
+        insider_activity_provider: "InsiderActivityProvider | None" = None,
         seasonality_provider: "SeasonalityProvider | None" = None,
         analyst_provider: "AnalystConsensusProvider | None" = None,
         forward_estimates_provider: "ForwardEstimatesProvider | None" = None,
@@ -66,6 +68,7 @@ class SignalEngine:
         self._use_case = AssessSignalUseCase(weights=weights)
         self._bandar = bandar_provider
         self._fundamentals = fundamentals_provider
+        self._insider = insider_activity_provider
         self._seasonality = seasonality_provider
         self._analyst = analyst_provider
         self._forward_estimates = forward_estimates_provider
@@ -151,8 +154,20 @@ class SignalEngine:
                 logger.debug("SignalEngine: bandar unavailable for %s: %s", ticker, exc)
 
         # ── insider activity ──────────────────────────────────────────────────
-        # No provider implemented yet; insider_net_buy_ratio stays None → neutral 50.0.
-        # When an InsiderActivityProvider is added, fetch it here.
+        insider_ratio: float | None = None
+        if self._insider is not None:
+            try:
+                from datetime import timedelta
+                from src.domain.value_objects.insider_transaction import compute_net_buy_ratio
+                txns = self._insider.get_insider_transactions(
+                    ticker=ticker,
+                    from_date=today - timedelta(days=90),
+                    to_date=today,
+                    action_type="ALL",
+                )
+                insider_ratio = compute_net_buy_ratio(txns)
+            except Exception as exc:
+                logger.debug("SignalEngine: insider unavailable for %s: %s", ticker, exc)
 
         # ── seasonality ──────────────────────────────────────────────────────
         if self._seasonality is not None:
@@ -188,7 +203,7 @@ class SignalEngine:
             snapshot_date=today,
             bandar_broad_score=bandar_score,
             bandar_max_range=bandar_max_range,
-            insider_net_buy_ratio=None,
+            insider_net_buy_ratio=insider_ratio,
             seasonality_win_rate=win_rate,
             seasonality_avg_return_pct=avg_return,
             analyst_buy_pct=buy_pct,

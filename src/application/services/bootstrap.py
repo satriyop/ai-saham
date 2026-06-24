@@ -242,6 +242,7 @@ def create_signal_engine(
         return SignalEngine(weights=weights)
 
     from src.infrastructure.browser.stockbit_bandar import StockbitBandarDetectorProvider
+    from src.infrastructure.browser.stockbit_insider import StockbitInsiderActivityProvider
     from src.infrastructure.browser.stockbit_seasonality import StockbitSeasonalityProvider
     from src.infrastructure.browser.stockbit_analyst import StockbitAnalystConsensusProvider
     from src.infrastructure.browser.stockbit_forward_estimates import (
@@ -251,6 +252,7 @@ def create_signal_engine(
     resolved = _Path(db_path)
     return SignalEngine(
         bandar_provider=StockbitBandarDetectorProvider(broker_provider=None, db_path=resolved),
+        insider_activity_provider=StockbitInsiderActivityProvider(broker_provider=None, db_path=resolved),
         seasonality_provider=StockbitSeasonalityProvider(broker_provider=None, db_path=resolved),
         analyst_provider=StockbitAnalystConsensusProvider(broker_provider=None, db_path=resolved),
         forward_estimates_provider=StockbitForwardEstimatesProvider(
