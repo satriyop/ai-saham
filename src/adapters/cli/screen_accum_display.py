@@ -165,6 +165,7 @@ def display_results(
     table.add_column("BB%ile", justify="right")
     table.add_column("Trend")
     table.add_column("Risk")
+    table.add_column("Action")
     if strategy_signals is not None:
         table.add_column("Strat")
 
@@ -220,6 +221,18 @@ def display_results(
         else:
             risk_cell = Text("—", style="bright_black")
 
+        if c.trade_setup is not None:
+            _action_style = {
+                "ENTER":              "bold green",
+                "WATCH":              "yellow",
+                "AVOID":              "red",
+                "BLOCKED_EXECUTION":  "bold red",
+                "BLOCKED_STRUCTURAL": "bold red",
+            }.get(c.trade_setup.action.value, "white")
+            action_cell = Text(c.trade_setup.action.short, style=_action_style)
+        else:
+            action_cell = Text("—", style="bright_black")
+
         row = [
             str(i),
             c.ticker,
@@ -234,6 +247,7 @@ def display_results(
             bb_cell,
             c.trend,
             risk_cell,
+            action_cell,
         ]
         if strategy_signals is not None:
             raw = strategy_signals.get(c.ticker, "?")

@@ -39,6 +39,7 @@ if TYPE_CHECKING:
     from src.domain.value_objects.seasonal_edge import SeasonalEdge
     from src.domain.value_objects.shareholding_composition import ShareholdingComposition
     from src.domain.value_objects.ticker_notation import TickerNotationSnapshot
+    from src.domain.value_objects.trade_setup import TradeSetup
 
 from src.application.ports.corporate_action_repository import CorporateActionRepository
 from src.domain.ports.analyst_consensus_provider import AnalystConsensusProvider
@@ -221,6 +222,8 @@ class AccumulationCandidate:
     signal_assessment: "AssessSignalResponse | None" = None
     # Phase E: post-screening risk assessment (populated by risk funnel when configured)
     risk_assessment: "RiskAssessment | None" = None
+    # Unified trade action verdict — requires both signal_assessment and risk funnel
+    trade_setup: "TradeSetup | None" = None
 
     def to_dict(self) -> dict:
         return {
@@ -655,7 +658,13 @@ class AccumulationScreenUseCase:
         provider calls (Rec 15: share data snapshots).
         """
         from src.application.use_case.assess_risk_use_case import AssessRiskRequest
+        from src.application.use_case.assess_trade_setup_use_case import (
+            AssessTradeSetupRequest,
+            AssessTradeSetupUseCase,
+        )
         from src.domain.rules.risk_gate import GateContext
+
+        trade_setup_uc = AssessTradeSetupUseCase()
 
         for candidate in candidates:
             try:
@@ -691,6 +700,19 @@ class AccumulationScreenUseCase:
                     )
                 )
                 candidate.risk_assessment = resp.assessment
+                if candidate.signal_assessment is not None:
+                    try:
+                        trade_resp = trade_setup_uc.execute(AssessTradeSetupRequest(
+                            ticker=candidate.ticker,
+                            snapshot_date=as_of_date,
+                            signal_response=candidate.signal_assessment,
+                            risk_response=resp,
+                        ))
+                        candidate.trade_setup = trade_resp.setup
+                    except Exception as exc2:
+                        logger.debug(
+                            "Risk funnel: trade_setup failed for %s: %s", candidate.ticker, exc2
+                        )
             except Exception as exc:
                 logger.debug("Risk funnel: assessment failed for %s: %s", candidate.ticker, exc)
 

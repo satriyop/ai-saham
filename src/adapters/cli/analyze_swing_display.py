@@ -283,6 +283,7 @@ def print_swing_rich_overview(
     strategy_risk_level: str | None,
     strategy_risk_name: str | None,
     config: SwingDisplayConfig,
+    trade_setup=None,
 ) -> None:
     summary_parts = swing_summary_parts(accum, risk_resp, backtest_result, sentiment_resp)
     summary_text = " · ".join(summary_parts) if summary_parts else "insufficient data for assessment"
@@ -342,6 +343,19 @@ def print_swing_rich_overview(
     if risk_resp is not None:
         r = risk_resp.assessment
         signals.add_row("Risk", r.risk_level_name, f"confidence {r.confidence}/100")
+    if trade_setup is not None:
+        _action_style = {
+            "ENTER":              "bold green",
+            "WATCH":              "yellow",
+            "AVOID":              "red",
+            "BLOCKED_EXECUTION":  "bold red",
+            "BLOCKED_STRUCTURAL": "bold red",
+        }.get(trade_setup.action.value, "white")
+        signals.add_row(
+            "ACTION",
+            Text(trade_setup.action.short, style=_action_style),
+            trade_setup.rationale,
+        )
     if broker_detail is not None:
         signals.add_row("Broker quality", broker_detail.quality, broker_detail.broker_weight_quality)
     if broker_quality_note is not None:
@@ -432,6 +446,7 @@ def print_swing_output(
     strategy_risk_level: str | None = None,
     strategy_risk_name: str | None = None,
     signal_assessment=None,
+    trade_setup=None,
     config: SwingDisplayConfig | None = None,
 ) -> None:
     config = config or SwingDisplayConfig(
@@ -468,6 +483,7 @@ def print_swing_output(
         strategy_risk_level=strategy_risk_level,
         strategy_risk_name=strategy_risk_name,
         config=config,
+        trade_setup=trade_setup,
     )
 
     # ── Panel 2: DETAILED MARKET & RISK CONTEXT ─────────────────────────────

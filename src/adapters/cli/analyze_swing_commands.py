@@ -476,6 +476,7 @@ def _print_swing_output(
     strategy_risk_level: str | None = None,
     strategy_risk_name: str | None = None,
     signal_assessment=None,
+    trade_setup=None,
 ) -> None:
     from src.adapters.cli.analyze_swing_display import print_swing_output
 
@@ -506,6 +507,7 @@ def _print_swing_output(
         strategy_risk_level=strategy_risk_level,
         strategy_risk_name=strategy_risk_name,
         signal_assessment=signal_assessment,
+        trade_setup=trade_setup,
         config=_DISPLAY_CONFIG,
     )
 
@@ -893,6 +895,7 @@ def swing(
                 "breakdown": workflow_response.signal_assessment.assessment.breakdown_dict,
                 "coverage_warning": workflow_response.signal_assessment.coverage_warning,
             } if workflow_response.signal_assessment else None,
+            "trade_setup": workflow_response.trade_setup.to_dict() if workflow_response.trade_setup else None,
         }
         typer.echo(json.dumps(out, indent=2, default=str))
         return
@@ -924,6 +927,7 @@ def swing(
         strategy_risk_level=strategy_risk_level,
         strategy_risk_name=strategy_risk_name,
         signal_assessment=workflow_response.signal_assessment,
+        trade_setup=workflow_response.trade_setup,
     )
 
 

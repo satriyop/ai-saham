@@ -31,6 +31,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from src.domain.value_objects.market_context import MarketContext
+    from src.domain.value_objects.trade_setup import TradeSetup
 from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.market_data_repository import MarketDataRepository
 
@@ -88,6 +89,7 @@ class SwingAnalysisWorkflowResponse:
     stop_loss_pct: Decimal
     regime_label: str | None
     signal_assessment: "AssessSignalResponse | None" = None
+    trade_setup: "TradeSetup | None" = None
     warnings: tuple[str, ...] = ()
 
 
@@ -349,6 +351,25 @@ class SwingAnalysisWorkflowUseCase:
             except Exception as exc:
                 warnings.append(f"Market regime unavailable: {exc}")
 
+        trade_setup = None
+        if signal_assessment is not None and risk_response is not None:
+            try:
+                from src.application.use_case.assess_trade_setup_use_case import (
+                    AssessTradeSetupRequest,
+                    AssessTradeSetupUseCase,
+                )
+                trade_setup = AssessTradeSetupUseCase().execute(
+                    AssessTradeSetupRequest(
+                        ticker=request.ticker,
+                        snapshot_date=request.today,
+                        signal_response=signal_assessment,
+                        risk_response=risk_response,
+                        market_context=market_regime,
+                    )
+                ).setup
+            except Exception as exc:
+                warnings.append(f"TradeSetup unavailable: {exc}")
+
         swing_config = self._load_swing_config()
         regime_label = market_regime.regime.value if market_regime else None
         take_profit_pct, stop_loss_pct = self._resolve_preset_targets(
@@ -393,6 +414,7 @@ class SwingAnalysisWorkflowUseCase:
             stop_loss_pct=stop_loss_pct,
             regime_label=regime_label,
             signal_assessment=signal_assessment,
+            trade_setup=trade_setup,
             warnings=tuple(warnings),
         )
 
