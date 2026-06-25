@@ -142,7 +142,7 @@ class RiskEngine:
         if market_context is not None and market_context.gate_tightening:
             gate_label = f"regime:{market_context.regime.value}"
             gated = [
-                replace(a, gate_triggered=gate_label)
+                replace(a, gate_triggered=gate_label, gate_is_structural=True)
                 if a.risk_level == RiskLevel.HIGH_RISK and a.gate_triggered is None
                 else a
                 for a in result.assessments
@@ -235,5 +235,5 @@ def _apply_regime_gate(
 
     regime = market_context.regime.value
     gate_label = f"regime:{regime}"
-    new_assessment = replace(response.assessment, gate_triggered=gate_label)
+    new_assessment = replace(response.assessment, gate_triggered=gate_label, gate_is_structural=True)
     return replace(response, assessment=new_assessment)

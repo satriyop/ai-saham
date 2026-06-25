@@ -38,7 +38,8 @@ class RiskAssessment:
     rationale: tuple[str, ...]  # Immutable tuple for frozen dataclass
     snapshot_date: date
     indicators: IndicatorSnapshot
-    gate_triggered: str | None = None  # set when a RiskGate overrode the technical signal
+    gate_triggered: str | None = None     # set when a RiskGate overrode the technical signal
+    gate_is_structural: bool | None = None  # True=structural, False=execution, None=no gate
 
     def __post_init__(self) -> None:
         """Validate confidence is within valid range."""

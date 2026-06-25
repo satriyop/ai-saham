@@ -57,6 +57,7 @@ class AssessSignalResponse:
     assessment: SignalAssessment
     profile: str
     coverage_warning: str | None = None
+    signal_score_raw: int | None = None  # pre-regime score; None means no regime adjustment applied
 
     @property
     def score(self) -> int:

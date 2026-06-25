@@ -257,6 +257,7 @@ def _apply_market_context(
 
     base = response.assessment.score
     adjusted = max(0, min(100, round(base * multiplier)))
+    raw = response.signal_score_raw if response.signal_score_raw is not None else base
 
     if adjusted >= _STRONG_THRESHOLD:
         new_strength = SignalStrength.STRONG
@@ -286,6 +287,6 @@ def _apply_market_context(
         score=adjusted,
         strength=new_strength,
         entry_quality=new_entry,
-        rationale=response.assessment.rationale + note,
+        rationale=response.assessment.rationale + (note,),
     )
-    return replace(response, assessment=new_assessment)
+    return replace(response, assessment=new_assessment, signal_score_raw=raw)

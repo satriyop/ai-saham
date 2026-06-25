@@ -248,6 +248,7 @@ class AssessRiskUseCase:
                             snapshot_date=latest_snapshot.date,
                             indicators=latest_snapshot,
                             gate_triggered=type(gate).__name__,
+                            gate_is_structural=True,
                         )
                         return AssessRiskResponse(
                             ticker=agg_response.ticker,
@@ -274,6 +275,7 @@ class AssessRiskUseCase:
                             snapshot_date=assessment.snapshot_date,
                             indicators=assessment.indicators,
                             gate_triggered=type(gate).__name__,
+                            gate_is_structural=False,
                         )
                         return AssessRiskResponse(
                             ticker=agg_response.ticker,
@@ -480,6 +482,7 @@ class AssessRiskUseCase:
                             confidence=gate_result.confidence,
                             rationale=(gate_result.reason, *a.rationale),
                             gate_triggered=type(gate).__name__,
+                            gate_is_structural=True,
                         )
                         for a in proto_assessments
                     ]
@@ -509,6 +512,7 @@ class AssessRiskUseCase:
                             confidence=gate_result.confidence,
                             rationale=(gate_result.reason, *assessment.rationale),
                             gate_triggered=type(gate).__name__,
+                            gate_is_structural=False,
                         )
                         break  # first-gate-wins: consistent with execute()
                 upgraded.append(assessment)
