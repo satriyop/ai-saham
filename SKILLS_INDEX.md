@@ -19,7 +19,7 @@ Catalog of all documented artifacts in this project.
 
 | Name | Description | Tags | Link |
 |------|-------------|------|------|
-| Codebase Known Pitfalls | 18 confirmed bug patterns across fetch, gates, risk, signal, MCE, and scoring | — | [SKILL.md](.claude/skills/codebase-known-pitfalls/SKILL.md) |
+| Codebase Known Pitfalls | 22 confirmed bug patterns: fetch, gates, risk, signal, MCE, scoring, dataclass replace() fill-in, early-return hidden crashes, TYPE_CHECKING, tuple concatenation | — | [SKILL.md](.claude/skills/codebase-known-pitfalls/SKILL.md) |
 | MCE Integration Guide | Canonical wiring checklist for MarketContextEngine — universe, benchmark, vocab, gate post-processing | `mce`, `market-context`, `regime` | [SKILL.md](.claude/skills/mce-integration-guide/SKILL.md) |
 | IDX Public API | — | — | [SKILL.md](.claude/skills/idx-public-api/SKILL.md) |
 | Stockbit API Explorer | — | — | [SKILL.md](.claude/skills/stockbit-api-explorer/SKILL.md) |

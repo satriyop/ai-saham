@@ -2,16 +2,21 @@
 name: codebase-known-pitfalls
 description: >
   Repeatable bug patterns and their correct solutions, learned from real bugs
-  found in ai-saham code reviews (commits 87c24bd, post-R1 2026-06-24, R3 2026-06-24).
+  found in ai-saham code reviews (commits 87c24bd, post-R1 2026-06-24, R3 2026-06-24,
+  TradeSetup ADR-026 2026-06-25).
   Use this skill whenever you are about to: write or modify a fetch/cache use
   case, build or extend GateContext, add a new risk gate, thread as_of_date
   through a service, design a frozen dataclass value object, write profile-
   override logic in assess_all_profiles, add counts to a fetch response DTO,
-  inject a service into a use case, or build enrichment-result workflows.
+  inject a service into a use case, build enrichment-result workflows, add a
+  new field to RiskAssessment/SignalAssessment/TradeSetup, or post-process
+  assessment results with replace().
   Also trigger for: "gate not firing in screener but fires in analyze risk",
   "backtest results look too good", "free_float_pct over 100", "active_codes
   lower than expected", "CLOSE always shows dash", "profile list out of sync",
-  "signal computed twice for same ticker", "should I inject AssessSignalUseCase".
+  "signal computed twice for same ticker", "should I inject AssessSignalUseCase",
+  "BLOCKED_STRUCTURAL shows as BLOCKED_EXECUTION", "regime gate not classifying
+  correctly", "tests pass but production crashes in RISK_OFF regime".
 ---
 
 # Codebase Known Pitfalls
@@ -836,6 +841,179 @@ pattern in `src/application/use_case/build_market_context_use_case.py` or simila
 
 ---
 
+## 19. `replace()` Fill-In Obligation for New Dataclass Fields
+
+**Context:** `dataclasses.replace()` copies a dataclass instance with selected fields changed.
+It silently leaves any field **not mentioned** at its current value (or default if the source
+instance also had the default). A new field added to a dataclass does NOT force callers of
+`replace()` to set it — unlike the constructor, which will raise `TypeError` if a required
+kwarg is missing.
+
+**The failure mode (TradeSetup ADR-026, commit 28087db):**
+`gate_is_structural: bool | None` was added to `RiskAssessment`. The primary `execute()` path
+used direct construction (`RiskAssessment(..., gate_is_structural=True)`), which was updated.
+But four `replace()` call sites spread across two files were missed:
+
+| Call site | Expected | Got | Result |
+|---|---|---|---|
+| `execute_all_profiles()` structural gate (assess_risk_use_case.py:479) | `True` | `None` | BLOCKED_STRUCTURAL → BLOCKED_EXECUTION |
+| `execute_all_profiles()` execution gate (assess_risk_use_case.py:508) | `False` | `None` | correct by coincidence (None is falsy) |
+| `_apply_regime_gate()` (risk_engine.py:238) | `True` | `None` | BLOCKED_STRUCTURAL → BLOCKED_EXECUTION |
+| `assess_all_profiles()` regime replace (risk_engine.py:145) | `True` | `None` | BLOCKED_STRUCTURAL → BLOCKED_EXECUTION |
+
+**Why it's silent:** `gate_is_structural: bool | None = None` has a default of `None`.
+`replace(a, gate_triggered="FundamentalGate")` produces a valid object with `gate_is_structural=None`.
+Downstream code checking `if risk.assessment.gate_is_structural:` gets `False` for `None`,
+silently choosing the wrong branch.
+
+**Rule — when you add a field to a dataclass:**
+
+```python
+# Step 1: find all replace() calls referencing this dataclass
+grep -r "replace(" src/ | grep -v "^Binary"
+# Then grep for type(gate).__name__ or whatever field you can identify
+grep -rn "gate_triggered" src/
+
+# Step 2: for every replace() call, explicitly set the new field
+replace(a, gate_triggered=..., gate_is_structural=True)   # NOT: replace(a, gate_triggered=...)
+```
+
+**Step 3 — add a targeted test:**
+```python
+# Test that all four paths return the correct gate_is_structural value
+def test_structural_gate_is_structural_in_all_profiles():
+    result = use_case.execute_all_profiles(request_with_structural_gate)
+    for a in result.assessments:
+        assert a.gate_is_structural is True, f"profile {a.profile}: expected True got {a.gate_is_structural}"
+```
+
+**Primary vs secondary call sites:** constructor calls (primary `execute()` path) are usually the
+first implementation and are updated. `replace()` calls in secondary paths
+(`execute_all_profiles`, `assess_all_profiles`, helper functions) are the dangerous ones.
+Grep specifically for `replace(` after adding any new dataclass field.
+
+---
+
+## 20. Early Return Hides Crash in Non-Happy-Path Code
+
+**Context:** A function with an early return for the common case (e.g., "no adjustment needed,
+return immediately") leaves the code below the early return effectively untested if tests
+only exercise that common case.
+
+**The failure mode (TradeSetup ADR-026, commit 28087db):**
+`_apply_market_context()` in `signal_engine.py` has:
+```python
+if multiplier == 1.0 and not tighten:
+    return response    # ← early return for RISK_ON/NEUTRAL regimes
+```
+All tests used RISK_ON or NEUTRAL market context (or no context at all), so they always hit
+the early return. The code below contained a runtime crash:
+```python
+rationale=response.assessment.rationale + note,  # TypeError: tuple + str
+```
+1910 tests passed. Production would crash on the first RISK_OFF or VOLATILE regime evaluation.
+
+**Pattern:**
+```
+early_return_condition → covers 90% of test cases
+rest of function       → untested, contains crash
+```
+
+**Rule — for every early return in a non-trivial function:**
+- Write at least one test that bypasses it
+- The test should exercise the "expensive path" that the early return protects
+- Name it clearly: `test_apply_market_context_risk_off_regime` not `test_apply_market_context`
+
+**Functions in this codebase with early returns that need non-happy-path tests:**
+- `_apply_market_context()` — bypass by using `multiplier < 1.0` or `gate_tightening=True`
+- `_apply_regime_gate()` — bypass by setting `risk_level=HIGH_RISK` and `gate_tightening=True`
+- `_staleness_warning()` — bypass by using stale candle dates
+
+---
+
+## 21. `TYPE_CHECKING` Guard Makes Symbols Invisible at Runtime
+
+**Context:** `if TYPE_CHECKING:` is `False` at runtime. Imports inside this block are
+available to type checkers (mypy, pyright) but do NOT exist in the running process.
+Any runtime code that tries to use a symbol imported only under `TYPE_CHECKING` raises `NameError`.
+
+**The failure mode (TradeSetup ADR-026):**
+```python
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from src.domain.value_objects.signal_assessment import EntryQuality  # invisible at runtime
+
+def _resolve_action(self, sig, risk) -> SetupAction:
+    eq = sig.assessment.entry_quality
+    if eq == EntryQuality.ENTER:   # ← NameError: name 'EntryQuality' is not defined
+        ...
+```
+
+The original fix was an inline import inside the method body:
+```python
+def _resolve_action(self, ...):
+    from src.domain.value_objects.signal_assessment import EntryQuality  # re-imported every call
+    ...
+```
+This works but re-executes the import on every call (Python caches `sys.modules`, so the cost
+is a dict lookup, but it's still unnecessary overhead and misleading idiom).
+
+**Correct pattern — real module-level import:**
+```python
+from src.domain.value_objects.signal_assessment import EntryQuality   # module-level, no guard
+
+if TYPE_CHECKING:
+    from src.application.use_case.assess_risk_use_case import AssessRiskResponse
+    # ^ keep TYPE_CHECKING for things used ONLY in annotations, not runtime logic
+```
+
+**Rule:** `TYPE_CHECKING` is for type annotations in function signatures and class fields ONLY.
+If a symbol is used in `if x == Symbol.MEMBER:` or any runtime comparison, it must be a real
+module-level import. The inline-inside-method pattern is a workaround for circular imports —
+if you don't have a circular import, just import at the top.
+
+---
+
+## 22. `tuple[str, ...] + str` TypeError — Append With `(item,)` Syntax
+
+**Context:** Python's `+` operator on sequences requires both operands to be the same type.
+`tuple + str` raises `TypeError: can only concatenate tuple (not "str") to tuple`.
+This is non-obvious because `list + [item]` and `str + str` both work, leading agents to
+assume `tuple + str` would silently coerce.
+
+**The failure mode (TradeSetup ADR-026, signal_engine.py:290):**
+```python
+# SignalAssessment.rationale is tuple[str, ...]
+# note is a plain str built by string concatenation
+note = f" [regime:{regime} ×{multiplier:.2f} {base}→{adjusted}]"
+
+new_assessment = replace(
+    response.assessment,
+    rationale=response.assessment.rationale + note,   # TypeError!
+)
+```
+
+**Correct pattern — wrap the item in a single-element tuple:**
+```python
+rationale=response.assessment.rationale + (note,),   # tuple + tuple[str] ✓
+```
+
+**Variant patterns:**
+```python
+# Prepend (gate reason before technical rationale — see §3c):
+rationale=(gate_result.reason, *a.rationale)          # unpack existing tuple ✓
+
+# Append multiple items:
+rationale=response.assessment.rationale + (item_a, item_b)   # ✓
+
+# Append from a list:
+rationale=response.assessment.rationale + tuple(new_items)    # ✓
+```
+
+**Why tests don't catch this:** the crash only fires when the `if multiplier == 1.0 and not tighten: return` early return is bypassed (see §20). RISK_ON/NEUTRAL regimes hit the early return. Add a test that uses `multiplier=0.8` (RISK_OFF) or `gate_tightening=True` to exercise this path.
+
+---
+
 ## Quick Reference — Component → Pitfall
 
 | Component / scenario | Read section |
@@ -868,3 +1046,12 @@ pattern in `src/application/use_case/build_market_context_use_case.py` or simila
 | Sidecar reader receives unrecognized regime string | §16 |
 | Monday staleness false alarm on market data freshness check | §17 |
 | Piecewise scorer jumps at exact threshold value | §18 |
+| Added new field to RiskAssessment/SignalAssessment/TradeSetup | §19 |
+| `replace()` call not updated after new dataclass field added | §19 |
+| BLOCKED_STRUCTURAL returned as BLOCKED_EXECUTION from all-profiles path | §19 |
+| Tests pass (1910 green) but production crashes with certain inputs | §20 |
+| Function has early return — non-happy path never tested | §20 |
+| `NameError` on symbol imported under `TYPE_CHECKING` | §21 |
+| Inline `from ... import X` inside method body (workaround for circular import) | §21 |
+| `TypeError: can only concatenate tuple (not "str") to tuple` | §22 |
+| Appending a string to `rationale: tuple[str, ...]` | §22 |
