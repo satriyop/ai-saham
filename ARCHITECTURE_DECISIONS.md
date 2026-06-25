@@ -181,7 +181,10 @@ Risk profiles map analysis results to qualitative interpretation. Three built-in
 * Each gate MUST declare an `enabled: bool` field in the YAML config. A gate with `enabled: false` is skipped entirely from the pipeline — no evaluation, no block decision. This supports backtesting, A/B comparison, and T2 Tuner proposals without code changes. See ADR-024 Engine Configurability Contract for the full gate YAML schema.
 * A profile configuration YAML schema MUST be validated at startup via `yaml_loader.py`. Invalid config aborts startup with a clear error, not a silent fallback.
 * Custom profiles (user-defined YAML) are supported. Custom profile names are strings; built-in profiles use the `RiskProfile` enum.
-* Gate thresholds may be tightened based on market regime (RISK_OFF/WEAK) — see ADR-026 for regime integration rules.
+* Gate thresholds may be tightened based on market context (RISK_OFF/VOLATILE) — see ADR-029 for MarketContextEngine regime labels and integration rules.
+
+**Implementation status (2026-06-25)**
+`config/risk_engine.yaml` currently controls gate enablement and several gate thresholds through `create_risk_engine()`. Built-in RSI/EMA/SMA profile thresholds and per-profile gate threshold blocks are still migration targets; until migrated, the Python rule classes remain compile-time defaults.
 
 **Rationale**
 Separates math from policy. Config-driven thresholds enable the learning loop (ADR-027) to propose adjustments without requiring code changes, and enable calibration for IDX market specifics (ADR-028) without forking profiles.
@@ -504,7 +507,7 @@ Output cadence: per week / per quarter (gate inputs are slow-moving).
 
 **Answers:** "How strong and well-aligned are the factors supporting entry?"
 
-Owns: composite signal score (weighted sum of 6 factors: bandar intensity, foreign flow quality, insider activity (net buy direction), seasonality edge, analyst consensus, forward EPS valuation), preset gate evaluation, entry quality classification.
+Owns: composite signal score (weighted sum of 6 factors: bandar intensity, foreign flow quality, insider activity (net buy direction), seasonality edge, analyst consensus, forward EPS valuation) and entry quality classification. Screener-specific preset gates remain in screener policy, not in SignalEngine.
 
 Output cadence: per session (signal factors are fast-moving).
 
@@ -515,7 +518,7 @@ Output cadence: per session (signal factors are fast-moving).
 
 **Factory:** `create_signal_engine(db_path, with_enrichment)` in `src/application/services/bootstrap.py`. All provider injection and weight configuration is owned by the factory.
 
-**Output:** `SignalAssessment` — `score: int (0–100)`, `strength: SignalStrength (STRONG/MODERATE/WEAK)`, `entry_quality: EntryQuality (ENTER/WATCH/AVOID)`, `breakdown: dict[str, float]`, `rationale: tuple[str, ...]`
+**Output:** `SignalAssessment` — `score: int (0–100)`, `strength: SignalStrength (STRONG/MODERATE/WEAK)`, `entry_quality: EntryQuality (ENTER/WATCH/AVOID)`, `breakdown: tuple[tuple[str, float], ...]`, `rationale: tuple[str, ...]`
 
 **Signal weights** are read from `config/signal_engine.yaml`. Default weights: bandar 20%, foreign flow 20%, insider activity 20%, seasonality 15%, analyst consensus 15%, forward EPS 10%. See Engine Configurability Contract below for on/off toggle semantics.
 
@@ -523,7 +526,7 @@ Output cadence: per session (signal factors are fast-moving).
 
 ### Orthogonality Rule
 
-A strong signal does NOT imply low risk. Low risk does NOT imply a strong signal. Both engines are evaluated independently. A combined recommendation is derived by `CombinedAssessment` (see ADR-026) — neither engine reads the other's output.
+A strong signal does NOT imply low risk. Low risk does NOT imply a strong signal. Both engines are evaluated independently. A combined verdict is derived by `AssessTradeSetupUseCase` into a `TradeSetup` value object (see ADR-026) — neither engine reads the other's output.
 
 ---
 
@@ -635,7 +638,7 @@ class SignalAssessment:
     score: int                         # 0–100 weighted composite
     strength: SignalStrength           # STRONG / MODERATE / WEAK
     entry_quality: EntryQuality        # ENTER / WATCH / AVOID
-    breakdown: dict[str, float]        # factor name → contribution (0–1)
+    breakdown: tuple[tuple[str, float], ...]  # factor name/value pairs; use breakdown_dict for dict access
     rationale: tuple[str, ...]         # ordered explanations
     snapshot_date: date
 ```
@@ -663,12 +666,11 @@ class SignalContext:
     bandar_max_range: int                       # denominator for bandar_broad_score normalization
     foreign_flow_quality: float | None          # 0.0–1.0 (from accumulation stream)
     insider_net_buy_ratio: float | None         # -1.0 to 1.0 (negative = net selling, positive = net buying)
-    seasonality_win_rate: float | None          # 0.0–1.0 (pct of months positive for this ticker)
+    seasonality_win_rate: float | None          # 0.0–100.0 (pct of months positive for this ticker)
     seasonality_avg_return_pct: float | None    # e.g. 2.5 = 2.5% avg monthly return this season
     analyst_buy_pct: float | None               # 0.0–1.0
     analyst_upside_pct: float | None            # e.g. 15.0 = 15% upside to consensus price target
     forward_pe: float | None                    # forward P/E ratio for valuation normalization
-    sentiment: SentimentSnapshot | None         # optional: from FetchSentimentUseCase
 ```
 
 **`piotroski_f_score` is intentionally absent from `SignalContext`.** It remains in `GateContext` (RiskEngine path only). Passing it to SignalEngine would re-introduce the double-counting problem that `insider_activity` was added to solve.
@@ -688,8 +690,8 @@ class SignalContext:
 
 **Implications**
 
-* `src/application/use_case/accumulation_screen_use_case.py` — `_composite_score()` (line ~358) and `evaluate_foreign_bounce_gates()` (line ~1106) are migration targets. After migration, these functions are deleted.
-* `src/application/use_case/swing_analysis_workflow_use_case.py` — signal assembly must delegate to `signal_engine.evaluate_with_context()`.
+* `src/application/use_case/accumulation_screen_use_case.py` delegates SignalAssessment scoring to `signal_engine.evaluate_with_context()`. Accumulation evidence is now separate `AccumulationEvidence` context and the public screen filter is `--min-accum-score`; see ADR-030.
+* `src/application/use_case/swing_analysis_workflow_use_case.py` reuses the candidate SignalAssessment when available, otherwise delegates to `signal_engine.evaluate_with_context()` or `signal_engine.evaluate()`.
 * `create_signal_engine(db_path, with_enrichment)` factory in `src/application/services/bootstrap.py` injects providers, parses `config/signal_engine.yaml` (`signal_engine.factors` block), applies `enabled` filtering, and computes renormalized weights before constructing the engine. See ADR-024 Engine Configurability Contract for the full schema and renormalization rule.
 * `evaluate_with_context(ticker, SignalContext)` MUST be used by screening loops to avoid N+1 provider fetches.
 * Unit tests must test `SignalEngine` in isolation with injected mock providers — no Stockbit browser in tests.
@@ -701,61 +703,87 @@ class SignalContext:
 
 ## ADR-026: Risk+Signal Pipeline Composition
 
-_Date: 2026-06-24 · Context: Defines how SignalEngine and RiskEngine outputs combine into an action recommendation_
+_Date: 2026-06-24 · Updated: 2026-06-25 · Context: Defines how SignalEngine and RiskEngine outputs combine into an action verdict_
 
 **Decision**
-Features presenting a complete trade recommendation MUST compose both engine outputs through a `CombinedAssessment` domain value object. The composition rule is deterministic and lives in the domain layer.
+Features presenting a complete trade recommendation MUST compose both engine outputs through a `TradeSetup` domain value object, produced by `AssessTradeSetupUseCase`. The composition rule is deterministic and lives in the application layer (use case), not the domain value object itself.
 
-**Value Object: `CombinedAssessment`** (`src/domain/value_objects/combined_assessment.py`)
+> **Implementation note:** The original plan named `CombinedAssessment` / `ActionRecommendation`. During implementation the design evolved: (1) composition logic belongs in an application use case, not a static domain method; (2) `BLOCKED` was split into two distinct states to separate structural disqualifiers (permanent, skip entirely) from execution-quality gates (re-check if market conditions change).
+
+**Value Object: `TradeSetup`** (`src/domain/value_objects/trade_setup.py`)
 
 ```python
 @dataclass(frozen=True)
-class CombinedAssessment:
-    signal: SignalAssessment
-    risk: RiskAssessment
-    action: ActionRecommendation
-    reason: str
+class TradeSetup:
+    ticker: str
+    snapshot_date: date
+    action: SetupAction
+    signal_score: int                    # final 0-100 score from SignalAssessment
+    signal_score_raw: int                # pre-regime score, when available
+    signal_strength: SignalStrength      # from SignalAssessment
+    risk_level: RiskLevel                # from RiskAssessment
+    blocking_gates: tuple[str, ...]      # gate labels; empty when not BLOCKED_*
+    regime: MarketRegime | None          # None when MCE not used
+    signal_multiplier: float             # 1.0 = no MCE impact; <1.0 = headwind
+    gate_tightening: bool                # True when regime tightened gates
+    rationale: str
 ```
 
-**Enum: `ActionRecommendation`** (`src/domain/value_objects/action_recommendation.py`)
+**Enum: `SetupAction`** (`src/domain/value_objects/trade_setup.py`)
 
 ```python
-class ActionRecommendation(Enum):
-    ENTER = "ENTER"     # STRONG signal + LOW_RISK
-    WATCH = "WATCH"     # MODERATE signal OR MODERATE risk
-    AVOID = "AVOID"     # WEAK signal
-    BLOCKED = "BLOCKED" # HIGH_RISK (gate fired) — overrides any signal strength
+class SetupAction(Enum):
+    ENTER             = "ENTER"              # STRONG signal + LOW_RISK [+ favorable regime]
+    WATCH             = "WATCH"              # MODERATE signal OR MODERATE risk
+    AVOID             = "AVOID"              # WEAK signal
+    BLOCKED_EXECUTION = "BLOCKED_EXECUTION"  # execution-quality gate fired (re-check later)
+    BLOCKED_STRUCTURAL= "BLOCKED_STRUCTURAL" # structural gate fired (skip entirely)
 ```
 
-**Composition Rule** (deterministic, no I/O):
+**BLOCKED split rationale**
+
+`gate_is_structural: bool | None` on `RiskAssessment` carries the gate type:
+- `True` → structural gate (e.g. FundamentalGate, LiquidityGate, FreeFloatGate, or MCE regime gate when applied by RiskEngine) → `BLOCKED_STRUCTURAL`: the instrument is fundamentally unsuitable right now.
+- `False` → execution gate (e.g. BandarGate) → `BLOCKED_EXECUTION`: the current execution/flow environment is poor; conditions may change.
+- `None` → no gate triggered (normal path).
+
+**Composition Rule** (`AssessTradeSetupUseCase`, deterministic, no I/O):
 
 ```
-if risk.risk_level == HIGH_RISK:
-    → BLOCKED  (gate overrides; signal strength is irrelevant)
-elif signal.strength == STRONG and risk.risk_level == LOW_RISK:
+if any gate triggered and gate_is_structural == True:
+    → BLOCKED_STRUCTURAL
+elif any gate triggered and gate_is_structural == False:
+    → BLOCKED_EXECUTION
+elif signal.entry_quality == ENTER:
     → ENTER
+elif signal.entry_quality == WATCH:
+    → WATCH
 elif signal.strength == WEAK:
     → AVOID
 else:
     → WATCH
 ```
 
-**Regime Modifier**
-When `market_regime` is RISK_OFF or WEAK:
-- ENTER is downgraded to WATCH (no new entries in a falling market)
-- Gate thresholds in `RiskEngine` tighten per ADR-010 profile config
+**MCE Regime Modifier**
+`MarketContextEngine` output is optional. Current code records `regime`, `signal_multiplier`, and `gate_tightening` in `TradeSetup` when the caller supplies `market_context`.
+
+Engine-level adjustment is owned by the engines, not by `AssessTradeSetupUseCase`:
+- `SignalEngine.evaluate(..., market_context=...)` applies `score × signal_multiplier` and caps ENTER to WATCH when `gate_tightening=True`.
+- `RiskEngine.assess(..., market_context=...)` marks HIGH_RISK assessments with a `regime:{REGIME}` structural gate when `gate_tightening=True`.
+
+Callers that compute signal/risk before market context is available may still pass market context to `AssessTradeSetupUseCase`; in that case the regime is recorded in the verdict rationale, but signal/risk scores are not retroactively recomputed.
 
 **Implications**
 
-* `SwingAnalysisWorkflowUseCase` computes both assessments and calls `CombinedAssessment.compose(signal, risk, regime)` to produce the action.
-* `AccumulationScreenUseCase` computes `CombinedAssessment` per candidate and uses it for the final ranking/display column.
-* Neither engine reads the other's output. The composition is always performed by the use case, never inside an engine.
-* `market_regime_use_case.py` output is fetched by the use case layer and passed as `regime: MarketRegime | None` to both engines and the composer.
-* The `BLOCKED` state is the highest-priority output. No signal strength, no AI explanation, no config override can change a BLOCKED result without changing the underlying gate data.
-* CLI display of `CombinedAssessment` uses `rich_display.action_cell()` — a single consistent formatter for all commands.
+* `AssessTradeSetupUseCase` (`src/application/use_case/assess_trade_setup_use_case.py`) is the single composition point. It is stateless — instantiated inline as `AssessTradeSetupUseCase().execute(request)`.
+* `SwingAnalysisWorkflowUseCase` computes `trade_setup` after signal, risk, and `market_regime` are all resolved. Current implementation passes `market_context=market_regime` to the composer for verdict context; engine-level MCE adjustment requires passing the same context into `SignalEngine`/`RiskEngine` before composition.
+* `AccumulationScreenUseCase` computes `trade_setup` per candidate inside `_run_risk_funnel()` — the only scope where `AssessRiskResponse` (not just `RiskAssessment`) is still in scope. No `market_context` (screener doesn't use MCE).
+* `SwingAnalysisWorkflowResponse.trade_setup` and `AccumulationCandidate.trade_setup` are both `TradeSetup | None` (None when signal or risk are absent).
+* CLI display: color-coded action cell (bold green=ENTER, yellow=WATCH, red=AVOID, bold red=BLOCKED_*) in both `screen accum` table and `analyze swing` Panel 1 Signal Snapshot.
+* `TradeSetup.to_dict()` is the canonical serialization for JSON output and the ADR-027 learning journal.
 
 **Rationale**
-Without a formal composition rule, every CLI command that shows both signal and risk invents its own merging logic — creating divergent action columns in `screen accum`, `analyze swing`, and future commands. A domain-level `CombinedAssessment` ensures the same ENTER/WATCH/AVOID/BLOCKED logic everywhere.
+Without a formal composition rule, every CLI command that shows both signal and risk invents its own merging logic — creating divergent action columns in `screen accum`, `analyze swing`, and future commands. `AssessTradeSetupUseCase` ensures the same ENTER/WATCH/AVOID/BLOCKED logic everywhere. The BLOCKED split enables the learning loop (ADR-027) to attribute outcomes separately: structural blocks have no actionable signal, execution blocks may yield profitable retries.
 
 ---
 
@@ -770,7 +798,7 @@ The system provides a four-phase learning loop for the swing domain that records
 
 | Phase | CLI Command | What it does |
 |-------|-------------|-------------|
-| Record | `swing learn record` | At trade entry, persist `CombinedAssessment` snapshot to journal |
+| Record | `swing learn record` | At trade entry, persist `TradeSetup` snapshot to journal |
 | Grade | `swing learn grade --days N` | Fetch forward return for each recorded entry; compute WIN/LOSS/NEUTRAL |
 | Attribute | `swing learn attribute` | Correlate outcomes with gate triggers and signal factor breakdown |
 | Tune | `swing learn tune [--apply]` | AI T2 Tuner proposes YAML threshold diff; `--apply` writes after confirmation |
@@ -782,19 +810,26 @@ The system provides a four-phase learning loop for the swing domain that records
   "ticker": "BBCA",
   "entry_date": "2026-06-24",
   "entry_price": 9100,
-  "signal_score": 72,
-  "signal_strength": "STRONG",
-  "signal_breakdown": {"bandar_intensity": 0.85, "foreign_flow_quality": 0.70, ...},
-  "risk_level": "LOW_RISK",
-  "risk_confidence": 100,
-  "gate_triggered": null,
   "action": "ENTER",
+  "signal_score": 72,
+  "signal_score_raw": 72,
+  "signal_strength": "STRONG",
+  "risk_level": "LOW_RISK",
+  "blocking_gates": [],
+  "regime": null,
+  "signal_multiplier": 1.0,
+  "gate_tightening": false,
+  "rationale": "STRONG signal, LOW_RISK. No active gates.",
+  "signal_breakdown": {"bandar_intensity": 0.85, "foreign_flow_quality": 0.70, ...},
+  "risk_confidence": 100,
   "outcome_date": null,
   "exit_price": null,
   "return_pct": null,
   "outcome": null
 }
 ```
+
+Note: the top-level fields mirror `TradeSetup.to_dict()` exactly; `signal_breakdown` and `risk_confidence` are appended from the underlying engine assessments. The journal record is immutable after writing — outcome fields are populated by `swing learn grade`.
 
 **Attribution Rules**
 - Attribution requires minimum 30 graded outcomes before generating suggestions (enforce in `SwingSignalTunerUseCase`).
@@ -913,7 +948,7 @@ Professional-grade IDX tools (Bloomberg PORT with IDX data, local tools like RTI
 
 ## ADR-029: Market Context Engine (MCE) — Third First-Class Application Service
 
-**Status:** Accepted  
+**Status:** Accepted
 **Date:** 2026-06-24
 
 ---
@@ -942,8 +977,8 @@ The existing `MarketRegimeUseCase` (7 binary 0/1 signals, IDX-internal only, no 
 
 ### Key Decisions
 
-#### 1. MarketRegimeUseCase is replaced, not wrapped
-The old 7-signal binary use case is deleted from `saham analyze regime`. `MarketContextEngine` delegates to `BuildMarketContextUseCase` — pure computation with no IO. The engine owns all fetching.
+#### 1. MarketRegimeUseCase is superseded for user-facing regime analysis
+The old 7-signal binary use case is no longer the implementation behind `saham analyze regime`. `MarketContextEngine` delegates to `BuildMarketContextUseCase` — pure computation with no IO. The engine owns all fetching for the current regime command. Legacy callers may still exist until migrated.
 
 #### 2. Continuous 0.0–1.0 factor scoring, not binary
 Each factor is scored on a continuous scale using piecewise linear interpolation. Unavailable/disabled factors are excluded and the remaining weights renormalize to 1.0 (same pattern as `AssessSignalUseCase`).
@@ -979,7 +1014,7 @@ class MarketContext:
 Both downstream engines accept an optional `market_context` parameter:
 
 - **SignalEngine**: `score × signal_multiplier`; ENTER→WATCH when `gate_tightening=True`; regime note appended to rationale.
-- **RiskEngine**: when `gate_tightening=True` and assessment is `HIGH_RISK`, `gate_triggered = "regime:{REGIME_NAME"` is set.
+- **RiskEngine**: when `gate_tightening=True` and assessment is `HIGH_RISK`, `gate_triggered = "regime:{REGIME_NAME}"` is set.
 
 Neither engine is broken without `market_context` — it is always optional.
 
@@ -1019,6 +1054,69 @@ All factor thresholds and regime effects live in `config/market_context_engine.y
 
 - **MarketRegimeUseCase** is kept for legacy callers (pre-open workflow, swing analysis, backtest, daily briefing). These callers migrate to MCE in a future phase; the old use case is not removed until all callers are migrated.
 - `saham view market-context` does not have a `--history` subcommand yet; `get_recent_snapshots()` is infrastructure-ready for a future `saham view market-context history` command.
+
+---
+
+## ADR-030: Accumulation Screener Evidence Split
+
+**Status:** Accepted
+**Date:** 2026-06-25
+
+### Context
+
+`screen accum` had one ambiguous `score` that mixed several questions:
+- Is there deterministic foreign accumulation evidence?
+- Is the enriched ticker attractive according to SignalEngine?
+- Is the setup tradable after RiskEngine gates?
+- Is the data fresh and complete enough to trust the result?
+
+This made `--min-score` arbitrary because users could not tell which question it filtered. It also made the CLI table overloaded: one score and one row tried to explain evidence, signal, risk, and data coverage.
+
+### Decision
+
+Do **not** promote ScreenEngine to a first-class engine. Screening remains an application use case because it is an orchestration workflow over repositories and existing engines. The reusable artifact is **Accumulation Evidence**, not a new engine pillar.
+
+`AccumulationScreenUseCase` now delegates deterministic foreign-flow scoring to `AssessAccumulationEvidenceUseCase`, which returns the domain value object `AccumulationEvidence`. The candidate-level field is `accum_score`; the old generic `score` name is compatibility-only for legacy application callers.
+
+`screen accum` replaces the public `--min-score` option with explicit filters:
+- `--min-accum-score`: threshold for deterministic accumulation evidence, 0–120.
+- `--min-signal-score`: optional threshold for SignalEngine score, 0–100.
+
+Default thresholds and component weights live in `config/accumulation_screener.yaml` so the learning loop can tune policy by YAML diff instead of code changes.
+
+### Screen Questions
+
+The screener answers separate questions and displays them separately:
+
+| Panel | Question | Owner |
+|-------|----------|-------|
+| Verdict | What should I do with this candidate now? | `TradeSetup` composition |
+| Accumulation Evidence | Is foreign flow accumulating deterministically? | `AssessAccumulationEvidenceUseCase` |
+| Signal | Is the enriched setup attractive? | `SignalEngine` |
+| Risk | Is the setup blocked or degraded by gates? | `RiskEngine` |
+| Data Coverage | Is the data fresh and complete enough? | Screen adapter/use case metadata |
+
+### Layer Plan
+
+| Layer | Artifact |
+|-------|----------|
+| Domain | `AccumulationEvidence` value object |
+| Application | `AssessAccumulationEvidenceUseCase` |
+| Application | `AccumulationScreenUseCase` orchestration over evidence, signal, risk, and trade setup |
+| Infrastructure | `accumulation_screener_config.py` YAML loader |
+| Infrastructure | `config/accumulation_screener.yaml` thresholds and component weights |
+| Adapter | `screen_accum_commands.py` explicit filter options |
+| Adapter | `screen_accum_display.py` multi-panel display |
+
+### Rationale
+
+SignalEngine, RiskEngine, and MarketContextEngine are first-class because they each expose reusable decision services with stable input/output contracts. A screen is different: it selects, enriches, filters, sorts, and displays candidates for a workflow. Making ScreenEngine first-class would duplicate orchestration rather than clarify a decision boundary.
+
+The boundary that matters for learning is the scoring artifact. `AccumulationEvidence` is deterministic, replayable, and has tuneable components; it can be correlated with outcomes without conflating SignalEngine or RiskEngine behavior.
+
+### Compatibility
+
+Existing application services that still read `AccumulationCandidate.score` are tolerated through a deprecated compatibility alias while call sites migrate. New screen code, JSON output, CLI help, and ADR language use `accum_score`.
 
 ---
 

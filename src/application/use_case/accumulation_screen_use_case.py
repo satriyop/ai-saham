@@ -1,14 +1,9 @@
 """
 AccumulationScreenUseCase — multi-stock foreign accumulation screener.
 
-Scans a list of tickers for sustained foreign investor accumulation
-patterns. Scores each ticker using a composite signal:
-  - Net buy consistency (% of days with net foreign buying)
-  - Consecutive buy streak (exponential, uncapped)
-  - Foreign VWAP vs current price (are foreigners underwater?)
-  - RSI headroom (tent function peaking at RSI=40)
-  - Avg foreign flow ratio (% of daily turnover that's foreign)
-  - Bollinger Band squeeze (coiled spring detection)
+Scans a list of tickers for sustained foreign investor accumulation patterns.
+Foreign-flow evidence scoring is delegated to AssessAccumulationEvidenceUseCase;
+this use case owns orchestration, filtering, enrichment, and sorting.
 
 Intraday vs Swing usage:
   This screener produces a SWING WATCHLIST (5–20 day horizon).
@@ -19,7 +14,6 @@ Depends on: Domain ports only — no infrastructure imports
 """
 
 import logging
-import math
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal, InvalidOperation
@@ -42,6 +36,10 @@ if TYPE_CHECKING:
     from src.domain.value_objects.trade_setup import TradeSetup
 
 from src.application.ports.corporate_action_repository import CorporateActionRepository
+from src.application.use_case.assess_accumulation_evidence_use_case import (
+    AssessAccumulationEvidenceRequest,
+    AssessAccumulationEvidenceUseCase,
+)
 from src.domain.ports.analyst_consensus_provider import AnalystConsensusProvider
 from src.domain.ports.bandar_detector_provider import BandarDetectorProvider
 from src.domain.ports.broker_data_repository import BrokerDataRepository
@@ -52,6 +50,7 @@ from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.ports.seasonality_provider import SeasonalityProvider
 from src.domain.ports.shareholding_provider import ShareholdingProvider
 from src.domain.ports.ticker_notation_provider import TickerNotationProvider
+from src.domain.value_objects.accumulation_evidence import AccumulationEvidence
 from src.domain.value_objects.idx_market import SHARES_PER_LOT
 
 # Default preset targets (1:1 R:R, regime-unaware fallback)
@@ -127,7 +126,10 @@ class AccumulationScreenRequest:
     tickers: list[str]
     window_days: int = 7  # latest broker sessions: 7, 30, or 90
     min_net_buy_days: int = 2  # skip tickers with fewer qualifying days
-    min_score: float = 0.0  # filter: only include scores >= this
+    min_accum_score: float = 0.0  # filter: only include accumulation evidence >= this
+    min_accum_score_enabled: bool = True
+    min_signal_score: float = 0.0  # optional SignalEngine score filter
+    min_signal_score_enabled: bool = False
     rsi_period: int = 14
     sma_period: int = 20
     as_of_date: date | None = None  # deterministic replay date; defaults to today
@@ -155,6 +157,65 @@ class AccumulationScreenRequest:
     # Phase E: risk profile for post-screening risk funnel (ignored when no risk_use_case)
     risk_profile: str = "balanced"
 
+    def __init__(
+        self,
+        tickers: list[str],
+        window_days: int = 7,
+        min_net_buy_days: int = 2,
+        min_accum_score: float = 0.0,
+        min_accum_score_enabled: bool = True,
+        min_signal_score: float = 0.0,
+        min_signal_score_enabled: bool = False,
+        rsi_period: int = 14,
+        sma_period: int = 20,
+        as_of_date: date | None = None,
+        resistance_gate_enabled: bool = True,
+        resistance_headroom_min_pct: float = 5.0,
+        regime: str | None = None,
+        ex_date_warning_days: int = 10,
+        sector_breadth_enabled: bool = True,
+        sector_breadth_threshold: float = 0.60,
+        sector_breadth_bonus_pts: float = 10.0,
+        sector_breadth_min_tickers: int = 3,
+        tier1_broker_codes: frozenset[str] | None = None,
+        bci_cluster_min_count: int = 3,
+        bci_stable_min_count: int = 1,
+        min_market_cap_idr: int = 0,
+        min_piotroski: int = 0,
+        risk_profile: str = "balanced",
+        min_score: float | None = None,
+    ) -> None:
+        # Deprecated compatibility for non-CLI application callers. The public CLI
+        # uses --min-accum-score only; this keeps audit/backtest tests stable while
+        # their call sites are migrated.
+        if min_score is not None:
+            min_accum_score = min_score
+            min_accum_score_enabled = True
+        self.tickers = tickers
+        self.window_days = window_days
+        self.min_net_buy_days = min_net_buy_days
+        self.min_accum_score = min_accum_score
+        self.min_accum_score_enabled = min_accum_score_enabled
+        self.min_signal_score = min_signal_score
+        self.min_signal_score_enabled = min_signal_score_enabled
+        self.rsi_period = rsi_period
+        self.sma_period = sma_period
+        self.as_of_date = as_of_date
+        self.resistance_gate_enabled = resistance_gate_enabled
+        self.resistance_headroom_min_pct = resistance_headroom_min_pct
+        self.regime = regime
+        self.ex_date_warning_days = ex_date_warning_days
+        self.sector_breadth_enabled = sector_breadth_enabled
+        self.sector_breadth_threshold = sector_breadth_threshold
+        self.sector_breadth_bonus_pts = sector_breadth_bonus_pts
+        self.sector_breadth_min_tickers = sector_breadth_min_tickers
+        self.tier1_broker_codes = tier1_broker_codes or TIER1_FOREIGN_BROKERS
+        self.bci_cluster_min_count = bci_cluster_min_count
+        self.bci_stable_min_count = bci_stable_min_count
+        self.min_market_cap_idr = min_market_cap_idr
+        self.min_piotroski = min_piotroski
+        self.risk_profile = risk_profile
+
 
 @dataclass
 class AccumulationCandidate:
@@ -173,12 +234,12 @@ class AccumulationCandidate:
     # positive = foreigners are underwater
     rsi: float | None
     trend: str  # "UP" | "DOWN" | "SIDE"
-    score: float  # 0–120 composite score
+    accum_score: float  # 0–120 accumulation evidence score
     top_brokers: list[str] | None  # per-broker codes (Stockbit only)
     institutional_flag: bool  # True if major institutional broker present
     # Improvement #1: flow ratio signal
     avg_flow_ratio: float | None = None  # avg % of daily turnover that's foreign
-    score_breakdown: dict = field(default_factory=dict)  # per-component pts
+    accumulation_evidence: AccumulationEvidence | None = None
     # Improvement #3: BB squeeze
     bb_width: float | None = None  # current BB Width %
     bb_width_pctile: float | None = None  # 0..1 vs last 60 days (lower = tighter)
@@ -225,6 +286,22 @@ class AccumulationCandidate:
     # Unified trade action verdict — requires both signal_assessment and risk funnel
     trade_setup: "TradeSetup | None" = None
 
+    @property
+    def score(self) -> float:
+        """Deprecated alias for older application services; use accum_score."""
+        return self.accum_score
+
+    @score.setter
+    def score(self, value: float) -> None:
+        self.accum_score = value
+
+    @property
+    def score_breakdown(self) -> dict:
+        """Deprecated alias for older display/tests; use accumulation_evidence."""
+        if self.accumulation_evidence is None:
+            return {}
+        return self.accumulation_evidence.breakdown_dict
+
     def to_dict(self) -> dict:
         return {
             "ticker": self.ticker,
@@ -241,7 +318,7 @@ class AccumulationCandidate:
             else None,
             "rsi": round(self.rsi, 2) if self.rsi is not None else None,
             "trend": self.trend,
-            "score": self.score,
+            "accum_score": self.accum_score,
             "top_brokers": self.top_brokers,
             "institutional_flag": self.institutional_flag,
             "bci_label": self.bci_label,
@@ -250,7 +327,11 @@ class AccumulationCandidate:
             "avg_flow_ratio": round(self.avg_flow_ratio, 2)
             if self.avg_flow_ratio is not None
             else None,
-            "score_breakdown": self.score_breakdown,
+            "accumulation_evidence": (
+                self.accumulation_evidence.to_dict()
+                if self.accumulation_evidence is not None
+                else None
+            ),
             "bb_width": round(self.bb_width, 2) if self.bb_width is not None else None,
             "bb_width_pctile": round(self.bb_width_pctile, 3)
             if self.bb_width_pctile is not None
@@ -297,78 +378,27 @@ class AccumulationScreenResponse:
     provider: str  # "idx" or "stockbit"
 
 
-def _score(candidate: AccumulationCandidate) -> tuple[float, dict]:
-    """Composite score 0–120 (soft cap).
+def _trade_action_rank(candidate: "AccumulationCandidate") -> int:
+    if candidate.trade_setup is None:
+        return 0
+    action = candidate.trade_setup.action.value
+    return {
+        "ENTER": 5,
+        "WATCH": 4,
+        "AVOID": 2,
+        "BLOCKED_EXECUTION": 1,
+        "BLOCKED_STRUCTURAL": 0,
+    }.get(action, 0)
 
-    Weights:
-      40 pts — net buy ratio (consistency)
-      30 pts — consecutive streak (exponential, τ=7d, uncapped)
-      20 pts — VWAP discount (linear 0..10% → 0..20 pts)
-      10 pts — RSI headroom (tent peak at RSI=40, zero at ≤25 or ≥75)
-      10 pts — avg foreign flow ratio (% of daily turnover, saturates at 20%)
-      10 pts — BB Width squeeze (bottom 20th pctile vs last 60d)
-      15 pts — BCI CLUSTER (3+ Tier 1 foreign brokers, Stockbit only)
-       5 pts — BCI STABLE (1–2 Tier 1 foreign brokers, Stockbit only)
-       0 pts — BCI RETAIL-LED or no Stockbit data
-    """
-    # Consistency: 0..40
-    s_consistency = candidate.net_buy_ratio * 40.0
 
-    # Streak: soft exponential saturation, τ=7d — 7d≈63%, 14d≈86%, never caps
-    s_streak = 30.0 * (1.0 - math.exp(-candidate.consecutive_streak / 7.0))
-
-    # VWAP discount: linear ramp, saturates at 10% underwater
-    d = candidate.vwap_discount_pct or 0.0
-    s_vwap = max(0.0, min(d, 10.0)) / 10.0 * 20.0
-
-    # RSI: tent function peaking at 40 (room to run without panic)
-    rsi = candidate.rsi
-    if rsi is None:
-        s_rsi = 5.0  # neutral when data missing
-    elif rsi <= 25 or rsi >= 75:
-        s_rsi = 0.0
-    elif rsi <= 40:
-        s_rsi = (rsi - 25) / 15.0 * 10.0
-    else:
-        s_rsi = (75.0 - rsi) / 35.0 * 10.0
-
-    # Avg flow ratio: % of daily turnover that's net foreign
-    fr = max(0.0, min(candidate.avg_flow_ratio or 0.0, 20.0))
-    s_flow = fr / 20.0 * 10.0
-
-    # BCI — tiered: CLUSTER = 3+ Tier 1 foreign desks, STABLE = 1–2, RETAIL-LED = 0
-    if candidate.bci_label == BCI_CLUSTER:
-        s_inst = 15.0
-    elif candidate.bci_label == BCI_STABLE:
-        s_inst = 5.0
-    else:
-        s_inst = 0.0
-
-    # BB squeeze: low percentile rank = tighter band = coiled spring
-    pctile = candidate.bb_width_pctile
-    if pctile is None:
-        s_squeeze = 0.0
-    elif pctile <= 0.20:
-        s_squeeze = 10.0 - pctile / 0.20 * 5.0  # 10..5 pts
-    elif pctile <= 0.40:
-        s_squeeze = 5.0 - (pctile - 0.20) / 0.20 * 5.0  # 5..0 pts
-    else:
-        s_squeeze = 0.0
-
-    total = round(
-        min(s_consistency + s_streak + s_vwap + s_rsi + s_flow + s_inst + s_squeeze, 120.0),
-        1,
+def _screen_sort_key(candidate: "AccumulationCandidate") -> tuple[float, float, float, float]:
+    """Default screener ordering: verdict, signal, accumulation evidence, seasonality."""
+    return (
+        float(_trade_action_rank(candidate)),
+        float(candidate.signal_assessment.assessment.score if candidate.signal_assessment else 0),
+        candidate.accum_score,
+        candidate.seasonal_edge.score if candidate.seasonal_edge else 0.0,
     )
-    breakdown = {
-        "cons": round(s_consistency, 1),
-        "streak": round(s_streak, 1),
-        "vwap": round(s_vwap, 1),
-        "rsi": round(s_rsi, 1),
-        "flow": round(s_flow, 1),
-        "bb": round(s_squeeze, 1),
-        "inst": round(s_inst, 1),
-    }
-    return total, breakdown
 
 
 class AccumulationScreenUseCase:
@@ -395,6 +425,7 @@ class AccumulationScreenUseCase:
         idx_groups: "dict[str, list[str]] | None" = None,
         risk_use_case: "AssessRiskUseCase | None" = None,
         signal_engine: "SignalEngine | None" = None,
+        accumulation_evidence_use_case: AssessAccumulationEvidenceUseCase | None = None,
     ) -> None:
         from src.application.services.signal_engine import SignalEngine as _SignalEngine
 
@@ -411,6 +442,9 @@ class AccumulationScreenUseCase:
         self._ticker_notation_provider = ticker_notation_provider
         self._risk_use_case = risk_use_case
         self._signal_engine = signal_engine or _SignalEngine()
+        self._accumulation_evidence_uc = (
+            accumulation_evidence_use_case or AssessAccumulationEvidenceUseCase()
+        )
         # idx_groups: {group_name: [ticker, ...]} from config/idx_groups.yaml
         # Build a reverse map: ticker → group_name for fast lookup
         self._ticker_to_group: dict[str, str] = {}
@@ -492,7 +526,22 @@ class AccumulationScreenUseCase:
                         skipped += 1
                         continue
 
-            result.score, result.score_breakdown = _score(result)
+            evidence_resp = self._accumulation_evidence_uc.execute(
+                AssessAccumulationEvidenceRequest(
+                    ticker=result.ticker,
+                    snapshot_date=today,
+                    net_buy_ratio=result.net_buy_ratio,
+                    consecutive_streak=result.consecutive_streak,
+                    vwap_discount_pct=result.vwap_discount_pct,
+                    rsi=result.rsi,
+                    avg_flow_ratio=result.avg_flow_ratio,
+                    bb_width_pctile=result.bb_width_pctile,
+                    bci_label=result.bci_label,
+                    bci_tier1_count=result.bci_tier1_count,
+                )
+            )
+            result.accumulation_evidence = evidence_resp.evidence
+            result.accum_score = evidence_resp.evidence.accum_score
 
             # Phase 2.2: resistance-proximity flag
             if (
@@ -599,7 +648,7 @@ class AccumulationScreenUseCase:
             signal_ctx = SignalContext(
                 ticker=result.ticker,
                 snapshot_date=today,
-                foreign_flow_quality=min(result.score, 120.0) / 120.0,
+                foreign_flow_quality=min(result.accum_score, 120.0) / 120.0,
                 bandar_broad_score=bd.broad_score if bd else None,
                 bandar_max_range=(3 + num_optional) * 2 if bd else 6,
                 insider_net_buy_ratio=compute_net_buy_ratio(insider_txns) if insider_txns else None,
@@ -613,19 +662,20 @@ class AccumulationScreenUseCase:
                 result.ticker, signal_ctx
             )
 
-            if result.score < request.min_score:
+            if (
+                request.min_accum_score_enabled
+                and result.accum_score < request.min_accum_score
+            ):
+                continue
+            if (
+                request.min_signal_score_enabled
+                and (
+                    result.signal_assessment is None
+                    or result.signal_assessment.assessment.score < request.min_signal_score
+                )
+            ):
                 continue
             candidates.append(result)
-
-        # Primary sort: signal score (when available); tiebreaker: flow score + seasonal
-        candidates.sort(
-            key=lambda c: (
-                c.signal_assessment.assessment.score if c.signal_assessment else 0,
-                c.score,
-                c.seasonal_edge.score if c.seasonal_edge else 0.0,
-            ),
-            reverse=True,
-        )
 
         # Phase 3.2: sector breadth post-processing pass
         if request.sector_breadth_enabled and self._ticker_to_group:
@@ -636,6 +686,8 @@ class AccumulationScreenUseCase:
         # data from candidates (Rec 15 data sharing — zero extra provider queries).
         if self._risk_use_case is not None:
             self._run_risk_funnel(candidates, today, request.risk_profile)
+
+        candidates.sort(key=_screen_sort_key, reverse=True)
 
         return AccumulationScreenResponse(
             candidates=candidates,
@@ -883,7 +935,7 @@ class AccumulationScreenUseCase:
             vwap_discount_pct=vwap_discount_pct,
             rsi=rsi,
             trend=trend,
-            score=0.0,  # set after by _score()
+            accum_score=0.0,  # set after by AssessAccumulationEvidenceUseCase
             top_brokers=top_brokers,
             institutional_flag=institutional_flag,
             bci_label=bci_label,
@@ -936,7 +988,7 @@ class AccumulationScreenUseCase:
             for m in members:
                 m.sector_breadth_pct = breadth_pct
                 if breadth_pct >= request.sector_breadth_threshold:
-                    m.score += request.sector_breadth_bonus_pts
+                    m.accum_score += request.sector_breadth_bonus_pts
                     m.sector_breadth_bonus = request.sector_breadth_bonus_pts
 
     def _compute_rsi(self, candles: list, period: int) -> float | None:
@@ -1077,9 +1129,9 @@ def evaluate_foreign_bounce_gates(
     """
     gates = (
         (
-            "score",
-            candidate.score >= gate_min_score,
-            _fmt_gate_value(candidate.score),
+            "accum_score",
+            candidate.accum_score >= gate_min_score,
+            _fmt_gate_value(candidate.accum_score),
             f">= {gate_min_score:.0f}",
         ),
         (
@@ -1122,7 +1174,7 @@ def evaluate_foreign_bounce_gates(
     )
     if not failed:
         return "ENTER", failed
-    if candidate.score >= gate_min_score or len(failed) <= watch_max_failed_gates:
+    if candidate.accum_score >= gate_min_score or len(failed) <= watch_max_failed_gates:
         return "WATCH", failed
     return "AVOID", failed
 
@@ -1152,12 +1204,12 @@ def classify_multi_window_pattern(
     """
     hot = [
         w for w in windows
-        if candidates_by_window.get(w) and candidates_by_window[w].score >= coiled_spring_min_score
+        if candidates_by_window.get(w) and candidates_by_window[w].accum_score >= coiled_spring_min_score
     ]
 
     for w in windows:
         c = candidates_by_window.get(w)
-        if (c and c.score >= coiled_spring_min_score
+        if (c and c.accum_score >= coiled_spring_min_score
                 and c.bb_width_pctile is not None
                 and c.bb_width_pctile <= coiled_spring_bb_pctile):
             return "coiled spring"

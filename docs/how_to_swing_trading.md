@@ -84,13 +84,13 @@ Add `--with-regime` to `saham analyze swing` to include regime context inline wi
 saham screen accum --universe lq45 --multi
 
 # Narrow to highest conviction
-saham screen accum --universe lq45 --multi --min-score 50
+saham screen accum --universe lq45 --multi --min-accum-score 50
 
 # Only coiled springs (BB squeeze setups)
 saham screen accum --universe lq45 --squeeze-only
 
 # Only where foreigners are defending (underwater positions)
-saham screen accum --universe lq45 --vwap-only --min-score 50
+saham screen accum --universe lq45 --vwap-only --min-accum-score 50
 ```
 
 **Why multi-window is the right starting view:**
@@ -632,7 +632,7 @@ saham fetch market --universe lq45
 saham analyze regime
 
 # 3. Scan for candidates
-saham screen accum --universe lq45 --multi --min-score 50
+saham screen accum --universe lq45 --multi --min-accum-score 50
 # → Shortlist: BBRI (sustained, 7s=74.1), TLKM (building, 7s=61.3)
 
 # 4. Deep-dive on top candidate

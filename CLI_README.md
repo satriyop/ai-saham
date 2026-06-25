@@ -943,6 +943,18 @@ saham view universe idx80 --date 2026-06-01  # As of a specific date
 
 ---
 
+### `saham view market-context` — Cross-Market Regime Context
+
+Show cross-market regime context — VIX, EIDO, USD/IDR, IDX breadth — all from local cache:
+
+```bash
+saham view market-context
+```
+
+Data is populated automatically by `saham fetch market` (always includes the ^JKSE benchmark and market context data).
+
+---
+
 ## 10. Backtesting - The `strategy backtest` Command
 
 Backtesting lets you test a strategy on historical data before risking real capital.
@@ -1897,14 +1909,17 @@ cached data produces identical output.
 | `--days` | `-d` | 365 | Days of history to fetch |
 | `--candles-only` | | false | Skip broker flow fetch |
 | `--broker-only` | | false | Skip candles fetch |
-| `--provider` | | yahoo | Candles provider: yahoo or idx |
+| `--provider` | | (from config) | Candles provider: yahoo or idx |
+| `--broker-provider` | | auto | Broker provider: idx or stockbit (auto-detected) |
+| `--no-meta` | | false | Skip sector/industry metadata fetch |
+| `--no-enrichment` | | false | Skip Stockbit enrichment fetch |
 | `--refresh` | `-r` | false | Force refresh all |
 
 ---
 
 ## 17. Foreign Accumulation Screener - The `screen accum` Command
 
-Screen stocks for institutional foreign accumulation patterns. Detects stocks being quietly bought by foreign investors over multiple days. Each result includes a **CompositeSignalScore** (0–100) combining enrichment signals (analyst consensus, insider activity, bandar, fundamentals, earnings beat streak, forward estimates) with broker flow and technical/valuation context.
+Screen stocks for institutional foreign accumulation patterns. Detects stocks being quietly bought by foreign investors over multiple days. Each result includes a **SignalAssessment** score (0–100) with STRONG/MODERATE/WEAK rating, combining bandar detector, foreign flow quality, insider activity, seasonality, analyst consensus, and forward valuation.
 
 ### Single-Window Mode
 
@@ -1963,8 +1978,11 @@ accumulation scores are equal.
 ### Filters
 
 ```bash
-# Score threshold
-saham screen accum --universe lq45 --min-score 50 --top 10
+# Accumulation evidence threshold
+saham screen accum --universe lq45 --min-accum-score 50 --top 10
+
+# Optional SignalEngine threshold
+saham screen accum --universe lq45 --min-signal-score 55 --top 10
 
 # Only where foreigners are underwater (bought higher than today)
 saham screen accum --universe lq45 --vwap-only
@@ -1975,7 +1993,7 @@ saham screen accum --universe lq45 --squeeze-only
 # Show per-broker detail (requires Stockbit data)
 saham screen accum --universe lq45 --granular
 
-# Show score component breakdown
+# Show evidence/signal component breakdown
 saham screen accum --universe lq45 --breakdown
 
 # Column reference guide
@@ -1990,7 +2008,8 @@ saham screen accum --universe lq45 --save morning-watch
 | `--universe` | `-u` | | Universe: lq45, idx80, idxcomp100, cached |
 | `--window` | `-w` | 7 | Analysis window in days |
 | `--min-streak` | | 0 | Minimum consecutive buy days |
-| `--min-score` | | 0.0 | Minimum composite score (0-120) |
+| `--min-accum-score` | | config | Minimum accumulation evidence score (0-120) |
+| `--min-signal-score` | | disabled/config | Optional minimum SignalEngine score (0-100) |
 | `--vwap-only` | | false | Only underwater foreign positions |
 | `--squeeze-only` | | false | Only BB squeeze stocks |
 | `--top` | | 20 | Show top N results |
@@ -2005,14 +2024,14 @@ saham screen accum --universe lq45 --save morning-watch
 Replay accumulation signals historically and measure forward returns:
 
 ```bash
-saham screen accum audit --universe idx80 --preset foreign-bounce
-saham screen accum audit --universe lq45 --window 7 --min-score 70
+saham analyze accum-audit --universe idx80 --preset foreign-bounce
+saham analyze accum-audit --universe lq45 --window 7 --min-score 70
 ```
 
 ### Logging to Journal
 
 ```bash
-saham trade log swing --ticker BBRI --window 7
+saham trade log --type swing --ticker BBRI --window 7
 ```
 
 ### Watchlist Persistence
@@ -2079,10 +2098,10 @@ Emits deterministic ENTER / WAIT / SKIP decisions based on entry ranges from the
 
 ```bash
 # Log to paper trade journal
-saham trade log intraday
+saham trade log --type intraday
 
 # Review hit rate
-saham trade review intraday --horizon 5
+saham trade review intraday
 
 # Record actual outcome
 saham trade outcome BBCA --entry 9000 --exit 9500 --result target
@@ -2094,9 +2113,12 @@ saham trade outcome BBCA --entry 9000 --exit 9500 --result target
 |---------|---------|
 | `saham screen pre-open` | Pre-market movers screener |
 | `saham trade confirm` | Confirm against actual opening prices |
-| `saham trade log intraday` | Append to paper trade journal |
+| `saham trade log --type intraday` | Append to paper trade journal |
 | `saham trade review intraday` | Review journal accuracy |
+| `saham trade review swing` | Review accumulation journal |
 | `saham trade outcome` | Record actual trade outcome |
+| `saham trade migrate-journal` | One-time CSV journal to JSONL migration |
+| `saham trade backtest-intraday` | Walk-forward backtest of intraday workflow |
 
 ---
 
@@ -2624,7 +2646,8 @@ saham strategy backtest BBCA --strategy my_flow_strategy
 | Command | Purpose | Key Options |
 |---------|---------|-------------|
 | `saham version` | Show version | — |
-| `saham fetch market` | Batch data update (candles + broker) | `--universe`, `--days`, `--broker-provider`, `--refresh` |
+| `saham today` | Read-only daily briefing | `--universe`, `--top`, `--date` |
+| `saham fetch market` | Batch data update (candles + broker) | `--universe`, `--days`, `--provider`, `--broker-provider`, `--no-meta`, `--no-enrichment`, `--refresh` |
 | `saham indicator compute SMA TICKER` | Simple Moving Average | `--period`, `--field`, `--days` |
 | `saham indicator compute EMA TICKER` | Exponential Moving Average | `--period`, `--field`, `--days` |
 | `saham indicator compute RSI TICKER` | Relative Strength Index | `--period`, `--days` |
@@ -2646,6 +2669,7 @@ saham strategy backtest BBCA --strategy my_flow_strategy
 | `saham view broker flow TICKER` | View foreign flow summary | `--days` |
 | `saham view broker top TICKER` | View top brokers | `--date` |
 | `saham view broker history TICKER` | View foreign flow time-series | `--days`, `--source` |
+| `saham view market-context` | Cross-market regime context (VIX, EIDO, USD/IDR) | — |
 | `saham view broker distribution TICKER` | Cross-broker counterparty matrix | — |
 | `saham view broker top-foreign` | View top foreign flow stocks by period | `--days`, `--date`, `--limit` |
 | `saham fetch broker-import FILE` | Import broker data from CSV | `--preview`, `--mapping`, `--on-error` |
@@ -2662,17 +2686,20 @@ saham strategy backtest BBCA --strategy my_flow_strategy
 | `saham indicator list` | List all indicators | `--formulas` |
 | `saham indicator show NAME` | Show formula details | — |
 | `saham indicator delete NAME` | Delete custom formula | `--force` |
-| `saham screen accum` | Foreign accumulation screener (CompositeSignalScore 0–100) | `--universe`, `--window`, `--multi`, `--format`, `--breakdown`, `--save` |
+| `saham screen accum` | Foreign accumulation screener (SignalAssessment 0–100) | `--universe`, `--window`, `--multi`, `--format`, `--breakdown`, `--save` |
 | `saham screen watchlist` | List saved watchlists / show tickers in a named one | — |
 | `saham screen compare NAME` | Diff saved watchlist against fresh screener run | `--universe`, `--top` |
 | `saham analyze accum-audit` | Historical accumulation audit | `--universe`, `--preset`, `--simulate-exits` |
 | `saham screen pre-open` | Pre-open market screener | `--movers-json`, `--fast`, `--top` |
 | `saham trade confirm` | Confirm at opening auction | `--opening-json` |
-| `saham trade log intraday` | Log confirmation to journal | — |
-| `saham trade review intraday` | Review paper trade journal | `--horizon` |
+| `saham trade log --type TYPE` | Log a paper-trade decision | `--type` (swing or intraday) |
+| `saham trade review intraday` | Review intraday confirmation journal | `--journal`, `--db` |
+| `saham trade review swing` | Review accumulation trade journal | `--horizon`, `--min-score` |
+| `saham trade migrate-journal` | One-time CSV journal migration to JSONL | — |
 | `saham trade outcome` | Record actual trade outcome | `--entry`, `--exit`, `--result` |
 | `saham analyze swing TICKER` | Unified swing analysis | `--capital`, `--preset`, `--with-regime` |
-| `saham trade backtest-swing` | Portfolio walk-forward backtest | `--universe`, `--capital`, `--allow-regimes` |
+| `saham trade backtest-swing` | Portfolio walk-forward swing backtest | `--universe`, `--preset`, `--capital`, `--allow-regimes` |
+| `saham trade backtest-intraday` | Walk-forward intraday pre-open backtest | `--universe`, `--start`, `--end` |
 | `saham analyze swing-compare` | Compare regime variants | `--universe`, `--variants` |
 | `saham trade size TICKER` | ATR position sizing | `--capital`, `--risk-pct`, `--entry` |
 | `saham analyze regime` | Market regime context | `--universe`, `--as-of`, `--format` |
@@ -2685,7 +2712,10 @@ saham strategy backtest BBCA --strategy my_flow_strategy
 | `saham fetch universe create NAME` | Create custom universe from sector | `--sector`, `--subsector` |
 | `saham fetch stockbit login` | Stockbit browser login | `--timeout` |
 | `saham fetch stockbit status` | Check session health | — |
+| `saham fetch stockbit spy` | Capture API traffic to identify endpoints | `--target`, `--ticker` |
 | `saham fetch stockbit test` | Smoke-test adapter | `--ticker`, `--no-headless` |
+| `saham fetch stockbit browse` | Open headed browser with saved session | — |
+| `saham fetch stockbit fetch-top5` | Top IEV movers + orderbook snapshots | `--top`, `--no-headless` |
 
 ---
 

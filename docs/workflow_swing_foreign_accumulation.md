@@ -189,12 +189,12 @@ Sistem menghitung skor komposit **0–7** (7-point check) untuk menentukan kondi
 |--------|------|---------|------------------------------|
 | **BULLISH** | 6–7 | Konfirmasi kuat di benchmark & breadth | Oke, tapi saham lebih mahal — VWAP Disc mungkin kecil |
 | **SIDEWAYS** | 4–5 | Kondisi normal, tidak ada tren dominan | **Terbaik** — harga flat, asing masih mengumpulkan |
-| **WEAK** | 2–3 | Tekanan jual meningkat, IHSG di bawah SMA | Hati-hati — gunakan `--min-score 70`, size 50% |
+| **WEAK** | 2–3 | Tekanan jual meningkat, IHSG di bawah SMA | Hati-hati — gunakan `--min-accum-score 70`, size 50% |
 | **RISK_OFF** | 0–1 | Penjualan massal (Panic/Crash) | **Skip swing** — tunggu stabilisasi |
 
 **Aturan praktis:**
 - `BULLISH` atau `SIDEWAYS` → jalankan screener normal
-- `WEAK` → gunakan `--min-score 60`, ukuran posisi 50% dari normal
+- `WEAK` → gunakan `--min-accum-score 60`, ukuran posisi 50% dari normal
 - `RISK_OFF` → tidak entry swing baru, fokus ke cash atau posisi yang sudah ada
 
 ---
@@ -308,13 +308,13 @@ saham screen accum --universe lq45 --squeeze-only
 saham screen accum --universe lq45 --vwap-only
 
 # Kombinasi: skor tinggi + squeeze + underwater
-saham screen accum --universe lq45 --vwap-only --squeeze-only --min-score 60
+saham screen accum --universe lq45 --vwap-only --squeeze-only --min-accum-score 60
 
 # Tampilkan breakdown skor per komponen
 saham screen accum --universe lq45 --breakdown
 
 # Universe lebih luas
-saham screen accum --universe idx80 --multi --min-score 50 --top 15
+saham screen accum --universe idx80 --multi --min-accum-score 50 --top 15
 
 # Saham spesifik (bukan universe)
 saham screen accum BBCA BBRI BMRI TLKM --multi
@@ -842,7 +842,7 @@ Default backtest biaya adalah `--cost-bps 20` one-way, diterapkan saat entry dan
 │  FILTER SCREENER BERGUNA                                              │
 │    --squeeze-only     BB Width ≤ 20th pctile (coiled spring)         │
 │    --vwap-only        Asing masih underwater                         │
-│    --min-score 60     Hanya skor tinggi                               │
+│    --min-accum-score 60 Hanya bukti akumulasi tinggi                  │
 │    --multi            Tampilkan 7/30/90 sesi + pattern               │
 │    --breakdown        Skor per komponen                               │
 ├──────────────────────────────────────────────────────────────────────┤
@@ -929,7 +929,7 @@ Kalau trend berbalik (lebih banyak hari sell belakangan), skip.
 Strategi tidak profitable untuk periode/universe itu. Coba:
 1. Filter regime: `--allow-regimes BULLISH,SIDEWAYS`
 2. Perkecil universe: dari `idx80` ke `lq45`
-3. Naikkan `--min-score` di screener ke 60 atau 70
+3. Naikkan `--min-accum-score` di screener ke 60 atau 70
 
 ### `saham analyze regime` Menunjukkan RISK_OFF
 

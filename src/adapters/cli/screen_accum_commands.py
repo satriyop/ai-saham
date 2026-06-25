@@ -30,6 +30,9 @@ from src.application.use_case.accumulation_screen_use_case import (
     AccumulationScreenResponse,
     AccumulationScreenUseCase,
 )
+from src.application.use_case.assess_accumulation_evidence_use_case import (
+    AssessAccumulationEvidenceUseCase,
+)
 from src.application.use_case.assess_risk_use_case import AssessRiskRequest, AssessRiskUseCase
 from src.domain.rules.bandar_gate import BandarGate
 from src.domain.rules.free_float_gate import FreeFloatGate
@@ -46,12 +49,15 @@ from src.infrastructure.browser.stockbit_seasonality import StockbitSeasonalityP
 from src.infrastructure.browser.stockbit_shareholding import StockbitShareholdingProvider
 from src.infrastructure.browser.stockbit_ticker_notation import StockbitTickerNotationProvider
 from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.accumulation_screener_config import (
+    load_accumulation_screener_config as _load_accumulation_screener_config,
+)
 from src.infrastructure.config.swing_config import load_swing_config as _load_swing_config
-from src.infrastructure.config.user_config import get_swing_default
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
 _SC = _load_swing_config()
+_ASC = _load_accumulation_screener_config()
 
 DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 DEFAULT_ACCUM_DB_PATH = DEFAULT_DB_PATH  # alias kept for external imports
@@ -178,13 +184,16 @@ def _run_multi(
     windows: list[int],
     base_request: AccumulationScreenRequest,
 ) -> dict[int, AccumulationScreenResponse]:
-    """Run screener for each window. Always min_score=0 to get full picture."""
+    """Run screener for each window. Disable score filters to get full picture."""
     return {
         w: use_case.execute(AccumulationScreenRequest(
             tickers=tickers,
             window_days=w,
             min_net_buy_days=base_request.min_net_buy_days,
-            min_score=0.0,
+            min_accum_score=0.0,
+            min_accum_score_enabled=False,
+            min_signal_score=0.0,
+            min_signal_score_enabled=False,
             rsi_period=base_request.rsi_period,
             sma_period=base_request.sma_period,
             tier1_broker_codes=base_request.tier1_broker_codes,
@@ -221,9 +230,22 @@ def accumulation_run(
         int,
         typer.Option("--min-streak", help="Minimum consecutive buy days required", min=0),
     ] = 0,
-    min_score: Annotated[
+    min_accum_score: Annotated[
         Optional[float],
-        typer.Option("--min-score", help="Minimum composite score (0–120, default: 70)", min=0),
+        typer.Option(
+            "--min-accum-score",
+            help="Minimum accumulation evidence score (0–120; config default)",
+            min=0,
+        ),
+    ] = None,
+    min_signal_score: Annotated[
+        Optional[float],
+        typer.Option(
+            "--min-signal-score",
+            help="Optional minimum SignalEngine score (0–100; disabled unless set or enabled in config)",
+            min=0,
+            max=100,
+        ),
     ] = None,
     min_piotroski: Annotated[
         int,
@@ -298,7 +320,7 @@ def accumulation_run(
     """
     Screen stocks for foreign accumulation patterns.
 
-    Scores each ticker 0–120 based on: consistency of daily foreign buying,
+    Computes accumulation evidence 0–120 based on: consistency of daily foreign buying,
     consecutive buy streak, whether foreigners are underwater (VWAP vs price),
     RSI headroom, foreign flow as % of total turnover, and BB Width squeeze.
 
@@ -309,7 +331,8 @@ def accumulation_run(
         saham screen accum --universe lq45 --window 30
         saham screen accum --universe lq45 --multi
         saham screen accum --universe lq45 --multi --sort-by 30s
-        saham screen accum --universe lq45 --min-score 50 --top 10
+        saham screen accum --universe lq45 --min-accum-score 50 --top 10
+        saham screen accum --universe lq45 --min-signal-score 55 --top 10
         saham screen accum BBCA BBRI BMRI --window 7
         saham screen accum --universe lq45 --vwap-only
         saham screen accum --universe lq45 --squeeze-only
@@ -325,8 +348,17 @@ def accumulation_run(
 
     resolved_db = db_path or DEFAULT_DB_PATH
 
-    if min_score is None:
-        min_score = float(get_swing_default("min_score", 70.0))
+    min_accum_score_enabled = _ASC.min_accum_score.enabled
+    if min_accum_score is None:
+        min_accum_score = _ASC.min_accum_score.value
+    else:
+        min_accum_score_enabled = True
+
+    min_signal_score_enabled = _ASC.min_signal_score.enabled
+    if min_signal_score is None:
+        min_signal_score = _ASC.min_signal_score.value
+    else:
+        min_signal_score_enabled = True
 
     try:
         ticker_list = resolve_tickers(
@@ -371,13 +403,19 @@ def accumulation_run(
         ticker_notation_provider=_sb.notation_prov,
         forward_estimates_provider=_sb.forward_estimates_prov,
         risk_use_case=_risk_uc,
+        accumulation_evidence_use_case=AssessAccumulationEvidenceUseCase(
+            _ASC.evidence_policy
+        ),
     )
 
     base_request = AccumulationScreenRequest(
         tickers=ticker_list,
         window_days=window,
         min_net_buy_days=max(1, min_streak),
-        min_score=min_score,
+        min_accum_score=min_accum_score,
+        min_accum_score_enabled=min_accum_score_enabled,
+        min_signal_score=min_signal_score,
+        min_signal_score_enabled=min_signal_score_enabled,
         min_piotroski=min_piotroski,
         tier1_broker_codes=_SC.tier1_broker_codes,
         bci_cluster_min_count=_SC.bci_cluster_min_count,
@@ -523,7 +561,7 @@ def _save_watchlist(
             window_days=window_days,
             ticker=c.ticker,
             rank=i + 1,
-            flow_score=c.score,
+            flow_score=c.accum_score,
             composite_score=c.signal_assessment.assessment.score if c.signal_assessment else None,
             consecutive_streak=c.consecutive_streak,
             net_buy_ratio=c.net_buy_ratio,
@@ -566,12 +604,16 @@ def _make_use_case_for_compare(
             bandar_detector_provider=_sb.bandar_prov,
             fundamentals_provider=_sb.fundamentals_prov,
             forward_estimates_provider=_sb.forward_estimates_prov,
+            accumulation_evidence_use_case=AssessAccumulationEvidenceUseCase(
+                _ASC.evidence_policy
+            ),
         )
         response = use_case.execute(AccumulationScreenRequest(
             tickers=ticker_list,
             window_days=window,
             min_net_buy_days=1,
-            min_score=0.0,
+            min_accum_score=0.0,
+            min_accum_score_enabled=False,
             tier1_broker_codes=_SC.tier1_broker_codes,
             bci_cluster_min_count=_SC.bci_cluster_min_count,
             bci_stable_min_count=_SC.bci_stable_min_count,

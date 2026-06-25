@@ -27,11 +27,10 @@ def _candidate(**kwargs) -> AccumulationCandidate:
         vwap_discount_pct=4.0,
         rsi=45.0,
         trend="SIDE",
-        score=80.0,
+        accum_score=80.0,
         top_brokers=["AK", "BK"],
         institutional_flag=True,
         avg_flow_ratio=6.0,
-        score_breakdown={},
     )
     defaults.update(kwargs)
     return AccumulationCandidate(**defaults)
@@ -69,7 +68,7 @@ def test_single_gate_fail_returns_watch():
 
 
 def test_many_gates_fail_returns_avoid():
-    c = _candidate(rsi=75.0, trend="UP", avg_flow_ratio=1.0, vwap_discount_pct=0.5, score=30.0)
+    c = _candidate(rsi=75.0, trend="UP", avg_flow_ratio=1.0, vwap_discount_pct=0.5, accum_score=30.0)
     classification, failed = _eval(c)
     assert classification == "AVOID"
     assert len(failed) > 2
@@ -77,7 +76,7 @@ def test_many_gates_fail_returns_avoid():
 
 def test_score_gate_fail_but_few_total_fails_returns_watch():
     # Score fails, but only 1 other gate fails (≤ watch_max_failed_gates=2)
-    c = _candidate(score=60.0, rsi=65.0)  # 2 failures: score + RSI
+    c = _candidate(accum_score=60.0, rsi=65.0)  # 2 failures: score + RSI
     classification, failed = _eval(c)
     assert classification == "WATCH"
 
@@ -107,7 +106,7 @@ def test_wrong_trend_fails_trend_gate():
 
 
 def test_custom_gate_values_respected():
-    c = _candidate(score=50.0)
+    c = _candidate(accum_score=50.0)
     # With min_score=40.0, score gate should pass
     classification, failed = _eval(c, gate_min_score=40.0)
     assert not any("score" in f for f in failed)

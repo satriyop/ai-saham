@@ -72,7 +72,7 @@ saham screen accum --universe lq45 --window 30    # last 30 days
 saham screen accum --universe lq45 --window 90    # last 90 days
 
 # Filter results
-saham screen accum --universe lq45 --min-score 50     # only strong signals
+saham screen accum --universe lq45 --min-accum-score 50  # only strong accumulation evidence
 saham screen accum --universe lq45 --min-streak 3     # only 3+ consecutive buy days
 saham screen accum --universe lq45 --vwap-only        # only where foreigners are underwater
 saham screen accum --universe lq45 --squeeze-only     # only BB squeeze setups
@@ -144,7 +144,7 @@ The composite signal strength. Combines all indicators below into one number. Hi
 | 40–69 | **Moderate signal** | Watch, wait for confirmation |
 | < 40 | **Weak signal** | Likely noise, skip |
 
-Use `--min-score 50` to filter out weak signals. The score has a soft cap at 120 — scores above 100 are rare and represent exceptional setups.
+Use `--min-accum-score 50` to filter out weak accumulation evidence. The accumulation evidence score has a soft cap at 120 — scores above 100 are rare and represent exceptional setups.
 
 ---
 
@@ -375,7 +375,7 @@ saham screen accum --universe lq45 --multi
 
 # 3. Focus on high-conviction setups
 saham screen accum --universe lq45 --multi --squeeze-only   # coiled spring candidates
-saham screen accum --universe lq45 --vwap-only --min-score 50  # underwater + strong signal
+saham screen accum --universe lq45 --vwap-only --min-accum-score 50  # underwater + strong accumulation evidence
 ```
 
 ### Deep-Dive on a Candidate

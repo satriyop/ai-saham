@@ -32,7 +32,7 @@ A **local-first, production-grade CLI application** for stock analysis focused o
 - **Shareholding Composition** - 🏦 Institutional/individual split + top controlling holder from IDX filings
 - **Bandar Detector** - 🔍 Stockbit institutional operator accumulation/distribution signal (-9 to +9 score)
 - **Company Fundamentals** - 📈 P/E, ROE, Piotroski F-Score, quality gate with dividend yield + YoY growth
-- **Market Regime Detection** - Deterministic IHSG regime context (BULLISH/SIDEWAYS/WEAK/RISK_OFF)
+- **Market Context Engine** - Deterministic cross-market context using RISK_ON/NEUTRAL/RISK_OFF/VOLATILE regimes
 - **Ticker Notation Context** - Stockbit special notation/status badges cached locally for swing and pre-open views
 - **Terminal Charts** - ASCII price/RSI/volume charts in-terminal
 - **Batch Update** - Single command to refresh candles + broker flow for entire universes
@@ -44,14 +44,14 @@ A **local-first, production-grade CLI application** for stock analysis focused o
 - **Accumulation Audit** - Replay accumulation signals historically and measure forward returns
 - **Ticker Dashboard** - Read-only, cached-data dashboard via `saham view BBCA` showing notation, valuation, consensus, ownership, bandar signal, company profile, recent candles, corporate actions, insider activity, seasonality, IEV, and sentiment
 - **Universe Overview** - Market-wide view via `saham view universe lq45` showing price, foreign flow, and sector context per ticker
-- **Composite Signal Score** - `saham screen accum` now includes a 0–100 composite score combining enrichment, broker flow, technical, and valuation signals
+- **Signal Assessment** - `saham screen accum` scores each ticker 0–100 via `SignalEngine` (bandar, foreign flow, insider activity, seasonality, analyst consensus, forward valuation) with STRONG/MODERATE/WEAK rating
 - **Earnings History** - Quarterly earnings beat/miss streak from Stockbit `/earnings` endpoint, surfaced in swing analysis and enrichment cache
 - **Valuation Metrics** - P/E and EPS TTM from Stockbit, cached alongside fundamentals
 - **Watchlist Persistence** - `saham screen accum --save NAME` persists screener results; `saham screen watchlist` / `saham screen compare` to review and diff against fresh runs
 - **Cross-Broker Distribution** - `saham view broker distribution TICKER` shows counterparty flow breakdown across brokers
-- **Risk Engine** - Application-layer `RiskEngine` service wrapping rule-based risk gates (fundamental, bandar, liquidity) with self-contained enrichment fetch; used by both `analyze risk` and `screen accum` for candidate filtering
+- **Risk Engine** - Application-layer `RiskEngine` service wrapping rule-based risk gates (fundamental, liquidity, free float, bandar) with self-contained enrichment fetch; used by `analyze risk` and swing/accumulation workflows
 - **Data Status Labels** - Staleness replaced with contextual labels (`pending-eod` during market hours, `ready`, `bf+` for backfill, `✓` for aggregation up-to-date)
-- **Regime-Adaptive Backtest Exits** - Backtest exits adjust dynamically based on IHSG market regime (BULLISH/SIDEWAYS/WEAK/RISK_OFF)
+- **Regime-Aware Backtesting** - Swing backtests can group/filter entries by MarketContextEngine regime and use regime-specific preset exits
 - **IDX Floor Price Filter** - Rp 50 minimum price filter applied during IDX data ingestion
 - **Hexagonal Architecture** - Clean separation of domain, application, and infrastructure
 
@@ -89,15 +89,16 @@ saham analyze chart price BBRI --sma 20 --ema 50
 
 | Group | Purpose | Key Sub-commands |
 | :--- | :--- | :--- |
-| **`saham today`** | Daily briefing | read-only regime + candidate summary |
-| **`saham fetch`** | Data Ingestion | `market`, `broker`, `broker-import`, `broker-history`, `broker-top-foreign`, `iev`, `status`, `audit`, `stockbit`, `universe list/update/create/inspect` |
+| **`saham today`** | Daily briefing | `--universe`, `--top`, `--date` |
+| **`saham version`** | Version info | (no subcommands) |
+| **`saham fetch`** | Data Ingestion | `market`, `broker`, `broker-import`, `broker-history`, `broker-top-foreign`, `iev`, `status`, `audit`, `stockbit login/status/spy/test/browse/fetch-top5`, `universe list/update/inspect/create` |
 | **`saham screen`** | Candidate Discovery | `pre-open`, `accum`, `watchlist`, `compare` |
 | **`saham learn`** | Feedback Loop | `snapshot`, `track`, `grade`, `prompt`, `tune` |
-| **`saham view`** | Read-only Browsing | `broker status`, `broker flow`, `broker top`, `broker history`, `broker top-foreign`, `broker distribution`, `broker mappings`, `ticker TICKER` (or just `BBCA`), `universe` |
+| **`saham view`** | Read-only Browsing | `broker status/flow/top/history/top-foreign/distribution/mappings`, `market-context`, `ticker TICKER` (or just `BBCA`), `universe` |
 | **`saham indicator`**| Technical Math | `compute`, `snapshot`, `create`, `list`, `show`, `delete` |
-| **`saham analyze`** | Insights & Charts | `risk`, `compare`, `sentiment`, `audit`, `regime`, `chart`, `swing`, `accum-audit`, `swing-compare` |
-| **`saham strategy`** | Strategy Lifecycle| `init`, `validate`, `list`, `create`, `backtest`, `skill` |
-| **`saham trade`** | Paper Trade Workspace | `confirm`, `outcome`, `size`, `backtest-swing`, `backtest-intraday`, `log intraday/swing`, `review intraday/swing` |
+| **`saham analyze`** | Insights & Charts | `risk`, `compare`, `sentiment`, `audit`, `regime`, `chart price/rsi/volume`, `swing`, `accum-audit`, `swing-compare` |
+| **`saham strategy`** | Strategy Lifecycle| `init`, `validate`, `list`, `create`, `backtest`, `skill generate/check/index` |
+| **`saham trade`** | Paper Trade Workspace | `confirm`, `outcome`, `size`, `backtest-swing`, `backtest-intraday`, `log`, `migrate-journal`, `review intraday/swing` |
 
 ---
 
@@ -498,6 +499,9 @@ saham view broker top BBCA
 # Cross-broker distribution matrix (Stockbit data)
 saham view broker distribution BBCA
 
+# Cross-market regime context (VIX, EIDO, USD/IDR)
+saham view market-context
+
 # Import from CSV (legacy path during CLI migration)
 saham fetch broker-import data.csv --preview
 
@@ -529,6 +533,9 @@ saham fetch market BBCA BBRI BMRI               # Explicit tickers
 saham fetch market --universe lq45 --days 30    # Shorter history
 saham fetch market --universe lq45 --broker-only
 saham fetch market --universe lq45 --refresh    # Force refresh all
+saham fetch market BBCA --broker-provider stockbit --days 30  # Use Stockbit broker provider
+saham fetch market --universe lq45 --no-meta    # Skip metadata fetch
+saham fetch market --universe lq45 --no-enrichment  # Skip enrichment fetch
 ```
 
 | Option | Short | Default | Description |
@@ -537,7 +544,10 @@ saham fetch market --universe lq45 --refresh    # Force refresh all
 | `--days` | `-d` | 90 | Days of history to fetch |
 | `--candles-only` | | false | Skip broker flow fetch |
 | `--broker-only` | | false | Skip candles fetch |
-| `--provider` | | yahoo | Candles provider: yahoo or idx |
+| `--provider` | | (from config) | Candles provider: yahoo or idx |
+| `--broker-provider` | | auto | Broker provider: idx or stockbit (auto-detected) |
+| `--no-meta` | | false | Skip sector/industry metadata fetch |
+| `--no-enrichment` | | false | Skip Stockbit enrichment fetch |
 | `--refresh` | `-r` | false | Force refresh even if cached |
 
 ---
@@ -579,7 +589,7 @@ saham fetch universe create consumer_primer -s 1
 
 ### `saham screen accum` - Foreign Accumulation Screener
 
-Screen stocks for institutional foreign accumulation patterns. Each result includes a **CompositeSignalScore** (0–100) combining enrichment signals (analyst consensus, insider activity, bandar, fundamentals, earnings beat streak, forward estimates) with broker flow and technical/valuation context.
+Screen stocks for institutional foreign accumulation patterns. Results are split into verdict, accumulation evidence, signal, risk, and data coverage panels.
 
 ```bash
 # Single window
@@ -592,7 +602,8 @@ saham screen accum --universe lq45 --multi
 saham screen accum --universe lq45 --multi --sort-by 30s
 
 # Filters
-saham screen accum --universe lq45 --min-score 50 --top 10
+saham screen accum --universe lq45 --min-accum-score 50 --top 10
+saham screen accum --universe lq45 --min-signal-score 55 --top 10
 saham screen accum --universe lq45 --vwap-only
 saham screen accum --universe lq45 --squeeze-only
 saham screen accum --universe lq45 --granular
@@ -613,12 +624,13 @@ saham screen accum --universe lq45 --format json
 | `--universe` | `-u` | | Universe: lq45, idx80, idxcomp100, cached |
 | `--window` | `-w` | 7 | Analysis window in broker sessions (7, 30, 90) |
 | `--min-streak` | | 0 | Minimum consecutive buy days |
-| `--min-score` | | 0.0 | Minimum composite score (0-120) |
+| `--min-accum-score` | | config | Minimum accumulation evidence score (0-120 soft cap) |
+| `--min-signal-score` | | disabled/config | Optional minimum SignalEngine score (0-100) |
 | `--vwap-only` | | false | Only stocks where foreigners are underwater |
 | `--squeeze-only` | | false | Only stocks in Bollinger Band squeeze |
 | `--top` | | 20 | Show top N results |
 | `--granular` | | false | Show per-broker detail (Stockbit data) |
-| `--breakdown` | | false | Show per-component score breakdown |
+| `--breakdown` | | false | Show per-component accumulation/signal breakdown |
 | `--multi` | | false | Show scores across multiple windows |
 | `--windows` | | 7,30,90 | Comma-separated broker-session windows for --multi |
 | `--sort-by` | | avg | Sort by: avg, max, 7s, 30s, 90s. Legacy 7d/30d/90d labels are also accepted. |
@@ -627,7 +639,9 @@ saham screen accum --universe lq45 --format json
 | `--guide` | | false | Print column reference guide |
 | `--explain` | | false | Print column guide after results |
 
-**Score components (0-120 total):** consistency (40) + streak (30) + VWAP discount (20) + RSI headroom (10) + flow % (10) + BB squeeze (10) + institutional flag (5)
+**Accumulation evidence score (0-120 soft cap):** consistency, streak, VWAP discount, RSI headroom, flow %, BB squeeze, and BCI. Thresholds and weights are configured in `config/accumulation_screener.yaml`.
+
+**SignalAssessment score (0-100, via SignalEngine):** bandar intensity, foreign flow quality, insider net buy ratio, seasonality win rate, analyst buy consensus, and forward PE valuation. Weights are configured in `config/signal_engine.yaml`.
 
 #### `saham screen watchlist` - Saved Snapshots
 
@@ -657,10 +671,10 @@ saham analyze accum-audit --universe idx80 --window 7 --min-score 70
 saham analyze accum-audit --universe lq45 --simulate-exits
 ```
 
-#### `saham trade log swing` - Log to Journal
+#### `saham trade log --type swing` - Log to Journal
 
 ```bash
-saham trade log swing --ticker BBRI --window 7 --from-analysis --with-regime
+saham trade log --type swing --ticker BBRI --window 7 --from-analysis --with-regime
 ```
 
 ---
@@ -685,10 +699,10 @@ saham trade confirm
 saham trade confirm --opening-json '{"BBCA":9050,"BMRI":5875}'
 
 # Step 3: Log to journal
-saham trade log intraday
+saham trade log --type intraday
 
 # Step 4: Review performance
-saham trade review intraday --horizon 5
+saham trade review intraday
 
 # Record actual outcome
 saham trade outcome BBCA --entry 9000 --exit 9500 --result target
@@ -698,7 +712,7 @@ saham trade outcome BBCA --entry 9000 --exit 9500 --result target
 |---------|---------|
 | `saham screen pre-open` | Screen movers before market open |
 | `saham trade confirm` | Confirm after opening price known |
-| `saham trade log intraday` | Append to paper trade journal |
+| `saham trade log --type intraday` | Append to paper trade journal |
 | `saham trade review intraday` | Review journal hit rate |
 | `saham trade outcome` | Record actual trade outcome |
 
@@ -785,7 +799,7 @@ saham analyze swing BBRI --format json
 ```bash
 saham trade backtest-swing --universe idx80 --preset foreign-bounce
 saham trade backtest-swing --universe lq45 --capital 50000000 --max-positions 3
-saham trade backtest-swing --universe idx80 --with-regime --allow-regimes BULLISH,SIDEWAYS
+saham trade backtest-swing --universe idx80 --with-regime --allow-regimes RISK_ON,NEUTRAL
 saham trade backtest-swing --universe idx80 --cost-bps 0  # gross/no-cost comparison
 ```
 
@@ -814,7 +828,7 @@ Alias for the accumulation screener.
 
 Alias for the accumulation audit.
 
-#### `saham trade log swing` / `saham trade review swing`
+#### `saham trade log --type swing` / `saham trade review swing`
 
 Aliases for accumulation journal commands.
 
@@ -822,7 +836,7 @@ Aliases for accumulation journal commands.
 
 ### `saham analyze regime` - Market Regime
 
-Show deterministic IHSG market regime context for swing trading.
+Show deterministic cross-market context for swing trading.
 
 ```bash
 saham analyze regime
@@ -839,7 +853,7 @@ saham analyze regime --format json
 | `--as-of` | | today | Regime date (YYYY-MM-DD) |
 | `--format` | | table | Output format: table or json |
 
-**Regime labels:** `BULLISH`, `SIDEWAYS`, `WEAK`, `RISK_OFF`
+**Regime labels:** `RISK_ON`, `NEUTRAL`, `RISK_OFF`, `VOLATILE`
 
 ---
 
@@ -1254,10 +1268,11 @@ src/
 │       ├── risk_assessment.py / risk_signal.py
 │       ├── backtest_result.py / screener_result.py
 │       ├── sentiment.py
+│       ├── market_context.py / trade_setup.py
 │       ├── indicator_snapshot.py / intraday_confirmation.py
 │       ├── analyst_consensus.py / company_fundamentals.py
 │       ├── company_profile.py
-│       ├── composite_signal_score.py
+│       ├── signal_assessment.py
 │       ├── earnings_record.py / forward_estimates.py
 │       ├── insider_transaction.py / bandar_detector_snapshot.py
 │       ├── intraday_broker_chart.py
@@ -1313,6 +1328,8 @@ src/
 │   │   ├── validator.py / evaluator.py
 │   ├── services/
 │   │   ├── risk_engine.py            # First-class risk assessment (ADR-024)
+│   │   ├── signal_engine.py          # First-class signal assessment (ADR-025)
+│   │   ├── market_context_engine.py  # First-class market context (ADR-029)
 │   │   ├── indicator_registry.py
 │   │   ├── strategy_loader.py
 │   │   ├── skill_generator.py
@@ -1376,6 +1393,7 @@ src/
 │   │   ├── sqlite_iev_repository.py
 │   │   ├── sqlite_watchlist_repository.py
 │   │   ├── sqlite_system_status_provider.py
+│   │   ├── sqlite_market_context_repository.py
 │   │   ├── formula_storage.py
 │   │   ├── sentiment_repository.py
 │   │   ├── intraday_confirmation_csv.py
@@ -1464,7 +1482,8 @@ src/
 - Domain logic is pure and framework-agnostic
 - External systems never leak into the domain
 - Rule-first, AI-optional — risk gates and rules do the work; AI explains
-- Risk Engine is the single entry point for risk assessment (ADR-024)
+- RiskEngine, SignalEngine, and MarketContextEngine are first-class application services
+- Complete trade verdicts are composed through TradeSetup / AssessTradeSetupUseCase
 - AI is always optional and swappable (DeepSeek default)
 - Plugins extend functionality without modifying core
 
@@ -1496,6 +1515,9 @@ src/
 | `config/formulas.yaml` | Persisted custom formulas |
 | `config/universes.yaml` | Ticker universe definitions |
 | `config/idx_groups.yaml` | IDX sector/industry group mappings |
+| `config/risk_engine.yaml` | Risk gate enablement and thresholds |
+| `config/signal_engine.yaml` | Signal factor enablement and weights |
+| `config/market_context_engine.yaml` | Market context factors, thresholds, and regime effects |
 | `config/swing_screener.yaml` | Swing screener calibration (smart money brokers, noise brokers, preset gates) |
 | `config/pre_open_screener.yaml` | Pre-open screener rules and thresholds |
 | `config/csv_mappings/` | CSV import column mapping definitions |

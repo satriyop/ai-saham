@@ -22,8 +22,12 @@ from src.domain.services.trading_calendar import trading_sessions_apart
 from src.infrastructure.config.swing_config import (
     load_swing_config as _load_swing_screener_config_typed,
 )
+from src.infrastructure.config.accumulation_screener_config import (
+    load_accumulation_screener_config as _load_accumulation_screener_config,
+)
 
 _SC = _load_swing_screener_config_typed()
+_ASC = _load_accumulation_screener_config()
 _TABLE_WIDTH = 93
 
 
@@ -44,9 +48,9 @@ def fmt_score(s: float | None) -> str:
     """Format a score with color for table cells."""
     if s is None:
         return typer.style("   —  ", fg=typer.colors.BRIGHT_BLACK)
-    if s >= _SC.enter_min_score:
+    if s >= _ASC.display.enter_min_accum_score:
         return typer.style(f"{s:>6.1f}", fg=typer.colors.GREEN)
-    if s >= _SC.watch_min_score:
+    if s >= _ASC.display.watch_min_accum_score:
         return typer.style(f"{s:>6.1f}", fg=typer.colors.YELLOW)
     return typer.style(f"{s:>6.1f}", fg=typer.colors.WHITE)
 
@@ -56,13 +60,13 @@ def classify_pattern(
     candidates_by_window: dict[int, "AccumulationCandidate | None"],
 ) -> str:
     """Label the multi-window pattern for a ticker."""
-    threshold = _SC.coiled_spring_min_score
-    hot = [w for w in windows if candidates_by_window.get(w) and candidates_by_window[w].score >= threshold]
+    threshold = _ASC.display.coiled_spring_min_accum_score
+    hot = [w for w in windows if candidates_by_window.get(w) and candidates_by_window[w].accum_score >= threshold]
 
     # Coiled spring: any window with squeeze + strong score
     for w in windows:
         c = candidates_by_window.get(w)
-        if c and c.score >= threshold and c.bb_width_pctile is not None and c.bb_width_pctile <= _SC.coiled_spring_bb_pctile:
+        if c and c.accum_score >= threshold and c.bb_width_pctile is not None and c.bb_width_pctile <= _ASC.display.coiled_spring_bb_pctile:
             return "coiled spring"
 
     if not hot:
@@ -113,6 +117,186 @@ def notation_detail(snapshot) -> str:
 _STRAT_SYMBOL = {"LOW_RISK": "↑", "HIGH_RISK": "↓", "MODERATE": "~"}
 
 
+def _price_text(value: Decimal | None) -> str:
+    if value is None:
+        return "-"
+    return f"{value:,.0f}"
+
+
+def _risk_reason(assessment) -> str:
+    if assessment is None or not assessment.rationale:
+        return "-"
+    return "; ".join(assessment.rationale)
+
+
+def _data_freshness(candidate: AccumulationCandidate) -> str:
+    if candidate.latest_candle_date is None or candidate.latest_broker_date is None:
+        return "MISSING"
+    if candidate.latest_candle_date == candidate.latest_broker_date:
+        return "OK"
+    return "LAG"
+
+
+def _scoring_definitions_panel():
+    p = _ASC.evidence_policy
+
+    accum_table = compact_table()
+    accum_table.add_column("Factor", style="bold")
+    accum_table.add_column("Max", justify="right")
+    accum_table.add_column("Mechanism")
+    accum_table.add_row(
+        "Net days",
+        f"{p.consistency.weight:g}",
+        "net_buy_days / total_days × max points",
+    )
+    accum_table.add_row(
+        "Streak",
+        f"{p.streak.weight:g}",
+        f"exponential saturation: max × (1 - exp(-streak / {p.streak.tau_days:g}))",
+    )
+    accum_table.add_row(
+        "F_VWAP%",
+        f"{p.vwap_discount.weight:g}",
+        f"linear 0-{p.vwap_discount.saturate_at:g}% underwater; capped at max",
+    )
+    accum_table.add_row(
+        "RSI",
+        f"{p.rsi_headroom.weight:g}",
+        f"tent score: 0 at <= {p.rsi_headroom.low:g} or >= {p.rsi_headroom.high:g}; peak at {p.rsi_headroom.peak:g}",
+    )
+    accum_table.add_row(
+        "Flow%",
+        f"{p.foreign_flow_ratio.weight:g}",
+        f"net foreign turnover share; linear to {p.foreign_flow_ratio.saturate_at:g}%",
+    )
+    accum_table.add_row(
+        "BB%ile",
+        f"{p.bb_squeeze.weight:g}",
+        f"squeeze score: best below {p.bb_squeeze.tight_pctile:.0%}; fades to 0 by {p.bb_squeeze.loose_pctile:.0%}",
+    )
+    accum_table.add_row(
+        "BCI",
+        f"{p.bci.cluster_points:g}",
+        f"Tier-1 broker concentration: CLUSTER {p.bci.cluster_points:g}, STABLE {p.bci.stable_points:g}",
+    )
+
+    signal_table = compact_table(show_header=False)
+    signal_table.add_column("Key", style="bold cyan")
+    signal_table.add_column("Definition")
+    signal_table.add_row(
+        "Signal score",
+        "0-100 from SignalEngine factors: bandar, foreign quality, insider activity, seasonality, analyst, forward valuation.",
+    )
+    signal_table.add_row(
+        "Signal verdict",
+        "STRONG / MODERATE / WEAK from score thresholds; entry quality becomes ENTER / WATCH / AVOID.",
+    )
+    signal_table.add_row(
+        "Risk gate",
+        "PASS means no structural/execution gate fired. Technical risk is RSI + EMA/SMA profile logic.",
+    )
+    signal_table.add_row(
+        "Rule Conf",
+        "RiskEngine rule alignment only: 100 = RSI and trend agree, 50 = one signal or conflict, 0 = neutral.",
+    )
+
+    return panel(
+        Group(
+            Text("Accumulation evidence scoring", style="bold cyan"),
+            accum_table,
+            Text("\nSignal / risk definitions", style="bold cyan"),
+            signal_table,
+        ),
+        title="Scoring Definitions",
+    )
+
+
+def _detail_status(style_key: str) -> Text:
+    styles = {
+        "GOOD": "green",
+        "WARN": "yellow",
+        "BAD": "red",
+        "INFO": "bright_black",
+        "BUY": "cyan",
+        "TAILWIND": "green",
+        "HEADWIND": "red",
+        "BULLISH": "green",
+        "BEARISH": "red",
+        "ACCUM": "green",
+        "DISTRIB": "red",
+        "QUALITY": "green",
+        "WEAK": "yellow",
+        "LAG": "yellow",
+    }
+    return Text(style_key, style=styles.get(style_key, ""))
+
+
+def _add_detail_row(table, show_ticker: bool, ticker: str, kind: str, status: str, detail: str) -> None:
+    row = [kind]
+    if show_ticker:
+        row.append(ticker)
+    row.extend([_detail_status(status), detail])
+    table.add_row(*row)
+
+
+def _evidence_factor_rows(candidate: AccumulationCandidate) -> list[tuple[str, ...]]:
+    bd = candidate.score_breakdown
+    rsi = f"{candidate.rsi:.1f}" if candidate.rsi is not None else "-"
+    flow = f"{candidate.avg_flow_ratio:+.1f}%" if candidate.avg_flow_ratio is not None else "-"
+    vwap = (
+        f"{candidate.vwap_discount_pct:+.1f}%"
+        if candidate.vwap_discount_pct is not None else "-"
+    )
+    bb = (
+        f"{candidate.bb_width_pctile * 100:.0f}%"
+        if candidate.bb_width_pctile is not None else "-"
+    )
+    return [
+        (
+            f"{bd.get('cons', 0):.1f}",
+            "Net days",
+            f"{candidate.net_buy_days}/{candidate.total_days}",
+            "Foreign buy consistency",
+        ),
+        (
+            f"{bd.get('streak', 0):.1f}",
+            "Streak",
+            f"{candidate.consecutive_streak}s",
+            "Current buy run",
+        ),
+        (
+            f"{bd.get('vwap', 0):.1f}",
+            "F_VWAP%",
+            vwap,
+            "Foreign avg cost vs price",
+        ),
+        (
+            f"{bd.get('rsi', 0):.1f}",
+            "RSI",
+            rsi,
+            "Entry headroom",
+        ),
+        (
+            f"{bd.get('flow', 0):.1f}",
+            "Flow%",
+            flow,
+            "Foreign share of turnover",
+        ),
+        (
+            f"{bd.get('bb', 0):.1f}",
+            "BB%ile",
+            bb,
+            "Volatility squeeze",
+        ),
+        (
+            f"{bd.get('inst', 0):.1f}",
+            "BCI",
+            candidate.bci_label or "-",
+            "Tier-1 broker concentration",
+        ),
+    ]
+
+
 def display_results(
     response: AccumulationScreenResponse,
     universe_label: str,
@@ -129,9 +313,10 @@ def display_results(
     if vwap_only:
         candidates = [c for c in candidates if c.vwap_discount_pct and c.vwap_discount_pct > 0]
     if squeeze_only:
-        candidates = [c for c in candidates if c.bb_width_pctile is not None and c.bb_width_pctile <= _SC.coiled_spring_bb_pctile]
+        candidates = [c for c in candidates if c.bb_width_pctile is not None and c.bb_width_pctile <= _ASC.display.coiled_spring_bb_pctile]
 
     candidates = candidates[:top_n]
+    show_context_ticker = len(candidates) > 1
 
     if not candidates:
         empty = compact_table(show_header=False)
@@ -151,25 +336,62 @@ def display_results(
         )
         return
 
-    table = compact_table()
-    table.add_column("#", justify="right")
-    table.add_column("Ticker", style="bold")
-    table.add_column("Cmp", justify="right")
-    table.add_column("Score", justify="right")
-    table.add_column("Streak", justify="right")
-    table.add_column("Net Days", justify="right")
-    table.add_column("Net Value", justify="right")
-    table.add_column("Flow%", justify="right")
-    table.add_column("F_VWAP%", justify="right")
-    table.add_column("RSI", justify="right")
-    table.add_column("BB%ile", justify="right")
-    table.add_column("Trend")
-    table.add_column("Risk")
-    table.add_column("Action")
+    verdict_table = compact_table()
+    verdict_table.add_column("Action")
+    verdict_table.add_column("#", justify="right")
+    verdict_table.add_column("Ticker", style="bold")
+    verdict_table.add_column("Price", justify="right")
+    verdict_table.add_column("Signal", justify="right")
+    verdict_table.add_column("Accum", justify="right")
+    verdict_table.add_column("Gate")
+    verdict_table.add_column("Trend")
     if strategy_signals is not None:
-        table.add_column("Strat")
+        verdict_table.add_column("Strat")
 
-    detail_lines: list[Text] = []
+    evidence_table = compact_table()
+    evidence_table.add_column("Pts", justify="right")
+    if show_context_ticker:
+        evidence_table.add_column("Ticker", style="bold")
+    evidence_table.add_column("Factor")
+    evidence_table.add_column("Value", justify="right")
+    evidence_table.add_column("Means")
+
+    signal_table = compact_table()
+    signal_table.add_column("Signal")
+    if show_context_ticker:
+        signal_table.add_column("Ticker", style="bold")
+    signal_table.add_column("Score", justify="right")
+    signal_table.add_column("Bandar", justify="right")
+    signal_table.add_column("Foreign", justify="right")
+    signal_table.add_column("Insider", justify="right")
+    signal_table.add_column("Season", justify="right")
+    signal_table.add_column("Analyst", justify="right")
+    signal_table.add_column("Fwd", justify="right")
+
+    risk_table = compact_table()
+    risk_table.add_column("Status")
+    if show_context_ticker:
+        risk_table.add_column("Ticker", style="bold")
+    risk_table.add_column("Gate")
+    risk_table.add_column("Technical")
+    risk_table.add_column("Rule Conf", justify="right")
+
+    data_table = compact_table()
+    data_table.add_column("Fresh")
+    if show_context_ticker:
+        data_table.add_column("Ticker", style="bold")
+    data_table.add_column("Candle")
+    data_table.add_column("Broker")
+    data_table.add_column("Missing")
+
+    details_table = compact_table()
+    details_table.add_column("Type")
+    if show_context_ticker:
+        details_table.add_column("Ticker", style="bold")
+    details_table.add_column("Status")
+    details_table.add_column("Detail")
+    has_detail_rows = False
+    risk_detail_lines: list[Text] = []
 
     for i, c in enumerate(candidates, 1):
         net_days_str = f"{c.net_buy_days}/{c.total_days}"
@@ -187,9 +409,9 @@ def display_results(
             bb_cell = Text("—", style="bright_black")
 
         # Color flow score
-        if c.score >= _SC.enter_min_score:
+        if c.accum_score >= _ASC.display.enter_min_accum_score:
             score_style = "green"
-        elif c.score >= _SC.watch_min_score:
+        elif c.accum_score >= _ASC.display.watch_min_accum_score:
             score_style = "yellow"
         else:
             score_style = ""
@@ -210,16 +432,14 @@ def display_results(
         else:
             cmp_cell = Text("—", style="bright_black")
 
-        if c.risk_assessment is not None:
-            rl = c.risk_assessment.risk_level_name
-            if rl == "HIGH_RISK":
-                risk_cell = Text("HI", style="bold red")
-            elif rl == "MODERATE":
-                risk_cell = Text("MID", style="yellow")
-            else:
-                risk_cell = Text("LO", style="green")
-        else:
-            risk_cell = Text("—", style="bright_black")
+        gate_triggered = (
+            c.risk_assessment.gate_triggered
+            if c.risk_assessment and c.risk_assessment.gate_triggered
+            else None
+        )
+        gate_status = "BLOCK" if gate_triggered else ("PASS" if c.risk_assessment else "-")
+        gate_style = "bold red" if gate_triggered else ("green" if c.risk_assessment else "bright_black")
+        gate_cell = Text(gate_status, style=gate_style)
 
         if c.trade_setup is not None:
             _action_style = {
@@ -234,109 +454,159 @@ def display_results(
             action_cell = Text("—", style="bright_black")
 
         row = [
+            action_cell,
             str(i),
             c.ticker,
+            _price_text(c.current_price),
             cmp_cell,
-            Text(f"{c.score:.1f}", style=score_style),
-            streak_str,
-            net_days_str,
-            format_value(c.total_net_value),
-            flow_str,
-            vwap_str,
-            rsi_str,
-            bb_cell,
+            Text(f"{c.accum_score:.1f}", style=score_style),
+            gate_cell,
             c.trend,
-            risk_cell,
-            action_cell,
         ]
         if strategy_signals is not None:
             raw = strategy_signals.get(c.ticker, "?")
             sym = _STRAT_SYMBOL.get(raw, raw)
             strat_style = "green" if raw == "LOW_RISK" else ("red" if raw == "HIGH_RISK" else "bright_black")
             row.append(Text(sym, style=strat_style))
-        table.add_row(*row)
+        verdict_table.add_row(*row)
 
-        if show_breakdown and c.score_breakdown:
-            bd = c.score_breakdown
-            detail_lines.append(Text(
-                f"    [cons={bd.get('cons', 0):.1f} streak={bd.get('streak', 0):.1f}"
-                f" vwap={bd.get('vwap', 0):.1f} rsi={bd.get('rsi', 0):.1f}"
-                f" flow={bd.get('flow', 0):.1f} bb={bd.get('bb', 0):.1f}"
-                f" inst={bd.get('cons', 0) * 0:.0f}]"  # BCI score logic placeholder
-            ))
-        if show_breakdown and c.signal_assessment is not None:
-            bd = c.signal_assessment.assessment.breakdown_dict
-            detail_lines.append(Text(
-                f"    {c.ticker} SIGNAL: [ban={bd.get('bandar_intensity', 0):.0f}"
-                f" ff={bd.get('foreign_flow_quality', 0):.0f}"
-                f" pio={bd.get('piotroski_quality', 0):.0f}"
-                f" sea={bd.get('seasonality_edge', 0):.0f}"
-                f" ana={bd.get('analyst_consensus', 0):.0f}"
-                f" fwd={bd.get('forward_valuation', 0):.0f}]",
-                style="dim",
-            ))
+        for evidence_row in _evidence_factor_rows(c):
+            if show_context_ticker:
+                evidence_table.add_row(evidence_row[0], c.ticker, *evidence_row[1:])
+            else:
+                evidence_table.add_row(*evidence_row)
+
+        if c.signal_assessment is not None:
+            sa = c.signal_assessment.assessment
+            bd = sa.breakdown_dict
+            signal_row = [
+                sa.strength.value,
+                str(sa.score),
+                f"{bd.get('bandar_intensity', 0):.0f}",
+                f"{bd.get('foreign_flow_quality', 0):.0f}",
+                f"{bd.get('insider_activity', 0):.0f}",
+                f"{bd.get('seasonality_edge', 0):.0f}",
+                f"{bd.get('analyst_consensus', 0):.0f}",
+                f"{bd.get('forward_valuation', 0):.0f}",
+            ]
+            if show_context_ticker:
+                signal_table.add_row(signal_row[0], c.ticker, *signal_row[1:])
+            else:
+                signal_table.add_row(*signal_row)
+        else:
+            signal_row = ["-", "-", "-", "-", "-", "-", "-", "-"]
+            if show_context_ticker:
+                signal_table.add_row(signal_row[0], c.ticker, *signal_row[1:])
+            else:
+                signal_table.add_row(*signal_row)
+
+        risk_row = [
+            gate_status,
+            gate_triggered or "-",
+            c.risk_assessment.risk_level_name if c.risk_assessment else "-",
+            str(c.risk_assessment.confidence) if c.risk_assessment else "-",
+        ]
+        if show_context_ticker:
+            risk_table.add_row(risk_row[0], c.ticker, *risk_row[1:])
+        else:
+            risk_table.add_row(*risk_row)
+        risk_detail_lines.append(Text(
+            f"#{i} {c.ticker}: {_risk_reason(c.risk_assessment)}",
+            style="dim",
+        ))
 
         notation_text = notation_detail(c.ticker_notation)
         if notation_text:
-            detail_lines.append(Text(f"    {c.ticker} NOTATION: {notation_text}", style="yellow" if c.ticker_notation and c.ticker_notation.has_warning else ""))
+            _add_detail_row(
+                details_table,
+                show_context_ticker,
+                c.ticker,
+                "Notation",
+                "WARN" if c.ticker_notation and c.ticker_notation.has_warning else "INFO",
+                notation_text,
+            )
+            has_detail_rows = True
 
         if c.seasonal_edge is not None:
             se = c.seasonal_edge
-            se_style = "green" if se.is_tailwind else ("red" if se.is_headwind else "")
-            detail_lines.append(Text(f"    {c.ticker} SEASONAL {se.label} (score {se.score:+.2f})", style=se_style))
+            _add_detail_row(
+                details_table,
+                show_context_ticker,
+                c.ticker,
+                "Seasonal",
+                "TAILWIND" if se.is_tailwind else ("HEADWIND" if se.is_headwind else "INFO"),
+                f"{se.label} (score {se.score:+.2f})",
+            )
+            has_detail_rows = True
 
         if c.dividend_risk:
-            detail_lines.append(Text(f"    {c.ticker} DIVIDEND RISK", style="yellow"))
+            _add_detail_row(details_table, show_context_ticker, c.ticker, "Corp Act", "WARN", "Dividend risk inside hold window")
+            has_detail_rows = True
         if c.rights_issue_risk:
-            detail_lines.append(Text(f"    {c.ticker} RIGHTS ISSUE", style="yellow"))
+            _add_detail_row(details_table, show_context_ticker, c.ticker, "Corp Act", "WARN", "Rights issue inside hold window")
+            has_detail_rows = True
         if c.insider_buying:
             for label in c.recent_insider_buys:
-                detail_lines.append(Text(f"    {c.ticker} INSIDER BUY - {label}", style="cyan"))
+                _add_detail_row(details_table, show_context_ticker, c.ticker, "Insider", "BUY", label)
+                has_detail_rows = True
 
         if c.analyst_consensus is not None:
             ac = c.analyst_consensus
             if ac.is_bullish and (ac.upside_pct or 0) >= 10:
-                ac_style = "green"
+                ac_status = "BULLISH"
             elif ac.sell_count > ac.buy_count:
-                ac_style = "red"
+                ac_status = "BEARISH"
             else:
-                ac_style = ""
-            detail_lines.append(Text(f"    {c.ticker} ANALYST: {ac.label}", style=ac_style))
+                ac_status = "INFO"
+            _add_detail_row(details_table, show_context_ticker, c.ticker, "Analyst", ac_status, ac.label)
+            has_detail_rows = True
 
         if c.shareholding is not None:
             sh = c.shareholding
-            sh_style = "cyan" if sh.institution_pct >= 30.0 else ""
-            detail_lines.append(Text(f"    {c.ticker} HOLDING: {sh.label}", style=sh_style))
+            _add_detail_row(
+                details_table,
+                show_context_ticker,
+                c.ticker,
+                "Holding",
+                "GOOD" if sh.institution_pct >= 30.0 else "INFO",
+                sh.label,
+            )
+            has_detail_rows = True
 
         if c.bandar_detector is not None:
             bd = c.bandar_detector
             if bd.accumulation_score >= 4:
-                bd_style = "green"
+                bd_status = "ACCUM"
             elif bd.is_accumulating:
-                bd_style = "yellow"
+                bd_status = "GOOD"
             elif bd.is_distributing:
-                bd_style = "red"
+                bd_status = "DISTRIB"
             else:
-                bd_style = ""
-            detail_lines.append(Text(f"    {c.ticker} BANDAR: {bd.label}", style=bd_style))
+                bd_status = "INFO"
+            _add_detail_row(details_table, show_context_ticker, c.ticker, "Bandar", bd_status, bd.label)
+            has_detail_rows = True
 
         if c.fundamentals is not None:
             fund = c.fundamentals
             if fund.is_quality:
-                fund_style = "green"
+                fund_status = "QUALITY"
             elif fund.roe_ttm is not None and fund.roe_ttm >= 10.0:
-                fund_style = "yellow"
+                fund_status = "GOOD"
             else:
-                fund_style = "red"
-            detail_lines.append(Text(f"    {c.ticker} FUNDAM: {fund.label}", style=fund_style))
+                fund_status = "WEAK"
+            _add_detail_row(details_table, show_context_ticker, c.ticker, "Fundam", fund_status, fund.label)
+            has_detail_rows = True
 
         if c.risk_assessment is not None and c.risk_assessment.gate_triggered:
-            gate_style = "bold red" if c.risk_assessment.risk_level_name == "HIGH_RISK" else "yellow"
-            detail_lines.append(Text(
-                f"    {c.ticker} RISK GATE: {c.risk_assessment.gate_triggered}"
-                f" → {c.risk_assessment.risk_level_name}",
-                style=gate_style,
-            ))
+            _add_detail_row(
+                details_table,
+                show_context_ticker,
+                c.ticker,
+                "Risk Gate",
+                "BAD" if c.risk_assessment.risk_level_name == "HIGH_RISK" else "WARN",
+                f"{c.risk_assessment.gate_triggered} -> {c.risk_assessment.risk_level_name}",
+            )
+            has_detail_rows = True
 
         missing = [
             label for label, val in [
@@ -350,10 +620,25 @@ def display_results(
             if val is None
         ]
         if missing:
-            detail_lines.append(Text(
-                f"    {c.ticker} MISSING: {('  '.join(missing))}",
-                style="dim",
-            ))
+            _add_detail_row(
+                details_table,
+                show_context_ticker,
+                c.ticker,
+                "Missing",
+                "INFO",
+                " ".join(missing),
+            )
+            has_detail_rows = True
+        data_row = [
+            _data_freshness(c),
+            c.latest_candle_date.isoformat() if c.latest_candle_date else "-",
+            c.latest_broker_date.isoformat() if c.latest_broker_date else "-",
+            " ".join(missing) if missing else "-",
+        ]
+        if show_context_ticker:
+            data_table.add_row(data_row[0], c.ticker, *data_row[1:])
+        else:
+            data_table.add_row(*data_row)
 
         if granular and c.top_brokers:
             broker_line = "    " + "  ".join(c.top_brokers[:5])
@@ -363,32 +648,56 @@ def display_results(
                 broker_line += f"  [BCI:{c.bci_label}({c.bci_tier1_count}T1)]"
             elif c.bci_label == "RETAIL-LED":
                 broker_line += "  [BCI:RETAIL-LED]"
-            detail_lines.append(Text(broker_line))
+            _add_detail_row(details_table, show_context_ticker, c.ticker, "Broker", "INFO", broker_line.strip())
+            has_detail_rows = True
 
         if c.latest_candle_date is not None and c.latest_broker_date is not None:
             if c.latest_broker_date < c.latest_candle_date:
                 lag = trading_sessions_apart(c.latest_broker_date, c.latest_candle_date)
                 if lag > 0:
-                    detail_lines.append(Text(
-                        f"    {c.ticker} DATA LAG: broker as of {c.latest_broker_date}"
-                        f" (+{lag} session{'s' if lag > 1 else ''} behind candle {c.latest_candle_date})"
-                        f" → saham fetch market {c.ticker} --broker-only",
-                        style="yellow",
-                    ))
+                    _add_detail_row(
+                        details_table,
+                        show_context_ticker,
+                        c.ticker,
+                        "Data",
+                        "LAG",
+                        f"Broker as of {c.latest_broker_date} (+{lag} session{'s' if lag > 1 else ''} behind candle {c.latest_candle_date}) -> saham fetch market {c.ticker} --broker-only",
+                    )
+                    has_detail_rows = True
             elif c.latest_candle_date < c.latest_broker_date:
                 lag = trading_sessions_apart(c.latest_candle_date, c.latest_broker_date)
                 if lag > 0:
-                    detail_lines.append(Text(
-                        f"    {c.ticker} DATA LAG: candle as of {c.latest_candle_date}"
-                        f" (+{lag} session{'s' if lag > 1 else ''} behind broker {c.latest_broker_date})"
-                        f" → saham fetch market {c.ticker} --candles-only",
-                        style="yellow",
-                    ))
+                    _add_detail_row(
+                        details_table,
+                        show_context_ticker,
+                        c.ticker,
+                        "Data",
+                        "LAG",
+                        f"Candle as of {c.latest_candle_date} (+{lag} session{'s' if lag > 1 else ''} behind broker {c.latest_broker_date}) -> saham fetch market {c.ticker} --candles-only",
+                    )
+                    has_detail_rows = True
 
-    sections = [table]
-    if detail_lines:
-        sections.append(Text("\nDetails", style="bold cyan"))
-        sections.extend(detail_lines)
+    sections = [
+        panel(verdict_table, title="Verdict"),
+        panel(evidence_table, title="Accumulation Evidence"),
+        panel(signal_table, title="Signal"),
+        panel(
+            Group(
+                risk_table,
+                Text("\nWhy", style="bold cyan"),
+                *risk_detail_lines,
+                Text(
+                    "\nRule Conf comes from RiskEngine rule alignment: "
+                    "100 = RSI and trend agree, 50 = one signal/conflict, 0 = neutral.",
+                    style="dim",
+                ),
+            ),
+            title="Risk Gate",
+        ),
+        panel(data_table, title="Data Coverage"),
+    ]
+    if has_detail_rows:
+        sections.append(panel(details_table, title="Enrichment Details"))
 
     console().print(
         panel(
@@ -423,10 +732,10 @@ def display_results(
         )
 
     explain_lines = [
-        "FLOW%: avg net foreign % of total daily turnover (positive = accumulating)",
-        "F_VWAP%: positive = price < foreign avg buy cost basis (foreigners underwater)",
-        "BB%ILE: BB Width pctile vs last 60d — green(≤20%) = squeeze (coiled spring)",
-        "Score 0–120 | consistency 40 | streak 30 | VWAP 20 | RSI 10 | flow 10 | BB 10 | BCI 0/5/15"
+        "Verdict panel is the action summary. Context panels explain why.",
+        "ACCUM is deterministic foreign-flow evidence (0-120). SIGNAL is SignalEngine attractiveness (0-100).",
+        "GATE PASS means no structural/execution risk gate fired; it does not mean the ticker is risk-free.",
+        "FLOW% = avg net foreign % of turnover. F_VWAP% positive = price below foreign average buy cost. BB%ILE lower = tighter squeeze.",
     ]
     if strategy_signals is not None:
         explain_lines.append(f"STRAT ({strategy_name}): ↑=LOW_RISK(entry)  ~=MODERATE(hold)  ↓=HIGH_RISK(exit)")
@@ -444,6 +753,7 @@ def display_results(
             title="Metadata & Guide",
         )
     )
+    console().print(_scoring_definitions_panel())
 
 
 def display_multi(
@@ -476,7 +786,7 @@ def display_multi(
 
     def sort_key(item: tuple) -> float:
         pw = item[1]
-        scores = [c.score for c in pw.values()]
+        scores = [c.accum_score for c in pw.values()]
         if not scores:
             return 0.0
         if sort_by == "avg":
@@ -486,7 +796,7 @@ def display_multi(
         try:
             w = int(sort_by.rstrip("ds"))
             c = pw.get(w)
-            return c.score if c else 0.0
+            return c.accum_score if c else 0.0
         except (ValueError, AttributeError):
             return sum(scores) / len(scores)
 
@@ -522,8 +832,10 @@ def display_multi(
             if candidate is None:
                 score_cells.append(Text("—", style="bright_black"))
                 continue
-            style = "green" if candidate.score >= 70 else ("yellow" if candidate.score >= 40 else "")
-            score_cells.append(Text(f"{candidate.score:.0f}", style=style))
+            style = "green" if candidate.accum_score >= _ASC.display.enter_min_accum_score else (
+                "yellow" if candidate.accum_score >= _ASC.display.watch_min_accum_score else ""
+            )
+            score_cells.append(Text(f"{candidate.accum_score:.0f}", style=style))
         pattern = classify_pattern(windows, pw)
         trend = next((c.trend for w in sorted(windows) for c in [pw.get(w)] if c), "—")
         quality = (broker_quality or {}).get(tk)
@@ -553,7 +865,7 @@ def display_multi(
 
     meta_table.add_row(
         "Score Range",
-        "Score ≥70 green | ≥40 yellow | <40 white"
+        "Accum ≥70 green | ≥40 yellow | <40 white"
     )
 
     meta_table.add_row(
@@ -650,7 +962,7 @@ def print_column_guide() -> None:
     guide_table.add_row(
         "BREAKDOWN",
         "cons / streak / vwap\nrsi / flow / bb / inst",
-        "Score components: cons (40 pts), streak (30 pts), vwap (20 pts), rsi (10 pts), flow (10 pts), bb (10 pts), inst (15 pts BCI)."
+        "Accumulation evidence components: cons (40 pts), streak (30 pts), vwap (20 pts), rsi (10 pts), flow (10 pts), bb (10 pts), inst (15 pts BCI)."
     )
 
     checklist_text = Text(

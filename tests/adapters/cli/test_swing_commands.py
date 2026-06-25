@@ -122,6 +122,8 @@ def _summary(
 
 
 def _candidate(**overrides) -> AccumulationCandidate:
+    if "score" in overrides:
+        overrides["accum_score"] = overrides.pop("score")
     values = {
         "ticker": "BBCA",
         "window_days": 7,
@@ -135,7 +137,7 @@ def _candidate(**overrides) -> AccumulationCandidate:
         "vwap_discount_pct": 3.0,
         "rsi": 55.0,
         "trend": "SIDE",
-        "score": 70.0,
+        "accum_score": 70.0,
         "top_brokers": None,
         "institutional_flag": False,
         "avg_flow_ratio": 5.0,
