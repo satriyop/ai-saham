@@ -58,7 +58,7 @@ def _make_entry(
     flow_pct: Decimal | None = Decimal("18"),
     bb_pctile: Decimal | None = Decimal("0.15"),
     entry_price: Decimal = Decimal("4840"),
-    classification: str | None = None,
+    setup_match: str | None = None,
 ) -> AccumulationJournalEntry:
     return AccumulationJournalEntry(
         logged_at=logged_at,
@@ -73,14 +73,14 @@ def _make_entry(
         rsi=Decimal("42.0"),
         trend="SIDE",
         pattern=pattern,
-        preset="foreign-bounce" if classification else None,
-        classification=classification,
-        failed_gates=("trend: DOWN (required SIDE)",) if classification == "WATCH" else (),
-        regime="SIDEWAYS" if classification else None,
-        planned_entry=entry_price if classification else None,
-        planned_stop=Decimal("4598") if classification else None,
-        planned_target=Decimal("5082") if classification else None,
-        max_hold_days=10 if classification else None,
+        setup="foreign-bounce" if setup_match else None,
+        setup_match=setup_match,
+        failed_gates=("trend: DOWN (required SIDE)",) if setup_match == "PARTIAL" else (),
+        regime="SIDEWAYS" if setup_match else None,
+        planned_entry=entry_price if setup_match else None,
+        planned_stop=Decimal("4598") if setup_match else None,
+        planned_target=Decimal("5082") if setup_match else None,
+        max_hold_days=10 if setup_match else None,
         actual_close_5d=actual_close_5d,
         actual_close_10d=actual_close_10d,
         actual_close_20d=actual_close_20d,
@@ -232,8 +232,8 @@ class TestLogCandidate:
             window_days=7,
             candidate=_make_candidate(),
             logged_at=date(2026, 5, 1),
-            preset="foreign-bounce",
-            classification="WATCH",
+            setup="foreign-bounce",
+            setup_match="PARTIAL",
             failed_gates=("trend: DOWN (required SIDE)",),
             regime="SIDEWAYS",
             planned_entry=Decimal("4840"),
@@ -243,8 +243,8 @@ class TestLogCandidate:
         )
 
         entry: AccumulationJournalEntry = store.append.call_args[0][0][0]
-        assert entry.preset == "foreign-bounce"
-        assert entry.classification == "WATCH"
+        assert entry.setup == "foreign-bounce"
+        assert entry.setup_match == "PARTIAL"
         assert entry.failed_gates == ("trend: DOWN (required SIDE)",)
         assert entry.regime == "SIDEWAYS"
         assert entry.planned_entry == Decimal("4840")
@@ -281,18 +281,18 @@ class TestReviewEmptyAndShortCircuit:
         repo.get_candles.assert_not_called()
         store.update_review_fields.assert_not_called()
 
-    def test_review_groups_enriched_entries_by_preset_decision(self):
+    def test_review_groups_enriched_entries_by_setup_match(self):
         entries = [
             _make_entry(
                 ticker="AAA",
-                classification="ENTER",
+                setup_match="MATCH",
                 actual_close_10d=Decimal("5324"),
                 max_close=Decimal("5400"),
                 min_close=Decimal("4800"),
             ),
             _make_entry(
                 ticker="BBB",
-                classification="WATCH",
+                setup_match="PARTIAL",
                 actual_close_10d=Decimal("4598"),
                 max_close=Decimal("4900"),
                 min_close=Decimal("4500"),
@@ -305,10 +305,10 @@ class TestReviewEmptyAndShortCircuit:
         report = service.review()
 
         by_decision = {stat.decision: stat for stat in report.by_decision}
-        assert by_decision["ENTER"].avg_return_10d == 10.0
-        assert by_decision["ENTER"].win_rate_10d == 100.0
-        assert by_decision["WATCH"].avg_return_10d == -5.0
-        assert by_decision["WATCH"].win_rate_10d == 0.0
+        assert by_decision["MATCH"].avg_return_10d == 10.0
+        assert by_decision["MATCH"].win_rate_10d == 100.0
+        assert by_decision["PARTIAL"].avg_return_10d == -5.0
+        assert by_decision["PARTIAL"].win_rate_10d == 0.0
 
     def test_review_does_not_call_update_when_no_new_enrichment(self):
         """All entries lack data but candles are also unavailable."""

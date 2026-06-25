@@ -31,8 +31,8 @@ class AccumulationJournalEntry:
     rsi: Decimal | None
     trend: str | None
     pattern: str | None
-    preset: str | None = None
-    classification: str | None = None
+    setup: str | None = None
+    setup_match: str | None = None
     failed_gates: tuple[str, ...] = ()
     regime: str | None = None
     planned_entry: Decimal | None = None

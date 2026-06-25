@@ -103,8 +103,8 @@ class AccumulationJournalService:
         candidate: AccumulationCandidate | None,
         logged_at: date,
         pattern: str | None = None,
-        preset: str | None = None,
-        classification: str | None = None,
+        setup: str | None = None,
+        setup_match: str | None = None,
         failed_gates: tuple[str, ...] = (),
         regime: str | None = None,
         planned_entry: Decimal | None = None,
@@ -141,8 +141,8 @@ class AccumulationJournalService:
             rsi=_d(candidate.rsi) if candidate else None,
             trend=candidate.trend if candidate else None,
             pattern=pattern,
-            preset=preset,
-            classification=classification,
+            setup=setup,
+            setup_match=setup_match,
             failed_gates=failed_gates,
             regime=regime,
             planned_entry=planned_entry,
@@ -235,8 +235,8 @@ class AccumulationJournalService:
             rsi=entry.rsi,
             trend=entry.trend,
             pattern=entry.pattern,
-            preset=entry.preset,
-            classification=entry.classification,
+            setup=entry.setup,
+            setup_match=entry.setup_match,
             failed_gates=entry.failed_gates,
             regime=entry.regime,
             planned_entry=entry.planned_entry,
@@ -283,7 +283,7 @@ class AccumulationJournalService:
     ) -> list[DecisionStat]:
         decisions: dict[str, list[AccumulationJournalEntry]] = {}
         for e in entries:
-            key = e.classification or "unknown"
+            key = e.setup_match or "unknown"
             decisions.setdefault(key, []).append(e)
 
         result = []

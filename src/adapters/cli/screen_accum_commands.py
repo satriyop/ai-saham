@@ -62,7 +62,7 @@ _ASC = _load_accumulation_screener_config()
 DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 DEFAULT_ACCUM_DB_PATH = DEFAULT_DB_PATH  # alias kept for external imports
 
-FOREIGN_BOUNCE_PRESET = "foreign-bounce"
+FOREIGN_BOUNCE_SETUP = "foreign-bounce"
 
 # Backward-compat alias — callers use BrokerQualitySnapshot from Application layer.
 ScreenBrokerQuality = BrokerQualitySnapshot

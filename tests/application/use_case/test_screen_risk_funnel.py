@@ -262,7 +262,7 @@ def test_to_dict_includes_risk_fields_when_assessment_present():
         date=_TODAY, sma=Decimal("5000"), ema=Decimal("5000"), rsi=Decimal("50")
     )
     assessment = RiskAssessment(
-        profile=RiskProfile.BALANCED,
+        sensitivity=RiskProfile.BALANCED,
         risk_level=RiskLevel.HIGH_RISK,
         confidence=100,
         rationale=("F-score=1 ≤ 3 (distress threshold)",),

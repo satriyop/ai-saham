@@ -87,7 +87,7 @@ FREKUENSI        AKTIVITAS                           PERINTAH
 Setiap hari      Refresh data harga + broker flow    saham fetch market --universe lq45
 Setiap hari      Cek regime pasar                    saham analyze regime
 Setiap hari      Jalankan screener                   saham screen accum --universe lq45 --multi
-Per kandidat     Analisis detail + sizing            saham analyze swing TICKER --preset foreign-bounce
+Per kandidat     Analisis detail + sizing            saham analyze swing TICKER --setup foreign-bounce
 Saat entry       Log keputusan ke journal            saham trade log swing --ticker TICKER --from-analysis --with-regime
 Saat exit        Catat outcome                       (manual di journal)
 Mingguan         Review hit rate                     saham trade review swing --horizon 10
@@ -336,11 +336,22 @@ Setelah screener, pilih 2–4 saham untuk analisis detail. Prioritas:
 
 ## 7. Langkah 3 — Analisis Kandidat Terpilih
 
-Untuk setiap kandidat dari screener, jalankan analisis lengkap dengan preset `foreign-bounce`.
+Untuk setiap kandidat dari screener, jalankan analisis lengkap dengan setup yang sesuai. Default saat ini adalah `foreign-bounce`.
 
 ```bash
-saham analyze swing GGRM --preset foreign-bounce --capital 10000000 --with-regime
+saham analyze swing GGRM --setup foreign-bounce --capital 10000000 --with-regime
 ```
+
+### Katalog Setup
+
+Semua gate setup bersifat deterministik dan bisa diubah di `config/swing_screener.yaml`.
+
+| Setup | Dipakai Saat | Pertanyaan yang Dijawab |
+|-------|--------------|--------------------------|
+| `foreign-bounce` | Harga masih range/SIDE dan asing underwater | Apakah akumulasi asing cukup kuat untuk bounce dari area foreign VWAP? |
+| `coiled-spring` | Volatilitas rendah, BB width percentile kecil | Apakah akumulasi terjadi saat volatilitas terkompresi sebelum ekspansi? |
+| `smart-money-confirmed` | Data top broker detail tersedia | Apakah aliran broker didominasi smart money, bukan noise flow? |
+| `pullback-continuation` | Tren sudah UP dan sedang pullback ringan | Apakah pullback masih sehat dan didukung foreign flow? |
 
 Secara default, command ini akan mengecek dan refresh data harga + broker flow hanya untuk ticker tersebut kalau cache lokal stale atau belum ada. Gunakan `--no-refresh` untuk mode cached-only/offline, atau `--force-refresh` kalau ingin memaksa fetch ulang dari provider.
 
@@ -376,7 +387,7 @@ BROKER DETAIL (5/5 sessions)            through: 2026-06-12 · stockbit
   Concentration    top buyer 38.0%; top seller 41.6%
   Quality          broad accumulation; smart support
 
-PRESET — foreign-bounce                            final: ENTER
+SETUP — foreign-bounce                             match: MATCH
   PASS            score           actual=72.4       required=>= 70
   PASS            vwap_disc_pct   actual=+3.2%      required=>= +3%
   PASS            trend           actual=SIDE        required=SIDE
@@ -394,7 +405,7 @@ RISK CONFIRMATION                                 verdict: LOW_RISK  conf: 71/10
   · MAs are aligned — bullish structure
   · RSI below 50 — room to run
 
-PRESET SIZING
+SETUP SIZING
   Entry    47,100   Stop  44,745  (-5.00%)   Target   49,455  (+5.00%)
   Position  2 lots = 200 shares   Cost  9,420,000 IDR  (94.2% of capital)
   Risk        94,000 IDR   Max hold  10 trading days
@@ -420,14 +431,14 @@ PLAN:  ENTER setup passed. Consider 2 lots at 47,100; TP 49,455; SL 44,745; max 
 - `Smart flow` / `Noise flow` mengklasifikasikan semua top-broker row yang tersedia di summary Stockbit, termasuk broker lokal kalau Stockbit mengembalikannya.
 - Tier broker deterministik: `AK`, `BK`, `KZ`, `ZP`, `RX`, `MS`, `DB`, `CS`, `ML`, `YU` bobot lebih tinggi; `YP`, `PD`, `XL`, `XC` bobot noise lebih rendah.
 - Kalau kode broker tidak muncul, artinya tidak ada di top-broker row yang tersimpan, bukan berarti aktivitas broker itu nol.
-- `Weighted net` masih layer pengukuran saja. Belum mengubah gate `ENTER/WATCH/AVOID`.
-- Catatan `Broker quality` di bawah preset adalah konteks konfirmasi/warning saja. `smart+` bisa mendukung `ENTER` atau memprioritaskan `WATCH`, sedangkan `noise+` atau `smart-` berarti chart harus lebih kuat atau setup tidak boleh di-upgrade.
+- `Weighted net` masih layer pengukuran saja. Belum mengubah gate `MATCH/PARTIAL/NO_MATCH`.
+- Catatan `Broker quality` di bawah setup adalah konteks konfirmasi/warning saja. `smart+` bisa mendukung `ENTER` atau memprioritaskan `WATCH`, sedangkan `noise+` atau `smart-` berarti chart harus lebih kuat atau setup tidak boleh di-upgrade.
 
 ---
 
 ### Membaca Gate `foreign-bounce`
 
-Preset `foreign-bounce` mengevaluasi **6 gate** secara deterministik:
+Setup `foreign-bounce` mengevaluasi **6 gate** secara deterministik:
 
 | Gate | Requirement | Rationale |
 |------|-------------|-----------|
@@ -439,11 +450,11 @@ Preset `foreign-bounce` mengevaluasi **6 gate** secara deterministik:
 | `rsi ≤ 60` | RSI tidak overbought | Masih ada ruang naik |
 
 **Output gate:**
-- `ENTER` — semua 6 gate pass
-- `WATCH` — skor ≥ 70 ATAU ≤ 2 gate gagal — monitor, mungkin masuk besok
-- `AVOID` — terlalu banyak gate gagal
+- `MATCH` — semua gate setup pass
+- `PARTIAL` — setup hampir cocok, tetapi masih ada gate gagal dalam batas toleransi
+- `NO_MATCH` — terlalu banyak gate gagal atau evidence wajib tidak tersedia
 
-**Regime-adaptive TP/SL:** TP dan SL preset bervariasi berdasarkan regime entry, di-load dari `config/swing_screener.yaml`:
+**Regime-adaptive TP/SL:** TP dan SL setup bervariasi berdasarkan regime entry, di-load dari `config/swing_screener.yaml`:
 
 | Regime | TP | SL | R:R |
 |--------|----|----|-----|
@@ -456,20 +467,20 @@ Preset `foreign-bounce` mengevaluasi **6 gate** secara deterministik:
 ### Opsi Analisis Lainnya
 
 ```bash
-# Tanpa preset — analisis lengkap dengan profil risiko
+# Tanpa setup — analisis lengkap dengan profil risiko
 saham analyze swing BBRI --profile conservative --capital 10000000
 
 # Aggressive profile dengan ATR stop lebih longgar
 saham analyze swing BBRI --profile aggressive --capital 10000000 --atr-mult 2.0
 
 # Dengan custom entry price
-saham analyze swing BBRI --preset foreign-bounce --capital 10000000 --entry 4825
+saham analyze swing BBRI --setup foreign-bounce --capital 10000000 --entry 4825
 
 # Tanpa backtest (lebih cepat)
-saham analyze swing BBRI --preset foreign-bounce --no-backtest
+saham analyze swing BBRI --setup foreign-bounce --no-backtest
 
 # Format JSON (untuk integrasi)
-saham analyze swing BBRI --preset foreign-bounce --format json
+saham analyze swing BBRI --setup foreign-bounce --format json
 ```
 
 ---
@@ -590,7 +601,7 @@ Pasang stop segera setelah order terisi. Untuk swing, dua pilihan:
 | Tipe Stop | Formula | Kapan Digunakan |
 |-----------|---------|----------------|
 | **ATR Stop** | `entry - (ATR × mult)` | Default — mengikuti volatilitas saham |
-| **Preset Stop** | `-5%` dari entry | Quick alternative, konsisten dengan backtest |
+| **Setup Stop** | `-5%` dari entry | Quick alternative, konsisten dengan backtest |
 | **Structural Stop** | Bawah support terdekat | Kalau ada level teknikal yang jelas |
 
 Jangan geser stop ke bawah. Boleh geser ke atas (trailing) setelah harga bergerak menguntungkan.
@@ -636,7 +647,7 @@ saham view broker flow GGRM --days 5
 
 ### Log Keputusan ke Journal
 
-Catat setiap kandidat yang kamu analisis (bukan hanya yang kamu masuki), tetapi simpan juga keputusan preset dan rencana trade. Ini membuat review bisa membedakan setup `ENTER`, `WATCH`, dan `AVOID`.
+Catat setiap kandidat yang kamu analisis (bukan hanya yang kamu masuki), tetapi simpan juga ringkasan setup dan rencana trade. Ini membuat review bisa membedakan setup `MATCH`, `PARTIAL`, dan `NO_MATCH`.
 
 ```bash
 saham trade log swing --ticker GGRM --window 7 --from-analysis --with-regime
@@ -649,12 +660,12 @@ Dengan `--from-analysis`, journal menyimpan:
 
 | Field | Isi |
 |-------|-----|
-| `preset` | Nama preset, saat ini `foreign-bounce` |
-| `classification` | `ENTER`, `WATCH`, atau `AVOID` |
+| `setup` | Nama setup, saat ini `foreign-bounce` |
+| `setup_match` | `MATCH`, `PARTIAL`, atau `NO_MATCH` |
 | `failed_gates` | Gate yang gagal, misalnya VWAP atau trend |
 | `regime` | Regime pasar jika memakai `--with-regime` |
-| `planned_entry`, `planned_stop`, `planned_target` | Rencana harga dari preset |
-| `max_hold_days` | Batas hold preset, saat ini 10 hari trading |
+| `planned_entry`, `planned_stop`, `planned_target` | Rencana harga dari setup |
+| `max_hold_days` | Batas hold setup, saat ini 10 hari trading |
 
 ### Review Performa Strategi
 
@@ -682,7 +693,7 @@ PERFORMANCE BY SCORE BUCKET
   Score 40–69   8    +1.1%     +1.8%           50%
   Score 0–39    5    -0.8%     -2.1%           40%
 
-PERFORMANCE BY PRESET DECISION
+PERFORMANCE BY SETUP MATCH
   DECISION       N   AVG_10D   WIN_RATE  AVG_MAX_UP   AVG_MAX_DD
   --------------------------------------------------------------
   ENTER          8    +5.4%       62%       +8.9%       -3.8%
@@ -729,7 +740,7 @@ Contoh output:
 ══════════════════════════════════════════════════════════════════════════════
 WALK-FORWARD SWING BACKTEST
 ══════════════════════════════════════════════════════════════════════════════
-Preset: foreign-bounce | Period: 2025-01-01 to 2026-06-13
+Setup: foreign-bounce | Period: 2025-01-01 to 2026-06-13
 Cost: 20 bps one-way, applied on entry and exit
 Read as: the workflow scans each replay date, opens eligible signals within
 portfolio limits, then exits by TP/SL/max-hold.
@@ -761,7 +772,7 @@ WEAK               7     -0.8%       43%      -1,200,000
 Sebelum `smart+`, `noise+`, atau `smart-` dijadikan gate, ukur dulu hasil historisnya:
 
 ```bash
-saham analyze accum-audit --universe lq45 --preset foreign-bounce --start 2026-01-01
+saham analyze accum-audit --universe lq45 --setup foreign-bounce --start 2026-01-01
 ```
 
 Output audit sekarang punya dimensi `broker_quality`:
@@ -775,7 +786,7 @@ Output audit sekarang punya dimensi `broker_quality`:
 | `mixed` | Ada detail broker, tapi tidak dominan jelas |
 | `no_detail` | Tidak ada top-broker detail di cache |
 
-Gunakan AVG10D, WIN10D, MAXUP, dan MAXDD untuk memutuskan apakah broker quality cukup kuat untuk tetap sebagai warning, menjadi downgrade, atau layak menjadi gate preset baru.
+Gunakan AVG10D, WIN10D, MAXUP, dan MAXDD untuk memutuskan apakah broker quality cukup kuat untuk tetap sebagai warning, menjadi downgrade, atau layak menjadi gate setup baru.
 
 ### Bandingkan Variant Regime Filter
 
@@ -809,8 +820,8 @@ Default backtest biaya adalah `--cost-bps 20` one-way, diterapkan saat entry dan
 
 | Parameter | Default | Keterangan |
 |-----------|---------|-----------|
-| `--take-profit` | 5.0% | Target preset |
-| `--stop-loss` | 5.0% | Stop preset |
+| `--take-profit` | 5.0% | Target setup |
+| `--stop-loss` | 5.0% | Stop setup |
 | `--max-hold` | 10 | Maks hari hold |
 | `--max-positions` | 5 | Posisi concurrent maksimal |
 | `--risk-pct` | 1.0% | Risk per trade |
@@ -835,7 +846,7 @@ Default backtest biaya adalah `--cost-bps 20` one-way, diterapkan saat entry dan
 ├──────────────────────────────────────────────────────────────────────┤
 │  PER KANDIDAT (5 menit/saham)                                         │
 │    saham analyze swing TICKER \                                       │
-│      --preset foreign-bounce \                                        │
+│      --setup foreign-bounce \                                        │
 │      --capital 10000000 \                                             │
 │      --with-regime                                                    │
 ├──────────────────────────────────────────────────────────────────────┤
@@ -874,7 +885,7 @@ Default backtest biaya adalah `--cost-bps 20` one-way, diterapkan saat entry dan
 ├──────────────────────────────────────────────────────────────────────┤
 │  REGIME-ADAPTIVE TP/SL                                                  │
 │    BULLISH: TP+8% / SL-4% (2:1 R:R)                                    │
-│    SIDEWAYS: TP+5% / SL-5% (1:1 R:R) — default dalam preset            │
+│    SIDEWAYS: TP+5% / SL-5% (1:1 R:R) — default dalam setup            │
 │    WEAK: TP+3% / SL-3%                                                  │
 │    RISK_OFF: TP+3% / SL-3%                                              │
 ├──────────────────────────────────────────────────────────────────────┤
@@ -907,7 +918,7 @@ saham view broker flow BBCA --days 7
 
 Artinya satu gate spesifik gagal. Cek detail:
 ```bash
-saham analyze swing TICKER --preset foreign-bounce
+saham analyze swing TICKER --setup foreign-bounce
 ```
 
 Lihat gate mana yang `✗ FAIL` dan alasannya:

@@ -40,9 +40,9 @@ from src.domain.ports.market_data_repository import MarketDataRepository
 class SwingAnalysisWorkflowRequest:
     ticker: str
     today: date
-    profile: str
+    sensitivity: str
     strategy: str
-    preset_name: str | None
+    setup_name: str | None
     window: int
     flow_window: int
     capital: int | None
@@ -78,8 +78,8 @@ class SwingAnalysisWorkflowResponse:
     strategy_risk_name: str | None
     atr_value: Decimal | None
     sizing: SizingResult | None
-    preset_eval: Any | None
-    preset_sizing: PercentSizingResult | None
+    setup_eval: Any | None
+    setup_sizing: PercentSizingResult | None
     broker_quality_note: Any | None
     backtest_result: Any | None
     sentiment_response: Any | None
@@ -106,11 +106,11 @@ class SwingAnalysisWorkflowUseCase:
         build_flow_detail: Callable[..., Any],
         build_broker_detail: Callable[..., Any],
         build_accumulation_candidate: Callable[..., Any | None],
-        evaluate_preset: Callable[..., Any | None],
+        evaluate_setup: Callable[..., Any | None],
         build_broker_quality_note: Callable[..., Any | None],
         fetch_sentiment: Callable[..., tuple[Any | None, str | None]],
         load_swing_config: Callable[[], dict],
-        resolve_preset_targets: Callable[[str | None, dict], tuple[Decimal, Decimal]],
+        resolve_setup_targets: Callable[[str | None, dict], tuple[Decimal, Decimal]],
         structural_gates: list[RiskGate] | None = None,
         execution_gates: list[RiskGate] | None = None,
         signal_engine: "SignalEngine | None" = None,
@@ -123,11 +123,11 @@ class SwingAnalysisWorkflowUseCase:
         self._build_flow_detail = build_flow_detail
         self._build_broker_detail = build_broker_detail
         self._build_accumulation_candidate = build_accumulation_candidate
-        self._evaluate_preset = evaluate_preset
+        self._evaluate_setup = evaluate_setup
         self._build_broker_quality_note = build_broker_quality_note
         self._fetch_sentiment = fetch_sentiment
         self._load_swing_config = load_swing_config
-        self._resolve_preset_targets = resolve_preset_targets
+        self._resolve_setup_targets = resolve_setup_targets
         self._structural_gates: list[RiskGate] = structural_gates or []
         self._execution_gates: list[RiskGate] = execution_gates or []
         self._signal_engine = signal_engine
@@ -205,7 +205,7 @@ class SwingAnalysisWorkflowUseCase:
             risk_response = risk_use_case.execute(
                 AssessRiskRequest(
                     ticker=request.ticker,
-                    profile=request.profile,
+                    sensitivity=request.sensitivity,
                     gate_context=gate_ctx,
                 )
             )
@@ -281,24 +281,24 @@ class SwingAnalysisWorkflowUseCase:
 
         atr_value = self._compute_atr(candles)
         sizing: SizingResult | None = None
-        preset_eval = None
-        preset_sizing: PercentSizingResult | None = None
-        if request.preset_name is not None:
-            preset_eval = self._evaluate_preset(accumulation_candidate)
+        setup_eval = None
+        setup_sizing: PercentSizingResult | None = None
+        if request.setup_name is not None:
+            setup_eval = self._evaluate_setup(accumulation_candidate)
 
         broker_quality_note = self._build_broker_quality_note(
             broker_detail=broker_detail,
-            preset_eval=preset_eval,
+            setup_eval=setup_eval,
         )
 
-        preset_entry: Decimal | None = None
-        if request.capital is not None and preset_eval is not None and preset_eval.passed:
-            preset_entry = (
+        setup_entry: Decimal | None = None
+        if request.capital is not None and setup_eval is not None and setup_eval.passed:
+            setup_entry = (
                 Decimal(str(request.entry_price))
                 if request.entry_price
                 else latest_close
             )
-        elif request.capital is not None and atr_value and preset_eval is None:
+        elif request.capital is not None and atr_value and setup_eval is None:
             try:
                 entry = (
                     Decimal(str(request.entry_price))
@@ -372,21 +372,21 @@ class SwingAnalysisWorkflowUseCase:
 
         swing_config = self._load_swing_config()
         regime_label = market_regime.regime.value if market_regime else None
-        take_profit_pct, stop_loss_pct = self._resolve_preset_targets(
+        take_profit_pct, stop_loss_pct = self._resolve_setup_targets(
             regime_label,
             swing_config,
         )
-        if preset_entry is not None and request.capital is not None:
+        if setup_entry is not None and request.capital is not None:
             try:
-                preset_sizing = compute_percent_position_size(
-                    entry=preset_entry,
+                setup_sizing = compute_percent_position_size(
+                    entry=setup_entry,
                     capital=Decimal(str(request.capital)),
                     risk_pct=Decimal(str(request.risk_pct)) / Decimal("100"),
                     stop_loss_pct=stop_loss_pct,
                     take_profit_pct=take_profit_pct,
                 )
             except ValueError as exc:
-                warnings.append(f"Preset sizing unavailable: {exc}")
+                warnings.append(f"Setup sizing unavailable: {exc}")
 
         return SwingAnalysisWorkflowResponse(
             ticker=request.ticker,
@@ -403,8 +403,8 @@ class SwingAnalysisWorkflowUseCase:
             strategy_risk_name=strategy_risk_name,
             atr_value=atr_value,
             sizing=sizing,
-            preset_eval=preset_eval,
-            preset_sizing=preset_sizing,
+            setup_eval=setup_eval,
+            setup_sizing=setup_sizing,
             broker_quality_note=broker_quality_note,
             backtest_result=backtest_result,
             sentiment_response=sentiment_response,

@@ -36,7 +36,7 @@ def make_snapshot() -> IndicatorSnapshot:
 def make_assessment(snapshot: IndicatorSnapshot) -> RiskAssessment:
     """Create test assessment."""
     return RiskAssessment(
-        profile=RiskProfile.BALANCED,
+        sensitivity=RiskProfile.BALANCED,
         risk_level=RiskLevel.MODERATE,
         confidence=50,
         rationale=("Test",),

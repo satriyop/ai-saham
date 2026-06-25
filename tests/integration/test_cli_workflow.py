@@ -562,7 +562,7 @@ class TestCLIRiskAssessment:
             [
                 "analyze", "risk",
                 "RISK_TEST",
-                "--profile",
+                "--sensitivity",
                 "balanced",
                 "--db",
                 str(db_path),

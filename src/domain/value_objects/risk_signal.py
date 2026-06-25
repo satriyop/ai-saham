@@ -1,7 +1,7 @@
 """
 Risk signal value objects.
 
-Defines enumerations for risk levels and risk profiles used
+Defines enumerations for risk levels and signal sensitivities used
 throughout the risk assessment domain.
 
 Layer: Domain
@@ -23,11 +23,14 @@ class RiskLevel(Enum):
     LOW_RISK = "low_risk"
 
 
-class RiskProfile(Enum):
+class SignalSensitivity(Enum):
     """
-    Risk profile for rule selection.
+    Signal sensitivity preset for rule selection.
 
-    Determines which rule thresholds and logic to apply:
+    Controls how easily the technical screener triggers — not investor
+    risk tolerance. CONSERVATIVE requires both indicators to agree before
+    flagging a condition; AGGRESSIVE fires on either indicator alone.
+
     - CONSERVATIVE: Strictest thresholds, requires indicator agreement
     - BALANCED: Moderate thresholds, majority rules
     - AGGRESSIVE: Widest thresholds, either indicator can signal
@@ -38,22 +41,26 @@ class RiskProfile(Enum):
     AGGRESSIVE = "aggressive"
 
     @classmethod
-    def from_string(cls, value: str) -> "RiskProfile":
+    def from_string(cls, value: str) -> "SignalSensitivity":
         """
-        Create RiskProfile from string value.
+        Create SignalSensitivity from string value.
 
         Args:
-            value: Profile name (case-insensitive)
+            value: Sensitivity name (case-insensitive)
 
         Returns:
-            Matching RiskProfile enum
+            Matching SignalSensitivity enum
 
         Raises:
-            ValueError: If value doesn't match any profile
+            ValueError: If value doesn't match any sensitivity preset
         """
         normalized = value.lower().strip()
-        for profile in cls:
-            if profile.value == normalized:
-                return profile
+        for preset in cls:
+            if preset.value == normalized:
+                return preset
         valid = [p.value for p in cls]
-        raise ValueError(f"Invalid profile '{value}'. Must be one of: {valid}")
+        raise ValueError(f"Invalid sensitivity '{value}'. Must be one of: {valid}")
+
+
+# Backwards-compatibility alias — prefer SignalSensitivity in new code
+RiskProfile = SignalSensitivity

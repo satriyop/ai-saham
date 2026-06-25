@@ -15,7 +15,7 @@ from src.domain.rules.base_rule import BaseRule
 from src.domain.rules.conservative import ConservativeRuleSet
 from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 from src.domain.value_objects.risk_assessment import RiskAssessment
-from src.domain.value_objects.risk_signal import RiskProfile
+from src.domain.value_objects.risk_signal import SignalSensitivity
 
 if TYPE_CHECKING:
     from src.application.rules.interpreter import YamlRuleInterpreter
@@ -23,10 +23,10 @@ if TYPE_CHECKING:
 
 class RuleEngine:
     """
-    Orchestrates risk evaluation using profile-specific rule sets.
+    Orchestrates rule evaluation using sensitivity-preset-specific rule sets.
 
     Responsible for:
-        1. Selecting the appropriate rule set based on profile
+        1. Selecting the appropriate rule set based on signal sensitivity preset
         2. Evaluating indicator snapshots against the selected rules
         3. Producing immutable RiskAssessment value objects
         4. Supporting custom YAML-based rules via register_custom_rules()
@@ -34,12 +34,20 @@ class RuleEngine:
     This is a pure domain service with no I/O dependencies.
     """
 
-    def __init__(self) -> None:
-        """Initialize rule sets for all profiles."""
-        self._rule_sets: dict[RiskProfile, BaseRule] = {
-            RiskProfile.CONSERVATIVE: ConservativeRuleSet(),
-            RiskProfile.BALANCED: BalancedRuleSet(),
-            RiskProfile.AGGRESSIVE: AggressiveRuleSet(),
+    def __init__(
+        self,
+        rule_sets: "dict[SignalSensitivity, BaseRule] | None" = None,
+    ) -> None:
+        """Initialize rule sets for all signal sensitivity presets.
+
+        Args:
+            rule_sets: Optional pre-built rule sets with custom thresholds.
+                       If None, defaults are used (hardcoded IDX-conventional values).
+        """
+        self._rule_sets: dict[SignalSensitivity, BaseRule] = rule_sets if rule_sets is not None else {
+            SignalSensitivity.CONSERVATIVE: ConservativeRuleSet(),
+            SignalSensitivity.BALANCED: BalancedRuleSet(),
+            SignalSensitivity.AGGRESSIVE: AggressiveRuleSet(),
         }
         self._custom_interpreter: "YamlRuleInterpreter | None" = None
 
@@ -82,9 +90,9 @@ class RuleEngine:
         # Evaluate using the custom interpreter
         risk_level, confidence, rationale = self._custom_interpreter.evaluate(snapshot)
 
-        # Create RiskAssessment with string profile (not RiskProfile enum)
+        # Create RiskAssessment with string profile (not SignalSensitivity enum)
         return RiskAssessment(
-            profile=self._custom_interpreter.profile_name,  # String, not enum
+            sensitivity=self._custom_interpreter.profile_name,  # String, not enum
             risk_level=risk_level,
             confidence=confidence,
             rationale=tuple(rationale),
@@ -95,14 +103,14 @@ class RuleEngine:
     def evaluate(
         self,
         snapshot: IndicatorSnapshot,
-        profile: RiskProfile | str,
+        profile: SignalSensitivity | str,
     ) -> RiskAssessment:
         """
         Evaluate a snapshot against a specific risk profile.
 
         Args:
             snapshot: IndicatorSnapshot containing SMA, EMA, RSI values
-            profile: RiskProfile enum or string (e.g., "balanced")
+            profile: SignalSensitivity enum or string (e.g., "balanced")
 
         Returns:
             RiskAssessment containing risk level, confidence, and rationale
@@ -112,7 +120,7 @@ class RuleEngine:
         """
         # Convert string to enum if needed
         if isinstance(profile, str):
-            profile = RiskProfile.from_string(profile)
+            profile = SignalSensitivity.from_string(profile)
 
         # Get the appropriate rule set
         rule_set = self._rule_sets[profile]
@@ -122,7 +130,7 @@ class RuleEngine:
 
         # Create immutable RiskAssessment
         return RiskAssessment(
-            profile=profile,
+            sensitivity=profile,
             risk_level=risk_level,
             confidence=confidence,
             rationale=tuple(rationale),  # Convert to tuple for immutability
@@ -147,12 +155,17 @@ class RuleEngine:
             (ordered: conservative, balanced, aggressive)
         """
         return [
-            self.evaluate(snapshot, RiskProfile.CONSERVATIVE),
-            self.evaluate(snapshot, RiskProfile.BALANCED),
-            self.evaluate(snapshot, RiskProfile.AGGRESSIVE),
+            self.evaluate(snapshot, SignalSensitivity.CONSERVATIVE),
+            self.evaluate(snapshot, SignalSensitivity.BALANCED),
+            self.evaluate(snapshot, SignalSensitivity.AGGRESSIVE),
         ]
 
     @property
+    def available_sensitivities(self) -> list[str]:
+        """Return list of available signal sensitivity preset names."""
+        return [p.value for p in SignalSensitivity]
+
+    # Backwards-compatibility alias
+    @property
     def available_profiles(self) -> list[str]:
-        """Return list of available profile names."""
-        return [p.value for p in RiskProfile]
+        return self.available_sensitivities

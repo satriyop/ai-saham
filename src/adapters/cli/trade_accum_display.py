@@ -93,7 +93,7 @@ def display_journal_review(
         )
     )
 
-    # 3. Performance By Preset Decision
+    # 3. Performance By Setup Match
     if report.by_decision:
         decision_table = compact_table()
         decision_table.add_column("Decision", style="bold cyan")
@@ -117,7 +117,7 @@ def display_journal_review(
         console().print(
             panel(
                 decision_table,
-                title="PERFORMANCE BY PRESET DECISION"
+                title="PERFORMANCE BY SETUP MATCH"
             )
         )
 

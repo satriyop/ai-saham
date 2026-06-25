@@ -2024,7 +2024,10 @@ saham screen accum --universe lq45 --save morning-watch
 Replay accumulation signals historically and measure forward returns:
 
 ```bash
-saham analyze accum-audit --universe idx80 --preset foreign-bounce
+saham analyze accum-audit --universe idx80 --setup foreign-bounce
+saham analyze accum-audit --universe idx80 --setup coiled-spring
+saham analyze accum-audit --universe idx80 --setup smart-money-confirmed
+saham analyze accum-audit --universe idx80 --setup pullback-continuation
 saham analyze accum-audit --universe lq45 --window 7 --min-score 70
 ```
 
@@ -2270,8 +2273,11 @@ saham analyze swing BBRI
 # With position sizing
 saham analyze swing BBRI --capital 10000000
 
-# With preset strategy gates
-saham analyze swing BBRI --preset foreign-bounce --capital 10000000
+# With setup gates
+saham analyze swing BBRI --setup foreign-bounce --capital 10000000
+saham analyze swing BBRI --setup coiled-spring --capital 10000000
+saham analyze swing BBRI --setup smart-money-confirmed --capital 10000000
+saham analyze swing BBRI --setup pullback-continuation --capital 10000000
 
 # Conservative profile, skip sentiment
 saham analyze swing BBRI --profile conservative --no-sentiment
@@ -2284,7 +2290,7 @@ saham analyze swing BBRI --with-regime
 |--------|-------|---------|-------------|
 | `--profile` | `-p` | balanced | Risk profile |
 | `--strategy` | `-S` | foreign-accumulation | Backtest strategy |
-| `--preset` | | | Swing preset: foreign-bounce |
+| `--setup` | | foreign-bounce | Swing setup: foreign-bounce, coiled-spring, smart-money-confirmed, pullback-continuation |
 | `--capital` | `-c` | | Capital (enables sizing) |
 | `--risk-pct` | | 1.0 | % of capital at risk |
 | `--no-sentiment` | | false | Skip sentiment |
@@ -2315,9 +2321,20 @@ Analysis commands are read-only — they never call external APIs.
 Walk-forward portfolio backtest for the swing workflow:
 
 ```bash
-saham trade backtest-swing --universe idx80 --preset foreign-bounce
+saham trade backtest-swing --universe idx80 --setup foreign-bounce
+saham trade backtest-swing --universe idx80 --setup coiled-spring
+saham trade backtest-swing --universe idx80 --setup pullback-continuation
 saham trade backtest-swing --universe lq45 --capital 50000000 --max-positions 3
 ```
+
+Setup gates are deterministic and configurable in `config/swing_screener.yaml`.
+
+| Setup | Question Answered |
+|-------|-------------------|
+| `foreign-bounce` | Foreign accumulation while price is still below foreign VWAP in a range |
+| `coiled-spring` | Accumulation plus compressed volatility before possible expansion |
+| `smart-money-confirmed` | Smart-money broker flow dominates noise flow |
+| `pullback-continuation` | Uptrend pullback still has foreign-flow support and RSI headroom |
 
 ### Swing Compare
 
@@ -2689,7 +2706,7 @@ saham strategy backtest BBCA --strategy my_flow_strategy
 | `saham screen accum` | Foreign accumulation screener (SignalAssessment 0–100) | `--universe`, `--window`, `--multi`, `--format`, `--breakdown`, `--save` |
 | `saham screen watchlist` | List saved watchlists / show tickers in a named one | — |
 | `saham screen compare NAME` | Diff saved watchlist against fresh screener run | `--universe`, `--top` |
-| `saham analyze accum-audit` | Historical accumulation audit | `--universe`, `--preset`, `--simulate-exits` |
+| `saham analyze accum-audit` | Historical accumulation audit | `--universe`, `--setup`, `--simulate-exits` |
 | `saham screen pre-open` | Pre-open market screener | `--movers-json`, `--fast`, `--top` |
 | `saham trade confirm` | Confirm at opening auction | `--opening-json` |
 | `saham trade log --type TYPE` | Log a paper-trade decision | `--type` (swing or intraday) |
@@ -2697,8 +2714,8 @@ saham strategy backtest BBCA --strategy my_flow_strategy
 | `saham trade review swing` | Review accumulation trade journal | `--horizon`, `--min-score` |
 | `saham trade migrate-journal` | One-time CSV journal migration to JSONL | — |
 | `saham trade outcome` | Record actual trade outcome | `--entry`, `--exit`, `--result` |
-| `saham analyze swing TICKER` | Unified swing analysis | `--capital`, `--preset`, `--with-regime` |
-| `saham trade backtest-swing` | Portfolio walk-forward swing backtest | `--universe`, `--preset`, `--capital`, `--allow-regimes` |
+| `saham analyze swing TICKER` | Unified swing analysis | `--capital`, `--setup`, `--with-regime` |
+| `saham trade backtest-swing` | Portfolio walk-forward swing backtest | `--universe`, `--setup`, `--capital`, `--allow-regimes` |
 | `saham trade backtest-intraday` | Walk-forward intraday pre-open backtest | `--universe`, `--start`, `--end` |
 | `saham analyze swing-compare` | Compare regime variants | `--universe`, `--variants` |
 | `saham trade size TICKER` | ATR position sizing | `--capital`, `--risk-pct`, `--entry` |

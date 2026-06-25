@@ -20,6 +20,14 @@ from src.application.use_case.accumulation_screen_use_case import (
     AccumulationScreenUseCase,
 )
 from src.application.services.market_context_engine import MarketContextEngine
+from src.application.use_case.evaluate_swing_setup_use_case import (
+    AVAILABLE_SWING_SETUPS,
+    CoiledSpringSetupConfig,
+    ForeignBounceSetupConfig,
+    PullbackContinuationSetupConfig,
+    SmartMoneyConfirmedSetupConfig,
+    SwingSetupCatalogConfig,
+)
 from src.infrastructure.browser.stockbit_analyst import StockbitAnalystConsensusProvider
 from src.infrastructure.browser.stockbit_bandar import StockbitBandarDetectorProvider
 from src.infrastructure.browser.stockbit_corp_action import StockbitCorporateActionRepository
@@ -41,10 +49,51 @@ DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 DEFAULT_ACCUM_JOURNAL_PATH = Path(APP_CFG.storage.accum_journal)
 DEFAULT_TRADE_JOURNAL_PATH = Path(APP_CFG.storage.trade_journal)
 
-FOREIGN_BOUNCE_PRESET = "foreign-bounce"
+FOREIGN_BOUNCE_SETUP = "foreign-bounce"
 FOREIGN_BOUNCE_TAKE_PROFIT = Decimal("5")
 FOREIGN_BOUNCE_STOP_LOSS = Decimal("5")
 FOREIGN_BOUNCE_MAX_HOLD_DAYS = 10
+
+
+def _setup_config() -> SwingSetupCatalogConfig:
+    return SwingSetupCatalogConfig(
+        foreign_bounce=ForeignBounceSetupConfig(
+            enabled=_SC.foreign_bounce_enabled,
+            gate_min_score=_SC.gate_min_score,
+            gate_min_vwap_discount_pct=_SC.gate_min_vwap_discount_pct,
+            gate_required_trend=_SC.gate_required_trend,
+            gate_min_flow_ratio_pct=_SC.gate_min_flow_ratio_pct,
+            gate_max_rsi=_SC.gate_max_rsi,
+            partial_max_failed_gates=_SC.partial_max_failed_gates,
+        ),
+        coiled_spring=CoiledSpringSetupConfig(
+            enabled=_SC.coiled_spring_enabled,
+            gate_min_score=_SC.coiled_spring_gate_min_score,
+            gate_max_bb_width_pctile=_SC.coiled_spring_gate_max_bb_width_pctile,
+            gate_min_flow_ratio_pct=_SC.coiled_spring_gate_min_flow_ratio_pct,
+            gate_max_rsi=_SC.coiled_spring_gate_max_rsi,
+            partial_max_failed_gates=_SC.coiled_spring_partial_max_failed_gates,
+        ),
+        smart_money_confirmed=SmartMoneyConfirmedSetupConfig(
+            enabled=_SC.smart_money_confirmed_enabled,
+            gate_min_score=_SC.smart_money_confirmed_gate_min_score,
+            gate_min_smart_flow_idr=_SC.smart_money_confirmed_gate_min_smart_flow_idr,
+            gate_min_smart_share_pct=_SC.smart_money_confirmed_gate_min_smart_share_pct,
+            gate_max_noise_share_pct=_SC.smart_money_confirmed_gate_max_noise_share_pct,
+            reject_smart_net_selling=_SC.smart_money_confirmed_reject_smart_net_selling,
+            partial_max_failed_gates=_SC.smart_money_confirmed_partial_max_failed_gates,
+        ),
+        pullback_continuation=PullbackContinuationSetupConfig(
+            enabled=_SC.pullback_continuation_enabled,
+            gate_min_score=_SC.pullback_continuation_gate_min_score,
+            gate_required_trend=_SC.pullback_continuation_gate_required_trend,
+            gate_min_flow_ratio_pct=_SC.pullback_continuation_gate_min_flow_ratio_pct,
+            gate_min_rsi=_SC.pullback_continuation_gate_min_rsi,
+            gate_max_rsi=_SC.pullback_continuation_gate_max_rsi,
+            gate_min_vwap_discount_pct=_SC.pullback_continuation_gate_min_vwap_discount_pct,
+            partial_max_failed_gates=_SC.pullback_continuation_partial_max_failed_gates,
+        ),
+    )
 
 
 def _make_stockbit_providers(db_path: Path) -> StockbitProviders:
@@ -66,7 +115,7 @@ def _accumulation_log_impl(
     window: int,
     entry_price: Optional[float],
     from_analysis: bool,
-    preset: str,
+    setup: str,
     with_regime: bool,
     regime_universe: Optional[str],
     benchmark: str,
@@ -86,10 +135,10 @@ def _accumulation_log_impl(
 
     ticker_upper = ticker.upper()
     logged_at = date.today()
-    preset_name = preset.lower()
-    if from_analysis and preset_name != FOREIGN_BOUNCE_PRESET:
+    setup_name = setup.lower()
+    if from_analysis and setup_name not in AVAILABLE_SWING_SETUPS:
         typer.echo(
-            f"Unknown swing preset '{preset}'. Available presets: {FOREIGN_BOUNCE_PRESET}",
+            f"Unknown swing setup '{setup}'. Available setups: {', '.join(AVAILABLE_SWING_SETUPS)}",
             err=True,
         )
         raise typer.Exit(1)
@@ -139,7 +188,7 @@ def _accumulation_log_impl(
         window_days=window,
         entry_price=Decimal(str(entry_price)) if entry_price is not None else None,
         from_analysis=from_analysis,
-        preset=preset_name if from_analysis else None,
+        setup=setup_name if from_analysis else None,
         with_regime=with_regime,
         regime_universe=regime_tickers,
         benchmark_ticker=benchmark,
@@ -149,12 +198,7 @@ def _accumulation_log_impl(
         sector_breadth_threshold=_SC.sector_breadth_threshold,
         sector_breadth_bonus_pts=_SC.sector_breadth_bonus_pts,
         sector_breadth_min_tickers=_SC.sector_breadth_min_tickers,
-        gate_min_score=_SC.gate_min_score,
-        gate_min_vwap_discount_pct=_SC.gate_min_vwap_discount_pct,
-        gate_required_trend=_SC.gate_required_trend,
-        gate_min_flow_ratio_pct=_SC.gate_min_flow_ratio_pct,
-        gate_max_rsi=_SC.gate_max_rsi,
-        watch_max_failed_gates=_SC.watch_max_failed_gates,
+        setup_config=_setup_config(),
         take_profit_pct=FOREIGN_BOUNCE_TAKE_PROFIT,
         stop_loss_pct=FOREIGN_BOUNCE_STOP_LOSS,
         max_hold_days=FOREIGN_BOUNCE_MAX_HOLD_DAYS,
@@ -177,7 +221,7 @@ def _accumulation_log_impl(
     score_str = f"{result.candidate_score:.1f}" if result.candidate_score is not None else "0.0"
     pattern_str = f" | pattern: {result.pattern}" if result.pattern else ""
     decision_str = (
-        f" | preset={preset_name} | decision={result.classification}"
+        f" | setup={setup_name} | match={result.setup_match}"
         if from_analysis else ""
     )
     plan_str = (
@@ -214,13 +258,13 @@ def accumulation_log(
         bool,
         typer.Option(
             "--from-analysis",
-            help="Record preset decision, failed gates, and trade plan fields",
+            help="Record setup match, failed gates, and trade plan fields",
         ),
     ] = False,
-    preset: Annotated[
+    setup: Annotated[
         str,
-        typer.Option("--preset", help="Swing preset to journal with --from-analysis"),
-    ] = FOREIGN_BOUNCE_PRESET,
+        typer.Option("--setup", help="Swing setup to journal with --from-analysis"),
+    ] = FOREIGN_BOUNCE_SETUP,
     with_regime: Annotated[
         bool,
         typer.Option("--with-regime", help="Include market regime label in journal row"),
@@ -259,7 +303,7 @@ def accumulation_log(
         window=window,
         entry_price=entry_price,
         from_analysis=from_analysis,
-        preset=preset,
+        setup=setup,
         with_regime=with_regime,
         regime_universe=regime_universe,
         benchmark=benchmark,

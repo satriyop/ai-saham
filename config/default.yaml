@@ -44,7 +44,7 @@ broker:
 
 # ── Analysis ──────────────────────────────────────────────────────────────
 analysis:
-  risk_profile: balanced # conservative | balanced | aggressive
+  signal_sensitivity: balanced # conservative | balanced | aggressive
   benchmark: "^JKSE"     # benchmark ticker for regime / return comparison
   universe: lq45         # default universe for daily briefings
   regime_universe: idx80 # universe used for market regime detection

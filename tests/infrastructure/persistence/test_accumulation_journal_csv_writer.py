@@ -21,8 +21,8 @@ def _entry() -> AccumulationJournalEntry:
         rsi=Decimal("42"),
         trend="SIDE",
         pattern="building",
-        preset="foreign-bounce",
-        classification="WATCH",
+        setup="foreign-bounce",
+        setup_match="PARTIAL",
         failed_gates=("trend: DOWN (required SIDE)", "flow_pct: 2.0% (required >= +5%)"),
         regime="SIDEWAYS",
         planned_entry=Decimal("4840"),
@@ -41,8 +41,8 @@ def test_append_and_read_round_trips_analysis_decision_fields(tmp_path):
 
     assert len(rows) == 1
     row = rows[0]
-    assert row.preset == "foreign-bounce"
-    assert row.classification == "WATCH"
+    assert row.setup == "foreign-bounce"
+    assert row.setup_match == "PARTIAL"
     assert row.failed_gates == (
         "trend: DOWN (required SIDE)",
         "flow_pct: 2.0% (required >= +5%)",
@@ -54,8 +54,8 @@ def test_append_and_read_round_trips_analysis_decision_fields(tmp_path):
     assert row.max_hold_days == 10
 
 
-def test_read_all_accepts_legacy_csv_without_analysis_columns(tmp_path):
-    path = tmp_path / "legacy.csv"
+def test_read_all_accepts_csv_without_setup_columns(tmp_path):
+    path = tmp_path / "minimal.csv"
     path.write_text(
         "logged_at,ticker,entry_price,window_days,score,streak,flow_pct,"
         "vwap_disc_pct,bb_pctile,rsi,trend,pattern,actual_close_5d,"
@@ -68,8 +68,8 @@ def test_read_all_accepts_legacy_csv_without_analysis_columns(tmp_path):
     row = store.read_all()[0]
 
     assert row.ticker == "BBRI"
-    assert row.preset is None
-    assert row.classification is None
+    assert row.setup is None
+    assert row.setup_match is None
     assert row.failed_gates == ()
 
 
@@ -90,7 +90,7 @@ def test_update_review_fields_preserves_analysis_decision_fields(tmp_path):
     assert store.update_review_fields([enriched]) == 1
 
     row = store.read_all()[0]
-    assert row.classification == "WATCH"
+    assert row.setup_match == "PARTIAL"
     assert row.failed_gates == original.failed_gates
     assert row.planned_stop == Decimal("4598")
     assert row.actual_close_10d == Decimal("5082")

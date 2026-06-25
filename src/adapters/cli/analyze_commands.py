@@ -45,14 +45,14 @@ analyze_app.add_typer(chart_app, name="chart")
 from src.infrastructure.config.app_config import APP_CFG
 
 DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
-DEFAULT_RISK_PROFILE = APP_CFG.analysis.risk_profile
-VALID_PROFILES = ["conservative", "balanced", "aggressive"]
+DEFAULT_SIGNAL_SENSITIVITY = APP_CFG.analysis.signal_sensitivity
+VALID_SENSITIVITIES = ["conservative", "balanced", "aggressive"]
 
 
-def _validate_profile(value: str) -> str:
-    if value.lower() not in VALID_PROFILES:
+def _validate_sensitivity(value: str) -> str:
+    if value.lower() not in VALID_SENSITIVITIES:
         raise typer.BadParameter(
-            f"Invalid profile '{value}'. Must be one of: {', '.join(VALID_PROFILES)}"
+            f"Invalid sensitivity '{value}'. Must be one of: {', '.join(VALID_SENSITIVITIES)}"
         )
     return value.lower()
 
@@ -97,8 +97,8 @@ def risk(
     ticker: Annotated[str, typer.Argument(help="Stock ticker symbol (e.g., BBCA)")],
     profile: Annotated[
         str,
-        typer.Option("--profile", "-p", help="Risk profile (conservative/balanced/aggressive)", callback=_validate_profile),
-    ] = DEFAULT_RISK_PROFILE,
+        typer.Option("--sensitivity", "-p", help="Signal sensitivity (conservative/balanced/aggressive)", callback=_validate_sensitivity),
+    ] = DEFAULT_SIGNAL_SENSITIVITY,
     all_profiles: Annotated[bool, typer.Option("--all", "-a", help="Show assessment for all profiles")] = False,
     rules_file: Annotated[Optional[Path], typer.Option("--rules-file", "-r", help="Path to custom YAML rules file")] = None,
     sma_period: Annotated[int, typer.Option("--sma", help="SMA period", min=1)] = 20,
@@ -117,7 +117,7 @@ def risk(
     """
     Assess risk for an IDX stock based on technical indicators.
 
-    Uses deterministic, rule-based evaluation with configurable risk profiles:
+    Uses deterministic, rule-based evaluation with configurable signal sensitivity:
       conservative  Strict thresholds, both indicators must agree
       balanced      Standard thresholds, majority rules
       aggressive    Wide thresholds, either indicator can signal
@@ -129,7 +129,7 @@ def risk(
 
     Examples:
         saham analyze risk BBCA
-        saham analyze risk BBRI --profile conservative
+        saham analyze risk BBRI --sensitivity conservative
         saham analyze risk TLKM --all
         saham analyze risk BBCA --rules-file config/my_rules.yaml
         saham analyze risk BBCA --explain
@@ -168,7 +168,7 @@ def risk(
 
         request = AssessRiskRequest(
             ticker=ticker,
-            profile=profile,
+            sensitivity=profile,
             sma_period=sma_period,
             ema_period=ema_period,
             rsi_period=rsi_period,
@@ -193,7 +193,7 @@ def risk(
             typer.echo("─" * 40)
             for assessment in response.assessments:
                 typer.echo(
-                    f"{assessment.profile_name:<14} {assessment.risk_level_name:<12} {assessment.confidence}/100"
+                    f"{assessment.sensitivity_name:<14} {assessment.risk_level_name:<12} {assessment.confidence}/100"
                 )
 
         else:
@@ -207,7 +207,7 @@ def risk(
                     "ticker": response.ticker,
                     "risk_level": assessment.risk_level_name,
                     "confidence": assessment.confidence,
-                    "profile": response.profile,
+                    "sensitivity": response.sensitivity,
                     "rationale": assessment.rationale_list,
                     "indicators": {
                         f"sma_{response.sma_period}": float(snapshot.sma),
@@ -218,7 +218,7 @@ def risk(
                 return
 
             typer.echo(f"\n{'='*50}")
-            typer.echo(f" Risk Assessment  ·  {response.ticker}  ·  {response.profile}")
+            typer.echo(f" Risk Assessment  ·  {response.ticker}  ·  {response.sensitivity}")
             typer.echo(f"{'='*50}\n")
             typer.echo(f"Data Date: {assessment.snapshot_date}")
 
@@ -308,8 +308,8 @@ def compare(
     tickers: Annotated[list[str], typer.Argument(help="Two or more tickers to compare (e.g., BBCA BBRI BMRI)")],
     profile: Annotated[
         str,
-        typer.Option("--profile", "-p", help="Risk profile (conservative/balanced/aggressive)", callback=_validate_profile),
-    ] = DEFAULT_RISK_PROFILE,
+        typer.Option("--sensitivity", "-p", help="Signal sensitivity (conservative/balanced/aggressive)", callback=_validate_sensitivity),
+    ] = DEFAULT_SIGNAL_SENSITIVITY,
     sma_period: Annotated[int, typer.Option("--sma", help="SMA period", min=1)] = 20,
     rsi_period: Annotated[int, typer.Option("--rsi", help="RSI period", min=1)] = 14,
     days: Annotated[int, typer.Option("--days", "-d", help="Days of history", min=30)] = 365,
@@ -322,7 +322,7 @@ def compare(
 
     Examples:
         saham analyze compare BBCA BBRI BMRI
-        saham analyze compare BBCA TLKM --profile conservative
+        saham analyze compare BBCA TLKM --sensitivity conservative
     """
     if len(tickers) < 2:
         typer.echo("[error] Provide at least 2 tickers to compare.", err=True)
@@ -333,7 +333,7 @@ def compare(
     engine = create_risk_engine(resolved_db, with_enrichment=True)
 
     typer.echo(f"\n{'='*60}")
-    typer.echo(f" Risk Comparison  ·  Profile: {profile}")
+    typer.echo(f" Risk Comparison  ·  Sensitivity: {profile}")
     typer.echo(f"{'='*60}\n")
     typer.echo(
         f"{'TICKER':<8} {'CLOSE':>10} {'SMA({})'.format(sma_period):>10}"
@@ -345,7 +345,7 @@ def compare(
         try:
             req = AssessRiskRequest(
                 ticker=t,
-                profile=profile,
+                sensitivity=profile,
                 sma_period=sma_period,
                 ema_period=sma_period,
                 rsi_period=rsi_period,

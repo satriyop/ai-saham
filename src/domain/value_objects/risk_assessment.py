@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from datetime import date
 
 from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
-from src.domain.value_objects.risk_signal import RiskLevel, RiskProfile
+from src.domain.value_objects.risk_signal import RiskLevel, SignalSensitivity
 
 
 @dataclass(frozen=True)
@@ -23,8 +23,8 @@ class RiskAssessment:
     metadata for transparency and auditability.
 
     Attributes:
-        profile: The risk profile used for evaluation (RiskProfile enum or string
-                 for custom YAML-based rules)
+        sensitivity: The signal sensitivity preset used (SignalSensitivity enum or
+                     string for custom YAML-based rules)
         risk_level: The determined risk level (HIGH_RISK, MODERATE, LOW_RISK)
         confidence: Rule alignment strength (0, 50, or 100)
         rationale: Human-readable explanations for the assessment
@@ -32,7 +32,7 @@ class RiskAssessment:
         indicators: The full indicator snapshot that was evaluated
     """
 
-    profile: RiskProfile | str  # str for custom YAML rules
+    sensitivity: SignalSensitivity | str  # str for custom YAML rules
     risk_level: RiskLevel
     confidence: int
     rationale: tuple[str, ...]  # Immutable tuple for frozen dataclass
@@ -47,16 +47,26 @@ class RiskAssessment:
             raise ValueError(f"Confidence must be 0-100, got {self.confidence}")
 
     @property
+    def sensitivity_name(self) -> str:
+        """Return sensitivity preset name as string for display."""
+        if isinstance(self.sensitivity, str):
+            return self.sensitivity
+        return self.sensitivity.value
+
+    # Backwards-compatibility alias
+    @property
     def profile_name(self) -> str:
-        """Return profile name as string for display."""
-        if isinstance(self.profile, str):
-            return self.profile
-        return self.profile.value
+        return self.sensitivity_name
 
     @property
-    def is_custom_profile(self) -> bool:
+    def is_custom_sensitivity(self) -> bool:
         """Return True if this assessment used custom YAML rules."""
-        return isinstance(self.profile, str)
+        return isinstance(self.sensitivity, str)
+
+    # Backwards-compatibility alias
+    @property
+    def is_custom_profile(self) -> bool:
+        return self.is_custom_sensitivity
 
     @property
     def risk_level_name(self) -> str:

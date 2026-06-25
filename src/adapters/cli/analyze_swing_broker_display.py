@@ -12,7 +12,7 @@ from typing import Any
 
 @dataclass(frozen=True)
 class BrokerQualityNote:
-    """Non-authoritative named-broker confirmation note for preset review."""
+    """Non-authoritative named-broker confirmation note for setup review."""
 
     level: str
     message: str
@@ -120,12 +120,12 @@ class BrokerDetail:
 
 def build_broker_quality_note(
     broker_detail: BrokerDetail | None,
-    preset_eval: Any | None,
+    setup_eval: Any | None,
     *,
     smart_sell_min_share_pct: float = 15.0,
 ) -> BrokerQualityNote | None:
-    """Build a display-only broker-quality note without changing preset gates."""
-    if broker_detail is None or preset_eval is None:
+    """Build a display-only broker-quality note without changing setup gates."""
+    if broker_detail is None or setup_eval is None:
         return None
 
     smart_flow = broker_detail.smart_flow
@@ -145,7 +145,7 @@ def build_broker_quality_note(
                 ),
             )
 
-    if preset_eval.classification == "ENTER" and (
+    if setup_eval.match.value == "MATCH" and (
         quality == "noisy accumulation"
         or (noise_flow > Decimal("0") and noise_flow > smart_flow)
     ):
@@ -157,7 +157,7 @@ def build_broker_quality_note(
             ),
         )
 
-    if preset_eval.classification == "WATCH" and smart_flow > Decimal("0"):
+    if setup_eval.match.value == "PARTIAL" and smart_flow > Decimal("0"):
         return BrokerQualityNote(
             level="support",
             message=(
@@ -166,12 +166,12 @@ def build_broker_quality_note(
             ),
         )
 
-    if preset_eval.classification == "ENTER" and smart_flow > Decimal("0"):
+    if setup_eval.match.value == "MATCH" and smart_flow > Decimal("0"):
         return BrokerQualityNote(
             level="support",
             message=(
                 "Broker quality support: smart-money buying confirms the "
-                "preset setup."
+                "setup match."
             ),
         )
 

@@ -9,13 +9,13 @@ from src.adapters.cli.main import app
 runner = CliRunner()
 
 
-def test_accumulation_audit_unknown_preset_error():
+def test_accumulation_audit_unknown_setup_error():
     result = runner.invoke(
         app,
-        ["analyze", "accum-audit", "--preset", "unknown-preset"],
+        ["analyze", "accum-audit", "--setup", "unknown-setup"],
     )
 
     assert result.exit_code != 0
     output = result.output or result.stdout
-    assert "unknown preset" in output.lower()
+    assert "unknown setup" in output.lower()
     assert "foreign-bounce" in output

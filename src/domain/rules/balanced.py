@@ -36,6 +36,16 @@ class BalancedRuleSet(BaseRule):
     RSI_LOW_RISK = Decimal("30")
     DIVERGENCE_THRESHOLD = Decimal("0")  # Any divergence counts
 
+    def __init__(
+        self,
+        rsi_high_risk: Decimal = Decimal("70"),
+        rsi_low_risk: Decimal = Decimal("30"),
+        divergence_threshold: Decimal = Decimal("0"),
+    ) -> None:
+        self.RSI_HIGH_RISK = rsi_high_risk
+        self.RSI_LOW_RISK = rsi_low_risk
+        self.DIVERGENCE_THRESHOLD = divergence_threshold
+
     @property
     def profile_name(self) -> str:
         return "balanced"

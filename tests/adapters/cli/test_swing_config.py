@@ -58,14 +58,50 @@ def test_loads_gate_thresholds_from_yaml(tmp_path):
         "foreign_bounce": {
             "gates": {"min_score": 65, "max_rsi": 55, "min_vwap_discount_pct": 2.0,
                       "required_trend": "UP", "min_flow_ratio_pct": 3.0},
-            "watch_max_failed_gates": 1,
+            "partial_max_failed_gates": 1,
         },
     })
     result = _load_swing_screener_config_typed(cfg)
     assert result.gate_min_score == 65.0
     assert result.gate_max_rsi == 55.0
     assert result.gate_required_trend == "UP"
-    assert result.watch_max_failed_gates == 1
+    assert result.partial_max_failed_gates == 1
+
+
+def test_loads_setup_catalog_thresholds_from_yaml(tmp_path):
+    cfg = _write_yaml(tmp_path / "s.yaml", {
+        "setups": {
+            "coiled-spring": {
+                "enabled": False,
+                "gates": {"min_score": 61, "max_bb_width_pctile": 0.15},
+                "partial_max_failed_gates": 1,
+            },
+            "smart-money-confirmed": {
+                "gates": {
+                    "min_smart_flow_idr": 1000000,
+                    "min_smart_share_pct": 45,
+                    "max_noise_share_pct": 40,
+                    "reject_smart_net_selling": False,
+                },
+            },
+            "pullback-continuation": {
+                "gates": {"min_rsi": 42, "max_rsi": 63, "required_trend": "UP"},
+            },
+        },
+    })
+    result = _load_swing_screener_config_typed(cfg)
+
+    assert result.coiled_spring_enabled is False
+    assert result.coiled_spring_gate_min_score == 61.0
+    assert result.coiled_spring_gate_max_bb_width_pctile == 0.15
+    assert result.coiled_spring_partial_max_failed_gates == 1
+    assert result.smart_money_confirmed_gate_min_smart_flow_idr == Decimal("1000000.0")
+    assert result.smart_money_confirmed_gate_min_smart_share_pct == 45.0
+    assert result.smart_money_confirmed_gate_max_noise_share_pct == 40.0
+    assert result.smart_money_confirmed_reject_smart_net_selling is False
+    assert result.pullback_continuation_gate_min_rsi == 42.0
+    assert result.pullback_continuation_gate_max_rsi == 63.0
+    assert result.pullback_continuation_gate_required_trend == "UP"
 
 
 def test_loads_verdict_thresholds_from_yaml(tmp_path):

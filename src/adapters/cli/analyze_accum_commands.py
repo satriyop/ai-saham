@@ -27,7 +27,7 @@ from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarket
 
 DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 
-AUDIT_PRESETS = {
+AUDIT_SETUPS = {
     "foreign-bounce": {
         "universe": "idx80",
         "window": 7,
@@ -43,7 +43,50 @@ AUDIT_PRESETS = {
         "stop_losses": "3,5,7",
         "max_holds": "3,5,7,10",
     },
+    "coiled-spring": {
+        "universe": "idx80",
+        "window": 7,
+        "min_score": 60.0,
+        "min_net_buy_days": 2,
+        "min_flow_pct": 3.0,
+        "require_rsi": True,
+        "max_rsi": 65.0,
+        "max_bb_width_pctile": 0.20,
+        "simulate_exits": True,
+        "take_profits": "4,5,6",
+        "stop_losses": "3,5,7",
+        "max_holds": "5,7,10,15",
+    },
+    "smart-money-confirmed": {
+        "universe": "idx80",
+        "window": 7,
+        "min_score": 60.0,
+        "min_net_buy_days": 2,
+        "broker_quality": "smart+",
+        "simulate_exits": True,
+        "take_profits": "4,5,6",
+        "stop_losses": "3,5,7",
+        "max_holds": "3,5,7,10",
+    },
+    "pullback-continuation": {
+        "universe": "idx80",
+        "window": 7,
+        "min_score": 55.0,
+        "min_net_buy_days": 2,
+        "min_vwap_disc": -2.0,
+        "trend": "UP",
+        "min_flow_pct": 2.0,
+        "require_rsi": True,
+        "min_rsi": 40.0,
+        "max_rsi": 65.0,
+        "simulate_exits": True,
+        "take_profits": "5,8,10",
+        "stop_losses": "4,5,7",
+        "max_holds": "5,10,15",
+    },
 }
+
+_AUDIT_SETUP_HELP = ", ".join(AUDIT_SETUPS)
 
 
 def _display_audit_summary(response: AccumulationAuditResponse, top_groups: int) -> None:
@@ -95,9 +138,9 @@ def accumulation_audit(
         Optional[str],
         typer.Option("--universe", "-u", help="Universe name or 'cached' — see `saham fetch universe list`"),
     ] = None,
-    preset: Annotated[
+    setup: Annotated[
         Optional[str],
-        typer.Option("--preset", help="Audit preset: foreign-bounce"),
+        typer.Option("--setup", help=f"Audit setup: {_AUDIT_SETUP_HELP}"),
     ] = None,
     start: Annotated[
         str,
@@ -141,6 +184,18 @@ def accumulation_audit(
     max_rsi: Annotated[
         Optional[float],
         typer.Option("--max-rsi", help="Require RSI at or below this value"),
+    ] = None,
+    min_rsi: Annotated[
+        Optional[float],
+        typer.Option("--min-rsi", help="Require RSI at or above this value"),
+    ] = None,
+    max_bb_width_pctile: Annotated[
+        Optional[float],
+        typer.Option("--max-bb-width-pctile", help="Require BB width percentile at or below this value"),
+    ] = None,
+    broker_quality: Annotated[
+        Optional[str],
+        typer.Option("--broker-quality", help="Require broker-quality bucket, e.g. smart+"),
     ] = None,
     simulate_exits: Annotated[
         Optional[bool],
@@ -187,46 +242,52 @@ def accumulation_audit(
     """
     resolved_db = db_path or DEFAULT_DB_PATH
 
-    preset_name = preset.lower() if preset else None
-    preset_values = {}
-    if preset_name is not None:
-        if preset_name not in AUDIT_PRESETS:
+    setup_name = setup.lower() if setup else None
+    setup_values = {}
+    if setup_name is not None:
+        if setup_name not in AUDIT_SETUPS:
             typer.echo(
-                f"Error: unknown preset '{preset}'. "
-                f"Available presets: {', '.join(AUDIT_PRESETS)}",
+                f"Error: unknown setup '{setup}'. "
+                f"Available setups: {', '.join(AUDIT_SETUPS)}",
                 err=True,
             )
             raise typer.Exit(1)
-        preset_values = AUDIT_PRESETS[preset_name]
+        setup_values = AUDIT_SETUPS[setup_name]
 
-    universe = universe or preset_values.get("universe")
-    window = window if window is not None else int(preset_values.get("window", 7))
+    universe = universe or setup_values.get("universe")
+    window = window if window is not None else int(setup_values.get("window", 7))
     min_score = (
         min_score if min_score is not None
-        else float(preset_values.get("min_score", 40.0))
+        else float(setup_values.get("min_score", 40.0))
     )
     min_net_buy_days = (
         min_net_buy_days if min_net_buy_days is not None
-        else int(preset_values.get("min_net_buy_days", 2))
+        else int(setup_values.get("min_net_buy_days", 2))
     )
     min_vwap_disc = (
         min_vwap_disc if min_vwap_disc is not None
-        else preset_values.get("min_vwap_disc")
+        else setup_values.get("min_vwap_disc")
     )
-    trend = trend or preset_values.get("trend")
+    trend = trend or setup_values.get("trend")
     min_flow_pct = (
         min_flow_pct if min_flow_pct is not None
-        else preset_values.get("min_flow_pct")
+        else setup_values.get("min_flow_pct")
     )
-    require_rsi = require_rsi or bool(preset_values.get("require_rsi", False))
-    max_rsi = max_rsi if max_rsi is not None else preset_values.get("max_rsi")
+    require_rsi = require_rsi or bool(setup_values.get("require_rsi", False))
+    max_rsi = max_rsi if max_rsi is not None else setup_values.get("max_rsi")
+    min_rsi = min_rsi if min_rsi is not None else setup_values.get("min_rsi")
+    max_bb_width_pctile = (
+        max_bb_width_pctile if max_bb_width_pctile is not None
+        else setup_values.get("max_bb_width_pctile")
+    )
+    broker_quality = broker_quality or setup_values.get("broker_quality")
     simulate_exits = (
         simulate_exits if simulate_exits is not None
-        else bool(preset_values.get("simulate_exits", False))
+        else bool(setup_values.get("simulate_exits", False))
     )
-    take_profits = take_profits or str(preset_values.get("take_profits", "4,5,6"))
-    stop_losses = stop_losses or str(preset_values.get("stop_losses", "3,5,7"))
-    max_holds = max_holds or str(preset_values.get("max_holds", "3,5,7,10"))
+    take_profits = take_profits or str(setup_values.get("take_profits", "4,5,6"))
+    stop_losses = stop_losses or str(setup_values.get("stop_losses", "3,5,7"))
+    max_holds = max_holds or str(setup_values.get("max_holds", "3,5,7,10"))
 
     try:
         start_date = date.fromisoformat(start)
@@ -268,6 +329,12 @@ def accumulation_audit(
         filter_parts.append("RSI present")
     if max_rsi is not None:
         filter_parts.append(f"RSI<={max_rsi:g}")
+    if min_rsi is not None:
+        filter_parts.append(f"RSI>={min_rsi:g}")
+    if max_bb_width_pctile is not None:
+        filter_parts.append(f"BBpct<={max_bb_width_pctile:g}")
+    if broker_quality is not None:
+        filter_parts.append(f"broker={broker_quality}")
     if simulate_exits:
         filter_parts.append("exit simulation")
     filter_label = f" | filters: {', '.join(filter_parts)}" if filter_parts else ""
@@ -303,7 +370,10 @@ def accumulation_audit(
             trend=trend_filter,
             min_flow_pct=min_flow_pct,
             require_rsi=require_rsi,
+            min_rsi=min_rsi,
             max_rsi=max_rsi,
+            max_bb_width_pctile=max_bb_width_pctile,
+            broker_quality=broker_quality,
             simulate_exits=simulate_exits,
             take_profit_pcts=take_profit_grid,
             stop_loss_pcts=stop_loss_grid,

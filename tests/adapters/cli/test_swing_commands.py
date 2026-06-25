@@ -19,13 +19,11 @@ from src.adapters.cli.analyze_swing_broker_display import (
     build_flow_detail as _build_flow_detail,
 )
 from src.adapters.cli.analyze_swing_commands import (
-    FOREIGN_BOUNCE_PRESET,
+    FOREIGN_BOUNCE_SETUP_NAME,
     DataFreshness,
-    PresetEvaluation,
-    PresetGate,
     _auto_refresh_swing_data,
     _build_data_freshness,
-    _evaluate_foreign_bounce,
+    _evaluate_swing_setup,
     _fetch_swing_sentiment,
     _print_swing_output,
 )
@@ -35,6 +33,7 @@ from src.adapters.cli.analyze_swing_display import (
 from src.adapters.cli.main import app
 from src.application.use_case.accumulation_screen_use_case import AccumulationCandidate
 from src.domain.entities.broker_flow import BrokerSummary, BrokerTransaction, BrokerType
+from src.domain.value_objects.setup_evaluation import SetupEvaluation, SetupGate, SetupMatch
 
 runner = CliRunner()
 
@@ -147,24 +146,28 @@ def _candidate(**overrides) -> AccumulationCandidate:
 
 
 def test_foreign_bounce_passes_all_gates():
-    evaluation = _evaluate_foreign_bounce(_candidate())
+    evaluation = _evaluate_swing_setup(FOREIGN_BOUNCE_SETUP_NAME, _candidate())
 
-    assert evaluation.name == FOREIGN_BOUNCE_PRESET
+    assert evaluation.name == FOREIGN_BOUNCE_SETUP_NAME
     assert evaluation.passed is True
-    assert evaluation.classification == "ENTER"
+    assert evaluation.match == SetupMatch.MATCH
     assert evaluation.failed_reasons == ()
 
 
 def test_foreign_bounce_reports_failed_gates():
-    evaluation = _evaluate_foreign_bounce(_candidate(score=70.0, trend="DOWN"))
+    evaluation = _evaluate_swing_setup(
+        FOREIGN_BOUNCE_SETUP_NAME,
+        _candidate(score=70.0, trend="DOWN"),
+    )
 
     assert evaluation.passed is False
-    assert evaluation.classification == "WATCH"
+    assert evaluation.match == SetupMatch.PARTIAL
     assert any("trend" in reason for reason in evaluation.failed_reasons)
 
 
 def test_failed_gates_summary_includes_all_failed_reasons():
-    evaluation = _evaluate_foreign_bounce(
+    evaluation = _evaluate_swing_setup(
+        FOREIGN_BOUNCE_SETUP_NAME,
         _candidate(
             score=26.8,
             vwap_discount_pct=-0.7,
@@ -183,10 +186,10 @@ def test_failed_gates_summary_includes_all_failed_reasons():
 
 
 def test_foreign_bounce_missing_accumulation_is_avoid():
-    evaluation = _evaluate_foreign_bounce(None)
+    evaluation = _evaluate_swing_setup(FOREIGN_BOUNCE_SETUP_NAME, None)
 
     assert evaluation.passed is False
-    assert evaluation.classification == "AVOID"
+    assert evaluation.match == SetupMatch.NO_MATCH
 
 
 def test_data_freshness_reports_source_dates_and_lag_warnings():
@@ -443,9 +446,12 @@ def test_broker_quality_note_warns_when_enter_is_noise_led():
         window_sessions=5,
         as_of_date=date(2026, 6, 1),
     )
-    preset = _evaluate_foreign_bounce(_candidate(score=75, trend="SIDE"))
+    setup = _evaluate_swing_setup(
+        FOREIGN_BOUNCE_SETUP_NAME,
+        _candidate(score=75, trend="SIDE"),
+    )
 
-    note = _build_broker_quality_note(detail, preset)
+    note = _build_broker_quality_note(detail, setup)
 
     assert note is not None
     assert note.level == "warning"
@@ -469,9 +475,12 @@ def test_broker_quality_note_supports_watch_when_smart_buying():
         window_sessions=5,
         as_of_date=date(2026, 6, 1),
     )
-    preset = _evaluate_foreign_bounce(_candidate(score=68, trend="SIDE"))
+    setup = _evaluate_swing_setup(
+        FOREIGN_BOUNCE_SETUP_NAME,
+        _candidate(score=68, trend="SIDE"),
+    )
 
-    note = _build_broker_quality_note(detail, preset)
+    note = _build_broker_quality_note(detail, setup)
 
     assert note is not None
     assert note.level == "support"
@@ -495,9 +504,12 @@ def test_broker_quality_note_warns_on_smart_selling():
         window_sessions=5,
         as_of_date=date(2026, 6, 1),
     )
-    preset = _evaluate_foreign_bounce(_candidate(score=75, trend="SIDE"))
+    setup = _evaluate_swing_setup(
+        FOREIGN_BOUNCE_SETUP_NAME,
+        _candidate(score=75, trend="SIDE"),
+    )
 
-    note = _build_broker_quality_note(detail, preset)
+    note = _build_broker_quality_note(detail, setup)
 
     assert note is not None
     assert note.level == "warning"
@@ -528,9 +540,12 @@ def test_broker_quality_note_skips_warn_on_minor_smart_selling():
         window_sessions=5,
         as_of_date=date(2026, 6, 1),
     )
-    preset = _evaluate_foreign_bounce(_candidate(score=75, trend="SIDE"))
+    setup = _evaluate_swing_setup(
+        FOREIGN_BOUNCE_SETUP_NAME,
+        _candidate(score=75, trend="SIDE"),
+    )
 
-    note = build_broker_quality_note(detail, preset, smart_sell_min_share_pct=15.0)
+    note = build_broker_quality_note(detail, setup, smart_sell_min_share_pct=15.0)
 
     assert note is None or "smart-money net selling" not in (note.message or "")
 
@@ -589,12 +604,12 @@ def test_fetch_swing_sentiment_verbose_keeps_provider_details(
     assert "RAW_SENTIMENT_STDERR" in captured.err
 
 
-def test_swing_backtest_unknown_preset_error():
-    result = runner.invoke(app, ["trade", "backtest-swing", "--preset", "unknown"])
+def test_swing_backtest_unknown_setup_error():
+    result = runner.invoke(app, ["trade", "backtest-swing", "--setup", "unknown"])
 
     assert result.exit_code != 0
-    assert "unknown swing preset" in result.output.lower()
-    assert FOREIGN_BOUNCE_PRESET in result.output
+    assert "unknown swing setup" in result.output.lower()
+    assert FOREIGN_BOUNCE_SETUP_NAME in result.output
 
 
 def test_regime_command_accepts_explicit_ticker_with_empty_cache(tmp_path: Path):
@@ -651,13 +666,12 @@ def test_swing_compare_rejects_unknown_variant():
 
 
 def test_swing_output_renders_rich_decision_overview(capsys):
-    preset = PresetEvaluation(
-        name=FOREIGN_BOUNCE_PRESET,
-        passed=False,
-        classification="WATCH",
+    setup = SetupEvaluation(
+        name=FOREIGN_BOUNCE_SETUP_NAME,
+        match=SetupMatch.PARTIAL,
         gates=(
-            PresetGate("score", True, "70.0", ">= 55"),
-            PresetGate("trend", False, "DOWN", "SIDE"),
+            SetupGate("score", True, "70.0", ">= 55"),
+            SetupGate("trend", False, "DOWN", "SIDE"),
         ),
         failed_reasons=("trend: DOWN (required SIDE)",),
     )
@@ -682,8 +696,8 @@ def test_swing_output_renders_rich_decision_overview(capsys):
         risk_resp=None,
         atr_value=None,
         sizing=None,
-        preset_eval=preset,
-        preset_sizing=None,
+        setup_eval=setup,
+        setup_sizing=None,
         broker_quality_note=None,
         market_regime=None,
         capital=None,
@@ -700,5 +714,5 @@ def test_swing_output_renders_rich_decision_overview(capsys):
     assert "Decision" in out
     assert "Signal Snapshot" in out
     assert "PLAN" in out
-    assert "WATCH only" in out
+    assert "Setup is partial" in out
     assert "SUMMARY:" in out

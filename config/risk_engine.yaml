@@ -25,3 +25,21 @@ risk_engine:
       min_free_float_pct: 15.0
     bandar:
       enabled: true
+
+  # Signal sensitivity thresholds — how easily the screener triggers
+  # These are NOT investor risk tolerance (see ADR-026, SignalSensitivity rename).
+  # Thresholds here override the hardcoded defaults in the rule set classes.
+  # Leave this section absent to use defaults (no behavior change).
+  sensitivities:
+    conservative:
+      rsi_high_risk: 75
+      rsi_low_risk: 25
+      ema_sma_divergence_threshold: 1.0
+    balanced:
+      rsi_high_risk: 70
+      rsi_low_risk: 30
+      ema_sma_divergence_threshold: 0
+    aggressive:
+      rsi_high_risk: 60
+      rsi_low_risk: 40
+      ema_sma_divergence_threshold: 0.1

@@ -49,9 +49,9 @@ def _request(**overrides) -> SwingAnalysisWorkflowRequest:
     values = {
         "ticker": "BBCA",
         "today": date(2026, 6, 18),
-        "profile": "balanced",
+        "sensitivity": "balanced",
         "strategy": "foreign-accumulation",
-        "preset_name": None,
+        "setup_name": None,
         "window": 7,
         "flow_window": 30,
         "capital": None,
@@ -84,11 +84,11 @@ def _workflow(market_repo, calls: list[str]) -> SwingAnalysisWorkflowUseCase:
         build_flow_detail=lambda **kwargs: {"flow_window": kwargs["window_sessions"]},
         build_broker_detail=lambda **kwargs: {"broker_window": kwargs["window_sessions"]},
         build_accumulation_candidate=lambda **kwargs: {"ticker": kwargs["ticker"]},
-        evaluate_preset=lambda candidate: None,
+        evaluate_setup=lambda candidate: None,
         build_broker_quality_note=lambda **kwargs: None,
         fetch_sentiment=lambda **kwargs: (None, None),
         load_swing_config=lambda: {},
-        resolve_preset_targets=lambda regime, config: (Decimal("5"), Decimal("5")),
+        resolve_setup_targets=lambda regime, config: (Decimal("5"), Decimal("5")),
     )
 
 
@@ -143,11 +143,11 @@ def test_swing_workflow_records_accumulation_failure_warning():
         build_flow_detail=lambda **kwargs: None,
         build_broker_detail=lambda **kwargs: None,
         build_accumulation_candidate=build_accumulation_candidate,
-        evaluate_preset=lambda candidate: None,
+        evaluate_setup=lambda candidate: None,
         build_broker_quality_note=lambda **kwargs: None,
         fetch_sentiment=lambda **kwargs: (None, None),
         load_swing_config=lambda: {},
-        resolve_preset_targets=lambda regime, config: (Decimal("5"), Decimal("5")),
+        resolve_setup_targets=lambda regime, config: (Decimal("5"), Decimal("5")),
     )
 
     response = workflow.execute(_request())

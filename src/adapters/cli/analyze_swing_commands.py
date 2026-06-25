@@ -41,7 +41,18 @@ from src.application.use_case.accumulation_screen_use_case import (
     AccumulationCandidate,
     AccumulationScreenRequest,
     AccumulationScreenUseCase,
-    resolve_preset_targets,
+    resolve_setup_targets,
+)
+from src.application.use_case.evaluate_swing_setup_use_case import (
+    AVAILABLE_SWING_SETUPS,
+    CoiledSpringSetupConfig,
+    EvaluateSwingSetupRequest,
+    EvaluateSwingSetupUseCase,
+    FOREIGN_BOUNCE_SETUP,
+    ForeignBounceSetupConfig,
+    PullbackContinuationSetupConfig,
+    SmartMoneyConfirmedSetupConfig,
+    SwingSetupCatalogConfig,
 )
 from src.application.use_case.fetch_sentiment_use_case import (
     FetchSentimentRequest,
@@ -64,8 +75,9 @@ from src.application.use_case.swing_backtest_use_case import (
     SwingBacktestUseCase,
 )
 from src.application.use_case.swing_backtest_use_case import (
-    FOREIGN_BOUNCE_PRESET as BACKTEST_FOREIGN_BOUNCE_PRESET,
+    FOREIGN_BOUNCE_SETUP as BACKTEST_FOREIGN_BOUNCE_SETUP,
 )
+from src.domain.value_objects.setup_evaluation import SetupEvaluation
 from src.infrastructure.browser.stockbit_analyst import StockbitAnalystConsensusProvider
 from src.infrastructure.browser.stockbit_bandar import StockbitBandarDetectorProvider
 from src.infrastructure.browser.stockbit_corp_action import StockbitCorporateActionRepository
@@ -83,10 +95,10 @@ from src.infrastructure.sentiment import SentimentFactory
 DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 _W = 70  # display width
 
-FOREIGN_BOUNCE_PRESET = "foreign-bounce"
+FOREIGN_BOUNCE_SETUP_NAME = FOREIGN_BOUNCE_SETUP
 FOREIGN_BOUNCE_MAX_HOLD_DAYS = 10
 
-# Legacy constants kept for backtest use — actual analyze/screen uses resolve_preset_targets()
+# Fixed fallback constants kept for backtest use; analyze/screen use resolve_setup_targets().
 FOREIGN_BOUNCE_TAKE_PROFIT = Decimal("5")
 FOREIGN_BOUNCE_STOP_LOSS = Decimal("5")
 
@@ -154,23 +166,6 @@ BROKER_WEIGHTS: dict[str, Decimal] = {
     **{code: _SC.smart_weight for code in SMART_MONEY_BROKERS},
     **{code: _SC.noise_weight for code in NOISE_BROKERS},
 }
-
-
-@dataclass(frozen=True)
-class PresetGate:
-    label: str
-    passed: bool
-    actual: str
-    required: str
-
-
-@dataclass(frozen=True)
-class PresetEvaluation:
-    name: str
-    passed: bool
-    classification: str
-    gates: tuple[PresetGate, ...]
-    failed_reasons: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -365,88 +360,69 @@ def _parse_compare_variants(value: str) -> tuple[str, ...]:
     return variants
 
 
-def _fmt_optional_float(value: float | None, suffix: str = "") -> str:
-    return "missing" if value is None else f"{value:.1f}{suffix}"
+def _setup_config() -> SwingSetupCatalogConfig:
+    return SwingSetupCatalogConfig(
+        foreign_bounce=ForeignBounceSetupConfig(
+            enabled=_SC.foreign_bounce_enabled,
+            gate_min_score=_SC.gate_min_score,
+            gate_min_vwap_discount_pct=_SC.gate_min_vwap_discount_pct,
+            gate_required_trend=_SC.gate_required_trend,
+            gate_min_flow_ratio_pct=_SC.gate_min_flow_ratio_pct,
+            gate_max_rsi=_SC.gate_max_rsi,
+            partial_max_failed_gates=_SC.partial_max_failed_gates,
+        ),
+        coiled_spring=CoiledSpringSetupConfig(
+            enabled=_SC.coiled_spring_enabled,
+            gate_min_score=_SC.coiled_spring_gate_min_score,
+            gate_max_bb_width_pctile=_SC.coiled_spring_gate_max_bb_width_pctile,
+            gate_min_flow_ratio_pct=_SC.coiled_spring_gate_min_flow_ratio_pct,
+            gate_max_rsi=_SC.coiled_spring_gate_max_rsi,
+            partial_max_failed_gates=_SC.coiled_spring_partial_max_failed_gates,
+        ),
+        smart_money_confirmed=SmartMoneyConfirmedSetupConfig(
+            enabled=_SC.smart_money_confirmed_enabled,
+            gate_min_score=_SC.smart_money_confirmed_gate_min_score,
+            gate_min_smart_flow_idr=_SC.smart_money_confirmed_gate_min_smart_flow_idr,
+            gate_min_smart_share_pct=_SC.smart_money_confirmed_gate_min_smart_share_pct,
+            gate_max_noise_share_pct=_SC.smart_money_confirmed_gate_max_noise_share_pct,
+            reject_smart_net_selling=_SC.smart_money_confirmed_reject_smart_net_selling,
+            partial_max_failed_gates=_SC.smart_money_confirmed_partial_max_failed_gates,
+        ),
+        pullback_continuation=PullbackContinuationSetupConfig(
+            enabled=_SC.pullback_continuation_enabled,
+            gate_min_score=_SC.pullback_continuation_gate_min_score,
+            gate_required_trend=_SC.pullback_continuation_gate_required_trend,
+            gate_min_flow_ratio_pct=_SC.pullback_continuation_gate_min_flow_ratio_pct,
+            gate_min_rsi=_SC.pullback_continuation_gate_min_rsi,
+            gate_max_rsi=_SC.pullback_continuation_gate_max_rsi,
+            gate_min_vwap_discount_pct=_SC.pullback_continuation_gate_min_vwap_discount_pct,
+            partial_max_failed_gates=_SC.pullback_continuation_partial_max_failed_gates,
+        ),
+    )
 
 
-def _evaluate_foreign_bounce(
+def _evaluate_swing_setup(
+    setup_name: str,
     accum: AccumulationCandidate | None,
-) -> PresetEvaluation:
-    """Evaluate audited foreign-bounce gates for one accumulation candidate."""
-    if accum is None:
-        return PresetEvaluation(
-            name=FOREIGN_BOUNCE_PRESET,
-            passed=False,
-            classification="AVOID",
-            gates=(
-                PresetGate(
-                    label="broker flow data",
-                    passed=False,
-                    actual="missing",
-                    required="available",
-                ),
-            ),
-            failed_reasons=("No accumulation/broker-flow candidate available",),
+    broker_detail: BrokerDetail | None = None,
+) -> SetupEvaluation:
+    """Evaluate audited setup fit for one accumulation candidate."""
+    return EvaluateSwingSetupUseCase().execute(
+        EvaluateSwingSetupRequest(
+            setup_name=setup_name,
+            candidate=accum,
+            config=_setup_config(),
+            broker_detail=broker_detail,
         )
+    )
 
-    gates = (
-        PresetGate(
-            label="score",
-            passed=accum.score >= _SC.gate_min_score,
-            actual=f"{accum.score:.1f}",
-            required=f">= {_SC.gate_min_score:.0f}",
-        ),
-        PresetGate(
-            label="fvwap%",
-            passed=accum.vwap_discount_pct is not None and accum.vwap_discount_pct >= _SC.gate_min_vwap_discount_pct,
-            actual=_fmt_optional_float(accum.vwap_discount_pct, "%"),
-            required=f">= +{_SC.gate_min_vwap_discount_pct:.0f}%",
-        ),
-        PresetGate(
-            label="trend",
-            passed=accum.trend == _SC.gate_required_trend,
-            actual=accum.trend,
-            required=_SC.gate_required_trend,
-        ),
-        PresetGate(
-            label="flow_pct",
-            passed=accum.avg_flow_ratio is not None and accum.avg_flow_ratio >= _SC.gate_min_flow_ratio_pct,
-            actual=_fmt_optional_float(accum.avg_flow_ratio, "%"),
-            required=f">= +{_SC.gate_min_flow_ratio_pct:.0f}%",
-        ),
-        PresetGate(
-            label="RSI present",
-            passed=accum.rsi is not None,
-            actual=_fmt_optional_float(accum.rsi),
-            required="present",
-        ),
-        PresetGate(
-            label="RSI",
-            passed=accum.rsi is not None and accum.rsi <= _SC.gate_max_rsi,
-            actual=_fmt_optional_float(accum.rsi),
-            required=f"<= {_SC.gate_max_rsi:.0f}",
-        ),
-    )
-    failed = tuple(
-        f"{gate.label}: {gate.actual} (required {gate.required})"
-        for gate in gates
-        if not gate.passed
-    )
-    passed = not failed
-    if passed:
-        classification = "ENTER"
-    elif accum.score >= _SC.gate_min_score or len(failed) <= _SC.watch_max_failed_gates:
-        classification = "WATCH"
-    else:
-        classification = "AVOID"
 
-    return PresetEvaluation(
-        name=FOREIGN_BOUNCE_PRESET,
-        passed=passed,
-        classification=classification,
-        gates=gates,
-        failed_reasons=failed,
-    )
+def _evaluate_foreign_bounce_setup(
+    accum: "AccumulationCandidate | None",
+    broker_detail: "BrokerDetail | None" = None,
+) -> "SetupEvaluation":
+    """Convenience wrapper: evaluate the foreign-bounce setup for one candidate."""
+    return _evaluate_swing_setup(FOREIGN_BOUNCE_SETUP_NAME, accum, broker_detail)
 
 
 def _print_swing_output(
@@ -462,8 +438,8 @@ def _print_swing_output(
     risk_resp,
     atr_value: "Decimal | None",
     sizing: "SizingResult | None",
-    preset_eval: "PresetEvaluation | None",
-    preset_sizing: "PercentSizingResult | None",
+    setup_eval: "SetupEvaluation | None",
+    setup_sizing: "PercentSizingResult | None",
     broker_quality_note: BrokerQualityNote | None,
     market_regime: "MarketContext | None",
     capital: "int | None",
@@ -483,7 +459,7 @@ def _print_swing_output(
     print_swing_output(
         ticker=ticker,
         today=today,
-        profile=profile,
+        sensitivity=profile,
         strategy_name=strategy_name,
         data_freshness=data_freshness,
         flow_detail=flow_detail,
@@ -493,8 +469,8 @@ def _print_swing_output(
         risk_resp=risk_resp,
         atr_value=atr_value,
         sizing=sizing,
-        preset_eval=preset_eval,
-        preset_sizing=preset_sizing,
+        setup_eval=setup_eval,
+        setup_sizing=setup_sizing,
         broker_quality_note=broker_quality_note,
         market_regime=market_regime,
         capital=capital,
@@ -528,9 +504,9 @@ def swing(
             help="Backtest strategy name (default: foreign-accumulation)",
         ),
     ] = "foreign-accumulation",
-    preset: Annotated[
+    setup: Annotated[
         Optional[str],
-        typer.Option("--preset", help="Swing preset to evaluate (default: foreign-bounce)"),
+        typer.Option("--setup", help="Swing setup to evaluate (default: foreign-bounce)"),
     ] = "foreign-bounce",
     window: Annotated[
         int,
@@ -601,7 +577,7 @@ def swing(
             "--risk-strategy",
             help=(
                 "Strategy to use as additional risk gate. "
-                "If strategy signals HIGH_RISK, overrides preset to AVOID. "
+                "If strategy signals HIGH_RISK, marks the final action as blocked/avoid. "
                 "Example: --risk-strategy williams-r-bounce"
             ),
         ),
@@ -627,7 +603,7 @@ def swing(
 
     Examples:
         saham analyze swing BBRI
-        saham analyze swing BBRI --preset foreign-bounce --capital 10000000
+        saham analyze swing BBRI --setup foreign-bounce --capital 10000000
         saham analyze swing BBRI --capital 10000000 --risk-pct 1
         saham analyze swing BBRI --profile conservative --no-sentiment
         saham analyze swing BBRI --no-refresh --no-backtest --no-sentiment
@@ -644,10 +620,10 @@ def swing(
         if _cfg is not None:
             capital = int(_cfg)
 
-    preset_name = preset.lower() if preset else None
-    if preset_name is not None and preset_name != FOREIGN_BOUNCE_PRESET:
+    setup_name = setup.lower() if setup else None
+    if setup_name is not None and setup_name not in AVAILABLE_SWING_SETUPS:
         typer.echo(
-            f"Unknown swing preset '{preset}'. Available presets: {FOREIGN_BOUNCE_PRESET}",
+            f"Unknown swing setup '{setup}'. Available setups: {', '.join(AVAILABLE_SWING_SETUPS)}",
             err=True,
         )
         raise typer.Exit(1)
@@ -702,15 +678,19 @@ def swing(
             smart_share_threshold_pct=_SC.smart_share_threshold_pct,
         ),
         build_accumulation_candidate=_build_accumulation_candidate,
-        evaluate_preset=_evaluate_foreign_bounce,
-        build_broker_quality_note=lambda broker_detail, preset_eval: build_broker_quality_note(
+        evaluate_setup=lambda candidate: _evaluate_swing_setup(
+            setup_name or FOREIGN_BOUNCE_SETUP_NAME,
+            candidate,
             broker_detail,
-            preset_eval,
+        ),
+        build_broker_quality_note=lambda broker_detail, setup_eval: build_broker_quality_note(
+            broker_detail,
+            setup_eval,
             smart_sell_min_share_pct=_SC.smart_sell_min_share_pct,
         ),
         fetch_sentiment=_fetch_swing_sentiment,
         load_swing_config=_load_swing_screener_config,
-        resolve_preset_targets=resolve_preset_targets,
+        resolve_setup_targets=resolve_setup_targets,
         structural_gates=[FundamentalGate(), LiquidityGate(), FreeFloatGate()],
         execution_gates=[BandarGate()],
         signal_engine=create_signal_engine(db_path=resolved_db, with_enrichment=True),
@@ -720,9 +700,9 @@ def swing(
             SwingAnalysisWorkflowRequest(
                 ticker=ticker_upper,
                 today=today,
-                profile=profile,
+                sensitivity=profile,
                 strategy=strategy,
-                preset_name=preset_name,
+                setup_name=setup_name,
                 window=window,
                 flow_window=flow_window,
                 capital=capital,
@@ -758,8 +738,8 @@ def swing(
     strategy_risk_name = workflow_response.strategy_risk_name
     atr_value = workflow_response.atr_value
     sizing = workflow_response.sizing
-    preset_eval = workflow_response.preset_eval
-    preset_sizing = workflow_response.preset_sizing
+    setup_eval = workflow_response.setup_eval
+    setup_sizing = workflow_response.setup_sizing
     broker_quality_note = workflow_response.broker_quality_note
     backtest_result = workflow_response.backtest_result
     sentiment_resp = workflow_response.sentiment_response
@@ -776,7 +756,7 @@ def swing(
         out: dict = {
             "ticker": ticker_upper,
             "date": str(today),
-            "profile": profile,
+            "sensitivity": profile,
             "data": data_out,
             "flow_detail": flow_detail.to_dict() if flow_detail else None,
             "broker_detail": broker_detail.to_dict() if broker_detail else None,
@@ -824,17 +804,17 @@ def swing(
                     if accum_candidate and accum_candidate.ticker_notation else None
                 ),
             },
-            "preset": {
-                "name": preset_eval.name if preset_eval else None,
-                "passed": preset_eval.passed if preset_eval else None,
-                "classification": preset_eval.classification if preset_eval else None,
-                "failed_reasons": list(preset_eval.failed_reasons) if preset_eval else [],
+            "setup": {
+                "name": setup_eval.name if setup_eval else None,
+                "passed": setup_eval.passed if setup_eval else None,
+                "match": setup_eval.match.value if setup_eval else None,
+                "failed_reasons": list(setup_eval.failed_reasons) if setup_eval else [],
                 "plan": {
-                    "take_profit_pct": float(_tp_pct) if preset_eval else None,
-                    "stop_loss_pct": float(_sl_pct) if preset_eval else None,
+                    "take_profit_pct": float(_tp_pct) if setup_eval else None,
+                    "stop_loss_pct": float(_sl_pct) if setup_eval else None,
                     "regime": _regime_label,
                     "max_hold_days": FOREIGN_BOUNCE_MAX_HOLD_DAYS
-                    if preset_eval else None,
+                    if setup_eval else None,
                 },
             },
             "risk": {
@@ -846,19 +826,19 @@ def swing(
             },
             "sizing": {
                 "entry": float(
-                    preset_sizing.entry_price if preset_sizing
+                    setup_sizing.entry_price if setup_sizing
                     else sizing.entry_price
-                ) if (preset_sizing or sizing) else None,
+                ) if (setup_sizing or sizing) else None,
                 "stop": float(
-                    preset_sizing.stop_price if preset_sizing
+                    setup_sizing.stop_price if setup_sizing
                     else sizing.stop_price
-                ) if (preset_sizing or sizing) else None,
+                ) if (setup_sizing or sizing) else None,
                 "target": float(
-                    preset_sizing.target_price if preset_sizing
+                    setup_sizing.target_price if setup_sizing
                     else sizing.target_price
-                ) if (preset_sizing or sizing) else None,
+                ) if (setup_sizing or sizing) else None,
                 "lots": (
-                    preset_sizing.lots if preset_sizing
+                    setup_sizing.lots if setup_sizing
                     else sizing.lots if sizing else None
                 ),
                 "atr": float(atr_value) if atr_value else None,
@@ -903,7 +883,7 @@ def swing(
     _print_swing_output(
         ticker=ticker_upper,
         today=today,
-        profile=profile,
+        sensitivity=profile,
         strategy_name=strategy,
         data_freshness=data_freshness,
         flow_detail=flow_detail,
@@ -913,8 +893,8 @@ def swing(
         risk_resp=risk_resp,
         atr_value=atr_value,
         sizing=sizing,
-        preset_eval=preset_eval,
-        preset_sizing=preset_sizing,
+        setup_eval=setup_eval,
+        setup_sizing=setup_sizing,
         broker_quality_note=broker_quality_note,
         market_regime=market_regime,
         capital=capital,
@@ -947,10 +927,10 @@ def swing_compare(
             help="Comma-separated variants: baseline, sideways_only, weak_plus",
         ),
     ] = "baseline,sideways_only,weak_plus",
-    preset: Annotated[
+    setup: Annotated[
         str,
-        typer.Option("--preset", help="Swing preset to validate"),
-    ] = BACKTEST_FOREIGN_BOUNCE_PRESET,
+        typer.Option("--setup", help="Swing setup to validate"),
+    ] = BACKTEST_FOREIGN_BOUNCE_SETUP,
     start: Annotated[
         str,
         typer.Option("--start", help="Backtest start date, YYYY-MM-DD"),
@@ -1010,11 +990,11 @@ def swing_compare(
     Variants use the same portfolio simulation as `saham trade backtest-swing`;
     only the allowed entry regimes differ.
     """
-    preset_name = preset.lower()
-    if preset_name != BACKTEST_FOREIGN_BOUNCE_PRESET:
+    setup_name = setup.lower()
+    if setup_name not in AVAILABLE_SWING_SETUPS:
         typer.echo(
-            f"Unknown swing preset '{preset}'. "
-            f"Available presets: {BACKTEST_FOREIGN_BOUNCE_PRESET}",
+            f"Unknown swing setup '{setup}'. "
+            f"Available setups: {', '.join(AVAILABLE_SWING_SETUPS)}",
             err=True,
         )
         raise typer.Exit(1)
@@ -1065,7 +1045,7 @@ def swing_compare(
                 tickers=ticker_list,
                 start_date=start_date,
                 end_date=end_date,
-                preset=preset_name,
+                setup=setup_name,
                 capital=Decimal(str(capital)),
                 risk_pct=Decimal(str(risk_pct)) / Decimal("100"),
                 max_positions=max_positions,
@@ -1076,6 +1056,7 @@ def swing_compare(
                 include_regime=True,
                 benchmark_ticker=benchmark,
                 allowed_regimes=allowed_regimes,
+                setup_config=_setup_config(),
             ))
             rows.append((variant, response))
     except ValueError as e:
@@ -1112,5 +1093,3 @@ def swing_compare(
         universe_label=universe or "explicit",
         variants_by_name=SWING_COMPARE_VARIANTS,
     )
-
-

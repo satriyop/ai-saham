@@ -1,5 +1,5 @@
 """
-Walk-forward portfolio backtest for deterministic swing trade presets.
+Walk-forward portfolio backtest for deterministic swing trade setups.
 
 Layer: Application
 Depends on: Domain ports and accumulation screen use case
@@ -16,6 +16,12 @@ from src.application.use_case.accumulation_screen_use_case import (
     AccumulationScreenRequest,
     AccumulationScreenUseCase,
 )
+from src.application.use_case.evaluate_swing_setup_use_case import (
+    AVAILABLE_SWING_SETUPS,
+    EvaluateSwingSetupRequest,
+    EvaluateSwingSetupUseCase,
+    SwingSetupCatalogConfig,
+)
 from src.application.services.market_context_engine import MarketContextEngine
 from src.domain.value_objects.market_context import MarketContext
 from src.domain.entities.candle import Candle
@@ -23,7 +29,7 @@ from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.value_objects.idx_market import SHARES_PER_LOT
 
-FOREIGN_BOUNCE_PRESET = "foreign-bounce"
+FOREIGN_BOUNCE_SETUP = "foreign-bounce"
 DEFAULT_SWING_COST_BPS = Decimal("20")
 
 
@@ -34,7 +40,7 @@ class SwingBacktestRequest:
     tickers: list[str]
     start_date: date
     end_date: date
-    preset: str = FOREIGN_BOUNCE_PRESET
+    setup: str = FOREIGN_BOUNCE_SETUP
     capital: Decimal = Decimal("100000000")
     risk_pct: Decimal = Decimal("0.01")
     max_positions: int = 5
@@ -52,7 +58,8 @@ class SwingBacktestRequest:
     include_regime: bool = False
     benchmark_ticker: str = "^JKSE"
     allowed_regimes: tuple[str, ...] = ()
-    preset_targets: dict | None = None
+    setup_targets: dict | None = None
+    setup_config: SwingSetupCatalogConfig = field(default_factory=SwingSetupCatalogConfig)
 
 
 @dataclass(frozen=True)
@@ -145,7 +152,7 @@ class SwingBacktestRegimeStat:
 class SwingBacktestResponse:
     """Portfolio-level walk-forward result."""
 
-    preset: str
+    setup: str
     start_date: date
     end_date: date
     initial_capital: Decimal
@@ -303,7 +310,7 @@ class SwingBacktestUseCase:
             final_equity = request.capital
 
         return SwingBacktestResponse(
-            preset=request.preset,
+            setup=request.setup,
             start_date=request.start_date,
             end_date=request.end_date,
             initial_capital=request.capital,
@@ -333,8 +340,8 @@ class SwingBacktestUseCase:
         )
 
     def _validate(self, request: SwingBacktestRequest) -> None:
-        if request.preset != FOREIGN_BOUNCE_PRESET:
-            raise ValueError(f"Unsupported swing preset: {request.preset}")
+        if request.setup not in AVAILABLE_SWING_SETUPS:
+            raise ValueError(f"Unsupported swing setup: {request.setup}")
         if not request.tickers:
             raise ValueError("At least one ticker is required")
         if request.start_date > request.end_date:
@@ -368,12 +375,12 @@ class SwingBacktestUseCase:
             tickers=tickers,
             window_days=request.window_days,
             min_net_buy_days=request.min_net_buy_days,
-            min_score=request.min_score,
+            min_score=0.0,
             as_of_date=signal_date,
         ))
         candidates = [
             candidate for candidate in response.candidates
-            if self._passes_preset(candidate, request)
+            if self._passes_setup(candidate, request)
         ]
         return sorted(
             candidates,
@@ -385,20 +392,19 @@ class SwingBacktestUseCase:
             reverse=True,
         )
 
-    def _passes_preset(
+    def _passes_setup(
         self,
         candidate: AccumulationCandidate,
         request: SwingBacktestRequest,
     ) -> bool:
         return (
-            candidate.score >= request.min_score
-            and candidate.vwap_discount_pct is not None
-            and candidate.vwap_discount_pct >= request.min_vwap_disc_pct
-            and candidate.trend.upper() == request.trend.upper()
-            and candidate.avg_flow_ratio is not None
-            and candidate.avg_flow_ratio >= request.min_flow_pct
-            and candidate.rsi is not None
-            and candidate.rsi <= request.max_rsi
+            EvaluateSwingSetupUseCase().execute(
+                EvaluateSwingSetupRequest(
+                    setup_name=request.setup,
+                    candidate=candidate,
+                    config=request.setup_config,
+                )
+            ).passed
         )
 
     def _passes_regime_filter(
@@ -470,9 +476,9 @@ class SwingBacktestUseCase:
 
         tp_pct = request.take_profit_pct
         sl_pct = request.stop_loss_pct
-        if request.preset_targets:
-            from src.application.use_case.accumulation_screen_use_case import resolve_preset_targets
-            tp_pct, sl_pct = resolve_preset_targets(position.regime, {"preset_targets": request.preset_targets})
+        if request.setup_targets:
+            from src.application.use_case.accumulation_screen_use_case import resolve_setup_targets
+            tp_pct, sl_pct = resolve_setup_targets(position.regime, {"setup_targets": request.setup_targets})
 
         target = position.entry_price * (
             Decimal("1") + tp_pct / Decimal("100")

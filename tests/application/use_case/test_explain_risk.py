@@ -46,7 +46,7 @@ def make_assessment(
     """Create test assessment with snapshot."""
     snapshot = make_snapshot()
     assessment = RiskAssessment(
-        profile=RiskProfile.BALANCED,
+        sensitivity=RiskProfile.BALANCED,
         risk_level=risk_level,
         confidence=confidence,
         rationale=(
@@ -229,7 +229,7 @@ class TestDeterminismPreserved:
         # Verify assessment is unchanged (immutable dataclass)
         assert assessment_before.risk_level == RiskLevel.HIGH_RISK
         assert assessment_before.confidence == 100
-        assert assessment_before.profile == RiskProfile.BALANCED
+        assert assessment_before.sensitivity == RiskProfile.BALANCED
         assert assessment_before.rationale == (
             "RSI 72.50 > threshold (70)",
             "EMA < SMA indicates downtrend",
@@ -243,4 +243,4 @@ class TestDeterminismPreserved:
         # Both assessments should be identical
         assert assessment1.risk_level == assessment2.risk_level
         assert assessment1.confidence == assessment2.confidence
-        assert assessment1.profile == assessment2.profile
+        assert assessment1.sensitivity == assessment2.sensitivity

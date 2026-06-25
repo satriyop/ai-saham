@@ -53,7 +53,7 @@ from src.domain.ports.ticker_notation_provider import TickerNotationProvider
 from src.domain.value_objects.accumulation_evidence import AccumulationEvidence
 from src.domain.value_objects.idx_market import SHARES_PER_LOT
 
-# Default preset targets (1:1 R:R, regime-unaware fallback)
+# Default setup targets (1:1 R:R, regime-unaware fallback)
 _DEFAULT_TAKE_PROFIT = Decimal("5")
 _DEFAULT_STOP_LOSS = Decimal("5")
 
@@ -72,17 +72,17 @@ _REGIME_TARGETS: dict[str, tuple[Decimal, Decimal]] = {
 }
 
 
-def resolve_preset_targets(
+def resolve_setup_targets(
     regime: str | None,
     config: dict | None = None,
 ) -> tuple[Decimal, Decimal]:
-    """Return (take_profit_pct, stop_loss_pct) for the foreign-bounce preset.
+    """Return (take_profit_pct, stop_loss_pct) for the foreign-bounce setup.
 
     Precedence: YAML config overrides > regime defaults > hardcoded fallback.
     All values are in percentage points (e.g. Decimal("5") = 5%).
     """
     if config:
-        targets = config.get("preset_targets", {})
+        targets = config.get("setup_targets", {})
         regime_key = (regime or "default").lower()
         tier = targets.get(regime_key) or targets.get("default", {})
         if tier:
@@ -747,7 +747,7 @@ class AccumulationScreenUseCase:
                 resp = self._risk_use_case.execute(  # type: ignore[union-attr]
                     AssessRiskRequest(
                         ticker=candidate.ticker,
-                        profile=risk_profile,
+                        sensitivity=risk_profile,
                         gate_context=gate_ctx,
                     )
                 )
@@ -1098,85 +1098,6 @@ class AccumulationScreenUseCase:
 
         nearest_resistance_pct = min(resistances) if resistances else None
         return ma200, week52_high, nearest_resistance_pct
-
-
-# ── Foreign-bounce gate evaluation ────────────────────────────────────────────
-# Application-layer policy: decides ENTER / WATCH / AVOID for the foreign-bounce
-# preset.  Lives here so the decision is testable independent of CLI plumbing.
-
-def _fmt_gate_value(value: float | None, suffix: str = "") -> str:
-    """Format a numeric gate value for failure messages (stored in journal CSV)."""
-    if value is None:
-        return "None"
-    return f"{value:.1f}{suffix}"
-
-
-def evaluate_foreign_bounce_gates(
-    candidate: "AccumulationCandidate",
-    gate_min_score: float,
-    gate_min_vwap_discount_pct: float,
-    gate_required_trend: str,
-    gate_min_flow_ratio_pct: float,
-    gate_max_rsi: float,
-    watch_max_failed_gates: int,
-) -> tuple[str, tuple[str, ...]]:
-    """
-    Apply the foreign-bounce entry gates to a candidate.
-
-    Returns (classification, failed_gates) where classification is one of
-    "ENTER", "WATCH", or "AVOID", and failed_gates is a tuple of human-readable
-    strings describing each gate that was not met (stored in the trade journal).
-    """
-    gates = (
-        (
-            "accum_score",
-            candidate.accum_score >= gate_min_score,
-            _fmt_gate_value(candidate.accum_score),
-            f">= {gate_min_score:.0f}",
-        ),
-        (
-            "vwap_disc_pct",
-            candidate.vwap_discount_pct is not None
-            and candidate.vwap_discount_pct >= gate_min_vwap_discount_pct,
-            _fmt_gate_value(candidate.vwap_discount_pct, "%"),
-            f">= +{gate_min_vwap_discount_pct:.0f}%",
-        ),
-        (
-            "trend",
-            candidate.trend == gate_required_trend,
-            candidate.trend,
-            gate_required_trend,
-        ),
-        (
-            "flow_pct",
-            candidate.avg_flow_ratio is not None
-            and candidate.avg_flow_ratio >= gate_min_flow_ratio_pct,
-            _fmt_gate_value(candidate.avg_flow_ratio, "%"),
-            f">= +{gate_min_flow_ratio_pct:.0f}%",
-        ),
-        (
-            "RSI present",
-            candidate.rsi is not None,
-            _fmt_gate_value(candidate.rsi),
-            "present",
-        ),
-        (
-            "RSI",
-            candidate.rsi is not None and candidate.rsi <= gate_max_rsi,
-            _fmt_gate_value(candidate.rsi),
-            f"<= {gate_max_rsi:.0f}",
-        ),
-    )
-    failed = tuple(
-        f"{label}: {actual} (required {required})"
-        for label, passed, actual, required in gates
-        if not passed
-    )
-    if not failed:
-        return "ENTER", failed
-    if candidate.accum_score >= gate_min_score or len(failed) <= watch_max_failed_gates:
-        return "WATCH", failed
-    return "AVOID", failed
 
 
 def compute_percent_plan(

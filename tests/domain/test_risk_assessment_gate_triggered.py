@@ -44,7 +44,7 @@ class TestRiskAssessmentGateTriggeredField:
             rsi=Decimal("50"),
         )
         return RiskAssessment(
-            profile=RiskProfile.BALANCED,
+            sensitivity=RiskProfile.BALANCED,
             risk_level=RiskLevel.MODERATE,
             confidence=50,
             rationale=("test",),
@@ -62,7 +62,7 @@ class TestRiskAssessmentGateTriggeredField:
             rsi=Decimal("50"),
         )
         assessment = RiskAssessment(
-            profile=RiskProfile.BALANCED,
+            sensitivity=RiskProfile.BALANCED,
             risk_level=RiskLevel.MODERATE,
             confidence=50,
             rationale=("test",),
@@ -136,7 +136,7 @@ class TestAssessRiskResponseGateProperty:
         )
         req = AssessRiskRequest(
             ticker="BBCA",
-            profile="balanced",
+            sensitivity="balanced",
             gate_context=GateContext(
                 ticker="BBCA",
                 snapshot_date=_TODAY,
@@ -156,7 +156,7 @@ class TestAssessRiskResponseGateProperty:
         )
         req = AssessRiskRequest(
             ticker="BBCA",
-            profile="balanced",
+            sensitivity="balanced",
             gate_context=GateContext(
                 ticker="BBCA",
                 snapshot_date=_TODAY,
@@ -175,7 +175,7 @@ class TestAssessRiskResponseGateProperty:
         )
         req = AssessRiskRequest(
             ticker="BBCA",
-            profile="balanced",
+            sensitivity="balanced",
             gate_context=GateContext(
                 ticker="BBCA",
                 snapshot_date=_TODAY,

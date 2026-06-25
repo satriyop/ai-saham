@@ -34,6 +34,16 @@ class AggressiveRuleSet(BaseRule):
     RSI_LOW_RISK = Decimal("40")
     DIVERGENCE_THRESHOLD = Decimal("0.1")
 
+    def __init__(
+        self,
+        rsi_high_risk: Decimal = Decimal("60"),
+        rsi_low_risk: Decimal = Decimal("40"),
+        divergence_threshold: Decimal = Decimal("0.1"),
+    ) -> None:
+        self.RSI_HIGH_RISK = rsi_high_risk
+        self.RSI_LOW_RISK = rsi_low_risk
+        self.DIVERGENCE_THRESHOLD = divergence_threshold
+
     @property
     def profile_name(self) -> str:
         return "aggressive"

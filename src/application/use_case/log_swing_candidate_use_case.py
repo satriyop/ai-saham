@@ -2,7 +2,7 @@
 Application use case: log a swing trade candidate to the accumulation journal.
 
 Orchestrates: single-ticker screen → multi-window pattern → entry price resolution
-→ gate evaluation (optional) → regime computation (optional) → CSV write → JSONL
+→ setup evaluation (optional) → regime computation (optional) → CSV write → JSONL
 dual-write (optional).
 
 Layer: Application
@@ -19,7 +19,12 @@ from src.application.use_case.accumulation_screen_use_case import (
     AccumulationScreenRequest,
     classify_multi_window_pattern,
     compute_percent_plan,
-    evaluate_foreign_bounce_gates,
+)
+from src.application.use_case.evaluate_swing_setup_use_case import (
+    EvaluateSwingSetupRequest,
+    EvaluateSwingSetupUseCase,
+    FOREIGN_BOUNCE_SETUP,
+    SwingSetupCatalogConfig,
 )
 
 if TYPE_CHECKING:
@@ -38,8 +43,8 @@ class LogSwingCandidateRequest:
     ticker: str
     window_days: int
     entry_price: Decimal | None         # None = resolve from latest candle
-    from_analysis: bool                 # True: run gate evaluation + trade plan
-    preset: str | None                  # e.g. "foreign-bounce"
+    from_analysis: bool                 # True: run setup evaluation + trade plan
+    setup: str | None                   # e.g. "foreign-bounce"
     with_regime: bool
     regime_universe: list[str]          # pre-resolved ticker list
     benchmark_ticker: str
@@ -50,13 +55,7 @@ class LogSwingCandidateRequest:
     sector_breadth_threshold: float
     sector_breadth_bonus_pts: float
     sector_breadth_min_tickers: int
-    # Gate thresholds
-    gate_min_score: float
-    gate_min_vwap_discount_pct: float
-    gate_required_trend: str
-    gate_min_flow_ratio_pct: float
-    gate_max_rsi: float
-    watch_max_failed_gates: int
+    setup_config: SwingSetupCatalogConfig
     # Multi-window pattern config
     multi_windows: tuple[int, ...] = (7, 30, 90)
     coiled_spring_min_score: float = 60.0
@@ -71,7 +70,7 @@ class LogSwingCandidateRequest:
 class LogSwingCandidateResponse:
     ticker: str
     written: bool                       # False if duplicate
-    classification: str | None          # ENTER / WATCH / AVOID (None when from_analysis=False)
+    setup_match: str | None             # MATCH / PARTIAL / NO_MATCH (None when from_analysis=False)
     pattern: str | None
     regime: str | None
     entry_price: Decimal
@@ -163,29 +162,25 @@ class LogSwingCandidateUseCase:
         else:
             resolved_entry = Decimal("0")
 
-        # 4. Gate evaluation + trade plan (only when from_analysis=True)
-        classification: str | None = None
+        # 4. Setup evaluation + trade plan (only when from_analysis=True)
+        setup_match: str | None = None
         failed_gates: tuple[str, ...] = ()
         planned_stop: Decimal | None = None
         planned_target: Decimal | None = None
         active_max_hold: int | None = None
-        journal_preset: str | None = None
+        journal_setup: str | None = None
 
         if request.from_analysis:
-            journal_preset = request.preset
-            if candidate is None:
-                classification = "AVOID"
-                failed_gates = ("No accumulation/broker-flow candidate available",)
-            else:
-                classification, failed_gates = evaluate_foreign_bounce_gates(
+            journal_setup = request.setup
+            setup_eval = EvaluateSwingSetupUseCase().execute(
+                EvaluateSwingSetupRequest(
+                    setup_name=request.setup or FOREIGN_BOUNCE_SETUP,
                     candidate=candidate,
-                    gate_min_score=request.gate_min_score,
-                    gate_min_vwap_discount_pct=request.gate_min_vwap_discount_pct,
-                    gate_required_trend=request.gate_required_trend,
-                    gate_min_flow_ratio_pct=request.gate_min_flow_ratio_pct,
-                    gate_max_rsi=request.gate_max_rsi,
-                    watch_max_failed_gates=request.watch_max_failed_gates,
+                    config=request.setup_config,
                 )
+            )
+            setup_match = setup_eval.match.value
+            failed_gates = setup_eval.failed_reasons
             planned_stop, planned_target = compute_percent_plan(
                 resolved_entry, request.stop_loss_pct, request.take_profit_pct
             )
@@ -209,8 +204,8 @@ class LogSwingCandidateUseCase:
             candidate=candidate,
             logged_at=request.logged_at,
             pattern=pattern,
-            preset=journal_preset,
-            classification=classification,
+            setup=journal_setup,
+            setup_match=setup_match,
             failed_gates=failed_gates,
             regime=regime,
             planned_entry=planned_entry,
@@ -228,8 +223,8 @@ class LogSwingCandidateUseCase:
                 entry_price=resolved_entry,
                 candidate=candidate,
                 pattern=pattern,
-                preset=journal_preset,
-                decision=classification,
+                setup=journal_setup,
+                setup_match=setup_match,
                 failed_gates=failed_gates,
                 regime=regime,
                 planned_entry=planned_entry,
@@ -241,7 +236,7 @@ class LogSwingCandidateUseCase:
         return LogSwingCandidateResponse(
             ticker=ticker,
             written=written_count > 0,
-            classification=classification,
+            setup_match=setup_match,
             pattern=pattern,
             regime=regime,
             entry_price=resolved_entry,
@@ -260,8 +255,8 @@ class LogSwingCandidateUseCase:
         entry_price: Decimal,
         candidate: "AccumulationCandidate | None",
         pattern: str | None,
-        preset: str | None,
-        decision: str | None,
+        setup: str | None,
+        setup_match: str | None,
         failed_gates: tuple[str, ...],
         regime: str | None,
         planned_entry: Decimal | None,
@@ -279,7 +274,7 @@ class LogSwingCandidateUseCase:
             "regime": regime,
             "trend": candidate.trend if candidate else None,
             "rsi": float(candidate.rsi) if candidate and candidate.rsi is not None else None,
-            "decision": decision,
+            "decision": setup_match,
             "planned_entry": _f(planned_entry),
             "planned_stop": _f(planned_stop),
             "planned_target": _f(planned_target),
@@ -292,7 +287,7 @@ class LogSwingCandidateUseCase:
             "vwap_disc_pct": float(candidate.vwap_discount_pct) if candidate and candidate.vwap_discount_pct is not None else None,
             "bb_pctile": float(candidate.bb_width_pctile) if candidate and candidate.bb_width_pctile is not None else None,
             "pattern": pattern,
-            "preset": preset,
+            "setup": setup,
             "failed_gates": list(failed_gates),
             "max_hold_days": max_hold_days,
             "actual_entry_price": None,

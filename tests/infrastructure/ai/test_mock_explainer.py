@@ -37,7 +37,7 @@ def make_assessment(
         snapshot = make_snapshot()
 
     return RiskAssessment(
-        profile=RiskProfile.BALANCED,
+        sensitivity=RiskProfile.BALANCED,
         risk_level=risk_level,
         confidence=confidence,
         rationale=("Test rationale 1", "Test rationale 2"),

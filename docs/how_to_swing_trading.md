@@ -21,9 +21,9 @@ DAILY ROUTINE (10 minutes)
 Step 1 → Update data        saham fetch market --universe lq45
 Step 2 → Check market       saham analyze regime
 Step 3 → Find candidates    saham screen accum --universe lq45 --multi
-Step 4 → Deep-dive          saham analyze swing BBRI --preset foreign-bounce --capital N
+Step 4 → Deep-dive          saham analyze swing BBRI --setup foreign-bounce --capital N
 Step 5 → Confirm chart      saham analyze chart price BBRI --sma 20 --days 90
-Step 6 → Size the trade     saham trade size BBRI --capital N    (if not using preset)
+Step 6 → Size the trade     saham trade size BBRI --capital N    (if not using setup)
 Step 7 → Log the decision   saham trade log swing --ticker BBRI --from-analysis --with-regime
 ──────────────────────────────────────────────────────────────────
 After 10–20 trading days: review what the setup actually delivered
@@ -141,17 +141,17 @@ By default, `saham analyze swing` checks and refreshes only the requested ticker
 
 Sentiment is optional context. Provider/RSS errors are suppressed into a concise `SENTIMENT` warning by default so deterministic gates stay readable. Use `--sentiment-verbose` only when debugging the news provider, or `--no-sentiment` for a fully offline deterministic run.
 
-### With the `foreign-bounce` preset
+### With the `foreign-bounce` setup
 
-The `foreign-bounce` preset applies a structured gate checklist to determine whether this specific setup meets entry criteria. When capital is provided, it also computes the exact lot size using regime-adaptive TP/SL from `config/swing_screener.yaml`.
+The `foreign-bounce` setup applies a structured gate checklist to determine whether this specific setup meets entry criteria. When capital is provided, it also computes the exact lot size using regime-adaptive TP/SL from `config/swing_screener.yaml`.
 
 ```bash
-saham analyze swing BBRI --preset foreign-bounce
-saham analyze swing BBRI --preset foreign-bounce --capital 10000000
-saham analyze swing BBRI --preset foreign-bounce --capital 50000000 --risk-pct 2
+saham analyze swing BBRI --setup foreign-bounce
+saham analyze swing BBRI --setup foreign-bounce --capital 10000000
+saham analyze swing BBRI --setup foreign-bounce --capital 50000000 --risk-pct 2
 ```
 
-**Preset gates for `foreign-bounce`:**
+**Setup gates for `foreign-bounce`:**
 
 | Gate | Requirement | Rationale |
 |---|---|---|
@@ -164,9 +164,9 @@ saham analyze swing BBRI --preset foreign-bounce --capital 50000000 --risk-pct 2
 
 **Classification output:**
 
-- `ENTER` — all 6 gates pass; setup is aligned
-- `WATCH` — close but not fully confirmed; wait for failed gates to improve
-- `AVOID` — too many gates failed; not a valid setup today
+- `MATCH` — all setup gates pass
+- `PARTIAL` — close but not fully confirmed; wait for failed gates to improve
+- `NO_MATCH` — too many gates failed or required evidence is missing
 
 **Regime-adaptive TP/SL:** The system loads TP/SL targets based on entry regime from `config/swing_screener.yaml`. When `--with-regime` is active, targets adjust automatically:
 
@@ -184,7 +184,7 @@ Without `--with-regime`, the default SIDEWAYS targets (5%/5%) are used.
 
 The 5%/5% parameters match exactly what the backtest validates. The win rate and profit factor you see in the HISTORY section were produced with these exits — if you size to a 2:1 target but the backtest was run at 1:1, you're executing a strategy that was never validated at those parameters.
 
-A 1:1 R:R requires a win rate above 50% just to break even. That's the implicit claim this preset makes: the accumulation signal is strong enough to be right more than half the time on a 5% bounce.
+A 1:1 R:R requires a win rate above 50% just to break even. That's the implicit claim this setup makes: the accumulation signal is strong enough to be right more than half the time on a 5% bounce.
 
 To explore a different R:R, change the backtest first:
 ```bash
@@ -192,20 +192,20 @@ saham trade backtest-swing --universe lq45 --start 2025-01-01 --take-profit 10 -
 ```
 If the win rate at 10% TP is still above 33% (the 2:1 break-even), the higher target is viable.
 
-Note: `--rr` and `--atr-mult` flags are only active when no preset is used. When a preset is active, sizing is driven entirely by the preset's fixed percentages, not ATR.
+Note: `--rr` and `--atr-mult` flags are only active when no setup is used. When a setup is active, sizing is driven entirely by the setup's fixed percentages, not ATR.
 
 ### With market regime context
 
 ```bash
-saham analyze swing BBRI --preset foreign-bounce --with-regime
-saham analyze swing BBRI --preset foreign-bounce --with-regime --regime-universe lq45
+saham analyze swing BBRI --setup foreign-bounce --with-regime
+saham analyze swing BBRI --setup foreign-bounce --with-regime --regime-universe lq45
 ```
 
 Adding `--with-regime` appends a MARKET REGIME section to the output showing IHSG breadth and benchmark context at the moment of your analysis.
 
-### With ATR-based sizing (no preset)
+### With ATR-based sizing (no setup)
 
-If you are using your own entry/exit logic rather than the preset, omit `--preset` and provide sizing parameters manually:
+If you are using your own entry/exit logic rather than the setup, omit `--setup` and provide sizing parameters manually:
 
 ```bash
 saham analyze swing BBRI --capital 10000000 --risk-pct 1 --atr-mult 1.5 --rr 2.0
@@ -253,7 +253,7 @@ BROKER DETAIL (5/5 sessions)            through: 2026-06-12 · stockbit
   Concentration    top buyer 38.0%; top seller 41.6%
   Quality          broad accumulation; smart support
 
-PRESET — foreign-bounce                            final: ENTER
+SETUP — foreign-bounce                            match: MATCH
   PASS            score           actual=74.1       required=>= 70
   PASS            vwap_disc_pct   actual=+4.2%      required=>= +3%
   PASS            trend           actual=SIDE        required=SIDE
@@ -270,7 +270,7 @@ RISK CONFIRMATION                                 verdict: LOW_RISK  conf: 71/10
   SMA20     4,810   EMA20     4,825   RSI14   44.5
   · RSI below 50 — room to run
 
-PRESET SIZING
+SETUP SIZING
   Entry    4,840   Stop  4,598  (-5.00%)   Target   5,082  (+5.00%)
   Position  4 lots = 400 shares   Cost  1,936,000 IDR  (19.4% of capital)
   Risk       96,800 IDR   Max hold  10 trading days
@@ -296,8 +296,8 @@ PLAN:  ENTER setup passed. Consider 4 lots at 4,840; TP 5,082; SL 4,598; max hol
 - `Smart flow` / `Noise flow` classifies all named top-broker rows available in the Stockbit summary, including local brokers when Stockbit returns them.
 - The deterministic tier map is `AK`, `BK`, `KZ`, `ZP`, `RX`, `MS`, `DB`, `ML`, `YU` = higher weight; `YP`, `PD`, `XL`, `XC` = lower/noise weight.
 - Absence of a broker code means it was not present in the cached top-broker rows, not that the broker had zero activity.
-- `Weighted net` is a measurement layer only. It does not change `ENTER/WATCH/AVOID` gates yet.
-- `Broker quality` notes under the preset block are confirmation/warning context only. `smart+` can support an `ENTER` or prioritize a `WATCH`, while `noise+` or `smart-` warns you to demand stronger chart confirmation or avoid upgrading the setup.
+- `Weighted net` is a measurement layer only. It does not change final action by itself.
+- `Broker quality` notes under the setup block are confirmation/warning context only. `smart+` can support a high-priority candidate, while `noise+` or `smart-` warns you to demand stronger chart confirmation or avoid upgrading the setup.
 
 ### Enrichment signals explanation
 
@@ -320,7 +320,7 @@ All signals are pre-warmed by `saham fetch market --universe lq45` and served fr
 | Option | Default | Description |
 |---|---|---|
 | `--profile` | `balanced` | Risk profile: balanced / conservative / aggressive |
-| `--preset` | none | Swing preset: `foreign-bounce` |
+| `--setup` | none | Swing setup: `foreign-bounce` |
 | `--window` | `7` | Accumulation analysis window in broker sessions |
 | `--flow-window` | `30` | Broker-flow detail window in broker sessions |
 | `--capital` | none | Capital in IDR — enables sizing block |
@@ -438,8 +438,8 @@ saham trade log swing --ticker BBCA --window 7 --entry-price 9450 --from-analysi
 The command:
 1. Runs the accumulation screen for that ticker on the specified window
 2. Computes the multi-window pattern (7/30/90 broker sessions) automatically
-3. Re-evaluates the `foreign-bounce` preset gates when `--from-analysis` is used
-4. Stores preset name, decision (`ENTER/WATCH/AVOID`), failed gates, regime, entry, stop, target, and max hold
+3. Re-evaluates the `foreign-bounce` setup gates when `--from-analysis` is used
+4. Stores setup name, decision (`ENTER/WATCH/AVOID`), failed gates, regime, entry, stop, target, and max hold
 5. Appends one row to `journals/accumulation.csv`
 6. Is idempotent — re-running the same (date, ticker, window) never duplicates
 
@@ -468,9 +468,9 @@ PERFORMANCE BY SCORE BUCKET
   Score 0–39    5    -0.8%     -2.1%           40%
 ```
 
-**Performance by preset decision** — answers: do true `ENTER` rows outperform watchlist rows?
+**Performance by setup decision** — answers: do true `ENTER` rows outperform watchlist rows?
 ```
-PERFORMANCE BY PRESET DECISION
+PERFORMANCE BY SETUP DECISION
   DECISION       N   AVG_10D   WIN_RATE  AVG_MAX_UP   AVG_MAX_DD
   --------------------------------------------------------------
   ENTER          8    +5.4%       62%       +8.9%       -3.8%
@@ -503,11 +503,11 @@ After 20+ entries the statistics become meaningful. This is the only way to know
 
 ---
 
-## Validating the Preset — Portfolio Backtests
+## Validating the Setup — Portfolio Backtests
 
 ### `saham trade backtest-swing` — Walk-forward portfolio simulation
 
-This validates the `foreign-bounce` preset at the portfolio level. Unlike `saham strategy backtest` (which tests a rules-file strategy on one stock), `swing backtest` replays the full daily workflow across a universe: scan → apply preset gates → rank by score → open within cash limits → exit by TP/SL/max-hold.
+This validates the `foreign-bounce` setup at the portfolio level. Unlike `saham strategy backtest` (which tests a rules-file strategy on one stock), `swing backtest` replays the full daily workflow across a universe: scan → apply setup gates → rank by score → open within cash limits → exit by TP/SL/max-hold.
 
 ```bash
 saham trade backtest-swing --universe lq45 --start 2025-01-01
@@ -523,7 +523,7 @@ Default simulations include `20` bps one-way transaction cost, applied on both e
 
 | Option | Default | Description |
 |---|---|---|
-| `--preset` | `foreign-bounce` | Swing preset to validate |
+| `--setup` | `foreign-bounce` | Swing setup to validate |
 | `--start` | `2026-01-01` | Backtest start date |
 | `--end` | today | Backtest end date |
 | `--capital` | `100,000,000` | Initial capital in IDR |
@@ -543,7 +543,7 @@ Default simulations include `20` bps one-way transaction cost, applied on both e
 ══════════════════════════════════════════════════════════════════════════════
 WALK-FORWARD SWING BACKTEST
 ══════════════════════════════════════════════════════════════════════════════
-Preset: foreign-bounce | Period: 2025-01-01 to 2026-06-12
+Setup: foreign-bounce | Period: 2025-01-01 to 2026-06-12
 Cost: 20 bps one-way, applied on entry and exit
 Read as: the workflow scans each replay date, opens eligible signals within
 portfolio limits, then exits by TP/SL/max-hold.
@@ -574,17 +574,17 @@ SIDEWAYS          22     +1.4%       55%       7,300,000
 WEAK               7     -0.8%       43%      -1,200,000
 ```
 
-This tells you which market conditions the preset works best in. If WEAK regime consistently underperforms, restrict entries with `--allow-regimes SIDEWAYS,BULLISH`.
+This tells you which market conditions the setup works best in. If WEAK regime consistently underperforms, restrict entries with `--allow-regimes SIDEWAYS,BULLISH`.
 
 ### `saham analyze accum-audit` — Validate Signal Buckets
 
 Use audit before turning a confirmation signal into a hard rule:
 
 ```bash
-saham analyze accum-audit --universe lq45 --preset foreign-bounce --start 2026-01-01
+saham analyze accum-audit --universe lq45 --setup foreign-bounce --start 2026-01-01
 ```
 
-The grouped output includes `broker_quality` buckets (`smart+`, `noise+`, `smart-`, `noise-`, `mixed`, `no_detail`) with forward returns and win rate. Treat these rows as evidence for whether broker quality should stay a warning, become a downgrade, or become a future preset gate.
+The grouped output includes `broker_quality` buckets (`smart+`, `noise+`, `smart-`, `noise-`, `mixed`, `no_detail`) with forward returns and win rate. Treat these rows as evidence for whether broker quality should stay a warning, become a downgrade, or become a future setup gate.
 
 ### `saham analyze swing-compare` — Regime filter variants side-by-side
 
@@ -636,7 +636,7 @@ saham screen accum --universe lq45 --multi --min-accum-score 50
 # → Shortlist: BBRI (sustained, 7s=74.1), TLKM (building, 7s=61.3)
 
 # 4. Deep-dive on top candidate
-saham analyze swing BBRI --preset foreign-bounce --capital 10000000 --with-regime
+saham analyze swing BBRI --setup foreign-bounce --capital 10000000 --with-regime
 # → PLAN: ENTER setup passed. Consider 4 lots at 4,840; TP 5,082; SL 4,598
 
 # 5. Confirm chart structure before paper entry
@@ -646,12 +646,12 @@ saham analyze chart volume BBRI --days 30
 # → Confirm sideways base / support, RSI room, and volume participation
 
 # 6. Check second candidate
-saham analyze swing TLKM --preset foreign-bounce --capital 10000000
+saham analyze swing TLKM --setup foreign-bounce --capital 10000000
 # → PLAN: WATCH only. vwap_disc: 1.2% (required >= 3%)
 
 # 7. Log BBRI decision and plan to journal
 saham trade log swing --ticker BBRI --window 7 --from-analysis --with-regime
-# → Logged BBRI | 2026-06-12 | window=7 sessions | score=74.1 | pattern: sustained | preset=foreign-bounce | decision=ENTER | regime=SIDEWAYS | plan entry=4,840 stop=4,598 target=5,082 hold=10d
+# → Logged BBRI | 2026-06-12 | window=7 sessions | score=74.1 | pattern: sustained | setup=foreign-bounce | decision=ENTER | regime=SIDEWAYS | plan entry=4,840 stop=4,598 target=5,082 hold=10d
 
 # --- 10 trading days later ---
 
@@ -667,8 +667,8 @@ The application identifies entries. Monitor these signals on open positions by r
 
 | Signal | Action |
 |---|---|
-| Preset changes from `ENTER` to `WATCH` | Tighten stop or reduce size |
-| Preset changes from `WATCH` to `AVOID` | Exit — institutional support is weakening |
+| Final action changes from `ENTER` to `WATCH` | Tighten stop or reduce size |
+| Final action changes from `WATCH` to `AVOID` | Exit — institutional support is weakening |
 | STREAK drops to 0 (a sell day breaks the run) | Warning — watch closely |
 | VWAP_DISC turns negative (foreigners now in profit) | Motivation to defend is gone — consider tightening stop |
 | RSI > 70 (overbought) | Take partial profit or trail stop |
@@ -676,7 +676,7 @@ The application identifies entries. Monitor these signals on open positions by r
 | Price hits 3× ATR above entry | Swing likely complete |
 | Market regime turns `RISK_OFF` | Close all positions |
 
-The discipline is: run `saham analyze swing TICKER --preset foreign-bounce` on every open position every morning. If the preset that justified your entry now says `AVOID`, the trade is over regardless of your P&L.
+The discipline is: run `saham analyze swing TICKER --setup foreign-bounce` on every open position every morning. If the final action moves to `AVOID`, the trade is over regardless of your P&L.
 
 ---
 
@@ -688,13 +688,13 @@ The discipline is: run `saham analyze swing TICKER --preset foreign-bounce` on e
 | `saham analyze regime` | IHSG market regime: BULLISH / SIDEWAYS / WEAK / RISK_OFF |
 | `saham screen accum --universe lq45 --multi` | Multi-window accumulation screener |
 | `saham analyze swing TICKER` | Composite view: accumulation + risk + sizing + backtest + sentiment |
-| `saham analyze swing TICKER --preset foreign-bounce` | Gate-checked entry decision with structured plan |
-| `saham analyze swing TICKER --preset foreign-bounce --capital N` | Full plan + lot sizing |
+| `saham analyze swing TICKER --setup foreign-bounce` | Gate-checked entry decision with structured plan |
+| `saham analyze swing TICKER --setup foreign-bounce --capital N` | Full plan + lot sizing |
 | `saham analyze swing TICKER --with-regime` | Adds IHSG breadth context to swing output |
 | `saham trade size TICKER --capital N` | Standalone ATR-based position sizing |
-| `saham trade backtest-swing --universe lq45` | Walk-forward portfolio backtest of the preset |
+| `saham trade backtest-swing --universe lq45` | Walk-forward portfolio backtest of the setup |
 | `saham analyze swing-compare --universe lq45` | Compare baseline vs regime-filtered variants |
-| `saham trade log swing --ticker BBRI --from-analysis --with-regime` | Log candidate, preset decision, failed gates, regime, and plan |
+| `saham trade log swing --ticker BBRI --from-analysis --with-regime` | Log candidate, setup decision, failed gates, regime, and plan |
 | `saham trade review swing` | Review journal: did ENTER beat WATCH and did high-score setups deliver? |
 
 For a reference of accumulation screener columns (`STREAK`, `VWAP_DISC`, `FLOW%`, `BB%ILE`, `PATTERN`), run:

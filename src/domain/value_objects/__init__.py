@@ -10,7 +10,7 @@ Layer: Domain
 from src.domain.value_objects.backtest_result import BacktestResult
 from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 from src.domain.value_objects.risk_assessment import RiskAssessment
-from src.domain.value_objects.risk_signal import RiskLevel, RiskProfile
+from src.domain.value_objects.risk_signal import RiskLevel, RiskProfile, SignalSensitivity
 from src.domain.value_objects.sentiment import (
     HeadlineResult,
     Sentiment,
@@ -33,6 +33,7 @@ __all__ = [
     "RiskAssessment",
     "RiskLevel",
     "RiskProfile",
+    "SignalSensitivity",
     "Sentiment",
     "SentimentSnapshot",
     "SkillAnnotation",

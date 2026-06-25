@@ -166,7 +166,10 @@ class AccumulationAuditRequest:
     trend: str | None = None
     min_flow_pct: float | None = None
     require_rsi: bool = False
+    min_rsi: float | None = None
     max_rsi: float | None = None
+    max_bb_width_pctile: float | None = None
+    broker_quality: str | None = None
     simulate_exits: bool = False
     take_profit_pcts: tuple[float, ...] = ()
     stop_loss_pcts: tuple[float, ...] = ()
@@ -223,7 +226,7 @@ class AccumulationAuditUseCase:
             )
 
             for candidate in screen_response.candidates:
-                if not self._passes_filters(candidate, request):
+                if not self._passes_filters(candidate, request, signal_date):
                     continue
                 record = self._build_record(
                     candidate=candidate,
@@ -279,6 +282,7 @@ class AccumulationAuditUseCase:
         self,
         candidate: AccumulationCandidate,
         request: AccumulationAuditRequest,
+        signal_date: date,
     ) -> bool:
         """Apply audit-only strict filters to a replayed candidate."""
         if request.min_vwap_disc_pct is not None:
@@ -304,6 +308,26 @@ class AccumulationAuditUseCase:
             if candidate.rsi is None:
                 return False
             if candidate.rsi > request.max_rsi:
+                return False
+
+        if request.min_rsi is not None:
+            if candidate.rsi is None:
+                return False
+            if candidate.rsi < request.min_rsi:
+                return False
+
+        if request.max_bb_width_pctile is not None:
+            if candidate.bb_width_pctile is None:
+                return False
+            if candidate.bb_width_pctile > request.max_bb_width_pctile:
+                return False
+
+        if request.broker_quality is not None:
+            quality = self._broker_quality_bucket(
+                ticker=candidate.ticker,
+                signal_date=signal_date,
+            )
+            if quality.lower() != request.broker_quality.lower():
                 return False
 
         return True

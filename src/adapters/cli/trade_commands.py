@@ -24,7 +24,7 @@ import typer
 from src.adapters.cli.trade_accum_commands import (
     DEFAULT_ACCUM_JOURNAL_PATH,
     DEFAULT_DB_PATH,
-    FOREIGN_BOUNCE_PRESET,
+    FOREIGN_BOUNCE_SETUP,
     _accumulation_log_impl,
     accumulation_review,
 )
@@ -85,12 +85,12 @@ def trade_log(
     ] = None,
     from_analysis: Annotated[
         bool,
-        typer.Option("--from-analysis", help="Record preset, failed gates, trade plan (swing only)"),
+        typer.Option("--from-analysis", help="Record setup match, failed gates, trade plan (swing only)"),
     ] = False,
-    preset: Annotated[
+    setup: Annotated[
         str,
-        typer.Option("--preset", help="Swing preset name"),
-    ] = FOREIGN_BOUNCE_PRESET,
+        typer.Option("--setup", help="Swing setup name"),
+    ] = FOREIGN_BOUNCE_SETUP,
     with_regime: Annotated[
         bool,
         typer.Option("--with-regime", help="Include market regime label (swing only)"),
@@ -139,7 +139,7 @@ def trade_log(
             window=window,
             entry_price=entry_price,
             from_analysis=from_analysis,
-            preset=preset,
+            setup=setup,
             with_regime=with_regime,
             regime_universe=regime_universe,
             benchmark=benchmark,

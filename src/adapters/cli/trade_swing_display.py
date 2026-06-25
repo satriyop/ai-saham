@@ -25,7 +25,7 @@ def display_swing_backtest(response: SwingBacktestResponse, show_trades: int) ->
     summary_table.add_column("Metric", style="bold cyan")
     summary_table.add_column("Value")
 
-    summary_table.add_row("Preset Strategy", response.preset)
+    summary_table.add_row("Setup", response.setup)
     summary_table.add_row("Period", f"{response.start_date} to {response.end_date}")
     summary_table.add_row("Transaction Cost", f"{float(response.cost_bps):g} bps one-way (applied on entry & exit)")
     summary_table.add_row("Simulation Logic", "Scans each replay date, opens eligible signals within portfolio limits, then exits by TP/SL/max-hold.")

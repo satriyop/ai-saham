@@ -2,9 +2,9 @@
 #
 # Impacted CLI Commands:
 #   - saham screen accum / saham screen swing (runs accumulation screening using parameters defined here)
-#   - saham analyze swing / swing-compare (uses screen gates, BCI profiles, corporate actions, and preset targets)
-#   - saham trade size (uses swing ATR multipliers / preset targets to size positions)
-#   - saham trade backtest-swing (backtests swing strategies using preset targets and regime-adaptive TP/SL)
+#   - saham analyze swing / swing-compare (uses screen gates, BCI profiles, corporate actions, and setup targets)
+#   - saham trade size (uses swing ATR multipliers / setup targets to size positions)
+#   - saham trade backtest-swing (backtests swing strategies using setup targets and regime-adaptive TP/SL)
 #
 version: 1
 name: "swing-screener"
@@ -41,8 +41,8 @@ resistance:
   # Set to false to disable the resistance gate entirely.
   resistance_gate_enabled: true
 
-preset_targets:
-  # Regime-adaptive TP/SL for the foreign-bounce preset.
+setup_targets:
+  # Regime-adaptive TP/SL for the foreign-bounce setup.
   # Keys use MCE vocabulary (RISK_ON/NEUTRAL/VOLATILE/RISK_OFF).
   # Legacy keys (bullish/sideways/weak) kept for old sidecars and backcompat.
   # Validated direction: IHSG has documented regime cycles.
@@ -67,7 +67,7 @@ preset_targets:
     take_profit_pct: 5.0
     stop_loss_pct: 5.0    # Fallback when regime data is unavailable
 
-  # Legacy labels — kept for backward compat with old sidecars
+  # Legacy regime labels.
   bullish:
     take_profit_pct: 8.0
     stop_loss_pct: 4.0
@@ -157,19 +157,50 @@ regime:
   # Applies to both price breadth and foreign-flow breadth signals.
   breadth_threshold_pct: 50
 
-foreign_bounce:
-  # Gate thresholds for the foreign-bounce preset ENTER/WATCH/AVOID classification.
-  # A candidate must pass ALL gates for ENTER; partial pass = WATCH.
-  gates:
-    min_score: 70              # accumulation composite score gate (0–120 scale)
-    min_vwap_discount_pct: 3.0 # foreigners must be underwater ≥ 3% below VWAP
-    required_trend: SIDE       # pre-accumulation trend must be sideways (not trending up)
-    min_flow_ratio_pct: 5.0    # foreign flow ≥ 5% of daily turnover over window
-    max_rsi: 60                # not overbought — room to run
+setups:
+  foreign-bounce:
+    enabled: true
+    # Reversal/absorption: foreigners are accumulating while price is still depressed.
+    gates:
+      min_score: 70              # accumulation evidence score gate (0–120 scale)
+      min_vwap_discount_pct: 3.0 # foreigners must be underwater ≥ 3% below VWAP
+      required_trend: SIDE       # pre-accumulation trend must be sideways
+      min_flow_ratio_pct: 5.0    # foreign flow ≥ 5% of daily turnover over window
+      max_rsi: 60                # not overbought — room to run
+    partial_max_failed_gates: 2
 
-  # Maximum number of failed gates allowed before downgrading from WATCH to AVOID.
-  # Also: if score ≥ min_score regardless of failed count → stays WATCH.
-  watch_max_failed_gates: 2
+  coiled-spring:
+    enabled: true
+    # Breakout preparation: accumulation is present while volatility compresses.
+    gates:
+      min_score: 60
+      max_bb_width_pctile: 0.20
+      min_flow_ratio_pct: 3.0
+      max_rsi: 65
+    partial_max_failed_gates: 2
+
+  smart-money-confirmed:
+    enabled: true
+    # Quality filter: named-broker attribution confirms the accumulation.
+    gates:
+      min_score: 60
+      min_smart_flow_idr: 0
+      min_smart_share_pct: 30.0
+      max_noise_share_pct: 60.0
+      reject_smart_net_selling: true
+    partial_max_failed_gates: 1
+
+  pullback-continuation:
+    enabled: true
+    # Trend-following: controlled pullback/accumulation inside an uptrend.
+    gates:
+      min_score: 55
+      required_trend: UP
+      min_flow_ratio_pct: 2.0
+      min_rsi: 40
+      max_rsi: 65
+      min_vwap_discount_pct: -2.0
+    partial_max_failed_gates: 2
 
 verdicts:
   # Score thresholds for ENTER/WATCH classifications in the screener output table.

@@ -12,6 +12,10 @@ from src.application.use_case.accumulation_screen_use_case import (
     AccumulationScreenRequest,
     AccumulationScreenResponse,
 )
+from src.application.use_case.evaluate_swing_setup_use_case import (
+    ForeignBounceSetupConfig,
+    SwingSetupCatalogConfig,
+)
 from src.application.use_case.log_swing_candidate_use_case import (
     LogSwingCandidateRequest,
     LogSwingCandidateUseCase,
@@ -128,7 +132,7 @@ def _make_request(
     window_days: int = 7,
     entry_price: Decimal | None = None,
     from_analysis: bool = True,
-    preset: str | None = "foreign-bounce",
+    setup: str | None = "foreign-bounce",
     with_regime: bool = False,
     regime_universe: list[str] | None = None,
 ) -> LogSwingCandidateRequest:
@@ -137,7 +141,7 @@ def _make_request(
         window_days=window_days,
         entry_price=entry_price,
         from_analysis=from_analysis,
-        preset=preset,
+        setup=setup,
         with_regime=with_regime,
         regime_universe=regime_universe or [],
         benchmark_ticker="COMPOSITE",
@@ -147,12 +151,16 @@ def _make_request(
         sector_breadth_threshold=0.6,
         sector_breadth_bonus_pts=10.0,
         sector_breadth_min_tickers=3,
-        gate_min_score=60.0,
-        gate_min_vwap_discount_pct=2.0,
-        gate_required_trend="UP",
-        gate_min_flow_ratio_pct=5.0,
-        gate_max_rsi=65.0,
-        watch_max_failed_gates=1,
+        setup_config=SwingSetupCatalogConfig(
+            foreign_bounce=ForeignBounceSetupConfig(
+                gate_min_score=60.0,
+                gate_min_vwap_discount_pct=2.0,
+                gate_required_trend="UP",
+                gate_min_flow_ratio_pct=5.0,
+                gate_max_rsi=65.0,
+                partial_max_failed_gates=1,
+            )
+        ),
         take_profit_pct=Decimal("5"),
         stop_loss_pct=Decimal("5"),
         max_hold_days=10,
@@ -179,7 +187,7 @@ def test_logs_candidate_and_returns_written_true():
     result = uc.execute(_make_request())
 
     assert result.written is True
-    assert result.classification == "ENTER"
+    assert result.setup_match == "MATCH"
     assert result.candidate_score == pytest.approx(70.0)
     assert len(journal.calls) == 1
     assert len(trade_store.records) == 1
@@ -204,7 +212,7 @@ def test_duplicate_returns_written_false_and_no_jsonl():
     assert len(trade_store.records) == 0  # JSONL write skipped on duplicate
 
 
-def test_from_analysis_false_skips_gate_evaluation():
+def test_from_analysis_false_skips_setup_evaluation():
     candidate = _make_candidate()
     screen = FakeScreenUseCase({("BBCA", 7): candidate, ("BBCA", 30): None, ("BBCA", 90): None})
     journal = FakeJournalService()
@@ -215,9 +223,9 @@ def test_from_analysis_false_skips_gate_evaluation():
         journal_service=journal,
         market_repository=market,
     )
-    result = uc.execute(_make_request(from_analysis=False, preset=None))
+    result = uc.execute(_make_request(from_analysis=False, setup=None))
 
-    assert result.classification is None
+    assert result.setup_match is None
     assert result.planned_stop is None
     assert result.planned_target is None
     assert result.failed_gates == ()
@@ -242,7 +250,7 @@ def test_with_regime_populates_regime_label():
     assert journal.calls[0]["regime"] == "RISK_ON"
 
 
-def test_no_candidate_found_produces_avoid_and_zero_score():
+def test_no_candidate_found_produces_no_match_and_zero_score():
     screen = FakeScreenUseCase({})  # no candidates for any window
     journal = FakeJournalService()
     market = FakeMarketRepository()
@@ -255,7 +263,7 @@ def test_no_candidate_found_produces_avoid_and_zero_score():
     result = uc.execute(_make_request())
 
     assert result.candidate_score is None
-    assert result.classification == "AVOID"
+    assert result.setup_match == "NO_MATCH"
     assert "No accumulation/broker-flow candidate available" in result.failed_gates
     assert result.entry_price == Decimal("0")
 

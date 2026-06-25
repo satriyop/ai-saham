@@ -28,15 +28,66 @@ from src.application.use_case.swing_backtest_use_case import (
     SwingBacktestRequest,
     SwingBacktestUseCase,
 )
+from src.application.use_case.evaluate_swing_setup_use_case import (
+    AVAILABLE_SWING_SETUPS,
+    CoiledSpringSetupConfig,
+    ForeignBounceSetupConfig,
+    PullbackContinuationSetupConfig,
+    SmartMoneyConfirmedSetupConfig,
+    SwingSetupCatalogConfig,
+)
 from src.application.use_case.swing_backtest_use_case import (
-    FOREIGN_BOUNCE_PRESET as BACKTEST_FOREIGN_BOUNCE_PRESET,
+    FOREIGN_BOUNCE_SETUP as BACKTEST_FOREIGN_BOUNCE_SETUP,
 )
 from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.swing_config import load_swing_config as _load_swing_config
 from src.infrastructure.config.user_config import get_swing_default
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
 DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
+_SC = _load_swing_config()
+
+
+def _setup_config() -> SwingSetupCatalogConfig:
+    return SwingSetupCatalogConfig(
+        foreign_bounce=ForeignBounceSetupConfig(
+            enabled=_SC.foreign_bounce_enabled,
+            gate_min_score=_SC.gate_min_score,
+            gate_min_vwap_discount_pct=_SC.gate_min_vwap_discount_pct,
+            gate_required_trend=_SC.gate_required_trend,
+            gate_min_flow_ratio_pct=_SC.gate_min_flow_ratio_pct,
+            gate_max_rsi=_SC.gate_max_rsi,
+            partial_max_failed_gates=_SC.partial_max_failed_gates,
+        ),
+        coiled_spring=CoiledSpringSetupConfig(
+            enabled=_SC.coiled_spring_enabled,
+            gate_min_score=_SC.coiled_spring_gate_min_score,
+            gate_max_bb_width_pctile=_SC.coiled_spring_gate_max_bb_width_pctile,
+            gate_min_flow_ratio_pct=_SC.coiled_spring_gate_min_flow_ratio_pct,
+            gate_max_rsi=_SC.coiled_spring_gate_max_rsi,
+            partial_max_failed_gates=_SC.coiled_spring_partial_max_failed_gates,
+        ),
+        smart_money_confirmed=SmartMoneyConfirmedSetupConfig(
+            enabled=_SC.smart_money_confirmed_enabled,
+            gate_min_score=_SC.smart_money_confirmed_gate_min_score,
+            gate_min_smart_flow_idr=_SC.smart_money_confirmed_gate_min_smart_flow_idr,
+            gate_min_smart_share_pct=_SC.smart_money_confirmed_gate_min_smart_share_pct,
+            gate_max_noise_share_pct=_SC.smart_money_confirmed_gate_max_noise_share_pct,
+            reject_smart_net_selling=_SC.smart_money_confirmed_reject_smart_net_selling,
+            partial_max_failed_gates=_SC.smart_money_confirmed_partial_max_failed_gates,
+        ),
+        pullback_continuation=PullbackContinuationSetupConfig(
+            enabled=_SC.pullback_continuation_enabled,
+            gate_min_score=_SC.pullback_continuation_gate_min_score,
+            gate_required_trend=_SC.pullback_continuation_gate_required_trend,
+            gate_min_flow_ratio_pct=_SC.pullback_continuation_gate_min_flow_ratio_pct,
+            gate_min_rsi=_SC.pullback_continuation_gate_min_rsi,
+            gate_max_rsi=_SC.pullback_continuation_gate_max_rsi,
+            gate_min_vwap_discount_pct=_SC.pullback_continuation_gate_min_vwap_discount_pct,
+            partial_max_failed_gates=_SC.pullback_continuation_partial_max_failed_gates,
+        ),
+    )
 
 
 def _parse_regime_filter(value: str | None) -> tuple[str, ...]:
@@ -63,10 +114,10 @@ def swing_backtest(
         Optional[str],
         typer.Option("--universe", "-u", help="Universe name or 'cached' — see `saham fetch universe list`"),
     ] = None,
-    preset: Annotated[
+    setup: Annotated[
         str,
-        typer.Option("--preset", help="Swing preset to validate"),
-    ] = BACKTEST_FOREIGN_BOUNCE_PRESET,
+        typer.Option("--setup", help="Swing setup to validate"),
+    ] = BACKTEST_FOREIGN_BOUNCE_SETUP,
     start: Annotated[
         str,
         typer.Option("--start", help="Backtest start date, YYYY-MM-DD"),
@@ -138,15 +189,15 @@ def swing_backtest(
     """
     Walk-forward backtest for the deterministic swing workflow.
 
-    This validates the full daily process: scan, apply preset gates, rank
+    This validates the full daily process: scan, apply setup gates, rank
     candidates, open only within portfolio limits, avoid duplicate positions,
     and exit by TP/SL/max-hold. It reads local cached market and broker data.
     """
-    preset_name = preset.lower()
-    if preset_name != BACKTEST_FOREIGN_BOUNCE_PRESET:
+    setup_name = setup.lower()
+    if setup_name not in AVAILABLE_SWING_SETUPS:
         typer.echo(
-            f"Unknown swing preset '{preset}'. "
-            f"Available presets: {BACKTEST_FOREIGN_BOUNCE_PRESET}",
+            f"Unknown swing setup '{setup}'. "
+            f"Available setups: {', '.join(AVAILABLE_SWING_SETUPS)}",
             err=True,
         )
         raise typer.Exit(1)
@@ -184,15 +235,15 @@ def swing_backtest(
 
     typer.echo(
         f"Backtesting {len(ticker_list)} tickers | {start_date} to {end_date} | "
-        f"preset={preset_name} | max positions={max_positions}..."
+        f"setup={setup_name} | max positions={max_positions}..."
     )
 
-    preset_targets = None
+    setup_targets = None
     try:
         import yaml
         with open("config/swing_screener.yaml", encoding="utf-8") as fh:
             yaml_data = yaml.safe_load(fh) or {}
-            preset_targets = yaml_data.get("preset_targets")
+            setup_targets = yaml_data.get("setup_targets")
     except Exception:
         pass
 
@@ -205,7 +256,7 @@ def swing_backtest(
             tickers=ticker_list,
             start_date=start_date,
             end_date=end_date,
-            preset=preset_name,
+            setup=setup_name,
             capital=Decimal(str(capital)),
             risk_pct=Decimal(str(risk_pct)) / Decimal("100"),
             max_positions=max_positions,
@@ -216,7 +267,8 @@ def swing_backtest(
             include_regime=with_regime or bool(allowed_regimes),
             benchmark_ticker=benchmark,
             allowed_regimes=allowed_regimes,
-            preset_targets=preset_targets,
+            setup_targets=setup_targets,
+            setup_config=_setup_config(),
         ))
     except ValueError as e:
         typer.echo(f"Error: {e}", err=True)
@@ -224,7 +276,7 @@ def swing_backtest(
 
     if output_format == "json":
         typer.echo(json.dumps({
-            "preset": response.preset,
+            "setup": response.setup,
             "start_date": response.start_date.isoformat(),
             "end_date": response.end_date.isoformat(),
             "initial_capital": str(response.initial_capital),

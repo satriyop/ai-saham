@@ -51,7 +51,7 @@ A **local-first, production-grade CLI application** for stock analysis focused o
 - **Cross-Broker Distribution** - `saham view broker distribution TICKER` shows counterparty flow breakdown across brokers
 - **Risk Engine** - Application-layer `RiskEngine` service wrapping rule-based risk gates (fundamental, liquidity, free float, bandar) with self-contained enrichment fetch; used by `analyze risk` and swing/accumulation workflows
 - **Data Status Labels** - Staleness replaced with contextual labels (`pending-eod` during market hours, `ready`, `bf+` for backfill, `✓` for aggregation up-to-date)
-- **Regime-Aware Backtesting** - Swing backtests can group/filter entries by MarketContextEngine regime and use regime-specific preset exits
+- **Regime-Aware Backtesting** - Swing backtests can group/filter entries by MarketContextEngine regime and use regime-specific setup exits
 - **IDX Floor Price Filter** - Rp 50 minimum price filter applied during IDX data ingestion
 - **Hexagonal Architecture** - Clean separation of domain, application, and infrastructure
 
@@ -666,7 +666,10 @@ saham screen compare morning-watch --universe lq45 --top 30  # Override universe
 Replay accumulation signals historically and measure forward returns.
 
 ```bash
-saham analyze accum-audit --universe idx80 --preset foreign-bounce
+saham analyze accum-audit --universe idx80 --setup foreign-bounce
+saham analyze accum-audit --universe idx80 --setup coiled-spring
+saham analyze accum-audit --universe idx80 --setup smart-money-confirmed
+saham analyze accum-audit --universe idx80 --setup pullback-continuation
 saham analyze accum-audit --universe idx80 --window 7 --min-score 70
 saham analyze accum-audit --universe lq45 --simulate-exits
 ```
@@ -765,7 +768,10 @@ Unified composite swing trade analysis combining accumulation, risk, sizing, bac
 # Full analysis
 saham analyze swing BBRI
 saham analyze swing BBRI --capital 10000000
-saham analyze swing BBRI --preset foreign-bounce --capital 10000000
+saham analyze swing BBRI --setup foreign-bounce --capital 10000000
+saham analyze swing BBRI --setup coiled-spring --capital 10000000
+saham analyze swing BBRI --setup smart-money-confirmed --capital 10000000
+saham analyze swing BBRI --setup pullback-continuation --capital 10000000
 saham analyze swing BBRI --capital 10000000 --risk-pct 1
 saham analyze swing BBRI --profile conservative --no-sentiment
 saham analyze swing BBRI --no-refresh --no-backtest --no-sentiment
@@ -778,7 +784,7 @@ saham analyze swing BBRI --format json
 |--------|-------|---------|-------------|
 | `--profile` | `-p` | balanced | Risk profile |
 | `--strategy` | `-S` | foreign-accumulation | Backtest strategy name |
-| `--preset` | | | Swing preset: foreign-bounce |
+| `--setup` | | foreign-bounce | Swing setup: foreign-bounce, coiled-spring, smart-money-confirmed, pullback-continuation |
 | `--window` | `-w` | 7 | Accumulation window in broker sessions |
 | `--flow-window` | | 30 | Broker-flow detail window in broker sessions |
 | `--capital` | `-c` | | Capital in IDR (enables sizing) |
@@ -797,7 +803,9 @@ saham analyze swing BBRI --format json
 #### `saham trade backtest-swing` - Portfolio Walk-Forward Backtest
 
 ```bash
-saham trade backtest-swing --universe idx80 --preset foreign-bounce
+saham trade backtest-swing --universe idx80 --setup foreign-bounce
+saham trade backtest-swing --universe idx80 --setup coiled-spring
+saham trade backtest-swing --universe idx80 --setup pullback-continuation
 saham trade backtest-swing --universe lq45 --capital 50000000 --max-positions 3
 saham trade backtest-swing --universe idx80 --with-regime --allow-regimes RISK_ON,NEUTRAL
 saham trade backtest-swing --universe idx80 --cost-bps 0  # gross/no-cost comparison
@@ -805,6 +813,15 @@ saham trade backtest-swing --universe idx80 --cost-bps 0  # gross/no-cost compar
 
 Default backtests include `--cost-bps 20` one-way transaction cost. Override explicitly
 when testing a different broker fee assumption.
+
+Swing setup gates are deterministic and configurable in `config/swing_screener.yaml`:
+
+| Setup | Question Answered |
+|-------|-------------------|
+| `foreign-bounce` | Is foreign accumulation happening while price is still below foreign VWAP in a range? |
+| `coiled-spring` | Is accumulation happening while volatility is compressed enough for a potential expansion? |
+| `smart-money-confirmed` | Is broker attribution led by smart-money flow rather than noise flow? |
+| `pullback-continuation` | Is an uptrend pullback still supported by foreign flow and RSI headroom? |
 
 #### `saham analyze swing-compare` - Compare Regime Variants
 
@@ -1518,7 +1535,7 @@ src/
 | `config/risk_engine.yaml` | Risk gate enablement and thresholds |
 | `config/signal_engine.yaml` | Signal factor enablement and weights |
 | `config/market_context_engine.yaml` | Market context factors, thresholds, and regime effects |
-| `config/swing_screener.yaml` | Swing screener calibration (smart money brokers, noise brokers, preset gates) |
+| `config/swing_screener.yaml` | Swing screener calibration (smart money brokers, noise brokers, setup gates and targets) |
 | `config/pre_open_screener.yaml` | Pre-open screener rules and thresholds |
 | `config/csv_mappings/` | CSV import column mapping definitions |
 

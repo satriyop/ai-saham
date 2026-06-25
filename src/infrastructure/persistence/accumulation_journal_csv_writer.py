@@ -20,7 +20,7 @@ _COLUMNS = [
     "logged_at", "ticker", "entry_price", "window_days",
     "score", "streak", "flow_pct", "vwap_disc_pct", "bb_pctile", "rsi",
     "trend", "pattern",
-    "preset", "classification", "failed_gates", "regime",
+    "setup", "setup_match", "failed_gates", "regime",
     "planned_entry", "planned_stop", "planned_target", "max_hold_days",
     # Review-time fields
     "actual_close_5d", "actual_close_10d", "actual_close_20d",
@@ -66,8 +66,8 @@ def _row_to_entry(row: dict[str, str]) -> AccumulationJournalEntry:
         rsi=_from_str(row["rsi"]),
         trend=row["trend"] or None,
         pattern=row["pattern"] or None,
-        preset=row.get("preset") or None,
-        classification=row.get("classification") or None,
+        setup=row.get("setup") or None,
+        setup_match=row.get("setup_match") or None,
         failed_gates=tuple(
             part.strip()
             for part in (row.get("failed_gates") or "").split(";")
@@ -100,8 +100,8 @@ def _entry_to_row(e: AccumulationJournalEntry) -> dict[str, str | int | float]:
         "rsi": _to_str(e.rsi),
         "trend": e.trend or "",
         "pattern": e.pattern or "",
-        "preset": e.preset or "",
-        "classification": e.classification or "",
+        "setup": e.setup or "",
+        "setup_match": e.setup_match or "",
         "failed_gates": "; ".join(e.failed_gates),
         "regime": e.regime or "",
         "planned_entry": _to_str(e.planned_entry),

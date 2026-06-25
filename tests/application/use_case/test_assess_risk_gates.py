@@ -109,7 +109,7 @@ def _ctx(
 
 def test_no_gates_returns_technical_assessment():
     uc = _make_use_case()
-    req = AssessRiskRequest(ticker="BBCA", profile="balanced")
+    req = AssessRiskRequest(ticker="BBCA", sensitivity="balanced")
     resp = uc.execute(req)
     assert resp.gate_triggered is None
     assert resp.assessment.risk_level in (RiskLevel.LOW_RISK, RiskLevel.MODERATE, RiskLevel.HIGH_RISK)
@@ -118,7 +118,7 @@ def test_no_gates_returns_technical_assessment():
 def test_gates_inactive_when_no_gate_context():
     """Gates configured but no gate_context → technical result only."""
     uc = _make_use_case(structural_gates=[FundamentalGate()])
-    req = AssessRiskRequest(ticker="BBCA", profile="balanced", gate_context=None)
+    req = AssessRiskRequest(ticker="BBCA", sensitivity="balanced", gate_context=None)
     resp = uc.execute(req)
     assert resp.gate_triggered is None
 
@@ -129,7 +129,7 @@ def test_fundamental_gate_short_circuits_on_distress():
     uc = _make_use_case(structural_gates=[FundamentalGate()])
     req = AssessRiskRequest(
         ticker="BBCA",
-        profile="balanced",
+        sensitivity="balanced",
         gate_context=_ctx(piotroski=2),
     )
     resp = uc.execute(req)
@@ -142,7 +142,7 @@ def test_fundamental_gate_passes_healthy_company():
     uc = _make_use_case(structural_gates=[FundamentalGate()])
     req = AssessRiskRequest(
         ticker="BBCA",
-        profile="balanced",
+        sensitivity="balanced",
         gate_context=_ctx(piotroski=7),
     )
     resp = uc.execute(req)
@@ -153,7 +153,7 @@ def test_fundamental_gate_passes_when_no_fundamental_data():
     uc = _make_use_case(structural_gates=[FundamentalGate()])
     req = AssessRiskRequest(
         ticker="BBCA",
-        profile="balanced",
+        sensitivity="balanced",
         gate_context=_ctx(piotroski=None),
     )
     resp = uc.execute(req)
@@ -166,7 +166,7 @@ def test_liquidity_gate_fires_on_third_liner():
     uc = _make_use_case(structural_gates=[LiquidityGate()])
     req = AssessRiskRequest(
         ticker="BBCA",
-        profile="balanced",
+        sensitivity="balanced",
         gate_context=_ctx(market_cap=500_000_000_000),  # 500B < 1T
     )
     resp = uc.execute(req)
@@ -194,7 +194,7 @@ def test_liquidity_gate_fires_on_illiquid_candles():
     )
     req = AssessRiskRequest(
         ticker="BBCA",
-        profile="balanced",
+        sensitivity="balanced",
         gate_context=GateContext(
             ticker="BBCA",
             snapshot_date=_TODAY,
@@ -210,7 +210,7 @@ def test_liquidity_gate_passes_liquid_large_cap():
     uc = _make_use_case(structural_gates=[LiquidityGate()])
     req = AssessRiskRequest(
         ticker="BBCA",
-        profile="balanced",
+        sensitivity="balanced",
         gate_context=_ctx(market_cap=50 * _1T),
     )
     resp = uc.execute(req)
@@ -245,7 +245,7 @@ def test_bandar_gate_downgrades_low_risk_on_distribution():
     uc = _make_use_case(execution_gates=[BandarGate()], candles=falling)
     req = AssessRiskRequest(
         ticker="BBCA",
-        profile="aggressive",
+        sensitivity="aggressive",
         gate_context=_ctx(
             five_day="Big Dist",
             is_distributing=True,
@@ -265,7 +265,7 @@ def test_bandar_gate_does_not_fire_when_accumulating():
     uc = _make_use_case(execution_gates=[BandarGate()])
     req = AssessRiskRequest(
         ticker="BBCA",
-        profile="balanced",
+        sensitivity="balanced",
         gate_context=_ctx(five_day="Big Acc", is_distributing=False),
     )
     resp = uc.execute(req)
@@ -282,7 +282,7 @@ def test_structural_gate_fires_before_execution_gate():
     )
     req = AssessRiskRequest(
         ticker="BBCA",
-        profile="balanced",
+        sensitivity="balanced",
         gate_context=_ctx(piotroski=1, five_day="Big Dist", is_distributing=True),
     )
     resp = uc.execute(req)
@@ -307,7 +307,7 @@ def test_structural_gate_preserves_technical_rationale_in_all_profiles():
         assert assessment.risk_level == RiskLevel.HIGH_RISK
         # Rationale must include gate reason AND profile-specific technical lines
         assert len(assessment.rationale) > 1, (
-            f"Profile {assessment.profile}: expected gate reason + technical rationale, "
+            f"Profile {assessment.sensitivity}: expected gate reason + technical rationale, "
             f"got only: {assessment.rationale}"
         )
         # First element is the gate reason

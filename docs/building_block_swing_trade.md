@@ -68,7 +68,7 @@ The swing trade feature is a **unified composite workflow** that combines accumu
 │  │  AccumulationCandidate   Score, streak, vwap, RSI, BB   │          │
 │  │  FlowDetail              Foreign flow stats over window  │          │
 │  │  DataFreshness           Cached data date ranges        │          │
-│  │  PresetEvaluation        ENTER/WATCH/AVOID classification│          │
+│  │  SetupEvaluation        MATCH/PARTIAL/NO_MATCH fit│          │
 │  │  SwingBacktestResponse   Portfolio-level metrics        │          │
 │  │  MarketRegimeResponse    Breadth + flow regime snapshot │          │
 │  └──────────────────────────────────────────────────────────┘          │
@@ -154,15 +154,13 @@ The single-ticker `saham analyze swing BBCA` command runs **7 data pipelines** s
        │
        ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  STEP 4: Preset evaluation (foreign-bounce gates)              │
-│  _evaluate_foreign_bounce(accum)                                │
-│    ├── Gate 1: score >= 70                                     │
-│    ├── Gate 2: vwap_disc >= 3%                                 │
-│    ├── Gate 3: trend == SIDE                                   │
-│    ├── Gate 4: avg_flow_ratio >= 5%                            │
-│    ├── Gate 5: RSI present                                     │
-│    └── Gate 6: RSI <= 60                                       │
-│  Output: PresetEvaluation(ENTER/WATCH/AVOID, failed_reasons)   │
+│  STEP 4: Setup evaluation (named setup gates)                  │
+│  EvaluateSwingSetupUseCase                                     │
+│    ├── foreign-bounce                                          │
+│    ├── coiled-spring                                           │
+│    ├── smart-money-confirmed                                   │
+│    └── pullback-continuation                                   │
+│  Output: SetupEvaluation(MATCH/PARTIAL/NO_MATCH, failed_reasons)   │
 └─────────────────────────────────────────────────────────────────┘
        │
        ▼
@@ -186,7 +184,7 @@ The single-ticker `saham analyze swing BBCA` command runs **7 data pipelines** s
        ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │  STEP 7: Position sizing                                       │
-│  IF preset_eval.passed:                                        │
+│  IF setup_eval.passed:                                        │
 │    compute_percent_position_size(capital, 5% stop, 5% TP)     │
 │  ELSE IF capital + atr_value:                                  │
 │    compute_position_size(entry, atr, capital, risk%, mult)    │
@@ -233,10 +231,10 @@ The single-ticker `saham analyze swing BBCA` command runs **7 data pipelines** s
 │    ├── DATA section (freshness)                                │
 │    ├── ACCUMULATION section (score, streak, VWAP, BB)         │
 │    ├── FLOW DETAIL section (net, buy/sell, avg flow %)        │
-│    ├── PRESET section (ENTER/WATCH/AVOID + gate details)      │
+│    ├── SETUP section (MATCH/PARTIAL/NO_MATCH + gate details)      │
 │    ├── MARKET REGIME section (breadth, change, flow)          │
 │    ├── RISK CONFIRMATION section (SMA, EMA, RSI, rationale)   │
-│    ├── PRESET SIZING / SIZING section (lots, stop, target)    │
+│    ├── SETUP SIZING / SIZING section (lots, stop, target)     │
 │    ├── HISTORY section (win rate, profit factor, max DD)      │
 │    ├── SENTIMENT section (call, distribution, confidence)     │
 │    └── SUMMARY + PLAN section (action recommendation)         │
@@ -357,9 +355,9 @@ The `AccumulationScreenUseCase` scores each stock on 7 dimensions (total 0–120
 
 ---
 
-## Preset Gates (foreign-bounce)
+## Setup Gates (foreign-bounce)
 
-The `foreign-bounce` preset acts as a hard filter on accumulation candidates:
+The `foreign-bounce` setup checks deterministic pattern fit on accumulation candidates:
 
 ```
 ┌──────────┬──────────────┬───────────────┬──────────────────────┐
@@ -424,6 +422,6 @@ analyze regime  needs: candles.* + broker_flow.* (for breadth)
 1. **Swing is not a single use case** — it's an **adapter-level orchestration** that calls 6+ use cases sequentially.
 2. **Every pipeline is optional and fault-tolerant** — each step is wrapped in `try/except`, so missing data doesn't crash the whole command.
 3. **Regime awareness is a filter, not a signal** — market regime only blocks entries, it doesn't generate them.
-4. **Preset logic is in the adapter, calibration is in config** — the `foreign-bounce` gate logic lives in `analyze_swing_commands.py`, but calibration parameters (TP/SL per regime, smart-money broker codes, noise broker filters) load from `config/swing_screener.yaml`.
+4. **Setup logic is in the adapter, calibration is in config** — the `foreign-bounce` gate logic lives in `analyze_swing_commands.py`, but calibration parameters (TP/SL per regime, smart-money broker codes, noise broker filters) load from `config/swing_screener.yaml`.
 5. **Position sizer is pure math** — no I/O, no ports. Works purely from Decimal inputs.
 6. **Auto-refresh is the default** — every `analyze swing` refetches candles + broker data before analyzing, unless `--no-refresh`.

@@ -1,4 +1,4 @@
-"""Tests for evaluate_foreign_bounce_gates and compute_percent_plan."""
+"""Tests for foreign-bounce setup evaluation and compute_percent_plan."""
 
 from decimal import Decimal
 
@@ -7,8 +7,21 @@ import pytest
 from src.application.use_case.accumulation_screen_use_case import (
     AccumulationCandidate,
     compute_percent_plan,
-    evaluate_foreign_bounce_gates,
 )
+from src.application.use_case.evaluate_swing_setup_use_case import (
+    COILED_SPRING_SETUP,
+    PULLBACK_CONTINUATION_SETUP,
+    SMART_MONEY_CONFIRMED_SETUP,
+    CoiledSpringSetupConfig,
+    EvaluateSwingSetupRequest,
+    EvaluateSwingSetupUseCase,
+    FOREIGN_BOUNCE_SETUP,
+    ForeignBounceSetupConfig,
+    PullbackContinuationSetupConfig,
+    SmartMoneyConfirmedSetupConfig,
+    SwingSetupCatalogConfig,
+)
+from src.domain.value_objects.setup_evaluation import SetupMatch
 
 # ── helpers ────────────────────────────────────────────────────────────────────
 
@@ -42,74 +55,179 @@ _GATE_DEFAULTS = dict(
     gate_required_trend="SIDE",
     gate_min_flow_ratio_pct=5.0,
     gate_max_rsi=60.0,
-    watch_max_failed_gates=2,
+    partial_max_failed_gates=2,
 )
 
 
 def _eval(candidate, **overrides):
     params = {**_GATE_DEFAULTS, **overrides}
-    return evaluate_foreign_bounce_gates(candidate, **params)
+    return EvaluateSwingSetupUseCase().execute(
+        EvaluateSwingSetupRequest(
+            setup_name=FOREIGN_BOUNCE_SETUP,
+            candidate=candidate,
+            config=SwingSetupCatalogConfig(foreign_bounce=ForeignBounceSetupConfig(**params)),
+        )
+    )
 
 
-# ── evaluate_foreign_bounce_gates ──────────────────────────────────────────────
+# ── foreign-bounce setup evaluation ────────────────────────────────────────────
 
-def test_all_gates_pass_returns_enter():
+def test_all_gates_pass_returns_match():
     c = _candidate()
-    classification, failed = _eval(c)
-    assert classification == "ENTER"
-    assert failed == ()
+    evaluation = _eval(c)
+    assert evaluation.match == SetupMatch.MATCH
+    assert evaluation.failed_reasons == ()
 
 
-def test_single_gate_fail_returns_watch():
+def test_single_gate_fail_returns_partial():
     c = _candidate(rsi=65.0)
-    classification, failed = _eval(c)
-    assert classification == "WATCH"
-    assert any("RSI" in f for f in failed)
+    evaluation = _eval(c)
+    assert evaluation.match == SetupMatch.PARTIAL
+    assert any("RSI" in f for f in evaluation.failed_reasons)
 
 
-def test_many_gates_fail_returns_avoid():
+def test_many_gates_fail_returns_no_match():
     c = _candidate(rsi=75.0, trend="UP", avg_flow_ratio=1.0, vwap_discount_pct=0.5, accum_score=30.0)
-    classification, failed = _eval(c)
-    assert classification == "AVOID"
-    assert len(failed) > 2
+    evaluation = _eval(c)
+    assert evaluation.match == SetupMatch.NO_MATCH
+    assert len(evaluation.failed_reasons) > 2
 
 
-def test_score_gate_fail_but_few_total_fails_returns_watch():
-    # Score fails, but only 1 other gate fails (≤ watch_max_failed_gates=2)
+def test_score_gate_fail_but_few_total_fails_returns_partial():
+    # Score fails, but only 1 other gate fails (<= partial_max_failed_gates=2)
     c = _candidate(accum_score=60.0, rsi=65.0)  # 2 failures: score + RSI
-    classification, failed = _eval(c)
-    assert classification == "WATCH"
+    evaluation = _eval(c)
+    assert evaluation.match == SetupMatch.PARTIAL
 
 
 def test_failed_gates_contain_required_values():
     c = _candidate(rsi=75.0)
-    _, failed = _eval(c)
-    assert any("<= 60" in f for f in failed)
+    evaluation = _eval(c)
+    assert any("<= 60" in f for f in evaluation.failed_reasons)
 
 
 def test_none_rsi_fails_rsi_present_gate():
     c = _candidate(rsi=None)
-    _, failed = _eval(c)
-    assert any("RSI present" in f for f in failed)
+    evaluation = _eval(c)
+    assert any("RSI present" in f for f in evaluation.failed_reasons)
 
 
 def test_none_vwap_fails_vwap_gate():
     c = _candidate(vwap_discount_pct=None)
-    _, failed = _eval(c)
-    assert any("vwap_disc_pct" in f for f in failed)
+    evaluation = _eval(c)
+    assert any("fvwap%" in f for f in evaluation.failed_reasons)
 
 
 def test_wrong_trend_fails_trend_gate():
     c = _candidate(trend="UP")
-    _, failed = _eval(c)
-    assert any("trend" in f for f in failed)
+    evaluation = _eval(c)
+    assert any("trend" in f for f in evaluation.failed_reasons)
 
 
 def test_custom_gate_values_respected():
     c = _candidate(accum_score=50.0)
     # With min_score=40.0, score gate should pass
-    classification, failed = _eval(c, gate_min_score=40.0)
-    assert not any("score" in f for f in failed)
+    evaluation = _eval(c, gate_min_score=40.0)
+    assert not any("score" in f for f in evaluation.failed_reasons)
+
+
+def test_coiled_spring_match_requires_tight_bb_width():
+    c = _candidate(accum_score=62.0, bb_width_pctile=0.12, avg_flow_ratio=3.5, rsi=58.0)
+
+    evaluation = EvaluateSwingSetupUseCase().execute(
+        EvaluateSwingSetupRequest(
+            setup_name=COILED_SPRING_SETUP,
+            candidate=c,
+            config=SwingSetupCatalogConfig(
+                coiled_spring=CoiledSpringSetupConfig(gate_max_bb_width_pctile=0.20)
+            ),
+        )
+    )
+
+    assert evaluation.match == SetupMatch.MATCH
+
+
+def test_coiled_spring_rejects_loose_bb_width_when_other_gates_fail():
+    c = _candidate(accum_score=40.0, bb_width_pctile=0.60, avg_flow_ratio=0.5, rsi=72.0)
+
+    evaluation = EvaluateSwingSetupUseCase().execute(
+        EvaluateSwingSetupRequest(
+            setup_name=COILED_SPRING_SETUP,
+            candidate=c,
+            config=SwingSetupCatalogConfig(),
+        )
+    )
+
+    assert evaluation.match == SetupMatch.NO_MATCH
+    assert any("bb_width_pctile" in reason for reason in evaluation.failed_reasons)
+
+
+def test_smart_money_confirmed_requires_broker_detail():
+    c = _candidate(accum_score=70.0)
+
+    evaluation = EvaluateSwingSetupUseCase().execute(
+        EvaluateSwingSetupRequest(
+            setup_name=SMART_MONEY_CONFIRMED_SETUP,
+            candidate=c,
+            config=SwingSetupCatalogConfig(),
+            broker_detail=None,
+        )
+    )
+
+    assert evaluation.match == SetupMatch.NO_MATCH
+    assert any("broker detail" in reason for reason in evaluation.failed_reasons)
+
+
+def test_smart_money_confirmed_matches_smart_led_flow():
+    from types import SimpleNamespace
+
+    c = _candidate(accum_score=70.0)
+    broker_detail = SimpleNamespace(
+        smart_flow=Decimal("70000000"),
+        noise_flow=Decimal("20000000"),
+        neutral_flow=Decimal("10000000"),
+        smart_share_pct=70.0,
+    )
+
+    evaluation = EvaluateSwingSetupUseCase().execute(
+        EvaluateSwingSetupRequest(
+            setup_name=SMART_MONEY_CONFIRMED_SETUP,
+            candidate=c,
+            config=SwingSetupCatalogConfig(
+                smart_money_confirmed=SmartMoneyConfirmedSetupConfig(
+                    gate_min_smart_share_pct=60.0,
+                    gate_max_noise_share_pct=30.0,
+                )
+            ),
+            broker_detail=broker_detail,
+        )
+    )
+
+    assert evaluation.match == SetupMatch.MATCH
+
+
+def test_pullback_continuation_matches_uptrend_pullback():
+    c = _candidate(
+        accum_score=60.0,
+        trend="UP",
+        avg_flow_ratio=3.0,
+        rsi=50.0,
+        vwap_discount_pct=-1.0,
+    )
+
+    evaluation = EvaluateSwingSetupUseCase().execute(
+        EvaluateSwingSetupRequest(
+            setup_name=PULLBACK_CONTINUATION_SETUP,
+            candidate=c,
+            config=SwingSetupCatalogConfig(
+                pullback_continuation=PullbackContinuationSetupConfig(
+                    gate_min_vwap_discount_pct=-2.0
+                )
+            ),
+        )
+    )
+
+    assert evaluation.match == SetupMatch.MATCH
 
 
 # ── compute_percent_plan ───────────────────────────────────────────────────────

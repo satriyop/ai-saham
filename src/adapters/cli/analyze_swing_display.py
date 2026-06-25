@@ -116,10 +116,10 @@ def style_gate(passed: bool) -> str:
     return typer.style(label, fg=color, bold=True)
 
 
-def style_classification(value: str) -> str:
-    if value == "ENTER":
+def style_setup_match(value: str) -> str:
+    if value == "MATCH":
         return typer.style(value, fg=typer.colors.GREEN, bold=True)
-    if value == "WATCH":
+    if value == "PARTIAL":
         return typer.style(value, fg=typer.colors.YELLOW, bold=True)
     return typer.style(value, fg=typer.colors.RED, bold=True)
 
@@ -151,8 +151,8 @@ def signal_label(candidate: Any, config: SwingDisplayConfig) -> str:
     return "weak"
 
 
-def format_failed_gates_summary(preset_eval: Any) -> str:
-    return "Failed gates: " + "; ".join(preset_eval.failed_reasons)
+def format_failed_gates_summary(setup_eval: Any) -> str:
+    return "Failed gates: " + "; ".join(setup_eval.failed_reasons)
 
 
 def swing_summary_parts(
@@ -178,41 +178,41 @@ def swing_plan_text(
     capital: int | None,
     atr_value: Decimal | None,
     sizing: Any | None,
-    preset_eval: Any | None,
-    preset_sizing: Any | None,
+    setup_eval: Any | None,
+    setup_sizing: Any | None,
     strategy_risk_level: str | None,
     strategy_risk_name: str | None,
     config: SwingDisplayConfig,
 ) -> tuple[str, str]:
     strategy_override = (
         strategy_risk_level == "HIGH_RISK"
-        and preset_eval is not None
-        and preset_eval.passed
+        and setup_eval is not None
+        and setup_eval.passed
     )
 
-    if preset_eval is not None:
+    if setup_eval is not None:
         if strategy_override:
             return (
-                f"AVOID (strategy gate: '{strategy_risk_name}' signals HIGH_RISK; preset passed but technical signal says exit).",
+                f"AVOID (strategy gate: '{strategy_risk_name}' signals HIGH_RISK; setup matched but technical signal says exit).",
                 "red",
             )
-        if preset_eval.passed and preset_sizing and preset_sizing.lots > 0:
+        if setup_eval.passed and setup_sizing and setup_sizing.lots > 0:
             return (
-                f"ENTER setup passed. Consider {preset_sizing.lots} lots at "
-                f"{float(preset_sizing.entry_price):,.0f}; TP "
-                f"{float(preset_sizing.target_price):,.0f}; SL "
-                f"{float(preset_sizing.stop_price):,.0f}; max hold "
+                f"Setup matched. Consider {setup_sizing.lots} lots at "
+                f"{float(setup_sizing.entry_price):,.0f}; TP "
+                f"{float(setup_sizing.target_price):,.0f}; SL "
+                f"{float(setup_sizing.stop_price):,.0f}; max hold "
                 f"{config.foreign_bounce_max_hold_days} trading days.",
                 "green",
             )
-        if preset_eval.passed:
-            return ("ENTER setup passed. Add --capital to compute lot size.", "green")
-        if preset_eval.classification == "WATCH":
+        if setup_eval.passed:
+            return ("Setup matched. Add --capital to compute lot size.", "green")
+        if setup_eval.match.value == "PARTIAL":
             return (
-                "WATCH only. Preset is close but not fully confirmed; wait for failed gates to improve.",
+                "Setup is partial. Wait for failed gates to improve before treating it as a match.",
                 "yellow",
             )
-        return ("AVOID. Preset gates are not aligned.", "red")
+        return ("Setup does not match. Gates are not aligned.", "red")
     if sizing and sizing.lots > 0:
         return (
             f"Sized scenario: {sizing.lots} lots at {float(sizing.entry_price):,.0f}. "
@@ -264,7 +264,7 @@ def notation_detail(snapshot: Any) -> str:
 def print_swing_rich_overview(
     ticker: str,
     today: date,
-    profile: str,
+    sensitivity: str,
     strategy_name: str,
     data_freshness: DataFreshness,
     broker_detail: BrokerDetail | None,
@@ -272,8 +272,8 @@ def print_swing_rich_overview(
     risk_resp,
     atr_value: Decimal | None,
     sizing: SizingResult | None,
-    preset_eval: PresetEvaluation | None,
-    preset_sizing: PercentSizingResult | None,
+    setup_eval: Any | None,
+    setup_sizing: Any | None,
     broker_quality_note: BrokerQualityNote | None,
     market_regime: MarketContext | None,
     capital: int | None,
@@ -292,8 +292,8 @@ def print_swing_rich_overview(
         capital,
         atr_value,
         sizing,
-        preset_eval,
-        preset_sizing,
+        setup_eval,
+        setup_sizing,
         strategy_risk_level,
         strategy_risk_name,
         config,
@@ -303,7 +303,7 @@ def print_swing_rich_overview(
     data_table.add_column("Metric", style="bold")
     data_table.add_column("Value")
     data_table.add_row("Analysis date", str(today))
-    data_table.add_row("Profile", profile)
+    data_table.add_row("Sensitivity", sensitivity)
     data_table.add_row("Strategy", strategy_name)
     data_table.add_row("Candles through", fmt_date(data_freshness.candle_end))
     data_table.add_row("Broker flow through", fmt_date(data_freshness.broker_end))
@@ -333,9 +333,9 @@ def print_swing_rich_overview(
         )
     else:
         signals.add_row("Accumulation", "missing", f"Run: saham fetch broker {ticker}")
-    if preset_eval is not None:
-        failed = "; ".join(preset_eval.failed_reasons[:2]) if preset_eval.failed_reasons else "all gates passed"
-        signals.add_row("Preset", preset_eval.classification, failed)
+    if setup_eval is not None:
+        failed = "; ".join(setup_eval.failed_reasons[:2]) if setup_eval.failed_reasons else "all gates passed"
+        signals.add_row("Setup", setup_eval.match.value, failed)
     if accum is not None and accum.ticker_notation is not None:
         note_status = notation_label(accum.ticker_notation)
         if note_status != "-":
@@ -385,7 +385,7 @@ def print_swing_rich_overview(
         signals,
     ]
 
-    chosen_sizing = preset_sizing or sizing
+    chosen_sizing = setup_sizing or sizing
     if capital is not None and chosen_sizing is not None:
         sizing_table = compact_table(show_header=False)
         sizing_table.add_column("Metric", style="bold")
@@ -411,7 +411,7 @@ def print_swing_rich_overview(
         panel(
             Group(*sections),
             title=f"Swing Decision - {ticker}",
-            subtitle=f"{today.isoformat()} / {profile}",
+            subtitle=f"{today.isoformat()} / {sensitivity}",
         )
     )
 
@@ -422,7 +422,7 @@ def print_swing_rich_overview(
 def print_swing_output(
     ticker: str,
     today: date,
-    profile: str,
+    sensitivity: str,
     strategy_name: str,
     data_freshness: DataFreshness,
     flow_detail: FlowDetail | None,
@@ -432,8 +432,8 @@ def print_swing_output(
     risk_resp,
     atr_value: "Decimal | None",
     sizing: "SizingResult | None",
-    preset_eval: "PresetEvaluation | None",
-    preset_sizing: "PercentSizingResult | None",
+    setup_eval: "Any | None",
+    setup_sizing: "Any | None",
     broker_quality_note: BrokerQualityNote | None,
     market_regime: "MarketContext | None",
     capital: "int | None",
@@ -464,7 +464,7 @@ def print_swing_output(
     print_swing_rich_overview(
         ticker=ticker,
         today=today,
-        profile=profile,
+        sensitivity=sensitivity,
         strategy_name=strategy_name,
         data_freshness=data_freshness,
         broker_detail=broker_detail,
@@ -472,8 +472,8 @@ def print_swing_output(
         risk_resp=risk_resp,
         atr_value=atr_value,
         sizing=sizing,
-        preset_eval=preset_eval,
-        preset_sizing=preset_sizing,
+        setup_eval=setup_eval,
+        setup_sizing=setup_sizing,
         broker_quality_note=broker_quality_note,
         market_regime=market_regime,
         capital=capital,
@@ -536,7 +536,7 @@ def print_swing_output(
         )
         strat_text.append(Text(f"Strategy Gate ({strategy_risk_name}): {_strat_sym} {strategy_risk_level}", style=f"bold {_strat_color}"))
         if strategy_risk_level == "HIGH_RISK":
-            strat_text.append(Text(f"⚠ Strategy '{strategy_risk_name}' signals HIGH_RISK — overrides preset to AVOID.", style="red"))
+            strat_text.append(Text(f"Strategy '{strategy_risk_name}' signals HIGH_RISK - blocks setup action.", style="red"))
         elif strategy_risk_level == "LOW_RISK":
             strat_text.append(Text(f"✓ Strategy '{strategy_risk_name}' confirms entry signal.", style="green"))
         else:
@@ -769,10 +769,10 @@ def print_swing_output(
             )
         )
 
-    # ── Panel 4: PRESET RULE AUDITS & GATES ───────────────────────────────────
-    if preset_eval is not None:
+    # ── Panel 4: SETUP FIT & GATES ────────────────────────────────────────────
+    if setup_eval is not None:
         gates_group = []
-        gates_group.append(Text(f"Preset Rules Evaluation: {preset_eval.name}", style="bold cyan"))
+        gates_group.append(Text(f"Setup Fit: {setup_eval.name} -> {setup_eval.match.value}", style="bold cyan"))
 
         gates_table = compact_table()
         gates_table.add_column("Status")
@@ -780,7 +780,7 @@ def print_swing_output(
         gates_table.add_column("Actual Value")
         gates_table.add_column("Required Threshold")
 
-        for gate in preset_eval.gates:
+        for gate in setup_eval.gates:
             status_str = "[green]PASS[/]" if gate.passed else "[red]FAIL[/]"
             gates_table.add_row(
                 status_str,
@@ -790,10 +790,10 @@ def print_swing_output(
             )
         gates_group.append(gates_table)
 
-        if preset_eval.passed:
-            gates_group.append(Text("✓ All gates successfully passed. Tested plan: TP +5%, SL -5%, max hold 10 trading days.", style="green"))
+        if setup_eval.passed:
+            gates_group.append(Text("All gates passed. Tested plan: TP +5%, SL -5%, max hold 10 trading days.", style="green"))
         else:
-            gates_group.append(Text(f"⚠ {format_failed_gates_summary(preset_eval)}", style="red"))
+            gates_group.append(Text(format_failed_gates_summary(setup_eval), style="red"))
 
         if broker_quality_note is not None:
             note_style = "yellow" if broker_quality_note.level == "warning" else "cyan"
@@ -803,7 +803,7 @@ def print_swing_output(
         console().print(
             panel(
                 Group(*gates_group),
-                title="PRESET RULE AUDITS & GATES",
+                title="SETUP FIT & GATES",
             )
         )
 
@@ -958,4 +958,3 @@ def display_swing_compare(
     console().print(compare_table)
     console().print(Text("\nDISCLAIMER: Historical simulation only. Not trading advice.", style="dim italic"))
     console().print("")
-

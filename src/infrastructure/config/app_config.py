@@ -57,7 +57,7 @@ class BrokerConfig:
 
 @dataclass(frozen=True)
 class AnalysisConfig:
-    risk_profile: str = "balanced"
+    signal_sensitivity: str = "balanced"
     benchmark: str = "^JKSE"
     universe: str = "lq45"
     regime_universe: str = "idx80"

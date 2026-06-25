@@ -58,12 +58,14 @@ class RiskEngine:
         fundamentals_provider: "FundamentalsProvider | None" = None,
         bandar_provider: "BandarDetectorProvider | None" = None,
         shareholding_provider: "ShareholdingProvider | None" = None,
+        rule_sets: "dict | None" = None,
     ) -> None:
         self._use_case = AssessRiskUseCase(
             repository=repository,
             registry=registry,
             structural_gates=structural_gates,
             execution_gates=execution_gates,
+            rule_sets=rule_sets,
         )
         self._fundamentals_provider = fundamentals_provider
         self._bandar_provider = bandar_provider
@@ -92,7 +94,7 @@ class RiskEngine:
         if as_of_date is not None:
             gate_ctx = replace(gate_ctx, snapshot_date=as_of_date)
         response = self._use_case.execute(
-            AssessRiskRequest(ticker=ticker, profile=profile, gate_context=gate_ctx)
+            AssessRiskRequest(ticker=ticker, sensitivity=profile, gate_context=gate_ctx)
         )
         return _apply_regime_gate(response, market_context)
 
@@ -111,7 +113,7 @@ class RiskEngine:
         Wire up by passing this engine to the screener instead of AssessRiskUseCase.
         """
         response = self._use_case.execute(
-            AssessRiskRequest(ticker=ticker, profile=profile, gate_context=gate_context)
+            AssessRiskRequest(ticker=ticker, sensitivity=profile, gate_context=gate_context)
         )
         return _apply_regime_gate(response, market_context)
 

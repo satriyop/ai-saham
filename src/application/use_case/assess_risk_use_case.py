@@ -26,7 +26,7 @@ from src.domain.rules.risk_gate import GateContext, RiskGate
 from src.domain.rules.rule_engine import RuleEngine
 from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 from src.domain.value_objects.risk_assessment import RiskAssessment
-from src.domain.value_objects.risk_signal import RiskLevel, RiskProfile
+from src.domain.value_objects.risk_signal import RiskLevel, SignalSensitivity
 from src.domain.value_objects.sentiment import SentimentSnapshot
 
 
@@ -35,7 +35,7 @@ class AssessRiskRequest:
     """Request DTO for risk assessment."""
 
     ticker: str
-    profile: str = "balanced"
+    sensitivity: str = "balanced"
     sma_period: int = 20
     ema_period: int = 20
     rsi_period: int = 14
@@ -74,9 +74,14 @@ class AssessRiskResponse:
         return self.assessment.confidence
 
     @property
+    def sensitivity(self) -> str:
+        """Convenience property for signal sensitivity preset name."""
+        return self.assessment.sensitivity_name
+
+    # Backwards-compatibility alias
+    @property
     def profile(self) -> str:
-        """Convenience property for profile name."""
-        return self.assessment.profile_name
+        return self.sensitivity
 
 
 @dataclass
@@ -96,7 +101,7 @@ class AssessRiskTrendResponse:
     """Response DTO for risk trend over N days."""
 
     ticker: str
-    profile: str
+    sensitivity: str
     history: list[tuple[date, str, int]]  # (date, risk_level, confidence)
     direction: str  # "IMPROVING" | "STABLE" | "DETERIORATING"
     days_in_current: int
@@ -124,6 +129,7 @@ class AssessRiskUseCase:
         rules_loader: RulesLoader | None = None,
         structural_gates: list[RiskGate] | None = None,
         execution_gates: list[RiskGate] | None = None,
+        rule_sets: "dict | None" = None,
     ) -> None:
         """
         Initialize with repository, optional registry, optional rules loader,
@@ -140,10 +146,12 @@ class AssessRiskUseCase:
             execution_gates: Gates run AFTER the rule engine (e.g. BandarGate).
                             Can downgrade but not upgrade the technical result.
                             Requires gate_context on the request.
+            rule_sets: Optional pre-built rule sets with custom thresholds.
+                      If None, RuleEngine defaults (hardcoded values) are used.
         """
         self._repository = repository
         self._registry = registry if registry is not None else IndicatorRegistry()
-        self._rule_engine = RuleEngine()
+        self._rule_engine = RuleEngine(rule_sets=rule_sets)
         if rules_loader is None:
             from src.infrastructure.config.yaml_loader import YamlConfigLoader
 
@@ -241,7 +249,7 @@ class AssessRiskUseCase:
                         # Tier 1/2 structural gates: gate name propagates into the
                         # domain value object so ExplainRiskUseCase can narrate it.
                         assessment = RiskAssessment(
-                            profile=RiskProfile.from_string(request.profile),
+                            sensitivity=SignalSensitivity.from_string(request.sensitivity),
                             risk_level=gate_result.override_risk,
                             confidence=gate_result.confidence,
                             rationale=(gate_result.reason,),
@@ -259,7 +267,7 @@ class AssessRiskUseCase:
                             coverage_warning=agg_response.coverage_warning,
                         )
 
-            profile = RiskProfile.from_string(request.profile)
+            profile = SignalSensitivity.from_string(request.sensitivity)
             assessment = self._rule_engine.evaluate(latest_snapshot, profile)
 
             if gate_ctx is not None and self._execution_gates:
@@ -268,7 +276,7 @@ class AssessRiskUseCase:
                     if gate_result.triggered and gate_result.override_risk is not None:
                         # Tier 3 execution gates: downgrade; preserve prior rationale.
                         assessment = RiskAssessment(
-                            profile=assessment.profile,
+                            sensitivity=assessment.sensitivity,
                             risk_level=gate_result.override_risk,
                             confidence=gate_result.confidence,
                             rationale=(gate_result.reason, *assessment.rationale),
@@ -559,7 +567,7 @@ class AssessRiskUseCase:
                 f"Run 'saham fetch market {request.ticker.upper()} --days 365' first."
             )
 
-        profile = RiskProfile.from_string(request.profile)
+        profile = SignalSensitivity.from_string(request.sensitivity)
         window = agg_response.snapshots[-days:]
 
         history: list[tuple[date, str, int]] = []
@@ -590,7 +598,7 @@ class AssessRiskUseCase:
 
         return AssessRiskTrendResponse(
             ticker=agg_response.ticker,
-            profile=request.profile,
+            sensitivity=request.sensitivity,
             history=history,
             direction=direction,
             days_in_current=days_in_current,

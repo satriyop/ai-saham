@@ -298,7 +298,7 @@ class TestRuleEngine:
         assessment = engine.evaluate(snapshot, "balanced")
 
         assert isinstance(assessment, RiskAssessment)
-        assert assessment.profile == RiskProfile.BALANCED
+        assert assessment.sensitivity == RiskProfile.BALANCED
 
     def test_evaluate_with_enum_profile(self):
         """Engine should accept RiskProfile enum."""
@@ -307,14 +307,14 @@ class TestRuleEngine:
 
         assessment = engine.evaluate(snapshot, RiskProfile.CONSERVATIVE)
 
-        assert assessment.profile == RiskProfile.CONSERVATIVE
+        assert assessment.sensitivity == RiskProfile.CONSERVATIVE
 
     def test_evaluate_invalid_profile_raises_error(self):
         """Engine should raise ValueError for invalid profile."""
         engine = RuleEngine()
         snapshot = make_snapshot()
 
-        with pytest.raises(ValueError, match="Invalid profile"):
+        with pytest.raises(ValueError, match="Invalid sensitivity"):
             engine.evaluate(snapshot, "invalid_profile")
 
     def test_evaluate_all_profiles(self):
@@ -325,7 +325,7 @@ class TestRuleEngine:
         assessments = engine.evaluate_all_profiles(snapshot)
 
         assert len(assessments) == 3
-        profiles = [a.profile for a in assessments]
+        profiles = [a.sensitivity for a in assessments]
         assert RiskProfile.CONSERVATIVE in profiles
         assert RiskProfile.BALANCED in profiles
         assert RiskProfile.AGGRESSIVE in profiles
@@ -470,7 +470,7 @@ class TestRiskAssessment:
 
         with pytest.raises(ValueError, match="Confidence must be 0-100"):
             RiskAssessment(
-                profile=RiskProfile.BALANCED,
+                sensitivity=RiskProfile.BALANCED,
                 risk_level=RiskLevel.MODERATE,
                 confidence=150,  # Invalid
                 rationale=("test",),
@@ -531,5 +531,5 @@ class TestRiskProfile:
 
     def test_from_string_invalid_raises_error(self):
         """from_string should raise ValueError for invalid input."""
-        with pytest.raises(ValueError, match="Invalid profile"):
+        with pytest.raises(ValueError, match="Invalid sensitivity"):
             RiskProfile.from_string("invalid")

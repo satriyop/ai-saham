@@ -507,7 +507,7 @@ Output cadence: per week / per quarter (gate inputs are slow-moving).
 
 **Answers:** "How strong and well-aligned are the factors supporting entry?"
 
-Owns: composite signal score (weighted sum of 6 factors: bandar intensity, foreign flow quality, insider activity (net buy direction), seasonality edge, analyst consensus, forward EPS valuation) and entry quality classification. Screener-specific preset gates remain in screener policy, not in SignalEngine.
+Owns: composite signal score (weighted sum of 6 factors: bandar intensity, foreign flow quality, insider activity (net buy direction), seasonality edge, analyst consensus, forward EPS valuation) and entry quality classification. Screener-specific setup gates remain in screener policy, not in SignalEngine.
 
 Output cadence: per session (signal factors are fast-moving).
 
@@ -532,7 +532,7 @@ A strong signal does NOT imply low risk. Low risk does NOT imply a strong signal
 
 ### Engine Configurability Contract
 
-Every component of both engines — signal factors and risk gates — MUST support individual on/off toggling and full parameter configuration via dedicated engine config files. Signal factors live in `config/signal_engine.yaml`; risk gates and profiles live in `config/risk_engine.yaml`. Screener-specific policy (resistance gates, preset TP/SL targets, corporate actions, sector breadth) stays in `config/swing_screener.yaml` — it is NOT engine config. This is what makes the engines tunable by the T2 Learning Loop (ADR-027) without code changes.
+Every component of both engines — signal factors and risk gates — MUST support individual on/off toggling and full parameter configuration via dedicated engine config files. Signal factors live in `config/signal_engine.yaml`; risk gates and profiles live in `config/risk_engine.yaml`. Screener-specific policy (resistance gates, setup TP/SL targets, corporate actions, sector breadth) stays in `config/swing_screener.yaml` — it is NOT engine config. This is what makes the engines tunable by the T2 Learning Loop (ADR-027) without code changes.
 
 #### YAML Schema
 
@@ -1117,6 +1117,74 @@ The boundary that matters for learning is the scoring artifact. `AccumulationEvi
 ### Compatibility
 
 Existing application services that still read `AccumulationCandidate.score` are tolerated through a deprecated compatibility alias while call sites migrate. New screen code, JSON output, CLI help, and ADR language use `accum_score`.
+
+---
+
+## ADR-031: Swing Setup Evaluation Boundary
+
+**Status:** Accepted
+**Date:** 2026-06-25
+
+### Context
+
+The swing workflow previously exposed `--preset foreign-bounce` and returned a setup-like result using `ENTER`, `WATCH`, and `AVOID`. That duplicated final-action vocabulary already owned by `TradeSetup` (ADR-026), and the foreign-bounce gate policy lived in the CLI adapter.
+
+### Decision
+
+Rename the concept from **preset** to **setup** and make setup evaluation an application-layer deterministic policy.
+
+Setup evaluation answers only:
+
+> Does this candidate fit the named setup?
+
+Setup evaluation returns:
+
+| Result | Meaning |
+|--------|---------|
+| `MATCH` | All setup gates pass |
+| `PARTIAL` | Candidate is close enough to track, but at least one gate failed |
+| `NO_MATCH` | Candidate does not fit the setup |
+
+Final trading action remains exclusively owned by `TradeSetup.action` (`ENTER`, `WATCH`, `AVOID`, `BLOCKED_EXECUTION`, `BLOCKED_STRUCTURAL`).
+
+The initial setup catalog is:
+
+| Setup | Question Answered | Required Evidence |
+|-------|-------------------|-------------------|
+| `foreign-bounce` | Is foreign accumulation happening while price is still below foreign VWAP in a range? | accumulation candidate |
+| `coiled-spring` | Is accumulation happening while volatility is compressed enough for a potential expansion? | accumulation candidate with BB width percentile |
+| `smart-money-confirmed` | Is broker attribution led by smart-money flow rather than noise flow? | accumulation candidate plus broker-detail attribution |
+| `pullback-continuation` | Is an uptrend pullback still supported by foreign flow and RSI headroom? | accumulation candidate |
+
+All setup gate thresholds and enable flags must be configurable through `config/swing_screener.yaml`. Code-level defaults are deterministic fallbacks only. Calibration and future learning should propose YAML changes, not code edits.
+
+### Layer Plan
+
+| Layer | Artifact |
+|-------|----------|
+| Domain | `SetupEvaluation`, `SetupGate`, `SetupMatch` value objects |
+| Application | `EvaluateSwingSetupUseCase` for named setup policy |
+| Infrastructure | `config/swing_screener.yaml` setup gates and `setup_targets` |
+| Adapter | CLI `--setup`, setup JSON/display formatting only |
+
+### Rationale
+
+Setup evaluation is not a first-class engine like SignalEngine, RiskEngine, or MarketContextEngine. It is a named pattern-fit check for a workflow. Making it an engine would overstate its scope and duplicate orchestration boundaries.
+
+Keeping setup policy in application code satisfies adapter thinness: CLI adapters parse `--setup`, wire dependencies, and format results; they do not own gate policy or business classification.
+
+### Compatibility
+
+This is a breaking rename. Public CLI flags, JSON fields, and journal fields use:
+
+| Old | New |
+|-----|-----|
+| `--preset` | `--setup` |
+| JSON `preset` | JSON `setup` |
+| journal `preset` | journal `setup` |
+| journal `classification` | journal `setup_match` |
+
+No legacy alias is kept for this migration.
 
 ---
 
