@@ -652,6 +652,190 @@ already populated before recomputing it from the same source data. This is struc
 
 ---
 
+## 14. MarketContextEngine — `universe=` Parameter Is Mandatory for Breadth and Flow Factors
+
+**Context:** `MarketContextEngine.__init__` accepts `universe: list[str] = []`. Passing an empty
+list (or omitting it) silently disables two of six scoring factors: `idx_breadth` and `foreign_flow`
+both report UNAVAILABLE. No error is raised at construction time.
+
+**The violation:** constructing `MarketContextEngine` without resolving the regime universe first.
+
+```python
+# WRONG — idx_breadth + foreign_flow always UNAVAILABLE; conviction is systematically deflated
+engine = MarketContextEngine(market_repository=repo, config=cfg)
+```
+
+**Correct pattern — always resolve before constructing:**
+```python
+tickers = resolve_tickers(
+    universe=APP_CFG.analysis.regime_universe,
+    explicit=[],
+    db_path=db_path,
+)
+engine = MarketContextEngine(
+    market_repository=SQLiteMarketRepository(db_path=db_path),
+    config=cfg,
+    universe=tickers,
+    broker_repository=SQLiteBrokerRepository(db_path=db_path),
+    context_repository=SQLiteMarketContextRepository(db_path=db_path),
+)
+```
+
+**Where this bites:** any CLI command that constructs `MarketContextEngine` inline — check
+`today_commands.py`, `analyze_regime_commands.py`, and any new command that adds regime context.
+
+**Related pitfall — benchmark override:** if the command accepts a `--benchmark` flag, use
+`dataclasses.replace` twice (nested frozen dataclass) to propagate it to the config before
+constructing the engine:
+```python
+if benchmark and benchmark != cfg.idx_trend.benchmark_ticker:
+    cfg = dc_replace(cfg, idx_trend=dc_replace(cfg.idx_trend, benchmark_ticker=benchmark))
+```
+See §10 for frozen dataclass override patterns.
+
+---
+
+## 15. `assess_all_profiles()` Must Receive the Same Post-Processing as `assess()`
+
+**Context:** `RiskEngine` exposes multiple public assessment entry points: `assess()`,
+`assess_with_context()`, `assess_request()`, and `assess_all_profiles()`. Post-processing steps
+(e.g., `_apply_regime_gate()`) are wired individually into each path — there is no shared
+post-processing hook.
+
+**The violation:** adding a post-processing step to `assess()` but forgetting `assess_all_profiles()`.
+The multi-profile comparison view silently skips the gate, showing HIGH_RISK without the regime label.
+
+**Detection heuristic:** any time you add or modify a post-processing step in one `assess_*` method,
+grep for all other `assess_*` methods in `risk_engine.py` and apply the same step.
+
+**Correct implementation for `assess_all_profiles()`** when the regime gate must apply:
+```python
+def assess_all_profiles(
+    self,
+    request: AssessRiskRequest,
+    market_context: "MarketContext | None" = None,
+) -> "AssessAllProfilesResponse":
+    result = self._use_case.execute_all_profiles(self._inject_gate_context(request))
+    if market_context is not None and market_context.gate_tightening:
+        gate_label = f"regime:{market_context.regime.value}"
+        gated = [
+            replace(a, gate_triggered=gate_label)
+            if a.risk_level == RiskLevel.HIGH_RISK and a.gate_triggered is None
+            else a
+            for a in result.assessments
+        ]
+        result = replace(result, assessments=gated)
+    return result
+```
+
+Note: `_apply_regime_gate()` operates on a single `AssessRiskResponse`; `assess_all_profiles`
+returns `AssessAllProfilesResponse` whose `.assessments` is a list of `RiskAssessment` objects.
+The logic must be replicated inline using `replace()` on each item — it cannot call the helper
+directly.
+
+---
+
+## 16. Vocabulary-Boundary Gate Failures — String-Matching Gates Fail Open After Vocab Migration
+
+**The pattern:** any gate or filter that works by testing a vocabulary string silently fails open when
+the vocabulary changes and not every comparison site is updated. This is the most insidious failure
+mode in the codebase because: (a) there is no type error, (b) the gate continues to "work" for the
+values it does recognize, and (c) the failing case is the high-risk regime you most need the gate to
+catch.
+
+**How the MCE migration triggered this simultaneously in three places:**
+
+| Site | Old (failing) value | New (correct) value | Effect of mismatch |
+|---|---|---|---|
+| `tighten_in_regimes` config | `["WEAK", "RISK_OFF"]` | `["VOLATILE", "RISK_OFF"]` | VOLATILE market → gate never tightens |
+| `_REGIME_TARGETS` dict | no RISK_ON / NEUTRAL / VOLATILE keys | added all MCE keys | all MCE regimes → 5%/5% default TP/SL |
+| `SWING_COMPARE_VARIANTS` | `"sideways_only"` / `"weak_plus"` labels | MCE-vocab tuples | wrong regimes filtered in compare mode |
+
+**Defense strategy — three rules:**
+
+1. **Fail-closed for unrecognized values.** Any sidecar reader or gate that receives a string regime
+   value should validate against a known set and coerce unknowns to `"RISK_OFF"`, not silently pass:
+   ```python
+   _KNOWN_REGIMES = {"RISK_ON", "NEUTRAL", "RISK_OFF", "VOLATILE", "BULLISH", "SIDEWAYS", "WEAK"}
+   if raw is not None and raw.upper() not in _KNOWN_REGIMES:
+       typer.echo(f"Warning: unrecognized regime '{raw}' ...", err=True)
+       raw = "RISK_OFF"
+   ```
+
+2. **Keep backward-compat keys in lookup tables.** Old sidecar files still contain legacy labels.
+   Lookup dicts (`_REGIME_TARGETS`, YAML `preset_targets`) should carry both old and new keys.
+
+3. **When migrating a vocab, grep every comparison site.** Search for each old label string
+   (BULLISH, SIDEWAYS, WEAK) across `src/`, `config/`, and `tests/` before closing the migration PR.
+
+---
+
+## 17. Business-Day Gap for Market Data Staleness
+
+**Context:** `BuildMarketContextUseCase._staleness_warning()` checks how many days have passed since
+the most recent candle. Using calendar days (`(as_of - candles[-1].date).days > 1`) fires a false
+alarm every Monday: a 3-day weekend gap looks like stale data even though no trading occurred.
+
+**Wrong:**
+```python
+if (as_of - candles[-1].date).days > 1:
+    return StalenessWarning(...)
+```
+
+**Correct — count only weekdays (Mon–Fri):**
+```python
+def _business_day_gap(start: date, end: date) -> int:
+    """Count trading-day gap: start exclusive, end inclusive."""
+    days, current = 0, start + timedelta(days=1)
+    while current <= end:
+        if current.weekday() < 5:   # 0=Mon … 4=Fri
+            days += 1
+        current += timedelta(days=1)
+    return days
+
+if _business_day_gap(candles[-1].date, as_of) > 1:
+    return StalenessWarning(...)
+```
+
+**Scope of the pattern:** apply this wherever `(date_a - date_b).days` is used as a "is this stale?"
+or "how many sessions have passed?" test on market data. The correct threshold remains `> 1` because
+a single skipped business day (public holiday, data provider gap) warrants a staleness flag.
+
+---
+
+## 18. Piecewise Scoring — Use Strict `<` at the Top of Each Tier Boundary
+
+**Context:** `VixFactor._score()` (and any piecewise linear scorer) maps a continuous input value
+onto a 0.0–1.0 score through ordered tier conditions. Using `<=` at the boundary between two tiers
+causes a discontinuous score jump: a value exactly at the threshold takes the lower-tier score, while
+the very next floating-point value takes the upper-tier score.
+
+**Wrong (discontinuous at `cfg.high = 35.0`):**
+```python
+elif v <= cfg.high:           # v=35.0 → score=0.25
+    score = 0.25 + (cfg.high - v) / (cfg.high - cfg.elevated) * 0.25
+else:                         # v=35.001 → score=0.0   ← jump!
+    score, label = 0.0, "STRESSED"
+```
+
+**Correct (boundary belongs to the more restrictive tier):**
+```python
+elif v < cfg.high:            # v=35.0 falls here: score=0.0 (the stricter tier)
+    score = 0.25 + (cfg.high - v) / (cfg.high - cfg.elevated) * 0.25
+else:                         # v >= cfg.high → VOLATILE override fires separately
+    score, label = 0.0, "STRESSED"
+```
+
+**General rule:** in piecewise scoring, the tier boundary belongs to the *more restrictive* (higher
+stress, lower score) tier. Use `< threshold` for the less-restrictive tier so that
+`v == threshold` falls into the stricter tier. This maintains score monotonicity and prevents
+discontinuous jumps.
+
+**Applies to:** `VixFactor`, any future factor that uses a multi-tier `if/elif/else` scoring
+pattern in `src/application/use_case/build_market_context_use_case.py` or similar.
+
+---
+
 ## Quick Reference — Component → Pitfall
 
 | Component / scenario | Read section |
@@ -677,3 +861,10 @@ already populated before recomputing it from the same source data. This is struc
 | "Should I inject AssessSignalUseCase?" | §12 |
 | Signal computed twice for the same ticker in workflow | §13 |
 | Workflow receives enriched candidate — recompute or reuse? | §13 |
+| Constructing MarketContextEngine in a new command | §14 |
+| benchmark= override not reaching MCE config | §14 |
+| assess_all_profiles() not applying regime gate | §15 |
+| Gate that worked for old vocab silently disabled after migration | §16 |
+| Sidecar reader receives unrecognized regime string | §16 |
+| Monday staleness false alarm on market data freshness check | §17 |
+| Piecewise scorer jumps at exact threshold value | §18 |
