@@ -13,6 +13,7 @@ from rich.console import Console, Group
 from rich.text import Text
 
 from src.adapters.cli.rich_display import compact_table, panel
+from src.application.services.universe_loader import resolve_tickers
 from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
 from src.application.use_case.daily_briefing_use_case import DailyBriefingRequest, DailyBriefingUseCase
 from src.application.services.market_context_engine import MarketContextEngine
@@ -58,11 +59,20 @@ def today(
     as_of = _parse_date(date_str)
     market_repo = SQLiteMarketRepository(db_path)
     broker_repo = SQLiteBrokerRepository(db_path)
+    try:
+        regime_tickers = resolve_tickers(
+            universe=APP_CFG.analysis.regime_universe,
+            explicit=[],
+            db_path=db_path,
+        )
+    except Exception:
+        regime_tickers = []
     use_case = DailyBriefingUseCase(
         market_repository=market_repo,
         regime_use_case=MarketContextEngine(
             market_repository=market_repo,
             broker_repository=broker_repo,
+            universe=regime_tickers,
         ),
         accumulation_use_case=AccumulationScreenUseCase(
             broker_repository=broker_repo,

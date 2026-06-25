@@ -16,7 +16,7 @@ Depends on: Domain only (market_context, Candle entity, MarketContextConfig)
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from src.domain.entities.candle import Candle
@@ -132,10 +132,10 @@ class BuildMarketContextUseCase:
         elif v <= cfg.elevated:
             score = 0.50 + (cfg.elevated - v) / (cfg.elevated - cfg.low) * 0.25
             label = "NEUTRAL"
-        elif v <= cfg.high:
+        elif v < cfg.high:
             score = 0.25 + (cfg.high - v) / (cfg.high - cfg.elevated) * 0.25
             label = "STRESSED"
-        else:
+        else:  # v >= cfg.high → score 0.0; VOLATILE override fires separately
             score, label = 0.0, "STRESSED"
 
         rationale = f"VIX {v:.1f}"
@@ -145,10 +145,10 @@ class BuildMarketContextUseCase:
             rationale += f" (low {cfg.very_low}–{cfg.low})"
         elif v <= cfg.elevated:
             rationale += f" (elevated {cfg.low}–{cfg.elevated})"
-        elif v <= cfg.high:
+        elif v < cfg.high:
             rationale += f" (risk_off {cfg.elevated}–{cfg.high})"
         else:
-            rationale += f" (volatile >{cfg.high})"
+            rationale += f" (volatile ≥{cfg.high})"
 
         return ContextFactor(name="vix", enabled=True, value=v, score=round(score, 4),
                              weight=cfg.weight, label=label, rationale=rationale)
@@ -349,6 +349,16 @@ def _classify_regime(conviction: float, vix_close: Decimal | None, thresholds) -
     return MarketRegime.NEUTRAL
 
 
+def _business_day_gap(start: date, end: date) -> int:
+    """Count weekday-only days between start (exclusive) and end (inclusive)."""
+    days, current = 0, start + timedelta(days=1)
+    while current <= end:
+        if current.weekday() < 5:  # Mon–Fri
+            days += 1
+        current += timedelta(days=1)
+    return days
+
+
 def _staleness_warning(
     vix_candles: list[Candle],
     eido_candles: list[Candle],
@@ -357,7 +367,7 @@ def _staleness_warning(
 ) -> str | None:
     stale = []
     for name, candles in [("VIX", vix_candles), ("EIDO", eido_candles), ("USD/IDR", usd_idr_candles)]:
-        if candles and (as_of - candles[-1].date).days > 1:
+        if candles and _business_day_gap(candles[-1].date, as_of) > 1:
             stale.append(f"{name} ({candles[-1].date})")
     return f"Using T-1 data for: {', '.join(stale)}. Run: saham fetch market" if stale else None
 

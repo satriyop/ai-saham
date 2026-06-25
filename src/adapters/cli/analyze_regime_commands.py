@@ -80,8 +80,8 @@ def regime(
         typer.echo(f"Error: invalid date format: {e}", err=True)
         raise typer.Exit(1)
 
-    # Explicit tickers take precedence; only fall back to universe when no tickers given
-    resolved_universe = universe or (APP_CFG.analysis.regime_universe if not tickers else None)
+    # Breadth universe: --universe flag overrides default; explicit tickers are additive
+    resolved_universe = universe or APP_CFG.analysis.regime_universe
     try:
         ticker_list = resolve_tickers(
             universe=resolved_universe,

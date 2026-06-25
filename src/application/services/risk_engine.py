@@ -132,9 +132,23 @@ class RiskEngine:
         response = self._use_case.execute(self._inject_gate_context(request))
         return _apply_regime_gate(response, market_context)
 
-    def assess_all_profiles(self, request: AssessRiskRequest) -> "AssessAllProfilesResponse":
+    def assess_all_profiles(
+        self,
+        request: AssessRiskRequest,
+        market_context: "MarketContext | None" = None,
+    ) -> "AssessAllProfilesResponse":
         """Run assessment across all risk profiles (conservative/balanced/aggressive)."""
-        return self._use_case.execute_all_profiles(self._inject_gate_context(request))
+        result = self._use_case.execute_all_profiles(self._inject_gate_context(request))
+        if market_context is not None and market_context.gate_tightening:
+            gate_label = f"regime:{market_context.regime.value}"
+            gated = [
+                replace(a, gate_triggered=gate_label)
+                if a.risk_level == RiskLevel.HIGH_RISK and a.gate_triggered is None
+                else a
+                for a in result.assessments
+            ]
+            result = replace(result, assessments=gated)
+        return result
 
     def assess_trend(
         self, request: AssessRiskRequest, days: int = 7

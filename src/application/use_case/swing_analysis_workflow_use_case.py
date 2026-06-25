@@ -409,6 +409,7 @@ class SwingAnalysisWorkflowUseCase:
         self,
         request: SwingAnalysisWorkflowRequest,
     ) -> "MarketContext":
+        from dataclasses import replace as dc_replace
         from src.application.services.market_context_engine import MarketContextEngine
         from src.infrastructure.config.market_context_config import load_market_context_config
         from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
@@ -420,9 +421,12 @@ class SwingAnalysisWorkflowUseCase:
             explicit=[],
             db_path=request.db_path,
         )
+        cfg = load_market_context_config()
+        if request.benchmark and request.benchmark != cfg.idx_trend.benchmark_ticker:
+            cfg = dc_replace(cfg, idx_trend=dc_replace(cfg.idx_trend, benchmark_ticker=request.benchmark))
         engine = MarketContextEngine(
             market_repository=SQLiteMarketRepository(db_path=request.db_path),
-            config=load_market_context_config(),
+            config=cfg,
             universe=tickers,
             broker_repository=SQLiteBrokerRepository(db_path=request.db_path),
             context_repository=SQLiteMarketContextRepository(db_path=request.db_path),
