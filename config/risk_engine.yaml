@@ -15,9 +15,9 @@ risk_engine:
     fundamental:
       enabled: true
       piotroski_min: 3          # F-score <= this → HIGH_RISK (FundamentalGate.distress_threshold)
-      market_cap_floor_idr: 1_000_000_000_000   # 1T IDR — passed to LiquidityGate
     liquidity:
       enabled: true
+      market_cap_floor_idr: 1_000_000_000_000   # 1T IDR — LiquidityGate market-cap floor
       median_tx_floor_idr: 5_000_000_000        # 5B IDR median 20-day tx value floor
       lookback_days: 20
     free_float:
@@ -25,21 +25,3 @@ risk_engine:
       min_free_float_pct: 15.0
     bandar:
       enabled: true
-
-  # Signal sensitivity thresholds — how easily the screener triggers
-  # These are NOT investor risk tolerance (see ADR-026, SignalSensitivity rename).
-  # Thresholds here override the hardcoded defaults in the rule set classes.
-  # Leave this section absent to use defaults (no behavior change).
-  sensitivities:
-    conservative:
-      rsi_high_risk: 75
-      rsi_low_risk: 25
-      ema_sma_divergence_threshold: 1.0
-    balanced:
-      rsi_high_risk: 70
-      rsi_low_risk: 30
-      ema_sma_divergence_threshold: 0
-    aggressive:
-      rsi_high_risk: 60
-      rsi_low_risk: 40
-      ema_sma_divergence_threshold: 0.1

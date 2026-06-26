@@ -1,6 +1,58 @@
 version: 1
 
 accumulation_screener:
+  screener:
+    # Market cap floor in IDR. Tickers with market_cap_idr below this are excluded.
+    # Set to 0 to disable. Example: 500_000_000_000 = 500B IDR.
+    # Requires fundamentals_provider (Stockbit keystats) to be active.
+    min_market_cap_idr: 0
+
+  sector_breadth:
+    # Set to false to disable sector breadth bonus entirely.
+    enabled: true
+
+    # If >= this fraction of sector peers show positive net_buy_ratio over
+    # the screening window, apply a rotation bonus to all tickers in that sector.
+    breadth_threshold: 0.60
+
+    # Bonus points awarded when breadth threshold is met.
+    bonus_pts: 10
+
+    # Minimum tickers from the same idx_groups.yaml group that must appear
+    # in the screened result set for breadth calculation to apply.
+    min_tickers_for_breadth: 3
+
+  broker_quality:
+    # Smart-money foreign desks used for broker-quality scoring.
+    smart_money:
+      brokers: [AK, BK, KZ, ZP, RX, MS, DB, ML, YU]
+      weight: 1.5
+
+    # Domestic retail noise brokers used for broker-quality scoring.
+    noise:
+      brokers: [YP, PD, XL, XC]
+      weight: 0.5
+
+    smart_share_threshold_pct: 60.0
+    smart_sell_min_share_pct: 15.0
+
+    # Tier 1 foreign institutional desks used for BCI scoring.
+    tier1:
+      brokers: [AK, BK, ZP, KZ, YU, RX, HD, CP, DR]
+      cluster_min_count: 3
+      stable_min_count: 1
+
+  verdicts:
+    enter_min_score: 70
+    watch_min_score: 40
+    signals:
+      strong_min_score: 70
+      strong_min_streak: 8
+      building_min_score: 60
+      building_min_streak: 5
+      coiled_spring_bb_pctile: 0.20
+      coiled_spring_min_score: 60
+
   evidence:
     max_score: 120.0
     components:

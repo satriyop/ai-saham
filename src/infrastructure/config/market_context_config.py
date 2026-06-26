@@ -11,7 +11,9 @@ from pathlib import Path
 
 import yaml
 
-MARKET_CONTEXT_CONFIG_PATH = Path("config/market_context_engine.yaml")
+from src.infrastructure.config.app_config import APP_CFG
+
+MARKET_CONTEXT_CONFIG_PATH = Path(APP_CFG.config_paths.market_context_engine)
 
 
 @dataclass(frozen=True)

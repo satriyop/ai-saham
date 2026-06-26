@@ -4,7 +4,7 @@
 #   - saham analyze sentiment TICKER (propagates sentiment across related tickers in groups)
 #   - saham analyze audit (audits sentiment with group context)
 #   - saham analyze risk TICKER --with-sentiment (adds group sentiment context)
-#   - saham screen accum / saham screen swing (group maps for calculating sector breadth and BCI score rotation bonus)
+#   - saham screen accum (group maps for calculating sector breadth and BCI score rotation bonus)
 #
 # Used for sentiment propagation across related tickers.
 

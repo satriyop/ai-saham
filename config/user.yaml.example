@@ -38,8 +38,17 @@ swing:
 #   intraday_confirmation: "~/.ai-saham/journals/.last-confirmation.json"
 #   intraday_confirmation_journal: "~/.ai-saham/journals/intraday-confirmations.csv"
 #   opening_data_dir: "~/.ai-saham/data/opening"
-#   pre_open_config: "~/.ai-saham/config/pre_open_screener.yaml"
-#   swing_config: "~/.ai-saham/config/swing_screener.yaml"
+
+# config_paths:
+#   pre_open_screener: "~/.ai-saham/config/pre_open_screener.yaml"
+#   accumulation_screener: "~/.ai-saham/config/accumulation_screener.yaml"
+#   swing_setups: "~/.ai-saham/config/swing_setups.yaml"
+#   swing_targets: "~/.ai-saham/config/swing_targets.yaml"
+#   swing_risk_policy: "~/.ai-saham/config/swing_risk_policy.yaml"
+#   risk_engine: "~/.ai-saham/config/risk_engine.yaml"
+#   signal_engine: "~/.ai-saham/config/signal_engine.yaml"
+#   market_context_engine: "~/.ai-saham/config/market_context_engine.yaml"
+#   stockbit: "~/.ai-saham/config/stockbit.yaml"
 
 # market:
 #   idx_request_delay_seconds: 1.0

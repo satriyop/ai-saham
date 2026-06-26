@@ -1,0 +1,29 @@
+# Swing Target Configuration
+#
+# Owns regime-adaptive TP/SL exits for swing setup planning and backtests.
+#
+version: 1
+name: "swing-targets"
+description: |
+  Regime-adaptive take-profit and stop-loss targets for swing setup exits.
+
+setup_targets:
+  risk_on:
+    take_profit_pct: 8.0
+    stop_loss_pct: 4.0
+
+  neutral:
+    take_profit_pct: 5.0
+    stop_loss_pct: 5.0
+
+  volatile:
+    take_profit_pct: 3.0
+    stop_loss_pct: 3.0
+
+  risk_off:
+    take_profit_pct: 3.0
+    stop_loss_pct: 3.0
+
+  default:
+    take_profit_pct: 5.0
+    stop_loss_pct: 5.0

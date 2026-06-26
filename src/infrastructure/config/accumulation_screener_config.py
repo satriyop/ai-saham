@@ -12,6 +12,7 @@ from typing import Any
 
 import yaml
 
+from src.infrastructure.config.app_config import APP_CFG
 from src.application.use_case.assess_accumulation_evidence_use_case import (
     AccumulationEvidencePolicy,
     BciEvidencePolicy,
@@ -22,7 +23,7 @@ from src.application.use_case.assess_accumulation_evidence_use_case import (
     StreakEvidencePolicy,
 )
 
-ACCUMULATION_SCREENER_CONFIG_PATH = Path("config/accumulation_screener.yaml")
+ACCUMULATION_SCREENER_CONFIG_PATH = Path(APP_CFG.config_paths.accumulation_screener)
 
 
 @dataclass(frozen=True)

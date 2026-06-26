@@ -1,0 +1,18 @@
+# Swing Risk Overlay Configuration
+#
+# Owns swing-specific risk overlays that are not RiskEngine gates.
+#
+version: 1
+name: "swing-risk-policy"
+description: |
+  Swing workflow risk overlays for resistance headroom and corporate action
+  warnings. These are workflow policy, not RiskEngine gate configuration.
+
+resistance:
+  enabled: true
+  headroom_min_pct: 5.0
+
+corporate_actions:
+  # Current implementation reads cached Stockbit corporate actions from SQLite.
+  # Refresh with `saham fetch market TICKER --enrichment-only` when stale.
+  ex_date_warning_days: 10

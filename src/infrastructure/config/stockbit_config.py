@@ -16,7 +16,9 @@ from pathlib import Path
 
 import yaml
 
-STOCKBIT_CONFIG_PATH = Path("config/stockbit.yaml")
+from src.infrastructure.config.app_config import APP_CFG
+
+STOCKBIT_CONFIG_PATH = Path(APP_CFG.config_paths.stockbit)
 
 
 @dataclass(frozen=True)

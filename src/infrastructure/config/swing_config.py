@@ -1,24 +1,36 @@
 """
-Swing screener calibration config — loaded from config/swing_screener.yaml.
+Swing workflow calibration config loaded from responsibility-specific YAML files.
 
 Shared between swing_commands and accumulation_commands to avoid circular imports.
 
 Layer: Infrastructure
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal
 from pathlib import Path
+from typing import Any
 
 import yaml
 
-SWING_SCREENER_CONFIG_PATH = Path("config/swing_screener.yaml")
+from src.infrastructure.config.app_config import APP_CFG
+
+ACCUMULATION_SCREENER_CONFIG_PATH = Path(APP_CFG.config_paths.accumulation_screener)
+SWING_SETUPS_CONFIG_PATH = Path(APP_CFG.config_paths.swing_setups)
+SWING_TARGETS_CONFIG_PATH = Path(APP_CFG.config_paths.swing_targets)
+SWING_RISK_POLICY_CONFIG_PATH = Path(APP_CFG.config_paths.swing_risk_policy)
+
+
+@dataclass(frozen=True)
+class SetupTargetConfig:
+    take_profit_pct: Decimal = Decimal("5")
+    stop_loss_pct: Decimal = Decimal("5")
 
 
 @dataclass(frozen=True)
 class SwingConfig:
-    """Swing screener calibration params. All fields carry hardcoded defaults so
-    the system works even when config/swing_screener.yaml is absent or malformed."""
+    """Swing workflow calibration params. All fields carry hardcoded defaults so
+    the system works even when optional YAML policy files are absent or malformed."""
 
     # broker quality
     smart_money_brokers: tuple[str, ...] = ("AK", "BK", "KZ", "ZP", "RX", "MS", "DB", "ML", "YU")
@@ -74,26 +86,32 @@ class SwingConfig:
     tier1_broker_codes: frozenset[str] = frozenset({"AK", "BK", "ZP", "KZ", "YU", "RX", "HD", "CP", "DR"})
     bci_cluster_min_count: int = 3
     bci_stable_min_count: int = 1
-    # market regime indicator periods (passed to MarketRegimeRequest)
-    regime_breadth_sma_period: int = 20
-    regime_benchmark_sma_fast: int = 20
-    regime_benchmark_sma_slow: int = 50
-    regime_breadth_threshold_pct: int = 50
-    # sector breadth confirmation (sector_breadth section in swing_screener.yaml)
+    # regime-adaptive setup exits
+    setup_targets: dict[str, SetupTargetConfig] = field(default_factory=lambda: {
+        "risk_on": SetupTargetConfig(Decimal("8"), Decimal("4")),
+        "neutral": SetupTargetConfig(Decimal("5"), Decimal("5")),
+        "volatile": SetupTargetConfig(Decimal("3"), Decimal("3")),
+        "risk_off": SetupTargetConfig(Decimal("3"), Decimal("3")),
+        "default": SetupTargetConfig(Decimal("5"), Decimal("5")),
+    })
+    # sector breadth confirmation (accumulation_screener.yaml)
     sector_breadth_enabled: bool = True
     sector_breadth_threshold: float = 0.60
     sector_breadth_bonus_pts: float = 10.0
     sector_breadth_min_tickers: int = 3
+    # resistance/corporate-action gates
+    resistance_gate_enabled: bool = True
+    resistance_headroom_min_pct: float = 5.0
+    ex_date_warning_days: int = 10
 
 
 def load_swing_config(
-    config_path: Path = SWING_SCREENER_CONFIG_PATH,
+    config_path: Path | None = None,
 ) -> SwingConfig:
-    """Load swing screener calibration params from YAML. Returns defaults on any error."""
+    """Load swing workflow calibration params from YAML. Returns defaults on any error."""
     defaults = SwingConfig()
     try:
-        with open(config_path, encoding="utf-8") as fh:
-            data = yaml.safe_load(fh) or {}
+        data = _read_single_config(config_path) if config_path else _read_split_config()
     except Exception:
         return defaults
     try:
@@ -112,7 +130,8 @@ def load_swing_config(
         pc_gates = pc.get("gates") or {}
         vd = data.get("verdicts") or {}
         vd_sig = vd.get("signals") or {}
-        rg = data.get("regime") or {}
+        resistance = data.get("resistance") or {}
+        corporate_actions = data.get("corporate_actions") or {}
 
         def _f(d: dict, k: str, default: float) -> float:
             return float(d[k]) if k in d else default
@@ -125,6 +144,19 @@ def load_swing_config(
 
         def _b(d: dict, k: str, default: bool) -> bool:
             return bool(d[k]) if k in d else default
+
+        def _setup_targets(raw: Any) -> dict[str, SetupTargetConfig]:
+            if not isinstance(raw, dict):
+                return defaults.setup_targets
+            parsed: dict[str, SetupTargetConfig] = {}
+            for key, val in raw.items():
+                if not isinstance(val, dict):
+                    continue
+                parsed[str(key).lower()] = SetupTargetConfig(
+                    take_profit_pct=Decimal(str(val["take_profit_pct"])),
+                    stop_loss_pct=Decimal(str(val["stop_loss_pct"])),
+                )
+            return parsed if parsed else defaults.setup_targets
 
         def _codes(d: dict, default: tuple[str, ...]) -> tuple[str, ...]:
             raw = d.get("brokers") or []
@@ -183,17 +215,53 @@ def load_swing_config(
             tier1_broker_codes=frozenset(_codes(t1, tuple(defaults.tier1_broker_codes))),
             bci_cluster_min_count=_i(t1, "cluster_min_count", defaults.bci_cluster_min_count),
             bci_stable_min_count=_i(t1, "stable_min_count", defaults.bci_stable_min_count),
-            regime_breadth_sma_period=_i(rg, "breadth_sma_period", defaults.regime_breadth_sma_period),
-            regime_benchmark_sma_fast=_i(rg, "benchmark_sma_fast", defaults.regime_benchmark_sma_fast),
-            regime_benchmark_sma_slow=_i(rg, "benchmark_sma_slow", defaults.regime_benchmark_sma_slow),
-            regime_breadth_threshold_pct=_i(rg, "breadth_threshold_pct", defaults.regime_breadth_threshold_pct),
-            sector_breadth_enabled=bool(
-                sb["sector_breadth_enabled"] if "sector_breadth_enabled" in sb
-                else defaults.sector_breadth_enabled
-            ),
+            setup_targets=_setup_targets(data.get("setup_targets")),
+            sector_breadth_enabled=_b(sb, "enabled", defaults.sector_breadth_enabled),
             sector_breadth_threshold=_f(sb, "breadth_threshold", defaults.sector_breadth_threshold),
             sector_breadth_bonus_pts=_f(sb, "bonus_pts", defaults.sector_breadth_bonus_pts),
             sector_breadth_min_tickers=_i(sb, "min_tickers_for_breadth", defaults.sector_breadth_min_tickers),
+            resistance_gate_enabled=_b(resistance, "enabled", defaults.resistance_gate_enabled),
+            resistance_headroom_min_pct=_f(resistance, "headroom_min_pct", defaults.resistance_headroom_min_pct),
+            ex_date_warning_days=_i(corporate_actions, "ex_date_warning_days", defaults.ex_date_warning_days),
         )
     except Exception:
         return defaults
+
+
+def _read_yaml(path: Path) -> dict:
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return yaml.safe_load(fh) or {}
+    except Exception:
+        return {}
+
+
+def _merge_section(data: dict, raw: dict, key: str) -> None:
+    section = raw.get(key)
+    if isinstance(section, dict):
+        data[key] = section
+
+
+def _read_single_config(config_path: Path | None) -> dict:
+    return _read_yaml(config_path) if config_path else {}
+
+
+def _read_split_config() -> dict:
+    data: dict[str, Any] = {}
+
+    accumulation_raw = _read_yaml(ACCUMULATION_SCREENER_CONFIG_PATH)
+    accumulation = accumulation_raw.get("accumulation_screener") or accumulation_raw
+    if isinstance(accumulation, dict):
+        for key in ("screener", "sector_breadth", "broker_quality", "verdicts"):
+            _merge_section(data, accumulation, key)
+
+    for path in (
+        SWING_SETUPS_CONFIG_PATH,
+        SWING_TARGETS_CONFIG_PATH,
+        SWING_RISK_POLICY_CONFIG_PATH,
+    ):
+        raw = _read_yaml(path)
+        for key in ("setups", "setup_targets", "resistance", "corporate_actions"):
+            _merge_section(data, raw, key)
+
+    return data

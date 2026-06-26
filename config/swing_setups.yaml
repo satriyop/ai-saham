@@ -1,0 +1,55 @@
+# Swing Setup Configuration
+#
+# Owns named swing setup gate policy only.
+#
+version: 1
+name: "swing-setups"
+description: |
+  Deterministic named setup gates for swing workflows.
+  Setup evaluation answers whether a candidate fits a setup; final action remains
+  owned by SignalEngine + RiskEngine -> TradeSetup.
+
+setups:
+  foreign-bounce:
+    enabled: true
+    # Reversal/absorption: foreigners are accumulating while price is still depressed.
+    gates:
+      min_score: 70              # accumulation evidence score gate (0-120 scale)
+      min_vwap_discount_pct: 3.0 # foreigners must be underwater >= 3% below VWAP
+      required_trend: SIDE       # pre-accumulation trend must be sideways
+      min_flow_ratio_pct: 5.0    # foreign flow >= 5% of daily turnover over window
+      max_rsi: 60                # not overbought; room to run
+    partial_max_failed_gates: 2
+
+  coiled-spring:
+    enabled: true
+    # Breakout preparation: accumulation is present while volatility compresses.
+    gates:
+      min_score: 60
+      max_bb_width_pctile: 0.20
+      min_flow_ratio_pct: 3.0
+      max_rsi: 65
+    partial_max_failed_gates: 2
+
+  smart-money-confirmed:
+    enabled: true
+    # Quality filter: named-broker attribution confirms the accumulation.
+    gates:
+      min_score: 60
+      min_smart_flow_idr: 0
+      min_smart_share_pct: 30.0
+      max_noise_share_pct: 60.0
+      reject_smart_net_selling: true
+    partial_max_failed_gates: 1
+
+  pullback-continuation:
+    enabled: true
+    # Trend-following: controlled pullback/accumulation inside an uptrend.
+    gates:
+      min_score: 55
+      required_trend: UP
+      min_flow_ratio_pct: 2.0
+      min_rsi: 40
+      max_rsi: 65
+      min_vwap_discount_pct: -2.0
+    partial_max_failed_gates: 2

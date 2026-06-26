@@ -34,8 +34,18 @@ storage:
   intraday_confirmation: "data/session/.last-confirmation.json"  # Last intraday order confirmation temp file
   intraday_confirmation_journal: "journals/intraday_confirmations.csv"  # Intraday trades execution journal
   opening_data_dir: "data/opening"           # Intraday learning loop data directory
-  pre_open_config: "config/pre_open_screener.yaml"  # Pre-open screener rule definitions
-  swing_config: "config/swing_screener.yaml"  # Swing screener rule definitions
+
+# ── Config Paths ───────────────────────────────────────────────────────────
+config_paths:
+  pre_open_screener: "config/pre_open_screener.yaml"
+  accumulation_screener: "config/accumulation_screener.yaml"
+  swing_setups: "config/swing_setups.yaml"
+  swing_targets: "config/swing_targets.yaml"
+  swing_risk_policy: "config/swing_risk_policy.yaml"
+  risk_engine: "config/risk_engine.yaml"
+  signal_engine: "config/signal_engine.yaml"
+  market_context_engine: "config/market_context_engine.yaml"
+  stockbit: "config/stockbit.yaml"
 
 # ── Broker ────────────────────────────────────────────────────────────────
 broker:
@@ -44,7 +54,6 @@ broker:
 
 # ── Analysis ──────────────────────────────────────────────────────────────
 analysis:
-  signal_sensitivity: balanced # conservative | balanced | aggressive
   benchmark: "^JKSE"     # benchmark ticker for regime / return comparison
   universe: lq45         # default universe for daily briefings
   regime_universe: idx80 # universe used for market regime detection

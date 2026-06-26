@@ -3,7 +3,7 @@
 # Impacted CLI Commands:
 #   - saham fetch universe update / list / show (manages and updates universe lists dynamically)
 #   - saham fetch market (resolves ticker list by universe name)
-#   - saham screen accum / saham screen swing (screens candidate tickers within selected universe)
+#   - saham screen accum (screens candidate tickers within selected universe)
 #   - saham analyze swing / swing-compare / regime (identifies tickers / benchmark baskets to analyze)
 #   - saham today (reads LQ45/default universe for briefing summary)
 #   - saham view universe (renders cache browser tables organized by universe ticker list)

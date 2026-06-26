@@ -45,8 +45,19 @@ class StorageConfig:
     intraday_confirmation: str = "data/session/.last-confirmation.json"
     intraday_confirmation_journal: str = "journals/intraday_confirmations.csv"
     opening_data_dir: str = "data/opening"
-    pre_open_config: str = "config/pre_open_screener.yaml"
-    swing_config: str = "config/swing_screener.yaml"
+
+
+@dataclass(frozen=True)
+class ConfigPathsConfig:
+    pre_open_screener: str = "config/pre_open_screener.yaml"
+    accumulation_screener: str = "config/accumulation_screener.yaml"
+    swing_setups: str = "config/swing_setups.yaml"
+    swing_targets: str = "config/swing_targets.yaml"
+    swing_risk_policy: str = "config/swing_risk_policy.yaml"
+    risk_engine: str = "config/risk_engine.yaml"
+    signal_engine: str = "config/signal_engine.yaml"
+    market_context_engine: str = "config/market_context_engine.yaml"
+    stockbit: str = "config/stockbit.yaml"
 
 
 @dataclass(frozen=True)
@@ -57,7 +68,6 @@ class BrokerConfig:
 
 @dataclass(frozen=True)
 class AnalysisConfig:
-    signal_sensitivity: str = "balanced"
     benchmark: str = "^JKSE"
     universe: str = "lq45"
     regime_universe: str = "idx80"
@@ -104,6 +114,7 @@ class AiConfig:
 class AppConfig:
     market: MarketConfig = field(default_factory=MarketConfig)
     storage: StorageConfig = field(default_factory=StorageConfig)
+    config_paths: ConfigPathsConfig = field(default_factory=ConfigPathsConfig)
     broker: BrokerConfig = field(default_factory=BrokerConfig)
     analysis: AnalysisConfig = field(default_factory=AnalysisConfig)
     trading: TradingConfig = field(default_factory=TradingConfig)
@@ -152,6 +163,7 @@ def load_app_config() -> AppConfig:
     return AppConfig(
         market=_build(cfg.get("market", {}), MarketConfig),
         storage=_build(cfg.get("storage", {}), StorageConfig),
+        config_paths=_build(cfg.get("config_paths", {}), ConfigPathsConfig),
         broker=_build(cfg.get("broker", {}), BrokerConfig),
         analysis=_build(cfg.get("analysis", {}), AnalysisConfig),
         trading=_build(cfg.get("trading", {}), TradingConfig),
