@@ -106,19 +106,9 @@ FOREIGN_BOUNCE_MAX_HOLD_DAYS = 10
 FOREIGN_BOUNCE_TAKE_PROFIT = Decimal("5")
 FOREIGN_BOUNCE_STOP_LOSS = Decimal("5")
 
-_SWING_SCREENER_CONFIG_PATH = Path(APP_CFG.storage.swing_config)
-
-
-def _load_swing_screener_config() -> dict:
-    """Load swing_screener.yaml if it exists; return empty dict on missing file."""
-    try:
-        import yaml
-        with open(_SWING_SCREENER_CONFIG_PATH) as f:
-            return yaml.safe_load(f) or {}
-    except FileNotFoundError:
-        return {}
-    except Exception:
-        return {}
+def _load_swing_workflow_config():
+    """Load typed swing workflow config from split YAML policy files."""
+    return _load_swing_config_typed()
 
 SWING_COMPARE_VARIANTS: dict[str, tuple[str, ...]] = {
     "baseline": (),
@@ -127,11 +117,11 @@ SWING_COMPARE_VARIANTS: dict[str, tuple[str, ...]] = {
 }
 
 from src.infrastructure.config.swing_config import (  # noqa: E402
-    load_swing_config as _load_swing_screener_config_typed,
+    load_swing_config as _load_swing_config_typed,
 )
 
-# Load from config/swing_screener.yaml; fall back to _SwingConfig defaults on any error.
-_SC = _load_swing_screener_config_typed()
+# Load split swing workflow config; fall back to _SwingConfig defaults on any error.
+_SC = _load_swing_config_typed()
 _DISPLAY_CONFIG = SwingDisplayConfig(
     enter_min_score=_SC.enter_min_score,
     watch_min_score=_SC.watch_min_score,
@@ -432,7 +422,6 @@ def _evaluate_foreign_bounce_setup(
 def _print_swing_output(
     ticker: str,
     today: date,
-    profile: str,
     strategy_name: str,
     data_freshness: DataFreshness,
     flow_detail: FlowDetail | None,
@@ -471,7 +460,6 @@ def _print_swing_output(
     print_swing_output(
         ticker=ticker,
         today=today,
-        sensitivity=profile,
         strategy_name=strategy_name,
         data_freshness=data_freshness,
         flow_detail=flow_detail,
@@ -512,10 +500,6 @@ def _print_swing_output(
 
 def swing(
     ticker: Annotated[str, typer.Argument(help="Stock ticker symbol (e.g., BBRI)")],
-    profile: Annotated[
-        str,
-        typer.Option("--profile", "-p", help="Risk profile: balanced/conservative/aggressive"),
-    ] = "balanced",
     strategy: Annotated[
         Optional[str],
         typer.Option(
@@ -657,8 +641,8 @@ def swing(
     """
     Unified composite swing trade analysis for a single stock.
 
-    Core verdict: SignalEngine + RiskEngine + MarketContextEngine -> TradeSetup.
-    Strategy, setup, sentiment, and detailed flow panels are opt-in evidence.
+    Core verdict: SignalEngine + RiskEngine -> TradeSetup.
+    Market context, strategy, setup, sentiment, and detailed flow panels are opt-in evidence.
 
     Replaces the multi-command morning workflow:
       saham screen accum, saham analyze risk, saham indicator compute,
@@ -732,6 +716,11 @@ def swing(
                 min_net_buy_days=0,
                 min_score=0.0,
                 tier1_broker_codes=_SC.tier1_broker_codes,
+                bci_cluster_min_count=_SC.bci_cluster_min_count,
+                bci_stable_min_count=_SC.bci_stable_min_count,
+                resistance_gate_enabled=_SC.resistance_gate_enabled,
+                resistance_headroom_min_pct=_SC.resistance_headroom_min_pct,
+                ex_date_warning_days=_SC.ex_date_warning_days,
             )
         )
         return accum_resp.candidates[0] if accum_resp.candidates else None
@@ -765,7 +754,7 @@ def swing(
             smart_sell_min_share_pct=_SC.smart_sell_min_share_pct,
         ),
         fetch_sentiment=_fetch_swing_sentiment,
-        load_swing_config=_load_swing_screener_config,
+        load_swing_config=_load_swing_workflow_config,
         resolve_setup_targets=resolve_setup_targets,
         structural_gates=[FundamentalGate(), LiquidityGate(), FreeFloatGate()],
         execution_gates=[BandarGate()],
@@ -777,7 +766,7 @@ def swing(
             SwingAnalysisWorkflowRequest(
                 ticker=ticker_upper,
                 today=today,
-                sensitivity=profile,
+                sensitivity="balanced",
                 strategy_name=strategy_evidence_name,
                 setup_name=setup_name,
                 window=window,
@@ -837,7 +826,6 @@ def swing(
         out: dict = {
             "ticker": ticker_upper,
             "date": str(today),
-            "sensitivity": profile,
             "modules": workflow_response.modules or {},
             "data": data_out,
             "flow_detail": flow_detail.to_dict() if flow_detail else None,
@@ -981,7 +969,6 @@ def swing(
     _print_swing_output(
         ticker=ticker_upper,
         today=today,
-        profile=profile,
         strategy_name=strategy_evidence_name or "-",
         data_freshness=data_freshness,
         flow_detail=flow_detail,
@@ -1163,6 +1150,9 @@ def swing_compare(
                 benchmark_ticker=benchmark,
                 allowed_regimes=allowed_regimes,
                 setup_config=_setup_config(),
+                resistance_gate_enabled=_SC.resistance_gate_enabled,
+                resistance_headroom_min_pct=_SC.resistance_headroom_min_pct,
+                ex_date_warning_days=_SC.ex_date_warning_days,
             ))
             rows.append((variant, response))
     except ValueError as e:

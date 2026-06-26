@@ -322,7 +322,8 @@ def _extract_observed_price(tdata) -> tuple[float, str, str] | None:
 def _load_config_snapshot() -> dict:
     try:
         import yaml
-        with open("config/pre_open_screener.yaml") as f:
+        from src.infrastructure.config.app_config import APP_CFG
+        with open(APP_CFG.config_paths.pre_open_screener) as f:
             data = yaml.safe_load(f)
         analysis = data.get("analysis", {})
         risk = data.get("risk", {})

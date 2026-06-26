@@ -383,7 +383,7 @@ def confirm_open(
 
     import yaml
     from src.application.use_case.pre_open_screen_use_case import PreOpenScreenConfig
-    config_path = Path(APP_CFG.storage.pre_open_config)
+    config_path = Path(APP_CFG.config_paths.pre_open_screener)
     if config_path.exists():
         with open(config_path) as f:
             yaml_data = yaml.safe_load(f) or {}

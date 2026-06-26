@@ -56,6 +56,9 @@ class LogSwingCandidateRequest:
     sector_breadth_bonus_pts: float
     sector_breadth_min_tickers: int
     setup_config: SwingSetupCatalogConfig
+    resistance_gate_enabled: bool = True
+    resistance_headroom_min_pct: float = 5.0
+    ex_date_warning_days: int = 10
     # Multi-window pattern config
     multi_windows: tuple[int, ...] = (7, 30, 90)
     coiled_spring_min_score: float = 60.0
@@ -109,6 +112,9 @@ class LogSwingCandidateUseCase:
             sector_breadth_threshold=request.sector_breadth_threshold,
             sector_breadth_bonus_pts=request.sector_breadth_bonus_pts,
             sector_breadth_min_tickers=request.sector_breadth_min_tickers,
+            resistance_gate_enabled=request.resistance_gate_enabled,
+            resistance_headroom_min_pct=request.resistance_headroom_min_pct,
+            ex_date_warning_days=request.ex_date_warning_days,
         )
         response = self._screen.execute(screen_req)
         candidate: AccumulationCandidate | None = next(
@@ -130,6 +136,9 @@ class LogSwingCandidateUseCase:
                     sector_breadth_threshold=request.sector_breadth_threshold,
                     sector_breadth_bonus_pts=request.sector_breadth_bonus_pts,
                     sector_breadth_min_tickers=request.sector_breadth_min_tickers,
+                    resistance_gate_enabled=request.resistance_gate_enabled,
+                    resistance_headroom_min_pct=request.resistance_headroom_min_pct,
+                    ex_date_warning_days=request.ex_date_warning_days,
                 ))
                 for w in windows
             }

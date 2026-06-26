@@ -44,7 +44,7 @@ from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBroker
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
 DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
-DEFAULT_PRE_OPEN_CONFIG_PATH = Path(APP_CFG.storage.pre_open_config)
+DEFAULT_PRE_OPEN_CONFIG_PATH = Path(APP_CFG.config_paths.pre_open_screener)
 DEFAULT_SESSION_FILE = Path(APP_CFG.storage.stockbit_session_file)
 DEFAULT_SIDECAR_PATH = Path(APP_CFG.storage.intraday_sidecar)
 DEFAULT_REGIME_UNIVERSE = APP_CFG.analysis.regime_universe

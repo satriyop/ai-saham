@@ -17,7 +17,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal, InvalidOperation
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 logger = logging.getLogger(__name__)
 
@@ -58,23 +58,18 @@ _DEFAULT_TAKE_PROFIT = Decimal("5")
 _DEFAULT_STOP_LOSS = Decimal("5")
 
 # Regime-specific targets (validated direction: IHSG has documented regime cycles)
-# MCE vocabulary (RISK_ON/NEUTRAL/VOLATILE/RISK_OFF) is primary;
-# legacy labels kept for backward-compat with old sidecars and explicit CLI flags.
+# MCE vocabulary (RISK_ON/NEUTRAL/VOLATILE/RISK_OFF).
 _REGIME_TARGETS: dict[str, tuple[Decimal, Decimal]] = {
     "RISK_ON":  (Decimal("8"), Decimal("4")),   # 2:1 R:R — trending market
     "NEUTRAL":  (Decimal("5"), Decimal("5")),   # 1:1 R:R — range-bound
     "VOLATILE": (Decimal("3"), Decimal("3")),   # tight — minimize exposure
     "RISK_OFF": (Decimal("3"), Decimal("3")),   # capital preservation
-    # legacy labels
-    "BULLISH":  (Decimal("8"), Decimal("4")),
-    "SIDEWAYS": (Decimal("5"), Decimal("5")),
-    "WEAK":     (Decimal("3"), Decimal("3")),
 }
 
 
 def resolve_setup_targets(
     regime: str | None,
-    config: dict | None = None,
+    config: Any | None = None,
 ) -> tuple[Decimal, Decimal]:
     """Return (take_profit_pct, stop_loss_pct) for the foreign-bounce setup.
 
@@ -82,12 +77,19 @@ def resolve_setup_targets(
     All values are in percentage points (e.g. Decimal("5") = 5%).
     """
     if config:
-        targets = config.get("setup_targets", {})
+        targets = getattr(config, "setup_targets", None)
+        if targets is None and isinstance(config, dict):
+            targets = config.get("setup_targets", config)
+        targets = targets or {}
         regime_key = (regime or "default").lower()
         tier = targets.get(regime_key) or targets.get("default", {})
         if tier:
-            tp = tier.get("take_profit_pct")
-            sl = tier.get("stop_loss_pct")
+            if isinstance(tier, dict):
+                tp = tier.get("take_profit_pct")
+                sl = tier.get("stop_loss_pct")
+            else:
+                tp = getattr(tier, "take_profit_pct", None)
+                sl = getattr(tier, "stop_loss_pct", None)
             if tp is not None and sl is not None:
                 return Decimal(str(tp)), Decimal(str(sl))
 

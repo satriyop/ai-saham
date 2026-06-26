@@ -238,15 +238,6 @@ def swing_backtest(
         f"setup={setup_name} | max positions={max_positions}..."
     )
 
-    setup_targets = None
-    try:
-        import yaml
-        with open("config/swing_screener.yaml", encoding="utf-8") as fh:
-            yaml_data = yaml.safe_load(fh) or {}
-            setup_targets = yaml_data.get("setup_targets")
-    except Exception:
-        pass
-
     use_case = SwingBacktestUseCase(
         broker_repository=SQLiteBrokerRepository(resolved_db),
         market_repository=SQLiteMarketRepository(db_path=resolved_db),
@@ -267,8 +258,11 @@ def swing_backtest(
             include_regime=with_regime or bool(allowed_regimes),
             benchmark_ticker=benchmark,
             allowed_regimes=allowed_regimes,
-            setup_targets=setup_targets,
+            setup_targets=_SC.setup_targets,
             setup_config=_setup_config(),
+            resistance_gate_enabled=_SC.resistance_gate_enabled,
+            resistance_headroom_min_pct=_SC.resistance_headroom_min_pct,
+            ex_date_warning_days=_SC.ex_date_warning_days,
         ))
     except ValueError as e:
         typer.echo(f"Error: {e}", err=True)

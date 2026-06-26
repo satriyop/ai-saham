@@ -515,10 +515,180 @@ def _setup_gates_group(
     return Group(*gates_group)
 
 
+def _build_signal_panel(signal_assessment) -> Any:
+    if signal_assessment is None:
+        return panel(Text("Signal unavailable", style="dim"), title="Signal")
+
+    assessment = signal_assessment.assessment
+    strength_value, strength_style, _ = _signal_label(signal_assessment)
+
+    headline_table = compact_table(show_header=False)
+    headline_table.add_column("Strength")
+    headline_table.add_column("Score")
+    headline_table.add_column("Spacer")
+    headline_table.add_row(
+        Text(strength_value, style=strength_style),
+        f"score {assessment.score:.1f}  {assessment.entry_quality.value}",
+        "",
+    )
+
+    items = [headline_table]
+
+    breakdown = getattr(assessment, "breakdown_dict", None) or {}
+    if breakdown:
+        key_map = [
+            ("bandar_intensity", "Bandar"),
+            ("foreign_flow_quality", "Foreign"),
+            ("insider_activity", "Insider"),
+            ("seasonality_edge", "Season"),
+            ("analyst_consensus", "Analyst"),
+            ("forward_valuation", "Fwd"),
+        ]
+        factor_table = compact_table()
+        for _, header in key_map:
+            factor_table.add_column(header, justify="right")
+        factor_table.add_row(
+            *[str(round(breakdown.get(key, 0))) for key, _ in key_map]
+        )
+        items.append(factor_table)
+
+    return panel(Group(*items), title="Signal")
+
+
+def _build_risk_panel(risk_resp, with_technical_gate) -> Any:
+    gate_table = compact_table(show_header=False)
+    gate_table.add_column("Gate", style="bold")
+    gate_table.add_column("Summary")
+    gate_table.add_column("Detail")
+
+    risk_value, risk_style, risk_detail = _risk_label(risk_resp)
+    gate_table.add_row("Gates", Text(risk_value, style=risk_style), risk_detail)
+
+    tech_value, tech_style, tech_detail = _technical_label(risk_resp, with_technical_gate)
+    gate_table.add_row("Technical", Text(tech_value, style=tech_style), tech_detail)
+
+    items: list = [gate_table]
+    if risk_resp is not None and risk_resp.assessment.gate_triggered:
+        items.append(Text(""))
+        items.append(Text("Why", style="bold cyan"))
+        for line in risk_resp.assessment.rationale_list[:3]:
+            items.append(Text(f"  {line}", style="dim"))
+
+    renderable = Group(*items) if len(items) > 1 else items[0]
+    return panel(renderable, title="Risk")
+
+
+def _build_market_context_panel(
+    market_regime,
+    mc_signal_preview,
+    mc_risk_preview,
+    canonical_signal=None,
+) -> Any:
+    table = compact_table(show_header=False)
+    table.add_column("Dim", style="bold")
+    table.add_column("Summary")
+    table.add_column("Detail")
+
+    market_value, market_style, market_detail = _market_label(market_regime)
+    table.add_row("Regime", Text(market_value, style=market_style), market_detail)
+
+    signal_summary = "no impact"
+    signal_detail = ""
+    if mc_signal_preview is not None and canonical_signal is not None:
+        before = canonical_signal.assessment
+        after = mc_signal_preview.assessment
+        mult = getattr(after, "market_multiplier", None)
+        if mult is None:
+            mult = (after.score / before.score) if before.score else 1.0
+        if before.score != after.score or before.entry_quality.value != after.entry_quality.value:
+            signal_summary = f"x{mult:.2f}"
+            signal_detail = (
+                f"{before.score:.0f}->{after.score:.0f} "
+                f"({before.entry_quality.value}->{after.entry_quality.value})"
+            )
+    table.add_row("Signal", signal_summary, signal_detail)
+
+    if market_regime.gate_tightening:
+        table.add_row("Gates", "tightened", "see --with-market-detail")
+    else:
+        table.add_row("Gates", "open", "gates unchanged")
+
+    return panel(table, title="Market Context")
+
+
+def _build_plan_panel(plan_text, plan_style, capital, chosen_sizing) -> Any:
+    if not capital or chosen_sizing is None:
+        return panel(Text(plan_text, style=f"bold {plan_style}"), title="Plan")
+
+    table = compact_table(show_header=False)
+    table.add_column("Key", style="bold")
+    table.add_column("Value")
+    table.add_row("Next step", Text(plan_text, style=f"bold {plan_style}"))
+    table.add_row(
+        "Sizing",
+        f"Entry {float(chosen_sizing.entry_price):,.0f} | "
+        f"Stop {float(chosen_sizing.stop_price):,.0f} | "
+        f"Target {float(chosen_sizing.target_price):,.0f} | "
+        f"Lots {chosen_sizing.lots:,} | "
+        f"Capital {capital:,.0f}",
+    )
+    return panel(table, title="Plan")
+
+
+def _build_data_panel(
+    data_freshness,
+    broker_detail,
+    broker_quality_note,
+    accum,
+    auto_refresh: bool = False,
+    refresh_actions: tuple = (),
+) -> Any:
+    warnings = list(getattr(data_freshness, "warnings", ()) or ())
+    candle_lag = next((w for w in warnings if "candle" in w.lower()), "")
+    broker_lag = next((w for w in warnings if "broker" in w.lower()), "")
+
+    table = compact_table(show_header=False)
+    table.add_column("Source", style="bold")
+    table.add_column("Value")
+    table.add_column("Detail")
+
+    table.add_row("Candles", fmt_date(data_freshness.candle_end), candle_lag or "ok")
+    table.add_row("Broker", fmt_date(data_freshness.broker_end), broker_lag or "ok")
+
+    if broker_quality_note is not None:
+        note_style = "yellow" if broker_quality_note.level == "warning" else "cyan"
+        table.add_row(
+            "Quality",
+            Text(broker_quality_note.level.upper(), style=note_style),
+            broker_quality_note.message,
+        )
+    elif broker_detail is None:
+        table.add_row("Quality", "N/A", "broker detail unavailable")
+
+    missing = getattr(data_freshness, "missing", []) or []
+    if missing:
+        table.add_row(
+            "Missing",
+            ", ".join(missing),
+            "add --with-fundamental or fetch data",
+        )
+
+    if accum is not None and getattr(accum, "ticker_notation", None):
+        notation = accum.ticker_notation
+        table.add_row(
+            "Notation",
+            getattr(notation, "listing_board", "") or "-",
+            f"haircut={getattr(notation, 'haircut_percentage', '')}"
+            if getattr(notation, "haircut_percentage", None)
+            else notation_detail(notation),
+        )
+
+    return panel(table, title="Data")
+
+
 def print_swing_rich_overview(
     ticker: str,
     today: date,
-    sensitivity: str,
     strategy_name: str,
     data_freshness: DataFreshness,
     broker_detail: BrokerDetail | None,
@@ -550,8 +720,6 @@ def print_swing_rich_overview(
     market_context_trade_setup_preview=None,
     with_technical_gate: bool = False,
 ) -> None:
-    summary_parts = swing_summary_parts(accum, risk_resp, backtest_result, sentiment_resp)
-    summary_text = " · ".join(summary_parts) if summary_parts else "insufficient data for assessment"
     plan_text, plan_style = swing_plan_text(
         ticker,
         capital,
@@ -569,135 +737,53 @@ def print_swing_rich_overview(
     price = _price_text(accum, sizing, setup_sizing)
 
     signal_source = signal_assessment or getattr(accum, "signal_assessment", None)
-    signal_value, signal_style, signal_detail = _signal_label(signal_source)
-    risk_value, risk_style, risk_detail = _risk_label(risk_resp)
-    market_value, market_style, market_detail = _market_label(market_regime)
-    accum_value, accum_style, accum_detail = _accumulation_label(accum, config)
+    signal_value, signal_style, _ = _signal_label(signal_source)
+    risk_value, risk_style, _ = _risk_label(risk_resp)
+    market_value, market_style, _ = _market_label(market_regime)
 
-    status_table = compact_table(show_header=False)
-    status_table.add_column("Metric", style="bold")
-    status_table.add_column("Value")
-    status_table.add_row("Latest price", price)
-    status_table.add_row("Candles", fmt_date(data_freshness.candle_end))
-    status_table.add_row("Broker flow", fmt_date(data_freshness.broker_end))
-    status_table.add_row("Refresh", _refresh_text(data_freshness))
-
+    # Verdict table (no Accum column)
     verdict = compact_table()
     verdict.add_column("Action")
     verdict.add_column("Price", justify="right")
     verdict.add_column("Signal")
-    verdict.add_column("Accum")
     verdict.add_column("Risk")
-    verdict.add_column("Setup")
     verdict.add_column("Market")
+    verdict.add_column("Setup")
     verdict.add_row(
         Text(action_value, style=action_style),
         price,
         Text(signal_value, style=signal_style),
-        Text(accum_value, style=accum_style),
         Text(risk_value, style=risk_style),
-        Text(setup_value, style=setup_style),
         Text(market_value, style=market_style),
+        Text(setup_value, style=setup_style),
     )
-
-    engine_summary = compact_table()
-    engine_summary.add_column("Engine", style="bold")
-    engine_summary.add_column("Summary")
-    engine_summary.add_column("Detail")
-    engine_summary.add_row("SignalEngine", Text(signal_value, style=signal_style), signal_detail)
-    engine_summary.add_row("RiskEngine", Text(risk_value, style=risk_style), risk_detail)
-    tech_value, tech_style, tech_detail = _technical_label(risk_resp, with_technical_gate)
-    engine_summary.add_row("Technical", Text(tech_value, style=tech_style), tech_detail)
-    engine_summary.add_row("Market Context", Text(market_value, style=market_style), market_detail)
-    broker_value, broker_style, broker_detail_text = _broker_label(broker_detail, broker_quality_note)
-    engine_summary.add_row("Broker quality", Text(broker_value, style=broker_style), broker_detail_text)
-
-    plan_table = compact_table(show_header=False)
-    plan_table.add_column("Key", style="bold")
-    plan_table.add_column("Value")
-    plan_table.add_row("Reason", action_detail)
-    plan_table.add_row("Next step", Text(plan_text, style=f"bold {plan_style}"))
-    plan_table.add_row("Context", Text(summary_text, style="bold"))
-
-    finding_group = _top_findings(
-        setup_eval=setup_eval,
-        risk_resp=risk_resp,
-        broker_quality_note=broker_quality_note,
-        data_freshness=data_freshness,
-        trade_setup=trade_setup,
-    )
-
-    data_table = compact_table(show_header=False)
-    data_table.add_column("Metric", style="bold")
-    data_table.add_column("Value")
-    data_table.add_row("Profile", sensitivity)
-    data_table.add_row("Strategy evidence", strategy_name if include_strategy else "off")
-    data_table.add_row("Candles through", fmt_date(data_freshness.candle_end))
-    data_table.add_row("Broker flow through", fmt_date(data_freshness.broker_end))
-    data_table.add_row(
-        "Modules",
-        _modules_text(
-            setup_eval=setup_eval,
-            capital=capital,
-            include_strategy=include_strategy,
-            include_sentiment=include_sentiment,
-            include_flow_detail=include_flow_detail,
-            include_signal_detail=include_signal_detail,
-            include_risk_detail=include_risk_detail,
-            include_market_detail=include_market_detail,
-            market_regime=market_regime,
-        ),
-    )
-    if market_regime is not None:
-        _label = REGIME_DISPLAY_LABEL.get(market_regime.regime.value, market_regime.regime.value)
-        _score = context_conviction_score(market_regime)
-        data_table.add_row("Market regime", f"{_label} ({_score}/7)")
-    notation_text = notation_detail(accum.ticker_notation) if accum is not None else ""
-    if notation_text:
-        data_table.add_row("Notation", notation_text)
-
-    sections = [
-        Text("Status", style="bold cyan"),
-        status_table,
-        Text("Verdict", style="bold cyan"),
-        verdict,
-        Text("Engine Summary", style="bold cyan"),
-        engine_summary,
-        Text("Why / Blockers", style="bold yellow"),
-        Group(*finding_group),
-        Text("Plan", style="bold cyan"),
-        plan_table,
-    ]
 
     chosen_sizing = setup_sizing or sizing
-    if capital is not None and chosen_sizing is not None:
-        sizing_table = compact_table(show_header=False)
-        sizing_table.add_column("Metric", style="bold")
-        sizing_table.add_column("Value")
-        sizing_table.add_row("Capital", f"{capital:,.0f} IDR")
-        sizing_table.add_row("Entry", f"{float(chosen_sizing.entry_price):,.0f}")
-        sizing_table.add_row("Stop", f"{float(chosen_sizing.stop_price):,.0f}")
-        sizing_table.add_row("Target", f"{float(chosen_sizing.target_price):,.0f}")
-        sizing_table.add_row("Lots", f"{chosen_sizing.lots:,}")
-        sections.extend([Text("Order Plan", style="bold cyan"), sizing_table])
 
-    warnings = list(data_freshness.warnings)
+    sections = [
+        panel(verdict, title="Verdict"),
+        _build_signal_panel(signal_source),
+        _build_risk_panel(risk_resp, with_technical_gate),
+    ]
     if market_regime is not None:
-        warnings.extend(context_warnings(market_regime))
-    if warnings:
-        warning_table = compact_table(show_header=False)
-        warning_table.add_column("Warning")
-        for warning in warnings[:5]:
-            warning_table.add_row(f"- {warning}")
-        sections.extend([Text("Data & Context Warnings", style="bold yellow"), warning_table])
-
-    sections.extend([Text("Run Context", style="bold cyan"), data_table])
+        sections.append(
+            _build_market_context_panel(
+                market_regime,
+                market_context_signal_preview,
+                market_context_risk_preview,
+                canonical_signal=signal_source,
+            )
+        )
+    sections += [
+        _build_plan_panel(plan_text, plan_style, capital, chosen_sizing),
+        _build_data_panel(data_freshness, broker_detail, broker_quality_note, accum),
+    ]
 
     console().print(
         panel(
             Group(*sections),
             title=f"Swing Analysis - {ticker}",
-            subtitle=f"{today.isoformat()} / {sensitivity} / verdict-first",
+            subtitle=today.isoformat(),
         )
     )
 
@@ -757,7 +843,6 @@ def _market_context_preview_group(
 def print_swing_output(
     ticker: str,
     today: date,
-    sensitivity: str,
     strategy_name: str,
     data_freshness: DataFreshness,
     flow_detail: FlowDetail | None,
@@ -807,7 +892,6 @@ def print_swing_output(
     print_swing_rich_overview(
         ticker=ticker,
         today=today,
-        sensitivity=sensitivity,
         strategy_name=strategy_name,
         data_freshness=data_freshness,
         broker_detail=broker_detail,
@@ -1158,27 +1242,34 @@ def print_swing_output(
         r = backtest_result
         history_group.append(Text(f"Historical Backtest ({strategy_name}): {r.trade_count} trades", style="bold cyan"))
         history_group.append(Text("Evidence only: this panel does not change TradeSetup.action.", style="dim"))
-        hist_table = compact_table()
-        hist_table.add_column("Win Rate")
-        hist_table.add_column("Profit Factor")
-        hist_table.add_column("Max Drawdown")
-        hist_table.add_column("Avg Win")
-        hist_table.add_column("Avg Loss")
+        period_start = getattr(r, "start_date", None)
+        period_end = getattr(r, "end_date", None)
+        period_text = (
+            f"{period_start} to {period_end}"
+            if period_start is not None and period_end is not None
+            else "unknown"
+        )
+        hist_table = compact_table(show_header=False)
+        hist_table.add_column("Metric", style="bold")
+        hist_table.add_column("Value")
 
         win_style = "green" if float(r.win_rate) >= 55 else ("yellow" if float(r.win_rate) >= 45 else "red")
         avg_win_val = f"{float(r.avg_win):,.0f} IDR" if r.avg_win else "—"
         avg_loss_val = f"{float(r.avg_loss):,.0f} IDR" if r.avg_loss else "—"
 
-        hist_table.add_row(
-            f"[{win_style}]{float(r.win_rate):.1f}%[/]",
-            f"{float(r.profit_factor):.2f}",
-            f"{float(r.max_drawdown_pct):.1f}%",
-            avg_win_val,
-            avg_loss_val
-        )
+        hist_table.add_row("Period", period_text)
+        hist_table.add_row("Win Rate", f"[{win_style}]{float(r.win_rate):.1f}%[/]")
+        hist_table.add_row("Profit Factor", f"{float(r.profit_factor):.2f}")
+        hist_table.add_row("Max Drawdown", f"{float(r.max_drawdown_pct):.1f}%")
+        hist_table.add_row("Avg Win/Loss", f"{avg_win_val} / {avg_loss_val}")
         history_group.append(hist_table)
     elif include_strategy and backtest_result is not None and backtest_result.trade_count == 0:
         history_group.append(Text(f"Historical Backtest ({strategy_name})", style="bold cyan"))
+        if getattr(backtest_result, "start_date", None) is not None and getattr(backtest_result, "end_date", None) is not None:
+            history_group.append(Text(
+                f"Period: {backtest_result.start_date} to {backtest_result.end_date}",
+                style="dim",
+            ))
         history_group.append(Text("No trades triggered in available history (needs more broker data).", style="dim"))
         history_group.append(Text(f"Tip: run `saham backtest {ticker} --strategy {strategy_name} --verbose`", style="dim italic"))
     elif include_strategy:

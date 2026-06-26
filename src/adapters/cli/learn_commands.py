@@ -28,7 +28,7 @@ from src.infrastructure.config.app_config import APP_CFG
 OPENING_DATA_DIR = Path(APP_CFG.storage.opening_data_dir)
 DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 DEFAULT_SESSION_FILE = Path(APP_CFG.storage.stockbit_session_file)
-DEFAULT_PRE_OPEN_CONFIG = Path(APP_CFG.storage.pre_open_config)
+DEFAULT_PRE_OPEN_CONFIG = Path(APP_CFG.config_paths.pre_open_screener)
 
 learn_app = typer.Typer(
     name="learn",
@@ -291,7 +291,7 @@ def track(
                 running_trade_provider = StockbitRunningTradeProvider(
                     broker_provider=broker_provider
                 )
-                with open("config/stockbit.yaml") as f:
+                with open(APP_CFG.config_paths.stockbit) as f:
                     stockbit_cfg = yaml.safe_load(f) or {}
                 institutional_codes = frozenset(
                     stockbit_cfg.get("broker_codes", {}).get("institutional_proxy", [])

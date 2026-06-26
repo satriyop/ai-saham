@@ -20,13 +20,13 @@ from src.application.use_case.accumulation_screen_use_case import (
 )
 from src.domain.services.trading_calendar import trading_sessions_apart
 from src.infrastructure.config.swing_config import (
-    load_swing_config as _load_swing_screener_config_typed,
+    load_swing_config as _load_swing_config,
 )
 from src.infrastructure.config.accumulation_screener_config import (
     load_accumulation_screener_config as _load_accumulation_screener_config,
 )
 
-_SC = _load_swing_screener_config_typed()
+_SC = _load_swing_config()
 _ASC = _load_accumulation_screener_config()
 _TABLE_WIDTH = 93
 
@@ -129,6 +129,25 @@ def _risk_reason(assessment) -> str:
     return "; ".join(assessment.rationale)
 
 
+def _risk_tier(assessment) -> str:
+    if assessment is None or not assessment.gate_triggered:
+        return "-"
+    return "structural" if assessment.gate_is_structural else "execution"
+
+
+def _risk_detail_line(rank: int, candidate: AccumulationCandidate) -> Text:
+    assessment = candidate.risk_assessment
+    if assessment is None:
+        return Text(f"#{rank} {candidate.ticker}: risk unavailable", style="dim")
+    if not assessment.gate_triggered:
+        return Text(f"#{rank} {candidate.ticker}: no risk gate fired", style="dim")
+    reason = _risk_reason(assessment)
+    return Text(
+        f"#{rank} {candidate.ticker}: {assessment.gate_triggered} - {reason}",
+        style="red" if assessment.gate_is_structural else "yellow",
+    )
+
+
 def _data_freshness(candidate: AccumulationCandidate) -> str:
     if candidate.latest_candle_date is None or candidate.latest_broker_date is None:
         return "MISSING"
@@ -185,19 +204,15 @@ def _scoring_definitions_panel():
     signal_table.add_column("Definition")
     signal_table.add_row(
         "Signal score",
-        "0-100 from SignalEngine factors: bandar, foreign quality, insider activity, seasonality, analyst, forward valuation.",
+        "SignalEngine attractiveness score (0-100) from bandar, foreign quality, insider activity, seasonality, analyst, and forward valuation.",
     )
     signal_table.add_row(
-        "Signal verdict",
-        "STRONG / MODERATE / WEAK from score thresholds; entry quality becomes ENTER / WATCH / AVOID.",
+        "Signal status",
+        "STRONG / MODERATE / WEAK from score thresholds; entry quality maps to ENTER / WATCH / AVOID.",
     )
     signal_table.add_row(
-        "Risk gate",
-        "PASS means no structural/execution gate fired. Technical risk is RSI + EMA/SMA profile logic.",
-    )
-    signal_table.add_row(
-        "Rule Conf",
-        "RiskEngine rule alignment only: 100 = RSI and trend agree, 50 = one signal or conflict, 0 = neutral.",
+        "Risk status",
+        "RiskEngine gate state, not a score: OPEN means no structural/execution gate fired; BLOCKED means a risk gate fired.",
     )
 
     return panel(
@@ -301,10 +316,10 @@ def display_results(
     response: AccumulationScreenResponse,
     universe_label: str,
     top_n: int,
-    granular: bool,
+    show_top_broker: bool,
     vwap_only: bool,
     squeeze_only: bool,
-    show_breakdown: bool,
+    include_explanation: bool = False,
     strategy_signals: dict[str, str] | None = None,
     strategy_name: str | None = None,
 ) -> None:
@@ -372,9 +387,8 @@ def display_results(
     risk_table.add_column("Status")
     if show_context_ticker:
         risk_table.add_column("Ticker", style="bold")
+    risk_table.add_column("Tier")
     risk_table.add_column("Gate")
-    risk_table.add_column("Technical")
-    risk_table.add_column("Rule Conf", justify="right")
 
     data_table = compact_table()
     data_table.add_column("Fresh")
@@ -437,7 +451,7 @@ def display_results(
             if c.risk_assessment and c.risk_assessment.gate_triggered
             else None
         )
-        gate_status = "BLOCK" if gate_triggered else ("PASS" if c.risk_assessment else "-")
+        gate_status = "BLOCKED" if gate_triggered else ("OPEN" if c.risk_assessment else "N/A")
         gate_style = "bold red" if gate_triggered else ("green" if c.risk_assessment else "bright_black")
         gate_cell = Text(gate_status, style=gate_style)
 
@@ -502,18 +516,14 @@ def display_results(
 
         risk_row = [
             gate_status,
+            _risk_tier(c.risk_assessment),
             gate_triggered or "-",
-            c.risk_assessment.risk_level_name if c.risk_assessment else "-",
-            str(c.risk_assessment.confidence) if c.risk_assessment else "-",
         ]
         if show_context_ticker:
             risk_table.add_row(risk_row[0], c.ticker, *risk_row[1:])
         else:
             risk_table.add_row(*risk_row)
-        risk_detail_lines.append(Text(
-            f"#{i} {c.ticker}: {_risk_reason(c.risk_assessment)}",
-            style="dim",
-        ))
+        risk_detail_lines.append(_risk_detail_line(i, c))
 
         notation_text = notation_detail(c.ticker_notation)
         if notation_text:
@@ -602,7 +612,7 @@ def display_results(
                 details_table,
                 show_context_ticker,
                 c.ticker,
-                "Risk Gate",
+                "Risk Block",
                 "BAD" if c.risk_assessment.gate_is_structural else "WARN",
                 f"{c.risk_assessment.gate_triggered} -> {c.risk_assessment.risk_level_name}",
             )
@@ -640,7 +650,7 @@ def display_results(
         else:
             data_table.add_row(*data_row)
 
-        if granular and c.top_brokers:
+        if show_top_broker and c.top_brokers:
             broker_line = "    " + "  ".join(c.top_brokers[:5])
             if c.bci_label == "CLUSTER":
                 broker_line += f"  [BCI:{c.bci_label}({c.bci_tier1_count}T1)]"
@@ -687,12 +697,18 @@ def display_results(
                 Text("\nWhy", style="bold cyan"),
                 *risk_detail_lines,
                 Text(
-                    "\nRule Conf comes from RiskEngine rule alignment: "
-                    "100 = RSI and trend agree, 50 = one signal/conflict, 0 = neutral.",
+                    "\nRiskEngine is gate-based: OPEN means no structural/execution gate fired; "
+                    "BLOCKED means a gate stopped or downgraded action.",
+                    style="dim",
+                ),
+                Text(
+                    "\nTechnicalGate is not evaluated by screen accum. Use "
+                    "saham analyze swing TICKER --with-technical-gate for "
+                    "technical execution-gate diagnostics.",
                     style="dim",
                 ),
             ),
-            title="Risk Gate",
+            title="Risk Status",
         ),
         panel(data_table, title="Data Coverage"),
     ]
@@ -707,7 +723,10 @@ def display_results(
         )
     )
 
-    # Render metadata guide cleanly in a second panel
+    if not include_explanation:
+        return
+
+    # Render run context cleanly in a second panel
     meta_table = compact_table(show_header=False)
     meta_table.add_column("Key", style="bold cyan")
     meta_table.add_column("Value")
@@ -734,7 +753,7 @@ def display_results(
     explain_lines = [
         "Verdict panel is the action summary. Context panels explain why.",
         "ACCUM is deterministic foreign-flow evidence (0-120). SIGNAL is SignalEngine attractiveness (0-100).",
-        "GATE PASS means no structural/execution risk gate fired; it does not mean the ticker is risk-free.",
+        "GATE OPEN means no structural/execution risk gate fired; it does not mean the ticker is risk-free.",
         "FLOW% = avg net foreign % of turnover. F_VWAP% positive = price below foreign average buy cost. BB%ILE lower = tighter squeeze.",
     ]
     if strategy_signals is not None:
@@ -750,7 +769,7 @@ def display_results(
     console().print(
         panel(
             meta_table,
-            title="Metadata & Guide",
+            title="Run Context",
         )
     )
     console().print(_scoring_definitions_panel())
@@ -764,6 +783,7 @@ def display_multi(
     squeeze_only: bool,
     screened_at: "date",
     broker_quality = None,
+    include_explanation: bool = False,
 ) -> None:
     """Render multi-window side-by-side table."""
     windows = sorted(results.keys())
@@ -823,7 +843,7 @@ def display_multi(
         table.add_column(f"{w}s", justify="right")
     table.add_column("Pattern")
     table.add_column("Trend")
-    table.add_column("BRK")
+    table.add_column("Broker Flow")
 
     for i, (tk, pw) in enumerate(rows, 1):
         score_cells = []
@@ -850,7 +870,10 @@ def display_multi(
         )
     )
 
-    # Render metadata guide cleanly in a second panel
+    if not include_explanation:
+        return
+
+    # Render run context cleanly in a second panel
     meta_table = compact_table(show_header=False)
     meta_table.add_column("Key", style="bold cyan")
     meta_table.add_column("Value")
@@ -864,18 +887,18 @@ def display_multi(
     )
 
     meta_table.add_row(
-        "Score Range",
+        "Scores",
         "Accum ≥70 green | ≥40 yellow | <40 white"
     )
 
     meta_table.add_row(
-        "Patterns:",
+        "Patterns",
         "sustained | building | fresh rotation | long-term only | coiled spring | weak"
     )
 
     meta_table.add_row(
-        "Broker Quality (BRK)",
-        "named top-broker quality; smart+/noise+ = buyer-led, smart-/noise- = seller-led, n/a = no detail"
+        "Broker Flow",
+        "5-session named top-broker bucket: smart+/noise+ = net buying, smart-/noise- = net selling, n/a = no detail"
     )
 
     meta_table.add_row(
@@ -886,7 +909,7 @@ def display_multi(
     console().print(
         panel(
             meta_table,
-            title="Metadata & Guide",
+            title="Run Context",
         )
     )
 
@@ -960,7 +983,7 @@ def print_column_guide() -> None:
         "Multi-window 7d/30d/90d evaluation.\n- sustained: score ≥60 on all windows.\n- building: strong 7d+30d, weak 90d.\n- coiled spring: BB squeeze + score ≥60 on any window."
     )
     guide_table.add_row(
-        "BREAKDOWN",
+        "EVIDENCE PTS",
         "cons / streak / vwap\nrsi / flow / bb / inst",
         "Accumulation evidence components: cons (40 pts), streak (30 pts), vwap (20 pts), rsi (10 pts), flow (10 pts), bb (10 pts), inst (15 pts BCI)."
     )
@@ -980,7 +1003,7 @@ def print_column_guide() -> None:
         "  • Run --multi first for the daily overview — one command, three windows.\n"
         "  • Use --squeeze-only to surface 'coiled spring' setups.\n"
         "  • Deep-dive: saham view broker flow <TICKER> --days 30\n"
-        "               saham risk <TICKER> --profile balanced --with-sentiment",
+        "               saham analyze risk <TICKER> --with-sentiment",
         style="cyan"
     )
 

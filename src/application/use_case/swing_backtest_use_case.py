@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import Decimal
 from statistics import mean
+from typing import Any
 
 from src.application.use_case.accumulation_screen_use_case import (
     AccumulationCandidate,
@@ -58,8 +59,11 @@ class SwingBacktestRequest:
     include_regime: bool = False
     benchmark_ticker: str = "^JKSE"
     allowed_regimes: tuple[str, ...] = ()
-    setup_targets: dict | None = None
+    setup_targets: dict[str, Any] | None = None
     setup_config: SwingSetupCatalogConfig = field(default_factory=SwingSetupCatalogConfig)
+    resistance_gate_enabled: bool = True
+    resistance_headroom_min_pct: float = 5.0
+    ex_date_warning_days: int = 10
 
 
 @dataclass(frozen=True)
@@ -377,6 +381,9 @@ class SwingBacktestUseCase:
             min_net_buy_days=request.min_net_buy_days,
             min_score=0.0,
             as_of_date=signal_date,
+            resistance_gate_enabled=request.resistance_gate_enabled,
+            resistance_headroom_min_pct=request.resistance_headroom_min_pct,
+            ex_date_warning_days=request.ex_date_warning_days,
         ))
         candidates = [
             candidate for candidate in response.candidates

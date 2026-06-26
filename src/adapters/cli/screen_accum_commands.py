@@ -15,7 +15,11 @@ from typing import Annotated, Optional
 
 import typer
 
-from src.application.services.bootstrap import create_indicator_registry
+from src.application.services.bootstrap import (
+    _load_engine_config,
+    _resolve_risk_gates,
+    create_indicator_registry,
+)
 from src.application.services.broker_quality import (
     BrokerQualitySnapshot,
     compute_broker_quality_batch,
@@ -34,10 +38,6 @@ from src.application.use_case.assess_accumulation_evidence_use_case import (
     AssessAccumulationEvidenceUseCase,
 )
 from src.application.use_case.assess_risk_use_case import AssessRiskRequest, AssessRiskUseCase
-from src.domain.rules.bandar_gate import BandarGate
-from src.domain.rules.free_float_gate import FreeFloatGate
-from src.domain.rules.fundamental_gate import FundamentalGate
-from src.domain.rules.liquidity_gate import LiquidityGate
 from src.infrastructure.browser.stockbit_analyst import StockbitAnalystConsensusProvider
 from src.infrastructure.browser.stockbit_bandar import StockbitBandarDetectorProvider
 from src.infrastructure.browser.stockbit_corp_action import StockbitCorporateActionRepository
@@ -57,7 +57,7 @@ from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBroker
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
 _SC = _load_swing_config()
-_ASC = _load_accumulation_screener_config()
+_ASC = _load_accumulation_screener_config(Path(APP_CFG.config_paths.accumulation_screener))
 
 DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 DEFAULT_ACCUM_DB_PATH = DEFAULT_DB_PATH  # alias kept for external imports
@@ -131,10 +131,10 @@ def _display_results(
     response: AccumulationScreenResponse,
     universe_label: str,
     top_n: int,
-    granular: bool,
+    show_top_broker: bool,
     vwap_only: bool,
     squeeze_only: bool,
-    show_breakdown: bool,
+    include_explanation: bool,
     strategy_signals: dict[str, str] | None = None,
     strategy_name: str | None = None,
 ) -> None:
@@ -143,10 +143,10 @@ def _display_results(
         response=response,
         universe_label=universe_label,
         top_n=top_n,
-        granular=granular,
+        show_top_broker=show_top_broker,
         vwap_only=vwap_only,
         squeeze_only=squeeze_only,
-        show_breakdown=show_breakdown,
+        include_explanation=include_explanation,
         strategy_signals=strategy_signals,
         strategy_name=strategy_name,
     )
@@ -160,6 +160,7 @@ def _display_multi(
     squeeze_only: bool,
     screened_at: "date",
     broker_quality: dict[str, ScreenBrokerQuality] | None = None,
+    include_explanation: bool = False,
 ) -> None:
     from src.adapters.cli.screen_accum_display import display_multi
     display_multi(
@@ -170,6 +171,7 @@ def _display_multi(
         squeeze_only=squeeze_only,
         screened_at=screened_at,
         broker_quality=broker_quality,
+        include_explanation=include_explanation,
     )
 
 
@@ -197,6 +199,12 @@ def _run_multi(
             rsi_period=base_request.rsi_period,
             sma_period=base_request.sma_period,
             tier1_broker_codes=base_request.tier1_broker_codes,
+            bci_cluster_min_count=base_request.bci_cluster_min_count,
+            bci_stable_min_count=base_request.bci_stable_min_count,
+            min_market_cap_idr=base_request.min_market_cap_idr,
+            resistance_gate_enabled=base_request.resistance_gate_enabled,
+            resistance_headroom_min_pct=base_request.resistance_headroom_min_pct,
+            ex_date_warning_days=base_request.ex_date_warning_days,
             sector_breadth_enabled=base_request.sector_breadth_enabled,
             sector_breadth_threshold=base_request.sector_breadth_threshold,
             sector_breadth_bonus_pts=base_request.sector_breadth_bonus_pts,
@@ -263,13 +271,9 @@ def accumulation_run(
         int,
         typer.Option("--top", help="Show top N results", min=1),
     ] = 20,
-    granular: Annotated[
+    show_top_broker: Annotated[
         bool,
-        typer.Option("--granular", help="Show per-broker detail (Stockbit data required)"),
-    ] = False,
-    show_breakdown: Annotated[
-        bool,
-        typer.Option("--breakdown", help="Show per-component score breakdown under each row"),
+        typer.Option("--top-broker", help="Show top broker-code detail and BCI label when available"),
     ] = False,
     multi: Annotated[
         bool,
@@ -299,7 +303,7 @@ def accumulation_run(
     ] = False,
     explain: Annotated[
         bool,
-        typer.Option("--explain", help="Print column guide appended after results"),
+        typer.Option("--explain", help="Append run context and scoring definitions after results"),
     ] = False,
     strategy: Annotated[
         Optional[str],
@@ -336,8 +340,7 @@ def accumulation_run(
         saham screen accum BBCA BBRI BMRI --window 7
         saham screen accum --universe lq45 --vwap-only
         saham screen accum --universe lq45 --squeeze-only
-        saham screen accum --universe lq45 --granular
-        saham screen accum --universe lq45 --breakdown
+        saham screen accum --universe lq45 --top-broker
         saham screen accum --universe lq45 --explain
         saham screen accum --guide
         saham screen accum --universe lq45 --format json
@@ -385,10 +388,13 @@ def accumulation_run(
     broker_repo = SQLiteBrokerRepository(resolved_db)
     market_repo = SQLiteMarketRepository(db_path=resolved_db)
     _sb = _make_stockbit_providers(resolved_db)
+    _risk_structural_gates, _risk_execution_gates = _resolve_risk_gates(
+        _load_engine_config(Path(APP_CFG.config_paths.risk_engine))
+    )
     _risk_uc = AssessRiskUseCase(
         repository=market_repo,
-        structural_gates=[FundamentalGate(), LiquidityGate(), FreeFloatGate()],
-        execution_gates=[BandarGate()],
+        structural_gates=_risk_structural_gates,
+        execution_gates=_risk_execution_gates,
     )
     use_case = AccumulationScreenUseCase(
         broker_repository=broker_repo,
@@ -421,6 +427,9 @@ def accumulation_run(
         bci_cluster_min_count=_SC.bci_cluster_min_count,
         bci_stable_min_count=_SC.bci_stable_min_count,
         min_market_cap_idr=_SC.min_market_cap_idr,
+        resistance_gate_enabled=_SC.resistance_gate_enabled,
+        resistance_headroom_min_pct=_SC.resistance_headroom_min_pct,
+        ex_date_warning_days=_SC.ex_date_warning_days,
         sector_breadth_enabled=_SC.sector_breadth_enabled,
         sector_breadth_threshold=_SC.sector_breadth_threshold,
         sector_breadth_bonus_pts=_SC.sector_breadth_bonus_pts,
@@ -467,9 +476,8 @@ def accumulation_run(
             squeeze_only=squeeze_only,
             screened_at=screened_at,
             broker_quality=broker_quality,
+            include_explanation=explain,
         )
-        if explain:
-            _print_column_guide()
         return
 
     if output_format != "json":
@@ -520,15 +528,13 @@ def accumulation_run(
         response=response,
         universe_label=universe_label,
         top_n=top,
-        granular=granular,
+        show_top_broker=show_top_broker,
         vwap_only=vwap_only,
         squeeze_only=squeeze_only,
-        show_breakdown=show_breakdown,
+        include_explanation=explain,
         strategy_signals=strategy_signals or None,
         strategy_name=strategy,
     )
-    if explain:
-        _print_column_guide()
 
     if save_name:
         _save_watchlist(
@@ -617,6 +623,9 @@ def _make_use_case_for_compare(
             tier1_broker_codes=_SC.tier1_broker_codes,
             bci_cluster_min_count=_SC.bci_cluster_min_count,
             bci_stable_min_count=_SC.bci_stable_min_count,
+            resistance_gate_enabled=_SC.resistance_gate_enabled,
+            resistance_headroom_min_pct=_SC.resistance_headroom_min_pct,
+            ex_date_warning_days=_SC.ex_date_warning_days,
         ))
         return response.candidates[:top]
     except Exception:

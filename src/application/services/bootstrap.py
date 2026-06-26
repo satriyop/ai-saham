@@ -184,7 +184,9 @@ def create_risk_engine(
         broker_repository=broker_repository,
     )
 
-    cfg = _load_engine_config(Path("config/risk_engine.yaml"))
+    from src.infrastructure.config.app_config import APP_CFG
+
+    cfg = _load_engine_config(Path(APP_CFG.config_paths.risk_engine))
     structural_gates, execution_gates = _resolve_risk_gates(cfg)
 
     fund_prov = None
@@ -238,7 +240,9 @@ def create_signal_engine(
 
     from src.application.services.signal_engine import SignalEngine
 
-    cfg = _load_engine_config(Path("config/signal_engine.yaml"))
+    from src.infrastructure.config.app_config import APP_CFG
+
+    cfg = _load_engine_config(Path(APP_CFG.config_paths.signal_engine))
     weights = _resolve_signal_weights(cfg)
 
     if not with_enrichment:
