@@ -164,8 +164,8 @@ def swing_summary_parts(
     parts = []
     if accum:
         parts.append(f"Score {accum.score:.1f}")
-    if risk_resp:
-        parts.append(risk_resp.assessment.risk_level_name)
+    if risk_resp and risk_resp.assessment.gate_triggered:
+        parts.append(f"gate: BLOCKED ({risk_resp.assessment.gate_triggered})")
     if backtest_result and backtest_result.trade_count > 0:
         parts.append(f"{float(backtest_result.win_rate):.0f}% WR")
     if sentiment_resp and not sentiment_resp.warning:
@@ -300,17 +300,17 @@ def _risk_label(risk_resp: Any | None) -> tuple[str, str, str]:
 
 def _technical_label(risk_resp: Any | None, with_technical_gate: bool) -> tuple[str, str, str]:
     """Engine-summary row for the optional TechnicalGate."""
-    gate = risk_resp.assessment.gate_triggered if risk_resp is not None else None
-    gate_text = f"BLOCKED ({gate})" if gate else "open"
     if not with_technical_gate:
-        return "off", "bright_black", f"gate: {gate_text}"
+        return "off", "bright_black", "use --with-technical-gate to enable"
     if risk_resp is None:
-        return "on", "white", f"gate: {gate_text}"
+        return "on", "white", "gate: unavailable"
     snap = risk_resp.assessment.indicators
     sma_pos = "above" if snap.sma > snap.ema else ("below" if snap.sma < snap.ema else "==")
     summary = f"RSI {float(snap.rsi):.0f} · SMA {sma_pos}"
-    style = "bold red" if gate else "cyan"
-    return summary, style, f"gate: {gate_text}"
+    gate = risk_resp.assessment.gate_triggered
+    if gate == "TechnicalGate":
+        return summary, "bold red", "gate: BLOCKED"
+    return summary, "cyan", "gate: open"
 
 
 def _signal_label(signal_assessment: Any | None) -> tuple[str, str, str]:
