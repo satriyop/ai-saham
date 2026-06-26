@@ -136,6 +136,18 @@ class SignalEngine:
         response = self._use_case.execute(self._inject_signal_context(request))
         return _apply_market_context(response, market_context)
 
+    def apply_market_context(
+        self,
+        response: AssessSignalResponse,
+        market_context: "MarketContext",
+    ) -> AssessSignalResponse:
+        """Apply MCE adjustment to an already-computed raw response (preview path).
+
+        Used by the workflow to compute a what-if signal preview without re-fetching
+        provider data. Does not affect canonical signal_assessment.
+        """
+        return _apply_market_context(response, market_context)
+
     # ── internals ────────────────────────────────────────────────────────────
 
     def _inject_signal_context(self, request: AssessSignalRequest) -> AssessSignalRequest:

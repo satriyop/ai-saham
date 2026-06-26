@@ -1,10 +1,12 @@
 """Tests for swing command helper logic."""
 
 import logging
+import inspect
 import sys
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
+from types import SimpleNamespace
 
 from typer.testing import CliRunner
 
@@ -36,6 +38,39 @@ from src.domain.entities.broker_flow import BrokerSummary, BrokerTransaction, Br
 from src.domain.value_objects.setup_evaluation import SetupEvaluation, SetupGate, SetupMatch
 
 runner = CliRunner()
+
+
+def test_swing_command_defaults_do_not_apply_setup_and_include_regime():
+    params = inspect.signature(swing_cli.swing).parameters
+
+    assert params["setup"].default is None
+    assert params["with_market_context"].default is False
+    assert params["strategy"].default is None
+
+
+def test_old_regime_flags_fail_as_unknown_options():
+    result_with = runner.invoke(app, ["analyze", "swing", "BBCA", "--with-regime"])
+    assert result_with.exit_code != 0
+
+    result_no = runner.invoke(app, ["analyze", "swing", "BBCA", "--no-regime"])
+    assert result_no.exit_code != 0
+
+
+def test_swing_rejects_strategy_with_deprecated_no_backtest():
+    result = runner.invoke(
+        app,
+        [
+            "analyze",
+            "swing",
+            "BBCA",
+            "--strategy",
+            "foreign-accumulation",
+            "--no-backtest",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "Conflict: strategy/backtest evidence is enabled" in result.output
 
 
 def _build_broker_detail(*args, **kwargs):
@@ -705,14 +740,123 @@ def test_swing_output_renders_rich_decision_overview(capsys):
         sentiment_resp=None,
         sentiment_warning=None,
         sentiment_verbose=False,
-        no_backtest=True,
-        no_sentiment=True,
+        include_strategy=False,
+        include_sentiment=False,
+        include_flow_detail=False,
+        include_signal_detail=False,
+        include_risk_detail=False,
+        include_market_detail=False,
     )
 
     out = capsys.readouterr().out
-    assert "Swing Decision - BBCA" in out
-    assert "Decision" in out
-    assert "Signal Snapshot" in out
-    assert "PLAN" in out
+    assert "Swing Analysis - BBCA" in out
+    assert "Status" in out
+    assert "Verdict" in out
+    assert "Engine Summary" in out
+    assert "SETUP EVIDENCE" in out
+    assert "Why / Blockers" in out
+    assert "Plan" in out
     assert "Setup is partial" in out
-    assert "SUMMARY:" in out
+    assert "Run Context" in out
+
+
+def test_swing_output_renders_optional_evidence_as_separate_panels(capsys):
+    strength = SimpleNamespace(value="STRONG")
+    entry_quality = SimpleNamespace(value="ENTER")
+    signal_assessment = SimpleNamespace(
+        assessment=SimpleNamespace(
+            score=82,
+            strength=strength,
+            entry_quality=entry_quality,
+            score_label="82/100",
+            rationale=("foreign flow supportive", "bandar supportive"),
+            breakdown_dict={
+                "bandar_intensity": 80.0,
+                "foreign_flow_quality": 75.0,
+                "insider_activity": 50.0,
+                "seasonality_edge": 60.0,
+                "analyst_consensus": 70.0,
+                "forward_valuation": 55.0,
+            },
+        ),
+        coverage_warning=None,
+    )
+    risk_resp = SimpleNamespace(
+        assessment=SimpleNamespace(
+            risk_level_name="LOW_RISK",
+            confidence=100,
+            gate_triggered=None,
+            indicators=SimpleNamespace(
+                sma=Decimal("1000"),
+                ema=Decimal("1010"),
+                rsi=Decimal("55"),
+            ),
+            rationale_list=("trend constructive",),
+        )
+    )
+    backtest_result = SimpleNamespace(
+        trade_count=12,
+        win_rate=Decimal("58.3"),
+        profit_factor=Decimal("1.42"),
+        max_drawdown_pct=Decimal("6.5"),
+        avg_win=Decimal("500000"),
+        avg_loss=Decimal("-300000"),
+    )
+    sentiment_resp = SimpleNamespace(
+        warning=None,
+        snapshot=SimpleNamespace(
+            overall_sentiment=SimpleNamespace(value="POSITIVE"),
+            total_count=8,
+            positive_count=4,
+            neutral_count=3,
+            negative_count=1,
+            confidence_pct=75,
+        ),
+    )
+
+    _print_swing_output(
+        ticker="BBCA",
+        today=date(2026, 6, 19),
+        profile="balanced",
+        strategy_name="foreign-accumulation",
+        data_freshness=DataFreshness(
+            as_of_date=date(2026, 6, 19),
+            candle_start=date(2026, 1, 1),
+            candle_end=date(2026, 6, 18),
+            broker_start=date(2026, 1, 1),
+            broker_end=date(2026, 6, 18),
+            warnings=(),
+        ),
+        flow_detail=None,
+        broker_detail=None,
+        window=7,
+        accum=_candidate(score=82.0, trend="SIDE"),
+        risk_resp=risk_resp,
+        atr_value=None,
+        sizing=None,
+        setup_eval=None,
+        setup_sizing=None,
+        broker_quality_note=None,
+        market_regime=None,
+        capital=None,
+        backtest_result=backtest_result,
+        sentiment_resp=sentiment_resp,
+        sentiment_warning=None,
+        sentiment_verbose=False,
+        include_strategy=True,
+        include_sentiment=True,
+        include_flow_detail=True,
+        include_signal_detail=True,
+        include_risk_detail=True,
+        include_market_detail=False,
+        signal_assessment=signal_assessment,
+        market_context_trade_setup_preview=None,
+    )
+
+    out = capsys.readouterr().out
+    assert "SIGNAL DETAIL" in out
+    assert "RISK DETAIL" in out
+    assert "FLOW / BROKER DETAIL" in out
+    assert "STRATEGY EVIDENCE" in out
+    assert "SENTIMENT EVIDENCE" in out
+    assert "DETAILED HISTORY & SENTIMENT" not in out

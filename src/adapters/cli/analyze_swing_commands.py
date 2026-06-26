@@ -32,7 +32,11 @@ from src.adapters.cli.analyze_swing_display import (
     SwingDisplayConfig,
     display_swing_compare,
 )
-from src.application.services.bootstrap import create_indicator_registry, create_signal_engine
+from src.application.services.bootstrap import (
+    create_indicator_registry,
+    create_risk_engine,
+    create_signal_engine,
+)
 from src.application.services.universe_loader import (
     UniverseNotFoundError,
     resolve_tickers,
@@ -447,12 +451,19 @@ def _print_swing_output(
     sentiment_resp,
     sentiment_warning: str | None,
     sentiment_verbose: bool,
-    no_backtest: bool,
-    no_sentiment: bool,
+    include_strategy: bool,
+    include_sentiment: bool,
+    include_flow_detail: bool,
+    include_signal_detail: bool,
+    include_risk_detail: bool,
+    include_market_detail: bool,
     strategy_risk_level: str | None = None,
     strategy_risk_name: str | None = None,
     signal_assessment=None,
     trade_setup=None,
+    market_context_signal_preview=None,
+    market_context_risk_preview=None,
+    market_context_trade_setup_preview=None,
 ) -> None:
     from src.adapters.cli.analyze_swing_display import print_swing_output
 
@@ -478,12 +489,19 @@ def _print_swing_output(
         sentiment_resp=sentiment_resp,
         sentiment_warning=sentiment_warning,
         sentiment_verbose=sentiment_verbose,
-        no_backtest=no_backtest,
-        no_sentiment=no_sentiment,
+        include_strategy=include_strategy,
+        include_sentiment=include_sentiment,
+        include_flow_detail=include_flow_detail,
+        include_signal_detail=include_signal_detail,
+        include_risk_detail=include_risk_detail,
+        include_market_detail=include_market_detail,
         strategy_risk_level=strategy_risk_level,
         strategy_risk_name=strategy_risk_name,
         signal_assessment=signal_assessment,
         trade_setup=trade_setup,
+        market_context_signal_preview=market_context_signal_preview,
+        market_context_risk_preview=market_context_risk_preview,
+        market_context_trade_setup_preview=market_context_trade_setup_preview,
         config=_DISPLAY_CONFIG,
     )
 
@@ -497,17 +515,17 @@ def swing(
         typer.Option("--profile", "-p", help="Risk profile: balanced/conservative/aggressive"),
     ] = "balanced",
     strategy: Annotated[
-        str,
+        Optional[str],
         typer.Option(
             "--strategy",
             "-S",
-            help="Backtest strategy name (default: foreign-accumulation)",
+            help="Strategy/backtest evidence name; omitted means strategy evidence is skipped",
         ),
-    ] = "foreign-accumulation",
+    ] = None,
     setup: Annotated[
         Optional[str],
-        typer.Option("--setup", help="Swing setup to evaluate (default: foreign-bounce)"),
-    ] = "foreign-bounce",
+        typer.Option("--setup", help="Swing setup to evaluate; omitted means no setup lens"),
+    ] = None,
     window: Annotated[
         int,
         typer.Option("--window", "-w", help="Accumulation analysis window in broker sessions"),
@@ -538,7 +556,41 @@ def swing(
     ] = APP_CFG.swing.rr,
     no_sentiment: Annotated[
         bool,
-        typer.Option("--no-sentiment", help="Skip news sentiment (offline mode)"),
+        typer.Option("--no-sentiment", help="Deprecated no-op; sentiment is off by default"),
+    ] = False,
+    with_sentiment: Annotated[
+        bool,
+        typer.Option("--with-sentiment", help="Include news sentiment evidence"),
+    ] = False,
+    with_flow_detail: Annotated[
+        bool,
+        typer.Option("--with-flow-detail", help="Include broker flow and attribution evidence"),
+    ] = False,
+    with_signal_detail: Annotated[
+        bool,
+        typer.Option("--with-signal-detail", help="Include signal factor detail"),
+    ] = False,
+    with_risk_detail: Annotated[
+        bool,
+        typer.Option("--with-risk-detail", help="Include risk indicator and gate detail"),
+    ] = False,
+    with_market_detail: Annotated[
+        bool,
+        typer.Option("--with-market-detail", help="Include full market-context factor detail"),
+    ] = False,
+    explain: Annotated[
+        bool,
+        typer.Option("--explain", help="Shortcut for signal, risk, and market details"),
+    ] = False,
+    full: Annotated[
+        bool,
+        typer.Option(
+            "--full",
+            help=(
+                "Include all optional evidence except named setup; uses "
+                "foreign-accumulation for strategy evidence when --strategy is omitted"
+            ),
+        ),
     ] = False,
     sentiment_verbose: Annotated[
         bool,
@@ -546,7 +598,7 @@ def swing(
     ] = False,
     no_backtest: Annotated[
         bool,
-        typer.Option("--no-backtest", help="Skip historical backtest"),
+        typer.Option("--no-backtest", help="Deprecated compatibility; conflicts with --strategy"),
     ] = False,
     auto_refresh: Annotated[
         bool,
@@ -559,9 +611,12 @@ def swing(
         bool,
         typer.Option("--force-refresh", help="Force provider refresh even if cached data is fresh"),
     ] = False,
-    with_regime: Annotated[
+    with_market_context: Annotated[
         bool,
-        typer.Option("--with-regime", help="Add market regime context"),
+        typer.Option(
+            "--with-market-context",
+            help="Build MCE and display a what-if impact preview (does not change final TradeSetup)",
+        ),
     ] = False,
     regime_universe: Annotated[
         str,
@@ -576,9 +631,8 @@ def swing(
         typer.Option(
             "--risk-strategy",
             help=(
-                "Strategy to use as additional risk gate. "
-                "If strategy signals HIGH_RISK, marks the final action as blocked/avoid. "
-                "Example: --risk-strategy williams-r-bounce"
+                "Deprecated compatibility risk gate. Prefer core RiskEngine verdict. "
+                "If strategy signals HIGH_RISK, marks the setup plan as blocked/avoid."
             ),
         ),
     ] = None,
@@ -594,8 +648,8 @@ def swing(
     """
     Unified composite swing trade analysis for a single stock.
 
-    Combines: accumulation signal, risk confirmation, position sizing,
-    historical backtest, and news sentiment in one command.
+    Core verdict: SignalEngine + RiskEngine + MarketContextEngine -> TradeSetup.
+    Strategy, setup, sentiment, and detailed flow panels are opt-in evidence.
 
     Replaces the multi-command morning workflow:
       saham screen accum, saham analyze risk, saham indicator compute,
@@ -605,9 +659,8 @@ def swing(
         saham analyze swing BBRI
         saham analyze swing BBRI --setup foreign-bounce --capital 10000000
         saham analyze swing BBRI --capital 10000000 --risk-pct 1
-        saham analyze swing BBRI --profile conservative --no-sentiment
-        saham analyze swing BBRI --no-refresh --no-backtest --no-sentiment
-        saham analyze swing BBRI --no-backtest --no-sentiment
+        saham analyze swing BBRI --strategy foreign-accumulation
+        saham analyze swing BBRI --with-flow-detail --explain
         saham analyze swing BBRI --force-refresh
         saham analyze swing BBRI --capital 10000000 --entry 4825 --rr 2.5
     """
@@ -627,6 +680,20 @@ def swing(
             err=True,
         )
         raise typer.Exit(1)
+    strategy_evidence_name = strategy or ("foreign-accumulation" if full else None)
+    if strategy_evidence_name and no_backtest:
+        typer.echo(
+            "Conflict: strategy/backtest evidence is enabled, "
+            "so it cannot be combined with deprecated --no-backtest.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    include_sentiment = with_sentiment or full
+    include_flow_detail = with_flow_detail or full
+    include_signal_detail = with_signal_detail or explain or full
+    include_risk_detail = with_risk_detail or explain or full
+    include_market_detail = with_market_detail or explain or full
 
     market_repo = SQLiteMarketRepository(db_path=resolved_db)
     broker_repo = SQLiteBrokerRepository(resolved_db)
@@ -678,8 +745,8 @@ def swing(
             smart_share_threshold_pct=_SC.smart_share_threshold_pct,
         ),
         build_accumulation_candidate=_build_accumulation_candidate,
-        evaluate_setup=lambda candidate: _evaluate_swing_setup(
-            setup_name or FOREIGN_BOUNCE_SETUP_NAME,
+        evaluate_setup=lambda candidate, broker_detail: _evaluate_swing_setup(
+            setup_name,
             candidate,
             broker_detail,
         ),
@@ -694,6 +761,7 @@ def swing(
         structural_gates=[FundamentalGate(), LiquidityGate(), FreeFloatGate()],
         execution_gates=[BandarGate()],
         signal_engine=create_signal_engine(db_path=resolved_db, with_enrichment=True),
+        risk_engine=create_risk_engine(db_path=resolved_db, with_enrichment=True),
     )
     try:
         workflow_response = workflow.execute(
@@ -701,7 +769,7 @@ def swing(
                 ticker=ticker_upper,
                 today=today,
                 sensitivity=profile,
-                strategy=strategy,
+                strategy_name=strategy_evidence_name,
                 setup_name=setup_name,
                 window=window,
                 flow_window=flow_window,
@@ -710,12 +778,15 @@ def swing(
                 entry_price=entry_price,
                 atr_mult=atr_mult,
                 rr=rr,
-                no_sentiment=no_sentiment,
+                include_sentiment=include_sentiment,
+                include_flow_detail=include_flow_detail,
+                include_signal_detail=include_signal_detail,
+                include_risk_detail=include_risk_detail,
+                include_market_detail=include_market_detail,
                 sentiment_verbose=sentiment_verbose,
-                no_backtest=no_backtest,
                 auto_refresh=auto_refresh,
                 force_refresh=force_refresh,
-                with_regime=with_regime,
+                with_market_context=with_market_context,
                 regime_universe=regime_universe,
                 benchmark=benchmark,
                 risk_strategy=risk_strategy,
@@ -757,6 +828,7 @@ def swing(
             "ticker": ticker_upper,
             "date": str(today),
             "sensitivity": profile,
+            "modules": workflow_response.modules or {},
             "data": data_out,
             "flow_detail": flow_detail.to_dict() if flow_detail else None,
             "broker_detail": broker_detail.to_dict() if broker_detail else None,
@@ -816,7 +888,7 @@ def swing(
                     "max_hold_days": FOREIGN_BOUNCE_MAX_HOLD_DAYS
                     if setup_eval else None,
                 },
-            },
+            } if setup_eval else None,
             "risk": {
                 "level": risk_resp.assessment.risk_level_name if risk_resp else None,
                 "confidence": risk_resp.assessment.confidence if risk_resp else None,
@@ -843,7 +915,8 @@ def swing(
                 ),
                 "atr": float(atr_value) if atr_value else None,
             },
-            "backtest": {
+            "strategy_evidence": {
+                "name": strategy_evidence_name,
                 "win_rate": float(backtest_result.win_rate) if backtest_result else None,
                 "profit_factor": float(backtest_result.profit_factor) if backtest_result else None,
                 "max_drawdown_pct": (
@@ -851,7 +924,7 @@ def swing(
                     if backtest_result else None
                 ),
                 "trade_count": backtest_result.trade_count if backtest_result else None,
-            },
+            } if strategy_evidence_name else None,
             "sentiment": {
                 "call": (
                     sentiment_resp.snapshot.overall_sentiment.value
@@ -866,7 +939,7 @@ def swing(
                     sentiment_resp.snapshot.confidence_pct
                     if sentiment_resp and not sentiment_resp.warning else None
                 ),
-            },
+            } if include_sentiment else None,
             "market_regime": market_regime.to_dict() if market_regime else None,
             "signal_assessment": {
                 "score": workflow_response.signal_assessment.assessment.score,
@@ -876,6 +949,21 @@ def swing(
                 "coverage_warning": workflow_response.signal_assessment.coverage_warning,
             } if workflow_response.signal_assessment else None,
             "trade_setup": workflow_response.trade_setup.to_dict() if workflow_response.trade_setup else None,
+            "market_context_preview": {
+                "signal_preview": {
+                    "score": _mcs.assessment.score,
+                    "strength": _mcs.assessment.strength.value,
+                    "entry_quality": _mcs.assessment.entry_quality.value,
+                } if (_mcs := workflow_response.market_context_signal_preview) else None,
+                "risk_preview": {
+                    "level": _mcr.assessment.risk_level_name,
+                    "gate_triggered": _mcr.assessment.gate_triggered,
+                } if (_mcr := workflow_response.market_context_risk_preview) else None,
+                "trade_setup_preview": (
+                    workflow_response.market_context_trade_setup_preview.to_dict()
+                    if workflow_response.market_context_trade_setup_preview else None
+                ),
+            } if market_regime else None,
         }
         typer.echo(json.dumps(out, indent=2, default=str))
         return
@@ -883,8 +971,8 @@ def swing(
     _print_swing_output(
         ticker=ticker_upper,
         today=today,
-        sensitivity=profile,
-        strategy_name=strategy,
+        profile=profile,
+        strategy_name=strategy_evidence_name or "-",
         data_freshness=data_freshness,
         flow_detail=flow_detail,
         broker_detail=broker_detail,
@@ -902,12 +990,19 @@ def swing(
         sentiment_resp=sentiment_resp,
         sentiment_warning=sentiment_warning,
         sentiment_verbose=sentiment_verbose,
-        no_backtest=no_backtest,
-        no_sentiment=no_sentiment,
+        include_strategy=strategy_evidence_name is not None,
+        include_sentiment=include_sentiment,
+        include_flow_detail=include_flow_detail,
+        include_signal_detail=include_signal_detail,
+        include_risk_detail=include_risk_detail,
+        include_market_detail=include_market_detail,
         strategy_risk_level=strategy_risk_level,
         strategy_risk_name=strategy_risk_name,
         signal_assessment=workflow_response.signal_assessment,
         trade_setup=workflow_response.trade_setup,
+        market_context_signal_preview=workflow_response.market_context_signal_preview,
+        market_context_risk_preview=workflow_response.market_context_risk_preview,
+        market_context_trade_setup_preview=workflow_response.market_context_trade_setup_preview,
     )
 
 

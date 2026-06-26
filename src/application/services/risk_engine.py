@@ -158,6 +158,18 @@ class RiskEngine:
         """Evaluate risk trend over the last N days."""
         return self._use_case.execute_trend(self._inject_gate_context(request), days=days)
 
+    def apply_market_context(
+        self,
+        response: "AssessRiskResponse",
+        market_context: "MarketContext",
+    ) -> "AssessRiskResponse":
+        """Apply MCE gate tightening to an already-computed raw response (preview path).
+
+        Used by the workflow to compute a what-if risk preview without re-fetching
+        provider data. Does not affect canonical risk_response.
+        """
+        return _apply_regime_gate(response, market_context)
+
     # ── internals ────────────────────────────────────────────────────────────
 
     def _inject_gate_context(self, request: AssessRiskRequest) -> AssessRiskRequest:

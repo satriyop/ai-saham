@@ -226,7 +226,10 @@ def swing_plan_text(
             f"Fetch more data to enable position sizing (run saham fetch market {ticker} --days 90).",
             "yellow",
         )
-    return ("No action plan available from current inputs.", "bright_black")
+    return (
+        "No setup or sizing plan requested. Use --setup for setup gates or --capital for sizing.",
+        "bright_black",
+    )
 
 
 def notation_label(snapshot: Any) -> str:
@@ -261,6 +264,245 @@ def notation_detail(snapshot: Any) -> str:
     return " | ".join(bits)
 
 
+def _trade_action_label(trade_setup: Any | None) -> tuple[str, str, str]:
+    if trade_setup is None:
+        return "N/A", "white", "TradeSetup unavailable"
+    style = {
+        "ENTER": "bold green",
+        "WATCH": "yellow",
+        "AVOID": "red",
+        "BLOCKED_EXECUTION": "bold red",
+        "BLOCKED_STRUCTURAL": "bold red",
+    }.get(trade_setup.action.value, "white")
+    return trade_setup.action.short, style, trade_setup.rationale
+
+
+def _setup_match_label(setup_eval: Any | None) -> tuple[str, str]:
+    if setup_eval is None:
+        return "not applied", "bright_black"
+    style = {
+        "MATCH": "bold green",
+        "PARTIAL": "yellow",
+        "NO_MATCH": "red",
+    }.get(setup_eval.match.value, "white")
+    return setup_eval.match.value, style
+
+
+def _risk_label(risk_resp: Any | None) -> tuple[str, str, str]:
+    if risk_resp is None:
+        return "N/A", "white", "risk unavailable"
+    assessment = risk_resp.assessment
+    style = {
+        "LOW_RISK": "bold green",
+        "MODERATE": "yellow",
+        "HIGH_RISK": "bold red",
+    }.get(assessment.risk_level_name, "white")
+    gate = assessment.gate_triggered or "-"
+    return assessment.risk_level_name, style, f"conf {assessment.confidence}/100; gate {gate}"
+
+
+def _signal_label(signal_assessment: Any | None) -> tuple[str, str, str]:
+    if signal_assessment is None:
+        return "N/A", "white", "signal unavailable"
+    assessment = signal_assessment.assessment
+    style = {
+        "STRONG": "bold green",
+        "MODERATE": "yellow",
+        "WEAK": "red",
+    }.get(assessment.strength.value, "white")
+    return (
+        assessment.strength.value,
+        style,
+        f"score {assessment.score:.1f}; {assessment.entry_quality.value}",
+    )
+
+
+def _accumulation_label(accum: Any | None, config: SwingDisplayConfig) -> tuple[str, str, str]:
+    if accum is None:
+        return "missing", "red", "no accumulation candidate"
+    label = signal_label(accum, config)
+    style = "bold green" if accum.score >= config.enter_min_score else (
+        "yellow" if accum.score >= config.watch_min_score else "red"
+    )
+    detail = (
+        f"score {accum.score:.1f}; streak {accum.consecutive_streak}s; "
+        f"net {accum.net_buy_days}/{accum.total_days}; flow {fmt_pct(accum.avg_flow_ratio, True)}"
+    )
+    return label.upper(), style, detail
+
+
+def _market_label(market_regime: MarketContext | None) -> tuple[str, str, str]:
+    if market_regime is None:
+        return "off", "bright_black", "run with --with-market-context for regime preview"
+    label = REGIME_DISPLAY_LABEL.get(market_regime.regime.value, market_regime.regime.value)
+    score = context_conviction_score(market_regime)
+    style = {
+        "RISK_ON": "bold green",
+        "NEUTRAL": "yellow",
+        "RISK_OFF": "bold red",
+        "VOLATILE": "bold red",
+    }.get(market_regime.regime.value, "white")
+    return label, style, f"conviction {score}/7"
+
+
+def _broker_label(
+    broker_detail: BrokerDetail | None,
+    broker_quality_note: BrokerQualityNote | None,
+) -> tuple[str, str, str]:
+    if broker_quality_note is not None:
+        style = "yellow" if broker_quality_note.level == "warning" else "cyan"
+        return broker_quality_note.level.upper(), style, broker_quality_note.message
+    if broker_detail is None:
+        return "N/A", "white", "broker detail unavailable"
+    return broker_detail.quality, "cyan", broker_detail.broker_weight_quality
+
+
+def _price_text(accum: Any | None, sizing: Any | None, setup_sizing: Any | None) -> str:
+    if accum is not None:
+        return f"{float(accum.current_price):,.0f}"
+    chosen = setup_sizing or sizing
+    if chosen is not None:
+        return f"{float(chosen.entry_price):,.0f}"
+    return "N/A"
+
+
+def _refresh_text(data_freshness: Any) -> str:
+    actions = getattr(data_freshness, "refresh_actions", ()) or ()
+    if not actions:
+        return "not reported"
+    return ", ".join(str(action) for action in actions)
+
+
+def _modules_text(
+    setup_eval: Any | None,
+    capital: int | None,
+    include_strategy: bool,
+    include_sentiment: bool,
+    include_flow_detail: bool,
+    include_signal_detail: bool,
+    include_risk_detail: bool,
+    include_market_detail: bool,
+    market_regime: MarketContext | None,
+) -> str:
+    modules = [
+        f"Market Context {'on' if market_regime is not None else 'off'}",
+        f"setup {'on' if setup_eval is not None else 'off'}",
+        f"sizing {'on' if capital is not None else 'off'}",
+        f"strategy {'on' if include_strategy else 'off'}",
+        f"sentiment {'on' if include_sentiment else 'off'}",
+        f"flow-detail {'on' if include_flow_detail else 'off'}",
+    ]
+    detail_bits = []
+    if include_signal_detail:
+        detail_bits.append("signal")
+    if include_risk_detail:
+        detail_bits.append("risk")
+    if include_market_detail:
+        detail_bits.append("market")
+    modules.append(f"detail {','.join(detail_bits) if detail_bits else 'off'}")
+    return " | ".join(modules)
+
+
+def _top_findings(
+    setup_eval: Any | None,
+    risk_resp: Any | None,
+    broker_quality_note: BrokerQualityNote | None,
+    data_freshness: Any,
+    trade_setup: Any | None,
+) -> list[Text]:
+    findings: list[Text] = []
+    if trade_setup is not None and trade_setup.action.value.startswith("BLOCKED"):
+        findings.append(Text(f"- Action blocked: {trade_setup.rationale}", style="red"))
+    if setup_eval is not None and setup_eval.failed_reasons:
+        for reason in setup_eval.failed_reasons[:2]:
+            findings.append(Text(f"- Setup gate: {reason}", style="yellow"))
+    if risk_resp is not None and risk_resp.assessment.gate_triggered:
+        findings.append(
+            Text(f"- Risk gate: {risk_resp.assessment.gate_triggered}", style="red")
+        )
+    if broker_quality_note is not None:
+        style = "yellow" if broker_quality_note.level == "warning" else "cyan"
+        findings.append(Text(f"- Broker: {broker_quality_note.message}", style=style))
+    for warning in data_freshness.warnings[:2]:
+        findings.append(Text(f"- Data: {warning}", style="yellow"))
+    if not findings:
+        findings.append(Text("- No blocking issues surfaced in displayed checks.", style="green"))
+    return findings[:5]
+
+
+def _gate_meaning(label: str) -> str:
+    meanings = {
+        "score": "overall accumulation conviction",
+        "fvwap%": "foreign holders still have price support incentive",
+        "trend": "chart regime required by the setup",
+        "flow_pct": "foreign net flow is meaningful versus turnover",
+        "RSI present": "momentum indicator is available",
+        "RSI": "momentum is not overextended",
+        "RSI lower": "pullback has enough momentum",
+        "RSI upper": "pullback is not overbought",
+        "bb_width_pctile": "volatility is compressed",
+        "smart_flow": "smart-money flow is net supportive",
+        "smart_share_pct": "smart-money share is large enough",
+        "noise_share_pct": "noise-flow dominance is controlled",
+        "smart_net_selling": "smart-money is not distributing",
+        "broker detail": "named-broker attribution is available",
+        "setup enabled": "setup is enabled in config",
+        "broker flow data": "accumulation evidence exists",
+    }
+    return meanings.get(label, "setup-specific requirement")
+
+
+def _setup_gates_group(
+    setup_eval: Any,
+    broker_quality_note: BrokerQualityNote | None,
+) -> Group:
+    gates_group = []
+    match_style = {
+        "MATCH": "bold green",
+        "PARTIAL": "yellow",
+        "NO_MATCH": "red",
+    }.get(setup_eval.match.value, "white")
+    gates_group.append(
+        Text(
+            f"{setup_eval.match.value} - {setup_eval.name}",
+            style=match_style,
+        )
+    )
+
+    gates_table = compact_table()
+    gates_table.add_column("Result", style="bold")
+    gates_table.add_column("Gate")
+    gates_table.add_column("Actual")
+    gates_table.add_column("Required")
+    gates_table.add_column("Meaning")
+
+    ordered_gates = sorted(setup_eval.gates, key=lambda gate: gate.passed)
+    for gate in ordered_gates:
+        status_text = Text(
+            "PASS" if gate.passed else "FAIL",
+            style="green" if gate.passed else "red",
+        )
+        gates_table.add_row(
+            status_text,
+            gate.label,
+            str(gate.actual),
+            str(gate.required),
+            _gate_meaning(gate.label),
+        )
+    gates_group.append(gates_table)
+
+    if setup_eval.failed_reasons:
+        gates_group.append(Text(format_failed_gates_summary(setup_eval), style="yellow"))
+    else:
+        gates_group.append(Text("All setup gates passed.", style="green"))
+
+    if broker_quality_note is not None:
+        note_style = "yellow" if broker_quality_note.level == "warning" else "cyan"
+        gates_group.append(Text(f"Broker note: {broker_quality_note.message}", style=note_style))
+
+    return Group(*gates_group)
+
+
 def print_swing_rich_overview(
     ticker: str,
     today: date,
@@ -283,7 +525,17 @@ def print_swing_rich_overview(
     strategy_risk_level: str | None,
     strategy_risk_name: str | None,
     config: SwingDisplayConfig,
+    include_strategy: bool = False,
+    include_sentiment: bool = False,
+    include_flow_detail: bool = False,
+    include_signal_detail: bool = False,
+    include_risk_detail: bool = False,
+    include_market_detail: bool = False,
+    signal_assessment=None,
     trade_setup=None,
+    market_context_signal_preview=None,
+    market_context_risk_preview=None,
+    market_context_trade_setup_preview=None,
 ) -> None:
     summary_parts = swing_summary_parts(accum, risk_resp, backtest_result, sentiment_resp)
     summary_text = " · ".join(summary_parts) if summary_parts else "insufficient data for assessment"
@@ -299,14 +551,92 @@ def print_swing_rich_overview(
         config,
     )
 
+    action_value, action_style, action_detail = _trade_action_label(trade_setup)
+    setup_value, setup_style = _setup_match_label(setup_eval)
+    price = _price_text(accum, sizing, setup_sizing)
+
+    signal_source = signal_assessment or getattr(accum, "signal_assessment", None)
+    signal_value, signal_style, signal_detail = _signal_label(signal_source)
+    risk_value, risk_style, risk_detail = _risk_label(risk_resp)
+    market_value, market_style, market_detail = _market_label(market_regime)
+    accum_value, accum_style, accum_detail = _accumulation_label(accum, config)
+
+    status_table = compact_table(show_header=False)
+    status_table.add_column("Metric", style="bold")
+    status_table.add_column("Value")
+    status_table.add_row("Latest price", price)
+    status_table.add_row("Candles", fmt_date(data_freshness.candle_end))
+    status_table.add_row("Broker flow", fmt_date(data_freshness.broker_end))
+    status_table.add_row("Refresh", _refresh_text(data_freshness))
+
+    verdict = compact_table()
+    verdict.add_column("Action")
+    verdict.add_column("Price", justify="right")
+    verdict.add_column("Signal")
+    verdict.add_column("Accum")
+    verdict.add_column("Risk")
+    verdict.add_column("Setup")
+    verdict.add_column("Market")
+    verdict.add_row(
+        Text(action_value, style=action_style),
+        price,
+        Text(signal_value, style=signal_style),
+        Text(accum_value, style=accum_style),
+        Text(risk_value, style=risk_style),
+        Text(setup_value, style=setup_style),
+        Text(market_value, style=market_style),
+    )
+
+    engine_summary = compact_table()
+    engine_summary.add_column("Engine", style="bold")
+    engine_summary.add_column("Summary")
+    engine_summary.add_column("Detail")
+    engine_summary.add_row("SignalEngine", Text(signal_value, style=signal_style), signal_detail)
+    engine_summary.add_row("RiskEngine", Text(risk_value, style=risk_style), risk_detail)
+    engine_summary.add_row("Market Context", Text(market_value, style=market_style), market_detail)
+    if setup_eval is not None:
+        engine_summary.add_row("Setup lens", Text(setup_value, style=setup_style), f"{setup_eval.name} evidence only")
+    else:
+        engine_summary.add_row("Setup lens", Text("off", style="bright_black"), "use --setup for named setup evidence")
+    broker_value, broker_style, broker_detail_text = _broker_label(broker_detail, broker_quality_note)
+    engine_summary.add_row("Broker quality", Text(broker_value, style=broker_style), broker_detail_text)
+
+    plan_table = compact_table(show_header=False)
+    plan_table.add_column("Key", style="bold")
+    plan_table.add_column("Value")
+    plan_table.add_row("Reason", action_detail)
+    plan_table.add_row("Next step", Text(plan_text, style=f"bold {plan_style}"))
+    plan_table.add_row("Context", Text(summary_text, style="bold"))
+
+    finding_group = _top_findings(
+        setup_eval=setup_eval,
+        risk_resp=risk_resp,
+        broker_quality_note=broker_quality_note,
+        data_freshness=data_freshness,
+        trade_setup=trade_setup,
+    )
+
     data_table = compact_table(show_header=False)
     data_table.add_column("Metric", style="bold")
     data_table.add_column("Value")
-    data_table.add_row("Analysis date", str(today))
-    data_table.add_row("Sensitivity", sensitivity)
-    data_table.add_row("Strategy", strategy_name)
+    data_table.add_row("Profile", sensitivity)
+    data_table.add_row("Strategy evidence", strategy_name if include_strategy else "off")
     data_table.add_row("Candles through", fmt_date(data_freshness.candle_end))
     data_table.add_row("Broker flow through", fmt_date(data_freshness.broker_end))
+    data_table.add_row(
+        "Modules",
+        _modules_text(
+            setup_eval=setup_eval,
+            capital=capital,
+            include_strategy=include_strategy,
+            include_sentiment=include_sentiment,
+            include_flow_detail=include_flow_detail,
+            include_signal_detail=include_signal_detail,
+            include_risk_detail=include_risk_detail,
+            include_market_detail=include_market_detail,
+            market_regime=market_regime,
+        ),
+    )
     if market_regime is not None:
         _label = REGIME_DISPLAY_LABEL.get(market_regime.regime.value, market_regime.regime.value)
         _score = context_conviction_score(market_regime)
@@ -315,74 +645,17 @@ def print_swing_rich_overview(
     if notation_text:
         data_table.add_row("Notation", notation_text)
 
-    decision = compact_table(show_header=False)
-    decision.add_column("Label", style="bold")
-    decision.add_column("Value")
-    decision.add_row("SUMMARY:", Text(summary_text, style="bold"))
-    decision.add_row("PLAN:", Text(plan_text, style=f"bold {plan_style}"))
-
-    signals = compact_table()
-    signals.add_column("Signal", style="bold")
-    signals.add_column("Status")
-    signals.add_column("Detail")
-    if accum is not None:
-        signals.add_row(
-            "Accumulation",
-            f"{accum.score:.1f}",
-            f"streak {accum.consecutive_streak}s; trend {accum.trend}; flow {fmt_pct(accum.avg_flow_ratio, True)}",
-        )
-    else:
-        signals.add_row("Accumulation", "missing", f"Run: saham fetch broker {ticker}")
-    if setup_eval is not None:
-        failed = "; ".join(setup_eval.failed_reasons[:2]) if setup_eval.failed_reasons else "all gates passed"
-        signals.add_row("Setup", setup_eval.match.value, failed)
-    if accum is not None and accum.ticker_notation is not None:
-        note_status = notation_label(accum.ticker_notation)
-        if note_status != "-":
-            signals.add_row("Notation", note_status, notation_detail(accum.ticker_notation))
-    if risk_resp is not None:
-        r = risk_resp.assessment
-        signals.add_row("Risk", r.risk_level_name, f"confidence {r.confidence}/100")
-    if trade_setup is not None:
-        _action_style = {
-            "ENTER":              "bold green",
-            "WATCH":              "yellow",
-            "AVOID":              "red",
-            "BLOCKED_EXECUTION":  "bold red",
-            "BLOCKED_STRUCTURAL": "bold red",
-        }.get(trade_setup.action.value, "white")
-        signals.add_row(
-            "ACTION",
-            Text(trade_setup.action.short, style=_action_style),
-            trade_setup.rationale,
-        )
-    if broker_detail is not None:
-        signals.add_row("Broker quality", broker_detail.quality, broker_detail.broker_weight_quality)
-    if broker_quality_note is not None:
-        signals.add_row("Broker note", broker_quality_note.level, broker_quality_note.message)
-    if sentiment_resp and not sentiment_resp.warning:
-        snap = sentiment_resp.snapshot
-        signals.add_row(
-            "Sentiment",
-            snap.overall_sentiment.value.upper(),
-            f"{snap.total_count} headlines; confidence {snap.confidence_pct}%",
-        )
-    elif sentiment_warning:
-        signals.add_row("Sentiment", "unavailable", sentiment_warning)
-    if backtest_result is not None and backtest_result.trade_count > 0:
-        signals.add_row(
-            "History",
-            f"{backtest_result.trade_count} trades",
-            f"WR {float(backtest_result.win_rate):.1f}%; PF {float(backtest_result.profit_factor):.2f}",
-        )
-
     sections = [
-        Text("Decision", style="bold cyan"),
-        decision,
-        Text("Data Freshness", style="bold cyan"),
-        data_table,
-        Text("Signal Snapshot", style="bold cyan"),
-        signals,
+        Text("Status", style="bold cyan"),
+        status_table,
+        Text("Verdict", style="bold cyan"),
+        verdict,
+        Text("Engine Summary", style="bold cyan"),
+        engine_summary,
+        Text("Why / Blockers", style="bold yellow"),
+        Group(*finding_group),
+        Text("Plan", style="bold cyan"),
+        plan_table,
     ]
 
     chosen_sizing = setup_sizing or sizing
@@ -395,7 +668,7 @@ def print_swing_rich_overview(
         sizing_table.add_row("Stop", f"{float(chosen_sizing.stop_price):,.0f}")
         sizing_table.add_row("Target", f"{float(chosen_sizing.target_price):,.0f}")
         sizing_table.add_row("Lots", f"{chosen_sizing.lots:,}")
-        sections.extend([Text("Sizing", style="bold cyan"), sizing_table])
+        sections.extend([Text("Order Plan", style="bold cyan"), sizing_table])
 
     warnings = list(data_freshness.warnings)
     if market_regime is not None:
@@ -405,18 +678,69 @@ def print_swing_rich_overview(
         warning_table.add_column("Warning")
         for warning in warnings[:5]:
             warning_table.add_row(f"- {warning}")
-        sections.extend([Text("Warnings", style="bold yellow"), warning_table])
+        sections.extend([Text("Data & Context Warnings", style="bold yellow"), warning_table])
+
+    sections.extend([Text("Run Context", style="bold cyan"), data_table])
 
     console().print(
         panel(
             Group(*sections),
-            title=f"Swing Decision - {ticker}",
-            subtitle=f"{today.isoformat()} / {sensitivity}",
+            title=f"Swing Analysis - {ticker}",
+            subtitle=f"{today.isoformat()} / {sensitivity} / verdict-first",
         )
     )
 
 
 
+
+
+def _market_context_preview_group(
+    market_regime: Any,
+    canonical_signal: Any | None,
+    preview_signal: Any | None,
+    canonical_risk: Any | None,
+    preview_risk: Any | None,
+    canonical_trade_setup: Any | None,
+    preview_trade_setup: Any,
+) -> Group:
+    items: list = []
+
+    regime_label = REGIME_DISPLAY_LABEL.get(market_regime.regime.value, market_regime.regime.value)
+    items.append(Text(f"Regime: {regime_label}", style="bold cyan"))
+
+    if canonical_signal is not None and preview_signal is not None:
+        raw_score = canonical_signal.assessment.score
+        preview_score = preview_signal.assessment.score
+        raw_eq = canonical_signal.assessment.entry_quality.value
+        preview_eq = preview_signal.assessment.entry_quality.value
+        if raw_score != preview_score or raw_eq != preview_eq:
+            impact = f"Signal {raw_score:.0f} → {preview_score:.0f}; {raw_eq} would become {preview_eq}"
+        else:
+            impact = "No signal score change (multiplier=1.0)"
+        items.append(Text(f"Signal impact:  {impact}", style="yellow" if raw_eq != preview_eq else "dim"))
+
+    if canonical_risk is not None and preview_risk is not None:
+        raw_gate = canonical_risk.assessment.gate_triggered
+        preview_gate = preview_risk.assessment.gate_triggered
+        if preview_gate and not raw_gate:
+            items.append(Text(f"Risk impact:    regime gate would trigger ({preview_gate})", style="yellow"))
+        elif preview_gate and raw_gate and preview_gate != raw_gate:
+            items.append(Text(f"Risk impact:    gate upgraded {raw_gate} → {preview_gate}", style="yellow"))
+        else:
+            items.append(Text("Risk impact:    no additional gate triggered", style="dim"))
+
+    canonical_action = canonical_trade_setup.action.value if canonical_trade_setup else "N/A"
+    preview_action = preview_trade_setup.action.value
+    if canonical_action != preview_action:
+        items.append(Text(
+            f"Preview:        TradeSetup would change {canonical_action} → {preview_action}",
+            style="bold yellow",
+        ))
+    else:
+        items.append(Text("Preview:        No action change in preview.", style="dim green"))
+    items.append(Text(f"Final (unchanged): {canonical_action}", style="bold"))
+
+    return Group(*items)
 
 
 def print_swing_output(
@@ -441,12 +765,19 @@ def print_swing_output(
     sentiment_resp,
     sentiment_warning: str | None,
     sentiment_verbose: bool,
-    no_backtest: bool,
-    no_sentiment: bool,
+    include_strategy: bool,
+    include_sentiment: bool,
+    include_flow_detail: bool,
+    include_signal_detail: bool,
+    include_risk_detail: bool,
+    include_market_detail: bool,
     strategy_risk_level: str | None = None,
     strategy_risk_name: str | None = None,
     signal_assessment=None,
     trade_setup=None,
+    market_context_signal_preview=None,
+    market_context_risk_preview=None,
+    market_context_trade_setup_preview=None,
     config: SwingDisplayConfig | None = None,
 ) -> None:
     config = config or SwingDisplayConfig(
@@ -483,12 +814,52 @@ def print_swing_output(
         strategy_risk_level=strategy_risk_level,
         strategy_risk_name=strategy_risk_name,
         config=config,
+        include_strategy=include_strategy,
+        include_sentiment=include_sentiment,
+        include_flow_detail=include_flow_detail,
+        include_signal_detail=include_signal_detail,
+        include_risk_detail=include_risk_detail,
+        include_market_detail=include_market_detail,
+        signal_assessment=signal_assessment,
         trade_setup=trade_setup,
+        market_context_signal_preview=market_context_signal_preview,
+        market_context_risk_preview=market_context_risk_preview,
+        market_context_trade_setup_preview=market_context_trade_setup_preview,
     )
 
-    # ── Panel 2: DETAILED MARKET & RISK CONTEXT ─────────────────────────────
+    # ── Market Context Preview Panel ─────────────────────────────────────────
+    if market_context_trade_setup_preview is not None and market_regime is not None:
+        _preview_group = _market_context_preview_group(
+            market_regime=market_regime,
+            canonical_signal=signal_assessment,
+            preview_signal=market_context_signal_preview,
+            canonical_risk=risk_resp,
+            preview_risk=market_context_risk_preview,
+            canonical_trade_setup=trade_setup,
+            preview_trade_setup=market_context_trade_setup_preview,
+        )
+        console().print("")
+        console().print(
+            panel(
+                _preview_group,
+                title="MARKET CONTEXT PREVIEW",
+                subtitle="evidence only — does not change final TradeSetup",
+            )
+        )
+
+    # ── Panel 2: SETUP EVIDENCE ─────────────────────────────────────────────
+    if setup_eval is not None:
+        console().print("")
+        console().print(
+            panel(
+                _setup_gates_group(setup_eval, broker_quality_note),
+                title="SETUP EVIDENCE",
+            )
+        )
+
+    # ── Panel 3: ENGINE DETAIL PANELS ───────────────────────────────────────
     regime_text = []
-    if market_regime is not None:
+    if include_market_detail and market_regime is not None:
         _rlabel = REGIME_DISPLAY_LABEL.get(market_regime.regime.value, market_regime.regime.value)
         _rscore = context_conviction_score(market_regime)
         regime_text.append(Text(f"Market Regime: {_rlabel} ({_rscore}/7)", style="bold cyan"))
@@ -505,7 +876,7 @@ def print_swing_output(
         regime_text.append(regime_table)
 
     risk_text = []
-    if risk_resp:
+    if include_risk_detail and risk_resp:
         r = risk_resp.assessment
         snap = r.indicators
         risk_text.append(Text(f"Risk Confirmation Verdict: {r.risk_level_name} (Confidence: {r.confidence}/100)", style="bold cyan"))
@@ -521,7 +892,7 @@ def print_swing_output(
         risk_text.append(risk_table)
         for reason in r.rationale_list[:3]:
             risk_text.append(Text(f"• {reason}", style="dim"))
-    else:
+    elif include_risk_detail:
         risk_text.append(Text("Insufficient candle data for risk assessment.", style="dim"))
 
     strat_text = []
@@ -543,7 +914,7 @@ def print_swing_output(
             strat_text.append(Text(f"~ Strategy '{strategy_risk_name}' is neutral — no override.", style="dim"))
 
     signal_text = []
-    if signal_assessment is not None:
+    if include_signal_detail and signal_assessment is not None:
         sa = signal_assessment.assessment
         _sig_style = {
             "STRONG": "bold green",
@@ -554,39 +925,73 @@ def print_swing_output(
             f"Signal Assessment: {sa.score_label} {sa.strength.value} → {sa.entry_quality.value}",
             style=_sig_style,
         ))
+        breakdown = getattr(sa, "breakdown_dict", None) or {}
+        if breakdown:
+            _factor_labels = {
+                "bandar_intensity": "Bandar Intensity",
+                "foreign_flow_quality": "Foreign Flow Quality",
+                "insider_activity": "Insider Activity",
+                "seasonality_edge": "Seasonality Edge",
+                "analyst_consensus": "Analyst Consensus",
+                "forward_valuation": "Forward Valuation",
+            }
+            bd_table = compact_table()
+            bd_table.add_column("Factor")
+            bd_table.add_column("Score", justify="right")
+            bd_table.add_column("Source", style="dim")
+            for _factor, _score in breakdown.items():
+                _source = ""
+                if _factor == "foreign_flow_quality" and accum is not None:
+                    _raw_accum = min(accum.score, 120.0)
+                    _source = f"Accum evidence {_raw_accum:.0f}/120"
+                bd_table.add_row(
+                    _factor_labels.get(_factor, _factor),
+                    f"{_score:.1f}",
+                    _source,
+                )
+            signal_text.append(bd_table)
         for line in sa.rationale[-3:]:
             signal_text.append(Text(f"  {line}", style="dim"))
         if signal_assessment.coverage_warning:
             signal_text.append(Text(f"  ⚠ {signal_assessment.coverage_warning}", style="dim yellow"))
 
-    context_group = []
-    if regime_text:
-        context_group.extend(regime_text)
-    if risk_text:
-        if context_group:
-            context_group.append(Text(""))
-        context_group.extend(risk_text)
-    if strat_text:
-        if context_group:
-            context_group.append(Text(""))
-        context_group.extend(strat_text)
     if signal_text:
-        if context_group:
-            context_group.append(Text(""))
-        context_group.extend(signal_text)
-
-    if context_group:
         console().print("")
         console().print(
             panel(
-                Group(*context_group),
-                title="DETAILED MARKET & RISK CONTEXT",
+                Group(*signal_text),
+                title="SIGNAL DETAIL",
             )
         )
 
-    # ── Panel 3: DETAILED FOREIGN FLOW & BROKER ATTRIBUTION ────────────────
+    if risk_text or strat_text:
+        risk_group = []
+        if risk_text:
+            risk_group.extend(risk_text)
+        if strat_text:
+            if risk_group:
+                risk_group.append(Text(""))
+            risk_group.extend(strat_text)
+        console().print("")
+        console().print(
+            panel(
+                Group(*risk_group),
+                title="RISK DETAIL",
+            )
+        )
+
+    if regime_text:
+        console().print("")
+        console().print(
+            panel(
+                Group(*regime_text),
+                title="MARKET DETAIL",
+            )
+        )
+
+    # ── Panel 4: FLOW / BROKER DETAIL ───────────────────────────────────────
     flow_group = []
-    if accum:
+    if include_flow_detail and accum:
         label = signal_label(accum, config)
         flow_group.append(Text(f"Accumulation Signal ({window} sessions): {label.upper()}", style="bold cyan"))
 
@@ -650,51 +1055,12 @@ def print_swing_output(
             fund_color = "green" if fund.is_quality else ("yellow" if fund.roe_ttm is not None and fund.roe_ttm >= 10.0 else "red")
             corp_flags.append(Text(f"📈 FUNDAM: {fund.label}", style=fund_color))
 
-        # Earnings history — read from cache only (no live fetch in display layer)
-        try:
-            from pathlib import Path as _Path
-
-            from src.infrastructure.browser.stockbit_earnings import StockbitEarningsProvider
-            from src.infrastructure.config.app_config import APP_CFG as _app_cfg
-            _db = _Path(_app_cfg.storage.db_path)
-            _ep = StockbitEarningsProvider(broker_provider=None, db_path=_db)
-            _earnings = _ep.get_earnings_history(accum.ticker, quarters=4)
-            if _earnings:
-                beat_streak = sum(1 for r in _earnings if r.beat is True)
-                miss_streak = sum(1 for r in _earnings if r.beat is False)
-                _labels = "  |  ".join(r.label for r in _earnings[:4])
-                if beat_streak >= 3:
-                    e_color = "green"
-                elif miss_streak >= 3:
-                    e_color = "red"
-                else:
-                    e_color = "white"
-                corp_flags.append(Text(f"💰 EARNINGS ({beat_streak}/{len(_earnings)} beat): {_labels}", style=e_color))
-        except Exception:
-            pass
-
-        # Valuation metrics — read from cache only
-        try:
-            from pathlib import Path as _Path2
-
-            from src.infrastructure.browser.stockbit_valuation import StockbitValuationProvider
-            from src.infrastructure.config.app_config import APP_CFG as _app_cfg2
-            _db2 = _Path2(_app_cfg2.storage.db_path)
-            _vp = StockbitValuationProvider(broker_provider=None, db_path=_db2)
-            _val = _vp.get_valuation(accum.ticker)
-            if _val and not _val.is_empty:
-                _parts = [f"{label} {v:.2f}" for label, v in _val.labeled]
-                if _parts:
-                    corp_flags.append(Text(f"💲 VALUATION: {' | '.join(_parts)}", style="cyan"))
-        except Exception:
-            pass
-
         if corp_flags:
             flow_group.append(Text("\nAdditional Signals & Flags", style="bold cyan"))
             for flag in corp_flags:
                 flow_group.append(flag)
 
-    if flow_detail:
+    if include_flow_detail and flow_detail:
         if flow_group:
             flow_group.append(Text(""))
         flow_group.append(Text(f"Detailed Flow Context ({flow_detail.window_sessions} sessions) through {fmt_date(flow_detail.through_date)}", style="bold cyan"))
@@ -720,7 +1086,7 @@ def print_swing_output(
         )
         flow_group.append(detail_flow_table)
 
-    if broker_detail:
+    if include_flow_detail and broker_detail:
         if flow_group:
             flow_group.append(Text(""))
         flow_group.append(Text(f"Attribution ({broker_detail.detail_sessions}/{broker_detail.window_sessions} sessions) via {broker_detail.source}", style="bold cyan"))
@@ -765,56 +1131,16 @@ def print_swing_output(
         console().print(
             panel(
                 Group(*flow_group),
-                title="DETAILED FOREIGN FLOW & BROKER ATTRIBUTION",
+                title="FLOW / BROKER DETAIL",
             )
         )
 
-    # ── Panel 4: SETUP FIT & GATES ────────────────────────────────────────────
-    if setup_eval is not None:
-        gates_group = []
-        gates_group.append(Text(f"Setup Fit: {setup_eval.name} -> {setup_eval.match.value}", style="bold cyan"))
-
-        gates_table = compact_table()
-        gates_table.add_column("Status")
-        gates_table.add_column("Gate Rule", style="bold")
-        gates_table.add_column("Actual Value")
-        gates_table.add_column("Required Threshold")
-
-        for gate in setup_eval.gates:
-            status_str = "[green]PASS[/]" if gate.passed else "[red]FAIL[/]"
-            gates_table.add_row(
-                status_str,
-                gate.label,
-                str(gate.actual),
-                str(gate.required)
-            )
-        gates_group.append(gates_table)
-
-        if setup_eval.passed:
-            gates_group.append(Text("All gates passed. Tested plan: TP +5%, SL -5%, max hold 10 trading days.", style="green"))
-        else:
-            gates_group.append(Text(format_failed_gates_summary(setup_eval), style="red"))
-
-        if broker_quality_note is not None:
-            note_style = "yellow" if broker_quality_note.level == "warning" else "cyan"
-            gates_group.append(Text(f"★ {broker_quality_note.message}", style=note_style))
-
-        console().print("")
-        console().print(
-            panel(
-                Group(*gates_group),
-                title="SETUP FIT & GATES",
-            )
-        )
-
-    # ── Panel 5: DETAILED HISTORY & SENTIMENT ─────────────────────────────────
-    history_sentiment_group = []
-
-    # Backtest segment
+    # ── Panel 5: STRATEGY EVIDENCE ──────────────────────────────────────────
     history_group = []
-    if backtest_result is not None and backtest_result.trade_count > 0:
+    if include_strategy and backtest_result is not None and backtest_result.trade_count > 0:
         r = backtest_result
         history_group.append(Text(f"Historical Backtest ({strategy_name}): {r.trade_count} trades", style="bold cyan"))
+        history_group.append(Text("Evidence only: this panel does not change TradeSetup.action.", style="dim"))
         hist_table = compact_table()
         hist_table.add_column("Win Rate")
         hist_table.add_column("Profit Factor")
@@ -834,21 +1160,25 @@ def print_swing_output(
             avg_loss_val
         )
         history_group.append(hist_table)
-    elif backtest_result is not None and backtest_result.trade_count == 0:
+    elif include_strategy and backtest_result is not None and backtest_result.trade_count == 0:
         history_group.append(Text(f"Historical Backtest ({strategy_name})", style="bold cyan"))
         history_group.append(Text("No trades triggered in available history (needs more broker data).", style="dim"))
         history_group.append(Text(f"Tip: run `saham backtest {ticker} --strategy {strategy_name} --verbose`", style="dim italic"))
-    elif not no_backtest:
+    elif include_strategy:
         history_group.append(Text("Historical Backtest", style="bold cyan"))
         history_group.append(Text(f"Could not run backtest. Run: `saham fetch market {ticker} --days 730`", style="dim yellow"))
 
     if history_group:
-        history_sentiment_group.extend(history_group)
+        console().print("")
+        console().print(
+            panel(
+                Group(*history_group),
+                title="STRATEGY EVIDENCE",
+            )
+        )
 
-    # Sentiment segment
-    if not no_sentiment:
-        if history_sentiment_group:
-            history_sentiment_group.append(Text(""))
+    # ── Panel 6: SENTIMENT EVIDENCE ─────────────────────────────────────────
+    if include_sentiment:
         sentiment_group = []
         if sentiment_resp and not sentiment_resp.warning:
             snap = sentiment_resp.snapshot
@@ -867,14 +1197,11 @@ def print_swing_output(
             if not sentiment_verbose:
                 sentiment_group.append(Text("Use --sentiment-verbose to show provider details.", style="dim italic"))
 
-        history_sentiment_group.extend(sentiment_group)
-
-    if history_sentiment_group:
         console().print("")
         console().print(
             panel(
-                Group(*history_sentiment_group),
-                title="DETAILED HISTORY & SENTIMENT",
+                Group(*sentiment_group),
+                title="SENTIMENT EVIDENCE",
             )
         )
     console().print("")

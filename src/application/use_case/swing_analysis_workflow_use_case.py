@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from src.application.services.risk_engine import RiskEngine
     from src.application.services.signal_engine import SignalEngine
     from src.application.use_case.assess_signal_use_case import AssessSignalResponse
 
@@ -41,7 +42,7 @@ class SwingAnalysisWorkflowRequest:
     ticker: str
     today: date
     sensitivity: str
-    strategy: str
+    strategy_name: str | None
     setup_name: str | None
     window: int
     flow_window: int
@@ -50,12 +51,15 @@ class SwingAnalysisWorkflowRequest:
     entry_price: float | None
     atr_mult: float
     rr: float
-    no_sentiment: bool
+    include_sentiment: bool
+    include_flow_detail: bool
+    include_signal_detail: bool
+    include_risk_detail: bool
+    include_market_detail: bool
     sentiment_verbose: bool
-    no_backtest: bool
     auto_refresh: bool
     force_refresh: bool
-    with_regime: bool
+    with_market_context: bool
     regime_universe: str
     benchmark: str
     risk_strategy: str | None
@@ -90,6 +94,10 @@ class SwingAnalysisWorkflowResponse:
     regime_label: str | None
     signal_assessment: "AssessSignalResponse | None" = None
     trade_setup: "TradeSetup | None" = None
+    market_context_signal_preview: "AssessSignalResponse | None" = None
+    market_context_risk_preview: Any | None = None
+    market_context_trade_setup_preview: "TradeSetup | None" = None
+    modules: dict[str, bool] | None = None
     warnings: tuple[str, ...] = ()
 
 
@@ -106,7 +114,7 @@ class SwingAnalysisWorkflowUseCase:
         build_flow_detail: Callable[..., Any],
         build_broker_detail: Callable[..., Any],
         build_accumulation_candidate: Callable[..., Any | None],
-        evaluate_setup: Callable[..., Any | None],
+        evaluate_setup: Callable[[Any | None, Any | None], Any | None],
         build_broker_quality_note: Callable[..., Any | None],
         fetch_sentiment: Callable[..., tuple[Any | None, str | None]],
         load_swing_config: Callable[[], dict],
@@ -114,6 +122,7 @@ class SwingAnalysisWorkflowUseCase:
         structural_gates: list[RiskGate] | None = None,
         execution_gates: list[RiskGate] | None = None,
         signal_engine: "SignalEngine | None" = None,
+        risk_engine: "RiskEngine | None" = None,
     ) -> None:
         self._market_repo = market_repository
         self._broker_repo = broker_repository
@@ -131,6 +140,7 @@ class SwingAnalysisWorkflowUseCase:
         self._structural_gates: list[RiskGate] = structural_gates or []
         self._execution_gates: list[RiskGate] = execution_gates or []
         self._signal_engine = signal_engine
+        self._risk_engine = risk_engine
 
     def execute(
         self,
@@ -153,18 +163,23 @@ class SwingAnalysisWorkflowUseCase:
             broker_repo=self._broker_repo,
             refresh_actions=refresh_actions,
         )
-        flow_detail = self._build_flow_detail(
-            ticker=request.ticker,
-            broker_repo=self._broker_repo,
-            window_sessions=request.flow_window,
-            as_of_date=request.today,
-        )
-        broker_detail = self._build_broker_detail(
-            ticker=request.ticker,
-            broker_repo=self._broker_repo,
-            window_sessions=5,
-            as_of_date=request.today,
-        )
+        needs_broker_detail = request.include_flow_detail or request.setup_name is not None
+        flow_detail = None
+        if request.include_flow_detail:
+            flow_detail = self._build_flow_detail(
+                ticker=request.ticker,
+                broker_repo=self._broker_repo,
+                window_sessions=request.flow_window,
+                as_of_date=request.today,
+            )
+        broker_detail = None
+        if needs_broker_detail:
+            broker_detail = self._build_broker_detail(
+                ticker=request.ticker,
+                broker_repo=self._broker_repo,
+                window_sessions=5,
+                as_of_date=request.today,
+            )
 
         candles = self._market_repo.get_candles(request.ticker)
         if not candles:
@@ -180,14 +195,15 @@ class SwingAnalysisWorkflowUseCase:
         except Exception as exc:
             warnings.append(f"Accumulation unavailable: {exc}")
 
+        market_regime = None
+        if request.with_market_context:
+            try:
+                market_regime = self._build_market_regime(request)
+            except Exception as exc:
+                warnings.append(f"Market regime unavailable: {exc}")
+
         risk_response = None
         try:
-            risk_use_case = AssessRiskUseCase(
-                repository=self._market_repo,
-                registry=self._registry,
-                structural_gates=self._structural_gates or None,
-                execution_gates=self._execution_gates or None,
-            )
             gate_ctx: GateContext | None = None
             if (self._structural_gates or self._execution_gates) and accumulation_candidate is not None:
                 fund = accumulation_candidate.fundamentals
@@ -202,12 +218,33 @@ class SwingAnalysisWorkflowUseCase:
                     five_day_accdist=bandar.five_day_accdist if bandar else None,
                     bandar_is_distributing=bandar.is_distributing if bandar else False,
                 )
-            risk_response = risk_use_case.execute(
-                AssessRiskRequest(
+            if self._risk_engine is not None and gate_ctx is not None:
+                risk_response = self._risk_engine.assess_with_context(
                     ticker=request.ticker,
-                    sensitivity=request.sensitivity,
+                    profile=request.sensitivity,
                     gate_context=gate_ctx,
+                    market_context=None,
                 )
+            elif self._risk_engine is not None:
+                risk_response = self._risk_engine.assess(
+                    ticker=request.ticker,
+                    profile=request.sensitivity,
+                    as_of_date=request.today,
+                    market_context=None,
+                )
+            else:
+                risk_use_case = AssessRiskUseCase(
+                    repository=self._market_repo,
+                    registry=self._registry,
+                    structural_gates=self._structural_gates or None,
+                    execution_gates=self._execution_gates or None,
+                )
+                risk_response = risk_use_case.execute(
+                    AssessRiskRequest(
+                        ticker=request.ticker,
+                        sensitivity=request.sensitivity,
+                        gate_context=gate_ctx,
+                    )
             )
         except Exception as exc:
             warnings.append(f"Risk assessment unavailable: {exc}")
@@ -215,8 +252,11 @@ class SwingAnalysisWorkflowUseCase:
         signal_assessment = None
         if self._signal_engine is not None:
             try:
-                if accumulation_candidate is not None and accumulation_candidate.signal_assessment is not None:
-                    # Fast path: reuse screener's already-computed result — no recomputation
+                if (
+                    accumulation_candidate is not None
+                    and accumulation_candidate.signal_assessment is not None
+                ):
+                    # Fast path: reuse screener's pre-computed raw signal — no recomputation
                     signal_assessment = accumulation_candidate.signal_assessment
                 elif accumulation_candidate is not None:
                     # Fallback: candidate exists but screener ran without a signal_engine
@@ -245,12 +285,16 @@ class SwingAnalysisWorkflowUseCase:
                         forward_pe=fe.forward_pe if fe else None,
                     )
                     signal_assessment = self._signal_engine.evaluate_with_context(
-                        request.ticker, signal_ctx
+                        request.ticker,
+                        signal_ctx,
+                        market_context=None,
                     )
                 else:
                     # No candidate — provider-based standalone evaluation
                     signal_assessment = self._signal_engine.evaluate(
-                        request.ticker, request.today
+                        request.ticker,
+                        request.today,
+                        market_context=None,
                     )
             except Exception as exc:
                 warnings.append(f"Signal assessment unavailable: {exc}")
@@ -284,7 +328,7 @@ class SwingAnalysisWorkflowUseCase:
         setup_eval = None
         setup_sizing: PercentSizingResult | None = None
         if request.setup_name is not None:
-            setup_eval = self._evaluate_setup(accumulation_candidate)
+            setup_eval = self._evaluate_setup(accumulation_candidate, broker_detail)
 
         broker_quality_note = self._build_broker_quality_note(
             broker_detail=broker_detail,
@@ -317,10 +361,10 @@ class SwingAnalysisWorkflowUseCase:
                 warnings.append(f"Position sizing unavailable: {exc}")
 
         backtest_result = None
-        if not request.no_backtest:
+        if request.strategy_name is not None:
             try:
                 loader = StrategyLoader(registry=self._registry)
-                rules_path = loader.resolve(request.strategy)
+                rules_path = loader.resolve(request.strategy_name)
                 backtest_use_case = BacktestUseCase(
                     repository=self._market_repo,
                     registry=self._registry,
@@ -338,18 +382,11 @@ class SwingAnalysisWorkflowUseCase:
 
         sentiment_response = None
         sentiment_warning = None
-        if not request.no_sentiment:
+        if request.include_sentiment:
             sentiment_response, sentiment_warning = self._fetch_sentiment(
                 ticker=request.ticker,
                 sentiment_verbose=request.sentiment_verbose,
             )
-
-        market_regime = None
-        if request.with_regime:
-            try:
-                market_regime = self._build_market_regime(request)
-            except Exception as exc:
-                warnings.append(f"Market regime unavailable: {exc}")
 
         trade_setup = None
         if signal_assessment is not None and risk_response is not None:
@@ -364,11 +401,44 @@ class SwingAnalysisWorkflowUseCase:
                         snapshot_date=request.today,
                         signal_response=signal_assessment,
                         risk_response=risk_response,
-                        market_context=market_regime,
+                        market_context=None,
                     )
                 ).setup
             except Exception as exc:
                 warnings.append(f"TradeSetup unavailable: {exc}")
+
+        market_context_signal_preview = None
+        market_context_risk_preview = None
+        market_context_trade_setup_preview = None
+        if (
+            market_regime is not None
+            and signal_assessment is not None
+            and risk_response is not None
+            and self._signal_engine is not None
+            and self._risk_engine is not None
+        ):
+            try:
+                from src.application.use_case.assess_trade_setup_use_case import (
+                    AssessTradeSetupRequest,
+                    AssessTradeSetupUseCase,
+                )
+                market_context_signal_preview = self._signal_engine.apply_market_context(
+                    signal_assessment, market_regime
+                )
+                market_context_risk_preview = self._risk_engine.apply_market_context(
+                    risk_response, market_regime
+                )
+                market_context_trade_setup_preview = AssessTradeSetupUseCase().execute(
+                    AssessTradeSetupRequest(
+                        ticker=request.ticker,
+                        snapshot_date=request.today,
+                        signal_response=market_context_signal_preview,
+                        risk_response=market_context_risk_preview,
+                        market_context=market_regime,
+                    )
+                ).setup
+            except Exception as exc:
+                warnings.append(f"Market context preview unavailable: {exc}")
 
         swing_config = self._load_swing_config()
         regime_label = market_regime.regime.value if market_regime else None
@@ -415,6 +485,20 @@ class SwingAnalysisWorkflowUseCase:
             regime_label=regime_label,
             signal_assessment=signal_assessment,
             trade_setup=trade_setup,
+            market_context_signal_preview=market_context_signal_preview,
+            market_context_risk_preview=market_context_risk_preview,
+            market_context_trade_setup_preview=market_context_trade_setup_preview,
+            modules={
+                "setup": request.setup_name is not None,
+                "sizing": request.capital is not None,
+                "strategy": request.strategy_name is not None,
+                "sentiment": request.include_sentiment,
+                "flow_detail": request.include_flow_detail,
+                "signal_detail": request.include_signal_detail,
+                "risk_detail": request.include_risk_detail,
+                "market_detail": request.include_market_detail,
+                "market_context": request.with_market_context,
+            },
             warnings=tuple(warnings),
         )
 

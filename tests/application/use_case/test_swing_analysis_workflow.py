@@ -50,7 +50,7 @@ def _request(**overrides) -> SwingAnalysisWorkflowRequest:
         "ticker": "BBCA",
         "today": date(2026, 6, 18),
         "sensitivity": "balanced",
-        "strategy": "foreign-accumulation",
+        "strategy_name": None,
         "setup_name": None,
         "window": 7,
         "flow_window": 30,
@@ -59,12 +59,15 @@ def _request(**overrides) -> SwingAnalysisWorkflowRequest:
         "entry_price": None,
         "atr_mult": 1.5,
         "rr": 2.0,
-        "no_sentiment": True,
+        "include_sentiment": False,
+        "include_flow_detail": False,
+        "include_signal_detail": False,
+        "include_risk_detail": False,
+        "include_market_detail": False,
         "sentiment_verbose": False,
-        "no_backtest": True,
         "auto_refresh": False,
         "force_refresh": False,
-        "with_regime": False,
+        "with_market_context": False,
         "regime_universe": "idx80",
         "benchmark": "^JKSE",
         "risk_strategy": None,
@@ -84,7 +87,7 @@ def _workflow(market_repo, calls: list[str]) -> SwingAnalysisWorkflowUseCase:
         build_flow_detail=lambda **kwargs: {"flow_window": kwargs["window_sessions"]},
         build_broker_detail=lambda **kwargs: {"broker_window": kwargs["window_sessions"]},
         build_accumulation_candidate=lambda **kwargs: {"ticker": kwargs["ticker"]},
-        evaluate_setup=lambda candidate: None,
+        evaluate_setup=lambda candidate, broker_detail: None,
         build_broker_quality_note=lambda **kwargs: None,
         fetch_sentiment=lambda **kwargs: (None, None),
         load_swing_config=lambda: {},
@@ -106,8 +109,11 @@ def test_swing_workflow_runs_without_auto_refresh():
     assert response.latest_close == Decimal("1010")
     assert response.atr_value == Decimal("25")
     assert response.data_freshness == {"freshness": ("disabled",)}
-    assert response.flow_detail == {"flow_window": 30}
-    assert response.broker_detail == {"broker_window": 5}
+    assert response.flow_detail is None
+    assert response.broker_detail is None
+    assert response.modules["strategy"] is False
+    assert response.modules["sentiment"] is False
+    assert response.modules["flow_detail"] is False
 
 
 def test_swing_workflow_runs_auto_refresh_when_enabled():
@@ -143,7 +149,7 @@ def test_swing_workflow_records_accumulation_failure_warning():
         build_flow_detail=lambda **kwargs: None,
         build_broker_detail=lambda **kwargs: None,
         build_accumulation_candidate=build_accumulation_candidate,
-        evaluate_setup=lambda candidate: None,
+        evaluate_setup=lambda candidate, broker_detail: None,
         build_broker_quality_note=lambda **kwargs: None,
         fetch_sentiment=lambda **kwargs: (None, None),
         load_swing_config=lambda: {},
@@ -154,3 +160,178 @@ def test_swing_workflow_records_accumulation_failure_warning():
 
     assert response.accumulation_candidate is None
     assert "Accumulation unavailable: no broker rows" in response.warnings
+
+
+def test_swing_workflow_only_builds_optional_evidence_when_requested():
+    calls: list[str] = []
+    workflow = SwingAnalysisWorkflowUseCase(
+        market_repository=FakeMarketRepository([_candle(date(2026, 6, 18))]),
+        broker_repository=FakeBrokerRepository(),
+        registry=FakeRegistry(),
+        refresh_data=lambda **kwargs: ("candles=ok",),
+        build_data_freshness=lambda **kwargs: None,
+        build_flow_detail=lambda **kwargs: calls.append("flow") or {"flow": True},
+        build_broker_detail=lambda **kwargs: calls.append("broker") or {"broker": True},
+        build_accumulation_candidate=lambda **kwargs: None,
+        evaluate_setup=lambda candidate, broker_detail: calls.append("setup") or None,
+        build_broker_quality_note=lambda **kwargs: None,
+        fetch_sentiment=lambda **kwargs: calls.append("sentiment") or (None, None),
+        load_swing_config=lambda: {},
+        resolve_setup_targets=lambda regime, config: (Decimal("5"), Decimal("5")),
+    )
+
+    response = workflow.execute(
+        _request(
+            include_flow_detail=True,
+            include_sentiment=True,
+            setup_name="foreign-bounce",
+        )
+    )
+
+    assert calls == ["flow", "broker", "setup", "sentiment"]
+    assert response.flow_detail == {"flow": True}
+    assert response.broker_detail == {"broker": True}
+    assert response.modules["setup"] is True
+    assert response.modules["sentiment"] is True
+    assert response.modules["flow_detail"] is True
+
+
+def test_swing_workflow_preview_fields_are_none_without_market_context():
+    workflow = _workflow(
+        FakeMarketRepository([_candle(date(2026, 6, 18))]),
+        [],
+    )
+
+    response = workflow.execute(_request(with_market_context=False))
+
+    assert response.market_regime is None
+    assert response.market_context_signal_preview is None
+    assert response.market_context_risk_preview is None
+    assert response.market_context_trade_setup_preview is None
+    assert response.modules["market_context"] is False
+
+
+def test_swing_workflow_canonical_trade_setup_unaffected_by_market_context():
+    """TradeSetup must be identical whether or not MCE is requested."""
+    from dataclasses import replace as dc_replace
+    from src.domain.value_objects.market_context import MarketContext, MarketRegime
+    from src.domain.value_objects.signal_assessment import SignalAssessment, SignalStrength, EntryQuality
+    from src.application.use_case.assess_signal_use_case import AssessSignalResponse
+
+    _RISK_OFF_CONTEXT = MarketContext(
+        regime=MarketRegime.RISK_OFF,
+        conviction=0.9,
+        factors=(),
+        signal_multiplier=0.4,
+        gate_tightening=True,
+        as_of_date=date(2026, 6, 18),
+        staleness_warning=None,
+        coverage_warning=None,
+    )
+    _RAW_SIGNAL = SignalAssessment(
+        ticker="BBCA",
+        snapshot_date=date(2026, 6, 18),
+        score=75.0,
+        strength=SignalStrength.STRONG,
+        entry_quality=EntryQuality.ENTER,
+        breakdown=(("bandar_intensity", 80.0), ("foreign_flow_quality", 70.0)),
+        rationale=("bandar supportive",),
+    )
+
+    def _raw_signal_response():
+        return AssessSignalResponse(
+            ticker="BBCA",
+            assessment=_RAW_SIGNAL,
+            sensitivity="balanced",
+            coverage_warning=None,
+        )
+
+    class FakeSignalEngine:
+        def evaluate(self, ticker, as_of_date=None, market_context=None):
+            return _raw_signal_response()
+
+        def evaluate_with_context(self, ticker, signal_context, market_context=None):
+            return _raw_signal_response()
+
+        def apply_market_context(self, response, market_context):
+            from src.application.services.signal_engine import _apply_market_context
+            return _apply_market_context(response, market_context)
+
+    class FakeRiskEngine:
+        def _make_response(self):
+            from src.application.use_case.assess_risk_use_case import AssessRiskResponse
+            from src.domain.value_objects.risk_assessment import RiskAssessment, RiskLevel
+            from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
+            assessment = RiskAssessment(
+                sensitivity="balanced",
+                risk_level=RiskLevel.LOW_RISK,
+                confidence=100,
+                gate_triggered=None,
+                gate_is_structural=None,
+                rationale=(),
+                snapshot_date=date(2026, 6, 18),
+                indicators=IndicatorSnapshot(
+                    date=date(2026, 6, 18),
+                    sma=Decimal("1000"),
+                    ema=Decimal("1005"),
+                    rsi=Decimal("50"),
+                ),
+            )
+            return AssessRiskResponse(
+                ticker="BBCA",
+                assessment=assessment,
+                sma_period=20,
+                ema_period=20,
+                rsi_period=14,
+            )
+
+        def assess_with_context(self, ticker, profile, gate_context, market_context=None):
+            return self._make_response()
+
+        def assess(self, ticker, profile="balanced", as_of_date=None, market_context=None):
+            return self._make_response()
+
+        def apply_market_context(self, response, market_context):
+            from src.application.services.risk_engine import _apply_regime_gate
+            return _apply_regime_gate(response, market_context)
+
+    class FakeMarketRegimeBuilder:
+        def build(self, request):
+            return _RISK_OFF_CONTEXT
+
+    workflow = SwingAnalysisWorkflowUseCase(
+        market_repository=FakeMarketRepository([_candle(date(2026, 6, 18))]),
+        broker_repository=FakeBrokerRepository(),
+        registry=FakeRegistry(),
+        refresh_data=lambda **kwargs: ("disabled",),
+        build_data_freshness=lambda **kwargs: {"freshness": "ok"},
+        build_flow_detail=lambda **kwargs: None,
+        build_broker_detail=lambda **kwargs: None,
+        build_accumulation_candidate=lambda **kwargs: None,
+        evaluate_setup=lambda candidate, broker_detail: None,
+        build_broker_quality_note=lambda **kwargs: None,
+        fetch_sentiment=lambda **kwargs: (None, None),
+        load_swing_config=lambda: {},
+        resolve_setup_targets=lambda regime, config: (Decimal("5"), Decimal("5")),
+        signal_engine=FakeSignalEngine(),
+        risk_engine=FakeRiskEngine(),
+    )
+
+    monkeypatch_build = FakeMarketRegimeBuilder()
+
+    import unittest.mock as mock
+    with mock.patch.object(workflow, "_build_market_regime", return_value=_RISK_OFF_CONTEXT):
+        response_with_mce = workflow.execute(_request(with_market_context=True))
+        response_without_mce = workflow.execute(_request(with_market_context=False))
+
+    assert response_without_mce.market_regime is None
+    assert response_with_mce.market_regime is not None
+
+    assert response_without_mce.trade_setup is not None
+    assert response_with_mce.trade_setup is not None
+    assert response_with_mce.trade_setup.action == response_without_mce.trade_setup.action, (
+        "canonical TradeSetup must be identical regardless of --with-market-context"
+    )
+
+    assert response_with_mce.market_context_trade_setup_preview is not None
+    assert response_with_mce.market_context_signal_preview is not None
