@@ -319,6 +319,7 @@ class TestAssessSignalUseCaseScoring:
         resp = self._run(_ctx(bandar_broad_score=3, bandar_max_range=6))
         assert resp.coverage_warning is not None
         assert "5/6" in resp.coverage_warning
+        assert "Refresh or import enrichment data" in resp.coverage_warning
 
     def test_no_coverage_warning_with_sufficient_data(self):
         # 4 factors provided → only 2 missing → below the 3-factor warning threshold

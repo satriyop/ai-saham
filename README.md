@@ -762,10 +762,9 @@ embed real-time institutional absorption ratios from Stockbit (requires login).
 
 ### `saham analyze swing` - Swing Trade Workflow
 
-Unified composite swing trade analysis combining accumulation, risk, sizing, backtest, sentiment, and market regime.
+Verdict-first swing analysis. The default command composes `SignalEngine + RiskEngine + MarketContextEngine` into the final `TradeSetup`; setup gates, strategy backtest, sentiment, and detailed broker attribution are optional evidence.
 
 ```bash
-# Full analysis
 saham analyze swing BBRI
 saham analyze swing BBRI --capital 10000000
 saham analyze swing BBRI --setup foreign-bounce --capital 10000000
@@ -773,18 +772,21 @@ saham analyze swing BBRI --setup coiled-spring --capital 10000000
 saham analyze swing BBRI --setup smart-money-confirmed --capital 10000000
 saham analyze swing BBRI --setup pullback-continuation --capital 10000000
 saham analyze swing BBRI --capital 10000000 --risk-pct 1
-saham analyze swing BBRI --profile conservative --no-sentiment
-saham analyze swing BBRI --no-refresh --no-backtest --no-sentiment
+saham analyze swing BBRI --strategy foreign-accumulation
+saham analyze swing BBRI --with-sentiment --with-flow-detail
+saham analyze swing BBRI --explain
+saham analyze swing BBRI --full
+saham analyze swing BBRI --no-refresh
 saham analyze swing BBRI --force-refresh
-saham analyze swing BBRI --with-regime
+saham analyze swing BBRI --no-regime
 saham analyze swing BBRI --format json
 ```
 
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
 | `--profile` | `-p` | balanced | Risk profile |
-| `--strategy` | `-S` | foreign-accumulation | Backtest strategy name |
-| `--setup` | | foreign-bounce | Swing setup: foreign-bounce, coiled-spring, smart-money-confirmed, pullback-continuation |
+| `--strategy` | `-S` | none | Optional strategy/backtest evidence name |
+| `--setup` | | none | Optional swing setup lens: foreign-bounce, coiled-spring, smart-money-confirmed, pullback-continuation |
 | `--window` | `-w` | 7 | Accumulation window in broker sessions |
 | `--flow-window` | | 30 | Broker-flow detail window in broker sessions |
 | `--capital` | `-c` | | Capital in IDR (enables sizing) |
@@ -792,12 +794,19 @@ saham analyze swing BBRI --format json
 | `--entry` | | | Entry price override |
 | `--atr-mult` | | 1.5 | ATR multiplier for stop |
 | `--rr` | | 2.0 | Reward:risk ratio |
-| `--no-sentiment` | | false | Skip news sentiment |
+| `--with-sentiment` | | false | Include news sentiment evidence |
+| `--with-flow-detail` | | false | Include broker flow and attribution evidence |
+| `--with-signal-detail` | | false | Include SignalEngine factor detail |
+| `--with-risk-detail` | | false | Include RiskEngine indicator/gate detail |
+| `--with-market-detail` | | false | Include full MCE factor detail |
+| `--explain` | | false | Shortcut for signal, risk, and market detail |
+| `--full` | | false | Include all optional evidence except named setup; uses `foreign-accumulation` for strategy evidence when `--strategy` is omitted |
+| `--no-sentiment` | | false | Deprecated no-op; sentiment is off by default |
 | `--sentiment-verbose` | | false | Show optional sentiment provider errors/noise |
-| `--no-backtest` | | false | Skip historical backtest |
+| `--no-backtest` | | false | Deprecated compatibility; conflicts with `--strategy` |
 | `--no-refresh` | | false | Disable automatic single-ticker candle/broker refresh |
 | `--force-refresh` | | false | Force provider refresh even when cached data is fresh |
-| `--with-regime` | | false | Add market regime context |
+| `--no-regime` | | false | Disable default market regime context |
 | `--format` | | table | Output format: table or json |
 
 #### `saham trade backtest-swing` - Portfolio Walk-Forward Backtest

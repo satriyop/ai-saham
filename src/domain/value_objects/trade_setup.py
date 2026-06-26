@@ -25,7 +25,6 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from src.domain.value_objects.market_context import MarketRegime
     from src.domain.value_objects.signal_assessment import SignalStrength
-    from src.domain.value_objects.risk_signal import RiskLevel
 
 
 class SetupAction(Enum):
@@ -84,8 +83,7 @@ class TradeSetup:
     signal_score_raw: int                   # pre-regime (== signal_score if no MCE)
     signal_strength: "SignalStrength"
 
-    # Risk dimension
-    risk_level: "RiskLevel"
+    # Risk dimension — verdict is gate_triggered only; blocking_gates names the gate(s)
     blocking_gates: tuple[str, ...]         # empty when no gate blocked
 
     # Regime dimension (self-contained for learning loop)
@@ -116,7 +114,7 @@ class TradeSetup:
             "signal_score": self.signal_score,
             "signal_score_raw": self.signal_score_raw,
             "signal_strength": self.signal_strength.value,
-            "risk_level": self.risk_level.value,
+            "gate_triggered": self.blocking_gates[0] if self.blocking_gates else None,
             "blocking_gates": list(self.blocking_gates),
             "regime": self.regime.value if self.regime else None,
             "signal_multiplier": self.signal_multiplier,

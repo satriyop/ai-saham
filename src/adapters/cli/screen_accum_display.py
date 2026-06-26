@@ -603,7 +603,7 @@ def display_results(
                 show_context_ticker,
                 c.ticker,
                 "Risk Gate",
-                "BAD" if c.risk_assessment.risk_level_name == "HIGH_RISK" else "WARN",
+                "BAD" if c.risk_assessment.gate_is_structural else "WARN",
                 f"{c.risk_assessment.gate_triggered} -> {c.risk_assessment.risk_level_name}",
             )
             has_detail_rows = True

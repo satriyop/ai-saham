@@ -212,7 +212,8 @@ class TestAssessRiskWithFormula:
         assert response.ticker == "BBCA"
         # Assessment should have been made
         assert response.assessment is not None
-        assert response.assessment.risk_level is not None
+        assert response.assessment is not None
+        assert response.assessment.risk_level_name in ("BLOCKED", "OPEN")
 
     def test_assess_risk_formula_affects_result(
         self, mock_repository, registry_with_formula, temp_dir
@@ -249,7 +250,8 @@ rules:
 
         # The actual outcome depends on the computed SMOOTH_RSI value
         # We just verify the system works end-to-end
-        assert response.assessment.risk_level is not None
+        assert response.assessment is not None
+        assert response.assessment.risk_level_name in ("BLOCKED", "OPEN")
 
 
 # --- BacktestUseCase Tests ---

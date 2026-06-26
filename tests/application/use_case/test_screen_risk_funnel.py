@@ -25,7 +25,6 @@ from src.application.use_case.assess_risk_use_case import AssessRiskUseCase
 from src.domain.entities.candle import Candle
 from src.domain.rules.fundamental_gate import FundamentalGate
 from src.domain.value_objects.company_fundamentals import CompanyFundamentals
-from src.domain.value_objects.risk_signal import RiskLevel
 
 _TODAY = date(2026, 6, 23)
 
@@ -124,7 +123,7 @@ def test_risk_funnel_fires_fundamental_gate_on_distressed_ticker():
     uc._run_risk_funnel([candidate], _TODAY, "balanced")
 
     assert candidate.risk_assessment is not None
-    assert candidate.risk_assessment.risk_level == RiskLevel.HIGH_RISK
+    assert candidate.risk_assessment.gate_triggered is not None
     assert candidate.risk_assessment.gate_triggered == "FundamentalGate"
 
 
@@ -170,10 +169,10 @@ def test_risk_funnel_builds_gate_context_from_candidate_data():
     captured_contexts: list = []
 
     class _CapturingGate:
-        def evaluate(self, ctx, current_risk):
+        def evaluate(self, ctx):
             captured_contexts.append(ctx)
             from src.domain.rules.risk_gate import GateResult
-            return GateResult(triggered=False, override_risk=None, reason="pass", confidence=0)
+            return GateResult(triggered=False, reason="pass", confidence=0)
 
     risk_uc = AssessRiskUseCase(
         repository=mkt_repo,
@@ -216,7 +215,6 @@ def test_risk_funnel_skips_failed_candidate_and_continues():
     mkt_repo = _mock_market_repo(["BBCA", "TLKM"])
 
     success_assessment = MagicMock()
-    success_assessment.risk_level = RiskLevel.LOW_RISK
     success_assessment.gate_triggered = None
 
     risk_uc = MagicMock(spec=AssessRiskUseCase)
@@ -263,12 +261,12 @@ def test_to_dict_includes_risk_fields_when_assessment_present():
     )
     assessment = RiskAssessment(
         sensitivity=RiskProfile.BALANCED,
-        risk_level=RiskLevel.HIGH_RISK,
-        confidence=100,
         rationale=("F-score=1 ≤ 3 (distress threshold)",),
         snapshot_date=_TODAY,
         indicators=snapshot,
         gate_triggered="FundamentalGate",
+        gate_is_structural=True,
+        gate_confidence=100,
     )
 
     c = AccumulationCandidate(
@@ -290,7 +288,7 @@ def test_to_dict_includes_risk_fields_when_assessment_present():
         risk_assessment=assessment,
     )
     d = c.to_dict()
-    assert d["risk_level"] == "HIGH_RISK"
+    assert d["risk_level"] == "BLOCKED"
     assert d["risk_confidence"] == 100
     assert d["risk_gate"] == "FundamentalGate"
 

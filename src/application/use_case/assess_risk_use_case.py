@@ -12,7 +12,7 @@ from dataclasses import dataclass, replace
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
-from typing import Union
+from typing import TYPE_CHECKING, Union
 
 from src.application.ports.rules_loader import RulesLoader
 from src.application.rules.schema import BUILTIN_INDICATORS, IndicatorType
@@ -23,11 +23,13 @@ from src.application.use_case.aggregate_indicators_use_case import (
 )
 from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.rules.risk_gate import GateContext, RiskGate
-from src.domain.rules.rule_engine import RuleEngine
 from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 from src.domain.value_objects.risk_assessment import RiskAssessment
-from src.domain.value_objects.risk_signal import RiskLevel, SignalSensitivity
+from src.domain.value_objects.risk_signal import SignalSensitivity
 from src.domain.value_objects.sentiment import SentimentSnapshot
+
+if TYPE_CHECKING:
+    from src.application.services.indicator_evaluator import IndicatorEvaluator
 
 
 @dataclass
@@ -65,13 +67,15 @@ class AssessRiskResponse:
 
     @property
     def risk_level(self) -> str:
-        """Convenience property for risk level string."""
-        return self.assessment.risk_level_name
+        """Gate-based risk indicator for display."""
+        if self.assessment.gate_triggered:
+            return "BLOCKED"
+        return "open"
 
     @property
     def confidence(self) -> int:
-        """Convenience property for confidence score."""
-        return self.assessment.confidence
+        """Confidence of the gate that fired (0 when none)."""
+        return self.assessment.gate_confidence or 0
 
     @property
     def sensitivity(self) -> str:
@@ -102,7 +106,7 @@ class AssessRiskTrendResponse:
 
     ticker: str
     sensitivity: str
-    history: list[tuple[date, str, int]]  # (date, risk_level, confidence)
+    history: list[tuple[date, str, int]]  # (date, indicator_reading, confidence)
     direction: str  # "IMPROVING" | "STABLE" | "DETERIORATING"
     days_in_current: int
 
@@ -129,7 +133,7 @@ class AssessRiskUseCase:
         rules_loader: RulesLoader | None = None,
         structural_gates: list[RiskGate] | None = None,
         execution_gates: list[RiskGate] | None = None,
-        rule_sets: "dict | None" = None,
+        indicator_evaluator: "IndicatorEvaluator | None" = None,
     ) -> None:
         """
         Initialize with repository, optional registry, optional rules loader,
@@ -140,18 +144,17 @@ class AssessRiskUseCase:
             registry: IndicatorRegistry for computing indicators.
                      If None, creates default registry (built-ins only).
             rules_loader: RulesLoader port interface.
-            structural_gates: Gates run BEFORE the rule engine (e.g. FundamentalGate,
-                             LiquidityGate). If any fires, the rule engine is skipped.
+            structural_gates: Gates run first (e.g. FundamentalGate, LiquidityGate,
+                             FreeFloatGate). If any fires → BLOCKED_STRUCTURAL.
                              Requires gate_context on the request.
-            execution_gates: Gates run AFTER the rule engine (e.g. BandarGate).
-                            Can downgrade but not upgrade the technical result.
+            execution_gates: Gates run after structural (e.g. BandarGate,
+                            TechnicalGate). If any fires → BLOCKED_EXECUTION.
                             Requires gate_context on the request.
-            rule_sets: Optional pre-built rule sets with custom thresholds.
-                      If None, RuleEngine defaults (hardcoded values) are used.
+            indicator_evaluator: Optional IndicatorEvaluator for computing
+                            indicator readings (trend history, TechnicalGate).
         """
         self._repository = repository
         self._registry = registry if registry is not None else IndicatorRegistry()
-        self._rule_engine = RuleEngine(rule_sets=rule_sets)
         if rules_loader is None:
             from src.infrastructure.config.yaml_loader import YamlConfigLoader
 
@@ -159,6 +162,7 @@ class AssessRiskUseCase:
         self._rules_loader = rules_loader
         self._structural_gates: list[RiskGate] = structural_gates or []
         self._execution_gates: list[RiskGate] = execution_gates or []
+        self._indicator_evaluator = indicator_evaluator
 
     def execute(self, request: AssessRiskRequest) -> AssessRiskResponse:
         """
@@ -206,8 +210,26 @@ class AssessRiskUseCase:
                 )
                 latest_snapshot = latest_snapshot.with_extras(sentiment_extras)
 
-            self._rule_engine.register_custom_rules(interpreter)
-            assessment = self._rule_engine.evaluate_custom(latest_snapshot)
+            from src.domain.value_objects.risk_signal import RiskLevel
+
+            risk_level, confidence, rationale = interpreter.evaluate(latest_snapshot)
+            if risk_level == RiskLevel.HIGH_RISK:
+                assessment = RiskAssessment(
+                    sensitivity=interpreter.profile_name,
+                    rationale=tuple(rationale),
+                    snapshot_date=latest_snapshot.date,
+                    indicators=latest_snapshot,
+                    gate_triggered="custom_rule",
+                    gate_is_structural=False,
+                    gate_confidence=confidence,
+                )
+            else:
+                assessment = RiskAssessment(
+                    sensitivity=interpreter.profile_name,
+                    rationale=tuple(rationale),
+                    snapshot_date=latest_snapshot.date,
+                    indicators=latest_snapshot,
+                )
 
             return AssessRiskResponse(
                 ticker=request.ticker.upper(),
@@ -236,64 +258,39 @@ class AssessRiskUseCase:
                 )
 
             latest_snapshot = agg_response.snapshots[-1]
+            sensitivity = SignalSensitivity.from_string(request.sensitivity)
 
-            # Phase B: gate evaluation — build enriched context, then run gates.
-            # Structural gates short-circuit before the rule engine;
-            # execution gates may downgrade after.
-            gate_ctx = self._build_gate_context(request, latest_snapshot.date)
+            # Gate evaluation — build enriched context, then run gates.
+            # Structural gates short-circuit first (BLOCKED_STRUCTURAL);
+            # execution gates run after (BLOCKED_EXECUTION).
+            gate_ctx = self._build_gate_context(
+                request, latest_snapshot.date, latest_snapshot
+            )
 
-            if gate_ctx is not None and self._structural_gates:
+            if gate_ctx is not None:
                 for gate in self._structural_gates:
-                    gate_result = gate.evaluate(gate_ctx, RiskLevel.MODERATE)
-                    if gate_result.triggered and gate_result.override_risk is not None:
-                        # Tier 1/2 structural gates: gate name propagates into the
-                        # domain value object so ExplainRiskUseCase can narrate it.
-                        assessment = RiskAssessment(
-                            sensitivity=SignalSensitivity.from_string(request.sensitivity),
-                            risk_level=gate_result.override_risk,
-                            confidence=gate_result.confidence,
-                            rationale=(gate_result.reason,),
-                            snapshot_date=latest_snapshot.date,
-                            indicators=latest_snapshot,
-                            gate_triggered=type(gate).__name__,
-                            gate_is_structural=True,
+                    gate_result = gate.evaluate(gate_ctx)
+                    if gate_result.triggered:
+                        return self._gate_response(
+                            agg_response, request, sensitivity, latest_snapshot,
+                            gate, gate_result, is_structural=True,
                         )
-                        return AssessRiskResponse(
-                            ticker=agg_response.ticker,
-                            assessment=assessment,
-                            sma_period=request.sma_period,
-                            ema_period=request.ema_period,
-                            rsi_period=request.rsi_period,
-                            coverage_warning=agg_response.coverage_warning,
-                        )
-
-            profile = SignalSensitivity.from_string(request.sensitivity)
-            assessment = self._rule_engine.evaluate(latest_snapshot, profile)
-
-            if gate_ctx is not None and self._execution_gates:
                 for gate in self._execution_gates:
-                    gate_result = gate.evaluate(gate_ctx, assessment.risk_level)
-                    if gate_result.triggered and gate_result.override_risk is not None:
-                        # Tier 3 execution gates: downgrade; preserve prior rationale.
-                        assessment = RiskAssessment(
-                            sensitivity=assessment.sensitivity,
-                            risk_level=gate_result.override_risk,
-                            confidence=gate_result.confidence,
-                            rationale=(gate_result.reason, *assessment.rationale),
-                            snapshot_date=assessment.snapshot_date,
-                            indicators=assessment.indicators,
-                            gate_triggered=type(gate).__name__,
-                            gate_is_structural=False,
-                        )
-                        return AssessRiskResponse(
-                            ticker=agg_response.ticker,
-                            assessment=assessment,
-                            sma_period=request.sma_period,
-                            ema_period=request.ema_period,
-                            rsi_period=request.rsi_period,
-                            coverage_warning=agg_response.coverage_warning,
+                    gate_result = gate.evaluate(gate_ctx)
+                    if gate_result.triggered:
+                        return self._gate_response(
+                            agg_response, request, sensitivity, latest_snapshot,
+                            gate, gate_result, is_structural=False,
                         )
 
+            # No gate fired.
+            assessment = RiskAssessment(
+                sensitivity=sensitivity,
+                rationale=("all gates passed",),
+                snapshot_date=latest_snapshot.date,
+                indicators=latest_snapshot,
+                gate_triggered=None,
+            )
             return AssessRiskResponse(
                 ticker=agg_response.ticker,
                 assessment=assessment,
@@ -303,17 +300,46 @@ class AssessRiskUseCase:
                 coverage_warning=agg_response.coverage_warning,
             )
 
+    def _gate_response(
+        self,
+        agg_response,
+        request: AssessRiskRequest,
+        sensitivity: SignalSensitivity,
+        latest_snapshot: IndicatorSnapshot,
+        gate: RiskGate,
+        gate_result,
+        is_structural: bool,
+    ) -> "AssessRiskResponse":
+        assessment = RiskAssessment(
+            sensitivity=sensitivity,
+            rationale=(gate_result.reason,),
+            snapshot_date=latest_snapshot.date,
+            indicators=latest_snapshot,
+            gate_triggered=type(gate).__name__,
+            gate_is_structural=is_structural,
+            gate_confidence=gate_result.confidence,
+        )
+        return AssessRiskResponse(
+            ticker=agg_response.ticker,
+            assessment=assessment,
+            sma_period=request.sma_period,
+            ema_period=request.ema_period,
+            rsi_period=request.rsi_period,
+            coverage_warning=agg_response.coverage_warning,
+        )
+
     def _build_gate_context(
         self,
         request: AssessRiskRequest,
         snapshot_date: date,
+        latest_snapshot: IndicatorSnapshot | None = None,
     ) -> GateContext | None:
         """
         Return an enriched GateContext for gate evaluation.
 
         If request.gate_context is None or no gates are configured, returns None.
         Enriches the caller-provided context with recent candles (for LiquidityGate)
-        from the repository.
+        from the repository and the latest indicator snapshot (for TechnicalGate).
         """
         if request.gate_context is None:
             return None
@@ -329,6 +355,8 @@ class AssessRiskUseCase:
                 end_date=snapshot_date,
             )
             ctx = replace(ctx, recent_candles=tuple(candles[-20:]))
+        if latest_snapshot is not None and ctx.latest_snapshot is None:
+            ctx = replace(ctx, latest_snapshot=latest_snapshot)
         return ctx
 
     def _build_snapshot_for_rules(
@@ -475,56 +503,53 @@ class AssessRiskUseCase:
 
         # Extract latest snapshot
         latest_snapshot = agg_response.snapshots[-1]
-        gate_ctx = self._build_gate_context(request, latest_snapshot.date)
+        gate_ctx = self._build_gate_context(
+            request, latest_snapshot.date, latest_snapshot
+        )
 
-        # Structural gates short-circuit all profiles to the same override.
-        if gate_ctx is not None and self._structural_gates:
+        # Without a rule engine, gates produce the same verdict for all
+        # sensitivities — they no longer depend on an intermediate risk level.
+        # Run gates once, then emit one assessment per sensitivity preset.
+        fired_gate = None
+        fired_result = None
+        fired_structural = None
+        if gate_ctx is not None:
             for gate in self._structural_gates:
-                gate_result = gate.evaluate(gate_ctx, RiskLevel.MODERATE)
-                if gate_result.triggered and gate_result.override_risk is not None:
-                    proto_assessments = self._rule_engine.evaluate_all_profiles(latest_snapshot)
-                    assessments = [
-                        replace(
-                            a,
-                            risk_level=gate_result.override_risk,
-                            confidence=gate_result.confidence,
-                            rationale=(gate_result.reason, *a.rationale),
-                            gate_triggered=type(gate).__name__,
-                            gate_is_structural=True,
-                        )
-                        for a in proto_assessments
-                    ]
-                    return AssessAllProfilesResponse(
-                        ticker=agg_response.ticker,
-                        assessments=assessments,
-                        sma_period=request.sma_period,
-                        ema_period=request.ema_period,
-                        rsi_period=request.rsi_period,
-                        coverage_warning=agg_response.coverage_warning,
-                    )
-
-        # Evaluate all profiles
-        assessments = self._rule_engine.evaluate_all_profiles(latest_snapshot)
-
-        # Execution gates are per-assessment: downgrade where current_risk qualifies.
-        # First-gate-wins to match the semantics of the single-profile execute() path.
-        if gate_ctx is not None and self._execution_gates:
-            upgraded: list[RiskAssessment] = []
-            for assessment in assessments:
+                gate_result = gate.evaluate(gate_ctx)
+                if gate_result.triggered:
+                    fired_gate, fired_result, fired_structural = gate, gate_result, True
+                    break
+            if fired_gate is None:
                 for gate in self._execution_gates:
-                    gate_result = gate.evaluate(gate_ctx, assessment.risk_level)
-                    if gate_result.triggered and gate_result.override_risk is not None:
-                        assessment = replace(
-                            assessment,
-                            risk_level=gate_result.override_risk,
-                            confidence=gate_result.confidence,
-                            rationale=(gate_result.reason, *assessment.rationale),
-                            gate_triggered=type(gate).__name__,
-                            gate_is_structural=False,
-                        )
-                        break  # first-gate-wins: consistent with execute()
-                upgraded.append(assessment)
-            assessments = upgraded
+                    gate_result = gate.evaluate(gate_ctx)
+                    if gate_result.triggered:
+                        fired_gate, fired_result, fired_structural = gate, gate_result, False
+                        break
+
+        assessments: list[RiskAssessment] = []
+        for sensitivity in (
+            SignalSensitivity.CONSERVATIVE,
+            SignalSensitivity.BALANCED,
+            SignalSensitivity.AGGRESSIVE,
+        ):
+            if fired_gate is not None:
+                assessments.append(RiskAssessment(
+                    sensitivity=sensitivity,
+                    rationale=(fired_result.reason,),
+                    snapshot_date=latest_snapshot.date,
+                    indicators=latest_snapshot,
+                    gate_triggered=type(fired_gate).__name__,
+                    gate_is_structural=fired_structural,
+                    gate_confidence=fired_result.confidence,
+                ))
+            else:
+                assessments.append(RiskAssessment(
+                    sensitivity=sensitivity,
+                    rationale=("all gates passed",),
+                    snapshot_date=latest_snapshot.date,
+                    indicators=latest_snapshot,
+                    gate_triggered=None,
+                ))
 
         return AssessAllProfilesResponse(
             ticker=agg_response.ticker,
@@ -567,16 +592,21 @@ class AssessRiskUseCase:
                 f"Run 'saham fetch market {request.ticker.upper()} --days 365' first."
             )
 
-        profile = SignalSensitivity.from_string(request.sensitivity)
         window = agg_response.snapshots[-days:]
 
         history: list[tuple[date, str, int]] = []
-        for snapshot in window:
-            assessment = self._rule_engine.evaluate(snapshot, profile)
-            history.append((snapshot.date, assessment.risk_level_name, assessment.confidence))
+        if self._indicator_evaluator is not None:
+            for snapshot in window:
+                ctx = self._indicator_evaluator.evaluate(snapshot)
+                history.append(
+                    (snapshot.date, ctx.overall.value.upper(), ctx.confidence)
+                )
+        else:
+            for snapshot in window:
+                history.append((snapshot.date, "UNKNOWN", 0))
 
-        # Determine direction: compare first vs last risk level
-        _rank = {"LOW_RISK": 0, "MODERATE": 1, "HIGH_RISK": 2}
+        # Determine direction: compare first vs last indicator reading
+        _rank = {"BULLISH": 0, "NEUTRAL": 1, "BEARISH": 2}
         first_rank = _rank.get(history[0][1], 1) if history else 1
         last_rank = _rank.get(history[-1][1], 1) if history else 1
 

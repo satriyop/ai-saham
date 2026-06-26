@@ -1184,7 +1184,48 @@ This is a breaking rename. Public CLI flags, JSON fields, and journal fields use
 | journal `preset` | journal `setup` |
 | journal `classification` | journal `setup_match` |
 
-No legacy alias is kept for this migration.
+---
+
+## ADR-032: `analyze swing` Verdict Boundary
+
+**Status:** Accepted
+**Date:** 2026-06-26
+
+### Context
+
+`saham analyze swing` had grown into a composite command where strategy backtest, sentiment, setup gates, broker attribution, and risk/signal outputs appeared together. That made it easy to confuse inspection evidence with the authoritative trade verdict.
+
+### Decision
+
+The core decision basis for `saham analyze swing TICKER` is exclusively:
+
+```text
+SignalEngine + RiskEngine + MarketContextEngine -> TradeSetup
+```
+
+`TradeSetup.action` is the authoritative final action. This follows ADR-026 (`TradeSetup` composition), ADR-029 (MCE as the third engine pillar), and ADR-031 (setup evaluation answers only setup fit).
+
+Evidence modules are optional and do not independently alter the verdict:
+
+| Module | Purpose |
+|--------|---------|
+| `--setup NAME` | Named setup fit evidence (`MATCH`/`PARTIAL`/`NO_MATCH`) |
+| `--strategy NAME` | Strategy/backtest evidence panel |
+| `--with-sentiment` | News sentiment context |
+| `--with-flow-detail` | Broker flow and attribution detail |
+| `--with-signal-detail` | Signal factor detail |
+| `--with-risk-detail` | Risk indicator/gate detail |
+| `--with-market-detail` | Full MCE factor detail |
+
+Default output remains verdict-first and concise: latest price, data freshness, SignalEngine summary, RiskEngine summary, MCE summary, final `TradeSetup`, and why/blockers.
+
+### Learning Loop
+
+Evidence modules exist for user inspection and ADR-027 learning-loop attribution. Future tuning must adjust YAML/configurable engine or setup parameters (`config/signal_engine.yaml`, `config/risk_engine.yaml`, `config/market_context_engine.yaml`, `config/swing_screener.yaml`) rather than adding hidden decision branches in CLI or workflow code.
+
+### Compatibility
+
+`--strategy` defaults to none. `--strategy NAME` enables strategy evidence. `--full` includes strategy evidence using `foreign-accumulation` when no explicit strategy is provided. Deprecated `--no-backtest` and `--no-sentiment` remain accepted for compatibility because those modules are default-off; enabling strategy evidence together with `--no-backtest` is a conflict.
 
 ---
 

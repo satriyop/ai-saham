@@ -1,14 +1,11 @@
-"""
-RiskGate — domain abstraction for structural and execution risk filters.
+"""RiskGate — domain abstraction for structural and execution risk filters.
 
-Gates augment or override the technical rule engine's assessment with
-non-technical data (fundamentals, liquidity, institutional flow).
+Gates are pure functions: they receive pre-loaded data via GateContext and
+return a GateResult. No IO, no database access. GateContext is populated by
+the application layer (AssessRiskUseCase / RiskEngine) before gate evaluation.
 
-All gates are pure functions: they receive pre-loaded data via GateContext
-and return a GateResult. No IO, no database access.
-
-GateContext is populated by the application layer (AssessRiskUseCase)
-before gate evaluation. Each gate extracts only what it needs.
+The verdict is purely `gate_triggered`: a gate either fires (triggered=True)
+or it does not. Gates no longer override an intermediate RiskLevel.
 
 Layer: Domain
 Depends on: Domain value objects only
@@ -21,10 +18,9 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import TYPE_CHECKING
 
-from src.domain.value_objects.risk_signal import RiskLevel
-
 if TYPE_CHECKING:
     from src.domain.entities.candle import Candle
+    from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 
 
 @dataclass(frozen=True)
@@ -32,9 +28,8 @@ class GateResult:
     """Outcome from a single RiskGate evaluation."""
 
     triggered: bool
-    override_risk: RiskLevel | None  # set when triggered; replaces current assessment
-    reason: str                       # human-readable; included in RiskAssessment rationale
-    confidence: int = 100             # confidence of the override (0, 50, or 100)
+    reason: str                       # human-readable; surfaced in RiskAssessment rationale
+    confidence: int = 100             # confidence of the trigger (0, 50, 80, or 100)
 
 
 @dataclass(frozen=True)
@@ -45,10 +40,6 @@ class GateContext:
     The application layer is responsible for populating this before gate
     evaluation. Gates receive only plain Python values — no repositories,
     no IO, no lazy loading.
-
-    Structural data (piotroski, market_cap) is quarterly; execution data
-    (bandar) is daily. The caller should populate only the fields relevant
-    to the gates it is running.
     """
 
     ticker: str
@@ -59,38 +50,27 @@ class GateContext:
     market_cap_idr: int | None = None
 
     # Structural: sourced from ShareholdingComposition (quarterly refresh)
-    # Computed as individual_pct + institution_pct from IDX disclosure.
-    # Upper-bound proxy: institution_pct may include some strategic holders.
     free_float_pct: float | None = None
 
     # Execution: sourced from BandarDetectorSnapshot (daily)
-    five_day_accdist: str | None = None   # "Big Acc" | "Small Acc" | "Neutral" | "Small Dist" | "Big Dist"
-    bandar_is_distributing: bool = False  # True when five_day score < 0
+    five_day_accdist: str | None = None
+    bandar_is_distributing: bool = False
 
     # Liquidity: filled by AssessRiskUseCase from MarketDataRepository
     recent_candles: tuple = field(default_factory=tuple)  # tuple[Candle, ...]
 
+    # Technical: latest indicator snapshot, for TechnicalGate (optional gate)
+    latest_snapshot: "IndicatorSnapshot | None" = None
+
 
 class RiskGate(ABC):
-    """Abstract gate that can override or augment a risk assessment.
+    """Abstract gate that fires (or not) against a GateContext.
 
-    Structural gates (FundamentalGate, LiquidityGate) run before the rule
-    engine and can short-circuit to HIGH_RISK.
-
-    Execution gates (BandarGate) run after the rule engine and can downgrade
-    a LOW_RISK technical result when conflicting signals exist.
+    Structural gates (FundamentalGate, LiquidityGate, FreeFloatGate) run first
+    and short-circuit to BLOCKED_STRUCTURAL. Execution gates (BandarGate,
+    TechnicalGate) run after and short-circuit to BLOCKED_EXECUTION.
     """
 
     @abstractmethod
-    def evaluate(self, context: GateContext, current_risk: RiskLevel) -> GateResult:
-        """
-        Evaluate the gate against the provided context.
-
-        Args:
-            context: Pre-loaded data for gate evaluation.
-            current_risk: Risk level to test against. Structural gates ignore
-                         this; execution gates use it for conditional downgrades.
-
-        Returns:
-            GateResult with triggered=True and override_risk set if the gate fires.
-        """
+    def evaluate(self, context: GateContext) -> GateResult:
+        """Evaluate the gate against the provided context."""

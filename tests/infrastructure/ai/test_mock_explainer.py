@@ -38,11 +38,11 @@ def make_assessment(
 
     return RiskAssessment(
         sensitivity=RiskProfile.BALANCED,
-        risk_level=risk_level,
-        confidence=confidence,
         rationale=("Test rationale 1", "Test rationale 2"),
         snapshot_date=snapshot.date,
         indicators=snapshot,
+        gate_triggered=("gate" if risk_level == RiskLevel.HIGH_RISK else None),
+        gate_confidence=confidence,
     )
 
 

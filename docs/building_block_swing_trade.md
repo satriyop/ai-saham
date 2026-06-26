@@ -113,13 +113,13 @@ The swing trade feature is a **unified composite workflow** that combines accumu
 
 ---
 
-## `swing analyze` — Internal Flow (Composite)
+## `swing analyze` — Internal Flow (Core Verdict + Evidence)
 
-The single-ticker `saham analyze swing BBCA` command runs **7 data pipelines** sequentially and combines them into one output:
+The single-ticker `saham analyze swing BBCA` command centers the core deterministic verdict on `SignalEngine + RiskEngine + MarketContextEngine -> TradeSetup`. Setup gates, strategy backtest, sentiment, and detailed broker attribution are optional evidence modules for human inspection and learning-loop attribution; they do not independently alter `TradeSetup.action`.
 
 ```
 ┌─────────────┐
-│   ENTRY     │  saham analyze swing BBCA --capital 10000000 --with-regime
+│   ENTRY     │  saham analyze swing BBCA --capital 10000000
 └──────┬──────┘
        │
        ▼
@@ -142,7 +142,7 @@ The single-ticker `saham analyze swing BBCA` command runs **7 data pipelines** s
        │
        ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  STEP 3: Accumulation screening (7-dimension scoring)          │
+│  STEP 3: Accumulation evidence for SignalEngine context        │
 │  AccumulationScreenUseCase                                     │
 │    ├── BrokerRepository.get_broker_summaries(window)           │
 │    ├── Compute score (net_buy_ratio + streak + VWAP +          │
@@ -193,9 +193,9 @@ The single-ticker `saham analyze swing BBCA` command runs **7 data pipelines** s
        │
        ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  STEP 8: Backtest history (single-ticker)                      │
-│  IF not --no-backtest:                                         │
-│    StrategyLoader -> resolve("foreign-accumulation")           │
+│  STEP 8: Strategy evidence (optional)                          │
+│  IF --strategy NAME:                                           │
+│    StrategyLoader -> resolve(NAME)                             │
 │    BacktestUseCase(ticker, rules, capital)                     │
 │  Output: BacktestResult(win_rate, profit_factor, max_dd,      │
 │           trade_count)                                          │
@@ -203,8 +203,8 @@ The single-ticker `saham analyze swing BBCA` command runs **7 data pipelines** s
        │
        ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  STEP 9: Sentiment (optional)                                  │
-│  IF not --no-sentiment:                                        │
+│  STEP 9: Sentiment evidence (optional)                         │
+│  IF --with-sentiment:                                          │
 │    SentimentFactory -> CompositeNewsProvider                   │
 │                     -> KeywordClassifier                       │
 │    FetchSentimentUseCase(ticker, 3d, 20 headlines)            │
@@ -213,7 +213,7 @@ The single-ticker `saham analyze swing BBCA` command runs **7 data pipelines** s
        │
        ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  STEP 10: Market regime (optional, --with-regime)              │
+│  STEP 10: Market regime (default, unless --no-regime)          │
 │  MarketRegimeUseCase                                           │
 │    ├── Benchmark close + SMA20 + SMA50                         │
 │    ├── Breadth: % stocks above SMA20 + 5d change               │

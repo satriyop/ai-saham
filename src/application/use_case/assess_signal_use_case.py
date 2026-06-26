@@ -285,7 +285,7 @@ class AssessSignalUseCase:
         if missing >= _COVERAGE_WARNING_THRESHOLD:
             return (
                 f"{missing}/6 enrichment factors missing — score defaulted to neutral (50) "
-                f"for those factors. Run with --with-enrichment for accurate scores."
+                f"for those factors. Refresh or import enrichment data for more accurate scores."
             )
         return None
 

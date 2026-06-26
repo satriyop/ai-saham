@@ -464,6 +464,7 @@ def _print_swing_output(
     market_context_signal_preview=None,
     market_context_risk_preview=None,
     market_context_trade_setup_preview=None,
+    with_technical_gate: bool = False,
 ) -> None:
     from src.adapters.cli.analyze_swing_display import print_swing_output
 
@@ -503,6 +504,7 @@ def _print_swing_output(
         market_context_risk_preview=market_context_risk_preview,
         market_context_trade_setup_preview=market_context_trade_setup_preview,
         config=_DISPLAY_CONFIG,
+        with_technical_gate=with_technical_gate,
     )
 
 
@@ -616,6 +618,13 @@ def swing(
         typer.Option(
             "--with-market-context",
             help="Build MCE and display a what-if impact preview (does not change final TradeSetup)",
+        ),
+    ] = False,
+    with_technical_gate: Annotated[
+        bool,
+        typer.Option(
+            "--with-technical-gate",
+            help="Enable the optional TechnicalGate (SMA/EMA/RSI) execution gate. Off by default.",
         ),
     ] = False,
     regime_universe: Annotated[
@@ -791,6 +800,7 @@ def swing(
                 benchmark=benchmark,
                 risk_strategy=risk_strategy,
                 db_path=resolved_db,
+                with_technical_gate=with_technical_gate,
             )
         )
     except SwingAnalysisDataUnavailable:
@@ -1003,6 +1013,7 @@ def swing(
         market_context_signal_preview=workflow_response.market_context_signal_preview,
         market_context_risk_preview=workflow_response.market_context_risk_preview,
         market_context_trade_setup_preview=workflow_response.market_context_trade_setup_preview,
+        with_technical_gate=with_technical_gate,
     )
 
 

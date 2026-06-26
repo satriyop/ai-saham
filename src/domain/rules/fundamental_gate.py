@@ -15,18 +15,16 @@ Layer: Domain
 """
 
 from src.domain.rules.risk_gate import GateContext, GateResult, RiskGate
-from src.domain.value_objects.risk_signal import RiskLevel
 
 _DEFAULT_DISTRESS_THRESHOLD = 3
 
 
 class FundamentalGate(RiskGate):
     """
-    Structural gate: Piotroski F-score ≤ threshold → HIGH_RISK override.
+    Structural gate: Piotroski F-score ≤ threshold fires.
 
-    Runs before the technical rule engine and short-circuits to HIGH_RISK
-    regardless of the current RSI or trend signal. No fundamental data
-    available → gate passes silently (no override).
+    Runs before execution gates and short-circuits regardless of the current
+    RSI or trend signal. No fundamental data available → gate passes silently.
     """
 
     def __init__(self, distress_threshold: int = _DEFAULT_DISTRESS_THRESHOLD) -> None:
@@ -34,18 +32,16 @@ class FundamentalGate(RiskGate):
             raise ValueError(f"distress_threshold must be 0–9, got {distress_threshold}")
         self._threshold = distress_threshold
 
-    def evaluate(self, context: GateContext, current_risk: RiskLevel) -> GateResult:
+    def evaluate(self, context: GateContext) -> GateResult:
         if context.piotroski_f_score is None:
             return GateResult(
                 triggered=False,
-                override_risk=None,
                 reason="no fundamental data — gate skipped",
                 confidence=0,
             )
         if context.piotroski_f_score <= self._threshold:
             return GateResult(
                 triggered=True,
-                override_risk=RiskLevel.HIGH_RISK,
                 reason=(
                     f"Fundamental distress: F-score {context.piotroski_f_score}"
                     f" ≤ {self._threshold} (value trap risk)"
@@ -54,7 +50,6 @@ class FundamentalGate(RiskGate):
             )
         return GateResult(
             triggered=False,
-            override_risk=None,
             reason=f"F-score {context.piotroski_f_score} > {self._threshold} (fundamental gate passes)",
             confidence=100,
         )

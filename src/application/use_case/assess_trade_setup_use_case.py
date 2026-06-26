@@ -76,7 +76,6 @@ class AssessTradeSetupUseCase:
             signal_score=sig.score,
             signal_score_raw=raw,
             signal_strength=sig.assessment.strength,
-            risk_level=risk.assessment.risk_level,
             blocking_gates=blocking,
             regime=regime,
             signal_multiplier=multiplier,
@@ -126,7 +125,7 @@ class AssessTradeSetupUseCase:
             gate = risk.assessment.gate_triggered or "unknown"
             parts.append(f"Blocked by {gate}")
         else:
-            parts.append(f"Risk {risk.assessment.risk_level.value}")
+            parts.append("gate: open")
 
         if mc is not None:
             parts.append(f"Regime {mc.regime.value} ×{mc.signal_multiplier:.2f}")

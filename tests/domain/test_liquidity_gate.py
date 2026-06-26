@@ -8,7 +8,6 @@ import pytest
 from src.domain.entities.candle import Candle
 from src.domain.rules.liquidity_gate import LiquidityGate
 from src.domain.rules.risk_gate import GateContext
-from src.domain.value_objects.risk_signal import RiskLevel
 
 _TODAY = date(2026, 6, 23)
 _1T = 1_000_000_000_000
@@ -44,24 +43,23 @@ class TestLiquidityGateMarketCap:
 
     def test_below_1t_triggers_high_risk(self):
         gate = LiquidityGate()
-        result = gate.evaluate(_ctx(market_cap_idr=500_000_000_000), RiskLevel.LOW_RISK)
+        result = gate.evaluate(_ctx(market_cap_idr=500_000_000_000))
         assert result.triggered
-        assert result.override_risk == RiskLevel.HIGH_RISK
 
     def test_at_1t_triggers(self):
         gate = LiquidityGate(third_liner_cap_idr=_1T)
         # exactly at threshold → below (strict <) so does NOT trigger
-        result = gate.evaluate(_ctx(market_cap_idr=_1T), RiskLevel.LOW_RISK)
+        result = gate.evaluate(_ctx(market_cap_idr=_1T))
         assert not result.triggered
 
     def test_above_1t_passes(self):
         gate = LiquidityGate()
-        result = gate.evaluate(_ctx(market_cap_idr=2 * _1T), RiskLevel.LOW_RISK)
+        result = gate.evaluate(_ctx(market_cap_idr=2 * _1T))
         assert not result.triggered
 
     def test_no_market_cap_skips_cap_check(self):
         gate = LiquidityGate()
-        result = gate.evaluate(_ctx(market_cap_idr=None), RiskLevel.MODERATE)
+        result = gate.evaluate(_ctx(market_cap_idr=None))
         # No candles either — both checks skipped → passes
         assert not result.triggered
 
@@ -71,15 +69,14 @@ class TestLiquidityGateMarketCap:
         gate = LiquidityGate(liquidity_floor_idr=_5B)
         result = gate.evaluate(
             _ctx(market_cap_idr=100_000_000_000, candles=illiquid_candles),
-            RiskLevel.LOW_RISK,
         )
         assert result.triggered
         assert "Third-liner" in result.reason
 
     def test_custom_cap_threshold(self):
         gate = LiquidityGate(third_liner_cap_idr=500_000_000_000)
-        assert gate.evaluate(_ctx(market_cap_idr=400_000_000_000), RiskLevel.MODERATE).triggered
-        assert not gate.evaluate(_ctx(market_cap_idr=600_000_000_000), RiskLevel.MODERATE).triggered
+        assert gate.evaluate(_ctx(market_cap_idr=400_000_000_000)).triggered
+        assert not gate.evaluate(_ctx(market_cap_idr=600_000_000_000)).triggered
 
 
 class TestLiquidityGateMedianVolume:
@@ -89,15 +86,14 @@ class TestLiquidityGateMedianVolume:
         # price=100, volume=10_000 → tx=1_000_000 IDR per day (far below 5B)
         candles = tuple(_candle(close=100, volume=10_000, day_offset=i) for i in range(20))
         gate = LiquidityGate(liquidity_floor_idr=_5B)
-        result = gate.evaluate(_ctx(candles=candles), RiskLevel.LOW_RISK)
+        result = gate.evaluate(_ctx(candles=candles))
         assert result.triggered
-        assert result.override_risk == RiskLevel.HIGH_RISK
 
     def test_high_median_transaction_passes(self):
         # price=10_000, volume=1_000_000 → tx=10B IDR per day (2× floor)
         candles = tuple(_candle(close=10_000, volume=1_000_000, day_offset=i) for i in range(20))
         gate = LiquidityGate(liquidity_floor_idr=_5B)
-        result = gate.evaluate(_ctx(candles=candles), RiskLevel.LOW_RISK)
+        result = gate.evaluate(_ctx(candles=candles))
         assert not result.triggered
 
     def test_median_uses_lookback_tail(self):
@@ -108,12 +104,12 @@ class TestLiquidityGateMedianVolume:
             _candle(close=10_000, volume=1_000_000, day_offset=i) for i in range(20)
         )
         gate = LiquidityGate(liquidity_floor_idr=_5B, lookback_days=20)
-        result = gate.evaluate(_ctx(candles=old_candles + recent_candles), RiskLevel.LOW_RISK)
+        result = gate.evaluate(_ctx(candles=old_candles + recent_candles))
         assert not result.triggered  # recent 20 are liquid → passes
 
     def test_no_candles_skips_liquidity_check(self):
         gate = LiquidityGate()
-        result = gate.evaluate(_ctx(candles=()), RiskLevel.LOW_RISK)
+        result = gate.evaluate(_ctx(candles=()))
         assert not result.triggered
 
     def test_zero_volume_candles_excluded_from_median(self):
@@ -123,7 +119,7 @@ class TestLiquidityGateMedianVolume:
             _candle(close=10_000, volume=1_000_000, day_offset=i + 10) for i in range(10)
         )
         gate = LiquidityGate(liquidity_floor_idr=_5B)
-        result = gate.evaluate(_ctx(candles=zero_vol + high_vol), RiskLevel.LOW_RISK)
+        result = gate.evaluate(_ctx(candles=zero_vol + high_vol))
         # Median of non-zero values only; high-volume candles should keep it above floor
         assert not result.triggered
 
@@ -133,28 +129,28 @@ class TestLiquidityGateIgnoresCurrentRisk:
 
     def test_fires_on_low_risk(self):
         gate = LiquidityGate()
-        result = gate.evaluate(_ctx(market_cap_idr=100_000_000_000), RiskLevel.LOW_RISK)
+        result = gate.evaluate(_ctx(market_cap_idr=100_000_000_000))
         assert result.triggered
 
     def test_fires_on_moderate(self):
         gate = LiquidityGate()
-        result = gate.evaluate(_ctx(market_cap_idr=100_000_000_000), RiskLevel.MODERATE)
+        result = gate.evaluate(_ctx(market_cap_idr=100_000_000_000))
         assert result.triggered
 
     def test_fires_on_high_risk(self):
         gate = LiquidityGate()
-        result = gate.evaluate(_ctx(market_cap_idr=100_000_000_000), RiskLevel.HIGH_RISK)
+        result = gate.evaluate(_ctx(market_cap_idr=100_000_000_000))
         assert result.triggered
 
 
 class TestLiquidityGateReason:
     def test_cap_trigger_reason_mentions_third_liner(self):
         gate = LiquidityGate()
-        result = gate.evaluate(_ctx(market_cap_idr=500_000_000_000), RiskLevel.LOW_RISK)
+        result = gate.evaluate(_ctx(market_cap_idr=500_000_000_000))
         assert "Third-liner" in result.reason or "third" in result.reason.lower()
 
     def test_liquidity_trigger_reason_mentions_illiquid(self):
         candles = tuple(_candle(close=100, volume=1_000, day_offset=i) for i in range(20))
         gate = LiquidityGate(liquidity_floor_idr=_5B)
-        result = gate.evaluate(_ctx(candles=candles), RiskLevel.LOW_RISK)
+        result = gate.evaluate(_ctx(candles=candles))
         assert "Illiquid" in result.reason or "illiquid" in result.reason.lower()

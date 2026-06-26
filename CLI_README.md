@@ -2264,10 +2264,9 @@ data/opening/
 
 ## 20. Swing Analyze Workflow - The `analyze swing` Command
 
-Unified analysis combining accumulation, risk, sizing, backtest, and sentiment in one command.
+Verdict-first swing analysis. The default command shows latest price, data freshness, concise SignalEngine/RiskEngine/MCE summaries, and the final `TradeSetup`. Setup gates, strategy backtest, sentiment, and detailed broker attribution are opt-in evidence.
 
 ```bash
-# Full analysis
 saham analyze swing BBRI
 
 # With position sizing
@@ -2279,23 +2278,33 @@ saham analyze swing BBRI --setup coiled-spring --capital 10000000
 saham analyze swing BBRI --setup smart-money-confirmed --capital 10000000
 saham analyze swing BBRI --setup pullback-continuation --capital 10000000
 
-# Conservative profile, skip sentiment
-saham analyze swing BBRI --profile conservative --no-sentiment
+# Optional evidence
+saham analyze swing BBRI --strategy foreign-accumulation
+saham analyze swing BBRI --with-sentiment --with-flow-detail
+saham analyze swing BBRI --explain
+saham analyze swing BBRI --full
 
-# Compare with market regime context
-saham analyze swing BBRI --with-regime
+# Disable market regime context
+saham analyze swing BBRI --no-regime
 ```
 
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
 | `--profile` | `-p` | balanced | Risk profile |
-| `--strategy` | `-S` | foreign-accumulation | Backtest strategy |
-| `--setup` | | foreign-bounce | Swing setup: foreign-bounce, coiled-spring, smart-money-confirmed, pullback-continuation |
+| `--strategy` | `-S` | none | Optional strategy/backtest evidence name |
+| `--setup` | | none | Optional swing setup lens: foreign-bounce, coiled-spring, smart-money-confirmed, pullback-continuation |
 | `--capital` | `-c` | | Capital (enables sizing) |
 | `--risk-pct` | | 1.0 | % of capital at risk |
-| `--no-sentiment` | | false | Skip sentiment |
-| `--no-backtest` | | false | Skip backtest |
-| `--with-regime` | | false | Add regime context |
+| `--with-sentiment` | | false | Include news sentiment evidence |
+| `--with-flow-detail` | | false | Include broker flow and attribution evidence |
+| `--with-signal-detail` | | false | Include SignalEngine factor detail |
+| `--with-risk-detail` | | false | Include RiskEngine indicator/gate detail |
+| `--with-market-detail` | | false | Include full MCE factor detail |
+| `--explain` | | false | Shortcut for signal, risk, and market detail |
+| `--full` | | false | Include all optional evidence except named setup; uses `foreign-accumulation` for strategy evidence when `--strategy` is omitted |
+| `--no-sentiment` | | false | Deprecated no-op; sentiment is off by default |
+| `--no-backtest` | | false | Deprecated compatibility; conflicts with `--strategy` |
+| `--no-regime` | | false | Disable default regime context |
 
 ### Swing Analyze Output Signals
 
@@ -2714,7 +2723,7 @@ saham strategy backtest BBCA --strategy my_flow_strategy
 | `saham trade review swing` | Review accumulation trade journal | `--horizon`, `--min-score` |
 | `saham trade migrate-journal` | One-time CSV journal migration to JSONL | — |
 | `saham trade outcome` | Record actual trade outcome | `--entry`, `--exit`, `--result` |
-| `saham analyze swing TICKER` | Unified swing analysis | `--capital`, `--setup`, `--with-regime` |
+| `saham analyze swing TICKER` | Unified swing analysis with default regime context | `--capital`, `--setup`, `--no-regime` |
 | `saham trade backtest-swing` | Portfolio walk-forward swing backtest | `--universe`, `--setup`, `--capital`, `--allow-regimes` |
 | `saham trade backtest-intraday` | Walk-forward intraday pre-open backtest | `--universe`, `--start`, `--end` |
 | `saham analyze swing-compare` | Compare regime variants | `--universe`, `--variants` |

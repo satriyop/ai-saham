@@ -55,45 +55,6 @@ def _resolve_signal_weights(cfg: dict) -> dict[str, float] | None:
     return {name: w / total for name, w in active.items()}
 
 
-def _resolve_rule_sets(cfg: dict) -> "dict | None":
-    """
-    Parse sensitivity-preset thresholds from config and return pre-built rule sets.
-
-    Returns None when the 'sensitivities' section is absent, so RuleEngine falls
-    back to its own hardcoded defaults (identical to historical behavior).
-    """
-    from decimal import Decimal as _D
-    from src.domain.rules.aggressive import AggressiveRuleSet
-    from src.domain.rules.balanced import BalancedRuleSet
-    from src.domain.rules.conservative import ConservativeRuleSet
-    from src.domain.value_objects.risk_signal import SignalSensitivity
-
-    presets = cfg.get("risk_engine", {}).get("sensitivities", {})
-    if not presets:
-        return None
-
-    def _d(name: str, key: str, default) -> _D:
-        return _D(str(presets.get(name, {}).get(key, default)))
-
-    return {
-        SignalSensitivity.CONSERVATIVE: ConservativeRuleSet(
-            rsi_high_risk=_d("conservative", "rsi_high_risk", 75),
-            rsi_low_risk=_d("conservative", "rsi_low_risk", 25),
-            divergence_threshold=_d("conservative", "ema_sma_divergence_threshold", "1.0"),
-        ),
-        SignalSensitivity.BALANCED: BalancedRuleSet(
-            rsi_high_risk=_d("balanced", "rsi_high_risk", 70),
-            rsi_low_risk=_d("balanced", "rsi_low_risk", 30),
-            divergence_threshold=_d("balanced", "ema_sma_divergence_threshold", "0"),
-        ),
-        SignalSensitivity.AGGRESSIVE: AggressiveRuleSet(
-            rsi_high_risk=_d("aggressive", "rsi_high_risk", 60),
-            rsi_low_risk=_d("aggressive", "rsi_low_risk", 40),
-            divergence_threshold=_d("aggressive", "ema_sma_divergence_threshold", "0.1"),
-        ),
-    }
-
-
 def _resolve_risk_gates(cfg: dict) -> tuple[list, list]:
     """
     Parse enabled risk gates and return (structural_gates, execution_gates).
@@ -225,7 +186,6 @@ def create_risk_engine(
 
     cfg = _load_engine_config(Path("config/risk_engine.yaml"))
     structural_gates, execution_gates = _resolve_risk_gates(cfg)
-    rule_sets = _resolve_rule_sets(cfg)
 
     fund_prov = None
     bandar_prov = None
@@ -245,6 +205,8 @@ def create_risk_engine(
         bandar_prov = StockbitBandarDetectorProvider(broker_provider=None, db_path=resolved)
         shareholding_prov = StockbitShareholdingProvider(broker_provider=None, db_path=resolved)
 
+    from src.application.services.indicator_evaluator import IndicatorEvaluator
+
     return RiskEngine(
         repository=repository,
         registry=registry,
@@ -253,7 +215,7 @@ def create_risk_engine(
         fundamentals_provider=fund_prov,
         bandar_provider=bandar_prov,
         shareholding_provider=shareholding_prov,
-        rule_sets=rule_sets,
+        indicator_evaluator=IndicatorEvaluator(),
     )
 
 

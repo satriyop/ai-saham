@@ -292,13 +292,25 @@ def _risk_label(risk_resp: Any | None) -> tuple[str, str, str]:
     if risk_resp is None:
         return "N/A", "white", "risk unavailable"
     assessment = risk_resp.assessment
-    style = {
-        "LOW_RISK": "bold green",
-        "MODERATE": "yellow",
-        "HIGH_RISK": "bold red",
-    }.get(assessment.risk_level_name, "white")
-    gate = assessment.gate_triggered or "-"
-    return assessment.risk_level_name, style, f"conf {assessment.confidence}/100; gate {gate}"
+    gate = assessment.gate_triggered
+    if gate:
+        return "BLOCKED", "bold red", f"gate {gate} (conf {assessment.gate_confidence or 0}/100)"
+    return "OPEN", "bold green", "no gate fired"
+
+
+def _technical_label(risk_resp: Any | None, with_technical_gate: bool) -> tuple[str, str, str]:
+    """Engine-summary row for the optional TechnicalGate."""
+    gate = risk_resp.assessment.gate_triggered if risk_resp is not None else None
+    gate_text = f"BLOCKED ({gate})" if gate else "open"
+    if not with_technical_gate:
+        return "off", "bright_black", f"gate: {gate_text}"
+    if risk_resp is None:
+        return "on", "white", f"gate: {gate_text}"
+    snap = risk_resp.assessment.indicators
+    sma_pos = "above" if snap.sma > snap.ema else ("below" if snap.sma < snap.ema else "==")
+    summary = f"RSI {float(snap.rsi):.0f} · SMA {sma_pos}"
+    style = "bold red" if gate else "cyan"
+    return summary, style, f"gate: {gate_text}"
 
 
 def _signal_label(signal_assessment: Any | None) -> tuple[str, str, str]:
@@ -536,6 +548,7 @@ def print_swing_rich_overview(
     market_context_signal_preview=None,
     market_context_risk_preview=None,
     market_context_trade_setup_preview=None,
+    with_technical_gate: bool = False,
 ) -> None:
     summary_parts = swing_summary_parts(accum, risk_resp, backtest_result, sentiment_resp)
     summary_text = " · ".join(summary_parts) if summary_parts else "insufficient data for assessment"
@@ -593,11 +606,9 @@ def print_swing_rich_overview(
     engine_summary.add_column("Detail")
     engine_summary.add_row("SignalEngine", Text(signal_value, style=signal_style), signal_detail)
     engine_summary.add_row("RiskEngine", Text(risk_value, style=risk_style), risk_detail)
+    tech_value, tech_style, tech_detail = _technical_label(risk_resp, with_technical_gate)
+    engine_summary.add_row("Technical", Text(tech_value, style=tech_style), tech_detail)
     engine_summary.add_row("Market Context", Text(market_value, style=market_style), market_detail)
-    if setup_eval is not None:
-        engine_summary.add_row("Setup lens", Text(setup_value, style=setup_style), f"{setup_eval.name} evidence only")
-    else:
-        engine_summary.add_row("Setup lens", Text("off", style="bright_black"), "use --setup for named setup evidence")
     broker_value, broker_style, broker_detail_text = _broker_label(broker_detail, broker_quality_note)
     engine_summary.add_row("Broker quality", Text(broker_value, style=broker_style), broker_detail_text)
 
@@ -779,6 +790,7 @@ def print_swing_output(
     market_context_risk_preview=None,
     market_context_trade_setup_preview=None,
     config: SwingDisplayConfig | None = None,
+    with_technical_gate: bool = False,
 ) -> None:
     config = config or SwingDisplayConfig(
         enter_min_score=70,
@@ -825,6 +837,7 @@ def print_swing_output(
         market_context_signal_preview=market_context_signal_preview,
         market_context_risk_preview=market_context_risk_preview,
         market_context_trade_setup_preview=market_context_trade_setup_preview,
+        with_technical_gate=with_technical_gate,
     )
 
     # ── Market Context Preview Panel ─────────────────────────────────────────
@@ -879,7 +892,11 @@ def print_swing_output(
     if include_risk_detail and risk_resp:
         r = risk_resp.assessment
         snap = r.indicators
-        risk_text.append(Text(f"Risk Confirmation Verdict: {r.risk_level_name} (Confidence: {r.confidence}/100)", style="bold cyan"))
+        if r.gate_triggered:
+            _verdict = f"BLOCKED — gate {r.gate_triggered} (conf {r.gate_confidence or 0}/100)"
+        else:
+            _verdict = "OPEN — no gate fired"
+        risk_text.append(Text(f"Risk Verdict: {_verdict}", style="bold cyan"))
         risk_table = compact_table()
         risk_table.add_column("SMA20")
         risk_table.add_column("EMA20")

@@ -28,9 +28,9 @@ from src.application.use_case.assess_risk_use_case import (
 )
 from src.domain.rules.risk_gate import GateContext, RiskGate
 from src.domain.ports.market_data_repository import MarketDataRepository
-from src.domain.value_objects.risk_signal import RiskLevel
 
 if TYPE_CHECKING:
+    from src.application.services.indicator_evaluator import IndicatorEvaluator
     from src.application.services.indicator_registry import IndicatorRegistry
     from src.domain.ports.fundamentals_provider import FundamentalsProvider
     from src.domain.ports.bandar_detector_provider import BandarDetectorProvider
@@ -58,14 +58,14 @@ class RiskEngine:
         fundamentals_provider: "FundamentalsProvider | None" = None,
         bandar_provider: "BandarDetectorProvider | None" = None,
         shareholding_provider: "ShareholdingProvider | None" = None,
-        rule_sets: "dict | None" = None,
+        indicator_evaluator: "IndicatorEvaluator | None" = None,
     ) -> None:
         self._use_case = AssessRiskUseCase(
             repository=repository,
             registry=registry,
             structural_gates=structural_gates,
             execution_gates=execution_gates,
-            rule_sets=rule_sets,
+            indicator_evaluator=indicator_evaluator,
         )
         self._fundamentals_provider = fundamentals_provider
         self._bandar_provider = bandar_provider
@@ -145,7 +145,7 @@ class RiskEngine:
             gate_label = f"regime:{market_context.regime.value}"
             gated = [
                 replace(a, gate_triggered=gate_label, gate_is_structural=True)
-                if a.risk_level == RiskLevel.HIGH_RISK and a.gate_triggered is None
+                if a.gate_triggered is None
                 else a
                 for a in result.assessments
             ]
@@ -235,13 +235,11 @@ def _apply_regime_gate(
     """
     Apply regime gate tightening to a risk assessment.
 
-    When gate_tightening=True and the assessment is HIGH_RISK, injects a
-    regime gate trigger so the stock is blocked at the gate layer.
+    When gate_tightening=True and no gate has fired yet, injects a regime gate
+    trigger so the stock is blocked at the gate layer.
     No-op when market_context is None or gate_tightening is False.
     """
     if market_context is None or not market_context.gate_tightening:
-        return response
-    if response.assessment.risk_level != RiskLevel.HIGH_RISK:
         return response
     if response.assessment.gate_triggered is not None:
         # already gated by a domain gate — don't overwrite

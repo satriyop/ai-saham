@@ -72,6 +72,7 @@ def _request(**overrides) -> SwingAnalysisWorkflowRequest:
         "benchmark": "^JKSE",
         "risk_strategy": None,
         "db_path": Path("data.db"),
+        "with_technical_gate": False,
     }
     values.update(overrides)
     return SwingAnalysisWorkflowRequest(**values)
@@ -260,12 +261,10 @@ def test_swing_workflow_canonical_trade_setup_unaffected_by_market_context():
     class FakeRiskEngine:
         def _make_response(self):
             from src.application.use_case.assess_risk_use_case import AssessRiskResponse
-            from src.domain.value_objects.risk_assessment import RiskAssessment, RiskLevel
+            from src.domain.value_objects.risk_assessment import RiskAssessment
             from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
             assessment = RiskAssessment(
                 sensitivity="balanced",
-                risk_level=RiskLevel.LOW_RISK,
-                confidence=100,
                 gate_triggered=None,
                 gate_is_structural=None,
                 rationale=(),

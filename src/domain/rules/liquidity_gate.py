@@ -25,7 +25,6 @@ import statistics
 from decimal import Decimal
 
 from src.domain.rules.risk_gate import GateContext, GateResult, RiskGate
-from src.domain.value_objects.risk_signal import RiskLevel
 
 _THIRD_LINER_CAP_IDR = 1_000_000_000_000  # IDR 1T
 _LIQUIDITY_FLOOR_IDR = 5_000_000_000       # IDR 5B per day
@@ -52,7 +51,7 @@ class LiquidityGate(RiskGate):
         self._liquidity_floor = liquidity_floor_idr
         self._lookback = lookback_days
 
-    def evaluate(self, context: GateContext, current_risk: RiskLevel) -> GateResult:
+    def evaluate(self, context: GateContext) -> GateResult:
         # Rec 6: market cap tiering (static check, runs first)
         if context.market_cap_idr is not None:
             if context.market_cap_idr < self._cap_threshold:
@@ -60,7 +59,6 @@ class LiquidityGate(RiskGate):
                 threshold_t = self._cap_threshold // 1_000_000_000_000
                 return GateResult(
                     triggered=True,
-                    override_risk=RiskLevel.HIGH_RISK,
                     reason=(
                         f"Third-liner: market cap {cap_b}B IDR"
                         f" < {threshold_t}T IDR threshold (manipulation/spread risk)"
@@ -83,7 +81,6 @@ class LiquidityGate(RiskGate):
                     floor_b = self._liquidity_floor // 1_000_000_000
                     return GateResult(
                         triggered=True,
-                        override_risk=RiskLevel.HIGH_RISK,
                         reason=(
                             f"Illiquid: median 20d tx {median_m}M IDR"
                             f" < {floor_b}B IDR/day floor (slippage risk)"
@@ -93,7 +90,6 @@ class LiquidityGate(RiskGate):
 
         return GateResult(
             triggered=False,
-            override_risk=None,
             reason="liquidity and market cap checks passed",
             confidence=100,
         )

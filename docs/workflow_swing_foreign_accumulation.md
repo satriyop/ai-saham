@@ -336,10 +336,10 @@ Setelah screener, pilih 2–4 saham untuk analisis detail. Prioritas:
 
 ## 7. Langkah 3 — Analisis Kandidat Terpilih
 
-Untuk setiap kandidat dari screener, jalankan analisis lengkap dengan setup yang sesuai. Default saat ini adalah `foreign-bounce`.
+Untuk setiap kandidat dari screener, jalankan analisis lengkap dengan setup yang sesuai. Setup tidak dipilih secara implisit; gunakan `--setup` hanya saat ingin mengevaluasi lensa setup tertentu.
 
 ```bash
-saham analyze swing GGRM --setup foreign-bounce --capital 10000000 --with-regime
+saham analyze swing GGRM --setup foreign-bounce --capital 10000000
 ```
 
 ### Katalog Setup
@@ -355,7 +355,7 @@ Semua gate setup bersifat deterministik dan bisa diubah di `config/swing_screene
 
 Secara default, command ini akan mengecek dan refresh data harga + broker flow hanya untuk ticker tersebut kalau cache lokal stale atau belum ada. Gunakan `--no-refresh` untuk mode cached-only/offline, atau `--force-refresh` kalau ingin memaksa fetch ulang dari provider.
 
-Sentiment/news hanya konteks tambahan. Error provider RSS disembunyikan menjadi warning singkat di blok `SENTIMENT` supaya gate deterministik tetap mudah dibaca. Gunakan `--sentiment-verbose` hanya untuk debugging provider berita, atau `--no-sentiment` untuk workflow offline penuh.
+Sentiment/news hanya konteks tambahan dan default-nya mati. Gunakan `--with-sentiment` untuk menampilkan evidence berita; error provider RSS disembunyikan menjadi warning singkat supaya gate deterministik tetap mudah dibaca. Tambahkan `--sentiment-verbose` hanya untuk debugging provider berita.
 
 ### Contoh Output Lengkap
 
@@ -467,7 +467,7 @@ Setup `foreign-bounce` mengevaluasi **6 gate** secara deterministik:
 ### Opsi Analisis Lainnya
 
 ```bash
-# Tanpa setup — analisis lengkap dengan profil risiko
+# Tanpa setup — verdict inti dengan profil risiko
 saham analyze swing BBRI --profile conservative --capital 10000000
 
 # Aggressive profile dengan ATR stop lebih longgar
@@ -476,8 +476,10 @@ saham analyze swing BBRI --profile aggressive --capital 10000000 --atr-mult 2.0
 # Dengan custom entry price
 saham analyze swing BBRI --setup foreign-bounce --capital 10000000 --entry 4825
 
-# Tanpa backtest (lebih cepat)
-saham analyze swing BBRI --setup foreign-bounce --no-backtest
+# Evidence opsional
+saham analyze swing BBRI --strategy foreign-accumulation
+saham analyze swing BBRI --with-flow-detail --explain
+saham analyze swing BBRI --with-sentiment
 
 # Format JSON (untuk integrasi)
 saham analyze swing BBRI --setup foreign-bounce --format json

@@ -47,14 +47,14 @@ def make_assessment(
     snapshot = make_snapshot()
     assessment = RiskAssessment(
         sensitivity=RiskProfile.BALANCED,
-        risk_level=risk_level,
-        confidence=confidence,
         rationale=(
             "RSI 72.50 > threshold (70)",
             "EMA < SMA indicates downtrend",
         ),
         snapshot_date=snapshot.date,
         indicators=snapshot,
+        gate_triggered=("gate" if risk_level == RiskLevel.HIGH_RISK else None),
+        gate_confidence=confidence,
     )
     return assessment, snapshot
 
@@ -227,7 +227,7 @@ class TestDeterminismPreserved:
         )
 
         # Verify assessment is unchanged (immutable dataclass)
-        assert assessment_before.risk_level == RiskLevel.HIGH_RISK
+        assert assessment_before.gate_triggered == "gate"
         assert assessment_before.confidence == 100
         assert assessment_before.sensitivity == RiskProfile.BALANCED
         assert assessment_before.rationale == (
@@ -241,6 +241,6 @@ class TestDeterminismPreserved:
         assessment2, snapshot2 = make_assessment()
 
         # Both assessments should be identical
-        assert assessment1.risk_level == assessment2.risk_level
+        assert assessment1.gate_triggered == assessment2.gate_triggered
         assert assessment1.confidence == assessment2.confidence
         assert assessment1.sensitivity == assessment2.sensitivity

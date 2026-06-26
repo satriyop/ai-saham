@@ -64,6 +64,7 @@ class SwingAnalysisWorkflowRequest:
     benchmark: str
     risk_strategy: str | None
     db_path: Path
+    with_technical_gate: bool = False
 
 
 @dataclass(frozen=True)
@@ -205,7 +206,7 @@ class SwingAnalysisWorkflowUseCase:
         risk_response = None
         try:
             gate_ctx: GateContext | None = None
-            if (self._structural_gates or self._execution_gates) and accumulation_candidate is not None:
+            if (self._structural_gates or self._execution_gates or request.with_technical_gate) and accumulation_candidate is not None:
                 fund = accumulation_candidate.fundamentals
                 bandar = accumulation_candidate.bandar_detector
                 shareholding = accumulation_candidate.shareholding
@@ -218,7 +219,29 @@ class SwingAnalysisWorkflowUseCase:
                     five_day_accdist=bandar.five_day_accdist if bandar else None,
                     bandar_is_distributing=bandar.is_distributing if bandar else False,
                 )
-            if self._risk_engine is not None and gate_ctx is not None:
+            if request.with_technical_gate:
+                # Opt-in TechnicalGate path: route through a use case that
+                # appends TechnicalGate to the execution tier.
+                from src.application.services.indicator_evaluator import IndicatorEvaluator
+                from src.domain.rules.technical_gate import TechnicalGate
+
+                evaluator = IndicatorEvaluator()
+                execution_gates = list(self._execution_gates) + [TechnicalGate(evaluator)]
+                risk_use_case = AssessRiskUseCase(
+                    repository=self._market_repo,
+                    registry=self._registry,
+                    structural_gates=self._structural_gates or None,
+                    execution_gates=execution_gates,
+                    indicator_evaluator=evaluator,
+                )
+                risk_response = risk_use_case.execute(
+                    AssessRiskRequest(
+                        ticker=request.ticker,
+                        sensitivity=request.sensitivity,
+                        gate_context=gate_ctx,
+                    )
+                )
+            elif self._risk_engine is not None and gate_ctx is not None:
                 risk_response = self._risk_engine.assess_with_context(
                     ticker=request.ticker,
                     profile=request.sensitivity,
@@ -315,7 +338,11 @@ class SwingAnalysisWorkflowUseCase:
                         rules_file=rules_path,
                     )
                 )
-                strategy_risk_level = strategy_response.assessment.risk_level_name
+                strategy_risk_level = (
+                    "HIGH_RISK"
+                    if strategy_response.assessment.gate_triggered
+                    else "LOW_RISK"
+                )
             except StrategyNotFoundError:
                 warnings.append(
                     f"Risk strategy '{request.risk_strategy}' not found - gate skipped."
@@ -498,6 +525,7 @@ class SwingAnalysisWorkflowUseCase:
                 "risk_detail": request.include_risk_detail,
                 "market_detail": request.include_market_detail,
                 "market_context": request.with_market_context,
+                "technical_gate": request.with_technical_gate,
             },
             warnings=tuple(warnings),
         )

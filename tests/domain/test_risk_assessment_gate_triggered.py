@@ -24,7 +24,7 @@ from src.domain.rules.liquidity_gate import LiquidityGate
 from src.domain.rules.risk_gate import GateContext
 from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 from src.domain.value_objects.risk_assessment import RiskAssessment
-from src.domain.value_objects.risk_signal import RiskLevel, RiskProfile
+from src.domain.value_objects.risk_signal import RiskProfile
 
 _TODAY = date(2026, 6, 23)
 _1T = 1_000_000_000_000
@@ -45,8 +45,6 @@ class TestRiskAssessmentGateTriggeredField:
         )
         return RiskAssessment(
             sensitivity=RiskProfile.BALANCED,
-            risk_level=RiskLevel.MODERATE,
-            confidence=50,
             rationale=("test",),
             snapshot_date=_TODAY,
             indicators=snapshot,
@@ -63,8 +61,6 @@ class TestRiskAssessmentGateTriggeredField:
         )
         assessment = RiskAssessment(
             sensitivity=RiskProfile.BALANCED,
-            risk_level=RiskLevel.MODERATE,
-            confidence=50,
             rationale=("test",),
             snapshot_date=_TODAY,
             indicators=snapshot,
