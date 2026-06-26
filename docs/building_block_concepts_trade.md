@@ -238,16 +238,18 @@ These are the three multi-step workflows that combine multiple building blocks. 
 
 #### Swing (`saham analyze swing`)
 
-Composite 7-section view that calls:
-1. **Accumulation screen** — direct SQLite + inline scoring
-2. **Risk assessment** — built-in profiles or custom rules
-3. **Backtest** — against `foreign-accumulation` strategy preset
-4. **Regime** — market breadth analysis
-5. **Position sizing** — ATR-based capital allocation
-6. **Flow detail** — per-broker breakdown (if Stockbit)
-7. **Sentiment** — news context
+Verdict-first composite: `SignalEngine + RiskEngine + MarketContextEngine → TradeSetup`. The core verdict panel condenses Action, Signal, Risk, Setup, and Market into one row. Supporting evidence panels (setup gates, strategy backtest, sentiment, broker attribution) are opt-in. RiskEngine now reports `OPEN` (no gate fired) or `BLOCKED (gate: Name)` instead of legacy risk levels.
 
-Does NOT use strategies for its main decision. The backtest panel uses the strategy, but only as a historical reference view.
+Data inputs:
+1. **Accumulation screen** — direct SQLite + inline scoring (→ SignalEngine)
+2. **Risk assessment** — structural/execution gates + optional TechnicalGate (→ RiskEngine)
+3. **Market regime** — breadth analysis (→ MarketContextEngine)
+4. **Setup gates** — opt-in structured gate list (`--setup`)
+5. **Position sizing** — ATR or fixed TP/SL (`--capital`)
+6. **Flow / broker detail** — opt-in per-broker breakdown (`--with-flow-detail`)
+7. **Strategy backtest + sentiment** — opt-in evidence panels (`--strategy`, `--with-sentiment`)
+
+The backtest panel uses the strategy only as a historical reference view; the core verdict does not use strategies.
 
 #### Intraday (`saham screen pre-open` → opening confirmation → log → outcome → review)
 
@@ -298,14 +300,14 @@ SQLite DB
    │
    ├──> AccumulationScreenUseCase  (proprietary scoring, no registry)
    │
-   └──> swing analyze (composite: accum + risk + backtest + regime + sizing)
+    └──> swing analyze (composite: signal engines + risk gates + regimen + opt-in backtest/sentiment/broker)
 ```
 
 The three end-to-end workflows share the **SQLite database** and **indicator registry** but have completely independent decision logic. This is intentional — each has different timeframes and signal types:
 
 | Workflow | Timeframe | Decision Logic | Uses Strategies? |
 |----------|-----------|---------------|-----------------|
-| Swing | 5-20 days | Accumulation + risk + backtest (reference) | Backtest panel only |
+| Swing | 5-20 days | SignalEngine + RiskEngine + MarketContextEngine → TradeSetup | Backtest/sentiment/broker panels only |
 | Intraday | Minutes | 10-step screen + 8-gate confirmation | No |
 | Accum screen | Trend | 120-point scoring | No |
 

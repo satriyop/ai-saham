@@ -344,7 +344,7 @@ saham analyze swing GGRM --setup foreign-bounce --capital 10000000
 
 ### Katalog Setup
 
-Semua gate setup bersifat deterministik dan bisa diubah di `config/swing_screener.yaml`.
+Semua gate setup bersifat deterministik dan bisa diubah di `config/swing_setups.yaml`.
 
 | Setup | Dipakai Saat | Pertanyaan yang Dijawab |
 |-------|--------------|--------------------------|
@@ -359,69 +359,110 @@ Sentiment/news hanya konteks tambahan dan default-nya mati. Gunakan `--with-sent
 
 ### Contoh Output Lengkap
 
+Output menggunakan Rich panel-based rendering. Panel inti (Verdict, Signal, Risk, Plan, Data) selalu ditampilkan; panel evidence (SETUP EVIDENCE, FLOW/BROKER DETAIL, STRATEGY EVIDENCE, SENTIMENT EVIDENCE) bersifat opt-in.
+
 ```
-══════════════════════════════════════════════════════════════════════════════
-SWING VIEW — GGRM · 2026-06-13 · profile=balanced
-══════════════════════════════════════════════════════════════════════════════
-
-DATA
-  Analysis date  2026-06-13   Candles through  2026-06-12   Broker flow through  2026-06-12
-  Regime as of   2026-06-13
-  Refresh        candles=cached-current; broker(idx)=cached-current
-
-ACCUMULATION (7 sessions)                          signal: building
-  Score  72.4   STREAK  4s   NET_DAYS  4/7   FLOW%  +24.8%
-  VWAP   +3.2%    BB%ILE  15%    TREND  SIDE
-  [cons=22.9 streak=15.3 vwap=6.4 rsi=5.8 flow=10.0 bb=8.5]
-
-FLOW DETAIL (30 sessions)                          through: 2026-06-12 · institutional desk
-  Range  2026-05-04 → 2026-06-12   Sessions  30/30
-  Net    +71.81B IDR   BUY/SELL  19/11   STREAK  6s
-  Avg FLOW%  +18.40%   Latest  +8.20B (+24.80%)
-
-BROKER DETAIL (5/5 sessions)            through: 2026-06-12 · stockbit
-  Top buyers       AK +18.20B (4s), CC +12.40B (3s), YP +8.10B (2s)
-  Top sellers      KZ -9.40B (2s), DB -6.70B (1s)
-  Smart flow       +14.10B IDR   Noise flow  +8.10B IDR
-  Weighted net     +20.45B IDR   Smart share  58.4%
-  Concentration    top buyer 38.0%; top seller 41.6%
-  Quality          broad accumulation; smart support
-
-SETUP — foreign-bounce                             match: MATCH
-  PASS            score           actual=72.4       required=>= 70
-  PASS            vwap_disc_pct   actual=+3.2%      required=>= +3%
-  PASS            trend           actual=SIDE        required=SIDE
-  PASS            flow_pct        actual=+24.8%      required=>= +5%
-  PASS            RSI present     actual=42.5        required=present
-  PASS            RSI             actual=42.5        required=<= 60
-  Tested plan: TP +5%, SL -5%, max hold 10 trading days.
-
-MARKET REGIME                                     SIDEWAYS
-  Breadth SMA20  54.2%   5d change  -2.1%
-  Benchmark 20d  -1.4%   Foreign flow breadth  23.1%
-
-RISK CONFIRMATION                                 verdict: LOW_RISK  conf: 71/100
-  SMA20    47,200   EMA20    47,050   RSI14   42.5
-  · MAs are aligned — bullish structure
-  · RSI below 50 — room to run
-
-SETUP SIZING
-  Entry    47,100   Stop  44,745  (-5.00%)   Target   49,455  (+5.00%)
-  Position  2 lots = 200 shares   Cost  9,420,000 IDR  (94.2% of capital)
-  Risk        94,000 IDR   Max hold  10 trading days
-  (5% stop = 1.50× ATR14)
-
-HISTORY  (foreign-accumulation)  8 trades
-  Win rate  62.5%   Profit factor  1.84   Max DD  -8.2%
-
-SENTIMENT (3d)                                     call: NEUTRAL
-  4 headlines   (+1 / =2 / -1)   confidence  62%
-
-══════════════════════════════════════════════════════════════════════════════
-SUMMARY: Score 72.4 · LOW_RISK · 62% WR · neutral news
-PLAN:  ENTER setup passed. Consider 2 lots at 47,100; TP 49,455; SL 44,745; max hold 10 trading days.
-══════════════════════════════════════════════════════════════════════════════
+╭────────────────────────────────────── Swing Analysis - GGRM ──────────────────────────────────────╮
+│ ╭─────────────────────────────────────────── Verdict ───────────────────────────────────────────╮ │
+│ │ Action Price   Signal  Risk Setup  Market                                                      │ │
+│ │ ENTER  47,100  STRONG  OPEN  MATCH  SIDEWAYS                                                  │ │
+│ ╰───────────────────────────────────────────────────────────────────────────────────────────────╯ │
+│ ╭──────────────────────────────────────────── Signal ───────────────────────────────────────────╮ │
+│ │ STRONG score 72.4  ENTER                                                                      │ │
+│ │ Bandar Foreign Insider Season Analyst Fwd                                                     │ │
+│ │     22      60      50     55      45  55                                                     │ │
+│ ╰───────────────────────────────────────────────────────────────────────────────────────────────╯ │
+│ ╭───────────────────────────────────────────── Risk ────────────────────────────────────────────╮ │
+│ │ Gates     OPEN               no gate fired                                                    │ │
+│ │ Technical off                use --with-technical-gate to enable                              │ │
+│ ╰───────────────────────────────────────────────────────────────────────────────────────────────╯ │
+│ ╭─────────────────────────────────────── Market Context ────────────────────────────────────────╮ │
+│ │ Market       SIDEWAYS (4/7)      conviction 0.57                                              │ │
+│ │ Signal       score 72.4 → 78.5   from: BULLISH impact (+8%)                                   │ │
+│ │ Risk         gate tightened      regime: SIDEWAYS; gate: regime:SIDEWAYS                       │ │
+│ ╰───────────────────────────────────────────────────────────────────────────────────────────────╯ │
+│ ╭───────────────────────────────────────────── Plan ────────────────────────────────────────────╮ │
+│ │ ENTER setup passed. Consider 2 lots at 47,100; TP 49,455; SL 44,745; max hold 10d.            │ │
+│ ╰───────────────────────────────────────────────────────────────────────────────────────────────╯ │
+│ ╭───────────────────────────────────────────── Data ────────────────────────────────────────────╮ │
+│ │ Candles  2026-06-12  ok                                                                       │ │
+│ │ Broker   2026-06-12  ok                                                                       │ │
+│ │ Quality  OK          broad accumulation; smart support                                        │ │
+│ │ Notation Papan Utama                                                                            │ │
+│ ╰───────────────────────────────────────────────────────────────────────────────────────────────╯ │
+╰──────────────────────────────────────────── 2026-06-13 ───────────────────────────────────────────╯
 ```
+
+Dengan `--with-technical-gate`, panel Risk menampilkan baris Technical:
+```
+│ │ Gates     OPEN               no gate fired                                                    │ │
+│ │ Technical RSI 43 · SMA above gate: open                                                       │ │
+```
+
+Panel evidence berikut muncul saat opsi terkait digunakan:
+
+**SETUP EVIDENCE** (`--setup foreign-bounce`):
+```
+╭───────────────────────────────────────── SETUP EVIDENCE ─────────────────────────────────────────╮
+│ MATCH - foreign-bounce                                                                           │
+│ Result Gate        Actual Required Meaning                                                       │
+│ PASS   score       72.4   >= 70    overall accumulation conviction                               │
+│ PASS   fvwap%      3.2%   >= +3%   foreign holders still have price support incentive            │
+│ PASS   trend       SIDE   SIDE     chart regime required by the setup                            │
+│ PASS   flow_pct    24.8%  >= +5%   foreign net flow is meaningful versus turnover                │
+│ PASS   RSI present 42.5   present  momentum indicator is available                               │
+│ PASS   RSI         42.5   <= 60    momentum is not overextended                                  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+**FLOW / BROKER DETAIL** (`--with-flow-detail`):
+```
+╭─────────────────────────────────────── FLOW DETAIL ───────────────────────────────────────╮
+│ Accumulation (7 sessions)   Score 72.4  STREAK 4s  FLOW% +24.8%  VWAP +3.2%  BB%ILE 15%   │
+│   [cons=22.9 streak=15.3 vwap=6.4 rsi=5.8 flow=10.0 bb=8.5]                              │
+│                                                                                            │
+│ Flow (30 sessions)          +71.81B IDR  BUY/SELL 19/11  STREAK 6s  Avg +18.4%             │
+│                                                                                            │
+│ Additional Signals & Flags                                                                │
+│ 📊 ANALYST: 35B 2H | target Rp8,827 (+40.7%)                                             │
+│ 🏦 HOLDING: DWIMURIA 54.9% | Inst 31.9% | Individual 8.7%                                │
+│ 🔍 BANDAR: Score +5 (Acc, top1 47%)                                                       │
+│ 📈 FUNDAM: P/E 18.3, ROE 21.2%, F-Score 7, quality=True                                  │
+│ ⭐ INSIDER BUY — John Doe (Comm) BUY 500,000 @ 1,200                                      │
+│ ⚠ DIVIDEND RISK — ex-date within hold window                                             │
+│ ★ SEASONAL Dec (score +0.92)                                                              │
+╰───────────────────────────────────────────────────────────────────────────────────────────╯
+
+╭─────────────────────────────────────── BROKER DETAIL ───────────────────────────────────────╮
+│ 5/5 sessions · stockbit                                                                      │
+│ Top buyers       AK +18.20B (4s), CC +12.40B (3s), YP +8.10B (2s)                           │
+│ Top sellers      KZ -9.40B (2s), DB -6.70B (1s)                                             │
+│ Smart flow       +14.10B IDR   Noise flow  +8.10B IDR                                       │
+│ Weighted net     +20.45B IDR   Smart share  58.4%                                           │
+│ Concentration    top buyer 38.0%; top seller 41.6%                                          │
+│ Quality          broad accumulation; smart support                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+**STRATEGY EVIDENCE** (`--strategy foreign-accumulation`):
+```
+╭─────────────────────────────────────── STRATEGY EVIDENCE ───────────────────────────────────────╮
+│ Historical Backtest (foreign-accumulation): 8 trades                                             │
+│ Evidence only: this panel does not change TradeSetup.action.                                    │
+│ Win Rate Profit Factor Max Drawdown Avg Win        Avg Loss                                     │
+│ 62.5%    1.84          8.2%         4,621,503 IDR  -3,041,931 IDR                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+**SENTIMENT EVIDENCE** (`--with-sentiment`):
+```
+╭─────────────────────────────────────── SENTIMENT EVIDENCE ───────────────────────────────────────╮
+│ News Sentiment (3d): NEUTRAL                                                                      │
+│ Headlines scanned: 4 (+1 / =2 / -1) | Confidence: 62%                                            │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+RiskEngine sekarang menampilkan `OPEN` (tidak ada gate terpicu) atau `BLOCKED (gate: Nama)` — label risk level lama (`LOW_RISK`/`MODERATE`/`HIGH_RISK`) tidak lagi muncul di output swing. Gunakan `--with-risk-detail` untuk breakdown gate-by-gate dengan nilai SMA/EMA/RSI.
 
 `BROKER DETAIL` hanya muncul kalau cache broker punya transaksi per-broker, biasanya dari Stockbit. Ini adalah view top broker bernama, bukan time-series aggregate foreign flow seperti `FLOW DETAIL`. Pakai blok ini sebagai konteks konfirmasi:
 
@@ -454,7 +495,7 @@ Setup `foreign-bounce` mengevaluasi **6 gate** secara deterministik:
 - `PARTIAL` — setup hampir cocok, tetapi masih ada gate gagal dalam batas toleransi
 - `NO_MATCH` — terlalu banyak gate gagal atau evidence wajib tidak tersedia
 
-**Regime-adaptive TP/SL:** TP dan SL setup bervariasi berdasarkan regime entry, di-load dari `config/swing_screener.yaml`:
+**Regime-adaptive TP/SL:** TP dan SL setup bervariasi berdasarkan regime entry, di-load dari `config/swing_targets.yaml`:
 
 | Regime | TP | SL | R:R |
 |--------|----|----|-----|
@@ -467,19 +508,25 @@ Setup `foreign-bounce` mengevaluasi **6 gate** secara deterministik:
 ### Opsi Analisis Lainnya
 
 ```bash
-# Tanpa setup — verdict inti dengan profil risiko
-saham analyze swing BBRI --profile conservative --capital 10000000
+# Tanpa setup — verdict inti dengan ATR sizing
+saham analyze swing BBRI --capital 10000000 --risk-pct 1
 
-# Aggressive profile dengan ATR stop lebih longgar
-saham analyze swing BBRI --profile aggressive --capital 10000000 --atr-mult 2.0
+# Dengan entry price override dan risk ratio
+saham analyze swing BBRI --capital 10000000 --entry 4825 --rr 2.5
 
-# Dengan custom entry price
+# Dengan custom entry price dan setup
 saham analyze swing BBRI --setup foreign-bounce --capital 10000000 --entry 4825
+
+# Dengan TechnicalGate execution gate
+saham analyze swing BBRI --setup foreign-bounce --capital 10000000 --with-technical-gate
 
 # Evidence opsional
 saham analyze swing BBRI --strategy foreign-accumulation
 saham analyze swing BBRI --with-flow-detail --explain
 saham analyze swing BBRI --with-sentiment
+
+# Market context preview
+saham analyze swing BBRI --with-market-context
 
 # Format JSON (untuk integrasi)
 saham analyze swing BBRI --setup foreign-bounce --format json

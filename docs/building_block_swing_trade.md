@@ -115,7 +115,7 @@ The swing trade feature is a **unified composite workflow** that combines accumu
 
 ## `swing analyze` — Internal Flow (Core Verdict + Evidence)
 
-The single-ticker `saham analyze swing BBCA` command centers the core deterministic verdict on `SignalEngine + RiskEngine + MarketContextEngine -> TradeSetup`. Setup gates, strategy backtest, sentiment, and detailed broker attribution are optional evidence modules for human inspection and learning-loop attribution; they do not independently alter `TradeSetup.action`.
+The single-ticker `saham analyze swing BBCA` command centers the core deterministic verdict on `SignalEngine + RiskEngine -> TradeSetup`. Market context, setup gates, strategy backtest, sentiment, and detailed broker attribution are optional evidence modules for human inspection and learning-loop attribution; they do not independently alter `TradeSetup.action`.
 
 ```
 ┌─────────────┐
@@ -213,7 +213,7 @@ The single-ticker `saham analyze swing BBCA` command centers the core determinis
        │
        ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  STEP 10: Market regime (default, unless --no-regime)          │
+│  STEP 10: Market regime (opt-in via --with-market-context)     │
 │  MarketRegimeUseCase                                           │
 │    ├── Benchmark close + SMA20 + SMA50                         │
 │    ├── Breadth: % stocks above SMA20 + 5d change               │
@@ -227,17 +227,26 @@ The single-ticker `saham analyze swing BBCA` command centers the core determinis
 │  STEP 11: Output                                               │
 │  IF --format json: JSON dump of all outputs                    │
 │  IF --format table (default):                                  │
-│    _print_swing_output()                                       │
-│    ├── DATA section (freshness)                                │
-│    ├── ACCUMULATION section (score, streak, VWAP, BB)         │
-│    ├── FLOW DETAIL section (net, buy/sell, avg flow %)        │
-│    ├── SETUP section (MATCH/PARTIAL/NO_MATCH + gate details)      │
-│    ├── MARKET REGIME section (breadth, change, flow)          │
-│    ├── RISK CONFIRMATION section (SMA, EMA, RSI, rationale)   │
-│    ├── SETUP SIZING / SIZING section (lots, stop, target)     │
-│    ├── HISTORY section (win rate, profit factor, max DD)      │
-│    ├── SENTIMENT section (call, distribution, confidence)     │
-│    └── SUMMARY + PLAN section (action recommendation)         │
+│    print_swing_rich_overview()  [always shows core panels]     │
+│    ├── Verdict panel (Action, Price, Signal, Risk, Setup,      │
+│    │                  Market — condensed in one compact table) │
+│    ├── Signal panel (score, factor breakdown, entry quality)   │
+│    ├── Risk panel (Gates: OPEN/BLOCKED, Technical: on/off)    │
+│    ├── Market Context panel (regime label, signal/risk impact) │
+│    ├── Plan panel (action text, sizing summary)                │
+│    └── Data panel (candle/broker freshness, quality, notation) │
+│                                                                  │
+│  print_swing_output()  [opt-in evidence panels below core]     │
+│    ├── Market Context Preview (if preview data available)      │
+│    ├── SETUP EVIDENCE (MATCH/PARTIAL/NO_MATCH + gate details) │
+│    ├── ENGINE DETAIL panels (signal/risk/market w/ --explain) │
+│    ├── FLOW / BROKER DETAIL (w/ --with-flow-detail)            │
+│    ├── STRATEGY EVIDENCE (win rate, PF, max DD w/ --strategy) │
+│    └── SENTIMENT EVIDENCE (call, distribution, w/ --sentiment)│
+│                                                                  │
+│  RiskEngine displays OPEN (no gate) or BLOCKED (gate: Name)    │
+│  instead of legacy LOW_RISK/MODERATE/HIGH_RISK labels.         │
+│  Use --with-technical-gate to enable SMA/EMA/RSI gate in Risk.│
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -422,6 +431,6 @@ analyze regime  needs: candles.* + broker_flow.* (for breadth)
 1. **Swing is not a single use case** — it's an **adapter-level orchestration** that calls 6+ use cases sequentially.
 2. **Every pipeline is optional and fault-tolerant** — each step is wrapped in `try/except`, so missing data doesn't crash the whole command.
 3. **Regime awareness is a filter, not a signal** — market regime only blocks entries, it doesn't generate them.
-4. **Setup logic is in the adapter, calibration is in config** — the `foreign-bounce` gate logic lives in `analyze_swing_commands.py`, but calibration parameters (TP/SL per regime, smart-money broker codes, noise broker filters) load from `config/swing_screener.yaml`.
+4. **Setup logic is in the application layer, calibration is in config** — setup gates load from `config/swing_setups.yaml`, TP/SL targets from `config/swing_targets.yaml`, and broker-quality inputs from `config/accumulation_screener.yaml`.
 5. **Position sizer is pure math** — no I/O, no ports. Works purely from Decimal inputs.
 6. **Auto-refresh is the default** — every `analyze swing` refetches candles + broker data before analyzing, unless `--no-refresh`.

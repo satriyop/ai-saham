@@ -73,7 +73,7 @@ saham analyze regime --universe idx80
 - **Breadth 5d change**: Whether breadth is improving or deteriorating. A negative change with a SIDEWAYS label is a warning.
 - **Foreign flow breadth**: % of universe stocks with positive net foreign flow. Falling sharply = institutions are selling, not buying.
 
-`saham analyze swing` includes regime context by default. Use `--no-regime` only when you want a faster cached-only read without market context.
+`saham analyze swing` by default shows the core verdict only (SignalEngine + RiskEngine → TradeSetup). Market context is an opt-in evidence panel — add `--with-market-context` to see IHSG breadth, benchmark trend, and regime impact on the TradeSetup.
 
 ---
 
@@ -125,7 +125,7 @@ A stock that scores 75 on 7 sessions, 72 on 30 sessions, and 68 on 90 sessions i
 
 ## Step 4 — Deep-Dive with `saham analyze swing`
 
-`saham analyze swing` is the cornerstone command. By default it gives a deterministic core verdict: `SignalEngine + RiskEngine + MarketContextEngine -> TradeSetup`. Backtest, sentiment, setup gates, and detailed broker attribution are evidence panels you opt into when you need them.
+`saham analyze swing` is the cornerstone command. By default it gives a deterministic core verdict: `SignalEngine + RiskEngine -> TradeSetup`. Market context, backtest, sentiment, setup gates, and detailed broker attribution are evidence panels you opt into when you need them.
 
 ### Basic usage
 
@@ -145,7 +145,7 @@ Sentiment is optional context and is off by default. Provider/RSS errors are sup
 
 ### With the `foreign-bounce` setup
 
-The `foreign-bounce` setup applies a structured gate checklist to determine whether this specific setup meets entry criteria. When capital is provided, it also computes the exact lot size using regime-adaptive TP/SL from `config/swing_screener.yaml`.
+The `foreign-bounce` setup applies a structured gate checklist to determine whether this specific setup meets entry criteria. When capital is provided, it also computes the exact lot size using regime-adaptive TP/SL from `config/swing_targets.yaml`.
 
 ```bash
 saham analyze swing BBRI --setup foreign-bounce
@@ -170,7 +170,7 @@ saham analyze swing BBRI --setup foreign-bounce --capital 50000000 --risk-pct 2
 - `PARTIAL` — close but not fully confirmed; wait for failed gates to improve
 - `NO_MATCH` — too many gates failed or required evidence is missing
 
-**Regime-adaptive TP/SL:** The system loads TP/SL targets based on entry regime from `config/swing_screener.yaml`. Regime context is active by default, so targets adjust automatically when regime data is available:
+**Regime-adaptive TP/SL:** The system loads TP/SL targets based on entry regime from `config/swing_targets.yaml`. Regime context is active by default, so targets adjust automatically when regime data is available:
 
 | Regime | TP | SL | R:R |
 |--------|----|----|-----|
@@ -180,7 +180,7 @@ saham analyze swing BBRI --setup foreign-bounce --capital 50000000 --risk-pct 2
 | RISK_OFF | +3% | -3% | 1:1 |
 | Default | +5% | -5% | 1:1 |
 
-With `--no-regime`, the default SIDEWAYS targets (5%/5%) are used.
+The TP/SL defaults above apply when regime context is available (via `--with-market-context`). Without market context, the SIDEWAYS defaults (5%/5%) are used.
 
 **Why 1:1 R:R in SIDEWAYS?**
 
@@ -199,12 +199,11 @@ Note: `--rr` and `--atr-mult` flags are only active when no setup is used. When 
 ### Market regime context
 
 ```bash
-saham analyze swing BBRI --setup foreign-bounce
-saham analyze swing BBRI --setup foreign-bounce --regime-universe lq45
-saham analyze swing BBRI --setup foreign-bounce --no-regime
+saham analyze swing BBRI --setup foreign-bounce --with-market-context
+saham analyze swing BBRI --setup foreign-bounce --with-market-context --regime-universe lq45
 ```
 
-Market context is included by default and shows IHSG breadth and benchmark context at the moment of your analysis. Use `--no-regime` to suppress it.
+Market context is an opt-in evidence panel. By default it is not shown. Add `--with-market-context` to see IHSG breadth, benchmark trend, and the regime's impact on TradeSetup signal/risk scores.
 
 ### With ATR-based sizing (no setup)
 
@@ -219,79 +218,49 @@ This uses ATR(14) to calculate the stop distance (`stop = entry − 1.5 × ATR`)
 
 ### Output sections
 
+Output uses Rich panel-based rendering. The core verdict panel is always shown; evidence panels (setup gates, broker detail, strategy backtest, sentiment) are opt-in via flags.
+
 ```
-══════════════════════════════════════════════════════════════════════════════
-SWING VIEW — BBRI · 2026-06-12 · profile=balanced
-══════════════════════════════════════════════════════════════════════════════
-
-DATA
-  Analysis date  2026-06-12   Candles through  2026-06-12   Broker flow through  2026-06-12
-  Regime as of   2026-06-12
-  Refresh        candles=cached-current; broker(idx)=cached-current
-
-ACCUMULATION (7 sessions)                          signal: building
-  Score  74.1   STREAK  6s   NET_DAYS  5/7   FLOW%  +18.4%
-  VWAP   +4.2%    BB%ILE  15%    TREND  SIDE
-  [cons=28.6 streak=20.1 vwap=8.4 rsi=6.2 flow=9.2 bb=8.5]
-
-ENRICHMENT (stockbit, cached by `saham fetch market`)
-  📊 ANALYST: 35B 2H | target Rp8,827 (+40.7%)
-  🏦 HOLDING: DWIMURIA 54.9% | Inst 31.9% | Individual 8.7%
-  🔍 BANDAR: Score +5 (Acc, top1 47%)
-  📈 FUNDAM: P/E 18.3, ROE 21.2%, F-Score 7, quality=True
-  ⭐ INSIDER BUY — John Doe (Comm) BUY 500,000 @ 1,200
-  ⚠ DIVIDEND RISK
-  SEASONAL +0.9% (60%wr, 5y)
-
-FLOW DETAIL (30 sessions)                          through: 2026-06-12 · institutional desk
-  Range  2026-05-04 → 2026-06-12   Sessions  30/30
-  Net    +71.81B IDR   BUY/SELL  19/11   STREAK  6s
-  Avg FLOW%  +18.40%   Latest  +8.20B (+24.80%)
-
-BROKER DETAIL (5/5 sessions)            through: 2026-06-12 · stockbit
-  Top buyers       AK +18.20B (4s), CC +12.40B (3s), YP +8.10B (2s)
-  Top sellers      KZ -9.40B (2s), DB -6.70B (1s)
-  Smart flow       +14.10B IDR   Noise flow  +8.10B IDR
-  Weighted net     +20.45B IDR   Smart share  58.4%
-  Concentration    top buyer 38.0%; top seller 41.6%
-  Quality          broad accumulation; smart support
-
-SETUP — foreign-bounce                            match: MATCH
-  PASS            score           actual=74.1       required=>= 70
-  PASS            vwap_disc_pct   actual=+4.2%      required=>= +3%
-  PASS            trend           actual=SIDE        required=SIDE
-  PASS            flow_pct        actual=+18.4%      required=>= +5%
-  PASS            RSI present     actual=44.5        required=present
-  PASS            RSI             actual=44.5        required=<= 60
-  Tested plan: TP +5%, SL -5%, max hold 10 trading days.
-
-MARKET REGIME                                     SIDEWAYS
-  Breadth SMA20  52.3%   5d change  -2.1%
-  Benchmark 20d  -1.2%   Foreign flow breadth  38.1%
-
-RISK CONFIRMATION                                 verdict: LOW_RISK  conf: 71/100
-  SMA20     4,810   EMA20     4,825   RSI14   44.5
-  · RSI below 50 — room to run
-
-SETUP SIZING
-  Entry    4,840   Stop  4,598  (-5.00%)   Target   5,082  (+5.00%)
-  Position  4 lots = 400 shares   Cost  1,936,000 IDR  (19.4% of capital)
-  Risk       96,800 IDR   Max hold  10 trading days
-  (5% stop = 1.20× ATR14)
-
-HISTORY  (foreign-accumulation)  28 trades
-  Win rate  58.3%   Profit factor  1.84   Max DD  -12.4%
-
-SENTIMENT (3d)                                     call: POSITIVE
-  12 headlines   (+7 / =3 / -2)   confidence  58%
-
-══════════════════════════════════════════════════════════════════════════════
-SUMMARY: Score 74.1 · LOW_RISK · 58% WR · positive news
-PLAN:  ENTER setup passed. Consider 4 lots at 4,840; TP 5,082; SL 4,598; max hold 10 trading days.
-══════════════════════════════════════════════════════════════════════════════
+╭────────────────────────────────────── Swing Analysis - BBRI ──────────────────────────────────────╮
+│ ╭─────────────────────────────────────────── Verdict ───────────────────────────────────────────╮ │
+│ │ Action Price  Signal  Risk Setup  Market                                                       │ │
+│ │ ENTER  4,840  STRONG  OPEN  MATCH  SIDEWAYS                                                   │ │
+│ ╰───────────────────────────────────────────────────────────────────────────────────────────────╯ │
+│ ╭──────────────────────────────────────────── Signal ───────────────────────────────────────────╮ │
+│ │ STRONG score 74.1  ENTER                                                                      │ │
+│ │ Bandar Foreign Insider Season Analyst Fwd                                                     │ │
+│ │     28      60      50     60      50  50                                                     │ │
+│ ╰───────────────────────────────────────────────────────────────────────────────────────────────╯ │
+│ ╭───────────────────────────────────────────── Risk ────────────────────────────────────────────╮ │
+│ │ Gates     OPEN               no gate fired                                                    │ │
+│ │ Technical off                use --with-technical-gate to enable                              │ │
+│ ╰───────────────────────────────────────────────────────────────────────────────────────────────╯ │
+│ ╭─────────────────────────────────────── Market Context ────────────────────────────────────────╮ │
+│ │ Market       SIDEWAYS (4/7)      conviction 0.57                                              │ │
+│ │ Signal       score 74.1 → 80.2   from: BULLISH impact (+8%)                                   │ │
+│ │ Risk         gate tightened      regime: SIDEWAYS; gate: regime:SIDEWAYS                       │ │
+│ ╰───────────────────────────────────────────────────────────────────────────────────────────────╯ │
+│ ╭───────────────────────────────────────────── Plan ────────────────────────────────────────────╮ │
+│ │ ENTER setup passed. Consider 4 lots at 4,840; TP 5,082; SL 4,598; max hold 10d.              │ │
+│ ╰───────────────────────────────────────────────────────────────────────────────────────────────╯ │
+│ ╭───────────────────────────────────────────── Data ────────────────────────────────────────────╮ │
+│ │ Candles  2026-06-12  ok                                                                       │ │
+│ │ Broker   2026-06-12  ok                                                                       │ │
+│ │ Quality  OK          broad accumulation; smart support                                        │ │
+│ │ Notation Papan Utama                                                                            │ │
+│ ╰───────────────────────────────────────────────────────────────────────────────────────────────╯ │
+╰──────────────────────────────────────────── 2026-06-12 ───────────────────────────────────────────╯
 ```
 
-`BROKER DETAIL` appears only when the cached broker summaries contain named per-broker transactions, typically from Stockbit. This is a named top-broker view, not the same as the aggregate foreign-flow time series in `FLOW DETAIL`. Use it as confirmation context:
+RiskEngine now reports `OPEN` (no gate fired) or `BLOCKED (gate: Name)` — legacy risk level labels (`LOW_RISK`/`MODERATE`/`HIGH_RISK`) are no longer shown in swing output. Use `--with-risk-detail` for the full gate-by-gate breakdown with SMA/EMA/RSI values.
+
+An optional `--with-technical-gate` enables the SMA/EMA/RSI TechnicalGate in the Risk panel:
+```
+│ │ Gates     OPEN               no gate fired                                                    │ │
+│ │ Technical RSI 45 · SMA below gate: open                                                       │ │
+```
+
+`BROKER DETAIL` (opt-in via `--with-flow-detail`) appears only when the cached broker summaries contain named per-broker transactions, typically from Stockbit. This is a named top-broker view, not the same as the aggregate foreign-flow time series in `FLOW DETAIL`. Use it as confirmation context:
 
 - `broad accumulation` supports the aggregate flow signal.
 - `concentrated accumulation` means one broker dominates the flow; downgrade confidence unless the chart is constructive.
@@ -322,7 +291,6 @@ All signals are pre-warmed by `saham fetch market --universe lq45` and served fr
 
 | Option | Default | Description |
 |---|---|---|
-| `--profile` | `balanced` | Risk profile: balanced / conservative / aggressive |
 | `--setup` | none | Optional swing setup lens: `foreign-bounce`, `coiled-spring`, `smart-money-confirmed`, `pullback-continuation` |
 | `--window` | `7` | Accumulation analysis window in broker sessions |
 | `--flow-window` | `30` | Broker-flow detail window in broker sessions |
@@ -331,7 +299,6 @@ All signals are pre-warmed by `saham fetch market --universe lq45` and served fr
 | `--entry` | latest close | Entry price override |
 | `--atr-mult` | `1.5` | ATR multiplier for stop (ATR-mode only) |
 | `--rr` | `2.0` | Reward:risk ratio for target (ATR-mode only) |
-| `--no-regime` | off | Disable default market regime section |
 | `--regime-universe` | `idx80` | Universe for breadth context |
 | `--benchmark` | `^JKSE` | Benchmark ticker for regime |
 | `--with-sentiment` | off | Include news sentiment evidence |
@@ -339,6 +306,8 @@ All signals are pre-warmed by `saham fetch market --universe lq45` and served fr
 | `--with-signal-detail` | off | Include SignalEngine factor detail |
 | `--with-risk-detail` | off | Include RiskEngine indicator/gate detail |
 | `--with-market-detail` | off | Include full MCE factor detail |
+| `--with-market-context` | off | Show MarketContextEngine factor detail |
+| `--with-technical-gate` | off | Enable optional TechnicalGate (SMA/EMA/RSI execution gate). Off by default. Adds "Technical" row to Risk panel. |
 | `--explain` | off | Shortcut for signal/risk/market detail |
 | `--full` | off | Include all optional evidence except named setup; uses `foreign-accumulation` if `--strategy` is omitted |
 | `--sentiment-verbose` | off | Show optional sentiment provider errors/noise |
