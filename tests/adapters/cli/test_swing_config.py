@@ -13,7 +13,7 @@ from src.adapters.cli.analyze_swing_commands import (
 )
 from src.infrastructure.config.swing_config import SwingConfig as _SwingConfig
 from src.infrastructure.config.swing_config import (
-    load_swing_config as _load_swing_screener_config_typed,
+    load_swing_config as _load_swing_config,
 )
 
 
@@ -29,7 +29,7 @@ def test_loads_smart_money_brokers_from_yaml(tmp_path):
     cfg = _write_yaml(tmp_path / "s.yaml", {
         "broker_quality": {"smart_money": {"brokers": ["AK", "ZP"], "weight": 1.5}},
     })
-    result = _load_swing_screener_config_typed(cfg)
+    result = _load_swing_config(cfg)
     assert result.smart_money_brokers == ("AK", "ZP")
 
 
@@ -37,7 +37,7 @@ def test_loads_noise_brokers_from_yaml(tmp_path):
     cfg = _write_yaml(tmp_path / "s.yaml", {
         "broker_quality": {"noise": {"brokers": ["YP"], "weight": 0.5}},
     })
-    result = _load_swing_screener_config_typed(cfg)
+    result = _load_swing_config(cfg)
     assert result.noise_brokers == ("YP",)
 
 
@@ -48,7 +48,7 @@ def test_loads_broker_weights_from_yaml(tmp_path):
             "noise": {"brokers": ["YP"], "weight": 0.3},
         },
     })
-    result = _load_swing_screener_config_typed(cfg)
+    result = _load_swing_config(cfg)
     assert result.smart_weight == Decimal("2.0")
     assert result.noise_weight == Decimal("0.3")
 
@@ -61,7 +61,7 @@ def test_loads_gate_thresholds_from_yaml(tmp_path):
             "partial_max_failed_gates": 1,
         },
     })
-    result = _load_swing_screener_config_typed(cfg)
+    result = _load_swing_config(cfg)
     assert result.gate_min_score == 65.0
     assert result.gate_max_rsi == 55.0
     assert result.gate_required_trend == "UP"
@@ -89,7 +89,7 @@ def test_loads_setup_catalog_thresholds_from_yaml(tmp_path):
             },
         },
     })
-    result = _load_swing_screener_config_typed(cfg)
+    result = _load_swing_config(cfg)
 
     assert result.coiled_spring_enabled is False
     assert result.coiled_spring_gate_min_score == 61.0
@@ -108,7 +108,7 @@ def test_loads_verdict_thresholds_from_yaml(tmp_path):
     cfg = _write_yaml(tmp_path / "s.yaml", {
         "verdicts": {"enter_min_score": 75, "watch_min_score": 45},
     })
-    result = _load_swing_screener_config_typed(cfg)
+    result = _load_swing_config(cfg)
     assert result.enter_min_score == 75.0
     assert result.watch_min_score == 45.0
 
@@ -117,20 +117,36 @@ def test_loads_signal_thresholds_from_yaml(tmp_path):
     cfg = _write_yaml(tmp_path / "s.yaml", {
         "verdicts": {"signals": {"strong_min_streak": 10, "building_min_score": 55.0}},
     })
-    result = _load_swing_screener_config_typed(cfg)
+    result = _load_swing_config(cfg)
     assert result.strong_min_streak == 10
     assert result.building_min_score == 55.0
 
 
+def test_loads_resistance_and_corporate_action_thresholds_from_yaml(tmp_path):
+    cfg = _write_yaml(tmp_path / "s.yaml", {
+        "resistance": {
+            "enabled": False,
+            "headroom_min_pct": 7.5,
+        },
+        "corporate_actions": {
+            "ex_date_warning_days": 15,
+        },
+    })
+    result = _load_swing_config(cfg)
+    assert result.resistance_gate_enabled is False
+    assert result.resistance_headroom_min_pct == 7.5
+    assert result.ex_date_warning_days == 15
+
+
 def test_falls_back_to_defaults_when_file_missing():
-    result = _load_swing_screener_config_typed(Path("/nonexistent/swing_screener.yaml"))
+    result = _load_swing_config(Path("/nonexistent/swing_config.yaml"))
     assert result == _SwingConfig()
 
 
 def test_falls_back_to_defaults_when_yaml_invalid(tmp_path):
     bad = tmp_path / "s.yaml"
     bad.write_text("{ bad yaml: :")
-    result = _load_swing_screener_config_typed(bad)
+    result = _load_swing_config(bad)
     assert result == _SwingConfig()
 
 
@@ -138,7 +154,7 @@ def test_falls_back_to_defaults_when_broker_codes_empty(tmp_path):
     cfg = _write_yaml(tmp_path / "s.yaml", {
         "broker_quality": {"smart_money": {"brokers": []}},
     })
-    result = _load_swing_screener_config_typed(cfg)
+    result = _load_swing_config(cfg)
     # Empty list → fall back to hardcoded defaults
     assert result.smart_money_brokers == _SwingConfig().smart_money_brokers
 
@@ -147,7 +163,7 @@ def test_strips_and_uppercases_codes(tmp_path):
     cfg = _write_yaml(tmp_path / "s.yaml", {
         "broker_quality": {"smart_money": {"brokers": ["ak", " zp "]}},
     })
-    result = _load_swing_screener_config_typed(cfg)
+    result = _load_swing_config(cfg)
     assert result.smart_money_brokers == ("AK", "ZP")
 
 
@@ -156,15 +172,15 @@ def test_partial_yaml_uses_defaults_for_missing_sections(tmp_path):
     cfg = _write_yaml(tmp_path / "s.yaml", {
         "verdicts": {"enter_min_score": 75},
     })
-    result = _load_swing_screener_config_typed(cfg)
+    result = _load_swing_config(cfg)
     assert result.enter_min_score == 75.0
     assert result.smart_money_brokers == _SwingConfig().smart_money_brokers
     assert result.gate_min_score == _SwingConfig().gate_min_score
 
 
 def test_live_config_loads_without_error():
-    """Smoke test: config/swing_screener.yaml is valid and matches expected values."""
-    result = _load_swing_screener_config_typed(Path("config/swing_screener.yaml"))
+    """Smoke test: split swing workflow config is valid and matches expected values."""
+    result = _load_swing_config()
     assert len(result.smart_money_brokers) > 0
     assert len(result.noise_brokers) > 0
     assert result.gate_min_score == 70.0
@@ -172,6 +188,9 @@ def test_live_config_loads_without_error():
     assert result.watch_min_score == 40.0
     assert result.strong_min_streak == 8
     assert result.coiled_spring_bb_pctile == 0.20
+    assert result.resistance_gate_enabled is True
+    assert result.resistance_headroom_min_pct == 5.0
+    assert result.ex_date_warning_days == 10
 
 
 # ── Module-level constants wired correctly ────────────────────────────────
@@ -197,7 +216,7 @@ def test_loads_tier1_brokers_from_yaml(tmp_path):
     cfg = _write_yaml(tmp_path / "s.yaml", {
         "broker_quality": {"tier1": {"brokers": ["AK", "BK"], "cluster_min_count": 3, "stable_min_count": 1}},
     })
-    result = _load_swing_screener_config_typed(cfg)
+    result = _load_swing_config(cfg)
     assert result.tier1_broker_codes == frozenset({"AK", "BK"})
 
 
@@ -205,7 +224,7 @@ def test_loads_bci_count_thresholds(tmp_path):
     cfg = _write_yaml(tmp_path / "s.yaml", {
         "broker_quality": {"tier1": {"brokers": ["AK"], "cluster_min_count": 4, "stable_min_count": 2}},
     })
-    result = _load_swing_screener_config_typed(cfg)
+    result = _load_swing_config(cfg)
     assert result.bci_cluster_min_count == 4
     assert result.bci_stable_min_count == 2
 
@@ -214,7 +233,7 @@ def test_tier1_falls_back_to_defaults_when_empty(tmp_path):
     cfg = _write_yaml(tmp_path / "s.yaml", {
         "broker_quality": {"tier1": {"brokers": []}},
     })
-    result = _load_swing_screener_config_typed(cfg)
+    result = _load_swing_config(cfg)
     assert result.tier1_broker_codes == _SwingConfig().tier1_broker_codes
 
 
@@ -225,23 +244,25 @@ def test_cs_not_in_tier1_brokers():
     assert "CS" not in _SC.tier1_broker_codes
 
 
-# ── Market regime params ──────────────────────────────────────────────────
+# ── Setup targets ─────────────────────────────────────────────────────────
 
-def test_loads_regime_periods_from_yaml(tmp_path):
+def test_loads_setup_targets_from_yaml(tmp_path):
     cfg = _write_yaml(tmp_path / "s.yaml", {
-        "regime": {"breadth_sma_period": 10, "benchmark_sma_fast": 10, "benchmark_sma_slow": 30,
-                   "breadth_threshold_pct": 40},
+        "setup_targets": {
+            "risk_on": {"take_profit_pct": 9.0, "stop_loss_pct": 4.5},
+            "default": {"take_profit_pct": 6.0, "stop_loss_pct": 3.0},
+        },
     })
-    result = _load_swing_screener_config_typed(cfg)
-    assert result.regime_breadth_sma_period == 10
-    assert result.regime_benchmark_sma_fast == 10
-    assert result.regime_benchmark_sma_slow == 30
-    assert result.regime_breadth_threshold_pct == 40
+    result = _load_swing_config(cfg)
+    assert result.setup_targets["risk_on"].take_profit_pct == Decimal("9.0")
+    assert result.setup_targets["risk_on"].stop_loss_pct == Decimal("4.5")
+    assert result.setup_targets["default"].take_profit_pct == Decimal("6.0")
 
 
-def test_live_config_loads_tier1_and_regime():
-    result = _load_swing_screener_config_typed(Path("config/swing_screener.yaml"))
+def test_live_config_loads_tier1_and_setup_targets():
+    result = _load_swing_config()
     assert "AK" in result.tier1_broker_codes
     assert "CS" not in result.tier1_broker_codes
-    assert result.regime_benchmark_sma_slow == 50
+    assert set(result.setup_targets) == {"risk_on", "neutral", "volatile", "risk_off", "default"}
+    assert result.setup_targets["risk_on"].take_profit_pct == Decimal("8.0")
     assert result.bci_cluster_min_count == 3

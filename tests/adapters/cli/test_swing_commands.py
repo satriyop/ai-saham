@@ -46,6 +46,12 @@ def test_swing_command_defaults_do_not_apply_setup_and_include_regime():
     assert params["setup"].default is None
     assert params["with_market_context"].default is False
     assert params["strategy"].default is None
+    assert "profile" not in params
+
+
+def test_swing_profile_flag_is_removed():
+    result = runner.invoke(app, ["analyze", "swing", "BBCA", "--profile", "balanced"])
+    assert result.exit_code != 0
 
 
 def test_old_regime_flags_fail_as_unknown_options():
@@ -714,7 +720,6 @@ def test_swing_output_renders_rich_decision_overview(capsys):
     _print_swing_output(
         ticker="BBCA",
         today=date(2026, 6, 19),
-        profile="balanced",
         strategy_name="foreign-accumulation",
         data_freshness=DataFreshness(
             as_of_date=date(2026, 6, 19),
@@ -750,14 +755,13 @@ def test_swing_output_renders_rich_decision_overview(capsys):
 
     out = capsys.readouterr().out
     assert "Swing Analysis - BBCA" in out
-    assert "Status" in out
     assert "Verdict" in out
-    assert "Engine Summary" in out
+    assert "Signal" in out
+    assert "Risk" in out
     assert "SETUP EVIDENCE" in out
-    assert "Why / Blockers" in out
     assert "Plan" in out
     assert "Setup is partial" in out
-    assert "Run Context" in out
+    assert "Data" in out
 
 
 def test_swing_output_renders_optional_evidence_as_separate_panels(capsys):
@@ -796,6 +800,8 @@ def test_swing_output_renders_optional_evidence_as_separate_panels(capsys):
     )
     backtest_result = SimpleNamespace(
         trade_count=12,
+        start_date=date(2026, 1, 1),
+        end_date=date(2026, 6, 18),
         win_rate=Decimal("58.3"),
         profit_factor=Decimal("1.42"),
         max_drawdown_pct=Decimal("6.5"),
@@ -817,7 +823,6 @@ def test_swing_output_renders_optional_evidence_as_separate_panels(capsys):
     _print_swing_output(
         ticker="BBCA",
         today=date(2026, 6, 19),
-        profile="balanced",
         strategy_name="foreign-accumulation",
         data_freshness=DataFreshness(
             as_of_date=date(2026, 6, 19),
@@ -858,5 +863,6 @@ def test_swing_output_renders_optional_evidence_as_separate_panels(capsys):
     assert "RISK DETAIL" in out
     assert "FLOW / BROKER DETAIL" in out
     assert "STRATEGY EVIDENCE" in out
+    assert "2026-01-01 to 2026-06-18" in out
     assert "SENTIMENT EVIDENCE" in out
     assert "DETAILED HISTORY & SENTIMENT" not in out
