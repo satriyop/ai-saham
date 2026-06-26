@@ -532,7 +532,7 @@ A strong signal does NOT imply low risk. Low risk does NOT imply a strong signal
 
 ### Engine Configurability Contract
 
-Every component of both engines — signal factors and risk gates — MUST support individual on/off toggling and full parameter configuration via dedicated engine config files. Signal factors live in `config/signal_engine.yaml`; risk gates and profiles live in `config/risk_engine.yaml`. Screener-specific policy (resistance gates, setup TP/SL targets, corporate actions, sector breadth) stays in `config/swing_screener.yaml` — it is NOT engine config. This is what makes the engines tunable by the T2 Learning Loop (ADR-027) without code changes.
+Every component of both engines — signal factors and risk gates — MUST support individual on/off toggling and full parameter configuration via dedicated engine config files. Signal factors live in `config/signal_engine.yaml`; risk gates and profiles live in `config/risk_engine.yaml`. Workflow policy stays outside engine config: accumulation discovery in `config/accumulation_screener.yaml`, setup gates in `config/swing_setups.yaml`, regime targets in `config/swing_targets.yaml`, and swing overlays in `config/swing_risk_policy.yaml`.
 
 #### YAML Schema
 
@@ -839,7 +839,7 @@ Note: the top-level fields mirror `TradeSetup.to_dict()` exactly; `signal_breakd
 
 **AI Tuner (T2) Constraints**
 - Input: attribution summary JSON (not raw candles, not raw journal entries)
-- Output: proposed YAML diff targeting `config/signal_engine.yaml` (for signal factor changes) or `config/risk_engine.yaml` (for gate changes) — never `config/swing_screener.yaml` (screener policy is not engine tuning)
+- Output: proposed YAML diff targeting `config/signal_engine.yaml` (for signal factor changes) or `config/risk_engine.yaml` (for gate changes) — not workflow policy files such as `config/accumulation_screener.yaml`, `config/swing_setups.yaml`, `config/swing_targets.yaml`, or `config/swing_risk_policy.yaml`
 - AI never reads current config directly — the use case provides a structured summary
 - Proposed diffs may include: numeric threshold adjustments (gate thresholds, signal weights), and component enable/disable toggles (`enabled: true/false` per factor or gate). The full Engine Configurability Contract in ADR-024 defines all valid diff targets.
 - `--apply` flag writes proposed changes after user confirmation prompt; without `--apply`, proposals are printed only
@@ -1156,7 +1156,7 @@ The initial setup catalog is:
 | `smart-money-confirmed` | Is broker attribution led by smart-money flow rather than noise flow? | accumulation candidate plus broker-detail attribution |
 | `pullback-continuation` | Is an uptrend pullback still supported by foreign flow and RSI headroom? | accumulation candidate |
 
-All setup gate thresholds and enable flags must be configurable through `config/swing_screener.yaml`. Code-level defaults are deterministic fallbacks only. Calibration and future learning should propose YAML changes, not code edits.
+All setup gate thresholds and enable flags must be configurable through `config/swing_setups.yaml`. Code-level defaults are deterministic fallbacks only. Calibration and future learning should propose YAML changes, not code edits.
 
 ### Layer Plan
 
@@ -1164,7 +1164,7 @@ All setup gate thresholds and enable flags must be configurable through `config/
 |-------|----------|
 | Domain | `SetupEvaluation`, `SetupGate`, `SetupMatch` value objects |
 | Application | `EvaluateSwingSetupUseCase` for named setup policy |
-| Infrastructure | `config/swing_screener.yaml` setup gates and `setup_targets` |
+| Infrastructure | `config/swing_setups.yaml` setup gates; `config/swing_targets.yaml` regime TP/SL targets |
 | Adapter | CLI `--setup`, setup JSON/display formatting only |
 
 ### Rationale
@@ -1197,13 +1197,15 @@ This is a breaking rename. Public CLI flags, JSON fields, and journal fields use
 
 ### Decision
 
-The core decision basis for `saham analyze swing TICKER` is exclusively:
+The current core decision basis for `saham analyze swing TICKER` is exclusively:
 
 ```text
-SignalEngine + RiskEngine + MarketContextEngine -> TradeSetup
+SignalEngine + RiskEngine -> TradeSetup
 ```
 
-`TradeSetup.action` is the authoritative final action. This follows ADR-026 (`TradeSetup` composition), ADR-029 (MCE as the third engine pillar), and ADR-031 (setup evaluation answers only setup fit).
+`TradeSetup.action` is the authoritative final action. This follows ADR-026 (`TradeSetup` composition) and ADR-031 (setup evaluation answers only setup fit).
+
+MarketContextEngine remains deterministic, but it is not yet tuned enough to be an authoritative input to `TradeSetup.action`. Until SignalEngine, RiskEngine, and MCE thresholds are calibrated, MCE is exposed as optional preview/enrichment evidence via `--with-market-context` / `--with-market-detail`. Its preview may show how signal/risk/trade setup would change under regime adjustment, but it does not change the canonical `TradeSetup`.
 
 Evidence modules are optional and do not independently alter the verdict:
 
@@ -1215,17 +1217,18 @@ Evidence modules are optional and do not independently alter the verdict:
 | `--with-flow-detail` | Broker flow and attribution detail |
 | `--with-signal-detail` | Signal factor detail |
 | `--with-risk-detail` | Risk indicator/gate detail |
-| `--with-market-detail` | Full MCE factor detail |
+| `--with-market-context` | MCE what-if preview/enrichment |
+| `--with-market-detail` | Full MCE factor detail when context is enabled |
 
-Default output remains verdict-first and concise: latest price, data freshness, SignalEngine summary, RiskEngine summary, MCE summary, final `TradeSetup`, and why/blockers.
+Default output remains verdict-first and concise: latest price, data freshness, SignalEngine summary, RiskEngine summary, final `TradeSetup`, and why/blockers.
 
 ### Learning Loop
 
-Evidence modules exist for user inspection and ADR-027 learning-loop attribution. Future tuning must adjust YAML/configurable engine or setup parameters (`config/signal_engine.yaml`, `config/risk_engine.yaml`, `config/market_context_engine.yaml`, `config/swing_screener.yaml`) rather than adding hidden decision branches in CLI or workflow code.
+Evidence modules exist for user inspection and ADR-027 learning-loop attribution. Near-term tuning priority is SignalEngine and RiskEngine. Future MCE promotion to an authoritative `TradeSetup` input requires calibrated YAML/configurable parameters and a follow-up ADR update; until then, tuning must not add hidden MCE decision branches in CLI or workflow code.
 
 ### Compatibility
 
-`--strategy` defaults to none. `--strategy NAME` enables strategy evidence. `--full` includes strategy evidence using `foreign-accumulation` when no explicit strategy is provided. Deprecated `--no-backtest` and `--no-sentiment` remain accepted for compatibility because those modules are default-off; enabling strategy evidence together with `--no-backtest` is a conflict.
+`--strategy` defaults to none. `--strategy NAME` enables strategy evidence. `--full` includes strategy evidence using `foreign-accumulation` when no explicit strategy is provided. `--with-market-context` enables optional MCE preview/enrichment; old `--with-regime` / `--no-regime` flags are not part of the `analyze swing` command. Deprecated `--no-backtest` and `--no-sentiment` remain accepted for compatibility because those modules are default-off; enabling strategy evidence together with `--no-backtest` is a conflict.
 
 ---
 

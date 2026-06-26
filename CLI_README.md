@@ -347,9 +347,6 @@ The `analyze risk` command converts indicator values into actionable assessments
 # Balanced profile (default)
 saham analyze risk BBCA
 
-# Conservative for retirement accounts
-saham analyze risk BBCA --profile conservative
-
 # Compare all three profiles
 saham analyze risk BBCA --all
 ```
@@ -949,7 +946,17 @@ Show cross-market regime context — VIX, EIDO, USD/IDR, IDX breadth — all fro
 
 ```bash
 saham view market-context
+saham view market-context --date 2026-06-01  # Specific date
+saham view market-context --verbose           # Full rationale
 ```
+
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--date` | | today | Context date, YYYY-MM-DD |
+| `--universe` | `-u` | (config) | Universe for idx_breadth factor |
+| `--verbose` | `-v` | false | Show score bar and full rationale per factor |
+| `--format` | | table | Output format: table or json |
+| `--db` | | | SQLite database path |
 
 Data is populated automatically by `saham fetch market` (always includes the ^JKSE benchmark and market context data).
 
@@ -1601,14 +1608,14 @@ Generate SKILL.md on demand for any artifact type:
 
 ```bash
 # Strategy (default type)
-saham skill generate rsi-momentum
-saham skill generate foreign-accumulation
+saham strategy skill generate rsi-momentum
+saham strategy skill generate foreign-accumulation
 
 # Indicator plugin
-saham skill generate atr --type indicator
+saham strategy skill generate atr --type indicator
 
 # Formula
-saham skill generate SMOOTH_RSI --type formula
+saham strategy skill generate SMOOTH_RSI --type formula
 ```
 
 If no sidecar exists, a placeholder SKILL.md is generated with a warning.
@@ -1618,12 +1625,12 @@ If no sidecar exists, a placeholder SKILL.md is generated with a warning.
 Scan all strategies and report which SKILL.md files are out of date:
 
 ```bash
-saham skill check
+saham strategy skill check
 ```
 
 ```
   foreign-accumulation: up to date
-  rsi-momentum: STALE (run: saham skill generate rsi-momentum)
+  rsi-momentum: STALE (run: saham strategy skill generate rsi-momentum)
 
 1/2 artifact(s) need regeneration.
 ```
@@ -1635,7 +1642,7 @@ This uses a hash of the strategy rules embedded in each SKILL.md to detect drift
 Generate a project-wide catalog of all SKILL.md files:
 
 ```bash
-saham skill index
+saham strategy skill index
 ```
 
 Creates `SKILLS_INDEX.md` at the project root:
@@ -1663,17 +1670,17 @@ To add skill documentation to any strategy:
 
 1. Create `strategies/<name>/strategy.skill.yaml` (see sidecar format above)
 2. Run `saham strategy validate <name>` — SKILL.md is auto-generated
-3. Run `saham skill index` — updates the project-wide catalog
+3. Run `saham strategy skill index` — updates the project-wide catalog
 
 ### Command Reference
 
 | Command | Purpose | Reads | Writes |
 |---------|---------|-------|--------|
-| `saham skill generate NAME` | Generate SKILL.md | strategy.yaml + sidecar | SKILL.md |
-| `saham skill generate NAME --type indicator` | Generate for indicator | plugin + sidecar | SKILL.md |
-| `saham skill generate NAME --type formula` | Generate for formula | formula + sidecar | SKILL.md |
-| `saham skill check` | Report stale/missing docs | strategy.yaml + SKILL.md | Nothing |
-| `saham skill index` | Rebuild catalog | All SKILL.md files | SKILLS_INDEX.md |
+| `saham strategy skill generate NAME` | Generate SKILL.md | strategy.yaml + sidecar | SKILL.md |
+| `saham strategy skill generate NAME --type indicator` | Generate for indicator | plugin + sidecar | SKILL.md |
+| `saham strategy skill generate NAME --type formula` | Generate for formula | formula + sidecar | SKILL.md |
+| `saham strategy skill check` | Report stale/missing docs | strategy.yaml + SKILL.md | Nothing |
+| `saham strategy skill index` | Rebuild catalog | All SKILL.md files | SKILLS_INDEX.md |
 
 ---
 
@@ -1914,6 +1921,7 @@ cached data produces identical output.
 | `--no-meta` | | false | Skip sector/industry metadata fetch |
 | `--no-enrichment` | | false | Skip Stockbit enrichment fetch |
 | `--refresh` | `-r` | false | Force refresh all |
+| `--db` | | | SQLite database path |
 
 ---
 
@@ -1936,7 +1944,7 @@ saham screen accum BBCA BBRI BMRI --window 7
 
 ### Multi-Window Mode
 
-Compare scores across 7d, 30d, and 90d windows side-by-side:
+Compare scores across 7, 30, and 90 broker-session windows side-by-side:
 
 ```bash
 saham screen accum --universe lq45 --multi
@@ -1990,11 +1998,11 @@ saham screen accum --universe lq45 --vwap-only
 # Only Bollinger Band squeeze setups
 saham screen accum --universe lq45 --squeeze-only
 
-# Show per-broker detail (requires Stockbit data)
-saham screen accum --universe lq45 --granular
+# Show top broker-code detail and BCI label when available
+saham screen accum --universe lq45 --top-broker
 
-# Show evidence/signal component breakdown
-saham screen accum --universe lq45 --breakdown
+# Show run context and scoring definitions after results
+saham screen accum --universe lq45 --explain
 
 # Column reference guide
 saham screen accum --guide
@@ -2006,7 +2014,7 @@ saham screen accum --universe lq45 --save morning-watch
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
 | `--universe` | `-u` | | Universe: lq45, idx80, idxcomp100, cached |
-| `--window` | `-w` | 7 | Analysis window in days |
+| `--window` | `-w` | 7 | Analysis window in broker sessions (7, 30, 90) |
 | `--min-streak` | | 0 | Minimum consecutive buy days |
 | `--min-accum-score` | | config | Minimum accumulation evidence score (0-120) |
 | `--min-signal-score` | | disabled/config | Optional minimum SignalEngine score (0-100) |
@@ -2014,10 +2022,16 @@ saham screen accum --universe lq45 --save morning-watch
 | `--squeeze-only` | | false | Only BB squeeze stocks |
 | `--top` | | 20 | Show top N results |
 | `--multi` | | false | Multi-window side-by-side |
-| `--sort-by` | | avg | Sort: avg, max, 7d, 30d, 90d |
+| `--windows` | | 7,30,90 | Comma-separated broker-session windows for --multi |
+| `--sort-by` | | avg | Sort: avg, max, 7s, 30s, 90s |
+| `--top-broker` | | false | Show top broker-code detail and BCI label when available |
+| `--explain` | | false | Append run context and scoring definitions after results |
+| `--min-piotroski` | | | Minimum Piotroski F-score filter |
+| `--strategy` | `-S` | | Optional backtest strategy for signal context |
 | `--format` | | table | Output format: table or json |
 | `--save` | | none | Persist results to watchlist (e.g. `--save morning-watch`) |
 | `--guide` | | false | Column reference guide |
+| `--db` | | | SQLite database path |
 
 ### Historical Audit
 
@@ -2264,7 +2278,7 @@ data/opening/
 
 ## 20. Swing Analyze Workflow - The `analyze swing` Command
 
-Verdict-first swing analysis. The default command shows latest price, data freshness, concise SignalEngine/RiskEngine/MCE summaries, and the final `TradeSetup`. Setup gates, strategy backtest, sentiment, and detailed broker attribution are opt-in evidence.
+Verdict-first swing analysis composing `SignalEngine + RiskEngine` into the final `TradeSetup`. RiskEngine now reports `OPEN` (no gate fired) or `BLOCKED (gate: Name)` instead of legacy risk levels. MarketContextEngine is optional preview/enrichment via `--with-market-context` while engine thresholds are still being tuned. An optional `--with-technical-gate` enables the SMA/EMA/RSI technical execution gate (off by default). Setup gates, strategy backtest, sentiment, market context, and detailed broker attribution are opt-in evidence.
 
 ```bash
 saham analyze swing BBRI
@@ -2281,30 +2295,44 @@ saham analyze swing BBRI --setup pullback-continuation --capital 10000000
 # Optional evidence
 saham analyze swing BBRI --strategy foreign-accumulation
 saham analyze swing BBRI --with-sentiment --with-flow-detail
+saham analyze swing BBRI --with-technical-gate
 saham analyze swing BBRI --explain
 saham analyze swing BBRI --full
 
-# Disable market regime context
-saham analyze swing BBRI --no-regime
+# Optional market context preview
+saham analyze swing BBRI --with-market-context
 ```
 
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
-| `--profile` | `-p` | balanced | Risk profile |
 | `--strategy` | `-S` | none | Optional strategy/backtest evidence name |
 | `--setup` | | none | Optional swing setup lens: foreign-bounce, coiled-spring, smart-money-confirmed, pullback-continuation |
+| `--window` | `-w` | 7 | Accumulation window in broker sessions |
+| `--flow-window` | | 30 | Broker-flow detail window in broker sessions |
 | `--capital` | `-c` | | Capital (enables sizing) |
-| `--risk-pct` | | 1.0 | % of capital at risk |
+| `--risk-pct` | | 1.0 | % of capital at risk per trade |
+| `--entry` | | | Entry price override |
+| `--atr-mult` | | 1.5 | ATR multiplier for stop |
+| `--rr` | | 2.0 | Reward:risk ratio |
 | `--with-sentiment` | | false | Include news sentiment evidence |
 | `--with-flow-detail` | | false | Include broker flow and attribution evidence |
 | `--with-signal-detail` | | false | Include SignalEngine factor detail |
 | `--with-risk-detail` | | false | Include RiskEngine indicator/gate detail |
-| `--with-market-detail` | | false | Include full MCE factor detail |
+| `--with-market-context` | | false | Show MarketContextEngine preview/enrichment without changing final `TradeSetup` |
+| `--with-market-detail` | | false | Include full MCE factor detail when market context is enabled |
+| `--with-technical-gate` | | false | Enable the optional TechnicalGate (SMA/EMA/RSI execution gate). Off by default. Adds "Technical" row to engine summary. |
 | `--explain` | | false | Shortcut for signal, risk, and market detail |
 | `--full` | | false | Include all optional evidence except named setup; uses `foreign-accumulation` for strategy evidence when `--strategy` is omitted |
 | `--no-sentiment` | | false | Deprecated no-op; sentiment is off by default |
+| `--sentiment-verbose` | | false | Show optional sentiment provider errors/noise |
 | `--no-backtest` | | false | Deprecated compatibility; conflicts with `--strategy` |
-| `--no-regime` | | false | Disable default regime context |
+| `--no-refresh` | | false | Disable auto single-ticker candle/broker refresh |
+| `--force-refresh` | | false | Force provider refresh even when cached data is fresh |
+| `--regime-universe` | | | Universe for regime breadth context |
+| `--benchmark` | | ^JKSE | Benchmark ticker for regime |
+| `--risk-strategy` | | | Risk strategy name for alternative gate config |
+| `--format` | | table | Output format: table or json |
+| `--db` | | | SQLite database path |
 
 ### Swing Analyze Output Signals
 
@@ -2336,7 +2364,7 @@ saham trade backtest-swing --universe idx80 --setup pullback-continuation
 saham trade backtest-swing --universe lq45 --capital 50000000 --max-positions 3
 ```
 
-Setup gates are deterministic and configurable in `config/swing_screener.yaml`.
+Setup gates are deterministic and configurable in `config/swing_setups.yaml`.
 
 | Setup | Question Answered |
 |-------|-------------------|
@@ -2379,6 +2407,15 @@ saham analyze regime --as-of 2026-06-01
 # Custom universe and benchmark
 saham analyze regime --universe idx80 --benchmark ^JKSE
 ```
+
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--universe` | `-u` | idx80 | Universe for breadth context |
+| `--benchmark` | | ^JKSE | Benchmark ticker |
+| `--as-of` | | today | Regime date (YYYY-MM-DD) |
+| `--verbose` | `-v` | false | Show score bar and rationale per factor |
+| `--format` | | table | Output format: table or json |
+| `--db` | | | SQLite database path |
 
 **Regime labels:** `BULLISH` (strong), `SIDEWAYS` (mixed), `WEAK` (declining), `RISK_OFF` (bearish)
 
@@ -2489,7 +2526,6 @@ Quickly compare risk levels across multiple tickers:
 
 ```bash
 saham analyze compare BBCA BBRI BMRI
-saham analyze compare BBCA TLKM --profile conservative
 ```
 
 ---
@@ -2507,8 +2543,8 @@ saham fetch market BBCA --days 730
 # Step 2: Check long-term trend
 saham indicator compute SMA BBCA --period 200
 
-# Step 3: Risk assessment with strict thresholds
-saham analyze risk BBCA --profile conservative
+# Step 3: Risk assessment
+saham analyze risk BBCA
 
 # Step 4: Verify with all profiles
 saham analyze risk BBCA --all
@@ -2533,11 +2569,11 @@ saham fetch market BBRI --days 365 --refresh
 # Step 2: Fast indicators
 saham indicator snapshot BBRI --sma 10 --ema 9 --rsi 7
 
-# Step 3: Aggressive profile for early signals
-saham analyze risk BBRI --profile aggressive
+# Step 3: Risk assessment
+saham analyze risk BBRI
 
 # Step 4: Get AI explanation
-saham analyze risk BBRI --profile aggressive --explain --provider ollama
+saham analyze risk BBRI --explain --provider ollama
 
 # Step 5: Current sentiment
 saham analyze sentiment BBRI --days 1
@@ -2679,8 +2715,8 @@ saham strategy backtest BBCA --strategy my_flow_strategy
 | `saham indicator compute RSI TICKER` | Relative Strength Index | `--period`, `--days` |
 | `saham indicator compute INDICATOR TICKER` | Compute any indicator | `--period`, `--days`, `--tail`, `--db` |
 | `saham indicator snapshot TICKER` | All indicators combined | `--sma`, `--ema`, `--rsi`, `--days`, `--format` |
-| `saham analyze compare TICKER TICKER...` | Side-by-side risk comparison | `--profile`, `--sma`, `--rsi` |
-| `saham analyze risk TICKER` | Risk assessment | `--profile`, `--all`, `--rules-file`, `--explain`, `--with-sentiment`, `--trend`, `--format` |
+| `saham analyze compare TICKER TICKER...` | Side-by-side risk comparison | `--sma`, `--rsi` |
+| `saham analyze risk TICKER` | Risk assessment | `--all`, `--rules-file`, `--explain`, `--with-sentiment`, `--trend`, `--format` |
 | `saham analyze sentiment TICKER` | News sentiment | `--days`, `--max`, `--ai-classify`, `--news-provider`, `--no-ai` |
 | `saham analyze audit` | Audit sentiment accuracy | — |
 | `saham view TICKER` | Read-only ticker data dashboard (all cached data) | — |
@@ -2704,15 +2740,15 @@ saham strategy backtest BBCA --strategy my_flow_strategy
 | `saham strategy create INTENT` | Create strategy from natural language | `--name`, `--provider`, `--save/--no-save` |
 | `saham strategy validate NAME` | Validate strategy (auto-generates SKILL.md) | `--strict` |
 | `saham strategy list` | List available strategies | `--verbose`, `--all` |
-| `saham skill generate NAME` | Generate SKILL.md for an artifact | `--type` (strategy/indicator/formula) |
-| `saham skill check` | Report stale/missing SKILL.md files | — |
-| `saham skill index` | Rebuild SKILLS_INDEX.md catalog | — |
+| `saham strategy skill generate NAME` | Generate SKILL.md for an artifact | `--type` (strategy/indicator/formula) |
+| `saham strategy skill check` | Report stale/missing SKILL.md files | — |
+| `saham strategy skill index` | Rebuild SKILLS_INDEX.md catalog | — |
 | `saham strategy backtest TICKER` | Strategy backtesting | `--strategy`/`--rules-file`, `--start`, `--end`, `--capital`, `--verbose`, `--format` |
 | `saham indicator create` | Create formula from natural language | `--name`, `--provider`, `--save/--no-save` |
 | `saham indicator list` | List all indicators | `--formulas` |
 | `saham indicator show NAME` | Show formula details | — |
 | `saham indicator delete NAME` | Delete custom formula | `--force` |
-| `saham screen accum` | Foreign accumulation screener (SignalAssessment 0–100) | `--universe`, `--window`, `--multi`, `--format`, `--breakdown`, `--save` |
+| `saham screen accum` | Foreign accumulation screener (SignalAssessment 0–100) | `--universe`, `--window`, `--multi`, `--top-broker`, `--min-accum-score`, `--min-signal-score`, `--min-piotroski`, `--vwap-only`, `--squeeze-only`, `--save`, `--format`, `--guide`, `--explain`, `--db` |
 | `saham screen watchlist` | List saved watchlists / show tickers in a named one | — |
 | `saham screen compare NAME` | Diff saved watchlist against fresh screener run | `--universe`, `--top` |
 | `saham analyze accum-audit` | Historical accumulation audit | `--universe`, `--setup`, `--simulate-exits` |
@@ -2720,15 +2756,15 @@ saham strategy backtest BBCA --strategy my_flow_strategy
 | `saham trade confirm` | Confirm at opening auction | `--opening-json` |
 | `saham trade log --type TYPE` | Log a paper-trade decision | `--type` (swing or intraday) |
 | `saham trade review intraday` | Review intraday confirmation journal | `--journal`, `--db` |
-| `saham trade review swing` | Review accumulation trade journal | `--horizon`, `--min-score` |
+| `saham trade review swing` | Review accumulation trade journal | `--horizon`, `--min-score`, `--journal`, `--db` |
 | `saham trade migrate-journal` | One-time CSV journal migration to JSONL | — |
 | `saham trade outcome` | Record actual trade outcome | `--entry`, `--exit`, `--result` |
-| `saham analyze swing TICKER` | Unified swing analysis with default regime context | `--capital`, `--setup`, `--no-regime` |
+| `saham analyze swing TICKER` | Unified swing analysis with optional market context preview | `--capital`, `--setup`, `--strategy`, `--with-sentiment`, `--with-flow-detail`, `--with-signal-detail`, `--with-risk-detail`, `--with-market-detail`, `--with-market-context`, `--with-technical-gate`, `--explain`, `--full`, `--risk-strategy`, `--format`, `--db` |
 | `saham trade backtest-swing` | Portfolio walk-forward swing backtest | `--universe`, `--setup`, `--capital`, `--allow-regimes` |
 | `saham trade backtest-intraday` | Walk-forward intraday pre-open backtest | `--universe`, `--start`, `--end` |
 | `saham analyze swing-compare` | Compare regime variants | `--universe`, `--variants` |
 | `saham trade size TICKER` | ATR position sizing | `--capital`, `--risk-pct`, `--entry` |
-| `saham analyze regime` | Market regime context | `--universe`, `--as-of`, `--format` |
+| `saham analyze regime` | Market regime context | `--universe`, `--benchmark`, `--as-of`, `--verbose`, `--format`, `--db` |
 | `saham analyze chart price TICKER` | Price chart with overlays | `--sma`, `--ema`, `--days`, `--width` |
 | `saham analyze chart rsi TICKER` | RSI chart | `--period`, `--days` |
 | `saham analyze chart volume TICKER` | Volume bar chart | `--days` |

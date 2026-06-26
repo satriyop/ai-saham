@@ -263,9 +263,8 @@ saham indicator snapshot BBCA --format json  # JSON output
 Assess risk using rule-based evaluation with optional AI explanation.
 
 ```bash
-# Built-in profiles
+# Balanced profile
 saham analyze risk BBCA                           # Balanced (default)
-saham analyze risk BBRI --profile conservative
 saham analyze risk TLKM --all                     # Compare all profiles
 
 # Custom rules
@@ -288,9 +287,8 @@ saham analyze risk BBCA --format json
 
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
-| `--profile` | `-p` | balanced | Risk profile |
-| `--all` | `-a` | false | Show all profiles |
-| `--rules-file` | `-r` | | Custom YAML rules (overrides --profile) |
+| `--all` | `-a` | false | Show all sensitivity profiles |
+| `--rules-file` | `-r` | | Custom YAML rules |
 | `--explain` | `-e` | false | Generate AI explanation |
 | `--provider` | | deepseek | AI provider |
 | `--model` | `-m` | | Model name (for Ollama/DeepSeek) |
@@ -318,12 +316,10 @@ Compare risk across multiple tickers in a single table.
 
 ```bash
 saham analyze compare BBCA BBRI BMRI
-saham analyze compare BBCA TLKM --profile conservative
 ```
 
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
-| `--profile` | `-p` | balanced | Risk profile |
 | `--sma` | | 20 | SMA period |
 | `--rsi` | | 14 | RSI period |
 | `--days` | `-d` | 365 | Days of history |
@@ -520,6 +516,14 @@ saham view universe lq45 --top 10    # Top 10 tickers only
 saham view universe lq45 --date 2026-06-01  # Show data as of a specific date
 ```
 
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--date` | | today | Context date, YYYY-MM-DD |
+| `--universe` | `-u` | (config) | Universe for idx_breadth factor |
+| `--verbose` | `-v` | false | Show score bar and full rationale per factor |
+| `--format` | | table | Output format: table or json |
+| `--db` | | | SQLite database path |
+
 ---
 
 ### `saham fetch market` - Batch Data Update
@@ -549,6 +553,7 @@ saham fetch market --universe lq45 --no-enrichment  # Skip enrichment fetch
 | `--no-meta` | | false | Skip sector/industry metadata fetch |
 | `--no-enrichment` | | false | Skip Stockbit enrichment fetch |
 | `--refresh` | `-r` | false | Force refresh even if cached |
+| `--db` | | | SQLite database path |
 
 ---
 
@@ -606,8 +611,8 @@ saham screen accum --universe lq45 --min-accum-score 50 --top 10
 saham screen accum --universe lq45 --min-signal-score 55 --top 10
 saham screen accum --universe lq45 --vwap-only
 saham screen accum --universe lq45 --squeeze-only
-saham screen accum --universe lq45 --granular
-saham screen accum --universe lq45 --breakdown
+saham screen accum --universe lq45 --top-broker
+saham screen accum --universe lq45 --explain
 
 # Save to watchlist for later comparison
 saham screen accum --universe lq45 --save morning-watch
@@ -626,18 +631,20 @@ saham screen accum --universe lq45 --format json
 | `--min-streak` | | 0 | Minimum consecutive buy days |
 | `--min-accum-score` | | config | Minimum accumulation evidence score (0-120 soft cap) |
 | `--min-signal-score` | | disabled/config | Optional minimum SignalEngine score (0-100) |
+| `--min-piotroski` | | | Minimum Piotroski F-score filter |
+| `--strategy` | `-S` | | Optional backtest strategy for signal context |
 | `--vwap-only` | | false | Only stocks where foreigners are underwater |
 | `--squeeze-only` | | false | Only stocks in Bollinger Band squeeze |
 | `--top` | | 20 | Show top N results |
-| `--granular` | | false | Show per-broker detail (Stockbit data) |
-| `--breakdown` | | false | Show per-component accumulation/signal breakdown |
+| `--top-broker` | | false | Show top broker-code detail and BCI label when available |
 | `--multi` | | false | Show scores across multiple windows |
 | `--windows` | | 7,30,90 | Comma-separated broker-session windows for --multi |
 | `--sort-by` | | avg | Sort by: avg, max, 7s, 30s, 90s. Legacy 7d/30d/90d labels are also accepted. |
 | `--format` | | table | Output format: table or json |
 | `--save` | | none | Save results to watchlist (e.g. `--save morning-watch`) |
-| `--guide` | | false | Print column reference guide |
-| `--explain` | | false | Print column guide after results |
+| `--guide` | | false | Print column reference guide and exit |
+| `--explain` | | false | Append run context and scoring definitions after results |
+| `--db` | | | SQLite database path |
 
 **Accumulation evidence score (0-120 soft cap):** consistency, streak, VWAP discount, RSI headroom, flow %, BB squeeze, and BCI. Thresholds and weights are configured in `config/accumulation_screener.yaml`.
 
@@ -673,6 +680,33 @@ saham analyze accum-audit --universe idx80 --setup pullback-continuation
 saham analyze accum-audit --universe idx80 --window 7 --min-score 70
 saham analyze accum-audit --universe lq45 --simulate-exits
 ```
+
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--universe` | `-u` | | Universe: lq45, idx80, idxcomp100, cached |
+| `--setup` | | | Audit setup: foreign-bounce, coiled-spring, smart-money-confirmed, pullback-continuation |
+| `--start` | | 2026-01-01 | Audit start date, YYYY-MM-DD |
+| `--end` | | today | Audit end date, YYYY-MM-DD |
+| `--window` | `-w` | | Accumulation window in broker sessions |
+| `--min-score` | | | Minimum composite score to audit |
+| `--min-net-buy-days` | | | Minimum foreign net-buy days |
+| `--min-vwap-disc` | | | Require VWAP discount at least this percent |
+| `--trend` | | | Require trend bucket: UP, SIDE, or DOWN |
+| `--min-flow-pct` | | | Require average foreign flow percent |
+| `--require-rsi` | | false | Exclude signals with missing RSI |
+| `--max-rsi` | | | Require RSI at or below this value |
+| `--min-rsi` | | | Require RSI at or above this value |
+| `--max-bb-width-pctile` | | | Require BB width percentile at or below this value |
+| `--broker-quality` | | | Require broker-quality bucket, e.g. smart+ |
+| `--simulate-exits` | | | Run TP/SL/max-hold exit grid |
+| `--take-profits` | | | Comma-separated take-profit percentages |
+| `--stop-losses` | | | Comma-separated stop-loss percentages |
+| `--max-holds` | | | Comma-separated max holding days |
+| `--horizon` | | 20 | Forward horizon for max up/down metrics |
+| `--output` | `-o` | | Write raw audit records to CSV |
+| `--top-groups` | | 80 | Number of grouped summary rows to print |
+| `--format` | | table | Output format: table or json |
+| `--db` | | | SQLite database path |
 
 #### `saham trade log --type swing` - Log to Journal
 
@@ -762,7 +796,7 @@ embed real-time institutional absorption ratios from Stockbit (requires login).
 
 ### `saham analyze swing` - Swing Trade Workflow
 
-Verdict-first swing analysis. The default command composes `SignalEngine + RiskEngine + MarketContextEngine` into the final `TradeSetup`; setup gates, strategy backtest, sentiment, and detailed broker attribution are optional evidence.
+Verdict-first swing analysis composing `SignalEngine + RiskEngine` into the final `TradeSetup`. RiskEngine now reports `OPEN` (no gate fired) or `BLOCKED (gate: Name)` instead of legacy risk levels. MarketContextEngine is optional preview/enrichment via `--with-market-context` while engine thresholds are still being tuned. An optional `--with-technical-gate` enables the SMA/EMA/RSI technical execution gate (off by default). Setup gates, strategy backtest, sentiment, market context, and detailed broker attribution are opt-in evidence.
 
 ```bash
 saham analyze swing BBRI
@@ -774,17 +808,17 @@ saham analyze swing BBRI --setup pullback-continuation --capital 10000000
 saham analyze swing BBRI --capital 10000000 --risk-pct 1
 saham analyze swing BBRI --strategy foreign-accumulation
 saham analyze swing BBRI --with-sentiment --with-flow-detail
+saham analyze swing BBRI --with-technical-gate
 saham analyze swing BBRI --explain
 saham analyze swing BBRI --full
 saham analyze swing BBRI --no-refresh
 saham analyze swing BBRI --force-refresh
-saham analyze swing BBRI --no-regime
+saham analyze swing BBRI --with-market-context
 saham analyze swing BBRI --format json
 ```
 
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
-| `--profile` | `-p` | balanced | Risk profile |
 | `--strategy` | `-S` | none | Optional strategy/backtest evidence name |
 | `--setup` | | none | Optional swing setup lens: foreign-bounce, coiled-spring, smart-money-confirmed, pullback-continuation |
 | `--window` | `-w` | 7 | Accumulation window in broker sessions |
@@ -798,7 +832,8 @@ saham analyze swing BBRI --format json
 | `--with-flow-detail` | | false | Include broker flow and attribution evidence |
 | `--with-signal-detail` | | false | Include SignalEngine factor detail |
 | `--with-risk-detail` | | false | Include RiskEngine indicator/gate detail |
-| `--with-market-detail` | | false | Include full MCE factor detail |
+| `--with-market-context` | | false | Show MarketContextEngine preview/enrichment without changing final `TradeSetup` |
+| `--with-market-detail` | | false | Include full MCE factor detail when market context is enabled |
 | `--explain` | | false | Shortcut for signal, risk, and market detail |
 | `--full` | | false | Include all optional evidence except named setup; uses `foreign-accumulation` for strategy evidence when `--strategy` is omitted |
 | `--no-sentiment` | | false | Deprecated no-op; sentiment is off by default |
@@ -806,8 +841,12 @@ saham analyze swing BBRI --format json
 | `--no-backtest` | | false | Deprecated compatibility; conflicts with `--strategy` |
 | `--no-refresh` | | false | Disable automatic single-ticker candle/broker refresh |
 | `--force-refresh` | | false | Force provider refresh even when cached data is fresh |
-| `--no-regime` | | false | Disable default market regime context |
+| `--with-technical-gate` | | false | Enable the optional TechnicalGate (SMA/EMA/RSI execution gate). Off by default. Adds "Technical" row to engine summary. |
+| `--regime-universe` | | | Universe for regime breadth context |
+| `--benchmark` | | ^JKSE | Benchmark ticker for regime |
+| `--risk-strategy` | | | Risk strategy name for alternative gate config |
 | `--format` | | table | Output format: table or json |
+| `--db` | | | SQLite database path |
 
 #### `saham trade backtest-swing` - Portfolio Walk-Forward Backtest
 
@@ -823,7 +862,27 @@ saham trade backtest-swing --universe idx80 --cost-bps 0  # gross/no-cost compar
 Default backtests include `--cost-bps 20` one-way transaction cost. Override explicitly
 when testing a different broker fee assumption.
 
-Swing setup gates are deterministic and configurable in `config/swing_screener.yaml`:
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--universe` | `-u` | | Universe name (lq45, idx80, idxcomp100, cached) |
+| `--setup` | | foreign-bounce | Swing setup: foreign-bounce, coiled-spring, smart-money-confirmed, pullback-continuation |
+| `--start` | | (config) | Backtest start date, YYYY-MM-DD |
+| `--end` | | today | Backtest end date, YYYY-MM-DD |
+| `--capital` | `-c` | (config) | Initial capital in IDR |
+| `--risk-pct` | | (config) | % of capital risked per trade |
+| `--max-positions` | | 5 | Maximum concurrent open positions |
+| `--take-profit` | | (config) | Take-profit percentage |
+| `--stop-loss` | | (config) | Stop-loss percentage |
+| `--max-hold` | | (config) | Maximum holding period in trading days |
+| `--cost-bps` | | (config) | One-way transaction cost in basis points |
+| `--with-regime` | | false | Group trades by entry-date market regime |
+| `--allow-regimes` | | | Comma-separated entry regimes allowed |
+| `--benchmark` | | ^JKSE | Benchmark ticker for regime context |
+| `--show-trades` | | 20 | Number of recent trades to print |
+| `--format` | | table | Output format: table or json |
+| `--db` | | | SQLite database path |
+
+Swing setup gates are deterministic and configurable in `config/swing_setups.yaml`:
 
 | Setup | Question Answered |
 |-------|-------------------|
@@ -877,7 +936,9 @@ saham analyze regime --format json
 | `--universe` | `-u` | idx80 | Universe for breadth context |
 | `--benchmark` | | ^JKSE | Benchmark ticker |
 | `--as-of` | | today | Regime date (YYYY-MM-DD) |
+| `--verbose` | `-v` | false | Show score bar and rationale per factor |
 | `--format` | | table | Output format: table or json |
+| `--db` | | | SQLite database path |
 
 **Regime labels:** `RISK_ON`, `NEUTRAL`, `RISK_OFF`, `VOLATILE`
 
@@ -1248,7 +1309,9 @@ saham strategy backtest BBCA --strategy momentum
 src/
 ├── domain/                          # Pure business logic
 │   ├── entities/                    # Stock, Candle, BrokerFlow, StockMeta
-│   ├── indicators/                  # SMA, EMA, RSI calculations
+│   ├── indicators/                  # SMA, EMA, RSI, MACD calculations
+│   │   ├── indicator_context.py     # Enriched context for indicator evaluation
+│   │   └── indicator_reading.py     # IndicatorReading measurement language
 │   ├── ports/                       # Interfaces (38 provider/repository ports)
 │   │   ├── broker_data_provider.py / broker_data_repository.py
 │   │   ├── market_data_provider.py / market_data_repository.py
@@ -1275,17 +1338,14 @@ src/
 │   │   ├── accumulation_journal_store.py / trade_journal_store.py
 │   │   ├── csv_broker_parser.py / persistence.py
 │   │   └── sentiment_repository.py
-│   ├── rules/                       # Risk assessment rules + gates
-│   │   ├── rule_engine.py           # Core rule engine
+│   ├── rules/                       # Risk assessment gates
 │   │   ├── risk_gate.py             # Abstract gate interface + context
+│   │   ├── technical_gate.py        # Optional RSI/EMA/SMA execution gate
 │   │   ├── fundamental_gate.py      # P/E, ROE, Piotroski F-Score, quality gate
 │   │   ├── bandar_gate.py           # Stockbit operator accumulation/distribution score
 │   │   ├── liquidity_gate.py        # Volume + turnover ratio checks
 │   │   ├── free_float_gate.py       # Free float ratio filter
-│   │   ├── base_rule.py
-│   │   ├── conservative.py
-│   │   ├── balanced.py
-│   │   └── aggressive.py
+│   │   └── base_rule.py
 │   ├── services/
 │   │   ├── analyze_stock.py
 │   │   ├── backtest_engine.py
@@ -1340,7 +1400,14 @@ src/
 │   │   ├── daily_briefing_use_case.py
 │   │   ├── analyze_running_trade_use_case.py
 │   │   ├── swing_analysis_workflow_use_case.py
-│   │   ├── opening_snapshot/track/grade/prompt/tune_use_case.py
+│   │   ├── assess_signal_use_case.py
+│   │   ├── assess_trade_setup_use_case.py
+│   │   ├── assess_accumulation_evidence_use_case.py
+│   │   ├── evaluate_swing_setup_use_case.py
+│   │   ├── build_market_context_use_case.py
+│   │   ├── opening_snapshot_use_case.py / opening_track_use_case.py
+│   │   ├── opening_grade_use_case.py / opening_prompt_use_case.py
+│   │   ├── opening_tune_use_case.py
 │   │   ├── create_indicator_from_intent_use_case.py
 │   │   ├── create_strategy_from_intent_use_case.py
 │   │   ├── import_broker_data_use_case.py
@@ -1348,6 +1415,8 @@ src/
 │   │   ├── compare_screen_snapshots_use_case.py
 │   │   ├── resolve_opening_prices_use_case.py
 │   │   ├── fetch_stock_meta_use_case.py
+│   │   ├── get_system_status_use_case.py
+│   │   ├── run_analysis_use_case.py
 │   │   └── view_universe_summary_use_case.py
 │   ├── formula/                      # Formula DSL engine
 │   │   ├── tokenizer.py / parser.py / ast_nodes.py
@@ -1357,6 +1426,7 @@ src/
 │   │   ├── signal_engine.py          # First-class signal assessment (ADR-025)
 │   │   ├── market_context_engine.py  # First-class market context (ADR-029)
 │   │   ├── indicator_registry.py
+│   │   ├── indicator_evaluator.py    # Evaluates indicators from config
 │   │   ├── strategy_loader.py
 │   │   ├── skill_generator.py
 │   │   ├── universe_loader.py
@@ -1457,7 +1527,7 @@ src/
 │   ├── csv/
 │   │   └── adapter.py                # CSV broker data import
 │   └── config/
-│       ├── swing_config.py           # Swing screener configuration
+│       ├── swing_config.py           # Swing policy configuration
 │       └── yaml_loader.py
 │
 ├── adapters/                         # User interfaces
@@ -1544,9 +1614,16 @@ src/
 | `config/risk_engine.yaml` | Risk gate enablement and thresholds |
 | `config/signal_engine.yaml` | Signal factor enablement and weights |
 | `config/market_context_engine.yaml` | Market context factors, thresholds, and regime effects |
-| `config/swing_screener.yaml` | Swing screener calibration (smart money brokers, noise brokers, setup gates and targets) |
+| `config/accumulation_screener.yaml` | Accumulation discovery policy (filters, sector breadth, broker quality, BCI, evidence weights) |
+| `config/swing_setups.yaml` | Named swing setup gates |
+| `config/swing_targets.yaml` | Regime-adaptive TP/SL targets |
+| `config/swing_risk_policy.yaml` | Swing risk overlays outside RiskEngine (resistance, corporate action warning) |
 | `config/pre_open_screener.yaml` | Pre-open screener rules and thresholds |
+| `config/atr_rules.yaml.example` | ATR-based risk rule template |
 | `config/csv_mappings/` | CSV import column mapping definitions |
+
+Config file locations are centralized under `config_paths:` in `config/default.yaml`;
+override that section in `config/user.yaml` when using personal config copies.
 
 ---
 
