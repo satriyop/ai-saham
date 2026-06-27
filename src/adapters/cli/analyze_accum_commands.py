@@ -22,71 +22,18 @@ from src.application.use_case.accumulation_audit_use_case import (
     AccumulationAuditUseCase,
 )
 from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.accumulation_audit_config import (
+    load_accumulation_audit_config,
+)
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
 DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
-
-AUDIT_SETUPS = {
-    "foreign-bounce": {
-        "universe": "idx80",
-        "window": 7,
-        "min_score": 70.0,
-        "min_net_buy_days": 2,
-        "min_vwap_disc": 3.0,
-        "trend": "SIDE",
-        "min_flow_pct": 5.0,
-        "require_rsi": True,
-        "max_rsi": 60.0,
-        "simulate_exits": True,
-        "take_profits": "4,5,6",
-        "stop_losses": "3,5,7",
-        "max_holds": "3,5,7,10",
-    },
-    "coiled-spring": {
-        "universe": "idx80",
-        "window": 7,
-        "min_score": 60.0,
-        "min_net_buy_days": 2,
-        "min_flow_pct": 3.0,
-        "require_rsi": True,
-        "max_rsi": 65.0,
-        "max_bb_width_pctile": 0.20,
-        "simulate_exits": True,
-        "take_profits": "4,5,6",
-        "stop_losses": "3,5,7",
-        "max_holds": "5,7,10,15",
-    },
-    "smart-money-confirmed": {
-        "universe": "idx80",
-        "window": 7,
-        "min_score": 60.0,
-        "min_net_buy_days": 2,
-        "broker_quality": "smart+",
-        "simulate_exits": True,
-        "take_profits": "4,5,6",
-        "stop_losses": "3,5,7",
-        "max_holds": "3,5,7,10",
-    },
-    "pullback-continuation": {
-        "universe": "idx80",
-        "window": 7,
-        "min_score": 55.0,
-        "min_net_buy_days": 2,
-        "min_vwap_disc": -2.0,
-        "trend": "UP",
-        "min_flow_pct": 2.0,
-        "require_rsi": True,
-        "min_rsi": 40.0,
-        "max_rsi": 65.0,
-        "simulate_exits": True,
-        "take_profits": "5,8,10",
-        "stop_losses": "4,5,7",
-        "max_holds": "5,10,15",
-    },
-}
+_AUDIT_CFG = load_accumulation_audit_config()
+AUDIT_SETUPS = _AUDIT_CFG.setups
 
 _AUDIT_SETUP_HELP = ", ".join(AUDIT_SETUPS)
+_DEFAULT_AUDIT_HORIZON = max(_AUDIT_CFG.policy.forward_return_horizons)
 
 
 def _display_audit_summary(response: AccumulationAuditResponse, top_groups: int) -> None:
@@ -216,7 +163,7 @@ def accumulation_audit(
     horizon: Annotated[
         int,
         typer.Option("--horizon", help="Forward horizon for max up/down metrics", min=5),
-    ] = 20,
+    ] = _DEFAULT_AUDIT_HORIZON,
     output_path: Annotated[
         Optional[Path],
         typer.Option("--output", "-o", help="Write raw audit records to CSV"),
@@ -378,6 +325,7 @@ def accumulation_audit(
             take_profit_pcts=take_profit_grid,
             stop_loss_pcts=stop_loss_grid,
             max_hold_days=max_hold_grid,
+            policy=_AUDIT_CFG.policy,
         )
     )
 

@@ -11,17 +11,69 @@
 #
 version: 1
 risk_engine:
+
+  # Indicator defaults used by RiskEngine and optional TechnicalGate paths.
+  indicators:
+    sma_period: 20
+    ema_period: 20
+    rsi_period: 14
+    history_days: 365
+    gate_recent_candle_lookback: 20
+
+  # How MarketContext gate_tightening affects the risk preview path.
+  # This remains preview/enrichment unless the caller explicitly applies
+  # market context to RiskEngine.
+  market_context_gate:
+    enabled: true
+    block_when_gate_tightening: true
+    gate_is_structural: true
+    label_prefix: "regime"
+
   gates:
     fundamental:
       enabled: true
       piotroski_min: 3          # F-score <= this → HIGH_RISK (FundamentalGate.distress_threshold)
+      missing_data_action: skip # skip | block | warn (warn is non-blocking diagnostic)
+      missing_data_confidence: 0
+      triggered_confidence: 100
+      pass_confidence: 100
     liquidity:
       enabled: true
       market_cap_floor_idr: 1_000_000_000_000   # 1T IDR — LiquidityGate market-cap floor
       median_tx_floor_idr: 5_000_000_000        # 5B IDR median 20-day tx value floor
       lookback_days: 20
+      missing_data_action: skip
+      missing_data_confidence: 0
+      triggered_confidence: 100
+      pass_confidence: 100
     free_float:
       enabled: true
       min_free_float_pct: 15.0
+      missing_data_action: skip
+      missing_data_confidence: 0
+      triggered_confidence: 100
+      pass_confidence: 100
     bandar:
       enabled: true
+      distribution_labels:
+        - "Small Dist"
+        - "Big Dist"
+        - "Small Dis"
+        - "Big Dis"
+      missing_data_action: skip
+      missing_data_confidence: 0
+      triggered_confidence: 80
+      pass_confidence: 100
+    technical:
+      # TechnicalGate remains opt-in from saham analyze swing
+      # (--with-technical-gate). This block only tunes its behavior.
+      block_when_bearish: true
+      missing_data_action: skip
+      missing_data_confidence: 0
+      pass_confidence: 100
+      evaluator:
+        rsi_overbought: 70.0
+        rsi_oversold: 30.0
+        agreement_count: 2
+        full_agreement_confidence: 100
+        partial_agreement_confidence: 50

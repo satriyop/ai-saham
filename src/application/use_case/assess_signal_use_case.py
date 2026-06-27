@@ -14,7 +14,7 @@ Depends on: domain only (SignalAssessment, SignalContext)
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 
 from src.domain.value_objects.signal_assessment import (
@@ -24,14 +24,85 @@ from src.domain.value_objects.signal_assessment import (
     SignalStrength,
 )
 
-_NEUTRAL = 50.0
+@dataclass(frozen=True)
+class SignalClassificationConfig:
+    strong_min_score: int = 70
+    moderate_min_score: int = 45
 
-# Classification thresholds (score-based; future: configurable per profile in YAML)
-_STRONG_THRESHOLD = 70
-_MODERATE_THRESHOLD = 45
 
-# Minimum data coverage below which a warning is issued
-_COVERAGE_WARNING_THRESHOLD = 3  # out of 6 factors
+@dataclass(frozen=True)
+class SignalMissingDataConfig:
+    neutral_score: float = 50.0
+    coverage_warning_missing_factors: int = 3
+
+
+@dataclass(frozen=True)
+class SeasonalityScoringConfig:
+    tailwind_min_avg_return_pct: float = 0.0
+    tailwind_min_win_rate_pct: float = 50.0
+    headwind_max_avg_return_pct: float = 0.0
+    headwind_max_win_rate_pct: float = 50.0
+
+
+@dataclass(frozen=True)
+class AnalystScoringConfig:
+    buy_score_max_points: float = 60.0
+    upside_score_max_points: float = 40.0
+    upside_cap_pct: float = 30.0
+
+
+@dataclass(frozen=True)
+class ForwardPeScoringConfig:
+    very_cheap_pe: float = 10.0
+    cheap_pe: float = 15.0
+    fair_pe: float = 20.0
+    expensive_pe: float = 30.0
+    very_cheap_score: float = 95.0
+    cheap_score: float = 75.0
+    fair_score: float = 50.0
+    expensive_score: float = 25.0
+    post_expensive_pe_step: float = 10.0
+    post_expensive_score_decay: float = 15.0
+
+
+@dataclass(frozen=True)
+class BandarScoringConfig:
+    mandatory_signal_count: int = 3
+    signal_score_unit: int = 2
+    default_max_range: int = 6
+
+
+@dataclass(frozen=True)
+class SignalScoringConfig:
+    bandar: BandarScoringConfig = field(default_factory=BandarScoringConfig)
+    seasonality: SeasonalityScoringConfig = field(default_factory=SeasonalityScoringConfig)
+    analyst: AnalystScoringConfig = field(default_factory=AnalystScoringConfig)
+    forward_pe: ForwardPeScoringConfig = field(default_factory=ForwardPeScoringConfig)
+
+
+@dataclass(frozen=True)
+class AccumulationScoreMappingConfig:
+    max_score: float = 120.0
+    clamp: bool = True
+
+
+@dataclass(frozen=True)
+class SignalInputMappingConfig:
+    accumulation_score: AccumulationScoreMappingConfig = field(default_factory=AccumulationScoreMappingConfig)
+
+
+@dataclass(frozen=True)
+class SignalEnrichmentConfig:
+    insider_lookback_days: int = 90
+
+
+@dataclass(frozen=True)
+class SignalEngineConfig:
+    classification: SignalClassificationConfig = field(default_factory=SignalClassificationConfig)
+    missing_data: SignalMissingDataConfig = field(default_factory=SignalMissingDataConfig)
+    scoring: SignalScoringConfig = field(default_factory=SignalScoringConfig)
+    input_mapping: SignalInputMappingConfig = field(default_factory=SignalInputMappingConfig)
+    enrichment: SignalEnrichmentConfig = field(default_factory=SignalEnrichmentConfig)
 
 # Default weights — used when no YAML config is provided (identical to historical hardcoded values)
 _DEFAULT_WEIGHTS: dict[str, float] = {
@@ -84,8 +155,13 @@ class AssessSignalUseCase:
     factory. When None, _DEFAULT_WEIGHTS are used (preserves historical behavior).
     """
 
-    def __init__(self, weights: dict[str, float] | None = None) -> None:
+    def __init__(
+        self,
+        weights: dict[str, float] | None = None,
+        config: SignalEngineConfig | None = None,
+    ) -> None:
         self._weights = weights or _DEFAULT_WEIGHTS.copy()
+        self._config = config or SignalEngineConfig()
 
     def execute(self, request: AssessSignalRequest) -> AssessSignalResponse:
         ctx = request.signal_context or SignalContext(
@@ -160,15 +236,17 @@ class AssessSignalUseCase:
         Default max_range = 6 (only today + five_day + top1 present).
         """
         if ctx.bandar_broad_score is None:
-            return _NEUTRAL, False
+            return self._config.missing_data.neutral_score, False
         max_r = ctx.bandar_max_range
+        if max_r <= 0:
+            return self._config.missing_data.neutral_score, False
         normalized = (ctx.bandar_broad_score + max_r) / (2 * max_r) * 100.0
         return max(0.0, min(100.0, normalized)), True
 
     def _score_foreign(self, ctx: SignalContext) -> tuple[float, bool]:
         """Foreign flow quality (0.0–1.0 pre-normalized) → 0–100."""
         if ctx.foreign_flow_quality is None:
-            return _NEUTRAL, False
+            return self._config.missing_data.neutral_score, False
         return max(0.0, min(100.0, ctx.foreign_flow_quality * 100.0)), True
 
     def _score_insider_activity(self, ctx: SignalContext) -> tuple[float, bool]:
@@ -179,7 +257,7 @@ class AssessSignalUseCase:
         Returns neutral 50.0 when no insider data is available (no provider yet).
         """
         if ctx.insider_net_buy_ratio is None:
-            return _NEUTRAL, False
+            return self._config.missing_data.neutral_score, False
         return max(0.0, min(100.0, (ctx.insider_net_buy_ratio + 1.0) / 2.0 * 100.0)), True
 
     def _score_seasonality(self, ctx: SignalContext) -> tuple[float, bool]:
@@ -196,18 +274,25 @@ class AssessSignalUseCase:
         accumulation_screen_use_case.py; directional correction is R2 scope.
         """
         if ctx.seasonality_win_rate is None or ctx.seasonality_avg_return_pct is None:
-            return _NEUTRAL, False
+            return self._config.missing_data.neutral_score, False
 
         win = ctx.seasonality_win_rate
         avg = ctx.seasonality_avg_return_pct
-        is_tailwind = avg > 0 and win > 50.0
-        is_headwind = avg < 0 and win < 50.0
+        cfg = self._config.scoring.seasonality
+        is_tailwind = (
+            avg > cfg.tailwind_min_avg_return_pct
+            and win > cfg.tailwind_min_win_rate_pct
+        )
+        is_headwind = (
+            avg < cfg.headwind_max_avg_return_pct
+            and win < cfg.headwind_max_win_rate_pct
+        )
 
         if is_tailwind:
             return win, True
         if is_headwind:
             return 100.0 - win, True
-        return _NEUTRAL, True
+        return self._config.missing_data.neutral_score, True
 
     def _score_analyst(self, ctx: SignalContext) -> tuple[float, bool]:
         """
@@ -217,9 +302,16 @@ class AssessSignalUseCase:
         analyst_upside_pct: percentage, e.g. 15.0 = 15% price target upside
         """
         if ctx.analyst_buy_pct is None:
-            return _NEUTRAL, False
-        buy_score = ctx.analyst_buy_pct * 60.0
-        upside_score = max(0.0, min(30.0, ctx.analyst_upside_pct or 0.0)) / 30.0 * 40.0
+            return self._config.missing_data.neutral_score, False
+        cfg = self._config.scoring.analyst
+        buy_score = ctx.analyst_buy_pct * cfg.buy_score_max_points
+        upside_score = (
+            max(0.0, min(cfg.upside_cap_pct, ctx.analyst_upside_pct or 0.0))
+            / cfg.upside_cap_pct
+            * cfg.upside_score_max_points
+            if cfg.upside_cap_pct > 0
+            else 0.0
+        )
         return min(100.0, buy_score + upside_score), True
 
     def _score_forward_pe(self, ctx: SignalContext) -> tuple[float, bool]:
@@ -237,28 +329,45 @@ class AssessSignalUseCase:
         """
         pe = ctx.forward_pe
         if pe is None or pe <= 0:
-            return _NEUTRAL, False
+            return self._config.missing_data.neutral_score, False
 
-        if pe <= 10:
-            fwd = 95.0
-        elif pe <= 15:
-            fwd = 95.0 - (pe - 10.0) / 5.0 * 20.0
-        elif pe <= 20:
-            fwd = 75.0 - (pe - 15.0) / 5.0 * 25.0
-        elif pe <= 30:
-            fwd = 50.0 - (pe - 20.0) / 10.0 * 25.0
+        cfg = self._config.scoring.forward_pe
+        if pe <= cfg.very_cheap_pe:
+            fwd = cfg.very_cheap_score
+        elif pe <= cfg.cheap_pe:
+            fwd = _interpolate(
+                pe, cfg.very_cheap_pe, cfg.cheap_pe,
+                cfg.very_cheap_score, cfg.cheap_score,
+            )
+        elif pe <= cfg.fair_pe:
+            fwd = _interpolate(
+                pe, cfg.cheap_pe, cfg.fair_pe,
+                cfg.cheap_score, cfg.fair_score,
+            )
+        elif pe <= cfg.expensive_pe:
+            fwd = _interpolate(
+                pe, cfg.fair_pe, cfg.expensive_pe,
+                cfg.fair_score, cfg.expensive_score,
+            )
         else:
-            fwd = max(0.0, 25.0 - (pe - 30.0) / 10.0 * 15.0)
+            decay = (
+                (pe - cfg.expensive_pe)
+                / cfg.post_expensive_pe_step
+                * cfg.post_expensive_score_decay
+                if cfg.post_expensive_pe_step > 0
+                else cfg.expensive_score
+            )
+            fwd = max(0.0, cfg.expensive_score - decay)
 
         return fwd, True
 
     # ── classification ───────────────────────────────────────────────────────
 
-    @staticmethod
-    def _classify_strength(score: int) -> SignalStrength:
-        if score >= _STRONG_THRESHOLD:
+    def _classify_strength(self, score: int) -> SignalStrength:
+        cfg = self._config.classification
+        if score >= cfg.strong_min_score:
             return SignalStrength.STRONG
-        if score >= _MODERATE_THRESHOLD:
+        if score >= cfg.moderate_min_score:
             return SignalStrength.MODERATE
         return SignalStrength.WEAK
 
@@ -272,8 +381,7 @@ class AssessSignalUseCase:
 
     # ── coverage ─────────────────────────────────────────────────────────────
 
-    @staticmethod
-    def _coverage_warning(ctx: SignalContext) -> str | None:
+    def _coverage_warning(self, ctx: SignalContext) -> str | None:
         missing = sum([
             ctx.bandar_broad_score is None,
             ctx.foreign_flow_quality is None,
@@ -282,9 +390,10 @@ class AssessSignalUseCase:
             ctx.analyst_buy_pct is None,
             ctx.forward_pe is None,
         ])
-        if missing >= _COVERAGE_WARNING_THRESHOLD:
+        if missing >= self._config.missing_data.coverage_warning_missing_factors:
             return (
-                f"{missing}/6 enrichment factors missing — score defaulted to neutral (50) "
+                f"{missing}/6 enrichment factors missing — score defaulted to neutral "
+                f"({self._config.missing_data.neutral_score:g}) "
                 f"for those factors. Refresh or import enrichment data for more accurate scores."
             )
         return None
@@ -327,3 +436,16 @@ class AssessSignalUseCase:
             f"Signal score {score}/100 — {strength.value}, {entry_quality.value}"
         )
         return tuple(lines)
+
+
+def _interpolate(
+    value: float,
+    low_value: float,
+    high_value: float,
+    low_score: float,
+    high_score: float,
+) -> float:
+    if high_value == low_value:
+        return high_score
+    progress = (value - low_value) / (high_value - low_value)
+    return low_score + progress * (high_score - low_score)

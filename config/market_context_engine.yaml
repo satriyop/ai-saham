@@ -1,5 +1,13 @@
 market_context_engine:
 
+  scoring:
+    neutral_score: 0.5
+    stale_business_day_gap: 1
+    coverage_warning_unavailable_ratio: 0.5
+    labels:
+      favorable_min_score: 0.65
+      neutral_min_score: 0.35
+
   factors:
 
     vix:
@@ -11,6 +19,12 @@ market_context_engine:
         low: 20.0           # VIX 15–20 → score 0.75
         elevated: 25.0      # VIX 20–25 → score 0.50; VIX 25–35 → score 0.25
         high: 35.0          # VIX > 35 → score 0.0 + VOLATILE regime override
+      score_anchors:
+        very_low: 1.0
+        low: 0.75
+        elevated: 0.50
+        risk_off: 0.25
+        high: 0.0
 
     eido:
       enabled: true
@@ -39,6 +53,7 @@ market_context_engine:
         sma_slow: 50
         above_pct_strong: 3.0   # IHSG > SMA50 by ≥ 3% → score 1.0
         below_pct_strong: -5.0  # IHSG < SMA50 by ≥ 5% → score 0.0
+        fast_sma_adjustment: 0.05
 
     idx_breadth:
       enabled: true
@@ -54,6 +69,8 @@ market_context_engine:
       thresholds:
         lookback_days: 5    # recent net foreign flow window
         reference_days: 20  # rolling average comparison baseline
+        bearish_diff_ratio: -0.5
+        bullish_diff_ratio: 0.5
 
     commodity_composite:
       enabled: false        # off by default — toggle to true when commodity data available

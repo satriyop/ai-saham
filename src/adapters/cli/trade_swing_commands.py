@@ -24,7 +24,6 @@ from src.application.services.universe_loader import (
     resolve_tickers,
 )
 from src.application.use_case.swing_backtest_use_case import (
-    DEFAULT_SWING_COST_BPS,
     SwingBacktestRequest,
     SwingBacktestUseCase,
 )
@@ -40,6 +39,9 @@ from src.application.use_case.swing_backtest_use_case import (
     FOREIGN_BOUNCE_SETUP as BACKTEST_FOREIGN_BOUNCE_SETUP,
 )
 from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.swing_backtest_config import (
+    load_swing_backtest_config as _load_swing_backtest_config,
+)
 from src.infrastructure.config.swing_config import load_swing_config as _load_swing_config
 from src.infrastructure.config.user_config import get_swing_default
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
@@ -47,6 +49,7 @@ from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarket
 
 DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 _SC = _load_swing_config()
+_BT = _load_swing_backtest_config()
 
 
 def _setup_config() -> SwingSetupCatalogConfig:
@@ -129,27 +132,27 @@ def swing_backtest(
     capital: Annotated[
         int,
         typer.Option("--capital", "-c", help="Initial capital in IDR", min=1),
-    ] = APP_CFG.trading.capital,
+    ] = _BT.capital,
     risk_pct: Annotated[
         float,
         typer.Option("--risk-pct", help="% of capital risked per trade", min=0.01),
-    ] = APP_CFG.swing.risk_pct,
+    ] = _BT.risk_pct,
     max_positions: Annotated[
         int,
         typer.Option("--max-positions", help="Maximum concurrent open positions", min=1),
-    ] = 5,
+    ] = _BT.max_positions,
     take_profit: Annotated[
         float,
         typer.Option("--take-profit", help="Take-profit percentage", min=0.01),
-    ] = APP_CFG.swing.take_profit,
+    ] = _BT.take_profit_pct,
     stop_loss: Annotated[
         float,
         typer.Option("--stop-loss", help="Stop-loss percentage", min=0.01),
-    ] = APP_CFG.swing.stop_loss,
+    ] = _BT.stop_loss_pct,
     max_hold: Annotated[
         int,
         typer.Option("--max-hold", help="Maximum holding period in trading days", min=1),
-    ] = APP_CFG.swing.max_hold,
+    ] = _BT.max_hold_days,
     cost_bps: Annotated[
         float,
         typer.Option(
@@ -157,7 +160,7 @@ def swing_backtest(
             help="One-way transaction cost in basis points (20 ~= 0.20%)",
             min=0,
         ),
-    ] = APP_CFG.backtest.cost_bps,
+    ] = _BT.cost_bps,
     with_regime: Annotated[
         bool,
         typer.Option("--with-regime", help="Group trades by entry-date market regime"),
@@ -263,6 +266,8 @@ def swing_backtest(
             resistance_gate_enabled=_SC.resistance_gate_enabled,
             resistance_headroom_min_pct=_SC.resistance_headroom_min_pct,
             ex_date_warning_days=_SC.ex_date_warning_days,
+            forward_data_lookahead_days=_BT.forward_data_lookahead_days,
+            same_day_exit_priority=_BT.same_day_exit_priority,
         ))
     except ValueError as e:
         typer.echo(f"Error: {e}", err=True)

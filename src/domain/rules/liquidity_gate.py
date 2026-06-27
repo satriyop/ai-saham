@@ -22,6 +22,7 @@ Layer: Domain
 """
 
 import statistics
+from dataclasses import dataclass
 from decimal import Decimal
 
 from src.domain.rules.risk_gate import GateContext, GateResult, RiskGate
@@ -29,6 +30,14 @@ from src.domain.rules.risk_gate import GateContext, GateResult, RiskGate
 _THIRD_LINER_CAP_IDR = 1_000_000_000_000  # IDR 1T
 _LIQUIDITY_FLOOR_IDR = 5_000_000_000       # IDR 5B per day
 _DEFAULT_LOOKBACK = 20                      # trading sessions
+
+
+@dataclass(frozen=True)
+class LiquidityGatePolicy:
+    missing_data_action: str = "skip"
+    missing_data_confidence: int = 0
+    triggered_confidence: int = 100
+    pass_confidence: int = 100
 
 
 class LiquidityGate(RiskGate):
@@ -46,10 +55,12 @@ class LiquidityGate(RiskGate):
         third_liner_cap_idr: int = _THIRD_LINER_CAP_IDR,
         liquidity_floor_idr: int = _LIQUIDITY_FLOOR_IDR,
         lookback_days: int = _DEFAULT_LOOKBACK,
+        policy: LiquidityGatePolicy | None = None,
     ) -> None:
         self._cap_threshold = third_liner_cap_idr
         self._liquidity_floor = liquidity_floor_idr
         self._lookback = lookback_days
+        self._policy = policy or LiquidityGatePolicy()
 
     def evaluate(self, context: GateContext) -> GateResult:
         # Rec 6: market cap tiering (static check, runs first)
@@ -63,7 +74,7 @@ class LiquidityGate(RiskGate):
                         f"Third-liner: market cap {cap_b}B IDR"
                         f" < {threshold_t}T IDR threshold (manipulation/spread risk)"
                     ),
-                    confidence=100,
+                    confidence=self._policy.triggered_confidence,
                 )
 
         # Rec 2: median 20-day transaction value (dynamic, requires candles)
@@ -85,11 +96,20 @@ class LiquidityGate(RiskGate):
                             f"Illiquid: median 20d tx {median_m}M IDR"
                             f" < {floor_b}B IDR/day floor (slippage risk)"
                         ),
-                        confidence=100,
-                    )
+                            confidence=self._policy.triggered_confidence,
+                        )
+
+        if context.market_cap_idr is None and not context.recent_candles:
+            triggered = self._policy.missing_data_action == "block"
+            return GateResult(
+                triggered=triggered,
+                reason="liquidity data unavailable — gate blocked"
+                if triggered else "liquidity data unavailable — gate skipped",
+                confidence=self._policy.missing_data_confidence,
+            )
 
         return GateResult(
             triggered=False,
             reason="liquidity and market cap checks passed",
-            confidence=100,
+            confidence=self._policy.pass_confidence,
         )

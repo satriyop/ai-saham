@@ -520,7 +520,7 @@ Output cadence: per session (signal factors are fast-moving).
 
 **Output:** `SignalAssessment` — `score: int (0–100)`, `strength: SignalStrength (STRONG/MODERATE/WEAK)`, `entry_quality: EntryQuality (ENTER/WATCH/AVOID)`, `breakdown: tuple[tuple[str, float], ...]`, `rationale: tuple[str, ...]`
 
-**Signal weights** are read from `config/signal_engine.yaml`. Default weights: bandar 20%, foreign flow 20%, insider activity 20%, seasonality 15%, analyst consensus 15%, forward EPS 10%. See Engine Configurability Contract below for on/off toggle semantics.
+**Signal policy** is read from `config/signal_engine.yaml`: factor enablement, weights, classification thresholds, missing-data defaults, enrichment lookbacks, upstream input mapping, and factor-internal scoring thresholds. Default weights: bandar 20%, foreign flow 20%, insider activity 20%, seasonality 15%, analyst consensus 15%, forward EPS 10%. See Engine Configurability Contract below for on/off toggle semantics.
 
 ---
 
@@ -532,7 +532,7 @@ A strong signal does NOT imply low risk. Low risk does NOT imply a strong signal
 
 ### Engine Configurability Contract
 
-Every component of both engines — signal factors and risk gates — MUST support individual on/off toggling and full parameter configuration via dedicated engine config files. Signal factors live in `config/signal_engine.yaml`; risk gates and profiles live in `config/risk_engine.yaml`. Workflow policy stays outside engine config: accumulation discovery in `config/accumulation_screener.yaml`, setup gates in `config/swing_setups.yaml`, regime targets in `config/swing_targets.yaml`, and swing overlays in `config/swing_risk_policy.yaml`.
+Every component of both engines — signal factors and risk gates — MUST support individual on/off toggling and full parameter configuration via dedicated engine config files. Signal factors live in `config/signal_engine.yaml`; risk gates and profiles live in `config/risk_engine.yaml`. Workflow policy stays outside engine config: accumulation discovery in `config/accumulation_screener.yaml`, accumulation audit/learning measurement in `config/accumulation_audit.yaml`, setup gates in `config/swing_setups.yaml`, regime targets in `config/swing_targets.yaml`, swing backtest execution assumptions in `config/swing_backtest.yaml`, analyze-swing workflow defaults in `config/analyze_swing.yaml`, and swing overlays in `config/swing_risk_policy.yaml`.
 
 #### YAML Schema
 
@@ -540,6 +540,35 @@ Every component of both engines — signal factors and risk gates — MUST suppo
 
 ```yaml
 signal_engine:
+  classification:
+    strong_min_score: 70
+    moderate_min_score: 45
+  missing_data:
+    neutral_score: 50.0
+    coverage_warning_missing_factors: 3
+  enrichment:
+    insider_lookback_days: 90
+  input_mapping:
+    accumulation_score:
+      max_score: 120.0
+      clamp: true
+  scoring:
+    bandar:
+      mandatory_signal_count: 3
+      signal_score_unit: 2
+      default_max_range: 6
+    seasonality:
+      tailwind_min_avg_return_pct: 0.0
+      tailwind_min_win_rate_pct: 50.0
+    analyst:
+      buy_score_max_points: 60.0
+      upside_score_max_points: 40.0
+      upside_cap_pct: 30.0
+    forward_pe:
+      very_cheap_pe: 10.0
+      cheap_pe: 15.0
+      fair_pe: 20.0
+      expensive_pe: 30.0
   factors:
     bandar_intensity:
       enabled: true
@@ -565,19 +594,42 @@ signal_engine:
 
 ```yaml
 risk_engine:
+  indicators:
+    sma_period: 20
+    ema_period: 20
+    rsi_period: 14
+    history_days: 365
+  market_context_gate:
+    enabled: true
+    block_when_gate_tightening: true
   gates:
     fundamental:
       enabled: true
       piotroski_min: 4
-      market_cap_floor_idr: 1_000_000_000_000
+      missing_data_action: skip
+      triggered_confidence: 100
     liquidity:
       enabled: true
+      market_cap_floor_idr: 1_000_000_000_000
       median_tx_floor_idr: 5_000_000_000
+      missing_data_action: skip
+      triggered_confidence: 100
     free_float:
       enabled: true
       min_free_float_pct: 15.0
+      missing_data_action: skip
+      triggered_confidence: 100
     bandar:
       enabled: true
+      distribution_labels: ["Small Dist", "Big Dist"]
+      missing_data_action: skip
+      triggered_confidence: 80
+    technical:
+      block_when_bearish: true
+      missing_data_action: skip
+      evaluator:
+        rsi_overbought: 70.0
+        rsi_oversold: 30.0
 ```
 
 #### On/Off Semantics
@@ -1027,7 +1079,7 @@ Second 3-word exception (after `saham view broker`, ADR-018). Rationale: MCE has
 `saham analyze regime` is preserved and now powered by MCE (richer output).
 
 #### 7. Config ownership
-All factor thresholds and regime effects live in `config/market_context_engine.yaml`. Each factor has `enabled: bool` and tunable thresholds — the ADR-027 learning loop can propose YAML diffs to tune thresholds without code changes.
+All factor thresholds, score-label thresholds, fallback scoring policy, warning thresholds, normalization bounds, and regime effects live in `config/market_context_engine.yaml`. Each factor has `enabled: bool` and tunable thresholds — the ADR-027 learning loop can propose YAML diffs to tune thresholds without code changes.
 
 #### 8. Persistence (Phase 5)
 `SQLiteMarketContextRepository` stores one canonical snapshot per `as_of_date` (`INSERT OR REPLACE`). Factors serialized as JSON. The `MarketContextEngine` saves silently after every `evaluate()` call (failures are debug-logged, never raised — persistence is best-effort). `get_snapshot()` and `get_recent_snapshots()` allow the learning loop to replay past regime decisions.

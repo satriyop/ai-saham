@@ -648,7 +648,7 @@ saham screen accum --universe lq45 --format json
 
 **Accumulation evidence score (0-120 soft cap):** consistency, streak, VWAP discount, RSI headroom, flow %, BB squeeze, and BCI. Thresholds and weights are configured in `config/accumulation_screener.yaml`.
 
-**SignalAssessment score (0-100, via SignalEngine):** bandar intensity, foreign flow quality, insider net buy ratio, seasonality win rate, analyst buy consensus, and forward PE valuation. Weights are configured in `config/signal_engine.yaml`.
+**SignalAssessment score (0-100, via SignalEngine):** bandar intensity, foreign flow quality, insider net buy ratio, seasonality win rate, analyst buy consensus, and forward PE valuation. Weights, classification thresholds, missing-data policy, enrichment lookbacks, input mapping, and factor scoring thresholds are configured in `config/signal_engine.yaml`.
 
 #### `saham screen watchlist` - Saved Snapshots
 
@@ -1611,12 +1611,15 @@ src/
 | `config/formulas.yaml` | Persisted custom formulas |
 | `config/universes.yaml` | Ticker universe definitions |
 | `config/idx_groups.yaml` | IDX sector/industry group mappings |
-| `config/risk_engine.yaml` | Risk gate enablement and thresholds |
-| `config/signal_engine.yaml` | Signal factor enablement and weights |
-| `config/market_context_engine.yaml` | Market context factors, thresholds, and regime effects |
+| `config/risk_engine.yaml` | Risk gate enablement, thresholds, confidence/missing-data policy, indicator defaults, technical-gate tuning, and market-context gate policy |
+| `config/signal_engine.yaml` | Signal factor enablement, weights, classification thresholds, missing-data policy, enrichment lookbacks, input mapping, and factor scoring thresholds |
+| `config/market_context_engine.yaml` | Market context factors, thresholds, VIX score anchors, scoring labels/fallbacks, warning policy, and regime effects |
 | `config/accumulation_screener.yaml` | Accumulation discovery policy (filters, sector breadth, broker quality, BCI, evidence weights) |
+| `config/accumulation_audit.yaml` | Accumulation-audit learning policy: setup presets, forward-return horizons, exit simulation assumptions, grouping dimensions, and bucket edges |
 | `config/swing_setups.yaml` | Named swing setup gates |
 | `config/swing_targets.yaml` | Regime-adaptive TP/SL targets |
+| `config/swing_backtest.yaml` | Swing backtest portfolio defaults and execution assumptions, including cost, max hold, forward lookahead, and same-day stop/target priority |
+| `config/analyze_swing.yaml` | Analyze-swing workflow defaults for auto-refresh windows, sentiment lookback, flow-detail window, and permissive single-ticker candidate construction |
 | `config/swing_risk_policy.yaml` | Swing risk overlays outside RiskEngine (resistance, corporate action warning) |
 | `config/pre_open_screener.yaml` | Pre-open screener rules and thresholds |
 | `config/atr_rules.yaml.example` | ATR-based risk rule template |

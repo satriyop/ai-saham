@@ -22,6 +22,7 @@ from src.application.use_case.assess_signal_use_case import (
     AssessSignalRequest,
     AssessSignalResponse,
     AssessSignalUseCase,
+    SignalEngineConfig,
 )
 from src.domain.value_objects.signal_assessment import (
     EntryQuality,
@@ -37,10 +38,6 @@ if TYPE_CHECKING:
     from src.domain.ports.analyst_consensus_provider import AnalystConsensusProvider
     from src.domain.ports.forward_estimates_provider import ForwardEstimatesProvider
     from src.domain.value_objects.market_context import MarketContext
-
-# Mirror thresholds from AssessSignalUseCase — must stay in sync
-_STRONG_THRESHOLD = 70
-_MODERATE_THRESHOLD = 45
 
 logger = logging.getLogger(__name__)
 
@@ -73,8 +70,10 @@ class SignalEngine:
         analyst_provider: "AnalystConsensusProvider | None" = None,
         forward_estimates_provider: "ForwardEstimatesProvider | None" = None,
         weights: "dict[str, float] | None" = None,
+        config: SignalEngineConfig | None = None,
     ) -> None:
-        self._use_case = AssessSignalUseCase(weights=weights)
+        self._config = config or SignalEngineConfig()
+        self._use_case = AssessSignalUseCase(weights=weights, config=self._config)
         self._bandar = bandar_provider
         self._fundamentals = fundamentals_provider
         self._insider = insider_activity_provider
@@ -104,7 +103,7 @@ class SignalEngine:
         response = self._use_case.execute(
             AssessSignalRequest(ticker=ticker, signal_context=ctx)
         )
-        return _apply_market_context(response, market_context)
+        return _apply_market_context(response, market_context, self._config)
 
     def evaluate_with_context(
         self,
@@ -121,7 +120,7 @@ class SignalEngine:
         response = self._use_case.execute(
             AssessSignalRequest(ticker=ticker, signal_context=signal_context)
         )
-        return _apply_market_context(response, market_context)
+        return _apply_market_context(response, market_context, self._config)
 
     def evaluate_request(
         self,
@@ -134,7 +133,7 @@ class SignalEngine:
         Injects signal_context automatically when the caller hasn't supplied one.
         """
         response = self._use_case.execute(self._inject_signal_context(request))
-        return _apply_market_context(response, market_context)
+        return _apply_market_context(response, market_context, self._config)
 
     def apply_market_context(
         self,
@@ -146,7 +145,22 @@ class SignalEngine:
         Used by the workflow to compute a what-if signal preview without re-fetching
         provider data. Does not affect canonical signal_assessment.
         """
-        return _apply_market_context(response, market_context)
+        return _apply_market_context(response, market_context, self._config)
+
+    def foreign_flow_quality_from_accum_score(self, accum_score: float) -> float:
+        cfg = self._config.input_mapping.accumulation_score
+        if cfg.max_score <= 0:
+            return 0.0
+        score = accum_score
+        if cfg.clamp:
+            score = max(0.0, min(score, cfg.max_score))
+        return score / cfg.max_score
+
+    def bandar_max_range(self, optional_signal_count: int) -> int:
+        cfg = self._config.scoring.bandar
+        if optional_signal_count < 0:
+            optional_signal_count = 0
+        return (cfg.mandatory_signal_count + optional_signal_count) * cfg.signal_score_unit
 
     # ── internals ────────────────────────────────────────────────────────────
 
@@ -161,7 +175,7 @@ class SignalEngine:
         today = date.today()
 
         bandar_score: int | None = None
-        bandar_max_range: int = 6  # default: 3 mandatory signals × ±2
+        bandar_max_range: int = self._config.scoring.bandar.default_max_range
 
         win_rate: float | None = None
         avg_return: float | None = None
@@ -182,7 +196,7 @@ class SignalEngine:
                         1 for x in [snap.top3_accdist, snap.top5_accdist, snap.top10_accdist]
                         if x is not None
                     )
-                    bandar_max_range = (3 + num_optional) * 2
+                    bandar_max_range = self.bandar_max_range(num_optional)
             except Exception as exc:
                 logger.debug("SignalEngine: bandar unavailable for %s: %s", ticker, exc)
 
@@ -194,7 +208,9 @@ class SignalEngine:
                 from src.domain.value_objects.insider_transaction import compute_net_buy_ratio
                 txns = self._insider.get_insider_transactions(
                     ticker=ticker,
-                    from_date=today - timedelta(days=90),
+                    from_date=today - timedelta(
+                        days=self._config.enrichment.insider_lookback_days
+                    ),
                     to_date=today,
                     action_type="ALL",
                 )
@@ -250,6 +266,7 @@ class SignalEngine:
 def _apply_market_context(
     response: AssessSignalResponse,
     market_context: "MarketContext | None",
+    config: SignalEngineConfig | None = None,
 ) -> AssessSignalResponse:
     """
     Apply regime adjustment to a signal assessment.
@@ -261,6 +278,7 @@ def _apply_market_context(
     if market_context is None:
         return response
 
+    cfg = config or SignalEngineConfig()
     multiplier = market_context.signal_multiplier
     tighten = market_context.gate_tightening
 
@@ -271,9 +289,9 @@ def _apply_market_context(
     adjusted = max(0, min(100, round(base * multiplier)))
     raw = response.signal_score_raw if response.signal_score_raw is not None else base
 
-    if adjusted >= _STRONG_THRESHOLD:
+    if adjusted >= cfg.classification.strong_min_score:
         new_strength = SignalStrength.STRONG
-    elif adjusted >= _MODERATE_THRESHOLD:
+    elif adjusted >= cfg.classification.moderate_min_score:
         new_strength = SignalStrength.MODERATE
     else:
         new_strength = SignalStrength.WEAK

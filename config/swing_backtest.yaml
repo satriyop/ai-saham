@@ -1,0 +1,24 @@
+version: 1
+
+swing_backtest:
+  portfolio:
+    capital: 100_000_000
+    risk_pct: 1.0
+    max_positions: 5
+
+  execution:
+    take_profit_pct: 5.0
+    stop_loss_pct: 5.0
+    max_hold_days: 10
+    cost_bps: 20.0
+
+    # Current simulator behavior. Kept explicit so tuning reports declare the
+    # execution model they optimized against.
+    entry_timing: same_day_close
+
+    # Calendar-day lookahead used only to confirm a signal has future candles.
+    forward_data_lookahead_days: 45
+
+    # If daily high reaches TP and low reaches SL on the same candle, use the
+    # conservative sequence unless intentionally testing sensitivity.
+    same_day_exit_priority: stop_first

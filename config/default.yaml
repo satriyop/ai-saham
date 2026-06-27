@@ -39,8 +39,11 @@ storage:
 config_paths:
   pre_open_screener: "config/pre_open_screener.yaml"
   accumulation_screener: "config/accumulation_screener.yaml"
+  accumulation_audit: "config/accumulation_audit.yaml"
   swing_setups: "config/swing_setups.yaml"
   swing_targets: "config/swing_targets.yaml"
+  swing_backtest: "config/swing_backtest.yaml"
+  analyze_swing: "config/analyze_swing.yaml"
   swing_risk_policy: "config/swing_risk_policy.yaml"
   risk_engine: "config/risk_engine.yaml"
   signal_engine: "config/signal_engine.yaml"

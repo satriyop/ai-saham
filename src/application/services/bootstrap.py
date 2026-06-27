@@ -55,16 +55,94 @@ def _resolve_signal_weights(cfg: dict) -> dict[str, float] | None:
     return {name: w / total for name, w in active.items()}
 
 
+def _resolve_signal_config(cfg: dict):
+    from src.application.use_case.assess_signal_use_case import (
+        AccumulationScoreMappingConfig,
+        AnalystScoringConfig,
+        BandarScoringConfig,
+        ForwardPeScoringConfig,
+        SeasonalityScoringConfig,
+        SignalClassificationConfig,
+        SignalEnrichmentConfig,
+        SignalEngineConfig,
+        SignalInputMappingConfig,
+        SignalMissingDataConfig,
+        SignalScoringConfig,
+    )
+
+    root = cfg.get("signal_engine", {})
+    classification = root.get("classification", {})
+    missing = root.get("missing_data", {})
+    scoring = root.get("scoring", {})
+    enrichment = root.get("enrichment", {})
+    input_mapping = root.get("input_mapping", {})
+    accum_mapping = input_mapping.get("accumulation_score", {})
+    bandar = scoring.get("bandar", {})
+    seasonality = scoring.get("seasonality", {})
+    analyst = scoring.get("analyst", {})
+    forward_pe = scoring.get("forward_pe", {})
+
+    return SignalEngineConfig(
+        classification=SignalClassificationConfig(
+            strong_min_score=classification.get("strong_min_score", 70),
+            moderate_min_score=classification.get("moderate_min_score", 45),
+        ),
+        missing_data=SignalMissingDataConfig(
+            neutral_score=missing.get("neutral_score", 50.0),
+            coverage_warning_missing_factors=missing.get("coverage_warning_missing_factors", 3),
+        ),
+        scoring=SignalScoringConfig(
+            bandar=BandarScoringConfig(
+                mandatory_signal_count=bandar.get("mandatory_signal_count", 3),
+                signal_score_unit=bandar.get("signal_score_unit", 2),
+                default_max_range=bandar.get("default_max_range", 6),
+            ),
+            seasonality=SeasonalityScoringConfig(
+                tailwind_min_avg_return_pct=seasonality.get("tailwind_min_avg_return_pct", 0.0),
+                tailwind_min_win_rate_pct=seasonality.get("tailwind_min_win_rate_pct", 50.0),
+                headwind_max_avg_return_pct=seasonality.get("headwind_max_avg_return_pct", 0.0),
+                headwind_max_win_rate_pct=seasonality.get("headwind_max_win_rate_pct", 50.0),
+            ),
+            analyst=AnalystScoringConfig(
+                buy_score_max_points=analyst.get("buy_score_max_points", 60.0),
+                upside_score_max_points=analyst.get("upside_score_max_points", 40.0),
+                upside_cap_pct=analyst.get("upside_cap_pct", 30.0),
+            ),
+            forward_pe=ForwardPeScoringConfig(
+                very_cheap_pe=forward_pe.get("very_cheap_pe", 10.0),
+                cheap_pe=forward_pe.get("cheap_pe", 15.0),
+                fair_pe=forward_pe.get("fair_pe", 20.0),
+                expensive_pe=forward_pe.get("expensive_pe", 30.0),
+                very_cheap_score=forward_pe.get("very_cheap_score", 95.0),
+                cheap_score=forward_pe.get("cheap_score", 75.0),
+                fair_score=forward_pe.get("fair_score", 50.0),
+                expensive_score=forward_pe.get("expensive_score", 25.0),
+                post_expensive_pe_step=forward_pe.get("post_expensive_pe_step", 10.0),
+                post_expensive_score_decay=forward_pe.get("post_expensive_score_decay", 15.0),
+            ),
+        ),
+        input_mapping=SignalInputMappingConfig(
+            accumulation_score=AccumulationScoreMappingConfig(
+                max_score=accum_mapping.get("max_score", 120.0),
+                clamp=accum_mapping.get("clamp", True),
+            ),
+        ),
+        enrichment=SignalEnrichmentConfig(
+            insider_lookback_days=enrichment.get("insider_lookback_days", 90),
+        ),
+    )
+
+
 def _resolve_risk_gates(cfg: dict) -> tuple[list, list]:
     """
     Parse enabled risk gates and return (structural_gates, execution_gates).
 
     When config is absent/empty, defaults match the previous hardcoded values.
     """
-    from src.domain.rules.bandar_gate import BandarGate
-    from src.domain.rules.free_float_gate import FreeFloatGate
-    from src.domain.rules.fundamental_gate import FundamentalGate
-    from src.domain.rules.liquidity_gate import LiquidityGate
+    from src.domain.rules.bandar_gate import BandarGate, BandarGateConfig
+    from src.domain.rules.free_float_gate import FreeFloatGate, FreeFloatGatePolicy
+    from src.domain.rules.fundamental_gate import FundamentalGate, FundamentalGatePolicy
+    from src.domain.rules.liquidity_gate import LiquidityGate, LiquidityGatePolicy
 
     gates = cfg.get("risk_engine", {}).get("gates", {})
 
@@ -73,6 +151,12 @@ def _resolve_risk_gates(cfg: dict) -> tuple[list, list]:
     if fund.get("enabled", True):
         structural.append(FundamentalGate(
             distress_threshold=fund.get("piotroski_min", 3),
+            policy=FundamentalGatePolicy(
+                missing_data_action=fund.get("missing_data_action", "skip"),
+                missing_data_confidence=fund.get("missing_data_confidence", 0),
+                triggered_confidence=fund.get("triggered_confidence", 100),
+                pass_confidence=fund.get("pass_confidence", 100),
+            ),
         ))
 
     liq = gates.get("liquidity", {})
@@ -81,20 +165,93 @@ def _resolve_risk_gates(cfg: dict) -> tuple[list, list]:
             third_liner_cap_idr=liq.get("market_cap_floor_idr", 1_000_000_000_000),
             liquidity_floor_idr=liq.get("median_tx_floor_idr", 5_000_000_000),
             lookback_days=liq.get("lookback_days", 20),
+            policy=LiquidityGatePolicy(
+                missing_data_action=liq.get("missing_data_action", "skip"),
+                missing_data_confidence=liq.get("missing_data_confidence", 0),
+                triggered_confidence=liq.get("triggered_confidence", 100),
+                pass_confidence=liq.get("pass_confidence", 100),
+            ),
         ))
 
     ff = gates.get("free_float", {})
     if ff.get("enabled", True):
         structural.append(FreeFloatGate(
             min_free_float_pct=ff.get("min_free_float_pct", 15.0),
+            policy=FreeFloatGatePolicy(
+                missing_data_action=ff.get("missing_data_action", "skip"),
+                missing_data_confidence=ff.get("missing_data_confidence", 0),
+                triggered_confidence=ff.get("triggered_confidence", 100),
+                pass_confidence=ff.get("pass_confidence", 100),
+            ),
         ))
 
     execution = []
     bandar = gates.get("bandar", {})
     if bandar.get("enabled", True):
-        execution.append(BandarGate())
+        execution.append(BandarGate(
+            BandarGateConfig(
+                distribution_labels=frozenset(bandar.get("distribution_labels", [
+                    "Small Dist", "Big Dist", "Small Dis", "Big Dis",
+                ])),
+                missing_data_action=bandar.get("missing_data_action", "skip"),
+                missing_data_confidence=bandar.get("missing_data_confidence", 0),
+                triggered_confidence=bandar.get("triggered_confidence", 80),
+                pass_confidence=bandar.get("pass_confidence", 100),
+            )
+        ))
 
     return structural, execution
+
+
+def _resolve_risk_indicator_defaults(cfg: dict):
+    from src.application.services.risk_engine import RiskIndicatorDefaults
+
+    indicators = cfg.get("risk_engine", {}).get("indicators", {})
+    return RiskIndicatorDefaults(
+        sma_period=indicators.get("sma_period", 20),
+        ema_period=indicators.get("ema_period", 20),
+        rsi_period=indicators.get("rsi_period", 14),
+        history_days=indicators.get("history_days", 365),
+        gate_recent_candle_lookback=indicators.get("gate_recent_candle_lookback", 20),
+    )
+
+
+def _resolve_market_context_gate(cfg: dict):
+    from src.application.services.risk_engine import MarketContextGateConfig
+
+    gate = cfg.get("risk_engine", {}).get("market_context_gate", {})
+    return MarketContextGateConfig(
+        enabled=gate.get("enabled", True),
+        block_when_gate_tightening=gate.get("block_when_gate_tightening", True),
+        gate_is_structural=gate.get("gate_is_structural", True),
+        label_prefix=gate.get("label_prefix", "regime"),
+    )
+
+
+def _resolve_indicator_evaluator_config(cfg: dict):
+    from src.application.services.indicator_evaluator import IndicatorEvaluatorConfig
+
+    technical = cfg.get("risk_engine", {}).get("gates", {}).get("technical", {})
+    evaluator = technical.get("evaluator", {})
+    return IndicatorEvaluatorConfig(
+        rsi_overbought=evaluator.get("rsi_overbought", 70.0),
+        rsi_oversold=evaluator.get("rsi_oversold", 30.0),
+        agreement_count=evaluator.get("agreement_count", 2),
+        full_agreement_confidence=evaluator.get("full_agreement_confidence", 100),
+        partial_agreement_confidence=evaluator.get("partial_agreement_confidence", 50),
+    )
+
+
+def _resolve_technical_gate_config(cfg: dict):
+    from src.domain.rules.technical_gate import TechnicalGateConfig
+
+    technical = cfg.get("risk_engine", {}).get("gates", {}).get("technical", {})
+    return TechnicalGateConfig(
+        block_when_bearish=technical.get("block_when_bearish", True),
+        missing_data_action=technical.get("missing_data_action", "skip"),
+        missing_data_confidence=technical.get("missing_data_confidence", 0),
+        pass_confidence=technical.get("pass_confidence", 100),
+    )
 
 
 # ── Factory functions ─────────────────────────────────────────────────────────
@@ -188,6 +345,10 @@ def create_risk_engine(
 
     cfg = _load_engine_config(Path(APP_CFG.config_paths.risk_engine))
     structural_gates, execution_gates = _resolve_risk_gates(cfg)
+    indicator_defaults = _resolve_risk_indicator_defaults(cfg)
+    market_context_gate = _resolve_market_context_gate(cfg)
+    indicator_evaluator_config = _resolve_indicator_evaluator_config(cfg)
+    technical_gate_config = _resolve_technical_gate_config(cfg)
 
     fund_prov = None
     bandar_prov = None
@@ -217,7 +378,10 @@ def create_risk_engine(
         fundamentals_provider=fund_prov,
         bandar_provider=bandar_prov,
         shareholding_provider=shareholding_prov,
-        indicator_evaluator=IndicatorEvaluator(),
+        indicator_evaluator=IndicatorEvaluator(indicator_evaluator_config),
+        indicator_defaults=indicator_defaults,
+        market_context_gate=market_context_gate,
+        technical_gate_config=technical_gate_config,
     )
 
 
@@ -244,9 +408,10 @@ def create_signal_engine(
 
     cfg = _load_engine_config(Path(APP_CFG.config_paths.signal_engine))
     weights = _resolve_signal_weights(cfg)
+    signal_config = _resolve_signal_config(cfg)
 
     if not with_enrichment:
-        return SignalEngine(weights=weights)
+        return SignalEngine(weights=weights, config=signal_config)
 
     from src.infrastructure.browser.stockbit_bandar import StockbitBandarDetectorProvider
     from src.infrastructure.browser.stockbit_insider import StockbitInsiderActivityProvider
@@ -266,6 +431,7 @@ def create_signal_engine(
             broker_provider=None, db_path=resolved
         ),
         weights=weights,
+        config=signal_config,
     )
 
 

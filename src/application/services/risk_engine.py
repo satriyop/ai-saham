@@ -15,7 +15,7 @@ Layer: Application
 from __future__ import annotations
 
 import logging
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import date
 from typing import TYPE_CHECKING
 
@@ -32,12 +32,30 @@ from src.domain.ports.market_data_repository import MarketDataRepository
 if TYPE_CHECKING:
     from src.application.services.indicator_evaluator import IndicatorEvaluator
     from src.application.services.indicator_registry import IndicatorRegistry
+    from src.domain.rules.technical_gate import TechnicalGateConfig
     from src.domain.ports.fundamentals_provider import FundamentalsProvider
     from src.domain.ports.bandar_detector_provider import BandarDetectorProvider
     from src.domain.ports.shareholding_provider import ShareholdingProvider
     from src.domain.value_objects.market_context import MarketContext
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class RiskIndicatorDefaults:
+    sma_period: int = 20
+    ema_period: int = 20
+    rsi_period: int = 14
+    history_days: int = 365
+    gate_recent_candle_lookback: int = 20
+
+
+@dataclass(frozen=True)
+class MarketContextGateConfig:
+    enabled: bool = True
+    block_when_gate_tightening: bool = True
+    gate_is_structural: bool = True
+    label_prefix: str = "regime"
 
 
 class RiskEngine:
@@ -59,13 +77,22 @@ class RiskEngine:
         bandar_provider: "BandarDetectorProvider | None" = None,
         shareholding_provider: "ShareholdingProvider | None" = None,
         indicator_evaluator: "IndicatorEvaluator | None" = None,
+        indicator_defaults: RiskIndicatorDefaults | None = None,
+        market_context_gate: MarketContextGateConfig | None = None,
+        technical_gate_config: "TechnicalGateConfig | None" = None,
     ) -> None:
+        self._indicator_defaults = indicator_defaults or RiskIndicatorDefaults()
+        self._market_context_gate = market_context_gate or MarketContextGateConfig()
+        self._indicator_evaluator = indicator_evaluator
+        self._technical_gate_config = technical_gate_config
         self._use_case = AssessRiskUseCase(
             repository=repository,
             registry=registry,
             structural_gates=structural_gates,
             execution_gates=execution_gates,
-            indicator_evaluator=indicator_evaluator,
+            indicator_evaluator=self._indicator_evaluator,
+            indicator_history_days=self._indicator_defaults.history_days,
+            gate_recent_candle_lookback=self._indicator_defaults.gate_recent_candle_lookback,
         )
         self._fundamentals_provider = fundamentals_provider
         self._bandar_provider = bandar_provider
@@ -94,9 +121,16 @@ class RiskEngine:
         if as_of_date is not None:
             gate_ctx = replace(gate_ctx, snapshot_date=as_of_date)
         response = self._use_case.execute(
-            AssessRiskRequest(ticker=ticker, sensitivity=profile, gate_context=gate_ctx)
+            AssessRiskRequest(
+                ticker=ticker,
+                sensitivity=profile,
+                sma_period=self._indicator_defaults.sma_period,
+                ema_period=self._indicator_defaults.ema_period,
+                rsi_period=self._indicator_defaults.rsi_period,
+                gate_context=gate_ctx,
+            )
         )
-        return _apply_regime_gate(response, market_context)
+        return _apply_regime_gate(response, market_context, self._market_context_gate)
 
     def assess_with_context(
         self,
@@ -113,9 +147,16 @@ class RiskEngine:
         Wire up by passing this engine to the screener instead of AssessRiskUseCase.
         """
         response = self._use_case.execute(
-            AssessRiskRequest(ticker=ticker, sensitivity=profile, gate_context=gate_context)
+            AssessRiskRequest(
+                ticker=ticker,
+                sensitivity=profile,
+                sma_period=self._indicator_defaults.sma_period,
+                ema_period=self._indicator_defaults.ema_period,
+                rsi_period=self._indicator_defaults.rsi_period,
+                gate_context=gate_context,
+            )
         )
-        return _apply_regime_gate(response, market_context)
+        return _apply_regime_gate(response, market_context, self._market_context_gate)
 
     def assess_request(
         self,
@@ -131,8 +172,8 @@ class RiskEngine:
         """
         if request.rules_file is not None:
             return self._use_case.execute(request)
-        response = self._use_case.execute(self._inject_gate_context(request))
-        return _apply_regime_gate(response, market_context)
+        response = self._use_case.execute(self._inject_gate_context(self._apply_request_defaults(request)))
+        return _apply_regime_gate(response, market_context, self._market_context_gate)
 
     def assess_all_profiles(
         self,
@@ -140,11 +181,22 @@ class RiskEngine:
         market_context: "MarketContext | None" = None,
     ) -> "AssessAllProfilesResponse":
         """Run assessment across all risk profiles (conservative/balanced/aggressive)."""
-        result = self._use_case.execute_all_profiles(self._inject_gate_context(request))
-        if market_context is not None and market_context.gate_tightening:
-            gate_label = f"regime:{market_context.regime.value}"
+        result = self._use_case.execute_all_profiles(
+            self._inject_gate_context(self._apply_request_defaults(request))
+        )
+        if (
+            market_context is not None
+            and self._market_context_gate.enabled
+            and self._market_context_gate.block_when_gate_tightening
+            and market_context.gate_tightening
+        ):
+            gate_label = f"{self._market_context_gate.label_prefix}:{market_context.regime.value}"
             gated = [
-                replace(a, gate_triggered=gate_label, gate_is_structural=True)
+                replace(
+                    a,
+                    gate_triggered=gate_label,
+                    gate_is_structural=self._market_context_gate.gate_is_structural,
+                )
                 if a.gate_triggered is None
                 else a
                 for a in result.assessments
@@ -156,7 +208,22 @@ class RiskEngine:
         self, request: AssessRiskRequest, days: int = 7
     ) -> "AssessRiskTrendResponse":
         """Evaluate risk trend over the last N days."""
-        return self._use_case.execute_trend(self._inject_gate_context(request), days=days)
+        return self._use_case.execute_trend(
+            self._inject_gate_context(self._apply_request_defaults(request)),
+            days=days,
+        )
+
+    @property
+    def indicator_evaluator(self) -> "IndicatorEvaluator | None":
+        return self._indicator_evaluator
+
+    @property
+    def indicator_defaults(self) -> RiskIndicatorDefaults:
+        return self._indicator_defaults
+
+    @property
+    def technical_gate_config(self) -> "TechnicalGateConfig | None":
+        return self._technical_gate_config
 
     def apply_market_context(
         self,
@@ -168,7 +235,7 @@ class RiskEngine:
         Used by the workflow to compute a what-if risk preview without re-fetching
         provider data. Does not affect canonical risk_response.
         """
-        return _apply_regime_gate(response, market_context)
+        return _apply_regime_gate(response, market_context, self._market_context_gate)
 
     # ── internals ────────────────────────────────────────────────────────────
 
@@ -178,6 +245,17 @@ class RiskEngine:
             return request
         gate_ctx = self._build_gate_context(request.ticker)
         return replace(request, gate_context=gate_ctx)
+
+    def _apply_request_defaults(self, request: AssessRiskRequest) -> AssessRiskRequest:
+        defaults = self._indicator_defaults
+        updates = {}
+        if request.sma_period == AssessRiskRequest.sma_period:
+            updates["sma_period"] = defaults.sma_period
+        if request.ema_period == AssessRiskRequest.ema_period:
+            updates["ema_period"] = defaults.ema_period
+        if request.rsi_period == AssessRiskRequest.rsi_period:
+            updates["rsi_period"] = defaults.rsi_period
+        return replace(request, **updates) if updates else request
 
     def _build_gate_context(self, ticker: str, as_of_date: date | None = None) -> GateContext:
         """Fetch enrichment data from injected providers and build a GateContext.
@@ -231,6 +309,7 @@ class RiskEngine:
 def _apply_regime_gate(
     response: AssessRiskResponse,
     market_context: "MarketContext | None",
+    config: MarketContextGateConfig | None = None,
 ) -> AssessRiskResponse:
     """
     Apply regime gate tightening to a risk assessment.
@@ -239,13 +318,23 @@ def _apply_regime_gate(
     trigger so the stock is blocked at the gate layer.
     No-op when market_context is None or gate_tightening is False.
     """
-    if market_context is None or not market_context.gate_tightening:
+    cfg = config or MarketContextGateConfig()
+    if (
+        market_context is None
+        or not cfg.enabled
+        or not cfg.block_when_gate_tightening
+        or not market_context.gate_tightening
+    ):
         return response
     if response.assessment.gate_triggered is not None:
         # already gated by a domain gate — don't overwrite
         return response
 
     regime = market_context.regime.value
-    gate_label = f"regime:{regime}"
-    new_assessment = replace(response.assessment, gate_triggered=gate_label, gate_is_structural=True)
+    gate_label = f"{cfg.label_prefix}:{regime}"
+    new_assessment = replace(
+        response.assessment,
+        gate_triggered=gate_label,
+        gate_is_structural=cfg.gate_is_structural,
+    )
     return replace(response, assessment=new_assessment)

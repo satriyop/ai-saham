@@ -225,6 +225,54 @@ def test_swing_backtest_default_applies_transaction_costs():
     assert response.trades[0].net_return_pct == 4.59
 
 
+def test_swing_backtest_can_prioritize_target_when_same_day_hits_stop_and_target():
+    base = date(2026, 1, 1)
+    signal_date = base + timedelta(days=24)
+    exit_date = base + timedelta(days=25)
+    candles = [
+        _flat_candle(
+            "BBCA",
+            base + timedelta(days=i),
+            Decimal("100") if i % 2 == 0 else Decimal("101"),
+        )
+        for i in range(25)
+    ]
+    candles.append(
+        _ohlc(
+            "BBCA",
+            exit_date,
+            Decimal("100"),
+            Decimal("106"),
+            Decimal("94"),
+            Decimal("100"),
+        )
+    )
+    summaries = [
+        _summary("BBCA", base + timedelta(days=i), Decimal("110"))
+        for i in range(18, 25)
+    ]
+    use_case = SwingBacktestUseCase(
+        broker_repository=MockBrokerRepository(summaries),
+        market_repository=MockMarketRepository(candles),
+    )
+
+    response = use_case.execute(SwingBacktestRequest(
+        tickers=["BBCA"],
+        start_date=signal_date,
+        end_date=exit_date,
+        capital=Decimal("1000000"),
+        risk_pct=Decimal("0.01"),
+        max_positions=1,
+        min_net_buy_days=1,
+        cost_bps=Decimal("0"),
+        same_day_exit_priority="target_first",
+    ))
+
+    assert response.trade_count == 1
+    assert response.trades[0].exit_reason == "target"
+    assert response.trades[0].net_return_pct == 5.0
+
+
 def test_swing_backtest_respects_max_positions():
     base = date(2026, 1, 1)
     signal_date = base + timedelta(days=24)

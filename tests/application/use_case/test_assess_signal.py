@@ -17,6 +17,13 @@ from src.application.use_case.assess_signal_use_case import (
     AssessSignalRequest,
     AssessSignalResponse,
     AssessSignalUseCase,
+    AnalystScoringConfig,
+    ForwardPeScoringConfig,
+    SeasonalityScoringConfig,
+    SignalClassificationConfig,
+    SignalEngineConfig,
+    SignalMissingDataConfig,
+    SignalScoringConfig,
 )
 from src.domain.value_objects.signal_assessment import (
     EntryQuality,
@@ -262,6 +269,62 @@ class TestAssessSignalUseCaseScoring:
                 assert resp.assessment.entry_quality == EntryQuality.WATCH
             else:
                 assert resp.assessment.entry_quality == EntryQuality.AVOID
+
+    def test_classification_thresholds_are_configurable(self):
+        uc = AssessSignalUseCase(config=SignalEngineConfig(
+            classification=SignalClassificationConfig(
+                strong_min_score=80,
+                moderate_min_score=60,
+            )
+        ))
+        resp = uc.execute(AssessSignalRequest(
+            ticker="BBCA",
+            signal_context=_ctx(),
+        ))
+
+        assert resp.score == 50
+        assert resp.assessment.strength == SignalStrength.WEAK
+        assert resp.assessment.entry_quality == EntryQuality.AVOID
+
+    def test_scoring_thresholds_are_configurable(self):
+        uc = AssessSignalUseCase(config=SignalEngineConfig(
+            missing_data=SignalMissingDataConfig(neutral_score=40.0),
+            scoring=SignalScoringConfig(
+                seasonality=SeasonalityScoringConfig(
+                    tailwind_min_avg_return_pct=1.0,
+                    tailwind_min_win_rate_pct=60.0,
+                ),
+                analyst=AnalystScoringConfig(
+                    buy_score_max_points=50.0,
+                    upside_score_max_points=50.0,
+                    upside_cap_pct=50.0,
+                ),
+                forward_pe=ForwardPeScoringConfig(
+                    very_cheap_pe=5.0,
+                    cheap_pe=10.0,
+                    fair_pe=15.0,
+                    expensive_pe=20.0,
+                    very_cheap_score=100.0,
+                    cheap_score=80.0,
+                    fair_score=40.0,
+                    expensive_score=10.0,
+                ),
+            ),
+        ))
+        resp = uc.execute(AssessSignalRequest(
+            ticker="BBCA",
+            signal_context=_ctx(
+                seasonality_win_rate=55.0,
+                seasonality_avg_return_pct=0.5,
+                analyst_buy_pct=1.0,
+                analyst_upside_pct=50.0,
+                forward_pe=10.0,
+            ),
+        ))
+
+        assert resp.assessment.breakdown_dict["seasonality_edge"] == pytest.approx(40.0)
+        assert resp.assessment.breakdown_dict["analyst_consensus"] == pytest.approx(100.0)
+        assert resp.assessment.breakdown_dict["forward_valuation"] == pytest.approx(80.0)
 
     # breakdown structure
 

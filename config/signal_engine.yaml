@@ -10,6 +10,57 @@
 #
 version: 1
 signal_engine:
+
+  # Final SignalAssessment classification. TradeSetup consumes the resulting
+  # ENTER/WATCH/AVOID action after RiskEngine gates are applied.
+  classification:
+    strong_min_score: 70
+    moderate_min_score: 45
+
+  # Missing enrichment is scored neutral, then surfaced as a coverage warning
+  # once too many factors are absent.
+  missing_data:
+    neutral_score: 50.0
+    coverage_warning_missing_factors: 3
+
+  # Provider lookbacks used by SignalEngine self-fetch mode.
+  enrichment:
+    insider_lookback_days: 90
+
+  # Maps upstream workflow evidence into SignalContext fields.
+  input_mapping:
+    accumulation_score:
+      max_score: 120.0
+      clamp: true
+
+  # Factor-internal scoring thresholds. Factor weights below control influence;
+  # this block controls how raw enrichment data maps to a 0-100 component score.
+  scoring:
+    bandar:
+      mandatory_signal_count: 3
+      signal_score_unit: 2
+      default_max_range: 6
+    seasonality:
+      tailwind_min_avg_return_pct: 0.0
+      tailwind_min_win_rate_pct: 50.0
+      headwind_max_avg_return_pct: 0.0
+      headwind_max_win_rate_pct: 50.0
+    analyst:
+      buy_score_max_points: 60.0
+      upside_score_max_points: 40.0
+      upside_cap_pct: 30.0
+    forward_pe:
+      very_cheap_pe: 10.0
+      cheap_pe: 15.0
+      fair_pe: 20.0
+      expensive_pe: 30.0
+      very_cheap_score: 95.0
+      cheap_score: 75.0
+      fair_score: 50.0
+      expensive_score: 25.0
+      post_expensive_pe_step: 10.0
+      post_expensive_score_decay: 15.0
+
   factors:
     bandar_intensity:
       enabled: true

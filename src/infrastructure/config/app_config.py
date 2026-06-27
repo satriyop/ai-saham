@@ -51,8 +51,11 @@ class StorageConfig:
 class ConfigPathsConfig:
     pre_open_screener: str = "config/pre_open_screener.yaml"
     accumulation_screener: str = "config/accumulation_screener.yaml"
+    accumulation_audit: str = "config/accumulation_audit.yaml"
     swing_setups: str = "config/swing_setups.yaml"
     swing_targets: str = "config/swing_targets.yaml"
+    swing_backtest: str = "config/swing_backtest.yaml"
+    analyze_swing: str = "config/analyze_swing.yaml"
     swing_risk_policy: str = "config/swing_risk_policy.yaml"
     risk_engine: str = "config/risk_engine.yaml"
     signal_engine: str = "config/signal_engine.yaml"

@@ -1043,8 +1043,7 @@ def print_swing_output(
             for _factor, _score in breakdown.items():
                 _source = ""
                 if _factor == "foreign_flow_quality" and accum is not None:
-                    _raw_accum = min(accum.score, 120.0)
-                    _source = f"Accum evidence {_raw_accum:.0f}/120"
+                    _source = f"Accum evidence mapped to {_score:.0f}/100"
                 bd_table.add_row(
                     _factor_labels.get(_factor, _factor),
                     f"{_score:.1f}",

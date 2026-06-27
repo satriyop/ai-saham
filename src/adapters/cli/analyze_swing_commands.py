@@ -73,7 +73,6 @@ from src.domain.rules.free_float_gate import FreeFloatGate
 from src.domain.rules.fundamental_gate import FundamentalGate
 from src.domain.rules.liquidity_gate import LiquidityGate
 from src.application.use_case.swing_backtest_use_case import (
-    DEFAULT_SWING_COST_BPS,
     SwingBacktestRequest,
     SwingBacktestResponse,
     SwingBacktestUseCase,
@@ -91,6 +90,12 @@ from src.infrastructure.browser.stockbit_seasonality import StockbitSeasonalityP
 from src.infrastructure.browser.stockbit_shareholding import StockbitShareholdingProvider
 from src.infrastructure.browser.stockbit_ticker_notation import StockbitTickerNotationProvider
 from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.analyze_swing_config import (
+    load_analyze_swing_config as _load_analyze_swing_config,
+)
+from src.infrastructure.config.swing_backtest_config import (
+    load_swing_backtest_config as _load_swing_backtest_config,
+)
 from src.infrastructure.config.user_config import get_swing_default
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
@@ -100,7 +105,6 @@ DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 _W = 70  # display width
 
 FOREIGN_BOUNCE_SETUP_NAME = FOREIGN_BOUNCE_SETUP
-FOREIGN_BOUNCE_MAX_HOLD_DAYS = 10
 
 # Fixed fallback constants kept for backtest use; analyze/screen use resolve_setup_targets().
 FOREIGN_BOUNCE_TAKE_PROFIT = Decimal("5")
@@ -122,6 +126,8 @@ from src.infrastructure.config.swing_config import (  # noqa: E402
 
 # Load split swing workflow config; fall back to _SwingConfig defaults on any error.
 _SC = _load_swing_config_typed()
+_BT = _load_swing_backtest_config()
+_AS = _load_analyze_swing_config()
 _DISPLAY_CONFIG = SwingDisplayConfig(
     enter_min_score=_SC.enter_min_score,
     watch_min_score=_SC.watch_min_score,
@@ -131,7 +137,7 @@ _DISPLAY_CONFIG = SwingDisplayConfig(
     strong_min_streak=_SC.strong_min_streak,
     building_min_score=_SC.building_min_score,
     building_min_streak=_SC.building_min_streak,
-    foreign_bounce_max_hold_days=FOREIGN_BOUNCE_MAX_HOLD_DAYS,
+    foreign_bounce_max_hold_days=_BT.max_hold_days,
 )
 
 SMART_MONEY_BROKERS = set(_SC.smart_money_brokers)
@@ -278,7 +284,7 @@ def _auto_refresh_swing_data(
     actions: list[str] = []
     candles_status = _fetch_candles(
         ticker=ticker,
-        days=365,
+        days=_AS.market_refresh_days,
         db_path=db_path,
         provider_name="yahoo",
         refresh=force_refresh,
@@ -288,7 +294,7 @@ def _auto_refresh_swing_data(
     broker_provider, broker_provider_name = _create_broker_provider(None)
     broker_status = _fetch_broker(
         ticker=ticker,
-        days=90,
+        days=_AS.broker_refresh_days,
         db_path=db_path,
         broker_provider=broker_provider,
         refresh=force_refresh,
@@ -331,8 +337,8 @@ def _fetch_swing_sentiment(
             )
             response = sent_uc.execute(FetchSentimentRequest(
                 ticker=ticker,
-                max_headlines=20,
-                days=3,
+                max_headlines=_AS.sentiment_max_headlines,
+                days=_AS.sentiment_days,
             ))
         return response, response.warning
     except Exception as exc:
@@ -519,7 +525,7 @@ def swing(
     flow_window: Annotated[
         int,
         typer.Option("--flow-window", help="Broker-flow detail window in broker sessions", min=1),
-    ] = 30,
+    ] = _AS.flow_detail_window_sessions,
     capital: Annotated[
         Optional[int],
         typer.Option("--capital", "-c", help="Capital in IDR — enables position sizing block"),
@@ -713,8 +719,8 @@ def swing(
             AccumulationScreenRequest(
                 tickers=[ticker],
                 window_days=window,
-                min_net_buy_days=0,
-                min_score=0.0,
+                min_net_buy_days=_AS.candidate_min_net_buy_days,
+                min_score=_AS.candidate_min_score,
                 tier1_broker_codes=_SC.tier1_broker_codes,
                 bci_cluster_min_count=_SC.bci_cluster_min_count,
                 bci_stable_min_count=_SC.bci_stable_min_count,
@@ -883,8 +889,7 @@ def swing(
                     "take_profit_pct": float(_tp_pct) if setup_eval else None,
                     "stop_loss_pct": float(_sl_pct) if setup_eval else None,
                     "regime": _regime_label,
-                    "max_hold_days": FOREIGN_BOUNCE_MAX_HOLD_DAYS
-                    if setup_eval else None,
+                    "max_hold_days": _BT.max_hold_days if setup_eval else None,
                 },
             } if setup_eval else None,
             "risk": {
@@ -1035,27 +1040,27 @@ def swing_compare(
     capital: Annotated[
         int,
         typer.Option("--capital", "-c", help="Initial capital in IDR", min=1),
-    ] = APP_CFG.trading.capital,
+    ] = _BT.capital,
     risk_pct: Annotated[
         float,
         typer.Option("--risk-pct", help="% of capital risked per trade", min=0.01),
-    ] = APP_CFG.swing.risk_pct,
+    ] = _BT.risk_pct,
     max_positions: Annotated[
         int,
         typer.Option("--max-positions", help="Maximum concurrent open positions", min=1),
-    ] = 5,
+    ] = _BT.max_positions,
     take_profit: Annotated[
         float,
         typer.Option("--take-profit", help="Take-profit percentage", min=0.01),
-    ] = APP_CFG.swing.take_profit,
+    ] = _BT.take_profit_pct,
     stop_loss: Annotated[
         float,
         typer.Option("--stop-loss", help="Stop-loss percentage", min=0.01),
-    ] = APP_CFG.swing.stop_loss,
+    ] = _BT.stop_loss_pct,
     max_hold: Annotated[
         int,
         typer.Option("--max-hold", help="Maximum holding period in trading days", min=1),
-    ] = APP_CFG.swing.max_hold,
+    ] = _BT.max_hold_days,
     cost_bps: Annotated[
         float,
         typer.Option(
@@ -1063,7 +1068,7 @@ def swing_compare(
             help="One-way transaction cost in basis points (20 ~= 0.20%)",
             min=0,
         ),
-    ] = APP_CFG.backtest.cost_bps,
+    ] = _BT.cost_bps,
     benchmark: Annotated[
         str,
         typer.Option("--benchmark", help="Benchmark ticker for regime context"),
@@ -1153,6 +1158,8 @@ def swing_compare(
                 resistance_gate_enabled=_SC.resistance_gate_enabled,
                 resistance_headroom_min_pct=_SC.resistance_headroom_min_pct,
                 ex_date_warning_days=_SC.ex_date_warning_days,
+                forward_data_lookahead_days=_BT.forward_data_lookahead_days,
+                same_day_exit_priority=_BT.same_day_exit_priority,
             ))
             rows.append((variant, response))
     except ValueError as e:

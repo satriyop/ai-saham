@@ -650,9 +650,12 @@ class AccumulationScreenUseCase:
             signal_ctx = SignalContext(
                 ticker=result.ticker,
                 snapshot_date=today,
-                foreign_flow_quality=min(result.accum_score, 120.0) / 120.0,
+                foreign_flow_quality=self._signal_engine.foreign_flow_quality_from_accum_score(
+                    result.accum_score
+                ),
                 bandar_broad_score=bd.broad_score if bd else None,
-                bandar_max_range=(3 + num_optional) * 2 if bd else 6,
+                bandar_max_range=self._signal_engine.bandar_max_range(num_optional)
+                if bd else self._signal_engine.bandar_max_range(0),
                 insider_net_buy_ratio=compute_net_buy_ratio(insider_txns) if insider_txns else None,
                 seasonality_win_rate=se.win_rate_pct if se else None,
                 seasonality_avg_return_pct=se.avg_monthly_return_pct if se else None,

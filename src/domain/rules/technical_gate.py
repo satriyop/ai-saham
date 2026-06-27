@@ -19,6 +19,9 @@ if TYPE_CHECKING:
 @dataclass(frozen=True)
 class TechnicalGateConfig:
     block_when_bearish: bool = True
+    missing_data_action: str = "skip"
+    missing_data_confidence: int = 0
+    pass_confidence: int = 100
 
 
 class TechnicalGate(RiskGate):
@@ -32,10 +35,12 @@ class TechnicalGate(RiskGate):
 
     def evaluate(self, context: GateContext) -> GateResult:
         if context.latest_snapshot is None:
+            triggered = self._config.missing_data_action == "block"
             return GateResult(
-                triggered=False,
-                reason="no snapshot for technical gate",
-                confidence=0,
+                triggered=triggered,
+                reason="no snapshot for technical gate — blocked"
+                if triggered else "no snapshot for technical gate",
+                confidence=self._config.missing_data_confidence,
             )
         indicator_ctx = self._evaluator.evaluate(context.latest_snapshot)
         if self._config.block_when_bearish and indicator_ctx.overall == IndicatorReading.BEARISH:
@@ -51,5 +56,5 @@ class TechnicalGate(RiskGate):
         return GateResult(
             triggered=False,
             reason=f"technical: {indicator_ctx.overall.value} (no block)",
-            confidence=100,
+            confidence=self._config.pass_confidence,
         )

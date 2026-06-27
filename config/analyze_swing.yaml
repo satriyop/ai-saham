@@ -1,0 +1,19 @@
+version: 1
+
+analyze_swing:
+  auto_refresh:
+    market_days: 365
+    broker_days: 90
+
+  sentiment:
+    max_headlines: 20
+    days: 3
+
+  evidence:
+    flow_detail_window_sessions: 30
+
+  candidate:
+    # Internal candidate construction for single-ticker analysis. Keep permissive
+    # by default so SignalEngine/RiskEngine decide the final assessment.
+    min_net_buy_days: 0
+    min_score: 0.0

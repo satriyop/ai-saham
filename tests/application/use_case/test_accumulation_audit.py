@@ -8,6 +8,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from src.application.use_case.accumulation_audit_use_case import (
+    AccumulationAuditPolicy,
     AccumulationAuditRequest,
     AccumulationAuditUseCase,
 )
@@ -438,3 +439,45 @@ def test_accumulation_audit_exit_simulation_reports_target_and_max_hold_stats():
     )
     assert max_hold_stat.avg_return_pct == 2.0
     assert max_hold_stat.max_hold_rate_pct == 100.0
+
+
+def test_accumulation_audit_exit_simulation_can_prioritize_target_on_same_day():
+    base = date(2026, 1, 1)
+    signal_date = base + timedelta(days=24)
+    candles = _alternating_candles("BBCA", base, 25)
+    candles.append(
+        _ohlc(
+            "BBCA", base + timedelta(days=25),
+            Decimal("100"), Decimal("106"), Decimal("94"), Decimal("100"),
+        )
+    )
+    summaries = [
+        _summary("BBCA", base + timedelta(days=i), Decimal("110"))
+        for i in range(18, 25)
+    ]
+
+    use_case = AccumulationAuditUseCase(
+        broker_repository=MockBrokerRepository(summaries),
+        market_repository=MockMarketRepository(candles),
+    )
+
+    response = use_case.execute(
+        AccumulationAuditRequest(
+            tickers=["BBCA"],
+            start_date=signal_date,
+            end_date=signal_date,
+            window_days=7,
+            min_net_buy_days=1,
+            min_score=0,
+            horizon_days=5,
+            simulate_exits=True,
+            take_profit_pcts=(5,),
+            stop_loss_pcts=(5,),
+            max_hold_days=(1,),
+            policy=AccumulationAuditPolicy(same_day_exit_priority="target_first"),
+        )
+    )
+
+    stat = response.exit_simulations[0]
+    assert stat.target_rate_pct == 100.0
+    assert stat.avg_return_pct == 5.0

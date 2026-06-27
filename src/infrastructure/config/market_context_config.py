@@ -25,6 +25,11 @@ class VixFactorConfig:
     low: float = 20.0         # (15, 20] → score 0.75
     elevated: float = 25.0   # (20, 25] → score 0.50; (25, 35] → score 0.25
     high: float = 35.0        # > → score 0.0 + VOLATILE override
+    very_low_score: float = 1.0
+    low_score: float = 0.75
+    elevated_score: float = 0.50
+    risk_off_score: float = 0.25
+    high_score: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -57,6 +62,7 @@ class IdxTrendFactorConfig:
     # Distance from SMA50 scoring (pct of SMA50 price)
     above_pct_strong: float = 3.0   # > +3% above SMA50 → score 1.0
     below_pct_strong: float = -5.0  # > -5% below SMA50 → score 0.0
+    fast_sma_adjustment: float = 0.05
 
 
 @dataclass(frozen=True)
@@ -74,6 +80,8 @@ class ForeignFlowFactorConfig:
     weight: float = 0.15
     lookback_days: int = 5
     reference_days: int = 20
+    bearish_diff_ratio: float = -0.5
+    bullish_diff_ratio: float = 0.5
 
 
 @dataclass(frozen=True)
@@ -103,6 +111,20 @@ class RegimeEffect:
 
 
 @dataclass(frozen=True)
+class ScoreLabelThresholds:
+    favorable_min_score: float = 0.65
+    neutral_min_score: float = 0.35
+
+
+@dataclass(frozen=True)
+class MarketContextScoringConfig:
+    neutral_score: float = 0.5
+    stale_business_day_gap: int = 1
+    coverage_warning_unavailable_ratio: float = 0.5
+    labels: ScoreLabelThresholds = field(default_factory=ScoreLabelThresholds)
+
+
+@dataclass(frozen=True)
 class MarketContextConfig:
     """
     Full config for MarketContextEngine. All fields carry hardcoded defaults
@@ -117,6 +139,7 @@ class MarketContextConfig:
     foreign_flow: ForeignFlowFactorConfig = field(default_factory=ForeignFlowFactorConfig)
     commodity: CommodityCompositeConfig = field(default_factory=CommodityCompositeConfig)
     regime_thresholds: RegimeThresholds = field(default_factory=RegimeThresholds)
+    scoring: MarketContextScoringConfig = field(default_factory=MarketContextScoringConfig)
     regime_effects: dict[str, RegimeEffect] = field(default_factory=lambda: {
         "RISK_ON":  RegimeEffect(signal_multiplier=1.0, gate_tightening=False),
         "NEUTRAL":  RegimeEffect(signal_multiplier=1.0, gate_tightening=False),
@@ -155,6 +178,11 @@ def load_market_context_config(
                 low=f.get("thresholds", {}).get("low", d.low),
                 elevated=f.get("thresholds", {}).get("elevated", d.elevated),
                 high=f.get("thresholds", {}).get("high", d.high),
+                very_low_score=f.get("score_anchors", {}).get("very_low", d.very_low_score),
+                low_score=f.get("score_anchors", {}).get("low", d.low_score),
+                elevated_score=f.get("score_anchors", {}).get("elevated", d.elevated_score),
+                risk_off_score=f.get("score_anchors", {}).get("risk_off", d.risk_off_score),
+                high_score=f.get("score_anchors", {}).get("high", d.high_score),
             )
 
         def _eido(f: dict) -> EidoFactorConfig:
@@ -189,6 +217,7 @@ def load_market_context_config(
                 sma_slow=f.get("thresholds", {}).get("sma_slow", d.sma_slow),
                 above_pct_strong=f.get("thresholds", {}).get("above_pct_strong", d.above_pct_strong),
                 below_pct_strong=f.get("thresholds", {}).get("below_pct_strong", d.below_pct_strong),
+                fast_sma_adjustment=f.get("thresholds", {}).get("fast_sma_adjustment", d.fast_sma_adjustment),
             )
 
         def _idx_breadth(f: dict) -> IdxBreadthFactorConfig:
@@ -208,6 +237,8 @@ def load_market_context_config(
                 weight=f.get("weight", d.weight),
                 lookback_days=f.get("thresholds", {}).get("lookback_days", d.lookback_days),
                 reference_days=f.get("thresholds", {}).get("reference_days", d.reference_days),
+                bearish_diff_ratio=f.get("thresholds", {}).get("bearish_diff_ratio", d.bearish_diff_ratio),
+                bullish_diff_ratio=f.get("thresholds", {}).get("bullish_diff_ratio", d.bullish_diff_ratio),
             )
 
         def _commodity(f: dict) -> CommodityCompositeConfig:
@@ -256,6 +287,33 @@ def load_market_context_config(
                 risk_on_min_score=rt.get("risk_on_min_score", defaults.regime_thresholds.risk_on_min_score),
                 risk_off_max_score=rt.get("risk_off_max_score", defaults.regime_thresholds.risk_off_max_score),
                 volatile_vix_override=rt.get("volatile_vix_override", defaults.regime_thresholds.volatile_vix_override),
+            ),
+            scoring=MarketContextScoringConfig(
+                neutral_score=root.get("scoring", {}).get("neutral_score", defaults.scoring.neutral_score),
+                stale_business_day_gap=root.get("scoring", {}).get(
+                    "stale_business_day_gap",
+                    defaults.scoring.stale_business_day_gap,
+                ),
+                coverage_warning_unavailable_ratio=root.get("scoring", {}).get(
+                    "coverage_warning_unavailable_ratio",
+                    defaults.scoring.coverage_warning_unavailable_ratio,
+                ),
+                labels=ScoreLabelThresholds(
+                    favorable_min_score=root.get("score_labels", {}).get(
+                        "favorable_min_score",
+                        root.get("scoring", {}).get("labels", {}).get(
+                            "favorable_min_score",
+                            defaults.scoring.labels.favorable_min_score,
+                        ),
+                    ),
+                    neutral_min_score=root.get("score_labels", {}).get(
+                        "neutral_min_score",
+                        root.get("scoring", {}).get("labels", {}).get(
+                            "neutral_min_score",
+                            defaults.scoring.labels.neutral_min_score,
+                        ),
+                    ),
+                ),
             ),
             regime_effects={
                 "RISK_ON":  _re("RISK_ON"),

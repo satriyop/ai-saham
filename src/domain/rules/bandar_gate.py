@@ -13,13 +13,24 @@ appear constructive.
 Layer: Domain
 """
 
+from dataclasses import dataclass, field
+
 from src.domain.rules.risk_gate import GateContext, GateResult, RiskGate
 
 # Labels from BandarDetectorSnapshot that indicate distribution
-_DISTRIBUTION_LABELS = frozenset({
+_DEFAULT_DISTRIBUTION_LABELS = frozenset({
     "Small Dist", "Big Dist",
     "Small Dis", "Big Dis",   # backward-compat aliases
 })
+
+
+@dataclass(frozen=True)
+class BandarGateConfig:
+    distribution_labels: frozenset[str] = field(default_factory=lambda: _DEFAULT_DISTRIBUTION_LABELS)
+    missing_data_action: str = "skip"
+    missing_data_confidence: int = 0
+    triggered_confidence: int = 80
+    pass_confidence: int = 100
 
 
 class BandarGate(RiskGate):
@@ -30,24 +41,29 @@ class BandarGate(RiskGate):
     Skips silently when no bandar flow data is available.
     """
 
+    def __init__(self, config: BandarGateConfig | None = None) -> None:
+        self._config = config or BandarGateConfig()
+
     def evaluate(self, context: GateContext) -> GateResult:
         if context.five_day_accdist is None:
+            triggered = self._config.missing_data_action == "block"
             return GateResult(
-                triggered=False,
-                reason="no bandar flow data — gate skipped",
-                confidence=0,
+                triggered=triggered,
+                reason="no bandar flow data — gate blocked"
+                if triggered else "no bandar flow data — gate skipped",
+                confidence=self._config.missing_data_confidence,
             )
-        if context.five_day_accdist in _DISTRIBUTION_LABELS:
+        if context.five_day_accdist in self._config.distribution_labels:
             return GateResult(
                 triggered=True,
                 reason=(
                     f"Bandar distribution ({context.five_day_accdist})"
                     " — distribution trap risk"
                 ),
-                confidence=80,
+                confidence=self._config.triggered_confidence,
             )
         return GateResult(
             triggered=False,
             reason=f"Bandar 5-day ({context.five_day_accdist}) consistent",
-            confidence=100,
+            confidence=self._config.pass_confidence,
         )

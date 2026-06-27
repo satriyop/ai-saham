@@ -26,6 +26,7 @@ from src.domain.value_objects.market_context import (
     MarketRegime,
 )
 from src.infrastructure.config.market_context_config import MarketContextConfig
+from src.infrastructure.config.market_context_config import ScoreLabelThresholds
 
 
 @dataclass
@@ -70,22 +71,37 @@ class BuildMarketContextUseCase:
         factors: list[ContextFactor] = []
 
         # ── VIX ──────────────────────────────────────────────────────────────
-        factors.append(self._score_vix(cfg.vix, request.vix_candles, as_of))
+        factors.append(self._score_vix(cfg.vix, request.vix_candles, as_of, cfg.scoring.labels))
 
         # ── EIDO ─────────────────────────────────────────────────────────────
-        factors.append(self._score_eido(cfg.eido, request.eido_candles, request.ihsg_candles, as_of))
+        factors.append(self._score_eido(
+            cfg.eido, request.eido_candles, request.ihsg_candles, as_of,
+            cfg.scoring.labels, cfg.scoring.neutral_score,
+        ))
 
         # ── USD/IDR ──────────────────────────────────────────────────────────
-        factors.append(self._score_usd_idr(cfg.usd_idr, request.usd_idr_candles, as_of))
+        factors.append(self._score_usd_idr(
+            cfg.usd_idr, request.usd_idr_candles, as_of,
+            cfg.scoring.labels, cfg.scoring.neutral_score,
+        ))
 
         # ── IDX Trend ────────────────────────────────────────────────────────
-        factors.append(self._score_idx_trend(cfg.idx_trend, request.ihsg_candles, as_of))
+        factors.append(self._score_idx_trend(
+            cfg.idx_trend, request.ihsg_candles, as_of,
+            cfg.scoring.labels, cfg.scoring.neutral_score,
+        ))
 
         # ── IDX Breadth ──────────────────────────────────────────────────────
-        factors.append(self._score_idx_breadth(cfg.idx_breadth, request.universe_candles, as_of))
+        factors.append(self._score_idx_breadth(
+            cfg.idx_breadth, request.universe_candles, as_of,
+            cfg.scoring.labels, cfg.scoring.neutral_score,
+        ))
 
         # ── Foreign Flow ─────────────────────────────────────────────────────
-        factors.append(self._score_foreign_flow(cfg.foreign_flow, request.foreign_flow_series, as_of))
+        factors.append(self._score_foreign_flow(
+            cfg.foreign_flow, request.foreign_flow_series, as_of,
+            cfg.scoring.labels, cfg.scoring.neutral_score,
+        ))
 
         # ── Commodity Composite (optional) ────────────────────────────────────
         if cfg.commodity.enabled:
@@ -94,13 +110,19 @@ class BuildMarketContextUseCase:
             factors.append(_disabled("commodity_composite", cfg.commodity.weight))
 
         # ── Aggregate ────────────────────────────────────────────────────────
-        conviction = _weighted_conviction(factors)
+        conviction = _weighted_conviction(factors, cfg.scoring.neutral_score)
         vix_value = _latest_close(request.vix_candles)
         regime = _classify_regime(conviction, vix_value, cfg.regime_thresholds)
         effect = cfg.get_effect(regime.value)
 
-        staleness = _staleness_warning(request.vix_candles, request.eido_candles, request.usd_idr_candles, as_of)
-        coverage = _coverage_warning(factors)
+        staleness = _staleness_warning(
+            request.vix_candles,
+            request.eido_candles,
+            request.usd_idr_candles,
+            as_of,
+            cfg.scoring.stale_business_day_gap,
+        )
+        coverage = _coverage_warning(factors, cfg.scoring.coverage_warning_unavailable_ratio)
 
         context = MarketContext(
             regime=regime,
@@ -116,7 +138,13 @@ class BuildMarketContextUseCase:
 
     # ── Factor scorers ────────────────────────────────────────────────────────
 
-    def _score_vix(self, cfg, candles: list[Candle], as_of: date) -> ContextFactor:
+    def _score_vix(
+        self,
+        cfg,
+        candles: list[Candle],
+        as_of: date,
+        labels: ScoreLabelThresholds,
+    ) -> ContextFactor:
         if not cfg.enabled:
             return _disabled("vix", cfg.weight)
         close = _latest_close(candles)
@@ -125,18 +153,22 @@ class BuildMarketContextUseCase:
 
         v = float(close)
         if v <= cfg.very_low:
-            score, label = 1.0, "FAVORABLE"
+            score = cfg.very_low_score
         elif v <= cfg.low:
-            score = 0.75 + (cfg.low - v) / (cfg.low - cfg.very_low) * 0.25
-            label = "FAVORABLE"
+            score = _interpolate_score(
+                v, cfg.very_low, cfg.low, cfg.very_low_score, cfg.low_score
+            )
         elif v <= cfg.elevated:
-            score = 0.50 + (cfg.elevated - v) / (cfg.elevated - cfg.low) * 0.25
-            label = "NEUTRAL"
+            score = _interpolate_score(
+                v, cfg.low, cfg.elevated, cfg.low_score, cfg.elevated_score
+            )
         elif v < cfg.high:
-            score = 0.25 + (cfg.high - v) / (cfg.high - cfg.elevated) * 0.25
-            label = "STRESSED"
+            score = _interpolate_score(
+                v, cfg.elevated, cfg.high, cfg.elevated_score, cfg.risk_off_score
+            )
         else:  # v >= cfg.high → score 0.0; VOLATILE override fires separately
-            score, label = 0.0, "STRESSED"
+            score = cfg.high_score
+        label = _score_label(score, labels)
 
         rationale = f"VIX {v:.1f}"
         if v <= cfg.very_low:
@@ -153,7 +185,15 @@ class BuildMarketContextUseCase:
         return ContextFactor(name="vix", enabled=True, value=v, score=round(score, 4),
                              weight=cfg.weight, label=label, rationale=rationale)
 
-    def _score_eido(self, cfg, eido_candles: list[Candle], ihsg_candles: list[Candle], as_of: date) -> ContextFactor:
+    def _score_eido(
+        self,
+        cfg,
+        eido_candles: list[Candle],
+        ihsg_candles: list[Candle],
+        as_of: date,
+        labels: ScoreLabelThresholds,
+        neutral_score: float,
+    ) -> ContextFactor:
         if not cfg.enabled:
             return _disabled("eido", cfg.weight)
 
@@ -171,13 +211,20 @@ class BuildMarketContextUseCase:
             divergence = eido_ret - ihsg_ret
             rationale_suffix = f"EIDO {eido_ret:+.1f}% vs IHSG {ihsg_ret:+.1f}% ({cfg.lookback_days}d, divergence {divergence:+.1f}%)"
 
-        score = _piecewise_linear(divergence, cfg.discount_pct, cfg.premium_pct)
-        label = "FAVORABLE" if score >= 0.65 else ("NEUTRAL" if score >= 0.35 else "STRESSED")
+        score = _piecewise_linear(divergence, cfg.discount_pct, cfg.premium_pct, neutral_score)
+        label = _score_label(score, labels)
 
         return ContextFactor(name="eido", enabled=True, value=round(divergence, 4), score=round(score, 4),
                              weight=cfg.weight, label=label, rationale=rationale_suffix)
 
-    def _score_usd_idr(self, cfg, candles: list[Candle], as_of: date) -> ContextFactor:
+    def _score_usd_idr(
+        self,
+        cfg,
+        candles: list[Candle],
+        as_of: date,
+        labels: ScoreLabelThresholds,
+        neutral_score: float,
+    ) -> ContextFactor:
         if not cfg.enabled:
             return _disabled("usd_idr", cfg.weight)
 
@@ -187,8 +234,8 @@ class BuildMarketContextUseCase:
 
         # USD/IDR rises = Rupiah weakens = bearish for IDX
         # So invert: weaken_pct (positive) → score 0.0, strengthen_pct (negative) → score 1.0
-        score = _piecewise_linear(ret, cfg.weaken_pct, cfg.strengthen_pct)
-        label = "FAVORABLE" if score >= 0.65 else ("NEUTRAL" if score >= 0.35 else "STRESSED")
+        score = _piecewise_linear(ret, cfg.weaken_pct, cfg.strengthen_pct, neutral_score)
+        label = _score_label(score, labels)
 
         direction = "strengthened" if ret < 0 else "weakened"
         rationale = f"IDR {direction} {abs(ret):.1f}% over {cfg.lookback_days}d (USD/IDR Δ {ret:+.1f}%)"
@@ -196,7 +243,14 @@ class BuildMarketContextUseCase:
         return ContextFactor(name="usd_idr", enabled=True, value=round(ret, 4), score=round(score, 4),
                              weight=cfg.weight, label=label, rationale=rationale)
 
-    def _score_idx_trend(self, cfg, candles: list[Candle], as_of: date) -> ContextFactor:
+    def _score_idx_trend(
+        self,
+        cfg,
+        candles: list[Candle],
+        as_of: date,
+        labels: ScoreLabelThresholds,
+        neutral_score: float,
+    ) -> ContextFactor:
         if not cfg.enabled:
             return _disabled("idx_trend", cfg.weight)
         if not candles:
@@ -211,15 +265,21 @@ class BuildMarketContextUseCase:
 
         # Primary: % distance from SMA50
         dist_pct = (close - float(sma50)) / float(sma50) * 100.0
-        primary_score = _piecewise_linear(dist_pct, cfg.below_pct_strong, cfg.above_pct_strong)
+        primary_score = _piecewise_linear(
+            dist_pct,
+            cfg.below_pct_strong,
+            cfg.above_pct_strong,
+            neutral_score,
+        )
 
         # Secondary: above/below SMA20 (adds 0–0.1 adjustment)
         if sma20 is not None:
             above_fast = close > float(sma20)
-            primary_score = min(1.0, primary_score + (0.05 if above_fast else -0.05))
+            adjustment = cfg.fast_sma_adjustment if above_fast else -cfg.fast_sma_adjustment
+            primary_score = min(1.0, primary_score + adjustment)
 
         score = max(0.0, min(1.0, primary_score))
-        label = "FAVORABLE" if score >= 0.65 else ("NEUTRAL" if score >= 0.35 else "STRESSED")
+        label = _score_label(score, labels)
 
         sma50_str = f"{float(sma50):,.0f}"
         rationale = f"IHSG {close:,.0f} / SMA{cfg.sma_slow} {sma50_str} ({dist_pct:+.1f}%)"
@@ -229,7 +289,14 @@ class BuildMarketContextUseCase:
         return ContextFactor(name="idx_trend", enabled=True, value=round(dist_pct, 4), score=round(score, 4),
                              weight=cfg.weight, label=label, rationale=rationale)
 
-    def _score_foreign_flow(self, cfg, series: list[tuple[date, Decimal]], as_of: date) -> ContextFactor:
+    def _score_foreign_flow(
+        self,
+        cfg,
+        series: list[tuple[date, Decimal]],
+        as_of: date,
+        labels: ScoreLabelThresholds,
+        neutral_score: float,
+    ) -> ContextFactor:
         if not cfg.enabled:
             return _disabled("foreign_flow", cfg.weight)
         if not series:
@@ -251,13 +318,18 @@ class BuildMarketContextUseCase:
         # recent_avg == ref_avg → score = 0.5
         # Use ratio of difference vs |ref_avg| to normalize, fallback to sign if ref=0
         if ref_avg == 0:
-            score = 1.0 if recent_avg > 0 else (0.5 if recent_avg == 0 else 0.0)
+            score = 1.0 if recent_avg > 0 else (neutral_score if recent_avg == 0 else 0.0)
         else:
             # diff as % of abs(ref_avg): +50% diff → score 1.0; -50% diff → score 0.0
             diff_ratio = float((recent_avg - ref_avg) / abs(ref_avg))
-            score = _piecewise_linear(diff_ratio, -0.5, 0.5)
+            score = _piecewise_linear(
+                diff_ratio,
+                cfg.bearish_diff_ratio,
+                cfg.bullish_diff_ratio,
+                neutral_score,
+            )
 
-        label = "FAVORABLE" if score >= 0.65 else ("NEUTRAL" if score >= 0.35 else "STRESSED")
+        label = _score_label(score, labels)
         flow_str = _fmt_idr(recent_avg)
         ref_str = _fmt_idr(ref_avg)
         rationale = f"Net foreign {flow_str} avg/{cfg.lookback_days}d (ref {ref_str} avg/{cfg.reference_days}d)"
@@ -265,7 +337,14 @@ class BuildMarketContextUseCase:
         return ContextFactor(name="foreign_flow", enabled=True, value=round(float(recent_avg), 2),
                              score=round(score, 4), weight=cfg.weight, label=label, rationale=rationale)
 
-    def _score_idx_breadth(self, cfg, universe_candles: dict[str, list[Candle]], as_of: date) -> ContextFactor:
+    def _score_idx_breadth(
+        self,
+        cfg,
+        universe_candles: dict[str, list[Candle]],
+        as_of: date,
+        labels: ScoreLabelThresholds,
+        neutral_score: float,
+    ) -> ContextFactor:
         if not cfg.enabled:
             return _disabled("idx_breadth", cfg.weight)
         if not universe_candles:
@@ -288,8 +367,8 @@ class BuildMarketContextUseCase:
             return _unavailable("idx_breadth", cfg.weight, "no tickers with sufficient history")
 
         breadth_pct = above / evaluated * 100.0
-        score = _piecewise_linear(breadth_pct, cfg.bearish_pct, cfg.bullish_pct)
-        label = "FAVORABLE" if score >= 0.65 else ("NEUTRAL" if score >= 0.35 else "STRESSED")
+        score = _piecewise_linear(breadth_pct, cfg.bearish_pct, cfg.bullish_pct, neutral_score)
+        label = _score_label(score, labels)
         rationale = f"{breadth_pct:.1f}% of {evaluated} tickers above SMA{period} (bearish <{cfg.bearish_pct}%, bullish >{cfg.bullish_pct}%)"
 
         return ContextFactor(name="idx_breadth", enabled=True, value=round(breadth_pct, 4), score=round(score, 4),
@@ -298,12 +377,33 @@ class BuildMarketContextUseCase:
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _piecewise_linear(value: float, low: float, high: float) -> float:
+def _piecewise_linear(value: float, low: float, high: float, neutral_score: float = 0.5) -> float:
     """Map value linearly from low→0.0 to high→1.0, clamped."""
     if high == low:
-        return 0.5
+        return neutral_score
     ratio = (value - low) / (high - low)
     return max(0.0, min(1.0, ratio))
+
+
+def _interpolate_score(
+    value: float,
+    low_value: float,
+    high_value: float,
+    low_score: float,
+    high_score: float,
+) -> float:
+    if high_value == low_value:
+        return high_score
+    progress = (value - low_value) / (high_value - low_value)
+    return low_score + progress * (high_score - low_score)
+
+
+def _score_label(score: float, labels: ScoreLabelThresholds) -> str:
+    if score >= labels.favorable_min_score:
+        return "FAVORABLE"
+    if score >= labels.neutral_min_score:
+        return "NEUTRAL"
+    return "STRESSED"
 
 
 def _latest_close(candles: list[Candle]) -> Decimal | None:
@@ -327,14 +427,14 @@ def _sma(candles: list[Candle], period: int) -> Decimal | None:
     return sum(closes, Decimal("0")) / Decimal(period)
 
 
-def _weighted_conviction(factors: list[ContextFactor]) -> float:
+def _weighted_conviction(factors: list[ContextFactor], neutral_score: float) -> float:
     """Weighted average of available scores; renormalizes when factors are skipped."""
     active = [(f.score, f.weight) for f in factors if f.score is not None]
     if not active:
-        return 0.5
+        return neutral_score
     total_weight = sum(w for _, w in active)
     if total_weight == 0:
-        return 0.5
+        return neutral_score
     return sum(s * w for s, w in active) / total_weight
 
 
@@ -364,18 +464,19 @@ def _staleness_warning(
     eido_candles: list[Candle],
     usd_idr_candles: list[Candle],
     as_of: date,
+    stale_business_day_gap: int,
 ) -> str | None:
     stale = []
     for name, candles in [("VIX", vix_candles), ("EIDO", eido_candles), ("USD/IDR", usd_idr_candles)]:
-        if candles and _business_day_gap(candles[-1].date, as_of) > 1:
+        if candles and _business_day_gap(candles[-1].date, as_of) > stale_business_day_gap:
             stale.append(f"{name} ({candles[-1].date})")
     return f"Using T-1 data for: {', '.join(stale)}. Run: saham fetch market" if stale else None
 
 
-def _coverage_warning(factors: list[ContextFactor]) -> str | None:
+def _coverage_warning(factors: list[ContextFactor], unavailable_ratio: float) -> str | None:
     enabled = [f for f in factors if f.enabled]
     unavailable = [f for f in enabled if f.score is None]
-    if len(unavailable) >= len(enabled) / 2:
+    if enabled and len(unavailable) / len(enabled) >= unavailable_ratio:
         names = ", ".join(f.name for f in unavailable)
         return f"{len(unavailable)}/{len(enabled)} factors unavailable: {names}"
     return None

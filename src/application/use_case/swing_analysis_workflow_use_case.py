@@ -225,19 +225,45 @@ class SwingAnalysisWorkflowUseCase:
                 from src.application.services.indicator_evaluator import IndicatorEvaluator
                 from src.domain.rules.technical_gate import TechnicalGate
 
-                evaluator = IndicatorEvaluator()
-                execution_gates = list(self._execution_gates) + [TechnicalGate(evaluator)]
+                evaluator = (
+                    self._risk_engine.indicator_evaluator
+                    if self._risk_engine is not None
+                    else None
+                ) or IndicatorEvaluator()
+                indicator_defaults = (
+                    self._risk_engine.indicator_defaults
+                    if self._risk_engine is not None
+                    else None
+                )
+                technical_gate_config = (
+                    self._risk_engine.technical_gate_config
+                    if self._risk_engine is not None
+                    else None
+                )
+                execution_gates = list(self._execution_gates) + [
+                    TechnicalGate(evaluator, technical_gate_config)
+                ]
                 risk_use_case = AssessRiskUseCase(
                     repository=self._market_repo,
                     registry=self._registry,
                     structural_gates=self._structural_gates or None,
                     execution_gates=execution_gates,
                     indicator_evaluator=evaluator,
+                    indicator_history_days=indicator_defaults.history_days
+                    if indicator_defaults is not None else 365,
+                    gate_recent_candle_lookback=indicator_defaults.gate_recent_candle_lookback
+                    if indicator_defaults is not None else 20,
                 )
                 risk_response = risk_use_case.execute(
                     AssessRiskRequest(
                         ticker=request.ticker,
                         sensitivity=request.sensitivity,
+                        sma_period=indicator_defaults.sma_period
+                        if indicator_defaults is not None else 20,
+                        ema_period=indicator_defaults.ema_period
+                        if indicator_defaults is not None else 20,
+                        rsi_period=indicator_defaults.rsi_period
+                        if indicator_defaults is not None else 14,
                         gate_context=gate_ctx,
                     )
                 )
@@ -296,9 +322,12 @@ class SwingAnalysisWorkflowUseCase:
                     signal_ctx = SignalContext(
                         ticker=request.ticker,
                         snapshot_date=request.today,
-                        foreign_flow_quality=min(accumulation_candidate.score, 120.0) / 120.0,
+                        foreign_flow_quality=self._signal_engine.foreign_flow_quality_from_accum_score(
+                            accumulation_candidate.score
+                        ),
                         bandar_broad_score=bd.broad_score if bd else None,
-                        bandar_max_range=(3 + num_optional) * 2 if bd else 6,
+                        bandar_max_range=self._signal_engine.bandar_max_range(num_optional)
+                        if bd else self._signal_engine.bandar_max_range(0),
                         insider_net_buy_ratio=None,
                         seasonality_win_rate=se.win_rate_pct if se else None,
                         seasonality_avg_return_pct=se.avg_monthly_return_pct if se else None,

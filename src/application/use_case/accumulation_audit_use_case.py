@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import Decimal
 from statistics import mean
+from typing import Callable
 
 from src.application.use_case.accumulation_screen_use_case import (
     AccumulationCandidate,
@@ -24,6 +25,41 @@ from src.domain.ports.market_data_repository import MarketDataRepository
 
 SMART_MONEY_BROKERS = {"AK", "BK", "KZ", "ZP", "RX", "MS", "DB", "CS", "ML", "YU"}
 NOISE_BROKERS = {"YP", "PD", "XL", "XC"}
+DEFAULT_AUDIT_GROUP_DIMENSIONS = (
+    "score",
+    "streak",
+    "flow_pct",
+    "vwap_disc_pct",
+    "rsi",
+    "bb_pctile",
+    "trend",
+    "broker_quality",
+)
+
+
+@dataclass(frozen=True)
+class AuditBucketPolicy:
+    """Bucket boundaries used by accumulation-audit learning summaries."""
+
+    score: tuple[float, ...] = (40.0, 70.0)
+    streak: tuple[int, ...] = (3, 5)
+    flow_pct: tuple[float, ...] = (5.0, 15.0)
+    vwap_disc_pct: tuple[float, ...] = (0.0, 5.0)
+    rsi: tuple[float, ...] = (30.0, 45.0, 60.0)
+    bb_pctile: tuple[float, ...] = (0.20, 0.40)
+
+
+@dataclass(frozen=True)
+class AccumulationAuditPolicy:
+    """Tunable measurement policy for historical accumulation audits."""
+
+    forward_return_horizons: tuple[int, ...] = (5, 10, 20)
+    forward_fetch_buffer_days: int = 40
+    exit_fetch_buffer_days: int = 40
+    same_day_exit_priority: str = "stop_first"
+    broker_quality_window_sessions: int = 5
+    group_dimensions: tuple[str, ...] = DEFAULT_AUDIT_GROUP_DIMENSIONS
+    buckets: AuditBucketPolicy = field(default_factory=AuditBucketPolicy)
 
 
 @dataclass(frozen=True)
@@ -48,6 +84,7 @@ class AuditRecord:
     return_20d_pct: float | None
     max_upside_pct: float | None
     max_drawdown_pct: float | None
+    forward_returns_pct: dict[int, float | None] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         """Convert to JSON/CSV friendly primitives."""
@@ -71,6 +108,11 @@ class AuditRecord:
             "return_20d_pct": self.return_20d_pct,
             "max_upside_pct": self.max_upside_pct,
             "max_drawdown_pct": self.max_drawdown_pct,
+            **{
+                f"return_{horizon}d_pct": value
+                for horizon, value in sorted(self.forward_returns_pct.items())
+                if horizon not in {5, 10, 20}
+            },
         }
 
 
@@ -174,6 +216,7 @@ class AccumulationAuditRequest:
     take_profit_pcts: tuple[float, ...] = ()
     stop_loss_pcts: tuple[float, ...] = ()
     max_hold_days: tuple[int, ...] = ()
+    policy: AccumulationAuditPolicy = field(default_factory=AccumulationAuditPolicy)
 
 
 class AccumulationAuditUseCase:
@@ -207,6 +250,7 @@ class AccumulationAuditUseCase:
             raise ValueError("start_date must be on or before end_date")
         if request.horizon_days < 1:
             raise ValueError("horizon_days must be positive")
+        self._validate_policy(request.policy)
         if request.simulate_exits:
             self._validate_exit_simulation_request(request)
 
@@ -232,6 +276,7 @@ class AccumulationAuditUseCase:
                     candidate=candidate,
                     signal_date=signal_date,
                     horizon_days=request.horizon_days,
+                    policy=request.policy,
                 )
                 if record is None:
                     skipped_no_forward_data += 1
@@ -252,13 +297,26 @@ class AccumulationAuditUseCase:
             total_records=len(records),
             skipped_no_forward_data=skipped_no_forward_data,
             records=records,
-            group_stats=self._group_stats(records),
+            group_stats=self._group_stats(records, request.policy),
             exit_simulations=(
                 self._simulate_exits(records, request)
                 if request.simulate_exits else []
             ),
             warnings=warnings,
         )
+
+    def _validate_policy(self, policy: AccumulationAuditPolicy) -> None:
+        """Validate tunable measurement policy values."""
+        if any(horizon <= 0 for horizon in policy.forward_return_horizons):
+            raise ValueError("forward_return_horizons must contain positive days")
+        if policy.forward_fetch_buffer_days < 0:
+            raise ValueError("forward_fetch_buffer_days cannot be negative")
+        if policy.exit_fetch_buffer_days < 0:
+            raise ValueError("exit_fetch_buffer_days cannot be negative")
+        if policy.broker_quality_window_sessions <= 0:
+            raise ValueError("broker_quality_window_sessions must be positive")
+        if policy.same_day_exit_priority not in {"stop_first", "target_first"}:
+            raise ValueError("same_day_exit_priority must be stop_first or target_first")
 
     def _validate_exit_simulation_request(
         self,
@@ -326,6 +384,7 @@ class AccumulationAuditUseCase:
             quality = self._broker_quality_bucket(
                 ticker=candidate.ticker,
                 signal_date=signal_date,
+                window_sessions=request.policy.broker_quality_window_sessions,
             )
             if quality.lower() != request.broker_quality.lower():
                 return False
@@ -354,12 +413,15 @@ class AccumulationAuditUseCase:
         candidate: AccumulationCandidate,
         signal_date: date,
         horizon_days: int,
+        policy: AccumulationAuditPolicy,
     ) -> AuditRecord | None:
         """Convert a candidate into an audit record with forward returns."""
         forward = self._market_repo.get_candles(
             candidate.ticker,
             start_date=signal_date + timedelta(days=1),
-            end_date=signal_date + timedelta(days=horizon_days + 40),
+            end_date=signal_date + timedelta(
+                days=horizon_days + policy.forward_fetch_buffer_days
+            ),
         )
         forward = [c for c in forward if c.date > signal_date]
         if not forward:
@@ -377,6 +439,10 @@ class AccumulationAuditUseCase:
         horizon = forward[:horizon_days]
         max_upside = max((_pct_change(c.close, price) for c in horizon), default=None)
         max_drawdown = min((_pct_change(c.close, price) for c in horizon), default=None)
+        forward_returns = {
+            horizon: nth_return(horizon)
+            for horizon in policy.forward_return_horizons
+        }
 
         return AuditRecord(
             signal_date=signal_date,
@@ -393,13 +459,15 @@ class AccumulationAuditUseCase:
             broker_quality=self._broker_quality_bucket(
                 ticker=candidate.ticker,
                 signal_date=signal_date,
+                window_sessions=policy.broker_quality_window_sessions,
             ),
             current_price=price,
-            return_5d_pct=nth_return(5),
-            return_10d_pct=nth_return(10),
-            return_20d_pct=nth_return(20),
+            return_5d_pct=forward_returns.get(5),
+            return_10d_pct=forward_returns.get(10),
+            return_20d_pct=forward_returns.get(20),
             max_upside_pct=max_upside,
             max_drawdown_pct=max_drawdown,
+            forward_returns_pct=forward_returns,
         )
 
     def _simulate_exits(
@@ -421,6 +489,7 @@ class AccumulationAuditUseCase:
                                 take_profit_pct=take_profit,
                                 stop_loss_pct=stop_loss,
                                 max_hold_days=max_hold,
+                                policy=request.policy,
                             )
                         ) is not None
                     ]
@@ -448,12 +517,15 @@ class AccumulationAuditUseCase:
         take_profit_pct: float,
         stop_loss_pct: float,
         max_hold_days: int,
+        policy: AccumulationAuditPolicy,
     ) -> "_ExitOutcome | None":
         """Simulate one deterministic exit path for one signal."""
         forward = self._market_repo.get_candles(
             record.ticker,
             start_date=record.signal_date + timedelta(days=1),
-            end_date=record.signal_date + timedelta(days=max_hold_days + 40),
+            end_date=record.signal_date + timedelta(
+                days=max_hold_days + policy.exit_fetch_buffer_days
+            ),
         )
         forward = [c for c in forward if c.date > record.signal_date]
         if not forward:
@@ -472,7 +544,9 @@ class AccumulationAuditUseCase:
             stop_hit = candle.low <= stop
             target_hit = candle.high >= target
 
-            if stop_hit:
+            if stop_hit and (
+                policy.same_day_exit_priority == "stop_first" or not target_hit
+            ):
                 return _ExitOutcome(
                     return_pct=_pct_change(stop, entry),
                     holding_days=day_index,
@@ -486,6 +560,13 @@ class AccumulationAuditUseCase:
                     reason="target",
                     max_drawdown_pct=round(float(max_drawdown), 4),
                 )
+            if stop_hit:
+                return _ExitOutcome(
+                    return_pct=_pct_change(stop, entry),
+                    holding_days=day_index,
+                    reason="stop",
+                    max_drawdown_pct=round(float(max_drawdown), 4),
+                )
 
         exit_candle = forward[min(max_hold_days, len(forward)) - 1]
         return _ExitOutcome(
@@ -495,20 +576,33 @@ class AccumulationAuditUseCase:
             max_drawdown_pct=round(float(max_drawdown), 4),
         )
 
-    def _group_stats(self, records: list[AuditRecord]) -> list[AuditGroupStat]:
-        dimensions = {
-            "score": _score_bucket,
-            "streak": _streak_bucket,
-            "flow_pct": _flow_bucket,
-            "vwap_disc_pct": _vwap_bucket,
-            "rsi": _rsi_bucket,
-            "bb_pctile": _bb_bucket,
+    def _group_stats(
+        self,
+        records: list[AuditRecord],
+        policy: AccumulationAuditPolicy,
+    ) -> list[AuditGroupStat]:
+        dimensions: dict[str, Callable[[AuditRecord], str]] = {
+            "score": lambda r: _range_bucket(r.score, policy.buckets.score),
+            "streak": lambda r: _range_bucket(float(r.streak), policy.buckets.streak),
+            "flow_pct": lambda r: _nullable_range_bucket(
+                r.flow_pct, policy.buckets.flow_pct
+            ),
+            "vwap_disc_pct": lambda r: _nullable_range_bucket(
+                r.vwap_disc_pct, policy.buckets.vwap_disc_pct
+            ),
+            "rsi": lambda r: _nullable_range_bucket(r.rsi, policy.buckets.rsi),
+            "bb_pctile": lambda r: _nullable_range_bucket(
+                r.bb_pctile, policy.buckets.bb_pctile
+            ),
             "trend": lambda r: r.trend,
             "broker_quality": lambda r: r.broker_quality,
         }
 
         stats: list[AuditGroupStat] = []
-        for dimension, bucket_fn in dimensions.items():
+        for dimension in policy.group_dimensions:
+            bucket_fn = dimensions.get(dimension)
+            if bucket_fn is None:
+                continue
             buckets: dict[str, list[AuditRecord]] = {}
             for record in records:
                 buckets.setdefault(bucket_fn(record), []).append(record)
@@ -667,6 +761,33 @@ def _broker_quality_bucket_from_flows(
     if noise_flow > Decimal("0") and noise_flow >= smart_flow and noise_flow >= neutral_flow:
         return "noise+"
     return "mixed"
+
+
+def _fmt_edge(value: float | int) -> str:
+    if float(value).is_integer():
+        return str(int(value))
+    return f"{value:g}"
+
+
+def _range_bucket(value: float, edges: tuple[float | int, ...]) -> str:
+    ordered = tuple(sorted(edges))
+    if not ordered:
+        return "all"
+    if value < float(ordered[0]):
+        return f"<{_fmt_edge(ordered[0])}"
+    for lower, upper in zip(ordered, ordered[1:]):
+        if value < float(upper):
+            return f"{_fmt_edge(lower)}-{_fmt_edge(upper)}"
+    return f"{_fmt_edge(ordered[-1])}+"
+
+
+def _nullable_range_bucket(
+    value: float | None,
+    edges: tuple[float | int, ...],
+) -> str:
+    if value is None:
+        return "missing"
+    return _range_bucket(value, edges)
 
 
 def _score_bucket(record: AuditRecord) -> str:

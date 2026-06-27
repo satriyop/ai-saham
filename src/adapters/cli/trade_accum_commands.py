@@ -39,20 +39,30 @@ from src.infrastructure.browser.stockbit_seasonality import StockbitSeasonalityP
 from src.infrastructure.browser.stockbit_shareholding import StockbitShareholdingProvider
 from src.infrastructure.browser.stockbit_ticker_notation import StockbitTickerNotationProvider
 from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.swing_backtest_config import (
+    load_swing_backtest_config as _load_swing_backtest_config,
+)
 from src.infrastructure.config.swing_config import load_swing_config as _load_swing_config
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
 _SC = _load_swing_config()
+_BT = _load_swing_backtest_config()
 
 DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 DEFAULT_ACCUM_JOURNAL_PATH = Path(APP_CFG.storage.accum_journal)
 DEFAULT_TRADE_JOURNAL_PATH = Path(APP_CFG.storage.trade_journal)
 
 FOREIGN_BOUNCE_SETUP = "foreign-bounce"
-FOREIGN_BOUNCE_TAKE_PROFIT = Decimal("5")
-FOREIGN_BOUNCE_STOP_LOSS = Decimal("5")
-FOREIGN_BOUNCE_MAX_HOLD_DAYS = 10
+_DEFAULT_SETUP_TARGET = _SC.setup_targets.get("default")
+FOREIGN_BOUNCE_TAKE_PROFIT = (
+    _DEFAULT_SETUP_TARGET.take_profit_pct
+    if _DEFAULT_SETUP_TARGET else Decimal(str(_BT.take_profit_pct))
+)
+FOREIGN_BOUNCE_STOP_LOSS = (
+    _DEFAULT_SETUP_TARGET.stop_loss_pct
+    if _DEFAULT_SETUP_TARGET else Decimal(str(_BT.stop_loss_pct))
+)
 
 
 def _setup_config() -> SwingSetupCatalogConfig:
@@ -204,7 +214,7 @@ def _accumulation_log_impl(
         ex_date_warning_days=_SC.ex_date_warning_days,
         take_profit_pct=FOREIGN_BOUNCE_TAKE_PROFIT,
         stop_loss_pct=FOREIGN_BOUNCE_STOP_LOSS,
-        max_hold_days=FOREIGN_BOUNCE_MAX_HOLD_DAYS,
+        max_hold_days=_BT.max_hold_days,
     ))
 
     if result.candidate_score is None and entry_price is None:
@@ -229,7 +239,7 @@ def _accumulation_log_impl(
     )
     plan_str = (
         f" | plan entry={result.entry_price:,.0f} stop={result.planned_stop:,.0f} "
-        f"target={result.planned_target:,.0f} hold={FOREIGN_BOUNCE_MAX_HOLD_DAYS}d"
+        f"target={result.planned_target:,.0f} hold={_BT.max_hold_days}d"
         if from_analysis and result.planned_stop is not None and result.planned_target is not None
         else ""
     )

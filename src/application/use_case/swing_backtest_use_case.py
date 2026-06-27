@@ -64,6 +64,8 @@ class SwingBacktestRequest:
     resistance_gate_enabled: bool = True
     resistance_headroom_min_pct: float = 5.0
     ex_date_warning_days: int = 10
+    forward_data_lookahead_days: int = 45
+    same_day_exit_priority: str = "stop_first"
 
 
 @dataclass(frozen=True)
@@ -271,7 +273,7 @@ class SwingBacktestUseCase:
                     if not self._passes_regime_filter(regime_label, request):
                         skipped_by_regime += 1
                         continue
-                    if not self._has_forward_data(candidate.ticker, current_date):
+                    if not self._has_forward_data(candidate.ticker, current_date, request):
                         skipped_no_forward_data += 1
                         continue
 
@@ -340,6 +342,7 @@ class SwingBacktestUseCase:
                 "Backtest uses the supplied current universe; "
                 "historical index membership is not reconstructed.",
                 "Signals enter at same-day close; intraday execution/slippage is not modeled.",
+                f"Same-day stop/target priority: {request.same_day_exit_priority}.",
             ],
         )
 
@@ -362,6 +365,10 @@ class SwingBacktestUseCase:
             raise ValueError("max_hold_days must be positive")
         if request.cost_bps < 0:
             raise ValueError("cost_bps cannot be negative")
+        if request.forward_data_lookahead_days <= 0:
+            raise ValueError("forward_data_lookahead_days must be positive")
+        if request.same_day_exit_priority not in {"stop_first", "target_first"}:
+            raise ValueError("same_day_exit_priority must be stop_first or target_first")
         valid_regimes = {"RISK_ON", "NEUTRAL", "RISK_OFF", "VOLATILE"}
         invalid = [r for r in request.allowed_regimes if r.upper() not in valid_regimes]
         if invalid:
@@ -495,10 +502,16 @@ class SwingBacktestUseCase:
         )
         holding_days = self._holding_days(position.ticker, position.entry_date, current_date)
 
-        if candle.low <= stop:
+        stop_hit = candle.low <= stop
+        target_hit = candle.high >= target
+        if stop_hit and (
+            request.same_day_exit_priority == "stop_first" or not target_hit
+        ):
             return self._close_trade(position, current_date, stop, "stop", request)
-        if candle.high >= target:
+        if target_hit:
             return self._close_trade(position, current_date, target, "target", request)
+        if stop_hit:
+            return self._close_trade(position, current_date, stop, "stop", request)
         if holding_days >= request.max_hold_days:
             return self._close_trade(position, current_date, candle.close, "max_hold", request)
         return None
@@ -584,11 +597,16 @@ class SwingBacktestUseCase:
             regimes[replay_date] = engine.evaluate(as_of_date=replay_date)
         return regimes
 
-    def _has_forward_data(self, ticker: str, signal_date: date) -> bool:
+    def _has_forward_data(
+        self,
+        ticker: str,
+        signal_date: date,
+        request: SwingBacktestRequest,
+    ) -> bool:
         candles = self._market_repo.get_candles(
             ticker,
             start_date=signal_date + timedelta(days=1),
-            end_date=signal_date + timedelta(days=45),
+            end_date=signal_date + timedelta(days=request.forward_data_lookahead_days),
         )
         return any(c.date > signal_date for c in candles)
 

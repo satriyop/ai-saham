@@ -14,9 +14,19 @@ into distressed companies.
 Layer: Domain
 """
 
+from dataclasses import dataclass
+
 from src.domain.rules.risk_gate import GateContext, GateResult, RiskGate
 
 _DEFAULT_DISTRESS_THRESHOLD = 3
+
+
+@dataclass(frozen=True)
+class FundamentalGatePolicy:
+    missing_data_action: str = "skip"
+    missing_data_confidence: int = 0
+    triggered_confidence: int = 100
+    pass_confidence: int = 100
 
 
 class FundamentalGate(RiskGate):
@@ -27,17 +37,23 @@ class FundamentalGate(RiskGate):
     RSI or trend signal. No fundamental data available → gate passes silently.
     """
 
-    def __init__(self, distress_threshold: int = _DEFAULT_DISTRESS_THRESHOLD) -> None:
+    def __init__(
+        self,
+        distress_threshold: int = _DEFAULT_DISTRESS_THRESHOLD,
+        policy: FundamentalGatePolicy | None = None,
+    ) -> None:
         if not 0 <= distress_threshold <= 9:
             raise ValueError(f"distress_threshold must be 0–9, got {distress_threshold}")
         self._threshold = distress_threshold
+        self._policy = policy or FundamentalGatePolicy()
 
     def evaluate(self, context: GateContext) -> GateResult:
         if context.piotroski_f_score is None:
+            triggered = self._policy.missing_data_action == "block"
             return GateResult(
-                triggered=False,
-                reason="no fundamental data — gate skipped",
-                confidence=0,
+                triggered=triggered,
+                reason="no fundamental data — gate blocked" if triggered else "no fundamental data — gate skipped",
+                confidence=self._policy.missing_data_confidence,
             )
         if context.piotroski_f_score <= self._threshold:
             return GateResult(
@@ -46,10 +62,10 @@ class FundamentalGate(RiskGate):
                     f"Fundamental distress: F-score {context.piotroski_f_score}"
                     f" ≤ {self._threshold} (value trap risk)"
                 ),
-                confidence=100,
+                confidence=self._policy.triggered_confidence,
             )
         return GateResult(
             triggered=False,
             reason=f"F-score {context.piotroski_f_score} > {self._threshold} (fundamental gate passes)",
-            confidence=100,
+            confidence=self._policy.pass_confidence,
         )

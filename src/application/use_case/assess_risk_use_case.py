@@ -134,6 +134,8 @@ class AssessRiskUseCase:
         structural_gates: list[RiskGate] | None = None,
         execution_gates: list[RiskGate] | None = None,
         indicator_evaluator: "IndicatorEvaluator | None" = None,
+        indicator_history_days: int = 365,
+        gate_recent_candle_lookback: int = 20,
     ) -> None:
         """
         Initialize with repository, optional registry, optional rules loader,
@@ -163,6 +165,8 @@ class AssessRiskUseCase:
         self._structural_gates: list[RiskGate] = structural_gates or []
         self._execution_gates: list[RiskGate] = execution_gates or []
         self._indicator_evaluator = indicator_evaluator
+        self._indicator_history_days = indicator_history_days
+        self._gate_recent_candle_lookback = gate_recent_candle_lookback
 
     def execute(self, request: AssessRiskRequest) -> AssessRiskResponse:
         """
@@ -247,14 +251,14 @@ class AssessRiskUseCase:
                     sma_period=request.sma_period,
                     ema_period=request.ema_period,
                     rsi_period=request.rsi_period,
-                    days=365,  # Get enough data for indicator convergence
+                    days=self._indicator_history_days,
                 )
             )
 
             if not agg_response.has_values:
                 raise ValueError(
                     f"Insufficient data for {request.ticker.upper()}. "
-                    f"Run 'saham fetch market {request.ticker.upper()} --days 365' first."
+                    f"Run 'saham fetch market {request.ticker.upper()} --days {self._indicator_history_days}' first."
                 )
 
             latest_snapshot = agg_response.snapshots[-1]
@@ -354,7 +358,7 @@ class AssessRiskUseCase:
                 request.ticker.upper(),
                 end_date=snapshot_date,
             )
-            ctx = replace(ctx, recent_candles=tuple(candles[-20:]))
+            ctx = replace(ctx, recent_candles=tuple(candles[-self._gate_recent_candle_lookback:]))
         if latest_snapshot is not None and ctx.latest_snapshot is None:
             ctx = replace(ctx, latest_snapshot=latest_snapshot)
         return ctx
@@ -391,7 +395,7 @@ class AssessRiskUseCase:
         if not candles:
             raise ValueError(
                 f"Insufficient data for {ticker}. "
-                f"Run 'saham fetch market {ticker} --days 365' first."
+                    f"Run 'saham fetch market {ticker} --days {self._indicator_history_days}' first."
             )
 
         # Compute each required indicator using registry
@@ -491,14 +495,14 @@ class AssessRiskUseCase:
                 sma_period=request.sma_period,
                 ema_period=request.ema_period,
                 rsi_period=request.rsi_period,
-                days=365,
+                days=self._indicator_history_days,
             )
         )
 
         if not agg_response.has_values:
             raise ValueError(
                 f"Insufficient data for {request.ticker.upper()}. "
-                f"Run 'saham fetch market {request.ticker.upper()} --days 365' first."
+                f"Run 'saham fetch market {request.ticker.upper()} --days {self._indicator_history_days}' first."
             )
 
         # Extract latest snapshot
@@ -582,14 +586,14 @@ class AssessRiskUseCase:
                 sma_period=request.sma_period,
                 ema_period=request.ema_period,
                 rsi_period=request.rsi_period,
-                days=365,
+                days=self._indicator_history_days,
             )
         )
 
         if not agg_response.has_values:
             raise ValueError(
                 f"Insufficient data for {request.ticker.upper()}. "
-                f"Run 'saham fetch market {request.ticker.upper()} --days 365' first."
+                f"Run 'saham fetch market {request.ticker.upper()} --days {self._indicator_history_days}' first."
             )
 
         window = agg_response.snapshots[-days:]

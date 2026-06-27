@@ -8,26 +8,38 @@ Layer: Application
 Depends on: Domain value objects only
 """
 
+from dataclasses import dataclass
+
 from src.domain.indicators.indicator_context import IndicatorContext
 from src.domain.indicators.indicator_reading import IndicatorReading
 from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 
-_RSI_OVERBOUGHT = 70.0
-_RSI_OVERSOLD = 30.0
+
+@dataclass(frozen=True)
+class IndicatorEvaluatorConfig:
+    rsi_overbought: float = 70.0
+    rsi_oversold: float = 30.0
+    agreement_count: int = 2
+    full_agreement_confidence: int = 100
+    partial_agreement_confidence: int = 50
 
 
 class IndicatorEvaluator:
     """Map an IndicatorSnapshot to an IndicatorContext using fixed thresholds."""
 
+    def __init__(self, config: IndicatorEvaluatorConfig | None = None) -> None:
+        self._config = config or IndicatorEvaluatorConfig()
+
     def evaluate(self, snapshot: IndicatorSnapshot) -> IndicatorContext:
+        cfg = self._config
         # RSI
         rsi_f = float(snapshot.rsi)
-        if rsi_f > _RSI_OVERBOUGHT:
+        if rsi_f > cfg.rsi_overbought:
             rsi_r = IndicatorReading.BEARISH
-            rsi_note = f"RSI {rsi_f:.1f} > {_RSI_OVERBOUGHT} (overbought)"
-        elif rsi_f < _RSI_OVERSOLD:
+            rsi_note = f"RSI {rsi_f:.1f} > {cfg.rsi_overbought} (overbought)"
+        elif rsi_f < cfg.rsi_oversold:
             rsi_r = IndicatorReading.BULLISH
-            rsi_note = f"RSI {rsi_f:.1f} < {_RSI_OVERSOLD} (oversold)"
+            rsi_note = f"RSI {rsi_f:.1f} < {cfg.rsi_oversold} (oversold)"
         else:
             rsi_r = IndicatorReading.NEUTRAL
             rsi_note = f"RSI {rsi_f:.1f} neutral"
@@ -58,15 +70,19 @@ class IndicatorEvaluator:
         bearish_count = readings.count(IndicatorReading.BEARISH)
         bullish_count = readings.count(IndicatorReading.BULLISH)
 
-        if bearish_count >= 2:
+        if bearish_count >= cfg.agreement_count:
             overall = IndicatorReading.BEARISH
-        elif bullish_count >= 2:
+        elif bullish_count >= cfg.agreement_count:
             overall = IndicatorReading.BULLISH
         else:
             overall = IndicatorReading.NEUTRAL
 
         all_same = len(set(readings)) == 1
-        confidence = 100 if all_same else 50
+        confidence = (
+            cfg.full_agreement_confidence
+            if all_same
+            else cfg.partial_agreement_confidence
+        )
 
         return IndicatorContext(
             sma_reading=sma_r,
