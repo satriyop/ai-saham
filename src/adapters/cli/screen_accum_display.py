@@ -413,8 +413,6 @@ def display_results(
             bb_style = "green" if c.bb_width_pctile <= _SC.coiled_spring_bb_pctile else (
                 "yellow" if c.bb_width_pctile <= 0.40 else ""
             )
-        else:
-
         # Color flow score
         if c.accum_score >= _ASC.display.enter_min_accum_score:
             score_style = "green"
