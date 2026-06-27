@@ -408,19 +408,12 @@ def display_results(
     risk_detail_lines: list[Text] = []
 
     for i, c in enumerate(candidates, 1):
-        net_days_str = f"{c.net_buy_days}/{c.total_days}"
-        vwap_str = f"{c.vwap_discount_pct:+.1f}%" if c.vwap_discount_pct is not None else "   —  "
-        rsi_str = f"{c.rsi:.1f}" if c.rsi is not None else "  —"
-        streak_str = f"{c.consecutive_streak}s"
-        flow_str = f"{c.avg_flow_ratio:+.1f}" if c.avg_flow_ratio is not None else "   —"
         if c.bb_width_pctile is not None:
             pct_int = int(c.bb_width_pctile * 100)
             bb_style = "green" if c.bb_width_pctile <= _SC.coiled_spring_bb_pctile else (
                 "yellow" if c.bb_width_pctile <= 0.40 else ""
             )
-            bb_cell = Text(f"{pct_int}%", style=bb_style)
         else:
-            bb_cell = Text("—", style="bright_black")
 
         # Color flow score
         if c.accum_score >= _ASC.display.enter_min_accum_score:

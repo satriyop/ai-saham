@@ -22,7 +22,7 @@ from src.application.rules.exceptions import (
     RulesSchemaError,
     RulesValidationError,
 )
-from src.application.services.bootstrap import create_indicator_registry, create_risk_engine
+from src.application.services.bootstrap import create_risk_engine
 from src.application.use_case.assess_risk_use_case import AssessRiskRequest
 from src.domain.ports.ai_explainer import ExplainerAuthError
 from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot

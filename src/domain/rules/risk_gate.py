@@ -19,7 +19,6 @@ from datetime import date
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from src.domain.entities.candle import Candle
     from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 
 

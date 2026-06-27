@@ -8,7 +8,7 @@ Layer: Application (Use Case)
 """
 
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date
 from decimal import Decimal
 from typing import Optional
 
@@ -103,8 +103,6 @@ class AuditSentimentUseCase:
         Returns:
             Price delta percentage (Decimal) or None if insufficient data
         """
-        # Fetch candles around the range
-        end_date = start_date + timedelta(days=days_after + 7) # Extra buffer for weekends
         candles = self._market_repo.get_candles(ticker.upper())
 
         if not candles:

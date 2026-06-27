@@ -27,7 +27,6 @@ from src.adapters.cli.view_market_context_display import (
     REGIME_DISPLAY_LABEL,
     context_conviction_score,
     context_factor_value,
-    context_warnings,
 )
 from src.application.use_case.swing_backtest_use_case import SwingBacktestResponse
 from src.domain.value_objects.market_context import MarketContext

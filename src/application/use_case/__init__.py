@@ -34,11 +34,6 @@ from src.application.use_case.create_indicator_from_intent_use_case import (
     CreateIndicatorFromIntentResponse,
     CreateIndicatorFromIntentUseCase,
 )
-from src.application.use_case.fetch_market_data_use_case import (
-    FetchMarketDataRequest,
-    FetchMarketDataResponse,
-    FetchMarketDataUseCase,
-)
 from src.application.use_case.fetch_sentiment_use_case import (
     FetchSentimentRequest,
     FetchSentimentResponse,

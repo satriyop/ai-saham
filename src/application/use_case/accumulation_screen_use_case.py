@@ -641,7 +641,6 @@ class AccumulationScreenUseCase:
             se = result.seasonal_edge
             ac = result.analyst_consensus
             fe = result.forward_estimates
-            fund = result.fundamentals
             num_optional = sum(
                 1 for x in [bd.top3_accdist, bd.top5_accdist, bd.top10_accdist]
                 if x is not None

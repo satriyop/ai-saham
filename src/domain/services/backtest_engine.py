@@ -89,9 +89,6 @@ class BacktestEngine:
             d: (action, rule) for d, action, rule in actions
         }
 
-        # Build candle lookup by date for price retrieval
-        candle_by_date: dict[date, Candle] = {c.date: c for c in sorted_candles}
-
         # Simulation state
         capital = self._initial_capital
         position: _Position | None = None

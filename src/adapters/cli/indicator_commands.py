@@ -164,8 +164,6 @@ def compute(
 
         # ── Header ────────────────────────────────────────────────────────────
         date_start, _ = values[0]
-        _, date_end = values[-1]  # type: ignore[misc]
-        date_end = display_values[-1][0]
         typer.echo(f"\n{'='*52}")
         typer.echo(f" {label}  ·  {ticker_upper}  ·  {values[0][0]} → {values[-1][0]}")
         typer.echo(f" {len(values)} values computed  (showing last {len(display_values)})")

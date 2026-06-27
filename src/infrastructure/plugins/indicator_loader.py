@@ -140,7 +140,4 @@ class IndicatorPluginLoader:
             logger.warning(f"Failed to load plugin {path}: {e}")
             return []
 
-    def _load_plugin(self, path: Path) -> type["IndicatorPlugin"] | None:
-        """Load first plugin from a file. Kept for backward compatibility."""
-        found = self._load_plugins(path)
-        return found[0] if found else None
+

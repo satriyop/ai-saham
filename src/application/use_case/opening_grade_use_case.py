@@ -52,8 +52,6 @@ def compute_grade(run_date: date | None = None) -> dict:
 
     for cand in candidates:
         ticker = cand["ticker"]
-        suggested_entry = cand.get("suggested_entry")
-        atr_stop = cand.get("atr_stop")
         one_r = cand.get("one_r")
         entry_low = cand.get("entry_range_low")
         entry_high = cand.get("entry_range_high")

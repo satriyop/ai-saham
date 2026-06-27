@@ -175,14 +175,6 @@ def print_browser_plan(config: PreOpenScreenConfig) -> None:
     console().print("")
 
 
-STRAT_SYMBOL = {"LOW_RISK": "↑", "HIGH_RISK": "↓", "MODERATE": "~"}
-STRAT_COLOR = {
-    "LOW_RISK": typer.colors.GREEN,
-    "HIGH_RISK": typer.colors.RED,
-    "MODERATE": typer.colors.BRIGHT_BLACK,
-}
-
-
 def display_pre_open_summary_panel(
     candidates: list[ScreenerCandidate],
     screened_date: date,
@@ -367,7 +359,6 @@ def display_results(
 
         if strategy_signals is not None:
             raw = strategy_signals.get(candidate.ticker, "?")
-            sym = STRAT_SYMBOL.get(raw, raw)
             if raw == "LOW_RISK":
                 strat_text = "[green]↑[/]"
             elif raw == "HIGH_RISK":
