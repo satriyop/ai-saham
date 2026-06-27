@@ -84,6 +84,9 @@ from src.domain.value_objects.setup_evaluation import SetupEvaluation
 from src.infrastructure.browser.stockbit_analyst import StockbitAnalystConsensusProvider
 from src.infrastructure.browser.stockbit_bandar import StockbitBandarDetectorProvider
 from src.infrastructure.browser.stockbit_corp_action import StockbitCorporateActionRepository
+from src.infrastructure.browser.stockbit_forward_estimates import (
+    StockbitForwardEstimatesProvider,
+)
 from src.infrastructure.browser.stockbit_fundamentals import StockbitFundamentalsProvider
 from src.infrastructure.browser.stockbit_insider import StockbitInsiderActivityProvider
 from src.infrastructure.browser.stockbit_seasonality import StockbitSeasonalityProvider
@@ -161,6 +164,10 @@ def _make_stockbit_providers(db_path: Path) -> Any:
         bandar_prov=StockbitBandarDetectorProvider(broker_provider=None, db_path=db_path),
         fundamentals_prov=StockbitFundamentalsProvider(broker_provider=None, db_path=db_path),
         notation_prov=StockbitTickerNotationProvider(broker_provider=None, db_path=db_path),
+        forward_estimates_prov=StockbitForwardEstimatesProvider(
+            broker_provider=None,
+            db_path=db_path,
+        ),
     )
 BROKER_WEIGHTS: dict[str, Decimal] = {
     **{code: _SC.smart_weight for code in SMART_MONEY_BROKERS},
@@ -714,6 +721,7 @@ def swing(
             bandar_detector_provider=_sb.bandar_prov,
             fundamentals_provider=_sb.fundamentals_prov,
             ticker_notation_provider=_sb.notation_prov,
+            forward_estimates_provider=_sb.forward_estimates_prov,
         )
         accum_resp = accum_uc.execute(
             AccumulationScreenRequest(

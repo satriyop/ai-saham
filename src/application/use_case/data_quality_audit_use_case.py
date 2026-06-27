@@ -36,6 +36,8 @@ class DataQualityRawSnapshot:
     candle_source_columns_present: bool
     unknown_candle_provenance_rows: int
     enrichment_tables: tuple[DataQualityTableSnapshot, ...] = ()
+    empty_analyst_rows: int = 0
+    forward_estimates_missing_pe_rows: int = 0
 
 
 class DataQualityAuditReader(Protocol):
@@ -235,6 +237,38 @@ class DataQualityAuditUseCase:
                         impact="Enrichment coverage is uneven across candidates.",
                     )
                 )
+
+        if snapshot.empty_analyst_rows > 0:
+            issues.append(
+                DataQualityIssue(
+                    severity="info",
+                    code="EMPTY_ANALYST_SENTINELS",
+                    message=(
+                        f"{snapshot.empty_analyst_rows} analyst_cache row(s) are "
+                        "fresh empty sentinels."
+                    ),
+                    impact=(
+                        "SignalEngine treats analyst consensus as missing for those "
+                        "tickers; use enrichment refresh when source data should exist."
+                    ),
+                )
+            )
+
+        if snapshot.forward_estimates_missing_pe_rows > 0:
+            issues.append(
+                DataQualityIssue(
+                    severity="info",
+                    code="FORWARD_ESTIMATES_MISSING_PE",
+                    message=(
+                        f"{snapshot.forward_estimates_missing_pe_rows} "
+                        "forward_estimates_cache row(s) have EPS but no forward PE."
+                    ),
+                    impact=(
+                        "Forward valuation needs latest price fallback or refreshed "
+                        "current_price to avoid neutral scoring."
+                    ),
+                )
+            )
 
         status = "fail" if any(i.severity == "fail" for i in issues) else (
             "warn" if any(i.severity == "warn" for i in issues) else "pass"

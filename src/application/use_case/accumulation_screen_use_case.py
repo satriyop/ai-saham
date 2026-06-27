@@ -52,6 +52,7 @@ from src.domain.ports.shareholding_provider import ShareholdingProvider
 from src.domain.ports.ticker_notation_provider import TickerNotationProvider
 from src.domain.value_objects.accumulation_evidence import AccumulationEvidence
 from src.domain.value_objects.idx_market import SHARES_PER_LOT
+from src.domain.value_objects.forward_estimates import ForwardEstimates
 
 # Default setup targets (1:1 R:R, regime-unaware fallback)
 _DEFAULT_TAKE_PROFIT = Decimal("5")
@@ -580,6 +581,7 @@ class AccumulationScreenUseCase:
 
             # Insider activity: director/commissioner transactions in last 90 days
             insider_txns: list = []
+            insider_net_buy_ratio: float | None = None
             if self._insider_provider is not None:
                 from datetime import timedelta
                 from src.domain.value_objects.insider_transaction import compute_net_buy_ratio
@@ -595,6 +597,9 @@ class AccumulationScreenUseCase:
                 if buy_txns:
                     result.insider_buying = True
                     result.recent_insider_buys = [t.label for t in buy_txns[:3]]
+                insider_net_buy_ratio = compute_net_buy_ratio(insider_txns)
+                if insider_net_buy_ratio is None:
+                    insider_net_buy_ratio = 0.0
 
             # Analyst consensus: aggregated buy/hold/sell + price target
             if self._analyst_provider is not None:
@@ -633,6 +638,19 @@ class AccumulationScreenUseCase:
                 result.forward_estimates = self._forward_estimates_provider.get_forward_estimates(
                     ticker=result.ticker,
                 )
+                if (
+                    result.forward_estimates is not None
+                    and result.forward_estimates.forward_pe is None
+                    and result.forward_estimates.forward_eps_1y is not None
+                    and result.current_price > Decimal("0")
+                ):
+                    result.forward_estimates = ForwardEstimates.compute(
+                        ticker=result.ticker,
+                        forward_eps_1y=result.forward_estimates.forward_eps_1y,
+                        revenue_forward_1y=result.forward_estimates.revenue_forward_1y,
+                        current_price=float(result.current_price),
+                        fetched_at=result.forward_estimates.fetched_at,
+                    )
 
             # Signal assessment — delegates to SignalEngine (first-class service, ADR-025)
             from src.domain.value_objects.signal_assessment import SignalContext
@@ -655,7 +673,7 @@ class AccumulationScreenUseCase:
                 bandar_broad_score=bd.broad_score if bd else None,
                 bandar_max_range=self._signal_engine.bandar_max_range(num_optional)
                 if bd else self._signal_engine.bandar_max_range(0),
-                insider_net_buy_ratio=compute_net_buy_ratio(insider_txns) if insider_txns else None,
+                insider_net_buy_ratio=insider_net_buy_ratio,
                 seasonality_win_rate=se.win_rate_pct if se else None,
                 seasonality_avg_return_pct=se.avg_monthly_return_pct if se else None,
                 analyst_buy_pct=(ac.buy_count / ac.analyst_count) if ac and ac.analyst_count > 0 else None,

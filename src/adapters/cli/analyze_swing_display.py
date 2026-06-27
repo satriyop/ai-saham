@@ -150,6 +150,44 @@ def signal_label(candidate: Any, config: SwingDisplayConfig) -> str:
     return "weak"
 
 
+def accumulation_evidence_label(candidate: Any, config: SwingDisplayConfig) -> str:
+    if candidate.score >= config.enter_min_score:
+        return "enter-zone"
+    if candidate.score >= config.watch_min_score:
+        return "watch-zone"
+    return "weak"
+
+
+def flow_direction_label(candidate: Any) -> str:
+    flow = getattr(candidate, "avg_flow_ratio", None)
+    if flow is None:
+        return "flow unknown"
+    if flow > 0:
+        return "flow positive"
+    if flow < 0:
+        return "flow negative"
+    return "flow flat"
+
+
+def has_current_flow_confirmation(candidate: Any) -> bool:
+    flow = getattr(candidate, "avg_flow_ratio", None)
+    return (
+        flow is not None
+        and flow > 0
+        and getattr(candidate, "consecutive_streak", 0) > 0
+        and getattr(candidate, "net_buy_days", 0) > (getattr(candidate, "total_days", 0) / 2)
+    )
+
+
+def has_bandar_distribution(snapshot: Any) -> bool:
+    if snapshot is None:
+        return False
+    if getattr(snapshot, "is_distributing", False):
+        return True
+    broker_accdist = str(getattr(snapshot, "broker_accdist", "") or "").lower()
+    return broker_accdist in {"dis", "dist"}
+
+
 def format_failed_gates_summary(setup_eval: Any) -> str:
     return "Failed gates: " + "; ".join(setup_eval.failed_reasons)
 
@@ -1022,8 +1060,12 @@ def print_swing_output(
             "WEAK": "red",
         }.get(sa.strength.value, "white")
         signal_text.append(Text(
-            f"Signal Assessment: {sa.score_label} {sa.strength.value} → {sa.entry_quality.value}",
+            f"Explains the Signal column in Verdict: {sa.score_label} {sa.strength.value} -> {sa.entry_quality.value}",
             style=_sig_style,
+        ))
+        signal_text.append(Text(
+            "Scale: SignalEngine 0-100. Used in final TradeSetup: yes.",
+            style="dim",
         ))
         breakdown = getattr(sa, "breakdown_dict", None) or {}
         if breakdown:
@@ -1035,16 +1077,48 @@ def print_swing_output(
                 "analyst_consensus": "Analyst Consensus",
                 "forward_valuation": "Forward Valuation",
             }
+            _factor_rationale_labels = {
+                "bandar_intensity": "Bandar accumulation",
+                "foreign_flow_quality": "Foreign flow",
+                "insider_activity": "Insider activity",
+                "seasonality_edge": "Seasonal edge",
+                "analyst_consensus": "Analyst consensus",
+                "forward_valuation": "Forward valuation",
+            }
+            _rationale_by_label = {
+                line.split(":", 1)[0]: line
+                for line in sa.rationale
+                if ":" in line
+            }
             bd_table = compact_table()
             bd_table.add_column("Factor")
             bd_table.add_column("Score", justify="right")
             bd_table.add_column("Source", style="dim")
             for _factor, _score in breakdown.items():
                 _source = ""
+                _label = _factor_labels.get(_factor, _factor)
+                _rationale = _rationale_by_label.get(
+                    _factor_rationale_labels.get(_factor, _label)
+                )
+                if _rationale and "no data (neutral 50)" in _rationale:
+                    _source = "missing data -> neutral 50"
                 if _factor == "foreign_flow_quality" and accum is not None:
-                    _source = f"Accum evidence mapped to {_score:.0f}/100"
+                    _source = (
+                        f"Composite accumulation evidence {accum.score:.1f}/120 -> {_score:.1f}/100"
+                    )
+                elif _score == 50.0 and not _source:
+                    if _factor == "insider_activity":
+                        _source = "neutral: no net insider buy/sell"
+                    elif _factor == "seasonality_edge":
+                        _source = "neutral seasonal edge"
+                    elif _factor == "analyst_consensus":
+                        _source = "balanced analyst signal"
+                    elif _factor == "forward_valuation":
+                        _source = "neutral valuation"
+                    else:
+                        _source = "neutral score"
                 bd_table.add_row(
-                    _factor_labels.get(_factor, _factor),
+                    _label,
                     f"{_score:.1f}",
                     _source,
                 )
@@ -1091,11 +1165,24 @@ def print_swing_output(
     # ── Panel 4: FLOW / BROKER DETAIL ───────────────────────────────────────
     flow_group = []
     if include_flow_detail and accum:
-        label = signal_label(accum, config)
-        flow_group.append(Text(f"Accumulation Signal ({window} sessions): {label.upper()}", style="bold cyan"))
+        evidence_label = accumulation_evidence_label(accum, config)
+        flow_label = flow_direction_label(accum)
+        flow_group.append(Text(
+            f"Composite Accumulation Evidence ({window} broker sessions): "
+            f"{evidence_label.upper()} / {flow_label.upper()}",
+            style="bold cyan",
+        ))
+        flow_group.append(Text(
+            "Scope: broker-flow and attribution diagnostics. SignalEngine uses the composite accumulation score below, not pure foreign net flow.",
+            style="dim",
+        ))
+        flow_group.append(Text(
+            "Longer-term flow context below is diagnostic only and does not directly change Verdict.",
+            style="dim",
+        ))
 
         flow_table = compact_table()
-        flow_table.add_column("Score")
+        flow_table.add_column("Accum Score")
         flow_table.add_column("Streak")
         flow_table.add_column("Net Days")
         flow_table.add_column("Flow Ratio")
@@ -1122,6 +1209,43 @@ def print_swing_output(
         )
         flow_group.append(flow_table)
 
+        if accum.score >= config.watch_min_score and not has_current_flow_confirmation(accum):
+            flow_group.append(Text(
+                "Note: composite score is in watch-zone, but current foreign flow is not confirming "
+                "(check Flow Ratio, Streak, and Net Days).",
+                style="dim yellow",
+            ))
+
+        bd_for_note = getattr(accum, "bandar_detector", None)
+        if has_bandar_distribution(bd_for_note):
+            flow_group.append(Text(
+                "Note: Bandar detector shows distribution; RiskEngine can block execution even when "
+                "the composite Signal remains MODERATE.",
+                style="dim red",
+            ))
+
+        evidence = getattr(accum, "accumulation_evidence", None)
+        breakdown = getattr(evidence, "breakdown_dict", None) or {}
+        if breakdown:
+            component_labels = {
+                "cons": "Net-day consistency",
+                "streak": "Buy streak",
+                "vwap": "Foreign VWAP discount",
+                "rsi": "RSI headroom",
+                "flow": "Flow ratio",
+                "bb": "BB squeeze",
+                "inst": "Broker attribution",
+            }
+            component_table = compact_table()
+            component_table.add_column("Accum Component")
+            component_table.add_column("Pts", justify="right")
+            for key, value in breakdown.items():
+                component_table.add_row(
+                    component_labels.get(key, key),
+                    f"{value:.1f}",
+                )
+            flow_group.append(component_table)
+
         # Corp action risks & flags
         corp_flags = []
         if accum.dividend_risk:
@@ -1133,7 +1257,7 @@ def print_swing_output(
         if accum.seasonal_edge is not None:
             se = accum.seasonal_edge
             se_color = "green" if se.is_tailwind else ("red" if se.is_headwind else "white")
-            corp_flags.append(Text(f"★ SEASONAL {se.label} (score {se.score:+.2f})", style=se_color))
+            corp_flags.append(Text(f"★ SEASONAL {se.label} (accum bonus {se.score:+.2f})", style=se_color))
         if accum.insider_buying:
             for label_in in accum.recent_insider_buys:
                 corp_flags.append(Text(f"⭐ INSIDER BUY — {label_in}", style="cyan"))
@@ -1162,7 +1286,34 @@ def print_swing_output(
     if include_flow_detail and flow_detail:
         if flow_group:
             flow_group.append(Text(""))
-        flow_group.append(Text(f"Detailed Flow Context ({flow_detail.window_sessions} sessions) through {fmt_date(flow_detail.through_date)}", style="bold cyan"))
+        flow_group.append(Text(
+            f"Longer-Term Flow Context ({flow_detail.window_sessions} broker sessions, diagnostic only) through {fmt_date(flow_detail.through_date)}",
+            style="bold cyan",
+        ))
+        if (
+            accum is not None
+            and flow_detail.total_net_flow < Decimal("0")
+            and has_current_flow_confirmation(accum)
+        ):
+            flow_group.append(Text(
+                "Interpretation: recent signal-window accumulation is occurring inside a negative longer-term flow backdrop.",
+                style="dim yellow",
+            ))
+        elif (
+            accum is not None
+            and flow_detail.total_net_flow < Decimal("0")
+            and accum.score >= config.watch_min_score
+            and not has_current_flow_confirmation(accum)
+        ):
+            flow_group.append(Text(
+                "Interpretation: longer-term flow is negative and the current signal window lacks foreign-flow confirmation.",
+                style="dim yellow",
+            ))
+        elif accum is not None and flow_detail.total_net_flow > Decimal("0") and accum.score < config.watch_min_score:
+            flow_group.append(Text(
+                "Interpretation: longer-term net buying exists, but the current signal window is still weak.",
+                style="dim yellow",
+            ))
 
         detail_flow_table = compact_table()
         detail_flow_table.add_column("Range")

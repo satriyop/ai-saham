@@ -104,6 +104,11 @@ class SQLiteDataQualityAuditReader:
                     conn,
                     normalized_tickers,
                 ),
+                empty_analyst_rows=_empty_analyst_rows(conn, normalized_tickers),
+                forward_estimates_missing_pe_rows=_forward_estimates_missing_pe_rows(
+                    conn,
+                    normalized_tickers,
+                ),
             )
 
 
@@ -322,6 +327,7 @@ def _enrichment_snapshots(
         ("shareholding_composition", "fetched_date"),
         ("bandar_detector", "session_date"),
         ("company_fundamentals", "fetched_date"),
+        ("forward_estimates_cache", "fetched_date"),
     )
     snapshots: list[DataQualityTableSnapshot] = []
     for table, date_column in specs:
@@ -335,6 +341,31 @@ def _enrichment_snapshots(
         if snapshot is not None:
             snapshots.append(snapshot)
     return tuple(snapshots)
+
+
+def _empty_analyst_rows(conn: sqlite3.Connection, tickers: list[str]) -> int:
+    if not _table_exists(conn, "analyst_cache"):
+        return 0
+    return _count_rows(
+        conn,
+        "analyst_cache",
+        tickers=tickers,
+        where_extra="buy_count + hold_count + sell_count = 0",
+    )
+
+
+def _forward_estimates_missing_pe_rows(
+    conn: sqlite3.Connection,
+    tickers: list[str],
+) -> int:
+    if not _table_exists(conn, "forward_estimates_cache"):
+        return 0
+    return _count_rows(
+        conn,
+        "forward_estimates_cache",
+        tickers=tickers,
+        where_extra="forward_eps_1y IS NOT NULL AND forward_pe IS NULL",
+    )
 
 
 def _parse_date(raw: object) -> date | None:

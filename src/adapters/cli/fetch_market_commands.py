@@ -545,7 +545,13 @@ def _print_table_summary(
         )
 
 
-def _fetch_enrichment(ticker: str, db_path: Path, broker_provider) -> str:
+def _fetch_enrichment(
+    ticker: str,
+    db_path: Path,
+    broker_provider,
+    *,
+    force_refresh: bool = False,
+) -> str:
     """Pre-fetch Stockbit enrichment data for one ticker into SQLite cache.
 
     Delegates cache-freshness-then-fetch policy to RefreshStockbitEnrichmentUseCase.
@@ -616,7 +622,11 @@ def _fetch_enrichment(ticker: str, db_path: Path, broker_provider) -> str:
         EnrichmentTask("valuation", lambda: valuation_prov.is_cache_fresh(ticker),   lambda: valuation_prov.get_valuation(ticker)),
     ]
     return RefreshStockbitEnrichmentUseCase().execute(
-        RefreshStockbitEnrichmentRequest(ticker=ticker, tasks=tasks)
+        RefreshStockbitEnrichmentRequest(
+            ticker=ticker,
+            tasks=tasks,
+            force_refresh=force_refresh,
+        )
     ).status
 
 

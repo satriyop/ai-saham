@@ -151,6 +151,43 @@ def test_clean_snapshot_passes() -> None:
     assert response.issues == ()
 
 
+def test_enrichment_sentinel_findings_are_informational() -> None:
+    reader = FakeReader(
+        DataQualityRawSnapshot(
+            database_exists=True,
+            expected_trading_day=date(2026, 6, 18),
+            candles=DataQualityTableSnapshot(
+                table="candles",
+                rows=100,
+                tickers=1,
+                latest=date(2026, 6, 18),
+            ),
+            broker_summaries_idx=DataQualityTableSnapshot(
+                table="broker_summaries",
+                rows=100,
+                tickers=1,
+                latest=date(2026, 6, 18),
+            ),
+            foreign_flow_stockbit=None,
+            broker_daily_flow_stockbit=None,
+            stockbit_summary_rows=0,
+            unsafe_broker_summary_rows=0,
+            bad_candle_rows=0,
+            candle_source_columns_present=True,
+            unknown_candle_provenance_rows=0,
+            empty_analyst_rows=1,
+            forward_estimates_missing_pe_rows=2,
+        )
+    )
+
+    response = DataQualityAuditUseCase(reader).execute(DataQualityAuditRequest())
+
+    assert response.status == "pass"
+    codes = {issue.code for issue in response.issues}
+    assert "EMPTY_ANALYST_SENTINELS" in codes
+    assert "FORWARD_ESTIMATES_MISSING_PE" in codes
+
+
 def test_unknown_candle_provenance_warns() -> None:
     reader = FakeReader(
         DataQualityRawSnapshot(

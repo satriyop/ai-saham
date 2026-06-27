@@ -182,6 +182,7 @@ class SignalEngine:
 
         buy_pct: float | None = None
         upside_pct: float | None = None
+        analyst_current_price: float | None = None
 
         forward_pe: float | None = None
 
@@ -215,6 +216,8 @@ class SignalEngine:
                     action_type="ALL",
                 )
                 insider_ratio = compute_net_buy_ratio(txns)
+                if insider_ratio is None:
+                    insider_ratio = 0.0
             except Exception as exc:
                 logger.debug("SignalEngine: insider unavailable for %s: %s", ticker, exc)
 
@@ -235,6 +238,7 @@ class SignalEngine:
                 if consensus is not None and consensus.analyst_count > 0:
                     buy_pct = consensus.buy_count / consensus.analyst_count  # 0.0–1.0
                     upside_pct = consensus.upside_pct  # percentage, e.g. 15.0 = 15%
+                    analyst_current_price = consensus.current_price
             except Exception as exc:
                 logger.debug("SignalEngine: analyst unavailable for %s: %s", ticker, exc)
 
@@ -244,6 +248,13 @@ class SignalEngine:
                 fe = self._forward_estimates.get_forward_estimates(ticker)
                 if fe is not None:
                     forward_pe = fe.forward_pe  # None for loss-making companies
+                    if (
+                        forward_pe is None
+                        and fe.forward_eps_1y
+                        and analyst_current_price
+                        and analyst_current_price > 0
+                    ):
+                        forward_pe = round(analyst_current_price / fe.forward_eps_1y, 1)
             except Exception as exc:
                 logger.debug("SignalEngine: forward estimates unavailable for %s: %s", ticker, exc)
 

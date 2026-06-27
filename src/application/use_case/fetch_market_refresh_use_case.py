@@ -148,6 +148,7 @@ class FetchMarketRefreshUseCase:
                     ticker,
                     request.db_path,
                     request.broker_provider,
+                    force_refresh=request.refresh,
                 )
 
             any_error = (

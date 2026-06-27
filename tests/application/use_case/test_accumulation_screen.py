@@ -477,6 +477,7 @@ from datetime import date as _date
 from decimal import Decimal as _Decimal
 
 from src.application.use_case.assess_signal_use_case import AssessSignalRequest, AssessSignalUseCase
+from src.domain.value_objects.forward_estimates import ForwardEstimates
 from src.domain.value_objects.signal_assessment import SignalContext, SignalStrength
 
 
@@ -520,6 +521,47 @@ def test_signal_all_neutral_when_no_enrichment():
     assert bd["seasonality_edge"] == 50.0
     assert bd["analyst_consensus"] == 50.0
     assert bd["forward_valuation"] == 50.0
+
+
+def test_screen_derives_forward_pe_from_latest_price_when_cache_has_eps_only():
+    from unittest.mock import MagicMock
+
+    session_dates = _weekdays(date(2026, 1, 1), 7)
+    as_of = session_dates[-1]
+    candles = [
+        _candle("BBCA", date(2025, 12, 1) + timedelta(days=i), _Decimal("100"))
+        for i in range(45)
+    ]
+    summaries = [_summary("BBCA", day, _Decimal("110")) for day in session_dates]
+    forward_provider = MagicMock()
+    forward_provider.get_forward_estimates.return_value = ForwardEstimates(
+        ticker="BBCA",
+        forward_eps_1y=10.0,
+        revenue_forward_1y=None,
+        current_price=None,
+        forward_pe=None,
+    )
+
+    use_case = AccumulationScreenUseCase(
+        broker_repository=MockBrokerRepository(summaries),
+        market_repository=MockMarketRepository(candles),
+        forward_estimates_provider=forward_provider,
+    )
+
+    response = use_case.execute(AccumulationScreenRequest(
+        tickers=["BBCA"],
+        window_days=7,
+        min_net_buy_days=1,
+        as_of_date=as_of,
+    ))
+
+    candidate = response.candidates[0]
+    assert candidate.forward_estimates is not None
+    assert candidate.forward_estimates.forward_pe == 10.0
+    assert (
+        candidate.signal_assessment.assessment.breakdown_dict["forward_valuation"]
+        == pytest.approx(95.0)
+    )
 
 
 def test_signal_insider_full_buy_raises_score():

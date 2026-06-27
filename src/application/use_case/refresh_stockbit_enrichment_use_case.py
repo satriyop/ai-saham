@@ -27,6 +27,7 @@ class EnrichmentTask:
 class RefreshStockbitEnrichmentRequest:
     ticker: str
     tasks: list[EnrichmentTask]
+    force_refresh: bool = False
 
 
 @dataclass(frozen=True)
@@ -60,7 +61,7 @@ class RefreshStockbitEnrichmentUseCase:
 
         for task in request.tasks:
             try:
-                if task.is_fresh():
+                if not request.force_refresh and task.is_fresh():
                     cached.append(task.label)
                 else:
                     task.fetch()

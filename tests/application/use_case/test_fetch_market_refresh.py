@@ -44,7 +44,7 @@ def test_fetch_market_refresh_adds_benchmark_first():
         fetch_candles=fetch_candles,
         fetch_broker=fetch_broker,
         fetch_meta=lambda ticker, db_path: "cached(1d)",
-        fetch_enrichment=lambda ticker, db_path, broker_provider: "skip",
+        fetch_enrichment=lambda ticker, db_path, broker_provider, force_refresh=False: "skip",
     )
 
     response = use_case.execute(_request())
@@ -61,7 +61,7 @@ def test_fetch_market_refresh_empty_input_returns_empty_response():
         fetch_candles=lambda **kwargs: "unexpected",
         fetch_broker=lambda **kwargs: BrokerFetchResult("unexpected", "unexpected"),
         fetch_meta=lambda ticker, db_path: "unexpected",
-        fetch_enrichment=lambda ticker, db_path, broker_provider: "unexpected",
+        fetch_enrichment=lambda ticker, db_path, broker_provider, force_refresh=False: "unexpected",
     )
 
     response = use_case.execute(_request(tickers=[]))
@@ -83,7 +83,7 @@ def test_fetch_market_refresh_honors_skip_flags_and_collects_notes():
         fetch_candles=fetch_candles,
         fetch_broker=lambda **kwargs: BrokerFetchResult("skip", "skip"),
         fetch_meta=lambda ticker, db_path: "skip",
-        fetch_enrichment=lambda ticker, db_path, broker_provider: "skip",
+        fetch_enrichment=lambda ticker, db_path, broker_provider, force_refresh=False: "skip",
     )
 
     response = use_case.execute(
@@ -109,7 +109,7 @@ def test_fetch_market_refresh_counts_failures_and_meta_changes():
         fetch_candles=fetch_candles,
         fetch_broker=lambda **kwargs: BrokerFetchResult("✓(2026-06-18)", "✓(2026-06-18)"),
         fetch_meta=fetch_meta,
-        fetch_enrichment=lambda ticker, db_path, broker_provider: "skip",
+        fetch_enrichment=lambda ticker, db_path, broker_provider, force_refresh=False: "skip",
     )
 
     response = use_case.execute(_request())
@@ -118,3 +118,27 @@ def test_fetch_market_refresh_counts_failures_and_meta_changes():
     assert response.fail_count == 1
     assert response.failures == ["BBCA"]
     assert response.meta_changed == ["  BBRI: changed->Finance"]
+
+
+def test_fetch_market_refresh_passes_refresh_to_enrichment():
+    force_values: list[bool] = []
+
+    def fetch_enrichment(ticker, db_path, broker_provider, force_refresh=False):
+        force_values.append(force_refresh)
+        return "analyst"
+
+    use_case = FetchMarketRefreshUseCase(
+        fetch_candles=lambda **kwargs: "✓(2026-06-18)",
+        fetch_broker=lambda **kwargs: BrokerFetchResult("✓(2026-06-18)", "✓(2026-06-18)"),
+        fetch_meta=lambda ticker, db_path: "cached(1d)",
+        fetch_enrichment=fetch_enrichment,
+    )
+
+    use_case.execute(_request(
+        tickers=["BBCA"],
+        broker_provider_name="stockbit",
+        no_enrichment=False,
+        refresh=True,
+    ))
+
+    assert force_values == [True, True]

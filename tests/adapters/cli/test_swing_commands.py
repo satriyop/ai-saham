@@ -35,6 +35,7 @@ from src.adapters.cli.analyze_swing_display import (
 from src.adapters.cli.main import app
 from src.application.use_case.accumulation_screen_use_case import AccumulationCandidate
 from src.domain.entities.broker_flow import BrokerSummary, BrokerTransaction, BrokerType
+from src.domain.value_objects.accumulation_evidence import AccumulationEvidence
 from src.domain.value_objects.setup_evaluation import SetupEvaluation, SetupGate, SetupMatch
 
 runner = CliRunner()
@@ -860,9 +861,136 @@ def test_swing_output_renders_optional_evidence_as_separate_panels(capsys):
 
     out = capsys.readouterr().out
     assert "SIGNAL DETAIL" in out
+    assert "Explains the Signal column in Verdict" in out
+    assert "Scale: SignalEngine 0-100. Used in final TradeSetup: yes." in out
+    assert "Composite accumulation evidence 82.0/120" in out
     assert "RISK DETAIL" in out
     assert "FLOW / BROKER DETAIL" in out
+    assert "Composite Accumulation Evidence (7 broker sessions)" in out
+    assert "ENTER-ZONE / FLOW POSITIVE" in out
+    assert "Longer-term flow context below is diagnostic only" in out
+    assert "Accum Score" in out
     assert "STRATEGY EVIDENCE" in out
     assert "2026-01-01 to 2026-06-18" in out
     assert "SENTIMENT EVIDENCE" in out
     assert "DETAILED HISTORY & SENTIMENT" not in out
+
+
+def test_swing_flow_detail_calls_out_conflicted_negative_flow(capsys):
+    risk_resp = SimpleNamespace(
+        assessment=SimpleNamespace(
+            risk_level_name="BLOCKED",
+            confidence=80,
+            gate_triggered="BandarGate",
+            gate_confidence=80,
+            indicators=SimpleNamespace(
+                sma=Decimal("4756"),
+                ema=Decimal("4869"),
+                rsi=Decimal("42"),
+            ),
+            rationale_list=("Bandar distribution (Big Dist)",),
+        )
+    )
+    signal_assessment = SimpleNamespace(
+        assessment=SimpleNamespace(
+            score=59,
+            strength=SimpleNamespace(value="MODERATE"),
+            entry_quality=SimpleNamespace(value="WATCH"),
+            score_label="59/100",
+            rationale=("Foreign flow: 36/100", "Bandar accumulation: 8/100"),
+            breakdown_dict={
+                "bandar_intensity": 8.3,
+                "foreign_flow_quality": 35.7,
+            },
+        ),
+        coverage_warning=None,
+    )
+    flow_detail = SimpleNamespace(
+        window_sessions=30,
+        through_date=date(2026, 6, 26),
+        from_date=date(2026, 5, 7),
+        total_net_flow=Decimal("-1130000000000"),
+        available_sessions=30,
+        buy_sessions=8,
+        sell_sessions=22,
+        consecutive_buy_sessions=0,
+        avg_flow_ratio_pct=-11.08,
+        latest_net_flow=Decimal("-87140000000"),
+        latest_flow_ratio_pct=-28.14,
+    )
+    accum = _candidate(
+        score=42.8,
+        consecutive_streak=0,
+        net_buy_days=3,
+        total_days=7,
+        avg_flow_ratio=-9.0,
+        accumulation_evidence=AccumulationEvidence(
+            ticker="ASII",
+            snapshot_date=date(2026, 6, 27),
+            accum_score=42.8,
+            max_score=120.0,
+            breakdown=(
+                ("cons", 17.1),
+                ("streak", 0.0),
+                ("vwap", 1.2),
+                ("rsi", 9.4),
+                ("flow", 0.0),
+                ("bb", 0.0),
+                ("inst", 15.0),
+            ),
+        ),
+        bandar_detector=SimpleNamespace(
+            label="Dist | today=Big Dist",
+            accumulation_score=-6,
+            is_accumulating=False,
+            is_distributing=True,
+        ),
+    )
+
+    _print_swing_output(
+        ticker="ASII",
+        today=date(2026, 6, 27),
+        strategy_name=None,
+        data_freshness=DataFreshness(
+            as_of_date=date(2026, 6, 27),
+            candle_start=date(2026, 1, 1),
+            candle_end=date(2026, 6, 26),
+            broker_start=date(2026, 1, 1),
+            broker_end=date(2026, 6, 26),
+            warnings=(),
+        ),
+        flow_detail=flow_detail,
+        broker_detail=None,
+        window=7,
+        accum=accum,
+        risk_resp=risk_resp,
+        atr_value=None,
+        sizing=None,
+        setup_eval=None,
+        setup_sizing=None,
+        broker_quality_note=None,
+        market_regime=None,
+        capital=None,
+        backtest_result=None,
+        sentiment_resp=None,
+        sentiment_warning=None,
+        sentiment_verbose=False,
+        include_strategy=False,
+        include_sentiment=False,
+        include_flow_detail=True,
+        include_signal_detail=True,
+        include_risk_detail=False,
+        include_market_detail=False,
+        signal_assessment=signal_assessment,
+        market_context_trade_setup_preview=None,
+    )
+
+    out = capsys.readouterr().out
+    assert "WATCH-ZONE / FLOW NEGATIVE" in out
+    assert "current foreign flow is not confirming" in out
+    assert "Bandar detector shows distribution" in out
+    assert "Flow ratio" in out
+    assert "0.0" in out
+    assert "lacks foreign-flow" in out
+    assert "confirmation" in out
+    assert "recent signal-window accumulation is occurring" not in out

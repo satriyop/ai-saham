@@ -31,6 +31,28 @@ def test_all_cached_returns_check_mark_format():
     assert resp.errors == ()
 
 
+def test_force_refresh_fetches_even_when_cache_is_fresh():
+    calls = {"fetch": 0}
+
+    def is_fresh() -> bool:
+        return True
+
+    def fetch() -> None:
+        calls["fetch"] += 1
+
+    task = EnrichmentTask(label="analyst", is_fresh=is_fresh, fetch=fetch)
+
+    resp = _uc().execute(RefreshStockbitEnrichmentRequest(
+        ticker="BBCA",
+        tasks=[task],
+        force_refresh=True,
+    ))
+
+    assert calls["fetch"] == 1
+    assert resp.fetched == ("analyst",)
+    assert resp.cached == ()
+
+
 def test_some_fetched_returns_plus_joined_with_cached_suffix():
     tasks = [
         _task("notation", fresh=False),
