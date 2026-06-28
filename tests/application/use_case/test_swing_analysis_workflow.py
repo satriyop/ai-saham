@@ -294,10 +294,6 @@ def test_swing_workflow_canonical_trade_setup_unaffected_by_market_context():
             from src.application.services.risk_engine import _apply_regime_gate
             return _apply_regime_gate(response, market_context)
 
-    class FakeMarketRegimeBuilder:
-        def build(self, request):
-            return _RISK_OFF_CONTEXT
-
     workflow = SwingAnalysisWorkflowUseCase(
         market_repository=FakeMarketRepository([_candle(date(2026, 6, 18))]),
         broker_repository=FakeBrokerRepository(),
@@ -312,16 +308,13 @@ def test_swing_workflow_canonical_trade_setup_unaffected_by_market_context():
         fetch_sentiment=lambda **kwargs: (None, None),
         load_swing_config=lambda: {},
         resolve_setup_targets=lambda regime, config: (Decimal("5"), Decimal("5")),
+        evaluate_market_context=lambda **kwargs: _RISK_OFF_CONTEXT,
         signal_engine=FakeSignalEngine(),
         risk_engine=FakeRiskEngine(),
     )
 
-    monkeypatch_build = FakeMarketRegimeBuilder()
-
-    import unittest.mock as mock
-    with mock.patch.object(workflow, "_build_market_regime", return_value=_RISK_OFF_CONTEXT):
-        response_with_mce = workflow.execute(_request(with_market_context=True))
-        response_without_mce = workflow.execute(_request(with_market_context=False))
+    response_with_mce = workflow.execute(_request(with_market_context=True))
+    response_without_mce = workflow.execute(_request(with_market_context=False))
 
     assert response_without_mce.market_regime is None
     assert response_with_mce.market_regime is not None

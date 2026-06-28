@@ -38,6 +38,7 @@ from src.domain.value_objects.idx_market import (
 from src.domain.value_objects.screener_result import ScreenerCandidate
 from src.infrastructure.browser.stockbit_browser_provider import ManualBrowserDataProvider
 from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.market_context_factory import evaluate_market_context
 from src.infrastructure.config.pre_open_config import load_pre_open_screen_config
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
@@ -377,6 +378,7 @@ def pre_open(
         market_repository=repository,
         broker_repository=broker_repo,
         registry=registry,
+        evaluate_market_context=evaluate_market_context,
     )
 
     try:

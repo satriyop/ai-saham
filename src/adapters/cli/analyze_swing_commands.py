@@ -87,6 +87,7 @@ from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.config.analyze_swing_config import (
     load_analyze_swing_config as _load_analyze_swing_config,
 )
+from src.infrastructure.config.market_context_factory import evaluate_market_context
 from src.infrastructure.config.swing_backtest_config import (
     load_swing_backtest_config as _load_swing_backtest_config,
 )
@@ -694,6 +695,7 @@ def swing(
         fetch_sentiment=_fetch_swing_sentiment,
         load_swing_config=_load_swing_workflow_config,
         resolve_setup_targets=resolve_setup_targets,
+        evaluate_market_context=evaluate_market_context,
         structural_gates=[FundamentalGate(), LiquidityGate(), FreeFloatGate()],
         execution_gates=[BandarGate()],
         signal_engine=create_signal_engine(db_path=resolved_db, with_enrichment=True),

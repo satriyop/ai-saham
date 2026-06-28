@@ -27,7 +27,6 @@ from src.application.services.signal_context_builder import (
     build_signal_context_from_candidate,
 )
 from src.application.services.strategy_loader import StrategyLoader, StrategyNotFoundError
-from src.application.services.universe_loader import resolve_tickers
 from src.application.use_case.assess_risk_use_case import AssessRiskRequest, AssessRiskUseCase
 from src.domain.rules.risk_gate import GateContext, RiskGate
 from src.application.use_case.backtest_use_case import BacktestRequest, BacktestUseCase
@@ -122,6 +121,7 @@ class SwingAnalysisWorkflowUseCase:
         fetch_sentiment: Callable[..., tuple[Any | None, str | None]],
         load_swing_config: Callable[[], Any],
         resolve_setup_targets: Callable[[str | None, Any], tuple[Decimal, Decimal]],
+        evaluate_market_context: Callable[..., "MarketContext"] | None = None,
         structural_gates: list[RiskGate] | None = None,
         execution_gates: list[RiskGate] | None = None,
         signal_engine: "SignalEngine | None" = None,
@@ -140,6 +140,7 @@ class SwingAnalysisWorkflowUseCase:
         self._fetch_sentiment = fetch_sentiment
         self._load_swing_config = load_swing_config
         self._resolve_setup_targets = resolve_setup_targets
+        self._evaluate_market_context = evaluate_market_context
         self._structural_gates: list[RiskGate] = structural_gates or []
         self._execution_gates: list[RiskGate] = execution_gates or []
         self._signal_engine = signal_engine
@@ -201,7 +202,14 @@ class SwingAnalysisWorkflowUseCase:
         market_regime = None
         if request.with_market_context:
             try:
-                market_regime = self._build_market_regime(request)
+                if self._evaluate_market_context is None:
+                    raise RuntimeError("Market context evaluator is not configured.")
+                market_regime = self._evaluate_market_context(
+                    db_path=request.db_path,
+                    as_of_date=request.today,
+                    universe=request.regime_universe,
+                    benchmark=request.benchmark,
+                )
             except Exception as exc:
                 warnings.append(f"Market regime unavailable: {exc}")
 
@@ -548,35 +556,6 @@ class SwingAnalysisWorkflowUseCase:
         except Exception:
             return None
         return None
-
-    def _build_market_regime(
-        self,
-        request: SwingAnalysisWorkflowRequest,
-    ) -> "MarketContext":
-        from dataclasses import replace as dc_replace
-        from src.application.services.market_context_engine import MarketContextEngine
-        from src.infrastructure.config.market_context_config import load_market_context_config
-        from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
-        from src.infrastructure.persistence.sqlite_market_context_repository import SQLiteMarketContextRepository
-        from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
-
-        tickers = resolve_tickers(
-            universe=request.regime_universe,
-            explicit=[],
-            db_path=request.db_path,
-        )
-        cfg = load_market_context_config()
-        if request.benchmark and request.benchmark != cfg.idx_trend.benchmark_ticker:
-            cfg = dc_replace(cfg, idx_trend=dc_replace(cfg.idx_trend, benchmark_ticker=request.benchmark))
-        engine = MarketContextEngine(
-            market_repository=SQLiteMarketRepository(db_path=request.db_path),
-            config=cfg,
-            universe=tickers,
-            broker_repository=SQLiteBrokerRepository(db_path=request.db_path),
-            context_repository=SQLiteMarketContextRepository(db_path=request.db_path),
-        )
-        return engine.evaluate(as_of_date=request.today)
-
 
 class SwingAnalysisDataUnavailable(Exception):
     """Raised when a ticker has no local candle data for swing analysis."""

@@ -171,6 +171,7 @@ def test_pre_open_workflow_reports_market_regime_failure_as_warning():
         market_repository=FakeMarketRepository({"BBCA": (date(2026, 1, 1), run_date)}),
         broker_repository=FakeBrokerRepository({"BBCA": (date(2026, 1, 1), run_date)}),
         registry=object(),
+        evaluate_market_context=lambda **kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
     )
 
     response = workflow.execute(
@@ -185,3 +186,38 @@ def test_pre_open_workflow_reports_market_regime_failure_as_warning():
 
     assert response.market_regime is None
     assert any(warning.startswith("Market regime unavailable:") for warning in response.warnings)
+
+
+def test_pre_open_workflow_uses_injected_market_context_evaluator():
+    run_date = date(2026, 6, 18)
+    calls: list[dict] = []
+    screen = FakeScreenUseCase(_screen_response(run_date))
+    expected_context = object()
+    workflow = PreOpenWorkflowUseCase(
+        screen_use_case=screen,
+        market_repository=FakeMarketRepository({"BBCA": (date(2026, 1, 1), run_date)}),
+        broker_repository=FakeBrokerRepository({"BBCA": (date(2026, 1, 1), run_date)}),
+        registry=object(),
+        evaluate_market_context=lambda **kwargs: calls.append(kwargs) or expected_context,
+    )
+
+    response = workflow.execute(
+        PreOpenWorkflowRequest(
+            config=PreOpenScreenConfig(fast_mode=True),
+            run_date=run_date,
+            with_regime=True,
+            regime_universe="idx80",
+            benchmark="^JKSE",
+            db_path=Path("/tmp/test.db"),
+        )
+    )
+
+    assert response.market_regime is expected_context
+    assert calls == [
+        {
+            "db_path": Path("/tmp/test.db"),
+            "as_of_date": run_date,
+            "universe": "idx80",
+            "benchmark": "^JKSE",
+        }
+    ]
