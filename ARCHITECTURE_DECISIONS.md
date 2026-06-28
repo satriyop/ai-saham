@@ -1280,7 +1280,7 @@ Evidence modules exist for user inspection and ADR-027 learning-loop attribution
 
 ### Compatibility
 
-`--strategy` defaults to none. `--strategy NAME` enables strategy evidence. `--full` includes strategy evidence using `foreign-accumulation` when no explicit strategy is provided. `--with-market-context` enables optional MCE preview/enrichment; old `--with-regime` / `--no-regime` flags are not part of the `analyze swing` command. Deprecated `--no-backtest` and `--no-sentiment` remain accepted for compatibility because those modules are default-off; enabling strategy evidence together with `--no-backtest` is a conflict.
+`--strategy` defaults to none. `--strategy NAME` enables strategy evidence. `--full` includes strategy evidence using `foreign-accumulation` when no explicit strategy is provided. `--with-market-context` enables optional MCE preview/enrichment. Old `--with-regime` / `--no-regime`, `--no-backtest`, and `--no-sentiment` flags are not part of the `analyze swing` command.
 
 ---
 

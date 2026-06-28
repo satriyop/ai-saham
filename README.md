@@ -836,15 +836,12 @@ saham analyze swing BBRI --format json
 | `--with-market-detail` | | false | Include full MCE factor detail when market context is enabled |
 | `--explain` | | false | Shortcut for signal, risk, and market detail |
 | `--full` | | false | Include all optional evidence except named setup; uses `foreign-accumulation` for strategy evidence when `--strategy` is omitted |
-| `--no-sentiment` | | false | Deprecated no-op; sentiment is off by default |
 | `--sentiment-verbose` | | false | Show optional sentiment provider errors/noise |
-| `--no-backtest` | | false | Deprecated compatibility; conflicts with `--strategy` |
 | `--no-refresh` | | false | Disable automatic single-ticker candle/broker refresh |
 | `--force-refresh` | | false | Force provider refresh even when cached data is fresh |
 | `--with-technical-gate` | | false | Enable the optional TechnicalGate (SMA/EMA/RSI execution gate). Off by default. Adds "Technical" row to engine summary. |
 | `--regime-universe` | | | Universe for regime breadth context |
 | `--benchmark` | | ^JKSE | Benchmark ticker for regime |
-| `--risk-strategy` | | | Risk strategy name for alternative gate config |
 | `--format` | | table | Output format: table or json |
 | `--db` | | | SQLite database path |
 

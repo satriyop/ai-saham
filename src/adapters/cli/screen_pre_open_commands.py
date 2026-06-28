@@ -212,14 +212,6 @@ def pre_open(
         Optional[Path],
         typer.Option("--config", "-c", help="Pre-open screener config YAML path"),
     ] = None,
-    legacy_strategy_path: Annotated[
-        Optional[Path],
-        typer.Option(
-            "--strategy",
-            "-s",
-            help="Deprecated alias for --config",
-        ),
-    ] = None,
     db_path: Annotated[Optional[Path], typer.Option("--db")] = None,
     with_ai: Annotated[
         bool,
@@ -266,7 +258,7 @@ def pre_open(
     """
     import json
 
-    resolved_config = config_path or legacy_strategy_path or DEFAULT_PRE_OPEN_CONFIG_PATH
+    resolved_config = config_path or DEFAULT_PRE_OPEN_CONFIG_PATH
     resolved_db = db_path or DEFAULT_DB_PATH
 
     overrides: dict = {
@@ -281,11 +273,6 @@ def pre_open(
         "atr_mult": atr_mult,
     }
     config = load_pre_open_screen_config(resolved_config, overrides)
-    if legacy_strategy_path and not config_path:
-        typer.echo(
-            "Warning: --strategy is deprecated for intraday pre-open; use --config.",
-            err=True,
-        )
     run_guard = _build_intraday_run_guard(
         _current_idx_datetime(),
         allow_non_trading_day=allow_non_trading_day,

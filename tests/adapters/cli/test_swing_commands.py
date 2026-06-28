@@ -62,21 +62,16 @@ def test_old_regime_flags_fail_as_unknown_options():
     assert result_no.exit_code != 0
 
 
-def test_swing_rejects_strategy_with_deprecated_no_backtest():
-    result = runner.invoke(
-        app,
-        [
-            "analyze",
-            "swing",
-            "BBCA",
-            "--strategy",
-            "foreign-accumulation",
-            "--no-backtest",
-        ],
-    )
+def test_swing_deprecated_no_backtest_flag_is_removed():
+    result = runner.invoke(app, ["analyze", "swing", "BBCA", "--no-backtest"])
 
     assert result.exit_code != 0
-    assert "Conflict: strategy/backtest evidence is enabled" in result.output
+
+
+def test_swing_deprecated_no_sentiment_flag_is_removed():
+    result = runner.invoke(app, ["analyze", "swing", "BBCA", "--no-sentiment"])
+
+    assert result.exit_code != 0
 
 
 def test_swing_command_delegates_workflow_construction_to_builder(monkeypatch):
@@ -100,8 +95,6 @@ def test_swing_command_delegates_workflow_construction_to_builder(monkeypatch):
                 latest_close=Decimal("0"),
                 accumulation_candidate=None,
                 risk_response=None,
-                strategy_risk_level=None,
-                strategy_risk_name=None,
                 atr_value=None,
                 sizing=None,
                 setup_eval=None,
@@ -169,8 +162,6 @@ def test_swing_display_path_prefers_grouped_response_contracts(monkeypatch):
                 latest_close=Decimal("0"),
                 accumulation_candidate=flat_accum,
                 risk_response="flat-risk",
-                strategy_risk_level=None,
-                strategy_risk_name=None,
                 atr_value=None,
                 sizing=None,
                 setup_eval=None,

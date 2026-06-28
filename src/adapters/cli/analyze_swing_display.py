@@ -225,22 +225,9 @@ def swing_plan_text(
     sizing: Any | None,
     setup_eval: Any | None,
     setup_sizing: Any | None,
-    strategy_risk_level: str | None,
-    strategy_risk_name: str | None,
     config: SwingDisplayConfig,
 ) -> tuple[str, str]:
-    strategy_override = (
-        strategy_risk_level == "HIGH_RISK"
-        and setup_eval is not None
-        and setup_eval.passed
-    )
-
     if setup_eval is not None:
-        if strategy_override:
-            return (
-                f"AVOID (strategy gate: '{strategy_risk_name}' signals HIGH_RISK; setup matched but technical signal says exit).",
-                "red",
-            )
         if setup_eval.passed and setup_sizing and setup_sizing.lots > 0:
             return (
                 f"Setup matched. Consider {setup_sizing.lots} lots at "
@@ -749,8 +736,6 @@ def print_swing_rich_overview(
     backtest_result,
     sentiment_resp,
     sentiment_warning: str | None,
-    strategy_risk_level: str | None,
-    strategy_risk_name: str | None,
     config: SwingDisplayConfig,
     include_strategy: bool = False,
     include_sentiment: bool = False,
@@ -772,8 +757,6 @@ def print_swing_rich_overview(
         sizing,
         setup_eval,
         setup_sizing,
-        strategy_risk_level,
-        strategy_risk_name,
         config,
     )
 
@@ -912,8 +895,6 @@ def print_swing_output(
     include_signal_detail: bool,
     include_risk_detail: bool,
     include_market_detail: bool,
-    strategy_risk_level: str | None = None,
-    strategy_risk_name: str | None = None,
     signal_assessment=None,
     trade_setup=None,
     market_context_signal_preview=None,
@@ -952,8 +933,6 @@ def print_swing_output(
         backtest_result=backtest_result,
         sentiment_resp=sentiment_resp,
         sentiment_warning=sentiment_warning,
-        strategy_risk_level=strategy_risk_level,
-        strategy_risk_name=strategy_risk_name,
         config=config,
         include_strategy=include_strategy,
         include_sentiment=include_sentiment,
@@ -1041,24 +1020,6 @@ def print_swing_output(
     elif include_risk_detail:
         risk_text.append(Text("Insufficient candle data for risk assessment.", style="dim"))
 
-    strat_text = []
-    if strategy_risk_level is not None:
-        _strat_color = {
-            "LOW_RISK": "green",
-            "HIGH_RISK": "red",
-            "MODERATE": "yellow",
-        }.get(strategy_risk_level, "white")
-        _strat_sym = {"LOW_RISK": "↑", "HIGH_RISK": "↓", "MODERATE": "~"}.get(
-            strategy_risk_level, "?"
-        )
-        strat_text.append(Text(f"Strategy Gate ({strategy_risk_name}): {_strat_sym} {strategy_risk_level}", style=f"bold {_strat_color}"))
-        if strategy_risk_level == "HIGH_RISK":
-            strat_text.append(Text(f"Strategy '{strategy_risk_name}' signals HIGH_RISK - blocks setup action.", style="red"))
-        elif strategy_risk_level == "LOW_RISK":
-            strat_text.append(Text(f"✓ Strategy '{strategy_risk_name}' confirms entry signal.", style="green"))
-        else:
-            strat_text.append(Text(f"~ Strategy '{strategy_risk_name}' is neutral — no override.", style="dim"))
-
     signal_text = []
     if include_signal_detail and signal_assessment is not None:
         sa = signal_assessment.assessment
@@ -1145,18 +1106,11 @@ def print_swing_output(
             )
         )
 
-    if risk_text or strat_text:
-        risk_group = []
-        if risk_text:
-            risk_group.extend(risk_text)
-        if strat_text:
-            if risk_group:
-                risk_group.append(Text(""))
-            risk_group.extend(strat_text)
+    if risk_text:
         console().print("")
         console().print(
             panel(
-                Group(*risk_group),
+                Group(*risk_text),
                 title="RISK DETAIL",
             )
         )

@@ -43,12 +43,8 @@ _SC = _load_swing_config()
 _ASC = _load_accumulation_screener_config(Path(APP_CFG.config_paths.accumulation_screener))
 
 DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
-DEFAULT_ACCUM_DB_PATH = DEFAULT_DB_PATH  # alias kept for external imports
 
 FOREIGN_BOUNCE_SETUP = "foreign-bounce"
-
-# Backward-compat alias — callers use BrokerQualitySnapshot from Application layer.
-ScreenBrokerQuality = BrokerQualitySnapshot
 
 
 def _format_value(value: Decimal) -> str:
@@ -128,7 +124,7 @@ def _display_multi(
     sort_by: str,
     squeeze_only: bool,
     screened_at: "date",
-    broker_quality: dict[str, ScreenBrokerQuality] | None = None,
+    broker_quality: dict[str, BrokerQualitySnapshot] | None = None,
     include_explanation: bool = False,
 ) -> None:
     from src.adapters.cli.screen_accum_display import display_multi

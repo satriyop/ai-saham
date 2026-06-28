@@ -203,8 +203,6 @@ def _print_swing_output(
     include_signal_detail: bool,
     include_risk_detail: bool,
     include_market_detail: bool,
-    strategy_risk_level: str | None = None,
-    strategy_risk_name: str | None = None,
     signal_assessment=None,
     trade_setup=None,
     market_context_signal_preview=None,
@@ -241,8 +239,6 @@ def _print_swing_output(
         include_signal_detail=include_signal_detail,
         include_risk_detail=include_risk_detail,
         include_market_detail=include_market_detail,
-        strategy_risk_level=strategy_risk_level,
-        strategy_risk_name=strategy_risk_name,
         signal_assessment=signal_assessment,
         trade_setup=trade_setup,
         market_context_signal_preview=market_context_signal_preview,
@@ -297,10 +293,6 @@ def swing(
         float,
         typer.Option("--rr", help="Reward:risk ratio for target"),
     ] = APP_CFG.swing.rr,
-    no_sentiment: Annotated[
-        bool,
-        typer.Option("--no-sentiment", help="Deprecated no-op; sentiment is off by default"),
-    ] = False,
     with_sentiment: Annotated[
         bool,
         typer.Option("--with-sentiment", help="Include news sentiment evidence"),
@@ -339,10 +331,6 @@ def swing(
         bool,
         typer.Option("--sentiment-verbose", help="Show sentiment provider errors/noise"),
     ] = False,
-    no_backtest: Annotated[
-        bool,
-        typer.Option("--no-backtest", help="Deprecated compatibility; conflicts with --strategy"),
-    ] = False,
     auto_refresh: Annotated[
         bool,
         typer.Option(
@@ -376,16 +364,6 @@ def swing(
         str,
         typer.Option("--benchmark", help="Benchmark ticker for regime context"),
     ] = APP_CFG.analysis.benchmark,
-    risk_strategy: Annotated[
-        Optional[str],
-        typer.Option(
-            "--risk-strategy",
-            help=(
-                "Deprecated compatibility risk gate. Prefer core RiskEngine verdict. "
-                "If strategy signals HIGH_RISK, marks the setup plan as blocked/avoid."
-            ),
-        ),
-    ] = None,
     output_format: Annotated[
         str,
         typer.Option("--format", help="Output format: table or json"),
@@ -431,13 +409,6 @@ def swing(
         )
         raise typer.Exit(1)
     strategy_evidence_name = strategy or ("foreign-accumulation" if full else None)
-    if strategy_evidence_name and no_backtest:
-        typer.echo(
-            "Conflict: strategy/backtest evidence is enabled, "
-            "so it cannot be combined with deprecated --no-backtest.",
-            err=True,
-        )
-        raise typer.Exit(1)
 
     include_sentiment = with_sentiment or full
     include_flow_detail = with_flow_detail or full
@@ -480,7 +451,6 @@ def swing(
                 with_market_context=with_market_context,
                 regime_universe=regime_universe,
                 benchmark=benchmark,
-                risk_strategy=risk_strategy,
                 db_path=resolved_db,
                 with_technical_gate=with_technical_gate,
             )
@@ -508,8 +478,6 @@ def swing(
         if evidence else workflow_response.accumulation_candidate
     )
     risk_resp = verdict.risk_response if verdict else workflow_response.risk_response
-    strategy_risk_level = workflow_response.strategy_risk_level
-    strategy_risk_name = workflow_response.strategy_risk_name
     atr_value = workflow_response.atr_value
     sizing = workflow_response.sizing
     setup_eval = evidence.setup_eval if evidence else workflow_response.setup_eval
@@ -565,8 +533,6 @@ def swing(
         include_signal_detail=include_signal_detail,
         include_risk_detail=include_risk_detail,
         include_market_detail=include_market_detail,
-        strategy_risk_level=strategy_risk_level,
-        strategy_risk_name=strategy_risk_name,
         signal_assessment=verdict.signal_assessment if verdict else workflow_response.signal_assessment,
         trade_setup=verdict.trade_setup if verdict else workflow_response.trade_setup,
         market_context_signal_preview=(

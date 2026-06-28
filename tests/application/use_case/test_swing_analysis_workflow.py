@@ -70,7 +70,6 @@ def _request(**overrides) -> SwingAnalysisWorkflowRequest:
         "with_market_context": False,
         "regime_universe": "idx80",
         "benchmark": "^JKSE",
-        "risk_strategy": None,
         "db_path": Path("data.db"),
         "with_technical_gate": False,
     }

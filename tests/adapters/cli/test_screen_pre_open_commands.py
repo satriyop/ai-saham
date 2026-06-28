@@ -87,7 +87,7 @@ def test_default_pre_open_config_lives_under_config():
     assert DEFAULT_PRE_OPEN_CONFIG_PATH.exists()
 
 
-def test_pre_open_strategy_alias_is_deprecated():
+def test_pre_open_strategy_alias_is_removed():
     result = runner.invoke(
         app,
         [
@@ -100,9 +100,7 @@ def test_pre_open_strategy_alias_is_deprecated():
         ],
     )
 
-    assert "Warning: --strategy is deprecated" in result.output
-
-
+    assert result.exit_code != 0
 
 
 def test_pre_open_results_render_rich_summary_panel(capsys):

@@ -26,7 +26,6 @@ from src.application.services.position_sizer import (
 from src.application.services.signal_context_builder import (
     build_signal_context_from_candidate,
 )
-from src.application.services.strategy_loader import StrategyLoader, StrategyNotFoundError
 from src.application.use_case.assess_risk_use_case import AssessRiskRequest, AssessRiskUseCase
 from src.domain.rules.risk_gate import GateContext, RiskGate
 from src.application.use_case.backtest_use_case import BacktestRequest, BacktestUseCase
@@ -63,7 +62,6 @@ class SwingAnalysisWorkflowRequest:
     with_market_context: bool
     regime_universe: str
     benchmark: str
-    risk_strategy: str | None
     db_path: Path
     with_technical_gate: bool = False
 
@@ -204,8 +202,6 @@ class SwingAnalysisWorkflowResponse:
     latest_close: Decimal
     accumulation_candidate: Any | None
     risk_response: Any | None
-    strategy_risk_level: str | None
-    strategy_risk_name: str | None
     atr_value: Decimal | None
     sizing: SizingResult | None
     setup_eval: Any | None
@@ -719,34 +715,6 @@ class SwingAnalysisWorkflowUseCase:
             except Exception as exc:
                 warnings.append(f"Signal assessment unavailable: {exc}")
 
-        strategy_risk_level = None
-        strategy_risk_name = request.risk_strategy
-        if request.risk_strategy:
-            try:
-                loader = StrategyLoader(registry=self._registry)
-                rules_path = loader.resolve(request.risk_strategy)
-                strategy_risk_use_case = AssessRiskUseCase(
-                    repository=self._market_repo,
-                    registry=self._registry,
-                )
-                strategy_response = strategy_risk_use_case.execute(
-                    AssessRiskRequest(
-                        ticker=request.ticker,
-                        rules_file=rules_path,
-                    )
-                )
-                strategy_risk_level = (
-                    "HIGH_RISK"
-                    if strategy_response.assessment.gate_triggered
-                    else "LOW_RISK"
-                )
-            except StrategyNotFoundError:
-                warnings.append(
-                    f"Risk strategy '{request.risk_strategy}' not found - gate skipped."
-                )
-            except Exception as exc:
-                warnings.append(f"Risk strategy unavailable: {exc}")
-
         atr_value = self._compute_atr(candles)
         sizing: SizingResult | None = None
         setup_eval = None
@@ -921,8 +889,6 @@ class SwingAnalysisWorkflowUseCase:
             latest_close=latest_close,
             accumulation_candidate=accumulation_candidate,
             risk_response=risk_response,
-            strategy_risk_level=strategy_risk_level,
-            strategy_risk_name=strategy_risk_name,
             atr_value=atr_value,
             sizing=sizing,
             setup_eval=setup_eval,
