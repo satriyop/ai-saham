@@ -11,8 +11,7 @@ Layer: Adapter
 import json
 import logging
 from contextlib import contextmanager, nullcontext, redirect_stderr, redirect_stdout
-from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date
 from decimal import Decimal
 from io import StringIO
 from pathlib import Path
@@ -40,6 +39,13 @@ from src.application.services.bootstrap import (
 from src.application.services.accumulation_screen_factory import (
     create_accumulation_screen_use_case,
 )
+from src.application.services.swing_data_freshness import (
+    SwingDataFreshness as DataFreshness,
+    build_swing_data_freshness as _build_data_freshness,
+    expected_weekday_data_date as _expected_weekday_data_date,
+    weekday_session_lag as _weekday_session_lag,
+)
+from src.application.services.swing_data_refresh import refresh_swing_data
 from src.application.services.universe_loader import (
     UniverseNotFoundError,
     resolve_tickers,
@@ -145,140 +151,27 @@ BROKER_WEIGHTS: dict[str, Decimal] = {
 }
 
 
-@dataclass(frozen=True)
-class DataFreshness:
-    """Cached source data dates used by a swing analysis run."""
-
-    as_of_date: date
-    candle_start: date | None
-    candle_end: date | None
-    broker_start: date | None
-    broker_end: date | None
-    warnings: tuple[str, ...]
-    refresh_actions: tuple[str, ...] = ()
-
-    def to_dict(self) -> dict:
-        return {
-            "as_of_date": self.as_of_date.isoformat(),
-            "candles_from": self.candle_start.isoformat() if self.candle_start else None,
-            "candles_through": self.candle_end.isoformat() if self.candle_end else None,
-            "broker_flow_from": self.broker_start.isoformat() if self.broker_start else None,
-            "broker_flow_through": self.broker_end.isoformat() if self.broker_end else None,
-            "refresh_actions": list(self.refresh_actions),
-            "warnings": list(self.warnings),
-        }
-
-
-def _expected_weekday_data_date(as_of_date: date) -> date:
-    """Latest regular weekday session expected for a given analysis date."""
-    if as_of_date.weekday() == 5:  # Saturday
-        return as_of_date - timedelta(days=1)
-    if as_of_date.weekday() == 6:  # Sunday
-        return as_of_date - timedelta(days=2)
-    return as_of_date
-
-
-def _weekday_session_lag(latest: date | None, as_of_date: date) -> int | None:
-    """Count regular weekday sessions from latest data through expected date."""
-    if latest is None:
-        return None
-    expected = _expected_weekday_data_date(as_of_date)
-    if latest >= expected:
-        return 0
-    current = latest + timedelta(days=1)
-    lag = 0
-    while current <= expected:
-        if current.weekday() < 5:
-            lag += 1
-        current += timedelta(days=1)
-    return lag
-
-
-def _build_data_freshness(
-    ticker: str,
-    as_of_date: date,
-    market_repo: SQLiteMarketRepository,
-    broker_repo: SQLiteBrokerRepository,
-    refresh_actions: tuple[str, ...] = (),
-) -> DataFreshness:
-    candle_range = market_repo.get_date_range(ticker)
-    broker_range = broker_repo.get_date_range(ticker)
-    candle_start, candle_end = candle_range if candle_range else (None, None)
-    broker_start, broker_end = broker_range if broker_range else (None, None)
-
-    warnings: list[str] = []
-    if candle_end is None:
-        warnings.append(f"No cached candle data for {ticker}.")
-    else:
-        lag = _weekday_session_lag(candle_end, as_of_date)
-        if lag and lag > 0:
-            warnings.append(
-                f"Latest candle is {lag} trading session(s) before expected data date "
-                f"({_expected_weekday_data_date(as_of_date)})."
-            )
-
-    if broker_end is None:
-        warnings.append(f"No cached broker flow data for {ticker}.")
-    else:
-        lag = _weekday_session_lag(broker_end, as_of_date)
-        if lag and lag > 0:
-            warnings.append(
-                f"Latest broker flow is {lag} trading session(s) before expected data date "
-                f"({_expected_weekday_data_date(as_of_date)})."
-            )
-
-    if candle_end and broker_end and candle_end != broker_end:
-        warnings.append(
-            f"Candle date ({candle_end}) and broker flow date ({broker_end}) differ."
-        )
-    for action in refresh_actions:
-        if "ERR:" in action:
-            warnings.append(f"Refresh issue: {action}")
-
-    return DataFreshness(
-        as_of_date=as_of_date,
-        candle_start=candle_start,
-        candle_end=candle_end,
-        broker_start=broker_start,
-        broker_end=broker_end,
-        warnings=tuple(warnings),
-        refresh_actions=refresh_actions,
-    )
-
-
 def _auto_refresh_swing_data(
     ticker: str,
     db_path: Path,
     force_refresh: bool,
 ) -> tuple[str, ...]:
-    """Refresh only the requested ticker for swing analysis."""
     from src.adapters.cli.fetch_market_commands import (
         _create_broker_provider,
         _fetch_broker,
         _fetch_candles,
     )
 
-    actions: list[str] = []
-    candles_status = _fetch_candles(
+    return refresh_swing_data(
         ticker=ticker,
-        days=_AS.market_refresh_days,
         db_path=db_path,
-        provider_name="yahoo",
-        refresh=force_refresh,
+        force_refresh=force_refresh,
+        market_refresh_days=_AS.market_refresh_days,
+        broker_refresh_days=_AS.broker_refresh_days,
+        fetch_candles=_fetch_candles,
+        create_broker_provider=_create_broker_provider,
+        fetch_broker=_fetch_broker,
     )
-    actions.append(f"candles={candles_status}")
-
-    broker_provider, broker_provider_name = _create_broker_provider(None)
-    broker_status = _fetch_broker(
-        ticker=ticker,
-        days=_AS.broker_refresh_days,
-        db_path=db_path,
-        broker_provider=broker_provider,
-        refresh=force_refresh,
-    )
-    actions.append(f"broker({broker_provider_name})={broker_status}")
-
-    return tuple(actions)
 
 
 @contextmanager
