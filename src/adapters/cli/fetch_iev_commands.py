@@ -47,9 +47,9 @@ def collect_iev(
     Capture today's IEV mover ranking from Stockbit and store it locally.
 
     Run this at 08:50 WIB each trading day (during the pre-open auction window)
-    to build a historical IEV dataset for backtesting. After a few months of
-    daily collection the intraday backtest can filter candidates by IEV rank,
-    matching live workflow behaviour.
+    to build a historical IEV dataset for the intraday proxy simulation. After
+    a few months of daily collection the simulation can filter candidates by
+    IEV rank, closer to live workflow behaviour.
 
     Requires an active Stockbit session (saham fetch stockbit login).
 

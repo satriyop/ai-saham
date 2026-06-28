@@ -670,11 +670,11 @@ def intraday_backtest(
     ] = None,
     start: Annotated[
         str,
-        typer.Option("--start", help="Backtest start date YYYY-MM-DD"),
+        typer.Option("--start", help="Simulation start date YYYY-MM-DD"),
     ] = APP_CFG.backtest.start_date,
     end: Annotated[
         Optional[str],
-        typer.Option("--end", help="Backtest end date YYYY-MM-DD"),
+        typer.Option("--end", help="Simulation end date YYYY-MM-DD"),
     ] = None,
     capital: Annotated[
         int,
@@ -726,7 +726,11 @@ def intraday_backtest(
     ] = None,
 ) -> None:
     """
-    Walk-forward backtest of the intraday pre-open workflow.
+    Daily-OHLC proxy simulation of the intraday pre-open workflow.
+
+    This is not an exact intraday replay. It uses candle.open as the entry
+    proxy, same-day high/low/close for exits, and applies saved IEV snapshots
+    only on dates where they exist.
     """
     try:
         start_date = date.fromisoformat(start)
@@ -754,7 +758,7 @@ def intraday_backtest(
         raise typer.Exit(1)
 
     typer.echo(
-        f"Intraday backtest: {len(ticker_list)} tickers | "
+        f"Intraday proxy simulation: {len(ticker_list)} tickers | "
         f"{start_date} to {end_date} | "
         f"max_daily={max_daily_positions} | "
         f"include_wait={include_wait}",

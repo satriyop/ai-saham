@@ -1,5 +1,5 @@
 """
-Walk-forward backtest for the deterministic intraday pre-open + opening confirmation workflow.
+Daily-OHLC proxy simulation for the deterministic intraday pre-open workflow.
 
 Uses daily OHLC as a proxy for intraday execution (Option A):
   - Screening reuses pre-open math (ATR/RSI/SMA, entry range, ATR stop, ACCUM, FVWAP).
@@ -49,7 +49,7 @@ PER_TRADE_CAPITAL_CAP_PCT = Decimal("0.10")  # at most 10% of capital per trade
 
 @dataclass(frozen=True)
 class IntradayBacktestRequest:
-    """Input parameters for a walk-forward intraday workflow backtest."""
+    """Input parameters for a daily-OHLC intraday proxy simulation."""
 
     tickers: list[str]
     start_date: date
@@ -79,7 +79,7 @@ class IntradayBacktestRequest:
 
 @dataclass(frozen=True)
 class IntradayBacktestTrade:
-    """One completed intraday backtest trade (same-day in + out)."""
+    """One completed intraday proxy trade (same-day in + out)."""
 
     ticker: str
     trade_date: date
@@ -148,7 +148,7 @@ class IntradayBacktestTrade:
 
 @dataclass(frozen=True)
 class IntradayBacktestResponse:
-    """Aggregate result of a walk-forward intraday backtest."""
+    """Aggregate result of a daily-OHLC intraday proxy simulation."""
 
     # Config echo
     start_date: date
@@ -450,7 +450,7 @@ def _breakdown_by(
 
 
 class IntradayBacktestUseCase:
-    """Walk-forward intraday backtest using daily OHLC as execution proxy.
+    """Walk-forward intraday proxy simulation using daily OHLC.
 
     For each trading date d in [start_date, end_date]:
       1. Build pre-open candidates as of d-1 (yesterday's data → today's plan)
@@ -709,6 +709,7 @@ class IntradayBacktestUseCase:
             "Same-day H/L ordering is conservative: "
             "both-breached cases assume stop hit first.",
             "Opening price = candle.open (IDX 09:00 call-auction clearing price proxy).",
+            "Tick-friction and regime gates are NOT replayed in this daily-OHLC proxy.",
         ])
         if not request.include_wait:
             warnings.append("WAIT decisions are skipped by default; use --include-wait to include them.")

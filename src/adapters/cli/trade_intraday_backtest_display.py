@@ -1,5 +1,5 @@
 """
-Display helpers for intraday backtest CLI output.
+Display helpers for intraday proxy simulation CLI output.
 
 Layer: Adapter
 """
@@ -15,7 +15,7 @@ from src.application.use_case.intraday_backtest_use_case import IntradayBacktest
 
 
 def display_intraday_backtest(response: IntradayBacktestResponse, show_trades: int) -> None:
-    """Print walk-forward intraday backtest results to the console."""
+    """Print daily-OHLC intraday proxy simulation results to the console."""
     # 1. Info Header
     info_table = compact_table(show_header=False)
     info_table.add_column("Key", style="bold cyan")
@@ -29,22 +29,26 @@ def display_intraday_backtest(response: IntradayBacktestResponse, show_trades: i
     )
     info_table.add_row(
         "Entry",
-        "candle.open (IDX 09:00 call-auction clearing price)"
+        "daily candle.open proxy for IDX 09:00 call-auction clearing price"
     )
     info_table.add_row(
         "Exit",
-        "H/L/close same day. Both-breached → stop (conservative)."
+        "same-day daily high/low/close proxy. Both-breached -> stop."
     )
     info_table.add_row(
         "IEV",
-        "not replayed — all universe tickers screened each day."
+        "filters by saved NCP snapshots when available; otherwise full universe."
+    )
+    info_table.add_row(
+        "Live gates",
+        "tick-friction and regime gates are not replayed in this proxy."
     )
 
     console().print("")
     console().print(
         panel(
             info_table,
-            title="INTRADAY WALK-FORWARD BACKTEST (Option A — daily OHLC proxy)",
+            title="INTRADAY PROXY SIMULATION (daily OHLC)",
         )
     )
 

@@ -891,6 +891,25 @@ Swing setup gates are deterministic and configurable in `config/swing_setups.yam
 | `smart-money-confirmed` | Is broker attribution led by smart-money flow rather than noise flow? |
 | `pullback-continuation` | Is an uptrend pullback still supported by foreign flow and RSI headroom? |
 
+#### `saham trade backtest-intraday` - Intraday Proxy Simulation
+
+```bash
+saham trade backtest-intraday --universe idx80 --start 2026-01-01
+saham trade backtest-intraday BBCA BBRI --include-wait
+```
+
+This command is a daily-OHLC proxy simulation, not an exact intraday replay.
+It builds candidates from prior-session data, uses `candle.open` as the opening
+auction proxy, and exits using the same day's high/low/close. If stop and target
+are both touched in the daily candle, the simulation assumes the stop was hit
+first. Saved IEV/NCP snapshots are applied only for dates where they exist;
+otherwise the full requested universe is screened. Live confirmation gates such
+as tick-friction and regime tightening are not replayed in this proxy.
+
+Use it to sanity-check whether the intraday idea has broad historical expectancy,
+not to validate exact auction execution, slippage, bid/offer path, or minute-level
+timing.
+
 #### `saham analyze swing-compare` - Compare Regime Variants
 
 ```bash

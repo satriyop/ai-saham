@@ -9,11 +9,53 @@ from zoneinfo import ZoneInfo
 from typer.testing import CliRunner
 
 from src.adapters.cli.main import app
+from src.adapters.cli.trade_intraday_backtest_display import display_intraday_backtest
+from src.application.use_case.intraday_backtest_use_case import IntradayBacktestResponse
 from src.domain.entities.candle import Candle
 from src.domain.entities.trade_tick import TradeTick
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
 runner = CliRunner()
+
+
+def test_intraday_backtest_display_calls_it_proxy_simulation(capsys):
+    response = IntradayBacktestResponse(
+        start_date=date(2026, 6, 1),
+        end_date=date(2026, 6, 10),
+        initial_capital=Decimal("100000000"),
+        cost_bps=Decimal("20"),
+        include_wait=False,
+        max_daily_positions=3,
+        final_equity=Decimal("100000000"),
+        total_return_pct=0.0,
+        max_drawdown_pct=0.0,
+        trade_count=1,
+        win_rate_pct=100.0,
+        avg_trade_return_pct=1.0,
+        avg_winner_pct=1.0,
+        avg_loser_pct=None,
+        profit_factor=float("inf"),
+        expectancy_pct=1.0,
+        avg_r_multiple=1.0,
+        exit_reason_counts={"target": 1},
+        decisions={"ENTER": 1},
+        trading_days=7,
+        days_with_trades=1,
+        by_accum_tag=[],
+        by_fvwap_sign=[],
+        by_rsi_bucket=[],
+        by_ticker=[],
+        trades=[],
+        warnings=[],
+    )
+
+    display_intraday_backtest(response, show_trades=0)
+
+    out = capsys.readouterr().out
+    assert "INTRADAY PROXY SIMULATION" in out
+    assert "daily OHLC" in out
+    assert "saved NCP snapshots" in out
+    assert "tick-friction and regime gates are not replayed" in out
 
 
 def _write_sidecar(path: Path) -> None:

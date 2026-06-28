@@ -10,7 +10,7 @@ Commands (all under `saham trade`):
   saham trade outcome             — record intraday outcome
   saham trade size                — ATR-based swing position sizing
   saham trade backtest-swing      — swing workflow walk-forward backtest
-  saham trade backtest-intraday   — intraday workflow walk-forward backtest
+  saham trade backtest-intraday   — intraday workflow daily-OHLC proxy simulation
   saham trade migrate-journal     — one-time migration of CSV journals to trades.jsonl
 
 Layer: Adapter

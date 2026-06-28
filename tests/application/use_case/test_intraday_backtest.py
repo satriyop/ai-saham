@@ -1,5 +1,5 @@
 """
-Tests for walk-forward intraday backtest.
+Tests for daily-OHLC intraday proxy simulation.
 
 Uses in-memory repository stubs and a controllable IndicatorRegistry to keep
 ATR/RSI/SMA deterministic. The candidate must reach the ENTER (or WAIT) branch
@@ -267,6 +267,7 @@ def _build(
 
 
 def test_exit_reason_target_when_high_reaches_prev_high():
+    # Daily-OHLC proxy: entry = today's candle.open.
     # target = prev_high = 105; stop = prev_close - atr = 98
     # high (106) >= target, low (99) > stop -> "target"
     today = _candle(
@@ -281,8 +282,11 @@ def test_exit_reason_target_when_high_reaches_prev_high():
 
     assert resp.trade_count == 1
     trade = resp.trades[0]
+    assert trade.entry_price == Decimal("100")
+    assert trade.opening_price == Decimal("100")
     assert trade.exit_reason == "target"
     assert trade.exit_price == Decimal("105")
+    assert any("Tick-friction and regime gates are NOT replayed" in w for w in resp.warnings)
     assert trade.target_price == Decimal("105")
     assert trade.stop_price == Decimal("98")
     assert trade.same_day_both_breached is False
@@ -342,6 +346,33 @@ def test_exit_reason_both_assume_stop_when_high_and_low_both_breach():
     assert trade.exit_reason == "both_assume_stop"
     assert trade.exit_price == Decimal("98")  # stop_price
     assert trade.same_day_both_breached is True
+
+
+def test_proxy_does_not_replay_tick_friction_gate():
+    """A live confirm would reject this 1-tick target/stop setup; proxy still trades it."""
+    today = _candle(
+        TICKER, TRADE_DAY,
+        open_=Decimal("100"),
+        high=Decimal("102"),
+        low=Decimal("100"),
+        close=Decimal("101"),
+    )
+    history = _history_with_prev(
+        TICKER,
+        PREV_DAY,
+        prev_close=Decimal("100"),
+        prev_high=Decimal("101"),
+    )
+    registry = StubIndicatorRegistry(atr=Decimal("1"))
+    use_case = _build(today, history=history, registry=registry)
+
+    resp = use_case.execute(_default_request())
+
+    assert resp.trade_count == 1
+    trade = resp.trades[0]
+    assert trade.stop_price == Decimal("99")
+    assert trade.target_price == Decimal("101")
+    assert trade.exit_reason == "target"
 
 
 def test_include_wait_false_skips_wait_decisions():
@@ -488,7 +519,7 @@ def test_validation_start_after_end_raises():
         ))
 
 
-def test_no_broker_data_yields_none_accum_fields_but_trade_completes():
+def test_proxy_does_not_require_backed_accumulation_when_no_broker_data():
     today = _candle(
         TICKER, TRADE_DAY,
         open_=Decimal("100"),
