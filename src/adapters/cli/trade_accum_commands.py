@@ -15,26 +15,19 @@ from typing import Annotated, Optional
 
 import typer
 
+from src.application.services.accumulation_screen_factory import (
+    create_accumulation_screen_use_case,
+)
 from src.application.services.swing_setup_catalog import build_swing_setup_catalog_config
 from src.application.services.universe_loader import resolve_tickers
-from src.application.use_case.accumulation_screen_use_case import (
-    AccumulationScreenUseCase,
-)
 from src.application.services.market_context_engine import MarketContextEngine
 from src.application.use_case.evaluate_swing_setup_use_case import (
     AVAILABLE_SWING_SETUPS,
     SwingSetupCatalogConfig,
 )
-from src.infrastructure.browser.stockbit_analyst import StockbitAnalystConsensusProvider
-from src.infrastructure.browser.stockbit_bandar import StockbitBandarDetectorProvider
-from src.infrastructure.browser.stockbit_corp_action import StockbitCorporateActionRepository
-from src.infrastructure.browser.stockbit_forward_estimates import StockbitForwardEstimatesProvider
-from src.infrastructure.browser.stockbit_fundamentals import StockbitFundamentalsProvider
-from src.infrastructure.browser.stockbit_insider import StockbitInsiderActivityProvider
-from src.infrastructure.browser.stockbit_providers import StockbitProviders
-from src.infrastructure.browser.stockbit_seasonality import StockbitSeasonalityProvider
-from src.infrastructure.browser.stockbit_shareholding import StockbitShareholdingProvider
-from src.infrastructure.browser.stockbit_ticker_notation import StockbitTickerNotationProvider
+from src.infrastructure.browser.stockbit_provider_bundle import (
+    create_readonly_stockbit_providers,
+)
 from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.config.swing_backtest_config import (
     load_swing_backtest_config as _load_swing_backtest_config,
@@ -64,20 +57,6 @@ FOREIGN_BOUNCE_STOP_LOSS = (
 
 def _setup_config() -> SwingSetupCatalogConfig:
     return build_swing_setup_catalog_config(_SC)
-
-
-def _make_stockbit_providers(db_path: Path) -> StockbitProviders:
-    return StockbitProviders(
-        corp_repo=StockbitCorporateActionRepository(broker_provider=None, db_path=db_path),
-        season_prov=StockbitSeasonalityProvider(broker_provider=None, db_path=db_path),
-        insider_prov=StockbitInsiderActivityProvider(broker_provider=None, db_path=db_path),
-        analyst_prov=StockbitAnalystConsensusProvider(broker_provider=None, db_path=db_path),
-        shareholding_prov=StockbitShareholdingProvider(broker_provider=None, db_path=db_path),
-        bandar_prov=StockbitBandarDetectorProvider(broker_provider=None, db_path=db_path),
-        fundamentals_prov=StockbitFundamentalsProvider(broker_provider=None, db_path=db_path),
-        notation_prov=StockbitTickerNotationProvider(broker_provider=None, db_path=db_path),
-        forward_estimates_prov=StockbitForwardEstimatesProvider(broker_provider=None, db_path=db_path),
-    )
 
 
 def _accumulation_log_impl(
@@ -115,19 +94,11 @@ def _accumulation_log_impl(
 
     broker_repo = SQLiteBrokerRepository(db_path)
     market_repo = SQLiteMarketRepository(db_path=db_path)
-    _sb = _make_stockbit_providers(db_path)
-    screen_uc = AccumulationScreenUseCase(
+    _sb = create_readonly_stockbit_providers(db_path)
+    screen_uc = create_accumulation_screen_use_case(
         broker_repository=broker_repo,
         market_repository=market_repo,
-        corporate_action_repo=_sb.corp_repo,
-        seasonality_provider=_sb.season_prov,
-        insider_activity_provider=_sb.insider_prov,
-        analyst_consensus_provider=_sb.analyst_prov,
-        shareholding_provider=_sb.shareholding_prov,
-        bandar_detector_provider=_sb.bandar_prov,
-        fundamentals_provider=_sb.fundamentals_prov,
-        ticker_notation_provider=_sb.notation_prov,
-        forward_estimates_provider=_sb.forward_estimates_prov,
+        stockbit_providers=_sb,
     )
     journal_svc = AccumulationJournalService(
         store=AccumulationJournalCsvWriter(journal_path),
