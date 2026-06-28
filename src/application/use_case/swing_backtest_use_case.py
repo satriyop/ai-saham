@@ -406,7 +406,7 @@ class SwingBacktestUseCase:
         return sorted(
             candidates,
             key=lambda c: (
-                c.score,
+                c.accum_score,
                 c.avg_flow_ratio or 0.0,
                 c.vwap_discount_pct or 0.0,
             ),
@@ -475,7 +475,7 @@ class SwingBacktestUseCase:
             shares=shares,
             entry_value=entry_value,
             entry_cost=self._trade_cost(entry_value, request),
-            score=candidate.score,
+            score=candidate.accum_score,
             flow_pct=candidate.avg_flow_ratio,
             vwap_disc_pct=candidate.vwap_discount_pct,
             rsi=candidate.rsi,

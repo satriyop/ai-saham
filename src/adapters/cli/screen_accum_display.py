@@ -255,7 +255,10 @@ def _add_detail_row(table, show_ticker: bool, ticker: str, kind: str, status: st
 
 
 def _evidence_factor_rows(candidate: AccumulationCandidate) -> list[tuple[str, ...]]:
-    bd = candidate.score_breakdown
+    bd = (
+        candidate.accumulation_evidence.breakdown_dict
+        if candidate.accumulation_evidence else {}
+    )
     rsi = f"{candidate.rsi:.1f}" if candidate.rsi is not None else "-"
     flow = f"{candidate.avg_flow_ratio:+.1f}%" if candidate.avg_flow_ratio is not None else "-"
     vwap = (

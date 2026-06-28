@@ -193,8 +193,8 @@ class EvaluateSwingSetupUseCase:
         gates = (
             SetupGate(
                 label="score",
-                passed=candidate.score >= config.gate_min_score,
-                actual=f"{candidate.score:.1f}",
+                passed=candidate.accum_score >= config.gate_min_score,
+                actual=f"{candidate.accum_score:.1f}",
                 required=f">= {config.gate_min_score:.0f}",
             ),
             SetupGate(
@@ -238,7 +238,7 @@ class EvaluateSwingSetupUseCase:
             setup_name=FOREIGN_BOUNCE_SETUP,
             gates=gates,
             partial_max_failed_gates=config.partial_max_failed_gates,
-            force_partial_when_score_passes=candidate.score >= config.gate_min_score,
+            force_partial_when_score_passes=candidate.accum_score >= config.gate_min_score,
         )
 
     def _coiled_spring(
@@ -252,8 +252,8 @@ class EvaluateSwingSetupUseCase:
         gates = (
             SetupGate(
                 label="score",
-                passed=candidate.score >= config.gate_min_score,
-                actual=f"{candidate.score:.1f}",
+                passed=candidate.accum_score >= config.gate_min_score,
+                actual=f"{candidate.accum_score:.1f}",
                 required=f">= {config.gate_min_score:.0f}",
             ),
             SetupGate(
@@ -291,7 +291,7 @@ class EvaluateSwingSetupUseCase:
             setup_name=COILED_SPRING_SETUP,
             gates=gates,
             partial_max_failed_gates=config.partial_max_failed_gates,
-            force_partial_when_score_passes=candidate.score >= config.gate_min_score,
+            force_partial_when_score_passes=candidate.accum_score >= config.gate_min_score,
         )
 
     def _smart_money_confirmed(
@@ -329,8 +329,8 @@ class EvaluateSwingSetupUseCase:
         gates = (
             SetupGate(
                 label="score",
-                passed=candidate.score >= config.gate_min_score,
-                actual=f"{candidate.score:.1f}",
+                passed=candidate.accum_score >= config.gate_min_score,
+                actual=f"{candidate.accum_score:.1f}",
                 required=f">= {config.gate_min_score:.0f}",
             ),
             SetupGate(
@@ -369,7 +369,7 @@ class EvaluateSwingSetupUseCase:
             setup_name=SMART_MONEY_CONFIRMED_SETUP,
             gates=gates,
             partial_max_failed_gates=config.partial_max_failed_gates,
-            force_partial_when_score_passes=candidate.score >= config.gate_min_score,
+            force_partial_when_score_passes=candidate.accum_score >= config.gate_min_score,
         )
 
     def _pullback_continuation(
@@ -383,8 +383,8 @@ class EvaluateSwingSetupUseCase:
         gates = (
             SetupGate(
                 label="score",
-                passed=candidate.score >= config.gate_min_score,
-                actual=f"{candidate.score:.1f}",
+                passed=candidate.accum_score >= config.gate_min_score,
+                actual=f"{candidate.accum_score:.1f}",
                 required=f">= {config.gate_min_score:.0f}",
             ),
             SetupGate(
@@ -428,5 +428,5 @@ class EvaluateSwingSetupUseCase:
             setup_name=PULLBACK_CONTINUATION_SETUP,
             gates=gates,
             partial_max_failed_gates=config.partial_max_failed_gates,
-            force_partial_when_score_passes=candidate.score >= config.gate_min_score,
+            force_partial_when_score_passes=candidate.accum_score >= config.gate_min_score,
         )

@@ -448,7 +448,7 @@ class AccumulationAuditUseCase:
         return AuditRecord(
             signal_date=signal_date,
             ticker=candidate.ticker,
-            score=candidate.score,
+            score=candidate.accum_score,
             streak=candidate.consecutive_streak,
             net_buy_ratio=candidate.net_buy_ratio,
             total_net_value=candidate.total_net_value,

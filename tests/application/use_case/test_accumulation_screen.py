@@ -285,7 +285,7 @@ def test_bci_cluster_when_three_or_more_tier1_codes_are_net_buyers():
 
     assert c.bci_label == BCI_CLUSTER
     assert c.bci_tier1_count == 3
-    assert c.score_breakdown["inst"] == 15.0
+    assert c.accumulation_evidence.breakdown_dict["inst"] == 15.0
 
 
 def test_bci_stable_when_one_or_two_tier1_codes_are_net_buyers():
@@ -308,7 +308,7 @@ def test_bci_stable_when_one_or_two_tier1_codes_are_net_buyers():
 
     assert c.bci_label == BCI_STABLE
     assert c.bci_tier1_count == 1
-    assert c.score_breakdown["inst"] == 5.0
+    assert c.accumulation_evidence.breakdown_dict["inst"] == 5.0
 
 
 def test_bci_retail_when_no_tier1_codes_are_net_buyers():
@@ -330,7 +330,7 @@ def test_bci_retail_when_no_tier1_codes_are_net_buyers():
 
     assert c.bci_label == BCI_RETAIL
     assert c.bci_tier1_count == 0
-    assert c.score_breakdown["inst"] == 0.0
+    assert c.accumulation_evidence.breakdown_dict["inst"] == 0.0
 
 
 def test_bci_none_when_no_daily_flow_data():
@@ -348,7 +348,7 @@ def test_bci_none_when_no_daily_flow_data():
 
     assert c.bci_label is None
     assert c.bci_tier1_count == 0
-    assert c.score_breakdown["inst"] == 0.0
+    assert c.accumulation_evidence.breakdown_dict["inst"] == 0.0
 
 
 def test_bci_counts_all_net_buyers_not_just_top5():

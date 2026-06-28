@@ -252,7 +252,7 @@ class LogSwingCandidateUseCase:
             planned_stop=planned_stop,
             planned_target=planned_target,
             failed_gates=failed_gates,
-            candidate_score=candidate.score if candidate else None,
+            candidate_score=candidate.accum_score if candidate else None,
         )
 
     @staticmethod
@@ -290,7 +290,7 @@ class LogSwingCandidateUseCase:
             "stop_pct": None,
             "entry_price": _f(entry_price),
             "window_days": window_days,
-            "accum_score": candidate.score if candidate else None,
+            "accum_score": candidate.accum_score if candidate else None,
             "accum_streak": candidate.consecutive_streak if candidate else None,
             "flow_pct": float(candidate.avg_flow_ratio) if candidate and candidate.avg_flow_ratio is not None else None,
             "vwap_disc_pct": float(candidate.vwap_discount_pct) if candidate and candidate.vwap_discount_pct is not None else None,

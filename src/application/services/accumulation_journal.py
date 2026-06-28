@@ -132,7 +132,7 @@ class AccumulationJournalService:
             ticker=ticker,
             entry_price=entry_price,
             window_days=window_days,
-            score=candidate.score if candidate else None,
+            score=candidate.accum_score if candidate else None,
             streak=candidate.consecutive_streak if candidate else None,
             flow_pct=_d(candidate.avg_flow_ratio) if candidate else None,
             vwap_disc_pct=_d(candidate.vwap_discount_pct) if candidate else None,

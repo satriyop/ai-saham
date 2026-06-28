@@ -437,7 +437,7 @@ def _candidate_accumulation_to_dict(candidate: Any | None) -> dict[str, Any]:
         }
     return {
         "accum_score": candidate.accum_score,
-        "score": candidate.score,
+        "score": candidate.accum_score,
         "streak": candidate.consecutive_streak,
         "trend": candidate.trend,
         "flow_pct": candidate.avg_flow_ratio,
