@@ -151,6 +151,10 @@ def signal_label(candidate: Any, config: SwingDisplayConfig) -> str:
 
 
 def accumulation_evidence_label(candidate: Any, config: SwingDisplayConfig) -> str:
+    flow_evidence = getattr(candidate, "flow_evidence", None)
+    status = getattr(flow_evidence, "confirmation_status", None)
+    if status:
+        return str(status).lower().replace("_", "-")
     if candidate.score >= config.enter_min_score:
         return "enter-zone"
     if candidate.score >= config.watch_min_score:
@@ -159,6 +163,10 @@ def accumulation_evidence_label(candidate: Any, config: SwingDisplayConfig) -> s
 
 
 def flow_direction_label(candidate: Any) -> str:
+    flow_evidence = getattr(candidate, "flow_evidence", None)
+    direction = getattr(flow_evidence, "flow_direction", None)
+    if direction:
+        return f"flow {str(direction).lower()}"
     flow = getattr(candidate, "avg_flow_ratio", None)
     if flow is None:
         return "flow unknown"

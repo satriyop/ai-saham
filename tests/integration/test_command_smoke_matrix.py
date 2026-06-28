@@ -100,6 +100,11 @@ def test_analyze_swing_table_and_json_contracts(temp_workspace, monkeypatch):
     assert payload["artifact_type"] == "swing_analysis"
     assert payload["schema_version"] == 1
     assert payload["accumulation"]["accum_score"] == payload["accumulation"]["score"]
+    assert (
+        payload["accumulation"]["composite_flow_evidence_score"]
+        == payload["accumulation"]["accum_score"]
+    )
+    assert payload["accumulation"]["flow_evidence"]["score_family"] == "composite_flow_evidence"
     assert "trade_setup" in payload
 
 
@@ -121,6 +126,11 @@ def test_screen_accum_table_multi_and_json_contracts(temp_workspace, monkeypatch
     assert payload["artifact_type"] == "accumulation_screen"
     assert payload["schema_version"] == 1
     assert payload["candidates"][0]["accum_score"] is not None
+    assert (
+        payload["candidates"][0]["composite_flow_evidence_score"]
+        == payload["candidates"][0]["accum_score"]
+    )
+    assert payload["candidates"][0]["flow_evidence"]["score_family"] == "composite_flow_evidence"
 
     multi = runner.invoke(app, ["screen", "accum", "BBCA", "--multi", "--db", str(db_path)])
     assert multi.exit_code == 0, multi.output

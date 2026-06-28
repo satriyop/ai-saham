@@ -1,5 +1,6 @@
 """Tests for swing command helper logic."""
 
+import json
 import logging
 import inspect
 import sys
@@ -76,6 +77,68 @@ def test_swing_rejects_strategy_with_deprecated_no_backtest():
 
     assert result.exit_code != 0
     assert "Conflict: strategy/backtest evidence is enabled" in result.output
+
+
+def test_swing_command_delegates_workflow_construction_to_builder(monkeypatch):
+    captured = {}
+
+    class FakeFreshness:
+        def to_dict(self):
+            return {"as_of_date": "2026-06-28", "warnings": []}
+
+    class FakeWorkflow:
+        def execute(self, request):
+            captured["request"] = request
+            return SimpleNamespace(
+                ticker=request.ticker,
+                today=request.today,
+                refresh_actions=(),
+                data_freshness=FakeFreshness(),
+                flow_detail=None,
+                broker_detail=None,
+                candles=[],
+                latest_close=Decimal("0"),
+                accumulation_candidate=None,
+                risk_response=None,
+                strategy_risk_level=None,
+                strategy_risk_name=None,
+                atr_value=None,
+                sizing=None,
+                setup_eval=None,
+                setup_sizing=None,
+                broker_quality_note=None,
+                backtest_result=None,
+                sentiment_response=None,
+                sentiment_warning=None,
+                market_regime=None,
+                take_profit_pct=Decimal("5"),
+                stop_loss_pct=Decimal("5"),
+                regime_label=None,
+                signal_assessment=None,
+                trade_setup=None,
+                market_context_signal_preview=None,
+                market_context_risk_preview=None,
+                market_context_trade_setup_preview=None,
+                modules={},
+                warnings=(),
+            )
+
+    def fake_builder(**kwargs):
+        captured["builder"] = kwargs
+        return FakeWorkflow()
+
+    monkeypatch.setattr(swing_cli, "create_swing_analysis_workflow", fake_builder)
+
+    result = runner.invoke(
+        app,
+        ["analyze", "swing", "BBCA", "--setup", "foreign-bounce", "--format", "json"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["artifact_type"] == "swing_analysis"
+    assert captured["builder"]["setup_name"] == "foreign-bounce"
+    assert captured["request"].ticker == "BBCA"
 
 
 def _build_broker_detail(*args, **kwargs):
@@ -509,11 +572,11 @@ def test_fetch_swing_sentiment_suppresses_provider_noise_by_default(
     capsys,
 ):
     monkeypatch.setattr(
-        "src.adapters.cli.analyze_swing_commands.SentimentFactory.create_news_provider",
+        "src.adapters.cli.analyze_swing_workflow_factory.SentimentFactory.create_news_provider",
         lambda: NoisyNewsProvider(),
     )
     monkeypatch.setattr(
-        "src.adapters.cli.analyze_swing_commands.SentimentFactory.create_classifier",
+        "src.adapters.cli.analyze_swing_workflow_factory.SentimentFactory.create_classifier",
         lambda use_ai=False: object(),
     )
 
@@ -531,11 +594,11 @@ def test_fetch_swing_sentiment_verbose_keeps_provider_details(
     capsys,
 ):
     monkeypatch.setattr(
-        "src.adapters.cli.analyze_swing_commands.SentimentFactory.create_news_provider",
+        "src.adapters.cli.analyze_swing_workflow_factory.SentimentFactory.create_news_provider",
         lambda: NoisyNewsProvider(),
     )
     monkeypatch.setattr(
-        "src.adapters.cli.analyze_swing_commands.SentimentFactory.create_classifier",
+        "src.adapters.cli.analyze_swing_workflow_factory.SentimentFactory.create_classifier",
         lambda use_ai=False: object(),
     )
 

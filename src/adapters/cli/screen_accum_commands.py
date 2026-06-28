@@ -15,14 +15,10 @@ from typing import Annotated, Optional
 
 import typer
 
-from src.application.services.bootstrap import (
-    _load_engine_config,
-    _resolve_risk_gates,
-    create_indicator_registry,
+from src.adapters.cli.screen_accum_workflow_factory import (
+    create_accumulation_screen_workflow,
 )
-from src.application.services.accumulation_screen_factory import (
-    create_accumulation_screen_use_case,
-)
+from src.application.services.bootstrap import create_indicator_registry
 from src.application.services.broker_quality import (
     BrokerQualitySnapshot,
     compute_broker_quality_batch,
@@ -37,16 +33,11 @@ from src.application.use_case.accumulation_screen_use_case import (
     AccumulationScreenResponse,
 )
 from src.application.use_case.assess_risk_use_case import AssessRiskRequest, AssessRiskUseCase
-from src.infrastructure.browser.stockbit_provider_bundle import (
-    create_readonly_stockbit_providers,
-)
 from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.config.accumulation_screener_config import (
     load_accumulation_screener_config as _load_accumulation_screener_config,
 )
 from src.infrastructure.config.swing_config import load_swing_config as _load_swing_config
-from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
-from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
 _SC = _load_swing_config()
 _ASC = _load_accumulation_screener_config(Path(APP_CFG.config_paths.accumulation_screener))
@@ -363,24 +354,13 @@ def accumulation_run(
 
     universe_label = universe or f"{len(ticker_list)} tickers"
 
-    broker_repo = SQLiteBrokerRepository(resolved_db)
-    market_repo = SQLiteMarketRepository(db_path=resolved_db)
-    _sb = create_readonly_stockbit_providers(resolved_db)
-    _risk_structural_gates, _risk_execution_gates = _resolve_risk_gates(
-        _load_engine_config(Path(APP_CFG.config_paths.risk_engine))
+    workflow = create_accumulation_screen_workflow(
+        db_path=resolved_db,
+        screener_config=_ASC,
     )
-    _risk_uc = AssessRiskUseCase(
-        repository=market_repo,
-        structural_gates=_risk_structural_gates,
-        execution_gates=_risk_execution_gates,
-    )
-    use_case = create_accumulation_screen_use_case(
-        broker_repository=broker_repo,
-        market_repository=market_repo,
-        stockbit_providers=_sb,
-        risk_use_case=_risk_uc,
-        evidence_policy=_ASC.evidence_policy,
-    )
+    broker_repo = workflow.broker_repository
+    market_repo = workflow.market_repository
+    use_case = workflow.use_case
 
     base_request = AccumulationScreenRequest(
         tickers=ticker_list,
@@ -570,16 +550,12 @@ def _make_use_case_for_compare(
         if not ticker_list:
             return None
 
-        broker_repo = SQLiteBrokerRepository(db_path)
-        market_repo = SQLiteMarketRepository(db_path=db_path)
-        _sb = create_readonly_stockbit_providers(db_path)
-
-        use_case = create_accumulation_screen_use_case(
-            broker_repository=broker_repo,
-            market_repository=market_repo,
-            stockbit_providers=_sb,
-            evidence_policy=_ASC.evidence_policy,
+        workflow = create_accumulation_screen_workflow(
+            db_path=db_path,
+            screener_config=_ASC,
+            with_risk=False,
         )
+        use_case = workflow.use_case
         response = use_case.execute(AccumulationScreenRequest(
             tickers=ticker_list,
             window_days=window,

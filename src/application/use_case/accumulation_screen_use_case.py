@@ -55,6 +55,7 @@ from src.domain.ports.seasonality_provider import SeasonalityProvider
 from src.domain.ports.shareholding_provider import ShareholdingProvider
 from src.domain.ports.ticker_notation_provider import TickerNotationProvider
 from src.domain.value_objects.accumulation_evidence import AccumulationEvidence
+from src.domain.value_objects.flow_evidence import FlowEvidence
 from src.domain.value_objects.idx_market import SHARES_PER_LOT
 
 # Default setup targets (1:1 R:R, regime-unaware fallback)
@@ -246,6 +247,7 @@ class AccumulationCandidate:
     # Improvement #1: flow ratio signal
     avg_flow_ratio: float | None = None  # avg % of daily turnover that's foreign
     accumulation_evidence: AccumulationEvidence | None = None
+    flow_evidence: FlowEvidence | None = None
     # Improvement #3: BB squeeze
     bb_width: float | None = None  # current BB Width %
     bb_width_pctile: float | None = None  # 0..1 vs last 60 days (lower = tighter)
@@ -326,6 +328,7 @@ class AccumulationCandidate:
             "rsi": round(self.rsi, 2) if self.rsi is not None else None,
             "trend": self.trend,
             "accum_score": self.accum_score,
+            "composite_flow_evidence_score": self.accum_score,
             "top_brokers": self.top_brokers,
             "institutional_flag": self.institutional_flag,
             "bci_label": self.bci_label,
@@ -337,6 +340,11 @@ class AccumulationCandidate:
             "accumulation_evidence": (
                 self.accumulation_evidence.to_dict()
                 if self.accumulation_evidence is not None
+                else None
+            ),
+            "flow_evidence": (
+                self.flow_evidence.to_dict()
+                if self.flow_evidence is not None
                 else None
             ),
             "bb_width": round(self.bb_width, 2) if self.bb_width is not None else None,
@@ -553,6 +561,22 @@ class AccumulationScreenUseCase:
             )
             result.accumulation_evidence = evidence_resp.evidence
             result.accum_score = evidence_resp.evidence.accum_score
+            result.flow_evidence = FlowEvidence.from_accumulation_evidence(
+                composite_score=evidence_resp.evidence.accum_score,
+                max_score=evidence_resp.evidence.max_score,
+                net_buy_days=result.net_buy_days,
+                total_days=result.total_days,
+                streak=result.consecutive_streak,
+                avg_flow_ratio=result.avg_flow_ratio,
+                f_vwap_pct=result.vwap_discount_pct,
+                vwap_pct=result.vwap_pct,
+                bb_width_pctile=result.bb_width_pctile,
+                component_breakdown=evidence_resp.evidence.breakdown,
+                longer_term_context={
+                    "bci_label": result.bci_label,
+                    "bci_tier1_count": result.bci_tier1_count,
+                },
+            )
 
             # Phase 2.2: resistance-proximity flag
             if (

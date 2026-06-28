@@ -9,11 +9,8 @@ Layer: Adapter
 """
 
 import json
-import logging
-from contextlib import contextmanager, nullcontext, redirect_stderr, redirect_stdout
 from datetime import date
 from decimal import Decimal
-from io import StringIO
 from pathlib import Path
 from typing import Annotated, Any, Optional
 
@@ -23,29 +20,20 @@ from src.adapters.cli.analyze_swing_broker_display import (
     BrokerDetail,
     BrokerQualityNote,
     FlowDetail,
-    build_broker_detail,
-    build_broker_quality_note,
-    build_flow_detail,
 )
 from src.adapters.cli.analyze_swing_display import (
     SwingDisplayConfig,
     display_swing_compare,
 )
-from src.application.services.bootstrap import (
-    create_indicator_registry,
-    create_risk_engine,
-    create_signal_engine,
-)
-from src.application.services.accumulation_screen_factory import (
-    create_accumulation_screen_use_case,
+from src.adapters.cli.analyze_swing_workflow_factory import (
+    create_swing_analysis_workflow,
+    _fetch_swing_sentiment as _fetch_swing_sentiment_with_config,
 )
 from src.application.services.swing_data_freshness import (
     SwingDataFreshness as DataFreshness,
-    build_swing_data_freshness as _build_data_freshness,
     expected_weekday_data_date as _expected_weekday_data_date,
     weekday_session_lag as _weekday_session_lag,
 )
-from src.application.services.swing_data_refresh import refresh_swing_data
 from src.application.services.universe_loader import (
     UniverseNotFoundError,
     resolve_tickers,
@@ -53,8 +41,6 @@ from src.application.services.universe_loader import (
 from src.application.services.swing_setup_catalog import build_swing_setup_catalog_config
 from src.application.use_case.accumulation_screen_use_case import (
     AccumulationCandidate,
-    AccumulationScreenRequest,
-    resolve_setup_targets,
 )
 from src.application.use_case.evaluate_swing_setup_use_case import (
     AVAILABLE_SWING_SETUPS,
@@ -63,20 +49,11 @@ from src.application.use_case.evaluate_swing_setup_use_case import (
     FOREIGN_BOUNCE_SETUP,
     SwingSetupCatalogConfig,
 )
-from src.application.use_case.fetch_sentiment_use_case import (
-    FetchSentimentRequest,
-    FetchSentimentUseCase,
-)
 from src.domain.value_objects.market_context import MarketContext
 from src.application.use_case.swing_analysis_workflow_use_case import (
     SwingAnalysisDataUnavailable,
     SwingAnalysisWorkflowRequest,
-    SwingAnalysisWorkflowUseCase,
 )
-from src.domain.rules.bandar_gate import BandarGate
-from src.domain.rules.free_float_gate import FreeFloatGate
-from src.domain.rules.fundamental_gate import FundamentalGate
-from src.domain.rules.liquidity_gate import LiquidityGate
 from src.application.use_case.swing_backtest_use_case import (
     SwingBacktestRequest,
     SwingBacktestResponse,
@@ -86,21 +63,16 @@ from src.application.use_case.swing_backtest_use_case import (
     FOREIGN_BOUNCE_SETUP as BACKTEST_FOREIGN_BOUNCE_SETUP,
 )
 from src.domain.value_objects.setup_evaluation import SetupEvaluation
-from src.infrastructure.browser.stockbit_provider_bundle import (
-    create_readonly_stockbit_providers,
-)
 from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.config.analyze_swing_config import (
     load_analyze_swing_config as _load_analyze_swing_config,
 )
-from src.infrastructure.config.market_context_factory import evaluate_market_context
 from src.infrastructure.config.swing_backtest_config import (
     load_swing_backtest_config as _load_swing_backtest_config,
 )
 from src.infrastructure.config.user_config import get_swing_default
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
-from src.infrastructure.sentiment import SentimentFactory
 
 DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 _W = 70  # display width
@@ -151,70 +123,16 @@ BROKER_WEIGHTS: dict[str, Decimal] = {
 }
 
 
-def _auto_refresh_swing_data(
-    ticker: str,
-    db_path: Path,
-    force_refresh: bool,
-) -> tuple[str, ...]:
-    from src.adapters.cli.fetch_market_commands import (
-        _create_broker_provider,
-        _fetch_broker,
-        _fetch_candles,
-    )
-
-    return refresh_swing_data(
-        ticker=ticker,
-        db_path=db_path,
-        force_refresh=force_refresh,
-        market_refresh_days=_AS.market_refresh_days,
-        broker_refresh_days=_AS.broker_refresh_days,
-        fetch_candles=_fetch_candles,
-        create_broker_provider=_create_broker_provider,
-        fetch_broker=_fetch_broker,
-    )
-
-
-@contextmanager
-def _quiet_sentiment_fetch(enabled: bool):
-    """Suppress optional sentiment provider noise in composite swing output."""
-    if not enabled:
-        with nullcontext():
-            yield
-        return
-
-    previous_disable = logging.root.manager.disable
-    sink = StringIO()
-    try:
-        logging.disable(logging.CRITICAL)
-        with redirect_stdout(sink), redirect_stderr(sink):
-            yield
-    finally:
-        logging.disable(previous_disable)
-
-
 def _fetch_swing_sentiment(
     ticker: str,
     sentiment_verbose: bool,
 ):
-    """Fetch optional sentiment context without leaking provider noise by default."""
-    try:
-        with _quiet_sentiment_fetch(enabled=not sentiment_verbose):
-            news_provider = SentimentFactory.create_news_provider()
-            classifier = SentimentFactory.create_classifier(use_ai=False)
-            sent_uc = FetchSentimentUseCase(
-                news_provider=news_provider,
-                classifier=classifier,
-            )
-            response = sent_uc.execute(FetchSentimentRequest(
-                ticker=ticker,
-                max_headlines=_AS.sentiment_max_headlines,
-                days=_AS.sentiment_days,
-            ))
-        return response, response.warning
-    except Exception as exc:
-        if sentiment_verbose:
-            return None, f"Sentiment fetch failed: {exc}"
-        return None, "News unavailable (provider fetch failed)."
+    """Compatibility wrapper for tests and helper imports."""
+    return _fetch_swing_sentiment_with_config(
+        ticker=ticker,
+        sentiment_verbose=sentiment_verbose,
+        analyze_config=_AS,
+    )
 
 
 def _parse_compare_variants(value: str) -> tuple[str, ...]:
@@ -527,72 +445,14 @@ def swing(
     include_risk_detail = with_risk_detail or explain or full
     include_market_detail = with_market_detail or explain or full
 
-    market_repo = SQLiteMarketRepository(db_path=resolved_db)
-    broker_repo = SQLiteBrokerRepository(resolved_db)
-    registry = create_indicator_registry(
-        broker_repository=broker_repo,
-        market_repository=market_repo,
-    )
-
-    def _build_accumulation_candidate(ticker: str, window: int):
-        _sb = create_readonly_stockbit_providers(resolved_db)
-        accum_uc = create_accumulation_screen_use_case(
-            broker_repository=broker_repo,
-            market_repository=market_repo,
-            stockbit_providers=_sb,
-        )
-        accum_resp = accum_uc.execute(
-            AccumulationScreenRequest(
-                tickers=[ticker],
-                window_days=window,
-                min_net_buy_days=_AS.candidate_min_net_buy_days,
-                min_score=_AS.candidate_min_score,
-                tier1_broker_codes=_SC.tier1_broker_codes,
-                bci_cluster_min_count=_SC.bci_cluster_min_count,
-                bci_stable_min_count=_SC.bci_stable_min_count,
-                resistance_gate_enabled=_SC.resistance_gate_enabled,
-                resistance_headroom_min_pct=_SC.resistance_headroom_min_pct,
-                ex_date_warning_days=_SC.ex_date_warning_days,
-            )
-        )
-        return accum_resp.candidates[0] if accum_resp.candidates else None
-
-    workflow = SwingAnalysisWorkflowUseCase(
-        market_repository=market_repo,
-        broker_repository=broker_repo,
-        registry=registry,
-        refresh_data=_auto_refresh_swing_data,
-        build_data_freshness=_build_data_freshness,
-        build_flow_detail=build_flow_detail,
-        build_broker_detail=lambda ticker, broker_repo, window_sessions=5, as_of_date=None: build_broker_detail(
-            ticker=ticker,
-            broker_repo=broker_repo,
-            window_sessions=window_sessions,
-            as_of_date=as_of_date,
-            smart_money_brokers=SMART_MONEY_BROKERS,
-            noise_brokers=NOISE_BROKERS,
-            broker_weights=BROKER_WEIGHTS,
-            smart_share_threshold_pct=_SC.smart_share_threshold_pct,
-        ),
-        build_accumulation_candidate=_build_accumulation_candidate,
-        evaluate_setup=lambda candidate, broker_detail: _evaluate_swing_setup(
-            setup_name,
-            candidate,
-            broker_detail,
-        ),
-        build_broker_quality_note=lambda broker_detail, setup_eval: build_broker_quality_note(
-            broker_detail,
-            setup_eval,
-            smart_sell_min_share_pct=_SC.smart_sell_min_share_pct,
-        ),
-        fetch_sentiment=_fetch_swing_sentiment,
-        load_swing_config=_load_swing_workflow_config,
-        resolve_setup_targets=resolve_setup_targets,
-        evaluate_market_context=evaluate_market_context,
-        structural_gates=[FundamentalGate(), LiquidityGate(), FreeFloatGate()],
-        execution_gates=[BandarGate()],
-        signal_engine=create_signal_engine(db_path=resolved_db, with_enrichment=True),
-        risk_engine=create_risk_engine(db_path=resolved_db, with_enrichment=True),
+    workflow = create_swing_analysis_workflow(
+        db_path=resolved_db,
+        setup_name=setup_name,
+        swing_config=_SC,
+        analyze_config=_AS,
+        smart_money_brokers=SMART_MONEY_BROKERS,
+        noise_brokers=NOISE_BROKERS,
+        broker_weights=BROKER_WEIGHTS,
     )
     try:
         workflow_response = workflow.execute(
@@ -676,6 +536,13 @@ def swing(
                 "flow_pct": accum_candidate.avg_flow_ratio if accum_candidate else None,
                 "vwap_disc_pct": accum_candidate.vwap_discount_pct if accum_candidate else None,
                 "bb_width_pctile": accum_candidate.bb_width_pctile if accum_candidate else None,
+                "composite_flow_evidence_score": (
+                    accum_candidate.accum_score if accum_candidate else None
+                ),
+                "flow_evidence": (
+                    accum_candidate.flow_evidence.to_dict()
+                    if accum_candidate and accum_candidate.flow_evidence else None
+                ),
                 "dividend_risk": accum_candidate.dividend_risk if accum_candidate else False,
                 "rights_issue_risk": accum_candidate.rights_issue_risk if accum_candidate else False,
                 "upcoming_rups": accum_candidate.upcoming_rups if accum_candidate else [],

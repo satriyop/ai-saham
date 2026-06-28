@@ -1,8 +1,14 @@
 """Tests for accumulation CLI helper logic."""
 
+import json
 from datetime import date
 from decimal import Decimal
+from types import SimpleNamespace
 
+from typer.testing import CliRunner
+
+from src.adapters.cli import screen_accum_commands as accum_cli
+from src.adapters.cli.main import app
 from src.adapters.cli.screen_accum_commands import (
     _display_multi,
     _display_results,
@@ -17,6 +23,8 @@ from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 from src.domain.value_objects.risk_assessment import RiskAssessment
 from src.domain.value_objects.signal_assessment import SignalStrength
 from src.domain.value_objects.trade_setup import SetupAction, TradeSetup
+
+runner = CliRunner()
 
 
 class FakeBrokerSummaryRepository:
@@ -93,6 +101,40 @@ def _candidate(**overrides) -> AccumulationCandidate:
     }
     values.update(overrides)
     return AccumulationCandidate(**values)
+
+
+def test_screen_accum_delegates_workflow_construction_to_builder(monkeypatch):
+    captured = {}
+
+    class FakeUseCase:
+        def execute(self, request):
+            captured["request"] = request
+            return AccumulationScreenResponse(
+                candidates=[_candidate()],
+                screened_at=date(2026, 6, 28),
+                window_days=request.window_days,
+                total_tickers_checked=len(request.tickers),
+                tickers_skipped=0,
+                provider="fake",
+            )
+
+    def fake_builder(**kwargs):
+        captured["builder"] = kwargs
+        return SimpleNamespace(
+            use_case=FakeUseCase(),
+            broker_repository=object(),
+            market_repository=object(),
+        )
+
+    monkeypatch.setattr(accum_cli, "create_accumulation_screen_workflow", fake_builder)
+
+    result = runner.invoke(app, ["screen", "accum", "BBCA", "--format", "json"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["artifact_type"] == "accumulation_screen"
+    assert captured["builder"]["screener_config"] is accum_cli._ASC
+    assert captured["request"].tickers == ["BBCA"]
 
 
 def test_screen_broker_quality_counts_local_noise_brokers():

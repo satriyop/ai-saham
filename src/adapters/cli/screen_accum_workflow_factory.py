@@ -1,0 +1,75 @@
+"""
+Factory for saham screen accum workflow wiring.
+
+Layer: Adapter
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+
+from src.application.services.accumulation_screen_factory import (
+    create_accumulation_screen_use_case,
+)
+from src.application.services.bootstrap import (
+    _load_engine_config,
+    _resolve_risk_gates,
+)
+from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
+from src.application.use_case.assess_risk_use_case import AssessRiskUseCase
+from src.domain.ports.broker_data_repository import BrokerDataRepository
+from src.domain.ports.market_data_repository import MarketDataRepository
+from src.infrastructure.browser.stockbit_provider_bundle import (
+    create_readonly_stockbit_providers,
+)
+from src.infrastructure.config.accumulation_screener_config import (
+    AccumulationScreenerConfig,
+)
+from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
+from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
+
+
+@dataclass(frozen=True)
+class AccumulationScreenWorkflow:
+    use_case: AccumulationScreenUseCase
+    broker_repository: BrokerDataRepository
+    market_repository: MarketDataRepository
+
+
+def create_accumulation_screen_workflow(
+    *,
+    db_path: Path,
+    screener_config: AccumulationScreenerConfig,
+    with_risk: bool = True,
+) -> AccumulationScreenWorkflow:
+    """Build accumulation screen workflow dependencies for CLI commands."""
+    broker_repo = SQLiteBrokerRepository(db_path)
+    market_repo = SQLiteMarketRepository(db_path=db_path)
+    stockbit_providers = create_readonly_stockbit_providers(db_path)
+
+    risk_use_case = None
+    if with_risk:
+        structural_gates, execution_gates = _resolve_risk_gates(
+            _load_engine_config(Path(APP_CFG.config_paths.risk_engine))
+        )
+        risk_use_case = AssessRiskUseCase(
+            repository=market_repo,
+            structural_gates=structural_gates,
+            execution_gates=execution_gates,
+        )
+
+    use_case = create_accumulation_screen_use_case(
+        broker_repository=broker_repo,
+        market_repository=market_repo,
+        stockbit_providers=stockbit_providers,
+        risk_use_case=risk_use_case,
+        evidence_policy=screener_config.evidence_policy,
+    )
+
+    return AccumulationScreenWorkflow(
+        use_case=use_case,
+        broker_repository=broker_repo,
+        market_repository=market_repo,
+    )

@@ -464,6 +464,12 @@ def test_screen_attaches_ticker_notation_without_changing_score():
     assert enriched.candidates[0].ticker_notation is not None
     assert enriched.candidates[0].ticker_notation.codes == ["X"]
     assert enriched.candidates[0].score == base.candidates[0].score
+    assert enriched.candidates[0].flow_evidence is not None
+    assert enriched.candidates[0].flow_evidence.composite_score == enriched.candidates[0].score
+    assert (
+        enriched.candidates[0].to_dict()["composite_flow_evidence_score"]
+        == enriched.candidates[0].to_dict()["accum_score"]
+    )
     assert enriched.candidates[0].to_dict()["ticker_notation"]["notations"][0]["code"] == "X"
 
 
