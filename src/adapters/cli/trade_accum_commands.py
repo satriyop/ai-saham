@@ -19,8 +19,6 @@ from src.application.services.accumulation_screen_factory import (
     create_accumulation_screen_use_case,
 )
 from src.application.services.swing_setup_catalog import build_swing_setup_catalog_config
-from src.application.services.universe_loader import resolve_tickers
-from src.application.services.market_context_engine import MarketContextEngine
 from src.application.use_case.evaluate_swing_setup_use_case import (
     AVAILABLE_SWING_SETUPS,
     SwingSetupCatalogConfig,
@@ -33,6 +31,7 @@ from src.infrastructure.config.swing_backtest_config import (
     load_swing_backtest_config as _load_swing_backtest_config,
 )
 from src.infrastructure.config.swing_config import load_swing_config as _load_swing_config
+from src.infrastructure.config.market_context_factory import create_market_context_engine
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
@@ -108,11 +107,10 @@ def _accumulation_log_impl(
     regime_tickers: list[str] = []
     if with_regime:
         try:
-            regime_tickers = resolve_tickers(universe=regime_universe, explicit=[], db_path=db_path)
-            regime_uc = MarketContextEngine(
-                market_repository=market_repo,
-                broker_repository=broker_repo,
-                universe=regime_tickers,
+            regime_uc = create_market_context_engine(
+                db_path=db_path,
+                universe=regime_universe or APP_CFG.analysis.regime_universe,
+                benchmark=benchmark,
             )
         except Exception as exc:
             typer.echo(f"Warning: could not resolve regime universe: {exc}", err=True)
@@ -151,7 +149,7 @@ def _accumulation_log_impl(
     if result.candidate_score is None and entry_price is None:
         typer.echo(
             f"Warning: no accumulation data for {ticker_upper} in the last {window} broker sessions. "
-            "Logging with score=0.",
+            "Logging without an accumulation score.",
             err=True,
         )
 
@@ -162,7 +160,7 @@ def _accumulation_log_impl(
         )
         return
 
-    score_str = f"{result.candidate_score:.1f}" if result.candidate_score is not None else "0.0"
+    score_str = f"{result.candidate_score:.1f}" if result.candidate_score is not None else "N/A"
     pattern_str = f" | pattern: {result.pattern}" if result.pattern else ""
     decision_str = (
         f" | setup={setup_name} | match={result.setup_match}"

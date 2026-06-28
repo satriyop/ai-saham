@@ -1284,4 +1284,66 @@ Evidence modules exist for user inspection and ADR-027 learning-loop attribution
 
 ---
 
+## ADR-033: Workflow Composition Artifact Boundaries
+
+**Status:** Accepted
+**Date:** 2026-06-28
+
+### Context
+
+The CLI now exposes several deterministic workflows that reuse overlapping data:
+broker flow, candles, enrichment, signal, risk, market context, setup gates, and
+historical replay. Reuse is useful, but a generic workflow wrapper would blur
+which output is an actionable verdict and which output is evidence, discovery, a
+session confirmation, or a learning artifact.
+
+### Decision
+
+Public commands stay explicit. Shared behavior should be extracted only at
+small contract boundaries, not by collapsing commands behind a generic mode.
+
+Canonical artifact ownership:
+
+| Command | Workflow family | Canonical artifact | Meaning |
+|---------|-----------------|--------------------|---------|
+| `saham analyze swing TICKER` | Single-ticker swing decision | `TradeSetup` | Authoritative swing action from `SignalEngine + RiskEngine` |
+| `saham screen accum` | Candidate discovery | `AccumulationCandidate` with optional `TradeSetup` | Ranked candidates; final action exists only when both signal and risk are present |
+| `saham screen pre-open` | Intraday pre-open planning | `PreOpenScreenResult` | Conditional pre-open candidate list and entry ranges |
+| `saham trade confirm` | Intraday post-open confirmation | `IntradayConfirmationResult` | ENTER/WAIT/SKIP decision after actual opening price is known |
+| `saham trade backtest-swing` | Historical replay | `SwingBacktestResponse` | Walk-forward performance artifact, not a live verdict |
+| `saham trade backtest-intraday` | Historical proxy simulation | `IntradayBacktestResponse` | Daily-OHLC proxy performance artifact, not exact intraday replay |
+| `saham analyze accum-audit` | Learning/audit replay | `AccumulationAuditResponse` | Forward-return audit of accumulation evidence |
+| `saham trade log --type swing` | Journal continuation | `LogSwingCandidateResponse` | Persistence outcome for a logged candidate |
+
+Composition rules:
+
+* `TradeSetup` is the only final swing trade verdict wording.
+* Any command that shows a complete swing action from signal and risk must call
+  `AssessTradeSetupUseCase`.
+* `SetupEvaluation`, strategy evidence, sentiment, broker detail, and market
+  context preview are evidence modules. They must not independently overwrite
+  `TradeSetup.action`.
+* Pre-open and intraday confirmation use their own session artifacts. They must
+  not reuse `TradeSetup` wording unless the full swing signal/risk contract is
+  actually composed.
+* Backtest and audit commands produce learning artifacts. They may replay the
+  same deterministic rules, but their outputs are performance observations, not
+  current recommendations.
+
+### Layering
+
+Adapters may parse flags, construct infrastructure dependencies, call use cases,
+format display, and write command sidecars. Workflow policy and composition
+belong in application use cases. Infrastructure factories are preferred when a
+command needs a configured engine, repository bundle, or provider bundle.
+
+### Consequences
+
+This keeps the user-facing command model explicit while still allowing shared
+internals. Future refactors should add narrow services such as provider bundles,
+config factories, display DTOs, or composition contract tests before introducing
+larger workflow abstractions.
+
+---
+
 *End of Architecture Decisions Record.*

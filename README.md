@@ -1602,6 +1602,18 @@ src/
 - AI is always optional and swappable (DeepSeek default)
 - Plugins extend functionality without modifying core
 
+**Workflow Artifacts:**
+
+| Command | Primary output | Interpretation |
+|---------|----------------|----------------|
+| `saham analyze swing TICKER` | `TradeSetup` | Final swing verdict from `SignalEngine + RiskEngine` |
+| `saham screen accum` | `AccumulationCandidate` | Ranked discovery result; action appears only when signal and risk are both available |
+| `saham screen pre-open` | `PreOpenScreenResult` | Intraday pre-open plan with conditional entry ranges |
+| `saham trade confirm` | `IntradayConfirmationResult` | Post-open ENTER/WAIT/SKIP decision using actual opening price |
+| `saham trade backtest-swing` | `SwingBacktestResponse` | Historical walk-forward performance artifact |
+| `saham trade backtest-intraday` | `IntradayBacktestResponse` | Daily-OHLC intraday proxy simulation artifact |
+| `saham analyze accum-audit` | `AccumulationAuditResponse` | Learning/audit artifact for forward-return behavior |
+
 ---
 
 ## Configuration

@@ -22,9 +22,19 @@ from src.application.use_case.accumulation_screen_use_case import (
     AccumulationScreenUseCase,
 )
 from src.application.use_case.assess_risk_use_case import AssessRiskUseCase
+from src.application.use_case.assess_risk_use_case import AssessRiskResponse
+from src.application.use_case.assess_signal_use_case import AssessSignalResponse
 from src.domain.entities.candle import Candle
 from src.domain.rules.fundamental_gate import FundamentalGate
 from src.domain.value_objects.company_fundamentals import CompanyFundamentals
+from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
+from src.domain.value_objects.risk_assessment import RiskAssessment
+from src.domain.value_objects.signal_assessment import (
+    EntryQuality,
+    SignalAssessment,
+    SignalStrength,
+)
+from src.domain.value_objects.trade_setup import SetupAction
 
 _TODAY = date(2026, 6, 23)
 
@@ -158,6 +168,65 @@ def test_risk_funnel_passes_healthy_ticker():
     # The technical engine may still return HIGH_RISK (e.g. RSI overbought on
     # flat candles) — that's fine; we're testing gate selectivity, not rule engine.
     assert candidate.risk_assessment.gate_triggered is None
+
+
+def test_risk_funnel_composes_trade_setup_from_signal_and_risk():
+    """screen accum final action must come from AssessTradeSetupUseCase."""
+    mkt_repo = _mock_market_repo(["BBCA"])
+    signal_response = AssessSignalResponse(
+        ticker="BBCA",
+        assessment=SignalAssessment(
+            ticker="BBCA",
+            score=76,
+            strength=SignalStrength.STRONG,
+            entry_quality=EntryQuality.ENTER,
+            breakdown=(("foreign_flow_quality", 80.0),),
+            rationale=("signal supportive",),
+            snapshot_date=_TODAY,
+        ),
+        sensitivity="balanced",
+    )
+    risk_response = AssessRiskResponse(
+        ticker="BBCA",
+        assessment=RiskAssessment(
+            sensitivity="balanced",
+            rationale=("no gate fired",),
+            snapshot_date=_TODAY,
+            indicators=IndicatorSnapshot(
+                date=_TODAY,
+                sma=Decimal("5000"),
+                ema=Decimal("5000"),
+                rsi=Decimal("50"),
+            ),
+            gate_triggered=None,
+            gate_is_structural=None,
+            gate_confidence=None,
+        ),
+        sma_period=20,
+        ema_period=20,
+        rsi_period=14,
+    )
+    risk_uc = MagicMock(spec=AssessRiskUseCase)
+    risk_uc.execute.return_value = risk_response
+    uc = AccumulationScreenUseCase(
+        broker_repository=_mock_broker_repo(),
+        market_repository=mkt_repo,
+        risk_use_case=risk_uc,
+    )
+
+    candidate = MagicMock()
+    candidate.ticker = "BBCA"
+    candidate.fundamentals = None
+    candidate.shareholding = None
+    candidate.bandar_detector = None
+    candidate.signal_assessment = signal_response
+
+    uc._run_risk_funnel([candidate], _TODAY, "balanced")
+
+    assert candidate.risk_assessment == risk_response.assessment
+    assert candidate.trade_setup is not None
+    assert candidate.trade_setup.action == SetupAction.ENTER
+    assert candidate.trade_setup.signal_score == 76
 
 
 # ─── GateContext built from pre-loaded data ───────────────────────────────────
