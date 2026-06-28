@@ -22,9 +22,6 @@ from src.adapters.cli.analyze_swing_broker_display import (
 )
 from src.adapters.cli.analyze_swing_commands import (
     FOREIGN_BOUNCE_SETUP_NAME,
-    DataFreshness,
-    _auto_refresh_swing_data,
-    _build_data_freshness,
     _evaluate_swing_setup,
     _fetch_swing_sentiment,
     _print_swing_output,
@@ -33,6 +30,7 @@ from src.adapters.cli.analyze_swing_display import (
     format_failed_gates_summary as _format_failed_gates_summary,
 )
 from src.adapters.cli.main import app
+from src.application.services.swing_data_freshness import SwingDataFreshness
 from src.application.use_case.accumulation_screen_use_case import AccumulationCandidate
 from src.domain.entities.broker_flow import BrokerSummary, BrokerTransaction, BrokerType
 from src.domain.value_objects.accumulation_evidence import AccumulationEvidence
@@ -91,14 +89,6 @@ def _build_broker_detail(*args, **kwargs):
     )
 
 
-class FakeRangeRepository:
-    def __init__(self, date_range):
-        self._date_range = date_range
-
-    def get_date_range(self, ticker: str):
-        return self._date_range
-
-
 class FakeBrokerSummaryRepository:
     def __init__(self, summaries):
         self._summaries = summaries
@@ -111,10 +101,6 @@ class FakeBrokerSummaryRepository:
             and (start_date is None or summary.date >= start_date)
             and (end_date is None or summary.date <= end_date)
         ]
-
-
-class FakeBrokerProvider:
-    provider_name = "idx"
 
 
 def _tx(
@@ -232,90 +218,6 @@ def test_foreign_bounce_missing_accumulation_is_avoid():
 
     assert evaluation.passed is False
     assert evaluation.match == SetupMatch.NO_MATCH
-
-
-def test_data_freshness_reports_source_dates_and_lag_warnings():
-    freshness = _build_data_freshness(
-        ticker="BBCA",
-        as_of_date=date(2026, 6, 15),
-        market_repo=FakeRangeRepository((date(2026, 1, 1), date(2026, 6, 12))),
-        broker_repo=FakeRangeRepository((date(2026, 1, 2), date(2026, 6, 10))),
-        refresh_actions=(
-            "candles=provider-no-new-data(latest=2026-06-12)",
-            "broker(idx)=ERR:timeout",
-        ),
-    )
-
-    assert freshness.candle_end == date(2026, 6, 12)
-    assert freshness.broker_end == date(2026, 6, 10)
-    assert any("Latest candle" in warning for warning in freshness.warnings)
-    assert any("Latest broker flow" in warning for warning in freshness.warnings)
-    assert any("differ" in warning for warning in freshness.warnings)
-    assert any("Refresh issue" in warning for warning in freshness.warnings)
-    assert freshness.to_dict()["refresh_actions"] == [
-        "candles=provider-no-new-data(latest=2026-06-12)",
-        "broker(idx)=ERR:timeout",
-    ]
-    assert freshness.to_dict()["broker_flow_through"] == "2026-06-10"
-
-
-def test_data_freshness_does_not_warn_for_friday_data_on_sunday():
-    freshness = _build_data_freshness(
-        ticker="JPFA",
-        as_of_date=date(2026, 6, 14),
-        market_repo=FakeRangeRepository((date(2026, 1, 1), date(2026, 6, 12))),
-        broker_repo=FakeRangeRepository((date(2026, 1, 1), date(2026, 6, 12))),
-        refresh_actions=(
-            "candles=cached-current",
-            "broker(stockbit)=cached-current",
-        ),
-    )
-
-    assert freshness.warnings == ()
-
-
-def test_auto_refresh_swing_data_uses_update_provider_factory(monkeypatch, tmp_path):
-    def fake_fetch_candles(**kwargs):
-        assert kwargs["ticker"] == "JPFA"
-        assert kwargs["days"] == 365
-        assert kwargs["db_path"] == tmp_path / "data.db"
-        assert kwargs["provider_name"] == "yahoo"
-        assert kwargs["refresh"] is False
-        return "cached-current"
-
-    def fake_create_broker_provider(name):
-        assert name is None
-        return FakeBrokerProvider(), "idx"
-
-    def fake_fetch_broker(**kwargs):
-        assert kwargs["ticker"] == "JPFA"
-        assert kwargs["days"] == 90
-        assert kwargs["db_path"] == tmp_path / "data.db"
-        assert kwargs["broker_provider"].provider_name == "idx"
-        assert kwargs["refresh"] is False
-        return "cached-current"
-
-    monkeypatch.setattr(
-        "src.adapters.cli.fetch_market_commands._fetch_candles",
-        fake_fetch_candles,
-    )
-    monkeypatch.setattr(
-        "src.adapters.cli.fetch_market_commands._create_broker_provider",
-        fake_create_broker_provider,
-    )
-    monkeypatch.setattr(
-        "src.adapters.cli.fetch_market_commands._fetch_broker",
-        fake_fetch_broker,
-    )
-
-    assert _auto_refresh_swing_data(
-        ticker="JPFA",
-        db_path=tmp_path / "data.db",
-        force_refresh=False,
-    ) == (
-        "candles=cached-current",
-        "broker(idx)=cached-current",
-    )
 
 
 def test_flow_detail_uses_latest_broker_sessions():
@@ -722,7 +624,7 @@ def test_swing_output_renders_rich_decision_overview(capsys):
         ticker="BBCA",
         today=date(2026, 6, 19),
         strategy_name="foreign-accumulation",
-        data_freshness=DataFreshness(
+        data_freshness=SwingDataFreshness(
             as_of_date=date(2026, 6, 19),
             candle_start=date(2026, 1, 1),
             candle_end=date(2026, 6, 18),
@@ -825,7 +727,7 @@ def test_swing_output_renders_optional_evidence_as_separate_panels(capsys):
         ticker="BBCA",
         today=date(2026, 6, 19),
         strategy_name="foreign-accumulation",
-        data_freshness=DataFreshness(
+        data_freshness=SwingDataFreshness(
             as_of_date=date(2026, 6, 19),
             candle_start=date(2026, 1, 1),
             candle_end=date(2026, 6, 18),
@@ -951,7 +853,7 @@ def test_swing_flow_detail_calls_out_conflicted_negative_flow(capsys):
         ticker="ASII",
         today=date(2026, 6, 27),
         strategy_name=None,
-        data_freshness=DataFreshness(
+        data_freshness=SwingDataFreshness(
             as_of_date=date(2026, 6, 27),
             candle_start=date(2026, 1, 1),
             candle_end=date(2026, 6, 26),

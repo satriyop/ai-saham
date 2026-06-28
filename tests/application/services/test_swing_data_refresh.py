@@ -52,3 +52,42 @@ def test_refresh_swing_data_delegates_to_fetch_functions():
             "refresh": True,
         },
     )
+
+
+def test_refresh_swing_data_uses_configured_windows_and_provider_factory(tmp_path):
+    class FakeBrokerProvider:
+        provider_name = "idx"
+
+    def fake_fetch_candles(**kwargs):
+        assert kwargs["ticker"] == "JPFA"
+        assert kwargs["days"] == 365
+        assert kwargs["db_path"] == tmp_path / "data.db"
+        assert kwargs["provider_name"] == "yahoo"
+        assert kwargs["refresh"] is False
+        return "cached-current"
+
+    def fake_create_broker_provider(name):
+        assert name is None
+        return FakeBrokerProvider(), "idx"
+
+    def fake_fetch_broker(**kwargs):
+        assert kwargs["ticker"] == "JPFA"
+        assert kwargs["days"] == 90
+        assert kwargs["db_path"] == tmp_path / "data.db"
+        assert kwargs["broker_provider"].provider_name == "idx"
+        assert kwargs["refresh"] is False
+        return "cached-current"
+
+    assert refresh_swing_data(
+        ticker="JPFA",
+        db_path=tmp_path / "data.db",
+        force_refresh=False,
+        market_refresh_days=365,
+        broker_refresh_days=90,
+        fetch_candles=fake_fetch_candles,
+        create_broker_provider=fake_create_broker_provider,
+        fetch_broker=fake_fetch_broker,
+    ) == (
+        "candles=cached-current",
+        "broker(idx)=cached-current",
+    )
