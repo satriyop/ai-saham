@@ -351,17 +351,17 @@ def display_results(
         )
         return
 
-    verdict_table = compact_table()
-    verdict_table.add_column("Action")
-    verdict_table.add_column("#", justify="right")
-    verdict_table.add_column("Ticker", style="bold")
-    verdict_table.add_column("Price", justify="right")
-    verdict_table.add_column("Signal", justify="right")
-    verdict_table.add_column("Accum", justify="right")
-    verdict_table.add_column("Gate")
-    verdict_table.add_column("Trend")
+    action_table = compact_table()
+    action_table.add_column("Action")
+    action_table.add_column("#", justify="right")
+    action_table.add_column("Ticker", style="bold")
+    action_table.add_column("Price", justify="right")
+    action_table.add_column("Signal", justify="right")
+    action_table.add_column("Accum", justify="right")
+    action_table.add_column("Gate")
+    action_table.add_column("Trend")
     if strategy_signals is not None:
-        verdict_table.add_column("Strat")
+        action_table.add_column("Strat")
 
     evidence_table = compact_table()
     evidence_table.add_column("Pts", justify="right")
@@ -473,7 +473,7 @@ def display_results(
             sym = _STRAT_SYMBOL.get(raw, raw)
             strat_style = "green" if raw == "LOW_RISK" else ("red" if raw == "HIGH_RISK" else "bright_black")
             row.append(Text(sym, style=strat_style))
-        verdict_table.add_row(*row)
+        action_table.add_row(*row)
 
         for evidence_row in _evidence_factor_rows(c):
             if show_context_ticker:
@@ -679,7 +679,7 @@ def display_results(
                     has_detail_rows = True
 
     sections = [
-        panel(verdict_table, title="Verdict"),
+        panel(action_table, title="Candidate Actions"),
         panel(evidence_table, title="Accumulation Evidence"),
         panel(signal_table, title="Signal"),
         panel(
@@ -742,7 +742,7 @@ def display_results(
         )
 
     explain_lines = [
-        "Verdict panel is the action summary. Context panels explain why.",
+        "Candidate Actions is the screen summary. Context panels explain why.",
         "ACCUM is deterministic foreign-flow evidence (0-120). SIGNAL is SignalEngine attractiveness (0-100).",
         "GATE OPEN means no structural/execution risk gate fired; it does not mean the ticker is risk-free.",
         "FLOW% = avg net foreign % of turnover. F_VWAP% positive = price below foreign average buy cost. BB%ILE lower = tighter squeeze.",

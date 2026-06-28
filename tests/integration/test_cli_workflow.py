@@ -570,7 +570,7 @@ class TestCLIRiskAssessment:
         output = result.output or result.stdout
         assert result.exit_code == 0, f"risk failed: {output}"
         assert "Risk Assessment" in output
-        assert "Verdict:" in output
+        assert "Status:" in output
 
     def test_risk_all_profiles(self, temp_workspace, monkeypatch):
         """CLI: risk --all shows all profiles."""
@@ -595,6 +595,7 @@ class TestCLIRiskAssessment:
 
         output = result.output or result.stdout
         assert result.exit_code == 0, f"risk --all failed: {output}"
+        assert "Status" in output
         # Should show multiple profiles
         assert "conservative" in output.lower()
         assert "balanced" in output.lower()

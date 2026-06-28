@@ -164,6 +164,8 @@ def test_display_results_renders_rich_accumulation_panel(capsys):
 
     out = capsys.readouterr().out
     assert "Foreign Accumulation - LQ45" in out
+    assert "Candidate Actions" in out
+    assert "Verdict" not in out
     assert "BBCA" in out
     assert "Risk Status" in out
     assert "Rule Conf" not in out
@@ -196,6 +198,7 @@ def test_display_results_renders_explanation_panels_when_requested(capsys):
     out = capsys.readouterr().out
     assert "Run Context" in out
     assert "Scoring Definitions" in out
+    assert "Candidate Actions is the screen summary" in out
     assert "Swing trade watchlist" in out
 
 

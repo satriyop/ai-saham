@@ -173,7 +173,7 @@ def risk(
             typer.echo(f"  EMA:  {snapshot.ema:>12,.2f}")
             typer.echo(f"  RSI:  {snapshot.rsi:>12.2f}")
 
-            typer.echo(f"\n{'Profile':<14} {'Verdict':<12} {'Gate'}")
+            typer.echo(f"\n{'Profile':<14} {'Status':<12} {'Gate'}")
             typer.echo("─" * 40)
             for assessment in response.assessments:
                 _gate = assessment.gate_triggered or "-"
@@ -190,6 +190,7 @@ def risk(
                 import json as _json
                 typer.echo(_json.dumps({
                     "ticker": response.ticker,
+                    "status": assessment.risk_level_name,
                     "verdict": assessment.risk_level_name,
                     "gate_triggered": assessment.gate_triggered,
                     "gate_confidence": assessment.gate_confidence,
@@ -216,7 +217,7 @@ def risk(
 
             typer.echo("\nRisk Result")
             typer.echo(f"{'─'*30}")
-            typer.echo(f"  Verdict:    {assessment.risk_level_name}")
+            typer.echo(f"  Status:     {assessment.risk_level_name}")
             typer.echo(f"  Gate:       {assessment.gate_triggered or '-'}")
 
             typer.echo("\nTriggered Rules")

@@ -667,6 +667,7 @@ def swing(
                 broker_quality_note.to_dict() if broker_quality_note else None
             ),
             "accumulation": {
+                "accum_score": accum_candidate.accum_score if accum_candidate else None,
                 "score": accum_candidate.score if accum_candidate else None,
                 "streak": accum_candidate.consecutive_streak if accum_candidate else None,
                 "trend": accum_candidate.trend if accum_candidate else None,

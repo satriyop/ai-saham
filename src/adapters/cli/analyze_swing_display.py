@@ -1014,10 +1014,10 @@ def print_swing_output(
         r = risk_resp.assessment
         snap = r.indicators
         if r.gate_triggered:
-            _verdict = f"BLOCKED — gate {r.gate_triggered} (conf {r.gate_confidence or 0}/100)"
+            _status = f"BLOCKED — gate {r.gate_triggered} (conf {r.gate_confidence or 0}/100)"
         else:
-            _verdict = "OPEN — no gate fired"
-        risk_text.append(Text(f"Risk Verdict: {_verdict}", style="bold cyan"))
+            _status = "OPEN — no gate fired"
+        risk_text.append(Text(f"Risk Status: {_status}", style="bold cyan"))
         risk_table = compact_table()
         risk_table.add_column("SMA20")
         risk_table.add_column("EMA20")

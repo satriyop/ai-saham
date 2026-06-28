@@ -99,11 +99,11 @@ def display_raw_movers(raw_movers: list, top_n: int | None, iev_min: int) -> Non
     )
 
 
-VERDICT_ORDER = {"PRIME": 0, "WATCH": 1, "NO_DATA": 2, "SKIP": 3}
+PLAN_ORDER = {"PRIME": 0, "WATCH": 1, "NO_DATA": 2, "SKIP": 3}
 
 
-def verdict(candidate: ScreenerCandidate) -> str:
-    """Synthesise all signals into a single action verdict."""
+def pre_open_plan(candidate: ScreenerCandidate) -> str:
+    """Synthesize all pre-open signals into a session plan label."""
     if candidate.entry_range_low is None:
         return "NO_DATA"
     if candidate.trend_signal in ("BEARISH", "GAP_OUT") or candidate.accum_tag == "DISTRIBUTING":
@@ -186,10 +186,10 @@ def display_pre_open_summary_panel(
 ) -> None:
     sorted_candidates = sorted(
         candidates,
-        key=lambda c: (VERDICT_ORDER.get(verdict(c), 99), -c.iev),
+        key=lambda c: (PLAN_ORDER.get(pre_open_plan(c), 99), -c.iev),
     )
-    watchlist = [c for c in sorted_candidates if verdict(c) in ("PRIME", "WATCH")]
-    skipped = [c for c in sorted_candidates if verdict(c) not in ("PRIME", "WATCH")]
+    watchlist = [c for c in sorted_candidates if pre_open_plan(c) in ("PRIME", "WATCH")]
+    skipped = [c for c in sorted_candidates if pre_open_plan(c) not in ("PRIME", "WATCH")]
 
     summary = compact_table(show_header=False)
     summary.add_column("Metric", style="bold")
@@ -291,7 +291,7 @@ def display_results(
 
     sorted_candidates = sorted(
         candidates,
-        key=lambda c: (VERDICT_ORDER.get(verdict(c), 99), -c.iev),
+        key=lambda c: (PLAN_ORDER.get(pre_open_plan(c), 99), -c.iev),
     )
 
     show_spread = any(c.spread_pct is not None for c in sorted_candidates)
@@ -299,7 +299,7 @@ def display_results(
 
     # 2. Results Table
     results_table = compact_table()
-    results_table.add_column("Verdict")
+    results_table.add_column("Plan")
     results_table.add_column("Ticker", style="bold")
     results_table.add_column("IEV", justify="right")
     results_table.add_column("Gap%", justify="right")
@@ -315,17 +315,17 @@ def display_results(
         results_table.add_column("Strat", justify="right")
 
     for candidate in sorted_candidates:
-        current_verdict = verdict(candidate)
+        current_plan = pre_open_plan(candidate)
 
-        # Colorize verdict
-        if current_verdict == "PRIME":
-            verdict_text = "[green]★ PRIME[/]"
-        elif current_verdict == "WATCH":
-            verdict_text = "[yellow]◉ WATCH[/]"
-        elif current_verdict == "NO_DATA":
-            verdict_text = "[dim]? NO_DATA[/]"
+        # Colorize plan
+        if current_plan == "PRIME":
+            plan_text = "[green]★ PRIME[/]"
+        elif current_plan == "WATCH":
+            plan_text = "[yellow]◉ WATCH[/]"
+        elif current_plan == "NO_DATA":
+            plan_text = "[dim]? NO_DATA[/]"
         else:
-            verdict_text = "[red]✗ SKIP[/]"
+            plan_text = "[red]✗ SKIP[/]"
 
         # Format gap
         gap_val = float(candidate.gap_pct) if candidate.gap_pct is not None else 0.0
@@ -338,7 +338,7 @@ def display_results(
         signal = signal_col(candidate)
 
         row_cells = [
-            verdict_text,
+            plan_text,
             candidate.ticker,
             f"{candidate.iev:,}",
             gap_text,
@@ -373,7 +373,7 @@ def display_results(
     console().print(
         panel(
             results_table,
-            title="PRE-OPEN SCREENER RESULTS"
+            title="PRE-OPEN CANDIDATE PLAN"
         )
     )
 
@@ -395,14 +395,14 @@ def display_results(
         )
 
     # 4. Next Action Panel
-    watchlist = [c for c in sorted_candidates if verdict(c) in ("PRIME", "WATCH")]
-    skipped = [c for c in sorted_candidates if verdict(c) not in ("PRIME", "WATCH")]
+    watchlist = [c for c in sorted_candidates if pre_open_plan(c) in ("PRIME", "WATCH")]
+    skipped = [c for c in sorted_candidates if pre_open_plan(c) not in ("PRIME", "WATCH")]
 
     footer_elements = []
     if watchlist:
         watch_labels = []
         for candidate in watchlist:
-            prefix = "★" if verdict(candidate) == "PRIME" else "◉"
+            prefix = "★" if pre_open_plan(candidate) == "PRIME" else "◉"
             watch_labels.append(f"{prefix} {candidate.ticker}")
         skip_labels = "  ".join(c.ticker for c in skipped) or "—"
 
@@ -428,7 +428,7 @@ def display_results(
 
     # 5. Explanations & Disclaimers
     legends = [
-        Text("VERDICT: ★ PRIME = all signals green | ◉ WATCH = bullish, needs confirm | ✗ SKIP = bearish/distributing | ? NO_DATA = run 'saham fetch market TICKER --days 365'", style="dim"),
+        Text("PLAN: ★ PRIME = all signals green | ◉ WATCH = bullish, needs confirm | ✗ SKIP = bearish/distributing | ? NO_DATA = run 'saham fetch market TICKER --days 365'", style="dim"),
         Text("SIGNAL: ACCUM tag × streak | FVWAP% (floor=asing underwater, sell=asing profit) | PH=Prev High", style="dim"),
         Text("STOP%: max loss from entry (ATR-based, capped -7%)", style="dim"),
     ]
