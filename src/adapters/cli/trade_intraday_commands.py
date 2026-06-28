@@ -30,6 +30,7 @@ from src.application.use_case.intraday_backtest_use_case import (
     IntradayBacktestRequest,
     IntradayBacktestUseCase,
 )
+from src.application.use_case.pre_open_screen_use_case import PreOpenScreenConfig
 from src.application.use_case.resolve_opening_prices_use_case import (
     OpeningPriceObservation,
     ResolveOpeningPricesRequest,
@@ -50,6 +51,17 @@ DEFAULT_CONFIRMATION_PATH = Path(APP_CFG.storage.intraday_confirmation)
 DEFAULT_CONFIRMATION_JOURNAL_PATH = Path(APP_CFG.storage.intraday_confirmation_journal)
 DEFAULT_REGIME_UNIVERSE = APP_CFG.analysis.regime_universe
 DEFAULT_REGIME_BENCHMARK = APP_CFG.analysis.benchmark
+
+
+def _load_pre_open_config() -> PreOpenScreenConfig:
+    import yaml
+
+    config_path = Path(APP_CFG.config_paths.pre_open_screener)
+    if config_path.exists():
+        with open(config_path) as f:
+            yaml_data = yaml.safe_load(f) or {}
+        return PreOpenScreenConfig.from_yaml(yaml_data)
+    return PreOpenScreenConfig()
 
 
 def _decimal_or_none(value) -> Decimal | None:
@@ -381,15 +393,7 @@ def confirm_open(
         observations,
     )
 
-    import yaml
-    from src.application.use_case.pre_open_screen_use_case import PreOpenScreenConfig
-    config_path = Path(APP_CFG.config_paths.pre_open_screener)
-    if config_path.exists():
-        with open(config_path) as f:
-            yaml_data = yaml.safe_load(f) or {}
-        po_config = PreOpenScreenConfig.from_yaml(yaml_data)
-    else:
-        po_config = PreOpenScreenConfig()
+    po_config = _load_pre_open_config()
 
     _KNOWN_REGIMES = {"RISK_ON", "NEUTRAL", "RISK_OFF", "VOLATILE",
                       "BULLISH", "SIDEWAYS", "WEAK"}  # legacy compat
@@ -689,9 +693,9 @@ def intraday_backtest(
         typer.Option("--max-daily-positions", help="Max simultaneous trades per day", min=1),
     ] = 3,
     max_stop: Annotated[
-        float,
-        typer.Option("--max-stop", help="Max allowed stop distance", min=0.005),
-    ] = 0.07,
+        Optional[float],
+        typer.Option("--max-stop", help="Max allowed stop distance; defaults to pre-open config", min=0.005),
+    ] = None,
     cost_bps: Annotated[
         float,
         typer.Option("--cost-bps", help="Transaction cost in basis points per side", min=0),
@@ -701,13 +705,13 @@ def intraday_backtest(
         typer.Option("--include-wait/--no-include-wait", help="Treat WAIT decisions as ENTER"),
     ] = False,
     atr_mult: Annotated[
-        float,
-        typer.Option("--atr-mult", help="ATR multiplier for stop distance", min=0.1),
-    ] = 1.0,
+        Optional[float],
+        typer.Option("--atr-mult", help="ATR multiplier for stop distance; defaults to pre-open config", min=0.1),
+    ] = None,
     rsi_overbought: Annotated[
-        float,
-        typer.Option("--rsi-overbought", help="RSI threshold for BEARISH classification"),
-    ] = 75.0,
+        Optional[float],
+        typer.Option("--rsi-overbought", help="RSI threshold for BEARISH classification; defaults to pre-open config"),
+    ] = None,
     iev_top_n: Annotated[
         int,
         typer.Option("--iev-top-n", help="IEV snapshots filter top-N movers limit", min=1),
@@ -757,6 +761,17 @@ def intraday_backtest(
         )
         raise typer.Exit(1)
 
+    po_config = _load_pre_open_config()
+    resolved_max_stop = Decimal(str(max_stop)) if max_stop is not None else po_config.max_stop_pct
+    resolved_atr_mult = (
+        Decimal(str(atr_mult)) if atr_mult is not None else po_config.atr_multiplier
+    )
+    resolved_rsi_overbought = (
+        Decimal(str(rsi_overbought))
+        if rsi_overbought is not None
+        else po_config.rsi_overbought_threshold
+    )
+
     typer.echo(
         f"Intraday proxy simulation: {len(ticker_list)} tickers | "
         f"{start_date} to {end_date} | "
@@ -805,11 +820,17 @@ def intraday_backtest(
             capital=Decimal(str(capital)),
             risk_pct=Decimal(str(risk_pct)) / Decimal("100"),
             max_daily_positions=max_daily_positions,
-            max_stop_pct=Decimal(str(max_stop)),
+            max_stop_pct=resolved_max_stop,
             cost_bps=Decimal(str(cost_bps)),
             include_wait=include_wait,
-            atr_multiplier=Decimal(str(atr_mult)),
-            rsi_overbought_threshold=Decimal(str(rsi_overbought)),
+            atr_multiplier=resolved_atr_mult,
+            rsi_overbought_threshold=resolved_rsi_overbought,
+            atr_range_cap_min=po_config.atr_range_cap_min,
+            atr_range_cap_max=po_config.atr_range_cap_max,
+            accum_window_days=po_config.accum_window_days,
+            accum_backed_threshold=po_config.accum_backed_threshold,
+            fvwap_period=po_config.fvwap_period,
+            history_days=po_config.history_days,
             iev_top_n=iev_top_n,
         ))
     except ValueError as exc:

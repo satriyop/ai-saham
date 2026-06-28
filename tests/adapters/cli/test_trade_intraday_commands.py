@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 
 from typer.testing import CliRunner
 
+import src.adapters.cli.trade_intraday_commands as trade_intraday_commands
 from src.adapters.cli.main import app
 from src.adapters.cli.trade_intraday_backtest_display import display_intraday_backtest
 from src.application.use_case.intraday_backtest_use_case import IntradayBacktestResponse
@@ -16,6 +17,79 @@ from src.domain.entities.trade_tick import TradeTick
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
 runner = CliRunner()
+
+
+class _FakeIEVRepo:
+    def __init__(self, db_path):
+        pass
+
+    def get_coverage(self):
+        return {"total_dates": 0}
+
+
+def _patch_intraday_proxy_dependencies(monkeypatch, captured: dict) -> None:
+    monkeypatch.setattr(
+        trade_intraday_commands,
+        "resolve_tickers",
+        lambda universe, explicit, db_path: explicit or ["BBCA"],
+    )
+    monkeypatch.setattr(
+        trade_intraday_commands,
+        "SQLiteMarketRepository",
+        lambda db_path: object(),
+    )
+    monkeypatch.setattr(
+        trade_intraday_commands,
+        "SQLiteBrokerRepository",
+        lambda db_path: object(),
+    )
+    monkeypatch.setattr(
+        trade_intraday_commands,
+        "create_indicator_registry",
+        lambda broker_repository, market_repository: object(),
+    )
+    monkeypatch.setattr(
+        "src.infrastructure.persistence.sqlite_iev_repository.SQLiteIEVRepository",
+        _FakeIEVRepo,
+    )
+
+    class FakeUseCase:
+        def __init__(self, market_repository, broker_repository, indicator_registry, iev_repository=None):
+            pass
+
+        def execute(self, request):
+            captured["request"] = request
+            return IntradayBacktestResponse(
+                start_date=request.start_date,
+                end_date=request.end_date,
+                initial_capital=request.capital,
+                cost_bps=request.cost_bps,
+                include_wait=request.include_wait,
+                max_daily_positions=request.max_daily_positions,
+                final_equity=request.capital,
+                total_return_pct=0.0,
+                max_drawdown_pct=0.0,
+                trade_count=0,
+                win_rate_pct=None,
+                avg_trade_return_pct=None,
+                avg_winner_pct=None,
+                avg_loser_pct=None,
+                profit_factor=None,
+                expectancy_pct=None,
+                avg_r_multiple=None,
+                exit_reason_counts={},
+                decisions={},
+                trading_days=0,
+                days_with_trades=0,
+                by_accum_tag=[],
+                by_fvwap_sign=[],
+                by_rsi_bucket=[],
+                by_ticker=[],
+                trades=[],
+                warnings=[],
+            )
+
+    monkeypatch.setattr(trade_intraday_commands, "IntradayBacktestUseCase", FakeUseCase)
 
 
 def test_intraday_backtest_display_calls_it_proxy_simulation(capsys):
@@ -56,6 +130,57 @@ def test_intraday_backtest_display_calls_it_proxy_simulation(capsys):
     assert "daily OHLC" in out
     assert "saved NCP snapshots" in out
     assert "tick-friction and regime gates are not replayed" in out
+
+
+def test_intraday_proxy_uses_pre_open_config_defaults(monkeypatch):
+    captured: dict = {}
+    _patch_intraday_proxy_dependencies(monkeypatch, captured)
+
+    result = runner.invoke(
+        app,
+        [
+            "trade", "backtest-intraday", "BBCA",
+            "--start", "2026-06-01",
+            "--end", "2026-06-01",
+            "--format", "json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    request = captured["request"]
+    assert request.atr_multiplier == Decimal("0.25")
+    assert request.max_stop_pct == Decimal("0.07")
+    assert request.rsi_overbought_threshold == Decimal("75")
+    assert request.atr_range_cap_min == Decimal("0.01")
+    assert request.atr_range_cap_max == Decimal("0.05")
+    assert request.accum_window_days == 7
+    assert request.accum_backed_threshold == 50.0
+    assert request.fvwap_period == 20
+    assert request.history_days == 365
+
+
+def test_intraday_proxy_cli_overrides_pre_open_config_defaults(monkeypatch):
+    captured: dict = {}
+    _patch_intraday_proxy_dependencies(monkeypatch, captured)
+
+    result = runner.invoke(
+        app,
+        [
+            "trade", "backtest-intraday", "BBCA",
+            "--start", "2026-06-01",
+            "--end", "2026-06-01",
+            "--format", "json",
+            "--atr-mult", "0.5",
+            "--max-stop", "0.04",
+            "--rsi-overbought", "70",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    request = captured["request"]
+    assert request.atr_multiplier == Decimal("0.5")
+    assert request.max_stop_pct == Decimal("0.04")
+    assert request.rsi_overbought_threshold == Decimal("70")
 
 
 def _write_sidecar(path: Path) -> None:
