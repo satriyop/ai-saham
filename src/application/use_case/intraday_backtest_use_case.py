@@ -22,6 +22,12 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from src.application.services.indicator_registry import IndicatorRegistry
+from src.application.services.stats import (
+    average,
+    foreign_vwap_discount_pct,
+    max_drawdown_pct,
+    profit_factor,
+)
 from src.application.use_case.confirm_intraday_open_use_case import (
     ConfirmIntradayOpenRequest,
     ConfirmIntradayOpenUseCase,
@@ -98,7 +104,7 @@ class IntradayBacktestTrade:
     rsi: float | None
     atr: float | None
     accum_tag: str | None
-    accum_score: float | None
+    broker_accum_score: float | None
     accum_streak: int | None
     fvwap_discount_pct: float | None
     prev_high: Decimal | None
@@ -130,7 +136,7 @@ class IntradayBacktestTrade:
             "rsi": self.rsi,
             "atr": self.atr,
             "accum_tag": self.accum_tag,
-            "accum_score": self.accum_score,
+            "broker_accum_score": self.broker_accum_score,
             "accum_streak": self.accum_streak,
             "fvwap_discount_pct": self.fvwap_discount_pct,
             "prev_high": str(self.prev_high) if self.prev_high is not None else None,
@@ -201,7 +207,7 @@ class _BacktestCandidate:
     entry_range_high: Decimal | None
     atr_stop: Decimal | None
     trend: str | None
-    accum_score: float | None
+    broker_accum_score: float | None
     accum_tag: str | None
     accum_streak: int | None
     fvwap_discount_pct: float | None
@@ -267,7 +273,7 @@ def _assess_broker_as_of(
     Critical: uses signal_date (not date.today()) to avoid lookahead bias.
     """
     empty: dict = {
-        "accum_score": None, "accum_tag": None, "accum_streak": None,
+        "broker_accum_score": None, "accum_tag": None, "accum_streak": None,
         "fvwap_discount_pct": None,
     }
     try:
@@ -307,7 +313,7 @@ def _assess_broker_as_of(
         else:
             tag = "UNCONFIRMED"
 
-        result["accum_score"] = score
+        result["broker_accum_score"] = score
         result["accum_tag"] = tag
         result["accum_streak"] = streak
 
@@ -322,8 +328,10 @@ def _assess_broker_as_of(
             if vwap_values:
                 fvwap = vwap_values[-1]
                 if fvwap > 0:
-                    result["fvwap_discount_pct"] = round(
-                        float((fvwap - current_price) / current_price * 100), 2,
+                    result["fvwap_discount_pct"] = foreign_vwap_discount_pct(
+                        fvwap,
+                        current_price,
+                        precision=2,
                     )
         except Exception:
             pass
@@ -377,28 +385,15 @@ def _compute_pnl(
 
 
 def _max_drawdown(equity_curve: list[Decimal]) -> float:
-    peak: Decimal | None = None
-    max_dd = Decimal("0")
-    for equity in equity_curve:
-        if peak is None or equity > peak:
-            peak = equity
-        if peak and peak > 0:
-            dd = (equity - peak) / peak * Decimal("100")
-            if dd < max_dd:
-                max_dd = dd
-    return round(float(max_dd), 4)
+    return max_drawdown_pct(equity_curve, precision=4)
 
 
 def _avg(values: list[float]) -> float | None:
-    return round(sum(values) / len(values), 4) if values else None
+    return average(values, precision=4)
 
 
 def _profit_factor(trades: list[IntradayBacktestTrade]) -> float | None:
-    gross_profit = sum(float(t.pnl) for t in trades if t.pnl > 0)
-    gross_loss = sum(abs(float(t.pnl)) for t in trades if t.pnl < 0)
-    if gross_loss == 0:
-        return None if gross_profit == 0 else float("inf")
-    return round(gross_profit / gross_loss, 3)
+    return profit_factor((trade.pnl for trade in trades), precision=3)
 
 
 def _expectancy(trades: list[IntradayBacktestTrade]) -> float | None:
@@ -574,11 +569,11 @@ class IntradayBacktestUseCase:
 
             def _rank_key(conf):
                 cand = candidate_map.get(conf.ticker)
-                accum_score = cand.accum_score if cand else None
+                broker_accum_score = cand.broker_accum_score if cand else None
                 fvwap = cand.fvwap_discount_pct if cand else None
                 stop_pct = float(conf.stop_pct) if conf.stop_pct else 999.0
                 return (
-                    -(accum_score or 0.0),
+                    -(broker_accum_score or 0.0),
                     -(fvwap or 0.0),
                     stop_pct,
                     conf.ticker,
@@ -667,7 +662,7 @@ class IntradayBacktestUseCase:
                     rsi=float(cand.rsi) if cand.rsi is not None else None,
                     atr=float(cand.atr) if cand.atr is not None else None,
                     accum_tag=cand.accum_tag,
-                    accum_score=cand.accum_score,
+                    broker_accum_score=cand.broker_accum_score,
                     accum_streak=cand.accum_streak,
                     fvwap_discount_pct=cand.fvwap_discount_pct,
                     prev_high=cand.prev_high,
@@ -812,7 +807,7 @@ class IntradayBacktestUseCase:
             entry_range_high=range_high,
             atr_stop=atr_stop,
             trend=trend,
-            accum_score=broker["accum_score"],
+            broker_accum_score=broker["broker_accum_score"],
             accum_tag=broker["accum_tag"],
             accum_streak=broker["accum_streak"],
             fvwap_discount_pct=broker["fvwap_discount_pct"],

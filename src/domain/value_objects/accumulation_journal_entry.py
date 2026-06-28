@@ -23,8 +23,8 @@ class AccumulationJournalEntry:
     ticker: str
     entry_price: Decimal
     window_days: int
-    score: float
-    streak: int
+    score: float | None
+    streak: int | None
     flow_pct: Decimal | None
     vwap_disc_pct: Decimal | None
     bb_pctile: Decimal | None

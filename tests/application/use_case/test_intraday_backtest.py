@@ -502,7 +502,7 @@ def test_no_broker_data_yields_none_accum_fields_but_trade_completes():
     assert resp.trade_count == 1
     trade = resp.trades[0]
     assert trade.accum_tag is None
-    assert trade.accum_score is None
+    assert trade.broker_accum_score is None
     assert trade.accum_streak is None
     assert trade.exit_reason == "target"
 
@@ -524,7 +524,7 @@ def test_insufficient_history_skips_ticker_silently():
     assert resp.trade_count == 0
 
 
-def test_ranking_picks_higher_accum_score_when_capped():
+def test_ranking_picks_higher_broker_accum_score_when_capped():
     tickers = ["BBCA", "BBRI"]
     today_candles = [
         _candle(t, TRADE_DAY, Decimal("100"), Decimal("106"), Decimal("99"), Decimal("101"))
@@ -534,8 +534,8 @@ def test_ranking_picks_higher_accum_score_when_capped():
     for t in tickers:
         history.extend(_history_with_prev(t, PREV_DAY))
 
-    # BBCA: 7 consecutive backed days -> high accum_score (BACKED)
-    # BBRI: only 4 of 7 backed (recent 4) -> lower accum_score (UNCONFIRMED)
+    # BBCA: 7 consecutive backed days -> high broker_accum_score (BACKED)
+    # BBRI: only 4 of 7 backed (recent 4) -> lower broker_accum_score (UNCONFIRMED)
     summaries = []
     summaries.extend(_backed_summaries("BBCA", PREV_DAY, days=7))
     # 3 non-accumulating older days + 4 accumulating recent days for BBRI
@@ -588,8 +588,8 @@ def test_ranking_picks_higher_accum_score_when_capped():
     assert resp.trade_count == 1
     chosen = resp.trades[0]
     assert chosen.ticker == "BBCA"
-    # And BBCA should have a higher accum_score than what BBRI would have got
-    assert chosen.accum_score is not None
+    # And BBCA should have a higher broker_accum_score than what BBRI would have got
+    assert chosen.broker_accum_score is not None
     assert chosen.accum_tag == "BACKED"
 
 

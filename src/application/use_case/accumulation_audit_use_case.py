@@ -12,9 +12,9 @@ AI usage: None
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import Decimal
-from statistics import mean
 from typing import Callable
 
+from src.application.services.stats import average, pct_change, win_rate
 from src.application.use_case.accumulation_screen_use_case import (
     AccumulationCandidate,
     AccumulationScreenRequest,
@@ -669,19 +669,15 @@ class _ExitOutcome:
 
 
 def _pct_change(value: Decimal, base: Decimal) -> float:
-    return round(float((value - base) / base * Decimal("100")), 4)
+    return pct_change(value, base, precision=4)
 
 
 def _avg(values: list[float | None]) -> float | None:
-    clean = [v for v in values if v is not None]
-    return round(mean(clean), 4) if clean else None
+    return average(values, precision=4)
 
 
 def _win_rate(values: list[float | None]) -> float | None:
-    clean = [v for v in values if v is not None]
-    if not clean:
-        return None
-    return round(sum(1 for v in clean if v > 0) / len(clean) * 100, 2)
+    return win_rate(values, precision=2)
 
 
 def _make_group_stat(
@@ -723,8 +719,7 @@ def _make_exit_simulation_stat(
         count=count,
         avg_return_pct=_avg([o.return_pct for o in outcomes]),
         win_rate_pct=_win_rate([o.return_pct for o in outcomes]),
-        avg_holding_days=round(mean([o.holding_days for o in outcomes]), 2)
-        if outcomes else None,
+        avg_holding_days=average([float(o.holding_days) for o in outcomes], precision=2),
         stop_rate_pct=rate("stop"),
         target_rate_pct=rate("target"),
         max_hold_rate_pct=rate("max_hold"),

@@ -173,7 +173,7 @@ class StockbitForwardEstimatesProvider(ForwardEstimatesProvider):
 
     def get_forward_estimates(self, ticker: str) -> ForwardEstimates | None:
         ticker = ticker.upper()
-        cached = self._read_cache(ticker)
+        cached = self._read_cache(ticker, require_fresh=self._provider is not None)
         if cached is not None:
             return cached
         result = self._fetch(ticker)
@@ -181,7 +181,7 @@ class StockbitForwardEstimatesProvider(ForwardEstimatesProvider):
             self._write_cache(result)
         return result
 
-    def _read_cache(self, ticker: str) -> ForwardEstimates | None:
+    def _read_cache(self, ticker: str, require_fresh: bool = True) -> ForwardEstimates | None:
         try:
             with sqlite3.connect(str(self._db_path)) as conn:
                 row = conn.execute(
@@ -193,7 +193,7 @@ class StockbitForwardEstimatesProvider(ForwardEstimatesProvider):
             if not row:
                 return None
             fetched_at = _parse_fetched_at(row[0])
-            if fetched_at is None or fetched_at.date() < date.today():
+            if require_fresh and (fetched_at is None or fetched_at.date() < date.today()):
                 return None
             return ForwardEstimates(
                 ticker=ticker,

@@ -73,6 +73,24 @@ def test_read_all_accepts_csv_without_setup_columns(tmp_path):
     assert row.failed_gates == ()
 
 
+def test_append_and_read_preserves_none_score_and_streak(tmp_path):
+    path = tmp_path / "accumulation.csv"
+    store = AccumulationJournalCsvWriter(path)
+    entry = AccumulationJournalEntry(
+        **{
+            **_entry().__dict__,
+            "score": None,
+            "streak": None,
+        }
+    )
+
+    assert store.append([entry]) == 1
+    row = store.read_all()[0]
+
+    assert row.score is None
+    assert row.streak is None
+
+
 def test_update_review_fields_preserves_analysis_decision_fields(tmp_path):
     path = tmp_path / "accumulation.csv"
     store = AccumulationJournalCsvWriter(path)

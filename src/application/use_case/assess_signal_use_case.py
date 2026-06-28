@@ -17,6 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date
 
+from src.application.services.stats import interpolate
 from src.domain.value_objects.signal_assessment import (
     EntryQuality,
     SignalAssessment,
@@ -445,7 +446,4 @@ def _interpolate(
     low_score: float,
     high_score: float,
 ) -> float:
-    if high_value == low_value:
-        return high_score
-    progress = (value - low_value) / (high_value - low_value)
-    return low_score + progress * (high_score - low_score)
+    return interpolate(value, low_value, high_value, low_score, high_score)

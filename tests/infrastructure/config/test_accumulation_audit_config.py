@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import yaml
+
 from src.infrastructure.config.accumulation_audit_config import (
     load_accumulation_audit_config,
     load_accumulation_audit_policy,
@@ -56,3 +58,27 @@ accumulation_audit:
 
     assert loaded.setups["foreign-bounce"]["min_score"] == 72
     assert loaded.setups["foreign-bounce"]["take_profits"] == "4,6"
+
+
+def test_accumulation_audit_setup_thresholds_match_live_swing_setups():
+    swing = yaml.safe_load(Path("config/swing_setups.yaml").read_text())["setups"]
+    audit = yaml.safe_load(Path("config/accumulation_audit.yaml").read_text())[
+        "accumulation_audit"
+    ]["setups"]
+
+    key_map = {
+        "min_score": "min_score",
+        "min_vwap_discount_pct": "min_vwap_disc",
+        "required_trend": "trend",
+        "min_flow_ratio_pct": "min_flow_pct",
+        "max_rsi": "max_rsi",
+        "min_rsi": "min_rsi",
+        "max_bb_width_pctile": "max_bb_width_pctile",
+    }
+
+    for setup_name, live_setup in swing.items():
+        live_gates = live_setup["gates"]
+        audit_setup = audit[setup_name]
+        for live_key, audit_key in key_map.items():
+            if live_key in live_gates:
+                assert audit_setup[audit_key] == live_gates[live_key]

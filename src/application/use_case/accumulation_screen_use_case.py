@@ -36,6 +36,10 @@ if TYPE_CHECKING:
     from src.domain.value_objects.trade_setup import TradeSetup
 
 from src.application.ports.corporate_action_repository import CorporateActionRepository
+from src.application.services.signal_context_builder import (
+    build_signal_context_from_candidate,
+)
+from src.application.services.stats import foreign_vwap_discount_pct
 from src.application.use_case.assess_accumulation_evidence_use_case import (
     AssessAccumulationEvidenceRequest,
     AssessAccumulationEvidenceUseCase,
@@ -52,7 +56,6 @@ from src.domain.ports.shareholding_provider import ShareholdingProvider
 from src.domain.ports.ticker_notation_provider import TickerNotationProvider
 from src.domain.value_objects.accumulation_evidence import AccumulationEvidence
 from src.domain.value_objects.idx_market import SHARES_PER_LOT
-from src.domain.value_objects.forward_estimates import ForwardEstimates
 
 # Default setup targets (1:1 R:R, regime-unaware fallback)
 _DEFAULT_TAKE_PROFIT = Decimal("5")
@@ -264,6 +267,7 @@ class AccumulationCandidate:
     # Insider activity — IDX-filed director/commissioner buy transactions
     insider_buying: bool = False  # True when insider bought within lookback window
     recent_insider_buys: list[str] = field(default_factory=list)  # human-readable labels
+    insider_net_buy_ratio: float | None = None
     # Analyst consensus — aggregated analyst buy/hold/sell + price target
     analyst_consensus: "AnalystConsensus | None" = None
     # Shareholding composition — institutional %, individual %, top controlling holder
@@ -346,6 +350,9 @@ class AccumulationCandidate:
             "seasonal_label": self.seasonal_edge.label if self.seasonal_edge else None,
             "insider_buying": self.insider_buying,
             "recent_insider_buys": self.recent_insider_buys,
+            "insider_net_buy_ratio": round(self.insider_net_buy_ratio, 4)
+            if self.insider_net_buy_ratio is not None
+            else None,
             "analyst_consensus": self.analyst_consensus.to_dict()
             if self.analyst_consensus
             else None,
@@ -644,41 +651,16 @@ class AccumulationScreenUseCase:
                     and result.forward_estimates.forward_eps_1y is not None
                     and result.current_price > Decimal("0")
                 ):
-                    result.forward_estimates = ForwardEstimates.compute(
-                        ticker=result.ticker,
-                        forward_eps_1y=result.forward_estimates.forward_eps_1y,
-                        revenue_forward_1y=result.forward_estimates.revenue_forward_1y,
-                        current_price=float(result.current_price),
-                        fetched_at=result.forward_estimates.fetched_at,
+                    result.forward_estimates = result.forward_estimates.with_current_price(
+                        float(result.current_price)
                     )
 
-            # Signal assessment — delegates to SignalEngine (first-class service, ADR-025)
-            from src.domain.value_objects.signal_assessment import SignalContext
-
-            bd = result.bandar_detector
-            se = result.seasonal_edge
-            ac = result.analyst_consensus
-            fe = result.forward_estimates
-            num_optional = sum(
-                1 for x in [bd.top3_accdist, bd.top5_accdist, bd.top10_accdist]
-                if x is not None
-            ) if bd is not None else 0
-
-            signal_ctx = SignalContext(
+            result.insider_net_buy_ratio = insider_net_buy_ratio
+            signal_ctx = build_signal_context_from_candidate(
                 ticker=result.ticker,
                 snapshot_date=today,
-                foreign_flow_quality=self._signal_engine.foreign_flow_quality_from_accum_score(
-                    result.accum_score
-                ),
-                bandar_broad_score=bd.broad_score if bd else None,
-                bandar_max_range=self._signal_engine.bandar_max_range(num_optional)
-                if bd else self._signal_engine.bandar_max_range(0),
-                insider_net_buy_ratio=insider_net_buy_ratio,
-                seasonality_win_rate=se.win_rate_pct if se else None,
-                seasonality_avg_return_pct=se.avg_monthly_return_pct if se else None,
-                analyst_buy_pct=(ac.buy_count / ac.analyst_count) if ac and ac.analyst_count > 0 else None,
-                analyst_upside_pct=ac.upside_pct if ac else None,
-                forward_pe=fe.forward_pe if fe else None,
+                candidate=result,
+                signal_engine=self._signal_engine,
             )
             result.signal_assessment = self._signal_engine.evaluate_with_context(
                 result.ticker, signal_ctx
@@ -878,12 +860,7 @@ class AccumulationScreenUseCase:
         )
 
         # Foreign VWAP discount % — how far foreigners' avg buy is above current price
-        vwap_discount_pct: float | None = None
-        if foreign_vwap is not None and current_price > 0:
-            try:
-                vwap_discount_pct = float((foreign_vwap - current_price) / current_price * 100)
-            except (InvalidOperation, ZeroDivisionError):
-                pass
+        vwap_discount_pct = foreign_vwap_discount_pct(foreign_vwap, current_price)
 
         # Market VWAP % — how far current price is from 20-day all-participant VWAP
         # Negative = price below VWAP (constructive; entering below market average cost basis)

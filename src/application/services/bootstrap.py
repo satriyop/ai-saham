@@ -22,6 +22,9 @@ if TYPE_CHECKING:
     from src.infrastructure.persistence.formula_storage import FormulaStorage
     from src.application.services.risk_engine import RiskEngine
     from src.application.services.signal_engine import SignalEngine
+    from src.infrastructure.persistence.sqlite_market_repository import (
+        SQLiteMarketRepository,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -420,8 +423,19 @@ def create_signal_engine(
     from src.infrastructure.browser.stockbit_forward_estimates import (
         StockbitForwardEstimatesProvider,
     )
+    from src.infrastructure.persistence.sqlite_market_repository import (
+        SQLiteMarketRepository,
+    )
 
     resolved = _Path(db_path)
+    market_repository = SQLiteMarketRepository(db_path=resolved)
+
+    def _latest_close(ticker: str) -> float | None:
+        candles = market_repository.get_candles(ticker)
+        if not candles:
+            return None
+        return float(candles[-1].close)
+
     return SignalEngine(
         bandar_provider=StockbitBandarDetectorProvider(broker_provider=None, db_path=resolved),
         insider_activity_provider=StockbitInsiderActivityProvider(broker_provider=None, db_path=resolved),
@@ -430,6 +444,7 @@ def create_signal_engine(
         forward_estimates_provider=StockbitForwardEstimatesProvider(
             broker_provider=None, db_path=resolved
         ),
+        latest_price_provider=_latest_close,
         weights=weights,
         config=signal_config,
     )

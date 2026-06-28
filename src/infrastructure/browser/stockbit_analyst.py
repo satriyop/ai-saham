@@ -253,6 +253,9 @@ class StockbitAnalystConsensusProvider(AnalystConsensusProvider):
         """
         ticker = ticker.upper()
 
+        if self._provider is None:
+            return self._read_cache(ticker)
+
         if self._is_cache_fresh(ticker):
             return self._read_cache(ticker)
 

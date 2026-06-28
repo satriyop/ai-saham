@@ -182,7 +182,7 @@ def _write_sidecar(
                 "trend": c.trend_signal,
                 "rsi": str(c.rsi) if c.rsi else None,
                 "accum_tag": c.accum_tag,
-                "accum_score": c.accum_score,
+                "broker_accum_score": c.broker_accum_score,
                 "accum_streak": c.accum_streak,
                 "foreign_vwap": str(c.foreign_vwap) if c.foreign_vwap else None,
                 "fvwap_discount_pct": (

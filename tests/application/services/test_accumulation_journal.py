@@ -13,8 +13,8 @@ from src.domain.value_objects.accumulation_journal_entry import AccumulationJour
 
 def _make_candidate(
     ticker="BBRI",
-    score=75.0,
-    streak=6,
+    score: float | None = 75.0,
+    streak: int | None = 6,
     vwap=4.5,
     flow=18.0,
     bb=0.15,
@@ -133,7 +133,7 @@ class TestLogCandidate:
         assert stored_entry.entry_price == Decimal("4840")
         assert stored_entry.window_days == 7
 
-    def test_log_with_none_candidate_writes_zero_score_and_none_signals(self):
+    def test_log_with_none_candidate_writes_none_score_and_signals(self):
         store = MagicMock()
         store.append.return_value = 1
         service = _make_service(store, MagicMock())
@@ -147,8 +147,8 @@ class TestLogCandidate:
         )
 
         entry: AccumulationJournalEntry = store.append.call_args[0][0][0]
-        assert entry.score == 0.0
-        assert entry.streak == 0
+        assert entry.score is None
+        assert entry.streak is None
         assert entry.flow_pct is None
         assert entry.vwap_disc_pct is None
         assert entry.bb_pctile is None
@@ -501,6 +501,18 @@ class TestReviewScoreBuckets:
         assert by_bucket["0–39"].avg_return_10d is None
         assert by_bucket["0–39"].win_rate_10d is None
 
+    def test_score_bucket_excludes_none_scores(self):
+        entries = [
+            _make_entry(score=None, actual_close_10d=Decimal("5000"), entry_price=Decimal("4840")),
+            _make_entry(score=30.0, actual_close_10d=Decimal("5000"), entry_price=Decimal("4840"), ticker="A"),
+        ]
+        service = self._service_with_enriched_entries(entries)
+
+        report = service.review()
+
+        by_bucket = {s.bucket: s for s in report.score_buckets}
+        assert by_bucket["0–39"].n == 1
+
 
 # ── TestReviewPatternStats ───────────────────────────────────────────────────
 
@@ -562,7 +574,7 @@ class TestReviewSignalDeltas:
         assert delta.group_a_n == 1   # streak=5 → group_a
         assert delta.group_b_n == 1   # streak=4 → group_b
 
-    def test_signal_delta_none_vwap_bb_flow_fall_in_group_b(self):
+    def test_signal_delta_none_vwap_bb_flow_are_excluded(self):
         entries = [
             _make_entry(
                 ticker="A",
@@ -580,7 +592,7 @@ class TestReviewSignalDeltas:
         for d in report.signal_deltas:
             if d.signal in ("vwap_disc", "bb_pctile", "flow_pct"):
                 assert d.group_a_n == 0
-                assert d.group_b_n == 1
+                assert d.group_b_n == 0
 
     def test_signal_delta_bb_pctile_threshold_at_0_20_decimal(self):
         entries = [

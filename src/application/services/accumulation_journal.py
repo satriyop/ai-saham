@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import Decimal
 
+from src.application.services.stats import average, win_rate
 from src.application.use_case.accumulation_screen_use_case import AccumulationCandidate
 from src.domain.ports.accumulation_journal_store import AccumulationJournalStore
 from src.domain.ports.market_data_repository import MarketDataRepository
@@ -69,19 +70,17 @@ class AccumulationJournalReport:
     signal_deltas: list[SignalDelta] = field(default_factory=list)
 
 
-def _avg(values: list[float]) -> float | None:
-    return round(sum(values) / len(values), 2) if values else None
+def _avg(values: list[float | None]) -> float | None:
+    return average(values, precision=2)
 
 
-def _win_rate(returns: list[float]) -> float | None:
-    if not returns:
-        return None
-    return round(sum(1 for r in returns if r > 0) / len(returns) * 100, 1)
+def _win_rate(returns: list[float | None]) -> float | None:
+    return win_rate(returns, precision=1)
 
 
 def _group_avg_10d(entries: list[AccumulationJournalEntry]) -> float | None:
     returns = [e.return_10d_pct for e in entries if e.return_10d_pct is not None]
-    return _avg(returns)  # type: ignore[arg-type]
+    return _avg(returns)
 
 
 class AccumulationJournalService:
@@ -133,8 +132,8 @@ class AccumulationJournalService:
             ticker=ticker,
             entry_price=entry_price,
             window_days=window_days,
-            score=candidate.score if candidate else 0.0,
-            streak=candidate.consecutive_streak if candidate else 0,
+            score=candidate.score if candidate else None,
+            streak=candidate.consecutive_streak if candidate else None,
             flow_pct=_d(candidate.avg_flow_ratio) if candidate else None,
             vwap_disc_pct=_d(candidate.vwap_discount_pct) if candidate else None,
             bb_pctile=_d(candidate.bb_width_pctile) if candidate else None,
@@ -256,9 +255,9 @@ class AccumulationJournalService:
         self, entries: list[AccumulationJournalEntry]
     ) -> list[ScoreBucketStat]:
         buckets = [
-            ("70+", lambda e: e.score >= 70),
-            ("40–69", lambda e: 40 <= e.score < 70),
-            ("0–39", lambda e: e.score < 40),
+            ("70+", lambda e: e.score is not None and e.score >= 70),
+            ("40–69", lambda e: e.score is not None and 40 <= e.score < 70),
+            ("0–39", lambda e: e.score is not None and e.score < 40),
         ]
         result = []
         for label, pred in buckets:
@@ -272,9 +271,9 @@ class AccumulationJournalService:
             result.append(ScoreBucketStat(
                 bucket=label,
                 n=len(group),
-                avg_return_5d=_avg(returns_5d),  # type: ignore[arg-type]
-                avg_return_10d=_avg(returns_10d),  # type: ignore[arg-type]
-                win_rate_10d=_win_rate(returns_10d),  # type: ignore[arg-type]
+                avg_return_5d=_avg(returns_5d),
+                avg_return_10d=_avg(returns_10d),
+                win_rate_10d=_win_rate(returns_10d),
             ))
         return result
 
@@ -294,10 +293,10 @@ class AccumulationJournalService:
             result.append(DecisionStat(
                 decision=decision,
                 n=len(group),
-                avg_return_10d=_avg(returns_10d),  # type: ignore[arg-type]
-                win_rate_10d=_win_rate(returns_10d),  # type: ignore[arg-type]
-                avg_max_upside=_avg(upsides),  # type: ignore[arg-type]
-                avg_max_drawdown=_avg(drawdowns),  # type: ignore[arg-type]
+                avg_return_10d=_avg(returns_10d),
+                win_rate_10d=_win_rate(returns_10d),
+                avg_max_upside=_avg(upsides),
+                avg_max_drawdown=_avg(drawdowns),
             ))
         return result
 
@@ -317,10 +316,10 @@ class AccumulationJournalService:
             result.append(PatternStat(
                 pattern=pat,
                 n=len(group),
-                avg_return_10d=_avg(returns_10d),  # type: ignore[arg-type]
-                win_rate_10d=_win_rate(returns_10d),  # type: ignore[arg-type]
-                avg_max_upside=_avg(upsides),  # type: ignore[arg-type]
-                avg_max_drawdown=_avg(drawdowns),  # type: ignore[arg-type]
+                avg_return_10d=_avg(returns_10d),
+                win_rate_10d=_win_rate(returns_10d),
+                avg_max_upside=_avg(upsides),
+                avg_max_drawdown=_avg(drawdowns),
             ))
         return result
 
@@ -332,28 +331,33 @@ class AccumulationJournalService:
             (
                 "streak", "≥5d", "streak >= 5",
                 "<5d", "streak < 5",
-                lambda e: e.streak >= 5,
+                lambda e: e.streak is not None,
+                lambda e: e.streak is not None and e.streak >= 5,
             ),
             (
                 "vwap_disc", ">0 (underwater)", "vwap_disc > 0",
                 "≤0 (in profit)", "vwap_disc ≤ 0",
+                lambda e: e.vwap_disc_pct is not None,
                 lambda e: e.vwap_disc_pct is not None and e.vwap_disc_pct > 0,
             ),
             (
                 "bb_pctile", "≤20% (squeeze)", "bb_pctile ≤ 20%",
                 ">40%", "bb_pctile > 40%",
+                lambda e: e.bb_pctile is not None,
                 lambda e: e.bb_pctile is not None and e.bb_pctile <= Decimal("0.20"),
             ),
             (
                 "flow_pct", "≥15%", "flow ≥ 15%",
                 "<15%", "flow < 15%",
+                lambda e: e.flow_pct is not None,
                 lambda e: e.flow_pct is not None and e.flow_pct >= Decimal("15"),
             ),
         ]
         result = []
-        for signal, a_label, _, b_label, __, pred in comparisons:
-            group_a = [e for e in entries if pred(e)]
-            group_b = [e for e in entries if not pred(e)]
+        for signal, a_label, _, b_label, __, has_signal, pred in comparisons:
+            eligible = [e for e in entries if has_signal(e)]
+            group_a = [e for e in eligible if pred(e)]
+            group_b = [e for e in eligible if not pred(e)]
             result.append(SignalDelta(
                 signal=signal,
                 group_a_label=a_label,

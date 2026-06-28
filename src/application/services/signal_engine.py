@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 from dataclasses import replace
 from datetime import date
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from src.application.use_case.assess_signal_use_case import (
     AssessSignalRequest,
@@ -29,6 +29,7 @@ from src.domain.value_objects.signal_assessment import (
     SignalContext,
     SignalStrength,
 )
+from src.domain.value_objects.forward_estimates import derive_forward_pe
 
 if TYPE_CHECKING:
     from src.domain.ports.bandar_detector_provider import BandarDetectorProvider
@@ -69,6 +70,7 @@ class SignalEngine:
         seasonality_provider: "SeasonalityProvider | None" = None,
         analyst_provider: "AnalystConsensusProvider | None" = None,
         forward_estimates_provider: "ForwardEstimatesProvider | None" = None,
+        latest_price_provider: Callable[[str], float | None] | None = None,
         weights: "dict[str, float] | None" = None,
         config: SignalEngineConfig | None = None,
     ) -> None:
@@ -80,6 +82,7 @@ class SignalEngine:
         self._seasonality = seasonality_provider
         self._analyst = analyst_provider
         self._forward_estimates = forward_estimates_provider
+        self._latest_price_provider = latest_price_provider
 
     def evaluate(
         self,
@@ -185,6 +188,7 @@ class SignalEngine:
         analyst_current_price: float | None = None
 
         forward_pe: float | None = None
+        latest_price: float | None = None
 
         # ── bandar ───────────────────────────────────────────────────────────
         if self._bandar is not None:
@@ -235,8 +239,8 @@ class SignalEngine:
         if self._analyst is not None:
             try:
                 consensus = self._analyst.get_consensus(ticker)
-                if consensus is not None and consensus.analyst_count > 0:
-                    buy_pct = consensus.buy_count / consensus.analyst_count  # 0.0–1.0
+                if consensus is not None and consensus.buy_ratio is not None:
+                    buy_pct = consensus.buy_ratio
                     upside_pct = consensus.upside_pct  # percentage, e.g. 15.0 = 15%
                     analyst_current_price = consensus.current_price
             except Exception as exc:
@@ -248,13 +252,12 @@ class SignalEngine:
                 fe = self._forward_estimates.get_forward_estimates(ticker)
                 if fe is not None:
                     forward_pe = fe.forward_pe  # None for loss-making companies
-                    if (
-                        forward_pe is None
-                        and fe.forward_eps_1y
-                        and analyst_current_price
-                        and analyst_current_price > 0
-                    ):
-                        forward_pe = round(analyst_current_price / fe.forward_eps_1y, 1)
+                    if forward_pe is None:
+                        latest_price = self._latest_price(ticker)
+                        forward_pe = derive_forward_pe(
+                            fe.forward_eps_1y,
+                            latest_price or analyst_current_price,
+                        )
             except Exception as exc:
                 logger.debug("SignalEngine: forward estimates unavailable for %s: %s", ticker, exc)
 
@@ -270,6 +273,16 @@ class SignalEngine:
             analyst_upside_pct=upside_pct,
             forward_pe=forward_pe,
         )
+
+    def _latest_price(self, ticker: str) -> float | None:
+        if self._latest_price_provider is None:
+            return None
+        try:
+            price = self._latest_price_provider(ticker)
+        except Exception as exc:
+            logger.debug("SignalEngine: latest price unavailable for %s: %s", ticker, exc)
+            return None
+        return price if price and price > 0 else None
 
 
 # ── Market context post-processing ───────────────────────────────────────────

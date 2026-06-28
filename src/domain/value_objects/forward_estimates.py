@@ -13,6 +13,16 @@ from dataclasses import dataclass
 from datetime import datetime
 
 
+def derive_forward_pe(
+    forward_eps_1y: float | None,
+    current_price: float | None,
+) -> float | None:
+    """Derive forward P/E from EPS and price when both are usable."""
+    if forward_eps_1y and current_price and forward_eps_1y > 0:
+        return round(current_price / forward_eps_1y, 1)
+    return None
+
+
 @dataclass(frozen=True)
 class ForwardEstimates:
     ticker: str
@@ -31,9 +41,7 @@ class ForwardEstimates:
         current_price: float | None,
         fetched_at: datetime | None = None,
     ) -> "ForwardEstimates":
-        fpe: float | None = None
-        if forward_eps_1y and current_price and forward_eps_1y > 0:
-            fpe = round(current_price / forward_eps_1y, 1)
+        fpe = derive_forward_pe(forward_eps_1y, current_price)
         return cls(
             ticker=ticker,
             forward_eps_1y=forward_eps_1y,
@@ -41,6 +49,16 @@ class ForwardEstimates:
             current_price=current_price,
             forward_pe=fpe,
             fetched_at=fetched_at,
+        )
+
+    def with_current_price(self, current_price: float | None) -> "ForwardEstimates":
+        """Return a copy using a canonical analysis price for derived forward P/E."""
+        return self.compute(
+            ticker=self.ticker,
+            forward_eps_1y=self.forward_eps_1y,
+            revenue_forward_1y=self.revenue_forward_1y,
+            current_price=current_price,
+            fetched_at=self.fetched_at,
         )
 
     def to_dict(self) -> dict:

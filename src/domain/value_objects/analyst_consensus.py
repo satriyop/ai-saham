@@ -31,6 +31,12 @@ class AnalystConsensus:
         return self.buy_count + self.hold_count + self.sell_count
 
     @property
+    def buy_ratio(self) -> float | None:
+        if self.analyst_count == 0:
+            return None
+        return self.buy_count / self.analyst_count
+
+    @property
     def upside_pct(self) -> float | None:
         if self.avg_price_target and self.current_price and self.current_price > 0:
             return (self.avg_price_target - self.current_price) / self.current_price * 100

@@ -65,7 +65,7 @@ class BandarDetectorSnapshot:
 
     @property
     def is_distributing(self) -> bool:
-        return self.broker_accdist == "Dis"
+        return self.broker_accdist in {"Dis", "Dist"}
 
     @property
     def accumulation_score(self) -> int:

@@ -11,6 +11,7 @@ from src.application.use_case.accumulation_audit_use_case import (
     AccumulationAuditPolicy,
     AccumulationAuditRequest,
     AccumulationAuditUseCase,
+    _pct_change,
 )
 from src.domain.entities.broker_flow import BrokerSummary, BrokerTransaction, BrokerType
 from src.domain.entities.candle import Candle
@@ -87,6 +88,10 @@ class MockBrokerRepository(BrokerDataRepository):
         if not rows:
             return None
         return rows[0].date, rows[-1].date
+
+
+def test_accumulation_audit_pct_change_zero_base_is_zero():
+    assert _pct_change(Decimal("100"), Decimal("0")) == 0.0
 
 
 def _candle(ticker: str, day: date, close: Decimal) -> Candle:

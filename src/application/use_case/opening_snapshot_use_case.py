@@ -97,7 +97,10 @@ class OpeningSnapshotUseCase:
                 "rsi": round(float(c.rsi), 2) if c.rsi else None,
                 "atr": round(float(c.atr), 2) if c.atr else None,
                 "accum_tag": c.accum_tag,
-                "accum_score": round(c.accum_score, 1) if c.accum_score is not None else None,
+                "broker_accum_score": (
+                    round(c.broker_accum_score, 1)
+                    if c.broker_accum_score is not None else None
+                ),
                 "iev_intensity": round(c.iev_intensity, 3) if c.iev_intensity is not None else None,
                 "unusual_volume": c.unusual_volume,
                 # bid_offer_imbalance: NCP-locked pre-open order book ratio

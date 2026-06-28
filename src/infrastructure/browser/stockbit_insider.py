@@ -328,6 +328,9 @@ class StockbitInsiderActivityProvider(InsiderActivityProvider):
         """
         ticker = ticker.upper()
 
+        if self._provider is None:
+            return self._read_cache(ticker, from_date, to_date, action_type)
+
         if self._is_cache_fresh(ticker):
             return self._read_cache(ticker, from_date, to_date, action_type)
 

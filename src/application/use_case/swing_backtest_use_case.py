@@ -9,9 +9,15 @@ AI usage: None
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import Decimal
-from statistics import mean
 from typing import Any
 
+from src.application.services.stats import (
+    average,
+    max_drawdown_pct,
+    pct_change,
+    profit_factor,
+    win_rate,
+)
 from src.application.use_case.accumulation_screen_use_case import (
     AccumulationCandidate,
     AccumulationScreenRequest,
@@ -642,16 +648,7 @@ class SwingBacktestUseCase:
         return value * request.cost_bps / Decimal("10000")
 
     def _max_drawdown(self, curve: list[SwingBacktestDailyEquity]) -> float:
-        peak: Decimal | None = None
-        max_dd = Decimal("0")
-        for point in curve:
-            if peak is None or point.equity > peak:
-                peak = point.equity
-            if peak and peak > 0:
-                drawdown = (point.equity - peak) / peak * Decimal("100")
-                if drawdown < max_dd:
-                    max_dd = drawdown
-        return round(float(max_dd), 4)
+        return max_drawdown_pct((point.equity for point in curve), precision=4)
 
     def _regime_stats(
         self,
@@ -677,24 +674,16 @@ class SwingBacktestUseCase:
 
 
 def _pct_change(value: Decimal, base: Decimal) -> float:
-    if base == 0:
-        return 0.0
-    return round(float((value - base) / base * Decimal("100")), 4)
+    return pct_change(value, base, precision=4)
 
 
 def _avg(values: list[float]) -> float | None:
-    return round(mean(values), 4) if values else None
+    return average(values, precision=4)
 
 
 def _win_rate(values: list[float]) -> float | None:
-    if not values:
-        return None
-    return round(sum(1 for value in values if value > 0) / len(values) * 100, 2)
+    return win_rate(values, precision=2)
 
 
 def _profit_factor(trades: list[SwingBacktestTrade]) -> float | None:
-    gains = sum((trade.pnl for trade in trades if trade.pnl > 0), Decimal("0"))
-    losses = abs(sum((trade.pnl for trade in trades if trade.pnl < 0), Decimal("0")))
-    if losses == 0:
-        return None if gains == 0 else float("inf")
-    return round(float(gains / losses), 4)
+    return profit_factor((trade.pnl for trade in trades), precision=4)

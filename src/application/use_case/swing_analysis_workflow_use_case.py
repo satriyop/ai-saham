@@ -23,12 +23,14 @@ from src.application.services.position_sizer import (
     compute_percent_position_size,
     compute_position_size,
 )
+from src.application.services.signal_context_builder import (
+    build_signal_context_from_candidate,
+)
 from src.application.services.strategy_loader import StrategyLoader, StrategyNotFoundError
 from src.application.services.universe_loader import resolve_tickers
 from src.application.use_case.assess_risk_use_case import AssessRiskRequest, AssessRiskUseCase
 from src.domain.rules.risk_gate import GateContext, RiskGate
 from src.application.use_case.backtest_use_case import BacktestRequest, BacktestUseCase
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from src.domain.value_objects.market_context import MarketContext
@@ -309,32 +311,11 @@ class SwingAnalysisWorkflowUseCase:
                     signal_assessment = accumulation_candidate.signal_assessment
                 elif accumulation_candidate is not None:
                     # Fallback: candidate exists but screener ran without a signal_engine
-                    from src.domain.value_objects.signal_assessment import SignalContext
-                    bd = accumulation_candidate.bandar_detector
-                    se = accumulation_candidate.seasonal_edge
-                    ac = accumulation_candidate.analyst_consensus
-                    fe = accumulation_candidate.forward_estimates
-                    fund = accumulation_candidate.fundamentals
-                    num_optional = sum(
-                        1 for x in [bd.top3_accdist, bd.top5_accdist, bd.top10_accdist]
-                        if x is not None
-                    ) if bd is not None else 0
-                    signal_ctx = SignalContext(
+                    signal_ctx = build_signal_context_from_candidate(
                         ticker=request.ticker,
                         snapshot_date=request.today,
-                        foreign_flow_quality=self._signal_engine.foreign_flow_quality_from_accum_score(
-                            accumulation_candidate.score
-                        ),
-                        bandar_broad_score=bd.broad_score if bd else None,
-                        bandar_max_range=self._signal_engine.bandar_max_range(num_optional)
-                        if bd else self._signal_engine.bandar_max_range(0),
-                        insider_net_buy_ratio=None,
-                        seasonality_win_rate=se.win_rate_pct if se else None,
-                        seasonality_avg_return_pct=se.avg_monthly_return_pct if se else None,
-                        analyst_buy_pct=(ac.buy_count / ac.analyst_count)
-                            if ac and ac.analyst_count > 0 else None,
-                        analyst_upside_pct=ac.upside_pct if ac else None,
-                        forward_pe=fe.forward_pe if fe else None,
+                        candidate=accumulation_candidate,
+                        signal_engine=self._signal_engine,
                     )
                     signal_assessment = self._signal_engine.evaluate_with_context(
                         request.ticker,

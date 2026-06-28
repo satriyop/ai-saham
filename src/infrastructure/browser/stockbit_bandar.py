@@ -218,7 +218,11 @@ class StockbitBandarDetectorProvider(BandarDetectorProvider):
         if key in self._mem_cache:
             return self._mem_cache[key]
 
-        cached = self._read_cache(ticker.upper(), target_date)
+        cached = self._read_cache(
+            ticker.upper(),
+            target_date,
+            allow_previous=self._provider is None,
+        )
         if cached is not None:
             self._mem_cache[key] = cached
             return cached
@@ -229,37 +233,46 @@ class StockbitBandarDetectorProvider(BandarDetectorProvider):
             self._write_cache(result)
         return result
 
-    def _read_cache(self, ticker: str, target_date: date) -> BandarDetectorSnapshot | None:
+    def _read_cache(
+        self,
+        ticker: str,
+        target_date: date,
+        allow_previous: bool = False,
+    ) -> BandarDetectorSnapshot | None:
         try:
+            date_filter = "session_date<=?" if allow_previous else "session_date=?"
+            order_clause = "ORDER BY session_date DESC " if allow_previous else ""
             with sqlite3.connect(self._db_path) as conn:
                 row = conn.execute(
-                    "SELECT broker_accdist, today_accdist, five_day_accdist, top1_accdist, "
+                    "SELECT session_date, broker_accdist, today_accdist, five_day_accdist, top1_accdist, "
                     "top1_percent, today_percent, total_buyer, total_seller, "
                     "top3_accdist, top5_accdist, top10_accdist, "
                     "number_broker_buysell, vwap, total_value, total_volume "
-                    "FROM bandar_detector WHERE ticker=? AND session_date=?",
+                    f"FROM bandar_detector WHERE ticker=? AND {date_filter} "
+                    f"{order_clause}LIMIT 1",
                     (ticker, target_date.isoformat()),
                 ).fetchone()
             if not row:
                 return None
+            session_date = date.fromisoformat(str(row[0]))
             return BandarDetectorSnapshot(
                 ticker=ticker,
-                session_date=target_date,
-                broker_accdist=str(row[0] or "Neutral"),
-                today_accdist=str(row[1] or "Neutral"),
-                five_day_accdist=str(row[2] or "Neutral"),
-                top1_accdist=str(row[3] or "Neutral"),
-                top1_percent=float(row[4] or 0),
-                today_percent=float(row[5] or 0),
-                total_buyer=int(row[6] or 0),
-                total_seller=int(row[7] or 0),
-                top3_accdist=str(row[8]) if row[8] else None,
-                top5_accdist=str(row[9]) if row[9] else None,
-                top10_accdist=str(row[10]) if row[10] else None,
-                number_broker_buysell=int(row[11]) if row[11] is not None else None,
-                vwap=Decimal(str(row[12])) if row[12] is not None else None,
-                total_value=Decimal(str(row[13])) if row[13] is not None else None,
-                total_volume=int(row[14]) if row[14] is not None else None,
+                session_date=session_date,
+                broker_accdist=str(row[1] or "Neutral"),
+                today_accdist=str(row[2] or "Neutral"),
+                five_day_accdist=str(row[3] or "Neutral"),
+                top1_accdist=str(row[4] or "Neutral"),
+                top1_percent=float(row[5] or 0),
+                today_percent=float(row[6] or 0),
+                total_buyer=int(row[7] or 0),
+                total_seller=int(row[8] or 0),
+                top3_accdist=str(row[9]) if row[9] else None,
+                top5_accdist=str(row[10]) if row[10] else None,
+                top10_accdist=str(row[11]) if row[11] else None,
+                number_broker_buysell=int(row[12]) if row[12] is not None else None,
+                vwap=Decimal(str(row[13])) if row[13] is not None else None,
+                total_value=Decimal(str(row[14])) if row[14] is not None else None,
+                total_volume=int(row[15]) if row[15] is not None else None,
             )
         except Exception as e:
             logger.warning("bandar_detector: cache read failed for %s: %s", ticker, e)

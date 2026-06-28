@@ -29,6 +29,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from src.application.services.indicator_registry import IndicatorRegistry
+from src.application.services.stats import foreign_vwap_discount_pct
 from src.domain.ports.browser_data_provider import BrowserDataProvider
 from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.ports.ticker_notation_provider import TickerNotationProvider
@@ -365,7 +366,7 @@ class PreOpenScreenUseCase:
 
             # Step 8 (Improvements #1 + #2): Accumulation backing + Foreign VWAP
             # Broker summaries loaded once, reused by both signals.
-            accum_score: float | None = None
+            broker_accum_score: float | None = None
             accum_tag: str | None = None
             accum_streak: int | None = None
             foreign_vwap: Decimal | None = None
@@ -380,7 +381,7 @@ class PreOpenScreenUseCase:
                     accum_threshold=config.accum_backed_threshold,
                     fvwap_period=config.fvwap_period,
                 )
-                accum_score = broker_ctx["accum_score"]
+                broker_accum_score = broker_ctx["broker_accum_score"]
                 accum_tag = broker_ctx["accum_tag"]
                 accum_streak = broker_ctx["accum_streak"]
                 foreign_vwap = broker_ctx["foreign_vwap"]
@@ -412,7 +413,7 @@ class PreOpenScreenUseCase:
                     gap_pct=gap_pct,
                     entry_range_low=entry_range_low,
                     entry_range_high=entry_range_high,
-                    accum_score=accum_score,
+                    broker_accum_score=broker_accum_score,
                     accum_tag=accum_tag,
                     accum_streak=accum_streak,
                     foreign_vwap=foreign_vwap,
@@ -535,11 +536,11 @@ class PreOpenScreenUseCase:
     ) -> dict:
         """Load broker summaries once; compute accumulation tag + Foreign VWAP.
 
-        Returns dict with: accum_score, accum_tag, accum_streak,
+        Returns dict with: broker_accum_score, accum_tag, accum_streak,
         foreign_vwap, fvwap_discount_pct. All None on failure or missing data.
         """
         empty = {
-            "accum_score": None,
+            "broker_accum_score": None,
             "accum_tag": None,
             "accum_streak": None,
             "foreign_vwap": None,
@@ -589,7 +590,7 @@ class PreOpenScreenUseCase:
             else:
                 tag = "UNCONFIRMED"
 
-            result["accum_score"] = score
+            result["broker_accum_score"] = score
             result["accum_tag"] = tag
             result["accum_streak"] = streak
 
@@ -607,8 +608,10 @@ class PreOpenScreenUseCase:
                     fvwap = vwap_values[-1]
                     if fvwap > 0:
                         result["foreign_vwap"] = fvwap
-                        result["fvwap_discount_pct"] = round(
-                            float((fvwap - current_price) / current_price * 100), 2
+                        result["fvwap_discount_pct"] = foreign_vwap_discount_pct(
+                            fvwap,
+                            current_price,
+                            precision=2,
                         )
             except Exception:
                 pass
