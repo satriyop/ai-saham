@@ -115,6 +115,12 @@ def test_swing_workflow_runs_without_auto_refresh():
     assert response.modules["strategy"] is False
     assert response.modules["sentiment"] is False
     assert response.modules["flow_detail"] is False
+    assert response.verdict is not None
+    assert response.evidence is not None
+    assert response.diagnostics is not None
+    assert response.verdict.trade_setup is response.trade_setup
+    assert response.evidence.accumulation_candidate is response.accumulation_candidate
+    assert response.diagnostics.data_freshness is response.data_freshness
 
 
 def test_swing_workflow_runs_auto_refresh_when_enabled():
@@ -327,3 +333,8 @@ def test_swing_workflow_canonical_trade_setup_unaffected_by_market_context():
 
     assert response_with_mce.market_context_trade_setup_preview is not None
     assert response_with_mce.market_context_signal_preview is not None
+    assert response_with_mce.verdict is not None
+    assert (
+        response_with_mce.verdict.market_context_trade_setup_preview
+        is response_with_mce.market_context_trade_setup_preview
+    )

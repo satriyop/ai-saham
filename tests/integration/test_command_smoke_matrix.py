@@ -99,6 +99,11 @@ def test_analyze_swing_table_and_json_contracts(temp_workspace, monkeypatch):
     payload = _json_stdout(js)
     assert payload["artifact_type"] == "swing_analysis"
     assert payload["schema_version"] == 1
+    assert payload["verdict"]["trade_setup"] == payload["trade_setup"]
+    assert payload["verdict"]["signal_assessment"] == payload["signal_assessment"]
+    assert payload["verdict"]["risk_assessment"]["risk_status"] == payload["risk"]["risk_status"]
+    assert payload["evidence"]["accumulation"] == payload["accumulation"]
+    assert payload["diagnostics"]["data"]["as_of_date"] == payload["data"]["as_of_date"]
     assert payload["accumulation"]["accum_score"] == payload["accumulation"]["score"]
     assert (
         payload["accumulation"]["composite_flow_evidence_score"]

@@ -119,6 +119,9 @@ def test_swing_command_delegates_workflow_construction_to_builder(monkeypatch):
                 market_context_signal_preview=None,
                 market_context_risk_preview=None,
                 market_context_trade_setup_preview=None,
+                verdict=None,
+                evidence=None,
+                diagnostics=None,
                 modules={},
                 warnings=(),
             )

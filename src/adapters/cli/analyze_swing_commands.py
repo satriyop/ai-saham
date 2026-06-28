@@ -516,12 +516,33 @@ def swing(
         data_out = data_freshness.to_dict()
         if market_regime is not None:
             data_out["regime_as_of"] = market_regime.as_of_date.isoformat()
+        diagnostics_out = (
+            workflow_response.diagnostics.to_dict()
+            if workflow_response.diagnostics else {}
+        )
+        if market_regime is not None and "data" in diagnostics_out:
+            diagnostics_out["data"]["regime_as_of"] = market_regime.as_of_date.isoformat()
+        evidence_out = (
+            workflow_response.evidence.to_dict(
+                strategy_name=strategy_evidence_name,
+                max_hold_days=_BT.max_hold_days,
+            )
+            if workflow_response.evidence else {}
+        )
+        if not include_sentiment and evidence_out:
+            evidence_out["sentiment"] = None
         out: dict = {
             "schema_version": 1,
             "artifact_type": "swing_analysis",
             "ticker": ticker_upper,
             "date": str(today),
             "modules": workflow_response.modules or {},
+            "verdict": (
+                workflow_response.verdict.to_dict()
+                if workflow_response.verdict else None
+            ),
+            "evidence": evidence_out,
+            "diagnostics": diagnostics_out,
             "data": data_out,
             "flow_detail": flow_detail.to_dict() if flow_detail else None,
             "broker_detail": broker_detail.to_dict() if broker_detail else None,
