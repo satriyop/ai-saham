@@ -30,7 +30,6 @@ from src.application.use_case.intraday_backtest_use_case import (
     IntradayBacktestRequest,
     IntradayBacktestUseCase,
 )
-from src.application.use_case.pre_open_screen_use_case import PreOpenScreenConfig
 from src.application.use_case.resolve_opening_prices_use_case import (
     OpeningPriceObservation,
     ResolveOpeningPricesRequest,
@@ -42,6 +41,7 @@ from src.domain.value_objects.intraday_confirmation import (
     IntradayConfirmationJournalEntry,
 )
 from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.pre_open_config import load_pre_open_screen_config
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
@@ -51,17 +51,6 @@ DEFAULT_CONFIRMATION_PATH = Path(APP_CFG.storage.intraday_confirmation)
 DEFAULT_CONFIRMATION_JOURNAL_PATH = Path(APP_CFG.storage.intraday_confirmation_journal)
 DEFAULT_REGIME_UNIVERSE = APP_CFG.analysis.regime_universe
 DEFAULT_REGIME_BENCHMARK = APP_CFG.analysis.benchmark
-
-
-def _load_pre_open_config() -> PreOpenScreenConfig:
-    import yaml
-
-    config_path = Path(APP_CFG.config_paths.pre_open_screener)
-    if config_path.exists():
-        with open(config_path) as f:
-            yaml_data = yaml.safe_load(f) or {}
-        return PreOpenScreenConfig.from_yaml(yaml_data)
-    return PreOpenScreenConfig()
 
 
 def _decimal_or_none(value) -> Decimal | None:
@@ -393,7 +382,7 @@ def confirm_open(
         observations,
     )
 
-    po_config = _load_pre_open_config()
+    po_config = load_pre_open_screen_config()
 
     _KNOWN_REGIMES = {"RISK_ON", "NEUTRAL", "RISK_OFF", "VOLATILE",
                       "BULLISH", "SIDEWAYS", "WEAK"}  # legacy compat
@@ -761,7 +750,7 @@ def intraday_backtest(
         )
         raise typer.Exit(1)
 
-    po_config = _load_pre_open_config()
+    po_config = load_pre_open_screen_config()
     resolved_max_stop = Decimal(str(max_stop)) if max_stop is not None else po_config.max_stop_pct
     resolved_atr_mult = (
         Decimal(str(atr_mult)) if atr_mult is not None else po_config.atr_multiplier

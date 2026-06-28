@@ -13,7 +13,6 @@ from pathlib import Path
 from typing import Annotated, Optional
 
 import typer
-import yaml
 
 from src.adapters.cli.screen_pre_open_display import (
     display_raw_movers,
@@ -22,7 +21,6 @@ from src.adapters.cli.screen_pre_open_display import (
 from src.application.services.bootstrap import create_indicator_registry
 from src.domain.value_objects.market_context import MarketContext
 from src.application.use_case.pre_open_screen_use_case import (
-    PreOpenScreenConfig,
     PreOpenScreenUseCase,
 )
 from src.application.use_case.pre_open_workflow_use_case import (
@@ -40,6 +38,7 @@ from src.domain.value_objects.idx_market import (
 from src.domain.value_objects.screener_result import ScreenerCandidate
 from src.infrastructure.browser.stockbit_browser_provider import ManualBrowserDataProvider
 from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.pre_open_config import load_pre_open_screen_config
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
@@ -125,36 +124,6 @@ def _build_intraday_run_guard(
         )
 
     return IntradayRunGuard(run_at=local_run_at, warnings=tuple(warnings))
-
-
-def _load_config(config_path: Path, overrides: dict) -> PreOpenScreenConfig:
-    if config_path.exists():
-        with open(config_path) as f:
-            data = yaml.safe_load(f)
-        config = PreOpenScreenConfig.from_yaml(data)
-    else:
-        config = PreOpenScreenConfig()
-
-    if overrides.get("iev_min") is not None:
-        config.iev_min = overrides["iev_min"]
-    if overrides.get("iep_min") is not None:
-        config.iep_min = overrides["iep_min"]
-    if overrides.get("capital") is not None:
-        config.capital = Decimal(str(overrides["capital"]))
-    if overrides.get("stop_loss_pct") is not None:
-        config.stop_loss_pct = Decimal(str(overrides["stop_loss_pct"]))
-    if overrides.get("tick_above") is not None:
-        config.tick_above = overrides["tick_above"]
-    if overrides.get("top_n") is not None:
-        config.top_n = overrides["top_n"]
-    if overrides.get("fast_mode") is not None:
-        config.fast_mode = overrides["fast_mode"]
-    if overrides.get("max_gap") is not None:
-        config.max_gap_pct = Decimal(str(overrides["max_gap"]))
-    if overrides.get("atr_mult") is not None:
-        config.atr_multiplier = Decimal(str(overrides["atr_mult"]))
-
-    return config
 
 
 def _write_sidecar(
@@ -308,7 +277,7 @@ def pre_open(
         "max_gap": max_gap,
         "atr_mult": atr_mult,
     }
-    config = _load_config(resolved_config, overrides)
+    config = load_pre_open_screen_config(resolved_config, overrides)
     if legacy_strategy_path and not config_path:
         typer.echo(
             "Warning: --strategy is deprecated for intraday pre-open; use --config.",

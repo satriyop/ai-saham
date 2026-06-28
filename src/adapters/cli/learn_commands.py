@@ -129,7 +129,6 @@ def snapshot(
 
     try:
         from src.adapters.cli.screen_pre_open_commands import (
-            _load_config,
             _playwright_available,
         )
         from src.application.services.bootstrap import create_indicator_registry
@@ -141,6 +140,7 @@ def snapshot(
         from src.infrastructure.browser.stockbit_ticker_notation import (
             StockbitTickerNotationProvider,
         )
+        from src.infrastructure.config.pre_open_config import load_pre_open_screen_config
         from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
         from src.infrastructure.persistence.sqlite_iev_repository import SQLiteIEVRepository
         from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
@@ -152,7 +152,7 @@ def snapshot(
         typer.echo("No Playwright session. Run: saham fetch stockbit login", err=True)
         raise typer.Exit(1)
 
-    config = _load_config(resolved_config, {})
+    config = load_pre_open_screen_config(resolved_config)
     repository = SQLiteMarketRepository(db_path=resolved_db)
     broker_repo = SQLiteBrokerRepository(resolved_db)
     registry = create_indicator_registry(

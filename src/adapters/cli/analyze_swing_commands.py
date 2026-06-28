@@ -41,6 +41,7 @@ from src.application.services.universe_loader import (
     UniverseNotFoundError,
     resolve_tickers,
 )
+from src.application.services.swing_setup_catalog import build_swing_setup_catalog_config
 from src.application.use_case.accumulation_screen_use_case import (
     AccumulationCandidate,
     AccumulationScreenRequest,
@@ -49,13 +50,9 @@ from src.application.use_case.accumulation_screen_use_case import (
 )
 from src.application.use_case.evaluate_swing_setup_use_case import (
     AVAILABLE_SWING_SETUPS,
-    CoiledSpringSetupConfig,
     EvaluateSwingSetupRequest,
     EvaluateSwingSetupUseCase,
     FOREIGN_BOUNCE_SETUP,
-    ForeignBounceSetupConfig,
-    PullbackContinuationSetupConfig,
-    SmartMoneyConfirmedSetupConfig,
     SwingSetupCatalogConfig,
 )
 from src.application.use_case.fetch_sentiment_use_case import (
@@ -368,44 +365,7 @@ def _parse_compare_variants(value: str) -> tuple[str, ...]:
 
 
 def _setup_config() -> SwingSetupCatalogConfig:
-    return SwingSetupCatalogConfig(
-        foreign_bounce=ForeignBounceSetupConfig(
-            enabled=_SC.foreign_bounce_enabled,
-            gate_min_score=_SC.gate_min_score,
-            gate_min_vwap_discount_pct=_SC.gate_min_vwap_discount_pct,
-            gate_required_trend=_SC.gate_required_trend,
-            gate_min_flow_ratio_pct=_SC.gate_min_flow_ratio_pct,
-            gate_max_rsi=_SC.gate_max_rsi,
-            partial_max_failed_gates=_SC.partial_max_failed_gates,
-        ),
-        coiled_spring=CoiledSpringSetupConfig(
-            enabled=_SC.coiled_spring_enabled,
-            gate_min_score=_SC.coiled_spring_gate_min_score,
-            gate_max_bb_width_pctile=_SC.coiled_spring_gate_max_bb_width_pctile,
-            gate_min_flow_ratio_pct=_SC.coiled_spring_gate_min_flow_ratio_pct,
-            gate_max_rsi=_SC.coiled_spring_gate_max_rsi,
-            partial_max_failed_gates=_SC.coiled_spring_partial_max_failed_gates,
-        ),
-        smart_money_confirmed=SmartMoneyConfirmedSetupConfig(
-            enabled=_SC.smart_money_confirmed_enabled,
-            gate_min_score=_SC.smart_money_confirmed_gate_min_score,
-            gate_min_smart_flow_idr=_SC.smart_money_confirmed_gate_min_smart_flow_idr,
-            gate_min_smart_share_pct=_SC.smart_money_confirmed_gate_min_smart_share_pct,
-            gate_max_noise_share_pct=_SC.smart_money_confirmed_gate_max_noise_share_pct,
-            reject_smart_net_selling=_SC.smart_money_confirmed_reject_smart_net_selling,
-            partial_max_failed_gates=_SC.smart_money_confirmed_partial_max_failed_gates,
-        ),
-        pullback_continuation=PullbackContinuationSetupConfig(
-            enabled=_SC.pullback_continuation_enabled,
-            gate_min_score=_SC.pullback_continuation_gate_min_score,
-            gate_required_trend=_SC.pullback_continuation_gate_required_trend,
-            gate_min_flow_ratio_pct=_SC.pullback_continuation_gate_min_flow_ratio_pct,
-            gate_min_rsi=_SC.pullback_continuation_gate_min_rsi,
-            gate_max_rsi=_SC.pullback_continuation_gate_max_rsi,
-            gate_min_vwap_discount_pct=_SC.pullback_continuation_gate_min_vwap_discount_pct,
-            partial_max_failed_gates=_SC.pullback_continuation_partial_max_failed_gates,
-        ),
-    )
+    return build_swing_setup_catalog_config(_SC)
 
 
 def _evaluate_swing_setup(
