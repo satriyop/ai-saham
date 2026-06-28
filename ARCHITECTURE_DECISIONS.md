@@ -1330,6 +1330,17 @@ Composition rules:
   same deterministic rules, but their outputs are performance observations, not
   current recommendations.
 
+JSON contract rules:
+
+* JSON outputs and command sidecars should include `schema_version` and
+  `artifact_type` at the root.
+* New machine-facing fields should use explicit artifact names such as
+  `accum_score`, `signal_score`, `risk_status`, `broker_accum_score`, or
+  `trade_setup.action`.
+* Legacy ambiguous aliases such as `score` or `verdict` may remain for
+  compatibility, but the clearer canonical field should be present beside them
+  before callers are migrated.
+
 ### Layering
 
 Adapters may parse flags, construct infrastructure dependencies, call use cases,

@@ -370,6 +370,7 @@ class AccumulationCandidate:
                 "breakdown": self.signal_assessment.assessment.breakdown_dict,
                 "coverage_warning": self.signal_assessment.coverage_warning,
             } if self.signal_assessment else None,
+            "risk_status": self.risk_assessment.risk_level_name if self.risk_assessment else None,
             "risk_level": self.risk_assessment.risk_level_name if self.risk_assessment else None,
             "risk_confidence": self.risk_assessment.confidence if self.risk_assessment else None,
             "risk_gate": self.risk_assessment.gate_triggered if self.risk_assessment else None,

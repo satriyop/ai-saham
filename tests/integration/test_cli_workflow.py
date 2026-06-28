@@ -572,6 +572,34 @@ class TestCLIRiskAssessment:
         assert "Risk Assessment" in output
         assert "Status:" in output
 
+    def test_risk_command_json_contract(self, temp_workspace, monkeypatch):
+        """CLI: risk JSON exposes canonical contract fields."""
+        import json
+
+        monkeypatch.chdir(temp_workspace)
+        db_path = temp_workspace / "data.db"
+        repo = SQLiteMarketRepository(db_path=db_path)
+        candles = generate_test_candles(days=150, ticker="RISK_JSON")
+        repo.save_candles(candles)
+
+        result = runner.invoke(
+            app,
+            [
+                "analyze", "risk",
+                "RISK_JSON",
+                "--format", "json",
+                "--db",
+                str(db_path),
+            ],
+        )
+
+        output = result.output or result.stdout
+        assert result.exit_code == 0, f"risk json failed: {output}"
+        payload = json.loads(output)
+        assert payload["schema_version"] == 1
+        assert payload["artifact_type"] == "risk_assessment"
+        assert payload["risk_status"] == payload["status"] == payload["verdict"]
+
     def test_risk_all_profiles(self, temp_workspace, monkeypatch):
         """CLI: risk --all shows all profiles."""
         monkeypatch.chdir(temp_workspace)

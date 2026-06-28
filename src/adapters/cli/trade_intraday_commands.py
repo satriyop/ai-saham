@@ -133,6 +133,8 @@ def _write_confirmation_sidecar(
 ) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     data = {
+        "schema_version": 1,
+        "artifact_type": "intraday_confirmation",
         "confirmed_at": str(confirmed_date),
         "max_stop_pct": str(max_stop_pct),
         "confirmations": [
@@ -830,6 +832,8 @@ def intraday_backtest(
         import json as _json
         typer.echo(_json.dumps(
             {
+                "schema_version": 1,
+                "artifact_type": "intraday_proxy_simulation",
                 "start_date": response.start_date.isoformat(),
                 "end_date": response.end_date.isoformat(),
                 "initial_capital": str(response.initial_capital),

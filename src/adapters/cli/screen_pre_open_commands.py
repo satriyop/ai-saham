@@ -138,6 +138,8 @@ def _write_sidecar(
 
     sidecar_path.parent.mkdir(parents=True, exist_ok=True)
     data = {
+        "schema_version": 1,
+        "artifact_type": "pre_open_session",
         "screened_at": str(screened_date),
         "market_regime": market_regime.to_dict() if market_regime else None,
         "candidates": [

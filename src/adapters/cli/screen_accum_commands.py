@@ -429,6 +429,8 @@ def accumulation_run(
             for ticker_key, quality in broker_quality.items():
                 by_ticker.setdefault(ticker_key, {})["broker_quality"] = quality.to_dict()
             typer.echo(json.dumps({
+                "schema_version": 1,
+                "artifact_type": "accumulation_screen_multi",
                 "mode": "multi",
                 "windows": [f"{w}_sessions" for w in sorted(multi_results.keys())],
                 "screened_at": str(screened_at),
@@ -461,6 +463,8 @@ def accumulation_run(
 
     if output_format == "json":
         data = {
+            "schema_version": 1,
+            "artifact_type": "accumulation_screen",
             "screened_at": str(response.screened_at),
             "window_days": response.window_days,
             "total_checked": response.total_tickers_checked,

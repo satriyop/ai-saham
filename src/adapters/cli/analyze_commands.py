@@ -127,7 +127,8 @@ def risk(
             err=True,
         )
 
-    typer.echo(f"Assessing risk for {ticker.upper()} [{profile}]...")
+    if fmt != "json":
+        typer.echo(f"Assessing risk for {ticker.upper()} [{profile}]...")
 
     try:
         engine = create_risk_engine(resolved_db, with_enrichment=True)
@@ -189,7 +190,10 @@ def risk(
             if fmt == "json":
                 import json as _json
                 typer.echo(_json.dumps({
+                    "schema_version": 1,
+                    "artifact_type": "risk_assessment",
                     "ticker": response.ticker,
+                    "risk_status": assessment.risk_level_name,
                     "status": assessment.risk_level_name,
                     "verdict": assessment.risk_level_name,
                     "gate_triggered": assessment.gate_triggered,

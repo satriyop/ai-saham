@@ -1614,6 +1614,10 @@ src/
 | `saham trade backtest-intraday` | `IntradayBacktestResponse` | Daily-OHLC intraday proxy simulation artifact |
 | `saham analyze accum-audit` | `AccumulationAuditResponse` | Learning/audit artifact for forward-return behavior |
 
+JSON outputs and command sidecars include `schema_version` and `artifact_type`
+at the root. Explicit fields such as `accum_score`, `signal_score`, and
+`risk_status` are canonical; older ambiguous aliases may remain for compatibility.
+
 ---
 
 ## Configuration

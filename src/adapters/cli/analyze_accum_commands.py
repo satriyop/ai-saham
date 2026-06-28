@@ -331,10 +331,15 @@ def accumulation_audit(
 
     if output_path is not None:
         _write_audit_csv(response, output_path)
-        typer.echo(f"Wrote {response.total_records} audit records to {output_path}")
+        typer.echo(
+            f"Wrote {response.total_records} audit records to {output_path}",
+            err=output_format == "json",
+        )
 
     if output_format == "json":
         typer.echo(json.dumps({
+            "schema_version": 1,
+            "artifact_type": "accumulation_audit",
             "start_date": response.start_date.isoformat(),
             "end_date": response.end_date.isoformat(),
             "window_days": response.window_days,

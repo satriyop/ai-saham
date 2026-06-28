@@ -221,6 +221,8 @@ def test_accumulation_audit_replays_signal_and_forward_returns_without_ai():
     assert record.ticker == "BBCA"
     assert record.current_price == Decimal("120")
     assert record.return_5d_pct == 4.1667
+    record_dict = record.to_dict()
+    assert record_dict["accum_score"] == record_dict["score"]
     assert response.group_stats
 
 

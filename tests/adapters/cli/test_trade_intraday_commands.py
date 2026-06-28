@@ -147,6 +147,9 @@ def test_intraday_proxy_uses_pre_open_config_defaults(monkeypatch):
     )
 
     assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert payload["schema_version"] == 1
+    assert payload["artifact_type"] == "intraday_proxy_simulation"
     request = captured["request"]
     assert request.atr_multiplier == Decimal("0.25")
     assert request.max_stop_pct == Decimal("0.07")
@@ -273,6 +276,8 @@ def test_confirm_open_outputs_decisions_and_writes_sidecar(tmp_path):
     assert "SKIP" in result.stdout
 
     saved = json.loads(output.read_text())
+    assert saved["schema_version"] == 1
+    assert saved["artifact_type"] == "intraday_confirmation"
     assert saved["confirmed_at"] == "2026-06-12"
     assert saved["confirmations"][0]["decision"] == "ENTER"
     assert saved["confirmations"][1]["decision"] == "SKIP_GAP_UP"

@@ -657,6 +657,8 @@ def swing(
         if market_regime is not None:
             data_out["regime_as_of"] = market_regime.as_of_date.isoformat()
         out: dict = {
+            "schema_version": 1,
+            "artifact_type": "swing_analysis",
             "ticker": ticker_upper,
             "date": str(today),
             "modules": workflow_response.modules or {},
@@ -721,6 +723,8 @@ def swing(
                 },
             } if setup_eval else None,
             "risk": {
+                "risk_status": risk_resp.assessment.risk_level_name if risk_resp else None,
+                "status": risk_resp.assessment.risk_level_name if risk_resp else None,
                 "level": risk_resp.assessment.risk_level_name if risk_resp else None,
                 "confidence": risk_resp.assessment.confidence if risk_resp else None,
                 "sma20": float(risk_resp.assessment.indicators.sma) if risk_resp else None,
@@ -954,10 +958,11 @@ def swing_compare(
         )
         raise typer.Exit(1)
 
-    typer.echo(
-        f"Comparing {len(variant_names)} variants over {len(ticker_list)} tickers | "
-        f"{start_date} to {end_date}..."
-    )
+    if output_format != "json":
+        typer.echo(
+            f"Comparing {len(variant_names)} variants over {len(ticker_list)} tickers | "
+            f"{start_date} to {end_date}..."
+        )
 
     use_case = SwingBacktestUseCase(
         broker_repository=SQLiteBrokerRepository(resolved_db),
@@ -996,6 +1001,8 @@ def swing_compare(
 
     if output_format == "json":
         typer.echo(json.dumps({
+            "schema_version": 1,
+            "artifact_type": "swing_compare",
             "start_date": start_date.isoformat(),
             "end_date": end_date.isoformat(),
             "ticker_count": len(ticker_list),

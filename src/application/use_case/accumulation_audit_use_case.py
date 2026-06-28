@@ -91,6 +91,7 @@ class AuditRecord:
         return {
             "signal_date": self.signal_date.isoformat(),
             "ticker": self.ticker,
+            "accum_score": self.score,
             "score": self.score,
             "streak": self.streak,
             "net_buy_ratio": round(self.net_buy_ratio, 4),

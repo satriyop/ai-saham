@@ -114,6 +114,7 @@ class SwingBacktestTrade:
             "pnl": str(self.pnl),
             "holding_days": self.holding_days,
             "exit_reason": self.exit_reason,
+            "accum_score": self.score,
             "score": self.score,
             "flow_pct": self.flow_pct,
             "vwap_disc_pct": self.vwap_disc_pct,

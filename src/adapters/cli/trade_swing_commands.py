@@ -196,10 +196,11 @@ def swing_backtest(
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1)
 
-    typer.echo(
-        f"Backtesting {len(ticker_list)} tickers | {start_date} to {end_date} | "
-        f"setup={setup_name} | max positions={max_positions}..."
-    )
+    if output_format != "json":
+        typer.echo(
+            f"Backtesting {len(ticker_list)} tickers | {start_date} to {end_date} | "
+            f"setup={setup_name} | max positions={max_positions}..."
+        )
 
     use_case = SwingBacktestUseCase(
         broker_repository=SQLiteBrokerRepository(resolved_db),
@@ -235,6 +236,8 @@ def swing_backtest(
 
     if output_format == "json":
         typer.echo(json.dumps({
+            "schema_version": 1,
+            "artifact_type": "swing_backtest",
             "setup": response.setup,
             "start_date": response.start_date.isoformat(),
             "end_date": response.end_date.isoformat(),

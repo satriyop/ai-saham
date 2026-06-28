@@ -192,6 +192,8 @@ def test_swing_backtest_opens_signal_and_exits_at_target():
     assert trade.net_return_pct == 5.0
     assert trade.lots == 20
     assert trade.regime is not None
+    trade_dict = trade.to_dict()
+    assert trade_dict["accum_score"] == trade_dict["score"]
     assert response.regime_stats
 
 

@@ -11,6 +11,7 @@ from src.adapters.cli.main import app
 from src.adapters.cli.screen_pre_open_commands import (
     DEFAULT_PRE_OPEN_CONFIG_PATH,
     _build_intraday_run_guard,
+    _write_sidecar,
 )
 from src.adapters.cli.screen_pre_open_display import (
     display_results as _display_results,
@@ -131,6 +132,22 @@ def test_pre_open_results_render_rich_summary_panel(capsys):
     assert "Candles through" in out
     assert "2026-06-11" in out
     assert "freshness warning" in out
+
+
+def test_pre_open_sidecar_includes_json_contract_metadata(tmp_path):
+    sidecar_path = tmp_path / "pre-open.json"
+
+    _write_sidecar(
+        candidates=[_candidate("BBCA")],
+        screened_date=date(2026, 6, 12),
+        sidecar_path=sidecar_path,
+    )
+
+    import json
+    data = json.loads(sidecar_path.read_text())
+    assert data["schema_version"] == 1
+    assert data["artifact_type"] == "pre_open_session"
+    assert data["candidates"][0]["ticker"] == "BBCA"
 
 
 def test_pre_open_empty_results_points_to_fetch_iev(capsys):
