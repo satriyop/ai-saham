@@ -89,7 +89,7 @@ def test_swing_command_delegates_workflow_construction_to_builder(monkeypatch):
     class FakeWorkflow:
         def execute(self, request):
             captured["request"] = request
-            return SimpleNamespace(
+            response = SimpleNamespace(
                 ticker=request.ticker,
                 today=request.today,
                 refresh_actions=(),
@@ -125,6 +125,11 @@ def test_swing_command_delegates_workflow_construction_to_builder(monkeypatch):
                 modules={},
                 warnings=(),
             )
+            response.to_dict = lambda **kwargs: {
+                "schema_version": 1,
+                "artifact_type": "swing_analysis",
+            }
+            return response
 
     def fake_builder(**kwargs):
         captured["builder"] = kwargs

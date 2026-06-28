@@ -229,6 +229,97 @@ class SwingAnalysisWorkflowResponse:
     modules: dict[str, bool] | None = None
     warnings: tuple[str, ...] = ()
 
+    def to_dict(
+        self,
+        *,
+        strategy_name: str | None = None,
+        max_hold_days: int | None = None,
+        include_sentiment: bool = True,
+    ) -> dict[str, Any]:
+        verdict = self.verdict or SwingVerdict(
+            trade_setup=self.trade_setup,
+            signal_assessment=self.signal_assessment,
+            risk_response=self.risk_response,
+            market_regime=self.market_regime,
+            market_context_signal_preview=self.market_context_signal_preview,
+            market_context_risk_preview=self.market_context_risk_preview,
+            market_context_trade_setup_preview=self.market_context_trade_setup_preview,
+        )
+        evidence = self.evidence or SwingEvidence(
+            accumulation_candidate=self.accumulation_candidate,
+            setup_eval=self.setup_eval,
+            backtest_result=self.backtest_result,
+            sentiment_response=self.sentiment_response,
+            sentiment_warning=self.sentiment_warning,
+            take_profit_pct=self.take_profit_pct,
+            stop_loss_pct=self.stop_loss_pct,
+            regime_label=self.regime_label,
+        )
+        diagnostics = self.diagnostics or SwingDiagnostics(
+            data_freshness=self.data_freshness,
+            flow_detail=self.flow_detail,
+            broker_detail=self.broker_detail,
+            broker_quality_note=self.broker_quality_note,
+            refresh_actions=self.refresh_actions,
+            warnings=self.warnings,
+        )
+        market_regime = verdict.market_regime
+        data_out = _object_to_dict(diagnostics.data_freshness)
+        if isinstance(data_out, dict) and market_regime is not None:
+            data_out["regime_as_of"] = market_regime.as_of_date.isoformat()
+        diagnostics_out = diagnostics.to_dict()
+        if (
+            isinstance(diagnostics_out.get("data"), dict)
+            and market_regime is not None
+        ):
+            diagnostics_out["data"]["regime_as_of"] = market_regime.as_of_date.isoformat()
+        evidence_out = evidence.to_dict(
+            strategy_name=strategy_name,
+            max_hold_days=max_hold_days,
+        )
+        if not include_sentiment:
+            evidence_out["sentiment"] = None
+
+        return {
+            "schema_version": 1,
+            "artifact_type": "swing_analysis",
+            "ticker": self.ticker,
+            "date": str(self.today),
+            "modules": self.modules or {},
+            "verdict": verdict.to_dict(),
+            "evidence": evidence_out,
+            "diagnostics": diagnostics_out,
+            "data": data_out,
+            "flow_detail": _object_to_dict(diagnostics.flow_detail),
+            "broker_detail": _object_to_dict(diagnostics.broker_detail),
+            "broker_quality_note": _object_to_dict(diagnostics.broker_quality_note),
+            "accumulation": _candidate_accumulation_to_dict(
+                evidence.accumulation_candidate
+            ),
+            "setup": evidence_out["setup"],
+            "risk": _risk_response_to_legacy_dict(verdict.risk_response),
+            "sizing": _sizing_to_dict(
+                setup_sizing=self.setup_sizing,
+                sizing=self.sizing,
+                atr_value=self.atr_value,
+            ),
+            "strategy_evidence": evidence_out["strategy_evidence"],
+            "sentiment": evidence_out["sentiment"] if include_sentiment else None,
+            "market_regime": (
+                market_regime.to_dict() if market_regime else None
+            ),
+            "signal_assessment": _signal_response_to_dict(
+                verdict.signal_assessment
+            ),
+            "trade_setup": (
+                verdict.trade_setup.to_dict() if verdict.trade_setup else None
+            ),
+            "market_context_preview": (
+                _market_context_preview_to_legacy_dict(verdict)
+                if market_regime else None
+            ),
+        }
+
 
 def _signal_response_to_dict(response: "AssessSignalResponse | None") -> dict[str, Any] | None:
     if response is None:
@@ -276,13 +367,77 @@ def _risk_response_to_preview_dict(response: Any | None) -> dict[str, Any] | Non
     }
 
 
+def _risk_response_to_legacy_dict(response: Any | None) -> dict[str, Any]:
+    if response is None:
+        return {
+            "risk_status": None,
+            "status": None,
+            "level": None,
+            "confidence": None,
+            "sma20": None,
+            "ema20": None,
+            "rsi14": None,
+        }
+    return _risk_response_to_dict(response) or {}
+
+
+def _market_context_preview_to_legacy_dict(verdict: SwingVerdict) -> dict[str, Any]:
+    signal_preview = verdict.market_context_signal_preview
+    risk_preview = verdict.market_context_risk_preview
+    return {
+        "signal_preview": {
+            "score": signal_preview.assessment.score,
+            "strength": signal_preview.assessment.strength.value,
+            "entry_quality": signal_preview.assessment.entry_quality.value,
+        } if signal_preview else None,
+        "risk_preview": _risk_response_to_preview_dict(risk_preview),
+        "trade_setup_preview": (
+            verdict.market_context_trade_setup_preview.to_dict()
+            if verdict.market_context_trade_setup_preview else None
+        ),
+    }
+
+
+def _sizing_to_dict(
+    *,
+    setup_sizing: PercentSizingResult | None,
+    sizing: SizingResult | None,
+    atr_value: Decimal | None,
+) -> dict[str, Any]:
+    active_sizing = setup_sizing or sizing
+    return {
+        "entry": float(active_sizing.entry_price) if active_sizing else None,
+        "stop": float(active_sizing.stop_price) if active_sizing else None,
+        "target": float(active_sizing.target_price) if active_sizing else None,
+        "lots": active_sizing.lots if active_sizing else None,
+        "atr": float(atr_value) if atr_value else None,
+    }
+
+
 def _candidate_accumulation_to_dict(candidate: Any | None) -> dict[str, Any]:
     if candidate is None:
         return {
             "accum_score": None,
             "score": None,
+            "streak": None,
+            "trend": None,
+            "flow_pct": None,
+            "vwap_disc_pct": None,
+            "bb_width_pctile": None,
             "composite_flow_evidence_score": None,
             "flow_evidence": None,
+            "dividend_risk": False,
+            "rights_issue_risk": False,
+            "upcoming_rups": [],
+            "seasonal_score": None,
+            "seasonal_label": None,
+            "insider_buying": False,
+            "recent_insider_buys": [],
+            "analyst_consensus": None,
+            "shareholding": None,
+            "bandar_detector": None,
+            "fundamentals": None,
+            "ticker_notation": None,
         }
     return {
         "accum_score": candidate.accum_score,
