@@ -492,42 +492,59 @@ def swing(
         )
         raise typer.Exit(1)
 
-    data_freshness = workflow_response.data_freshness
-    flow_detail = workflow_response.flow_detail
-    broker_detail = workflow_response.broker_detail
-    accum_candidate = workflow_response.accumulation_candidate
-    risk_resp = workflow_response.risk_response
+    verdict = workflow_response.verdict
+    evidence = workflow_response.evidence
+    diagnostics = workflow_response.diagnostics
+
+    data_freshness = (
+        diagnostics.data_freshness if diagnostics else workflow_response.data_freshness
+    )
+    flow_detail = diagnostics.flow_detail if diagnostics else workflow_response.flow_detail
+    broker_detail = (
+        diagnostics.broker_detail if diagnostics else workflow_response.broker_detail
+    )
+    accum_candidate = (
+        evidence.accumulation_candidate
+        if evidence else workflow_response.accumulation_candidate
+    )
+    risk_resp = verdict.risk_response if verdict else workflow_response.risk_response
     strategy_risk_level = workflow_response.strategy_risk_level
     strategy_risk_name = workflow_response.strategy_risk_name
     atr_value = workflow_response.atr_value
     sizing = workflow_response.sizing
-    setup_eval = workflow_response.setup_eval
+    setup_eval = evidence.setup_eval if evidence else workflow_response.setup_eval
     setup_sizing = workflow_response.setup_sizing
-    broker_quality_note = workflow_response.broker_quality_note
-    backtest_result = workflow_response.backtest_result
-    sentiment_resp = workflow_response.sentiment_response
-    sentiment_warning = workflow_response.sentiment_warning
-    market_regime = workflow_response.market_regime
-    _tp_pct = workflow_response.take_profit_pct
-    _sl_pct = workflow_response.stop_loss_pct
-    _regime_label = workflow_response.regime_label
+    broker_quality_note = (
+        diagnostics.broker_quality_note
+        if diagnostics else workflow_response.broker_quality_note
+    )
+    backtest_result = (
+        evidence.backtest_result if evidence else workflow_response.backtest_result
+    )
+    sentiment_resp = (
+        evidence.sentiment_response if evidence else workflow_response.sentiment_response
+    )
+    sentiment_warning = (
+        evidence.sentiment_warning if evidence else workflow_response.sentiment_warning
+    )
+    market_regime = verdict.market_regime if verdict else workflow_response.market_regime
+    _tp_pct = evidence.take_profit_pct if evidence else workflow_response.take_profit_pct
+    _sl_pct = evidence.stop_loss_pct if evidence else workflow_response.stop_loss_pct
+    _regime_label = evidence.regime_label if evidence else workflow_response.regime_label
 
     if output_format == "json":
         data_out = data_freshness.to_dict()
         if market_regime is not None:
             data_out["regime_as_of"] = market_regime.as_of_date.isoformat()
-        diagnostics_out = (
-            workflow_response.diagnostics.to_dict()
-            if workflow_response.diagnostics else {}
-        )
+        diagnostics_out = diagnostics.to_dict() if diagnostics else {}
         if market_regime is not None and "data" in diagnostics_out:
             diagnostics_out["data"]["regime_as_of"] = market_regime.as_of_date.isoformat()
         evidence_out = (
-            workflow_response.evidence.to_dict(
+            evidence.to_dict(
                 strategy_name=strategy_evidence_name,
                 max_hold_days=_BT.max_hold_days,
             )
-            if workflow_response.evidence else {}
+            if evidence else {}
         )
         if not include_sentiment and evidence_out:
             evidence_out["sentiment"] = None
@@ -538,8 +555,8 @@ def swing(
             "date": str(today),
             "modules": workflow_response.modules or {},
             "verdict": (
-                workflow_response.verdict.to_dict()
-                if workflow_response.verdict else None
+                verdict.to_dict()
+                if verdict else None
             ),
             "evidence": evidence_out,
             "diagnostics": diagnostics_out,
@@ -665,26 +682,26 @@ def swing(
             } if include_sentiment else None,
             "market_regime": market_regime.to_dict() if market_regime else None,
             "signal_assessment": {
-                "score": workflow_response.signal_assessment.assessment.score,
-                "strength": workflow_response.signal_assessment.assessment.strength.value,
-                "entry_quality": workflow_response.signal_assessment.assessment.entry_quality.value,
-                "breakdown": workflow_response.signal_assessment.assessment.breakdown_dict,
-                "coverage_warning": workflow_response.signal_assessment.coverage_warning,
-            } if workflow_response.signal_assessment else None,
-            "trade_setup": workflow_response.trade_setup.to_dict() if workflow_response.trade_setup else None,
+                "score": verdict.signal_assessment.assessment.score,
+                "strength": verdict.signal_assessment.assessment.strength.value,
+                "entry_quality": verdict.signal_assessment.assessment.entry_quality.value,
+                "breakdown": verdict.signal_assessment.assessment.breakdown_dict,
+                "coverage_warning": verdict.signal_assessment.coverage_warning,
+            } if verdict and verdict.signal_assessment else None,
+            "trade_setup": verdict.trade_setup.to_dict() if verdict and verdict.trade_setup else None,
             "market_context_preview": {
                 "signal_preview": {
                     "score": _mcs.assessment.score,
                     "strength": _mcs.assessment.strength.value,
                     "entry_quality": _mcs.assessment.entry_quality.value,
-                } if (_mcs := workflow_response.market_context_signal_preview) else None,
+                } if (_mcs := (verdict.market_context_signal_preview if verdict else None)) else None,
                 "risk_preview": {
                     "level": _mcr.assessment.risk_level_name,
                     "gate_triggered": _mcr.assessment.gate_triggered,
-                } if (_mcr := workflow_response.market_context_risk_preview) else None,
+                } if (_mcr := (verdict.market_context_risk_preview if verdict else None)) else None,
                 "trade_setup_preview": (
-                    workflow_response.market_context_trade_setup_preview.to_dict()
-                    if workflow_response.market_context_trade_setup_preview else None
+                    verdict.market_context_trade_setup_preview.to_dict()
+                    if verdict and verdict.market_context_trade_setup_preview else None
                 ),
             } if market_regime else None,
         }
@@ -720,11 +737,20 @@ def swing(
         include_market_detail=include_market_detail,
         strategy_risk_level=strategy_risk_level,
         strategy_risk_name=strategy_risk_name,
-        signal_assessment=workflow_response.signal_assessment,
-        trade_setup=workflow_response.trade_setup,
-        market_context_signal_preview=workflow_response.market_context_signal_preview,
-        market_context_risk_preview=workflow_response.market_context_risk_preview,
-        market_context_trade_setup_preview=workflow_response.market_context_trade_setup_preview,
+        signal_assessment=verdict.signal_assessment if verdict else workflow_response.signal_assessment,
+        trade_setup=verdict.trade_setup if verdict else workflow_response.trade_setup,
+        market_context_signal_preview=(
+            verdict.market_context_signal_preview
+            if verdict else workflow_response.market_context_signal_preview
+        ),
+        market_context_risk_preview=(
+            verdict.market_context_risk_preview
+            if verdict else workflow_response.market_context_risk_preview
+        ),
+        market_context_trade_setup_preview=(
+            verdict.market_context_trade_setup_preview
+            if verdict else workflow_response.market_context_trade_setup_preview
+        ),
         with_technical_gate=with_technical_gate,
     )
 
