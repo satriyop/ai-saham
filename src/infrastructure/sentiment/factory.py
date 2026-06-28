@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from src.domain.ports.news_provider import NewsProvider
 
 # Supported providers
-SUPPORTED_NEWS_PROVIDERS = ("composite", "google", "kontan", "cnbc", "idxchannel", "mock")
+SUPPORTED_NEWS_PROVIDERS = ("composite", "google", "kontan", "cnbc", "idxchannel", "katadata", "mock")
 SUPPORTED_CLASSIFIERS = ("keyword", "ai")
 DEFAULT_NEWS_PROVIDER = "composite"
 DEFAULT_CLASSIFIER = "keyword"
@@ -87,6 +87,12 @@ class SentimentFactory:
             )
 
             return IDXChannelNewsProvider()
+        elif provider == "katadata":
+            from src.infrastructure.sentiment.katadata_provider import (
+                KatadataNewsProvider,
+            )
+
+            return KatadataNewsProvider()
         else:  # google
             from src.infrastructure.sentiment.google_news_provider import (
                 GoogleNewsProvider,

@@ -23,12 +23,14 @@ Layer: Infrastructure
 from src.infrastructure.sentiment.factory import SentimentFactory
 from src.infrastructure.sentiment.google_news_provider import GoogleNewsProvider
 from src.infrastructure.sentiment.idxchannel_provider import IDXChannelNewsProvider
+from src.infrastructure.sentiment.katadata_provider import KatadataNewsProvider
 from src.infrastructure.sentiment.keyword_classifier import KeywordClassifier
 from src.infrastructure.sentiment.mock_provider import MockNewsProvider
 
 __all__ = [
     "GoogleNewsProvider",
     "IDXChannelNewsProvider",
+    "KatadataNewsProvider",
     "KeywordClassifier",
     "MockNewsProvider",
     "SentimentFactory",

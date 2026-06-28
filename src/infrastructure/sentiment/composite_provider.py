@@ -17,6 +17,7 @@ from src.infrastructure.sentiment.cnbc_indonesia_provider import CNBCIndonesiaNe
 from src.infrastructure.sentiment.deduplication import deduplicate_headlines
 from src.infrastructure.sentiment.google_news_provider import GoogleNewsProvider
 from src.infrastructure.sentiment.idxchannel_provider import IDXChannelNewsProvider
+from src.infrastructure.sentiment.katadata_provider import KatadataNewsProvider
 from src.infrastructure.sentiment.kontan_provider import KontanNewsProvider
 
 logger = logging.getLogger("ai_saham.sentiment.composite")
@@ -42,6 +43,7 @@ class CompositeNewsProvider(NewsProvider):
         self._kontan = KontanNewsProvider()
         self._cnbc = CNBCIndonesiaNewsProvider()
         self._idxchannel = IDXChannelNewsProvider()
+        self._katadata = KatadataNewsProvider()
         self._google = GoogleNewsProvider()
 
     @property
@@ -64,7 +66,7 @@ class CompositeNewsProvider(NewsProvider):
         pooled_headlines: List[RawHeadline] = []
 
         # TIER 1: Concurrent fetch from premium local sources
-        tier1_providers = [self._kontan, self._cnbc, self._idxchannel]
+        tier1_providers = [self._kontan, self._cnbc, self._idxchannel, self._katadata]
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(tier1_providers)) as executor:
             future_to_provider = {
