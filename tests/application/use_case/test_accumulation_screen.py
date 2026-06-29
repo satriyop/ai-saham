@@ -285,7 +285,7 @@ def test_bci_cluster_when_three_or_more_tier1_codes_are_net_buyers():
 
     assert c.bci_label == BCI_CLUSTER
     assert c.bci_tier1_count == 3
-    assert c.accumulation_evidence.breakdown_dict["inst"] == 15.0
+    assert c.foreign_flow_score_breakdown.breakdown_dict["inst"] == 15.0
 
 
 def test_bci_stable_when_one_or_two_tier1_codes_are_net_buyers():
@@ -308,7 +308,7 @@ def test_bci_stable_when_one_or_two_tier1_codes_are_net_buyers():
 
     assert c.bci_label == BCI_STABLE
     assert c.bci_tier1_count == 1
-    assert c.accumulation_evidence.breakdown_dict["inst"] == 5.0
+    assert c.foreign_flow_score_breakdown.breakdown_dict["inst"] == 5.0
 
 
 def test_bci_retail_when_no_tier1_codes_are_net_buyers():
@@ -330,7 +330,7 @@ def test_bci_retail_when_no_tier1_codes_are_net_buyers():
 
     assert c.bci_label == BCI_RETAIL
     assert c.bci_tier1_count == 0
-    assert c.accumulation_evidence.breakdown_dict["inst"] == 0.0
+    assert c.foreign_flow_score_breakdown.breakdown_dict["inst"] == 0.0
 
 
 def test_bci_none_when_no_daily_flow_data():
@@ -348,7 +348,7 @@ def test_bci_none_when_no_daily_flow_data():
 
     assert c.bci_label is None
     assert c.bci_tier1_count == 0
-    assert c.accumulation_evidence.breakdown_dict["inst"] == 0.0
+    assert c.foreign_flow_score_breakdown.breakdown_dict["inst"] == 0.0
 
 
 def test_bci_counts_all_net_buyers_not_just_top5():
@@ -464,10 +464,13 @@ def test_screen_attaches_ticker_notation_without_changing_score():
     assert enriched.candidates[0].ticker_notation is not None
     assert enriched.candidates[0].ticker_notation.codes == ["X"]
     assert enriched.candidates[0].accum_score == base.candidates[0].accum_score
-    assert enriched.candidates[0].flow_evidence is not None
-    assert enriched.candidates[0].flow_evidence.composite_score == enriched.candidates[0].accum_score
+    assert enriched.candidates[0].foreign_flow_evidence is not None
     assert (
-        enriched.candidates[0].to_dict()["composite_flow_evidence_score"]
+        enriched.candidates[0].foreign_flow_evidence.composite_score
+        == enriched.candidates[0].accum_score
+    )
+    assert (
+        enriched.candidates[0].to_dict()["composite_foreign_flow_score"]
         == enriched.candidates[0].to_dict()["accum_score"]
     )
     assert enriched.candidates[0].to_dict()["ticker_notation"]["notations"][0]["code"] == "X"

@@ -745,7 +745,7 @@ class SignalContext:
 
 **Implications**
 
-* `src/application/use_case/accumulation_screen_use_case.py` delegates SignalAssessment scoring to `signal_engine.evaluate_with_context()`. Accumulation evidence is now separate `AccumulationEvidence` context and the public screen filter is `--min-accum-score`; see ADR-030.
+* `src/application/use_case/accumulation_screen_use_case.py` delegates SignalAssessment scoring to `signal_engine.evaluate_with_context()`. Foreign-flow scoring is separate `ForeignFlowScoreBreakdown` context and the public screen filter is `--min-accum-score`; see ADR-030.
 * `src/application/use_case/swing_analysis_workflow_use_case.py` reuses the candidate SignalAssessment when available, otherwise delegates to `signal_engine.evaluate_with_context()` or `signal_engine.evaluate()`.
 * `create_signal_engine(db_path, with_enrichment)` factory in `src/application/services/bootstrap.py` injects providers, parses `config/signal_engine.yaml` (`signal_engine.factors` block), applies `enabled` filtering, and computes renormalized weights before constructing the engine. See ADR-024 Engine Configurability Contract for the full schema and renormalization rule.
 * `evaluate_with_context(ticker, SignalContext)` MUST be used by screening loops to avoid N+1 provider fetches.
@@ -1129,9 +1129,9 @@ This made `--min-score` arbitrary because users could not tell which question it
 
 ### Decision
 
-Do **not** promote ScreenEngine to a first-class engine. Screening remains an application use case because it is an orchestration workflow over repositories and existing engines. The reusable artifact is **Accumulation Evidence**, not a new engine pillar.
+Do **not** promote ScreenEngine to a first-class engine. Screening remains an application use case because it is an orchestration workflow over repositories and existing engines. The reusable artifact is **Foreign Flow Score Breakdown**, not a new engine pillar.
 
-`AccumulationScreenUseCase` now delegates deterministic foreign-flow scoring to `AssessAccumulationEvidenceUseCase`, which returns the domain value object `AccumulationEvidence`. The candidate-level field is `accum_score`; generic `score` is not used for the application object.
+`AccumulationScreenUseCase` now delegates deterministic foreign-flow scoring to `ScoreForeignFlowUseCase`, which returns the domain value object `ForeignFlowScoreBreakdown`. The candidate-level field is `accum_score`; generic `score` is not used for the application object.
 
 `screen accum` replaces the public `--min-score` option with explicit filters:
 - `--min-accum-score`: threshold for deterministic accumulation evidence, 0–120.
@@ -1146,7 +1146,7 @@ The screener answers separate questions and displays them separately:
 | Panel | Question | Owner |
 |-------|----------|-------|
 | Verdict | What should I do with this candidate now? | `TradeSetup` composition |
-| Accumulation Evidence | Is foreign flow accumulating deterministically? | `AssessAccumulationEvidenceUseCase` |
+| Foreign Flow Score | Is foreign flow accumulating deterministically? | `ScoreForeignFlowUseCase` |
 | Signal | Is the enriched setup attractive? | `SignalEngine` |
 | Risk | Is the setup blocked or degraded by gates? | `RiskEngine` |
 | Data Coverage | Is the data fresh and complete enough? | Screen adapter/use case metadata |
@@ -1155,8 +1155,8 @@ The screener answers separate questions and displays them separately:
 
 | Layer | Artifact |
 |-------|----------|
-| Domain | `AccumulationEvidence` value object |
-| Application | `AssessAccumulationEvidenceUseCase` |
+| Domain | `ForeignFlowScoreBreakdown` value object |
+| Application | `ScoreForeignFlowUseCase` |
 | Application | `AccumulationScreenUseCase` orchestration over evidence, signal, risk, and trade setup |
 | Infrastructure | `accumulation_screener_config.py` YAML loader |
 | Infrastructure | `config/accumulation_screener.yaml` thresholds and component weights |
@@ -1167,7 +1167,7 @@ The screener answers separate questions and displays them separately:
 
 SignalEngine, RiskEngine, and MarketContextEngine are first-class because they each expose reusable decision services with stable input/output contracts. A screen is different: it selects, enriches, filters, sorts, and displays candidates for a workflow. Making ScreenEngine first-class would duplicate orchestration rather than clarify a decision boundary.
 
-The boundary that matters for learning is the scoring artifact. `AccumulationEvidence` is deterministic, replayable, and has tuneable components; it can be correlated with outcomes without conflating SignalEngine or RiskEngine behavior.
+The boundary that matters for learning is the scoring artifact. `ForeignFlowScoreBreakdown` is deterministic, replayable, and has tuneable components; it can be correlated with outcomes without conflating SignalEngine or RiskEngine behavior.
 
 ### Compatibility
 
@@ -1361,6 +1361,42 @@ This keeps the user-facing command model explicit while still allowing shared
 internals. Future refactors should add narrow services such as provider bundles,
 config factories, display DTOs, or composition contract tests before introducing
 larger workflow abstractions.
+
+---
+
+## ADR-034: Date Field Semantics
+
+**Status:** Accepted
+**Date:** 2026-06-29
+
+### Context
+
+The codebase intentionally carries several date names that look similar but
+answer different questions. Renaming all of them to one generic field would hide
+important anti-lookahead and data provenance rules.
+
+### Decision
+
+Date fields keep these meanings:
+
+| Field | Meaning |
+|-------|---------|
+| `snapshot_date` | Date of the evaluated point-in-time snapshot or workflow assessment. |
+| `session_date` | Exchange trading session date for session-bound market data. |
+| `report_date` | Publisher or filing date for reported data, such as IDX shareholding composition. |
+| `as_of_date` | Replay/query boundary: only use data available on or before this date. |
+| `fetched_at` | Cache/ingestion timestamp, not a market or filing date. |
+
+New domain and application contracts should choose the most specific name from
+this table. Do not standardize these fields mechanically unless the data meaning
+is actually the same.
+
+### Consequences
+
+Backtest and replay paths can continue to use `as_of_date` as an availability
+guard, while source-specific value objects retain their own provenance dates.
+This avoids confusing `report_date` with cache freshness and avoids treating
+session data as if it were a generic workflow snapshot.
 
 ---
 

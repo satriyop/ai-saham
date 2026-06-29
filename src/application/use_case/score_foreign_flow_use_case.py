@@ -1,7 +1,7 @@
 """
-AssessAccumulationEvidenceUseCase.
+ScoreForeignFlowUseCase.
 
-Application-layer deterministic scoring of foreign accumulation evidence.
+Application-layer deterministic scoring of foreign broker-flow evidence.
 """
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ import math
 from dataclasses import dataclass, field
 from datetime import date
 
-from src.domain.value_objects.accumulation_evidence import AccumulationEvidence
+from src.domain.value_objects.foreign_flow_score_breakdown import ForeignFlowScoreBreakdown
 
 
 @dataclass(frozen=True)
@@ -51,7 +51,7 @@ class BciEvidencePolicy:
 
 
 @dataclass(frozen=True)
-class AccumulationEvidencePolicy:
+class ForeignFlowScorePolicy:
     max_score: float = 120.0
     consistency: EvidenceComponentPolicy = field(
         default_factory=lambda: EvidenceComponentPolicy(weight=40.0)
@@ -75,7 +75,7 @@ class AccumulationEvidencePolicy:
 
 
 @dataclass(frozen=True)
-class AssessAccumulationEvidenceRequest:
+class ScoreForeignFlowRequest:
     ticker: str
     snapshot_date: date
     net_buy_ratio: float
@@ -89,20 +89,20 @@ class AssessAccumulationEvidenceRequest:
 
 
 @dataclass(frozen=True)
-class AssessAccumulationEvidenceResponse:
-    evidence: AccumulationEvidence
+class ScoreForeignFlowResponse:
+    evidence: ForeignFlowScoreBreakdown
 
 
-class AssessAccumulationEvidenceUseCase:
-    """Score accumulation evidence from already-computed ticker facts."""
+class ScoreForeignFlowUseCase:
+    """Score foreign broker-flow evidence from already-computed ticker facts."""
 
-    def __init__(self, policy: AccumulationEvidencePolicy | None = None) -> None:
-        self._policy = policy or AccumulationEvidencePolicy()
+    def __init__(self, policy: ForeignFlowScorePolicy | None = None) -> None:
+        self._policy = policy or ForeignFlowScorePolicy()
 
     def execute(
         self,
-        request: AssessAccumulationEvidenceRequest,
-    ) -> AssessAccumulationEvidenceResponse:
+        request: ScoreForeignFlowRequest,
+    ) -> ScoreForeignFlowResponse:
         p = self._policy
         breakdown: dict[str, float] = {}
 
@@ -141,8 +141,8 @@ class AssessAccumulationEvidenceUseCase:
         }
         total = round(min(sum(breakdown.values()), p.max_score), 1)
 
-        return AssessAccumulationEvidenceResponse(
-            evidence=AccumulationEvidence(
+        return ScoreForeignFlowResponse(
+            evidence=ForeignFlowScoreBreakdown(
                 ticker=request.ticker,
                 snapshot_date=request.snapshot_date,
                 accum_score=total,

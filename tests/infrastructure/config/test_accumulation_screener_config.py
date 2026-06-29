@@ -28,8 +28,8 @@ accumulation_screener:
 
     loaded = load_accumulation_screener_config(config)
 
-    assert loaded.evidence_policy.consistency.enabled is False
-    assert loaded.evidence_policy.consistency.weight == 12.0
+    assert loaded.foreign_flow_score_policy.consistency.enabled is False
+    assert loaded.foreign_flow_score_policy.consistency.weight == 12.0
     assert loaded.min_accum_score.enabled is True
     assert loaded.min_accum_score.value == 55.0
     assert loaded.min_signal_score.enabled is True

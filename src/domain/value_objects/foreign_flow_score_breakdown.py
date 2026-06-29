@@ -1,5 +1,5 @@
 """
-AccumulationEvidence value object.
+ForeignFlowScoreBreakdown value object.
 
 Layer: Domain
 """
@@ -11,8 +11,8 @@ from datetime import date
 
 
 @dataclass(frozen=True)
-class AccumulationEvidence:
-    """Deterministic foreign-flow evidence used by the accumulation screener."""
+class ForeignFlowScoreBreakdown:
+    """Deterministic score components for foreign broker-flow evidence."""
 
     ticker: str
     snapshot_date: date
@@ -30,10 +30,10 @@ class AccumulationEvidence:
 
     def __post_init__(self) -> None:
         if self.max_score <= 0:
-            raise ValueError("AccumulationEvidence max_score must be positive")
+            raise ValueError("ForeignFlowScoreBreakdown max_score must be positive")
         if not 0 <= self.accum_score <= self.max_score:
             raise ValueError(
-                f"AccumulationEvidence accum_score must be 0–{self.max_score:g}, "
+                f"ForeignFlowScoreBreakdown accum_score must be 0-{self.max_score:g}, "
                 f"got {self.accum_score}"
             )
 
@@ -46,6 +46,7 @@ class AccumulationEvidence:
             "ticker": self.ticker,
             "snapshot_date": self.snapshot_date.isoformat(),
             "accum_score": self.accum_score,
+            "composite_foreign_flow_score": self.accum_score,
             "max_score": self.max_score,
             "breakdown": self.breakdown_dict,
             "net_buy_ratio": round(self.net_buy_ratio, 4),

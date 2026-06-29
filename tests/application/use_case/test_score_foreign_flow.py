@@ -1,18 +1,18 @@
 from datetime import date
 
-from src.application.use_case.assess_accumulation_evidence_use_case import (
-    AssessAccumulationEvidenceRequest,
-    AssessAccumulationEvidenceUseCase,
-    AccumulationEvidencePolicy,
+from src.application.use_case.score_foreign_flow_use_case import (
     EvidenceComponentPolicy,
+    ForeignFlowScorePolicy,
+    ScoreForeignFlowRequest,
+    ScoreForeignFlowUseCase,
 )
 
 
-def test_assess_accumulation_evidence_matches_legacy_breakdown_shape():
-    uc = AssessAccumulationEvidenceUseCase()
+def test_score_foreign_flow_matches_legacy_breakdown_shape():
+    uc = ScoreForeignFlowUseCase()
 
     resp = uc.execute(
-        AssessAccumulationEvidenceRequest(
+        ScoreForeignFlowRequest(
             ticker="BBCA",
             snapshot_date=date(2026, 6, 25),
             net_buy_ratio=1.0,
@@ -39,14 +39,14 @@ def test_assess_accumulation_evidence_matches_legacy_breakdown_shape():
     }
 
 
-def test_assess_accumulation_evidence_can_disable_component():
-    policy = AccumulationEvidencePolicy(
+def test_score_foreign_flow_can_disable_component():
+    policy = ForeignFlowScorePolicy(
         consistency=EvidenceComponentPolicy(enabled=False, weight=40.0),
     )
-    uc = AssessAccumulationEvidenceUseCase(policy)
+    uc = ScoreForeignFlowUseCase(policy)
 
     resp = uc.execute(
-        AssessAccumulationEvidenceRequest(
+        ScoreForeignFlowRequest(
             ticker="BBCA",
             snapshot_date=date(2026, 6, 25),
             net_buy_ratio=1.0,

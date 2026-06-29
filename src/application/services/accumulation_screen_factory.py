@@ -9,8 +9,8 @@ from __future__ import annotations
 from typing import Any
 
 from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
-from src.application.use_case.assess_accumulation_evidence_use_case import (
-    AssessAccumulationEvidenceUseCase,
+from src.application.use_case.score_foreign_flow_use_case import (
+    ScoreForeignFlowUseCase,
 )
 from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.market_data_repository import MarketDataRepository
@@ -23,13 +23,13 @@ def create_accumulation_screen_use_case(
     stockbit_providers: Any | None = None,
     risk_use_case: Any | None = None,
     signal_engine: Any | None = None,
-    evidence_policy: Any | None = None,
+    foreign_flow_score_policy: Any | None = None,
     idx_groups: dict[str, list[str]] | None = None,
 ) -> AccumulationScreenUseCase:
     """Build AccumulationScreenUseCase with consistent optional enrichment wiring."""
-    evidence_use_case = (
-        AssessAccumulationEvidenceUseCase(evidence_policy)
-        if evidence_policy is not None
+    score_use_case = (
+        ScoreForeignFlowUseCase(foreign_flow_score_policy)
+        if foreign_flow_score_policy is not None
         else None
     )
     return AccumulationScreenUseCase(
@@ -47,5 +47,5 @@ def create_accumulation_screen_use_case(
         idx_groups=idx_groups,
         risk_use_case=risk_use_case,
         signal_engine=signal_engine,
-        accumulation_evidence_use_case=evidence_use_case,
+        foreign_flow_score_use_case=score_use_case,
     )

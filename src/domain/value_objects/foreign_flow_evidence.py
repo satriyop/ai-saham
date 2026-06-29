@@ -1,5 +1,5 @@
 """
-FlowEvidence value object.
+ForeignFlowEvidence value object.
 
 Layer: Domain
 """
@@ -9,12 +9,14 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 
+from src.domain.value_objects.foreign_flow_score_breakdown import ForeignFlowScoreBreakdown
 
-COMPOSITE_FLOW_EVIDENCE = "composite_flow_evidence"
+
+COMPOSITE_FOREIGN_FLOW = "composite_foreign_flow"
 
 
 @dataclass(frozen=True)
-class FlowEvidence:
+class ForeignFlowEvidence:
     """Explicit foreign-flow evidence contract used by swing workflows."""
 
     composite_score: float
@@ -54,18 +56,18 @@ class FlowEvidence:
                 ),
             )
         if self.max_score <= 0:
-            raise ValueError("FlowEvidence max_score must be positive")
+            raise ValueError("ForeignFlowEvidence max_score must be positive")
         if not 0 <= self.composite_score <= self.max_score:
             raise ValueError(
-                f"FlowEvidence composite_score must be 0-{self.max_score:g}, "
+                f"ForeignFlowEvidence composite_score must be 0-{self.max_score:g}, "
                 f"got {self.composite_score}"
             )
         if self.total_days < 0:
-            raise ValueError("FlowEvidence total_days cannot be negative")
+            raise ValueError("ForeignFlowEvidence total_days cannot be negative")
         if self.net_buy_days < 0:
-            raise ValueError("FlowEvidence net_buy_days cannot be negative")
+            raise ValueError("ForeignFlowEvidence net_buy_days cannot be negative")
         if self.net_buy_days > self.total_days:
-            raise ValueError("FlowEvidence net_buy_days cannot exceed total_days")
+            raise ValueError("ForeignFlowEvidence net_buy_days cannot exceed total_days")
 
     @property
     def component_breakdown_dict(self) -> dict[str, float]:
@@ -79,40 +81,35 @@ class FlowEvidence:
         }
 
     @classmethod
-    def from_accumulation_evidence(
+    def from_score_breakdown(
         cls,
+        breakdown: ForeignFlowScoreBreakdown,
         *,
-        composite_score: float,
-        max_score: float,
         net_buy_days: int,
         total_days: int,
-        streak: int,
-        avg_flow_ratio: float | None,
-        f_vwap_pct: float | None,
-        vwap_pct: float | None,
-        bb_width_pctile: float | None,
-        component_breakdown: tuple[tuple[str, float], ...],
+        streak: int | None = None,
+        vwap_pct: float | None = None,
         longer_term_context: dict[str, object] | None = None,
-    ) -> "FlowEvidence":
-        flow_direction = classify_flow_direction(avg_flow_ratio)
+    ) -> "ForeignFlowEvidence":
+        flow_direction = classify_flow_direction(breakdown.avg_flow_ratio)
         return cls(
-            composite_score=composite_score,
-            max_score=max_score,
-            score_family=COMPOSITE_FLOW_EVIDENCE,
+            composite_score=breakdown.accum_score,
+            max_score=breakdown.max_score,
+            score_family=COMPOSITE_FOREIGN_FLOW,
             flow_direction=flow_direction,
             confirmation_status=classify_confirmation_status(
-                composite_score=composite_score,
-                max_score=max_score,
+                composite_score=breakdown.accum_score,
+                max_score=breakdown.max_score,
                 flow_direction=flow_direction,
             ),
             net_buy_days=net_buy_days,
             total_days=total_days,
-            streak=streak,
-            avg_flow_ratio=avg_flow_ratio,
-            f_vwap_pct=f_vwap_pct,
+            streak=breakdown.consecutive_streak if streak is None else streak,
+            avg_flow_ratio=breakdown.avg_flow_ratio,
+            f_vwap_pct=breakdown.vwap_discount_pct,
             vwap_pct=vwap_pct,
-            bb_width_pctile=bb_width_pctile,
-            component_breakdown=component_breakdown,
+            bb_width_pctile=breakdown.bb_width_pctile,
+            component_breakdown=breakdown.breakdown,
             longer_term_context=tuple(
                 sorted(
                     (str(key), _freeze_context_value(value))

@@ -34,7 +34,7 @@ from src.adapters.cli.main import app
 from src.application.services.swing_data_freshness import SwingDataFreshness
 from src.application.use_case.accumulation_screen_use_case import AccumulationCandidate
 from src.domain.entities.broker_flow import BrokerSummary, BrokerTransaction, BrokerType
-from src.domain.value_objects.accumulation_evidence import AccumulationEvidence
+from src.domain.value_objects.foreign_flow_score_breakdown import ForeignFlowScoreBreakdown
 from src.domain.value_objects.setup_evaluation import SetupEvaluation, SetupGate, SetupMatch
 
 runner = CliRunner()
@@ -997,7 +997,7 @@ def test_swing_flow_detail_calls_out_conflicted_negative_flow(capsys):
         net_buy_days=3,
         total_days=7,
         avg_flow_ratio=-9.0,
-        accumulation_evidence=AccumulationEvidence(
+        foreign_flow_score_breakdown=ForeignFlowScoreBreakdown(
             ticker="ASII",
             snapshot_date=date(2026, 6, 27),
             accum_score=42.8,

@@ -157,7 +157,7 @@ def _data_freshness(candidate: AccumulationCandidate) -> str:
 
 
 def _scoring_definitions_panel():
-    p = _ASC.evidence_policy
+    p = _ASC.foreign_flow_score_policy
 
     accum_table = compact_table()
     accum_table.add_column("Factor", style="bold")
@@ -256,8 +256,8 @@ def _add_detail_row(table, show_ticker: bool, ticker: str, kind: str, status: st
 
 def _evidence_factor_rows(candidate: AccumulationCandidate) -> list[tuple[str, ...]]:
     bd = (
-        candidate.accumulation_evidence.breakdown_dict
-        if candidate.accumulation_evidence else {}
+        candidate.foreign_flow_score_breakdown.breakdown_dict
+        if candidate.foreign_flow_score_breakdown else {}
     )
     rsi = f"{candidate.rsi:.1f}" if candidate.rsi is not None else "-"
     flow = f"{candidate.avg_flow_ratio:+.1f}%" if candidate.avg_flow_ratio is not None else "-"

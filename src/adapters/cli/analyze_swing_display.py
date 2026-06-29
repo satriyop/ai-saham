@@ -150,9 +150,9 @@ def signal_label(candidate: Any, config: SwingDisplayConfig) -> str:
     return "weak"
 
 
-def accumulation_evidence_label(candidate: Any, config: SwingDisplayConfig) -> str:
-    flow_evidence = getattr(candidate, "flow_evidence", None)
-    status = getattr(flow_evidence, "confirmation_status", None)
+def foreign_flow_evidence_label(candidate: Any, config: SwingDisplayConfig) -> str:
+    foreign_flow_evidence = getattr(candidate, "foreign_flow_evidence", None)
+    status = getattr(foreign_flow_evidence, "confirmation_status", None)
     if status:
         return str(status).lower().replace("_", "-")
     if candidate.accum_score >= config.enter_min_score:
@@ -163,8 +163,8 @@ def accumulation_evidence_label(candidate: Any, config: SwingDisplayConfig) -> s
 
 
 def flow_direction_label(candidate: Any) -> str:
-    flow_evidence = getattr(candidate, "flow_evidence", None)
-    direction = getattr(flow_evidence, "flow_direction", None)
+    foreign_flow_evidence = getattr(candidate, "foreign_flow_evidence", None)
+    direction = getattr(foreign_flow_evidence, "flow_direction", None)
     if direction:
         return f"flow {str(direction).lower()}"
     flow = getattr(candidate, "avg_flow_ratio", None)
@@ -1127,7 +1127,7 @@ def print_swing_output(
     # ── Panel 4: FLOW / BROKER DETAIL ───────────────────────────────────────
     flow_group = []
     if include_flow_detail and accum:
-        evidence_label = accumulation_evidence_label(accum, config)
+        evidence_label = foreign_flow_evidence_label(accum, config)
         flow_label = flow_direction_label(accum)
         flow_group.append(Text(
             f"Composite Accumulation Evidence ({window} broker sessions): "
@@ -1186,8 +1186,8 @@ def print_swing_output(
                 style="dim red",
             ))
 
-        evidence = getattr(accum, "accumulation_evidence", None)
-        breakdown = getattr(evidence, "breakdown_dict", None) or {}
+        score_breakdown = getattr(accum, "foreign_flow_score_breakdown", None)
+        breakdown = getattr(score_breakdown, "breakdown_dict", None) or {}
         if breakdown:
             component_labels = {
                 "cons": "Net-day consistency",

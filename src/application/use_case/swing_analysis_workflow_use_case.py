@@ -119,9 +119,9 @@ class SwingEvidence:
         backtest_result = self.backtest_result
         sentiment_resp = self.sentiment_response
         return {
-            "flow_evidence": (
-                candidate.flow_evidence.to_dict()
-                if candidate and getattr(candidate, "flow_evidence", None) else None
+            "foreign_flow_evidence": (
+                candidate.foreign_flow_evidence.to_dict()
+                if candidate and getattr(candidate, "foreign_flow_evidence", None) else None
             ),
             "accumulation": _candidate_accumulation_to_dict(candidate),
             "setup": {
@@ -438,8 +438,8 @@ def _candidate_accumulation_to_dict(candidate: Any | None) -> dict[str, Any]:
             "flow_pct": None,
             "vwap_disc_pct": None,
             "bb_width_pctile": None,
-            "composite_flow_evidence_score": None,
-            "flow_evidence": None,
+            "composite_foreign_flow_score": None,
+            "foreign_flow_evidence": None,
             "dividend_risk": False,
             "rights_issue_risk": False,
             "upcoming_rups": [],
@@ -461,10 +461,10 @@ def _candidate_accumulation_to_dict(candidate: Any | None) -> dict[str, Any]:
         "flow_pct": candidate.avg_flow_ratio,
         "vwap_disc_pct": candidate.vwap_discount_pct,
         "bb_width_pctile": candidate.bb_width_pctile,
-        "composite_flow_evidence_score": candidate.accum_score,
-        "flow_evidence": (
-            candidate.flow_evidence.to_dict()
-            if getattr(candidate, "flow_evidence", None) else None
+        "composite_foreign_flow_score": candidate.accum_score,
+        "foreign_flow_evidence": (
+            candidate.foreign_flow_evidence.to_dict()
+            if getattr(candidate, "foreign_flow_evidence", None) else None
         ),
         "dividend_risk": candidate.dividend_risk,
         "rights_issue_risk": candidate.rights_issue_risk,

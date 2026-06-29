@@ -65,7 +65,7 @@ def create_accumulation_screen_workflow(
         market_repository=market_repo,
         stockbit_providers=stockbit_providers,
         risk_use_case=risk_use_case,
-        evidence_policy=screener_config.evidence_policy,
+        foreign_flow_score_policy=screener_config.foreign_flow_score_policy,
     )
 
     return AccumulationScreenWorkflow(

@@ -29,7 +29,7 @@ def test_create_accumulation_screen_use_case_wires_stockbit_providers():
         stockbit_providers=providers,
         risk_use_case=risk_use_case,
         signal_engine=signal_engine,
-        evidence_policy=Mock(),
+        foreign_flow_score_policy=Mock(),
     )
 
     assert use_case._broker_repo is broker_repo

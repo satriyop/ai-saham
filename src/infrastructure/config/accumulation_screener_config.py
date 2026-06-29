@@ -13,11 +13,11 @@ from typing import Any
 import yaml
 
 from src.infrastructure.config.app_config import APP_CFG
-from src.application.use_case.assess_accumulation_evidence_use_case import (
-    AccumulationEvidencePolicy,
+from src.application.use_case.score_foreign_flow_use_case import (
     BciEvidencePolicy,
     BollingerSqueezePolicy,
     EvidenceComponentPolicy,
+    ForeignFlowScorePolicy,
     LinearSaturationPolicy,
     RsiEvidencePolicy,
     StreakEvidencePolicy,
@@ -42,8 +42,8 @@ class AccumulationDisplayConfig:
 
 @dataclass(frozen=True)
 class AccumulationScreenerConfig:
-    evidence_policy: AccumulationEvidencePolicy = field(
-        default_factory=AccumulationEvidencePolicy
+    foreign_flow_score_policy: ForeignFlowScorePolicy = field(
+        default_factory=ForeignFlowScorePolicy
     )
     min_accum_score: ScoreFilterConfig = field(
         default_factory=lambda: ScoreFilterConfig(enabled=True, value=70.0)
@@ -75,9 +75,13 @@ def load_accumulation_screener_config(
         display = root.get("display") or {}
         sorting = root.get("sorting") or {}
 
-        policy = _build_evidence_policy(evidence, components, defaults.evidence_policy)
+        policy = _build_foreign_flow_score_policy(
+            evidence,
+            components,
+            defaults.foreign_flow_score_policy,
+        )
         return AccumulationScreenerConfig(
-            evidence_policy=policy,
+            foreign_flow_score_policy=policy,
             min_accum_score=_filter(
                 filters.get("min_accum_score"),
                 defaults.min_accum_score,
@@ -139,11 +143,11 @@ def _component(
     )
 
 
-def _build_evidence_policy(
+def _build_foreign_flow_score_policy(
     evidence: dict[str, Any],
     components: dict[str, Any],
-    default: AccumulationEvidencePolicy,
-) -> AccumulationEvidencePolicy:
+    default: ForeignFlowScorePolicy,
+) -> ForeignFlowScorePolicy:
     consistency = _component(components.get("consistency"), default.consistency)
 
     streak_raw = components.get("streak") or {}
@@ -194,7 +198,7 @@ def _build_evidence_policy(
         stable_points=_f(bci_raw, "stable_points", default.bci.stable_points),
     )
 
-    return AccumulationEvidencePolicy(
+    return ForeignFlowScorePolicy(
         max_score=_f(evidence, "max_score", default.max_score),
         consistency=consistency,
         streak=streak,

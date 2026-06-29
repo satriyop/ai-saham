@@ -2,7 +2,7 @@
 AccumulationScreenUseCase — multi-stock foreign accumulation screener.
 
 Scans a list of tickers for sustained foreign investor accumulation patterns.
-Foreign-flow evidence scoring is delegated to AssessAccumulationEvidenceUseCase;
+Foreign-flow scoring is delegated to ScoreForeignFlowUseCase;
 this use case owns orchestration, filtering, enrichment, and sorting.
 
 Intraday vs Swing usage:
@@ -40,9 +40,9 @@ from src.application.services.signal_context_builder import (
     build_signal_context_from_candidate,
 )
 from src.application.services.stats import foreign_vwap_discount_pct
-from src.application.use_case.assess_accumulation_evidence_use_case import (
-    AssessAccumulationEvidenceRequest,
-    AssessAccumulationEvidenceUseCase,
+from src.application.use_case.score_foreign_flow_use_case import (
+    ScoreForeignFlowRequest,
+    ScoreForeignFlowUseCase,
 )
 from src.domain.ports.analyst_consensus_provider import AnalystConsensusProvider
 from src.domain.ports.bandar_detector_provider import BandarDetectorProvider
@@ -54,8 +54,8 @@ from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.ports.seasonality_provider import SeasonalityProvider
 from src.domain.ports.shareholding_provider import ShareholdingProvider
 from src.domain.ports.ticker_notation_provider import TickerNotationProvider
-from src.domain.value_objects.accumulation_evidence import AccumulationEvidence
-from src.domain.value_objects.flow_evidence import FlowEvidence
+from src.domain.value_objects.foreign_flow_evidence import ForeignFlowEvidence
+from src.domain.value_objects.foreign_flow_score_breakdown import ForeignFlowScoreBreakdown
 from src.domain.value_objects.idx_market import SHARES_PER_LOT
 
 # Default setup targets (1:1 R:R, regime-unaware fallback)
@@ -229,13 +229,13 @@ class AccumulationCandidate:
     # positive = foreigners are underwater
     rsi: float | None
     trend: str  # "UP" | "DOWN" | "SIDE"
-    accum_score: float  # 0–120 accumulation evidence score
+    accum_score: float  # 0-120 composite foreign-flow score
     top_brokers: list[str] | None  # per-broker codes (Stockbit only)
     institutional_flag: bool  # True if major institutional broker present
     # Improvement #1: flow ratio signal
     avg_flow_ratio: float | None = None  # avg % of daily turnover that's foreign
-    accumulation_evidence: AccumulationEvidence | None = None
-    flow_evidence: FlowEvidence | None = None
+    foreign_flow_score_breakdown: ForeignFlowScoreBreakdown | None = None
+    foreign_flow_evidence: ForeignFlowEvidence | None = None
     # Improvement #3: BB squeeze
     bb_width: float | None = None  # current BB Width %
     bb_width_pctile: float | None = None  # 0..1 vs last 60 days (lower = tighter)
@@ -300,7 +300,7 @@ class AccumulationCandidate:
             "rsi": round(self.rsi, 2) if self.rsi is not None else None,
             "trend": self.trend,
             "accum_score": self.accum_score,
-            "composite_flow_evidence_score": self.accum_score,
+            "composite_foreign_flow_score": self.accum_score,
             "top_brokers": self.top_brokers,
             "institutional_flag": self.institutional_flag,
             "bci_label": self.bci_label,
@@ -309,14 +309,14 @@ class AccumulationCandidate:
             "avg_flow_ratio": round(self.avg_flow_ratio, 2)
             if self.avg_flow_ratio is not None
             else None,
-            "accumulation_evidence": (
-                self.accumulation_evidence.to_dict()
-                if self.accumulation_evidence is not None
+            "foreign_flow_score_breakdown": (
+                self.foreign_flow_score_breakdown.to_dict()
+                if self.foreign_flow_score_breakdown is not None
                 else None
             ),
-            "flow_evidence": (
-                self.flow_evidence.to_dict()
-                if self.flow_evidence is not None
+            "foreign_flow_evidence": (
+                self.foreign_flow_evidence.to_dict()
+                if self.foreign_flow_evidence is not None
                 else None
             ),
             "bb_width": round(self.bb_width, 2) if self.bb_width is not None else None,
@@ -416,7 +416,7 @@ class AccumulationScreenUseCase:
         idx_groups: "dict[str, list[str]] | None" = None,
         risk_use_case: "AssessRiskUseCase | None" = None,
         signal_engine: "SignalEngine | None" = None,
-        accumulation_evidence_use_case: AssessAccumulationEvidenceUseCase | None = None,
+        foreign_flow_score_use_case: ScoreForeignFlowUseCase | None = None,
     ) -> None:
         from src.application.services.signal_engine import SignalEngine as _SignalEngine
 
@@ -433,8 +433,8 @@ class AccumulationScreenUseCase:
         self._ticker_notation_provider = ticker_notation_provider
         self._risk_use_case = risk_use_case
         self._signal_engine = signal_engine or _SignalEngine()
-        self._accumulation_evidence_uc = (
-            accumulation_evidence_use_case or AssessAccumulationEvidenceUseCase()
+        self._foreign_flow_score_uc = (
+            foreign_flow_score_use_case or ScoreForeignFlowUseCase()
         )
         # idx_groups: {group_name: [ticker, ...]} from config/idx_groups.yaml
         # Build a reverse map: ticker → group_name for fast lookup
@@ -517,8 +517,8 @@ class AccumulationScreenUseCase:
                         skipped += 1
                         continue
 
-            evidence_resp = self._accumulation_evidence_uc.execute(
-                AssessAccumulationEvidenceRequest(
+            evidence_resp = self._foreign_flow_score_uc.execute(
+                ScoreForeignFlowRequest(
                     ticker=result.ticker,
                     snapshot_date=today,
                     net_buy_ratio=result.net_buy_ratio,
@@ -531,19 +531,13 @@ class AccumulationScreenUseCase:
                     bci_tier1_count=result.bci_tier1_count,
                 )
             )
-            result.accumulation_evidence = evidence_resp.evidence
+            result.foreign_flow_score_breakdown = evidence_resp.evidence
             result.accum_score = evidence_resp.evidence.accum_score
-            result.flow_evidence = FlowEvidence.from_accumulation_evidence(
-                composite_score=evidence_resp.evidence.accum_score,
-                max_score=evidence_resp.evidence.max_score,
+            result.foreign_flow_evidence = ForeignFlowEvidence.from_score_breakdown(
+                evidence_resp.evidence,
                 net_buy_days=result.net_buy_days,
                 total_days=result.total_days,
-                streak=result.consecutive_streak,
-                avg_flow_ratio=result.avg_flow_ratio,
-                f_vwap_pct=result.vwap_discount_pct,
                 vwap_pct=result.vwap_pct,
-                bb_width_pctile=result.bb_width_pctile,
-                component_breakdown=evidence_resp.evidence.breakdown,
                 longer_term_context={
                     "bci_label": result.bci_label,
                     "bci_tier1_count": result.bci_tier1_count,
@@ -925,7 +919,7 @@ class AccumulationScreenUseCase:
             vwap_discount_pct=vwap_discount_pct,
             rsi=rsi,
             trend=trend,
-            accum_score=0.0,  # set after by AssessAccumulationEvidenceUseCase
+            accum_score=0.0,  # set after by ScoreForeignFlowUseCase
             top_brokers=top_brokers,
             institutional_flag=institutional_flag,
             bci_label=bci_label,
