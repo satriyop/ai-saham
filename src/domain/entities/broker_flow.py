@@ -252,11 +252,6 @@ class ForeignFlowSnapshot:
         return self.net_val > Decimal("0")
 
 
-# Backward-compatible alias for older code paths. The data represents aggregate
-# foreign flow, not all broker archetypes.
-BrokerFlowPoint = ForeignFlowPoint
-
-
 @dataclass(frozen=True)
 class BrokerDailyFlow:
     """

@@ -105,7 +105,8 @@ class LogSwingCandidateUseCase:
         screen_req = AccumulationScreenRequest(
             tickers=[ticker],
             window_days=request.window_days,
-            min_score=0.0,
+            min_accum_score=0.0,
+            min_accum_score_enabled=True,
             min_net_buy_days=0,
             tier1_broker_codes=request.tier1_broker_codes,
             sector_breadth_enabled=request.sector_breadth_enabled,
@@ -129,7 +130,8 @@ class LogSwingCandidateUseCase:
                 w: self._screen.execute(AccumulationScreenRequest(
                     tickers=[ticker],
                     window_days=w,
-                    min_score=0.0,
+                    min_accum_score=0.0,
+                    min_accum_score_enabled=True,
                     min_net_buy_days=0,
                     tier1_broker_codes=request.tier1_broker_codes,
                     sector_breadth_enabled=request.sector_breadth_enabled,

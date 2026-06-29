@@ -82,12 +82,6 @@ class AssessRiskResponse:
         """Convenience property for signal sensitivity preset name."""
         return self.assessment.sensitivity_name
 
-    # Backwards-compatibility alias
-    @property
-    def profile(self) -> str:
-        return self.sensitivity
-
-
 @dataclass
 class AssessAllProfilesResponse:
     """Response DTO containing assessments for all profiles."""

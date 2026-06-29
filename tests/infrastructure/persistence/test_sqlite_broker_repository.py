@@ -312,11 +312,6 @@ class TestSQLiteBrokerRepository:
             date(2024, 1, 20),
         )
         assert repository.get_foreign_flow_date_range("BBCA", source="idx") is None
-        assert repository.get_broker_flow_date_range("BBCA", source="stockbit") == (
-            date(2024, 1, 10),
-            date(2024, 1, 20),
-        )
-
     def test_migrates_legacy_broker_flow_points_table(self, temp_db):
         """Should migrate legacy broker_flow_points into foreign_flow_points."""
         with sqlite3.connect(temp_db) as conn:

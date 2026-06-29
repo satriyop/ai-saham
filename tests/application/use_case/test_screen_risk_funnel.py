@@ -323,13 +323,13 @@ def test_risk_funnel_skips_failed_candidate_and_continues():
 def test_to_dict_includes_risk_fields_when_assessment_present():
     from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
     from src.domain.value_objects.risk_assessment import RiskAssessment
-    from src.domain.value_objects.risk_signal import RiskProfile
+    from src.domain.value_objects.risk_signal import SignalSensitivity
 
     snapshot = IndicatorSnapshot(
         date=_TODAY, sma=Decimal("5000"), ema=Decimal("5000"), rsi=Decimal("50")
     )
     assessment = RiskAssessment(
-        sensitivity=RiskProfile.BALANCED,
+        sensitivity=SignalSensitivity.BALANCED,
         rationale=("F-score=1 ≤ 3 (distress threshold)",),
         snapshot_date=_TODAY,
         indicators=snapshot,

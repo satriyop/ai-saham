@@ -265,7 +265,8 @@ class AccumulationAuditUseCase:
                     tickers=tickers,
                     window_days=request.window_days,
                     min_net_buy_days=request.min_net_buy_days,
-                    min_score=request.min_score,
+                    min_accum_score=request.min_score,
+                    min_accum_score_enabled=True,
                     as_of_date=signal_date,
                 )
             )

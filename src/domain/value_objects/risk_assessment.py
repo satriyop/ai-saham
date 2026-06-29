@@ -47,20 +47,10 @@ class RiskAssessment:
             return self.sensitivity
         return self.sensitivity.value
 
-    # Backwards-compatibility alias
-    @property
-    def profile_name(self) -> str:
-        return self.sensitivity_name
-
     @property
     def is_custom_sensitivity(self) -> bool:
         """Return True if this assessment used custom YAML rules."""
         return isinstance(self.sensitivity, str)
-
-    # Backwards-compatibility alias
-    @property
-    def is_custom_profile(self) -> bool:
-        return self.is_custom_sensitivity
 
     @property
     def rationale_list(self) -> list[str]:

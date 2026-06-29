@@ -12,7 +12,6 @@ from abc import ABC, abstractmethod
 from datetime import date
 
 from src.domain.entities.broker_flow import (
-    BrokerFlowPoint,
     BrokerSummary,
     ForeignFlowPoint,
     ForeignFlowSnapshot,
@@ -120,15 +119,6 @@ class BrokerDataProvider(ABC):
         Default: returns empty list (providers that don't support it are no-ops).
         """
         return []
-
-    def fetch_broker_flow_history(
-        self,
-        ticker: str,
-        days: int = 365,
-    ) -> list[BrokerFlowPoint]:
-        """Deprecated alias for fetch_foreign_flow_history."""
-        return self.fetch_foreign_flow_history(ticker, days)
-
 
 class BrokerDataProviderError(Exception):
     """Raised when broker data provider encounters an error."""

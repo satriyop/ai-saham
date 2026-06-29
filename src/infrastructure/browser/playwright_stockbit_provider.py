@@ -33,7 +33,6 @@ from typing import Any
 
 from src.domain.entities.broker_flow import (
     BrokerDailyFlow,
-    BrokerFlowPoint,
     BrokerSummary,
     BrokerTransaction,
     BrokerType,
@@ -638,14 +637,6 @@ class StockbitPlaywrightBrokerProvider(BrokerDataProvider):
             logger.warning("fetch_foreign_flow_from_summary %s failed: %s", ticker, e)
             return []
 
-
-    def fetch_broker_flow_history(
-        self,
-        ticker: str,
-        days: int = 365,
-    ) -> list[BrokerFlowPoint]:
-        """Deprecated alias for fetch_foreign_flow_history."""
-        return self.fetch_foreign_flow_history(ticker, days)
 
     def fetch_broker_daily_flows(
         self,
@@ -1253,14 +1244,6 @@ def _parse_foreign_flow_history(
     return sorted(points, key=lambda p: p.date)
 
 
-def _parse_broker_flow_history(
-    ticker: str,
-    body: dict,
-) -> list[BrokerFlowPoint]:
-    """Deprecated alias for _parse_foreign_flow_history."""
-    return _parse_foreign_flow_history(ticker, body)
-
-
 # ── Board-aware IEV fetcher ────────────────────────────────────────────────
 
 def _fetch_iev_all_boards(token: str) -> list[MoverData]:
@@ -1764,4 +1747,3 @@ def _load_api_patterns(path: Path) -> dict:
         return {}
     with open(path) as f:
         return json.load(f)
-

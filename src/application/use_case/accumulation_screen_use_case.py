@@ -190,14 +190,7 @@ class AccumulationScreenRequest:
         min_market_cap_idr: int = 0,
         min_piotroski: int = 0,
         risk_profile: str = "balanced",
-        min_score: float | None = None,
     ) -> None:
-        # Deprecated compatibility for non-CLI application callers. The public CLI
-        # uses --min-accum-score only; this keeps audit/backtest tests stable while
-        # their call sites are migrated.
-        if min_score is not None:
-            min_accum_score = min_score
-            min_accum_score_enabled = True
         self.tickers = tickers
         self.window_days = window_days
         self.min_net_buy_days = min_net_buy_days
@@ -294,22 +287,6 @@ class AccumulationCandidate:
     risk_assessment: "RiskAssessment | None" = None
     # Unified trade action verdict — requires both signal_assessment and risk funnel
     trade_setup: "TradeSetup | None" = None
-
-    @property
-    def score(self) -> float:
-        """Deprecated alias for older application services; use accum_score."""
-        return self.accum_score
-
-    @score.setter
-    def score(self, value: float) -> None:
-        self.accum_score = value
-
-    @property
-    def score_breakdown(self) -> dict:
-        """Deprecated alias for older display/tests; use accumulation_evidence."""
-        if self.accumulation_evidence is None:
-            return {}
-        return self.accumulation_evidence.breakdown_dict
 
     def to_dict(self) -> dict:
         return {

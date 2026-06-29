@@ -23,7 +23,7 @@ from src.application.use_case.assess_risk_use_case import (
 )
 from src.domain.entities.candle import Candle
 from src.domain.ports.market_data_repository import MarketDataRepository
-from src.domain.value_objects.risk_signal import RiskProfile
+from src.domain.value_objects.risk_signal import SignalSensitivity
 
 # --- Test Fixtures ---
 
@@ -113,7 +113,7 @@ class TestAssessRiskUseCase:
         assert isinstance(response, AssessRiskResponse)
         assert response.ticker == "BBCA"
         assert response.assessment is not None
-        assert response.assessment.sensitivity == RiskProfile.BALANCED
+        assert response.assessment.sensitivity == SignalSensitivity.BALANCED
 
     def test_execute_uses_specified_profile(self):
         """Should use the profile specified in request."""
@@ -206,9 +206,9 @@ class TestAssessRiskUseCaseAllProfiles:
         response = use_case.execute_all_profiles(request)
 
         profiles = [a.sensitivity for a in response.assessments]
-        assert RiskProfile.CONSERVATIVE in profiles
-        assert RiskProfile.BALANCED in profiles
-        assert RiskProfile.AGGRESSIVE in profiles
+        assert SignalSensitivity.CONSERVATIVE in profiles
+        assert SignalSensitivity.BALANCED in profiles
+        assert SignalSensitivity.AGGRESSIVE in profiles
 
     def test_execute_all_profiles_raises_error_for_insufficient_data(self):
         """Should raise ValueError when insufficient data."""
@@ -247,8 +247,8 @@ class TestAssessRiskResponseDTO:
         assert isinstance(response.confidence, int)
         assert 0 <= response.confidence <= 100
 
-    def test_response_profile_property(self):
-        """Should expose profile name as string."""
+    def test_response_sensitivity_property(self):
+        """Should expose sensitivity preset name as string."""
         candles = make_trending_candles("BBCA", 100)
         repository = MockRepository(candles)
         use_case = AssessRiskUseCase(repository)
@@ -315,8 +315,8 @@ class TestAssessRiskDeterminism:
         aggressive = use_case.execute(AssessRiskRequest(ticker="BBCA", sensitivity="aggressive"))
 
         # They may be the same or different - the point is they're both valid
-        assert conservative.assessment.sensitivity == RiskProfile.CONSERVATIVE
-        assert aggressive.assessment.sensitivity == RiskProfile.AGGRESSIVE
+        assert conservative.assessment.sensitivity == SignalSensitivity.CONSERVATIVE
+        assert aggressive.assessment.sensitivity == SignalSensitivity.AGGRESSIVE
 
 
 class TestAssessRiskIntegration:

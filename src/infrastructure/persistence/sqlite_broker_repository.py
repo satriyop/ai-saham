@@ -16,7 +16,6 @@ from pathlib import Path
 
 from src.domain.entities.broker_flow import (
     BrokerDailyFlow,
-    BrokerFlowPoint,
     BrokerSummary,
     BrokerTransaction,
     ForeignFlowPoint,
@@ -622,28 +621,6 @@ class SQLiteBrokerRepository(BrokerDataRepository):
             )
         except sqlite3.Error as e:
             raise BrokerDataRepositoryError(f"Failed to get foreign flow date range: {e}") from e
-
-    def save_broker_flow_points(self, points: list[BrokerFlowPoint]) -> None:
-        """Deprecated alias for save_foreign_flow_points."""
-        self.save_foreign_flow_points(points)
-
-    def get_broker_flow_points(
-        self,
-        ticker: str,
-        start_date: date | None = None,
-        end_date: date | None = None,
-        source: str | None = None,
-    ) -> list[BrokerFlowPoint]:
-        """Deprecated alias for get_foreign_flow_points."""
-        return self.get_foreign_flow_points(ticker, start_date, end_date, source)
-
-    def get_broker_flow_date_range(
-        self,
-        ticker: str,
-        source: str | None = None,
-    ) -> tuple[date, date] | None:
-        """Deprecated alias for get_foreign_flow_date_range."""
-        return self.get_foreign_flow_date_range(ticker, source=source)
 
     # ── ForeignFlowSnapshot persistence ───────────────────────────────────
 

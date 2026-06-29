@@ -180,7 +180,7 @@ Risk profiles map analysis results to qualitative interpretation. Three built-in
 * Gate trigger thresholds (Piotroski F-score cutoff, market cap floor, liquidity floor, free float minimum, bandar distribution score threshold) MUST be configurable per profile in `config/risk_engine.yaml`.
 * Each gate MUST declare an `enabled: bool` field in the YAML config. A gate with `enabled: false` is skipped entirely from the pipeline — no evaluation, no block decision. This supports backtesting, A/B comparison, and T2 Tuner proposals without code changes. See ADR-024 Engine Configurability Contract for the full gate YAML schema.
 * A profile configuration YAML schema MUST be validated at startup via `yaml_loader.py`. Invalid config aborts startup with a clear error, not a silent fallback.
-* Custom profiles (user-defined YAML) are supported. Custom profile names are strings; built-in profiles use the `RiskProfile` enum.
+* Custom profiles (user-defined YAML) are supported. Custom profile names are strings; built-in profiles use the `SignalSensitivity` enum.
 * Gate thresholds may be tightened based on market context (RISK_OFF/VOLATILE) — see ADR-029 for MarketContextEngine regime labels and integration rules.
 
 **Implementation status (2026-06-25)**
@@ -1128,7 +1128,7 @@ This made `--min-score` arbitrary because users could not tell which question it
 
 Do **not** promote ScreenEngine to a first-class engine. Screening remains an application use case because it is an orchestration workflow over repositories and existing engines. The reusable artifact is **Accumulation Evidence**, not a new engine pillar.
 
-`AccumulationScreenUseCase` now delegates deterministic foreign-flow scoring to `AssessAccumulationEvidenceUseCase`, which returns the domain value object `AccumulationEvidence`. The candidate-level field is `accum_score`; the old generic `score` name is compatibility-only for legacy application callers.
+`AccumulationScreenUseCase` now delegates deterministic foreign-flow scoring to `AssessAccumulationEvidenceUseCase`, which returns the domain value object `AccumulationEvidence`. The candidate-level field is `accum_score`; generic `score` is not used for the application object.
 
 `screen accum` replaces the public `--min-score` option with explicit filters:
 - `--min-accum-score`: threshold for deterministic accumulation evidence, 0–120.
@@ -1168,7 +1168,7 @@ The boundary that matters for learning is the scoring artifact. `AccumulationEvi
 
 ### Compatibility
 
-Existing application services that still read `AccumulationCandidate.score` are tolerated through a deprecated compatibility alias while call sites migrate. New screen code, JSON output, CLI help, and ADR language use `accum_score`.
+Application services read `AccumulationCandidate.accum_score`. JSON output may still include explicitly documented compatibility aliases, but new screen code, CLI help, and ADR language use `accum_score`.
 
 ---
 

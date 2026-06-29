@@ -61,6 +61,3 @@ class SignalSensitivity(Enum):
         valid = [p.value for p in cls]
         raise ValueError(f"Invalid sensitivity '{value}'. Must be one of: {valid}")
 
-
-# Backwards-compatibility alias — prefer SignalSensitivity in new code
-RiskProfile = SignalSensitivity
