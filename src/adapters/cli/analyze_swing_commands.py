@@ -465,37 +465,27 @@ def swing(
     verdict = workflow_response.verdict
     evidence = workflow_response.evidence
     diagnostics = workflow_response.diagnostics
+    if verdict is None or evidence is None or diagnostics is None:
+        typer.echo(
+            "Internal error: swing workflow returned an incomplete grouped response.",
+            err=True,
+        )
+        raise typer.Exit(1)
 
-    data_freshness = (
-        diagnostics.data_freshness if diagnostics else workflow_response.data_freshness
-    )
-    flow_detail = diagnostics.flow_detail if diagnostics else workflow_response.flow_detail
-    broker_detail = (
-        diagnostics.broker_detail if diagnostics else workflow_response.broker_detail
-    )
-    accum_candidate = (
-        evidence.accumulation_candidate
-        if evidence else workflow_response.accumulation_candidate
-    )
-    risk_resp = verdict.risk_response if verdict else workflow_response.risk_response
+    data_freshness = diagnostics.data_freshness
+    flow_detail = diagnostics.flow_detail
+    broker_detail = diagnostics.broker_detail
+    accum_candidate = evidence.accumulation_candidate
+    risk_resp = verdict.risk_response
     atr_value = workflow_response.atr_value
     sizing = workflow_response.sizing
-    setup_eval = evidence.setup_eval if evidence else workflow_response.setup_eval
+    setup_eval = evidence.setup_eval
     setup_sizing = workflow_response.setup_sizing
-    broker_quality_note = (
-        diagnostics.broker_quality_note
-        if diagnostics else workflow_response.broker_quality_note
-    )
-    backtest_result = (
-        evidence.backtest_result if evidence else workflow_response.backtest_result
-    )
-    sentiment_resp = (
-        evidence.sentiment_response if evidence else workflow_response.sentiment_response
-    )
-    sentiment_warning = (
-        evidence.sentiment_warning if evidence else workflow_response.sentiment_warning
-    )
-    market_regime = verdict.market_regime if verdict else workflow_response.market_regime
+    broker_quality_note = diagnostics.broker_quality_note
+    backtest_result = evidence.backtest_result
+    sentiment_resp = evidence.sentiment_response
+    sentiment_warning = evidence.sentiment_warning
+    market_regime = verdict.market_regime
 
     if output_format == "json":
         out = workflow_response.to_dict(
@@ -533,20 +523,11 @@ def swing(
         include_signal_detail=include_signal_detail,
         include_risk_detail=include_risk_detail,
         include_market_detail=include_market_detail,
-        signal_assessment=verdict.signal_assessment if verdict else workflow_response.signal_assessment,
-        trade_setup=verdict.trade_setup if verdict else workflow_response.trade_setup,
-        market_context_signal_preview=(
-            verdict.market_context_signal_preview
-            if verdict else workflow_response.market_context_signal_preview
-        ),
-        market_context_risk_preview=(
-            verdict.market_context_risk_preview
-            if verdict else workflow_response.market_context_risk_preview
-        ),
-        market_context_trade_setup_preview=(
-            verdict.market_context_trade_setup_preview
-            if verdict else workflow_response.market_context_trade_setup_preview
-        ),
+        signal_assessment=verdict.signal_assessment,
+        trade_setup=verdict.trade_setup,
+        market_context_signal_preview=verdict.market_context_signal_preview,
+        market_context_risk_preview=verdict.market_context_risk_preview,
+        market_context_trade_setup_preview=verdict.market_context_trade_setup_preview,
         with_technical_gate=with_technical_gate,
     )
 

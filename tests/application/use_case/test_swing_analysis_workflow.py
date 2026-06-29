@@ -108,18 +108,17 @@ def test_swing_workflow_runs_without_auto_refresh():
     assert response.refresh_actions == ("disabled",)
     assert response.latest_close == Decimal("1010")
     assert response.atr_value == Decimal("25")
-    assert response.data_freshness == {"freshness": ("disabled",)}
-    assert response.flow_detail is None
-    assert response.broker_detail is None
     assert response.modules["strategy"] is False
     assert response.modules["sentiment"] is False
     assert response.modules["flow_detail"] is False
     assert response.verdict is not None
     assert response.evidence is not None
     assert response.diagnostics is not None
-    assert response.verdict.trade_setup is response.trade_setup
-    assert response.evidence.accumulation_candidate is response.accumulation_candidate
-    assert response.diagnostics.data_freshness is response.data_freshness
+    assert response.diagnostics.data_freshness == {"freshness": ("disabled",)}
+    assert response.diagnostics.flow_detail is None
+    assert response.diagnostics.broker_detail is None
+    assert response.verdict.trade_setup is None
+    assert response.evidence.accumulation_candidate == {"ticker": "BBCA"}
 
 
 def test_swing_workflow_runs_auto_refresh_when_enabled():
@@ -164,7 +163,8 @@ def test_swing_workflow_records_accumulation_failure_warning():
 
     response = workflow.execute(_request())
 
-    assert response.accumulation_candidate is None
+    assert response.evidence is not None
+    assert response.evidence.accumulation_candidate is None
     assert "Accumulation unavailable: no broker rows" in response.warnings
 
 
@@ -210,10 +210,11 @@ def test_swing_workflow_preview_fields_are_none_without_market_context():
 
     response = workflow.execute(_request(with_market_context=False))
 
-    assert response.market_regime is None
-    assert response.market_context_signal_preview is None
-    assert response.market_context_risk_preview is None
-    assert response.market_context_trade_setup_preview is None
+    assert response.verdict is not None
+    assert response.verdict.market_regime is None
+    assert response.verdict.market_context_signal_preview is None
+    assert response.verdict.market_context_risk_preview is None
+    assert response.verdict.market_context_trade_setup_preview is None
     assert response.modules["market_context"] is False
 
 
