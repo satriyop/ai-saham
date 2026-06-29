@@ -14,7 +14,7 @@ def _entry() -> AccumulationJournalEntry:
         entry_price=Decimal("4840"),
         window_days=7,
         score=75.0,
-        streak=6,
+        foreign_flow_buy_streak=6,
         flow_pct=Decimal("18"),
         vwap_disc_pct=Decimal("4.5"),
         bb_pctile=Decimal("0.15"),
@@ -57,7 +57,7 @@ def test_append_and_read_round_trips_analysis_decision_fields(tmp_path):
 def test_read_all_accepts_csv_without_setup_columns(tmp_path):
     path = tmp_path / "minimal.csv"
     path.write_text(
-        "logged_at,ticker,entry_price,window_days,score,streak,flow_pct,"
+        "logged_at,ticker,entry_price,window_days,score,foreign_flow_buy_streak,flow_pct,"
         "vwap_disc_pct,bb_pctile,rsi,trend,pattern,actual_close_5d,"
         "actual_close_10d,actual_close_20d,max_close_in_horizon,"
         "min_close_in_horizon\n"
@@ -80,7 +80,7 @@ def test_append_and_read_preserves_none_score_and_streak(tmp_path):
         **{
             **_entry().__dict__,
             "score": None,
-            "streak": None,
+            "foreign_flow_buy_streak": None,
         }
     )
 
@@ -88,7 +88,7 @@ def test_append_and_read_preserves_none_score_and_streak(tmp_path):
     row = store.read_all()[0]
 
     assert row.score is None
-    assert row.streak is None
+    assert row.foreign_flow_buy_streak is None
 
 
 def test_update_review_fields_preserves_analysis_decision_fields(tmp_path):

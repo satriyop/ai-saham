@@ -18,7 +18,7 @@ from src.domain.value_objects.accumulation_journal_entry import AccumulationJour
 _COLUMNS = [
     # Log-time fields
     "logged_at", "ticker", "entry_price", "window_days",
-    "score", "streak", "flow_pct", "vwap_disc_pct", "bb_pctile", "rsi",
+    "score", "foreign_flow_buy_streak", "flow_pct", "vwap_disc_pct", "bb_pctile", "rsi",
     "trend", "pattern",
     "setup", "setup_match", "failed_gates", "regime",
     "planned_entry", "planned_stop", "planned_target", "max_hold_days",
@@ -59,7 +59,7 @@ def _row_to_entry(row: dict[str, str]) -> AccumulationJournalEntry:
         entry_price=_from_str(row["entry_price"]) or Decimal("0"),
         window_days=int(row["window_days"]),
         score=_from_float_str(row["score"]),
-        streak=_from_int_str(row["streak"]),
+        foreign_flow_buy_streak=_from_int_str(row["foreign_flow_buy_streak"]),
         flow_pct=_from_str(row["flow_pct"]),
         vwap_disc_pct=_from_str(row["vwap_disc_pct"]),
         bb_pctile=_from_str(row["bb_pctile"]),
@@ -93,7 +93,7 @@ def _entry_to_row(e: AccumulationJournalEntry) -> dict[str, str | int | float]:
         "entry_price": _to_str(e.entry_price),
         "window_days": e.window_days,
         "score": _to_str(e.score),
-        "streak": _to_str(e.streak),
+        "foreign_flow_buy_streak": _to_str(e.foreign_flow_buy_streak),
         "flow_pct": _to_str(e.flow_pct),
         "vwap_disc_pct": _to_str(e.vwap_disc_pct),
         "bb_pctile": _to_str(e.bb_pctile),

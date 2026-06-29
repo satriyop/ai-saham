@@ -24,7 +24,7 @@ class AccumulationJournalEntry:
     entry_price: Decimal
     window_days: int
     score: float | None
-    streak: int | None
+    foreign_flow_buy_streak: int | None
     flow_pct: Decimal | None
     vwap_disc_pct: Decimal | None
     bb_pctile: Decimal | None

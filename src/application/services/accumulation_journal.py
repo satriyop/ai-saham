@@ -133,7 +133,7 @@ class AccumulationJournalService:
             entry_price=entry_price,
             window_days=window_days,
             score=candidate.foreign_flow_score if candidate else None,
-            streak=candidate.consecutive_streak if candidate else None,
+            foreign_flow_buy_streak=candidate.consecutive_streak if candidate else None,
             flow_pct=_d(candidate.avg_flow_ratio) if candidate else None,
             vwap_disc_pct=_d(candidate.vwap_discount_pct) if candidate else None,
             bb_pctile=_d(candidate.bb_width_pctile) if candidate else None,
@@ -227,7 +227,7 @@ class AccumulationJournalService:
             entry_price=entry.entry_price,
             window_days=entry.window_days,
             score=entry.score,
-            streak=entry.streak,
+            foreign_flow_buy_streak=entry.foreign_flow_buy_streak,
             flow_pct=entry.flow_pct,
             vwap_disc_pct=entry.vwap_disc_pct,
             bb_pctile=entry.bb_pctile,
@@ -329,10 +329,10 @@ class AccumulationJournalService:
         """Compare avg 10d return for four binary signal splits."""
         comparisons = [
             (
-                "streak", "≥5d", "streak >= 5",
-                "<5d", "streak < 5",
-                lambda e: e.streak is not None,
-                lambda e: e.streak is not None and e.streak >= 5,
+                "foreign_flow_buy_streak", "≥5d", "foreign_flow_buy_streak >= 5",
+                "<5d", "foreign_flow_buy_streak < 5",
+                lambda e: e.foreign_flow_buy_streak is not None,
+                lambda e: e.foreign_flow_buy_streak is not None and e.foreign_flow_buy_streak >= 5,
             ),
             (
                 "vwap_disc", ">0 (underwater)", "vwap_disc > 0",

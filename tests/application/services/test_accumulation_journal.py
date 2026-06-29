@@ -14,7 +14,7 @@ from src.domain.value_objects.accumulation_journal_entry import AccumulationJour
 def _make_candidate(
     ticker="BBRI",
     score: float | None = 75.0,
-    streak: int | None = 6,
+    foreign_flow_buy_streak: int | None = 6,
     vwap=4.5,
     flow=18.0,
     bb=0.15,
@@ -28,7 +28,7 @@ def _make_candidate(
         total_days=7,
         net_buy_ratio=5 / 7,
         total_net_value=Decimal("1000000000"),
-        consecutive_streak=streak,
+        consecutive_streak=foreign_flow_buy_streak,
         foreign_vwap=Decimal("5000"),
         current_price=Decimal("4840"),
         vwap_discount_pct=vwap,
@@ -46,7 +46,7 @@ def _make_entry(
     ticker="BBRI",
     logged_at=date(2026, 5, 1),
     score=75.0,
-    streak=6,
+    foreign_flow_buy_streak=6,
     window_days=7,
     pattern="building",
     actual_close_10d: Decimal | None = None,
@@ -66,7 +66,7 @@ def _make_entry(
         entry_price=entry_price,
         window_days=window_days,
         score=score,
-        streak=streak,
+        foreign_flow_buy_streak=foreign_flow_buy_streak,
         flow_pct=flow_pct,
         vwap_disc_pct=vwap_disc_pct,
         bb_pctile=bb_pctile,
@@ -127,7 +127,7 @@ class TestLogCandidate:
         stored_entry: AccumulationJournalEntry = store.append.call_args[0][0][0]
         assert stored_entry.ticker == "BBRI"
         assert stored_entry.score == 75.0
-        assert stored_entry.streak == 6
+        assert stored_entry.foreign_flow_buy_streak == 6
         assert stored_entry.trend == "SIDE"
         assert stored_entry.pattern == "building"
         assert stored_entry.entry_price == Decimal("4840")
@@ -148,7 +148,7 @@ class TestLogCandidate:
 
         entry: AccumulationJournalEntry = store.append.call_args[0][0][0]
         assert entry.score is None
-        assert entry.streak is None
+        assert entry.foreign_flow_buy_streak is None
         assert entry.flow_pct is None
         assert entry.vwap_disc_pct is None
         assert entry.bb_pctile is None
@@ -563,16 +563,16 @@ class TestReviewSignalDeltas:
 
     def test_signal_delta_streak_splits_at_five_inclusive(self):
         entries = [
-            _make_entry(ticker="A", streak=5, actual_close_10d=Decimal("5000"), entry_price=Decimal("4840")),
-            _make_entry(ticker="B", streak=4, actual_close_10d=Decimal("5000"), entry_price=Decimal("4840")),
+            _make_entry(ticker="A", foreign_flow_buy_streak=5, actual_close_10d=Decimal("5000"), entry_price=Decimal("4840")),
+            _make_entry(ticker="B", foreign_flow_buy_streak=4, actual_close_10d=Decimal("5000"), entry_price=Decimal("4840")),
         ]
         service = self._service_with_entries(entries)
 
         report = service.review()
 
-        delta = next(d for d in report.signal_deltas if d.signal == "streak")
-        assert delta.group_a_n == 1   # streak=5 → group_a
-        assert delta.group_b_n == 1   # streak=4 → group_b
+        delta = next(d for d in report.signal_deltas if d.signal == "foreign_flow_buy_streak")
+        assert delta.group_a_n == 1   # foreign_flow_buy_streak=5 → group_a
+        assert delta.group_b_n == 1   # foreign_flow_buy_streak=4 → group_b
 
     def test_signal_delta_none_vwap_bb_flow_are_excluded(self):
         entries = [
@@ -609,7 +609,7 @@ class TestReviewSignalDeltas:
 
     def test_signal_delta_avg_10d_none_when_group_has_no_return_data(self):
         entries = [
-            _make_entry(ticker="A", streak=10, actual_close_10d=None, entry_price=Decimal("4840")),
+            _make_entry(ticker="A", foreign_flow_buy_streak=10, actual_close_10d=None, entry_price=Decimal("4840")),
         ]
         # Entry has no actual_close_10d → won't appear in stats at all
         # After re-read, return the same entry (not enriched)
