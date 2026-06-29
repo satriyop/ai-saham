@@ -465,4 +465,4 @@ class TestBrokerTypeDetection:
         else:
             broker_type = summary.top_sellers[0].broker_type.value
 
-        assert broker_type == expected.lower()
+        assert broker_type == expected

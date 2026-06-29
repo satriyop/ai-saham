@@ -15,21 +15,41 @@ from enum import Enum
 class Sentiment(Enum):
     """Sentiment classification for a headline."""
 
-    POSITIVE = "positive"
-    NEUTRAL = "neutral"
-    NEGATIVE = "negative"
+    POSITIVE = "POSITIVE"
+    NEUTRAL = "NEUTRAL"
+    NEGATIVE = "NEGATIVE"
+
+    @classmethod
+    def parse(cls, value: str) -> "Sentiment":
+        """Parse canonical uppercase and legacy lowercase sentiment values."""
+        normalized = value.strip().upper().replace("-", "_")
+        for sentiment in cls:
+            if normalized in {sentiment.name, sentiment.value}:
+                return sentiment
+        valid = [sentiment.value for sentiment in cls]
+        raise ValueError(f"Invalid sentiment '{value}'. Must be one of: {valid}")
 
 
 class CatalystType(Enum):
     """Category of the news catalyst."""
 
-    EARNINGS = "earnings"
-    CORP_ACTION = "corp_action"
-    REGULATORY = "regulatory"
-    MACRO = "macro"
-    GOVERNANCE = "governance"
-    RUMOR = "rumor"
-    GENERAL = "general"
+    EARNINGS = "EARNINGS"
+    CORP_ACTION = "CORP_ACTION"
+    REGULATORY = "REGULATORY"
+    MACRO = "MACRO"
+    GOVERNANCE = "GOVERNANCE"
+    RUMOR = "RUMOR"
+    GENERAL = "GENERAL"
+
+    @classmethod
+    def parse(cls, value: str) -> "CatalystType":
+        """Parse canonical uppercase and legacy lowercase catalyst values."""
+        normalized = value.strip().upper().replace("-", "_")
+        for catalyst in cls:
+            if normalized in {catalyst.name, catalyst.value}:
+                return catalyst
+        valid = [catalyst.value for catalyst in cls]
+        raise ValueError(f"Invalid catalyst '{value}'. Must be one of: {valid}")
 
 
 @dataclass(frozen=True)

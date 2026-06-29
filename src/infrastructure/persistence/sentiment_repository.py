@@ -88,8 +88,8 @@ class SQLiteSentimentRepository(SentimentRepository):
                 id=row[0],
                 date=date.fromisoformat(row[1]),
                 ticker=row[2],
-                sentiment=Sentiment(row[3]),
-                catalyst=CatalystType(row[4]),
+                sentiment=Sentiment.parse(row[3]),
+                catalyst=CatalystType.parse(row[4]),
                 score=row[5],
             )
             for row in rows
@@ -131,25 +131,29 @@ class SQLiteSentimentRepository(SentimentRepository):
             stats["audited_logs"] = len(rows)
 
             for sentiment_val, catalyst_val, delta in rows:
+                sentiment = Sentiment.parse(sentiment_val)
+                catalyst = CatalystType.parse(catalyst_val)
+                sentiment_key = sentiment.value
+                catalyst_key = catalyst.value
                 is_win = False
-                if sentiment_val == Sentiment.POSITIVE.value and delta > 0:
+                if sentiment == Sentiment.POSITIVE and delta > 0:
                     is_win = True
-                elif sentiment_val == Sentiment.NEGATIVE.value and delta < 0:
+                elif sentiment == Sentiment.NEGATIVE and delta < 0:
                     is_win = True
 
                 # By sentiment
-                if sentiment_val not in stats["by_sentiment"]:
-                    stats["by_sentiment"][sentiment_val] = {"wins": 0, "total": 0}
-                stats["by_sentiment"][sentiment_val]["total"] += 1
+                if sentiment_key not in stats["by_sentiment"]:
+                    stats["by_sentiment"][sentiment_key] = {"wins": 0, "total": 0}
+                stats["by_sentiment"][sentiment_key]["total"] += 1
                 if is_win:
-                    stats["by_sentiment"][sentiment_val]["wins"] += 1
+                    stats["by_sentiment"][sentiment_key]["wins"] += 1
 
                 # By catalyst
-                if catalyst_val not in stats["by_catalyst"]:
-                    stats["by_catalyst"][catalyst_val] = {"wins": 0, "total": 0}
-                stats["by_catalyst"][catalyst_val]["total"] += 1
+                if catalyst_key not in stats["by_catalyst"]:
+                    stats["by_catalyst"][catalyst_key] = {"wins": 0, "total": 0}
+                stats["by_catalyst"][catalyst_key]["total"] += 1
                 if is_win:
-                    stats["by_catalyst"][catalyst_val]["wins"] += 1
+                    stats["by_catalyst"][catalyst_key]["wins"] += 1
 
         return stats
 
@@ -173,8 +177,8 @@ class SQLiteSentimentRepository(SentimentRepository):
                 id=row[0],
                 date=date.fromisoformat(row[1]),
                 ticker=row[2],
-                sentiment=Sentiment(row[3]),
-                catalyst=CatalystType(row[4]),
+                sentiment=Sentiment.parse(row[3]),
+                catalyst=CatalystType.parse(row[4]),
                 score=row[5],
             )
             for row in rows

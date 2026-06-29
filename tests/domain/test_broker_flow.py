@@ -249,6 +249,12 @@ class TestBrokerType:
 
     def test_broker_types(self):
         """Should have correct broker types."""
-        assert BrokerType.FOREIGN.value == "foreign"
-        assert BrokerType.LOCAL.value == "local"
-        assert BrokerType.UNKNOWN.value == "unknown"
+        assert BrokerType.FOREIGN.value == "FOREIGN"
+        assert BrokerType.LOCAL.value == "LOCAL"
+        assert BrokerType.UNKNOWN.value == "UNKNOWN"
+
+    def test_parse_legacy_broker_type(self):
+        """Should parse legacy lowercase broker type values."""
+        assert BrokerType.parse("foreign") == BrokerType.FOREIGN
+        assert BrokerType.parse("local") == BrokerType.LOCAL
+        assert BrokerType.parse("unknown") == BrokerType.UNKNOWN

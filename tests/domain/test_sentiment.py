@@ -27,15 +27,16 @@ class TestSentimentEnum:
 
     def test_sentiment_values(self):
         """Sentiment enum should have correct values."""
-        assert Sentiment.POSITIVE.value == "positive"
-        assert Sentiment.NEUTRAL.value == "neutral"
-        assert Sentiment.NEGATIVE.value == "negative"
+        assert Sentiment.POSITIVE.value == "POSITIVE"
+        assert Sentiment.NEUTRAL.value == "NEUTRAL"
+        assert Sentiment.NEGATIVE.value == "NEGATIVE"
 
     def test_sentiment_from_string(self):
-        """Sentiment can be accessed by value."""
-        assert Sentiment("positive") == Sentiment.POSITIVE
-        assert Sentiment("neutral") == Sentiment.NEUTRAL
-        assert Sentiment("negative") == Sentiment.NEGATIVE
+        """Sentiment can parse canonical and legacy values."""
+        assert Sentiment.parse("POSITIVE") == Sentiment.POSITIVE
+        assert Sentiment.parse("positive") == Sentiment.POSITIVE
+        assert Sentiment.parse("neutral") == Sentiment.NEUTRAL
+        assert Sentiment.parse("negative") == Sentiment.NEGATIVE
 
 
 class TestCatalystTypeEnum:
@@ -43,9 +44,15 @@ class TestCatalystTypeEnum:
 
     def test_catalyst_values(self):
         """CatalystType enum should have correct values."""
-        assert CatalystType.EARNINGS.value == "earnings"
-        assert CatalystType.RUMOR.value == "rumor"
-        assert CatalystType.GENERAL.value == "general"
+        assert CatalystType.EARNINGS.value == "EARNINGS"
+        assert CatalystType.RUMOR.value == "RUMOR"
+        assert CatalystType.GENERAL.value == "GENERAL"
+
+    def test_catalyst_from_string(self):
+        """CatalystType can parse canonical and legacy values."""
+        assert CatalystType.parse("EARNINGS") == CatalystType.EARNINGS
+        assert CatalystType.parse("earnings") == CatalystType.EARNINGS
+        assert CatalystType.parse("corp_action") == CatalystType.CORP_ACTION
 
 
 class TestHeadlineResult:

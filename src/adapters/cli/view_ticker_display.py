@@ -453,7 +453,7 @@ def _sentiment_panel(logs: list) -> object:
     tbl.add_column("Catalyst", style="dim")
     tbl.add_column("Score", justify="right", min_width=5, style="dim")
 
-    _SENTIMENT_STYLE = {"positive": "green", "negative": "red", "neutral": "yellow"}
+    _SENTIMENT_STYLE = {"POSITIVE": "green", "NEGATIVE": "red", "NEUTRAL": "yellow"}
 
     for log in logs[:8]:
         style = _SENTIMENT_STYLE.get(log.sentiment.value, "default")

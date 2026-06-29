@@ -18,10 +18,10 @@ class TradeAction(Enum):
     Uses quant-standard terminology for clarity.
     """
 
-    ENTER_LONG = "enter_long"  # Open long position
-    EXIT_LONG = "exit_long"  # Close long position
-    HOLD = "hold"  # Maintain current position
-    FLAT = "flat"  # No position / stay out
+    ENTER_LONG = "ENTER_LONG"  # Open long position
+    EXIT_LONG = "EXIT_LONG"  # Close long position
+    HOLD = "HOLD"  # Maintain current position
+    FLAT = "FLAT"  # No position / stay out
 
     @classmethod
     def from_string(cls, value: str) -> "TradeAction":
@@ -37,13 +37,9 @@ class TradeAction(Enum):
         Raises:
             ValueError: If value doesn't match any action
         """
-        normalized = value.lower().strip().replace("_", "_")
+        normalized = value.strip().upper().replace("-", "_")
         for action in cls:
-            if action.value == normalized:
+            if normalized in {action.name, action.value}:
                 return action
-        # Also try matching by name (ENTER_LONG, etc.)
-        try:
-            return cls[value.upper().strip()]
-        except KeyError:
-            valid = [a.value for a in cls]
-            raise ValueError(f"Invalid action '{value}'. Must be one of: {valid}")
+        valid = [a.value for a in cls]
+        raise ValueError(f"Invalid action '{value}'. Must be one of: {valid}")

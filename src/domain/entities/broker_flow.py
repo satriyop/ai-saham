@@ -17,9 +17,19 @@ from enum import Enum
 class BrokerType(Enum):
     """Type of broker by investor category."""
 
-    FOREIGN = "foreign"  # ASING - Foreign investors
-    LOCAL = "local"  # LOKAL - Domestic investors
-    UNKNOWN = "unknown"
+    FOREIGN = "FOREIGN"  # ASING - Foreign investors
+    LOCAL = "LOCAL"  # LOKAL - Domestic investors
+    UNKNOWN = "UNKNOWN"
+
+    @classmethod
+    def parse(cls, value: str) -> "BrokerType":
+        """Parse canonical uppercase and legacy lowercase broker type values."""
+        normalized = value.strip().upper().replace("-", "_")
+        for broker_type in cls:
+            if normalized in {broker_type.name, broker_type.value}:
+                return broker_type
+        valid = [broker_type.value for broker_type in cls]
+        raise ValueError(f"Invalid broker type '{value}'. Must be one of: {valid}")
 
 
 @dataclass(frozen=True)
@@ -103,7 +113,7 @@ class BrokerTransaction:
         return cls(
             broker_code=data["broker_code"],
             broker_name=data["broker_name"],
-            broker_type=BrokerType(data["broker_type"]),
+            broker_type=BrokerType.parse(data["broker_type"]),
             buy_lot=int(data["buy_lot"]),
             sell_lot=int(data["sell_lot"]),
             buy_value=Decimal(data["buy_value"]),

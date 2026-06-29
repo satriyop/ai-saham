@@ -476,7 +476,7 @@ def test_broker_detail_aggregates_named_brokers_across_investor_types():
     assert detail.quality == "broad accumulation"
     assert detail.to_dict()["top_buyers"][0]["broker_code"] == "AK"
     buyer_rows = {row["broker_code"]: row for row in detail.to_dict()["top_buyers"]}
-    assert buyer_rows["YP"]["broker_type"] == "local"
+    assert buyer_rows["YP"]["broker_type"] == "LOCAL"
     assert detail.to_dict()["smart_flow"] == "55000000"
     assert detail.to_dict()["broker_weight_quality"] == "smart support"
 
