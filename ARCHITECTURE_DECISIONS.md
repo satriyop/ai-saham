@@ -1340,6 +1340,10 @@ JSON contract rules:
 * Legacy ambiguous aliases such as `score` or `verdict` may remain for
   compatibility, but the clearer canonical field should be present beside them
   before callers are migrated.
+* `saham analyze swing --format json` treats grouped `verdict`, `evidence`, and
+  `diagnostics` as canonical. Top-level fields such as `trade_setup`,
+  `signal_assessment`, `accumulation`, `risk`, and `data` are compatibility
+  aliases and must remain value-equal to their grouped source while retained.
 
 ### Layering
 

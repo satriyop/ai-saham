@@ -99,11 +99,21 @@ def test_analyze_swing_table_and_json_contracts(temp_workspace, monkeypatch):
     payload = _json_stdout(js)
     assert payload["artifact_type"] == "swing_analysis"
     assert payload["schema_version"] == 1
+    assert payload["json_contract"]["canonical"] == ["verdict", "evidence", "diagnostics"]
+    assert "trade_setup" in payload["json_contract"]["compatibility_aliases"]
+    assert "signal_assessment" in payload["json_contract"]["compatibility_aliases"]
+    assert "accumulation" in payload["json_contract"]["compatibility_aliases"]
     assert payload["verdict"]["trade_setup"] == payload["trade_setup"]
     assert payload["verdict"]["signal_assessment"] == payload["signal_assessment"]
     assert payload["verdict"]["risk_assessment"]["risk_status"] == payload["risk"]["risk_status"]
     assert payload["evidence"]["accumulation"] == payload["accumulation"]
+    assert payload["evidence"]["setup"] == payload["setup"]
+    assert payload["evidence"]["strategy_evidence"] == payload["strategy_evidence"]
+    assert payload["evidence"]["sentiment"] == payload["sentiment"]
     assert payload["diagnostics"]["data"]["as_of_date"] == payload["data"]["as_of_date"]
+    assert payload["diagnostics"]["flow_detail"] == payload["flow_detail"]
+    assert payload["diagnostics"]["broker_detail"] == payload["broker_detail"]
+    assert payload["diagnostics"]["broker_quality_note"] == payload["broker_quality_note"]
     assert payload["accumulation"]["accum_score"] == payload["accumulation"]["score"]
     assert (
         payload["accumulation"]["composite_flow_evidence_score"]
