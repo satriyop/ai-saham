@@ -151,7 +151,7 @@ def _build_user_prompt(grade: dict) -> str:
         if t.get("no_track_data"):
             continue
         per_ticker_summary.append(
-            f"  {t['ticker']:8s} verdict={t.get('verdict','?'):5s} "
+            f"  {t['ticker']:8s} opening_setup={t.get('opening_setup','?'):5s} "
             f"trend={t.get('trend','?'):8s} "
             f"entry_hit={str(t.get('entry_range_hit','?')):5s} "
             f"clean={str(t.get('clean_trade','?')):5s} "
@@ -163,7 +163,7 @@ def _build_user_prompt(grade: dict) -> str:
         )
 
     config = grade.get("config_snapshot", {})
-    by_verdict = grade.get("by_verdict", {})
+    by_opening_setup = grade.get("by_opening_setup", {})
 
     return f"""DATE: {grade.get('date')}
 
@@ -176,10 +176,10 @@ SESSION SUMMARY:
   Clean trade rate:       {grade.get('clean_trade_rate', 'N/A')}
   IEP mean error:         {grade.get('iep_accuracy', {}).get('mean_error_pct', 'N/A')}%
 
-BY VERDICT:
-  PRIME: count={by_verdict.get('PRIME',{}).get('count',0)} clean_trade={by_verdict.get('PRIME',{}).get('clean_trade_rate','N/A')} entry_hit={by_verdict.get('PRIME',{}).get('entry_range_hit_rate','N/A')}
-  WATCH: count={by_verdict.get('WATCH',{}).get('count',0)} clean_trade={by_verdict.get('WATCH',{}).get('clean_trade_rate','N/A')} entry_hit={by_verdict.get('WATCH',{}).get('entry_range_hit_rate','N/A')}
-  SKIP:  count={by_verdict.get('SKIP',{}).get('count',0)} clean_trade={by_verdict.get('SKIP',{}).get('clean_trade_rate','N/A')}
+BY OPENING SETUP:
+  PRIME: count={by_opening_setup.get('PRIME',{}).get('count',0)} clean_trade={by_opening_setup.get('PRIME',{}).get('clean_trade_rate','N/A')} entry_hit={by_opening_setup.get('PRIME',{}).get('entry_range_hit_rate','N/A')}
+  WATCH: count={by_opening_setup.get('WATCH',{}).get('count',0)} clean_trade={by_opening_setup.get('WATCH',{}).get('clean_trade_rate','N/A')} entry_hit={by_opening_setup.get('WATCH',{}).get('entry_range_hit_rate','N/A')}
+  SKIP:  count={by_opening_setup.get('SKIP',{}).get('count',0)} clean_trade={by_opening_setup.get('SKIP',{}).get('clean_trade_rate','N/A')}
 
 PER TICKER:
 {chr(10).join(per_ticker_summary)}
@@ -189,7 +189,7 @@ CURRENT CONFIG:
   iev_intensity_unusual_threshold:  {config.get('iev_intensity_unusual_threshold', 'N/A')}
   atr_range_cap_min:                {config.get('atr_range_cap_min', 'N/A')}
   atr_range_cap_max:                {config.get('atr_range_cap_max', 'N/A')}
-  accum_backed_threshold:           {config.get('accum_backed_threshold', 'N/A')}
+  broker_backing_threshold:           {config.get('broker_backing_threshold', 'N/A')}
   min_target_ticks:                 {config.get('min_target_ticks', 'N/A')}
   tick_friction_gate:               {config.get('tick_friction_gate', 'N/A')}
 

@@ -79,7 +79,7 @@ def test_skip_bearish_context_when_preopen_trend_bearish():
 
 
 def test_skip_bearish_context_when_accumulation_distributing():
-    confirmation = _confirm(_candidate(accum_tag="DISTRIBUTING"))
+    confirmation = _confirm(_candidate(opening_broker_backing_tag="DISTRIBUTING"))
 
     assert confirmation.decision == IntradayDecision.SKIP_BEARISH_CONTEXT
     assert "broker context is DISTRIBUTING" in confirmation.reasons

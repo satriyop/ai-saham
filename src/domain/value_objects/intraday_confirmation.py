@@ -37,7 +37,7 @@ class IntradayConfirmationCandidate:
     trend: str | None = None
     rsi: Decimal | None = None
     gap_pct: Decimal | None = None
-    accum_tag: str | None = None
+    opening_broker_backing_tag: str | None = None
     fvwap_discount_pct: Decimal | None = None
     opening_price_source: str | None = None
     opening_price_confidence: str | None = None
@@ -61,7 +61,7 @@ class IntradayConfirmation:
     trend: str | None = None
     rsi: Decimal | None = None
     gap_pct: Decimal | None = None
-    accum_tag: str | None = None
+    opening_broker_backing_tag: str | None = None
     fvwap_discount_pct: Decimal | None = None
     opening_price_source: str | None = None
     opening_price_confidence: str | None = None
@@ -95,7 +95,7 @@ class IntradayConfirmationJournalEntry:
     trend: str | None = None
     rsi: Decimal | None = None
     gap_pct: Decimal | None = None
-    accum_tag: str | None = None
+    opening_broker_backing_tag: str | None = None
     fvwap_discount_pct: Decimal | None = None
     actual_entry_price: Decimal | None = None
     actual_exit_price: Decimal | None = None

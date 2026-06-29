@@ -49,7 +49,7 @@ class PreOpenWorkflowRequest:
     regime_universe: str = "idx80"
     benchmark: str = "^JKSE"
     db_path: Path = Path("data.db")
-    signal_strategy: str | None = None
+    risk_strategy: str | None = None
 
 
 @dataclass(frozen=True)
@@ -59,8 +59,8 @@ class PreOpenWorkflowResponse:
     raw_movers: list
     data_freshness: PreOpenDataFreshness
     market_regime: "MarketContext | None" = None
-    strategy_signals: dict[str, str] | None = None
-    strategy_name: str | None = None
+    strategy_risk_statuses: dict[str, str] | None = None
+    risk_strategy_name: str | None = None
 
 
 class PreOpenWorkflowUseCase:
@@ -90,8 +90,8 @@ class PreOpenWorkflowUseCase:
         result = screen_response.result
 
         warnings = list(screen_response.warnings) + list(request.guard_warnings)
-        strategy_signals, strategy_warning = self._build_strategy_signals(
-            strategy_name=request.signal_strategy,
+        strategy_risk_statuses, strategy_warning = self._build_strategy_risk_statuses(
+            risk_strategy_name=request.risk_strategy,
             candidates=result.candidates,
         )
         if strategy_warning:
@@ -122,29 +122,29 @@ class PreOpenWorkflowUseCase:
             raw_movers=screen_response.raw_movers,
             data_freshness=data_freshness,
             market_regime=market_regime,
-            strategy_signals=strategy_signals,
-            strategy_name=request.signal_strategy,
+            strategy_risk_statuses=strategy_risk_statuses,
+            risk_strategy_name=request.risk_strategy,
         )
 
-    def _build_strategy_signals(
+    def _build_strategy_risk_statuses(
         self,
-        strategy_name: str | None,
+        risk_strategy_name: str | None,
         candidates: list[ScreenerCandidate],
     ) -> tuple[dict[str, str] | None, str | None]:
-        if not strategy_name:
+        if not risk_strategy_name:
             return None, None
 
         try:
             strategy_loader = StrategyLoader(registry=self._registry)
-            rules_path = strategy_loader.resolve(strategy_name)
+            rules_path = strategy_loader.resolve(risk_strategy_name)
         except StrategyNotFoundError as exc:
-            return {}, f"Strategy '{strategy_name}' not found: {exc}"
+            return {}, f"Strategy '{risk_strategy_name}' not found: {exc}"
 
         risk_use_case = AssessRiskUseCase(
             repository=self._market_repo,
             registry=self._registry,
         )
-        signals: dict[str, str] = {}
+        statuses: dict[str, str] = {}
         for candidate in candidates:
             try:
                 response = risk_use_case.execute(
@@ -153,10 +153,10 @@ class PreOpenWorkflowUseCase:
                         rules_file=rules_path,
                     )
                 )
-                signals[candidate.ticker] = response.assessment.risk_level_name
+                statuses[candidate.ticker] = response.assessment.risk_level_name
             except Exception:
-                signals[candidate.ticker] = "?"
-        return signals, None
+                statuses[candidate.ticker] = "?"
+        return statuses, None
 
     def _build_data_freshness(
         self,

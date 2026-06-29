@@ -109,7 +109,7 @@ class IntradayConfirmationJournalService:
                 trend=confirmation.trend,
                 rsi=confirmation.rsi,
                 gap_pct=confirmation.gap_pct,
-                accum_tag=confirmation.accum_tag,
+                opening_broker_backing_tag=confirmation.opening_broker_backing_tag,
                 fvwap_discount_pct=confirmation.fvwap_discount_pct,
             )
             for confirmation in confirmations
@@ -137,7 +137,7 @@ class IntradayConfirmationJournalService:
                 "accum": self._bucket(
                     entries,
                     outcomes,
-                    lambda entry: f"accum:{entry.accum_tag or 'missing'}",
+                    lambda entry: f"accum:{entry.opening_broker_backing_tag or 'missing'}",
                 ),
                 "fvwap": self._bucket(entries, outcomes, lambda entry: entry.fvwap_bucket),
             },

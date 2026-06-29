@@ -122,7 +122,7 @@ def today(
 
     opening = compact_table()
     opening.add_column("Ticker", style="bold")
-    opening.add_column("Verdict")
+    opening.add_column("Opening Setup")
     opening.add_column("IEV", justify="right")
     opening.add_column("IEP", justify="right")
     opening.add_column("Trend")
@@ -131,15 +131,17 @@ def today(
             iev = f"{candidate.iev:,}" if candidate.iev is not None else "-"
             iep = f"{candidate.iep:,}" if candidate.iep is not None else "-"
 
-            # Color trend and verdict
-            verdict_style = "green" if "BUY" in candidate.verdict.upper() else ("red" if "SELL" in candidate.verdict.upper() else "white")
-            verdict_text = f"[{verdict_style}]{candidate.verdict}[/{verdict_style}]"
+            # Color the opening-session setup label.
+            setup_style = "green" if candidate.opening_setup == "PRIME" else (
+                "yellow" if candidate.opening_setup == "WATCH" else "red"
+            )
+            setup_text = f"[{setup_style}]{candidate.opening_setup}[/{setup_style}]"
 
             trend_map = {"UP": "green", "DOWN": "red", "SIDE": "yellow"}
             trend_style = trend_map.get(str(candidate.trend).upper(), "white")
             trend_text = f"[{trend_style}]{candidate.trend or '-'}[/{trend_style}]"
 
-            opening.add_row(candidate.ticker, verdict_text, iev, iep, trend_text)
+            opening.add_row(candidate.ticker, setup_text, iev, iep, trend_text)
     else:
         opening.add_row("-", "No saved opening snapshot", "-", "-", "Run: saham learn snapshot --force")
 

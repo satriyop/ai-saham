@@ -153,9 +153,9 @@ def _write_sidecar(
                 "atr_stop": str(c.stop_loss_price) if c.stop_loss_price else None,
                 "trend": c.trend_signal,
                 "rsi": str(c.rsi) if c.rsi else None,
-                "accum_tag": c.accum_tag,
-                "broker_accum_score": c.broker_accum_score,
-                "accum_streak": c.accum_streak,
+                "opening_broker_backing_tag": c.opening_broker_backing_tag,
+                "opening_broker_backing_score": c.opening_broker_backing_score,
+                "opening_broker_buy_streak": c.opening_broker_buy_streak,
                 "foreign_vwap": str(c.foreign_vwap) if c.foreign_vwap else None,
                 "fvwap_discount_pct": (
                     c.fvwap_discount_pct if c.fvwap_discount_pct is not None else None
@@ -241,11 +241,11 @@ def pre_open(
             help="Allow weekend/non-trading-day dry-runs",
         ),
     ] = False,
-    signal_strategy: Annotated[
+    risk_strategy: Annotated[
         Optional[str],
         typer.Option(
-            "--signal-strategy",
-            help="Strategy name to show as extra signal column",
+            "--risk-strategy",
+            help="Strategy/rules name to show as an extra risk-status column",
         ),
     ] = None,
 ) -> None:
@@ -380,7 +380,7 @@ def pre_open(
                 regime_universe=regime_universe,
                 benchmark=benchmark,
                 db_path=resolved_db,
-                signal_strategy=signal_strategy,
+                risk_strategy=risk_strategy,
             )
         )
         result = response.result
@@ -396,8 +396,8 @@ def pre_open(
             warnings=response.warnings,
             data_freshness=response.data_freshness,
             market_regime=response.market_regime,
-            strategy_signals=response.strategy_signals,
-            strategy_name=response.strategy_name,
+            strategy_risk_statuses=response.strategy_risk_statuses,
+            risk_strategy_name=response.risk_strategy_name,
         )
 
         _write_sidecar(

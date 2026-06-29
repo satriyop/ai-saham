@@ -57,7 +57,7 @@ def compute_grade(run_date: date | None = None) -> dict:
         entry_high = cand.get("entry_range_high")
         trend = cand.get("trend")
         iep = cand.get("iep")
-        verdict = cand.get("verdict", "SKIP")
+        opening_setup = cand.get("opening_setup", "SKIP")
         bid_pressure_preopen = cand.get("bid_pressure_preopen")  # NCP-locked 08:57
 
         # Time-series of observed prices. Prefer explicit execution/last-price fields;
@@ -73,7 +73,7 @@ def compute_grade(run_date: date | None = None) -> dict:
         if not price_series:
             per_ticker.append({
                 "ticker": ticker,
-                "verdict": verdict,
+                "opening_setup": opening_setup,
                 "trend": trend,
                 "no_track_data": True,
             })
@@ -164,7 +164,7 @@ def compute_grade(run_date: date | None = None) -> dict:
 
         per_ticker.append({
             "ticker": ticker,
-            "verdict": verdict,
+            "opening_setup": opening_setup,
             "trend": trend,
             "iep": iep,
             "opening_price": opening_price,
@@ -207,8 +207,11 @@ def compute_grade(run_date: date | None = None) -> dict:
         vals = [t[key] for t in items if t.get(key) is not None]
         return round(sum(1 for v in vals if v) / len(vals), 3) if vals else None
 
-    def by_verdict(verdict_filter):
-        subset = [t for t in per_ticker if t.get("verdict") == verdict_filter and not t.get("no_track_data")]
+    def by_opening_setup(setup_filter):
+        subset = [
+            t for t in per_ticker
+            if t.get("opening_setup") == setup_filter and not t.get("no_track_data")
+        ]
         if not subset:
             return {"count": 0}
         return {
@@ -239,10 +242,10 @@ def compute_grade(run_date: date | None = None) -> dict:
         "trend_accuracy_T15": rate(tracked, "trend_T15"),
         "trend_accuracy_T30": rate(tracked, "trend_T30"),
         "clean_trade_rate": rate(tracked, "clean_trade"),
-        "by_verdict": {
-            "PRIME": by_verdict("PRIME"),
-            "WATCH": by_verdict("WATCH"),
-            "SKIP": by_verdict("SKIP"),
+        "by_opening_setup": {
+            "PRIME": by_opening_setup("PRIME"),
+            "WATCH": by_opening_setup("WATCH"),
+            "SKIP": by_opening_setup("SKIP"),
         },
         "iep_accuracy": {
             "mean_error_pct": round(sum(iep_errors) / len(iep_errors), 3) if iep_errors else None,
@@ -330,7 +333,7 @@ def _load_config_snapshot() -> dict:
             "iev_intensity_unusual_threshold": analysis.get("iev_intensity_unusual_threshold"),
             "atr_range_cap_min": analysis.get("atr_range_cap_min"),
             "atr_range_cap_max": analysis.get("atr_range_cap_max"),
-            "accum_backed_threshold": analysis.get("accum_backed_threshold"),
+            "broker_backing_threshold": analysis.get("broker_backing_threshold"),
             "min_target_ticks": risk.get("min_target_ticks"),
             "tick_friction_gate": risk.get("tick_friction_gate"),
         }
@@ -358,15 +361,15 @@ def _write_grade_md(grade: dict, path: Path) -> None:
         f"| High-confidence prices | {grade.get('data_quality', {}).get('high_confidence_price_count', 0)} |",
         f"| Low-confidence prices | {grade.get('data_quality', {}).get('low_confidence_price_count', 0)} |",
         "",
-        "## By Verdict",
+        "## By Opening Setup",
         "",
-        "| Verdict | Count | Entry Range Hit | Clean Trade | Trend T+5 | Trend T+30 |",
+        "| Opening Setup | Count | Entry Range Hit | Clean Trade | Trend T+5 | Trend T+30 |",
         "|---|---|---|---|---|---|",
     ]
-    for verdict in ("PRIME", "WATCH", "SKIP"):
-        v = grade["by_verdict"].get(verdict, {})
+    for opening_setup in ("PRIME", "WATCH", "SKIP"):
+        v = grade["by_opening_setup"].get(opening_setup, {})
         lines.append(
-            f"| {verdict} | {v.get('count', 0)} "
+            f"| {opening_setup} | {v.get('count', 0)} "
             f"| {_pct(v.get('entry_range_hit_rate'))} "
             f"| {_pct(v.get('clean_trade_rate'))} "
             f"| {_pct(v.get('trend_accuracy_T5'))} "
@@ -374,15 +377,15 @@ def _write_grade_md(grade: dict, path: Path) -> None:
         )
 
     lines += ["", "## Per Ticker", "",
-              "| Ticker | Verdict | Trend | Opening | Entry Range | 1R Avail | Stop Hit | Clean | Trend T5 | Trend T30 |",
+              "| Ticker | Opening Setup | Trend | Opening | Entry Range | 1R Avail | Stop Hit | Clean | Trend T5 | Trend T30 |",
               "|---|---|---|---|---|---|---|---|---|---|"]
     for t in grade.get("per_ticker", []):
         if t.get("no_track_data"):
-            lines.append(f"| {t['ticker']} | {t.get('verdict','?')} | — | NO DATA | — | — | — | — | — | — |")
+            lines.append(f"| {t['ticker']} | {t.get('opening_setup','?')} | — | NO DATA | — | — | — | — | — | — |")
         else:
             lines.append(
                 f"| {t['ticker']} "
-                f"| {t.get('verdict','?')} "
+                f"| {t.get('opening_setup','?')} "
                 f"| {t.get('trend','?')} "
                 f"| {t.get('opening_price','?')} "
                 f"| {'✓' if t.get('entry_range_hit') else '✗'} "

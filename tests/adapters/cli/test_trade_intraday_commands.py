@@ -81,7 +81,7 @@ def _patch_intraday_proxy_dependencies(monkeypatch, captured: dict) -> None:
                 decisions={},
                 trading_days=0,
                 days_with_trades=0,
-                by_accum_tag=[],
+                by_opening_broker_backing_tag=[],
                 by_fvwap_sign=[],
                 by_rsi_bucket=[],
                 by_ticker=[],
@@ -115,7 +115,7 @@ def test_intraday_backtest_display_calls_it_proxy_simulation(capsys):
         decisions={"ENTER": 1},
         trading_days=7,
         days_with_trades=1,
-        by_accum_tag=[],
+        by_opening_broker_backing_tag=[],
         by_fvwap_sign=[],
         by_rsi_bucket=[],
         by_ticker=[],
@@ -156,8 +156,8 @@ def test_intraday_proxy_uses_pre_open_config_defaults(monkeypatch):
     assert request.rsi_overbought_threshold == Decimal("75")
     assert request.atr_range_cap_min == Decimal("0.01")
     assert request.atr_range_cap_max == Decimal("0.05")
-    assert request.accum_window_days == 7
-    assert request.accum_backed_threshold == 50.0
+    assert request.broker_backing_window_days == 7
+    assert request.broker_backing_threshold == 50.0
     assert request.fvwap_period == 20
     assert request.history_days == 365
 
@@ -202,7 +202,7 @@ def _write_sidecar(path: Path) -> None:
                         "atr_stop": "8900",
                         "trend": "BULLISH",
                         "rsi": "52",
-                        "accum_tag": "BACKED",
+                        "opening_broker_backing_tag": "BACKED",
                     },
                     {
                         "ticker": "GOTO",
@@ -238,7 +238,7 @@ def _write_confirmation(path: Path, include_context: bool = False) -> None:
                 "trend": "BULLISH",
                 "rsi": "52",
                 "gap_pct": "0.6",
-                "accum_tag": "BACKED",
+                "opening_broker_backing_tag": "BACKED",
                 "fvwap_discount_pct": "2.4",
             }
         )

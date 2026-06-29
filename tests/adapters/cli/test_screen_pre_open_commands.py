@@ -121,8 +121,8 @@ def test_pre_open_results_render_rich_summary_panel(capsys):
     out = capsys.readouterr().out
     assert "Pre-Open Screener" in out
     assert "Session Summary" in out
-    assert "PRE-OPEN CANDIDATE PLAN" in out
-    assert "PLAN:" in out
+    assert "PRE-OPEN OPENING SETUP" in out
+    assert "SETUP:" in out
     assert "VERDICT:" not in out
     assert "Watchlist" in out
     assert "BBCA" in out

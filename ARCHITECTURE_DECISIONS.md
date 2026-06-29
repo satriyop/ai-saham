@@ -1338,11 +1338,10 @@ JSON contract rules:
 * JSON outputs and command sidecars should include `schema_version` and
   `artifact_type` at the root.
 * New machine-facing fields should use explicit artifact names such as
-  `foreign_flow_score`, `signal_score`, `risk_status`, `broker_accum_score`, or
+  `foreign_flow_score`, `signal_score`, `risk_status`, `opening_broker_backing_score`, or
   `trade_setup.action`.
-* Legacy ambiguous aliases such as `score` or `verdict` may remain for
-  compatibility, but the clearer canonical field should be present beside them
-  before callers are migrated.
+* Opening-session artifacts use `opening_setup` for PRIME/WATCH/SKIP labels;
+  they must not use generic `verdict` unless they compose a `TradeSetup`.
 * `saham analyze swing --format json` treats grouped `verdict`, `evidence`, and
   `diagnostics` as canonical. Top-level fields such as `trade_setup`,
   `signal_assessment`, `accumulation`, `risk`, and `data` are compatibility

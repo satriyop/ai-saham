@@ -102,27 +102,27 @@ def display_raw_movers(raw_movers: list, top_n: int | None, iev_min: int) -> Non
 PLAN_ORDER = {"PRIME": 0, "WATCH": 1, "NO_DATA": 2, "SKIP": 3}
 
 
-def pre_open_plan(candidate: ScreenerCandidate) -> str:
-    """Synthesize all pre-open signals into a session plan label."""
+def pre_open_setup(candidate: ScreenerCandidate) -> str:
+    """Synthesize pre-open evidence into an opening-session setup label."""
     if candidate.entry_range_low is None:
         return "NO_DATA"
-    if candidate.trend_signal in ("BEARISH", "GAP_OUT") or candidate.accum_tag == "DISTRIBUTING":
+    if candidate.trend_signal in ("BEARISH", "GAP_OUT") or candidate.opening_broker_backing_tag == "DISTRIBUTING":
         return "SKIP"
     if candidate.trend_signal == "NEUTRAL":
         return "SKIP"
-    backed = candidate.accum_tag == "BACKED"
+    backed = candidate.opening_broker_backing_tag == "BACKED"
     floor = candidate.fvwap_discount_pct is not None and candidate.fvwap_discount_pct > 0
     if backed and floor:
         return "PRIME"
     return "WATCH"
 
 
-def signal_col(candidate: ScreenerCandidate) -> str:
-    """Compact ACCUM tag + FVWAP into a single SIGNAL string."""
+def backing_col(candidate: ScreenerCandidate) -> str:
+    """Compact broker-backing tag + FVWAP into one diagnostics string."""
     parts: list[str] = []
-    if candidate.accum_tag is not None:
-        tag = candidate.accum_tag[:8]
-        streak = f"×{candidate.accum_streak}d" if candidate.accum_streak else ""
+    if candidate.opening_broker_backing_tag is not None:
+        tag = candidate.opening_broker_backing_tag[:8]
+        streak = f"×{candidate.opening_broker_buy_streak}d" if candidate.opening_broker_buy_streak else ""
         parts.append(f"{tag}{streak}")
     if candidate.fvwap_discount_pct is not None:
         note = " floor" if candidate.fvwap_discount_pct > 0 else (
@@ -186,10 +186,10 @@ def display_pre_open_summary_panel(
 ) -> None:
     sorted_candidates = sorted(
         candidates,
-        key=lambda c: (PLAN_ORDER.get(pre_open_plan(c), 99), -c.iev),
+        key=lambda c: (PLAN_ORDER.get(pre_open_setup(c), 99), -c.iev),
     )
-    watchlist = [c for c in sorted_candidates if pre_open_plan(c) in ("PRIME", "WATCH")]
-    skipped = [c for c in sorted_candidates if pre_open_plan(c) not in ("PRIME", "WATCH")]
+    watchlist = [c for c in sorted_candidates if pre_open_setup(c) in ("PRIME", "WATCH")]
+    skipped = [c for c in sorted_candidates if pre_open_setup(c) not in ("PRIME", "WATCH")]
 
     summary = compact_table(show_header=False)
     summary.add_column("Metric", style="bold")
@@ -265,8 +265,8 @@ def display_results(
     warnings: list[str],
     data_freshness: PreOpenDataFreshness | None = None,
     market_regime: MarketContext | None = None,
-    strategy_signals: dict[str, str] | None = None,
-    strategy_name: str | None = None,
+    strategy_risk_statuses: dict[str, str] | None = None,
+    risk_strategy_name: str | None = None,
 ) -> None:
     # 1. Summary Panel
     display_pre_open_summary_panel(
@@ -291,7 +291,7 @@ def display_results(
 
     sorted_candidates = sorted(
         candidates,
-        key=lambda c: (PLAN_ORDER.get(pre_open_plan(c), 99), -c.iev),
+        key=lambda c: (PLAN_ORDER.get(pre_open_setup(c), 99), -c.iev),
     )
 
     show_spread = any(c.spread_pct is not None for c in sorted_candidates)
@@ -299,7 +299,7 @@ def display_results(
 
     # 2. Results Table
     results_table = compact_table()
-    results_table.add_column("Plan")
+    results_table.add_column("Setup")
     results_table.add_column("Ticker", style="bold")
     results_table.add_column("IEV", justify="right")
     results_table.add_column("Gap%", justify="right")
@@ -308,14 +308,14 @@ def display_results(
     results_table.add_column("Entry Range", justify="right")
     results_table.add_column("Stop%", justify="right")
     results_table.add_column("RSI", justify="right")
-    results_table.add_column("Signal")
+    results_table.add_column("Broker Backing")
     if show_notation:
         results_table.add_column("Note")
-    if strategy_signals is not None:
-        results_table.add_column("Strat", justify="right")
+    if strategy_risk_statuses is not None:
+        results_table.add_column("Risk", justify="right")
 
     for candidate in sorted_candidates:
-        current_plan = pre_open_plan(candidate)
+        current_plan = pre_open_setup(candidate)
 
         # Colorize plan
         if current_plan == "PRIME":
@@ -335,7 +335,7 @@ def display_results(
         rng = candidate.entry_range_label
         stop_pct = candidate.risk_reward_label
         rsi_str = f"{float(candidate.rsi):.0f}" if candidate.rsi else "-"
-        signal = signal_col(candidate)
+        signal = backing_col(candidate)
 
         row_cells = [
             plan_text,
@@ -357,8 +357,8 @@ def display_results(
         if show_notation:
             row_cells.append(notation_label(candidate.ticker_notation))
 
-        if strategy_signals is not None:
-            raw = strategy_signals.get(candidate.ticker, "?")
+        if strategy_risk_statuses is not None:
+            raw = strategy_risk_statuses.get(candidate.ticker, "?")
             if raw == "LOW_RISK":
                 strat_text = "[green]↑[/]"
             elif raw == "HIGH_RISK":
@@ -373,7 +373,7 @@ def display_results(
     console().print(
         panel(
             results_table,
-            title="PRE-OPEN CANDIDATE PLAN"
+            title="PRE-OPEN OPENING SETUP"
         )
     )
 
@@ -395,14 +395,14 @@ def display_results(
         )
 
     # 4. Next Action Panel
-    watchlist = [c for c in sorted_candidates if pre_open_plan(c) in ("PRIME", "WATCH")]
-    skipped = [c for c in sorted_candidates if pre_open_plan(c) not in ("PRIME", "WATCH")]
+    watchlist = [c for c in sorted_candidates if pre_open_setup(c) in ("PRIME", "WATCH")]
+    skipped = [c for c in sorted_candidates if pre_open_setup(c) not in ("PRIME", "WATCH")]
 
     footer_elements = []
     if watchlist:
         watch_labels = []
         for candidate in watchlist:
-            prefix = "★" if pre_open_plan(candidate) == "PRIME" else "◉"
+            prefix = "★" if pre_open_setup(candidate) == "PRIME" else "◉"
             watch_labels.append(f"{prefix} {candidate.ticker}")
         skip_labels = "  ".join(c.ticker for c in skipped) or "—"
 
@@ -428,13 +428,13 @@ def display_results(
 
     # 5. Explanations & Disclaimers
     legends = [
-        Text("PLAN: ★ PRIME = all signals green | ◉ WATCH = bullish, needs confirm | ✗ SKIP = bearish/distributing | ? NO_DATA = run 'saham fetch market TICKER --days 365'", style="dim"),
-        Text("SIGNAL: ACCUM tag × streak | FVWAP% (floor=asing underwater, sell=asing profit) | PH=Prev High", style="dim"),
+        Text("SETUP: ★ PRIME = opening evidence aligned | ◉ WATCH = valid but needs confirm | ✗ SKIP = bearish/distributing | ? NO_DATA = run 'saham fetch market TICKER --days 365'", style="dim"),
+        Text("BROKER BACKING: tag × streak | FVWAP% (floor=asing underwater, sell=asing profit) | PH=Prev High", style="dim"),
         Text("STOP%: max loss from entry (ATR-based, capped -7%)", style="dim"),
     ]
-    if strategy_signals is not None:
+    if strategy_risk_statuses is not None:
         legends.append(
-            Text(f"STRAT ({strategy_name}): ↑ = LOW_RISK(entry) | ~ = MODERATE(hold) | ↓ = HIGH_RISK(exit)", style="dim")
+            Text(f"RISK STRATEGY ({risk_strategy_name}): ↑ = LOW_RISK | ~ = MODERATE | ↓ = HIGH_RISK", style="dim")
         )
     legends.append(Text("\nDISCLAIMER: Analysis only. Not trading advice.", style="dim italic"))
 

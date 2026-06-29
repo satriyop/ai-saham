@@ -96,10 +96,10 @@ class OpeningSnapshotUseCase:
                 "trend": c.trend_signal,
                 "rsi": round(float(c.rsi), 2) if c.rsi else None,
                 "atr": round(float(c.atr), 2) if c.atr else None,
-                "accum_tag": c.accum_tag,
-                "broker_accum_score": (
-                    round(c.broker_accum_score, 1)
-                    if c.broker_accum_score is not None else None
+                "opening_broker_backing_tag": c.opening_broker_backing_tag,
+                "opening_broker_backing_score": (
+                    round(c.opening_broker_backing_score, 1)
+                    if c.opening_broker_backing_score is not None else None
                 ),
                 "iev_intensity": round(c.iev_intensity, 3) if c.iev_intensity is not None else None,
                 "unusual_volume": c.unusual_volume,
@@ -108,7 +108,7 @@ class OpeningSnapshotUseCase:
                 # >0.6 = buyers dominating (committed demand), <0.4 = sellers dominating
                 "bid_pressure_preopen": c.bid_offer_imbalance,
                 "ticker_notation": c.ticker_notation.to_dict() if c.ticker_notation else None,
-                "verdict": self._verdict(c, request.config.min_bid_pressure_preopen),
+                "opening_setup": self._opening_setup(c, request.config.min_bid_pressure_preopen),
             })
 
         snapshot = {
@@ -130,17 +130,17 @@ class OpeningSnapshotUseCase:
         return snapshot
 
     @staticmethod
-    def _verdict(candidate, min_bp: float = 0.0) -> str:
-        """Derive PRIME/WATCH/SKIP from existing candidate signals."""
+    def _opening_setup(candidate, min_bp: float = 0.0) -> str:
+        """Derive PRIME/WATCH/SKIP from opening-session signals."""
         trend = candidate.trend_signal or ""
-        accum = candidate.accum_tag or ""
+        broker_backing = candidate.opening_broker_backing_tag or ""
         unusual = getattr(candidate, "unusual_volume", False)
         # Weak pre-open bid pressure → insufficient conviction for a WATCH entry
         if min_bp > 0 and (candidate.bid_offer_imbalance or 0) < min_bp:
             return "SKIP"
-        if trend == "BULLISH" and accum == "BACKED" and not unusual:
+        if trend == "BULLISH" and broker_backing == "BACKED" and not unusual:
             return "PRIME"
-        if trend in ("BULLISH", "NEUTRAL") and accum != "DISTRIBUTING":
+        if trend in ("BULLISH", "NEUTRAL") and broker_backing != "DISTRIBUTING":
             return "WATCH"
         return "SKIP"
 

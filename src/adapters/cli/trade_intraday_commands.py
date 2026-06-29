@@ -87,7 +87,7 @@ def _load_confirmation_candidates(
                 trend=row.get("trend"),
                 rsi=_decimal_or_none(row.get("rsi")),
                 gap_pct=_decimal_or_none(row.get("gap_pct")),
-                accum_tag=row.get("accum_tag"),
+                opening_broker_backing_tag=row.get("opening_broker_backing_tag"),
                 fvwap_discount_pct=_decimal_or_none(row.get("fvwap_discount_pct")),
                 opening_price_source=observation.source if observation else None,
                 opening_price_confidence=observation.confidence if observation else None,
@@ -105,7 +105,7 @@ def _load_confirmation_candidates(
             "prev_low": row.get("prev_low"),
             "entry_range_low": row.get("entry_range_low"),
             "entry_range_high": row.get("entry_range_high"),
-            "accum_tag": row.get("accum_tag"),
+            "opening_broker_backing_tag": row.get("opening_broker_backing_tag"),
             "fvwap_discount_pct": row.get("fvwap_discount_pct"),
             "opening_price_source": observation.source if observation else None,
             "opening_price_confidence": observation.confidence if observation else None,
@@ -150,7 +150,7 @@ def _write_confirmation_sidecar(
                 "trend": c.trend,
                 "rsi": str(c.rsi) if c.rsi is not None else None,
                 "gap_pct": str(c.gap_pct) if c.gap_pct is not None else None,
-                "accum_tag": c.accum_tag,
+                "opening_broker_backing_tag": c.opening_broker_backing_tag,
                 "fvwap_discount_pct": (
                     str(c.fvwap_discount_pct)
                     if c.fvwap_discount_pct is not None
@@ -476,7 +476,7 @@ def _confirm_log_impl(confirmation_path: Path, journal_path: Path) -> None:
             trend=row.get("trend"),
             rsi=_decimal_or_none(row.get("rsi")),
             gap_pct=_decimal_or_none(row.get("gap_pct")),
-            accum_tag=row.get("accum_tag"),
+            opening_broker_backing_tag=row.get("opening_broker_backing_tag"),
             fvwap_discount_pct=_decimal_or_none(row.get("fvwap_discount_pct")),
         )
         for row in data.get("confirmations", [])
@@ -818,8 +818,8 @@ def intraday_backtest(
             rsi_overbought_threshold=resolved_rsi_overbought,
             atr_range_cap_min=po_config.atr_range_cap_min,
             atr_range_cap_max=po_config.atr_range_cap_max,
-            accum_window_days=po_config.accum_window_days,
-            accum_backed_threshold=po_config.accum_backed_threshold,
+            broker_backing_window_days=po_config.broker_backing_window_days,
+            broker_backing_threshold=po_config.broker_backing_threshold,
             fvwap_period=po_config.fvwap_period,
             history_days=po_config.history_days,
             iev_top_n=iev_top_n,
@@ -850,8 +850,8 @@ def intraday_backtest(
                 "avg_r_multiple": response.avg_r_multiple,
                 "exit_reason_counts": response.exit_reason_counts,
                 "decisions": response.decisions,
-                "by_accum_tag": [
-                    {**r, "total_pnl": str(r["total_pnl"])} for r in response.by_accum_tag
+                "by_opening_broker_backing_tag": [
+                    {**r, "total_pnl": str(r["total_pnl"])} for r in response.by_opening_broker_backing_tag
                 ],
                 "by_fvwap_sign": [
                     {**r, "total_pnl": str(r["total_pnl"])} for r in response.by_fvwap_sign

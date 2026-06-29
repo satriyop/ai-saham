@@ -38,7 +38,7 @@ def _entry(
         trend="BULLISH",
         rsi=rsi,
         gap_pct=gap,
-        accum_tag=accum,
+        opening_broker_backing_tag=accum,
         fvwap_discount_pct=fvwap,
     )
 
@@ -144,7 +144,7 @@ def test_review_prefers_manual_outcome_without_repository_call():
         trend=entry.trend,
         rsi=entry.rsi,
         gap_pct=entry.gap_pct,
-        accum_tag=entry.accum_tag,
+        opening_broker_backing_tag=entry.opening_broker_backing_tag,
         fvwap_discount_pct=entry.fvwap_discount_pct,
         actual_entry_price=Decimal("9050"),
         actual_exit_price=Decimal("9200"),

@@ -25,7 +25,7 @@ def _entry(ticker="BBCA") -> IntradayConfirmationJournalEntry:
         trend="BULLISH",
         rsi=Decimal("52"),
         gap_pct=Decimal("0.6"),
-        accum_tag="BACKED",
+        opening_broker_backing_tag="BACKED",
         fvwap_discount_pct=Decimal("2.4"),
     )
 

@@ -87,7 +87,7 @@ def intraday_entry_to_record(entry) -> dict:
         "stop_pct": _f(entry.stop_pct),
         "iev": entry.iev,
         "gap_pct": _f(entry.gap_pct),
-        "accum_tag": entry.accum_tag,
+        "opening_broker_backing_tag": entry.opening_broker_backing_tag,
         "fvwap_discount_pct": _f(entry.fvwap_discount_pct),
         "opening_price": _f(entry.opening_price),
         "reason_codes": list(entry.reason_codes),

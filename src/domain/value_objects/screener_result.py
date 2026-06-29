@@ -118,9 +118,9 @@ class ScreenerCandidate:
     entry_range_low: Decimal | None = None
     entry_range_high: Decimal | None = None
     # Improvement #1 — smart money alignment
-    broker_accum_score: float | None = None  # 0–70 broker consistency + streak score
-    accum_tag: str | None = None           # BACKED / UNCONFIRMED / DISTRIBUTING
-    accum_streak: int | None = None        # consecutive foreign buy days
+    opening_broker_backing_score: float | None = None  # 0–70 broker consistency + streak score
+    opening_broker_backing_tag: str | None = None           # BACKED / UNCONFIRMED / DISTRIBUTING
+    opening_broker_buy_streak: int | None = None        # consecutive foreign buy days
     # Improvement #2 — foreign VWAP floor signal
     foreign_vwap: Decimal | None = None
     fvwap_discount_pct: float | None = None  # positive = foreigners underwater (bullish floor)

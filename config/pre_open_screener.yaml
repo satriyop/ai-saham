@@ -64,8 +64,8 @@ analysis:
   use_atr_range: true          # scale entry band by ATR instead of fixed %
   atr_range_cap_min: 0.01      # floor: never narrower than 1%
   atr_range_cap_max: 0.05      # ceiling: never wider than 5%
-  accum_window_days: 7         # lookback for accumulation backing check
-  accum_backed_threshold: 50   # score >= this -> BACKED
+  broker_backing_window_days: 7         # lookback for opening broker-backing check
+  broker_backing_threshold: 50   # score >= this -> BACKED
   fvwap_period: 20             # rolling window for Foreign VWAP
 
   # IEV intensity: compares mover IEV to the stock's own average 5-min volume.
@@ -86,7 +86,7 @@ regime_gate:
   # 0.5 = halve the entry band (e.g., ±3% → ±1.5%).
   gap_pct_tightening_factor: 0.5
 
-  # If true, reject UNCONFIRMED or None accumulation tags in tighten_in_regimes.
+  # If true, reject UNCONFIRMED or None broker-backing tags in tighten_in_regimes.
   # Only BACKED candidates proceed in weak market conditions.
   require_backed_in_weak: true
 

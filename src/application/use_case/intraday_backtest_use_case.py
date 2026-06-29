@@ -2,7 +2,7 @@
 Daily-OHLC proxy simulation for the deterministic intraday pre-open workflow.
 
 Uses daily OHLC as a proxy for intraday execution (Option A):
-  - Screening reuses pre-open math (ATR/RSI/SMA, entry range, ATR stop, ACCUM, FVWAP).
+  - Screening reuses pre-open math (ATR/RSI/SMA, entry range, ATR stop, broker backing, FVWAP).
     IEV filter is intentionally OMITTED — historical IEV is not stored.
   - Opening price proxy = candle.open (IDX 09:00 call-auction clearing price).
   - Same-day exit only. No overnight holds.
@@ -65,8 +65,8 @@ class IntradayBacktestRequest:
     rsi_overbought_threshold: Decimal = Decimal("75")
     atr_range_cap_min: Decimal = Decimal("0.01")   # 1% floor on ATR band
     atr_range_cap_max: Decimal = Decimal("0.05")   # 5% ceiling on ATR band
-    accum_window_days: int = 7
-    accum_backed_threshold: float = 50.0
+    broker_backing_window_days: int = 7
+    broker_backing_threshold: float = 50.0
     fvwap_period: int = 20
     history_days: int = 60                         # min candle lookback per ticker
     include_wait: bool = False                     # treat WAIT as ENTER if True
@@ -103,9 +103,9 @@ class IntradayBacktestTrade:
     trend: str | None
     rsi: float | None
     atr: float | None
-    accum_tag: str | None
-    broker_accum_score: float | None
-    accum_streak: int | None
+    opening_broker_backing_tag: str | None
+    opening_broker_backing_score: float | None
+    opening_broker_buy_streak: int | None
     fvwap_discount_pct: float | None
     prev_high: Decimal | None
     entry_range_low: Decimal | None
@@ -135,9 +135,9 @@ class IntradayBacktestTrade:
             "trend": self.trend,
             "rsi": self.rsi,
             "atr": self.atr,
-            "accum_tag": self.accum_tag,
-            "broker_accum_score": self.broker_accum_score,
-            "accum_streak": self.accum_streak,
+            "opening_broker_backing_tag": self.opening_broker_backing_tag,
+            "opening_broker_backing_score": self.opening_broker_backing_score,
+            "opening_broker_buy_streak": self.opening_broker_buy_streak,
             "fvwap_discount_pct": self.fvwap_discount_pct,
             "prev_high": str(self.prev_high) if self.prev_high is not None else None,
             "entry_range_low": str(self.entry_range_low) if self.entry_range_low is not None else None,
@@ -180,7 +180,7 @@ class IntradayBacktestResponse:
     days_with_trades: int
 
     # Signal-quality breakdowns
-    by_accum_tag: list[dict]
+    by_opening_broker_backing_tag: list[dict]
     by_fvwap_sign: list[dict]
     by_rsi_bucket: list[dict]
     by_ticker: list[dict]
@@ -207,9 +207,9 @@ class _BacktestCandidate:
     entry_range_high: Decimal | None
     atr_stop: Decimal | None
     trend: str | None
-    broker_accum_score: float | None
-    accum_tag: str | None
-    accum_streak: int | None
+    opening_broker_backing_score: float | None
+    opening_broker_backing_tag: str | None
+    opening_broker_buy_streak: int | None
     fvwap_discount_pct: float | None
 
 
@@ -264,20 +264,20 @@ def _assess_broker_as_of(
     candles: list[Candle],
     current_price: Decimal | None,
     signal_date: date,
-    accum_window: int,
-    accum_threshold: float,
+    broker_backing_window: int,
+    broker_backing_threshold: float,
     fvwap_period: int,
 ) -> dict:
-    """Compute ACCUM tag + Foreign VWAP using data available as of signal_date.
+    """Compute opening broker-backing tag + Foreign VWAP using data available as of signal_date.
 
     Critical: uses signal_date (not date.today()) to avoid lookahead bias.
     """
     empty: dict = {
-        "broker_accum_score": None, "accum_tag": None, "accum_streak": None,
+        "opening_broker_backing_score": None, "opening_broker_backing_tag": None, "opening_broker_buy_streak": None,
         "fvwap_discount_pct": None,
     }
     try:
-        start = signal_date - timedelta(days=accum_window + fvwap_period + 10)
+        start = signal_date - timedelta(days=broker_backing_window + fvwap_period + 10)
         summaries = broker_repo.get_broker_summaries(
             ticker=ticker, start_date=start, end_date=signal_date,
         )
@@ -289,7 +289,7 @@ def _assess_broker_as_of(
 
     result = dict(empty)
 
-    cutoff = signal_date - timedelta(days=accum_window)
+    cutoff = signal_date - timedelta(days=broker_backing_window)
     window = [s for s in summaries if s.date > cutoff]
 
     if window:
@@ -306,16 +306,16 @@ def _assess_broker_as_of(
 
         score = round(ratio * 40.0 + 30.0 * (1.0 - math.exp(-streak / 7.0)), 1)
 
-        if score >= accum_threshold:
+        if score >= broker_backing_threshold:
             tag = "BACKED"
         elif ratio < 0.3:
             tag = "DISTRIBUTING"
         else:
             tag = "UNCONFIRMED"
 
-        result["broker_accum_score"] = score
-        result["accum_tag"] = tag
-        result["accum_streak"] = streak
+        result["opening_broker_backing_score"] = score
+        result["opening_broker_backing_tag"] = tag
+        result["opening_broker_buy_streak"] = streak
 
     if candles and current_price is not None and current_price > 0:
         try:
@@ -536,7 +536,7 @@ class IntradayBacktestUseCase:
                     trend=cand.trend,
                     rsi=cand.rsi,
                     gap_pct=None,
-                    accum_tag=cand.accum_tag,
+                    opening_broker_backing_tag=cand.opening_broker_backing_tag,
                     fvwap_discount_pct=(
                         Decimal(str(cand.fvwap_discount_pct))
                         if cand.fvwap_discount_pct is not None else None
@@ -569,11 +569,11 @@ class IntradayBacktestUseCase:
 
             def _rank_key(conf):
                 cand = candidate_map.get(conf.ticker)
-                broker_accum_score = cand.broker_accum_score if cand else None
+                opening_broker_backing_score = cand.opening_broker_backing_score if cand else None
                 fvwap = cand.fvwap_discount_pct if cand else None
                 stop_pct = float(conf.stop_pct) if conf.stop_pct else 999.0
                 return (
-                    -(broker_accum_score or 0.0),
+                    -(opening_broker_backing_score or 0.0),
                     -(fvwap or 0.0),
                     stop_pct,
                     conf.ticker,
@@ -661,9 +661,9 @@ class IntradayBacktestUseCase:
                     trend=cand.trend,
                     rsi=float(cand.rsi) if cand.rsi is not None else None,
                     atr=float(cand.atr) if cand.atr is not None else None,
-                    accum_tag=cand.accum_tag,
-                    broker_accum_score=cand.broker_accum_score,
-                    accum_streak=cand.accum_streak,
+                    opening_broker_backing_tag=cand.opening_broker_backing_tag,
+                    opening_broker_backing_score=cand.opening_broker_backing_score,
+                    opening_broker_buy_streak=cand.opening_broker_buy_streak,
                     fvwap_discount_pct=cand.fvwap_discount_pct,
                     prev_high=cand.prev_high,
                     entry_range_low=cand.entry_range_low,
@@ -791,8 +791,8 @@ class IntradayBacktestUseCase:
             candles=candles,
             current_price=prev.close,
             signal_date=signal_date,
-            accum_window=request.accum_window_days,
-            accum_threshold=request.accum_backed_threshold,
+            broker_backing_window=request.broker_backing_window_days,
+            broker_backing_threshold=request.broker_backing_threshold,
             fvwap_period=request.fvwap_period,
         )
 
@@ -808,9 +808,9 @@ class IntradayBacktestUseCase:
             entry_range_high=range_high,
             atr_stop=atr_stop,
             trend=trend,
-            broker_accum_score=broker["broker_accum_score"],
-            accum_tag=broker["accum_tag"],
-            accum_streak=broker["accum_streak"],
+            opening_broker_backing_score=broker["opening_broker_backing_score"],
+            opening_broker_backing_tag=broker["opening_broker_backing_tag"],
+            opening_broker_buy_streak=broker["opening_broker_buy_streak"],
             fvwap_discount_pct=broker["fvwap_discount_pct"],
         )
 
@@ -873,7 +873,10 @@ class IntradayBacktestUseCase:
             float((final_equity - request.capital) / request.capital * 100), 4,
         )
 
-        by_accum = _breakdown_by(trades, lambda t: t.accum_tag or "none")
+        by_broker_backing = _breakdown_by(
+            trades,
+            lambda t: t.opening_broker_backing_tag or "none",
+        )
         by_fvwap = _breakdown_by(
             trades,
             lambda t: "positive" if (t.fvwap_discount_pct is not None and t.fvwap_discount_pct > 0) else "non-positive",
@@ -905,7 +908,7 @@ class IntradayBacktestUseCase:
             decisions=decision_counts,
             trading_days=trading_days,
             days_with_trades=days_with_trades,
-            by_accum_tag=by_accum,
+            by_opening_broker_backing_tag=by_broker_backing,
             by_fvwap_sign=by_fvwap,
             by_rsi_bucket=by_rsi,
             by_ticker=by_ticker,
@@ -940,7 +943,7 @@ class IntradayBacktestUseCase:
             decisions={},
             trading_days=0,
             days_with_trades=0,
-            by_accum_tag=[],
+            by_opening_broker_backing_tag=[],
             by_fvwap_sign=[],
             by_rsi_bucket=[],
             by_ticker=[],

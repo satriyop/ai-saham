@@ -33,7 +33,7 @@ class DataFreshnessItem:
 @dataclass(frozen=True)
 class OpeningBriefingCandidate:
     ticker: str
-    verdict: str
+    opening_setup: str
     iev: int | None = None
     iep: int | None = None
     trend: str | None = None
@@ -185,7 +185,7 @@ class DailyBriefingUseCase:
         candidates = [
             OpeningBriefingCandidate(
                 ticker=str(row.get("ticker", "")).upper(),
-                verdict=str(row.get("verdict", "?")),
+                opening_setup=str(row.get("opening_setup", "?")),
                 iev=row.get("iev"),
                 iep=row.get("iep"),
                 trend=row.get("trend"),

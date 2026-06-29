@@ -70,7 +70,7 @@ class TestTickFrictionGateIntegration:
             suggested_entry=Decimal(str(opening)),
             atr_stop=Decimal(str(atr_stop)),
             trend="BULLISH",
-            accum_tag="BACKED",
+            opening_broker_backing_tag="BACKED",
         )
 
     def _run(self, opening, atr_stop, tick_friction_gate=True, min_target_ticks=3, min_stop_ticks=2):

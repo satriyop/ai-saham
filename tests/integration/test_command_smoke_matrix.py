@@ -170,7 +170,7 @@ def test_pre_open_and_confirm_sidecar_contracts(temp_workspace, monkeypatch):
         ],
     )
     assert pre_open.exit_code == 0, pre_open.output
-    assert "PRE-OPEN CANDIDATE PLAN" in pre_open.stdout
+    assert "PRE-OPEN OPENING SETUP" in pre_open.stdout
     assert "VERDICT:" not in pre_open.stdout
 
     # Write an explicit sidecar path for the confirm step; screen pre-open uses
@@ -190,9 +190,9 @@ def test_pre_open_and_confirm_sidecar_contracts(temp_workspace, monkeypatch):
             "atr_stop": "950",
             "trend": "BULLISH",
             "rsi": "55",
-            "accum_tag": "BACKED",
-            "broker_accum_score": 70.0,
-            "accum_streak": 3,
+            "opening_broker_backing_tag": "BACKED",
+            "opening_broker_backing_score": 70.0,
+            "opening_broker_buy_streak": 3,
             "foreign_vwap": "980",
             "fvwap_discount_pct": 2.0,
             "prev_high": 1100,

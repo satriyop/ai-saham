@@ -195,9 +195,9 @@ def snapshot(
     n = len(result.get("candidates", []))
     typer.echo(f"Saved {n} candidates → {out_dir}/snapshot.json")
     for c in result.get("candidates", []):
-        verdict = c.get("verdict", "?")
+        opening_setup = c.get("opening_setup", "?")
         typer.echo(
-            f"  {c['ticker']:8s}  {verdict:5s}  "
+            f"  {c['ticker']:8s}  {opening_setup:5s}  "
             f"trend={c.get('trend', '?'):8s}  IEP={c.get('iep', '?')}"
         )
 
@@ -417,11 +417,11 @@ def grade(
     typer.echo(f"  Trend accuracy T+30m:   {_pct(result.get('trend_accuracy_T30'))}")
     typer.echo(f"  Clean trade rate:       {_pct(result.get('clean_trade_rate'))}")
     typer.echo("")
-    for verdict in ("PRIME", "WATCH", "SKIP"):
-        v = result.get("by_verdict", {}).get(verdict, {})
+    for opening_setup in ("PRIME", "WATCH", "SKIP"):
+        v = result.get("by_opening_setup", {}).get(opening_setup, {})
         if v.get("count", 0) > 0:
             typer.echo(
-                f"  {verdict:5s}  n={v['count']}  "
+                f"  {opening_setup:5s}  n={v['count']}  "
                 f"entry_hit={_pct(v.get('entry_range_hit_rate'))}  "
                 f"clean={_pct(v.get('clean_trade_rate'))}"
             )

@@ -8,7 +8,7 @@ Steps:
   5.   ATR-scaled entry range (Improvement #3)
   6.   Order book bid → gap% (skipped in fast mode)
   7.   ATR-based stop (or legacy fixed-pct fallback)
-  8.   Accumulation backing tag + Foreign VWAP (Improvements #1 & #2)
+  8.   Opening broker-backing tag + Foreign VWAP (Improvements #1 & #2)
   9.   AI research per ticker (optional)
   10.  Build ScreenerCandidate
 
@@ -71,9 +71,9 @@ class PreOpenScreenConfig:
     use_atr_range: bool = True
     atr_range_cap_min: Decimal = Decimal("0.01")  # never narrower than 1%
     atr_range_cap_max: Decimal = Decimal("0.05")  # never wider than 5%
-    # Improvement #1 — accumulation backing
-    accum_window_days: int = 7
-    accum_backed_threshold: float = 50.0
+    # Improvement #1 — opening broker backing
+    broker_backing_window_days: int = 7
+    broker_backing_threshold: float = 50.0
     # Improvement #2 — foreign VWAP
     fvwap_period: int = 20
     # Speculative symbol filter (Phase 1.1)
@@ -127,8 +127,8 @@ class PreOpenScreenConfig:
             use_atr_range=bool(analysis.get("use_atr_range", True)),
             atr_range_cap_min=Decimal(str(analysis.get("atr_range_cap_min", 0.01))),
             atr_range_cap_max=Decimal(str(analysis.get("atr_range_cap_max", 0.05))),
-            accum_window_days=int(analysis.get("accum_window_days", 7)),
-            accum_backed_threshold=float(analysis.get("accum_backed_threshold", 50.0)),
+            broker_backing_window_days=int(analysis.get("broker_backing_window_days", 7)),
+            broker_backing_threshold=float(analysis.get("broker_backing_threshold", 50.0)),
             fvwap_period=int(analysis.get("fvwap_period", 20)),
             exclude_suffix_pattern=str(
                 data.get("filters", {}).get("exclude_suffix_pattern", r"-(W|R|L)$")
@@ -364,11 +364,11 @@ class PreOpenScreenUseCase:
                 sma=sma_val,
             )
 
-            # Step 8 (Improvements #1 + #2): Accumulation backing + Foreign VWAP
+            # Step 8 (Improvements #1 + #2): opening broker backing + Foreign VWAP
             # Broker summaries loaded once, reused by both signals.
-            broker_accum_score: float | None = None
-            accum_tag: str | None = None
-            accum_streak: int | None = None
+            opening_broker_backing_score: float | None = None
+            opening_broker_backing_tag: str | None = None
+            opening_broker_buy_streak: int | None = None
             foreign_vwap: Decimal | None = None
             fvwap_discount_pct: float | None = None
 
@@ -377,13 +377,13 @@ class PreOpenScreenUseCase:
                     ticker=ticker,
                     candles=candles,
                     current_price=ob.price if ob else prev_close,
-                    accum_window=config.accum_window_days,
-                    accum_threshold=config.accum_backed_threshold,
+                    broker_backing_window=config.broker_backing_window_days,
+                    broker_backing_threshold=config.broker_backing_threshold,
                     fvwap_period=config.fvwap_period,
                 )
-                broker_accum_score = broker_ctx["broker_accum_score"]
-                accum_tag = broker_ctx["accum_tag"]
-                accum_streak = broker_ctx["accum_streak"]
+                opening_broker_backing_score = broker_ctx["opening_broker_backing_score"]
+                opening_broker_backing_tag = broker_ctx["opening_broker_backing_tag"]
+                opening_broker_buy_streak = broker_ctx["opening_broker_buy_streak"]
                 foreign_vwap = broker_ctx["foreign_vwap"]
                 fvwap_discount_pct = broker_ctx["fvwap_discount_pct"]
 
@@ -413,9 +413,9 @@ class PreOpenScreenUseCase:
                     gap_pct=gap_pct,
                     entry_range_low=entry_range_low,
                     entry_range_high=entry_range_high,
-                    broker_accum_score=broker_accum_score,
-                    accum_tag=accum_tag,
-                    accum_streak=accum_streak,
+                    opening_broker_backing_score=opening_broker_backing_score,
+                    opening_broker_backing_tag=opening_broker_backing_tag,
+                    opening_broker_buy_streak=opening_broker_buy_streak,
                     foreign_vwap=foreign_vwap,
                     fvwap_discount_pct=fvwap_discount_pct,
                     iev_intensity=iev_intensity,
@@ -530,26 +530,26 @@ class PreOpenScreenUseCase:
         ticker: str,
         candles: list,
         current_price: Decimal | None,
-        accum_window: int,
-        accum_threshold: float,
+        broker_backing_window: int,
+        broker_backing_threshold: float,
         fvwap_period: int,
     ) -> dict:
-        """Load broker summaries once; compute accumulation tag + Foreign VWAP.
+        """Load broker summaries once; compute opening broker-backing tag + Foreign VWAP.
 
-        Returns dict with: broker_accum_score, accum_tag, accum_streak,
+        Returns dict with: opening_broker_backing_score, opening_broker_backing_tag, opening_broker_buy_streak,
         foreign_vwap, fvwap_discount_pct. All None on failure or missing data.
         """
         empty = {
-            "broker_accum_score": None,
-            "accum_tag": None,
-            "accum_streak": None,
+            "opening_broker_backing_score": None,
+            "opening_broker_backing_tag": None,
+            "opening_broker_buy_streak": None,
             "foreign_vwap": None,
             "fvwap_discount_pct": None,
         }
 
         try:
             today = date.today()
-            start = today - timedelta(days=accum_window + fvwap_period + 10)
+            start = today - timedelta(days=broker_backing_window + fvwap_period + 10)
             summaries = self._broker_repository.get_broker_summaries(
                 ticker=ticker, start_date=start, end_date=today
             )
@@ -561,8 +561,8 @@ class PreOpenScreenUseCase:
 
         result = dict(empty)
 
-        # ── Improvement #1: Accumulation backing ──────────────────────────
-        cutoff = date.today() - timedelta(days=accum_window)
+        # ── Improvement #1: Opening broker backing ────────────────────────
+        cutoff = date.today() - timedelta(days=broker_backing_window)
         window = [s for s in summaries if s.date > cutoff]
 
         if window:
@@ -583,16 +583,16 @@ class PreOpenScreenUseCase:
                 1,
             )
 
-            if score >= accum_threshold:
+            if score >= broker_backing_threshold:
                 tag = "BACKED"
             elif ratio < 0.3:
                 tag = "DISTRIBUTING"
             else:
                 tag = "UNCONFIRMED"
 
-            result["broker_accum_score"] = score
-            result["accum_tag"] = tag
-            result["accum_streak"] = streak
+            result["opening_broker_backing_score"] = score
+            result["opening_broker_backing_tag"] = tag
+            result["opening_broker_buy_streak"] = streak
 
         # ── Improvement #2: Foreign VWAP ──────────────────────────────────
         if candles and current_price is not None and current_price > 0:

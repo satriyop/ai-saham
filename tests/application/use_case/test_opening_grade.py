@@ -15,7 +15,7 @@ def test_opening_grade_prefers_orderbook_lastprice_over_midpoint(tmp_path, monke
         "candidates": [
             {
                 "ticker": "BBCA",
-                "verdict": "WATCH",
+                "opening_setup": "WATCH",
                 "trend": "BULLISH",
                 "iep": 6400,
                 "entry_range_low": 6000,
@@ -62,7 +62,7 @@ def test_opening_grade_marks_midpoint_as_low_confidence_fallback(tmp_path, monke
         "candidates": [
             {
                 "ticker": "BBCA",
-                "verdict": "WATCH",
+                "opening_setup": "WATCH",
                 "trend": "BULLISH",
                 "entry_range_low": 6000,
                 "entry_range_high": 6500,

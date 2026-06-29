@@ -737,6 +737,12 @@ saham trade review intraday
 saham trade outcome BBCA --entry 9000 --exit 9500 --result target
 ```
 
+Pre-open output uses `opening_setup` (`PRIME`, `WATCH`, `SKIP`) for the
+opening-session plan. This is not a swing `TradeSetup` verdict. Broker-flow
+diagnostics use opening broker-backing fields such as
+`opening_broker_backing_score` and `opening_broker_backing_tag`.
+Use `--risk-strategy NAME` to add an optional strategy/rules risk-status column.
+
 | Command | Purpose |
 |---------|---------|
 | `saham screen pre-open` | Screen movers before market open |

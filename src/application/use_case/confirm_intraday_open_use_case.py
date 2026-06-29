@@ -84,7 +84,7 @@ class ConfirmIntradayOpenUseCase:
 
         opening = candidate.opening_price
 
-        # Regime gate: in WEAK/RISK_OFF, tighten entry band and require BACKED accumulation
+        # Regime gate: in WEAK/RISK_OFF, tighten entry band and require BACKED opening broker flow.
         effective_range_low = candidate.entry_range_low
         effective_range_high = candidate.entry_range_high
         regime_tightening_active = (
@@ -101,7 +101,7 @@ class ConfirmIntradayOpenUseCase:
                 f"regime {request.regime}: entry band tightened to"
                 f" {effective_range_low:,.0f}–{effective_range_high:,.0f}"
             )
-            if request.require_backed_in_weak and candidate.accum_tag not in ("BACKED",):
+            if request.require_backed_in_weak and candidate.opening_broker_backing_tag not in ("BACKED",):
                 return self._result(
                     candidate,
                     IntradayDecision.SKIP_BEARISH_CONTEXT,
@@ -109,8 +109,8 @@ class ConfirmIntradayOpenUseCase:
                     stop_pct=self._stop_pct(opening, candidate.atr_stop),
                     reasons=tuple(
                         reasons + [
-                            f"regime {request.regime}: BACKED accumulation required"
-                            f" (got {candidate.accum_tag or 'None'})"
+                            f"regime {request.regime}: BACKED broker flow required"
+                            f" (got {candidate.opening_broker_backing_tag or 'None'})"
                         ]
                     ),
                 )
@@ -148,7 +148,7 @@ class ConfirmIntradayOpenUseCase:
                 reasons=tuple(reasons + [f"pre-open trend is {candidate.trend}"]),
             )
 
-        if candidate.accum_tag == "DISTRIBUTING":
+        if candidate.opening_broker_backing_tag == "DISTRIBUTING":
             return self._result(
                 candidate,
                 IntradayDecision.SKIP_BEARISH_CONTEXT,
@@ -244,7 +244,7 @@ class ConfirmIntradayOpenUseCase:
             trend=candidate.trend,
             rsi=candidate.rsi,
             gap_pct=candidate.gap_pct,
-            accum_tag=candidate.accum_tag,
+            opening_broker_backing_tag=candidate.opening_broker_backing_tag,
             fvwap_discount_pct=candidate.fvwap_discount_pct,
             opening_price_source=candidate.opening_price_source,
             opening_price_confidence=candidate.opening_price_confidence,

@@ -165,7 +165,7 @@ def display_intraday_backtest(response: IntradayBacktestResponse, show_trades: i
         console().print("")
         console().print(panel(table, title=title))
 
-    render_breakdown("BY ACCUM TAG", response.by_accum_tag)
+    render_breakdown("BY OPENING BROKER BACKING", response.by_opening_broker_backing_tag)
     render_breakdown("BY FVWAP SIGN", response.by_fvwap_sign)
     render_breakdown("BY RSI BUCKET", response.by_rsi_bucket)
     render_breakdown("TOP TICKERS (by trade count)", response.by_ticker)
