@@ -91,7 +91,7 @@ class AuditRecord:
         return {
             "signal_date": self.signal_date.isoformat(),
             "ticker": self.ticker,
-            "accum_score": self.score,
+            "foreign_flow_score": self.score,
             "score": self.score,
             "streak": self.streak,
             "net_buy_ratio": round(self.net_buy_ratio, 4),
@@ -265,8 +265,8 @@ class AccumulationAuditUseCase:
                     tickers=tickers,
                     window_days=request.window_days,
                     min_net_buy_days=request.min_net_buy_days,
-                    min_accum_score=request.min_score,
-                    min_accum_score_enabled=True,
+                    min_foreign_flow_score=request.min_score,
+                    min_foreign_flow_score_enabled=True,
                     as_of_date=signal_date,
                 )
             )
@@ -449,7 +449,7 @@ class AccumulationAuditUseCase:
         return AuditRecord(
             signal_date=signal_date,
             ticker=candidate.ticker,
-            score=candidate.accum_score,
+            score=candidate.foreign_flow_score,
             streak=candidate.consecutive_streak,
             net_buy_ratio=candidate.net_buy_ratio,
             total_net_value=candidate.total_net_value,

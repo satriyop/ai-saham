@@ -321,7 +321,7 @@ def _summary(
 
 def _candidate(**overrides) -> AccumulationCandidate:
     if "score" in overrides:
-        overrides["accum_score"] = overrides.pop("score")
+        overrides["foreign_flow_score"] = overrides.pop("score")
     values = {
         "ticker": "BBCA",
         "window_days": 7,
@@ -335,7 +335,7 @@ def _candidate(**overrides) -> AccumulationCandidate:
         "vwap_discount_pct": 3.0,
         "rsi": 55.0,
         "trend": "SIDE",
-        "accum_score": 70.0,
+        "foreign_flow_score": 70.0,
         "top_brokers": None,
         "institutional_flag": False,
         "avg_flow_ratio": 5.0,
@@ -936,10 +936,10 @@ def test_swing_output_renders_optional_evidence_as_separate_panels(capsys):
     assert "SIGNAL DETAIL" in out
     assert "Explains the Signal column in Verdict" in out
     assert "Scale: SignalEngine 0-100. Used in final TradeSetup: yes." in out
-    assert "Composite accumulation evidence 82.0/120" in out
+    assert "Composite foreign-flow score 82.0/120" in out
     assert "RISK DETAIL" in out
     assert "FLOW / BROKER DETAIL" in out
-    assert "Composite Accumulation Evidence (7 broker sessions)" in out
+    assert "Composite Foreign Flow Score (7 broker sessions)" in out
     assert "ENTER-ZONE / FLOW POSITIVE" in out
     assert "Longer-term flow context below is diagnostic only" in out
     assert "Accum Score" in out
@@ -1000,7 +1000,7 @@ def test_swing_flow_detail_calls_out_conflicted_negative_flow(capsys):
         foreign_flow_score_breakdown=ForeignFlowScoreBreakdown(
             ticker="ASII",
             snapshot_date=date(2026, 6, 27),
-            accum_score=42.8,
+            foreign_flow_score=42.8,
             max_score=120.0,
             breakdown=(
                 ("cons", 17.1),

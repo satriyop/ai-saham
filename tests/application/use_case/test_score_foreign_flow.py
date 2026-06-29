@@ -27,7 +27,7 @@ def test_score_foreign_flow_matches_legacy_breakdown_shape():
     )
 
     evidence = resp.evidence
-    assert evidence.accum_score == 120.0
+    assert evidence.foreign_flow_score == 120.0
     assert evidence.breakdown_dict == {
         "cons": 40.0,
         "streak": 19.0,
@@ -60,4 +60,4 @@ def test_score_foreign_flow_can_disable_component():
     )
 
     assert resp.evidence.breakdown_dict["cons"] == 0.0
-    assert resp.evidence.accum_score == 5.0
+    assert resp.evidence.foreign_flow_score == 5.0

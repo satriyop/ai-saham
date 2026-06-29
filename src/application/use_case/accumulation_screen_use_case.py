@@ -133,8 +133,8 @@ class AccumulationScreenRequest:
     tickers: list[str]
     window_days: int = 7  # latest broker sessions: 7, 30, or 90
     min_net_buy_days: int = 2  # skip tickers with fewer qualifying days
-    min_accum_score: float = 0.0  # filter: only include accumulation evidence >= this
-    min_accum_score_enabled: bool = True
+    min_foreign_flow_score: float = 0.0  # filter: only include composite foreign-flow score >= this
+    min_foreign_flow_score_enabled: bool = True
     min_signal_score: float = 0.0  # optional SignalEngine score filter
     min_signal_score_enabled: bool = False
     rsi_period: int = 14
@@ -166,8 +166,8 @@ class AccumulationScreenRequest:
         tickers: list[str],
         window_days: int = 7,
         min_net_buy_days: int = 2,
-        min_accum_score: float = 0.0,
-        min_accum_score_enabled: bool = True,
+        min_foreign_flow_score: float = 0.0,
+        min_foreign_flow_score_enabled: bool = True,
         min_signal_score: float = 0.0,
         min_signal_score_enabled: bool = False,
         rsi_period: int = 14,
@@ -190,8 +190,8 @@ class AccumulationScreenRequest:
         self.tickers = tickers
         self.window_days = window_days
         self.min_net_buy_days = min_net_buy_days
-        self.min_accum_score = min_accum_score
-        self.min_accum_score_enabled = min_accum_score_enabled
+        self.min_foreign_flow_score = min_foreign_flow_score
+        self.min_foreign_flow_score_enabled = min_foreign_flow_score_enabled
         self.min_signal_score = min_signal_score
         self.min_signal_score_enabled = min_signal_score_enabled
         self.rsi_period = rsi_period
@@ -229,7 +229,7 @@ class AccumulationCandidate:
     # positive = foreigners are underwater
     rsi: float | None
     trend: str  # "UP" | "DOWN" | "SIDE"
-    accum_score: float  # 0-120 composite foreign-flow score
+    foreign_flow_score: float  # 0-120 composite foreign-flow score
     top_brokers: list[str] | None  # per-broker codes (Stockbit only)
     institutional_flag: bool  # True if major institutional broker present
     # Improvement #1: flow ratio signal
@@ -299,8 +299,8 @@ class AccumulationCandidate:
             else None,
             "rsi": round(self.rsi, 2) if self.rsi is not None else None,
             "trend": self.trend,
-            "accum_score": self.accum_score,
-            "composite_foreign_flow_score": self.accum_score,
+            "foreign_flow_score": self.foreign_flow_score,
+            "composite_foreign_flow_score": self.foreign_flow_score,
             "top_brokers": self.top_brokers,
             "institutional_flag": self.institutional_flag,
             "bci_label": self.bci_label,
@@ -383,11 +383,11 @@ def _trade_action_rank(candidate: "AccumulationCandidate") -> int:
 
 
 def _screen_sort_key(candidate: "AccumulationCandidate") -> tuple[float, float, float, float]:
-    """Default screener ordering: verdict, signal, accumulation evidence, seasonality."""
+    """Default screener ordering: verdict, signal, foreign-flow score, seasonality."""
     return (
         float(_trade_action_rank(candidate)),
         float(candidate.signal_assessment.assessment.score if candidate.signal_assessment else 0),
-        candidate.accum_score,
+        candidate.foreign_flow_score,
         candidate.seasonal_edge.score if candidate.seasonal_edge else 0.0,
     )
 
@@ -532,7 +532,7 @@ class AccumulationScreenUseCase:
                 )
             )
             result.foreign_flow_score_breakdown = evidence_resp.evidence
-            result.accum_score = evidence_resp.evidence.accum_score
+            result.foreign_flow_score = evidence_resp.evidence.foreign_flow_score
             result.foreign_flow_evidence = ForeignFlowEvidence.from_score_breakdown(
                 evidence_resp.evidence,
                 net_buy_days=result.net_buy_days,
@@ -658,8 +658,8 @@ class AccumulationScreenUseCase:
             )
 
             if (
-                request.min_accum_score_enabled
-                and result.accum_score < request.min_accum_score
+                request.min_foreign_flow_score_enabled
+                and result.foreign_flow_score < request.min_foreign_flow_score
             ):
                 continue
             if (
@@ -919,7 +919,7 @@ class AccumulationScreenUseCase:
             vwap_discount_pct=vwap_discount_pct,
             rsi=rsi,
             trend=trend,
-            accum_score=0.0,  # set after by ScoreForeignFlowUseCase
+            foreign_flow_score=0.0,  # set after by ScoreForeignFlowUseCase
             top_brokers=top_brokers,
             institutional_flag=institutional_flag,
             bci_label=bci_label,
@@ -972,7 +972,7 @@ class AccumulationScreenUseCase:
             for m in members:
                 m.sector_breadth_pct = breadth_pct
                 if breadth_pct >= request.sector_breadth_threshold:
-                    m.accum_score += request.sector_breadth_bonus_pts
+                    m.foreign_flow_score += request.sector_breadth_bonus_pts
                     m.sector_breadth_bonus = request.sector_breadth_bonus_pts
 
     def _compute_rsi(self, candles: list, period: int) -> float | None:
@@ -1109,12 +1109,12 @@ def classify_multi_window_pattern(
     """
     hot = [
         w for w in windows
-        if candidates_by_window.get(w) and candidates_by_window[w].accum_score >= coiled_spring_min_score
+        if candidates_by_window.get(w) and candidates_by_window[w].foreign_flow_score >= coiled_spring_min_score
     ]
 
     for w in windows:
         c = candidates_by_window.get(w)
-        if (c and c.accum_score >= coiled_spring_min_score
+        if (c and c.foreign_flow_score >= coiled_spring_min_score
                 and c.bb_width_pctile is not None
                 and c.bb_width_pctile <= coiled_spring_bb_pctile):
             return "coiled spring"

@@ -48,9 +48,9 @@ def fmt_score(s: float | None) -> str:
     """Format a score with color for table cells."""
     if s is None:
         return typer.style("   —  ", fg=typer.colors.BRIGHT_BLACK)
-    if s >= _ASC.display.enter_min_accum_score:
+    if s >= _ASC.display.enter_min_foreign_flow_score:
         return typer.style(f"{s:>6.1f}", fg=typer.colors.GREEN)
-    if s >= _ASC.display.watch_min_accum_score:
+    if s >= _ASC.display.watch_min_foreign_flow_score:
         return typer.style(f"{s:>6.1f}", fg=typer.colors.YELLOW)
     return typer.style(f"{s:>6.1f}", fg=typer.colors.WHITE)
 
@@ -60,13 +60,13 @@ def classify_pattern(
     candidates_by_window: dict[int, "AccumulationCandidate | None"],
 ) -> str:
     """Label the multi-window pattern for a ticker."""
-    threshold = _ASC.display.coiled_spring_min_accum_score
-    hot = [w for w in windows if candidates_by_window.get(w) and candidates_by_window[w].accum_score >= threshold]
+    threshold = _ASC.display.coiled_spring_min_foreign_flow_score
+    hot = [w for w in windows if candidates_by_window.get(w) and candidates_by_window[w].foreign_flow_score >= threshold]
 
     # Coiled spring: any window with squeeze + strong score
     for w in windows:
         c = candidates_by_window.get(w)
-        if c and c.accum_score >= threshold and c.bb_width_pctile is not None and c.bb_width_pctile <= _ASC.display.coiled_spring_bb_pctile:
+        if c and c.foreign_flow_score >= threshold and c.bb_width_pctile is not None and c.bb_width_pctile <= _ASC.display.coiled_spring_bb_pctile:
             return "coiled spring"
 
     if not hot:
@@ -417,9 +417,9 @@ def display_results(
                 "yellow" if c.bb_width_pctile <= 0.40 else ""
             )
         # Color flow score
-        if c.accum_score >= _ASC.display.enter_min_accum_score:
+        if c.foreign_flow_score >= _ASC.display.enter_min_foreign_flow_score:
             score_style = "green"
-        elif c.accum_score >= _ASC.display.watch_min_accum_score:
+        elif c.foreign_flow_score >= _ASC.display.watch_min_foreign_flow_score:
             score_style = "yellow"
         else:
             score_style = ""
@@ -467,7 +467,7 @@ def display_results(
             c.ticker,
             _price_text(c.current_price),
             cmp_cell,
-            Text(f"{c.accum_score:.1f}", style=score_style),
+            Text(f"{c.foreign_flow_score:.1f}", style=score_style),
             gate_cell,
             c.trend,
         ]
@@ -683,7 +683,7 @@ def display_results(
 
     sections = [
         panel(action_table, title="Candidate Actions"),
-        panel(evidence_table, title="Accumulation Evidence"),
+        panel(evidence_table, title="Foreign Flow Score"),
         panel(signal_table, title="Signal"),
         panel(
             Group(
@@ -800,7 +800,7 @@ def display_multi(
 
     def sort_key(item: tuple) -> float:
         pw = item[1]
-        scores = [c.accum_score for c in pw.values()]
+        scores = [c.foreign_flow_score for c in pw.values()]
         if not scores:
             return 0.0
         if sort_by == "avg":
@@ -810,7 +810,7 @@ def display_multi(
         try:
             w = int(sort_by.rstrip("ds"))
             c = pw.get(w)
-            return c.accum_score if c else 0.0
+            return c.foreign_flow_score if c else 0.0
         except (ValueError, AttributeError):
             return sum(scores) / len(scores)
 
@@ -846,10 +846,10 @@ def display_multi(
             if candidate is None:
                 score_cells.append(Text("—", style="bright_black"))
                 continue
-            style = "green" if candidate.accum_score >= _ASC.display.enter_min_accum_score else (
-                "yellow" if candidate.accum_score >= _ASC.display.watch_min_accum_score else ""
+            style = "green" if candidate.foreign_flow_score >= _ASC.display.enter_min_foreign_flow_score else (
+                "yellow" if candidate.foreign_flow_score >= _ASC.display.watch_min_foreign_flow_score else ""
             )
-            score_cells.append(Text(f"{candidate.accum_score:.0f}", style=style))
+            score_cells.append(Text(f"{candidate.foreign_flow_score:.0f}", style=style))
         pattern = classify_pattern(windows, pw)
         trend = next((c.trend for w in sorted(windows) for c in [pw.get(w)] if c), "—")
         quality = (broker_quality or {}).get(tk)

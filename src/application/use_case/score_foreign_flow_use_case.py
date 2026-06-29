@@ -145,7 +145,7 @@ class ScoreForeignFlowUseCase:
             evidence=ForeignFlowScoreBreakdown(
                 ticker=request.ticker,
                 snapshot_date=request.snapshot_date,
-                accum_score=total,
+                foreign_flow_score=total,
                 max_score=p.max_score,
                 breakdown=tuple(rounded_breakdown.items()),
                 net_buy_ratio=request.net_buy_ratio,

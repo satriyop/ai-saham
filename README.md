@@ -586,7 +586,7 @@ saham fetch universe create consumer_primer -s 1
 
 ### `saham screen accum` - Foreign Accumulation Screener
 
-Screen stocks for institutional foreign accumulation patterns. Results are split into verdict, accumulation evidence, signal, risk, and data coverage panels.
+Screen stocks for institutional foreign accumulation patterns. Results are split into verdict, foreign-flow score, signal, risk, and data coverage panels.
 
 ```bash
 # Single window
@@ -599,7 +599,7 @@ saham screen accum --universe lq45 --multi
 saham screen accum --universe lq45 --multi --sort-by 30s
 
 # Filters
-saham screen accum --universe lq45 --min-accum-score 50 --top 10
+saham screen accum --universe lq45 --min-foreign-flow-score 50 --top 10
 saham screen accum --universe lq45 --min-signal-score 55 --top 10
 saham screen accum --universe lq45 --vwap-only
 saham screen accum --universe lq45 --squeeze-only
@@ -621,7 +621,7 @@ saham screen accum --universe lq45 --format json
 | `--universe` | `-u` | | Universe: lq45, idx80, idxcomp100, cached |
 | `--window` | `-w` | 7 | Analysis window in broker sessions (7, 30, 90) |
 | `--min-streak` | | 0 | Minimum consecutive buy days |
-| `--min-accum-score` | | config | Minimum accumulation evidence score (0-120 soft cap) |
+| `--min-foreign-flow-score` | | config | Minimum composite foreign-flow score (0-120 soft cap) |
 | `--min-signal-score` | | disabled/config | Optional minimum SignalEngine score (0-100) |
 | `--min-piotroski` | | | Minimum Piotroski F-score filter |
 | `--strategy` | `-S` | | Optional backtest strategy for signal context |
@@ -1604,7 +1604,7 @@ src/
 | `saham analyze accum-audit` | `AccumulationAuditResponse` | Learning/audit artifact for forward-return behavior |
 
 JSON outputs and command sidecars include `schema_version` and `artifact_type`
-at the root. Explicit fields such as `accum_score`, `signal_score`, and
+at the root. Explicit fields such as `foreign_flow_score`, `signal_score`, and
 `risk_status` are canonical; older ambiguous aliases may remain for compatibility.
 For `saham analyze swing --format json`, grouped `verdict`, `evidence`, and
 `diagnostics` are canonical. Legacy top-level fields such as `trade_setup`,

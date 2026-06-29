@@ -463,15 +463,15 @@ def test_screen_attaches_ticker_notation_without_changing_score():
 
     assert enriched.candidates[0].ticker_notation is not None
     assert enriched.candidates[0].ticker_notation.codes == ["X"]
-    assert enriched.candidates[0].accum_score == base.candidates[0].accum_score
+    assert enriched.candidates[0].foreign_flow_score == base.candidates[0].foreign_flow_score
     assert enriched.candidates[0].foreign_flow_evidence is not None
     assert (
         enriched.candidates[0].foreign_flow_evidence.composite_score
-        == enriched.candidates[0].accum_score
+        == enriched.candidates[0].foreign_flow_score
     )
     assert (
         enriched.candidates[0].to_dict()["composite_foreign_flow_score"]
-        == enriched.candidates[0].to_dict()["accum_score"]
+        == enriched.candidates[0].to_dict()["foreign_flow_score"]
     )
     assert enriched.candidates[0].to_dict()["ticker_notation"]["notations"][0]["code"] == "X"
 
@@ -638,8 +638,8 @@ def test_screener_populates_signal_assessment():
             tickers=["BBCA"],
             window_days=7,
             min_net_buy_days=0,
-            min_accum_score=0.0,
-            min_accum_score_enabled=True,
+            min_foreign_flow_score=0.0,
+            min_foreign_flow_score_enabled=True,
             as_of_date=as_of,
         )
     )
@@ -866,7 +866,7 @@ def _make_candidate(score: float, bb_width_pctile: float | None = None) -> Accum
         vwap_discount_pct=0.0,
         rsi=50.0,
         trend="UP",
-        accum_score=score,
+        foreign_flow_score=score,
         top_brokers=None,
         institutional_flag=False,
         bb_width_pctile=bb_width_pctile,

@@ -34,7 +34,7 @@ def _make_candidate(
         vwap_discount_pct=vwap,
         rsi=rsi,
         trend=trend,
-        accum_score=score,
+        foreign_flow_score=score,
         top_brokers=None,
         institutional_flag=False,
         avg_flow_ratio=flow,

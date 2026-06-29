@@ -89,7 +89,7 @@ accumulation_screener:
         stable_points: 5.0
 
   filters:
-    min_accum_score:
+    min_foreign_flow_score:
       enabled: true
       value: 0.0
     min_signal_score:
@@ -99,10 +99,10 @@ accumulation_screener:
   sorting:
     primary: trade_setup
     secondary: signal_score
-    tertiary: accum_score
+    tertiary: foreign_flow_score
 
   display:
-    enter_min_accum_score: 70.0
-    watch_min_accum_score: 40.0
-    coiled_spring_min_accum_score: 60.0
+    enter_min_foreign_flow_score: 70.0
+    watch_min_foreign_flow_score: 40.0
+    coiled_spring_min_foreign_flow_score: 60.0
     coiled_spring_bb_pctile: 0.20

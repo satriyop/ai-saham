@@ -21,7 +21,7 @@ class ScreenSnapshotEntry:
 
     ticker: str
     rank: int            # 1-based position in the screener results
-    flow_score: float    # accumulation evidence score (0-120)
+    flow_score: float    # composite foreign-flow score (0-120)
     composite_score: float | None    # SignalAssessment.assessment.score (0–100); None if not available
     consecutive_streak: int
     net_buy_ratio: float

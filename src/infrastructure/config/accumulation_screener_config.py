@@ -34,9 +34,9 @@ class ScoreFilterConfig:
 
 @dataclass(frozen=True)
 class AccumulationDisplayConfig:
-    enter_min_accum_score: float = 70.0
-    watch_min_accum_score: float = 40.0
-    coiled_spring_min_accum_score: float = 60.0
+    enter_min_foreign_flow_score: float = 70.0
+    watch_min_foreign_flow_score: float = 40.0
+    coiled_spring_min_foreign_flow_score: float = 60.0
     coiled_spring_bb_pctile: float = 0.20
 
 
@@ -45,7 +45,7 @@ class AccumulationScreenerConfig:
     foreign_flow_score_policy: ForeignFlowScorePolicy = field(
         default_factory=ForeignFlowScorePolicy
     )
-    min_accum_score: ScoreFilterConfig = field(
+    min_foreign_flow_score: ScoreFilterConfig = field(
         default_factory=lambda: ScoreFilterConfig(enabled=True, value=70.0)
     )
     min_signal_score: ScoreFilterConfig = field(
@@ -54,7 +54,7 @@ class AccumulationScreenerConfig:
     display: AccumulationDisplayConfig = field(default_factory=AccumulationDisplayConfig)
     sort_primary: str = "trade_setup"
     sort_secondary: str = "signal_score"
-    sort_tertiary: str = "accum_score"
+    sort_tertiary: str = "foreign_flow_score"
 
 
 def load_accumulation_screener_config(
@@ -82,25 +82,25 @@ def load_accumulation_screener_config(
         )
         return AccumulationScreenerConfig(
             foreign_flow_score_policy=policy,
-            min_accum_score=_filter(
-                filters.get("min_accum_score"),
-                defaults.min_accum_score,
+            min_foreign_flow_score=_filter(
+                filters.get("min_foreign_flow_score"),
+                defaults.min_foreign_flow_score,
             ),
             min_signal_score=_filter(
                 filters.get("min_signal_score"),
                 defaults.min_signal_score,
             ),
             display=AccumulationDisplayConfig(
-                enter_min_accum_score=_f(
-                    display, "enter_min_accum_score", defaults.display.enter_min_accum_score
+                enter_min_foreign_flow_score=_f(
+                    display, "enter_min_foreign_flow_score", defaults.display.enter_min_foreign_flow_score
                 ),
-                watch_min_accum_score=_f(
-                    display, "watch_min_accum_score", defaults.display.watch_min_accum_score
+                watch_min_foreign_flow_score=_f(
+                    display, "watch_min_foreign_flow_score", defaults.display.watch_min_foreign_flow_score
                 ),
-                coiled_spring_min_accum_score=_f(
+                coiled_spring_min_foreign_flow_score=_f(
                     display,
-                    "coiled_spring_min_accum_score",
-                    defaults.display.coiled_spring_min_accum_score,
+                    "coiled_spring_min_foreign_flow_score",
+                    defaults.display.coiled_spring_min_foreign_flow_score,
                 ),
                 coiled_spring_bb_pctile=_f(
                     display, "coiled_spring_bb_pctile", defaults.display.coiled_spring_bb_pctile

@@ -154,7 +154,7 @@ def screen_compare(
 
     fresh_tickers = [c.ticker for c in fresh_candidates]
     fresh_scores = {
-        c.ticker: (c.accum_score, c.signal_assessment.assessment.score if c.signal_assessment else None)
+        c.ticker: (c.foreign_flow_score, c.signal_assessment.assessment.score if c.signal_assessment else None)
         for c in fresh_candidates
     }
     fresh_ranks = {c.ticker: i + 1 for i, c in enumerate(fresh_candidates)}

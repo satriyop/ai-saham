@@ -431,7 +431,7 @@ def _sizing_to_dict(
 def _candidate_accumulation_to_dict(candidate: Any | None) -> dict[str, Any]:
     if candidate is None:
         return {
-            "accum_score": None,
+            "foreign_flow_score": None,
             "score": None,
             "streak": None,
             "trend": None,
@@ -454,14 +454,14 @@ def _candidate_accumulation_to_dict(candidate: Any | None) -> dict[str, Any]:
             "ticker_notation": None,
         }
     return {
-        "accum_score": candidate.accum_score,
-        "score": candidate.accum_score,
+        "foreign_flow_score": candidate.foreign_flow_score,
+        "score": candidate.foreign_flow_score,
         "streak": candidate.consecutive_streak,
         "trend": candidate.trend,
         "flow_pct": candidate.avg_flow_ratio,
         "vwap_disc_pct": candidate.vwap_discount_pct,
         "bb_width_pctile": candidate.bb_width_pctile,
-        "composite_foreign_flow_score": candidate.accum_score,
+        "composite_foreign_flow_score": candidate.foreign_flow_score,
         "foreign_flow_evidence": (
             candidate.foreign_flow_evidence.to_dict()
             if getattr(candidate, "foreign_flow_evidence", None) else None

@@ -11,7 +11,7 @@ from src.domain.value_objects.forward_estimates import ForwardEstimates
 
 def test_signal_context_builder_derives_forward_pe_and_preserves_insider_ratio():
     candidate = SimpleNamespace(
-        accum_score=60.0,
+        foreign_flow_score=60.0,
         current_price=Decimal("125"),
         insider_net_buy_ratio=0.25,
         bandar_detector=None,

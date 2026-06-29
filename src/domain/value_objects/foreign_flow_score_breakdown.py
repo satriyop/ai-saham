@@ -16,7 +16,7 @@ class ForeignFlowScoreBreakdown:
 
     ticker: str
     snapshot_date: date
-    accum_score: float
+    foreign_flow_score: float
     breakdown: tuple[tuple[str, float], ...] = field(default_factory=tuple)
     max_score: float = 120.0
     net_buy_ratio: float = 0.0
@@ -31,10 +31,10 @@ class ForeignFlowScoreBreakdown:
     def __post_init__(self) -> None:
         if self.max_score <= 0:
             raise ValueError("ForeignFlowScoreBreakdown max_score must be positive")
-        if not 0 <= self.accum_score <= self.max_score:
+        if not 0 <= self.foreign_flow_score <= self.max_score:
             raise ValueError(
-                f"ForeignFlowScoreBreakdown accum_score must be 0-{self.max_score:g}, "
-                f"got {self.accum_score}"
+                f"ForeignFlowScoreBreakdown foreign_flow_score must be 0-{self.max_score:g}, "
+                f"got {self.foreign_flow_score}"
             )
 
     @property
@@ -45,8 +45,8 @@ class ForeignFlowScoreBreakdown:
         return {
             "ticker": self.ticker,
             "snapshot_date": self.snapshot_date.isoformat(),
-            "accum_score": self.accum_score,
-            "composite_foreign_flow_score": self.accum_score,
+            "foreign_flow_score": self.foreign_flow_score,
+            "composite_foreign_flow_score": self.foreign_flow_score,
             "max_score": self.max_score,
             "breakdown": self.breakdown_dict,
             "net_buy_ratio": round(self.net_buy_ratio, 4),

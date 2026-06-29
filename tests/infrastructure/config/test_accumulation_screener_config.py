@@ -16,7 +16,7 @@ accumulation_screener:
         enabled: false
         weight: 12
   filters:
-    min_accum_score:
+    min_foreign_flow_score:
       enabled: true
       value: 55
     min_signal_score:
@@ -30,7 +30,7 @@ accumulation_screener:
 
     assert loaded.foreign_flow_score_policy.consistency.enabled is False
     assert loaded.foreign_flow_score_policy.consistency.weight == 12.0
-    assert loaded.min_accum_score.enabled is True
-    assert loaded.min_accum_score.value == 55.0
+    assert loaded.min_foreign_flow_score.enabled is True
+    assert loaded.min_foreign_flow_score.value == 55.0
     assert loaded.min_signal_score.enabled is True
     assert loaded.min_signal_score.value == 60.0

@@ -114,10 +114,10 @@ def test_analyze_swing_table_and_json_contracts(temp_workspace, monkeypatch):
     assert payload["diagnostics"]["flow_detail"] == payload["flow_detail"]
     assert payload["diagnostics"]["broker_detail"] == payload["broker_detail"]
     assert payload["diagnostics"]["broker_quality_note"] == payload["broker_quality_note"]
-    assert payload["accumulation"]["accum_score"] == payload["accumulation"]["score"]
+    assert payload["accumulation"]["foreign_flow_score"] == payload["accumulation"]["score"]
     assert (
         payload["accumulation"]["composite_foreign_flow_score"]
-        == payload["accumulation"]["accum_score"]
+        == payload["accumulation"]["foreign_flow_score"]
     )
     assert payload["accumulation"]["foreign_flow_evidence"]["score_family"] == "composite_foreign_flow"
     assert "trade_setup" in payload
@@ -140,10 +140,10 @@ def test_screen_accum_table_multi_and_json_contracts(temp_workspace, monkeypatch
     payload = _json_stdout(js)
     assert payload["artifact_type"] == "accumulation_screen"
     assert payload["schema_version"] == 1
-    assert payload["candidates"][0]["accum_score"] is not None
+    assert payload["candidates"][0]["foreign_flow_score"] is not None
     assert (
         payload["candidates"][0]["composite_foreign_flow_score"]
-        == payload["candidates"][0]["accum_score"]
+        == payload["candidates"][0]["foreign_flow_score"]
     )
     assert payload["candidates"][0]["foreign_flow_evidence"]["score_family"] == "composite_foreign_flow"
 

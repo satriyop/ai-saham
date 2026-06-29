@@ -155,13 +155,13 @@ def today(
             trend_text = f"[{trend_style}]{candidate.trend or '-'}[/{trend_style}]"
 
             # Color score
-            if candidate.accum_score >= 80:
+            if candidate.foreign_flow_score >= 80:
                 score_style = "green"
-            elif candidate.accum_score >= 60:
+            elif candidate.foreign_flow_score >= 60:
                 score_style = "yellow"
             else:
                 score_style = "white"
-            score_text = f"[{score_style}]{candidate.accum_score:.1f}[/{score_style}]"
+            score_text = f"[{score_style}]{candidate.foreign_flow_score:.1f}[/{score_style}]"
 
             accumulation.add_row(
                 candidate.ticker,

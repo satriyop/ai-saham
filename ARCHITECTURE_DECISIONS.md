@@ -552,7 +552,7 @@ signal_engine:
   enrichment:
     insider_lookback_days: 90
   input_mapping:
-    accumulation_score:
+    foreign_flow_score:
       max_score: 120.0
       clamp: true
   scoring:
@@ -745,7 +745,7 @@ class SignalContext:
 
 **Implications**
 
-* `src/application/use_case/accumulation_screen_use_case.py` delegates SignalAssessment scoring to `signal_engine.evaluate_with_context()`. Foreign-flow scoring is separate `ForeignFlowScoreBreakdown` context and the public screen filter is `--min-accum-score`; see ADR-030.
+* `src/application/use_case/accumulation_screen_use_case.py` delegates SignalAssessment scoring to `signal_engine.evaluate_with_context()`. Foreign-flow scoring is separate `ForeignFlowScoreBreakdown` context and the public screen filter is `--min-foreign-flow-score`; see ADR-030.
 * `src/application/use_case/swing_analysis_workflow_use_case.py` reuses the candidate SignalAssessment when available, otherwise delegates to `signal_engine.evaluate_with_context()` or `signal_engine.evaluate()`.
 * `create_signal_engine(db_path, with_enrichment)` factory in `src/application/services/bootstrap.py` injects providers, parses `config/signal_engine.yaml` (`signal_engine.factors` block), applies `enabled` filtering, and computes renormalized weights before constructing the engine. See ADR-024 Engine Configurability Contract for the full schema and renormalization rule.
 * `evaluate_with_context(ticker, SignalContext)` MUST be used by screening loops to avoid N+1 provider fetches.
@@ -1120,7 +1120,7 @@ All factor thresholds, score-label thresholds, fallback scoring policy, warning 
 ### Context
 
 `screen accum` had one ambiguous `score` that mixed several questions:
-- Is there deterministic foreign accumulation evidence?
+- Is there deterministic foreign-flow score evidence?
 - Is the enriched ticker attractive according to SignalEngine?
 - Is the setup tradable after RiskEngine gates?
 - Is the data fresh and complete enough to trust the result?
@@ -1131,10 +1131,10 @@ This made `--min-score` arbitrary because users could not tell which question it
 
 Do **not** promote ScreenEngine to a first-class engine. Screening remains an application use case because it is an orchestration workflow over repositories and existing engines. The reusable artifact is **Foreign Flow Score Breakdown**, not a new engine pillar.
 
-`AccumulationScreenUseCase` now delegates deterministic foreign-flow scoring to `ScoreForeignFlowUseCase`, which returns the domain value object `ForeignFlowScoreBreakdown`. The candidate-level field is `accum_score`; generic `score` is not used for the application object.
+`AccumulationScreenUseCase` now delegates deterministic foreign-flow scoring to `ScoreForeignFlowUseCase`, which returns the domain value object `ForeignFlowScoreBreakdown`. The candidate-level field is `foreign_flow_score`; generic `score` is not used for the application object.
 
 `screen accum` replaces the public `--min-score` option with explicit filters:
-- `--min-accum-score`: threshold for deterministic accumulation evidence, 0–120.
+- `--min-foreign-flow-score`: threshold for deterministic foreign-flow score, 0-120.
 - `--min-signal-score`: optional threshold for SignalEngine score, 0–100.
 
 Default thresholds and component weights live in `config/accumulation_screener.yaml` so the learning loop can tune policy by YAML diff instead of code changes.
@@ -1171,7 +1171,7 @@ The boundary that matters for learning is the scoring artifact. `ForeignFlowScor
 
 ### Compatibility
 
-Application services read `AccumulationCandidate.accum_score`. JSON output may still include explicitly documented compatibility aliases, but new screen code, CLI help, and ADR language use `accum_score`.
+Application services read `AccumulationCandidate.foreign_flow_score`. JSON output may still include explicitly documented compatibility aliases, but new screen code, CLI help, and ADR language use `foreign_flow_score`.
 
 ---
 
@@ -1315,7 +1315,7 @@ Canonical artifact ownership:
 | `saham trade confirm` | Intraday post-open confirmation | `IntradayConfirmationResult` | ENTER/WAIT/SKIP decision after actual opening price is known |
 | `saham trade backtest-swing` | Historical replay | `SwingBacktestResponse` | Walk-forward performance artifact, not a live verdict |
 | `saham trade backtest-intraday` | Historical proxy simulation | `IntradayBacktestResponse` | Daily-OHLC proxy performance artifact, not exact intraday replay |
-| `saham analyze accum-audit` | Learning/audit replay | `AccumulationAuditResponse` | Forward-return audit of accumulation evidence |
+| `saham analyze accum-audit` | Learning/audit replay | `AccumulationAuditResponse` | Forward-return audit of foreign-flow score evidence |
 | `saham trade log --type swing` | Journal continuation | `LogSwingCandidateResponse` | Persistence outcome for a logged candidate |
 
 Composition rules:
@@ -1338,7 +1338,7 @@ JSON contract rules:
 * JSON outputs and command sidecars should include `schema_version` and
   `artifact_type` at the root.
 * New machine-facing fields should use explicit artifact names such as
-  `accum_score`, `signal_score`, `risk_status`, `broker_accum_score`, or
+  `foreign_flow_score`, `signal_score`, `risk_status`, `broker_accum_score`, or
   `trade_setup.action`.
 * Legacy ambiguous aliases such as `score` or `verdict` may remain for
   compatibility, but the clearer canonical field should be present beside them

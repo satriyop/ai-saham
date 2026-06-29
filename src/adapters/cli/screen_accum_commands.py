@@ -157,8 +157,8 @@ def _run_multi(
             tickers=tickers,
             window_days=w,
             min_net_buy_days=base_request.min_net_buy_days,
-            min_accum_score=0.0,
-            min_accum_score_enabled=False,
+            min_foreign_flow_score=0.0,
+            min_foreign_flow_score_enabled=False,
             min_signal_score=0.0,
             min_signal_score_enabled=False,
             rsi_period=base_request.rsi_period,
@@ -203,11 +203,11 @@ def accumulation_run(
         int,
         typer.Option("--min-streak", help="Minimum consecutive buy days required", min=0),
     ] = 0,
-    min_accum_score: Annotated[
+    min_foreign_flow_score: Annotated[
         Optional[float],
         typer.Option(
-            "--min-accum-score",
-            help="Minimum accumulation evidence score (0–120; config default)",
+            "--min-foreign-flow-score",
+            help="Minimum composite foreign-flow score (0-120; config default)",
             min=0,
         ),
     ] = None,
@@ -289,7 +289,7 @@ def accumulation_run(
     """
     Screen stocks for foreign accumulation patterns.
 
-    Computes accumulation evidence 0–120 based on: consistency of daily foreign buying,
+    Computes composite foreign-flow score 0-120 based on: consistency of daily foreign buying,
     consecutive buy streak, whether foreigners are underwater (VWAP vs price),
     RSI headroom, foreign flow as % of total turnover, and BB Width squeeze.
 
@@ -300,7 +300,7 @@ def accumulation_run(
         saham screen accum --universe lq45 --window 30
         saham screen accum --universe lq45 --multi
         saham screen accum --universe lq45 --multi --sort-by 30s
-        saham screen accum --universe lq45 --min-accum-score 50 --top 10
+        saham screen accum --universe lq45 --min-foreign-flow-score 50 --top 10
         saham screen accum --universe lq45 --min-signal-score 55 --top 10
         saham screen accum BBCA BBRI BMRI --window 7
         saham screen accum --universe lq45 --vwap-only
@@ -316,11 +316,11 @@ def accumulation_run(
 
     resolved_db = db_path or DEFAULT_DB_PATH
 
-    min_accum_score_enabled = _ASC.min_accum_score.enabled
-    if min_accum_score is None:
-        min_accum_score = _ASC.min_accum_score.value
+    min_foreign_flow_score_enabled = _ASC.min_foreign_flow_score.enabled
+    if min_foreign_flow_score is None:
+        min_foreign_flow_score = _ASC.min_foreign_flow_score.value
     else:
-        min_accum_score_enabled = True
+        min_foreign_flow_score_enabled = True
 
     min_signal_score_enabled = _ASC.min_signal_score.enabled
     if min_signal_score is None:
@@ -362,8 +362,8 @@ def accumulation_run(
         tickers=ticker_list,
         window_days=window,
         min_net_buy_days=max(1, min_streak),
-        min_accum_score=min_accum_score,
-        min_accum_score_enabled=min_accum_score_enabled,
+        min_foreign_flow_score=min_foreign_flow_score,
+        min_foreign_flow_score_enabled=min_foreign_flow_score_enabled,
         min_signal_score=min_signal_score,
         min_signal_score_enabled=min_signal_score_enabled,
         min_piotroski=min_piotroski,
@@ -515,7 +515,7 @@ def _save_watchlist(
             window_days=window_days,
             ticker=c.ticker,
             rank=i + 1,
-            flow_score=c.accum_score,
+            flow_score=c.foreign_flow_score,
             composite_score=c.signal_assessment.assessment.score if c.signal_assessment else None,
             consecutive_streak=c.consecutive_streak,
             net_buy_ratio=c.net_buy_ratio,
@@ -556,8 +556,8 @@ def _make_use_case_for_compare(
             tickers=ticker_list,
             window_days=window,
             min_net_buy_days=1,
-            min_accum_score=0.0,
-            min_accum_score_enabled=False,
+            min_foreign_flow_score=0.0,
+            min_foreign_flow_score_enabled=False,
             tier1_broker_codes=_SC.tier1_broker_codes,
             bci_cluster_min_count=_SC.bci_cluster_min_count,
             bci_stable_min_count=_SC.bci_stable_min_count,

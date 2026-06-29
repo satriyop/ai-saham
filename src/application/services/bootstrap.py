@@ -60,7 +60,7 @@ def _resolve_signal_weights(cfg: dict) -> dict[str, float] | None:
 
 def _resolve_signal_config(cfg: dict):
     from src.application.use_case.assess_signal_use_case import (
-        AccumulationScoreMappingConfig,
+        ForeignFlowScoreMappingConfig,
         AnalystScoringConfig,
         BandarScoringConfig,
         ForwardPeScoringConfig,
@@ -79,7 +79,7 @@ def _resolve_signal_config(cfg: dict):
     scoring = root.get("scoring", {})
     enrichment = root.get("enrichment", {})
     input_mapping = root.get("input_mapping", {})
-    accum_mapping = input_mapping.get("accumulation_score", {})
+    foreign_flow_score_mapping = input_mapping.get("foreign_flow_score", {})
     bandar = scoring.get("bandar", {})
     seasonality = scoring.get("seasonality", {})
     analyst = scoring.get("analyst", {})
@@ -125,9 +125,9 @@ def _resolve_signal_config(cfg: dict):
             ),
         ),
         input_mapping=SignalInputMappingConfig(
-            accumulation_score=AccumulationScoreMappingConfig(
-                max_score=accum_mapping.get("max_score", 120.0),
-                clamp=accum_mapping.get("clamp", True),
+            foreign_flow_score=ForeignFlowScoreMappingConfig(
+                max_score=foreign_flow_score_mapping.get("max_score", 120.0),
+                clamp=foreign_flow_score_mapping.get("clamp", True),
             ),
         ),
         enrichment=SignalEnrichmentConfig(

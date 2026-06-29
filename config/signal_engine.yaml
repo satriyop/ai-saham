@@ -29,7 +29,7 @@ signal_engine:
 
   # Maps upstream workflow evidence into SignalContext fields.
   input_mapping:
-    accumulation_score:
+    foreign_flow_score:
       max_score: 120.0
       clamp: true
 

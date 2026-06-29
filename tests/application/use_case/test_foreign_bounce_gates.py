@@ -40,7 +40,7 @@ def _candidate(**kwargs) -> AccumulationCandidate:
         vwap_discount_pct=4.0,
         rsi=45.0,
         trend="SIDE",
-        accum_score=80.0,
+        foreign_flow_score=80.0,
         top_brokers=["AK", "BK"],
         institutional_flag=True,
         avg_flow_ratio=6.0,
@@ -87,7 +87,7 @@ def test_single_gate_fail_returns_partial():
 
 
 def test_many_gates_fail_returns_no_match():
-    c = _candidate(rsi=75.0, trend="UP", avg_flow_ratio=1.0, vwap_discount_pct=0.5, accum_score=30.0)
+    c = _candidate(rsi=75.0, trend="UP", avg_flow_ratio=1.0, vwap_discount_pct=0.5, foreign_flow_score=30.0)
     evaluation = _eval(c)
     assert evaluation.match == SetupMatch.NO_MATCH
     assert len(evaluation.failed_reasons) > 2
@@ -95,7 +95,7 @@ def test_many_gates_fail_returns_no_match():
 
 def test_score_gate_fail_but_few_total_fails_returns_partial():
     # Score fails, but only 1 other gate fails (<= partial_max_failed_gates=2)
-    c = _candidate(accum_score=60.0, rsi=65.0)  # 2 failures: score + RSI
+    c = _candidate(foreign_flow_score=60.0, rsi=65.0)  # 2 failures: score + RSI
     evaluation = _eval(c)
     assert evaluation.match == SetupMatch.PARTIAL
 
@@ -125,14 +125,14 @@ def test_wrong_trend_fails_trend_gate():
 
 
 def test_custom_gate_values_respected():
-    c = _candidate(accum_score=50.0)
+    c = _candidate(foreign_flow_score=50.0)
     # With min_score=40.0, score gate should pass
     evaluation = _eval(c, gate_min_score=40.0)
     assert not any("score" in f for f in evaluation.failed_reasons)
 
 
 def test_coiled_spring_match_requires_tight_bb_width():
-    c = _candidate(accum_score=62.0, bb_width_pctile=0.12, avg_flow_ratio=3.5, rsi=58.0)
+    c = _candidate(foreign_flow_score=62.0, bb_width_pctile=0.12, avg_flow_ratio=3.5, rsi=58.0)
 
     evaluation = EvaluateSwingSetupUseCase().execute(
         EvaluateSwingSetupRequest(
@@ -148,7 +148,7 @@ def test_coiled_spring_match_requires_tight_bb_width():
 
 
 def test_coiled_spring_rejects_loose_bb_width_when_other_gates_fail():
-    c = _candidate(accum_score=40.0, bb_width_pctile=0.60, avg_flow_ratio=0.5, rsi=72.0)
+    c = _candidate(foreign_flow_score=40.0, bb_width_pctile=0.60, avg_flow_ratio=0.5, rsi=72.0)
 
     evaluation = EvaluateSwingSetupUseCase().execute(
         EvaluateSwingSetupRequest(
@@ -163,7 +163,7 @@ def test_coiled_spring_rejects_loose_bb_width_when_other_gates_fail():
 
 
 def test_smart_money_confirmed_requires_broker_detail():
-    c = _candidate(accum_score=70.0)
+    c = _candidate(foreign_flow_score=70.0)
 
     evaluation = EvaluateSwingSetupUseCase().execute(
         EvaluateSwingSetupRequest(
@@ -181,7 +181,7 @@ def test_smart_money_confirmed_requires_broker_detail():
 def test_smart_money_confirmed_matches_smart_led_flow():
     from types import SimpleNamespace
 
-    c = _candidate(accum_score=70.0)
+    c = _candidate(foreign_flow_score=70.0)
     broker_detail = SimpleNamespace(
         smart_flow=Decimal("70000000"),
         noise_flow=Decimal("20000000"),
@@ -208,7 +208,7 @@ def test_smart_money_confirmed_matches_smart_led_flow():
 
 def test_pullback_continuation_matches_uptrend_pullback():
     c = _candidate(
-        accum_score=60.0,
+        foreign_flow_score=60.0,
         trend="UP",
         avg_flow_ratio=3.0,
         rsi=50.0,

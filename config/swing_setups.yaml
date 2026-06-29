@@ -14,7 +14,7 @@ setups:
     enabled: true
     # Reversal/absorption: foreigners are accumulating while price is still depressed.
     gates:
-      min_score: 70              # accumulation evidence score gate (0-120 scale)
+      min_score: 70              # composite foreign-flow score gate (0-120 scale)
       min_vwap_discount_pct: 3.0 # foreigners must be underwater >= 3% below VWAP
       required_trend: SIDE       # pre-accumulation trend must be sideways
       min_flow_ratio_pct: 5.0    # foreign flow >= 5% of daily turnover over window

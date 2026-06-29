@@ -82,14 +82,16 @@ class SignalScoringConfig:
 
 
 @dataclass(frozen=True)
-class AccumulationScoreMappingConfig:
+class ForeignFlowScoreMappingConfig:
     max_score: float = 120.0
     clamp: bool = True
 
 
 @dataclass(frozen=True)
 class SignalInputMappingConfig:
-    accumulation_score: AccumulationScoreMappingConfig = field(default_factory=AccumulationScoreMappingConfig)
+    foreign_flow_score: ForeignFlowScoreMappingConfig = field(
+        default_factory=ForeignFlowScoreMappingConfig
+    )
 
 
 @dataclass(frozen=True)

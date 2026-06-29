@@ -93,12 +93,12 @@ class ForeignFlowEvidence:
     ) -> "ForeignFlowEvidence":
         flow_direction = classify_flow_direction(breakdown.avg_flow_ratio)
         return cls(
-            composite_score=breakdown.accum_score,
+            composite_score=breakdown.foreign_flow_score,
             max_score=breakdown.max_score,
             score_family=COMPOSITE_FOREIGN_FLOW,
             flow_direction=flow_direction,
             confirmation_status=classify_confirmation_status(
-                composite_score=breakdown.accum_score,
+                composite_score=breakdown.foreign_flow_score,
                 max_score=breakdown.max_score,
                 flow_direction=flow_direction,
             ),

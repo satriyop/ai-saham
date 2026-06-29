@@ -136,16 +136,16 @@ def signal_label(candidate: Any, config: SwingDisplayConfig) -> str:
     if (
         candidate.bb_width_pctile is not None
         and candidate.bb_width_pctile <= config.coiled_spring_bb_pctile
-        and candidate.accum_score >= config.coiled_spring_min_score
+        and candidate.foreign_flow_score >= config.coiled_spring_min_score
     ):
         return "coiled spring"
-    if candidate.accum_score >= config.strong_min_score and candidate.consecutive_streak >= config.strong_min_streak:
+    if candidate.foreign_flow_score >= config.strong_min_score and candidate.consecutive_streak >= config.strong_min_streak:
         return "strong"
-    if candidate.accum_score >= config.building_min_score and candidate.consecutive_streak >= config.building_min_streak:
+    if candidate.foreign_flow_score >= config.building_min_score and candidate.consecutive_streak >= config.building_min_streak:
         return "building"
-    if candidate.accum_score >= config.enter_min_score:
+    if candidate.foreign_flow_score >= config.enter_min_score:
         return "high score"
-    if candidate.accum_score >= config.watch_min_score:
+    if candidate.foreign_flow_score >= config.watch_min_score:
         return "moderate"
     return "weak"
 
@@ -155,9 +155,9 @@ def foreign_flow_evidence_label(candidate: Any, config: SwingDisplayConfig) -> s
     status = getattr(foreign_flow_evidence, "confirmation_status", None)
     if status:
         return str(status).lower().replace("_", "-")
-    if candidate.accum_score >= config.enter_min_score:
+    if candidate.foreign_flow_score >= config.enter_min_score:
         return "enter-zone"
-    if candidate.accum_score >= config.watch_min_score:
+    if candidate.foreign_flow_score >= config.watch_min_score:
         return "watch-zone"
     return "weak"
 
@@ -208,7 +208,7 @@ def swing_summary_parts(
 ) -> list[str]:
     parts = []
     if accum:
-        parts.append(f"Score {accum.accum_score:.1f}")
+        parts.append(f"Score {accum.foreign_flow_score:.1f}")
     if risk_resp and risk_resp.assessment.gate_triggered:
         parts.append(f"gate: BLOCKED ({risk_resp.assessment.gate_triggered})")
     if backtest_result and backtest_result.trade_count > 0:
@@ -365,11 +365,11 @@ def _accumulation_label(accum: Any | None, config: SwingDisplayConfig) -> tuple[
     if accum is None:
         return "missing", "red", "no accumulation candidate"
     label = signal_label(accum, config)
-    style = "bold green" if accum.accum_score >= config.enter_min_score else (
-        "yellow" if accum.accum_score >= config.watch_min_score else "red"
+    style = "bold green" if accum.foreign_flow_score >= config.enter_min_score else (
+        "yellow" if accum.foreign_flow_score >= config.watch_min_score else "red"
     )
     detail = (
-        f"score {accum.accum_score:.1f}; streak {accum.consecutive_streak}s; "
+        f"score {accum.foreign_flow_score:.1f}; streak {accum.consecutive_streak}s; "
         f"net {accum.net_buy_days}/{accum.total_days}; flow {fmt_pct(accum.avg_flow_ratio, True)}"
     )
     return label.upper(), style, detail
@@ -476,7 +476,7 @@ def _top_findings(
 
 def _gate_meaning(label: str) -> str:
     meanings = {
-        "score": "overall accumulation conviction",
+        "score": "composite foreign-flow strength",
         "fvwap%": "foreign holders still have price support incentive",
         "trend": "chart regime required by the setup",
         "flow_pct": "foreign net flow is meaningful versus turnover",
@@ -491,7 +491,7 @@ def _gate_meaning(label: str) -> str:
         "smart_net_selling": "smart-money is not distributing",
         "broker detail": "named-broker attribution is available",
         "setup enabled": "setup is enabled in config",
-        "broker flow data": "accumulation evidence exists",
+        "broker flow data": "foreign-flow score exists",
     }
     return meanings.get(label, "setup-specific requirement")
 
@@ -1073,7 +1073,7 @@ def print_swing_output(
                     _source = "missing data -> neutral 50"
                 if _factor == "foreign_flow_quality" and accum is not None:
                     _source = (
-                        f"Composite accumulation evidence {accum.accum_score:.1f}/120 -> {_score:.1f}/100"
+                        f"Composite foreign-flow score {accum.foreign_flow_score:.1f}/120 -> {_score:.1f}/100"
                     )
                 elif _score == 50.0 and not _source:
                     if _factor == "insider_activity":
@@ -1130,12 +1130,12 @@ def print_swing_output(
         evidence_label = foreign_flow_evidence_label(accum, config)
         flow_label = flow_direction_label(accum)
         flow_group.append(Text(
-            f"Composite Accumulation Evidence ({window} broker sessions): "
+            f"Composite Foreign Flow Score ({window} broker sessions): "
             f"{evidence_label.upper()} / {flow_label.upper()}",
             style="bold cyan",
         ))
         flow_group.append(Text(
-            "Scope: broker-flow and attribution diagnostics. SignalEngine uses the composite accumulation score below, not pure foreign net flow.",
+            "Scope: broker-flow and attribution diagnostics. SignalEngine uses the composite foreign-flow score below, not pure foreign net flow.",
             style="dim",
         ))
         flow_group.append(Text(
@@ -1160,7 +1160,7 @@ def print_swing_output(
         net_str = f"{accum.net_buy_days}/{accum.total_days}"
 
         flow_table.add_row(
-            f"{accum.accum_score:.1f}",
+            f"{accum.foreign_flow_score:.1f}",
             f"{accum.consecutive_streak}s",
             net_str,
             flow_str,
@@ -1171,7 +1171,7 @@ def print_swing_output(
         )
         flow_group.append(flow_table)
 
-        if accum.accum_score >= config.watch_min_score and not has_current_flow_confirmation(accum):
+        if accum.foreign_flow_score >= config.watch_min_score and not has_current_flow_confirmation(accum):
             flow_group.append(Text(
                 "Note: composite score is in watch-zone, but current foreign flow is not confirming "
                 "(check Flow Ratio, Streak, and Net Days).",
@@ -1264,14 +1264,14 @@ def print_swing_output(
         elif (
             accum is not None
             and flow_detail.total_net_flow < Decimal("0")
-            and accum.accum_score >= config.watch_min_score
+            and accum.foreign_flow_score >= config.watch_min_score
             and not has_current_flow_confirmation(accum)
         ):
             flow_group.append(Text(
                 "Interpretation: longer-term flow is negative and the current signal window lacks foreign-flow confirmation.",
                 style="dim yellow",
             ))
-        elif accum is not None and flow_detail.total_net_flow > Decimal("0") and accum.accum_score < config.watch_min_score:
+        elif accum is not None and flow_detail.total_net_flow > Decimal("0") and accum.foreign_flow_score < config.watch_min_score:
             flow_group.append(Text(
                 "Interpretation: longer-term net buying exists, but the current signal window is still weak.",
                 style="dim yellow",

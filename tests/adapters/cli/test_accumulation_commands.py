@@ -94,7 +94,7 @@ def _candidate(**overrides) -> AccumulationCandidate:
         "vwap_discount_pct": 3.0,
         "rsi": 55.0,
         "trend": "SIDE",
-        "accum_score": 70.0,
+        "foreign_flow_score": 70.0,
         "top_brokers": None,
         "institutional_flag": False,
         "avg_flow_ratio": 5.0,
@@ -305,7 +305,7 @@ def test_display_results_renders_blocked_risk_diagnostics(capsys):
 def test_display_multi_renders_rich_accumulation_panel(capsys):
     results = {
         7: AccumulationScreenResponse(
-            candidates=[_candidate(accum_score=72.0, window_days=7)],
+            candidates=[_candidate(foreign_flow_score=72.0, window_days=7)],
             screened_at=date(2026, 6, 19),
             window_days=7,
             total_tickers_checked=1,
@@ -313,7 +313,7 @@ def test_display_multi_renders_rich_accumulation_panel(capsys):
             provider="stockbit",
         ),
         30: AccumulationScreenResponse(
-            candidates=[_candidate(accum_score=55.0, window_days=30)],
+            candidates=[_candidate(foreign_flow_score=55.0, window_days=30)],
             screened_at=date(2026, 6, 19),
             window_days=30,
             total_tickers_checked=1,
