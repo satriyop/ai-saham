@@ -9,7 +9,7 @@ from decimal import Decimal
 
 from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 from src.domain.value_objects.risk_assessment import RiskAssessment
-from src.domain.value_objects.risk_signal import RiskLevel, SignalSensitivity
+from src.domain.value_objects.risk_signal import RiskLevel
 from src.infrastructure.ai.mock_explainer import MockExplainer
 
 
@@ -37,7 +37,6 @@ def make_assessment(
         snapshot = make_snapshot()
 
     return RiskAssessment(
-        sensitivity=SignalSensitivity.BALANCED,
         rationale=("Test rationale 1", "Test rationale 2"),
         snapshot_date=snapshot.date,
         indicators=snapshot,

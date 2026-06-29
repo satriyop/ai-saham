@@ -69,8 +69,8 @@ class YamlRuleInterpreter:
         self._sorted_rules = sorted(rule_set.rules, key=lambda r: r.priority)
 
     @property
-    def profile_name(self) -> str:
-        """Return the name of the rule set (used as profile name)."""
+    def rule_set_name(self) -> str:
+        """Return the name of the rule set."""
         return self._rule_set.name
 
     @property

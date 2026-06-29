@@ -161,9 +161,6 @@ class AccumulationScreenRequest:
     min_market_cap_idr: int = 0
     # Piotroski F-Score floor (0–9). Tickers below this are excluded (0 = disabled)
     min_piotroski: int = 0
-    # Phase E: risk profile for post-screening risk funnel (ignored when no risk_use_case)
-    risk_profile: str = "balanced"
-
     def __init__(
         self,
         tickers: list[str],
@@ -189,7 +186,6 @@ class AccumulationScreenRequest:
         bci_stable_min_count: int = 1,
         min_market_cap_idr: int = 0,
         min_piotroski: int = 0,
-        risk_profile: str = "balanced",
     ) -> None:
         self.tickers = tickers
         self.window_days = window_days
@@ -214,7 +210,6 @@ class AccumulationScreenRequest:
         self.bci_stable_min_count = bci_stable_min_count
         self.min_market_cap_idr = min_market_cap_idr
         self.min_piotroski = min_piotroski
-        self.risk_profile = risk_profile
 
 
 @dataclass
@@ -691,7 +686,7 @@ class AccumulationScreenUseCase:
         # not on all 800+ tickers. Reuses already-loaded fundamentals + bandar
         # data from candidates (Rec 15 data sharing — zero extra provider queries).
         if self._risk_use_case is not None:
-            self._run_risk_funnel(candidates, today, request.risk_profile)
+            self._run_risk_funnel(candidates, today)
 
         candidates.sort(key=_screen_sort_key, reverse=True)
 
@@ -708,7 +703,6 @@ class AccumulationScreenUseCase:
         self,
         candidates: list[AccumulationCandidate],
         as_of_date: date,
-        risk_profile: str,
     ) -> None:
         """Run AssessRiskUseCase on each survivor and attach the result in-place.
 
@@ -753,7 +747,6 @@ class AccumulationScreenUseCase:
                 resp = self._risk_use_case.execute(  # type: ignore[union-attr]
                     AssessRiskRequest(
                         ticker=candidate.ticker,
-                        sensitivity=risk_profile,
                         gate_context=gate_ctx,
                     )
                 )

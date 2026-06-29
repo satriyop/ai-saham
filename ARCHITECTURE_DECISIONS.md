@@ -151,7 +151,7 @@ Behavior differences are controlled via configuration, not code.
 
 **Implications**
 
-* Risk profiles
+* Risk gates
 * Thresholds
 * AI enable/disable
 
@@ -160,34 +160,29 @@ Promotes flexibility without branching logic.
 
 ---
 
-## ADR-010: Risk Profiles as Policy Layer
+## ADR-010: Risk Gates as Policy Layer
 
 **Decision**
-Risk profiles map analysis results to qualitative interpretation. Three built-in profiles exist: Conservative, Balanced, Aggressive. All profile thresholds and gate trigger levels must be config-driven, not hardcoded.
-
-**Built-in Profiles**
-
-| Profile | RSI High-Risk | RSI Low-Risk | EMA/SMA Min Divergence | Decision Logic |
-|---------|--------------|-------------|----------------------|----------------|
-| Conservative | > 75 | < 25 | ≥ 1.0% | Both RSI and trend must agree |
-| Balanced | > 70 | < 30 | ≥ 0% | Majority rules |
-| Aggressive | > 60 | < 40 | ≥ 0.1% | Either can signal |
+Risk assessment is gate-based. A configured gate either fires or it does not,
+producing `BLOCKED` or `OPEN`. Conservative/balanced/aggressive risk profiles
+are retired from the current application because they no longer affect gate
+outcomes.
 
 **Implications**
 
-* No prediction or trading execution — profiles are interpretive policy only.
-* Profile thresholds (RSI high/low, EMA/SMA divergence minimum) MUST be readable from `config/risk_engine.yaml`. Python constants are compile-time defaults only; YAML values override at startup.
-* Gate trigger thresholds (Piotroski F-score cutoff, market cap floor, liquidity floor, free float minimum, bandar distribution score threshold) MUST be configurable per profile in `config/risk_engine.yaml`.
+* No prediction or trading execution — gates are deterministic policy only.
+* Gate trigger thresholds (Piotroski F-score cutoff, market cap floor, liquidity floor, free float minimum, bandar distribution labels, technical gate thresholds) MUST be configurable in `config/risk_engine.yaml`.
 * Each gate MUST declare an `enabled: bool` field in the YAML config. A gate with `enabled: false` is skipped entirely from the pipeline — no evaluation, no block decision. This supports backtesting, A/B comparison, and T2 Tuner proposals without code changes. See ADR-024 Engine Configurability Contract for the full gate YAML schema.
-* A profile configuration YAML schema MUST be validated at startup via `yaml_loader.py`. Invalid config aborts startup with a clear error, not a silent fallback.
-* Custom profiles (user-defined YAML) are supported. Custom profile names are strings; built-in profiles use the `SignalSensitivity` enum.
+* Risk-engine YAML schema MUST be validated at startup via `yaml_loader.py`. Invalid config aborts startup with a clear error, not a silent fallback.
 * Gate thresholds may be tightened based on market context (RISK_OFF/VOLATILE) — see ADR-029 for MarketContextEngine regime labels and integration rules.
 
-**Implementation status (2026-06-25)**
-`config/risk_engine.yaml` currently controls gate enablement and several gate thresholds through `create_risk_engine()`. Built-in RSI/EMA/SMA profile thresholds and per-profile gate threshold blocks are still migration targets; until migrated, the Python rule classes remain compile-time defaults.
+**Implementation status (2026-06-29)**
+`config/risk_engine.yaml` controls gate enablement and gate thresholds through
+`create_risk_engine()`. The risk profile/sensitivity path and `--all` profile
+comparison are removed.
 
 **Rationale**
-Separates math from policy. Config-driven thresholds enable the learning loop (ADR-027) to propose adjustments without requiring code changes, and enable calibration for IDX market specifics (ADR-028) without forking profiles.
+Separates math from policy. Config-driven thresholds enable the learning loop (ADR-027) to propose adjustments without requiring code changes, and enable calibration for IDX market specifics (ADR-028) without maintaining duplicate profile paths.
 
 ---
 
@@ -492,14 +487,14 @@ Owns: 3-tier gate pipeline (structural → technical rules → execution), Piotr
 Output cadence: per week / per quarter (gate inputs are slow-moving).
 
 **Interface (`src/application/services/risk_engine.py`):**
-- `assess(ticker, profile, as_of_date)` — self-fetches enrichment via injected providers
-- `assess_with_context(ticker, profile, gate_context)` — pipeline path, avoids N+1 in screener loops
+- `assess(ticker, as_of_date)` — self-fetches enrichment via injected providers
+- `assess_with_context(ticker, gate_context)` — pipeline path, avoids N+1 in screener loops
 - `assess_request(request)` — advanced path accepting full `AssessRiskRequest`
-- `assess_all_profiles(request)` / `assess_trend(request, days)` — multi-profile and trend views
+- `assess_trend(request, days)` — trend view
 
 **Factory:** `create_risk_engine(db_path, with_enrichment)` in `src/application/services/bootstrap.py`. All gate instantiation and configuration is owned by the factory. Callers never instantiate `RiskGate` subclasses directly.
 
-**Output:** `RiskAssessment` — `risk_level`, `confidence`, `gate_triggered`, `rationale: tuple[str, ...]`, `snapshot_date`
+**Output:** `RiskAssessment` — `risk_level_name`, `confidence`, `gate_triggered`, `rationale: tuple[str, ...]`, `snapshot_date`
 
 ---
 
@@ -967,7 +962,7 @@ Rp 50 absolute floor. No changes — already enforced.
 
 **Current gap:** `BandarGate` uses `bandar_is_distributing: bool` (any score < 0 = distributing). Stockbit provides a -9 to +9 score; a -1 and a -9 carry very different implications.
 
-**Rule:** `GateContext.bandar_is_distributing: bool` is replaced by `GateContext.bandar_five_day_score: int | None` (-9 to +9). `BandarGate` compares `bandar_five_day_score ≤ distribution_threshold` where `distribution_threshold` is configurable per profile in `config/risk_engine.yaml` (default: -2). Score of -1 is treated as noise and does not trigger the gate.
+**Rule:** `GateContext.bandar_is_distributing: bool` is replaced by `GateContext.bandar_five_day_score: int | None` (-9 to +9). `BandarGate` compares `bandar_five_day_score ≤ distribution_threshold` where `distribution_threshold` is configurable in `config/risk_engine.yaml` (default: -2). Score of -1 is treated as noise and does not trigger the gate.
 
 **Migration:** `StockbitBandarDetectorProvider` already returns the numeric score. `GateContext` construction in `bootstrap.py` must pass the score, not the boolean.
 

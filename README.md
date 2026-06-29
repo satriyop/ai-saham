@@ -11,7 +11,7 @@ A **local-first, production-grade CLI application** for stock analysis focused o
 - **Technical Indicators** - SMA, EMA, RSI, ATR with professional-grade calculations
 - **Formula DSL** - Compose indicators with expressions like `SMA(RSI(14), 10)`
 - **Plugin System** - Extend with custom indicators (ATR included as example)
-- **Risk Assessment** - Three built-in profiles (conservative, balanced, aggressive) + trend mode
+- **Risk Assessment** - Configured risk gates with OPEN/BLOCKED status + trend mode
 - **Custom Rules DSL** - Define your own rules via YAML configuration
 - **Strategy Packages** - First-class, versionable, portable strategy artifacts
 - **Skill Documentation** - Auto-generated SKILL.md with drift detection and project-wide catalog
@@ -260,12 +260,11 @@ saham indicator snapshot BBCA --format json  # JSON output
 
 ### `saham analyze risk` - Risk Assessment
 
-Assess risk using rule-based evaluation with optional AI explanation.
+Assess risk using configured deterministic gates with optional AI explanation.
 
 ```bash
-# Balanced profile
-saham analyze risk BBCA                           # Balanced (default)
-saham analyze risk TLKM --all                     # Compare all profiles
+# Gate-based risk assessment
+saham analyze risk BBCA
 
 # Custom rules
 saham analyze risk BBCA --rules-file config/my_rules.yaml
@@ -287,7 +286,6 @@ saham analyze risk BBCA --format json
 
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
-| `--all` | `-a` | false | Show all sensitivity profiles |
 | `--rules-file` | `-r` | | Custom YAML rules |
 | `--explain` | `-e` | false | Generate AI explanation |
 | `--provider` | | deepseek | AI provider |
@@ -298,15 +296,9 @@ saham analyze risk BBCA --format json
 | `--format` | | table | Output format: `table` or `json` |
 | `--no-ai` | | false | Disable AI, use offline keyword classification |
 
-**Risk Profiles:**
+**Risk Status:** `OPEN`, `BLOCKED`
 
-| Profile | Description |
-|---------|-------------|
-| `conservative` | Strict thresholds, requires indicators to agree |
-| `balanced` | Standard thresholds, majority rules |
-| `aggressive` | Wide thresholds, single indicator can signal |
-
-**Risk Levels:** `HIGH_RISK`, `MODERATE`, `LOW_RISK`
+**Risk Gates:** fundamental, liquidity, free float, bandar, optional technical gate, optional market-context gate.
 
 ---
 

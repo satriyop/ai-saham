@@ -24,7 +24,6 @@ from src.domain.rules.liquidity_gate import LiquidityGate
 from src.domain.rules.risk_gate import GateContext
 from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 from src.domain.value_objects.risk_assessment import RiskAssessment
-from src.domain.value_objects.risk_signal import SignalSensitivity
 
 _TODAY = date(2026, 6, 23)
 _1T = 1_000_000_000_000
@@ -44,7 +43,6 @@ class TestRiskAssessmentGateTriggeredField:
             rsi=Decimal("50"),
         )
         return RiskAssessment(
-            sensitivity=SignalSensitivity.BALANCED,
             rationale=("test",),
             snapshot_date=_TODAY,
             indicators=snapshot,
@@ -60,7 +58,6 @@ class TestRiskAssessmentGateTriggeredField:
             rsi=Decimal("50"),
         )
         assessment = RiskAssessment(
-            sensitivity=SignalSensitivity.BALANCED,
             rationale=("test",),
             snapshot_date=_TODAY,
             indicators=snapshot,
@@ -132,7 +129,6 @@ class TestAssessRiskResponseGateProperty:
         )
         req = AssessRiskRequest(
             ticker="BBCA",
-            sensitivity="balanced",
             gate_context=GateContext(
                 ticker="BBCA",
                 snapshot_date=_TODAY,
@@ -152,7 +148,6 @@ class TestAssessRiskResponseGateProperty:
         )
         req = AssessRiskRequest(
             ticker="BBCA",
-            sensitivity="balanced",
             gate_context=GateContext(
                 ticker="BBCA",
                 snapshot_date=_TODAY,
@@ -171,7 +166,6 @@ class TestAssessRiskResponseGateProperty:
         )
         req = AssessRiskRequest(
             ticker="BBCA",
-            sensitivity="balanced",
             gate_context=GateContext(
                 ticker="BBCA",
                 snapshot_date=_TODAY,

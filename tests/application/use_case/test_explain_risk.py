@@ -21,7 +21,7 @@ from src.domain.ports.ai_explainer import (
 )
 from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 from src.domain.value_objects.risk_assessment import RiskAssessment
-from src.domain.value_objects.risk_signal import RiskLevel, SignalSensitivity
+from src.domain.value_objects.risk_signal import RiskLevel
 from src.infrastructure.ai.mock_explainer import MockExplainer
 
 
@@ -46,7 +46,6 @@ def make_assessment(
     """Create test assessment with snapshot."""
     snapshot = make_snapshot()
     assessment = RiskAssessment(
-        sensitivity=SignalSensitivity.BALANCED,
         rationale=(
             "RSI 72.50 > threshold (70)",
             "EMA < SMA indicates downtrend",
@@ -229,7 +228,6 @@ class TestDeterminismPreserved:
         # Verify assessment is unchanged (immutable dataclass)
         assert assessment_before.gate_triggered == "gate"
         assert assessment_before.confidence == 100
-        assert assessment_before.sensitivity == SignalSensitivity.BALANCED
         assert assessment_before.rationale == (
             "RSI 72.50 > threshold (70)",
             "EMA < SMA indicates downtrend",
@@ -243,4 +241,3 @@ class TestDeterminismPreserved:
         # Both assessments should be identical
         assert assessment1.gate_triggered == assessment2.gate_triggered
         assert assessment1.confidence == assessment2.confidence
-        assert assessment1.sensitivity == assessment2.sensitivity

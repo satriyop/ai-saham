@@ -45,7 +45,6 @@ analyze_app.add_typer(chart_app, name="chart")
 from src.infrastructure.config.app_config import APP_CFG
 
 DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
-DEFAULT_RISK_PROFILE = "balanced"
 
 
 def _no_data_error(ticker: str) -> None:
@@ -86,7 +85,6 @@ def _display_ai_explanation(
 @analyze_app.command()
 def risk(
     ticker: Annotated[str, typer.Argument(help="Stock ticker symbol (e.g., BBCA)")],
-    all_profiles: Annotated[bool, typer.Option("--all", "-a", help="Show assessment for all profiles")] = False,
     rules_file: Annotated[Optional[Path], typer.Option("--rules-file", "-r", help="Path to custom YAML rules file")] = None,
     sma_period: Annotated[int, typer.Option("--sma", help="SMA period", min=1)] = 20,
     ema_period: Annotated[int, typer.Option("--ema", help="EMA period", min=1)] = 20,
@@ -102,33 +100,22 @@ def risk(
     fmt: Annotated[str, typer.Option("--format", help="Output format: table or json")] = APP_CFG.analysis.format,
 ) -> None:
     """
-    Assess risk for an IDX stock based on technical indicators.
+    Assess risk for an IDX stock using deterministic risk gates.
 
-    Uses deterministic, rule-based evaluation with the balanced risk profile.
-
-    Risk levels:
-      LOW_RISK   Indicators suggest favorable conditions
-      MODERATE   Indicators suggest neutral/balanced conditions
-      HIGH_RISK  Indicators suggest elevated risk
+    Risk status:
+      OPEN      No configured gate fired
+      BLOCKED   A configured gate fired
 
     Examples:
         saham analyze risk BBCA
-        saham analyze risk TLKM --all
         saham analyze risk BBCA --rules-file config/my_rules.yaml
         saham analyze risk BBCA --explain
         saham analyze risk BBCA --with-sentiment
     """
     resolved_db = db_path or DEFAULT_DB_PATH
-    profile = DEFAULT_RISK_PROFILE
-
-    if rules_file and all_profiles:
-        typer.echo(
-            "Warning: --rules-file is incompatible with --all. Using custom rules for single assessment.",
-            err=True,
-        )
 
     if fmt != "json":
-        typer.echo(f"Assessing risk for {ticker.upper()} [{profile}]...")
+        typer.echo(f"Assessing risk for {ticker.upper()}...")
 
     try:
         engine = create_risk_engine(resolved_db, with_enrichment=True)
@@ -153,7 +140,6 @@ def risk(
 
         request = AssessRiskRequest(
             ticker=ticker,
-            sensitivity=profile,
             sma_period=sma_period,
             ema_period=ema_period,
             rsi_period=rsi_period,
@@ -161,93 +147,64 @@ def risk(
             sentiment=sentiment_snapshot,
         )
 
-        if all_profiles and not rules_file:
-            response = engine.assess_all_profiles(request)
-            snapshot = response.assessments[0].indicators
+        response = engine.assess_request(request)
+        assessment = response.assessment
+        snapshot = assessment.indicators
 
-            typer.echo(f"\n{'='*50}")
-            typer.echo(f" Risk Assessment  ·  {response.ticker}  ·  All Profiles")
-            typer.echo(f"{'='*50}\n")
-            typer.echo(f"Data Date: {response.assessments[0].snapshot_date}")
-            typer.echo(f"\nIndicators: SMA({response.sma_period}), EMA({response.ema_period}), RSI({response.rsi_period})")
-            typer.echo(f"  SMA:  {snapshot.sma:>12,.2f}")
-            typer.echo(f"  EMA:  {snapshot.ema:>12,.2f}")
-            typer.echo(f"  RSI:  {snapshot.rsi:>12.2f}")
+        if fmt == "json":
+            import json as _json
+            typer.echo(_json.dumps({
+                "schema_version": 1,
+                "artifact_type": "risk_assessment",
+                "ticker": response.ticker,
+                "risk_status": assessment.risk_level_name,
+                "status": assessment.risk_level_name,
+                "verdict": assessment.risk_level_name,
+                "gate_triggered": assessment.gate_triggered,
+                "gate_confidence": assessment.gate_confidence,
+                "rationale": assessment.rationale_list,
+                "indicators": {
+                    f"sma_{response.sma_period}": float(snapshot.sma),
+                    f"ema_{response.ema_period}": float(snapshot.ema),
+                    f"rsi_{response.rsi_period}": float(snapshot.rsi),
+                },
+            }, indent=2))
+            return
 
-            typer.echo(f"\n{'Profile':<14} {'Status':<12} {'Gate'}")
-            typer.echo("─" * 40)
-            for assessment in response.assessments:
-                _gate = assessment.gate_triggered or "-"
-                typer.echo(
-                    f"{assessment.sensitivity_name:<14} {assessment.risk_level_name:<12} {_gate}"
-                )
+        typer.echo(f"\n{'='*50}")
+        typer.echo(f" Risk Assessment  ·  {response.ticker}")
+        typer.echo(f"{'='*50}\n")
+        typer.echo(f"Data Date: {assessment.snapshot_date}")
 
-        else:
-            response = engine.assess_request(request)
-            assessment = response.assessment
-            snapshot = assessment.indicators
+        typer.echo("\nIndicators")
+        typer.echo(f"{'─'*30}")
+        typer.echo(f"  SMA({response.sma_period}):  {snapshot.sma:>12,.2f}")
+        typer.echo(f"  EMA({response.ema_period}):  {snapshot.ema:>12,.2f}")
+        typer.echo(f"  RSI({response.rsi_period}):  {snapshot.rsi:>12.2f}")
 
-            if fmt == "json":
-                import json as _json
-                typer.echo(_json.dumps({
-                    "schema_version": 1,
-                    "artifact_type": "risk_assessment",
-                    "ticker": response.ticker,
-                    "risk_status": assessment.risk_level_name,
-                    "status": assessment.risk_level_name,
-                    "verdict": assessment.risk_level_name,
-                    "gate_triggered": assessment.gate_triggered,
-                    "gate_confidence": assessment.gate_confidence,
-                    "sensitivity": response.sensitivity,
-                    "rationale": assessment.rationale_list,
-                    "indicators": {
-                        f"sma_{response.sma_period}": float(snapshot.sma),
-                        f"ema_{response.ema_period}": float(snapshot.ema),
-                        f"rsi_{response.rsi_period}": float(snapshot.rsi),
-                    },
-                }, indent=2))
-                return
+        typer.echo("\nRisk Result")
+        typer.echo(f"{'─'*30}")
+        typer.echo(f"  Status:     {assessment.risk_level_name}")
+        typer.echo(f"  Gate:       {assessment.gate_triggered or '-'}")
 
-            typer.echo(f"\n{'='*50}")
-            typer.echo(f" Risk Assessment  ·  {response.ticker}  ·  {response.sensitivity}")
-            typer.echo(f"{'='*50}\n")
-            typer.echo(f"Data Date: {assessment.snapshot_date}")
+        typer.echo("\nTriggered Rules")
+        typer.echo(f"{'─'*30}")
+        for reason in assessment.rationale_list:
+            typer.echo(f"  · {reason}")
 
-            typer.echo("\nIndicators")
-            typer.echo(f"{'─'*30}")
-            typer.echo(f"  SMA({response.sma_period}):  {snapshot.sma:>12,.2f}")
-            typer.echo(f"  EMA({response.ema_period}):  {snapshot.ema:>12,.2f}")
-            typer.echo(f"  RSI({response.rsi_period}):  {snapshot.rsi:>12.2f}")
-
-            typer.echo("\nRisk Result")
-            typer.echo(f"{'─'*30}")
-            typer.echo(f"  Status:     {assessment.risk_level_name}")
-            typer.echo(f"  Gate:       {assessment.gate_triggered or '-'}")
-
-            typer.echo("\nTriggered Rules")
-            typer.echo(f"{'─'*30}")
-            for reason in assessment.rationale_list:
-                typer.echo(f"  · {reason}")
-
-            if explain:
-                _display_ai_explanation(
-                    ticker=ticker.upper(),
-                    assessment=assessment,
-                    snapshot=snapshot,
-                    provider=provider,
-                    model=model,
-                )
-
-        if explain and all_profiles:
-            typer.echo(
-                "\nNote: AI explanation only available for single profile view (omit --all).",
-                err=True,
+        if explain:
+            _display_ai_explanation(
+                ticker=ticker.upper(),
+                assessment=assessment,
+                snapshot=snapshot,
+                provider=provider,
+                model=model,
             )
 
         if response.coverage_warning:
             typer.echo(f"\n[warning] {response.coverage_warning}", err=True)
 
-        if trend > 0 and not all_profiles and not rules_file:
+        if trend > 0 and not rules_file:
             try:
                 trend_resp = engine.assess_trend(request, days=trend)
                 typer.echo(f"\n{'─'*50}")
@@ -315,12 +272,11 @@ def compare(
         raise typer.Exit(1)
 
     resolved_db = db_path or DEFAULT_DB_PATH
-    profile = DEFAULT_RISK_PROFILE
     repository = SQLiteMarketRepository(db_path=resolved_db)
     engine = create_risk_engine(resolved_db, with_enrichment=True)
 
     typer.echo(f"\n{'='*60}")
-    typer.echo(f" Risk Comparison  ·  Profile: {profile}")
+    typer.echo(" Risk Comparison")
     typer.echo(f"{'='*60}\n")
     typer.echo(
         f"{'TICKER':<8} {'CLOSE':>10} {'SMA({})'.format(sma_period):>10}"
@@ -332,7 +288,6 @@ def compare(
         try:
             req = AssessRiskRequest(
                 ticker=t,
-                sensitivity=profile,
                 sma_period=sma_period,
                 ema_period=sma_period,
                 rsi_period=rsi_period,
@@ -350,7 +305,6 @@ def compare(
             typer.echo(f"{t.upper():<8} {'—':>10} {'—':>10} {'—':>9} {'NO DATA':<12} {'—':>6}")
 
     typer.echo("─" * 60)
-    typer.echo(f"Profile: {profile}")
     typer.echo("\nDISCLAIMER: Analysis only, not trading advice.")
 
 

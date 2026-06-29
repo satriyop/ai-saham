@@ -14,7 +14,6 @@ from decimal import Decimal
 import pytest
 
 from src.application.use_case.assess_risk_use_case import (
-    AssessAllProfilesResponse,
     AssessRiskRequest,
     AssessRiskUseCase,
 )
@@ -108,7 +107,7 @@ def _ctx(
 
 def test_no_gates_returns_technical_assessment():
     uc = _make_use_case()
-    req = AssessRiskRequest(ticker="BBCA", sensitivity="balanced")
+    req = AssessRiskRequest(ticker="BBCA")
     resp = uc.execute(req)
     assert resp.gate_triggered is None
     assert resp.assessment is not None
@@ -117,7 +116,7 @@ def test_no_gates_returns_technical_assessment():
 def test_gates_inactive_when_no_gate_context():
     """Gates configured but no gate_context → technical result only."""
     uc = _make_use_case(structural_gates=[FundamentalGate()])
-    req = AssessRiskRequest(ticker="BBCA", sensitivity="balanced", gate_context=None)
+    req = AssessRiskRequest(ticker="BBCA", gate_context=None)
     resp = uc.execute(req)
     assert resp.gate_triggered is None
 
@@ -128,7 +127,6 @@ def test_fundamental_gate_short_circuits_on_distress():
     uc = _make_use_case(structural_gates=[FundamentalGate()])
     req = AssessRiskRequest(
         ticker="BBCA",
-        sensitivity="balanced",
         gate_context=_ctx(piotroski=2),
     )
     resp = uc.execute(req)
@@ -141,7 +139,6 @@ def test_fundamental_gate_passes_healthy_company():
     uc = _make_use_case(structural_gates=[FundamentalGate()])
     req = AssessRiskRequest(
         ticker="BBCA",
-        sensitivity="balanced",
         gate_context=_ctx(piotroski=7),
     )
     resp = uc.execute(req)
@@ -152,7 +149,6 @@ def test_fundamental_gate_passes_when_no_fundamental_data():
     uc = _make_use_case(structural_gates=[FundamentalGate()])
     req = AssessRiskRequest(
         ticker="BBCA",
-        sensitivity="balanced",
         gate_context=_ctx(piotroski=None),
     )
     resp = uc.execute(req)
@@ -165,7 +161,6 @@ def test_liquidity_gate_fires_on_third_liner():
     uc = _make_use_case(structural_gates=[LiquidityGate()])
     req = AssessRiskRequest(
         ticker="BBCA",
-        sensitivity="balanced",
         gate_context=_ctx(market_cap=500_000_000_000),  # 500B < 1T
     )
     resp = uc.execute(req)
@@ -193,7 +188,6 @@ def test_liquidity_gate_fires_on_illiquid_candles():
     )
     req = AssessRiskRequest(
         ticker="BBCA",
-        sensitivity="balanced",
         gate_context=GateContext(
             ticker="BBCA",
             snapshot_date=_TODAY,
@@ -209,7 +203,6 @@ def test_liquidity_gate_passes_liquid_large_cap():
     uc = _make_use_case(structural_gates=[LiquidityGate()])
     req = AssessRiskRequest(
         ticker="BBCA",
-        sensitivity="balanced",
         gate_context=_ctx(market_cap=50 * _1T),
     )
     resp = uc.execute(req)
@@ -223,7 +216,6 @@ def test_bandar_gate_fires_on_distribution():
     uc = _make_use_case(execution_gates=[BandarGate()])
     req = AssessRiskRequest(
         ticker="BBCA",
-        sensitivity="balanced",
         gate_context=_ctx(
             five_day="Big Dist",
             is_distributing=True,
@@ -238,7 +230,6 @@ def test_bandar_gate_does_not_fire_when_accumulating():
     uc = _make_use_case(execution_gates=[BandarGate()])
     req = AssessRiskRequest(
         ticker="BBCA",
-        sensitivity="balanced",
         gate_context=_ctx(five_day="Big Acc", is_distributing=False),
     )
     resp = uc.execute(req)
@@ -255,7 +246,6 @@ def test_structural_gate_fires_before_execution_gate():
     )
     req = AssessRiskRequest(
         ticker="BBCA",
-        sensitivity="balanced",
         gate_context=_ctx(piotroski=1, five_day="Big Dist", is_distributing=True),
     )
     resp = uc.execute(req)
@@ -263,25 +253,17 @@ def test_structural_gate_fires_before_execution_gate():
     assert resp.assessment.risk_level_name == "BLOCKED"
 
 
-# ─── execute_all_profiles rationale preservation (Fix #8) ────────────────────
+# ─── Gate rationale preservation ──────────────────────────────────────────────
 
-def test_structural_gate_preserves_technical_rationale_in_all_profiles():
-    """Structural gate override must prepend gate reason, not replace all rationale."""
+def test_structural_gate_preserves_gate_rationale():
+    """Structural gate must surface the gate reason."""
     uc = _make_use_case(structural_gates=[FundamentalGate()])
     req = AssessRiskRequest(
         ticker="BBCA",
         gate_context=_ctx(piotroski=1),  # triggers FundamentalGate (F-score ≤ 3)
     )
-    resp = uc.execute_all_profiles(req)
-    assert isinstance(resp, AssessAllProfilesResponse)
-    for assessment in resp.assessments:
-        # Gate must have fired
-        assert assessment.gate_triggered == "FundamentalGate"
-        assert assessment.risk_level_name == "BLOCKED"
-        # Rationale must include the gate reason
-        assert len(assessment.rationale) >= 1, (
-            f"Profile {assessment.sensitivity}: expected gate reason in rationale, "
-            f"got: {assessment.rationale}"
-        )
-        # First element is the gate reason
-        assert "Piotroski" in assessment.rationale[0] or "F-score" in assessment.rationale[0]
+    resp = uc.execute(req)
+    assert resp.assessment.gate_triggered == "FundamentalGate"
+    assert resp.assessment.risk_level_name == "BLOCKED"
+    assert len(resp.assessment.rationale) >= 1
+    assert "Piotroski" in resp.assessment.rationale[0] or "F-score" in resp.assessment.rationale[0]

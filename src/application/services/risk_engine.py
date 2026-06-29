@@ -22,7 +22,6 @@ from typing import TYPE_CHECKING
 from src.application.use_case.assess_risk_use_case import (
     AssessRiskRequest,
     AssessRiskResponse,
-    AssessAllProfilesResponse,
     AssessRiskTrendResponse,
     AssessRiskUseCase,
 )
@@ -101,7 +100,6 @@ class RiskEngine:
     def assess(
         self,
         ticker: str,
-        profile: str = "balanced",
         as_of_date: date | None = None,
         market_context: "MarketContext | None" = None,
     ) -> AssessRiskResponse:
@@ -123,7 +121,6 @@ class RiskEngine:
         response = self._use_case.execute(
             AssessRiskRequest(
                 ticker=ticker,
-                sensitivity=profile,
                 sma_period=self._indicator_defaults.sma_period,
                 ema_period=self._indicator_defaults.ema_period,
                 rsi_period=self._indicator_defaults.rsi_period,
@@ -135,7 +132,6 @@ class RiskEngine:
     def assess_with_context(
         self,
         ticker: str,
-        profile: str,
         gate_context: GateContext,
         market_context: "MarketContext | None" = None,
     ) -> AssessRiskResponse:
@@ -149,7 +145,6 @@ class RiskEngine:
         response = self._use_case.execute(
             AssessRiskRequest(
                 ticker=ticker,
-                sensitivity=profile,
                 sma_period=self._indicator_defaults.sma_period,
                 ema_period=self._indicator_defaults.ema_period,
                 rsi_period=self._indicator_defaults.rsi_period,
@@ -174,35 +169,6 @@ class RiskEngine:
             return self._use_case.execute(request)
         response = self._use_case.execute(self._inject_gate_context(self._apply_request_defaults(request)))
         return _apply_regime_gate(response, market_context, self._market_context_gate)
-
-    def assess_all_profiles(
-        self,
-        request: AssessRiskRequest,
-        market_context: "MarketContext | None" = None,
-    ) -> "AssessAllProfilesResponse":
-        """Run assessment across all risk profiles (conservative/balanced/aggressive)."""
-        result = self._use_case.execute_all_profiles(
-            self._inject_gate_context(self._apply_request_defaults(request))
-        )
-        if (
-            market_context is not None
-            and self._market_context_gate.enabled
-            and self._market_context_gate.block_when_gate_tightening
-            and market_context.gate_tightening
-        ):
-            gate_label = f"{self._market_context_gate.label_prefix}:{market_context.regime.value}"
-            gated = [
-                replace(
-                    a,
-                    gate_triggered=gate_label,
-                    gate_is_structural=self._market_context_gate.gate_is_structural,
-                )
-                if a.gate_triggered is None
-                else a
-                for a in result.assessments
-            ]
-            result = replace(result, assessments=gated)
-        return result
 
     def assess_trend(
         self, request: AssessRiskRequest, days: int = 7

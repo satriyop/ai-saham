@@ -41,7 +41,6 @@ from src.domain.ports.market_data_repository import MarketDataRepository
 class SwingAnalysisWorkflowRequest:
     ticker: str
     today: date
-    sensitivity: str
     strategy_name: str | None
     setup_name: str | None
     window: int
@@ -661,7 +660,6 @@ class SwingAnalysisWorkflowUseCase:
                 risk_response = risk_use_case.execute(
                     AssessRiskRequest(
                         ticker=request.ticker,
-                        sensitivity=request.sensitivity,
                         sma_period=indicator_defaults.sma_period
                         if indicator_defaults is not None else 20,
                         ema_period=indicator_defaults.ema_period
@@ -674,14 +672,12 @@ class SwingAnalysisWorkflowUseCase:
             elif self._risk_engine is not None and gate_ctx is not None:
                 risk_response = self._risk_engine.assess_with_context(
                     ticker=request.ticker,
-                    profile=request.sensitivity,
                     gate_context=gate_ctx,
                     market_context=None,
                 )
             elif self._risk_engine is not None:
                 risk_response = self._risk_engine.assess(
                     ticker=request.ticker,
-                    profile=request.sensitivity,
                     as_of_date=request.today,
                     market_context=None,
                 )
@@ -695,7 +691,6 @@ class SwingAnalysisWorkflowUseCase:
                 risk_response = risk_use_case.execute(
                     AssessRiskRequest(
                         ticker=request.ticker,
-                        sensitivity=request.sensitivity,
                         gate_context=gate_ctx,
                     )
             )

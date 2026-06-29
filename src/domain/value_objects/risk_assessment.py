@@ -13,7 +13,6 @@ from dataclasses import dataclass
 from datetime import date
 
 from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
-from src.domain.value_objects.risk_signal import SignalSensitivity
 
 
 @dataclass(frozen=True)
@@ -22,8 +21,6 @@ class RiskAssessment:
     Immutable result of risk evaluation for a single snapshot.
 
     Attributes:
-        sensitivity: The signal sensitivity preset used (SignalSensitivity enum
-                     or string for custom YAML-based rules)
         rationale: Human-readable explanations for the assessment
         snapshot_date: Date of the indicator snapshot evaluated
         indicators: The full indicator snapshot that was evaluated
@@ -32,25 +29,12 @@ class RiskAssessment:
         gate_confidence: Confidence of the gate that fired, or None
     """
 
-    sensitivity: SignalSensitivity | str  # str for custom YAML rules
     rationale: tuple[str, ...]
     snapshot_date: date
     indicators: IndicatorSnapshot
     gate_triggered: str | None = None
     gate_is_structural: bool | None = None
     gate_confidence: int | None = None
-
-    @property
-    def sensitivity_name(self) -> str:
-        """Return sensitivity preset name as string for display."""
-        if isinstance(self.sensitivity, str):
-            return self.sensitivity
-        return self.sensitivity.value
-
-    @property
-    def is_custom_sensitivity(self) -> bool:
-        """Return True if this assessment used custom YAML rules."""
-        return isinstance(self.sensitivity, str)
 
     @property
     def rationale_list(self) -> list[str]:

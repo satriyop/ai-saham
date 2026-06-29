@@ -40,7 +40,6 @@ USER_PROMPT_TEMPLATE = """Explain this risk assessment to a beginner investor:
 
 Ticker: {ticker}
 Date: {date}
-Signal Sensitivity: {sensitivity}
 
 Technical Indicators:
 - SMA(20): {sma}
@@ -66,7 +65,6 @@ class SanitizedInput:
 
     ticker: str
     date: str
-    sensitivity: str
     risk_level: str
     confidence: str
     sma: str
@@ -98,7 +96,6 @@ def sanitize_for_llm(
     return SanitizedInput(
         ticker=ticker,
         date=str(snapshot.date),
-        sensitivity=assessment.sensitivity_name,
         risk_level=assessment.risk_level_name,
         confidence=str(assessment.confidence),
         sma=f"{snapshot.sma:,.2f}",
@@ -113,7 +110,6 @@ def build_user_prompt(sanitized: SanitizedInput) -> str:
     return USER_PROMPT_TEMPLATE.format(
         ticker=sanitized.ticker,
         date=sanitized.date,
-        sensitivity=sanitized.sensitivity,
         sma=sanitized.sma,
         ema=sanitized.ema,
         rsi=sanitized.rsi,

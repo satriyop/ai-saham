@@ -4,7 +4,6 @@ from src.application.use_case.aggregate_indicators_use_case import (
     AggregateIndicatorsUseCase,
 )
 from src.application.use_case.assess_risk_use_case import (
-    AssessAllProfilesResponse,
     AssessRiskRequest,
     AssessRiskResponse,
     AssessRiskUseCase,
@@ -49,7 +48,6 @@ __all__ = [
     "AggregateIndicatorsRequest",
     "AggregateIndicatorsResponse",
     "AggregateIndicatorsUseCase",
-    "AssessAllProfilesResponse",
     "AssessRiskRequest",
     "AssessRiskResponse",
     "AssessRiskUseCase",

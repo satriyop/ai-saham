@@ -49,7 +49,6 @@ def _request(**overrides) -> SwingAnalysisWorkflowRequest:
     values = {
         "ticker": "BBCA",
         "today": date(2026, 6, 18),
-        "sensitivity": "balanced",
         "strategy_name": None,
         "setup_name": None,
         "window": 7,
@@ -270,7 +269,6 @@ def test_swing_workflow_canonical_trade_setup_unaffected_by_market_context():
             from src.domain.value_objects.risk_assessment import RiskAssessment
             from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
             assessment = RiskAssessment(
-                sensitivity="balanced",
                 gate_triggered=None,
                 gate_is_structural=None,
                 rationale=(),
@@ -290,10 +288,10 @@ def test_swing_workflow_canonical_trade_setup_unaffected_by_market_context():
                 rsi_period=14,
             )
 
-        def assess_with_context(self, ticker, profile, gate_context, market_context=None):
+        def assess_with_context(self, ticker, gate_context, market_context=None):
             return self._make_response()
 
-        def assess(self, ticker, profile="balanced", as_of_date=None, market_context=None):
+        def assess(self, ticker, as_of_date=None, market_context=None):
             return self._make_response()
 
         def apply_market_context(self, response, market_context):

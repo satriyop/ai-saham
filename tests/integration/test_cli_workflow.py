@@ -600,8 +600,8 @@ class TestCLIRiskAssessment:
         assert payload["artifact_type"] == "risk_assessment"
         assert payload["risk_status"] == payload["status"] == payload["verdict"]
 
-    def test_risk_all_profiles(self, temp_workspace, monkeypatch):
-        """CLI: risk --all shows all profiles."""
+    def test_risk_all_profiles_flag_is_removed(self, temp_workspace, monkeypatch):
+        """CLI: risk --all is removed because RiskEngine is gate-based."""
         monkeypatch.chdir(temp_workspace)
 
         # Set up test data - need sufficient data for risk calculation
@@ -622,12 +622,8 @@ class TestCLIRiskAssessment:
         )
 
         output = result.output or result.stdout
-        assert result.exit_code == 0, f"risk --all failed: {output}"
-        assert "Status" in output
-        # Should show multiple profiles
-        assert "conservative" in output.lower()
-        assert "balanced" in output.lower()
-        assert "aggressive" in output.lower()
+        assert result.exit_code != 0
+        assert "No such option" in output
 
     def test_risk_with_custom_rules(self, temp_workspace, monkeypatch):
         """CLI: risk with --rules-file uses custom rules."""

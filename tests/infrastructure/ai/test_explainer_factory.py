@@ -14,7 +14,7 @@ import pytest
 from src.domain.ports.ai_explainer import ExplainerAuthError, ExplainerRateLimitError
 from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 from src.domain.value_objects.risk_assessment import RiskAssessment
-from src.domain.value_objects.risk_signal import RiskLevel, SignalSensitivity
+from src.domain.value_objects.risk_signal import RiskLevel
 from src.infrastructure.ai.factory import (
     SUPPORTED_PROVIDERS,
     ExplainerFactory,
@@ -36,7 +36,6 @@ def make_snapshot() -> IndicatorSnapshot:
 def make_assessment(snapshot: IndicatorSnapshot) -> RiskAssessment:
     """Create test assessment."""
     return RiskAssessment(
-        sensitivity=SignalSensitivity.BALANCED,
         rationale=("Test",),
         snapshot_date=snapshot.date,
         indicators=snapshot,

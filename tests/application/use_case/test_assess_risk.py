@@ -16,14 +16,12 @@ from decimal import Decimal
 import pytest
 
 from src.application.use_case.assess_risk_use_case import (
-    AssessAllProfilesResponse,
     AssessRiskRequest,
     AssessRiskResponse,
     AssessRiskUseCase,
 )
 from src.domain.entities.candle import Candle
 from src.domain.ports.market_data_repository import MarketDataRepository
-from src.domain.value_objects.risk_signal import SignalSensitivity
 
 # --- Test Fixtures ---
 
@@ -107,27 +105,13 @@ class TestAssessRiskUseCase:
         repository = MockRepository(candles)
         use_case = AssessRiskUseCase(repository)
 
-        request = AssessRiskRequest(ticker="BBCA", sensitivity="balanced")
+        request = AssessRiskRequest(ticker="BBCA")
         response = use_case.execute(request)
 
         assert isinstance(response, AssessRiskResponse)
         assert response.ticker == "BBCA"
         assert response.assessment is not None
-        assert response.assessment.sensitivity == SignalSensitivity.BALANCED
-
-    def test_execute_uses_specified_profile(self):
-        """Should use the profile specified in request."""
-        candles = make_trending_candles("BBCA", 100)
-        repository = MockRepository(candles)
-        use_case = AssessRiskUseCase(repository)
-
-        conservative_resp = use_case.execute(
-            AssessRiskRequest(ticker="BBCA", sensitivity="conservative")
-        )
-        aggressive_resp = use_case.execute(AssessRiskRequest(ticker="BBCA", sensitivity="aggressive"))
-
-        assert conservative_resp.sensitivity == "conservative"
-        assert aggressive_resp.sensitivity == "aggressive"
+        assert response.assessment.risk_level_name in ("OPEN", "BLOCKED")
 
     def test_execute_uses_specified_periods(self):
         """Should use indicator periods from request."""
@@ -137,7 +121,6 @@ class TestAssessRiskUseCase:
 
         request = AssessRiskRequest(
             ticker="BBCA",
-            sensitivity="balanced",
             sma_period=50,
             ema_period=30,
             rsi_period=7,
@@ -153,20 +136,9 @@ class TestAssessRiskUseCase:
         repository = MockRepository([])
         use_case = AssessRiskUseCase(repository)
 
-        request = AssessRiskRequest(ticker="XXXX", sensitivity="balanced")
+        request = AssessRiskRequest(ticker="XXXX")
 
         with pytest.raises(ValueError, match="Insufficient data"):
-            use_case.execute(request)
-
-    def test_execute_raises_error_for_invalid_profile(self):
-        """Should raise ValueError for invalid profile name."""
-        candles = make_trending_candles("BBCA", 100)
-        repository = MockRepository(candles)
-        use_case = AssessRiskUseCase(repository)
-
-        request = AssessRiskRequest(ticker="BBCA", sensitivity="invalid")
-
-        with pytest.raises(ValueError, match="Invalid sensitivity"):
             use_case.execute(request)
 
     def test_execute_normalizes_ticker(self):
@@ -175,50 +147,10 @@ class TestAssessRiskUseCase:
         repository = MockRepository(candles)
         use_case = AssessRiskUseCase(repository)
 
-        request = AssessRiskRequest(ticker="bbca", sensitivity="balanced")
+        request = AssessRiskRequest(ticker="bbca")
         response = use_case.execute(request)
 
         assert response.ticker == "BBCA"
-
-
-class TestAssessRiskUseCaseAllProfiles:
-    """Test AssessRiskUseCase.execute_all_profiles behavior."""
-
-    def test_execute_all_profiles_returns_three_assessments(self):
-        """Should return assessments for all three profiles."""
-        candles = make_trending_candles("BBCA", 100)
-        repository = MockRepository(candles)
-        use_case = AssessRiskUseCase(repository)
-
-        request = AssessRiskRequest(ticker="BBCA")
-        response = use_case.execute_all_profiles(request)
-
-        assert isinstance(response, AssessAllProfilesResponse)
-        assert len(response.assessments) == 3
-
-    def test_execute_all_profiles_contains_all_profile_types(self):
-        """Should contain conservative, balanced, and aggressive."""
-        candles = make_trending_candles("BBCA", 100)
-        repository = MockRepository(candles)
-        use_case = AssessRiskUseCase(repository)
-
-        request = AssessRiskRequest(ticker="BBCA")
-        response = use_case.execute_all_profiles(request)
-
-        profiles = [a.sensitivity for a in response.assessments]
-        assert SignalSensitivity.CONSERVATIVE in profiles
-        assert SignalSensitivity.BALANCED in profiles
-        assert SignalSensitivity.AGGRESSIVE in profiles
-
-    def test_execute_all_profiles_raises_error_for_insufficient_data(self):
-        """Should raise ValueError when insufficient data."""
-        repository = MockRepository([])
-        use_case = AssessRiskUseCase(repository)
-
-        request = AssessRiskRequest(ticker="XXXX")
-
-        with pytest.raises(ValueError, match="Insufficient data"):
-            use_case.execute_all_profiles(request)
 
 
 class TestAssessRiskResponseDTO:
@@ -230,7 +162,7 @@ class TestAssessRiskResponseDTO:
         repository = MockRepository(candles)
         use_case = AssessRiskUseCase(repository)
 
-        request = AssessRiskRequest(ticker="BBCA", sensitivity="balanced")
+        request = AssessRiskRequest(ticker="BBCA")
         response = use_case.execute(request)
 
         assert response.risk_level in ("open", "BLOCKED")
@@ -241,23 +173,11 @@ class TestAssessRiskResponseDTO:
         repository = MockRepository(candles)
         use_case = AssessRiskUseCase(repository)
 
-        request = AssessRiskRequest(ticker="BBCA", sensitivity="balanced")
+        request = AssessRiskRequest(ticker="BBCA")
         response = use_case.execute(request)
 
         assert isinstance(response.confidence, int)
         assert 0 <= response.confidence <= 100
-
-    def test_response_sensitivity_property(self):
-        """Should expose sensitivity preset name as string."""
-        candles = make_trending_candles("BBCA", 100)
-        repository = MockRepository(candles)
-        use_case = AssessRiskUseCase(repository)
-
-        request = AssessRiskRequest(ticker="BBCA", sensitivity="conservative")
-        response = use_case.execute(request)
-
-        assert response.sensitivity == "conservative"
-
 
 class TestAssessRiskRequestDTO:
     """Test AssessRiskRequest DTO defaults."""
@@ -266,7 +186,6 @@ class TestAssessRiskRequestDTO:
         """Request should have sensible defaults."""
         request = AssessRiskRequest(ticker="BBCA")
 
-        assert request.sensitivity == "balanced"
         assert request.sma_period == 20
         assert request.ema_period == 20
         assert request.rsi_period == 14
@@ -275,13 +194,11 @@ class TestAssessRiskRequestDTO:
         """Custom values should override defaults."""
         request = AssessRiskRequest(
             ticker="BBCA",
-            sensitivity="conservative",
             sma_period=50,
             ema_period=30,
             rsi_period=7,
         )
 
-        assert request.sensitivity == "conservative"
         assert request.sma_period == 50
         assert request.ema_period == 30
         assert request.rsi_period == 7
@@ -296,7 +213,7 @@ class TestAssessRiskDeterminism:
         repository = MockRepository(candles)
         use_case = AssessRiskUseCase(repository)
 
-        request = AssessRiskRequest(ticker="BBCA", sensitivity="balanced")
+        request = AssessRiskRequest(ticker="BBCA")
 
         response1 = use_case.execute(request)
         response2 = use_case.execute(request)
@@ -304,20 +221,6 @@ class TestAssessRiskDeterminism:
         assert response1.assessment.gate_triggered == response2.assessment.gate_triggered
         assert response1.assessment.gate_confidence == response2.assessment.gate_confidence
         assert response1.assessment.rationale == response2.assessment.rationale
-
-    def test_different_profiles_may_differ(self):
-        """Different profiles may produce different results."""
-        candles = make_trending_candles("BBCA", 100)
-        repository = MockRepository(candles)
-        use_case = AssessRiskUseCase(repository)
-
-        conservative = use_case.execute(AssessRiskRequest(ticker="BBCA", sensitivity="conservative"))
-        aggressive = use_case.execute(AssessRiskRequest(ticker="BBCA", sensitivity="aggressive"))
-
-        # They may be the same or different - the point is they're both valid
-        assert conservative.assessment.sensitivity == SignalSensitivity.CONSERVATIVE
-        assert aggressive.assessment.sensitivity == SignalSensitivity.AGGRESSIVE
-
 
 class TestAssessRiskIntegration:
     """Integration tests verifying rule application."""
@@ -328,7 +231,7 @@ class TestAssessRiskIntegration:
         repository = MockRepository(candles)
         use_case = AssessRiskUseCase(repository)
 
-        request = AssessRiskRequest(ticker="BBCA", sensitivity="balanced")
+        request = AssessRiskRequest(ticker="BBCA")
         response = use_case.execute(request)
 
         # The snapshot date should be recent (within the data range)
@@ -342,7 +245,7 @@ class TestAssessRiskIntegration:
         repository = MockRepository(candles)
         use_case = AssessRiskUseCase(repository)
 
-        request = AssessRiskRequest(ticker="BBCA", sensitivity="balanced")
+        request = AssessRiskRequest(ticker="BBCA")
         response = use_case.execute(request)
 
         indicators = response.assessment.indicators
@@ -356,7 +259,7 @@ class TestAssessRiskIntegration:
         repository = MockRepository(candles)
         use_case = AssessRiskUseCase(repository)
 
-        request = AssessRiskRequest(ticker="BBCA", sensitivity="balanced")
+        request = AssessRiskRequest(ticker="BBCA")
         response = use_case.execute(request)
 
         assert len(response.assessment.rationale) > 0

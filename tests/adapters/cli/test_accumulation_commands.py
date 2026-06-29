@@ -246,7 +246,6 @@ def test_display_results_renders_explanation_panels_when_requested(capsys):
 
 def test_display_results_renders_blocked_risk_diagnostics(capsys):
     risk_assessment = RiskAssessment(
-        sensitivity="balanced",
         rationale=("Piotroski F-Score 1 below threshold 3",),
         snapshot_date=date(2026, 6, 19),
         indicators=IndicatorSnapshot(

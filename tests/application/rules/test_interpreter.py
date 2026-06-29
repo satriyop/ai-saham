@@ -475,12 +475,12 @@ class TestDeterminism:
 class TestInterpreterProperties:
     """Test interpreter properties."""
 
-    def test_profile_name(self):
+    def test_rule_set_name(self):
         """Should return the rule set name."""
         rule_set = make_rule_set([make_rule("test")], name="my_custom_rules")
         interpreter = YamlRuleInterpreter(rule_set)
 
-        assert interpreter.profile_name == "my_custom_rules"
+        assert interpreter.rule_set_name == "my_custom_rules"
 
     def test_rule_count(self):
         """Should return the number of rules."""

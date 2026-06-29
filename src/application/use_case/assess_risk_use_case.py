@@ -1,8 +1,4 @@
-"""
-AssessRisk use case - evaluate stock risk using indicator-based rules.
-
-Orchestrates indicator aggregation and rule evaluation to produce
-deterministic risk assessments for different risk profiles.
+"""AssessRisk use case - evaluate stock risk using deterministic gates.
 
 Layer: Application
 Depends on: Domain rules, Domain value objects, AggregateIndicatorsUseCase
@@ -25,7 +21,6 @@ from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.rules.risk_gate import GateContext, RiskGate
 from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 from src.domain.value_objects.risk_assessment import RiskAssessment
-from src.domain.value_objects.risk_signal import SignalSensitivity
 from src.domain.value_objects.sentiment import SentimentSnapshot
 
 if TYPE_CHECKING:
@@ -37,7 +32,6 @@ class AssessRiskRequest:
     """Request DTO for risk assessment."""
 
     ticker: str
-    sensitivity: str = "balanced"
     sma_period: int = 20
     ema_period: int = 20
     rsi_period: int = 14
@@ -77,29 +71,12 @@ class AssessRiskResponse:
         """Confidence of the gate that fired (0 when none)."""
         return self.assessment.gate_confidence or 0
 
-    @property
-    def sensitivity(self) -> str:
-        """Convenience property for signal sensitivity preset name."""
-        return self.assessment.sensitivity_name
-
-@dataclass
-class AssessAllProfilesResponse:
-    """Response DTO containing assessments for all profiles."""
-
-    ticker: str
-    assessments: list[RiskAssessment]
-    sma_period: int
-    ema_period: int
-    rsi_period: int
-    coverage_warning: str | None = None
-
 
 @dataclass
 class AssessRiskTrendResponse:
     """Response DTO for risk trend over N days."""
 
     ticker: str
-    sensitivity: str
     history: list[tuple[date, str, int]]  # (date, indicator_reading, confidence)
     direction: str  # "IMPROVING" | "STABLE" | "DETERIORATING"
     days_in_current: int
@@ -164,23 +141,23 @@ class AssessRiskUseCase:
 
     def execute(self, request: AssessRiskRequest) -> AssessRiskResponse:
         """
-        Execute risk assessment for a single profile or custom rules.
+        Execute risk assessment for a ticker.
 
-        If rules_file is provided, uses custom YAML rules instead of built-in profiles.
+        If rules_file is provided, uses custom YAML rules instead of configured risk gates.
 
         Args:
-            request: Contains ticker, profile, indicator periods, and optional rules_file
+            request: Contains ticker, indicator periods, and optional rules_file
 
         Returns:
             AssessRiskResponse with the risk assessment
 
         Raises:
-            ValueError: If ticker invalid, profile invalid, or insufficient data
+            ValueError: If ticker invalid or insufficient data
             RulesFileError: If rules file not found (when rules_file specified)
             RulesSchemaError: If rules file has invalid syntax
             RulesValidationError: If rules file has invalid content
         """
-        # Evaluate using custom rules or built-in profile
+        # Evaluate using custom rules or configured gates.
         if request.rules_file is not None:
             # Load and evaluate custom rules
             from src.application.rules.interpreter import YamlRuleInterpreter
@@ -213,7 +190,6 @@ class AssessRiskUseCase:
             risk_level, confidence, rationale = interpreter.evaluate(latest_snapshot)
             if risk_level == RiskLevel.HIGH_RISK:
                 assessment = RiskAssessment(
-                    sensitivity=interpreter.profile_name,
                     rationale=tuple(rationale),
                     snapshot_date=latest_snapshot.date,
                     indicators=latest_snapshot,
@@ -223,7 +199,6 @@ class AssessRiskUseCase:
                 )
             else:
                 assessment = RiskAssessment(
-                    sensitivity=interpreter.profile_name,
                     rationale=tuple(rationale),
                     snapshot_date=latest_snapshot.date,
                     indicators=latest_snapshot,
@@ -237,7 +212,7 @@ class AssessRiskUseCase:
                 rsi_period=request.rsi_period,
             )
         else:
-            # Use built-in profile - standard aggregation flow
+            # Standard configured gate flow.
             agg_use_case = AggregateIndicatorsUseCase(self._repository)
             agg_response = agg_use_case.execute(
                 AggregateIndicatorsRequest(
@@ -256,8 +231,6 @@ class AssessRiskUseCase:
                 )
 
             latest_snapshot = agg_response.snapshots[-1]
-            sensitivity = SignalSensitivity.from_string(request.sensitivity)
-
             # Gate evaluation — build enriched context, then run gates.
             # Structural gates short-circuit first (BLOCKED_STRUCTURAL);
             # execution gates run after (BLOCKED_EXECUTION).
@@ -270,20 +243,19 @@ class AssessRiskUseCase:
                     gate_result = gate.evaluate(gate_ctx)
                     if gate_result.triggered:
                         return self._gate_response(
-                            agg_response, request, sensitivity, latest_snapshot,
+                            agg_response, request, latest_snapshot,
                             gate, gate_result, is_structural=True,
                         )
                 for gate in self._execution_gates:
                     gate_result = gate.evaluate(gate_ctx)
                     if gate_result.triggered:
                         return self._gate_response(
-                            agg_response, request, sensitivity, latest_snapshot,
+                            agg_response, request, latest_snapshot,
                             gate, gate_result, is_structural=False,
                         )
 
             # No gate fired.
             assessment = RiskAssessment(
-                sensitivity=sensitivity,
                 rationale=("all gates passed",),
                 snapshot_date=latest_snapshot.date,
                 indicators=latest_snapshot,
@@ -302,14 +274,12 @@ class AssessRiskUseCase:
         self,
         agg_response,
         request: AssessRiskRequest,
-        sensitivity: SignalSensitivity,
         latest_snapshot: IndicatorSnapshot,
         gate: RiskGate,
         gate_result,
         is_structural: bool,
     ) -> "AssessRiskResponse":
         assessment = RiskAssessment(
-            sensitivity=sensitivity,
             rationale=(gate_result.reason,),
             snapshot_date=latest_snapshot.date,
             indicators=latest_snapshot,
@@ -468,96 +438,6 @@ class AssessRiskUseCase:
             return values[-1][1]
         return Decimal("0")  # Fallback if insufficient data
 
-    def execute_all_profiles(self, request: AssessRiskRequest) -> AssessAllProfilesResponse:
-        """
-        Execute risk assessment for all profiles.
-
-        Args:
-            request: Contains ticker and indicator periods (profile is ignored)
-
-        Returns:
-            AssessAllProfilesResponse with assessments for all profiles
-
-        Raises:
-            ValueError: If ticker invalid or insufficient data
-        """
-        # Get aggregated indicators
-        agg_use_case = AggregateIndicatorsUseCase(self._repository)
-        agg_response = agg_use_case.execute(
-            AggregateIndicatorsRequest(
-                ticker=request.ticker,
-                sma_period=request.sma_period,
-                ema_period=request.ema_period,
-                rsi_period=request.rsi_period,
-                days=self._indicator_history_days,
-            )
-        )
-
-        if not agg_response.has_values:
-            raise ValueError(
-                f"Insufficient data for {request.ticker.upper()}. "
-                f"Run 'saham fetch market {request.ticker.upper()} --days {self._indicator_history_days}' first."
-            )
-
-        # Extract latest snapshot
-        latest_snapshot = agg_response.snapshots[-1]
-        gate_ctx = self._build_gate_context(
-            request, latest_snapshot.date, latest_snapshot
-        )
-
-        # Without a rule engine, gates produce the same verdict for all
-        # sensitivities — they no longer depend on an intermediate risk level.
-        # Run gates once, then emit one assessment per sensitivity preset.
-        fired_gate = None
-        fired_result = None
-        fired_structural = None
-        if gate_ctx is not None:
-            for gate in self._structural_gates:
-                gate_result = gate.evaluate(gate_ctx)
-                if gate_result.triggered:
-                    fired_gate, fired_result, fired_structural = gate, gate_result, True
-                    break
-            if fired_gate is None:
-                for gate in self._execution_gates:
-                    gate_result = gate.evaluate(gate_ctx)
-                    if gate_result.triggered:
-                        fired_gate, fired_result, fired_structural = gate, gate_result, False
-                        break
-
-        assessments: list[RiskAssessment] = []
-        for sensitivity in (
-            SignalSensitivity.CONSERVATIVE,
-            SignalSensitivity.BALANCED,
-            SignalSensitivity.AGGRESSIVE,
-        ):
-            if fired_gate is not None:
-                assessments.append(RiskAssessment(
-                    sensitivity=sensitivity,
-                    rationale=(fired_result.reason,),
-                    snapshot_date=latest_snapshot.date,
-                    indicators=latest_snapshot,
-                    gate_triggered=type(fired_gate).__name__,
-                    gate_is_structural=fired_structural,
-                    gate_confidence=fired_result.confidence,
-                ))
-            else:
-                assessments.append(RiskAssessment(
-                    sensitivity=sensitivity,
-                    rationale=("all gates passed",),
-                    snapshot_date=latest_snapshot.date,
-                    indicators=latest_snapshot,
-                    gate_triggered=None,
-                ))
-
-        return AssessAllProfilesResponse(
-            ticker=agg_response.ticker,
-            assessments=assessments,
-            sma_period=request.sma_period,
-            ema_period=request.ema_period,
-            rsi_period=request.rsi_period,
-            coverage_warning=agg_response.coverage_warning,
-        )
-
     def execute_trend(
         self, request: AssessRiskRequest, days: int = 7
     ) -> "AssessRiskTrendResponse":
@@ -567,7 +447,7 @@ class AssessRiskUseCase:
         Re-uses AggregateIndicatorsUseCase snapshots (no extra DB queries).
 
         Args:
-            request: Standard risk request (profile applies)
+            request: Standard risk request
             days: Number of recent snapshots to include in history
 
         Returns:
@@ -626,7 +506,6 @@ class AssessRiskUseCase:
 
         return AssessRiskTrendResponse(
             ticker=agg_response.ticker,
-            sensitivity=request.sensitivity,
             history=history,
             direction=direction,
             days_in_current=days_in_current,

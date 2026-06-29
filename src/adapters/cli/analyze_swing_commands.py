@@ -430,7 +430,6 @@ def swing(
             SwingAnalysisWorkflowRequest(
                 ticker=ticker_upper,
                 today=today,
-                sensitivity="balanced",
                 strategy_name=strategy_evidence_name,
                 setup_name=setup_name,
                 window=window,

@@ -130,7 +130,7 @@ def test_risk_funnel_fires_fundamental_gate_on_distressed_ticker():
     )
     candidate.bandar_detector = None
 
-    uc._run_risk_funnel([candidate], _TODAY, "balanced")
+    uc._run_risk_funnel([candidate], _TODAY)
 
     assert candidate.risk_assessment is not None
     assert candidate.risk_assessment.gate_triggered is not None
@@ -161,7 +161,7 @@ def test_risk_funnel_passes_healthy_ticker():
     )
     candidate.bandar_detector = None
 
-    uc._run_risk_funnel([candidate], _TODAY, "balanced")
+    uc._run_risk_funnel([candidate], _TODAY)
 
     assert candidate.risk_assessment is not None
     # FundamentalGate must not have fired (F-score=8 is healthy).
@@ -189,7 +189,6 @@ def test_risk_funnel_composes_trade_setup_from_signal_and_risk():
     risk_response = AssessRiskResponse(
         ticker="BBCA",
         assessment=RiskAssessment(
-            sensitivity="balanced",
             rationale=("no gate fired",),
             snapshot_date=_TODAY,
             indicators=IndicatorSnapshot(
@@ -221,7 +220,7 @@ def test_risk_funnel_composes_trade_setup_from_signal_and_risk():
     candidate.bandar_detector = None
     candidate.signal_assessment = signal_response
 
-    uc._run_risk_funnel([candidate], _TODAY, "balanced")
+    uc._run_risk_funnel([candidate], _TODAY)
 
     assert candidate.risk_assessment == risk_response.assessment
     assert candidate.trade_setup is not None
@@ -266,7 +265,7 @@ def test_risk_funnel_builds_gate_context_from_candidate_data():
     candidate.bandar_detector.five_day_accdist = "Big Acc"
     candidate.bandar_detector.is_distributing = False
 
-    uc._run_risk_funnel([candidate], _TODAY, "balanced")
+    uc._run_risk_funnel([candidate], _TODAY)
 
     assert len(captured_contexts) >= 1
     ctx = captured_contexts[0]
@@ -308,7 +307,7 @@ def test_risk_funnel_skips_failed_candidate_and_continues():
     c2.fundamentals = None
     c2.bandar_detector = None
 
-    uc._run_risk_funnel([c1, c2], _TODAY, "balanced")
+    uc._run_risk_funnel([c1, c2], _TODAY)
 
     # c1 failed — risk_assessment should not be set (MagicMock auto-creates attribute)
     # Verify execute was called for both
@@ -323,13 +322,11 @@ def test_risk_funnel_skips_failed_candidate_and_continues():
 def test_to_dict_includes_risk_fields_when_assessment_present():
     from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
     from src.domain.value_objects.risk_assessment import RiskAssessment
-    from src.domain.value_objects.risk_signal import SignalSensitivity
 
     snapshot = IndicatorSnapshot(
         date=_TODAY, sma=Decimal("5000"), ema=Decimal("5000"), rsi=Decimal("50")
     )
     assessment = RiskAssessment(
-        sensitivity=SignalSensitivity.BALANCED,
         rationale=("F-score=1 ≤ 3 (distress threshold)",),
         snapshot_date=_TODAY,
         indicators=snapshot,
