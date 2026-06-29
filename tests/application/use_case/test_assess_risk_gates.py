@@ -91,7 +91,6 @@ def _ctx(
     piotroski: int | None = 7,
     market_cap: int = 2 * _1T,
     five_day: str | None = "Big Acc",
-    is_distributing: bool = False,
 ) -> GateContext:
     return GateContext(
         ticker="BBCA",
@@ -99,7 +98,6 @@ def _ctx(
         piotroski_f_score=piotroski,
         market_cap_idr=market_cap,
         five_day_accdist=five_day,
-        bandar_is_distributing=is_distributing,
     )
 
 
@@ -218,7 +216,6 @@ def test_bandar_gate_fires_on_distribution():
         ticker="BBCA",
         gate_context=_ctx(
             five_day="Big Dist",
-            is_distributing=True,
         ),
     )
     resp = uc.execute(req)
@@ -230,7 +227,7 @@ def test_bandar_gate_does_not_fire_when_accumulating():
     uc = _make_use_case(execution_gates=[BandarGate()])
     req = AssessRiskRequest(
         ticker="BBCA",
-        gate_context=_ctx(five_day="Big Acc", is_distributing=False),
+        gate_context=_ctx(five_day="Big Acc"),
     )
     resp = uc.execute(req)
     assert resp.gate_triggered is None
@@ -246,7 +243,7 @@ def test_structural_gate_fires_before_execution_gate():
     )
     req = AssessRiskRequest(
         ticker="BBCA",
-        gate_context=_ctx(piotroski=1, five_day="Big Dist", is_distributing=True),
+        gate_context=_ctx(piotroski=1, five_day="Big Dist"),
     )
     resp = uc.execute(req)
     assert resp.gate_triggered == "FundamentalGate"

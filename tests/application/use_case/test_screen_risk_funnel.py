@@ -263,7 +263,6 @@ def test_risk_funnel_builds_gate_context_from_candidate_data():
     )
     candidate.bandar_detector = MagicMock()
     candidate.bandar_detector.five_day_accdist = "Big Acc"
-    candidate.bandar_detector.is_distributing = False
 
     uc._run_risk_funnel([candidate], _TODAY)
 
@@ -272,7 +271,6 @@ def test_risk_funnel_builds_gate_context_from_candidate_data():
     assert ctx.piotroski_f_score == 7
     assert ctx.market_cap_idr == 5_000_000_000_000
     assert ctx.five_day_accdist == "Big Acc"
-    assert ctx.bandar_is_distributing is False
 
 
 # ─── Graceful degradation ────────────────────────────────────────────────────

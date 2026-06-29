@@ -55,3 +55,35 @@ def test_flow_evidence_weak_when_score_below_watch_zone():
 
     assert evidence.confirmation_status == "WEAK"
     assert evidence.flow_direction == "UNKNOWN"
+
+
+def test_flow_evidence_longer_term_context_is_hashable_and_serializes_as_dict():
+    evidence = FlowEvidence.from_accumulation_evidence(
+        composite_score=72.0,
+        max_score=120.0,
+        net_buy_days=5,
+        total_days=7,
+        streak=4,
+        avg_flow_ratio=8.5,
+        f_vwap_pct=3.2,
+        vwap_pct=-1.1,
+        bb_width_pctile=0.18,
+        component_breakdown=(),
+        longer_term_context={
+            "window": 30,
+            "labels": ["positive", "confirmed"],
+            "nested": {"net": 12.5},
+        },
+    )
+
+    assert isinstance(hash(evidence), int)
+    assert evidence.longer_term_context == (
+        ("labels", ("positive", "confirmed")),
+        ("nested", (("net", 12.5),)),
+        ("window", 30),
+    )
+    assert evidence.to_dict()["longer_term_context"] == {
+        "window": 30,
+        "labels": ["positive", "confirmed"],
+        "nested": {"net": 12.5},
+    }

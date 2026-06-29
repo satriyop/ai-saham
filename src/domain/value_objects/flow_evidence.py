@@ -6,6 +6,7 @@ Layer: Domain
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 
 
@@ -29,9 +30,29 @@ class FlowEvidence:
     vwap_pct: float | None = None
     bb_width_pctile: float | None = None
     component_breakdown: tuple[tuple[str, float], ...] = field(default_factory=tuple)
-    longer_term_context: dict[str, object] = field(default_factory=dict)
+    longer_term_context: tuple[tuple[str, object], ...] = field(default_factory=tuple)
 
     def __post_init__(self) -> None:
+        if isinstance(self.longer_term_context, Mapping):
+            object.__setattr__(
+                self,
+                "longer_term_context",
+                tuple(
+                    sorted(
+                        (str(key), _freeze_context_value(value))
+                        for key, value in self.longer_term_context.items()
+                    )
+                ),
+            )
+        elif not isinstance(self.longer_term_context, tuple):
+            object.__setattr__(
+                self,
+                "longer_term_context",
+                tuple(
+                    (str(key), _freeze_context_value(value))
+                    for key, value in self.longer_term_context
+                ),
+            )
         if self.max_score <= 0:
             raise ValueError("FlowEvidence max_score must be positive")
         if not 0 <= self.composite_score <= self.max_score:
@@ -49,6 +70,13 @@ class FlowEvidence:
     @property
     def component_breakdown_dict(self) -> dict[str, float]:
         return dict(self.component_breakdown)
+
+    @property
+    def longer_term_context_dict(self) -> dict[str, object]:
+        return {
+            key: _thaw_context_value(value)
+            for key, value in self.longer_term_context
+        }
 
     @classmethod
     def from_accumulation_evidence(
@@ -85,7 +113,12 @@ class FlowEvidence:
             vwap_pct=vwap_pct,
             bb_width_pctile=bb_width_pctile,
             component_breakdown=component_breakdown,
-            longer_term_context=longer_term_context or {},
+            longer_term_context=tuple(
+                sorted(
+                    (str(key), _freeze_context_value(value))
+                    for key, value in (longer_term_context or {}).items()
+                )
+            ),
         )
 
     def to_dict(self) -> dict:
@@ -107,7 +140,7 @@ class FlowEvidence:
             "bb_width_pctile": round(self.bb_width_pctile, 3)
             if self.bb_width_pctile is not None else None,
             "component_breakdown": self.component_breakdown_dict,
-            "longer_term_context": self.longer_term_context,
+            "longer_term_context": self.longer_term_context_dict,
         }
 
 
@@ -119,6 +152,34 @@ def classify_flow_direction(avg_flow_ratio: float | None) -> str:
     if avg_flow_ratio < 0:
         return "NEGATIVE"
     return "FLAT"
+
+
+def _freeze_context_value(value: object) -> object:
+    if isinstance(value, Mapping):
+        return tuple(
+            sorted(
+                (str(key), _freeze_context_value(item))
+                for key, item in value.items()
+            )
+        )
+    if isinstance(value, tuple):
+        return tuple(_freeze_context_value(item) for item in value)
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        return tuple(_freeze_context_value(item) for item in value)
+    return value
+
+
+def _thaw_context_value(value: object) -> object:
+    if isinstance(value, tuple):
+        if all(
+            isinstance(item, tuple)
+            and len(item) == 2
+            and isinstance(item[0], str)
+            for item in value
+        ):
+            return {key: _thaw_context_value(item) for key, item in value}
+        return [_thaw_context_value(item) for item in value]
+    return value
 
 
 def classify_confirmation_status(

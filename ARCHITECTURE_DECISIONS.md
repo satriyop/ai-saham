@@ -261,7 +261,7 @@ Sentiment analysis is classified into two categories:
 **Implications**
 
 * Deterministic sentiment lives in `infrastructure/sentiment/keyword_classifier.py`.
-* `domain/indicators/sentiment_score.py` exists as a placeholder stub (0 lines) — deterministic sentiment was designed for but never placed in the domain layer.
+* Empty domain placeholder files are not kept; deterministic sentiment was designed for but never placed in the domain layer.
 * AI-based sentiment lives in `infrastructure/sentiment/ai_classifier.py` + `infrastructure/ai/sentiment_analyzer.py`.
 * Composite provider (`infrastructure/sentiment/composite_provider.py`) merges multiple news sources.
 * News sources (`google_news_provider.py`, `cnbc_indonesia_provider.py`, `kontan_provider.py`) are swappable implementations.
@@ -371,6 +371,14 @@ Consumers derive `.date()` for day precision or `.strftime("%Y-%m")` for month p
   compatibility with rows cached before this change.
 
 **Exceptions**
+
+Date naming convention:
+
+* `snapshot_date` — the date a computed assessment/evidence snapshot represents.
+* `session_date` — an exchange trading session key for immutable market-session data.
+* `report_date` — an issuer/API filing or reporting date.
+* `as_of_date` — a caller-supplied evaluation cutoff date, especially for replay/backtest.
+* `fetched_at` — the timestamp when data was retrieved and cached.
 
 * `BandarDetectorSnapshot.session_date: date` — the session date is the semantic key for
   immutable end-of-day data, not a cache freshness indicator. Not changed.
@@ -960,11 +968,11 @@ Rp 50 absolute floor. No changes — already enforced.
 
 ### Rule 5: Bandar Score Granularity
 
-**Current gap:** `BandarGate` uses `bandar_is_distributing: bool` (any score < 0 = distributing). Stockbit provides a -9 to +9 score; a -1 and a -9 carry very different implications.
+**Current state:** `BandarGate` uses `five_day_accdist` label matching. The stale `bandar_is_distributing` boolean has been removed from `GateContext` because it did not affect gate behavior.
 
-**Rule:** `GateContext.bandar_is_distributing: bool` is replaced by `GateContext.bandar_five_day_score: int | None` (-9 to +9). `BandarGate` compares `bandar_five_day_score ≤ distribution_threshold` where `distribution_threshold` is configurable in `config/risk_engine.yaml` (default: -2). Score of -1 is treated as noise and does not trigger the gate.
+**Future rule:** `GateContext` may add `bandar_five_day_score: int | None` (-9 to +9). `BandarGate` should compare `bandar_five_day_score ≤ distribution_threshold` where `distribution_threshold` is configurable in `config/risk_engine.yaml` (default: -2). Score of -1 is treated as noise and does not trigger the gate.
 
-**Migration:** `StockbitBandarDetectorProvider` already returns the numeric score. `GateContext` construction in `bootstrap.py` must pass the score, not the boolean.
+**Migration:** `StockbitBandarDetectorProvider` already returns label data. Numeric score wiring remains a future enhancement; until then, label matching remains authoritative.
 
 ---
 
@@ -980,11 +988,11 @@ Rp 50 absolute floor. No changes — already enforced.
 
 * `src/domain/value_objects/tick_size.py` — new pure domain function
 * `src/application/services/position_sizer.py` — apply `round_to_tick()` to all price levels
-* `src/domain/rules/risk_gate.py` — `GateContext` adds `bandar_five_day_score`, `price_vs_upper_rejection_pct`; removes `bandar_is_distributing`
-* `src/domain/rules/bandar_gate.py` — updated to compare score vs. threshold
+* `src/domain/rules/risk_gate.py` — `GateContext` removed `bandar_is_distributing`; future work may add `bandar_five_day_score`, `price_vs_upper_rejection_pct`
+* `src/domain/rules/bandar_gate.py` — currently label-based; future work may compare numeric score vs. threshold
 * `src/domain/value_objects/signal_assessment.py` — `SignalContext` adds `foreign_ownership_pct`, `foreign_ownership_cap_pct`
 * `src/application/services/bootstrap.py` — construct updated `GateContext` from enrichment data
-* All tests referencing `GateContext(bandar_is_distributing=...)` must be updated to `bandar_five_day_score=...`
+* Tests must not reference removed `GateContext(bandar_is_distributing=...)`
 
 **Rationale**
 Professional-grade IDX tools (Bloomberg PORT with IDX data, local tools like RTI Business, Stockbit Pro) all respect these structural constraints. Ignoring tick sizes causes computed stop-loss levels to be invalid on exchange. Ignoring auto-rejection bands creates unrealistic exit scenarios in backtest. Ignoring foreign cap saturation overstates the longevity of foreign flow signals in near-cap stocks.

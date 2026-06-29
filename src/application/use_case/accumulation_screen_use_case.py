@@ -739,10 +739,6 @@ class AccumulationScreenUseCase:
                         candidate.bandar_detector.five_day_accdist
                         if candidate.bandar_detector else None
                     ),
-                    bandar_is_distributing=(
-                        candidate.bandar_detector.is_distributing
-                        if candidate.bandar_detector else False
-                    ),
                 )
                 resp = self._risk_use_case.execute(  # type: ignore[union-attr]
                     AssessRiskRequest(

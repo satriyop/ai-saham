@@ -53,7 +53,6 @@ class GateContext:
 
     # Execution: sourced from BandarDetectorSnapshot (daily)
     five_day_accdist: str | None = None
-    bandar_is_distributing: bool = False
 
     # Liquidity: filled by AssessRiskUseCase from MarketDataRepository
     recent_candles: tuple = field(default_factory=tuple)  # tuple[Candle, ...]

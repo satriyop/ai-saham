@@ -620,7 +620,6 @@ class SwingAnalysisWorkflowUseCase:
                     market_cap_idr=fund.market_cap_idr if fund else None,
                     free_float_pct=shareholding.free_float_pct if shareholding else None,
                     five_day_accdist=bandar.five_day_accdist if bandar else None,
-                    bandar_is_distributing=bandar.is_distributing if bandar else False,
                 )
             if request.with_technical_gate:
                 # Opt-in TechnicalGate path: route through a use case that
