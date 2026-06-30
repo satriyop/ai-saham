@@ -222,7 +222,8 @@ def test_accumulation_audit_replays_signal_and_forward_returns_without_ai():
     assert record.current_price == Decimal("120")
     assert record.return_5d_pct == 4.1667
     record_dict = record.to_dict()
-    assert record_dict["foreign_flow_score"] == record_dict["score"]
+    assert record_dict["foreign_flow_score"] == record.foreign_flow_score
+    assert "score" not in record_dict
     assert response.group_stats
 
 

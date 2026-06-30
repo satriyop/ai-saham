@@ -80,7 +80,7 @@ accumulation_audit:
 
     # Summary dimensions shown in audit learning tables.
     dimensions:
-      - score
+      - foreign_flow_score
       - streak
       - flow_pct
       - vwap_disc_pct
@@ -92,7 +92,7 @@ accumulation_audit:
     # Bucket edges for learning reports. Values below the first edge use
     # "<edge"; values at/above the last edge use "edge+".
     bucket_edges:
-      score: [40, 70]
+      foreign_flow_score: [40, 70]
       streak: [3, 5]
       flow_pct: [5, 15]
       vwap_disc_pct: [0, 5]

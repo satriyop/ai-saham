@@ -94,7 +94,10 @@ def load_accumulation_audit_policy(
             defaults.group_dimensions,
         ),
         buckets=AuditBucketPolicy(
-            score=_float_tuple(bucket_edges.get("score"), defaults.buckets.score),
+            foreign_flow_score=_float_tuple(
+                bucket_edges.get("foreign_flow_score"),
+                defaults.buckets.foreign_flow_score,
+            ),
             streak=_int_tuple(bucket_edges.get("streak"), defaults.buckets.streak),
             flow_pct=_float_tuple(bucket_edges.get("flow_pct"), defaults.buckets.flow_pct),
             vwap_disc_pct=_float_tuple(

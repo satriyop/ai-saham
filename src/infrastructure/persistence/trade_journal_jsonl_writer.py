@@ -49,7 +49,7 @@ def accumulation_entry_to_record(entry) -> dict:
         "stop_pct": None,
         "entry_price": _f(entry.entry_price),
         "window_days": entry.window_days,
-        "foreign_flow_score": entry.score,
+        "foreign_flow_score": entry.foreign_flow_score,
         "foreign_flow_buy_streak": entry.foreign_flow_buy_streak,
         "flow_pct": _f(entry.flow_pct),
         "vwap_disc_pct": _f(entry.vwap_disc_pct),

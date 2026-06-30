@@ -18,7 +18,7 @@ from src.domain.value_objects.accumulation_journal_entry import AccumulationJour
 _COLUMNS = [
     # Log-time fields
     "logged_at", "ticker", "entry_price", "window_days",
-    "score", "foreign_flow_buy_streak", "flow_pct", "vwap_disc_pct", "bb_pctile", "rsi",
+    "foreign_flow_score", "foreign_flow_buy_streak", "flow_pct", "vwap_disc_pct", "bb_pctile", "rsi",
     "trend", "pattern",
     "setup", "setup_match", "failed_gates", "regime",
     "planned_entry", "planned_stop", "planned_target", "max_hold_days",
@@ -52,13 +52,17 @@ def _from_int_str(s: str) -> int | None:
     return int(s) if s else None
 
 
+def _row_foreign_flow_score(row: dict[str, str]) -> float | None:
+    return _from_float_str(row.get("foreign_flow_score", "") or row.get("score", ""))
+
+
 def _row_to_entry(row: dict[str, str]) -> AccumulationJournalEntry:
     return AccumulationJournalEntry(
         logged_at=date.fromisoformat(row["logged_at"]),
         ticker=row["ticker"],
         entry_price=_from_str(row["entry_price"]) or Decimal("0"),
         window_days=int(row["window_days"]),
-        score=_from_float_str(row["score"]),
+        foreign_flow_score=_row_foreign_flow_score(row),
         foreign_flow_buy_streak=_from_int_str(row["foreign_flow_buy_streak"]),
         flow_pct=_from_str(row["flow_pct"]),
         vwap_disc_pct=_from_str(row["vwap_disc_pct"]),
@@ -92,7 +96,7 @@ def _entry_to_row(e: AccumulationJournalEntry) -> dict[str, str | int | float]:
         "ticker": e.ticker,
         "entry_price": _to_str(e.entry_price),
         "window_days": e.window_days,
-        "score": _to_str(e.score),
+        "foreign_flow_score": _to_str(e.foreign_flow_score),
         "foreign_flow_buy_streak": _to_str(e.foreign_flow_buy_streak),
         "flow_pct": _to_str(e.flow_pct),
         "vwap_disc_pct": _to_str(e.vwap_disc_pct),

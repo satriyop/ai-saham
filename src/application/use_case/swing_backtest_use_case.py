@@ -91,7 +91,7 @@ class SwingBacktestTrade:
     pnl: Decimal
     holding_days: int
     exit_reason: str
-    score: float
+    foreign_flow_score: float
     flow_pct: float | None
     vwap_disc_pct: float | None
     rsi: float | None
@@ -113,8 +113,7 @@ class SwingBacktestTrade:
             "pnl": str(self.pnl),
             "holding_days": self.holding_days,
             "exit_reason": self.exit_reason,
-            "foreign_flow_score": self.score,
-            "score": self.score,
+            "foreign_flow_score": self.foreign_flow_score,
             "flow_pct": self.flow_pct,
             "vwap_disc_pct": self.vwap_disc_pct,
             "rsi": self.rsi,
@@ -197,7 +196,7 @@ class _OpenPosition:
     shares: int
     entry_value: Decimal
     entry_cost: Decimal
-    score: float
+    foreign_flow_score: float
     flow_pct: float | None
     vwap_disc_pct: float | None
     rsi: float | None
@@ -475,7 +474,7 @@ class SwingBacktestUseCase:
             shares=shares,
             entry_value=entry_value,
             entry_cost=self._trade_cost(entry_value, request),
-            score=candidate.foreign_flow_score,
+            foreign_flow_score=candidate.foreign_flow_score,
             flow_pct=candidate.avg_flow_ratio,
             vwap_disc_pct=candidate.vwap_discount_pct,
             rsi=candidate.rsi,
@@ -562,7 +561,7 @@ class SwingBacktestUseCase:
             pnl=pnl,
             holding_days=self._holding_days(position.ticker, position.entry_date, exit_date),
             exit_reason=reason,
-            score=position.score,
+            foreign_flow_score=position.foreign_flow_score,
             flow_pct=position.flow_pct,
             vwap_disc_pct=position.vwap_disc_pct,
             rsi=position.rsi,

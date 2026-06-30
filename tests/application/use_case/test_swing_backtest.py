@@ -193,7 +193,8 @@ def test_swing_backtest_opens_signal_and_exits_at_target():
     assert trade.lots == 20
     assert trade.regime is not None
     trade_dict = trade.to_dict()
-    assert trade_dict["foreign_flow_score"] == trade_dict["score"]
+    assert trade_dict["foreign_flow_score"] == trade.foreign_flow_score
+    assert "score" not in trade_dict
     assert response.regime_stats
 
 

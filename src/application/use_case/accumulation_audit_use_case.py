@@ -26,7 +26,7 @@ from src.domain.ports.market_data_repository import MarketDataRepository
 SMART_MONEY_BROKERS = {"AK", "BK", "KZ", "ZP", "RX", "MS", "DB", "CS", "ML", "YU"}
 NOISE_BROKERS = {"YP", "PD", "XL", "XC"}
 DEFAULT_AUDIT_GROUP_DIMENSIONS = (
-    "score",
+    "foreign_flow_score",
     "streak",
     "flow_pct",
     "vwap_disc_pct",
@@ -41,7 +41,7 @@ DEFAULT_AUDIT_GROUP_DIMENSIONS = (
 class AuditBucketPolicy:
     """Bucket boundaries used by accumulation-audit learning summaries."""
 
-    score: tuple[float, ...] = (40.0, 70.0)
+    foreign_flow_score: tuple[float, ...] = (40.0, 70.0)
     streak: tuple[int, ...] = (3, 5)
     flow_pct: tuple[float, ...] = (5.0, 15.0)
     vwap_disc_pct: tuple[float, ...] = (0.0, 5.0)
@@ -68,7 +68,7 @@ class AuditRecord:
 
     signal_date: date
     ticker: str
-    score: float
+    foreign_flow_score: float
     streak: int
     net_buy_ratio: float
     total_net_value: Decimal
@@ -91,8 +91,7 @@ class AuditRecord:
         return {
             "signal_date": self.signal_date.isoformat(),
             "ticker": self.ticker,
-            "foreign_flow_score": self.score,
-            "score": self.score,
+            "foreign_flow_score": self.foreign_flow_score,
             "streak": self.streak,
             "net_buy_ratio": round(self.net_buy_ratio, 4),
             "total_net_value": str(self.total_net_value),
@@ -449,7 +448,7 @@ class AccumulationAuditUseCase:
         return AuditRecord(
             signal_date=signal_date,
             ticker=candidate.ticker,
-            score=candidate.foreign_flow_score,
+            foreign_flow_score=candidate.foreign_flow_score,
             streak=candidate.consecutive_streak,
             net_buy_ratio=candidate.net_buy_ratio,
             total_net_value=candidate.total_net_value,
@@ -584,7 +583,10 @@ class AccumulationAuditUseCase:
         policy: AccumulationAuditPolicy,
     ) -> list[AuditGroupStat]:
         dimensions: dict[str, Callable[[AuditRecord], str]] = {
-            "score": lambda r: _range_bucket(r.score, policy.buckets.score),
+            "foreign_flow_score": lambda r: _range_bucket(
+                r.foreign_flow_score,
+                policy.buckets.foreign_flow_score,
+            ),
             "streak": lambda r: _range_bucket(float(r.streak), policy.buckets.streak),
             "flow_pct": lambda r: _nullable_range_bucket(
                 r.flow_pct, policy.buckets.flow_pct
@@ -788,9 +790,9 @@ def _nullable_range_bucket(
 
 
 def _score_bucket(record: AuditRecord) -> str:
-    if record.score >= 70:
+    if record.foreign_flow_score >= 70:
         return "70+"
-    if record.score >= 40:
+    if record.foreign_flow_score >= 40:
         return "40-69"
     return "0-39"
 

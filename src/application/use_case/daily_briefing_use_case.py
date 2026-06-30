@@ -37,7 +37,7 @@ class OpeningBriefingCandidate:
     iev: int | None = None
     iep: int | None = None
     trend: str | None = None
-    accum_score: float | None = None
+    foreign_flow_score: float | None = None
 
 
 @dataclass(frozen=True)
@@ -189,7 +189,7 @@ class DailyBriefingUseCase:
                 iev=row.get("iev"),
                 iep=row.get("iep"),
                 trend=row.get("trend"),
-                accum_score=row.get("accum_score"),
+                foreign_flow_score=row.get("foreign_flow_score", row.get("accum_score")),
             )
             for row in data.get("candidates", [])
             if row.get("ticker")

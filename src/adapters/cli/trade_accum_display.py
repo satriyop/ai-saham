@@ -74,7 +74,7 @@ def display_journal_review(
     bucket_table.add_column("Avg 10D", justify="right")
     bucket_table.add_column("Win Rate 10D", justify="right")
 
-    for stat in report.score_buckets:
+    for stat in report.foreign_flow_score_buckets:
         if stat.n == 0 and min_foreign_flow_score > 0:
             continue
         bucket_table.add_row(
