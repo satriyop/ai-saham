@@ -20,6 +20,10 @@ swing_backtest:
     entry_timing: same_day_close
     forward_data_lookahead_days: 30
     same_day_exit_priority: target_first
+  attribution:
+    score_buckets:
+      high_min_score: 80
+      mid_min_score: 60
 """,
         encoding="utf-8",
     )
@@ -36,3 +40,5 @@ swing_backtest:
     assert loaded.entry_timing == "same_day_close"
     assert loaded.forward_data_lookahead_days == 30
     assert loaded.same_day_exit_priority == "target_first"
+    assert loaded.attribution_high_min_score == 80.0
+    assert loaded.attribution_mid_min_score == 60.0

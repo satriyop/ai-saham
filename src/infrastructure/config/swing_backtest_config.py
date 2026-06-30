@@ -29,6 +29,8 @@ class SwingBacktestConfig:
     entry_timing: str = "same_day_close"
     forward_data_lookahead_days: int = 45
     same_day_exit_priority: str = "stop_first"
+    attribution_high_min_score: float = 70.0
+    attribution_mid_min_score: float = 45.0
 
 
 def load_swing_backtest_config(
@@ -50,6 +52,8 @@ def load_swing_backtest_config(
 
     portfolio = root.get("portfolio") or {}
     execution = root.get("execution") or {}
+    attribution = root.get("attribution") or {}
+    score_buckets = attribution.get("score_buckets") or {}
     return SwingBacktestConfig(
         capital=_int(portfolio, "capital", defaults.capital),
         risk_pct=_float(portfolio, "risk_pct", defaults.risk_pct),
@@ -68,6 +72,16 @@ def load_swing_backtest_config(
             execution,
             "same_day_exit_priority",
             defaults.same_day_exit_priority,
+        ),
+        attribution_high_min_score=_float(
+            score_buckets,
+            "high_min_score",
+            defaults.attribution_high_min_score,
+        ),
+        attribution_mid_min_score=_float(
+            score_buckets,
+            "mid_min_score",
+            defaults.attribution_mid_min_score,
         ),
     )
 

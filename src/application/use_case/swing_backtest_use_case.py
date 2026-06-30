@@ -12,6 +12,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any
 
+from src.application.services.market_context_engine import MarketContextEngine
 from src.application.services.stats import (
     average,
     max_drawdown_pct,
@@ -20,6 +21,7 @@ from src.application.services.stats import (
     win_rate,
 )
 from src.application.services.swing_backtest_attribution import (
+    AttributionBucketPolicy,
     SwingBacktestAttributionSummary,
     summarize_swing_backtest_attribution,
 )
@@ -39,13 +41,12 @@ from src.application.use_case.evaluate_swing_setup_use_case import (
     EvaluateSwingSetupUseCase,
     SwingSetupCatalogConfig,
 )
-from src.application.services.market_context_engine import MarketContextEngine
-from src.domain.value_objects.market_context import MarketContext
 from src.domain.entities.candle import Candle
 from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.rules.risk_gate import GateContext
 from src.domain.value_objects.idx_market import SHARES_PER_LOT
+from src.domain.value_objects.market_context import MarketContext
 from src.domain.value_objects.setup_evaluation import SetupEvaluation, SetupGate
 
 FOREIGN_BOUNCE_SETUP = "foreign-bounce"
@@ -84,6 +85,9 @@ class SwingBacktestRequest:
     ex_date_warning_days: int = 10
     forward_data_lookahead_days: int = 45
     same_day_exit_priority: str = "stop_first"
+    attribution_bucket_policy: AttributionBucketPolicy = field(
+        default_factory=AttributionBucketPolicy
+    )
 
 
 @dataclass(frozen=True)
@@ -416,7 +420,10 @@ class SwingBacktestUseCase:
             equity_curve=equity_curve,
             regime_stats=self._regime_stats(trades),
             regime_by_date=regime_by_date,
-            attribution_summary=summarize_swing_backtest_attribution(trades),
+            attribution_summary=summarize_swing_backtest_attribution(
+                trades,
+                request.attribution_bucket_policy,
+            ),
             warnings=[
                 "Backtest uses the supplied current universe; "
                 "historical index membership is not reconstructed.",

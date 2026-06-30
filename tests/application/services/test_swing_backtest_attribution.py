@@ -2,6 +2,7 @@ from datetime import date
 from decimal import Decimal
 
 from src.application.services.swing_backtest_attribution import (
+    AttributionBucketPolicy,
     summarize_swing_backtest_attribution,
 )
 from src.application.use_case.swing_backtest_use_case import SwingBacktestTrade
@@ -93,5 +94,25 @@ def test_empty_swing_backtest_attribution_summary_is_deterministic():
     assert summary.group_stats == ()
     assert summary.to_dict() == {
         "intent": "learning_summary_only_not_entry_logic",
+        "bucket_policy": {
+            "high_min_score": 70.0,
+            "mid_min_score": 45.0,
+        },
         "group_stats": [],
     }
+
+
+def test_summarize_swing_backtest_attribution_uses_configured_score_buckets():
+    summary = summarize_swing_backtest_attribution(
+        (_trade(ticker="BBCA", net_return_pct=5.0, pnl="500", signal_score=65),),
+        AttributionBucketPolicy(high_min_score=80.0, mid_min_score=60.0),
+    )
+
+    by_key = {
+        (stat.dimension, stat.bucket): stat
+        for stat in summary.group_stats
+    }
+
+    assert by_key[("signal_score_bucket", "MID_60_79")].trade_count == 1
+    assert by_key[("signal_factor_bucket", "bandar_intensity:MID_60_79")].trade_count == 1
+    assert by_key[("signal_factor_bucket", "foreign_flow_quality:HIGH_80_PLUS")].trade_count == 1

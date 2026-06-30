@@ -883,7 +883,18 @@ Swing setup gates are deterministic and configurable in `config/swing_setups.yam
 
 Backtest JSON includes a deterministic attribution summary for tuning. Its
 intent is learning/reporting only: grouped setup, signal, risk, and regime
-statistics must not be used as live entry logic.
+statistics must not be used as live entry logic. Attribution score buckets are
+reporting-only and configurable in `config/swing_backtest.yaml`.
+
+Attribution dimensions map to these primary tuning files:
+
+| Attribution dimension | Primary config target |
+|-----------------------|-----------------------|
+| `trade_setup_action`, `signal_strength`, `signal_score_bucket`, `signal_factor_bucket` | `config/signal_engine.yaml` |
+| `risk_status`, `risk_gate` | `config/risk_engine.yaml` |
+| `setup_gate` | `config/swing_setups.yaml` |
+| `regime` | `config/market_context_engine.yaml`, `config/swing_targets.yaml` |
+| execution assumptions, reporting buckets | `config/swing_backtest.yaml` |
 
 | Setup | Question Answered |
 |-------|-------------------|

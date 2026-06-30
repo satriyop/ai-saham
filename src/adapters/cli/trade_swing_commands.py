@@ -19,14 +19,11 @@ import typer
 from src.adapters.cli.trade_swing_display import display_swing_backtest
 from src.application.services.bootstrap import create_indicator_registry, create_risk_engine
 from src.application.services.position_sizer import compute_position_size
+from src.application.services.swing_backtest_attribution import AttributionBucketPolicy
 from src.application.services.swing_setup_catalog import build_swing_setup_catalog_config
 from src.application.services.universe_loader import (
     UniverseNotFoundError,
     resolve_tickers,
-)
-from src.application.use_case.swing_backtest_use_case import (
-    SwingBacktestRequest,
-    SwingBacktestUseCase,
 )
 from src.application.use_case.evaluate_swing_setup_use_case import (
     AVAILABLE_SWING_SETUPS,
@@ -35,10 +32,14 @@ from src.application.use_case.evaluate_swing_setup_use_case import (
 from src.application.use_case.swing_backtest_use_case import (
     FOREIGN_BOUNCE_SETUP as BACKTEST_FOREIGN_BOUNCE_SETUP,
 )
-from src.infrastructure.config.app_config import APP_CFG
+from src.application.use_case.swing_backtest_use_case import (
+    SwingBacktestRequest,
+    SwingBacktestUseCase,
+)
 from src.infrastructure.config.accumulation_screener_config import (
     load_accumulation_screener_config,
 )
+from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.config.swing_backtest_config import (
     load_swing_backtest_config as _load_swing_backtest_config,
 )
@@ -242,6 +243,10 @@ def swing_backtest(
             ex_date_warning_days=_SC.ex_date_warning_days,
             forward_data_lookahead_days=_BT.forward_data_lookahead_days,
             same_day_exit_priority=_BT.same_day_exit_priority,
+            attribution_bucket_policy=AttributionBucketPolicy(
+                high_min_score=_BT.attribution_high_min_score,
+                mid_min_score=_BT.attribution_mid_min_score,
+            ),
         ))
     except ValueError as e:
         typer.echo(f"Error: {e}", err=True)

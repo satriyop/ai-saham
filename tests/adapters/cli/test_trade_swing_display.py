@@ -39,6 +39,15 @@ def _response() -> SwingBacktestResponse:
                     total_pnl=Decimal("10000"),
                     profit_factor=1.5,
                 ),
+                AttributionGroupStat(
+                    dimension="signal_score_bucket",
+                    bucket="HIGH_70_PLUS",
+                    trade_count=2,
+                    win_rate_pct=50.0,
+                    avg_return_pct=1.0,
+                    total_pnl=Decimal("10000"),
+                    profit_factor=1.5,
+                ),
             )
         ),
     )
@@ -58,4 +67,5 @@ def test_display_swing_backtest_can_show_attribution_panel(capsys):
     assert "TUNING ATTRIBUTION SUMMARY" in output
     assert "learning_summary_only_not_entry_logic" in output
     assert "signal_strength" in output
+    assert "signal_score_bucket" in output
     assert "STRONG" in output

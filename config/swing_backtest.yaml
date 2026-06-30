@@ -22,3 +22,10 @@ swing_backtest:
     # If daily high reaches TP and low reaches SL on the same candle, use the
     # cautious sequence unless intentionally testing execution-order assumptions.
     same_day_exit_priority: stop_first
+
+  attribution:
+    # Reporting-only buckets used by attribution_summary. These do not affect
+    # entries, exits, SignalEngine scoring, RiskEngine gates, or TradeSetup.
+    score_buckets:
+      high_min_score: 70.0
+      mid_min_score: 45.0

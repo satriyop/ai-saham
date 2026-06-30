@@ -43,30 +43,50 @@ class AttributionGroupStat:
 
 
 @dataclass(frozen=True)
+class AttributionBucketPolicy:
+    """Score bucket boundaries for attribution grouping only."""
+
+    high_min_score: float = 70.0
+    mid_min_score: float = 45.0
+
+    def __post_init__(self) -> None:
+        if self.high_min_score <= self.mid_min_score:
+            raise ValueError("high_min_score must be greater than mid_min_score")
+
+    def to_dict(self) -> dict:
+        return {
+            "high_min_score": self.high_min_score,
+            "mid_min_score": self.mid_min_score,
+        }
+
+
+@dataclass(frozen=True)
 class SwingBacktestAttributionSummary:
     """Grouped deterministic evidence for tuning swing workflow YAML."""
 
-    intent: str = (
-        "learning_summary_only_not_entry_logic"
-    )
+    intent: str = "learning_summary_only_not_entry_logic"
+    bucket_policy: AttributionBucketPolicy = field(default_factory=AttributionBucketPolicy)
     group_stats: tuple[AttributionGroupStat, ...] = field(default_factory=tuple)
 
     def to_dict(self) -> dict:
         return {
             "intent": self.intent,
+            "bucket_policy": self.bucket_policy.to_dict(),
             "group_stats": [stat.to_dict() for stat in self.group_stats],
         }
 
 
 def summarize_swing_backtest_attribution(
     trades: Iterable[Any],
+    bucket_policy: AttributionBucketPolicy | None = None,
 ) -> SwingBacktestAttributionSummary:
     """Build deterministic grouped attribution from completed backtest trades."""
     rows = list(trades)
     groups: dict[tuple[str, str], list[Any]] = {}
+    policy = bucket_policy or AttributionBucketPolicy()
 
     for trade in rows:
-        for dimension, bucket in _trade_buckets(trade):
+        for dimension, bucket in _trade_buckets(trade, policy):
             groups.setdefault((dimension, bucket), []).append(trade)
 
     stats = tuple(
@@ -78,19 +98,33 @@ def summarize_swing_backtest_attribution(
             key=lambda stat: (stat.dimension, -stat.trade_count, stat.bucket),
         )
     )
-    return SwingBacktestAttributionSummary(group_stats=stats)
+    return SwingBacktestAttributionSummary(
+        bucket_policy=policy,
+        group_stats=stats,
+    )
 
 
-def _trade_buckets(trade: Any) -> tuple[tuple[str, str], ...]:
+def _trade_buckets(
+    trade: Any,
+    bucket_policy: AttributionBucketPolicy,
+) -> tuple[tuple[str, str], ...]:
     buckets: list[tuple[str, str]] = []
     _add(buckets, "trade_setup_action", getattr(trade, "trade_setup_action", None))
     _add(buckets, "risk_status", getattr(trade, "risk_status", None))
     _add(buckets, "risk_gate", getattr(trade, "risk_gate", None))
     _add(buckets, "signal_strength", getattr(trade, "signal_strength", None))
-    _add(buckets, "signal_score_bucket", _score_bucket(getattr(trade, "signal_score", None)))
+    _add(
+        buckets,
+        "signal_score_bucket",
+        _score_bucket(getattr(trade, "signal_score", None), bucket_policy),
+    )
     _add(buckets, "regime", getattr(trade, "regime", None))
     _add_setup_gate_buckets(buckets, getattr(trade, "setup_gates", ()))
-    _add_signal_factor_buckets(buckets, getattr(trade, "signal_breakdown", ()))
+    _add_signal_factor_buckets(
+        buckets,
+        getattr(trade, "signal_breakdown", ()),
+        bucket_policy,
+    )
     return tuple(buckets)
 
 
@@ -117,27 +151,33 @@ def _add_setup_gate_buckets(
 def _add_signal_factor_buckets(
     buckets: list[tuple[str, str]],
     signal_breakdown: Iterable[tuple[str, float]],
+    bucket_policy: AttributionBucketPolicy,
 ) -> None:
     for name, value in signal_breakdown:
-        buckets.append(("signal_factor_bucket", f"{name}:{_factor_bucket(value)}"))
+        buckets.append((
+            "signal_factor_bucket",
+            f"{name}:{_score_bucket(value, bucket_policy)}",
+        ))
 
 
-def _score_bucket(value: int | float | None) -> str | None:
+def _score_bucket(
+    value: int | float | None,
+    bucket_policy: AttributionBucketPolicy,
+) -> str | None:
     if value is None:
         return None
-    if value >= 70:
-        return "HIGH_70_PLUS"
-    if value >= 45:
-        return "MID_45_69"
-    return "LOW_BELOW_45"
+    high = _format_threshold(bucket_policy.high_min_score)
+    mid = _format_threshold(bucket_policy.mid_min_score)
+    high_floor = _format_threshold(bucket_policy.high_min_score - 1)
+    if value >= bucket_policy.high_min_score:
+        return f"HIGH_{high}_PLUS"
+    if value >= bucket_policy.mid_min_score:
+        return f"MID_{mid}_{high_floor}"
+    return f"LOW_BELOW_{mid}"
 
 
-def _factor_bucket(value: float) -> str:
-    if value >= 70:
-        return "HIGH_70_PLUS"
-    if value >= 45:
-        return "MID_45_69"
-    return "LOW_BELOW_45"
+def _format_threshold(value: float) -> str:
+    return str(int(value)) if value == int(value) else str(value).replace(".", "_")
 
 
 def _build_stat(

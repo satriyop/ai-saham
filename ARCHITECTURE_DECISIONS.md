@@ -894,7 +894,14 @@ Note: the top-level fields mirror `TradeSetup.to_dict()` exactly; `signal_breakd
 
 **AI Tuner (T2) Constraints**
 - Input: attribution summary JSON (not raw candles, not raw journal entries)
-- Output: proposed YAML diff targeting `config/signal_engine.yaml` (for signal factor changes) or `config/risk_engine.yaml` (for gate changes) — not workflow policy files such as `config/accumulation_screener.yaml`, `config/swing_setups.yaml`, `config/swing_targets.yaml`, or `config/swing_risk_policy.yaml`
+- Output: proposed YAML diff targeting only deterministic tuning files that map
+  directly to attribution dimensions:
+  `config/signal_engine.yaml` for signal factor/classification changes,
+  `config/risk_engine.yaml` for risk gate changes,
+  `config/swing_setups.yaml` for setup gate changes,
+  `config/market_context_engine.yaml` / `config/swing_targets.yaml` for regime
+  context and regime-adaptive exit changes, and `config/swing_backtest.yaml`
+  for replay assumptions and reporting buckets.
 - AI never reads current config directly — the use case provides a structured summary
 - Proposed diffs may include: numeric threshold adjustments (gate thresholds, signal weights), and component enable/disable toggles (`enabled: true/false` per factor or gate). The full Engine Configurability Contract in ADR-024 defines all valid diff targets.
 - `--apply` flag writes proposed changes after user confirmation prompt; without `--apply`, proposals are printed only

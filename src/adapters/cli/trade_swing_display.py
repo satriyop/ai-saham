@@ -169,6 +169,7 @@ def _display_attribution_summary(response: SwingBacktestResponse) -> None:
         "risk_status",
         "risk_gate",
         "signal_strength",
+        "signal_score_bucket",
         "setup_gate",
         "regime",
         "signal_factor_bucket",
