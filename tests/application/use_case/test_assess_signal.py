@@ -50,10 +50,6 @@ def _assess(**kwargs) -> AssessSignalResponse:
 
 
 class TestAssessSignalRequestDTO:
-    def test_default_sensitivity_is_balanced(self):
-        req = AssessSignalRequest(ticker="BBCA")
-        assert req.sensitivity == "balanced"
-
     def test_signal_context_defaults_to_none(self):
         req = AssessSignalRequest(ticker="BBCA")
         assert req.signal_context is None

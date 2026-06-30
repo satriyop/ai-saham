@@ -1081,7 +1081,7 @@ def print_swing_output(
                     elif _factor == "seasonality_edge":
                         _source = "neutral seasonal edge"
                     elif _factor == "analyst_consensus":
-                        _source = "balanced analyst signal"
+                        _source = "mixed analyst signal"
                     elif _factor == "forward_valuation":
                         _source = "neutral valuation"
                     else:

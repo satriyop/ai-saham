@@ -172,7 +172,7 @@ This file is the canonical state tracker for the AGY risk methodology improvemen
 **Status:** ✅ Done
 
 **Files changed:**
-- `src/application/use_case/accumulation_screen_use_case.py` — `risk_profile` on request; `risk_assessment: RiskAssessment | None` on candidate; `risk_use_case` param on use case; `_run_risk_funnel()` helper; call in `execute()` after sort/breadth; `to_dict()` includes `risk_level`, `risk_confidence`, `risk_gate`
+- `src/application/use_case/accumulation_screen_use_case.py` — `risk_assessment: RiskAssessment | None` on candidate; RiskEngine funnel wiring; `_run_risk_funnel()` helper; call in `execute()` after sort/breadth; `to_dict()` includes risk status/gate fields
 - `src/adapters/cli/screen_accum_display.py` — "Risk" column (HI/MID/LO colored); gate detail line when `gate_triggered` is set
 - `tests/application/use_case/test_screen_risk_funnel.py` — 9 new tests
 
@@ -180,7 +180,7 @@ This file is the canonical state tracker for the AGY risk methodology improvemen
 - Funnel is opt-in (`risk_use_case=None` → no change to existing callers)
 - `_run_risk_funnel()` builds `GateContext` from already-loaded candidate data (Rec 15 data sharing: zero extra provider queries)
 - Errors are caught per-candidate and logged at DEBUG — funnel failures never abort the screen
-- `risk_profile` on `AccumulationScreenRequest` controls which rule profile the risk engine uses (default "balanced")
+- Risk profile selection was later retired. Current risk behavior is configured through RiskEngine gates and YAML thresholds.
 
 ---
 
@@ -214,4 +214,3 @@ _Append decisions, blockers, or scope changes here as they come up._
 - 2026-06-23: Rec 13 done (1755 tests pass). Rec 15 deferred — AssessRiskUseCase not yet wired into screener. Phase A complete. Next: Phase B.
 - 2026-06-23: Phase B done (1804 tests pass). RiskGate ABC + FundamentalGate + BandarGate + LiquidityGate. Gates opt-in via constructor; all existing callers unchanged. Next: Phase C.
 - 2026-06-23: Phase F done (1855 tests pass). FreeFloatGate — structural gate using individual_pct + institution_pct < 15% (MSCI threshold). Rec 7 complete. ShareholdingProvider wired into RiskEngine; screener funnel zero N+1.
-

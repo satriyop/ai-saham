@@ -18,11 +18,10 @@ Rules:
 
 This is what lets you:
 - switch from CLI → bot → web
-- go conservative → aggressive → full AI
+- tune deterministic engines through explicit YAML policy
 - change providers without rewriting logic
 
 
 Domain defines what it needs, not how it’s done.
-
 
 

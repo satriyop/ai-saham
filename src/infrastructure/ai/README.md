@@ -4,7 +4,7 @@ This module contains AI adapter implementations for the AI Saham analysis engine
 
 ## Philosophy: AI as an Adapter
 
-Even in "full AI mode", AI remains:
+Even when AI features are enabled, AI remains:
 - **An adapter** - Implements domain ports, can be swapped
 - **Swappable** - Claude → OpenAI → Ollama → Mock
 - **Bypassable** - System works 100% without AI

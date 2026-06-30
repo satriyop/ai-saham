@@ -117,7 +117,7 @@ Sebelum menggunakan screener, pahami apa yang diukur tiap komponen skor.
 | **BCI RETAIL-LED** | 0 pts | 0 Tier 1 foreign desks | Didominasi retail/noise |
 | **Sektor Breadth** | +10 | Bonus ke SEMUA anggota grup kalau ≥60% peers sektor positif | Konfirmasi rotasi sektor |
 
-Skor di-cap di 120 lalu ditambah bonus sektor (sehingga bisa >120). Breakdown per komponen bisa dilihat dengan `--breakdown`.
+Skor di-cap di 120 lalu ditambah bonus sektor (sehingga bisa >120). Definisi komponen bisa dilihat dengan `--explain` atau `--guide`.
 
 ### Interpretasi Skor
 
@@ -189,12 +189,12 @@ Sistem menghitung skor komposit **0–7** (7-point check) untuk menentukan kondi
 |--------|------|---------|------------------------------|
 | **BULLISH** | 6–7 | Konfirmasi kuat di benchmark & breadth | Oke, tapi saham lebih mahal — VWAP Disc mungkin kecil |
 | **SIDEWAYS** | 4–5 | Kondisi normal, tidak ada tren dominan | **Terbaik** — harga flat, asing masih mengumpulkan |
-| **WEAK** | 2–3 | Tekanan jual meningkat, IHSG di bawah SMA | Hati-hati — gunakan `--min-accum-score 70`, size 50% |
+| **WEAK** | 2-3 | Tekanan jual meningkat, IHSG di bawah SMA | Hati-hati — gunakan `--min-foreign-flow-score 70`, size 50% |
 | **RISK_OFF** | 0–1 | Penjualan massal (Panic/Crash) | **Skip swing** — tunggu stabilisasi |
 
 **Aturan praktis:**
 - `BULLISH` atau `SIDEWAYS` → jalankan screener normal
-- `WEAK` → gunakan `--min-accum-score 60`, ukuran posisi 50% dari normal
+- `WEAK` → gunakan `--min-foreign-flow-score 60`, ukuran posisi 50% dari normal
 - `RISK_OFF` → tidak entry swing baru, fokus ke cash atau posisi yang sudah ada
 
 ---
@@ -308,13 +308,13 @@ saham screen accum --universe lq45 --squeeze-only
 saham screen accum --universe lq45 --vwap-only
 
 # Kombinasi: skor tinggi + squeeze + underwater
-saham screen accum --universe lq45 --vwap-only --squeeze-only --min-accum-score 60
+saham screen accum --universe lq45 --vwap-only --squeeze-only --min-foreign-flow-score 60
 
-# Tampilkan breakdown skor per komponen
-saham screen accum --universe lq45 --breakdown
+# Tampilkan definisi skor dan konteks run
+saham screen accum --universe lq45 --explain
 
 # Universe lebih luas
-saham screen accum --universe idx80 --multi --min-accum-score 50 --top 15
+saham screen accum --universe idx80 --multi --min-foreign-flow-score 50 --top 15
 
 # Saham spesifik (bukan universe)
 saham screen accum BBCA BBRI BMRI TLKM --multi
@@ -902,9 +902,9 @@ Default backtest biaya adalah `--cost-bps 20` one-way, diterapkan saat entry dan
 │  FILTER SCREENER BERGUNA                                              │
 │    --squeeze-only     BB Width ≤ 20th pctile (coiled spring)         │
 │    --vwap-only        Asing masih underwater                         │
-│    --min-accum-score 60 Hanya bukti akumulasi tinggi                  │
+│    --min-foreign-flow-score 60 Hanya bukti foreign-flow tinggi         │
 │    --multi            Tampilkan 7/30/90 sesi + pattern               │
-│    --breakdown        Skor per komponen                               │
+│    --explain          Definisi skor + konteks run                     │
 ├──────────────────────────────────────────────────────────────────────┤
 │  PRIORITAS ENTRY                                                      │
 │    ✓ Gate: ENTER (6/6 gates pass)                                    │
@@ -989,7 +989,7 @@ Kalau trend berbalik (lebih banyak hari sell belakangan), skip.
 Strategi tidak profitable untuk periode/universe itu. Coba:
 1. Filter regime: `--allow-regimes BULLISH,SIDEWAYS`
 2. Perkecil universe: dari `idx80` ke `lq45`
-3. Naikkan `--min-accum-score` di screener ke 60 atau 70
+3. Naikkan `--min-foreign-flow-score` di screener ke 60 atau 70
 
 ### `saham analyze regime` Menunjukkan RISK_OFF
 

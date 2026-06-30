@@ -65,14 +65,12 @@ This document explains the conceptual building blocks of the trading system — 
   ┌───────────────────────────────────────────────────────────────────--------──┐
   │  RISK ASSESSMENT — evaluate rules against current state                     │
   │                                                                             │
-  │  saham analyze risk BBCA                      (built-in profiles)           │
-  │  saham analyze risk BBCA --profile aggressive                               │
-  │  saham analyze risk BBCA --rules-file custom.yaml (any strategy YAML)       │
-  │  saham analyze risk BBCA --all               (all 3 profiles side-by-side)  │
+  │  saham analyze risk BBCA                      (configured risk gates)        │
+  │  saham analyze risk BBCA --rules-file custom.yaml (custom rule YAML)        │
   │  saham analyze risk BBCA --with-sentiment    (adds news AI context)         │
   │  saham analyze compare BBCA BBRI BMRI        (side-by-side across tickers)  │
   │                                                                             │
-  │  Three built-in profiles (hardcoded RuleSets, no YAML needed):              │
+  │  Risk profiles are retired; risk behavior is configured through gates.       │
   │  ┌──────────────┬────────────┬──────────────┐                               │
   │  │ conservative │  balanced  │  aggressive  │                               │
   │  │ RSI>75=OB    │  RSI>70=OB │  RSI>65=OB   │                               │

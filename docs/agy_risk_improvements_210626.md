@@ -2,7 +2,7 @@
 
 **Date:** June 21, 2026  
 **Document Reference:** docs/agy_risk_improvements_210626.md  
-**Status:** Strategic Review  
+**Status:** Historical strategic review — superseded by ADR-010, ADR-024, and ADR-032 for current RiskEngine behavior.
 
 ---
 
@@ -15,10 +15,8 @@ The risk engine maps the latest state of a stock using:
 *   **Momentum (RSI):** Evaluates overbought or oversold conditions.
 *   **Trend (EMA/SMA Divergence):** Measures the absolute percentage difference and relative crossover direction of the 20-period Exponential Moving Average (EMA) and Simple Moving Average (SMA).
 
-### B. Standard Risk Profiles
-*   **Conservative:** Strict thresholds (RSI > 75 or < 25; EMA/SMA divergence >= 1%). Requires **both** indicators to agree (e.g., oversold + uptrend) to signal a non-moderate risk level.
-*   **Balanced:** Standard thresholds (RSI > 70 or < 30; any EMA/SMA divergence). Utilizes **majority rule** logic.
-*   **Aggressive:** High sensitivity thresholds (RSI > 60 or < 40; EMA/SMA divergence >= 0.1%). Either indicator alone can trigger a signal, with RSI taking priority.
+### B. Legacy Threshold Profiles
+The original 2026-06-21 review discussed three technical-threshold presets. Those presets are no longer active architecture. Current RiskEngine behavior is gate-based and configured through `config/risk_engine.yaml`; the optional technical gate is orthogonal to swing setup/risk composition.
 
 ---
 

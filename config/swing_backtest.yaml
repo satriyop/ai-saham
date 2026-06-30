@@ -20,5 +20,5 @@ swing_backtest:
     forward_data_lookahead_days: 45
 
     # If daily high reaches TP and low reaches SL on the same candle, use the
-    # conservative sequence unless intentionally testing sensitivity.
+    # cautious sequence unless intentionally testing execution-order assumptions.
     same_day_exit_priority: stop_first

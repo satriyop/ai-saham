@@ -18,25 +18,8 @@ fallback to neutral or ignore sentiment entirely
 ➡ No rule breaks
 
 
-## Risk Profile + Sentiment
-**Risk profiles + sentiment (this is important)**
+## Sentiment Boundary
 
-1. Conservative
-
-- Sentiment is advisory only
-- Never overrides price/volume signals
-- Acts as confidence modifier
-
-2. Balanced
-
-- Sentiment can confirm signals
-- May filter false positives
-
-3. Aggressive
-- Sentiment can lead
-- Price can confirm later
-
-4. Full AI
-- Sentiment can dominate
-- Rules are bypassed intentionally
-- All of this is driven by config, not code.
+Sentiment is contextual evidence. Keyword classification is deterministic;
+LLM-assisted classification is optional and non-authoritative. Neither path may
+bypass SignalEngine, RiskEngine, or MarketContextEngine.

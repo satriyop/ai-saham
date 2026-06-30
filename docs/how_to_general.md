@@ -37,16 +37,11 @@
  ---
  Phase 3 — Risk Assessment
 
- # Single profile
- saham analyze risk BBCA                            # balanced (default)
- saham analyze risk BBCA --profile conservative
- saham analyze risk BBCA --profile aggressive
-
- # All profiles side-by-side
- saham analyze risk BBCA --all
+ # Gate-based risk assessment
+ saham analyze risk BBCA
 
  # Custom rules (your own YAML logic)
- saham analyze risk BBCA --rules-file config/conservative.yaml
+ saham analyze risk BBCA --rules-file config/custom_rules.yaml.example
 
  # With AI explanation (default provider: deepseek)
  saham analyze risk BBCA --explain                            # Uses deepseek (default)
@@ -146,4 +141,3 @@
  saham fetch universe create food_retail -s 1 -b 10  # Create custom universe from subsector
 
  ---
-

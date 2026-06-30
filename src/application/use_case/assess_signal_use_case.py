@@ -121,7 +121,6 @@ _DEFAULT_WEIGHTS: dict[str, float] = {
 @dataclass
 class AssessSignalRequest:
     ticker: str
-    sensitivity: str = "balanced"
     signal_context: SignalContext | None = None
 
 
@@ -129,7 +128,6 @@ class AssessSignalRequest:
 class AssessSignalResponse:
     ticker: str
     assessment: SignalAssessment
-    sensitivity: str
     coverage_warning: str | None = None
     signal_score_raw: int | None = None  # pre-regime score; None means no regime adjustment applied
 
@@ -175,7 +173,6 @@ class AssessSignalUseCase:
         return AssessSignalResponse(
             ticker=request.ticker,
             assessment=assessment,
-            sensitivity=request.sensitivity,
             coverage_warning=warning,
         )
 

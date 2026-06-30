@@ -248,7 +248,6 @@ def test_swing_workflow_canonical_trade_setup_unaffected_by_market_context():
         return AssessSignalResponse(
             ticker="BBCA",
             assessment=_RAW_SIGNAL,
-            sensitivity="balanced",
             coverage_warning=None,
         )
 

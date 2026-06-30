@@ -51,25 +51,9 @@ Deterministic : (TBD Approach, Future dev)
 - vaderSentiment
 - keyword-based scoring
 
-## Risk Profile + Sentiment
-**Risk profiles + sentiment (this is important)**
+## Sentiment Boundary
 
-1. Conservative
-
-- Sentiment is advisory only
-- Never overrides price/volume signals
-- Acts as confidence modifier
-
-2. Balanced
-
-- Sentiment can confirm signals
-- May filter false positives
-
-3. Aggressive
-- Sentiment can lead
-- Price can confirm later
-
-4. Full AI
-- Sentiment can dominate
-- Rules are bypassed intentionally
-- All of this is driven by config, not code.
+Sentiment is context, not an engine override. Deterministic sentiment belongs in
+infrastructure sentiment classifiers and may be mapped into explicit signal
+inputs. AI-based sentiment is optional explanation/context and must not bypass
+SignalEngine, RiskEngine, or MarketContextEngine outputs.

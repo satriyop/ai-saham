@@ -184,7 +184,6 @@ def test_risk_funnel_composes_trade_setup_from_signal_and_risk():
             rationale=("signal supportive",),
             snapshot_date=_TODAY,
         ),
-        sensitivity="balanced",
     )
     risk_response = AssessRiskResponse(
         ticker="BBCA",

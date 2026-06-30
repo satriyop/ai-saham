@@ -72,15 +72,16 @@ saham screen accum --universe lq45 --window 30    # last 30 days
 saham screen accum --universe lq45 --window 90    # last 90 days
 
 # Filter results
-saham screen accum --universe lq45 --min-accum-score 50  # only strong accumulation evidence
+saham screen accum --universe lq45 --min-foreign-flow-score 50  # only strong foreign-flow evidence
 saham screen accum --universe lq45 --min-streak 3     # only 3+ consecutive buy days
 saham screen accum --universe lq45 --vwap-only        # only where foreigners are underwater
 saham screen accum --universe lq45 --squeeze-only     # only BB squeeze setups
 saham screen accum --universe lq45 --top 10           # show top 10 only
 
 # More detail
-saham screen accum --universe lq45 --breakdown        # show score breakdown per row
-saham screen accum --universe lq45 --granular         # show which brokers bought (Stockbit only)
+saham screen accum --universe lq45 --guide            # explain columns and scoring components
+saham screen accum --universe lq45 --top-broker       # show top broker-code detail when available
+saham screen accum --universe lq45 --explain          # append run context and scoring definitions
 saham screen accum --universe lq45 --format json      # machine-readable output
 ```
 
@@ -134,9 +135,9 @@ FOREIGN ACCUMULATION — LQ45 | MULTI-WINDOW | 2026-06-11
 
 ## Column-by-Column Explanation
 
-### SCORE (0–120)
+### FOREIGN FLOW SCORE (0-120)
 
-The composite signal strength. Combines all indicators below into one number. Higher = more confident accumulation signal.
+The deterministic foreign-flow evidence strength. Combines all indicators below into one number. Higher = stronger foreign-flow accumulation evidence.
 
 | Range | Meaning | What to do |
 |---|---|---|
@@ -144,7 +145,7 @@ The composite signal strength. Combines all indicators below into one number. Hi
 | 40–69 | **Moderate signal** | Watch, wait for confirmation |
 | < 40 | **Weak signal** | Likely noise, skip |
 
-Use `--min-accum-score 50` to filter out weak accumulation evidence. The accumulation evidence score has a soft cap at 120 — scores above 100 are rare and represent exceptional setups.
+Use `--min-foreign-flow-score 50` to filter out weak foreign-flow evidence. The foreign-flow score has a soft cap at 120 — scores above 100 are rare and represent exceptional setups.
 
 ---
 
@@ -322,14 +323,10 @@ The pattern label summarizes what the multi-window comparison reveals about the 
 
 ---
 
-## Scoring Breakdown (`--breakdown`)
+## Scoring Definitions (`--explain` / `--guide`)
 
-Add `--breakdown` to any single-window screen to see exactly how each stock earned its score:
-
-```
-  1 GGRM      72.4      4d       4/4       +19.4B  +24.8      -1.9%   42.5    —    DOWN
-    [cons=40.0 streak=13.1 vwap=0.0 rsi=9.3 flow=10.0 bb=0.0 inst=0.0]
-```
+Add `--explain` after a screen run to show run context and scoring definitions.
+Use `--guide` when you only want the column reference without running a screen.
 
 This shows GGRM earned:
 - `cons=40.0` — perfect consistency (4/4 days = 100%)
@@ -340,7 +337,7 @@ This shows GGRM earned:
 - `bb=0.0` — no squeeze data (< 60 days of candle history)
 - `inst=0.0` — no institutional brokers detected (IDX data, no Stockbit)
 
-**Diagnostic use:** If a stock you expected to score high is ranked lower than expected, `--breakdown` immediately shows which signal is missing. Common patterns:
+**Diagnostic use:** If a stock you expected to score high is ranked lower than expected, the scoring definitions show which component is likely missing. Common patterns:
 - `vwap=0` — foreigners are in profit, no defense motive. Wait for a pullback.
 - `streak=0` — high consistency but the run broke. A single sell day reset it.
 - `bb=0` — not enough data for squeeze detection. Run `saham fetch market` with more days.
@@ -375,7 +372,7 @@ saham screen accum --universe lq45 --multi
 
 # 3. Focus on high-conviction setups
 saham screen accum --universe lq45 --multi --squeeze-only   # coiled spring candidates
-saham screen accum --universe lq45 --vwap-only --min-accum-score 50  # underwater + strong accumulation evidence
+saham screen accum --universe lq45 --vwap-only --min-foreign-flow-score 50  # underwater + strong foreign-flow evidence
 ```
 
 ### Deep-Dive on a Candidate
@@ -383,16 +380,16 @@ saham screen accum --universe lq45 --vwap-only --min-accum-score 50  # underwate
 Once you find a ticker worth researching (e.g. BBRI):
 
 ```bash
-# How has the score changed over time?
-saham screen accum BBRI --window 7 --breakdown
-saham screen accum BBRI --window 30 --breakdown
+# How does the current score break down?
+saham screen accum BBRI --window 7 --explain
+saham screen accum BBRI --window 30 --explain
 
 # What does the daily flow look like?
 saham view broker flow BBRI --days 30
 
-# Technical risk assessment
-saham analyze risk BBRI --profile balanced
-saham analyze risk BBRI --with-sentiment   # add news context
+# Swing decision and risk/signal context
+saham analyze swing BBRI --with-risk-detail --with-signal-detail
+saham analyze swing BBRI --with-sentiment   # add news context
 ```
 
 ### What Makes a Strong Candidate?
@@ -445,18 +442,18 @@ saham screen accum --universe cached --multi
 | Foreign buy/sell totals | ✓ | ✓ |
 | Per-broker detail | ✗ | ✓ |
 | Which institution bought | ✗ | ✓ |
-| `--granular` flag | Not useful | Shows broker codes |
+| `--top-broker` flag | Not useful | Shows top broker-code detail |
 | `inst` score component | Always 0 | Active |
 
-**Why per-broker data matters:** Not all "foreign" buying is the same. A hedge fund (e.g. broker code `AK` = UBS, `BK` = JP Morgan, `ZP` = Morgan Stanley) buying 5 consecutive days is a fundamentally different signal than retail foreign accounts buying. With Stockbit data and `--granular`, you can see which institutions are moving.
+**Why per-broker data matters:** Not all "foreign" buying is the same. A hedge fund (e.g. broker code `AK` = UBS, `BK` = JP Morgan, `ZP` = Morgan Stanley) buying 5 consecutive days is a fundamentally different signal than retail foreign accounts buying. With Stockbit data and `--top-broker`, you can see which institutions are moving.
 
 To configure Stockbit:
 ```bash
 # Login via browser (opens a Chromium window to authenticate with your Stockbit account)
 saham fetch stockbit login
 
-# Now screener automatically uses Stockbit and shows institutional flags
-saham screen accum --universe lq45 --granular
+# Now screener can show top broker-code detail when available
+saham screen accum --universe lq45 --top-broker
 ```
 
 ---
