@@ -46,7 +46,6 @@ class ForeignFlowScoreBreakdown:
             "ticker": self.ticker,
             "snapshot_date": self.snapshot_date.isoformat(),
             "foreign_flow_score": self.foreign_flow_score,
-            "composite_foreign_flow_score": self.foreign_flow_score,
             "max_score": self.max_score,
             "breakdown": self.breakdown_dict,
             "net_buy_ratio": round(self.net_buy_ratio, 4),

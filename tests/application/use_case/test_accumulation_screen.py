@@ -469,11 +469,10 @@ def test_screen_attaches_ticker_notation_without_changing_score():
         enriched.candidates[0].foreign_flow_evidence.composite_score
         == enriched.candidates[0].foreign_flow_score
     )
-    assert (
-        enriched.candidates[0].to_dict()["composite_foreign_flow_score"]
-        == enriched.candidates[0].to_dict()["foreign_flow_score"]
-    )
-    assert enriched.candidates[0].to_dict()["ticker_notation"]["notations"][0]["code"] == "X"
+    candidate_dict = enriched.candidates[0].to_dict()
+    assert candidate_dict["foreign_flow_score"] == enriched.candidates[0].foreign_flow_score
+    assert "composite_foreign_flow_score" not in candidate_dict
+    assert candidate_dict["ticker_notation"]["notations"][0]["code"] == "X"
 
 
 # ─── Signal Assessment (migrated from _composite_score) ──────────────────────

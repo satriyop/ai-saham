@@ -300,7 +300,6 @@ class AccumulationCandidate:
             "rsi": round(self.rsi, 2) if self.rsi is not None else None,
             "trend": self.trend,
             "foreign_flow_score": self.foreign_flow_score,
-            "composite_foreign_flow_score": self.foreign_flow_score,
             "top_brokers": self.top_brokers,
             "institutional_flag": self.institutional_flag,
             "bci_label": self.bci_label,
@@ -351,7 +350,6 @@ class AccumulationCandidate:
                 "coverage_warning": self.signal_assessment.coverage_warning,
             } if self.signal_assessment else None,
             "risk_status": self.risk_assessment.risk_level_name if self.risk_assessment else None,
-            "risk_level": self.risk_assessment.risk_level_name if self.risk_assessment else None,
             "risk_confidence": self.risk_assessment.confidence if self.risk_assessment else None,
             "risk_gate": self.risk_assessment.gate_triggered if self.risk_assessment else None,
         }

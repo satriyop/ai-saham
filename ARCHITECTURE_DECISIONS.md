@@ -869,7 +869,7 @@ The system provides a four-phase learning loop for the swing domain that records
   "signal_score": 72,
   "signal_score_raw": 72,
   "signal_strength": "STRONG",
-  "risk_level": "LOW_RISK",
+  "risk_status": "OPEN",
   "blocking_gates": [],
   "regime": null,
   "signal_multiplier": 1.0,
@@ -1171,7 +1171,7 @@ The boundary that matters for learning is the scoring artifact. `ForeignFlowScor
 
 ### Compatibility
 
-Application services read `AccumulationCandidate.foreign_flow_score`. JSON output may still include explicitly documented compatibility aliases, but new screen code, CLI help, and ADR language use `foreign_flow_score`.
+Application services read `AccumulationCandidate.foreign_flow_score`. JSON output should use explicit fields such as `foreign_flow_score`; ambiguous `score` aliases are not part of new contracts.
 
 ---
 
@@ -1343,9 +1343,8 @@ JSON contract rules:
 * Opening-session artifacts use `opening_setup` for PRIME/WATCH/SKIP labels;
   they must not use generic `verdict` unless they compose a `TradeSetup`.
 * `saham analyze swing --format json` treats grouped `verdict`, `evidence`, and
-  `diagnostics` as canonical. Top-level fields such as `trade_setup`,
-  `signal_assessment`, `accumulation`, `risk`, and `data` are compatibility
-  aliases and must remain value-equal to their grouped source while retained.
+  `diagnostics` as canonical. It does not emit top-level aliases such as
+  `trade_setup`, `signal_assessment`, `accumulation`, `risk`, or `data`.
 
 ### Layering
 

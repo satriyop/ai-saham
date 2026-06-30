@@ -1611,11 +1611,10 @@ src/
 
 JSON outputs and command sidecars include `schema_version` and `artifact_type`
 at the root. Explicit fields such as `foreign_flow_score`, `signal_score`, and
-`risk_status` are canonical; older ambiguous aliases may remain for compatibility.
+`risk_status` are canonical; new machine-facing outputs should avoid ambiguous
+score/status aliases.
 For `saham analyze swing --format json`, grouped `verdict`, `evidence`, and
-`diagnostics` are canonical. Legacy top-level fields such as `trade_setup`,
-`signal_assessment`, `accumulation`, `risk`, and `data` are compatibility aliases
-and must match the grouped values.
+`diagnostics` are canonical.
 
 ---
 

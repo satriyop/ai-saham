@@ -100,27 +100,31 @@ def test_analyze_swing_table_and_json_contracts(temp_workspace, monkeypatch):
     assert payload["artifact_type"] == "swing_analysis"
     assert payload["schema_version"] == 1
     assert payload["json_contract"]["canonical"] == ["verdict", "evidence", "diagnostics"]
-    assert "trade_setup" in payload["json_contract"]["compatibility_aliases"]
-    assert "signal_assessment" in payload["json_contract"]["compatibility_aliases"]
-    assert "accumulation" in payload["json_contract"]["compatibility_aliases"]
-    assert payload["verdict"]["trade_setup"] == payload["trade_setup"]
-    assert payload["verdict"]["signal_assessment"] == payload["signal_assessment"]
-    assert payload["verdict"]["risk_assessment"]["risk_status"] == payload["risk"]["risk_status"]
-    assert payload["evidence"]["accumulation"] == payload["accumulation"]
-    assert payload["evidence"]["setup"] == payload["setup"]
-    assert payload["evidence"]["strategy_evidence"] == payload["strategy_evidence"]
-    assert payload["evidence"]["sentiment"] == payload["sentiment"]
-    assert payload["diagnostics"]["data"]["as_of_date"] == payload["data"]["as_of_date"]
-    assert payload["diagnostics"]["flow_detail"] == payload["flow_detail"]
-    assert payload["diagnostics"]["broker_detail"] == payload["broker_detail"]
-    assert payload["diagnostics"]["broker_quality_note"] == payload["broker_quality_note"]
-    assert payload["accumulation"]["foreign_flow_score"] == payload["accumulation"]["score"]
-    assert (
-        payload["accumulation"]["composite_foreign_flow_score"]
-        == payload["accumulation"]["foreign_flow_score"]
-    )
-    assert payload["accumulation"]["foreign_flow_evidence"]["score_family"] == "composite_foreign_flow"
-    assert "trade_setup" in payload
+    assert "compatibility_aliases" not in payload["json_contract"]
+    for old_key in (
+        "trade_setup",
+        "signal_assessment",
+        "risk",
+        "accumulation",
+        "setup",
+        "strategy_evidence",
+        "sentiment",
+        "data",
+        "flow_detail",
+        "broker_detail",
+        "broker_quality_note",
+        "market_context_preview",
+    ):
+        assert old_key not in payload
+    risk = payload["verdict"]["risk_assessment"]
+    assert "risk_status" in risk
+    assert "status" not in risk
+    assert "level" not in risk
+    accumulation = payload["evidence"]["accumulation"]
+    assert "foreign_flow_score" in accumulation
+    assert "score" not in accumulation
+    assert "composite_foreign_flow_score" not in accumulation
+    assert accumulation["foreign_flow_evidence"]["score_family"] == "composite_foreign_flow"
 
 
 def test_screen_accum_table_multi_and_json_contracts(temp_workspace, monkeypatch):
@@ -141,10 +145,8 @@ def test_screen_accum_table_multi_and_json_contracts(temp_workspace, monkeypatch
     assert payload["artifact_type"] == "accumulation_screen"
     assert payload["schema_version"] == 1
     assert payload["candidates"][0]["foreign_flow_score"] is not None
-    assert (
-        payload["candidates"][0]["composite_foreign_flow_score"]
-        == payload["candidates"][0]["foreign_flow_score"]
-    )
+    assert "composite_foreign_flow_score" not in payload["candidates"][0]
+    assert "risk_level" not in payload["candidates"][0]
     assert payload["candidates"][0]["foreign_flow_evidence"]["score_family"] == "composite_foreign_flow"
 
     multi = runner.invoke(app, ["screen", "accum", "BBCA", "--multi", "--db", str(db_path)])

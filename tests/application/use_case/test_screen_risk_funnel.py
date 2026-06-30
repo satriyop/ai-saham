@@ -7,7 +7,7 @@ Verifies:
 - FundamentalGate HIGH_RISK surfaces on the candidate's risk_assessment
 - GateContext is built from pre-loaded candidate data (no duplicate provider calls)
 - Graceful degradation: risk failure for one ticker does not abort others
-- to_dict() includes risk_level, risk_confidence, risk_gate fields
+- to_dict() includes risk_status, risk_confidence, risk_gate fields
 """
 
 from datetime import date, timedelta
@@ -352,7 +352,7 @@ def test_to_dict_includes_risk_fields_when_assessment_present():
     )
     d = c.to_dict()
     assert d["risk_status"] == "BLOCKED"
-    assert d["risk_level"] == "BLOCKED"
+    assert "risk_level" not in d
     assert d["risk_confidence"] == 100
     assert d["risk_gate"] == "FundamentalGate"
 
@@ -378,6 +378,6 @@ def test_to_dict_risk_fields_none_when_no_assessment():
     )
     d = c.to_dict()
     assert d["risk_status"] is None
-    assert d["risk_level"] is None
+    assert "risk_level" not in d
     assert d["risk_confidence"] is None
     assert d["risk_gate"] is None
