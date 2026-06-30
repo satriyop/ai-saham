@@ -413,12 +413,12 @@ A flat CLI adapter directory becomes unreadable as the command surface grows. Em
 * New command files must follow this convention from creation.
 * A file serving only one command group gets exactly one prefix segment (e.g., `analyze_swing_commands.py`).
 * A display file paired with a command file mirrors its prefix (e.g., `analyze_swing_display.py`).
-* Legacy cross-group files (`accumulation_commands.py`, `intraday_workflow_commands.py`) are grandfathered until explicitly refactored — do not rename them inline with feature work.
-* Existing display files with the old naming (`swing_display.py`, `swing_analysis_display.py`, etc.) will be renamed in a dedicated pass.
+* Legacy cross-group files are not the target shape. Split them when a focused command-group cleanup is already in scope; do not rename them as incidental churn in unrelated feature work.
+* Accumulation and swing command/display files already follow this convention (`screen_accum_commands.py`, `trade_accum_commands.py`, `analyze_accum_commands.py`, `analyze_swing_display.py`, `trade_swing_display.py`).
 
 **Exceptions**
 
-* Files serving multiple top-level groups (legacy cross-group modules) keep their current names until explicitly split.
+* Files serving multiple top-level groups may keep their current names until a dedicated split is made.
 * Shared infrastructure not tied to a specific command (e.g., a `_swing_helpers.py`) may omit the top-command prefix.
 
 ---
@@ -1395,6 +1395,36 @@ Backtest and replay paths can continue to use `as_of_date` as an availability
 guard, while source-specific value objects retain their own provenance dates.
 This avoids confusing `report_date` with cache freshness and avoids treating
 session data as if it were a generic workflow snapshot.
+
+---
+
+## ADR-035: Port Method Naming Convention
+
+### Context
+
+The codebase intentionally has both provider ports and repository ports. Their
+method prefixes look inconsistent unless the source boundary is explicit.
+
+### Decision
+
+Port method prefixes distinguish data source boundaries:
+
+| Prefix | Meaning | Examples |
+|--------|---------|----------|
+| `fetch_*` | Obtain data from a live/external provider or an interaction boundary. May perform network/browser/API work. | `MarketDataProvider.fetch_daily_ohlcv`, `BrokerDataProvider.fetch_broker_summary`, `NewsProvider.fetch_headlines` |
+| `get_*` | Read from local repositories, caches, deterministic services, or enrichment providers that expose cached/as-of semantics. | `MarketDataRepository.get_candles`, `BrokerDataRepository.get_broker_summaries`, `ShareholdingProvider.get_composition` |
+
+`MarketDataProvider.fetch_daily_ohlcv()` and `MarketDataRepository.get_candles()`
+are not competing names for one operation: the provider crosses an external
+source boundary; the repository reads persisted/cache-backed candles.
+
+### Guidance
+
+New live provider ports should use `fetch_*`. New repository/cache ports should
+use `get_*`. If a provider exposes historical/as-of cached enrichment behind the
+interface, `get_*` is acceptable when the caller is not asking it to perform a
+fresh external fetch. Do not mechanically rename existing ports unless the
+boundary meaning is wrong.
 
 ---
 

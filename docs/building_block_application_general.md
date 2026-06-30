@@ -151,7 +151,7 @@ The same layers with their actual components visible:
 | 1 | **CLI Router** | Routes user commands to use cases via lifecycle groups. Parses flags, wires dependencies, displays output. | `saham <group> <cmd>` | `main.py`, `fetch_commands.py`, `trade_commands.py`, etc |
 | 2 | **Data Ingestion** | Fetches, caches, and serves OHLCV + broker + news data from external sources. | `fetch market`, `fetch broker`, `fetch stockbit`, `fetch iev`, `analyze sentiment` | `yahoo.py`, `idx_market.py`, `idx.py`, `playwright_stockbit.py`, `playwright_stockbit_browser.py`, 20 Stockbit specialized providers, 6 sentiment providers, SQLite repos |
 | 3 | **Analysis Core** | Deterministic indicator computation, risk profiling, and composite analysis. | `indicator compute`, `indicator snapshot`, `analyze risk`, `analyze compare` | `sma.py`, `ema.py`, `rsi.py`, `indicator_registry.py`, 3 rule profiles, `rule_engine.py` |
-| 4 | **Screening Suite** | Multi-dimensional stock screening for accumulation patterns, pre-open movers, and swing candidates. | `screen accum`, `screen pre-open` | `accumulation_screen.py`, `intraday_workflow_commands.py`, `pre_open_screen.py` |
+| 4 | **Screening Suite** | Multi-dimensional stock screening for accumulation patterns, pre-open movers, and swing candidates. | `screen accum`, `screen pre-open` | `accumulation_screen_use_case.py`, `screen_accum_commands.py`, `pre_open_screen_use_case.py`, `screen_pre_open_commands.py` |
 | 5 | **Strategy System** | Authoring, validation, loading, and execution of versioned strategy packages. | `strategy init/create/validate/list`, `strategy backtest` | `strategy_loader.py`, 3 strategy YAMLs, `strategy_commands.py` |
 | 6 | **Formula DSL** | Custom indicator language with tokenizer, parser, evaluator, and validator. Supports nesting and series operations. | `indicator create`, `indicator show`, `indicator compute <formula>` | 6 files in `application/formula/`, `formula_storage.py` |
 | 7 | **AI Integration** | 6 AI providers for explanation, formula translation, strategy creation, and sentiment classification. | `--explain`, `--ai-classify`, `indicator create`, `strategy create` | `factory.py`, 6 explainers, 2 translators, `sentiment_analyzer.py` |
@@ -245,19 +245,19 @@ Each Big block decomposes into Medium modules:
 | Module | File(s) | Lines | What It Does |
 |--------|---------|-------|-------------|
 | Domain Backtest Engine | `domain/services/backtest_engine.py` | ~200 | All-in-long simulation, drawdown, P&L |
-| Backtest Use Case | `application/use_case/backtest.py` | ~250 | Signal generation + engine orchestration |
-| Swing Backtest | `application/use_case/swing_backtest.py` | ~664 | Walk-forward portfolio backtest with regime awareness |
+| Backtest Use Case | `application/use_case/backtest_use_case.py` | ~250 | Signal generation + engine orchestration |
+| Swing Backtest | `application/use_case/swing_backtest_use_case.py` | ~664 | Walk-forward portfolio backtest with regime awareness |
 
 #### Trading Workflow
 
 | Module | File(s) | Lines | What It Does |
 |--------|---------|-------|-------------|
-| Pre-Open Screen Use Case | `application/use_case/pre_open_screen.py` | ~400 | 10-step pre-open analysis |
-| Intraday Confirm Use Case | `application/use_case/confirm_intraday_open.py` | ~100 | Opening auction confirmation |
+| Pre-Open Screen Use Case | `application/use_case/pre_open_screen_use_case.py` | ~400 | 10-step pre-open analysis |
+| Intraday Confirm Use Case | `application/use_case/confirm_intraday_open_use_case.py` | ~100 | Opening auction confirmation |
 | Position Sizer | `application/services/position_sizer.py` | ~150 | ATR-based position sizing |
 | Intraday Conf Journal | `application/services/intraday_confirmation_journal.py` | ~80 | Confirmation journal |
 | Accumulation Journal | `application/services/accumulation_journal.py` | ~80 | Accumulation candidate journal |
-| Intraday Backtest | `application/use_case/intraday_backtest.py` | ~100 | Intraday strategy evaluation |
+| Intraday Backtest | `application/use_case/intraday_backtest_use_case.py` | ~100 | Intraday strategy evaluation |
 
 #### Persistence
 
@@ -368,44 +368,42 @@ Each Big block decomposes into Medium modules:
 
 | Use Case | File | Input | Output |
 |----------|------|-------|--------|
-| `FetchMarketDataUseCase` | `use_case/fetch_market_data.py` | ticker, days, refresh | candles + source metadata |
-| `ComputeSMAUseCase` | `use_case/compute_sma.py` | ticker, period, field | SMA values |
-| `ComputeEMAUseCase` | `use_case/compute_ema.py` | ticker, period, field | EMA values |
-| `ComputeRSIUseCase` | `use_case/compute_rsi.py` | ticker, period | RSI values |
-| `AggregateIndicatorsUseCase` | `use_case/aggregate_indicators.py` | ticker, periods | Combined indicator table |
-| `AssessRiskUseCase` | `use_case/assess_risk.py` | ticker, profile, rules | Risk assessment |
-| `ExplainRiskUseCase` | `use_case/explain_risk.py` | risk assessment, provider | AI explanation |
-| `RunAnalysisUseCase` | `use_case/run_analysis.py` | ticker | Full analysis pipeline |
-| `BacktestUseCase` | `use_case/backtest.py` | ticker, strategy, capital | Trade log + metrics |
-| `SwingBacktestUseCase` | `use_case/swing_backtest.py` | universe, capital, preset | Portfolio report |
-| `MarketRegimeUseCase` | `use_case/market_regime.py` | universe, as_of | Regime context |
-| `PreOpenScreenUseCase` | `use_case/pre_open_screen.py` | movers, order books, caps | Screened candidates |
-| `ConfirmIntradayOpenUseCase` | `use_case/confirm_intraday_open.py` | opening data, session | ENTER/WAIT/SKIP |
-| `FetchSentimentUseCase` | `use_case/fetch_sentiment.py` | ticker, days, classifier | Sentiment summary |
-| `AuditSentimentUseCase` | `use_case/audit_sentiment.py` | ticker | Accuracy audit |
-| `FetchBrokerDataUseCase` | `use_case/fetch_broker_data.py` | ticker, date range | BrokerSummary list |
-| `ImportBrokerDataUseCase` | `use_case/import_broker_data.py` | file, format | Imported summaries |
-| `AccumulationScreenUseCase` | `use_case/accumulation_screen.py` | universe, window | Scored stock list |
-| `AccumulationAuditUseCase` | `use_case/accumulation_audit.py` | universe, preset | Audit report |
-| `CreateIndicatorFromIntentUseCase` | `use_case/create_indicator_from_intent.py` | intent, provider | Formula string |
-| `CreateStrategyFromIntentUseCase` | `use_case/create_strategy_from_intent.py` | intent, provider | Strategy YAML |
-| `IntradayBacktestUseCase` | `use_case/intraday_backtest.py` | ticker, strategy | Performance report |
-| `RefreshMarketDataUseCase` | `use_case/refresh_market_data.py` | ticker, days | Refreshed candles |
-| `FetchMarketRefreshUseCase` | `use_case/fetch_market_refresh.py` | universe, days | Batch refresh |
-| `RefreshBrokerDataUseCase` | `use_case/refresh_broker_data.py` | ticker, date range | Refreshed broker data |
-| `FetchBrokerDailyFlowsUseCase` | `use_case/fetch_broker_daily_flows.py` | ticker, days | Foreign flow time-series |
-| `OpeningSnapshotUseCase` | `use_case/opening_snapshot.py` | — | NCP-locked predictions |
-| `OpeningTrackUseCase` | `use_case/opening_track.py` | — | Orderbook tracking |
-| `OpeningGradeUseCase` | `use_case/opening_grade.py` | — | Accuracy report |
-| `OpeningPromptUseCase` | `use_case/opening_prompt.py` | session | AI prompt |
-| `OpeningTuneUseCase` | `use_case/opening_tune.py` | — | Config recommendations |
-| `DailyBriefingUseCase` | `use_case/daily_briefing.py` | universe, date | Briefing summary |
-| `SwingAnalysisWorkflowUseCase` | `use_case/swing_analysis_workflow.py` | ticker, capital | Composite swing view |
-| `PreOpenWorkflowUseCase` | `use_case/pre_open_workflow.py` | movers, config | Pre-open orchestration |
-| `ResolveOpeningPricesUseCase` | `use_case/resolve_opening_prices.py` | session | Opening prices |
-| `DataUpdateStatusUseCase` | `use_case/data_update_status.py` | — | Health check |
-| `FetchStockMetaUseCase` | `use_case/fetch_stock_meta.py` | ticker | Sector/industry metadata |
-| `AnalyzeRunningTradeUseCase` | `use_case/analyze_running_trade.py` | ticker | Running trade attribution |
+| `RefreshMarketDataUseCase` | `use_case/refresh_market_data_use_case.py` | ticker, days, refresh | candles + source metadata |
+| `ComputeSMAUseCase` | `use_case/compute_sma_use_case.py` | ticker, period, field | SMA values |
+| `ComputeEMAUseCase` | `use_case/compute_ema_use_case.py` | ticker, period, field | EMA values |
+| `ComputeRSIUseCase` | `use_case/compute_rsi_use_case.py` | ticker, period | RSI values |
+| `AggregateIndicatorsUseCase` | `use_case/aggregate_indicators_use_case.py` | ticker, periods | Combined indicator table |
+| `AssessRiskUseCase` | `use_case/assess_risk_use_case.py` | ticker, profile, rules | Risk assessment |
+| `ExplainRiskUseCase` | `use_case/explain_risk_use_case.py` | risk assessment, provider | AI explanation |
+| `BacktestUseCase` | `use_case/backtest_use_case.py` | ticker, strategy, capital | Trade log + metrics |
+| `SwingBacktestUseCase` | `use_case/swing_backtest_use_case.py` | universe, capital, preset | Portfolio report |
+| `BuildMarketContextUseCase` | `use_case/build_market_context_use_case.py` | universe, as_of | Market context factors |
+| `PreOpenScreenUseCase` | `use_case/pre_open_screen_use_case.py` | movers, order books, caps | Screened candidates |
+| `ConfirmIntradayOpenUseCase` | `use_case/confirm_intraday_open_use_case.py` | opening data, session | ENTER/WAIT/SKIP |
+| `FetchSentimentUseCase` | `use_case/fetch_sentiment_use_case.py` | ticker, days, classifier | Sentiment summary |
+| `AuditSentimentUseCase` | `use_case/audit_sentiment_use_case.py` | ticker | Accuracy audit |
+| `FetchBrokerDataUseCase` | `use_case/fetch_broker_data_use_case.py` | ticker, date range | BrokerSummary list |
+| `ImportBrokerDataUseCase` | `use_case/import_broker_data_use_case.py` | file, format | Imported summaries |
+| `AccumulationScreenUseCase` | `use_case/accumulation_screen_use_case.py` | universe, window | Scored stock list |
+| `AccumulationAuditUseCase` | `use_case/accumulation_audit_use_case.py` | universe, preset | Audit report |
+| `CreateIndicatorFromIntentUseCase` | `use_case/create_indicator_from_intent_use_case.py` | intent, provider | Formula string |
+| `CreateStrategyFromIntentUseCase` | `use_case/create_strategy_from_intent_use_case.py` | intent, provider | Strategy YAML |
+| `IntradayBacktestUseCase` | `use_case/intraday_backtest_use_case.py` | ticker, strategy | Performance report |
+| `FetchMarketRefreshUseCase` | `use_case/fetch_market_refresh_use_case.py` | universe, days | Batch refresh |
+| `RefreshBrokerDataUseCase` | `use_case/refresh_broker_data_use_case.py` | ticker, date range | Refreshed broker data |
+| `FetchBrokerDailyFlowsUseCase` | `use_case/fetch_broker_daily_flows_use_case.py` | ticker, days | Foreign flow time-series |
+| `OpeningSnapshotUseCase` | `use_case/opening_snapshot_use_case.py` | — | NCP-locked predictions |
+| `OpeningTrackUseCase` | `use_case/opening_track_use_case.py` | — | Orderbook tracking |
+| `OpeningGradeUseCase` | `use_case/opening_grade_use_case.py` | — | Accuracy report |
+| `OpeningPromptUseCase` | `use_case/opening_prompt_use_case.py` | session | AI prompt |
+| `OpeningTuneUseCase` | `use_case/opening_tune_use_case.py` | — | Config recommendations |
+| `DailyBriefingUseCase` | `use_case/daily_briefing_use_case.py` | universe, date | Briefing summary |
+| `SwingAnalysisWorkflowUseCase` | `use_case/swing_analysis_workflow_use_case.py` | ticker, capital | Composite swing view |
+| `PreOpenWorkflowUseCase` | `use_case/pre_open_workflow_use_case.py` | movers, config | Pre-open orchestration |
+| `ResolveOpeningPricesUseCase` | `use_case/resolve_opening_prices_use_case.py` | session | Opening prices |
+| `DataUpdateStatusUseCase` | `use_case/data_update_status_use_case.py` | — | Health check |
+| `FetchStockMetaUseCase` | `use_case/fetch_stock_meta_use_case.py` | ticker | Sector/industry metadata |
+| `AnalyzeRunningTradeUseCase` | `use_case/analyze_running_trade_use_case.py` | ticker | Running trade attribution |
 
 #### Application Services (10)
 
@@ -592,9 +590,10 @@ Each Big block decomposes into Medium modules:
 | Stockbit Impl | `cli/fetch_stockbit_commands.py` | Implementation of session management |
 | Chart Impl | `cli/analyze_chart_commands.py` | Implementation of ASCII charts |
 | Data Quality | `cli/fetch_audit_commands.py` | `saham fetch audit` data quality diagnostic |
-| Accumulation | `cli/accumulation_commands.py` | Implementation of accumulation screen logic |
-| Accumulation Display | `cli/accumulation_display.py` | Rich-formatted accumulation output |
-| Accumulation Audit Display | `cli/accumulation_audit_display.py` | Rich-formatted audit output |
+| Screen Accumulation | `cli/screen_accum_commands.py` | Implementation of accumulation screen CLI |
+| Screen Accumulation Display | `cli/screen_accum_display.py` | Rich-formatted accumulation screen output |
+| Analyze Accumulation Audit | `cli/analyze_accum_commands.py` | Historical accumulation audit CLI |
+| Analyze Accumulation Display | `cli/analyze_accum_display.py` | Rich-formatted accumulation audit output |
 | Broker Display | `cli/broker_display.py` | Rich-formatted broker tables |
 | Swing Analyze Display | `cli/analyze_swing_display.py` | Rich-formatted swing analysis output |
 | Swing Broker Display | `cli/analyze_swing_broker_display.py` | Rich-formatted broker attribution |

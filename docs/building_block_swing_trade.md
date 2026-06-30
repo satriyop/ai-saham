@@ -393,11 +393,11 @@ Classification:
 | File | Lines | Role |
 |------|-------|------|
 | `adapters/cli/analyze_swing_commands.py` + `adapters/cli/trade_swing_commands.py` | ~2000 combined | Analyze (screening + signals) and Trade (backtest + sizing + journal) sub-groups |
-| `application/use_case/swing_backtest.py` | 664 | Walk-forward portfolio simulation |
-| `application/use_case/accumulation_screen.py` | 434 | 7-dimension accumulation scoring |
-| `application/use_case/assess_risk.py` | ~150 | Risk profile confirmation |
-| `application/use_case/market_regime.py` | 313 | Breadth + flow regime detection |
-| `application/use_case/fetch_sentiment.py` | ~120 | News sentiment fetching |
+| `application/use_case/swing_backtest_use_case.py` | 664 | Walk-forward portfolio simulation |
+| `application/use_case/accumulation_screen_use_case.py` | 434 | 7-dimension accumulation scoring |
+| `application/use_case/assess_risk_use_case.py` | ~150 | Risk assessment |
+| `application/use_case/build_market_context_use_case.py` | 313 | Breadth + flow market context |
+| `application/use_case/fetch_sentiment_use_case.py` | ~120 | News sentiment fetching |
 | `application/services/position_sizer.py` | 188 | ATR-based lot sizing (pure math) |
 | `application/services/strategy_loader.py` | ~200 | Strategy YAML resolution |
 | `application/services/universe_loader.py` | ~100 | Ticker list resolution |
