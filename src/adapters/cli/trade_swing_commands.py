@@ -144,6 +144,13 @@ def swing_backtest(
         int,
         typer.Option("--show-trades", help="Number of recent trades to print", min=0),
     ] = 20,
+    with_attribution: Annotated[
+        bool,
+        typer.Option(
+            "--with-attribution",
+            help="Show deterministic grouped attribution summary for tuning",
+        ),
+    ] = False,
     output_format: Annotated[
         str,
         typer.Option("--format", help="Output format: table or json"),
@@ -273,7 +280,11 @@ def swing_backtest(
         }, indent=2, default=str))
         return
 
-    display_swing_backtest(response, show_trades=show_trades)
+    display_swing_backtest(
+        response,
+        show_trades=show_trades,
+        show_attribution=with_attribution,
+    )
 
 
 # ─── size command ─────────────────────────────────────────────────────────────

@@ -19,7 +19,11 @@ def _fmt_pct(value: float | None, signed: bool = False) -> str:
     return f"{value:+.2f}%" if signed else f"{value:.1f}%"
 
 
-def display_swing_backtest(response: SwingBacktestResponse, show_trades: int) -> None:
+def display_swing_backtest(
+    response: SwingBacktestResponse,
+    show_trades: int,
+    show_attribution: bool = False,
+) -> None:
     # Summary panel
     summary_table = compact_table(show_header=False)
     summary_table.add_column("Metric", style="bold cyan")
@@ -131,6 +135,9 @@ def display_swing_backtest(response: SwingBacktestResponse, show_trades: int) ->
             )
         )
 
+    if show_attribution:
+        _display_attribution_summary(response)
+
     # Warnings & Footnotes (Panel 4)
     warnings_list = []
     if response.warnings:
@@ -150,3 +157,64 @@ def display_swing_backtest(response: SwingBacktestResponse, show_trades: int) ->
         )
     )
     console().print("")
+
+
+def _display_attribution_summary(response: SwingBacktestResponse) -> None:
+    stats = response.attribution_summary.group_stats
+    if not stats:
+        return
+
+    preferred_dimensions = (
+        "trade_setup_action",
+        "risk_status",
+        "risk_gate",
+        "signal_strength",
+        "setup_gate",
+        "regime",
+        "signal_factor_bucket",
+    )
+    rows = []
+    for dimension in preferred_dimensions:
+        dimension_rows = [stat for stat in stats if stat.dimension == dimension]
+        rows.extend(sorted(
+            dimension_rows,
+            key=lambda stat: (stat.trade_count, stat.avg_return_pct or 0.0),
+            reverse=True,
+        )[:5])
+
+    if not rows:
+        return
+
+    table = compact_table()
+    table.add_column("Dimension", style="bold cyan")
+    table.add_column("Bucket")
+    table.add_column("Trades", justify="right")
+    table.add_column("Win", justify="right")
+    table.add_column("Avg", justify="right")
+    table.add_column("PF", justify="right")
+
+    for stat in rows:
+        avg = stat.avg_return_pct or 0.0
+        style = "green" if avg > 0 else "red" if avg < 0 else "yellow"
+        profit_factor = (
+            "INF" if stat.profit_factor == float("inf")
+            else "N/A" if stat.profit_factor is None
+            else f"{stat.profit_factor:.2f}"
+        )
+        table.add_row(
+            stat.dimension,
+            stat.bucket,
+            str(stat.trade_count),
+            _fmt_pct(stat.win_rate_pct),
+            f"[{style}]{_fmt_pct(stat.avg_return_pct, True)}[/]",
+            profit_factor,
+        )
+
+    console().print("")
+    console().print(
+        panel(
+            table,
+            title="TUNING ATTRIBUTION SUMMARY",
+            subtitle=response.attribution_summary.intent,
+        )
+    )

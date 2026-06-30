@@ -852,6 +852,7 @@ saham trade backtest-swing --universe idx80 --setup pullback-continuation
 saham trade backtest-swing --universe lq45 --capital 50000000 --max-positions 3
 saham trade backtest-swing --universe idx80 --with-regime --allow-regimes RISK_ON,NEUTRAL
 saham trade backtest-swing --universe idx80 --cost-bps 0  # gross/no-cost comparison
+saham trade backtest-swing --universe idx80 --with-attribution
 ```
 
 Default backtests include `--cost-bps 20` one-way transaction cost. Override explicitly
@@ -874,6 +875,7 @@ when testing a different broker fee assumption.
 | `--allow-regimes` | | | Comma-separated entry regimes allowed |
 | `--benchmark` | | ^JKSE | Benchmark ticker for regime context |
 | `--show-trades` | | 20 | Number of recent trades to print |
+| `--with-attribution` | | false | Show deterministic grouped attribution summary for manual tuning |
 | `--format` | | table | Output format: table or json |
 | `--db` | | | SQLite database path |
 
