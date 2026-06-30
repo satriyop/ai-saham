@@ -127,7 +127,7 @@ class BandarDetectorSnapshot:
 ---
 
 ### Bug 4: `accdist` Labels Are a 5-Level Ordinal, Not a 3-State Enum
-> **Status: ✅ Done** — `beb1db5` (`_INTENSITY_SCORE` keys corrected to "Small Dist"/"Big Dist"; backward-compat aliases retained; score range updated to -6..+6)
+> **Status: ✅ Done** — `_INTENSITY_SCORE` uses canonical Stockbit labels `"Small Dist"` / `"Big Dist"`; old `"Small Dis"` / `"Big Dis"` compatibility labels have been removed; score range is -6..+6.
 
 **File:** `src/infrastructure/browser/stockbit_bandar.py` + any caller that checks this field
 

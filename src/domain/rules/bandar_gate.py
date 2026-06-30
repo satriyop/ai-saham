@@ -20,7 +20,6 @@ from src.domain.rules.risk_gate import GateContext, GateResult, RiskGate
 # Labels from BandarDetectorSnapshot that indicate distribution
 _DEFAULT_DISTRIBUTION_LABELS = frozenset({
     "Small Dist", "Big Dist",
-    "Small Dis", "Big Dis",   # backward-compat aliases
 })
 
 

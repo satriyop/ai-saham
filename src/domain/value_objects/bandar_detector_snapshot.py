@@ -45,18 +45,12 @@ class BandarDetectorSnapshot:
     total_volume: int | None = None    # volume — total traded volume (lots)
 
     # Confirmed 5-level ordinal from API probe 2026-06-20.
-    # Backward-compat aliases ("Dis", "Normal" variants) retained for cached rows.
     _INTENSITY_SCORE: ClassVar[dict[str, int]] = {
         "Big Acc":    2,
         "Small Acc":  1,
         "Neutral":    0,
         "Small Dist": -1,
         "Big Dist":   -2,
-        # backward-compat aliases
-        "Small Dis":  -1,
-        "Big Dis":    -2,
-        "Normal Acc": 1,
-        "Normal Dis": -1,
     }
 
     @property

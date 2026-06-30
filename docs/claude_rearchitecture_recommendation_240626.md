@@ -277,7 +277,7 @@ _RSI_LOW_RISK = 40
 _EMA_SMA_MIN_DIVERGENCE_PCT = Decimal("0.1")
 ```
 
-Gate trigger thresholds (`Piotroski ≤ 3`, `MarketCap < 1T`, `20d median tx < 5B IDR`, `free_float_pct < 15%`) are hardcoded in gate classes. The `BandarGate` threshold (`bandar_is_distributing`) is a hardcoded boolean derived from `five_day_accdist < 0`.
+Gate trigger thresholds (`Piotroski ≤ 3`, `MarketCap < 1T`, `20d median tx < 5B IDR`, `free_float_pct < 15%`) are hardcoded in gate classes. The original review described `BandarGate` as a boolean `bandar_is_distributing` check; that field has since been removed from `GateContext`. Current code gates on canonical 5-day `five_day_accdist` distribution labels (`Small Dist`, `Big Dist`).
 
 **To support the learning loop and backtesting feedback loop, thresholds must be configurable at runtime.** A calibrated IDX profile might need RSI HIGH_RISK at 72 (not 70) after discovering that IDX stocks in accumulation can sustain RSI above 70 for weeks due to thin float + institutional support.
 
@@ -356,11 +356,11 @@ This section covers Indonesia-specific market structure rules that professional-
 
 ### 4.5 BandarGate Score Granularity
 
-**Current gap:** `BandarGate` uses `bandar_is_distributing: bool` which is `True` when `five_day_accdist < 0`. The Stockbit bandar score ranges from -9 (heavy distribution) to +9 (heavy accumulation). A score of -1 (slight distribution) and -9 (heavy distribution) both trigger the gate identically.
+**Current gap:** `BandarGate` uses canonical 5-day `five_day_accdist` distribution labels. The stale `bandar_is_distributing: bool` field described in the original review has been removed from `GateContext`. Score-granular gating is still a future improvement if `bandar_five_day_score` is introduced.
 
 **IDX-specific context:** In Indonesia, "bandar" (large operators, market makers, or block traders) behavior is more concentrated than in developed markets due to thin float and low institutional diversity. A -9 bandar score is a genuine "exit trap" signal, while -1 might be normal day-to-day noise.
 
-**Recommended revision:** Change `GateContext.bandar_is_distributing: bool` to `GateContext.bandar_five_day_score: int | None` (-9 to +9). `BandarGate` configures a threshold (`bandar_distribution_threshold: int = -2`, configurable in profile YAML). Only scores ≤ threshold trigger the downgrade. -1 becomes noise; -5 is a genuine gate trigger.
+**Recommended revision:** Add `GateContext.bandar_five_day_score: int | None` (-9 to +9) if score-granular gating becomes available. `BandarGate` would configure a threshold (`bandar_distribution_threshold: int = -2`, configurable in risk policy YAML). Only scores ≤ threshold trigger the downgrade. -1 becomes noise; -5 is a genuine gate trigger.
 
 ### 4.6 Tick Size Compliance in PositionSizer
 

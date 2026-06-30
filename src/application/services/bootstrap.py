@@ -194,7 +194,7 @@ def _resolve_risk_gates(cfg: dict) -> tuple[list, list]:
         execution.append(BandarGate(
             BandarGateConfig(
                 distribution_labels=frozenset(bandar.get("distribution_labels", [
-                    "Small Dist", "Big Dist", "Small Dis", "Big Dis",
+                    "Small Dist", "Big Dist",
                 ])),
                 missing_data_action=bandar.get("missing_data_action", "skip"),
                 missing_data_confidence=bandar.get("missing_data_confidence", 0),

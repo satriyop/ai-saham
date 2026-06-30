@@ -58,8 +58,6 @@ risk_engine:
       distribution_labels:
         - "Small Dist"
         - "Big Dist"
-        - "Small Dis"
-        - "Big Dis"
       missing_data_action: skip
       missing_data_confidence: 0
       triggered_confidence: 80
