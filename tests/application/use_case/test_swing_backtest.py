@@ -241,6 +241,12 @@ def test_swing_backtest_opens_signal_and_exits_at_target():
     assert trade_dict["market_context"]["regime"] == trade.regime
     assert "score" not in trade_dict
     assert response.regime_stats
+    summary = response.attribution_summary.to_dict()
+    assert summary["intent"] == "learning_summary_only_not_entry_logic"
+    assert any(
+        stat["dimension"] == "signal_strength"
+        for stat in summary["group_stats"]
+    )
 
 
 def test_swing_backtest_default_applies_transaction_costs():

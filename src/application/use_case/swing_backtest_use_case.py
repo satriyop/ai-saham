@@ -19,6 +19,10 @@ from src.application.services.stats import (
     profit_factor,
     win_rate,
 )
+from src.application.services.swing_backtest_attribution import (
+    SwingBacktestAttributionSummary,
+    summarize_swing_backtest_attribution,
+)
 from src.application.use_case.accumulation_screen_use_case import (
     AccumulationCandidate,
     AccumulationDerivedFeaturePolicy,
@@ -225,6 +229,9 @@ class SwingBacktestResponse:
     equity_curve: list[SwingBacktestDailyEquity] = field(default_factory=list)
     regime_stats: list[SwingBacktestRegimeStat] = field(default_factory=list)
     regime_by_date: dict[date, MarketContext] = field(default_factory=dict)
+    attribution_summary: SwingBacktestAttributionSummary = field(
+        default_factory=SwingBacktestAttributionSummary
+    )
     warnings: list[str] = field(default_factory=list)
 
 
@@ -409,6 +416,7 @@ class SwingBacktestUseCase:
             equity_curve=equity_curve,
             regime_stats=self._regime_stats(trades),
             regime_by_date=regime_by_date,
+            attribution_summary=summarize_swing_backtest_attribution(trades),
             warnings=[
                 "Backtest uses the supplied current universe; "
                 "historical index membership is not reconstructed.",

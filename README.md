@@ -879,9 +879,9 @@ when testing a different broker fee assumption.
 
 Swing setup gates are deterministic and configurable in `config/swing_setups.yaml`:
 
-Backtest JSON trade rows include tuning attribution fields such as setup gates,
-SignalEngine score/breakdown, optional RiskEngine status, and optional
-MarketContextEngine factor context.
+Backtest JSON includes a deterministic attribution summary for tuning. Its
+intent is learning/reporting only: grouped setup, signal, risk, and regime
+statistics must not be used as live entry logic.
 
 | Setup | Question Answered |
 |-------|-------------------|
