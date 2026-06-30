@@ -879,6 +879,10 @@ when testing a different broker fee assumption.
 
 Swing setup gates are deterministic and configurable in `config/swing_setups.yaml`:
 
+Backtest JSON trade rows include tuning attribution fields such as setup gates,
+SignalEngine score/breakdown, optional RiskEngine status, and optional
+MarketContextEngine factor context.
+
 | Setup | Question Answered |
 |-------|-------------------|
 | `foreign-bounce` | Is foreign accumulation happening while price is still below foreign VWAP in a range? |
