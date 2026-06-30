@@ -888,6 +888,8 @@ reported under `group_stats`; screened-candidate forward-return attribution is
 reported under `candidate_group_stats` to reduce survivorship bias from setup
 and risk candidates that were not opened as portfolio trades. Attribution score
 buckets are reporting-only and configurable in `config/swing_backtest.yaml`.
+The `tuning_targets` block is the deterministic allowlist that maps each
+attribution dimension to the YAML files and fields it may influence.
 
 Attribution dimensions map to these primary tuning files:
 

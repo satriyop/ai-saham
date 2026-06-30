@@ -2,6 +2,7 @@ from datetime import date
 from decimal import Decimal
 
 from src.application.services.swing_backtest_attribution import (
+    DEFAULT_TUNING_TARGETS,
     AttributionBucketPolicy,
     summarize_swing_backtest_attribution,
 )
@@ -123,6 +124,9 @@ def test_empty_swing_backtest_attribution_summary_is_deterministic():
         },
         "group_stats": [],
         "candidate_group_stats": [],
+        "tuning_targets": [
+            target.to_dict() for target in DEFAULT_TUNING_TARGETS
+        ],
     }
 
 
@@ -160,3 +164,26 @@ def test_summarize_swing_backtest_attribution_groups_candidate_observations():
     assert by_key[("candidate_setup_match", "MATCH")].win_rate_pct == 0.0
     assert by_key[("setup_gate", "vwap_discount:FAIL")].observation_count == 2
     assert by_key[("candidate_signal_score_bucket", "LOW_BELOW_45")].observation_count == 1
+
+
+def test_swing_backtest_attribution_tuning_targets_cover_current_dimensions():
+    summary = summarize_swing_backtest_attribution(
+        (_trade(ticker="BBCA", net_return_pct=5.0, pnl="500"),),
+        (_Observation(forward_return_pct=4.0),),
+    )
+
+    emitted_dimensions = {
+        stat.dimension
+        for stat in (*summary.group_stats, *summary.candidate_group_stats)
+    }
+    target_by_dimension = {
+        target.dimension: target
+        for target in summary.tuning_targets
+    }
+
+    assert emitted_dimensions <= set(target_by_dimension)
+    assert target_by_dimension["candidate_risk_status"].source_scope == "screened_candidates"
+    assert target_by_dimension["risk_gate"].warning is not None
+    assert "config/swing_setups.yaml:setups.*.gates" in (
+        target_by_dimension["setup_gate"].yaml_paths
+    )

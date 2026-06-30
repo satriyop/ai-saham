@@ -63,6 +63,32 @@ class CandidateAttributionStat:
 
 
 @dataclass(frozen=True)
+class TuningTarget:
+    """Allowlisted config target for one attribution dimension."""
+
+    dimension: str
+    source_scope: str
+    source_field: str
+    meaning: str
+    config_family: str
+    yaml_paths: tuple[str, ...]
+    allowed_use: str
+    warning: str | None = None
+
+    def to_dict(self) -> dict:
+        return {
+            "dimension": self.dimension,
+            "source_scope": self.source_scope,
+            "source_field": self.source_field,
+            "meaning": self.meaning,
+            "config_family": self.config_family,
+            "yaml_paths": list(self.yaml_paths),
+            "allowed_use": self.allowed_use,
+            "warning": self.warning,
+        }
+
+
+@dataclass(frozen=True)
 class AttributionBucketPolicy:
     """Score bucket boundaries for attribution grouping only."""
 
@@ -88,6 +114,9 @@ class SwingBacktestAttributionSummary:
     bucket_policy: AttributionBucketPolicy = field(default_factory=AttributionBucketPolicy)
     group_stats: tuple[AttributionGroupStat, ...] = field(default_factory=tuple)
     candidate_group_stats: tuple[CandidateAttributionStat, ...] = field(default_factory=tuple)
+    tuning_targets: tuple[TuningTarget, ...] = field(
+        default_factory=lambda: DEFAULT_TUNING_TARGETS
+    )
 
     def to_dict(self) -> dict:
         return {
@@ -97,7 +126,189 @@ class SwingBacktestAttributionSummary:
             "candidate_group_stats": [
                 stat.to_dict() for stat in self.candidate_group_stats
             ],
+            "tuning_targets": [target.to_dict() for target in self.tuning_targets],
         }
+
+
+DEFAULT_TUNING_TARGETS: tuple[TuningTarget, ...] = (
+    TuningTarget(
+        dimension="trade_setup_action",
+        source_scope="completed_trades",
+        source_field="SwingBacktestTrade.trade_setup_action",
+        meaning="Final TradeSetup action observed on executed portfolio trades.",
+        config_family="signal",
+        yaml_paths=(
+            "config/signal_engine.yaml:signal_engine.classification",
+            "config/signal_engine.yaml:signal_engine.factors",
+            "config/risk_engine.yaml:risk_engine.gates",
+        ),
+        allowed_use="Tune final signal/risk thresholds only from executed-trade outcomes.",
+    ),
+    TuningTarget(
+        dimension="signal_strength",
+        source_scope="completed_trades",
+        source_field="SwingBacktestTrade.signal_strength",
+        meaning="SignalAssessment strength bucket on executed portfolio trades.",
+        config_family="signal",
+        yaml_paths=(
+            "config/signal_engine.yaml:signal_engine.classification.strong_min_score",
+            "config/signal_engine.yaml:signal_engine.classification.moderate_min_score",
+        ),
+        allowed_use="Tune signal classification thresholds from completed trade outcomes.",
+    ),
+    TuningTarget(
+        dimension="signal_score_bucket",
+        source_scope="completed_trades",
+        source_field="SwingBacktestTrade.signal_score",
+        meaning="Bucketed SignalEngine total score on executed portfolio trades.",
+        config_family="signal",
+        yaml_paths=(
+            "config/signal_engine.yaml:signal_engine.classification",
+            "config/swing_backtest.yaml:swing_backtest.attribution.score_buckets",
+        ),
+        allowed_use="Tune score thresholds; attribution buckets are reporting-only.",
+    ),
+    TuningTarget(
+        dimension="signal_factor_bucket",
+        source_scope="completed_trades",
+        source_field="SwingBacktestTrade.signal_breakdown",
+        meaning="Bucketed SignalEngine factor scores on executed portfolio trades.",
+        config_family="signal",
+        yaml_paths=(
+            "config/signal_engine.yaml:signal_engine.factors",
+            "config/signal_engine.yaml:signal_engine.scoring",
+        ),
+        allowed_use="Tune signal factor weights and factor-internal scoring thresholds.",
+    ),
+    TuningTarget(
+        dimension="risk_status",
+        source_scope="completed_trades",
+        source_field="SwingBacktestTrade.risk_status",
+        meaning="RiskEngine OPEN/BLOCKED status recorded on executed portfolio trades.",
+        config_family="risk",
+        yaml_paths=("config/risk_engine.yaml:risk_engine.gates",),
+        allowed_use="Tune risk gate policy only with candidate stats as a bias check.",
+        warning="Completed trades can underrepresent blocked/rejected candidates.",
+    ),
+    TuningTarget(
+        dimension="risk_gate",
+        source_scope="completed_trades",
+        source_field="SwingBacktestTrade.risk_gate",
+        meaning="Risk gate label recorded on executed portfolio trades.",
+        config_family="risk",
+        yaml_paths=("config/risk_engine.yaml:risk_engine.gates",),
+        allowed_use="Tune gate thresholds only with candidate stats as a bias check.",
+        warning="Completed trades can underrepresent blocked/rejected candidates.",
+    ),
+    TuningTarget(
+        dimension="setup_gate",
+        source_scope="completed_trades_and_screened_candidates",
+        source_field="SetupGate.label + SetupGate.passed",
+        meaning="Pass/fail state for named swing setup gates.",
+        config_family="setup",
+        yaml_paths=("config/swing_setups.yaml:setups.*.gates",),
+        allowed_use="Tune setup gates using candidate_group_stats first; trades are confirmation.",
+    ),
+    TuningTarget(
+        dimension="regime",
+        source_scope="completed_trades",
+        source_field="SwingBacktestTrade.regime",
+        meaning="MarketContext regime on executed portfolio trades.",
+        config_family="market_context",
+        yaml_paths=(
+            "config/market_context_engine.yaml:market_context_engine",
+            "config/swing_targets.yaml:setup_targets",
+        ),
+        allowed_use="Tune regime context and regime-adaptive exits from executed trades.",
+    ),
+    TuningTarget(
+        dimension="candidate_setup_match",
+        source_scope="screened_candidates",
+        source_field="SwingBacktestCandidateObservation.setup_match",
+        meaning="Setup fit result for every screened candidate with forward data.",
+        config_family="setup",
+        yaml_paths=(
+            "config/swing_setups.yaml:setups.*.gates",
+            "config/swing_setups.yaml:setups.*.partial_max_failed_gates",
+        ),
+        allowed_use="Primary evidence for setup gate tuning; not an executed trade result.",
+    ),
+    TuningTarget(
+        dimension="candidate_signal_strength",
+        source_scope="screened_candidates",
+        source_field="SwingBacktestCandidateObservation.signal_strength",
+        meaning="Signal strength on every screened candidate with forward data.",
+        config_family="signal",
+        yaml_paths=("config/signal_engine.yaml:signal_engine.classification",),
+        allowed_use="Bias check for signal thresholds before validating on completed trades.",
+    ),
+    TuningTarget(
+        dimension="candidate_signal_score_bucket",
+        source_scope="screened_candidates",
+        source_field="SwingBacktestCandidateObservation.signal_score",
+        meaning="Bucketed SignalEngine score on every screened candidate with forward data.",
+        config_family="signal",
+        yaml_paths=(
+            "config/signal_engine.yaml:signal_engine.classification",
+            "config/swing_backtest.yaml:swing_backtest.attribution.score_buckets",
+        ),
+        allowed_use="Bias check for signal score thresholds; buckets are reporting-only.",
+    ),
+    TuningTarget(
+        dimension="candidate_signal_factor_bucket",
+        source_scope="screened_candidates",
+        source_field="SwingBacktestCandidateObservation.signal_breakdown",
+        meaning="Bucketed factor scores on every screened candidate with forward data.",
+        config_family="signal",
+        yaml_paths=(
+            "config/signal_engine.yaml:signal_engine.factors",
+            "config/signal_engine.yaml:signal_engine.scoring",
+        ),
+        allowed_use="Bias check for signal factor tuning before completed-trade validation.",
+    ),
+    TuningTarget(
+        dimension="candidate_risk_status",
+        source_scope="screened_candidates",
+        source_field="SwingBacktestCandidateObservation.risk_status",
+        meaning="RiskEngine OPEN/BLOCKED status on every screened candidate with forward data.",
+        config_family="risk",
+        yaml_paths=("config/risk_engine.yaml:risk_engine.gates",),
+        allowed_use="Primary evidence for risk gate tuning; not an executed trade result.",
+    ),
+    TuningTarget(
+        dimension="candidate_risk_gate",
+        source_scope="screened_candidates",
+        source_field="SwingBacktestCandidateObservation.risk_gate",
+        meaning="Risk gate label on every screened candidate with forward data.",
+        config_family="risk",
+        yaml_paths=("config/risk_engine.yaml:risk_engine.gates",),
+        allowed_use="Primary evidence for risk gate threshold tuning.",
+    ),
+    TuningTarget(
+        dimension="candidate_trade_setup_action",
+        source_scope="screened_candidates",
+        source_field="SwingBacktestCandidateObservation.trade_setup_action",
+        meaning="TradeSetup action on every screened candidate with forward data.",
+        config_family="signal_and_risk",
+        yaml_paths=(
+            "config/signal_engine.yaml:signal_engine",
+            "config/risk_engine.yaml:risk_engine",
+        ),
+        allowed_use="Bias check for final action composition; not portfolio execution.",
+    ),
+    TuningTarget(
+        dimension="candidate_regime",
+        source_scope="screened_candidates",
+        source_field="SwingBacktestCandidateObservation.regime",
+        meaning="MarketContext regime on every screened candidate with forward data.",
+        config_family="market_context",
+        yaml_paths=(
+            "config/market_context_engine.yaml:market_context_engine",
+            "config/swing_targets.yaml:setup_targets",
+        ),
+        allowed_use="Bias check for market context tuning before completed-trade validation.",
+    ),
+)
 
 
 def summarize_swing_backtest_attribution(
