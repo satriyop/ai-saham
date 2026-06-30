@@ -197,6 +197,22 @@ def _display_attribution_summary(response: SwingBacktestResponse) -> None:
     if not rows:
         return
 
+    quality = response.attribution_summary.sample_quality
+    quality_table = compact_table(show_header=False)
+    quality_table.add_column("Metric", style="bold cyan")
+    quality_table.add_column("Value")
+    quality_table.add_row("Status", _quality_status_text(quality.status))
+    quality_table.add_row(
+        "Completed Trades",
+        f"{quality.completed_trade_count}/{quality.min_sample_size}",
+    )
+    quality_table.add_row(
+        "Candidate Observations",
+        f"{quality.candidate_observation_count}/{quality.min_sample_size}",
+    )
+    if quality.notes:
+        quality_table.add_row("Notes", " | ".join(quality.notes))
+
     table = compact_table()
     table.add_column("Dimension", style="bold cyan")
     table.add_column("Bucket")
@@ -226,11 +242,28 @@ def _display_attribution_summary(response: SwingBacktestResponse) -> None:
     console().print("")
     console().print(
         panel(
+            quality_table,
+            title="TUNING READINESS",
+        )
+    )
+    console().print("")
+    console().print(
+        panel(
             table,
             title="TUNING ATTRIBUTION SUMMARY",
             subtitle=response.attribution_summary.intent,
         )
     )
+
+
+def _quality_status_text(status: str) -> str:
+    color = {
+        "INSUFFICIENT_SAMPLE": "red",
+        "CANDIDATE_ONLY": "yellow",
+        "TRADE_READY": "green",
+        "MIXED_READY": "green",
+    }.get(status, "white")
+    return f"[{color}]{status}[/]"
 
 
 def _stat_count(stat) -> int:
