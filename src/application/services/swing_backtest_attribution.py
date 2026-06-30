@@ -43,6 +43,26 @@ class AttributionGroupStat:
 
 
 @dataclass(frozen=True)
+class CandidateAttributionStat:
+    """Forward-return stats for screened candidates, including rejected setups."""
+
+    dimension: str
+    bucket: str
+    observation_count: int
+    win_rate_pct: float | None
+    avg_forward_return_pct: float | None
+
+    def to_dict(self) -> dict:
+        return {
+            "dimension": self.dimension,
+            "bucket": self.bucket,
+            "observation_count": self.observation_count,
+            "win_rate_pct": self.win_rate_pct,
+            "avg_forward_return_pct": self.avg_forward_return_pct,
+        }
+
+
+@dataclass(frozen=True)
 class AttributionBucketPolicy:
     """Score bucket boundaries for attribution grouping only."""
 
@@ -67,27 +87,38 @@ class SwingBacktestAttributionSummary:
     intent: str = "learning_summary_only_not_entry_logic"
     bucket_policy: AttributionBucketPolicy = field(default_factory=AttributionBucketPolicy)
     group_stats: tuple[AttributionGroupStat, ...] = field(default_factory=tuple)
+    candidate_group_stats: tuple[CandidateAttributionStat, ...] = field(default_factory=tuple)
 
     def to_dict(self) -> dict:
         return {
             "intent": self.intent,
             "bucket_policy": self.bucket_policy.to_dict(),
             "group_stats": [stat.to_dict() for stat in self.group_stats],
+            "candidate_group_stats": [
+                stat.to_dict() for stat in self.candidate_group_stats
+            ],
         }
 
 
 def summarize_swing_backtest_attribution(
     trades: Iterable[Any],
+    candidate_observations: Iterable[Any] = (),
     bucket_policy: AttributionBucketPolicy | None = None,
 ) -> SwingBacktestAttributionSummary:
     """Build deterministic grouped attribution from completed backtest trades."""
     rows = list(trades)
     groups: dict[tuple[str, str], list[Any]] = {}
+    observation_rows = list(candidate_observations)
+    candidate_groups: dict[tuple[str, str], list[Any]] = {}
     policy = bucket_policy or AttributionBucketPolicy()
 
     for trade in rows:
         for dimension, bucket in _trade_buckets(trade, policy):
             groups.setdefault((dimension, bucket), []).append(trade)
+
+    for observation in observation_rows:
+        for dimension, bucket in _candidate_buckets(observation, policy):
+            candidate_groups.setdefault((dimension, bucket), []).append(observation)
 
     stats = tuple(
         sorted(
@@ -98,9 +129,19 @@ def summarize_swing_backtest_attribution(
             key=lambda stat: (stat.dimension, -stat.trade_count, stat.bucket),
         )
     )
+    candidate_stats = tuple(
+        sorted(
+            (
+                _build_candidate_stat(dimension, bucket, bucket_observations)
+                for (dimension, bucket), bucket_observations in candidate_groups.items()
+            ),
+            key=lambda stat: (stat.dimension, -stat.observation_count, stat.bucket),
+        )
+    )
     return SwingBacktestAttributionSummary(
         bucket_policy=policy,
         group_stats=stats,
+        candidate_group_stats=candidate_stats,
     )
 
 
@@ -124,6 +165,32 @@ def _trade_buckets(
         buckets,
         getattr(trade, "signal_breakdown", ()),
         bucket_policy,
+    )
+    return tuple(buckets)
+
+
+def _candidate_buckets(
+    observation: Any,
+    bucket_policy: AttributionBucketPolicy,
+) -> tuple[tuple[str, str], ...]:
+    buckets: list[tuple[str, str]] = []
+    _add(buckets, "candidate_setup_match", getattr(observation, "setup_match", None))
+    _add(buckets, "candidate_signal_strength", getattr(observation, "signal_strength", None))
+    _add(
+        buckets,
+        "candidate_signal_score_bucket",
+        _score_bucket(getattr(observation, "signal_score", None), bucket_policy),
+    )
+    _add(buckets, "candidate_risk_status", getattr(observation, "risk_status", None))
+    _add(buckets, "candidate_risk_gate", getattr(observation, "risk_gate", None))
+    _add(buckets, "candidate_trade_setup_action", getattr(observation, "trade_setup_action", None))
+    _add(buckets, "candidate_regime", getattr(observation, "regime", None))
+    _add_setup_gate_buckets(buckets, getattr(observation, "setup_gates", ()))
+    _add_signal_factor_buckets(
+        buckets,
+        getattr(observation, "signal_breakdown", ()),
+        bucket_policy,
+        dimension="candidate_signal_factor_bucket",
     )
     return tuple(buckets)
 
@@ -152,10 +219,11 @@ def _add_signal_factor_buckets(
     buckets: list[tuple[str, str]],
     signal_breakdown: Iterable[tuple[str, float]],
     bucket_policy: AttributionBucketPolicy,
+    dimension: str = "signal_factor_bucket",
 ) -> None:
     for name, value in signal_breakdown:
         buckets.append((
-            "signal_factor_bucket",
+            dimension,
             f"{name}:{_score_bucket(value, bucket_policy)}",
         ))
 
@@ -193,4 +261,24 @@ def _build_stat(
         avg_return_pct=average((trade.net_return_pct for trade in trades), precision=4),
         total_pnl=sum((trade.pnl for trade in trades), Decimal("0")),
         profit_factor=profit_factor((trade.pnl for trade in trades), precision=4),
+    )
+
+
+def _build_candidate_stat(
+    dimension: str,
+    bucket: str,
+    observations: list[Any],
+) -> CandidateAttributionStat:
+    return CandidateAttributionStat(
+        dimension=dimension,
+        bucket=bucket,
+        observation_count=len(observations),
+        win_rate_pct=win_rate(
+            (observation.forward_return_pct for observation in observations),
+            precision=2,
+        ),
+        avg_forward_return_pct=average(
+            (observation.forward_return_pct for observation in observations),
+            precision=4,
+        ),
     )

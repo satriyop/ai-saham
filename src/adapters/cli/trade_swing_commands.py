@@ -281,6 +281,10 @@ def swing_backtest(
             },
             "attribution_summary": response.attribution_summary.to_dict(),
             "trades": [trade.to_dict() for trade in response.trades],
+            "candidate_observations": [
+                observation.to_dict()
+                for observation in response.candidate_observations
+            ],
             "equity_curve": [point.to_dict() for point in response.equity_curve],
         }, indent=2, default=str))
         return

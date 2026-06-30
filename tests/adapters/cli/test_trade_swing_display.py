@@ -4,6 +4,7 @@ from decimal import Decimal
 from src.adapters.cli.trade_swing_display import display_swing_backtest
 from src.application.services.swing_backtest_attribution import (
     AttributionGroupStat,
+    CandidateAttributionStat,
     SwingBacktestAttributionSummary,
 )
 from src.application.use_case.swing_backtest_use_case import SwingBacktestResponse
@@ -48,7 +49,42 @@ def _response() -> SwingBacktestResponse:
                     total_pnl=Decimal("10000"),
                     profit_factor=1.5,
                 ),
-            )
+            ),
+            candidate_group_stats=(
+                CandidateAttributionStat(
+                    dimension="candidate_setup_match",
+                    bucket="NO_MATCH",
+                    observation_count=1,
+                    win_rate_pct=100.0,
+                    avg_forward_return_pct=4.0,
+                ),
+            ),
+        ),
+    )
+
+
+def _candidate_only_response() -> SwingBacktestResponse:
+    response = _response()
+    return SwingBacktestResponse(
+        setup=response.setup,
+        start_date=response.start_date,
+        end_date=response.end_date,
+        initial_capital=response.initial_capital,
+        cost_bps=response.cost_bps,
+        final_equity=response.final_equity,
+        total_return_pct=response.total_return_pct,
+        max_drawdown_pct=response.max_drawdown_pct,
+        trade_count=0,
+        win_rate_pct=None,
+        avg_trade_return_pct=None,
+        profit_factor=None,
+        exposure_pct=response.exposure_pct,
+        skipped_no_cash=0,
+        skipped_duplicate=0,
+        skipped_no_forward_data=0,
+        skipped_by_regime=0,
+        attribution_summary=SwingBacktestAttributionSummary(
+            candidate_group_stats=response.attribution_summary.candidate_group_stats,
         ),
     )
 
@@ -68,4 +104,18 @@ def test_display_swing_backtest_can_show_attribution_panel(capsys):
     assert "learning_summary_only_not_entry_logic" in output
     assert "signal_strength" in output
     assert "signal_score_bucket" in output
+    assert "candidate_setup_match" in output
     assert "STRONG" in output
+
+
+def test_display_swing_backtest_shows_candidate_only_attribution(capsys):
+    display_swing_backtest(
+        _candidate_only_response(),
+        show_trades=0,
+        show_attribution=True,
+    )
+
+    output = capsys.readouterr().out
+    assert "TUNING ATTRIBUTION SUMMARY" in output
+    assert "candidate_setup_match" in output
+    assert "NO_MATCH" in output

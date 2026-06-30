@@ -9,6 +9,29 @@ from src.application.use_case.swing_backtest_use_case import SwingBacktestTrade
 from src.domain.value_objects.setup_evaluation import SetupGate
 
 
+class _Observation:
+    def __init__(
+        self,
+        *,
+        forward_return_pct: float,
+        setup_match: str = "NO_MATCH",
+        signal_score: int = 40,
+        risk_status: str | None = None,
+    ) -> None:
+        self.forward_return_pct = forward_return_pct
+        self.setup_match = setup_match
+        self.signal_score = signal_score
+        self.signal_strength = "WEAK"
+        self.signal_breakdown = (("foreign_flow_quality", float(signal_score)),)
+        self.setup_gates = (
+            SetupGate("vwap_discount", False, "1", ">= 3"),
+        )
+        self.risk_status = risk_status
+        self.risk_gate = None
+        self.trade_setup_action = "WATCH"
+        self.regime = None
+
+
 def _trade(
     *,
     ticker: str,
@@ -99,13 +122,14 @@ def test_empty_swing_backtest_attribution_summary_is_deterministic():
             "mid_min_score": 45.0,
         },
         "group_stats": [],
+        "candidate_group_stats": [],
     }
 
 
 def test_summarize_swing_backtest_attribution_uses_configured_score_buckets():
     summary = summarize_swing_backtest_attribution(
         (_trade(ticker="BBCA", net_return_pct=5.0, pnl="500", signal_score=65),),
-        AttributionBucketPolicy(high_min_score=80.0, mid_min_score=60.0),
+        bucket_policy=AttributionBucketPolicy(high_min_score=80.0, mid_min_score=60.0),
     )
 
     by_key = {
@@ -116,3 +140,23 @@ def test_summarize_swing_backtest_attribution_uses_configured_score_buckets():
     assert by_key[("signal_score_bucket", "MID_60_79")].trade_count == 1
     assert by_key[("signal_factor_bucket", "bandar_intensity:MID_60_79")].trade_count == 1
     assert by_key[("signal_factor_bucket", "foreign_flow_quality:HIGH_80_PLUS")].trade_count == 1
+
+
+def test_summarize_swing_backtest_attribution_groups_candidate_observations():
+    summary = summarize_swing_backtest_attribution(
+        (),
+        (
+            _Observation(forward_return_pct=4.0, setup_match="NO_MATCH", signal_score=40),
+            _Observation(forward_return_pct=-2.0, setup_match="MATCH", signal_score=75),
+        ),
+    )
+
+    by_key = {
+        (stat.dimension, stat.bucket): stat
+        for stat in summary.candidate_group_stats
+    }
+
+    assert by_key[("candidate_setup_match", "NO_MATCH")].avg_forward_return_pct == 4.0
+    assert by_key[("candidate_setup_match", "MATCH")].win_rate_pct == 0.0
+    assert by_key[("setup_gate", "vwap_discount:FAIL")].observation_count == 2
+    assert by_key[("candidate_signal_score_bucket", "LOW_BELOW_45")].observation_count == 1

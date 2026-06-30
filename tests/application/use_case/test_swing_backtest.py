@@ -7,12 +7,12 @@ The backtest must be deterministic, offline, and portfolio-aware.
 from datetime import date, timedelta
 from decimal import Decimal
 
+from src.application.use_case.assess_risk_use_case import AssessRiskResponse
 from src.application.use_case.swing_backtest_use_case import (
     DEFAULT_SWING_COST_BPS,
     SwingBacktestRequest,
     SwingBacktestUseCase,
 )
-from src.application.use_case.assess_risk_use_case import AssessRiskResponse
 from src.domain.entities.broker_flow import BrokerSummary
 from src.domain.entities.candle import Candle
 from src.domain.ports.broker_data_repository import BrokerDataRepository
@@ -217,6 +217,7 @@ def test_swing_backtest_opens_signal_and_exits_at_target():
     ))
 
     assert response.trade_count == 1
+    assert response.candidate_observations
     assert response.total_return_pct == 1.0
     assert response.final_equity == Decimal("1010000")
     trade = response.trades[0]
@@ -246,6 +247,47 @@ def test_swing_backtest_opens_signal_and_exits_at_target():
     assert any(
         stat["dimension"] == "signal_strength"
         for stat in summary["group_stats"]
+    )
+    assert any(
+        stat["dimension"] == "candidate_setup_match"
+        for stat in summary["candidate_group_stats"]
+    )
+
+
+def test_swing_backtest_records_rejected_candidate_observations():
+    base = date(2026, 1, 1)
+    signal_date = base + timedelta(days=24)
+    exit_date = base + timedelta(days=25)
+    summaries = [
+        _summary("BBCA", base + timedelta(days=i), Decimal("110"))
+        for i in range(18, 25)
+    ]
+    use_case = SwingBacktestUseCase(
+        broker_repository=MockBrokerRepository(summaries),
+        market_repository=MockMarketRepository(_base_candles("BBCA", base)),
+    )
+
+    response = use_case.execute(SwingBacktestRequest(
+        tickers=["BBCA"],
+        start_date=signal_date,
+        end_date=exit_date,
+        setup="smart-money-confirmed",
+        capital=Decimal("1000000"),
+        risk_pct=Decimal("0.01"),
+        max_positions=1,
+        min_net_buy_days=1,
+        cost_bps=Decimal("0"),
+    ))
+
+    assert response.trade_count == 0
+    assert response.candidate_observations
+    observation = response.candidate_observations[0]
+    assert observation.setup_match in {"PARTIAL", "NO_MATCH"}
+    assert observation.forward_return_pct == 5.0
+    summary = response.attribution_summary.to_dict()
+    assert any(
+        stat["dimension"] == "candidate_setup_match"
+        for stat in summary["candidate_group_stats"]
     )
 
 

@@ -160,7 +160,10 @@ def display_swing_backtest(
 
 
 def _display_attribution_summary(response: SwingBacktestResponse) -> None:
-    stats = response.attribution_summary.group_stats
+    stats = (
+        tuple(response.attribution_summary.group_stats)
+        + tuple(response.attribution_summary.candidate_group_stats)
+    )
     if not stats:
         return
 
@@ -173,13 +176,21 @@ def _display_attribution_summary(response: SwingBacktestResponse) -> None:
         "setup_gate",
         "regime",
         "signal_factor_bucket",
+        "candidate_setup_match",
+        "candidate_risk_status",
+        "candidate_trade_setup_action",
+        "candidate_signal_score_bucket",
+        "candidate_signal_factor_bucket",
     )
     rows = []
     for dimension in preferred_dimensions:
         dimension_rows = [stat for stat in stats if stat.dimension == dimension]
         rows.extend(sorted(
             dimension_rows,
-            key=lambda stat: (stat.trade_count, stat.avg_return_pct or 0.0),
+            key=lambda stat: (
+                _stat_count(stat),
+                _stat_avg_return(stat) or 0.0,
+            ),
             reverse=True,
         )[:5])
 
@@ -189,25 +200,26 @@ def _display_attribution_summary(response: SwingBacktestResponse) -> None:
     table = compact_table()
     table.add_column("Dimension", style="bold cyan")
     table.add_column("Bucket")
-    table.add_column("Trades", justify="right")
+    table.add_column("Samples", justify="right")
     table.add_column("Win", justify="right")
     table.add_column("Avg", justify="right")
     table.add_column("PF", justify="right")
 
     for stat in rows:
-        avg = stat.avg_return_pct or 0.0
+        avg = _stat_avg_return(stat) or 0.0
         style = "green" if avg > 0 else "red" if avg < 0 else "yellow"
+        raw_profit_factor = _stat_profit_factor(stat)
         profit_factor = (
-            "INF" if stat.profit_factor == float("inf")
-            else "N/A" if stat.profit_factor is None
-            else f"{stat.profit_factor:.2f}"
+            "INF" if raw_profit_factor == float("inf")
+            else "N/A" if raw_profit_factor is None
+            else f"{raw_profit_factor:.2f}"
         )
         table.add_row(
             stat.dimension,
             stat.bucket,
-            str(stat.trade_count),
+            str(_stat_count(stat)),
             _fmt_pct(stat.win_rate_pct),
-            f"[{style}]{_fmt_pct(stat.avg_return_pct, True)}[/]",
+            f"[{style}]{_fmt_pct(_stat_avg_return(stat), True)}[/]",
             profit_factor,
         )
 
@@ -219,3 +231,19 @@ def _display_attribution_summary(response: SwingBacktestResponse) -> None:
             subtitle=response.attribution_summary.intent,
         )
     )
+
+
+def _stat_count(stat) -> int:
+    return getattr(stat, "trade_count", getattr(stat, "observation_count", 0))
+
+
+def _stat_avg_return(stat) -> float | None:
+    return getattr(
+        stat,
+        "avg_return_pct",
+        getattr(stat, "avg_forward_return_pct", None),
+    )
+
+
+def _stat_profit_factor(stat) -> float | None:
+    return getattr(stat, "profit_factor", None)

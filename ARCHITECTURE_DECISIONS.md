@@ -889,6 +889,11 @@ Note: the top-level fields mirror `TradeSetup.to_dict()` exactly; `signal_breakd
 **Attribution Rules**
 - Attribution requires minimum 30 graded outcomes before generating suggestions (enforce in `SwingSignalTunerUseCase`).
 - Attribution is statistical correlation, not causal proof. AI tuner output must include a confidence note.
+- Swing backtest attribution has two scopes: completed portfolio trades
+  (`group_stats`) and screened-candidate forward-return observations
+  (`candidate_group_stats`). Candidate observations exist to reduce
+  survivorship bias when tuning setup and risk gates; they must not be treated
+  as executed trades or live entry logic.
 - Gate attribution: for each gate, compute `gated_win_rate` (forward return of gated candidates) vs. `passed_win_rate`. If `gated_win_rate > passed_win_rate + 10%`, the gate is being too aggressive and the threshold should consider relaxing. If a gate is routinely not triggered across 30+ outcomes and shows no correlation with outcomes, the Tuner may propose `enabled: false`.
 - Factor attribution: for each factor in `signal_breakdown`, compute correlation of the factor's per-trade score with the forward return. If a factor shows consistently near-neutral contribution (factor score within ±0.1 of the 0.5 neutral baseline across 30+ outcomes), the Tuner may propose `enabled: false` to remove it from scoring. If a previously disabled factor is re-enabled and outcomes improve, the Tuner may propose keeping it enabled and increasing its weight.
 

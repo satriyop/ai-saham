@@ -171,6 +171,56 @@ class SwingBacktestTrade:
 
 
 @dataclass(frozen=True)
+class SwingBacktestCandidateObservation:
+    """Screened candidate forward-return observation for setup/risk tuning."""
+
+    ticker: str
+    signal_date: date
+    entry_price: Decimal
+    observation_exit_date: date
+    observation_exit_price: Decimal
+    forward_return_pct: float
+    setup_match: str | None = None
+    setup_failed_reasons: tuple[str, ...] = ()
+    setup_gates: tuple[SetupGate, ...] = ()
+    trade_setup_action: str | None = None
+    signal_score: int | None = None
+    signal_strength: str | None = None
+    signal_breakdown: tuple[tuple[str, float], ...] = ()
+    risk_status: str | None = None
+    risk_gate: str | None = None
+    regime: str | None = None
+
+    def to_dict(self) -> dict:
+        return {
+            "ticker": self.ticker,
+            "signal_date": self.signal_date.isoformat(),
+            "entry_price": str(self.entry_price),
+            "observation_exit_date": self.observation_exit_date.isoformat(),
+            "observation_exit_price": str(self.observation_exit_price),
+            "forward_return_pct": self.forward_return_pct,
+            "setup_match": self.setup_match,
+            "setup_failed_reasons": list(self.setup_failed_reasons),
+            "setup_gates": [
+                {
+                    "label": gate.label,
+                    "passed": gate.passed,
+                    "actual": gate.actual,
+                    "required": gate.required,
+                }
+                for gate in self.setup_gates
+            ],
+            "trade_setup_action": self.trade_setup_action,
+            "signal_score": self.signal_score,
+            "signal_strength": self.signal_strength,
+            "signal_breakdown": dict(self.signal_breakdown),
+            "risk_status": self.risk_status,
+            "risk_gate": self.risk_gate,
+            "regime": self.regime,
+        }
+
+
+@dataclass(frozen=True)
 class SwingBacktestDailyEquity:
     """Daily portfolio equity point."""
 
@@ -230,6 +280,9 @@ class SwingBacktestResponse:
     skipped_no_forward_data: int
     skipped_by_regime: int
     trades: list[SwingBacktestTrade] = field(default_factory=list)
+    candidate_observations: list[SwingBacktestCandidateObservation] = field(
+        default_factory=list
+    )
     equity_curve: list[SwingBacktestDailyEquity] = field(default_factory=list)
     regime_stats: list[SwingBacktestRegimeStat] = field(default_factory=list)
     regime_by_date: dict[date, MarketContext] = field(default_factory=dict)
@@ -271,6 +324,7 @@ class _OpenPosition:
 class _EntrySignal:
     candidate: AccumulationCandidate
     setup_evaluation: SetupEvaluation
+    candidate_observation: SwingBacktestCandidateObservation | None = None
 
 
 class SwingBacktestUseCase:
@@ -312,6 +366,7 @@ class SwingBacktestUseCase:
         cash = request.capital
         open_positions: list[_OpenPosition] = []
         trades: list[SwingBacktestTrade] = []
+        candidate_observations: list[SwingBacktestCandidateObservation] = []
         equity_curve: list[SwingBacktestDailyEquity] = []
         skipped_no_cash = 0
         skipped_duplicate = 0
@@ -340,16 +395,28 @@ class SwingBacktestUseCase:
 
             available_slots = request.max_positions - len(open_positions)
             if available_slots > 0:
-                candidates = self._signals_for_date(tickers, current_date, request)
+                regime = regime_by_date.get(current_date)
+                candidates = self._signals_for_date(
+                    tickers,
+                    current_date,
+                    request,
+                    regime,
+                )
+                candidate_observations.extend(
+                    signal.candidate_observation
+                    for signal in candidates
+                    if signal.candidate_observation is not None
+                )
                 open_tickers = {p.ticker for p in open_positions}
                 for entry_signal in candidates:
+                    if not entry_signal.setup_evaluation.passed:
+                        continue
                     candidate = entry_signal.candidate
                     if available_slots <= 0:
                         break
                     if candidate.ticker in open_tickers:
                         skipped_duplicate += 1
                         continue
-                    regime = regime_by_date.get(current_date)
                     regime_label = regime.regime.value if regime is not None else None
                     if not self._passes_regime_filter(regime_label, request):
                         skipped_by_regime += 1
@@ -417,11 +484,13 @@ class SwingBacktestUseCase:
             skipped_no_forward_data=skipped_no_forward_data,
             skipped_by_regime=skipped_by_regime,
             trades=trades,
+            candidate_observations=candidate_observations,
             equity_curve=equity_curve,
             regime_stats=self._regime_stats(trades),
             regime_by_date=regime_by_date,
             attribution_summary=summarize_swing_backtest_attribution(
                 trades,
+                candidate_observations,
                 request.attribution_bucket_policy,
             ),
             warnings=[
@@ -467,6 +536,7 @@ class SwingBacktestUseCase:
         tickers: list[str],
         signal_date: date,
         request: SwingBacktestRequest,
+        market_context: MarketContext | None = None,
     ) -> list[_EntrySignal]:
         response = self._screen.execute(AccumulationScreenRequest(
             tickers=tickers,
@@ -484,8 +554,14 @@ class SwingBacktestUseCase:
         candidates = []
         for candidate in response.candidates:
             setup_evaluation = self._evaluate_setup(candidate, request)
-            if setup_evaluation.passed:
-                candidates.append(_EntrySignal(candidate, setup_evaluation))
+            observation = self._build_candidate_observation(
+                candidate,
+                setup_evaluation,
+                signal_date,
+                request,
+                market_context,
+            )
+            candidates.append(_EntrySignal(candidate, setup_evaluation, observation))
         return sorted(
             candidates,
             key=lambda signal: (
@@ -494,6 +570,49 @@ class SwingBacktestUseCase:
                 signal.candidate.vwap_discount_pct or 0.0,
             ),
             reverse=True,
+        )
+
+    def _build_candidate_observation(
+        self,
+        candidate: AccumulationCandidate,
+        setup_evaluation: SetupEvaluation,
+        signal_date: date,
+        request: SwingBacktestRequest,
+        market_context: MarketContext | None,
+    ) -> SwingBacktestCandidateObservation | None:
+        entry = candidate.current_price
+        if entry <= 0:
+            return None
+
+        forward_candle = self._observation_exit_candle(candidate.ticker, signal_date, request)
+        if forward_candle is None:
+            return None
+
+        signal = candidate.signal_assessment.assessment if candidate.signal_assessment else None
+        risk_response, trade_setup = self._assess_trade_setup(
+            candidate=candidate,
+            signal_date=signal_date,
+            market_context=market_context,
+        )
+        risk = risk_response.assessment if risk_response is not None else None
+
+        return SwingBacktestCandidateObservation(
+            ticker=candidate.ticker,
+            signal_date=signal_date,
+            entry_price=entry,
+            observation_exit_date=forward_candle.date,
+            observation_exit_price=forward_candle.close,
+            forward_return_pct=_pct_change(forward_candle.close, entry),
+            setup_match=getattr(setup_evaluation.match, "value", str(setup_evaluation.match)),
+            setup_failed_reasons=tuple(setup_evaluation.failed_reasons),
+            setup_gates=setup_evaluation.gates,
+            trade_setup_action=trade_setup.action.value if trade_setup is not None else None,
+            signal_score=signal.score if signal is not None else None,
+            signal_strength=signal.strength.value if signal is not None else None,
+            signal_breakdown=signal.breakdown if signal is not None else (),
+            risk_status=risk.risk_level_name if risk is not None else None,
+            risk_gate=risk.gate_triggered if risk is not None else None,
+            regime=market_context.regime.value if market_context is not None else None,
         )
 
     def _evaluate_setup(
@@ -790,6 +909,23 @@ class SwingBacktestUseCase:
             end_date=signal_date + timedelta(days=request.forward_data_lookahead_days),
         )
         return any(c.date > signal_date for c in candles)
+
+    def _observation_exit_candle(
+        self,
+        ticker: str,
+        signal_date: date,
+        request: SwingBacktestRequest,
+    ) -> Candle | None:
+        candles = self._market_repo.get_candles(
+            ticker,
+            start_date=signal_date + timedelta(days=1),
+            end_date=signal_date + timedelta(days=request.forward_data_lookahead_days),
+        )
+        forward_candles = [c for c in candles if c.date > signal_date]
+        if not forward_candles:
+            return None
+        index = min(request.max_hold_days, len(forward_candles)) - 1
+        return forward_candles[index]
 
     def _candle_on(self, ticker: str, target_date: date) -> Candle | None:
         candles = self._market_repo.get_candles(
