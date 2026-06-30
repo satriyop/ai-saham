@@ -1,5 +1,6 @@
 from datetime import date
 from decimal import Decimal
+from math import inf
 
 from src.application.services.swing_backtest_attribution import (
     DEFAULT_TUNING_TARGETS,
@@ -250,3 +251,174 @@ def test_swing_backtest_attribution_marks_mixed_ready_sample_quality():
     assert quality.status == "MIXED_READY"
     assert quality.trade_sample_ready is True
     assert quality.candidate_sample_ready is True
+
+
+def test_swing_backtest_attribution_summary_golden_contract():
+    summary = summarize_swing_backtest_attribution(
+        (
+            _trade(
+                ticker="BBCA",
+                net_return_pct=5.0,
+                pnl="500",
+                signal_score=72,
+            ),
+        ),
+        (
+            _Observation(
+                forward_return_pct=-2.0,
+                setup_match="NO_MATCH",
+                signal_score=40,
+            ),
+        ),
+    )
+
+    payload = summary.to_dict()
+
+    assert payload["intent"] == "learning_summary_only_not_entry_logic"
+    assert payload["bucket_policy"] == {
+        "high_min_score": 70.0,
+        "mid_min_score": 45.0,
+    }
+    assert payload["sample_quality"] == {
+        "status": "INSUFFICIENT_SAMPLE",
+        "completed_trade_count": 1,
+        "candidate_observation_count": 1,
+        "min_sample_size": 30,
+        "trade_sample_ready": False,
+        "candidate_sample_ready": False,
+        "notes": [
+            "Samples are below the minimum required for tuning suggestions.",
+            "Completed trades: 1/30 minimum.",
+            "Candidate observations: 1/30 minimum.",
+        ],
+    }
+    assert payload["group_stats"] == [
+        {
+            "dimension": "regime",
+            "bucket": "RISK_ON",
+            "trade_count": 1,
+            "win_rate_pct": 100.0,
+            "avg_return_pct": 5.0,
+            "total_pnl": "500",
+            "profit_factor": inf,
+        },
+        {
+            "dimension": "risk_status",
+            "bucket": "OPEN",
+            "trade_count": 1,
+            "win_rate_pct": 100.0,
+            "avg_return_pct": 5.0,
+            "total_pnl": "500",
+            "profit_factor": inf,
+        },
+        {
+            "dimension": "setup_gate",
+            "bucket": "foreign_flow_score:PASS",
+            "trade_count": 1,
+            "win_rate_pct": 100.0,
+            "avg_return_pct": 5.0,
+            "total_pnl": "500",
+            "profit_factor": inf,
+        },
+        {
+            "dimension": "setup_gate",
+            "bucket": "vwap_discount:PASS",
+            "trade_count": 1,
+            "win_rate_pct": 100.0,
+            "avg_return_pct": 5.0,
+            "total_pnl": "500",
+            "profit_factor": inf,
+        },
+        {
+            "dimension": "signal_factor_bucket",
+            "bucket": "bandar_intensity:HIGH_70_PLUS",
+            "trade_count": 1,
+            "win_rate_pct": 100.0,
+            "avg_return_pct": 5.0,
+            "total_pnl": "500",
+            "profit_factor": inf,
+        },
+        {
+            "dimension": "signal_factor_bucket",
+            "bucket": "foreign_flow_quality:HIGH_70_PLUS",
+            "trade_count": 1,
+            "win_rate_pct": 100.0,
+            "avg_return_pct": 5.0,
+            "total_pnl": "500",
+            "profit_factor": inf,
+        },
+        {
+            "dimension": "signal_score_bucket",
+            "bucket": "HIGH_70_PLUS",
+            "trade_count": 1,
+            "win_rate_pct": 100.0,
+            "avg_return_pct": 5.0,
+            "total_pnl": "500",
+            "profit_factor": inf,
+        },
+        {
+            "dimension": "signal_strength",
+            "bucket": "STRONG",
+            "trade_count": 1,
+            "win_rate_pct": 100.0,
+            "avg_return_pct": 5.0,
+            "total_pnl": "500",
+            "profit_factor": inf,
+        },
+        {
+            "dimension": "trade_setup_action",
+            "bucket": "ENTER",
+            "trade_count": 1,
+            "win_rate_pct": 100.0,
+            "avg_return_pct": 5.0,
+            "total_pnl": "500",
+            "profit_factor": inf,
+        },
+    ]
+    assert payload["candidate_group_stats"] == [
+        {
+            "dimension": "candidate_setup_match",
+            "bucket": "NO_MATCH",
+            "observation_count": 1,
+            "win_rate_pct": 0.0,
+            "avg_forward_return_pct": -2.0,
+        },
+        {
+            "dimension": "candidate_signal_factor_bucket",
+            "bucket": "foreign_flow_quality:LOW_BELOW_45",
+            "observation_count": 1,
+            "win_rate_pct": 0.0,
+            "avg_forward_return_pct": -2.0,
+        },
+        {
+            "dimension": "candidate_signal_score_bucket",
+            "bucket": "LOW_BELOW_45",
+            "observation_count": 1,
+            "win_rate_pct": 0.0,
+            "avg_forward_return_pct": -2.0,
+        },
+        {
+            "dimension": "candidate_signal_strength",
+            "bucket": "WEAK",
+            "observation_count": 1,
+            "win_rate_pct": 0.0,
+            "avg_forward_return_pct": -2.0,
+        },
+        {
+            "dimension": "candidate_trade_setup_action",
+            "bucket": "WATCH",
+            "observation_count": 1,
+            "win_rate_pct": 0.0,
+            "avg_forward_return_pct": -2.0,
+        },
+        {
+            "dimension": "setup_gate",
+            "bucket": "vwap_discount:FAIL",
+            "observation_count": 1,
+            "win_rate_pct": 0.0,
+            "avg_forward_return_pct": -2.0,
+        },
+    ]
+    assert payload["tuning_targets"] == [
+        target.to_dict() for target in DEFAULT_TUNING_TARGETS
+    ]
