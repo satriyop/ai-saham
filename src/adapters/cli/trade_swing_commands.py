@@ -17,7 +17,7 @@ from typing import Annotated, Optional
 import typer
 
 from src.adapters.cli.trade_swing_display import display_swing_backtest
-from src.application.services.bootstrap import create_indicator_registry
+from src.application.services.bootstrap import create_indicator_registry, create_risk_engine
 from src.application.services.position_sizer import compute_position_size
 from src.application.services.swing_setup_catalog import build_swing_setup_catalog_config
 from src.application.services.universe_loader import (
@@ -210,6 +210,7 @@ def swing_backtest(
         broker_repository=SQLiteBrokerRepository(resolved_db),
         market_repository=SQLiteMarketRepository(db_path=resolved_db),
         derived_feature_policy=_ASC.derived_features,
+        risk_engine=create_risk_engine(resolved_db, with_enrichment=True),
     )
     try:
         response = use_case.execute(SwingBacktestRequest(

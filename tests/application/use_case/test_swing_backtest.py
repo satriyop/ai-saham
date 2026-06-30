@@ -12,10 +12,13 @@ from src.application.use_case.swing_backtest_use_case import (
     SwingBacktestRequest,
     SwingBacktestUseCase,
 )
+from src.application.use_case.assess_risk_use_case import AssessRiskResponse
 from src.domain.entities.broker_flow import BrokerSummary
 from src.domain.entities.candle import Candle
 from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.market_data_repository import MarketDataRepository
+from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
+from src.domain.value_objects.risk_assessment import RiskAssessment
 
 
 class MockMarketRepository(MarketDataRepository):
@@ -87,6 +90,36 @@ class MockBrokerRepository(BrokerDataRepository):
         if not rows:
             return None
         return rows[0].date, rows[-1].date
+
+
+class FakeRiskEngine:
+    def __init__(self) -> None:
+        self.contexts = []
+
+    def assess_with_context(self, ticker, gate_context, market_context=None):
+        self.contexts.append(gate_context)
+        assessment = RiskAssessment(
+            rationale=("all gates passed",),
+            snapshot_date=gate_context.snapshot_date,
+            indicators=IndicatorSnapshot(
+                date=gate_context.snapshot_date,
+                sma=Decimal("100"),
+                ema=Decimal("100"),
+                rsi=Decimal("50"),
+            ),
+        )
+        return AssessRiskResponse(
+            ticker=ticker,
+            assessment=assessment,
+            sma_period=20,
+            ema_period=20,
+            rsi_period=14,
+        )
+
+
+class FailingRiskEngine:
+    def assess_with_context(self, ticker, gate_context, market_context=None):
+        raise ValueError("missing attribution inputs")
 
 
 def _ohlc(
@@ -238,6 +271,72 @@ def test_swing_backtest_default_applies_transaction_costs():
     assert response.total_return_pct == 0.918
     assert response.final_equity == Decimal("1009180.000")
     assert response.trades[0].net_return_pct == 4.59
+
+
+def test_swing_backtest_records_risk_and_trade_setup_attribution():
+    base = date(2026, 1, 1)
+    signal_date = base + timedelta(days=24)
+    exit_date = base + timedelta(days=25)
+    summaries = [
+        _summary("BBCA", base + timedelta(days=i), Decimal("110"))
+        for i in range(18, 25)
+    ]
+    risk_engine = FakeRiskEngine()
+    use_case = SwingBacktestUseCase(
+        broker_repository=MockBrokerRepository(summaries),
+        market_repository=MockMarketRepository(_base_candles("BBCA", base)),
+        risk_engine=risk_engine,
+    )
+
+    response = use_case.execute(SwingBacktestRequest(
+        tickers=["BBCA"],
+        start_date=signal_date,
+        end_date=exit_date,
+        capital=Decimal("1000000"),
+        risk_pct=Decimal("0.01"),
+        max_positions=1,
+        min_net_buy_days=1,
+        cost_bps=Decimal("0"),
+    ))
+
+    assert response.trade_count == 1
+    trade = response.trades[0]
+    assert trade.risk_status == "OPEN"
+    assert trade.risk_gate is None
+    assert trade.risk_confidence == 0
+    assert trade.trade_setup_action is not None
+    assert risk_engine.contexts[0].ticker == "BBCA"
+    assert risk_engine.contexts[0].snapshot_date == signal_date
+
+
+def test_swing_backtest_keeps_trade_when_risk_attribution_fails():
+    base = date(2026, 1, 1)
+    signal_date = base + timedelta(days=24)
+    exit_date = base + timedelta(days=25)
+    summaries = [
+        _summary("BBCA", base + timedelta(days=i), Decimal("110"))
+        for i in range(18, 25)
+    ]
+    use_case = SwingBacktestUseCase(
+        broker_repository=MockBrokerRepository(summaries),
+        market_repository=MockMarketRepository(_base_candles("BBCA", base)),
+        risk_engine=FailingRiskEngine(),
+    )
+
+    response = use_case.execute(SwingBacktestRequest(
+        tickers=["BBCA"],
+        start_date=signal_date,
+        end_date=exit_date,
+        capital=Decimal("1000000"),
+        risk_pct=Decimal("0.01"),
+        max_positions=1,
+        min_net_buy_days=1,
+        cost_bps=Decimal("0"),
+    ))
+
+    assert response.trade_count == 1
+    assert response.trades[0].risk_status is None
+    assert response.trades[0].trade_setup_action is None
 
 
 def test_swing_backtest_can_prioritize_target_when_same_day_hits_stop_and_target():

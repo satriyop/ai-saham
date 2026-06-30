@@ -6,6 +6,7 @@ Depends on: Domain ports and accumulation screen use case
 AI usage: None
 """
 
+import logging
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import Decimal
@@ -24,6 +25,10 @@ from src.application.use_case.accumulation_screen_use_case import (
     AccumulationScreenRequest,
     AccumulationScreenUseCase,
 )
+from src.application.use_case.assess_trade_setup_use_case import (
+    AssessTradeSetupRequest,
+    AssessTradeSetupUseCase,
+)
 from src.application.use_case.evaluate_swing_setup_use_case import (
     AVAILABLE_SWING_SETUPS,
     EvaluateSwingSetupRequest,
@@ -35,11 +40,13 @@ from src.domain.value_objects.market_context import MarketContext
 from src.domain.entities.candle import Candle
 from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.market_data_repository import MarketDataRepository
+from src.domain.rules.risk_gate import GateContext
 from src.domain.value_objects.idx_market import SHARES_PER_LOT
 from src.domain.value_objects.setup_evaluation import SetupEvaluation, SetupGate
 
 FOREIGN_BOUNCE_SETUP = "foreign-bounce"
 DEFAULT_SWING_COST_BPS = Decimal("20")
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -269,10 +276,12 @@ class SwingBacktestUseCase:
         broker_repository: BrokerDataRepository,
         market_repository: MarketDataRepository,
         derived_feature_policy: AccumulationDerivedFeaturePolicy | None = None,
+        risk_engine: Any | None = None,
     ) -> None:
         self._broker_repo = broker_repository
         self._market_repo = market_repository
         self._derived_features = derived_feature_policy or AccumulationDerivedFeaturePolicy()
+        self._risk_engine = risk_engine
         self._screen = AccumulationScreenUseCase(
             broker_repository=broker_repository,
             market_repository=market_repository,
@@ -526,8 +535,12 @@ class SwingBacktestUseCase:
 
         entry_value = Decimal(shares) * entry
         signal = candidate.signal_assessment.assessment if candidate.signal_assessment else None
-        risk = candidate.risk_assessment
-        trade_setup = candidate.trade_setup
+        risk_response, trade_setup = self._assess_trade_setup(
+            candidate=candidate,
+            signal_date=signal_date,
+            market_context=market_context,
+        )
+        risk = risk_response.assessment if risk_response is not None else None
         return _OpenPosition(
             ticker=candidate.ticker,
             entry_date=signal_date,
@@ -553,6 +566,67 @@ class SwingBacktestUseCase:
             risk_gate=risk.gate_triggered if risk is not None else None,
             risk_confidence=risk.confidence if risk is not None else None,
             market_context=market_context,
+        )
+
+    def _assess_trade_setup(
+        self,
+        *,
+        candidate: AccumulationCandidate,
+        signal_date: date,
+        market_context: MarketContext | None,
+    ):
+        if self._risk_engine is None or candidate.signal_assessment is None:
+            return None, None
+
+        try:
+            risk_response = self._risk_engine.assess_with_context(
+                candidate.ticker,
+                self._build_gate_context(candidate, signal_date),
+                market_context=market_context,
+            )
+        except Exception as exc:
+            logger.debug(
+                "Swing backtest risk attribution failed for %s on %s: %s",
+                candidate.ticker,
+                signal_date,
+                exc,
+            )
+            return None, None
+        trade_setup = AssessTradeSetupUseCase().execute(
+            AssessTradeSetupRequest(
+                ticker=candidate.ticker,
+                snapshot_date=signal_date,
+                signal_response=candidate.signal_assessment,
+                risk_response=risk_response,
+                market_context=market_context,
+            )
+        ).setup
+        return risk_response, trade_setup
+
+    @staticmethod
+    def _build_gate_context(
+        candidate: AccumulationCandidate,
+        signal_date: date,
+    ) -> GateContext:
+        return GateContext(
+            ticker=candidate.ticker,
+            snapshot_date=signal_date,
+            piotroski_f_score=(
+                candidate.fundamentals.piotroski_f_score
+                if candidate.fundamentals else None
+            ),
+            market_cap_idr=(
+                candidate.fundamentals.market_cap_idr
+                if candidate.fundamentals else None
+            ),
+            free_float_pct=(
+                candidate.shareholding.free_float_pct
+                if candidate.shareholding is not None else None
+            ),
+            five_day_accdist=(
+                candidate.bandar_detector.five_day_accdist
+                if candidate.bandar_detector else None
+            ),
         )
 
     def _maybe_exit(
