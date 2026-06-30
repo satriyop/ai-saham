@@ -17,6 +17,8 @@ from typing import Any, Iterable
 
 from src.application.services.stats import average, profit_factor, win_rate
 
+MIN_TUNING_SAMPLE_SIZE = 30
+
 
 @dataclass(frozen=True)
 class AttributionGroupStat:
@@ -39,6 +41,30 @@ class AttributionGroupStat:
             "avg_return_pct": self.avg_return_pct,
             "total_pnl": str(self.total_pnl),
             "profit_factor": self.profit_factor,
+        }
+
+
+@dataclass(frozen=True)
+class SampleQuality:
+    """Deterministic readiness gate for attribution-driven tuning."""
+
+    status: str
+    completed_trade_count: int
+    candidate_observation_count: int
+    min_sample_size: int
+    trade_sample_ready: bool
+    candidate_sample_ready: bool
+    notes: tuple[str, ...]
+
+    def to_dict(self) -> dict:
+        return {
+            "status": self.status,
+            "completed_trade_count": self.completed_trade_count,
+            "candidate_observation_count": self.candidate_observation_count,
+            "min_sample_size": self.min_sample_size,
+            "trade_sample_ready": self.trade_sample_ready,
+            "candidate_sample_ready": self.candidate_sample_ready,
+            "notes": list(self.notes),
         }
 
 
@@ -112,6 +138,9 @@ class SwingBacktestAttributionSummary:
 
     intent: str = "learning_summary_only_not_entry_logic"
     bucket_policy: AttributionBucketPolicy = field(default_factory=AttributionBucketPolicy)
+    sample_quality: SampleQuality = field(
+        default_factory=lambda: _build_sample_quality(0, 0)
+    )
     group_stats: tuple[AttributionGroupStat, ...] = field(default_factory=tuple)
     candidate_group_stats: tuple[CandidateAttributionStat, ...] = field(default_factory=tuple)
     tuning_targets: tuple[TuningTarget, ...] = field(
@@ -122,6 +151,7 @@ class SwingBacktestAttributionSummary:
         return {
             "intent": self.intent,
             "bucket_policy": self.bucket_policy.to_dict(),
+            "sample_quality": self.sample_quality.to_dict(),
             "group_stats": [stat.to_dict() for stat in self.group_stats],
             "candidate_group_stats": [
                 stat.to_dict() for stat in self.candidate_group_stats
@@ -311,6 +341,53 @@ DEFAULT_TUNING_TARGETS: tuple[TuningTarget, ...] = (
 )
 
 
+def _build_sample_quality(
+    completed_trade_count: int,
+    candidate_observation_count: int,
+    min_sample_size: int = MIN_TUNING_SAMPLE_SIZE,
+) -> SampleQuality:
+    trade_ready = completed_trade_count >= min_sample_size
+    candidate_ready = candidate_observation_count >= min_sample_size
+
+    notes: list[str] = []
+    if completed_trade_count == 0 and candidate_observation_count == 0:
+        status = "INSUFFICIENT_SAMPLE"
+        notes.append("No completed trades or candidate observations are available.")
+    elif trade_ready and candidate_ready:
+        status = "MIXED_READY"
+        notes.append("Completed-trade and screened-candidate samples meet the minimum.")
+    elif trade_ready:
+        status = "TRADE_READY"
+        notes.append("Completed-trade sample meets the minimum.")
+        notes.append("Candidate sample is below the minimum; setup/risk gate tuning is weaker.")
+    elif candidate_ready:
+        status = "CANDIDATE_ONLY"
+        notes.append("Screened-candidate sample meets the minimum.")
+        notes.append("Completed-trade sample is below the minimum; portfolio outcome tuning is blocked.")
+    else:
+        status = "INSUFFICIENT_SAMPLE"
+        notes.append("Samples are below the minimum required for tuning suggestions.")
+
+    if completed_trade_count < min_sample_size:
+        notes.append(
+            f"Completed trades: {completed_trade_count}/{min_sample_size} minimum."
+        )
+    if candidate_observation_count < min_sample_size:
+        notes.append(
+            f"Candidate observations: {candidate_observation_count}/{min_sample_size} minimum."
+        )
+
+    return SampleQuality(
+        status=status,
+        completed_trade_count=completed_trade_count,
+        candidate_observation_count=candidate_observation_count,
+        min_sample_size=min_sample_size,
+        trade_sample_ready=trade_ready,
+        candidate_sample_ready=candidate_ready,
+        notes=tuple(notes),
+    )
+
+
 def summarize_swing_backtest_attribution(
     trades: Iterable[Any],
     candidate_observations: Iterable[Any] = (),
@@ -351,6 +428,10 @@ def summarize_swing_backtest_attribution(
     )
     return SwingBacktestAttributionSummary(
         bucket_policy=policy,
+        sample_quality=_build_sample_quality(
+            completed_trade_count=len(rows),
+            candidate_observation_count=len(observation_rows),
+        ),
         group_stats=stats,
         candidate_group_stats=candidate_stats,
     )

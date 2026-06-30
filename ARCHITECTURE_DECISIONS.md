@@ -889,6 +889,10 @@ Note: the top-level fields mirror `TradeSetup.to_dict()` exactly; `signal_breakd
 **Attribution Rules**
 - Attribution requires minimum 30 graded outcomes before generating suggestions (enforce in `SwingSignalTunerUseCase`).
 - Attribution is statistical correlation, not causal proof. AI tuner output must include a confidence note.
+- The attribution summary must include `sample_quality`, a deterministic readiness
+  gate with minimum sample size, completed-trade count, candidate-observation
+  count, readiness booleans, status, and explanatory notes. Tuner implementations
+  must not propose YAML changes from `INSUFFICIENT_SAMPLE` summaries.
 - Swing backtest attribution has two scopes: completed portfolio trades
   (`group_stats`) and screened-candidate forward-return observations
   (`candidate_group_stats`). Candidate observations exist to reduce

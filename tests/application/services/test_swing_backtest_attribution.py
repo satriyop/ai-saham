@@ -122,6 +122,19 @@ def test_empty_swing_backtest_attribution_summary_is_deterministic():
             "high_min_score": 70.0,
             "mid_min_score": 45.0,
         },
+        "sample_quality": {
+            "status": "INSUFFICIENT_SAMPLE",
+            "completed_trade_count": 0,
+            "candidate_observation_count": 0,
+            "min_sample_size": 30,
+            "trade_sample_ready": False,
+            "candidate_sample_ready": False,
+            "notes": [
+                "No completed trades or candidate observations are available.",
+                "Completed trades: 0/30 minimum.",
+                "Candidate observations: 0/30 minimum.",
+            ],
+        },
         "group_stats": [],
         "candidate_group_stats": [],
         "tuning_targets": [
@@ -187,3 +200,53 @@ def test_swing_backtest_attribution_tuning_targets_cover_current_dimensions():
     assert "config/swing_setups.yaml:setups.*.gates" in (
         target_by_dimension["setup_gate"].yaml_paths
     )
+
+
+def test_swing_backtest_attribution_marks_candidate_only_sample_quality():
+    summary = summarize_swing_backtest_attribution(
+        (),
+        tuple(_Observation(forward_return_pct=1.0) for _ in range(30)),
+    )
+
+    quality = summary.sample_quality
+
+    assert quality.status == "CANDIDATE_ONLY"
+    assert quality.completed_trade_count == 0
+    assert quality.candidate_observation_count == 30
+    assert quality.trade_sample_ready is False
+    assert quality.candidate_sample_ready is True
+    assert "portfolio outcome tuning is blocked" in " ".join(quality.notes)
+
+
+def test_swing_backtest_attribution_marks_trade_ready_sample_quality():
+    summary = summarize_swing_backtest_attribution(
+        tuple(
+            _trade(ticker=f"BB{i:02d}", net_return_pct=1.0, pnl="100")
+            for i in range(30)
+        ),
+        (),
+    )
+
+    quality = summary.sample_quality
+
+    assert quality.status == "TRADE_READY"
+    assert quality.completed_trade_count == 30
+    assert quality.candidate_observation_count == 0
+    assert quality.trade_sample_ready is True
+    assert quality.candidate_sample_ready is False
+
+
+def test_swing_backtest_attribution_marks_mixed_ready_sample_quality():
+    summary = summarize_swing_backtest_attribution(
+        tuple(
+            _trade(ticker=f"BB{i:02d}", net_return_pct=1.0, pnl="100")
+            for i in range(30)
+        ),
+        tuple(_Observation(forward_return_pct=1.0) for _ in range(30)),
+    )
+
+    quality = summary.sample_quality
+
+    assert quality.status == "MIXED_READY"
+    assert quality.trade_sample_ready is True
+    assert quality.candidate_sample_ready is True
