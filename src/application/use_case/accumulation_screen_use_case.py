@@ -137,8 +137,8 @@ class AccumulationScreenRequest:
     min_foreign_flow_score_enabled: bool = True
     min_signal_score: float = 0.0  # optional SignalEngine score filter
     min_signal_score_enabled: bool = False
-    rsi_period: int = 14
-    sma_period: int = 20
+    rsi_period: int | None = None
+    sma_period: int | None = None
     as_of_date: date | None = None  # deterministic replay date; defaults to today
     # Phase 2.2 — resistance-proximity gate
     resistance_gate_enabled: bool = True
@@ -170,8 +170,8 @@ class AccumulationScreenRequest:
         min_foreign_flow_score_enabled: bool = True,
         min_signal_score: float = 0.0,
         min_signal_score_enabled: bool = False,
-        rsi_period: int = 14,
-        sma_period: int = 20,
+        rsi_period: int | None = None,
+        sma_period: int | None = None,
         as_of_date: date | None = None,
         resistance_gate_enabled: bool = True,
         resistance_headroom_min_pct: float = 5.0,
@@ -210,6 +210,21 @@ class AccumulationScreenRequest:
         self.bci_stable_min_count = bci_stable_min_count
         self.min_market_cap_idr = min_market_cap_idr
         self.min_piotroski = min_piotroski
+
+
+@dataclass(frozen=True)
+class AccumulationDerivedFeaturePolicy:
+    """Tunable windows for derived features used by the accumulation screen."""
+
+    rsi_period: int = 14
+    trend_sma_period: int = 20
+    trend_threshold_pct: float = 2.0
+    bb_period: int = 20
+    bb_history: int = 60
+    market_vwap_period: int = 20
+    resistance_ma_period: int = 200
+    resistance_high_period: int = 252
+    insider_lookback_days: int = 90
 
 
 @dataclass
@@ -415,6 +430,7 @@ class AccumulationScreenUseCase:
         risk_use_case: "AssessRiskUseCase | None" = None,
         signal_engine: "SignalEngine | None" = None,
         foreign_flow_score_use_case: ScoreForeignFlowUseCase | None = None,
+        derived_feature_policy: AccumulationDerivedFeaturePolicy | None = None,
     ) -> None:
         from src.application.services.signal_engine import SignalEngine as _SignalEngine
 
@@ -434,6 +450,7 @@ class AccumulationScreenUseCase:
         self._foreign_flow_score_uc = (
             foreign_flow_score_use_case or ScoreForeignFlowUseCase()
         )
+        self._derived_features = derived_feature_policy or AccumulationDerivedFeaturePolicy()
         # idx_groups: {group_name: [ticker, ...]} from config/idx_groups.yaml
         # Build a reverse map: ticker → group_name for fast lookup
         self._ticker_to_group: dict[str, str] = {}
@@ -454,8 +471,8 @@ class AccumulationScreenUseCase:
                 window_days=request.window_days,
                 today=today,
                 min_net_buy_days=request.min_net_buy_days,
-                rsi_period=request.rsi_period,
-                sma_period=request.sma_period,
+                rsi_period=request.rsi_period or self._derived_features.rsi_period,
+                sma_period=request.sma_period or self._derived_features.trend_sma_period,
                 tier1_broker_codes=request.tier1_broker_codes,
                 bci_cluster_min_count=request.bci_cluster_min_count,
                 bci_stable_min_count=request.bci_stable_min_count,
@@ -582,10 +599,11 @@ class AccumulationScreenUseCase:
                 from datetime import timedelta
                 from src.domain.value_objects.insider_transaction import compute_net_buy_ratio
 
-                insider_lookback = 90
                 insider_txns = self._insider_provider.get_insider_transactions(
                     ticker=result.ticker,
-                    from_date=today - timedelta(days=insider_lookback),
+                    from_date=today - timedelta(
+                        days=self._derived_features.insider_lookback_days
+                    ),
                     to_date=today,
                     action_type="ALL",
                 )
@@ -835,7 +853,11 @@ class AccumulationScreenUseCase:
             latest_candle_date = candles[-1].date
             rsi = self._compute_rsi(candles, rsi_period)
             trend = self._compute_trend(candles, sma_period)
-            bb_width, bb_width_pctile = self._compute_bb_squeeze(candles)
+            bb_width, bb_width_pctile = self._compute_bb_squeeze(
+                candles,
+                period=self._derived_features.bb_period,
+                history=self._derived_features.bb_history,
+            )
 
         # Phase 2.2: Resistance proximity (MA200 and 52-week high)
         ma200, week52_high, nearest_resistance_pct = self._compute_resistance(
@@ -850,11 +872,11 @@ class AccumulationScreenUseCase:
         vwap_pct: float | None = None
         if candles:
             try:
-                window_20 = candles[-20:]
-                total_vol = sum(c.volume for c in window_20)
+                vwap_window = candles[-self._derived_features.market_vwap_period:]
+                total_vol = sum(c.volume for c in vwap_window)
                 if total_vol > 0:
                     total_tpv = sum(
-                        (c.high + c.low + c.close) / Decimal("3") * c.volume for c in window_20
+                        (c.high + c.low + c.close) / Decimal("3") * c.volume for c in vwap_window
                     )
                     market_vwap = total_tpv / total_vol
                     if market_vwap > 0:
@@ -1009,9 +1031,10 @@ class AccumulationScreenUseCase:
         current = float(candles[-1].close)
         pct_diff = (current - sma) / sma * 100
 
-        if pct_diff > 2.0:
+        threshold = self._derived_features.trend_threshold_pct
+        if pct_diff > threshold:
             return "UP"
-        elif pct_diff < -2.0:
+        elif pct_diff < -threshold:
             return "DOWN"
         return "SIDE"
 
@@ -1050,8 +1073,8 @@ class AccumulationScreenUseCase:
         rank = sum(1 for w in recent if w <= bb_width_now) / len(recent)
         return bb_width_now, rank
 
-    @staticmethod
     def _compute_resistance(
+        self,
         candles: list,
         current_price: Decimal,
     ) -> tuple[Decimal | None, Decimal | None, float | None]:
@@ -1065,12 +1088,15 @@ class AccumulationScreenUseCase:
             return None, None, None
 
         ma200: Decimal | None = None
-        if len(candles) >= 200:
-            ma200 = Decimal(str(sum(c.close for c in candles[-200:]) / 200))
+        ma_period = self._derived_features.resistance_ma_period
+        if len(candles) >= ma_period:
+            ma200 = Decimal(str(sum(c.close for c in candles[-ma_period:]) / ma_period))
 
         week52_high: Decimal | None = None
         if len(candles) >= 1:
-            week52_high = max(c.high for c in candles[-252:])
+            week52_high = max(
+                c.high for c in candles[-self._derived_features.resistance_high_period:]
+            )
 
         resistances: list[float] = []
         for level in (ma200, week52_high):

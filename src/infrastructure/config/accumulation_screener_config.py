@@ -22,6 +22,9 @@ from src.application.use_case.score_foreign_flow_use_case import (
     RsiEvidencePolicy,
     StreakEvidencePolicy,
 )
+from src.application.use_case.accumulation_screen_use_case import (
+    AccumulationDerivedFeaturePolicy,
+)
 
 ACCUMULATION_SCREENER_CONFIG_PATH = Path(APP_CFG.config_paths.accumulation_screener)
 
@@ -44,6 +47,9 @@ class AccumulationDisplayConfig:
 class AccumulationScreenerConfig:
     foreign_flow_score_policy: ForeignFlowScorePolicy = field(
         default_factory=ForeignFlowScorePolicy
+    )
+    derived_features: AccumulationDerivedFeaturePolicy = field(
+        default_factory=AccumulationDerivedFeaturePolicy
     )
     min_foreign_flow_score: ScoreFilterConfig = field(
         default_factory=lambda: ScoreFilterConfig(enabled=True, value=70.0)
@@ -71,6 +77,7 @@ def load_accumulation_screener_config(
         root = raw.get("accumulation_screener") or raw
         evidence = root.get("evidence") or {}
         components = evidence.get("components") or {}
+        derived_features = root.get("derived_features") or {}
         filters = root.get("filters") or {}
         display = root.get("display") or {}
         sorting = root.get("sorting") or {}
@@ -82,6 +89,10 @@ def load_accumulation_screener_config(
         )
         return AccumulationScreenerConfig(
             foreign_flow_score_policy=policy,
+            derived_features=_build_derived_feature_policy(
+                derived_features,
+                defaults.derived_features,
+            ),
             min_foreign_flow_score=_filter(
                 filters.get("min_foreign_flow_score"),
                 defaults.min_foreign_flow_score,
@@ -116,6 +127,17 @@ def load_accumulation_screener_config(
 
 def _f(data: dict[str, Any], key: str, default: float) -> float:
     return float(data[key]) if key in data else default
+
+
+def _i(data: dict[str, Any], key: str, default: int) -> int:
+    return int(data[key]) if key in data else default
+
+
+def _positive_i(data: dict[str, Any], key: str, default: int) -> int:
+    value = _i(data, key, default)
+    if value < 1:
+        raise ValueError(f"{key} must be >= 1")
+    return value
 
 
 def _b(data: dict[str, Any], key: str, default: bool) -> bool:
@@ -207,4 +229,25 @@ def _build_foreign_flow_score_policy(
         foreign_flow_ratio=flow,
         bb_squeeze=bb,
         bci=bci,
+    )
+
+
+def _build_derived_feature_policy(
+    raw: dict[str, Any],
+    default: AccumulationDerivedFeaturePolicy,
+) -> AccumulationDerivedFeaturePolicy:
+    return AccumulationDerivedFeaturePolicy(
+        rsi_period=_positive_i(raw, "rsi_period", default.rsi_period),
+        trend_sma_period=_positive_i(raw, "trend_sma_period", default.trend_sma_period),
+        trend_threshold_pct=_f(raw, "trend_threshold_pct", default.trend_threshold_pct),
+        bb_period=_positive_i(raw, "bb_period", default.bb_period),
+        bb_history=_positive_i(raw, "bb_history", default.bb_history),
+        market_vwap_period=_positive_i(raw, "market_vwap_period", default.market_vwap_period),
+        resistance_ma_period=_positive_i(raw, "resistance_ma_period", default.resistance_ma_period),
+        resistance_high_period=_positive_i(
+            raw, "resistance_high_period", default.resistance_high_period
+        ),
+        insider_lookback_days=_positive_i(
+            raw, "insider_lookback_days", default.insider_lookback_days
+        ),
     )

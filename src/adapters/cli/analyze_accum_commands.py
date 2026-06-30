@@ -25,11 +25,15 @@ from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.config.accumulation_audit_config import (
     load_accumulation_audit_config,
 )
+from src.infrastructure.config.accumulation_screener_config import (
+    load_accumulation_screener_config,
+)
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
 DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 _AUDIT_CFG = load_accumulation_audit_config()
+_SCREEN_CFG = load_accumulation_screener_config()
 AUDIT_SETUPS = _AUDIT_CFG.setups
 
 _AUDIT_SETUP_HELP = ", ".join(AUDIT_SETUPS)
@@ -307,6 +311,7 @@ def accumulation_audit(
     use_case = AccumulationAuditUseCase(
         broker_repository=SQLiteBrokerRepository(resolved_db),
         market_repository=SQLiteMarketRepository(db_path=resolved_db),
+        derived_feature_policy=_SCREEN_CFG.derived_features,
     )
     response = use_case.execute(
         AccumulationAuditRequest(

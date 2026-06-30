@@ -15,6 +15,16 @@ accumulation_screener:
       consistency:
         enabled: false
         weight: 12
+  derived_features:
+    rsi_period: 10
+    trend_sma_period: 30
+    trend_threshold_pct: 3.5
+    bb_period: 18
+    bb_history: 45
+    market_vwap_period: 15
+    resistance_ma_period: 150
+    resistance_high_period: 180
+    insider_lookback_days: 60
   filters:
     min_foreign_flow_score:
       enabled: true
@@ -34,3 +44,12 @@ accumulation_screener:
     assert loaded.min_foreign_flow_score.value == 55.0
     assert loaded.min_signal_score.enabled is True
     assert loaded.min_signal_score.value == 60.0
+    assert loaded.derived_features.rsi_period == 10
+    assert loaded.derived_features.trend_sma_period == 30
+    assert loaded.derived_features.trend_threshold_pct == 3.5
+    assert loaded.derived_features.bb_period == 18
+    assert loaded.derived_features.bb_history == 45
+    assert loaded.derived_features.market_vwap_period == 15
+    assert loaded.derived_features.resistance_ma_period == 150
+    assert loaded.derived_features.resistance_high_period == 180
+    assert loaded.derived_features.insider_lookback_days == 60

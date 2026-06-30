@@ -17,6 +17,7 @@ from typing import Callable
 from src.application.services.stats import average, pct_change, win_rate
 from src.application.use_case.accumulation_screen_use_case import (
     AccumulationCandidate,
+    AccumulationDerivedFeaturePolicy,
     AccumulationScreenRequest,
     AccumulationScreenUseCase,
 )
@@ -233,12 +234,15 @@ class AccumulationAuditUseCase:
         self,
         broker_repository: BrokerDataRepository,
         market_repository: MarketDataRepository,
+        derived_feature_policy: AccumulationDerivedFeaturePolicy | None = None,
     ) -> None:
         self._broker_repo = broker_repository
         self._market_repo = market_repository
+        self._derived_features = derived_feature_policy or AccumulationDerivedFeaturePolicy()
         self._screen = AccumulationScreenUseCase(
             broker_repository=broker_repository,
             market_repository=market_repository,
+            derived_feature_policy=self._derived_features,
         )
 
     def execute(self, request: AccumulationAuditRequest) -> AccumulationAuditResponse:
@@ -266,6 +270,8 @@ class AccumulationAuditUseCase:
                     min_net_buy_days=request.min_net_buy_days,
                     min_foreign_flow_score=request.min_foreign_flow_score,
                     min_foreign_flow_score_enabled=True,
+                    rsi_period=self._derived_features.rsi_period,
+                    sma_period=self._derived_features.trend_sma_period,
                     as_of_date=signal_date,
                 )
             )

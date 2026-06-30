@@ -9,6 +9,7 @@ from src.application.use_case.accumulation_screen_use_case import (
     BCI_CLUSTER,
     BCI_RETAIL,
     BCI_STABLE,
+    AccumulationDerivedFeaturePolicy,
     TIER1_FOREIGN_BROKERS,
     AccumulationScreenRequest,
     AccumulationScreenUseCase,
@@ -200,6 +201,43 @@ def test_screen_ignores_unsafe_broker_summary_rows():
         (s.foreign_net_value for s in valid_summaries),
         Decimal("0"),
     )
+
+
+def test_screen_uses_derived_feature_policy_for_trend_threshold():
+    session_dates = _weekdays(date(2026, 1, 1), 7)
+    as_of = session_dates[-1]
+    candle_dates = _weekdays(date(2025, 12, 1), 25)
+    candles = [
+        _candle("BBCA", day, Decimal("100")) for day in candle_dates[:-1]
+    ] + [_candle("BBCA", candle_dates[-1], Decimal("103"))]
+    summaries = [_summary("BBCA", day, Decimal("110")) for day in session_dates]
+
+    loose_threshold = AccumulationScreenUseCase(
+        broker_repository=MockBrokerRepository(summaries),
+        market_repository=MockMarketRepository(candles),
+        derived_feature_policy=AccumulationDerivedFeaturePolicy(
+            trend_sma_period=20,
+            trend_threshold_pct=5.0,
+        ),
+    )
+    strict_threshold = AccumulationScreenUseCase(
+        broker_repository=MockBrokerRepository(summaries),
+        market_repository=MockMarketRepository(candles),
+        derived_feature_policy=AccumulationDerivedFeaturePolicy(
+            trend_sma_period=20,
+            trend_threshold_pct=2.0,
+        ),
+    )
+
+    request = AccumulationScreenRequest(
+        tickers=["BBCA"],
+        window_days=7,
+        min_net_buy_days=1,
+        as_of_date=as_of,
+    )
+
+    assert loose_threshold.execute(request).candidates[0].trend == "SIDE"
+    assert strict_threshold.execute(request).candidates[0].trend == "UP"
 
 
 def _daily_flow(ticker: str, day: date, broker_code: str, net_lot: int) -> BrokerDailyFlow:

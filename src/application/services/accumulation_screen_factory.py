@@ -24,6 +24,7 @@ def create_accumulation_screen_use_case(
     risk_use_case: Any | None = None,
     signal_engine: Any | None = None,
     foreign_flow_score_policy: Any | None = None,
+    derived_feature_policy: Any | None = None,
     idx_groups: dict[str, list[str]] | None = None,
 ) -> AccumulationScreenUseCase:
     """Build AccumulationScreenUseCase with consistent optional enrichment wiring."""
@@ -48,4 +49,5 @@ def create_accumulation_screen_use_case(
         risk_use_case=risk_use_case,
         signal_engine=signal_engine,
         foreign_flow_score_use_case=score_use_case,
+        derived_feature_policy=derived_feature_policy,
     )

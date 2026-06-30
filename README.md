@@ -1647,7 +1647,7 @@ For `saham analyze swing --format json`, grouped `verdict`, `evidence`, and
 | `config/risk_engine.yaml` | Risk gate enablement, thresholds, confidence/missing-data policy, indicator defaults, technical-gate tuning, and market-context gate policy |
 | `config/signal_engine.yaml` | Signal factor enablement, weights, classification thresholds, missing-data policy, enrichment lookbacks, input mapping, and factor scoring thresholds |
 | `config/market_context_engine.yaml` | Market context factors, thresholds, VIX score anchors, scoring labels/fallbacks, warning policy, and regime effects |
-| `config/accumulation_screener.yaml` | Accumulation discovery policy (filters, sector breadth, broker quality, BCI, evidence weights) |
+| `config/accumulation_screener.yaml` | Accumulation discovery policy (filters, sector breadth, broker quality, BCI, evidence weights, and derived feature windows) |
 | `config/accumulation_audit.yaml` | Accumulation-audit learning policy: setup presets, forward-return horizons, exit simulation assumptions, grouping dimensions, and bucket edges |
 | `config/swing_setups.yaml` | Named swing setup gates |
 | `config/swing_targets.yaml` | Regime-adaptive TP/SL targets |

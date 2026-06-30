@@ -60,6 +60,9 @@ from src.infrastructure.browser.stockbit_provider_bundle import (
     create_readonly_stockbit_providers,
 )
 from src.infrastructure.config.analyze_swing_config import AnalyzeSwingConfig
+from src.infrastructure.config.accumulation_screener_config import (
+    load_accumulation_screener_config,
+)
 from src.infrastructure.config.market_context_factory import evaluate_market_context
 from src.infrastructure.config.swing_config import SwingConfig
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
@@ -84,6 +87,7 @@ def create_swing_analysis_workflow(
         broker_repository=broker_repo,
         market_repository=market_repo,
     )
+    accumulation_config = load_accumulation_screener_config()
 
     def _build_accumulation_candidate(ticker: str, window: int):
         stockbit_providers = create_readonly_stockbit_providers(db_path)
@@ -91,6 +95,8 @@ def create_swing_analysis_workflow(
             broker_repository=broker_repo,
             market_repository=market_repo,
             stockbit_providers=stockbit_providers,
+            foreign_flow_score_policy=accumulation_config.foreign_flow_score_policy,
+            derived_feature_policy=accumulation_config.derived_features,
         )
         accum_resp = accum_uc.execute(
             AccumulationScreenRequest(

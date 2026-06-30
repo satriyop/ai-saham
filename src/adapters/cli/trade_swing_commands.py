@@ -36,6 +36,9 @@ from src.application.use_case.swing_backtest_use_case import (
     FOREIGN_BOUNCE_SETUP as BACKTEST_FOREIGN_BOUNCE_SETUP,
 )
 from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.accumulation_screener_config import (
+    load_accumulation_screener_config,
+)
 from src.infrastructure.config.swing_backtest_config import (
     load_swing_backtest_config as _load_swing_backtest_config,
 )
@@ -47,6 +50,7 @@ from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarket
 DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 _SC = _load_swing_config()
 _BT = _load_swing_backtest_config()
+_ASC = load_accumulation_screener_config()
 
 
 def _setup_config() -> SwingSetupCatalogConfig:
@@ -205,6 +209,7 @@ def swing_backtest(
     use_case = SwingBacktestUseCase(
         broker_repository=SQLiteBrokerRepository(resolved_db),
         market_repository=SQLiteMarketRepository(db_path=resolved_db),
+        derived_feature_policy=_ASC.derived_features,
     )
     try:
         response = use_case.execute(SwingBacktestRequest(

@@ -77,6 +77,18 @@ accumulation_screener:
         cluster_points: 15.0
         stable_points: 5.0
 
+  derived_features:
+    # Price/flow feature windows used before foreign-flow scoring and setup gates.
+    rsi_period: 14
+    trend_sma_period: 20
+    trend_threshold_pct: 2.0
+    bb_period: 20
+    bb_history: 60
+    market_vwap_period: 20
+    resistance_ma_period: 200
+    resistance_high_period: 252
+    insider_lookback_days: 90
+
   filters:
     min_foreign_flow_score:
       enabled: true

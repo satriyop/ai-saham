@@ -24,10 +24,14 @@ from src.adapters.cli.view_market_context_display import (
     context_regime_style,
 )
 from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.accumulation_screener_config import (
+    load_accumulation_screener_config,
+)
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
 DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
+_ASC = load_accumulation_screener_config()
 
 
 def _parse_date(value: str | None) -> date | None:
@@ -77,6 +81,7 @@ def today(
         accumulation_use_case=AccumulationScreenUseCase(
             broker_repository=broker_repo,
             market_repository=market_repo,
+            derived_feature_policy=_ASC.derived_features,
         ),
     )
 

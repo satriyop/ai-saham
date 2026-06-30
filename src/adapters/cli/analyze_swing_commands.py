@@ -64,6 +64,9 @@ from src.application.use_case.swing_backtest_use_case import (
 )
 from src.domain.value_objects.setup_evaluation import SetupEvaluation
 from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.accumulation_screener_config import (
+    load_accumulation_screener_config as _load_accumulation_screener_config,
+)
 from src.infrastructure.config.analyze_swing_config import (
     load_analyze_swing_config as _load_analyze_swing_config,
 )
@@ -101,6 +104,7 @@ from src.infrastructure.config.swing_config import (  # noqa: E402
 _SC = _load_swing_config_typed()
 _BT = _load_swing_backtest_config()
 _AS = _load_analyze_swing_config()
+_ASC = _load_accumulation_screener_config()
 _DISPLAY_CONFIG = SwingDisplayConfig(
     enter_min_score=_SC.enter_min_score,
     watch_min_score=_SC.watch_min_score,
@@ -657,6 +661,7 @@ def swing_compare(
     use_case = SwingBacktestUseCase(
         broker_repository=SQLiteBrokerRepository(resolved_db),
         market_repository=SQLiteMarketRepository(db_path=resolved_db),
+        derived_feature_policy=_ASC.derived_features,
     )
     rows: list[tuple[str, SwingBacktestResponse]] = []
     try:
