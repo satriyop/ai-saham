@@ -25,7 +25,7 @@ class AnalyzeSwingConfig:
     sentiment_days: int = 3
     flow_detail_window_sessions: int = 30
     candidate_min_net_buy_days: int = 0
-    candidate_min_score: float = 0.0
+    candidate_min_foreign_flow_score: float = 0.0
 
 
 def load_analyze_swing_config(config_path: Path | None = None) -> AnalyzeSwingConfig:
@@ -57,7 +57,7 @@ def load_analyze_swing_config(config_path: Path | None = None) -> AnalyzeSwingCo
             "min_net_buy_days",
             defaults.candidate_min_net_buy_days,
         ),
-        candidate_min_score=_float(candidate, "min_score", defaults.candidate_min_score),
+        candidate_min_foreign_flow_score=_float(candidate, "min_foreign_flow_score", defaults.candidate_min_foreign_flow_score),
     )
 
 

@@ -97,7 +97,7 @@ def create_swing_analysis_workflow(
                 tickers=[ticker],
                 window_days=window,
                 min_net_buy_days=analyze_config.candidate_min_net_buy_days,
-                min_foreign_flow_score=analyze_config.candidate_min_score,
+                min_foreign_flow_score=analyze_config.candidate_min_foreign_flow_score,
                 min_foreign_flow_score_enabled=True,
                 tier1_broker_codes=swing_config.tier1_broker_codes,
                 bci_cluster_min_count=swing_config.bci_cluster_min_count,

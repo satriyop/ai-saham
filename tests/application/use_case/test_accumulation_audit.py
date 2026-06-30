@@ -210,7 +210,7 @@ def test_accumulation_audit_replays_signal_and_forward_returns_without_ai():
             end_date=base + timedelta(days=20),
             window_days=7,
             min_net_buy_days=1,
-            min_score=0,
+            min_foreign_flow_score=0,
             horizon_days=5,
         )
     )
@@ -254,7 +254,7 @@ def test_accumulation_audit_does_not_use_future_candle_as_signal_price():
             end_date=signal_date,
             window_days=7,
             min_net_buy_days=1,
-            min_score=0,
+            min_foreign_flow_score=0,
             horizon_days=5,
         )
     )
@@ -294,7 +294,7 @@ def test_accumulation_audit_strict_filters_keep_only_matching_candidates():
             end_date=signal_date,
             window_days=7,
             min_net_buy_days=1,
-            min_score=0,
+            min_foreign_flow_score=0,
             horizon_days=5,
             min_vwap_disc_pct=5,
             trend="SIDE",
@@ -368,7 +368,7 @@ def test_accumulation_audit_groups_outcomes_by_broker_quality():
             end_date=signal_date,
             window_days=7,
             min_net_buy_days=1,
-            min_score=0,
+            min_foreign_flow_score=0,
             horizon_days=5,
         )
     )
@@ -421,7 +421,7 @@ def test_accumulation_audit_exit_simulation_reports_target_and_max_hold_stats():
             end_date=signal_date,
             window_days=7,
             min_net_buy_days=1,
-            min_score=0,
+            min_foreign_flow_score=0,
             horizon_days=5,
             simulate_exits=True,
             take_profit_pcts=(5, 20),
@@ -475,7 +475,7 @@ def test_accumulation_audit_exit_simulation_can_prioritize_target_on_same_day():
             end_date=signal_date,
             window_days=7,
             min_net_buy_days=1,
-            min_score=0,
+            min_foreign_flow_score=0,
             horizon_days=5,
             simulate_exits=True,
             take_profit_pcts=(5,),

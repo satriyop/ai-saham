@@ -361,7 +361,7 @@ class AccumulationCandidate:
 class AccumulationScreenResponse:
     """Screener output."""
 
-    candidates: list[AccumulationCandidate]  # sorted by score descending
+    candidates: list[AccumulationCandidate]  # sorted by foreign-flow score descending
     screened_at: date
     window_days: int
     total_tickers_checked: int
@@ -919,7 +919,7 @@ class AccumulationScreenUseCase:
             vwap_discount_pct=vwap_discount_pct,
             rsi=rsi,
             trend=trend,
-            foreign_flow_score=0.0,  # set after by ScoreForeignFlowUseCase
+            foreign_flow_score=0.0,  # populated later by ScoreForeignFlowUseCase
             top_brokers=top_brokers,
             institutional_flag=institutional_flag,
             bci_label=bci_label,

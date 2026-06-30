@@ -80,7 +80,7 @@ class LogSwingCandidateResponse:
     planned_stop: Decimal | None
     planned_target: Decimal | None
     failed_gates: tuple[str, ...]
-    candidate_score: float | None       # None when ticker had no accumulation data
+    candidate_foreign_flow_score: float | None       # None when ticker had no accumulation data
 
 
 class LogSwingCandidateUseCase:
@@ -254,7 +254,7 @@ class LogSwingCandidateUseCase:
             planned_stop=planned_stop,
             planned_target=planned_target,
             failed_gates=failed_gates,
-            candidate_score=candidate.foreign_flow_score if candidate else None,
+            candidate_foreign_flow_score=candidate.foreign_flow_score if candidate else None,
         )
 
     @staticmethod

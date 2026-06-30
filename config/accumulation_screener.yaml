@@ -42,17 +42,6 @@ accumulation_screener:
       cluster_min_count: 3
       stable_min_count: 1
 
-  verdicts:
-    enter_min_score: 70
-    watch_min_score: 40
-    signals:
-      strong_min_score: 70
-      strong_min_streak: 8
-      building_min_score: 60
-      building_min_streak: 5
-      coiled_spring_bb_pctile: 0.20
-      coiled_spring_min_score: 60
-
   evidence:
     max_score: 120.0
     components:

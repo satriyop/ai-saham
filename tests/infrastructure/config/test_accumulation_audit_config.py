@@ -48,7 +48,7 @@ def test_load_accumulation_audit_config_reads_setup_presets(tmp_path: Path):
 accumulation_audit:
   setups:
     foreign-bounce:
-      min_score: 72
+      min_foreign_flow_score: 72
       take_profits: "4,6"
 """,
         encoding="utf-8",
@@ -56,7 +56,7 @@ accumulation_audit:
 
     loaded = load_accumulation_audit_config(config)
 
-    assert loaded.setups["foreign-bounce"]["min_score"] == 72
+    assert loaded.setups["foreign-bounce"]["min_foreign_flow_score"] == 72
     assert loaded.setups["foreign-bounce"]["take_profits"] == "4,6"
 
 
@@ -67,7 +67,7 @@ def test_accumulation_audit_setup_thresholds_match_live_swing_setups():
     ]["setups"]
 
     key_map = {
-        "min_score": "min_score",
+        "min_foreign_flow_score": "min_foreign_flow_score",
         "min_vwap_discount_pct": "min_vwap_disc",
         "required_trend": "trend",
         "min_flow_ratio_pct": "min_flow_pct",

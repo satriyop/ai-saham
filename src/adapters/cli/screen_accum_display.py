@@ -217,7 +217,7 @@ def _scoring_definitions_panel():
 
     return panel(
         Group(
-            Text("Accumulation evidence scoring", style="bold cyan"),
+            Text("Foreign-flow score components", style="bold cyan"),
             accum_table,
             Text("\nSignal / risk definitions", style="bold cyan"),
             signal_table,
@@ -979,7 +979,7 @@ def print_column_guide() -> None:
     guide_table.add_row(
         "EVIDENCE PTS",
         "cons / streak / vwap\nrsi / flow / bb / inst",
-        "Accumulation evidence components: cons (40 pts), streak (30 pts), vwap (20 pts), rsi (10 pts), flow (10 pts), bb (10 pts), inst (15 pts BCI)."
+        "Foreign-flow score components: cons (40 pts), streak (30 pts), vwap (20 pts), rsi (10 pts), flow (10 pts), bb (10 pts), inst (15 pts BCI)."
     )
 
     checklist_text = Text(

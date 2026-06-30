@@ -50,7 +50,7 @@ def _candidate(**kwargs) -> AccumulationCandidate:
 
 
 _GATE_DEFAULTS = dict(
-    gate_min_score=70.0,
+    gate_min_foreign_flow_score=70.0,
     gate_min_vwap_discount_pct=3.0,
     gate_required_trend="SIDE",
     gate_min_flow_ratio_pct=5.0,
@@ -126,8 +126,8 @@ def test_wrong_trend_fails_trend_gate():
 
 def test_custom_gate_values_respected():
     c = _candidate(foreign_flow_score=50.0)
-    # With min_score=40.0, score gate should pass
-    evaluation = _eval(c, gate_min_score=40.0)
+    # With min_foreign_flow_score=40.0, score gate should pass
+    evaluation = _eval(c, gate_min_foreign_flow_score=40.0)
     assert not any("score" in f for f in evaluation.failed_reasons)
 
 

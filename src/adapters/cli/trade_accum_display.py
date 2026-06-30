@@ -19,7 +19,7 @@ def display_journal_review(
     report: Any,
     journal_path: Path,
     horizon: int,
-    min_score: float,
+    min_foreign_flow_score: float,
 ) -> None:
     # 1. Info Header
     info_table = compact_table(show_header=False)
@@ -32,7 +32,7 @@ def display_journal_review(
     )
     info_table.add_row(
         "Horizon",
-        f"{horizon} trading days | min_score filter: {min_score}"
+        f"{horizon} trading days | min foreign-flow score filter: {min_foreign_flow_score}"
     )
 
     console().print("")
@@ -66,7 +66,7 @@ def display_journal_review(
         color = "green" if v >= 50 else "red" if v < 40 else "white"
         return f"[{color}]{v:.0f}%[/]"
 
-    # 2. Performance By Score Bucket
+    # 2. Performance By Foreign-Flow Score Bucket
     bucket_table = compact_table()
     bucket_table.add_column("Bucket", style="bold cyan")
     bucket_table.add_column("N", justify="right")
@@ -75,7 +75,7 @@ def display_journal_review(
     bucket_table.add_column("Win Rate 10D", justify="right")
 
     for stat in report.score_buckets:
-        if stat.n == 0 and min_score > 0:
+        if stat.n == 0 and min_foreign_flow_score > 0:
             continue
         bucket_table.add_row(
             stat.bucket,
@@ -89,7 +89,7 @@ def display_journal_review(
     console().print(
         panel(
             bucket_table,
-            title="PERFORMANCE BY SCORE BUCKET"
+            title="PERFORMANCE BY FOREIGN-FLOW SCORE BUCKET"
         )
     )
 

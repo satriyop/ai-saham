@@ -208,7 +208,7 @@ def swing_summary_parts(
 ) -> list[str]:
     parts = []
     if accum:
-        parts.append(f"Score {accum.foreign_flow_score:.1f}")
+        parts.append(f"Foreign Flow Score {accum.foreign_flow_score:.1f}")
     if risk_resp and risk_resp.assessment.gate_triggered:
         parts.append(f"gate: BLOCKED ({risk_resp.assessment.gate_triggered})")
     if backtest_result and backtest_result.trade_count > 0:
@@ -369,7 +369,7 @@ def _accumulation_label(accum: Any | None, config: SwingDisplayConfig) -> tuple[
         "yellow" if accum.foreign_flow_score >= config.watch_min_score else "red"
     )
     detail = (
-        f"score {accum.foreign_flow_score:.1f}; streak {accum.consecutive_streak}s; "
+        f"foreign-flow score {accum.foreign_flow_score:.1f}; streak {accum.consecutive_streak}s; "
         f"net {accum.net_buy_days}/{accum.total_days}; flow {fmt_pct(accum.avg_flow_ratio, True)}"
     )
     return label.upper(), style, detail
@@ -1144,7 +1144,7 @@ def print_swing_output(
         ))
 
         flow_table = compact_table()
-        flow_table.add_column("Accum Score")
+        flow_table.add_column("Foreign Flow Score")
         flow_table.add_column("Streak")
         flow_table.add_column("Net Days")
         flow_table.add_column("Flow Ratio")
@@ -1199,7 +1199,7 @@ def print_swing_output(
                 "inst": "Broker attribution",
             }
             component_table = compact_table()
-            component_table.add_column("Accum Component")
+            component_table.add_column("Foreign Flow Component")
             component_table.add_column("Pts", justify="right")
             for key, value in breakdown.items():
                 component_table.add_row(

@@ -30,7 +30,7 @@ AVAILABLE_SWING_SETUPS = (
 
 @dataclass(frozen=True)
 class ForeignBounceSetupConfig:
-    gate_min_score: float = 70.0
+    gate_min_foreign_flow_score: float = 70.0
     gate_min_vwap_discount_pct: float = 3.0
     gate_required_trend: str = "SIDE"
     gate_min_flow_ratio_pct: float = 5.0
@@ -41,7 +41,7 @@ class ForeignBounceSetupConfig:
 
 @dataclass(frozen=True)
 class CoiledSpringSetupConfig:
-    gate_min_score: float = 60.0
+    gate_min_foreign_flow_score: float = 60.0
     gate_max_bb_width_pctile: float = 0.20
     gate_min_flow_ratio_pct: float = 3.0
     gate_max_rsi: float = 65.0
@@ -51,7 +51,7 @@ class CoiledSpringSetupConfig:
 
 @dataclass(frozen=True)
 class SmartMoneyConfirmedSetupConfig:
-    gate_min_score: float = 60.0
+    gate_min_foreign_flow_score: float = 60.0
     gate_min_smart_flow_idr: Decimal = Decimal("0")
     gate_min_smart_share_pct: float = 30.0
     gate_max_noise_share_pct: float = 60.0
@@ -62,7 +62,7 @@ class SmartMoneyConfirmedSetupConfig:
 
 @dataclass(frozen=True)
 class PullbackContinuationSetupConfig:
-    gate_min_score: float = 55.0
+    gate_min_foreign_flow_score: float = 55.0
     gate_required_trend: str = "UP"
     gate_min_flow_ratio_pct: float = 2.0
     gate_min_rsi: float = 40.0
@@ -192,10 +192,10 @@ class EvaluateSwingSetupUseCase:
 
         gates = (
             SetupGate(
-                label="score",
-                passed=candidate.foreign_flow_score >= config.gate_min_score,
+                label="foreign_flow_score",
+                passed=candidate.foreign_flow_score >= config.gate_min_foreign_flow_score,
                 actual=f"{candidate.foreign_flow_score:.1f}",
-                required=f">= {config.gate_min_score:.0f}",
+                required=f">= {config.gate_min_foreign_flow_score:.0f}",
             ),
             SetupGate(
                 label="fvwap%",
@@ -238,7 +238,7 @@ class EvaluateSwingSetupUseCase:
             setup_name=FOREIGN_BOUNCE_SETUP,
             gates=gates,
             partial_max_failed_gates=config.partial_max_failed_gates,
-            force_partial_when_score_passes=candidate.foreign_flow_score >= config.gate_min_score,
+            force_partial_when_score_passes=candidate.foreign_flow_score >= config.gate_min_foreign_flow_score,
         )
 
     def _coiled_spring(
@@ -251,10 +251,10 @@ class EvaluateSwingSetupUseCase:
 
         gates = (
             SetupGate(
-                label="score",
-                passed=candidate.foreign_flow_score >= config.gate_min_score,
+                label="foreign_flow_score",
+                passed=candidate.foreign_flow_score >= config.gate_min_foreign_flow_score,
                 actual=f"{candidate.foreign_flow_score:.1f}",
-                required=f">= {config.gate_min_score:.0f}",
+                required=f">= {config.gate_min_foreign_flow_score:.0f}",
             ),
             SetupGate(
                 label="bb_width_pctile",
@@ -291,7 +291,7 @@ class EvaluateSwingSetupUseCase:
             setup_name=COILED_SPRING_SETUP,
             gates=gates,
             partial_max_failed_gates=config.partial_max_failed_gates,
-            force_partial_when_score_passes=candidate.foreign_flow_score >= config.gate_min_score,
+            force_partial_when_score_passes=candidate.foreign_flow_score >= config.gate_min_foreign_flow_score,
         )
 
     def _smart_money_confirmed(
@@ -328,10 +328,10 @@ class EvaluateSwingSetupUseCase:
 
         gates = (
             SetupGate(
-                label="score",
-                passed=candidate.foreign_flow_score >= config.gate_min_score,
+                label="foreign_flow_score",
+                passed=candidate.foreign_flow_score >= config.gate_min_foreign_flow_score,
                 actual=f"{candidate.foreign_flow_score:.1f}",
-                required=f">= {config.gate_min_score:.0f}",
+                required=f">= {config.gate_min_foreign_flow_score:.0f}",
             ),
             SetupGate(
                 label="smart_flow",
@@ -369,7 +369,7 @@ class EvaluateSwingSetupUseCase:
             setup_name=SMART_MONEY_CONFIRMED_SETUP,
             gates=gates,
             partial_max_failed_gates=config.partial_max_failed_gates,
-            force_partial_when_score_passes=candidate.foreign_flow_score >= config.gate_min_score,
+            force_partial_when_score_passes=candidate.foreign_flow_score >= config.gate_min_foreign_flow_score,
         )
 
     def _pullback_continuation(
@@ -382,10 +382,10 @@ class EvaluateSwingSetupUseCase:
 
         gates = (
             SetupGate(
-                label="score",
-                passed=candidate.foreign_flow_score >= config.gate_min_score,
+                label="foreign_flow_score",
+                passed=candidate.foreign_flow_score >= config.gate_min_foreign_flow_score,
                 actual=f"{candidate.foreign_flow_score:.1f}",
-                required=f">= {config.gate_min_score:.0f}",
+                required=f">= {config.gate_min_foreign_flow_score:.0f}",
             ),
             SetupGate(
                 label="trend",
@@ -428,5 +428,5 @@ class EvaluateSwingSetupUseCase:
             setup_name=PULLBACK_CONTINUATION_SETUP,
             gates=gates,
             partial_max_failed_gates=config.partial_max_failed_gates,
-            force_partial_when_score_passes=candidate.foreign_flow_score >= config.gate_min_score,
+            force_partial_when_score_passes=candidate.foreign_flow_score >= config.gate_min_foreign_flow_score,
         )

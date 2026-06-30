@@ -274,7 +274,7 @@ def accumulation_run(
         Optional[str],
         typer.Option(
             "--strategy", "-S",
-            help="Show strategy signal column alongside accum score (e.g. williams-r-bounce)",
+            help="Show strategy signal column alongside foreign-flow score (e.g. williams-r-bounce)",
         ),
     ] = None,
     db_path: Annotated[

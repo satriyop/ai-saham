@@ -203,7 +203,7 @@ class AccumulationAuditRequest:
     end_date: date
     window_days: int = 7
     min_net_buy_days: int = 2
-    min_score: float = 0.0
+    min_foreign_flow_score: float = 0.0
     horizon_days: int = 20
     min_vwap_disc_pct: float | None = None
     trend: str | None = None
@@ -265,7 +265,7 @@ class AccumulationAuditUseCase:
                     tickers=tickers,
                     window_days=request.window_days,
                     min_net_buy_days=request.min_net_buy_days,
-                    min_foreign_flow_score=request.min_score,
+                    min_foreign_flow_score=request.min_foreign_flow_score,
                     min_foreign_flow_score_enabled=True,
                     as_of_date=signal_date,
                 )

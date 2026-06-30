@@ -101,9 +101,13 @@ def accumulation_audit(
         Optional[int],
         typer.Option("--window", "-w", help="Accumulation window in broker sessions", min=3),
     ] = None,
-    min_score: Annotated[
+    min_foreign_flow_score: Annotated[
         Optional[float],
-        typer.Option("--min-score", help="Minimum composite score to audit", min=0),
+        typer.Option(
+            "--min-foreign-flow-score",
+            help="Minimum composite foreign-flow score to audit",
+            min=0,
+        ),
     ] = None,
     min_net_buy_days: Annotated[
         Optional[int],
@@ -203,9 +207,9 @@ def accumulation_audit(
 
     universe = universe or setup_values.get("universe")
     window = window if window is not None else int(setup_values.get("window", 7))
-    min_score = (
-        min_score if min_score is not None
-        else float(setup_values.get("min_score", 40.0))
+    min_foreign_flow_score = (
+        min_foreign_flow_score if min_foreign_flow_score is not None
+        else float(setup_values.get("min_foreign_flow_score", 40.0))
     )
     min_net_buy_days = (
         min_net_buy_days if min_net_buy_days is not None
@@ -297,7 +301,7 @@ def accumulation_audit(
     if output_format != "json":
         typer.echo(
             f"Auditing {len(ticker_list)} tickers | {start_date} to {end_date} | "
-            f"{window} sessions | min score {min_score:g}{filter_label}..."
+            f"{window} sessions | min foreign-flow score {min_foreign_flow_score:g}{filter_label}..."
         )
 
     use_case = AccumulationAuditUseCase(
@@ -311,7 +315,7 @@ def accumulation_audit(
             end_date=end_date,
             window_days=window,
             min_net_buy_days=min_net_buy_days,
-            min_score=min_score,
+            min_foreign_flow_score=min_foreign_flow_score,
             horizon_days=horizon,
             min_vwap_disc_pct=min_vwap_disc,
             trend=trend_filter,

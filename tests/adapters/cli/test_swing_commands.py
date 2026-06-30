@@ -942,7 +942,7 @@ def test_swing_output_renders_optional_evidence_as_separate_panels(capsys):
     assert "Composite Foreign Flow Score (7 broker sessions)" in out
     assert "ENTER-ZONE / FLOW POSITIVE" in out
     assert "Longer-term flow context below is diagnostic only" in out
-    assert "Accum Score" in out
+    assert "Foreign Flow Score" in out
     assert "STRATEGY EVIDENCE" in out
     assert "2026-01-01 to 2026-06-18" in out
     assert "SENTIMENT EVIDENCE" in out

@@ -638,7 +638,7 @@ saham screen accum --universe lq45 --format json
 | `--explain` | | false | Append run context and scoring definitions after results |
 | `--db` | | | SQLite database path |
 
-**Accumulation evidence score (0-120 soft cap):** consistency, streak, VWAP discount, RSI headroom, flow %, BB squeeze, and BCI. Thresholds and weights are configured in `config/accumulation_screener.yaml`.
+**Foreign Flow Score (0-120 soft cap):** consistency, streak, VWAP discount, RSI headroom, flow %, BB squeeze, and BCI. Thresholds and weights are configured in `config/accumulation_screener.yaml`.
 
 **SignalAssessment score (0-100, via SignalEngine):** bandar intensity, foreign flow quality, insider net buy ratio, seasonality win rate, analyst buy consensus, and forward PE valuation. Weights, classification thresholds, missing-data policy, enrichment lookbacks, input mapping, and factor scoring thresholds are configured in `config/signal_engine.yaml`.
 
@@ -669,7 +669,7 @@ saham analyze accum-audit --universe idx80 --setup foreign-bounce
 saham analyze accum-audit --universe idx80 --setup coiled-spring
 saham analyze accum-audit --universe idx80 --setup smart-money-confirmed
 saham analyze accum-audit --universe idx80 --setup pullback-continuation
-saham analyze accum-audit --universe idx80 --window 7 --min-score 70
+saham analyze accum-audit --universe idx80 --window 7 --min-foreign-flow-score 70
 saham analyze accum-audit --universe lq45 --simulate-exits
 ```
 
@@ -680,7 +680,7 @@ saham analyze accum-audit --universe lq45 --simulate-exits
 | `--start` | | 2026-01-01 | Audit start date, YYYY-MM-DD |
 | `--end` | | today | Audit end date, YYYY-MM-DD |
 | `--window` | `-w` | | Accumulation window in broker sessions |
-| `--min-score` | | | Minimum composite score to audit |
+| `--min-foreign-flow-score` | | | Minimum composite foreign-flow score to audit |
 | `--min-net-buy-days` | | | Minimum foreign net-buy days |
 | `--min-vwap-disc` | | | Require VWAP discount at least this percent |
 | `--trend` | | | Require trend bucket: UP, SIDE, or DOWN |
@@ -1416,7 +1416,7 @@ src/
 │   │   ├── swing_analysis_workflow_use_case.py
 │   │   ├── assess_signal_use_case.py
 │   │   ├── assess_trade_setup_use_case.py
-│   │   ├── assess_accumulation_evidence_use_case.py
+│   │   ├── score_foreign_flow_use_case.py
 │   │   ├── evaluate_swing_setup_use_case.py
 │   │   ├── build_market_context_use_case.py
 │   │   ├── opening_snapshot_use_case.py / opening_track_use_case.py

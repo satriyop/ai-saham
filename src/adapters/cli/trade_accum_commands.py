@@ -146,10 +146,10 @@ def _accumulation_log_impl(
         max_hold_days=_BT.max_hold_days,
     ))
 
-    if result.candidate_score is None and entry_price is None:
+    if result.candidate_foreign_flow_score is None and entry_price is None:
         typer.echo(
             f"Warning: no accumulation data for {ticker_upper} in the last {window} broker sessions. "
-            "Logging without an accumulation score.",
+            "Logging without a foreign-flow score.",
             err=True,
         )
 
@@ -160,7 +160,7 @@ def _accumulation_log_impl(
         )
         return
 
-    score_str = f"{result.candidate_score:.1f}" if result.candidate_score is not None else "N/A"
+    score_str = f"{result.candidate_foreign_flow_score:.1f}" if result.candidate_foreign_flow_score is not None else "N/A"
     pattern_str = f" | pattern: {result.pattern}" if result.pattern else ""
     decision_str = (
         f" | setup={setup_name} | match={result.setup_match}"
@@ -259,9 +259,12 @@ def accumulation_review(
         int,
         typer.Option("--horizon", help="Trading days forward for max/min window", min=1),
     ] = 10,
-    min_score: Annotated[
+    min_foreign_flow_score: Annotated[
         float,
-        typer.Option("--min-score", help="Only include entries with score ≥ this"),
+        typer.Option(
+            "--min-foreign-flow-score",
+            help="Only include entries with foreign-flow score >= this",
+        ),
     ] = 0.0,
     journal: Annotated[
         Optional[Path],
@@ -273,14 +276,14 @@ def accumulation_review(
     ] = None,
 ) -> None:
     """
-    Review accumulation trade journal: forward returns by score and pattern.
+    Review accumulation trade journal: forward returns by foreign-flow score and pattern.
 
     Fetches actual forward closes from the local database and computes
-    what the accumulation score thresholds actually delivered.
+    what the foreign-flow score thresholds actually delivered.
 
     Example:
         saham trade review swing
-        saham trade review swing --horizon 10 --min-score 70
+        saham trade review swing --horizon 10 --min-foreign-flow-score 70
     """
     from src.application.services.accumulation_journal import AccumulationJournalService
     from src.infrastructure.persistence.accumulation_journal_csv_writer import (
@@ -311,5 +314,5 @@ def accumulation_review(
         report=report,
         journal_path=journal_path,
         horizon=horizon,
-        min_score=min_score,
+        min_foreign_flow_score=min_foreign_flow_score,
     )

@@ -41,7 +41,7 @@ class SwingConfig:
     smart_sell_min_share_pct: float = 15.0
     # foreign_bounce setup gates
     foreign_bounce_enabled: bool = True
-    gate_min_score: float = 70.0
+    gate_min_foreign_flow_score: float = 70.0
     gate_min_vwap_discount_pct: float = 3.0
     gate_required_trend: str = "SIDE"
     gate_min_flow_ratio_pct: float = 5.0
@@ -49,14 +49,14 @@ class SwingConfig:
     partial_max_failed_gates: int = 2
     # coiled_spring setup gates
     coiled_spring_enabled: bool = True
-    coiled_spring_gate_min_score: float = 60.0
+    coiled_spring_gate_min_foreign_flow_score: float = 60.0
     coiled_spring_gate_max_bb_width_pctile: float = 0.20
     coiled_spring_gate_min_flow_ratio_pct: float = 3.0
     coiled_spring_gate_max_rsi: float = 65.0
     coiled_spring_partial_max_failed_gates: int = 2
     # smart_money_confirmed setup gates
     smart_money_confirmed_enabled: bool = True
-    smart_money_confirmed_gate_min_score: float = 60.0
+    smart_money_confirmed_gate_min_foreign_flow_score: float = 60.0
     smart_money_confirmed_gate_min_smart_flow_idr: Decimal = Decimal("0")
     smart_money_confirmed_gate_min_smart_share_pct: float = 30.0
     smart_money_confirmed_gate_max_noise_share_pct: float = 60.0
@@ -64,7 +64,7 @@ class SwingConfig:
     smart_money_confirmed_partial_max_failed_gates: int = 1
     # pullback_continuation setup gates
     pullback_continuation_enabled: bool = True
-    pullback_continuation_gate_min_score: float = 55.0
+    pullback_continuation_gate_min_foreign_flow_score: float = 55.0
     pullback_continuation_gate_required_trend: str = "UP"
     pullback_continuation_gate_min_flow_ratio_pct: float = 2.0
     pullback_continuation_gate_min_rsi: float = 40.0
@@ -175,20 +175,20 @@ def load_swing_config(
             smart_share_threshold_pct=_f(bq, "smart_share_threshold_pct", defaults.smart_share_threshold_pct),
             smart_sell_min_share_pct=_f(bq, "smart_sell_min_share_pct", defaults.smart_sell_min_share_pct),
             foreign_bounce_enabled=_b(fb, "enabled", defaults.foreign_bounce_enabled),
-            gate_min_score=_f(fb_gates, "min_score", defaults.gate_min_score),
+            gate_min_foreign_flow_score=_f(fb_gates, "min_foreign_flow_score", defaults.gate_min_foreign_flow_score),
             gate_min_vwap_discount_pct=_f(fb_gates, "min_vwap_discount_pct", defaults.gate_min_vwap_discount_pct),
             gate_required_trend=_s(fb_gates, "required_trend", defaults.gate_required_trend),
             gate_min_flow_ratio_pct=_f(fb_gates, "min_flow_ratio_pct", defaults.gate_min_flow_ratio_pct),
             gate_max_rsi=_f(fb_gates, "max_rsi", defaults.gate_max_rsi),
             partial_max_failed_gates=_i(fb, "partial_max_failed_gates", defaults.partial_max_failed_gates),
             coiled_spring_enabled=_b(cs, "enabled", defaults.coiled_spring_enabled),
-            coiled_spring_gate_min_score=_f(cs_gates, "min_score", defaults.coiled_spring_gate_min_score),
+            coiled_spring_gate_min_foreign_flow_score=_f(cs_gates, "min_foreign_flow_score", defaults.coiled_spring_gate_min_foreign_flow_score),
             coiled_spring_gate_max_bb_width_pctile=_f(cs_gates, "max_bb_width_pctile", defaults.coiled_spring_gate_max_bb_width_pctile),
             coiled_spring_gate_min_flow_ratio_pct=_f(cs_gates, "min_flow_ratio_pct", defaults.coiled_spring_gate_min_flow_ratio_pct),
             coiled_spring_gate_max_rsi=_f(cs_gates, "max_rsi", defaults.coiled_spring_gate_max_rsi),
             coiled_spring_partial_max_failed_gates=_i(cs, "partial_max_failed_gates", defaults.coiled_spring_partial_max_failed_gates),
             smart_money_confirmed_enabled=_b(smc, "enabled", defaults.smart_money_confirmed_enabled),
-            smart_money_confirmed_gate_min_score=_f(smc_gates, "min_score", defaults.smart_money_confirmed_gate_min_score),
+            smart_money_confirmed_gate_min_foreign_flow_score=_f(smc_gates, "min_foreign_flow_score", defaults.smart_money_confirmed_gate_min_foreign_flow_score),
             smart_money_confirmed_gate_min_smart_flow_idr=Decimal(
                 str(_f(smc_gates, "min_smart_flow_idr", float(defaults.smart_money_confirmed_gate_min_smart_flow_idr)))
             ),
@@ -197,7 +197,7 @@ def load_swing_config(
             smart_money_confirmed_reject_smart_net_selling=_b(smc_gates, "reject_smart_net_selling", defaults.smart_money_confirmed_reject_smart_net_selling),
             smart_money_confirmed_partial_max_failed_gates=_i(smc, "partial_max_failed_gates", defaults.smart_money_confirmed_partial_max_failed_gates),
             pullback_continuation_enabled=_b(pc, "enabled", defaults.pullback_continuation_enabled),
-            pullback_continuation_gate_min_score=_f(pc_gates, "min_score", defaults.pullback_continuation_gate_min_score),
+            pullback_continuation_gate_min_foreign_flow_score=_f(pc_gates, "min_foreign_flow_score", defaults.pullback_continuation_gate_min_foreign_flow_score),
             pullback_continuation_gate_required_trend=_s(pc_gates, "required_trend", defaults.pullback_continuation_gate_required_trend),
             pullback_continuation_gate_min_flow_ratio_pct=_f(pc_gates, "min_flow_ratio_pct", defaults.pullback_continuation_gate_min_flow_ratio_pct),
             pullback_continuation_gate_min_rsi=_f(pc_gates, "min_rsi", defaults.pullback_continuation_gate_min_rsi),

@@ -53,7 +53,6 @@ class SwingBacktestRequest:
     max_positions: int = 5
     window_days: int = 7
     min_net_buy_days: int = 2
-    min_score: float = 70.0
     min_vwap_disc_pct: float = 3.0
     trend: str = "SIDE"
     min_flow_pct: float = 5.0
