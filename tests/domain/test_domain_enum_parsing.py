@@ -3,6 +3,7 @@
 import pytest
 
 from src.domain.indicators.indicator_reading import IndicatorReading
+from src.domain.ports.csv_broker_parser import CsvFormat, ErrorStrategy
 from src.domain.value_objects.risk_signal import RiskLevel
 from src.domain.value_objects.trade_action import TradeAction
 
@@ -47,3 +48,27 @@ def test_trade_action_from_string_accepts_legacy_values() -> None:
 def test_trade_action_from_string_rejects_unknown_value() -> None:
     with pytest.raises(ValueError, match="Invalid action"):
         TradeAction.from_string("BUY")
+
+
+def test_csv_format_values_are_uppercase() -> None:
+    assert CsvFormat.SIMPLE.value == "SIMPLE"
+    assert CsvFormat.DETAILED.value == "DETAILED"
+    assert CsvFormat.CUSTOM.value == "CUSTOM"
+
+
+def test_csv_format_parse_accepts_legacy_values() -> None:
+    assert CsvFormat.parse("simple") == CsvFormat.SIMPLE
+    assert CsvFormat.parse("DETAILED") == CsvFormat.DETAILED
+    assert CsvFormat.parse("custom") == CsvFormat.CUSTOM
+
+
+def test_error_strategy_values_are_uppercase() -> None:
+    assert ErrorStrategy.SKIP.value == "SKIP"
+    assert ErrorStrategy.FAIL.value == "FAIL"
+    assert ErrorStrategy.REPORT.value == "REPORT"
+
+
+def test_error_strategy_parse_accepts_legacy_values() -> None:
+    assert ErrorStrategy.parse("skip") == ErrorStrategy.SKIP
+    assert ErrorStrategy.parse("FAIL") == ErrorStrategy.FAIL
+    assert ErrorStrategy.parse("report") == ErrorStrategy.REPORT

@@ -40,7 +40,7 @@ class TestMarkdownSkillWriterRender:
         result = writer.render_skill(metadata)
 
         assert "# RSI Momentum" in result
-        assert "**Type:** strategy" in result
+        assert "**Type:** STRATEGY" in result
 
     def test_render_includes_description_from_annotation(self):
         """render_skill() should include description when annotation exists."""

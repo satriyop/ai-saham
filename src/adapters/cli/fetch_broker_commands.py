@@ -382,20 +382,14 @@ def broker_import(
         saham fetch broker-import data.csv --mapping rti    # Use custom mapping
         saham fetch broker-import data.csv --on-error fail  # Stop on first error
     """
-    # Parse error strategy
-    error_strategies = {
-        "skip": ErrorStrategy.SKIP,
-        "fail": ErrorStrategy.FAIL,
-        "report": ErrorStrategy.REPORT,
-    }
-    if on_error not in error_strategies:
+    try:
+        error_strategy = ErrorStrategy.parse(on_error)
+    except ValueError:
         typer.echo(
             typer.style(f"Invalid --on-error value: {on_error}", fg=typer.colors.RED)
         )
-        typer.echo(f"Valid values: {', '.join(error_strategies.keys())}")
+        typer.echo("Valid values: skip, fail, report")
         raise typer.Exit(1)
-
-    error_strategy = error_strategies[on_error]
 
     # Load custom mapping if specified
     mapping_config = None

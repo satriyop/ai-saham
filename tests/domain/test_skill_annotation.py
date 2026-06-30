@@ -27,15 +27,21 @@ class TestArtifactType:
 
     def test_enum_has_strategy_value(self):
         """ArtifactType should have STRATEGY member."""
-        assert ArtifactType.STRATEGY.value == "strategy"
+        assert ArtifactType.STRATEGY.value == "STRATEGY"
 
     def test_enum_has_indicator_value(self):
         """ArtifactType should have INDICATOR member."""
-        assert ArtifactType.INDICATOR.value == "indicator"
+        assert ArtifactType.INDICATOR.value == "INDICATOR"
 
     def test_enum_has_formula_value(self):
         """ArtifactType should have FORMULA member."""
-        assert ArtifactType.FORMULA.value == "formula"
+        assert ArtifactType.FORMULA.value == "FORMULA"
+
+    def test_parse_accepts_legacy_lowercase_value(self):
+        """ArtifactType should parse lowercase sidecar/boundary values."""
+        assert ArtifactType.parse("strategy") == ArtifactType.STRATEGY
+        assert ArtifactType.parse("INDICATOR") == ArtifactType.INDICATOR
+        assert ArtifactType.parse("formula") == ArtifactType.FORMULA
 
 
 class TestSkillAnnotation:

@@ -15,9 +15,19 @@ from pathlib import Path
 class ArtifactType(Enum):
     """Type of artifact that can have skill annotations."""
 
-    STRATEGY = "strategy"
-    INDICATOR = "indicator"
-    FORMULA = "formula"
+    STRATEGY = "STRATEGY"
+    INDICATOR = "INDICATOR"
+    FORMULA = "FORMULA"
+
+    @classmethod
+    def parse(cls, value: str) -> "ArtifactType":
+        """Parse canonical uppercase and legacy lowercase artifact types."""
+        normalized = value.strip().upper().replace("-", "_")
+        for artifact_type in cls:
+            if normalized in {artifact_type.name, artifact_type.value}:
+                return artifact_type
+        valid = [artifact_type.value for artifact_type in cls]
+        raise ValueError(f"Invalid artifact type '{value}'. Must be one of: {valid}")
 
 
 @dataclass(frozen=True)

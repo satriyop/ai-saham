@@ -141,12 +141,12 @@ class MappingLoader:
         name = data.get("name", default_name)
 
         # Parse format
-        format_str = data.get("format", "simple").lower()
+        format_str = str(data.get("format", "SIMPLE"))
         try:
-            csv_format = CsvFormat(format_str)
+            csv_format = CsvFormat.parse(format_str)
         except ValueError:
             raise CsvBrokerParserError(
-                f"Invalid format '{format_str}'. Must be one of: simple, detailed, custom"
+                f"Invalid format '{format_str}'. Must be one of: SIMPLE, DETAILED, CUSTOM"
             )
 
         # Parse columns

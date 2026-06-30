@@ -20,17 +20,37 @@ from src.domain.entities.broker_flow import BrokerSummary
 class CsvFormat(Enum):
     """Supported CSV format types."""
 
-    SIMPLE = "simple"  # Aggregate foreign flow only
-    DETAILED = "detailed"  # With broker transactions
-    CUSTOM = "custom"  # User-defined mapping
+    SIMPLE = "SIMPLE"  # Aggregate foreign flow only
+    DETAILED = "DETAILED"  # With broker transactions
+    CUSTOM = "CUSTOM"  # User-defined mapping
+
+    @classmethod
+    def parse(cls, value: str) -> "CsvFormat":
+        """Parse canonical uppercase and legacy lowercase CSV format values."""
+        normalized = value.strip().upper().replace("-", "_")
+        for csv_format in cls:
+            if normalized in {csv_format.name, csv_format.value}:
+                return csv_format
+        valid = [csv_format.value for csv_format in cls]
+        raise ValueError(f"Invalid CSV format '{value}'. Must be one of: {valid}")
 
 
 class ErrorStrategy(Enum):
     """How to handle parsing errors."""
 
-    SKIP = "skip"  # Skip invalid rows, continue processing
-    FAIL = "fail"  # Stop on first error
-    REPORT = "report"  # Collect all errors, report at end
+    SKIP = "SKIP"  # Skip invalid rows, continue processing
+    FAIL = "FAIL"  # Stop on first error
+    REPORT = "REPORT"  # Collect all errors, report at end
+
+    @classmethod
+    def parse(cls, value: str) -> "ErrorStrategy":
+        """Parse canonical uppercase and legacy lowercase error strategy values."""
+        normalized = value.strip().upper().replace("-", "_")
+        for strategy in cls:
+            if normalized in {strategy.name, strategy.value}:
+                return strategy
+        valid = [strategy.value for strategy in cls]
+        raise ValueError(f"Invalid error strategy '{value}'. Must be one of: {valid}")
 
 
 @dataclass(frozen=True)
