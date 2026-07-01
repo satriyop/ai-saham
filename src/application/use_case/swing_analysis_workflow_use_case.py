@@ -23,19 +23,20 @@ from src.application.services.position_sizer import (
     compute_percent_position_size,
     compute_position_size,
 )
-from src.domain.value_objects.benchmark_symbol import canonicalize_ticker
 from src.application.services.signal_context_builder import (
     build_signal_context_from_candidate,
 )
+from src.application.services.strategy_loader import StrategyLoader
 from src.application.use_case.assess_risk_use_case import AssessRiskRequest, AssessRiskUseCase
-from src.domain.rules.risk_gate import GateContext, RiskGate
 from src.application.use_case.backtest_use_case import BacktestRequest, BacktestUseCase
+from src.domain.ports.broker_data_repository import BrokerDataRepository
+from src.domain.ports.market_data_repository import MarketDataRepository
+from src.domain.rules.risk_gate import GateContext, RiskGate
+from src.domain.value_objects.benchmark_symbol import canonicalize_ticker
 
 if TYPE_CHECKING:
     from src.domain.value_objects.market_context import MarketContext
     from src.domain.value_objects.trade_setup import TradeSetup
-from src.domain.ports.broker_data_repository import BrokerDataRepository
-from src.domain.ports.market_data_repository import MarketDataRepository
 
 
 @dataclass(frozen=True)

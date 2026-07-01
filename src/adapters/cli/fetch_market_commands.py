@@ -720,7 +720,7 @@ def _fetch_global_context_tickers(db_path: Path, days: int = 180) -> None:
                 )
             )
             if resp.status.startswith("cached"):
-                status = f"✓"
+                status = "✓"
             else:
                 status = resp.status
             results.append(f"{ticker}({factor}):{status}")
