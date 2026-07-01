@@ -6,6 +6,8 @@ from src.application.services.swing_tuning_contracts import (
     build_tuning_config_diff_draft,
     build_tuning_proposal_draft,
     build_tuning_readiness_plan,
+    parse_tuning_config_path,
+    validate_tuning_target_paths,
 )
 from tests.application.services.swing_backtest_attribution_fixtures import (
     ObservationFixture,
@@ -200,6 +202,14 @@ def test_tuning_config_diff_draft_is_schema_only_for_ready_proposals():
     assert draft.diff_items == ()
     assert draft.rejected_items
     assert all(rejection.target_path != "N/A" for rejection in draft.rejected_items)
+    assert all(
+        rejection.parsed_target_path is not None
+        for rejection in draft.rejected_items
+    )
+    assert all(
+        rejection.to_dict()["parsed_target_path"]["raw"] == rejection.target_path
+        for rejection in draft.rejected_items
+    )
     assert {
         rejection.reason
         for rejection in draft.rejected_items
@@ -207,4 +217,48 @@ def test_tuning_config_diff_draft_is_schema_only_for_ready_proposals():
         "Config diff generation requires HIGH evidence strength; current strength is MEDIUM.",
         "Config diff generation requires HIGH evidence strength; current strength is LOW.",
         "Value-selection logic is not implemented; schema is locked first.",
+    }
+
+
+def test_parse_tuning_config_path_splits_file_and_document_path():
+    parsed = parse_tuning_config_path(
+        "config/signal_engine.yaml:signal_engine.classification"
+    )
+
+    assert parsed.raw == "config/signal_engine.yaml:signal_engine.classification"
+    assert parsed.file_path == "config/signal_engine.yaml"
+    assert parsed.document_path == "signal_engine.classification"
+    assert parsed.to_dict() == {
+        "raw": "config/signal_engine.yaml:signal_engine.classification",
+        "file_path": "config/signal_engine.yaml",
+        "document_path": "signal_engine.classification",
+    }
+
+
+def test_parse_tuning_config_path_rejects_invalid_format():
+    invalid_paths = (
+        "config/signal_engine.yaml",
+        "config/signal_engine.yaml:",
+        ":signal_engine.classification",
+        "config/signal_engine.json:signal_engine.classification",
+    )
+
+    for invalid_path in invalid_paths:
+        try:
+            parse_tuning_config_path(invalid_path)
+        except ValueError:
+            continue
+        raise AssertionError(f"Expected invalid path to fail: {invalid_path}")
+
+
+def test_validate_tuning_target_paths_covers_all_current_targets():
+    summary = summarize_swing_backtest_attribution(())
+
+    parsed_paths = validate_tuning_target_paths(summary)
+
+    assert parsed_paths
+    assert set(parsed_paths) == {
+        yaml_path
+        for target in summary.tuning_targets
+        for yaml_path in target.yaml_paths
     }

@@ -911,7 +911,8 @@ targets are ranked before any future tuning engine proposes values.
 Use `--with-tuning-diff` to print the locked config-diff schema for future
 tuners. Current output is schema-only: it reports zero diff items plus rejected
 target paths/reasons, and never reads current YAML values, chooses proposed
-values, applies changes, runs AI, or mutates config.
+values, applies changes, runs AI, or mutates config. JSON output includes parsed
+target path fields (`file_path`, `document_path`, `raw`) for future tooling.
 
 Attribution dimensions map to these primary tuning files:
 

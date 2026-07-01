@@ -21,6 +21,22 @@ from src.application.services.swing_backtest_attribution import (
 
 
 @dataclass(frozen=True)
+class TuningConfigPath:
+    """Structured YAML path target for future config diff generation."""
+
+    raw: str
+    file_path: str
+    document_path: str
+
+    def to_dict(self) -> dict:
+        return {
+            "raw": self.raw,
+            "file_path": self.file_path,
+            "document_path": self.document_path,
+        }
+
+
+@dataclass(frozen=True)
 class TuningReadinessPlan:
     """Deterministic preflight for attribution-driven YAML tuning."""
 
@@ -137,10 +153,16 @@ class TuningConfigDiffItem:
     evidence_dimension: str
     confidence: str
     status: str
+    parsed_target_path: TuningConfigPath | None = None
 
     def to_dict(self) -> dict:
         return {
             "target_path": self.target_path,
+            "parsed_target_path": (
+                self.parsed_target_path.to_dict()
+                if self.parsed_target_path is not None
+                else None
+            ),
             "current_value": self.current_value,
             "proposed_value": self.proposed_value,
             "rationale": self.rationale,
@@ -157,10 +179,16 @@ class TuningConfigDiffRejection:
     target_path: str
     evidence_dimension: str
     reason: str
+    parsed_target_path: TuningConfigPath | None = None
 
     def to_dict(self) -> dict:
         return {
             "target_path": self.target_path,
+            "parsed_target_path": (
+                self.parsed_target_path.to_dict()
+                if self.parsed_target_path is not None
+                else None
+            ),
             "evidence_dimension": self.evidence_dimension,
             "reason": self.reason,
         }
@@ -371,6 +399,7 @@ def build_tuning_config_diff_draft(
     rejected_items: list[TuningConfigDiffRejection] = []
     for candidate in proposal.candidate_changes:
         for target_path in candidate.yaml_paths:
+            parsed_target_path = parse_tuning_config_path(target_path)
             if candidate.evidence_strength != "HIGH":
                 reason = (
                     "Config diff generation requires HIGH evidence strength; "
@@ -383,6 +412,7 @@ def build_tuning_config_diff_draft(
             rejected_items.append(
                 TuningConfigDiffRejection(
                     target_path=target_path,
+                    parsed_target_path=parsed_target_path,
                     evidence_dimension=candidate.dimension,
                     reason=reason,
                 )
@@ -398,6 +428,32 @@ def build_tuning_config_diff_draft(
         rejected_items=tuple(rejected_items),
         notes=notes,
     )
+
+
+def parse_tuning_config_path(raw_path: str) -> TuningConfigPath:
+    """Parse a tuning target path in file.yaml:document.path format."""
+    file_path, separator, document_path = raw_path.partition(":")
+    if not separator or not file_path.strip() or not document_path.strip():
+        raise ValueError(
+            "Tuning config path must use 'file.yaml:document.path' format."
+        )
+    normalized_file_path = file_path.strip()
+    if not normalized_file_path.endswith((".yaml", ".yml")):
+        raise ValueError("Tuning config path file must end with .yaml or .yml.")
+    return TuningConfigPath(
+        raw=raw_path,
+        file_path=normalized_file_path,
+        document_path=document_path.strip(),
+    )
+
+
+def validate_tuning_target_paths(summary: SwingBacktestAttributionSummary) -> tuple[str, ...]:
+    """Validate all tuning target YAML paths and return normalized raw paths."""
+    parsed_paths: list[str] = []
+    for target in summary.tuning_targets:
+        for yaml_path in target.yaml_paths:
+            parsed_paths.append(parse_tuning_config_path(yaml_path).raw)
+    return tuple(parsed_paths)
 
 
 def _evidence_by_dimension(
