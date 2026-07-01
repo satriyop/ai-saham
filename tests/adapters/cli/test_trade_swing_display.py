@@ -95,6 +95,7 @@ def test_display_swing_backtest_hides_attribution_by_default(capsys):
     output = capsys.readouterr().out
     assert "TUNING ATTRIBUTION SUMMARY" not in output
     assert "TUNING READINESS" not in output
+    assert "TUNING READINESS PLAN" not in output
 
 
 def test_display_swing_backtest_can_show_attribution_panel(capsys):
@@ -125,3 +126,18 @@ def test_display_swing_backtest_shows_candidate_only_attribution(capsys):
     assert "TUNING ATTRIBUTION SUMMARY" in output
     assert "candidate_setup_match" in output
     assert "NO_MATCH" in output
+
+
+def test_display_swing_backtest_can_show_tuning_plan(capsys):
+    display_swing_backtest(
+        _response(),
+        show_trades=0,
+        show_tuning_plan=True,
+    )
+
+    output = capsys.readouterr().out
+    assert "TUNING READINESS PLAN" in output
+    assert "INSUFFICIENT_SAMPLE" in output
+    assert "Can Propose Changes" in output
+    assert "Blocked Reasons" in output
+    assert "readiness_gate_for_future_tuning_only" in output

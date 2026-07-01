@@ -19,7 +19,10 @@ import typer
 from src.adapters.cli.trade_swing_display import display_swing_backtest
 from src.application.services.bootstrap import create_indicator_registry, create_risk_engine
 from src.application.services.position_sizer import compute_position_size
-from src.application.services.swing_backtest_attribution import AttributionBucketPolicy
+from src.application.services.swing_backtest_attribution import (
+    AttributionBucketPolicy,
+    build_tuning_readiness_plan,
+)
 from src.application.services.swing_setup_catalog import build_swing_setup_catalog_config
 from src.application.services.universe_loader import (
     UniverseNotFoundError,
@@ -152,6 +155,13 @@ def swing_backtest(
             help="Show deterministic grouped attribution summary for tuning",
         ),
     ] = False,
+    with_tuning_plan: Annotated[
+        bool,
+        typer.Option(
+            "--with-tuning-plan",
+            help="Show deterministic tuning readiness plan; no AI or YAML changes",
+        ),
+    ] = False,
     output_format: Annotated[
         str,
         typer.Option("--format", help="Output format: table or json"),
@@ -253,7 +263,7 @@ def swing_backtest(
         raise typer.Exit(1)
 
     if output_format == "json":
-        typer.echo(json.dumps({
+        payload = {
             "schema_version": 1,
             "artifact_type": "swing_backtest",
             "setup": response.setup,
@@ -286,13 +296,19 @@ def swing_backtest(
                 for observation in response.candidate_observations
             ],
             "equity_curve": [point.to_dict() for point in response.equity_curve],
-        }, indent=2, default=str))
+        }
+        if with_tuning_plan:
+            payload["tuning_plan"] = build_tuning_readiness_plan(
+                response.attribution_summary
+            ).to_dict()
+        typer.echo(json.dumps(payload, indent=2, default=str))
         return
 
     display_swing_backtest(
         response,
         show_trades=show_trades,
         show_attribution=with_attribution,
+        show_tuning_plan=with_tuning_plan,
     )
 
 

@@ -10,6 +10,7 @@ from rich.console import Group
 from rich.text import Text
 
 from src.adapters.cli.rich_display import compact_table, console, panel
+from src.application.services.swing_backtest_attribution import build_tuning_readiness_plan
 from src.application.use_case.swing_backtest_use_case import SwingBacktestResponse
 
 
@@ -23,6 +24,7 @@ def display_swing_backtest(
     response: SwingBacktestResponse,
     show_trades: int,
     show_attribution: bool = False,
+    show_tuning_plan: bool = False,
 ) -> None:
     # Summary panel
     summary_table = compact_table(show_header=False)
@@ -138,6 +140,9 @@ def display_swing_backtest(
     if show_attribution:
         _display_attribution_summary(response)
 
+    if show_tuning_plan:
+        _display_tuning_plan(response)
+
     # Warnings & Footnotes (Panel 4)
     warnings_list = []
     if response.warnings:
@@ -157,6 +162,38 @@ def display_swing_backtest(
         )
     )
     console().print("")
+
+
+def _display_tuning_plan(response: SwingBacktestResponse) -> None:
+    tuning_plan = build_tuning_readiness_plan(response.attribution_summary)
+    table = compact_table(show_header=False)
+    table.add_column("Metric", style="bold cyan")
+    table.add_column("Value")
+    table.add_row("Status", _quality_status_text(tuning_plan.status))
+    table.add_row(
+        "Can Propose Changes",
+        "[green]yes[/]" if tuning_plan.can_propose_changes else "[red]no[/]",
+    )
+    table.add_row(
+        "Evidence Scopes",
+        ", ".join(tuning_plan.allowed_evidence_scopes) or "N/A",
+    )
+    table.add_row(
+        "Config Families",
+        ", ".join(tuning_plan.allowed_config_families) or "N/A",
+    )
+    table.add_row("Target Count", str(tuning_plan.target_count))
+    if tuning_plan.blocked_reasons:
+        table.add_row("Blocked Reasons", " | ".join(tuning_plan.blocked_reasons))
+    table.add_row("Intent", tuning_plan.intent)
+
+    console().print("")
+    console().print(
+        panel(
+            table,
+            title="TUNING READINESS PLAN",
+        )
+    )
 
 
 def _display_attribution_summary(response: SwingBacktestResponse) -> None:

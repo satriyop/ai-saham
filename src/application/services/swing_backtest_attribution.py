@@ -115,6 +115,32 @@ class TuningTarget:
 
 
 @dataclass(frozen=True)
+class TuningReadinessPlan:
+    """Deterministic preflight for attribution-driven YAML tuning."""
+
+    intent: str
+    status: str
+    can_propose_changes: bool
+    blocked_reasons: tuple[str, ...]
+    allowed_evidence_scopes: tuple[str, ...]
+    allowed_config_families: tuple[str, ...]
+    target_count: int
+    notes: tuple[str, ...]
+
+    def to_dict(self) -> dict:
+        return {
+            "intent": self.intent,
+            "status": self.status,
+            "can_propose_changes": self.can_propose_changes,
+            "blocked_reasons": list(self.blocked_reasons),
+            "allowed_evidence_scopes": list(self.allowed_evidence_scopes),
+            "allowed_config_families": list(self.allowed_config_families),
+            "target_count": self.target_count,
+            "notes": list(self.notes),
+        }
+
+
+@dataclass(frozen=True)
 class AttributionBucketPolicy:
     """Score bucket boundaries for attribution grouping only."""
 
@@ -435,6 +461,50 @@ def summarize_swing_backtest_attribution(
         group_stats=stats,
         candidate_group_stats=candidate_stats,
     )
+
+
+def build_tuning_readiness_plan(
+    summary: SwingBacktestAttributionSummary,
+) -> TuningReadinessPlan:
+    """Build deterministic readiness output for tuning, without proposing edits."""
+    quality = summary.sample_quality
+    evidence_scopes: list[str] = []
+    if quality.trade_sample_ready:
+        evidence_scopes.append("completed_trades")
+    if quality.candidate_sample_ready:
+        evidence_scopes.append("screened_candidates")
+
+    allowed_targets = tuple(
+        target
+        for target in summary.tuning_targets
+        if _target_scope_allowed(target.source_scope, evidence_scopes)
+    )
+    config_families = tuple(
+        sorted({target.config_family for target in allowed_targets})
+    )
+    can_propose_changes = quality.status != "INSUFFICIENT_SAMPLE"
+    notes = (
+        "Readiness plan is deterministic and reporting-only.",
+        "No AI proposal, YAML diff, or config mutation is generated.",
+        *quality.notes,
+    )
+
+    return TuningReadinessPlan(
+        intent="readiness_gate_for_future_tuning_only",
+        status=quality.status,
+        can_propose_changes=can_propose_changes,
+        blocked_reasons=() if can_propose_changes else quality.notes,
+        allowed_evidence_scopes=tuple(evidence_scopes),
+        allowed_config_families=config_families,
+        target_count=len(allowed_targets),
+        notes=notes,
+    )
+
+
+def _target_scope_allowed(source_scope: str, evidence_scopes: list[str]) -> bool:
+    if source_scope == "completed_trades_and_screened_candidates":
+        return bool({"completed_trades", "screened_candidates"} & set(evidence_scopes))
+    return source_scope in evidence_scopes
 
 
 def _trade_buckets(

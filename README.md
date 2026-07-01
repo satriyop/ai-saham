@@ -853,6 +853,7 @@ saham trade backtest-swing --universe lq45 --capital 50000000 --max-positions 3
 saham trade backtest-swing --universe idx80 --with-regime --allow-regimes RISK_ON,NEUTRAL
 saham trade backtest-swing --universe idx80 --cost-bps 0  # gross/no-cost comparison
 saham trade backtest-swing --universe idx80 --with-attribution
+saham trade backtest-swing --universe idx80 --with-tuning-plan
 ```
 
 Default backtests include `--cost-bps 20` one-way transaction cost. Override explicitly
@@ -876,6 +877,7 @@ when testing a different broker fee assumption.
 | `--benchmark` | | ^JKSE | Benchmark ticker for regime context |
 | `--show-trades` | | 20 | Number of recent trades to print |
 | `--with-attribution` | | false | Show deterministic grouped attribution summary for manual tuning |
+| `--with-tuning-plan` | | false | Show deterministic tuning readiness plan; no AI or YAML changes |
 | `--format` | | table | Output format: table or json |
 | `--db` | | | SQLite database path |
 
@@ -892,6 +894,10 @@ The `tuning_targets` block is the deterministic allowlist that maps each
 attribution dimension to the YAML files and fields it may influence.
 The `sample_quality` block is the deterministic readiness gate; tuner proposals
 must not act on summaries marked `INSUFFICIENT_SAMPLE`.
+Use `--with-tuning-plan` to print the readiness preflight explicitly. It reports
+whether changes may be proposed, which evidence scopes are allowed, and which
+config families are in scope. It does not create an AI proposal, YAML diff, or
+config mutation.
 
 Attribution dimensions map to these primary tuning files:
 

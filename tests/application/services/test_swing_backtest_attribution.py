@@ -5,6 +5,7 @@ from math import inf
 from src.application.services.swing_backtest_attribution import (
     DEFAULT_TUNING_TARGETS,
     AttributionBucketPolicy,
+    build_tuning_readiness_plan,
     summarize_swing_backtest_attribution,
 )
 from src.application.use_case.swing_backtest_use_case import SwingBacktestTrade
@@ -251,6 +252,47 @@ def test_swing_backtest_attribution_marks_mixed_ready_sample_quality():
     assert quality.status == "MIXED_READY"
     assert quality.trade_sample_ready is True
     assert quality.candidate_sample_ready is True
+
+
+def test_tuning_readiness_plan_blocks_insufficient_sample():
+    summary = summarize_swing_backtest_attribution(
+        (_trade(ticker="BBCA", net_return_pct=5.0, pnl="500"),),
+        (_Observation(forward_return_pct=1.0),),
+    )
+
+    plan = build_tuning_readiness_plan(summary)
+
+    assert plan.intent == "readiness_gate_for_future_tuning_only"
+    assert plan.status == "INSUFFICIENT_SAMPLE"
+    assert plan.can_propose_changes is False
+    assert plan.allowed_evidence_scopes == ()
+    assert plan.allowed_config_families == ()
+    assert plan.target_count == 0
+    assert plan.blocked_reasons == summary.sample_quality.notes
+    assert "No AI proposal" in " ".join(plan.notes)
+
+
+def test_tuning_readiness_plan_allows_candidate_scoped_targets():
+    summary = summarize_swing_backtest_attribution(
+        (),
+        tuple(_Observation(forward_return_pct=1.0) for _ in range(30)),
+    )
+
+    plan = build_tuning_readiness_plan(summary)
+
+    assert plan.status == "CANDIDATE_ONLY"
+    assert plan.can_propose_changes is True
+    assert plan.allowed_evidence_scopes == ("screened_candidates",)
+    assert plan.allowed_config_families == (
+        "market_context",
+        "risk",
+        "setup",
+        "signal",
+        "signal_and_risk",
+    )
+    assert plan.target_count == 9
+    assert plan.blocked_reasons == ()
+    assert "portfolio outcome tuning is blocked" in " ".join(plan.notes)
 
 
 def test_swing_backtest_attribution_summary_golden_contract():
