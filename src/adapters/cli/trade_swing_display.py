@@ -10,7 +10,10 @@ from rich.console import Group
 from rich.text import Text
 
 from src.adapters.cli.rich_display import compact_table, console, panel
-from src.application.services.swing_backtest_attribution import build_tuning_readiness_plan
+from src.application.services.swing_backtest_attribution import (
+    build_tuning_proposal_draft,
+    build_tuning_readiness_plan,
+)
 from src.application.use_case.swing_backtest_use_case import SwingBacktestResponse
 
 
@@ -25,6 +28,7 @@ def display_swing_backtest(
     show_trades: int,
     show_attribution: bool = False,
     show_tuning_plan: bool = False,
+    show_tuning_proposal: bool = False,
 ) -> None:
     # Summary panel
     summary_table = compact_table(show_header=False)
@@ -143,6 +147,9 @@ def display_swing_backtest(
     if show_tuning_plan:
         _display_tuning_plan(response)
 
+    if show_tuning_proposal:
+        _display_tuning_proposal(response)
+
     # Warnings & Footnotes (Panel 4)
     warnings_list = []
     if response.warnings:
@@ -192,6 +199,52 @@ def _display_tuning_plan(response: SwingBacktestResponse) -> None:
         panel(
             table,
             title="TUNING READINESS PLAN",
+        )
+    )
+
+
+def _display_tuning_proposal(response: SwingBacktestResponse) -> None:
+    draft = build_tuning_proposal_draft(response.attribution_summary)
+    table = compact_table()
+    table.add_column("Dimension", style="bold cyan")
+    table.add_column("Family")
+    table.add_column("Evidence")
+    table.add_column("Action")
+
+    for candidate in draft.candidate_changes[:8]:
+        table.add_row(
+            candidate.dimension,
+            candidate.config_family,
+            " | ".join(candidate.evidence_buckets),
+            candidate.proposed_action,
+        )
+
+    if not draft.candidate_changes:
+        table.add_row(
+            "N/A",
+            "N/A",
+            "No candidate changes",
+            "blocked",
+        )
+
+    summary_table = compact_table(show_header=False)
+    summary_table.add_column("Metric", style="bold cyan")
+    summary_table.add_column("Value")
+    summary_table.add_row("Status", draft.status)
+    summary_table.add_row("Readiness", _quality_status_text(draft.readiness_status))
+    summary_table.add_row("Candidate Changes", str(len(draft.candidate_changes)))
+    summary_table.add_row("Rejected Changes", str(len(draft.rejected_changes)))
+    summary_table.add_row("YAML Diff", "no")
+    summary_table.add_row("Human Review", "required")
+    if draft.evidence_notes:
+        summary_table.add_row("Notes", " | ".join(draft.evidence_notes[:3]))
+
+    console().print("")
+    console().print(
+        panel(
+            Group(summary_table, Text(""), table),
+            title="TUNING PROPOSAL DRAFT",
+            subtitle=draft.intent,
         )
     )
 

@@ -21,6 +21,7 @@ from src.application.services.bootstrap import create_indicator_registry, create
 from src.application.services.position_sizer import compute_position_size
 from src.application.services.swing_backtest_attribution import (
     AttributionBucketPolicy,
+    build_tuning_proposal_draft,
     build_tuning_readiness_plan,
 )
 from src.application.services.swing_setup_catalog import build_swing_setup_catalog_config
@@ -162,6 +163,13 @@ def swing_backtest(
             help="Show deterministic tuning readiness plan; no AI or YAML changes",
         ),
     ] = False,
+    with_tuning_proposal: Annotated[
+        bool,
+        typer.Option(
+            "--with-tuning-proposal",
+            help="Show deterministic dry-run tuning proposal targets; no YAML diff",
+        ),
+    ] = False,
     output_format: Annotated[
         str,
         typer.Option("--format", help="Output format: table or json"),
@@ -301,6 +309,10 @@ def swing_backtest(
             payload["tuning_plan"] = build_tuning_readiness_plan(
                 response.attribution_summary
             ).to_dict()
+        if with_tuning_proposal:
+            payload["tuning_proposal"] = build_tuning_proposal_draft(
+                response.attribution_summary
+            ).to_dict()
         typer.echo(json.dumps(payload, indent=2, default=str))
         return
 
@@ -309,6 +321,7 @@ def swing_backtest(
         show_trades=show_trades,
         show_attribution=with_attribution,
         show_tuning_plan=with_tuning_plan,
+        show_tuning_proposal=with_tuning_proposal,
     )
 
 

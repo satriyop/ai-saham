@@ -854,6 +854,7 @@ saham trade backtest-swing --universe idx80 --with-regime --allow-regimes RISK_O
 saham trade backtest-swing --universe idx80 --cost-bps 0  # gross/no-cost comparison
 saham trade backtest-swing --universe idx80 --with-attribution
 saham trade backtest-swing --universe idx80 --with-tuning-plan
+saham trade backtest-swing --universe idx80 --with-tuning-proposal
 ```
 
 Default backtests include `--cost-bps 20` one-way transaction cost. Override explicitly
@@ -878,6 +879,7 @@ when testing a different broker fee assumption.
 | `--show-trades` | | 20 | Number of recent trades to print |
 | `--with-attribution` | | false | Show deterministic grouped attribution summary for manual tuning |
 | `--with-tuning-plan` | | false | Show deterministic tuning readiness plan; no AI or YAML changes |
+| `--with-tuning-proposal` | | false | Show deterministic dry-run tuning proposal targets; no YAML diff |
 | `--format` | | table | Output format: table or json |
 | `--db` | | | SQLite database path |
 
@@ -898,6 +900,10 @@ Use `--with-tuning-plan` to print the readiness preflight explicitly. It reports
 whether changes may be proposed, which evidence scopes are allowed, and which
 config families are in scope. It does not create an AI proposal, YAML diff, or
 config mutation.
+Use `--with-tuning-proposal` to print the next dry-run handoff contract. It
+lists evidence-backed config targets that may be reviewed, plus rejected targets
+and reasons in JSON output. It still does not choose parameter values, generate
+YAML diffs, run AI, or mutate config.
 
 Attribution dimensions map to these primary tuning files:
 

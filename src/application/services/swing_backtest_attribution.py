@@ -141,6 +141,78 @@ class TuningReadinessPlan:
 
 
 @dataclass(frozen=True)
+class TuningProposalCandidate:
+    """Dry-run candidate target for future human/AI-assisted tuning."""
+
+    dimension: str
+    config_family: str
+    source_scope: str
+    yaml_paths: tuple[str, ...]
+    allowed_use: str
+    evidence_buckets: tuple[str, ...]
+    proposed_action: str = "review_threshold_or_weight_no_yaml_diff"
+    warning: str | None = None
+
+    def to_dict(self) -> dict:
+        return {
+            "dimension": self.dimension,
+            "config_family": self.config_family,
+            "source_scope": self.source_scope,
+            "yaml_paths": list(self.yaml_paths),
+            "allowed_use": self.allowed_use,
+            "evidence_buckets": list(self.evidence_buckets),
+            "proposed_action": self.proposed_action,
+            "warning": self.warning,
+        }
+
+
+@dataclass(frozen=True)
+class TuningProposalRejection:
+    """Rejected tuning target with deterministic reason."""
+
+    dimension: str
+    config_family: str
+    reason: str
+
+    def to_dict(self) -> dict:
+        return {
+            "dimension": self.dimension,
+            "config_family": self.config_family,
+            "reason": self.reason,
+        }
+
+
+@dataclass(frozen=True)
+class TuningProposalDraft:
+    """Deterministic dry-run proposal envelope; never mutates config."""
+
+    intent: str
+    status: str
+    readiness_status: str
+    can_generate_yaml_diff: bool
+    requires_human_review: bool
+    candidate_changes: tuple[TuningProposalCandidate, ...]
+    rejected_changes: tuple[TuningProposalRejection, ...]
+    evidence_notes: tuple[str, ...]
+
+    def to_dict(self) -> dict:
+        return {
+            "intent": self.intent,
+            "status": self.status,
+            "readiness_status": self.readiness_status,
+            "can_generate_yaml_diff": self.can_generate_yaml_diff,
+            "requires_human_review": self.requires_human_review,
+            "candidate_changes": [
+                candidate.to_dict() for candidate in self.candidate_changes
+            ],
+            "rejected_changes": [
+                rejection.to_dict() for rejection in self.rejected_changes
+            ],
+            "evidence_notes": list(self.evidence_notes),
+        }
+
+
+@dataclass(frozen=True)
 class AttributionBucketPolicy:
     """Score bucket boundaries for attribution grouping only."""
 
@@ -499,6 +571,138 @@ def build_tuning_readiness_plan(
         target_count=len(allowed_targets),
         notes=notes,
     )
+
+
+def build_tuning_proposal_draft(
+    summary: SwingBacktestAttributionSummary,
+) -> TuningProposalDraft:
+    """Build a deterministic dry-run proposal envelope without YAML diffs."""
+    readiness = build_tuning_readiness_plan(summary)
+    notes = _unique_strings((
+        "Draft is deterministic and dry-run only.",
+        "Candidate changes identify review targets, not parameter values.",
+        "No AI proposal, YAML diff, or config mutation is generated.",
+        *readiness.notes,
+    ))
+    if not readiness.can_propose_changes:
+        return TuningProposalDraft(
+            intent="dry_run_tuning_proposal_contract_only",
+            status="BLOCKED",
+            readiness_status=readiness.status,
+            can_generate_yaml_diff=False,
+            requires_human_review=True,
+            candidate_changes=(),
+            rejected_changes=tuple(
+                TuningProposalRejection(
+                    dimension=target.dimension,
+                    config_family=target.config_family,
+                    reason="Readiness gate blocks tuning proposals.",
+                )
+                for target in summary.tuning_targets
+            ),
+            evidence_notes=notes,
+        )
+
+    evidence_by_dimension = _evidence_buckets_by_dimension(summary)
+    candidate_changes: list[TuningProposalCandidate] = []
+    rejected_changes: list[TuningProposalRejection] = []
+
+    for target in summary.tuning_targets:
+        if not _target_scope_allowed(
+            target.source_scope,
+            list(readiness.allowed_evidence_scopes),
+        ):
+            rejected_changes.append(
+                TuningProposalRejection(
+                    dimension=target.dimension,
+                    config_family=target.config_family,
+                    reason="Target source scope is not ready.",
+                )
+            )
+            continue
+
+        evidence_buckets = evidence_by_dimension.get(target.dimension, ())
+        if not evidence_buckets:
+            rejected_changes.append(
+                TuningProposalRejection(
+                    dimension=target.dimension,
+                    config_family=target.config_family,
+                    reason="No attribution buckets are available for this dimension.",
+                )
+            )
+            continue
+
+        candidate_changes.append(
+            TuningProposalCandidate(
+                dimension=target.dimension,
+                config_family=target.config_family,
+                source_scope=target.source_scope,
+                yaml_paths=target.yaml_paths,
+                allowed_use=target.allowed_use,
+                evidence_buckets=evidence_buckets,
+                warning=target.warning,
+            )
+        )
+
+    status = "READY_FOR_HUMAN_REVIEW" if candidate_changes else "NO_EVIDENCE_TARGETS"
+    return TuningProposalDraft(
+        intent="dry_run_tuning_proposal_contract_only",
+        status=status,
+        readiness_status=readiness.status,
+        can_generate_yaml_diff=False,
+        requires_human_review=True,
+        candidate_changes=tuple(candidate_changes),
+        rejected_changes=tuple(rejected_changes),
+        evidence_notes=notes,
+    )
+
+
+def _evidence_buckets_by_dimension(
+    summary: SwingBacktestAttributionSummary,
+) -> dict[str, tuple[str, ...]]:
+    evidence: dict[str, tuple[str, ...]] = {}
+    stats = (
+        tuple(summary.group_stats)
+        + tuple(summary.candidate_group_stats)
+    )
+    dimensions = sorted({stat.dimension for stat in stats})
+    for dimension in dimensions:
+        dimension_stats = [stat for stat in stats if stat.dimension == dimension]
+        top_stats = sorted(
+            dimension_stats,
+            key=lambda stat: (
+                _stat_sample_count(stat),
+                _stat_return(stat) or 0.0,
+                stat.bucket,
+            ),
+            reverse=True,
+        )[:3]
+        evidence[dimension] = tuple(_format_evidence_bucket(stat) for stat in top_stats)
+    return evidence
+
+
+def _stat_sample_count(stat: AttributionGroupStat | CandidateAttributionStat) -> int:
+    return getattr(stat, "trade_count", getattr(stat, "observation_count", 0))
+
+
+def _stat_return(stat: AttributionGroupStat | CandidateAttributionStat) -> float | None:
+    return getattr(
+        stat,
+        "avg_return_pct",
+        getattr(stat, "avg_forward_return_pct", None),
+    )
+
+
+def _format_evidence_bucket(
+    stat: AttributionGroupStat | CandidateAttributionStat,
+) -> str:
+    avg_return = _stat_return(stat)
+    avg_text = "N/A" if avg_return is None else f"{avg_return:+.2f}%"
+    return f"{stat.bucket} | n={_stat_sample_count(stat)} | avg={avg_text}"
+
+
+def _unique_strings(values: Iterable[str]) -> tuple[str, ...]:
+    return tuple(dict.fromkeys(values))
 
 
 def _target_scope_allowed(source_scope: str, evidence_scopes: list[str]) -> bool:

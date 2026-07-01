@@ -5,6 +5,7 @@ from math import inf
 from src.application.services.swing_backtest_attribution import (
     DEFAULT_TUNING_TARGETS,
     AttributionBucketPolicy,
+    build_tuning_proposal_draft,
     build_tuning_readiness_plan,
     summarize_swing_backtest_attribution,
 )
@@ -293,6 +294,58 @@ def test_tuning_readiness_plan_allows_candidate_scoped_targets():
     assert plan.target_count == 9
     assert plan.blocked_reasons == ()
     assert "portfolio outcome tuning is blocked" in " ".join(plan.notes)
+
+
+def test_tuning_proposal_draft_blocks_insufficient_sample():
+    summary = summarize_swing_backtest_attribution(
+        (_trade(ticker="BBCA", net_return_pct=5.0, pnl="500"),),
+        (_Observation(forward_return_pct=1.0),),
+    )
+
+    draft = build_tuning_proposal_draft(summary)
+
+    assert draft.intent == "dry_run_tuning_proposal_contract_only"
+    assert draft.status == "BLOCKED"
+    assert draft.readiness_status == "INSUFFICIENT_SAMPLE"
+    assert draft.can_generate_yaml_diff is False
+    assert draft.requires_human_review is True
+    assert draft.candidate_changes == ()
+    assert len(draft.rejected_changes) == len(DEFAULT_TUNING_TARGETS)
+    assert {
+        rejection.reason
+        for rejection in draft.rejected_changes
+    } == {"Readiness gate blocks tuning proposals."}
+    assert "No AI proposal" in " ".join(draft.evidence_notes)
+
+
+def test_tuning_proposal_draft_lists_candidate_ready_review_targets():
+    summary = summarize_swing_backtest_attribution(
+        (),
+        tuple(_Observation(forward_return_pct=1.0) for _ in range(30)),
+    )
+
+    draft = build_tuning_proposal_draft(summary)
+
+    dimensions = {candidate.dimension for candidate in draft.candidate_changes}
+
+    assert draft.status == "READY_FOR_HUMAN_REVIEW"
+    assert draft.readiness_status == "CANDIDATE_ONLY"
+    assert draft.can_generate_yaml_diff is False
+    assert draft.requires_human_review is True
+    assert dimensions == {
+        "candidate_setup_match",
+        "candidate_signal_strength",
+        "candidate_signal_score_bucket",
+        "candidate_signal_factor_bucket",
+        "candidate_trade_setup_action",
+        "setup_gate",
+    }
+    assert all(candidate.evidence_buckets for candidate in draft.candidate_changes)
+    assert {
+        rejection.dimension
+        for rejection in draft.rejected_changes
+        if rejection.reason == "No attribution buckets are available for this dimension."
+    } == {"candidate_risk_gate", "candidate_risk_status", "candidate_regime"}
 
 
 def test_swing_backtest_attribution_summary_golden_contract():
