@@ -23,6 +23,7 @@ from src.domain.value_objects.skill_annotation import (
     SkillMetadata,
 )
 from src.domain.value_objects.trade_action import TradeAction
+from src.domain.value_objects.ticker_classifier import is_non_idx_ticker
 
 __all__ = [
     "ArtifactType",
@@ -37,4 +38,5 @@ __all__ = [
     "SkillAnnotation",
     "SkillMetadata",
     "TradeAction",
+    "is_non_idx_ticker",
 ]

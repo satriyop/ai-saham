@@ -84,6 +84,10 @@ class FallbackMarketDataProvider(MarketDataProvider):
         expected = _expected_trading_days(start_date, end_date)
         coverage = len(primary_candles) / expected
 
+        from src.domain.value_objects import is_non_idx_ticker
+        if is_non_idx_ticker(ticker):
+            return primary_candles
+
         if coverage >= self._threshold:
             return primary_candles
 
