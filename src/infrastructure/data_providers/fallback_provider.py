@@ -19,6 +19,7 @@ from datetime import date
 
 from src.domain.entities.candle import Candle
 from src.domain.ports.market_data_provider import MarketDataProvider
+from src.domain.value_objects import is_non_idx_ticker
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +87,6 @@ class FallbackMarketDataProvider(MarketDataProvider):
         expected = _expected_trading_days(start_date, end_date)
         coverage = len(primary_candles) / expected
 
-        from src.domain.value_objects import is_non_idx_ticker
         if is_non_idx_ticker(ticker, self._non_idx_tickers):
             return primary_candles
 

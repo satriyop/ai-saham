@@ -13,7 +13,7 @@ from decimal import Decimal
 from typing import Any
 
 from src.application.services.market_context_engine import MarketContextEngine
-from src.application.services.benchmark_symbol import canonicalize_ticker
+from src.domain.value_objects.benchmark_symbol import canonicalize_ticker
 from src.application.services.stats import (
     average,
     max_drawdown_pct,

@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 
 import typer
 
-from src.application.services.benchmark_symbol import (
+from src.domain.value_objects.benchmark_symbol import (
     canonicalize_ticker,
     is_benchmark_ticker,
 )

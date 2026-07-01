@@ -13,7 +13,7 @@ from decimal import Decimal
 
 import yfinance as yf
 
-from src.application.services.benchmark_symbol import (
+from src.domain.value_objects.benchmark_symbol import (
     CANONICAL_BENCHMARK_TICKER,
     YAHOO_BENCHMARK_TICKER,
     is_benchmark_ticker,

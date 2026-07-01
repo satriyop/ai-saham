@@ -1,6 +1,6 @@
 """Canonical benchmark ticker helpers.
 
-Layer: Application
+Layer: Domain
 """
 
 CANONICAL_BENCHMARK_TICKER = "IHSG"

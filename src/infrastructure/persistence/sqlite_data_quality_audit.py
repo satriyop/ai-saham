@@ -10,7 +10,7 @@ import sqlite3
 from datetime import date
 from pathlib import Path
 
-from src.application.services.benchmark_symbol import CANONICAL_BENCHMARK_TICKER
+from src.domain.value_objects.benchmark_symbol import CANONICAL_BENCHMARK_TICKER
 from src.application.use_case.data_quality_audit_use_case import (
     DataQualityRawSnapshot,
     DataQualityTableSnapshot,

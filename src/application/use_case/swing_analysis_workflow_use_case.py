@@ -23,7 +23,7 @@ from src.application.services.position_sizer import (
     compute_percent_position_size,
     compute_position_size,
 )
-from src.application.services.benchmark_symbol import canonicalize_ticker
+from src.domain.value_objects.benchmark_symbol import canonicalize_ticker
 from src.application.services.signal_context_builder import (
     build_signal_context_from_candidate,
 )

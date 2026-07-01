@@ -24,7 +24,7 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import TYPE_CHECKING
 
-from src.application.services.benchmark_symbol import canonicalize_ticker
+from src.domain.value_objects.benchmark_symbol import canonicalize_ticker
 from src.domain.value_objects import is_non_idx_ticker
 from src.domain.entities.candle import Candle
 from src.domain.ports.market_data_provider import MarketDataProvider

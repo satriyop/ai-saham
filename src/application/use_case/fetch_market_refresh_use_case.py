@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from src.application.services.benchmark_symbol import (
+from src.domain.value_objects.benchmark_symbol import (
     CANONICAL_BENCHMARK_TICKER,
     canonicalize_ticker,
     is_benchmark_ticker,

@@ -15,7 +15,7 @@ from src.application.services.strategy_loader import StrategyLoader, StrategyNot
 from src.application.use_case.assess_risk_use_case import AssessRiskRequest, AssessRiskUseCase
 from typing import TYPE_CHECKING
 
-from src.application.services.benchmark_symbol import canonicalize_ticker
+from src.domain.value_objects.benchmark_symbol import canonicalize_ticker
 
 if TYPE_CHECKING:
     from src.domain.value_objects.market_context import MarketContext

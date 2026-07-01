@@ -10,7 +10,7 @@ from dataclasses import replace as dc_replace
 from datetime import date
 from pathlib import Path
 
-from src.application.services.benchmark_symbol import canonicalize_ticker
+from src.domain.value_objects.benchmark_symbol import canonicalize_ticker
 from src.application.services.market_context_engine import MarketContextEngine
 from src.application.services.universe_loader import resolve_tickers
 from src.domain.value_objects.market_context import MarketContext
