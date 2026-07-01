@@ -5,6 +5,7 @@ from src.adapters.cli.trade_swing_display import display_swing_backtest
 from src.application.services.swing_backtest_attribution import (
     AttributionGroupStat,
     CandidateAttributionStat,
+    SampleQuality,
     SwingBacktestAttributionSummary,
 )
 from src.application.use_case.swing_backtest_use_case import SwingBacktestResponse
@@ -85,6 +86,60 @@ def _candidate_only_response() -> SwingBacktestResponse:
         skipped_by_regime=0,
         attribution_summary=SwingBacktestAttributionSummary(
             candidate_group_stats=response.attribution_summary.candidate_group_stats,
+        ),
+    )
+
+
+def _trade_ready_tuning_response() -> SwingBacktestResponse:
+    response = _response()
+    return SwingBacktestResponse(
+        setup=response.setup,
+        start_date=response.start_date,
+        end_date=response.end_date,
+        initial_capital=response.initial_capital,
+        cost_bps=response.cost_bps,
+        final_equity=response.final_equity,
+        total_return_pct=response.total_return_pct,
+        max_drawdown_pct=response.max_drawdown_pct,
+        trade_count=60,
+        win_rate_pct=response.win_rate_pct,
+        avg_trade_return_pct=response.avg_trade_return_pct,
+        profit_factor=response.profit_factor,
+        exposure_pct=response.exposure_pct,
+        skipped_no_cash=0,
+        skipped_duplicate=0,
+        skipped_no_forward_data=0,
+        skipped_by_regime=0,
+        attribution_summary=SwingBacktestAttributionSummary(
+            sample_quality=SampleQuality(
+                status="TRADE_READY",
+                completed_trade_count=60,
+                candidate_observation_count=0,
+                min_sample_size=30,
+                trade_sample_ready=True,
+                candidate_sample_ready=False,
+                notes=(),
+            ),
+            group_stats=(
+                AttributionGroupStat(
+                    dimension="signal_strength",
+                    bucket="STRONG",
+                    trade_count=30,
+                    win_rate_pct=20.0,
+                    avg_return_pct=-2.0,
+                    total_pnl=Decimal("-6000"),
+                    profit_factor=0.5,
+                ),
+                AttributionGroupStat(
+                    dimension="signal_strength",
+                    bucket="WEAK",
+                    trade_count=30,
+                    win_rate_pct=80.0,
+                    avg_return_pct=5.0,
+                    total_pnl=Decimal("15000"),
+                    profit_factor=2.0,
+                ),
+            ),
         ),
     )
 
@@ -173,3 +228,24 @@ def test_display_swing_backtest_can_show_tuning_config_diff(capsys):
     assert "Diff Items" in output
     assert "Rejected Items" in output
     assert "config_diff_schema_only_no_apply" in output
+    assert "Policy" in output
+    assert "INSUFFICIENT_EVIDENCE" in output
+
+
+def test_display_swing_backtest_tuning_config_diff_shows_candidate_policy(capsys):
+    display_swing_backtest(
+        _trade_ready_tuning_response(),
+        show_trades=0,
+        show_tuning_diff=True,
+    )
+
+    output = capsys.readouterr().out
+    assert "Resolved Candidates" in output
+    assert "Rejected Candidates" in output
+    assert "PROPOSED_VALUES_DRY_RUN" in output
+    assert "PROPOSED_VALUE_SELECTED" in output
+    assert "Item Statuses" in output
+    assert "DETERMINISTIC_VALUE_SELECTED" in output
+    assert "Value Policies" in output
+    assert "Proposed" in output
+    assert "DETERMINISTIC_GUARDED" not in output

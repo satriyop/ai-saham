@@ -39,8 +39,17 @@ def display_swing_backtest(
 
     summary_table.add_row("Setup", response.setup)
     summary_table.add_row("Period", f"{response.start_date} to {response.end_date}")
-    summary_table.add_row("Transaction Cost", f"{float(response.cost_bps):g} bps one-way (applied on entry & exit)")
-    summary_table.add_row("Simulation Logic", "Scans each replay date, opens eligible signals within portfolio limits, then exits by TP/SL/max-hold.")
+    summary_table.add_row(
+        "Transaction Cost",
+        f"{float(response.cost_bps):g} bps one-way (applied on entry & exit)",
+    )
+    summary_table.add_row(
+        "Simulation Logic",
+        (
+            "Scans each replay date, opens eligible signals within portfolio "
+            "limits, then exits by TP/SL/max-hold."
+        ),
+    )
 
     console().print("")
     console().print(
@@ -67,7 +76,13 @@ def display_swing_backtest(
     metrics_table.add_row("Trades count", str(response.trade_count))
 
     win_val = response.win_rate_pct
-    win_color = "green" if (win_val or 0) >= 55.0 else ("yellow" if (win_val or 0) >= 45.0 else "red")
+    win_color = (
+        "green"
+        if (win_val or 0) >= 55.0
+        else "yellow"
+        if (win_val or 0) >= 45.0
+        else "red"
+    )
     metrics_table.add_row("Win rate", f"[{win_color}]{_fmt_pct(win_val)}[/]")
     metrics_table.add_row("Avg trade return", _fmt_pct(response.avg_trade_return_pct, True))
 
@@ -80,7 +95,12 @@ def display_swing_backtest(
     metrics_table.add_row("Exposure days ratio", _fmt_pct(response.exposure_pct))
 
     # Skips row
-    skips_info = f"no_cash={response.skipped_no_cash} | duplicate={response.skipped_duplicate} | no_forward_data={response.skipped_no_forward_data} | regime={response.skipped_by_regime}"
+    skips_info = (
+        f"no_cash={response.skipped_no_cash} | "
+        f"duplicate={response.skipped_duplicate} | "
+        f"no_forward_data={response.skipped_no_forward_data} | "
+        f"regime={response.skipped_by_regime}"
+    )
     metrics_table.add_row("Skipped orders count", skips_info)
 
     console().print(metrics_table)
@@ -164,7 +184,12 @@ def display_swing_backtest(
     footer_elements = []
     if warnings_list:
         footer_elements.extend([Text("Warnings", style="bold yellow"), *warnings_list, Text("")])
-    footer_elements.append(Text("DISCLAIMER: Historical simulation only. Not trading advice.", style="dim italic"))
+    footer_elements.append(
+        Text(
+            "DISCLAIMER: Historical simulation only. Not trading advice.",
+            style="dim italic",
+        )
+    )
 
     console().print("")
     console().print(
@@ -269,28 +294,72 @@ def _display_tuning_config_diff(response: SwingBacktestResponse) -> None:
     summary_table.add_row("Proposal", draft.proposal_status)
     summary_table.add_row("Diff Items", str(len(draft.diff_items)))
     summary_table.add_row("Rejected Items", str(len(draft.rejected_items)))
+    if draft.diff_items:
+        summary_table.add_row(
+            "Item Statuses",
+            ", ".join(sorted({item.status for item in draft.diff_items})),
+        )
+        summary_table.add_row(
+            "Value Policies",
+            ", ".join(
+                sorted({item.value_selection_policy for item in draft.diff_items})
+            ),
+        )
     summary_table.add_row("Can Apply", "no")
     summary_table.add_row("Human Review", "required")
     if draft.notes:
         summary_table.add_row("Notes", " | ".join(draft.notes[:3]))
 
-    table = compact_table()
-    table.add_column("Target Path", style="bold cyan")
-    table.add_column("Evidence")
-    table.add_column("Reason")
+    item_table = compact_table()
+    item_table.add_column("Target", style="bold cyan")
+    item_table.add_column("Current", justify="right")
+    item_table.add_column("Proposed", justify="right")
+    item_table.add_column("Policy", overflow="fold")
+    item_table.add_column("Rationale")
+    for item in draft.diff_items[:8]:
+        item_table.add_row(
+            _fmt_target_path(item),
+            _fmt_config_value(item.current_value),
+            _fmt_config_value(item.proposed_value),
+            item.value_selection_policy,
+            item.rationale,
+        )
+    if not draft.diff_items:
+        item_table.add_row(
+            "N/A",
+            "N/A",
+            "N/A",
+            "N/A",
+            "No resolved diff candidates",
+        )
+
+    rejection_table = compact_table()
+    rejection_table.add_column("Target Path", style="bold cyan")
+    rejection_table.add_column("Evidence")
+    rejection_table.add_column("Policy")
+    rejection_table.add_column("Reason")
     for rejection in draft.rejected_items[:8]:
-        table.add_row(
+        rejection_table.add_row(
             rejection.target_path,
             rejection.evidence_dimension,
+            rejection.value_selection_policy,
             rejection.reason,
         )
     if not draft.rejected_items:
-        table.add_row("N/A", "N/A", "No diff candidates")
+        rejection_table.add_row("N/A", "N/A", "N/A", "No rejected candidates")
 
     console().print("")
     console().print(
         panel(
-            Group(summary_table, Text(""), table),
+            Group(
+                summary_table,
+                Text(""),
+                Text("Resolved Candidates", style="bold"),
+                item_table,
+                Text(""),
+                Text("Rejected Candidates", style="bold"),
+                rejection_table,
+            ),
             title="TUNING CONFIG DIFF DRAFT",
             subtitle=draft.intent,
         )
@@ -418,3 +487,24 @@ def _stat_avg_return(stat) -> float | None:
 
 def _stat_profit_factor(stat) -> float | None:
     return getattr(stat, "profit_factor", None)
+
+
+def _fmt_config_value(value: object | None) -> str:
+    if value is None:
+        return "N/A"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, float):
+        return f"{value:g}"
+    if isinstance(value, (dict, list, tuple)):
+        return type(value).__name__
+    return str(value)
+
+
+def _fmt_target_path(item) -> str:
+    parsed = getattr(item, "parsed_target_path", None)
+    if parsed is None:
+        return item.target_path
+    file_name = parsed.file_path.rsplit("/", maxsplit=1)[-1]
+    leaf = parsed.document_path.rsplit(".", maxsplit=1)[-1]
+    return f"{file_name}:{leaf}"
