@@ -10,7 +10,7 @@ from rich.console import Group
 from rich.text import Text
 
 from src.adapters.cli.rich_display import compact_table, console, panel
-from src.application.services.swing_backtest_attribution import (
+from src.application.services.swing_tuning_contracts import (
     build_tuning_config_diff_draft,
     build_tuning_proposal_draft,
     build_tuning_readiness_plan,

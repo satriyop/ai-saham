@@ -19,13 +19,13 @@ import typer
 from src.adapters.cli.trade_swing_display import display_swing_backtest
 from src.application.services.bootstrap import create_indicator_registry, create_risk_engine
 from src.application.services.position_sizer import compute_position_size
-from src.application.services.swing_backtest_attribution import (
-    AttributionBucketPolicy,
+from src.application.services.swing_backtest_attribution import AttributionBucketPolicy
+from src.application.services.swing_setup_catalog import build_swing_setup_catalog_config
+from src.application.services.swing_tuning_contracts import (
     build_tuning_config_diff_draft,
     build_tuning_proposal_draft,
     build_tuning_readiness_plan,
 )
-from src.application.services.swing_setup_catalog import build_swing_setup_catalog_config
 from src.application.services.universe_loader import (
     UniverseNotFoundError,
     resolve_tickers,

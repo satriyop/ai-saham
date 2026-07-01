@@ -5,10 +5,12 @@ from math import inf
 from src.application.services.swing_backtest_attribution import (
     DEFAULT_TUNING_TARGETS,
     AttributionBucketPolicy,
+    summarize_swing_backtest_attribution,
+)
+from src.application.services.swing_tuning_contracts import (
     build_tuning_config_diff_draft,
     build_tuning_proposal_draft,
     build_tuning_readiness_plan,
-    summarize_swing_backtest_attribution,
 )
 from src.application.use_case.swing_backtest_use_case import SwingBacktestTrade
 from src.domain.value_objects.setup_evaluation import SetupGate
