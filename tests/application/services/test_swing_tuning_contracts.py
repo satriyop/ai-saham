@@ -7,6 +7,7 @@ from src.application.services.swing_tuning_contracts import (
     build_tuning_proposal_draft,
     build_tuning_readiness_plan,
     parse_tuning_config_path,
+    resolve_tuning_config_value,
     validate_tuning_target_paths,
 )
 from tests.application.services.swing_backtest_attribution_fixtures import (
@@ -178,7 +179,7 @@ def test_tuning_config_diff_draft_blocks_insufficient_sample():
         rejection.reason
         for rejection in draft.rejected_items
     } == {"Proposal target rejected: Readiness gate blocks tuning proposals."}
-    assert "schema-only" in " ".join(draft.notes)
+    assert "read-only" in " ".join(draft.notes)
 
 
 def test_tuning_config_diff_draft_is_schema_only_for_ready_proposals():
@@ -196,12 +197,22 @@ def test_tuning_config_diff_draft_is_schema_only_for_ready_proposals():
 
     draft = build_tuning_config_diff_draft(summary)
 
-    assert draft.status == "SCHEMA_ONLY"
+    assert draft.status == "READ_ONLY_VALUES"
     assert draft.proposal_status == "READY_FOR_HUMAN_REVIEW"
     assert draft.can_apply is False
-    assert draft.diff_items == ()
+    assert draft.diff_items
     assert draft.rejected_items
-    assert all(rejection.target_path != "N/A" for rejection in draft.rejected_items)
+    assert {
+        item.status
+        for item in draft.diff_items
+    } == {"CURRENT_VALUE_ONLY"}
+    assert {
+        item.confidence
+        for item in draft.diff_items
+    } == {"READ_ONLY_CURRENT_VALUE"}
+    assert all(item.current_value is not None for item in draft.diff_items)
+    assert all(item.proposed_value is None for item in draft.diff_items)
+    assert all(item.parsed_target_path is not None for item in draft.diff_items)
     assert all(
         rejection.parsed_target_path is not None
         for rejection in draft.rejected_items
@@ -213,11 +224,7 @@ def test_tuning_config_diff_draft_is_schema_only_for_ready_proposals():
     assert {
         rejection.reason
         for rejection in draft.rejected_items
-    } <= {
-        "Config diff generation requires HIGH evidence strength; current strength is MEDIUM.",
-        "Config diff generation requires HIGH evidence strength; current strength is LOW.",
-        "Value-selection logic is not implemented; schema is locked first.",
-    }
+    } == {"wildcard_path_not_resolved"}
 
 
 def test_parse_tuning_config_path_splits_file_and_document_path():
@@ -249,6 +256,56 @@ def test_parse_tuning_config_path_rejects_invalid_format():
         except ValueError:
             continue
         raise AssertionError(f"Expected invalid path to fail: {invalid_path}")
+
+
+def test_resolve_tuning_config_value_reads_concrete_yaml_path(tmp_path):
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    (config_dir / "signal_engine.yaml").write_text(
+        "signal_engine:\n"
+        "  classification:\n"
+        "    strong_min_score: 70\n",
+        encoding="utf-8",
+    )
+    parsed = parse_tuning_config_path(
+        "config/signal_engine.yaml:signal_engine.classification.strong_min_score"
+    )
+
+    resolution = resolve_tuning_config_value(parsed, config_root=tmp_path)
+
+    assert resolution.resolved is True
+    assert resolution.current_value == 70
+    assert resolution.unresolved_reason is None
+    assert resolution.to_dict()["current_value"] == 70
+
+
+def test_resolve_tuning_config_value_rejects_wildcard_without_reading_yaml(tmp_path):
+    parsed = parse_tuning_config_path("config/swing_setups.yaml:setups.*.gates")
+
+    resolution = resolve_tuning_config_value(parsed, config_root=tmp_path)
+
+    assert resolution.resolved is False
+    assert resolution.current_value is None
+    assert resolution.unresolved_reason == "wildcard_path_not_resolved"
+
+
+def test_resolve_tuning_config_value_reports_missing_document_path(tmp_path):
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    (config_dir / "signal_engine.yaml").write_text(
+        "signal_engine:\n"
+        "  classification: {}\n",
+        encoding="utf-8",
+    )
+    parsed = parse_tuning_config_path(
+        "config/signal_engine.yaml:signal_engine.classification.strong_min_score"
+    )
+
+    resolution = resolve_tuning_config_value(parsed, config_root=tmp_path)
+
+    assert resolution.resolved is False
+    assert resolution.current_value is None
+    assert resolution.unresolved_reason == "document_path_not_found"
 
 
 def test_validate_tuning_target_paths_covers_all_current_targets():

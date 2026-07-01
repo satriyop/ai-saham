@@ -11,7 +11,10 @@ Layer: Application
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Iterable
+
+import yaml
 
 from src.application.services.swing_backtest_attribution import (
     AttributionGroupStat,
@@ -33,6 +36,24 @@ class TuningConfigPath:
             "raw": self.raw,
             "file_path": self.file_path,
             "document_path": self.document_path,
+        }
+
+
+@dataclass(frozen=True)
+class TuningConfigValueResolution:
+    """Read-only result of resolving a tuning config path."""
+
+    target_path: TuningConfigPath
+    resolved: bool
+    current_value: object | None = None
+    unresolved_reason: str | None = None
+
+    def to_dict(self) -> dict:
+        return {
+            "target_path": self.target_path.to_dict(),
+            "resolved": self.resolved,
+            "current_value": self.current_value,
+            "unresolved_reason": self.unresolved_reason,
         }
 
 
@@ -367,12 +388,14 @@ def build_tuning_proposal_draft(
 
 def build_tuning_config_diff_draft(
     summary: SwingBacktestAttributionSummary,
+    config_root: Path | str = Path("."),
 ) -> TuningConfigDiffDraft:
-    """Build a guarded config-diff schema without proposing values."""
+    """Build a guarded config-diff schema with read-only current values."""
     proposal = build_tuning_proposal_draft(summary)
     notes = _unique_strings((
-        "Config diff draft is schema-only.",
-        "No current values are read and no proposed values are selected.",
+        "Config diff draft is read-only.",
+        "Current values are resolved only for concrete YAML paths.",
+        "No proposed values are selected.",
         "No YAML diff, AI proposal, apply step, or config mutation is generated.",
         *proposal.evidence_notes,
     ))
@@ -396,35 +419,50 @@ def build_tuning_config_diff_draft(
             notes=notes,
         )
 
+    diff_items: list[TuningConfigDiffItem] = []
     rejected_items: list[TuningConfigDiffRejection] = []
     for candidate in proposal.candidate_changes:
         for target_path in candidate.yaml_paths:
             parsed_target_path = parse_tuning_config_path(target_path)
-            if candidate.evidence_strength != "HIGH":
-                reason = (
-                    "Config diff generation requires HIGH evidence strength; "
-                    f"current strength is {candidate.evidence_strength}."
+            resolution = resolve_tuning_config_value(
+                parsed_target_path,
+                config_root=config_root,
+            )
+            if not resolution.resolved:
+                rejected_items.append(
+                    TuningConfigDiffRejection(
+                        target_path=target_path,
+                        parsed_target_path=parsed_target_path,
+                        evidence_dimension=candidate.dimension,
+                        reason=resolution.unresolved_reason
+                        or "config_value_not_resolved",
+                    )
                 )
-            else:
-                reason = (
-                    "Value-selection logic is not implemented; schema is locked first."
-                )
-            rejected_items.append(
-                TuningConfigDiffRejection(
+                continue
+
+            diff_items.append(
+                TuningConfigDiffItem(
                     target_path=target_path,
                     parsed_target_path=parsed_target_path,
+                    current_value=resolution.current_value,
+                    proposed_value=None,
+                    rationale=(
+                        "Read-only current value resolved; value-selection logic "
+                        "is not implemented."
+                    ),
                     evidence_dimension=candidate.dimension,
-                    reason=reason,
+                    confidence="READ_ONLY_CURRENT_VALUE",
+                    status="CURRENT_VALUE_ONLY",
                 )
             )
 
     return TuningConfigDiffDraft(
         intent="config_diff_schema_only_no_apply",
-        status="SCHEMA_ONLY",
+        status="READ_ONLY_VALUES" if diff_items else "SCHEMA_ONLY",
         proposal_status=proposal.status,
         can_apply=False,
         requires_human_review=True,
-        diff_items=(),
+        diff_items=tuple(diff_items),
         rejected_items=tuple(rejected_items),
         notes=notes,
     )
@@ -454,6 +492,47 @@ def validate_tuning_target_paths(summary: SwingBacktestAttributionSummary) -> tu
         for yaml_path in target.yaml_paths:
             parsed_paths.append(parse_tuning_config_path(yaml_path).raw)
     return tuple(parsed_paths)
+
+
+def resolve_tuning_config_value(
+    target_path: TuningConfigPath,
+    config_root: Path | str = Path("."),
+) -> TuningConfigValueResolution:
+    """Resolve a concrete YAML tuning path without mutating config."""
+    if "*" in target_path.document_path:
+        return TuningConfigValueResolution(
+            target_path=target_path,
+            resolved=False,
+            unresolved_reason="wildcard_path_not_resolved",
+        )
+
+    root = Path(config_root)
+    yaml_path = root / target_path.file_path
+    if not yaml_path.exists():
+        return TuningConfigValueResolution(
+            target_path=target_path,
+            resolved=False,
+            unresolved_reason="config_file_not_found",
+        )
+
+    with yaml_path.open(encoding="utf-8") as fh:
+        document = yaml.safe_load(fh) or {}
+
+    current: object = document
+    for part in target_path.document_path.split("."):
+        if not isinstance(current, dict) or part not in current:
+            return TuningConfigValueResolution(
+                target_path=target_path,
+                resolved=False,
+                unresolved_reason="document_path_not_found",
+            )
+        current = current[part]
+
+    return TuningConfigValueResolution(
+        target_path=target_path,
+        resolved=True,
+        current_value=current,
+    )
 
 
 def _evidence_by_dimension(
