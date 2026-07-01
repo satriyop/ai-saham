@@ -664,6 +664,7 @@ The system validates incoming data:
 | Issue | Impact | Workaround |
 |-------|--------|------------|
 | Yahoo delays | Data may be 15-20min delayed | Accept for daily analysis |
+| Yahoo `^JKSE` volume | Yahoo index volume is not authoritative for IHSG benchmark analysis and may be zero or use provider-specific units | Use canonical `IHSG` persisted from Stockbit `/company-price-feed/historical/summary/IHSG`; Yahoo `^JKSE` is only a provider alias/fallback |
 | Split adjustments | Historical prices adjusted | Use adjusted close |
 | Missing days | Holidays/weekends excluded | Expected behavior |
 | Legacy candle provenance | Older databases may contain candle rows written before `source`, `volume_unit`, and `price_adjustment_policy` existed. Those rows are migrated with `unknown` provenance until refreshed. | Run `saham fetch audit` to identify unknown provenance, then refresh affected tickers. New Yahoo and IDX candle fetches persist volume in raw shares with explicit provider metadata. |

@@ -265,7 +265,7 @@ def create_indicator_registry(
     load_formulas: bool = True,
     broker_repository: "BrokerDataRepository | None" = None,
     market_repository: "MarketDataRepository | None" = None,
-    index_ticker: str = "^JKSE",
+    index_ticker: str = "IHSG",
 ) -> IndicatorRegistry:
     """
     Create an IndicatorRegistry with plugins and formulas loaded.

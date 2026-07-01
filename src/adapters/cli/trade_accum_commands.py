@@ -218,7 +218,7 @@ def accumulation_log(
     benchmark: Annotated[
         str,
         typer.Option("--benchmark", help="Benchmark ticker for regime context"),
-    ] = "^JKSE",
+    ] = "IHSG",
     journal: Annotated[
         Optional[Path],
         typer.Option("--journal", help="Journal CSV path"),

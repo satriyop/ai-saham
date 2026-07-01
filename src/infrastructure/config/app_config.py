@@ -71,7 +71,7 @@ class BrokerConfig:
 
 @dataclass(frozen=True)
 class AnalysisConfig:
-    benchmark: str = "^JKSE"
+    benchmark: str = "IHSG"
     universe: str = "lq45"
     regime_universe: str = "idx80"
     format: str = "table"

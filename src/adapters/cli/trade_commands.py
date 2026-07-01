@@ -102,7 +102,7 @@ def trade_log(
     benchmark: Annotated[
         str,
         typer.Option("--benchmark", help="Benchmark ticker for regime context"),
-    ] = "^JKSE",
+    ] = "IHSG",
     # intraday options
     confirmation: Annotated[
         Optional[Path],

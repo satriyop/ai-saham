@@ -8,7 +8,7 @@ description: |
   Entry: RS_IHSG > 1.0 (outperforming market) AND MACD bullish cross.
   Exit:  RS_IHSG < 0.8 (significantly underperforming) or MACD bearish cross.
 
-  Requires IHSG data:  saham update ^JKSE --days 365
+  Requires IHSG data:  saham fetch market IHSG --days 365
   Minimum data: 21 candles (MACD signal) + 20 (RS lookback = 20 trading days).
 
 indicators:

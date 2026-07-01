@@ -223,7 +223,7 @@ class TestRelativeStrengthIHSGIndicator:
     def _make_ihsg(self, n: int, base: float = 7000.0, step: float = 10.0) -> list[Candle]:
         return [
             Candle(
-                ticker="^JKSE",
+                ticker="IHSG",
                 date=date(2025, 1, 1) + timedelta(days=i),
                 open=Decimal(str(base + i * step)),
                 high=Decimal(str(base + i * step + 5)),
@@ -246,7 +246,7 @@ class TestRelativeStrengthIHSGIndicator:
         # Stock: +20% over 20 days, IHSG: +10% — RS should be 2.0
         stock = [make_candle(i, 1000 + i * 10, volume=100_000) for i in range(21)]
         ihsg = [
-            Candle(ticker="^JKSE",
+            Candle(ticker="IHSG",
                    date=date(2025, 1, 1) + timedelta(days=i),
                    open=Decimal(str(7000 + i * 5)),
                    high=Decimal(str(7000 + i * 5 + 5)),

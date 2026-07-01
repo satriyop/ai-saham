@@ -62,7 +62,7 @@ class IndicatorRegistry:
         self,
         broker_repository: "BrokerDataRepository | None" = None,
         market_repository: "MarketDataRepository | None" = None,
-        index_ticker: str = "^JKSE",
+        index_ticker: str = "IHSG",
     ) -> None:
         """Initialize with empty plugin and formula registries."""
         self._plugins: dict[str, tuple[type[IndicatorPlugin], int]] = {}

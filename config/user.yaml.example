@@ -25,7 +25,7 @@ swing:
 #   capital: 100_000_000  # IDR — initial capital for backtests / simulations
 
 # analysis:
-#   benchmark: "^JKSE"   # benchmark for regime / return comparison
+#   benchmark: "IHSG"    # benchmark for regime / return comparison
 #   universe: lq45        # default universe for daily briefing
 
 # storage:

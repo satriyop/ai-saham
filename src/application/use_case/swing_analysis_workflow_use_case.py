@@ -23,6 +23,7 @@ from src.application.services.position_sizer import (
     compute_percent_position_size,
     compute_position_size,
 )
+from src.application.services.benchmark_symbol import canonicalize_ticker
 from src.application.services.signal_context_builder import (
     build_signal_context_from_candidate,
 )
@@ -499,7 +500,7 @@ class SwingAnalysisWorkflowUseCase:
                     db_path=request.db_path,
                     as_of_date=request.today,
                     universe=request.regime_universe,
-                    benchmark=request.benchmark,
+                    benchmark=canonicalize_ticker(request.benchmark),
                 )
             except Exception as exc:
                 warnings.append(f"Market regime unavailable: {exc}")

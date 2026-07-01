@@ -26,6 +26,10 @@ if TYPE_CHECKING:
 
 import typer
 
+from src.application.services.benchmark_symbol import (
+    canonicalize_ticker,
+    is_benchmark_ticker,
+)
 from src.application.services.universe_loader import (
     UniverseNotFoundError,
     resolve_tickers,
@@ -89,23 +93,27 @@ MARKET_START_TOLERANCE_DAYS: int = APP_CFG.fetch.start_tolerance_days
 
 def _last_known_trading_day(db_path: Path) -> date | None:
     """
-    Return the latest date in the ^JKSE candle cache.
+    Return the latest date in the benchmark candle cache.
 
-    Yahoo Finance only includes actual IDX trading sessions, so this date
-    is the last known trading day — correctly excluding weekends and IDX
-    public holidays without any heuristic or API call.
+    Stockbit/Yahoo only include actual IDX trading sessions, so this date
+    is the last known trading day, correctly excluding weekends and IDX
+    public holidays without a calendar heuristic.
 
-    Returns None on first run before ^JKSE has been cached.
+    Returns None on first run before benchmark candles have been cached.
     """
     repo = SQLiteMarketRepository(db_path=db_path)
-    date_range = repo.get_date_range("^JKSE")
+    date_range = repo.get_date_range(_BENCHMARK_TICKER)
+    if date_range is None:
+        # Temporary compatibility while old local databases still contain the
+        # Yahoo benchmark symbol.
+        date_range = repo.get_date_range("^JKSE")
     return date_range[1] if date_range else None
 
 
 def _last_weekday(as_of: date) -> date:
     """
     Fallback: most recent Mon–Fri on or before as_of.
-    Used only when ^JKSE candles are not yet cached (first run).
+    Used only when benchmark candles are not yet cached (first run).
     Does NOT account for IDX holidays — use _last_known_trading_day() when possible.
     """
     if as_of.weekday() == 5:   # Saturday → Friday
@@ -375,7 +383,11 @@ def _fetch_candles(
     """Fetch candles for one ticker. Returns status string."""
     from src.infrastructure.data_providers.idx_market import IdxMarketDataProvider
 
-    if provider_name == "idx":
+    ticker = canonicalize_ticker(ticker)
+
+    if is_benchmark_ticker(ticker) and broker_provider is not None:
+        provider = StockbitHistoricalProvider(broker_provider=broker_provider)
+    elif provider_name == "idx":
         provider = IdxMarketDataProvider()
     elif broker_provider is not None:
         provider = FallbackMarketDataProvider(
@@ -390,12 +402,12 @@ def _fetch_candles(
 
     try:
         # End tolerance: how many calendar days old can cached data be and still
-        # be considered current? Derived from the last known IDX trading day
-        # (^JKSE candles). For the benchmark itself, use weekday fallback to
-        # break the circular dependency (^JKSE can't use its own stale data
-        # to decide if it needs updating).
+        # be considered current? Derived from the last known IDX trading day.
+        # For the benchmark itself, use weekday fallback to break the circular
+        # dependency (benchmark candles can't use their own stale data to decide
+        # if they need updating).
         today = date.today()
-        if ticker.upper() == _BENCHMARK_TICKER:
+        if is_benchmark_ticker(ticker):
             last_trading = _last_weekday(today)
         else:
             last_trading = _last_known_trading_day(db_path) or _last_weekday(today)
@@ -431,7 +443,8 @@ def _fetch_broker(
     _idx_summary_provider=None,  # injectable for testing; production code uses IdxBrokerDataProvider
 ) -> BrokerFetchResult:
     """Fetch broker flow for one ticker. Returns split status for summaries and flow tables."""
-    if ticker.startswith("^"):
+    ticker = canonicalize_ticker(ticker)
+    if is_benchmark_ticker(ticker) or ticker.startswith("^"):
         return BrokerFetchResult(summaries="n/a:index", flow="n/a:index")
 
     end_date = date.today()
@@ -561,7 +574,8 @@ def _fetch_enrichment(
 
     if not isinstance(broker_provider, StockbitPlaywrightBrokerProvider):
         return "skip:no-stockbit"
-    if ticker.startswith("^"):
+    ticker = canonicalize_ticker(ticker)
+    if is_benchmark_ticker(ticker) or ticker.startswith("^"):
         return "n/a:index"
 
     from datetime import timedelta
@@ -632,7 +646,8 @@ def _fetch_enrichment(
 
 def _fetch_meta(ticker: str, db_path: Path) -> str:
     """Fetch sector/industry metadata for one ticker. Returns a status string."""
-    if ticker.startswith("^"):
+    ticker = canonicalize_ticker(ticker)
+    if is_benchmark_ticker(ticker) or ticker.startswith("^"):
         return "n/a:index"
 
     try:
@@ -765,7 +780,7 @@ def fetch_market(
     """
     Fetch fresh candles + broker flow + sector metadata for a stock universe.
 
-    Always includes ^JKSE (benchmark) for regime analysis.
+    Always includes IHSG (benchmark) for regime analysis.
     Sector/industry data is fetched via Yahoo Finance and cached for 30 days
     (only re-fetched when stale). Use --no-meta to skip.
 
@@ -815,9 +830,13 @@ def fetch_market(
         )
         raise typer.Exit(1)
 
-    # Include benchmark first
-    without_benchmark = [t for t in ticker_list if t != _BENCHMARK_TICKER]
-    full_ticker_list = [_BENCHMARK_TICKER] + without_benchmark
+    # Include benchmark first for display. The use case repeats this canonical
+    # normalization for execution.
+    without_benchmark = [
+        canonicalize_ticker(t) for t in ticker_list
+        if canonicalize_ticker(t) != _BENCHMARK_TICKER
+    ]
+    full_ticker_list = [_BENCHMARK_TICKER] + list(dict.fromkeys(without_benchmark))
 
     enrichment_available = (
         not no_enrichment
@@ -981,7 +1000,7 @@ def fetch_market(
         color=typer.colors.YELLOW,
     )
 
-    # Table summary — exclude index tickers (^JKSE) since they have no broker/meta rows
+    # Table summary — exclude index tickers since they have no broker/meta rows
     _print_table_summary(
         db_path=resolved_db,
         stock_tickers=response.stock_tickers_only,

@@ -45,7 +45,7 @@ def build_data_update_table_statuses(
     Return dynamic status for every table `saham fetch market` may touch.
 
     The result is scoped to the stock tickers in the current run. Index tickers
-    such as ^JKSE are intentionally excluded by the caller for non-candle tables.
+    such as IHSG are intentionally excluded by the caller for non-candle tables.
     """
     today = today or date.today()
     stock_tickers = [t.upper() for t in tickers if not t.startswith("^")]

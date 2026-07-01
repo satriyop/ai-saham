@@ -16,7 +16,10 @@
 
 # ── Market ────────────────────────────────────────────────────────────────
 market:
-  provider: yahoo        # candle data source: yahoo | idx
+  provider: yahoo        # primary candle source for stock tickers: yahoo | idx
+                         # When a Stockbit session is active, Stockbit is used
+                         # automatically as the candle source for IHSG (benchmark)
+                         # and as fallback for any stock ticker Yahoo cannot cover.
   suffix: ".JK"         # ticker suffix for IDX symbols
   default_days: 365      # history depth for indicator/analyze commands
   idx_request_delay_seconds: 1.0   # min spacing between requests (rate-limit courtesy)
@@ -52,12 +55,14 @@ config_paths:
 
 # ── Broker ────────────────────────────────────────────────────────────────
 broker:
-  provider: idx          # broker summary provider: idx | stockbit
+  provider: idx          # broker summary source: idx (true daily totals, always)
+                         # Stockbit tracked/institutional flow is layered on top
+                         # automatically when a session is active — not a replacement.
   default_days: 30       # broker fetch look-back window (sessions)
 
 # ── Analysis ──────────────────────────────────────────────────────────────
 analysis:
-  benchmark: "^JKSE"     # benchmark ticker for regime / return comparison
+  benchmark: "IHSG"      # canonical benchmark ticker for regime / return comparison
   universe: lq45         # default universe for daily briefings
   regime_universe: idx80 # universe used for market regime detection
   format: table          # output format: table | json

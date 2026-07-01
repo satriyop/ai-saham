@@ -218,6 +218,6 @@ def test_pre_open_workflow_uses_injected_market_context_evaluator():
             "db_path": Path("/tmp/test.db"),
             "as_of_date": run_date,
             "universe": "idx80",
-            "benchmark": "^JKSE",
+            "benchmark": "IHSG",
         }
     ]

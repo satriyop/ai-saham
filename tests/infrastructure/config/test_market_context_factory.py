@@ -46,7 +46,7 @@ def test_evaluate_market_context_delegates_to_factory_engine(tmp_path, monkeypat
         db_path=tmp_path / "data.db",
         as_of_date=date(2026, 6, 18),
         universe="idx80",
-        benchmark="^JKSE",
+        benchmark="IHSG",
     )
 
     assert result is expected

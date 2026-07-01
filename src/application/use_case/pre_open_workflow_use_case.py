@@ -15,6 +15,8 @@ from src.application.services.strategy_loader import StrategyLoader, StrategyNot
 from src.application.use_case.assess_risk_use_case import AssessRiskRequest, AssessRiskUseCase
 from typing import TYPE_CHECKING
 
+from src.application.services.benchmark_symbol import canonicalize_ticker
+
 if TYPE_CHECKING:
     from src.domain.value_objects.market_context import MarketContext
 from src.application.use_case.pre_open_screen_use_case import (
@@ -47,7 +49,7 @@ class PreOpenWorkflowRequest:
     guard_warnings: tuple[str, ...] = ()
     with_regime: bool = False
     regime_universe: str = "idx80"
-    benchmark: str = "^JKSE"
+    benchmark: str = "IHSG"
     db_path: Path = Path("data.db")
     risk_strategy: str | None = None
 
@@ -111,7 +113,7 @@ class PreOpenWorkflowUseCase:
                     db_path=request.db_path,
                     as_of_date=result.screened_date,
                     universe=request.regime_universe,
-                    benchmark=request.benchmark,
+                    benchmark=canonicalize_ticker(request.benchmark),
                 )
             except Exception as exc:
                 warnings.append(f"Market regime unavailable: {exc}")

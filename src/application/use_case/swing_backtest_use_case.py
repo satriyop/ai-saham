@@ -7,12 +7,13 @@ AI usage: None
 """
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any
 
 from src.application.services.market_context_engine import MarketContextEngine
+from src.application.services.benchmark_symbol import canonicalize_ticker
 from src.application.services.stats import (
     average,
     max_drawdown_pct,
@@ -35,6 +36,7 @@ from src.application.use_case.assess_trade_setup_use_case import (
     AssessTradeSetupRequest,
     AssessTradeSetupUseCase,
 )
+from src.infrastructure.config.market_context_config import load_market_context_config
 from src.application.use_case.evaluate_swing_setup_use_case import (
     AVAILABLE_SWING_SETUPS,
     EvaluateSwingSetupRequest,
@@ -76,7 +78,7 @@ class SwingBacktestRequest:
     max_hold_days: int = 10
     cost_bps: Decimal = DEFAULT_SWING_COST_BPS
     include_regime: bool = False
-    benchmark_ticker: str = "^JKSE"
+    benchmark_ticker: str = "IHSG"
     allowed_regimes: tuple[str, ...] = ()
     setup_targets: dict[str, Any] | None = None
     setup_config: SwingSetupCatalogConfig = field(default_factory=SwingSetupCatalogConfig)
@@ -887,8 +889,16 @@ class SwingBacktestUseCase:
         if not request.include_regime and not request.allowed_regimes:
             return {}
 
+        cfg = load_market_context_config()
+        benchmark = canonicalize_ticker(request.benchmark_ticker)
+        if benchmark != cfg.idx_trend.benchmark_ticker:
+            cfg = replace(
+                cfg,
+                idx_trend=replace(cfg.idx_trend, benchmark_ticker=benchmark),
+            )
         engine = MarketContextEngine(
             market_repository=self._market_repo,
+            config=cfg,
             universe=tickers,
             broker_repository=self._broker_repo,
         )

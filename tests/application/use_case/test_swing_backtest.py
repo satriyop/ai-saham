@@ -193,7 +193,7 @@ def test_swing_backtest_opens_signal_and_exits_at_target():
         for i in range(18, 25)
     ]
     benchmark_candles = [
-        _flat_candle("^JKSE", base - timedelta(days=60 - i), Decimal(1000 + i))
+        _flat_candle("IHSG", base - timedelta(days=60 - i), Decimal(1000 + i))
         for i in range(86)
     ]
     use_case = SwingBacktestUseCase(
@@ -213,7 +213,7 @@ def test_swing_backtest_opens_signal_and_exits_at_target():
         min_net_buy_days=1,
         cost_bps=Decimal("0"),
         include_regime=True,
-        benchmark_ticker="^JKSE",
+        benchmark_ticker="IHSG",
     ))
 
     assert response.trade_count == 1
@@ -474,7 +474,7 @@ def test_swing_backtest_can_filter_entries_by_allowed_regimes():
         for i in range(18, 25)
     ]
     benchmark_candles = [
-        _flat_candle("^JKSE", base - timedelta(days=60 - i), Decimal(1000 + i))
+        _flat_candle("IHSG", base - timedelta(days=60 - i), Decimal(1000 + i))
         for i in range(86)
     ]
     use_case = SwingBacktestUseCase(
@@ -493,7 +493,7 @@ def test_swing_backtest_can_filter_entries_by_allowed_regimes():
         max_positions=1,
         min_net_buy_days=1,
         cost_bps=Decimal("0"),
-        benchmark_ticker="^JKSE",
+        benchmark_ticker="IHSG",
         allowed_regimes=("RISK_OFF",),
     ))
 

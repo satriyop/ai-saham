@@ -160,6 +160,19 @@ def test_range_update_status_distinguishes_rows_from_calendar_span():
 
 def test_fetch_broker_skips_index_ticker(tmp_path: Path):
     result = _fetch_broker(
+        ticker="IHSG",
+        days=90,
+        db_path=tmp_path / "data.db",
+        broker_provider=object(),
+        refresh=False,
+    )
+
+    assert result.summaries == "n/a:index"
+    assert result.flow == "n/a:index"
+
+
+def test_fetch_broker_skips_legacy_index_alias(tmp_path: Path):
+    result = _fetch_broker(
         ticker="^JKSE",
         days=90,
         db_path=tmp_path / "data.db",
@@ -169,6 +182,49 @@ def test_fetch_broker_skips_index_ticker(tmp_path: Path):
 
     assert result.summaries == "n/a:index"
     assert result.flow == "n/a:index"
+
+
+def test_fetch_candles_uses_stockbit_historical_for_benchmark_with_stockbit(
+    monkeypatch,
+    tmp_path: Path,
+):
+    db_path = tmp_path / "data.db"
+
+    class FakeStockbitHistoricalProvider:
+        provider_name = "stockbit"
+        volume_unit = "shares"
+        price_adjustment_policy = "raw"
+        instances: list["FakeStockbitHistoricalProvider"] = []
+
+        def __init__(self, broker_provider) -> None:
+            self.broker_provider = broker_provider
+            self.requested: list[tuple[str, date, date]] = []
+            self.instances.append(self)
+
+        def fetch_daily_ohlcv(self, ticker: str, start_date: date, end_date: date):
+            self.requested.append((ticker, start_date, end_date))
+            return [_candle("IHSG", start_date)]
+
+    monkeypatch.setattr(
+        "src.adapters.cli.fetch_market_commands.StockbitHistoricalProvider",
+        FakeStockbitHistoricalProvider,
+    )
+
+    status = _fetch_candles(
+        ticker="^JKSE",
+        days=1,
+        db_path=db_path,
+        provider_name="yahoo",
+        refresh=True,
+        broker_provider=object(),
+    )
+
+    repo = SQLiteMarketRepository(db_path)
+    rows = repo.get_candles("IHSG")
+    assert status.startswith("+")
+    assert len(rows) == 1
+    assert rows[0].ticker == "IHSG"
+    assert FakeStockbitHistoricalProvider.instances[0].requested[0][0] == "IHSG"
 
 
 def test_fetch_candles_backfills_older_gap(monkeypatch, tmp_path: Path):
@@ -250,9 +306,9 @@ def test_fetch_candles_treats_recent_trading_day_as_current(monkeypatch, tmp_pat
     repo.save_candles([
         _candle("BBCA", requested_start),
         _candle("BBCA", latest),
-        # ^JKSE candle on `latest` sets the last known trading day, so the
+        # IHSG candle on `latest` sets the last known trading day, so the
         # staleness check considers BBCA data current (not stale).
-        _candle("^JKSE", latest),
+        _candle("IHSG", latest),
     ])
     FakeMarketProvider.instances.clear()
     monkeypatch.setattr(
@@ -382,10 +438,10 @@ def test_fetch_broker_treats_recent_trading_day_as_current(tmp_path: Path):
             source="stockbit",
         ),
     ])
-    # Seed ^JKSE candles so _last_known_trading_day returns `latest`,
+    # Seed IHSG candles so _last_known_trading_day returns `latest`,
     # making the broker data considered current (not stale).
     market_repo = SQLiteMarketRepository(db_path)
-    market_repo.save_candles([_candle("^JKSE", latest)])
+    market_repo.save_candles([_candle("IHSG", latest)])
     provider = FakeBrokerProvider("stockbit")
 
     result = _fetch_broker(

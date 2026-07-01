@@ -16,7 +16,7 @@ Interpretation:
   RS = 1.0 : neutral / no index data available
 
 Requires IHSG data in local DB:
-  saham fetch ^JKSE --days 365
+  saham fetch market IHSG --days 365
 
 This is a broker-aware plugin — it requires index candles to be injected
 via set_index_candles() before compute() is called. The registry handles

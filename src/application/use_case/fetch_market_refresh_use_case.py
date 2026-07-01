@@ -10,9 +10,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from src.application.services.benchmark_symbol import (
+    CANONICAL_BENCHMARK_TICKER,
+    canonicalize_ticker,
+    is_benchmark_ticker,
+)
 from src.application.services.universe_loader import resolve_tickers
 
-BENCHMARK_TICKER = "^JKSE"
+BENCHMARK_TICKER = CANONICAL_BENCHMARK_TICKER
 
 
 @dataclass(frozen=True)
@@ -185,7 +190,10 @@ class FetchMarketRefreshUseCase:
             if on_ticker_complete is not None:
                 on_ticker_complete(result_item, len(ticker_results), len(ticker_list))
 
-        stock_tickers_only = [ticker for ticker in ticker_list if not ticker.startswith("^")]
+        stock_tickers_only = [
+            ticker for ticker in ticker_list
+            if not is_benchmark_ticker(ticker) and not ticker.startswith("^")
+        ]
         return FetchMarketRefreshResponse(
             ticker_list=ticker_list,
             stock_tickers_only=stock_tickers_only,
@@ -200,7 +208,14 @@ class FetchMarketRefreshUseCase:
         )
 
     def _with_benchmark_first(self, tickers: list[str]) -> list[str]:
-        without_benchmark = [ticker for ticker in tickers if ticker != BENCHMARK_TICKER]
+        seen: set[str] = set()
+        without_benchmark: list[str] = []
+        for ticker in tickers:
+            canonical = canonicalize_ticker(ticker)
+            if canonical == BENCHMARK_TICKER or canonical in seen:
+                continue
+            seen.add(canonical)
+            without_benchmark.append(canonical)
         return [BENCHMARK_TICKER] + without_benchmark
 
 

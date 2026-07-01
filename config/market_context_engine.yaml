@@ -47,7 +47,7 @@ market_context_engine:
     idx_trend:
       enabled: true
       weight: 0.15
-      benchmark_ticker: "^JKSE"
+      benchmark_ticker: "IHSG"
       thresholds:
         sma_fast: 20
         sma_slow: 50

@@ -56,7 +56,7 @@ class UsdIdrFactorConfig:
 class IdxTrendFactorConfig:
     enabled: bool = True
     weight: float = 0.15
-    benchmark_ticker: str = "^JKSE"
+    benchmark_ticker: str = "IHSG"
     sma_fast: int = 20
     sma_slow: int = 50
     # Distance from SMA50 scoring (pct of SMA50 price)

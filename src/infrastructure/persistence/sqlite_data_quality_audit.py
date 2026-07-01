@@ -10,6 +10,7 @@ import sqlite3
 from datetime import date
 from pathlib import Path
 
+from src.application.services.benchmark_symbol import CANONICAL_BENCHMARK_TICKER
 from src.application.use_case.data_quality_audit_use_case import (
     DataQualityRawSnapshot,
     DataQualityTableSnapshot,
@@ -41,7 +42,15 @@ class SQLiteDataQualityAuditReader:
         normalized_tickers = [t.upper() for t in tickers or []]
         with sqlite3.connect(str(self._db_path)) as conn:
             conn.row_factory = sqlite3.Row
-            expected = _latest_date(conn, "candles", "date", ticker="^JKSE")
+            expected = _latest_date(
+                conn,
+                "candles",
+                "date",
+                ticker=CANONICAL_BENCHMARK_TICKER,
+            )
+            if expected is None:
+                # Compatibility for databases not yet migrated to canonical IHSG.
+                expected = _latest_date(conn, "candles", "date", ticker="^JKSE")
             if expected is None:
                 expected = _latest_date(conn, "candles", "date")
 

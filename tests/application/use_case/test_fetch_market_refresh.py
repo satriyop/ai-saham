@@ -56,6 +56,19 @@ def test_fetch_market_refresh_adds_benchmark_first():
     assert response.fail_count == 0
 
 
+def test_fetch_market_refresh_normalizes_legacy_benchmark_alias():
+    use_case = FetchMarketRefreshUseCase(
+        fetch_candles=lambda **kwargs: "✓(2026-06-18)",
+        fetch_broker=lambda **kwargs: BrokerFetchResult("n/a:index", "n/a:index"),
+        fetch_meta=lambda ticker, db_path: "cached(1d)",
+        fetch_enrichment=lambda ticker, db_path, broker_provider, force_refresh=False: "skip",
+    )
+
+    response = use_case.execute(_request(tickers=["^JKSE", "BBCA"]))
+
+    assert response.ticker_list == [BENCHMARK_TICKER, "BBCA"]
+
+
 def test_fetch_market_refresh_empty_input_returns_empty_response():
     use_case = FetchMarketRefreshUseCase(
         fetch_candles=lambda **kwargs: "unexpected",
