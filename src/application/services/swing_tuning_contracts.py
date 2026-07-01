@@ -2,8 +2,9 @@
 
 Intent:
     This module consumes swing backtest attribution summaries and builds guarded
-    tuning handoff artifacts. It never selects parameter values, generates YAML
-    diffs, calls AI, applies changes, or mutates config.
+    tuning handoff artifacts. It may select narrowly bounded deterministic
+    dry-run values for human review. It never generates YAML diffs, calls AI,
+    applies changes, or mutates config.
 
 Layer: Application
 """
@@ -220,6 +221,17 @@ class TuningConfigDiffRejection:
 
 
 @dataclass(frozen=True)
+class TuningValueSuggestion:
+    """Deterministic value-selection result for a config diff item."""
+
+    proposed_value: object | None
+    rationale: str
+    confidence: str
+    status: str
+    value_selection_policy: str
+
+
+@dataclass(frozen=True)
 class TuningConfigDiffDraft:
     """Guarded schema envelope for future tuning config diffs."""
 
@@ -394,12 +406,12 @@ def build_tuning_config_diff_draft(
     summary: SwingBacktestAttributionSummary,
     config_root: Path | str = Path("."),
 ) -> TuningConfigDiffDraft:
-    """Build a guarded config-diff schema with read-only current values."""
+    """Build a guarded dry-run config-diff schema without mutating config."""
     proposal = build_tuning_proposal_draft(summary)
     notes = _unique_strings((
-        "Config diff draft is read-only.",
+        "Config diff draft is dry-run only.",
         "Current values are resolved only for concrete YAML paths.",
-        "No proposed values are selected.",
+        "Proposed values require deterministic guarded value-selection.",
         "No YAML diff, AI proposal, apply step, or config mutation is generated.",
         *proposal.evidence_notes,
     ))
@@ -448,26 +460,33 @@ def build_tuning_config_diff_draft(
                 )
                 continue
 
+            suggestion = _suggest_tuning_value(candidate, resolution)
             diff_items.append(
                 TuningConfigDiffItem(
                     target_path=target_path,
                     parsed_target_path=parsed_target_path,
                     current_value=resolution.current_value,
-                    proposed_value=None,
-                    rationale=(
-                        "Read-only current value resolved; value-selection logic "
-                        "is not implemented."
-                    ),
+                    proposed_value=suggestion.proposed_value,
+                    rationale=suggestion.rationale,
                     evidence_dimension=candidate.dimension,
-                    confidence="READ_ONLY_CURRENT_VALUE",
-                    status="CURRENT_VALUE_ONLY",
-                    value_selection_policy="NO_VALUE_SELECTION_POLICY",
+                    confidence=suggestion.confidence,
+                    status=suggestion.status,
+                    value_selection_policy=suggestion.value_selection_policy,
                 )
             )
 
+    has_proposed_values = any(
+        item.proposed_value is not None for item in diff_items
+    )
     return TuningConfigDiffDraft(
         intent="config_diff_schema_only_no_apply",
-        status="READ_ONLY_VALUES" if diff_items else "SCHEMA_ONLY",
+        status=(
+            "PROPOSED_VALUES_DRY_RUN"
+            if has_proposed_values
+            else "READ_ONLY_VALUES"
+            if diff_items
+            else "SCHEMA_ONLY"
+        ),
         proposal_status=proposal.status,
         can_apply=False,
         requires_human_review=True,
@@ -550,6 +569,153 @@ def _value_selection_policy_for_rejection(unresolved_reason: str | None) -> str:
         "config_file_not_found": "CONFIG_FILE_NOT_FOUND",
         "document_path_not_found": "DOCUMENT_PATH_NOT_FOUND",
     }.get(unresolved_reason or "", "CONFIG_VALUE_NOT_RESOLVED")
+
+
+def _suggest_tuning_value(
+    candidate: TuningProposalCandidate,
+    resolution: TuningConfigValueResolution,
+) -> TuningValueSuggestion:
+    """Select a bounded deterministic value only for narrow safe cases."""
+    current_value = resolution.current_value
+    if not _is_tunable_number(current_value):
+        return TuningValueSuggestion(
+            proposed_value=None,
+            rationale=(
+                "Current value resolved, but only numeric non-boolean config "
+                "values are eligible for deterministic value-selection."
+            ),
+            confidence="READ_ONLY_CURRENT_VALUE",
+            status="CURRENT_VALUE_ONLY",
+            value_selection_policy="NON_NUMERIC_CURRENT_VALUE",
+        )
+
+    if candidate.evidence_strength != "HIGH":
+        return TuningValueSuggestion(
+            proposed_value=None,
+            rationale=(
+                "Current value resolved, but evidence strength is not HIGH."
+            ),
+            confidence="READ_ONLY_CURRENT_VALUE",
+            status="CURRENT_VALUE_ONLY",
+            value_selection_policy="INSUFFICIENT_EVIDENCE",
+        )
+
+    if not _evidence_supports_tightening(candidate):
+        return TuningValueSuggestion(
+            proposed_value=None,
+            rationale=(
+                "Current numeric value resolved, but attribution buckets do not "
+                "show adverse ordering that supports threshold tightening."
+            ),
+            confidence="READ_ONLY_CURRENT_VALUE",
+            status="CURRENT_VALUE_ONLY",
+            value_selection_policy="NO_ADVERSE_BUCKET_ORDERING",
+        )
+
+    direction = _numeric_adjustment_direction(resolution.target_path)
+    if direction == 0:
+        return TuningValueSuggestion(
+            proposed_value=None,
+            rationale=(
+                "Current numeric value resolved, but the path does not expose "
+                "an unambiguous min/max threshold direction."
+            ),
+            confidence="READ_ONLY_CURRENT_VALUE",
+            status="CURRENT_VALUE_ONLY",
+            value_selection_policy="NO_UNAMBIGUOUS_DIRECTION",
+        )
+
+    proposed_value = _bounded_one_step_adjustment(current_value, direction)
+    return TuningValueSuggestion(
+        proposed_value=proposed_value,
+        rationale=(
+            "HIGH evidence and a numeric threshold path allow a bounded "
+            "one-step deterministic dry-run proposal for human review."
+        ),
+        confidence="DETERMINISTIC_GUARDED",
+        status="PROPOSED_VALUE_SELECTED",
+        value_selection_policy="DETERMINISTIC_VALUE_SELECTED",
+    )
+
+
+def _is_tunable_number(value: object | None) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _numeric_adjustment_direction(target_path: TuningConfigPath) -> int:
+    leaf_name = target_path.document_path.rsplit(".", maxsplit=1)[-1].lower()
+    if any(token in leaf_name for token in ("min", "floor", "required")):
+        return 1
+    if any(token in leaf_name for token in ("max", "ceiling")):
+        return -1
+    return 0
+
+
+def _bounded_one_step_adjustment(value: object, direction: int) -> int | float:
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value + direction
+    numeric_value = float(value)
+    return round(numeric_value + (0.5 * direction), 4)
+
+
+def _evidence_supports_tightening(candidate: TuningProposalCandidate) -> bool:
+    bucket_avgs = {
+        label: avg
+        for label, avg in (
+            _parse_evidence_bucket_avg(bucket)
+            for bucket in candidate.evidence_buckets
+        )
+        if label and avg is not None
+    }
+    if candidate.dimension in {
+        "signal_strength",
+        "candidate_signal_strength",
+    }:
+        strong_avg = bucket_avgs.get("STRONG")
+        if strong_avg is None:
+            return False
+        return any(
+            avg > strong_avg
+            for label, avg in bucket_avgs.items()
+            if label in {"MODERATE", "WEAK"}
+        )
+    if candidate.dimension in {
+        "signal_score_bucket",
+        "candidate_signal_score_bucket",
+    }:
+        high_avg = next(
+            (
+                avg
+                for label, avg in bucket_avgs.items()
+                if label.startswith("HIGH")
+            ),
+            None,
+        )
+        if high_avg is None:
+            return False
+        return any(
+            avg > high_avg
+            for label, avg in bucket_avgs.items()
+            if label.startswith(("LOW", "MID"))
+        )
+    return False
+
+
+def _parse_evidence_bucket_avg(bucket: str) -> tuple[str, float | None]:
+    parts = tuple(part.strip() for part in bucket.split("|"))
+    label = parts[0] if parts else ""
+    avg_part = next(
+        (part for part in parts if part.startswith("avg=")),
+        "",
+    )
+    if not avg_part:
+        return label, None
+    try:
+        return label, float(
+            avg_part.removeprefix("avg=").removesuffix("%").replace("+", "")
+        )
+    except ValueError:
+        return label, None
 
 
 def _evidence_by_dimension(

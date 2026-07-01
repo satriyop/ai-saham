@@ -187,7 +187,7 @@ def test_tuning_config_diff_draft_blocks_insufficient_sample():
         rejection.to_dict()["value_selection_policy"]
         for rejection in draft.rejected_items
     } == {"INSUFFICIENT_EVIDENCE"}
-    assert "read-only" in " ".join(draft.notes)
+    assert "dry-run" in " ".join(draft.notes)
 
 
 def test_tuning_config_diff_draft_is_schema_only_for_ready_proposals():
@@ -221,11 +221,11 @@ def test_tuning_config_diff_draft_is_schema_only_for_ready_proposals():
     assert {
         item.value_selection_policy
         for item in draft.diff_items
-    } == {"NO_VALUE_SELECTION_POLICY"}
+    } == {"NON_NUMERIC_CURRENT_VALUE"}
     assert {
         item.to_dict()["value_selection_policy"]
         for item in draft.diff_items
-    } == {"NO_VALUE_SELECTION_POLICY"}
+    } == {"NON_NUMERIC_CURRENT_VALUE"}
     assert all(item.current_value is not None for item in draft.diff_items)
     assert all(item.proposed_value is None for item in draft.diff_items)
     assert all(item.parsed_target_path is not None for item in draft.diff_items)
@@ -245,6 +245,64 @@ def test_tuning_config_diff_draft_is_schema_only_for_ready_proposals():
         rejection.value_selection_policy
         for rejection in draft.rejected_items
     } == {"WILDCARD_UNRESOLVED"}
+
+
+def test_tuning_config_diff_draft_selects_guarded_numeric_values(tmp_path):
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    (config_dir / "signal_engine.yaml").write_text(
+        "signal_engine:\n"
+        "  classification:\n"
+        "    strong_min_score: 70\n"
+        "    moderate_min_score: 45\n",
+        encoding="utf-8",
+    )
+    summary = summarize_swing_backtest_attribution(
+        tuple(
+            make_trade(
+                ticker=f"T{i:03}",
+                net_return_pct=-2.0 if i < 30 else 5.0,
+                pnl="-200" if i < 30 else "500",
+                signal_strength="STRONG" if i < 30 else "WEAK",
+            )
+            for i in range(60)
+        )
+    )
+
+    draft = build_tuning_config_diff_draft(summary, config_root=tmp_path)
+    threshold_items = {
+        item.parsed_target_path.document_path: item
+        for item in draft.diff_items
+        if item.parsed_target_path is not None
+        and item.parsed_target_path.document_path.startswith(
+            "signal_engine.classification."
+        )
+    }
+
+    assert draft.status == "PROPOSED_VALUES_DRY_RUN"
+    assert draft.can_apply is False
+    assert draft.requires_human_review is True
+    assert threshold_items[
+        "signal_engine.classification.strong_min_score"
+    ].current_value == 70
+    assert threshold_items[
+        "signal_engine.classification.strong_min_score"
+    ].proposed_value == 71
+    assert threshold_items[
+        "signal_engine.classification.moderate_min_score"
+    ].current_value == 45
+    assert threshold_items[
+        "signal_engine.classification.moderate_min_score"
+    ].proposed_value == 46
+    assert {
+        item.status for item in threshold_items.values()
+    } == {"PROPOSED_VALUE_SELECTED"}
+    assert {
+        item.confidence for item in threshold_items.values()
+    } == {"DETERMINISTIC_GUARDED"}
+    assert {
+        item.value_selection_policy for item in threshold_items.values()
+    } == {"DETERMINISTIC_VALUE_SELECTED"}
 
 
 def test_parse_tuning_config_path_splits_file_and_document_path():

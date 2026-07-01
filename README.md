@@ -881,7 +881,7 @@ when testing a different broker fee assumption.
 | `--with-attribution` | | false | Show deterministic grouped attribution summary for manual tuning |
 | `--with-tuning-plan` | | false | Show deterministic tuning readiness plan; no AI or YAML changes |
 | `--with-tuning-proposal` | | false | Show deterministic dry-run tuning proposal targets; no YAML diff |
-| `--with-tuning-diff` | | false | Show read-only tuning config diff draft; no apply |
+| `--with-tuning-diff` | | false | Show guarded dry-run tuning config diff draft; no apply |
 | `--format` | | table | Output format: table or json |
 | `--db` | | | SQLite database path |
 
@@ -908,13 +908,15 @@ and reasons in JSON output. It still does not choose parameter values, generate
 YAML diffs, run AI, or mutate config. Proposal candidates include deterministic
 `priority`, `evidence_strength`, sample count, and return-spread fields so review
 targets are ranked before any future tuning engine proposes values.
-Use `--with-tuning-diff` to print the locked config-diff schema for future
-tuners. Current output resolves read-only `current_value` for concrete YAML
-paths and rejects wildcard paths such as `setups.*.gates`. It never chooses
-proposed values, applies changes, runs AI, or mutates config. JSON output
-includes parsed target path fields (`file_path`, `document_path`, `raw`) and a
-machine-readable `value_selection_policy` explaining why `proposed_value` remains
-unset.
+Use `--with-tuning-diff` to print the guarded config-diff schema for future
+tuners. Current output resolves `current_value` for concrete YAML paths and
+rejects wildcard paths such as `setups.*.gates`. It may select `proposed_value`
+only for numeric non-boolean thresholds when evidence strength is HIGH and the
+path has an unambiguous min/max direction. It never applies changes, runs AI, or
+mutates config. JSON output includes parsed target path fields (`file_path`,
+`document_path`, `raw`) and a machine-readable `value_selection_policy`
+explaining whether a deterministic value was selected or why `proposed_value`
+remains unset.
 
 Attribution dimensions map to these primary tuning files:
 
