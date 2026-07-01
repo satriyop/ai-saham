@@ -105,7 +105,7 @@ class EchoLatestBrokerProvider(FakeBrokerProvider):
 class FakeMarketProvider:
     instances: list["FakeMarketProvider"] = []
 
-    def __init__(self) -> None:
+    def __init__(self, *args, **kwargs) -> None:
         self.requested_ranges: list[tuple[date, date]] = []
         FakeMarketProvider.instances.append(self)
 
@@ -196,7 +196,7 @@ def test_fetch_candles_uses_stockbit_historical_for_benchmark_with_stockbit(
         price_adjustment_policy = "raw"
         instances: list["FakeStockbitHistoricalProvider"] = []
 
-        def __init__(self, broker_provider) -> None:
+        def __init__(self, broker_provider, non_idx_tickers=None) -> None:
             self.broker_provider = broker_provider
             self.requested: list[tuple[str, date, date]] = []
             self.instances.append(self)

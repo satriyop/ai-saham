@@ -385,17 +385,21 @@ def _fetch_candles(
 
     ticker = canonicalize_ticker(ticker)
 
+    from src.infrastructure.config.market_context_config import get_global_context_tickers
+    non_idx = get_global_context_tickers()
+
     if is_benchmark_ticker(ticker) and broker_provider is not None:
-        provider = StockbitHistoricalProvider(broker_provider=broker_provider)
+        provider = StockbitHistoricalProvider(broker_provider=broker_provider, non_idx_tickers=non_idx)
     elif provider_name == "idx":
         provider = IdxMarketDataProvider()
     elif broker_provider is not None:
         provider = FallbackMarketDataProvider(
-            primary=YahooFinanceProvider(),
-            fallback=StockbitHistoricalProvider(broker_provider=broker_provider),
+            primary=YahooFinanceProvider(non_idx_tickers=non_idx),
+            fallback=StockbitHistoricalProvider(broker_provider=broker_provider, non_idx_tickers=non_idx),
+            non_idx_tickers=non_idx,
         )
     else:
-        provider = YahooFinanceProvider()
+        provider = YahooFinanceProvider(non_idx_tickers=non_idx)
 
     repo = SQLiteMarketRepository(db_path=db_path)
     use_case = RefreshMarketDataUseCase(provider=provider, repository=repo)
@@ -698,7 +702,8 @@ def _fetch_global_context_tickers(db_path: Path, days: int = 180) -> None:
     if not global_tickers:
         return
 
-    provider = YahooFinanceProvider(market_suffix="")
+    from src.infrastructure.config.market_context_config import get_global_context_tickers
+    provider = YahooFinanceProvider(market_suffix="", non_idx_tickers=get_global_context_tickers())
     repo = SQLiteMarketRepository(db_path=db_path)
     use_case = RefreshMarketDataUseCase(provider=provider, repository=repo)
 

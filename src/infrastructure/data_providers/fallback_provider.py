@@ -49,11 +49,13 @@ class FallbackMarketDataProvider(MarketDataProvider):
         primary: MarketDataProvider,
         fallback: MarketDataProvider,
         coverage_threshold: float = _DEFAULT_COVERAGE_THRESHOLD,
+        non_idx_tickers: set[str] | None = None,
     ) -> None:
         self._primary = primary
         self._fallback = fallback
         self._threshold = coverage_threshold
         self._active_provider: MarketDataProvider = primary
+        self._non_idx_tickers = non_idx_tickers or set()
 
     # Proxy metadata to whichever provider last served data
     @property
@@ -85,7 +87,7 @@ class FallbackMarketDataProvider(MarketDataProvider):
         coverage = len(primary_candles) / expected
 
         from src.domain.value_objects import is_non_idx_ticker
-        if is_non_idx_ticker(ticker):
+        if is_non_idx_ticker(ticker, self._non_idx_tickers):
             return primary_candles
 
         if coverage >= self._threshold:

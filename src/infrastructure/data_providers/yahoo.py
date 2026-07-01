@@ -43,17 +43,23 @@ class YahooFinanceProvider(MarketDataProvider):
         market_suffix: Suffix to append (default: '.JK' for IDX)
     """
 
-    def __init__(self, market_suffix: str | None = None) -> None:
+    def __init__(
+        self,
+        market_suffix: str | None = None,
+        non_idx_tickers: set[str] | None = None,
+    ) -> None:
         """
         Initialize Yahoo Finance provider.
 
         Args:
             market_suffix: Suffix for ticker symbols (e.g., '.JK' for IDX)
+            non_idx_tickers: Extra global tickers to skip suffix appending.
         """
         if market_suffix is None:
             from src.infrastructure.config.app_config import APP_CFG
             market_suffix = APP_CFG.market.suffix
         self._market_suffix = market_suffix
+        self._non_idx_tickers = non_idx_tickers or set()
         self.provider_name = "yahoo"
         self.volume_unit = "shares"
         self.price_adjustment_policy = "yfinance_default"
@@ -104,7 +110,7 @@ class YahooFinanceProvider(MarketDataProvider):
         ticker = ticker.upper().strip()
         if ticker == CANONICAL_BENCHMARK_TICKER:
             return YAHOO_BENCHMARK_TICKER
-        if is_non_idx_ticker(ticker):
+        if is_non_idx_ticker(ticker, self._non_idx_tickers):
             return ticker
         if "." in ticker:
             return ticker

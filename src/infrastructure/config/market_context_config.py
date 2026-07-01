@@ -324,3 +324,24 @@ def load_market_context_config(
         )
     except Exception:
         return defaults
+
+
+def get_global_context_tickers() -> set[str]:
+    """Return all global context tickers configured in market_context_engine.yaml."""
+    try:
+        cfg = load_market_context_config()
+        tickers = set()
+        if cfg.vix.enabled:
+            tickers.add(cfg.vix.ticker.upper().strip())
+        if cfg.eido.enabled:
+            tickers.add(cfg.eido.ticker.upper().strip())
+        if cfg.usd_idr.enabled:
+            tickers.add(cfg.usd_idr.ticker.upper().strip())
+        if cfg.commodity_composite.enabled and cfg.commodity_composite.components:
+            for comp in cfg.commodity_composite.components:
+                tickers.add(comp.ticker.upper().strip())
+        return tickers
+    except Exception:
+        # Fallback to defaults on error
+        return {"^VIX", "EIDO", "IDR=X"}
+

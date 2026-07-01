@@ -20,8 +20,10 @@ def test_is_non_idx_ticker_futures():
 
 
 def test_is_non_idx_ticker_specific_global_tickers():
-    assert is_non_idx_ticker("EIDO") is True
-    assert is_non_idx_ticker("eido") is True
+    assert is_non_idx_ticker("EIDO") is False
+    assert is_non_idx_ticker("EIDO", {"EIDO"}) is True
+    assert is_non_idx_ticker("eido", {"EIDO"}) is True
+    assert is_non_idx_ticker("SPY", {"SPY"}) is True
 
 
 def test_is_non_idx_ticker_idx_stocks_are_false():

@@ -111,8 +111,10 @@ class StockbitHistoricalProvider(MarketDataProvider):
     def __init__(
         self,
         broker_provider: "StockbitPlaywrightBrokerProvider | None",
+        non_idx_tickers: set[str] | None = None,
     ) -> None:
         self._provider = broker_provider
+        self._non_idx_tickers = non_idx_tickers or set()
 
     def fetch_daily_ohlcv(
         self,
@@ -129,7 +131,7 @@ class StockbitHistoricalProvider(MarketDataProvider):
             return []
 
         canonical_ticker = canonicalize_ticker(ticker)
-        if is_non_idx_ticker(canonical_ticker):
+        if is_non_idx_ticker(canonical_ticker, self._non_idx_tickers):
             return []
 
         try:
