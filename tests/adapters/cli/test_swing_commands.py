@@ -1,8 +1,8 @@
 """Tests for swing command helper logic."""
 
+import inspect
 import json
 import logging
-import inspect
 import sys
 from datetime import date
 from decimal import Decimal
@@ -31,8 +31,14 @@ from src.adapters.cli.analyze_swing_display import (
     format_failed_gates_summary as _format_failed_gates_summary,
 )
 from src.adapters.cli.main import app
+from src.application.services.swing_backtest_attribution import (
+    AttributionGroupStat,
+    SampleQuality,
+    SwingBacktestAttributionSummary,
+)
 from src.application.services.swing_data_freshness import SwingDataFreshness
 from src.application.use_case.accumulation_screen_use_case import AccumulationCandidate
+from src.application.use_case.swing_backtest_use_case import SwingBacktestResponse
 from src.domain.entities.broker_flow import BrokerSummary, BrokerTransaction, BrokerType
 from src.domain.value_objects.foreign_flow_score_breakdown import ForeignFlowScoreBreakdown
 from src.domain.value_objects.setup_evaluation import SetupEvaluation, SetupGate, SetupMatch
@@ -761,6 +767,147 @@ def test_swing_backtest_rejects_invalid_allowed_regime():
 
     assert result.exit_code != 0
     assert "--allow-regimes" in result.output
+
+
+def _trade_ready_backtest_response() -> SwingBacktestResponse:
+    return SwingBacktestResponse(
+        setup=FOREIGN_BOUNCE_SETUP_NAME,
+        start_date=date(2026, 1, 1),
+        end_date=date(2026, 1, 31),
+        initial_capital=Decimal("1000000"),
+        cost_bps=Decimal("20"),
+        final_equity=Decimal("1010000"),
+        total_return_pct=1.0,
+        max_drawdown_pct=-1.0,
+        trade_count=60,
+        win_rate_pct=50.0,
+        avg_trade_return_pct=1.0,
+        profit_factor=1.5,
+        exposure_pct=25.0,
+        skipped_no_cash=0,
+        skipped_duplicate=0,
+        skipped_no_forward_data=0,
+        skipped_by_regime=0,
+        attribution_summary=SwingBacktestAttributionSummary(
+            sample_quality=SampleQuality(
+                status="TRADE_READY",
+                completed_trade_count=60,
+                candidate_observation_count=0,
+                min_sample_size=30,
+                trade_sample_ready=True,
+                candidate_sample_ready=False,
+                notes=(),
+            ),
+            group_stats=(
+                AttributionGroupStat(
+                    dimension="signal_strength",
+                    bucket="STRONG",
+                    trade_count=30,
+                    win_rate_pct=20.0,
+                    avg_return_pct=-2.0,
+                    total_pnl=Decimal("-6000"),
+                    profit_factor=0.5,
+                ),
+                AttributionGroupStat(
+                    dimension="signal_strength",
+                    bucket="WEAK",
+                    trade_count=30,
+                    win_rate_pct=80.0,
+                    avg_return_pct=5.0,
+                    total_pnl=Decimal("15000"),
+                    profit_factor=2.0,
+                ),
+            ),
+        ),
+    )
+
+
+def _patch_swing_backtest_command(monkeypatch):
+    from src.adapters.cli import trade_swing_commands
+
+    class FakeSwingBacktestUseCase:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def execute(self, request):
+            return _trade_ready_backtest_response()
+
+    monkeypatch.setattr(
+        trade_swing_commands,
+        "resolve_tickers",
+        lambda universe, explicit, db_path: tuple(explicit) or ("BBCA",),
+    )
+    monkeypatch.setattr(trade_swing_commands, "SQLiteBrokerRepository", lambda *a, **k: object())
+    monkeypatch.setattr(trade_swing_commands, "SQLiteMarketRepository", lambda *a, **k: object())
+    monkeypatch.setattr(trade_swing_commands, "create_risk_engine", lambda *a, **k: object())
+    monkeypatch.setattr(
+        trade_swing_commands,
+        "SwingBacktestUseCase",
+        FakeSwingBacktestUseCase,
+    )
+
+
+def test_swing_backtest_tuning_diff_json_exposes_guardrails(monkeypatch):
+    _patch_swing_backtest_command(monkeypatch)
+
+    result = runner.invoke(
+        app,
+        [
+            "trade",
+            "backtest-swing",
+            "BBCA",
+            "--with-tuning-diff",
+            "--format",
+            "json",
+            "--start",
+            "2026-01-01",
+            "--end",
+            "2026-01-31",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    tuning_diff = payload["tuning_config_diff"]
+
+    assert tuning_diff["status"] == "PROPOSED_VALUES_DRY_RUN"
+    assert tuning_diff["can_apply"] is False
+    assert tuning_diff["requires_human_review"] is True
+    assert tuning_diff["diff_items"]
+    assert tuning_diff["rejected_items"] == []
+    item = tuning_diff["diff_items"][0]
+    assert item["current_value"] is not None
+    assert item["proposed_value"] is not None
+    assert item["status"] == "PROPOSED_VALUE_SELECTED"
+    assert item["value_selection_policy"] == "DETERMINISTIC_VALUE_SELECTED"
+
+
+def test_swing_backtest_tuning_diff_table_exposes_policy(monkeypatch):
+    _patch_swing_backtest_command(monkeypatch)
+
+    result = runner.invoke(
+        app,
+        [
+            "trade",
+            "backtest-swing",
+            "BBCA",
+            "--with-tuning-diff",
+            "--show-trades",
+            "0",
+            "--start",
+            "2026-01-01",
+            "--end",
+            "2026-01-31",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "TUNING CONFIG DIFF DRAFT" in result.output
+    assert "PROPOSED_VALUES_DRY_RUN" in result.output
+    assert "PROPOSED_VALUE_SELECTED" in result.output
+    assert "DETERMINISTIC_VALUE_SELECTED" in result.output
+    assert "Value Policies" in result.output
+    assert "Can Apply" in result.output
 
 
 def test_swing_compare_rejects_unknown_variant():
