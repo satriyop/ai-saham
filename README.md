@@ -903,7 +903,9 @@ config mutation.
 Use `--with-tuning-proposal` to print the next dry-run handoff contract. It
 lists evidence-backed config targets that may be reviewed, plus rejected targets
 and reasons in JSON output. It still does not choose parameter values, generate
-YAML diffs, run AI, or mutate config.
+YAML diffs, run AI, or mutate config. Proposal candidates include deterministic
+`priority`, `evidence_strength`, sample count, and return-spread fields so review
+targets are ranked before any future tuning engine proposes values.
 
 Attribution dimensions map to these primary tuning files:
 

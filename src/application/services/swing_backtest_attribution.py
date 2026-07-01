@@ -150,6 +150,10 @@ class TuningProposalCandidate:
     yaml_paths: tuple[str, ...]
     allowed_use: str
     evidence_buckets: tuple[str, ...]
+    evidence_strength: str
+    priority: int
+    evidence_sample_count: int
+    evidence_return_spread_pct: float | None
     proposed_action: str = "review_threshold_or_weight_no_yaml_diff"
     warning: str | None = None
 
@@ -161,6 +165,10 @@ class TuningProposalCandidate:
             "yaml_paths": list(self.yaml_paths),
             "allowed_use": self.allowed_use,
             "evidence_buckets": list(self.evidence_buckets),
+            "evidence_strength": self.evidence_strength,
+            "priority": self.priority,
+            "evidence_sample_count": self.evidence_sample_count,
+            "evidence_return_spread_pct": self.evidence_return_spread_pct,
             "proposed_action": self.proposed_action,
             "warning": self.warning,
         }
@@ -210,6 +218,15 @@ class TuningProposalDraft:
             ],
             "evidence_notes": list(self.evidence_notes),
         }
+
+
+@dataclass(frozen=True)
+class _DimensionEvidence:
+    buckets: tuple[str, ...]
+    sample_count: int
+    return_spread_pct: float | None
+    strength: str
+    priority: int
 
 
 @dataclass(frozen=True)
@@ -603,7 +620,7 @@ def build_tuning_proposal_draft(
             evidence_notes=notes,
         )
 
-    evidence_by_dimension = _evidence_buckets_by_dimension(summary)
+    evidence_by_dimension = _evidence_by_dimension(summary)
     candidate_changes: list[TuningProposalCandidate] = []
     rejected_changes: list[TuningProposalRejection] = []
 
@@ -621,8 +638,8 @@ def build_tuning_proposal_draft(
             )
             continue
 
-        evidence_buckets = evidence_by_dimension.get(target.dimension, ())
-        if not evidence_buckets:
+        evidence = evidence_by_dimension.get(target.dimension)
+        if evidence is None or not evidence.buckets:
             rejected_changes.append(
                 TuningProposalRejection(
                     dimension=target.dimension,
@@ -639,11 +656,23 @@ def build_tuning_proposal_draft(
                 source_scope=target.source_scope,
                 yaml_paths=target.yaml_paths,
                 allowed_use=target.allowed_use,
-                evidence_buckets=evidence_buckets,
+                evidence_buckets=evidence.buckets,
+                evidence_strength=evidence.strength,
+                priority=evidence.priority,
+                evidence_sample_count=evidence.sample_count,
+                evidence_return_spread_pct=evidence.return_spread_pct,
                 warning=target.warning,
             )
         )
 
+    candidate_changes.sort(
+        key=lambda candidate: (
+            candidate.priority,
+            candidate.evidence_sample_count,
+            candidate.dimension,
+        ),
+        reverse=True,
+    )
     status = "READY_FOR_HUMAN_REVIEW" if candidate_changes else "NO_EVIDENCE_TARGETS"
     return TuningProposalDraft(
         intent="dry_run_tuning_proposal_contract_only",
@@ -657,10 +686,10 @@ def build_tuning_proposal_draft(
     )
 
 
-def _evidence_buckets_by_dimension(
+def _evidence_by_dimension(
     summary: SwingBacktestAttributionSummary,
-) -> dict[str, tuple[str, ...]]:
-    evidence: dict[str, tuple[str, ...]] = {}
+) -> dict[str, _DimensionEvidence]:
+    evidence: dict[str, _DimensionEvidence] = {}
     stats = (
         tuple(summary.group_stats)
         + tuple(summary.candidate_group_stats)
@@ -677,8 +706,65 @@ def _evidence_buckets_by_dimension(
             ),
             reverse=True,
         )[:3]
-        evidence[dimension] = tuple(_format_evidence_bucket(stat) for stat in top_stats)
+        sample_count = sum(_stat_sample_count(stat) for stat in dimension_stats)
+        returns = tuple(
+            value
+            for value in (_stat_return(stat) for stat in dimension_stats)
+            if value is not None
+        )
+        spread = round(max(returns) - min(returns), 4) if returns else None
+        strength = _evidence_strength(
+            sample_count=sample_count,
+            bucket_count=len(dimension_stats),
+            return_spread_pct=spread,
+            min_sample_size=summary.sample_quality.min_sample_size,
+        )
+        evidence[dimension] = _DimensionEvidence(
+            buckets=tuple(_format_evidence_bucket(stat) for stat in top_stats),
+            sample_count=sample_count,
+            return_spread_pct=spread,
+            strength=strength,
+            priority=_evidence_priority(
+                sample_count=sample_count,
+                return_spread_pct=spread,
+                strength=strength,
+            ),
+        )
     return evidence
+
+
+def _evidence_strength(
+    *,
+    sample_count: int,
+    bucket_count: int,
+    return_spread_pct: float | None,
+    min_sample_size: int,
+) -> str:
+    spread = return_spread_pct or 0.0
+    if sample_count >= min_sample_size * 2 and bucket_count >= 2 and spread >= 2.0:
+        return "HIGH"
+    if sample_count >= min_sample_size and (bucket_count >= 2 or spread >= 1.0):
+        return "MEDIUM"
+    if sample_count >= min_sample_size:
+        return "LOW"
+    return "INSUFFICIENT"
+
+
+def _evidence_priority(
+    *,
+    sample_count: int,
+    return_spread_pct: float | None,
+    strength: str,
+) -> int:
+    strength_bonus = {
+        "HIGH": 300,
+        "MEDIUM": 200,
+        "LOW": 100,
+        "INSUFFICIENT": 0,
+    }[strength]
+    spread_bonus = min(int((return_spread_pct or 0.0) * 10), 100)
+    sample_bonus = min(sample_count, 100)
+    return strength_bonus + spread_bonus + sample_bonus
 
 
 def _stat_sample_count(stat: AttributionGroupStat | CandidateAttributionStat) -> int:

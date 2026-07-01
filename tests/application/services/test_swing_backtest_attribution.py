@@ -340,12 +340,63 @@ def test_tuning_proposal_draft_lists_candidate_ready_review_targets():
         "candidate_trade_setup_action",
         "setup_gate",
     }
+    assert tuple(draft.candidate_changes) == tuple(
+        sorted(
+            draft.candidate_changes,
+            key=lambda candidate: (
+                candidate.priority,
+                candidate.evidence_sample_count,
+                candidate.dimension,
+            ),
+            reverse=True,
+        )
+    )
     assert all(candidate.evidence_buckets for candidate in draft.candidate_changes)
+    assert all(candidate.priority > 0 for candidate in draft.candidate_changes)
+    assert {
+        candidate.evidence_strength
+        for candidate in draft.candidate_changes
+    } <= {"LOW", "MEDIUM", "HIGH"}
+    assert all(
+        candidate.evidence_sample_count >= summary.sample_quality.min_sample_size
+        for candidate in draft.candidate_changes
+    )
     assert {
         rejection.dimension
         for rejection in draft.rejected_changes
         if rejection.reason == "No attribution buckets are available for this dimension."
     } == {"candidate_risk_gate", "candidate_risk_status", "candidate_regime"}
+
+
+def test_tuning_proposal_draft_computes_evidence_strength_and_spread():
+    summary = summarize_swing_backtest_attribution(
+        (),
+        tuple(
+            _Observation(
+                forward_return_pct=4.0 if i < 15 else -2.0,
+                setup_match="MATCH" if i < 15 else "NO_MATCH",
+                signal_score=75 if i < 15 else 40,
+            )
+            for i in range(30)
+        ),
+    )
+
+    draft = build_tuning_proposal_draft(summary)
+    by_dimension = {
+        candidate.dimension: candidate
+        for candidate in draft.candidate_changes
+    }
+
+    signal_score = by_dimension["candidate_signal_score_bucket"]
+
+    assert signal_score.evidence_strength == "MEDIUM"
+    assert signal_score.evidence_sample_count == 30
+    assert signal_score.evidence_return_spread_pct == 6.0
+    assert signal_score.priority == 290
+    assert signal_score.evidence_buckets == (
+        "HIGH_70_PLUS | n=15 | avg=+4.00%",
+        "LOW_BELOW_45 | n=15 | avg=-2.00%",
+    )
 
 
 def test_swing_backtest_attribution_summary_golden_contract():

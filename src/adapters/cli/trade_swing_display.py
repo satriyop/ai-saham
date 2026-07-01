@@ -206,6 +206,8 @@ def _display_tuning_plan(response: SwingBacktestResponse) -> None:
 def _display_tuning_proposal(response: SwingBacktestResponse) -> None:
     draft = build_tuning_proposal_draft(response.attribution_summary)
     table = compact_table()
+    table.add_column("Priority", justify="right")
+    table.add_column("Strength")
     table.add_column("Dimension", style="bold cyan")
     table.add_column("Family")
     table.add_column("Evidence")
@@ -213,6 +215,8 @@ def _display_tuning_proposal(response: SwingBacktestResponse) -> None:
 
     for candidate in draft.candidate_changes[:8]:
         table.add_row(
+            str(candidate.priority),
+            candidate.evidence_strength,
             candidate.dimension,
             candidate.config_family,
             " | ".join(candidate.evidence_buckets),
@@ -221,6 +225,8 @@ def _display_tuning_proposal(response: SwingBacktestResponse) -> None:
 
     if not draft.candidate_changes:
         table.add_row(
+            "0",
+            "N/A",
             "N/A",
             "N/A",
             "No candidate changes",
