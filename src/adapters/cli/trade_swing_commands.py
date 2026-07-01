@@ -85,7 +85,11 @@ def swing_backtest(
     ] = None,
     universe: Annotated[
         Optional[str],
-        typer.Option("--universe", "-u", help="Universe name or 'cached' — see `saham fetch universe list`"),
+        typer.Option(
+            "--universe",
+            "-u",
+            help="Universe name or 'cached' — see `saham fetch universe list`",
+        ),
     ] = None,
     setup: Annotated[
         str,
@@ -175,7 +179,10 @@ def swing_backtest(
         bool,
         typer.Option(
             "--with-tuning-diff",
-            help="Show schema-only tuning config diff draft; no apply",
+            help=(
+                "Show guarded dry-run tuning config diff with current/proposed "
+                "values; no apply"
+            ),
         ),
     ] = False,
     output_format: Annotated[
@@ -344,7 +351,12 @@ def size(
     ticker: Annotated[str, typer.Argument(help="Stock ticker symbol (e.g., BBRI)")],
     capital: Annotated[
         Optional[int],
-        typer.Option("--capital", "-c", help="Total capital in IDR (default: from config/user.yaml)", min=1),
+        typer.Option(
+            "--capital",
+            "-c",
+            help="Total capital in IDR (default: from config/user.yaml)",
+            min=1,
+        ),
     ] = None,
     risk_pct: Annotated[
         float,
@@ -398,7 +410,8 @@ def size(
             capital = int(_cfg)
     if capital is None:
         typer.echo(
-            "Error: --capital is required. Pass it as a flag or set swing.capital in config/user.yaml.",
+            "Error: --capital is required. Pass it as a flag or set "
+            "swing.capital in config/user.yaml.",
             err=True,
         )
         raise typer.Exit(1)

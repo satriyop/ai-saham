@@ -88,7 +88,7 @@ class TuningReadinessPlan:
 
 @dataclass(frozen=True)
 class TuningProposalCandidate:
-    """Dry-run candidate target for future human/AI-assisted tuning."""
+    """Dry-run review target selected from attribution evidence."""
 
     dimension: str
     config_family: str
@@ -138,7 +138,7 @@ class TuningProposalRejection:
 
 @dataclass(frozen=True)
 class TuningProposalDraft:
-    """Deterministic dry-run proposal envelope; never mutates config."""
+    """Deterministic target-selection proposal; never chooses values or mutates config."""
 
     intent: str
     status: str
@@ -168,7 +168,7 @@ class TuningProposalDraft:
 
 @dataclass(frozen=True)
 class TuningConfigDiffItem:
-    """Schema for a future YAML config change proposal."""
+    """Dry-run current/proposed value row for human review."""
 
     target_path: str
     current_value: object | None
@@ -235,7 +235,7 @@ class TuningValueSuggestion:
 
 @dataclass(frozen=True)
 class TuningConfigDiffDraft:
-    """Guarded schema envelope for future tuning config diffs."""
+    """Guarded current/proposed value envelope; never applies config changes."""
 
     intent: str
     status: str
@@ -330,7 +330,7 @@ def build_tuning_readiness_plan(
 def build_tuning_proposal_draft(
     summary: SwingBacktestAttributionSummary,
 ) -> TuningProposalDraft:
-    """Build a deterministic dry-run proposal envelope without YAML diffs."""
+    """Build deterministic target-selection output without parameter values."""
     readiness = build_tuning_readiness_plan(summary)
     notes = _unique_strings((
         "Draft is deterministic and dry-run only.",

@@ -195,7 +195,7 @@ def test_tuning_config_diff_draft_blocks_insufficient_sample():
     assert "dry-run" in " ".join(draft.notes)
 
 
-def test_tuning_config_diff_draft_is_schema_only_for_ready_proposals():
+def test_tuning_config_diff_draft_explains_non_value_selected_paths():
     summary = summarize_swing_backtest_attribution(
         (),
         tuple(
