@@ -912,8 +912,9 @@ Use `--with-tuning-diff` to print the locked config-diff schema for future
 tuners. Current output resolves read-only `current_value` for concrete YAML
 paths and rejects wildcard paths such as `setups.*.gates`. It never chooses
 proposed values, applies changes, runs AI, or mutates config. JSON output
-includes parsed target path fields (`file_path`, `document_path`, `raw`) for
-future tooling.
+includes parsed target path fields (`file_path`, `document_path`, `raw`) and a
+machine-readable `value_selection_policy` explaining why `proposed_value` remains
+unset.
 
 Attribution dimensions map to these primary tuning files:
 

@@ -174,6 +174,7 @@ class TuningConfigDiffItem:
     evidence_dimension: str
     confidence: str
     status: str
+    value_selection_policy: str
     parsed_target_path: TuningConfigPath | None = None
 
     def to_dict(self) -> dict:
@@ -190,6 +191,7 @@ class TuningConfigDiffItem:
             "evidence_dimension": self.evidence_dimension,
             "confidence": self.confidence,
             "status": self.status,
+            "value_selection_policy": self.value_selection_policy,
         }
 
 
@@ -200,6 +202,7 @@ class TuningConfigDiffRejection:
     target_path: str
     evidence_dimension: str
     reason: str
+    value_selection_policy: str
     parsed_target_path: TuningConfigPath | None = None
 
     def to_dict(self) -> dict:
@@ -212,6 +215,7 @@ class TuningConfigDiffRejection:
             ),
             "evidence_dimension": self.evidence_dimension,
             "reason": self.reason,
+            "value_selection_policy": self.value_selection_policy,
         }
 
 
@@ -413,6 +417,7 @@ def build_tuning_config_diff_draft(
                     target_path="N/A",
                     evidence_dimension=rejection.dimension,
                     reason=f"Proposal target rejected: {rejection.reason}",
+                    value_selection_policy="INSUFFICIENT_EVIDENCE",
                 )
                 for rejection in proposal.rejected_changes
             ),
@@ -436,6 +441,9 @@ def build_tuning_config_diff_draft(
                         evidence_dimension=candidate.dimension,
                         reason=resolution.unresolved_reason
                         or "config_value_not_resolved",
+                        value_selection_policy=_value_selection_policy_for_rejection(
+                            resolution.unresolved_reason,
+                        ),
                     )
                 )
                 continue
@@ -453,6 +461,7 @@ def build_tuning_config_diff_draft(
                     evidence_dimension=candidate.dimension,
                     confidence="READ_ONLY_CURRENT_VALUE",
                     status="CURRENT_VALUE_ONLY",
+                    value_selection_policy="NO_VALUE_SELECTION_POLICY",
                 )
             )
 
@@ -533,6 +542,14 @@ def resolve_tuning_config_value(
         resolved=True,
         current_value=current,
     )
+
+
+def _value_selection_policy_for_rejection(unresolved_reason: str | None) -> str:
+    return {
+        "wildcard_path_not_resolved": "WILDCARD_UNRESOLVED",
+        "config_file_not_found": "CONFIG_FILE_NOT_FOUND",
+        "document_path_not_found": "DOCUMENT_PATH_NOT_FOUND",
+    }.get(unresolved_reason or "", "CONFIG_VALUE_NOT_RESOLVED")
 
 
 def _evidence_by_dimension(

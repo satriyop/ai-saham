@@ -179,6 +179,14 @@ def test_tuning_config_diff_draft_blocks_insufficient_sample():
         rejection.reason
         for rejection in draft.rejected_items
     } == {"Proposal target rejected: Readiness gate blocks tuning proposals."}
+    assert {
+        rejection.value_selection_policy
+        for rejection in draft.rejected_items
+    } == {"INSUFFICIENT_EVIDENCE"}
+    assert {
+        rejection.to_dict()["value_selection_policy"]
+        for rejection in draft.rejected_items
+    } == {"INSUFFICIENT_EVIDENCE"}
     assert "read-only" in " ".join(draft.notes)
 
 
@@ -210,6 +218,14 @@ def test_tuning_config_diff_draft_is_schema_only_for_ready_proposals():
         item.confidence
         for item in draft.diff_items
     } == {"READ_ONLY_CURRENT_VALUE"}
+    assert {
+        item.value_selection_policy
+        for item in draft.diff_items
+    } == {"NO_VALUE_SELECTION_POLICY"}
+    assert {
+        item.to_dict()["value_selection_policy"]
+        for item in draft.diff_items
+    } == {"NO_VALUE_SELECTION_POLICY"}
     assert all(item.current_value is not None for item in draft.diff_items)
     assert all(item.proposed_value is None for item in draft.diff_items)
     assert all(item.parsed_target_path is not None for item in draft.diff_items)
@@ -225,6 +241,10 @@ def test_tuning_config_diff_draft_is_schema_only_for_ready_proposals():
         rejection.reason
         for rejection in draft.rejected_items
     } == {"wildcard_path_not_resolved"}
+    assert {
+        rejection.value_selection_policy
+        for rejection in draft.rejected_items
+    } == {"WILDCARD_UNRESOLVED"}
 
 
 def test_parse_tuning_config_path_splits_file_and_document_path():
