@@ -23,6 +23,8 @@ from src.application.services.swing_backtest_attribution import (
     SwingBacktestAttributionSummary,
 )
 
+TUNING_CONFIG_DIFF_NO_APPLY_INTENT = "config_diff_schema_only_no_apply"
+
 
 @dataclass(frozen=True)
 class TuningConfigPath:
@@ -259,6 +261,25 @@ class TuningConfigDiffDraft:
         }
 
 
+def assert_tuning_config_diff_apply_block(
+    draft: TuningConfigDiffDraft,
+) -> TuningConfigDiffDraft:
+    """Assert that a tuning config diff draft remains non-applyable."""
+    violations: list[str] = []
+    if draft.intent != TUNING_CONFIG_DIFF_NO_APPLY_INTENT:
+        violations.append("intent_must_be_no_apply")
+    if draft.can_apply:
+        violations.append("can_apply_must_be_false")
+    if not draft.requires_human_review:
+        violations.append("requires_human_review_must_be_true")
+    if violations:
+        raise ValueError(
+            "Tuning config diff apply block violated: "
+            + ", ".join(violations)
+        )
+    return draft
+
+
 @dataclass(frozen=True)
 class _DimensionEvidence:
     buckets: tuple[str, ...]
@@ -417,23 +438,25 @@ def build_tuning_config_diff_draft(
     ))
 
     if proposal.status == "BLOCKED":
-        return TuningConfigDiffDraft(
-            intent="config_diff_schema_only_no_apply",
-            status="BLOCKED",
-            proposal_status=proposal.status,
-            can_apply=False,
-            requires_human_review=True,
-            diff_items=(),
-            rejected_items=tuple(
-                TuningConfigDiffRejection(
-                    target_path="N/A",
-                    evidence_dimension=rejection.dimension,
-                    reason=f"Proposal target rejected: {rejection.reason}",
-                    value_selection_policy="INSUFFICIENT_EVIDENCE",
-                )
-                for rejection in proposal.rejected_changes
+        return assert_tuning_config_diff_apply_block(
+            TuningConfigDiffDraft(
+                intent=TUNING_CONFIG_DIFF_NO_APPLY_INTENT,
+                status="BLOCKED",
+                proposal_status=proposal.status,
+                can_apply=False,
+                requires_human_review=True,
+                diff_items=(),
+                rejected_items=tuple(
+                    TuningConfigDiffRejection(
+                        target_path="N/A",
+                        evidence_dimension=rejection.dimension,
+                        reason=f"Proposal target rejected: {rejection.reason}",
+                        value_selection_policy="INSUFFICIENT_EVIDENCE",
+                    )
+                    for rejection in proposal.rejected_changes
+                ),
+                notes=notes,
             ),
-            notes=notes,
         )
 
     diff_items: list[TuningConfigDiffItem] = []
@@ -478,21 +501,23 @@ def build_tuning_config_diff_draft(
     has_proposed_values = any(
         item.proposed_value is not None for item in diff_items
     )
-    return TuningConfigDiffDraft(
-        intent="config_diff_schema_only_no_apply",
-        status=(
-            "PROPOSED_VALUES_DRY_RUN"
-            if has_proposed_values
-            else "READ_ONLY_VALUES"
-            if diff_items
-            else "SCHEMA_ONLY"
-        ),
-        proposal_status=proposal.status,
-        can_apply=False,
-        requires_human_review=True,
-        diff_items=tuple(diff_items),
-        rejected_items=tuple(rejected_items),
-        notes=notes,
+    return assert_tuning_config_diff_apply_block(
+        TuningConfigDiffDraft(
+            intent=TUNING_CONFIG_DIFF_NO_APPLY_INTENT,
+            status=(
+                "PROPOSED_VALUES_DRY_RUN"
+                if has_proposed_values
+                else "READ_ONLY_VALUES"
+                if diff_items
+                else "SCHEMA_ONLY"
+            ),
+            proposal_status=proposal.status,
+            can_apply=False,
+            requires_human_review=True,
+            diff_items=tuple(diff_items),
+            rejected_items=tuple(rejected_items),
+            notes=notes,
+        )
     )
 
 

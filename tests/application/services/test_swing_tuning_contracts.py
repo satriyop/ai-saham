@@ -1,8 +1,13 @@
+from dataclasses import replace
+
+import pytest
+
 from src.application.services.swing_backtest_attribution import (
     DEFAULT_TUNING_TARGETS,
     summarize_swing_backtest_attribution,
 )
 from src.application.services.swing_tuning_contracts import (
+    assert_tuning_config_diff_apply_block,
     build_tuning_config_diff_draft,
     build_tuning_proposal_draft,
     build_tuning_readiness_plan,
@@ -303,6 +308,41 @@ def test_tuning_config_diff_draft_selects_guarded_numeric_values(tmp_path):
     assert {
         item.value_selection_policy for item in threshold_items.values()
     } == {"DETERMINISTIC_VALUE_SELECTED"}
+
+
+def test_tuning_config_diff_apply_block_rejects_applyable_drafts(tmp_path):
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    (config_dir / "signal_engine.yaml").write_text(
+        "signal_engine:\n"
+        "  classification:\n"
+        "    strong_min_score: 70\n"
+        "    moderate_min_score: 45\n",
+        encoding="utf-8",
+    )
+    summary = summarize_swing_backtest_attribution(
+        tuple(
+            make_trade(
+                ticker=f"T{i:03}",
+                net_return_pct=-2.0 if i < 30 else 5.0,
+                pnl="-200" if i < 30 else "500",
+                signal_strength="STRONG" if i < 30 else "WEAK",
+            )
+            for i in range(60)
+        )
+    )
+
+    draft = build_tuning_config_diff_draft(summary, config_root=tmp_path)
+
+    assert draft.status == "PROPOSED_VALUES_DRY_RUN"
+    assert assert_tuning_config_diff_apply_block(draft) is draft
+    for unsafe_draft in (
+        replace(draft, can_apply=True),
+        replace(draft, requires_human_review=False),
+        replace(draft, intent="config_diff_apply"),
+    ):
+        with pytest.raises(ValueError, match="apply block violated"):
+            assert_tuning_config_diff_apply_block(unsafe_draft)
 
 
 def test_parse_tuning_config_path_splits_file_and_document_path():

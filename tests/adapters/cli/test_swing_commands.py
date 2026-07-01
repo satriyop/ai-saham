@@ -910,6 +910,25 @@ def test_swing_backtest_tuning_diff_table_exposes_policy(monkeypatch):
     assert "Can Apply" in result.output
 
 
+def test_swing_backtest_has_no_tuning_diff_apply_flag():
+    from src.adapters.cli import trade_swing_commands
+
+    params = inspect.signature(trade_swing_commands.swing_backtest).parameters
+    result = runner.invoke(
+        app,
+        [
+            "trade",
+            "backtest-swing",
+            "BBCA",
+            "--apply-tuning-diff",
+        ],
+    )
+
+    assert "apply_tuning_diff" not in params
+    assert result.exit_code != 0
+    assert "apply-tuning-diff" in result.output
+
+
 def test_swing_compare_rejects_unknown_variant():
     result = runner.invoke(
         app,
