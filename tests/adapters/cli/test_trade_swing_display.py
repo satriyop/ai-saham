@@ -97,6 +97,7 @@ def test_display_swing_backtest_hides_attribution_by_default(capsys):
     assert "TUNING READINESS" not in output
     assert "TUNING READINESS PLAN" not in output
     assert "TUNING PROPOSAL DRAFT" not in output
+    assert "TUNING CONFIG DIFF DRAFT" not in output
 
 
 def test_display_swing_backtest_can_show_attribution_panel(capsys):
@@ -157,3 +158,18 @@ def test_display_swing_backtest_can_show_tuning_proposal(capsys):
     assert "Candidate Changes" in output
     assert "Rejected Changes" in output
     assert "dry_run_tuning_proposal_contract_only" in output
+
+
+def test_display_swing_backtest_can_show_tuning_config_diff(capsys):
+    display_swing_backtest(
+        _response(),
+        show_trades=0,
+        show_tuning_diff=True,
+    )
+
+    output = capsys.readouterr().out
+    assert "TUNING CONFIG DIFF DRAFT" in output
+    assert "BLOCKED" in output
+    assert "Diff Items" in output
+    assert "Rejected Items" in output
+    assert "config_diff_schema_only_no_apply" in output

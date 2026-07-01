@@ -5,6 +5,7 @@ from math import inf
 from src.application.services.swing_backtest_attribution import (
     DEFAULT_TUNING_TARGETS,
     AttributionBucketPolicy,
+    build_tuning_config_diff_draft,
     build_tuning_proposal_draft,
     build_tuning_readiness_plan,
     summarize_swing_backtest_attribution,
@@ -397,6 +398,59 @@ def test_tuning_proposal_draft_computes_evidence_strength_and_spread():
         "HIGH_70_PLUS | n=15 | avg=+4.00%",
         "LOW_BELOW_45 | n=15 | avg=-2.00%",
     )
+
+
+def test_tuning_config_diff_draft_blocks_insufficient_sample():
+    summary = summarize_swing_backtest_attribution(
+        (_trade(ticker="BBCA", net_return_pct=5.0, pnl="500"),),
+        (_Observation(forward_return_pct=1.0),),
+    )
+
+    draft = build_tuning_config_diff_draft(summary)
+
+    assert draft.intent == "config_diff_schema_only_no_apply"
+    assert draft.status == "BLOCKED"
+    assert draft.proposal_status == "BLOCKED"
+    assert draft.can_apply is False
+    assert draft.requires_human_review is True
+    assert draft.diff_items == ()
+    assert len(draft.rejected_items) == len(DEFAULT_TUNING_TARGETS)
+    assert {
+        rejection.reason
+        for rejection in draft.rejected_items
+    } == {"Proposal target rejected: Readiness gate blocks tuning proposals."}
+    assert "schema-only" in " ".join(draft.notes)
+
+
+def test_tuning_config_diff_draft_is_schema_only_for_ready_proposals():
+    summary = summarize_swing_backtest_attribution(
+        (),
+        tuple(
+            _Observation(
+                forward_return_pct=4.0 if i < 15 else -2.0,
+                setup_match="MATCH" if i < 15 else "NO_MATCH",
+                signal_score=75 if i < 15 else 40,
+            )
+            for i in range(30)
+        ),
+    )
+
+    draft = build_tuning_config_diff_draft(summary)
+
+    assert draft.status == "SCHEMA_ONLY"
+    assert draft.proposal_status == "READY_FOR_HUMAN_REVIEW"
+    assert draft.can_apply is False
+    assert draft.diff_items == ()
+    assert draft.rejected_items
+    assert all(rejection.target_path != "N/A" for rejection in draft.rejected_items)
+    assert {
+        rejection.reason
+        for rejection in draft.rejected_items
+    } <= {
+        "Config diff generation requires HIGH evidence strength; current strength is MEDIUM.",
+        "Config diff generation requires HIGH evidence strength; current strength is LOW.",
+        "Value-selection logic is not implemented; schema is locked first.",
+    }
 
 
 def test_swing_backtest_attribution_summary_golden_contract():

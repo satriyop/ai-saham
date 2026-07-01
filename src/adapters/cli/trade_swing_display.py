@@ -11,6 +11,7 @@ from rich.text import Text
 
 from src.adapters.cli.rich_display import compact_table, console, panel
 from src.application.services.swing_backtest_attribution import (
+    build_tuning_config_diff_draft,
     build_tuning_proposal_draft,
     build_tuning_readiness_plan,
 )
@@ -29,6 +30,7 @@ def display_swing_backtest(
     show_attribution: bool = False,
     show_tuning_plan: bool = False,
     show_tuning_proposal: bool = False,
+    show_tuning_diff: bool = False,
 ) -> None:
     # Summary panel
     summary_table = compact_table(show_header=False)
@@ -150,6 +152,9 @@ def display_swing_backtest(
     if show_tuning_proposal:
         _display_tuning_proposal(response)
 
+    if show_tuning_diff:
+        _display_tuning_config_diff(response)
+
     # Warnings & Footnotes (Panel 4)
     warnings_list = []
     if response.warnings:
@@ -250,6 +255,43 @@ def _display_tuning_proposal(response: SwingBacktestResponse) -> None:
         panel(
             Group(summary_table, Text(""), table),
             title="TUNING PROPOSAL DRAFT",
+            subtitle=draft.intent,
+        )
+    )
+
+
+def _display_tuning_config_diff(response: SwingBacktestResponse) -> None:
+    draft = build_tuning_config_diff_draft(response.attribution_summary)
+    summary_table = compact_table(show_header=False)
+    summary_table.add_column("Metric", style="bold cyan")
+    summary_table.add_column("Value")
+    summary_table.add_row("Status", draft.status)
+    summary_table.add_row("Proposal", draft.proposal_status)
+    summary_table.add_row("Diff Items", str(len(draft.diff_items)))
+    summary_table.add_row("Rejected Items", str(len(draft.rejected_items)))
+    summary_table.add_row("Can Apply", "no")
+    summary_table.add_row("Human Review", "required")
+    if draft.notes:
+        summary_table.add_row("Notes", " | ".join(draft.notes[:3]))
+
+    table = compact_table()
+    table.add_column("Target Path", style="bold cyan")
+    table.add_column("Evidence")
+    table.add_column("Reason")
+    for rejection in draft.rejected_items[:8]:
+        table.add_row(
+            rejection.target_path,
+            rejection.evidence_dimension,
+            rejection.reason,
+        )
+    if not draft.rejected_items:
+        table.add_row("N/A", "N/A", "No diff candidates")
+
+    console().print("")
+    console().print(
+        panel(
+            Group(summary_table, Text(""), table),
+            title="TUNING CONFIG DIFF DRAFT",
             subtitle=draft.intent,
         )
     )

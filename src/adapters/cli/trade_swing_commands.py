@@ -21,6 +21,7 @@ from src.application.services.bootstrap import create_indicator_registry, create
 from src.application.services.position_sizer import compute_position_size
 from src.application.services.swing_backtest_attribution import (
     AttributionBucketPolicy,
+    build_tuning_config_diff_draft,
     build_tuning_proposal_draft,
     build_tuning_readiness_plan,
 )
@@ -170,6 +171,13 @@ def swing_backtest(
             help="Show deterministic dry-run tuning proposal targets; no YAML diff",
         ),
     ] = False,
+    with_tuning_diff: Annotated[
+        bool,
+        typer.Option(
+            "--with-tuning-diff",
+            help="Show schema-only tuning config diff draft; no apply",
+        ),
+    ] = False,
     output_format: Annotated[
         str,
         typer.Option("--format", help="Output format: table or json"),
@@ -313,6 +321,10 @@ def swing_backtest(
             payload["tuning_proposal"] = build_tuning_proposal_draft(
                 response.attribution_summary
             ).to_dict()
+        if with_tuning_diff:
+            payload["tuning_config_diff"] = build_tuning_config_diff_draft(
+                response.attribution_summary
+            ).to_dict()
         typer.echo(json.dumps(payload, indent=2, default=str))
         return
 
@@ -322,6 +334,7 @@ def swing_backtest(
         show_attribution=with_attribution,
         show_tuning_plan=with_tuning_plan,
         show_tuning_proposal=with_tuning_proposal,
+        show_tuning_diff=with_tuning_diff,
     )
 
 

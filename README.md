@@ -855,6 +855,7 @@ saham trade backtest-swing --universe idx80 --cost-bps 0  # gross/no-cost compar
 saham trade backtest-swing --universe idx80 --with-attribution
 saham trade backtest-swing --universe idx80 --with-tuning-plan
 saham trade backtest-swing --universe idx80 --with-tuning-proposal
+saham trade backtest-swing --universe idx80 --with-tuning-diff
 ```
 
 Default backtests include `--cost-bps 20` one-way transaction cost. Override explicitly
@@ -880,6 +881,7 @@ when testing a different broker fee assumption.
 | `--with-attribution` | | false | Show deterministic grouped attribution summary for manual tuning |
 | `--with-tuning-plan` | | false | Show deterministic tuning readiness plan; no AI or YAML changes |
 | `--with-tuning-proposal` | | false | Show deterministic dry-run tuning proposal targets; no YAML diff |
+| `--with-tuning-diff` | | false | Show schema-only tuning config diff draft; no apply |
 | `--format` | | table | Output format: table or json |
 | `--db` | | | SQLite database path |
 
@@ -906,6 +908,10 @@ and reasons in JSON output. It still does not choose parameter values, generate
 YAML diffs, run AI, or mutate config. Proposal candidates include deterministic
 `priority`, `evidence_strength`, sample count, and return-spread fields so review
 targets are ranked before any future tuning engine proposes values.
+Use `--with-tuning-diff` to print the locked config-diff schema for future
+tuners. Current output is schema-only: it reports zero diff items plus rejected
+target paths/reasons, and never reads current YAML values, chooses proposed
+values, applies changes, runs AI, or mutates config.
 
 Attribution dimensions map to these primary tuning files:
 

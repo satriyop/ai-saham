@@ -221,6 +221,74 @@ class TuningProposalDraft:
 
 
 @dataclass(frozen=True)
+class TuningConfigDiffItem:
+    """Schema for a future YAML config change proposal."""
+
+    target_path: str
+    current_value: object | None
+    proposed_value: object | None
+    rationale: str
+    evidence_dimension: str
+    confidence: str
+    status: str
+
+    def to_dict(self) -> dict:
+        return {
+            "target_path": self.target_path,
+            "current_value": self.current_value,
+            "proposed_value": self.proposed_value,
+            "rationale": self.rationale,
+            "evidence_dimension": self.evidence_dimension,
+            "confidence": self.confidence,
+            "status": self.status,
+        }
+
+
+@dataclass(frozen=True)
+class TuningConfigDiffRejection:
+    """Rejected config diff candidate with deterministic reason."""
+
+    target_path: str
+    evidence_dimension: str
+    reason: str
+
+    def to_dict(self) -> dict:
+        return {
+            "target_path": self.target_path,
+            "evidence_dimension": self.evidence_dimension,
+            "reason": self.reason,
+        }
+
+
+@dataclass(frozen=True)
+class TuningConfigDiffDraft:
+    """Guarded schema envelope for future tuning config diffs."""
+
+    intent: str
+    status: str
+    proposal_status: str
+    can_apply: bool
+    requires_human_review: bool
+    diff_items: tuple[TuningConfigDiffItem, ...]
+    rejected_items: tuple[TuningConfigDiffRejection, ...]
+    notes: tuple[str, ...]
+
+    def to_dict(self) -> dict:
+        return {
+            "intent": self.intent,
+            "status": self.status,
+            "proposal_status": self.proposal_status,
+            "can_apply": self.can_apply,
+            "requires_human_review": self.requires_human_review,
+            "diff_items": [item.to_dict() for item in self.diff_items],
+            "rejected_items": [
+                rejection.to_dict() for rejection in self.rejected_items
+            ],
+            "notes": list(self.notes),
+        }
+
+
+@dataclass(frozen=True)
 class _DimensionEvidence:
     buckets: tuple[str, ...]
     sample_count: int
@@ -683,6 +751,70 @@ def build_tuning_proposal_draft(
         candidate_changes=tuple(candidate_changes),
         rejected_changes=tuple(rejected_changes),
         evidence_notes=notes,
+    )
+
+
+def build_tuning_config_diff_draft(
+    summary: SwingBacktestAttributionSummary,
+) -> TuningConfigDiffDraft:
+    """Build a guarded config-diff schema without proposing values."""
+    proposal = build_tuning_proposal_draft(summary)
+    notes = _unique_strings((
+        "Config diff draft is schema-only.",
+        "No current values are read and no proposed values are selected.",
+        "No YAML diff, AI proposal, apply step, or config mutation is generated.",
+        *proposal.evidence_notes,
+    ))
+
+    if proposal.status == "BLOCKED":
+        return TuningConfigDiffDraft(
+            intent="config_diff_schema_only_no_apply",
+            status="BLOCKED",
+            proposal_status=proposal.status,
+            can_apply=False,
+            requires_human_review=True,
+            diff_items=(),
+            rejected_items=tuple(
+                TuningConfigDiffRejection(
+                    target_path="N/A",
+                    evidence_dimension=rejection.dimension,
+                    reason=f"Proposal target rejected: {rejection.reason}",
+                )
+                for rejection in proposal.rejected_changes
+            ),
+            notes=notes,
+        )
+
+    rejected_items: list[TuningConfigDiffRejection] = []
+    for candidate in proposal.candidate_changes:
+        for target_path in candidate.yaml_paths:
+            if candidate.evidence_strength != "HIGH":
+                reason = (
+                    "Config diff generation requires HIGH evidence strength; "
+                    f"current strength is {candidate.evidence_strength}."
+                )
+            else:
+                reason = (
+                    "Value-selection logic is not implemented; schema is locked first."
+                )
+            rejected_items.append(
+                TuningConfigDiffRejection(
+                    target_path=target_path,
+                    evidence_dimension=candidate.dimension,
+                    reason=reason,
+                )
+            )
+
+    status = "SCHEMA_ONLY"
+    return TuningConfigDiffDraft(
+        intent="config_diff_schema_only_no_apply",
+        status=status,
+        proposal_status=proposal.status,
+        can_apply=False,
+        requires_human_review=True,
+        diff_items=(),
+        rejected_items=tuple(rejected_items),
+        notes=notes,
     )
 
 
