@@ -24,6 +24,8 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import TYPE_CHECKING
 
+from src.application.services.benchmark_symbol import canonicalize_ticker
+from src.domain.value_objects import is_non_idx_ticker
 from src.domain.entities.candle import Candle
 from src.domain.ports.market_data_provider import MarketDataProvider
 from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
@@ -37,10 +39,19 @@ _LOTS_PER_SHARE = 100
 _PAGE_LIMIT = 50
 
 
+# IDX stock prices are integer IDR; IHSG index level is conventionally 3dp.
+# When Stockbit returns a Python float (e.g. for in-progress intraday sessions)
+# we round to this precision before converting to Decimal to avoid IEEE 754
+# binary noise (e.g. 5737.73583984375 instead of 5737.736).
+_PRICE_DECIMAL_PLACES = 3
+
+
 def _parse_decimal(raw) -> Decimal | None:
     if raw is None:
         return None
     try:
+        if isinstance(raw, float):
+            return Decimal(str(round(raw, _PRICE_DECIMAL_PLACES)))
         return Decimal(str(raw))
     except (InvalidOperation, ValueError, TypeError):
         return None
@@ -93,7 +104,7 @@ class StockbitHistoricalProvider(MarketDataProvider):
         broker_provider: Authenticated Stockbit session for token access.
     """
 
-    provider_name = "stockbit_historical"
+    provider_name = "stockbit"
     volume_unit = "shares"          # lots converted to shares (* 100) on ingest
     price_adjustment_policy = "raw"
 
@@ -117,6 +128,10 @@ class StockbitHistoricalProvider(MarketDataProvider):
         if self._provider is None:
             return []
 
+        canonical_ticker = canonicalize_ticker(ticker)
+        if is_non_idx_ticker(canonical_ticker):
+            return []
+
         try:
             from src.infrastructure.browser.playwright_stockbit_provider import _exodus_get
             token = self._provider._get_token()
@@ -124,7 +139,7 @@ class StockbitHistoricalProvider(MarketDataProvider):
             logger.debug("StockbitHistoricalProvider: token fetch failed for %s: %s", ticker, exc)
             return []
 
-        base_url = STOCKBIT_CFG.historical_summary_url.format(ticker=ticker.upper())
+        base_url = STOCKBIT_CFG.historical_summary_url.format(ticker=canonical_ticker)
         all_candles: list[Candle] = []
         page = 1
 
@@ -143,7 +158,7 @@ class StockbitHistoricalProvider(MarketDataProvider):
                 rows = (body.get("data") or {}).get("result") or []
                 if not rows:
                     break
-                all_candles.extend(_parse_ohlcv_rows(ticker, rows))
+                all_candles.extend(_parse_ohlcv_rows(canonical_ticker, rows))
                 if len(rows) < _PAGE_LIMIT:
                     break
                 page += 1

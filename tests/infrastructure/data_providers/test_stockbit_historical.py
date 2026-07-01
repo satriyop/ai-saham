@@ -11,6 +11,7 @@ from src.infrastructure.data_providers.fallback_provider import (
 )
 from src.infrastructure.data_providers.stockbit_historical import (
     StockbitHistoricalProvider,
+    _parse_decimal,
     _parse_ohlcv_rows,
 )
 
@@ -72,6 +73,50 @@ def test_parse_ohlcv_rows_empty():
     assert _parse_ohlcv_rows("BBCA", []) == []
 
 
+# ── _parse_decimal ────────────────────────────────────────────────────────────
+
+def test_parse_decimal_float_is_rounded_to_3dp():
+    """Stockbit returns Python floats for in-progress sessions; must not store
+    IEEE 754 binary noise (e.g. 5737.73583984375 instead of 5737.736)."""
+    result = _parse_decimal(5737.73583984375)
+    assert result == Decimal("5737.736")
+
+
+def test_parse_decimal_string_is_preserved_as_is():
+    """String values from the API (settled sessions) must not be rounded."""
+    result = _parse_decimal("5737.736")
+    assert result == Decimal("5737.736")
+
+
+def test_parse_decimal_integer_string_preserved():
+    result = _parse_decimal("6300")
+    assert result == Decimal("6300")
+
+
+def test_parse_decimal_none_returns_none():
+    assert _parse_decimal(None) is None
+
+
+def test_parse_ohlcv_rows_float_prices_are_rounded(monkeypatch):
+    """When Stockbit returns float OHLCV values, stored candles must have
+    at most 3 decimal places — no IEEE 754 binary noise."""
+    row = {
+        "date": "2026-07-01",
+        "open": 5640.61083984375,   # float with binary noise
+        "high": 5737.73583984375,
+        "low":  5607.451171875,
+        "close": 5695.1162109375,
+        "volume": 172115099,
+    }
+    candles = _parse_ohlcv_rows("IHSG", [row])
+    assert len(candles) == 1
+    c = candles[0]
+    assert c.open  == Decimal("5640.611")
+    assert c.high  == Decimal("5737.736")
+    assert c.low   == Decimal("5607.451")
+    assert c.close == Decimal("5695.116")
+
+
 # ── StockbitHistoricalProvider ────────────────────────────────────────────────
 
 def test_returns_empty_when_no_broker_provider():
@@ -82,9 +127,47 @@ def test_returns_empty_when_no_broker_provider():
 
 def test_provider_metadata():
     prov = StockbitHistoricalProvider(broker_provider=None)
-    assert prov.provider_name == "stockbit_historical"
+    assert prov.provider_name == "stockbit"
     assert prov.volume_unit == "shares"
     assert prov.price_adjustment_policy == "raw"
+
+
+def test_stockbit_provider_normalizes_yahoo_index_alias_to_ihsg(monkeypatch):
+    requested_urls: list[str] = []
+
+    class Broker:
+        def _get_token(self):
+            return "token"
+
+    def fake_get(url, token):
+        requested_urls.append(url)
+        return {
+            "data": {
+                "result": [
+                    _make_row(
+                        d="2026-07-01",
+                        open_=5640.611,
+                        high=5737.736,
+                        low=5607.451,
+                        close=5695.116,
+                        volume=172115099,
+                    )
+                ]
+            }
+        }
+
+    monkeypatch.setattr(
+        "src.infrastructure.browser.playwright_stockbit_provider._exodus_get",
+        fake_get,
+    )
+
+    prov = StockbitHistoricalProvider(broker_provider=Broker())
+    candles = prov.fetch_daily_ohlcv("^JKSE", date(2026, 7, 1), date(2026, 7, 1))
+
+    assert len(candles) == 1
+    assert candles[0].ticker == "IHSG"
+    assert candles[0].volume == 172115099 * 100
+    assert "/historical/summary/IHSG?" in requested_urls[0]
 
 
 # ── _expected_trading_days ────────────────────────────────────────────────────
@@ -128,7 +211,7 @@ def test_uses_fallback_when_primary_empty():
     primary.fetch_daily_ohlcv.return_value = []
     fallback = MagicMock()
     fallback.fetch_daily_ohlcv.return_value = [_candle("2026-06-19")]
-    fallback.provider_name = "stockbit_historical"
+    fallback.provider_name = "stockbit"
     fallback.volume_unit = "shares"
     fallback.price_adjustment_policy = "raw"
 
@@ -137,7 +220,7 @@ def test_uses_fallback_when_primary_empty():
 
     assert len(result) == 1
     fallback.fetch_daily_ohlcv.assert_called_once()
-    assert provider.provider_name == "stockbit_historical"
+    assert provider.provider_name == "stockbit"
 
 
 def test_returns_primary_partial_when_fallback_also_empty():
@@ -161,7 +244,7 @@ def test_primary_exception_triggers_fallback():
     primary.fetch_daily_ohlcv.side_effect = Exception("Yahoo is down")
     fallback = MagicMock()
     fallback.fetch_daily_ohlcv.return_value = [_candle("2026-06-19")]
-    fallback.provider_name = "stockbit_historical"
+    fallback.provider_name = "stockbit"
     fallback.volume_unit = "shares"
     fallback.price_adjustment_policy = "raw"
 
@@ -169,4 +252,4 @@ def test_primary_exception_triggers_fallback():
     result = provider.fetch_daily_ohlcv("BBCA", date(2026, 6, 1), date(2026, 6, 30))
 
     assert len(result) == 1
-    assert provider.provider_name == "stockbit_historical"
+    assert provider.provider_name == "stockbit"
