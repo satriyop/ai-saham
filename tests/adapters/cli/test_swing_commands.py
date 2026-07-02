@@ -885,6 +885,14 @@ def test_swing_backtest_tuning_diff_json_exposes_guardrails(monkeypatch):
         ]
         > 0
     )
+    assert "review_checklist" in tuning_diff
+    assert (
+        "Review every proposed value before editing YAML manually."
+        in tuning_diff["review_checklist"]
+    )
+    assert tuning_diff["review_checklist"][-1] == (
+        "Do not apply automatically; edit YAML manually only after review."
+    )
     item = tuning_diff["diff_items"][0]
     assert item["current_value"] is not None
     assert item["proposed_value"] is not None
@@ -932,6 +940,7 @@ def test_swing_backtest_tuning_diff_table_exposes_policy(monkeypatch):
     assert "Evidence Coverage" in result.output
     assert "Class" in result.output
     assert "Trace" in result.output
+    assert "Review Checklist" in result.output
     assert "Can Apply" in result.output
 
 

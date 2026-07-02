@@ -412,6 +412,12 @@ def _display_tuning_config_diff(response: SwingBacktestResponse) -> None:
             "No rejected candidates",
         )
 
+    checklist_table = compact_table(show_header=False)
+    checklist_table.add_column("Step", style="bold cyan")
+    checklist_table.add_column("Review")
+    for index, item in enumerate(draft.review_checklist, start=1):
+        checklist_table.add_row(str(index), item)
+
     console().print("")
     console().print(
         panel(
@@ -423,6 +429,9 @@ def _display_tuning_config_diff(response: SwingBacktestResponse) -> None:
                 Text(""),
                 Text("Rejected Candidates", style="bold"),
                 rejection_table,
+                Text(""),
+                Text("Review Checklist", style="bold"),
+                checklist_table,
             ),
             title="TUNING CONFIG DIFF DRAFT",
             subtitle=draft.intent,

@@ -346,6 +346,7 @@ class TuningConfigDiffDraft:
     rejected_items: tuple[TuningConfigDiffRejection, ...]
     notes: tuple[str, ...]
     summary: dict[str, object] | None = None
+    review_checklist: tuple[str, ...] = ()
 
     def to_dict(self) -> dict:
         return {
@@ -361,6 +362,13 @@ class TuningConfigDiffDraft:
             "summary": self.summary or _build_tuning_config_diff_summary(
                 self.diff_items,
                 self.rejected_items,
+            ),
+            "review_checklist": list(
+                self.review_checklist
+                or _build_tuning_config_diff_review_checklist(
+                    self.diff_items,
+                    self.rejected_items,
+                )
             ),
             "notes": list(self.notes),
         }
@@ -565,6 +573,10 @@ def build_tuning_config_diff_draft(
                     (),
                     rejected_items_tuple,
                 ),
+                review_checklist=_build_tuning_config_diff_review_checklist(
+                    (),
+                    rejected_items_tuple,
+                ),
                 notes=notes,
             ),
         )
@@ -639,6 +651,10 @@ def build_tuning_config_diff_draft(
                 deduped_diff_items,
                 rejected_items_tuple,
             ),
+            review_checklist=_build_tuning_config_diff_review_checklist(
+                deduped_diff_items,
+                rejected_items_tuple,
+            ),
             notes=notes,
         )
     )
@@ -670,6 +686,33 @@ def _build_tuning_config_diff_summary(
         "value_policy_counts": value_policy_counts,
         "evidence_dimension_counts": evidence_dimension_counts,
     }
+
+
+def _build_tuning_config_diff_review_checklist(
+    diff_items: tuple[TuningConfigDiffItem, ...],
+    rejected_items: tuple[TuningConfigDiffRejection, ...],
+) -> tuple[str, ...]:
+    checklist = [
+        "Confirm sample size is sufficient for the target evidence.",
+        "Confirm return spread is stable across the evidence buckets.",
+        "Confirm proposed value direction matches the setup intent.",
+    ]
+    if any(item.proposed_value is not None for item in diff_items):
+        checklist.append(
+            "Review every proposed value before editing YAML manually."
+        )
+    if any(item.proposed_value is None for item in diff_items):
+        checklist.append(
+            "Inspect current-only rows before treating them as tunable."
+        )
+    if rejected_items:
+        checklist.append(
+            "Resolve rejected rows before expecting a complete tuning diff."
+        )
+    checklist.append(
+        "Do not apply automatically; edit YAML manually only after review."
+    )
+    return tuple(checklist)
 
 
 def _count_strings(values: Iterable[str]) -> dict[str, int]:

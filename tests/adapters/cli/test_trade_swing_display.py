@@ -234,6 +234,8 @@ def test_display_swing_backtest_can_show_tuning_config_diff(capsys):
     assert "Trace" in output
     assert "INSUFFICIENT_EVIDENCE" in output
     assert "not resolved; readiness blocked" in output
+    assert "Review Checklist" in output
+    assert "Do not apply automatically" in output
 
 
 def test_display_swing_backtest_tuning_config_diff_shows_candidate_policy(capsys):
@@ -256,5 +258,6 @@ def test_display_swing_backtest_tuning_config_diff_shows_candidate_policy(capsys
     assert "Evidence Coverage" in output
     assert "Class" in output
     assert "Trace" in output
+    assert "Review Checklist" in output
     assert "Proposed" in output
     assert "DETERMINISTIC_GUARDED" not in output

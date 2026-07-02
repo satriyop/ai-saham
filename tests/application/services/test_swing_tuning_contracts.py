@@ -202,6 +202,13 @@ def test_tuning_config_diff_draft_blocks_insufficient_sample():
     assert summary["proposed_count"] == 0
     assert summary["current_only_count"] == 0
     assert summary["rejected_count"] == len(DEFAULT_TUNING_TARGETS)
+    assert (
+        "Resolve rejected rows before expecting a complete tuning diff."
+        in draft.to_dict()["review_checklist"]
+    )
+    assert draft.to_dict()["review_checklist"][-1] == (
+        "Do not apply automatically; edit YAML manually only after review."
+    )
     assert "dry-run" in " ".join(draft.notes)
 
 
@@ -254,6 +261,10 @@ def test_tuning_config_diff_draft_explains_non_value_selected_paths():
     assert all(
         item.to_dict()["evidence_snapshot"]["evidence_strength"]
         for item in draft.diff_items
+    )
+    assert (
+        "Inspect current-only rows before treating them as tunable."
+        in draft.to_dict()["review_checklist"]
     )
     assert all(item.current_value is not None for item in draft.diff_items)
     assert all(item.proposed_value is None for item in draft.diff_items)
@@ -362,6 +373,10 @@ def test_tuning_config_diff_draft_selects_guarded_numeric_values(tmp_path):
     assert all(
         item.to_dict()["evidence_snapshot"]["evidence_buckets"]
         for item in threshold_items.values()
+    )
+    assert (
+        "Review every proposed value before editing YAML manually."
+        in draft.to_dict()["review_checklist"]
     )
     summary_dict = draft.to_dict()["summary"]
     assert summary_dict["resolved_count"] == len(draft.diff_items)
