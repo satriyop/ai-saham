@@ -925,6 +925,7 @@ saham trade tune-swing --universe idx80 --setup foreign-bounce
 saham trade tune-swing --universe lq45 --with-regime --format json
 saham trade tune-swing --universe idx80 --save
 saham trade tune-swing --universe idx80 --export-patch journals/swing_tuning_patch.json
+saham trade validate-tuning-patch journals/swing_tuning_patch.json
 saham trade review-tuning-swing
 saham trade review-tuning-swing --compare-latest
 ```
@@ -936,10 +937,11 @@ changes, and does not mutate configuration. Use `--save` to append the review
 artifact to `journals/swing_tuning_reviews.jsonl`; use `--journal PATH` to
 override that path for one run. Use `--export-patch PATH` to write only the
 guarded proposed-value rows to a review-only JSON artifact; it still does not
-edit YAML. Use `saham trade review-tuning-swing` to inspect saved review runs
-without replaying the backtest. Add `--compare-latest` to compare the newest
-saved review against the previous saved review, including metric deltas and
-proposed target-path changes.
+edit YAML. Validate an exported patch with `saham trade validate-tuning-patch`
+before considering any manual config edit. Use `saham trade review-tuning-swing`
+to inspect saved review runs without replaying the backtest. Add
+`--compare-latest` to compare the newest saved review against the previous saved
+review, including metric deltas and proposed target-path changes.
 
 Attribution dimensions map to these primary tuning files:
 
@@ -1683,6 +1685,7 @@ src/
 | `saham trade backtest-swing` | `SwingBacktestResponse` | Historical walk-forward performance artifact |
 | `saham trade tune-swing` | `swing_tuning_review` | Deterministic attribution-to-config review artifact; no apply |
 | `saham trade review-tuning-swing` | `swing_tuning_review_history` | Read-only summary of saved tuning review artifacts |
+| `saham trade validate-tuning-patch` | `swing_tuning_patch_validation` | Read-only validation of exported tuning patch JSON |
 | `saham trade backtest-intraday` | `IntradayBacktestResponse` | Daily-OHLC intraday proxy simulation artifact |
 | `saham analyze accum-audit` | `AccumulationAuditResponse` | Learning/audit artifact for forward-return behavior |
 

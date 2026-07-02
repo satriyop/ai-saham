@@ -12,6 +12,7 @@ Commands (all under `saham trade`):
   saham trade backtest-swing      — swing workflow walk-forward backtest
   saham trade tune-swing          — swing tuning review from backtest attribution
   saham trade review-tuning-swing — review saved swing tuning runs
+  saham trade validate-tuning-patch — validate exported swing tuning patch JSON
   saham trade backtest-intraday   — intraday workflow daily-OHLC proxy simulation
   saham trade migrate-journal     — one-time migration of CSV journals to trades.jsonl
 
@@ -42,8 +43,12 @@ from src.adapters.cli.trade_intraday_commands import (
 )
 from src.adapters.cli.trade_swing_commands import size, swing_backtest, swing_tune
 from src.adapters.cli.trade_swing_tuning_display import (
+    display_swing_tuning_patch_validation,
     display_swing_tuning_review_comparison,
     display_swing_tuning_review_report,
+)
+from src.application.services.swing_tuning_patch_validator import (
+    SwingTuningPatchValidator,
 )
 from src.application.services.swing_tuning_review_journal import (
     SwingTuningReviewJournal,
@@ -123,6 +128,36 @@ def review_tuning_swing(
     display_swing_tuning_review_report(report, journal_path)
     if comparison is not None:
         display_swing_tuning_review_comparison(comparison)
+
+
+@trade_app.command("validate-tuning-patch")
+def validate_tuning_patch(
+    patch_path: Annotated[
+        Path,
+        typer.Argument(help="Path to exported swing tuning patch JSON"),
+    ],
+    config_root: Annotated[
+        Path,
+        typer.Option("--config-root", help="Repository/config root for YAML resolution"),
+    ] = Path("."),
+    output_format: Annotated[
+        str,
+        typer.Option("--format", help="Output format: table or json"),
+    ] = APP_CFG.analysis.format,
+) -> None:
+    """Validate exported swing tuning patch JSON without applying it."""
+    report = SwingTuningPatchValidator(config_root=config_root).validate(patch_path)
+
+    if output_format == "json":
+        payload = {
+            **report.to_dict(),
+            "schema_version": 1,
+            "artifact_type": "swing_tuning_patch_validation",
+        }
+        typer.echo(json.dumps(payload, indent=2, default=str))
+        return
+
+    display_swing_tuning_patch_validation(report)
 
 
 @trade_app.command("log")

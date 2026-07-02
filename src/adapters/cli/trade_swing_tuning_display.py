@@ -10,6 +10,9 @@ from pathlib import Path
 from rich.text import Text
 
 from src.adapters.cli.rich_display import compact_table, console, panel
+from src.application.services.swing_tuning_patch_validator import (
+    SwingTuningPatchValidationReport,
+)
 from src.application.services.swing_tuning_review_journal import (
     SwingTuningReviewComparison,
     SwingTuningReviewReport,
@@ -131,6 +134,48 @@ def display_swing_tuning_review_comparison(
 
     console().print("")
     console().print(panel(target_table, title="PROPOSED TARGET PATH CHANGES"))
+
+
+def display_swing_tuning_patch_validation(
+    report: SwingTuningPatchValidationReport,
+) -> None:
+    info = compact_table(show_header=False)
+    info.add_column("Key", style="bold cyan")
+    info.add_column("Value")
+    info.add_row("Patch", report.patch_path)
+    info.add_row("Artifact", report.artifact_type or "N/A")
+    info.add_row("Valid", "yes" if report.valid else "no")
+    info.add_row(
+        "Items",
+        f"{report.valid_item_count}/{report.item_count} valid",
+    )
+    if report.issues:
+        info.add_row("Issues", " | ".join(report.issues))
+
+    console().print("")
+    console().print(panel(info, title="SWING TUNING PATCH VALIDATION"))
+
+    if not report.item_results:
+        return
+
+    table = compact_table()
+    table.add_column("Target Path")
+    table.add_column("Valid")
+    table.add_column("Current")
+    table.add_column("Proposed")
+    table.add_column("Issues")
+
+    for item in report.item_results:
+        table.add_row(
+            item.target_path or "N/A",
+            "yes" if item.valid else "no",
+            _value(item.current_value),
+            _value(item.proposed_value),
+            " | ".join(item.issues) or "-",
+        )
+
+    console().print("")
+    console().print(panel(table, title="PATCH ITEMS"))
 
 
 def _period(start_date: str | None, end_date: str | None) -> str:
