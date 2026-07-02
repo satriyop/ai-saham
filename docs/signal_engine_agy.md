@@ -175,3 +175,42 @@ This is a valid and robust pattern for quantitative engines, serving specific ar
 * **Dimensionality Reduction:** Instead of forcing the top-level Signal Engine to balance 15+ flat weights, related sub-metrics are encapsulated inside the Foreign Flow domain model. This allows top-level configuration weights to stay clean and readable (e.g. 20% Bandar, 20% Foreign Flow, etc.).
 * **Modularity and Reuse:** The `ScoreForeignFlowUseCase` is decoupled from the rest of the engine. Other workflows (such as the Swing Screener) can fetch and filter candidates based purely on raw `foreign_flow_score` without loading valuation, consensus, or seasonality dependencies.
 * **Collinearity Safeguard:** Double-counting technical indicators is avoided. While the Foreign Flow sub-composite uses **RSI** and **Bollinger Bands**, the top-level Signal Engine does not have another competing technical momentum factor. The other 5 dimensions are non-overlapping (Valuation, Insider, Seasonality, Bandar, Analysts).
+
+---
+
+## 9. Deep-Dive: Insider Activity Factor
+
+### Concept & Market Microstructure
+Corporate insiders (Directors, Commissioners, and Major Shareholders) possess intimate operational knowledge of their firms. While selling can happen for many non-fundamental reasons (such as portfolio rebalancing, taxes, or liquidity needs), insider buying is historically a high-conviction vote of confidence.
+
+The `SignalEngine` tracks these transactions over a **lookback window** (default: `90` days) using official disclosures collected from IDX disclosures.
+
+### Share-Weighted Net Buy Ratio
+The factor calculates the total shares transacted by insiders:
+```
+total_shares = buy_shares + sell_shares
+```
+
+Then it computes the net buy ratio:
+```
+net_buy_ratio = (buy_shares - sell_shares) / total_shares
+```
+
+This yields a value in the range of `[-1.0, +1.0]`:
+* `+1.0`: 100% of insider transacted volume was buying.
+* `-1.0`: 100% of insider transacted volume was selling.
+* `0.0`: Mapped net volume of buys and sells was equal.
+* `None`: No transactions were recorded in the window (falls back to neutral 50.0).
+
+### Factor Normalization
+If the ratio is not `None`, it is scaled to the 0 to 100 point score:
+```
+Score = ((net_buy_ratio + 1.0) / 2.0) * 100.0
+```
+
+### Key Design Assumptions & Implications
+* **Share-Weighting vs. Headcount:** The score is volume-weighted, not transaction-count-weighted. If 5 directors buy 10,000 shares each (5 bullish events), but 1 major holder sells 200,000 shares (1 bearish event), the net buy ratio is negative (`-0.60` -> `20.0` points). The single large transaction overrides the others under the assumption that size reflects conviction.
+* **No Role-Weighting:** Directors (`DIREKTUR`), Commissioners (`KOMISARIS`), and Major Holders (`MAJOR_HOLDER`) are weighted identically per share. A routine rebalancing sale by a large holder can wipe out a highly bullish buy signal from the Managing Director.
+* **Share Count vs. Cash (IDR) Value:** The score is based purely on transacted shares rather than total Rupiah value.
+* **Neutral Default:** A lack of insider activity yields `None` which defaults to `50.0` points. Insiders not trading does not penalize the security.
+
