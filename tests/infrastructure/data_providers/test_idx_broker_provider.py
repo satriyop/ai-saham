@@ -10,6 +10,7 @@ Tests:
 - Foreign flow value estimation
 """
 
+import logging
 from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
@@ -242,7 +243,7 @@ class TestFetchBrokerSummaries:
 
         provider = IdxBrokerDataProvider()
         # 2025-01-20 (Mon) to 2025-01-26 (Sun) = 5 weekdays
-        summaries = provider.fetch_broker_summaries(
+        provider.fetch_broker_summaries(
             "BBCA", date(2025, 1, 20), date(2025, 1, 26)
         )
 
@@ -251,7 +252,12 @@ class TestFetchBrokerSummaries:
 
     @patch("src.infrastructure.data_providers.idx.time.sleep")
     @patch("src.infrastructure.data_providers.idx.httpx.Client")
-    def test_continues_on_single_day_failure(self, mock_client_cls, mock_sleep):
+    def test_continues_on_single_day_failure_without_warning_noise(
+        self,
+        mock_client_cls,
+        mock_sleep,
+        caplog,
+    ):
         """Should continue fetching if one day fails with a network error."""
         mock_client = MagicMock()
         mock_client_cls.return_value.__enter__ = MagicMock(return_value=mock_client)
@@ -268,13 +274,15 @@ class TestFetchBrokerSummaries:
 
         provider = IdxBrokerDataProvider()
         # Mon-Tue (2 weekdays)
-        summaries = provider.fetch_broker_summaries(
-            "BBCA", date(2025, 1, 20), date(2025, 1, 21)
-        )
+        with caplog.at_level(logging.WARNING):
+            summaries = provider.fetch_broker_summaries(
+                "BBCA", date(2025, 1, 20), date(2025, 1, 21)
+            )
 
         # Day 1 fails after retries, day 2 succeeds → 1 summary
         assert len(summaries) == 1
         assert summaries[0].ticker == "BBCA"
+        assert "Failed to fetch BBCA" not in caplog.text
 
     @patch("src.infrastructure.data_providers.idx.httpx.Client")
     def test_403_returns_no_data_in_range(self, mock_client_cls):

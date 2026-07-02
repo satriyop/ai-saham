@@ -306,7 +306,7 @@ class IdxBrokerDataProvider(BrokerDataProvider):
                     summaries.append(summary)
                     logger.debug("Fetched %s for %s", ticker, current_date)
             except BrokerDataProviderError as e:
-                logger.warning(
+                logger.debug(
                     "Failed to fetch %s for %s: %s",
                     ticker, current_date, e,
                 )
