@@ -924,6 +924,7 @@ remains unset.
 saham trade tune-swing --universe idx80 --setup foreign-bounce
 saham trade tune-swing --universe lq45 --with-regime --format json
 saham trade tune-swing --universe idx80 --save
+saham trade review-tuning-swing
 ```
 
 Runs the same walk-forward replay as `backtest-swing`, then emits attribution,
@@ -931,7 +932,8 @@ readiness, proposal-target, and guarded config-diff review artifacts in one
 place. This command is review-only: it does not call AI, does not apply YAML
 changes, and does not mutate configuration. Use `--save` to append the review
 artifact to `journals/swing_tuning_reviews.jsonl`; use `--journal PATH` to
-override that path for one run.
+override that path for one run. Use `saham trade review-tuning-swing` to inspect
+saved review runs without replaying the backtest.
 
 Attribution dimensions map to these primary tuning files:
 
@@ -1674,6 +1676,7 @@ src/
 | `saham trade confirm` | `IntradayConfirmationResult` | Post-open ENTER/WAIT/SKIP decision using actual opening price |
 | `saham trade backtest-swing` | `SwingBacktestResponse` | Historical walk-forward performance artifact |
 | `saham trade tune-swing` | `swing_tuning_review` | Deterministic attribution-to-config review artifact; no apply |
+| `saham trade review-tuning-swing` | `swing_tuning_review_history` | Read-only summary of saved tuning review artifacts |
 | `saham trade backtest-intraday` | `IntradayBacktestResponse` | Daily-OHLC intraday proxy simulation artifact |
 | `saham analyze accum-audit` | `AccumulationAuditResponse` | Learning/audit artifact for forward-return behavior |
 

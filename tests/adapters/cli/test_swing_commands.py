@@ -1012,6 +1012,52 @@ def test_swing_tune_save_writes_review_journal(monkeypatch, tmp_path):
     assert records[0]["apply"]["supported"] is False
 
 
+def test_swing_tuning_review_history_json_reads_saved_runs(tmp_path):
+    journal_path = tmp_path / "swing_tuning_reviews.jsonl"
+    journal_path.write_text(
+        json.dumps({
+            "recorded_at": "2026-07-02T10:00:00+07:00",
+            "artifact_type": "swing_tuning_review",
+            "setup": "foreign-bounce",
+            "start_date": "2026-01-01",
+            "end_date": "2026-01-31",
+            "sample": {"status": "INSUFFICIENT_SAMPLE"},
+            "backtest_summary": {
+                "trade_count": 0,
+                "candidate_observation_count": 2,
+                "total_return_pct": 0.0,
+                "win_rate_pct": None,
+            },
+            "tuning_config_diff": {
+                "status": "BLOCKED",
+                "summary": {"proposed_count": 0, "rejected_count": 3},
+            },
+        })
+        + "\n"
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "trade",
+            "review-tuning-swing",
+            "--journal",
+            str(journal_path),
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert payload["artifact_type"] == "swing_tuning_review_history"
+    assert payload["journal"] == str(journal_path)
+    assert payload["total_records"] == 1
+    assert payload["records"][0]["setup"] == "foreign-bounce"
+    assert payload["records"][0]["sample_status"] == "INSUFFICIENT_SAMPLE"
+    assert payload["records"][0]["rejected_count"] == 3
+
+
 def test_swing_backtest_has_no_tuning_diff_apply_flag():
     from src.adapters.cli import trade_swing_commands
 

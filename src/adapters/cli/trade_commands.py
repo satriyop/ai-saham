@@ -11,12 +11,14 @@ Commands (all under `saham trade`):
   saham trade size                — ATR-based swing position sizing
   saham trade backtest-swing      — swing workflow walk-forward backtest
   saham trade tune-swing          — swing tuning review from backtest attribution
+  saham trade review-tuning-swing — review saved swing tuning runs
   saham trade backtest-intraday   — intraday workflow daily-OHLC proxy simulation
   saham trade migrate-journal     — one-time migration of CSV journals to trades.jsonl
 
 Layer: Adapter
 """
 
+import json
 from pathlib import Path
 from typing import Annotated, Optional
 
@@ -39,7 +41,16 @@ from src.adapters.cli.trade_intraday_commands import (
     intraday_backtest,
 )
 from src.adapters.cli.trade_swing_commands import size, swing_backtest, swing_tune
+from src.adapters.cli.trade_swing_tuning_display import (
+    display_swing_tuning_review_report,
+)
+from src.application.services.swing_tuning_review_journal import (
+    SwingTuningReviewJournal,
+)
 from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.persistence.swing_tuning_review_jsonl_writer import (
+    SwingTuningReviewJsonlWriter,
+)
 
 trade_app = typer.Typer(
     name="trade",
@@ -64,6 +75,40 @@ trade_app.command("size")(size)
 trade_app.command("backtest-swing")(swing_backtest)
 trade_app.command("tune-swing")(swing_tune)
 trade_app.command("backtest-intraday")(intraday_backtest)
+
+
+@trade_app.command("review-tuning-swing")
+def review_tuning_swing(
+    journal: Annotated[
+        Optional[Path],
+        typer.Option("--journal", help="Swing tuning review journal path"),
+    ] = None,
+    limit: Annotated[
+        int,
+        typer.Option("--limit", help="Number of recent saved runs to show", min=1),
+    ] = 10,
+    output_format: Annotated[
+        str,
+        typer.Option("--format", help="Output format: table or json"),
+    ] = APP_CFG.analysis.format,
+) -> None:
+    """Review saved swing tuning review runs."""
+    journal_path = journal or Path(APP_CFG.storage.swing_tuning_review_journal)
+    report = SwingTuningReviewJournal(
+        SwingTuningReviewJsonlWriter(journal_path)
+    ).review(limit=limit)
+
+    if output_format == "json":
+        payload = {
+            "schema_version": 1,
+            "artifact_type": "swing_tuning_review_history",
+            "journal": str(journal_path),
+            **report.to_dict(),
+        }
+        typer.echo(json.dumps(payload, indent=2, default=str))
+        return
+
+    display_swing_tuning_review_report(report, journal_path)
 
 
 @trade_app.command("log")
