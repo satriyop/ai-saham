@@ -146,3 +146,79 @@ def test_swing_tuning_review_journal_compares_latest_runs(tmp_path):
     assert deltas["win_rate_pct"] == 5.0
     assert comparison.newly_proposed_target_paths == ("config/risk_engine.yaml:b",)
     assert comparison.disappeared_target_paths == ("config/signal_engine.yaml:a",)
+
+
+def test_swing_tuning_review_journal_measures_latest_apply(tmp_path):
+    path = tmp_path / "journals" / "swing_tuning_reviews.jsonl"
+    store = SwingTuningReviewJsonlWriter(path)
+    store.append({
+        "recorded_at": "2026-07-01T10:00:00+07:00",
+        "artifact_type": "swing_tuning_review",
+        "setup": "foreign-bounce",
+        "sample": {"status": "TRADE_READY"},
+        "backtest_summary": {
+            "trade_count": 10,
+            "candidate_observation_count": 30,
+            "total_return_pct": 1.5,
+            "win_rate_pct": 50.0,
+        },
+        "tuning_config_diff": {
+            "status": "PROPOSED_VALUES_DRY_RUN",
+            "summary": {"proposed_count": 1, "rejected_count": 2},
+        },
+    })
+    store.append({
+        "recorded_at": "2026-07-03T10:00:00+07:00",
+        "artifact_type": "swing_tuning_review",
+        "setup": "foreign-bounce",
+        "sample": {"status": "TRADE_READY"},
+        "backtest_summary": {
+            "trade_count": 12,
+            "candidate_observation_count": 35,
+            "total_return_pct": 3.0,
+            "win_rate_pct": 55.0,
+        },
+        "tuning_config_diff": {
+            "status": "PROPOSED_VALUES_DRY_RUN",
+            "summary": {"proposed_count": 1, "rejected_count": 1},
+        },
+    })
+    apply_records = [
+        {
+            "artifact_type": "swing_tuning_patch_apply",
+            "applied_at": "2026-07-02T09:00:00+07:00",
+            "patch_path": "journals/swing_tuning_patch.json",
+            "changes": [
+                {
+                    "target_path": "config/signal_engine.yaml:x",
+                    "old_value": 70,
+                    "new_value": 71,
+                }
+            ],
+        }
+    ]
+
+    measurement = SwingTuningReviewJournal(store).measure_latest_apply(apply_records)
+
+    assert measurement.status == "READY"
+    assert measurement.applied_patch is not None
+    assert measurement.applied_patch.change_count == 1
+    assert measurement.applied_patch.target_paths == ("config/signal_engine.yaml:x",)
+    assert measurement.baseline is not None
+    assert measurement.candidate is not None
+    assert measurement.baseline.recorded_at == "2026-07-01T10:00:00+07:00"
+    assert measurement.candidate.recorded_at == "2026-07-03T10:00:00+07:00"
+    deltas = {delta.name: delta.delta for delta in measurement.metric_deltas}
+    assert deltas["trade_count"] == 2
+    assert deltas["total_return_pct"] == 1.5
+
+
+def test_swing_tuning_review_journal_measurement_requires_apply_log(tmp_path):
+    path = tmp_path / "journals" / "swing_tuning_reviews.jsonl"
+    store = SwingTuningReviewJsonlWriter(path)
+
+    measurement = SwingTuningReviewJournal(store).measure_latest_apply([])
+
+    assert measurement.status == "NO_APPLY_LOG"
+    assert measurement.applied_patch is None
+    assert measurement.metric_deltas == ()

@@ -49,6 +49,7 @@ from src.adapters.cli.trade_swing_tuning_display import (
     display_swing_tuning_patch_dry_run,
     display_swing_tuning_patch_validation,
     display_swing_tuning_patch_verify,
+    display_swing_tuning_post_apply_measurement,
     display_swing_tuning_review_comparison,
     display_swing_tuning_review_report,
 )
@@ -112,6 +113,17 @@ def review_tuning_swing(
             help="Compare latest saved review against the previous saved review",
         ),
     ] = False,
+    measure_latest_apply: Annotated[
+        bool,
+        typer.Option(
+            "--measure-latest-apply",
+            help="Compare saved reviews before and after the latest applied patch",
+        ),
+    ] = False,
+    apply_log: Annotated[
+        Path,
+        typer.Option("--apply-log", help="Swing tuning apply log JSONL path"),
+    ] = Path("journals/swing_tuning_apply_log.jsonl"),
 ) -> None:
     """Review saved swing tuning review runs."""
     journal_path = journal or Path(APP_CFG.storage.swing_tuning_review_journal)
@@ -120,6 +132,13 @@ def review_tuning_swing(
     )
     report = journal_service.review(limit=limit)
     comparison = journal_service.compare_latest() if compare_latest else None
+    measurement = (
+        journal_service.measure_latest_apply(
+            SwingTuningReviewJsonlWriter(apply_log).read_all()
+        )
+        if measure_latest_apply
+        else None
+    )
 
     if output_format == "json":
         payload = {
@@ -130,12 +149,16 @@ def review_tuning_swing(
         }
         if comparison is not None:
             payload["comparison"] = comparison.to_dict()
+        if measurement is not None:
+            payload["post_apply_measurement"] = measurement.to_dict()
         typer.echo(json.dumps(payload, indent=2, default=str))
         return
 
     display_swing_tuning_review_report(report, journal_path)
     if comparison is not None:
         display_swing_tuning_review_comparison(comparison)
+    if measurement is not None:
+        display_swing_tuning_post_apply_measurement(measurement)
 
 
 @trade_app.command("validate-tuning-patch")

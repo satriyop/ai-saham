@@ -17,6 +17,7 @@ from src.application.services.swing_tuning_patch_validator import (
     SwingTuningPatchVerifyReport,
 )
 from src.application.services.swing_tuning_review_journal import (
+    SwingTuningPostApplyMeasurement,
     SwingTuningReviewComparison,
     SwingTuningReviewReport,
 )
@@ -137,6 +138,60 @@ def display_swing_tuning_review_comparison(
 
     console().print("")
     console().print(panel(target_table, title="PROPOSED TARGET PATH CHANGES"))
+
+
+def display_swing_tuning_post_apply_measurement(
+    measurement: SwingTuningPostApplyMeasurement,
+) -> None:
+    info = compact_table(show_header=False)
+    info.add_column("Key", style="bold cyan")
+    info.add_column("Value")
+    info.add_row("Status", measurement.status)
+    if measurement.applied_patch is not None:
+        info.add_row("Applied At", measurement.applied_patch.applied_at or "N/A")
+        info.add_row("Patch", measurement.applied_patch.patch_path or "N/A")
+        info.add_row("Changes", str(measurement.applied_patch.change_count))
+    if measurement.notes:
+        info.add_row("Notes", " | ".join(measurement.notes))
+
+    console().print("")
+    console().print(panel(info, title="POST-APPLY TUNING MEASUREMENT"))
+
+    if measurement.status != "READY":
+        return
+
+    summary = compact_table(show_header=False)
+    summary.add_column("Key", style="bold cyan")
+    summary.add_column("Baseline")
+    summary.add_column("Candidate")
+    summary.add_row(
+        "Recorded",
+        measurement.baseline.recorded_at if measurement.baseline else "N/A",
+        measurement.candidate.recorded_at if measurement.candidate else "N/A",
+    )
+    summary.add_row(
+        "Sample",
+        measurement.baseline.sample_status if measurement.baseline else "N/A",
+        measurement.candidate.sample_status if measurement.candidate else "N/A",
+    )
+    console().print("")
+    console().print(panel(summary, title="REVIEW WINDOW"))
+
+    deltas = compact_table()
+    deltas.add_column("Metric", style="bold cyan")
+    deltas.add_column("Baseline", justify="right")
+    deltas.add_column("Candidate", justify="right")
+    deltas.add_column("Delta", justify="right")
+    for delta in measurement.metric_deltas:
+        deltas.add_row(
+            delta.name,
+            _value(delta.baseline_value),
+            _value(delta.candidate_value),
+            _delta(delta.delta),
+        )
+
+    console().print("")
+    console().print(panel(deltas, title="BEFORE / AFTER METRICS"))
 
 
 def display_swing_tuning_patch_validation(

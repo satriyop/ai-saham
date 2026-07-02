@@ -931,6 +931,7 @@ saham trade apply-tuning-patch journals/swing_tuning_patch.json --yes
 saham trade apply-tuning-patch journals/swing_tuning_patch.json --verify
 saham trade review-tuning-swing
 saham trade review-tuning-swing --compare-latest
+saham trade review-tuning-swing --measure-latest-apply
 ```
 
 Runs the same walk-forward replay as `backtest-swing`, then emits attribution,
@@ -952,7 +953,10 @@ paths and confirm actual values match the patch's proposed values. Use
 `saham trade review-tuning-swing` to inspect saved review runs without replaying
 the backtest. Add `--compare-latest` to compare the newest saved review against
 the previous saved review, including metric deltas and proposed target-path
-changes.
+changes. Add `--measure-latest-apply` after a patch has been applied and a new
+`tune-swing --save` run has been recorded; it compares the latest saved review
+before the apply timestamp with the latest saved review after it. This is
+deterministic before/after attribution, not proof of causality.
 
 Attribution dimensions map to these primary tuning files:
 
@@ -1700,6 +1704,7 @@ src/
 | `saham trade apply-tuning-patch --dry-run` | `swing_tuning_patch_dry_run` | Read-only preview of YAML value changes; no writes |
 | `saham trade apply-tuning-patch --yes` | `swing_tuning_patch_apply` | Explicit YAML apply with validation, clean-target guard, and JSONL audit log |
 | `saham trade apply-tuning-patch --verify` | `swing_tuning_patch_verify` | Reload affected YAML paths and confirm proposed values are present |
+| `saham trade review-tuning-swing --measure-latest-apply` | `swing_tuning_review_history` + `post_apply_measurement` | Compare saved tuning reviews before/after latest applied patch |
 | `saham trade backtest-intraday` | `IntradayBacktestResponse` | Daily-OHLC intraday proxy simulation artifact |
 | `saham analyze accum-audit` | `AccumulationAuditResponse` | Learning/audit artifact for forward-return behavior |
 
