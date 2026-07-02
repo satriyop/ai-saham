@@ -76,6 +76,37 @@ If a `MarketContext` is provided (e.g. from `saham today` or screeners):
 ---
 
 ## 5. Identified Logic Smells & Recommendations
-* **Seasonality Pattern Direction Check:**
-  * **The Issue:** Under the current calculation, a strong headwind (e.g. win rate = 20%, indicating the stock historically falls 80% of the time in this month) yields a score of `100 - 20 = 80.0`. This gives the stock a high positive contribution to its bullish entry signal, despite seasonality being strongly bearish.
   * **Recommendation:** Bullish scoring should penalize bearish seasonality. Seasonal headwinds should scale down toward `0.0` (or below `50.0`), rather than mirroring tailwind scores. A future tuning cycle should adjust this formula.
+
+---
+
+## 6. Deep-Dive: Bandar Intensity Factor
+
+### Concept & Market Microstructure
+On the Indonesian Stock Exchange (IDX), transactions are processed via registered brokerages (identified by 2-letter codes like YP, CC, PD). By tracking the net transaction balance of these codes at the end of each session, we can identify institutional operator ("Bandar") footprints:
+* **Top 1:** The single largest net-buying/net-selling broker.
+* **Top 3:** The top 3 net-buying/net-selling brokers combined.
+* **Top 5:** The top 5 net-buying/net-selling brokers combined.
+* **Top 10:** The top 10 net-buying/net-selling brokers combined.
+
+If buying is highly concentrated among the **Top 1/3/5** brokers while selling is fragmented across dozens of retail brokers, it indicates active institutional accumulation.
+
+### Mapped Ordinal Scores
+Each intensity label is assigned a numeric value:
+* `"Big Acc"` $\rightarrow +2$
+* `"Small Acc"` $\rightarrow +1$
+* `"Neutral"` $\rightarrow 0$
+* `"Small Dist"` $\rightarrow -1$
+* `"Big Dist"` $\rightarrow -2$
+
+### Dynamic Range Calculation
+The `broad_score` is a simple sum of these values across all available signals. Because some tickers or days lack optional top-3/5/10 records, the range is dynamic:
+* **Mandatory inputs (3):** `today_accdist`, `five_day_accdist`, and `top1_accdist` (base range is $[-6, +6]$).
+* **Optional inputs (up to 3):** `top3_accdist`, `top5_accdist`, and `top10_accdist` (if populated).
+* **Formula:**
+$$\text{max\_range} = (3 + \text{num\_optional}) \times 2$$
+
+### Final Factor Normalization
+The resulting raw `broad_score` is scaled to a standard $0$ to $100$ point score:
+$$\text{Score} = \frac{\text{broad\_score} + \text{max\_range}}{2 \times \text{max\_range}} \times 100.0$$
+
