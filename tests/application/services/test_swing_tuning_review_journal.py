@@ -82,3 +82,67 @@ def test_swing_tuning_review_journal_summarizes_recent_runs(tmp_path):
     assert latest.tuning_diff_status == "PROPOSED_VALUES_DRY_RUN"
     assert latest.proposed_count == 2
     assert latest.rejected_count == 1
+
+
+def test_swing_tuning_review_journal_compares_latest_runs(tmp_path):
+    path = tmp_path / "journals" / "swing_tuning_reviews.jsonl"
+    store = SwingTuningReviewJsonlWriter(path)
+    store.append({
+        "recorded_at": "2026-07-01T10:00:00+07:00",
+        "artifact_type": "swing_tuning_review",
+        "setup": "foreign-bounce",
+        "sample": {"status": "TRADE_READY"},
+        "backtest_summary": {
+            "trade_count": 10,
+            "candidate_observation_count": 30,
+            "total_return_pct": 1.5,
+            "win_rate_pct": 50.0,
+        },
+        "tuning_config_diff": {
+            "status": "PROPOSED_VALUES_DRY_RUN",
+            "summary": {"proposed_count": 1, "rejected_count": 2},
+            "diff_items": [
+                {
+                    "target_path": "config/signal_engine.yaml:a",
+                    "proposed_value": 60,
+                },
+            ],
+        },
+    })
+    store.append({
+        "recorded_at": "2026-07-02T10:00:00+07:00",
+        "artifact_type": "swing_tuning_review",
+        "setup": "foreign-bounce",
+        "sample": {"status": "TRADE_READY"},
+        "backtest_summary": {
+            "trade_count": 12,
+            "candidate_observation_count": 35,
+            "total_return_pct": 3.0,
+            "win_rate_pct": 55.0,
+        },
+        "tuning_config_diff": {
+            "status": "PROPOSED_VALUES_DRY_RUN",
+            "summary": {"proposed_count": 1, "rejected_count": 1},
+            "diff_items": [
+                {
+                    "target_path": "config/risk_engine.yaml:b",
+                    "proposed_value": 100,
+                },
+            ],
+        },
+    })
+
+    comparison = SwingTuningReviewJournal(store).compare_latest()
+
+    assert comparison.status == "READY"
+    assert comparison.baseline is not None
+    assert comparison.candidate is not None
+    assert comparison.baseline.recorded_at == "2026-07-01T10:00:00+07:00"
+    assert comparison.candidate.recorded_at == "2026-07-02T10:00:00+07:00"
+    deltas = {delta.name: delta.delta for delta in comparison.metric_deltas}
+    assert deltas["trade_count"] == 2
+    assert deltas["candidate_observation_count"] == 5
+    assert deltas["total_return_pct"] == 1.5
+    assert deltas["win_rate_pct"] == 5.0
+    assert comparison.newly_proposed_target_paths == ("config/risk_engine.yaml:b",)
+    assert comparison.disappeared_target_paths == ("config/signal_engine.yaml:a",)

@@ -1058,6 +1058,87 @@ def test_swing_tuning_review_history_json_reads_saved_runs(tmp_path):
     assert payload["records"][0]["rejected_count"] == 3
 
 
+def test_swing_tuning_review_history_json_can_compare_latest(tmp_path):
+    journal_path = tmp_path / "swing_tuning_reviews.jsonl"
+    rows = [
+        {
+            "recorded_at": "2026-07-01T10:00:00+07:00",
+            "artifact_type": "swing_tuning_review",
+            "setup": "foreign-bounce",
+            "sample": {"status": "TRADE_READY"},
+            "backtest_summary": {
+                "trade_count": 10,
+                "candidate_observation_count": 30,
+                "total_return_pct": 1.5,
+                "win_rate_pct": 50.0,
+            },
+            "tuning_config_diff": {
+                "status": "PROPOSED_VALUES_DRY_RUN",
+                "summary": {"proposed_count": 1, "rejected_count": 2},
+                "diff_items": [
+                    {
+                        "target_path": "config/signal_engine.yaml:a",
+                        "proposed_value": 60,
+                    },
+                ],
+            },
+        },
+        {
+            "recorded_at": "2026-07-02T10:00:00+07:00",
+            "artifact_type": "swing_tuning_review",
+            "setup": "foreign-bounce",
+            "sample": {"status": "TRADE_READY"},
+            "backtest_summary": {
+                "trade_count": 12,
+                "candidate_observation_count": 35,
+                "total_return_pct": 3.0,
+                "win_rate_pct": 55.0,
+            },
+            "tuning_config_diff": {
+                "status": "PROPOSED_VALUES_DRY_RUN",
+                "summary": {"proposed_count": 1, "rejected_count": 1},
+                "diff_items": [
+                    {
+                        "target_path": "config/risk_engine.yaml:b",
+                        "proposed_value": 100,
+                    },
+                ],
+            },
+        },
+    ]
+    journal_path.write_text("\n".join(json.dumps(row) for row in rows) + "\n")
+
+    result = runner.invoke(
+        app,
+        [
+            "trade",
+            "review-tuning-swing",
+            "--journal",
+            str(journal_path),
+            "--format",
+            "json",
+            "--compare-latest",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    comparison = payload["comparison"]
+    assert comparison["status"] == "READY"
+    deltas = {
+        item["name"]: item["delta"]
+        for item in comparison["metric_deltas"]
+    }
+    assert deltas["trade_count"] == 2
+    assert deltas["total_return_pct"] == 1.5
+    assert comparison["newly_proposed_target_paths"] == [
+        "config/risk_engine.yaml:b"
+    ]
+    assert comparison["disappeared_target_paths"] == [
+        "config/signal_engine.yaml:a"
+    ]
+
+
 def test_swing_backtest_has_no_tuning_diff_apply_flag():
     from src.adapters.cli import trade_swing_commands
 

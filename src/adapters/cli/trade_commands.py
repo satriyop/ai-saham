@@ -42,6 +42,7 @@ from src.adapters.cli.trade_intraday_commands import (
 )
 from src.adapters.cli.trade_swing_commands import size, swing_backtest, swing_tune
 from src.adapters.cli.trade_swing_tuning_display import (
+    display_swing_tuning_review_comparison,
     display_swing_tuning_review_report,
 )
 from src.application.services.swing_tuning_review_journal import (
@@ -91,12 +92,21 @@ def review_tuning_swing(
         str,
         typer.Option("--format", help="Output format: table or json"),
     ] = APP_CFG.analysis.format,
+    compare_latest: Annotated[
+        bool,
+        typer.Option(
+            "--compare-latest",
+            help="Compare latest saved review against the previous saved review",
+        ),
+    ] = False,
 ) -> None:
     """Review saved swing tuning review runs."""
     journal_path = journal or Path(APP_CFG.storage.swing_tuning_review_journal)
-    report = SwingTuningReviewJournal(
+    journal_service = SwingTuningReviewJournal(
         SwingTuningReviewJsonlWriter(journal_path)
-    ).review(limit=limit)
+    )
+    report = journal_service.review(limit=limit)
+    comparison = journal_service.compare_latest() if compare_latest else None
 
     if output_format == "json":
         payload = {
@@ -105,10 +115,14 @@ def review_tuning_swing(
             "journal": str(journal_path),
             **report.to_dict(),
         }
+        if comparison is not None:
+            payload["comparison"] = comparison.to_dict()
         typer.echo(json.dumps(payload, indent=2, default=str))
         return
 
     display_swing_tuning_review_report(report, journal_path)
+    if comparison is not None:
+        display_swing_tuning_review_comparison(comparison)
 
 
 @trade_app.command("log")

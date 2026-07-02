@@ -925,6 +925,7 @@ saham trade tune-swing --universe idx80 --setup foreign-bounce
 saham trade tune-swing --universe lq45 --with-regime --format json
 saham trade tune-swing --universe idx80 --save
 saham trade review-tuning-swing
+saham trade review-tuning-swing --compare-latest
 ```
 
 Runs the same walk-forward replay as `backtest-swing`, then emits attribution,
@@ -933,7 +934,9 @@ place. This command is review-only: it does not call AI, does not apply YAML
 changes, and does not mutate configuration. Use `--save` to append the review
 artifact to `journals/swing_tuning_reviews.jsonl`; use `--journal PATH` to
 override that path for one run. Use `saham trade review-tuning-swing` to inspect
-saved review runs without replaying the backtest.
+saved review runs without replaying the backtest. Add `--compare-latest` to
+compare the newest saved review against the previous saved review, including
+metric deltas and proposed target-path changes.
 
 Attribution dimensions map to these primary tuning files:
 

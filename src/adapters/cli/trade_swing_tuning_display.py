@@ -11,6 +11,7 @@ from rich.text import Text
 
 from src.adapters.cli.rich_display import compact_table, console, panel
 from src.application.services.swing_tuning_review_journal import (
+    SwingTuningReviewComparison,
     SwingTuningReviewReport,
 )
 
@@ -74,6 +75,64 @@ def display_swing_tuning_review_report(
     console().print(panel(table, title="RECENT SWING TUNING REVIEWS"))
 
 
+def display_swing_tuning_review_comparison(
+    comparison: SwingTuningReviewComparison,
+) -> None:
+    if comparison.status != "READY":
+        message = " | ".join(comparison.notes) or "Comparison unavailable."
+        console().print("")
+        console().print(panel(Text(message, style="yellow"), title="TUNING DELTA"))
+        return
+
+    info = compact_table(show_header=False)
+    info.add_column("Key", style="bold cyan")
+    info.add_column("Value")
+    info.add_row("Status", comparison.status)
+    info.add_row(
+        "Baseline",
+        comparison.baseline.recorded_at if comparison.baseline else "N/A",
+    )
+    info.add_row(
+        "Candidate",
+        comparison.candidate.recorded_at if comparison.candidate else "N/A",
+    )
+
+    delta_table = compact_table()
+    delta_table.add_column("Metric", style="bold cyan")
+    delta_table.add_column("Baseline", justify="right")
+    delta_table.add_column("Candidate", justify="right")
+    delta_table.add_column("Delta", justify="right")
+
+    for delta in comparison.metric_deltas:
+        delta_table.add_row(
+            delta.name,
+            _value(delta.baseline_value),
+            _value(delta.candidate_value),
+            _delta(delta.delta),
+        )
+
+    console().print("")
+    console().print(panel(info, title="TUNING COMPARISON"))
+    console().print("")
+    console().print(panel(delta_table, title="METRIC DELTAS"))
+
+    target_table = compact_table()
+    target_table.add_column("Change", style="bold cyan")
+    target_table.add_column("Target Path")
+    for path in comparison.newly_proposed_target_paths:
+        target_table.add_row("new", path)
+    for path in comparison.disappeared_target_paths:
+        target_table.add_row("removed", path)
+    if (
+        not comparison.newly_proposed_target_paths
+        and not comparison.disappeared_target_paths
+    ):
+        target_table.add_row("none", "No proposed target path changes")
+
+    console().print("")
+    console().print(panel(target_table, title="PROPOSED TARGET PATH CHANGES"))
+
+
 def _period(start_date: str | None, end_date: str | None) -> str:
     if start_date and end_date:
         return f"{start_date} to {end_date}"
@@ -90,3 +149,23 @@ def _pct(value: float | None, signed: bool = False) -> str:
     color = "green" if value >= 0 else "red"
     text = f"{value:+.2f}%" if signed else f"{value:.1f}%"
     return f"[{color}]{text}[/]"
+
+
+def _value(value: object | None) -> str:
+    if value is None:
+        return "N/A"
+    if isinstance(value, float):
+        return f"{value:.2f}"
+    return str(value)
+
+
+def _delta(value: object | None) -> str:
+    if value is None:
+        return "N/A"
+    if isinstance(value, float):
+        color = "green" if value >= 0 else "red"
+        return f"[{color}]{value:+.2f}[/]"
+    if isinstance(value, int):
+        color = "green" if value >= 0 else "red"
+        return f"[{color}]{value:+d}[/]"
+    return str(value)
