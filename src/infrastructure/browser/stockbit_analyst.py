@@ -38,6 +38,7 @@ logger = logging.getLogger(__name__)
 
 from src.infrastructure.browser.stockbit_base_provider import StockbitCachingProvider
 from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+from src.infrastructure.persistence.sqlite_migration_runner import SqliteMigrationRunner
 
 _ANALYST_URL = STOCKBIT_CFG.analyst_url
 
@@ -114,16 +115,8 @@ class StockbitAnalystConsensusProvider(AnalystConsensusProvider, StockbitCaching
 
     # ── Schema ───────────────────────────────────────────────────────────────
 
-    _MIGRATE_COLUMNS = [
-        "ALTER TABLE analyst_cache ADD COLUMN price_target_low REAL",
-        "ALTER TABLE analyst_cache ADD COLUMN price_target_high REAL",
-    ]
-
-    def _ensure_schema(self) -> None:
-        try:
-            with self._get_conn() as conn:
-                conn.execute("""
-                    CREATE TABLE IF NOT EXISTS analyst_cache (
+    _MIGRATIONS: list[tuple[int, str]] = [
+        (0, """CREATE TABLE IF NOT EXISTS analyst_cache (
                         ticker             TEXT NOT NULL PRIMARY KEY,
                         buy_count          INTEGER NOT NULL DEFAULT 0,
                         hold_count         INTEGER NOT NULL DEFAULT 0,
@@ -134,17 +127,15 @@ class StockbitAnalystConsensusProvider(AnalystConsensusProvider, StockbitCaching
                         fetched_date       TEXT NOT NULL,
                         price_target_low   REAL,
                         price_target_high  REAL
-                    )
-                """)
-                conn.execute("""
-                    CREATE INDEX IF NOT EXISTS idx_analyst_ticker_fetched
-                    ON analyst_cache(ticker, fetched_date)
-                """)
-                for col_sql in self._MIGRATE_COLUMNS:
-                    try:
-                        conn.execute(col_sql)
-                    except Exception:
-                        pass  # column already exists
+                    )"""),
+        (1, "CREATE INDEX IF NOT EXISTS idx_analyst_ticker_fetched ON analyst_cache(ticker, fetched_date)"),
+        (2, "ALTER TABLE analyst_cache ADD COLUMN price_target_low REAL"),
+        (3, "ALTER TABLE analyst_cache ADD COLUMN price_target_high REAL"),
+    ]
+
+    def _ensure_schema(self) -> None:
+        try:
+            SqliteMigrationRunner(self._db_path).run("analyst_cache", self._MIGRATIONS)
         except Exception as e:
             logger.warning("analyst_cache schema error: %s", e)
 

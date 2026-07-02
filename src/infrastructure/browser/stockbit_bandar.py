@@ -46,6 +46,7 @@ logger = logging.getLogger(__name__)
 
 from src.infrastructure.browser.stockbit_base_provider import StockbitCachingProvider
 from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+from src.infrastructure.persistence.sqlite_migration_runner import SqliteMigrationRunner
 
 _MARKET_DETECTOR_URL = STOCKBIT_CFG.bandar_detector_url
 
@@ -72,15 +73,15 @@ CREATE TABLE IF NOT EXISTS bandar_detector (
 )
 """
 
-# Columns added after initial schema — applied via ALTER TABLE on existing DBs
-_MIGRATE_COLUMNS = [
-    "ALTER TABLE bandar_detector ADD COLUMN top3_accdist TEXT",
-    "ALTER TABLE bandar_detector ADD COLUMN top5_accdist TEXT",
-    "ALTER TABLE bandar_detector ADD COLUMN top10_accdist TEXT",
-    "ALTER TABLE bandar_detector ADD COLUMN number_broker_buysell INTEGER",
-    "ALTER TABLE bandar_detector ADD COLUMN vwap REAL",
-    "ALTER TABLE bandar_detector ADD COLUMN total_value REAL",
-    "ALTER TABLE bandar_detector ADD COLUMN total_volume INTEGER",
+_MIGRATIONS: list[tuple[int, str]] = [
+    (0, _CREATE_TABLE),
+    (1, "ALTER TABLE bandar_detector ADD COLUMN top3_accdist TEXT"),
+    (2, "ALTER TABLE bandar_detector ADD COLUMN top5_accdist TEXT"),
+    (3, "ALTER TABLE bandar_detector ADD COLUMN top10_accdist TEXT"),
+    (4, "ALTER TABLE bandar_detector ADD COLUMN number_broker_buysell INTEGER"),
+    (5, "ALTER TABLE bandar_detector ADD COLUMN vwap REAL"),
+    (6, "ALTER TABLE bandar_detector ADD COLUMN total_value REAL"),
+    (7, "ALTER TABLE bandar_detector ADD COLUMN total_volume INTEGER"),
 ]
 
 
@@ -186,13 +187,7 @@ class StockbitBandarDetectorProvider(BandarDetectorProvider, StockbitCachingProv
 
     def _ensure_schema(self) -> None:
         try:
-            with sqlite3.connect(self._db_path) as conn:
-                conn.execute(_CREATE_TABLE)
-                for col_sql in _MIGRATE_COLUMNS:
-                    try:
-                        conn.execute(col_sql)
-                    except sqlite3.OperationalError:
-                        pass  # column already exists
+            SqliteMigrationRunner(self._db_path).run("bandar_detector", _MIGRATIONS)
         except Exception as e:
             logger.warning("bandar_detector: failed to create cache table: %s", e)
 

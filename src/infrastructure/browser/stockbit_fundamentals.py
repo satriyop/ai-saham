@@ -35,6 +35,7 @@ logger = logging.getLogger(__name__)
 
 from src.infrastructure.browser.stockbit_base_provider import StockbitCachingProvider
 from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+from src.infrastructure.persistence.sqlite_migration_runner import SqliteMigrationRunner
 
 _KEYSTATS_URL = STOCKBIT_CFG.keystats_url
 _CACHE_TTL_DAYS = STOCKBIT_CFG.cache_ttl_days_fundamentals
@@ -57,9 +58,10 @@ CREATE TABLE IF NOT EXISTS company_fundamentals (
 )
 """
 
-_MIGRATE_COLUMNS = [
-    "ALTER TABLE company_fundamentals ADD COLUMN market_cap_idr INTEGER",
-    "ALTER TABLE company_fundamentals ADD COLUMN pbv REAL",
+_MIGRATIONS: list[tuple[int, str]] = [
+    (0, _CREATE_TABLE),
+    (1, "ALTER TABLE company_fundamentals ADD COLUMN market_cap_idr INTEGER"),
+    (2, "ALTER TABLE company_fundamentals ADD COLUMN pbv REAL"),
 ]
 
 
@@ -178,13 +180,7 @@ class StockbitFundamentalsProvider(FundamentalsProvider, StockbitCachingProvider
 
     def _ensure_schema(self) -> None:
         try:
-            with sqlite3.connect(self._db_path) as conn:
-                conn.execute(_CREATE_TABLE)
-                for col_sql in _MIGRATE_COLUMNS:
-                    try:
-                        conn.execute(col_sql)
-                    except Exception:
-                        pass  # column already exists
+            SqliteMigrationRunner(self._db_path).run("company_fundamentals", _MIGRATIONS)
         except Exception as e:
             logger.warning("company_fundamentals: failed to create cache table: %s", e)
 

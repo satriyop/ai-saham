@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)
 
 from src.infrastructure.browser.stockbit_base_provider import StockbitCachingProvider
 from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+from src.infrastructure.persistence.sqlite_migration_runner import SqliteMigrationRunner
 
 _SEASONALITY_URL = STOCKBIT_CFG.seasonality_url
 
@@ -128,11 +129,8 @@ class StockbitSeasonalityProvider(SeasonalityProvider, StockbitCachingProvider):
 
     # ── Schema ───────────────────────────────────────────────────────────────
 
-    def _ensure_schema(self) -> None:
-        try:
-            with self._get_conn() as conn:
-                conn.execute("""
-                    CREATE TABLE IF NOT EXISTS seasonality_cache (
+    _MIGRATIONS: list[tuple[int, str]] = [
+        (0, """CREATE TABLE IF NOT EXISTS seasonality_cache (
                         ticker           TEXT NOT NULL,
                         year             INTEGER NOT NULL,
                         month            INTEGER NOT NULL,
@@ -145,16 +143,14 @@ class StockbitSeasonalityProvider(SeasonalityProvider, StockbitCachingProvider):
                         fetched_month    TEXT NOT NULL,
                         fetched_at       TEXT,
                         PRIMARY KEY (ticker, year, month)
-                    )
-                """)
-                conn.execute("""
-                    CREATE INDEX IF NOT EXISTS idx_seasonality_ticker_month
-                    ON seasonality_cache(ticker, fetched_month)
-                """)
-                try:
-                    conn.execute("ALTER TABLE seasonality_cache ADD COLUMN fetched_at TEXT")
-                except Exception:
-                    pass  # column already exists
+                    )"""),
+        (1, "CREATE INDEX IF NOT EXISTS idx_seasonality_ticker_month ON seasonality_cache(ticker, fetched_month)"),
+        (2, "ALTER TABLE seasonality_cache ADD COLUMN fetched_at TEXT"),
+    ]
+
+    def _ensure_schema(self) -> None:
+        try:
+            SqliteMigrationRunner(self._db_path).run("seasonality_cache", self._MIGRATIONS)
         except Exception as e:
             logger.warning("seasonality_cache schema error: %s", e)
 
