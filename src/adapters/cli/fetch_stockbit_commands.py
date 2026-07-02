@@ -237,26 +237,23 @@ def test(
         str,
         typer.Option("--ticker", help="Ticker for orderbook smoke test"),
     ] = "BBCA",
-    headless: Annotated[
-        bool,
-        typer.Option("--headless/--no-headless", help="Run browser headless"),
-    ] = True,
 ) -> None:
     """
     Smoke-test the Stockbit adapter with the saved session.
 
-    Runs a live fetch of movers and order book and prints raw results.
+    Runs a live fetch of movers and order book via the persisted JWT token
+    and prints raw results. No browser is launched — data uses httpx directly.
     Use this to verify the adapter works after calibrating from spy output.
 
     Examples:
         saham fetch stockbit test
-        saham fetch stockbit test --no-headless    (see the browser)
         saham fetch stockbit test --ticker BMRI
     """
-    _require_playwright_cli()
+    from src.infrastructure.browser.stockbit_api_client import create_stockbit_api_client
     from src.infrastructure.browser.playwright_stockbit_provider import PlaywrightStockbitProvider
 
-    provider = PlaywrightStockbitProvider(headless=headless)
+    api_client = create_stockbit_api_client()
+    provider = PlaywrightStockbitProvider(api_client=api_client)
 
     # ── Test 1: movers ────────────────────────────────────────────────────
     typer.echo("")
@@ -281,9 +278,9 @@ def test(
             typer.echo(typer.style("  ✗ 0 movers returned", fg=typer.colors.RED))
             typer.echo("")
             typer.echo("  Diagnosis:")
-            typer.echo("    — API intercept: no URL matched movers patterns")
-            typer.echo("    — DOM scrape:    no table rows found")
-            typer.echo("    — Next step:     saham fetch stockbit spy --target screener")
+            typer.echo("    — Exodus API returned empty or unexpected response")
+            typer.echo("    — Token may be expired: saham fetch stockbit login")
+            typer.echo("    — Next step: saham fetch stockbit spy --target screener")
     except Exception as e:
         typer.echo(typer.style(f"  ✗ Error: {e}", fg=typer.colors.RED))
 

@@ -1061,25 +1061,27 @@ diagnostic report only; it does not repair or refresh data.
 
 ### `saham fetch stockbit` - Stockbit Session Management
 
-Manage Stockbit browser sessions for automated data fetching.
+Manage the Stockbit JWT token and browser session. Browser is used only for
+`login`, `spy`, and `browse` — all data commands use the persisted token via httpx.
 
 ```bash
-saham fetch stockbit login                    # Open browser for manual login
+saham fetch stockbit login                    # Open browser for manual login (saves JWT)
 saham fetch stockbit login --timeout 180      # Longer timeout for 2FA
 saham fetch stockbit status                   # Check session health
 saham fetch stockbit spy                      # Capture API traffic
 saham fetch stockbit spy --target orderbook --ticker BBRI
-saham fetch stockbit test                     # Smoke-test the adapter
+saham fetch stockbit test                     # Smoke-test movers + orderbook (no browser)
+saham fetch stockbit test --ticker BMRI       # Use different ticker for orderbook test
 saham fetch stockbit fetch-top5 --top 5       # Top IEV movers + orderbooks
 saham fetch stockbit browse                   # Interactive browser session
 ```
 
 | Command | Purpose |
 |---------|---------|
-| `saham fetch stockbit login` | Create persistent browser session profile |
-| `saham fetch stockbit status` | Check session health |
-| `saham fetch stockbit spy` | Capture all API traffic to identify endpoints |
-| `saham fetch stockbit test` | Smoke-test live adapter with saved session |
+| `saham fetch stockbit login` | Open browser once to save JWT to `.stockbit_profile/token.json` |
+| `saham fetch stockbit status` | Check token age and session health |
+| `saham fetch stockbit spy` | Capture API traffic to identify endpoints |
+| `saham fetch stockbit test` | Smoke-test movers + orderbook via persisted JWT (no browser) |
 | `saham fetch stockbit fetch-top5` | Top IEV movers + live orderbook snapshots |
 | `saham fetch stockbit browse` | Open headed browser with saved session |
 
