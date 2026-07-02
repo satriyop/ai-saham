@@ -11,6 +11,7 @@ from rich.text import Text
 
 from src.adapters.cli.rich_display import compact_table, console, panel
 from src.application.services.swing_tuning_patch_validator import (
+    SwingTuningPatchDryRunReport,
     SwingTuningPatchValidationReport,
 )
 from src.application.services.swing_tuning_review_journal import (
@@ -176,6 +177,39 @@ def display_swing_tuning_patch_validation(
 
     console().print("")
     console().print(panel(table, title="PATCH ITEMS"))
+
+
+def display_swing_tuning_patch_dry_run(
+    report: SwingTuningPatchDryRunReport,
+) -> None:
+    info = compact_table(show_header=False)
+    info.add_column("Key", style="bold cyan")
+    info.add_column("Value")
+    info.add_row("Patch", report.patch_path)
+    info.add_row("Ready", "yes" if report.ready else "no")
+    info.add_row("Changes", str(len(report.changes)))
+    if report.issues:
+        info.add_row("Issues", " | ".join(report.issues))
+
+    console().print("")
+    console().print(panel(info, title="SWING TUNING PATCH DRY RUN"))
+
+    if not report.changes:
+        return
+
+    table = compact_table()
+    table.add_column("Target Path")
+    table.add_column("Current")
+    table.add_column("Proposed")
+    for change in report.changes:
+        table.add_row(
+            change.target_path,
+            _value(change.current_value),
+            _value(change.proposed_value),
+        )
+
+    console().print("")
+    console().print(panel(table, title="YAML CHANGES THAT WOULD BE MADE"))
 
 
 def _period(start_date: str | None, end_date: str | None) -> str:

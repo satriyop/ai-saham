@@ -1,6 +1,7 @@
 import json
 
 from src.application.services.swing_tuning_patch_validator import (
+    SwingTuningPatchDryRunPlanner,
     SwingTuningPatchValidator,
 )
 
@@ -77,3 +78,44 @@ def test_swing_tuning_patch_validator_rejects_applyable_artifact(tmp_path):
 
     assert report.valid is False
     assert report.issues == ("apply_supported_must_be_false",)
+
+
+def test_swing_tuning_patch_dry_run_plans_yaml_changes(tmp_path):
+    _write_config(tmp_path)
+    patch_path = tmp_path / "patch.json"
+    patch_path.write_text(json.dumps({
+        "artifact_type": "swing_tuning_patch_review",
+        "apply": {"supported": False},
+        "patch_items": [
+            {
+                "target_path": (
+                    "config/signal_engine.yaml:"
+                    "signal_engine.classification.strong_min_score"
+                ),
+                "current_value": 70,
+                "proposed_value": 71,
+            },
+        ],
+    }))
+
+    report = SwingTuningPatchDryRunPlanner(config_root=tmp_path).plan(patch_path)
+
+    assert report.ready is True
+    assert report.issues == ()
+    assert len(report.changes) == 1
+    assert report.changes[0].current_value == 70
+    assert report.changes[0].proposed_value == 71
+
+
+def test_swing_tuning_patch_dry_run_rejects_empty_patch(tmp_path):
+    patch_path = tmp_path / "patch.json"
+    patch_path.write_text(json.dumps({
+        "artifact_type": "swing_tuning_patch_review",
+        "apply": {"supported": False},
+        "patch_items": [],
+    }))
+
+    report = SwingTuningPatchDryRunPlanner(config_root=tmp_path).plan(patch_path)
+
+    assert report.ready is False
+    assert report.issues == ("patch_has_no_items",)
