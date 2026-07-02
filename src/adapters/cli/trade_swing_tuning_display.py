@@ -10,6 +10,9 @@ from pathlib import Path
 from rich.text import Text
 
 from src.adapters.cli.rich_display import compact_table, console, panel
+from src.application.services.swing_tuning_loop_status import (
+    SwingTuningLoopStatusReport,
+)
 from src.application.services.swing_tuning_patch_validator import (
     SwingTuningPatchApplyReport,
     SwingTuningPatchDryRunReport,
@@ -80,6 +83,60 @@ def display_swing_tuning_review_report(
 
     console().print("")
     console().print(panel(table, title="RECENT SWING TUNING REVIEWS"))
+
+
+def display_swing_tuning_loop_status(
+    report: SwingTuningLoopStatusReport,
+) -> None:
+    info = compact_table(show_header=False)
+    info.add_column("Key", style="bold cyan")
+    info.add_column("Value")
+    info.add_row("Status", report.status)
+    info.add_row("Next", report.next_action)
+    info.add_row("Notes", " | ".join(report.notes))
+
+    console().print("")
+    console().print(panel(info, title="SWING TUNING LOOP STATUS"))
+
+    table = compact_table()
+    table.add_column("Step", style="bold cyan")
+    table.add_column("State")
+    table.add_column("Detail")
+    latest_review = report.review.latest_review
+    table.add_row(
+        "Review",
+        "ready" if latest_review else "missing",
+        (
+            f"{latest_review.recorded_at} {latest_review.setup or 'N/A'}"
+            if latest_review
+            else "Run tune-swing --save"
+        ),
+    )
+    table.add_row(
+        "Patch",
+        _patch_state(report),
+        report.patch.patch_path,
+    )
+    latest_apply = report.apply.latest_apply
+    table.add_row(
+        "Apply",
+        "ready" if latest_apply else "missing",
+        latest_apply.applied_at if latest_apply else report.apply.apply_log_path,
+    )
+    table.add_row(
+        "Verify",
+        _verify_state(report),
+        _verify_detail(report),
+    )
+    measurement = report.apply.post_apply_measurement
+    table.add_row(
+        "Measure",
+        measurement.status,
+        _measurement_detail(report),
+    )
+
+    console().print("")
+    console().print(panel(table, title="LOOP ARTIFACTS"))
 
 
 def display_swing_tuning_review_comparison(
@@ -369,6 +426,43 @@ def _value(value: object | None) -> str:
     if isinstance(value, float):
         return f"{value:.2f}"
     return str(value)
+
+
+def _patch_state(report: SwingTuningLoopStatusReport) -> str:
+    if not report.patch.exists:
+        return "missing"
+    if report.patch.validation is None or not report.patch.validation.valid:
+        return "invalid"
+    if report.patch.dry_run_ready is not True:
+        return "not ready"
+    return "ready"
+
+
+def _verify_state(report: SwingTuningLoopStatusReport) -> str:
+    if report.patch.verify is None:
+        return "N/A"
+    return "ready" if report.patch.verify.verified else "not verified"
+
+
+def _verify_detail(report: SwingTuningLoopStatusReport) -> str:
+    verify = report.patch.verify
+    if verify is None:
+        return "No patch"
+    return f"{verify.verified_item_count}/{verify.item_count} verified"
+
+
+def _measurement_detail(report: SwingTuningLoopStatusReport) -> str:
+    measurement = report.apply.post_apply_measurement
+    if measurement.status != "READY":
+        return " | ".join(measurement.notes) or "N/A"
+    deltas = {
+        delta.name: delta.delta
+        for delta in measurement.metric_deltas
+    }
+    return (
+        f"return {_delta(deltas.get('total_return_pct'))}, "
+        f"win {_delta(deltas.get('win_rate_pct'))}"
+    )
 
 
 def _delta(value: object | None) -> str:

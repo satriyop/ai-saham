@@ -1421,6 +1421,38 @@ def test_swing_tuning_review_history_json_measures_latest_apply(tmp_path):
     assert deltas["total_return_pct"] == 1.5
 
 
+def test_swing_tuning_status_json_reports_next_action(tmp_path):
+    journal_path = tmp_path / "swing_tuning_reviews.jsonl"
+    patch_path = tmp_path / "swing_tuning_patch.json"
+    apply_log_path = tmp_path / "swing_tuning_apply_log.jsonl"
+
+    result = runner.invoke(
+        app,
+        [
+            "trade",
+            "tuning-status",
+            "--journal",
+            str(journal_path),
+            "--patch",
+            str(patch_path),
+            "--apply-log",
+            str(apply_log_path),
+            "--config-root",
+            str(tmp_path),
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert payload["artifact_type"] == "swing_tuning_loop_status"
+    assert payload["status"] == "IN_PROGRESS"
+    assert payload["next_action"] == "RUN_TUNE_SWING_SAVE"
+    assert payload["review"]["total_records"] == 0
+    assert payload["patch"]["exists"] is False
+
+
 def test_swing_backtest_has_no_tuning_diff_apply_flag():
     from src.adapters.cli import trade_swing_commands
 

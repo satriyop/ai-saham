@@ -932,6 +932,7 @@ saham trade apply-tuning-patch journals/swing_tuning_patch.json --verify
 saham trade review-tuning-swing
 saham trade review-tuning-swing --compare-latest
 saham trade review-tuning-swing --measure-latest-apply
+saham trade tuning-status
 ```
 
 Runs the same walk-forward replay as `backtest-swing`, then emits attribution,
@@ -956,7 +957,10 @@ the previous saved review, including metric deltas and proposed target-path
 changes. Add `--measure-latest-apply` after a patch has been applied and a new
 `tune-swing --save` run has been recorded; it compares the latest saved review
 before the apply timestamp with the latest saved review after it. This is
-deterministic before/after attribution, not proof of causality.
+deterministic before/after attribution, not proof of causality. Use
+`saham trade tuning-status` for a compact read-only view of the latest saved
+review, exported patch, apply log, verification state, post-apply measurement,
+and the next deterministic action in the loop.
 
 Attribution dimensions map to these primary tuning files:
 
@@ -1699,6 +1703,7 @@ src/
 | `saham trade confirm` | `IntradayConfirmationResult` | Post-open ENTER/WAIT/SKIP decision using actual opening price |
 | `saham trade backtest-swing` | `SwingBacktestResponse` | Historical walk-forward performance artifact |
 | `saham trade tune-swing` | `swing_tuning_review` | Deterministic attribution-to-config review artifact; no apply |
+| `saham trade tuning-status` | `swing_tuning_loop_status` | Read-only summary of review, patch, apply, verify, measurement, and next action |
 | `saham trade review-tuning-swing` | `swing_tuning_review_history` | Read-only summary of saved tuning review artifacts |
 | `saham trade validate-tuning-patch` | `swing_tuning_patch_validation` | Read-only validation of exported tuning patch JSON |
 | `saham trade apply-tuning-patch --dry-run` | `swing_tuning_patch_dry_run` | Read-only preview of YAML value changes; no writes |

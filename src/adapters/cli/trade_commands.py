@@ -11,6 +11,7 @@ Commands (all under `saham trade`):
   saham trade size                — ATR-based swing position sizing
   saham trade backtest-swing      — swing workflow walk-forward backtest
   saham trade tune-swing          — swing tuning review from backtest attribution
+  saham trade tuning-status       — read-only swing tuning loop status
   saham trade review-tuning-swing — review saved swing tuning runs
   saham trade validate-tuning-patch — validate exported swing tuning patch JSON
   saham trade apply-tuning-patch  — dry-run or explicitly apply exported tuning patch changes
@@ -45,6 +46,7 @@ from src.adapters.cli.trade_intraday_commands import (
 )
 from src.adapters.cli.trade_swing_commands import size, swing_backtest, swing_tune
 from src.adapters.cli.trade_swing_tuning_display import (
+    display_swing_tuning_loop_status,
     display_swing_tuning_patch_apply,
     display_swing_tuning_patch_dry_run,
     display_swing_tuning_patch_validation,
@@ -52,6 +54,9 @@ from src.adapters.cli.trade_swing_tuning_display import (
     display_swing_tuning_post_apply_measurement,
     display_swing_tuning_review_comparison,
     display_swing_tuning_review_report,
+)
+from src.application.services.swing_tuning_loop_status import (
+    SwingTuningLoopStatusService,
 )
 from src.application.services.swing_tuning_patch_validator import (
     SwingTuningPatchApplier,
@@ -90,6 +95,53 @@ trade_app.command("size")(size)
 trade_app.command("backtest-swing")(swing_backtest)
 trade_app.command("tune-swing")(swing_tune)
 trade_app.command("backtest-intraday")(intraday_backtest)
+
+
+@trade_app.command("tuning-status")
+def tuning_status(
+    journal: Annotated[
+        Optional[Path],
+        typer.Option("--journal", help="Swing tuning review journal path"),
+    ] = None,
+    patch_path: Annotated[
+        Path,
+        typer.Option("--patch", help="Exported swing tuning patch JSON path"),
+    ] = Path("journals/swing_tuning_patch.json"),
+    apply_log: Annotated[
+        Path,
+        typer.Option("--apply-log", help="Swing tuning apply log JSONL path"),
+    ] = Path("journals/swing_tuning_apply_log.jsonl"),
+    config_root: Annotated[
+        Path,
+        typer.Option("--config-root", help="Repository/config root for YAML resolution"),
+    ] = Path("."),
+    output_format: Annotated[
+        str,
+        typer.Option("--format", help="Output format: table or json"),
+    ] = APP_CFG.analysis.format,
+) -> None:
+    """Show read-only status for the swing tuning loop."""
+    journal_path = journal or Path(APP_CFG.storage.swing_tuning_review_journal)
+    report = SwingTuningLoopStatusService(
+        SwingTuningReviewJsonlWriter(journal_path),
+        config_root=config_root,
+    ).status(
+        review_journal_path=journal_path,
+        patch_path=patch_path,
+        apply_log_path=apply_log,
+        apply_records=SwingTuningReviewJsonlWriter(apply_log).read_all(),
+    )
+
+    if output_format == "json":
+        payload = {
+            "schema_version": 1,
+            "artifact_type": "swing_tuning_loop_status",
+            **report.to_dict(),
+        }
+        typer.echo(json.dumps(payload, indent=2, default=str))
+        return
+
+    display_swing_tuning_loop_status(report)
 
 
 @trade_app.command("review-tuning-swing")
