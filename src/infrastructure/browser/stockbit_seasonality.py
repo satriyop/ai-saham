@@ -29,6 +29,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+from src.infrastructure.browser.stockbit_base_provider import StockbitCachingProvider
 from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
 
 _SEASONALITY_URL = STOCKBIT_CFG.seasonality_url
@@ -112,7 +113,7 @@ def _parse_seasonality(ticker: str, month: int, back_years: int, body: dict) -> 
     )
 
 
-class StockbitSeasonalityProvider(SeasonalityProvider):
+class StockbitSeasonalityProvider(SeasonalityProvider, StockbitCachingProvider):
     """
     Fetches monthly seasonality from Stockbit.
 
@@ -125,22 +126,7 @@ class StockbitSeasonalityProvider(SeasonalityProvider):
         db_path: Path to the SQLite database (same data.db used by other repos).
     """
 
-    def __init__(
-        self,
-        api_client: "StockbitApiClient | None",
-        db_path: str | Path = Path("data.db"),
-    ) -> None:
-        self._api_client = api_client
-        self._db_path = Path(db_path).expanduser()
-        self._ensure_schema()
-
     # ── Schema ───────────────────────────────────────────────────────────────
-
-    def _get_conn(self) -> sqlite3.Connection:
-        self._db_path.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(str(self._db_path))
-        conn.row_factory = sqlite3.Row
-        return conn
 
     def _ensure_schema(self) -> None:
         try:

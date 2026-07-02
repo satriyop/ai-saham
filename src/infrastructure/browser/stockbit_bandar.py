@@ -44,6 +44,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+from src.infrastructure.browser.stockbit_base_provider import StockbitCachingProvider
 from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
 
 _MARKET_DETECTOR_URL = STOCKBIT_CFG.bandar_detector_url
@@ -168,7 +169,7 @@ def _parse_snapshot(ticker: str, session_date: date, body: dict) -> BandarDetect
     )
 
 
-class StockbitBandarDetectorProvider(BandarDetectorProvider):
+class StockbitBandarDetectorProvider(BandarDetectorProvider, StockbitCachingProvider):
     """Fetches bandar detector signal from Stockbit Exodus API.
 
     SQLite cache keyed by (ticker, session_date) — data is fixed after
@@ -180,12 +181,10 @@ class StockbitBandarDetectorProvider(BandarDetectorProvider):
         api_client: "StockbitApiClient | None",
         db_path: Path,
     ) -> None:
-        self._api_client = api_client
-        self._db_path = db_path
         self._mem_cache: dict[tuple[str, str], BandarDetectorSnapshot | None] = {}
-        self._ensure_table()
+        super().__init__(api_client, db_path)
 
-    def _ensure_table(self) -> None:
+    def _ensure_schema(self) -> None:
         try:
             with sqlite3.connect(self._db_path) as conn:
                 conn.execute(_CREATE_TABLE)

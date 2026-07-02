@@ -33,6 +33,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+from src.infrastructure.browser.stockbit_base_provider import StockbitCachingProvider
 from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
 
 _PROFILE_URL = STOCKBIT_CFG.company_profile_url
@@ -105,22 +106,13 @@ def _parse_fetched_at(raw: str | None) -> datetime | None:
             return None
 
 
-class StockbitCompanyProfileProvider(CompanyProfileProvider):
+class StockbitCompanyProfileProvider(CompanyProfileProvider, StockbitCachingProvider):
     """Fetches company profile from Stockbit /emitten/{ticker}/profile.
 
     SQLite cache with 30-day TTL — profile data (IPO history, contacts) changes rarely.
     """
 
-    def __init__(
-        self,
-        api_client: "StockbitApiClient | None",
-        db_path: str | Path = Path("data.db"),
-    ) -> None:
-        self._api_client = api_client
-        self._db_path = Path(db_path).expanduser()
-        self._ensure_table()
-
-    def _ensure_table(self) -> None:
+    def _ensure_schema(self) -> None:
         try:
             with sqlite3.connect(str(self._db_path)) as conn:
                 conn.execute(_CREATE_TABLE)

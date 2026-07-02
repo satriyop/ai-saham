@@ -32,6 +32,7 @@ from src.domain.value_objects.broker_distribution import (
     BrokerDistributionEntry,
     BrokerDistributionSnapshot,
 )
+from src.infrastructure.browser.stockbit_base_provider import StockbitCachingProvider
 from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
 
 if TYPE_CHECKING:
@@ -103,7 +104,7 @@ def _parse_response(ticker: str, body: dict) -> BrokerDistributionSnapshot | Non
     )
 
 
-class StockbitBrokerDistributionProvider(BrokerDistributionProvider):
+class StockbitBrokerDistributionProvider(BrokerDistributionProvider, StockbitCachingProvider):
     """Fetches cross-broker distribution from Stockbit /order-trade/broker/distribution.
 
     Caches per (ticker, date) in SQLite table `broker_distribution_cache`.
@@ -114,22 +115,7 @@ class StockbitBrokerDistributionProvider(BrokerDistributionProvider):
         db_path:         Path to SQLite database.
     """
 
-    def __init__(
-        self,
-        api_client: "StockbitApiClient | None",
-        db_path: str | Path = Path("data.db"),
-    ) -> None:
-        self._api_client = api_client
-        self._db_path = Path(db_path).expanduser()
-        self._ensure_schema()
-
     # ── Schema ───────────────────────────────────────────────────────────────
-
-    def _get_conn(self) -> sqlite3.Connection:
-        self._db_path.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(str(self._db_path))
-        conn.row_factory = sqlite3.Row
-        return conn
 
     def _ensure_schema(self) -> None:
         try:

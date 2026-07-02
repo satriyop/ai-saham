@@ -38,6 +38,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+from src.infrastructure.browser.stockbit_base_provider import StockbitCachingProvider
 from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
 
 _EARNINGS_URL = STOCKBIT_CFG.earnings_url
@@ -119,7 +120,7 @@ def _current_quarter_year() -> tuple[int, int]:
     return (today.month - 1) // 3 + 1, today.year
 
 
-class StockbitEarningsProvider(EarningsProvider):
+class StockbitEarningsProvider(EarningsProvider, StockbitCachingProvider):
     """Fetches quarterly EPS history from Stockbit /earnings endpoint.
 
     Walks the prev_earnings_period chain to collect up to `quarters` records.
@@ -130,22 +131,7 @@ class StockbitEarningsProvider(EarningsProvider):
         db_path: Path to the SQLite database.
     """
 
-    def __init__(
-        self,
-        api_client: "StockbitApiClient | None",
-        db_path: str | Path = Path("data.db"),
-    ) -> None:
-        self._api_client = api_client
-        self._db_path = Path(db_path).expanduser()
-        self._ensure_schema()
-
     # ── Schema ───────────────────────────────────────────────────────────────
-
-    def _get_conn(self) -> sqlite3.Connection:
-        self._db_path.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(str(self._db_path))
-        conn.row_factory = sqlite3.Row
-        return conn
 
     def _ensure_schema(self) -> None:
         try:

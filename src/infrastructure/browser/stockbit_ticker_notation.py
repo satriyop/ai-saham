@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+from src.infrastructure.browser.stockbit_base_provider import StockbitCachingProvider
 from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
 
 _EMITTEN_INFO_URL = STOCKBIT_CFG.emitten_info_url
@@ -124,27 +125,12 @@ def _parse_snapshot(ticker: str, body: dict) -> TickerNotationSnapshot | None:
     )
 
 
-class StockbitTickerNotationProvider(TickerNotationProvider, TickerNotationRepository):
+class StockbitTickerNotationProvider(TickerNotationProvider, TickerNotationRepository, StockbitCachingProvider):
     """Fetches and caches Stockbit ticker notation/status context."""
-
-    def __init__(
-        self,
-        api_client: "StockbitApiClient | None",
-        db_path: str | Path = Path("data.db"),
-    ) -> None:
-        self._api_client = api_client
-        self._db_path = Path(db_path).expanduser()
-        self._ensure_schema()
-
-    def _connect(self) -> sqlite3.Connection:
-        self._db_path.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(str(self._db_path))
-        conn.row_factory = sqlite3.Row
-        return conn
 
     def _ensure_schema(self) -> None:
         try:
-            with self._connect() as conn:
+            with self._get_conn() as conn:
                 conn.execute("""
                     CREATE TABLE IF NOT EXISTS ticker_notation_cache (
                         ticker              TEXT PRIMARY KEY,
@@ -175,7 +161,7 @@ class StockbitTickerNotationProvider(TickerNotationProvider, TickerNotationRepos
     def is_cache_fresh(self, ticker: str) -> bool:
         today = date.today().isoformat()
         try:
-            with self._connect() as conn:
+            with self._get_conn() as conn:
                 row = conn.execute(
                     """
                     SELECT 1 FROM ticker_notation_cache
@@ -203,7 +189,7 @@ class StockbitTickerNotationProvider(TickerNotationProvider, TickerNotationRepos
         fetched_at = snapshot.fetched_at or datetime.now()
         fetched_date = fetched_at.date()
         try:
-            with self._connect() as conn:
+            with self._get_conn() as conn:
                 conn.execute(
                     """
                     INSERT OR REPLACE INTO ticker_notation_cache (
@@ -237,7 +223,7 @@ class StockbitTickerNotationProvider(TickerNotationProvider, TickerNotationRepos
 
     def _read_cache(self, ticker: str) -> TickerNotationSnapshot | None:
         try:
-            with self._connect() as conn:
+            with self._get_conn() as conn:
                 row = conn.execute(
                     "SELECT * FROM ticker_notation_cache WHERE ticker=?",
                     (ticker.upper(),),

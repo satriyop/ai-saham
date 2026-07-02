@@ -36,6 +36,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+from src.infrastructure.browser.stockbit_base_provider import StockbitCachingProvider
 from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
 
 _ANALYST_URL = STOCKBIT_CFG.analyst_url
@@ -99,7 +100,7 @@ def _parse_consensus(ticker: str, body: dict) -> AnalystConsensus | None:
     )
 
 
-class StockbitAnalystConsensusProvider(AnalystConsensusProvider):
+class StockbitAnalystConsensusProvider(AnalystConsensusProvider, StockbitCachingProvider):
     """Fetches analyst consensus from Stockbit Exodus API.
 
     SQLite daily cache (table: analyst_cache, TTL = 1 calendar day).
@@ -111,22 +112,7 @@ class StockbitAnalystConsensusProvider(AnalystConsensusProvider):
         db_path: Path to the SQLite database (same data.db used by other repos).
     """
 
-    def __init__(
-        self,
-        api_client: "StockbitApiClient | None",
-        db_path: str | Path = Path("data.db"),
-    ) -> None:
-        self._api_client = api_client
-        self._db_path = Path(db_path).expanduser()
-        self._ensure_schema()
-
     # ── Schema ───────────────────────────────────────────────────────────────
-
-    def _get_conn(self) -> sqlite3.Connection:
-        self._db_path.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(str(self._db_path))
-        conn.row_factory = sqlite3.Row
-        return conn
 
     _MIGRATE_COLUMNS = [
         "ALTER TABLE analyst_cache ADD COLUMN price_target_low REAL",

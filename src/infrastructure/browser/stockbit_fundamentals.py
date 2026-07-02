@@ -33,6 +33,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+from src.infrastructure.browser.stockbit_base_provider import StockbitCachingProvider
 from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
 
 _KEYSTATS_URL = STOCKBIT_CFG.keystats_url
@@ -160,7 +161,7 @@ def _parse_fundamentals(ticker: str, body: dict) -> CompanyFundamentals | None:
     )
 
 
-class StockbitFundamentalsProvider(FundamentalsProvider):
+class StockbitFundamentalsProvider(FundamentalsProvider, StockbitCachingProvider):
     """Fetches key fundamental ratios from Stockbit KeyStats API.
 
     SQLite cache with 7-day TTL — underlying metrics (ROE, NPM, F-score)
@@ -172,12 +173,10 @@ class StockbitFundamentalsProvider(FundamentalsProvider):
         api_client: "StockbitApiClient | None",
         db_path: Path,
     ) -> None:
-        self._api_client = api_client
-        self._db_path = db_path
         self._mem_cache: dict[str, CompanyFundamentals | None] = {}
-        self._ensure_table()
+        super().__init__(api_client, db_path)
 
-    def _ensure_table(self) -> None:
+    def _ensure_schema(self) -> None:
         try:
             with sqlite3.connect(self._db_path) as conn:
                 conn.execute(_CREATE_TABLE)

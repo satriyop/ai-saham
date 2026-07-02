@@ -37,6 +37,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+from src.infrastructure.browser.stockbit_base_provider import StockbitCachingProvider
 from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
 
 _VALUATION_URL = STOCKBIT_CFG.valuation_metrics_url
@@ -83,7 +84,7 @@ def _parse_response(ticker: str, body: dict) -> ValuationMetrics | None:
     )
 
 
-class StockbitValuationProvider(ValuationProvider):
+class StockbitValuationProvider(ValuationProvider, StockbitCachingProvider):
     """Fetches and caches per-ticker valuation metrics from the Stockbit Exodus API."""
 
     def __init__(
@@ -91,16 +92,9 @@ class StockbitValuationProvider(ValuationProvider):
         api_client: "StockbitApiClient | None",
         db_path: Path | None = None,
     ) -> None:
-        self._api_client = api_client
-        self._db_path = db_path or Path("data/saham.db")
-        self._ensure_table()
+        super().__init__(api_client, db_path or Path("data/saham.db"))
 
-    def _get_conn(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._db_path)
-        conn.row_factory = sqlite3.Row
-        return conn
-
-    def _ensure_table(self) -> None:
+    def _ensure_schema(self) -> None:
         with self._get_conn() as conn:
             conn.execute(_CREATE_TABLE)
 
