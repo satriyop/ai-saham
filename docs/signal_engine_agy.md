@@ -46,7 +46,7 @@ Each input is normalized to a standard `0.0` to `100.0` range:
    * Shifts net transaction buy ratio `[-1.0, +1.0]` (where `-1.0` is pure selling, `0.0` is neutral, and `+1.0` is pure buying) to `0.0` to `2.0` and multiplies by `50.0`.
 4. **Seasonality Edge:**
    * **Tailwind** (average return > 0% AND monthly win rate > 50%): score = `win_rate_pct`.
-   * **Headwind** (average return < 0% AND monthly win rate < 50%): score = `100.0 - win_rate_pct` *(see Section 5 for logic warning)*.
+   * **Headwind** (average return < 0% AND monthly win rate < 50%): score = `win_rate_pct`.
    * **Neutral:** score = `50.0`.
 5. **Analyst Consensus:**
    * Sums points: `(buy_ratio * 60) + ((upside_pct / 30) * 40)`. Target upside capped at `30.0%`.
@@ -77,14 +77,7 @@ If a `MarketContext` is provided (e.g. from `saham today` or screeners):
 
 ---
 
-## 5. Identified Logic Smells & Recommendations
-* **Seasonality Pattern Direction Check:**
-  * **The Issue:** Under the current calculation, a strong headwind (e.g. win rate = 20%, indicating the stock historically falls 80% of the time in this month) yields a score of `100 - 20 = 80.0`. This gives the stock a high positive contribution to its bullish entry signal, despite seasonality being strongly bearish.
-  * **Recommendation:** Bullish scoring should penalize bearish seasonality. Seasonal headwinds should scale down toward `0.0` (or below `50.0`), rather than mirroring tailwind scores. A future tuning cycle should adjust this formula.
-
----
-
-## 6. Deep-Dive: Bandar Intensity Factor
+## 5. Deep-Dive: Bandar Intensity Factor
 
 ### Concept & Market Microstructure
 On the Indonesian Stock Exchange (IDX), transactions are processed via registered brokerages (identified by 2-letter codes like YP, CC, PD). By tracking the net transaction balance of these codes at the end of each session, we can identify institutional operator ("Bandar") footprints:
@@ -120,7 +113,7 @@ Score = ((broad_score + max_range) / (2 * max_range)) * 100.0
 
 ---
 
-## 7. Deep-Dive: Foreign Flow Quality Factor
+## 6. Deep-Dive: Foreign Flow Quality Factor
 
 ### Concept & Market Microstructure
 Foreign institutional desks (often referred to simply as "Foreign Flow") act as major directional catalysts for IDX securities. This factor evaluates the intensity, persistence, and technical context of foreign broker transactions.
@@ -166,19 +159,7 @@ Score = (RawScore / 120.0) * 100.0
 
 ---
 
-## 8. Architectural Perspective: Composite of Composites
-
-### Vetting the Aggregation Pattern
-The Foreign Flow Quality factor is structurally a **composite of composites** (a double-level aggregation). 
-
-This is a valid and robust pattern for quantitative engines, serving specific architectural purposes:
-* **Dimensionality Reduction:** Instead of forcing the top-level Signal Engine to balance 15+ flat weights, related sub-metrics are encapsulated inside the Foreign Flow domain model. This allows top-level configuration weights to stay clean and readable (e.g. 20% Bandar, 20% Foreign Flow, etc.).
-* **Modularity and Reuse:** The `ScoreForeignFlowUseCase` is decoupled from the rest of the engine. Other workflows (such as the Swing Screener) can fetch and filter candidates based purely on raw `foreign_flow_score` without loading valuation, consensus, or seasonality dependencies.
-* **Collinearity Safeguard:** Double-counting technical indicators is avoided. While the Foreign Flow sub-composite uses **RSI** and **Bollinger Bands**, the top-level Signal Engine does not have another competing technical momentum factor. The other 5 dimensions are non-overlapping (Valuation, Insider, Seasonality, Bandar, Analysts).
-
----
-
-## 9. Deep-Dive: Insider Activity Factor
+## 7. Deep-Dive: Insider Activity Factor
 
 ### Concept & Market Microstructure
 Corporate insiders (Directors, Commissioners, and Major Shareholders) possess intimate operational knowledge of their firms. While selling can happen for many non-fundamental reasons (such as portfolio rebalancing, taxes, or liquidity needs), insider buying is historically a high-conviction vote of confidence.
@@ -214,3 +195,40 @@ Score = ((net_buy_ratio + 1.0) / 2.0) * 100.0
 * **Share Count vs. Cash (IDR) Value:** The score is based purely on transacted shares rather than total Rupiah value.
 * **Neutral Default:** A lack of insider activity yields `None` which defaults to `50.0` points. Insiders not trading does not penalize the security.
 
+---
+
+## 8. Deep-Dive: Seasonality Edge Factor
+
+### Concept & Market Microstructure
+Certain securities display recurring performance patterns during specific calendar months. The Seasonality Edge factor identifies whether a security is entering a historically strong or weak month using statistics gathered from the past 5 years.
+
+### The Three Scoring Regimes
+Based on the monthly statistics, the engine places the stock into one of three classifications:
+
+1. **Tailwind (Bullish Month):**
+   * **Rule:** Average monthly return > 0.0% AND win rate > 50.0%.
+   * **Score:** Equals the win rate directly (ranging from 50.0 to 100.0 points).
+2. **Headwind (Bearish Month):**
+   * **Rule:** Average monthly return < 0.0% AND win rate < 50.0%.
+   * **Score:** Equals the win rate directly (ranging from 0.0 to 50.0 points). A weak seasonal month correctly penalizes the entry signal.
+3. **Neutral (Inconsistent Month):**
+   * **Rule:** Any statistical combination that is neither a tailwind nor headwind.
+   * **Score:** Defaults to a neutral 50.0 points (neither boosts nor penalizes the signal).
+
+### Domain Invariant Validations
+To prevent mathematical leaks, the `SeasonalEdge` domain value object validates all inputs on instantiation:
+* Month must be strictly between 1 and 12.
+* Win rate must be strictly between 0.0% and 100.0%.
+* Positive years count cannot exceed total history years count.
+
+---
+
+## 9. Architectural Perspective: Composite of Composites
+
+### Vetting the Aggregation Pattern
+The Foreign Flow Quality factor is structurally a **composite of composites** (a double-level aggregation). 
+
+This is a valid and robust pattern for quantitative engines, serving specific architectural purposes:
+* **Dimensionality Reduction:** Instead of forcing the top-level Signal Engine to balance 15+ flat weights, related sub-metrics are encapsulated inside the Foreign Flow domain model. This allows top-level configuration weights to stay clean and readable (e.g. 20% Bandar, 20% Foreign Flow, etc.).
+* **Modularity and Reuse:** The `ScoreForeignFlowUseCase` is decoupled from the rest of the engine. Other workflows (such as the Swing Screener) can fetch and filter candidates based purely on raw `foreign_flow_score` without loading valuation, consensus, or seasonality dependencies.
+* **Collinearity Safeguard:** Double-counting technical indicators is avoided. While the Foreign Flow sub-composite uses **RSI** and **Bollinger Bands**, the top-level Signal Engine does not have another competing technical momentum factor. The other 5 dimensions are non-overlapping (Valuation, Insider, Seasonality, Bandar, Analysts).
