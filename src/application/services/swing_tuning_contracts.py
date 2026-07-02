@@ -599,7 +599,7 @@ def _tuning_diff_item_priority(item: TuningConfigDiffItem) -> int:
         return 100
     return {
         "DETERMINISTIC_VALUE_SELECTED": 100,
-        "NO_ADVERSE_BUCKET_ORDERING": 80,
+        "NO_DETERMINISTIC_DIRECTION": 80,
         "INSUFFICIENT_EVIDENCE": 70,
         "NO_UNAMBIGUOUS_DIRECTION": 60,
         "NON_NUMERIC_CURRENT_VALUE": 50,
@@ -779,36 +779,42 @@ def _suggest_tuning_value(
             value_selection_policy="INSUFFICIENT_EVIDENCE",
         )
 
-    if not _evidence_supports_tightening(candidate):
+    adjustment_direction = _deterministic_adjustment_direction(
+        candidate,
+        resolution.target_path,
+    )
+    if adjustment_direction is None:
         return TuningValueSuggestion(
             proposed_value=None,
             rationale=(
                 "Current numeric value resolved, but attribution buckets do not "
-                "show adverse ordering that supports threshold tightening."
+                "support a deterministic value direction for this path."
             ),
             confidence="READ_ONLY_CURRENT_VALUE",
             status="CURRENT_VALUE_ONLY",
-            value_selection_policy="NO_ADVERSE_BUCKET_ORDERING",
+            value_selection_policy="NO_DETERMINISTIC_DIRECTION",
         )
 
-    direction = _numeric_adjustment_direction(resolution.target_path)
-    if direction == 0:
+    if adjustment_direction == 0:
         return TuningValueSuggestion(
             proposed_value=None,
             rationale=(
                 "Current numeric value resolved, but the path does not expose "
-                "an unambiguous min/max threshold direction."
+                "an eligible threshold/weight/exit direction."
             ),
             confidence="READ_ONLY_CURRENT_VALUE",
             status="CURRENT_VALUE_ONLY",
             value_selection_policy="NO_UNAMBIGUOUS_DIRECTION",
         )
 
-    proposed_value = _bounded_one_step_adjustment(current_value, direction)
+    proposed_value = _bounded_one_step_adjustment(
+        current_value,
+        adjustment_direction,
+    )
     return TuningValueSuggestion(
         proposed_value=proposed_value,
         rationale=(
-            "HIGH evidence and a numeric threshold path allow a bounded "
+            "HIGH evidence and an eligible numeric path allow a bounded "
             "one-step deterministic dry-run proposal for human review."
         ),
         confidence="DETERMINISTIC_GUARDED",
@@ -821,11 +827,56 @@ def _is_tunable_number(value: object | None) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
+def _deterministic_adjustment_direction(
+    candidate: TuningProposalCandidate,
+    target_path: TuningConfigPath,
+) -> int | None:
+    if _evidence_supports_tightening(candidate):
+        return _tighten_adjustment_direction(target_path)
+    if _evidence_supports_loosening(candidate):
+        return _loosen_adjustment_direction(target_path)
+    return None
+
+
+def _tighten_adjustment_direction(target_path: TuningConfigPath) -> int:
+    threshold_direction = _numeric_adjustment_direction(target_path)
+    if threshold_direction != 0:
+        return threshold_direction
+
+    path = target_path.document_path.lower()
+    if ".take_profit_pct" in path:
+        return 1
+    if ".stop_loss_pct" in path:
+        return -1
+    if path.endswith(".signal_multiplier"):
+        return -1
+    if path.endswith(".partial_max_failed_gates"):
+        return -1
+    return 0
+
+
+def _loosen_adjustment_direction(target_path: TuningConfigPath) -> int:
+    threshold_direction = _numeric_adjustment_direction(target_path)
+    if threshold_direction != 0:
+        return -threshold_direction
+
+    path = target_path.document_path.lower()
+    if ".take_profit_pct" in path:
+        return -1
+    if ".stop_loss_pct" in path:
+        return 1
+    if path.endswith(".signal_multiplier"):
+        return 1
+    if path.endswith(".partial_max_failed_gates"):
+        return 1
+    return 0
+
+
 def _numeric_adjustment_direction(target_path: TuningConfigPath) -> int:
     leaf_name = target_path.document_path.rsplit(".", maxsplit=1)[-1].lower()
-    if any(token in leaf_name for token in ("min", "floor", "required")):
+    if any(token in leaf_name for token in ("min", "floor", "required", "bullish")):
         return 1
-    if any(token in leaf_name for token in ("max", "ceiling")):
+    if any(token in leaf_name for token in ("max", "ceiling", "bearish")):
         return -1
     return 0
 
@@ -838,14 +889,7 @@ def _bounded_one_step_adjustment(value: object, direction: int) -> int | float:
 
 
 def _evidence_supports_tightening(candidate: TuningProposalCandidate) -> bool:
-    bucket_avgs = {
-        label: avg
-        for label, avg in (
-            _parse_evidence_bucket_avg(bucket)
-            for bucket in candidate.evidence_buckets
-        )
-        if label and avg is not None
-    }
+    bucket_avgs = _evidence_bucket_avgs(candidate)
     if candidate.dimension in {
         "signal_strength",
         "candidate_signal_strength",
@@ -877,7 +921,69 @@ def _evidence_supports_tightening(candidate: TuningProposalCandidate) -> bool:
             for label, avg in bucket_avgs.items()
             if label.startswith(("LOW", "MID"))
         )
+    if candidate.dimension in {"candidate_setup_match", "setup_match"}:
+        match_avg = bucket_avgs.get("MATCH")
+        no_match_avg = bucket_avgs.get("NO_MATCH")
+        return match_avg is not None and no_match_avg is not None and match_avg > no_match_avg
+    if candidate.dimension == "setup_gate":
+        return _setup_gate_pass_avg_beats_fail_avg(bucket_avgs)
     return False
+
+
+def _evidence_supports_loosening(candidate: TuningProposalCandidate) -> bool:
+    bucket_avgs = _evidence_bucket_avgs(candidate)
+    if candidate.dimension in {"candidate_setup_match", "setup_match"}:
+        match_avg = bucket_avgs.get("MATCH")
+        no_match_avg = bucket_avgs.get("NO_MATCH")
+        return match_avg is not None and no_match_avg is not None and no_match_avg > match_avg
+    if candidate.dimension == "setup_gate":
+        return _setup_gate_fail_avg_beats_pass_avg(bucket_avgs)
+    if candidate.dimension == "candidate_risk_status":
+        open_avg = bucket_avgs.get("OPEN")
+        blocked_avg = bucket_avgs.get("BLOCKED")
+        return blocked_avg is not None and open_avg is not None and blocked_avg > open_avg
+    return False
+
+
+def _evidence_bucket_avgs(
+    candidate: TuningProposalCandidate,
+) -> dict[str, float]:
+    return {
+        label: avg
+        for label, avg in (
+            _parse_evidence_bucket_avg(bucket)
+            for bucket in candidate.evidence_buckets
+        )
+        if label and avg is not None
+    }
+
+
+def _setup_gate_pass_avg_beats_fail_avg(bucket_avgs: dict[str, float]) -> bool:
+    gate_names = {
+        label.rsplit(":", maxsplit=1)[0]
+        for label in bucket_avgs
+        if label.endswith((":PASS", ":FAIL"))
+    }
+    return any(
+        bucket_avgs.get(f"{gate_name}:PASS") is not None
+        and bucket_avgs.get(f"{gate_name}:FAIL") is not None
+        and bucket_avgs[f"{gate_name}:PASS"] > bucket_avgs[f"{gate_name}:FAIL"]
+        for gate_name in gate_names
+    )
+
+
+def _setup_gate_fail_avg_beats_pass_avg(bucket_avgs: dict[str, float]) -> bool:
+    gate_names = {
+        label.rsplit(":", maxsplit=1)[0]
+        for label in bucket_avgs
+        if label.endswith((":PASS", ":FAIL"))
+    }
+    return any(
+        bucket_avgs.get(f"{gate_name}:PASS") is not None
+        and bucket_avgs.get(f"{gate_name}:FAIL") is not None
+        and bucket_avgs[f"{gate_name}:FAIL"] > bucket_avgs[f"{gate_name}:PASS"]
+        for gate_name in gate_names
+    )
 
 
 def _parse_evidence_bucket_avg(bucket: str) -> tuple[str, float | None]:

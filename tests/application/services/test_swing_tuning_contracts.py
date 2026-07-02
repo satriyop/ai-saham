@@ -352,6 +352,51 @@ def test_tuning_config_diff_draft_deduplicates_target_paths(tmp_path):
     )
 
 
+def test_tuning_config_diff_draft_can_loosen_setup_thresholds(tmp_path):
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    (config_dir / "swing_setups.yaml").write_text(
+        "setups:\n"
+        "  foreign-bounce:\n"
+        "    gates:\n"
+        "      min_foreign_flow_score: 70\n"
+        "      max_rsi: 60\n"
+        "      required_trend: SIDE\n"
+        "    partial_max_failed_gates: 2\n",
+        encoding="utf-8",
+    )
+    summary = summarize_swing_backtest_attribution(
+        (),
+        tuple(
+            ObservationFixture(
+                forward_return_pct=-2.0 if i < 30 else 5.0,
+                setup_match="MATCH" if i < 30 else "NO_MATCH",
+            )
+            for i in range(60)
+        ),
+    )
+
+    draft = build_tuning_config_diff_draft(summary, config_root=tmp_path)
+    by_path = {item.target_path: item for item in draft.diff_items}
+
+    assert draft.status == "PROPOSED_VALUES_DRY_RUN"
+    assert by_path[
+        "config/swing_setups.yaml:setups.foreign-bounce.gates.min_foreign_flow_score"
+    ].proposed_value == 69
+    assert by_path[
+        "config/swing_setups.yaml:setups.foreign-bounce.gates.max_rsi"
+    ].proposed_value == 61
+    assert by_path[
+        "config/swing_setups.yaml:setups.foreign-bounce.partial_max_failed_gates"
+    ].proposed_value == 3
+    assert by_path[
+        "config/swing_setups.yaml:setups.foreign-bounce.gates.required_trend"
+    ].proposed_value is None
+    assert by_path[
+        "config/swing_setups.yaml:setups.foreign-bounce.gates.min_foreign_flow_score"
+    ].value_selection_policy == "DETERMINISTIC_VALUE_SELECTED"
+
+
 def test_tuning_config_diff_apply_block_rejects_applyable_drafts(tmp_path):
     config_dir = tmp_path / "config"
     config_dir.mkdir()
