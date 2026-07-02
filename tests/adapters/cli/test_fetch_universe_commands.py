@@ -4,8 +4,10 @@ from pathlib import Path
 import yaml
 from typer.testing import CliRunner
 
-from src.adapters.cli.main import app
+import src.application.services.stockbit_session as _session_svc
 import src.infrastructure.browser.stockbit_api_client as _stockbit_api_client
+from src.adapters.cli.main import app
+from src.application.services.stockbit_session import StockbitSession
 
 runner = CliRunner()
 
@@ -16,12 +18,14 @@ def test_universe_create_help():
     assert "Create a custom universe from a Stockbit" in result.stdout
 
 
-class MockBrokerProvider:
-    def __init__(self, *args, **kwargs):
-        pass
-
-    def is_authenticated(self):
-        return True
+def _mock_authenticated_session(monkeypatch):
+    """Patch get_stockbit_session() to return an authenticated session with a fake api_client."""
+    _fake_client = object.__new__(_stockbit_api_client.StockbitApiClient)
+    monkeypatch.setattr(
+        _session_svc, "get_stockbit_session",
+        lambda: StockbitSession(api_client=_fake_client, authenticated=True),
+    )
+    return _fake_client
 
 
 class MockUniverseProvider:
@@ -47,9 +51,8 @@ def test_universe_create_with_subsector(monkeypatch, tmp_path: Path):
     (tmp_path / ".stockbit_profile").mkdir()
     monkeypatch.chdir(tmp_path)
 
-    # Mock provider
-    import src.infrastructure.browser.playwright_stockbit_provider as playwright_stockbit
-    monkeypatch.setattr(playwright_stockbit, "StockbitBrokerProvider", MockBrokerProvider)
+    # Mock Stockbit session
+    _fake_client = _mock_authenticated_session(monkeypatch)
 
     # Mock API call
     def mock_api_get(self, url: str, params=None):
@@ -101,9 +104,8 @@ def test_universe_create_sector_level(monkeypatch, tmp_path: Path):
     (tmp_path / ".stockbit_profile").mkdir()
     monkeypatch.chdir(tmp_path)
 
-    # Mock provider
-    import src.infrastructure.browser.playwright_stockbit_provider as playwright_stockbit
-    monkeypatch.setattr(playwright_stockbit, "StockbitBrokerProvider", MockBrokerProvider)
+    # Mock Stockbit session
+    _fake_client = _mock_authenticated_session(monkeypatch)
 
     # Mock API calls and capture sleep times
     sleep_calls = []
@@ -179,9 +181,8 @@ def test_universe_create_sector_level_fail_fast(monkeypatch, tmp_path: Path):
     (tmp_path / ".stockbit_profile").mkdir()
     monkeypatch.chdir(tmp_path)
 
-    # Mock provider
-    import src.infrastructure.browser.playwright_stockbit_provider as playwright_stockbit
-    monkeypatch.setattr(playwright_stockbit, "StockbitBrokerProvider", MockBrokerProvider)
+    # Mock Stockbit session
+    _fake_client = _mock_authenticated_session(monkeypatch)
 
     # Mock API calls where the second subsector fetch fails
     def mock_api_get(self, url: str, params=None):
@@ -233,10 +234,9 @@ def test_universe_update_handles_custom_universe(monkeypatch, tmp_path: Path):
     (tmp_path / ".stockbit_profile").mkdir()
     monkeypatch.chdir(tmp_path)
 
-    # Mock provider & universe provider
-    import src.infrastructure.browser.playwright_stockbit_provider as playwright_stockbit
+    # Mock Stockbit session & universe provider
     import src.infrastructure.browser.stockbit_universe as stockbit_universe
-    monkeypatch.setattr(playwright_stockbit, "StockbitBrokerProvider", MockBrokerProvider)
+    _fake_client = _mock_authenticated_session(monkeypatch)
     monkeypatch.setattr(stockbit_universe, "StockbitUniverseProvider", MockUniverseProvider)
 
     # Seed an existing custom universe configuration with metadata
@@ -300,9 +300,8 @@ def test_universe_update_all_includes_custom_universes(monkeypatch, tmp_path: Pa
     (tmp_path / ".stockbit_profile").mkdir()
     monkeypatch.chdir(tmp_path)
 
-    import src.infrastructure.browser.playwright_stockbit_provider as playwright_stockbit
     import src.infrastructure.browser.stockbit_universe as stockbit_universe
-    monkeypatch.setattr(playwright_stockbit, "StockbitBrokerProvider", MockBrokerProvider)
+    _fake_client = _mock_authenticated_session(monkeypatch)
     monkeypatch.setattr(stockbit_universe, "StockbitUniverseProvider", MockUniverseProvider)
 
     # Seed an existing custom universe configuration with metadata

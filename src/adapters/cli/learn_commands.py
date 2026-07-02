@@ -99,20 +99,13 @@ def snapshot(
     # (catches IDX holidays where in_window is true but market is closed).
     if not force:
         try:
-            from pathlib import Path as _Path
-
-            from src.infrastructure.browser.stockbit_market_time import (
-                StockbitMarketTimeProvider,
-            )
+            from src.application.services.stockbit_session import get_stockbit_session
+            from src.infrastructure.browser.stockbit_market_time import StockbitMarketTimeProvider
 
             _mstatus = None
-            if _Path(APP_CFG.storage.stockbit_profile_dir).exists():
-                from src.infrastructure.browser.stockbit_api_client import create_stockbit_api_client
-                from src.infrastructure.browser.playwright_stockbit_provider import StockbitBrokerProvider
-
-                _api_client = create_stockbit_api_client()
-                if StockbitBrokerProvider(_api_client).is_authenticated():
-                    _mstatus = StockbitMarketTimeProvider(api_client=_api_client).get_status()
+            _mtime_session = get_stockbit_session()
+            if _mtime_session and _mtime_session.authenticated:
+                _mstatus = StockbitMarketTimeProvider(api_client=_mtime_session.api_client).get_status()
             if _mstatus and _mstatus.source == "stockbit" and not _mstatus.is_pre_open:
                 typer.echo(
                     f"Warning: Stockbit reports session='{_mstatus.session_name}' "
@@ -271,14 +264,9 @@ def track(
         profile_dir=Path(APP_CFG.storage.stockbit_profile_dir), headless=headless
     )
 
-    # Shared api_client — both broker confirm and order book use the same token
-    _shared_api_client = None
-    try:
-        from src.infrastructure.browser.stockbit_api_client import create_stockbit_api_client
-        from src.infrastructure.browser.playwright_stockbit_provider import StockbitBrokerProvider
-        _shared_api_client = create_stockbit_api_client()
-    except Exception:
-        pass
+    # Shared session — both broker confirm and order book use the same token
+    from src.application.services.stockbit_session import get_stockbit_session as _get_learn_session
+    _learn_session = _get_learn_session()
 
     # Optionally wire broker confirmation provider
     running_trade_provider = None
@@ -291,9 +279,9 @@ def track(
                 StockbitRunningTradeProvider,
             )
 
-            if _shared_api_client and StockbitBrokerProvider(_shared_api_client).is_authenticated():
+            if _learn_session and _learn_session.authenticated:
                 running_trade_provider = StockbitRunningTradeProvider(
-                    api_client=_shared_api_client
+                    api_client=_learn_session.api_client
                 )
                 with open(APP_CFG.config_paths.stockbit) as f:
                     stockbit_cfg = yaml.safe_load(f) or {}
@@ -316,8 +304,8 @@ def track(
     try:
         from src.infrastructure.browser.stockbit_order_book import StockbitOrderBookProvider
 
-        if _shared_api_client and StockbitBrokerProvider(_shared_api_client).is_authenticated():
-            order_book_provider = StockbitOrderBookProvider(api_client=_shared_api_client)
+        if _learn_session and _learn_session.authenticated:
+            order_book_provider = StockbitOrderBookProvider(api_client=_learn_session.api_client)
             typer.echo("Order book depth enabled — bid_pressure_ratio + live F.Net per snapshot")
         else:
             typer.echo("Stockbit session not authenticated — order book disabled", err=True)

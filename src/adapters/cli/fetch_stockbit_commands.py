@@ -249,10 +249,14 @@ def test(
         saham fetch stockbit test
         saham fetch stockbit test --ticker BMRI
     """
-    from src.infrastructure.browser.stockbit_api_client import create_stockbit_api_client
+    from src.application.services.stockbit_session import get_stockbit_session
     from src.infrastructure.browser.playwright_stockbit_provider import PlaywrightStockbitProvider
 
-    api_client = create_stockbit_api_client()
+    _test_session = get_stockbit_session()
+    if not _test_session or not _test_session.authenticated:
+        typer.echo("Stockbit session expired. Run `saham fetch stockbit login` to refresh.")
+        raise typer.Exit(1)
+    api_client = _test_session.api_client
     provider = PlaywrightStockbitProvider(api_client=api_client)
 
     # ── Test 1: movers ────────────────────────────────────────────────────
@@ -354,10 +358,14 @@ def fetch_top5(
         saham fetch stockbit fetch-top5
         saham fetch stockbit fetch-top5 --top 10
     """
-    from src.infrastructure.browser.stockbit_api_client import create_stockbit_api_client
+    from src.application.services.stockbit_session import get_stockbit_session
     from src.infrastructure.browser.playwright_stockbit_provider import PlaywrightStockbitProvider
 
-    provider = PlaywrightStockbitProvider(api_client=create_stockbit_api_client())
+    _top5_session = get_stockbit_session()
+    if not _top5_session or not _top5_session.authenticated:
+        typer.echo("Stockbit session expired. Run `saham fetch stockbit login` to refresh.")
+        raise typer.Exit(1)
+    provider = PlaywrightStockbitProvider(api_client=_top5_session.api_client)
 
     typer.echo("")
     typer.echo(f"Fetching top {top} IEV movers + orderbooks...")

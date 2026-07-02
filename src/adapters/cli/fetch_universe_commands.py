@@ -133,26 +133,17 @@ def universe_update(
         except Exception as e:
             typer.echo(f"Warning: could not read {resolved_config}: {e}")
 
-    try:
-        from src.infrastructure.browser.stockbit_api_client import create_stockbit_api_client
-        from src.infrastructure.browser.playwright_stockbit_provider import StockbitBrokerProvider
-        from src.infrastructure.browser.stockbit_universe import (
-            StockbitUniverseProvider,
-        )
-        from src.infrastructure.browser.stockbit_universe import (
-            universe_type as _utype,
-        )
+    from src.application.services.stockbit_session import get_stockbit_session
+    from src.infrastructure.browser.stockbit_universe import StockbitUniverseProvider
+    from src.infrastructure.browser.stockbit_universe import universe_type as _utype
 
-        api_client = create_stockbit_api_client()
-        provider = StockbitBrokerProvider(api_client)
-        if not provider.is_authenticated():
-            typer.echo("Stockbit session expired. Run `saham fetch stockbit login` to refresh.")
-            raise typer.Exit(1)
-
-        universe_prov = StockbitUniverseProvider(api_client=api_client)
-    except ImportError as e:
-        typer.echo(f"Playwright not installed: {e}")
+    _session = get_stockbit_session()
+    if not _session or not _session.authenticated:
+        typer.echo("Stockbit session expired. Run `saham fetch stockbit login` to refresh.")
         raise typer.Exit(1)
+
+    api_client = _session.api_client
+    universe_prov = StockbitUniverseProvider(api_client=api_client)
 
 
 
@@ -340,19 +331,12 @@ def universe_inspect(
         typer.echo("Error: --sector (-s) ID is required when specifying --subsector (-b) ID.", err=True)
         raise typer.Exit(1)
 
-    try:
-        from src.infrastructure.browser.stockbit_api_client import create_stockbit_api_client
-        from src.infrastructure.browser.playwright_stockbit_provider import StockbitBrokerProvider
-        api_client = create_stockbit_api_client()
-        provider = StockbitBrokerProvider(api_client)
-        if not provider.is_authenticated():
-            typer.echo("Session expired. Run `saham fetch stockbit login` to refresh.")
-            raise typer.Exit(1)
-    except ImportError as e:
-        typer.echo(f"Playwright not installed: {e}")
+    from src.application.services.stockbit_session import get_stockbit_session as _gsession
+    _sb_session = _gsession()
+    if not _sb_session or not _sb_session.authenticated:
+        typer.echo("Session expired. Run `saham fetch stockbit login` to refresh.")
         raise typer.Exit(1)
-
-
+    api_client = _sb_session.api_client
 
     if sector_id is None:
         console().print("")
@@ -490,21 +474,12 @@ def universe_create(
     resolved_config = config_path or Path("config/universes.yaml")
     universe_key = name.strip().lower()
 
-    if not _STOCKBIT_PROFILE_DIR.exists():
-        typer.echo("No Stockbit session. Run `saham fetch stockbit login` first.")
+    from src.application.services.stockbit_session import get_stockbit_session as _get_create_session
+    _create_session = _get_create_session()
+    if not _create_session or not _create_session.authenticated:
+        typer.echo("No Stockbit session or session expired. Run `saham fetch stockbit login`.")
         raise typer.Exit(1)
-
-    try:
-        from src.infrastructure.browser.stockbit_api_client import create_stockbit_api_client
-        from src.infrastructure.browser.playwright_stockbit_provider import StockbitBrokerProvider
-        api_client = create_stockbit_api_client()
-        provider = StockbitBrokerProvider(api_client)
-        if not provider.is_authenticated():
-            typer.echo("Session expired. Run `saham fetch stockbit login` to refresh.")
-            raise typer.Exit(1)
-    except ImportError as e:
-        typer.echo(f"Playwright not installed: {e}")
-        raise typer.Exit(1)
+    api_client = _create_session.api_client
 
 
 

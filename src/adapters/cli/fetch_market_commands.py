@@ -352,11 +352,14 @@ def _create_broker_provider(name: str | None):
       1. Playwright session (.stockbit_profile/) — preferred; no token file needed
       2. IDX public API — always available fallback
     """
-    from src.infrastructure.browser.stockbit_api_client import create_stockbit_api_client
+    from src.application.services.stockbit_session import get_stockbit_session
     from src.infrastructure.browser.playwright_stockbit_provider import StockbitBrokerProvider
 
     if name == "stockbit":
-        return StockbitBrokerProvider(create_stockbit_api_client()), "stockbit"
+        session = get_stockbit_session()
+        if session and session.authenticated:
+            return StockbitBrokerProvider(session.api_client), "stockbit"
+        return IdxBrokerDataProvider(), "idx"
     if name == "idx":
         return IdxBrokerDataProvider(), "idx"
     if name is not None:
@@ -366,10 +369,9 @@ def _create_broker_provider(name: str | None):
         )
 
     # Auto-detect
-    if STOCKBIT_PROFILE_DIR.exists():
-        provider = StockbitBrokerProvider(create_stockbit_api_client())
-        if provider.is_authenticated():
-            return provider, "stockbit"
+    session = get_stockbit_session()
+    if session and session.authenticated:
+        return StockbitBrokerProvider(session.api_client), "stockbit"
     return IdxBrokerDataProvider(), "idx"
 
 

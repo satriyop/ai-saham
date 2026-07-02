@@ -54,35 +54,28 @@ def broker_status() -> None:
                + " (public API, no auth required)")
 
     # Stockbit Playwright session provider
-    try:
-        from src.infrastructure.browser.stockbit_api_client import create_stockbit_api_client
-        from src.infrastructure.browser.playwright_stockbit_provider import StockbitBrokerProvider
-        session_provider = StockbitBrokerProvider(create_stockbit_api_client())
-        if session_provider.is_authenticated():
-            marker = _DEFAULT_PROFILE_DIR / ".logged_in_at"
-            age_h: float | None = None
-            if marker.exists():
-                import time as _time
-                try:
-                    age_h = round((_time.time() - float(marker.read_text())) / 3600, 1)
-                except Exception:
-                    pass
-            age_str = f" ({age_h}h old)" if age_h is not None else ""
-            typer.echo(
-                "Stockbit-Session provider: "
-                + typer.style(f"Active{age_str}", fg=typer.colors.GREEN)
-                + " — use --provider stockbit"
-            )
-        else:
-            typer.echo(
-                "Stockbit-Session provider: "
-                + typer.style("No session", fg=typer.colors.YELLOW)
-                + " (run 'saham fetch stockbit login' to set up)"
-            )
-    except ImportError:
+    from src.application.services.stockbit_session import get_stockbit_session
+    _session = get_stockbit_session()
+    if _session and _session.authenticated:
+        marker = _DEFAULT_PROFILE_DIR / ".logged_in_at"
+        age_h: float | None = None
+        if marker.exists():
+            import time as _time
+            try:
+                age_h = round((_time.time() - float(marker.read_text())) / 3600, 1)
+            except Exception:
+                pass
+        age_str = f" ({age_h}h old)" if age_h is not None else ""
         typer.echo(
             "Stockbit-Session provider: "
-            + typer.style("playwright not installed", fg=typer.colors.YELLOW)
+            + typer.style(f"Active{age_str}", fg=typer.colors.GREEN)
+            + " — use --provider stockbit"
+        )
+    else:
+        typer.echo(
+            "Stockbit-Session provider: "
+            + typer.style("No session", fg=typer.colors.YELLOW)
+            + " (run 'saham fetch stockbit login' to set up)"
         )
 
     typer.echo(f"\nDefault provider: {DEFAULT_PROVIDER}")

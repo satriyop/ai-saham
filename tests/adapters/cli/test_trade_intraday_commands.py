@@ -338,11 +338,17 @@ def test_intraday_confirm_open_auto_uses_stockbit_provider_stubs(tmp_path, monke
         def fetch_snapshot(self, ticker: str):
             return None
 
-    import src.infrastructure.browser.playwright_stockbit_provider as playwright_stockbit
+    import src.application.services.stockbit_session as _session_svc
+    import src.infrastructure.browser.stockbit_api_client as _stockbit_api_client
     import src.infrastructure.browser.stockbit_order_book as stockbit_order_book
     import src.infrastructure.browser.stockbit_running_trade as stockbit_running_trade
+    from src.application.services.stockbit_session import StockbitSession
 
-    monkeypatch.setattr(playwright_stockbit, "StockbitBrokerProvider", FakeBrokerProvider)
+    _fake_client = object.__new__(_stockbit_api_client.StockbitApiClient)
+    monkeypatch.setattr(
+        _session_svc, "get_stockbit_session",
+        lambda: StockbitSession(api_client=_fake_client, authenticated=True),
+    )
     monkeypatch.setattr(
         stockbit_running_trade,
         "StockbitRunningTradeProvider",
