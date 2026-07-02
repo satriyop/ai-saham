@@ -361,6 +361,7 @@ def _display_tuning_config_diff(response: SwingBacktestResponse) -> None:
     item_table.add_column("Proposed", justify="right")
     item_table.add_column("Policy", overflow="fold")
     item_table.add_column("Meaning")
+    item_table.add_column("Trace")
     item_table.add_column("Rationale")
     for item in draft.diff_items[:8]:
         item_table.add_row(
@@ -370,10 +371,12 @@ def _display_tuning_config_diff(response: SwingBacktestResponse) -> None:
             _fmt_config_value(item.proposed_value),
             item.value_selection_policy,
             item.interpretation,
+            _fmt_evidence_snapshot(item.evidence_snapshot),
             item.rationale,
         )
     if not draft.diff_items:
         item_table.add_row(
+            "N/A",
             "N/A",
             "N/A",
             "N/A",
@@ -579,3 +582,17 @@ def _fmt_count_map(counts: object) -> str:
     if not isinstance(counts, dict) or not counts:
         return "N/A"
     return ", ".join(f"{key}={value}" for key, value in sorted(counts.items()))
+
+
+def _fmt_evidence_snapshot(snapshot) -> str:
+    if snapshot is None:
+        return "N/A"
+    spread = (
+        "N/A"
+        if snapshot.return_spread_pct is None
+        else f"{snapshot.return_spread_pct:+.2f}%"
+    )
+    return (
+        f"n={snapshot.sample_count}, spread={spread}, "
+        f"strength={snapshot.evidence_strength}, priority={snapshot.priority}"
+    )

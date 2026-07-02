@@ -169,6 +169,42 @@ class TuningProposalDraft:
 
 
 @dataclass(frozen=True)
+class TuningEvidenceSnapshot:
+    """Compact attribution evidence behind one tuning config diff row."""
+
+    sample_count: int
+    return_spread_pct: float | None
+    priority: int
+    evidence_strength: str
+    proposed_action: str
+    evidence_buckets: tuple[str, ...]
+
+    @classmethod
+    def from_candidate(
+        cls,
+        candidate: TuningProposalCandidate,
+    ) -> TuningEvidenceSnapshot:
+        return cls(
+            sample_count=candidate.evidence_sample_count,
+            return_spread_pct=candidate.evidence_return_spread_pct,
+            priority=candidate.priority,
+            evidence_strength=candidate.evidence_strength,
+            proposed_action=candidate.proposed_action,
+            evidence_buckets=candidate.evidence_buckets,
+        )
+
+    def to_dict(self) -> dict:
+        return {
+            "sample_count": self.sample_count,
+            "return_spread_pct": self.return_spread_pct,
+            "priority": self.priority,
+            "evidence_strength": self.evidence_strength,
+            "proposed_action": self.proposed_action,
+            "evidence_buckets": list(self.evidence_buckets),
+        }
+
+
+@dataclass(frozen=True)
 class TuningConfigDiffItem:
     """Dry-run current/proposed value row for human review."""
 
@@ -182,6 +218,7 @@ class TuningConfigDiffItem:
     value_selection_policy: str
     parsed_target_path: TuningConfigPath | None = None
     evidence_dimensions: tuple[str, ...] = ()
+    evidence_snapshot: TuningEvidenceSnapshot | None = None
 
     @property
     def interpretation(self) -> str:
@@ -208,6 +245,11 @@ class TuningConfigDiffItem:
             "status": self.status,
             "value_selection_policy": self.value_selection_policy,
             "interpretation": self.interpretation,
+            "evidence_snapshot": (
+                self.evidence_snapshot.to_dict()
+                if self.evidence_snapshot is not None
+                else None
+            ),
         }
 
 
@@ -529,6 +571,9 @@ def build_tuning_config_diff_draft(
                         confidence=suggestion.confidence,
                         status=suggestion.status,
                         value_selection_policy=suggestion.value_selection_policy,
+                        evidence_snapshot=TuningEvidenceSnapshot.from_candidate(
+                            candidate
+                        ),
                     )
                 )
 
@@ -639,6 +684,7 @@ def _dedupe_tuning_diff_items(
                 ),
                 evidence_dimension=selected.evidence_dimension,
                 evidence_dimensions=evidence_dimensions,
+                evidence_snapshot=selected.evidence_snapshot,
                 confidence=selected.confidence,
                 status=selected.status,
                 value_selection_policy=selected.value_selection_policy,

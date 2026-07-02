@@ -247,6 +247,14 @@ def test_tuning_config_diff_draft_explains_non_value_selected_paths():
         "read-only current value; evidence below high",
         "read-only current value; non-numeric config",
     }
+    assert all(
+        item.to_dict()["evidence_snapshot"]["sample_count"] == 30
+        for item in draft.diff_items
+    )
+    assert all(
+        item.to_dict()["evidence_snapshot"]["evidence_strength"]
+        for item in draft.diff_items
+    )
     assert all(item.current_value is not None for item in draft.diff_items)
     assert all(item.proposed_value is None for item in draft.diff_items)
     assert all(item.parsed_target_path is not None for item in draft.diff_items)
@@ -326,6 +334,22 @@ def test_tuning_config_diff_draft_selects_guarded_numeric_values(tmp_path):
     assert {
         item.to_dict()["interpretation"] for item in threshold_items.values()
     } == {"proposed guarded value"}
+    assert {
+        item.to_dict()["evidence_snapshot"]["sample_count"]
+        for item in threshold_items.values()
+    } == {60}
+    assert {
+        item.to_dict()["evidence_snapshot"]["evidence_strength"]
+        for item in threshold_items.values()
+    } == {"HIGH"}
+    assert {
+        item.to_dict()["evidence_snapshot"]["proposed_action"]
+        for item in threshold_items.values()
+    } == {"review_threshold_or_weight_no_yaml_diff"}
+    assert all(
+        item.to_dict()["evidence_snapshot"]["evidence_buckets"]
+        for item in threshold_items.values()
+    )
     summary_dict = draft.to_dict()["summary"]
     assert summary_dict["resolved_count"] == len(draft.diff_items)
     assert summary_dict["proposed_count"] >= len(threshold_items)
