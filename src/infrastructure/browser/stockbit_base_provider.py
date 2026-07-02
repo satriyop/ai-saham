@@ -20,6 +20,11 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
 
+# One live connection per resolved db_path, shared across all providers in a process.
+# CLI processes are short-lived; connections close on exit. Tests use unique tmp_path dirs
+# so each test gets its own path key and there is no cross-test state.
+_conn_registry: dict[str, sqlite3.Connection] = {}
+
 
 class StockbitCachingProvider:
     """Base for Stockbit providers that pair live API fetching with a SQLite cache.
@@ -39,9 +44,13 @@ class StockbitCachingProvider:
         self._ensure_schema()
 
     def _get_conn(self) -> sqlite3.Connection:
-        self._db_path.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(str(self._db_path))
-        conn.row_factory = sqlite3.Row
+        key = str(self._db_path.resolve())
+        conn = _conn_registry.get(key)
+        if conn is None:
+            self._db_path.parent.mkdir(parents=True, exist_ok=True)
+            conn = sqlite3.connect(str(self._db_path), check_same_thread=False)
+            conn.row_factory = sqlite3.Row
+            _conn_registry[key] = conn
         return conn
 
     def _ensure_schema(self) -> None:
