@@ -17,6 +17,15 @@ import yaml
 _SETUP_GATES_WILDCARD_PATH = "setups.*.gates"
 _SETUP_PARTIAL_MAX_FAILED_GATES_WILDCARD_PATH = "setups.*.partial_max_failed_gates"
 
+__all__ = (
+    "TuningConfigPath",
+    "TuningConfigValueResolution",
+    "expand_tuning_config_paths",
+    "parse_tuning_config_path",
+    "resolve_tuning_config_value",
+    "validate_tuning_target_paths",
+)
+
 
 @dataclass(frozen=True)
 class TuningConfigPath:
