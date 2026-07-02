@@ -335,6 +335,19 @@ def test_tuning_config_diff_draft_selects_guarded_numeric_values(tmp_path):
         item.to_dict()["interpretation"] for item in threshold_items.values()
     } == {"proposed guarded value"}
     assert {
+        item.to_dict()["target_classification"]["target_family"]
+        for item in threshold_items.values()
+    } == {"signal_engine"}
+    assert {
+        item.to_dict()["target_classification"]["target_kind"]
+        for item in threshold_items.values()
+    } == {"classification"}
+    assert threshold_items[
+        "signal_engine.classification.strong_min_score"
+    ].to_dict()["target_classification"]["target_parameter"] == (
+        "strong_min_score"
+    )
+    assert {
         item.to_dict()["evidence_snapshot"]["sample_count"]
         for item in threshold_items.values()
     } == {60}
@@ -452,6 +465,20 @@ def test_tuning_config_diff_draft_can_loosen_setup_thresholds(tmp_path):
     assert by_path[
         "config/swing_setups.yaml:setups.foreign-bounce.gates.min_foreign_flow_score"
     ].value_selection_policy == "DETERMINISTIC_VALUE_SELECTED"
+    assert by_path[
+        "config/swing_setups.yaml:setups.foreign-bounce.gates.min_foreign_flow_score"
+    ].to_dict()["target_classification"] == {
+        "target_family": "swing_setup",
+        "target_kind": "gate",
+        "target_parameter": "min_foreign_flow_score",
+    }
+    assert by_path[
+        "config/swing_setups.yaml:setups.foreign-bounce.partial_max_failed_gates"
+    ].to_dict()["target_classification"] == {
+        "target_family": "swing_setup",
+        "target_kind": "threshold",
+        "target_parameter": "partial_max_failed_gates",
+    }
 
 
 def test_tuning_config_diff_apply_block_rejects_applyable_drafts(tmp_path):

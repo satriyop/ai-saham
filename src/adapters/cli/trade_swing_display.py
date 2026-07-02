@@ -356,6 +356,7 @@ def _display_tuning_config_diff(response: SwingBacktestResponse) -> None:
 
     item_table = compact_table()
     item_table.add_column("Target", style="bold cyan")
+    item_table.add_column("Class")
     item_table.add_column("Evidence")
     item_table.add_column("Current", justify="right")
     item_table.add_column("Proposed", justify="right")
@@ -366,6 +367,7 @@ def _display_tuning_config_diff(response: SwingBacktestResponse) -> None:
     for item in draft.diff_items[:8]:
         item_table.add_row(
             _fmt_target_path(item),
+            _fmt_target_classification(item.target_classification),
             _fmt_evidence_dimensions(item),
             _fmt_config_value(item.current_value),
             _fmt_config_value(item.proposed_value),
@@ -376,6 +378,7 @@ def _display_tuning_config_diff(response: SwingBacktestResponse) -> None:
         )
     if not draft.diff_items:
         item_table.add_row(
+            "N/A",
             "N/A",
             "N/A",
             "N/A",
@@ -595,4 +598,12 @@ def _fmt_evidence_snapshot(snapshot) -> str:
     return (
         f"n={snapshot.sample_count}, spread={spread}, "
         f"strength={snapshot.evidence_strength}, priority={snapshot.priority}"
+    )
+
+
+def _fmt_target_classification(classification) -> str:
+    return (
+        f"{classification.target_family}/"
+        f"{classification.target_kind}/"
+        f"{classification.target_parameter}"
     )
