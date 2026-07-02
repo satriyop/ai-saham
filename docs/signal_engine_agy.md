@@ -247,7 +247,36 @@ Score = Buy_Ratio_Score + Price_Target_Upside_Score
 
 ---
 
-## 10. Architectural Perspective: Composite of Composites
+## 10. Deep-Dive: Forward Valuation Factor
+
+### Concept & Market Microstructure
+The Forward Valuation factor assesses whether a security is cheap or expensive relative to its expected earnings per share (EPS) over the next 12 months. It relies on the derived **Forward P/E Ratio**:
+```
+Forward P/E = Current Price / Projected next-year EPS
+```
+* If the projected EPS is negative (unprofitable) or the price is invalid, the ratio is uncomputable (falls back to a neutral 50.0 points).
+
+### Non-Linear Score Mapping
+The Forward P/E maps to a score of `0.0` to `100.0` points through five distinct pricing tiers:
+
+1. **Tier 1: Cheap (P/E <= 10.0):**
+   * Flat **95.0 points**.
+2. **Tier 2: Cheap-to-Fair (P/E > 10.0 and <= 15.0):**
+   * Linearly interpolated from `95.0` points down to `75.0` points.
+3. **Tier 3: Fair-to-Moderate (P/E > 15.0 and <= 20.0):**
+   * Linearly interpolated from `75.0` points down to `50.0` points.
+4. **Tier 4: Moderate-to-Expensive (P/E > 20.0 and <= 30.0):**
+   * Linearly interpolated from `50.0` points down to `25.0` points.
+5. **Tier 5: Highly Expensive (P/E > 30.0):**
+   * Decays exponentially to penalize overvalued securities:
+   * Formula: `Score = 25.0 * exp(-0.05 * (Forward_PE - 30.0))`
+
+### Smooth Penalty Design
+This tiered decay ensures valuation does not act as a harsh binary switch (e.g. "reject if P/E > 15"). A slightly expensive stock gets a minor point deduction, while a highly overvalued stock (e.g., Forward P/E of 50+) gets heavily penalized with a low score contribution.
+
+---
+
+## 11. Architectural Perspective: Composite of Composites
 
 ### Vetting the Aggregation Pattern
 The Foreign Flow Quality factor is structurally a **composite of composites** (a double-level aggregation). 
