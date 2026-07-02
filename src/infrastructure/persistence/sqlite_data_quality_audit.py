@@ -10,7 +10,10 @@ import sqlite3
 from datetime import date
 from pathlib import Path
 
-from src.domain.value_objects.benchmark_symbol import CANONICAL_BENCHMARK_TICKER
+from src.domain.value_objects.benchmark_symbol import (
+    CANONICAL_BENCHMARK_TICKER,
+    YAHOO_BENCHMARK_TICKER,
+)
 from src.application.use_case.data_quality_audit_use_case import (
     DataQualityRawSnapshot,
     DataQualityTableSnapshot,
@@ -50,7 +53,12 @@ class SQLiteDataQualityAuditReader:
             )
             if expected is None:
                 # Compatibility for databases not yet migrated to canonical IHSG.
-                expected = _latest_date(conn, "candles", "date", ticker="^JKSE")
+                expected = _latest_date(
+                    conn,
+                    "candles",
+                    "date",
+                    ticker=YAHOO_BENCHMARK_TICKER,
+                )
             if expected is None:
                 expected = _latest_date(conn, "candles", "date")
 

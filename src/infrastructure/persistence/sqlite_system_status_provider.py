@@ -13,6 +13,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import List
 
+from src.domain.value_objects.benchmark_symbol import YAHOO_BENCHMARK_TICKER
 from src.domain.ports.system_status_provider import (
     ProviderStatusDto,
     SystemStatusProvider,
@@ -181,14 +182,19 @@ class SQLiteSystemStatusProvider(SystemStatusProvider):
 
         start = time.time()
         try:
-            hist = yf.download("^JKSE", period="5d", progress=False, auto_adjust=True)
+            hist = yf.download(
+                YAHOO_BENCHMARK_TICKER,
+                period="5d",
+                progress=False,
+                auto_adjust=True,
+            )
             elapsed = round(time.time() - start, 1)
 
             if hist is not None and not hist.empty:
                 return ProviderStatusDto(
                     name="Yahoo Finance",
                     ok=True,
-                    label=f"{len(hist)} days (^JKSE)",
+                    label=f"{len(hist)} days ({YAHOO_BENCHMARK_TICKER})",
                     ms=elapsed,
                 )
             return ProviderStatusDto(
