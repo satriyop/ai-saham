@@ -1012,6 +1012,42 @@ def test_swing_tune_save_writes_review_journal(monkeypatch, tmp_path):
     assert records[0]["apply"]["supported"] is False
 
 
+def test_swing_tune_export_patch_writes_review_only_patch(monkeypatch, tmp_path):
+    _patch_swing_backtest_command(monkeypatch)
+    patch_path = tmp_path / "swing_tuning_patch.json"
+
+    result = runner.invoke(
+        app,
+        [
+            "trade",
+            "tune-swing",
+            "BBCA",
+            "--format",
+            "json",
+            "--start",
+            "2026-01-01",
+            "--end",
+            "2026-01-31",
+            "--export-patch",
+            str(patch_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    patch_payload = json.loads(patch_path.read_text())
+    assert payload["patch_export"]["path"] == str(patch_path)
+    assert payload["patch_export"]["item_count"] == patch_payload["item_count"]
+    assert patch_payload["artifact_type"] == "swing_tuning_patch_review"
+    assert patch_payload["apply"]["supported"] is False
+    assert patch_payload["patch_items"]
+    assert all(
+        item["proposed_value"] is not None
+        for item in patch_payload["patch_items"]
+    )
+    assert patch_payload["source_review"]["setup"] == payload["setup"]
+
+
 def test_swing_tuning_review_history_json_reads_saved_runs(tmp_path):
     journal_path = tmp_path / "swing_tuning_reviews.jsonl"
     journal_path.write_text(

@@ -924,6 +924,7 @@ remains unset.
 saham trade tune-swing --universe idx80 --setup foreign-bounce
 saham trade tune-swing --universe lq45 --with-regime --format json
 saham trade tune-swing --universe idx80 --save
+saham trade tune-swing --universe idx80 --export-patch journals/swing_tuning_patch.json
 saham trade review-tuning-swing
 saham trade review-tuning-swing --compare-latest
 ```
@@ -933,10 +934,12 @@ readiness, proposal-target, and guarded config-diff review artifacts in one
 place. This command is review-only: it does not call AI, does not apply YAML
 changes, and does not mutate configuration. Use `--save` to append the review
 artifact to `journals/swing_tuning_reviews.jsonl`; use `--journal PATH` to
-override that path for one run. Use `saham trade review-tuning-swing` to inspect
-saved review runs without replaying the backtest. Add `--compare-latest` to
-compare the newest saved review against the previous saved review, including
-metric deltas and proposed target-path changes.
+override that path for one run. Use `--export-patch PATH` to write only the
+guarded proposed-value rows to a review-only JSON artifact; it still does not
+edit YAML. Use `saham trade review-tuning-swing` to inspect saved review runs
+without replaying the backtest. Add `--compare-latest` to compare the newest
+saved review against the previous saved review, including metric deltas and
+proposed target-path changes.
 
 Attribution dimensions map to these primary tuning files:
 

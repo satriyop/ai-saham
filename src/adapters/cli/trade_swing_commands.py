@@ -262,6 +262,59 @@ def _swing_tuning_payload(response: SwingBacktestResponse) -> dict:
     }
 
 
+def _swing_tuning_patch_payload(review_payload: dict) -> dict:
+    tuning_config_diff = review_payload.get("tuning_config_diff") or {}
+    diff_items = tuning_config_diff.get("diff_items") or []
+    patch_items = [
+        {
+            "target_path": item.get("target_path"),
+            "parsed_target_path": item.get("parsed_target_path"),
+            "current_value": item.get("current_value"),
+            "proposed_value": item.get("proposed_value"),
+            "rationale": item.get("rationale"),
+            "confidence": item.get("confidence"),
+            "status": item.get("status"),
+            "value_selection_policy": item.get("value_selection_policy"),
+            "target_classification": item.get("target_classification"),
+            "evidence_snapshot": item.get("evidence_snapshot"),
+            "evidence_dimensions": item.get("evidence_dimensions"),
+        }
+        for item in diff_items
+        if item.get("proposed_value") is not None
+    ]
+    return {
+        "schema_version": 1,
+        "artifact_type": "swing_tuning_patch_review",
+        "intent": "review_only_candidate_config_patch_no_apply",
+        "source_review": {
+            "setup": review_payload.get("setup"),
+            "start_date": review_payload.get("start_date"),
+            "end_date": review_payload.get("end_date"),
+            "sample": review_payload.get("sample"),
+            "backtest_summary": review_payload.get("backtest_summary"),
+            "tuning_config_diff_status": tuning_config_diff.get("status"),
+            "tuning_config_diff_summary": tuning_config_diff.get("summary"),
+        },
+        "patch_items": patch_items,
+        "item_count": len(patch_items),
+        "apply": {
+            "supported": False,
+            "reason": "Patch export is review-only and must not mutate YAML.",
+        },
+    }
+
+
+def _export_swing_tuning_patch(review_payload: dict, path: Path) -> dict:
+    patch_payload = _swing_tuning_patch_payload(review_payload)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(patch_payload, indent=2, default=str) + "\n")
+    return {
+        "path": str(path),
+        "item_count": patch_payload["item_count"],
+        "artifact_type": patch_payload["artifact_type"],
+    }
+
+
 # ─── swing backtest command ──────────────────────────────────────────────────
 
 def swing_backtest(
@@ -525,6 +578,13 @@ def swing_tune(
         Optional[Path],
         typer.Option("--journal", help="Override swing tuning review journal path"),
     ] = None,
+    export_patch: Annotated[
+        Optional[Path],
+        typer.Option(
+            "--export-patch",
+            help="Write proposed config values to a review-only JSON patch artifact",
+        ),
+    ] = None,
 ) -> None:
     """
     Build deterministic swing tuning review from walk-forward attribution.
@@ -563,6 +623,11 @@ def swing_tune(
             **save_result.to_dict(),
             "path": str(journal_path),
         }
+    if export_patch is not None:
+        payload["patch_export"] = _export_swing_tuning_patch(
+            payload,
+            export_patch,
+        )
 
     if output_format == "json":
         typer.echo(json.dumps(payload, indent=2, default=str))
@@ -581,6 +646,12 @@ def swing_tune(
         typer.echo(
             f"Saved swing tuning review -> {persistence['path']} "
             f"(records={persistence['record_count']})"
+        )
+    if export_patch is not None:
+        patch_export = payload["patch_export"]
+        typer.echo(
+            f"Exported swing tuning patch -> {patch_export['path']} "
+            f"(items={patch_export['item_count']})"
         )
 
 
