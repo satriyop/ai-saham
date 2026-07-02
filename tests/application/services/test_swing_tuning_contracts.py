@@ -226,11 +226,11 @@ def test_tuning_config_diff_draft_explains_non_value_selected_paths():
     assert {
         item.value_selection_policy
         for item in draft.diff_items
-    } == {"NON_NUMERIC_CURRENT_VALUE"}
+    } == {"INSUFFICIENT_EVIDENCE", "NON_NUMERIC_CURRENT_VALUE"}
     assert {
         item.to_dict()["value_selection_policy"]
         for item in draft.diff_items
-    } == {"NON_NUMERIC_CURRENT_VALUE"}
+    } == {"INSUFFICIENT_EVIDENCE", "NON_NUMERIC_CURRENT_VALUE"}
     assert all(item.current_value is not None for item in draft.diff_items)
     assert all(item.proposed_value is None for item in draft.diff_items)
     assert all(item.parsed_target_path is not None for item in draft.diff_items)
@@ -279,6 +279,7 @@ def test_tuning_config_diff_draft_selects_guarded_numeric_values(tmp_path):
         item.parsed_target_path.document_path: item
         for item in draft.diff_items
         if item.parsed_target_path is not None
+        and item.evidence_dimension == "signal_strength"
         and item.parsed_target_path.document_path.startswith(
             "signal_engine.classification."
         )
@@ -437,3 +438,21 @@ def test_validate_tuning_target_paths_covers_all_current_targets():
         for target in summary.tuning_targets
         for yaml_path in target.yaml_paths
     }
+
+
+def test_tuning_targets_include_concrete_signal_risk_and_market_paths():
+    summary = summarize_swing_backtest_attribution(())
+    paths = {
+        yaml_path
+        for target in summary.tuning_targets
+        for yaml_path in target.yaml_paths
+    }
+
+    assert {
+        "config/signal_engine.yaml:signal_engine.classification.strong_min_score",
+        "config/signal_engine.yaml:signal_engine.factors.foreign_flow_quality.weight",
+        "config/risk_engine.yaml:risk_engine.gates.liquidity.market_cap_floor_idr",
+        "config/risk_engine.yaml:risk_engine.gates.free_float.min_free_float_pct",
+        "config/market_context_engine.yaml:market_context_engine.regime_thresholds.risk_on_min_score",
+        "config/swing_targets.yaml:setup_targets.risk_off.stop_loss_pct",
+    } <= paths

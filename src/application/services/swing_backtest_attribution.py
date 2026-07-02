@@ -169,6 +169,8 @@ DEFAULT_TUNING_TARGETS: tuple[TuningTarget, ...] = (
         config_family="signal",
         yaml_paths=(
             "config/signal_engine.yaml:signal_engine.classification",
+            "config/signal_engine.yaml:signal_engine.classification.strong_min_score",
+            "config/signal_engine.yaml:signal_engine.classification.moderate_min_score",
             "config/signal_engine.yaml:signal_engine.factors",
             "config/risk_engine.yaml:risk_engine.gates",
         ),
@@ -194,7 +196,11 @@ DEFAULT_TUNING_TARGETS: tuple[TuningTarget, ...] = (
         config_family="signal",
         yaml_paths=(
             "config/signal_engine.yaml:signal_engine.classification",
+            "config/signal_engine.yaml:signal_engine.classification.strong_min_score",
+            "config/signal_engine.yaml:signal_engine.classification.moderate_min_score",
             "config/swing_backtest.yaml:swing_backtest.attribution.score_buckets",
+            "config/swing_backtest.yaml:swing_backtest.attribution.score_buckets.high_min_score",
+            "config/swing_backtest.yaml:swing_backtest.attribution.score_buckets.mid_min_score",
         ),
         allowed_use="Tune score thresholds; attribution buckets are reporting-only.",
     ),
@@ -206,6 +212,12 @@ DEFAULT_TUNING_TARGETS: tuple[TuningTarget, ...] = (
         config_family="signal",
         yaml_paths=(
             "config/signal_engine.yaml:signal_engine.factors",
+            "config/signal_engine.yaml:signal_engine.factors.bandar_intensity.weight",
+            "config/signal_engine.yaml:signal_engine.factors.foreign_flow_quality.weight",
+            "config/signal_engine.yaml:signal_engine.factors.insider_activity.weight",
+            "config/signal_engine.yaml:signal_engine.factors.seasonality_edge.weight",
+            "config/signal_engine.yaml:signal_engine.factors.analyst_consensus.weight",
+            "config/signal_engine.yaml:signal_engine.factors.forward_valuation.weight",
             "config/signal_engine.yaml:signal_engine.scoring",
         ),
         allowed_use="Tune signal factor weights and factor-internal scoring thresholds.",
@@ -216,7 +228,13 @@ DEFAULT_TUNING_TARGETS: tuple[TuningTarget, ...] = (
         source_field="SwingBacktestTrade.risk_status",
         meaning="RiskEngine OPEN/BLOCKED status recorded on executed portfolio trades.",
         config_family="risk",
-        yaml_paths=("config/risk_engine.yaml:risk_engine.gates",),
+        yaml_paths=(
+            "config/risk_engine.yaml:risk_engine.gates",
+            "config/risk_engine.yaml:risk_engine.gates.fundamental.piotroski_min",
+            "config/risk_engine.yaml:risk_engine.gates.liquidity.market_cap_floor_idr",
+            "config/risk_engine.yaml:risk_engine.gates.liquidity.median_tx_floor_idr",
+            "config/risk_engine.yaml:risk_engine.gates.free_float.min_free_float_pct",
+        ),
         allowed_use="Tune risk gate policy only with candidate stats as a bias check.",
         warning="Completed trades can underrepresent blocked/rejected candidates.",
     ),
@@ -226,7 +244,13 @@ DEFAULT_TUNING_TARGETS: tuple[TuningTarget, ...] = (
         source_field="SwingBacktestTrade.risk_gate",
         meaning="Risk gate label recorded on executed portfolio trades.",
         config_family="risk",
-        yaml_paths=("config/risk_engine.yaml:risk_engine.gates",),
+        yaml_paths=(
+            "config/risk_engine.yaml:risk_engine.gates",
+            "config/risk_engine.yaml:risk_engine.gates.fundamental.piotroski_min",
+            "config/risk_engine.yaml:risk_engine.gates.liquidity.market_cap_floor_idr",
+            "config/risk_engine.yaml:risk_engine.gates.liquidity.median_tx_floor_idr",
+            "config/risk_engine.yaml:risk_engine.gates.free_float.min_free_float_pct",
+        ),
         allowed_use="Tune gate thresholds only with candidate stats as a bias check.",
         warning="Completed trades can underrepresent blocked/rejected candidates.",
     ),
@@ -247,7 +271,20 @@ DEFAULT_TUNING_TARGETS: tuple[TuningTarget, ...] = (
         config_family="market_context",
         yaml_paths=(
             "config/market_context_engine.yaml:market_context_engine",
+            "config/market_context_engine.yaml:market_context_engine.regime_thresholds.risk_on_min_score",
+            "config/market_context_engine.yaml:market_context_engine.regime_thresholds.risk_off_max_score",
+            "config/market_context_engine.yaml:market_context_engine.regime_thresholds.volatile_vix_override",
+            "config/market_context_engine.yaml:market_context_engine.regime_effects.RISK_OFF.signal_multiplier",
+            "config/market_context_engine.yaml:market_context_engine.regime_effects.VOLATILE.signal_multiplier",
             "config/swing_targets.yaml:setup_targets",
+            "config/swing_targets.yaml:setup_targets.risk_on.take_profit_pct",
+            "config/swing_targets.yaml:setup_targets.risk_on.stop_loss_pct",
+            "config/swing_targets.yaml:setup_targets.neutral.take_profit_pct",
+            "config/swing_targets.yaml:setup_targets.neutral.stop_loss_pct",
+            "config/swing_targets.yaml:setup_targets.risk_off.take_profit_pct",
+            "config/swing_targets.yaml:setup_targets.risk_off.stop_loss_pct",
+            "config/swing_targets.yaml:setup_targets.volatile.take_profit_pct",
+            "config/swing_targets.yaml:setup_targets.volatile.stop_loss_pct",
         ),
         allowed_use="Tune regime context and regime-adaptive exits from executed trades.",
     ),
@@ -269,7 +306,11 @@ DEFAULT_TUNING_TARGETS: tuple[TuningTarget, ...] = (
         source_field="SwingBacktestCandidateObservation.signal_strength",
         meaning="Signal strength on every screened candidate with forward data.",
         config_family="signal",
-        yaml_paths=("config/signal_engine.yaml:signal_engine.classification",),
+        yaml_paths=(
+            "config/signal_engine.yaml:signal_engine.classification",
+            "config/signal_engine.yaml:signal_engine.classification.strong_min_score",
+            "config/signal_engine.yaml:signal_engine.classification.moderate_min_score",
+        ),
         allowed_use="Bias check for signal thresholds before validating on completed trades.",
     ),
     TuningTarget(
@@ -280,7 +321,11 @@ DEFAULT_TUNING_TARGETS: tuple[TuningTarget, ...] = (
         config_family="signal",
         yaml_paths=(
             "config/signal_engine.yaml:signal_engine.classification",
+            "config/signal_engine.yaml:signal_engine.classification.strong_min_score",
+            "config/signal_engine.yaml:signal_engine.classification.moderate_min_score",
             "config/swing_backtest.yaml:swing_backtest.attribution.score_buckets",
+            "config/swing_backtest.yaml:swing_backtest.attribution.score_buckets.high_min_score",
+            "config/swing_backtest.yaml:swing_backtest.attribution.score_buckets.mid_min_score",
         ),
         allowed_use="Bias check for signal score thresholds; buckets are reporting-only.",
     ),
@@ -292,6 +337,12 @@ DEFAULT_TUNING_TARGETS: tuple[TuningTarget, ...] = (
         config_family="signal",
         yaml_paths=(
             "config/signal_engine.yaml:signal_engine.factors",
+            "config/signal_engine.yaml:signal_engine.factors.bandar_intensity.weight",
+            "config/signal_engine.yaml:signal_engine.factors.foreign_flow_quality.weight",
+            "config/signal_engine.yaml:signal_engine.factors.insider_activity.weight",
+            "config/signal_engine.yaml:signal_engine.factors.seasonality_edge.weight",
+            "config/signal_engine.yaml:signal_engine.factors.analyst_consensus.weight",
+            "config/signal_engine.yaml:signal_engine.factors.forward_valuation.weight",
             "config/signal_engine.yaml:signal_engine.scoring",
         ),
         allowed_use="Bias check for signal factor tuning before completed-trade validation.",
@@ -302,7 +353,13 @@ DEFAULT_TUNING_TARGETS: tuple[TuningTarget, ...] = (
         source_field="SwingBacktestCandidateObservation.risk_status",
         meaning="RiskEngine OPEN/BLOCKED status on every screened candidate with forward data.",
         config_family="risk",
-        yaml_paths=("config/risk_engine.yaml:risk_engine.gates",),
+        yaml_paths=(
+            "config/risk_engine.yaml:risk_engine.gates",
+            "config/risk_engine.yaml:risk_engine.gates.fundamental.piotroski_min",
+            "config/risk_engine.yaml:risk_engine.gates.liquidity.market_cap_floor_idr",
+            "config/risk_engine.yaml:risk_engine.gates.liquidity.median_tx_floor_idr",
+            "config/risk_engine.yaml:risk_engine.gates.free_float.min_free_float_pct",
+        ),
         allowed_use="Primary evidence for risk gate tuning; not an executed trade result.",
     ),
     TuningTarget(
@@ -311,7 +368,13 @@ DEFAULT_TUNING_TARGETS: tuple[TuningTarget, ...] = (
         source_field="SwingBacktestCandidateObservation.risk_gate",
         meaning="Risk gate label on every screened candidate with forward data.",
         config_family="risk",
-        yaml_paths=("config/risk_engine.yaml:risk_engine.gates",),
+        yaml_paths=(
+            "config/risk_engine.yaml:risk_engine.gates",
+            "config/risk_engine.yaml:risk_engine.gates.fundamental.piotroski_min",
+            "config/risk_engine.yaml:risk_engine.gates.liquidity.market_cap_floor_idr",
+            "config/risk_engine.yaml:risk_engine.gates.liquidity.median_tx_floor_idr",
+            "config/risk_engine.yaml:risk_engine.gates.free_float.min_free_float_pct",
+        ),
         allowed_use="Primary evidence for risk gate threshold tuning.",
     ),
     TuningTarget(
@@ -322,7 +385,13 @@ DEFAULT_TUNING_TARGETS: tuple[TuningTarget, ...] = (
         config_family="signal_and_risk",
         yaml_paths=(
             "config/signal_engine.yaml:signal_engine",
+            "config/signal_engine.yaml:signal_engine.classification.strong_min_score",
+            "config/signal_engine.yaml:signal_engine.classification.moderate_min_score",
             "config/risk_engine.yaml:risk_engine",
+            "config/risk_engine.yaml:risk_engine.gates.fundamental.piotroski_min",
+            "config/risk_engine.yaml:risk_engine.gates.liquidity.market_cap_floor_idr",
+            "config/risk_engine.yaml:risk_engine.gates.liquidity.median_tx_floor_idr",
+            "config/risk_engine.yaml:risk_engine.gates.free_float.min_free_float_pct",
         ),
         allowed_use="Bias check for final action composition; not portfolio execution.",
     ),
@@ -334,7 +403,20 @@ DEFAULT_TUNING_TARGETS: tuple[TuningTarget, ...] = (
         config_family="market_context",
         yaml_paths=(
             "config/market_context_engine.yaml:market_context_engine",
+            "config/market_context_engine.yaml:market_context_engine.regime_thresholds.risk_on_min_score",
+            "config/market_context_engine.yaml:market_context_engine.regime_thresholds.risk_off_max_score",
+            "config/market_context_engine.yaml:market_context_engine.regime_thresholds.volatile_vix_override",
+            "config/market_context_engine.yaml:market_context_engine.regime_effects.RISK_OFF.signal_multiplier",
+            "config/market_context_engine.yaml:market_context_engine.regime_effects.VOLATILE.signal_multiplier",
             "config/swing_targets.yaml:setup_targets",
+            "config/swing_targets.yaml:setup_targets.risk_on.take_profit_pct",
+            "config/swing_targets.yaml:setup_targets.risk_on.stop_loss_pct",
+            "config/swing_targets.yaml:setup_targets.neutral.take_profit_pct",
+            "config/swing_targets.yaml:setup_targets.neutral.stop_loss_pct",
+            "config/swing_targets.yaml:setup_targets.risk_off.take_profit_pct",
+            "config/swing_targets.yaml:setup_targets.risk_off.stop_loss_pct",
+            "config/swing_targets.yaml:setup_targets.volatile.take_profit_pct",
+            "config/swing_targets.yaml:setup_targets.volatile.stop_loss_pct",
         ),
         allowed_use="Bias check for market context tuning before completed-trade validation.",
     ),
@@ -363,7 +445,10 @@ def _build_sample_quality(
     elif candidate_ready:
         status = "CANDIDATE_ONLY"
         notes.append("Screened-candidate sample meets the minimum.")
-        notes.append("Completed-trade sample is below the minimum; portfolio outcome tuning is blocked.")
+        notes.append(
+            "Completed-trade sample is below the minimum; "
+            "portfolio outcome tuning is blocked."
+        )
     else:
         status = "INSUFFICIENT_SAMPLE"
         notes.append("Samples are below the minimum required for tuning suggestions.")
