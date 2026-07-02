@@ -284,6 +284,14 @@ def test_tuning_config_diff_draft_selects_guarded_numeric_values(tmp_path):
     assert threshold_items[
         "signal_engine.classification.strong_min_score"
     ].proposed_value == 71
+    assert "signal_strength" in threshold_items[
+        "signal_engine.classification.strong_min_score"
+    ].evidence_dimensions
+    assert len(
+        threshold_items[
+            "signal_engine.classification.strong_min_score"
+        ].evidence_dimensions
+    ) > 1
     assert threshold_items[
         "signal_engine.classification.moderate_min_score"
     ].current_value == 45
@@ -299,6 +307,49 @@ def test_tuning_config_diff_draft_selects_guarded_numeric_values(tmp_path):
     assert {
         item.value_selection_policy for item in threshold_items.values()
     } == {"DETERMINISTIC_VALUE_SELECTED"}
+
+
+def test_tuning_config_diff_draft_deduplicates_target_paths(tmp_path):
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    (config_dir / "signal_engine.yaml").write_text(
+        "signal_engine:\n"
+        "  classification:\n"
+        "    strong_min_score: 70\n"
+        "    moderate_min_score: 45\n",
+        encoding="utf-8",
+    )
+    summary = summarize_swing_backtest_attribution(
+        tuple(
+            make_trade(
+                ticker=f"T{i:03}",
+                net_return_pct=-2.0 if i < 30 else 5.0,
+                pnl="-200" if i < 30 else "500",
+                signal_strength="STRONG" if i < 30 else "WEAK",
+            )
+            for i in range(60)
+        )
+    )
+
+    draft = build_tuning_config_diff_draft(summary, config_root=tmp_path)
+    target_paths = [item.target_path for item in draft.diff_items]
+    strong_threshold = next(
+        item
+        for item in draft.diff_items
+        if item.target_path
+        == "config/signal_engine.yaml:signal_engine.classification.strong_min_score"
+    )
+
+    assert len(target_paths) == len(set(target_paths))
+    assert strong_threshold.evidence_dimension == "signal_strength"
+    assert {
+        "signal_strength",
+        "signal_score_bucket",
+        "trade_setup_action",
+    } <= set(strong_threshold.evidence_dimensions)
+    assert strong_threshold.to_dict()["evidence_dimensions"] == list(
+        strong_threshold.evidence_dimensions
+    )
 
 
 def test_tuning_config_diff_apply_block_rejects_applyable_drafts(tmp_path):

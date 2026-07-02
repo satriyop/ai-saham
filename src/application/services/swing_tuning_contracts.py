@@ -181,8 +181,10 @@ class TuningConfigDiffItem:
     status: str
     value_selection_policy: str
     parsed_target_path: TuningConfigPath | None = None
+    evidence_dimensions: tuple[str, ...] = ()
 
     def to_dict(self) -> dict:
+        evidence_dimensions = self.evidence_dimensions or (self.evidence_dimension,)
         return {
             "target_path": self.target_path,
             "parsed_target_path": (
@@ -194,6 +196,7 @@ class TuningConfigDiffItem:
             "proposed_value": self.proposed_value,
             "rationale": self.rationale,
             "evidence_dimension": self.evidence_dimension,
+            "evidence_dimensions": list(evidence_dimensions),
             "confidence": self.confidence,
             "status": self.status,
             "value_selection_policy": self.value_selection_policy,
@@ -507,6 +510,7 @@ def build_tuning_config_diff_draft(
     has_proposed_values = any(
         item.proposed_value is not None for item in diff_items
     )
+    deduped_diff_items = _dedupe_tuning_diff_items(diff_items)
     return assert_tuning_config_diff_apply_block(
         TuningConfigDiffDraft(
             intent=TUNING_CONFIG_DIFF_NO_APPLY_INTENT,
@@ -520,7 +524,7 @@ def build_tuning_config_diff_draft(
             proposal_status=proposal.status,
             can_apply=False,
             requires_human_review=True,
-            diff_items=tuple(diff_items),
+            diff_items=deduped_diff_items,
             rejected_items=tuple(rejected_items),
             notes=notes,
         )
@@ -541,6 +545,76 @@ def parse_tuning_config_path(raw_path: str) -> TuningConfigPath:
         raw=raw_path,
         file_path=normalized_file_path,
         document_path=document_path.strip(),
+    )
+
+
+def _dedupe_tuning_diff_items(
+    diff_items: list[TuningConfigDiffItem],
+) -> tuple[TuningConfigDiffItem, ...]:
+    grouped: dict[str, list[TuningConfigDiffItem]] = {}
+    for item in diff_items:
+        grouped.setdefault(item.target_path, []).append(item)
+
+    deduped: list[TuningConfigDiffItem] = []
+    for target_path in sorted(grouped):
+        rows = grouped[target_path]
+        selected = _select_tuning_diff_item(rows)
+        evidence_dimensions = _unique_strings(
+            item.evidence_dimension for item in rows
+        )
+        deduped.append(
+            TuningConfigDiffItem(
+                target_path=selected.target_path,
+                parsed_target_path=selected.parsed_target_path,
+                current_value=selected.current_value,
+                proposed_value=selected.proposed_value,
+                rationale=_merged_tuning_diff_rationale(
+                    selected.rationale,
+                    evidence_dimensions,
+                ),
+                evidence_dimension=selected.evidence_dimension,
+                evidence_dimensions=evidence_dimensions,
+                confidence=selected.confidence,
+                status=selected.status,
+                value_selection_policy=selected.value_selection_policy,
+            )
+        )
+    return tuple(deduped)
+
+
+def _select_tuning_diff_item(
+    rows: list[TuningConfigDiffItem],
+) -> TuningConfigDiffItem:
+    return max(
+        enumerate(rows),
+        key=lambda indexed: (
+            _tuning_diff_item_priority(indexed[1]),
+            -indexed[0],
+        ),
+    )[1]
+
+
+def _tuning_diff_item_priority(item: TuningConfigDiffItem) -> int:
+    if item.proposed_value is not None:
+        return 100
+    return {
+        "DETERMINISTIC_VALUE_SELECTED": 100,
+        "NO_ADVERSE_BUCKET_ORDERING": 80,
+        "INSUFFICIENT_EVIDENCE": 70,
+        "NO_UNAMBIGUOUS_DIRECTION": 60,
+        "NON_NUMERIC_CURRENT_VALUE": 50,
+    }.get(item.value_selection_policy, 10)
+
+
+def _merged_tuning_diff_rationale(
+    rationale: str,
+    evidence_dimensions: tuple[str, ...],
+) -> str:
+    if len(evidence_dimensions) <= 1:
+        return rationale
+    return (
+        f"{rationale} Evidence dimensions: "
+        f"{', '.join(evidence_dimensions)}."
     )
 
 

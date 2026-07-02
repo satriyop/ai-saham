@@ -880,6 +880,7 @@ def test_swing_backtest_tuning_diff_json_exposes_guardrails(monkeypatch):
     assert item["proposed_value"] is not None
     assert item["status"] == "PROPOSED_VALUE_SELECTED"
     assert item["value_selection_policy"] == "DETERMINISTIC_VALUE_SELECTED"
+    assert item["evidence_dimensions"]
 
 
 def test_swing_backtest_tuning_diff_table_exposes_policy(monkeypatch):

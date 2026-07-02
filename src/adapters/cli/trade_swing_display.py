@@ -312,6 +312,7 @@ def _display_tuning_config_diff(response: SwingBacktestResponse) -> None:
 
     item_table = compact_table()
     item_table.add_column("Target", style="bold cyan")
+    item_table.add_column("Evidence")
     item_table.add_column("Current", justify="right")
     item_table.add_column("Proposed", justify="right")
     item_table.add_column("Policy", overflow="fold")
@@ -319,6 +320,7 @@ def _display_tuning_config_diff(response: SwingBacktestResponse) -> None:
     for item in draft.diff_items[:8]:
         item_table.add_row(
             _fmt_target_path(item),
+            _fmt_evidence_dimensions(item),
             _fmt_config_value(item.current_value),
             _fmt_config_value(item.proposed_value),
             item.value_selection_policy,
@@ -326,6 +328,7 @@ def _display_tuning_config_diff(response: SwingBacktestResponse) -> None:
         )
     if not draft.diff_items:
         item_table.add_row(
+            "N/A",
             "N/A",
             "N/A",
             "N/A",
@@ -508,3 +511,10 @@ def _fmt_target_path(item) -> str:
     file_name = parsed.file_path.rsplit("/", maxsplit=1)[-1]
     leaf = parsed.document_path.rsplit(".", maxsplit=1)[-1]
     return f"{file_name}:{leaf}"
+
+
+def _fmt_evidence_dimensions(item) -> str:
+    dimensions = getattr(item, "evidence_dimensions", ()) or (
+        item.evidence_dimension,
+    )
+    return ",".join(dimensions)
