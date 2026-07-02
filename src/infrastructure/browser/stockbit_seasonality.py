@@ -86,7 +86,8 @@ def _parse_seasonality(ticker: str, month: int, back_years: int, body: dict) -> 
     try:
         win_rate = float(raw_prob)
     except (TypeError, ValueError):
-        win_rate = 0.0
+        logger.debug("No win rate for %s month=%d", ticker, month)
+        return None
 
     try:
         positive_years = int(raw_up)
@@ -208,8 +209,10 @@ class StockbitSeasonalityProvider(SeasonalityProvider):
 
         if row is None:
             return None
-        if row["avg_return_pct"] is None:
+        if row["avg_return_pct"] is None or row["win_rate_pct"] is None:
             return None  # sentinel for "fetched but no data"
+        if row["positive_years"] is None or row["total_years"] is None or row["back_years"] is None:
+            return None
 
         fetched_at: datetime | None = None
         raw_fa = row["fetched_at"]
@@ -223,10 +226,10 @@ class StockbitSeasonalityProvider(SeasonalityProvider):
             ticker=ticker.upper(),
             month=month,
             avg_monthly_return_pct=row["avg_return_pct"],
-            win_rate_pct=row["win_rate_pct"] or 0.0,
-            positive_years=row["positive_years"] or 0,
-            total_years=row["total_years"] or 0,
-            back_years=row["back_years"] or 5,
+            win_rate_pct=row["win_rate_pct"],
+            positive_years=row["positive_years"],
+            total_years=row["total_years"],
+            back_years=row["back_years"],
             source=row["source"] or "stockbit",
             fetched_at=fetched_at,
         )
