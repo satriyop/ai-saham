@@ -979,6 +979,39 @@ def test_swing_tune_json_exposes_first_class_tuning_review(monkeypatch):
     }
 
 
+def test_swing_tune_save_writes_review_journal(monkeypatch, tmp_path):
+    _patch_swing_backtest_command(monkeypatch)
+    journal_path = tmp_path / "swing_tuning_reviews.jsonl"
+
+    result = runner.invoke(
+        app,
+        [
+            "trade",
+            "tune-swing",
+            "BBCA",
+            "--format",
+            "json",
+            "--start",
+            "2026-01-01",
+            "--end",
+            "2026-01-31",
+            "--save",
+            "--journal",
+            str(journal_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert payload["persistence"]["saved"] is True
+    assert payload["persistence"]["path"] == str(journal_path)
+    records = [json.loads(line) for line in journal_path.read_text().splitlines()]
+    assert len(records) == 1
+    assert records[0]["recorded_at"] == payload["persistence"]["recorded_at"]
+    assert records[0]["artifact_type"] == "swing_tuning_review"
+    assert records[0]["apply"]["supported"] is False
+
+
 def test_swing_backtest_has_no_tuning_diff_apply_flag():
     from src.adapters.cli import trade_swing_commands
 

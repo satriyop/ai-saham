@@ -923,12 +923,15 @@ remains unset.
 ```bash
 saham trade tune-swing --universe idx80 --setup foreign-bounce
 saham trade tune-swing --universe lq45 --with-regime --format json
+saham trade tune-swing --universe idx80 --save
 ```
 
 Runs the same walk-forward replay as `backtest-swing`, then emits attribution,
 readiness, proposal-target, and guarded config-diff review artifacts in one
 place. This command is review-only: it does not call AI, does not apply YAML
-changes, and does not mutate configuration.
+changes, and does not mutate configuration. Use `--save` to append the review
+artifact to `journals/swing_tuning_reviews.jsonl`; use `--journal PATH` to
+override that path for one run.
 
 Attribution dimensions map to these primary tuning files:
 
@@ -1572,7 +1575,8 @@ src/
 │   │   ├── intraday_confirmation_csv.py
 │   │   ├── accumulation_journal_csv_writer.py
 │   │   ├── iev_json_sidecar.py
-│   │   └── trade_journal_jsonl_writer.py
+│   │   ├── trade_journal_jsonl_writer.py
+│   │   └── swing_tuning_review_jsonl_writer.py
 │   ├── ai/
 │   │   ├── factory.py                # AI provider factory + rate limiter wrapper
 │   │   ├── deepseek_explainer.py
@@ -1756,7 +1760,7 @@ make clean
 ## Data Storage
 
 - **Location:** `data/db/data.db` (SQLite, configurable via `--db` or `config/default.yaml`)
-- **Content:** Cached OHLCV candles (with source provenance), broker summaries, sentiment logs, trade journals, Stockbit enrichment cache (analyst consensus, insider trades, fundamentals, corporate actions, forward estimates, company profiles, shareholding, seasonality)
+- **Content:** Cached OHLCV candles (with source provenance), broker summaries, sentiment logs, trade journals, swing tuning review journals, Stockbit enrichment cache (analyst consensus, insider trades, fundamentals, corporate actions, forward estimates, company profiles, shareholding, seasonality)
 - **Refresh:** Use `--refresh` flag or `saham fetch market --universe <name>` to batch update
 - **Enrichment TTL:** Enrichment data auto-refreshes on a per-column TTL basis (daily for price data, weekly for fundamentals, monthly for shareholding)
 

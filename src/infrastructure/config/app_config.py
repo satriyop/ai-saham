@@ -39,6 +39,7 @@ class StorageConfig:
     db_path: str = "data/db/data.db"
     accum_journal: str = "journals/accumulation.csv"
     trade_journal: str = "journals/trades.jsonl"
+    swing_tuning_review_journal: str = "journals/swing_tuning_reviews.jsonl"
     stockbit_profile_dir: str = ".stockbit_profile"
     stockbit_session_file: str = "stockbit_session.json"
     intraday_sidecar: str = "data/session/.last-session.json"

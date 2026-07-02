@@ -26,6 +26,9 @@ from src.application.services.swing_tuning_contracts import (
     build_tuning_proposal_draft,
     build_tuning_readiness_plan,
 )
+from src.application.services.swing_tuning_review_journal import (
+    SwingTuningReviewJournal,
+)
 from src.application.services.universe_loader import (
     UniverseNotFoundError,
     resolve_tickers,
@@ -53,8 +56,14 @@ from src.infrastructure.config.swing_config import load_swing_config as _load_sw
 from src.infrastructure.config.user_config import get_swing_default
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
+from src.infrastructure.persistence.swing_tuning_review_jsonl_writer import (
+    SwingTuningReviewJsonlWriter,
+)
 
 DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
+DEFAULT_SWING_TUNING_REVIEW_JOURNAL_PATH = Path(
+    APP_CFG.storage.swing_tuning_review_journal
+)
 _SC = _load_swing_config()
 _BT = _load_swing_backtest_config()
 _ASC = load_accumulation_screener_config()
@@ -505,6 +514,17 @@ def swing_tune(
         Optional[Path],
         typer.Option("--db", help="SQLite database path"),
     ] = None,
+    save: Annotated[
+        bool,
+        typer.Option(
+            "--save",
+            help="Append the tuning review artifact to the local JSONL journal",
+        ),
+    ] = False,
+    journal: Annotated[
+        Optional[Path],
+        typer.Option("--journal", help="Override swing tuning review journal path"),
+    ] = None,
 ) -> None:
     """
     Build deterministic swing tuning review from walk-forward attribution.
@@ -533,8 +553,19 @@ def swing_tune(
         announce=output_format != "json",
     )
 
+    payload = _swing_tuning_payload(response)
+    if save:
+        journal_path = journal or DEFAULT_SWING_TUNING_REVIEW_JOURNAL_PATH
+        save_result = SwingTuningReviewJournal(
+            SwingTuningReviewJsonlWriter(journal_path)
+        ).append_review(payload)
+        payload["persistence"] = {
+            **save_result.to_dict(),
+            "path": str(journal_path),
+        }
+
     if output_format == "json":
-        typer.echo(json.dumps(_swing_tuning_payload(response), indent=2, default=str))
+        typer.echo(json.dumps(payload, indent=2, default=str))
         return
 
     display_swing_backtest(
@@ -545,6 +576,12 @@ def swing_tune(
         show_tuning_proposal=True,
         show_tuning_diff=True,
     )
+    if save:
+        persistence = payload["persistence"]
+        typer.echo(
+            f"Saved swing tuning review -> {persistence['path']} "
+            f"(records={persistence['record_count']})"
+        )
 
 
 # ─── size command ─────────────────────────────────────────────────────────────
