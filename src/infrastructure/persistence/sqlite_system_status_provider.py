@@ -13,7 +13,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import List
 
-from src.domain.value_objects.benchmark_symbol import YAHOO_BENCHMARK_TICKER
+from src.domain.value_objects.benchmark_symbol import YAHOO_IHSG_TICKER
 from src.domain.ports.system_status_provider import (
     ProviderStatusDto,
     SystemStatusProvider,
@@ -183,7 +183,7 @@ class SQLiteSystemStatusProvider(SystemStatusProvider):
         start = time.time()
         try:
             hist = yf.download(
-                YAHOO_BENCHMARK_TICKER,
+                YAHOO_IHSG_TICKER,
                 period="5d",
                 progress=False,
                 auto_adjust=True,
@@ -194,7 +194,7 @@ class SQLiteSystemStatusProvider(SystemStatusProvider):
                 return ProviderStatusDto(
                     name="Yahoo Finance",
                     ok=True,
-                    label=f"{len(hist)} days ({YAHOO_BENCHMARK_TICKER})",
+                    label=f"{len(hist)} days ({YAHOO_IHSG_TICKER})",
                     ms=elapsed,
                 )
             return ProviderStatusDto(

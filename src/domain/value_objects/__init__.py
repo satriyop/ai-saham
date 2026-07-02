@@ -10,7 +10,7 @@ Layer: Domain
 from src.domain.value_objects.backtest_result import BacktestResult
 from src.domain.value_objects.benchmark_symbol import (
     CANONICAL_BENCHMARK_TICKER,
-    YAHOO_BENCHMARK_TICKER,
+    YAHOO_IHSG_TICKER,
     canonicalize_ticker,
     is_benchmark_ticker,
 )
@@ -45,7 +45,7 @@ __all__ = [
     "SkillAnnotation",
     "SkillMetadata",
     "TradeAction",
-    "YAHOO_BENCHMARK_TICKER",
+    "YAHOO_IHSG_TICKER",
     "canonicalize_ticker",
     "is_benchmark_ticker",
     "is_non_idx_ticker",

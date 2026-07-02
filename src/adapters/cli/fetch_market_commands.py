@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 import typer
 
 from src.domain.value_objects.benchmark_symbol import (
-    YAHOO_BENCHMARK_TICKER,
+    YAHOO_IHSG_TICKER,
     canonicalize_ticker,
     is_benchmark_ticker,
 )
@@ -107,7 +107,7 @@ def _last_known_trading_day(db_path: Path) -> date | None:
     if date_range is None:
         # Temporary compatibility while old local databases still contain the
         # Yahoo benchmark symbol.
-        date_range = repo.get_date_range(YAHOO_BENCHMARK_TICKER)
+        date_range = repo.get_date_range(YAHOO_IHSG_TICKER)
     return date_range[1] if date_range else None
 
 

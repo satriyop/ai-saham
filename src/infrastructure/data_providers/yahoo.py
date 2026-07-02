@@ -15,7 +15,7 @@ import yfinance as yf
 
 from src.domain.value_objects.benchmark_symbol import (
     CANONICAL_BENCHMARK_TICKER,
-    YAHOO_BENCHMARK_TICKER,
+    YAHOO_IHSG_TICKER,
     is_benchmark_ticker,
 )
 from src.domain.value_objects import is_non_idx_ticker
@@ -109,7 +109,7 @@ class YahooFinanceProvider(MarketDataProvider):
         """Convert ticker to Yahoo Finance format."""
         ticker = ticker.upper().strip()
         if ticker == CANONICAL_BENCHMARK_TICKER:
-            return YAHOO_BENCHMARK_TICKER
+            return YAHOO_IHSG_TICKER
         if is_non_idx_ticker(ticker, self._non_idx_tickers):
             return ticker
         if "." in ticker:

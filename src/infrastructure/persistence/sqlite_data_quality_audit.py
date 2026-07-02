@@ -12,7 +12,7 @@ from pathlib import Path
 
 from src.domain.value_objects.benchmark_symbol import (
     CANONICAL_BENCHMARK_TICKER,
-    YAHOO_BENCHMARK_TICKER,
+    YAHOO_IHSG_TICKER,
 )
 from src.application.use_case.data_quality_audit_use_case import (
     DataQualityRawSnapshot,
@@ -57,7 +57,7 @@ class SQLiteDataQualityAuditReader:
                     conn,
                     "candles",
                     "date",
-                    ticker=YAHOO_BENCHMARK_TICKER,
+                    ticker=YAHOO_IHSG_TICKER,
                 )
             if expected is None:
                 expected = _latest_date(conn, "candles", "date")
