@@ -29,6 +29,19 @@ from src.infrastructure.config.app_config import APP_CFG
 _STOCKBIT_PROFILE_DIR = Path(APP_CFG.storage.stockbit_profile_dir)
 
 
+def _extract_list(body: dict | None, *keys: str) -> list[dict]:
+    if not body:
+        return []
+    data = body.get("data")
+    if isinstance(data, list):
+        return [i for i in data if isinstance(i, dict)]
+    if isinstance(data, dict):
+        for k in keys:
+            if isinstance(data.get(k), list):
+                return [i for i in data[k] if isinstance(i, dict)]
+    return []
+
+
 @universe_app.command("list")
 def universe_list(
     config_path: Annotated[
@@ -121,7 +134,8 @@ def universe_update(
             typer.echo(f"Warning: could not read {resolved_config}: {e}")
 
     try:
-        from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
+        from src.infrastructure.browser.stockbit_api_client import create_stockbit_api_client
+        from src.infrastructure.browser.playwright_stockbit_provider import StockbitBrokerProvider
         from src.infrastructure.browser.stockbit_universe import (
             StockbitUniverseProvider,
         )
@@ -129,32 +143,18 @@ def universe_update(
             universe_type as _utype,
         )
 
-        provider = StockbitPlaywrightBrokerProvider()
+        api_client = create_stockbit_api_client()
+        provider = StockbitBrokerProvider(api_client)
         if not provider.is_authenticated():
             typer.echo("Stockbit session expired. Run `saham fetch stockbit login` to refresh.")
             raise typer.Exit(1)
 
-        token = provider._get_token()
-        universe_prov = StockbitUniverseProvider(broker_provider=provider)
+        universe_prov = StockbitUniverseProvider(api_client=api_client)
     except ImportError as e:
         typer.echo(f"Playwright not installed: {e}")
         raise typer.Exit(1)
 
-    def _get(url: str) -> dict | None:
-        from src.infrastructure.browser.playwright_stockbit_provider import _exodus_get
-        return _exodus_get(url, token)
 
-    def _extract_list(body: dict | None, *keys: str) -> list[dict]:
-        if not body:
-            return []
-        data = body.get("data")
-        if isinstance(data, list):
-            return [i for i in data if isinstance(i, dict)]
-        if isinstance(data, dict):
-            for k in keys:
-                if isinstance(data.get(k), list):
-                    return [i for i in data[k] if isinstance(i, dict)]
-        return []
 
     typer.echo("")
     typer.echo("Discovering IDX index universes from Stockbit...")
@@ -208,7 +208,7 @@ def universe_update(
             try:
                 if subsector_id is not None:
                     url = f"https://exodus.stockbit.com/emitten/v3/sector/{sector_id}/subsector/{subsector_id}/company"
-                    comp_body = _get(url)
+                    comp_body = api_client.get(url)
                     if comp_body is not None:
                         items = _extract_list(comp_body, "companies", "list", "items", "stocks")
                         for item in items:
@@ -222,7 +222,7 @@ def universe_update(
                             if code and isinstance(code, str) and code.strip():
                                 tickers.append(code.strip().upper())
                 else:
-                    body = _get(f"https://exodus.stockbit.com/emitten/sectors/{sector_id}/subsectors")
+                    body = api_client.get(f"https://exodus.stockbit.com/emitten/sectors/{sector_id}/subsectors")
                     if body is not None:
                         subsectors = _extract_list(body, "subsectors", "list", "items")
                         for i, sub in enumerate(subsectors):
@@ -232,7 +232,7 @@ def universe_update(
                             if i > 0:
                                 time.sleep(0.2)
                             url = f"https://exodus.stockbit.com/emitten/v3/sector/{sector_id}/subsector/{sub_id}/company"
-                            comp_body = _get(url)
+                            comp_body = api_client.get(url)
                             if comp_body is None:
                                 tickers = []
                                 break
@@ -341,38 +341,23 @@ def universe_inspect(
         raise typer.Exit(1)
 
     try:
-        from src.infrastructure.browser.playwright_stockbit_provider import (
-            StockbitPlaywrightBrokerProvider,
-            _exodus_get,
-        )
-        provider = StockbitPlaywrightBrokerProvider()
+        from src.infrastructure.browser.stockbit_api_client import create_stockbit_api_client
+        from src.infrastructure.browser.playwright_stockbit_provider import StockbitBrokerProvider
+        api_client = create_stockbit_api_client()
+        provider = StockbitBrokerProvider(api_client)
         if not provider.is_authenticated():
             typer.echo("Session expired. Run `saham fetch stockbit login` to refresh.")
             raise typer.Exit(1)
-        token = provider._get_token()
     except ImportError as e:
         typer.echo(f"Playwright not installed: {e}")
         raise typer.Exit(1)
 
-    def _get(url: str) -> dict | None:
-        return _exodus_get(url, token)
 
-    def _extract_list(body: dict | None, *keys: str) -> list[dict]:
-        if not body:
-            return []
-        data = body.get("data")
-        if isinstance(data, list):
-            return [i for i in data if isinstance(i, dict)]
-        if isinstance(data, dict):
-            for k in keys:
-                if isinstance(data.get(k), list):
-                    return [i for i in data[k] if isinstance(i, dict)]
-        return []
 
     if sector_id is None:
         console().print("")
         console().print("Fetching all sectors from Stockbit...")
-        body = _get("https://exodus.stockbit.com/emitten/sectors")
+        body = api_client.get("https://exodus.stockbit.com/emitten/sectors")
         sectors = _extract_list(body, "sectors", "list", "items")
 
         if not sectors:
@@ -399,7 +384,7 @@ def universe_inspect(
     elif subsector_id is None:
         console().print("")
         console().print(f"Fetching subsectors for sector {sector_id}...")
-        body = _get(f"https://exodus.stockbit.com/emitten/sectors/{sector_id}/subsectors")
+        body = api_client.get(f"https://exodus.stockbit.com/emitten/sectors/{sector_id}/subsectors")
         subsectors = _extract_list(body, "subsectors", "list", "items")
 
         if not subsectors:
@@ -418,7 +403,7 @@ def universe_inspect(
 
             if with_count and not count:
                 url = f"https://exodus.stockbit.com/emitten/v3/sector/{sector_id}/subsector/{sub_id}/company"
-                comp_body = _get(url)
+                comp_body = api_client.get(url)
                 items = _extract_list(comp_body, "companies", "list", "items", "stocks")
                 count = len(items)
 
@@ -434,7 +419,7 @@ def universe_inspect(
         console().print("")
         console().print(f"Fetching companies for sector {sector_id} subsector {subsector_id}...")
         url = f"https://exodus.stockbit.com/emitten/v3/sector/{sector_id}/subsector/{subsector_id}/company"
-        comp_body = _get(url)
+        comp_body = api_client.get(url)
         items = _extract_list(comp_body, "companies", "list", "items", "stocks")
 
         if not items:
@@ -510,33 +495,18 @@ def universe_create(
         raise typer.Exit(1)
 
     try:
-        from src.infrastructure.browser.playwright_stockbit_provider import (
-            StockbitPlaywrightBrokerProvider,
-            _exodus_get,
-        )
-        provider = StockbitPlaywrightBrokerProvider()
+        from src.infrastructure.browser.stockbit_api_client import create_stockbit_api_client
+        from src.infrastructure.browser.playwright_stockbit_provider import StockbitBrokerProvider
+        api_client = create_stockbit_api_client()
+        provider = StockbitBrokerProvider(api_client)
         if not provider.is_authenticated():
             typer.echo("Session expired. Run `saham fetch stockbit login` to refresh.")
             raise typer.Exit(1)
-        token = provider._get_token()
     except ImportError as e:
         typer.echo(f"Playwright not installed: {e}")
         raise typer.Exit(1)
 
-    def _get(url: str) -> dict | None:
-        return _exodus_get(url, token)
 
-    def _extract_list(body: dict | None, *keys: str) -> list[dict]:
-        if not body:
-            return []
-        data = body.get("data")
-        if isinstance(data, list):
-            return [i for i in data if isinstance(i, dict)]
-        if isinstance(data, dict):
-            for k in keys:
-                if isinstance(data.get(k), list):
-                    return [i for i in data[k] if isinstance(i, dict)]
-        return []
 
     tickers = []
 
@@ -544,7 +514,7 @@ def universe_create(
         console().print("")
         console().print(f"Fetching companies for sector {sector_id} subsector {subsector_id}...")
         url = f"https://exodus.stockbit.com/emitten/v3/sector/{sector_id}/subsector/{subsector_id}/company"
-        comp_body = _get(url)
+        comp_body = api_client.get(url)
         if comp_body is None:
             typer.echo(f"Error: Failed to fetch data for sector {sector_id} subsector {subsector_id}.", err=True)
             raise typer.Exit(1)
@@ -567,7 +537,7 @@ def universe_create(
     else:
         console().print("")
         console().print(f"Fetching subsectors for sector {sector_id}...")
-        body = _get(f"https://exodus.stockbit.com/emitten/sectors/{sector_id}/subsectors")
+        body = api_client.get(f"https://exodus.stockbit.com/emitten/sectors/{sector_id}/subsectors")
         if body is None:
             typer.echo(f"Error: Failed to fetch subsectors for sector {sector_id}.", err=True)
             raise typer.Exit(1)
@@ -590,7 +560,7 @@ def universe_create(
 
             console().print(f"  [{i+1}/{len(subsectors)}] Fetching subsector {sub_id} ({sub_name})...")
             url = f"https://exodus.stockbit.com/emitten/v3/sector/{sector_id}/subsector/{sub_id}/company"
-            comp_body = _get(url)
+            comp_body = api_client.get(url)
             if comp_body is None:
                 typer.echo(f"Error: Failed to fetch data for sector {sector_id} subsector {sub_id}. Aborting transaction to keep config safe.", err=True)
                 raise typer.Exit(1)

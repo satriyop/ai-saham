@@ -313,7 +313,7 @@ def test_intraday_confirm_open_auto_uses_stockbit_provider_stubs(tmp_path, monke
             return True
 
     class FakeRunningTradeProvider:
-        def __init__(self, broker_provider):
+        def __init__(self, api_client):
             pass
 
         def fetch_running_trade(self, ticker: str, limit: int = 80):
@@ -332,7 +332,7 @@ def test_intraday_confirm_open_auto_uses_stockbit_provider_stubs(tmp_path, monke
             ]
 
     class FakeOrderBookProvider:
-        def __init__(self, broker_provider):
+        def __init__(self, api_client):
             pass
 
         def fetch_snapshot(self, ticker: str):
@@ -342,7 +342,7 @@ def test_intraday_confirm_open_auto_uses_stockbit_provider_stubs(tmp_path, monke
     import src.infrastructure.browser.stockbit_order_book as stockbit_order_book
     import src.infrastructure.browser.stockbit_running_trade as stockbit_running_trade
 
-    monkeypatch.setattr(playwright_stockbit, "StockbitPlaywrightBrokerProvider", FakeBrokerProvider)
+    monkeypatch.setattr(playwright_stockbit, "StockbitBrokerProvider", FakeBrokerProvider)
     monkeypatch.setattr(
         stockbit_running_trade,
         "StockbitRunningTradeProvider",

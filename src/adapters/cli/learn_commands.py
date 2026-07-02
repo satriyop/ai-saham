@@ -107,13 +107,12 @@ def snapshot(
 
             _mstatus = None
             if _Path(APP_CFG.storage.stockbit_profile_dir).exists():
-                from src.infrastructure.browser.playwright_stockbit_provider import (
-                    StockbitPlaywrightBrokerProvider,
-                )
+                from src.infrastructure.browser.stockbit_api_client import create_stockbit_api_client
+                from src.infrastructure.browser.playwright_stockbit_provider import StockbitBrokerProvider
 
-                _bp = StockbitPlaywrightBrokerProvider()
-                if _bp.is_authenticated():
-                    _mstatus = StockbitMarketTimeProvider(broker_provider=_bp).get_status()
+                _api_client = create_stockbit_api_client()
+                if StockbitBrokerProvider(_api_client).is_authenticated():
+                    _mstatus = StockbitMarketTimeProvider(api_client=_api_client).get_status()
             if _mstatus and _mstatus.source == "stockbit" and not _mstatus.is_pre_open:
                 typer.echo(
                     f"Warning: Stockbit reports session='{_mstatus.session_name}' "
@@ -172,7 +171,7 @@ def snapshot(
     except Exception:
         pass
 
-    notation_provider = StockbitTickerNotationProvider(broker_provider=None, db_path=resolved_db)
+    notation_provider = StockbitTickerNotationProvider(api_client=None, db_path=resolved_db)
     use_case = OpeningSnapshotUseCase(
         browser=browser,
         repository=repository,
@@ -272,6 +271,15 @@ def track(
         profile_dir=Path(APP_CFG.storage.stockbit_profile_dir), headless=headless
     )
 
+    # Shared api_client — both broker confirm and order book use the same token
+    _shared_api_client = None
+    try:
+        from src.infrastructure.browser.stockbit_api_client import create_stockbit_api_client
+        from src.infrastructure.browser.playwright_stockbit_provider import StockbitBrokerProvider
+        _shared_api_client = create_stockbit_api_client()
+    except Exception:
+        pass
+
     # Optionally wire broker confirmation provider
     running_trade_provider = None
     institutional_codes: frozenset[str] = frozenset()
@@ -279,17 +287,13 @@ def track(
         try:
             import yaml
 
-            from src.infrastructure.browser.playwright_stockbit_provider import (
-                StockbitPlaywrightBrokerProvider,
-            )
             from src.infrastructure.browser.stockbit_running_trade import (
                 StockbitRunningTradeProvider,
             )
 
-            broker_provider = StockbitPlaywrightBrokerProvider()
-            if broker_provider.is_authenticated():
+            if _shared_api_client and StockbitBrokerProvider(_shared_api_client).is_authenticated():
                 running_trade_provider = StockbitRunningTradeProvider(
-                    broker_provider=broker_provider
+                    api_client=_shared_api_client
                 )
                 with open(APP_CFG.config_paths.stockbit) as f:
                     stockbit_cfg = yaml.safe_load(f) or {}
@@ -310,12 +314,10 @@ def track(
     # Always wire order book provider — full depth replaces naive top-of-book bid_pressure
     order_book_provider = None
     try:
-        from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
         from src.infrastructure.browser.stockbit_order_book import StockbitOrderBookProvider
 
-        ob_broker = StockbitPlaywrightBrokerProvider()
-        if ob_broker.is_authenticated():
-            order_book_provider = StockbitOrderBookProvider(broker_provider=ob_broker)
+        if _shared_api_client and StockbitBrokerProvider(_shared_api_client).is_authenticated():
+            order_book_provider = StockbitOrderBookProvider(api_client=_shared_api_client)
             typer.echo("Order book depth enabled — bid_pressure_ratio + live F.Net per snapshot")
         else:
             typer.echo("Stockbit session not authenticated — order book disabled", err=True)

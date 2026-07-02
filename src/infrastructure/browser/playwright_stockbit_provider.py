@@ -281,6 +281,10 @@ class StockbitBrokerProvider(BrokerDataProvider):
     def provider_name(self) -> str:
         return "stockbit"
 
+    @property
+    def api_client(self) -> StockbitApiClient:
+        return self._api_client
+
     def is_authenticated(self) -> bool:
         """True if a persistent profile exists and its login marker is < 72h old."""
         marker = self._profile_dir / ".logged_in_at"
@@ -514,10 +518,6 @@ class StockbitBrokerProvider(BrokerDataProvider):
         return all_flows
 
 
-# ── Backward-compatibility alias ───────────────────────────────────────────
-# CLI adapters still import StockbitPlaywrightBrokerProvider; Phase F will
-# update them to StockbitBrokerProvider. Keep the alias until then.
-StockbitPlaywrightBrokerProvider = StockbitBrokerProvider
 
 
 def _fetch_broker_daily_flows_for_code(

@@ -315,6 +315,26 @@ def get_display_market_status() -> MarketStatus:
     return LocalClockMarketStatusProvider().get_status()
 
 
+def _fetch_and_maybe_cache_live_status() -> MarketStatus | None:
+    """Fetch from Stockbit, cache on success, return None if unavailable. Never raises."""
+    try:
+        from src.infrastructure.browser.stockbit_api_client import create_stockbit_api_client
+        from src.infrastructure.browser.playwright_stockbit_provider import StockbitBrokerProvider
+        from src.infrastructure.config.app_config import APP_CFG
+        if not Path(APP_CFG.storage.stockbit_profile_dir).exists():
+            return None
+        provider = StockbitBrokerProvider(create_stockbit_api_client())
+        if not provider.is_authenticated():
+            return None
+        result = StockbitMarketTimeProvider(api_client=provider.api_client).get_status()
+        if result and result.source == "stockbit":
+            write_market_status_cache(result)
+            return result
+        return None
+    except Exception:
+        return None
+
+
 def fetch_and_cache_market_status() -> MarketStatus | None:
     """Fetch market status from Stockbit and write to cache on success.
 
@@ -323,23 +343,7 @@ def fetch_and_cache_market_status() -> MarketStatus | None:
     Does NOT fall back to local clock — callers handle the None case explicitly
     so they can show a clear message to the user.
     """
-    try:
-        from pathlib import Path
-
-        from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
-        from src.infrastructure.config.app_config import APP_CFG
-        if not Path(APP_CFG.storage.stockbit_profile_dir).exists():
-            return None
-        provider = StockbitPlaywrightBrokerProvider()
-        if not provider.is_authenticated():
-            return None
-        result = StockbitMarketTimeProvider(broker_provider=provider).get_status()
-        if result and result.source == "stockbit":
-            write_market_status_cache(result)
-            return result
-        return None
-    except Exception:
-        return None
+    return _fetch_and_maybe_cache_live_status()
 
 
 def get_current_market_status() -> MarketStatus:
@@ -356,21 +360,7 @@ def get_current_market_status() -> MarketStatus:
     cached = read_cached_market_status()
     if cached:
         return cached
-    try:
-        from pathlib import Path
-
-        from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
-        from src.infrastructure.config.app_config import APP_CFG
-        if Path(APP_CFG.storage.stockbit_profile_dir).exists():
-            provider = StockbitPlaywrightBrokerProvider()
-            if provider.is_authenticated():
-                result = StockbitMarketTimeProvider(broker_provider=provider).get_status()
-                if result.source == "stockbit":
-                    write_market_status_cache(result)
-                    return result
-    except Exception:
-        pass
-    return LocalClockMarketStatusProvider().get_status()
+    return _fetch_and_maybe_cache_live_status() or LocalClockMarketStatusProvider().get_status()
 
 
 def format_market_status_line(status: MarketStatus) -> str:

@@ -55,8 +55,9 @@ def broker_status() -> None:
 
     # Stockbit Playwright session provider
     try:
-        from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
-        session_provider = StockbitPlaywrightBrokerProvider()
+        from src.infrastructure.browser.stockbit_api_client import create_stockbit_api_client
+        from src.infrastructure.browser.playwright_stockbit_provider import StockbitBrokerProvider
+        session_provider = StockbitBrokerProvider(create_stockbit_api_client())
         if session_provider.is_authenticated():
             marker = _DEFAULT_PROFILE_DIR / ".logged_in_at"
             age_h: float | None = None
@@ -340,7 +341,7 @@ def broker_distribution_view(
         StockbitBrokerDistributionProvider,
     )
 
-    prov = StockbitBrokerDistributionProvider(broker_provider=None, db_path=db_path)
+    prov = StockbitBrokerDistributionProvider(api_client=None, db_path=db_path)
     snapshot = prov.get_distribution(ticker.upper())
 
     if snapshot is None:

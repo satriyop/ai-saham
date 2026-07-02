@@ -196,8 +196,8 @@ def test_fetch_candles_uses_stockbit_historical_for_benchmark_with_stockbit(
         price_adjustment_policy = "raw"
         instances: list["FakeStockbitHistoricalProvider"] = []
 
-        def __init__(self, broker_provider, non_idx_tickers=None) -> None:
-            self.broker_provider = broker_provider
+        def __init__(self, api_client, non_idx_tickers=None) -> None:
+            self.api_client = api_client
             self.requested: list[tuple[str, date, date]] = []
             self.instances.append(self)
 
@@ -210,13 +210,16 @@ def test_fetch_candles_uses_stockbit_historical_for_benchmark_with_stockbit(
         FakeStockbitHistoricalProvider,
     )
 
+    class _FakeBroker:
+        api_client = object()
+
     status = _fetch_candles(
         ticker="^JKSE",
         days=1,
         db_path=db_path,
         provider_name="yahoo",
         refresh=True,
-        broker_provider=object(),
+        broker_provider=_FakeBroker(),
     )
 
     repo = SQLiteMarketRepository(db_path)

@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Optional
 
 if TYPE_CHECKING:
-    from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
+    from src.infrastructure.browser.playwright_stockbit_provider import StockbitBrokerProvider
 
 import typer
 
@@ -352,9 +352,11 @@ def _create_broker_provider(name: str | None):
       1. Playwright session (.stockbit_profile/) — preferred; no token file needed
       2. IDX public API — always available fallback
     """
+    from src.infrastructure.browser.stockbit_api_client import create_stockbit_api_client
+    from src.infrastructure.browser.playwright_stockbit_provider import StockbitBrokerProvider
+
     if name == "stockbit":
-        from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
-        return StockbitPlaywrightBrokerProvider(), "stockbit"
+        return StockbitBrokerProvider(create_stockbit_api_client()), "stockbit"
     if name == "idx":
         return IdxBrokerDataProvider(), "idx"
     if name is not None:
@@ -365,8 +367,7 @@ def _create_broker_provider(name: str | None):
 
     # Auto-detect
     if STOCKBIT_PROFILE_DIR.exists():
-        from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
-        provider = StockbitPlaywrightBrokerProvider()
+        provider = StockbitBrokerProvider(create_stockbit_api_client())
         if provider.is_authenticated():
             return provider, "stockbit"
     return IdxBrokerDataProvider(), "idx"
@@ -379,7 +380,7 @@ def _fetch_candles(
     provider_name: str,
     refresh: bool,
     short_history: list[str] | None = None,
-    broker_provider: "StockbitPlaywrightBrokerProvider | None" = None,
+    broker_provider: "StockbitBrokerProvider | None" = None,
 ) -> str:
     """Fetch candles for one ticker. Returns status string."""
     from src.infrastructure.data_providers.idx_market import IdxMarketDataProvider
@@ -390,13 +391,13 @@ def _fetch_candles(
     non_idx = get_global_context_tickers()
 
     if is_benchmark_ticker(ticker) and broker_provider is not None:
-        provider = StockbitHistoricalProvider(broker_provider=broker_provider, non_idx_tickers=non_idx)
+        provider = StockbitHistoricalProvider(api_client=broker_provider.api_client, non_idx_tickers=non_idx)
     elif provider_name == "idx":
         provider = IdxMarketDataProvider()
     elif broker_provider is not None:
         provider = FallbackMarketDataProvider(
             primary=YahooFinanceProvider(non_idx_tickers=non_idx),
-            fallback=StockbitHistoricalProvider(broker_provider=broker_provider, non_idx_tickers=non_idx),
+            fallback=StockbitHistoricalProvider(api_client=broker_provider.api_client, non_idx_tickers=non_idx),
             non_idx_tickers=non_idx,
         )
     else:
@@ -575,9 +576,7 @@ def _fetch_enrichment(
     Delegates cache-freshness-then-fetch policy to RefreshStockbitEnrichmentUseCase.
     Returns a compact status string, e.g. "analyst+bandar  ✓(insider,season,corp,holding)".
     """
-    from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
-
-    if not isinstance(broker_provider, StockbitPlaywrightBrokerProvider):
+    if broker_provider is None:
         return "skip:no-stockbit"
     ticker = canonicalize_ticker(ticker)
     if is_benchmark_ticker(ticker) or ticker.startswith("^"):
@@ -611,19 +610,20 @@ def _fetch_enrichment(
     today = date.today()
     insider_from = today - timedelta(days=365)
 
-    analyst_prov = StockbitAnalystConsensusProvider(broker_provider=broker_provider, db_path=db_path)
-    insider_prov = StockbitInsiderActivityProvider(broker_provider=broker_provider, db_path=db_path)
-    season_prov = StockbitSeasonalityProvider(broker_provider=broker_provider, db_path=db_path)
-    corp_repo = StockbitCorporateActionRepository(broker_provider=broker_provider, db_path=db_path)
-    shareholding_prov = StockbitShareholdingProvider(broker_provider=broker_provider, db_path=db_path)
-    bandar_prov = StockbitBandarDetectorProvider(broker_provider=broker_provider, db_path=db_path)
-    fundamentals_prov = StockbitFundamentalsProvider(broker_provider=broker_provider, db_path=db_path)
-    notation_prov = StockbitTickerNotationProvider(broker_provider=broker_provider, db_path=db_path)
-    fwd_est_prov = StockbitForwardEstimatesProvider(broker_provider=broker_provider, db_path=db_path)
-    profile_prov = StockbitCompanyProfileProvider(broker_provider=broker_provider, db_path=db_path)
-    earnings_prov = StockbitEarningsProvider(broker_provider=broker_provider, db_path=db_path)
-    distribution_prov = StockbitBrokerDistributionProvider(broker_provider=broker_provider, db_path=db_path)
-    valuation_prov = StockbitValuationProvider(broker_provider=broker_provider, db_path=db_path)
+    _api_client = broker_provider.api_client
+    analyst_prov = StockbitAnalystConsensusProvider(api_client=_api_client, db_path=db_path)
+    insider_prov = StockbitInsiderActivityProvider(api_client=_api_client, db_path=db_path)
+    season_prov = StockbitSeasonalityProvider(api_client=_api_client, db_path=db_path)
+    corp_repo = StockbitCorporateActionRepository(api_client=_api_client, db_path=db_path)
+    shareholding_prov = StockbitShareholdingProvider(api_client=_api_client, db_path=db_path)
+    bandar_prov = StockbitBandarDetectorProvider(api_client=_api_client, db_path=db_path)
+    fundamentals_prov = StockbitFundamentalsProvider(api_client=_api_client, db_path=db_path)
+    notation_prov = StockbitTickerNotationProvider(api_client=_api_client, db_path=db_path)
+    fwd_est_prov = StockbitForwardEstimatesProvider(api_client=_api_client, db_path=db_path)
+    profile_prov = StockbitCompanyProfileProvider(api_client=_api_client, db_path=db_path)
+    earnings_prov = StockbitEarningsProvider(api_client=_api_client, db_path=db_path)
+    distribution_prov = StockbitBrokerDistributionProvider(api_client=_api_client, db_path=db_path)
+    valuation_prov = StockbitValuationProvider(api_client=_api_client, db_path=db_path)
 
     tasks = [
         EnrichmentTask("notation", lambda: notation_prov.is_cache_fresh(ticker),   lambda: notation_prov.get_notation(ticker)),

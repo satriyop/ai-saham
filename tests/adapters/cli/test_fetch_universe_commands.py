@@ -5,6 +5,7 @@ import yaml
 from typer.testing import CliRunner
 
 from src.adapters.cli.main import app
+import src.infrastructure.browser.stockbit_api_client as _stockbit_api_client
 
 runner = CliRunner()
 
@@ -16,15 +17,15 @@ def test_universe_create_help():
 
 
 class MockBrokerProvider:
+    def __init__(self, *args, **kwargs):
+        pass
+
     def is_authenticated(self):
         return True
 
-    def _get_token(self):
-        return "fake-token"
-
 
 class MockUniverseProvider:
-    def __init__(self, broker_provider):
+    def __init__(self, api_client):
         pass
 
     def list_available(self):
@@ -48,11 +49,10 @@ def test_universe_create_with_subsector(monkeypatch, tmp_path: Path):
 
     # Mock provider
     import src.infrastructure.browser.playwright_stockbit_provider as playwright_stockbit
-    monkeypatch.setattr(playwright_stockbit, "StockbitPlaywrightBrokerProvider", MockBrokerProvider)
+    monkeypatch.setattr(playwright_stockbit, "StockbitBrokerProvider", MockBrokerProvider)
 
     # Mock API call
-    def mock_exodus_get(url: str, token: str):
-        assert token == "fake-token"
+    def mock_api_get(self, url: str, params=None):
         if "subsector/10/company" in url:
             return {
                 "data": {
@@ -64,7 +64,7 @@ def test_universe_create_with_subsector(monkeypatch, tmp_path: Path):
             }
         return None
 
-    monkeypatch.setattr(playwright_stockbit, "_exodus_get", mock_exodus_get)
+    monkeypatch.setattr(_stockbit_api_client.StockbitApiClient, "get", mock_api_get)
 
     config_file = tmp_path / "config" / "universes.yaml"
     result = runner.invoke(
@@ -103,14 +103,13 @@ def test_universe_create_sector_level(monkeypatch, tmp_path: Path):
 
     # Mock provider
     import src.infrastructure.browser.playwright_stockbit_provider as playwright_stockbit
-    monkeypatch.setattr(playwright_stockbit, "StockbitPlaywrightBrokerProvider", MockBrokerProvider)
+    monkeypatch.setattr(playwright_stockbit, "StockbitBrokerProvider", MockBrokerProvider)
 
     # Mock API calls and capture sleep times
     sleep_calls = []
     monkeypatch.setattr(time, "sleep", lambda secs: sleep_calls.append(secs))
 
-    def mock_exodus_get(url: str, token: str):
-        assert token == "fake-token"
+    def mock_api_get(self, url: str, params=None):
         if "sectors/1/subsectors" in url:
             return {
                 "data": {
@@ -140,7 +139,7 @@ def test_universe_create_sector_level(monkeypatch, tmp_path: Path):
             }
         return None
 
-    monkeypatch.setattr(playwright_stockbit, "_exodus_get", mock_exodus_get)
+    monkeypatch.setattr(_stockbit_api_client.StockbitApiClient, "get", mock_api_get)
 
     config_file = tmp_path / "config" / "universes.yaml"
     result = runner.invoke(
@@ -182,11 +181,10 @@ def test_universe_create_sector_level_fail_fast(monkeypatch, tmp_path: Path):
 
     # Mock provider
     import src.infrastructure.browser.playwright_stockbit_provider as playwright_stockbit
-    monkeypatch.setattr(playwright_stockbit, "StockbitPlaywrightBrokerProvider", MockBrokerProvider)
+    monkeypatch.setattr(playwright_stockbit, "StockbitBrokerProvider", MockBrokerProvider)
 
     # Mock API calls where the second subsector fetch fails
-    def mock_exodus_get(url: str, token: str):
-        assert token == "fake-token"
+    def mock_api_get(self, url: str, params=None):
         if "sectors/1/subsectors" in url:
             return {
                 "data": {
@@ -205,11 +203,10 @@ def test_universe_create_sector_level_fail_fast(monkeypatch, tmp_path: Path):
                 }
             }
         elif "subsector/11/company" in url:
-            # Fails returning None (e.g. network timeout or 500 error)
             return None
         return None
 
-    monkeypatch.setattr(playwright_stockbit, "_exodus_get", mock_exodus_get)
+    monkeypatch.setattr(_stockbit_api_client.StockbitApiClient, "get", mock_api_get)
 
     config_file = tmp_path / "config" / "universes.yaml"
     result = runner.invoke(
@@ -239,7 +236,7 @@ def test_universe_update_handles_custom_universe(monkeypatch, tmp_path: Path):
     # Mock provider & universe provider
     import src.infrastructure.browser.playwright_stockbit_provider as playwright_stockbit
     import src.infrastructure.browser.stockbit_universe as stockbit_universe
-    monkeypatch.setattr(playwright_stockbit, "StockbitPlaywrightBrokerProvider", MockBrokerProvider)
+    monkeypatch.setattr(playwright_stockbit, "StockbitBrokerProvider", MockBrokerProvider)
     monkeypatch.setattr(stockbit_universe, "StockbitUniverseProvider", MockUniverseProvider)
 
     # Seed an existing custom universe configuration with metadata
@@ -257,8 +254,7 @@ def test_universe_update_handles_custom_universe(monkeypatch, tmp_path: Path):
         yaml.dump(initial_config, f)
 
     # Mock API call for update
-    def mock_exodus_get(url: str, token: str):
-        assert token == "fake-token"
+    def mock_api_get(self, url: str, params=None):
         if "subsector/20/company" in url:
             return {
                 "data": {
@@ -271,7 +267,7 @@ def test_universe_update_handles_custom_universe(monkeypatch, tmp_path: Path):
             }
         return None
 
-    monkeypatch.setattr(playwright_stockbit, "_exodus_get", mock_exodus_get)
+    monkeypatch.setattr(_stockbit_api_client.StockbitApiClient, "get", mock_api_get)
 
     result = runner.invoke(
         app,
@@ -306,7 +302,7 @@ def test_universe_update_all_includes_custom_universes(monkeypatch, tmp_path: Pa
 
     import src.infrastructure.browser.playwright_stockbit_provider as playwright_stockbit
     import src.infrastructure.browser.stockbit_universe as stockbit_universe
-    monkeypatch.setattr(playwright_stockbit, "StockbitPlaywrightBrokerProvider", MockBrokerProvider)
+    monkeypatch.setattr(playwright_stockbit, "StockbitBrokerProvider", MockBrokerProvider)
     monkeypatch.setattr(stockbit_universe, "StockbitUniverseProvider", MockUniverseProvider)
 
     # Seed an existing custom universe configuration with metadata
@@ -324,8 +320,7 @@ def test_universe_update_all_includes_custom_universes(monkeypatch, tmp_path: Pa
         yaml.dump(initial_config, f)
 
     # Mock API call for update
-    def mock_exodus_get(url: str, token: str):
-        assert token == "fake-token"
+    def mock_api_get(self, url: str, params=None):
         if "subsector/20/company" in url:
             return {
                 "data": {
@@ -337,7 +332,7 @@ def test_universe_update_all_includes_custom_universes(monkeypatch, tmp_path: Pa
             }
         return None
 
-    monkeypatch.setattr(playwright_stockbit, "_exodus_get", mock_exodus_get)
+    monkeypatch.setattr(_stockbit_api_client.StockbitApiClient, "get", mock_api_get)
 
     result = runner.invoke(
         app,

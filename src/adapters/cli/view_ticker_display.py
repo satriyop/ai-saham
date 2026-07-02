@@ -490,16 +490,16 @@ def show_ticker_view(ticker: str, db_path: Path = DEFAULT_DB_PATH) -> None:
 
     db = Path(db_path)
 
-    notation_prov = StockbitTickerNotationProvider(broker_provider=None, db_path=db)  # type: ignore[arg-type]
-    fund_prov = StockbitFundamentalsProvider(broker_provider=None, db_path=db)  # type: ignore[arg-type]
-    analyst_prov = StockbitAnalystConsensusProvider(broker_provider=None, db_path=db)  # type: ignore[arg-type]
-    sh_prov = StockbitShareholdingProvider(broker_provider=None, db_path=db)  # type: ignore[arg-type]
-    bandar_prov = StockbitBandarDetectorProvider(broker_provider=None, db_path=db)  # type: ignore[arg-type]
-    fwd_prov = StockbitForwardEstimatesProvider(broker_provider=None, db_path=db)  # type: ignore[arg-type]
-    profile_prov = StockbitCompanyProfileProvider(broker_provider=None, db_path=db)  # type: ignore[arg-type]
-    corp_action_repo = StockbitCorporateActionRepository(broker_provider=None, db_path=db)  # type: ignore[arg-type]
-    insider_prov = StockbitInsiderActivityProvider(broker_provider=None, db_path=db)  # type: ignore[arg-type]
-    seasonality_prov = StockbitSeasonalityProvider(broker_provider=None, db_path=db)  # type: ignore[arg-type]
+    notation_prov = StockbitTickerNotationProvider(api_client=None, db_path=db)
+    fund_prov = StockbitFundamentalsProvider(api_client=None, db_path=db)
+    analyst_prov = StockbitAnalystConsensusProvider(api_client=None, db_path=db)
+    sh_prov = StockbitShareholdingProvider(api_client=None, db_path=db)
+    bandar_prov = StockbitBandarDetectorProvider(api_client=None, db_path=db)
+    fwd_prov = StockbitForwardEstimatesProvider(api_client=None, db_path=db)
+    profile_prov = StockbitCompanyProfileProvider(api_client=None, db_path=db)
+    corp_action_repo = StockbitCorporateActionRepository(api_client=None, db_path=db)
+    insider_prov = StockbitInsiderActivityProvider(api_client=None, db_path=db)
+    seasonality_prov = StockbitSeasonalityProvider(api_client=None, db_path=db)
     market_repo = SQLiteMarketRepository(db)
     iev_repo = SQLiteIEVRepository(db)
     sentiment_repo = SQLiteSentimentRepository(db)

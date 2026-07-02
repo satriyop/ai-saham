@@ -320,18 +320,18 @@ def confirm_open(
             "skip browser-backed auto resolution."
         )
         try:
-            from src.infrastructure.browser.playwright_stockbit_provider import (
-                StockbitPlaywrightBrokerProvider,
-            )
+            from src.infrastructure.browser.stockbit_api_client import create_stockbit_api_client
+            from src.infrastructure.browser.playwright_stockbit_provider import StockbitBrokerProvider
             from src.infrastructure.browser.stockbit_order_book import StockbitOrderBookProvider
             from src.infrastructure.browser.stockbit_running_trade import (
                 StockbitRunningTradeProvider,
             )
 
-            broker_provider = StockbitPlaywrightBrokerProvider(
+            api_client = create_stockbit_api_client(
                 profile_dir=Path(APP_CFG.storage.stockbit_profile_dir),
                 headless=headless,
             )
+            broker_provider = StockbitBrokerProvider(api_client)
             if not broker_provider.is_authenticated():
                 typer.echo(
                     "No authenticated Stockbit profile for auto confirm. "
@@ -340,8 +340,8 @@ def confirm_open(
                     err=True,
                 )
                 raise typer.Exit(1)
-            running_trade_provider = StockbitRunningTradeProvider(broker_provider=broker_provider)
-            order_book_provider = StockbitOrderBookProvider(broker_provider=broker_provider)
+            running_trade_provider = StockbitRunningTradeProvider(api_client=api_client)
+            order_book_provider = StockbitOrderBookProvider(api_client=api_client)
         except typer.Exit:
             raise
         except Exception as e:
