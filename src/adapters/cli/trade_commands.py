@@ -48,6 +48,7 @@ from src.adapters.cli.trade_swing_tuning_display import (
     display_swing_tuning_patch_apply,
     display_swing_tuning_patch_dry_run,
     display_swing_tuning_patch_validation,
+    display_swing_tuning_patch_verify,
     display_swing_tuning_review_comparison,
     display_swing_tuning_review_report,
 )
@@ -55,6 +56,7 @@ from src.application.services.swing_tuning_patch_validator import (
     SwingTuningPatchApplier,
     SwingTuningPatchDryRunPlanner,
     SwingTuningPatchValidator,
+    SwingTuningPatchVerifier,
 )
 from src.application.services.swing_tuning_review_journal import (
     SwingTuningReviewJournal,
@@ -180,6 +182,10 @@ def apply_tuning_patch(
         bool,
         typer.Option("--yes", help="Required for real apply. Writes YAML when checks pass."),
     ] = False,
+    verify: Annotated[
+        bool,
+        typer.Option("--verify", help="Verify target YAML values match proposed values."),
+    ] = False,
     config_root: Annotated[
         Path,
         typer.Option("--config-root", help="Repository/config root for YAML resolution"),
@@ -194,12 +200,34 @@ def apply_tuning_patch(
     ] = APP_CFG.analysis.format,
 ) -> None:
     """Dry-run or explicitly apply exported swing tuning patch changes."""
-    if dry_run and yes:
-        typer.echo("Error: choose either --dry-run or --yes, not both.", err=True)
+    selected_modes = sum(1 for selected in (dry_run, yes, verify) if selected)
+    if selected_modes > 1:
+        typer.echo("Error: choose only one of --dry-run, --yes, or --verify.", err=True)
         raise typer.Exit(1)
-    if not dry_run and not yes:
-        typer.echo("Error: use --dry-run to preview or --yes to apply.", err=True)
+    if selected_modes == 0:
+        typer.echo(
+            "Error: use --dry-run to preview, --yes to apply, or --verify to check.",
+            err=True,
+        )
         raise typer.Exit(1)
+
+    if verify:
+        report = SwingTuningPatchVerifier(config_root=config_root).verify(patch_path)
+        if output_format == "json":
+            payload = {
+                **report.to_dict(),
+                "schema_version": 1,
+                "artifact_type": "swing_tuning_patch_verify",
+            }
+            typer.echo(json.dumps(payload, indent=2, default=str))
+            if not report.verified:
+                raise typer.Exit(1)
+            return
+
+        display_swing_tuning_patch_verify(report)
+        if not report.verified:
+            raise typer.Exit(1)
+        return
 
     if dry_run:
         report = SwingTuningPatchDryRunPlanner(config_root=config_root).plan(patch_path)

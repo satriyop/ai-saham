@@ -14,6 +14,7 @@ from src.application.services.swing_tuning_patch_validator import (
     SwingTuningPatchApplyReport,
     SwingTuningPatchDryRunReport,
     SwingTuningPatchValidationReport,
+    SwingTuningPatchVerifyReport,
 )
 from src.application.services.swing_tuning_review_journal import (
     SwingTuningReviewComparison,
@@ -247,6 +248,46 @@ def display_swing_tuning_patch_apply(
 
     console().print("")
     console().print(panel(table, title="YAML CHANGES APPLIED"))
+
+
+def display_swing_tuning_patch_verify(
+    report: SwingTuningPatchVerifyReport,
+) -> None:
+    info = compact_table(show_header=False)
+    info.add_column("Key", style="bold cyan")
+    info.add_column("Value")
+    info.add_row("Patch", report.patch_path)
+    info.add_row("Verified", "yes" if report.verified else "no")
+    info.add_row(
+        "Items",
+        f"{report.verified_item_count}/{report.item_count} verified",
+    )
+    if report.issues:
+        info.add_row("Issues", " | ".join(report.issues))
+
+    console().print("")
+    console().print(panel(info, title="SWING TUNING PATCH VERIFY"))
+
+    if not report.item_results:
+        return
+
+    table = compact_table()
+    table.add_column("Target Path")
+    table.add_column("Verified")
+    table.add_column("Expected")
+    table.add_column("Actual")
+    table.add_column("Issues")
+    for item in report.item_results:
+        table.add_row(
+            item.target_path or "N/A",
+            "yes" if item.verified else "no",
+            _value(item.expected_value),
+            _value(item.actual_value),
+            " | ".join(item.issues) or "-",
+        )
+
+    console().print("")
+    console().print(panel(table, title="APPLIED VALUE CHECKS"))
 
 
 def _period(start_date: str | None, end_date: str | None) -> str:

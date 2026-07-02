@@ -5,6 +5,7 @@ from src.application.services.swing_tuning_patch_validator import (
     SwingTuningPatchApplier,
     SwingTuningPatchDryRunPlanner,
     SwingTuningPatchValidator,
+    SwingTuningPatchVerifier,
 )
 
 
@@ -224,3 +225,61 @@ def test_swing_tuning_patch_apply_rejects_dirty_target(tmp_path):
         encoding="utf-8"
     )
     assert "strong_min_score: 70" in config_text
+
+
+def test_swing_tuning_patch_verify_passes_after_value_applied(tmp_path):
+    _write_config(tmp_path)
+    (tmp_path / "config" / "signal_engine.yaml").write_text(
+        "signal_engine:\n"
+        "  classification:\n"
+        "    strong_min_score: 71\n",
+        encoding="utf-8",
+    )
+    patch_path = tmp_path / "patch.json"
+    patch_path.write_text(json.dumps({
+        "artifact_type": "swing_tuning_patch_review",
+        "apply": {"supported": False},
+        "patch_items": [
+            {
+                "target_path": (
+                    "config/signal_engine.yaml:"
+                    "signal_engine.classification.strong_min_score"
+                ),
+                "current_value": 70,
+                "proposed_value": 71,
+            },
+        ],
+    }))
+
+    report = SwingTuningPatchVerifier(config_root=tmp_path).verify(patch_path)
+
+    assert report.verified is True
+    assert report.verified_item_count == 1
+    assert report.item_results[0].actual_value == 71
+    assert report.item_results[0].issues == ()
+
+
+def test_swing_tuning_patch_verify_fails_before_value_applied(tmp_path):
+    _write_config(tmp_path)
+    patch_path = tmp_path / "patch.json"
+    patch_path.write_text(json.dumps({
+        "artifact_type": "swing_tuning_patch_review",
+        "apply": {"supported": False},
+        "patch_items": [
+            {
+                "target_path": (
+                    "config/signal_engine.yaml:"
+                    "signal_engine.classification.strong_min_score"
+                ),
+                "current_value": 70,
+                "proposed_value": 71,
+            },
+        ],
+    }))
+
+    report = SwingTuningPatchVerifier(config_root=tmp_path).verify(patch_path)
+
+    assert report.verified is False
+    assert report.verified_item_count == 0
+    assert report.item_results[0].actual_value == 70
+    assert report.item_results[0].issues == ("proposed_value_not_applied",)

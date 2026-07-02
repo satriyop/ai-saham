@@ -928,6 +928,7 @@ saham trade tune-swing --universe idx80 --export-patch journals/swing_tuning_pat
 saham trade validate-tuning-patch journals/swing_tuning_patch.json
 saham trade apply-tuning-patch journals/swing_tuning_patch.json --dry-run
 saham trade apply-tuning-patch journals/swing_tuning_patch.json --yes
+saham trade apply-tuning-patch journals/swing_tuning_patch.json --verify
 saham trade review-tuning-swing
 saham trade review-tuning-swing --compare-latest
 ```
@@ -945,7 +946,9 @@ before considering any manual config edit. Use
 use `saham trade apply-tuning-patch --yes` to apply only after validation passes
 and target YAML files are clean in git. Real apply records an audit line in
 `journals/swing_tuning_apply_log.jsonl` with old and new values. YAML comments
-are not preserved by the writer, so review the dry-run before applying. Use
+are not preserved by the writer, so review the dry-run before applying. After
+apply, run `saham trade apply-tuning-patch --verify` to reload the affected YAML
+paths and confirm actual values match the patch's proposed values. Use
 `saham trade review-tuning-swing` to inspect saved review runs without replaying
 the backtest. Add `--compare-latest` to compare the newest saved review against
 the previous saved review, including metric deltas and proposed target-path
@@ -1696,6 +1699,7 @@ src/
 | `saham trade validate-tuning-patch` | `swing_tuning_patch_validation` | Read-only validation of exported tuning patch JSON |
 | `saham trade apply-tuning-patch --dry-run` | `swing_tuning_patch_dry_run` | Read-only preview of YAML value changes; no writes |
 | `saham trade apply-tuning-patch --yes` | `swing_tuning_patch_apply` | Explicit YAML apply with validation, clean-target guard, and JSONL audit log |
+| `saham trade apply-tuning-patch --verify` | `swing_tuning_patch_verify` | Reload affected YAML paths and confirm proposed values are present |
 | `saham trade backtest-intraday` | `IntradayBacktestResponse` | Daily-OHLC intraday proxy simulation artifact |
 | `saham analyze accum-audit` | `AccumulationAuditResponse` | Learning/audit artifact for forward-return behavior |
 
