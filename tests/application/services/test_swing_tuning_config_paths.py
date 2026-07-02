@@ -1,3 +1,9 @@
+"""Swing tuning config path helper tests.
+
+These tests own read-only YAML tuning path parsing, wildcard expansion,
+validation, and value resolution behavior.
+"""
+
 import pytest
 
 from src.application.services.swing_backtest_attribution import (

@@ -1,3 +1,9 @@
+"""Swing tuning diff policy helper tests.
+
+These tests own deterministic dry-run value selection, target classification,
+interpretation wording, summary counts, and review checklist behavior.
+"""
+
 from dataclasses import dataclass
 
 from src.application.services.swing_tuning_config_paths import (

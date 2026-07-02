@@ -1,3 +1,10 @@
+"""Swing tuning facade tests.
+
+These tests cover orchestration contracts: readiness, proposals, guarded diff
+drafts, and apply-block behavior. Helper internals belong in the focused
+config-path and diff-policy test modules.
+"""
+
 from dataclasses import replace
 
 import pytest
@@ -11,10 +18,6 @@ from src.application.services.swing_tuning_contracts import (
     build_tuning_config_diff_draft,
     build_tuning_proposal_draft,
     build_tuning_readiness_plan,
-    expand_tuning_config_paths,
-    parse_tuning_config_path,
-    resolve_tuning_config_value,
-    validate_tuning_target_paths,
 )
 from tests.application.services.swing_backtest_attribution_fixtures import (
     ObservationFixture,
@@ -529,129 +532,6 @@ def test_tuning_config_diff_apply_block_rejects_applyable_drafts(tmp_path):
     ):
         with pytest.raises(ValueError, match="apply block violated"):
             assert_tuning_config_diff_apply_block(unsafe_draft)
-
-
-def test_parse_tuning_config_path_splits_file_and_document_path():
-    parsed = parse_tuning_config_path(
-        "config/signal_engine.yaml:signal_engine.classification"
-    )
-
-    assert parsed.raw == "config/signal_engine.yaml:signal_engine.classification"
-    assert parsed.file_path == "config/signal_engine.yaml"
-    assert parsed.document_path == "signal_engine.classification"
-    assert parsed.to_dict() == {
-        "raw": "config/signal_engine.yaml:signal_engine.classification",
-        "file_path": "config/signal_engine.yaml",
-        "document_path": "signal_engine.classification",
-    }
-
-
-def test_parse_tuning_config_path_rejects_invalid_format():
-    invalid_paths = (
-        "config/signal_engine.yaml",
-        "config/signal_engine.yaml:",
-        ":signal_engine.classification",
-        "config/signal_engine.json:signal_engine.classification",
-    )
-
-    for invalid_path in invalid_paths:
-        try:
-            parse_tuning_config_path(invalid_path)
-        except ValueError:
-            continue
-        raise AssertionError(f"Expected invalid path to fail: {invalid_path}")
-
-
-def test_resolve_tuning_config_value_reads_concrete_yaml_path(tmp_path):
-    config_dir = tmp_path / "config"
-    config_dir.mkdir()
-    (config_dir / "signal_engine.yaml").write_text(
-        "signal_engine:\n"
-        "  classification:\n"
-        "    strong_min_score: 70\n",
-        encoding="utf-8",
-    )
-    parsed = parse_tuning_config_path(
-        "config/signal_engine.yaml:signal_engine.classification.strong_min_score"
-    )
-
-    resolution = resolve_tuning_config_value(parsed, config_root=tmp_path)
-
-    assert resolution.resolved is True
-    assert resolution.current_value == 70
-    assert resolution.unresolved_reason is None
-    assert resolution.to_dict()["current_value"] == 70
-
-
-def test_resolve_tuning_config_value_rejects_wildcard_without_reading_yaml(tmp_path):
-    parsed = parse_tuning_config_path("config/swing_setups.yaml:setups.*.gates")
-
-    resolution = resolve_tuning_config_value(parsed, config_root=tmp_path)
-
-    assert resolution.resolved is False
-    assert resolution.current_value is None
-    assert resolution.unresolved_reason == "wildcard_path_not_resolved"
-
-
-def test_expand_tuning_config_paths_expands_allowlisted_setup_wildcards():
-    gate_paths = expand_tuning_config_paths(
-        "config/swing_setups.yaml:setups.*.gates"
-    )
-    partial_paths = expand_tuning_config_paths(
-        "config/swing_setups.yaml:setups.*.partial_max_failed_gates"
-    )
-
-    assert (
-        "config/swing_setups.yaml:setups.foreign-bounce.gates.min_foreign_flow_score"
-        in gate_paths
-    )
-    assert (
-        "config/swing_setups.yaml:setups.foreign-bounce.gates.required_trend"
-        in gate_paths
-    )
-    assert (
-        "config/swing_setups.yaml:setups.foreign-bounce.partial_max_failed_gates"
-        in partial_paths
-    )
-    assert all("*" not in path for path in (*gate_paths, *partial_paths))
-
-
-def test_expand_tuning_config_paths_leaves_unknown_wildcards_unexpanded():
-    raw_path = "config/risk_engine.yaml:risk_engine.gates.*.enabled"
-
-    assert expand_tuning_config_paths(raw_path) == (raw_path,)
-
-
-def test_resolve_tuning_config_value_reports_missing_document_path(tmp_path):
-    config_dir = tmp_path / "config"
-    config_dir.mkdir()
-    (config_dir / "signal_engine.yaml").write_text(
-        "signal_engine:\n"
-        "  classification: {}\n",
-        encoding="utf-8",
-    )
-    parsed = parse_tuning_config_path(
-        "config/signal_engine.yaml:signal_engine.classification.strong_min_score"
-    )
-
-    resolution = resolve_tuning_config_value(parsed, config_root=tmp_path)
-
-    assert resolution.resolved is False
-    assert resolution.current_value is None
-    assert resolution.unresolved_reason == "document_path_not_found"
-
-
-def test_validate_tuning_target_paths_covers_all_current_targets():
-    summary = summarize_swing_backtest_attribution(())
-
-    parsed_paths = validate_tuning_target_paths(summary)
-
-    assert parsed_paths
-    assert set(parsed_paths) == {
-        yaml_path
-        for target in summary.tuning_targets
-        for yaml_path in target.yaml_paths
-    }
 
 
 def test_tuning_targets_include_concrete_signal_risk_and_market_paths():
