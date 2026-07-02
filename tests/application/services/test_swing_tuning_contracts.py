@@ -11,6 +11,7 @@ from src.application.services.swing_tuning_contracts import (
     build_tuning_config_diff_draft,
     build_tuning_proposal_draft,
     build_tuning_readiness_plan,
+    expand_tuning_config_paths,
     parse_tuning_config_path,
     resolve_tuning_config_value,
     validate_tuning_target_paths,
@@ -214,7 +215,6 @@ def test_tuning_config_diff_draft_explains_non_value_selected_paths():
     assert draft.proposal_status == "READY_FOR_HUMAN_REVIEW"
     assert draft.can_apply is False
     assert draft.diff_items
-    assert draft.rejected_items
     assert {
         item.status
         for item in draft.diff_items
@@ -234,22 +234,12 @@ def test_tuning_config_diff_draft_explains_non_value_selected_paths():
     assert all(item.current_value is not None for item in draft.diff_items)
     assert all(item.proposed_value is None for item in draft.diff_items)
     assert all(item.parsed_target_path is not None for item in draft.diff_items)
-    assert all(
-        rejection.parsed_target_path is not None
-        for rejection in draft.rejected_items
-    )
-    assert all(
-        rejection.to_dict()["parsed_target_path"]["raw"] == rejection.target_path
-        for rejection in draft.rejected_items
-    )
     assert {
-        rejection.reason
-        for rejection in draft.rejected_items
-    } == {"wildcard_path_not_resolved"}
-    assert {
-        rejection.value_selection_policy
-        for rejection in draft.rejected_items
-    } == {"WILDCARD_UNRESOLVED"}
+        item.target_path
+        for item in draft.diff_items
+        if item.target_path.startswith("config/swing_setups.yaml:setups.")
+    }
+    assert not draft.rejected_items
 
 
 def test_tuning_config_diff_draft_selects_guarded_numeric_values(tmp_path):
@@ -406,6 +396,35 @@ def test_resolve_tuning_config_value_rejects_wildcard_without_reading_yaml(tmp_p
     assert resolution.resolved is False
     assert resolution.current_value is None
     assert resolution.unresolved_reason == "wildcard_path_not_resolved"
+
+
+def test_expand_tuning_config_paths_expands_allowlisted_setup_wildcards():
+    gate_paths = expand_tuning_config_paths(
+        "config/swing_setups.yaml:setups.*.gates"
+    )
+    partial_paths = expand_tuning_config_paths(
+        "config/swing_setups.yaml:setups.*.partial_max_failed_gates"
+    )
+
+    assert (
+        "config/swing_setups.yaml:setups.foreign-bounce.gates.min_foreign_flow_score"
+        in gate_paths
+    )
+    assert (
+        "config/swing_setups.yaml:setups.foreign-bounce.gates.required_trend"
+        in gate_paths
+    )
+    assert (
+        "config/swing_setups.yaml:setups.foreign-bounce.partial_max_failed_gates"
+        in partial_paths
+    )
+    assert all("*" not in path for path in (*gate_paths, *partial_paths))
+
+
+def test_expand_tuning_config_paths_leaves_unknown_wildcards_unexpanded():
+    raw_path = "config/risk_engine.yaml:risk_engine.gates.*.enabled"
+
+    assert expand_tuning_config_paths(raw_path) == (raw_path,)
 
 
 def test_resolve_tuning_config_value_reports_missing_document_path(tmp_path):

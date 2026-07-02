@@ -24,6 +24,8 @@ from src.application.services.swing_backtest_attribution import (
 )
 
 TUNING_CONFIG_DIFF_NO_APPLY_INTENT = "config_diff_schema_only_no_apply"
+_SETUP_GATES_WILDCARD_PATH = "setups.*.gates"
+_SETUP_PARTIAL_MAX_FAILED_GATES_WILDCARD_PATH = "setups.*.partial_max_failed_gates"
 
 
 @dataclass(frozen=True)
@@ -463,40 +465,44 @@ def build_tuning_config_diff_draft(
     rejected_items: list[TuningConfigDiffRejection] = []
     for candidate in proposal.candidate_changes:
         for target_path in candidate.yaml_paths:
-            parsed_target_path = parse_tuning_config_path(target_path)
-            resolution = resolve_tuning_config_value(
-                parsed_target_path,
+            for expanded_target_path in expand_tuning_config_paths(
+                target_path,
                 config_root=config_root,
-            )
-            if not resolution.resolved:
-                rejected_items.append(
-                    TuningConfigDiffRejection(
-                        target_path=target_path,
+            ):
+                parsed_target_path = parse_tuning_config_path(expanded_target_path)
+                resolution = resolve_tuning_config_value(
+                    parsed_target_path,
+                    config_root=config_root,
+                )
+                if not resolution.resolved:
+                    rejected_items.append(
+                        TuningConfigDiffRejection(
+                            target_path=expanded_target_path,
+                            parsed_target_path=parsed_target_path,
+                            evidence_dimension=candidate.dimension,
+                            reason=resolution.unresolved_reason
+                            or "config_value_not_resolved",
+                            value_selection_policy=_value_selection_policy_for_rejection(
+                                resolution.unresolved_reason,
+                            ),
+                        )
+                    )
+                    continue
+
+                suggestion = _suggest_tuning_value(candidate, resolution)
+                diff_items.append(
+                    TuningConfigDiffItem(
+                        target_path=expanded_target_path,
                         parsed_target_path=parsed_target_path,
+                        current_value=resolution.current_value,
+                        proposed_value=suggestion.proposed_value,
+                        rationale=suggestion.rationale,
                         evidence_dimension=candidate.dimension,
-                        reason=resolution.unresolved_reason
-                        or "config_value_not_resolved",
-                        value_selection_policy=_value_selection_policy_for_rejection(
-                            resolution.unresolved_reason,
-                        ),
+                        confidence=suggestion.confidence,
+                        status=suggestion.status,
+                        value_selection_policy=suggestion.value_selection_policy,
                     )
                 )
-                continue
-
-            suggestion = _suggest_tuning_value(candidate, resolution)
-            diff_items.append(
-                TuningConfigDiffItem(
-                    target_path=target_path,
-                    parsed_target_path=parsed_target_path,
-                    current_value=resolution.current_value,
-                    proposed_value=suggestion.proposed_value,
-                    rationale=suggestion.rationale,
-                    evidence_dimension=candidate.dimension,
-                    confidence=suggestion.confidence,
-                    status=suggestion.status,
-                    value_selection_policy=suggestion.value_selection_policy,
-                )
-            )
 
     has_proposed_values = any(
         item.proposed_value is not None for item in diff_items
@@ -536,6 +542,27 @@ def parse_tuning_config_path(raw_path: str) -> TuningConfigPath:
         file_path=normalized_file_path,
         document_path=document_path.strip(),
     )
+
+
+def expand_tuning_config_paths(
+    raw_path: str,
+    config_root: Path | str = Path("."),
+) -> tuple[str, ...]:
+    """Expand allowlisted wildcard tuning paths into concrete YAML paths."""
+    parsed_path = parse_tuning_config_path(raw_path)
+    if "*" not in parsed_path.document_path:
+        return (parsed_path.raw,)
+
+    if parsed_path.file_path != "config/swing_setups.yaml":
+        return (parsed_path.raw,)
+
+    if parsed_path.document_path == _SETUP_GATES_WILDCARD_PATH:
+        return _expand_swing_setup_gate_paths(parsed_path, config_root)
+
+    if parsed_path.document_path == _SETUP_PARTIAL_MAX_FAILED_GATES_WILDCARD_PATH:
+        return _expand_swing_setup_partial_gate_paths(parsed_path, config_root)
+
+    return (parsed_path.raw,)
 
 
 def validate_tuning_target_paths(summary: SwingBacktestAttributionSummary) -> tuple[str, ...]:
@@ -586,6 +613,59 @@ def resolve_tuning_config_value(
         resolved=True,
         current_value=current,
     )
+
+
+def _expand_swing_setup_gate_paths(
+    target_path: TuningConfigPath,
+    config_root: Path | str,
+) -> tuple[str, ...]:
+    document = _load_yaml_document(target_path.file_path, config_root)
+    setups = document.get("setups") if isinstance(document, dict) else None
+    if not isinstance(setups, dict):
+        return (target_path.raw,)
+
+    expanded_paths: list[str] = []
+    for setup_name, setup_config in setups.items():
+        if not isinstance(setup_config, dict):
+            continue
+        gates = setup_config.get("gates")
+        if not isinstance(gates, dict):
+            continue
+        for gate_name in gates:
+            expanded_paths.append(
+                f"{target_path.file_path}:setups.{setup_name}.gates.{gate_name}"
+            )
+    return tuple(expanded_paths) or (target_path.raw,)
+
+
+def _expand_swing_setup_partial_gate_paths(
+    target_path: TuningConfigPath,
+    config_root: Path | str,
+) -> tuple[str, ...]:
+    document = _load_yaml_document(target_path.file_path, config_root)
+    setups = document.get("setups") if isinstance(document, dict) else None
+    if not isinstance(setups, dict):
+        return (target_path.raw,)
+
+    expanded_paths = tuple(
+        f"{target_path.file_path}:setups.{setup_name}.partial_max_failed_gates"
+        for setup_name, setup_config in setups.items()
+        if isinstance(setup_config, dict)
+        and "partial_max_failed_gates" in setup_config
+    )
+    return expanded_paths or (target_path.raw,)
+
+
+def _load_yaml_document(
+    file_path: str,
+    config_root: Path | str,
+) -> dict:
+    yaml_path = Path(config_root) / file_path
+    if not yaml_path.exists():
+        return {}
+    with yaml_path.open(encoding="utf-8") as fh:
+        document = yaml.safe_load(fh) or {}
+    return document if isinstance(document, dict) else {}
 
 
 def _value_selection_policy_for_rejection(unresolved_reason: str | None) -> str:
