@@ -875,6 +875,16 @@ def test_swing_backtest_tuning_diff_json_exposes_guardrails(monkeypatch):
     assert tuning_diff["requires_human_review"] is True
     assert tuning_diff["diff_items"]
     assert tuning_diff["rejected_items"] == []
+    assert tuning_diff["summary"]["resolved_count"] == len(
+        tuning_diff["diff_items"]
+    )
+    assert tuning_diff["summary"]["proposed_count"] > 0
+    assert (
+        tuning_diff["summary"]["value_policy_counts"][
+            "DETERMINISTIC_VALUE_SELECTED"
+        ]
+        > 0
+    )
     item = tuning_diff["diff_items"][0]
     assert item["current_value"] is not None
     assert item["proposed_value"] is not None
@@ -908,6 +918,7 @@ def test_swing_backtest_tuning_diff_table_exposes_policy(monkeypatch):
     assert "PROPOSED_VALUE_SELECTED" in result.output
     assert "DETERMINISTIC_VALUE_SELECTED" in result.output
     assert "Value Policies" in result.output
+    assert "Evidence Coverage" in result.output
     assert "Can Apply" in result.output
 
 

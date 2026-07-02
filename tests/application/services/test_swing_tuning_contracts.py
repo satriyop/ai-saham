@@ -193,6 +193,11 @@ def test_tuning_config_diff_draft_blocks_insufficient_sample():
         rejection.to_dict()["value_selection_policy"]
         for rejection in draft.rejected_items
     } == {"INSUFFICIENT_EVIDENCE"}
+    summary = draft.to_dict()["summary"]
+    assert summary["resolved_count"] == 0
+    assert summary["proposed_count"] == 0
+    assert summary["current_only_count"] == 0
+    assert summary["rejected_count"] == len(DEFAULT_TUNING_TARGETS)
     assert "dry-run" in " ".join(draft.notes)
 
 
@@ -307,6 +312,20 @@ def test_tuning_config_diff_draft_selects_guarded_numeric_values(tmp_path):
     assert {
         item.value_selection_policy for item in threshold_items.values()
     } == {"DETERMINISTIC_VALUE_SELECTED"}
+    summary_dict = draft.to_dict()["summary"]
+    assert summary_dict["resolved_count"] == len(draft.diff_items)
+    assert summary_dict["proposed_count"] >= len(threshold_items)
+    assert summary_dict["current_only_count"] == (
+        len(draft.diff_items) - summary_dict["proposed_count"]
+    )
+    assert summary_dict["rejected_count"] == len(draft.rejected_items)
+    assert (
+        summary_dict["value_policy_counts"]["DETERMINISTIC_VALUE_SELECTED"]
+        >= len(threshold_items)
+    )
+    assert summary_dict["evidence_dimension_counts"]["signal_strength"] >= len(
+        threshold_items
+    )
 
 
 def test_tuning_config_diff_draft_deduplicates_target_paths(tmp_path):

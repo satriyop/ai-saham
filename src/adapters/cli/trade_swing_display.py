@@ -287,13 +287,28 @@ def _display_tuning_proposal(response: SwingBacktestResponse) -> None:
 
 def _display_tuning_config_diff(response: SwingBacktestResponse) -> None:
     draft = build_tuning_config_diff_draft(response.attribution_summary)
+    summary = draft.summary or {}
     summary_table = compact_table(show_header=False)
     summary_table.add_column("Metric", style="bold cyan")
     summary_table.add_column("Value")
     summary_table.add_row("Status", draft.status)
     summary_table.add_row("Proposal", draft.proposal_status)
-    summary_table.add_row("Diff Items", str(len(draft.diff_items)))
-    summary_table.add_row("Rejected Items", str(len(draft.rejected_items)))
+    summary_table.add_row(
+        "Diff Items",
+        str(summary.get("resolved_count", len(draft.diff_items))),
+    )
+    summary_table.add_row(
+        "Proposed",
+        str(summary.get("proposed_count", 0)),
+    )
+    summary_table.add_row(
+        "Current Only",
+        str(summary.get("current_only_count", 0)),
+    )
+    summary_table.add_row(
+        "Rejected Items",
+        str(summary.get("rejected_count", len(draft.rejected_items))),
+    )
     if draft.diff_items:
         summary_table.add_row(
             "Item Statuses",
@@ -301,9 +316,11 @@ def _display_tuning_config_diff(response: SwingBacktestResponse) -> None:
         )
         summary_table.add_row(
             "Value Policies",
-            ", ".join(
-                sorted({item.value_selection_policy for item in draft.diff_items})
-            ),
+            _fmt_count_map(summary.get("value_policy_counts")),
+        )
+        summary_table.add_row(
+            "Evidence Coverage",
+            _fmt_count_map(summary.get("evidence_dimension_counts")),
         )
     summary_table.add_row("Can Apply", "no")
     summary_table.add_row("Human Review", "required")
@@ -518,3 +535,9 @@ def _fmt_evidence_dimensions(item) -> str:
         item.evidence_dimension,
     )
     return ",".join(dimensions)
+
+
+def _fmt_count_map(counts: object) -> str:
+    if not isinstance(counts, dict) or not counts:
+        return "N/A"
+    return ", ".join(f"{key}={value}" for key, value in sorted(counts.items()))

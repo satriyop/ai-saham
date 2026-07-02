@@ -247,5 +247,7 @@ def test_display_swing_backtest_tuning_config_diff_shows_candidate_policy(capsys
     assert "Item Statuses" in output
     assert "DETERMINISTIC_VALUE_SELECTED" in output
     assert "Value Policies" in output
+    assert "Current Only" in output
+    assert "Evidence Coverage" in output
     assert "Proposed" in output
     assert "DETERMINISTIC_GUARDED" not in output

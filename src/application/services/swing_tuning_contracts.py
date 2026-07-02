@@ -250,6 +250,7 @@ class TuningConfigDiffDraft:
     diff_items: tuple[TuningConfigDiffItem, ...]
     rejected_items: tuple[TuningConfigDiffRejection, ...]
     notes: tuple[str, ...]
+    summary: dict[str, object] | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -262,6 +263,10 @@ class TuningConfigDiffDraft:
             "rejected_items": [
                 rejection.to_dict() for rejection in self.rejected_items
             ],
+            "summary": self.summary or _build_tuning_config_diff_summary(
+                self.diff_items,
+                self.rejected_items,
+            ),
             "notes": list(self.notes),
         }
 
@@ -443,6 +448,15 @@ def build_tuning_config_diff_draft(
     ))
 
     if proposal.status == "BLOCKED":
+        rejected_items_tuple = tuple(
+            TuningConfigDiffRejection(
+                target_path="N/A",
+                evidence_dimension=rejection.dimension,
+                reason=f"Proposal target rejected: {rejection.reason}",
+                value_selection_policy="INSUFFICIENT_EVIDENCE",
+            )
+            for rejection in proposal.rejected_changes
+        )
         return assert_tuning_config_diff_apply_block(
             TuningConfigDiffDraft(
                 intent=TUNING_CONFIG_DIFF_NO_APPLY_INTENT,
@@ -451,14 +465,10 @@ def build_tuning_config_diff_draft(
                 can_apply=False,
                 requires_human_review=True,
                 diff_items=(),
-                rejected_items=tuple(
-                    TuningConfigDiffRejection(
-                        target_path="N/A",
-                        evidence_dimension=rejection.dimension,
-                        reason=f"Proposal target rejected: {rejection.reason}",
-                        value_selection_policy="INSUFFICIENT_EVIDENCE",
-                    )
-                    for rejection in proposal.rejected_changes
+                rejected_items=rejected_items_tuple,
+                summary=_build_tuning_config_diff_summary(
+                    (),
+                    rejected_items_tuple,
                 ),
                 notes=notes,
             ),
@@ -511,6 +521,7 @@ def build_tuning_config_diff_draft(
         item.proposed_value is not None for item in diff_items
     )
     deduped_diff_items = _dedupe_tuning_diff_items(diff_items)
+    rejected_items_tuple = tuple(rejected_items)
     return assert_tuning_config_diff_apply_block(
         TuningConfigDiffDraft(
             intent=TUNING_CONFIG_DIFF_NO_APPLY_INTENT,
@@ -525,10 +536,49 @@ def build_tuning_config_diff_draft(
             can_apply=False,
             requires_human_review=True,
             diff_items=deduped_diff_items,
-            rejected_items=tuple(rejected_items),
+            rejected_items=rejected_items_tuple,
+            summary=_build_tuning_config_diff_summary(
+                deduped_diff_items,
+                rejected_items_tuple,
+            ),
             notes=notes,
         )
     )
+
+
+def _build_tuning_config_diff_summary(
+    diff_items: tuple[TuningConfigDiffItem, ...],
+    rejected_items: tuple[TuningConfigDiffRejection, ...],
+) -> dict[str, object]:
+    value_policy_counts = _count_strings(
+        item.value_selection_policy for item in diff_items
+    )
+    evidence_dimension_counts = _count_strings(
+        dimension
+        for item in diff_items
+        for dimension in (
+            item.evidence_dimensions or (item.evidence_dimension,)
+        )
+    )
+    return {
+        "resolved_count": len(diff_items),
+        "proposed_count": sum(
+            1 for item in diff_items if item.proposed_value is not None
+        ),
+        "current_only_count": sum(
+            1 for item in diff_items if item.proposed_value is None
+        ),
+        "rejected_count": len(rejected_items),
+        "value_policy_counts": value_policy_counts,
+        "evidence_dimension_counts": evidence_dimension_counts,
+    }
+
+
+def _count_strings(values: Iterable[str]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for value in values:
+        counts[value] = counts.get(value, 0) + 1
+    return dict(sorted(counts.items()))
 
 
 def parse_tuning_config_path(raw_path: str) -> TuningConfigPath:
