@@ -342,27 +342,22 @@ def fetch_top5(
         int,
         typer.Option("--top", help="How many top IEV movers to fetch", min=1, max=20),
     ] = 5,
-    headless: Annotated[
-        bool,
-        typer.Option("--headless/--no-headless", help="Run browser headless"),
-    ] = True,
 ) -> None:
     """
     Fetch top-N IEV movers and their live orderbook snapshots in one session.
 
     Calls the Exodus IEV movers API (all boards: main + special monitoring),
     takes the top N by IEV, then fetches the orderbook for each ticker.
-    Displays a ranked table with best bid and best offer.
+    Displays a ranked table with best bid and best offer. No browser is launched.
 
     Examples:
         saham fetch stockbit fetch-top5
         saham fetch stockbit fetch-top5 --top 10
-        saham fetch stockbit fetch-top5 --no-headless   (see the browser)
     """
-    _require_playwright_cli()
+    from src.infrastructure.browser.stockbit_api_client import create_stockbit_api_client
     from src.infrastructure.browser.playwright_stockbit_provider import PlaywrightStockbitProvider
 
-    provider = PlaywrightStockbitProvider(headless=headless)
+    provider = PlaywrightStockbitProvider(api_client=create_stockbit_api_client())
 
     typer.echo("")
     typer.echo(f"Fetching top {top} IEV movers + orderbooks...")
