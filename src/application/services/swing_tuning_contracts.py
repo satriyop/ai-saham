@@ -183,6 +183,13 @@ class TuningConfigDiffItem:
     parsed_target_path: TuningConfigPath | None = None
     evidence_dimensions: tuple[str, ...] = ()
 
+    @property
+    def interpretation(self) -> str:
+        return _tuning_config_diff_item_interpretation(
+            self.status,
+            self.value_selection_policy,
+        )
+
     def to_dict(self) -> dict:
         evidence_dimensions = self.evidence_dimensions or (self.evidence_dimension,)
         return {
@@ -200,6 +207,7 @@ class TuningConfigDiffItem:
             "confidence": self.confidence,
             "status": self.status,
             "value_selection_policy": self.value_selection_policy,
+            "interpretation": self.interpretation,
         }
 
 
@@ -213,6 +221,12 @@ class TuningConfigDiffRejection:
     value_selection_policy: str
     parsed_target_path: TuningConfigPath | None = None
 
+    @property
+    def interpretation(self) -> str:
+        return _tuning_config_diff_rejection_interpretation(
+            self.value_selection_policy,
+        )
+
     def to_dict(self) -> dict:
         return {
             "target_path": self.target_path,
@@ -224,6 +238,7 @@ class TuningConfigDiffRejection:
             "evidence_dimension": self.evidence_dimension,
             "reason": self.reason,
             "value_selection_policy": self.value_selection_policy,
+            "interpretation": self.interpretation,
         }
 
 
@@ -654,6 +669,42 @@ def _tuning_diff_item_priority(item: TuningConfigDiffItem) -> int:
         "NO_UNAMBIGUOUS_DIRECTION": 60,
         "NON_NUMERIC_CURRENT_VALUE": 50,
     }.get(item.value_selection_policy, 10)
+
+
+def _tuning_config_diff_item_interpretation(
+    status: str,
+    value_selection_policy: str,
+) -> str:
+    if status == "PROPOSED_VALUE_SELECTED":
+        return "proposed guarded value"
+    return {
+        "NON_NUMERIC_CURRENT_VALUE": (
+            "read-only current value; non-numeric config"
+        ),
+        "INSUFFICIENT_EVIDENCE": (
+            "read-only current value; evidence below high"
+        ),
+        "NO_DETERMINISTIC_DIRECTION": (
+            "read-only current value; no deterministic direction"
+        ),
+        "NO_UNAMBIGUOUS_DIRECTION": (
+            "read-only current value; unsupported direction"
+        ),
+    }.get(value_selection_policy, "read-only current value")
+
+
+def _tuning_config_diff_rejection_interpretation(
+    value_selection_policy: str,
+) -> str:
+    return {
+        "INSUFFICIENT_EVIDENCE": "not resolved; readiness blocked",
+        "CONFIG_FILE_NOT_FOUND": "not resolved; config file missing",
+        "DOCUMENT_PATH_NOT_FOUND": "not resolved; YAML path missing",
+        "WILDCARD_UNRESOLVED": "not resolved; wildcard target unresolved",
+        "CONFIG_VALUE_NOT_RESOLVED": (
+            "not resolved; config value unavailable"
+        ),
+    }.get(value_selection_policy, "not resolved")
 
 
 def _merged_tuning_diff_rationale(

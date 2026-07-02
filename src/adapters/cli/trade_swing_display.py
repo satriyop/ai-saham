@@ -319,8 +319,35 @@ def _display_tuning_config_diff(response: SwingBacktestResponse) -> None:
             _fmt_count_map(summary.get("value_policy_counts")),
         )
         summary_table.add_row(
+            "Meanings",
+            ", ".join(sorted({item.interpretation for item in draft.diff_items})),
+        )
+        summary_table.add_row(
             "Evidence Coverage",
             _fmt_count_map(summary.get("evidence_dimension_counts")),
+        )
+    if draft.rejected_items:
+        summary_table.add_row(
+            "Rejected Policies",
+            ", ".join(
+                sorted(
+                    {
+                        rejection.value_selection_policy
+                        for rejection in draft.rejected_items
+                    }
+                )
+            ),
+        )
+        summary_table.add_row(
+            "Rejected Meanings",
+            ", ".join(
+                sorted(
+                    {
+                        rejection.interpretation
+                        for rejection in draft.rejected_items
+                    }
+                )
+            ),
         )
     summary_table.add_row("Can Apply", "no")
     summary_table.add_row("Human Review", "required")
@@ -333,6 +360,7 @@ def _display_tuning_config_diff(response: SwingBacktestResponse) -> None:
     item_table.add_column("Current", justify="right")
     item_table.add_column("Proposed", justify="right")
     item_table.add_column("Policy", overflow="fold")
+    item_table.add_column("Meaning")
     item_table.add_column("Rationale")
     for item in draft.diff_items[:8]:
         item_table.add_row(
@@ -341,10 +369,12 @@ def _display_tuning_config_diff(response: SwingBacktestResponse) -> None:
             _fmt_config_value(item.current_value),
             _fmt_config_value(item.proposed_value),
             item.value_selection_policy,
+            item.interpretation,
             item.rationale,
         )
     if not draft.diff_items:
         item_table.add_row(
+            "N/A",
             "N/A",
             "N/A",
             "N/A",
@@ -357,16 +387,24 @@ def _display_tuning_config_diff(response: SwingBacktestResponse) -> None:
     rejection_table.add_column("Target Path", style="bold cyan")
     rejection_table.add_column("Evidence")
     rejection_table.add_column("Policy")
+    rejection_table.add_column("Meaning")
     rejection_table.add_column("Reason")
     for rejection in draft.rejected_items[:8]:
         rejection_table.add_row(
             rejection.target_path,
             rejection.evidence_dimension,
             rejection.value_selection_policy,
+            rejection.interpretation,
             rejection.reason,
         )
     if not draft.rejected_items:
-        rejection_table.add_row("N/A", "N/A", "N/A", "No rejected candidates")
+        rejection_table.add_row(
+            "N/A",
+            "N/A",
+            "N/A",
+            "N/A",
+            "No rejected candidates",
+        )
 
     console().print("")
     console().print(

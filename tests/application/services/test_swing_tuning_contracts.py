@@ -193,6 +193,10 @@ def test_tuning_config_diff_draft_blocks_insufficient_sample():
         rejection.to_dict()["value_selection_policy"]
         for rejection in draft.rejected_items
     } == {"INSUFFICIENT_EVIDENCE"}
+    assert {
+        rejection.to_dict()["interpretation"]
+        for rejection in draft.rejected_items
+    } == {"not resolved; readiness blocked"}
     summary = draft.to_dict()["summary"]
     assert summary["resolved_count"] == 0
     assert summary["proposed_count"] == 0
@@ -236,6 +240,13 @@ def test_tuning_config_diff_draft_explains_non_value_selected_paths():
         item.to_dict()["value_selection_policy"]
         for item in draft.diff_items
     } == {"INSUFFICIENT_EVIDENCE", "NON_NUMERIC_CURRENT_VALUE"}
+    assert {
+        item.to_dict()["interpretation"]
+        for item in draft.diff_items
+    } == {
+        "read-only current value; evidence below high",
+        "read-only current value; non-numeric config",
+    }
     assert all(item.current_value is not None for item in draft.diff_items)
     assert all(item.proposed_value is None for item in draft.diff_items)
     assert all(item.parsed_target_path is not None for item in draft.diff_items)
@@ -312,6 +323,9 @@ def test_tuning_config_diff_draft_selects_guarded_numeric_values(tmp_path):
     assert {
         item.value_selection_policy for item in threshold_items.values()
     } == {"DETERMINISTIC_VALUE_SELECTED"}
+    assert {
+        item.to_dict()["interpretation"] for item in threshold_items.values()
+    } == {"proposed guarded value"}
     summary_dict = draft.to_dict()["summary"]
     assert summary_dict["resolved_count"] == len(draft.diff_items)
     assert summary_dict["proposed_count"] >= len(threshold_items)

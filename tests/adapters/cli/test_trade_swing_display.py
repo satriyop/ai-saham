@@ -229,7 +229,9 @@ def test_display_swing_backtest_can_show_tuning_config_diff(capsys):
     assert "Rejected Items" in output
     assert "config_diff_schema_only_no_apply" in output
     assert "Policy" in output
+    assert "Meaning" in output
     assert "INSUFFICIENT_EVIDENCE" in output
+    assert "not resolved; readiness blocked" in output
 
 
 def test_display_swing_backtest_tuning_config_diff_shows_candidate_policy(capsys):
@@ -246,6 +248,7 @@ def test_display_swing_backtest_tuning_config_diff_shows_candidate_policy(capsys
     assert "PROPOSED_VALUE_SELECTED" in output
     assert "Item Statuses" in output
     assert "DETERMINISTIC_VALUE_SELECTED" in output
+    assert "proposed guarded value" in output
     assert "Value Policies" in output
     assert "Current Only" in output
     assert "Evidence Coverage" in output
