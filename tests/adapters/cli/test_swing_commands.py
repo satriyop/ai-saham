@@ -1094,7 +1094,7 @@ def test_validate_tuning_patch_json_reports_valid_patch(tmp_path):
     assert payload["item_results"][0]["issues"] == []
 
 
-def test_apply_tuning_patch_requires_dry_run(tmp_path):
+def test_apply_tuning_patch_requires_dry_run_or_yes(tmp_path):
     patch_path = tmp_path / "patch.json"
     patch_path.write_text("{}")
 
@@ -1108,7 +1108,7 @@ def test_apply_tuning_patch_requires_dry_run(tmp_path):
     )
 
     assert result.exit_code == 1
-    assert "--dry-run is required" in result.output
+    assert "use --dry-run to preview or --yes to apply" in result.output
 
 
 def test_apply_tuning_patch_dry_run_json_reports_changes(tmp_path):

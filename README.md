@@ -927,6 +927,7 @@ saham trade tune-swing --universe idx80 --save
 saham trade tune-swing --universe idx80 --export-patch journals/swing_tuning_patch.json
 saham trade validate-tuning-patch journals/swing_tuning_patch.json
 saham trade apply-tuning-patch journals/swing_tuning_patch.json --dry-run
+saham trade apply-tuning-patch journals/swing_tuning_patch.json --yes
 saham trade review-tuning-swing
 saham trade review-tuning-swing --compare-latest
 ```
@@ -941,10 +942,14 @@ guarded proposed-value rows to a review-only JSON artifact; it still does not
 edit YAML. Validate an exported patch with `saham trade validate-tuning-patch`
 before considering any manual config edit. Use
 `saham trade apply-tuning-patch --dry-run` to preview exact YAML value changes;
-real apply is not implemented. Use `saham trade review-tuning-swing` to inspect
-saved review runs without replaying the backtest. Add `--compare-latest` to
-compare the newest saved review against the previous saved review, including
-metric deltas and proposed target-path changes.
+use `saham trade apply-tuning-patch --yes` to apply only after validation passes
+and target YAML files are clean in git. Real apply records an audit line in
+`journals/swing_tuning_apply_log.jsonl` with old and new values. YAML comments
+are not preserved by the writer, so review the dry-run before applying. Use
+`saham trade review-tuning-swing` to inspect saved review runs without replaying
+the backtest. Add `--compare-latest` to compare the newest saved review against
+the previous saved review, including metric deltas and proposed target-path
+changes.
 
 Attribution dimensions map to these primary tuning files:
 
@@ -1690,6 +1695,7 @@ src/
 | `saham trade review-tuning-swing` | `swing_tuning_review_history` | Read-only summary of saved tuning review artifacts |
 | `saham trade validate-tuning-patch` | `swing_tuning_patch_validation` | Read-only validation of exported tuning patch JSON |
 | `saham trade apply-tuning-patch --dry-run` | `swing_tuning_patch_dry_run` | Read-only preview of YAML value changes; no writes |
+| `saham trade apply-tuning-patch --yes` | `swing_tuning_patch_apply` | Explicit YAML apply with validation, clean-target guard, and JSONL audit log |
 | `saham trade backtest-intraday` | `IntradayBacktestResponse` | Daily-OHLC intraday proxy simulation artifact |
 | `saham analyze accum-audit` | `AccumulationAuditResponse` | Learning/audit artifact for forward-return behavior |
 

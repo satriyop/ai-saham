@@ -13,7 +13,7 @@ Commands (all under `saham trade`):
   saham trade tune-swing          — swing tuning review from backtest attribution
   saham trade review-tuning-swing — review saved swing tuning runs
   saham trade validate-tuning-patch — validate exported swing tuning patch JSON
-  saham trade apply-tuning-patch  — dry-run exported swing tuning patch changes
+  saham trade apply-tuning-patch  — dry-run or explicitly apply exported tuning patch changes
   saham trade backtest-intraday   — intraday workflow daily-OHLC proxy simulation
   saham trade migrate-journal     — one-time migration of CSV journals to trades.jsonl
 
@@ -21,6 +21,7 @@ Layer: Adapter
 """
 
 import json
+import subprocess
 from pathlib import Path
 from typing import Annotated, Optional
 
@@ -44,12 +45,14 @@ from src.adapters.cli.trade_intraday_commands import (
 )
 from src.adapters.cli.trade_swing_commands import size, swing_backtest, swing_tune
 from src.adapters.cli.trade_swing_tuning_display import (
+    display_swing_tuning_patch_apply,
     display_swing_tuning_patch_dry_run,
     display_swing_tuning_patch_validation,
     display_swing_tuning_review_comparison,
     display_swing_tuning_review_report,
 )
 from src.application.services.swing_tuning_patch_validator import (
+    SwingTuningPatchApplier,
     SwingTuningPatchDryRunPlanner,
     SwingTuningPatchValidator,
 )
@@ -171,37 +174,91 @@ def apply_tuning_patch(
     ],
     dry_run: Annotated[
         bool,
-        typer.Option("--dry-run", help="Required. Show changes without writing YAML."),
+        typer.Option("--dry-run", help="Show changes without writing YAML."),
+    ] = False,
+    yes: Annotated[
+        bool,
+        typer.Option("--yes", help="Required for real apply. Writes YAML when checks pass."),
     ] = False,
     config_root: Annotated[
         Path,
         typer.Option("--config-root", help="Repository/config root for YAML resolution"),
     ] = Path("."),
+    log_path: Annotated[
+        Path,
+        typer.Option("--log", help="Apply audit log JSONL path"),
+    ] = Path("journals/swing_tuning_apply_log.jsonl"),
     output_format: Annotated[
         str,
         typer.Option("--format", help="Output format: table or json"),
     ] = APP_CFG.analysis.format,
 ) -> None:
-    """Dry-run exported swing tuning patch changes without applying them."""
-    if not dry_run:
-        typer.echo("Error: --dry-run is required. Real apply is not implemented.", err=True)
+    """Dry-run or explicitly apply exported swing tuning patch changes."""
+    if dry_run and yes:
+        typer.echo("Error: choose either --dry-run or --yes, not both.", err=True)
+        raise typer.Exit(1)
+    if not dry_run and not yes:
+        typer.echo("Error: use --dry-run to preview or --yes to apply.", err=True)
         raise typer.Exit(1)
 
-    report = SwingTuningPatchDryRunPlanner(config_root=config_root).plan(patch_path)
+    if dry_run:
+        report = SwingTuningPatchDryRunPlanner(config_root=config_root).plan(patch_path)
+        if output_format == "json":
+            payload = {
+                **report.to_dict(),
+                "schema_version": 1,
+                "artifact_type": "swing_tuning_patch_dry_run",
+                "apply": {
+                    "performed": False,
+                    "reason": "dry-run only",
+                },
+            }
+            typer.echo(json.dumps(payload, indent=2, default=str))
+            return
+
+        display_swing_tuning_patch_dry_run(report)
+        return
+
+    report = SwingTuningPatchApplier(
+        config_root=config_root,
+        target_dirty_checker=lambda path: _git_path_is_dirty(path, config_root),
+    ).apply(
+        patch_path,
+        confirmed=yes,
+        log_path=log_path,
+    )
     if output_format == "json":
         payload = {
             **report.to_dict(),
             "schema_version": 1,
-            "artifact_type": "swing_tuning_patch_dry_run",
-            "apply": {
-                "performed": False,
-                "reason": "dry-run only",
-            },
+            "artifact_type": "swing_tuning_patch_apply",
         }
         typer.echo(json.dumps(payload, indent=2, default=str))
+        if not report.applied:
+            raise typer.Exit(1)
         return
 
-    display_swing_tuning_patch_dry_run(report)
+    display_swing_tuning_patch_apply(report)
+    if not report.applied:
+        raise typer.Exit(1)
+
+
+def _git_path_is_dirty(path: Path, config_root: Path) -> bool:
+    root = Path(config_root).resolve()
+    try:
+        relative_path = path.resolve().relative_to(root)
+    except ValueError:
+        return True
+    result = subprocess.run(
+        ["git", "status", "--porcelain", "--", str(relative_path)],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return True
+    return bool(result.stdout.strip())
 
 
 @trade_app.command("log")
