@@ -158,11 +158,10 @@ class TestAssessSignalUseCaseScoring:
         resp = self._run(_ctx(seasonality_win_rate=80.0, seasonality_avg_return_pct=2.0))
         assert resp.assessment.breakdown_dict["seasonality_edge"] == pytest.approx(80.0)
 
-    def test_seasonality_headwind_inverts_win_rate(self):
-        # avg_return < 0 AND win_rate < 50 → headwind → component = 100 − win_rate
-        # Note: this measures pattern STRENGTH not directional fitness (ported as-is)
+    def test_seasonality_headwind_uses_low_win_rate_as_low_score(self):
+        # avg_return < 0 AND win_rate < 50 → headwind → component = win_rate
         resp = self._run(_ctx(seasonality_win_rate=20.0, seasonality_avg_return_pct=-2.0))
-        assert resp.assessment.breakdown_dict["seasonality_edge"] == pytest.approx(80.0)
+        assert resp.assessment.breakdown_dict["seasonality_edge"] == pytest.approx(20.0)
 
     def test_seasonality_neutral_gives_50(self):
         # avg_return > 0 but win_rate ≤ 50 → neither tailwind nor headwind

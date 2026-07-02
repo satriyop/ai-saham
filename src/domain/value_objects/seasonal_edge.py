@@ -39,6 +39,23 @@ class SeasonalEdge:
     source: str = "stockbit"
     fetched_at: datetime | None = None
 
+    def __post_init__(self) -> None:
+        """Validate seasonal statistics are internally consistent."""
+        if not self.ticker:
+            raise ValueError("Ticker cannot be empty")
+        if not 1 <= self.month <= 12:
+            raise ValueError("Month must be between 1 and 12")
+        if not 0.0 <= self.win_rate_pct <= 100.0:
+            raise ValueError("Win rate must be between 0 and 100")
+        if self.positive_years < 0:
+            raise ValueError("Positive years cannot be negative")
+        if self.total_years <= 0:
+            raise ValueError("Total years must be positive")
+        if self.back_years <= 0:
+            raise ValueError("Back years must be positive")
+        if self.positive_years > self.total_years:
+            raise ValueError("Positive years cannot exceed total years")
+
     @property
     def score(self) -> float:
         """Composite seasonal edge = avg_return × win_rate (both in same unit).

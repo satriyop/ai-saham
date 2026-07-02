@@ -265,13 +265,11 @@ class AssessSignalUseCase:
         Map seasonal win rate to 0–100 with direction awareness.
 
         Tailwind  (avg_return > 0 AND win_rate > 50): score = win_rate_pct
-        Headwind  (avg_return < 0 AND win_rate < 50): score = 100 − win_rate_pct
+        Headwind  (avg_return < 0 AND win_rate < 50): score = win_rate_pct
         Neutral   (everything else):                   score = 50
 
-        Note: this measures PATTERN STRENGTH, not directional fitness —
-        a strong headwind (win_rate=20%) scores 80, same as a strong tailwind
-        (win_rate=80%). Ported faithfully from _composite_score() in
-        accumulation_screen_use_case.py; directional correction is R2 scope.
+        This is directional for long-candidate attractiveness: a historically
+        weak month should reduce the score, not become a strong positive signal.
         """
         if ctx.seasonality_win_rate is None or ctx.seasonality_avg_return_pct is None:
             return self._config.missing_data.neutral_score, False
@@ -291,7 +289,7 @@ class AssessSignalUseCase:
         if is_tailwind:
             return win, True
         if is_headwind:
-            return 100.0 - win, True
+            return win, True
         return self._config.missing_data.neutral_score, True
 
     def _score_analyst(self, ctx: SignalContext) -> tuple[float, bool]:
