@@ -13,7 +13,7 @@ from src.infrastructure.browser.stockbit_insider import StockbitInsiderActivityP
 
 def test_readonly_analyst_provider_returns_stale_cache_without_overwriting(tmp_path):
     provider = StockbitAnalystConsensusProvider(
-        broker_provider=None,
+        api_client=None,
         db_path=tmp_path / "stockbit.db",
     )
     provider._write_cache(
@@ -38,7 +38,7 @@ def test_readonly_analyst_provider_returns_stale_cache_without_overwriting(tmp_p
 
 def test_readonly_forward_provider_returns_stale_cache(tmp_path):
     provider = StockbitForwardEstimatesProvider(
-        broker_provider=None,
+        api_client=None,
         db_path=tmp_path / "stockbit.db",
     )
     provider._write_cache(
@@ -61,7 +61,7 @@ def test_readonly_forward_provider_returns_stale_cache(tmp_path):
 def test_readonly_insider_provider_does_not_write_empty_sentinel_on_cache_miss(tmp_path):
     db_path = tmp_path / "stockbit.db"
     provider = StockbitInsiderActivityProvider(
-        broker_provider=None,
+        api_client=None,
         db_path=db_path,
     )
 
@@ -81,7 +81,7 @@ def test_readonly_insider_provider_does_not_write_empty_sentinel_on_cache_miss(t
 
 def test_readonly_insider_provider_returns_cached_transactions(tmp_path):
     provider = StockbitInsiderActivityProvider(
-        broker_provider=None,
+        api_client=None,
         db_path=tmp_path / "stockbit.db",
     )
     provider._write_cache(

@@ -31,7 +31,7 @@ from src.domain.ports.forward_estimates_provider import ForwardEstimatesProvider
 from src.domain.value_objects.forward_estimates import ForwardEstimates
 
 if TYPE_CHECKING:
-    from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
+    from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
 
 logger = logging.getLogger(__name__)
 
@@ -157,10 +157,10 @@ class StockbitForwardEstimatesProvider(ForwardEstimatesProvider):
 
     def __init__(
         self,
-        broker_provider: "StockbitPlaywrightBrokerProvider",
+        api_client: "StockbitApiClient | None",
         db_path: str | Path = Path("data.db"),
     ) -> None:
-        self._provider = broker_provider
+        self._api_client = api_client
         self._db_path = Path(db_path).expanduser()
         self._ensure_table()
 
@@ -173,7 +173,7 @@ class StockbitForwardEstimatesProvider(ForwardEstimatesProvider):
 
     def get_forward_estimates(self, ticker: str) -> ForwardEstimates | None:
         ticker = ticker.upper()
-        cached = self._read_cache(ticker, require_fresh=self._provider is not None)
+        cached = self._read_cache(ticker, require_fresh=self._api_client is not None)
         if cached is not None:
             return cached
         result = self._fetch(ticker)
@@ -228,13 +228,11 @@ class StockbitForwardEstimatesProvider(ForwardEstimatesProvider):
             logger.debug("forward_estimates_cache write failed for %s: %s", est.ticker, e)
 
     def _fetch(self, ticker: str) -> ForwardEstimates | None:
-        if self._provider is None:
+        if self._api_client is None:
             return None
         try:
-            from src.infrastructure.browser.playwright_stockbit_provider import _exodus_get
-            token = self._provider._get_token()
             url = _CONSENSUS_URL.format(ticker=ticker)
-            body = _exodus_get(url, token)
+            body = self._api_client.get(url)
             if not body:
                 logger.debug("Empty forward estimates response for %s", ticker)
                 return None

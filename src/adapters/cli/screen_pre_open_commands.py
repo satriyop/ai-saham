@@ -352,7 +352,7 @@ def pre_open(
 
     from src.infrastructure.browser.stockbit_ticker_notation import StockbitTickerNotationProvider
 
-    notation_provider = StockbitTickerNotationProvider(broker_provider=None, db_path=resolved_db)
+    notation_provider = StockbitTickerNotationProvider(api_client=None, db_path=resolved_db)
 
     use_case = PreOpenScreenUseCase(
         browser=browser_provider,

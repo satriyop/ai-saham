@@ -40,7 +40,7 @@ from src.domain.ports.bandar_detector_provider import BandarDetectorProvider
 from src.domain.value_objects.bandar_detector_snapshot import BandarDetectorSnapshot
 
 if TYPE_CHECKING:
-    from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
+    from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
 
 logger = logging.getLogger(__name__)
 
@@ -177,10 +177,10 @@ class StockbitBandarDetectorProvider(BandarDetectorProvider):
 
     def __init__(
         self,
-        broker_provider: "StockbitPlaywrightBrokerProvider",
+        api_client: "StockbitApiClient | None",
         db_path: Path,
     ) -> None:
-        self._provider = broker_provider
+        self._api_client = api_client
         self._db_path = db_path
         self._mem_cache: dict[tuple[str, str], BandarDetectorSnapshot | None] = {}
         self._ensure_table()
@@ -221,7 +221,7 @@ class StockbitBandarDetectorProvider(BandarDetectorProvider):
         cached = self._read_cache(
             ticker.upper(),
             target_date,
-            allow_previous=self._provider is None,
+            allow_previous=self._api_client is None,
         )
         if cached is not None:
             self._mem_cache[key] = cached
@@ -312,13 +312,11 @@ class StockbitBandarDetectorProvider(BandarDetectorProvider):
             logger.warning("bandar_detector: cache write failed for %s: %s", snap.ticker, e)
 
     def _fetch(self, ticker: str, session_date: date) -> BandarDetectorSnapshot | None:
-        if self._provider is None:
+        if self._api_client is None:
             return None
         try:
-            from src.infrastructure.browser.playwright_stockbit_provider import _exodus_get
-            token = self._provider._get_token()
             url = _MARKET_DETECTOR_URL.format(ticker=ticker)
-            body = _exodus_get(url, token)
+            body = self._api_client.get(url)
             if not body:
                 logger.debug("Empty bandar detector response for %s", ticker)
                 return None

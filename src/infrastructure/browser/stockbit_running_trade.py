@@ -21,7 +21,7 @@ from src.domain.entities.trade_tick import TradeTick
 from src.domain.ports.running_trade_provider import RunningTradeProvider
 
 if TYPE_CHECKING:
-    from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
+    from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
 
 logger = logging.getLogger(__name__)
 
@@ -148,16 +148,14 @@ class StockbitRunningTradeProvider(RunningTradeProvider):
         broker_provider: Authenticated StockbitPlaywrightBrokerProvider for token access.
     """
 
-    def __init__(self, broker_provider: "StockbitPlaywrightBrokerProvider") -> None:
-        self._provider = broker_provider
+    def __init__(self, api_client: "StockbitApiClient | None") -> None:
+        self._api_client = api_client
 
     def fetch_running_trade(self, ticker: str, limit: int = 80) -> list[TradeTick]:
         """Return the most recent executed ticks for ticker. Returns [] on any error."""
         try:
-            from src.infrastructure.browser.playwright_stockbit_provider import _exodus_get
-            token = self._provider._get_token()
             url = _RUNNING_TRADE_URL.format(ticker=ticker.upper(), limit=limit)
-            body = _exodus_get(url, token)
+            body = self._api_client.get(url)
             if not body:
                 logger.debug("Empty running-trade response for %s", ticker)
                 return []

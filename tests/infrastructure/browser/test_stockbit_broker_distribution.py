@@ -190,7 +190,7 @@ def test_foreign_buying_from_domestic_false_when_foreign_counterparty():
 
 @pytest.fixture
 def tmp_provider(tmp_path):
-    return StockbitBrokerDistributionProvider(broker_provider=None, db_path=tmp_path / "test.db")
+    return StockbitBrokerDistributionProvider(api_client=None, db_path=tmp_path / "test.db")
 
 
 def test_schema_created(tmp_provider):

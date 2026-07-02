@@ -25,7 +25,7 @@ import logging
 from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
-    from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
+    from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
 
 logger = logging.getLogger(__name__)
 
@@ -121,16 +121,14 @@ class StockbitUniverseProvider:
         broker_provider: Authenticated StockbitPlaywrightBrokerProvider for token access.
     """
 
-    def __init__(self, broker_provider: "StockbitPlaywrightBrokerProvider") -> None:
-        self._provider = broker_provider
+    def __init__(self, api_client: "StockbitApiClient | None") -> None:
+        self._api_client = api_client
         self._subsector_map: dict[str, tuple[int | str, int]] | None = None  # key → (id, sector)
 
     # ── Internal helpers ────────────────────────────────────────────────────
 
     def _get(self, url: str) -> dict | None:
-        from src.infrastructure.browser.playwright_stockbit_provider import _exodus_get
-        token = self._provider._get_token()
-        return _exodus_get(url, token)
+        return self._api_client.get(url)
 
     def _parse_subsector_items(self, body: dict | None) -> list[dict]:
         """Extract the list of subsector items from a sectors API response."""

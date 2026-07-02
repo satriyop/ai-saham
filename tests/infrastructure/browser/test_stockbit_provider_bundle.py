@@ -15,6 +15,6 @@ def test_create_readonly_stockbit_providers_uses_cache_only(tmp_path):
     assert providers.fundamentals_prov is not None
     assert providers.notation_prov is not None
     assert providers.forward_estimates_prov is not None
-    assert providers.analyst_prov._provider is None
-    assert providers.bandar_prov._provider is None
-    assert providers.forward_estimates_prov._provider is None
+    assert providers.analyst_prov._api_client is None
+    assert providers.bandar_prov._api_client is None
+    assert providers.forward_estimates_prov._api_client is None

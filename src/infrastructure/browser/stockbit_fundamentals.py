@@ -29,7 +29,7 @@ from src.domain.ports.fundamentals_provider import FundamentalsProvider
 from src.domain.value_objects.company_fundamentals import CompanyFundamentals
 
 if TYPE_CHECKING:
-    from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
+    from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
 
 logger = logging.getLogger(__name__)
 
@@ -169,10 +169,10 @@ class StockbitFundamentalsProvider(FundamentalsProvider):
 
     def __init__(
         self,
-        broker_provider: "StockbitPlaywrightBrokerProvider",
+        api_client: "StockbitApiClient | None",
         db_path: Path,
     ) -> None:
-        self._provider = broker_provider
+        self._api_client = api_client
         self._db_path = db_path
         self._mem_cache: dict[str, CompanyFundamentals | None] = {}
         self._ensure_table()
@@ -307,13 +307,11 @@ class StockbitFundamentalsProvider(FundamentalsProvider):
             logger.warning("company_fundamentals: cache write failed for %s: %s", fund.ticker, e)
 
     def _fetch(self, ticker: str) -> CompanyFundamentals | None:
-        if self._provider is None:
+        if self._api_client is None:
             return None
         try:
-            from src.infrastructure.browser.playwright_stockbit_provider import _exodus_get
-            token = self._provider._get_token()
             url = _KEYSTATS_URL.format(ticker=ticker)
-            body = _exodus_get(url, token)
+            body = self._api_client.get(url)
             if not body:
                 logger.debug("Empty keystats response for %s", ticker)
                 return None

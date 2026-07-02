@@ -29,7 +29,7 @@ from src.domain.ports.company_profile_provider import CompanyProfileProvider
 from src.domain.value_objects.company_profile import CompanyProfile
 
 if TYPE_CHECKING:
-    from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
+    from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
 
 logger = logging.getLogger(__name__)
 
@@ -113,10 +113,10 @@ class StockbitCompanyProfileProvider(CompanyProfileProvider):
 
     def __init__(
         self,
-        broker_provider: "StockbitPlaywrightBrokerProvider",
+        api_client: "StockbitApiClient | None",
         db_path: str | Path = Path("data.db"),
     ) -> None:
-        self._provider = broker_provider
+        self._api_client = api_client
         self._db_path = Path(db_path).expanduser()
         self._ensure_table()
 
@@ -192,13 +192,11 @@ class StockbitCompanyProfileProvider(CompanyProfileProvider):
             logger.debug("company_profile_cache write failed for %s: %s", profile.ticker, e)
 
     def _fetch(self, ticker: str) -> CompanyProfile | None:
-        if self._provider is None:
+        if self._api_client is None:
             return None
         try:
-            from src.infrastructure.browser.playwright_stockbit_provider import _exodus_get
-            token = self._provider._get_token()
             url = _PROFILE_URL.format(ticker=ticker)
-            body = _exodus_get(url, token)
+            body = self._api_client.get(url)
             if not body:
                 logger.debug("Empty profile response for %s", ticker)
                 return None

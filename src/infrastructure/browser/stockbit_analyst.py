@@ -32,7 +32,7 @@ from src.domain.ports.analyst_consensus_provider import AnalystConsensusProvider
 from src.domain.value_objects.analyst_consensus import AnalystConsensus
 
 if TYPE_CHECKING:
-    from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
+    from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
 
 logger = logging.getLogger(__name__)
 
@@ -113,10 +113,10 @@ class StockbitAnalystConsensusProvider(AnalystConsensusProvider):
 
     def __init__(
         self,
-        broker_provider: "StockbitPlaywrightBrokerProvider",
+        api_client: "StockbitApiClient | None",
         db_path: str | Path = Path("data.db"),
     ) -> None:
-        self._provider = broker_provider
+        self._api_client = api_client
         self._db_path = Path(db_path).expanduser()
         self._ensure_schema()
 
@@ -253,7 +253,7 @@ class StockbitAnalystConsensusProvider(AnalystConsensusProvider):
         """
         ticker = ticker.upper()
 
-        if self._provider is None:
+        if self._api_client is None:
             return self._read_cache(ticker)
 
         if self._is_cache_fresh(ticker):
@@ -264,13 +264,11 @@ class StockbitAnalystConsensusProvider(AnalystConsensusProvider):
         return result
 
     def _fetch(self, ticker: str) -> AnalystConsensus | None:
-        if self._provider is None:
+        if self._api_client is None:
             return None
         try:
-            from src.infrastructure.browser.playwright_stockbit_provider import _exodus_get
-            token = self._provider._get_token()
             url = _ANALYST_URL.format(ticker=ticker.upper())
-            body = _exodus_get(url, token)
+            body = self._api_client.get(url)
             if not body:
                 logger.debug("Empty analyst response for %s", ticker)
                 return None

@@ -1,23 +1,23 @@
 """
-Playwright-based Stockbit browser provider.
+Stockbit provider module.
 
-Contains the two provider classes and all response parsers.
+Contains two provider classes and all response parsers:
+  - PlaywrightStockbitProvider — IEV/OrderBook provider backed by StockbitApiClient
+  - StockbitBrokerProvider    — BrokerDataProvider backed by StockbitApiClient
+
 Browser session utilities (login, spy, browse, JWT extraction) live in
 playwright_stockbit_browser.py and are re-exported from here for backward compat.
 
-Two modes for IEV/orderbook:
-  1. API-intercept mode (preferred): hooks Playwright's network layer to
-     capture JSON responses, bypassing fragile DOM selectors entirely.
-  2. DOM-scrape mode (fallback): parses rendered HTML tables.
+Phase D+E: browser launches removed from data-fetching methods. All Exodus API
+calls now go through StockbitApiClient (JWT managed by StockbitTokenStore).
 
 Flow:
-  saham fetch stockbit login   → saves persistent browser profile
+  saham fetch stockbit login   → saves persistent browser profile + JWT
   saham fetch stockbit spy     → captures all API traffic to identify endpoints
-  saham fetch stockbit test    → smoke-tests the adapter with live data
-  saham screen pre-open → uses saved session for autonomous screening
+  saham screen pre-open        → uses saved session for autonomous screening
 
 Layer: Infrastructure
-Depends on: playwright (optional), BrowserDataProvider port
+Depends on: StockbitApiClient, BrowserDataProvider port
 """
 
 from __future__ import annotations
@@ -50,6 +50,7 @@ from src.domain.value_objects.screener_result import (
     OrderBookBid,
     OrderBookTopOfBook,
 )
+from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +60,6 @@ from src.infrastructure.browser.playwright_stockbit_browser import (
     NAV_TIMEOUT,
     ORDERBOOK_PAGE_URL,
     SPA_SETTLE_MS,
-    StockbitSessionExpired,
     _exodus_get,
     _intercept_token,
     _persistent_context,
@@ -100,31 +100,29 @@ def _parse_number(text: str) -> int | None:
 
 class PlaywrightStockbitProvider(BrowserDataProvider):
     """
-    Autonomous Stockbit provider using Playwright.
+    Autonomous Stockbit IEV/OrderBook provider backed by StockbitApiClient.
 
-    Tries API-interception first (fast, reliable). Falls back to DOM scraping
-    if no JSON responses match known patterns.
+    No browser launches for data — uses the persisted JWT via api_client.
+    The browser profile is only referenced by _assert_session_fresh().
 
     Usage:
-        provider = PlaywrightStockbitProvider(headless=True)
+        from src.infrastructure.browser.stockbit_api_client import create_stockbit_api_client
+        api_client = create_stockbit_api_client()
+        provider = PlaywrightStockbitProvider(api_client=api_client)
         movers = provider.fetch_preopen_movers(iev_min=100_000)
         ob = provider.fetch_order_book_best_bid("BBCA")
     """
 
     def __init__(
         self,
+        api_client: StockbitApiClient,
         profile_dir: Path = DEFAULT_PROFILE_DIR,
-        headless: bool = True,
-        timeout: int = NAV_TIMEOUT,
-        api_patterns_file: Path | None = None,
     ) -> None:
-        self._profile_dir = profile_dir
-        self._headless = headless
-        self._timeout = timeout
-        self._api_patterns = _load_api_patterns(api_patterns_file) if api_patterns_file else {}
+        self._api_client = api_client
+        self._profile_dir = profile_dir  # kept only for _assert_session_fresh
 
     def _assert_session_fresh(self) -> None:
-        """Raise before launching a browser if the session marker is too old."""
+        """Raise before making API calls if the session marker is too old."""
         marker = self._profile_dir / ".logged_in_at"
         if not marker.exists():
             return  # no marker yet — first run after login
@@ -140,64 +138,30 @@ class PlaywrightStockbitProvider(BrowserDataProvider):
 
     def fetch_preopen_movers(self, iev_min: int) -> list[MoverData]:
         """
-        Fetch IEV movers from the Exodus API using a JWT extracted from the browser.
+        Fetch IEV movers from the Exodus API via StockbitApiClient.
 
         Flow:
-          1. Open orderbook page (reliably fires Bearer-authenticated Exodus requests)
-          2. Intercept RS256 Bearer token from request headers
-          3. Call market-mover for main boards + special monitoring, merge results
-          4. Parse and return MoverData list filtered by iev_min
+          1. Call IEV movers API for main boards + special monitoring, merge results
+          2. Parse and return MoverData list filtered by iev_min
         """
         self._assert_session_fresh()
-        sync_playwright = _require_playwright()
-
-        with sync_playwright() as pw:
-            ctx, page = _persistent_context(pw, self._profile_dir, self._headless)
-
-            try:
-                token = _intercept_token(page)
-                # ORDERBOOK_PAGE_URL reliably fires Bearer-authenticated Exodus requests.
-                # STREAM_URL does not fire Bearer requests within the settle window.
-                page.goto(ORDERBOOK_PAGE_URL, timeout=self._timeout, wait_until="domcontentloaded")
-                page.wait_for_timeout(SPA_SETTLE_MS)
-
-                resolved = _resolve_token(page, token)
-                if not resolved:
-                    logger.warning("Could not extract JWT — falling back to DOM")
-                    return _scrape_movers_from_dom(page, iev_min)
-
-                logger.info("JWT extracted, calling Exodus IEV API (all boards)")
-                try:
-                    all_movers = _fetch_iev_all_boards(resolved)
-                except StockbitSessionExpired as e:
-                    raise RuntimeError(
-                        f"{e}\n\nRun: saham fetch stockbit login"
-                    ) from None
-
-                filtered = [m for m in all_movers if m.iev >= iev_min]
-                if filtered:
-                    logger.info("Exodus API: %d movers (IEV >= %d)", len(filtered), iev_min)
-                    return filtered
-                logger.warning("Exodus API returned data but 0 movers matched IEV >= %d", iev_min)
-
-                logger.info("Falling back to DOM scraping")
-                return _scrape_movers_from_dom(page, iev_min)
-
-            finally:
-                ctx.close()
+        try:
+            all_movers = _fetch_iev_all_boards(self._api_client)
+        except Exception as e:
+            raise RuntimeError(
+                f"IEV fetch failed: {e}\nRun: saham fetch stockbit login"
+            ) from None
+        return [m for m in all_movers if m.iev >= iev_min]
 
     def fetch_top5_iev_with_orderbooks(self, top_n: int = 5) -> list[MoverWithOrderBook]:
         """
-        Fetch top-N IEV movers and their live orderbook snapshots in ONE browser session.
-        Raises RuntimeError immediately if session marker is >= 8h old.
+        Fetch top-N IEV movers and their live orderbook snapshots.
 
         Flow:
-          1. Open browser, navigate to stream page to load auth state
-          2. Extract JWT from localStorage
-          3. Call IEV movers API for all boards (main + special monitoring), merge
-          4. Take top_n by IEV descending
-          5. For each ticker, call orderbook API via httpx
-          6. Return combined list
+          1. Call IEV movers API for all boards (main + special monitoring), merge
+          2. Take top_n by IEV descending
+          3. For each ticker, call orderbook API
+          4. Return combined list
 
         Args:
             top_n: How many top IEV movers to return (default 5)
@@ -206,52 +170,30 @@ class PlaywrightStockbitProvider(BrowserDataProvider):
             List of MoverWithOrderBook sorted by IEV descending
         """
         self._assert_session_fresh()
-        sync_playwright = _require_playwright()
+        all_movers = _fetch_iev_all_boards(self._api_client)
+        top_movers = all_movers[:top_n]
+        logger.info("Top %d movers: %s", len(top_movers), [m.ticker for m in top_movers])
 
-        with sync_playwright() as pw:
-            ctx, page = _persistent_context(pw, self._profile_dir, self._headless)
+        results: list[MoverWithOrderBook] = []
+        for mover in top_movers:
+            ob_url = _ORDER_BOOK_API.format(ticker=mover.ticker.upper())
+            body = self._api_client.get(ob_url)
+            bid_price, bid_lots, offer_price, offer_lots = _parse_top_of_book(body)
+            results.append(MoverWithOrderBook(
+                ticker=mover.ticker,
+                iev=mover.iev,
+                best_bid=bid_price,
+                best_bid_lots=bid_lots,
+                best_offer=offer_price,
+                best_offer_lots=offer_lots,
+                iep=mover.iep,
+            ))
+            logger.info(
+                "%s: bid=%s (%s lots)  offer=%s (%s lots)",
+                mover.ticker, bid_price, bid_lots, offer_price, offer_lots,
+            )
 
-            try:
-                token_box = _intercept_token(page)
-                page.goto(ORDERBOOK_PAGE_URL, timeout=self._timeout, wait_until="domcontentloaded")
-                page.wait_for_timeout(SPA_SETTLE_MS)
-
-                token = _resolve_token(page, token_box)
-                if not token:
-                    logger.warning("Could not extract JWT for fetch_top5")
-                    return []
-
-                logger.info("Fetching IEV movers (all boards)...")
-                try:
-                    all_movers = _fetch_iev_all_boards(token)
-                except StockbitSessionExpired as e:
-                    raise RuntimeError(f"{e}\n\nRun: saham fetch stockbit login") from None
-                top_movers = all_movers[:top_n]
-                logger.info("Top %d movers: %s", len(top_movers), [m.ticker for m in top_movers])
-
-                results: list[MoverWithOrderBook] = []
-                for mover in top_movers:
-                    ob_url = _ORDER_BOOK_API.format(ticker=mover.ticker.upper())
-                    body = _exodus_get(ob_url, token)
-                    bid_price, bid_lots, offer_price, offer_lots = _parse_top_of_book(body)
-                    results.append(MoverWithOrderBook(
-                        ticker=mover.ticker,
-                        iev=mover.iev,
-                        best_bid=bid_price,
-                        best_bid_lots=bid_lots,
-                        best_offer=offer_price,
-                        best_offer_lots=offer_lots,
-                        iep=mover.iep,
-                    ))
-                    logger.info(
-                        "%s: bid=%s (%s lots)  offer=%s (%s lots)",
-                        mover.ticker, bid_price, bid_lots, offer_price, offer_lots,
-                    )
-
-                return results
-
-            finally:
-                ctx.close()
+        return results
 
     def fetch_iev_snapshot(self, top_n: int = 50) -> list[MoverData]:
         """
@@ -260,92 +202,47 @@ class PlaywrightStockbitProvider(BrowserDataProvider):
         Designed to be called at ~08:50 WIB to capture the pre-open mover list
         for historical backtesting. Returns up to top_n movers sorted by IEV desc.
 
-        Much faster than fetch_top5_iev_with_orderbooks (~15s vs ~45s) because
-        it skips the per-ticker orderbook API calls.
-
         Args:
             top_n: Maximum movers to return (default 50 to capture a broad universe).
         """
         self._assert_session_fresh()
-        sync_playwright = _require_playwright()
-
-        with sync_playwright() as pw:
-            ctx, page = _persistent_context(pw, self._profile_dir, self._headless)
-
-            try:
-                token_box = _intercept_token(page)
-                page.goto(ORDERBOOK_PAGE_URL, timeout=self._timeout, wait_until="domcontentloaded")
-                page.wait_for_timeout(SPA_SETTLE_MS)
-
-                token = _resolve_token(page, token_box)
-                if not token:
-                    logger.warning("Could not extract JWT for fetch_iev_snapshot")
-                    return []
-
-                logger.info("Fetching IEV movers for snapshot (top %d)...", top_n)
-                try:
-                    all_movers = _fetch_iev_all_boards(token)
-                except StockbitSessionExpired as e:
-                    raise RuntimeError(f"{e}\n\nRun: saham fetch stockbit login") from None
-
-                return all_movers[:top_n]
-
-            finally:
-                ctx.close()
+        return _fetch_iev_all_boards(self._api_client)[:top_n]
 
     def _fetch_order_book_raw(self, ticker: str) -> OrderBookTopOfBook | None:
-        """Single browser session: fetch orderbook and return both bid and offer."""
-        sync_playwright = _require_playwright()
+        """Fetch orderbook via api_client and return both bid and offer."""
+        ob_url = _ORDER_BOOK_API.format(ticker=ticker.upper())
+        body = self._api_client.get(ob_url)
+        if not body:
+            return None
 
-        with sync_playwright() as pw:
-            ctx, page = _persistent_context(pw, self._profile_dir, self._headless)
+        bid_price, bid_lots, offer_price, offer_lots = _parse_top_of_book(body)
+        if bid_price is None and offer_price is None:
+            data_block = body.get("data") if isinstance(body, dict) else None
+            iepiev = (data_block or {}).get("iepiev") or {}
+            bbo = iepiev.get("best_bid_offer") or {}
+            bid_list = (data_block or {}).get("bid") or []
+            offer_list = (data_block or {}).get("offer") or []
+            logger.warning(
+                "Order book no bid/offer for %s — "
+                "bbo=%s  bbo.bid.price=%s  bid_list_len=%d  "
+                "offer_list_len=%d  iep=%s  lastprice=%s",
+                ticker,
+                "present" if bbo else "MISSING",
+                (bbo.get("bid") or {}).get("price", {}).get("raw", "MISSING"),
+                len(bid_list),
+                len(offer_list),
+                iepiev.get("iep", {}).get("raw", "N/A"),
+                (data_block or {}).get("lastprice", "N/A"),
+            )
+            return None
 
-            try:
-                token_box = _intercept_token(page)
-                page.goto(ORDERBOOK_PAGE_URL, timeout=self._timeout, wait_until="domcontentloaded")
-                page.wait_for_timeout(SPA_SETTLE_MS)
-
-                token = _resolve_token(page, token_box)
-                if not token:
-                    logger.warning("Could not extract JWT for order book")
-                    return None
-
-                ob_url = _ORDER_BOOK_API.format(ticker=ticker.upper())
-                body = _exodus_get(ob_url, token)
-                if not body:
-                    return None
-
-                bid_price, bid_lots, offer_price, offer_lots = _parse_top_of_book(body)
-                if bid_price is None and offer_price is None:
-                    data_block = body.get("data") if isinstance(body, dict) else None
-                    iepiev = (data_block or {}).get("iepiev") or {}
-                    bbo = iepiev.get("best_bid_offer") or {}
-                    bid_list = (data_block or {}).get("bid") or []
-                    offer_list = (data_block or {}).get("offer") or []
-                    logger.warning(
-                        "Order book no bid/offer for %s — "
-                        "bbo=%s  bbo.bid.price=%s  bid_list_len=%d  "
-                        "offer_list_len=%d  iep=%s  lastprice=%s",
-                        ticker,
-                        "present" if bbo else "MISSING",
-                        (bbo.get("bid") or {}).get("price", {}).get("raw", "MISSING"),
-                        len(bid_list),
-                        len(offer_list),
-                        iepiev.get("iep", {}).get("raw", "N/A"),
-                        (data_block or {}).get("lastprice", "N/A"),
-                    )
-                    return None
-
-                bid = OrderBookBid(price=bid_price, volume=bid_lots) if bid_price and bid_lots else None
-                offer = OrderBookBid(price=offer_price, volume=offer_lots) if offer_price and offer_lots else None
-                logger.info(
-                    "Order book %s: bid=%s (%s lots)  offer=%s (%s lots)",
-                    ticker, bid_price, bid_lots, offer_price, offer_lots,
-                )
-                return OrderBookTopOfBook(bid=bid, offer=offer)
-
-            finally:
-                ctx.close()
+        bid = OrderBookBid(price=bid_price, volume=bid_lots) if bid_price and bid_lots else None
+        offer = OrderBookBid(price=offer_price, volume=offer_lots) if offer_price and offer_lots else None
+        logger.info(
+            "Order book %s: bid=%s (%s lots)  offer=%s (%s lots)",
+            ticker, bid_price, bid_lots, offer_price, offer_lots,
+        )
+        return OrderBookTopOfBook(bid=bid, offer=offer)
 
     def fetch_order_book_best_bid(self, ticker: str) -> OrderBookBid | None:
         """Fetch order book best bid. Delegates to _fetch_order_book_raw()."""
@@ -353,40 +250,32 @@ class PlaywrightStockbitProvider(BrowserDataProvider):
         return tob.bid if tob else None
 
     def fetch_order_book_top_of_book(self, ticker: str) -> OrderBookTopOfBook | None:
-        """Fetch order book best bid and best offer in one browser session."""
+        """Fetch order book best bid and best offer."""
         return self._fetch_order_book_raw(ticker)
 
 
-# ── Playwright-backed BrokerDataProvider ──────────────────────────────────
+# ── API-client-backed BrokerDataProvider ──────────────────────────────────
 
-class StockbitPlaywrightBrokerProvider(BrokerDataProvider):
+class StockbitBrokerProvider(BrokerDataProvider):
     """
-    Implements BrokerDataProvider using the Playwright persistent browser session.
+    BrokerDataProvider backed by StockbitApiClient (no Playwright needed for data).
 
-    Reuses the existing .stockbit_profile/ persistent context to extract an
-    RS256 Bearer token, then makes direct httpx calls to the Exodus API.
-    No manual token management needed — the browser session auto-refreshes.
+    Replaces StockbitPlaywrightBrokerProvider.
 
     Usage:
-        provider = StockbitPlaywrightBrokerProvider()
+        from src.infrastructure.browser.stockbit_api_client import create_stockbit_api_client
+        api_client = create_stockbit_api_client()
+        provider = StockbitBrokerProvider(api_client=api_client)
         summaries = provider.fetch_broker_summaries("BBCA", date(2026,1,1), date.today())
     """
 
-    # In-process token cache: avoids launching Chromium on every request
-    # during batch updates. Reset when session is re-created.
-    _TOKEN_TTL_SECONDS = 1800  # 30 minutes
-
     def __init__(
         self,
+        api_client: StockbitApiClient,
         profile_dir: Path = DEFAULT_PROFILE_DIR,
-        headless: bool = True,
-        timeout: int = NAV_TIMEOUT,
     ) -> None:
+        self._api_client = api_client
         self._profile_dir = profile_dir
-        self._headless = headless
-        self._timeout = timeout
-        self._token_cache: str | None = None
-        self._token_cached_at: float = 0
 
     @property
     def provider_name(self) -> str:
@@ -402,49 +291,6 @@ class StockbitPlaywrightBrokerProvider(BrokerDataProvider):
             return age_hours < 72
         except Exception:
             return False
-
-    def _get_token(self) -> str:
-        """
-        Return a valid RS256 Bearer token.
-
-        Uses a 30-minute in-process cache so batch updates don't launch
-        Chromium for every ticker. On cache miss, opens the browser, navigates
-        to ORDERBOOK_PAGE_URL (which reliably fires Bearer-authenticated Exodus
-        requests), intercepts the token, then immediately closes the browser.
-        """
-        now = time.time()
-        if self._token_cache and (now - self._token_cached_at) < self._TOKEN_TTL_SECONDS:
-            return self._token_cache
-
-        if not (self._profile_dir.exists() and any(self._profile_dir.iterdir())):
-            raise BrokerDataAuthError(
-                "No Stockbit session found.\nRun: saham fetch stockbit login"
-            )
-
-        sync_playwright = _require_playwright()
-        token: str | None = None
-        with sync_playwright() as pw:
-            ctx, page = _persistent_context(pw, self._profile_dir, self._headless)
-            try:
-                token_box = _intercept_token(page)
-                page.goto(ORDERBOOK_PAGE_URL, timeout=self._timeout, wait_until="domcontentloaded")
-                page.wait_for_timeout(SPA_SETTLE_MS)
-                token = _resolve_token(page, token_box)
-            finally:
-                ctx.close()
-
-        if not token:
-            raise BrokerDataAuthError(
-                "Could not extract auth token — session may be expired.\n"
-                "Run: saham fetch stockbit login"
-            )
-
-        self._token_cache = token
-        self._token_cached_at = time.time()
-        # Refresh the marker — successful token extraction proves the session is alive
-        marker = self._profile_dir / ".logged_in_at"
-        marker.write_text(str(time.time()))
-        return token
 
     def fetch_broker_summary(
         self,
@@ -467,7 +313,6 @@ class StockbitPlaywrightBrokerProvider(BrokerDataProvider):
         which named brokers bought/sold the stock in the requested period.
         Maps the date range to the closest supported period parameter.
         """
-        token = self._get_token()
         days = (end_date - start_date).days
         # All confirmed valid as of 2026-06-13
         if days <= 1:
@@ -490,7 +335,7 @@ class StockbitPlaywrightBrokerProvider(BrokerDataProvider):
             f"&limit=25"
             f"&period={period}"
         )
-        body = _exodus_get(url, token)
+        body = self._api_client.get(url)
         if not body:
             logger.warning(
                 "No broker data for %s (%s–%s). "
@@ -499,7 +344,7 @@ class StockbitPlaywrightBrokerProvider(BrokerDataProvider):
             )
             return []
 
-        real_total = _fetch_historical_summary_totals(ticker, start_date, end_date, token)
+        real_total = _fetch_historical_summary_totals(ticker, start_date, end_date, self._api_client)
         if real_total is None:
             logger.warning(
                 "fetch_broker_summaries/%s: historical/summary unavailable, "
@@ -530,7 +375,6 @@ class StockbitPlaywrightBrokerProvider(BrokerDataProvider):
         returns which stocks they collectively bought/sold the most. Useful for
         universe-level screening ("is this IEV mover in foreign top buys?").
         """
-        token = self._get_token()
         days = (end_date - start_date).days
         # Confirmed valid periods (2026-06-13): 1D, 3D, 7D, 1M, 3M, 1Y
         # LAST_1_WEEK and LAST_6_MONTHS are not valid values
@@ -555,7 +399,7 @@ class StockbitPlaywrightBrokerProvider(BrokerDataProvider):
             f"&period={period}"
             f"&net_val_period=NET_VAL_PERIOD_7D"
         )
-        body = _exodus_get(url, token)
+        body = self._api_client.get(url)
         if not body:
             logger.warning("No response from broker-centric scan endpoint")
             return []
@@ -574,7 +418,6 @@ class StockbitPlaywrightBrokerProvider(BrokerDataProvider):
         Uses the stock-centric historical Exodus API. Returns daily N.Val/N.Lot
         time-series for trend context and backfilling the foreign-flow table.
         """
-        token = self._get_token()
         codes_params = "&".join(f"broker_codes={c}" for c in _INSTITUTIONAL_PROXY_CODES)
         url = (
             f"{_BROKER_HISTORICAL_API}?interval=INTERVAL_DAILY"
@@ -585,7 +428,7 @@ class StockbitPlaywrightBrokerProvider(BrokerDataProvider):
             f"&investor_type=INVESTOR_TYPE_ALL"
             f"&pagination.page=1&pagination.limit={min(days, 365)}"
         )
-        body = _exodus_get(url, token)
+        body = self._api_client.get(url)
         if not body:
             logger.debug("No response from foreign flow history endpoint for %s", ticker)
             return []
@@ -609,7 +452,6 @@ class StockbitPlaywrightBrokerProvider(BrokerDataProvider):
         all_points: list[ForeignFlowPoint] = []
         page = 1
         try:
-            token = self._get_token()
             while True:
                 url = (
                     f"{_HISTORICAL_SUMMARY_API.format(ticker=ticker.upper())}"
@@ -618,7 +460,7 @@ class StockbitPlaywrightBrokerProvider(BrokerDataProvider):
                     f"&end_date={end_date.isoformat()}"
                     f"&limit=50&page={page}"
                 )
-                body = _exodus_get(url, token)
+                body = self._api_client.get(url)
                 if not body:
                     break
                 rows = (body.get("data") or {}).get("result") or []
@@ -636,7 +478,6 @@ class StockbitPlaywrightBrokerProvider(BrokerDataProvider):
         except Exception as e:
             logger.warning("fetch_foreign_flow_from_summary %s failed: %s", ticker, e)
             return []
-
 
     def fetch_broker_daily_flows(
         self,
@@ -656,12 +497,11 @@ class StockbitPlaywrightBrokerProvider(BrokerDataProvider):
             broker_codes: Which broker codes to fetch. Defaults to TRACKED_BROKER_CODES.
             days: Max calendar days to look back (capped at 365 by the API).
         """
-        token = self._get_token()
         codes = broker_codes if broker_codes is not None else TRACKED_BROKER_CODES
         all_flows: list[BrokerDailyFlow] = []
 
         for code in codes:
-            flows = _fetch_broker_daily_flows_for_code(token, ticker, code, days)
+            flows = _fetch_broker_daily_flows_for_code(self._api_client, ticker, code, days)
             all_flows.extend(flows)
             logger.debug(
                 "fetch_broker_daily_flows: %s/%s → %d records", ticker, code, len(flows)
@@ -674,8 +514,14 @@ class StockbitPlaywrightBrokerProvider(BrokerDataProvider):
         return all_flows
 
 
+# ── Backward-compatibility alias ───────────────────────────────────────────
+# CLI adapters still import StockbitPlaywrightBrokerProvider; Phase F will
+# update them to StockbitBrokerProvider. Keep the alias until then.
+StockbitPlaywrightBrokerProvider = StockbitBrokerProvider
+
+
 def _fetch_broker_daily_flows_for_code(
-    token: str,
+    api_client: StockbitApiClient,
     ticker: str,
     broker_code: str,
     days: int,
@@ -707,7 +553,7 @@ def _fetch_broker_daily_flows_for_code(
             f"&pagination.page={page}"
             f"&pagination.limit=100"
         )
-        body = _exodus_get(url, token)
+        body = api_client.get(url)
         if not body:
             break
 
@@ -900,7 +746,7 @@ def _fetch_historical_summary_totals(
     ticker: str,
     start_date: date,
     end_date: date,
-    token: str,
+    api_client: StockbitApiClient,
 ) -> tuple[Decimal, int] | None:
     """
     Return (total_value_IDR, total_lot) from /company-price-feed/historical/summary/{ticker}.
@@ -926,7 +772,7 @@ def _fetch_historical_summary_totals(
                 f"&end_date={end_date.isoformat()}"
                 f"&limit=50&page={page}"
             )
-            body = _exodus_get(url, token)
+            body = api_client.get(url)
             if not body:
                 break
             rows = (body.get("data") or {}).get("result") or []
@@ -1246,19 +1092,17 @@ def _parse_foreign_flow_history(
 
 # ── Board-aware IEV fetcher ────────────────────────────────────────────────
 
-def _fetch_iev_all_boards(token: str) -> list[MoverData]:
+def _fetch_iev_all_boards(api_client: StockbitApiClient) -> list[MoverData]:
     """
     Call IEV movers API for both board groups, merge, deduplicate, sort by IEV desc.
 
     Mirrors how the Stockbit frontend works: two separate API calls (main boards
     and special monitoring board), then combined into one sorted list.
-
-    Raises StockbitSessionExpired if any call returns 401.
     """
     seen: dict[str, MoverData] = {}
 
     for url in (_IEV_MOVER_URL_MAIN, _IEV_MOVER_URL_SPECIAL):
-        body = _exodus_get(url, token)  # raises StockbitSessionExpired on 401
+        body = api_client.get(url)
         if not body:
             logger.debug("No response from %s", url)
             continue
@@ -1663,79 +1507,6 @@ def _extract_volume(item: dict) -> int | None:
                 return int(val)
             except (ValueError, TypeError):
                 pass
-    return None
-
-
-# ── DOM scrapers (fallback) ────────────────────────────────────────────────
-
-def _scrape_movers_from_dom(page: Any, iev_min: int) -> list[MoverData]:
-    """
-    DOM fallback for movers. Tries multiple selector strategies.
-    Needs calibration against actual Stockbit DOM after `saham fetch stockbit spy`.
-    """
-    movers: list[MoverData] = []
-
-    # Strategy 1: standard table
-    rows = page.query_selector_all("table tbody tr")
-    if rows:
-        for row in rows:
-            cells = row.query_selector_all("td")
-            if len(cells) < 2:
-                continue
-            try:
-                ticker_text = cells[0].inner_text().strip().upper()
-                # IEV may be in any column — try each one
-                for cell in cells[1:]:
-                    raw = cell.inner_text().strip()
-                    iev = _parse_number(raw)
-                    if iev and iev >= iev_min and 2 <= len(ticker_text) <= 6:
-                        movers.append(MoverData(ticker=ticker_text, iev=iev))
-                        break
-            except Exception:
-                continue
-
-    if movers:
-        return sorted(movers, key=lambda m: m.iev, reverse=True)
-
-    # Strategy 2: look for elements containing ticker-like text near numbers
-    # (handles div-based layouts)
-    logger.warning(
-        "DOM scrape: no table rows found. "
-        "Run 'saham fetch stockbit spy' to identify the correct selectors."
-    )
-    return []
-
-
-def _scrape_best_bid_from_dom(page: Any, ticker: str) -> OrderBookBid | None:
-    """DOM fallback for order book. Needs calibration via spy."""
-    best_price: Decimal | None = None
-    best_volume: int = 0
-
-    rows = page.query_selector_all("table tbody tr")
-    for row in rows:
-        cells = row.query_selector_all("td")
-        if len(cells) < 2:
-            continue
-        try:
-            # Try cells[0]=price, cells[1]=volume
-            price_raw = cells[0].inner_text().strip()
-            vol_raw = cells[1].inner_text().strip()
-            price = Decimal(re.sub(r"[^\d]", "", price_raw))
-            volume = int(re.sub(r"[^\d]", "", vol_raw))
-            if price > 0 and volume > best_volume:
-                best_price = price
-                best_volume = volume
-        except Exception:
-            continue
-
-    if best_price:
-        return OrderBookBid(price=best_price, volume=best_volume)
-
-    logger.warning(
-        "DOM scrape: no order book data found for %s. "
-        "Run 'saham fetch stockbit spy --url orderbook --ticker %s'",
-        ticker, ticker,
-    )
     return None
 
 

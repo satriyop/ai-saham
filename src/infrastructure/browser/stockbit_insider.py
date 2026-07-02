@@ -26,7 +26,7 @@ from src.domain.ports.insider_activity_provider import InsiderActivityProvider
 from src.domain.value_objects.insider_transaction import InsiderTransaction
 
 if TYPE_CHECKING:
-    from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
+    from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
 
 logger = logging.getLogger(__name__)
 
@@ -162,10 +162,10 @@ class StockbitInsiderActivityProvider(InsiderActivityProvider):
 
     def __init__(
         self,
-        broker_provider: "StockbitPlaywrightBrokerProvider",
+        api_client: "StockbitApiClient | None",
         db_path: str | Path = Path("data.db"),
     ) -> None:
-        self._provider = broker_provider
+        self._api_client = api_client
         self._db_path = Path(db_path).expanduser()
         self._ensure_schema()
 
@@ -328,7 +328,7 @@ class StockbitInsiderActivityProvider(InsiderActivityProvider):
         """
         ticker = ticker.upper()
 
-        if self._provider is None:
+        if self._api_client is None:
             return self._read_cache(ticker, from_date, to_date, action_type)
 
         if self._is_cache_fresh(ticker):
@@ -341,11 +341,9 @@ class StockbitInsiderActivityProvider(InsiderActivityProvider):
     def _fetch(
         self, ticker: str, from_date: date, to_date: date, action_type: str
     ) -> list[InsiderTransaction]:
-        if self._provider is None:
+        if self._api_client is None:
             return []
         try:
-            from src.infrastructure.browser.playwright_stockbit_provider import _exodus_get
-            token = self._provider._get_token()
             action_param = _ACTION_MAP.get(action_type.upper(), "ACTION_TYPE_BUY")
             url = _INSIDER_URL.format(
                 ticker=ticker.upper(),
@@ -353,7 +351,7 @@ class StockbitInsiderActivityProvider(InsiderActivityProvider):
                 to_date=to_date.isoformat(),
                 action_param=action_param,
             )
-            body = _exodus_get(url, token)
+            body = self._api_client.get(url)
             if not body:
                 logger.debug("Empty insider response for %s", ticker)
                 return []

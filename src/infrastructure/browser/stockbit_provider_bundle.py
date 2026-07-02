@@ -23,20 +23,20 @@ from src.infrastructure.browser.stockbit_ticker_notation import StockbitTickerNo
 def create_readonly_stockbit_providers(db_path: Path) -> StockbitProviders:
     """Return Stockbit providers backed by SQLite cache only.
 
-    `broker_provider=None` keeps this bundle read-only: providers return cached
+    `api_client=None` keeps this bundle read-only: providers return cached
     enrichment when present and do not open a browser or hit Stockbit live APIs.
     """
     return StockbitProviders(
-        corp_repo=StockbitCorporateActionRepository(broker_provider=None, db_path=db_path),
-        season_prov=StockbitSeasonalityProvider(broker_provider=None, db_path=db_path),
-        insider_prov=StockbitInsiderActivityProvider(broker_provider=None, db_path=db_path),
-        analyst_prov=StockbitAnalystConsensusProvider(broker_provider=None, db_path=db_path),
-        shareholding_prov=StockbitShareholdingProvider(broker_provider=None, db_path=db_path),
-        bandar_prov=StockbitBandarDetectorProvider(broker_provider=None, db_path=db_path),
-        fundamentals_prov=StockbitFundamentalsProvider(broker_provider=None, db_path=db_path),
-        notation_prov=StockbitTickerNotationProvider(broker_provider=None, db_path=db_path),
+        corp_repo=StockbitCorporateActionRepository(api_client=None, db_path=db_path),
+        season_prov=StockbitSeasonalityProvider(api_client=None, db_path=db_path),
+        insider_prov=StockbitInsiderActivityProvider(api_client=None, db_path=db_path),
+        analyst_prov=StockbitAnalystConsensusProvider(api_client=None, db_path=db_path),
+        shareholding_prov=StockbitShareholdingProvider(api_client=None, db_path=db_path),
+        bandar_prov=StockbitBandarDetectorProvider(api_client=None, db_path=db_path),
+        fundamentals_prov=StockbitFundamentalsProvider(api_client=None, db_path=db_path),
+        notation_prov=StockbitTickerNotationProvider(api_client=None, db_path=db_path),
         forward_estimates_prov=StockbitForwardEstimatesProvider(
-            broker_provider=None,
+            api_client=None,
             db_path=db_path,
         ),
     )

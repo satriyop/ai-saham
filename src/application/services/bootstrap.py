@@ -367,9 +367,9 @@ def create_risk_engine(
             StockbitShareholdingProvider,
         )
 
-        fund_prov = StockbitFundamentalsProvider(broker_provider=None, db_path=resolved)
-        bandar_prov = StockbitBandarDetectorProvider(broker_provider=None, db_path=resolved)
-        shareholding_prov = StockbitShareholdingProvider(broker_provider=None, db_path=resolved)
+        fund_prov = StockbitFundamentalsProvider(api_client=None, db_path=resolved)
+        bandar_prov = StockbitBandarDetectorProvider(api_client=None, db_path=resolved)
+        shareholding_prov = StockbitShareholdingProvider(api_client=None, db_path=resolved)
 
     from src.application.services.indicator_evaluator import IndicatorEvaluator
 
@@ -437,12 +437,12 @@ def create_signal_engine(
         return float(candles[-1].close)
 
     return SignalEngine(
-        bandar_provider=StockbitBandarDetectorProvider(broker_provider=None, db_path=resolved),
-        insider_activity_provider=StockbitInsiderActivityProvider(broker_provider=None, db_path=resolved),
-        seasonality_provider=StockbitSeasonalityProvider(broker_provider=None, db_path=resolved),
-        analyst_provider=StockbitAnalystConsensusProvider(broker_provider=None, db_path=resolved),
+        bandar_provider=StockbitBandarDetectorProvider(api_client=None, db_path=resolved),
+        insider_activity_provider=StockbitInsiderActivityProvider(api_client=None, db_path=resolved),
+        seasonality_provider=StockbitSeasonalityProvider(api_client=None, db_path=resolved),
+        analyst_provider=StockbitAnalystConsensusProvider(api_client=None, db_path=resolved),
         forward_estimates_provider=StockbitForwardEstimatesProvider(
-            broker_provider=None, db_path=resolved
+            api_client=None, db_path=resolved
         ),
         latest_price_provider=_latest_close,
         weights=weights,

@@ -6,7 +6,7 @@ from src.infrastructure.browser.stockbit_bandar import StockbitBandarDetectorPro
 
 def test_bandar_cache_uses_latest_snapshot_on_or_before_target_date(tmp_path):
     provider = StockbitBandarDetectorProvider(
-        broker_provider=None,
+        api_client=None,
         db_path=tmp_path / "stockbit.db",
     )
     provider._write_cache(
@@ -34,7 +34,7 @@ def test_bandar_cache_uses_latest_snapshot_on_or_before_target_date(tmp_path):
 
 def test_bandar_cache_requires_exact_date_when_previous_not_allowed(tmp_path):
     provider = StockbitBandarDetectorProvider(
-        broker_provider=None,
+        api_client=None,
         db_path=tmp_path / "stockbit.db",
     )
     provider._write_cache(

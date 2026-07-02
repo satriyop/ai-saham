@@ -120,48 +120,40 @@ def test_parse_ohlcv_rows_float_prices_are_rounded(monkeypatch):
 # ── StockbitHistoricalProvider ────────────────────────────────────────────────
 
 def test_returns_empty_when_no_broker_provider():
-    prov = StockbitHistoricalProvider(broker_provider=None)
+    prov = StockbitHistoricalProvider(api_client=None)
     result = prov.fetch_daily_ohlcv("BBCA", date(2026, 1, 1), date(2026, 6, 1))
     assert result == []
 
 
 def test_provider_metadata():
-    prov = StockbitHistoricalProvider(broker_provider=None)
+    prov = StockbitHistoricalProvider(api_client=None)
     assert prov.provider_name == "stockbit"
     assert prov.volume_unit == "shares"
     assert prov.price_adjustment_policy == "raw"
 
 
-def test_stockbit_provider_normalizes_yahoo_index_alias_to_ihsg(monkeypatch):
+def test_stockbit_provider_normalizes_yahoo_index_alias_to_ihsg():
     requested_urls: list[str] = []
 
-    class Broker:
-        def _get_token(self):
-            return "token"
-
-    def fake_get(url, token):
-        requested_urls.append(url)
-        return {
-            "data": {
-                "result": [
-                    _make_row(
-                        d="2026-07-01",
-                        open_=5640.611,
-                        high=5737.736,
-                        low=5607.451,
-                        close=5695.116,
-                        volume=172115099,
-                    )
-                ]
+    class FakeClient:
+        def get(self, url, params=None):
+            requested_urls.append(url)
+            return {
+                "data": {
+                    "result": [
+                        _make_row(
+                            d="2026-07-01",
+                            open_=5640.611,
+                            high=5737.736,
+                            low=5607.451,
+                            close=5695.116,
+                            volume=172115099,
+                        )
+                    ]
+                }
             }
-        }
 
-    monkeypatch.setattr(
-        "src.infrastructure.browser.playwright_stockbit_provider._exodus_get",
-        fake_get,
-    )
-
-    prov = StockbitHistoricalProvider(broker_provider=Broker())
+    prov = StockbitHistoricalProvider(api_client=FakeClient())
     candles = prov.fetch_daily_ohlcv("^JKSE", date(2026, 7, 1), date(2026, 7, 1))
 
     assert len(candles) == 1

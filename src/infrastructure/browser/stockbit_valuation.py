@@ -33,7 +33,7 @@ from src.domain.ports.valuation_provider import ValuationProvider
 from src.domain.value_objects.valuation_metrics import ValuationMetrics
 
 if TYPE_CHECKING:
-    from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
+    from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
 
 logger = logging.getLogger(__name__)
 
@@ -88,10 +88,10 @@ class StockbitValuationProvider(ValuationProvider):
 
     def __init__(
         self,
-        broker_provider: "StockbitPlaywrightBrokerProvider | None",
+        api_client: "StockbitApiClient | None",
         db_path: Path | None = None,
     ) -> None:
-        self._provider = broker_provider
+        self._api_client = api_client
         self._db_path = db_path or Path("data/saham.db")
         self._ensure_table()
 
@@ -142,7 +142,7 @@ class StockbitValuationProvider(ValuationProvider):
             )
 
     def get_valuation(self, ticker: str) -> ValuationMetrics | None:
-        if self._provider is None:
+        if self._api_client is None:
             return self._read_cache(ticker)
 
         if self.is_cache_fresh(ticker):
@@ -151,7 +151,7 @@ class StockbitValuationProvider(ValuationProvider):
         key = ticker.upper()
         url = _VALUATION_URL.format(ticker=key)
         try:
-            body = self._provider.fetch_json(url)
+            body = self._api_client.get(url)
         except Exception as exc:
             logger.debug("valuation fetch failed for %s: %s", key, exc)
             return self._read_cache(ticker)

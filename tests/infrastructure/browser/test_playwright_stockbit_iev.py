@@ -28,18 +28,23 @@ def test_parse_iev_response_captures_iep():
     assert movers[0].iep == 5_925
 
 
-def test_fetch_iev_all_boards_preserves_iep_after_dedup(monkeypatch):
-    responses = iter([
+class _FakeApiClient:
+    """Stub StockbitApiClient that returns successive responses per URL call."""
+
+    def __init__(self, responses):
+        self._iter = iter(responses)
+
+    def get(self, url, params=None):
+        return next(self._iter)
+
+
+def test_fetch_iev_all_boards_preserves_iep_after_dedup():
+    client = _FakeApiClient([
         _body("BBCA", 450_000, 5_925),
         _body("BBCA", 430_000, 5_900),
     ])
 
-    def fake_exodus_get(url, token):
-        return next(responses)
-
-    monkeypatch.setattr(stockbit, "_exodus_get", fake_exodus_get)
-
-    movers = stockbit._fetch_iev_all_boards("token")
+    movers = stockbit._fetch_iev_all_boards(client)
 
     assert len(movers) == 1
     assert movers[0].ticker == "BBCA"

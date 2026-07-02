@@ -37,7 +37,7 @@ def _insert_row(
 @pytest.fixture
 def provider(tmp_path) -> StockbitShareholdingProvider:
     mock_broker = MagicMock()
-    return StockbitShareholdingProvider(broker_provider=mock_broker, db_path=tmp_path / "test.db")
+    return StockbitShareholdingProvider(api_client=mock_broker, db_path=tmp_path / "test.db")
 
 
 class TestLiveMode:
@@ -94,12 +94,12 @@ class TestBacktestNeverFetchesLive:
     def test_empty_cache_in_backtest_mode_does_not_call_api(self, provider):
         result = provider.get_composition(_TICKER, as_of_date=date(2024, 1, 15))
         assert result is None
-        provider._provider.assert_not_called()
+        provider._api_client.assert_not_called()
 
 
 class TestMemoryCacheBypass:
     def test_backtest_miss_does_not_corrupt_live_cache(self, provider, tmp_path):
-        _insert_row(tmp_path / "test.db", _TICKER, "2026-06-23T00:00:00", "2026-03-31")
+        _insert_row(tmp_path / "test.db", _TICKER, (datetime.now() - timedelta(days=1)).isoformat(), "2026-03-31")
 
         # Backtest call: report_date 2026-03-31 > as_of_date 2025-01-01 → None
         miss = provider.get_composition(_TICKER, as_of_date=date(2025, 1, 1))

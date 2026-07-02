@@ -427,6 +427,40 @@ def spy_stockbit_session(
     }
 
 
+def extract_exodus_token(
+    profile_dir: Path = DEFAULT_PROFILE_DIR,
+    headless: bool = True,
+    timeout: int = NAV_TIMEOUT,
+) -> str | None:
+    """
+    Open a (headless) browser with the saved profile, navigate to trigger an
+    authenticated Exodus request, and return the intercepted RS256 Bearer token.
+
+    Used by StockbitApiClient as the token_refresher callable. Returns None if
+    the profile is missing or the session has expired (needs re-login).
+    """
+    if not (profile_dir.exists() and any(profile_dir.iterdir())):
+        logger.debug("No Stockbit profile at %s — run: saham fetch stockbit login", profile_dir)
+        return None
+
+    sync_playwright = _require_playwright()
+    try:
+        with sync_playwright() as pw:
+            ctx, page = _persistent_context(pw, profile_dir, headless=headless)
+            token_box = _intercept_token(page)
+            try:
+                page.goto(ORDERBOOK_PAGE_URL, timeout=timeout, wait_until="domcontentloaded")
+                page.wait_for_timeout(SPA_SETTLE_MS)
+            except Exception as e:
+                logger.debug("Navigation failed during token extraction: %s", e)
+            token = _resolve_token(page, token_box)
+            ctx.close()
+            return token
+    except Exception as e:
+        logger.debug("Token extraction failed: %s", e)
+        return None
+
+
 def get_session_status(
     profile_dir: Path = DEFAULT_PROFILE_DIR,
 ) -> dict:

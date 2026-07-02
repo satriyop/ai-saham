@@ -37,7 +37,7 @@ from src.domain.ports.shareholding_provider import ShareholdingProvider
 from src.domain.value_objects.shareholding_composition import ShareholdingComposition
 
 if TYPE_CHECKING:
-    from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
+    from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
 
 logger = logging.getLogger(__name__)
 
@@ -178,10 +178,10 @@ class StockbitShareholdingProvider(ShareholdingProvider):
 
     def __init__(
         self,
-        broker_provider: "StockbitPlaywrightBrokerProvider",
+        api_client: "StockbitApiClient | None",
         db_path: Path,
     ) -> None:
-        self._provider = broker_provider
+        self._api_client = api_client
         self._db_path = db_path
         self._mem_cache: dict[str, ShareholdingComposition | None] = {}
         self._ensure_table()
@@ -308,13 +308,11 @@ class StockbitShareholdingProvider(ShareholdingProvider):
             logger.warning("shareholding: cache write failed for %s: %s", comp.ticker, e)
 
     def _fetch(self, ticker: str) -> ShareholdingComposition | None:
-        if self._provider is None:
+        if self._api_client is None:
             return None
         try:
-            from src.infrastructure.browser.playwright_stockbit_provider import _exodus_get
-            token = self._provider._get_token()
             url = _COMPOSITION_URL.format(ticker=ticker)
-            body = _exodus_get(url, token)
+            body = self._api_client.get(url)
             if not body:
                 logger.debug("Empty shareholding response for %s", ticker)
                 return None

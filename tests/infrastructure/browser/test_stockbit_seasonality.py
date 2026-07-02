@@ -58,7 +58,7 @@ def test_parse_seasonality_returns_none_when_win_rate_is_unparseable():
 
 
 def test_read_cache_returns_none_for_incomplete_cached_seasonality(tmp_path):
-    provider = StockbitSeasonalityProvider(broker_provider=None, db_path=tmp_path / "data.db")
+    provider = StockbitSeasonalityProvider(api_client=None, db_path=tmp_path / "data.db")
 
     with provider._get_conn() as conn:
         conn.execute(

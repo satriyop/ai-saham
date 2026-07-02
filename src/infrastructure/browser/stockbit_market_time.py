@@ -44,7 +44,7 @@ from src.domain.value_objects.idx_market import (
 from src.domain.value_objects.market_status import MarketStatus
 
 if TYPE_CHECKING:
-    from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
+    from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
 
 logger = logging.getLogger(__name__)
 
@@ -154,10 +154,10 @@ class StockbitMarketTimeProvider(MarketStatusProvider):
 
     def __init__(
         self,
-        broker_provider: "StockbitPlaywrightBrokerProvider",
+        api_client: "StockbitApiClient | None",
         ttl: int = _CACHE_TTL_SECONDS,
     ) -> None:
-        self._provider = broker_provider
+        self._api_client = api_client
         self._ttl = ttl
         self._cache: MarketStatus | None = None
         self._cache_at: float = 0.0
@@ -179,9 +179,7 @@ class StockbitMarketTimeProvider(MarketStatusProvider):
 
     def _fetch(self) -> MarketStatus | None:
         try:
-            from src.infrastructure.browser.playwright_stockbit_provider import _exodus_get
-            token = self._provider._get_token()
-            body = _exodus_get(_MARKET_TIME_URL, token)
+            body = self._api_client.get(_MARKET_TIME_URL)
             if not body:
                 logger.debug("Empty market-time response")
                 return None

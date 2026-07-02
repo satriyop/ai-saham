@@ -36,7 +36,7 @@ from src.domain.value_objects.intraday_broker_chart import (
 )
 
 if TYPE_CHECKING:
-    from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
+    from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
 
 logger = logging.getLogger(__name__)
 
@@ -118,15 +118,13 @@ class StockbitIntradayBrokerChartProvider(IntradayBrokerChartProvider):
     No caching — data is live intraday.
     """
 
-    def __init__(self, broker_provider: "StockbitPlaywrightBrokerProvider") -> None:
-        self._provider = broker_provider
+    def __init__(self, api_client: "StockbitApiClient | None") -> None:
+        self._api_client = api_client
 
     def fetch_chart(self, broker_code: str) -> IntradayBrokerChart | None:
         try:
-            from src.infrastructure.browser.playwright_stockbit_provider import _exodus_get
-            token = self._provider._get_token()
             url = _CHART_URL.format(broker_code=broker_code.upper())
-            body = _exodus_get(url, token)
+            body = self._api_client.get(url)
             if not body:
                 logger.debug("Empty intraday broker chart response for %s", broker_code)
                 return None

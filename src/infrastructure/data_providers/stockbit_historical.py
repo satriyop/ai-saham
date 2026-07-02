@@ -31,7 +31,7 @@ from src.domain.ports.market_data_provider import MarketDataProvider
 from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
 
 if TYPE_CHECKING:
-    from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
+    from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
 
 logger = logging.getLogger(__name__)
 
@@ -110,10 +110,10 @@ class StockbitHistoricalProvider(MarketDataProvider):
 
     def __init__(
         self,
-        broker_provider: "StockbitPlaywrightBrokerProvider | None",
+        api_client: "StockbitApiClient | None",
         non_idx_tickers: set[str] | None = None,
     ) -> None:
-        self._provider = broker_provider
+        self._api_client = api_client
         self._non_idx_tickers = non_idx_tickers or set()
 
     def fetch_daily_ohlcv(
@@ -127,18 +127,11 @@ class StockbitHistoricalProvider(MarketDataProvider):
         Returns empty list (not an exception) when the provider is unavailable
         or returns no data, so the caller can fall back to another source.
         """
-        if self._provider is None:
+        if self._api_client is None:
             return []
 
         canonical_ticker = canonicalize_ticker(ticker)
         if is_non_idx_ticker(canonical_ticker, self._non_idx_tickers):
-            return []
-
-        try:
-            from src.infrastructure.browser.playwright_stockbit_provider import _exodus_get
-            token = self._provider._get_token()
-        except Exception as exc:
-            logger.debug("StockbitHistoricalProvider: token fetch failed for %s: %s", ticker, exc)
             return []
 
         base_url = STOCKBIT_CFG.historical_summary_url.format(ticker=canonical_ticker)
@@ -154,7 +147,7 @@ class StockbitHistoricalProvider(MarketDataProvider):
                     f"&end_date={end_date.isoformat()}"
                     f"&limit={_PAGE_LIMIT}&page={page}"
                 )
-                body = _exodus_get(url, token)
+                body = self._api_client.get(url)
                 if not body:
                     break
                 rows = (body.get("data") or {}).get("result") or []

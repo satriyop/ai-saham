@@ -51,7 +51,7 @@ def test_parse_emitten_info_notation_and_status():
 
 def test_sqlite_cache_round_trip(tmp_path):
     provider = StockbitTickerNotationProvider(
-        broker_provider=None,
+        api_client=None,
         db_path=tmp_path / "data.db",
     )
     snapshot = _parse_snapshot(

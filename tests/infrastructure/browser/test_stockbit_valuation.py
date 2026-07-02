@@ -120,7 +120,7 @@ def test_valuation_metrics_pe_sd_bands():
 
 @pytest.fixture
 def provider(tmp_path):
-    return StockbitValuationProvider(broker_provider=None, db_path=tmp_path / "test.db")
+    return StockbitValuationProvider(api_client=None, db_path=tmp_path / "test.db")
 
 
 def test_cache_schema_created(provider):

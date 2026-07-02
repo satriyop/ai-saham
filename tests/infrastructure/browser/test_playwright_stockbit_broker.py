@@ -2,7 +2,6 @@
 
 from datetime import date
 from decimal import Decimal
-from unittest.mock import patch
 
 from src.infrastructure.browser.playwright_stockbit_provider import (
     _fetch_historical_summary_totals,
@@ -133,14 +132,21 @@ def test_foreign_fields_unaffected_by_real_total():
 
 # ── _fetch_historical_summary_totals tests ────────────────────────────────────
 
+class _FakeApiClient:
+    """Stub StockbitApiClient that returns a fixed response for any URL."""
+
+    def __init__(self, response):
+        self._response = response
+
+    def get(self, url, params=None):
+        return self._response
+
+
 def test_fetch_totals_single_day():
-    with patch(
-        "src.infrastructure.browser.playwright_stockbit_provider._exodus_get",
-        return_value=_historical_summary_body_single_day(),
-    ):
-        result = _fetch_historical_summary_totals(
-            "BBCA", date(2026, 6, 18), date(2026, 6, 18), token="fake"
-        )
+    client = _FakeApiClient(_historical_summary_body_single_day())
+    result = _fetch_historical_summary_totals(
+        "BBCA", date(2026, 6, 18), date(2026, 6, 18), api_client=client
+    )
     assert result is not None
     total_value, total_lot = result
     assert total_value == Decimal("1430146602500")
@@ -148,13 +154,10 @@ def test_fetch_totals_single_day():
 
 
 def test_fetch_totals_sums_multiple_days():
-    with patch(
-        "src.infrastructure.browser.playwright_stockbit_provider._exodus_get",
-        return_value=_historical_summary_body_two_days(),
-    ):
-        result = _fetch_historical_summary_totals(
-            "BBCA", date(2026, 6, 17), date(2026, 6, 18), token="fake"
-        )
+    client = _FakeApiClient(_historical_summary_body_two_days())
+    result = _fetch_historical_summary_totals(
+        "BBCA", date(2026, 6, 17), date(2026, 6, 18), api_client=client
+    )
     assert result is not None
     total_value, total_lot = result
     assert total_value == Decimal("2990187572500") + Decimal("1430146602500")
@@ -162,33 +165,26 @@ def test_fetch_totals_sums_multiple_days():
 
 
 def test_fetch_totals_returns_none_on_empty_response():
-    with patch(
-        "src.infrastructure.browser.playwright_stockbit_provider._exodus_get",
-        return_value=None,
-    ):
-        result = _fetch_historical_summary_totals(
-            "BBCA", date(2026, 6, 18), date(2026, 6, 18), token="fake"
-        )
+    client = _FakeApiClient(None)
+    result = _fetch_historical_summary_totals(
+        "BBCA", date(2026, 6, 18), date(2026, 6, 18), api_client=client
+    )
     assert result is None
 
 
 def test_fetch_totals_returns_none_on_empty_result_list():
-    with patch(
-        "src.infrastructure.browser.playwright_stockbit_provider._exodus_get",
-        return_value={"data": {"result": []}},
-    ):
-        result = _fetch_historical_summary_totals(
-            "BBCA", date(2026, 6, 18), date(2026, 6, 18), token="fake"
-        )
+    client = _FakeApiClient({"data": {"result": []}})
+    result = _fetch_historical_summary_totals(
+        "BBCA", date(2026, 6, 18), date(2026, 6, 18), api_client=client
+    )
     assert result is None
 
 
 def test_fetch_totals_returns_none_on_zero_value():
-    with patch(
-        "src.infrastructure.browser.playwright_stockbit_provider._exodus_get",
-        return_value={"data": {"result": [{"date": "2026-06-18", "value": 0, "volume": 100}]}},
-    ):
-        result = _fetch_historical_summary_totals(
-            "BBCA", date(2026, 6, 18), date(2026, 6, 18), token="fake"
-        )
+    client = _FakeApiClient(
+        {"data": {"result": [{"date": "2026-06-18", "value": 0, "volume": 100}]}}
+    )
+    result = _fetch_historical_summary_totals(
+        "BBCA", date(2026, 6, 18), date(2026, 6, 18), api_client=client
+    )
     assert result is None

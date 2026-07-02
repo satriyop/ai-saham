@@ -223,7 +223,31 @@ To prevent mathematical leaks, the `SeasonalEdge` domain value object validates 
 
 ---
 
-## 9. Architectural Perspective: Composite of Composites
+## 9. Deep-Dive: Analyst Consensus Factor
+
+### Concept & Market Microstructure
+Professional sell-side analysts research and release corporate ratings. This factor measures general market consensus and targets by evaluating two key metrics:
+1. **Buy Ratio:** The agreement/conviction among polled analysts (percentage recommending a buy vs. hold/sell).
+2. **Price Target Upside:** How much the current stock price is trading below the average estimated price target.
+
+### Scoring Structure
+The total score is a sum of two components, capped at a maximum of **100.0 points**:
+```
+Score = Buy_Ratio_Score + Price_Target_Upside_Score
+```
+
+### Component Details
+1. **Buy Ratio Score (Max 60 points):**
+   * Uses `buy_ratio` (percentage of total polled analysts recommending a buy).
+   * Formula: `buy_ratio * 60.0`.
+2. **Price Target Upside Score (Max 40 points):**
+   * Measures target price upside percentage, capped (saturated) at a **30.0%** upside limit.
+   * Formula: `(upside_pct / 30.0) * 40.0` (capped between 0.0 and 40.0).
+   * *Note: If the price target has negative upside (stock is trading above target), the upside score defaults to 0.*
+
+---
+
+## 10. Architectural Perspective: Composite of Composites
 
 ### Vetting the Aggregation Pattern
 The Foreign Flow Quality factor is structurally a **composite of composites** (a double-level aggregation). 
@@ -232,3 +256,4 @@ This is a valid and robust pattern for quantitative engines, serving specific ar
 * **Dimensionality Reduction:** Instead of forcing the top-level Signal Engine to balance 15+ flat weights, related sub-metrics are encapsulated inside the Foreign Flow domain model. This allows top-level configuration weights to stay clean and readable (e.g. 20% Bandar, 20% Foreign Flow, etc.).
 * **Modularity and Reuse:** The `ScoreForeignFlowUseCase` is decoupled from the rest of the engine. Other workflows (such as the Swing Screener) can fetch and filter candidates based purely on raw `foreign_flow_score` without loading valuation, consensus, or seasonality dependencies.
 * **Collinearity Safeguard:** Double-counting technical indicators is avoided. While the Foreign Flow sub-composite uses **RSI** and **Bollinger Bands**, the top-level Signal Engine does not have another competing technical momentum factor. The other 5 dimensions are non-overlapping (Valuation, Insider, Seasonality, Bandar, Analysts).
+

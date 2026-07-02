@@ -131,7 +131,7 @@ def test_earnings_record_yoy_growth_none_when_no_prev():
 
 @pytest.fixture
 def tmp_provider(tmp_path):
-    return StockbitEarningsProvider(broker_provider=None, db_path=tmp_path / "test.db")
+    return StockbitEarningsProvider(api_client=None, db_path=tmp_path / "test.db")
 
 
 def test_schema_created(tmp_provider):

@@ -35,7 +35,7 @@ def _insert_row(db_path: Path, ticker: str, fetched_date: str) -> None:
 def provider(tmp_path) -> StockbitFundamentalsProvider:
     """Provider wired to a temp DB. Broker provider is not needed for cache tests."""
     mock_broker = MagicMock()
-    p = StockbitFundamentalsProvider(broker_provider=mock_broker, db_path=tmp_path / "test.db")
+    p = StockbitFundamentalsProvider(api_client=mock_broker, db_path=tmp_path / "test.db")
     return p
 
 
@@ -89,7 +89,7 @@ class TestBacktestMode:
         """With as_of_date set and empty cache, must not call the broker API."""
         result = provider.get_fundamentals(_TICKER, as_of_date=date(2024, 1, 15))
         assert result is None
-        provider._provider.assert_not_called()
+        provider._api_client.assert_not_called()
 
     def test_stale_data_accepted_if_predates_as_of_date(self, provider, tmp_path):
         """A 30-day-old cache row is stale in live mode but valid in backtest mode
@@ -106,7 +106,7 @@ class TestMemoryCacheBypass:
 
     def test_backtest_miss_does_not_corrupt_live_cache(self, provider, tmp_path):
         """A backtest miss (as_of_date too early) must not write None to mem_cache."""
-        fetched = "2026-06-23T00:00:00"
+        fetched = (datetime.now() - timedelta(days=1)).isoformat()
         _insert_row(tmp_path / "test.db", _TICKER, fetched)
 
         # Backtest call returns None (future data)

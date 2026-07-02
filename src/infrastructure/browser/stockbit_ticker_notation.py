@@ -23,7 +23,7 @@ from src.domain.value_objects.ticker_notation import (
 )
 
 if TYPE_CHECKING:
-    from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
+    from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
 
 logger = logging.getLogger(__name__)
 
@@ -129,10 +129,10 @@ class StockbitTickerNotationProvider(TickerNotationProvider, TickerNotationRepos
 
     def __init__(
         self,
-        broker_provider: "StockbitPlaywrightBrokerProvider | None",
+        api_client: "StockbitApiClient | None",
         db_path: str | Path = Path("data.db"),
     ) -> None:
-        self._provider = broker_provider
+        self._api_client = api_client
         self._db_path = Path(db_path).expanduser()
         self._ensure_schema()
 
@@ -191,7 +191,7 @@ class StockbitTickerNotationProvider(TickerNotationProvider, TickerNotationRepos
         key = ticker.upper()
         if self.is_cache_fresh(key):
             return self._read_cache(key)
-        if self._provider is None:
+        if self._api_client is None:
             return self._read_cache(key)
         result = self._fetch(key)
         if result is not None:
@@ -287,12 +287,9 @@ class StockbitTickerNotationProvider(TickerNotationProvider, TickerNotationRepos
         )
 
     def _fetch(self, ticker: str) -> TickerNotationSnapshot | None:
-        if self._provider is None:
+        if self._api_client is None:
             return None
-        from src.infrastructure.browser.playwright_stockbit_provider import _exodus_get
-
-        token = self._provider._get_token()
-        body = _exodus_get(_EMITTEN_INFO_URL.format(ticker=ticker.upper()), token)
+        body = self._api_client.get(_EMITTEN_INFO_URL.format(ticker=ticker.upper()))
         if not body:
             return None
         return _parse_snapshot(ticker, body)

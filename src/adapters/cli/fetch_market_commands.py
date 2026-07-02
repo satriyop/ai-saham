@@ -465,7 +465,7 @@ def _fetch_broker(
 
     from src.infrastructure.browser.stockbit_ticker_notation import StockbitTickerNotationProvider
 
-    notation_repo = StockbitTickerNotationProvider(broker_provider=None, db_path=db_path)
+    notation_repo = StockbitTickerNotationProvider(api_client=None, db_path=db_path)
 
     response = RefreshBrokerDataUseCase(
         broker_provider=broker_provider,

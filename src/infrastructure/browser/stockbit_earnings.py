@@ -34,7 +34,7 @@ from src.domain.ports.earnings_provider import EarningsProvider
 from src.domain.value_objects.earnings_record import EarningsRecord
 
 if TYPE_CHECKING:
-    from src.infrastructure.browser.playwright_stockbit_provider import StockbitPlaywrightBrokerProvider
+    from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
 
 logger = logging.getLogger(__name__)
 
@@ -132,10 +132,10 @@ class StockbitEarningsProvider(EarningsProvider):
 
     def __init__(
         self,
-        broker_provider: "StockbitPlaywrightBrokerProvider | None",
+        api_client: "StockbitApiClient | None",
         db_path: str | Path = Path("data.db"),
     ) -> None:
-        self._provider = broker_provider
+        self._api_client = api_client
         self._db_path = Path(db_path).expanduser()
         self._ensure_schema()
 
@@ -282,13 +282,7 @@ class StockbitEarningsProvider(EarningsProvider):
         return self._read_cache(ticker, quarters)
 
     def _fetch_quarters(self, ticker: str, quarters: int) -> list[EarningsRecord]:
-        if self._provider is None:
-            return []
-
-        try:
-            token = self._provider._get_token()
-        except Exception as e:
-            logger.debug("Earnings: token fetch failed for %s: %s", ticker, e)
+        if self._api_client is None:
             return []
 
         records: list[EarningsRecord] = []
@@ -302,10 +296,10 @@ class StockbitEarningsProvider(EarningsProvider):
                     records.append(cached_rows)
                 # We still need to know the prev_period to continue the walk.
                 # Try fetching just to get the pointer without writing.
-                body = self._do_get(ticker, current_q, current_y, token)
+                body = self._do_get(ticker, current_q, current_y)
                 prev = _next_prev_period(body) if body else None
             else:
-                body = self._do_get(ticker, current_q, current_y, token)
+                body = self._do_get(ticker, current_q, current_y)
                 if not body:
                     break
                 record = _parse_period_record(ticker, current_q, current_y, body)
@@ -319,11 +313,10 @@ class StockbitEarningsProvider(EarningsProvider):
 
         return records
 
-    def _do_get(self, ticker: str, quarter: int, year: int, token: str) -> dict | None:
+    def _do_get(self, ticker: str, quarter: int, year: int) -> dict | None:
         try:
-            from src.infrastructure.browser.playwright_stockbit_provider import _exodus_get
             url = _EARNINGS_URL.format(ticker=ticker, quarter=quarter, year=year)
-            return _exodus_get(url, token)
+            return self._api_client.get(url)
         except Exception as e:
             logger.debug("Earnings GET failed for %s Q%s %s: %s", ticker, quarter, year, e)
             return None
