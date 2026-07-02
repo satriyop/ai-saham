@@ -98,7 +98,7 @@ saham analyze chart price BBRI --sma 20 --ema 50
 | **`saham indicator`**| Technical Math | `compute`, `snapshot`, `create`, `list`, `show`, `delete` |
 | **`saham analyze`** | Insights & Charts | `risk`, `compare`, `sentiment`, `audit`, `regime`, `chart price/rsi/volume`, `swing`, `accum-audit`, `swing-compare` |
 | **`saham strategy`** | Strategy Lifecycle| `init`, `validate`, `list`, `create`, `backtest`, `skill generate/check/index` |
-| **`saham trade`** | Paper Trade Workspace | `confirm`, `outcome`, `size`, `backtest-swing`, `backtest-intraday`, `log`, `migrate-journal`, `review intraday/swing` |
+| **`saham trade`** | Paper Trade Workspace | `confirm`, `outcome`, `size`, `backtest-swing`, `tune-swing`, `backtest-intraday`, `log`, `migrate-journal`, `review intraday/swing` |
 
 ---
 
@@ -918,6 +918,18 @@ mutates config. JSON output includes parsed target path fields (`file_path`,
 explaining whether a deterministic value was selected or why `proposed_value`
 remains unset.
 
+#### `saham trade tune-swing` - Deterministic Swing Tuning Review
+
+```bash
+saham trade tune-swing --universe idx80 --setup foreign-bounce
+saham trade tune-swing --universe lq45 --with-regime --format json
+```
+
+Runs the same walk-forward replay as `backtest-swing`, then emits attribution,
+readiness, proposal-target, and guarded config-diff review artifacts in one
+place. This command is review-only: it does not call AI, does not apply YAML
+changes, and does not mutate configuration.
+
 Attribution dimensions map to these primary tuning files:
 
 | Attribution dimension | Primary config target |
@@ -1657,6 +1669,7 @@ src/
 | `saham screen pre-open` | `PreOpenScreenResult` | Intraday pre-open plan with conditional entry ranges |
 | `saham trade confirm` | `IntradayConfirmationResult` | Post-open ENTER/WAIT/SKIP decision using actual opening price |
 | `saham trade backtest-swing` | `SwingBacktestResponse` | Historical walk-forward performance artifact |
+| `saham trade tune-swing` | `swing_tuning_review` | Deterministic attribution-to-config review artifact; no apply |
 | `saham trade backtest-intraday` | `IntradayBacktestResponse` | Daily-OHLC intraday proxy simulation artifact |
 | `saham analyze accum-audit` | `AccumulationAuditResponse` | Learning/audit artifact for forward-return behavior |
 

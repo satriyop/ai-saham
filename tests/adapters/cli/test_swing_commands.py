@@ -944,6 +944,41 @@ def test_swing_backtest_tuning_diff_table_exposes_policy(monkeypatch):
     assert "Can Apply" in result.output
 
 
+def test_swing_tune_json_exposes_first_class_tuning_review(monkeypatch):
+    _patch_swing_backtest_command(monkeypatch)
+
+    result = runner.invoke(
+        app,
+        [
+            "trade",
+            "tune-swing",
+            "BBCA",
+            "--format",
+            "json",
+            "--start",
+            "2026-01-01",
+            "--end",
+            "2026-01-31",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+
+    assert payload["artifact_type"] == "swing_tuning_review"
+    assert payload["intent"] == (
+        "deterministic_backtest_attribution_to_config_review_no_apply"
+    )
+    assert payload["tuning_plan"]["can_propose_changes"] is True
+    assert payload["tuning_proposal"]["requires_human_review"] is True
+    assert payload["tuning_config_diff"]["can_apply"] is False
+    assert payload["tuning_config_diff"]["requires_human_review"] is True
+    assert payload["apply"] == {
+        "supported": False,
+        "reason": "This command is review-only. Edit YAML manually after human review.",
+    }
+
+
 def test_swing_backtest_has_no_tuning_diff_apply_flag():
     from src.adapters.cli import trade_swing_commands
 

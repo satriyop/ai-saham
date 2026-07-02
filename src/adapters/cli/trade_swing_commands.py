@@ -39,6 +39,7 @@ from src.application.use_case.swing_backtest_use_case import (
 )
 from src.application.use_case.swing_backtest_use_case import (
     SwingBacktestRequest,
+    SwingBacktestResponse,
     SwingBacktestUseCase,
 )
 from src.infrastructure.config.accumulation_screener_config import (
@@ -74,6 +75,182 @@ def _parse_regime_filter(value: str | None) -> tuple[str, ...]:
             "--allow-regimes must contain only: RISK_ON, NEUTRAL, RISK_OFF, VOLATILE"
         )
     return regimes
+
+
+def _run_swing_backtest(
+    *,
+    tickers: list[str] | None,
+    universe: str | None,
+    setup: str,
+    start: str,
+    end: str | None,
+    capital: int,
+    risk_pct: float,
+    max_positions: int,
+    take_profit: float,
+    stop_loss: float,
+    max_hold: int,
+    cost_bps: float,
+    with_regime: bool,
+    allow_regimes: str | None,
+    benchmark: str,
+    db_path: Path | None,
+    announce: bool,
+) -> SwingBacktestResponse:
+    setup_name = setup.lower()
+    if setup_name not in AVAILABLE_SWING_SETUPS:
+        typer.echo(
+            f"Unknown swing setup '{setup}'. "
+            f"Available setups: {', '.join(AVAILABLE_SWING_SETUPS)}",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    try:
+        start_date = date.fromisoformat(start)
+        end_date = date.fromisoformat(end) if end else date.today()
+    except ValueError as e:
+        typer.echo(f"Error: invalid date format: {e}", err=True)
+        raise typer.Exit(1)
+
+    resolved_db = db_path or DEFAULT_DB_PATH
+    try:
+        ticker_list = resolve_tickers(
+            universe=universe,
+            explicit=list(tickers) if tickers else [],
+            db_path=resolved_db,
+        )
+    except (UniverseNotFoundError, FileNotFoundError) as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+    if not ticker_list:
+        typer.echo(
+            "No tickers to backtest. Specify --universe or provide ticker arguments.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    try:
+        allowed_regimes = _parse_regime_filter(allow_regimes)
+    except typer.BadParameter as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+    if announce:
+        typer.echo(
+            f"Backtesting {len(ticker_list)} tickers | {start_date} to {end_date} | "
+            f"setup={setup_name} | max positions={max_positions}..."
+        )
+
+    use_case = SwingBacktestUseCase(
+        broker_repository=SQLiteBrokerRepository(resolved_db),
+        market_repository=SQLiteMarketRepository(db_path=resolved_db),
+        derived_feature_policy=_ASC.derived_features,
+        risk_engine=create_risk_engine(resolved_db, with_enrichment=True),
+    )
+    try:
+        return use_case.execute(SwingBacktestRequest(
+            tickers=ticker_list,
+            start_date=start_date,
+            end_date=end_date,
+            setup=setup_name,
+            capital=Decimal(str(capital)),
+            risk_pct=Decimal(str(risk_pct)) / Decimal("100"),
+            max_positions=max_positions,
+            take_profit_pct=Decimal(str(take_profit)),
+            stop_loss_pct=Decimal(str(stop_loss)),
+            max_hold_days=max_hold,
+            cost_bps=Decimal(str(cost_bps)),
+            include_regime=with_regime or bool(allowed_regimes),
+            benchmark_ticker=benchmark,
+            allowed_regimes=allowed_regimes,
+            setup_targets=_SC.setup_targets,
+            setup_config=_setup_config(),
+            resistance_gate_enabled=_SC.resistance_gate_enabled,
+            resistance_headroom_min_pct=_SC.resistance_headroom_min_pct,
+            ex_date_warning_days=_SC.ex_date_warning_days,
+            forward_data_lookahead_days=_BT.forward_data_lookahead_days,
+            same_day_exit_priority=_BT.same_day_exit_priority,
+            attribution_bucket_policy=AttributionBucketPolicy(
+                high_min_score=_BT.attribution_high_min_score,
+                mid_min_score=_BT.attribution_mid_min_score,
+            ),
+        ))
+    except ValueError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+
+def _swing_backtest_payload(response: SwingBacktestResponse) -> dict:
+    return {
+        "schema_version": 1,
+        "artifact_type": "swing_backtest",
+        "setup": response.setup,
+        "start_date": response.start_date.isoformat(),
+        "end_date": response.end_date.isoformat(),
+        "initial_capital": str(response.initial_capital),
+        "cost_bps": str(response.cost_bps),
+        "final_equity": str(response.final_equity),
+        "total_return_pct": response.total_return_pct,
+        "max_drawdown_pct": response.max_drawdown_pct,
+        "trade_count": response.trade_count,
+        "win_rate_pct": response.win_rate_pct,
+        "avg_trade_return_pct": response.avg_trade_return_pct,
+        "profit_factor": response.profit_factor,
+        "exposure_pct": response.exposure_pct,
+        "skipped_no_cash": response.skipped_no_cash,
+        "skipped_duplicate": response.skipped_duplicate,
+        "skipped_no_forward_data": response.skipped_no_forward_data,
+        "skipped_by_regime": response.skipped_by_regime,
+        "warnings": response.warnings,
+        "regime_stats": [stat.to_dict() for stat in response.regime_stats],
+        "regime_by_date": {
+            key.isoformat(): value.to_dict()
+            for key, value in response.regime_by_date.items()
+        },
+        "attribution_summary": response.attribution_summary.to_dict(),
+        "trades": [trade.to_dict() for trade in response.trades],
+        "candidate_observations": [
+            observation.to_dict()
+            for observation in response.candidate_observations
+        ],
+        "equity_curve": [point.to_dict() for point in response.equity_curve],
+    }
+
+
+def _swing_tuning_payload(response: SwingBacktestResponse) -> dict:
+    plan = build_tuning_readiness_plan(response.attribution_summary)
+    proposal = build_tuning_proposal_draft(response.attribution_summary)
+    config_diff = build_tuning_config_diff_draft(response.attribution_summary)
+    return {
+        "schema_version": 1,
+        "artifact_type": "swing_tuning_review",
+        "intent": "deterministic_backtest_attribution_to_config_review_no_apply",
+        "setup": response.setup,
+        "start_date": response.start_date.isoformat(),
+        "end_date": response.end_date.isoformat(),
+        "sample": response.attribution_summary.sample_quality.to_dict(),
+        "backtest_summary": {
+            "initial_capital": str(response.initial_capital),
+            "final_equity": str(response.final_equity),
+            "total_return_pct": response.total_return_pct,
+            "max_drawdown_pct": response.max_drawdown_pct,
+            "trade_count": response.trade_count,
+            "win_rate_pct": response.win_rate_pct,
+            "avg_trade_return_pct": response.avg_trade_return_pct,
+            "profit_factor": response.profit_factor,
+            "candidate_observation_count": len(response.candidate_observations),
+        },
+        "attribution_summary": response.attribution_summary.to_dict(),
+        "tuning_plan": plan.to_dict(),
+        "tuning_proposal": proposal.to_dict(),
+        "tuning_config_diff": config_diff.to_dict(),
+        "apply": {
+            "supported": False,
+            "reason": "This command is review-only. Edit YAML manually after human review.",
+        },
+    }
 
 
 # ─── swing backtest command ──────────────────────────────────────────────────
@@ -201,125 +378,28 @@ def swing_backtest(
     candidates, open only within portfolio limits, avoid duplicate positions,
     and exit by TP/SL/max-hold. It reads local cached market and broker data.
     """
-    setup_name = setup.lower()
-    if setup_name not in AVAILABLE_SWING_SETUPS:
-        typer.echo(
-            f"Unknown swing setup '{setup}'. "
-            f"Available setups: {', '.join(AVAILABLE_SWING_SETUPS)}",
-            err=True,
-        )
-        raise typer.Exit(1)
-
-    try:
-        start_date = date.fromisoformat(start)
-        end_date = date.fromisoformat(end) if end else date.today()
-    except ValueError as e:
-        typer.echo(f"Error: invalid date format: {e}", err=True)
-        raise typer.Exit(1)
-
-    resolved_db = db_path or DEFAULT_DB_PATH
-    try:
-        ticker_list = resolve_tickers(
-            universe=universe,
-            explicit=list(tickers) if tickers else [],
-            db_path=resolved_db,
-        )
-    except (UniverseNotFoundError, FileNotFoundError) as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1)
-
-    if not ticker_list:
-        typer.echo(
-            "No tickers to backtest. Specify --universe or provide ticker arguments.",
-            err=True,
-        )
-        raise typer.Exit(1)
-
-    try:
-        allowed_regimes = _parse_regime_filter(allow_regimes)
-    except typer.BadParameter as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1)
-
-    if output_format != "json":
-        typer.echo(
-            f"Backtesting {len(ticker_list)} tickers | {start_date} to {end_date} | "
-            f"setup={setup_name} | max positions={max_positions}..."
-        )
-
-    use_case = SwingBacktestUseCase(
-        broker_repository=SQLiteBrokerRepository(resolved_db),
-        market_repository=SQLiteMarketRepository(db_path=resolved_db),
-        derived_feature_policy=_ASC.derived_features,
-        risk_engine=create_risk_engine(resolved_db, with_enrichment=True),
+    response = _run_swing_backtest(
+        tickers=tickers,
+        universe=universe,
+        setup=setup,
+        start=start,
+        end=end,
+        capital=capital,
+        risk_pct=risk_pct,
+        max_positions=max_positions,
+        take_profit=take_profit,
+        stop_loss=stop_loss,
+        max_hold=max_hold,
+        cost_bps=cost_bps,
+        with_regime=with_regime,
+        allow_regimes=allow_regimes,
+        benchmark=benchmark,
+        db_path=db_path,
+        announce=output_format != "json",
     )
-    try:
-        response = use_case.execute(SwingBacktestRequest(
-            tickers=ticker_list,
-            start_date=start_date,
-            end_date=end_date,
-            setup=setup_name,
-            capital=Decimal(str(capital)),
-            risk_pct=Decimal(str(risk_pct)) / Decimal("100"),
-            max_positions=max_positions,
-            take_profit_pct=Decimal(str(take_profit)),
-            stop_loss_pct=Decimal(str(stop_loss)),
-            max_hold_days=max_hold,
-            cost_bps=Decimal(str(cost_bps)),
-            include_regime=with_regime or bool(allowed_regimes),
-            benchmark_ticker=benchmark,
-            allowed_regimes=allowed_regimes,
-            setup_targets=_SC.setup_targets,
-            setup_config=_setup_config(),
-            resistance_gate_enabled=_SC.resistance_gate_enabled,
-            resistance_headroom_min_pct=_SC.resistance_headroom_min_pct,
-            ex_date_warning_days=_SC.ex_date_warning_days,
-            forward_data_lookahead_days=_BT.forward_data_lookahead_days,
-            same_day_exit_priority=_BT.same_day_exit_priority,
-            attribution_bucket_policy=AttributionBucketPolicy(
-                high_min_score=_BT.attribution_high_min_score,
-                mid_min_score=_BT.attribution_mid_min_score,
-            ),
-        ))
-    except ValueError as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1)
 
     if output_format == "json":
-        payload = {
-            "schema_version": 1,
-            "artifact_type": "swing_backtest",
-            "setup": response.setup,
-            "start_date": response.start_date.isoformat(),
-            "end_date": response.end_date.isoformat(),
-            "initial_capital": str(response.initial_capital),
-            "cost_bps": str(response.cost_bps),
-            "final_equity": str(response.final_equity),
-            "total_return_pct": response.total_return_pct,
-            "max_drawdown_pct": response.max_drawdown_pct,
-            "trade_count": response.trade_count,
-            "win_rate_pct": response.win_rate_pct,
-            "avg_trade_return_pct": response.avg_trade_return_pct,
-            "profit_factor": response.profit_factor,
-            "exposure_pct": response.exposure_pct,
-            "skipped_no_cash": response.skipped_no_cash,
-            "skipped_duplicate": response.skipped_duplicate,
-            "skipped_no_forward_data": response.skipped_no_forward_data,
-            "skipped_by_regime": response.skipped_by_regime,
-            "warnings": response.warnings,
-            "regime_stats": [stat.to_dict() for stat in response.regime_stats],
-            "regime_by_date": {
-                key.isoformat(): value.to_dict()
-                for key, value in response.regime_by_date.items()
-            },
-            "attribution_summary": response.attribution_summary.to_dict(),
-            "trades": [trade.to_dict() for trade in response.trades],
-            "candidate_observations": [
-                observation.to_dict()
-                for observation in response.candidate_observations
-            ],
-            "equity_curve": [point.to_dict() for point in response.equity_curve],
-        }
+        payload = _swing_backtest_payload(response)
         if with_tuning_plan:
             payload["tuning_plan"] = build_tuning_readiness_plan(
                 response.attribution_summary
@@ -342,6 +422,128 @@ def swing_backtest(
         show_tuning_plan=with_tuning_plan,
         show_tuning_proposal=with_tuning_proposal,
         show_tuning_diff=with_tuning_diff,
+    )
+
+
+def swing_tune(
+    tickers: Annotated[
+        Optional[list[str]],
+        typer.Argument(help="Explicit ticker symbols (e.g. BBCA BBRI)"),
+    ] = None,
+    universe: Annotated[
+        Optional[str],
+        typer.Option(
+            "--universe",
+            "-u",
+            help="Universe name or 'cached' — see `saham fetch universe list`",
+        ),
+    ] = None,
+    setup: Annotated[
+        str,
+        typer.Option("--setup", help="Swing setup to validate"),
+    ] = BACKTEST_FOREIGN_BOUNCE_SETUP,
+    start: Annotated[
+        str,
+        typer.Option("--start", help="Backtest start date, YYYY-MM-DD"),
+    ] = APP_CFG.backtest.start_date,
+    end: Annotated[
+        Optional[str],
+        typer.Option("--end", help="Backtest end date, YYYY-MM-DD (default: today)"),
+    ] = None,
+    capital: Annotated[
+        int,
+        typer.Option("--capital", "-c", help="Initial capital in IDR", min=1),
+    ] = _BT.capital,
+    risk_pct: Annotated[
+        float,
+        typer.Option("--risk-pct", help="% of capital risked per trade", min=0.01),
+    ] = _BT.risk_pct,
+    max_positions: Annotated[
+        int,
+        typer.Option("--max-positions", help="Maximum concurrent open positions", min=1),
+    ] = _BT.max_positions,
+    take_profit: Annotated[
+        float,
+        typer.Option("--take-profit", help="Take-profit percentage", min=0.01),
+    ] = _BT.take_profit_pct,
+    stop_loss: Annotated[
+        float,
+        typer.Option("--stop-loss", help="Stop-loss percentage", min=0.01),
+    ] = _BT.stop_loss_pct,
+    max_hold: Annotated[
+        int,
+        typer.Option("--max-hold", help="Maximum holding period in trading days", min=1),
+    ] = _BT.max_hold_days,
+    cost_bps: Annotated[
+        float,
+        typer.Option(
+            "--cost-bps",
+            help="One-way transaction cost in basis points (20 ~= 0.20%)",
+            min=0,
+        ),
+    ] = _BT.cost_bps,
+    with_regime: Annotated[
+        bool,
+        typer.Option("--with-regime", help="Group evidence by entry-date market regime"),
+    ] = False,
+    allow_regimes: Annotated[
+        Optional[str],
+        typer.Option(
+            "--allow-regimes",
+            help="Comma-separated entry regimes allowed to open trades",
+        ),
+    ] = None,
+    benchmark: Annotated[
+        str,
+        typer.Option("--benchmark", help="Benchmark ticker for regime context"),
+    ] = APP_CFG.analysis.benchmark,
+    output_format: Annotated[
+        str,
+        typer.Option("--format", help="Output format: table or json"),
+    ] = APP_CFG.analysis.format,
+    db_path: Annotated[
+        Optional[Path],
+        typer.Option("--db", help="SQLite database path"),
+    ] = None,
+) -> None:
+    """
+    Build deterministic swing tuning review from walk-forward attribution.
+
+    This is the first-class tuning-loop entry point for swing. It replays the
+    deterministic workflow, summarizes attribution, and emits guarded config
+    review artifacts. It never calls AI and never writes YAML.
+    """
+    response = _run_swing_backtest(
+        tickers=tickers,
+        universe=universe,
+        setup=setup,
+        start=start,
+        end=end,
+        capital=capital,
+        risk_pct=risk_pct,
+        max_positions=max_positions,
+        take_profit=take_profit,
+        stop_loss=stop_loss,
+        max_hold=max_hold,
+        cost_bps=cost_bps,
+        with_regime=with_regime,
+        allow_regimes=allow_regimes,
+        benchmark=benchmark,
+        db_path=db_path,
+        announce=output_format != "json",
+    )
+
+    if output_format == "json":
+        typer.echo(json.dumps(_swing_tuning_payload(response), indent=2, default=str))
+        return
+
+    display_swing_backtest(
+        response,
+        show_trades=0,
+        show_attribution=True,
+        show_tuning_plan=True,
+        show_tuning_proposal=True,
+        show_tuning_diff=True,
     )
 
 

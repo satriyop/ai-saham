@@ -10,6 +10,7 @@ Commands (all under `saham trade`):
   saham trade outcome             — record intraday outcome
   saham trade size                — ATR-based swing position sizing
   saham trade backtest-swing      — swing workflow walk-forward backtest
+  saham trade tune-swing          — swing tuning review from backtest attribution
   saham trade backtest-intraday   — intraday workflow daily-OHLC proxy simulation
   saham trade migrate-journal     — one-time migration of CSV journals to trades.jsonl
 
@@ -37,7 +38,7 @@ from src.adapters.cli.trade_intraday_commands import (
     confirm_review,
     intraday_backtest,
 )
-from src.adapters.cli.trade_swing_commands import size, swing_backtest
+from src.adapters.cli.trade_swing_commands import size, swing_backtest, swing_tune
 from src.infrastructure.config.app_config import APP_CFG
 
 trade_app = typer.Typer(
@@ -61,6 +62,7 @@ trade_app.add_typer(trade_review_app, name="review")
 trade_app.command("outcome")(confirm_outcome)
 trade_app.command("size")(size)
 trade_app.command("backtest-swing")(swing_backtest)
+trade_app.command("tune-swing")(swing_tune)
 trade_app.command("backtest-intraday")(intraday_backtest)
 
 
@@ -85,7 +87,10 @@ def trade_log(
     ] = None,
     from_analysis: Annotated[
         bool,
-        typer.Option("--from-analysis", help="Record setup match, failed gates, trade plan (swing only)"),
+        typer.Option(
+            "--from-analysis",
+            help="Record setup match, failed gates, trade plan (swing only)",
+        ),
     ] = False,
     setup: Annotated[
         str,
@@ -201,8 +206,16 @@ def trade_migrate_journal(
     accum_path = accum_csv or DEFAULT_ACCUM_JOURNAL_PATH
     intraday_path = intraday_csv or DEFAULT_CONFIRMATION_JOURNAL_PATH
 
-    swing_entries = AccumulationJournalCsvWriter(accum_path).read_all() if accum_path.exists() else []
-    intraday_entries = IntradayConfirmationCsvStore(intraday_path).read_all() if intraday_path.exists() else []
+    swing_entries = (
+        AccumulationJournalCsvWriter(accum_path).read_all()
+        if accum_path.exists()
+        else []
+    )
+    intraday_entries = (
+        IntradayConfirmationCsvStore(intraday_path).read_all()
+        if intraday_path.exists()
+        else []
+    )
 
     records = [accumulation_entry_to_record(e) for e in swing_entries] + \
               [intraday_entry_to_record(e) for e in intraday_entries]
