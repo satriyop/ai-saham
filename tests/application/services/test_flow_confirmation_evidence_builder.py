@@ -7,10 +7,11 @@ from src.application.services.flow_confirmation_evidence_builder import (
 from src.domain.value_objects.factor_evidence import Direction, Freshness
 
 
-def _flow_evidence(breakdown, confirmation_status="CONFIRMED"):
+def _flow_evidence(breakdown, confirmation_status="CONFIRMED", flow_direction="POSITIVE"):
     return SimpleNamespace(
         component_breakdown=tuple(breakdown.items()),
         confirmation_status=confirmation_status,
+        flow_direction=flow_direction,
     )
 
 
@@ -177,6 +178,7 @@ def test_to_dict_structure():
         "flow_signals",
         "flow_score_ex_bb",
         "confirmation_status",
+        "flow_direction",
         "bandar_broad_score",
         "bandar_direction",
         "bandar_freshness",
@@ -190,5 +192,20 @@ def test_to_dict_structure():
     assert expected_keys <= set(d.keys())
     assert d["bandar_direction"] == "BULLISH"
     assert d["group_freshness"] == "FRESH"
+    assert d["flow_direction"] == "POSITIVE"
     assert isinstance(d["flow_signals"], list)
     assert d["flow_signals"][0]["freshness"] == "FRESH"
+
+
+def test_flow_direction_extracted_from_evidence():
+    builder = FlowConfirmationEvidenceBuilder()
+
+    pos = builder.build(_candidate(flow_evidence=_flow_evidence(_FULL_BREAKDOWN, flow_direction="POSITIVE")))
+    neg = builder.build(_candidate(flow_evidence=_flow_evidence(_FULL_BREAKDOWN, flow_direction="NEGATIVE")))
+    flat = builder.build(_candidate(flow_evidence=_flow_evidence(_FULL_BREAKDOWN, flow_direction="FLAT")))
+    missing = builder.build(_candidate(flow_evidence=None))
+
+    assert pos.flow_direction == "POSITIVE"
+    assert neg.flow_direction == "NEGATIVE"
+    assert flat.flow_direction == "FLAT"
+    assert missing.flow_direction == "UNKNOWN"

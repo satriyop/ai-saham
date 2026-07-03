@@ -15,6 +15,7 @@ from datetime import date
 from src.domain.value_objects.factor_evidence import Direction, Freshness
 
 _VALID_CONFIRMATION_STATUS = {"CONFIRMED", "WATCH_ZONE", "WEAK"}
+_VALID_FLOW_DIRECTION = {"POSITIVE", "NEGATIVE", "FLAT", "UNKNOWN"}
 _VALID_FLOW_SIGNAL_KEYS = {"cons", "streak", "vwap", "flow", "inst"}
 
 
@@ -66,6 +67,7 @@ class FlowConfirmationEvidence:
     flow_signals: tuple[FlowSubSignal, ...]
     flow_score_ex_bb: float       # sum of flow_signals.score (BB excluded)
     confirmation_status: str      # "CONFIRMED" | "WATCH_ZONE" | "WEAK"
+    flow_direction: str           # "POSITIVE" | "NEGATIVE" | "FLAT" | "UNKNOWN"
     # Bandar (smart money operator) sub-signal — Stockbit only
     bandar_broad_score: int | None  # -12 to +12; None = MISSING
     bandar_direction: Direction
@@ -84,6 +86,11 @@ class FlowConfirmationEvidence:
             raise ValueError(
                 f"FlowConfirmationEvidence confirmation_status must be one of "
                 f"{_VALID_CONFIRMATION_STATUS}, got {self.confirmation_status!r}"
+            )
+        if self.flow_direction not in _VALID_FLOW_DIRECTION:
+            raise ValueError(
+                f"FlowConfirmationEvidence flow_direction must be one of "
+                f"{_VALID_FLOW_DIRECTION}, got {self.flow_direction!r}"
             )
         if self.flow_score_ex_bb < 0:
             raise ValueError(f"FlowConfirmationEvidence flow_score_ex_bb must be >= 0, got {self.flow_score_ex_bb}")
@@ -110,6 +117,7 @@ class FlowConfirmationEvidence:
             "flow_signals": [s.to_dict() for s in self.flow_signals],
             "flow_score_ex_bb": self.flow_score_ex_bb,
             "confirmation_status": self.confirmation_status,
+            "flow_direction": self.flow_direction,
             "bandar_broad_score": self.bandar_broad_score,
             "bandar_direction": self.bandar_direction.value,
             "bandar_freshness": self.bandar_freshness.value,

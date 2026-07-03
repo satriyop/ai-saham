@@ -39,8 +39,10 @@ _FLOW_SIGNAL_WEIGHTS: dict[str, float] = {
     "inst": 15.0,  # max achievable = cluster_points (CLUSTER > STABLE)
 }
 
-# Normalization denominator: total max_score declared by the policy.
-_FLOW_MAX_SCORE = 120.0
+# Normalization denominator: sum of max weights for the 5 included sub-signals
+# (cons=40 + streak=30 + vwap=20 + flow=10 + inst=15 = 115).
+# BB (10) and RSI (10) are excluded, so 120 is not the correct ceiling here.
+_FLOW_MAX_SCORE = 115.0
 
 # Default group cap for the flow confirmation group.
 # Even when bandar + foreign flow are both max-bullish, the combined group
@@ -83,6 +85,14 @@ class FlowConfirmationEvidenceBuilder:
         if confirmation_status not in {"CONFIRMED", "WATCH_ZONE", "WEAK"}:
             confirmation_status = "WEAK"
 
+        flow_direction = (
+            getattr(flow_evidence, "flow_direction", None)
+            if flow_evidence is not None
+            else "UNKNOWN"
+        ) or "UNKNOWN"
+        if flow_direction not in {"POSITIVE", "NEGATIVE", "FLAT", "UNKNOWN"}:
+            flow_direction = "UNKNOWN"
+
         # --- Bandar operator sub-signal --------------------------------------
         bandar_detector = getattr(candidate, "bandar_detector", None) if candidate else None
         bandar_broad_score: int | None = None
@@ -118,6 +128,7 @@ class FlowConfirmationEvidenceBuilder:
             flow_signals=flow_signals,
             flow_score_ex_bb=flow_score_ex_bb,
             confirmation_status=confirmation_status,
+            flow_direction=flow_direction,
             bandar_broad_score=bandar_broad_score,
             bandar_direction=bandar_direction,
             bandar_freshness=bandar_freshness,

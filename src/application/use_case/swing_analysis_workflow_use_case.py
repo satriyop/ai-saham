@@ -35,6 +35,7 @@ from src.domain.rules.risk_gate import GateContext, RiskGate
 from src.domain.value_objects.benchmark_symbol import canonicalize_ticker
 
 if TYPE_CHECKING:
+    from src.domain.value_objects.flow_confirmation_evidence import FlowConfirmationEvidence
     from src.domain.value_objects.market_context import MarketContext
     from src.domain.value_objects.setup_evidence import SetupEvidence
     from src.domain.value_objects.trade_setup import TradeSetup
@@ -116,6 +117,7 @@ class SwingEvidence:
     stop_loss_pct: Decimal
     regime_label: str | None
     setup_evidence: "SetupEvidence | None" = None
+    flow_confirmation_evidence: "FlowConfirmationEvidence | None" = None
 
     def to_dict(self, *, strategy_name: str | None = None, max_hold_days: int | None = None) -> dict[str, Any]:
         candidate = self.accumulation_candidate
@@ -168,6 +170,10 @@ class SwingEvidence:
                 ),
             },
             "setup_evidence": self.setup_evidence.to_dict() if self.setup_evidence else None,
+            "flow_confirmation_evidence": (
+                self.flow_confirmation_evidence.to_dict()
+                if self.flow_confirmation_evidence else None
+            ),
         }
 
 
@@ -796,6 +802,20 @@ class SwingAnalysisWorkflowUseCase:
             except Exception as exc:
                 warnings.append(f"Setup evidence unavailable: {exc}")
 
+        flow_confirmation_evidence = None
+        if accumulation_candidate is not None:
+            try:
+                from src.application.services.flow_confirmation_evidence_builder import (
+                    FlowConfirmationEvidenceBuilder,
+                )
+
+                flow_confirmation_evidence = FlowConfirmationEvidenceBuilder().build(
+                    accumulation_candidate,
+                    analysis_date=request.today,
+                )
+            except Exception as exc:
+                warnings.append(f"Flow confirmation evidence unavailable: {exc}")
+
         evidence = SwingEvidence(
             accumulation_candidate=accumulation_candidate,
             setup_eval=setup_eval,
@@ -806,6 +826,7 @@ class SwingAnalysisWorkflowUseCase:
             stop_loss_pct=stop_loss_pct,
             regime_label=regime_label,
             setup_evidence=setup_evidence,
+            flow_confirmation_evidence=flow_confirmation_evidence,
         )
         diagnostics = SwingDiagnostics(
             data_freshness=data_freshness,

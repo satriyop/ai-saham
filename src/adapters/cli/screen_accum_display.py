@@ -188,10 +188,15 @@ def _scoring_definitions_panel():
         f"{p.foreign_flow_ratio.weight:g}",
         f"net foreign turnover share; linear to {p.foreign_flow_ratio.saturate_at:g}%",
     )
+    _bb_scored = p.bb_squeeze.enabled
     accum_table.add_row(
         "BB%ile",
-        f"{p.bb_squeeze.weight:g}",
-        f"squeeze score: best below {p.bb_squeeze.tight_pctile:.0%}; fades to 0 by {p.bb_squeeze.loose_pctile:.0%}",
+        f"{p.bb_squeeze.weight:g}" if _bb_scored else "—",
+        (
+            f"squeeze score: best below {p.bb_squeeze.tight_pctile:.0%}; fades to 0 by {p.bb_squeeze.loose_pctile:.0%}"
+            if _bb_scored
+            else "structure/setup evidence (shown diagnostically); not scored in default flow score"
+        ),
     )
     accum_table.add_row(
         "BCI",
