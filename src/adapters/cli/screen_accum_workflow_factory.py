@@ -28,6 +28,9 @@ from src.infrastructure.config.accumulation_screener_config import (
 )
 from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
+from src.infrastructure.persistence.sqlite_candidate_observations_repository import (
+    SQLiteCandidateObservationsRepository,
+)
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
 
@@ -47,6 +50,7 @@ def create_accumulation_screen_workflow(
     """Build accumulation screen workflow dependencies for CLI commands."""
     broker_repo = SQLiteBrokerRepository(db_path)
     market_repo = SQLiteMarketRepository(db_path=db_path)
+    observations_repo = SQLiteCandidateObservationsRepository(db_path)
     stockbit_providers = create_readonly_stockbit_providers(db_path)
 
     risk_use_case = None
@@ -65,6 +69,7 @@ def create_accumulation_screen_workflow(
         market_repository=market_repo,
         stockbit_providers=stockbit_providers,
         risk_use_case=risk_use_case,
+        candidate_observations_repository=observations_repo,
         foreign_flow_score_policy=screener_config.foreign_flow_score_policy,
         derived_feature_policy=screener_config.derived_features,
     )

@@ -15,13 +15,18 @@ Depends on: Domain ports only — no infrastructure imports
 
 import logging
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import TYPE_CHECKING, Any
+
+from src.domain.ports.candidate_observations_repository import CandidateObservation
 
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
+    from src.domain.ports.candidate_observations_repository import (
+        CandidateObservationsRepository,
+    )
     from src.application.services.signal_engine import SignalEngine
     from src.application.use_case.assess_risk_use_case import AssessRiskUseCase
     from src.application.use_case.assess_signal_use_case import AssessSignalResponse
@@ -362,6 +367,7 @@ class AccumulationCandidate:
                 "strength": self.signal_assessment.assessment.strength.value,
                 "entry_quality": self.signal_assessment.assessment.entry_quality.value,
                 "breakdown": self.signal_assessment.assessment.breakdown_dict,
+                "confidence_score": self.signal_assessment.assessment.confidence_score,
                 "coverage_warning": self.signal_assessment.coverage_warning,
             } if self.signal_assessment else None,
             "risk_status": self.risk_assessment.risk_level_name if self.risk_assessment else None,
@@ -405,6 +411,47 @@ def _screen_sort_key(candidate: "AccumulationCandidate") -> tuple[float, float, 
     )
 
 
+def _candidate_observation_payload(
+    candidate: "AccumulationCandidate",
+    *,
+    snapshot_date: date,
+    captured_at: datetime,
+    request: "AccumulationScreenRequest",
+) -> dict:
+    """Build schema-versioned replay payload for one screened candidate."""
+    signal = candidate.signal_assessment
+    signal_payload = None
+    if signal is not None:
+        signal_payload = {
+            "assessment": signal.assessment.to_dict(),
+            "coverage_warning": signal.coverage_warning,
+            "evidence_confidence": signal.evidence_confidence,
+            "active_flags": list(signal.active_flags),
+            "flag_adjustment": signal.flag_adjustment,
+            "raw_group_score": signal.raw_group_score,
+        }
+
+    return {
+        "schema_version": 1,
+        "artifact_type": "candidate_observation",
+        "ticker": candidate.ticker,
+        "snapshot_date": snapshot_date.isoformat(),
+        "captured_at": captured_at.isoformat(),
+        "workflow": "screen_accum",
+        "request": {
+            "window_days": request.window_days,
+            "min_net_buy_days": request.min_net_buy_days,
+            "min_foreign_flow_score": request.min_foreign_flow_score,
+            "min_signal_score": request.min_signal_score,
+        },
+        "candidate": candidate.to_dict(),
+        "signal": signal_payload,
+        "trade_setup": (
+            candidate.trade_setup.to_dict() if candidate.trade_setup is not None else None
+        ),
+    }
+
+
 class AccumulationScreenUseCase:
     """
     Scan multiple tickers for foreign accumulation patterns.
@@ -429,6 +476,7 @@ class AccumulationScreenUseCase:
         idx_groups: "dict[str, list[str]] | None" = None,
         risk_use_case: "AssessRiskUseCase | None" = None,
         signal_engine: "SignalEngine | None" = None,
+        candidate_observations_repository: "CandidateObservationsRepository | None" = None,
         foreign_flow_score_use_case: ScoreForeignFlowUseCase | None = None,
         derived_feature_policy: AccumulationDerivedFeaturePolicy | None = None,
     ) -> None:
@@ -447,6 +495,7 @@ class AccumulationScreenUseCase:
         self._ticker_notation_provider = ticker_notation_provider
         self._risk_use_case = risk_use_case
         self._signal_engine = signal_engine or _SignalEngine()
+        self._candidate_observations_repo = candidate_observations_repository
         self._foreign_flow_score_uc = (
             foreign_flow_score_use_case or ScoreForeignFlowUseCase()
         )
@@ -712,6 +761,7 @@ class AccumulationScreenUseCase:
             self._run_risk_funnel(candidates, today)
 
         candidates.sort(key=_screen_sort_key, reverse=True)
+        self._persist_candidate_observations(candidates, today, request)
 
         return AccumulationScreenResponse(
             candidates=candidates,
@@ -721,6 +771,34 @@ class AccumulationScreenUseCase:
             tickers_skipped=skipped,
             provider="stockbit" if uses_stockbit else "idx",
         )
+
+    def _persist_candidate_observations(
+        self,
+        candidates: list[AccumulationCandidate],
+        snapshot_date: date,
+        request: AccumulationScreenRequest,
+    ) -> None:
+        if self._candidate_observations_repo is None or not candidates:
+            return
+        try:
+            captured_at = datetime.now()
+            observations = [
+                CandidateObservation(
+                    ticker=c.ticker,
+                    snapshot_date=snapshot_date,
+                    captured_at=captured_at,
+                    payload=_candidate_observation_payload(
+                        c,
+                        snapshot_date=snapshot_date,
+                        captured_at=captured_at,
+                        request=request,
+                    ),
+                )
+                for c in candidates
+            ]
+            self._candidate_observations_repo.save_many(observations)
+        except Exception as exc:
+            logger.warning("Candidate observation persistence unavailable: %s", exc)
 
     def _run_risk_funnel(
         self,

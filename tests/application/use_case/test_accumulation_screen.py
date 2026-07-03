@@ -973,3 +973,95 @@ def test_classify_coiled_spring_when_squeeze_and_high_score():
 def test_classify_weak_when_no_windows_hot():
     candidates = {w: _make_candidate(score=30.0) for w in _WINDOWS}
     assert classify_multi_window_pattern(_WINDOWS, candidates, _MIN_SCORE, _BB_PCTILE) == "weak"
+
+
+# ── Phase 7: persistence wiring ───────────────────────────────────────────────
+
+class SpyCandidateObservationsRepository:
+    """Records save_many calls for assertion."""
+
+    def __init__(self):
+        self.saved: list = []
+        self.raise_on_save: Exception | None = None
+
+    def save_many(self, observations):
+        if self.raise_on_save is not None:
+            raise self.raise_on_save
+        self.saved.extend(observations)
+
+    def get_latest(self, ticker, snapshot_date):
+        return None
+
+
+def test_screen_persists_candidate_observations_when_repo_injected():
+    """When candidate_observations_repository is injected, save_many receives
+    correctly-shaped observations for each passing candidate."""
+    from src.domain.ports.candidate_observations_repository import CandidateObservation
+
+    session_dates = _weekdays(date(2026, 1, 1), 7)
+    as_of = session_dates[-1]
+    candles = [
+        _candle("BBCA", date(2025, 12, 1) + timedelta(days=i), Decimal("100")) for i in range(45)
+    ]
+    summaries = [_summary("BBCA", day, Decimal("110")) for day in session_dates]
+
+    spy_repo = SpyCandidateObservationsRepository()
+    use_case = AccumulationScreenUseCase(
+        broker_repository=MockBrokerRepository(summaries),
+        market_repository=MockMarketRepository(candles),
+        candidate_observations_repository=spy_repo,
+    )
+
+    response = use_case.execute(
+        AccumulationScreenRequest(
+            tickers=["BBCA"],
+            window_days=7,
+            min_net_buy_days=1,
+            as_of_date=as_of,
+        )
+    )
+
+    assert len(response.candidates) == 1
+    assert len(spy_repo.saved) == 1
+
+    obs = spy_repo.saved[0]
+    assert isinstance(obs, CandidateObservation)
+    assert obs.ticker == "BBCA"
+    assert obs.snapshot_date == as_of
+
+    payload = obs.payload
+    assert payload["schema_version"] == 1
+    assert payload["artifact_type"] == "candidate_observation"
+    assert payload["ticker"] == "BBCA"
+
+
+def test_screen_result_returned_even_when_persistence_fails():
+    """save_many failure must not block the screen response (best-effort persistence)."""
+    session_dates = _weekdays(date(2026, 1, 1), 7)
+    as_of = session_dates[-1]
+    candles = [
+        _candle("BBCA", date(2025, 12, 1) + timedelta(days=i), Decimal("100")) for i in range(45)
+    ]
+    summaries = [_summary("BBCA", day, Decimal("110")) for day in session_dates]
+
+    spy_repo = SpyCandidateObservationsRepository()
+    spy_repo.raise_on_save = RuntimeError("DB write failed")
+
+    use_case = AccumulationScreenUseCase(
+        broker_repository=MockBrokerRepository(summaries),
+        market_repository=MockMarketRepository(candles),
+        candidate_observations_repository=spy_repo,
+    )
+
+    response = use_case.execute(
+        AccumulationScreenRequest(
+            tickers=["BBCA"],
+            window_days=7,
+            min_net_buy_days=1,
+            as_of_date=as_of,
+        )
+    )
+
+    # Response returned despite persistence failure
+    assert len(response.candidates) == 1
+    assert response.candidates[0].ticker == "BBCA"

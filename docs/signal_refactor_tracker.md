@@ -18,8 +18,8 @@ This file is the canonical phase-by-phase state for the SignalEngine staged-evid
 | 3 | Flow Confirmation Group | ✅ Done | see Phase 3 detail |
 | 4 | Replace Signal Aggregator | ✅ Done | 1788860, c0e47cd |
 | 5 | Regime-Conditional Signal Interpretation | ✅ Done | f361b90, 01afcf0 |
-| 6 | Confidence-Aware Classification | ✅ Done | pending commit |
-| 7 | Persistence For Replayable Evidence | 🔲 Not Started | — |
+| 6 | Confidence-Aware Classification | ✅ Done | e57e9fb |
+| 7 | Persistence For Replayable Evidence | ✅ Done | pending commit |
 | 8 | Walk-Forward Calibration Guardrails | 🔲 Not Started | — |
 
 **Status legend:** 🔲 Not Started · 🔄 In Progress · ✅ Done · ⏸️ Deferred
@@ -410,7 +410,7 @@ Code review identified four issues in Phase 5 commit (f361b90):
 
 **Goal:** Make historical signal decisions replayable without live re-fetching.
 
-**Status:** 🔲 Not Started
+**Status:** ✅ Done — candidate observations persisted locally and replayable via CLI
 
 ### Dependencies
 
@@ -418,14 +418,14 @@ Code review identified four issues in Phase 5 commit (f361b90):
 
 ### Sub-steps
 
-- [ ] 7.1 Define `SignalEvidence` JSON schema + schema version field (start at `schema_version: 1`)
-- [ ] 7.2 Create `candidate_observations` or `signal_evidence` table — schema-versioned JSON blob column. **Do not reuse or extend `screen_snapshots`.** Table created/upgraded via `SqliteMigrationRunner` inside the repository (follow the pattern from `7613c93`). Do not introduce a separate `migrations/` directory.
-- [ ] 7.3 Add `CandidateObservationsRepository` port to domain
-- [ ] 7.4 Create `SQLiteCandidateObservationsRepository` — uses `SqliteMigrationRunner` for table init/upgrade
-- [ ] 7.5 Implement schema-evolution tolerance in reader: tolerate missing optional fields, default new optional fields safely, reject unsupported major schema versions with clear error, avoid CLI crashes on older snapshots
-- [ ] 7.6 Wire persistence into the accumulation screen use case or workflow — the use case calls the repository after screening completes. The adapter only injects the repository dependency and formats output.
-- [ ] 7.7 Add `saham analyze signal-replay TICKER DATE` subcommand under existing `analyze` group — loads stored payload, does not re-fetch live providers
-- [ ] 7.8 Unit tests for persistence, schema-evolution (v1 payload parsed by v1+ reader), and replay read path
+- [x] 7.1 Define candidate observation JSON schema + schema version field (starts at `schema_version: 1`)
+- [x] 7.2 Create `candidate_observations` table — schema-versioned JSON blob column. **Does not reuse or extend `screen_snapshots`.** Table created/upgraded via `SqliteMigrationRunner` inside the repository. No separate `migrations/` directory.
+- [x] 7.3 Add `CandidateObservationsRepository` port to domain
+- [x] 7.4 Create `SQLiteCandidateObservationsRepository` — uses `SqliteMigrationRunner` for table init/upgrade
+- [x] 7.5 Implement schema-evolution tolerance in reader: payload defaults `schema_version`, display uses optional-safe `.get()`, unsupported major schema versions are rejected with clear error
+- [x] 7.6 Wire persistence into the accumulation screen use case — the use case calls the repository after screening completes. Adapter only injects the repository dependency.
+- [x] 7.7 Add `saham analyze signal-replay TICKER DATE` subcommand under existing `analyze` group — loads stored payload, does not re-fetch live providers
+- [x] 7.8 Unit tests for persistence, schema-version rejection, command contract, and replay read path
 
 ### Files To Create/Modify
 
@@ -436,7 +436,21 @@ Code review identified four issues in Phase 5 commit (f361b90):
 | Modify | Accumulation screen use case or workflow — call `CandidateObservationsRepository.save()` after screen run |
 | Modify | Accumulation screen adapter — inject `CandidateObservationsRepository`; do not orchestrate persistence here |
 | New or Modify | `src/adapters/cli/analyze_commands.py` or `analyze_signal_commands.py` — add `signal-replay` subcommand |
-| New | `tests/infrastructure/persistence/test_sqlite_candidate_observations.py` |
+| New | `tests/infrastructure/persistence/test_sqlite_candidate_observations_repository.py` |
+| New | `tests/application/use_case/test_replay_signal_observation_use_case.py` |
+| Modify | `tests/adapters/cli/test_command_contract.py` — add `signal-replay` |
+
+### Key Behavior
+
+- `screen accum` persists schema-versioned candidate observations after screening
+  completes. Persistence is local-first SQLite and best-effort; screen results are
+  not blocked if observation persistence fails.
+- Payload shape starts at `schema_version: 1` with root
+  `artifact_type: candidate_observation`, request metadata, candidate snapshot,
+  signal assessment, and optional trade setup.
+- Replay reads the latest stored observation for `ticker + snapshot_date`; it
+  does not instantiate market, broker, Stockbit, or signal providers.
+- Unsupported schema versions greater than 1 fail with a clear error.
 
 ### Verify
 
@@ -445,6 +459,8 @@ Code review identified four issues in Phase 5 commit (f361b90):
 - Evidence replay reads stored payload; no live providers called.
 - `screen_snapshots` schema unchanged.
 - No new `migrations/` directory created; table management lives in the repository class.
+- `python -m py_compile src/domain/ports/candidate_observations_repository.py src/infrastructure/persistence/sqlite_candidate_observations_repository.py src/application/use_case/replay_signal_observation_use_case.py src/application/use_case/accumulation_screen_use_case.py src/application/services/accumulation_screen_factory.py src/adapters/cli/screen_accum_workflow_factory.py src/adapters/cli/analyze_signal_commands.py src/adapters/cli/analyze_commands.py`
+- `./.venv/bin/pytest tests/infrastructure/persistence/test_sqlite_candidate_observations_repository.py tests/application/use_case/test_replay_signal_observation_use_case.py tests/adapters/cli/test_command_contract.py tests/application/use_case/test_accumulation_screen.py`
 
 ---
 
@@ -504,3 +520,4 @@ _Append decisions, blockers, or scope changes here as they come up._
 | 2026-07-03 | Phase 4 complete. `AssessSignalEvidenceUseCase` — staged aggregation with 2 evidence groups (setup 60%, flow 40%) + 3 flags (VALUATION_STRETCHED/ANALYST_BEARISH/INSIDER_SELLING). Missing evidence excluded from denominator (lowers confidence, not direction). `AssessSignalUseCase` retained as archived reference; no longer called by `SignalEngine`. 2239 tests pass (31 new). 4.6/4.7 complete after CLI display update and explicit Phase 0 before/after commentary. |
 | 2026-07-03 | Phase 5 complete. `MarketContext` is canonical signal conditioning when `--with-market-context` is enabled. ADR-037 supersedes ADR-032 preview-only wording. Follow-up fixed stale CLI help and compact Market Context display so preview-vs-canonical equality no longer hides `regime_conditioning` / `gate_tightening`. Focused CLI tests pass. |
 | 2026-07-03 | Phase 6 complete. `SignalAssessment.confidence_score` added; evidence confidence now caps entry quality. High score with low confidence becomes `WATCH`, not `ENTER`. Seasonality with unknown or fewer than 5 years is unavailable/missing, not directional evidence. Self-fetch, audit, and evidence annotation now share that rule. Focused signal, CLI, and workflow tests pass. |
+| 2026-07-03 | Phase 7 complete. `candidate_observations` SQLite persistence added via `SqliteMigrationRunner`; `screen accum` persists schema-versioned candidate observations from the application use case; `saham analyze signal-replay TICKER DATE` replays stored payloads without live providers. Focused persistence, replay, command contract, and accumulation tests pass. |

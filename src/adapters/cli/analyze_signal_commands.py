@@ -4,8 +4,8 @@ CLI implementation for `saham analyze signal-audit`.
 Phase 0 observability command for the SignalEngine composite score. Shows the
 exact per-factor inputs feeding the current flat-weighted score for one ticker:
 presence, raw context value, component score, configured/active weight, and
-weighted contribution. Also previews the Phase 4 renormalized score (missing
-factors excluded from the weight pool).
+weighted contribution. Also shows the legacy flat-factor renormalized score
+(missing factors excluded from the weight pool) for diagnostic reference.
 
 Adapter responsibilities only: parse input, wire dependencies, call use cases,
 format output. No scoring policy lives here.
@@ -33,8 +33,15 @@ from src.application.use_case.audit_signal_use_case import (
     AuditSignalRequest,
     AuditSignalUseCase,
 )
+from src.application.use_case.replay_signal_observation_use_case import (
+    ReplaySignalObservationRequest,
+    ReplaySignalObservationUseCase,
+)
 from src.domain.value_objects.signal_audit import SignalAuditReport
 from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.persistence.sqlite_candidate_observations_repository import (
+    SQLiteCandidateObservationsRepository,
+)
 
 DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 
@@ -66,8 +73,8 @@ def signal_audit(
     Shows per-factor: present/missing, raw context value, component score (0-100),
     configured weight, active weight, weighted contribution, and composite total.
 
-    Also shows a preview of the Phase 4 renormalized score (score if missing factors
-    were excluded from the weight pool rather than defaulting to neutral 50).
+    Also shows the legacy flat-factor renormalized score (missing factors excluded
+    from the weight pool) for diagnostic reference alongside the canonical score.
 
     Use --coverage to see DB-level usable row counts per factor across all tickers.
 
@@ -121,6 +128,37 @@ def signal_audit(
             typer.echo(f"\n[warning] Coverage unavailable: {e}", err=True)
 
 
+def signal_replay(
+    ticker: Annotated[str, typer.Argument(help="IDX ticker (e.g. BBCA)")],
+    snapshot_date: Annotated[str, typer.Argument(help="Snapshot date YYYY-MM-DD")],
+    db_path: Annotated[Optional[Path], typer.Option("--db")] = None,
+) -> None:
+    """Replay the latest stored signal observation for ticker/date."""
+    resolved_db = db_path or DEFAULT_DB_PATH
+    ticker_u = ticker.upper()
+    try:
+        day = date.fromisoformat(snapshot_date)
+    except ValueError:
+        typer.echo(f"[error] Invalid date: {snapshot_date} (expected YYYY-MM-DD)", err=True)
+        raise typer.Exit(1)
+
+    try:
+        repo = SQLiteCandidateObservationsRepository(resolved_db)
+        response = ReplaySignalObservationUseCase(repo).execute(
+            ReplaySignalObservationRequest(ticker=ticker_u, snapshot_date=day)
+        )
+    except Exception as exc:
+        typer.echo(f"[error] Failed to replay signal observation: {exc}", err=True)
+        raise typer.Exit(1)
+
+    if response.observation is None:
+        typer.echo(f"[error] No stored signal observation for {ticker_u} on {day}.", err=True)
+        typer.echo("        Run: saham screen accum to capture observations first.", err=True)
+        raise typer.Exit(1)
+
+    _display_replay(response.observation.payload)
+
+
 # ── display ───────────────────────────────────────────────────────────────────
 
 def _display_report(report: SignalAuditReport) -> None:
@@ -153,7 +191,7 @@ def _display_report(report: SignalAuditReport) -> None:
     )
     typer.echo("")
     typer.echo(
-        f"Phase 4 preview (renormalized, missing excluded): "
+        f"Legacy flat-factor renormalized (missing excluded): "
         f"{report.renormalized_score}/100"
     )
     typer.echo("")
@@ -161,6 +199,51 @@ def _display_report(report: SignalAuditReport) -> None:
     typer.echo(f"Coverage: {report.factors_present}/{total} factors present")
     if report.coverage_warning:
         typer.echo(f"[warning] {report.coverage_warning}", err=True)
+
+
+def _display_replay(payload: dict) -> None:
+    ticker = payload.get("ticker", "?")
+    snapshot_date = payload.get("snapshot_date", "?")
+    captured_at = payload.get("captured_at", "?")
+    signal = payload.get("signal") or {}
+    assessment = signal.get("assessment") or {}
+    candidate = payload.get("candidate") or {}
+    trade_setup = payload.get("trade_setup") or {}
+
+    typer.echo(f"\nSignal Replay  ·  {ticker}  ·  {snapshot_date}")
+    typer.echo("═" * 58)
+    typer.echo(f"Captured: {captured_at}")
+    typer.echo(f"Schema:   {payload.get('schema_version', '?')}")
+    typer.echo("")
+    confidence = assessment.get("confidence_score")
+    confidence_text = "—" if confidence is None else f"{float(confidence):.0%}"
+    typer.echo(
+        "Signal:  "
+        f"{assessment.get('score', '—')}/100  "
+        f"{assessment.get('strength', '—')}  "
+        f"{assessment.get('entry_quality', '—')}  "
+        f"conf={confidence_text}"
+    )
+    if signal.get("coverage_warning"):
+        typer.echo(f"Warning: {signal['coverage_warning']}")
+    typer.echo(
+        "Flow:    "
+        f"{candidate.get('foreign_flow_score', '—')}  "
+        f"trend={candidate.get('trend', '—')}  "
+        f"streak={candidate.get('consecutive_streak', '—')}"
+    )
+    if trade_setup:
+        typer.echo(
+            "Action:  "
+            f"{trade_setup.get('action', '—')}  "
+            f"risk={trade_setup.get('risk_level', '—')}"
+        )
+    breakdown = assessment.get("breakdown") or {}
+    if breakdown:
+        typer.echo("")
+        typer.echo("Breakdown:")
+        for key, value in breakdown.items():
+            typer.echo(f"  {key}: {value}")
 
 
 def _display_coverage(report: SignalCoverageReport) -> None:

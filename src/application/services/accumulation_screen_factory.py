@@ -23,6 +23,7 @@ def create_accumulation_screen_use_case(
     stockbit_providers: Any | None = None,
     risk_use_case: Any | None = None,
     signal_engine: Any | None = None,
+    candidate_observations_repository: Any | None = None,
     foreign_flow_score_policy: Any | None = None,
     derived_feature_policy: Any | None = None,
     idx_groups: dict[str, list[str]] | None = None,
@@ -48,6 +49,7 @@ def create_accumulation_screen_use_case(
         idx_groups=idx_groups,
         risk_use_case=risk_use_case,
         signal_engine=signal_engine,
+        candidate_observations_repository=candidate_observations_repository,
         foreign_flow_score_use_case=score_use_case,
         derived_feature_policy=derived_feature_policy,
     )
