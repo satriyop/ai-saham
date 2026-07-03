@@ -9,30 +9,32 @@ from src.application.use_case.assess_signal_use_case import (
 from src.domain.value_objects.forward_estimates import ForwardEstimates
 
 
-
 class EmptyInsiderProvider:
     def get_insider_transactions(self, **kwargs):
         return []
 
 
 class ForwardProviderWithMissingPe:
+    """Returns ForwardEstimates with no pre-computed PE — must be derived from price."""
     def get_forward_estimates(self, ticker):
         return ForwardEstimates(
             ticker=ticker,
-            forward_eps_1y=10.0,
+            forward_eps_1y=2.0,          # PE=125 when price=250, PE=40 when price=80
             revenue_forward_1y=None,
             current_price=None,
             forward_pe=None,
         )
 
 
-class AnalystProviderWithStalePrice:
+class AnalystProviderWithLowCurrentPrice:
+    """Returns analyst consensus with a low current_price (→ PE=40, below threshold)."""
     def get_consensus(self, ticker):
         return type("Consensus", (), {
             "analyst_count": 1,
             "buy_count": 1,
+            "buy_ratio": 1.0,        # required to populate analyst_current_price
             "upside_pct": 10.0,
-            "current_price": 80.0,
+            "current_price": 80.0,   # 80/2=40 PE → below VALUATION_STRETCHED threshold
         })()
 
 
@@ -59,22 +61,28 @@ def test_signal_engine_input_mapping_helpers_use_config():
 
 
 def test_signal_engine_empty_insider_fetch_counts_as_neutral_data():
+    # Empty insider list → insider_net_buy_ratio=0.0 (not INSIDER_SELLING threshold of -0.30)
     engine = SignalEngine(insider_activity_provider=EmptyInsiderProvider())
 
     response = engine.evaluate("BBCA")
 
-    assert response.assessment.breakdown_dict["insider_activity"] == 50.0
+    # 0.0 ratio does NOT trigger INSIDER_SELLING penalty
+    assert "INSIDER_SELLING" not in response.active_flags
+    # Self-fetch path has no SetupEvidence / FlowConfirmationEvidence → confidence=0
+    assert response.evidence_confidence == 0.0
     assert response.coverage_warning is not None
-    assert "5/6" in response.coverage_warning
 
 
 def test_signal_engine_derives_forward_pe_from_latest_price_before_analyst_price():
+    # With latest_price=250.0: PE = 250/2 = 125.0 > 50 → VALUATION_STRETCHED fires.
+    # Without latest_price (analyst_price=80.0 only): PE = 80/2 = 40.0 ≤ 50 → no flag.
+    # Flag firing proves latest_price was used in preference to analyst_current_price.
     engine = SignalEngine(
-        analyst_provider=AnalystProviderWithStalePrice(),
+        analyst_provider=AnalystProviderWithLowCurrentPrice(),
         forward_estimates_provider=ForwardProviderWithMissingPe(),
         latest_price_provider=lambda ticker: 250.0,
     )
 
     response = engine.evaluate("BBCA")
 
-    assert response.assessment.breakdown_dict["forward_valuation"] == 37.5
+    assert "VALUATION_STRETCHED" in response.active_flags

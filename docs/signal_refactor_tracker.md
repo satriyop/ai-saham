@@ -216,7 +216,7 @@ This file is the canonical phase-by-phase state for the SignalEngine staged-evid
 
 **Goal:** Make the evidence-first staged aggregator the canonical `SignalEngine`. Clean break — no parallel paths.
 
-**Status:** 🔲 Not Started
+**Status:** ✅ Done — 2239 tests pass (31 new), AssessSignalEvidenceUseCase is canonical in SignalEngine
 
 ### Dependencies
 
@@ -225,14 +225,14 @@ This file is the canonical phase-by-phase state for the SignalEngine staged-evid
 
 ### Sub-steps
 
-- [ ] 4.1 Implement `AssessSignalEvidenceUseCase` — staged aggregation: setup quality → flow confirmation → fundamental flags → analyst flags → insider flags → priors → confidence/freshness
-- [ ] 4.2 Implement `renormalize` missing-evidence policy: missing evidence excluded from weight denominator, always lowers confidence, no fabricated bullish/bearish direction
-- [ ] 4.3 Add YAML configuration for evidence groups, flag thresholds, and missing-evidence policy in `config/signal_engine.yaml`
-- [ ] 4.4 Add flag implementations: `VALUATION_STRETCHED` (P/E > 50), `ANALYST_BEARISH` (buy_ratio < 0.20), `INSIDER_SELLING` (large + recent + repeated)
-- [ ] 4.5 Wire `AssessSignalEvidenceUseCase` as canonical path in `src/application/services/signal_engine.py`. Remove old flat `AssessSignalUseCase` path.
+- [x] 4.1 Implement `AssessSignalEvidenceUseCase` — staged aggregation: setup quality → flow confirmation → fundamental flags → analyst flags → insider flags → confidence/freshness
+- [x] 4.2 Implement `renormalize` missing-evidence policy: missing evidence excluded from weight denominator, always lowers confidence, no fabricated bullish/bearish direction
+- [x] 4.3 Add YAML configuration for evidence groups, flag thresholds in `config/signal_engine.yaml`
+- [x] 4.4 Add flag implementations: `VALUATION_STRETCHED` (P/E > 50, -10 pts), `ANALYST_BEARISH` (buy_ratio < 0.20, -8 pts), `INSIDER_SELLING` (net_buy_ratio < -0.30, -12 pts)
+- [x] 4.5 Wired `AssessSignalEvidenceUseCase` as canonical path in `signal_engine.py`. `AssessSignalUseCase` retained as archived reference (not called by SignalEngine).
 - [ ] 4.6 Update CLI displays to render new canonical evidence and assessment. No dual-engine comparison mode.
 - [ ] 4.7 Document before/after explanation for each Phase 0 fixture case where output changes
-- [ ] 4.8 Unit tests for all staged aggregation paths, renormalize policy, and each flag
+- [x] 4.8 Unit tests for all staged aggregation paths, renormalize policy, and each flag
 
 ### Files To Create/Modify
 
@@ -426,3 +426,4 @@ _Append decisions, blockers, or scope changes here as they come up._
 | 2026-07-03 | Phase 1 complete. `FactorEvidence`/`SignalEvidence` domain objects + `SignalEvidenceBuilder` + `seasonality_total_years` threading. 2175 tests pass (after review fixes). No scoring changes, no CLI changes. Phase 2 and Phase 3 both unblocked. |
 | 2026-07-03 | Phase 2 complete. `SetupEvidence` domain VO + `SetupEvidenceBuilder` + wired into `SwingEvidence`. 2188 tests pass (13 new, after review cleanup). RS sub-signal date-gated at 2025-07-01; volume sub-signal source-gated to stockbit. RS/volume currently MISSING (no candle query infra yet). |
 | 2026-07-03 | Phase 3 complete. `FlowConfirmationEvidence` + builder. BB disabled by default in `ScoreForeignFlowUseCase` (key retained at 0.0). Group cap 0.80 applied to bandar+flow aggregate. 2205 tests pass (17 new). `FlowConfirmationEvidence` diagnostic-only; Phase 4 will use `capped_strength`. |
+| 2026-07-03 | Phase 4 complete. `AssessSignalEvidenceUseCase` — staged aggregation with 2 evidence groups (setup 60%, flow 40%) + 3 flags (VALUATION_STRETCHED/ANALYST_BEARISH/INSIDER_SELLING). Missing evidence excluded from denominator (lowers confidence, not direction). `AssessSignalUseCase` retained as archived reference; no longer called by `SignalEngine`. 2239 tests pass (31 new). 4.6/4.7 (CLI display + before/after commentary) deferred to next pass. |

@@ -2,11 +2,16 @@
 SignalEngine — first-class application service for composite signal assessment.
 
 Parallel to RiskEngine. Self-sufficient: callers never instantiate SignalContext,
-build provider chains, or wire AssessSignalUseCase. Two entry points:
+build provider chains, or wire AssessSignalEvidenceUseCase. Two entry points:
 
   evaluate()              — self-fetches enrichment from injected providers
   evaluate_with_context() — pipeline path; accepts pre-loaded SignalContext
                             to avoid N+1 fetches in screener loops
+
+Phase 4: canonical path is AssessSignalEvidenceUseCase (staged evidence-first
+aggregation). SetupEvidence and FlowConfirmationEvidence are optional inputs;
+when absent, those groups are MISSING (excluded from denominator) and confidence
+is lowered. Flags from SignalContext still apply as score penalties.
 
 Layer: Application
 """
@@ -18,10 +23,13 @@ from dataclasses import replace
 from datetime import date
 from typing import TYPE_CHECKING, Callable
 
+from src.application.use_case.assess_signal_evidence_use_case import (
+    AssessSignalEvidenceRequest,
+    AssessSignalEvidenceUseCase,
+)
 from src.application.use_case.assess_signal_use_case import (
     AssessSignalRequest,
     AssessSignalResponse,
-    AssessSignalUseCase,
     SignalEngineConfig,
 )
 from src.domain.value_objects.signal_assessment import (
@@ -38,7 +46,9 @@ if TYPE_CHECKING:
     from src.domain.ports.seasonality_provider import SeasonalityProvider
     from src.domain.ports.analyst_consensus_provider import AnalystConsensusProvider
     from src.domain.ports.forward_estimates_provider import ForwardEstimatesProvider
+    from src.domain.value_objects.flow_confirmation_evidence import FlowConfirmationEvidence
     from src.domain.value_objects.market_context import MarketContext
+    from src.domain.value_objects.setup_evidence import SetupEvidence
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +58,7 @@ class SignalEngine:
     Self-sufficient signal evaluation service.
 
     Owns enrichment provider wiring. Callers never see SignalContext,
-    AssessSignalUseCase, or provider imports — they call evaluate() and
+    AssessSignalEvidenceUseCase, or provider imports — they call evaluate() and
     get an AssessSignalResponse.
 
     All providers are optional:
@@ -58,8 +68,8 @@ class SignalEngine:
       - forward_estimates_provider: ForwardEstimatesProvider (forward_pe)
       - fundamentals_provider:      accepted but unused (piotroski moved to GateContext/RiskEngine)
 
-    Missing providers → neutral (50.0) defaults for those factors.
-    A coverage_warning is emitted when ≥ 3/6 factors fall back to neutral.
+    Missing evidence groups lower confidence; flags from SignalContext apply
+    score penalties. No neutral-fill for missing evidence groups.
     """
 
     def __init__(
@@ -75,7 +85,7 @@ class SignalEngine:
         config: SignalEngineConfig | None = None,
     ) -> None:
         self._config = config or SignalEngineConfig()
-        self._use_case = AssessSignalUseCase(weights=weights, config=self._config)
+        self._evidence_use_case = AssessSignalEvidenceUseCase(config=self._config)
         self._bandar = bandar_provider
         self._fundamentals = fundamentals_provider
         self._insider = insider_activity_provider
@@ -93,18 +103,19 @@ class SignalEngine:
         """
         Full self-contained evaluation.
 
-        Fetches enrichment from injected providers. Providers that are absent
-        or that raise exceptions are silently skipped — their factors fall back
-        to neutral (50.0).
-
-        market_context: when provided, applies signal_multiplier to the raw score
-        and downgrades ENTER→WATCH when gate_tightening is active.
+        Fetches enrichment from injected providers for flag evaluation.
+        Evidence groups (SetupEvidence, FlowConfirmationEvidence) are not
+        available in the self-fetch path — confidence will be 0, flags still apply.
         """
         ctx = self._build_signal_context(ticker)
         if as_of_date is not None:
             ctx = replace(ctx, snapshot_date=as_of_date)
-        response = self._use_case.execute(
-            AssessSignalRequest(ticker=ticker, signal_context=ctx)
+        response = self._evidence_use_case.execute(
+            AssessSignalEvidenceRequest(
+                ticker=ticker,
+                snapshot_date=ctx.snapshot_date,
+                signal_context=ctx,
+            )
         )
         return _apply_market_context(response, market_context, self._config)
 
@@ -114,8 +125,7 @@ class SignalEngine:
         """Public accessor for the enrichment SignalContext (observability path).
 
         Used by AuditSignalUseCase / signal-audit CLI to inspect the exact inputs
-        that feed the composite score without re-implementing provider wiring.
-        Does not affect scoring.
+        that feed the flag evaluation without re-implementing provider wiring.
         """
         ctx = self._build_signal_context(ticker)
         if as_of_date is not None:
@@ -127,15 +137,26 @@ class SignalEngine:
         ticker: str,
         signal_context: SignalContext,
         market_context: "MarketContext | None" = None,
+        setup_evidence: "SetupEvidence | None" = None,
+        flow_confirmation_evidence: "FlowConfirmationEvidence | None" = None,
     ) -> AssessSignalResponse:
         """
         Pipeline path: caller supplies pre-loaded SignalContext.
 
         Intended for screener loops (800+ tickers) where enrichment data is
         already fetched per candidate — avoids N+1 provider calls.
+
+        setup_evidence / flow_confirmation_evidence: when provided, group scores
+        are computed from evidence objects. When absent, those groups are MISSING.
         """
-        response = self._use_case.execute(
-            AssessSignalRequest(ticker=ticker, signal_context=signal_context)
+        response = self._evidence_use_case.execute(
+            AssessSignalEvidenceRequest(
+                ticker=ticker,
+                snapshot_date=signal_context.snapshot_date,
+                setup_evidence=setup_evidence,
+                flow_confirmation_evidence=flow_confirmation_evidence,
+                signal_context=signal_context,
+            )
         )
         return _apply_market_context(response, market_context, self._config)
 
@@ -148,8 +169,16 @@ class SignalEngine:
         Advanced path: caller provides a full AssessSignalRequest.
 
         Injects signal_context automatically when the caller hasn't supplied one.
+        Evidence groups are not available via this path (flags only).
         """
-        response = self._use_case.execute(self._inject_signal_context(request))
+        ctx = request.signal_context or self._build_signal_context(request.ticker)
+        response = self._evidence_use_case.execute(
+            AssessSignalEvidenceRequest(
+                ticker=request.ticker,
+                snapshot_date=ctx.snapshot_date,
+                signal_context=ctx,
+            )
+        )
         return _apply_market_context(response, market_context, self._config)
 
     def apply_market_context(
@@ -180,12 +209,6 @@ class SignalEngine:
         return (cfg.mandatory_signal_count + optional_signal_count) * cfg.signal_score_unit
 
     # ── internals ────────────────────────────────────────────────────────────
-
-    def _inject_signal_context(self, request: AssessSignalRequest) -> AssessSignalRequest:
-        if request.signal_context is not None:
-            return request
-        ctx = self._build_signal_context(request.ticker)
-        return replace(request, signal_context=ctx)
 
     def _build_signal_context(self, ticker: str) -> SignalContext:
         """Fetch enrichment from injected providers. Each provider fails gracefully."""

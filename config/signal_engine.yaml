@@ -80,3 +80,27 @@ signal_engine:
     forward_valuation:
       enabled: true
       weight: 0.10
+
+  # Phase 4: Evidence-group weights for AssessSignalEvidenceUseCase.
+  # Weights are relative (renormalized when a group is missing).
+  evidence_groups:
+    setup_quality:
+      weight: 0.60
+    flow_confirmation:
+      weight: 0.40
+
+  # Phase 4: Do-no-harm flags applied as score penalties.
+  # Flags fire when the condition is met; penalty is subtracted from the group score.
+  flags:
+    valuation_stretched:
+      enabled: true
+      forward_pe_threshold: 50.0
+      score_penalty: 10
+    analyst_bearish:
+      enabled: true
+      buy_ratio_threshold: 0.20
+      score_penalty: 8
+    insider_selling:
+      enabled: true
+      net_buy_ratio_threshold: -0.30
+      score_penalty: 12

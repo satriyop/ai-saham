@@ -98,17 +98,23 @@ def load_signal_weight_tables():
 
 def _resolve_signal_config(cfg: dict):
     from src.application.use_case.assess_signal_use_case import (
+        AnalystBearishFlagConfig,
+        EvidenceGroupConfig,
+        EvidenceGroupsConfig,
         ForeignFlowScoreMappingConfig,
         AnalystScoringConfig,
         BandarScoringConfig,
         ForwardPeScoringConfig,
+        InsiderSellingFlagConfig,
         SeasonalityScoringConfig,
         SignalClassificationConfig,
         SignalEnrichmentConfig,
         SignalEngineConfig,
+        SignalFlagsConfig,
         SignalInputMappingConfig,
         SignalMissingDataConfig,
         SignalScoringConfig,
+        ValuationStretchedFlagConfig,
     )
 
     root = cfg.get("signal_engine", {})
@@ -122,6 +128,11 @@ def _resolve_signal_config(cfg: dict):
     seasonality = scoring.get("seasonality", {})
     analyst = scoring.get("analyst", {})
     forward_pe = scoring.get("forward_pe", {})
+    evidence_groups = root.get("evidence_groups", {})
+    flags = root.get("flags", {})
+    flag_valuation = flags.get("valuation_stretched", {})
+    flag_analyst = flags.get("analyst_bearish", {})
+    flag_insider = flags.get("insider_selling", {})
 
     return SignalEngineConfig(
         classification=SignalClassificationConfig(
@@ -170,6 +181,31 @@ def _resolve_signal_config(cfg: dict):
         ),
         enrichment=SignalEnrichmentConfig(
             insider_lookback_days=enrichment.get("insider_lookback_days", 90),
+        ),
+        evidence_groups=EvidenceGroupsConfig(
+            setup_quality=EvidenceGroupConfig(
+                weight=evidence_groups.get("setup_quality", {}).get("weight", 0.60),
+            ),
+            flow_confirmation=EvidenceGroupConfig(
+                weight=evidence_groups.get("flow_confirmation", {}).get("weight", 0.40),
+            ),
+        ),
+        flags=SignalFlagsConfig(
+            valuation_stretched=ValuationStretchedFlagConfig(
+                enabled=flag_valuation.get("enabled", True),
+                forward_pe_threshold=flag_valuation.get("forward_pe_threshold", 50.0),
+                score_penalty=int(flag_valuation.get("score_penalty", 10)),
+            ),
+            analyst_bearish=AnalystBearishFlagConfig(
+                enabled=flag_analyst.get("enabled", True),
+                buy_ratio_threshold=flag_analyst.get("buy_ratio_threshold", 0.20),
+                score_penalty=int(flag_analyst.get("score_penalty", 8)),
+            ),
+            insider_selling=InsiderSellingFlagConfig(
+                enabled=flag_insider.get("enabled", True),
+                net_buy_ratio_threshold=flag_insider.get("net_buy_ratio_threshold", -0.30),
+                score_penalty=int(flag_insider.get("score_penalty", 12)),
+            ),
         ),
     )
 

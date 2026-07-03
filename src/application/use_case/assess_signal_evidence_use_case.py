@@ -1,0 +1,280 @@
+"""
+AssessSignalEvidenceUseCase — staged evidence-first signal aggregator (Phase 4).
+
+Replaces the flat 6-factor weighted average (AssessSignalUseCase) with a
+two-group staged aggregation:
+
+  Group 1 — Setup Quality     (default weight 0.60)
+  Group 2 — Flow Confirmation (default weight 0.40)
+
+Missing evidence is excluded from the weight denominator rather than filled with
+a neutral 50.0 score. This prevents data absence from inflating or deflating the
+result — missing groups lower confidence, not the directional score.
+
+Fundamental/analyst/insider context is applied as do-no-harm flags that impose
+score penalties, not as positive scored factors.
+
+Layer: Application
+Depends on: domain only + stdlib. No IO, no providers, no repositories.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import date
+from typing import TYPE_CHECKING
+
+from src.application.use_case.assess_signal_use_case import (
+    AssessSignalResponse,
+    SignalEngineConfig,
+)
+from src.domain.value_objects.signal_assessment import (
+    EntryQuality,
+    SignalAssessment,
+    SignalContext,
+    SignalStrength,
+)
+
+if TYPE_CHECKING:
+    from src.domain.value_objects.flow_confirmation_evidence import FlowConfirmationEvidence
+    from src.domain.value_objects.setup_evidence import SetupEvidence
+
+
+@dataclass
+class AssessSignalEvidenceRequest:
+    ticker: str
+    snapshot_date: date
+    setup_evidence: "SetupEvidence | None" = None
+    flow_confirmation_evidence: "FlowConfirmationEvidence | None" = None
+    signal_context: SignalContext | None = None   # for flag evaluation
+
+
+class AssessSignalEvidenceUseCase:
+    """
+    Staged evidence-first signal aggregator.
+
+    Two evidence groups contribute directional votes; flags from SignalContext
+    apply score penalties for fundamental risk signals. Missing evidence lowers
+    confidence but does not fabricate a neutral direction.
+    """
+
+    def __init__(self, config: SignalEngineConfig | None = None) -> None:
+        self._config = config or SignalEngineConfig()
+
+    def execute(self, request: AssessSignalEvidenceRequest) -> AssessSignalResponse:
+        # ── Stage 1: Setup Quality group ─────────────────────────────────────
+        setup_score, setup_present = self._score_setup_group(request.setup_evidence)
+
+        # ── Stage 2: Flow Confirmation group ─────────────────────────────────
+        flow_score, flow_present = self._score_flow_group(request.flow_confirmation_evidence)
+
+        # ── Renormalize: missing groups excluded from denominator ─────────────
+        base_score, confidence = self._renormalize(
+            setup_score, setup_present, flow_score, flow_present
+        )
+
+        # ── Stage 3: Flags (do-no-harm penalties from SignalContext) ──────────
+        active_flags, flag_adj = self._evaluate_flags(request.signal_context)
+
+        # ── Final score ───────────────────────────────────────────────────────
+        raw_group_score = round(base_score)
+        final_score = max(0, min(100, raw_group_score + flag_adj))
+
+        strength = self._classify_strength(final_score)
+        entry_quality = self._classify_entry(strength)
+
+        breakdown = self._build_breakdown(
+            setup_score, setup_present, flow_score, flow_present,
+            confidence, active_flags, flag_adj,
+        )
+        rationale = self._build_rationale(
+            request.ticker, final_score, strength, entry_quality,
+            setup_present, flow_present, confidence, active_flags, flag_adj,
+        )
+
+        assessment = SignalAssessment(
+            ticker=request.ticker,
+            score=final_score,
+            strength=strength,
+            entry_quality=entry_quality,
+            breakdown=breakdown,
+            rationale=rationale,
+            snapshot_date=request.snapshot_date,
+        )
+
+        coverage_warning = self._coverage_warning(confidence, setup_present, flow_present)
+
+        return AssessSignalResponse(
+            ticker=request.ticker,
+            assessment=assessment,
+            coverage_warning=coverage_warning,
+            evidence_confidence=round(confidence, 4),
+            active_flags=tuple(active_flags),
+            flag_adjustment=flag_adj,
+            raw_group_score=raw_group_score,
+        )
+
+    # ── group scorers ─────────────────────────────────────────────────────────
+
+    def _score_setup_group(self, ev: "SetupEvidence | None") -> tuple[float, bool]:
+        """Setup quality group score (0–100) from SetupEvidence.match_strength."""
+        if ev is None:
+            return 0.0, False
+        return float(ev.match_strength), True
+
+    def _score_flow_group(self, ev: "FlowConfirmationEvidence | None") -> tuple[float, bool]:
+        """Flow confirmation group score (0–100) from capped_strength (0–1)."""
+        if ev is None:
+            return 0.0, False
+        return max(0.0, min(100.0, ev.capped_strength * 100.0)), True
+
+    # ── renormalization ───────────────────────────────────────────────────────
+
+    def _renormalize(
+        self,
+        setup_score: float, setup_present: bool,
+        flow_score: float, flow_present: bool,
+    ) -> tuple[float, float]:
+        """
+        Compute base score and confidence from present evidence groups.
+
+        confidence = present_weight / total_weight.
+        When no groups are present, base_score = 50.0 (no directional information).
+        """
+        g = self._config.evidence_groups
+        total_weight = g.setup_quality.weight + g.flow_confirmation.weight
+
+        active: list[tuple[float, float]] = []  # (score, weight)
+        if setup_present:
+            active.append((setup_score, g.setup_quality.weight))
+        if flow_present:
+            active.append((flow_score, g.flow_confirmation.weight))
+
+        if not active:
+            return 50.0, 0.0
+
+        present_weight = sum(w for _, w in active)
+        base_score = sum(s * w for s, w in active) / present_weight
+        confidence = min(1.0, present_weight / total_weight) if total_weight > 0 else 0.0
+        return base_score, confidence
+
+    # ── flags ─────────────────────────────────────────────────────────────────
+
+    def _evaluate_flags(
+        self, ctx: SignalContext | None
+    ) -> tuple[list[str], int]:
+        """Return (active_flag_names, total_penalty) from SignalContext."""
+        if ctx is None:
+            return [], 0
+
+        flags_cfg = self._config.flags
+        active: list[str] = []
+        total_penalty = 0
+
+        if (
+            flags_cfg.valuation_stretched.enabled
+            and ctx.forward_pe is not None
+            and ctx.forward_pe > flags_cfg.valuation_stretched.forward_pe_threshold
+        ):
+            active.append("VALUATION_STRETCHED")
+            total_penalty -= flags_cfg.valuation_stretched.score_penalty
+
+        if (
+            flags_cfg.analyst_bearish.enabled
+            and ctx.analyst_buy_pct is not None
+            and ctx.analyst_buy_pct < flags_cfg.analyst_bearish.buy_ratio_threshold
+        ):
+            active.append("ANALYST_BEARISH")
+            total_penalty -= flags_cfg.analyst_bearish.score_penalty
+
+        if (
+            flags_cfg.insider_selling.enabled
+            and ctx.insider_net_buy_ratio is not None
+            and ctx.insider_net_buy_ratio < flags_cfg.insider_selling.net_buy_ratio_threshold
+        ):
+            active.append("INSIDER_SELLING")
+            total_penalty -= flags_cfg.insider_selling.score_penalty
+
+        return active, total_penalty
+
+    # ── breakdown and rationale ───────────────────────────────────────────────
+
+    def _build_breakdown(
+        self,
+        setup_score: float, setup_present: bool,
+        flow_score: float, flow_present: bool,
+        confidence: float,
+        active_flags: list[str],
+        flag_adj: int,
+    ) -> tuple[tuple[str, float], ...]:
+        entries: list[tuple[str, float]] = []
+        if setup_present:
+            entries.append(("setup_quality_group", round(setup_score, 2)))
+        if flow_present:
+            entries.append(("flow_confirmation_group", round(flow_score, 2)))
+        entries.append(("evidence_confidence", round(confidence * 100.0, 2)))
+        if flag_adj != 0:
+            entries.append(("flag_adjustment", float(flag_adj)))
+        return tuple(entries)
+
+    def _build_rationale(
+        self,
+        ticker: str,
+        final_score: int,
+        strength: SignalStrength,
+        entry_quality: EntryQuality,
+        setup_present: bool,
+        flow_present: bool,
+        confidence: float,
+        active_flags: list[str],
+        flag_adj: int,
+    ) -> tuple[str, ...]:
+        lines: list[str] = []
+        if not setup_present:
+            lines.append("Setup quality: no evidence (excluded from score)")
+        if not flow_present:
+            lines.append("Flow confirmation: no evidence (excluded from score)")
+        if active_flags:
+            flag_str = ", ".join(active_flags)
+            lines.append(f"Flags active: {flag_str} ({flag_adj:+d} pts)")
+        lines.append(
+            f"Evidence confidence: {confidence:.0%} — "
+            f"score {final_score} ({strength.value}/{entry_quality.value})"
+        )
+        return tuple(lines)
+
+    # ── classification ────────────────────────────────────────────────────────
+
+    def _classify_strength(self, score: int) -> SignalStrength:
+        cfg = self._config.classification
+        if score >= cfg.strong_min_score:
+            return SignalStrength.STRONG
+        if score >= cfg.moderate_min_score:
+            return SignalStrength.MODERATE
+        return SignalStrength.WEAK
+
+    def _classify_entry(self, strength: SignalStrength) -> EntryQuality:
+        if strength == SignalStrength.STRONG:
+            return EntryQuality.ENTER
+        if strength == SignalStrength.MODERATE:
+            return EntryQuality.WATCH
+        return EntryQuality.AVOID
+
+    # ── coverage warning ──────────────────────────────────────────────────────
+
+    def _coverage_warning(
+        self,
+        confidence: float,
+        setup_present: bool,
+        flow_present: bool,
+    ) -> str | None:
+        if confidence == 0.0:
+            return "No evidence groups present — score is neutral prior only"
+        if confidence < 0.5:
+            missing = []
+            if not setup_present:
+                missing.append("setup_quality")
+            if not flow_present:
+                missing.append("flow_confirmation")
+            return f"Low evidence confidence ({confidence:.0%}) — missing: {', '.join(missing)}"
+        return None

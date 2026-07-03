@@ -99,6 +99,57 @@ class SignalEnrichmentConfig:
     insider_lookback_days: int = 90
 
 
+# ── Phase 4: evidence-group and flag config ───────────────────────────────────
+
+@dataclass(frozen=True)
+class EvidenceGroupConfig:
+    weight: float = 1.0
+
+
+@dataclass(frozen=True)
+class EvidenceGroupsConfig:
+    setup_quality: EvidenceGroupConfig = field(
+        default_factory=lambda: EvidenceGroupConfig(weight=0.60)
+    )
+    flow_confirmation: EvidenceGroupConfig = field(
+        default_factory=lambda: EvidenceGroupConfig(weight=0.40)
+    )
+
+
+@dataclass(frozen=True)
+class ValuationStretchedFlagConfig:
+    enabled: bool = True
+    forward_pe_threshold: float = 50.0
+    score_penalty: int = 10
+
+
+@dataclass(frozen=True)
+class AnalystBearishFlagConfig:
+    enabled: bool = True
+    buy_ratio_threshold: float = 0.20
+    score_penalty: int = 8
+
+
+@dataclass(frozen=True)
+class InsiderSellingFlagConfig:
+    enabled: bool = True
+    net_buy_ratio_threshold: float = -0.30
+    score_penalty: int = 12
+
+
+@dataclass(frozen=True)
+class SignalFlagsConfig:
+    valuation_stretched: ValuationStretchedFlagConfig = field(
+        default_factory=ValuationStretchedFlagConfig
+    )
+    analyst_bearish: AnalystBearishFlagConfig = field(
+        default_factory=AnalystBearishFlagConfig
+    )
+    insider_selling: InsiderSellingFlagConfig = field(
+        default_factory=InsiderSellingFlagConfig
+    )
+
+
 @dataclass(frozen=True)
 class SignalEngineConfig:
     classification: SignalClassificationConfig = field(default_factory=SignalClassificationConfig)
@@ -106,6 +157,8 @@ class SignalEngineConfig:
     scoring: SignalScoringConfig = field(default_factory=SignalScoringConfig)
     input_mapping: SignalInputMappingConfig = field(default_factory=SignalInputMappingConfig)
     enrichment: SignalEnrichmentConfig = field(default_factory=SignalEnrichmentConfig)
+    evidence_groups: EvidenceGroupsConfig = field(default_factory=EvidenceGroupsConfig)
+    flags: SignalFlagsConfig = field(default_factory=SignalFlagsConfig)
 
 # Default weights — used when no YAML config is provided (identical to historical hardcoded values)
 _DEFAULT_WEIGHTS: dict[str, float] = {
@@ -130,6 +183,11 @@ class AssessSignalResponse:
     assessment: SignalAssessment
     coverage_warning: str | None = None
     signal_score_raw: int | None = None  # pre-regime score; None means no regime adjustment applied
+    # Phase 4 evidence fields — None/empty when produced by the old flat path
+    evidence_confidence: float | None = None   # 0.0–1.0; None = flat-path, no evidence tracking
+    active_flags: tuple[str, ...] = field(default_factory=tuple)
+    flag_adjustment: int = 0
+    raw_group_score: int | None = None          # score before flag adjustments
 
     @property
     def score(self) -> int:

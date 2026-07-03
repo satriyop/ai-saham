@@ -603,11 +603,9 @@ def test_screen_derives_forward_pe_from_latest_price_when_cache_has_eps_only():
 
     candidate = response.candidates[0]
     assert candidate.forward_estimates is not None
-    assert candidate.forward_estimates.forward_pe == 10.0
-    assert (
-        candidate.signal_assessment.assessment.breakdown_dict["forward_valuation"]
-        == pytest.approx(95.0)
-    )
+    assert candidate.forward_estimates.forward_pe == 10.0   # PE derived from eps + close price
+    # Phase 4: PE=10 is far below VALUATION_STRETCHED threshold (50) → no penalty flag
+    assert "VALUATION_STRETCHED" not in candidate.signal_assessment.active_flags
 
 
 def test_signal_insider_full_buy_raises_score():
