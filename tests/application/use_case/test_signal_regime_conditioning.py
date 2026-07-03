@@ -1,0 +1,373 @@
+"""
+Phase 5 — regime-conditional signal interpretation tests.
+
+Covers:
+  - RISK_ON: no conditioning fires
+  - NEUTRAL: weak flow (< 50) discounted, strong flow unchanged
+  - RISK_OFF: weak setup (< 60) discounted, strong setup (>= 60) unchanged
+  - VOLATILE: both groups discounted unconditionally
+  - No evidence: conditioning is no-op (nothing to discount)
+  - gate_tightening=True: ENTER capped to WATCH
+  - gate_tightening=False: ENTER preserved
+  - Regime notes appear in rationale when conditioning fires
+  - No notes when conditioning does not fire (RISK_ON, strong evidence)
+  - regime_conditioning=1.0 in breakdown when conditioning fires
+  - gate_tightening=1.0 in breakdown when gate fires
+  - Regime applied exactly once per execute() call (no double-apply)
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import date
+from types import SimpleNamespace
+
+import pytest
+
+from src.application.use_case.assess_signal_evidence_use_case import (
+    AssessSignalEvidenceRequest,
+    AssessSignalEvidenceUseCase,
+)
+from src.application.use_case.assess_signal_use_case import SignalEngineConfig
+from src.domain.value_objects.factor_evidence import Direction, Freshness
+from src.domain.value_objects.flow_confirmation_evidence import (
+    FlowConfirmationEvidence,
+    FlowSubSignal,
+)
+from src.domain.value_objects.market_context import MarketContext, MarketRegime
+from src.domain.value_objects.setup_evidence import SetupEvidence
+from src.domain.value_objects.signal_assessment import EntryQuality, SignalStrength
+
+SNAP = date(2026, 7, 3)
+UC = AssessSignalEvidenceUseCase()
+
+
+# ── fixtures ──────────────────────────────────────────────────────────────────
+
+_SETUP_STRENGTHS = {"MATCH": 100.0, "PARTIAL": 60.0, "NO_MATCH": 20.0}
+
+
+def _setup(match: str = "MATCH") -> SetupEvidence:
+    """SetupEvidence with match_strength constrained to {100.0, 60.0, 20.0}."""
+    strength = _SETUP_STRENGTHS[match]
+    return SetupEvidence(
+        ticker="TEST", snapshot_date=SNAP,
+        setup_name="foreign-bounce",
+        setup_match=match,
+        match_strength=strength,
+        failed_gates=(), trend="UP", rsi=45.0,
+        bb_width_pctile=0.20, vwap_discount_pct=1.5, vwap_pct=1.02,
+        rs_vs_ihsg_5d=1.05, rs_freshness=Freshness.FRESH,
+        volume_trend_ratio=1.2, volume_freshness=Freshness.FRESH,
+        candle_source="stockbit",
+    )
+
+
+def _flow(capped: float = 0.70) -> FlowConfirmationEvidence:
+    sig = FlowSubSignal(
+        key="cons", score=40.0, weight=40.0,
+        direction=Direction.BULLISH, freshness=Freshness.FRESH,
+    )
+    return FlowConfirmationEvidence(
+        ticker="TEST", snapshot_date=SNAP,
+        flow_signals=(sig,), flow_score_ex_bb=40.0,
+        confirmation_status="CONFIRMED", flow_direction="POSITIVE",
+        bandar_broad_score=None, bandar_direction=Direction.NEUTRAL,
+        bandar_freshness=Freshness.MISSING, bci_label=None,
+        bci_tier1_count=0,
+        uncapped_strength=capped, capped_strength=capped,
+        group_cap=0.80, group_freshness=Freshness.FRESH,
+    )
+
+
+def _mctx(
+    regime: str,
+    multiplier: float = 1.0,
+    gate_tightening: bool = False,
+) -> MarketContext:
+    return MarketContext(
+        regime=MarketRegime(regime),
+        conviction=0.7,
+        factors=(),
+        signal_multiplier=multiplier,
+        gate_tightening=gate_tightening,
+        as_of_date=SNAP,
+    )
+
+
+def _req(**kwargs) -> AssessSignalEvidenceRequest:
+    defaults = {"ticker": "TEST", "snapshot_date": SNAP}
+    defaults.update(kwargs)
+    return AssessSignalEvidenceRequest(**defaults)
+
+
+def _breakdown_dict(r) -> dict:
+    return dict(r.assessment.breakdown)
+
+
+# ── RISK_ON — no conditioning ─────────────────────────────────────────────────
+
+def test_risk_on_no_conditioning_fires():
+    """RISK_ON should never modify group scores regardless of strength."""
+    ctx = _mctx("RISK_ON")
+    # Weak NO_MATCH setup (score=20), weak flow (capped=0.30) — but RISK_ON, no conditioning
+    r = UC.execute(_req(
+        setup_evidence=_setup("NO_MATCH"),
+        flow_confirmation_evidence=_flow(0.30),
+        market_context=ctx,
+    ))
+    bd = _breakdown_dict(r)
+    assert bd.get("setup_quality_group") == pytest.approx(20.0)
+    assert bd.get("flow_confirmation_group") == pytest.approx(30.0)
+    assert "regime_conditioning" not in bd
+    assert not any("RISK_ON" in line for line in r.assessment.rationale)
+
+
+# ── NEUTRAL — weak flow discounted ────────────────────────────────────────────
+
+def test_neutral_weak_flow_is_discounted():
+    """NEUTRAL + flow_score < 50 → flow multiplied by 0.80."""
+    r = UC.execute(_req(
+        flow_confirmation_evidence=_flow(0.40),   # score = 40.0 < 50
+        market_context=_mctx("NEUTRAL"),
+    ))
+    bd = _breakdown_dict(r)
+    # 40 × 0.80 = 32
+    assert bd.get("flow_confirmation_group") == pytest.approx(32.0)
+    assert bd.get("regime_conditioning") == 1.0
+    assert any("NEUTRAL" in line for line in r.assessment.rationale)
+
+
+def test_neutral_strong_flow_unchanged():
+    """NEUTRAL + flow_score >= 50 → no conditioning fires."""
+    r = UC.execute(_req(
+        flow_confirmation_evidence=_flow(0.60),   # score = 60.0 >= 50
+        market_context=_mctx("NEUTRAL"),
+    ))
+    bd = _breakdown_dict(r)
+    assert bd.get("flow_confirmation_group") == pytest.approx(60.0)
+    assert "regime_conditioning" not in bd
+
+
+def test_neutral_only_discounts_flow_not_setup():
+    """NEUTRAL conditioning targets flow only; setup group is unaffected."""
+    r = UC.execute(_req(
+        setup_evidence=_setup("NO_MATCH"),       # weak setup (score=20) — unchanged by NEUTRAL
+        flow_confirmation_evidence=_flow(0.40),  # weak flow (score=40) → discounted
+        market_context=_mctx("NEUTRAL"),
+    ))
+    bd = _breakdown_dict(r)
+    assert bd.get("setup_quality_group") == pytest.approx(20.0)     # unchanged
+    assert bd.get("flow_confirmation_group") == pytest.approx(32.0)  # 40 × 0.80
+
+
+# ── RISK_OFF — weak setup discounted ─────────────────────────────────────────
+
+def test_risk_off_weak_setup_is_discounted():
+    """RISK_OFF + setup_score < 60 → setup multiplied by 0.50."""
+    r = UC.execute(_req(
+        setup_evidence=_setup("NO_MATCH"),   # score=20.0 < 60
+        market_context=_mctx("RISK_OFF"),
+    ))
+    bd = _breakdown_dict(r)
+    # 20 × 0.50 = 10
+    assert bd.get("setup_quality_group") == pytest.approx(10.0)
+    assert bd.get("regime_conditioning") == 1.0
+    assert any("RISK_OFF" in line for line in r.assessment.rationale)
+
+
+def test_risk_off_strong_setup_unchanged():
+    """RISK_OFF + setup_score >= 60 (MATCH quality) → no conditioning fires."""
+    r = UC.execute(_req(
+        setup_evidence=_setup("MATCH"),  # score = 100 >= 60
+        market_context=_mctx("RISK_OFF"),
+    ))
+    bd = _breakdown_dict(r)
+    assert bd.get("setup_quality_group") == pytest.approx(100.0)
+    assert "regime_conditioning" not in bd
+
+
+def test_risk_off_partial_setup_unchanged():
+    """RISK_OFF + setup_score == 60 (PARTIAL boundary) → NOT discounted (< 60 required)."""
+    r = UC.execute(_req(
+        setup_evidence=_setup("PARTIAL"),  # score = 60.0 — boundary, NOT < 60
+        market_context=_mctx("RISK_OFF"),
+    ))
+    bd = _breakdown_dict(r)
+    assert bd.get("setup_quality_group") == pytest.approx(60.0)
+    assert "regime_conditioning" not in bd
+
+
+def test_risk_off_does_not_discount_flow():
+    """RISK_OFF only targets setup; flow group unaffected."""
+    r = UC.execute(_req(
+        setup_evidence=_setup("NO_MATCH"),       # score=20 — discounted by RISK_OFF
+        flow_confirmation_evidence=_flow(0.30),   # score=30 — NOT discounted by RISK_OFF
+        market_context=_mctx("RISK_OFF"),
+    ))
+    bd = _breakdown_dict(r)
+    assert bd.get("setup_quality_group") == pytest.approx(10.0)   # 20 × 0.50
+    assert bd.get("flow_confirmation_group") == pytest.approx(30.0)  # unchanged
+
+
+# ── VOLATILE — both groups discounted ────────────────────────────────────────
+
+def test_volatile_discounts_both_groups():
+    """VOLATILE applies setup_discount and flow_discount to both groups."""
+    r = UC.execute(_req(
+        setup_evidence=_setup("MATCH"),           # score=100
+        flow_confirmation_evidence=_flow(0.80),   # score=80
+        market_context=_mctx("VOLATILE"),
+    ))
+    bd = _breakdown_dict(r)
+    assert bd.get("setup_quality_group") == pytest.approx(100.0 * 0.70)  # 70
+    assert bd.get("flow_confirmation_group") == pytest.approx(80.0 * 0.80)  # 64
+    assert bd.get("regime_conditioning") == 1.0
+    assert any("VOLATILE" in line for line in r.assessment.rationale)
+
+
+def test_volatile_with_only_setup():
+    """VOLATILE with only setup evidence — only setup discounted, flow absent."""
+    r = UC.execute(_req(
+        setup_evidence=_setup("MATCH"),   # score=100
+        market_context=_mctx("VOLATILE"),
+    ))
+    bd = _breakdown_dict(r)
+    assert bd.get("setup_quality_group") == pytest.approx(100.0 * 0.70)  # 70
+    assert "flow_confirmation_group" not in bd
+
+
+def test_volatile_with_only_flow():
+    """VOLATILE with only flow evidence — only flow discounted, setup absent."""
+    r = UC.execute(_req(
+        flow_confirmation_evidence=_flow(0.60),   # score = 60
+        market_context=_mctx("VOLATILE"),
+    ))
+    bd = _breakdown_dict(r)
+    assert "setup_quality_group" not in bd
+    assert bd.get("flow_confirmation_group") == pytest.approx(60.0 * 0.80)  # 48
+
+
+# ── no evidence — no conditioning ────────────────────────────────────────────
+
+def test_no_evidence_conditioning_is_noop():
+    """With no evidence groups, conditioning has nothing to discount."""
+    for regime in ("NEUTRAL", "RISK_OFF", "VOLATILE"):
+        r = UC.execute(_req(market_context=_mctx(regime)))
+        bd = _breakdown_dict(r)
+        assert "regime_conditioning" not in bd, f"unexpected flag for {regime}"
+        assert "setup_quality_group" not in bd
+        assert "flow_confirmation_group" not in bd
+
+
+def test_no_market_context_baseline():
+    """Without market_context, scores are unmodified (regression guard)."""
+    r = UC.execute(_req(
+        setup_evidence=_setup("NO_MATCH"),   # score=20
+        flow_confirmation_evidence=_flow(0.40),  # score=40
+    ))
+    bd = _breakdown_dict(r)
+    assert bd.get("setup_quality_group") == pytest.approx(20.0)
+    assert bd.get("flow_confirmation_group") == pytest.approx(40.0)
+    assert "regime_conditioning" not in bd
+
+
+# ── gate tightening ───────────────────────────────────────────────────────────
+
+def test_gate_tightening_caps_enter_to_watch():
+    """gate_tightening=True turns ENTER → WATCH after classification."""
+    # Score high enough to be STRONG/ENTER without gate
+    r_no_gate = UC.execute(_req(
+        setup_evidence=_setup("MATCH"),
+        flow_confirmation_evidence=_flow(0.90),
+        market_context=_mctx("RISK_ON", gate_tightening=False),
+    ))
+    assert r_no_gate.assessment.entry_quality == EntryQuality.ENTER
+
+    r_gate = UC.execute(_req(
+        setup_evidence=_setup("MATCH"),
+        flow_confirmation_evidence=_flow(0.90),
+        market_context=_mctx("RISK_ON", gate_tightening=True),
+    ))
+    assert r_gate.assessment.entry_quality == EntryQuality.WATCH
+    assert dict(r_gate.assessment.breakdown).get("gate_tightening") == 1.0
+    assert any("ENTER → WATCH" in line for line in r_gate.assessment.rationale)
+
+
+def test_gate_tightening_does_not_affect_watch_or_avoid():
+    """gate_tightening only caps ENTER; WATCH and AVOID are unchanged."""
+    # PARTIAL setup (score=60) is MODERATE (45 ≤ 60 < 70) → WATCH
+    r_watch = UC.execute(_req(
+        setup_evidence=_setup("PARTIAL"),
+        market_context=_mctx("RISK_ON", gate_tightening=True),
+    ))
+    assert r_watch.assessment.entry_quality == EntryQuality.WATCH
+    assert "gate_tightening" not in dict(r_watch.assessment.breakdown)
+
+    # NO_MATCH setup (score=20) is WEAK (< 45) → AVOID
+    r_avoid = UC.execute(_req(
+        setup_evidence=_setup("NO_MATCH"),
+        market_context=_mctx("RISK_ON", gate_tightening=True),
+    ))
+    assert r_avoid.assessment.entry_quality == EntryQuality.AVOID
+
+
+def test_gate_tightening_note_in_rationale():
+    """Gate tightening note appears in rationale when fired."""
+    r = UC.execute(_req(
+        setup_evidence=_setup("MATCH"),
+        flow_confirmation_evidence=_flow(0.90),
+        market_context=_mctx("RISK_ON", gate_tightening=True),
+    ))
+    rationale_text = " ".join(r.assessment.rationale)
+    assert "Gate tightening" in rationale_text
+
+
+# ── conditioning applied exactly once ────────────────────────────────────────
+
+def test_regime_conditioning_applied_exactly_once():
+    """Each execute() call applies conditioning once. Calling twice is idempotent (two separate responses)."""
+    setup = _setup("MATCH")   # score=100 → after VOLATILE: 70
+    flow = _flow(0.40)         # score=40 → after VOLATILE: 32
+    ctx = _mctx("VOLATILE")
+
+    r1 = UC.execute(_req(
+        setup_evidence=setup,
+        flow_confirmation_evidence=flow,
+        market_context=ctx,
+    ))
+    r2 = UC.execute(_req(
+        setup_evidence=setup,
+        flow_confirmation_evidence=flow,
+        market_context=ctx,
+    ))
+
+    # Both calls produce identical results — no accumulated discount
+    assert r1.assessment.score == r2.assessment.score
+    bd1 = _breakdown_dict(r1)
+    bd2 = _breakdown_dict(r2)
+    assert bd1.get("setup_quality_group") == bd2.get("setup_quality_group")
+    assert bd1.get("flow_confirmation_group") == bd2.get("flow_confirmation_group")
+
+
+# ── combined: regime + flags ──────────────────────────────────────────────────
+
+def test_regime_conditioning_and_flags_both_apply():
+    """Regime conditioning + do-no-harm flag penalties are independent — both fire."""
+    from src.domain.value_objects.signal_assessment import SignalContext
+    ctx_sig = SignalContext(
+        ticker="TEST", snapshot_date=SNAP,
+        forward_pe=60.0,   # triggers VALUATION_STRETCHED (-10)
+    )
+    # NO_MATCH setup: score=20 → RISK_OFF discounts to 10 → flag -10 → final=0
+    r = UC.execute(_req(
+        setup_evidence=_setup("NO_MATCH"),   # score=20 → 20 × 0.50 = 10
+        market_context=_mctx("RISK_OFF"),
+        signal_context=ctx_sig,
+    ))
+    bd = _breakdown_dict(r)
+    assert bd.get("setup_quality_group") == pytest.approx(10.0)   # 20 × 0.50
+    assert bd.get("flag_adjustment") == -10.0                     # VALUATION_STRETCHED
+    assert bd.get("regime_conditioning") == 1.0
+    # Final score: renormalized (setup only) = 10, flag -10, clamped to 0
+    assert r.assessment.score == 0

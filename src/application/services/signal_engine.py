@@ -13,6 +13,10 @@ aggregation). SetupEvidence and FlowConfirmationEvidence are optional inputs;
 when absent, those groups are MISSING (excluded from denominator) and confidence
 is lowered. Flags from SignalContext still apply as score penalties.
 
+Phase 5: MarketContext is passed into AssessSignalEvidenceRequest so regime
+conditioning happens INSIDE the use case before renormalization. The module-level
+_apply_market_context() post-multiplier is retired.
+
 Layer: Application
 """
 
@@ -32,11 +36,7 @@ from src.application.use_case.assess_signal_use_case import (
     AssessSignalResponse,
     SignalEngineConfig,
 )
-from src.domain.value_objects.signal_assessment import (
-    EntryQuality,
-    SignalContext,
-    SignalStrength,
-)
+from src.domain.value_objects.signal_assessment import SignalContext
 from src.domain.value_objects.forward_estimates import derive_forward_pe
 
 if TYPE_CHECKING:
@@ -110,14 +110,14 @@ class SignalEngine:
         ctx = self._build_signal_context(ticker)
         if as_of_date is not None:
             ctx = replace(ctx, snapshot_date=as_of_date)
-        response = self._evidence_use_case.execute(
+        return self._evidence_use_case.execute(
             AssessSignalEvidenceRequest(
                 ticker=ticker,
                 snapshot_date=ctx.snapshot_date,
                 signal_context=ctx,
+                market_context=market_context,
             )
         )
-        return _apply_market_context(response, market_context, self._config)
 
     def build_context(
         self, ticker: str, as_of_date: date | None = None
@@ -149,16 +149,16 @@ class SignalEngine:
         setup_evidence / flow_confirmation_evidence: when provided, group scores
         are computed from evidence objects. When absent, those groups are MISSING.
         """
-        response = self._evidence_use_case.execute(
+        return self._evidence_use_case.execute(
             AssessSignalEvidenceRequest(
                 ticker=ticker,
                 snapshot_date=signal_context.snapshot_date,
                 setup_evidence=setup_evidence,
                 flow_confirmation_evidence=flow_confirmation_evidence,
                 signal_context=signal_context,
+                market_context=market_context,
             )
         )
-        return _apply_market_context(response, market_context, self._config)
 
     def evaluate_request(
         self,
@@ -172,26 +172,14 @@ class SignalEngine:
         Evidence groups are not available via this path (flags only).
         """
         ctx = request.signal_context or self._build_signal_context(request.ticker)
-        response = self._evidence_use_case.execute(
+        return self._evidence_use_case.execute(
             AssessSignalEvidenceRequest(
                 ticker=request.ticker,
                 snapshot_date=ctx.snapshot_date,
                 signal_context=ctx,
+                market_context=market_context,
             )
         )
-        return _apply_market_context(response, market_context, self._config)
-
-    def apply_market_context(
-        self,
-        response: AssessSignalResponse,
-        market_context: "MarketContext",
-    ) -> AssessSignalResponse:
-        """Apply MCE adjustment to an already-computed raw response (preview path).
-
-        Used by the workflow to compute a what-if signal preview without re-fetching
-        provider data. Does not affect canonical signal_assessment.
-        """
-        return _apply_market_context(response, market_context, self._config)
 
     def foreign_flow_quality_from_foreign_flow_score(self, foreign_flow_score: float) -> float:
         cfg = self._config.input_mapping.foreign_flow_score
@@ -320,64 +308,3 @@ class SignalEngine:
             logger.debug("SignalEngine: latest price unavailable for %s: %s", ticker, exc)
             return None
         return price if price and price > 0 else None
-
-
-# ── Market context post-processing ───────────────────────────────────────────
-
-def _apply_market_context(
-    response: AssessSignalResponse,
-    market_context: "MarketContext | None",
-    config: SignalEngineConfig | None = None,
-) -> AssessSignalResponse:
-    """
-    Apply regime adjustment to a signal assessment.
-
-    score × signal_multiplier → re-classified strength/entry.
-    gate_tightening=True → ENTER is capped to WATCH.
-    No-op when market_context is None or multiplier=1.0 and no tightening.
-    """
-    if market_context is None:
-        return response
-
-    cfg = config or SignalEngineConfig()
-    multiplier = market_context.signal_multiplier
-    tighten = market_context.gate_tightening
-
-    if multiplier == 1.0 and not tighten:
-        return response
-
-    base = response.assessment.score
-    adjusted = max(0, min(100, round(base * multiplier)))
-    raw = response.signal_score_raw if response.signal_score_raw is not None else base
-
-    if adjusted >= cfg.classification.strong_min_score:
-        new_strength = SignalStrength.STRONG
-    elif adjusted >= cfg.classification.moderate_min_score:
-        new_strength = SignalStrength.MODERATE
-    else:
-        new_strength = SignalStrength.WEAK
-
-    if new_strength == SignalStrength.STRONG:
-        new_entry = EntryQuality.ENTER
-    elif new_strength == SignalStrength.MODERATE:
-        new_entry = EntryQuality.WATCH
-    else:
-        new_entry = EntryQuality.AVOID
-
-    if tighten and new_entry == EntryQuality.ENTER:
-        new_entry = EntryQuality.WATCH
-
-    regime = market_context.regime.value
-    note = f" [regime:{regime} ×{multiplier:.2f} {base}→{adjusted}"
-    if tighten and new_entry != response.assessment.entry_quality:
-        note += " ENTER→WATCH"
-    note += "]"
-
-    new_assessment = replace(
-        response.assessment,
-        score=adjusted,
-        strength=new_strength,
-        entry_quality=new_entry,
-        rationale=response.assessment.rationale + (note,),
-    )
-    return replace(response, assessment=new_assessment, signal_score_raw=raw)

@@ -263,9 +263,12 @@ def test_swing_workflow_canonical_trade_setup_unaffected_by_market_context():
         def evaluate_with_context(self, ticker, signal_context, market_context=None):
             return _raw_signal_response()
 
+        # Phase 5: apply_market_context removed — regime now inside use case.
+        # Workflow no longer calls this method; kept as a no-op so existing
+        # tests that reference signal_engine.apply_market_context don't break
+        # if called transitionally.
         def apply_market_context(self, response, market_context):
-            from src.application.services.signal_engine import _apply_market_context
-            return _apply_market_context(response, market_context)
+            return response
 
     class FakeRiskEngine:
         def _make_response(self):

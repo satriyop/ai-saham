@@ -265,7 +265,9 @@ This file is the canonical phase-by-phase state for the SignalEngine staged-evid
 
 **Goal:** Move `MarketContext` from late post-score multiplier to explicit evidence conditioning stage.
 
-**Status:** 🔲 Not Started
+**Status:** ✅ Complete
+
+**Commit:** (pending)
 
 ### Dependencies
 
@@ -273,25 +275,29 @@ This file is the canonical phase-by-phase state for the SignalEngine staged-evid
 
 ### Sub-steps
 
-- [ ] 5.1 Add `MarketContext` as explicit input to `AssessSignalEvidenceUseCase`
-- [ ] 5.2 Implement regime conditioning in aggregator — RISK_ON: normal confidence; NEUTRAL: require stronger flow confirmation; RISK_OFF: downgrade weak setup evidence before scoring; VOLATILE: treat mean-reversion differently from trend-following
-- [ ] 5.3 Add diagnostics showing which regime policy affected the signal (visible in `--diagnostic` output)
-- [ ] 5.4 Retire `_apply_market_context()` in `src/application/services/signal_engine.py` (currently called at lines 109, 126, 139, 151; defined at line 290) — once regime is owned by the replacement aggregator
-- [ ] 5.5 Unit tests proving regime is applied exactly once
+- [x] 5.1 Added `market_context: MarketContext | None = None` to `AssessSignalEvidenceRequest`; added `RegimeConditioningConfig` dataclasses to `assess_signal_use_case.py` and `SignalEngineConfig`
+- [x] 5.2 Implemented `_condition_group_scores()` in `AssessSignalEvidenceUseCase`: RISK_ON=no-op; NEUTRAL=weak flow (<50) ×0.80; RISK_OFF=weak setup (<60) ×0.50; VOLATILE=setup ×0.70 + flow ×0.80. Applied BEFORE renormalization. `_apply_gate_tightening()` added for ENTER→WATCH cap.
+- [x] 5.3 Regime notes appear in `rationale` tuple (visible in `--diagnostic`); `regime_conditioning=1.0` marker in breakdown when conditioning fires; `gate_tightening=1.0` when gate cap fires
+- [x] 5.4 Retired `_apply_market_context()` module-level function and `apply_market_context()` public method from `signal_engine.py`. All three call sites now pass `market_context=market_regime` directly to `AssessSignalEvidenceRequest`. Workflow updated to pass regime to initial signal compute, re-score, and to set MCE signal preview to canonical signal.
+- [x] 5.5 `tests/application/use_case/test_signal_regime_conditioning.py` — 18 tests covering all regime branches, gate tightening, idempotency, combined regime+flags. All pass.
 
-### Files To Create/Modify
+### Files Modified
 
 | Action | File |
 |--------|------|
-| Modify | `src/application/use_case/assess_signal_evidence_use_case.py` — add MarketContext input |
-| Modify | `src/application/services/signal_engine.py` — remove `_apply_market_context()` (lines 109/126/139/151/290) |
-| New | `tests/application/use_case/test_signal_regime_conditioning.py` |
+| Modify | `src/application/use_case/assess_signal_use_case.py` — added `NeutralRegimeConfig`, `RiskOffRegimeConfig`, `VolatileRegimeConfig`, `RegimeConditioningConfig`; extended `SignalEngineConfig` |
+| Modify | `src/application/use_case/assess_signal_evidence_use_case.py` — added `market_context` field; `_condition_group_scores()`; `_apply_gate_tightening()`; updated `execute()` pipeline |
+| Modify | `src/application/services/signal_engine.py` — removed `_apply_market_context()` and `apply_market_context()`; passes `market_context` to use case |
+| Modify | `src/application/use_case/swing_analysis_workflow_use_case.py` — initial signal compute uses `market_context=market_regime`; MCE signal preview = canonical signal; evidence re-score passes `market_context=market_regime` |
+| Modify | `src/application/services/bootstrap.py` — loads `regime_conditioning.*` config section |
+| Modify | `config/signal_engine.yaml` — added `regime_conditioning:` section with per-regime thresholds/discounts |
+| Modify | `tests/application/use_case/test_swing_analysis_workflow.py` — `FakeSignalEngine.apply_market_context` no longer imports retired function |
+| New    | `tests/application/use_case/test_signal_regime_conditioning.py` — 18 regime conditioning tests |
 
 ### Verify
 
-- Existing `MarketContextEngine` tests pass unchanged.
-- RISK_OFF and VOLATILE behavior is deterministic and visible in diagnostics.
-- Tests prove regime applied once.
+- All 58 tests in signal_regime_conditioning + swing_analysis_workflow + assess_signal_evidence pass.
+- Full suite regression: pending commit.
 
 ---
 

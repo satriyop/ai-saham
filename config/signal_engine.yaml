@@ -1,10 +1,13 @@
-# Signal Engine Configuration — Phase 4 (staged evidence aggregator)
+# Signal Engine Configuration — Phase 5 (regime-conditional evidence aggregator)
 #
 # Canonical scoring path: AssessSignalEvidenceUseCase
-#   Setup Quality (60%) + Flow Confirmation (40%), renormalized when a group is missing.
-#   Do-no-harm flags apply score penalties on top of group scores.
+#   Stage 1: Group scoring — Setup Quality (60%) + Flow Confirmation (40%)
+#   Stage 2: Regime conditioning — applied BEFORE renormalization (see regime_conditioning)
+#   Stage 3: Renormalize — missing groups excluded from denominator
+#   Stage 4: Do-no-harm flags — score penalties from SignalContext
+#   Stage 5: Gate tightening — ENTER → WATCH cap when MarketContext.gate_tightening=True
 #
-# Tune: evidence_groups.*.weight and flags.*.score_penalty
+# Tune: evidence_groups.*.weight, flags.*.score_penalty, regime_conditioning.*
 #       classification.strong_min_score / moderate_min_score
 #       scoring.bandar.* (still active — controls bandar_max_range helper)
 #
@@ -116,3 +119,20 @@ signal_engine:
       enabled: true
       net_buy_ratio_threshold: -0.30
       score_penalty: 12
+
+  # Phase 5: Regime-conditional group score conditioning applied BEFORE renormalization.
+  # RISK_ON:  no conditioning — full confidence in evidence.
+  # NEUTRAL:  weak flow confirmation (< threshold) discounted.
+  # RISK_OFF: weak setup evidence (< threshold = PARTIAL or NO_MATCH) heavily discounted.
+  # VOLATILE: both groups discounted regardless of score level.
+  # gate_tightening: ENTER → WATCH cap is set per MarketContext, not here.
+  regime_conditioning:
+    neutral:
+      weak_flow_threshold: 50.0     # flow scores below this are discounted
+      weak_flow_discount: 0.80      # ×0.80 (20% haircut)
+    risk_off:
+      weak_setup_threshold: 60.0    # setup scores below this (PARTIAL/NO_MATCH range)
+      weak_setup_discount: 0.50     # ×0.50 (50% haircut — market needs MATCH quality)
+    volatile:
+      setup_discount: 0.70          # ×0.70 applied to all setups in volatile regime
+      flow_discount: 0.80           # ×0.80 applied to all flow in volatile regime

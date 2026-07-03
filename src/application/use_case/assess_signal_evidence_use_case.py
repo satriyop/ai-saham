@@ -1,18 +1,19 @@
 """
-AssessSignalEvidenceUseCase — staged evidence-first signal aggregator (Phase 4).
+AssessSignalEvidenceUseCase — staged evidence-first signal aggregator (Phase 4/5).
 
-Replaces the flat 6-factor weighted average (AssessSignalUseCase) with a
-two-group staged aggregation:
-
+Phase 4: two-group staged aggregation replaces flat 6-factor weighted average.
   Group 1 — Setup Quality     (default weight 0.60)
   Group 2 — Flow Confirmation (default weight 0.40)
 
-Missing evidence is excluded from the weight denominator rather than filled with
-a neutral 50.0 score. This prevents data absence from inflating or deflating the
-result — missing groups lower confidence, not the directional score.
+Phase 5: regime-conditional group score conditioning applied before renormalization.
+  RISK_ON:   no conditioning (normal confidence).
+  NEUTRAL:   weak flow confirmation discounted.
+  RISK_OFF:  weak setup evidence (non-MATCH) discounted.
+  VOLATILE:  both groups discounted.
+  gate_tightening: ENTER → WATCH cap applied after classification.
 
-Fundamental/analyst/insider context is applied as do-no-harm flags that impose
-score penalties, not as positive scored factors.
+Missing evidence excluded from weight denominator. Flags from SignalContext apply
+score penalties as do-no-harm signals.
 
 Layer: Application
 Depends on: domain only + stdlib. No IO, no providers, no repositories.
@@ -37,6 +38,7 @@ from src.domain.value_objects.signal_assessment import (
 
 if TYPE_CHECKING:
     from src.domain.value_objects.flow_confirmation_evidence import FlowConfirmationEvidence
+    from src.domain.value_objects.market_context import MarketContext
     from src.domain.value_objects.setup_evidence import SetupEvidence
 
 
@@ -47,6 +49,7 @@ class AssessSignalEvidenceRequest:
     setup_evidence: "SetupEvidence | None" = None
     flow_confirmation_evidence: "FlowConfirmationEvidence | None" = None
     signal_context: SignalContext | None = None   # for flag evaluation
+    market_context: "MarketContext | None" = None  # for regime conditioning
 
 
 class AssessSignalEvidenceUseCase:
@@ -62,18 +65,21 @@ class AssessSignalEvidenceUseCase:
         self._config = config or SignalEngineConfig()
 
     def execute(self, request: AssessSignalEvidenceRequest) -> AssessSignalResponse:
-        # ── Stage 1: Setup Quality group ─────────────────────────────────────
+        # ── Stage 1: Group scoring ────────────────────────────────────────────
         setup_score, setup_present = self._score_setup_group(request.setup_evidence)
-
-        # ── Stage 2: Flow Confirmation group ─────────────────────────────────
         flow_score, flow_present = self._score_flow_group(request.flow_confirmation_evidence)
 
-        # ── Renormalize: missing groups excluded from denominator ─────────────
+        # ── Stage 2: Regime conditioning (before renormalization) ─────────────
+        setup_score, flow_score, regime_notes = self._condition_group_scores(
+            setup_score, setup_present, flow_score, flow_present, request.market_context
+        )
+
+        # ── Stage 3: Renormalize — missing groups excluded from denominator ───
         base_score, confidence = self._renormalize(
             setup_score, setup_present, flow_score, flow_present
         )
 
-        # ── Stage 3: Flags (do-no-harm penalties from SignalContext) ──────────
+        # ── Stage 4: Flags (do-no-harm penalties from SignalContext) ──────────
         active_flags, flag_adj = self._evaluate_flags(request.signal_context)
 
         # ── Final score ───────────────────────────────────────────────────────
@@ -83,13 +89,19 @@ class AssessSignalEvidenceUseCase:
         strength = self._classify_strength(final_score)
         entry_quality = self._classify_entry(strength)
 
+        # ── Stage 5: Gate tightening (ENTER → WATCH cap) ─────────────────────
+        entry_quality, gate_tightened = self._apply_gate_tightening(
+            entry_quality, request.market_context
+        )
+
         breakdown = self._build_breakdown(
             setup_score, setup_present, flow_score, flow_present,
-            confidence, active_flags, flag_adj,
+            confidence, active_flags, flag_adj, bool(regime_notes), gate_tightened,
         )
         rationale = self._build_rationale(
             request.ticker, final_score, strength, entry_quality,
             setup_present, flow_present, confidence, active_flags, flag_adj,
+            regime_notes, gate_tightened,
         )
 
         assessment = SignalAssessment(
@@ -127,6 +139,79 @@ class AssessSignalEvidenceUseCase:
         if ev is None:
             return 0.0, False
         return max(0.0, min(100.0, ev.capped_strength * 100.0)), True
+
+    # ── regime conditioning ───────────────────────────────────────────────────
+
+    def _condition_group_scores(
+        self,
+        setup_score: float, setup_present: bool,
+        flow_score: float, flow_present: bool,
+        market_context: "MarketContext | None",
+    ) -> tuple[float, float, list[str]]:
+        """Apply regime-specific conditioning to group scores before renormalization.
+
+        Returns (conditioned_setup_score, conditioned_flow_score, regime_notes).
+        RISK_ON: no change. Notes list is empty when no conditioning fires.
+        """
+        if market_context is None:
+            return setup_score, flow_score, []
+
+        regime = market_context.regime.value
+        cfg = self._config.regime_conditioning
+        notes: list[str] = []
+
+        if regime == "RISK_OFF" and setup_present:
+            rc = cfg.risk_off
+            if setup_score < rc.weak_setup_threshold:
+                old = setup_score
+                setup_score = setup_score * rc.weak_setup_discount
+                notes.append(
+                    f"RISK_OFF: setup {old:.0f}→{setup_score:.0f} "
+                    f"(×{rc.weak_setup_discount:.2f}, below MATCH threshold)"
+                )
+
+        elif regime == "NEUTRAL" and flow_present:
+            rc = cfg.neutral
+            if flow_score < rc.weak_flow_threshold:
+                old = flow_score
+                flow_score = flow_score * rc.weak_flow_discount
+                notes.append(
+                    f"NEUTRAL: flow {old:.0f}→{flow_score:.0f} "
+                    f"(×{rc.weak_flow_discount:.2f}, below confirmation threshold)"
+                )
+
+        elif regime == "VOLATILE":
+            rc = cfg.volatile
+            if setup_present:
+                old_s = setup_score
+                setup_score = setup_score * rc.setup_discount
+                notes.append(
+                    f"VOLATILE: setup {old_s:.0f}→{setup_score:.0f} "
+                    f"(×{rc.setup_discount:.2f})"
+                )
+            if flow_present:
+                old_f = flow_score
+                flow_score = flow_score * rc.flow_discount
+                notes.append(
+                    f"VOLATILE: flow {old_f:.0f}→{flow_score:.0f} "
+                    f"(×{rc.flow_discount:.2f})"
+                )
+
+        return setup_score, flow_score, notes
+
+    def _apply_gate_tightening(
+        self,
+        entry_quality: EntryQuality,
+        market_context: "MarketContext | None",
+    ) -> tuple[EntryQuality, bool]:
+        """Cap ENTER→WATCH when gate_tightening is set on market_context."""
+        if (
+            market_context is not None
+            and market_context.gate_tightening
+            and entry_quality == EntryQuality.ENTER
+        ):
+            return EntryQuality.WATCH, True
+        return entry_quality, False
 
     # ── renormalization ───────────────────────────────────────────────────────
 
@@ -206,6 +291,8 @@ class AssessSignalEvidenceUseCase:
         confidence: float,
         active_flags: list[str],
         flag_adj: int,
+        regime_conditioned: bool,
+        gate_tightened: bool,
     ) -> tuple[tuple[str, float], ...]:
         entries: list[tuple[str, float]] = []
         if setup_present:
@@ -215,6 +302,10 @@ class AssessSignalEvidenceUseCase:
         entries.append(("evidence_confidence", round(confidence * 100.0, 2)))
         if flag_adj != 0:
             entries.append(("flag_adjustment", float(flag_adj)))
+        if regime_conditioned:
+            entries.append(("regime_conditioning", 1.0))
+        if gate_tightened:
+            entries.append(("gate_tightening", 1.0))
         return tuple(entries)
 
     def _build_rationale(
@@ -228,6 +319,8 @@ class AssessSignalEvidenceUseCase:
         confidence: float,
         active_flags: list[str],
         flag_adj: int,
+        regime_notes: list[str],
+        gate_tightened: bool,
     ) -> tuple[str, ...]:
         lines: list[str] = []
         if not setup_present:
@@ -237,6 +330,10 @@ class AssessSignalEvidenceUseCase:
         if active_flags:
             flag_str = ", ".join(active_flags)
             lines.append(f"Flags active: {flag_str} ({flag_adj:+d} pts)")
+        for note in regime_notes:
+            lines.append(note)
+        if gate_tightened:
+            lines.append("Gate tightening: ENTER → WATCH (regime gate_tightening=True)")
         lines.append(
             f"Evidence confidence: {confidence:.0%} — "
             f"score {final_score} ({strength.value}/{entry_quality.value})"

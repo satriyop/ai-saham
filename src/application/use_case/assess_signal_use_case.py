@@ -150,6 +150,43 @@ class SignalFlagsConfig:
     )
 
 
+# ── Phase 5: regime-conditional group score conditioning ──────────────────────
+
+@dataclass(frozen=True)
+class NeutralRegimeConfig:
+    """NEUTRAL regime: discount weak flow confirmation below threshold."""
+    weak_flow_threshold: float = 50.0
+    weak_flow_discount: float = 0.80
+
+
+@dataclass(frozen=True)
+class RiskOffRegimeConfig:
+    """RISK_OFF regime: discount weak (non-MATCH) setup evidence."""
+    weak_setup_threshold: float = 60.0   # below this = PARTIAL or NO_MATCH
+    weak_setup_discount: float = 0.50
+
+
+@dataclass(frozen=True)
+class VolatileRegimeConfig:
+    """VOLATILE regime: discount both evidence groups."""
+    setup_discount: float = 0.70
+    flow_discount: float = 0.80
+
+
+@dataclass(frozen=True)
+class RegimeConditioningConfig:
+    """Per-regime group score conditioning applied before renormalization.
+
+    RISK_ON: no conditioning (normal confidence).
+    NEUTRAL: weak flow discounted (market needs stronger flow confirmation).
+    RISK_OFF: weak setup discounted (only MATCH-quality setups count).
+    VOLATILE: both groups discounted (higher bar in fast-moving markets).
+    """
+    neutral: NeutralRegimeConfig = field(default_factory=NeutralRegimeConfig)
+    risk_off: RiskOffRegimeConfig = field(default_factory=RiskOffRegimeConfig)
+    volatile: VolatileRegimeConfig = field(default_factory=VolatileRegimeConfig)
+
+
 @dataclass(frozen=True)
 class SignalEngineConfig:
     classification: SignalClassificationConfig = field(default_factory=SignalClassificationConfig)
@@ -159,6 +196,7 @@ class SignalEngineConfig:
     enrichment: SignalEnrichmentConfig = field(default_factory=SignalEnrichmentConfig)
     evidence_groups: EvidenceGroupsConfig = field(default_factory=EvidenceGroupsConfig)
     flags: SignalFlagsConfig = field(default_factory=SignalFlagsConfig)
+    regime_conditioning: RegimeConditioningConfig = field(default_factory=RegimeConditioningConfig)
 
 # Default weights — used when no YAML config is provided (identical to historical hardcoded values)
 _DEFAULT_WEIGHTS: dict[str, float] = {

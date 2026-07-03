@@ -106,6 +106,9 @@ def _resolve_signal_config(cfg: dict):
         BandarScoringConfig,
         ForwardPeScoringConfig,
         InsiderSellingFlagConfig,
+        NeutralRegimeConfig,
+        RegimeConditioningConfig,
+        RiskOffRegimeConfig,
         SeasonalityScoringConfig,
         SignalClassificationConfig,
         SignalEnrichmentConfig,
@@ -115,6 +118,7 @@ def _resolve_signal_config(cfg: dict):
         SignalMissingDataConfig,
         SignalScoringConfig,
         ValuationStretchedFlagConfig,
+        VolatileRegimeConfig,
     )
 
     root = cfg.get("signal_engine", {})
@@ -133,6 +137,10 @@ def _resolve_signal_config(cfg: dict):
     flag_valuation = flags.get("valuation_stretched", {})
     flag_analyst = flags.get("analyst_bearish", {})
     flag_insider = flags.get("insider_selling", {})
+    regime_cfg = root.get("regime_conditioning", {})
+    rc_neutral = regime_cfg.get("neutral", {})
+    rc_risk_off = regime_cfg.get("risk_off", {})
+    rc_volatile = regime_cfg.get("volatile", {})
 
     return SignalEngineConfig(
         classification=SignalClassificationConfig(
@@ -205,6 +213,20 @@ def _resolve_signal_config(cfg: dict):
                 enabled=flag_insider.get("enabled", True),
                 net_buy_ratio_threshold=flag_insider.get("net_buy_ratio_threshold", -0.30),
                 score_penalty=int(flag_insider.get("score_penalty", 12)),
+            ),
+        ),
+        regime_conditioning=RegimeConditioningConfig(
+            neutral=NeutralRegimeConfig(
+                weak_flow_threshold=rc_neutral.get("weak_flow_threshold", 50.0),
+                weak_flow_discount=rc_neutral.get("weak_flow_discount", 0.80),
+            ),
+            risk_off=RiskOffRegimeConfig(
+                weak_setup_threshold=rc_risk_off.get("weak_setup_threshold", 60.0),
+                weak_setup_discount=rc_risk_off.get("weak_setup_discount", 0.50),
+            ),
+            volatile=VolatileRegimeConfig(
+                setup_discount=rc_volatile.get("setup_discount", 0.70),
+                flow_discount=rc_volatile.get("flow_discount", 0.80),
             ),
         ),
     )

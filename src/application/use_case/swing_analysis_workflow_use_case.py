@@ -625,14 +625,14 @@ class SwingAnalysisWorkflowUseCase:
                     signal_assessment = self._signal_engine.evaluate_with_context(
                         request.ticker,
                         signal_ctx,
-                        market_context=None,
+                        market_context=market_regime,
                     )
                 else:
                     # No candidate — provider-based standalone evaluation
                     signal_assessment = self._signal_engine.evaluate(
                         request.ticker,
                         request.today,
-                        market_context=None,
+                        market_context=market_regime,
                     )
             except Exception as exc:
                 warnings.append(f"Signal assessment unavailable: {exc}")
@@ -736,9 +736,9 @@ class SwingAnalysisWorkflowUseCase:
                     AssessTradeSetupRequest,
                     AssessTradeSetupUseCase,
                 )
-                market_context_signal_preview = self._signal_engine.apply_market_context(
-                    signal_assessment, market_regime
-                )
+                # Phase 5: canonical signal already includes regime conditioning.
+                # MCE preview still differs via risk_preview (regime-adjusted risk).
+                market_context_signal_preview = signal_assessment
                 market_context_risk_preview = self._risk_engine.apply_market_context(
                     risk_response, market_regime
                 )
@@ -848,6 +848,7 @@ class SwingAnalysisWorkflowUseCase:
                 signal_assessment = self._signal_engine.evaluate_with_context(
                     request.ticker,
                     _evidence_ctx,
+                    market_context=market_regime,
                     setup_evidence=setup_evidence,
                     flow_confirmation_evidence=flow_confirmation_evidence,
                 )
@@ -884,9 +885,9 @@ class SwingAnalysisWorkflowUseCase:
                             AssessTradeSetupRequest,
                             AssessTradeSetupUseCase,
                         )
-                        _new_mce_signal = self._signal_engine.apply_market_context(
-                            signal_assessment, market_regime
-                        )
+                        # Phase 5: canonical signal already includes regime — no
+                        # separate apply_market_context() needed for signal preview.
+                        _new_mce_signal = signal_assessment
                         _new_mce_trade_preview = AssessTradeSetupUseCase().execute(
                             AssessTradeSetupRequest(
                                 ticker=request.ticker,
