@@ -286,9 +286,15 @@ def pre_open(
             typer.echo("Playwright session found — running autonomously...")
             from src.infrastructure.browser.playwright_stockbit_provider import PlaywrightStockbitProvider
 
-            browser_provider = PlaywrightStockbitProvider(
+            from src.infrastructure.browser.stockbit_api_client import create_stockbit_api_client
+
+            api_client = create_stockbit_api_client(
                 profile_dir=Path(APP_CFG.storage.stockbit_profile_dir),
                 headless=headless,
+            )
+            browser_provider = PlaywrightStockbitProvider(
+                api_client=api_client,
+                profile_dir=Path(APP_CFG.storage.stockbit_profile_dir),
             )
         else:
             if _playwright_available() and not _session_exists():

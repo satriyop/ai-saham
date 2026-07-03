@@ -72,7 +72,9 @@ def collect_iev(
     is_ncp = _mstatus.is_pre_open if _mstatus.source == "stockbit" else now_idx.time() >= time(8, 56)
 
     try:
-        provider = PlaywrightStockbitProvider(headless=not no_headless)
+        from src.infrastructure.browser.stockbit_api_client import create_stockbit_api_client
+        api_client = create_stockbit_api_client(headless=not no_headless)
+        provider = PlaywrightStockbitProvider(api_client=api_client)
     except Exception as exc:
         typer.echo(f"Error initialising Stockbit provider: {exc}", err=True)
         raise typer.Exit(1)

@@ -150,8 +150,13 @@ def snapshot(
     registry = create_indicator_registry(
         broker_repository=broker_repo, market_repository=repository
     )
-    browser = PlaywrightStockbitProvider(
+    from src.infrastructure.browser.stockbit_api_client import create_stockbit_api_client
+    api_client = create_stockbit_api_client(
         profile_dir=Path(APP_CFG.storage.stockbit_profile_dir), headless=headless
+    )
+    browser = PlaywrightStockbitProvider(
+        api_client=api_client,
+        profile_dir=Path(APP_CFG.storage.stockbit_profile_dir),
     )
 
     # Load today's NCP-locked IEP values for enrichment
@@ -260,13 +265,19 @@ def track(
         typer.echo("No Stockbit session. Run: saham fetch stockbit login", err=True)
         raise typer.Exit(1)
 
-    browser = PlaywrightStockbitProvider(
-        profile_dir=Path(APP_CFG.storage.stockbit_profile_dir), headless=headless
-    )
-
     # Shared session — both broker confirm and order book use the same token
     from src.application.services.stockbit_session import get_stockbit_session as _get_learn_session
     _learn_session = _get_learn_session()
+
+    from src.infrastructure.browser.stockbit_api_client import create_stockbit_api_client
+    _api_client = (_learn_session.api_client if _learn_session else None) or create_stockbit_api_client(
+        profile_dir=Path(APP_CFG.storage.stockbit_profile_dir), headless=headless
+    )
+
+    browser = PlaywrightStockbitProvider(
+        api_client=_api_client,
+        profile_dir=Path(APP_CFG.storage.stockbit_profile_dir),
+    )
 
     # Optionally wire broker confirmation provider
     running_trade_provider = None

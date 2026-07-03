@@ -27,8 +27,8 @@ def test_fetch_iev_writes_sqlite_and_json_sidecar(monkeypatch, tmp_path: Path):
     from src.infrastructure.browser import playwright_stockbit_provider as playwright_stockbit
 
     class FakeStockbitProvider:
-        def __init__(self, headless: bool = True) -> None:
-            self.headless = headless
+        def __init__(self, api_client=None, *args, **kwargs) -> None:
+            self.api_client = api_client
 
         def fetch_iev_snapshot(self, top_n: int):
             assert top_n == 5
