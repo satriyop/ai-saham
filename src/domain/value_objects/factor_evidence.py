@@ -87,3 +87,17 @@ class FactorEvidence:
                     f"FactorEvidence raw_fields entries must be 2-tuples of strings, "
                     f"got {entry!r}"
                 )
+
+    def to_dict(self) -> dict:
+        return {
+            "name": self.name,
+            "group": self.group,
+            "direction": self.direction.value,
+            "strength": round(self.strength, 4),
+            "confidence": round(self.confidence, 4),
+            "freshness": self.freshness.value,
+            "horizon": self.horizon.value,
+            "source": self.source,
+            "rationale": self.rationale,
+            "raw_fields": list(self.raw_fields),
+        }

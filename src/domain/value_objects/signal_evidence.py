@@ -48,3 +48,13 @@ class SignalEvidence:
                 f"SignalEvidence coverage_ratio must be 0.0–1.0, "
                 f"got {self.coverage_ratio}"
             )
+
+    def to_dict(self) -> dict:
+        return {
+            "ticker": self.ticker,
+            "snapshot_date": self.snapshot_date.isoformat(),
+            "factors": [f.to_dict() for f in self.factors],
+            "aggregate_confidence": round(self.aggregate_confidence, 4),
+            "coverage_ratio": round(self.coverage_ratio, 4),
+            "missing_factors": list(self.missing_factors),
+        }
