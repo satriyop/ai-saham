@@ -534,6 +534,8 @@ def _assess(
     insider_net_buy_ratio: float | None = None,
     seasonality_win_rate: float | None = None,
     seasonality_avg_return_pct: float | None = None,
+    seasonality_total_years: int | None = None,
+    seasonality_back_years: int | None = None,
     analyst_buy_pct: float | None = None,
     analyst_upside_pct: float | None = None,
     forward_pe: float | None = None,
@@ -548,6 +550,8 @@ def _assess(
         insider_net_buy_ratio=insider_net_buy_ratio,
         seasonality_win_rate=seasonality_win_rate,
         seasonality_avg_return_pct=seasonality_avg_return_pct,
+        seasonality_total_years=seasonality_total_years,
+        seasonality_back_years=seasonality_back_years,
         analyst_buy_pct=analyst_buy_pct,
         analyst_upside_pct=analyst_upside_pct,
         forward_pe=forward_pe,
@@ -626,7 +630,13 @@ def test_signal_analyst_all_buy_full_upside():
 
 def test_signal_seasonality_tailwind_uses_win_rate():
     # is_tailwind (avg>0 and win>50) → component = win_rate_pct = 80.0
-    sa = _assess(flow_score=60.0, seasonality_win_rate=80.0, seasonality_avg_return_pct=2.5)
+    sa = _assess(
+        flow_score=60.0,
+        seasonality_win_rate=80.0,
+        seasonality_avg_return_pct=2.5,
+        seasonality_total_years=5,
+        seasonality_back_years=5,
+    )
     bd = sa.assessment.breakdown_dict
     assert bd["seasonality_edge"] == 80.0
 
@@ -648,6 +658,8 @@ def test_signal_strong_when_multiple_factors_elevated():
         analyst_upside_pct=20.0,
         seasonality_win_rate=75.0,
         seasonality_avg_return_pct=1.5,
+        seasonality_total_years=5,
+        seasonality_back_years=5,
         bandar_broad_score=4,
         bandar_max_range=6,
     )

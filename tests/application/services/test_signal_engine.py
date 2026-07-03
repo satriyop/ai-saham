@@ -7,6 +7,7 @@ from src.application.use_case.assess_signal_use_case import (
     SignalScoringConfig,
 )
 from src.domain.value_objects.forward_estimates import ForwardEstimates
+from src.domain.value_objects.seasonal_edge import SeasonalEdge
 
 
 class EmptyInsiderProvider:
@@ -36,6 +37,19 @@ class AnalystProviderWithLowCurrentPrice:
             "upside_pct": 10.0,
             "current_price": 80.0,   # 80/2=40 PE → below VALUATION_STRETCHED threshold
         })()
+
+
+class SeasonalityProviderWithShortHistory:
+    def get_seasonal_edge(self, ticker, year, month):
+        return SeasonalEdge(
+            ticker=ticker,
+            month=month,
+            avg_monthly_return_pct=2.5,
+            win_rate_pct=75.0,
+            positive_years=3,
+            total_years=4,
+            back_years=5,
+        )
 
 
 def test_signal_engine_input_mapping_helpers_use_config():
@@ -86,3 +100,14 @@ def test_signal_engine_derives_forward_pe_from_latest_price_before_analyst_price
     response = engine.evaluate("BBCA")
 
     assert "VALUATION_STRETCHED" in response.active_flags
+
+
+def test_signal_engine_threads_seasonality_sample_size_into_context():
+    engine = SignalEngine(seasonality_provider=SeasonalityProviderWithShortHistory())
+
+    ctx = engine.build_context("BBCA")
+
+    assert ctx.seasonality_win_rate == 75.0
+    assert ctx.seasonality_avg_return_pct == 2.5
+    assert ctx.seasonality_total_years == 4
+    assert ctx.seasonality_back_years == 5

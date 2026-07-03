@@ -19,6 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from src.application.services.signal_evidence_builder import SignalEvidenceBuilder
+from src.application.services.signal_presence import is_signal_factor_present
 from src.application.use_case.assess_signal_use_case import (
     AssessSignalRequest,
     AssessSignalUseCase,
@@ -139,22 +140,7 @@ class AuditSignalUseCase:
 
     @staticmethod
     def _is_present(factor: str, ctx: SignalContext) -> bool:
-        if factor == "bandar_intensity":
-            return ctx.bandar_broad_score is not None
-        if factor == "foreign_flow_quality":
-            return ctx.foreign_flow_quality is not None
-        if factor == "insider_activity":
-            return ctx.insider_net_buy_ratio is not None
-        if factor == "seasonality_edge":
-            return (
-                ctx.seasonality_win_rate is not None
-                and ctx.seasonality_avg_return_pct is not None
-            )
-        if factor == "analyst_consensus":
-            return ctx.analyst_buy_pct is not None
-        if factor == "forward_valuation":
-            return ctx.forward_pe is not None and ctx.forward_pe > 0
-        return False
+        return is_signal_factor_present(factor, ctx)
 
     @staticmethod
     def _raw_value(factor: str, ctx: SignalContext) -> str:

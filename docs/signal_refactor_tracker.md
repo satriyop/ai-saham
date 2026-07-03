@@ -16,9 +16,9 @@ This file is the canonical phase-by-phase state for the SignalEngine staged-evid
 | 1 | Evidence Objects Beside Current Scores | ✅ Done | see Phase 1 detail |
 | 2 | Setup Evidence Contract | ✅ Done | see Phase 2 detail |
 | 3 | Flow Confirmation Group | ✅ Done | see Phase 3 detail |
-| 4 | Replace Signal Aggregator | 🔲 Not Started | — |
-| 5 | Regime-Conditional Signal Interpretation | 🔲 Not Started | — |
-| 6 | Confidence-Aware Classification | 🔲 Not Started | — |
+| 4 | Replace Signal Aggregator | ✅ Done | 1788860, c0e47cd |
+| 5 | Regime-Conditional Signal Interpretation | ✅ Done | f361b90, 01afcf0 |
+| 6 | Confidence-Aware Classification | ✅ Done | pending commit |
 | 7 | Persistence For Replayable Evidence | 🔲 Not Started | — |
 | 8 | Walk-Forward Calibration Guardrails | 🔲 Not Started | — |
 
@@ -92,7 +92,7 @@ This file is the canonical phase-by-phase state for the SignalEngine staged-evid
 - [x] 1.3 Extend `SignalContext` with `seasonality_total_years: int | None` — `SeasonalEdge` already carries it; it just needs to be threaded
 - [x] 1.4 Update `signal_context_builder.py` — pass `se.total_years` as `seasonality_total_years` in `build_signal_context_from_candidate()`
 - [x] 1.5 Add `SignalEvidenceBuilder` application service — builds `SignalEvidence` from `SignalContext` using current scores (no new scoring logic)
-- [x] 1.6 Unit tests for evidence objects (complete, partial, stale, missing data cases) and serialization determinism
+- [x] 1.6 Unit tests for evidence objects (complete, partial, missing data cases) and serialization determinism; `Freshness.STALE` enum exists but emission is deferred until timestamped evidence
 - [x] 1.7 CLI display unchanged — no evidence surfaced in CLI output yet (deferred to later phase)
 
 ### Files Created/Modified
@@ -116,7 +116,9 @@ This file is the canonical phase-by-phase state for the SignalEngine staged-evid
 
 ### Verify
 
-- Evidence builder tests cover complete, partial, stale, and missing data.
+- Evidence builder tests cover complete, partial, and missing data.
+- `Freshness.STALE` is modeled but not emitted until a later phase carries
+  cache/source timestamps into replayable evidence.
 - Evidence serialization is deterministic under fixed inputs.
 - No provider or CLI dependency enters domain objects.
 - Existing signal and screener tests pass unchanged.
@@ -232,7 +234,7 @@ This file is the canonical phase-by-phase state for the SignalEngine staged-evid
 - [x] 4.5 Wired `AssessSignalEvidenceUseCase` as canonical path in `signal_engine.py`. `AssessSignalUseCase` retained as archived reference (not called by SignalEngine).
 - [x] 4.6 Updated CLI displays: `screen_accum_display.py` and `analyze_swing_display.py` — replaced old 6-factor columns (Bandar/Foreign/Insider/Season/Analyst/Fwd) with new evidence columns (Setup/Flow/Conf%/Flags). Detailed breakdown now shows group names, evidence confidence, and flag penalties.
 - [x] 4.6b Production wiring: `accumulation_screen_use_case.py` now builds `FlowConfirmationEvidence` per candidate (SetupEvidence intentionally absent — batch screener does not evaluate named setups; confidence=0.40). `swing_analysis_workflow_use_case.py` re-scores with both evidence objects after they are built, then recomposes `trade_setup` and MCE preview from the enriched signal so `SwingVerdict` is internally consistent. Backtest attribution tuning keys updated from `factors.*` to `evidence_groups.*` and `flags.*`. `config/signal_engine.yaml` header and inline comments rewritten to reflect Phase 4 reality — old `factors.*` and dead scoring sections marked ARCHIVED.
-- [ ] 4.7 Document before/after explanation for each Phase 0 fixture case where output changes
+- [x] 4.7 Document before/after explanation for each Phase 0 fixture case where output changes
 - [x] 4.8 Unit tests for all staged aggregation paths, renormalize policy, and each flag
 
 ### Files To Create/Modify
@@ -252,6 +254,35 @@ This file is the canonical phase-by-phase state for the SignalEngine staged-evid
 - Seasonality initial cap: 3% to 5%.
 - Fundamental context (forward valuation, analyst consensus, insider selling): flags/modifiers only; no default positive timing score.
 
+### Phase 0 Fixture Before/After Commentary
+
+Phase 0 golden fixtures in `tests/application/use_case/test_signal_baseline.py`
+capture the archived six-factor `AssessSignalUseCase` behavior. They are not a
+one-to-one production input for Phase 4 because the canonical path now consumes
+`SetupEvidence` and/or `FlowConfirmationEvidence` evidence groups plus
+negative-only flags from `SignalContext`.
+
+Directly replaying Phase 0 `SignalContext` fixtures through
+`AssessSignalEvidenceUseCase` therefore exercises the flag-only/no-evidence path:
+no setup group, no flow group, confidence `0.0`, and neutral prior score `50`
+unless a negative flag fires. This is intentional. Production paths must supply
+evidence groups:
+
+- `screen accum`: supplies `FlowConfirmationEvidence`; setup evidence is absent
+  by design because batch screening does not evaluate a named setup. Expected
+  confidence is `0.40` before a single-ticker swing workflow enriches it.
+- `analyze swing`: supplies both `SetupEvidence` and `FlowConfirmationEvidence`
+  when an accumulation candidate and named setup evaluation are available.
+
+| Phase 0 case | Archived flat result | Direct Phase 4 flag-only replay | Explanation |
+|--------------|----------------------|----------------------------------|-------------|
+| `all_factors_present_strong` | `89 STRONG ENTER` | `50 MODERATE WATCH`, confidence `0.0` | Old positive bandar/foreign/insider/seasonality/analyst/valuation factors no longer create bullish score directly. Without setup/flow evidence groups, the new engine has no directional evidence and returns neutral prior. |
+| `all_factors_missing_neutral` | `50 MODERATE WATCH` | `50 MODERATE WATCH`, confidence `0.0` | Same visible score, but semantics changed: old path neutral-filled six missing factors; new path reports no evidence groups and low confidence explicitly. |
+| `bandar_and_flow_only` | `70 STRONG ENTER` | `50 MODERATE WATCH`, confidence `0.0` | Old path double-counted correlated bandar and foreign flow as two independent bullish factors while neutral-filling the rest. New production path requires `FlowConfirmationEvidence`; a raw `SignalContext` alone is insufficient directional evidence. |
+
+This is the intended Phase 4 break point: bullish signal strength comes from
+staged evidence groups, not from neutral-filled legacy factor averages.
+
 ### Verify
 
 - Replacement output is deterministic under fixed inputs.
@@ -267,7 +298,7 @@ This file is the canonical phase-by-phase state for the SignalEngine staged-evid
 
 **Status:** ✅ Complete
 
-**Commit:** (pending)
+**Commit:** f361b90; ADR/display/test compliance follow-up 01afcf0; compact CLI help/display follow-up pending commit
 
 ### Dependencies
 
@@ -306,6 +337,8 @@ Code review identified four issues in Phase 5 commit (f361b90):
 - [x] Medium: workflow test `test_swing_workflow_canonical_trade_setup_unaffected_by_market_context` contradicted Phase 5 → renamed to `test_swing_workflow_mce_regime_forwarded_to_signal_engine`; now verifies market_context is forwarded when MCE enabled
 - [x] Medium: MCE display "Signal impact" comparison showed "No signal score change (multiplier=1.0)" because preview==canonical → replaced with regime-aware "Signal: conditioning applied" message
 - [x] Low/Medium: panel subtitle "evidence only — does not change final TradeSetup" → updated to "regime conditioning in canonical signal · risk preview via MCE"
+- [x] Medium: CLI help text for `--with-market-context` no longer says MCE is what-if only; it now states the canonical signal/trade setup is conditioned with market regime
+- [x] Low/Medium: compact Market Context panel now reads `regime_conditioning` / `gate_tightening` markers from signal breakdown and shows `conditioned` instead of comparing canonical signal with the identical preview object
 
 ---
 
@@ -313,7 +346,7 @@ Code review identified four issues in Phase 5 commit (f361b90):
 
 **Goal:** Stop treating incomplete evidence as equally reliable as complete evidence.
 
-**Status:** 🔲 Not Started
+**Status:** ✅ Done — confidence-aware entry classification implemented; focused tests pass
 
 ### Dependencies
 
@@ -322,11 +355,11 @@ Code review identified four issues in Phase 5 commit (f361b90):
 
 ### Sub-steps
 
-- [ ] 6.1 Add `confidence_score` (0.0–1.0) to `SignalAssessment` or replacement value object
-- [ ] 6.2 Implement seasonality 5-year sample guard using `seasonality_total_years` from `SignalContext` — fewer than 5 years → `freshness: missing`, not directional evidence
-- [ ] 6.3 Add config thresholds in `config/signal_engine.yaml`: `enter_min_confidence`, `watch_min_confidence`
-- [ ] 6.4 Update classification: ENTER requires score >= score threshold AND confidence >= enter_min_confidence; WATCH can tolerate lower confidence
-- [ ] 6.5 Unit tests for score-confidence disagreement cases (high score + low confidence → WATCH not ENTER)
+- [x] 6.1 Add `confidence_score` (0.0–1.0) to `SignalAssessment` or replacement value object
+- [x] 6.2 Implement seasonality 5-year sample guard using `seasonality_total_years` from `SignalContext` — fewer than 5 years → `freshness: missing`, not directional evidence
+- [x] 6.3 Add config thresholds in `config/signal_engine.yaml`: `enter_min_confidence`, `watch_min_confidence`
+- [x] 6.4 Update classification: ENTER requires score >= score threshold AND confidence >= enter_min_confidence; WATCH can tolerate lower confidence
+- [x] 6.5 Unit tests for score-confidence disagreement cases (high score + low confidence → WATCH not ENTER)
 
 ### Files To Create/Modify
 
@@ -338,11 +371,38 @@ Code review identified four issues in Phase 5 commit (f361b90):
 | Modify | CLI signal display — show confidence alongside score |
 | New | `tests/application/use_case/test_confidence_aware_classification.py` |
 
+### Key Behavior
+
+- `SignalAssessment.confidence_score` is now part of the domain output and is
+  serialized by `to_dict()`.
+- `AssessSignalEvidenceUseCase` keeps score classification (`STRONG`,
+  `MODERATE`, `WEAK`) score-based, but entry quality is confidence-aware:
+  `ENTER` requires `confidence >= enter_min_confidence`; `WATCH` requires at
+  least `watch_min_confidence`.
+- Default thresholds: `enter_min_confidence: 0.70`,
+  `watch_min_confidence: 0.40`.
+- Flow-only high scores (`confidence=0.40`) become `WATCH`, not `ENTER`.
+  Setup-only high scores (`confidence=0.60`) also become `WATCH` under default
+  config.
+- Seasonality with `seasonality_total_years < 5` is treated as unavailable:
+  archived flat scoring returns neutral/no-data, and `SignalEvidenceBuilder`
+  marks the seasonality factor `MISSING`.
+- Unknown seasonality sample size (`seasonality_total_years is None`) is also
+  unavailable. `SignalEngine.build_context()` now threads
+  `SeasonalEdge.total_years` / `back_years`, and audit/evidence annotation share
+  one application-layer presence rule.
+- `Freshness.STALE` is still not emitted in Phase 6 because `SignalContext` does
+  not carry source fetch timestamps. Stale-vs-fresh evidence remains Phase 7
+  replay/persistence work; Phase 6 covers complete, partial, unknown-sample,
+  short-sample, and missing evidence.
+
 ### Verify
 
-- Tests cover complete, partial, stale, and missing evidence cases.
-- Score-confidence disagreement cases produce expected classification.
-- Seasonality guard rejects < 5 years as unavailable, not directional.
+- `python -m py_compile src/domain/value_objects/signal_assessment.py src/application/use_case/assess_signal_use_case.py src/application/use_case/assess_signal_evidence_use_case.py src/application/services/signal_evidence_builder.py src/application/services/bootstrap.py src/adapters/cli/analyze_swing_display.py`
+- `./.venv/bin/pytest tests/application/use_case/test_confidence_aware_classification.py tests/application/use_case/test_assess_signal_evidence_use_case.py tests/application/use_case/test_assess_signal.py tests/application/services/test_signal_evidence_builder.py tests/application/use_case/test_signal_regime_conditioning.py tests/application/services/test_signal_engine.py`
+- `./.venv/bin/pytest tests/adapters/cli/test_swing_commands.py`
+- `./.venv/bin/pytest tests/application/use_case/test_swing_analysis_workflow.py tests/application/use_case/test_screen_risk_funnel.py tests/application/use_case/test_accumulation_screen.py`
+- Post-review seasonality alignment: `./.venv/bin/pytest tests/application/services/test_signal_engine.py tests/application/services/test_signal_evidence_builder.py tests/application/use_case/test_audit_signal_use_case.py tests/application/use_case/test_assess_signal.py tests/application/use_case/test_signal_baseline.py tests/application/use_case/test_confidence_aware_classification.py tests/application/use_case/test_assess_signal_evidence_use_case.py`
 
 ---
 
@@ -441,4 +501,6 @@ _Append decisions, blockers, or scope changes here as they come up._
 | 2026-07-03 | Phase 1 complete. `FactorEvidence`/`SignalEvidence` domain objects + `SignalEvidenceBuilder` + `seasonality_total_years` threading. 2175 tests pass (after review fixes). No scoring changes, no CLI changes. Phase 2 and Phase 3 both unblocked. |
 | 2026-07-03 | Phase 2 complete. `SetupEvidence` domain VO + `SetupEvidenceBuilder` + wired into `SwingEvidence`. 2188 tests pass (13 new, after review cleanup). RS sub-signal date-gated at 2025-07-01; volume sub-signal source-gated to stockbit. RS/volume currently MISSING (no candle query infra yet). |
 | 2026-07-03 | Phase 3 complete. `FlowConfirmationEvidence` + builder. BB disabled by default in `ScoreForeignFlowUseCase` (key retained at 0.0). Group cap 0.80 applied to bandar+flow aggregate. 2205 tests pass (17 new). `FlowConfirmationEvidence` diagnostic-only; Phase 4 will use `capped_strength`. |
-| 2026-07-03 | Phase 4 complete. `AssessSignalEvidenceUseCase` — staged aggregation with 2 evidence groups (setup 60%, flow 40%) + 3 flags (VALUATION_STRETCHED/ANALYST_BEARISH/INSIDER_SELLING). Missing evidence excluded from denominator (lowers confidence, not direction). `AssessSignalUseCase` retained as archived reference; no longer called by `SignalEngine`. 2239 tests pass (31 new). 4.6/4.7 (CLI display + before/after commentary) deferred to next pass. |
+| 2026-07-03 | Phase 4 complete. `AssessSignalEvidenceUseCase` — staged aggregation with 2 evidence groups (setup 60%, flow 40%) + 3 flags (VALUATION_STRETCHED/ANALYST_BEARISH/INSIDER_SELLING). Missing evidence excluded from denominator (lowers confidence, not direction). `AssessSignalUseCase` retained as archived reference; no longer called by `SignalEngine`. 2239 tests pass (31 new). 4.6/4.7 complete after CLI display update and explicit Phase 0 before/after commentary. |
+| 2026-07-03 | Phase 5 complete. `MarketContext` is canonical signal conditioning when `--with-market-context` is enabled. ADR-037 supersedes ADR-032 preview-only wording. Follow-up fixed stale CLI help and compact Market Context display so preview-vs-canonical equality no longer hides `regime_conditioning` / `gate_tightening`. Focused CLI tests pass. |
+| 2026-07-03 | Phase 6 complete. `SignalAssessment.confidence_score` added; evidence confidence now caps entry quality. High score with low confidence becomes `WATCH`, not `ENTER`. Seasonality with unknown or fewer than 5 years is unavailable/missing, not directional evidence. Self-fetch, audit, and evidence annotation now share that rule. Focused signal, CLI, and workflow tests pass. |

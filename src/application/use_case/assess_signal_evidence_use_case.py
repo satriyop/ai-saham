@@ -87,7 +87,7 @@ class AssessSignalEvidenceUseCase:
         final_score = max(0, min(100, raw_group_score + flag_adj))
 
         strength = self._classify_strength(final_score)
-        entry_quality = self._classify_entry(strength)
+        entry_quality = self._classify_entry(strength, confidence)
 
         # ── Stage 5: Gate tightening (ENTER → WATCH cap) ─────────────────────
         entry_quality, gate_tightened = self._apply_gate_tightening(
@@ -112,6 +112,7 @@ class AssessSignalEvidenceUseCase:
             breakdown=breakdown,
             rationale=rationale,
             snapshot_date=request.snapshot_date,
+            confidence_score=round(confidence, 4),
         )
 
         coverage_warning = self._coverage_warning(confidence, setup_present, flow_present)
@@ -350,10 +351,16 @@ class AssessSignalEvidenceUseCase:
             return SignalStrength.MODERATE
         return SignalStrength.WEAK
 
-    def _classify_entry(self, strength: SignalStrength) -> EntryQuality:
-        if strength == SignalStrength.STRONG:
+    def _classify_entry(
+        self, strength: SignalStrength, confidence: float
+    ) -> EntryQuality:
+        cfg = self._config.classification
+        if strength == SignalStrength.STRONG and confidence >= cfg.enter_min_confidence:
             return EntryQuality.ENTER
-        if strength == SignalStrength.MODERATE:
+        if (
+            strength in {SignalStrength.STRONG, SignalStrength.MODERATE}
+            and confidence >= cfg.watch_min_confidence
+        ):
             return EntryQuality.WATCH
         return EntryQuality.AVOID
 

@@ -31,6 +31,7 @@ from src.application.use_case.assess_signal_use_case import (
     EvidenceGroupConfig,
     EvidenceGroupsConfig,
     InsiderSellingFlagConfig,
+    SignalClassificationConfig,
     SignalEngineConfig,
     SignalFlagsConfig,
     ValuationStretchedFlagConfig,
@@ -147,8 +148,10 @@ def test_only_flow_evidence_renormalized_to_flow_score():
     uc = _use_case()
     resp = uc.execute(_req(flow_confirmation_evidence=_flow_evidence(capped_strength=0.80)))
     assert resp.assessment.score == 80
+    assert resp.assessment.entry_quality.name == "WATCH"
     # confidence = 0.40 / (0.60+0.40) = 0.40
     assert resp.evidence_confidence == pytest.approx(0.40)
+    assert resp.assessment.confidence_score == pytest.approx(0.40)
 
 
 def test_only_setup_evidence_renormalized_to_setup_score():
@@ -156,8 +159,10 @@ def test_only_setup_evidence_renormalized_to_setup_score():
     uc = _use_case()
     resp = uc.execute(_req(setup_evidence=_setup_evidence("MATCH")))
     assert resp.assessment.score == 100
+    assert resp.assessment.entry_quality.name == "WATCH"
     # confidence = 0.60 / 1.0 = 0.60
     assert resp.evidence_confidence == pytest.approx(0.60)
+    assert resp.assessment.confidence_score == pytest.approx(0.60)
 
 
 def test_partial_setup_match_gives_lower_score():
@@ -196,6 +201,8 @@ def test_both_groups_present_full_strength_scores_100():
     ))
     assert resp.assessment.score == 100
     assert resp.assessment.strength == SignalStrength.STRONG
+    assert resp.assessment.entry_quality.name == "ENTER"
+    assert resp.assessment.confidence_score == pytest.approx(1.0)
 
 
 # ── flag tests ────────────────────────────────────────────────────────────────
@@ -314,6 +321,22 @@ def test_custom_group_weights_affect_score():
         flow_confirmation_evidence=_flow_evidence(capped_strength=1.0),
     ))
     assert resp.assessment.score == 68
+
+
+def test_custom_enter_confidence_threshold_allows_setup_only_enter():
+    cfg = SignalEngineConfig(
+        classification=SignalClassificationConfig(
+            strong_min_score=70,
+            moderate_min_score=45,
+            enter_min_confidence=0.60,
+            watch_min_confidence=0.40,
+        )
+    )
+    uc = _use_case(cfg)
+    resp = uc.execute(_req(setup_evidence=_setup_evidence("MATCH")))
+    assert resp.assessment.score == 100
+    assert resp.assessment.confidence_score == pytest.approx(0.60)
+    assert resp.assessment.entry_quality.name == "ENTER"
 
 
 def test_custom_flag_threshold_changes_trigger_point():

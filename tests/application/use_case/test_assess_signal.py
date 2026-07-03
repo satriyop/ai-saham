@@ -92,6 +92,7 @@ class TestAssessSignalUseCaseScoring:
             foreign_flow_quality=1.0,
             insider_net_buy_ratio=1.0,
             seasonality_win_rate=90.0, seasonality_avg_return_pct=3.0,
+            seasonality_total_years=5, seasonality_back_years=5,
             analyst_buy_pct=1.0, analyst_upside_pct=30.0,
             forward_pe=8.0,
         ))
@@ -155,12 +156,22 @@ class TestAssessSignalUseCaseScoring:
 
     def test_seasonality_tailwind_uses_win_rate_directly(self):
         # avg_return > 0 AND win_rate > 50 → tailwind → component = win_rate
-        resp = self._run(_ctx(seasonality_win_rate=80.0, seasonality_avg_return_pct=2.0))
+        resp = self._run(_ctx(
+            seasonality_win_rate=80.0,
+            seasonality_avg_return_pct=2.0,
+            seasonality_total_years=5,
+            seasonality_back_years=5,
+        ))
         assert resp.assessment.breakdown_dict["seasonality_edge"] == pytest.approx(80.0)
 
     def test_seasonality_headwind_uses_low_win_rate_as_low_score(self):
         # avg_return < 0 AND win_rate < 50 → headwind → component = win_rate
-        resp = self._run(_ctx(seasonality_win_rate=20.0, seasonality_avg_return_pct=-2.0))
+        resp = self._run(_ctx(
+            seasonality_win_rate=20.0,
+            seasonality_avg_return_pct=-2.0,
+            seasonality_total_years=5,
+            seasonality_back_years=5,
+        ))
         assert resp.assessment.breakdown_dict["seasonality_edge"] == pytest.approx(20.0)
 
     def test_seasonality_neutral_gives_50(self):
@@ -389,6 +400,16 @@ class TestAssessSignalUseCaseScoring:
         ))
         assert resp.coverage_warning is None
 
+    def test_seasonality_with_less_than_five_years_is_not_directional(self):
+        resp = self._run(_ctx(
+            seasonality_win_rate=80.0,
+            seasonality_avg_return_pct=3.0,
+            seasonality_total_years=4,
+        ))
+        bd = resp.assessment.breakdown_dict
+        assert bd["seasonality_edge"] == pytest.approx(50.0)
+        assert "Seasonal edge: no data" in " ".join(resp.assessment.rationale)
+
 
 # ── value object ──────────────────────────────────────────────────────────────
 
@@ -460,7 +481,7 @@ class TestSignalAssessmentValueObject:
         d = a.to_dict()
         assert set(d.keys()) == {
             "ticker", "score", "strength", "entry_quality",
-            "breakdown", "rationale", "snapshot_date"
+            "breakdown", "rationale", "snapshot_date", "confidence_score"
         }
         assert d["ticker"] == "BBCA"
         assert d["score"] == 50

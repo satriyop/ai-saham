@@ -1556,6 +1556,7 @@ def test_swing_output_renders_optional_evidence_as_separate_panels(capsys):
             strength=strength,
             entry_quality=entry_quality,
             score_label="82/100",
+            confidence_score=1.0,
             rationale=("setup quality strong", "flow confirmation positive"),
             breakdown_dict={
                 "setup_quality_group": 100.0,

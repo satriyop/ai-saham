@@ -58,6 +58,8 @@ def test_complete_evidence_all_present():
         insider_net_buy_ratio=0.8,
         seasonality_win_rate=75.0,
         seasonality_avg_return_pct=2.5,
+        seasonality_total_years=5,
+        seasonality_back_years=5,
         analyst_buy_pct=0.85,
         analyst_upside_pct=25.0,
         forward_pe=12.0,
@@ -156,3 +158,26 @@ def test_weighted_contribution_and_configured_weight():
         bandar.active_weight * bandar.component_score
     )
     assert bandar.raw_value == "broad_score=6/6"
+
+
+def test_seasonality_unknown_years_is_missing_in_audit_and_evidence():
+    ctx = SignalContext(
+        ticker="TEST",
+        snapshot_date=SNAPSHOT,
+        seasonality_win_rate=75.0,
+        seasonality_avg_return_pct=2.5,
+    )
+    response = AuditSignalUseCase().execute(
+        AuditSignalRequest(
+            ticker=ctx.ticker,
+            signal_context=ctx,
+            weights=dict(_DEFAULT_WEIGHTS),
+            raw_weights=dict(_DEFAULT_WEIGHTS),
+            config=SignalEngineConfig(),
+        )
+    )
+
+    seasonal = next(e for e in response.report.entries if e.factor == "seasonality_edge")
+    assert seasonal.present is False
+    assert seasonal.component_score == pytest.approx(50.0)
+    assert "seasonality_edge" in response.evidence.missing_factors

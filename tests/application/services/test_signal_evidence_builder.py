@@ -107,6 +107,24 @@ def test_seasonality_raw_fields_includes_total_years():
     assert ("total_years", "7") in seasonality.raw_fields
 
 
+def test_seasonality_with_less_than_five_years_is_missing():
+    ctx = _complete_context(seasonality_total_years=4)
+    ev = _build(ctx)
+    seasonality = _factor_by_name(ev, "seasonality_edge")
+    assert seasonality.freshness is Freshness.MISSING
+    assert seasonality.direction is Direction.NEUTRAL
+    assert "seasonality_edge" in ev.missing_factors
+
+
+def test_seasonality_with_unknown_years_is_missing():
+    ctx = _complete_context(seasonality_total_years=None, seasonality_back_years=None)
+    ev = _build(ctx)
+    seasonality = _factor_by_name(ev, "seasonality_edge")
+    assert seasonality.freshness is Freshness.MISSING
+    assert seasonality.direction is Direction.NEUTRAL
+    assert "seasonality_edge" in ev.missing_factors
+
+
 def test_missing_factor_direction_is_neutral():
     ctx = SignalContext(ticker="TEST", snapshot_date=date(2026, 7, 3))
     ev = _build(ctx)

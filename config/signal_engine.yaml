@@ -1,14 +1,15 @@
-# Signal Engine Configuration — Phase 5 (regime-conditional evidence aggregator)
+# Signal Engine Configuration — Phase 6 (confidence-aware evidence aggregator)
 #
 # Canonical scoring path: AssessSignalEvidenceUseCase
 #   Stage 1: Group scoring — Setup Quality (60%) + Flow Confirmation (40%)
 #   Stage 2: Regime conditioning — applied BEFORE renormalization (see regime_conditioning)
 #   Stage 3: Renormalize — missing groups excluded from denominator
 #   Stage 4: Do-no-harm flags — score penalties from SignalContext
-#   Stage 5: Gate tightening — ENTER → WATCH cap when MarketContext.gate_tightening=True
+#   Stage 5: Confidence-aware entry classification — ENTER requires score + confidence
+#   Stage 6: Gate tightening — ENTER → WATCH cap when MarketContext.gate_tightening=True
 #
 # Tune: evidence_groups.*.weight, flags.*.score_penalty, regime_conditioning.*
-#       classification.strong_min_score / moderate_min_score
+#       classification.* score and confidence thresholds
 #       scoring.bandar.* (still active — controls bandar_max_range helper)
 #
 # See ADR-024 for full configurability contract.
@@ -21,6 +22,8 @@ signal_engine:
   classification:
     strong_min_score: 70
     moderate_min_score: 45
+    enter_min_confidence: 0.70
+    watch_min_confidence: 0.40
 
   # [ARCHIVED — Phase 4] Missing-data neutral fill is no longer used.
   # Phase 4 excludes missing groups from the denominator instead of filling neutral.

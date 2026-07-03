@@ -553,6 +553,13 @@ def _build_signal_panel(signal_assessment) -> Any:
 
     assessment = signal_assessment.assessment
     strength_value, strength_style, _ = _signal_label(signal_assessment)
+    confidence_score = getattr(
+        assessment,
+        "confidence_score",
+        getattr(signal_assessment, "evidence_confidence", 1.0),
+    )
+    if confidence_score is None:
+        confidence_score = 1.0
 
     headline_table = compact_table(show_header=False)
     headline_table.add_column("Strength")
@@ -560,7 +567,11 @@ def _build_signal_panel(signal_assessment) -> Any:
     headline_table.add_column("Spacer")
     headline_table.add_row(
         Text(strength_value, style=strength_style),
-        f"score {assessment.score:.1f}  {assessment.entry_quality.value}",
+        (
+            f"score {assessment.score:.1f}  "
+            f"conf {confidence_score:.0%}  "
+            f"{assessment.entry_quality.value}"
+        ),
         "",
     )
 
@@ -635,17 +646,22 @@ def _build_market_context_panel(
 
     signal_summary = "no impact"
     signal_detail = ""
-    if mc_signal_preview is not None and canonical_signal is not None:
-        before = canonical_signal.assessment
-        after = mc_signal_preview.assessment
-        mult = getattr(after, "market_multiplier", None)
-        if mult is None:
-            mult = (after.score / before.score) if before.score else 1.0
-        if before.score != after.score or before.entry_quality.value != after.entry_quality.value:
-            signal_summary = f"x{mult:.2f}"
+    signal_for_context = mc_signal_preview or canonical_signal
+    if signal_for_context is not None:
+        assessment = signal_for_context.assessment
+        bd_dict = dict(assessment.breakdown)
+        regime_conditioned = bool(bd_dict.get("regime_conditioning"))
+        gate_tightened = bool(bd_dict.get("gate_tightening"))
+        if regime_conditioned or gate_tightened:
+            signal_summary = "conditioned"
+            markers = []
+            if regime_conditioned:
+                markers.append("regime")
+            if gate_tightened:
+                markers.append("gate tightening")
             signal_detail = (
-                f"{before.score:.0f}->{after.score:.0f} "
-                f"({before.entry_quality.value}->{after.entry_quality.value})"
+                f"{assessment.score:.0f} ({assessment.entry_quality.value}) · "
+                + ", ".join(markers)
             )
     table.add_row("Signal", signal_summary, signal_detail)
 
@@ -1045,8 +1061,17 @@ def print_swing_output(
             "MODERATE": "yellow",
             "WEAK": "red",
         }.get(sa.strength.value, "white")
+        confidence_score = getattr(
+            sa,
+            "confidence_score",
+            getattr(signal_assessment, "evidence_confidence", 1.0),
+        )
+        if confidence_score is None:
+            confidence_score = 1.0
         signal_text.append(Text(
-            f"Explains the Signal column in Verdict: {sa.score_label} {sa.strength.value} -> {sa.entry_quality.value}",
+            f"Explains the Signal column in Verdict: {sa.score_label} "
+            f"{sa.strength.value} / {confidence_score:.0%} confidence "
+            f"-> {sa.entry_quality.value}",
             style=_sig_style,
         ))
         signal_text.append(Text(

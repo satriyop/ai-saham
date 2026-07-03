@@ -207,6 +207,8 @@ class SignalEngine:
 
         win_rate: float | None = None
         avg_return: float | None = None
+        seasonality_total_years: int | None = None
+        seasonality_back_years: int | None = None
 
         buy_pct: float | None = None
         upside_pct: float | None = None
@@ -257,6 +259,8 @@ class SignalEngine:
                 if edge is not None:
                     win_rate = edge.win_rate_pct
                     avg_return = edge.avg_monthly_return_pct
+                    seasonality_total_years = edge.total_years
+                    seasonality_back_years = edge.back_years
             except Exception as exc:
                 logger.debug("SignalEngine: seasonality unavailable for %s: %s", ticker, exc)
 
@@ -294,6 +298,8 @@ class SignalEngine:
             insider_net_buy_ratio=insider_ratio,
             seasonality_win_rate=win_rate,
             seasonality_avg_return_pct=avg_return,
+            seasonality_total_years=seasonality_total_years,
+            seasonality_back_years=seasonality_back_years,
             analyst_buy_pct=buy_pct,
             analyst_upside_pct=upside_pct,
             forward_pe=forward_pe,

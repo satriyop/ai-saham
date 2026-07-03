@@ -113,10 +113,16 @@ class SignalAssessment:
     breakdown: tuple[tuple[str, float], ...] # (factor_name, component_score) pairs
     rationale: tuple[str, ...]
     snapshot_date: date
+    confidence_score: float = 1.0          # 0.0–1.0 evidence coverage/decision confidence
 
     def __post_init__(self) -> None:
         if not (0 <= self.score <= 100):
             raise ValueError(f"SignalAssessment score must be 0–100, got {self.score}")
+        if not (0.0 <= self.confidence_score <= 1.0):
+            raise ValueError(
+                f"SignalAssessment confidence_score must be 0.0–1.0, "
+                f"got {self.confidence_score}"
+            )
 
     @property
     def breakdown_dict(self) -> dict[str, float]:
@@ -146,4 +152,5 @@ class SignalAssessment:
             "breakdown": self.breakdown_dict,
             "rationale": list(self.rationale),
             "snapshot_date": self.snapshot_date.isoformat(),
+            "confidence_score": self.confidence_score,
         }

@@ -96,7 +96,9 @@ Outcomes:
 - The replacement engine has explicit inputs instead of scattered raw fields.
 
 Verify:
-- Evidence builder tests cover complete, partial, stale, and missing data.
+- Evidence builder tests cover complete, partial, and missing data. `Freshness.STALE`
+  is modeled in the enum but not emitted until a later phase carries cache/source
+  timestamps into replayable evidence.
 - Evidence serialization is deterministic.
 - No provider or CLI dependency enters domain objects.
 
@@ -260,7 +262,9 @@ Outcomes:
 - Coverage warning becomes part of the decision contract, not just text.
 
 Verify:
-- Tests cover complete, partial, stale, and missing evidence cases.
+- Tests cover complete, partial, unknown-sample, short-sample, and missing
+  evidence cases. Stale evidence requires cache/source timestamps and is deferred
+  to the persistence/replay phase.
 - Classification tests cover score-confidence disagreement cases.
 
 ## Phase 7: Persistence For Replayable Evidence

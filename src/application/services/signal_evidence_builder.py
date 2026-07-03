@@ -22,6 +22,7 @@ from src.domain.value_objects.factor_evidence import (
     Freshness,
     Horizon,
 )
+from src.application.services.signal_presence import is_signal_factor_present
 from src.domain.value_objects.signal_assessment import SignalContext
 from src.domain.value_objects.signal_evidence import SignalEvidence
 
@@ -47,8 +48,6 @@ _FACTOR_ORDER: tuple[str, ...] = (
 
 _BULLISH_MIN_SCORE = 60.0
 _BEARISH_MAX_SCORE = 40.0
-
-
 class SignalEvidenceBuilder:
     """Pure computation. No IO. Annotates scores with evidence metadata."""
 
@@ -127,22 +126,7 @@ class SignalEvidenceBuilder:
 
     @staticmethod
     def _is_present(factor: str, ctx: SignalContext) -> bool:
-        if factor == "bandar_intensity":
-            return ctx.bandar_broad_score is not None
-        if factor == "foreign_flow_quality":
-            return ctx.foreign_flow_quality is not None
-        if factor == "insider_activity":
-            return ctx.insider_net_buy_ratio is not None
-        if factor == "seasonality_edge":
-            return (
-                ctx.seasonality_win_rate is not None
-                and ctx.seasonality_avg_return_pct is not None
-            )
-        if factor == "analyst_consensus":
-            return ctx.analyst_buy_pct is not None
-        if factor == "forward_valuation":
-            return ctx.forward_pe is not None and ctx.forward_pe > 0
-        return False
+        return is_signal_factor_present(factor, ctx)
 
     # ── raw fields ────────────────────────────────────────────────────────────
 

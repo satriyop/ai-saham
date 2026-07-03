@@ -146,6 +146,8 @@ def _resolve_signal_config(cfg: dict):
         classification=SignalClassificationConfig(
             strong_min_score=classification.get("strong_min_score", 70),
             moderate_min_score=classification.get("moderate_min_score", 45),
+            enter_min_confidence=classification.get("enter_min_confidence", 0.70),
+            watch_min_confidence=classification.get("watch_min_confidence", 0.40),
         ),
         missing_data=SignalMissingDataConfig(
             neutral_score=missing.get("neutral_score", 50.0),

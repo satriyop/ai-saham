@@ -29,6 +29,8 @@ from src.domain.value_objects.signal_assessment import (
 class SignalClassificationConfig:
     strong_min_score: int = 70
     moderate_min_score: int = 45
+    enter_min_confidence: float = 0.70
+    watch_min_confidence: float = 0.40
 
 
 @dataclass(frozen=True)
@@ -319,6 +321,7 @@ class AssessSignalUseCase:
             breakdown=breakdown,
             rationale=rationale,
             snapshot_date=ctx.snapshot_date,
+            confidence_score=1.0,
         )
 
     # ── factor scorers ───────────────────────────────────────────────────────
@@ -368,6 +371,11 @@ class AssessSignalUseCase:
         weak month should reduce the score, not become a strong positive signal.
         """
         if ctx.seasonality_win_rate is None or ctx.seasonality_avg_return_pct is None:
+            return self._config.missing_data.neutral_score, False
+        if (
+            ctx.seasonality_total_years is None
+            or ctx.seasonality_total_years < 5
+        ):
             return self._config.missing_data.neutral_score, False
 
         win = ctx.seasonality_win_rate

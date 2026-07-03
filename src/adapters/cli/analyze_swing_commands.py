@@ -351,7 +351,7 @@ def swing(
         bool,
         typer.Option(
             "--with-market-context",
-            help="Build MCE and display a what-if impact preview (does not change final TradeSetup)",
+            help="Build MCE and condition the canonical signal/trade setup with market regime",
         ),
     ] = False,
     with_technical_gate: Annotated[
