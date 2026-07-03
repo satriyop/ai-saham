@@ -669,8 +669,21 @@ class AccumulationScreenUseCase:
                 candidate=result,
                 signal_engine=self._signal_engine,
             )
+            # Flow evidence is built from candidate data already in memory — no
+            # extra fetch. SetupEvidence is intentionally absent here: the batch
+            # screener does not evaluate named setup patterns per ticker; that
+            # happens only in the per-ticker swing workflow. Confidence will be
+            # 0.40 (flow group only) until the full workflow enriches it further.
+            _flow_ev = None
+            try:
+                from src.application.services.flow_confirmation_evidence_builder import (
+                    FlowConfirmationEvidenceBuilder,
+                )
+                _flow_ev = FlowConfirmationEvidenceBuilder().build(result, analysis_date=today)
+            except Exception:
+                pass
             result.signal_assessment = self._signal_engine.evaluate_with_context(
-                result.ticker, signal_ctx
+                result.ticker, signal_ctx, flow_confirmation_evidence=_flow_ev
             )
 
             if (

@@ -1,12 +1,14 @@
-# Signal Engine Configuration
+# Signal Engine Configuration — Phase 4 (staged evidence aggregator)
 #
-# Controls which factors participate in the composite signal score and at what weight.
-# Weights are renormalized automatically when factors are disabled — score stays 0–100.
+# Canonical scoring path: AssessSignalEvidenceUseCase
+#   Setup Quality (60%) + Flow Confirmation (40%), renormalized when a group is missing.
+#   Do-no-harm flags apply score penalties on top of group scores.
 #
-# enabled: false  removes the factor from the active pool entirely (weight redistributes)
-# enabled: false  ≠ weight: 0  (zero-weight keeps the factor in normalization math)
+# Tune: evidence_groups.*.weight and flags.*.score_penalty
+#       classification.strong_min_score / moderate_min_score
+#       scoring.bandar.* (still active — controls bandar_max_range helper)
 #
-# See ADR-024 Engine Configurability Contract for full semantics.
+# See ADR-024 for full configurability contract.
 #
 version: 1
 signal_engine:
@@ -17,8 +19,9 @@ signal_engine:
     strong_min_score: 70
     moderate_min_score: 45
 
-  # Missing enrichment is scored neutral, then surfaced as a coverage warning
-  # once too many factors are absent.
+  # [ARCHIVED — Phase 4] Missing-data neutral fill is no longer used.
+  # Phase 4 excludes missing groups from the denominator instead of filling neutral.
+  # Kept so AssessSignalUseCase (baseline reference) still loads without error.
   missing_data:
     neutral_score: 50.0
     coverage_warning_missing_factors: 3
@@ -33,13 +36,19 @@ signal_engine:
       max_score: 120.0
       clamp: true
 
-  # Factor-internal scoring thresholds. Factor weights below control influence;
-  # this block controls how raw enrichment data maps to a 0-100 component score.
+  # Scoring helpers.
+  #   scoring.bandar.*: ACTIVE — used by SignalEngine.bandar_max_range() to
+  #     compute the dynamic score ceiling for bandar broad_score.
+  #   scoring.seasonality/analyst/forward_pe: ARCHIVED — used only by the
+  #     retired AssessSignalUseCase flat-factor path, not by Phase 4 aggregator.
   scoring:
     bandar:
       mandatory_signal_count: 3
       signal_score_unit: 2
       default_max_range: 6
+    # ARCHIVED: seasonality, analyst, forward_pe scoring thresholds below are
+    # read only by AssessSignalUseCase (baseline reference). Phase 4 uses flags
+    # for analyst/valuation signals and SetupEvidence for timing structure.
     seasonality:
       tailwind_min_avg_return_pct: 0.0
       tailwind_min_win_rate_pct: 50.0
@@ -61,6 +70,9 @@ signal_engine:
       post_expensive_pe_step: 10.0
       post_expensive_score_decay: 15.0
 
+  # ARCHIVED: flat six-factor weights used by AssessSignalUseCase (baseline
+  # reference only). Not read by Phase 4 AssessSignalEvidenceUseCase.
+  # Do not tune these — tune evidence_groups and flags below instead.
   factors:
     bandar_intensity:
       enabled: true
@@ -81,8 +93,8 @@ signal_engine:
       enabled: true
       weight: 0.10
 
-  # Phase 4: Evidence-group weights for AssessSignalEvidenceUseCase.
-  # Weights are relative (renormalized when a group is missing).
+  # Evidence-group weights for AssessSignalEvidenceUseCase (canonical Phase 4 path).
+  # Weights are relative — renormalized when a group is missing (never neutral-filled).
   evidence_groups:
     setup_quality:
       weight: 0.60

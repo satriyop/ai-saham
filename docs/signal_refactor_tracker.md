@@ -216,7 +216,7 @@ This file is the canonical phase-by-phase state for the SignalEngine staged-evid
 
 **Goal:** Make the evidence-first staged aggregator the canonical `SignalEngine`. Clean break — no parallel paths.
 
-**Status:** ✅ Done — 2239 tests pass (31 new), AssessSignalEvidenceUseCase is canonical in SignalEngine
+**Status:** ✅ Done — 2239 tests pass, AssessSignalEvidenceUseCase is canonical in SignalEngine and wired in all production paths with consistent trade_setup and MCE preview
 
 ### Dependencies
 
@@ -230,7 +230,8 @@ This file is the canonical phase-by-phase state for the SignalEngine staged-evid
 - [x] 4.3 Add YAML configuration for evidence groups, flag thresholds in `config/signal_engine.yaml`
 - [x] 4.4 Add flag implementations: `VALUATION_STRETCHED` (P/E > 50, -10 pts), `ANALYST_BEARISH` (buy_ratio < 0.20, -8 pts), `INSIDER_SELLING` (net_buy_ratio < -0.30, -12 pts)
 - [x] 4.5 Wired `AssessSignalEvidenceUseCase` as canonical path in `signal_engine.py`. `AssessSignalUseCase` retained as archived reference (not called by SignalEngine).
-- [ ] 4.6 Update CLI displays to render new canonical evidence and assessment. No dual-engine comparison mode.
+- [x] 4.6 Updated CLI displays: `screen_accum_display.py` and `analyze_swing_display.py` — replaced old 6-factor columns (Bandar/Foreign/Insider/Season/Analyst/Fwd) with new evidence columns (Setup/Flow/Conf%/Flags). Detailed breakdown now shows group names, evidence confidence, and flag penalties.
+- [x] 4.6b Production wiring: `accumulation_screen_use_case.py` now builds `FlowConfirmationEvidence` per candidate (SetupEvidence intentionally absent — batch screener does not evaluate named setups; confidence=0.40). `swing_analysis_workflow_use_case.py` re-scores with both evidence objects after they are built, then recomposes `trade_setup` and MCE preview from the enriched signal so `SwingVerdict` is internally consistent. Backtest attribution tuning keys updated from `factors.*` to `evidence_groups.*` and `flags.*`. `config/signal_engine.yaml` header and inline comments rewritten to reflect Phase 4 reality — old `factors.*` and dead scoring sections marked ARCHIVED.
 - [ ] 4.7 Document before/after explanation for each Phase 0 fixture case where output changes
 - [x] 4.8 Unit tests for all staged aggregation paths, renormalize policy, and each flag
 

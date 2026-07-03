@@ -1556,17 +1556,18 @@ def test_swing_output_renders_optional_evidence_as_separate_panels(capsys):
             strength=strength,
             entry_quality=entry_quality,
             score_label="82/100",
-            rationale=("foreign flow supportive", "bandar supportive"),
+            rationale=("setup quality strong", "flow confirmation positive"),
             breakdown_dict={
-                "bandar_intensity": 80.0,
-                "foreign_flow_quality": 75.0,
-                "insider_activity": 50.0,
-                "seasonality_edge": 60.0,
-                "analyst_consensus": 70.0,
-                "forward_valuation": 55.0,
+                "setup_quality_group": 100.0,
+                "flow_confirmation_group": 75.0,
+                "evidence_confidence": 100.0,
             },
         ),
         coverage_warning=None,
+        active_flags=(),
+        flag_adjustment=0,
+        raw_group_score=82,
+        evidence_confidence=1.0,
     )
     risk_resp = SimpleNamespace(
         assessment=SimpleNamespace(
@@ -1645,7 +1646,7 @@ def test_swing_output_renders_optional_evidence_as_separate_panels(capsys):
     assert "SIGNAL DETAIL" in out
     assert "Explains the Signal column in Verdict" in out
     assert "Scale: SignalEngine 0-100. Used in final TradeSetup: yes." in out
-    assert "Composite foreign-flow score 82.0/120" in out
+    assert "Setup Quality" in out
     assert "RISK DETAIL" in out
     assert "FLOW / BROKER DETAIL" in out
     assert "Composite Foreign Flow Score (7 broker sessions)" in out

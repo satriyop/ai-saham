@@ -209,7 +209,7 @@ def _scoring_definitions_panel():
     signal_table.add_column("Definition")
     signal_table.add_row(
         "Signal score",
-        "SignalEngine attractiveness score (0-100) from bandar, foreign quality, insider activity, seasonality, analyst, and forward valuation.",
+        "SignalEngine attractiveness score (0-100). Setup = setup-quality group (0-100). Flow = flow-confirmation group (0-100). Conf% = evidence confidence (how much weight is covered). Flags = active do-no-harm penalties (VAL/ANL/INS).",
     )
     signal_table.add_row(
         "Signal status",
@@ -384,12 +384,10 @@ def display_results(
     if show_context_ticker:
         signal_table.add_column("Ticker", style="bold")
     signal_table.add_column("Score", justify="right")
-    signal_table.add_column("Bandar", justify="right")
-    signal_table.add_column("Foreign", justify="right")
-    signal_table.add_column("Insider", justify="right")
-    signal_table.add_column("Season", justify="right")
-    signal_table.add_column("Analyst", justify="right")
-    signal_table.add_column("Fwd", justify="right")
+    signal_table.add_column("Setup", justify="right")
+    signal_table.add_column("Flow", justify="right")
+    signal_table.add_column("Conf%", justify="right")
+    signal_table.add_column("Flags")
 
     risk_table = compact_table()
     risk_table.add_column("Status")
@@ -492,22 +490,29 @@ def display_results(
         if c.signal_assessment is not None:
             sa = c.signal_assessment.assessment
             bd = sa.breakdown_dict
+            _setup = bd.get("setup_quality_group")
+            _flow = bd.get("flow_confirmation_group")
+            _conf = bd.get("evidence_confidence")
+            _flags = getattr(c.signal_assessment, "active_flags", ())
+            _flag_abbr = {
+                "VALUATION_STRETCHED": "VAL",
+                "ANALYST_BEARISH": "ANL",
+                "INSIDER_SELLING": "INS",
+            }
             signal_row = [
                 sa.strength.value,
                 str(sa.score),
-                f"{bd.get('bandar_intensity', 0):.0f}",
-                f"{bd.get('foreign_flow_quality', 0):.0f}",
-                f"{bd.get('insider_activity', 0):.0f}",
-                f"{bd.get('seasonality_edge', 0):.0f}",
-                f"{bd.get('analyst_consensus', 0):.0f}",
-                f"{bd.get('forward_valuation', 0):.0f}",
+                f"{_setup:.0f}" if _setup is not None else "-",
+                f"{_flow:.0f}" if _flow is not None else "-",
+                f"{_conf:.0f}%" if _conf is not None else "-",
+                " ".join(_flag_abbr.get(f, f[:3]) for f in _flags) or "-",
             ]
             if show_context_ticker:
                 signal_table.add_row(signal_row[0], c.ticker, *signal_row[1:])
             else:
                 signal_table.add_row(*signal_row)
         else:
-            signal_row = ["-", "-", "-", "-", "-", "-", "-", "-"]
+            signal_row = ["-", "-", "-", "-", "-", "-"]
             if show_context_ticker:
                 signal_table.add_row(signal_row[0], c.ticker, *signal_row[1:])
             else:

@@ -6,7 +6,7 @@ AI usage: Optional sentiment provider, controlled by injected fetcher.
 """
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -828,6 +828,85 @@ class SwingAnalysisWorkflowUseCase:
             setup_evidence=setup_evidence,
             flow_confirmation_evidence=flow_confirmation_evidence,
         )
+
+        # Re-score with evidence now that both groups are available. Signal was
+        # computed earlier (before setup_eval existed), so that score had no
+        # evidence groups and confidence=0. Recompose all downstream outputs
+        # (TradeSetup, MCE preview) so verdict is internally consistent.
+        if (
+            self._signal_engine is not None
+            and accumulation_candidate is not None
+            and (setup_evidence is not None or flow_confirmation_evidence is not None)
+        ):
+            try:
+                _evidence_ctx = build_signal_context_from_candidate(
+                    ticker=request.ticker,
+                    snapshot_date=request.today,
+                    candidate=accumulation_candidate,
+                    signal_engine=self._signal_engine,
+                )
+                signal_assessment = self._signal_engine.evaluate_with_context(
+                    request.ticker,
+                    _evidence_ctx,
+                    setup_evidence=setup_evidence,
+                    flow_confirmation_evidence=flow_confirmation_evidence,
+                )
+            except Exception as exc:
+                warnings.append(f"Evidence-enriched signal re-score unavailable: {exc}")
+            else:
+                # Re-score succeeded — recompose trade_setup and MCE preview so
+                # all three fields in verdict use the same enriched signal score.
+                _new_trade_setup = trade_setup
+                _new_mce_signal = market_context_signal_preview
+                _new_mce_trade_preview = market_context_trade_setup_preview
+
+                if risk_response is not None:
+                    try:
+                        from src.application.use_case.assess_trade_setup_use_case import (
+                            AssessTradeSetupRequest,
+                            AssessTradeSetupUseCase,
+                        )
+                        _new_trade_setup = AssessTradeSetupUseCase().execute(
+                            AssessTradeSetupRequest(
+                                ticker=request.ticker,
+                                snapshot_date=request.today,
+                                signal_response=signal_assessment,
+                                risk_response=risk_response,
+                                market_context=None,
+                            )
+                        ).setup
+                    except Exception as exc:
+                        warnings.append(f"TradeSetup re-composition unavailable: {exc}")
+
+                if market_context_risk_preview is not None:
+                    try:
+                        from src.application.use_case.assess_trade_setup_use_case import (
+                            AssessTradeSetupRequest,
+                            AssessTradeSetupUseCase,
+                        )
+                        _new_mce_signal = self._signal_engine.apply_market_context(
+                            signal_assessment, market_regime
+                        )
+                        _new_mce_trade_preview = AssessTradeSetupUseCase().execute(
+                            AssessTradeSetupRequest(
+                                ticker=request.ticker,
+                                snapshot_date=request.today,
+                                signal_response=_new_mce_signal,
+                                risk_response=market_context_risk_preview,
+                                market_context=market_regime,
+                            )
+                        ).setup
+                    except Exception as exc:
+                        warnings.append(f"MCE preview re-computation unavailable: {exc}")
+
+                verdict = replace(
+                    verdict,
+                    signal_assessment=signal_assessment,
+                    trade_setup=_new_trade_setup,
+                    market_context_signal_preview=_new_mce_signal,
+                    market_context_trade_setup_preview=_new_mce_trade_preview,
+                )
+
         diagnostics = SwingDiagnostics(
             data_freshness=data_freshness,
             flow_detail=flow_detail,
@@ -860,11 +939,11 @@ class SwingAnalysisWorkflowUseCase:
             take_profit_pct=take_profit_pct,
             stop_loss_pct=stop_loss_pct,
             regime_label=regime_label,
-            signal_assessment=signal_assessment,
-            trade_setup=trade_setup,
-            market_context_signal_preview=market_context_signal_preview,
+            signal_assessment=verdict.signal_assessment,
+            trade_setup=verdict.trade_setup,
+            market_context_signal_preview=verdict.market_context_signal_preview,
             market_context_risk_preview=market_context_risk_preview,
-            market_context_trade_setup_preview=market_context_trade_setup_preview,
+            market_context_trade_setup_preview=verdict.market_context_trade_setup_preview,
             verdict=verdict,
             evidence=evidence,
             diagnostics=diagnostics,

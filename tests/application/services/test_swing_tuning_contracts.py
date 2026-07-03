@@ -544,7 +544,7 @@ def test_tuning_targets_include_concrete_signal_risk_and_market_paths():
 
     assert {
         "config/signal_engine.yaml:signal_engine.classification.strong_min_score",
-        "config/signal_engine.yaml:signal_engine.factors.foreign_flow_quality.weight",
+        "config/signal_engine.yaml:signal_engine.evidence_groups.flow_confirmation.weight",
         "config/risk_engine.yaml:risk_engine.gates.liquidity.market_cap_floor_idr",
         "config/risk_engine.yaml:risk_engine.gates.free_float.min_free_float_pct",
         "config/market_context_engine.yaml:market_context_engine.regime_thresholds.risk_on_min_score",

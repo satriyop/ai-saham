@@ -567,20 +567,29 @@ def _build_signal_panel(signal_assessment) -> Any:
     items = [headline_table]
 
     breakdown = getattr(assessment, "breakdown_dict", None) or {}
+    active_flags = getattr(signal_assessment, "active_flags", ())
+    _flag_abbr = {
+        "VALUATION_STRETCHED": "VAL",
+        "ANALYST_BEARISH": "ANL",
+        "INSIDER_SELLING": "INS",
+    }
     if breakdown:
         key_map = [
-            ("bandar_intensity", "Bandar"),
-            ("foreign_flow_quality", "Foreign"),
-            ("insider_activity", "Insider"),
-            ("seasonality_edge", "Season"),
-            ("analyst_consensus", "Analyst"),
-            ("forward_valuation", "Fwd"),
+            ("setup_quality_group", "Setup", False),
+            ("flow_confirmation_group", "Flow", False),
+            ("evidence_confidence", "Conf%", True),
         ]
         factor_table = compact_table()
-        for _, header in key_map:
+        for _, header, _ in key_map:
             factor_table.add_column(header, justify="right")
+        factor_table.add_column("Flags")
         factor_table.add_row(
-            *[str(round(breakdown.get(key, 0))) for key, _ in key_map]
+            *(
+                (f"{breakdown[key]:.0f}%" if is_pct else str(round(breakdown[key])))
+                if key in breakdown else "-"
+                for key, _, is_pct in key_map
+            ),
+            " ".join(_flag_abbr.get(f, f[:3]) for f in active_flags) or "-",
         )
         items.append(factor_table)
 
@@ -1037,61 +1046,53 @@ def print_swing_output(
             style="dim",
         ))
         breakdown = getattr(sa, "breakdown_dict", None) or {}
+        active_flags = getattr(signal_assessment, "active_flags", ())
+        flag_adj = getattr(signal_assessment, "flag_adjustment", 0)
+        raw_score = getattr(signal_assessment, "raw_group_score", None)
+        conf = getattr(signal_assessment, "evidence_confidence", None)
         if breakdown:
-            _factor_labels = {
-                "bandar_intensity": "Bandar Intensity",
-                "foreign_flow_quality": "Foreign Flow Quality",
-                "insider_activity": "Insider Activity",
-                "seasonality_edge": "Seasonality Edge",
-                "analyst_consensus": "Analyst Consensus",
-                "forward_valuation": "Forward Valuation",
+            _group_labels = {
+                "setup_quality_group": "Setup Quality",
+                "flow_confirmation_group": "Flow Confirmation",
+                "evidence_confidence": "Evidence Confidence",
+                "flag_adjustment": "Flag Adjustment",
             }
-            _factor_rationale_labels = {
-                "bandar_intensity": "Bandar accumulation",
-                "foreign_flow_quality": "Foreign flow",
-                "insider_activity": "Insider activity",
-                "seasonality_edge": "Seasonal edge",
-                "analyst_consensus": "Analyst consensus",
-                "forward_valuation": "Forward valuation",
-            }
-            _rationale_by_label = {
-                line.split(":", 1)[0]: line
-                for line in sa.rationale
-                if ":" in line
+            _group_sources = {
+                "setup_quality_group": "SetupEvidence.match_strength (MATCH=100, PARTIAL=60, NO_MATCH=20)",
+                "flow_confirmation_group": "FlowConfirmationEvidence.capped_strength × 100",
+                "evidence_confidence": "present weight / total weight (60% Setup + 40% Flow)",
+                "flag_adjustment": "sum of active flag penalties",
             }
             bd_table = compact_table()
-            bd_table.add_column("Factor")
-            bd_table.add_column("Score", justify="right")
+            bd_table.add_column("Group")
+            bd_table.add_column("Value", justify="right")
             bd_table.add_column("Source", style="dim")
-            for _factor, _score in breakdown.items():
-                _source = ""
-                _label = _factor_labels.get(_factor, _factor)
-                _rationale = _rationale_by_label.get(
-                    _factor_rationale_labels.get(_factor, _label)
-                )
-                if _rationale and "no data (neutral 50)" in _rationale:
-                    _source = "missing data -> neutral 50"
-                if _factor == "foreign_flow_quality" and accum is not None:
-                    _source = (
-                        f"Composite foreign-flow score {accum.foreign_flow_score:.1f}/120 -> {_score:.1f}/100"
-                    )
-                elif _score == 50.0 and not _source:
-                    if _factor == "insider_activity":
-                        _source = "neutral: no net insider buy/sell"
-                    elif _factor == "seasonality_edge":
-                        _source = "neutral seasonal edge"
-                    elif _factor == "analyst_consensus":
-                        _source = "mixed analyst signal"
-                    elif _factor == "forward_valuation":
-                        _source = "neutral valuation"
-                    else:
-                        _source = "neutral score"
-                bd_table.add_row(
-                    _label,
-                    f"{_score:.1f}",
-                    _source,
-                )
+            for _key, _val in breakdown.items():
+                _label = _group_labels.get(_key, _key)
+                _source = _group_sources.get(_key, "")
+                if _key == "evidence_confidence":
+                    bd_table.add_row(_label, f"{_val:.0f}%", _source)
+                else:
+                    bd_table.add_row(_label, f"{_val:.1f}", _source)
             signal_text.append(bd_table)
+        if active_flags:
+            _flag_names = {
+                "VALUATION_STRETCHED": f"VALUATION_STRETCHED ({flag_adj:+d} pts total)",
+                "ANALYST_BEARISH": "ANALYST_BEARISH",
+                "INSIDER_SELLING": "INSIDER_SELLING",
+            }
+            flag_detail = ", ".join(_flag_names.get(f, f) for f in active_flags)
+            signal_text.append(Text(f"  Flags: {flag_detail}", style="dim yellow"))
+        if raw_score is not None and flag_adj != 0:
+            signal_text.append(Text(
+                f"  Raw group score {raw_score} + flag adjustment {flag_adj:+d} = {sa.score}",
+                style="dim",
+            ))
+        if conf is not None:
+            signal_text.append(Text(
+                f"  Evidence confidence: {conf:.0%} of scoring weight covered",
+                style="dim",
+            ))
         for line in sa.rationale[-3:]:
             signal_text.append(Text(f"  {line}", style="dim"))
         if signal_assessment.coverage_warning:
