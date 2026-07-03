@@ -58,6 +58,44 @@ def _resolve_signal_weights(cfg: dict) -> dict[str, float] | None:
     return {name: w / total for name, w in active.items()}
 
 
+def _resolve_signal_raw_weights(cfg: dict) -> dict[str, float] | None:
+    """
+    Return raw configured factor weights (before renormalization) for enabled factors.
+
+    Mirrors _resolve_signal_weights but skips the renormalization step so callers
+    (e.g. the signal-audit observability command) can display the weights exactly
+    as authored in signal_engine.yaml. Returns None when config is absent/empty.
+    """
+    factors = cfg.get("signal_engine", {}).get("factors", {})
+    active = {
+        name: data["weight"]
+        for name, data in factors.items()
+        if data.get("enabled", True)
+    }
+    return active or None
+
+
+def load_signal_weight_tables():
+    """
+    Load (active_weights, raw_weights, config) for signal-audit observability.
+
+    active_weights: renormalized weights actually used by the current engine.
+    raw_weights:    raw configured weights from YAML (pre-renormalization).
+    config:         resolved SignalEngineConfig.
+
+    Falls back to AssessSignalUseCase._DEFAULT_WEIGHTS when config is absent so the
+    audit reflects the same weights the production engine would use.
+    """
+    from src.application.use_case.assess_signal_use_case import _DEFAULT_WEIGHTS
+    from src.infrastructure.config.app_config import APP_CFG
+
+    cfg = _load_engine_config(Path(APP_CFG.config_paths.signal_engine))
+    active = _resolve_signal_weights(cfg) or dict(_DEFAULT_WEIGHTS)
+    raw = _resolve_signal_raw_weights(cfg) or dict(_DEFAULT_WEIGHTS)
+    signal_config = _resolve_signal_config(cfg)
+    return active, raw, signal_config
+
+
 def _resolve_signal_config(cfg: dict):
     from src.application.use_case.assess_signal_use_case import (
         ForeignFlowScoreMappingConfig,

@@ -315,6 +315,7 @@ from src.adapters.cli.analyze_sentiment_commands import sentiment as _sentiment_
 from src.adapters.cli.analyze_sentiment_commands import sentiment_audit as _sentiment_audit_fn
 from src.adapters.cli.analyze_swing_commands import swing as _swing_fn
 from src.adapters.cli.analyze_swing_commands import swing_compare as _swing_compare_fn
+from src.adapters.cli.analyze_signal_commands import signal_audit as _signal_audit_fn
 
 analyze_app.command("sentiment")(_sentiment_fn)
 analyze_app.command("audit")(_sentiment_audit_fn)
@@ -322,3 +323,4 @@ analyze_app.command("regime")(_regime_fn)
 analyze_app.command("swing")(_swing_fn)
 analyze_app.command("accum-audit")(_accumulation_audit_fn)
 analyze_app.command("swing-compare")(_swing_compare_fn)
+analyze_app.command("signal-audit")(_signal_audit_fn)

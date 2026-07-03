@@ -108,6 +108,20 @@ class SignalEngine:
         )
         return _apply_market_context(response, market_context, self._config)
 
+    def build_context(
+        self, ticker: str, as_of_date: date | None = None
+    ) -> SignalContext:
+        """Public accessor for the enrichment SignalContext (observability path).
+
+        Used by AuditSignalUseCase / signal-audit CLI to inspect the exact inputs
+        that feed the composite score without re-implementing provider wiring.
+        Does not affect scoring.
+        """
+        ctx = self._build_signal_context(ticker)
+        if as_of_date is not None:
+            ctx = replace(ctx, snapshot_date=as_of_date)
+        return ctx
+
     def evaluate_with_context(
         self,
         ticker: str,
