@@ -13,6 +13,8 @@ Layer: Application
 Depends on: Domain ports only — no infrastructure imports
 """
 
+from __future__ import annotations
+
 import logging
 from dataclasses import dataclass, field
 from datetime import date, datetime
@@ -38,6 +40,7 @@ if TYPE_CHECKING:
     from src.domain.value_objects.seasonal_edge import SeasonalEdge
     from src.domain.value_objects.shareholding_composition import ShareholdingComposition
     from src.domain.value_objects.ticker_notation import TickerNotationSnapshot
+    from src.domain.value_objects.flow_confirmation_evidence import FlowConfirmationEvidence
     from src.domain.value_objects.trade_setup import TradeSetup
 
 from src.application.ports.corporate_action_repository import CorporateActionRepository
@@ -414,11 +417,17 @@ def _screen_sort_key(candidate: "AccumulationCandidate") -> tuple[float, float, 
 def _candidate_observation_payload(
     candidate: "AccumulationCandidate",
     *,
+    screen_result: str,
+    flow_ev: "FlowConfirmationEvidence | None",
     snapshot_date: date,
     captured_at: datetime,
     request: "AccumulationScreenRequest",
 ) -> dict:
-    """Build schema-versioned replay payload for one screened candidate."""
+    """Build schema-versioned replay payload for one screened candidate.
+
+    screen_result: "pass" | "rejected_flow" | "rejected_signal"
+    flow_ev: FlowConfirmationEvidence used as signal input; None if builder failed.
+    """
     signal = candidate.signal_assessment
     signal_payload = None
     if signal is not None:
@@ -429,6 +438,7 @@ def _candidate_observation_payload(
             "active_flags": list(signal.active_flags),
             "flag_adjustment": signal.flag_adjustment,
             "raw_group_score": signal.raw_group_score,
+            "flow_evidence": flow_ev.to_dict() if flow_ev is not None else None,
         }
 
     return {
@@ -438,6 +448,7 @@ def _candidate_observation_payload(
         "snapshot_date": snapshot_date.isoformat(),
         "captured_at": captured_at.isoformat(),
         "workflow": "screen_accum",
+        "screen_result": screen_result,
         "request": {
             "window_days": request.window_days,
             "min_net_buy_days": request.min_net_buy_days,
@@ -511,6 +522,10 @@ class AccumulationScreenUseCase:
     def execute(self, request: AccumulationScreenRequest) -> AccumulationScreenResponse:
         today = request.as_of_date or date.today()
         candidates: list[AccumulationCandidate] = []
+        # Collects (candidate, screen_result, flow_ev) for ALL evaluated tickers —
+        # both survivors and filtered-out. Rejected records are negative samples
+        # for future tuning (Phase 7 goal: "rejected candidates become learnable").
+        all_results: list[tuple[AccumulationCandidate, str, FlowConfirmationEvidence | None]] = []
         skipped = 0
         uses_stockbit = False
 
@@ -739,6 +754,7 @@ class AccumulationScreenUseCase:
                 request.min_foreign_flow_score_enabled
                 and result.foreign_flow_score < request.min_foreign_flow_score
             ):
+                all_results.append((result, "rejected_flow", _flow_ev))
                 continue
             if (
                 request.min_signal_score_enabled
@@ -747,7 +763,9 @@ class AccumulationScreenUseCase:
                     or result.signal_assessment.assessment.score < request.min_signal_score
                 )
             ):
+                all_results.append((result, "rejected_signal", _flow_ev))
                 continue
+            all_results.append((result, "pass", _flow_ev))
             candidates.append(result)
 
         # Phase 3.2: sector breadth post-processing pass
@@ -761,7 +779,7 @@ class AccumulationScreenUseCase:
             self._run_risk_funnel(candidates, today)
 
         candidates.sort(key=_screen_sort_key, reverse=True)
-        self._persist_candidate_observations(candidates, today, request)
+        self._persist_candidate_observations(all_results, today, request)
 
         return AccumulationScreenResponse(
             candidates=candidates,
@@ -774,11 +792,11 @@ class AccumulationScreenUseCase:
 
     def _persist_candidate_observations(
         self,
-        candidates: list[AccumulationCandidate],
+        all_results: list[tuple[AccumulationCandidate, str, FlowConfirmationEvidence | None]],
         snapshot_date: date,
         request: AccumulationScreenRequest,
     ) -> None:
-        if self._candidate_observations_repo is None or not candidates:
+        if self._candidate_observations_repo is None or not all_results:
             return
         try:
             captured_at = datetime.now()
@@ -789,12 +807,14 @@ class AccumulationScreenUseCase:
                     captured_at=captured_at,
                     payload=_candidate_observation_payload(
                         c,
+                        screen_result=screen_result,
+                        flow_ev=flow_ev,
                         snapshot_date=snapshot_date,
                         captured_at=captured_at,
                         request=request,
                     ),
                 )
-                for c in candidates
+                for c, screen_result, flow_ev in all_results
             ]
             self._candidate_observations_repo.save_many(observations)
         except Exception as exc:

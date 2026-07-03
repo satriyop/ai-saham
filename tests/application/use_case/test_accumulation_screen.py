@@ -1033,6 +1033,48 @@ def test_screen_persists_candidate_observations_when_repo_injected():
     assert payload["schema_version"] == 1
     assert payload["artifact_type"] == "candidate_observation"
     assert payload["ticker"] == "BBCA"
+    assert payload["screen_result"] == "pass"
+    # flow_evidence key must be present inside signal (None when no signal engine;
+    # the key itself must exist so replay consumers don't need to special-case)
+    assert "flow_evidence" in (payload.get("signal") or {})
+
+
+def test_screen_persists_rejected_candidates_with_filter_outcome():
+    """Candidates rejected by min_foreign_flow_score are still persisted as
+    negative samples for future tuning."""
+    session_dates = _weekdays(date(2026, 1, 1), 7)
+    as_of = session_dates[-1]
+    candles = [
+        _candle("BBCA", date(2025, 12, 1) + timedelta(days=i), Decimal("100")) for i in range(45)
+    ]
+    summaries = [_summary("BBCA", day, Decimal("110")) for day in session_dates]
+
+    spy_repo = SpyCandidateObservationsRepository()
+    use_case = AccumulationScreenUseCase(
+        broker_repository=MockBrokerRepository(summaries),
+        market_repository=MockMarketRepository(candles),
+        candidate_observations_repository=spy_repo,
+    )
+
+    response = use_case.execute(
+        AccumulationScreenRequest(
+            tickers=["BBCA"],
+            window_days=7,
+            min_net_buy_days=1,
+            as_of_date=as_of,
+            min_foreign_flow_score=9999.0,  # impossible threshold — all rejected
+            min_foreign_flow_score_enabled=True,
+        )
+    )
+
+    # No survivors — rejected by flow score threshold
+    assert len(response.candidates) == 0
+    # Rejected candidate still persisted as a learnable negative sample
+    assert len(spy_repo.saved) == 1
+    payload = spy_repo.saved[0].payload
+    assert payload["screen_result"] == "rejected_flow"
+    assert payload["ticker"] == "BBCA"
+    assert payload["schema_version"] == 1
 
 
 def test_screen_result_returned_even_when_persistence_fails():
