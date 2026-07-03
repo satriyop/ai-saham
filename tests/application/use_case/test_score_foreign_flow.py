@@ -27,14 +27,16 @@ def test_score_foreign_flow_matches_legacy_breakdown_shape():
     )
 
     evidence = resp.evidence
-    assert evidence.foreign_flow_score == 120.0
+    # bb_squeeze is disabled by default (Phase 3): "bb" key remains with 0.0,
+    # dropping the legacy total from 120.0 to 114.0.
+    assert evidence.foreign_flow_score == 114.0
     assert evidence.breakdown_dict == {
         "cons": 40.0,
         "streak": 19.0,
         "vwap": 20.0,
         "rsi": 10.0,
         "flow": 10.0,
-        "bb": 10.0,
+        "bb": 0.0,
         "inst": 15.0,
     }
 

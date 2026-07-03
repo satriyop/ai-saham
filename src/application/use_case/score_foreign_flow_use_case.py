@@ -69,7 +69,7 @@ class ForeignFlowScorePolicy:
         default_factory=lambda: LinearSaturationPolicy(weight=10.0, saturate_at=20.0)
     )
     bb_squeeze: BollingerSqueezePolicy = field(
-        default_factory=lambda: BollingerSqueezePolicy(weight=10.0)
+        default_factory=lambda: BollingerSqueezePolicy(enabled=False, weight=10.0)
     )
     bci: BciEvidencePolicy = field(default_factory=BciEvidencePolicy)
 

@@ -15,7 +15,7 @@ This file is the canonical phase-by-phase state for the SignalEngine staged-evid
 | 0 | Baseline & Evidence Audit | ✅ Done | see Phase 0 detail |
 | 1 | Evidence Objects Beside Current Scores | ✅ Done | see Phase 1 detail |
 | 2 | Setup Evidence Contract | ✅ Done | see Phase 2 detail |
-| 3 | Flow Confirmation Group | 🔲 Not Started | — |
+| 3 | Flow Confirmation Group | ✅ Done | see Phase 3 detail |
 | 4 | Replace Signal Aggregator | 🔲 Not Started | — |
 | 5 | Regime-Conditional Signal Interpretation | 🔲 Not Started | — |
 | 6 | Confidence-Aware Classification | 🔲 Not Started | — |
@@ -177,36 +177,38 @@ This file is the canonical phase-by-phase state for the SignalEngine staged-evid
 
 **Goal:** Reduce double-counting across related smart-money signals. Resolve BB compression location permanently.
 
-**Status:** 🔲 Not Started
+**Status:** ✅ Done — 2205 tests pass (17 new), BB disabled in flow score
 
 ### Dependencies
 
-- Phase 1 complete (`FactorEvidence` available)
+- Phase 1 complete ✅
 
 ### Sub-steps
 
-- [ ] 3.1 Add `FlowConfirmationEvidence` value object — sub-evidence: foreign consistency, foreign streak, foreign flow ratio, foreign VWAP discount, BCI, bandar broad score, smart/noise broker share
-- [ ] 3.2 Add `FlowConfirmationEvidenceBuilder` application service — groups sub-evidence, applies internal caps
-- [ ] 3.3 **BB compression removal**: remove `bb_squeeze` from scored weight in `src/application/use_case/score_foreign_flow_use_case.py`. BB evidence may remain visible in flow breakdown for diagnostics but must not add scored weight.
-- [ ] 3.4 Implement internal group cap so correlated broker/flow inputs cannot each vote as independent full-strength signals
-- [ ] 3.5 Unit tests proving BB is counted in only one configured group at a time
+- [x] 3.1 Add `FlowConfirmationEvidence` value object — sub-evidence: foreign consistency, foreign streak, foreign flow ratio, foreign VWAP discount, BCI, bandar broad score, smart/noise broker share
+- [x] 3.2 Add `FlowConfirmationEvidenceBuilder` application service — groups sub-evidence, applies internal cap (default 0.80)
+- [x] 3.3 **BB compression removal**: `bb_squeeze` default changed to `enabled=False` in `BollingerSqueezePolicy`. "bb" key still emitted at 0.0 in breakdown (re-enablable via explicit policy). Previous composite score 120 → 114 for max-squeeze inputs.
+- [x] 3.4 Group cap applied: `capped_strength = min(uncapped_strength, group_cap)`. Uncapped = average of flow_strength + bandar_strength (when both present), else flow_strength alone.
+- [x] 3.5 6 tests proving BB excluded from scored weight even at maximum squeeze. 11 builder tests covering sub-signal extraction, BB/RSI exclusion, bandar direction mapping, group cap, to_dict()
 
-### Files To Create/Modify
+### Files Created/Modified
 
 | Action | File |
 |--------|------|
-| New | `src/domain/value_objects/flow_confirmation_evidence.py` |
-| New | `src/application/services/flow_confirmation_evidence_builder.py` |
-| Modify | `src/application/use_case/score_foreign_flow_use_case.py` — remove `bb_squeeze` from scored contribution |
-| New | `tests/application/services/test_flow_confirmation_evidence_builder.py` |
-| New | `tests/application/use_case/test_score_foreign_flow_bb_exclusion.py` |
+| New | `src/domain/value_objects/flow_confirmation_evidence.py` — `FlowSubSignal` + `FlowConfirmationEvidence` frozen dataclasses |
+| New | `src/application/services/flow_confirmation_evidence_builder.py` — builder with BB/RSI exclusion and group cap |
+| Modify | `src/application/use_case/score_foreign_flow_use_case.py` — `bb_squeeze` default `enabled=False` |
+| Modify | `tests/application/use_case/test_score_foreign_flow.py` — expected "bb": 0.0, total: 114.0 |
+| New | `tests/application/services/test_flow_confirmation_evidence_builder.py` (11 tests) |
+| New | `tests/application/use_case/test_score_foreign_flow_bb_exclusion.py` (6 tests) |
 
-### Verify
+### Key Design Notes
 
-- Foreign-flow score breakdown remains visible as sub-evidence.
-- Bandar evidence visible as sub-evidence.
-- Tests prove BB compression counted in only one group.
-- No scoring changes to existing `AssessSignalUseCase` flat path (Phase 4 replaces it).
+- BB belongs in `SetupEvidence` (price structure). RSI is price-action, not broker flow. Both excluded from `FlowConfirmationEvidence`.
+- Flow sub-signal keys: cons, streak, vwap, flow, inst (5 of 7 breakdown keys).
+- Group cap 0.80: prevents bandar + foreign flow from each contributing a full independent vote in Phase 4 aggregator.
+- `FlowConfirmationEvidence` is diagnostic-only in Phase 3. Phase 4 uses `capped_strength` as scored group input.
+- `bb_squeeze` re-enablable via explicit `BollingerSqueezePolicy(enabled=True)` for callers that need legacy behaviour.
 
 ---
 
@@ -422,4 +424,5 @@ _Append decisions, blockers, or scope changes here as they come up._
 | 2026-07-03 | Design rationale and phase plan vetted across multiple rounds. Both docs finalized. Tracker created. |
 | 2026-07-03 | Phase 0 complete. `saham analyze signal-audit BBCA --coverage` works end-to-end. 2157 tests pass. Key finding: `foreign_flow_quality` is always None in `SignalEngine.evaluate()` self-fetch path — no ForeignFlowProvider is injected. Screener path (signal_context_builder.py) is fine. Gap is now visible in audit output. |
 | 2026-07-03 | Phase 1 complete. `FactorEvidence`/`SignalEvidence` domain objects + `SignalEvidenceBuilder` + `seasonality_total_years` threading. 2175 tests pass (after review fixes). No scoring changes, no CLI changes. Phase 2 and Phase 3 both unblocked. |
-| 2026-07-03 | Phase 2 complete. `SetupEvidence` domain VO + `SetupEvidenceBuilder` + wired into `SwingEvidence`. 2186 tests pass (11 new). RS sub-signal date-gated at 2025-07-01; volume sub-signal source-gated to stockbit. RS/volume currently MISSING (no candle query infra yet). |
+| 2026-07-03 | Phase 2 complete. `SetupEvidence` domain VO + `SetupEvidenceBuilder` + wired into `SwingEvidence`. 2188 tests pass (13 new, after review cleanup). RS sub-signal date-gated at 2025-07-01; volume sub-signal source-gated to stockbit. RS/volume currently MISSING (no candle query infra yet). |
+| 2026-07-03 | Phase 3 complete. `FlowConfirmationEvidence` + builder. BB disabled by default in `ScoreForeignFlowUseCase` (key retained at 0.0). Group cap 0.80 applied to bandar+flow aggregate. 2205 tests pass (17 new). `FlowConfirmationEvidence` diagnostic-only; Phase 4 will use `capped_strength`. |
