@@ -969,7 +969,7 @@ def print_column_guide() -> None:
     guide_table.add_row(
         "BB%ILE",
         "≤ 20% (green)\n21-40% (yellow)\n> 40%",
-        "Bollinger Band width percentile vs last 60 days.\n- ≤ 20%: Squeeze (coiled spring, volatility compressed, ready to break).\nScoring: bottom 20th pctile earns 5–10 pts."
+        "Bollinger Band width percentile vs last 60 days.\n- ≤ 20%: Squeeze (coiled spring, volatility compressed, ready to break).\nNot scored in default foreign-flow score (setup/structure evidence only)."
     )
     guide_table.add_row(
         "TREND",
@@ -984,7 +984,7 @@ def print_column_guide() -> None:
     guide_table.add_row(
         "EVIDENCE PTS",
         "cons / streak / vwap\nrsi / flow / bb / inst",
-        "Foreign-flow score components: cons (40 pts), streak (30 pts), vwap (20 pts), rsi (10 pts), flow (10 pts), bb (10 pts), inst (15 pts BCI)."
+        "Foreign-flow score components: cons (40 pts), streak (30 pts), vwap (20 pts), rsi (10 pts), flow (10 pts), inst (15 pts BCI). bb shown diagnostically — not scored by default."
     )
 
     checklist_text = Text(

@@ -3,13 +3,18 @@
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
+from src.application.services.flow_confirmation_evidence_builder import (
+    FlowConfirmationEvidenceBuilder,
+)
 from src.application.use_case.swing_analysis_workflow_use_case import (
     SwingAnalysisDataUnavailable,
     SwingAnalysisWorkflowRequest,
     SwingAnalysisWorkflowUseCase,
+    SwingEvidence,
 )
 from src.domain.entities.candle import Candle
 
@@ -335,3 +340,66 @@ def test_swing_workflow_canonical_trade_setup_unaffected_by_market_context():
         response_with_mce.verdict.market_context_trade_setup_preview
         is response_with_mce.market_context_trade_setup_preview
     )
+
+
+# ─── SwingEvidence.to_dict() regression ───────────────────────────────────────
+
+def test_swing_evidence_to_dict_includes_flow_confirmation_evidence():
+    """flow_confirmation_evidence must appear in serialized workflow output."""
+    candidate = SimpleNamespace(
+        ticker="BBCA",
+        foreign_flow_evidence=SimpleNamespace(
+            component_breakdown=(
+                ("cons", 40.0), ("streak", 19.0), ("vwap", 20.0),
+                ("rsi", 10.0), ("flow", 10.0), ("bb", 0.0), ("inst", 15.0),
+            ),
+            confirmation_status="CONFIRMED",
+            flow_direction="POSITIVE",
+        ),
+        bandar_detector=None,
+        bci_label="CLUSTER",
+        bci_tier1_count=3,
+        latest_candle_date=date(2026, 6, 25),
+    )
+    flow_ev = FlowConfirmationEvidenceBuilder().build(candidate, analysis_date=date(2026, 6, 25))
+    evidence = SwingEvidence(
+        accumulation_candidate=None,
+        setup_eval=None,
+        backtest_result=None,
+        sentiment_response=None,
+        sentiment_warning=None,
+        take_profit_pct=Decimal("0.05"),
+        stop_loss_pct=Decimal("0.03"),
+        regime_label=None,
+        flow_confirmation_evidence=flow_ev,
+    )
+
+    d = evidence.to_dict()
+
+    assert "flow_confirmation_evidence" in d
+    fc = d["flow_confirmation_evidence"]
+    assert fc is not None
+    assert fc["ticker"] == "BBCA"
+    assert fc["confirmation_status"] == "CONFIRMED"
+    assert fc["flow_direction"] == "POSITIVE"
+    assert isinstance(fc["flow_signals"], list)
+    assert all(s["key"] not in ("bb", "rsi") for s in fc["flow_signals"])
+
+
+def test_swing_evidence_to_dict_flow_confirmation_none_when_not_built():
+    """flow_confirmation_evidence key is present but None when builder not called."""
+    evidence = SwingEvidence(
+        accumulation_candidate=None,
+        setup_eval=None,
+        backtest_result=None,
+        sentiment_response=None,
+        sentiment_warning=None,
+        take_profit_pct=Decimal("0.05"),
+        stop_loss_pct=Decimal("0.03"),
+        regime_label=None,
+    )
+
+    d = evidence.to_dict()
+
+    assert "flow_confirmation_evidence" in d
+    assert d["flow_confirmation_evidence"] is None
