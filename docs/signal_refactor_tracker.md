@@ -14,7 +14,7 @@ This file is the canonical phase-by-phase state for the SignalEngine staged-evid
 |---|-------|--------|---------------|
 | 0 | Baseline & Evidence Audit | ✅ Done | see Phase 0 detail |
 | 1 | Evidence Objects Beside Current Scores | ✅ Done | see Phase 1 detail |
-| 2 | Setup Evidence Contract | 🔲 Not Started | — |
+| 2 | Setup Evidence Contract | ✅ Done | see Phase 2 detail |
 | 3 | Flow Confirmation Group | 🔲 Not Started | — |
 | 4 | Replace Signal Aggregator | 🔲 Not Started | — |
 | 5 | Regime-Conditional Signal Interpretation | 🔲 Not Started | — |
@@ -127,30 +127,37 @@ This file is the canonical phase-by-phase state for the SignalEngine staged-evid
 
 **Goal:** Make setup/timing structure visible to the signal layer without duplicating setup policy or changing scores.
 
-**Status:** 🔲 Not Started
+**Status:** ✅ Done — 2186 tests pass (11 new), zero scoring changes
 
 ### Dependencies
 
-- Phase 1 complete (`FactorEvidence`, `SignalEvidence` domain objects exist)
+- Phase 1 complete ✅
 
 ### Sub-steps
 
-- [ ] 2.1 Add `SetupEvidence` value object to domain — wraps: trend, rsi, bb_width_pctile, vwap_discount_pct, vwap_pct, setup_match, rs_vs_ihsg, volume_trend
-- [ ] 2.2 Add `SetupEvidenceBuilder` application service — consumes `AccumulationCandidate` + `SetupEvaluation`, emits `SetupEvidence`
-- [ ] 2.3 Add SetupMatch → evidence strength translation in builder only (MATCH → 100, PARTIAL → 60, NO_MATCH → 20). Do not modify `EvaluateSwingSetupUseCase`.
-- [ ] 2.4 Add 5-session price RS vs canonical `IHSG` sub-signal — **date-gate: IHSG candles only available from 2025-07-01**; emit `freshness: missing` when IHSG window is incomplete
-- [ ] 2.5 Add 5-session vs 20-session volume trend sub-signal — Stockbit candles get normal confidence; Yahoo/`yahoo_inferred` get `source: yahoo` confidence penalty or remain `freshness: missing`
-- [ ] 2.6 Expose `SetupEvidence` in the swing analysis or screen application response/diagnostic builder — not in `SignalEngine`. `SignalEngine` does not consume setup evidence until Phase 4 when the replacement aggregator exists.
-- [ ] 2.7 Unit tests — setup gate tests remain authoritative; setup evidence appears only when source data is present
+- [x] 2.1 Add `SetupEvidence` value object to domain — wraps: trend, rsi, bb_width_pctile, vwap_discount_pct, vwap_pct, setup_match, rs_vs_ihsg, volume_trend
+- [x] 2.2 Add `SetupEvidenceBuilder` application service — consumes `AccumulationCandidate` + `SetupEvaluation`, emits `SetupEvidence`
+- [x] 2.3 Add SetupMatch → evidence strength translation in builder only (MATCH → 100.0, PARTIAL → 60.0, NO_MATCH → 20.0). `EvaluateSwingSetupUseCase` untouched.
+- [x] 2.4 RS vs IHSG date-gate: `_IHSG_AVAILABLE_FROM = 2025-07-01`; before that date or when rs_vs_ihsg_5d=None → freshness=MISSING, value=None
+- [x] 2.5 Volume trend source-gate: candle_source="stockbit" → FRESH; "yahoo"/"yahoo_inferred" → MISSING, value=None
+- [x] 2.6 `SwingEvidence.setup_evidence: SetupEvidence | None` added (default None); `SetupEvidenceBuilder` wired in swing workflow `execute()`, guarded on candidate+setup_eval presence, wrapped in try/except
+- [x] 2.7 11 unit tests: match translation, RS date-gate (before/after cutoff), volume source-gating, technical field threading, bb_width_pctile bounds
 
-### Files To Create/Modify
+### Files Created/Modified
 
 | Action | File |
 |--------|------|
-| New | `src/domain/value_objects/setup_evidence.py` |
-| New | `src/application/services/setup_evidence_builder.py` |
-| Modify | Swing analysis or screen application response/diagnostic builder — include `SetupEvidence` in output. Do not modify `signal_engine.py`. |
-| New | `tests/application/services/test_setup_evidence_builder.py` |
+| New | `src/domain/value_objects/setup_evidence.py` — `SetupEvidence` frozen dataclass with `__post_init__` validation |
+| New | `src/application/services/setup_evidence_builder.py` — `SetupEvidenceBuilder.build()` with RS date-gate and volume source-gate |
+| Modify | `src/application/use_case/swing_analysis_workflow_use_case.py` — `setup_evidence` field added to `SwingEvidence`; builder wired into `execute()` |
+| New | `tests/application/services/test_setup_evidence_builder.py` (11 tests) |
+
+### Key Design Notes
+
+- RS vs IHSG: `_IHSG_AVAILABLE_FROM = date(2025, 7, 1)`. MISSING enforces `rs_vs_ihsg_5d = None` (no partial RS).
+- Volume: only `candle_source == "stockbit"` → FRESH. Yahoo IDX volume is frequently 0 or synthetic.
+- RS and volume sub-signals currently passed as None to builder (emit MISSING). Populated in a future follow-up when candle query infrastructure is available.
+- `EvaluateSwingSetupUseCase` and `config/swing_setups.yaml` untouched.
 
 ### Key Design Notes
 
@@ -414,4 +421,5 @@ _Append decisions, blockers, or scope changes here as they come up._
 |------|------|
 | 2026-07-03 | Design rationale and phase plan vetted across multiple rounds. Both docs finalized. Tracker created. |
 | 2026-07-03 | Phase 0 complete. `saham analyze signal-audit BBCA --coverage` works end-to-end. 2157 tests pass. Key finding: `foreign_flow_quality` is always None in `SignalEngine.evaluate()` self-fetch path — no ForeignFlowProvider is injected. Screener path (signal_context_builder.py) is fine. Gap is now visible in audit output. |
-| 2026-07-03 | Phase 1 complete. `FactorEvidence`/`SignalEvidence` domain objects + `SignalEvidenceBuilder` + `seasonality_total_years` threading. 2173 tests pass (16 new). No scoring changes, no CLI changes. Phase 2 and Phase 3 are now both unblocked (both depend only on Phase 1). |
+| 2026-07-03 | Phase 1 complete. `FactorEvidence`/`SignalEvidence` domain objects + `SignalEvidenceBuilder` + `seasonality_total_years` threading. 2175 tests pass (after review fixes). No scoring changes, no CLI changes. Phase 2 and Phase 3 both unblocked. |
+| 2026-07-03 | Phase 2 complete. `SetupEvidence` domain VO + `SetupEvidenceBuilder` + wired into `SwingEvidence`. 2186 tests pass (11 new). RS sub-signal date-gated at 2025-07-01; volume sub-signal source-gated to stockbit. RS/volume currently MISSING (no candle query infra yet). |

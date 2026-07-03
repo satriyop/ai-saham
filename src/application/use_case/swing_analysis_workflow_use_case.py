@@ -36,6 +36,7 @@ from src.domain.value_objects.benchmark_symbol import canonicalize_ticker
 
 if TYPE_CHECKING:
     from src.domain.value_objects.market_context import MarketContext
+    from src.domain.value_objects.setup_evidence import SetupEvidence
     from src.domain.value_objects.trade_setup import TradeSetup
 
 
@@ -114,6 +115,7 @@ class SwingEvidence:
     take_profit_pct: Decimal
     stop_loss_pct: Decimal
     regime_label: str | None
+    setup_evidence: "SetupEvidence | None" = None
 
     def to_dict(self, *, strategy_name: str | None = None, max_hold_days: int | None = None) -> dict[str, Any]:
         candidate = self.accumulation_candidate
@@ -165,6 +167,7 @@ class SwingEvidence:
                     if sentiment_resp and not sentiment_resp.warning else None
                 ),
             },
+            "setup_evidence": self.setup_evidence.to_dict() if self.setup_evidence else None,
         }
 
 
@@ -772,6 +775,27 @@ class SwingAnalysisWorkflowUseCase:
             market_context_risk_preview=market_context_risk_preview,
             market_context_trade_setup_preview=market_context_trade_setup_preview,
         )
+        setup_evidence = None
+        if accumulation_candidate is not None and setup_eval is not None:
+            try:
+                from src.application.services.setup_evidence_builder import (
+                    SetupEvidenceBuilder,
+                )
+
+                # RS and volume sub-signals require candle history not
+                # pre-computed here; pass None so the builder emits MISSING.
+                # Populated in a follow-up once candle-query infra exists.
+                setup_evidence = SetupEvidenceBuilder().build(
+                    accumulation_candidate,
+                    setup_eval,
+                    rs_vs_ihsg_5d=None,
+                    volume_trend_ratio=None,
+                    candle_source=None,
+                    analysis_date=request.today,
+                )
+            except Exception as exc:
+                warnings.append(f"Setup evidence unavailable: {exc}")
+
         evidence = SwingEvidence(
             accumulation_candidate=accumulation_candidate,
             setup_eval=setup_eval,
@@ -781,6 +805,7 @@ class SwingAnalysisWorkflowUseCase:
             take_profit_pct=take_profit_pct,
             stop_loss_pct=stop_loss_pct,
             regime_label=regime_label,
+            setup_evidence=setup_evidence,
         )
         diagnostics = SwingDiagnostics(
             data_freshness=data_freshness,
