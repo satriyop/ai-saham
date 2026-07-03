@@ -53,6 +53,8 @@ def build_signal_context_from_candidate(
         insider_net_buy_ratio=getattr(candidate, "insider_net_buy_ratio", None),
         seasonality_win_rate=se.win_rate_pct if se else None,
         seasonality_avg_return_pct=se.avg_monthly_return_pct if se else None,
+        seasonality_total_years=se.total_years if se else None,
+        seasonality_back_years=se.back_years if se else None,
         analyst_buy_pct=ac.buy_ratio if ac else None,
         analyst_upside_pct=ac.upside_pct if ac else None,
         forward_pe=forward_pe,

@@ -86,6 +86,13 @@ class SignalContext:
     # Pre-computed by ForwardEstimates.compute(). None for loss-making companies.
     forward_pe: float | None = None
 
+    seasonality_total_years: int | None = None
+    # Threaded from SeasonalEdge.total_years in signal_context_builder.py.
+    # Required by Phase 6 sample guard (< 5 years → evidence unavailable).
+    seasonality_back_years: int | None = None
+    # Threaded from SeasonalEdge.back_years — the lookback window requested
+    # when fetching (e.g. 5). Preserved in raw_fields for policy replay.
+
 
 @dataclass(frozen=True)
 class SignalAssessment:

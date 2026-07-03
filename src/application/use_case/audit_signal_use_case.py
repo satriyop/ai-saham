@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from src.application.services.signal_evidence_builder import SignalEvidenceBuilder
 from src.application.use_case.assess_signal_use_case import (
     AssessSignalRequest,
     AssessSignalUseCase,
@@ -25,6 +26,7 @@ from src.application.use_case.assess_signal_use_case import (
 )
 from src.domain.value_objects.signal_assessment import SignalContext
 from src.domain.value_objects.signal_audit import SignalAuditEntry, SignalAuditReport
+from src.domain.value_objects.signal_evidence import SignalEvidence
 
 # Canonical factor order (matches config/signal_engine.yaml `factors` block).
 _FACTOR_ORDER: tuple[str, ...] = (
@@ -49,6 +51,7 @@ class AuditSignalRequest:
 @dataclass
 class AuditSignalResponse:
     report: SignalAuditReport
+    evidence: SignalEvidence  # Phase 1 evidence contract alongside the audit report
 
 
 class AuditSignalUseCase:
@@ -110,7 +113,8 @@ class AuditSignalUseCase:
             factors_missing=factors_missing,
             renormalized_score=renormalized_score,
         )
-        return AuditSignalResponse(report=report)
+        evidence = SignalEvidenceBuilder().build(ctx, assessment.breakdown)
+        return AuditSignalResponse(report=report, evidence=evidence)
 
     # ── helpers ───────────────────────────────────────────────────────────────
 
