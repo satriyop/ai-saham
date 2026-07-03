@@ -842,37 +842,45 @@ def _market_context_preview_group(
     regime_label = REGIME_DISPLAY_LABEL.get(market_regime.regime.value, market_regime.regime.value)
     items.append(Text(f"Regime: {regime_label}", style="bold cyan"))
 
-    if canonical_signal is not None and preview_signal is not None:
-        raw_score = canonical_signal.assessment.score
-        preview_score = preview_signal.assessment.score
-        raw_eq = canonical_signal.assessment.entry_quality.value
-        preview_eq = preview_signal.assessment.entry_quality.value
-        if raw_score != preview_score or raw_eq != preview_eq:
-            impact = f"Signal {raw_score:.0f} → {preview_score:.0f}; {raw_eq} would become {preview_eq}"
+    # ADR-037: canonical signal already includes regime conditioning.
+    # preview_signal == canonical_signal — no separate "signal delta" to show.
+    # Regime impact is visible in signal rationale (see --with-signal-detail).
+    if canonical_signal is not None:
+        score = canonical_signal.assessment.score
+        eq = canonical_signal.assessment.entry_quality.value
+        bd_dict = dict(canonical_signal.assessment.breakdown)
+        if bd_dict.get("regime_conditioning"):
+            regime_label_sig = REGIME_DISPLAY_LABEL.get(
+                market_regime.regime.value, market_regime.regime.value
+            )
+            note = f"{regime_label_sig} conditioning applied — score {score:.0f} ({eq})"
+            items.append(Text(f"Signal:         {note}", style="yellow"))
         else:
-            impact = "No signal score change (multiplier=1.0)"
-        items.append(Text(f"Signal impact:  {impact}", style="yellow" if raw_eq != preview_eq else "dim"))
+            items.append(Text(
+                f"Signal:         score {score:.0f} ({eq}) — no regime conditioning fired",
+                style="dim",
+            ))
 
     if canonical_risk is not None and preview_risk is not None:
         raw_gate = canonical_risk.assessment.gate_triggered
         preview_gate = preview_risk.assessment.gate_triggered
         if preview_gate and not raw_gate:
-            items.append(Text(f"Risk impact:    regime gate would trigger ({preview_gate})", style="yellow"))
+            items.append(Text(f"Risk preview:   regime gate would trigger ({preview_gate})", style="yellow"))
         elif preview_gate and raw_gate and preview_gate != raw_gate:
-            items.append(Text(f"Risk impact:    gate upgraded {raw_gate} → {preview_gate}", style="yellow"))
+            items.append(Text(f"Risk preview:   gate upgraded {raw_gate} → {preview_gate}", style="yellow"))
         else:
-            items.append(Text("Risk impact:    no additional gate triggered", style="dim"))
+            items.append(Text("Risk preview:   no additional gate triggered", style="dim"))
 
     canonical_action = canonical_trade_setup.action.value if canonical_trade_setup else "N/A"
     preview_action = preview_trade_setup.action.value
     if canonical_action != preview_action:
         items.append(Text(
-            f"Preview:        TradeSetup would change {canonical_action} → {preview_action}",
+            f"Preview:        TradeSetup risk-preview → {preview_action} (vs canonical {canonical_action})",
             style="bold yellow",
         ))
     else:
-        items.append(Text("Preview:        No action change in preview.", style="dim green"))
-    items.append(Text(f"Final (unchanged): {canonical_action}", style="bold"))
+        items.append(Text("Preview:        No action change under regime-adjusted risk.", style="dim green"))
+    items.append(Text(f"Canonical:      {canonical_action}", style="bold"))
 
     return Group(*items)
 
@@ -973,7 +981,7 @@ def print_swing_output(
             panel(
                 _preview_group,
                 title="MARKET CONTEXT PREVIEW",
-                subtitle="evidence only — does not change final TradeSetup",
+                subtitle="regime conditioning in canonical signal · risk preview via MCE",
             )
         )
 

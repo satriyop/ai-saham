@@ -222,9 +222,16 @@ def test_swing_workflow_preview_fields_are_none_without_market_context():
     assert response.modules["market_context"] is False
 
 
-def test_swing_workflow_canonical_trade_setup_unaffected_by_market_context():
-    """TradeSetup must be identical whether or not MCE is requested."""
-    from dataclasses import replace as dc_replace
+def test_swing_workflow_mce_regime_forwarded_to_signal_engine():
+    """ADR-037: when --with-market-context is enabled, market_regime is forwarded
+    to evaluate_with_context so regime conditioning can be applied canonically.
+
+    Without MCE, market_context=None → no conditioning.
+    With MCE, market_context=market_regime is passed into the signal use case.
+
+    The FakeSignalEngine records calls to verify forwarding. TradeSetup action
+    IS allowed to differ with vs without MCE (ADR-037 supersedes ADR-032).
+    """
     from src.domain.value_objects.market_context import MarketContext, MarketRegime
     from src.domain.value_objects.signal_assessment import SignalAssessment, SignalStrength, EntryQuality
     from src.application.use_case.assess_signal_use_case import AssessSignalResponse
@@ -257,16 +264,16 @@ def test_swing_workflow_canonical_trade_setup_unaffected_by_market_context():
         )
 
     class FakeSignalEngine:
+        received_market_contexts: list = []
+
         def evaluate(self, ticker, as_of_date=None, market_context=None):
+            self.received_market_contexts.append(("evaluate", market_context))
             return _raw_signal_response()
 
-        def evaluate_with_context(self, ticker, signal_context, market_context=None):
+        def evaluate_with_context(self, ticker, signal_context, market_context=None, **kwargs):
+            self.received_market_contexts.append(("evaluate_with_context", market_context))
             return _raw_signal_response()
 
-        # Phase 5: apply_market_context removed — regime now inside use case.
-        # Workflow no longer calls this method; kept as a no-op so existing
-        # tests that reference signal_engine.apply_market_context don't break
-        # if called transitionally.
         def apply_market_context(self, response, market_context):
             return response
 
@@ -305,6 +312,7 @@ def test_swing_workflow_canonical_trade_setup_unaffected_by_market_context():
             from src.application.services.risk_engine import _apply_regime_gate
             return _apply_regime_gate(response, market_context)
 
+    fake_signal = FakeSignalEngine()
     workflow = SwingAnalysisWorkflowUseCase(
         market_repository=FakeMarketRepository([_candle(date(2026, 6, 18))]),
         broker_repository=FakeBrokerRepository(),
@@ -320,22 +328,27 @@ def test_swing_workflow_canonical_trade_setup_unaffected_by_market_context():
         load_swing_config=lambda: {},
         resolve_setup_targets=lambda regime, config: (Decimal("5"), Decimal("5")),
         evaluate_market_context=lambda **kwargs: _RISK_OFF_CONTEXT,
-        signal_engine=FakeSignalEngine(),
+        signal_engine=fake_signal,
         risk_engine=FakeRiskEngine(),
     )
 
-    response_with_mce = workflow.execute(_request(with_market_context=True))
+    fake_signal.received_market_contexts.clear()
     response_without_mce = workflow.execute(_request(with_market_context=False))
-
     assert response_without_mce.market_regime is None
-    assert response_with_mce.market_regime is not None
-
-    assert response_without_mce.trade_setup is not None
-    assert response_with_mce.trade_setup is not None
-    assert response_with_mce.trade_setup.action == response_without_mce.trade_setup.action, (
-        "canonical TradeSetup must be identical regardless of --with-market-context"
+    # Without MCE, signal engine called with market_context=None
+    assert all(ctx is None for (_, ctx) in fake_signal.received_market_contexts), (
+        "no market_context should be passed to signal engine when MCE disabled"
     )
 
+    fake_signal.received_market_contexts.clear()
+    response_with_mce = workflow.execute(_request(with_market_context=True))
+    assert response_with_mce.market_regime is not None
+    # With MCE, signal engine must receive the regime (ADR-037)
+    assert any(ctx is not None for (_, ctx) in fake_signal.received_market_contexts), (
+        "market_context must be forwarded to signal engine when MCE enabled (ADR-037)"
+    )
+
+    # MCE preview infra still populated
     assert response_with_mce.market_context_trade_setup_preview is not None
     assert response_with_mce.market_context_signal_preview is not None
     assert response_with_mce.verdict is not None

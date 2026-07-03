@@ -297,7 +297,15 @@ This file is the canonical phase-by-phase state for the SignalEngine staged-evid
 ### Verify
 
 - All 58 tests in signal_regime_conditioning + swing_analysis_workflow + assess_signal_evidence pass.
-- Full suite regression: pending commit.
+- Full suite 2257 tests pass (commit f361b90).
+
+### Follow-up: ADR-037 compliance fixes (post-review)
+
+Code review identified four issues in Phase 5 commit (f361b90):
+- [x] High: ADR-032 conflict → added ADR-037 to ARCHITECTURE_DECISIONS.md superseding preview-only constraint
+- [x] Medium: workflow test `test_swing_workflow_canonical_trade_setup_unaffected_by_market_context` contradicted Phase 5 → renamed to `test_swing_workflow_mce_regime_forwarded_to_signal_engine`; now verifies market_context is forwarded when MCE enabled
+- [x] Medium: MCE display "Signal impact" comparison showed "No signal score change (multiplier=1.0)" because preview==canonical → replaced with regime-aware "Signal: conditioning applied" message
+- [x] Low/Medium: panel subtitle "evidence only — does not change final TradeSetup" → updated to "regime conditioning in canonical signal · risk preview via MCE"
 
 ---
 
