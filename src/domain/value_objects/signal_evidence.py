@@ -49,8 +49,11 @@ class SignalEvidence:
                 f"got {self.coverage_ratio}"
             )
 
+    SCHEMA_VERSION = 1
+
     def to_dict(self) -> dict:
         return {
+            "schema_version": self.SCHEMA_VERSION,
             "ticker": self.ticker,
             "snapshot_date": self.snapshot_date.isoformat(),
             "factors": [f.to_dict() for f in self.factors],
@@ -63,9 +66,16 @@ class SignalEvidence:
     def from_dict(cls, data: dict) -> "SignalEvidence":
         """Reconstruct from a persisted dict with schema-evolution tolerance.
 
-        Missing optional fields are defaulted safely so older snapshots remain
-        parseable when new fields are added in later phases.
+        Missing optional fields default safely; unknown enum values in nested
+        FactorEvidence records fall back via _safe_enum. Raises ValueError for
+        unsupported major schema versions so callers know to skip or re-fetch.
         """
+        version = data.get("schema_version", 1)
+        if version > cls.SCHEMA_VERSION:
+            raise ValueError(
+                f"SignalEvidence schema_version {version} is not supported "
+                f"(max known: {cls.SCHEMA_VERSION})"
+            )
         return cls(
             ticker=data["ticker"],
             snapshot_date=date.fromisoformat(data["snapshot_date"]),

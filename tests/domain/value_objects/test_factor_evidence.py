@@ -146,3 +146,90 @@ def test_signal_evidence_coverage_ratio_bounds():
             coverage_ratio=0.5,
             missing_factors=(),
         )
+
+
+# ── from_dict / to_dict round-trip and schema-evolution tolerance ─────────────
+
+def test_factor_evidence_round_trip():
+    fe = _factor()
+    assert FactorEvidence.from_dict(fe.to_dict()) == fe
+
+
+def test_factor_evidence_from_dict_unknown_enum_falls_back_to_default():
+    data = _factor().to_dict()
+    data["direction"] = "SIDEWAYS"   # unknown Direction value
+    data["freshness"] = "EXPIRED"    # unknown Freshness value
+    data["horizon"] = "DECADAL"      # unknown Horizon value
+    parsed = FactorEvidence.from_dict(data)
+    assert parsed.direction == Direction.NEUTRAL
+    assert parsed.freshness == Freshness.MISSING
+    assert parsed.horizon == Horizon.DAILY
+
+
+def test_factor_evidence_from_dict_missing_optional_fields():
+    minimal = {"name": "bandar_intensity"}
+    parsed = FactorEvidence.from_dict(minimal)
+    assert parsed.name == "bandar_intensity"
+    assert parsed.strength == 0.0
+    assert parsed.confidence == 0.0
+    assert parsed.rationale == ""
+    assert parsed.raw_fields == ()
+
+
+def test_signal_evidence_round_trip():
+    se = SignalEvidence(
+        ticker="BBCA",
+        snapshot_date=date(2026, 7, 4),
+        factors=(_factor("bandar_intensity"), _factor("foreign_flow_quality")),
+        aggregate_confidence=1.0,
+        coverage_ratio=1.0,
+        missing_factors=(),
+    )
+    restored = SignalEvidence.from_dict(se.to_dict())
+    assert restored.ticker == se.ticker
+    assert restored.snapshot_date == se.snapshot_date
+    assert len(restored.factors) == 2
+    assert restored.factors[0] == se.factors[0]
+    assert restored.aggregate_confidence == se.aggregate_confidence
+    assert restored.coverage_ratio == se.coverage_ratio
+
+
+def test_signal_evidence_to_dict_includes_schema_version():
+    se = SignalEvidence(
+        ticker="BBCA",
+        snapshot_date=date(2026, 7, 4),
+        factors=(),
+        aggregate_confidence=0.0,
+        coverage_ratio=0.0,
+        missing_factors=(),
+    )
+    assert se.to_dict()["schema_version"] == 1
+
+
+def test_signal_evidence_from_dict_rejects_future_schema_version():
+    se = SignalEvidence(
+        ticker="BBCA",
+        snapshot_date=date(2026, 7, 4),
+        factors=(),
+        aggregate_confidence=0.0,
+        coverage_ratio=0.0,
+        missing_factors=(),
+    )
+    payload = se.to_dict()
+    payload["schema_version"] = 99
+    with pytest.raises(ValueError, match="schema_version 99 is not supported"):
+        SignalEvidence.from_dict(payload)
+
+
+def test_signal_evidence_from_dict_missing_optional_fields_default_safely():
+    payload = {
+        "ticker": "BBRI",
+        "snapshot_date": "2026-07-04",
+        # factors, aggregate_confidence, coverage_ratio, missing_factors all absent
+    }
+    se = SignalEvidence.from_dict(payload)
+    assert se.ticker == "BBRI"
+    assert se.factors == ()
+    assert se.aggregate_confidence == 0.0
+    assert se.coverage_ratio == 0.0
+    assert se.missing_factors == ()

@@ -288,6 +288,19 @@ Tasks:
   - avoid CLI crashes when rendering older snapshots
 - Add read path for debugging historical signal decisions.
 
+Implementation note (staged-evidence paths):
+  The screen (`saham screen accum`) uses Phase 4 staged evidence groups
+  (SetupEvidence, FlowConfirmationEvidence) rather than the flat per-factor
+  model that `SignalEvidence` was designed for. Building `SignalEvidence` from
+  Phase 4 group-level breakdown would produce `strength=0.0, direction=BEARISH`
+  for all present factors — materially wrong and unsafe for tuning datasets.
+  Therefore the screen `candidate_observation` payload stores
+  `FlowConfirmationEvidence` (the actual Phase 4 flow group object) as
+  `signal.flow_evidence` rather than a `SignalEvidence` bundle.
+  `SignalEvidence.to_dict()` / `from_dict()` are defined for use in audit and
+  swing-analysis paths where per-factor scores ARE available
+  (`AuditSignalUseCase`, future persistence from the full swing workflow).
+
 Outcomes:
 - Rejected candidates become learnable.
 - Future tuning can evaluate candidate-level evidence, not only completed
