@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from datetime import date, datetime
+from fnmatch import fnmatch
 from pathlib import Path
 from typing import Callable
 
@@ -31,6 +32,7 @@ TargetDirtyChecker = Callable[[Path], bool]
 # step: None means no quantization check.
 # max_shift_per_cycle: maximum absolute change allowed in one tuning cycle.
 _PARAMETER_BOUNDS: tuple[tuple[str, float, float, float | None, float], ...] = (
+    # --- signal_engine paths ---
     ("signal_engine.evidence_groups.setup_quality.weight", 0.05, 1.0, 0.05, 0.10),
     ("signal_engine.evidence_groups.flow_confirmation.weight", 0.05, 1.0, 0.05, 0.10),
     ("signal_engine.flags.valuation_stretched.score_penalty", 0, 25, 1, 5),
@@ -46,15 +48,35 @@ _PARAMETER_BOUNDS: tuple[tuple[str, float, float, float | None, float], ...] = (
     ("signal_engine.regime_conditioning.risk_off.weak_setup_discount", 0.20, 0.80, 0.05, 0.10),
     ("signal_engine.regime_conditioning.volatile.setup_discount", 0.40, 1.0, 0.05, 0.10),
     ("signal_engine.regime_conditioning.volatile.flow_discount", 0.40, 1.0, 0.05, 0.10),
+    # --- swing_setups paths (fnmatch wildcard on setup name) ---
+    ("setups.*.gates.max_bb_width_pctile", 0.05, 0.50, 0.05, 0.10),
+    ("setups.*.gates.max_rsi", 25, 80, 1, 5),
+    ("setups.*.gates.min_rsi", 15, 60, 1, 5),
+    ("setups.*.gates.min_flow_ratio_pct", 0.5, 25.0, 0.5, 2.0),
+    ("setups.*.gates.min_foreign_flow_score", 30, 90, 1, 5),
+    ("setups.*.gates.min_vwap_discount_pct", -5.0, 15.0, 0.5, 1.5),
+    ("setups.*.partial_max_failed_gates", 0, 5, 1, 1),
+    # --- risk_engine gate paths ---
+    ("risk_engine.gates.free_float.min_free_float_pct", 10.0, 25.0, 0.5, 2.0),
+    ("risk_engine.gates.fundamental.piotroski_min", 1, 7, 1, 1),
+    ("risk_engine.gates.liquidity.market_cap_floor_idr", 1e11, 5e12, 1e11, 5e11),
+    ("risk_engine.gates.liquidity.median_tx_floor_idr", 1e9, 5e10, 1e9, 5e9),
 )
 
 
 def _bounds_for_document_path(
     document_path: str,
 ) -> tuple[float, float, float | None, float] | None:
-    """Return (min, max, step, max_shift) if document_path matches a bounds policy."""
+    """Return (min, max, step, max_shift) if document_path matches a bounds policy.
+
+    Patterns containing '*' are matched with fnmatch; others require exact equality.
+    """
     for pattern, lo, hi, step, max_shift in _PARAMETER_BOUNDS:
-        if document_path == pattern:
+        match = (
+            fnmatch(document_path, pattern) if "*" in pattern
+            else document_path == pattern
+        )
+        if match:
             return (lo, hi, step, max_shift)
     return None
 
