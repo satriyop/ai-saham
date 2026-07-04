@@ -17,6 +17,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+from typing import TypeVar
+
+_E = TypeVar("_E")
+
+
+def _safe_enum(enum_cls: type[_E], value: object, default: _E) -> _E:
+    """Return enum member for value, falling back to default for unknown values."""
+    try:
+        return enum_cls(value)  # type: ignore[call-arg]
+    except (ValueError, KeyError):
+        return default
 
 
 class Direction(str, Enum):
@@ -101,3 +112,23 @@ class FactorEvidence:
             "rationale": self.rationale,
             "raw_fields": list(self.raw_fields),
         }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "FactorEvidence":
+        """Reconstruct from a persisted dict with schema-evolution tolerance.
+
+        Unknown enum values fall back to safe defaults so older snapshots render
+        without crashing when new enum variants are added in later phases.
+        """
+        return cls(
+            name=data["name"],
+            group=data.get("group", "unknown"),
+            direction=_safe_enum(Direction, data.get("direction", "NEUTRAL"), Direction.NEUTRAL),
+            strength=float(data.get("strength", 0.0)),
+            confidence=float(data.get("confidence", 0.0)),
+            freshness=_safe_enum(Freshness, data.get("freshness", "MISSING"), Freshness.MISSING),
+            horizon=_safe_enum(Horizon, data.get("horizon", "DAILY"), Horizon.DAILY),
+            source=data.get("source", ""),
+            rationale=data.get("rationale", ""),
+            raw_fields=tuple(tuple(pair) for pair in data.get("raw_fields", [])),
+        )

@@ -41,7 +41,6 @@ if TYPE_CHECKING:
     from src.domain.value_objects.shareholding_composition import ShareholdingComposition
     from src.domain.value_objects.ticker_notation import TickerNotationSnapshot
     from src.domain.value_objects.flow_confirmation_evidence import FlowConfirmationEvidence
-    from src.domain.value_objects.signal_evidence import SignalEvidence
     from src.domain.value_objects.trade_setup import TradeSetup
 
 from src.application.ports.corporate_action_repository import CorporateActionRepository
@@ -420,7 +419,6 @@ def _candidate_observation_payload(
     *,
     screen_result: str,
     flow_ev: "FlowConfirmationEvidence | None",
-    signal_ev: "SignalEvidence | None",
     snapshot_date: date,
     captured_at: datetime,
     request: "AccumulationScreenRequest",
@@ -429,9 +427,12 @@ def _candidate_observation_payload(
 
     screen_result: "pass" | "rejected_flow" | "rejected_signal"
     flow_ev: FlowConfirmationEvidence used as signal input; None if builder failed.
-    signal_ev: SignalEvidence factor bundle; strength fields are 0.0 when built
-        from Phase 4 group-level breakdown (no per-factor scores in that path),
-        but presence/absence, rationale, and freshness are accurate.
+
+    Note: SignalEvidence (Phase 1 flat-factor bundle) is intentionally absent from
+    the screen path. The Phase 4 staged-evidence path does not produce per-factor
+    scores — building SignalEvidence from group-level breakdown would serialize
+    strength=0.0 and direction=BEARISH for all present factors, which is misleading.
+    flow_evidence captures the equivalent information for screen replay.
     """
     signal = candidate.signal_assessment
     signal_payload = None
@@ -444,7 +445,6 @@ def _candidate_observation_payload(
             "flag_adjustment": signal.flag_adjustment,
             "raw_group_score": signal.raw_group_score,
             "flow_evidence": flow_ev.to_dict() if flow_ev is not None else None,
-            "signal_evidence": signal_ev.to_dict() if signal_ev is not None else None,
         }
 
     return {
@@ -528,16 +528,11 @@ class AccumulationScreenUseCase:
     def execute(self, request: AccumulationScreenRequest) -> AccumulationScreenResponse:
         today = request.as_of_date or date.today()
         candidates: list[AccumulationCandidate] = []
-        # Collects (candidate, screen_result, flow_ev, signal_ev) for ALL evaluated
-        # tickers — survivors and filtered-out alike. Rejected records are negative
-        # samples for future tuning (Phase 7: "rejected candidates become learnable").
+        # Collects (candidate, screen_result, flow_ev) for ALL evaluated tickers —
+        # survivors and filtered-out alike. Rejected records are negative samples
+        # for future tuning (Phase 7: "rejected candidates become learnable").
         all_results: list[
-            tuple[
-                AccumulationCandidate,
-                str,
-                FlowConfirmationEvidence | None,
-                SignalEvidence | None,
-            ]
+            tuple[AccumulationCandidate, str, FlowConfirmationEvidence | None]
         ] = []
         skipped = 0
         uses_stockbit = False
@@ -763,29 +758,11 @@ class AccumulationScreenUseCase:
                 result.ticker, signal_ctx, flow_confirmation_evidence=_flow_ev
             )
 
-            # Build SignalEvidence factor bundle for replay auditability.
-            # Uses Phase 4 group-level breakdown, so per-factor strength will be
-            # 0.0 (no individual factor scores in the staged-evidence path).
-            # Factor presence/absence, rationale, and freshness remain accurate.
-            _signal_ev = None
-            try:
-                from src.application.services.signal_evidence_builder import (
-                    SignalEvidenceBuilder,
-                )
-                _signal_ev = SignalEvidenceBuilder().build(
-                    signal_ctx,
-                    result.signal_assessment.assessment.breakdown
-                    if result.signal_assessment is not None
-                    else (),
-                )
-            except Exception:
-                pass
-
             if (
                 request.min_foreign_flow_score_enabled
                 and result.foreign_flow_score < request.min_foreign_flow_score
             ):
-                all_results.append((result, "rejected_flow", _flow_ev, _signal_ev))
+                all_results.append((result, "rejected_flow", _flow_ev))
                 continue
             if (
                 request.min_signal_score_enabled
@@ -794,9 +771,9 @@ class AccumulationScreenUseCase:
                     or result.signal_assessment.assessment.score < request.min_signal_score
                 )
             ):
-                all_results.append((result, "rejected_signal", _flow_ev, _signal_ev))
+                all_results.append((result, "rejected_signal", _flow_ev))
                 continue
-            all_results.append((result, "pass", _flow_ev, _signal_ev))
+            all_results.append((result, "pass", _flow_ev))
             candidates.append(result)
 
         # Phase 3.2: sector breadth post-processing pass
@@ -824,12 +801,7 @@ class AccumulationScreenUseCase:
     def _persist_candidate_observations(
         self,
         all_results: list[
-            tuple[
-                AccumulationCandidate,
-                str,
-                FlowConfirmationEvidence | None,
-                SignalEvidence | None,
-            ]
+            tuple[AccumulationCandidate, str, FlowConfirmationEvidence | None]
         ],
         snapshot_date: date,
         request: AccumulationScreenRequest,
@@ -847,13 +819,12 @@ class AccumulationScreenUseCase:
                         c,
                         screen_result=screen_result,
                         flow_ev=flow_ev,
-                        signal_ev=signal_ev,
                         snapshot_date=snapshot_date,
                         captured_at=captured_at,
                         request=request,
                     ),
                 )
-                for c, screen_result, flow_ev, signal_ev in all_results
+                for c, screen_result, flow_ev in all_results
             ]
             self._candidate_observations_repo.save_many(observations)
         except Exception as exc:

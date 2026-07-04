@@ -58,3 +58,19 @@ class SignalEvidence:
             "coverage_ratio": round(self.coverage_ratio, 4),
             "missing_factors": list(self.missing_factors),
         }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "SignalEvidence":
+        """Reconstruct from a persisted dict with schema-evolution tolerance.
+
+        Missing optional fields are defaulted safely so older snapshots remain
+        parseable when new fields are added in later phases.
+        """
+        return cls(
+            ticker=data["ticker"],
+            snapshot_date=date.fromisoformat(data["snapshot_date"]),
+            factors=tuple(FactorEvidence.from_dict(f) for f in data.get("factors", [])),
+            aggregate_confidence=float(data.get("aggregate_confidence", 0.0)),
+            coverage_ratio=float(data.get("coverage_ratio", 0.0)),
+            missing_factors=tuple(data.get("missing_factors", [])),
+        )
