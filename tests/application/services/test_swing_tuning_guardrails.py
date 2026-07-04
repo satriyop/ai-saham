@@ -315,9 +315,10 @@ def test_patch_with_complete_source_review_passes_validation(tmp_path):
     assert all("walk_forward_not_enforced" not in issue for issue in report.issues)
 
 
-def test_patch_oos_with_zero_trades_and_null_metrics_passes(tmp_path):
-    # An OOS window can legitimately have 0 trades (no setups triggered).
-    # total_return_pct and win_rate_pct may be null; trade_count must be 0.
+def test_patch_oos_with_zero_trades_fails_sample_guard(tmp_path):
+    # Walk-forward provenance is structurally valid with 0 OOS trades, but the
+    # sample readiness guard now rejects it: oos_trade_count=0 < 5 minimum.
+    # A patch must have at least 5 OOS trades to be applicable.
     _write_config(tmp_path)
     patch_path = tmp_path / "patch.json"
     patch_path.write_text(json.dumps({
@@ -334,7 +335,10 @@ def test_patch_oos_with_zero_trades_and_null_metrics_passes(tmp_path):
         "patch_items": [],
     }))
     report = SwingTuningPatchValidator(config_root=tmp_path).validate(patch_path)
-    assert report.valid is True
+    assert report.valid is False
+    assert all("walk_forward_not_enforced" not in issue for issue in report.issues)
+    assert any("sample_not_ready" in issue and "OOS trade_count=0" in issue
+               for issue in report.issues)
 
 
 # --- 18b. walk_forward_enforced exact boolean + date ordering ----------------
@@ -499,3 +503,93 @@ def test_tuning_config_diff_draft_within_performance_budget():
     build_tuning_config_diff_draft(summary)
     elapsed = time.monotonic() - start
     assert elapsed < 0.5, f"build_tuning_config_diff_draft took {elapsed:.3f}s — exceeds 0.5s budget"
+
+
+# --- sample readiness guards --------------------------------------------------
+# _COMPLETE_SOURCE_REVIEW has no sample/backtest_summary (backward-compat).
+# _TRADE_READY_SOURCE_REVIEW adds them to test the new quality gate.
+
+_TRADE_READY_SOURCE_REVIEW = {
+    **_COMPLETE_SOURCE_REVIEW,
+    "sample": {"status": "TRADE_READY", "min_sample_size": 30},
+    "backtest_summary": {"trade_count": 35},
+    # oos_backtest_summary already in _COMPLETE_SOURCE_REVIEW: trade_count=8, >=5
+}
+
+
+def _patch_with_source_review(source_review: dict, tmp_path) -> object:
+    _write_config(tmp_path)
+    p = tmp_path / "patch.json"
+    p.write_text(json.dumps({
+        "artifact_type": "swing_tuning_patch_review",
+        "apply": {"supported": False},
+        "source_review": source_review,
+        "patch_items": [],
+    }))
+    return SwingTuningPatchValidator(config_root=tmp_path).validate(p)
+
+
+def test_trade_ready_source_review_passes_sample_guard(tmp_path):
+    report = _patch_with_source_review(_TRADE_READY_SOURCE_REVIEW, tmp_path)
+    assert report.valid is True
+    assert all("sample_not_ready" not in issue for issue in report.issues)
+
+
+def test_candidate_only_status_fails_sample_guard(tmp_path):
+    review = {**_TRADE_READY_SOURCE_REVIEW, "sample": {"status": "CANDIDATE_ONLY"}}
+    report = _patch_with_source_review(review, tmp_path)
+    assert report.valid is False
+    assert any("sample_not_ready" in issue for issue in report.issues)
+    assert any("TRADE_READY" in issue for issue in report.issues)
+
+
+def test_is_trade_count_below_30_fails_sample_guard(tmp_path):
+    review = {**_TRADE_READY_SOURCE_REVIEW, "backtest_summary": {"trade_count": 16}}
+    report = _patch_with_source_review(review, tmp_path)
+    assert report.valid is False
+    assert any("sample_not_ready" in issue and "IS completed_trade_count=16" in issue
+               for issue in report.issues)
+
+
+def test_oos_trade_count_below_5_fails_sample_guard(tmp_path):
+    review = {
+        **_TRADE_READY_SOURCE_REVIEW,
+        "oos_backtest_summary": {"trade_count": 2, "total_return_pct": 3.0, "win_rate_pct": 50.0},
+    }
+    report = _patch_with_source_review(review, tmp_path)
+    assert report.valid is False
+    assert any("sample_not_ready" in issue and "OOS trade_count=2" in issue
+               for issue in report.issues)
+
+
+def test_oos_return_too_negative_fails_sample_guard(tmp_path):
+    review = {
+        **_TRADE_READY_SOURCE_REVIEW,
+        "oos_backtest_summary": {"trade_count": 8, "total_return_pct": -20.0, "win_rate_pct": 50.0},
+    }
+    report = _patch_with_source_review(review, tmp_path)
+    assert report.valid is False
+    assert any("sample_not_ready" in issue and "total_return_pct" in issue
+               for issue in report.issues)
+
+
+def test_oos_win_rate_below_floor_fails_sample_guard(tmp_path):
+    review = {
+        **_TRADE_READY_SOURCE_REVIEW,
+        "oos_backtest_summary": {"trade_count": 8, "total_return_pct": 1.0, "win_rate_pct": 35.0},
+    }
+    report = _patch_with_source_review(review, tmp_path)
+    assert report.valid is False
+    assert any("sample_not_ready" in issue and "win_rate_pct" in issue
+               for issue in report.issues)
+
+
+def test_null_oos_metrics_with_sufficient_oos_trades_pass_guard(tmp_path):
+    # OOS metrics can be None when all trades have no return data yet.
+    review = {
+        **_TRADE_READY_SOURCE_REVIEW,
+        "oos_backtest_summary": {"trade_count": 6, "total_return_pct": None, "win_rate_pct": None},
+    }
+    report = _patch_with_source_review(review, tmp_path)
+    assert report.valid is True
+    assert all("sample_not_ready" not in issue for issue in report.issues)

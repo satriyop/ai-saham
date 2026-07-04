@@ -26,6 +26,14 @@ from src.application.services.swing_tuning_config_paths import (
 TargetDirtyChecker = Callable[[Path], bool]
 
 
+# Minimum sample-quality thresholds required before a patch may be applied.
+# These mirror the TUNING_READINESS logic in swing_backtest_attribution.py;
+# any patch that would not reach TRADE_READY status is blocked here too.
+_MIN_IS_TRADE_COUNT: int = 30
+_MIN_OOS_TRADE_COUNT: int = 5
+_MAX_OOS_LOSS_PCT: float = -15.0    # OOS total return below this → reject
+_MIN_OOS_WIN_RATE_PCT: float = 40.0  # OOS win rate below this → reject
+
 # Phase 8: per-parameter walk-forward calibration guardrails.
 # (document_path_pattern, min_value, max_value, step, max_shift_per_cycle)
 # document_path_pattern: the part after the colon in the target_path.
@@ -264,6 +272,7 @@ class SwingTuningPatchValidator:
 
         source_review = payload.get("source_review")
         issues.extend(_validate_walk_forward_source_review(source_review))
+        issues.extend(_validate_sample_readiness(source_review))
 
         patch_items = payload.get("patch_items")
         if not isinstance(patch_items, list):
@@ -687,6 +696,71 @@ def _validate_walk_forward_source_review(source_review: object) -> tuple[str, ..
             issues.append(f"{prefix} oos_backtest_summary.total_return_pct is required (may be null)")
         if "win_rate_pct" not in oos:
             issues.append(f"{prefix} oos_backtest_summary.win_rate_pct is required (may be null)")
+    return tuple(issues)
+
+
+def _validate_sample_readiness(source_review: object) -> tuple[str, ...]:
+    """Return issue strings when sample quality is insufficient for apply.
+
+    All issues are prefixed with 'sample_not_ready:' so callers can detect
+    the category with a single substring check.
+    """
+    prefix = "sample_not_ready:"
+    issues: list[str] = []
+    if not isinstance(source_review, dict):
+        return ()  # structural error already reported by walk_forward check
+
+    sample = source_review.get("sample")
+    if isinstance(sample, dict):
+        status = sample.get("status")
+        if status != "TRADE_READY":
+            issues.append(
+                f"{prefix} sample.status must be TRADE_READY, got {status!r}; "
+                f"need at least {_MIN_IS_TRADE_COUNT} completed IS trades"
+            )
+
+    backtest = source_review.get("backtest_summary")
+    if isinstance(backtest, dict):
+        try:
+            is_trades = int(backtest.get("trade_count"))  # type: ignore[arg-type]
+            if is_trades < _MIN_IS_TRADE_COUNT:
+                issues.append(
+                    f"{prefix} IS completed_trade_count={is_trades} < {_MIN_IS_TRADE_COUNT}"
+                )
+        except (TypeError, ValueError):
+            issues.append(f"{prefix} backtest_summary.trade_count is missing or non-integer")
+
+    oos = source_review.get("oos_backtest_summary")
+    if isinstance(oos, dict):
+        try:
+            oos_trades = int(oos.get("trade_count"))  # type: ignore[arg-type]
+            if oos_trades < _MIN_OOS_TRADE_COUNT:
+                issues.append(
+                    f"{prefix} OOS trade_count={oos_trades} < {_MIN_OOS_TRADE_COUNT}"
+                )
+        except (TypeError, ValueError):
+            issues.append(f"{prefix} oos_backtest_summary.trade_count is missing or non-integer")
+
+        oos_return = oos.get("total_return_pct")
+        if oos_return is not None:
+            try:
+                if float(oos_return) < _MAX_OOS_LOSS_PCT:
+                    issues.append(
+                        f"{prefix} OOS total_return_pct={oos_return} < floor {_MAX_OOS_LOSS_PCT}"
+                    )
+            except (TypeError, ValueError):
+                pass
+
+        oos_win = oos.get("win_rate_pct")
+        if oos_win is not None:
+            try:
+                if float(oos_win) < _MIN_OOS_WIN_RATE_PCT:
+                    issues.append(
+                        f"{prefix} OOS win_rate_pct={oos_win} < floor {_MIN_OOS_WIN_RATE_PCT}"
+                    )
+            except (TypeError, ValueError):
+                pass
+
     return tuple(issues)
 
 
