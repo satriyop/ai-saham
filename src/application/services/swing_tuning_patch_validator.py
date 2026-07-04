@@ -31,8 +31,9 @@ TargetDirtyChecker = Callable[[Path], bool]
 # any patch that would not reach TRADE_READY status is blocked here too.
 _MIN_IS_TRADE_COUNT: int = 30
 _MIN_OOS_TRADE_COUNT: int = 5
-_MAX_OOS_LOSS_PCT: float = -15.0    # OOS total return below this → reject
+_MAX_OOS_LOSS_PCT: float = -15.0     # OOS total return below this → reject
 _MIN_OOS_WIN_RATE_PCT: float = 40.0  # OOS win rate below this → reject
+_MIN_OOS_PROFIT_FACTOR: float = 1.0  # OOS PF below this → reject (PF < 1 = losing system)
 
 # Phase 8: per-parameter walk-forward calibration guardrails.
 # (document_path_pattern, min_value, max_value, step, max_shift_per_cycle)
@@ -704,14 +705,22 @@ def _validate_sample_readiness(source_review: object) -> tuple[str, ...]:
 
     All issues are prefixed with 'sample_not_ready:' so callers can detect
     the category with a single substring check.
+
+    The validator is closed-by-default: missing required fields are rejected,
+    not skipped. OOS metrics must be numeric (not null) when OOS trade count
+    meets the minimum — a patch with 5+ OOS trades but no measurable outcome
+    cannot be approved.
     """
     prefix = "sample_not_ready:"
     issues: list[str] = []
     if not isinstance(source_review, dict):
         return ()  # structural error already reported by walk_forward check
 
+    # IS sample quality — both fields are required (Finding 1)
     sample = source_review.get("sample")
-    if isinstance(sample, dict):
+    if not isinstance(sample, dict):
+        issues.append(f"{prefix} source_review.sample must be a dict")
+    else:
         status = sample.get("status")
         if status != "TRADE_READY":
             issues.append(
@@ -720,7 +729,9 @@ def _validate_sample_readiness(source_review: object) -> tuple[str, ...]:
             )
 
     backtest = source_review.get("backtest_summary")
-    if isinstance(backtest, dict):
+    if not isinstance(backtest, dict):
+        issues.append(f"{prefix} source_review.backtest_summary must be a dict")
+    else:
         try:
             is_trades = int(backtest.get("trade_count"))  # type: ignore[arg-type]
             if is_trades < _MIN_IS_TRADE_COUNT:
@@ -730,8 +741,10 @@ def _validate_sample_readiness(source_review: object) -> tuple[str, ...]:
         except (TypeError, ValueError):
             issues.append(f"{prefix} backtest_summary.trade_count is missing or non-integer")
 
+    # OOS quality — trade count checked first; metrics required when count passes (Findings 2+3)
     oos = source_review.get("oos_backtest_summary")
     if isinstance(oos, dict):
+        oos_trades: int | None = None
         try:
             oos_trades = int(oos.get("trade_count"))  # type: ignore[arg-type]
             if oos_trades < _MIN_OOS_TRADE_COUNT:
@@ -741,25 +754,25 @@ def _validate_sample_readiness(source_review: object) -> tuple[str, ...]:
         except (TypeError, ValueError):
             issues.append(f"{prefix} oos_backtest_summary.trade_count is missing or non-integer")
 
-        oos_return = oos.get("total_return_pct")
-        if oos_return is not None:
-            try:
-                if float(oos_return) < _MAX_OOS_LOSS_PCT:
+        if oos_trades is not None and oos_trades >= _MIN_OOS_TRADE_COUNT:
+            # Metrics must be numeric (not null) when OOS has sufficient trades
+            for field, floor in (
+                ("total_return_pct", _MAX_OOS_LOSS_PCT),
+                ("win_rate_pct", _MIN_OOS_WIN_RATE_PCT),
+                ("profit_factor", _MIN_OOS_PROFIT_FACTOR),
+            ):
+                raw = oos.get(field)
+                try:
+                    fval = float(raw)  # raises on None or non-numeric
+                    if fval < floor:
+                        issues.append(
+                            f"{prefix} OOS {field}={fval} < floor {floor}"
+                        )
+                except (TypeError, ValueError):
                     issues.append(
-                        f"{prefix} OOS total_return_pct={oos_return} < floor {_MAX_OOS_LOSS_PCT}"
+                        f"{prefix} OOS {field} must be numeric when "
+                        f"oos_trade_count >= {_MIN_OOS_TRADE_COUNT}"
                     )
-            except (TypeError, ValueError):
-                pass
-
-        oos_win = oos.get("win_rate_pct")
-        if oos_win is not None:
-            try:
-                if float(oos_win) < _MIN_OOS_WIN_RATE_PCT:
-                    issues.append(
-                        f"{prefix} OOS win_rate_pct={oos_win} < floor {_MIN_OOS_WIN_RATE_PCT}"
-                    )
-            except (TypeError, ValueError):
-                pass
 
     return tuple(issues)
 

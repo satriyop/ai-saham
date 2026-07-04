@@ -7,10 +7,13 @@ _COMPLETE_SOURCE_REVIEW = {
     "is_end_date": "2026-04-01",
     "oos_start_date": "2026-04-02",
     "full_end_date": "2026-07-01",
+    "sample": {"status": "TRADE_READY", "min_sample_size": 30},
+    "backtest_summary": {"trade_count": 35},
     "oos_backtest_summary": {
         "trade_count": 8,
         "total_return_pct": 3.2,
         "win_rate_pct": 50.0,
+        "profit_factor": 1.5,
     },
 }
 

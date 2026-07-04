@@ -47,10 +47,13 @@ _COMPLETE_SOURCE_REVIEW = {
     "is_end_date": "2026-04-01",
     "oos_start_date": "2026-04-02",
     "full_end_date": "2026-07-01",
+    "sample": {"status": "TRADE_READY", "min_sample_size": 30},
+    "backtest_summary": {"trade_count": 35},
     "oos_backtest_summary": {
         "trade_count": 8,
         "total_return_pct": 3.2,
         "win_rate_pct": 50.0,
+        "profit_factor": 1.5,
     },
 }
 
@@ -506,15 +509,6 @@ def test_tuning_config_diff_draft_within_performance_budget():
 
 
 # --- sample readiness guards --------------------------------------------------
-# _COMPLETE_SOURCE_REVIEW has no sample/backtest_summary (backward-compat).
-# _TRADE_READY_SOURCE_REVIEW adds them to test the new quality gate.
-
-_TRADE_READY_SOURCE_REVIEW = {
-    **_COMPLETE_SOURCE_REVIEW,
-    "sample": {"status": "TRADE_READY", "min_sample_size": 30},
-    "backtest_summary": {"trade_count": 35},
-    # oos_backtest_summary already in _COMPLETE_SOURCE_REVIEW: trade_count=8, >=5
-}
 
 
 def _patch_with_source_review(source_review: dict, tmp_path) -> object:
@@ -530,13 +524,13 @@ def _patch_with_source_review(source_review: dict, tmp_path) -> object:
 
 
 def test_trade_ready_source_review_passes_sample_guard(tmp_path):
-    report = _patch_with_source_review(_TRADE_READY_SOURCE_REVIEW, tmp_path)
+    report = _patch_with_source_review(_COMPLETE_SOURCE_REVIEW, tmp_path)
     assert report.valid is True
     assert all("sample_not_ready" not in issue for issue in report.issues)
 
 
 def test_candidate_only_status_fails_sample_guard(tmp_path):
-    review = {**_TRADE_READY_SOURCE_REVIEW, "sample": {"status": "CANDIDATE_ONLY"}}
+    review = {**_COMPLETE_SOURCE_REVIEW, "sample": {"status": "CANDIDATE_ONLY"}}
     report = _patch_with_source_review(review, tmp_path)
     assert report.valid is False
     assert any("sample_not_ready" in issue for issue in report.issues)
@@ -544,7 +538,7 @@ def test_candidate_only_status_fails_sample_guard(tmp_path):
 
 
 def test_is_trade_count_below_30_fails_sample_guard(tmp_path):
-    review = {**_TRADE_READY_SOURCE_REVIEW, "backtest_summary": {"trade_count": 16}}
+    review = {**_COMPLETE_SOURCE_REVIEW, "backtest_summary": {"trade_count": 16}}
     report = _patch_with_source_review(review, tmp_path)
     assert report.valid is False
     assert any("sample_not_ready" in issue and "IS completed_trade_count=16" in issue
@@ -553,7 +547,7 @@ def test_is_trade_count_below_30_fails_sample_guard(tmp_path):
 
 def test_oos_trade_count_below_5_fails_sample_guard(tmp_path):
     review = {
-        **_TRADE_READY_SOURCE_REVIEW,
+        **_COMPLETE_SOURCE_REVIEW,
         "oos_backtest_summary": {"trade_count": 2, "total_return_pct": 3.0, "win_rate_pct": 50.0},
     }
     report = _patch_with_source_review(review, tmp_path)
@@ -564,7 +558,7 @@ def test_oos_trade_count_below_5_fails_sample_guard(tmp_path):
 
 def test_oos_return_too_negative_fails_sample_guard(tmp_path):
     review = {
-        **_TRADE_READY_SOURCE_REVIEW,
+        **_COMPLETE_SOURCE_REVIEW,
         "oos_backtest_summary": {"trade_count": 8, "total_return_pct": -20.0, "win_rate_pct": 50.0},
     }
     report = _patch_with_source_review(review, tmp_path)
@@ -575,7 +569,7 @@ def test_oos_return_too_negative_fails_sample_guard(tmp_path):
 
 def test_oos_win_rate_below_floor_fails_sample_guard(tmp_path):
     review = {
-        **_TRADE_READY_SOURCE_REVIEW,
+        **_COMPLETE_SOURCE_REVIEW,
         "oos_backtest_summary": {"trade_count": 8, "total_return_pct": 1.0, "win_rate_pct": 35.0},
     }
     report = _patch_with_source_review(review, tmp_path)
@@ -584,12 +578,94 @@ def test_oos_win_rate_below_floor_fails_sample_guard(tmp_path):
                for issue in report.issues)
 
 
-def test_null_oos_metrics_with_sufficient_oos_trades_pass_guard(tmp_path):
-    # OOS metrics can be None when all trades have no return data yet.
+# --- Finding 1: missing IS sample fields are now required ---
+
+def test_missing_sample_dict_fails_guard(tmp_path):
+    review = {k: v for k, v in _COMPLETE_SOURCE_REVIEW.items() if k != "sample"}
+    report = _patch_with_source_review(review, tmp_path)
+    assert report.valid is False
+    assert any("sample_not_ready" in i and "source_review.sample" in i for i in report.issues)
+
+
+def test_missing_backtest_summary_fails_guard(tmp_path):
+    review = {k: v for k, v in _COMPLETE_SOURCE_REVIEW.items() if k != "backtest_summary"}
+    report = _patch_with_source_review(review, tmp_path)
+    assert report.valid is False
+    assert any("sample_not_ready" in i and "backtest_summary" in i for i in report.issues)
+
+
+def test_non_integer_is_trade_count_fails_guard(tmp_path):
+    review = {**_COMPLETE_SOURCE_REVIEW, "backtest_summary": {"trade_count": "many"}}
+    report = _patch_with_source_review(review, tmp_path)
+    assert report.valid is False
+    assert any("sample_not_ready" in i and "trade_count" in i for i in report.issues)
+
+
+# --- Finding 3: profit_factor required and floor-checked ---
+
+def test_missing_profit_factor_with_oos_trades_fails_guard(tmp_path):
     review = {
-        **_TRADE_READY_SOURCE_REVIEW,
-        "oos_backtest_summary": {"trade_count": 6, "total_return_pct": None, "win_rate_pct": None},
+        **_COMPLETE_SOURCE_REVIEW,
+        "oos_backtest_summary": {"trade_count": 8, "total_return_pct": 2.0, "win_rate_pct": 55.0},
+        # profit_factor key absent
+    }
+    report = _patch_with_source_review(review, tmp_path)
+    assert report.valid is False
+    assert any("sample_not_ready" in i and "profit_factor" in i for i in report.issues)
+
+
+def test_null_profit_factor_with_oos_trades_fails_guard(tmp_path):
+    review = {
+        **_COMPLETE_SOURCE_REVIEW,
+        "oos_backtest_summary": {
+            "trade_count": 8, "total_return_pct": 2.0,
+            "win_rate_pct": 55.0, "profit_factor": None,
+        },
+    }
+    report = _patch_with_source_review(review, tmp_path)
+    assert report.valid is False
+    assert any("sample_not_ready" in i and "profit_factor" in i for i in report.issues)
+
+
+def test_profit_factor_below_floor_fails_guard(tmp_path):
+    review = {
+        **_COMPLETE_SOURCE_REVIEW,
+        "oos_backtest_summary": {
+            "trade_count": 8, "total_return_pct": 2.0,
+            "win_rate_pct": 55.0, "profit_factor": 0.75,
+        },
+    }
+    report = _patch_with_source_review(review, tmp_path)
+    assert report.valid is False
+    assert any("sample_not_ready" in i and "profit_factor=0.75" in i for i in report.issues)
+
+
+def test_profit_factor_exactly_at_floor_passes_guard(tmp_path):
+    review = {
+        **_COMPLETE_SOURCE_REVIEW,
+        "oos_backtest_summary": {
+            "trade_count": 8, "total_return_pct": 2.0,
+            "win_rate_pct": 55.0, "profit_factor": 1.0,
+        },
     }
     report = _patch_with_source_review(review, tmp_path)
     assert report.valid is True
-    assert all("sample_not_ready" not in issue for issue in report.issues)
+    assert all("profit_factor" not in i for i in report.issues)
+
+
+def test_null_oos_metrics_with_sufficient_oos_trades_fail_guard(tmp_path):
+    # When OOS has 6 trades (>= 5 minimum), all metrics must be numeric.
+    # Null return/win_rate/profit_factor are rejected — you cannot approve a patch
+    # based on trades with no measurable outcome.
+    review = {
+        **_COMPLETE_SOURCE_REVIEW,
+        "oos_backtest_summary": {"trade_count": 6, "total_return_pct": None, "win_rate_pct": None},
+    }
+    report = _patch_with_source_review(review, tmp_path)
+    assert report.valid is False
+    assert any("sample_not_ready" in issue and "total_return_pct" in issue
+               for issue in report.issues)
+    assert any("sample_not_ready" in issue and "win_rate_pct" in issue
+               for issue in report.issues)
+    assert any("sample_not_ready" in issue and "profit_factor" in issue
+               for issue in report.issues)
