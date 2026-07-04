@@ -136,7 +136,7 @@ The flow confirmation group measures institutional presence. The score (0 - 100)
                  ▼ (Combine and average the two strengths)
    [Uncapped Strength = (Foreign Flow Strength + Bandar Strength) / 2]
                  │
-                 ▼ (Apply 0.80 ceiling cap to prevent outliers)
+                 ▼ (Apply 0.80 ceiling cap to protect against outliers)
    [Capped Strength = Min(Uncapped Strength, 0.80)]
                  │
                  ▼ (Scale to 0 - 100 range)
@@ -174,8 +174,42 @@ The Foreign Flow Strength is calculated by summing **five distinct sub-signals**
 ---
 
 #### C. Bandar Strength
-Maps the local Bandar broad score (ranging from -12 to +12) to a 0.0 - 1.0 decimal:
-* **Bandar Strength** = (Broad Score + 12.0) / 24.0
+Bandar Strength represents the local market operator footprint. Unlike foreign flow which tracks cross-border institutional capital, Bandar strength tracks the concentration of daily transaction balances across all active IDX brokers (e.g. YP, CC, PD).
+
+* **The Bandar Broad Score Calculation:**
+  The `bandar_broad_score` is a consolidated integer ranging from **`-12` to `+12`**. Under the hood, the engine checks **six distinct indicator categories** from the database cache:
+  1. `today_accdist` (Today's accumulation/distribution classification)
+  2. `five_day_accdist` (5-day accumulation/distribution classification)
+  3. `top1_accdist` (Largest broker transaction net balance classification)
+  4. `top3_accdist` (Top 3 combined brokers net balance classification)
+  5. `top5_accdist` (Top 5 combined brokers net balance classification)
+  6. `top10_accdist` (Top 10 combined brokers net balance classification)
+
+  For each of the six indicators, the database stores a categorical label describing the buying concentration relative to selling. Each label is mapped to an ordinal value:
+  * `"Big Acc"` (Strong accumulation) -> **`+2`**
+  * `"Small Acc"` (Moderate accumulation) -> **`+1`**
+  * `"Neutral"` (Balanced retail/institutional volume) -> **`0`**
+  * `"Small Dist"` (Moderate distribution) -> **`-1`**
+  * `"Big Dist"` (Strong distribution) -> **`-2`**
+
+  The broad score is the sum of these six component values:
+  * **Max Accumulation Score (`+12`):** All 6 indicators are rated `"Big Acc"` (`6 * 2`).
+  * **Max Distribution Score (`-12`):** All 6 indicators are rated `"Big Dist"` (`6 * -2`).
+  * **Neutral Score (`0`):** Buying and selling are balanced, or indicators sum to zero.
+
+* **Normalizing to Strength (0.0 to 1.0):**
+  To combine this score with Foreign Flow, the `FlowConfirmationEvidenceBuilder` maps the range `[-12.0, +12.0]` to a positive strength fraction:
+  * **Bandar Strength** = (Bandar Broad Score + 12.0) / 24.0
+  * *Scale examples:*
+    * Broad Score of `+12` -> Strength = `(12 + 12) / 24 = 1.0` (100% Strength)
+    * Broad Score of `+6`  -> Strength = `(6 + 12) / 24 = 0.75` (75% Strength)
+    * Broad Score of `0`   -> Strength = `(0 + 12) / 24 = 0.50` (50% Neutral Strength)
+    * Broad Score of `-12` -> Strength = `(-12 + 12) / 24 = 0.0` (0% Strength)
+
+* **Behavior on Missing Data:**
+  If the local SQLite database lacks Bandar data for the ticker, `bandar_broad_score` is marked `None`/`MISSING`. In this scenario, the engine ignores Bandar entirely:
+  * `Uncapped Strength = Foreign Flow Strength`
+  The missing local operator presence is penalised under Stage 3 (Renormalization) by lowering the evidence confidence, but it does *not* artificially drag the Opportunity Score down to zero.
 
 ---
 
