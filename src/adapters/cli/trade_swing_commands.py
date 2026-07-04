@@ -9,7 +9,7 @@ Layer: Adapter
 """
 
 import json
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Annotated, Optional
@@ -294,6 +294,12 @@ def _swing_tuning_patch_payload(review_payload: dict) -> dict:
             "backtest_summary": review_payload.get("backtest_summary"),
             "tuning_config_diff_status": tuning_config_diff.get("status"),
             "tuning_config_diff_summary": tuning_config_diff.get("summary"),
+            "is_ratio": review_payload.get("is_ratio"),
+            "is_end_date": review_payload.get("is_end_date"),
+            "oos_start_date": review_payload.get("oos_start_date"),
+            "full_end_date": review_payload.get("full_end_date"),
+            "oos_backtest_summary": review_payload.get("oos_backtest_summary"),
+            "walk_forward_enforced": review_payload.get("is_end_date") is not None,
         },
         "patch_items": patch_items,
         "item_count": len(patch_items),
@@ -585,6 +591,16 @@ def swing_tune(
             help="Write proposed config values to a review-only JSON patch artifact",
         ),
     ] = None,
+    is_ratio: Annotated[
+        Optional[float],
+        typer.Option(
+            "--is-ratio",
+            help=(
+                "In-sample ratio 0.0–1.0 (e.g. 0.70 = 70% IS / 30% OOS). "
+                "Default: 1.0 (no split)."
+            ),
+        ),
+    ] = None,
 ) -> None:
     """
     Build deterministic swing tuning review from walk-forward attribution.
@@ -593,12 +609,58 @@ def swing_tune(
     deterministic workflow, summarizes attribution, and emits guarded config
     review artifacts. It never calls AI and never writes YAML.
     """
+    if is_ratio is not None:
+        if end is None:
+            typer.echo(
+                "Error: --is-ratio requires --end to define the full date range.",
+                err=True,
+            )
+            raise typer.Exit(1)
+        if not (0.0 < is_ratio < 1.0):
+            typer.echo(
+                f"Error: --is-ratio must be in range (0.0, 1.0) exclusive, got {is_ratio}",
+                err=True,
+            )
+            raise typer.Exit(1)
+
+    # If --is-ratio is set, trim the backtest to the IS window so proposals are
+    # generated from IS data only. Enforcement is signalled by storing is_end_date
+    # in the payload — the journal derives walk_forward_enforced from that field,
+    # not from is_ratio alone.
+    effective_end = end
+    is_end_date: str | None = None
+    oos_start_date: str | None = None
+    if is_ratio is not None and start and end:
+        start_dt = date.fromisoformat(start)
+        end_dt = date.fromisoformat(end)
+        if start_dt >= end_dt:
+            typer.echo("Error: --start must be before --end.", err=True)
+            raise typer.Exit(1)
+        total_days = (end_dt - start_dt).days
+        is_end_dt = start_dt + timedelta(days=int(total_days * is_ratio))
+        oos_start_dt = is_end_dt + timedelta(days=1)
+        if is_end_dt <= start_dt or oos_start_dt > end_dt:
+            typer.echo(
+                "Error: --is-ratio requires a date range large enough to produce "
+                "non-empty IS and OOS windows.",
+                err=True,
+            )
+            raise typer.Exit(1)
+        effective_end = is_end_dt.isoformat()
+        is_end_date = effective_end
+        oos_start_date = oos_start_dt.isoformat()
+        if output_format != "json":
+            typer.echo(
+                f"Walk-forward split: IS {start} -> {is_end_dt.isoformat()}  "
+                f"OOS {oos_start_dt.isoformat()} -> {end}"
+            )
+
     response = _run_swing_backtest(
         tickers=tickers,
         universe=universe,
         setup=setup,
         start=start,
-        end=end,
+        end=effective_end,
         capital=capital,
         risk_pct=risk_pct,
         max_positions=max_positions,
@@ -614,6 +676,43 @@ def swing_tune(
     )
 
     payload = _swing_tuning_payload(response)
+    if is_ratio is not None:
+        payload["is_ratio"] = round(is_ratio, 4)
+        if is_end_date and oos_start_date and end:
+            payload["is_end_date"] = is_end_date
+            payload["oos_start_date"] = oos_start_date
+            payload["full_end_date"] = end
+            # Run a second backtest on the OOS window so the journal contains both
+            # IS proposals and OOS performance — without OOS metrics the reviewer
+            # cannot detect overfit before deciding to apply the patch.
+            # OOS starts the day AFTER is_end_date so the split date is not shared.
+            oos_response = _run_swing_backtest(
+                tickers=tickers,
+                universe=universe,
+                setup=setup,
+                start=oos_start_date,
+                end=end,
+                capital=capital,
+                risk_pct=risk_pct,
+                max_positions=max_positions,
+                take_profit=take_profit,
+                stop_loss=stop_loss,
+                max_hold=max_hold,
+                cost_bps=cost_bps,
+                with_regime=with_regime,
+                allow_regimes=allow_regimes,
+                benchmark=benchmark,
+                db_path=db_path,
+                announce=False,
+            )
+            payload["oos_backtest_summary"] = {
+                "trade_count": oos_response.trade_count,
+                "total_return_pct": oos_response.total_return_pct,
+                "win_rate_pct": oos_response.win_rate_pct,
+                "max_drawdown_pct": oos_response.max_drawdown_pct,
+                "avg_trade_return_pct": oos_response.avg_trade_return_pct,
+                "profit_factor": oos_response.profit_factor,
+            }
     if save:
         journal_path = journal or DEFAULT_SWING_TUNING_REVIEW_JOURNAL_PATH
         save_result = SwingTuningReviewJournal(

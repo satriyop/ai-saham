@@ -1,5 +1,18 @@
 import json
 
+_COMPLETE_SOURCE_REVIEW = {
+    "walk_forward_enforced": True,
+    "is_ratio": 0.70,
+    "is_end_date": "2026-04-01",
+    "oos_start_date": "2026-04-02",
+    "full_end_date": "2026-07-01",
+    "oos_backtest_summary": {
+        "trade_count": 8,
+        "total_return_pct": 3.2,
+        "win_rate_pct": 50.0,
+    },
+}
+
 from src.application.services.swing_tuning_loop_status import (
     SwingTuningLoopStatusService,
 )
@@ -70,6 +83,7 @@ def test_swing_tuning_loop_status_reports_ready_measurement(tmp_path):
     patch_payload = {
         "artifact_type": "swing_tuning_patch_review",
         "apply": {"supported": False},
+        "source_review": _COMPLETE_SOURCE_REVIEW,
         "patch_items": [
             {
                 "target_path": (
@@ -122,3 +136,53 @@ def test_swing_tuning_loop_status_reports_ready_measurement(tmp_path):
     assert report.patch.verify is not None
     assert report.patch.verify.verified is True
     assert report.apply.post_apply_measurement.status == "READY"
+
+
+def test_swing_tuning_loop_status_handles_empty_patch_from_insufficient_sample(tmp_path):
+    journal_dir = tmp_path / "journals"
+    journal_dir.mkdir()
+    journal_path = journal_dir / "swing_tuning_reviews.jsonl"
+    patch_path = journal_dir / "swing_tuning_patch.json"
+    apply_log_path = journal_dir / "swing_tuning_apply_log.jsonl"
+    review_row = {
+        "recorded_at": "2026-07-03T10:00:00+07:00",
+        "artifact_type": "swing_tuning_review",
+        "setup": "foreign-bounce",
+        "sample": {"status": "INSUFFICIENT_SAMPLE", "min_sample_size": 30},
+        "backtest_summary": {
+            "trade_count": 0,
+            "candidate_observation_count": 20,
+            "total_return_pct": 0.0,
+            "win_rate_pct": None,
+        },
+        "tuning_config_diff": {
+            "status": "BLOCKED",
+            "summary": {"proposed_count": 0, "rejected_count": 16},
+        },
+    }
+    patch_payload = {
+        "artifact_type": "swing_tuning_patch_review",
+        "apply": {"supported": False},
+        "source_review": _COMPLETE_SOURCE_REVIEW,
+        "patch_items": [],
+    }
+    journal_path.write_text(json.dumps(review_row) + "\n", encoding="utf-8")
+    patch_path.write_text(json.dumps(patch_payload), encoding="utf-8")
+
+    report = SwingTuningLoopStatusService(
+        SwingTuningReviewJsonlWriter(journal_path),
+        config_root=tmp_path,
+    ).status(
+        review_journal_path=journal_path,
+        patch_path=patch_path,
+        apply_log_path=apply_log_path,
+        apply_records=[],
+    )
+
+    assert report.status == "IN_PROGRESS"
+    assert report.next_action == "RUN_TUNE_SWING_WITH_LARGER_SAMPLE"
+    assert report.patch.validation is not None
+    assert report.patch.validation.item_count == 0
+    assert report.review.latest_review is not None
+    assert report.review.latest_review.sample_status == "INSUFFICIENT_SAMPLE"
+    assert report.review.latest_review.min_sample_size == 30

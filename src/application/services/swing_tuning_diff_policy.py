@@ -194,10 +194,18 @@ def suggest_tuning_value(
             value_selection_policy="NO_UNAMBIGUOUS_DIRECTION",
         )
 
-    proposed_value = _bounded_one_step_adjustment(
-        current_value,
-        adjustment_direction,
-    )
+    if _should_snap_to_weight_grid(resolution.target_path.document_path):
+        # Use the 0.05 grid step directly so proposals stay within parameter bounds.
+        # Adding the generic 0.5 float step to e.g. confidence=0.70 would produce
+        # 1.20, which exceeds the 0.90 ceiling and fails validator immediately.
+        proposed_value = _snap_to_weight_grid(
+            float(current_value) + _WEIGHT_STEP * adjustment_direction
+        )
+    else:
+        proposed_value = _bounded_one_step_adjustment(
+            current_value,
+            adjustment_direction,
+        )
     return TuningValueSuggestion(
         proposed_value=proposed_value,
         rationale=(
@@ -277,7 +285,7 @@ def _classify_tuning_target_kind(target_path: TuningConfigPath) -> str:
         return "classification"
     if "gates" in segments:
         return "gate"
-    if "weights" in segments or leaf.endswith("_weight"):
+    if "weights" in segments or leaf.endswith("_weight") or leaf == "weight":
         return "weight"
     if _is_exit_rule_parameter(leaf, segments):
         return "exit_rule"
@@ -377,6 +385,31 @@ def _bounded_one_step_adjustment(value: object, direction: int) -> int | float:
         return value + direction
     numeric_value = float(value)
     return round(numeric_value + (0.5 * direction), 4)
+
+
+_WEIGHT_STEP = 0.05
+
+# Phase 8: document-path suffixes whose float proposals must land on a 0.05 grid.
+_QUANTIZED_STEP_PATHS = (
+    "evidence_groups.setup_quality.weight",
+    "evidence_groups.flow_confirmation.weight",
+    "classification.enter_min_confidence",
+    "classification.watch_min_confidence",
+    "regime_conditioning.neutral.weak_flow_discount",
+    "regime_conditioning.risk_off.weak_setup_discount",
+    "regime_conditioning.volatile.setup_discount",
+    "regime_conditioning.volatile.flow_discount",
+)
+
+
+def _snap_to_weight_grid(value: float) -> float:
+    """Snap value to the nearest 0.05 multiple."""
+    return round(round(value / _WEIGHT_STEP) * _WEIGHT_STEP, 4)
+
+
+def _should_snap_to_weight_grid(document_path: str) -> bool:
+    """True when the document path targets a 0.05-quantized weight/confidence param."""
+    return any(document_path.endswith(suffix) for suffix in _QUANTIZED_STEP_PATHS)
 
 
 def _evidence_supports_tightening(candidate) -> bool:

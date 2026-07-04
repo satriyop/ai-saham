@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Callable
 
@@ -23,6 +23,48 @@ from src.application.services.swing_tuning_config_paths import (
 )
 
 TargetDirtyChecker = Callable[[Path], bool]
+
+
+# Phase 8: per-parameter walk-forward calibration guardrails.
+# (document_path_pattern, min_value, max_value, step, max_shift_per_cycle)
+# document_path_pattern: the part after the colon in the target_path.
+# step: None means no quantization check.
+# max_shift_per_cycle: maximum absolute change allowed in one tuning cycle.
+_PARAMETER_BOUNDS: tuple[tuple[str, float, float, float | None, float], ...] = (
+    ("signal_engine.evidence_groups.setup_quality.weight", 0.05, 1.0, 0.05, 0.10),
+    ("signal_engine.evidence_groups.flow_confirmation.weight", 0.05, 1.0, 0.05, 0.10),
+    ("signal_engine.flags.valuation_stretched.score_penalty", 0, 25, 1, 5),
+    ("signal_engine.flags.analyst_bearish.score_penalty", 0, 25, 1, 5),
+    ("signal_engine.flags.insider_selling.score_penalty", 0, 25, 1, 5),
+    ("signal_engine.classification.strong_min_score", 50, 90, 1, 5),
+    ("signal_engine.classification.moderate_min_score", 25, 70, 1, 5),
+    ("signal_engine.classification.enter_min_confidence", 0.40, 0.90, 0.05, 0.10),
+    ("signal_engine.classification.watch_min_confidence", 0.20, 0.60, 0.05, 0.10),
+    ("signal_engine.regime_conditioning.neutral.weak_flow_threshold", 30.0, 70.0, 5.0, 10.0),
+    ("signal_engine.regime_conditioning.neutral.weak_flow_discount", 0.50, 1.0, 0.05, 0.10),
+    ("signal_engine.regime_conditioning.risk_off.weak_setup_threshold", 40.0, 80.0, 5.0, 10.0),
+    ("signal_engine.regime_conditioning.risk_off.weak_setup_discount", 0.20, 0.80, 0.05, 0.10),
+    ("signal_engine.regime_conditioning.volatile.setup_discount", 0.40, 1.0, 0.05, 0.10),
+    ("signal_engine.regime_conditioning.volatile.flow_discount", 0.40, 1.0, 0.05, 0.10),
+)
+
+
+def _bounds_for_document_path(
+    document_path: str,
+) -> tuple[float, float, float | None, float] | None:
+    """Return (min, max, step, max_shift) if document_path matches a bounds policy."""
+    for pattern, lo, hi, step, max_shift in _PARAMETER_BOUNDS:
+        if document_path == pattern:
+            return (lo, hi, step, max_shift)
+    return None
+
+
+def _is_quantized(value: float, step: float) -> bool:
+    """True when value is a multiple of step within floating-point tolerance."""
+    if step <= 0:
+        return True
+    remainder = abs(value % step)
+    return remainder < 1e-9 or abs(remainder - step) < 1e-9
 
 
 @dataclass(frozen=True)
@@ -198,6 +240,9 @@ class SwingTuningPatchValidator:
         if not isinstance(apply_block, dict) or apply_block.get("supported") is not False:
             issues.append("apply_supported_must_be_false")
 
+        source_review = payload.get("source_review")
+        issues.extend(_validate_walk_forward_source_review(source_review))
+
         patch_items = payload.get("patch_items")
         if not isinstance(patch_items, list):
             issues.append("patch_items_must_be_list")
@@ -267,6 +312,26 @@ class SwingTuningPatchValidator:
                         proposed_value,
                     ):
                         item_issues.append("proposed_value_type_mismatch")
+
+        # Phase 8: parameter bounds — range, quantization, per-cycle shift cap.
+        if resolved_current_value is not None and proposed_value is not None and not item_issues:
+            bounds = _bounds_for_document_path(parsed.document_path)
+            if bounds is not None:
+                lo, hi, step, max_shift = bounds
+                try:
+                    pv: float | None = float(proposed_value)
+                    cv: float | None = float(resolved_current_value)
+                except (TypeError, ValueError):
+                    pv = cv = None
+                if pv is not None:
+                    if not (lo <= pv <= hi):
+                        item_issues.append(f"proposed_value_out_of_range:[{lo},{hi}]")
+                    if step is not None and not _is_quantized(pv, step):
+                        item_issues.append(f"proposed_value_not_quantized:step={step}")
+                    if cv is not None and abs(pv - cv) > max_shift + 1e-9:
+                        item_issues.append(
+                            f"proposed_value_exceeds_shift_cap:{max_shift}"
+                        )
 
         return SwingTuningPatchItemValidation(
             target_path=target_path,
@@ -545,6 +610,62 @@ class SwingTuningPatchVerifier:
             actual_value=actual_value,
             issues=tuple(item_issues),
         )
+
+
+def _validate_walk_forward_source_review(source_review: object) -> tuple[str, ...]:
+    """Return a tuple of issue strings for walk-forward provenance violations.
+
+    All issues are prefixed with 'walk_forward_not_enforced:' so callers can
+    detect the category with a single substring check.
+    """
+    prefix = "walk_forward_not_enforced:"
+    issues: list[str] = []
+    if not isinstance(source_review, dict):
+        return (f"{prefix} source_review must be a dict",)
+    if source_review.get("walk_forward_enforced") is not True:
+        issues.append(f"{prefix} walk_forward_enforced must be exactly true (boolean)")
+    try:
+        ir = float(source_review.get("is_ratio"))  # type: ignore[arg-type]
+        if not (0.0 < ir < 1.0):
+            issues.append(f"{prefix} is_ratio must be in (0.0, 1.0), got {ir}")
+    except (TypeError, ValueError):
+        issues.append(f"{prefix} is_ratio must be a number in (0.0, 1.0)")
+    is_end_date_raw = source_review.get("is_end_date")
+    oos_start_date_raw = source_review.get("oos_start_date")
+    full_end_date_raw = source_review.get("full_end_date")
+    if not is_end_date_raw:
+        issues.append(f"{prefix} is_end_date is required")
+    if not oos_start_date_raw:
+        issues.append(f"{prefix} oos_start_date is required")
+    if not full_end_date_raw:
+        issues.append(f"{prefix} full_end_date is required")
+    if is_end_date_raw and oos_start_date_raw and full_end_date_raw:
+        try:
+            is_end = date.fromisoformat(str(is_end_date_raw))
+            oos_start = date.fromisoformat(str(oos_start_date_raw))
+            full_end = date.fromisoformat(str(full_end_date_raw))
+            if not (is_end < oos_start <= full_end):
+                issues.append(
+                    f"{prefix} date ordering violated: "
+                    f"is_end_date={is_end} oos_start_date={oos_start} "
+                    f"full_end_date={full_end}; "
+                    "require is_end_date < oos_start_date <= full_end_date"
+                )
+        except ValueError as exc:
+            issues.append(f"{prefix} date parse error: {exc}")
+    oos = source_review.get("oos_backtest_summary")
+    if not isinstance(oos, dict):
+        issues.append(f"{prefix} oos_backtest_summary must be a dict")
+    else:
+        try:
+            int(oos.get("trade_count"))  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            issues.append(f"{prefix} oos_backtest_summary.trade_count must be an integer")
+        if "total_return_pct" not in oos:
+            issues.append(f"{prefix} oos_backtest_summary.total_return_pct is required (may be null)")
+        if "win_rate_pct" not in oos:
+            issues.append(f"{prefix} oos_backtest_summary.win_rate_pct is required (may be null)")
+    return tuple(issues)
 
 
 def _invalid_report(patch_path: str, issue: str) -> SwingTuningPatchValidationReport:

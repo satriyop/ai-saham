@@ -58,27 +58,32 @@ def display_swing_tuning_review_report(
     table.add_column("Setup")
     table.add_column("Period")
     table.add_column("Sample")
-    table.add_column("Trades", justify="right")
-    table.add_column("Candidates", justify="right")
-    table.add_column("Return", justify="right")
-    table.add_column("Win", justify="right")
+    table.add_column("IS Trades", justify="right")
+    table.add_column("IS Return", justify="right")
+    table.add_column("IS Win", justify="right")
+    table.add_column("OOS Trades", justify="right")
+    table.add_column("OOS Return", justify="right")
+    table.add_column("OOS Win", justify="right")
     table.add_column("Diff")
     table.add_column("Proposed", justify="right")
-    table.add_column("Rejected", justify="right")
 
     for record in report.records:
+        oos_trades = _int(record.oos_trade_count) if record.walk_forward_enforced else "—"
+        oos_return = _pct(record.oos_total_return_pct, signed=True) if record.walk_forward_enforced else "—"
+        oos_win = _pct(record.oos_win_rate_pct) if record.walk_forward_enforced else "—"
         table.add_row(
             record.recorded_at or "N/A",
             record.setup or "N/A",
             _period(record.start_date, record.end_date),
             record.sample_status or "N/A",
             _int(record.trade_count),
-            _int(record.candidate_observation_count),
             _pct(record.total_return_pct, signed=True),
             _pct(record.win_rate_pct),
+            oos_trades,
+            oos_return,
+            oos_win,
             record.tuning_diff_status or "N/A",
             _int(record.proposed_count),
-            _int(record.rejected_count),
         )
 
     console().print("")
@@ -106,11 +111,7 @@ def display_swing_tuning_loop_status(
     table.add_row(
         "Review",
         "ready" if latest_review else "missing",
-        (
-            f"{latest_review.recorded_at} {latest_review.setup or 'N/A'}"
-            if latest_review
-            else "Run tune-swing --save"
-        ),
+        _loop_review_detail(report),
     )
     table.add_row(
         "Patch",
@@ -436,6 +437,37 @@ def _patch_state(report: SwingTuningLoopStatusReport) -> str:
     if report.patch.dry_run_ready is not True:
         return "not ready"
     return "ready"
+
+
+def _loop_review_detail(report: SwingTuningLoopStatusReport) -> str:
+    latest_review = report.review.latest_review
+    if latest_review is None:
+        return "Run tune-swing --save"
+    if (
+        report.next_action == "RUN_TUNE_SWING_WITH_LARGER_SAMPLE"
+        or latest_review.sample_status == "INSUFFICIENT_SAMPLE"
+    ):
+        trade_count = _sample_count(
+            latest_review.trade_count,
+            latest_review.min_sample_size,
+        )
+        candidate_count = _sample_count(
+            latest_review.candidate_observation_count,
+            latest_review.min_sample_size,
+        )
+        return (
+            f"{latest_review.sample_status or 'N/A'}; "
+            f"trades {trade_count}, candidates {candidate_count}"
+        )
+    return f"{latest_review.recorded_at} {latest_review.setup or 'N/A'}"
+
+
+def _sample_count(value: int | None, minimum: int | None) -> str:
+    if value is None and minimum is None:
+        return "N/A"
+    if minimum is None:
+        return _int(value)
+    return f"{_int(value)}/{minimum}"
 
 
 def _verify_state(report: SwingTuningLoopStatusReport) -> str:

@@ -2,9 +2,22 @@
 
 import inspect
 import json
+
+_COMPLETE_SOURCE_REVIEW = {
+    "walk_forward_enforced": True,
+    "is_ratio": 0.70,
+    "is_end_date": "2026-04-01",
+    "oos_start_date": "2026-04-02",
+    "full_end_date": "2026-07-01",
+    "oos_backtest_summary": {
+        "trade_count": 8,
+        "total_return_pct": 3.2,
+        "win_rate_pct": 50.0,
+    },
+}
 import logging
 import sys
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
@@ -1048,6 +1061,79 @@ def test_swing_tune_export_patch_writes_review_only_patch(monkeypatch, tmp_path)
     assert patch_payload["source_review"]["setup"] == payload["setup"]
 
 
+def test_swing_tune_is_ratio_patch_has_non_overlapping_split_dates(monkeypatch, tmp_path):
+    # The split date must not appear in both IS and OOS windows.
+    # is_end_date is the last IS day; oos_start_date must be the next calendar day.
+    _patch_swing_backtest_command(monkeypatch)
+    patch_path = tmp_path / "patch.json"
+
+    result = runner.invoke(
+        app,
+        [
+            "trade", "tune-swing", "BBCA",
+            "--format", "json",
+            "--start", "2026-01-01",
+            "--end", "2026-12-31",
+            "--is-ratio", "0.70",
+            "--export-patch", str(patch_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    patch_payload = json.loads(patch_path.read_text())
+    sr = patch_payload["source_review"]
+    assert sr.get("is_end_date") is not None
+    assert sr.get("oos_start_date") is not None
+    is_end = date.fromisoformat(sr["is_end_date"])
+    oos_start = date.fromisoformat(sr["oos_start_date"])
+    assert oos_start == is_end + timedelta(days=1), (
+        f"oos_start_date {oos_start} must be exactly one day after is_end_date {is_end}"
+    )
+
+
+# --- tune-swing --is-ratio date validation -----------------------------------
+
+def test_tune_swing_is_ratio_without_end_exits():
+    # --start has a config default; --end has no default and must be explicit
+    # so the OOS window end is known.
+    result = runner.invoke(
+        app, ["trade", "tune-swing", "BBCA", "--is-ratio", "0.70"]
+    )
+    assert result.exit_code != 0
+    assert "--is-ratio requires --end" in result.output
+
+
+def test_tune_swing_invalid_is_ratio_exits():
+    result = runner.invoke(
+        app,
+        ["trade", "tune-swing", "BBCA", "--is-ratio", "1.5",
+         "--start", "2026-01-01", "--end", "2026-07-01"],
+    )
+    assert result.exit_code != 0
+    assert "--is-ratio must be in range" in result.output
+
+
+def test_tune_swing_start_equals_end_exits():
+    result = runner.invoke(
+        app,
+        ["trade", "tune-swing", "BBCA", "--is-ratio", "0.70",
+         "--start", "2026-01-01", "--end", "2026-01-01"],
+    )
+    assert result.exit_code != 0
+    assert "--start must be before --end" in result.output
+
+
+def test_tune_swing_too_short_range_for_split_exits():
+    # 1-day range with is_ratio=0.50 → is_end_dt == start_dt (0 IS days)
+    result = runner.invoke(
+        app,
+        ["trade", "tune-swing", "BBCA", "--is-ratio", "0.50",
+         "--start", "2026-01-01", "--end", "2026-01-02"],
+    )
+    assert result.exit_code != 0
+    assert "non-empty IS and OOS windows" in result.output
+
+
 def test_validate_tuning_patch_json_reports_valid_patch(tmp_path):
     config_dir = tmp_path / "config"
     config_dir.mkdir()
@@ -1061,6 +1147,7 @@ def test_validate_tuning_patch_json_reports_valid_patch(tmp_path):
     patch_path.write_text(json.dumps({
         "artifact_type": "swing_tuning_patch_review",
         "apply": {"supported": False},
+        "source_review": _COMPLETE_SOURCE_REVIEW,
         "patch_items": [
             {
                 "target_path": (
@@ -1124,6 +1211,7 @@ def test_apply_tuning_patch_dry_run_json_reports_changes(tmp_path):
     patch_path.write_text(json.dumps({
         "artifact_type": "swing_tuning_patch_review",
         "apply": {"supported": False},
+        "source_review": _COMPLETE_SOURCE_REVIEW,
         "patch_items": [
             {
                 "target_path": (
@@ -1172,6 +1260,7 @@ def test_apply_tuning_patch_verify_json_reports_applied_values(tmp_path):
     patch_path.write_text(json.dumps({
         "artifact_type": "swing_tuning_patch_review",
         "apply": {"supported": False},
+        "source_review": _COMPLETE_SOURCE_REVIEW,
         "patch_items": [
             {
                 "target_path": (

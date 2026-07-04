@@ -37,7 +37,7 @@ def test_swing_tuning_review_journal_summarizes_recent_runs(tmp_path):
         "setup": "foreign-bounce",
         "start_date": "2026-01-01",
         "end_date": "2026-01-31",
-        "sample": {"status": "INSUFFICIENT_SAMPLE"},
+        "sample": {"status": "INSUFFICIENT_SAMPLE", "min_sample_size": 30},
         "backtest_summary": {
             "trade_count": 0,
             "candidate_observation_count": 3,
@@ -75,6 +75,7 @@ def test_swing_tuning_review_journal_summarizes_recent_runs(tmp_path):
     latest = report.records[0]
     assert latest.setup == "coiled-spring"
     assert latest.sample_status == "TRADE_READY"
+    assert latest.min_sample_size is None
     assert latest.trade_count == 12
     assert latest.candidate_observation_count == 40
     assert latest.total_return_pct == 4.5

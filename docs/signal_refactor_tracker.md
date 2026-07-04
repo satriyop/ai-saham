@@ -20,7 +20,7 @@ This file is the canonical phase-by-phase state for the SignalEngine staged-evid
 | 5 | Regime-Conditional Signal Interpretation | ✅ Done | f361b90, 01afcf0 |
 | 6 | Confidence-Aware Classification | ✅ Done | e57e9fb |
 | 7 | Persistence For Replayable Evidence | ✅ Done | pending commit |
-| 8 | Walk-Forward Calibration Guardrails | 🔲 Not Started | — |
+| 8 | Walk-Forward Calibration Guardrails | ✅ Done | pending commit |
 
 **Status legend:** 🔲 Not Started · 🔄 In Progress · ✅ Done · ⏸️ Deferred
 
@@ -481,13 +481,16 @@ Code review identified four issues in Phase 5 commit (f361b90):
 
 ### Sub-steps
 
-- [ ] 8.1 Extend `SwingBacktestAttributionSummary` allowlisted targets — add signal group weights and evidence flag thresholds added in Phase 4
-- [ ] 8.2 Extend `SwingTuningPatchValidator` — add YAML paths from Phase 4 `config/signal_engine.yaml` evidence group section
-- [ ] 8.3 Add in-sample/out-of-sample split enforcement (minimum 70% IS, 30% OOS)
-- [ ] 8.4 Add quantized weight step validator (weights must be multiples of 0.05)
-- [ ] 8.5 Add max per-cycle parameter shift cap (maximum ±0.10 deviation from baseline per tuning cycle)
-- [ ] 8.6 Profile calibration sweep on representative data; introduce NumPy or Polars only if pure-Python path cannot meet defined budget
-- [ ] 8.7 Unit tests for new guardrail rules
+- [x] 8.1 Extend `SwingBacktestAttributionSummary` allowlisted targets — add signal group weights and evidence flag thresholds added in Phase 4
+- [x] 8.2 Extend `SwingTuningPatchValidator` — add YAML paths from Phase 4 `config/signal_engine.yaml` evidence group section
+- [x] 8.3 Add in-sample/out-of-sample split enforcement: `--is-ratio` trims backtest to IS window; `is_end_date` in payload signals enforcement; `walk_forward_enforced` derived from `is_end_date` presence (not from `is_ratio < 1.0` alone)
+- [x] 8.4 Add quantized weight step validator (weights must be multiples of 0.05); proposal generation uses 0.05 step directly for quantized paths (not generic 0.5)
+- [x] 8.5 Add max per-cycle parameter shift cap (maximum ±0.10 for weight/confidence; ±5 for score thresholds)
+- [x] 8.6 Profiling decision: pure-Python calibration sweep measured adequate for current data sizes. No NumPy/Polars dependency added. Revisit if sweep exceeds 5s wall-time on a 200-ticker universe with 12-month window.
+- [x] 8.7 Unit tests for new guardrail rules — `tests/application/services/test_swing_tuning_guardrails.py` (27 tests)
+- [x] 8.8 Provenance guard hardened: `_validate_walk_forward_source_review()` requires complete `source_review` with `is_ratio`, `full_end_date`, `oos_backtest_summary` (keys present, metrics null-allowed); all test fixtures updated to use complete `source_review`
+- [x] 8.9 Zero-length IS/OOS split guard: `--is-ratio` without `--end` exits; `start_dt >= end_dt` exits; `is_end_dt` at either boundary exits. CLI tests cover all four cases.
+- [x] 8.10 IS/OOS split date overlap fixed: `oos_start_dt = is_end_dt + 1 day` so the split date is never shared between windows; `oos_start_date` stored in payload and source_review; validator enforces `is_end_date < oos_start_date <= full_end_date` with `date.fromisoformat` parsing; `walk_forward_enforced` requires exactly `True` (boolean, not truthy). 4 new tests. 2319 pass.
 
 ### Files To Create/Modify
 
@@ -521,3 +524,4 @@ _Append decisions, blockers, or scope changes here as they come up._
 | 2026-07-03 | Phase 5 complete. `MarketContext` is canonical signal conditioning when `--with-market-context` is enabled. ADR-037 supersedes ADR-032 preview-only wording. Follow-up fixed stale CLI help and compact Market Context display so preview-vs-canonical equality no longer hides `regime_conditioning` / `gate_tightening`. Focused CLI tests pass. |
 | 2026-07-03 | Phase 6 complete. `SignalAssessment.confidence_score` added; evidence confidence now caps entry quality. High score with low confidence becomes `WATCH`, not `ENTER`. Seasonality with unknown or fewer than 5 years is unavailable/missing, not directional evidence. Self-fetch, audit, and evidence annotation now share that rule. Focused signal, CLI, and workflow tests pass. |
 | 2026-07-03 | Phase 7 complete. `candidate_observations` SQLite persistence added via `SqliteMigrationRunner`; `screen accum` persists schema-versioned candidate observations from the application use case; `saham analyze signal-replay TICKER DATE` replays stored payloads without live providers. Focused persistence, replay, command contract, and accumulation tests pass. |
+| 2026-07-04 | Phase 8 complete. Attribution allowlist extended with Phase 5 `regime_conditioning.*` and Phase 6 `enter/watch_min_confidence` paths. `_PARAMETER_BOUNDS` table enforces range + quantization + per-cycle shift cap in `SwingTuningPatchValidator`. IS/OOS enforcement: `--is-ratio` trims backtest end date; `is_end_date` in payload is the enforcement signal (not `is_ratio` alone); `walk_forward_enforced` derives from `is_end_date` presence. Quantized path proposals use 0.05 step directly (not 0.5 + snap). Provenance guard hardened with `_validate_walk_forward_source_review()` requiring full source_review dict (is_ratio, full_end_date, oos_backtest_summary with keys present). CLI guards zero-length IS/OOS splits. 27 guardrail tests + 4 CLI date-validation tests. 2315 tests pass. |

@@ -37,6 +37,7 @@ class SwingTuningReviewSummary:
     start_date: str | None
     end_date: str | None
     sample_status: str | None
+    min_sample_size: int | None
     trade_count: int | None
     candidate_observation_count: int | None
     total_return_pct: float | None
@@ -44,6 +45,11 @@ class SwingTuningReviewSummary:
     tuning_diff_status: str | None
     proposed_count: int | None
     rejected_count: int | None
+    is_ratio: float | None  # 0.0–1.0; None = not tracked; 1.0 = full-data (no OOS split)
+    walk_forward_enforced: bool  # True when is_end_date stored; patch validation also requires oos_start_date and oos_backtest_summary
+    oos_trade_count: int | None  # None when walk_forward not enforced
+    oos_total_return_pct: float | None
+    oos_win_rate_pct: float | None
 
     def to_dict(self) -> dict:
         return {
@@ -52,6 +58,7 @@ class SwingTuningReviewSummary:
             "start_date": self.start_date,
             "end_date": self.end_date,
             "sample_status": self.sample_status,
+            "min_sample_size": self.min_sample_size,
             "trade_count": self.trade_count,
             "candidate_observation_count": self.candidate_observation_count,
             "total_return_pct": self.total_return_pct,
@@ -59,6 +66,11 @@ class SwingTuningReviewSummary:
             "tuning_diff_status": self.tuning_diff_status,
             "proposed_count": self.proposed_count,
             "rejected_count": self.rejected_count,
+            "is_ratio": self.is_ratio,
+            "walk_forward_enforced": self.walk_forward_enforced,
+            "oos_trade_count": self.oos_trade_count,
+            "oos_total_return_pct": self.oos_total_return_pct,
+            "oos_win_rate_pct": self.oos_win_rate_pct,
         }
 
 
@@ -206,6 +218,16 @@ class SwingTuningReviewJournal:
         candidate = _summarize_record(candidate_record)
         baseline_targets = _proposed_target_paths(baseline_record)
         candidate_targets = _proposed_target_paths(candidate_record)
+        notes_list = [
+            "Comparison is read-only and based on saved review artifacts.",
+            "Latest saved run is candidate; previous saved run is baseline.",
+        ]
+        if candidate.is_ratio is None or candidate.is_ratio >= 1.0:
+            notes_list.append(
+                "walk_forward_not_enforced: candidate review used full data "
+                "(no OOS split). Run with --is-ratio 0.70 to enforce 70/30 "
+                "IS/OOS split."
+            )
         return SwingTuningReviewComparison(
             status="READY",
             baseline=baseline,
@@ -217,10 +239,7 @@ class SwingTuningReviewJournal:
             disappeared_target_paths=tuple(
                 sorted(baseline_targets - candidate_targets)
             ),
-            notes=(
-                "Comparison is read-only and based on saved review artifacts.",
-                "Latest saved run is candidate; previous saved run is baseline.",
-            ),
+            notes=tuple(notes_list),
         )
 
     def measure_latest_apply(
@@ -289,12 +308,19 @@ def _summarize_record(record: dict[str, Any]) -> SwingTuningReviewSummary:
     backtest = _dict(record.get("backtest_summary"))
     tuning_diff = _dict(record.get("tuning_config_diff"))
     tuning_diff_summary = _dict(tuning_diff.get("summary"))
+    is_ratio_raw = _float(record.get("is_ratio"))
+    # walk_forward_enforced is True only when the backtest was actually run on the
+    # IS window — signalled by is_end_date being present in the record. Storing
+    # is_ratio alone does not constitute enforcement; it's metadata.
+    walk_forward_enforced = _str(record.get("is_end_date")) is not None
+    oos = _dict(record.get("oos_backtest_summary"))
     return SwingTuningReviewSummary(
         recorded_at=_str(record.get("recorded_at")),
         setup=_str(record.get("setup")),
         start_date=_str(record.get("start_date")),
         end_date=_str(record.get("end_date")),
         sample_status=_str(sample.get("status")),
+        min_sample_size=_int(sample.get("min_sample_size")),
         trade_count=_int(backtest.get("trade_count")),
         candidate_observation_count=_int(
             backtest.get("candidate_observation_count")
@@ -304,6 +330,11 @@ def _summarize_record(record: dict[str, Any]) -> SwingTuningReviewSummary:
         tuning_diff_status=_str(tuning_diff.get("status")),
         proposed_count=_int(tuning_diff_summary.get("proposed_count")),
         rejected_count=_int(tuning_diff_summary.get("rejected_count")),
+        is_ratio=is_ratio_raw,
+        walk_forward_enforced=walk_forward_enforced,
+        oos_trade_count=_int(oos.get("trade_count")),
+        oos_total_return_pct=_float(oos.get("total_return_pct")),
+        oos_win_rate_pct=_float(oos.get("win_rate_pct")),
     )
 
 
@@ -348,6 +379,10 @@ def _metric_deltas(
         ("win_rate_pct", baseline.win_rate_pct, candidate.win_rate_pct),
         ("proposed_count", baseline.proposed_count, candidate.proposed_count),
         ("rejected_count", baseline.rejected_count, candidate.rejected_count),
+        ("is_ratio", baseline.is_ratio, candidate.is_ratio),
+        ("oos_trade_count", baseline.oos_trade_count, candidate.oos_trade_count),
+        ("oos_total_return_pct", baseline.oos_total_return_pct, candidate.oos_total_return_pct),
+        ("oos_win_rate_pct", baseline.oos_win_rate_pct, candidate.oos_win_rate_pct),
     )
     return tuple(
         SwingTuningMetricDelta(

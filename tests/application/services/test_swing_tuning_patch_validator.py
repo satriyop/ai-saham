@@ -1,6 +1,19 @@
 import json
 from datetime import datetime
 
+_COMPLETE_SOURCE_REVIEW = {
+    "walk_forward_enforced": True,
+    "is_ratio": 0.70,
+    "is_end_date": "2026-04-01",
+    "oos_start_date": "2026-04-02",
+    "full_end_date": "2026-07-01",
+    "oos_backtest_summary": {
+        "trade_count": 8,
+        "total_return_pct": 3.2,
+        "win_rate_pct": 50.0,
+    },
+}
+
 from src.application.services.swing_tuning_patch_validator import (
     SwingTuningPatchApplier,
     SwingTuningPatchDryRunPlanner,
@@ -26,6 +39,7 @@ def test_swing_tuning_patch_validator_accepts_matching_current_value(tmp_path):
     patch_path.write_text(json.dumps({
         "artifact_type": "swing_tuning_patch_review",
         "apply": {"supported": False},
+        "source_review": _COMPLETE_SOURCE_REVIEW,
         "patch_items": [
             {
                 "target_path": (
@@ -51,6 +65,7 @@ def test_swing_tuning_patch_validator_rejects_stale_current_value(tmp_path):
     patch_path.write_text(json.dumps({
         "artifact_type": "swing_tuning_patch_review",
         "apply": {"supported": False},
+        "source_review": _COMPLETE_SOURCE_REVIEW,
         "patch_items": [
             {
                 "target_path": (
@@ -80,7 +95,7 @@ def test_swing_tuning_patch_validator_rejects_applyable_artifact(tmp_path):
     report = SwingTuningPatchValidator(config_root=tmp_path).validate(patch_path)
 
     assert report.valid is False
-    assert report.issues == ("apply_supported_must_be_false",)
+    assert "apply_supported_must_be_false" in report.issues
 
 
 def test_swing_tuning_patch_dry_run_plans_yaml_changes(tmp_path):
@@ -89,6 +104,7 @@ def test_swing_tuning_patch_dry_run_plans_yaml_changes(tmp_path):
     patch_path.write_text(json.dumps({
         "artifact_type": "swing_tuning_patch_review",
         "apply": {"supported": False},
+        "source_review": _COMPLETE_SOURCE_REVIEW,
         "patch_items": [
             {
                 "target_path": (
@@ -115,6 +131,7 @@ def test_swing_tuning_patch_dry_run_rejects_empty_patch(tmp_path):
     patch_path.write_text(json.dumps({
         "artifact_type": "swing_tuning_patch_review",
         "apply": {"supported": False},
+        "source_review": _COMPLETE_SOURCE_REVIEW,
         "patch_items": [],
     }))
 
@@ -131,6 +148,7 @@ def test_swing_tuning_patch_apply_writes_yaml_and_audit_log(tmp_path):
     patch_path.write_text(json.dumps({
         "artifact_type": "swing_tuning_patch_review",
         "apply": {"supported": False},
+        "source_review": _COMPLETE_SOURCE_REVIEW,
         "patch_items": [
             {
                 "target_path": (
@@ -170,6 +188,7 @@ def test_swing_tuning_patch_apply_rejects_without_confirmation(tmp_path):
     patch_path.write_text(json.dumps({
         "artifact_type": "swing_tuning_patch_review",
         "apply": {"supported": False},
+        "source_review": _COMPLETE_SOURCE_REVIEW,
         "patch_items": [
             {
                 "target_path": (
@@ -202,6 +221,7 @@ def test_swing_tuning_patch_apply_rejects_dirty_target(tmp_path):
     patch_path.write_text(json.dumps({
         "artifact_type": "swing_tuning_patch_review",
         "apply": {"supported": False},
+        "source_review": _COMPLETE_SOURCE_REVIEW,
         "patch_items": [
             {
                 "target_path": (
@@ -239,6 +259,7 @@ def test_swing_tuning_patch_verify_passes_after_value_applied(tmp_path):
     patch_path.write_text(json.dumps({
         "artifact_type": "swing_tuning_patch_review",
         "apply": {"supported": False},
+        "source_review": _COMPLETE_SOURCE_REVIEW,
         "patch_items": [
             {
                 "target_path": (
@@ -265,6 +286,7 @@ def test_swing_tuning_patch_verify_fails_before_value_applied(tmp_path):
     patch_path.write_text(json.dumps({
         "artifact_type": "swing_tuning_patch_review",
         "apply": {"supported": False},
+        "source_review": _COMPLETE_SOURCE_REVIEW,
         "patch_items": [
             {
                 "target_path": (

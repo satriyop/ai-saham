@@ -181,6 +181,8 @@ def _next_action(
         return "EXPORT_TUNING_PATCH"
     if patch.validation is None or not patch.validation.valid:
         return "FIX_OR_REEXPORT_PATCH"
+    if _patch_has_no_items(patch) and _latest_review_has_insufficient_sample(review):
+        return "RUN_TUNE_SWING_WITH_LARGER_SAMPLE"
     if patch.dry_run_ready is not True:
         return "REVIEW_PATCH_DRY_RUN"
     if apply.latest_apply is None:
@@ -202,3 +204,14 @@ def _overall_status(next_action: str) -> str:
     }:
         return "NEEDS_ATTENTION"
     return "IN_PROGRESS"
+
+
+def _patch_has_no_items(patch: SwingTuningPatchStatus) -> bool:
+    return patch.validation is not None and patch.validation.item_count == 0
+
+
+def _latest_review_has_insufficient_sample(review: SwingTuningReviewStatus) -> bool:
+    return (
+        review.latest_review is not None
+        and review.latest_review.sample_status == "INSUFFICIENT_SAMPLE"
+    )
