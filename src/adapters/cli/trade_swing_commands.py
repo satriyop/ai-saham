@@ -231,7 +231,11 @@ def _swing_backtest_payload(response: SwingBacktestResponse) -> dict:
 def _swing_tuning_payload(response: SwingBacktestResponse) -> dict:
     plan = build_tuning_readiness_plan(response.attribution_summary)
     proposal = build_tuning_proposal_draft(response.attribution_summary)
-    config_diff = build_tuning_config_diff_draft(response.attribution_summary)
+    active_setups = frozenset({response.setup}) if response.setup else None
+    config_diff = build_tuning_config_diff_draft(
+        response.attribution_summary,
+        active_setups=active_setups,
+    )
     return {
         "schema_version": 1,
         "artifact_type": "swing_tuning_review",
@@ -477,8 +481,10 @@ def swing_backtest(
                 response.attribution_summary
             ).to_dict()
         if with_tuning_diff:
+            active_setups_bs = frozenset({response.setup}) if response.setup else None
             payload["tuning_config_diff"] = build_tuning_config_diff_draft(
-                response.attribution_summary
+                response.attribution_summary,
+                active_setups=active_setups_bs,
             ).to_dict()
         typer.echo(json.dumps(payload, indent=2, default=str))
         return

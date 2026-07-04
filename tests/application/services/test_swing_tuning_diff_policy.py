@@ -233,3 +233,45 @@ def test_suggest_tuning_value_keeps_non_numeric_and_low_evidence_read_only():
     assert non_numeric.value_selection_policy == "NON_NUMERIC_CURRENT_VALUE"
     assert low_evidence.proposed_value is None
     assert low_evidence.value_selection_policy == "INSUFFICIENT_EVIDENCE"
+
+
+def _idr_candidate() -> _Candidate:
+    # Risk engine gate paths are driven by candidate_risk_status evidence.
+    # BLOCKED avg > OPEN avg means the gate blocks too many good candidates → loosen.
+    return _Candidate(
+        dimension="candidate_risk_status",
+        evidence_strength="HIGH",
+        evidence_buckets=("BLOCKED | n=50 | avg=+2.00%", "OPEN | n=150 | avg=-0.50%"),
+    )
+
+
+def test_market_cap_floor_idr_uses_100b_step_not_integer_plus_one():
+    resolution = TuningConfigValueResolution(
+        target_path=_path(
+            "config/risk_engine.yaml:risk_engine.gates.liquidity.market_cap_floor_idr"
+        ),
+        resolved=True,
+        current_value=1_000_000_000_000,
+    )
+
+    suggestion = suggest_tuning_value(_idr_candidate(), resolution)
+
+    assert suggestion.status == "PROPOSED_VALUE_SELECTED"
+    assert suggestion.proposed_value != 999_999_999_999, "must not produce +/-1 IDR noise"
+    assert suggestion.proposed_value % int(1e11) == 0, "must be quantized to 100B step"
+
+
+def test_median_tx_floor_idr_uses_1b_step_not_integer_plus_one():
+    resolution = TuningConfigValueResolution(
+        target_path=_path(
+            "config/risk_engine.yaml:risk_engine.gates.liquidity.median_tx_floor_idr"
+        ),
+        resolved=True,
+        current_value=5_000_000_000,
+    )
+
+    suggestion = suggest_tuning_value(_idr_candidate(), resolution)
+
+    assert suggestion.status == "PROPOSED_VALUE_SELECTED"
+    assert suggestion.proposed_value != 4_999_999_999, "must not produce +/-1 IDR noise"
+    assert suggestion.proposed_value % int(1e9) == 0, "must be quantized to 1B step"

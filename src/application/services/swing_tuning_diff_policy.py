@@ -10,6 +10,7 @@ Layer: Application
 from __future__ import annotations
 
 from dataclasses import dataclass
+from fnmatch import fnmatch
 from typing import Iterable
 
 from src.application.services.swing_tuning_config_paths import (
@@ -194,7 +195,11 @@ def suggest_tuning_value(
             value_selection_policy="NO_UNAMBIGUOUS_DIRECTION",
         )
 
-    if _should_snap_to_weight_grid(resolution.target_path.document_path):
+    document_path = resolution.target_path.document_path
+    custom_step = _custom_step_for(document_path)
+    if custom_step is not None:
+        proposed_value = _snap_to_step(float(current_value), custom_step, adjustment_direction)
+    elif _should_snap_to_weight_grid(document_path):
         # Use the 0.05 grid step directly so proposals stay within parameter bounds.
         # Adding the generic 0.5 float step to e.g. confidence=0.70 would produce
         # 1.20, which exceeds the 0.90 ceiling and fails validator immediately.
@@ -410,6 +415,29 @@ def _snap_to_weight_grid(value: float) -> float:
 def _should_snap_to_weight_grid(document_path: str) -> bool:
     """True when the document path targets a 0.05-quantized weight/confidence param."""
     return any(document_path.endswith(suffix) for suffix in _QUANTIZED_STEP_PATHS)
+
+
+# Per-path step overrides for large-magnitude parameters (e.g. IDR floor values).
+# Format: (document_path_pattern, step). Supports fnmatch wildcards.
+# Keep in sync with _PARAMETER_BOUNDS in swing_tuning_patch_validator.py.
+_CUSTOM_STEP_OVERRIDES: tuple[tuple[str, float], ...] = (
+    ("risk_engine.gates.liquidity.market_cap_floor_idr", 1e11),
+    ("risk_engine.gates.liquidity.median_tx_floor_idr", 1e9),
+)
+
+
+def _custom_step_for(document_path: str) -> float | None:
+    for pattern, step in _CUSTOM_STEP_OVERRIDES:
+        if fnmatch(document_path, pattern) if "*" in pattern else document_path == pattern:
+            return step
+    return None
+
+
+def _snap_to_step(value: float, step: float, direction: int) -> int | float:
+    """Snap value to step grid then move one step in direction."""
+    snapped = round(value / step) * step
+    result = snapped + step * direction
+    return int(result) if result == int(result) else round(result, 4)
 
 
 def _evidence_supports_tightening(candidate) -> bool:

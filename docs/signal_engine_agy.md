@@ -156,20 +156,35 @@ The flow confirmation group measures institutional presence. The score (0 - 100)
 The Foreign Flow Strength is calculated by summing **five distinct sub-signals** and normalizing them against a ceiling of **115 points**:
 * **Foreign Flow Strength** = (cons + streak + vwap + flow + inst) / 115.0
 
-* **Consistency (`cons`) — Max 40.0 pts:** 
-  * Score = Clamp(net_buy_ratio, 0.0, 1.0) * 40.0
-  * *Where `net_buy_ratio` is the proportion of trading days where foreign investors were net buyers.*
-* **Streak (`streak`) — Max 30.0 pts:** 
-  * Score = 30.0 * (1 - e^(-streak / 7.0))
-  * *Measures consecutive net buying days using an exponential saturation curve.*
-* **VWAP Discount (`vwap`) — Max 20.0 pts:** 
-  * Score = Clamp(vwap_discount_pct / 10.0, 0.0, 1.0) * 20.0
-  * *Rewards stocks trading at a discount relative to the foreign volume-weighted average price.*
-* **Foreign Flow Ratio (`flow`) — Max 10.0 pts:** 
-  * Score = Clamp(avg_flow_ratio / 20.0, 0.0, 1.0) * 10.0
-  * *Measures foreign net purchase volume relative to the total traded volume.*
-* **BCI Broker Concentration (`inst`) — Max 15.0 pts:** 
-  * Maps BCI labels to points: `"CLUSTER"` -> 15.0 points, `"STABLE"` -> 5.0 points, others -> 0.0 points.
+Raw foreign-flow evidence is produced by `ScoreForeignFlowUseCase`; `FlowConfirmationEvidenceBuilder` then extracts the five sub-signals (cons, streak, vwap, flow, inst) and normalizes them against 115 — deliberately excluding RSI and BB which belong to the setup group. Here is how each sub-signal is calculated:
+
+* **Consistency (`cons`) — Max Weight: 40.0 points**
+  * *What it represents:* The frequency of daily net-buying sessions by foreign investors over the tracking window.
+  * *How it is calculated:* Clamps the candidate's `net_buy_ratio` (percentage of days where foreign net buy IDR was positive) between 0.0 and 1.0, then multiplies by the weight.
+  * *Formula:* `cons = Clamp(net_buy_ratio, 0.0, 1.0) * 40.0`
+* **Streak (`streak`) — Max Weight: 30.0 points**
+  * *What it represents:* The consecutive daily buying streak by foreign operators.
+  * *How it is calculated:* Evaluates consecutive buying days using an exponential saturation decay curve with parameter `tau_days = 7.0` (streak decay parameter).
+  * *Formula:* `streak = 30.0 * (1.0 - e^(-streak / 7.0))`
+  * *Decay scale examples:*
+    * 1-day streak -> `30.0 * (1.0 - 0.8669) = 4.0` points
+    * 3-day streak -> `30.0 * (1.0 - 0.6514) = 10.5` points
+    * 5-day streak -> `30.0 * (1.0 - 0.4895) = 15.3` points
+    * 10-day streak -> `30.0 * (1.0 - 0.2397) = 22.8` points
+* **VWAP Discount (`vwap`) — Max Weight: 20.0 points**
+  * *What it represents:* The price advantage/discount relative to the volume-weighted average price foreigners paid over the tracking window.
+  * *How it is calculated:* Clamps the `vwap_discount_pct` (positive means close price is below foreign VWAP) between `0.0` and a saturation limit of `10.0` (10% discount). It then scales this discount linearly.
+  * *Formula:* `vwap = (Clamp(vwap_discount_pct, 0.0, 10.0) / 10.0) * 20.0`
+* **Foreign Flow Ratio (`flow`) — Max Weight: 10.0 points**
+  * *What it represents:* The volume intensity of foreign transactions relative to the stock's total daily turnover.
+  * *How it is calculated:* Clamps the `avg_flow_ratio` (average percentage of daily turnover that is foreign-led) between `0.0` and a saturation limit of `20.0` (20% turnover share). It then scales this ratio linearly.
+  * *Formula:* `flow = (Clamp(avg_flow_ratio, 0.0, 20.0) / 20.0) * 10.0`
+* **BCI Broker Concentration (`inst`) — Max Weight: 15.0 points**
+  * *What it represents:* Structural brokerage concentration to detect clustered accumulation by Tier 1 foreign desks (like CC, CS, MS, DB).
+  * *How it is calculated:* Evaluates the categorical Buyer-Seller Index (BCI) label from daily broker flow logs and maps it to points:
+    * **`CLUSTER`** (Clustered buying from multiple Tier 1 desks) -> **`15.0` points**
+    * **`STABLE`** (Moderate Tier 1 foreign brokerage presence) -> **`5.0` points**
+    * **`RETAIL-LED` / `None`** -> **`0.0` points**
 
 ---
 
@@ -244,9 +259,6 @@ In high-volatility environments (high VIX or rapid intraday moves), setups and f
   * Flow score is multiplied by `flow_discount` (default `0.80`).
 * **Logic:** This raises the absolute entry bar for both parameters to absorb volatility risk and prevent premature stop-outs.
 
-### 4. RISK_ON Regime
-No conditioning is applied. The group scores remain at their raw values.
-
 ---
 
 ## 6. Deep-Dive: Stage 3 - Renormalization & Confidence
@@ -288,13 +300,13 @@ Stage 4 evaluates fundamental and analyst context from the `SignalContext` objec
 
 ### 1. Flag Thresholds & Penalties Under the Hood
 * **VALUATION_STRETCHED (Penalty: -10 pts):**
-  * Trigger: `forward_pe > 50.0`
-  * Action: Reduces the composite score by 10 points. High P/E growth stocks or loss-makers with extreme multiples are penalized.
+  * Trigger: `forward_pe > 50.0` (Where Forward P/E = current price / projected next-year EPS. If projected EPS is negative or zero (unprofitable), Forward P/E is marked `None` / invalid, which bypasses this valuation penalty).
+  * Action: Reduces the composite score by 10 points.
 * **ANALYST_BEARISH (Penalty: -8 pts):**
-  * Trigger: `analyst_buy_pct < 0.20` (Less than 20% of analysts recommend a Buy).
+  * Trigger: `analyst_buy_pct < 0.20` (Less than 20% of polled sell-side analysts recommend a Buy).
   * Action: Reduces the composite score by 8 points.
 * **INSIDER_SELLING (Penalty: -12 pts):**
-  * Trigger: `insider_net_buy_ratio < -0.30` (Insider selling volume exceeds buying volume by more than 30% over the last 90 days).
+  * Trigger: `insider_net_buy_ratio < -0.30` (Insider selling volume exceeds buying volume by more than 30% over the last 90 days. This ratio is share-weighted based on official IDX disclosures).
   * Action: Reduces the composite score by 12 points.
 
 ### 2. Score Reduction Math
@@ -389,7 +401,34 @@ To see how this works under the hood, let's trace a mock analysis of **BBRI** on
 
 ---
 
-## 10. The Legacy AssessSignalUseCase class
+## 10. Tunable Engine Parameters & Configuration (`config/signal_engine.yaml`)
+
+The scoring ranges, thresholds, weights, and discounts are not hardcoded. They are dynamically loaded from [config/signal_engine.yaml](file:///Users/satriyo/dev/ai-saham/config/signal_engine.yaml). The table below lists the configurable parameters and their default factory settings:
+
+### A. Classification & Weights
+* **`classification.strong_min_score` (Default: `70`):** Score hurdle required to achieve `STRONG` strength.
+* **`classification.moderate_min_score` (Default: `45`):** Score hurdle required to achieve `MODERATE` strength.
+* **`classification.enter_min_confidence` (Default: `0.70`):** Evidence completeness required to output `ENTER`.
+* **`classification.watch_min_confidence` (Default: `0.40`):** Evidence completeness required to output `WATCH`.
+* **`evidence_groups.setup_quality.weight` (Default: `0.60`):** Base weight contribution of timing setups.
+* **`evidence_groups.flow_confirmation.weight` (Default: `0.40`):** Base weight contribution of flows.
+
+### B. Asymmetric Risk Flags
+* **`flags.valuation_stretched.forward_pe_threshold` (Default: `50.0`):** PE threshold triggering `-10` points penalty.
+* **`flags.analyst_bearish.buy_ratio_threshold` (Default: `0.20`):** Buy ratio threshold triggering `-8` points penalty.
+* **`flags.insider_selling.net_buy_ratio_threshold` (Default: `-0.30`):** Insider net ratio threshold triggering `-12` points penalty.
+
+### C. Market Regime Discounts
+* **`regime_conditioning.neutral.weak_flow_threshold` (Default: `50.0`):** Hurdle rate under neutral markets.
+* **`regime_conditioning.neutral.weak_flow_discount` (Default: `0.80`):** Flow penalty multiplier ($20\%$ discount).
+* **`regime_conditioning.risk_off.weak_setup_threshold` (Default: `60.0`):** Hurdle rate under risk-off markets.
+* **`regime_conditioning.risk_off.weak_setup_discount` (Default: `0.50`):** Setup penalty multiplier ($50\%$ discount).
+* **`regime_conditioning.volatile.setup_discount` (Default: `0.70`):** Volatile setup multiplier ($30\%$ discount).
+* **`regime_conditioning.volatile.flow_discount` (Default: `0.80`):** Volatile flow multiplier ($20\%$ discount).
+
+---
+
+## 11. The Legacy AssessSignalUseCase class
 
 The old flat 6-factor calculation is preserved as a separate class inside [assess_signal_use_case.py](file:///Users/satriyo/dev/ai-saham/src/application/use_case/assess_signal_use_case.py). 
 
@@ -420,7 +459,7 @@ Score = (0.20 * Bandar) + (0.20 * ForeignFlow) + (0.20 * Insider) + (0.15 * Seas
 
 ---
 
-## 11. Data Source Cache Tables
+## 12. Data Source Cache Tables
 
 Data is populated in local SQLite cache tables (`data/db/data.db`) via Stockbit Exodus API fetches or Yahoo Finance:
 

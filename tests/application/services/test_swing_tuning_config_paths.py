@@ -155,3 +155,76 @@ def test_validate_tuning_target_paths_covers_all_current_targets():
         for target in summary.tuning_targets
         for yaml_path in target.yaml_paths
     )
+
+
+def _write_two_setup_yaml(config_dir) -> None:
+    (config_dir / "swing_setups.yaml").write_text(
+        "setups:\n"
+        "  foreign-bounce:\n"
+        "    gates:\n"
+        "      min_foreign_flow_score: 70\n"
+        "    partial_max_failed_gates: 2\n"
+        "  coiled-spring:\n"
+        "    gates:\n"
+        "      max_bb_width_pctile: 0.20\n"
+        "    partial_max_failed_gates: 2\n",
+        encoding="utf-8",
+    )
+
+
+def test_active_setups_gate_filter_returns_only_matching_setup(tmp_path):
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    _write_two_setup_yaml(config_dir)
+
+    gate_paths = expand_tuning_config_paths(
+        "config/swing_setups.yaml:setups.*.gates",
+        config_root=tmp_path,
+        active_setups=frozenset({"foreign-bounce"}),
+    )
+    partial_paths = expand_tuning_config_paths(
+        "config/swing_setups.yaml:setups.*.partial_max_failed_gates",
+        config_root=tmp_path,
+        active_setups=frozenset({"foreign-bounce"}),
+    )
+
+    assert gate_paths == (
+        "config/swing_setups.yaml:setups.foreign-bounce.gates.min_foreign_flow_score",
+    )
+    assert partial_paths == (
+        "config/swing_setups.yaml:setups.foreign-bounce.partial_max_failed_gates",
+    )
+
+
+def test_active_setups_unknown_setup_returns_empty(tmp_path):
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    _write_two_setup_yaml(config_dir)
+
+    gate_paths = expand_tuning_config_paths(
+        "config/swing_setups.yaml:setups.*.gates",
+        config_root=tmp_path,
+        active_setups=frozenset({"does-not-exist"}),
+    )
+    partial_paths = expand_tuning_config_paths(
+        "config/swing_setups.yaml:setups.*.partial_max_failed_gates",
+        config_root=tmp_path,
+        active_setups=frozenset({"does-not-exist"}),
+    )
+
+    assert gate_paths == ()
+    assert partial_paths == ()
+
+
+def test_no_active_setups_preserves_all_setup_expansion(tmp_path):
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    _write_two_setup_yaml(config_dir)
+
+    gate_paths = expand_tuning_config_paths(
+        "config/swing_setups.yaml:setups.*.gates",
+        config_root=tmp_path,
+    )
+
+    assert "config/swing_setups.yaml:setups.foreign-bounce.gates.min_foreign_flow_score" in gate_paths
+    assert "config/swing_setups.yaml:setups.coiled-spring.gates.max_bb_width_pctile" in gate_paths

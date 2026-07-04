@@ -81,8 +81,15 @@ def parse_tuning_config_path(raw_path: str) -> TuningConfigPath:
 def expand_tuning_config_paths(
     raw_path: str,
     config_root: Path | str = Path("."),
+    active_setups: frozenset[str] | None = None,
 ) -> tuple[str, ...]:
-    """Expand allowlisted wildcard tuning paths into concrete YAML paths."""
+    """Expand allowlisted wildcard tuning paths into concrete YAML paths.
+
+    active_setups: when provided, only expand paths for setups whose name
+    is in the set (e.g. frozenset({"foreign-bounce"})). Other setup paths
+    are silently omitted, preventing cross-setup contamination in a single-
+    setup tuning run.
+    """
     parsed_path = parse_tuning_config_path(raw_path)
     if "*" not in parsed_path.document_path:
         return (parsed_path.raw,)
@@ -91,10 +98,10 @@ def expand_tuning_config_paths(
         return (parsed_path.raw,)
 
     if parsed_path.document_path == _SETUP_GATES_WILDCARD_PATH:
-        return _expand_swing_setup_gate_paths(parsed_path, config_root)
+        return _expand_swing_setup_gate_paths(parsed_path, config_root, active_setups)
 
     if parsed_path.document_path == _SETUP_PARTIAL_MAX_FAILED_GATES_WILDCARD_PATH:
-        return _expand_swing_setup_partial_gate_paths(parsed_path, config_root)
+        return _expand_swing_setup_partial_gate_paths(parsed_path, config_root, active_setups)
 
     return (parsed_path.raw,)
 
@@ -152,6 +159,7 @@ def resolve_tuning_config_value(
 def _expand_swing_setup_gate_paths(
     target_path: TuningConfigPath,
     config_root: Path | str,
+    active_setups: frozenset[str] | None = None,
 ) -> tuple[str, ...]:
     document = _load_yaml_document(target_path.file_path, config_root)
     setups = document.get("setups") if isinstance(document, dict) else None
@@ -160,6 +168,8 @@ def _expand_swing_setup_gate_paths(
 
     expanded_paths: list[str] = []
     for setup_name, setup_config in setups.items():
+        if active_setups is not None and setup_name not in active_setups:
+            continue
         if not isinstance(setup_config, dict):
             continue
         gates = setup_config.get("gates")
@@ -169,12 +179,17 @@ def _expand_swing_setup_gate_paths(
             expanded_paths.append(
                 f"{target_path.file_path}:setups.{setup_name}.gates.{gate_name}"
             )
+    # When a scope filter is active, return empty rather than the raw wildcard —
+    # empty means "nothing matched the filter," not an expansion failure.
+    if active_setups is not None:
+        return tuple(expanded_paths)
     return tuple(expanded_paths) or (target_path.raw,)
 
 
 def _expand_swing_setup_partial_gate_paths(
     target_path: TuningConfigPath,
     config_root: Path | str,
+    active_setups: frozenset[str] | None = None,
 ) -> tuple[str, ...]:
     document = _load_yaml_document(target_path.file_path, config_root)
     setups = document.get("setups") if isinstance(document, dict) else None
@@ -184,9 +199,12 @@ def _expand_swing_setup_partial_gate_paths(
     expanded_paths = tuple(
         f"{target_path.file_path}:setups.{setup_name}.partial_max_failed_gates"
         for setup_name, setup_config in setups.items()
-        if isinstance(setup_config, dict)
+        if (active_setups is None or setup_name in active_setups)
+        and isinstance(setup_config, dict)
         and "partial_max_failed_gates" in setup_config
     )
+    if active_setups is not None:
+        return expanded_paths
     return expanded_paths or (target_path.raw,)
 
 

@@ -500,8 +500,14 @@ def build_tuning_proposal_draft(
 def build_tuning_config_diff_draft(
     summary: SwingBacktestAttributionSummary,
     config_root: Path | str = Path("."),
+    active_setups: frozenset[str] | None = None,
 ) -> TuningConfigDiffDraft:
-    """Build a guarded dry-run config-diff schema without mutating config."""
+    """Build a guarded dry-run config-diff schema without mutating config.
+
+    active_setups: when provided, only include proposal paths for the named
+    setups (e.g. frozenset({"foreign-bounce"})). Prevents evidence from one
+    setup's backtest contaminating unrelated setup parameter proposals.
+    """
     proposal = build_tuning_proposal_draft(summary)
     notes = _unique_strings((
         "Config diff draft is dry-run only.",
@@ -549,6 +555,7 @@ def build_tuning_config_diff_draft(
             for expanded_target_path in expand_tuning_config_paths(
                 target_path,
                 config_root=config_root,
+                active_setups=active_setups,
             ):
                 parsed_target_path = parse_tuning_config_path(expanded_target_path)
                 resolution = resolve_tuning_config_value(
