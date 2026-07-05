@@ -306,6 +306,10 @@ def _signal_response_to_dict(response: "AssessSignalResponse | None") -> dict[st
         "entry_quality": response.assessment.entry_quality.value,
         "breakdown": response.assessment.breakdown_dict,
         "coverage_warning": response.coverage_warning,
+        "decision_constraints": (
+            response.assessment.decision_constraints.to_dict()
+            if getattr(response.assessment, "decision_constraints", None) else None
+        ),
     }
 
 
@@ -626,6 +630,7 @@ class SwingAnalysisWorkflowUseCase:
                         request.ticker,
                         signal_ctx,
                         market_context=market_regime,
+                        setup_family=request.setup_name,
                     )
                 else:
                     # No candidate — provider-based standalone evaluation
@@ -851,6 +856,7 @@ class SwingAnalysisWorkflowUseCase:
                     market_context=market_regime,
                     setup_evidence=setup_evidence,
                     flow_confirmation_evidence=flow_confirmation_evidence,
+                    setup_family=request.setup_name,
                 )
             except Exception as exc:
                 warnings.append(f"Evidence-enriched signal re-score unavailable: {exc}")

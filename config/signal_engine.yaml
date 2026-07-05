@@ -7,9 +7,11 @@
 #   Stage 4: Do-no-harm flags — score penalties from SignalContext
 #   Stage 5: Confidence-aware entry classification — ENTER requires score + confidence
 #   Stage 6: Gate tightening — ENTER → WATCH cap when MarketContext.gate_tightening=True
+#   Stage 7: Decision policy — explicit regime/setup max_decision constraints
 #
 # Tune: evidence_groups.*.weight, flags.*.score_penalty, regime_conditioning.*
 #       classification.* score and confidence thresholds
+#       decision_policy.regime_policy.* thresholds and multipliers
 #       scoring.bandar.* (still active — controls bandar_max_range helper)
 #
 # See ADR-024 for full configurability contract.
@@ -139,3 +141,78 @@ signal_engine:
     volatile:
       setup_discount: 0.70          # ×0.70 applied to all setups in volatile regime
       flow_discount: 0.80           # ×0.80 applied to all flow in volatile regime
+
+  # Phase A1: explicit regime eligibility policy. This caps final signal
+  # entry_quality and emits decision_constraints; it does not mutate raw score.
+  decision_policy:
+    regime_policy:
+      RISK_ON:
+        enter_allowed: true
+        enter_threshold: 70
+        watch_threshold: 45
+        min_coverage: 0.70
+        min_conviction: 0.70
+        max_decision: ENTER
+        regime_size_multiplier: 1.00
+
+      NEUTRAL:
+        enter_allowed: true
+        enter_threshold: 72
+        watch_threshold: 45
+        min_coverage: 0.70
+        min_conviction: 0.70
+        max_decision: ENTER
+        regime_size_multiplier: 0.50
+
+      RISK_OFF:
+        enter_allowed: false
+        enter_threshold: null
+        watch_threshold: 60
+        min_coverage: 0.80
+        min_conviction: 0.78
+        max_decision: WATCH
+        regime_size_multiplier: 0.25
+
+      VOLATILE:
+        enter_allowed: false
+        enter_threshold: null
+        watch_threshold: 65
+        min_coverage: 1.00
+        min_conviction: 1.00
+        max_decision: WATCH
+        regime_size_multiplier: 0.00
+
+    setup_regime_policy:
+      foreign_bounce:
+        RISK_ON: allowed
+        NEUTRAL: restricted_or_watch_only
+        RISK_OFF: allowed_if_flow_confirmation_strong
+        VOLATILE: enter_disabled
+
+      coiled_spring:
+        RISK_ON: allowed
+        NEUTRAL: restricted_or_watch_only
+        RISK_OFF: enter_disabled
+        VOLATILE: enter_disabled
+
+      smart_money_confirmed:
+        RISK_ON: allowed
+        NEUTRAL: restricted_or_watch_only
+        RISK_OFF: enter_disabled
+        VOLATILE: enter_disabled
+
+      pullback_continuation:
+        RISK_ON: allowed
+        NEUTRAL: restricted_or_watch_only
+        RISK_OFF: enter_disabled
+        VOLATILE: enter_disabled
+
+    setup_regime_actions:
+      allowed:
+        max_decision: ENTER
+      restricted_or_watch_only:
+        max_decision: WATCH
+      enter_disabled:
+        max_decision: WATCH
+      allowed_if_flow_confirmation_strong:
+        max_decision: ENTER

@@ -481,7 +481,8 @@ class TestSignalAssessmentValueObject:
         d = a.to_dict()
         assert set(d.keys()) == {
             "ticker", "score", "strength", "entry_quality",
-            "breakdown", "rationale", "snapshot_date", "confidence_score"
+            "breakdown", "rationale", "snapshot_date", "confidence_score",
+            "decision_constraints",
         }
         assert d["ticker"] == "BBCA"
         assert d["score"] == 50

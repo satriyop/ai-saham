@@ -1,371 +1,522 @@
 # Signal Refactor Phase Plan
 
-Date: 2026-07-03
+Date: 2026-07-05
 
-Purpose: provide an implementation-ready phase plan for improving SignalEngine
-composition and tuning. This plan is the controlling implementation plan;
-`docs/signal_refactor.md` is the design rationale.
+Purpose: provide the implementation phase plan for the finalized SignalEngine
+refactor direction in `docs/signal_refactor.md`.
 
-No runtime behavior is changed by this document.
+This document is a planning artifact only. It does not change runtime behavior.
+`docs/signal_refactor.md` remains the design rationale; this file is the phase
+execution plan.
 
-## Source Corrections Applied To `docs/signal_refactor.md`
+## Rollout Principle
 
-These corrections keep the design rationale aligned with current code:
+```text
+Canonical architecture, pattern-specific rollout.
+```
 
-- Insider activity is not assumed absent. It is wired when enrichment providers
-  are used, passed through `signal_context_builder.py`, and must be measured
-  through attribution before changing weight.
-- Analyst coverage is described as broad cache coverage but limited usable
-  analyst-count coverage: 296 cached rows, 87 usable rows, and 209
-  zero-analyst placeholders in the inspected DB.
-- Bollinger compression is documented as a current double-count / future
-  triple-count risk, not as unconditional current triple-counting.
-- Fundamental/analyst/insider demotion is documented in signal_refactor.md
-  Section 13 as a replacement-design direction. It must be implemented through
-  the canonical replacement aggregator, not through a parallel legacy/v2 split.
+The architecture remains general and composable:
 
-## Phase 0: Baseline And Evidence Audit
+- shared evidence contracts
+- `SetupPhaseState`
+- `RegimeDetectionEvidence`
+- forward labels
+- evidence status registry
+- Alpha/Trigger aggregation
+- DecisionPolicy constraints
+- TradeSetup execution boundary
 
-Goal: make current signal behavior measurable before replacing it.
+Production calibration is pattern-specific to avoid exploding the tuning
+surface. Do not calibrate foreign institutional accumulation, domestic bandar
+accumulation, mean reversion, breakout, multiple profiles, and multiple horizons
+all at once.
 
-Tasks:
-- Add a deterministic audit report for current SignalEngine inputs:
-  - factor value present/missing
-  - factor score
-  - configured weight
-  - active normalized weight
-  - data source/freshness when available
-- Add fixture tests that capture representative current outputs for known cases.
-  These fixtures are comparison evidence for the replacement, not a requirement
-  to preserve old behavior byte-for-byte.
-- Add a small local DB audit command or service for factor coverage:
-  - insider usable coverage
-  - analyst usable coverage
-  - forward estimates coverage
-  - seasonality coverage
-  - bandar coverage
-- Measure score variance and realized contribution before reducing or demoting
-  any factor.
+Initial production calibration target:
 
-Outcomes:
-- We know the actual current factor coverage and contribution.
-- Future phases have a measured baseline and explainable break points.
+```text
+foreign_institutional_accumulation_large_cap_SWING_10D
+```
 
-Verify:
-- Existing signal tests pass.
-- New audit tests use deterministic fixtures.
-- No production scoring changes happen in Phase 0.
+Initial target scope:
 
-## Phase 1: Evidence Objects Beside Current Scores
+- universe: LQ45 / IDX80 / liquid large caps
+- profile: `foreign_institutional`
+- horizon: `SWING_10D`
+- setup family: accumulation / foreign-bounce
+- primary flow track: `foreign_institutional_track`
+- required phase sequence: `ACCUMULATION -> COMPRESSION -> BREAKOUT_CONFIRMATION`
+- primary trigger: compression breakout with price/volume confirmation
+- regime: `RISK_ON` plus explicitly validated setup-specific exceptions
+- profile weights: disabled initially
+- validation: forward-label / OOS attribution gates required
 
-Goal: introduce the canonical evidence contracts used by the replacement
-SignalEngine.
+Second rollout track:
 
-Tasks:
-- Add immutable value objects:
-  - `FactorEvidence`
-  - `SignalEvidence`
-- Minimum fields:
-  - `name`
-  - `group`
-  - `direction`
-  - `strength`
-  - `confidence`
-  - `freshness`
-  - `horizon`
-  - `source`
-  - `rationale`
-  - `raw_fields`
-- Evidence raw fields must preserve enough source data for later policy:
-  - seasonality `total_years` / `back_years`
-  - candle source for volume-sensitive features
-  - cache/fetch date for freshness and decay
-- `SignalContext` must be extended with `seasonality_total_years: int | None`
-  in this phase. `SeasonalEdge` already carries `total_years` and `back_years`,
-  but `signal_context_builder.py` currently only passes `win_rate_pct` and
-  `avg_monthly_return_pct`. The Phase 6 sample guard (reject fewer than 5 years)
-  cannot be applied without this field being threaded through first.
-- Extend the application scoring path toward evidence-first output.
-- Until Phase 4 replaces the aggregator, keep CLI display behavior stable:
-  render the existing breakdown/assessment by default, and expose early evidence
-  only through explicit diagnostic/detail output. Do not put scoring policy in
-  adapters.
+```text
+domestic_bandar_accumulation_midcap_TACTICAL_3D_or_SWING_10D
+```
 
-Outcomes:
-- Richer evidence is available for debugging and future tuning.
-- The replacement engine has explicit inputs instead of scattered raw fields.
+Second-track scope:
 
-Verify:
-- Evidence builder tests cover complete, partial, and missing data. `Freshness.STALE`
-  is modeled in the enum but not emitted until a later phase carries cache/source
-  timestamps into replayable evidence.
-- Evidence serialization is deterministic.
-- No provider or CLI dependency enters domain objects.
+- universe: liquid mid/small caps with usable broker detail
+- profile: `domestic_bandar`
+- primary flow track: `domestic_bandar_track`
+- trigger: volume dry-up reversal + broker net-buy flip + price confirmation
+- calibration: separate from foreign institutional accumulation
+- threshold reuse: do not reuse foreign-track thresholds without OOS attribution
 
-## Phase 2: Setup Evidence Contract
+## Cross-Phase Rules
 
-Goal: make setup/timing structure visible to the signal layer without
-duplicating setup policy.
+- RiskEngine remains the only hard trade-risk gate authority.
+- SignalEngine emits evidence, phase state, coverage/conviction, context, and
+  decision constraints.
+- TradeSetup / sizing / backtest policy owns final stop, target, and position
+  size.
+- Regime is not a hidden multiplier inside raw stock score.
+- Missing evidence lowers `coverage_score`; weak or mixed evidence lowers
+  `conviction_score`.
+- `enter_allowed=false` is the authoritative ENTER block. Coverage/conviction
+  floors become WATCH / diagnostic-quality floors only when ENTER is disabled.
+- Evidence status is enforced by config: `DIAGNOSTIC`, `LOW_WEIGHT`,
+  `PRODUCTION`.
+- No automatic promotion from tuning output. Promotion is a manual config change
+  after validator-approved OOS evidence.
+- Every new tunable config path must be registered in validator bounds in the
+  same phase it becomes tunable.
+- Component weight groups must sum to `1.00`; validation must reject ambiguous
+  or invalid sums.
+- Saved observations must persist raw sub-signal fingerprints at signal time.
 
-Tasks:
-- Build `SetupEvidence` from existing data:
-  - `AccumulationCandidate.trend`
-  - `rsi`
-  - `bb_width_pctile`
-  - `vwap_discount_pct`
-  - `vwap_pct`
-  - `SetupEvaluation`
-- Add deterministic setup sub-evidence where data quality allows:
-  - 5-session price relative strength vs canonical `IHSG`
-  - 5-session vs 20-session volume trend
-- Volume trend must be source/confidence-gated. Stockbit candles can be treated
-  as higher-confidence; Yahoo or `yahoo_inferred` volume must carry lower
-  confidence or remain unavailable for scoring.
-- IHSG candle coverage constraint: local DB has IHSG rows from 2025-07-01
-  onward (Stockbit-backed). Equity candles go back to 2024-04-22. RS vs IHSG
-  is unavailable for any backtest or analysis before 2025-07-01. Evidence
-  builders must emit `freshness: missing` rather than computing a partial RS
-  when the IHSG window is incomplete.
-- Translate `SetupMatch` into evidence strength in the application evidence
-  builder only. Do not change `EvaluateSwingSetupUseCase` into a scoring engine.
-- Keep `EvaluateSwingSetupUseCase` and `config/swing_setups.yaml` as the
-  authoritative setup policy.
-- Do not add duplicate setup thresholds inside `SignalEngine`.
-- Emit setup evidence alongside current signal output as diagnostic data. It
-  becomes an input to the replacement aggregator in Phase 4.
+## Phase A1: Regime Eligibility Policy Quick Win
 
-Outcomes:
-- Setup evidence is visible in signal diagnostics.
-- Setup/timing structure is available to the replacement aggregator without
-  duplicating setup policy.
+Status: planned
+
+Goal: reduce false positives immediately before changing signal math or adding
+new regime persistence infrastructure.
+
+Work:
+
+- Add config-driven regime thresholds.
+- Add `enter_allowed`.
+- Add `max_decision`.
+- Add `regime_size_multiplier`.
+- Add coverage/conviction floors for WATCH / diagnostic quality.
+- Add setup-specific regime compatibility policy.
+- Define `setup_family` source priority if needed for setup-specific policy.
+- Emit decision constraints.
+- Preserve raw score comparability across regimes.
+- Do not create a new regime persistence table in A1.
+
+Required policy:
+
+```text
+Regime-level enter_allowed=false always overrides setup-specific max_decision=ENTER.
+No setup-specific policy may re-enable ENTER while regime-level ENTER is disabled.
+Setup-specific policy may tighten regime policy, not loosen it, unless a future ADR allows exceptions.
+```
 
 Verify:
-- Setup gate tests remain authoritative.
-- Setup evidence appears only when source data is present.
 
-## Phase 3: Flow Confirmation Group
+- RISK_ON, NEUTRAL, RISK_OFF, and VOLATILE decisions are deterministic.
+- RISK_OFF / VOLATILE cannot emit ENTER when `enter_allowed=false`.
+- Decision constraints are visible in output.
+- CLI adapters only display policy results; no scoring policy lives in adapters.
 
-Goal: reduce double-counting across related smart-money signals.
+Why first: A1 gives immediate false-positive reduction.
 
-Tasks:
-- Create one `flow_confirmation` evidence group.
-- Include sub-evidence:
-  - foreign consistency/streak
-  - foreign flow ratio
-  - foreign VWAP discount
-  - BCI
-  - bandar broad score
-  - smart/noise broker share when available
-- Keep sub-breakdown visible.
-- Cap group influence so correlated broker/flow inputs cannot each vote as
-  independent full-strength signals.
-- BB compression policy decision (resolved here, not deferred):
-  BB compression (`bb_width_pctile`) is a timing/structure signal — it indicates
-  whether price is in a tight range before a potential move. It belongs in the
-  setup quality group. Remove `bb_squeeze` from the scored contribution inside
-  `ScoreForeignFlowUseCase`.
-  BB evidence may remain visible in the flow breakdown for diagnostics but must
-  not add scored weight there. Setup quality becomes the single scoring home for
-  this signal.
+## Phase A2: Full RegimeDetectionEvidence And Replay
 
-Outcomes:
-- Smart-money evidence is grouped and explainable.
-- Future tuning can adjust the group rather than scattered overlapping factors.
+Status: planned
 
-Verify:
-- Foreign-flow score breakdown remains visible.
-- Bandar evidence remains visible as sub-evidence.
-- Tests prove BB compression is counted in only one configured group at a time.
+Goal: build replayable market-regime infrastructure after quick eligibility
+policy is explicit.
 
-## Phase 4: Replace Signal Aggregator
+Work:
 
-Goal: make the evidence-first staged aggregator the canonical SignalEngine.
-
-Tasks:
-- Implement staged aggregation in application layer:
-  - eligibility is not score; RiskEngine remains gate authority
-  - setup quality
-  - flow confirmation
-  - fundamental/context flags
-  - analyst context flags
-  - insider context flags
-  - priors
-  - confidence/freshness
-- Treat forward valuation, analyst consensus, and insider activity as a
-  hypothesis for flags/modifiers unless attribution supports direct timing
-  score weight.
-- Keep candidate thresholds such as valuation stretched, analyst bearish, and
-  insider selling configurable in YAML before enabling them.
-- Implement the canonical missing-evidence policy:
-  - missing evidence is excluded from score weight (`renormalize`)
-  - missing evidence always lowers confidence
-  - no unavailable factor may fabricate bullish or bearish direction
-- The missing-evidence policy must be configured in YAML for auditability,
-  emitted in diagnostics, and covered by tests. The shipped clean-break default
-  is `renormalize`.
-- Replace the old flat weighted average as the canonical SignalEngine path.
-- Update CLI displays to render the new canonical evidence and assessment
-  wording without a dual-engine comparison mode.
-
-Outcomes:
-- SignalEngine is staged, evidence-first, and confidence-aware at the contract
-  level.
-- Behavior changes are intentional, documented, and verified against the Phase 0
-  baseline rather than hidden behind a compatibility flag.
+- Add deterministic `RegimeModel` / `RegimeDetectionEvidence`.
+- Persist replayable `regime_observations`.
+- Persist regime detection inputs:
+  - `ihsg_20d_return`
+  - `ihsg_trend_structure`
+  - `ihsg_breadth_pct_above_ma`
+  - `ihsg_volume_trend`
+  - `ihsg_atr_pct`
+  - `idx_foreign_flow_5d`
+  - `idx_foreign_flow_20d`
+  - `foreign_sell_streak_ihsg_weighted`
+  - `foreign_buy_streak_ihsg_weighted`
+  - `banking_sector_vs_ihsg`
+  - `sector_breadth`
+- Persist `regime_score`, `regime`, `regime_confidence`,
+  `regime_stability`, `days_in_regime`, and `transition_warning`.
+- Persist regime forward labels:
+  - `forward_ihsg_return_5d`
+  - `forward_ihsg_return_10d`
+  - `forward_ihsg_return_20d`
+  - realized volatility / adverse market movement where available
+- Keep IDX foreign-flow transition inputs diagnostic / low-authority until
+  market-level labels prove lead-time value.
 
 Verify:
-- Replacement output is deterministic under fixed inputs.
-- Phase 0 fixtures have an explicit before/after explanation for changed cases.
-- CLI output no longer relies on legacy flat breakdown semantics.
 
-## Phase 5: Regime-Conditional Signal Interpretation
+- Regime observations are deterministic and replayable.
+- Regime confidence/stability are visible in signal output.
+- Regime improvements are validated with market-level forward labels, not only
+  ticker trade outcomes.
 
-Goal: move MarketContext from late multiplier toward explicit evidence
-conditioning.
+Why next: A2 builds replayable regime infrastructure without blocking A1.
 
-Tasks:
-- Feed `MarketContext` into the replacement aggregator.
-- Let regime adjust confidence/threshold interpretation before final score.
-- Add diagnostics showing which regime policy affected the signal.
-- Remove any duplicate post-score regime adjustment once regime is part of the
-  replacement aggregation policy. Specifically retire `_apply_market_context()`
-  in `src/application/services/signal_engine.py` as the post-score multiplier
-  path once regime conditioning is owned by the replacement aggregator.
+## Phase B: Minimal Forward Labels And Observation Fingerprints
 
-Outcomes:
-- RISK_OFF/VOLATILE downgrades are explainable.
-- Market regime becomes a policy stage, not hidden score math.
+Status: planned
 
-Verify:
-- Existing MarketContext tests pass.
-- RISK_OFF and VOLATILE behavior is deterministic and visible.
-- Tests prove regime is applied once.
+Goal: create replayable outcome labels before deeper architecture and tuning.
 
-## Phase 6: Confidence-Aware Classification
+Work:
 
-Goal: stop treating incomplete evidence as equally reliable.
-
-Tasks:
-- Add `coverage_score` or `confidence_score` to signal output.
-- Missing data can still map to neutral raw score, but lowers confidence.
-- Requires `seasonality_total_years` threaded through `SignalContext` from the
-  Phase 1 task.
-- Seasonality with fewer than 5 years for the scored calendar month should be
-  unavailable or low-confidence evidence, not directional timing evidence.
-- Define config thresholds for confidence-aware classification.
-- ENTER requires both score and confidence thresholds.
-- WATCH can tolerate lower confidence.
-
-Outcomes:
-- A high raw score with poor evidence coverage does not look as strong as a
-  complete-evidence score.
-- Coverage warning becomes part of the decision contract, not just text.
+- Persist deterministic `signal_forward_labels`.
+- Start calibration with `SWING_10D` as the first calibrated horizon.
+- Keep `TACTICAL_3D` and `ACCUM_20D` diagnostic or temporarily sharing
+  `SWING_10D` defaults until SWING is patch-eligible.
+- Implement `SUCCESS`, `FAILURE`, `NEUTRAL`, and `UNAVAILABLE`.
+- Store continuous outcomes:
+  - close return
+  - max forward return
+  - max adverse excursion
+  - days to peak/trough
+  - stop/target triggers
+- Mark incomplete candle windows as `UNAVAILABLE` with reason.
+- Persist sub-signal fingerprints at observation time:
+  - setup family
+  - setup phase
+  - RSI
+  - BB width percentile
+  - VWAP position
+  - RS vs IHSG
+  - volume ratio
+  - CNFB
+  - foreign participation/concentration
+  - domestic broker accumulation
+  - market regime metadata
+  - coverage/conviction
 
 Verify:
-- Tests cover complete, partial, unknown-sample, short-sample, and missing
-  evidence cases. Stale evidence requires cache/source timestamps and is deferred
-  to the persistence/replay phase.
-- Classification tests cover score-confidence disagreement cases.
 
-## Phase 7: Persistence For Replayable Evidence
+- Labels are local-first and independent of AI.
+- Attribution does not require recomputing historical evidence.
+- Missing forward windows are explicit, not silently ignored.
 
-Goal: make historical decisions replayable without live re-fetching.
+Why second: without labels, improvements are judged by intuition.
 
-Tasks:
-- Define schema-versioned JSON payload for `SignalEvidence`.
-- Persist evidence snapshots locally for screened candidates.
-- Do not reuse `screen_snapshots` for evidence storage. The existing
-  `screen_snapshots` table (`sqlite_watchlist_repository.py`) stores a thin
-  watchlist snapshot: `flow_score`, `composite_score`, `consecutive_streak`,
-  `net_buy_ratio`, `bci_label`. Its schema cannot hold structured `SignalEvidence`
-  without breaking the watchlist/comparison use case. Create a separate
-  `candidate_observations` or `signal_evidence` table with a schema-versioned
-  JSON blob column.
-- Parse persisted evidence with schema-evolution tolerance:
-  - tolerate missing optional fields
-  - default newly added optional fields safely
-  - reject unsupported major schema versions with a clear error
-  - avoid CLI crashes when rendering older snapshots
-- Add read path for debugging historical signal decisions.
+## Phase C: SetupPhaseState And Continuous Setup/Trigger Scoring
 
-Implementation note (staged-evidence paths):
-  The screen (`saham screen accum`) uses Phase 4 staged evidence groups
-  (SetupEvidence, FlowConfirmationEvidence) rather than the flat per-factor
-  model that `SignalEvidence` was designed for. Building `SignalEvidence` from
-  Phase 4 group-level breakdown would produce `strength=0.0, direction=BEARISH`
-  for all present factors — materially wrong and unsafe for tuning datasets.
-  Therefore the screen `candidate_observation` payload stores
-  `FlowConfirmationEvidence` (the actual Phase 4 flow group object) as
-  `signal.flow_evidence` rather than a `SignalEvidence` bundle.
-  `SignalEvidence.to_dict()` / `from_dict()` are defined for use in audit and
-  swing-analysis paths where per-factor scores ARE available
-  (`AuditSignalUseCase`, future persistence from the full swing workflow).
+Status: planned
 
-Outcomes:
-- Rejected candidates become learnable.
-- Future tuning can evaluate candidate-level evidence, not only completed
-  trades.
+Goal: detect temporal setup phase first, then replace coarse setup labels with
+continuous price/volume pivot evidence.
 
-Verify:
-- Local-first persistence only.
-- Schema version included.
-- Evidence replay reads stored payload, not live providers.
+Work:
 
-## Phase 8: Walk-Forward Calibration Guardrails
-
-Goal: extend the existing tuning loop to handle canonical evidence groups while
-preventing overfit.
-
-The tuning infrastructure already exists:
-- `SwingBacktestAttributionSummary` — defines allowlisted tuning targets
-- `SwingTuningDiffPolicy` — validates proposed YAML diffs against allowed paths
-- `SwingTuningPatchValidator` — rejects out-of-range or unauthorized parameter changes
-- `SwingTuningReviewJournal` — records tuning history for audit
-
-Tasks:
-- Extend `SwingBacktestAttributionSummary` allowlisted targets to include
-  signal group weights and evidence thresholds.
-- Extend `SwingTuningPatchValidator` rules to cover new YAML paths added in
-  Phase 4.
-- Add guardrails not yet present:
-  - in-sample/out-of-sample split enforcement
-  - quantized weight steps (5% increments)
-  - max per-cycle parameter shift cap
-- Define a local performance budget for calibration runs before adding
-  numerical dependencies.
-- Profile the tuning sweep; introduce NumPy or Polars only if profiling shows
-  the pure-Python path cannot meet budget.
-- Keep AI strictly in T2 tuner role: AI proposes YAML diffs,
-  `SwingTuningPatchValidator` approves/rejects, human confirms before apply.
-
-Outcomes:
-- Tuning remains deterministic-first.
-- Proposed changes are auditable and reversible.
+- Add `SetupPhaseState`:
+  - `NONE`
+  - `ACCUMULATION`
+  - `COMPRESSION`
+  - `BREAKOUT_CONFIRMATION`
+  - `EXHAUSTION`
+  - `DISTRIBUTION`
+  - `FAILED`
+- Persist phase state, phase history, phase sequence validity, phase age, and
+  phase strength.
+- Enforce setup-family phase requirements:
+  - accumulation / foreign-bounce require
+    `ACCUMULATION -> COMPRESSION -> BREAKOUT_CONFIRMATION`
+  - breakout requires `COMPRESSION -> BREAKOUT_CONFIRMATION`
+  - pullback requires trend/context support plus support reclaim or pivot
+    confirmation
+  - mean reversion requires support/reversal evidence and explicit risk controls
+- Emit `coverage_score` and `conviction_score`.
+- Promote RS vs IHSG to setup eligibility / max-decision evidence for swing,
+  breakout, accumulation, and foreign-bounce.
+- Add setup-family configurable RS policy:
+  - lag warning
+  - hard exclude
+  - warning action
+  - mean-reversion exception requirements
+- Add BB compression as `COMPRESSION` readiness, not bullish evidence.
+- Add `volume_dry_up_then_expansion` as the primary `SWING_10D` trigger pattern
+  for accumulation, foreign-bounce, and breakout.
+- Route volume expansion, positive close, VWAP reclaim, support reclaim, and
+  squeeze release to `BREAKOUT_CONFIRMATION` / Trigger.
+- Treat price confirmation thresholds as placeholders until setup/horizon
+  calibration.
+- Ensure `vwap_reclaim.close_above_vwap_pct: 0.30` cannot independently unlock
+  flow Trigger contribution in production.
 
 Verify:
-- No AI output directly mutates config.
-- Patch validation and dry-run remain mandatory before apply.
-- Measurement compares saved before/after artifacts and does not claim
-  causality.
 
-## Recommended Execution Order
+- Distribution, failed, and exhaustion phases are evaluated before generic
+  non-breakout WATCH handling.
+- Negative RS cannot be silently overwhelmed by other bullish setup components.
+- Volume trigger requires valid volume source and enough valid 20d sessions.
+- Suspended days, missing candles, and zero-volume distortion make volume trigger
+  unavailable and lower coverage.
 
-1. Phase 0: add current-factor audit/coverage report.
-2. Phase 1: add evidence objects beside current scores.
-3. Phase 2: expose setup evidence, no scoring change.
-4. Phase 3: group flow evidence and prevent double-counting.
-5. Phase 4: replace the flat SignalEngine aggregator.
-6. Phase 5: regime-conditional canonical policy.
-7. Phase 6: confidence-aware classification.
-8. Phase 7: evidence persistence/replay.
-9. Phase 8: calibrated tuning guardrails.
+## Phase D: Strategy Evidence Harness
 
-## Non-Goals
+Status: planned
 
-- No rewrite from scratch.
-- No AI-driven live decision path.
-- No adapter-owned scoring policy.
-- No duplicate setup thresholds inside SignalEngine.
-- No risk gates blended into bullish signal score.
-- No parallel legacy/v2 production paths.
-- No compatibility alias unless a concrete persisted-data reader requires it.
+Goal: reuse deterministic strategy packages as setup-family evidence and
+empirical validation tools without creating a parallel decision engine.
+
+Work:
+
+- Add `StrategyEvidenceBuilder` in the application layer.
+- Evaluate validated strategy YAMLs through `IndicatorRegistry`.
+- Map matched strategy rules to setup-family and setup-phase evidence with:
+  - coverage/conviction metadata
+  - freshness
+  - route metadata
+  - rationale
+- Persist matched strategy name, matched rule, and outcome in replay
+  observations.
+- Forbid strategy matches from overriding canonical `SetupPhaseState`
+  transition rules.
+- Use strategy backtests for empirical readiness checks before assigning
+  production weight.
+
+Verify:
+
+- Strategy outcomes cannot directly override canonical SignalEngine decisions.
+- Strategy evidence remains diagnostic until explicitly consumed by aggregation.
+
+## Phase E: Institutional Accumulation Evidence
+
+Status: planned
+
+Goal: make IDX flow empirical and two-track, while keeping it low-authority
+until proven.
+
+Work:
+
+- Add `InstitutionalAccumulationEvidence.institutional_flow`.
+- Add `foreign_institutional_track`:
+  - foreign participation
+  - foreign CR4/CR8 concentration
+  - CNFB-vs-price divergence
+  - foreign VWAP distance
+- Add `domestic_bandar_track`:
+  - top3/top5 domestic broker net-buy consistency
+  - broker reversal signal
+  - accumulation-session ratio
+  - domestic buy VWAP distance
+  - broker HHI divergence
+  - bandar broad / accumulation score
+- Add counterparty transfer metrics when broker-side data supports it.
+- Use asymmetric windows:
+  - 20d/30d for bullish accumulation / Alpha
+  - 3d/5d/7d for bearish distribution / risk
+- Enforce valid-session coverage before CNFB/VWAP metrics are available.
+- Persist raw flow metrics in replay observations.
+- Enforce EvidenceRegistration:
+  - `DIAGNOSTIC` report-only
+  - `LOW_WEIGHT` status-capped
+  - `PRODUCTION` normal configured weight
+
+Verify:
+
+- Missing foreign flow does not mean missing institutional flow when domestic
+  broker evidence exists.
+- Domestic broker accumulation supports ACCUMULATION / Alpha but cannot directly
+  create ENTER.
+- Broker codes are treated as evidence, not proof of actual owner identity.
+- Foreign and domestic component weight groups sum to `1.00`.
+
+## Phase F: Minimal Ticker Profile Diagnostics
+
+Status: planned
+
+Goal: classify ticker behavior without introducing tunable explosion.
+
+Work:
+
+- Add deterministic profile classifier as an application service.
+- Use local data only:
+  - liquidity
+  - broker activity
+  - foreign flow
+  - volatility
+  - index membership
+- Output soft exposures and `profile_confidence`.
+- Persist profile snapshots by epoch, monthly default cadence.
+- Backtests read historical profile snapshots for the signal date.
+- Define conservative fallback for sparse-history tickers.
+- Use profiles for evidence interpretation, diagnostics, and max decision only.
+- Do not add per-profile group weights yet.
+
+Verify:
+
+- Profile snapshots are deterministic and replayable.
+- Sparse-history tickers receive conservative defaults.
+- Profile-specific weights are not introduced before SWING_10D is patch-eligible.
+
+## Phase G: Simplified Alpha/Trigger Split
+
+Status: planned
+
+Goal: separate structural attractiveness from entry timing without adding a
+large tunable surface.
+
+Work:
+
+- Add Alpha and Trigger component scores.
+- Derive Alpha and Trigger from the four canonical groups:
+  - `setup_quality`
+  - `institutional_flow`
+  - `market_context`
+  - `company_quality_context`
+- Do not introduce a second independent factor tree.
+- Store only `alpha_fraction`; derive `trigger_fraction = 1.0 - alpha_fraction`.
+- Keep flow primarily Alpha/context.
+- Permit flow Trigger contribution only when price/volume confirms.
+- Apply EvidenceRegistration status caps during aggregation.
+- Add volatility context emission if not already present:
+  - ATR
+  - ATR%
+  - volatility bucket
+  - ATR stop/target hints
+  - volatility size multiplier
+- Keep ATR stop/target hints as placeholders until TradeSetup/backtest
+  calibration defines horizon-specific multiples.
+- Decide score precision contract:
+  - migrate score to float, or
+  - add `raw_score` / `score_exact` while preserving display int behavior
+
+Verify:
+
+- Alpha/Trigger matrix is descriptive unless explicit gates are configured.
+- Flow cannot dominate Trigger without price/volume confirmation.
+- ATR hints do not compute final stop, target, or position size.
+
+## Phase H: Sector Context
+
+Status: planned
+
+Goal: make IDX sector rotation part of signal interpretation without blocking on
+a new external provider.
+
+Work:
+
+- Add sector-relative return and breadth metrics.
+- Add ticker-vs-sector relative strength.
+- Use local universe-derived sector metrics first.
+- Fall back deterministically when sector mapping or peer coverage is
+  insufficient.
+- Feed sector context into `market_context` evidence and decision constraints.
+
+Verify:
+
+- Sector-derived context has local-universe fallback.
+- Scoring code does not fetch network data to complete peer coverage.
+
+## Phase I: Full Walk-Forward Calibration And Expanded Tunables
+
+Status: planned
+
+Goal: tune weights and thresholds only from replayable saved observations.
+
+Work:
+
+- Use persisted observations and forward labels.
+- Do not introduce separate `TACTICAL_3D` or `ACCUM_20D` tuning surfaces until
+  `SWING_10D` clears patch eligibility.
+- Enforce in-sample/out-of-sample split.
+- Quantize weight changes.
+- Cap per-cycle shifts.
+- Register all tunable config paths in validator bounds before use.
+- Add validator support for diagnostic-ready vs patch-eligible states.
+- Update `SwingTuningPatchValidator` where current behavior is weaker than the
+  target acceptance gates.
+- Reject hidden single-regime dependency unless setup is explicitly declared
+  single-regime scoped before calibration.
+- Reject threshold borrowing across patterns unless OOS attribution validates
+  the transfer.
+
+Patch-eligible target gates:
+
+```yaml
+tuning_readiness:
+  diagnostic_ready:
+    min_oos_trades: 10
+    allowed_output: report_only
+    may_change_config: false
+
+  patch_eligible:
+    min_is_trades: 60
+    min_oos_trades: 30
+    min_oos_profit_factor: 1.15
+    min_oos_average_return: 0.0
+    max_oos_drawdown_regression: 0.0
+    require_regime_attribution: true
+    require_coverage_conviction_bucket_attribution: true
+    reject_single_regime_dependency:
+      max_single_regime_oos_profit_share: 0.70
+      min_positive_oos_regime_count: 2
+      min_oos_trades_per_counted_regime: 5
+```
+
+Verify:
+
+- Diagnostic-ready findings are report-only.
+- Patch-eligible changes pass IS/OOS sample gates and attribution checks.
+- No config patch can exceed EvidenceRegistration status caps.
+- Regime improvements are validated with market-level forward labels, not only
+  ticker trade outcomes.
+
+## Layer Placement
+
+Domain:
+
+- immutable evidence value objects
+- `RegimeDetectionEvidence`
+- `SetupPhaseState` and phase-history value objects
+- score/result value objects
+- no providers, repositories, CLI, or AI
+
+Application:
+
+- evidence builders
+- regime model / market-wide regime detection use case
+- setup phase detector / transition policy
+- strategy evidence builder
+- indicator registry / formula evaluation orchestration
+- profile classifier
+- Alpha/Trigger aggregation
+- regime threshold policy
+- decision policy combining RegimeModel constraints with SignalEngine evidence
+- replay labeling and calibration use cases
+
+Infrastructure:
+
+- repository implementations
+- Stockbit/IDX/Yahoo provider adapters
+- plugin loading
+- local SQLite persistence
+- schema-versioned observation storage
+
+Adapter:
+
+- CLI request parsing
+- dependency wiring
+- display formatting
+- error mapping
+
+## Definition Of Done For Each Phase
+
+- Deterministic behavior under fixed local data and config.
+- Unit or focused integration tests for changed policy.
+- No scoring policy in CLI adapters.
+- No AI-dependent scoring.
+- New tunables registered in validator bounds.
+- New persistence is schema-versioned where applicable.
+- Existing RiskEngine hard-gate authority remains intact.
+- Documentation updated when phase state changes.

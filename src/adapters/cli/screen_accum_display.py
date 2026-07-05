@@ -387,6 +387,7 @@ def display_results(
     signal_table.add_column("Setup", justify="right")
     signal_table.add_column("Flow", justify="right")
     signal_table.add_column("Conf%", justify="right")
+    signal_table.add_column("Max")
     signal_table.add_column("Flags")
 
     risk_table = compact_table()
@@ -494,6 +495,7 @@ def display_results(
             _flow = bd.get("flow_confirmation_group")
             _conf = bd.get("evidence_confidence")
             _flags = getattr(c.signal_assessment, "active_flags", ())
+            _constraints = getattr(sa, "decision_constraints", None)
             _flag_abbr = {
                 "VALUATION_STRETCHED": "VAL",
                 "ANALYST_BEARISH": "ANL",
@@ -505,6 +507,7 @@ def display_results(
                 f"{_setup:.0f}" if _setup is not None else "-",
                 f"{_flow:.0f}" if _flow is not None else "-",
                 f"{_conf:.0f}%" if _conf is not None else "-",
+                _constraints.max_decision if _constraints is not None else "-",
                 " ".join(_flag_abbr.get(f, f[:3]) for f in _flags) or "-",
             ]
             if show_context_ticker:
@@ -512,7 +515,7 @@ def display_results(
             else:
                 signal_table.add_row(*signal_row)
         else:
-            signal_row = ["-", "-", "-", "-", "-", "-"]
+            signal_row = ["-", "-", "-", "-", "-", "-", "-"]
             if show_context_ticker:
                 signal_table.add_row(signal_row[0], c.ticker, *signal_row[1:])
             else:

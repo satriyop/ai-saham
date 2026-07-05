@@ -1551,7 +1551,7 @@ setup_regime_policy:
   pullback:
     RISK_ON: allowed
     NEUTRAL: allowed
-    RISK_OFF: allowed_if_risk_tight_and_flow_confirmed
+    RISK_OFF: allowed_if_risk_tight_and_flow_confirmed  # ignored while regime ENTER disabled
     VOLATILE: restricted_or_watch_only
 
   mean_reversion:
@@ -2206,7 +2206,7 @@ Work:
 - Validate IDX-level foreign-flow transition evidence with market-level forward
   labels before making it high-authority.
 
-Why second: A2 builds replayable regime infrastructure without blocking the A1
+Why next: A2 builds replayable regime infrastructure without blocking the A1
 false-positive reduction.
 
 ### Phase B: Minimal Forward Labels

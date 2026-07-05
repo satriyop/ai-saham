@@ -104,10 +104,12 @@ def _resolve_signal_config(cfg: dict):
         ForeignFlowScoreMappingConfig,
         AnalystScoringConfig,
         BandarScoringConfig,
+        DecisionPolicyConfig,
         ForwardPeScoringConfig,
         InsiderSellingFlagConfig,
         NeutralRegimeConfig,
         RegimeConditioningConfig,
+        RegimeDecisionPolicyConfig,
         RiskOffRegimeConfig,
         SeasonalityScoringConfig,
         SignalClassificationConfig,
@@ -117,6 +119,7 @@ def _resolve_signal_config(cfg: dict):
         SignalInputMappingConfig,
         SignalMissingDataConfig,
         SignalScoringConfig,
+        SetupRegimeActionConfig,
         ValuationStretchedFlagConfig,
         VolatileRegimeConfig,
     )
@@ -141,6 +144,13 @@ def _resolve_signal_config(cfg: dict):
     rc_neutral = regime_cfg.get("neutral", {})
     rc_risk_off = regime_cfg.get("risk_off", {})
     rc_volatile = regime_cfg.get("volatile", {})
+    decision_cfg = root.get("decision_policy", {})
+    decision_policy = _resolve_decision_policy_config(
+        decision_cfg,
+        DecisionPolicyConfig,
+        RegimeDecisionPolicyConfig,
+        SetupRegimeActionConfig,
+    )
 
     return SignalEngineConfig(
         classification=SignalClassificationConfig(
@@ -231,6 +241,91 @@ def _resolve_signal_config(cfg: dict):
                 flow_discount=rc_volatile.get("flow_discount", 0.80),
             ),
         ),
+        decision_policy=decision_policy,
+    )
+
+
+def _resolve_decision_policy_config(
+    decision_cfg: dict,
+    decision_policy_cls,
+    regime_policy_cls,
+    setup_action_cls,
+):
+    allowed_regimes = {"RISK_ON", "NEUTRAL", "RISK_OFF", "VOLATILE"}
+    allowed_decisions = {"ENTER", "WATCH", "AVOID"}
+
+    default_policy = decision_policy_cls()
+    if not decision_cfg:
+        return default_policy
+
+    regime_cfg = decision_cfg.get("regime_policy")
+    if not isinstance(regime_cfg, dict):
+        raise ValueError("signal_engine.decision_policy.regime_policy is required")
+
+    missing = allowed_regimes - set(regime_cfg)
+    extra = set(regime_cfg) - allowed_regimes
+    if missing:
+        raise ValueError(
+            "signal_engine.decision_policy.regime_policy missing regimes: "
+            + ", ".join(sorted(missing))
+        )
+    if extra:
+        raise ValueError(
+            "signal_engine.decision_policy.regime_policy has unknown regimes: "
+            + ", ".join(sorted(extra))
+        )
+
+    resolved_regimes = {}
+    for regime in sorted(allowed_regimes):
+        raw = regime_cfg[regime] or {}
+        decision = raw.get("max_decision")
+        if decision not in allowed_decisions:
+            raise ValueError(
+                f"Invalid max_decision for {regime}: {decision!r}"
+            )
+        resolved_regimes[regime] = regime_policy_cls(
+            enter_allowed=bool(raw.get("enter_allowed", True)),
+            max_decision=decision,
+            regime_size_multiplier=float(raw.get("regime_size_multiplier", 1.0)),
+            enter_threshold=raw.get("enter_threshold"),
+            watch_threshold=int(raw.get("watch_threshold", 45)),
+            min_coverage=float(raw.get("min_coverage", 0.0)),
+            min_conviction=float(raw.get("min_conviction", 0.0)),
+        )
+
+    raw_actions = decision_cfg.get("setup_regime_actions", {})
+    resolved_actions = dict(default_policy.setup_regime_actions)
+    for name, raw in raw_actions.items():
+        decision = (raw or {}).get("max_decision")
+        if decision not in allowed_decisions:
+            raise ValueError(
+                f"Invalid setup_regime_actions.{name}.max_decision: {decision!r}"
+            )
+        resolved_actions[name] = setup_action_cls(max_decision=decision)
+
+    raw_setup_policy = decision_cfg.get("setup_regime_policy", {})
+    resolved_setup_policy: dict[str, dict[str, str]] = {}
+    for family, by_regime in raw_setup_policy.items():
+        if not isinstance(by_regime, dict):
+            raise ValueError(f"setup_regime_policy.{family} must map regimes to actions")
+        resolved_family: dict[str, str] = {}
+        for regime, action_name in by_regime.items():
+            if regime not in allowed_regimes:
+                raise ValueError(
+                    f"Invalid setup_regime_policy.{family} regime: {regime!r}"
+                )
+            if action_name not in resolved_actions:
+                raise ValueError(
+                    f"Invalid setup_regime_policy.{family}.{regime} action: "
+                    f"{action_name!r}"
+                )
+            resolved_family[regime] = action_name
+        resolved_setup_policy[family] = resolved_family
+
+    return decision_policy_cls(
+        regime_policy=resolved_regimes,
+        setup_regime_policy=resolved_setup_policy,
+        setup_regime_actions=resolved_actions,
     )
 
 

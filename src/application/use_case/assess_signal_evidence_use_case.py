@@ -29,6 +29,7 @@ from src.application.use_case.assess_signal_use_case import (
     AssessSignalResponse,
     SignalEngineConfig,
 )
+from src.application.services.decision_policy import DecisionPolicyService
 from src.domain.value_objects.signal_assessment import (
     EntryQuality,
     SignalAssessment,
@@ -50,6 +51,7 @@ class AssessSignalEvidenceRequest:
     flow_confirmation_evidence: "FlowConfirmationEvidence | None" = None
     signal_context: SignalContext | None = None   # for flag evaluation
     market_context: "MarketContext | None" = None  # for regime conditioning
+    setup_family: str | None = None
 
 
 class AssessSignalEvidenceUseCase:
@@ -94,6 +96,18 @@ class AssessSignalEvidenceUseCase:
             entry_quality, request.market_context
         )
 
+        # ── Stage 6: Decision constraints (A1 explicit policy) ───────────────
+        decision_result = DecisionPolicyService(self._config.decision_policy).resolve(
+            entry_quality=entry_quality,
+            score=final_score,
+            coverage_score=confidence,
+            conviction_score=confidence,
+            market_context=request.market_context,
+            setup_family=request.setup_family,
+        )
+        entry_quality = decision_result.entry_quality
+        decision_constraints = decision_result.constraints
+
         breakdown = self._build_breakdown(
             setup_score, setup_present, flow_score, flow_present,
             confidence, active_flags, flag_adj, bool(regime_notes), gate_tightened,
@@ -113,6 +127,7 @@ class AssessSignalEvidenceUseCase:
             rationale=rationale,
             snapshot_date=request.snapshot_date,
             confidence_score=round(confidence, 4),
+            decision_constraints=decision_constraints,
         )
 
         coverage_warning = self._coverage_warning(confidence, setup_present, flow_present)

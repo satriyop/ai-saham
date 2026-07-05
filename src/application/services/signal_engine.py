@@ -139,6 +139,7 @@ class SignalEngine:
         market_context: "MarketContext | None" = None,
         setup_evidence: "SetupEvidence | None" = None,
         flow_confirmation_evidence: "FlowConfirmationEvidence | None" = None,
+        setup_family: str | None = None,
     ) -> AssessSignalResponse:
         """
         Pipeline path: caller supplies pre-loaded SignalContext.
@@ -157,6 +158,7 @@ class SignalEngine:
                 flow_confirmation_evidence=flow_confirmation_evidence,
                 signal_context=signal_context,
                 market_context=market_context,
+                setup_family=setup_family,
             )
         )
 

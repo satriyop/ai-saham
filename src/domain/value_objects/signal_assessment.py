@@ -18,6 +18,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 from enum import Enum
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.domain.value_objects.decision_constraints import DecisionConstraints
 
 
 class SignalStrength(Enum):
@@ -114,6 +118,7 @@ class SignalAssessment:
     rationale: tuple[str, ...]
     snapshot_date: date
     confidence_score: float = 1.0          # 0.0–1.0 evidence coverage/decision confidence
+    decision_constraints: "DecisionConstraints | None" = None
 
     def __post_init__(self) -> None:
         if not (0 <= self.score <= 100):
@@ -153,4 +158,8 @@ class SignalAssessment:
             "rationale": list(self.rationale),
             "snapshot_date": self.snapshot_date.isoformat(),
             "confidence_score": self.confidence_score,
+            "decision_constraints": (
+                self.decision_constraints.to_dict()
+                if self.decision_constraints else None
+            ),
         }

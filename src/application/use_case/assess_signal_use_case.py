@@ -190,6 +190,77 @@ class RegimeConditioningConfig:
 
 
 @dataclass(frozen=True)
+class RegimeDecisionPolicyConfig:
+    enter_allowed: bool = True
+    max_decision: str = "ENTER"
+    regime_size_multiplier: float = 1.0
+    enter_threshold: int | None = None
+    watch_threshold: int = 45
+    min_coverage: float = 0.0
+    min_conviction: float = 0.0
+
+
+@dataclass(frozen=True)
+class SetupRegimeActionConfig:
+    max_decision: str = "ENTER"
+
+
+@dataclass(frozen=True)
+class DecisionPolicyConfig:
+    regime_policy: dict[str, RegimeDecisionPolicyConfig] = field(
+        default_factory=lambda: {
+            "RISK_ON": RegimeDecisionPolicyConfig(
+                enter_allowed=True,
+                max_decision="ENTER",
+                regime_size_multiplier=1.0,
+                enter_threshold=70,
+                watch_threshold=45,
+                min_coverage=0.0,
+                min_conviction=0.0,
+            ),
+            "NEUTRAL": RegimeDecisionPolicyConfig(
+                enter_allowed=True,
+                max_decision="ENTER",
+                regime_size_multiplier=0.50,
+                enter_threshold=72,
+                watch_threshold=45,
+                min_coverage=0.0,
+                min_conviction=0.0,
+            ),
+            "RISK_OFF": RegimeDecisionPolicyConfig(
+                enter_allowed=False,
+                max_decision="WATCH",
+                regime_size_multiplier=0.25,
+                enter_threshold=None,
+                watch_threshold=60,
+                min_coverage=0.80,
+                min_conviction=0.78,
+            ),
+            "VOLATILE": RegimeDecisionPolicyConfig(
+                enter_allowed=False,
+                max_decision="WATCH",
+                regime_size_multiplier=0.0,
+                enter_threshold=None,
+                watch_threshold=65,
+                min_coverage=1.0,
+                min_conviction=1.0,
+            ),
+        }
+    )
+    setup_regime_policy: dict[str, dict[str, str]] = field(default_factory=dict)
+    setup_regime_actions: dict[str, SetupRegimeActionConfig] = field(
+        default_factory=lambda: {
+            "allowed": SetupRegimeActionConfig(max_decision="ENTER"),
+            "restricted_or_watch_only": SetupRegimeActionConfig(max_decision="WATCH"),
+            "enter_disabled": SetupRegimeActionConfig(max_decision="WATCH"),
+            "allowed_if_flow_confirmation_strong": SetupRegimeActionConfig(
+                max_decision="ENTER"
+            ),
+        }
+    )
+
+
+@dataclass(frozen=True)
 class SignalEngineConfig:
     classification: SignalClassificationConfig = field(default_factory=SignalClassificationConfig)
     missing_data: SignalMissingDataConfig = field(default_factory=SignalMissingDataConfig)
@@ -199,6 +270,7 @@ class SignalEngineConfig:
     evidence_groups: EvidenceGroupsConfig = field(default_factory=EvidenceGroupsConfig)
     flags: SignalFlagsConfig = field(default_factory=SignalFlagsConfig)
     regime_conditioning: RegimeConditioningConfig = field(default_factory=RegimeConditioningConfig)
+    decision_policy: DecisionPolicyConfig = field(default_factory=DecisionPolicyConfig)
 
 # Default weights — used when no YAML config is provided (identical to historical hardcoded values)
 _DEFAULT_WEIGHTS: dict[str, float] = {

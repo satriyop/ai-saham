@@ -604,6 +604,19 @@ def _build_signal_panel(signal_assessment) -> Any:
         )
         items.append(factor_table)
 
+    constraints = getattr(assessment, "decision_constraints", None)
+    if constraints is not None:
+        reasons = list(getattr(constraints, "constraint_reasons", ()) or ())
+        detail = (
+            f"max {constraints.max_decision}; "
+            f"size x{constraints.effective_size_multiplier:.2f}"
+        )
+        if constraints.regime:
+            detail = f"{constraints.regime}; " + detail
+        if reasons:
+            detail += f"; {reasons[0]}"
+        items.append(Text(detail, style="dim"))
+
     return panel(Group(*items), title="Signal")
 
 
@@ -1130,6 +1143,24 @@ def print_swing_output(
             signal_text.append(Text(f"  {line}", style="dim"))
         if signal_assessment.coverage_warning:
             signal_text.append(Text(f"  ⚠ {signal_assessment.coverage_warning}", style="dim yellow"))
+        constraints = getattr(sa, "decision_constraints", None)
+        if constraints is not None:
+            signal_text.append(Text("  Decision constraints", style="bold cyan"))
+            signal_text.append(Text(
+                f"    max_decision={constraints.max_decision} "
+                f"regime={constraints.regime or 'none'} "
+                f"enter_allowed={constraints.regime_enter_allowed} "
+                f"size={constraints.effective_size_multiplier:.2f}",
+                style="dim",
+            ))
+            if constraints.setup_family or constraints.setup_regime_action:
+                signal_text.append(Text(
+                    f"    setup={constraints.setup_family or 'none'} "
+                    f"action={constraints.setup_regime_action or 'none'}",
+                    style="dim",
+                ))
+            for reason in constraints.constraint_reasons:
+                signal_text.append(Text(f"    - {reason}", style="dim yellow"))
 
     if signal_text:
         console().print("")

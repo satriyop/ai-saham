@@ -1,3 +1,5 @@
+import pytest
+
 from src.application.services.bootstrap import _resolve_signal_config
 
 
@@ -51,6 +53,56 @@ def test_resolve_signal_config_reads_policy_blocks():
                     "post_expensive_score_decay": 12.0,
                 },
             },
+            "decision_policy": {
+                "regime_policy": {
+                    "RISK_ON": {
+                        "enter_allowed": True,
+                        "enter_threshold": 71,
+                        "watch_threshold": 46,
+                        "min_coverage": 0.61,
+                        "min_conviction": 0.62,
+                        "max_decision": "ENTER",
+                        "regime_size_multiplier": 1.0,
+                    },
+                    "NEUTRAL": {
+                        "enter_allowed": True,
+                        "enter_threshold": 73,
+                        "watch_threshold": 52,
+                        "min_coverage": 0.65,
+                        "min_conviction": 0.66,
+                        "max_decision": "ENTER",
+                        "regime_size_multiplier": 0.5,
+                    },
+                    "RISK_OFF": {
+                        "enter_allowed": False,
+                        "enter_threshold": None,
+                        "watch_threshold": 60,
+                        "min_coverage": 0.8,
+                        "min_conviction": 0.78,
+                        "max_decision": "WATCH",
+                        "regime_size_multiplier": 0.25,
+                    },
+                    "VOLATILE": {
+                        "enter_allowed": False,
+                        "enter_threshold": None,
+                        "watch_threshold": 65,
+                        "min_coverage": 1.0,
+                        "min_conviction": 1.0,
+                        "max_decision": "WATCH",
+                        "regime_size_multiplier": 0.0,
+                    },
+                },
+                "setup_regime_policy": {
+                    "foreign_bounce": {
+                        "RISK_OFF": "allowed_if_flow_confirmation_strong",
+                    },
+                },
+                "setup_regime_actions": {
+                    "allowed_if_flow_confirmation_strong": {
+                        "max_decision": "ENTER",
+                    },
+                },
+            },
         }
     }
 
@@ -76,3 +128,45 @@ def test_resolve_signal_config_reads_policy_blocks():
     assert resolved.scoring.forward_pe.very_cheap_pe == 8.0
     assert resolved.scoring.forward_pe.expensive_score == 18.0
     assert resolved.scoring.forward_pe.post_expensive_score_decay == 12.0
+    assert resolved.decision_policy.regime_policy["RISK_OFF"].enter_allowed is False
+    assert resolved.decision_policy.regime_policy["RISK_OFF"].max_decision == "WATCH"
+    assert resolved.decision_policy.regime_policy["NEUTRAL"].regime_size_multiplier == 0.5
+    assert (
+        resolved.decision_policy.setup_regime_policy["foreign_bounce"]["RISK_OFF"]
+        == "allowed_if_flow_confirmation_strong"
+    )
+
+
+def test_resolve_signal_config_rejects_missing_decision_policy_regime():
+    cfg = {
+        "signal_engine": {
+            "decision_policy": {
+                "regime_policy": {
+                    "RISK_ON": {"max_decision": "ENTER"},
+                    "NEUTRAL": {"max_decision": "ENTER"},
+                    "RISK_OFF": {"max_decision": "WATCH"},
+                },
+            },
+        },
+    }
+
+    with pytest.raises(ValueError, match="missing regimes: VOLATILE"):
+        _resolve_signal_config(cfg)
+
+
+def test_resolve_signal_config_rejects_invalid_decision_name():
+    cfg = {
+        "signal_engine": {
+            "decision_policy": {
+                "regime_policy": {
+                    "RISK_ON": {"max_decision": "BUY"},
+                    "NEUTRAL": {"max_decision": "ENTER"},
+                    "RISK_OFF": {"max_decision": "WATCH"},
+                    "VOLATILE": {"max_decision": "WATCH"},
+                },
+            },
+        },
+    }
+
+    with pytest.raises(ValueError, match="Invalid max_decision"):
+        _resolve_signal_config(cfg)
