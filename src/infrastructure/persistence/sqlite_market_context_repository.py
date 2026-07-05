@@ -35,6 +35,14 @@ CREATE TABLE IF NOT EXISTS market_context_snapshots (
 )
 """
 
+# A2: new optional regime quality columns added to existing table
+_A2_MIGRATIONS = [
+    "ALTER TABLE market_context_snapshots ADD COLUMN regime_confidence REAL",
+    "ALTER TABLE market_context_snapshots ADD COLUMN regime_stability TEXT",
+    "ALTER TABLE market_context_snapshots ADD COLUMN days_in_regime INTEGER",
+    "ALTER TABLE market_context_snapshots ADD COLUMN transition_warning TEXT",
+]
+
 
 class SQLiteMarketContextRepository:
     """Persists MarketContext snapshots to SQLite, one record per date."""
@@ -46,6 +54,11 @@ class SQLiteMarketContextRepository:
     def _init_db(self) -> None:
         with sqlite3.connect(self._db_path) as conn:
             conn.execute(_CREATE_TABLE)
+            for stmt in _A2_MIGRATIONS:
+                try:
+                    conn.execute(stmt)
+                except sqlite3.OperationalError:
+                    pass  # column already exists — idempotent
             conn.commit()
 
     # ── writes ────────────────────────────────────────────────────────────────
@@ -58,8 +71,10 @@ class SQLiteMarketContextRepository:
                 """
                 INSERT OR REPLACE INTO market_context_snapshots
                     (as_of_date, regime, conviction, signal_multiplier, gate_tightening,
-                     factors_json, staleness_warning, coverage_warning, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     factors_json, staleness_warning, coverage_warning,
+                     regime_confidence, regime_stability, days_in_regime, transition_warning,
+                     created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     context.as_of_date.isoformat(),
@@ -70,6 +85,10 @@ class SQLiteMarketContextRepository:
                     factors_json,
                     context.staleness_warning,
                     context.coverage_warning,
+                    getattr(context, "regime_confidence", None),
+                    getattr(context, "regime_stability", None),
+                    getattr(context, "days_in_regime", None),
+                    getattr(context, "transition_warning", None),
                     datetime.now(UTC).isoformat(),
                 ),
             )
@@ -124,6 +143,7 @@ def _dict_to_factor(d: dict) -> ContextFactor:
 
 def _row_to_context(row: sqlite3.Row) -> MarketContext:
     factors = tuple(_dict_to_factor(d) for d in json.loads(row["factors_json"]))
+    row_dict = dict(row)
     return MarketContext(
         regime=MarketRegime(row["regime"]),
         conviction=row["conviction"],
@@ -133,4 +153,8 @@ def _row_to_context(row: sqlite3.Row) -> MarketContext:
         as_of_date=date.fromisoformat(row["as_of_date"]),
         staleness_warning=row["staleness_warning"],
         coverage_warning=row["coverage_warning"],
+        regime_confidence=row_dict.get("regime_confidence"),
+        regime_stability=row_dict.get("regime_stability"),
+        days_in_regime=row_dict.get("days_in_regime"),
+        transition_warning=row_dict.get("transition_warning"),
     )

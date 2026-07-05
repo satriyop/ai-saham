@@ -258,6 +258,9 @@ class DecisionPolicyConfig:
             ),
         }
     )
+    # A2: caps applied when regime quality metadata is available
+    regime_confidence_min_enter: float = 0.35   # cap ENTER→WATCH when confidence < this
+    regime_transitioning_cap_enter: bool = True  # cap ENTER→WATCH when stability == TRANSITIONING
 
 
 @dataclass(frozen=True)

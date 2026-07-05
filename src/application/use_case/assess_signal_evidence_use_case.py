@@ -71,6 +71,9 @@ class AssessSignalEvidenceUseCase:
         setup_score, setup_present = self._score_setup_group(request.setup_evidence)
         flow_score, flow_present = self._score_flow_group(request.flow_confirmation_evidence)
 
+        # Save regime-neutral group scores before conditioning (for comparability)
+        setup_score_raw, flow_score_raw = setup_score, flow_score
+
         # ── Stage 2: Regime conditioning (before renormalization) ─────────────
         setup_score, flow_score, regime_notes = self._condition_group_scores(
             setup_score, setup_present, flow_score, flow_present, request.market_context
@@ -84,9 +87,16 @@ class AssessSignalEvidenceUseCase:
         # ── Stage 4: Flags (do-no-harm penalties from SignalContext) ──────────
         active_flags, flag_adj = self._evaluate_flags(request.signal_context)
 
-        # ── Final score ───────────────────────────────────────────────────────
+        # ── Final score (regime-conditioned) ─────────────────────────────────
         raw_group_score = round(base_score)
         final_score = max(0, min(100, raw_group_score + flag_adj))
+
+        # Pre-regime score: regime-neutral groups → renormalize → flags
+        # Preserved separately so score comparability holds across regime changes.
+        base_score_neutral, _ = self._renormalize(
+            setup_score_raw, setup_present, flow_score_raw, flow_present
+        )
+        signal_score_raw = max(0, min(100, round(base_score_neutral) + flag_adj))
 
         strength = self._classify_strength(final_score)
         entry_quality = self._classify_entry(strength, confidence)
@@ -140,6 +150,7 @@ class AssessSignalEvidenceUseCase:
             active_flags=tuple(active_flags),
             flag_adjustment=flag_adj,
             raw_group_score=raw_group_score,
+            signal_score_raw=signal_score_raw,
         )
 
     # ── group scorers ─────────────────────────────────────────────────────────

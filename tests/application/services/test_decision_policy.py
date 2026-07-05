@@ -58,7 +58,8 @@ def test_neutral_can_permit_enter_with_reduced_size():
 
 
 def test_risk_off_blocks_enter_even_when_entry_quality_is_enter():
-    result = _resolve("RISK_OFF", coverage=0.0, conviction=0.0)
+    result = _resolve("RISK_OFF", coverage=0.85, conviction=0.80)
+
 
     assert result.entry_quality == EntryQuality.WATCH
     assert result.constraints.max_decision == "WATCH"
@@ -101,3 +102,48 @@ def test_setup_specific_policy_cannot_reenable_enter_under_risk_off():
         "Setup-specific policy cannot override regime ENTER block"
         in result.constraints.constraint_reasons
     )
+
+
+def test_regime_transitioning_caps_enter_to_watch():
+    mctx = MarketContext(
+        regime=MarketRegime.RISK_ON,
+        conviction=0.70,
+        factors=(),
+        signal_multiplier=1.0,
+        gate_tightening=False,
+        as_of_date=SNAP,
+        regime_stability="TRANSITIONING",
+        regime_confidence=0.8,
+    )
+    result = DecisionPolicyService().resolve(
+        entry_quality=EntryQuality.ENTER,
+        score=75,
+        coverage_score=1.0,
+        conviction_score=1.0,
+        market_context=mctx,
+    )
+    assert result.entry_quality == EntryQuality.WATCH
+    assert "Regime TRANSITIONING — ENTER capped to WATCH" in result.constraints.constraint_reasons
+
+
+def test_low_regime_confidence_caps_enter_to_watch():
+    mctx = MarketContext(
+        regime=MarketRegime.RISK_ON,
+        conviction=0.70,
+        factors=(),
+        signal_multiplier=1.0,
+        gate_tightening=False,
+        as_of_date=SNAP,
+        regime_stability="STABLE",
+        regime_confidence=0.20,
+    )
+    result = DecisionPolicyService().resolve(
+        entry_quality=EntryQuality.ENTER,
+        score=75,
+        coverage_score=1.0,
+        conviction_score=1.0,
+        market_context=mctx,
+    )
+    assert result.entry_quality == EntryQuality.WATCH
+    assert "Low regime_confidence (0.20 < 0.35) — ENTER capped" in result.constraints.constraint_reasons
+

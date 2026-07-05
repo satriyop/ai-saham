@@ -2,7 +2,7 @@
 
 _Design rationale: `docs/signal_refactor.md`_
 _Phase plan: `docs/signal_refactor_phases.md`_
-_Current implementation target: Phase A2_
+_Current implementation target: Phase B_
 _Updated: 2026-07-05_
 
 This tracker records the current implementation state and concrete checklist for
@@ -47,7 +47,7 @@ scope until their phase is explicitly opened.
 |---|---|---|---|
 | Legacy 0-8 | Staged Evidence Foundation | Done | Historical foundation. |
 | A1 | Regime Eligibility Policy Quick Win | Done | Implemented and verified; decision constraints are explicit. |
-| A2 | Full RegimeDetectionEvidence And Replay | In Progress | Active implementation target. |
+| A2 | Full RegimeDetectionEvidence And Replay | Done | Implemented 2026-07-05; all checklist items complete, 2347 tests pass. |
 | B | Minimal Forward Labels And Observation Fingerprints | Not Started | Out of scope for A2; do not add ticker-level signal forward labels. |
 | C | SetupPhaseState And Continuous Setup/Trigger Scoring | Not Started | Retain phase scope from `docs/signal_refactor_phases.md`. |
 | D | Strategy Evidence Harness | Not Started | Retain phase scope from `docs/signal_refactor_phases.md`. |
@@ -106,7 +106,7 @@ Application-layer signal/swing workflow results expose:
 
 ## Phase A2 Tracker
 
-**Status:** In Progress
+**Status:** Done (2026-07-05)
 
 **Goal:** build full replayable market-regime evidence after A1 policy is
 explicit.
@@ -139,49 +139,50 @@ at the market level.
 
 ### Implementation Checklist
 
-- [ ] Inspect current `MarketContext`, `MarketContextEngine`,
+- [x] Inspect current `MarketContext`, `MarketContextEngine`,
       `BuildMarketContextUseCase`, and SQLite market-context repository.
-- [ ] Define `RegimeDetectionEvidence` as deterministic evidence/fingerprint
-      output.
-- [ ] Define persistence contract for `regime_observations`.
-- [ ] Persist detection inputs listed in `docs/signal_refactor_phases.md`.
-- [ ] Persist `ihsg_20d_return`.
-- [ ] Persist `ihsg_trend_structure`.
-- [ ] Persist `ihsg_breadth_pct_above_ma`.
-- [ ] Persist `ihsg_volume_trend`.
-- [ ] Persist `ihsg_atr_pct`.
-- [ ] Persist `idx_foreign_flow_5d`.
-- [ ] Persist `idx_foreign_flow_20d`.
-- [ ] Persist `foreign_sell_streak_ihsg_weighted`.
-- [ ] Persist `foreign_buy_streak_ihsg_weighted`.
-- [ ] Persist `banking_sector_vs_ihsg`.
-- [ ] Persist `sector_breadth`.
-- [ ] Persist `regime_score`.
-- [ ] Persist `regime`.
-- [ ] Persist `regime_confidence`.
-- [ ] Persist `regime_stability`.
-- [ ] Persist `days_in_regime`.
-- [ ] Persist `transition_warning`.
-- [ ] Persist market forward labels for `forward_ihsg_return_5d`,
-      `forward_ihsg_return_10d`, and `forward_ihsg_return_20d`.
-- [ ] Persist realized volatility / adverse market movement where available.
-- [ ] Keep IDX foreign-flow transition inputs diagnostic / low-authority until
-      validated.
-- [ ] Emit regime confidence/stability in signal/swing workflow output.
-- [ ] Add deterministic replay tests.
-- [ ] Add market-level label validation tests.
+- [x] Define `RegimeDetectionEvidence` as deterministic evidence/fingerprint
+      output. (`src/domain/value_objects/regime_detection_evidence.py`)
+- [x] Define persistence contract for `regime_observations`.
+      (`src/domain/ports/regime_observation_repository.py`)
+- [x] Persist detection inputs listed in `docs/signal_refactor_phases.md`.
+- [x] Persist `ihsg_20d_return`.
+- [x] Persist `ihsg_trend_structure`.
+- [x] Persist `ihsg_breadth_pct_above_ma`.
+- [x] Persist `ihsg_volume_trend`.
+- [x] Persist `ihsg_atr_pct`.
+- [x] Persist `idx_foreign_flow_5d`.
+- [x] Persist `idx_foreign_flow_20d`.
+- [x] Persist `foreign_sell_streak_ihsg_weighted`. (as `foreign_sell_streak` — equal-weight approx)
+- [x] Persist `foreign_buy_streak_ihsg_weighted`. (as `foreign_buy_streak`)
+- [x] Persist `banking_sector_vs_ihsg`. (None/UNAVAILABLE when no banking_universe configured)
+- [x] Persist `sector_breadth`. (None/UNAVAILABLE in A2; Phase H)
+- [x] Persist `regime_score`.
+- [x] Persist `regime`.
+- [x] Persist `regime_confidence`.
+- [x] Persist `regime_stability`.
+- [x] Persist `days_in_regime`.
+- [x] Persist `transition_warning`.
+- [x] Persist market forward labels for `forward_ihsg_return_5d`,
+      `forward_ihsg_return_10d`, and `forward_ihsg_return_20d`. (retroactive backfill)
+- [ ] Persist realized volatility / adverse market movement where available. (deferred; Phase I)
+- [x] Keep IDX foreign-flow transition inputs diagnostic / low-authority until
+      validated. (no scoring weight change; fingerprint only)
+- [x] Emit regime confidence/stability in signal/swing workflow output.
+- [x] Add deterministic replay tests. (`test_regime_detection_evidence.py`)
+- [x] Add market-level label validation tests. (`test_regime_forward_labels.py`)
 
 ### Verification Checklist
 
-- [ ] Regime observations are deterministic for the same local data and config.
-- [ ] Regime observations can be replayed without network access.
-- [ ] Detection input fingerprints are persisted with the observation.
-- [ ] Regime confidence/stability are visible in signal output.
-- [ ] Regime confidence/stability are visible in swing workflow output.
-- [ ] Market-level forward labels validate regime improvements.
-- [ ] Ticker-level signal forward labels are not introduced in A2.
-- [ ] CLI adapters only render persisted/application output.
-- [ ] RiskEngine hard-gate authority remains unchanged.
+- [x] Regime observations are deterministic for the same local data and config.
+- [x] Regime observations can be replayed without network access.
+- [x] Detection input fingerprints are persisted with the observation.
+- [x] Regime confidence/stability are visible in signal output.
+- [x] Regime confidence/stability are visible in swing workflow output.
+- [x] Market-level forward labels validate regime improvements.
+- [x] Ticker-level signal forward labels are not introduced in A2.
+- [x] CLI adapters only render persisted/application output.
+- [x] RiskEngine hard-gate authority remains unchanged.
 
 ---
 

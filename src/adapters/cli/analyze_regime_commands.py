@@ -29,6 +29,7 @@ from src.infrastructure.config.market_context_config import load_market_context_
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_context_repository import SQLiteMarketContextRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
+from src.infrastructure.persistence.sqlite_regime_observation_repository import SQLiteRegimeObservationRepository
 
 DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 
@@ -98,6 +99,7 @@ def regime(
         universe=ticker_list,
         broker_repository=SQLiteBrokerRepository(db_path=resolved_db),
         context_repository=SQLiteMarketContextRepository(db_path=resolved_db),
+        regime_observation_repository=SQLiteRegimeObservationRepository(db_path=resolved_db),
     )
 
     try:

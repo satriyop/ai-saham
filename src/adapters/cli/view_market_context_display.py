@@ -111,6 +111,38 @@ def display_market_context(context: MarketContext, verbose: bool = False) -> Non
     else:
         footer.append(tighten, style="dim")
 
+    # ── A2: Regime quality metadata ───────────────────────────────────────────
+    regime_quality_parts: list[Text] = []
+    regime_confidence  = getattr(context, "regime_confidence", None)
+    regime_stability   = getattr(context, "regime_stability", None)
+    days_in_regime     = getattr(context, "days_in_regime", None)
+    transition_warning = getattr(context, "transition_warning", None)
+
+    if regime_confidence is not None or regime_stability is not None:
+        rq = Text()
+        if regime_confidence is not None:
+            conf_style = (
+                "green" if regime_confidence >= 0.65
+                else "yellow" if regime_confidence >= 0.35
+                else "bold red"
+            )
+            rq.append("regime_confidence: ", style="dim")
+            rq.append(f"{regime_confidence:.2f}", style=conf_style)
+        if regime_stability is not None:
+            stab_style = (
+                "green" if regime_stability == "STABLE"
+                else "yellow" if regime_stability == "UNKNOWN"
+                else "bold red"
+            )
+            rq.append("   stability: ", style="dim")
+            rq.append(regime_stability, style=stab_style)
+        if days_in_regime is not None:
+            rq.append(f"   days_in_regime: {days_in_regime}", style="dim")
+        regime_quality_parts.append(rq)
+
+    if transition_warning:
+        regime_quality_parts.append(Text(f"⚠ {transition_warning}", style="yellow"))
+
     # ── Warnings ──────────────────────────────────────────────────────────────
     warnings = []
     if context.staleness_warning:
@@ -122,6 +154,8 @@ def display_market_context(context: MarketContext, verbose: bool = False) -> Non
     from rich.rule import Rule
 
     parts = [header, Rule(style="dim"), table, Rule(style="dim"), footer]
+    for rq in regime_quality_parts:
+        parts.append(rq)
     for w in warnings:
         parts.append(w)
 

@@ -64,11 +64,19 @@ class MarketContext:
     staleness_warning: str | None = None    # when any factor data is T-1 or older
     coverage_warning: str | None = None     # when ≥ half enabled factors are unavailable
 
+    # ── A2: regime quality metadata (None until RegimeDetectionEvidence is built) ──
+    regime_confidence: float | None = None   # 0.0–1.0; distance from nearest regime boundary
+    regime_stability: str | None = None      # "STABLE" | "TRANSITIONING" | "UNKNOWN"
+    days_in_regime: int | None = None        # consecutive days in current regime
+    transition_warning: str | None = None    # human-readable when TRANSITIONING
+
     def __post_init__(self) -> None:
         if not (0.0 <= self.conviction <= 1.0):
             raise ValueError(f"conviction must be 0.0–1.0, got {self.conviction}")
         if not (0.0 <= self.signal_multiplier <= 1.0):
             raise ValueError(f"signal_multiplier must be 0.0–1.0, got {self.signal_multiplier}")
+        if self.regime_confidence is not None and not (0.0 <= self.regime_confidence <= 1.0):
+            raise ValueError(f"regime_confidence must be 0.0–1.0, got {self.regime_confidence}")
 
     @property
     def regime_label(self) -> str:
@@ -94,6 +102,10 @@ class MarketContext:
             "as_of_date": self.as_of_date.isoformat(),
             "staleness_warning": self.staleness_warning,
             "coverage_warning": self.coverage_warning,
+            "regime_confidence": round(self.regime_confidence, 4) if self.regime_confidence is not None else None,
+            "regime_stability": self.regime_stability,
+            "days_in_regime": self.days_in_regime,
+            "transition_warning": self.transition_warning,
             "factors": [
                 {
                     "name": f.name,

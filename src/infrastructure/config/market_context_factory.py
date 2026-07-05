@@ -20,6 +20,10 @@ from src.infrastructure.persistence.sqlite_market_context_repository import (
     SQLiteMarketContextRepository,
 )
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
+from src.infrastructure.persistence.sqlite_regime_observation_repository import (
+    SQLiteRegimeObservationRepository,
+)
+
 
 
 def create_market_context_engine(
@@ -43,7 +47,9 @@ def create_market_context_engine(
         universe=tickers,
         broker_repository=SQLiteBrokerRepository(db_path=db_path),
         context_repository=SQLiteMarketContextRepository(db_path=db_path),
+        regime_observation_repository=SQLiteRegimeObservationRepository(db_path=db_path),
     )
+
 
 
 def evaluate_market_context(

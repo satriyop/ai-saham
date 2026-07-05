@@ -22,6 +22,10 @@ from src.application.use_case.build_market_context_use_case import (
     BuildMarketContextRequest,
     BuildMarketContextUseCase,
 )
+from src.domain.value_objects.regime_detection_evidence import (
+    RegimeDetectionEvidence,
+    RegimeStability,
+)
 from src.infrastructure.config.market_context_config import (
     MarketContextConfig,
     load_market_context_config,
@@ -31,6 +35,7 @@ if TYPE_CHECKING:
     from src.domain.ports.broker_data_repository import BrokerDataRepository
     from src.domain.ports.market_context_repository import MarketContextRepository
     from src.domain.ports.market_data_repository import MarketDataRepository
+    from src.domain.ports.regime_observation_repository import RegimeObservationRepository
     from src.domain.value_objects.market_context import MarketContext
 
 logger = logging.getLogger(__name__)
@@ -60,12 +65,16 @@ class MarketContextEngine:
         universe: list[str] | None = None,
         broker_repository: "BrokerDataRepository | None" = None,
         context_repository: "MarketContextRepository | None" = None,
+        regime_observation_repository: "RegimeObservationRepository | None" = None,
+        banking_universe: list[str] | None = None,
     ) -> None:
         self._repo = market_repository
         self._broker_repo = broker_repository
         self._context_repo = context_repository
+        self._obs_repo = regime_observation_repository
         self._config = config or load_market_context_config()
         self._universe = [t.upper() for t in (universe or [])]
+        self._banking_universe = [t.upper() for t in (banking_universe or [])]
         self._use_case = BuildMarketContextUseCase()
 
     def evaluate(
@@ -77,6 +86,8 @@ class MarketContextEngine:
 
         Reads all factor data from the local SQLite cache.
         Returns MarketContext with staleness/coverage warnings if data is missing.
+        A2: also computes RegimeDetectionEvidence, persists it, and backfills
+        forward labels for prior observations.
         """
         as_of = as_of_date or date.today()
         start = as_of - timedelta(days=_CANDLE_LOOKBACK_DAYS)
@@ -97,6 +108,7 @@ class MarketContextEngine:
 
         foreign_flow_series = self._aggregate_foreign_flow(as_of) if cfg.foreign_flow.enabled else []
 
+        # ── Pass 1: compute regime without stability (current regime unknown yet) ─
         request = BuildMarketContextRequest(
             config=cfg,
             as_of_date=as_of,
@@ -106,9 +118,44 @@ class MarketContextEngine:
             usd_idr_candles=usd_idr_candles,
             universe_candles=universe_candles,
             foreign_flow_series=foreign_flow_series,
+            days_in_regime=None,
+            regime_stability=None,
+            banking_universe=self._banking_universe,
         )
-        context = self._use_case.execute(request).context
+        result = self._use_case.execute(request)
+        current_regime = result.context.regime.value
+
+        # ── A2: stability now computed relative to the actual current regime ──
+        # Must happen AFTER the regime is known; prior[0].regime may differ.
+        days_in, stability = self._compute_stability(as_of, current_regime)
+
+        # ── Pass 2: rebuild context with correct stability fields ─────────────
+        if days_in is not None or stability is not None:
+            import dataclasses as _dc
+            transition_warning: str | None = None
+            if stability == "TRANSITIONING":
+                transition_warning = (
+                    f"Regime changed recently — in {current_regime} for {days_in or 0} day(s)"
+                )
+            result_context = _dc.replace(
+                result.context,
+                regime_stability=stability,
+                days_in_regime=days_in,
+                transition_warning=transition_warning,
+            )
+        else:
+            result_context = result.context
+
+        context = result_context
         self._persist(context)
+
+        # ── A2: persist regime observation fingerprint ─────────────────────────
+        evidence = self._build_evidence(context, result.regime_detection_inputs, as_of)
+        self._persist_observation(evidence)  # safe upsert: forward labels preserved by COALESCE
+
+        # ── A2: backfill forward labels for T-5, T-10, T-20 ──────────────────
+        self._backfill_forward_labels(as_of, ihsg_candles)
+
         return context
 
     def get_snapshot(self, as_of_date: date) -> "MarketContext | None":
@@ -122,6 +169,139 @@ class MarketContextEngine:
         if self._context_repo is None:
             return []
         return self._context_repo.get_recent(limit)
+
+    def _compute_stability(self, as_of: date, current_regime: str) -> tuple[int | None, str | None]:
+        """Query prior observations to compute days_in_regime and regime_stability.
+
+        `current_regime` must be the NEWLY computed regime for as_of (not prior[0].regime),
+        so that a regime change on as_of produces streak=0/TRANSITIONING, not inheriting the
+        prior regime's streak.
+
+        Returns (days_in_regime, regime_stability_str).
+        Both are None when no observation repository is configured.
+        """
+        if self._obs_repo is None:
+            return None, None
+        try:
+            prior = self._obs_repo.get_recent(limit=60)
+        except Exception as exc:
+            logger.debug("MarketContextEngine: failed to read prior observations: %s", exc)
+            return None, None
+
+        if not prior:
+            return None, RegimeStability.UNKNOWN.value
+
+        streak = 0
+        for obs in prior:
+            if obs.observation_date >= as_of:
+                continue  # skip same-day or future
+            if obs.regime == current_regime:
+                streak += 1
+            else:
+                break
+
+        stable_min_days = 5
+        if streak == 0:
+            stability = RegimeStability.TRANSITIONING.value
+        elif streak >= stable_min_days:
+            stability = RegimeStability.STABLE.value
+        else:
+            stability = RegimeStability.TRANSITIONING.value
+
+        return streak, stability
+
+    def _build_evidence(
+        self,
+        context: "MarketContext",
+        detection_inputs: dict,
+        as_of: date,
+    ) -> RegimeDetectionEvidence:
+        """Assemble a RegimeDetectionEvidence from the computed context and inputs."""
+        return RegimeDetectionEvidence(
+            observation_date=as_of,
+            schema_version=1,
+            regime=context.regime.value,
+            regime_score=context.conviction,
+            regime_confidence=context.regime_confidence or 0.0,
+            regime_stability=RegimeStability(context.regime_stability or "UNKNOWN"),
+            days_in_regime=context.days_in_regime,
+            transition_warning=context.transition_warning,
+            ihsg_20d_return=detection_inputs.get("ihsg_20d_return"),
+            ihsg_trend_structure=detection_inputs.get("ihsg_trend_structure"),
+            ihsg_breadth_pct_above_ma=detection_inputs.get("ihsg_breadth_pct_above_ma"),
+            ihsg_volume_trend=detection_inputs.get("ihsg_volume_trend"),
+            ihsg_atr_pct=detection_inputs.get("ihsg_atr_pct"),
+            idx_foreign_flow_5d=detection_inputs.get("idx_foreign_flow_5d"),
+            idx_foreign_flow_20d=detection_inputs.get("idx_foreign_flow_20d"),
+            foreign_buy_streak=detection_inputs.get("foreign_buy_streak"),
+            foreign_sell_streak=detection_inputs.get("foreign_sell_streak"),
+            banking_sector_vs_ihsg=detection_inputs.get("banking_sector_vs_ihsg"),
+            sector_breadth=detection_inputs.get("sector_breadth"),
+        )
+
+    def _persist_observation(self, evidence: RegimeDetectionEvidence) -> None:
+        if self._obs_repo is None:
+            return
+        try:
+            self._obs_repo.save(evidence)
+        except Exception as exc:
+            logger.debug("MarketContextEngine: failed to persist regime observation: %s", exc)
+
+    def _backfill_forward_labels(self, as_of: date, ihsg_candles: list) -> None:
+        """Retroactively fill forward IHSG return labels for T-5, T-10, T-20 observations.
+
+        Offsets are in TRADING SESSIONS (candle index), not calendar days,
+        so weekends and IDX holidays do not mislabel prior observations.
+        """
+        if self._obs_repo is None or not ihsg_candles:
+            return
+
+        # Sort candles ascending by date; use the last candle on or before as_of as T
+        sorted_candles = sorted(
+            (c for c in ihsg_candles if c.close),
+            key=lambda c: c.date,
+        )
+        if not sorted_candles:
+            return
+
+        # Find as_of index (last candle on or before as_of)
+        as_of_idx = -1
+        for i, c in enumerate(sorted_candles):
+            if c.date <= as_of:
+                as_of_idx = i
+
+        if as_of_idx < 0:
+            return
+        as_of_close = float(sorted_candles[as_of_idx].close)
+
+        for session_offset in (5, 10, 20):
+            prior_idx = as_of_idx - session_offset
+            if prior_idx < 0:
+                continue
+            prior_candle = sorted_candles[prior_idx]
+            prior_close = float(prior_candle.close)
+            if prior_close <= 0:
+                continue
+
+            fwd_return = round((as_of_close - prior_close) / prior_close, 4)
+            try:
+                if session_offset == 5:
+                    self._obs_repo.update_forward_labels(
+                        prior_candle.date, forward_ihsg_return_5d=fwd_return
+                    )
+                elif session_offset == 10:
+                    self._obs_repo.update_forward_labels(
+                        prior_candle.date, forward_ihsg_return_10d=fwd_return
+                    )
+                else:
+                    self._obs_repo.update_forward_labels(
+                        prior_candle.date, forward_ihsg_return_20d=fwd_return
+                    )
+            except Exception as exc:
+                logger.debug(
+                    "MarketContextEngine: failed to backfill forward labels for %s: %s",
+                    prior_candle.date, exc,
+                )
 
     def _persist(self, context: "MarketContext") -> None:
         if self._context_repo is None:
@@ -157,7 +337,13 @@ class MarketContextEngine:
         return sorted(daily_totals.items(), key=lambda x: x[0])
 
     def evaluate_with_data(self, request: BuildMarketContextRequest) -> "MarketContext":
-        """Pipeline path: caller provides pre-loaded data (avoids N+1 fetches in loops)."""
+        """Pipeline path: caller provides pre-loaded data (avoids N+1 fetches in loops).
+
+        NOTE: A2 regime observation persistence and forward-label backfill are intentionally
+        skipped here. This path is used for screen/backtest loops where throughput matters
+        and full evaluate() would cause N×2 use-case calls. If A2 replay data is needed for
+        a batch run, call evaluate() once per date after the loop completes.
+        """
         return self._use_case.execute(request).context
 
     # ── internals ─────────────────────────────────────────────────────────────

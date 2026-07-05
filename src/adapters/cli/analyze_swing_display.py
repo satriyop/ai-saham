@@ -869,7 +869,26 @@ def _market_context_preview_group(
     items: list = []
 
     regime_label = REGIME_DISPLAY_LABEL.get(market_regime.regime.value, market_regime.regime.value)
-    items.append(Text(f"Regime: {regime_label}", style="bold cyan"))
+    regime_confidence = getattr(market_regime, "regime_confidence", None)
+    regime_stability  = getattr(market_regime, "regime_stability", None)
+    days_in           = getattr(market_regime, "days_in_regime", None)
+
+    regime_line = Text()
+    regime_line.append(f"Regime: {regime_label}", style="bold cyan")
+    if regime_confidence is not None:
+        conf_style = "green" if regime_confidence >= 0.65 else "yellow" if regime_confidence >= 0.35 else "bold red"
+        regime_line.append(f"  conf: ", style="dim")
+        regime_line.append(f"{regime_confidence:.2f}", style=conf_style)
+    if regime_stability is not None:
+        stab_style = "green" if regime_stability == "STABLE" else "yellow" if regime_stability == "UNKNOWN" else "red"
+        regime_line.append(f"  [{regime_stability}]", style=stab_style)
+    if days_in is not None:
+        regime_line.append(f"  {days_in}d", style="dim")
+    items.append(regime_line)
+
+    transition_warning = getattr(market_regime, "transition_warning", None)
+    if transition_warning:
+        items.append(Text(f"  ⚠ {transition_warning}", style="yellow"))
 
     # ADR-037: canonical signal already includes regime conditioning.
     # preview_signal == canonical_signal — no separate "signal delta" to show.

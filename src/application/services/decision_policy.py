@@ -99,6 +99,7 @@ class DecisionPolicyService:
             )
 
         if regime_policy.enter_allowed and entry_quality == EntryQuality.ENTER:
+            # In enter-allowed regimes: floors gate ENTER → cap to WATCH if not met
             if coverage_score < regime_policy.min_coverage:
                 max_decision = _stricter(max_decision, EntryQuality.WATCH.value)
                 reasons.append(
@@ -108,6 +109,46 @@ class DecisionPolicyService:
                 max_decision = _stricter(max_decision, EntryQuality.WATCH.value)
                 reasons.append(
                     f"{regime} ENTER requires conviction >= {regime_policy.min_conviction:.0%}"
+                )
+
+        if not regime_policy.enter_allowed and entry_quality in {EntryQuality.ENTER, EntryQuality.WATCH}:
+            # In disabled regimes (RISK_OFF/VOLATILE): floors govern WATCH diagnostic quality
+            # — below floor means insufficient evidence for even a watchlist entry
+            if coverage_score < regime_policy.min_coverage:
+                max_decision = _stricter(max_decision, EntryQuality.AVOID.value)
+                reasons.append(
+                    f"{regime} WATCH requires coverage >= {regime_policy.min_coverage:.0%} "
+                    f"(got {coverage_score:.0%})"
+                )
+            if conviction_score < regime_policy.min_conviction:
+                max_decision = _stricter(max_decision, EntryQuality.AVOID.value)
+                reasons.append(
+                    f"{regime} WATCH requires conviction >= {regime_policy.min_conviction:.0%} "
+                    f"(got {conviction_score:.0%})"
+                )
+
+        # ── A2: regime quality caps (tightening-only; never relax A1 caps) ────
+        if market_context is not None:
+            regime_confidence = getattr(market_context, "regime_confidence", None)
+            regime_stability  = getattr(market_context, "regime_stability", None)
+
+            if (
+                self._config.regime_transitioning_cap_enter
+                and regime_stability == "TRANSITIONING"
+                and regime_policy.enter_allowed
+            ):
+                max_decision = _stricter(max_decision, EntryQuality.WATCH.value)
+                reasons.append("Regime TRANSITIONING — ENTER capped to WATCH")
+
+            if (
+                regime_confidence is not None
+                and regime_confidence < self._config.regime_confidence_min_enter
+                and regime_policy.enter_allowed
+            ):
+                max_decision = _stricter(max_decision, EntryQuality.WATCH.value)
+                reasons.append(
+                    f"Low regime_confidence ({regime_confidence:.2f} < "
+                    f"{self._config.regime_confidence_min_enter:.2f}) — ENTER capped"
                 )
 
         constrained = _cap_entry(entry_quality, max_decision)
