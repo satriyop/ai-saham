@@ -164,6 +164,33 @@ failed_gates = ["rsi"]
 The score remains continuous. The label and failed gates explain why it is not a
 clean setup.
 
+Relative strength vs IHSG is core `setup_quality` evidence for trend-following,
+breakout, accumulation, and foreign-bounce setups. It should not remain merely
+diagnostic for swing/accumulation decisions.
+
+Suggested evidence fields:
+
+```text
+relative_strength_context:
+  rs_vs_ihsg_20d: float | null
+  rs_bucket: LEADER | NEUTRAL | LAGGARD | UNKNOWN
+  rs_confidence: float
+  ihsg_window_complete: bool
+```
+
+Design rule:
+
+```text
+trend / breakout / accumulation / foreign_bounce:
+  negative RS vs IHSG heavily penalizes setup_quality or caps max_decision to WATCH
+
+mean_reversion:
+  weak RS may be allowed only when support/reversal evidence is strong
+```
+
+RS thresholds must be setup-family configurable and validator-bounded before
+production use.
+
 BB compression is trigger readiness, not simple bullish evidence. Compression
 alone says price is coiled; it does not say direction. A setup family may require
 compression before scoring, and compression quality may scale trigger readiness,
@@ -189,7 +216,8 @@ Setup Quality owns relative geometry and readiness:
 - Bollinger Band compression percentile
 - RSI value / RSI quality
 - SMA / trend alignment
-- relative strength vs IHSG
+- relative strength vs IHSG as core setup evidence
+- daily VWAP position / proximity, not VWAP reclaim event
 
 Trigger Timing owns immediate confirmation:
 - daily volume spike or volume dry-up reversal
@@ -504,6 +532,21 @@ profiles:
     confidence_adjustment: cap_until_liquidity_confirmed
 ```
 
+Operational confidence adjustments:
+
+```yaml
+confidence_adjustments:
+  neutral:
+    confidence_cap: 1.00
+
+  cap_until_liquidity_confirmed:
+    confidence_cap: 0.60
+    release_when:
+      median_turnover_20d_min: 5000000000
+      valid_trading_days_20d_min: 15
+      median_spread_pct_20d_max: 1.50
+```
+
 Do not introduce per-profile group weights initially. Profile should first
 affect evidence interpretation, confidence, diagnostics, and max decision. Only
 add profile-specific group weights after walk-forward data proves enough sample
@@ -594,51 +637,93 @@ Sub-signal routing must be explicit before Phase G implementation:
 
 | Group | Alpha-routed evidence | Trigger-routed evidence |
 |---|---|---|
-| `setup` | none by default; setup is timing/readiness evidence | continuous setup score, trend geometry, RSI quality, BB compression readiness, VWAP position, RS vs IHSG |
-| `flow` | 20d/30d durable CNFB slope, accumulation persistence, buyer concentration stability, foreign participation regime | only price-confirmed 3d/5d flow acceleration, broker streak acceleration with pivot confirmation, foreign VWAP reclaim context |
-| `context` | sector regime, IHSG regime, liquidity regime, sector-relative valuation context | NCP/pre-open confirmation, same-day gap direction, intraday liquidity/imbalance confirmation |
-| `fundamental_risk` | valuation percentile, earnings trend, analyst revision, insider/ownership quality, event-tagged seasonality | none by default; only event timing flags when explicitly configured |
+| `setup_quality` | none by default; setup is timing/readiness evidence | continuous setup score, trend geometry, RSI quality, BB compression readiness, VWAP position, RS vs IHSG |
+| `institutional_flow` | 20d/30d durable CNFB slope, accumulation persistence, buyer concentration stability, foreign participation regime | only price-confirmed 3d/5d flow acceleration, broker streak acceleration with pivot confirmation, foreign VWAP reclaim context |
+| `market_context` | sector regime, IHSG regime, liquidity regime, sector-relative valuation context | NCP/pre-open confirmation, same-day gap direction, intraday liquidity/imbalance confirmation |
+| `company_quality_context` | valuation percentile, earnings trend, analyst revision, insider/ownership quality, event-tagged seasonality | none by default; only event timing flags when explicitly configured |
 
-Flow and context may feed both Alpha and Trigger, but no sub-signal may be routed
-to both unless the config explicitly marks it as shared with a capped combined
-contribution. Evidence builders should emit route metadata such as
-`route: alpha`, `route: trigger`, or `route: shared_capped`.
+`institutional_flow` and `market_context` may feed both Alpha and Trigger, but
+no sub-signal may be routed to both unless the config explicitly marks it as
+shared with a capped combined contribution. Evidence builders should emit route
+metadata such as `route: alpha`, `route: trigger`, or `route: shared_capped`.
 
-Initial route fractions by horizon:
+Trigger flow condition:
+
+```yaml
+price_confirmation:
+  mode: any
+  conditions:
+    bullish_pivot_reclaim:
+      close_above_prior_pivot_pct: 0.50
+      daily_return_min_pct: 0.50
+    positive_close_above_reference:
+      reference: previous_close
+      close_above_reference_pct: 0.50
+    bullish_squeeze_release:
+      bb_width_percentile_max_before_release: 0.20
+      close_above_upper_band_or_range_high_pct: 0.30
+      volume_ratio_min: 1.20
+    vwap_reclaim:
+      close_above_vwap_pct: 0.30
+      intraday_or_daily_vwap_source_required: true
+    support_reclaim_with_valid_volume:
+      close_above_support_pct: 0.50
+      volume_ratio_min: 1.20
+      valid_volume_source: stockbit_or_idx
+```
+
+`price_confirmed = true` when the configured mode is satisfied using these
+thresholds. Flow evidence cannot contribute to Trigger unless
+`price_confirmed` is true for the same observation. Phase C may tune these
+thresholds, but it must keep them explicit and validator-bounded.
+
+Initial route fractions by horizon. Store only `alpha_fraction`; compute
+`trigger_fraction = 1.0 - alpha_fraction` to avoid coupled-parameter validator
+problems:
+
+Naming clarification:
+
+```text
+alpha_fraction = per-group routing fraction into Alpha
+alpha_weight   = final Alpha-vs-Trigger blend weight for the horizon
+```
+
+Do not use these interchangeably. `alpha_fraction` routes group contribution;
+`alpha_weight` combines the already-computed Alpha and Trigger scores.
 
 ```yaml
 route_fractions:
   TACTICAL_3D:
-    setup: {alpha: 0.00, trigger: 1.00}
-    flow: {alpha: 0.70, trigger: 0.30}
-    context: {alpha: 0.25, trigger: 0.75}
-    fundamental_risk: {alpha: 1.00, trigger: 0.00}
+    setup_quality: {alpha_fraction: 0.00}
+    institutional_flow: {alpha_fraction: 0.70}
+    market_context: {alpha_fraction: 0.25}
+    company_quality_context: {alpha_fraction: 1.00}
 
   SWING_10D:
-    setup: {alpha: 0.00, trigger: 1.00}
-    flow: {alpha: 0.80, trigger: 0.20}
-    context: {alpha: 0.60, trigger: 0.40}
-    fundamental_risk: {alpha: 1.00, trigger: 0.00}
+    setup_quality: {alpha_fraction: 0.00}
+    institutional_flow: {alpha_fraction: 0.80}
+    market_context: {alpha_fraction: 0.60}
+    company_quality_context: {alpha_fraction: 1.00}
 
   ACCUM_20D:
-    setup: {alpha: 0.10, trigger: 0.90}
-    flow: {alpha: 0.90, trigger: 0.10}
-    context: {alpha: 0.75, trigger: 0.25}
-    fundamental_risk: {alpha: 1.00, trigger: 0.00}
+    setup_quality: {alpha_fraction: 0.10}
+    institutional_flow: {alpha_fraction: 0.90}
+    market_context: {alpha_fraction: 0.75}
+    company_quality_context: {alpha_fraction: 1.00}
 ```
 
-For each group, `alpha + trigger` must equal `1.00`. Alpha and Trigger scores
-are computed by routing weighted group contributions, then normalizing each
-side by its routed total:
+For each group, `trigger_fraction` is derived, not stored. Alpha and Trigger
+scores are computed by routing weighted group contributions, then normalizing
+each side by its routed total:
 
 ```text
 alpha_score =
-  sum(group_score * group_weight * alpha_route_fraction)
-  / sum(group_weight * alpha_route_fraction)
+  sum(group_score * group_weight * alpha_fraction)
+  / sum(group_weight * alpha_fraction)
 
 trigger_score =
-  sum(group_score * group_weight * trigger_route_fraction)
-  / sum(group_weight * trigger_route_fraction)
+  sum(group_score * group_weight * (1 - alpha_fraction))
+  / sum(group_weight * (1 - alpha_fraction))
 ```
 
 This makes the Alpha/Trigger derivation computable while preserving the four
@@ -780,6 +865,39 @@ Regime controls eligibility and sizing constraints, not raw scores. SignalEngine
 should emit `max_decision`, `size_multiplier`, and rationale. Actual position
 sizing belongs in `TradeSetup` / sizing policy, which consumes these constraints
 alongside capital, stop distance, liquidity, and risk limits.
+
+### Volatility-Adjusted Execution Policy
+
+Static take-profit and stop-loss percentages should not be the long-term default
+across a mixed IDX universe. Execution policy should be ATR-aware because BBCA,
+coal cyclicals, second-liners, and speculative names have materially different
+normal volatility.
+
+Boundary:
+
+```text
+SignalEngine must not compute final stop price, target price, or position size.
+SignalEngine may emit volatility context and sizing/execution constraints.
+TradeSetup / sizing / backtest policy owns final stop, target, and position size.
+```
+
+Suggested emitted context:
+
+```text
+volatility_context:
+  atr_20: float | null
+  atr_pct: float | null
+  volatility_bucket: LOW | NORMAL | HIGH | EXTREME | UNKNOWN
+  stop_model_hint: ATR_MULTIPLE
+  suggested_stop_atr: 2.0
+  suggested_target_atr: 3.0
+  size_multiplier: float
+```
+
+ATR-scaled exits must be validated per horizon and setup family through
+walk-forward tests. Any ATR multipliers, volatility buckets, or size multipliers
+must be configurable and registered in validator bounds in the same phase they
+become tunable.
 
 ### Setup-Specific Regime Compatibility
 
@@ -940,7 +1058,7 @@ then a horizon-specific blend of Alpha and Trigger.
 Composition:
 
 ```text
-group_scores = setup, flow, context, fundamental_risk
+group_scores = setup_quality, institutional_flow, market_context, company_quality_context
 
 alpha_score =
   normalized weighted blend of group contributions routed to Alpha
@@ -950,7 +1068,7 @@ trigger_score =
 
 final_score =
   horizon_alpha_weight * alpha_score
-  + horizon_trigger_weight * trigger_score
+  + (1 - horizon_alpha_weight) * trigger_score
 ```
 
 This means the four groups drive all numeric scoring. Alpha/Trigger do not add a
@@ -959,18 +1077,33 @@ evidence.
 
 ```yaml
 groups:
-  setup:
+  setup_quality:
     weight: 0.35
 
-  flow:
+  institutional_flow:
     weight: 0.30
 
-  context:
+  market_context:
     weight: 0.25
 
-  fundamental_risk:
+  company_quality_context:
     weight: 0.10
 ```
+
+RiskEngine boundary:
+
+```text
+RiskEngine remains the only hard gate authority.
+SignalEngine company_quality_context may lower confidence, add warnings,
+cap max decision, or affect conviction/score, but it must not emit BLOCKED or
+duplicate RiskEngine gates.
+```
+
+`company_quality_context` represents company quality and contextual conviction
+only: valuation stretch, earnings trend, analyst revision, insider activity,
+ownership quality, seasonality, and event context. It must not contain liquidity
+gate, free-float gate, Piotroski blocking gate, bandar distribution block, or
+technical gate logic. Those remain RiskEngine responsibilities.
 
 For `SWING_10D`:
 
@@ -983,17 +1116,16 @@ SWING_10D:
     require_valid_volume: true
 
   alpha_trigger_blend:
-    alpha: 0.40
-    trigger: 0.60
+    alpha_weight: 0.40
 
   groups:
-    setup:
+    setup_quality:
       weight: 0.35
-    flow:
+    institutional_flow:
       weight: 0.30
-    context:
+    market_context:
       weight: 0.25
-    fundamental_risk:
+    company_quality_context:
       weight: 0.10
 ```
 
@@ -1008,14 +1140,17 @@ ACCUM_20D:
     require_valid_volume: true
 
   alpha_trigger_blend:
-    alpha: 0.50
-    trigger: 0.50
+    alpha_weight: 0.50
 
   groups:
-    setup: 0.25
-    flow: 0.40
-    context: 0.20
-    fundamental_risk: 0.15
+    setup_quality:
+      weight: 0.25
+    institutional_flow:
+      weight: 0.40
+    market_context:
+      weight: 0.20
+    company_quality_context:
+      weight: 0.15
 ```
 
 For `TACTICAL_3D`:
@@ -1029,14 +1164,17 @@ TACTICAL_3D:
     require_valid_volume: true
 
   alpha_trigger_blend:
-    alpha: 0.20
-    trigger: 0.80
+    alpha_weight: 0.20
 
   groups:
-    setup: 0.45
-    flow: 0.30
-    context: 0.20
-    fundamental_risk: 0.05
+    setup_quality:
+      weight: 0.45
+    institutional_flow:
+      weight: 0.30
+    market_context:
+      weight: 0.20
+    company_quality_context:
+      weight: 0.05
 ```
 
 Hard gates are horizon-specific. They should not be copied blindly between
@@ -1061,6 +1199,28 @@ explicit:
   "market_regime": "NEUTRAL",
   "sector_regime": "BULLISH",
   "decision": "ENTER",
+  "decision_constraints": {
+    "max_decision": "ENTER",
+    "size_multiplier": 0.50,
+    "constraint_reasons": [
+      "NEUTRAL regime"
+    ]
+  },
+  "volatility_context": {
+    "atr_20": 82.5,
+    "atr_pct": 2.4,
+    "volatility_bucket": "NORMAL",
+    "stop_model_hint": "ATR_MULTIPLE",
+    "suggested_stop_atr": 2.0,
+    "suggested_target_atr": 3.0,
+    "size_multiplier": 0.75
+  },
+  "relative_strength_context": {
+    "rs_vs_ihsg_20d": 0.042,
+    "rs_bucket": "LEADER",
+    "rs_confidence": 0.88,
+    "ihsg_window_complete": true
+  },
   "main_reasons": [
     "Foreign participation meaningful",
     "CNFB rising while price remains compressed",
@@ -1076,7 +1236,7 @@ explicit:
 For the example above, `SWING_10D` uses:
 
 ```text
-score = 0.40 * alpha_score + 0.60 * trigger_score
+score = alpha_weight * alpha_score + (1 - alpha_weight) * trigger_score
 score = 0.40 * 71 + 0.60 * 78 = 75.2
 ```
 
@@ -1153,6 +1313,10 @@ Goal: replace coarse setup labels with continuous price/volume pivot evidence.
 Work:
 
 - Add continuous setup sub-signal scoring.
+- Include RS vs IHSG as a core `setup_quality` input for trend, breakout,
+  accumulation, and foreign-bounce setups.
+- Add setup-family configurable RS thresholds, including max-decision caps for
+  negative RS when applicable.
 - Keep existing labels and failed gates for explanation.
 - Add BB compression as trigger readiness, not bullish evidence.
 - Exclude volume confirmation from setup scoring; route volume spike/dry-up,
@@ -1166,6 +1330,10 @@ actual OOS discrimination.
 
 Goal: reuse existing deterministic strategy packages as setup-family evidence
 and empirical validation tools without creating a parallel decision engine.
+
+Phase D evidence is diagnostic-only. It is persisted and reported, but it is not
+wired into group scores until Phase G explicitly consumes it through
+Alpha/Trigger aggregation.
 
 Work:
 
@@ -1228,6 +1396,9 @@ Work:
   independent factor tree.
 - Keep flow primarily Alpha/context. Permit trigger contribution only when price
   confirms.
+- Add volatility context emission if not already present: ATR, ATR%, volatility
+  bucket, ATR stop/target hints, and size constraint multiplier. Final
+  stop/target/position size remains owned by TradeSetup/sizing/backtest policy.
 - Decide and implement the score precision contract: either migrate
   `SignalAssessment.score` to float or add a separate raw/exact score field while
   preserving display int behavior.
@@ -1256,6 +1427,12 @@ Work:
 - Quantize weight changes.
 - Cap per-cycle shifts.
 - Register all tunable config paths in validator bounds before use.
+- Include validator bounds for ATR multipliers, volatility buckets, size
+  multipliers, and RS-vs-IHSG thresholds before those settings become
+  production tunables.
+- Update `SwingTuningPatchValidator` from diagnostic floors to target
+  patch-eligible floors where current validator behavior is weaker.
+- Add validator support for separate diagnostic-ready and patch-eligible states.
 - Record before/after artifacts.
 - Do not allow AI or CLI output to mutate config directly.
 
@@ -1276,13 +1453,21 @@ tuning_readiness:
     max_oos_drawdown_regression: 0.0
     require_regime_attribution: true
     require_confidence_bucket_attribution: true
-    reject_single_regime_dependency: true
+    reject_single_regime_dependency:
+      max_single_regime_oos_profit_share: 0.70
+      min_positive_oos_regime_count: 2
+      min_oos_trades_per_counted_regime: 5
 ```
 
 A finding can be diagnostic-ready with a small OOS sample, but it is not
 patch-eligible until the stricter sample and attribution gates pass. If current
 validator behavior is less strict, the stricter gates above are target-state
 requirements and must not be claimed as implemented.
+
+Single-regime dependency is rejected when more than 70% of OOS profit comes from
+one regime, or when fewer than two regimes have positive OOS contribution with
+at least five trades each. This prevents a patch from passing because it only
+worked in one hidden market condition.
 
 A config change is not accepted just because in-sample performance improves. It
 must clear OOS gates, preserve or improve drawdown behavior, and pass attribution
@@ -1385,6 +1570,11 @@ Any implementation based on this recommendation should satisfy:
 - Regime thresholds are config-driven.
 - `RISK_OFF` and `VOLATILE` initial policies explicitly disable `ENTER`; this
   cannot be inferred only from cap/floor math.
+- SignalEngine output includes decision constraints (`max_decision`,
+  `size_multiplier`, and reasons) for TradeSetup/sizing policy to consume.
+- SignalEngine emits volatility context and ATR-based execution hints only;
+  TradeSetup/sizing/backtest policy owns final stop price, target price, and
+  position size.
 - Setup-specific regime compatibility is explicit and affects eligibility, not
   raw evidence scores.
 - Setup-specific regime labels have operational numeric requirements.
@@ -1395,15 +1585,26 @@ Any implementation based on this recommendation should satisfy:
   recalculate profile weights ad hoc.
 - Profile does not introduce per-profile group weights initially; it affects
   evidence interpretation, confidence, diagnostics, and max decision first.
+- Profile confidence adjustments have numeric confidence caps and release
+  conditions.
 - Flow metrics are persisted with raw values, normalized scores, and authority
   labels. Flow starts diagnostic/binary/low-weight until OOS attribution proves
   bucket-level predictive value.
 - Raw net-buy intensity never directly creates `ENTER`.
 - Trigger is dominated by price/volume pivot confirmation; foreign/broker flow
   supports Trigger only when price confirms.
-- Alpha and Trigger are derived from the canonical four group scores.
-- Alpha/Trigger route fractions are defined per horizon and each group route
-  sums to `1.00`.
+- Relative strength vs IHSG is core `setup_quality` evidence for trend,
+  breakout, accumulation, and foreign-bounce setups.
+- Negative RS vs IHSG caps max decision or heavily penalizes setup quality for
+  trend/accumulation/foreign-bounce setups unless setup-family config explicitly
+  permits an exception.
+- Alpha and Trigger are derived from the canonical four group scores:
+  `setup_quality`, `institutional_flow`, `market_context`, and
+  `company_quality_context`.
+- Alpha/Trigger route fractions are defined per horizon and each group stores
+  only `alpha_fraction`; Trigger fraction is derived as
+  `1.0 - alpha_fraction`.
+- Trigger flow contribution requires explicit `price_confirmed` evidence.
 - Alpha/Trigger matrix is descriptive unless explicit per-horizon gates are
   configured and tested.
 - Setup owns RSI/BB/trend geometry; Trigger owns immediate confirmation and must
@@ -1411,8 +1612,11 @@ Any implementation based on this recommendation should satisfy:
 - Setup/readiness scoring may include BB compression, but compression alone is
   not bullish; Trigger activation requires bullish release or price/volume
   confirmation. Setup scoring excludes volume confirmation.
+- RS thresholds are setup-family configurable and validator-bounded.
 - Indicator/plugin/formula computations are reused through `IndicatorRegistry`
   instead of duplicated inside SignalEngine.
+- Strategy evidence is diagnostic-only until the Alpha/Trigger aggregation phase
+  explicitly consumes it.
 - Sparse-history tickers receive conservative profile defaults.
 - CNFB/VWAP metrics declare valid-session coverage and become unavailable below
   minimum coverage.
@@ -1422,6 +1626,9 @@ Any implementation based on this recommendation should satisfy:
   zero; no divide-by-zero fallback is allowed.
 - Sector-relative valuation requires sufficient peer coverage and otherwise
   falls back deterministically.
+- RiskEngine remains the only hard gate authority. `company_quality_context`
+  must not emit `BLOCKED` or duplicate liquidity, free-float, Piotroski, bandar
+  distribution, or technical gate logic.
 - Score precision migration is explicit before Phase G persists decimal scores.
 - Forward labels are persisted outcome records with explicit success, failure,
   neutral, and unavailable states per horizon.
@@ -1434,10 +1641,14 @@ Any implementation based on this recommendation should satisfy:
   stricter OOS sample and attribution gates.
 - Every new tunable config path is registered in validator bounds in the same
   implementation phase.
-- Flow/context sub-signals have explicit Alpha/Trigger routing metadata before
-  Phase G aggregation.
-- Sector context has a local-universe fallback and does not require a new
-  external provider.
+- ATR multipliers, volatility buckets, size multipliers, and RS thresholds are
+  validator-bounded before production use.
+- `SwingTuningPatchValidator` supports diagnostic-ready vs patch-eligible states
+  before expanded tuning patches are accepted.
+- `institutional_flow` / `market_context` sub-signals have explicit
+  Alpha/Trigger routing metadata before Phase G aggregation.
+- Sector-derived `market_context` has a local-universe fallback and does not
+  require a new external provider.
 - No scoring policy lives in CLI adapters.
 - All tuning uses saved observations and forward labels.
 
