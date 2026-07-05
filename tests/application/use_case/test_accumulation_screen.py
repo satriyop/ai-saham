@@ -9,8 +9,8 @@ from src.application.use_case.accumulation_screen_use_case import (
     BCI_CLUSTER,
     BCI_RETAIL,
     BCI_STABLE,
-    AccumulationDerivedFeaturePolicy,
     TIER1_FOREIGN_BROKERS,
+    AccumulationDerivedFeaturePolicy,
     AccumulationScreenRequest,
     AccumulationScreenUseCase,
 )
@@ -207,9 +207,9 @@ def test_screen_uses_derived_feature_policy_for_trend_threshold():
     session_dates = _weekdays(date(2026, 1, 1), 7)
     as_of = session_dates[-1]
     candle_dates = _weekdays(date(2025, 12, 1), 25)
-    candles = [
-        _candle("BBCA", day, Decimal("100")) for day in candle_dates[:-1]
-    ] + [_candle("BBCA", candle_dates[-1], Decimal("103"))]
+    candles = [_candle("BBCA", day, Decimal("100")) for day in candle_dates[:-1]] + [
+        _candle("BBCA", candle_dates[-1], Decimal("103"))
+    ]
     summaries = [_summary("BBCA", day, Decimal("110")) for day in session_dates]
 
     loose_threshold = AccumulationScreenUseCase(
@@ -579,8 +579,7 @@ def test_screen_derives_forward_pe_from_latest_price_when_cache_has_eps_only():
     session_dates = _weekdays(date(2026, 1, 1), 7)
     as_of = session_dates[-1]
     candles = [
-        _candle("BBCA", date(2025, 12, 1) + timedelta(days=i), _Decimal("100"))
-        for i in range(45)
+        _candle("BBCA", date(2025, 12, 1) + timedelta(days=i), _Decimal("100")) for i in range(45)
     ]
     summaries = [_summary("BBCA", day, _Decimal("110")) for day in session_dates]
     forward_provider = MagicMock()
@@ -598,16 +597,18 @@ def test_screen_derives_forward_pe_from_latest_price_when_cache_has_eps_only():
         forward_estimates_provider=forward_provider,
     )
 
-    response = use_case.execute(AccumulationScreenRequest(
-        tickers=["BBCA"],
-        window_days=7,
-        min_net_buy_days=1,
-        as_of_date=as_of,
-    ))
+    response = use_case.execute(
+        AccumulationScreenRequest(
+            tickers=["BBCA"],
+            window_days=7,
+            min_net_buy_days=1,
+            as_of_date=as_of,
+        )
+    )
 
     candidate = response.candidates[0]
     assert candidate.forward_estimates is not None
-    assert candidate.forward_estimates.forward_pe == 10.0   # PE derived from eps + close price
+    assert candidate.forward_estimates.forward_pe == 10.0  # PE derived from eps + close price
     # Phase 4: PE=10 is far below VALUATION_STRETCHED threshold (50) → no penalty flag
     assert "VALUATION_STRETCHED" not in candidate.signal_assessment.active_flags
 
@@ -669,11 +670,14 @@ def test_signal_strong_when_multiple_factors_elevated():
 
 # ─── Behavioral parity: screener integration ─────────────────────────────────
 
+
 def test_screener_populates_signal_assessment():
     """AccumulationScreenUseCase must populate signal_assessment on each candidate."""
     session_dates = _weekdays(date(2026, 1, 1), 7)
     as_of = session_dates[-1]
-    candles = [_candle("BBCA", date(2025, 12, 1) + timedelta(days=i), Decimal("100")) for i in range(45)]
+    candles = [
+        _candle("BBCA", date(2025, 12, 1) + timedelta(days=i), Decimal("100")) for i in range(45)
+    ]
     summaries = [_summary("BBCA", day, Decimal("110")) for day in session_dates]
 
     uc = AccumulationScreenUseCase(
@@ -698,6 +702,7 @@ def test_screener_populates_signal_assessment():
 
 # ── Piotroski quality gate ────────────────────────────────────────────────────
 
+
 def _make_use_case_with_fundamentals(piotroski_score: int | None):
     """Build a use case with a fundamentals_provider stub returning the given F-Score."""
     from unittest.mock import MagicMock
@@ -706,15 +711,23 @@ def _make_use_case_with_fundamentals(piotroski_score: int | None):
 
     session_dates = _weekdays(date(2026, 1, 1), 7)
     as_of = session_dates[-1]
-    candles = [_candle("BBCA", date(2025, 12, 1) + timedelta(days=i), _Decimal("100")) for i in range(45)]
+    candles = [
+        _candle("BBCA", date(2025, 12, 1) + timedelta(days=i), _Decimal("100")) for i in range(45)
+    ]
     summaries = [_summary("BBCA", day, _Decimal("110")) for day in session_dates]
 
     fund_prov = MagicMock()
     if piotroski_score is not None:
         fund_prov.get_fundamentals.return_value = CompanyFundamentals(
-            ticker="BBCA", pe_ratio_ttm=12.0, roe_ttm=15.0, net_profit_margin=12.0,
-            revenue_yoy_growth=8.0, piotroski_f_score=piotroski_score,
-            dividend_yield=2.0, week52_high=1200.0, week52_low=800.0,
+            ticker="BBCA",
+            pe_ratio_ttm=12.0,
+            roe_ttm=15.0,
+            net_profit_margin=12.0,
+            revenue_yoy_growth=8.0,
+            piotroski_f_score=piotroski_score,
+            dividend_yield=2.0,
+            week52_high=1200.0,
+            week52_low=800.0,
             near_52w_high_rank=50.0,
         )
     else:
@@ -730,52 +743,78 @@ def _make_use_case_with_fundamentals(piotroski_score: int | None):
 
 def test_min_piotroski_zero_does_not_filter():
     use_case, as_of = _make_use_case_with_fundamentals(piotroski_score=3)
-    response = use_case.execute(AccumulationScreenRequest(
-        tickers=["BBCA"], window_days=7, min_net_buy_days=1,
-        as_of_date=as_of, min_piotroski=0,
-    ))
+    response = use_case.execute(
+        AccumulationScreenRequest(
+            tickers=["BBCA"],
+            window_days=7,
+            min_net_buy_days=1,
+            as_of_date=as_of,
+            min_piotroski=0,
+        )
+    )
     assert len(response.candidates) == 1
 
 
 def test_min_piotroski_excludes_below_threshold():
     use_case, as_of = _make_use_case_with_fundamentals(piotroski_score=3)
-    response = use_case.execute(AccumulationScreenRequest(
-        tickers=["BBCA"], window_days=7, min_net_buy_days=1,
-        as_of_date=as_of, min_piotroski=5,
-    ))
+    response = use_case.execute(
+        AccumulationScreenRequest(
+            tickers=["BBCA"],
+            window_days=7,
+            min_net_buy_days=1,
+            as_of_date=as_of,
+            min_piotroski=5,
+        )
+    )
     assert len(response.candidates) == 0
 
 
 def test_min_piotroski_includes_at_threshold():
     use_case, as_of = _make_use_case_with_fundamentals(piotroski_score=5)
-    response = use_case.execute(AccumulationScreenRequest(
-        tickers=["BBCA"], window_days=7, min_net_buy_days=1,
-        as_of_date=as_of, min_piotroski=5,
-    ))
+    response = use_case.execute(
+        AccumulationScreenRequest(
+            tickers=["BBCA"],
+            window_days=7,
+            min_net_buy_days=1,
+            as_of_date=as_of,
+            min_piotroski=5,
+        )
+    )
     assert len(response.candidates) == 1
 
 
 def test_min_piotroski_excludes_when_no_fundamentals():
     use_case, as_of = _make_use_case_with_fundamentals(piotroski_score=None)
-    response = use_case.execute(AccumulationScreenRequest(
-        tickers=["BBCA"], window_days=7, min_net_buy_days=1,
-        as_of_date=as_of, min_piotroski=4,
-    ))
+    response = use_case.execute(
+        AccumulationScreenRequest(
+            tickers=["BBCA"],
+            window_days=7,
+            min_net_buy_days=1,
+            as_of_date=as_of,
+            min_piotroski=4,
+        )
+    )
     assert len(response.candidates) == 0
 
 
 def test_min_piotroski_passes_when_no_fundamentals_and_gate_disabled():
     use_case, as_of = _make_use_case_with_fundamentals(piotroski_score=None)
-    response = use_case.execute(AccumulationScreenRequest(
-        tickers=["BBCA"], window_days=7, min_net_buy_days=1,
-        as_of_date=as_of, min_piotroski=0,
-    ))
+    response = use_case.execute(
+        AccumulationScreenRequest(
+            tickers=["BBCA"],
+            window_days=7,
+            min_net_buy_days=1,
+            as_of_date=as_of,
+            min_piotroski=0,
+        )
+    )
     assert len(response.candidates) == 1
 
 
 # ── Early-pruning gate tests ──────────────────────────────────────────────────
 # Verify that enrichment providers are NOT queried for tickers that fail the
 # market_cap or piotroski gates (Rec 13: early market_cap floor pruning).
+
 
 def _make_use_case_with_all_providers(market_cap_idr: int | None, piotroski_score: int | None):
     """Build a use case with all enrichment providers mocked so we can assert call counts."""
@@ -785,17 +824,29 @@ def _make_use_case_with_all_providers(market_cap_idr: int | None, piotroski_scor
 
     session_dates = _weekdays(date(2026, 1, 1), 7)
     as_of = session_dates[-1]
-    candles = [_candle("BBCA", date(2025, 12, 1) + timedelta(days=i), _Decimal("100")) for i in range(45)]
+    candles = [
+        _candle("BBCA", date(2025, 12, 1) + timedelta(days=i), _Decimal("100")) for i in range(45)
+    ]
     summaries = [_summary("BBCA", day, _Decimal("110")) for day in session_dates]
 
     fund_prov = MagicMock()
-    fund_prov.get_fundamentals.return_value = CompanyFundamentals(
-        ticker="BBCA", pe_ratio_ttm=12.0, roe_ttm=15.0, net_profit_margin=12.0,
-        revenue_yoy_growth=8.0, piotroski_f_score=piotroski_score,
-        dividend_yield=2.0, week52_high=1200.0, week52_low=800.0,
-        near_52w_high_rank=50.0,
-        market_cap_idr=market_cap_idr,
-    ) if piotroski_score is not None or market_cap_idr is not None else None
+    fund_prov.get_fundamentals.return_value = (
+        CompanyFundamentals(
+            ticker="BBCA",
+            pe_ratio_ttm=12.0,
+            roe_ttm=15.0,
+            net_profit_margin=12.0,
+            revenue_yoy_growth=8.0,
+            piotroski_f_score=piotroski_score,
+            dividend_yield=2.0,
+            week52_high=1200.0,
+            week52_low=800.0,
+            near_52w_high_rank=50.0,
+            market_cap_idr=market_cap_idr,
+        )
+        if piotroski_score is not None or market_cap_idr is not None
+        else None
+    )
 
     seasonality_prov = MagicMock()
     seasonality_prov.get_seasonal_edge.return_value = None
@@ -817,24 +868,36 @@ def _make_use_case_with_all_providers(market_cap_idr: int | None, piotroski_scor
 
 def test_market_cap_floor_excludes_below_threshold():
     use_case, as_of, fund_prov, *_ = _make_use_case_with_all_providers(
-        market_cap_idr=500_000_000_000, piotroski_score=8,  # 500B IDR < 1T floor
+        market_cap_idr=500_000_000_000,
+        piotroski_score=8,  # 500B IDR < 1T floor
     )
-    response = use_case.execute(AccumulationScreenRequest(
-        tickers=["BBCA"], window_days=7, min_net_buy_days=1,
-        as_of_date=as_of, min_market_cap_idr=1_000_000_000_000,
-    ))
+    response = use_case.execute(
+        AccumulationScreenRequest(
+            tickers=["BBCA"],
+            window_days=7,
+            min_net_buy_days=1,
+            as_of_date=as_of,
+            min_market_cap_idr=1_000_000_000_000,
+        )
+    )
     assert len(response.candidates) == 0
     assert response.tickers_skipped == 1
 
 
 def test_market_cap_floor_includes_at_or_above_threshold():
     use_case, as_of, *_ = _make_use_case_with_all_providers(
-        market_cap_idr=2_000_000_000_000, piotroski_score=8,  # 2T IDR >= 1T floor
+        market_cap_idr=2_000_000_000_000,
+        piotroski_score=8,  # 2T IDR >= 1T floor
     )
-    response = use_case.execute(AccumulationScreenRequest(
-        tickers=["BBCA"], window_days=7, min_net_buy_days=1,
-        as_of_date=as_of, min_market_cap_idr=1_000_000_000_000,
-    ))
+    response = use_case.execute(
+        AccumulationScreenRequest(
+            tickers=["BBCA"],
+            window_days=7,
+            min_net_buy_days=1,
+            as_of_date=as_of,
+            min_market_cap_idr=1_000_000_000_000,
+        )
+    )
     assert len(response.candidates) == 1
 
 
@@ -842,13 +905,19 @@ def test_market_cap_floor_skips_enrichment_for_rejected_ticker():
     """Enrichment providers must NOT be called when market cap gate rejects the ticker."""
     use_case, as_of, fund_prov, seasonality_prov, bandar_prov, analyst_prov = (
         _make_use_case_with_all_providers(
-            market_cap_idr=100_000_000_000, piotroski_score=8,  # 100B IDR < 1T floor
+            market_cap_idr=100_000_000_000,
+            piotroski_score=8,  # 100B IDR < 1T floor
         )
     )
-    use_case.execute(AccumulationScreenRequest(
-        tickers=["BBCA"], window_days=7, min_net_buy_days=1,
-        as_of_date=as_of, min_market_cap_idr=1_000_000_000_000,
-    ))
+    use_case.execute(
+        AccumulationScreenRequest(
+            tickers=["BBCA"],
+            window_days=7,
+            min_net_buy_days=1,
+            as_of_date=as_of,
+            min_market_cap_idr=1_000_000_000_000,
+        )
+    )
     # Fundamentals fetched once for the gate check
     fund_prov.get_fundamentals.assert_called_once()
     # All other enrichment skipped
@@ -861,13 +930,19 @@ def test_piotroski_gate_skips_enrichment_for_rejected_ticker():
     """Enrichment providers must NOT be called when piotroski gate rejects the ticker."""
     use_case, as_of, fund_prov, seasonality_prov, bandar_prov, analyst_prov = (
         _make_use_case_with_all_providers(
-            market_cap_idr=5_000_000_000_000, piotroski_score=2,  # f-score 2 < floor 5
+            market_cap_idr=5_000_000_000_000,
+            piotroski_score=2,  # f-score 2 < floor 5
         )
     )
-    use_case.execute(AccumulationScreenRequest(
-        tickers=["BBCA"], window_days=7, min_net_buy_days=1,
-        as_of_date=as_of, min_piotroski=5,
-    ))
+    use_case.execute(
+        AccumulationScreenRequest(
+            tickers=["BBCA"],
+            window_days=7,
+            min_net_buy_days=1,
+            as_of_date=as_of,
+            min_piotroski=5,
+        )
+    )
     fund_prov.get_fundamentals.assert_called_once()
     seasonality_prov.get_seasonal_edge.assert_not_called()
     bandar_prov.get_snapshot.assert_not_called()
@@ -877,13 +952,18 @@ def test_piotroski_gate_skips_enrichment_for_rejected_ticker():
 def test_no_gate_active_fundamentals_fetched_in_enrichment_pass():
     """When no gate is active, fundamentals are fetched once in the normal enrichment pass."""
     use_case, as_of, fund_prov, *_ = _make_use_case_with_all_providers(
-        market_cap_idr=5_000_000_000_000, piotroski_score=8,
+        market_cap_idr=5_000_000_000_000,
+        piotroski_score=8,
     )
-    response = use_case.execute(AccumulationScreenRequest(
-        tickers=["BBCA"], window_days=7, min_net_buy_days=1,
-        as_of_date=as_of,
-        # No gate — min_market_cap_idr=0 and min_piotroski=0 (defaults)
-    ))
+    response = use_case.execute(
+        AccumulationScreenRequest(
+            tickers=["BBCA"],
+            window_days=7,
+            min_net_buy_days=1,
+            as_of_date=as_of,
+            # No gate — min_market_cap_idr=0 and min_piotroski=0 (defaults)
+        )
+    )
     assert len(response.candidates) == 1
     # Fundamentals still fetched exactly once (in enrichment pass, not gate pass)
     fund_prov.get_fundamentals.assert_called_once()
@@ -927,7 +1007,9 @@ _BB_PCTILE = 0.20
 
 def test_classify_all_windows_hot_is_sustained():
     candidates = {w: _make_candidate(score=70.0) for w in _WINDOWS}
-    assert classify_multi_window_pattern(_WINDOWS, candidates, _MIN_SCORE, _BB_PCTILE) == "sustained"
+    assert (
+        classify_multi_window_pattern(_WINDOWS, candidates, _MIN_SCORE, _BB_PCTILE) == "sustained"
+    )
 
 
 def test_classify_only_short_window_hot_is_fresh_rotation():
@@ -936,7 +1018,10 @@ def test_classify_only_short_window_hot_is_fresh_rotation():
         30: _make_candidate(score=40.0),
         90: _make_candidate(score=40.0),
     }
-    assert classify_multi_window_pattern(_WINDOWS, candidates, _MIN_SCORE, _BB_PCTILE) == "fresh rotation"
+    assert (
+        classify_multi_window_pattern(_WINDOWS, candidates, _MIN_SCORE, _BB_PCTILE)
+        == "fresh rotation"
+    )
 
 
 def test_classify_only_long_window_hot_is_long_term_only():
@@ -945,7 +1030,10 @@ def test_classify_only_long_window_hot_is_long_term_only():
         30: _make_candidate(score=40.0),
         90: _make_candidate(score=70.0),
     }
-    assert classify_multi_window_pattern(_WINDOWS, candidates, _MIN_SCORE, _BB_PCTILE) == "long-term only"
+    assert (
+        classify_multi_window_pattern(_WINDOWS, candidates, _MIN_SCORE, _BB_PCTILE)
+        == "long-term only"
+    )
 
 
 def test_classify_short_and_long_hot_but_not_all_is_building():
@@ -967,7 +1055,10 @@ def test_classify_coiled_spring_when_squeeze_and_high_score():
         30: _make_candidate(score=40.0),
         90: _make_candidate(score=40.0),
     }
-    assert classify_multi_window_pattern(_WINDOWS, candidates, _MIN_SCORE, _BB_PCTILE) == "coiled spring"
+    assert (
+        classify_multi_window_pattern(_WINDOWS, candidates, _MIN_SCORE, _BB_PCTILE)
+        == "coiled spring"
+    )
 
 
 def test_classify_weak_when_no_windows_hot():
@@ -976,6 +1067,7 @@ def test_classify_weak_when_no_windows_hot():
 
 
 # ── Phase 7: persistence wiring ───────────────────────────────────────────────
+
 
 class SpyCandidateObservationsRepository:
     """Records save_many calls for assertion."""
@@ -1034,6 +1126,12 @@ def test_screen_persists_candidate_observations_when_repo_injected():
     assert payload["artifact_type"] == "candidate_observation"
     assert payload["ticker"] == "BBCA"
     assert payload["screen_result"] == "pass"
+    fingerprint = payload["sub_signal_fingerprint"]
+    assert fingerprint["rsi_at_signal"] is not None
+    assert fingerprint["cnfb_20d_at_signal"] is not None
+    assert fingerprint["coverage_score"] == 0.5
+    assert fingerprint["conviction_score"] is not None
+    assert fingerprint["coverage_score"] != fingerprint["conviction_score"]
     # flow_evidence key must be present inside signal (None when no signal engine;
     # the key itself must exist so replay consumers don't need to special-case)
     assert "flow_evidence" in (payload.get("signal") or {})

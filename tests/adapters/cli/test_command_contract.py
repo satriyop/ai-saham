@@ -58,6 +58,7 @@ EXPECTED_COMMANDS: dict[tuple[str, ...], tuple[str, ...]] = {
         "accum-audit",
         "swing-compare",
         "signal-audit",
+        "signal-labels",
         "signal-replay",
         "chart",
     ),

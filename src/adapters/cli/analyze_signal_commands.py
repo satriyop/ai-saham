@@ -15,32 +15,46 @@ Layer: Adapter
 
 from __future__ import annotations
 
-from datetime import date
+import json
+from datetime import date, datetime
 from pathlib import Path
 from typing import Annotated, Optional
 
 import typer
 
+from src.application.ports.signal_coverage_provider import SignalCoverageReport
 from src.application.services.bootstrap import (
     create_signal_engine,
     load_signal_weight_tables,
-)
-from src.application.ports.signal_coverage_provider import SignalCoverageReport
-from src.infrastructure.persistence.sqlite_signal_coverage_provider import (
-    SqliteSignalCoverageProvider,
 )
 from src.application.use_case.audit_signal_use_case import (
     AuditSignalRequest,
     AuditSignalUseCase,
 )
+from src.application.use_case.generate_signal_forward_labels_use_case import (
+    GenerateSignalForwardLabelsRequest,
+    GenerateSignalForwardLabelsUseCase,
+)
 from src.application.use_case.replay_signal_observation_use_case import (
     ReplaySignalObservationRequest,
     ReplaySignalObservationUseCase,
 )
+from src.application.use_case.summarize_signal_forward_labels_use_case import (
+    SummarizeSignalForwardLabelsRequest,
+    SummarizeSignalForwardLabelsUseCase,
+)
 from src.domain.value_objects.signal_audit import SignalAuditReport
+from src.domain.value_objects.signal_forward_label import SignalLabelHorizon
 from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.persistence.sqlite_candidate_observations_repository import (
     SQLiteCandidateObservationsRepository,
+)
+from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
+from src.infrastructure.persistence.sqlite_signal_coverage_provider import (
+    SqliteSignalCoverageProvider,
+)
+from src.infrastructure.persistence.sqlite_signal_forward_labels_repository import (
+    SQLiteSignalForwardLabelsRepository,
 )
 
 DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
@@ -159,17 +173,98 @@ def signal_replay(
     _display_replay(response.observation.payload)
 
 
+def signal_labels(
+    snapshot_date: Annotated[str, typer.Argument(help="Signal date YYYY-MM-DD")],
+    ticker: Annotated[
+        Optional[str],
+        typer.Option("--ticker", "-t", help="Limit to one ticker; required with --generate"),
+    ] = None,
+    horizon: Annotated[
+        str,
+        typer.Option("--horizon", help="TACTICAL_3D, SWING_10D, or ACCUM_20D"),
+    ] = SignalLabelHorizon.SWING_10D.value,
+    generate: Annotated[
+        bool,
+        typer.Option("--generate", help="Generate label before summarizing"),
+    ] = False,
+    captured_at: Annotated[
+        Optional[str],
+        typer.Option("--captured-at", help="Specific observation timestamp ISO-8601"),
+    ] = None,
+    fmt: Annotated[str, typer.Option("--format", help="Output format: table or json")] = "table",
+    db_path: Annotated[Optional[Path], typer.Option("--db")] = None,
+) -> None:
+    """Generate and summarize persisted signal forward labels."""
+    resolved_db = db_path or DEFAULT_DB_PATH
+    try:
+        day = date.fromisoformat(snapshot_date)
+    except ValueError:
+        typer.echo(f"[error] Invalid date: {snapshot_date} (expected YYYY-MM-DD)", err=True)
+        raise typer.Exit(1)
+    try:
+        label_horizon = SignalLabelHorizon(horizon.upper())
+    except ValueError:
+        typer.echo(f"[error] Invalid horizon: {horizon}", err=True)
+        raise typer.Exit(1)
+    try:
+        captured_dt = datetime.fromisoformat(captured_at) if captured_at else None
+    except ValueError:
+        typer.echo(f"[error] Invalid captured-at: {captured_at}", err=True)
+        raise typer.Exit(1)
+
+    ticker_u = ticker.upper() if ticker else None
+    labels_repo = SQLiteSignalForwardLabelsRepository(resolved_db)
+
+    if generate:
+        if not ticker_u:
+            typer.echo("[error] --ticker is required with --generate", err=True)
+            raise typer.Exit(1)
+        generator = GenerateSignalForwardLabelsUseCase(
+            candidate_observations_repository=SQLiteCandidateObservationsRepository(resolved_db),
+            market_data_repository=SQLiteMarketRepository(resolved_db),
+            signal_forward_labels_repository=labels_repo,
+        )
+        response = generator.execute(
+            GenerateSignalForwardLabelsRequest(
+                ticker=ticker_u,
+                signal_date=day,
+                observation_captured_at=captured_dt,
+                horizons=(label_horizon,),
+            )
+        )
+        if response.observation is None:
+            typer.echo(f"[error] No stored signal observation for {ticker_u} on {day}.", err=True)
+            typer.echo("        Run: saham screen accum to capture observations first.", err=True)
+            raise typer.Exit(1)
+        if fmt != "json":
+            label = response.labels[0]
+            typer.echo(
+                f"Generated {label.horizon.value} label for {label.ticker} "
+                f"{label.signal_date}: {label.outcome_label.value}"
+            )
+
+    summary = SummarizeSignalForwardLabelsUseCase(labels_repo).execute(
+        SummarizeSignalForwardLabelsRequest(
+            signal_date=day,
+            horizon=label_horizon,
+            ticker=ticker_u,
+        )
+    )
+    if fmt == "json":
+        typer.echo(json.dumps(summary.to_dict(), indent=2))
+        return
+    _display_label_summary(day, label_horizon, ticker_u, summary)
+
+
 # ── display ───────────────────────────────────────────────────────────────────
 
+
 def _display_report(report: SignalAuditReport) -> None:
-    typer.echo(
-        f"\nSignal Audit  ·  {report.ticker}  ·  {report.snapshot_date}"
-    )
+    typer.echo(f"\nSignal Audit  ·  {report.ticker}  ·  {report.snapshot_date}")
     typer.echo("═" * 58)
     typer.echo("")
     typer.echo(
-        f"{'Factor':<18}{'Status':<8}{'Raw Value':<24}"
-        f"{'Score':>6}  {'Wt':>6}  {'WtdContrib':>10}"
+        f"{'Factor':<18}{'Status':<8}{'Raw Value':<24}{'Score':>6}  {'Wt':>6}  {'WtdContrib':>10}"
     )
     typer.echo("─" * 74)
 
@@ -186,13 +281,11 @@ def _display_report(report: SignalAuditReport) -> None:
 
     typer.echo("─" * 74)
     typer.echo(
-        f"COMPOSITE SCORE: {report.final_score}/100  "
-        f"{report.strength}  {report.entry_quality}"
+        f"COMPOSITE SCORE: {report.final_score}/100  {report.strength}  {report.entry_quality}"
     )
     typer.echo("")
     typer.echo(
-        f"Legacy flat-factor renormalized (missing excluded): "
-        f"{report.renormalized_score}/100"
+        f"Legacy flat-factor renormalized (missing excluded): {report.renormalized_score}/100"
     )
     typer.echo("")
     total = report.factors_present + report.factors_missing
@@ -234,9 +327,7 @@ def _display_replay(payload: dict) -> None:
     )
     if trade_setup:
         typer.echo(
-            "Action:  "
-            f"{trade_setup.get('action', '—')}  "
-            f"risk={trade_setup.get('risk_level', '—')}"
+            f"Action:  {trade_setup.get('action', '—')}  risk={trade_setup.get('risk_level', '—')}"
         )
     breakdown = assessment.get("breakdown") or {}
     if breakdown:
@@ -246,19 +337,44 @@ def _display_replay(payload: dict) -> None:
             typer.echo(f"  {key}: {value}")
 
 
+def _display_label_summary(day, horizon, ticker, summary) -> None:
+    suffix = f" · {ticker}" if ticker else ""
+    typer.echo(f"\nSignal Forward Labels · {day} · {horizon.value}{suffix}")
+    typer.echo("═" * 72)
+    typer.echo(f"Labels: {len(summary.labels)}")
+    if not summary.buckets:
+        typer.echo("No saved labels found.")
+        return
+    typer.echo("")
+    typer.echo(
+        f"{'Group':<18}{'Key':<22}{'N':>4}{'S':>4}{'F':>4}{'Ntrl':>6}"
+        f"{'Unav':>6}{'AvgClose':>10}{'AvgMFE':>9}{'AvgMAE':>9}"
+    )
+    typer.echo("─" * 92)
+    for bucket in summary.buckets:
+        typer.echo(
+            f"{bucket.group:<18}{bucket.key:<22}{bucket.observation_count:>4}"
+            f"{bucket.success_count:>4}{bucket.failure_count:>4}"
+            f"{bucket.neutral_count:>6}{bucket.unavailable_count:>6}"
+            f"{_fmt_pct(bucket.average_close_return):>10}"
+            f"{_fmt_pct(bucket.average_max_forward_return):>9}"
+            f"{_fmt_pct(bucket.average_max_adverse_excursion):>9}"
+        )
+
+
+def _fmt_pct(value: float | None) -> str:
+    return "—" if value is None else f"{value:.2f}%"
+
+
 def _display_coverage(report: SignalCoverageReport) -> None:
     typer.echo("")
     typer.echo(f"DB Factor Coverage  ·  {report.db_path}  ·  {report.as_of}")
     typer.echo("═" * 58)
     typer.echo(f"Total tickers in DB (candles): {report.total_tickers_in_db}")
     typer.echo("")
-    typer.echo(
-        f"{'Factor':<22}{'Rows':>8}{'Usable':>9}{'Tickers':>9}  {'Note'}"
-    )
+    typer.echo(f"{'Factor':<22}{'Rows':>8}{'Usable':>9}{'Tickers':>9}  {'Note'}")
     typer.echo("─" * 70)
     for f in report.factors:
         note = f.note or "directional quality filter applied"
-        typer.echo(
-            f"{f.factor:<22}{f.total_rows:>8}{f.usable_rows:>9}{f.total_tickers:>9}  {note}"
-        )
+        typer.echo(f"{f.factor:<22}{f.total_rows:>8}{f.usable_rows:>9}{f.total_tickers:>9}  {note}")
     typer.echo("─" * 70)

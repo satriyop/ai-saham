@@ -29,3 +29,12 @@ class CandidateObservationsRepository(Protocol):
     def get_latest(self, ticker: str, snapshot_date: date) -> CandidateObservation | None:
         """Return latest saved observation for ticker/date, if any."""
         ...
+
+    def get_at(
+        self,
+        ticker: str,
+        snapshot_date: date,
+        captured_at: datetime,
+    ) -> CandidateObservation | None:
+        """Return the observation for ticker/date/captured_at, if any."""
+        ...

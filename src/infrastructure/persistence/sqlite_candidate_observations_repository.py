@@ -12,7 +12,6 @@ from src.domain.ports.candidate_observations_repository import (
 )
 from src.infrastructure.persistence.sqlite_migration_runner import SqliteMigrationRunner
 
-
 _CREATE_TABLE = """
 CREATE TABLE IF NOT EXISTS candidate_observations (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -94,9 +93,38 @@ class SQLiteCandidateObservationsRepository:
         payload = json.loads(row["payload_json"])
         schema_version = int(payload.get("schema_version", row["schema_version"]))
         if schema_version > 1:
-            raise ValueError(
-                f"Unsupported candidate observation schema_version={schema_version}"
-            )
+            raise ValueError(f"Unsupported candidate observation schema_version={schema_version}")
+        payload.setdefault("schema_version", schema_version)
+        return CandidateObservation(
+            ticker=row["ticker"],
+            snapshot_date=date.fromisoformat(row["snapshot_date"]),
+            captured_at=datetime.fromisoformat(row["captured_at"]),
+            payload=payload,
+        )
+
+    def get_at(
+        self,
+        ticker: str,
+        snapshot_date: date,
+        captured_at: datetime,
+    ) -> CandidateObservation | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT ticker, snapshot_date, captured_at, schema_version, payload_json
+                FROM candidate_observations
+                WHERE ticker = ? AND snapshot_date = ? AND captured_at = ?
+                ORDER BY id DESC
+                LIMIT 1
+                """,
+                (ticker.upper(), snapshot_date.isoformat(), captured_at.isoformat()),
+            ).fetchone()
+        if row is None:
+            return None
+        payload = json.loads(row["payload_json"])
+        schema_version = int(payload.get("schema_version", row["schema_version"]))
+        if schema_version > 1:
+            raise ValueError(f"Unsupported candidate observation schema_version={schema_version}")
         payload.setdefault("schema_version", schema_version)
         return CandidateObservation(
             ticker=row["ticker"],

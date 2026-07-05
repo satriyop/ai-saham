@@ -2,13 +2,13 @@
 
 _Design rationale: `docs/signal_refactor.md`_
 _Phase plan: `docs/signal_refactor_phases.md`_
-_Current implementation target: Phase B_
+_Current implementation target: Phase C_
 _Updated: 2026-07-05_
 
 This tracker records the current implementation state and concrete checklist for
-the SignalEngine refactor. It is intentionally A2-focused: A1 is preserved as
-Done, A2 is the active implementation target, and later phases remain out of
-scope until their phase is explicitly opened.
+the SignalEngine refactor. It is intentionally Phase C-focused: A1, A2, and
+Phase B are preserved as Done, Phase C is the active implementation target, and
+later phases remain out of scope until their phase is explicitly opened.
 
 ---
 
@@ -34,8 +34,15 @@ scope until their phase is explicitly opened.
 - Setup-specific policy may tighten regime policy, not loosen it.
 - CLI adapters render results only; no scoring, cache, persistence, or workflow
   policy belongs in adapters.
-- A2 may add regime persistence.
-- A2 must not start Phase B ticker-level signal forward labels.
+- Phase C may add `SetupPhaseState` and phase-history persistence.
+- Phase C may add continuous setup/trigger evidence, but must not rewrite the
+  Phase G Alpha/Trigger aggregate architecture.
+- Phase C must keep price confirmation thresholds as placeholders until
+  setup/horizon calibration proves them.
+- Phase C must not change TradeSetup sizing math.
+- Phase C must not promote flow or trigger evidence into production authority
+  without saved-label attribution proof.
+- Phase C must not require AI or network-dependent tests.
 - IDX foreign-flow transition inputs stay diagnostic / low-authority until
   market-level labels prove lead-time value.
 
@@ -48,8 +55,8 @@ scope until their phase is explicitly opened.
 | Legacy 0-8 | Staged Evidence Foundation | Done | Historical foundation. |
 | A1 | Regime Eligibility Policy Quick Win | Done | Implemented and verified; decision constraints are explicit. |
 | A2 | Full RegimeDetectionEvidence And Replay | Done | Implemented 2026-07-05; all checklist items complete, 2347 tests pass. |
-| B | Minimal Forward Labels And Observation Fingerprints | Not Started | Out of scope for A2; do not add ticker-level signal forward labels. |
-| C | SetupPhaseState And Continuous Setup/Trigger Scoring | Not Started | Retain phase scope from `docs/signal_refactor_phases.md`. |
+| B | Minimal Forward Labels And Observation Fingerprints | Done | Implemented and verified; saved labels and fingerprint attribution are operational. |
+| C | SetupPhaseState And Continuous Setup/Trigger Scoring | In Progress | Active implementation target. |
 | D | Strategy Evidence Harness | Not Started | Retain phase scope from `docs/signal_refactor_phases.md`. |
 | E | Institutional Accumulation Evidence | Not Started | Retain phase scope from `docs/signal_refactor_phases.md`. |
 | F | Minimal Ticker Profile Diagnostics | Not Started | Retain phase scope from `docs/signal_refactor_phases.md`. |
@@ -108,81 +115,161 @@ Application-layer signal/swing workflow results expose:
 
 **Status:** Done (2026-07-05)
 
-**Goal:** build full replayable market-regime evidence after A1 policy is
-explicit.
+**Completed summary:**
 
-A2 should extend existing MarketContext infrastructure where possible while
-making regime detection deterministic, replayable, and empirically validatable
-at the market level.
+- Added deterministic `RegimeDetectionEvidence`.
+- Added replayable `regime_observations`.
+- Persisted regime inputs, fingerprints, confidence, stability, days in regime,
+  transition warning, and IHSG forward labels.
+- Exposed regime confidence/stability in signal and swing workflow output.
+- Added deterministic replay and market-label validation tests.
+
+**Carry-forward notes:**
+
+- Realized volatility / adverse market movement remains deferred to Phase I.
+- Foreign buy/sell streaks are stored as equal-weight approximations.
+- `banking_sector_vs_ihsg` is unavailable when no `banking_universe` is
+  configured.
+- `sector_breadth` remains unavailable until Phase H.
+- IDX foreign-flow transition inputs remain diagnostic / low-authority until
+  market-level labels prove value.
+
+---
+
+## Phase B Tracker
+
+**Status:** Done (2026-07-05)
+
+**Completed summary:**
+
+- Added deterministic `signal_forward_labels` for ticker-level outcomes.
+- Kept `SWING_10D` as the first calibrated horizon while `TACTICAL_3D` and
+  `ACCUM_20D` remain diagnostic.
+- Persisted signal-time `sub_signal_fingerprint` records for attribution.
+- Added local-first label generation through `saham analyze signal-labels`.
+- Added saved-label attribution summary that reads persisted labels and
+  fingerprints without recomputing historical evidence.
+
+**Carry-forward notes:**
+
+- Phase B labels are now available for Phase C validation.
+- Same-day target/stop collisions are conservatively labeled as `FAILURE`
+  until intraday order is available.
+- Coverage and conviction are stored separately in observation fingerprints.
+
+---
+
+## Phase C Tracker
+
+**Status:** In Progress
+
+**Goal:** detect temporal setup phase first, then replace coarse setup labels
+with continuous price/volume pivot evidence.
+
+Phase C must make setup state explicit and replayable before Alpha/Trigger
+aggregation is rewritten in Phase G. It should use Phase B labels to validate
+whether setup phases and pivot triggers separate outcomes, but it must not start
+Phase I tuning or config patching.
 
 ### In Scope
 
-- Deterministic `RegimeDetectionEvidence`.
-- Replayable `regime_observations`.
-- Regime confidence.
-- Regime stability.
-- Days in regime.
-- Detection input fingerprints.
-- IDX foreign-flow 5d/20d inputs.
-- IHSG-weighted foreign buy/sell streaks.
-- Regime forward labels.
-- Market-level validation.
+- `SetupPhaseState` values: `NONE`, `ACCUMULATION`, `COMPRESSION`,
+  `BREAKOUT_CONFIRMATION`, `EXHAUSTION`, `DISTRIBUTION`, and `FAILED`.
+- Phase state, phase history, sequence validity, phase age, and phase strength.
+- Setup-family phase requirements for accumulation, foreign-bounce, breakout,
+  pullback, and mean reversion.
+- Continuous setup/trigger evidence for price and volume pivot behavior.
+- `coverage_score` and `conviction_score` emission.
+- RS vs IHSG promoted to setup eligibility / max-decision evidence.
+- Setup-family configurable RS policy.
+- BB compression as `COMPRESSION` readiness, not bullish evidence.
+- `volume_dry_up_then_expansion` as primary `SWING_10D` trigger pattern for
+  accumulation, foreign-bounce, and breakout.
+- Trigger routing for volume expansion, positive close, VWAP reclaim, support
+  reclaim, and squeeze release.
+- Volume-trigger data quality checks for source, valid 20d sessions, missing
+  candles, suspended days, and zero-volume distortion.
+- Observation persistence of phase state and phase history.
 
 ### Out Of Scope
 
-- SignalEngine Alpha/Trigger rewrite.
-- `SetupPhaseState`.
-- Ticker-level signal forward labels from Phase B.
-- Changing raw stock scores by regime.
-- TradeSetup sizing math.
-- Making IDX foreign-flow high-authority before labels prove value.
+- Phase D strategy evidence harness.
+- Phase E institutional accumulation evidence expansion.
+- Phase G Alpha/Trigger aggregation rewrite.
+- Phase I walk-forward calibration and config patching.
+- TradeSetup stop, target, or position-size math.
+- Making price confirmation thresholds production-calibrated.
+- Letting `vwap_reclaim.close_above_vwap_pct: 0.30` independently unlock flow
+  Trigger contribution.
+- Recomputing historical evidence for attribution instead of using saved
+  observations and Phase B labels.
 
 ### Implementation Checklist
 
-- [x] Inspect current `MarketContext`, `MarketContextEngine`,
-      `BuildMarketContextUseCase`, and SQLite market-context repository.
-- [x] Define `RegimeDetectionEvidence` as deterministic evidence/fingerprint
-      output. (`src/domain/value_objects/regime_detection_evidence.py`)
-- [x] Define persistence contract for `regime_observations`.
-      (`src/domain/ports/regime_observation_repository.py`)
-- [x] Persist detection inputs listed in `docs/signal_refactor_phases.md`.
-- [x] Persist `ihsg_20d_return`.
-- [x] Persist `ihsg_trend_structure`.
-- [x] Persist `ihsg_breadth_pct_above_ma`.
-- [x] Persist `ihsg_volume_trend`.
-- [x] Persist `ihsg_atr_pct`.
-- [x] Persist `idx_foreign_flow_5d`.
-- [x] Persist `idx_foreign_flow_20d`.
-- [x] Persist `foreign_sell_streak_ihsg_weighted`. (as `foreign_sell_streak` — equal-weight approx)
-- [x] Persist `foreign_buy_streak_ihsg_weighted`. (as `foreign_buy_streak`)
-- [x] Persist `banking_sector_vs_ihsg`. (None/UNAVAILABLE when no banking_universe configured)
-- [x] Persist `sector_breadth`. (None/UNAVAILABLE in A2; Phase H)
-- [x] Persist `regime_score`.
-- [x] Persist `regime`.
-- [x] Persist `regime_confidence`.
-- [x] Persist `regime_stability`.
-- [x] Persist `days_in_regime`.
-- [x] Persist `transition_warning`.
-- [x] Persist market forward labels for `forward_ihsg_return_5d`,
-      `forward_ihsg_return_10d`, and `forward_ihsg_return_20d`. (retroactive backfill)
-- [ ] Persist realized volatility / adverse market movement where available. (deferred; Phase I)
-- [x] Keep IDX foreign-flow transition inputs diagnostic / low-authority until
-      validated. (no scoring weight change; fingerprint only)
-- [x] Emit regime confidence/stability in signal/swing workflow output.
-- [x] Add deterministic replay tests. (`test_regime_detection_evidence.py`)
-- [x] Add market-level label validation tests. (`test_regime_forward_labels.py`)
+- [ ] Inspect current `SetupEvidence`, `SetupEvidenceBuilder`,
+      `EvaluateSwingSetupUseCase`, swing workflow, accumulation screen
+      observation payloads, and Phase B label attribution use cases.
+- [ ] Define immutable `SetupPhaseState` / phase-history domain value objects.
+- [ ] Define deterministic phase transition policy for `NONE`,
+      `ACCUMULATION`, `COMPRESSION`, `BREAKOUT_CONFIRMATION`, `EXHAUSTION`,
+      `DISTRIBUTION`, and `FAILED`.
+- [ ] Persist current phase, previous phase, phase history, phase age sessions,
+      phase strength, phase reasons, and `phase_sequence_valid`.
+- [ ] Enforce accumulation / foreign-bounce sequence:
+      `ACCUMULATION -> COMPRESSION -> BREAKOUT_CONFIRMATION`.
+- [ ] Enforce breakout sequence:
+      `COMPRESSION -> BREAKOUT_CONFIRMATION`.
+- [ ] Enforce pullback requirements: trend/context support plus support reclaim
+      or pivot confirmation.
+- [ ] Enforce mean-reversion requirements: support/reversal evidence and
+      explicit risk controls.
+- [ ] Evaluate distribution, failed, and exhaustion phases before generic
+      non-breakout WATCH handling.
+- [ ] Emit `coverage_score` and `conviction_score` separately in setup/phase
+      output.
+- [ ] Promote RS vs IHSG to setup eligibility / max-decision evidence for
+      swing, breakout, accumulation, and foreign-bounce.
+- [ ] Add setup-family configurable RS policy: lag warning, hard exclude,
+      warning action, and mean-reversion exception requirements.
+- [ ] Treat negative RS as unable to be silently overwhelmed by other bullish
+      setup components.
+- [ ] Add BB compression as `COMPRESSION` readiness, not bullish evidence.
+- [ ] Add `volume_dry_up_then_expansion` trigger for accumulation,
+      foreign-bounce, and breakout.
+- [ ] Route volume expansion, positive close, VWAP reclaim, support reclaim,
+      and squeeze release to `BREAKOUT_CONFIRMATION` / Trigger.
+- [ ] Keep price confirmation thresholds documented as placeholders until
+      setup/horizon calibration.
+- [ ] Ensure `vwap_reclaim.close_above_vwap_pct: 0.30` cannot independently
+      unlock flow Trigger contribution in production.
+- [ ] Enforce valid volume source and enough valid 20d sessions for volume
+      trigger availability.
+- [ ] Treat suspended days, missing candles, and zero-volume distortion as
+      unavailable trigger evidence that lowers coverage.
+- [ ] Persist phase state/history into signal/candidate observations at
+      observation time.
+- [ ] Add deterministic tests for phase transitions and sequence validity.
+- [ ] Add tests proving one failed gate does not mean all gates failed.
+- [ ] Add tests proving distribution, failed, and exhaustion are evaluated
+      before generic WATCH.
+- [ ] Add tests proving negative RS cannot be overwhelmed by bullish components.
+- [ ] Add tests for volume-trigger source/session coverage and unavailable
+      handling.
+- [ ] Add tests proving CLI adapters only render phase/evidence output.
 
 ### Verification Checklist
 
-- [x] Regime observations are deterministic for the same local data and config.
-- [x] Regime observations can be replayed without network access.
-- [x] Detection input fingerprints are persisted with the observation.
-- [x] Regime confidence/stability are visible in signal output.
-- [x] Regime confidence/stability are visible in swing workflow output.
-- [x] Market-level forward labels validate regime improvements.
-- [x] Ticker-level signal forward labels are not introduced in A2.
-- [x] CLI adapters only render persisted/application output.
-- [x] RiskEngine hard-gate authority remains unchanged.
+- [ ] Phase state is deterministic for fixed local candles, config, and saved
+      evidence.
+- [ ] Phase history is persisted at observation time and replayable.
+- [ ] Phase sequence validity is available for Phase B label attribution.
+- [ ] Setup output exposes distinct coverage and conviction.
+- [ ] BB compression is readiness evidence, not bullish evidence.
+- [ ] Trigger evidence requires valid price/volume confirmation.
+- [ ] Flow evidence cannot directly create ENTER through Phase C trigger logic.
+- [ ] No Alpha/Trigger aggregate rewrite is introduced in Phase C.
+- [ ] No TradeSetup sizing math changes are introduced.
+- [ ] Tests run offline and do not require network access.
 
 ---
 
@@ -190,7 +277,7 @@ at the market level.
 
 ### TD-1: Double Regime Effect — regime_conditioning + decision_policy both active
 
-**Status:** Transitional — tracked, not a blocker for Phase B.
+**Status:** Transitional — tracked, not a blocker for Phase C planning.
 
 **Description:** `AssessSignalEvidenceUseCase._condition_group_scores()` (Phase 5 legacy) mutates
 group scores before renormalization when regime is RISK_OFF/VOLATILE/NEUTRAL. A1/A2 then adds
@@ -214,23 +301,30 @@ path and promote `signal_score_raw` → `assessment.score`. Requires updating te
 
 ## Current Assumptions
 
-- A2 should extend existing `MarketContext` infrastructure where possible.
-- A2 may add schema-versioned local SQLite persistence.
-- A2 should not introduce network-dependent tests.
-- A2 should not alter A1 `decision_constraints` precedence.
+- Phase C should extend existing setup evidence, swing workflow, and candidate
+  observation infrastructure where possible.
+- Phase C may add schema-versioned local SQLite persistence for setup phase
+  observations or extend existing observation payloads.
+- Phase C should use Phase B labels for validation and attribution, but should
+  not start Phase I tuning/config patching.
+- Phase C should not introduce network-dependent tests.
+- Phase C should not alter A1 `decision_constraints` precedence.
+- Phase C should not alter A2 regime observation contracts.
+- Phase C should not alter Phase B `signal_forward_labels` contracts except to
+  enrich saved fingerprints with phase fields.
 - Existing dirty worktree changes are from A1; do not revert unrelated files.
-- `SWING_10D` remains the first calibrated ticker-signal horizon, but A2 is
-  market-regime infrastructure and should not implement Phase B ticker labels.
+- `SWING_10D` remains the first calibrated ticker-signal horizon.
 
 ---
 
-## A2 Layer Plan For Implementation
+## Phase C Layer Plan For Implementation
 
-- Domain: add immutable regime evidence/value objects if required by the chosen
-  A2 implementation.
-- Application: own deterministic regime detection, workflow orchestration,
-  evidence fingerprinting, forward-label generation, and validation policy.
+- Domain: add immutable setup phase state, phase history, and setup/trigger
+  evidence value objects.
+- Application: own deterministic phase detection, setup-family sequence policy,
+  RS policy, volume-trigger availability, coverage/conviction calculation, and
+  observation persistence orchestration.
 - Infrastructure: implement schema-versioned local SQLite persistence for
-  `regime_observations` if persistence is added.
-- Adapter: render regime confidence/stability only; do not compute policy or
-  persistence behavior.
+  setup phase observations if separate persistence is added.
+- Adapter: render setup phase/evidence output only; do not compute workflow,
+  scoring, persistence policy, or phase transitions.

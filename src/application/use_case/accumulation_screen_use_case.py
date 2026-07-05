@@ -26,21 +26,21 @@ from src.domain.ports.candidate_observations_repository import CandidateObservat
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from src.domain.ports.candidate_observations_repository import (
-        CandidateObservationsRepository,
-    )
     from src.application.services.signal_engine import SignalEngine
     from src.application.use_case.assess_risk_use_case import AssessRiskUseCase
     from src.application.use_case.assess_signal_use_case import AssessSignalResponse
+    from src.domain.ports.candidate_observations_repository import (
+        CandidateObservationsRepository,
+    )
     from src.domain.value_objects.analyst_consensus import AnalystConsensus
     from src.domain.value_objects.bandar_detector_snapshot import BandarDetectorSnapshot
     from src.domain.value_objects.company_fundamentals import CompanyFundamentals
+    from src.domain.value_objects.flow_confirmation_evidence import FlowConfirmationEvidence
     from src.domain.value_objects.forward_estimates import ForwardEstimates
     from src.domain.value_objects.risk_assessment import RiskAssessment
     from src.domain.value_objects.seasonal_edge import SeasonalEdge
     from src.domain.value_objects.shareholding_composition import ShareholdingComposition
     from src.domain.value_objects.ticker_notation import TickerNotationSnapshot
-    from src.domain.value_objects.flow_confirmation_evidence import FlowConfirmationEvidence
     from src.domain.value_objects.trade_setup import TradeSetup
 
 from src.application.ports.corporate_action_repository import CorporateActionRepository
@@ -73,10 +73,10 @@ _DEFAULT_STOP_LOSS = Decimal("5")
 # Regime-specific targets (validated direction: IHSG has documented regime cycles)
 # MCE vocabulary (RISK_ON/NEUTRAL/VOLATILE/RISK_OFF).
 _REGIME_TARGETS: dict[str, tuple[Decimal, Decimal]] = {
-    "RISK_ON":  (Decimal("8"), Decimal("4")),   # 2:1 R:R — trending market
-    "NEUTRAL":  (Decimal("5"), Decimal("5")),   # 1:1 R:R — range-bound
-    "VOLATILE": (Decimal("3"), Decimal("3")),   # tight — minimize exposure
-    "RISK_OFF": (Decimal("3"), Decimal("3")),   # capital preservation
+    "RISK_ON": (Decimal("8"), Decimal("4")),  # 2:1 R:R — trending market
+    "NEUTRAL": (Decimal("5"), Decimal("5")),  # 1:1 R:R — range-bound
+    "VOLATILE": (Decimal("3"), Decimal("3")),  # tight — minimize exposure
+    "RISK_OFF": (Decimal("3"), Decimal("3")),  # capital preservation
 }
 
 
@@ -169,6 +169,7 @@ class AccumulationScreenRequest:
     min_market_cap_idr: int = 0
     # Piotroski F-Score floor (0–9). Tickers below this are excluded (0 = disabled)
     min_piotroski: int = 0
+
     def __init__(
         self,
         tickers: list[str],
@@ -362,9 +363,15 @@ class AccumulationCandidate:
             "bandar_detector": self.bandar_detector.to_dict() if self.bandar_detector else None,
             "fundamentals": self.fundamentals.to_dict() if self.fundamentals else None,
             "ticker_notation": self.ticker_notation.to_dict() if self.ticker_notation else None,
-            "latest_candle_date": self.latest_candle_date.isoformat() if self.latest_candle_date else None,
-            "latest_broker_date": self.latest_broker_date.isoformat() if self.latest_broker_date else None,
-            "forward_estimates": self.forward_estimates.to_dict() if self.forward_estimates else None,
+            "latest_candle_date": self.latest_candle_date.isoformat()
+            if self.latest_candle_date
+            else None,
+            "latest_broker_date": self.latest_broker_date.isoformat()
+            if self.latest_broker_date
+            else None,
+            "forward_estimates": self.forward_estimates.to_dict()
+            if self.forward_estimates
+            else None,
             "signal_assessment": {
                 "score": self.signal_assessment.assessment.score,
                 "strength": self.signal_assessment.assessment.strength.value,
@@ -374,9 +381,12 @@ class AccumulationCandidate:
                 "coverage_warning": self.signal_assessment.coverage_warning,
                 "decision_constraints": (
                     self.signal_assessment.assessment.decision_constraints.to_dict()
-                    if self.signal_assessment.assessment.decision_constraints else None
+                    if self.signal_assessment.assessment.decision_constraints
+                    else None
                 ),
-            } if self.signal_assessment else None,
+            }
+            if self.signal_assessment
+            else None,
             "risk_status": self.risk_assessment.risk_level_name if self.risk_assessment else None,
             "risk_confidence": self.risk_assessment.confidence if self.risk_assessment else None,
             "risk_gate": self.risk_assessment.gate_triggered if self.risk_assessment else None,
@@ -451,6 +461,12 @@ def _candidate_observation_payload(
             "flow_evidence": flow_ev.to_dict() if flow_ev is not None else None,
         }
 
+    sub_signal_fingerprint = _sub_signal_fingerprint(
+        candidate=candidate,
+        signal=signal,
+        flow_ev=flow_ev,
+    )
+
     return {
         "schema_version": 1,
         "artifact_type": "candidate_observation",
@@ -465,12 +481,76 @@ def _candidate_observation_payload(
             "min_foreign_flow_score": request.min_foreign_flow_score,
             "min_signal_score": request.min_signal_score,
         },
+        "sub_signal_fingerprint": sub_signal_fingerprint,
         "candidate": candidate.to_dict(),
         "signal": signal_payload,
         "trade_setup": (
             candidate.trade_setup.to_dict() if candidate.trade_setup is not None else None
         ),
     }
+
+
+def _sub_signal_fingerprint(
+    *,
+    candidate: "AccumulationCandidate",
+    signal: "AssessSignalResponse | None",
+    flow_ev: "FlowConfirmationEvidence | None",
+) -> dict:
+    """Persist raw sub-signal values as they were at observation time."""
+    assessment = signal.assessment if signal is not None else None
+    constraints = (
+        assessment.decision_constraints.to_dict()
+        if assessment is not None and assessment.decision_constraints is not None
+        else {}
+    )
+    coverage_score = _candidate_observation_coverage_score(flow_ev=flow_ev)
+    conviction_score = (
+        round(signal.raw_group_score / 100.0, 4)
+        if signal is not None and signal.raw_group_score is not None
+        else None
+    )
+    flow_dict = flow_ev.to_dict() if flow_ev is not None else {}
+    return {
+        "setup_family": constraints.get("setup_family"),
+        "setup_phase_current": None,
+        "setup_phase_previous": None,
+        "phase_sequence_valid": None,
+        "phase_age_sessions": None,
+        "phase_strength": None,
+        "phase_reasons": [],
+        "phase_coverage_score": None,
+        "phase_conviction_score": None,
+        "rsi_at_signal": candidate.rsi,
+        "bb_width_pctile_at_signal": candidate.bb_width_pctile,
+        "vwap_position_at_signal": candidate.vwap_pct,
+        "rs_vs_ihsg_20d_at_signal": None,
+        "volume_ratio_at_signal": candidate.avg_flow_ratio,
+        "cnfb_20d_at_signal": float(candidate.total_net_value),
+        "foreign_participation_at_signal": candidate.net_buy_ratio,
+        "foreign_concentration_at_signal": flow_dict.get("capped_strength"),
+        "domestic_broker_accumulation_at_signal": (
+            candidate.bandar_detector.bandar_score
+            if candidate.bandar_detector is not None
+            and hasattr(candidate.bandar_detector, "bandar_score")
+            else None
+        ),
+        "market_regime_at_signal": constraints.get("regime"),
+        "regime_confidence_at_signal": None,
+        "regime_stability_at_signal": None,
+        "decision_constraints": constraints or None,
+        "coverage_score": coverage_score,
+        "conviction_score": conviction_score,
+    }
+
+
+def _candidate_observation_coverage_score(
+    *,
+    flow_ev: "FlowConfirmationEvidence | None",
+) -> float:
+    # Phase B has no SetupPhaseState/setup evidence in screen observations yet.
+    # Persist availability ratio, not directional strength.
+    present_groups = 1 if flow_ev is not None else 0
+    return round(present_groups / 2.0, 4)
 
 
 class AccumulationScreenUseCase:
@@ -517,9 +597,7 @@ class AccumulationScreenUseCase:
         self._risk_use_case = risk_use_case
         self._signal_engine = signal_engine or _SignalEngine()
         self._candidate_observations_repo = candidate_observations_repository
-        self._foreign_flow_score_uc = (
-            foreign_flow_score_use_case or ScoreForeignFlowUseCase()
-        )
+        self._foreign_flow_score_uc = foreign_flow_score_use_case or ScoreForeignFlowUseCase()
         self._derived_features = derived_feature_policy or AccumulationDerivedFeaturePolicy()
         # idx_groups: {group_name: [ticker, ...]} from config/idx_groups.yaml
         # Build a reverse map: ticker → group_name for fast lookup
@@ -535,9 +613,7 @@ class AccumulationScreenUseCase:
         # Collects (candidate, screen_result, flow_ev) for ALL evaluated tickers —
         # survivors and filtered-out alike. Rejected records are negative samples
         # for future tuning (Phase 7: "rejected candidates become learnable").
-        all_results: list[
-            tuple[AccumulationCandidate, str, FlowConfirmationEvidence | None]
-        ] = []
+        all_results: list[tuple[AccumulationCandidate, str, FlowConfirmationEvidence | None]] = []
         skipped = 0
         uses_stockbit = False
 
@@ -575,13 +651,10 @@ class AccumulationScreenUseCase:
                 fundamentals_fetched = True
 
                 # Market cap floor gate
-                if (
-                    request.min_market_cap_idr > 0
-                    and (
-                        result.fundamentals is None
-                        or result.fundamentals.market_cap_idr is None
-                        or result.fundamentals.market_cap_idr < request.min_market_cap_idr
-                    )
+                if request.min_market_cap_idr > 0 and (
+                    result.fundamentals is None
+                    or result.fundamentals.market_cap_idr is None
+                    or result.fundamentals.market_cap_idr < request.min_market_cap_idr
                 ):
                     cap_b = (
                         result.fundamentals.market_cap_idr // 1_000_000_000
@@ -673,13 +746,12 @@ class AccumulationScreenUseCase:
             insider_net_buy_ratio: float | None = None
             if self._insider_provider is not None:
                 from datetime import timedelta
+
                 from src.domain.value_objects.insider_transaction import compute_net_buy_ratio
 
                 insider_txns = self._insider_provider.get_insider_transactions(
                     ticker=result.ticker,
-                    from_date=today - timedelta(
-                        days=self._derived_features.insider_lookback_days
-                    ),
+                    from_date=today - timedelta(days=self._derived_features.insider_lookback_days),
                     to_date=today,
                     action_type="ALL",
                 )
@@ -755,6 +827,7 @@ class AccumulationScreenUseCase:
                 from src.application.services.flow_confirmation_evidence_builder import (
                     FlowConfirmationEvidenceBuilder,
                 )
+
                 _flow_ev = FlowConfirmationEvidenceBuilder().build(result, analysis_date=today)
             except Exception:
                 pass
@@ -768,12 +841,9 @@ class AccumulationScreenUseCase:
             ):
                 all_results.append((result, "rejected_flow", _flow_ev))
                 continue
-            if (
-                request.min_signal_score_enabled
-                and (
-                    result.signal_assessment is None
-                    or result.signal_assessment.assessment.score < request.min_signal_score
-                )
+            if request.min_signal_score_enabled and (
+                result.signal_assessment is None
+                or result.signal_assessment.assessment.score < request.min_signal_score
             ):
                 all_results.append((result, "rejected_signal", _flow_ev))
                 continue
@@ -804,9 +874,7 @@ class AccumulationScreenUseCase:
 
     def _persist_candidate_observations(
         self,
-        all_results: list[
-            tuple[AccumulationCandidate, str, FlowConfirmationEvidence | None]
-        ],
+        all_results: list[tuple[AccumulationCandidate, str, FlowConfirmationEvidence | None]],
         snapshot_date: date,
         request: AccumulationScreenRequest,
     ) -> None:
@@ -859,20 +927,20 @@ class AccumulationScreenUseCase:
                     ticker=candidate.ticker,
                     snapshot_date=as_of_date,
                     piotroski_f_score=(
-                        candidate.fundamentals.piotroski_f_score
-                        if candidate.fundamentals else None
+                        candidate.fundamentals.piotroski_f_score if candidate.fundamentals else None
                     ),
                     market_cap_idr=(
-                        candidate.fundamentals.market_cap_idr
-                        if candidate.fundamentals else None
+                        candidate.fundamentals.market_cap_idr if candidate.fundamentals else None
                     ),
                     free_float_pct=(
                         candidate.shareholding.free_float_pct
-                        if candidate.shareholding is not None else None
+                        if candidate.shareholding is not None
+                        else None
                     ),
                     five_day_accdist=(
                         candidate.bandar_detector.five_day_accdist
-                        if candidate.bandar_detector else None
+                        if candidate.bandar_detector
+                        else None
                     ),
                 )
                 resp = self._risk_use_case.execute(  # type: ignore[union-attr]
@@ -884,12 +952,14 @@ class AccumulationScreenUseCase:
                 candidate.risk_assessment = resp.assessment
                 if candidate.signal_assessment is not None:
                     try:
-                        trade_resp = trade_setup_uc.execute(AssessTradeSetupRequest(
-                            ticker=candidate.ticker,
-                            snapshot_date=as_of_date,
-                            signal_response=candidate.signal_assessment,
-                            risk_response=resp,
-                        ))
+                        trade_resp = trade_setup_uc.execute(
+                            AssessTradeSetupRequest(
+                                ticker=candidate.ticker,
+                                snapshot_date=as_of_date,
+                                signal_response=candidate.signal_assessment,
+                                risk_response=resp,
+                            )
+                        )
                         candidate.trade_setup = trade_resp.setup
                     except Exception as exc2:
                         logger.debug(
@@ -997,7 +1067,7 @@ class AccumulationScreenUseCase:
         vwap_pct: float | None = None
         if candles:
             try:
-                vwap_window = candles[-self._derived_features.market_vwap_period:]
+                vwap_window = candles[-self._derived_features.market_vwap_period :]
                 total_vol = sum(c.volume for c in vwap_window)
                 if total_vol > 0:
                     total_tpv = sum(
@@ -1220,7 +1290,7 @@ class AccumulationScreenUseCase:
         week52_high: Decimal | None = None
         if len(candles) >= 1:
             week52_high = max(
-                c.high for c in candles[-self._derived_features.resistance_high_period:]
+                c.high for c in candles[-self._derived_features.resistance_high_period :]
             )
 
         resistances: list[float] = []
@@ -1257,15 +1327,20 @@ def classify_multi_window_pattern(
     "fresh rotation", "long-term only", "mixed", "weak"
     """
     hot = [
-        w for w in windows
-        if candidates_by_window.get(w) and candidates_by_window[w].foreign_flow_score >= coiled_spring_min_score
+        w
+        for w in windows
+        if candidates_by_window.get(w)
+        and candidates_by_window[w].foreign_flow_score >= coiled_spring_min_score
     ]
 
     for w in windows:
         c = candidates_by_window.get(w)
-        if (c and c.foreign_flow_score >= coiled_spring_min_score
-                and c.bb_width_pctile is not None
-                and c.bb_width_pctile <= coiled_spring_bb_pctile):
+        if (
+            c
+            and c.foreign_flow_score >= coiled_spring_min_score
+            and c.bb_width_pctile is not None
+            and c.bb_width_pctile <= coiled_spring_bb_pctile
+        ):
             return "coiled spring"
 
     if not hot:
