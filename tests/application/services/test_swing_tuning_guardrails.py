@@ -529,12 +529,20 @@ def test_trade_ready_source_review_passes_sample_guard(tmp_path):
     assert all("sample_not_ready" not in issue for issue in report.issues)
 
 
+def test_mixed_ready_status_passes_sample_guard(tmp_path):
+    # MIXED_READY = IS trades >= 30 AND candidate observations >= 30 — the
+    # better state than TRADE_READY. Validator must accept it.
+    review = {**_COMPLETE_SOURCE_REVIEW, "sample": {"status": "MIXED_READY"}}
+    report = _patch_with_source_review(review, tmp_path)
+    assert all("sample_not_ready" not in issue for issue in report.issues)
+
+
 def test_candidate_only_status_fails_sample_guard(tmp_path):
     review = {**_COMPLETE_SOURCE_REVIEW, "sample": {"status": "CANDIDATE_ONLY"}}
     report = _patch_with_source_review(review, tmp_path)
     assert report.valid is False
     assert any("sample_not_ready" in issue for issue in report.issues)
-    assert any("TRADE_READY" in issue for issue in report.issues)
+    assert any("TRADE_READY" in issue or "MIXED_READY" in issue for issue in report.issues)
 
 
 def test_is_trade_count_below_30_fails_sample_guard(tmp_path):

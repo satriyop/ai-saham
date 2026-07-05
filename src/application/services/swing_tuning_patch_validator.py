@@ -722,10 +722,13 @@ def _validate_sample_readiness(source_review: object) -> tuple[str, ...]:
         issues.append(f"{prefix} source_review.sample must be a dict")
     else:
         status = sample.get("status")
-        if status != "TRADE_READY":
+        # TRADE_READY = IS trades >= 30 (candidate observations below minimum).
+        # MIXED_READY = IS trades >= 30 AND candidate observations >= 30 — the
+        # better state. Both satisfy the patch-apply requirement.
+        if status not in {"TRADE_READY", "MIXED_READY"}:
             issues.append(
-                f"{prefix} sample.status must be TRADE_READY, got {status!r}; "
-                f"need at least {_MIN_IS_TRADE_COUNT} completed IS trades"
+                f"{prefix} sample.status must be TRADE_READY or MIXED_READY, "
+                f"got {status!r}; need at least {_MIN_IS_TRADE_COUNT} completed IS trades"
             )
 
     backtest = source_review.get("backtest_summary")
