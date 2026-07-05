@@ -1,18 +1,22 @@
-# Signal Engine Configuration — Phase 6 (confidence-aware evidence aggregator)
+# Signal Engine Configuration — Phase 6 + A1/A2 (confidence-aware evidence aggregator)
 #
 # Canonical scoring path: AssessSignalEvidenceUseCase
 #   Stage 1: Group scoring — Setup Quality (60%) + Flow Confirmation (40%)
-#   Stage 2: Regime conditioning — applied BEFORE renormalization (see regime_conditioning)
+#   Stage 2: [TRANSITIONAL] Regime conditioning — mutates group scores before renormalization.
+#            This is a Phase 5 legacy layer. A1/A2 adds explicit decision_policy constraints.
+#            Both run simultaneously — see ADR-TODO for removal plan.
+#            DO NOT tune regime_conditioning.* further; tune decision_policy instead.
 #   Stage 3: Renormalize — missing groups excluded from denominator
 #   Stage 4: Do-no-harm flags — score penalties from SignalContext
 #   Stage 5: Confidence-aware entry classification — ENTER requires score + confidence
 #   Stage 6: Gate tightening — ENTER → WATCH cap when MarketContext.gate_tightening=True
-#   Stage 7: Decision policy — explicit regime/setup max_decision constraints
+#   Stage 7: Decision policy — explicit regime/setup max_decision constraints (A1/A2)
 #
-# Tune: evidence_groups.*.weight, flags.*.score_penalty, regime_conditioning.*
+# Tune: evidence_groups.*.weight, flags.*.score_penalty
 #       classification.* score and confidence thresholds
-#       decision_policy.regime_policy.* thresholds and multipliers
+#       decision_policy.regime_policy.* thresholds and multipliers  ← PREFERRED for regime
 #       scoring.bandar.* (still active — controls bandar_max_range helper)
+#       DO NOT tune regime_conditioning.* (legacy/transitional — see Stage 2 note above)
 #
 # See ADR-024 for full configurability contract.
 #
@@ -127,6 +131,12 @@ signal_engine:
 
   # Phase 5: Regime-conditional group score conditioning applied BEFORE renormalization.
   # RISK_ON:  no conditioning — full confidence in evidence.
+  # TRANSITIONAL — Phase 5 legacy score conditioning.
+  # A1/A2 adds explicit decision_policy constraints that achieve the same regime gate.
+  # Running both causes a double regime effect: score is discounted AND ENTER is blocked.
+  # This will be removed when walk-forward validation confirms decision_policy alone
+  # is sufficient. Until then: DO NOT tune these values further.
+  # A2 adds signal_score_raw (regime-neutral) to AssessSignalResponse for comparability.
   # NEUTRAL:  weak flow confirmation (< threshold) discounted.
   # RISK_OFF: weak setup evidence (< threshold = PARTIAL or NO_MATCH) heavily discounted.
   # VOLATILE: both groups discounted regardless of score level.

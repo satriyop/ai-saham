@@ -186,6 +186,32 @@ at the market level.
 
 ---
 
+## Known Technical Debt (Explicitly Tracked)
+
+### TD-1: Double Regime Effect — regime_conditioning + decision_policy both active
+
+**Status:** Transitional — tracked, not a blocker for Phase B.
+
+**Description:** `AssessSignalEvidenceUseCase._condition_group_scores()` (Phase 5 legacy) mutates
+group scores before renormalization when regime is RISK_OFF/VOLATILE/NEUTRAL. A1/A2 then adds
+explicit `decision_policy` constraints on top. This creates a compound effect: score is discounted
+AND ENTER is blocked.
+
+**Contract violation:** The A1/A2 contract states "regime controls constraints, not score."
+`assessment.score` still reflects regime conditioning. `signal_score_raw` (added in A2) preserves
+the regime-neutral score for comparability.
+
+**Documented workaround:**
+- `config/signal_engine.yaml` `regime_conditioning.*` block marked TRANSITIONAL — DO NOT TUNE.
+- `_condition_group_scores()` docstring marks it as transitional Phase 5 legacy.
+- `AssessSignalResponse.signal_score_raw` holds the regime-neutral score.
+
+**Resolution path:** When walk-forward validation (Phase I) confirms `decision_policy` alone
+provides equivalent or better regime gating, remove `_condition_group_scores()` from the canonical
+path and promote `signal_score_raw` → `assessment.score`. Requires updating test expectations.
+
+---
+
 ## Current Assumptions
 
 - A2 should extend existing `MarketContext` infrastructure where possible.

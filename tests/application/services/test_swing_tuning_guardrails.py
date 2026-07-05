@@ -235,14 +235,24 @@ def _target_by_dimension(dimension):
     )
 
 
-def test_regime_target_includes_regime_conditioning_path():
+def test_regime_target_excludes_regime_conditioning_paths():
+    """regime_conditioning is frozen (TD-1) — must not appear in tunable yaml_paths."""
     regime = _target_by_dimension("regime")
-    assert (
-        "config/signal_engine.yaml:"
-        "signal_engine.regime_conditioning.neutral.weak_flow_discount"
-        in regime.yaml_paths
+    conditioning_paths = [p for p in regime.yaml_paths if "regime_conditioning" in p]
+    assert conditioning_paths == [], (
+        f"regime_conditioning paths must not be tunable: {conditioning_paths}"
     )
 
+def test_patch_modifying_regime_conditioning_fails(tmp_path):
+    """Explicitly test that target paths containing 'regime_conditioning' are blocked by validator."""
+    result = _validate_single(
+        tmp_path,
+        "signal_engine.regime_conditioning.neutral.weak_flow_discount",
+        0.80,
+        0.75,
+    )
+    assert result.valid is False
+    assert "target_path_not_tunable:regime_conditioning_is_legacy_layer" in result.issues
 
 def test_signal_strength_target_includes_enter_min_confidence_path():
     signal_strength = _target_by_dimension("signal_strength")

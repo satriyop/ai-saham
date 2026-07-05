@@ -119,10 +119,16 @@ class SignalAssessment:
     snapshot_date: date
     confidence_score: float = 1.0          # 0.0–1.0 evidence coverage/decision confidence
     decision_constraints: "DecisionConstraints | None" = None
+    legacy_conditioned_score: int | None = None
 
     def __post_init__(self) -> None:
         if not (0 <= self.score <= 100):
             raise ValueError(f"SignalAssessment score must be 0–100, got {self.score}")
+        if self.legacy_conditioned_score is not None and not (0 <= self.legacy_conditioned_score <= 100):
+            raise ValueError(
+                f"SignalAssessment legacy_conditioned_score must be 0–100, "
+                f"got {self.legacy_conditioned_score}"
+            )
         if not (0.0 <= self.confidence_score <= 1.0):
             raise ValueError(
                 f"SignalAssessment confidence_score must be 0.0–1.0, "
@@ -152,6 +158,7 @@ class SignalAssessment:
         return {
             "ticker": self.ticker,
             "score": self.score,
+            "legacy_conditioned_score": self.legacy_conditioned_score,
             "strength": self.strength.value,
             "entry_quality": self.entry_quality.value,
             "breakdown": self.breakdown_dict,
@@ -163,3 +170,4 @@ class SignalAssessment:
                 if self.decision_constraints else None
             ),
         }
+

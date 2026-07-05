@@ -74,29 +74,33 @@ class AssessSignalEvidenceUseCase:
         # Save regime-neutral group scores before conditioning (for comparability)
         setup_score_raw, flow_score_raw = setup_score, flow_score
 
-        # ── Stage 2: Regime conditioning (before renormalization) ─────────────
-        setup_score, flow_score, regime_notes = self._condition_group_scores(
-            setup_score, setup_present, flow_score, flow_present, request.market_context
+        # ── Stage 2: Regime conditioning (TRANSITIONAL / LEGACY ONLY) ─────────
+        # Legacy conditioning is calculated purely for diagnostic/fallback tracking
+        # but does NOT mutate the canonical score or breakdown.
+        setup_score_conditioned, flow_score_conditioned, regime_notes = self._condition_group_scores(
+            setup_score_raw, setup_present, flow_score_raw, flow_present, request.market_context
         )
 
         # ── Stage 3: Renormalize — missing groups excluded from denominator ───
-        base_score, confidence = self._renormalize(
-            setup_score, setup_present, flow_score, flow_present
+        # Canonical (regime-neutral) path
+        base_score_neutral, confidence = self._renormalize(
+            setup_score_raw, setup_present, flow_score_raw, flow_present
+        )
+
+        # Legacy (regime-conditioned) path
+        base_score_conditioned, _ = self._renormalize(
+            setup_score_conditioned, setup_present, flow_score_conditioned, flow_present
         )
 
         # ── Stage 4: Flags (do-no-harm penalties from SignalContext) ──────────
         active_flags, flag_adj = self._evaluate_flags(request.signal_context)
 
-        # ── Final score (regime-conditioned) ─────────────────────────────────
-        raw_group_score = round(base_score)
+        # ── Final score (regime-neutral) ─────────────────────────────────────
+        raw_group_score = round(base_score_neutral)
         final_score = max(0, min(100, raw_group_score + flag_adj))
 
-        # Pre-regime score: regime-neutral groups → renormalize → flags
-        # Preserved separately so score comparability holds across regime changes.
-        base_score_neutral, _ = self._renormalize(
-            setup_score_raw, setup_present, flow_score_raw, flow_present
-        )
-        signal_score_raw = max(0, min(100, round(base_score_neutral) + flag_adj))
+        # Legacy conditioned score
+        legacy_conditioned_score = max(0, min(100, round(base_score_conditioned) + flag_adj))
 
         strength = self._classify_strength(final_score)
         entry_quality = self._classify_entry(strength, confidence)
@@ -118,8 +122,9 @@ class AssessSignalEvidenceUseCase:
         entry_quality = decision_result.entry_quality
         decision_constraints = decision_result.constraints
 
+        # Breakdown and rationale use canonical (regime-neutral) scores
         breakdown = self._build_breakdown(
-            setup_score, setup_present, flow_score, flow_present,
+            setup_score_raw, setup_present, flow_score_raw, flow_present,
             confidence, active_flags, flag_adj, bool(regime_notes), gate_tightened,
         )
         rationale = self._build_rationale(
@@ -138,6 +143,7 @@ class AssessSignalEvidenceUseCase:
             snapshot_date=request.snapshot_date,
             confidence_score=round(confidence, 4),
             decision_constraints=decision_constraints,
+            legacy_conditioned_score=legacy_conditioned_score,
         )
 
         coverage_warning = self._coverage_warning(confidence, setup_present, flow_present)
@@ -150,7 +156,7 @@ class AssessSignalEvidenceUseCase:
             active_flags=tuple(active_flags),
             flag_adjustment=flag_adj,
             raw_group_score=raw_group_score,
-            signal_score_raw=signal_score_raw,
+            signal_score_raw=final_score,
         )
 
     # ── group scorers ─────────────────────────────────────────────────────────
@@ -167,7 +173,16 @@ class AssessSignalEvidenceUseCase:
             return 0.0, False
         return max(0.0, min(100.0, ev.capped_strength * 100.0)), True
 
-    # ── regime conditioning ───────────────────────────────────────────────────
+    # ── regime conditioning (TRANSITIONAL — Phase 5 legacy) ──────────────────
+    #
+    # TRANSITIONAL: This conditioning mutates group scores before renormalization,
+    # meaning assessment.score reflects regime. A1/A2 decision_policy constraints
+    # provide the same regime gate without score mutation. Both currently run together,
+    # creating a double-regime effect. When walk-forward validation confirms
+    # decision_policy alone is sufficient, _condition_group_scores() will be removed
+    # and assessment.score will become fully regime-neutral (= signal_score_raw).
+    #
+    # Until then: DO NOT tune regime_conditioning params further. Tune decision_policy.
 
     def _condition_group_scores(
         self,
@@ -175,7 +190,7 @@ class AssessSignalEvidenceUseCase:
         flow_score: float, flow_present: bool,
         market_context: "MarketContext | None",
     ) -> tuple[float, float, list[str]]:
-        """Apply regime-specific conditioning to group scores before renormalization.
+        """TRANSITIONAL Phase 5 layer — see class-level comment above.
 
         Returns (conditioned_setup_score, conditioned_flow_score, regime_notes).
         RISK_ON: no change. Notes list is empty when no conditioning fires.

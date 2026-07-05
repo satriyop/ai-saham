@@ -480,7 +480,7 @@ class TestSignalAssessmentValueObject:
         a = self._make()
         d = a.to_dict()
         assert set(d.keys()) == {
-            "ticker", "score", "strength", "entry_quality",
+            "ticker", "score", "legacy_conditioned_score", "strength", "entry_quality",
             "breakdown", "rationale", "snapshot_date", "confidence_score",
             "decision_constraints",
         }

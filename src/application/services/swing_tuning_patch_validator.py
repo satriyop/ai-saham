@@ -51,12 +51,8 @@ _PARAMETER_BOUNDS: tuple[tuple[str, float, float, float | None, float], ...] = (
     ("signal_engine.classification.moderate_min_score", 25, 70, 1, 5),
     ("signal_engine.classification.enter_min_confidence", 0.40, 0.90, 0.05, 0.10),
     ("signal_engine.classification.watch_min_confidence", 0.20, 0.60, 0.05, 0.10),
-    ("signal_engine.regime_conditioning.neutral.weak_flow_threshold", 30.0, 70.0, 5.0, 10.0),
-    ("signal_engine.regime_conditioning.neutral.weak_flow_discount", 0.50, 1.0, 0.05, 0.10),
-    ("signal_engine.regime_conditioning.risk_off.weak_setup_threshold", 40.0, 80.0, 5.0, 10.0),
-    ("signal_engine.regime_conditioning.risk_off.weak_setup_discount", 0.20, 0.80, 0.05, 0.10),
-    ("signal_engine.regime_conditioning.volatile.setup_discount", 0.40, 1.0, 0.05, 0.10),
-    ("signal_engine.regime_conditioning.volatile.flow_discount", 0.40, 1.0, 0.05, 0.10),
+    # regime_conditioning.* removed from tunable paths: transitional legacy layer (TD-1).
+    # Patches targeting regime_conditioning.* will now be rejected as out-of-bounds.
     # --- swing_setups paths (fnmatch wildcard on setup name) ---
     ("setups.*.gates.max_bb_width_pctile", 0.05, 0.50, 0.05, 0.10),
     ("setups.*.gates.max_rsi", 25, 80, 1, 5),
@@ -322,28 +318,31 @@ class SwingTuningPatchValidator:
             item_issues.append("proposed_value_required")
 
         if target_path:
-            try:
-                parsed = parse_tuning_config_path(target_path)
-            except ValueError:
-                item_issues.append("target_path_invalid")
+            if "regime_conditioning" in target_path:
+                item_issues.append("target_path_not_tunable:regime_conditioning_is_legacy_layer")
             else:
-                resolution = resolve_tuning_config_value(
-                    parsed,
-                    config_root=self._config_root,
-                )
-                if not resolution.resolved:
-                    item_issues.append(
-                        f"target_path_unresolved:{resolution.unresolved_reason}"
-                    )
+                try:
+                    parsed = parse_tuning_config_path(target_path)
+                except ValueError:
+                    item_issues.append("target_path_invalid")
                 else:
-                    resolved_current_value = resolution.current_value
-                    if current_value != resolution.current_value:
-                        item_issues.append("current_value_mismatch")
-                    if not _type_compatible(
-                        resolution.current_value,
-                        proposed_value,
-                    ):
-                        item_issues.append("proposed_value_type_mismatch")
+                    resolution = resolve_tuning_config_value(
+                        parsed,
+                        config_root=self._config_root,
+                    )
+                    if not resolution.resolved:
+                        item_issues.append(
+                            f"target_path_unresolved:{resolution.unresolved_reason}"
+                        )
+                    else:
+                        resolved_current_value = resolution.current_value
+                        if current_value != resolution.current_value:
+                            item_issues.append("current_value_mismatch")
+                        if not _type_compatible(
+                            resolution.current_value,
+                            proposed_value,
+                        ):
+                            item_issues.append("proposed_value_type_mismatch")
 
         # Phase 8: parameter bounds — range, quantization, per-cycle shift cap.
         if resolved_current_value is not None and proposed_value is not None and not item_issues:

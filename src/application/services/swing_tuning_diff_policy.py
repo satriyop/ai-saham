@@ -400,10 +400,7 @@ _QUANTIZED_STEP_PATHS = (
     "evidence_groups.flow_confirmation.weight",
     "classification.enter_min_confidence",
     "classification.watch_min_confidence",
-    "regime_conditioning.neutral.weak_flow_discount",
-    "regime_conditioning.risk_off.weak_setup_discount",
-    "regime_conditioning.volatile.setup_discount",
-    "regime_conditioning.volatile.flow_discount",
+    # regime_conditioning.* removed: transitional layer — not to be tuned (TD-1)
 )
 
 

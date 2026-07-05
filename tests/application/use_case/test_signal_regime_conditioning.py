@@ -132,8 +132,9 @@ def test_neutral_weak_flow_is_discounted():
         market_context=_mctx("NEUTRAL"),
     ))
     bd = _breakdown_dict(r)
-    # 40 × 0.80 = 32
-    assert bd.get("flow_confirmation_group") == pytest.approx(32.0)
+    assert bd.get("flow_confirmation_group") == pytest.approx(40.0)
+    assert r.assessment.legacy_conditioned_score == 32
+    assert r.assessment.score == 40
     assert bd.get("regime_conditioning") == 1.0
     assert any("NEUTRAL" in line for line in r.assessment.rationale)
 
@@ -158,7 +159,8 @@ def test_neutral_only_discounts_flow_not_setup():
     ))
     bd = _breakdown_dict(r)
     assert bd.get("setup_quality_group") == pytest.approx(20.0)     # unchanged
-    assert bd.get("flow_confirmation_group") == pytest.approx(32.0)  # 40 × 0.80
+    assert bd.get("flow_confirmation_group") == pytest.approx(40.0)  # unchanged (neutral)
+    assert r.assessment.legacy_conditioned_score == 25
 
 
 # ── RISK_OFF — weak setup discounted ─────────────────────────────────────────
@@ -170,8 +172,9 @@ def test_risk_off_weak_setup_is_discounted():
         market_context=_mctx("RISK_OFF"),
     ))
     bd = _breakdown_dict(r)
-    # 20 × 0.50 = 10
-    assert bd.get("setup_quality_group") == pytest.approx(10.0)
+    assert bd.get("setup_quality_group") == pytest.approx(20.0)
+    assert r.assessment.legacy_conditioned_score == 10
+    assert r.assessment.score == 20
     assert bd.get("regime_conditioning") == 1.0
     assert any("RISK_OFF" in line for line in r.assessment.rationale)
 
@@ -206,8 +209,9 @@ def test_risk_off_does_not_discount_flow():
         market_context=_mctx("RISK_OFF"),
     ))
     bd = _breakdown_dict(r)
-    assert bd.get("setup_quality_group") == pytest.approx(10.0)   # 20 × 0.50
-    assert bd.get("flow_confirmation_group") == pytest.approx(30.0)  # unchanged
+    assert bd.get("setup_quality_group") == pytest.approx(20.0)
+    assert bd.get("flow_confirmation_group") == pytest.approx(30.0)
+    assert r.assessment.legacy_conditioned_score == 18
 
 
 # ── VOLATILE — both groups discounted ────────────────────────────────────────
@@ -220,8 +224,10 @@ def test_volatile_discounts_both_groups():
         market_context=_mctx("VOLATILE"),
     ))
     bd = _breakdown_dict(r)
-    assert bd.get("setup_quality_group") == pytest.approx(100.0 * 0.70)  # 70
-    assert bd.get("flow_confirmation_group") == pytest.approx(80.0 * 0.80)  # 64
+    assert bd.get("setup_quality_group") == pytest.approx(100.0)
+    assert bd.get("flow_confirmation_group") == pytest.approx(80.0)
+    assert r.assessment.legacy_conditioned_score == 68
+    assert r.assessment.score == 92
     assert bd.get("regime_conditioning") == 1.0
     assert any("VOLATILE" in line for line in r.assessment.rationale)
 
@@ -233,8 +239,9 @@ def test_volatile_with_only_setup():
         market_context=_mctx("VOLATILE"),
     ))
     bd = _breakdown_dict(r)
-    assert bd.get("setup_quality_group") == pytest.approx(100.0 * 0.70)  # 70
-    assert "flow_confirmation_group" not in bd
+    assert bd.get("setup_quality_group") == pytest.approx(100.0)
+    assert r.assessment.legacy_conditioned_score == 70
+    assert r.assessment.score == 100
 
 
 def test_volatile_with_only_flow():
@@ -245,7 +252,10 @@ def test_volatile_with_only_flow():
     ))
     bd = _breakdown_dict(r)
     assert "setup_quality_group" not in bd
-    assert bd.get("flow_confirmation_group") == pytest.approx(60.0 * 0.80)  # 48
+    assert bd.get("flow_confirmation_group") == pytest.approx(60.0)
+    assert r.assessment.legacy_conditioned_score == 48
+    assert r.assessment.score == 60
+
 
 
 # ── no evidence — no conditioning ────────────────────────────────────────────
@@ -344,6 +354,7 @@ def test_regime_conditioning_applied_exactly_once():
 
     # Both calls produce identical results — no accumulated discount
     assert r1.assessment.score == r2.assessment.score
+    assert r1.assessment.legacy_conditioned_score == r2.assessment.legacy_conditioned_score
     bd1 = _breakdown_dict(r1)
     bd2 = _breakdown_dict(r2)
     assert bd1.get("setup_quality_group") == bd2.get("setup_quality_group")
@@ -359,15 +370,18 @@ def test_regime_conditioning_and_flags_both_apply():
         ticker="TEST", snapshot_date=SNAP,
         forward_pe=60.0,   # triggers VALUATION_STRETCHED (-10)
     )
-    # NO_MATCH setup: score=20 → RISK_OFF discounts to 10 → flag -10 → final=0
+    # NO_MATCH setup: score=20
     r = UC.execute(_req(
-        setup_evidence=_setup("NO_MATCH"),   # score=20 → 20 × 0.50 = 10
+        setup_evidence=_setup("NO_MATCH"),   # score=20
         market_context=_mctx("RISK_OFF"),
         signal_context=ctx_sig,
     ))
     bd = _breakdown_dict(r)
-    assert bd.get("setup_quality_group") == pytest.approx(10.0)   # 20 × 0.50
+    assert bd.get("setup_quality_group") == pytest.approx(20.0)
     assert bd.get("flag_adjustment") == -10.0                     # VALUATION_STRETCHED
     assert bd.get("regime_conditioning") == 1.0
-    # Final score: renormalized (setup only) = 10, flag -10, clamped to 0
-    assert r.assessment.score == 0
+    # Conditioned: setup=10, flag=-10 -> 0
+    assert r.assessment.legacy_conditioned_score == 0
+    # Canonical: setup=20, flag=-10 -> 10
+    assert r.assessment.score == 10
+

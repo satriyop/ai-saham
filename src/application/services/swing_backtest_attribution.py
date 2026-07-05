@@ -286,13 +286,8 @@ DEFAULT_TUNING_TARGETS: tuple[TuningTarget, ...] = (
             "config/market_context_engine.yaml:market_context_engine.regime_thresholds.volatile_vix_override",
             "config/market_context_engine.yaml:market_context_engine.regime_effects.RISK_OFF.signal_multiplier",
             "config/market_context_engine.yaml:market_context_engine.regime_effects.VOLATILE.signal_multiplier",
-            "config/signal_engine.yaml:signal_engine.regime_conditioning",
-            "config/signal_engine.yaml:signal_engine.regime_conditioning.neutral.weak_flow_threshold",
-            "config/signal_engine.yaml:signal_engine.regime_conditioning.neutral.weak_flow_discount",
-            "config/signal_engine.yaml:signal_engine.regime_conditioning.risk_off.weak_setup_threshold",
-            "config/signal_engine.yaml:signal_engine.regime_conditioning.risk_off.weak_setup_discount",
-            "config/signal_engine.yaml:signal_engine.regime_conditioning.volatile.setup_discount",
-            "config/signal_engine.yaml:signal_engine.regime_conditioning.volatile.flow_discount",
+            # signal_engine.regime_conditioning.* removed: transitional legacy layer, not to be tuned (TD-1).
+            # Tune decision_policy thresholds instead (see signal_engine.yaml decision_policy block).
             "config/swing_targets.yaml:setup_targets",
             "config/swing_targets.yaml:setup_targets.risk_on.take_profit_pct",
             "config/swing_targets.yaml:setup_targets.risk_on.stop_loss_pct",
@@ -304,8 +299,9 @@ DEFAULT_TUNING_TARGETS: tuple[TuningTarget, ...] = (
             "config/swing_targets.yaml:setup_targets.volatile.stop_loss_pct",
         ),
         allowed_use=(
-            "Tune regime context, regime_conditioning discounts, and "
-            "regime-adaptive exits from executed trades."
+            "Tune regime detection thresholds (market_context_engine.yaml) and "
+            "regime-adaptive exits (swing_targets.yaml) from executed trades. "
+            "Do NOT tune signal_engine.regime_conditioning — frozen legacy layer (TD-1)."
         ),
     ),
     TuningTarget(
