@@ -103,6 +103,30 @@ def test_resolve_signal_config_reads_policy_blocks():
                     },
                 },
             },
+            "alpha_trigger": {
+                "default_horizon": "TACTICAL_3D",
+                "low_weight_cap": 0.15,
+                "group_weights": {
+                    "setup_quality": 0.40,
+                    "institutional_flow": 0.25,
+                    "market_context": 0.25,
+                    "company_quality_context": 0.10,
+                },
+                "horizon_alpha_weights": {
+                    "TACTICAL_3D": 0.25,
+                },
+                "route_fractions": {
+                    "TACTICAL_3D": {
+                        "institutional_flow": {"alpha_fraction": 0.65},
+                    },
+                },
+                "evidence_registrations": {
+                    "market_context": {
+                        "status": "LOW_WEIGHT",
+                        "low_weight_cap": 0.05,
+                    },
+                },
+            },
         }
     }
 
@@ -134,6 +158,21 @@ def test_resolve_signal_config_reads_policy_blocks():
     assert (
         resolved.decision_policy.setup_regime_policy["foreign_bounce"]["RISK_OFF"]
         == "allowed_if_flow_confirmation_strong"
+    )
+    assert resolved.alpha_trigger.default_horizon == "TACTICAL_3D"
+    assert resolved.alpha_trigger.low_weight_cap == 0.15
+    assert resolved.alpha_trigger.group_weights["setup_quality"] == 0.40
+    assert resolved.alpha_trigger.group_weights["institutional_flow"] == 0.25
+    assert resolved.alpha_trigger.group_weights["market_context"] == 0.25
+    assert resolved.alpha_trigger.group_weights["company_quality_context"] == 0.10
+    assert resolved.alpha_trigger.horizon_alpha_weights["TACTICAL_3D"] == 0.25
+    assert (
+        resolved.alpha_trigger.route_fractions["TACTICAL_3D"]["institutional_flow"]
+        == 0.65
+    )
+    assert (
+        resolved.alpha_trigger.evidence_registrations["market_context"].status.value
+        == "LOW_WEIGHT"
     )
 
 
@@ -169,4 +208,36 @@ def test_resolve_signal_config_rejects_invalid_decision_name():
     }
 
     with pytest.raises(ValueError, match="Invalid max_decision"):
+        _resolve_signal_config(cfg)
+
+
+def test_resolve_signal_config_rejects_invalid_alpha_fraction():
+    cfg = {
+        "signal_engine": {
+            "alpha_trigger": {
+                "route_fractions": {
+                    "SWING_10D": {
+                        "setup_quality": {"alpha_fraction": 1.5},
+                    },
+                },
+            },
+        },
+    }
+
+    with pytest.raises(ValueError, match="alpha_fraction"):
+        _resolve_signal_config(cfg)
+
+
+def test_resolve_signal_config_rejects_negative_alpha_trigger_group_weight():
+    cfg = {
+        "signal_engine": {
+            "alpha_trigger": {
+                "group_weights": {
+                    "market_context": -0.10,
+                },
+            },
+        },
+    }
+
+    with pytest.raises(ValueError, match="group_weights.market_context"):
         _resolve_signal_config(cfg)

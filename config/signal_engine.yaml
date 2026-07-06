@@ -113,6 +113,51 @@ signal_engine:
     flow_confirmation:
       weight: 0.40
 
+  # Phase G: diagnostic Alpha/Trigger projection. This is derived from the
+  # canonical evidence groups, not a second factor tree. Existing runtime
+  # setup_quality and flow_confirmation evidence map into the canonical
+  # setup_quality and institutional_flow slots; market_context and
+  # company_quality_context are real configured slots that start unavailable /
+  # DIAGNOSTIC until producers are promoted.
+  alpha_trigger:
+    enabled: true
+    default_horizon: SWING_10D
+    low_weight_cap: 0.10
+    group_weights:
+      setup_quality: 0.35
+      institutional_flow: 0.30
+      market_context: 0.25
+      company_quality_context: 0.10
+    horizon_alpha_weights:
+      TACTICAL_3D: 0.20
+      SWING_10D: 0.40
+      ACCUM_20D: 0.50
+    route_fractions:
+      TACTICAL_3D:
+        setup_quality: {alpha_fraction: 0.00}
+        institutional_flow: {alpha_fraction: 0.70}
+        market_context: {alpha_fraction: 0.25}
+        company_quality_context: {alpha_fraction: 1.00}
+      SWING_10D:
+        setup_quality: {alpha_fraction: 0.00}
+        institutional_flow: {alpha_fraction: 0.80}
+        market_context: {alpha_fraction: 0.60}
+        company_quality_context: {alpha_fraction: 1.00}
+      ACCUM_20D:
+        setup_quality: {alpha_fraction: 0.10}
+        institutional_flow: {alpha_fraction: 0.90}
+        market_context: {alpha_fraction: 0.75}
+        company_quality_context: {alpha_fraction: 1.00}
+    evidence_registrations:
+      setup_quality:
+        status: PRODUCTION
+      institutional_flow:
+        status: PRODUCTION
+      market_context:
+        status: DIAGNOSTIC
+      company_quality_context:
+        status: DIAGNOSTIC
+
   # Phase 4: Do-no-harm flags applied as score penalties.
   # Flags fire when the condition is met; penalty is subtracted from the group score.
   flags:

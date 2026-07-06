@@ -25,6 +25,11 @@ from dataclasses import dataclass
 from datetime import date
 from typing import TYPE_CHECKING
 
+from src.application.services.alpha_trigger_aggregator import (
+    AlphaTriggerAggregationRequest,
+    AlphaTriggerAggregator,
+    AlphaTriggerGroupInput,
+)
 from src.application.use_case.assess_signal_use_case import (
     AssessSignalResponse,
     SignalEngineConfig,
@@ -54,6 +59,7 @@ class AssessSignalEvidenceRequest:
     market_context: "MarketContext | None" = None  # for regime conditioning
     setup_family: str | None = None
     setup_phase: "SetupPhaseSnapshot | None" = None
+    horizon: str | None = None
 
 
 class AssessSignalEvidenceUseCase:
@@ -67,6 +73,7 @@ class AssessSignalEvidenceUseCase:
 
     def __init__(self, config: SignalEngineConfig | None = None) -> None:
         self._config = config or SignalEngineConfig()
+        self._alpha_trigger = AlphaTriggerAggregator(self._config.alpha_trigger)
 
     def execute(self, request: AssessSignalEvidenceRequest) -> AssessSignalResponse:
         # ── Stage 1: Group scoring ────────────────────────────────────────────
@@ -98,6 +105,7 @@ class AssessSignalEvidenceUseCase:
         active_flags, flag_adj = self._evaluate_flags(request.signal_context)
 
         # ── Final score (regime-neutral) ─────────────────────────────────────
+        raw_exact_score = max(0.0, min(100.0, base_score_neutral + flag_adj))
         raw_group_score = round(base_score_neutral)
         final_score = max(0, min(100, raw_group_score + flag_adj))
 
@@ -133,6 +141,50 @@ class AssessSignalEvidenceUseCase:
         entry_quality = decision_result.entry_quality
         decision_constraints = decision_result.constraints
 
+        alpha_trigger_score = None
+        if self._config.alpha_trigger.enabled:
+            alpha_trigger_score = self._alpha_trigger.aggregate(
+                AlphaTriggerAggregationRequest(
+                    horizon=request.horizon or self._config.alpha_trigger.default_horizon,
+                    groups=(
+                        AlphaTriggerGroupInput(
+                            group="setup_quality",
+                            score=setup_score_raw,
+                            configured_weight=self._config.alpha_trigger.group_weights.get(
+                                "setup_quality", 0.0
+                            ),
+                            present=setup_present,
+                        ),
+                        AlphaTriggerGroupInput(
+                            group="institutional_flow",
+                            score=flow_score_raw,
+                            configured_weight=self._config.alpha_trigger.group_weights.get(
+                                "institutional_flow", 0.0
+                            ),
+                            present=flow_present,
+                        ),
+                        AlphaTriggerGroupInput(
+                            group="market_context",
+                            score=0.0,
+                            configured_weight=self._config.alpha_trigger.group_weights.get(
+                                "market_context", 0.0
+                            ),
+                            present=False,
+                        ),
+                        AlphaTriggerGroupInput(
+                            group="company_quality_context",
+                            score=0.0,
+                            configured_weight=self._config.alpha_trigger.group_weights.get(
+                                "company_quality_context", 0.0
+                            ),
+                            present=False,
+                        ),
+                    ),
+                    setup_phase=request.setup_phase,
+                    flow_confirmation_evidence=request.flow_confirmation_evidence,
+                )
+            )
+
         # Breakdown and rationale use canonical (regime-neutral) scores
         breakdown = self._build_breakdown(
             setup_score_raw, setup_present, flow_score_raw, flow_present,
@@ -155,6 +207,8 @@ class AssessSignalEvidenceUseCase:
             confidence_score=round(confidence, 4),
             decision_constraints=decision_constraints,
             legacy_conditioned_score=legacy_conditioned_score,
+            raw_exact_score=round(raw_exact_score, 4),
+            alpha_trigger_score=alpha_trigger_score,
         )
 
         coverage_warning = self._coverage_warning(confidence, setup_present, flow_present)
@@ -168,6 +222,8 @@ class AssessSignalEvidenceUseCase:
             flag_adjustment=flag_adj,
             raw_group_score=raw_group_score,
             signal_score_raw=final_score,
+            raw_exact_score=round(raw_exact_score, 4),
+            alpha_trigger_score=alpha_trigger_score,
         )
 
     # ── group scorers ─────────────────────────────────────────────────────────

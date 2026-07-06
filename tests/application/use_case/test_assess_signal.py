@@ -482,10 +482,12 @@ class TestSignalAssessmentValueObject:
         assert set(d.keys()) == {
             "ticker", "score", "legacy_conditioned_score", "strength", "entry_quality",
             "breakdown", "rationale", "snapshot_date", "confidence_score",
-            "decision_constraints",
+            "raw_exact_score", "alpha_trigger_score", "decision_constraints",
         }
         assert d["ticker"] == "BBCA"
         assert d["score"] == 50
+        assert d["raw_exact_score"] is None
+        assert d["alpha_trigger_score"] is None
 
 
 class TestSignalContext:

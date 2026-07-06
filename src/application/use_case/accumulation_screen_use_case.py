@@ -469,6 +469,11 @@ def _candidate_observation_payload(
             "active_flags": list(signal.active_flags),
             "flag_adjustment": signal.flag_adjustment,
             "raw_group_score": signal.raw_group_score,
+            "raw_exact_score": signal.raw_exact_score,
+            "alpha_trigger_score": (
+                signal.alpha_trigger_score.to_dict()
+                if signal.alpha_trigger_score is not None else None
+            ),
             "flow_evidence": flow_ev.to_dict() if flow_ev is not None else None,
         }
 
@@ -533,12 +538,14 @@ def _sub_signal_fingerprint(
     strategy_dict = _strategy_evidence_fingerprint(strategy_evidence)
     ia_dict = _ia_evidence_fingerprint(ia_evidence)
     tp_dict = _tp_fingerprint(tp_snapshot)
+    alpha_trigger_dict = _alpha_trigger_fingerprint(signal)
     return {
         "setup_family": constraints.get("setup_family"),
         **phase_dict,
         **strategy_dict,
         **ia_dict,
         **tp_dict,
+        **alpha_trigger_dict,
         "rsi_at_signal": candidate.rsi,
         "bb_width_pctile_at_signal": candidate.bb_width_pctile,
         "vwap_position_at_signal": candidate.vwap_pct,
@@ -559,6 +566,34 @@ def _sub_signal_fingerprint(
         "decision_constraints": constraints or None,
         "coverage_score": coverage_score,
         "conviction_score": conviction_score,
+    }
+
+
+def _alpha_trigger_fingerprint(signal: "AssessSignalResponse | None") -> dict:
+    score = signal.alpha_trigger_score if signal is not None else None
+    if score is None:
+        return {
+            "alpha_score": None,
+            "trigger_score": None,
+            "alpha_trigger_final_exact_score": None,
+            "alpha_trigger_horizon": None,
+            "alpha_trigger_alpha_weight": None,
+            "flow_trigger_allowed": None,
+            "alpha_trigger_route_metadata": None,
+            "alpha_trigger_unavailable_reasons": [],
+        }
+    return {
+        "alpha_score": score.alpha_score,
+        "trigger_score": score.trigger_score,
+        "alpha_trigger_final_exact_score": score.final_exact_score,
+        "alpha_trigger_horizon": score.horizon,
+        "alpha_trigger_alpha_weight": score.alpha_weight,
+        "flow_trigger_allowed": score.flow_trigger_allowed,
+        "alpha_trigger_route_metadata": [
+            contribution.to_dict()
+            for contribution in score.group_contributions
+        ],
+        "alpha_trigger_unavailable_reasons": list(score.unavailable_reasons),
     }
 
 

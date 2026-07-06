@@ -100,6 +100,7 @@ class SignalEngine:
         ticker: str,
         as_of_date: date | None = None,
         market_context: "MarketContext | None" = None,
+        horizon: str | None = None,
     ) -> AssessSignalResponse:
         """
         Full self-contained evaluation.
@@ -117,6 +118,7 @@ class SignalEngine:
                 snapshot_date=ctx.snapshot_date,
                 signal_context=ctx,
                 market_context=market_context,
+                horizon=horizon,
             )
         )
 
@@ -142,6 +144,7 @@ class SignalEngine:
         flow_confirmation_evidence: "FlowConfirmationEvidence | None" = None,
         setup_family: str | None = None,
         setup_phase: "SetupPhaseSnapshot | None" = None,
+        horizon: str | None = None,
     ) -> AssessSignalResponse:
         """
         Pipeline path: caller supplies pre-loaded SignalContext.
@@ -162,6 +165,7 @@ class SignalEngine:
                 market_context=market_context,
                 setup_family=setup_family,
                 setup_phase=setup_phase,
+                horizon=horizon,
             )
         )
 
@@ -169,6 +173,7 @@ class SignalEngine:
         self,
         request: AssessSignalRequest,
         market_context: "MarketContext | None" = None,
+        horizon: str | None = None,
     ) -> AssessSignalResponse:
         """
         Advanced path: caller provides a full AssessSignalRequest.
@@ -183,6 +188,7 @@ class SignalEngine:
                 snapshot_date=ctx.snapshot_date,
                 signal_context=ctx,
                 market_context=market_context,
+                horizon=horizon,
             )
         )
 

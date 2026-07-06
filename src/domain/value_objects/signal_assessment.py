@@ -21,6 +21,7 @@ from enum import Enum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from src.domain.value_objects.alpha_trigger_score import AlphaTriggerScore
     from src.domain.value_objects.decision_constraints import DecisionConstraints
 
 
@@ -120,6 +121,8 @@ class SignalAssessment:
     confidence_score: float = 1.0          # 0.0–1.0 evidence coverage/decision confidence
     decision_constraints: "DecisionConstraints | None" = None
     legacy_conditioned_score: int | None = None
+    raw_exact_score: float | None = None
+    alpha_trigger_score: "AlphaTriggerScore | None" = None
 
     def __post_init__(self) -> None:
         if not (0 <= self.score <= 100):
@@ -133,6 +136,11 @@ class SignalAssessment:
             raise ValueError(
                 f"SignalAssessment confidence_score must be 0.0–1.0, "
                 f"got {self.confidence_score}"
+            )
+        if self.raw_exact_score is not None and not (0.0 <= self.raw_exact_score <= 100.0):
+            raise ValueError(
+                f"SignalAssessment raw_exact_score must be 0.0–100.0, "
+                f"got {self.raw_exact_score}"
             )
 
     @property
@@ -165,9 +173,13 @@ class SignalAssessment:
             "rationale": list(self.rationale),
             "snapshot_date": self.snapshot_date.isoformat(),
             "confidence_score": self.confidence_score,
+            "raw_exact_score": self.raw_exact_score,
+            "alpha_trigger_score": (
+                self.alpha_trigger_score.to_dict()
+                if self.alpha_trigger_score else None
+            ),
             "decision_constraints": (
                 self.decision_constraints.to_dict()
                 if self.decision_constraints else None
             ),
         }
-

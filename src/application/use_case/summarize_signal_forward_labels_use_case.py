@@ -101,6 +101,17 @@ def _build_buckets(
             ("strategy_rule", fp.strategy_rule_name or "UNKNOWN"),
             ("strategy_outcome", fp.strategy_evidence_outcome or "UNKNOWN"),
             ("strategy_route", fp.strategy_evidence_route or "UNKNOWN"),
+            ("alpha_bucket", _score_bucket_100(fp.alpha_score)),
+            ("trigger_bucket", _score_bucket_100(fp.trigger_score)),
+            (
+                "alpha_trigger_final_bucket",
+                _score_bucket_100(fp.alpha_trigger_final_exact_score),
+            ),
+            ("alpha_trigger_horizon", fp.alpha_trigger_horizon or "UNKNOWN"),
+            (
+                "flow_trigger_allowed",
+                "UNKNOWN" if fp.flow_trigger_allowed is None else str(fp.flow_trigger_allowed),
+            ),
             ("coverage_bucket", _score_bucket(fp.coverage)),
             ("conviction_bucket", _score_bucket(fp.conviction)),
         )
@@ -148,6 +159,12 @@ def _score_bucket(value: float | None) -> str:
     if value < 0.7:
         return "MEDIUM"
     return "HIGH"
+
+
+def _score_bucket_100(value: float | None) -> str:
+    if value is None:
+        return "UNKNOWN"
+    return _score_bucket(float(value) / 100.0)
 
 
 def _average(values) -> float | None:

@@ -110,6 +110,15 @@ class SignalObservationFingerprint:
     tp_index_memberships: str | None = None    # comma-joined, e.g. "lq45,idx80"
     tp_coverage_score: float | None = None
     tp_epoch: str | None = None
+    # Phase G: Alpha/Trigger projection fingerprint
+    alpha_score: float | None = None
+    trigger_score: float | None = None
+    alpha_trigger_final_exact_score: float | None = None
+    alpha_trigger_horizon: str | None = None
+    alpha_trigger_alpha_weight: float | None = None
+    flow_trigger_allowed: bool | None = None
+    alpha_trigger_route_metadata: tuple[dict[str, Any], ...] = ()
+    alpha_trigger_unavailable_reasons: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -183,6 +192,18 @@ class SignalObservationFingerprint:
             "tp_index_memberships": self.tp_index_memberships,
             "tp_coverage_score": self.tp_coverage_score,
             "tp_epoch": self.tp_epoch,
+            "alpha_score": self.alpha_score,
+            "trigger_score": self.trigger_score,
+            "alpha_trigger_final_exact_score": self.alpha_trigger_final_exact_score,
+            "alpha_trigger_horizon": self.alpha_trigger_horizon,
+            "alpha_trigger_alpha_weight": self.alpha_trigger_alpha_weight,
+            "flow_trigger_allowed": self.flow_trigger_allowed,
+            "alpha_trigger_route_metadata": [
+                dict(v) for v in self.alpha_trigger_route_metadata
+            ],
+            "alpha_trigger_unavailable_reasons": list(
+                self.alpha_trigger_unavailable_reasons
+            ),
         }
 
     @classmethod
@@ -310,6 +331,24 @@ class SignalObservationFingerprint:
             tp_index_memberships=data.get("tp_index_memberships"),
             tp_coverage_score=_optional_float(data.get("tp_coverage_score")),
             tp_epoch=data.get("tp_epoch"),
+            alpha_score=_optional_float(data.get("alpha_score")),
+            trigger_score=_optional_float(data.get("trigger_score")),
+            alpha_trigger_final_exact_score=_optional_float(
+                data.get("alpha_trigger_final_exact_score")
+            ),
+            alpha_trigger_horizon=data.get("alpha_trigger_horizon"),
+            alpha_trigger_alpha_weight=_optional_float(
+                data.get("alpha_trigger_alpha_weight")
+            ),
+            flow_trigger_allowed=_optional_bool(data.get("flow_trigger_allowed")),
+            alpha_trigger_route_metadata=tuple(
+                dict(v)
+                for v in data.get("alpha_trigger_route_metadata") or ()
+                if isinstance(v, dict)
+            ),
+            alpha_trigger_unavailable_reasons=tuple(
+                str(v) for v in data.get("alpha_trigger_unavailable_reasons") or ()
+            ),
         )
 
 

@@ -51,6 +51,10 @@ _PARAMETER_BOUNDS: tuple[tuple[str, float, float, float | None, float], ...] = (
     ("signal_engine.classification.moderate_min_score", 25, 70, 1, 5),
     ("signal_engine.classification.enter_min_confidence", 0.40, 0.90, 0.05, 0.10),
     ("signal_engine.classification.watch_min_confidence", 0.20, 0.60, 0.05, 0.10),
+    ("signal_engine.alpha_trigger.low_weight_cap", 0.0, 0.25, 0.05, 0.05),
+    ("signal_engine.alpha_trigger.group_weights.*", 0.0, 1.0, 0.05, 0.10),
+    ("signal_engine.alpha_trigger.horizon_alpha_weights.*", 0.0, 1.0, 0.05, 0.10),
+    ("signal_engine.alpha_trigger.route_fractions.*.*.alpha_fraction", 0.0, 1.0, 0.05, 0.10),
     # regime_conditioning.* removed from tunable paths: transitional legacy layer (TD-1).
     # Patches targeting regime_conditioning.* will now be rejected as out-of-bounds.
     # --- swing_setups paths (fnmatch wildcard on setup name) ---

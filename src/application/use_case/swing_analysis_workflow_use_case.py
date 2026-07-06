@@ -305,6 +305,10 @@ class SwingAnalysisWorkflowResponse:
             and verdict.market_regime is not None
         ):
             diagnostics_out["data"]["regime_as_of"] = verdict.market_regime.as_of_date.isoformat()
+        diagnostics_out["volatility_context"] = _volatility_context_to_dict(
+            atr_value=self.atr_value,
+            latest_close=self.latest_close,
+        )
         evidence_out = evidence.to_dict(
             strategy_name=strategy_name,
             max_hold_days=max_hold_days,
@@ -332,15 +336,56 @@ def _signal_response_to_dict(response: "AssessSignalResponse | None") -> dict[st
         return None
     return {
         "score": response.assessment.score,
+        "raw_exact_score": response.assessment.raw_exact_score,
         "strength": response.assessment.strength.value,
         "entry_quality": response.assessment.entry_quality.value,
         "breakdown": response.assessment.breakdown_dict,
         "coverage_warning": response.coverage_warning,
+        "alpha_trigger_score": (
+            response.assessment.alpha_trigger_score.to_dict()
+            if response.assessment.alpha_trigger_score else None
+        ),
         "decision_constraints": (
             response.assessment.decision_constraints.to_dict()
             if getattr(response.assessment, "decision_constraints", None) else None
         ),
     }
+
+
+def _volatility_context_to_dict(
+    *,
+    atr_value: Decimal | None,
+    latest_close: Decimal | None,
+) -> dict[str, Any]:
+    atr_float = float(atr_value) if atr_value is not None else None
+    close_float = float(latest_close) if latest_close is not None else None
+    atr_pct = (
+        round((atr_float / close_float) * 100.0, 4)
+        if atr_float is not None and close_float and close_float > 0
+        else None
+    )
+    bucket, size_multiplier = _volatility_bucket(atr_pct)
+    return {
+        "atr_20": atr_float,
+        "atr_pct": atr_pct,
+        "volatility_bucket": bucket,
+        "stop_model_hint": "ATR_MULTIPLE",
+        "suggested_stop_atr": 2.0,
+        "suggested_target_atr": 3.0,
+        "volatility_size_multiplier": size_multiplier,
+    }
+
+
+def _volatility_bucket(atr_pct: float | None) -> tuple[str, float]:
+    if atr_pct is None:
+        return "UNKNOWN", 1.0
+    if atr_pct < 2.0:
+        return "LOW", 1.0
+    if atr_pct < 5.0:
+        return "NORMAL", 1.0
+    if atr_pct < 8.0:
+        return "HIGH", 0.75
+    return "EXTREME", 0.50
 
 
 def _object_to_dict(value: Any | None) -> Any | None:

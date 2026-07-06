@@ -84,7 +84,10 @@ def _setup_evidence(match: str = "MATCH") -> SetupEvidence:
     )
 
 
-def _flow_evidence(capped_strength: float = 0.70) -> FlowConfirmationEvidence:
+def _flow_evidence(
+    capped_strength: float = 0.70,
+    confirmation_status: str = "CONFIRMED",
+) -> FlowConfirmationEvidence:
     signal = FlowSubSignal(
         key="cons", score=40.0, weight=40.0,
         direction=Direction.BULLISH, freshness=Freshness.FRESH,
@@ -94,7 +97,7 @@ def _flow_evidence(capped_strength: float = 0.70) -> FlowConfirmationEvidence:
         snapshot_date=SNAP,
         flow_signals=(signal,),
         flow_score_ex_bb=40.0,
-        confirmation_status="CONFIRMED",
+        confirmation_status=confirmation_status,
         flow_direction="POSITIVE",
         bandar_broad_score=None,
         bandar_direction=Direction.NEUTRAL,
@@ -120,6 +123,18 @@ def _setup_phase(*, coverage: float, conviction: float) -> SetupPhaseSnapshot:
         phase_strength=conviction,
         coverage_score=coverage,
         conviction_score=conviction,
+        sequence_valid=True,
+    )
+
+
+def _phase_state(state: SetupPhaseState) -> SetupPhaseSnapshot:
+    return SetupPhaseSnapshot(
+        current_phase=state,
+        previous_phase=SetupPhaseState.COMPRESSION,
+        phase_age_sessions=1,
+        phase_strength=0.8,
+        coverage_score=0.8,
+        conviction_score=0.8,
         sequence_valid=True,
     )
 
@@ -238,6 +253,105 @@ def test_both_groups_present_weighted_combination():
         flow_confirmation_evidence=_flow_evidence(capped_strength=0.50),
     ))
     assert resp.assessment.score == 80
+
+
+def test_alpha_trigger_projection_uses_existing_group_scores():
+    resp = _use_case().execute(_req(
+        setup_evidence=_setup_evidence("MATCH"),
+        flow_confirmation_evidence=_flow_evidence(capped_strength=0.50),
+        setup_phase=_phase_state(SetupPhaseState.BREAKOUT_CONFIRMATION),
+    ))
+
+    at = resp.alpha_trigger_score
+
+    assert at is not None
+    assert at.horizon == "SWING_10D"
+    assert at.alpha_score == pytest.approx(50.0)
+    assert at.trigger_score == pytest.approx(92.6829268293)
+    assert at.final_exact_score == pytest.approx(75.6097560976)
+    assert at.coverage == pytest.approx(0.65)
+    assert at.authority_coverage == pytest.approx(0.65)
+    assert {c.group for c in at.group_contributions} == {
+        "setup_quality",
+        "institutional_flow",
+        "market_context",
+        "company_quality_context",
+    }
+    assert "market_context:missing" in at.unavailable_reasons
+    assert "company_quality_context:missing" in at.unavailable_reasons
+    assert resp.assessment.score == 80
+    assert resp.assessment.raw_exact_score == pytest.approx(80.0)
+    assert resp.assessment.to_dict()["alpha_trigger_score"]["final_exact_score"] == pytest.approx(75.6098)
+
+
+def test_alpha_trigger_missing_groups_do_not_neutral_fill_side_denominators():
+    resp = _use_case().execute(_req(setup_evidence=_setup_evidence("MATCH")))
+
+    at = resp.alpha_trigger_score
+
+    assert at is not None
+    assert at.alpha_score is None
+    assert at.trigger_score == pytest.approx(100.0)
+    assert at.final_exact_score == pytest.approx(100.0)
+    assert at.coverage == pytest.approx(0.35)
+    assert at.authority_coverage == pytest.approx(0.35)
+    assert "institutional_flow:missing" in at.unavailable_reasons
+    assert "market_context:missing" in at.unavailable_reasons
+    assert "company_quality_context:missing" in at.unavailable_reasons
+    assert "alpha:no_production_weight" in at.unavailable_reasons
+
+
+def test_flow_does_not_contribute_to_trigger_without_price_volume_confirmation():
+    resp = _use_case().execute(_req(
+        setup_evidence=_setup_evidence("MATCH"),
+        flow_confirmation_evidence=_flow_evidence(capped_strength=0.50),
+        setup_phase=_phase_state(SetupPhaseState.COMPRESSION),
+    ))
+
+    at = resp.alpha_trigger_score
+
+    assert at is not None
+    assert at.flow_trigger_allowed is False
+    assert at.alpha_score == pytest.approx(50.0)
+    assert at.trigger_score == pytest.approx(100.0)
+    flow = [c for c in at.group_contributions if c.group == "institutional_flow"][0]
+    assert flow.trigger_allowed is False
+    assert "flow_trigger_blocked:setup_phase_not_breakout_confirmation" in flow.reasons
+
+
+def test_breakout_confirmation_with_confirmed_flow_unlocks_flow_trigger_contribution():
+    resp = _use_case().execute(_req(
+        setup_evidence=_setup_evidence("MATCH"),
+        flow_confirmation_evidence=_flow_evidence(
+            capped_strength=0.50,
+            confirmation_status="CONFIRMED",
+        ),
+        setup_phase=_phase_state(SetupPhaseState.BREAKOUT_CONFIRMATION),
+    ))
+
+    at = resp.alpha_trigger_score
+
+    assert at is not None
+    assert at.flow_trigger_allowed is True
+    assert at.trigger_score == pytest.approx(92.6829268293)
+
+
+def test_flow_still_blocked_when_breakout_phase_lacks_confirmed_flow():
+    resp = _use_case().execute(_req(
+        setup_evidence=_setup_evidence("MATCH"),
+        flow_confirmation_evidence=_flow_evidence(
+            capped_strength=0.50,
+            confirmation_status="WATCH_ZONE",
+        ),
+        setup_phase=_phase_state(SetupPhaseState.BREAKOUT_CONFIRMATION),
+    ))
+
+    at = resp.alpha_trigger_score
+
+    assert at is not None
+    assert at.flow_trigger_allowed is False
+    assert at.trigger_score == pytest.approx(100.0)
+    assert "flow_trigger_blocked:flow_not_confirmed" in at.reasons
     assert resp.evidence_confidence == pytest.approx(1.0)
     assert resp.coverage_warning is None
 

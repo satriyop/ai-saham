@@ -18,6 +18,11 @@ from dataclasses import dataclass, field
 from datetime import date
 
 from src.application.services.stats import interpolate
+from src.domain.value_objects.alpha_trigger_score import (
+    AlphaTriggerScore,
+    EvidenceAuthorityStatus,
+    EvidenceRegistration,
+)
 from src.domain.value_objects.signal_assessment import (
     EntryQuality,
     SignalAssessment,
@@ -264,6 +269,79 @@ class DecisionPolicyConfig:
 
 
 @dataclass(frozen=True)
+class AlphaTriggerRouteFractionsConfig:
+    """Per-horizon group routing fractions. Trigger fraction is always derived."""
+
+    by_horizon: dict[str, dict[str, float]] = field(
+        default_factory=lambda: {
+            "TACTICAL_3D": {
+                "setup_quality": 0.00,
+                "institutional_flow": 0.70,
+                "market_context": 0.25,
+                "company_quality_context": 1.00,
+            },
+            "SWING_10D": {
+                "setup_quality": 0.00,
+                "institutional_flow": 0.80,
+                "market_context": 0.60,
+                "company_quality_context": 1.00,
+            },
+            "ACCUM_20D": {
+                "setup_quality": 0.10,
+                "institutional_flow": 0.90,
+                "market_context": 0.75,
+                "company_quality_context": 1.00,
+            },
+        }
+    )
+
+
+@dataclass(frozen=True)
+class AlphaTriggerConfig:
+    enabled: bool = True
+    default_horizon: str = "SWING_10D"
+    group_weights: dict[str, float] = field(
+        default_factory=lambda: {
+            "setup_quality": 0.35,
+            "institutional_flow": 0.30,
+            "market_context": 0.25,
+            "company_quality_context": 0.10,
+        }
+    )
+    route_fractions: dict[str, dict[str, float]] = field(
+        default_factory=lambda: AlphaTriggerRouteFractionsConfig().by_horizon
+    )
+    horizon_alpha_weights: dict[str, float] = field(
+        default_factory=lambda: {
+            "TACTICAL_3D": 0.20,
+            "SWING_10D": 0.40,
+            "ACCUM_20D": 0.50,
+        }
+    )
+    low_weight_cap: float = 0.10
+    evidence_registrations: dict[str, EvidenceRegistration] = field(
+        default_factory=lambda: {
+            "setup_quality": EvidenceRegistration(
+                evidence_name="setup_quality",
+                status=EvidenceAuthorityStatus.PRODUCTION,
+            ),
+            "institutional_flow": EvidenceRegistration(
+                evidence_name="institutional_flow",
+                status=EvidenceAuthorityStatus.PRODUCTION,
+            ),
+            "market_context": EvidenceRegistration(
+                evidence_name="market_context",
+                status=EvidenceAuthorityStatus.DIAGNOSTIC,
+            ),
+            "company_quality_context": EvidenceRegistration(
+                evidence_name="company_quality_context",
+                status=EvidenceAuthorityStatus.DIAGNOSTIC,
+            ),
+        }
+    )
+
+
+@dataclass(frozen=True)
 class SignalEngineConfig:
     classification: SignalClassificationConfig = field(default_factory=SignalClassificationConfig)
     missing_data: SignalMissingDataConfig = field(default_factory=SignalMissingDataConfig)
@@ -274,6 +352,7 @@ class SignalEngineConfig:
     flags: SignalFlagsConfig = field(default_factory=SignalFlagsConfig)
     regime_conditioning: RegimeConditioningConfig = field(default_factory=RegimeConditioningConfig)
     decision_policy: DecisionPolicyConfig = field(default_factory=DecisionPolicyConfig)
+    alpha_trigger: AlphaTriggerConfig = field(default_factory=AlphaTriggerConfig)
 
 # Default weights — used when no YAML config is provided (identical to historical hardcoded values)
 _DEFAULT_WEIGHTS: dict[str, float] = {
@@ -303,6 +382,8 @@ class AssessSignalResponse:
     active_flags: tuple[str, ...] = field(default_factory=tuple)
     flag_adjustment: int = 0
     raw_group_score: int | None = None          # score before flag adjustments
+    raw_exact_score: float | None = None
+    alpha_trigger_score: AlphaTriggerScore | None = None
 
     @property
     def score(self) -> int:

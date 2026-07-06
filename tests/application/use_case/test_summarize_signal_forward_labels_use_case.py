@@ -163,6 +163,46 @@ def test_summarize_groups_by_saved_strategy_evidence_fields():
     assert by_group[("strategy_route", "strategy_yaml_supportive")].observation_count == 1
 
 
+def test_summarize_groups_by_saved_alpha_trigger_buckets():
+    day = date(2026, 7, 1)
+    label = SignalForwardLabel(
+        ticker="BBCA",
+        signal_date=day,
+        horizon=SignalLabelHorizon.SWING_10D,
+        entry_reference_price=Decimal("100"),
+        label_window_start=date(2026, 7, 2),
+        label_window_end=date(2026, 7, 15),
+        close_return=4.0,
+        max_forward_return=5.0,
+        max_adverse_excursion=-1.0,
+        days_to_peak=2,
+        days_to_trough=1,
+        stop_would_trigger=False,
+        target_would_trigger=True,
+        outcome_label=SignalForwardOutcome.SUCCESS,
+        unavailable_reason=None,
+        fingerprint=SignalObservationFingerprint(
+            alpha_score=82.0,
+            trigger_score=62.0,
+            alpha_trigger_final_exact_score=70.0,
+            alpha_trigger_horizon="SWING_10D",
+            flow_trigger_allowed=True,
+        ),
+    )
+    repo = FakeSignalForwardLabelsRepository([label])
+
+    response = SummarizeSignalForwardLabelsUseCase(repo).execute(
+        SummarizeSignalForwardLabelsRequest()
+    )
+
+    by_group = {(bucket.group, bucket.key): bucket for bucket in response.buckets}
+    assert by_group[("alpha_bucket", "HIGH")].observation_count == 1
+    assert by_group[("trigger_bucket", "MEDIUM")].observation_count == 1
+    assert by_group[("alpha_trigger_final_bucket", "HIGH")].observation_count == 1
+    assert by_group[("alpha_trigger_horizon", "SWING_10D")].observation_count == 1
+    assert by_group[("flow_trigger_allowed", "True")].observation_count == 1
+
+
 def _label(
     *,
     ticker: str,
