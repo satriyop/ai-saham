@@ -1,18 +1,31 @@
 import json
 
 _COMPLETE_SOURCE_REVIEW = {
+    "readiness_state": "PATCH_ELIGIBLE",
     "walk_forward_enforced": True,
     "is_ratio": 0.70,
     "is_end_date": "2026-04-01",
     "oos_start_date": "2026-04-02",
     "full_end_date": "2026-07-01",
     "sample": {"status": "TRADE_READY", "min_sample_size": 30},
-    "backtest_summary": {"trade_count": 35},
+    "backtest_summary": {"trade_count": 60},
     "oos_backtest_summary": {
-        "trade_count": 8,
+        "trade_count": 30,
         "total_return_pct": 3.2,
+        "average_return_pct": 0.2,
         "win_rate_pct": 50.0,
         "profit_factor": 1.5,
+        "drawdown_regression_pct": 0.0,
+    },
+    "attribution": {
+        "market_regime": {
+            "buckets": [
+                {"key": "RISK_ON", "oos_trade_count": 15, "oos_profit": 1.0},
+                {"key": "NEUTRAL", "oos_trade_count": 15, "oos_profit": 0.8},
+            ],
+        },
+        "coverage_bucket": {"buckets": [{"key": "HIGH", "observation_count": 30}]},
+        "conviction_bucket": {"buckets": [{"key": "HIGH", "observation_count": 30}]},
     },
 }
 

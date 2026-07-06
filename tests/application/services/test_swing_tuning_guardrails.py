@@ -42,18 +42,31 @@ _SIGNAL_ENGINE_YAML = (
 
 
 _COMPLETE_SOURCE_REVIEW = {
+    "readiness_state": "PATCH_ELIGIBLE",
     "walk_forward_enforced": True,
     "is_ratio": 0.70,
     "is_end_date": "2026-04-01",
     "oos_start_date": "2026-04-02",
     "full_end_date": "2026-07-01",
     "sample": {"status": "TRADE_READY", "min_sample_size": 30},
-    "backtest_summary": {"trade_count": 35},
+    "backtest_summary": {"trade_count": 60},
     "oos_backtest_summary": {
-        "trade_count": 8,
+        "trade_count": 30,
         "total_return_pct": 3.2,
+        "average_return_pct": 0.2,
         "win_rate_pct": 50.0,
         "profit_factor": 1.5,
+        "drawdown_regression_pct": 0.0,
+    },
+    "attribution": {
+        "market_regime": {
+            "buckets": [
+                {"key": "RISK_ON", "oos_trade_count": 15, "oos_profit": 1.0},
+                {"key": "NEUTRAL", "oos_trade_count": 15, "oos_profit": 0.8},
+            ],
+        },
+        "coverage_bucket": {"buckets": [{"key": "HIGH", "observation_count": 30}]},
+        "conviction_bucket": {"buckets": [{"key": "HIGH", "observation_count": 30}]},
     },
 }
 
@@ -574,25 +587,71 @@ def test_oos_trade_count_below_5_fails_sample_guard(tmp_path):
                for issue in report.issues)
 
 
-def test_oos_return_too_negative_fails_sample_guard(tmp_path):
+def test_diagnostic_ready_source_review_is_report_only_not_patchable(tmp_path):
     review = {
         **_COMPLETE_SOURCE_REVIEW,
-        "oos_backtest_summary": {"trade_count": 8, "total_return_pct": -20.0, "win_rate_pct": 50.0},
+        "readiness_state": "DIAGNOSTIC_READY",
+        "oos_backtest_summary": {
+            **_COMPLETE_SOURCE_REVIEW["oos_backtest_summary"],
+            "trade_count": 12,
+        },
     }
     report = _patch_with_source_review(review, tmp_path)
     assert report.valid is False
-    assert any("sample_not_ready" in issue and "total_return_pct" in issue
+    assert any("Diagnostic-ready output is report-only" in issue for issue in report.issues)
+
+
+def test_missing_attribution_fails_phase_i_patch_guard(tmp_path):
+    review = {k: v for k, v in _COMPLETE_SOURCE_REVIEW.items() if k != "attribution"}
+    report = _patch_with_source_review(review, tmp_path)
+    assert report.valid is False
+    assert any("source_review.attribution" in issue for issue in report.issues)
+
+
+def test_single_regime_dependency_fails_phase_i_patch_guard(tmp_path):
+    review = {
+        **_COMPLETE_SOURCE_REVIEW,
+        "attribution": {
+            **_COMPLETE_SOURCE_REVIEW["attribution"],
+            "market_regime": {
+                "buckets": [
+                    {"key": "RISK_ON", "oos_trade_count": 28, "oos_profit": 1.0},
+                    {"key": "NEUTRAL", "oos_trade_count": 2, "oos_profit": 0.1},
+                ],
+            },
+        },
+    }
+    report = _patch_with_source_review(review, tmp_path)
+    assert report.valid is False
+    assert any("single-regime" in issue for issue in report.issues)
+    assert any("positive OOS regime count=1" in issue for issue in report.issues)
+
+
+def test_oos_average_return_negative_fails_sample_guard(tmp_path):
+    review = {
+        **_COMPLETE_SOURCE_REVIEW,
+        "oos_backtest_summary": {
+            **_COMPLETE_SOURCE_REVIEW["oos_backtest_summary"],
+            "average_return_pct": -0.1,
+        },
+    }
+    report = _patch_with_source_review(review, tmp_path)
+    assert report.valid is False
+    assert any("sample_not_ready" in issue and "average_return_pct" in issue
                for issue in report.issues)
 
 
-def test_oos_win_rate_below_floor_fails_sample_guard(tmp_path):
+def test_oos_drawdown_regression_fails_sample_guard(tmp_path):
     review = {
         **_COMPLETE_SOURCE_REVIEW,
-        "oos_backtest_summary": {"trade_count": 8, "total_return_pct": 1.0, "win_rate_pct": 35.0},
+        "oos_backtest_summary": {
+            **_COMPLETE_SOURCE_REVIEW["oos_backtest_summary"],
+            "drawdown_regression_pct": 0.1,
+        },
     }
     report = _patch_with_source_review(review, tmp_path)
     assert report.valid is False
-    assert any("sample_not_ready" in issue and "win_rate_pct" in issue
+    assert any("sample_not_ready" in issue and "drawdown_regression_pct" in issue
                for issue in report.issues)
 
 
@@ -622,10 +681,11 @@ def test_non_integer_is_trade_count_fails_guard(tmp_path):
 # --- Finding 3: profit_factor required and floor-checked ---
 
 def test_missing_profit_factor_with_oos_trades_fails_guard(tmp_path):
+    oos = dict(_COMPLETE_SOURCE_REVIEW["oos_backtest_summary"])
+    oos.pop("profit_factor")
     review = {
         **_COMPLETE_SOURCE_REVIEW,
-        "oos_backtest_summary": {"trade_count": 8, "total_return_pct": 2.0, "win_rate_pct": 55.0},
-        # profit_factor key absent
+        "oos_backtest_summary": oos,
     }
     report = _patch_with_source_review(review, tmp_path)
     assert report.valid is False
@@ -636,8 +696,8 @@ def test_null_profit_factor_with_oos_trades_fails_guard(tmp_path):
     review = {
         **_COMPLETE_SOURCE_REVIEW,
         "oos_backtest_summary": {
-            "trade_count": 8, "total_return_pct": 2.0,
-            "win_rate_pct": 55.0, "profit_factor": None,
+            **_COMPLETE_SOURCE_REVIEW["oos_backtest_summary"],
+            "profit_factor": None,
         },
     }
     report = _patch_with_source_review(review, tmp_path)
@@ -649,8 +709,8 @@ def test_profit_factor_below_floor_fails_guard(tmp_path):
     review = {
         **_COMPLETE_SOURCE_REVIEW,
         "oos_backtest_summary": {
-            "trade_count": 8, "total_return_pct": 2.0,
-            "win_rate_pct": 55.0, "profit_factor": 0.75,
+            **_COMPLETE_SOURCE_REVIEW["oos_backtest_summary"],
+            "profit_factor": 0.75,
         },
     }
     report = _patch_with_source_review(review, tmp_path)
@@ -658,12 +718,12 @@ def test_profit_factor_below_floor_fails_guard(tmp_path):
     assert any("sample_not_ready" in i and "profit_factor=0.75" in i for i in report.issues)
 
 
-def test_profit_factor_exactly_at_floor_passes_guard(tmp_path):
+def test_profit_factor_exactly_at_phase_i_floor_passes_guard(tmp_path):
     review = {
         **_COMPLETE_SOURCE_REVIEW,
         "oos_backtest_summary": {
-            "trade_count": 8, "total_return_pct": 2.0,
-            "win_rate_pct": 55.0, "profit_factor": 1.0,
+            **_COMPLETE_SOURCE_REVIEW["oos_backtest_summary"],
+            "profit_factor": 1.15,
         },
     }
     report = _patch_with_source_review(review, tmp_path)
@@ -672,18 +732,21 @@ def test_profit_factor_exactly_at_floor_passes_guard(tmp_path):
 
 
 def test_null_oos_metrics_with_sufficient_oos_trades_fail_guard(tmp_path):
-    # When OOS has 6 trades (>= 5 minimum), all metrics must be numeric.
-    # Null return/win_rate/profit_factor are rejected — you cannot approve a patch
-    # based on trades with no measurable outcome.
+    # Patch-eligible OOS samples must include the canonical measurable outcomes.
     review = {
         **_COMPLETE_SOURCE_REVIEW,
-        "oos_backtest_summary": {"trade_count": 6, "total_return_pct": None, "win_rate_pct": None},
+        "oos_backtest_summary": {
+            **_COMPLETE_SOURCE_REVIEW["oos_backtest_summary"],
+            "average_return_pct": None,
+            "profit_factor": None,
+            "drawdown_regression_pct": None,
+        },
     }
     report = _patch_with_source_review(review, tmp_path)
     assert report.valid is False
-    assert any("sample_not_ready" in issue and "total_return_pct" in issue
-               for issue in report.issues)
-    assert any("sample_not_ready" in issue and "win_rate_pct" in issue
-               for issue in report.issues)
     assert any("sample_not_ready" in issue and "profit_factor" in issue
+               for issue in report.issues)
+    assert any("sample_not_ready" in issue and "average_return_pct" in issue
+               for issue in report.issues)
+    assert any("sample_not_ready" in issue and "drawdown_regression_pct" in issue
                for issue in report.issues)

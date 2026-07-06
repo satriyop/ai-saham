@@ -2,7 +2,7 @@
 
 _Design rationale: `docs/signal_refactor.md`_
 _Phase plan: `docs/signal_refactor_phases.md`_
-_Current implementation target: Phase I planning_
+_Current implementation target: Phase I readiness audit_
 _Updated: 2026-07-06_
 
 This tracker records the current implementation state and concrete checklist for
@@ -76,7 +76,7 @@ the next implementation target.
 | F | Minimal Ticker Profile Diagnostics | Done (2026-07-06) | Deterministic ticker behavior classifier, diagnostic-only. 2489 tests pass. |
 | G | Simplified Alpha/Trigger Split | Done (2026-07-06) | Four canonical Alpha/Trigger slots configured; market/company slots start DIAGNOSTIC/unavailable until producers feed them. |
 | H | Sector Context | Done (2026-07-06) | Local-universe sector-relative return, breadth, ticker-vs-sector RS; DIAGNOSTIC-only; 2564 tests pass. |
-| I | Full Walk-Forward Calibration And Expanded Tunables | Not Started | Retain phase scope from `docs/signal_refactor_phases.md`. |
+| I | Full Walk-Forward Calibration And Expanded Tunables | In Progress (readiness audit) | Audit-first opening; no tuning patches or evidence promotion until OOS readiness is proven. |
 
 ---
 
@@ -683,5 +683,92 @@ promotion.
 - [x] IHSG 20d return sourced from local benchmark candles instead of the
       `idx_trend` MarketContext factor.
 - [x] Persistence regression test for `sc_*` fields in saved observations.
+
+---
+
+## Phase I Tracker: Full Walk-Forward Calibration And Expanded Tunables
+
+**Status:** In Progress - Readiness/Audit Pass (2026-07-06)
+
+**Goal:** Validate that the Phase B-H evidence and attribution surface is ready
+for walk-forward calibration, then start empirical calibration on one target:
+`foreign_institutional_accumulation_large_cap_SWING_10D`.
+
+Phase I begins with audit/readiness, not tuning patches. New diagnostic evidence
+from Phases D-H remains DIAGNOSTIC until saved-label attribution and
+out-of-sample proof justify manual promotion through validator-bounded config.
+
+### Non-Goals
+
+- No automatic promotion from DIAGNOSTIC to LOW_WEIGHT or PRODUCTION.
+- No tuning patches before readiness gates and persisted attribution are
+  verified.
+- No `TACTICAL_3D` or `ACCUM_20D` tuning surfaces before `SWING_10D` clears
+  patch eligibility.
+- No TradeSetup sizing authority change.
+- No RiskEngine hard-gate change.
+- No CLI policy logic.
+
+### Readiness/Audit Checklist
+
+- [x] Verify `SwingTuningPatchValidator` sample/OOS gates match canonical Phase
+      I docs.
+      - Updated patch validation to require `PATCH_ELIGIBLE`, 60 IS trades,
+        30 OOS trades, OOS profit factor >= 1.15, OOS average return >= 0,
+        drawdown regression <= 0, required regime/coverage/conviction
+        attribution, and no hidden single-regime dependency unless explicitly
+        scoped.
+      - Diagnostic-ready findings remain report-only and cannot validate a
+        config patch.
+- [ ] Verify validator bounds cover canonical tunable paths before any patch can
+      target them.
+      - Audit found missing bounds for current tuning-target paths, including
+        market context thresholds/effects, swing target stop/target paths,
+        swing backtest score buckets, and some expanded setup gates. These
+        paths must be bounded path-by-path before patches can target them.
+- [ ] Confirm persisted observations include Phase B-H fingerprints:
+      setup phase/history, strategy evidence, institutional accumulation,
+      ticker profile, Alpha/Trigger, and sector context.
+      - Code paths persist Phase B-H fields, but local `data/db/data.db`
+        observations currently do not: 45 rows from 2026-07-04 have zero
+        populated setup/IA/ticker-profile/AlphaTrigger/sector fingerprint
+        fields. Fresh observations must be captured before calibration.
+- [x] Confirm forward-label attribution groups include `sc_sector`,
+      `sc_sector_regime`, Alpha/Trigger buckets, coverage/conviction buckets,
+      setup phase, and market regime.
+- [x] Run attribution summaries for the required groups from persisted labels,
+      or document the missing-label/data blocker explicitly.
+      - `analyze signal-labels 2026-07-04 --horizon SWING_10D --format json
+        --db data/db/data.db` returned `label_count: 0`; no persisted labels
+        are available for attribution yet.
+- [x] Confirm all Phase D-H diagnostic evidence registrations remain
+      DIAGNOSTIC until OOS proof exists.
+      - `market_context` and `company_quality_context` Alpha/Trigger
+        registrations remain DIAGNOSTIC; no Phase D-H diagnostic evidence was
+        promoted.
+
+### First Calibration Target
+
+- [x] Scope empirical calibration to
+      `foreign_institutional_accumulation_large_cap_SWING_10D`.
+- [ ] Filter target candidates by horizon `SWING_10D`, ticker profile
+      foreign-institutional/large-cap path, setup family accumulation-style, and
+      available forward labels.
+      - Blocked until fresh Phase B-H observations and SWING_10D labels exist.
+- [ ] Produce readiness summary: sample count, OOS count, success/failure
+      balance, unavailable label count, and attribution bucket coverage.
+      - Current local readiness: 45 candidate observations, 0 forward labels,
+        0 observations with Phase B-H fingerprint coverage; not diagnostic-ready
+        and not patch-eligible.
+- [ ] Only after readiness passes: propose validator-bounded tuning patches for
+      review; no auto-apply.
+
+### Verification
+
+- [x] `python -m py_compile` for changed application/domain/config files.
+- [x] Focused pytest for validator, fingerprint serialization, attribution
+      summary, and any new calibration-readiness use case.
+- [x] Full pytest: 2567 passed.
+- [x] `git diff --check`.
 
 ---
