@@ -2,11 +2,11 @@
 
 _Design rationale: `docs/signal_refactor.md`_
 _Phase plan: `docs/signal_refactor_phases.md`_
-_Current implementation target: Phase E implementation_
+_Current implementation target: Phase G implementation_
 _Updated: 2026-07-06_
 
 This tracker records the current implementation state and concrete checklist for
-the SignalEngine refactor. A1, A2, B, C, and D are closed. Phase E is the active
+the SignalEngine refactor. A1, A2, B, C, D, E, and F are closed. Phase G is the next
 implementation target.
 
 ---
@@ -52,6 +52,13 @@ implementation target.
   the `InstitutionalAccumulationEvidenceBuilder` as DIAGNOSTIC-only without
   affecting `FlowConfirmationEvidence` group scoring, `DecisionPolicy`, or
   `AssessSignalEvidenceUseCase`.
+- Closed Phase F added `TickerProfileSnapshot` (liquidity, broker concentration,
+  foreign flow, ATR-style volatility, index membership dimensions, soft primary
+  profile exposures, and separate market tier), replay fingerprint fields,
+  `TickerProfileClassifier` (builds index reverse index from `universes.yaml`
+  at construction; never fetches data), and wired into both use cases as
+  DIAGNOSTIC-only without affecting SignalEngine group scoring,
+  `DecisionPolicy`, or `AssessSignalEvidenceUseCase`.
 
 ---
 
@@ -65,8 +72,8 @@ implementation target.
 | B | Minimal Forward Labels And Observation Fingerprints | Done | Implemented and verified; saved labels and fingerprint attribution are operational. |
 | C | SetupPhaseState And Continuous Setup/Trigger Scoring | Done | Closed 2026-07-06; diagnostic setup phase, replay history, and data-quality volume trigger implemented. |
 | D | Strategy Evidence Harness | Done (2026-07-06) | Diagnostic-only strategy evidence harness. 2424 tests pass. |
-| E | Institutional Accumulation Evidence | Done (2026-07-06) | Two-track institutional flow evidence, diagnostic-only. 2452 tests pass. |
-| F | Minimal Ticker Profile Diagnostics | Not Started | Retain phase scope from `docs/signal_refactor_phases.md`. |
+| E | Institutional Accumulation Evidence | Done (2026-07-06) | Two-track institutional flow evidence, diagnostic-only. 2457 tests pass. |
+| F | Minimal Ticker Profile Diagnostics | Done (2026-07-06) | Deterministic ticker behavior classifier, diagnostic-only. 2489 tests pass. |
 | G | Simplified Alpha/Trigger Split | Not Started | Retain phase scope from `docs/signal_refactor_phases.md`. |
 | H | Sector Context | Not Started | Retain phase scope from `docs/signal_refactor_phases.md`. |
 | I | Full Walk-Forward Calibration And Expanded Tunables | Not Started | Retain phase scope from `docs/signal_refactor_phases.md`. |
@@ -299,7 +306,9 @@ path and promote `signal_score_raw` → `assessment.score`. Requires updating te
 
 ## Current Assumptions
 
-- Phase F (Minimal Ticker Profile Diagnostics) is the next implementation target.
+- Phase F (Minimal Ticker Profile Diagnostics) is the active implementation target.
+- Phase F profile snapshots are DIAGNOSTIC-only; profiles do not feed into SignalEngine
+  group scoring or DecisionPolicy until Phase G explicitly wires them.
 - Phase E institutional accumulation evidence is DIAGNOSTIC-only; `FlowConfirmationEvidence`
   group scoring is unchanged until Phase G/I explicitly promotes institutional flow.
 - Phase D strategy evidence contract is preserved; Phase G is the first phase
@@ -361,10 +370,171 @@ After external review, three issues were identified and resolved:
 - Empirical readiness summary and OOS attribution (Phase I).
 - Promoting any component from DIAGNOSTIC to LOW_WEIGHT or PRODUCTION (Phase I).
 - Domestic bandar cost basis / VWAP reclaim as Trigger evidence (Phase G).
-- Ticker profile driving evidence interpretation weights (Phase F).
+- Ticker profile driving evidence interpretation weights (Phase F → now active).
 - BandarDetectorSnapshot historical caching (infrastructure improvement).
 - **EvidenceStatus registry / cap enforcement** (`signal_refactor.md` §2329): Phase E has the enum and config-validated `evidence_status = DIAGNOSTIC` but no registry object that prevents runtime promotion above DIAGNOSTIC. Safe for Phase E because no Phase E path feeds `InstitutionalAccumulationEvidence` into scoring. Implement the registry as a Phase G/I gate when evidence promotion paths actually exist.
 
 ---
 
+## Phase F Tracker: Minimal Ticker Profile Diagnostics
 
+**Status:** Closed
+
+**Goal:** Classify ticker behavior deterministically without introducing tunable explosion.
+Produce `TickerProfileSnapshot` for each ticker at signal time — dimension scores, soft
+primary-profile exposures, separate market tier, and profile confidence. DIAGNOSTIC-only.
+Does not feed into SignalEngine scoring or DecisionPolicy.
+
+**Close summary:** Phase F is closed as a diagnostic-only layer. Sparse/new
+tickers are conservative (`primary_profile=unclassified`, FI=0.0 / DB=0.5 /
+RS=0.5), configured exposure weights are validated, snapshots are persisted in
+replay fingerprints, and no Phase F output changes scoring, decision policy, or
+TradeSetup sizing.
+
+Design rationale: `docs/signal_refactor.md` § Phase F.
+Implementation plan: `/Users/satriyo/.claude/plans/plan-for-phase-e-bubbly-panda.md`.
+
+### Non-Goals
+
+- [x] Do not change `AssessSignalEvidenceUseCase` group scoring.
+- [x] Do not change `DecisionPolicy` or `SignalEngine.evaluate_with_context()`.
+- [x] Do not add per-profile group weights (Phase G).
+- [x] Do not add max-decision overrides driven by profile (Phase G).
+- [x] Do not add evidence interpretation wiring into scoring (Phase G).
+- [x] Do not add a new `ticker_profiles` SQLite table (Phase I).
+- [x] Do not duplicate `EvidenceStatus` enum — import from `institutional_accumulation_evidence.py`.
+- [x] Do not fetch data inside the classifier.
+
+### Domain
+
+- [x] Add `TickerProfileSnapshot` frozen dataclass in `src/domain/value_objects/ticker_profile_snapshot.py`.
+  - Fields: ticker, snapshot_date, epoch (str), primary_profile, profile_confidence,
+    liquidity_score, broker_concentration_score, foreign_flow_score, volatility_score,
+    index_membership_score, market_cap_bucket, sector, sub_sector, index_memberships,
+    coverage_score, evidence_status, reasons, unavailable_reasons, market_tier,
+    foreign_institutional_exposure, domestic_bandar_exposure,
+    retail_speculative_exposure, metadata.
+  - `__post_init__` bounds: all `*_score` fields, profile_confidence,
+    coverage_score, and soft exposure fields in [0,1]; non-empty ticker.
+  - `to_dict()`/`from_dict()` with `data.get()` for backward compat; snapshot_date as ISO string.
+- [x] Reuse `EvidenceStatus` enum from `institutional_accumulation_evidence.py` — do not duplicate.
+
+### Config
+
+- [x] Add `config/ticker_profile.yaml` with evidence_status, profile_window_days (30),
+      market_cap_thresholds_idr (large/mid/small), index_membership_scores (lq45/idx30/idx80/jii/mbx),
+      liquidity_thresholds, volatility_thresholds, sparse_history_threshold (10),
+      conservative_fallback_confidence (0.30), and exposure_weights.
+- [x] `TickerProfileConfig.validate()` checks index_membership_scores all in [0,1].
+- [x] `TickerProfileConfig.validate()` checks configured exposure weights are
+      non-negative and sum to 1.0 per profile.
+
+### Application
+
+- [x] Add `TickerProfileRequest` frozen dataclass (ticker, snapshot_date, candles,
+      broker_daily_flows, broker_summaries, market_cap_idr, sector, sub_sector).
+- [x] Add `TickerProfileClassifier` with `from_yaml()` factory in
+      `src/application/services/ticker_profile_classifier.py`.
+- [x] Load `universes.yaml` at construction; build `{ticker: (universe_names...)}` reverse index
+      for index membership resolution (not a per-request data fetch).
+- [x] Compute `liquidity_score` from Candle: mean `high * volume` per day → saturating linear
+      between `low_daily_value_idr` (0.0) and `high_daily_value_idr` (1.0); guard zero-volume candles.
+- [x] Compute `broker_concentration_score` from BrokerDailyFlow (local brokers only): buy-side HHI;
+      guard `total_local_buy == 0`.
+- [x] Compute `foreign_flow_score` from BrokerSummary: mean `(foreign_buy + foreign_sell) / total`;
+      guard zero total.
+- [x] Compute `volatility_score` from Candle using ATR-style true range:
+      `max(high-low, abs(high-prev_close), abs(low-prev_close)) / prev_close`
+      → saturating linear between `low_atr_pct` (0.0) and `high_atr_pct`
+      (1.0); guard insufficient candles and zero previous close.
+- [x] Compute `index_membership_score` from reverse index + config: max score across memberships;
+      0.0 (not None) if no index membership.
+- [x] Assign `market_cap_bucket` from `market_cap_idr` thresholds (large/mid/small/micro/None).
+- [x] Assign `market_tier` from deterministic rules: blue_chip → second_liner
+      → speculative → third_liner → unknown.
+- [x] Compute soft behavioral exposures for `foreign_institutional`,
+      `domestic_bandar`, and `retail_speculative`; assign `primary_profile`
+      from the largest exposure when history is sufficient.
+- [x] Sparse/new tickers force `primary_profile=unclassified`, `market_tier=unknown`,
+      confidence = conservative_fallback_confidence, and conservative exposures
+      FI=0.0 / DB=0.5 / RS=0.5.
+- [x] Coverage = available metric slots / 5. Index membership always counts (0.0 minimum).
+- [x] Profile confidence = exposure margin (largest exposure minus second
+      largest exposure) when history is sufficient; sparse history uses
+      conservative_fallback_confidence.
+- [x] `metadata["diagnostic_only"] = True` always.
+- [x] Builder never raises — top-level `except Exception` → minimal fallback snapshot with
+      `metadata["error"]`; per-dimension degradation to None.
+
+### Persistence
+
+- [x] Add ticker profile fingerprint fields to `SignalObservationFingerprint`
+      in `signal_forward_label.py` (all `None`-defaulted, `data.get()` in
+      `from_dict()`): `ticker_profile_label` (stores `primary_profile`),
+      `ticker_profile_confidence`, `tp_market_tier`, soft exposure fields,
+      dimension scores, market-cap/sector/index fields, `tp_coverage_score`,
+      and `tp_epoch`.
+- [x] Add `_tp_fingerprint(tp)` helper in `accumulation_screen_use_case.py` (same None-guard pattern as `_ia_evidence_fingerprint()`).
+- [x] Extend `_sub_signal_fingerprint()` with `tp_snapshot` param; spread `_tp_fingerprint()` result.
+- [x] Add `ticker_profile_snapshot` key to `SwingEvidence.to_dict()`.
+
+### Wiring
+
+- [x] Add `ticker_profile_snapshot: "TickerProfileSnapshot | None" = None` to `SwingEvidence` dataclass.
+- [x] Add build block in `swing_analysis_workflow_use_case.py` after `institutional_accumulation_evidence`
+      block (same guard pattern; same data sources already opened).
+- [x] Add `_build_candidate_ticker_profile(candidate, snapshot_date)` method to
+      `accumulation_screen_use_case.py` (same guard pattern as `_build_candidate_institutional_accumulation_evidence()`).
+      Uses same 45d broker window; extracts market_cap/sector from already-loaded candidate fields.
+- [x] Extend `_candidate_observation_payload()` and `_persist_candidate_observations()` loop.
+- [x] Confirm Phase F snapshot is NOT passed to `signal_engine.evaluate_with_context()`.
+- [x] Confirm `DecisionPolicy` has zero references to `TickerProfileSnapshot`.
+- [x] CLI adapters render returned snapshot only; no computation in CLI.
+
+### Tests
+
+- [x] Domain VO: to_dict/from_dict round-trip; ISO date; index_memberships as list.
+- [x] Snapshot rejects empty ticker and out-of-bounds scores.
+- [x] from_dict accepts minimal dict (backward compat, all optional fields None).
+- [x] Classifier: liquidity score — high-value candles → score near 1.0; low-value → near 0.0.
+- [x] Classifier: index membership score — LQ45 ticker → 1.0; not in any index → 0.0.
+- [x] Classifier: market cap bucket — thresholds large/mid/small/micro.
+- [x] Classifier: market_tier "blue_chip" — LQ45 + large cap.
+- [x] Classifier: market_tier "second_liner" — IDX80 + mid cap.
+- [x] Classifier: market_tier "third_liner" — small cap, no index.
+- [x] Classifier: market_tier "speculative" — low liquidity + high volatility.
+- [x] Classifier: sparse history fallback — < 10 candles →
+      `primary_profile=unclassified`, market_tier "unknown", confidence 0.30,
+      FI=0.0 / DB=0.5 / RS=0.5.
+- [x] Classifier: graceful degradation — exception → fallback, no raise.
+- [x] Classifier: missing broker data — dimensions None, coverage < 1.0, snapshot still returned.
+- [x] Config validation — index score > 1.0 rejected.
+- [x] Config validation — exposure weights reject negative values and sums
+      other than 1.0 per configured profile.
+- [x] `_tp_fingerprint()` reads correct fields; `tp_index_memberships` is comma-joined string.
+- [x] Scoring isolation — `TickerProfileSnapshot` does NOT change `AssessSignalEvidenceUseCase` output (zero references in SignalEngine + domain rules confirmed by grep).
+- [x] Backward compat — old fingerprints without `tp_*` fields parse without KeyError (all fields `= None` default; `data.get()` in `from_dict()`).
+- [x] All tests pass offline (2489 total; 3 pre-existing CLI fetch failures unrelated to Phase F).
+
+### Verification
+
+- [x] `TickerProfileSnapshot` is deterministic for fixed local data + config.
+- [x] Profile snapshots are replayable through Phase B forward labels (tp_* fields persisted at signal time).
+- [x] Sparse-history tickers receive conservative defaults
+      (`primary_profile=unclassified`, market_tier "unknown", confidence 0.30,
+      FI=0.0 / DB=0.5 / RS=0.5).
+- [x] Phase F snapshot is DIAGNOSTIC-only in `SignalEngine` and `DecisionPolicy` (grep confirms zero references).
+- [x] No per-profile group weights introduced.
+- [x] `SwingEvidence` sizing math and TradeSetup unchanged.
+- [x] All tests pass offline (2489 passing; 3 pre-existing unrelated failures).
+
+### Deferred to Later Phases
+
+- Per-profile group weights (Phase G).
+- Profile-driven max_decision overrides (Phase G).
+- Evidence interpretation wiring (Phase G).
+- Epoch-keyed `ticker_profiles` SQLite table for backtest snapshot lookup (Phase I).
+- Per-horizon profile tunables (Phase I).
+- EvidenceStatus registry / cap enforcement (Phase G/I).
+
+---

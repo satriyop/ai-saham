@@ -2339,9 +2339,11 @@ Work:
 - Start with local liquidity, broker, foreign-flow, volatility, and index
   membership data only.
 - Output soft exposures and profile confidence.
-- Persist profile snapshots by epoch, with monthly default cadence.
-- Backtests must read historical profile snapshots for the signal date and must
-  not recompute profiles using future data.
+- Persist profile at signal time via observation fingerprint fields (tp_* fields).
+  Epoch-keyed `ticker_profiles` table and stable-snapshot backtest reads are
+  explicitly deferred to Phase I (scope control decision: adding a new SQLite
+  table, repository port, and backtest integration before walk-forward labeling
+  is established would be premature complexity).
 - Define conservative fallback for sparse-history tickers.
 - Use profiles for evidence interpretation, profile confidence, diagnostics,
   and max decision only. Do not add per-profile group weights yet.

@@ -41,6 +41,7 @@ if TYPE_CHECKING:
     from src.domain.value_objects.flow_confirmation_evidence import FlowConfirmationEvidence
     from src.domain.value_objects.institutional_accumulation_evidence import InstitutionalAccumulationEvidence
     from src.domain.value_objects.market_context import MarketContext
+    from src.domain.value_objects.ticker_profile_snapshot import TickerProfileSnapshot
     from src.domain.value_objects.setup_evidence import SetupEvidence
     from src.domain.value_objects.setup_phase import SetupPhaseSnapshot
     from src.domain.value_objects.strategy_evidence import StrategyEvidence
@@ -127,6 +128,7 @@ class SwingEvidence:
     setup_phase: "SetupPhaseSnapshot | None" = None
     strategy_rule_evidence: "StrategyEvidence | None" = None
     institutional_accumulation_evidence: "InstitutionalAccumulationEvidence | None" = None
+    ticker_profile_snapshot: "TickerProfileSnapshot | None" = None
 
     def to_dict(self, *, strategy_name: str | None = None, max_hold_days: int | None = None) -> dict[str, Any]:
         candidate = self.accumulation_candidate
@@ -197,6 +199,10 @@ class SwingEvidence:
             "institutional_accumulation_evidence": (
                 self.institutional_accumulation_evidence.to_dict()
                 if self.institutional_accumulation_evidence else None
+            ),
+            "ticker_profile_snapshot": (
+                self.ticker_profile_snapshot.to_dict()
+                if self.ticker_profile_snapshot else None
             ),
         }
 
@@ -910,6 +916,8 @@ class SwingAnalysisWorkflowUseCase:
             except Exception as exc:
                 warnings.append(f"Strategy evidence unavailable: {exc}")
 
+        broker_daily_flows: tuple = ()
+        broker_summaries: tuple = ()
         institutional_accumulation_evidence = None
         try:
             from datetime import timedelta
@@ -955,6 +963,51 @@ class SwingAnalysisWorkflowUseCase:
         except Exception as exc:
             warnings.append(f"Institutional accumulation evidence unavailable: {exc}")
 
+        ticker_profile_snapshot = None
+        try:
+            from decimal import Decimal as _Decimal
+
+            from src.application.services.ticker_profile_classifier import (
+                TickerProfileClassifier,
+                TickerProfileRequest,
+            )
+
+            tp_market_cap_idr: _Decimal | None = None
+            if (
+                accumulation_candidate is not None
+                and accumulation_candidate.fundamentals is not None
+                and accumulation_candidate.fundamentals.market_cap_idr is not None
+            ):
+                tp_market_cap_idr = _Decimal(
+                    str(accumulation_candidate.fundamentals.market_cap_idr)
+                )
+            tp_sector = (
+                accumulation_candidate.ticker_notation.sector
+                if accumulation_candidate is not None
+                and accumulation_candidate.ticker_notation is not None
+                else None
+            )
+            tp_sub_sector = (
+                accumulation_candidate.ticker_notation.sub_sector
+                if accumulation_candidate is not None
+                and accumulation_candidate.ticker_notation is not None
+                else None
+            )
+            ticker_profile_snapshot = TickerProfileClassifier.from_yaml().classify(
+                TickerProfileRequest(
+                    ticker=request.ticker,
+                    snapshot_date=request.today,
+                    candles=tuple(candles),
+                    broker_daily_flows=broker_daily_flows,
+                    broker_summaries=broker_summaries,
+                    market_cap_idr=tp_market_cap_idr,
+                    sector=tp_sector,
+                    sub_sector=tp_sub_sector,
+                )
+            )
+        except Exception as exc:
+            warnings.append(f"Ticker profile classification unavailable: {exc}")
+
         evidence = SwingEvidence(
             accumulation_candidate=accumulation_candidate,
             setup_eval=setup_eval,
@@ -969,6 +1022,7 @@ class SwingAnalysisWorkflowUseCase:
             setup_phase=setup_phase,
             strategy_rule_evidence=strategy_rule_evidence,
             institutional_accumulation_evidence=institutional_accumulation_evidence,
+            ticker_profile_snapshot=ticker_profile_snapshot,
         )
 
         # Re-score with evidence now that both groups are available. Signal was

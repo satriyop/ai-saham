@@ -39,6 +39,7 @@ if TYPE_CHECKING:
     from src.domain.value_objects.forward_estimates import ForwardEstimates
     from src.domain.value_objects.institutional_accumulation_evidence import InstitutionalAccumulationEvidence
     from src.domain.value_objects.risk_assessment import RiskAssessment
+    from src.domain.value_objects.ticker_profile_snapshot import TickerProfileSnapshot
     from src.domain.value_objects.seasonal_edge import SeasonalEdge
     from src.domain.value_objects.setup_phase import SetupPhaseSnapshot
     from src.domain.value_objects.strategy_evidence import StrategyEvidence
@@ -445,6 +446,7 @@ def _candidate_observation_payload(
     request: "AccumulationScreenRequest",
     strategy_evidence: "StrategyEvidence | None" = None,
     ia_evidence: "InstitutionalAccumulationEvidence | None" = None,
+    tp_snapshot: "TickerProfileSnapshot | None" = None,
 ) -> dict:
     """Build schema-versioned replay payload for one screened candidate.
 
@@ -477,6 +479,7 @@ def _candidate_observation_payload(
         setup_phase=setup_phase,
         strategy_evidence=strategy_evidence,
         ia_evidence=ia_evidence,
+        tp_snapshot=tp_snapshot,
     )
 
     return {
@@ -510,6 +513,7 @@ def _sub_signal_fingerprint(
     setup_phase: "SetupPhaseSnapshot | None" = None,
     strategy_evidence: "StrategyEvidence | None" = None,
     ia_evidence: "InstitutionalAccumulationEvidence | None" = None,
+    tp_snapshot: "TickerProfileSnapshot | None" = None,
 ) -> dict:
     """Persist raw sub-signal values as they were at observation time."""
     assessment = signal.assessment if signal is not None else None
@@ -528,11 +532,13 @@ def _sub_signal_fingerprint(
     phase_dict = _setup_phase_fingerprint(setup_phase)
     strategy_dict = _strategy_evidence_fingerprint(strategy_evidence)
     ia_dict = _ia_evidence_fingerprint(ia_evidence)
+    tp_dict = _tp_fingerprint(tp_snapshot)
     return {
         "setup_family": constraints.get("setup_family"),
         **phase_dict,
         **strategy_dict,
         **ia_dict,
+        **tp_dict,
         "rsi_at_signal": candidate.rsi,
         "bb_width_pctile_at_signal": candidate.bb_width_pctile,
         "vwap_position_at_signal": candidate.vwap_pct,
@@ -646,6 +652,49 @@ def _ia_evidence_fingerprint(
         "ia_counterparty_sell_hhi": ct.sell_side_hhi if ct else None,
         "ia_coverage_score": ia_evidence.coverage_score,
         "ia_conviction_score": ia_evidence.conviction_score,
+    }
+
+
+def _tp_fingerprint(
+    tp: "TickerProfileSnapshot | None",
+) -> dict:
+    _none: dict = {
+        "ticker_profile_label": None,
+        "ticker_profile_confidence": None,
+        "tp_market_tier": None,
+        "tp_foreign_institutional_exposure": None,
+        "tp_domestic_bandar_exposure": None,
+        "tp_retail_speculative_exposure": None,
+        "tp_liquidity_score": None,
+        "tp_broker_concentration_score": None,
+        "tp_foreign_flow_score": None,
+        "tp_volatility_score": None,
+        "tp_index_membership_score": None,
+        "tp_market_cap_bucket": None,
+        "tp_sector": None,
+        "tp_index_memberships": None,
+        "tp_coverage_score": None,
+        "tp_epoch": None,
+    }
+    if tp is None:
+        return _none
+    return {
+        "ticker_profile_label": tp.primary_profile,
+        "ticker_profile_confidence": tp.profile_confidence,
+        "tp_market_tier": tp.market_tier,
+        "tp_foreign_institutional_exposure": tp.foreign_institutional_exposure,
+        "tp_domestic_bandar_exposure": tp.domestic_bandar_exposure,
+        "tp_retail_speculative_exposure": tp.retail_speculative_exposure,
+        "tp_liquidity_score": tp.liquidity_score,
+        "tp_broker_concentration_score": tp.broker_concentration_score,
+        "tp_foreign_flow_score": tp.foreign_flow_score,
+        "tp_volatility_score": tp.volatility_score,
+        "tp_index_membership_score": tp.index_membership_score,
+        "tp_market_cap_bucket": tp.market_cap_bucket,
+        "tp_sector": tp.sector,
+        "tp_index_memberships": ",".join(tp.index_memberships) if tp.index_memberships else None,
+        "tp_coverage_score": tp.coverage_score,
+        "tp_epoch": tp.epoch,
     }
 
 
@@ -1034,6 +1083,7 @@ class AccumulationScreenUseCase:
                     c,
                     snapshot_date,
                 )
+                tp_snapshot = self._build_candidate_ticker_profile(c, snapshot_date)
                 observations.append(
                     CandidateObservation(
                         ticker=c.ticker,
@@ -1046,6 +1096,7 @@ class AccumulationScreenUseCase:
                             setup_phase=setup_phase,
                             strategy_evidence=strategy_evidence,
                             ia_evidence=ia_evidence,
+                            tp_snapshot=tp_snapshot,
                             snapshot_date=snapshot_date,
                             captured_at=captured_at,
                             request=request,
@@ -1127,6 +1178,60 @@ class AccumulationScreenUseCase:
                     broker_summaries=broker_summaries,
                     bandar_snapshot=candidate.bandar_detector,
                     candles=tuple(candles),
+                )
+            )
+        except Exception:
+            return None
+
+    def _build_candidate_ticker_profile(
+        self,
+        candidate: "AccumulationCandidate",
+        snapshot_date: date,
+    ) -> "TickerProfileSnapshot | None":
+        try:
+            from datetime import timedelta
+            from decimal import Decimal as _Decimal
+
+            from src.application.services.ticker_profile_classifier import (
+                TickerProfileClassifier,
+                TickerProfileRequest,
+            )
+
+            start_date = snapshot_date - timedelta(days=45)
+            candles = self._market_repo.get_candles(candidate.ticker, end_date=snapshot_date)
+            broker_daily_flows = tuple(
+                self._broker_repo.get_broker_daily_flows(
+                    candidate.ticker, start_date=start_date, end_date=snapshot_date
+                )
+            )
+            broker_summaries = tuple(
+                self._broker_repo.get_broker_summaries(
+                    candidate.ticker, start_date=start_date, end_date=snapshot_date
+                )
+            )
+            market_cap_idr: _Decimal | None = None
+            if candidate.fundamentals is not None and candidate.fundamentals.market_cap_idr is not None:
+                market_cap_idr = _Decimal(str(candidate.fundamentals.market_cap_idr))
+            sector = (
+                candidate.ticker_notation.sector
+                if candidate.ticker_notation is not None
+                else None
+            )
+            sub_sector = (
+                candidate.ticker_notation.sub_sector
+                if candidate.ticker_notation is not None
+                else None
+            )
+            return TickerProfileClassifier.from_yaml().classify(
+                TickerProfileRequest(
+                    ticker=candidate.ticker,
+                    snapshot_date=snapshot_date,
+                    candles=tuple(candles),
+                    broker_daily_flows=broker_daily_flows,
+                    broker_summaries=broker_summaries,
+                    market_cap_idr=market_cap_idr,
+                    sector=sector,
+                    sub_sector=sub_sector,
                 )
             )
         except Exception:

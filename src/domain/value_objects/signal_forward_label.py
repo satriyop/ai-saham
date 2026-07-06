@@ -93,6 +93,23 @@ class SignalObservationFingerprint:
     ia_counterparty_sell_hhi: float | None = None
     ia_coverage_score: float | None = None
     ia_conviction_score: float | None = None
+    # Phase F: ticker profile snapshot
+    ticker_profile_label: str | None = None    # now stores primary_profile
+    ticker_profile_confidence: float | None = None
+    tp_market_tier: str | None = None
+    tp_foreign_institutional_exposure: float | None = None
+    tp_domestic_bandar_exposure: float | None = None
+    tp_retail_speculative_exposure: float | None = None
+    tp_liquidity_score: float | None = None
+    tp_broker_concentration_score: float | None = None
+    tp_foreign_flow_score: float | None = None
+    tp_volatility_score: float | None = None
+    tp_index_membership_score: float | None = None
+    tp_market_cap_bucket: str | None = None
+    tp_sector: str | None = None
+    tp_index_memberships: str | None = None    # comma-joined, e.g. "lq45,idx80"
+    tp_coverage_score: float | None = None
+    tp_epoch: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -150,6 +167,22 @@ class SignalObservationFingerprint:
             "ia_counterparty_sell_hhi": self.ia_counterparty_sell_hhi,
             "ia_coverage_score": self.ia_coverage_score,
             "ia_conviction_score": self.ia_conviction_score,
+            "ticker_profile_label": self.ticker_profile_label,
+            "ticker_profile_confidence": self.ticker_profile_confidence,
+            "tp_market_tier": self.tp_market_tier,
+            "tp_foreign_institutional_exposure": self.tp_foreign_institutional_exposure,
+            "tp_domestic_bandar_exposure": self.tp_domestic_bandar_exposure,
+            "tp_retail_speculative_exposure": self.tp_retail_speculative_exposure,
+            "tp_liquidity_score": self.tp_liquidity_score,
+            "tp_broker_concentration_score": self.tp_broker_concentration_score,
+            "tp_foreign_flow_score": self.tp_foreign_flow_score,
+            "tp_volatility_score": self.tp_volatility_score,
+            "tp_index_membership_score": self.tp_index_membership_score,
+            "tp_market_cap_bucket": self.tp_market_cap_bucket,
+            "tp_sector": self.tp_sector,
+            "tp_index_memberships": self.tp_index_memberships,
+            "tp_coverage_score": self.tp_coverage_score,
+            "tp_epoch": self.tp_epoch,
         }
 
     @classmethod
@@ -249,6 +282,34 @@ class SignalObservationFingerprint:
             ia_counterparty_sell_hhi=_optional_float(data.get("ia_counterparty_sell_hhi")),
             ia_coverage_score=_optional_float(data.get("ia_coverage_score")),
             ia_conviction_score=_optional_float(data.get("ia_conviction_score")),
+            ticker_profile_label=data.get("ticker_profile_label"),
+            ticker_profile_confidence=_optional_float(
+                data.get("ticker_profile_confidence")
+            ),
+            tp_market_tier=data.get("tp_market_tier"),
+            tp_foreign_institutional_exposure=_optional_float(
+                data.get("tp_foreign_institutional_exposure")
+            ),
+            tp_domestic_bandar_exposure=_optional_float(
+                data.get("tp_domestic_bandar_exposure")
+            ),
+            tp_retail_speculative_exposure=_optional_float(
+                data.get("tp_retail_speculative_exposure")
+            ),
+            tp_liquidity_score=_optional_float(data.get("tp_liquidity_score")),
+            tp_broker_concentration_score=_optional_float(
+                data.get("tp_broker_concentration_score")
+            ),
+            tp_foreign_flow_score=_optional_float(data.get("tp_foreign_flow_score")),
+            tp_volatility_score=_optional_float(data.get("tp_volatility_score")),
+            tp_index_membership_score=_optional_float(
+                data.get("tp_index_membership_score")
+            ),
+            tp_market_cap_bucket=data.get("tp_market_cap_bucket"),
+            tp_sector=data.get("tp_sector"),
+            tp_index_memberships=data.get("tp_index_memberships"),
+            tp_coverage_score=_optional_float(data.get("tp_coverage_score")),
+            tp_epoch=data.get("tp_epoch"),
         )
 
 

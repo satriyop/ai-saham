@@ -1,0 +1,52 @@
+version: 1
+
+ticker_profile:
+  evidence_status: DIAGNOSTIC
+
+  # Candle/flow window used for dimension computation
+  profile_window_days: 30
+  epoch_cadence: monthly
+
+  # Market cap bucket thresholds (IDR)
+  market_cap_thresholds_idr:
+    large: 10_000_000_000_000    # > 10T IDR
+    mid: 1_000_000_000_000       # 1T–10T IDR (else small)
+    small: 200_000_000_000       # 200B–1T IDR (else micro)
+
+  # Score assigned for each index membership (max taken when ticker in multiple)
+  index_membership_scores:
+    lq45: 1.00
+    idx30: 0.95
+    idx80: 0.75
+    jii: 0.65
+    mbx: 0.50
+
+  # Saturating linear scale for liquidity (avg daily value IDR)
+  liquidity_thresholds:
+    high_daily_value_idr: 50_000_000_000    # avg daily value >= 50B → score 1.0
+    low_daily_value_idr: 500_000_000        # avg daily value <= 500M → score 0.0
+
+  # Saturating linear scale for volatility (ATR/close ratio)
+  volatility_thresholds:
+    high_atr_pct: 0.050    # ATR/close >= 5% → score 1.0 (very volatile)
+    low_atr_pct: 0.005     # ATR/close <= 0.5% → score 0.0 (very stable)
+
+  # Sparse history fallback: fewer candles than this threshold → conservative defaults
+  sparse_history_threshold: 10
+  conservative_fallback_confidence: 0.30
+
+  # Weights used to compute soft profile exposures (three values sum to 1.0 within each profile)
+  exposure_weights:
+    foreign_institutional:
+      foreign_flow: 0.35
+      index_membership: 0.30
+      liquidity: 0.20
+      broker_concentration_inverse: 0.15
+    domestic_bandar:
+      broker_concentration: 0.45
+      foreign_flow_inverse: 0.35
+      liquidity: 0.20
+    retail_speculative:
+      volatility: 0.40
+      liquidity_inverse: 0.35
+      market_cap_speculative: 0.25
