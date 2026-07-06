@@ -55,12 +55,29 @@ _PARAMETER_BOUNDS: tuple[tuple[str, float, float, float | None, float], ...] = (
     ("signal_engine.classification.moderate_min_score", 25, 70, 1, 5),
     ("signal_engine.classification.enter_min_confidence", 0.40, 0.90, 0.05, 0.10),
     ("signal_engine.classification.watch_min_confidence", 0.20, 0.60, 0.05, 0.10),
+    ("signal_engine.decision_policy.regime_policy.*.enter_threshold", 50.0, 90.0, 1.0, 5.0),
+    ("signal_engine.decision_policy.regime_policy.*.watch_threshold", 25.0, 80.0, 1.0, 5.0),
+    ("signal_engine.decision_policy.regime_policy.*.min_coverage", 0.0, 1.0, 0.05, 0.10),
+    ("signal_engine.decision_policy.regime_policy.*.min_conviction", 0.0, 1.0, 0.05, 0.10),
+    ("signal_engine.decision_policy.regime_policy.*.regime_size_multiplier", 0.0, 1.0, 0.05, 0.10),
     ("signal_engine.alpha_trigger.low_weight_cap", 0.0, 0.25, 0.05, 0.05),
     ("signal_engine.alpha_trigger.group_weights.*", 0.0, 1.0, 0.05, 0.10),
     ("signal_engine.alpha_trigger.horizon_alpha_weights.*", 0.0, 1.0, 0.05, 0.10),
     ("signal_engine.alpha_trigger.route_fractions.*.*.alpha_fraction", 0.0, 1.0, 0.05, 0.10),
     # regime_conditioning.* removed from tunable paths: transitional legacy layer (TD-1).
     # Patches targeting regime_conditioning.* will now be rejected as out-of-bounds.
+    # --- market_context_engine paths ---
+    ("market_context_engine.regime_thresholds.risk_on_min_score", 0.45, 0.85, 0.05, 0.10),
+    ("market_context_engine.regime_thresholds.risk_off_max_score", 0.15, 0.55, 0.05, 0.10),
+    ("market_context_engine.regime_thresholds.volatile_vix_override", 20.0, 50.0, 1.0, 5.0),
+    ("market_context_engine.regime_effects.RISK_OFF.signal_multiplier", 0.20, 1.0, 0.05, 0.10),
+    ("market_context_engine.regime_effects.VOLATILE.signal_multiplier", 0.20, 1.0, 0.05, 0.10),
+    # --- swing_targets paths ---
+    ("setup_targets.*.take_profit_pct", 1.0, 15.0, 0.5, 2.0),
+    ("setup_targets.*.stop_loss_pct", 1.0, 10.0, 0.5, 2.0),
+    # --- swing_backtest reporting bucket paths ---
+    ("swing_backtest.attribution.score_buckets.high_min_score", 50.0, 90.0, 1.0, 5.0),
+    ("swing_backtest.attribution.score_buckets.mid_min_score", 25.0, 70.0, 1.0, 5.0),
     # --- swing_setups paths (fnmatch wildcard on setup name) ---
     ("setups.*.gates.max_bb_width_pctile", 0.05, 0.50, 0.05, 0.10),
     ("setups.*.gates.max_rsi", 25, 80, 1, 5),
@@ -68,12 +85,57 @@ _PARAMETER_BOUNDS: tuple[tuple[str, float, float, float | None, float], ...] = (
     ("setups.*.gates.min_flow_ratio_pct", 0.5, 25.0, 0.5, 2.0),
     ("setups.*.gates.min_foreign_flow_score", 30, 90, 1, 5),
     ("setups.*.gates.min_vwap_discount_pct", -5.0, 15.0, 0.5, 1.5),
+    ("setups.*.gates.min_smart_flow_idr", 0.0, 1e12, 1e9, 5e10),
+    ("setups.*.gates.min_smart_share_pct", 0.0, 100.0, 1.0, 10.0),
+    ("setups.*.gates.max_noise_share_pct", 0.0, 100.0, 1.0, 10.0),
     ("setups.*.partial_max_failed_gates", 0, 5, 1, 1),
+    # --- setup phase / RS policy paths ---
+    ("setup_phase.thresholds.accumulation_min_flow_score", 30.0, 90.0, 1.0, 5.0),
+    ("setup_phase.thresholds.accumulation_min_flow_ratio_pct", 0.5, 25.0, 0.5, 2.0),
+    ("setup_phase.thresholds.compression_max_bb_width_pctile", 0.05, 0.50, 0.05, 0.10),
+    ("setup_phase.thresholds.breakout_min_close_above_prev_high_pct", -2.0, 5.0, 0.5, 1.0),
+    ("setup_phase.thresholds.breakout_min_volume_ratio", 1.0, 3.0, 0.1, 0.3),
+    ("setup_phase.thresholds.breakout_reclaim_vwap_min_pct", -3.0, 5.0, 0.5, 1.0),
+    ("setup_phase.thresholds.exhaustion_rsi_min", 60.0, 90.0, 1.0, 5.0),
+    ("setup_phase.thresholds.exhaustion_min_price_extension_pct", 3.0, 20.0, 0.5, 3.0),
+    ("setup_phase.thresholds.distribution_min_bandar_score", -9.0, 0.0, 1.0, 2.0),
+    ("setup_phase.thresholds.failed_max_drawdown_from_recent_high_pct", -20.0, -2.0, 0.5, 2.0),
+    ("setup_phase.thresholds.failed_breakdown_below_support_pct", -10.0, -0.5, 0.5, 2.0),
+    ("setup_phase.rs_policy_by_setup_family.*.lag_warning_below", -10.0, 5.0, 0.5, 1.5),
+    ("setup_phase.rs_policy_by_setup_family.*.hard_exclude_below", -20.0, 0.0, 0.5, 2.0),
     # --- risk_engine gate paths ---
     ("risk_engine.gates.free_float.min_free_float_pct", 10.0, 25.0, 0.5, 2.0),
     ("risk_engine.gates.fundamental.piotroski_min", 1, 7, 1, 1),
     ("risk_engine.gates.liquidity.market_cap_floor_idr", 1e11, 5e12, 1e11, 5e11),
     ("risk_engine.gates.liquidity.median_tx_floor_idr", 1e9, 5e10, 1e9, 5e9),
+)
+
+_NON_TUNABLE_DOCUMENT_PATHS: tuple[tuple[str, str], ...] = (
+    ("signal_engine", "container_path_not_patchable"),
+    ("signal_engine.classification", "container_path_not_patchable"),
+    ("signal_engine.evidence_groups", "container_path_not_patchable"),
+    ("signal_engine.flags", "container_path_not_patchable"),
+    ("signal_engine.scoring.bandar", "legacy_scoring_container_not_patchable"),
+    ("signal_engine.decision_policy", "container_path_not_patchable"),
+    ("signal_engine.decision_policy.regime_policy", "container_path_not_patchable"),
+    ("signal_engine.decision_policy.regime_policy.*", "container_path_not_patchable"),
+    ("signal_engine.decision_policy.regime_policy.*.enter_allowed", "boolean_regime_policy_not_numeric_tunable"),
+    ("signal_engine.decision_policy.regime_policy.*.max_decision", "categorical_regime_policy_not_numeric_tunable"),
+    ("signal_engine.decision_policy.setup_regime_policy", "categorical_setup_regime_policy_not_numeric_tunable"),
+    ("signal_engine.decision_policy.setup_regime_policy.*", "categorical_setup_regime_policy_not_numeric_tunable"),
+    ("signal_engine.decision_policy.setup_regime_policy.*.*", "categorical_setup_regime_policy_not_numeric_tunable"),
+    ("risk_engine", "container_path_not_patchable"),
+    ("risk_engine.gates", "container_path_not_patchable"),
+    ("market_context_engine", "container_path_not_patchable"),
+    ("setup_targets", "container_path_not_patchable"),
+    ("swing_backtest.attribution.score_buckets", "container_path_not_patchable"),
+    ("setups.*.gates.required_trend", "categorical_setup_gate_not_numeric_tunable"),
+    ("setups.*.gates.reject_smart_net_selling", "boolean_setup_gate_not_numeric_tunable"),
+    ("setup_phase.rs_policy_by_setup_family.*.warning_max_decision", "categorical_rs_policy_not_numeric_tunable"),
+    ("setup_phase.rs_policy_by_setup_family.*.hard_exclude_max_decision", "categorical_rs_policy_not_numeric_tunable"),
+    ("setup_phase.rs_policy_by_setup_family.*.mean_reversion_exception_requires_support_reclaim", "boolean_rs_policy_not_numeric_tunable"),
+    ("setup_phase.volume_trigger.require_trusted_volume", "boolean_volume_policy_not_numeric_tunable"),
+    ("setup_phase.volume_trigger.trusted_benchmark_volume_sources", "list_volume_policy_not_numeric_tunable"),
 )
 
 
@@ -91,6 +153,17 @@ def _bounds_for_document_path(
         )
         if match:
             return (lo, hi, step, max_shift)
+    return None
+
+
+def _non_tunable_reason_for_document_path(document_path: str) -> str | None:
+    for pattern, reason in _NON_TUNABLE_DOCUMENT_PATHS:
+        match = (
+            fnmatch(document_path, pattern) if "*" in pattern
+            else document_path == pattern
+        )
+        if match:
+            return reason
     return None
 
 
@@ -314,6 +387,7 @@ class SwingTuningPatchValidator:
         proposed_value = item_dict.get("proposed_value")
         current_value = item_dict.get("current_value")
         resolved_current_value: object | None = None
+        document_path: str | None = None
 
         if not target_path:
             item_issues.append("target_path_required")
@@ -334,6 +408,14 @@ class SwingTuningPatchValidator:
                 except ValueError:
                     item_issues.append("target_path_invalid")
                 else:
+                    document_path = parsed.document_path
+                    non_tunable_reason = _non_tunable_reason_for_document_path(
+                        document_path
+                    )
+                    if non_tunable_reason is not None:
+                        item_issues.append(
+                            f"target_path_not_tunable:{non_tunable_reason}"
+                        )
                     resolution = resolve_tuning_config_value(
                         parsed,
                         config_root=self._config_root,
@@ -351,10 +433,20 @@ class SwingTuningPatchValidator:
                             proposed_value,
                         ):
                             item_issues.append("proposed_value_type_mismatch")
+                        elif (
+                            non_tunable_reason is None
+                            and _bounds_for_document_path(document_path) is None
+                        ):
+                            item_issues.append("target_path_unbounded")
 
         # Phase 8: parameter bounds — range, quantization, per-cycle shift cap.
-        if resolved_current_value is not None and proposed_value is not None and not item_issues:
-            bounds = _bounds_for_document_path(parsed.document_path)
+        if (
+            resolved_current_value is not None
+            and proposed_value is not None
+            and document_path is not None
+            and not item_issues
+        ):
+            bounds = _bounds_for_document_path(document_path)
             if bounds is not None:
                 lo, hi, step, max_shift = bounds
                 try:

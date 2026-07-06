@@ -720,12 +720,15 @@ out-of-sample proof justify manual promotion through validator-bounded config.
         scoped.
       - Diagnostic-ready findings remain report-only and cannot validate a
         config patch.
-- [ ] Verify validator bounds cover canonical tunable paths before any patch can
+- [x] Verify validator bounds cover canonical tunable paths before any patch can
       target them.
-      - Audit found missing bounds for current tuning-target paths, including
-        market context thresholds/effects, swing target stop/target paths,
-        swing backtest score buckets, and some expanded setup gates. These
-        paths must be bounded path-by-path before patches can target them.
+      - Added bounds for market context thresholds/effects, decision-policy
+        regime thresholds and size multipliers, swing target stop/target paths,
+        swing backtest score buckets, smart-money setup gates, setup-phase
+        thresholds, and RS policy numeric thresholds.
+      - Container, categorical, and boolean paths are explicitly non-tunable.
+      - Audit result: 54 bounded current target paths, 14 explicit non-tunable
+        paths, 0 missing.
 - [ ] Confirm persisted observations include Phase B-H fingerprints:
       setup phase/history, strategy evidence, institutional accumulation,
       ticker profile, Alpha/Trigger, and sector context.
@@ -766,9 +769,9 @@ out-of-sample proof justify manual promotion through validator-bounded config.
 ### Verification
 
 - [x] `python -m py_compile` for changed application/domain/config files.
-- [x] Focused pytest for validator, fingerprint serialization, attribution
-      summary, and any new calibration-readiness use case.
-- [x] Full pytest: 2567 passed.
+- [x] Focused pytest for validator, target-path bounds audit, attribution
+      summary, and calibration-readiness guardrails: 99 passed.
+- [x] Full pytest: 2569 passed.
 - [x] `git diff --check`.
 
 ---

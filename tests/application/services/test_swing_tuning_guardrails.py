@@ -13,6 +13,7 @@ from src.application.services.swing_tuning_patch_validator import (
     SwingTuningPatchValidator,
     _bounds_for_document_path,
     _is_quantized,
+    _non_tunable_reason_for_document_path,
 )
 from src.application.services.swing_tuning_review_journal import (
     SwingTuningReviewJournal,
@@ -21,7 +22,10 @@ from src.application.services.swing_tuning_review_journal import (
 from src.infrastructure.persistence.swing_tuning_review_jsonl_writer import (
     SwingTuningReviewJsonlWriter,
 )
-from src.application.services.swing_tuning_config_paths import parse_tuning_config_path
+from src.application.services.swing_tuning_config_paths import (
+    expand_tuning_config_paths,
+    parse_tuning_config_path,
+)
 from src.application.services.swing_backtest_attribution import SwingBacktestAttributionSummary
 from src.application.services.swing_tuning_contracts import build_tuning_config_diff_draft
 
@@ -117,6 +121,55 @@ def test_bounds_for_document_path_known_returns_bounds():
 
 def test_bounds_for_document_path_unknown_returns_none():
     assert _bounds_for_document_path("signal_engine.unknown.path") is None
+
+
+def test_current_tuning_target_paths_are_bounded_or_explicitly_non_tunable():
+    missing: list[str] = []
+    for target in DEFAULT_TUNING_TARGETS:
+        for raw_path in target.yaml_paths:
+            for expanded_path in expand_tuning_config_paths(raw_path, config_root="."):
+                parsed = parse_tuning_config_path(expanded_path)
+                bounded = _bounds_for_document_path(parsed.document_path) is not None
+                non_tunable = (
+                    _non_tunable_reason_for_document_path(parsed.document_path)
+                    is not None
+                )
+                if not bounded and not non_tunable:
+                    missing.append(expanded_path)
+
+    assert missing == []
+
+
+def test_unbounded_resolved_numeric_path_fails_closed(tmp_path):
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    (config_dir / "signal_engine.yaml").write_text(
+        "signal_engine:\n"
+        "  experimental:\n"
+        "    loose_threshold: 1.0\n",
+        encoding="utf-8",
+    )
+    patch_path = tmp_path / "patch.json"
+    patch_path.write_text(json.dumps({
+        "artifact_type": "swing_tuning_patch_review",
+        "apply": {"supported": False},
+        "source_review": _COMPLETE_SOURCE_REVIEW,
+        "patch_items": [
+            {
+                "target_path": (
+                    "config/signal_engine.yaml:"
+                    "signal_engine.experimental.loose_threshold"
+                ),
+                "current_value": 1.0,
+                "proposed_value": 1.1,
+            },
+        ],
+    }))
+
+    report = SwingTuningPatchValidator(config_root=tmp_path).validate(patch_path)
+
+    assert report.valid is False
+    assert "target_path_unbounded" in report.item_results[0].issues
 
 
 # --- 2. _is_quantized -------------------------------------------------------

@@ -287,7 +287,12 @@ DEFAULT_TUNING_TARGETS: tuple[TuningTarget, ...] = (
             "config/market_context_engine.yaml:market_context_engine.regime_effects.RISK_OFF.signal_multiplier",
             "config/market_context_engine.yaml:market_context_engine.regime_effects.VOLATILE.signal_multiplier",
             # signal_engine.regime_conditioning.* removed: transitional legacy layer, not to be tuned (TD-1).
-            # Tune decision_policy thresholds instead (see signal_engine.yaml decision_policy block).
+            "config/signal_engine.yaml:signal_engine.decision_policy",
+            "config/signal_engine.yaml:signal_engine.decision_policy.regime_policy.*.enter_threshold",
+            "config/signal_engine.yaml:signal_engine.decision_policy.regime_policy.*.watch_threshold",
+            "config/signal_engine.yaml:signal_engine.decision_policy.regime_policy.*.min_coverage",
+            "config/signal_engine.yaml:signal_engine.decision_policy.regime_policy.*.min_conviction",
+            "config/signal_engine.yaml:signal_engine.decision_policy.regime_policy.*.regime_size_multiplier",
             "config/swing_targets.yaml:setup_targets",
             "config/swing_targets.yaml:setup_targets.risk_on.take_profit_pct",
             "config/swing_targets.yaml:setup_targets.risk_on.stop_loss_pct",
@@ -301,6 +306,8 @@ DEFAULT_TUNING_TARGETS: tuple[TuningTarget, ...] = (
         allowed_use=(
             "Tune regime detection thresholds (market_context_engine.yaml) and "
             "regime-adaptive exits (swing_targets.yaml) from executed trades. "
+            "Tune explicit decision_policy regime caps/multipliers instead of "
+            "legacy score conditioning. "
             "Do NOT tune signal_engine.regime_conditioning — frozen legacy layer (TD-1)."
         ),
     ),
@@ -434,6 +441,12 @@ DEFAULT_TUNING_TARGETS: tuple[TuningTarget, ...] = (
             "config/market_context_engine.yaml:market_context_engine.regime_thresholds.volatile_vix_override",
             "config/market_context_engine.yaml:market_context_engine.regime_effects.RISK_OFF.signal_multiplier",
             "config/market_context_engine.yaml:market_context_engine.regime_effects.VOLATILE.signal_multiplier",
+            "config/signal_engine.yaml:signal_engine.decision_policy",
+            "config/signal_engine.yaml:signal_engine.decision_policy.regime_policy.*.enter_threshold",
+            "config/signal_engine.yaml:signal_engine.decision_policy.regime_policy.*.watch_threshold",
+            "config/signal_engine.yaml:signal_engine.decision_policy.regime_policy.*.min_coverage",
+            "config/signal_engine.yaml:signal_engine.decision_policy.regime_policy.*.min_conviction",
+            "config/signal_engine.yaml:signal_engine.decision_policy.regime_policy.*.regime_size_multiplier",
             "config/swing_targets.yaml:setup_targets",
             "config/swing_targets.yaml:setup_targets.risk_on.take_profit_pct",
             "config/swing_targets.yaml:setup_targets.risk_on.stop_loss_pct",
