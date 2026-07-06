@@ -274,28 +274,43 @@ class StockbitEarningsProvider(EarningsProvider, StockbitCachingProvider):
         records: list[EarningsRecord] = []
         current_q, current_y = _current_quarter_year()
 
-        for _ in range(quarters):
+        consecutive_failures = 0
+        max_failures = 4  # Try up to 1 year back to find the first reported quarter
+
+        while len(records) < quarters and consecutive_failures < max_failures:
             if self._is_row_fresh(ticker, current_y, current_q):
                 # Row already cached and fresh — load from cache and still get prev period pointer
                 cached_rows = self._read_cache_single(ticker, current_y, current_q)
                 if cached_rows:
                     records.append(cached_rows)
+                    consecutive_failures = 0
                 # We still need to know the prev_period to continue the walk.
                 # Try fetching just to get the pointer without writing.
                 body = self._do_get(ticker, current_q, current_y)
                 prev = _next_prev_period(body) if body else None
             else:
                 body = self._do_get(ticker, current_q, current_y)
-                if not body:
-                    break
-                record = _parse_period_record(ticker, current_q, current_y, body)
-                if record:
-                    records.append(record)
-                prev = _next_prev_period(body)
+                if body:
+                    record = _parse_period_record(ticker, current_q, current_y, body)
+                    if record:
+                        records.append(record)
+                        consecutive_failures = 0
+                    prev = _next_prev_period(body)
+                else:
+                    prev = None
 
-            if prev is None:
-                break
-            current_q, current_y = prev
+            if prev is not None:
+                current_q, current_y = prev
+            else:
+                # If we haven't found any records yet, walk backward to search for the latest reported quarter
+                if not records:
+                    consecutive_failures += 1
+                    current_q -= 1
+                    if current_q == 0:
+                        current_q = 4
+                        current_y -= 1
+                else:
+                    break
 
         return records
 

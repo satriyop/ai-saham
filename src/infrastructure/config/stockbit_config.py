@@ -89,7 +89,7 @@ class StockbitConfig:
     )
     analyst_url: str = "https://exodus.stockbit.com/analyst-ratings/{ticker}"
     analyst_consensus_url: str = "https://exodus.stockbit.com/analyst-ratings/{ticker}/consensus"
-    earnings_url: str = "https://exodus.stockbit.com/earnings?keyword={ticker}&quarter={quarter}&year={year}"
+    earnings_url: str = "https://exodus.stockbit.com/earnings?search={ticker}&quarter={quarter}&year={year}&page=1&sort_column=4&order=desc"
     valuation_metrics_url: str = "https://exodus.stockbit.com/valuation/company/{ticker}/metrics"
     emitten_info_url: str = "https://exodus.stockbit.com/emitten/{ticker}/info"
     keystats_url: str = "https://exodus.stockbit.com/keystats/ratio/v1/{ticker}?year_limit=10"

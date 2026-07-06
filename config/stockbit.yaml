@@ -187,7 +187,7 @@ endpoints:
     # Returns: current exchange session state (pre-open, regular, post-close, etc.)
 
   earnings:
-    url: "https://exodus.stockbit.com/earnings?keyword={ticker}&quarter={quarter}&year={year}"
+    url: "https://exodus.stockbit.com/earnings?search={ticker}&quarter={quarter}&year={year}&page=1&sort_column=4&order=desc"
     # Returns: quarterly EPS history.
 
   valuation_metrics:
