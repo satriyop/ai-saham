@@ -1,20 +1,12 @@
 # IDX Stock Universe Lists
 #
-# Impacted CLI Commands:
-#   - saham fetch universe update / list / show (manages and updates universe lists dynamically)
-#   - saham fetch market (resolves ticker list by universe name)
-#   - saham screen accum (screens candidate tickers within selected universe)
-#   - saham analyze swing / swing-compare / regime (identifies tickers / benchmark baskets to analyze)
-#   - saham today (reads LQ45/default universe for briefing summary)
-#   - saham view universe (renders cache browser tables organized by universe ticker list)
-#
 # These lists are used by `saham fetch market` and `saham screen accum`
 # to define which tickers to scan.
 #
 # IDX rebalances LQ45 and IDX80 every February and August.
 # Auto-updated via: saham fetch universe update (Stockbit Exodus API)
 #
-# Last updated: 2026-06-21
+# Last updated: 2026-07-06
 
 bank:
   sector_id: 3
@@ -69,6 +61,127 @@ bank:
   - SDRA
   - SUPA
   updated: '2026-06-21'
+basic_materials:
+  sector_id: 8
+  subsector_id: 22
+  tickers:
+  - ADMG
+  - AGII
+  - AKPI
+  - ALDO
+  - ALKA
+  - ALMI
+  - AMMN
+  - ANTM
+  - APLI
+  - ARCI
+  - ASPR
+  - AVIA
+  - AYLS
+  - BAJA
+  - BATR
+  - BEBS
+  - BLES
+  - BMSR
+  - BRMS
+  - BRNA
+  - BRPT
+  - BTON
+  - CHEM
+  - CITA
+  - CLPI
+  - CMNT
+  - CTBN
+  - DAAZ
+  - DGWG
+  - DKFT
+  - DPNS
+  - EKAD
+  - EMAS
+  - EPAC
+  - ESIP
+  - ESSA
+  - ETWA
+  - FASW
+  - FPNI
+  - FWCT
+  - GDST
+  - GGRP
+  - HKMU
+  - HRUM
+  - IFII
+  - IFSH
+  - IGAR
+  - INAI
+  - INCF
+  - INCI
+  - INCO
+  - INKP
+  - INRU
+  - INTD
+  - INTP
+  - IPOL
+  - ISSP
+  - JKSW
+  - KAYU
+  - KBRI
+  - KDSI
+  - KKES
+  - KMTR
+  - KRAS
+  - LMSH
+  - LTLS
+  - MBMA
+  - MDKA
+  - MDKI
+  - MINE
+  - MOLI
+  - NCKL
+  - NICE
+  - NICL
+  - NIKL
+  - NPGF
+  - NPII
+  - OBMD
+  - OKAS
+  - OPMS
+  - PACK
+  - PBID
+  - PDPP
+  - PICO
+  - PPRI
+  - PSAB
+  - PTMR
+  - PURE
+  - SAMF
+  - SBMA
+  - SIMA
+  - SMBR
+  - SMCB
+  - SMGA
+  - SMGR
+  - SMKL
+  - SMLE
+  - SOLA
+  - SPMA
+  - SQMI
+  - SRSN
+  - SULI
+  - SWAT
+  - TALF
+  - TBMS
+  - TDPM
+  - TINS
+  - TIRT
+  - TKIM
+  - TPIA
+  - TRST
+  - UNIC
+  - WSBP
+  - WTON
+  - YPAS
+  - ZINC
+  updated: '2026-07-06'
 bumn20:
   tickers:
   - ADHI
@@ -92,6 +205,164 @@ bumn20:
   - SMGR
   - TLKM
   updated: '2026-06-19'
+consumer_finance:
+  sector_id: 3
+  subsector_id: 23
+  tickers:
+  - AMOR
+  - PADI
+  - PANS
+  - RELI
+  - TRIM
+  - YULE
+  updated: '2026-07-06'
+consumer_goods:
+  sector_id: 1
+  subsector_id: 15
+  tickers:
+  - AALI
+  - ADES
+  - AGAR
+  - AISA
+  - ALTO
+  - ANDI
+  - ANJT
+  - ASHA
+  - AYAM
+  - BEEF
+  - BEER
+  - BISI
+  - BOBA
+  - BTEK
+  - BUDI
+  - BWPT
+  - CAMP
+  - CBUT
+  - CEKA
+  - CLEO
+  - CMRY
+  - COCO
+  - CPIN
+  - CPRO
+  - CRAB
+  - CSRA
+  - DEWI
+  - DLTA
+  - DPUM
+  - DSFI
+  - DSNG
+  - ENZO
+  - FAPA
+  - FISH
+  - FOOD
+  - FORE
+  - GOLL
+  - GOOD
+  - GRPM
+  - GULA
+  - GUNA
+  - GZCO
+  - HOKI
+  - IBOS
+  - ICBP
+  - IKAN
+  - INDF
+  - IPPE
+  - ISEA
+  - JARR
+  - JAWA
+  - JELI
+  - JPFA
+  - KEJU
+  - LSIP
+  - MAGP
+  - MAIN
+  - MAXI
+  - MGRO
+  - MKTR
+  - MLBI
+  - MYOR
+  - NASI
+  - NAYZ
+  - NEST
+  - NSSS
+  - OILS
+  - PGUN
+  - PMMP
+  - PNGO
+  - PSDN
+  - PSGO
+  - PTPS
+  - RLCO
+  - ROTI
+  - SGRO
+  - SIMP
+  - SIPD
+  - SKBM
+  - SKLT
+  - SMAR
+  - SOUL
+  - SSMS
+  - STAA
+  - STRK
+  - STTP
+  - TAYS
+  - TBLA
+  - TGKA
+  - TGUK
+  - TLDN
+  - TRGU
+  - UDNG
+  - ULTJ
+  - UNSP
+  - WAPO
+  - WINE
+  - WMPP
+  - WMUU
+  - YUPI
+  updated: '2026-07-06'
+consumer_non_cyclicals:
+  sector_id: 1
+  subsector_id: 37
+  tickers:
+  - BRRC
+  - EURO
+  - FLMC
+  - KINO
+  - KPAS
+  - MBTO
+  - MRAT
+  - MSJA
+  - NANO
+  - TCID
+  - UCID
+  - UNVR
+  - VICI
+  updated: '2026-07-06'
+consumer_staples:
+  sector_id: 1
+  subsector_id: 10
+  tickers:
+  - AMMS
+  - AMRT
+  - BUAH
+  - DAYA
+  - DMND
+  - EPMT
+  - GWAA
+  - HERO
+  - KMDS
+  - LAPD
+  - MAMIP
+  - MIDI
+  - MLPL
+  - MPPA
+  - PCAR
+  - RANC
+  - SDPC
+  - TAPG
+  - WICO
+  updated: '2026-07-06'
 cyclic:
   tickers:
   - ABBA
@@ -244,6 +515,7 @@ cyclic:
   - ZONE
   updated: '2026-06-19'
 energy:
+  sector_id: 7
   tickers:
   - AADI
   - ABMM
@@ -260,6 +532,7 @@ energy:
   - BESS
   - BIPI
   - BOAT
+  - BORN
   - BOSS
   - BSML
   - BSSR
@@ -284,7 +557,6 @@ energy:
   - GTSI
   - HILL
   - HITS
-  - HRUM
   - HUMI
   - IATA
   - INDY
@@ -336,7 +608,7 @@ energy:
   - UNIQ
   - WINS
   - WOWS
-  updated: '2026-06-19'
+  updated: '2026-07-06'
 finance:
   tickers:
   - ABDA
@@ -603,6 +875,30 @@ idx80:
   - UNVR
   - WIFI
   updated: '2026-06-19'
+insurance:
+  sector_id: 3
+  subsector_id: 12
+  tickers:
+  - ABDA
+  - AHAP
+  - AMAG
+  - ASBI
+  - ASDM
+  - ASJT
+  - ASMI
+  - ASRM
+  - BHAT
+  - JMAS
+  - LIFE
+  - LPGI
+  - MREI
+  - MTWI
+  - PNIN
+  - PNLF
+  - TUGU
+  - VINS
+  - YOII
+  updated: '2026-07-06'
 jii:
   tickers:
   - AADI
@@ -636,6 +932,39 @@ jii:
   - UNVR
   - WIFI
   updated: '2026-06-19'
+logistics:
+  sector_id: 51
+  subsector_id: 49
+  tickers:
+  - AKSI
+  - BLOG
+  - BLTA
+  - DEAL
+  - ELPI
+  - GTRA
+  - HAIS
+  - HATM
+  - JAYA
+  - KJEN
+  - KLAS
+  - LAJU
+  - LOPI
+  - MIRA
+  - MITI
+  - MPXL
+  - NELY
+  - PJHB
+  - PPGL
+  - PURA
+  - RCCC
+  - SAPX
+  - SDMU
+  - SMDR
+  - TMAS
+  - TNCA
+  - TRUK
+  - WBSA
+  updated: '2026-07-06'
 lq45:
   tickers:
   - AADI
@@ -1084,6 +1413,106 @@ noncyc:
   - WMUU
   - YUPI
   updated: '2026-06-19'
+property:
+  sector_id: 5
+  tickers:
+  - ADCP
+  - AMAN
+  - APLN
+  - ARGO
+  - ARMY
+  - ASPI
+  - ASRI
+  - ATAP
+  - BAPA
+  - BAPI
+  - BBSS
+  - BCIP
+  - BEST
+  - BIKA
+  - BIPP
+  - BKDP
+  - BKSL
+  - BSBK
+  - BSDE
+  - CBDK
+  - CBPE
+  - CITY
+  - COWL
+  - CPRI
+  - CSIS
+  - CTRA
+  - DADA
+  - DART
+  - DILD
+  - DMAS
+  - DUTI
+  - ELTY
+  - EMDE
+  - FMII
+  - FORZ
+  - GAMA
+  - GMTD
+  - GPRA
+  - GRIA
+  - HBAT
+  - HOMI
+  - INDO
+  - INPP
+  - IPAC
+  - JRPT
+  - KBAG
+  - KIJA
+  - KOCI
+  - KSIX
+  - LAND
+  - LCGP
+  - LPCK
+  - LPKR
+  - LPLI
+  - MDLN
+  - MKPI
+  - MMLP
+  - MPRO
+  - MSIE
+  - MTLA
+  - MTSM
+  - MYRX
+  - MYRXP
+  - NASA
+  - NIRO
+  - NZIA
+  - OMRE
+  - PAMG
+  - PANI
+  - PLIN
+  - POLI
+  - POLL
+  - POSA
+  - PPRO
+  - PUDP
+  - PURI
+  - PWON
+  - RBMS
+  - RDTX
+  - REAL
+  - RELF
+  - RIMO
+  - RISE
+  - ROCK
+  - RODA
+  - SAGE
+  - SATU
+  - SMDM
+  - SMRA
+  - TARA
+  - TRIN
+  - 'TRUE'
+  - UANG
+  - URBN
+  - VAST
+  - WINR
+  updated: '2026-07-06'
 tech:
   tickers:
   - AREA
@@ -1127,3 +1556,58 @@ tech:
   - WIRG
   - ZYRX
   updated: '2026-06-19'
+telecommunication:
+  sector_id: 9
+  subsector_id: 39
+  tickers:
+  - BALI
+  - BTEL
+  - CENT
+  - DATA
+  - EXCL
+  - FREN
+  - GHON
+  - GOLD
+  - IBST
+  - INET
+  - ISAT
+  - JAST
+  - KBLV
+  - KETR
+  - LCKM
+  - LINK
+  - MORA
+  - MTEL
+  - OASA
+  - SUPR
+  - TBIG
+  - TLKM
+  - TOWR
+  updated: '2026-07-06'
+tobacco:
+  sector_id: 1
+  subsector_id: 47
+  tickers:
+  - GGRM
+  - HMSP
+  - ITIC
+  - RMBA
+  - WIIM
+  updated: '2026-07-06'
+transportation:
+  sector_id: 51
+  subsector_id: 30
+  tickers:
+  - ASSA
+  - BIRD
+  - BPTR
+  - CMPP
+  - GIAA
+  - HELI
+  - IMJS
+  - LRNA
+  - SAFE
+  - TAXI
+  - TRJA
+  - WEHA
+  updated: '2026-07-06'

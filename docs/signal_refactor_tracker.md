@@ -2,12 +2,12 @@
 
 _Design rationale: `docs/signal_refactor.md`_
 _Phase plan: `docs/signal_refactor_phases.md`_
-_Current implementation target: Phase G implementation_
+_Current implementation target: Phase I planning_
 _Updated: 2026-07-06_
 
 This tracker records the current implementation state and concrete checklist for
-the SignalEngine refactor. A1, A2, B, C, D, E, and F are closed. Phase G is in
-implementation.
+the SignalEngine refactor. A1, A2, B, C, D, E, F, G, and H are closed. Phase I is
+the next implementation target.
 
 ---
 
@@ -75,7 +75,7 @@ implementation.
 | E | Institutional Accumulation Evidence | Done (2026-07-06) | Two-track institutional flow evidence, diagnostic-only. 2457 tests pass. |
 | F | Minimal Ticker Profile Diagnostics | Done (2026-07-06) | Deterministic ticker behavior classifier, diagnostic-only. 2489 tests pass. |
 | G | Simplified Alpha/Trigger Split | Done (2026-07-06) | Four canonical Alpha/Trigger slots configured; market/company slots start DIAGNOSTIC/unavailable until producers feed them. |
-| H | Sector Context | Not Started | Retain phase scope from `docs/signal_refactor_phases.md`. |
+| H | Sector Context | Done (2026-07-06) | Local-universe sector-relative return, breadth, ticker-vs-sector RS; DIAGNOSTIC-only; 2564 tests pass. |
 | I | Full Walk-Forward Calibration And Expanded Tunables | Not Started | Retain phase scope from `docs/signal_refactor_phases.md`. |
 
 ---
@@ -306,12 +306,14 @@ path and promote `signal_score_raw` → `assessment.score`. Requires updating te
 
 ## Current Assumptions
 
-- Phase G (Simplified Alpha/Trigger Split) is the active implementation target.
+- Phase H (Sector Context) is complete; Phase I is the next implementation target.
+- Phase H sector context evidence feeds the `market_context` Alpha/Trigger slot
+  as DIAGNOSTIC-only evidence; it can improve coverage/metadata but has zero
+  score authority until a future promotion.
 - Phase F profile snapshots remain DIAGNOSTIC-only; profiles do not feed into
-  SignalEngine group scoring or DecisionPolicy in the current Phase G
-  implementation.
+  SignalEngine group scoring or DecisionPolicy.
 - Phase E institutional accumulation evidence is DIAGNOSTIC-only; `FlowConfirmationEvidence`
-  group scoring is unchanged in the current Phase G implementation.
+  group scoring is unchanged.
 - Phase D strategy evidence contract is preserved; strategy evidence remains
   diagnostic and cannot override canonical setup phase or SignalEngine decisions.
 - Phase B labels remain the source for replay attribution; no recomputation of
@@ -590,5 +592,96 @@ phases provide producer evidence and promote authority.
 - Infrastructure: config YAML and bootstrap resolution; validator bounds for
   new numeric config paths.
 - Adapter: not touched for policy; display-only follow-up remains optional.
+
+---
+
+## Phase H Tracker: Sector Context
+
+**Status:** Done (2026-07-06)
+
+**Goal:** Make local-universe sector rotation part of signal interpretation.
+Compute sector-relative return, sector breadth, and ticker-vs-sector relative
+strength from same-sector peers in `universes.yaml`. Feed into the
+`market_context` Alpha/Trigger slot. DIAGNOSTIC-only; no scoring impact.
+
+Phase H does NOT change `DecisionPolicy`, TradeSetup, or final score
+authority. `SectorContextEvidence` feeds the existing Alpha/Trigger
+`market_context` slot as diagnostic evidence only: it can improve evidence
+coverage and route metadata, but the `market_context` EvidenceRegistration
+remains DIAGNOSTIC, so effective score authority is zero until a future
+promotion.
+
+### In Scope
+
+- `SectorContextEvidence` frozen domain value object: `sector`, `peer_count`,
+  `peer_tickers`, `sector_20d_return`, `sector_vs_ihsg_20d`, `sector_breadth`,
+  `ticker_vs_sector_rs`, `sector_regime` (BULLISH/NEUTRAL/BEARISH/UNKNOWN),
+  `coverage_score`, `evidence_status`, `reasons`, `unavailable_reasons`.
+- `config/sector_context.yaml` with min/max peer counts, lookback sessions,
+  min valid sessions per peer, and sector regime thresholds.
+- `SectorContextEvidenceBuilder` application service: never fetches, never
+  raises; builds a `sector_group → tickers` reverse index from `universes.yaml`
+  at construction; exposes `peers_for_ticker()` helper for workflow use.
+- Eight `sc_*` fingerprint fields in `SignalObservationFingerprint` with
+  backward-compatible defaults and `data.get()` parsing.
+- `_sc_fingerprint()` helper and wiring in `accumulation_screen_use_case.py`.
+- `sector_context_evidence` field and build block in
+  `swing_analysis_workflow_use_case.py`; wired into `SwingEvidence.to_dict()`.
+- Two attribution buckets (`sc_sector`, `sc_sector_regime`) in
+  `summarize_signal_forward_labels_use_case.py`.
+- IHSG 20d return sourced from local IHSG benchmark candles when available;
+  otherwise `sector_vs_ihsg_20d` is None.
+- 43 new tests: domain value object (validation, serialization, unavailable
+  factory) and application builder (pure helpers, builder build, index helpers).
+
+### Out Of Scope
+
+- Promoting `market_context` Alpha/Trigger slot from DIAGNOSTIC to LOW_WEIGHT
+  or PRODUCTION.
+- CLI rendering of sector context evidence.
+- Phase I walk-forward calibration.
+- Official IDX sector-index provider integration.
+
+### Completed
+
+- Frozen `SectorContextEvidence` with bounds validation and stable
+  `to_dict`/`from_dict`.
+- `SectorContextEvidenceBuilder` with `from_yaml()` factory; builds sector
+  index from non-index universe groups in `universes.yaml`; `_compute_return`,
+  `_coverage`, `_classify_regime` pure helpers; never raises.
+- Eight `sc_*` fields added to `SignalObservationFingerprint` (all
+  `None`-defaulted; `data.get()` in `from_dict()`).
+- `_sc_fingerprint()` helper in accumulation screen use case; spread into
+  `_sub_signal_fingerprint()`.
+- `sector_context_evidence` field and build block in swing workflow; wired into
+  `SwingEvidence` constructor and `to_dict()`.
+- Sector context passed into `AssessSignalEvidenceUseCase` as the diagnostic
+  Alpha/Trigger `market_context` group input when available.
+- Accumulation-screen observation persistence builds sector context and
+  persists non-empty `sc_*` fields when local peer/sector data is available.
+- Two attribution bucket keys in forward label summarizer.
+- 2564 tests pass after Phase H completion, including sector evidence,
+  Alpha/Trigger diagnostic routing, swing workflow, accumulation-screen
+  persistence, and forward-label attribution coverage.
+
+### Layer Summary
+
+- Domain: `SectorContextEvidence` frozen value object with bounds checking and
+  backward-compatible serialization.
+- Application: `SectorContextEvidenceBuilder` service; `sc_*` fingerprint
+  helpers; swing workflow and accumulation screen wiring; diagnostic
+  Alpha/Trigger market_context slot input; forward label attribution buckets.
+- Infrastructure: `config/sector_context.yaml`; universes.yaml sector reverse
+  index built at construction time.
+- Adapter: not touched.
+
+### Carry-Forward (open, not Phase H closure blockers)
+
+- [ ] CLI rendering for sector context evidence display.
+- [ ] Promote `market_context` Alpha/Trigger slot from DIAGNOSTIC when
+      sector evidence proves discriminative (Phase I).
+- [x] IHSG 20d return sourced from local benchmark candles instead of the
+      `idx_trend` MarketContext factor.
+- [x] Persistence regression test for `sc_*` fields in saved observations.
 
 ---

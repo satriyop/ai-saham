@@ -45,7 +45,9 @@ from src.domain.value_objects.flow_confirmation_evidence import (
 )
 from src.domain.value_objects.setup_evidence import SetupEvidence
 from src.domain.value_objects.setup_phase import SetupPhaseSnapshot, SetupPhaseState
+from src.domain.value_objects.sector_context_evidence import SectorContextEvidence
 from src.domain.value_objects.signal_assessment import SignalContext, SignalStrength
+from src.domain.value_objects.institutional_accumulation_evidence import EvidenceStatus
 
 SNAP = date(2026, 7, 3)
 
@@ -136,6 +138,23 @@ def _phase_state(state: SetupPhaseState) -> SetupPhaseSnapshot:
         coverage_score=0.8,
         conviction_score=0.8,
         sequence_valid=True,
+    )
+
+
+def _sector_context(regime: str = "BULLISH") -> SectorContextEvidence:
+    return SectorContextEvidence(
+        sector="banking",
+        peer_count=4,
+        peer_tickers=("BBCA", "BBRI", "BMRI", "BBNI"),
+        sector_20d_return=0.03,
+        sector_vs_ihsg_20d=0.02,
+        sector_breadth=0.75,
+        ticker_vs_sector_rs=0.01,
+        sector_regime=regime,
+        coverage_score=1.0,
+        evidence_status=EvidenceStatus.DIAGNOSTIC,
+        reasons=(),
+        unavailable_reasons=(),
     )
 
 
@@ -282,6 +301,28 @@ def test_alpha_trigger_projection_uses_existing_group_scores():
     assert resp.assessment.score == 80
     assert resp.assessment.raw_exact_score == pytest.approx(80.0)
     assert resp.assessment.to_dict()["alpha_trigger_score"]["final_exact_score"] == pytest.approx(75.6098)
+
+
+def test_alpha_trigger_sector_context_feeds_market_slot_as_diagnostic_coverage():
+    resp = _use_case().execute(_req(
+        setup_evidence=_setup_evidence("MATCH"),
+        flow_confirmation_evidence=_flow_evidence(capped_strength=0.50),
+        setup_phase=_phase_state(SetupPhaseState.BREAKOUT_CONFIRMATION),
+        sector_context_evidence=_sector_context("BULLISH"),
+    ))
+
+    at = resp.alpha_trigger_score
+
+    assert at is not None
+    assert at.coverage == pytest.approx(0.90)
+    assert at.authority_coverage == pytest.approx(0.65)
+    assert at.alpha_score == pytest.approx(50.0)
+    assert at.trigger_score == pytest.approx(92.6829268293)
+    market = [c for c in at.group_contributions if c.group == "market_context"][0]
+    assert market.present is True
+    assert market.score == pytest.approx(75.0)
+    assert market.effective_weight == pytest.approx(0.0)
+    assert "diagnostic_report_only" in market.reasons
 
 
 def test_alpha_trigger_missing_groups_do_not_neutral_fill_side_denominators():

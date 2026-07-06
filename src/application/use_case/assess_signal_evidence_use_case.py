@@ -45,6 +45,7 @@ from src.domain.value_objects.signal_assessment import (
 if TYPE_CHECKING:
     from src.domain.value_objects.flow_confirmation_evidence import FlowConfirmationEvidence
     from src.domain.value_objects.market_context import MarketContext
+    from src.domain.value_objects.sector_context_evidence import SectorContextEvidence
     from src.domain.value_objects.setup_evidence import SetupEvidence
     from src.domain.value_objects.setup_phase import SetupPhaseSnapshot
 
@@ -60,6 +61,7 @@ class AssessSignalEvidenceRequest:
     setup_family: str | None = None
     setup_phase: "SetupPhaseSnapshot | None" = None
     horizon: str | None = None
+    sector_context_evidence: "SectorContextEvidence | None" = None
 
 
 class AssessSignalEvidenceUseCase:
@@ -165,11 +167,15 @@ class AssessSignalEvidenceUseCase:
                         ),
                         AlphaTriggerGroupInput(
                             group="market_context",
-                            score=0.0,
+                            score=self._score_sector_market_context(
+                                request.sector_context_evidence
+                            ),
                             configured_weight=self._config.alpha_trigger.group_weights.get(
                                 "market_context", 0.0
                             ),
-                            present=False,
+                            present=self._sector_context_present(
+                                request.sector_context_evidence
+                            ),
                         ),
                         AlphaTriggerGroupInput(
                             group="company_quality_context",
@@ -239,6 +245,33 @@ class AssessSignalEvidenceUseCase:
         if ev is None:
             return 0.0, False
         return max(0.0, min(100.0, ev.capped_strength * 100.0)), True
+
+    def _score_sector_market_context(
+        self,
+        ev: "SectorContextEvidence | None",
+    ) -> float:
+        """Diagnostic market-context score from sector regime.
+
+        The score is routed through the Alpha/Trigger market_context slot, but
+        its DIAGNOSTIC registration gives it zero effective score authority.
+        """
+        if ev is None:
+            return 0.0
+        return {
+            "BULLISH": 75.0,
+            "NEUTRAL": 50.0,
+            "BEARISH": 25.0,
+        }.get(ev.sector_regime, 0.0)
+
+    def _sector_context_present(
+        self,
+        ev: "SectorContextEvidence | None",
+    ) -> bool:
+        return (
+            ev is not None
+            and ev.coverage_score > 0.0
+            and ev.sector_regime != "UNKNOWN"
+        )
 
     # ── regime conditioning (TRANSITIONAL — Phase 5 legacy) ──────────────────
     #

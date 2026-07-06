@@ -19,6 +19,8 @@ from src.domain.entities.candle import Candle
 from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.value_objects.ticker_notation import TickerNotation, TickerNotationSnapshot
+from src.domain.value_objects.sector_context_evidence import SectorContextEvidence
+from src.domain.value_objects.institutional_accumulation_evidence import EvidenceStatus
 
 
 class MockMarketRepository(MarketDataRepository):
@@ -1142,6 +1144,64 @@ def test_screen_persists_candidate_observations_when_repo_injected():
     # flow_evidence key must be present inside signal (None when no signal engine;
     # the key itself must exist so replay consumers don't need to special-case)
     assert "flow_evidence" in (payload.get("signal") or {})
+
+
+def test_screen_persists_sector_context_fingerprint_when_builder_available(monkeypatch):
+    class FakeSectorContextBuilder:
+        def peers_for_ticker(self, ticker):
+            return ("BBRI",)
+
+        def build(self, request):
+            return SectorContextEvidence(
+                sector="banking",
+                peer_count=1,
+                peer_tickers=("BBRI",),
+                sector_20d_return=0.02,
+                sector_vs_ihsg_20d=0.01,
+                sector_breadth=1.0,
+                ticker_vs_sector_rs=0.01,
+                sector_regime="BULLISH",
+                coverage_score=1.0,
+                evidence_status=EvidenceStatus.DIAGNOSTIC,
+                reasons=(),
+                unavailable_reasons=(),
+            )
+
+    monkeypatch.setattr(
+        "src.application.services.sector_context_evidence_builder."
+        "SectorContextEvidenceBuilder.from_yaml",
+        staticmethod(lambda: FakeSectorContextBuilder()),
+    )
+    session_dates = _weekdays(date(2026, 1, 1), 7)
+    as_of = session_dates[-1]
+    candles = [
+        _candle("BBCA", date(2025, 12, 1) + timedelta(days=i), Decimal("100"))
+        for i in range(45)
+    ] + [
+        _candle("IHSG", date(2025, 12, 1) + timedelta(days=i), Decimal("100"))
+        for i in range(45)
+    ]
+    summaries = [_summary("BBCA", day, Decimal("110")) for day in session_dates]
+    spy_repo = SpyCandidateObservationsRepository()
+    use_case = AccumulationScreenUseCase(
+        broker_repository=MockBrokerRepository(summaries),
+        market_repository=MockMarketRepository(candles),
+        candidate_observations_repository=spy_repo,
+    )
+
+    use_case.execute(
+        AccumulationScreenRequest(
+            tickers=["BBCA"],
+            window_days=7,
+            min_net_buy_days=1,
+            as_of_date=as_of,
+        )
+    )
+
+    fingerprint = spy_repo.saved[0].payload["sub_signal_fingerprint"]
+    assert fingerprint["sc_sector"] == "banking"
+    assert fingerprint["sc_sector_regime"] == "BULLISH"
+    assert fingerprint["sc_sector_vs_ihsg_20d"] == pytest.approx(0.01)
 
 
 def test_screen_persists_rejected_candidates_with_filter_outcome():

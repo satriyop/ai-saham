@@ -110,6 +110,15 @@ class SignalObservationFingerprint:
     tp_index_memberships: str | None = None    # comma-joined, e.g. "lq45,idx80"
     tp_coverage_score: float | None = None
     tp_epoch: str | None = None
+    # Phase H: Sector context evidence fingerprint
+    sc_sector: str | None = None
+    sc_peer_count: int | None = None
+    sc_sector_20d_return: float | None = None
+    sc_sector_vs_ihsg_20d: float | None = None
+    sc_sector_breadth: float | None = None
+    sc_ticker_vs_sector_rs: float | None = None
+    sc_sector_regime: str | None = None
+    sc_coverage_score: float | None = None
     # Phase G: Alpha/Trigger projection fingerprint
     alpha_score: float | None = None
     trigger_score: float | None = None
@@ -192,6 +201,14 @@ class SignalObservationFingerprint:
             "tp_index_memberships": self.tp_index_memberships,
             "tp_coverage_score": self.tp_coverage_score,
             "tp_epoch": self.tp_epoch,
+            "sc_sector": self.sc_sector,
+            "sc_peer_count": self.sc_peer_count,
+            "sc_sector_20d_return": self.sc_sector_20d_return,
+            "sc_sector_vs_ihsg_20d": self.sc_sector_vs_ihsg_20d,
+            "sc_sector_breadth": self.sc_sector_breadth,
+            "sc_ticker_vs_sector_rs": self.sc_ticker_vs_sector_rs,
+            "sc_sector_regime": self.sc_sector_regime,
+            "sc_coverage_score": self.sc_coverage_score,
             "alpha_score": self.alpha_score,
             "trigger_score": self.trigger_score,
             "alpha_trigger_final_exact_score": self.alpha_trigger_final_exact_score,
@@ -331,6 +348,14 @@ class SignalObservationFingerprint:
             tp_index_memberships=data.get("tp_index_memberships"),
             tp_coverage_score=_optional_float(data.get("tp_coverage_score")),
             tp_epoch=data.get("tp_epoch"),
+            sc_sector=data.get("sc_sector"),
+            sc_peer_count=_optional_int(data.get("sc_peer_count")),
+            sc_sector_20d_return=_optional_float(data.get("sc_sector_20d_return")),
+            sc_sector_vs_ihsg_20d=_optional_float(data.get("sc_sector_vs_ihsg_20d")),
+            sc_sector_breadth=_optional_float(data.get("sc_sector_breadth")),
+            sc_ticker_vs_sector_rs=_optional_float(data.get("sc_ticker_vs_sector_rs")),
+            sc_sector_regime=data.get("sc_sector_regime"),
+            sc_coverage_score=_optional_float(data.get("sc_coverage_score")),
             alpha_score=_optional_float(data.get("alpha_score")),
             trigger_score=_optional_float(data.get("trigger_score")),
             alpha_trigger_final_exact_score=_optional_float(

@@ -15,6 +15,7 @@ from src.application.use_case.swing_analysis_workflow_use_case import (
     SwingAnalysisWorkflowRequest,
     SwingAnalysisWorkflowUseCase,
     SwingEvidence,
+    _simple_return,
 )
 from src.domain.entities.candle import Candle
 from src.domain.ports.candidate_observations_repository import CandidateObservation
@@ -91,6 +92,30 @@ def _candle(day: date) -> Candle:
         close=Decimal("1010"),
         volume=1_000_000,
     )
+
+
+def _candle_with_close(day: date, close: str) -> Candle:
+    return Candle(
+        ticker="IHSG",
+        date=day,
+        open=Decimal(close),
+        high=Decimal(close),
+        low=Decimal(close),
+        close=Decimal(close),
+        volume=1_000_000,
+    )
+
+
+def test_simple_return_computes_decimal_return_from_candles():
+    start = date(2026, 6, 1)
+    candles = [
+        _candle_with_close(start + timedelta(days=idx), str(1000 + (idx * 10)))
+        for idx in range(20)
+    ]
+
+    ret = _simple_return(candles, lookback=20, min_valid=18)
+
+    assert ret == pytest.approx(0.19)
 
 
 def _breakout_candles() -> list[Candle]:

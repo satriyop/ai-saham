@@ -48,6 +48,7 @@ if TYPE_CHECKING:
     from src.domain.ports.forward_estimates_provider import ForwardEstimatesProvider
     from src.domain.value_objects.flow_confirmation_evidence import FlowConfirmationEvidence
     from src.domain.value_objects.market_context import MarketContext
+    from src.domain.value_objects.sector_context_evidence import SectorContextEvidence
     from src.domain.value_objects.setup_evidence import SetupEvidence
     from src.domain.value_objects.setup_phase import SetupPhaseSnapshot
 
@@ -145,6 +146,7 @@ class SignalEngine:
         setup_family: str | None = None,
         setup_phase: "SetupPhaseSnapshot | None" = None,
         horizon: str | None = None,
+        sector_context_evidence: "SectorContextEvidence | None" = None,
     ) -> AssessSignalResponse:
         """
         Pipeline path: caller supplies pre-loaded SignalContext.
@@ -166,6 +168,7 @@ class SignalEngine:
                 setup_family=setup_family,
                 setup_phase=setup_phase,
                 horizon=horizon,
+                sector_context_evidence=sector_context_evidence,
             )
         )
 

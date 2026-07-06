@@ -1,0 +1,38 @@
+# Sector Context Evidence Configuration (Phase H)
+#
+# Evidence authority: DIAGNOSTIC
+# Computes local-universe sector-relative return, breadth, and
+# ticker-vs-sector relative strength from same-sector peers in universes.yaml.
+# No external sector-index provider required.
+#
+# Promotion from DIAGNOSTIC requires Phase I walk-forward attribution proof.
+
+evidence_status: DIAGNOSTIC
+
+# Minimum same-sector peers needed for sector return/breadth to be meaningful.
+# Below this count, sector_20d_return and sector_breadth are still computed
+# but coverage_score is reduced proportionally.
+min_peer_count: 3
+
+# Maximum same-sector peers to use (candle-fetch cost control).
+# When more peers are available, the builder uses the first max_peer_count
+# tickers from the universe group (deterministic ordering).
+max_peer_count: 20
+
+# Number of trading sessions for return computation.
+lookback_sessions: 20
+
+# Minimum valid sessions required in the lookback window to include a peer.
+# Peers with fewer valid sessions lower coverage but are excluded from averages.
+min_valid_sessions_per_peer: 15
+
+# Sector regime classification thresholds.
+# Both sector_vs_ihsg_20d AND breadth must satisfy the threshold for BULLISH/BEARISH.
+# Otherwise NEUTRAL (or UNKNOWN when data is insufficient).
+sector_regime_thresholds:
+  bullish:
+    sector_vs_ihsg_min: 0.01      # sector outperforms IHSG by ≥ 1%
+    breadth_min: 0.55              # ≥ 55% of peers above their 20-session return
+  bearish:
+    sector_vs_ihsg_max: -0.01     # sector underperforms IHSG by ≥ 1%
+    breadth_max: 0.45              # < 45% of peers with positive 20-session return

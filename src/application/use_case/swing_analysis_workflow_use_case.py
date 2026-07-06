@@ -40,6 +40,7 @@ from src.domain.value_objects.benchmark_symbol import canonicalize_ticker
 if TYPE_CHECKING:
     from src.domain.value_objects.flow_confirmation_evidence import FlowConfirmationEvidence
     from src.domain.value_objects.institutional_accumulation_evidence import InstitutionalAccumulationEvidence
+    from src.domain.value_objects.sector_context_evidence import SectorContextEvidence
     from src.domain.value_objects.market_context import MarketContext
     from src.domain.value_objects.ticker_profile_snapshot import TickerProfileSnapshot
     from src.domain.value_objects.setup_evidence import SetupEvidence
@@ -129,6 +130,7 @@ class SwingEvidence:
     strategy_rule_evidence: "StrategyEvidence | None" = None
     institutional_accumulation_evidence: "InstitutionalAccumulationEvidence | None" = None
     ticker_profile_snapshot: "TickerProfileSnapshot | None" = None
+    sector_context_evidence: "SectorContextEvidence | None" = None
 
     def to_dict(self, *, strategy_name: str | None = None, max_hold_days: int | None = None) -> dict[str, Any]:
         candidate = self.accumulation_candidate
@@ -203,6 +205,10 @@ class SwingEvidence:
             "ticker_profile_snapshot": (
                 self.ticker_profile_snapshot.to_dict()
                 if self.ticker_profile_snapshot else None
+            ),
+            "sector_context_evidence": (
+                self.sector_context_evidence.to_dict()
+                if self.sector_context_evidence else None
             ),
         }
 
@@ -386,6 +392,41 @@ def _volatility_bucket(atr_pct: float | None) -> tuple[str, float]:
     if atr_pct < 8.0:
         return "HIGH", 0.75
     return "EXTREME", 0.50
+
+
+def _benchmark_return_from_repository(
+    repository: MarketDataRepository,
+    *,
+    benchmark: str,
+    end_date: date,
+    lookback: int,
+    min_valid: int,
+) -> float | None:
+    try:
+        candles = repository.get_candles(
+            canonicalize_ticker(benchmark),
+            end_date=end_date,
+        )
+    except Exception:
+        return None
+    return _simple_return(candles, lookback=lookback, min_valid=min_valid)
+
+
+def _simple_return(
+    candles: list[Any] | tuple[Any, ...],
+    *,
+    lookback: int,
+    min_valid: int,
+) -> float | None:
+    sorted_candles = sorted(candles, key=lambda c: c.date)
+    window = sorted_candles[-lookback:] if len(sorted_candles) >= lookback else sorted_candles
+    valid = [c for c in window if getattr(c, "close", None) and float(c.close) > 0.0]
+    if len(valid) < min_valid:
+        return None
+    reference = float(valid[0].close)
+    if reference <= 0.0:
+        return None
+    return (float(valid[-1].close) - reference) / reference
 
 
 def _object_to_dict(value: Any | None) -> Any | None:
@@ -1053,6 +1094,51 @@ class SwingAnalysisWorkflowUseCase:
         except Exception as exc:
             warnings.append(f"Ticker profile classification unavailable: {exc}")
 
+        sector_context_evidence = None
+        try:
+            from src.application.services.sector_context_evidence_builder import (
+                SectorContextEvidenceBuilder,
+                SectorContextRequest,
+            )
+
+            sc_builder = SectorContextEvidenceBuilder.from_yaml()
+            sc_sector = (
+                accumulation_candidate.ticker_notation.sector
+                if accumulation_candidate is not None
+                and accumulation_candidate.ticker_notation is not None
+                else None
+            ) or (
+                ticker_profile_snapshot.sector if ticker_profile_snapshot is not None else None
+            )
+            peer_tickers = sc_builder.peers_for_ticker(request.ticker)
+            peer_candles: dict[str, list] = {}
+            for peer in peer_tickers:
+                try:
+                    pc = self._market_repo.get_candles(peer)
+                    if pc:
+                        peer_candles[peer] = list(pc)
+                except Exception:
+                    pass
+            ihsg_20d_return = _benchmark_return_from_repository(
+                self._market_repo,
+                benchmark=request.benchmark,
+                end_date=request.today,
+                lookback=20,
+                min_valid=18,
+            )
+            sector_context_evidence = sc_builder.build(
+                SectorContextRequest(
+                    ticker=request.ticker,
+                    snapshot_date=request.today,
+                    sector=sc_sector,
+                    ticker_candles=tuple(candles),
+                    peer_candles=peer_candles,
+                    ihsg_20d_return=ihsg_20d_return,
+                )
+            )
+        except Exception as exc:
+            warnings.append(f"Sector context evidence unavailable: {exc}")
+
         evidence = SwingEvidence(
             accumulation_candidate=accumulation_candidate,
             setup_eval=setup_eval,
@@ -1068,6 +1154,7 @@ class SwingAnalysisWorkflowUseCase:
             strategy_rule_evidence=strategy_rule_evidence,
             institutional_accumulation_evidence=institutional_accumulation_evidence,
             ticker_profile_snapshot=ticker_profile_snapshot,
+            sector_context_evidence=sector_context_evidence,
         )
 
         # Re-score with evidence now that both groups are available. Signal was
@@ -1094,6 +1181,7 @@ class SwingAnalysisWorkflowUseCase:
                     flow_confirmation_evidence=flow_confirmation_evidence,
                     setup_family=request.setup_name,
                     setup_phase=setup_phase,
+                    sector_context_evidence=sector_context_evidence,
                 )
             except Exception as exc:
                 warnings.append(f"Evidence-enriched signal re-score unavailable: {exc}")

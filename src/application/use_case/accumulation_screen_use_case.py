@@ -39,6 +39,7 @@ if TYPE_CHECKING:
     from src.domain.value_objects.forward_estimates import ForwardEstimates
     from src.domain.value_objects.institutional_accumulation_evidence import InstitutionalAccumulationEvidence
     from src.domain.value_objects.risk_assessment import RiskAssessment
+    from src.domain.value_objects.sector_context_evidence import SectorContextEvidence
     from src.domain.value_objects.ticker_profile_snapshot import TickerProfileSnapshot
     from src.domain.value_objects.seasonal_edge import SeasonalEdge
     from src.domain.value_objects.setup_phase import SetupPhaseSnapshot
@@ -447,6 +448,7 @@ def _candidate_observation_payload(
     strategy_evidence: "StrategyEvidence | None" = None,
     ia_evidence: "InstitutionalAccumulationEvidence | None" = None,
     tp_snapshot: "TickerProfileSnapshot | None" = None,
+    sc_evidence: "SectorContextEvidence | None" = None,
 ) -> dict:
     """Build schema-versioned replay payload for one screened candidate.
 
@@ -485,6 +487,7 @@ def _candidate_observation_payload(
         strategy_evidence=strategy_evidence,
         ia_evidence=ia_evidence,
         tp_snapshot=tp_snapshot,
+        sc_evidence=sc_evidence,
     )
 
     return {
@@ -519,6 +522,7 @@ def _sub_signal_fingerprint(
     strategy_evidence: "StrategyEvidence | None" = None,
     ia_evidence: "InstitutionalAccumulationEvidence | None" = None,
     tp_snapshot: "TickerProfileSnapshot | None" = None,
+    sc_evidence: "SectorContextEvidence | None" = None,
 ) -> dict:
     """Persist raw sub-signal values as they were at observation time."""
     assessment = signal.assessment if signal is not None else None
@@ -538,6 +542,7 @@ def _sub_signal_fingerprint(
     strategy_dict = _strategy_evidence_fingerprint(strategy_evidence)
     ia_dict = _ia_evidence_fingerprint(ia_evidence)
     tp_dict = _tp_fingerprint(tp_snapshot)
+    sc_dict = _sc_fingerprint(sc_evidence)
     alpha_trigger_dict = _alpha_trigger_fingerprint(signal)
     return {
         "setup_family": constraints.get("setup_family"),
@@ -545,6 +550,7 @@ def _sub_signal_fingerprint(
         **strategy_dict,
         **ia_dict,
         **tp_dict,
+        **sc_dict,
         **alpha_trigger_dict,
         "rsi_at_signal": candidate.rsi,
         "bb_width_pctile_at_signal": candidate.bb_width_pctile,
@@ -733,6 +739,33 @@ def _tp_fingerprint(
     }
 
 
+def _sc_fingerprint(
+    sc: "SectorContextEvidence | None",
+) -> dict:
+    _none: dict = {
+        "sc_sector": None,
+        "sc_peer_count": None,
+        "sc_sector_20d_return": None,
+        "sc_sector_vs_ihsg_20d": None,
+        "sc_sector_breadth": None,
+        "sc_ticker_vs_sector_rs": None,
+        "sc_sector_regime": None,
+        "sc_coverage_score": None,
+    }
+    if sc is None:
+        return _none
+    return {
+        "sc_sector": sc.sector,
+        "sc_peer_count": sc.peer_count,
+        "sc_sector_20d_return": sc.sector_20d_return,
+        "sc_sector_vs_ihsg_20d": sc.sector_vs_ihsg_20d,
+        "sc_sector_breadth": sc.sector_breadth,
+        "sc_ticker_vs_sector_rs": sc.ticker_vs_sector_rs,
+        "sc_sector_regime": sc.sector_regime,
+        "sc_coverage_score": sc.coverage_score,
+    }
+
+
 def _strategy_evidence_fingerprint(
     strategy_evidence: "StrategyEvidence | None",
 ) -> dict:
@@ -770,6 +803,23 @@ def _candidate_observation_coverage_score(
     # Persist availability ratio, not directional strength.
     present_groups = 1 if flow_ev is not None else 0
     return round(present_groups / 2.0, 4)
+
+
+def _simple_return(
+    candles: list[Any] | tuple[Any, ...],
+    *,
+    lookback: int,
+    min_valid: int,
+) -> float | None:
+    sorted_candles = sorted(candles, key=lambda c: c.date)
+    window = sorted_candles[-lookback:] if len(sorted_candles) >= lookback else sorted_candles
+    valid = [c for c in window if getattr(c, "close", None) and float(c.close) > 0.0]
+    if len(valid) < min_valid:
+        return None
+    reference = float(valid[0].close)
+    if reference <= 0.0:
+        return None
+    return (float(valid[-1].close) - reference) / reference
 
 
 class AccumulationScreenUseCase:
@@ -1119,6 +1169,11 @@ class AccumulationScreenUseCase:
                     snapshot_date,
                 )
                 tp_snapshot = self._build_candidate_ticker_profile(c, snapshot_date)
+                sc_evidence = self._build_candidate_sector_context(
+                    c,
+                    snapshot_date,
+                    tp_snapshot,
+                )
                 observations.append(
                     CandidateObservation(
                         ticker=c.ticker,
@@ -1132,6 +1187,7 @@ class AccumulationScreenUseCase:
                             strategy_evidence=strategy_evidence,
                             ia_evidence=ia_evidence,
                             tp_snapshot=tp_snapshot,
+                            sc_evidence=sc_evidence,
                             snapshot_date=snapshot_date,
                             captured_at=captured_at,
                             request=request,
@@ -1267,6 +1323,54 @@ class AccumulationScreenUseCase:
                     market_cap_idr=market_cap_idr,
                     sector=sector,
                     sub_sector=sub_sector,
+                )
+            )
+        except Exception:
+            return None
+
+    def _build_candidate_sector_context(
+        self,
+        candidate: "AccumulationCandidate",
+        snapshot_date: date,
+        tp_snapshot: "TickerProfileSnapshot | None",
+    ) -> "SectorContextEvidence | None":
+        try:
+            from src.application.services.sector_context_evidence_builder import (
+                SectorContextEvidenceBuilder,
+                SectorContextRequest,
+            )
+
+            builder = SectorContextEvidenceBuilder.from_yaml()
+            sector = (
+                candidate.ticker_notation.sector
+                if candidate.ticker_notation is not None
+                else None
+            ) or (tp_snapshot.sector if tp_snapshot is not None else None)
+            peer_tickers = builder.peers_for_ticker(candidate.ticker)
+            peer_candles: dict[str, list] = {}
+            for peer in peer_tickers:
+                try:
+                    candles = self._market_repo.get_candles(peer, end_date=snapshot_date)
+                    if candles:
+                        peer_candles[peer] = list(candles)
+                except Exception:
+                    pass
+            ticker_candles = tuple(
+                self._market_repo.get_candles(candidate.ticker, end_date=snapshot_date)
+            )
+            ihsg_20d_return = _simple_return(
+                self._market_repo.get_candles("IHSG", end_date=snapshot_date),
+                lookback=20,
+                min_valid=18,
+            )
+            return builder.build(
+                SectorContextRequest(
+                    ticker=candidate.ticker,
+                    snapshot_date=snapshot_date,
+                    sector=sector,
+                    ticker_candles=ticker_candles,
+                    peer_candles=peer_candles,
+                    ihsg_20d_return=ihsg_20d_return,
                 )
             )
         except Exception:

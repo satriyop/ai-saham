@@ -114,6 +114,8 @@ def _build_buckets(
             ),
             ("coverage_bucket", _score_bucket(fp.coverage)),
             ("conviction_bucket", _score_bucket(fp.conviction)),
+            ("sc_sector", fp.sc_sector or "UNKNOWN"),
+            ("sc_sector_regime", fp.sc_sector_regime or "UNKNOWN"),
         )
         for key in keys:
             groups.setdefault(key, []).append(label)
