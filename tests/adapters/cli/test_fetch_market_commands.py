@@ -1,6 +1,6 @@
 """Tests for fetch market command helper behavior."""
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
 
@@ -36,6 +36,10 @@ def _candle(ticker: str, day: date) -> Candle:
         close=Decimal("100"),
         volume=1000,
     )
+
+
+def _generate_candles(ticker: str, start: date, end: date) -> list[Candle]:
+    return [_candle(ticker, start + timedelta(days=i)) for i in range((end - start).days + 1)]
 
 
 def _summary(ticker: str, day: date, source: str = "idx") -> BrokerSummary:
@@ -236,10 +240,7 @@ def test_fetch_candles_backfills_older_gap(monkeypatch, tmp_path: Path):
     today = date.today()
     cached_start = date.fromordinal(today.toordinal() - 90)
     requested_start = date.fromordinal(today.toordinal() - 365)
-    repo.save_candles([
-        _candle("BBCA", cached_start),
-        _candle("BBCA", today),
-    ])
+    repo.save_candles(_generate_candles("BBCA", cached_start, today))
     class _FakeBroker:
         api_client = object()
 
@@ -279,10 +280,7 @@ def test_fetch_candles_treats_small_leading_non_trading_gap_as_current(
     today = date.today()
     requested_start = date.fromordinal(today.toordinal() - 365)
     cached_start = date.fromordinal(requested_start.toordinal() + 2)
-    repo.save_candles([
-        _candle("BBCA", cached_start),
-        _candle("BBCA", today),
-    ])
+    repo.save_candles(_generate_candles("BBCA", cached_start, today))
     class _FakeBroker:
         api_client = object()
 
@@ -314,9 +312,7 @@ def test_fetch_candles_treats_recent_trading_day_as_current(monkeypatch, tmp_pat
     today = date.today()
     latest = date.fromordinal(today.toordinal() - 2)
     requested_start = date.fromordinal(today.toordinal() - 365)
-    repo.save_candles([
-        _candle("BBCA", requested_start),
-        _candle("BBCA", latest),
+    repo.save_candles(_generate_candles("BBCA", requested_start, latest) + [
         # IHSG candle on `latest` sets the last known trading day, so the
         # staleness check considers BBCA data current (not stale).
         _candle("IHSG", latest),
