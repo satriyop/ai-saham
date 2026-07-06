@@ -1,0 +1,39 @@
+version: 1
+
+institutional_accumulation:
+  evidence_status: DIAGNOSTIC
+
+  windows:
+    cnfb_bullish_accumulation: [20, 30]
+    cnfb_bearish_distribution: [3, 5, 7]
+    foreign_vwap_days: 20
+    domestic_vwap_days: 20
+    broker_consistency_days: [10, 20]
+    counterparty_window_days: 5
+
+  min_valid_sessions:
+    cnfb_20d: 15
+    cnfb_30d: 22
+    cnfb_3d: 2
+    vwap_20d: 10
+    broker_consistency: 8
+
+  # Component weights must sum to 1.00 per track group
+  foreign_institutional_track_components:
+    foreign_participation: 0.25
+    foreign_concentration_cr4_cr8: 0.20
+    cnfb_price_divergence: 0.35
+    foreign_vwap_distance: 0.20
+
+  domestic_bandar_track_components:
+    broker_consistency: 0.25
+    broker_reversal: 0.15
+    accumulation_session_ratio: 0.20
+    domestic_buy_vwap_distance: 0.15
+    broker_hhi_divergence: 0.15
+    bandar_broad_or_accumulation_score: 0.10
+
+  track_weights:
+    foreign_institutional_track: 0.45
+    domestic_bandar_track: 0.40
+    counterparty_transfer: 0.15

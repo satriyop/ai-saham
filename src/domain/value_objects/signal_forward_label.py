@@ -69,6 +69,30 @@ class SignalObservationFingerprint:
     market_regime: dict[str, Any] = field(default_factory=dict)
     coverage: float | None = None
     conviction: float | None = None
+    # Phase E: institutional accumulation evidence fingerprint
+    institutional_accumulation_status: str | None = None
+    ia_foreign_participation: float | None = None
+    ia_foreign_cr4: float | None = None
+    ia_foreign_cr8: float | None = None
+    ia_cnfb_divergence_20d: float | None = None
+    ia_cnfb_divergence_30d: float | None = None
+    ia_cnfb_distribution_3d: float | None = None
+    ia_foreign_vwap_distance: float | None = None
+    ia_foreign_track_coverage: float | None = None
+    ia_foreign_track_conviction: float | None = None
+    ia_domestic_broker_consistency: float | None = None
+    ia_domestic_broker_reversal: float | None = None
+    ia_domestic_accumulation_session_ratio: float | None = None
+    ia_domestic_buy_vwap_distance: float | None = None
+    ia_domestic_broker_hhi_divergence: float | None = None
+    ia_bandar_broad_score_normalized: float | None = None
+    ia_domestic_track_coverage: float | None = None
+    ia_domestic_track_conviction: float | None = None
+    ia_counterparty_transfer_asymmetry: float | None = None
+    ia_counterparty_buy_hhi: float | None = None
+    ia_counterparty_sell_hhi: float | None = None
+    ia_coverage_score: float | None = None
+    ia_conviction_score: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -103,6 +127,29 @@ class SignalObservationFingerprint:
             "market_regime": dict(self.market_regime),
             "coverage": self.coverage,
             "conviction": self.conviction,
+            "institutional_accumulation_status": self.institutional_accumulation_status,
+            "ia_foreign_participation": self.ia_foreign_participation,
+            "ia_foreign_cr4": self.ia_foreign_cr4,
+            "ia_foreign_cr8": self.ia_foreign_cr8,
+            "ia_cnfb_divergence_20d": self.ia_cnfb_divergence_20d,
+            "ia_cnfb_divergence_30d": self.ia_cnfb_divergence_30d,
+            "ia_cnfb_distribution_3d": self.ia_cnfb_distribution_3d,
+            "ia_foreign_vwap_distance": self.ia_foreign_vwap_distance,
+            "ia_foreign_track_coverage": self.ia_foreign_track_coverage,
+            "ia_foreign_track_conviction": self.ia_foreign_track_conviction,
+            "ia_domestic_broker_consistency": self.ia_domestic_broker_consistency,
+            "ia_domestic_broker_reversal": self.ia_domestic_broker_reversal,
+            "ia_domestic_accumulation_session_ratio": self.ia_domestic_accumulation_session_ratio,
+            "ia_domestic_buy_vwap_distance": self.ia_domestic_buy_vwap_distance,
+            "ia_domestic_broker_hhi_divergence": self.ia_domestic_broker_hhi_divergence,
+            "ia_bandar_broad_score_normalized": self.ia_bandar_broad_score_normalized,
+            "ia_domestic_track_coverage": self.ia_domestic_track_coverage,
+            "ia_domestic_track_conviction": self.ia_domestic_track_conviction,
+            "ia_counterparty_transfer_asymmetry": self.ia_counterparty_transfer_asymmetry,
+            "ia_counterparty_buy_hhi": self.ia_counterparty_buy_hhi,
+            "ia_counterparty_sell_hhi": self.ia_counterparty_sell_hhi,
+            "ia_coverage_score": self.ia_coverage_score,
+            "ia_conviction_score": self.ia_conviction_score,
         }
 
     @classmethod
@@ -179,6 +226,29 @@ class SignalObservationFingerprint:
             market_regime=dict(regime or {}),
             coverage=_optional_float(data.get("coverage", data.get("coverage_score"))),
             conviction=_optional_float(data.get("conviction", data.get("conviction_score"))),
+            institutional_accumulation_status=data.get("institutional_accumulation_status"),
+            ia_foreign_participation=_optional_float(data.get("ia_foreign_participation")),
+            ia_foreign_cr4=_optional_float(data.get("ia_foreign_cr4")),
+            ia_foreign_cr8=_optional_float(data.get("ia_foreign_cr8")),
+            ia_cnfb_divergence_20d=_optional_float(data.get("ia_cnfb_divergence_20d")),
+            ia_cnfb_divergence_30d=_optional_float(data.get("ia_cnfb_divergence_30d")),
+            ia_cnfb_distribution_3d=_optional_float(data.get("ia_cnfb_distribution_3d")),
+            ia_foreign_vwap_distance=_optional_float(data.get("ia_foreign_vwap_distance")),
+            ia_foreign_track_coverage=_optional_float(data.get("ia_foreign_track_coverage")),
+            ia_foreign_track_conviction=_optional_float(data.get("ia_foreign_track_conviction")),
+            ia_domestic_broker_consistency=_optional_float(data.get("ia_domestic_broker_consistency")),
+            ia_domestic_broker_reversal=_optional_float(data.get("ia_domestic_broker_reversal")),
+            ia_domestic_accumulation_session_ratio=_optional_float(data.get("ia_domestic_accumulation_session_ratio")),
+            ia_domestic_buy_vwap_distance=_optional_float(data.get("ia_domestic_buy_vwap_distance")),
+            ia_domestic_broker_hhi_divergence=_optional_float(data.get("ia_domestic_broker_hhi_divergence")),
+            ia_bandar_broad_score_normalized=_optional_float(data.get("ia_bandar_broad_score_normalized")),
+            ia_domestic_track_coverage=_optional_float(data.get("ia_domestic_track_coverage")),
+            ia_domestic_track_conviction=_optional_float(data.get("ia_domestic_track_conviction")),
+            ia_counterparty_transfer_asymmetry=_optional_float(data.get("ia_counterparty_transfer_asymmetry")),
+            ia_counterparty_buy_hhi=_optional_float(data.get("ia_counterparty_buy_hhi")),
+            ia_counterparty_sell_hhi=_optional_float(data.get("ia_counterparty_sell_hhi")),
+            ia_coverage_score=_optional_float(data.get("ia_coverage_score")),
+            ia_conviction_score=_optional_float(data.get("ia_conviction_score")),
         )
 
 

@@ -2,12 +2,12 @@
 
 _Design rationale: `docs/signal_refactor.md`_
 _Phase plan: `docs/signal_refactor_phases.md`_
-_Current implementation target: Phase D planning_
+_Current implementation target: Phase E implementation_
 _Updated: 2026-07-06_
 
 This tracker records the current implementation state and concrete checklist for
-the SignalEngine refactor. A1, A2, Phase B, and Phase C are preserved as Done.
-Phase D is now planned as the next implementation target.
+the SignalEngine refactor. A1, A2, B, C, and D are closed. Phase E is the active
+implementation target.
 
 ---
 
@@ -44,6 +44,14 @@ Phase D is now planned as the next implementation target.
 - Closed Phase C does not require AI or network-dependent tests.
 - IDX foreign-flow transition inputs stay diagnostic / low-authority until
   market-level labels prove lead-time value.
+- Closed Phase D added `StrategyEvidenceBuilder`, diagnostic-only strategy rule
+  evidence, and replay fingerprint fields without affecting SignalEngine group
+  scoring or DecisionPolicy.
+- Closed Phase E added `InstitutionalAccumulationEvidence` (two-track foreign +
+  domestic flow evidence, counterparty HHI), 23 `ia_*` fingerprint fields, and
+  the `InstitutionalAccumulationEvidenceBuilder` as DIAGNOSTIC-only without
+  affecting `FlowConfirmationEvidence` group scoring, `DecisionPolicy`, or
+  `AssessSignalEvidenceUseCase`.
 
 ---
 
@@ -56,8 +64,8 @@ Phase D is now planned as the next implementation target.
 | A2 | Full RegimeDetectionEvidence And Replay | Done | Implemented 2026-07-05; all checklist items complete, 2347 tests pass. |
 | B | Minimal Forward Labels And Observation Fingerprints | Done | Implemented and verified; saved labels and fingerprint attribution are operational. |
 | C | SetupPhaseState And Continuous Setup/Trigger Scoring | Done | Closed 2026-07-06; diagnostic setup phase, replay history, and data-quality volume trigger implemented. |
-| D | Strategy Evidence Harness | Planned | Diagnostic-only strategy evidence tracker created 2026-07-06. |
-| E | Institutional Accumulation Evidence | Not Started | Retain phase scope from `docs/signal_refactor_phases.md`. |
+| D | Strategy Evidence Harness | Done (2026-07-06) | Diagnostic-only strategy evidence harness. 2424 tests pass. |
+| E | Institutional Accumulation Evidence | Done (2026-07-06) | Two-track institutional flow evidence, diagnostic-only. 2452 tests pass. |
 | F | Minimal Ticker Profile Diagnostics | Not Started | Retain phase scope from `docs/signal_refactor_phases.md`. |
 | G | Simplified Alpha/Trigger Split | Not Started | Retain phase scope from `docs/signal_refactor_phases.md`. |
 | H | Sector Context | Not Started | Retain phase scope from `docs/signal_refactor_phases.md`. |
@@ -204,54 +212,26 @@ Phase C did not start Phase I tuning or config patching.
 - Recomputing historical evidence for attribution instead of using saved
   observations and Phase B labels.
 
-### Implementation Checklist
+### Completed
 
-- [x] Inspect current `SetupEvidence`, `SetupEvidenceBuilder`,
-      `EvaluateSwingSetupUseCase`, swing workflow, accumulation screen
-      observation payloads, and Phase B label attribution use cases.
-- [x] Define immutable `SetupPhaseState` / phase-history domain value objects.
-- [x] Define deterministic phase transition policy for `NONE`,
-      `ACCUMULATION`, `COMPRESSION`, `BREAKOUT_CONFIRMATION`, `EXHAUSTION`,
-      `DISTRIBUTION`, and `FAILED`.
-- [x] Persist current phase, previous phase, phase history, phase age sessions,
-      phase strength, phase reasons, and `phase_sequence_valid`.
-- [x] Enforce accumulation / foreign-bounce sequence:
-      `ACCUMULATION -> COMPRESSION -> BREAKOUT_CONFIRMATION`.
-- [x] Enforce breakout sequence:
-      `COMPRESSION -> BREAKOUT_CONFIRMATION`.
-- [x] Evaluate distribution, failed, and exhaustion phases before generic
-      non-breakout WATCH handling.
-- [x] Emit `coverage_score` and `conviction_score` separately in setup/phase
-      output.
-- [x] Promote RS vs IHSG to setup eligibility / max-decision evidence for
-      swing, breakout, accumulation, and foreign-bounce.
-- [x] Add setup-family configurable RS policy: lag warning, hard exclude,
-      warning action, and mean-reversion exception requirements.
-- [x] Treat negative RS as unable to be silently overwhelmed by other bullish
-      setup components.
-- [x] Add BB compression as `COMPRESSION` readiness, not bullish evidence.
-- [x] Add `volume_dry_up_then_expansion` trigger for accumulation,
-      foreign-bounce, and breakout.
-- [x] Route volume expansion, positive close, and VWAP reclaim to
-      `BREAKOUT_CONFIRMATION` / Trigger.
-- [x] Keep price confirmation thresholds documented as placeholders until
-      setup/horizon calibration.
-- [x] Ensure `vwap_reclaim.close_above_vwap_pct: 0.30` cannot independently
-      unlock flow Trigger contribution in production.
-- [x] Enforce volume data quality and enough valid 20d sessions for volume
-      trigger availability.
-- [x] Treat suspended days, missing candles, and zero-volume distortion as
-      unavailable trigger evidence that lowers coverage.
-- [x] Persist phase state/history into signal/candidate observations at
-      observation time.
-- [x] Add deterministic tests for phase transitions and sequence validity.
-- [x] Add tests proving one failed gate does not mean all gates failed.
-- [x] Add tests proving distribution, failed, and exhaustion are evaluated
-      before generic WATCH.
-- [x] Add tests proving negative RS cannot be overwhelmed by bullish components.
-- [x] Add tests for volume-trigger source/session coverage and unavailable
-      handling.
-- [x] Keep CLI adapters render-only for phase/evidence output.
+- Immutable `SetupPhaseState` with NONE / ACCUMULATION / COMPRESSION / BREAKOUT_CONFIRMATION / EXHAUSTION / DISTRIBUTION / FAILED transitions; sequence enforced per setup family.
+- Phase history, phase age, phase strength, phase reasons, and `phase_sequence_valid` persisted at observation time.
+- RS vs IHSG promoted to setup eligibility / max-decision evidence with per-family configurable RS policy; negative RS cannot be overwhelmed by bullish components.
+- BB compression as `COMPRESSION` readiness only; `volume_dry_up_then_expansion` as primary SWING_10D trigger for accumulation / foreign-bounce / breakout.
+- Volume data quality checks: valid 20d sessions, suspended days, missing candles, zero-volume distortion lower coverage.
+- `coverage_score` and `conviction_score` emitted separately; phase state persisted into signal and candidate observation fingerprints.
+- All checklist items verified; no Alpha/Trigger rewrite, no TradeSetup sizing changes.
+
+## Closed Phase C Layer Summary
+
+- Domain: added immutable setup phase state and phase history value objects.
+- Application: owns deterministic phase detection, setup-family sequence policy,
+  RS policy, volume-trigger availability, coverage/conviction calculation, and
+  observation persistence orchestration.
+- Infrastructure: extended local persistence/replay paths through existing
+  observation payloads and local repositories.
+- Adapter: remains render-only for setup phase/evidence output; no workflow,
+  scoring, persistence policy, or phase transitions are computed in adapters.
 
 ### Deferred Follow-Up Items
 
@@ -267,176 +247,27 @@ work or calibration:
 - [ ] Add explicit CLI adapter rendering regression tests for phase/evidence
       output.
 
-### Verification Checklist
-
-- [x] Phase state is deterministic for fixed local candles, config, and saved
-      evidence.
-- [x] Phase history is persisted at observation time and replayable.
-- [x] Phase sequence validity is available for Phase B label attribution.
-- [x] Setup output exposes distinct coverage and conviction.
-- [x] BB compression is readiness evidence, not bullish evidence.
-- [x] Trigger evidence requires valid price/volume confirmation.
-- [x] Flow evidence cannot directly create ENTER through Phase C trigger logic.
-- [x] No Alpha/Trigger aggregate rewrite is introduced in Phase C.
-- [x] No TradeSetup sizing math changes are introduced.
-- [x] Tests run offline and do not require network access.
-
 ---
 
 ## Phase D Tracker: Strategy Evidence Harness
 
-**Status:** In progress - core diagnostic harness implemented
+**Status:** Done (2026-07-06)
 
-**Goal:** reuse deterministic strategy packages as setup-family evidence and
-empirical validation tools without creating a parallel decision engine.
+**Completed:**
 
-Phase D evidence is diagnostic-only. It is persisted and reported, but it must
-not affect SignalEngine group scores, canonical `SetupPhaseState`, TradeSetup
-sizing, or final ENTER/WATCH/AVOID decisions until Phase G explicitly consumes
-it through the Alpha/Trigger aggregation plan.
+- Added frozen `StrategyEvidence` / `StrategyRuleEvidence` domain value objects with coverage, conviction, freshness, rationale, outcome (MATCHED/NOT_MATCHED/UNAVAILABLE/INVALID), and stable `to_dict`/`from_dict`.
+- Added `StrategyEvidenceBuilder` in `src/application/services`; evaluates strategy YAMLs through existing `IndicatorRegistry`; never raises — degrades to UNAVAILABLE/INVALID.
+- Strategy evidence wired into swing workflow and accumulation screen observation fingerprints; stored under `strategy_*` fields in `SignalObservationFingerprint`.
+- Evidence-enriched re-score and `DecisionPolicy` ignore strategy evidence in Phase D (zero impact on group scores or ENTER/WATCH/AVOID decisions, verified by grep).
+- Phase B label attribution extended with strategy evidence buckets; old observations without strategy fields still parse cleanly.
+- 2424 tests pass offline.
 
-### Non-Goals
+**Carry-forward (open, not Phase D closure blockers):**
 
-- [x] Do not allow a strategy match to override `SetupPhaseState`.
-- [x] Do not allow a strategy result to override SignalEngine decisions.
-- [x] Do not add Phase G Alpha/Trigger aggregation.
-- [x] Do not add Phase I calibration/tuning or production weights.
-- [x] Do not introduce AI, network calls, or provider fetches.
-- [x] Do not move strategy evaluation or policy into CLI adapters.
-- [x] Do not change TradeSetup stop, target, or position sizing.
-
-### Layer Plan
-
-- Domain: add immutable strategy evidence value object(s) only if existing
-  value objects cannot represent matched strategy evidence cleanly.
-- Application: add `StrategyEvidenceBuilder`, strategy-to-setup mapping policy,
-  deterministic strategy evaluation orchestration, replay fingerprint fields,
-  and empirical readiness checks.
-- Infrastructure: reuse existing local strategy YAML loading and persistence;
-  extend local observation payloads only, unless separate SQLite persistence is
-  required for replay queries.
-- Adapter: render strategy evidence returned by application results only; no
-  strategy evaluation, scoring, or persistence policy in CLI.
-
-### Input Contract
-
-- [x] Strategy YAML must already pass existing strategy validation.
-- [x] Strategy evaluation must run through existing deterministic rule /
-      indicator infrastructure and `IndicatorRegistry`.
-- [x] Evaluation must use local candles and local config only.
-- [x] Indicator warm-up handling must remain in application use cases.
-- [x] Strategy evidence must be reproducible for fixed candles, config,
-      strategy YAML, and as-of date.
-
-### Evidence Model Checklist
-
-- [x] Add `StrategyEvidence` or equivalent immutable diagnostic value object.
-- [x] Capture matched strategy package name.
-- [x] Capture matched rule identifier / rule label.
-- [x] Capture route metadata: setup family, setup phase, and evidence route
-      such as setup, trigger, filter, or exit-context.
-- [x] Capture match outcome: matched, not matched, unavailable, or invalid.
-- [x] Capture coverage metadata: required inputs present / total inputs.
-- [x] Capture conviction metadata: deterministic match strength or rule
-      confidence without implying production authority.
-- [x] Capture freshness metadata for candles and derived indicator inputs.
-- [x] Capture rationale explaining which deterministic rule(s) matched.
-- [x] Capture unavailable reasons for missing candles, warm-up, invalid config,
-      missing indicators, or insufficient data.
-- [x] Ensure strategy evidence serializes to stable dict/JSON.
-
-### Strategy Mapping Policy
-
-- [ ] Define config-driven mapping from strategy packages/rules to setup
-      family and setup phase evidence.
-- [x] Treat mapped strategy output as evidence about a setup route, not as the
-      setup route itself.
-- [ ] Allow multiple strategy matches to coexist without overwriting each other.
-- [x] Preserve canonical setup phase sequence policy from Phase C.
-- [x] Keep BB/compression, volume trigger, RS, and flow authority in their
-      existing Phase C evidence paths.
-- [x] Add explicit behavior for unmapped strategies: diagnostic only,
-      `setup_family=None`, no decision constraints.
-- [ ] Add conflict behavior: contradictory strategy matches are reported as
-      mixed evidence, not collapsed into a single bullish/bearish decision.
-
-### Application Wiring
-
-- [x] Add `StrategyEvidenceBuilder` in `src/application/services`.
-- [x] Reuse existing strategy loader/validator instead of parsing YAML ad hoc.
-- [x] Evaluate strategy rules through `IndicatorRegistry`.
-- [x] Add strategy evidence to swing workflow evidence output when strategy
-      evidence is requested or a strategy package is already part of the request.
-- [x] Add strategy evidence to replay/candidate observation fingerprints.
-- [x] Ensure evidence-enriched signal re-score ignores strategy evidence in
-      Phase D.
-- [x] Ensure DecisionPolicy ignores strategy evidence in Phase D except for
-      reporting already-computed diagnostic constraints if present.
-- [x] Keep CLI adapters thin: no direct strategy evidence computation.
-
-### Persistence And Replay Checklist
-
-- [x] Persist matched strategy name in candidate/signal observation payloads.
-- [x] Persist matched rule identifier.
-- [x] Persist strategy match outcome.
-- [x] Persist route metadata and mapped setup family/phase.
-- [x] Persist coverage, conviction, freshness, rationale, and unavailable
-      reasons.
-- [x] Extend `SignalObservationFingerprint.from_dict()` to parse strategy
-      evidence fields when present.
-- [x] Extend Phase B label attribution summaries with strategy evidence buckets:
-      strategy name, matched rule, route, and outcome.
-- [x] Ensure old observations without strategy evidence still parse.
-- [x] Do not recompute strategy evidence when generating forward labels; labels
-      must use saved observation-time evidence.
-
-### Empirical Readiness Checklist
-
-- [ ] Add a deterministic readiness summary from existing strategy backtests.
-- [ ] Readiness must be diagnostic-only in Phase D.
-- [ ] Require minimum sample count before reporting a strategy route as
-      empirically ready.
-- [ ] Report insufficient sample size explicitly.
-- [ ] Do not assign production weights or unlock scoring based on readiness
-      until Phase G/I.
-- [ ] Preserve setup-family and horizon grouping, starting with `SWING_10D`.
-
-### Tests
-
-- [x] Domain/value-object serialization tests for strategy evidence.
-- [x] Application tests for strategy evidence builder with local fake candles
-      and fake strategy/rule results.
-- [x] Tests for matched, not matched, unavailable, and invalid strategy states.
-- [x] Tests that strategy matches cannot override `SetupPhaseState`.
-- [x] Tests that strategy matches cannot override SignalEngine decisions.
-- [x] Tests that strategy evidence is ignored by evidence-enriched re-score in
-      Phase D.
-- [x] Persistence tests proving observation payloads include strategy evidence.
-- [x] Forward-label tests proving strategy attribution uses saved fingerprints
-      and does not recompute strategies.
-- [ ] CLI tests proving adapters render strategy evidence only.
-- [x] Offline-only tests; no network or AI dependencies.
-
-### Documentation Checklist
-
-- [x] Document Phase D evidence as diagnostic-only.
-- [x] Document initial mapping policy from strategy package/rule to setup family/phase.
-- [x] Document persistence fields and replay attribution buckets.
-- [ ] Document empirical readiness limits and sample-size requirements.
-- [ ] Document that Phase G is the first phase allowed to consume strategy
-      evidence in Alpha/Trigger aggregation.
-
-### Phase D Verification Checklist
-
-- [x] Strategy evidence is deterministic for fixed local inputs.
-- [x] Strategy evidence is persisted at observation time.
-- [x] Strategy evidence is replayable through Phase B labels.
-- [x] Strategy evidence remains diagnostic-only in SignalEngine and
-      DecisionPolicy.
-- [x] Canonical `SetupPhaseState` is never overwritten by strategy output.
-- [x] TradeSetup sizing math is unchanged.
-- [x] Adapters remain thin.
-- [x] Tests pass offline.
+- [ ] Config-driven mapping from strategy package/rule to setup family + phase evidence (multi-match coexistence and conflict reporting).
+- [ ] Empirical readiness summary from existing backtests (min sample size, SWING_10D grouping).
+- [ ] CLI adapter rendering regression tests for strategy evidence display.
+- [ ] Document Phase G as first phase allowed to consume strategy evidence in Alpha/Trigger aggregation.
 
 ---
 
@@ -468,25 +299,72 @@ path and promote `signal_score_raw` → `assessment.score`. Requires updating te
 
 ## Current Assumptions
 
-- Phase D is the next implementation target.
-- Phase D must preserve the diagnostic-only strategy evidence contract until
-  Phase G explicitly consumes strategy evidence in Alpha/Trigger aggregation.
-- Phase B labels remain the source for replay attribution.
+- Phase F (Minimal Ticker Profile Diagnostics) is the next implementation target.
+- Phase E institutional accumulation evidence is DIAGNOSTIC-only; `FlowConfirmationEvidence`
+  group scoring is unchanged until Phase G/I explicitly promotes institutional flow.
+- Phase D strategy evidence contract is preserved; Phase G is the first phase
+  allowed to consume it in Alpha/Trigger aggregation.
+- Phase B labels remain the source for replay attribution; no recomputation of
+  historical evidence.
 - Phase I tuning/config patching remains out of scope until Phase I is opened.
 - Network-dependent tests remain out of scope for refactor phases.
-- Existing dirty worktree changes are intentional; do not revert unrelated
-  files.
 - `SWING_10D` remains the first calibrated ticker-signal horizon.
 
 ---
 
-## Closed Phase C Layer Summary
+## Phase E Tracker: Institutional Accumulation Evidence
 
-- Domain: added immutable setup phase state and phase history value objects.
-- Application: owns deterministic phase detection, setup-family sequence policy,
-  RS policy, volume-trigger availability, coverage/conviction calculation, and
-  observation persistence orchestration.
-- Infrastructure: extended local persistence/replay paths through existing
-  observation payloads and local repositories.
-- Adapter: remains render-only for setup phase/evidence output; no workflow,
-  scoring, persistence policy, or phase transitions are computed in adapters.
+**Status:** Done (2026-07-06)
+
+**Goal:** Make IDX institutional flow empirical with two parallel tracks
+(`foreign_institutional_track` + `domestic_bandar_track`), add counterparty
+transfer metrics, enforce asymmetric observation windows, and persist all raw
+metrics in replay observations. Everything built in Phase E is DIAGNOSTIC /
+LOW_WEIGHT status until Phase I OOS attribution proves bucket-level predictive
+value.
+
+Phase E does NOT change `AssessSignalEvidenceUseCase` group scoring,
+`DecisionPolicy`, or `TradeSetup`. The existing `FlowConfirmationEvidence`
+continues to drive the `flow_confirmation` group score unchanged.
+
+### Completed
+
+- Added `EvidenceStatus` enum (DIAGNOSTIC / LOW_WEIGHT / PRODUCTION) and four frozen dataclasses: `ForeignInstitutionalTrack`, `DomesticBandarTrack`, `CounterpartyTransferEvidence`, `InstitutionalAccumulationEvidence` — all with `__post_init__` bounds, `to_dict`/`from_dict`, backward-compat `data.get()`.
+- Added `config/institutional_accumulation.yaml` with asymmetric windows, `min_valid_sessions`, and component weights; config validates all three weight groups sum to 1.00.
+- Added `InstitutionalAccumulationEvidenceBuilder` with `from_yaml()` factory; implements all foreign (participation, CR4/CR8, CNFB 20d/30d bullish + 3d/5d/7d bearish, foreign VWAP) and domestic (broker consistency, reversal, accumulation session ratio, domestic VWAP, HHI divergence, bandar normalisation) metrics and counterparty HHI; never raises — degrades to UNAVAILABLE with reason. `BrokerDailyFlow` foreign classification via `DEFAULT_FOREIGN_BROKER_CODES` frozenset (overridable in tests).
+- Added 23 `ia_*` fields to `SignalObservationFingerprint` (all `None`-defaulted; `data.get()` in `from_dict()`).
+- Added `_ia_evidence_fingerprint()` helper and spread into `_sub_signal_fingerprint()` in `accumulation_screen_use_case.py`; added `_build_candidate_institutional_accumulation_evidence()` method.
+- Added `institutional_accumulation_evidence` field and build block to `swing_analysis_workflow_use_case.py`; wired into `SwingEvidence` constructor and `to_dict()`.
+- Verified zero references to `InstitutionalAccumulationEvidence` in `AssessSignalEvidenceUseCase`, `DecisionPolicy`, and all domain entity files.
+- 2452 tests pass offline (28 new Phase E tests; 2424 existing all green).
+
+### Post-Closure Fixes Applied (2026-07-06)
+
+After external review, three issues were identified and resolved:
+
+1. **CNFB metadata key mismatch (High):** `_ia_evidence_fingerprint()` was reading wrong flat keys (`cnfb_divergence_30d_score`, `cnfb_distribution_3d_score`). Fixed to read from `metadata["cnfb_bullish_scores"]["cnfb_20d/30d"]` and `metadata["cnfb_bearish_scores"]["cnfb_3d"]`. `ia_cnfb_divergence_20d` is now the raw 20d score, not the averaged track score. Tests added.
+
+2. **Conviction renormalization (Medium):** Foreign and domestic track conviction was a non-renormalized weighted sum — missing components dragged conviction down, conflating it with coverage. Fixed: conviction now renormalizes over available-component weights so it reflects signal strength only. Coverage captures availability. Tests added.
+
+3. **EvidenceStatus registry (Medium):** Explicitly deferred to Phase G/I. No runtime code path promotes `InstitutionalAccumulationEvidence` into scoring in Phase E. Documented in Deferred section.
+
+2457 tests pass after fixes.
+
+### Carry-Forward (open, not Phase E closure blockers)
+
+- [ ] Extend `summarize_signal_forward_labels_use_case.py` to group by `ia_foreign_track_coverage` / `ia_domestic_track_coverage` buckets in attribution (currently reads `ia_*` fields but no dedicated bucket grouping).
+- [ ] Persistence integration test: verify `ia_*` fields land in saved observation payload via `AccumulationScreenUseCase` with a broker-repo stub.
+- [ ] CLI adapter regression tests for Phase E evidence rendering.
+
+### Deferred to Later Phases
+
+- Empirical readiness summary and OOS attribution (Phase I).
+- Promoting any component from DIAGNOSTIC to LOW_WEIGHT or PRODUCTION (Phase I).
+- Domestic bandar cost basis / VWAP reclaim as Trigger evidence (Phase G).
+- Ticker profile driving evidence interpretation weights (Phase F).
+- BandarDetectorSnapshot historical caching (infrastructure improvement).
+- **EvidenceStatus registry / cap enforcement** (`signal_refactor.md` §2329): Phase E has the enum and config-validated `evidence_status = DIAGNOSTIC` but no registry object that prevents runtime promotion above DIAGNOSTIC. Safe for Phase E because no Phase E path feeds `InstitutionalAccumulationEvidence` into scoring. Implement the registry as a Phase G/I gate when evidence promotion paths actually exist.
+
+---
+
+

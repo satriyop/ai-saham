@@ -39,6 +39,7 @@ from src.domain.value_objects.benchmark_symbol import canonicalize_ticker
 
 if TYPE_CHECKING:
     from src.domain.value_objects.flow_confirmation_evidence import FlowConfirmationEvidence
+    from src.domain.value_objects.institutional_accumulation_evidence import InstitutionalAccumulationEvidence
     from src.domain.value_objects.market_context import MarketContext
     from src.domain.value_objects.setup_evidence import SetupEvidence
     from src.domain.value_objects.setup_phase import SetupPhaseSnapshot
@@ -125,6 +126,7 @@ class SwingEvidence:
     flow_confirmation_evidence: "FlowConfirmationEvidence | None" = None
     setup_phase: "SetupPhaseSnapshot | None" = None
     strategy_rule_evidence: "StrategyEvidence | None" = None
+    institutional_accumulation_evidence: "InstitutionalAccumulationEvidence | None" = None
 
     def to_dict(self, *, strategy_name: str | None = None, max_hold_days: int | None = None) -> dict[str, Any]:
         candidate = self.accumulation_candidate
@@ -191,6 +193,10 @@ class SwingEvidence:
             "flow_confirmation_evidence": (
                 self.flow_confirmation_evidence.to_dict()
                 if self.flow_confirmation_evidence else None
+            ),
+            "institutional_accumulation_evidence": (
+                self.institutional_accumulation_evidence.to_dict()
+                if self.institutional_accumulation_evidence else None
             ),
         }
 
@@ -904,6 +910,51 @@ class SwingAnalysisWorkflowUseCase:
             except Exception as exc:
                 warnings.append(f"Strategy evidence unavailable: {exc}")
 
+        institutional_accumulation_evidence = None
+        try:
+            from datetime import timedelta
+
+            from src.application.services.institutional_accumulation_evidence_builder import (
+                InstitutionalAccumulationEvidenceBuilder,
+                InstitutionalAccumulationEvidenceRequest,
+            )
+
+            ia_start_date = request.today - timedelta(days=45)
+            broker_daily_flows = tuple(
+                self._broker_repo.get_broker_daily_flows(
+                    request.ticker, start_date=ia_start_date, end_date=request.today
+                )
+            )
+            foreign_flow_points = tuple(
+                self._broker_repo.get_foreign_flow_points(
+                    request.ticker, start_date=ia_start_date, end_date=request.today
+                )
+            )
+            broker_summaries = tuple(
+                self._broker_repo.get_broker_summaries(
+                    request.ticker, start_date=ia_start_date, end_date=request.today
+                )
+            )
+            institutional_accumulation_evidence = (
+                InstitutionalAccumulationEvidenceBuilder.from_yaml().build(
+                    InstitutionalAccumulationEvidenceRequest(
+                        ticker=request.ticker,
+                        snapshot_date=request.today,
+                        broker_daily_flows=broker_daily_flows,
+                        foreign_flow_points=foreign_flow_points,
+                        broker_summaries=broker_summaries,
+                        bandar_snapshot=(
+                            accumulation_candidate.bandar_detector
+                            if accumulation_candidate is not None
+                            else None
+                        ),
+                        candles=tuple(candles),
+                    )
+                )
+            )
+        except Exception as exc:
+            warnings.append(f"Institutional accumulation evidence unavailable: {exc}")
+
         evidence = SwingEvidence(
             accumulation_candidate=accumulation_candidate,
             setup_eval=setup_eval,
@@ -917,6 +968,7 @@ class SwingAnalysisWorkflowUseCase:
             flow_confirmation_evidence=flow_confirmation_evidence,
             setup_phase=setup_phase,
             strategy_rule_evidence=strategy_rule_evidence,
+            institutional_accumulation_evidence=institutional_accumulation_evidence,
         )
 
         # Re-score with evidence now that both groups are available. Signal was

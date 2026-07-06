@@ -37,6 +37,7 @@ if TYPE_CHECKING:
     from src.domain.value_objects.company_fundamentals import CompanyFundamentals
     from src.domain.value_objects.flow_confirmation_evidence import FlowConfirmationEvidence
     from src.domain.value_objects.forward_estimates import ForwardEstimates
+    from src.domain.value_objects.institutional_accumulation_evidence import InstitutionalAccumulationEvidence
     from src.domain.value_objects.risk_assessment import RiskAssessment
     from src.domain.value_objects.seasonal_edge import SeasonalEdge
     from src.domain.value_objects.setup_phase import SetupPhaseSnapshot
@@ -443,6 +444,7 @@ def _candidate_observation_payload(
     captured_at: datetime,
     request: "AccumulationScreenRequest",
     strategy_evidence: "StrategyEvidence | None" = None,
+    ia_evidence: "InstitutionalAccumulationEvidence | None" = None,
 ) -> dict:
     """Build schema-versioned replay payload for one screened candidate.
 
@@ -474,6 +476,7 @@ def _candidate_observation_payload(
         flow_ev=flow_ev,
         setup_phase=setup_phase,
         strategy_evidence=strategy_evidence,
+        ia_evidence=ia_evidence,
     )
 
     return {
@@ -506,6 +509,7 @@ def _sub_signal_fingerprint(
     flow_ev: "FlowConfirmationEvidence | None",
     setup_phase: "SetupPhaseSnapshot | None" = None,
     strategy_evidence: "StrategyEvidence | None" = None,
+    ia_evidence: "InstitutionalAccumulationEvidence | None" = None,
 ) -> dict:
     """Persist raw sub-signal values as they were at observation time."""
     assessment = signal.assessment if signal is not None else None
@@ -523,10 +527,12 @@ def _sub_signal_fingerprint(
     flow_dict = flow_ev.to_dict() if flow_ev is not None else {}
     phase_dict = _setup_phase_fingerprint(setup_phase)
     strategy_dict = _strategy_evidence_fingerprint(strategy_evidence)
+    ia_dict = _ia_evidence_fingerprint(ia_evidence)
     return {
         "setup_family": constraints.get("setup_family"),
         **phase_dict,
         **strategy_dict,
+        **ia_dict,
         "rsi_at_signal": candidate.rsi,
         "bb_width_pctile_at_signal": candidate.bb_width_pctile,
         "vwap_position_at_signal": candidate.vwap_pct,
@@ -577,6 +583,69 @@ def _setup_phase_fingerprint(
         "phase_history": [entry.to_dict() for entry in setup_phase.history],
         "phase_coverage_score": setup_phase.coverage_score,
         "phase_conviction_score": setup_phase.conviction_score,
+    }
+
+
+def _ia_evidence_fingerprint(
+    ia_evidence: "InstitutionalAccumulationEvidence | None",
+) -> dict:
+    _none: dict = {
+        "institutional_accumulation_status": None,
+        "ia_foreign_participation": None,
+        "ia_foreign_cr4": None,
+        "ia_foreign_cr8": None,
+        "ia_cnfb_divergence_20d": None,
+        "ia_cnfb_divergence_30d": None,
+        "ia_cnfb_distribution_3d": None,
+        "ia_foreign_vwap_distance": None,
+        "ia_foreign_track_coverage": None,
+        "ia_foreign_track_conviction": None,
+        "ia_domestic_broker_consistency": None,
+        "ia_domestic_broker_reversal": None,
+        "ia_domestic_accumulation_session_ratio": None,
+        "ia_domestic_buy_vwap_distance": None,
+        "ia_domestic_broker_hhi_divergence": None,
+        "ia_bandar_broad_score_normalized": None,
+        "ia_domestic_track_coverage": None,
+        "ia_domestic_track_conviction": None,
+        "ia_counterparty_transfer_asymmetry": None,
+        "ia_counterparty_buy_hhi": None,
+        "ia_counterparty_sell_hhi": None,
+        "ia_coverage_score": None,
+        "ia_conviction_score": None,
+    }
+    if ia_evidence is None:
+        return _none
+    ft = ia_evidence.foreign_institutional_track
+    dt = ia_evidence.domestic_bandar_track
+    ct = ia_evidence.counterparty_transfer
+    meta = ia_evidence.metadata or {}
+    bullish = meta.get("cnfb_bullish_scores") or {}
+    bearish = meta.get("cnfb_bearish_scores") or {}
+    return {
+        "institutional_accumulation_status": ia_evidence.evidence_status.value,
+        "ia_foreign_participation": ft.foreign_participation_score,
+        "ia_foreign_cr4": ft.foreign_cr4_score,
+        "ia_foreign_cr8": ft.foreign_cr8_score,
+        "ia_cnfb_divergence_20d": bullish.get("cnfb_20d"),
+        "ia_cnfb_divergence_30d": bullish.get("cnfb_30d"),
+        "ia_cnfb_distribution_3d": bearish.get("cnfb_3d"),
+        "ia_foreign_vwap_distance": ft.foreign_vwap_distance_score,
+        "ia_foreign_track_coverage": ft.coverage_score,
+        "ia_foreign_track_conviction": ft.conviction_score,
+        "ia_domestic_broker_consistency": dt.broker_consistency_score,
+        "ia_domestic_broker_reversal": dt.broker_reversal_score,
+        "ia_domestic_accumulation_session_ratio": dt.accumulation_session_ratio,
+        "ia_domestic_buy_vwap_distance": dt.domestic_buy_vwap_distance_score,
+        "ia_domestic_broker_hhi_divergence": dt.broker_hhi_divergence_score,
+        "ia_bandar_broad_score_normalized": dt.bandar_broad_score_normalized,
+        "ia_domestic_track_coverage": dt.coverage_score,
+        "ia_domestic_track_conviction": dt.conviction_score,
+        "ia_counterparty_transfer_asymmetry": ct.transfer_asymmetry_score if ct else None,
+        "ia_counterparty_buy_hhi": ct.buy_side_hhi if ct else None,
+        "ia_counterparty_sell_hhi": ct.sell_side_hhi if ct else None,
+        "ia_coverage_score": ia_evidence.coverage_score,
+        "ia_conviction_score": ia_evidence.conviction_score,
     }
 
 
@@ -961,6 +1030,10 @@ class AccumulationScreenUseCase:
                     snapshot_date,
                     request,
                 )
+                ia_evidence = self._build_candidate_institutional_accumulation_evidence(
+                    c,
+                    snapshot_date,
+                )
                 observations.append(
                     CandidateObservation(
                         ticker=c.ticker,
@@ -972,6 +1045,7 @@ class AccumulationScreenUseCase:
                             flow_ev=flow_ev,
                             setup_phase=setup_phase,
                             strategy_evidence=strategy_evidence,
+                            ia_evidence=ia_evidence,
                             snapshot_date=snapshot_date,
                             captured_at=captured_at,
                             request=request,
@@ -1009,6 +1083,50 @@ class AccumulationScreenUseCase:
                     snapshot_date=snapshot_date,
                     setup_family="accumulation",
                     setup_phase=setup_phase,
+                )
+            )
+        except Exception:
+            return None
+
+    def _build_candidate_institutional_accumulation_evidence(
+        self,
+        candidate: "AccumulationCandidate",
+        snapshot_date: date,
+    ) -> "InstitutionalAccumulationEvidence | None":
+        try:
+            from datetime import timedelta
+
+            from src.application.services.institutional_accumulation_evidence_builder import (
+                InstitutionalAccumulationEvidenceBuilder,
+                InstitutionalAccumulationEvidenceRequest,
+            )
+
+            start_date = snapshot_date - timedelta(days=45)
+            candles = self._market_repo.get_candles(candidate.ticker, end_date=snapshot_date)
+            broker_daily_flows = tuple(
+                self._broker_repo.get_broker_daily_flows(
+                    candidate.ticker, start_date=start_date, end_date=snapshot_date
+                )
+            )
+            foreign_flow_points = tuple(
+                self._broker_repo.get_foreign_flow_points(
+                    candidate.ticker, start_date=start_date, end_date=snapshot_date
+                )
+            )
+            broker_summaries = tuple(
+                self._broker_repo.get_broker_summaries(
+                    candidate.ticker, start_date=start_date, end_date=snapshot_date
+                )
+            )
+            return InstitutionalAccumulationEvidenceBuilder.from_yaml().build(
+                InstitutionalAccumulationEvidenceRequest(
+                    ticker=candidate.ticker,
+                    snapshot_date=snapshot_date,
+                    broker_daily_flows=broker_daily_flows,
+                    foreign_flow_points=foreign_flow_points,
+                    broker_summaries=broker_summaries,
+                    bandar_snapshot=candidate.bandar_detector,
+                    candles=tuple(candles),
                 )
             )
         except Exception:
