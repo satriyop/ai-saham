@@ -430,7 +430,8 @@ not universal for:
 Data quality guardrails:
 
 ```text
-volume trigger requires valid volume source
+volume trigger requires valid local OHLCV volume for stock tickers
+benchmark / IHSG source handling is separate from stock ticker volume
 20d average requires enough valid trading sessions
 suspended days / missing candles / zero-volume distortion = trigger unavailable
 unavailable volume trigger lowers coverage_score
@@ -1133,7 +1134,10 @@ price_confirmation:
     support_reclaim_with_valid_volume:
       close_above_support_pct: 0.50
       volume_ratio_min: 1.20
-      valid_volume_source: stockbit_or_idx
+      volume_quality:
+        ticker_type: stock
+        min_valid_20d_sessions: 18
+        zero_volume_tolerance: 1
 ```
 
 `price_confirmed = true` when the configured mode is satisfied using these
@@ -1585,7 +1589,7 @@ setup_regime_actions:
     max_decision: ENTER
     requires:
       trigger_volume_score_min: 75
-      valid_volume_source: stockbit_or_idx
+      volume_quality_valid: true
 
   allowed_if_risk_tight_and_flow_confirmed:
     max_decision: ENTER
@@ -2261,8 +2265,10 @@ Work:
   BREAKOUT_CONFIRMATION / Trigger.
 - Add `volume_dry_up_then_expansion` as the primary trigger pattern for
   `SWING_10D` accumulation, foreign-bounce, and breakout setup families.
-- Enforce volume-trigger data quality: valid volume source, enough valid
-  sessions for the 20d average, and no suspended/missing/zero-volume distortion.
+- Enforce volume-trigger data quality: valid local IDX/OHLCV volume for stock
+  tickers, enough sessions for the 20d average, and no
+  suspended/missing/zero-volume distortion. Benchmark/IHSG source handling is a
+  separate rule and must not force Stockbit as the stock-volume vendor.
 - Add tests proving one failed gate does not equal all gates failed.
 
 Why third: after labels exist, price/volume pivot evidence can be checked for
@@ -2589,9 +2595,12 @@ Any implementation based on this recommendation should satisfy:
 - Secondary triggers such as VWAP reclaim, support reclaim, squeeze release,
   positive close, and broker/foreign acceleration may confirm or supplement the
   primary trigger, but cannot replace it unless setup config explicitly allows.
-- Volume-trigger evidence requires a valid volume source, enough valid sessions
-  for the 20d average, and no suspended/missing/zero-volume distortion; otherwise
-  the trigger is unavailable and coverage is lowered.
+- Volume-trigger evidence requires quality-valid volume: for stock tickers,
+  local IDX/OHLCV volume is acceptable regardless of vendor label when it is not
+  synthetic or missing; benchmark/IHSG source handling is separate. The trigger
+  also requires enough valid sessions for the 20d average and no excessive
+  suspended/missing/zero-volume distortion; otherwise it is unavailable and
+  coverage is lowered.
 - `ACCUMULATION` alone is candidate tracking; `COMPRESSION` alone is trigger
   pending; `BREAKOUT_CONFIRMATION` without valid prior phases is a different
   setup family, not foreign-bounce `ENTER`.

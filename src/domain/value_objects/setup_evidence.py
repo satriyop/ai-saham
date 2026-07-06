@@ -4,7 +4,7 @@ Setup evidence value object.
 Diagnostic evidence contract for swing setup/timing structure. Introduced in
 Phase 2 of the SignalEngine refactor. Captures the setup gate result and the
 technical structure (trend, RSI, volatility compression, VWAP positioning)
-alongside date-gated relative-strength and source-confidence-gated volume
+alongside date-gated relative-strength and data-quality-gated volume
 sub-signals.
 
 This object carries NO scoring or setup-policy logic — it is a descriptive
@@ -47,10 +47,10 @@ class SetupEvidence:
     # RS vs IHSG sub-signal (pre-computed by caller; date-gated at 2025-07-01)
     rs_vs_ihsg_5d: float | None  # None when date-gated or unavailable
     rs_freshness: Freshness
-    # Volume trend sub-signal (source-confidence-gated; stockbit only)
-    volume_trend_ratio: float | None  # 5d/20d volume ratio; None when source is not stockbit
+    # Volume trend sub-signal (data-quality-gated; vendor identity is not policy)
+    volume_trend_ratio: float | None  # 5d/20d volume ratio; None when unavailable
     volume_freshness: Freshness
-    candle_source: str | None    # "stockbit" | "yahoo" | "yahoo_inferred" | None
+    candle_source: str | None    # e.g. "idx", "stockbit", "yahoo_inferred", None
 
     def __post_init__(self) -> None:
         if self.match_strength not in _VALID_STRENGTH:

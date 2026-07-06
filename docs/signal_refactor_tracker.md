@@ -2,13 +2,12 @@
 
 _Design rationale: `docs/signal_refactor.md`_
 _Phase plan: `docs/signal_refactor_phases.md`_
-_Current implementation target: Phase C_
-_Updated: 2026-07-05_
+_Current implementation target: Phase D planning_
+_Updated: 2026-07-06_
 
 This tracker records the current implementation state and concrete checklist for
-the SignalEngine refactor. It is intentionally Phase C-focused: A1, A2, and
-Phase B are preserved as Done, Phase C is the active implementation target, and
-later phases remain out of scope until their phase is explicitly opened.
+the SignalEngine refactor. A1, A2, Phase B, and Phase C are preserved as Done.
+Phase D is now planned as the next implementation target.
 
 ---
 
@@ -34,15 +33,15 @@ later phases remain out of scope until their phase is explicitly opened.
 - Setup-specific policy may tighten regime policy, not loosen it.
 - CLI adapters render results only; no scoring, cache, persistence, or workflow
   policy belongs in adapters.
-- Phase C may add `SetupPhaseState` and phase-history persistence.
-- Phase C may add continuous setup/trigger evidence, but must not rewrite the
-  Phase G Alpha/Trigger aggregate architecture.
-- Phase C must keep price confirmation thresholds as placeholders until
+- Closed Phase C added `SetupPhaseState`, phase-history persistence, and
+  continuous setup/trigger evidence without rewriting the Phase G Alpha/Trigger
+  aggregate architecture.
+- Closed Phase C keeps price confirmation thresholds as placeholders until
   setup/horizon calibration proves them.
-- Phase C must not change TradeSetup sizing math.
-- Phase C must not promote flow or trigger evidence into production authority
-  without saved-label attribution proof.
-- Phase C must not require AI or network-dependent tests.
+- Closed Phase C did not change TradeSetup sizing math.
+- Closed Phase C did not promote flow or trigger evidence into production
+  authority without saved-label attribution proof.
+- Closed Phase C does not require AI or network-dependent tests.
 - IDX foreign-flow transition inputs stay diagnostic / low-authority until
   market-level labels prove lead-time value.
 
@@ -56,8 +55,8 @@ later phases remain out of scope until their phase is explicitly opened.
 | A1 | Regime Eligibility Policy Quick Win | Done | Implemented and verified; decision constraints are explicit. |
 | A2 | Full RegimeDetectionEvidence And Replay | Done | Implemented 2026-07-05; all checklist items complete, 2347 tests pass. |
 | B | Minimal Forward Labels And Observation Fingerprints | Done | Implemented and verified; saved labels and fingerprint attribution are operational. |
-| C | SetupPhaseState And Continuous Setup/Trigger Scoring | In Progress | Active implementation target. |
-| D | Strategy Evidence Harness | Not Started | Retain phase scope from `docs/signal_refactor_phases.md`. |
+| C | SetupPhaseState And Continuous Setup/Trigger Scoring | Done | Closed 2026-07-06; diagnostic setup phase, replay history, and data-quality volume trigger implemented. |
+| D | Strategy Evidence Harness | Planned | Diagnostic-only strategy evidence tracker created 2026-07-06. |
 | E | Institutional Accumulation Evidence | Not Started | Retain phase scope from `docs/signal_refactor_phases.md`. |
 | F | Minimal Ticker Profile Diagnostics | Not Started | Retain phase scope from `docs/signal_refactor_phases.md`. |
 | G | Simplified Alpha/Trigger Split | Not Started | Retain phase scope from `docs/signal_refactor_phases.md`. |
@@ -161,23 +160,23 @@ Application-layer signal/swing workflow results expose:
 
 ## Phase C Tracker
 
-**Status:** In Progress
+**Status:** Done (2026-07-06)
 
 **Goal:** detect temporal setup phase first, then replace coarse setup labels
 with continuous price/volume pivot evidence.
 
-Phase C must make setup state explicit and replayable before Alpha/Trigger
-aggregation is rewritten in Phase G. It should use Phase B labels to validate
-whether setup phases and pivot triggers separate outcomes, but it must not start
-Phase I tuning or config patching.
+Phase C made setup state explicit and replayable before Alpha/Trigger
+aggregation is rewritten in Phase G. Phase B labels remain the attribution
+source for validating whether setup phases and pivot triggers separate outcomes.
+Phase C did not start Phase I tuning or config patching.
 
 ### In Scope
 
 - `SetupPhaseState` values: `NONE`, `ACCUMULATION`, `COMPRESSION`,
   `BREAKOUT_CONFIRMATION`, `EXHAUSTION`, `DISTRIBUTION`, and `FAILED`.
 - Phase state, phase history, sequence validity, phase age, and phase strength.
-- Setup-family phase requirements for accumulation, foreign-bounce, breakout,
-  pullback, and mean reversion.
+- Setup-family phase requirements for accumulation, foreign-bounce, and
+  breakout, with pullback and mean-reversion specifics deferred.
 - Continuous setup/trigger evidence for price and volume pivot behavior.
 - `coverage_score` and `conviction_score` emission.
 - RS vs IHSG promoted to setup eligibility / max-decision evidence.
@@ -185,10 +184,11 @@ Phase I tuning or config patching.
 - BB compression as `COMPRESSION` readiness, not bullish evidence.
 - `volume_dry_up_then_expansion` as primary `SWING_10D` trigger pattern for
   accumulation, foreign-bounce, and breakout.
-- Trigger routing for volume expansion, positive close, VWAP reclaim, support
-  reclaim, and squeeze release.
-- Volume-trigger data quality checks for source, valid 20d sessions, missing
-  candles, suspended days, and zero-volume distortion.
+- Trigger routing for volume expansion, positive close, and VWAP reclaim, with
+  support reclaim and squeeze release deferred.
+- Volume-trigger data quality checks for ticker type, valid 20d sessions,
+  missing candles, suspended days, synthetic/missing volume, and zero-volume
+  distortion.
 - Observation persistence of phase state and phase history.
 
 ### Out Of Scope
@@ -206,70 +206,237 @@ Phase I tuning or config patching.
 
 ### Implementation Checklist
 
-- [ ] Inspect current `SetupEvidence`, `SetupEvidenceBuilder`,
+- [x] Inspect current `SetupEvidence`, `SetupEvidenceBuilder`,
       `EvaluateSwingSetupUseCase`, swing workflow, accumulation screen
       observation payloads, and Phase B label attribution use cases.
-- [ ] Define immutable `SetupPhaseState` / phase-history domain value objects.
-- [ ] Define deterministic phase transition policy for `NONE`,
+- [x] Define immutable `SetupPhaseState` / phase-history domain value objects.
+- [x] Define deterministic phase transition policy for `NONE`,
       `ACCUMULATION`, `COMPRESSION`, `BREAKOUT_CONFIRMATION`, `EXHAUSTION`,
       `DISTRIBUTION`, and `FAILED`.
-- [ ] Persist current phase, previous phase, phase history, phase age sessions,
+- [x] Persist current phase, previous phase, phase history, phase age sessions,
       phase strength, phase reasons, and `phase_sequence_valid`.
-- [ ] Enforce accumulation / foreign-bounce sequence:
+- [x] Enforce accumulation / foreign-bounce sequence:
       `ACCUMULATION -> COMPRESSION -> BREAKOUT_CONFIRMATION`.
-- [ ] Enforce breakout sequence:
+- [x] Enforce breakout sequence:
       `COMPRESSION -> BREAKOUT_CONFIRMATION`.
+- [x] Evaluate distribution, failed, and exhaustion phases before generic
+      non-breakout WATCH handling.
+- [x] Emit `coverage_score` and `conviction_score` separately in setup/phase
+      output.
+- [x] Promote RS vs IHSG to setup eligibility / max-decision evidence for
+      swing, breakout, accumulation, and foreign-bounce.
+- [x] Add setup-family configurable RS policy: lag warning, hard exclude,
+      warning action, and mean-reversion exception requirements.
+- [x] Treat negative RS as unable to be silently overwhelmed by other bullish
+      setup components.
+- [x] Add BB compression as `COMPRESSION` readiness, not bullish evidence.
+- [x] Add `volume_dry_up_then_expansion` trigger for accumulation,
+      foreign-bounce, and breakout.
+- [x] Route volume expansion, positive close, and VWAP reclaim to
+      `BREAKOUT_CONFIRMATION` / Trigger.
+- [x] Keep price confirmation thresholds documented as placeholders until
+      setup/horizon calibration.
+- [x] Ensure `vwap_reclaim.close_above_vwap_pct: 0.30` cannot independently
+      unlock flow Trigger contribution in production.
+- [x] Enforce volume data quality and enough valid 20d sessions for volume
+      trigger availability.
+- [x] Treat suspended days, missing candles, and zero-volume distortion as
+      unavailable trigger evidence that lowers coverage.
+- [x] Persist phase state/history into signal/candidate observations at
+      observation time.
+- [x] Add deterministic tests for phase transitions and sequence validity.
+- [x] Add tests proving one failed gate does not mean all gates failed.
+- [x] Add tests proving distribution, failed, and exhaustion are evaluated
+      before generic WATCH.
+- [x] Add tests proving negative RS cannot be overwhelmed by bullish components.
+- [x] Add tests for volume-trigger source/session coverage and unavailable
+      handling.
+- [x] Keep CLI adapters render-only for phase/evidence output.
+
+### Deferred Follow-Up Items
+
+These are not Phase C closure blockers and remain available for later phase
+work or calibration:
+
 - [ ] Enforce pullback requirements: trend/context support plus support reclaim
       or pivot confirmation.
 - [ ] Enforce mean-reversion requirements: support/reversal evidence and
       explicit risk controls.
-- [ ] Evaluate distribution, failed, and exhaustion phases before generic
-      non-breakout WATCH handling.
-- [ ] Emit `coverage_score` and `conviction_score` separately in setup/phase
+- [ ] Add dedicated support reclaim and squeeze release trigger routing beyond
+      the current positive close / VWAP reclaim / volume expansion path.
+- [ ] Add explicit CLI adapter rendering regression tests for phase/evidence
       output.
-- [ ] Promote RS vs IHSG to setup eligibility / max-decision evidence for
-      swing, breakout, accumulation, and foreign-bounce.
-- [ ] Add setup-family configurable RS policy: lag warning, hard exclude,
-      warning action, and mean-reversion exception requirements.
-- [ ] Treat negative RS as unable to be silently overwhelmed by other bullish
-      setup components.
-- [ ] Add BB compression as `COMPRESSION` readiness, not bullish evidence.
-- [ ] Add `volume_dry_up_then_expansion` trigger for accumulation,
-      foreign-bounce, and breakout.
-- [ ] Route volume expansion, positive close, VWAP reclaim, support reclaim,
-      and squeeze release to `BREAKOUT_CONFIRMATION` / Trigger.
-- [ ] Keep price confirmation thresholds documented as placeholders until
-      setup/horizon calibration.
-- [ ] Ensure `vwap_reclaim.close_above_vwap_pct: 0.30` cannot independently
-      unlock flow Trigger contribution in production.
-- [ ] Enforce valid volume source and enough valid 20d sessions for volume
-      trigger availability.
-- [ ] Treat suspended days, missing candles, and zero-volume distortion as
-      unavailable trigger evidence that lowers coverage.
-- [ ] Persist phase state/history into signal/candidate observations at
-      observation time.
-- [ ] Add deterministic tests for phase transitions and sequence validity.
-- [ ] Add tests proving one failed gate does not mean all gates failed.
-- [ ] Add tests proving distribution, failed, and exhaustion are evaluated
-      before generic WATCH.
-- [ ] Add tests proving negative RS cannot be overwhelmed by bullish components.
-- [ ] Add tests for volume-trigger source/session coverage and unavailable
-      handling.
-- [ ] Add tests proving CLI adapters only render phase/evidence output.
 
 ### Verification Checklist
 
-- [ ] Phase state is deterministic for fixed local candles, config, and saved
+- [x] Phase state is deterministic for fixed local candles, config, and saved
       evidence.
-- [ ] Phase history is persisted at observation time and replayable.
-- [ ] Phase sequence validity is available for Phase B label attribution.
-- [ ] Setup output exposes distinct coverage and conviction.
-- [ ] BB compression is readiness evidence, not bullish evidence.
-- [ ] Trigger evidence requires valid price/volume confirmation.
-- [ ] Flow evidence cannot directly create ENTER through Phase C trigger logic.
-- [ ] No Alpha/Trigger aggregate rewrite is introduced in Phase C.
-- [ ] No TradeSetup sizing math changes are introduced.
-- [ ] Tests run offline and do not require network access.
+- [x] Phase history is persisted at observation time and replayable.
+- [x] Phase sequence validity is available for Phase B label attribution.
+- [x] Setup output exposes distinct coverage and conviction.
+- [x] BB compression is readiness evidence, not bullish evidence.
+- [x] Trigger evidence requires valid price/volume confirmation.
+- [x] Flow evidence cannot directly create ENTER through Phase C trigger logic.
+- [x] No Alpha/Trigger aggregate rewrite is introduced in Phase C.
+- [x] No TradeSetup sizing math changes are introduced.
+- [x] Tests run offline and do not require network access.
+
+---
+
+## Phase D Tracker: Strategy Evidence Harness
+
+**Status:** Planned
+
+**Goal:** reuse deterministic strategy packages as setup-family evidence and
+empirical validation tools without creating a parallel decision engine.
+
+Phase D evidence is diagnostic-only. It is persisted and reported, but it must
+not affect SignalEngine group scores, canonical `SetupPhaseState`, TradeSetup
+sizing, or final ENTER/WATCH/AVOID decisions until Phase G explicitly consumes
+it through the Alpha/Trigger aggregation plan.
+
+### Non-Goals
+
+- [ ] Do not allow a strategy match to override `SetupPhaseState`.
+- [ ] Do not allow a strategy result to override SignalEngine decisions.
+- [ ] Do not add Phase G Alpha/Trigger aggregation.
+- [ ] Do not add Phase I calibration/tuning or production weights.
+- [ ] Do not introduce AI, network calls, or provider fetches.
+- [ ] Do not move strategy evaluation or policy into CLI adapters.
+- [ ] Do not change TradeSetup stop, target, or position sizing.
+
+### Layer Plan
+
+- Domain: add immutable strategy evidence value object(s) only if existing
+  value objects cannot represent matched strategy evidence cleanly.
+- Application: add `StrategyEvidenceBuilder`, strategy-to-setup mapping policy,
+  deterministic strategy evaluation orchestration, replay fingerprint fields,
+  and empirical readiness checks.
+- Infrastructure: reuse existing local strategy YAML loading and persistence;
+  extend local observation payloads only, unless separate SQLite persistence is
+  required for replay queries.
+- Adapter: render strategy evidence returned by application results only; no
+  strategy evaluation, scoring, or persistence policy in CLI.
+
+### Input Contract
+
+- [ ] Strategy YAML must already pass existing strategy validation.
+- [ ] Strategy evaluation must run through existing deterministic rule /
+      indicator infrastructure and `IndicatorRegistry`.
+- [ ] Evaluation must use local candles and local config only.
+- [ ] Indicator warm-up handling must remain in application use cases.
+- [ ] Strategy evidence must be reproducible for fixed candles, config,
+      strategy YAML, and as-of date.
+
+### Evidence Model Checklist
+
+- [ ] Add `StrategyEvidence` or equivalent immutable diagnostic value object.
+- [ ] Capture matched strategy package name.
+- [ ] Capture matched rule identifier / rule label.
+- [ ] Capture route metadata: setup family, setup phase, and evidence route
+      such as setup, trigger, filter, or exit-context.
+- [ ] Capture match outcome: matched, not matched, unavailable, or invalid.
+- [ ] Capture coverage metadata: required inputs present / total inputs.
+- [ ] Capture conviction metadata: deterministic match strength or rule
+      confidence without implying production authority.
+- [ ] Capture freshness metadata for candles and derived indicator inputs.
+- [ ] Capture rationale explaining which deterministic rule(s) matched.
+- [ ] Capture unavailable reasons for missing candles, warm-up, invalid config,
+      missing indicators, or insufficient data.
+- [ ] Ensure strategy evidence serializes to stable dict/JSON.
+
+### Strategy Mapping Policy
+
+- [ ] Define config-driven mapping from strategy packages/rules to setup
+      family and setup phase evidence.
+- [ ] Treat mapped strategy output as evidence about a setup route, not as the
+      setup route itself.
+- [ ] Allow multiple strategy matches to coexist without overwriting each other.
+- [ ] Preserve canonical setup phase sequence policy from Phase C.
+- [ ] Keep BB/compression, volume trigger, RS, and flow authority in their
+      existing Phase C evidence paths.
+- [ ] Add explicit behavior for unmapped strategies: diagnostic only,
+      `setup_family=None`, no decision constraints.
+- [ ] Add conflict behavior: contradictory strategy matches are reported as
+      mixed evidence, not collapsed into a single bullish/bearish decision.
+
+### Application Wiring
+
+- [ ] Add `StrategyEvidenceBuilder` in `src/application/services`.
+- [ ] Reuse existing strategy loader/validator instead of parsing YAML ad hoc.
+- [ ] Evaluate strategy rules through `IndicatorRegistry`.
+- [ ] Add strategy evidence to swing workflow evidence output when strategy
+      evidence is requested or a strategy package is already part of the request.
+- [ ] Add strategy evidence to replay/candidate observation fingerprints.
+- [ ] Ensure evidence-enriched signal re-score ignores strategy evidence in
+      Phase D.
+- [ ] Ensure DecisionPolicy ignores strategy evidence in Phase D except for
+      reporting already-computed diagnostic constraints if present.
+- [ ] Keep CLI adapters thin: no direct strategy evidence computation.
+
+### Persistence And Replay Checklist
+
+- [ ] Persist matched strategy name in candidate/signal observation payloads.
+- [ ] Persist matched rule identifier.
+- [ ] Persist strategy match outcome.
+- [ ] Persist route metadata and mapped setup family/phase.
+- [ ] Persist coverage, conviction, freshness, rationale, and unavailable
+      reasons.
+- [ ] Extend `SignalObservationFingerprint.from_dict()` to parse strategy
+      evidence fields when present.
+- [ ] Extend Phase B label attribution summaries with strategy evidence buckets:
+      strategy name, matched rule, route, and outcome.
+- [ ] Ensure old observations without strategy evidence still parse.
+- [ ] Do not recompute strategy evidence when generating forward labels; labels
+      must use saved observation-time evidence.
+
+### Empirical Readiness Checklist
+
+- [ ] Add a deterministic readiness summary from existing strategy backtests.
+- [ ] Readiness must be diagnostic-only in Phase D.
+- [ ] Require minimum sample count before reporting a strategy route as
+      empirically ready.
+- [ ] Report insufficient sample size explicitly.
+- [ ] Do not assign production weights or unlock scoring based on readiness
+      until Phase G/I.
+- [ ] Preserve setup-family and horizon grouping, starting with `SWING_10D`.
+
+### Tests
+
+- [ ] Domain/value-object serialization tests for strategy evidence.
+- [ ] Application tests for strategy evidence builder with local fake candles
+      and fake strategy/rule results.
+- [ ] Tests for matched, not matched, unavailable, and invalid strategy states.
+- [ ] Tests that strategy matches cannot override `SetupPhaseState`.
+- [ ] Tests that strategy matches cannot override SignalEngine decisions.
+- [ ] Tests that strategy evidence is ignored by evidence-enriched re-score in
+      Phase D.
+- [ ] Persistence tests proving observation payloads include strategy evidence.
+- [ ] Forward-label tests proving strategy attribution uses saved fingerprints
+      and does not recompute strategies.
+- [ ] CLI tests proving adapters render strategy evidence only.
+- [ ] Offline-only tests; no network or AI dependencies.
+
+### Documentation Checklist
+
+- [ ] Document Phase D evidence as diagnostic-only.
+- [ ] Document mapping policy from strategy package/rule to setup family/phase.
+- [ ] Document persistence fields and replay attribution buckets.
+- [ ] Document empirical readiness limits and sample-size requirements.
+- [ ] Document that Phase G is the first phase allowed to consume strategy
+      evidence in Alpha/Trigger aggregation.
+
+### Phase D Verification Checklist
+
+- [ ] Strategy evidence is deterministic for fixed local inputs.
+- [ ] Strategy evidence is persisted at observation time.
+- [ ] Strategy evidence is replayable through Phase B labels.
+- [ ] Strategy evidence remains diagnostic-only in SignalEngine and
+      DecisionPolicy.
+- [ ] Canonical `SetupPhaseState` is never overwritten by strategy output.
+- [ ] TradeSetup sizing math is unchanged.
+- [ ] Adapters remain thin.
+- [ ] Tests pass offline.
 
 ---
 
@@ -301,30 +468,25 @@ path and promote `signal_score_raw` → `assessment.score`. Requires updating te
 
 ## Current Assumptions
 
-- Phase C should extend existing setup evidence, swing workflow, and candidate
-  observation infrastructure where possible.
-- Phase C may add schema-versioned local SQLite persistence for setup phase
-  observations or extend existing observation payloads.
-- Phase C should use Phase B labels for validation and attribution, but should
-  not start Phase I tuning/config patching.
-- Phase C should not introduce network-dependent tests.
-- Phase C should not alter A1 `decision_constraints` precedence.
-- Phase C should not alter A2 regime observation contracts.
-- Phase C should not alter Phase B `signal_forward_labels` contracts except to
-  enrich saved fingerprints with phase fields.
-- Existing dirty worktree changes are from A1; do not revert unrelated files.
+- Phase D is the next implementation target.
+- Phase D must preserve the diagnostic-only strategy evidence contract until
+  Phase G explicitly consumes strategy evidence in Alpha/Trigger aggregation.
+- Phase B labels remain the source for replay attribution.
+- Phase I tuning/config patching remains out of scope until Phase I is opened.
+- Network-dependent tests remain out of scope for refactor phases.
+- Existing dirty worktree changes are intentional; do not revert unrelated
+  files.
 - `SWING_10D` remains the first calibrated ticker-signal horizon.
 
 ---
 
-## Phase C Layer Plan For Implementation
+## Closed Phase C Layer Summary
 
-- Domain: add immutable setup phase state, phase history, and setup/trigger
-  evidence value objects.
-- Application: own deterministic phase detection, setup-family sequence policy,
+- Domain: added immutable setup phase state and phase history value objects.
+- Application: owns deterministic phase detection, setup-family sequence policy,
   RS policy, volume-trigger availability, coverage/conviction calculation, and
   observation persistence orchestration.
-- Infrastructure: implement schema-versioned local SQLite persistence for
-  setup phase observations if separate persistence is added.
-- Adapter: render setup phase/evidence output only; do not compute workflow,
-  scoring, persistence policy, or phase transitions.
+- Infrastructure: extended local persistence/replay paths through existing
+  observation payloads and local repositories.
+- Adapter: remains render-only for setup phase/evidence output; no workflow,
+  scoring, persistence policy, or phase transitions are computed in adapters.

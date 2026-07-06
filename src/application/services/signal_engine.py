@@ -49,6 +49,7 @@ if TYPE_CHECKING:
     from src.domain.value_objects.flow_confirmation_evidence import FlowConfirmationEvidence
     from src.domain.value_objects.market_context import MarketContext
     from src.domain.value_objects.setup_evidence import SetupEvidence
+    from src.domain.value_objects.setup_phase import SetupPhaseSnapshot
 
 logger = logging.getLogger(__name__)
 
@@ -140,6 +141,7 @@ class SignalEngine:
         setup_evidence: "SetupEvidence | None" = None,
         flow_confirmation_evidence: "FlowConfirmationEvidence | None" = None,
         setup_family: str | None = None,
+        setup_phase: "SetupPhaseSnapshot | None" = None,
     ) -> AssessSignalResponse:
         """
         Pipeline path: caller supplies pre-loaded SignalContext.
@@ -159,6 +161,7 @@ class SignalEngine:
                 signal_context=signal_context,
                 market_context=market_context,
                 setup_family=setup_family,
+                setup_phase=setup_phase,
             )
         )
 

@@ -83,6 +83,37 @@ def test_get_at_returns_specific_observation_by_captured_at(tmp_path: Path):
     assert obs.payload["value"] == "older"
 
 
+def test_list_recent_returns_prior_observations_newest_first(tmp_path: Path):
+    db_path = tmp_path / "data.db"
+    repo = SQLiteCandidateObservationsRepository(db_path)
+    repo.save_many(
+        [
+            CandidateObservation(
+                ticker="BBCA",
+                snapshot_date=date(2026, 7, 1),
+                captured_at=datetime(2026, 7, 1, 9, 0, 0),
+                payload={"schema_version": 1, "ticker": "BBCA", "value": "old"},
+            ),
+            CandidateObservation(
+                ticker="BBCA",
+                snapshot_date=date(2026, 7, 2),
+                captured_at=datetime(2026, 7, 2, 9, 0, 0),
+                payload={"schema_version": 1, "ticker": "BBCA", "value": "mid"},
+            ),
+            CandidateObservation(
+                ticker="BBCA",
+                snapshot_date=date(2026, 7, 3),
+                captured_at=datetime(2026, 7, 3, 9, 0, 0),
+                payload={"schema_version": 1, "ticker": "BBCA", "value": "same_day"},
+            ),
+        ]
+    )
+
+    rows = repo.list_recent("bbca", before_date=date(2026, 7, 3), limit=5)
+
+    assert [row.payload["value"] for row in rows] == ["mid", "old"]
+
+
 def test_schema_created_via_migration_runner(tmp_path: Path):
     db_path = tmp_path / "data.db"
     SQLiteCandidateObservationsRepository(db_path)

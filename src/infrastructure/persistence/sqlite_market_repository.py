@@ -205,6 +205,23 @@ class SQLiteMarketRepository(MarketDataRepository):
         except sqlite3.Error as e:
             raise MarketDataRepositoryError(f"Failed to get candles: {e}") from e
 
+    def get_candle_source(self, ticker: str, on_date: date) -> str | None:
+        """Return persisted provider source for one candle date, if available."""
+        try:
+            with self._get_connection() as conn:
+                row = conn.execute(
+                    """
+                    SELECT source
+                    FROM candles
+                    WHERE ticker = ? AND date = ?
+                    LIMIT 1
+                    """,
+                    (ticker.upper(), on_date.isoformat()),
+                ).fetchone()
+            return str(row["source"]) if row is not None else None
+        except sqlite3.Error as e:
+            raise MarketDataRepositoryError(f"Failed to get candle source: {e}") from e
+
     def has_data(
         self,
         ticker: str,

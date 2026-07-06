@@ -41,6 +41,7 @@ if TYPE_CHECKING:
     from src.domain.value_objects.flow_confirmation_evidence import FlowConfirmationEvidence
     from src.domain.value_objects.market_context import MarketContext
     from src.domain.value_objects.setup_evidence import SetupEvidence
+    from src.domain.value_objects.setup_phase import SetupPhaseSnapshot
 
 
 @dataclass
@@ -52,6 +53,7 @@ class AssessSignalEvidenceRequest:
     signal_context: SignalContext | None = None   # for flag evaluation
     market_context: "MarketContext | None" = None  # for regime conditioning
     setup_family: str | None = None
+    setup_phase: "SetupPhaseSnapshot | None" = None
 
 
 class AssessSignalEvidenceUseCase:
@@ -111,13 +113,22 @@ class AssessSignalEvidenceUseCase:
         )
 
         # ── Stage 6: Decision constraints (A1 explicit policy) ───────────────
+        policy_coverage = (
+            request.setup_phase.coverage_score
+            if request.setup_phase is not None else confidence
+        )
+        policy_conviction = (
+            request.setup_phase.conviction_score
+            if request.setup_phase is not None else confidence
+        )
         decision_result = DecisionPolicyService(self._config.decision_policy).resolve(
             entry_quality=entry_quality,
             score=final_score,
-            coverage_score=confidence,
-            conviction_score=confidence,
+            coverage_score=policy_coverage,
+            conviction_score=policy_conviction,
             market_context=request.market_context,
             setup_family=request.setup_family,
+            setup_phase=request.setup_phase,
         )
         entry_quality = decision_result.entry_quality
         decision_constraints = decision_result.constraints

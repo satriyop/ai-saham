@@ -96,26 +96,26 @@ def test_rs_missing_when_no_value():
     assert evidence.rs_vs_ihsg_5d is None
 
 
-def test_volume_fresh_for_stockbit():
+def test_volume_fresh_for_local_idx_stock_source():
     evidence = SetupEvidenceBuilder().build(
         _candidate(),
         _setup_eval(),
         volume_trend_ratio=1.2,
-        candle_source="stockbit",
+        candle_source="idx",
     )
     assert evidence.volume_freshness is Freshness.FRESH
     assert evidence.volume_trend_ratio == 1.2
 
 
-def test_volume_missing_for_yahoo():
+def test_volume_fresh_for_stock_source_without_vendor_lock():
     evidence = SetupEvidenceBuilder().build(
         _candidate(),
         _setup_eval(),
         volume_trend_ratio=1.2,
-        candle_source="yahoo",
+        candle_source=None,
     )
-    assert evidence.volume_freshness is Freshness.MISSING
-    assert evidence.volume_trend_ratio is None
+    assert evidence.volume_freshness is Freshness.FRESH
+    assert evidence.volume_trend_ratio == 1.2
 
 
 def test_volume_missing_for_yahoo_inferred():

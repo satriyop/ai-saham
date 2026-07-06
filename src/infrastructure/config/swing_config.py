@@ -13,6 +13,12 @@ from typing import Any
 
 import yaml
 
+from src.application.services.setup_phase_detector import (
+    SetupPhaseConfig,
+    SetupPhaseRSPolicyConfig,
+    SetupPhaseThresholdsConfig,
+    VolumeTriggerValidityConfig,
+)
 from src.infrastructure.config.app_config import APP_CFG
 
 ACCUMULATION_SCREENER_CONFIG_PATH = Path(APP_CFG.config_paths.accumulation_screener)
@@ -103,6 +109,7 @@ class SwingConfig:
     resistance_gate_enabled: bool = True
     resistance_headroom_min_pct: float = 5.0
     ex_date_warning_days: int = 10
+    setup_phase_config: SetupPhaseConfig = field(default_factory=SetupPhaseConfig)
 
 
 def load_swing_config(
@@ -132,6 +139,7 @@ def load_swing_config(
         vd_sig = vd.get("signals") or {}
         resistance = data.get("resistance") or {}
         corporate_actions = data.get("corporate_actions") or {}
+        setup_phase = data.get("setup_phase") or {}
 
         def _f(d: dict, k: str, default: float) -> float:
             return float(d[k]) if k in d else default
@@ -162,6 +170,126 @@ def load_swing_config(
             raw = d.get("brokers") or []
             parsed = tuple(str(c).strip().upper() for c in raw if c)
             return parsed if parsed else default
+
+        def _setup_phase_config(raw: Any) -> SetupPhaseConfig:
+            if not isinstance(raw, dict):
+                return defaults.setup_phase_config
+            th = raw.get("thresholds") or {}
+            vol = raw.get("volume_trigger") or {}
+            rs_by_family = raw.get("rs_policy_by_setup_family") or {}
+
+            def _rs_policy(value: Any) -> SetupPhaseRSPolicyConfig:
+                if not isinstance(value, dict):
+                    return SetupPhaseRSPolicyConfig()
+                return SetupPhaseRSPolicyConfig(
+                    lag_warning_below=_f(value, "lag_warning_below", -1.0),
+                    hard_exclude_below=_f(value, "hard_exclude_below", -4.0),
+                    warning_max_decision=_s(value, "warning_max_decision", "WATCH"),
+                    hard_exclude_max_decision=_s(
+                        value, "hard_exclude_max_decision", "AVOID"
+                    ),
+                    mean_reversion_exception_requires_support_reclaim=_b(
+                        value,
+                        "mean_reversion_exception_requires_support_reclaim",
+                        True,
+                    ),
+                )
+
+            benchmark_sources = vol.get("trusted_benchmark_volume_sources")
+            if benchmark_sources is None:
+                benchmark_sources = vol.get("allowed_sources")
+            if isinstance(benchmark_sources, list):
+                parsed_benchmark_sources = tuple(
+                    str(v).strip().lower() for v in benchmark_sources if v
+                )
+            else:
+                parsed_benchmark_sources = (
+                    defaults.setup_phase_config
+                    .volume_trigger
+                    .trusted_benchmark_volume_sources
+                )
+
+            return SetupPhaseConfig(
+                thresholds=SetupPhaseThresholdsConfig(
+                    accumulation_min_flow_score=_f(
+                        th,
+                        "accumulation_min_flow_score",
+                        SetupPhaseThresholdsConfig().accumulation_min_flow_score,
+                    ),
+                    accumulation_min_flow_ratio_pct=_f(
+                        th,
+                        "accumulation_min_flow_ratio_pct",
+                        SetupPhaseThresholdsConfig().accumulation_min_flow_ratio_pct,
+                    ),
+                    compression_max_bb_width_pctile=_f(
+                        th,
+                        "compression_max_bb_width_pctile",
+                        SetupPhaseThresholdsConfig().compression_max_bb_width_pctile,
+                    ),
+                    breakout_min_close_above_prev_high_pct=_f(
+                        th,
+                        "breakout_min_close_above_prev_high_pct",
+                        SetupPhaseThresholdsConfig().breakout_min_close_above_prev_high_pct,
+                    ),
+                    breakout_min_volume_ratio=_f(
+                        th,
+                        "breakout_min_volume_ratio",
+                        SetupPhaseThresholdsConfig().breakout_min_volume_ratio,
+                    ),
+                    breakout_reclaim_vwap_min_pct=_f(
+                        th,
+                        "breakout_reclaim_vwap_min_pct",
+                        SetupPhaseThresholdsConfig().breakout_reclaim_vwap_min_pct,
+                    ),
+                    exhaustion_rsi_min=_f(
+                        th,
+                        "exhaustion_rsi_min",
+                        SetupPhaseThresholdsConfig().exhaustion_rsi_min,
+                    ),
+                    exhaustion_min_price_extension_pct=_f(
+                        th,
+                        "exhaustion_min_price_extension_pct",
+                        SetupPhaseThresholdsConfig().exhaustion_min_price_extension_pct,
+                    ),
+                    distribution_min_bandar_score=_i(
+                        th,
+                        "distribution_min_bandar_score",
+                        SetupPhaseThresholdsConfig().distribution_min_bandar_score,
+                    ),
+                    failed_max_drawdown_from_recent_high_pct=_f(
+                        th,
+                        "failed_max_drawdown_from_recent_high_pct",
+                        SetupPhaseThresholdsConfig().failed_max_drawdown_from_recent_high_pct,
+                    ),
+                    failed_breakdown_below_support_pct=_f(
+                        th,
+                        "failed_breakdown_below_support_pct",
+                        SetupPhaseThresholdsConfig().failed_breakdown_below_support_pct,
+                    ),
+                ),
+                rs_policy_by_setup_family={
+                    str(key): _rs_policy(value)
+                    for key, value in rs_by_family.items()
+                } or defaults.setup_phase_config.rs_policy_by_setup_family,
+                volume_trigger=VolumeTriggerValidityConfig(
+                    require_trusted_volume=_b(
+                        vol,
+                        "require_trusted_volume",
+                        defaults.setup_phase_config.volume_trigger.require_trusted_volume,
+                    ),
+                    trusted_benchmark_volume_sources=parsed_benchmark_sources,
+                    min_valid_20d_sessions=_i(
+                        vol,
+                        "min_valid_20d_sessions",
+                        defaults.setup_phase_config.volume_trigger.min_valid_20d_sessions,
+                    ),
+                    zero_volume_tolerance=_i(
+                        vol,
+                        "zero_volume_tolerance",
+                        defaults.setup_phase_config.volume_trigger.zero_volume_tolerance,
+                    ),
+                ),
+            )
 
         sc = data.get("screener") or {}
         sb = data.get("sector_breadth") or {}
@@ -223,6 +351,7 @@ def load_swing_config(
             resistance_gate_enabled=_b(resistance, "enabled", defaults.resistance_gate_enabled),
             resistance_headroom_min_pct=_f(resistance, "headroom_min_pct", defaults.resistance_headroom_min_pct),
             ex_date_warning_days=_i(corporate_actions, "ex_date_warning_days", defaults.ex_date_warning_days),
+            setup_phase_config=_setup_phase_config(setup_phase),
         )
     except Exception:
         return defaults

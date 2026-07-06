@@ -257,9 +257,11 @@ Verify:
 - Distribution, failed, and exhaustion phases are evaluated before generic
   non-breakout WATCH handling.
 - Negative RS cannot be silently overwhelmed by other bullish setup components.
-- Volume trigger requires valid volume source and enough valid 20d sessions.
-- Suspended days, missing candles, and zero-volume distortion make volume trigger
-  unavailable and lower coverage.
+- Volume trigger eligibility is data-quality based: stock tickers may use valid
+  local IDX/OHLCV volume regardless of vendor label, benchmark/IHSG source
+  handling is separate, and enough valid 20d sessions are required.
+- Suspended days, missing candles, synthetic/missing volume, and excessive
+  zero-volume distortion make volume trigger unavailable and lower coverage.
 
 ## Phase D: Strategy Evidence Harness
 

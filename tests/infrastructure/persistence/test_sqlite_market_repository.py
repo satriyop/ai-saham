@@ -111,6 +111,17 @@ class TestSQLiteMarketRepository:
         assert result[0].date == date(2024, 1, 3)
         assert result[-1].date == date(2024, 1, 7)
 
+    def test_get_candle_source_returns_persisted_provider(self, repository):
+        repository.save_candles(
+            [make_candle("BBCA", 1)],
+            source="stockbit",
+            volume_unit="shares",
+            price_adjustment_policy="raw",
+        )
+
+        assert repository.get_candle_source("bbca", date(2024, 1, 1)) == "stockbit"
+        assert repository.get_candle_source("bbca", date(2024, 1, 2)) is None
+
     def test_get_date_range(self, repository):
         """Should return date range of stored data."""
         candles = [make_candle("BBCA", i) for i in range(1, 11)]

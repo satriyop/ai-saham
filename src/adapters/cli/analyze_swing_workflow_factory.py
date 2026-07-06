@@ -66,6 +66,9 @@ from src.infrastructure.config.accumulation_screener_config import (
 from src.infrastructure.config.market_context_factory import evaluate_market_context
 from src.infrastructure.config.swing_config import SwingConfig
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
+from src.infrastructure.persistence.sqlite_candidate_observations_repository import (
+    SQLiteCandidateObservationsRepository,
+)
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 from src.infrastructure.sentiment import SentimentFactory
 
@@ -83,6 +86,7 @@ def create_swing_analysis_workflow(
     """Build the composite swing analysis workflow with CLI infrastructure."""
     market_repo = SQLiteMarketRepository(db_path=db_path)
     broker_repo = SQLiteBrokerRepository(db_path)
+    candidate_observations_repo = SQLiteCandidateObservationsRepository(db_path)
     registry = create_indicator_registry(
         broker_repository=broker_repo,
         market_repository=market_repo,
@@ -161,6 +165,7 @@ def create_swing_analysis_workflow(
         execution_gates=[BandarGate()],
         signal_engine=create_signal_engine(db_path=db_path, with_enrichment=True),
         risk_engine=create_risk_engine(db_path=db_path, with_enrichment=True),
+        candidate_observations_repository=candidate_observations_repo,
     )
 
 

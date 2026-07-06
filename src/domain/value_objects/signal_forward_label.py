@@ -45,6 +45,7 @@ class SignalObservationFingerprint:
     phase_age_sessions: int | None = None
     phase_strength: float | None = None
     phase_reasons: tuple[str, ...] = ()
+    phase_history: tuple[dict[str, Any], ...] = ()
     phase_coverage_score: float | None = None
     phase_conviction_score: float | None = None
     rsi: float | None = None
@@ -69,6 +70,7 @@ class SignalObservationFingerprint:
             "phase_age_sessions": self.phase_age_sessions,
             "phase_strength": self.phase_strength,
             "phase_reasons": list(self.phase_reasons),
+            "phase_history": [dict(entry) for entry in self.phase_history],
             "phase_coverage_score": self.phase_coverage_score,
             "phase_conviction_score": self.phase_conviction_score,
             "rsi": self.rsi,
@@ -104,6 +106,9 @@ class SignalObservationFingerprint:
             phase_age_sessions=_optional_int(data.get("phase_age_sessions")),
             phase_strength=_optional_float(data.get("phase_strength")),
             phase_reasons=tuple(str(v) for v in data.get("phase_reasons") or ()),
+            phase_history=tuple(
+                dict(v) for v in data.get("phase_history") or () if isinstance(v, dict)
+            ),
             phase_coverage_score=_optional_float(data.get("phase_coverage_score")),
             phase_conviction_score=_optional_float(data.get("phase_conviction_score")),
             rsi=_optional_float(data.get("rsi", data.get("rsi_at_signal"))),

@@ -31,6 +31,8 @@ from src.application.use_case.assess_signal_use_case import (
     EvidenceGroupConfig,
     EvidenceGroupsConfig,
     InsiderSellingFlagConfig,
+    DecisionPolicyConfig,
+    RegimeDecisionPolicyConfig,
     SignalClassificationConfig,
     SignalEngineConfig,
     SignalFlagsConfig,
@@ -42,6 +44,7 @@ from src.domain.value_objects.flow_confirmation_evidence import (
     FlowSubSignal,
 )
 from src.domain.value_objects.setup_evidence import SetupEvidence
+from src.domain.value_objects.setup_phase import SetupPhaseSnapshot, SetupPhaseState
 from src.domain.value_objects.signal_assessment import SignalContext, SignalStrength
 
 SNAP = date(2026, 7, 3)
@@ -109,6 +112,18 @@ def _ctx(**kwargs) -> SignalContext:
     return SignalContext(ticker="TEST", snapshot_date=SNAP, **kwargs)
 
 
+def _setup_phase(*, coverage: float, conviction: float) -> SetupPhaseSnapshot:
+    return SetupPhaseSnapshot(
+        current_phase=SetupPhaseState.BREAKOUT_CONFIRMATION,
+        previous_phase=SetupPhaseState.COMPRESSION,
+        phase_age_sessions=1,
+        phase_strength=conviction,
+        coverage_score=coverage,
+        conviction_score=conviction,
+        sequence_valid=True,
+    )
+
+
 # ── no evidence tests ─────────────────────────────────────────────────────────
 
 def test_both_groups_missing_returns_neutral_prior():
@@ -138,6 +153,41 @@ def test_both_groups_missing_no_flags_score_stays_50():
     assert resp.active_flags == ()
     assert resp.flag_adjustment == 0
     assert resp.assessment.score == 50
+
+
+def test_setup_phase_coverage_and_conviction_drive_decision_floors():
+    config = SignalEngineConfig(
+        decision_policy=DecisionPolicyConfig(
+            regime_policy={
+                "RISK_ON": RegimeDecisionPolicyConfig(
+                    enter_allowed=True,
+                    max_decision="ENTER",
+                    enter_threshold=70,
+                    watch_threshold=45,
+                    min_coverage=0.7,
+                    min_conviction=0.7,
+                ),
+                "NEUTRAL": RegimeDecisionPolicyConfig(),
+                "RISK_OFF": RegimeDecisionPolicyConfig(enter_allowed=False, max_decision="WATCH"),
+                "VOLATILE": RegimeDecisionPolicyConfig(enter_allowed=False, max_decision="WATCH"),
+            }
+        )
+    )
+    resp = _use_case(config).execute(
+        _req(
+            setup_evidence=_setup_evidence("MATCH"),
+            flow_confirmation_evidence=_flow_evidence(0.95),
+            setup_family="foreign-bounce",
+            setup_phase=_setup_phase(coverage=0.2, conviction=0.2),
+        )
+    )
+
+    assert resp.evidence_confidence == 1.0
+    assert resp.assessment.entry_quality.value == "WATCH"
+    assert any(
+        "ENTER requires coverage" in reason
+        for reason in resp.assessment.decision_constraints.constraint_reasons
+    )
 
 
 # ── single group tests ────────────────────────────────────────────────────────

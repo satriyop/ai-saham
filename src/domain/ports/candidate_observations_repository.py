@@ -38,3 +38,17 @@ class CandidateObservationsRepository(Protocol):
     ) -> CandidateObservation | None:
         """Return the observation for ticker/date/captured_at, if any."""
         ...
+
+    def list_recent(
+        self,
+        ticker: str,
+        *,
+        before_date: date | None = None,
+        limit: int = 20,
+    ) -> list[CandidateObservation]:
+        """Return recent observations for ticker, newest first.
+
+        before_date excludes same-day observations so callers can reconstruct
+        prior state without reading the row currently being written.
+        """
+        ...

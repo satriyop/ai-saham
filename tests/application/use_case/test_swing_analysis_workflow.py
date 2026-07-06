@@ -1,6 +1,6 @@
 """Tests for swing analysis workflow orchestration."""
 
-from datetime import date
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
@@ -17,18 +17,61 @@ from src.application.use_case.swing_analysis_workflow_use_case import (
     SwingEvidence,
 )
 from src.domain.entities.candle import Candle
+from src.domain.ports.candidate_observations_repository import CandidateObservation
+from src.domain.value_objects.setup_evaluation import SetupEvaluation, SetupGate, SetupMatch
+from src.domain.value_objects.setup_phase import SetupPhaseSnapshot, SetupPhaseState
 
 
 class FakeMarketRepository:
-    def __init__(self, candles: list[Candle]) -> None:
+    def __init__(self, candles: list[Candle], source: str | None = None) -> None:
         self._candles = candles
+        self._source = source
 
     def get_candles(self, ticker: str, start_date=None, end_date=None):
         return self._candles
 
+    def get_candle_source(self, ticker: str, on_date: date):
+        return self._source
+
 
 class FakeBrokerRepository:
     pass
+
+
+class FakeCandidateObservationsRepository:
+    def __init__(self, phases: tuple[str, ...]) -> None:
+        self._phases = phases
+
+    def save_many(self, observations):
+        raise AssertionError("not used")
+
+    def get_latest(self, ticker, snapshot_date):
+        raise AssertionError("not used")
+
+    def get_at(self, ticker, snapshot_date, captured_at):
+        raise AssertionError("not used")
+
+    def list_recent(self, ticker, *, before_date=None, limit=20):
+        rows = []
+        start = date(2026, 6, 1)
+        for idx, phase in enumerate(self._phases):
+            day = start + timedelta(days=idx)
+            rows.append(
+                CandidateObservation(
+                    ticker=ticker.upper(),
+                    snapshot_date=day,
+                    captured_at=datetime(day.year, day.month, day.day, 9, 0, 0),
+                    payload={
+                        "schema_version": 1,
+                        "workflow": "screen_accum",
+                        "sub_signal_fingerprint": {
+                            "setup_family": "foreign-bounce",
+                            "setup_phase_current": phase,
+                        },
+                    },
+                )
+            )
+        return list(reversed(rows))[:limit]
 
 
 class FakeRegistry:
@@ -48,6 +91,32 @@ def _candle(day: date) -> Candle:
         close=Decimal("1010"),
         volume=1_000_000,
     )
+
+
+def _breakout_candles() -> list[Candle]:
+    start = date(2026, 5, 30)
+    candles = []
+    for idx in range(20):
+        open_ = Decimal("1000")
+        high = Decimal("1010")
+        close = Decimal("1005")
+        volume = 1_000_000 if idx < 15 else 2_000_000
+        if idx == 19:
+            open_ = Decimal("1015")
+            close = Decimal("1050")
+            high = Decimal("1060")
+        candles.append(
+            Candle(
+                ticker="BBCA",
+                date=start + timedelta(days=idx),
+                open=open_,
+                high=high,
+                low=Decimal("990"),
+                close=close,
+                volume=volume,
+            )
+        )
+    return candles
 
 
 def _request(**overrides) -> SwingAnalysisWorkflowRequest:
@@ -136,6 +205,54 @@ def test_swing_workflow_runs_auto_refresh_when_enabled():
 
     assert calls == ["refresh"]
     assert response.refresh_actions == ("candles=ok",)
+
+
+def test_swing_workflow_can_emit_breakout_confirmation_with_local_volume_source():
+    candidate = SimpleNamespace(
+        ticker="BBCA",
+        trend="SIDE",
+        rsi=55.0,
+        bb_width_pctile=0.15,
+        vwap_discount_pct=3.0,
+        vwap_pct=1.0,
+        latest_candle_date=date(2026, 6, 18),
+    )
+    setup_eval = SetupEvaluation(
+        name="foreign-bounce",
+        match=SetupMatch.MATCH,
+        gates=(
+            SetupGate("foreign_flow_score", True, "75", ">= 70"),
+            SetupGate("flow_pct", True, "5%", ">= 5%"),
+            SetupGate("fvwap%", True, "3%", ">= 3%"),
+        ),
+        failed_reasons=(),
+    )
+    workflow = SwingAnalysisWorkflowUseCase(
+        market_repository=FakeMarketRepository(_breakout_candles(), source="idx"),
+        broker_repository=FakeBrokerRepository(),
+        registry=FakeRegistry(),
+        refresh_data=lambda **kwargs: ("disabled",),
+        build_data_freshness=lambda **kwargs: {},
+        build_flow_detail=lambda **kwargs: None,
+        build_broker_detail=lambda **kwargs: None,
+        build_accumulation_candidate=lambda **kwargs: candidate,
+        evaluate_setup=lambda candidate, broker_detail: setup_eval,
+        build_broker_quality_note=lambda **kwargs: None,
+        fetch_sentiment=lambda **kwargs: (None, None),
+        load_swing_config=lambda: SimpleNamespace(),
+        resolve_setup_targets=lambda regime, config: (Decimal("5"), Decimal("5")),
+        candidate_observations_repository=FakeCandidateObservationsRepository(
+            ("ACCUMULATION", "COMPRESSION")
+        ),
+    )
+
+    response = workflow.execute(
+        _request(today=date(2026, 6, 18), setup_name="foreign-bounce")
+    )
+
+    assert response.evidence.setup_evidence.candle_source == "idx"
+    assert response.evidence.setup_phase.current_phase == SetupPhaseState.BREAKOUT_CONFIRMATION
+    assert response.evidence.setup_phase.sequence_valid is True
 
 
 def test_swing_workflow_raises_when_candles_are_missing():
@@ -419,3 +536,32 @@ def test_swing_evidence_to_dict_flow_confirmation_none_when_not_built():
 
     assert "flow_confirmation_evidence" in d
     assert d["flow_confirmation_evidence"] is None
+
+
+def test_swing_evidence_to_dict_includes_setup_phase():
+    phase = SetupPhaseSnapshot(
+        current_phase=SetupPhaseState.BREAKOUT_CONFIRMATION,
+        previous_phase=SetupPhaseState.COMPRESSION,
+        phase_age_sessions=1,
+        phase_strength=0.8,
+        coverage_score=1.0,
+        conviction_score=0.8,
+        sequence_valid=True,
+        reasons=("breakout: VWAP reclaim",),
+    )
+    evidence = SwingEvidence(
+        accumulation_candidate=None,
+        setup_eval=None,
+        backtest_result=None,
+        sentiment_response=None,
+        sentiment_warning=None,
+        take_profit_pct=Decimal("0.05"),
+        stop_loss_pct=Decimal("0.03"),
+        regime_label=None,
+        setup_phase=phase,
+    )
+
+    d = evidence.to_dict()
+
+    assert d["setup_phase"]["current_phase"] == "BREAKOUT_CONFIRMATION"
+    assert d["setup_phase"]["sequence_valid"] is True

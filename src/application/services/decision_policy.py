@@ -13,10 +13,12 @@ from typing import TYPE_CHECKING
 
 from src.application.use_case.assess_signal_use_case import DecisionPolicyConfig
 from src.domain.value_objects.decision_constraints import DecisionConstraints
+from src.domain.value_objects.setup_phase import SetupPhaseState
 from src.domain.value_objects.signal_assessment import EntryQuality
 
 if TYPE_CHECKING:
     from src.domain.value_objects.market_context import MarketContext
+    from src.domain.value_objects.setup_phase import SetupPhaseSnapshot
 
 
 _ORDER: dict[str, int] = {
@@ -47,6 +49,7 @@ class DecisionPolicyService:
         conviction_score: float,
         market_context: "MarketContext | None",
         setup_family: str | None = None,
+        setup_phase: "SetupPhaseSnapshot | None" = None,
     ) -> DecisionPolicyResult:
         regime = market_context.regime.value if market_context else "RISK_ON"
         regime_policy = self._config.regime_policy[regime]
@@ -150,6 +153,29 @@ class DecisionPolicyService:
                     f"Low regime_confidence ({regime_confidence:.2f} < "
                     f"{self._config.regime_confidence_min_enter:.2f}) — ENTER capped"
                 )
+
+        if setup_phase is not None:
+            if setup_phase.current_phase in {
+                SetupPhaseState.DISTRIBUTION,
+                SetupPhaseState.FAILED,
+            }:
+                max_decision = _stricter(max_decision, EntryQuality.AVOID.value)
+                reasons.append(
+                    f"Setup phase {setup_phase.current_phase.value} blocks entry"
+                )
+            elif setup_phase.current_phase == SetupPhaseState.EXHAUSTION:
+                max_decision = _stricter(max_decision, EntryQuality.WATCH.value)
+                reasons.append("Setup phase EXHAUSTION caps ENTER to WATCH")
+            for reason in setup_phase.reasons:
+                if "rs_policy_hard_exclude" in reason:
+                    max_decision = _stricter(max_decision, EntryQuality.AVOID.value)
+                    reasons.append(reason)
+                elif "rs_policy_warning" in reason:
+                    max_decision = _stricter(max_decision, EntryQuality.WATCH.value)
+                    reasons.append(reason)
+            if setup_phase.sequence_valid is False:
+                max_decision = _stricter(max_decision, EntryQuality.WATCH.value)
+                reasons.append("Setup phase sequence invalid — ENTER capped to WATCH")
 
         constrained = _cap_entry(entry_quality, max_decision)
         constraints = DecisionConstraints(

@@ -132,3 +132,38 @@ class SQLiteCandidateObservationsRepository:
             captured_at=datetime.fromisoformat(row["captured_at"]),
             payload=payload,
         )
+
+    def list_recent(
+        self,
+        ticker: str,
+        *,
+        before_date: date | None = None,
+        limit: int = 20,
+    ) -> list[CandidateObservation]:
+        query = """
+            SELECT ticker, snapshot_date, captured_at, schema_version, payload_json
+            FROM candidate_observations
+            WHERE ticker = ?
+        """
+        params: list[object] = [ticker.upper()]
+        if before_date is not None:
+            query += " AND snapshot_date < ?"
+            params.append(before_date.isoformat())
+        query += " ORDER BY snapshot_date DESC, captured_at DESC, id DESC LIMIT ?"
+        params.append(max(1, int(limit)))
+        with self._connect() as conn:
+            rows = conn.execute(query, params).fetchall()
+        return [self._row_to_observation(row) for row in rows]
+
+    def _row_to_observation(self, row: sqlite3.Row) -> CandidateObservation:
+        payload = json.loads(row["payload_json"])
+        schema_version = int(payload.get("schema_version", row["schema_version"]))
+        if schema_version > 1:
+            raise ValueError(f"Unsupported candidate observation schema_version={schema_version}")
+        payload.setdefault("schema_version", schema_version)
+        return CandidateObservation(
+            ticker=row["ticker"],
+            snapshot_date=date.fromisoformat(row["snapshot_date"]),
+            captured_at=datetime.fromisoformat(row["captured_at"]),
+            payload=payload,
+        )

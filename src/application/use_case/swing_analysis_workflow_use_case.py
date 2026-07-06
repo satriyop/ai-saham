@@ -30,6 +30,9 @@ from src.application.services.strategy_loader import StrategyLoader
 from src.application.use_case.assess_risk_use_case import AssessRiskRequest, AssessRiskUseCase
 from src.application.use_case.backtest_use_case import BacktestRequest, BacktestUseCase
 from src.domain.ports.broker_data_repository import BrokerDataRepository
+from src.domain.ports.candidate_observations_repository import (
+    CandidateObservationsRepository,
+)
 from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.rules.risk_gate import GateContext, RiskGate
 from src.domain.value_objects.benchmark_symbol import canonicalize_ticker
@@ -38,6 +41,7 @@ if TYPE_CHECKING:
     from src.domain.value_objects.flow_confirmation_evidence import FlowConfirmationEvidence
     from src.domain.value_objects.market_context import MarketContext
     from src.domain.value_objects.setup_evidence import SetupEvidence
+    from src.domain.value_objects.setup_phase import SetupPhaseSnapshot
     from src.domain.value_objects.trade_setup import TradeSetup
 
 
@@ -118,6 +122,7 @@ class SwingEvidence:
     regime_label: str | None
     setup_evidence: "SetupEvidence | None" = None
     flow_confirmation_evidence: "FlowConfirmationEvidence | None" = None
+    setup_phase: "SetupPhaseSnapshot | None" = None
 
     def to_dict(self, *, strategy_name: str | None = None, max_hold_days: int | None = None) -> dict[str, Any]:
         candidate = self.accumulation_candidate
@@ -170,6 +175,7 @@ class SwingEvidence:
                 ),
             },
             "setup_evidence": self.setup_evidence.to_dict() if self.setup_evidence else None,
+            "setup_phase": self.setup_phase.to_dict() if self.setup_phase else None,
             "flow_confirmation_evidence": (
                 self.flow_confirmation_evidence.to_dict()
                 if self.flow_confirmation_evidence else None
@@ -432,6 +438,7 @@ class SwingAnalysisWorkflowUseCase:
         execution_gates: list[RiskGate] | None = None,
         signal_engine: "SignalEngine | None" = None,
         risk_engine: "RiskEngine | None" = None,
+        candidate_observations_repository: CandidateObservationsRepository | None = None,
     ) -> None:
         self._market_repo = market_repository
         self._broker_repo = broker_repository
@@ -451,6 +458,7 @@ class SwingAnalysisWorkflowUseCase:
         self._execution_gates: list[RiskGate] = execution_gates or []
         self._signal_engine = signal_engine
         self._risk_engine = risk_engine
+        self._candidate_observations_repo = candidate_observations_repository
 
     def execute(
         self,
@@ -789,19 +797,24 @@ class SwingAnalysisWorkflowUseCase:
         setup_evidence = None
         if accumulation_candidate is not None and setup_eval is not None:
             try:
+                from src.application.services.candle_provenance import (
+                    resolve_candle_source,
+                )
                 from src.application.services.setup_evidence_builder import (
                     SetupEvidenceBuilder,
                 )
 
-                # RS and volume sub-signals require candle history not
-                # pre-computed here; pass None so the builder emits MISSING.
-                # Populated in a follow-up once candle-query infra exists.
+                candle_source = resolve_candle_source(
+                    self._market_repo,
+                    ticker=request.ticker,
+                    as_of_date=candles[-1].date,
+                )
                 setup_evidence = SetupEvidenceBuilder().build(
                     accumulation_candidate,
                     setup_eval,
                     rs_vs_ihsg_5d=None,
                     volume_trend_ratio=None,
-                    candle_source=None,
+                    candle_source=candle_source,
                     analysis_date=request.today,
                 )
             except Exception as exc:
@@ -821,6 +834,40 @@ class SwingAnalysisWorkflowUseCase:
             except Exception as exc:
                 warnings.append(f"Flow confirmation evidence unavailable: {exc}")
 
+        setup_phase = None
+        if setup_eval is not None:
+            try:
+                from src.application.services.setup_phase_detector import (
+                    SetupPhaseConfig,
+                    SetupPhaseDetector,
+                )
+                from src.application.services.setup_phase_history import (
+                    load_previous_setup_phases,
+                )
+
+                setup_phase_config = getattr(
+                    swing_config,
+                    "setup_phase_config",
+                    SetupPhaseConfig(),
+                )
+                previous_phases = load_previous_setup_phases(
+                    self._candidate_observations_repo,
+                    ticker=request.ticker,
+                    before_date=request.today,
+                    setup_family=request.setup_name,
+                )
+                setup_phase = SetupPhaseDetector().detect(
+                    candles=candles,
+                    setup_eval=setup_eval,
+                    setup_evidence=setup_evidence,
+                    flow_evidence=flow_confirmation_evidence,
+                    setup_family=request.setup_name,
+                    previous_phases=previous_phases,
+                    config=setup_phase_config,
+                )
+            except Exception as exc:
+                warnings.append(f"Setup phase unavailable: {exc}")
+
         evidence = SwingEvidence(
             accumulation_candidate=accumulation_candidate,
             setup_eval=setup_eval,
@@ -832,6 +879,7 @@ class SwingAnalysisWorkflowUseCase:
             regime_label=regime_label,
             setup_evidence=setup_evidence,
             flow_confirmation_evidence=flow_confirmation_evidence,
+            setup_phase=setup_phase,
         )
 
         # Re-score with evidence now that both groups are available. Signal was
@@ -857,6 +905,7 @@ class SwingAnalysisWorkflowUseCase:
                     setup_evidence=setup_evidence,
                     flow_confirmation_evidence=flow_confirmation_evidence,
                     setup_family=request.setup_name,
+                    setup_phase=setup_phase,
                 )
             except Exception as exc:
                 warnings.append(f"Evidence-enriched signal re-score unavailable: {exc}")

@@ -1084,6 +1084,9 @@ class SpyCandidateObservationsRepository:
     def get_latest(self, ticker, snapshot_date):
         return None
 
+    def list_recent(self, ticker, *, before_date=None, limit=20):
+        return []
+
 
 def test_screen_persists_candidate_observations_when_repo_injected():
     """When candidate_observations_repository is injected, save_many receives
@@ -1132,6 +1135,10 @@ def test_screen_persists_candidate_observations_when_repo_injected():
     assert fingerprint["coverage_score"] == 0.5
     assert fingerprint["conviction_score"] is not None
     assert fingerprint["coverage_score"] != fingerprint["conviction_score"]
+    assert fingerprint["setup_phase_current"] is not None
+    assert fingerprint["phase_coverage_score"] is not None
+    assert fingerprint["phase_conviction_score"] is not None
+    assert "phase_history" in fingerprint
     # flow_evidence key must be present inside signal (None when no signal engine;
     # the key itself must exist so replay consumers don't need to special-case)
     assert "flow_evidence" in (payload.get("signal") or {})

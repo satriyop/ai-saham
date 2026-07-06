@@ -39,6 +39,7 @@ if TYPE_CHECKING:
     from src.domain.value_objects.forward_estimates import ForwardEstimates
     from src.domain.value_objects.risk_assessment import RiskAssessment
     from src.domain.value_objects.seasonal_edge import SeasonalEdge
+    from src.domain.value_objects.setup_phase import SetupPhaseSnapshot
     from src.domain.value_objects.shareholding_composition import ShareholdingComposition
     from src.domain.value_objects.ticker_notation import TickerNotationSnapshot
     from src.domain.value_objects.trade_setup import TradeSetup
@@ -433,6 +434,7 @@ def _candidate_observation_payload(
     *,
     screen_result: str,
     flow_ev: "FlowConfirmationEvidence | None",
+    setup_phase: "SetupPhaseSnapshot | None",
     snapshot_date: date,
     captured_at: datetime,
     request: "AccumulationScreenRequest",
@@ -465,6 +467,7 @@ def _candidate_observation_payload(
         candidate=candidate,
         signal=signal,
         flow_ev=flow_ev,
+        setup_phase=setup_phase,
     )
 
     return {
@@ -495,6 +498,7 @@ def _sub_signal_fingerprint(
     candidate: "AccumulationCandidate",
     signal: "AssessSignalResponse | None",
     flow_ev: "FlowConfirmationEvidence | None",
+    setup_phase: "SetupPhaseSnapshot | None" = None,
 ) -> dict:
     """Persist raw sub-signal values as they were at observation time."""
     assessment = signal.assessment if signal is not None else None
@@ -510,16 +514,10 @@ def _sub_signal_fingerprint(
         else None
     )
     flow_dict = flow_ev.to_dict() if flow_ev is not None else {}
+    phase_dict = _setup_phase_fingerprint(setup_phase)
     return {
         "setup_family": constraints.get("setup_family"),
-        "setup_phase_current": None,
-        "setup_phase_previous": None,
-        "phase_sequence_valid": None,
-        "phase_age_sessions": None,
-        "phase_strength": None,
-        "phase_reasons": [],
-        "phase_coverage_score": None,
-        "phase_conviction_score": None,
+        **phase_dict,
         "rsi_at_signal": candidate.rsi,
         "bb_width_pctile_at_signal": candidate.bb_width_pctile,
         "vwap_position_at_signal": candidate.vwap_pct,
@@ -540,6 +538,36 @@ def _sub_signal_fingerprint(
         "decision_constraints": constraints or None,
         "coverage_score": coverage_score,
         "conviction_score": conviction_score,
+    }
+
+
+def _setup_phase_fingerprint(
+    setup_phase: "SetupPhaseSnapshot | None",
+) -> dict:
+    if setup_phase is None:
+        return {
+            "setup_phase_current": None,
+            "setup_phase_previous": None,
+            "phase_sequence_valid": None,
+            "phase_age_sessions": None,
+            "phase_strength": None,
+            "phase_reasons": [],
+            "phase_history": [],
+            "phase_coverage_score": None,
+            "phase_conviction_score": None,
+        }
+    return {
+        "setup_phase_current": setup_phase.current_phase.value,
+        "setup_phase_previous": (
+            setup_phase.previous_phase.value if setup_phase.previous_phase else None
+        ),
+        "phase_sequence_valid": setup_phase.sequence_valid,
+        "phase_age_sessions": setup_phase.phase_age_sessions,
+        "phase_strength": setup_phase.phase_strength,
+        "phase_reasons": list(setup_phase.reasons),
+        "phase_history": [entry.to_dict() for entry in setup_phase.history],
+        "phase_coverage_score": setup_phase.coverage_score,
+        "phase_conviction_score": setup_phase.conviction_score,
     }
 
 
@@ -882,25 +910,82 @@ class AccumulationScreenUseCase:
             return
         try:
             captured_at = datetime.now()
-            observations = [
-                CandidateObservation(
-                    ticker=c.ticker,
-                    snapshot_date=snapshot_date,
-                    captured_at=captured_at,
-                    payload=_candidate_observation_payload(
-                        c,
-                        screen_result=screen_result,
-                        flow_ev=flow_ev,
+            observations = []
+            for c, screen_result, flow_ev in all_results:
+                setup_phase = self._detect_candidate_setup_phase(
+                    c,
+                    flow_ev,
+                    snapshot_date,
+                )
+                observations.append(
+                    CandidateObservation(
+                        ticker=c.ticker,
                         snapshot_date=snapshot_date,
                         captured_at=captured_at,
-                        request=request,
-                    ),
+                        payload=_candidate_observation_payload(
+                            c,
+                            screen_result=screen_result,
+                            flow_ev=flow_ev,
+                            setup_phase=setup_phase,
+                            snapshot_date=snapshot_date,
+                            captured_at=captured_at,
+                            request=request,
+                        ),
+                    )
                 )
-                for c, screen_result, flow_ev in all_results
-            ]
             self._candidate_observations_repo.save_many(observations)
         except Exception as exc:
             logger.warning("Candidate observation persistence unavailable: %s", exc)
+
+    def _detect_candidate_setup_phase(
+        self,
+        candidate: "AccumulationCandidate",
+        flow_ev: "FlowConfirmationEvidence | None",
+        snapshot_date: date,
+    ) -> "SetupPhaseSnapshot | None":
+        try:
+            from src.application.services.candle_provenance import resolve_candle_source
+            from src.application.services.setup_evidence_builder import (
+                SetupEvidenceBuilder,
+            )
+            from src.application.services.setup_phase_detector import SetupPhaseDetector
+            from src.application.services.setup_phase_history import (
+                load_previous_setup_phases,
+            )
+
+            candles = self._market_repo.get_candles(
+                candidate.ticker,
+                end_date=snapshot_date,
+            )
+            previous_phases = load_previous_setup_phases(
+                self._candidate_observations_repo,
+                ticker=candidate.ticker,
+                before_date=snapshot_date,
+                setup_family="accumulation",
+            )
+            candle_source = resolve_candle_source(
+                self._market_repo,
+                ticker=candidate.ticker,
+                as_of_date=candles[-1].date if candles else snapshot_date,
+            )
+            setup_evidence = SetupEvidenceBuilder().build(
+                candidate,
+                None,
+                rs_vs_ihsg_5d=None,
+                volume_trend_ratio=None,
+                candle_source=candle_source,
+                analysis_date=snapshot_date,
+            )
+            return SetupPhaseDetector().detect(
+                candles=candles,
+                setup_eval=None,
+                setup_evidence=setup_evidence,
+                flow_evidence=flow_ev,
+                setup_family="accumulation",
+                previous_phases=previous_phases,
+            )
+        except Exception:
+            return None
 
     def _run_risk_funnel(
         self,

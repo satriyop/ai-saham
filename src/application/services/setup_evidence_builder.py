@@ -82,12 +82,10 @@ class SetupEvidenceBuilder:
         if rs_freshness == Freshness.MISSING:
             rs_vs_ihsg_5d = None
 
-        # --- Volume trend sub-signal (source-confidence-gated) ----------------
+        # --- Volume trend sub-signal (data-quality-gated) ---------------------
         volume_freshness = Freshness.MISSING
-        if volume_trend_ratio is not None and candle_source == "stockbit":
+        if volume_trend_ratio is not None and not _is_synthetic_volume_source(candle_source):
             volume_freshness = Freshness.FRESH
-        # Yahoo / yahoo_inferred volume is frequently 0 or synthetic for IDX;
-        # don't score it. MISSING -> value is None.
         if volume_freshness == Freshness.MISSING:
             volume_trend_ratio = None
 
@@ -116,3 +114,7 @@ class SetupEvidenceBuilder:
             getattr(candidate, "latest_candle_date", None) if candidate is not None else None
         )
         return candle_date or date.min
+
+
+def _is_synthetic_volume_source(source: str | None) -> bool:
+    return (source or "").strip().lower() in {"synthetic", "yahoo_inferred", "missing"}
