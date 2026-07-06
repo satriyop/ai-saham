@@ -89,7 +89,7 @@ Second-track scope:
 
 ## Phase A1: Regime Eligibility Policy Quick Win
 
-Status: planned
+Status: partially implemented
 
 Goal: reduce false positives immediately before changing signal math or adding
 new regime persistence infrastructure.
@@ -290,6 +290,17 @@ Verify:
 
 - Strategy outcomes cannot directly override canonical SignalEngine decisions.
 - Strategy evidence remains diagnostic until explicitly consumed by aggregation.
+
+Implemented foundation:
+
+- `StrategyEvidenceBuilder` evaluates validated strategy YAMLs through the
+  existing rule interpreter and `IndicatorRegistry`.
+- Swing analysis emits diagnostic strategy rule evidence when a strategy is
+  requested.
+- Replay fingerprints can carry strategy name, matched rule, outcome, route,
+  coverage, conviction, freshness, and rationale.
+- Phase B attribution can group saved labels by strategy name, matched rule,
+  route, and outcome without recomputing strategy evidence.
 
 ## Phase E: Institutional Accumulation Evidence
 

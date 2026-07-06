@@ -97,6 +97,10 @@ def _build_buckets(
                 "UNKNOWN" if fp.phase_sequence_valid is None else str(fp.phase_sequence_valid),
             ),
             ("market_regime", str(fp.market_regime.get("regime") or "UNKNOWN")),
+            ("strategy_name", fp.strategy_name or "UNKNOWN"),
+            ("strategy_rule", fp.strategy_rule_name or "UNKNOWN"),
+            ("strategy_outcome", fp.strategy_evidence_outcome or "UNKNOWN"),
+            ("strategy_route", fp.strategy_evidence_route or "UNKNOWN"),
             ("coverage_bucket", _score_bucket(fp.coverage)),
             ("conviction_bucket", _score_bucket(fp.conviction)),
         )

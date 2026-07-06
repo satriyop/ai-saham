@@ -42,6 +42,7 @@ if TYPE_CHECKING:
     from src.domain.value_objects.market_context import MarketContext
     from src.domain.value_objects.setup_evidence import SetupEvidence
     from src.domain.value_objects.setup_phase import SetupPhaseSnapshot
+    from src.domain.value_objects.strategy_evidence import StrategyEvidence
     from src.domain.value_objects.trade_setup import TradeSetup
 
 
@@ -123,6 +124,7 @@ class SwingEvidence:
     setup_evidence: "SetupEvidence | None" = None
     flow_confirmation_evidence: "FlowConfirmationEvidence | None" = None
     setup_phase: "SetupPhaseSnapshot | None" = None
+    strategy_rule_evidence: "StrategyEvidence | None" = None
 
     def to_dict(self, *, strategy_name: str | None = None, max_hold_days: int | None = None) -> dict[str, Any]:
         candidate = self.accumulation_candidate
@@ -158,6 +160,11 @@ class SwingEvidence:
                     if backtest_result else None
                 ),
                 "trade_count": backtest_result.trade_count if backtest_result else None,
+                "diagnostic": (
+                    self.strategy_rule_evidence.to_dict()
+                    if self.strategy_rule_evidence
+                    else None
+                ),
             } if strategy_name else None,
             "sentiment": {
                 "call": (
@@ -176,6 +183,11 @@ class SwingEvidence:
             },
             "setup_evidence": self.setup_evidence.to_dict() if self.setup_evidence else None,
             "setup_phase": self.setup_phase.to_dict() if self.setup_phase else None,
+            "strategy_rule_evidence": (
+                self.strategy_rule_evidence.to_dict()
+                if self.strategy_rule_evidence
+                else None
+            ),
             "flow_confirmation_evidence": (
                 self.flow_confirmation_evidence.to_dict()
                 if self.flow_confirmation_evidence else None
@@ -868,6 +880,30 @@ class SwingAnalysisWorkflowUseCase:
             except Exception as exc:
                 warnings.append(f"Setup phase unavailable: {exc}")
 
+        strategy_rule_evidence = None
+        if request.strategy_name is not None:
+            try:
+                from src.application.services.strategy_evidence_builder import (
+                    StrategyEvidenceBuilder,
+                    StrategyEvidenceRequest,
+                )
+
+                strategy_rule_evidence = StrategyEvidenceBuilder(
+                    registry=self._registry,
+                    loader=StrategyLoader(registry=self._registry),
+                ).build(
+                    StrategyEvidenceRequest(
+                        ticker=request.ticker,
+                        strategy_name=request.strategy_name,
+                        candles=tuple(candles),
+                        snapshot_date=request.today,
+                        setup_family=request.setup_name,
+                        setup_phase=setup_phase,
+                    )
+                )
+            except Exception as exc:
+                warnings.append(f"Strategy evidence unavailable: {exc}")
+
         evidence = SwingEvidence(
             accumulation_candidate=accumulation_candidate,
             setup_eval=setup_eval,
@@ -880,6 +916,7 @@ class SwingAnalysisWorkflowUseCase:
             setup_evidence=setup_evidence,
             flow_confirmation_evidence=flow_confirmation_evidence,
             setup_phase=setup_phase,
+            strategy_rule_evidence=strategy_rule_evidence,
         )
 
         # Re-score with evidence now that both groups are available. Signal was

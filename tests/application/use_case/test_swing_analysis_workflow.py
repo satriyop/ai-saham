@@ -255,6 +255,40 @@ def test_swing_workflow_can_emit_breakout_confirmation_with_local_volume_source(
     assert response.evidence.setup_phase.sequence_valid is True
 
 
+def test_swing_workflow_emits_diagnostic_strategy_rule_evidence(tmp_path):
+    strategy_path = tmp_path / "strategy.yaml"
+    strategy_path.write_text(
+        """
+version: 1
+name: "Price Breakout"
+default_outcome: MODERATE
+rules:
+  - name: close_breakout
+    when:
+      left:
+        indicator: CLOSE
+      operator: ">"
+      right:
+        value: 1000
+    outcome: LOW_RISK
+    rationale: "Close is above breakout threshold"
+""",
+        encoding="utf-8",
+    )
+    workflow = _workflow(
+        FakeMarketRepository([_candle(date(2026, 6, 18))]),
+        [],
+    )
+
+    response = workflow.execute(_request(strategy_name=str(strategy_path)))
+
+    assert response.evidence is not None
+    assert response.evidence.strategy_rule_evidence is not None
+    assert response.evidence.strategy_rule_evidence.strategy_name == "Price Breakout"
+    assert response.evidence.strategy_rule_evidence.matched_rule.rule_name == "close_breakout"
+    assert response.verdict.trade_setup is None
+
+
 def test_swing_workflow_raises_when_candles_are_missing():
     workflow = _workflow(FakeMarketRepository([]), [])
 

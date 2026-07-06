@@ -2285,16 +2285,22 @@ Alpha/Trigger aggregation.
 
 Work:
 
-- Add `StrategyEvidenceBuilder` in the application layer.
-- Evaluate validated strategy YAMLs through `IndicatorRegistry`.
+- Add `StrategyEvidenceBuilder` in the application layer. Implemented
+  foundation: the builder evaluates the current snapshot of validated strategy
+  YAMLs through the existing rule interpreter and `IndicatorRegistry`.
 - Map matched strategy rules to setup-family and setup-phase evidence with
-  coverage/conviction metadata, freshness, route metadata, and rationale.
+  coverage/conviction metadata, freshness, route metadata, and rationale. The
+  first implementation maps the requested setup family and canonical setup
+  phase onto one selected strategy rule; config-driven multi-rule mappings
+  remain a follow-up.
 - Persist matched strategy name, matched rule, and outcome in replay
-  observations.
+  observations. Replay fingerprints now support strategy name, rule, outcome,
+  route, coverage, conviction, freshness, and rationale fields.
 - Forbid strategy matches from overriding canonical `SetupPhaseState`
   transition rules.
 - Use strategy backtests for empirical readiness checks before assigning
-  production weight.
+  production weight. Current backtest evidence remains diagnostic; readiness
+  sample gates remain a follow-up before production weighting.
 - Forbid strategy outcomes from directly overriding canonical SignalEngine
   decisions.
 

@@ -48,6 +48,15 @@ class SignalObservationFingerprint:
     phase_history: tuple[dict[str, Any], ...] = ()
     phase_coverage_score: float | None = None
     phase_conviction_score: float | None = None
+    strategy_name: str | None = None
+    strategy_rule_name: str | None = None
+    strategy_rule_outcome: str | None = None
+    strategy_evidence_route: str | None = None
+    strategy_evidence_outcome: str | None = None
+    strategy_coverage_score: float | None = None
+    strategy_conviction_score: float | None = None
+    strategy_freshness_score: float | None = None
+    strategy_rationale: tuple[str, ...] = ()
     rsi: float | None = None
     bb_width_pctile: float | None = None
     vwap_position: float | None = None
@@ -73,6 +82,15 @@ class SignalObservationFingerprint:
             "phase_history": [dict(entry) for entry in self.phase_history],
             "phase_coverage_score": self.phase_coverage_score,
             "phase_conviction_score": self.phase_conviction_score,
+            "strategy_name": self.strategy_name,
+            "strategy_rule_name": self.strategy_rule_name,
+            "strategy_rule_outcome": self.strategy_rule_outcome,
+            "strategy_evidence_route": self.strategy_evidence_route,
+            "strategy_evidence_outcome": self.strategy_evidence_outcome,
+            "strategy_coverage_score": self.strategy_coverage_score,
+            "strategy_conviction_score": self.strategy_conviction_score,
+            "strategy_freshness_score": self.strategy_freshness_score,
+            "strategy_rationale": list(self.strategy_rationale),
             "rsi": self.rsi,
             "bb_width_pctile": self.bb_width_pctile,
             "vwap_position": self.vwap_position,
@@ -111,6 +129,21 @@ class SignalObservationFingerprint:
             ),
             phase_coverage_score=_optional_float(data.get("phase_coverage_score")),
             phase_conviction_score=_optional_float(data.get("phase_conviction_score")),
+            strategy_name=data.get("strategy_name"),
+            strategy_rule_name=data.get("strategy_rule_name"),
+            strategy_rule_outcome=data.get("strategy_rule_outcome"),
+            strategy_evidence_route=data.get("strategy_evidence_route"),
+            strategy_evidence_outcome=data.get("strategy_evidence_outcome"),
+            strategy_coverage_score=_optional_float(data.get("strategy_coverage_score")),
+            strategy_conviction_score=_optional_float(
+                data.get("strategy_conviction_score")
+            ),
+            strategy_freshness_score=_optional_float(
+                data.get("strategy_freshness_score")
+            ),
+            strategy_rationale=tuple(
+                str(v) for v in data.get("strategy_rationale") or ()
+            ),
             rsi=_optional_float(data.get("rsi", data.get("rsi_at_signal"))),
             bb_width_pctile=_optional_float(
                 data.get("bb_width_pctile", data.get("bb_width_pctile_at_signal"))

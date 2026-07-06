@@ -285,7 +285,7 @@ work or calibration:
 
 ## Phase D Tracker: Strategy Evidence Harness
 
-**Status:** Planned
+**Status:** In progress - core diagnostic harness implemented
 
 **Goal:** reuse deterministic strategy packages as setup-family evidence and
 empirical validation tools without creating a parallel decision engine.
@@ -297,13 +297,13 @@ it through the Alpha/Trigger aggregation plan.
 
 ### Non-Goals
 
-- [ ] Do not allow a strategy match to override `SetupPhaseState`.
-- [ ] Do not allow a strategy result to override SignalEngine decisions.
-- [ ] Do not add Phase G Alpha/Trigger aggregation.
-- [ ] Do not add Phase I calibration/tuning or production weights.
-- [ ] Do not introduce AI, network calls, or provider fetches.
-- [ ] Do not move strategy evaluation or policy into CLI adapters.
-- [ ] Do not change TradeSetup stop, target, or position sizing.
+- [x] Do not allow a strategy match to override `SetupPhaseState`.
+- [x] Do not allow a strategy result to override SignalEngine decisions.
+- [x] Do not add Phase G Alpha/Trigger aggregation.
+- [x] Do not add Phase I calibration/tuning or production weights.
+- [x] Do not introduce AI, network calls, or provider fetches.
+- [x] Do not move strategy evaluation or policy into CLI adapters.
+- [x] Do not change TradeSetup stop, target, or position sizing.
 
 ### Layer Plan
 
@@ -320,74 +320,74 @@ it through the Alpha/Trigger aggregation plan.
 
 ### Input Contract
 
-- [ ] Strategy YAML must already pass existing strategy validation.
-- [ ] Strategy evaluation must run through existing deterministic rule /
+- [x] Strategy YAML must already pass existing strategy validation.
+- [x] Strategy evaluation must run through existing deterministic rule /
       indicator infrastructure and `IndicatorRegistry`.
-- [ ] Evaluation must use local candles and local config only.
-- [ ] Indicator warm-up handling must remain in application use cases.
-- [ ] Strategy evidence must be reproducible for fixed candles, config,
+- [x] Evaluation must use local candles and local config only.
+- [x] Indicator warm-up handling must remain in application use cases.
+- [x] Strategy evidence must be reproducible for fixed candles, config,
       strategy YAML, and as-of date.
 
 ### Evidence Model Checklist
 
-- [ ] Add `StrategyEvidence` or equivalent immutable diagnostic value object.
-- [ ] Capture matched strategy package name.
-- [ ] Capture matched rule identifier / rule label.
-- [ ] Capture route metadata: setup family, setup phase, and evidence route
+- [x] Add `StrategyEvidence` or equivalent immutable diagnostic value object.
+- [x] Capture matched strategy package name.
+- [x] Capture matched rule identifier / rule label.
+- [x] Capture route metadata: setup family, setup phase, and evidence route
       such as setup, trigger, filter, or exit-context.
-- [ ] Capture match outcome: matched, not matched, unavailable, or invalid.
-- [ ] Capture coverage metadata: required inputs present / total inputs.
-- [ ] Capture conviction metadata: deterministic match strength or rule
+- [x] Capture match outcome: matched, not matched, unavailable, or invalid.
+- [x] Capture coverage metadata: required inputs present / total inputs.
+- [x] Capture conviction metadata: deterministic match strength or rule
       confidence without implying production authority.
-- [ ] Capture freshness metadata for candles and derived indicator inputs.
-- [ ] Capture rationale explaining which deterministic rule(s) matched.
-- [ ] Capture unavailable reasons for missing candles, warm-up, invalid config,
+- [x] Capture freshness metadata for candles and derived indicator inputs.
+- [x] Capture rationale explaining which deterministic rule(s) matched.
+- [x] Capture unavailable reasons for missing candles, warm-up, invalid config,
       missing indicators, or insufficient data.
-- [ ] Ensure strategy evidence serializes to stable dict/JSON.
+- [x] Ensure strategy evidence serializes to stable dict/JSON.
 
 ### Strategy Mapping Policy
 
 - [ ] Define config-driven mapping from strategy packages/rules to setup
       family and setup phase evidence.
-- [ ] Treat mapped strategy output as evidence about a setup route, not as the
+- [x] Treat mapped strategy output as evidence about a setup route, not as the
       setup route itself.
 - [ ] Allow multiple strategy matches to coexist without overwriting each other.
-- [ ] Preserve canonical setup phase sequence policy from Phase C.
-- [ ] Keep BB/compression, volume trigger, RS, and flow authority in their
+- [x] Preserve canonical setup phase sequence policy from Phase C.
+- [x] Keep BB/compression, volume trigger, RS, and flow authority in their
       existing Phase C evidence paths.
-- [ ] Add explicit behavior for unmapped strategies: diagnostic only,
+- [x] Add explicit behavior for unmapped strategies: diagnostic only,
       `setup_family=None`, no decision constraints.
 - [ ] Add conflict behavior: contradictory strategy matches are reported as
       mixed evidence, not collapsed into a single bullish/bearish decision.
 
 ### Application Wiring
 
-- [ ] Add `StrategyEvidenceBuilder` in `src/application/services`.
-- [ ] Reuse existing strategy loader/validator instead of parsing YAML ad hoc.
-- [ ] Evaluate strategy rules through `IndicatorRegistry`.
-- [ ] Add strategy evidence to swing workflow evidence output when strategy
+- [x] Add `StrategyEvidenceBuilder` in `src/application/services`.
+- [x] Reuse existing strategy loader/validator instead of parsing YAML ad hoc.
+- [x] Evaluate strategy rules through `IndicatorRegistry`.
+- [x] Add strategy evidence to swing workflow evidence output when strategy
       evidence is requested or a strategy package is already part of the request.
-- [ ] Add strategy evidence to replay/candidate observation fingerprints.
-- [ ] Ensure evidence-enriched signal re-score ignores strategy evidence in
+- [x] Add strategy evidence to replay/candidate observation fingerprints.
+- [x] Ensure evidence-enriched signal re-score ignores strategy evidence in
       Phase D.
-- [ ] Ensure DecisionPolicy ignores strategy evidence in Phase D except for
+- [x] Ensure DecisionPolicy ignores strategy evidence in Phase D except for
       reporting already-computed diagnostic constraints if present.
-- [ ] Keep CLI adapters thin: no direct strategy evidence computation.
+- [x] Keep CLI adapters thin: no direct strategy evidence computation.
 
 ### Persistence And Replay Checklist
 
-- [ ] Persist matched strategy name in candidate/signal observation payloads.
-- [ ] Persist matched rule identifier.
-- [ ] Persist strategy match outcome.
-- [ ] Persist route metadata and mapped setup family/phase.
-- [ ] Persist coverage, conviction, freshness, rationale, and unavailable
+- [x] Persist matched strategy name in candidate/signal observation payloads.
+- [x] Persist matched rule identifier.
+- [x] Persist strategy match outcome.
+- [x] Persist route metadata and mapped setup family/phase.
+- [x] Persist coverage, conviction, freshness, rationale, and unavailable
       reasons.
-- [ ] Extend `SignalObservationFingerprint.from_dict()` to parse strategy
+- [x] Extend `SignalObservationFingerprint.from_dict()` to parse strategy
       evidence fields when present.
-- [ ] Extend Phase B label attribution summaries with strategy evidence buckets:
+- [x] Extend Phase B label attribution summaries with strategy evidence buckets:
       strategy name, matched rule, route, and outcome.
-- [ ] Ensure old observations without strategy evidence still parse.
-- [ ] Do not recompute strategy evidence when generating forward labels; labels
+- [x] Ensure old observations without strategy evidence still parse.
+- [x] Do not recompute strategy evidence when generating forward labels; labels
       must use saved observation-time evidence.
 
 ### Empirical Readiness Checklist
@@ -403,40 +403,40 @@ it through the Alpha/Trigger aggregation plan.
 
 ### Tests
 
-- [ ] Domain/value-object serialization tests for strategy evidence.
-- [ ] Application tests for strategy evidence builder with local fake candles
+- [x] Domain/value-object serialization tests for strategy evidence.
+- [x] Application tests for strategy evidence builder with local fake candles
       and fake strategy/rule results.
-- [ ] Tests for matched, not matched, unavailable, and invalid strategy states.
-- [ ] Tests that strategy matches cannot override `SetupPhaseState`.
-- [ ] Tests that strategy matches cannot override SignalEngine decisions.
-- [ ] Tests that strategy evidence is ignored by evidence-enriched re-score in
+- [x] Tests for matched, not matched, unavailable, and invalid strategy states.
+- [x] Tests that strategy matches cannot override `SetupPhaseState`.
+- [x] Tests that strategy matches cannot override SignalEngine decisions.
+- [x] Tests that strategy evidence is ignored by evidence-enriched re-score in
       Phase D.
-- [ ] Persistence tests proving observation payloads include strategy evidence.
-- [ ] Forward-label tests proving strategy attribution uses saved fingerprints
+- [x] Persistence tests proving observation payloads include strategy evidence.
+- [x] Forward-label tests proving strategy attribution uses saved fingerprints
       and does not recompute strategies.
 - [ ] CLI tests proving adapters render strategy evidence only.
-- [ ] Offline-only tests; no network or AI dependencies.
+- [x] Offline-only tests; no network or AI dependencies.
 
 ### Documentation Checklist
 
-- [ ] Document Phase D evidence as diagnostic-only.
-- [ ] Document mapping policy from strategy package/rule to setup family/phase.
-- [ ] Document persistence fields and replay attribution buckets.
+- [x] Document Phase D evidence as diagnostic-only.
+- [x] Document initial mapping policy from strategy package/rule to setup family/phase.
+- [x] Document persistence fields and replay attribution buckets.
 - [ ] Document empirical readiness limits and sample-size requirements.
 - [ ] Document that Phase G is the first phase allowed to consume strategy
       evidence in Alpha/Trigger aggregation.
 
 ### Phase D Verification Checklist
 
-- [ ] Strategy evidence is deterministic for fixed local inputs.
-- [ ] Strategy evidence is persisted at observation time.
-- [ ] Strategy evidence is replayable through Phase B labels.
-- [ ] Strategy evidence remains diagnostic-only in SignalEngine and
+- [x] Strategy evidence is deterministic for fixed local inputs.
+- [x] Strategy evidence is persisted at observation time.
+- [x] Strategy evidence is replayable through Phase B labels.
+- [x] Strategy evidence remains diagnostic-only in SignalEngine and
       DecisionPolicy.
-- [ ] Canonical `SetupPhaseState` is never overwritten by strategy output.
-- [ ] TradeSetup sizing math is unchanged.
-- [ ] Adapters remain thin.
-- [ ] Tests pass offline.
+- [x] Canonical `SetupPhaseState` is never overwritten by strategy output.
+- [x] TradeSetup sizing math is unchanged.
+- [x] Adapters remain thin.
+- [x] Tests pass offline.
 
 ---
 

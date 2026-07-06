@@ -125,6 +125,44 @@ def test_summarize_groups_by_setup_phase_and_sequence_validity():
     assert by_group[("phase_sequence_valid", "True")].observation_count == 1
 
 
+def test_summarize_groups_by_saved_strategy_evidence_fields():
+    day = date(2026, 7, 1)
+    label = SignalForwardLabel(
+        ticker="BBCA",
+        signal_date=day,
+        horizon=SignalLabelHorizon.SWING_10D,
+        entry_reference_price=Decimal("100"),
+        label_window_start=date(2026, 7, 2),
+        label_window_end=date(2026, 7, 15),
+        close_return=4.0,
+        max_forward_return=5.0,
+        max_adverse_excursion=-1.0,
+        days_to_peak=2,
+        days_to_trough=1,
+        stop_would_trigger=False,
+        target_would_trigger=True,
+        outcome_label=SignalForwardOutcome.SUCCESS,
+        unavailable_reason=None,
+        fingerprint=SignalObservationFingerprint(
+            strategy_name="Price Breakout",
+            strategy_rule_name="close_breakout",
+            strategy_evidence_outcome="MATCHED",
+            strategy_evidence_route="strategy_yaml_supportive",
+        ),
+    )
+    repo = FakeSignalForwardLabelsRepository([label])
+
+    response = SummarizeSignalForwardLabelsUseCase(repo).execute(
+        SummarizeSignalForwardLabelsRequest()
+    )
+
+    by_group = {(bucket.group, bucket.key): bucket for bucket in response.buckets}
+    assert by_group[("strategy_name", "Price Breakout")].observation_count == 1
+    assert by_group[("strategy_rule", "close_breakout")].observation_count == 1
+    assert by_group[("strategy_outcome", "MATCHED")].observation_count == 1
+    assert by_group[("strategy_route", "strategy_yaml_supportive")].observation_count == 1
+
+
 def _label(
     *,
     ticker: str,

@@ -40,6 +40,7 @@ if TYPE_CHECKING:
     from src.domain.value_objects.risk_assessment import RiskAssessment
     from src.domain.value_objects.seasonal_edge import SeasonalEdge
     from src.domain.value_objects.setup_phase import SetupPhaseSnapshot
+    from src.domain.value_objects.strategy_evidence import StrategyEvidence
     from src.domain.value_objects.shareholding_composition import ShareholdingComposition
     from src.domain.value_objects.ticker_notation import TickerNotationSnapshot
     from src.domain.value_objects.trade_setup import TradeSetup
@@ -170,6 +171,7 @@ class AccumulationScreenRequest:
     min_market_cap_idr: int = 0
     # Piotroski F-Score floor (0–9). Tickers below this are excluded (0 = disabled)
     min_piotroski: int = 0
+    strategy_name: str | None = None
 
     def __init__(
         self,
@@ -196,6 +198,7 @@ class AccumulationScreenRequest:
         bci_stable_min_count: int = 1,
         min_market_cap_idr: int = 0,
         min_piotroski: int = 0,
+        strategy_name: str | None = None,
     ) -> None:
         self.tickers = tickers
         self.window_days = window_days
@@ -220,6 +223,7 @@ class AccumulationScreenRequest:
         self.bci_stable_min_count = bci_stable_min_count
         self.min_market_cap_idr = min_market_cap_idr
         self.min_piotroski = min_piotroski
+        self.strategy_name = strategy_name
 
 
 @dataclass(frozen=True)
@@ -438,6 +442,7 @@ def _candidate_observation_payload(
     snapshot_date: date,
     captured_at: datetime,
     request: "AccumulationScreenRequest",
+    strategy_evidence: "StrategyEvidence | None" = None,
 ) -> dict:
     """Build schema-versioned replay payload for one screened candidate.
 
@@ -468,6 +473,7 @@ def _candidate_observation_payload(
         signal=signal,
         flow_ev=flow_ev,
         setup_phase=setup_phase,
+        strategy_evidence=strategy_evidence,
     )
 
     return {
@@ -499,6 +505,7 @@ def _sub_signal_fingerprint(
     signal: "AssessSignalResponse | None",
     flow_ev: "FlowConfirmationEvidence | None",
     setup_phase: "SetupPhaseSnapshot | None" = None,
+    strategy_evidence: "StrategyEvidence | None" = None,
 ) -> dict:
     """Persist raw sub-signal values as they were at observation time."""
     assessment = signal.assessment if signal is not None else None
@@ -515,9 +522,11 @@ def _sub_signal_fingerprint(
     )
     flow_dict = flow_ev.to_dict() if flow_ev is not None else {}
     phase_dict = _setup_phase_fingerprint(setup_phase)
+    strategy_dict = _strategy_evidence_fingerprint(strategy_evidence)
     return {
         "setup_family": constraints.get("setup_family"),
         **phase_dict,
+        **strategy_dict,
         "rsi_at_signal": candidate.rsi,
         "bb_width_pctile_at_signal": candidate.bb_width_pctile,
         "vwap_position_at_signal": candidate.vwap_pct,
@@ -568,6 +577,35 @@ def _setup_phase_fingerprint(
         "phase_history": [entry.to_dict() for entry in setup_phase.history],
         "phase_coverage_score": setup_phase.coverage_score,
         "phase_conviction_score": setup_phase.conviction_score,
+    }
+
+
+def _strategy_evidence_fingerprint(
+    strategy_evidence: "StrategyEvidence | None",
+) -> dict:
+    if strategy_evidence is None:
+        return {
+            "strategy_name": None,
+            "strategy_rule_name": None,
+            "strategy_rule_outcome": None,
+            "strategy_evidence_route": None,
+            "strategy_evidence_outcome": None,
+            "strategy_coverage_score": None,
+            "strategy_conviction_score": None,
+            "strategy_freshness_score": None,
+            "strategy_rationale": [],
+        }
+    matched = strategy_evidence.matched_rule
+    return {
+        "strategy_name": strategy_evidence.strategy_name,
+        "strategy_rule_name": matched.rule_name if matched else None,
+        "strategy_rule_outcome": matched.rule_outcome if matched else None,
+        "strategy_evidence_route": matched.evidence_route if matched else None,
+        "strategy_evidence_outcome": strategy_evidence.outcome.value,
+        "strategy_coverage_score": strategy_evidence.coverage_score,
+        "strategy_conviction_score": strategy_evidence.conviction_score,
+        "strategy_freshness_score": strategy_evidence.freshness_score,
+        "strategy_rationale": list(strategy_evidence.rationale),
     }
 
 
@@ -917,6 +955,12 @@ class AccumulationScreenUseCase:
                     flow_ev,
                     snapshot_date,
                 )
+                strategy_evidence = self._build_candidate_strategy_evidence(
+                    c,
+                    setup_phase,
+                    snapshot_date,
+                    request,
+                )
                 observations.append(
                     CandidateObservation(
                         ticker=c.ticker,
@@ -927,6 +971,7 @@ class AccumulationScreenUseCase:
                             screen_result=screen_result,
                             flow_ev=flow_ev,
                             setup_phase=setup_phase,
+                            strategy_evidence=strategy_evidence,
                             snapshot_date=snapshot_date,
                             captured_at=captured_at,
                             request=request,
@@ -936,6 +981,38 @@ class AccumulationScreenUseCase:
             self._candidate_observations_repo.save_many(observations)
         except Exception as exc:
             logger.warning("Candidate observation persistence unavailable: %s", exc)
+
+    def _build_candidate_strategy_evidence(
+        self,
+        candidate: "AccumulationCandidate",
+        setup_phase: "SetupPhaseSnapshot | None",
+        snapshot_date: date,
+        request: AccumulationScreenRequest,
+    ) -> "StrategyEvidence | None":
+        if request.strategy_name is None:
+            return None
+        try:
+            from src.application.services.strategy_evidence_builder import (
+                StrategyEvidenceBuilder,
+                StrategyEvidenceRequest,
+            )
+
+            candles = self._market_repo.get_candles(
+                candidate.ticker,
+                end_date=snapshot_date,
+            )
+            return StrategyEvidenceBuilder().build(
+                StrategyEvidenceRequest(
+                    ticker=candidate.ticker,
+                    strategy_name=request.strategy_name,
+                    candles=tuple(candles),
+                    snapshot_date=snapshot_date,
+                    setup_family="accumulation",
+                    setup_phase=setup_phase,
+                )
+            )
+        except Exception:
+            return None
 
     def _detect_candidate_setup_phase(
         self,

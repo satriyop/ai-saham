@@ -378,6 +378,7 @@ def accumulation_run(
         sector_breadth_threshold=_SC.sector_breadth_threshold,
         sector_breadth_bonus_pts=_SC.sector_breadth_bonus_pts,
         sector_breadth_min_tickers=_SC.sector_breadth_min_tickers,
+        strategy_name=strategy,
     )
 
     if multi:
