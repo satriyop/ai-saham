@@ -752,7 +752,13 @@ class SQLiteBrokerRepository(BrokerDataRepository):
         broker_codes: list[str] | None = None,
         source: str | None = None,
     ) -> list[BrokerDailyFlow]:
-        """Retrieve per-broker daily flow records sorted by (date, broker_code)."""
+        """Retrieve per-broker daily flow records sorted by (date, broker_code).
+
+        Note on Imbalance: Summing net flows across all returned records for a
+        particular date will result in a non-zero imbalance. This is expected
+        because the repository only tracks select high-volume/institutional
+        desks rather than the entire broker universe.
+        """
         try:
             with self._get_connection() as conn:
                 query = "SELECT * FROM broker_daily_flow WHERE ticker = ?"

@@ -270,6 +270,14 @@ class BrokerDailyFlow:
     Sourced from the Stockbit /order-trade/broker/activity/historical endpoint
     with interval=INTERVAL_DAILY. One row per (ticker, date, broker_code).
 
+    NOTE ON IMBALANCE:
+    In a closed stock market, the sum of net flows across all brokers on a date
+    should equal zero. However, since the database only tracks a subset of primary
+    brokers (e.g. key retail and institutional desks configured in tracked_broker_codes),
+    summing net_lot or net_value across all records for a particular ticker and date
+    will result in a systematic imbalance (non-zero sum). This is an expected property
+    of the top-broker data feed.
+
     This is NEVER an aggregate — each row represents exactly one trading session.
     The accumulation screen uses this for accurate window-based broker analysis.
     """

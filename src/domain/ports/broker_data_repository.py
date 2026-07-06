@@ -217,6 +217,11 @@ class BrokerDataRepository(ABC):
         broker_codes=None returns all tracked broker codes.
         source=None returns all sources.
         Results sorted by (date, broker_code) ascending.
+
+        Note on Imbalance: Summing net flows across all returned records for a
+        particular date will result in a non-zero imbalance. This is expected
+        because the repository only tracks select high-volume/institutional
+        desks rather than the entire broker universe.
         """
         return []
 
