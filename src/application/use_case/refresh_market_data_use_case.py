@@ -80,28 +80,50 @@ class RefreshMarketDataUseCase:
             if existing:
                 earliest, latest = existing
                 previous_latest = latest
-                tolerated_start = requested_start + timedelta(
-                    days=request.start_tolerance_days
+
+                # Check for internal gaps (> 5 days) inside the requested cache range
+                existing_candles = self._repository.get_candles(
+                    ticker, start_date=requested_start, end_date=end_date
                 )
-                tolerated_end = end_date - timedelta(days=request.end_tolerance_days)
-                needs_older_backfill = earliest > tolerated_start
-                needs_forward_fill = latest < tolerated_end
+                has_internal_gap = False
+                if len(existing_candles) >= 1:
+                    # Check gap at the start of requested range if we have older historical data
+                    if earliest < requested_start:
+                        if (existing_candles[0].date - requested_start).days > 5:
+                            has_internal_gap = True
 
-                if needs_older_backfill:
-                    cached_days = (latest - earliest).days
-                    short_history_note = (
-                        f"  candles {ticker}: {cached_days}d cached "
-                        f"(from {earliest}), requested {request.days}d "
-                        "- backfilling older gap"
+                    # Check gaps between consecutive candles
+                    if not has_internal_gap and len(existing_candles) >= 2:
+                        for i in range(len(existing_candles) - 1):
+                            if (existing_candles[i + 1].date - existing_candles[i].date).days > 5:
+                                has_internal_gap = True
+                                break
+
+                if has_internal_gap:
+                    fetch_ranges.append((requested_start, end_date, "refresh"))
+                else:
+                    tolerated_start = requested_start + timedelta(
+                        days=request.start_tolerance_days
                     )
-                    fetch_ranges.append((
-                        requested_start,
-                        earliest - timedelta(days=1),
-                        "backfill",
-                    ))
+                    tolerated_end = end_date - timedelta(days=request.end_tolerance_days)
+                    needs_older_backfill = earliest > tolerated_start
+                    needs_forward_fill = latest < tolerated_end
 
-                if needs_forward_fill:
-                    fetch_ranges.append((latest, end_date, "forward"))
+                    if needs_older_backfill:
+                        cached_days = (latest - earliest).days
+                        short_history_note = (
+                            f"  candles {ticker}: {cached_days}d cached "
+                            f"(from {earliest}), requested {request.days}d "
+                            "- backfilling older gap"
+                        )
+                        fetch_ranges.append((
+                            requested_start,
+                            earliest - timedelta(days=1),
+                            "backfill",
+                        ))
+
+                    if needs_forward_fill:
+                        fetch_ranges.append((latest, end_date, "forward"))
 
                 if not fetch_ranges:
                     candles = self._repository.get_candles(

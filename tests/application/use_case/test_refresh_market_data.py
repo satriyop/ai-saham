@@ -1,6 +1,6 @@
 """Tests for cache-aware market data refresh use case."""
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
@@ -24,6 +24,10 @@ def _candle(ticker: str, day: date) -> Candle:
         close=Decimal("100"),
         volume=1000,
     )
+
+
+def _generate_candles(ticker: str, start: date, end: date) -> list[Candle]:
+    return [_candle(ticker, start + timedelta(days=i)) for i in range((end - start).days + 1)]
 
 
 class FakeMarketProvider(MarketDataProvider):
@@ -109,10 +113,7 @@ def test_refresh_backfills_older_gap_without_refetching_current_data():
     end_date = date(2026, 6, 14)
     cached_start = date(2026, 3, 16)
     requested_start = date(2025, 6, 14)
-    repo.save_candles([
-        _candle("BBCA", cached_start),
-        _candle("BBCA", end_date),
-    ])
+    repo.save_candles(_generate_candles("BBCA", cached_start, end_date))
 
     response = RefreshMarketDataUseCase(provider, repo).execute(
         RefreshMarketDataRequest(
@@ -136,10 +137,7 @@ def test_refresh_treats_small_start_gap_as_cached_current():
     repo = MemoryMarketRepository()
     provider = FakeMarketProvider()
     end_date = date(2026, 6, 14)
-    repo.save_candles([
-        _candle("BBCA", date(2025, 6, 16)),
-        _candle("BBCA", end_date),
-    ])
+    repo.save_candles(_generate_candles("BBCA", date(2025, 6, 16), end_date))
 
     response = RefreshMarketDataUseCase(provider, repo).execute(
         RefreshMarketDataRequest(
@@ -159,10 +157,7 @@ def test_refresh_reports_up_to_date_when_provider_adds_no_new_rows():
     provider = EmptyMarketProvider()
     end_date = date(2026, 6, 14)
     latest = date(2026, 6, 1)
-    repo.save_candles([
-        _candle("BBCA", date(2025, 6, 14)),
-        _candle("BBCA", latest),
-    ])
+    repo.save_candles(_generate_candles("BBCA", date(2025, 6, 14), latest))
 
     response = RefreshMarketDataUseCase(provider, repo).execute(
         RefreshMarketDataRequest(
@@ -232,4 +227,57 @@ def test_refresh_forward_fill_includes_latest_to_overwrite_partial_candle():
     # Verify that the forward fill range starts on `latest` (June 13)
     # instead of `latest + 1` (June 14) to overwrite partial quotes
     assert provider.requested_ranges == [(latest, end_date)]
+
+
+def test_refresh_forces_full_refresh_when_internal_gap_exists():
+    repo = MemoryMarketRepository()
+    provider = FakeMarketProvider()
+    end_date = date(2026, 6, 14)
+    requested_start = date(2025, 6, 14)
+
+    # Save sparse candles with a huge gap in the middle (e.g. 10 days)
+    repo.save_candles([
+        _candle("BBCA", date(2026, 6, 1)),
+        _candle("BBCA", date(2026, 6, 12)),  # 11 days gap
+        _candle("BBCA", end_date),
+    ])
+
+    response = RefreshMarketDataUseCase(provider, repo).execute(
+        RefreshMarketDataRequest(
+            ticker="BBCA",
+            days=365,
+            end_date=end_date,
+        )
+    )
+
+    # Should trigger a full refresh of the entire range
+    assert "refresh" in response.fetch_modes
+    assert provider.requested_ranges == [(requested_start, end_date)]
+
+
+def test_refresh_forces_full_refresh_when_start_boundary_gap_exists():
+    repo = MemoryMarketRepository()
+    provider = FakeMarketProvider()
+    end_date = date(2026, 6, 14)
+    requested_start = end_date - timedelta(days=180)
+
+    # Save a very old candle (so earliest is < requested_start)
+    # and then recent candles, but leaving a gap at the start of requested range.
+    repo.save_candles([
+        _candle("BBCA", date(2024, 4, 22)),   # very old
+        _candle("BBCA", date(2026, 6, 10)),   # first in requested window (gap is ~5 months)
+        _candle("BBCA", end_date),
+    ])
+
+    response = RefreshMarketDataUseCase(provider, repo).execute(
+        RefreshMarketDataRequest(
+            ticker="BBCA",
+            days=180,
+            end_date=end_date,
+        )
+    )
+
+    # Should trigger a full refresh of the entire requested range
+    assert "refresh" in response.fetch_modes
+    assert provider.requested_ranges == [(requested_start, end_date)]
 
