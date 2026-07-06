@@ -177,12 +177,16 @@ class IdxMarketDataProvider(MarketDataProvider):
         close = Decimal(str(data.get("Close", 0)))
         volume_shares = int(data.get("Volume", 0))
 
+        # Sanitize high/low bounds
+        sanitized_high = max(open_price, high, close, low)
+        sanitized_low = min(open_price, low, close, high)
+
         return Candle(
             ticker=ticker,
             date=trading_date,
             open=open_price,
-            high=high,
-            low=low,
+            high=sanitized_high,
+            low=sanitized_low,
             close=close,
             volume=volume_shares,
         )

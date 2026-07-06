@@ -285,3 +285,28 @@ class TestSQLiteMarketRepository:
             ).fetchone()
 
         assert row == ("idx", "shares", "raw")
+
+
+def test_get_candles_sanitizes_bad_database_ranges(temp_db):
+    """Test that SQLiteMarketRepository._row_to_candle sanitizes open/close values
+    loaded from legacy anomalous rows in the database."""
+    repo = SQLiteMarketRepository(db_path=temp_db)
+
+    # Insert raw invalid bounds directly into SQLite to bypass standard Candle validation
+    with sqlite3.connect(temp_db) as conn:
+        conn.execute(
+            """
+            INSERT INTO candles (ticker, date, open, high, low, close, volume)
+            VALUES ('IDR=X', '2026-06-25', '16500.00', '16400.00', '16200.00', '16100.00', 1000)
+            """
+        )
+        conn.commit()
+
+    candles = repo.get_candles("IDR=X")
+    assert len(candles) == 1
+    candle = candles[0]
+
+    # Verify that the loaded Candle object attributes were correctly sanitized
+    assert candle.high == Decimal("16500.00")
+    assert candle.low == Decimal("16100.00")
+

@@ -272,12 +272,21 @@ class SQLiteMarketRepository(MarketDataRepository):
 
     def _row_to_candle(self, row: sqlite3.Row) -> Candle:
         """Convert database row to Candle entity."""
+        open_val = Decimal(row["open"])
+        high_val = Decimal(row["high"])
+        low_val = Decimal(row["low"])
+        close_val = Decimal(row["close"])
+
+        # Sanitize legacy high/low anomalies gracefully
+        sanitized_high = max(open_val, high_val, close_val, low_val)
+        sanitized_low = min(open_val, low_val, close_val, high_val)
+
         return Candle(
             ticker=row["ticker"],
             date=date.fromisoformat(row["date"]),
-            open=Decimal(row["open"]),
-            high=Decimal(row["high"]),
-            low=Decimal(row["low"]),
-            close=Decimal(row["close"]),
+            open=open_val,
+            high=sanitized_high,
+            low=sanitized_low,
+            close=close_val,
             volume=row["volume"],
         )

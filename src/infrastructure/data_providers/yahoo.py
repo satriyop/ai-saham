@@ -13,16 +13,16 @@ from decimal import Decimal
 
 import yfinance as yf
 
-from src.domain.value_objects.benchmark_symbol import (
-    CANONICAL_BENCHMARK_TICKER,
-    YAHOO_IHSG_TICKER,
-    is_benchmark_ticker,
-)
-from src.domain.value_objects import is_non_idx_ticker
 from src.domain.entities.candle import Candle
 from src.domain.ports.market_data_provider import (
     MarketDataProvider,
     MarketDataProviderError,
+)
+from src.domain.value_objects import is_non_idx_ticker
+from src.domain.value_objects.benchmark_symbol import (
+    CANONICAL_BENCHMARK_TICKER,
+    YAHOO_IHSG_TICKER,
+    is_benchmark_ticker,
 )
 
 # Yahoo Finance reports ^JKSE (IHSG) volume in lots, not shares.
@@ -144,13 +144,22 @@ class YahooFinanceProvider(MarketDataProvider):
                 # Yahoo reports ^JKSE volume in lots; convert to shares.
                 volume = raw_volume * _LOTS_TO_SHARES if is_benchmark else raw_volume
 
+                open_val = Decimal(str(row["Open"])).quantize(Decimal("0.01"))
+                high_val = Decimal(str(row["High"])).quantize(Decimal("0.01"))
+                low_val = Decimal(str(row["Low"])).quantize(Decimal("0.01"))
+                close_val = Decimal(str(row["Close"])).quantize(Decimal("0.01"))
+
+                # Sanitize high/low bounds to handle yfinance currency anomalies
+                sanitized_high = max(open_val, high_val, close_val, low_val)
+                sanitized_low = min(open_val, low_val, close_val, high_val)
+
                 candle = Candle(
                     ticker=ticker,
                     date=idx.date(),
-                    open=Decimal(str(row["Open"])).quantize(Decimal("0.01")),
-                    high=Decimal(str(row["High"])).quantize(Decimal("0.01")),
-                    low=Decimal(str(row["Low"])).quantize(Decimal("0.01")),
-                    close=Decimal(str(row["Close"])).quantize(Decimal("0.01")),
+                    open=open_val,
+                    high=sanitized_high,
+                    low=sanitized_low,
+                    close=close_val,
                     volume=volume,
                 )
                 candles.append(candle)

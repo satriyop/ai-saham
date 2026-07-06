@@ -1,12 +1,11 @@
 """Tests for Yahoo Finance market data provider ticker normalization and volume handling."""
 
-import pandas as pd
-import pytest
 from datetime import date
 from decimal import Decimal
 
-from src.infrastructure.data_providers.yahoo import YahooFinanceProvider
+import pandas as pd
 
+from src.infrastructure.data_providers.yahoo import YahooFinanceProvider
 
 # ── Ticker normalization ───────────────────────────────────────────────────────
 
@@ -127,3 +126,26 @@ def test_yahoo_stock_zero_volume_row_is_kept():
 
     assert len(candles) == 1
     assert candles[0].volume == 0
+
+
+def test_yahoo_provider_sanitizes_invalid_high_low_bounds():
+    """Test that open/close values outside high/low bounds are sanitized."""
+    provider = YahooFinanceProvider()
+    df = _make_df([{
+        "date": "2026-06-25",
+        "open": 16500.00,  # higher than high
+        "high": 16400.00,
+        "low": 16200.00,
+        "close": 16100.00,  # lower than low
+        "volume": 1000,
+    }])
+
+    candles = provider._dataframe_to_candles("IDR=X", df)
+
+    assert len(candles) == 1
+    candle = candles[0]
+    # High should be sanitized to open_price (16500.00)
+    assert candle.high == Decimal("16500.00")
+    # Low should be sanitized to close_price (16100.00)
+    assert candle.low == Decimal("16100.00")
+

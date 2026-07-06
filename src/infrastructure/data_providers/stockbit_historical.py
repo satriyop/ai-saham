@@ -24,10 +24,10 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import TYPE_CHECKING
 
-from src.domain.value_objects.benchmark_symbol import canonicalize_ticker
-from src.domain.value_objects import is_non_idx_ticker
 from src.domain.entities.candle import Candle
 from src.domain.ports.market_data_provider import MarketDataProvider
+from src.domain.value_objects import is_non_idx_ticker
+from src.domain.value_objects.benchmark_symbol import canonicalize_ticker
 from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
 
 if TYPE_CHECKING:
@@ -78,13 +78,17 @@ def _parse_ohlcv_rows(ticker: str, rows: list[dict]) -> list[Candle]:
             continue
 
         try:
+            # Sanitize high/low bounds
+            sanitized_high = max(open_, high, close, low)
+            sanitized_low = min(open_, low, close, high)
+
             volume_shares = int(vol_lots) * _LOTS_PER_SHARE
             candles.append(Candle(
                 ticker=ticker.upper(),
                 date=d,
                 open=open_,
-                high=high,
-                low=low,
+                high=sanitized_high,
+                low=sanitized_low,
                 close=close,
                 volume=volume_shares,
             ))
