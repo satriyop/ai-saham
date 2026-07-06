@@ -26,11 +26,6 @@ if TYPE_CHECKING:
 
 import typer
 
-from src.domain.value_objects.benchmark_symbol import (
-    YAHOO_IHSG_TICKER,
-    canonicalize_ticker,
-    is_benchmark_ticker,
-)
 from src.application.services.universe_loader import (
     UniverseNotFoundError,
     resolve_tickers,
@@ -53,6 +48,11 @@ from src.application.use_case.refresh_market_data_use_case import (
     RefreshMarketDataRequest,
     RefreshMarketDataUseCase,
 )
+from src.domain.value_objects.benchmark_symbol import (
+    YAHOO_IHSG_TICKER,
+    canonicalize_ticker,
+    is_benchmark_ticker,
+)
 from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.config.data_sources_config import (
     broker_summary_source as _broker_summary_source,
@@ -60,7 +60,6 @@ from src.infrastructure.config.data_sources_config import (
 from src.infrastructure.config.data_sources_config import (
     candle_source as _candle_source,
 )
-from src.infrastructure.data_providers.fallback_provider import FallbackMarketDataProvider
 from src.infrastructure.data_providers.idx import IdxBrokerDataProvider
 from src.infrastructure.data_providers.stockbit_historical import StockbitHistoricalProvider
 from src.infrastructure.data_providers.yahoo import YahooFinanceProvider
@@ -385,6 +384,7 @@ def _fetch_candles(
     broker_provider: "StockbitBrokerProvider | None" = None,
 ) -> str:
     """Fetch candles for one ticker. Returns status string."""
+    from src.domain.value_objects import is_non_idx_ticker
     from src.infrastructure.data_providers.idx_market import IdxMarketDataProvider
 
     ticker = canonicalize_ticker(ticker)
@@ -392,18 +392,23 @@ def _fetch_candles(
     from src.infrastructure.config.market_context_config import get_global_context_tickers
     non_idx = get_global_context_tickers()
 
-    if is_benchmark_ticker(ticker) and broker_provider is not None:
-        provider = StockbitHistoricalProvider(api_client=broker_provider.api_client, non_idx_tickers=non_idx)
+    if is_non_idx_ticker(ticker, non_idx):
+        provider = YahooFinanceProvider(non_idx_tickers=non_idx)
+    elif is_benchmark_ticker(ticker):
+        if broker_provider is not None:
+            provider = StockbitHistoricalProvider(api_client=broker_provider.api_client, non_idx_tickers=non_idx)
+        else:
+            provider = YahooFinanceProvider(non_idx_tickers=non_idx)
     elif provider_name == "idx":
         provider = IdxMarketDataProvider()
-    elif broker_provider is not None:
-        provider = FallbackMarketDataProvider(
-            primary=YahooFinanceProvider(non_idx_tickers=non_idx),
-            fallback=StockbitHistoricalProvider(api_client=broker_provider.api_client, non_idx_tickers=non_idx),
-            non_idx_tickers=non_idx,
-        )
     else:
-        provider = YahooFinanceProvider(non_idx_tickers=non_idx)
+        # Standard IDX stock ticker
+        if broker_provider is None:
+            raise ValueError(
+                "Stockbit session is required to fetch IDX tickers to ensure correct exchange volumes. "
+                "Please run 'saham login' first."
+            )
+        provider = StockbitHistoricalProvider(api_client=broker_provider.api_client, non_idx_tickers=non_idx)
 
     repo = SQLiteMarketRepository(db_path=db_path)
     use_case = RefreshMarketDataUseCase(provider=provider, repository=repo)
@@ -686,11 +691,11 @@ def _fetch_global_context_tickers(db_path: Path, days: int = 180) -> None:
     Tickers are read from config/market_context_engine.yaml so disabling a factor
     also stops fetching its ticker.
     """
-    from src.infrastructure.config.market_context_config import load_market_context_config
     from src.application.use_case.refresh_market_data_use_case import (
         RefreshMarketDataRequest,
         RefreshMarketDataUseCase,
     )
+    from src.infrastructure.config.market_context_config import load_market_context_config
 
     cfg = load_market_context_config()
     global_tickers: list[tuple[str, str]] = []  # (ticker, factor_name)

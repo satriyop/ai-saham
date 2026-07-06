@@ -240,9 +240,12 @@ def test_fetch_candles_backfills_older_gap(monkeypatch, tmp_path: Path):
         _candle("BBCA", cached_start),
         _candle("BBCA", today),
     ])
+    class _FakeBroker:
+        api_client = object()
+
     FakeMarketProvider.instances.clear()
     monkeypatch.setattr(
-        "src.adapters.cli.fetch_market_commands.YahooFinanceProvider",
+        "src.adapters.cli.fetch_market_commands.StockbitHistoricalProvider",
         FakeMarketProvider,
     )
     notes: list[str] = []
@@ -254,6 +257,7 @@ def test_fetch_candles_backfills_older_gap(monkeypatch, tmp_path: Path):
         provider_name="yahoo",
         refresh=False,
         short_history=notes,
+        broker_provider=_FakeBroker(),
     )
 
     assert status.startswith("backfill+")
@@ -279,9 +283,12 @@ def test_fetch_candles_treats_small_leading_non_trading_gap_as_current(
         _candle("BBCA", cached_start),
         _candle("BBCA", today),
     ])
+    class _FakeBroker:
+        api_client = object()
+
     FakeMarketProvider.instances.clear()
     monkeypatch.setattr(
-        "src.adapters.cli.fetch_market_commands.YahooFinanceProvider",
+        "src.adapters.cli.fetch_market_commands.StockbitHistoricalProvider",
         FakeMarketProvider,
     )
     notes: list[str] = []
@@ -293,6 +300,7 @@ def test_fetch_candles_treats_small_leading_non_trading_gap_as_current(
         provider_name="yahoo",
         refresh=False,
         short_history=notes,
+        broker_provider=_FakeBroker(),
     )
 
     assert status.startswith("✓(")
@@ -313,9 +321,12 @@ def test_fetch_candles_treats_recent_trading_day_as_current(monkeypatch, tmp_pat
         # staleness check considers BBCA data current (not stale).
         _candle("IHSG", latest),
     ])
+    class _FakeBroker:
+        api_client = object()
+
     FakeMarketProvider.instances.clear()
     monkeypatch.setattr(
-        "src.adapters.cli.fetch_market_commands.YahooFinanceProvider",
+        "src.adapters.cli.fetch_market_commands.StockbitHistoricalProvider",
         FakeMarketProvider,
     )
 
@@ -325,6 +336,7 @@ def test_fetch_candles_treats_recent_trading_day_as_current(monkeypatch, tmp_pat
         db_path=db_path,
         provider_name="yahoo",
         refresh=False,
+        broker_provider=_FakeBroker(),
     )
 
     assert status.startswith("✓(")

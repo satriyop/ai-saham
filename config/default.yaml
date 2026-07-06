@@ -16,10 +16,10 @@
 
 # ── Market ────────────────────────────────────────────────────────────────
 market:
-  provider: yahoo        # primary candle source for stock tickers: yahoo | idx
-                         # When a Stockbit session is active, Stockbit is used
-                         # automatically as the candle source for IHSG (benchmark)
-                         # and as fallback for any stock ticker Yahoo cannot cover.
+  provider: stockbit     # primary candle source for stock tickers: stockbit | idx
+                         # Enforces Stockbit as the sole source of candles for IDX
+                         # stock tickers to guarantee correct exchange volumes.
+                         # Requires active login session (run 'saham login').
   suffix: ".JK"         # ticker suffix for IDX symbols
   default_days: 365      # history depth for indicator/analyze commands
   idx_request_delay_seconds: 1.0   # min spacing between requests (rate-limit courtesy)
