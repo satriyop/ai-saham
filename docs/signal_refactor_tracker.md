@@ -729,13 +729,14 @@ out-of-sample proof justify manual promotion through validator-bounded config.
       - Container, categorical, and boolean paths are explicitly non-tunable.
       - Audit result: 54 bounded current target paths, 14 explicit non-tunable
         paths, 0 missing.
-- [ ] Confirm persisted observations include Phase B-H fingerprints:
+- [x] Confirm persisted observations include Phase B-H fingerprints:
       setup phase/history, strategy evidence, institutional accumulation,
       ticker profile, Alpha/Trigger, and sector context.
-      - Code paths persist Phase B-H fields, but local `data/db/data.db`
-        observations currently do not: 45 rows from 2026-07-04 have zero
-        populated setup/IA/ticker-profile/AlphaTrigger/sector fingerprint
-        fields. Fresh observations must be captured before calibration.
+      - Historical local sample: 45 rows from 2026-07-04 have zero populated
+        setup/IA/ticker-profile/AlphaTrigger/sector fingerprint fields.
+      - Fresh `lq45` screen on 2026-07-06 generated 135 rows; all 135 have
+        setup phase, institutional accumulation, ticker profile, Alpha/Trigger,
+        and sector-context fingerprint fields populated.
 - [x] Confirm forward-label attribution groups include `sc_sector`,
       `sc_sector_regime`, Alpha/Trigger buckets, coverage/conviction buckets,
       setup phase, and market regime.
@@ -744,6 +745,9 @@ out-of-sample proof justify manual promotion through validator-bounded config.
       - `analyze signal-labels 2026-07-04 --horizon SWING_10D --format json
         --db data/db/data.db` returned `label_count: 0`; no persisted labels
         are available for attribution yet.
+      - Re-run for 2026-07-06 after fresh observations also returned
+        `label_count: 0`. Candle data currently ends on 2026-07-06, so
+        SWING_10D forward labels must wait for future candles.
 - [x] Confirm all Phase D-H diagnostic evidence registrations remain
       DIAGNOSTIC until OOS proof exists.
       - `market_context` and `company_quality_context` Alpha/Trigger
@@ -758,11 +762,18 @@ out-of-sample proof justify manual promotion through validator-bounded config.
       foreign-institutional/large-cap path, setup family accumulation-style, and
       available forward labels.
       - Blocked until fresh Phase B-H observations and SWING_10D labels exist.
+      - Fresh observations include 129 `foreign_institutional` / `SWING_10D`
+        rows, but `tp_market_cap_bucket` is not populated and labels are still
+        unavailable, so the full large-cap target filter is not ready.
 - [ ] Produce readiness summary: sample count, OOS count, success/failure
       balance, unavailable label count, and attribution bucket coverage.
       - Current local readiness: 45 candidate observations, 0 forward labels,
         0 observations with Phase B-H fingerprint coverage; not diagnostic-ready
         and not patch-eligible.
+      - Updated local readiness after fresh screen: 135 current observations,
+        129 foreign-institutional/SWING_10D observations, 0 forward labels, 0
+        future candles after 2026-07-06; still not diagnostic-ready and not
+        patch-eligible.
 - [ ] Only after readiness passes: propose validator-bounded tuning patches for
       review; no auto-apply.
 
