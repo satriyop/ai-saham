@@ -101,7 +101,7 @@ class RefreshMarketDataUseCase:
                     ))
 
                 if needs_forward_fill:
-                    fetch_ranges.append((latest + timedelta(days=1), end_date, "forward"))
+                    fetch_ranges.append((latest, end_date, "forward"))
 
                 if not fetch_ranges:
                     candles = self._repository.get_candles(

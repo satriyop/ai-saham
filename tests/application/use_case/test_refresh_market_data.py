@@ -173,7 +173,7 @@ def test_refresh_reports_up_to_date_when_provider_adds_no_new_rows():
     )
 
     assert response.status == "up-to-date(2026-06-01)"
-    assert provider.requested_ranges == [(date(2026, 6, 2), end_date)]
+    assert provider.requested_ranges == [(date(2026, 6, 1), end_date)]
 
 
 def test_refresh_passes_provider_metadata_when_repository_supports_it():
@@ -206,3 +206,30 @@ def test_refresh_rejects_empty_ticker():
         RefreshMarketDataUseCase(provider, repo).execute(
             RefreshMarketDataRequest(ticker=" ", days=30)
         )
+
+
+def test_refresh_forward_fill_includes_latest_to_overwrite_partial_candle():
+    repo = MemoryMarketRepository()
+    provider = FakeMarketProvider()
+    end_date = date(2026, 6, 14)
+    latest = date(2026, 6, 13)
+
+    # Save a partial/pre-market candle for June 13
+    repo.save_candles([
+        _candle("BBCA", date(2026, 6, 1)),
+        _candle("BBCA", latest),
+    ])
+
+    RefreshMarketDataUseCase(provider, repo).execute(
+        RefreshMarketDataRequest(
+            ticker="BBCA",
+            days=2,
+            end_date=end_date,
+            end_tolerance_days=0,
+        )
+    )
+
+    # Verify that the forward fill range starts on `latest` (June 13)
+    # instead of `latest + 1` (June 14) to overwrite partial quotes
+    assert provider.requested_ranges == [(latest, end_date)]
+
