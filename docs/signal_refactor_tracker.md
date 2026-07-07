@@ -3,7 +3,7 @@
 _Design rationale: `docs/signal_refactor.md`_
 _Phase plan: `docs/signal_refactor_phases.md`_
 _Current implementation target: Phase I readiness audit_
-_Updated: 2026-07-07 — persistence tests complete_
+_Updated: 2026-07-07 — persistence tests + CLI Alpha/Trigger & Sector Context rendering complete_
 
 This tracker records implementation state and the concrete checklist for the
 SignalEngine refactor. Phases A1–H are closed. Phase I is the active target.
@@ -111,7 +111,11 @@ All open items across all phases. This is the canonical list — phase sections 
       10 tests, 2598 total pass. Covers CNFB wiring, sector peer path, and
       structural key-presence guard distinguishing "key absent" from "key present
       with None".)_
-- [ ] CLI adapter regression tests for Phase E evidence rendering.
+- [x] CLI adapter regression tests for Phase E evidence rendering. _(Implemented
+      2026-07-07: ALPHA/TRIGGER DETAIL and SECTOR CONTEXT panels in
+      `analyze_swing_display.py`; 23 new tests in
+      `tests/adapters/cli/test_swing_display_alpha_sector.py`, 2621 total pass.
+      Adapter-only; no scoring, weighting, cache, or policy logic touched.)_
 
 ### Phase G
 - [ ] Phase D/E/F diagnostic evidence not yet promoted into production scoring.
@@ -120,15 +124,22 @@ All open items across all phases. This is the canonical list — phase sections 
       pending Phase I OOS proof.
 - [ ] `company_quality_context` slot has no producer; remains unavailable and
       deferred.
-- [ ] CLI display formatting for Alpha/Trigger diagnostics not implemented;
-      adapters remain render-only.
+- [x] CLI display formatting for Alpha/Trigger diagnostics implemented.
+      _(ALPHA/TRIGGER DETAIL panel: per-group score, weight, alpha/trigger
+      weighted contributions, flow_trigger status. DIAGNOSTIC groups labelled
+      "— no weight". Gated by `--signal-detail`.)_
 - [ ] ATR hint thresholds and size multipliers are placeholders; not
       Phase-I-calibrated production tunables.
 - [ ] Phase I walk-forward calibration, promotion workflow, and empirical
       readiness gates remain out of scope.
 
 ### Phase H
-- [ ] CLI rendering for sector context evidence display.
+- [x] CLI rendering for sector context evidence display. _(Implemented
+      2026-07-07: SECTOR CONTEXT panel shows sector label, regime, peer count,
+      signed-pct metrics table, coverage, and "DIAGNOSTIC — no scoring impact"
+      footer. Unavailable evidence renders a single dim reason line. Gated by
+      `--market-detail`. `sector_context_evidence` wired from `SwingEvidence`
+      through `swing()` → `_print_swing_output()` → `print_swing_output()`.)_
 - [ ] Promote `market_context` Alpha/Trigger slot from DIAGNOSTIC when sector
       evidence proves discriminative (Phase I).
 
