@@ -25,7 +25,7 @@ class TickerProfileSnapshot:
     foreign_flow_score: float | None         # [0,1]; avg foreign participation ratio
     volatility_score: float | None           # [0,1]; ATR/price normalized (higher = more volatile)
     index_membership_score: float | None     # [0,1]; best index score; 0.0 when in no index
-    market_cap_bucket: str | None            # "large"|"mid"|"small"|"micro"
+    market_cap_bucket: str | None            # "large"|"mid"|"small"|"micro"|"UNKNOWN"
     sector: str | None
     sub_sector: str | None
     index_memberships: tuple[str, ...]       # e.g. ("lq45", "idx80")

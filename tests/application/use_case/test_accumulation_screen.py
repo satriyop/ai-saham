@@ -818,7 +818,12 @@ def test_min_piotroski_passes_when_no_fundamentals_and_gate_disabled():
 # market_cap or piotroski gates (Rec 13: early market_cap floor pruning).
 
 
-def _make_use_case_with_all_providers(market_cap_idr: int | None, piotroski_score: int | None):
+def _make_use_case_with_all_providers(
+    market_cap_idr: int | None,
+    piotroski_score: int | None,
+    *,
+    candidate_observations_repository=None,
+):
     """Build a use case with all enrichment providers mocked so we can assert call counts."""
     from unittest.mock import MagicMock
 
@@ -864,6 +869,7 @@ def _make_use_case_with_all_providers(market_cap_idr: int | None, piotroski_scor
         seasonality_provider=seasonality_prov,
         bandar_detector_provider=bandar_prov,
         analyst_consensus_provider=analyst_prov,
+        candidate_observations_repository=candidate_observations_repository,
     )
     return use_case, as_of, fund_prov, seasonality_prov, bandar_prov, analyst_prov
 
@@ -1140,10 +1146,38 @@ def test_screen_persists_candidate_observations_when_repo_injected():
     assert fingerprint["setup_phase_current"] is not None
     assert fingerprint["phase_coverage_score"] is not None
     assert fingerprint["phase_conviction_score"] is not None
+    assert fingerprint["tp_market_cap_bucket"] == "UNKNOWN"
     assert "phase_history" in fingerprint
     # flow_evidence key must be present inside signal (None when no signal engine;
     # the key itself must exist so replay consumers don't need to special-case)
     assert "flow_evidence" in (payload.get("signal") or {})
+
+
+def test_screen_persists_market_cap_bucket_when_fundamentals_available():
+    from src.domain.ports.candidate_observations_repository import CandidateObservation
+
+    spy_repo = SpyCandidateObservationsRepository()
+    use_case, as_of, *_ = _make_use_case_with_all_providers(
+        market_cap_idr=15_000_000_000_000,
+        piotroski_score=8,
+        candidate_observations_repository=spy_repo,
+    )
+
+    response = use_case.execute(
+        AccumulationScreenRequest(
+            tickers=["BBCA"],
+            window_days=7,
+            min_net_buy_days=1,
+            as_of_date=as_of,
+        )
+    )
+
+    assert len(response.candidates) == 1
+    assert len(spy_repo.saved) == 1
+    obs = spy_repo.saved[0]
+    assert isinstance(obs, CandidateObservation)
+    fingerprint = obs.payload["sub_signal_fingerprint"]
+    assert fingerprint["tp_market_cap_bucket"] == "large"
 
 
 def test_screen_persists_sector_context_fingerprint_when_builder_available(monkeypatch):

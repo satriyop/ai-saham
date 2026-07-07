@@ -217,6 +217,20 @@ def test_market_cap_bucket_micro():
     assert snap.market_cap_bucket == "micro"
 
 
+def test_market_cap_bucket_unknown_when_unavailable():
+    snap = _classifier().classify(
+        _request(candles=_flat_candles(12), market_cap_idr=None)
+    )
+    assert snap.market_cap_bucket == "UNKNOWN"
+
+
+def test_market_cap_bucket_unknown_when_malformed():
+    snap = _classifier().classify(
+        _request(candles=_flat_candles(12), market_cap_idr="not-a-number")
+    )
+    assert snap.market_cap_bucket == "UNKNOWN"
+
+
 # --------------------------------------------------------------------------- #
 # 9-12. Market tier (formerly profile_label — a market-cap/liquidity tier)
 # --------------------------------------------------------------------------- #

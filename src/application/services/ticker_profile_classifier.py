@@ -479,10 +479,13 @@ class TickerProfileClassifier:
         scores = self._config.index_membership_scores
         return max(scores.get(name, 0.0) for name in memberships)
 
-    def _market_cap_bucket(self, market_cap_idr: Any) -> str | None:
+    def _market_cap_bucket(self, market_cap_idr: Any) -> str:
         if market_cap_idr is None:
-            return None
-        cap = float(market_cap_idr)
+            return "UNKNOWN"
+        try:
+            cap = float(market_cap_idr)
+        except (TypeError, ValueError):
+            return "UNKNOWN"
         if cap >= self._config.market_cap_large:
             return "large"
         if cap >= self._config.market_cap_mid:
@@ -563,7 +566,7 @@ class TickerProfileClassifier:
             foreign_flow_score=None,
             volatility_score=None,
             index_membership_score=None,
-            market_cap_bucket=None,
+            market_cap_bucket="UNKNOWN",
             sector=getattr(request, "sector", None),
             sub_sector=getattr(request, "sub_sector", None),
             index_memberships=(),

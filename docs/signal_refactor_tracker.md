@@ -765,6 +765,14 @@ out-of-sample proof justify manual promotion through validator-bounded config.
       - Fresh observations include 129 `foreign_institutional` / `SWING_10D`
         rows, but `tp_market_cap_bucket` is not populated and labels are still
         unavailable, so the full large-cap target filter is not ready.
+      - Fixed for new observations: ticker-profile classification and
+        candidate fingerprints persist unavailable market-cap enrichment as
+        explicit `UNKNOWN` instead of silent null, while available market-cap
+        data maps into `large`/`mid`/`small`/`micro` buckets.
+      - Local enrichment is now ready for regeneration:
+        `company_fundamentals` has 294 rows with 294 populated
+        `market_cap_idr` values; next fresh observations should populate
+        `tp_market_cap_bucket` where ticker-profile evidence is available.
 - [ ] Produce readiness summary: sample count, OOS count, success/failure
       balance, unavailable label count, and attribution bucket coverage.
       - Current local readiness: 45 candidate observations, 0 forward labels,
@@ -782,7 +790,10 @@ out-of-sample proof justify manual promotion through validator-bounded config.
 - [x] `python -m py_compile` for changed application/domain/config files.
 - [x] Focused pytest for validator, target-path bounds audit, attribution
       summary, and calibration-readiness guardrails: 99 passed.
-- [x] Full pytest: 2569 passed.
+- [x] Ticker-profile market-cap bucket readiness regression:
+      classifier/domain/accumulation-screen/forward-label focused tests:
+      101 passed.
+- [x] Full pytest: 2572 passed after `tp_market_cap_bucket` readiness fix.
 - [x] `git diff --check`.
 
 ---

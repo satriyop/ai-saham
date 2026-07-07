@@ -731,7 +731,7 @@ def _tp_fingerprint(
         "tp_foreign_flow_score": tp.foreign_flow_score,
         "tp_volatility_score": tp.volatility_score,
         "tp_index_membership_score": tp.index_membership_score,
-        "tp_market_cap_bucket": tp.market_cap_bucket,
+        "tp_market_cap_bucket": tp.market_cap_bucket or "UNKNOWN",
         "tp_sector": tp.sector,
         "tp_index_memberships": ",".join(tp.index_memberships) if tp.index_memberships else None,
         "tp_coverage_score": tp.coverage_score,
