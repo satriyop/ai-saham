@@ -155,6 +155,44 @@ class SQLiteCandidateObservationsRepository:
             rows = conn.execute(query, params).fetchall()
         return [self._row_to_observation(row) for row in rows]
 
+    def list_by_date(self, snapshot_date: date) -> list[CandidateObservation]:
+        """Return latest saved observation per ticker for a snapshot date."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT ticker, snapshot_date, captured_at, schema_version, payload_json
+                FROM (
+                    SELECT
+                        ticker,
+                        snapshot_date,
+                        captured_at,
+                        schema_version,
+                        payload_json,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY ticker
+                            ORDER BY captured_at DESC, id DESC
+                        ) AS row_num
+                    FROM candidate_observations
+                    WHERE snapshot_date = ?
+                )
+                WHERE row_num = 1
+                ORDER BY ticker ASC
+                """,
+                (snapshot_date.isoformat(),),
+            ).fetchall()
+        return [self._row_to_observation(row) for row in rows]
+
+    def list_snapshot_dates(self) -> list[date]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT DISTINCT snapshot_date
+                FROM candidate_observations
+                ORDER BY snapshot_date ASC
+                """
+            ).fetchall()
+        return [date.fromisoformat(row["snapshot_date"]) for row in rows]
+
     def _row_to_observation(self, row: sqlite3.Row) -> CandidateObservation:
         payload = json.loads(row["payload_json"])
         schema_version = int(payload.get("schema_version", row["schema_version"]))

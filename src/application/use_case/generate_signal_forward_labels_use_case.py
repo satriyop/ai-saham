@@ -37,6 +37,27 @@ class GenerateSignalForwardLabelsResponse:
     observation: CandidateObservation | None = None
 
 
+@dataclass(frozen=True)
+class GenerateAllSignalForwardLabelsRequest:
+    signal_date: date
+    horizons: tuple[SignalLabelHorizon, ...] = (SignalLabelHorizon.SWING_10D,)
+
+
+@dataclass(frozen=True)
+class GenerateAllSignalForwardLabelsResponse:
+    labels: tuple[SignalForwardLabel, ...] = field(default_factory=tuple)
+    observation_count: int = 0
+    generated_count: int = 0
+    unavailable_count: int = 0
+    generated_dates: tuple[date, ...] = field(default_factory=tuple)
+    skipped_dates: tuple[date, ...] = field(default_factory=tuple)
+
+
+@dataclass(frozen=True)
+class GenerateEligibleSignalForwardLabelsRequest:
+    horizon: SignalLabelHorizon = SignalLabelHorizon.SWING_10D
+
+
 class GenerateSignalForwardLabelsUseCase:
     """Label the latest saved candidate observation using local candles only."""
 
@@ -72,6 +93,83 @@ class GenerateSignalForwardLabelsUseCase:
             labels=labels,
             observation=observation,
         )
+
+    def execute_all(
+        self, request: GenerateAllSignalForwardLabelsRequest
+    ) -> GenerateAllSignalForwardLabelsResponse:
+        observations = self._observations.list_by_date(request.signal_date)
+        labels = self._build_labels_for_observations(observations, request.horizons)
+        self._labels.save_many(labels)
+        unavailable_count = _unavailable_count(labels)
+        return GenerateAllSignalForwardLabelsResponse(
+            labels=tuple(labels),
+            observation_count=len(observations),
+            generated_count=len(labels),
+            unavailable_count=unavailable_count,
+            generated_dates=(request.signal_date,) if labels else (),
+        )
+
+    def execute_eligible_dates(
+        self, request: GenerateEligibleSignalForwardLabelsRequest
+    ) -> GenerateAllSignalForwardLabelsResponse:
+        labels: list[SignalForwardLabel] = []
+        observation_count = 0
+        generated_dates: list[date] = []
+        skipped_dates: list[date] = []
+        for signal_date in self._observations.list_snapshot_dates():
+            observations = self._observations.list_by_date(signal_date)
+            if not observations:
+                skipped_dates.append(signal_date)
+                continue
+            if not self._has_complete_forward_window(observations, request.horizon):
+                skipped_dates.append(signal_date)
+                continue
+            observation_count += len(observations)
+            labels.extend(
+                self._build_labels_for_observations(
+                    observations,
+                    (request.horizon,),
+                )
+            )
+            generated_dates.append(signal_date)
+        self._labels.save_many(labels)
+        return GenerateAllSignalForwardLabelsResponse(
+            labels=tuple(labels),
+            observation_count=observation_count,
+            generated_count=len(labels),
+            unavailable_count=_unavailable_count(labels),
+            generated_dates=tuple(generated_dates),
+            skipped_dates=tuple(skipped_dates),
+        )
+
+    def _build_labels_for_observations(
+        self,
+        observations: list[CandidateObservation],
+        horizons: tuple[SignalLabelHorizon, ...],
+    ) -> list[SignalForwardLabel]:
+        labels: list[SignalForwardLabel] = []
+        for observation in observations:
+            labels.extend(
+                self._build_label(observation, horizon)
+                for horizon in horizons
+            )
+        return labels
+
+    def _has_complete_forward_window(
+        self,
+        observations: list[CandidateObservation],
+        horizon: SignalLabelHorizon,
+    ) -> bool:
+        required = horizon.trading_days
+        for observation in observations:
+            candles = self._market.get_candles(
+                observation.ticker.upper(),
+                start_date=observation.snapshot_date,
+            )
+            forward_candles = [c for c in candles if c.date > observation.snapshot_date]
+            if len(forward_candles) >= required:
+                return True
+        return False
 
     def _build_label(
         self,
@@ -188,6 +286,14 @@ def _unavailable_label(
         unavailable_reason=reason,
         fingerprint=fingerprint,
         observation_captured_at=observation_captured_at,
+    )
+
+
+def _unavailable_count(labels: list[SignalForwardLabel]) -> int:
+    return sum(
+        1
+        for label in labels
+        if label.outcome_label is SignalForwardOutcome.UNAVAILABLE
     )
 
 

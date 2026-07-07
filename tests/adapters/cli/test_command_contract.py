@@ -256,6 +256,14 @@ def test_public_command_tree_has_no_extra_commands():
         assert set(_listed_commands(result.stdout)) == set(expected), path
 
 
+def test_signal_labels_help_exposes_batch_generation_flags():
+    result = runner.invoke(app, ["analyze", "signal-labels", "--help"])
+
+    assert result.exit_code == 0
+    assert "--generate-all" in result.stdout
+    assert "--eligible-dates" in result.stdout
+
+
 def test_removed_legacy_paths_stay_removed():
     for path in REMOVED_PATHS:
         result = runner.invoke(app, [*path, "--help"])

@@ -52,3 +52,11 @@ class CandidateObservationsRepository(Protocol):
         prior state without reading the row currently being written.
         """
         ...
+
+    def list_by_date(self, snapshot_date: date) -> list[CandidateObservation]:
+        """Return latest observation per ticker for the given snapshot date."""
+        ...
+
+    def list_snapshot_dates(self) -> list[date]:
+        """Return snapshot dates with saved observations, oldest first."""
+        ...

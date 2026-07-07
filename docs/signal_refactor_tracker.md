@@ -793,6 +793,29 @@ out-of-sample proof justify manual promotion through validator-bounded config.
 - [ ] Only after readiness passes: propose validator-bounded tuning patches for
       review; no auto-apply.
 
+### Observation Automation
+
+- [x] Add EOD cron entries for deterministic swing observation capture:
+      `saham fetch market --universe lq45` at 18:30 WIB and
+      `saham screen accum --universe lq45 --multi --format json` at 19:15 WIB.
+- [x] Add idempotent batch forward-label generation:
+      `saham analyze signal-labels DATE --horizon SWING_10D --generate-all`.
+      Existing single-ticker `--generate --ticker` behavior is preserved.
+- [x] Add eligible-date label generation for cron:
+      `saham analyze signal-labels --eligible-dates --horizon SWING_10D
+      --generate-all`; dates without enough forward candles are skipped
+      deterministically.
+- [x] Add nightly label cron at 19:45 WIB using eligible-date mode and logging
+      to `logs/swing-labels.log`.
+- [x] Update cron cleanup to remove old loose `saham screen` and
+      `saham analyze` lines in addition to fetch/learn/trade lines.
+- [ ] Dedicated readiness report command deferred; current change keeps
+      labeling/summary behavior separate from patch eligibility policy instead
+      of adding adapter-side tuning readiness logic.
+- [ ] Label readiness remains blocked until enough future sessions exist for
+      `SWING_10D`; no tuning patches or evidence promotion before
+      patch-eligible OOS proof.
+
 ### Verification
 
 - [x] `python -m py_compile` for changed application/domain/config files.

@@ -114,6 +114,47 @@ def test_list_recent_returns_prior_observations_newest_first(tmp_path: Path):
     assert [row.payload["value"] for row in rows] == ["mid", "old"]
 
 
+def test_list_by_date_returns_latest_observation_per_ticker(tmp_path: Path):
+    db_path = tmp_path / "data.db"
+    repo = SQLiteCandidateObservationsRepository(db_path)
+    day = date(2026, 7, 3)
+    repo.save_many(
+        [
+            CandidateObservation(
+                ticker="BBCA",
+                snapshot_date=day,
+                captured_at=datetime(2026, 7, 3, 9, 0, 0),
+                payload={"schema_version": 1, "ticker": "BBCA", "value": "bbca_old"},
+            ),
+            CandidateObservation(
+                ticker="BBCA",
+                snapshot_date=day,
+                captured_at=datetime(2026, 7, 3, 10, 0, 0),
+                payload={"schema_version": 1, "ticker": "BBCA", "value": "bbca_new"},
+            ),
+            CandidateObservation(
+                ticker="BBRI",
+                snapshot_date=day,
+                captured_at=datetime(2026, 7, 3, 9, 30, 0),
+                payload={"schema_version": 1, "ticker": "BBRI", "value": "bbri"},
+            ),
+            CandidateObservation(
+                ticker="BBCA",
+                snapshot_date=date(2026, 7, 2),
+                captured_at=datetime(2026, 7, 2, 9, 0, 0),
+                payload={"schema_version": 1, "ticker": "BBCA", "value": "prior"},
+            ),
+        ]
+    )
+
+    rows = repo.list_by_date(day)
+
+    assert [(row.ticker, row.payload["value"]) for row in rows] == [
+        ("BBCA", "bbca_new"),
+        ("BBRI", "bbri"),
+    ]
+
+
 def test_schema_created_via_migration_runner(tmp_path: Path):
     db_path = tmp_path / "data.db"
     SQLiteCandidateObservationsRepository(db_path)

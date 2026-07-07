@@ -76,6 +76,20 @@ def test_get_at_and_list_signal_forward_labels(tmp_path: Path):
     assert [label.close_return for label in listed] == [5.0, 4.0]
 
 
+def test_save_many_is_idempotent_for_same_observation(tmp_path: Path):
+    db_path = tmp_path / "data.db"
+    repo = SQLiteSignalForwardLabelsRepository(db_path)
+    label = _label(captured_at=datetime(2026, 7, 1, 9, 0, 0), close_return=4.0)
+    updated = _label(captured_at=datetime(2026, 7, 1, 9, 0, 0), close_return=5.0)
+
+    repo.save_many([label])
+    repo.save_many([updated])
+    listed = repo.list(signal_date=date(2026, 7, 1), horizon=SignalLabelHorizon.SWING_10D)
+
+    assert len(listed) == 1
+    assert listed[0].close_return == 5.0
+
+
 def test_schema_created_via_migration_runner(tmp_path: Path):
     db_path = tmp_path / "data.db"
     SQLiteSignalForwardLabelsRepository(db_path)

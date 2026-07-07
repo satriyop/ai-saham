@@ -32,6 +32,8 @@ from src.application.use_case.audit_signal_use_case import (
     AuditSignalUseCase,
 )
 from src.application.use_case.generate_signal_forward_labels_use_case import (
+    GenerateAllSignalForwardLabelsRequest,
+    GenerateEligibleSignalForwardLabelsRequest,
     GenerateSignalForwardLabelsRequest,
     GenerateSignalForwardLabelsUseCase,
 )
@@ -174,7 +176,10 @@ def signal_replay(
 
 
 def signal_labels(
-    snapshot_date: Annotated[str, typer.Argument(help="Signal date YYYY-MM-DD")],
+    snapshot_date: Annotated[
+        Optional[str],
+        typer.Argument(help="Signal date YYYY-MM-DD; omit with --eligible-dates"),
+    ] = None,
     ticker: Annotated[
         Optional[str],
         typer.Option("--ticker", "-t", help="Limit to one ticker; required with --generate"),
@@ -187,6 +192,20 @@ def signal_labels(
         bool,
         typer.Option("--generate", help="Generate label before summarizing"),
     ] = False,
+    generate_all: Annotated[
+        bool,
+        typer.Option(
+            "--generate-all",
+            help="Generate labels for all latest observations on the date before summarizing",
+        ),
+    ] = False,
+    eligible_dates: Annotated[
+        bool,
+        typer.Option(
+            "--eligible-dates",
+            help="With --generate-all, generate labels for saved dates with enough forward candles",
+        ),
+    ] = False,
     captured_at: Annotated[
         Optional[str],
         typer.Option("--captured-at", help="Specific observation timestamp ISO-8601"),
@@ -196,11 +215,13 @@ def signal_labels(
 ) -> None:
     """Generate and summarize persisted signal forward labels."""
     resolved_db = db_path or DEFAULT_DB_PATH
-    try:
-        day = date.fromisoformat(snapshot_date)
-    except ValueError:
-        typer.echo(f"[error] Invalid date: {snapshot_date} (expected YYYY-MM-DD)", err=True)
-        raise typer.Exit(1)
+    day: date | None = None
+    if snapshot_date is not None:
+        try:
+            day = date.fromisoformat(snapshot_date)
+        except ValueError:
+            typer.echo(f"[error] Invalid date: {snapshot_date} (expected YYYY-MM-DD)", err=True)
+            raise typer.Exit(1)
     try:
         label_horizon = SignalLabelHorizon(horizon.upper())
     except ValueError:
@@ -215,10 +236,30 @@ def signal_labels(
     ticker_u = ticker.upper() if ticker else None
     labels_repo = SQLiteSignalForwardLabelsRepository(resolved_db)
 
+    if generate and generate_all:
+        typer.echo("[error] Use either --generate or --generate-all, not both.", err=True)
+        raise typer.Exit(1)
+    if generate_all and ticker_u:
+        typer.echo("[error] --ticker is not supported with --generate-all.", err=True)
+        raise typer.Exit(1)
+    if generate_all and captured_dt is not None:
+        typer.echo("[error] --captured-at is not supported with --generate-all.", err=True)
+        raise typer.Exit(1)
+    if eligible_dates and not generate_all:
+        typer.echo("[error] --eligible-dates requires --generate-all.", err=True)
+        raise typer.Exit(1)
+    if eligible_dates and snapshot_date is not None:
+        typer.echo("[error] Do not pass a date with --eligible-dates.", err=True)
+        raise typer.Exit(1)
+    if not eligible_dates and day is None:
+        typer.echo("[error] Signal date YYYY-MM-DD is required unless --eligible-dates is used.", err=True)
+        raise typer.Exit(1)
+
     if generate:
         if not ticker_u:
             typer.echo("[error] --ticker is required with --generate", err=True)
             raise typer.Exit(1)
+        assert day is not None
         generator = GenerateSignalForwardLabelsUseCase(
             candidate_observations_repository=SQLiteCandidateObservationsRepository(resolved_db),
             market_data_repository=SQLiteMarketRepository(resolved_db),
@@ -241,6 +282,31 @@ def signal_labels(
             typer.echo(
                 f"Generated {label.horizon.value} label for {label.ticker} "
                 f"{label.signal_date}: {label.outcome_label.value}"
+            )
+
+    if generate_all:
+        generator = GenerateSignalForwardLabelsUseCase(
+            candidate_observations_repository=SQLiteCandidateObservationsRepository(resolved_db),
+            market_data_repository=SQLiteMarketRepository(resolved_db),
+            signal_forward_labels_repository=labels_repo,
+        )
+        if eligible_dates:
+            response = generator.execute_eligible_dates(
+                GenerateEligibleSignalForwardLabelsRequest(horizon=label_horizon)
+            )
+        else:
+            assert day is not None
+            response = generator.execute_all(
+                GenerateAllSignalForwardLabelsRequest(
+                    signal_date=day,
+                    horizons=(label_horizon,),
+                )
+            )
+        if fmt != "json":
+            typer.echo(
+                f"Generated {response.generated_count} {label_horizon.value} labels "
+                f"from {response.observation_count} observations "
+                f"({response.unavailable_count} unavailable)."
             )
 
     summary = SummarizeSignalForwardLabelsUseCase(labels_repo).execute(

@@ -4,6 +4,8 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 from src.application.use_case.generate_signal_forward_labels_use_case import (
+    GenerateAllSignalForwardLabelsRequest,
+    GenerateEligibleSignalForwardLabelsRequest,
     GenerateSignalForwardLabelsRequest,
     GenerateSignalForwardLabelsUseCase,
 )
@@ -16,10 +18,14 @@ from src.domain.value_objects.signal_forward_label import (
 
 
 class FakeCandidateObservationsRepository:
-    def __init__(self, observation=None):
+    def __init__(self, observation=None, observations=None, observations_by_date=None):
         self.observation = observation
+        self.observations = observations if observations is not None else []
+        self.observations_by_date = observations_by_date or {}
         self.calls = []
         self.at_calls = []
+        self.list_by_date_calls = []
+        self.list_snapshot_dates_calls = 0
 
     def get_latest(self, ticker, snapshot_date):
         self.calls.append((ticker, snapshot_date))
@@ -28,6 +34,16 @@ class FakeCandidateObservationsRepository:
     def get_at(self, ticker, snapshot_date, captured_at):
         self.at_calls.append((ticker, snapshot_date, captured_at))
         return self.observation
+
+    def list_by_date(self, snapshot_date):
+        self.list_by_date_calls.append(snapshot_date)
+        if self.observations_by_date:
+            return list(self.observations_by_date.get(snapshot_date, ()))
+        return list(self.observations)
+
+    def list_snapshot_dates(self):
+        self.list_snapshot_dates_calls += 1
+        return sorted(self.observations_by_date)
 
 
 class FakeMarketDataRepository:
@@ -40,7 +56,8 @@ class FakeMarketDataRepository:
         return [
             c
             for c in self.candles
-            if (start_date is None or c.date >= start_date)
+            if c.ticker == ticker.upper()
+            and (start_date is None or c.date >= start_date)
             and (end_date is None or c.date <= end_date)
         ]
 
@@ -252,26 +269,152 @@ def test_marks_missing_entry_price_unavailable_without_fetching_candles():
     assert market_repo.calls == []
 
 
-def _observation(signal_date: date, payload: dict) -> CandidateObservation:
+def test_generate_all_labels_latest_observations_for_date():
+    signal_date = date(2026, 7, 1)
+    observations = (
+        _observation(
+            signal_date,
+            {"candidate": {"current_price": "100"}, "sub_signal_fingerprint": _fingerprint()},
+            ticker="BBCA",
+            captured_at=datetime(2026, 7, 1, 19, 0, 0),
+        ),
+        _observation(
+            signal_date,
+            {"candidate": {"current_price": "200"}, "sub_signal_fingerprint": _fingerprint()},
+            ticker="BBRI",
+            captured_at=datetime(2026, 7, 1, 19, 1, 0),
+        ),
+    )
+    candles = []
+    for ticker, entry in (("BBCA", 100), ("BBRI", 200)):
+        candles.extend(
+            _candle(signal_date + timedelta(days=i), str(entry + i), ticker=ticker)
+            for i in range(1, 11)
+        )
+    observations_repo = FakeCandidateObservationsRepository(observations=observations)
+    labels_repo = SpySignalForwardLabelsRepository()
+
+    response = GenerateSignalForwardLabelsUseCase(
+        candidate_observations_repository=observations_repo,
+        market_data_repository=FakeMarketDataRepository(candles),
+        signal_forward_labels_repository=labels_repo,
+    ).execute_all(GenerateAllSignalForwardLabelsRequest(signal_date=signal_date))
+
+    assert observations_repo.list_by_date_calls == [signal_date]
+    assert response.observation_count == 2
+    assert response.generated_count == 2
+    assert response.unavailable_count == 0
+    assert {label.ticker for label in response.labels} == {"BBCA", "BBRI"}
+    assert labels_repo.saved == list(response.labels)
+
+
+def test_generate_all_marks_incomplete_windows_unavailable():
+    signal_date = date(2026, 7, 1)
+    observation = _observation(
+        signal_date,
+        {"candidate": {"current_price": "100"}},
+        ticker="BBCA",
+    )
+
+    response = GenerateSignalForwardLabelsUseCase(
+        candidate_observations_repository=FakeCandidateObservationsRepository(
+            observations=[observation]
+        ),
+        market_data_repository=FakeMarketDataRepository(
+            [_candle(signal_date + timedelta(days=1), "101", ticker="BBCA")]
+        ),
+        signal_forward_labels_repository=SpySignalForwardLabelsRepository(),
+    ).execute_all(GenerateAllSignalForwardLabelsRequest(signal_date=signal_date))
+
+    assert response.observation_count == 1
+    assert response.generated_count == 1
+    assert response.unavailable_count == 1
+    assert response.labels[0].outcome_label is SignalForwardOutcome.UNAVAILABLE
+    assert response.labels[0].unavailable_reason == (
+        "incomplete_forward_window: required 10 trading days, found 1"
+    )
+
+
+def test_generate_eligible_dates_skips_dates_without_forward_window():
+    early = date(2026, 7, 1)
+    recent = date(2026, 7, 10)
+    observations_by_date = {
+        early: [
+            _observation(
+                early,
+                {"candidate": {"current_price": "100"}},
+                ticker="BBCA",
+            )
+        ],
+        recent: [
+            _observation(
+                recent,
+                {"candidate": {"current_price": "100"}},
+                ticker="BBRI",
+            )
+        ],
+    }
+    candles = [
+        _candle(early + timedelta(days=i), str(100 + i), ticker="BBCA")
+        for i in range(1, 11)
+    ]
+    candles.append(_candle(recent + timedelta(days=1), "101", ticker="BBRI"))
+    observations_repo = FakeCandidateObservationsRepository(
+        observations_by_date=observations_by_date
+    )
+    labels_repo = SpySignalForwardLabelsRepository()
+
+    response = GenerateSignalForwardLabelsUseCase(
+        candidate_observations_repository=observations_repo,
+        market_data_repository=FakeMarketDataRepository(candles),
+        signal_forward_labels_repository=labels_repo,
+    ).execute_eligible_dates(
+        GenerateEligibleSignalForwardLabelsRequest(horizon=SignalLabelHorizon.SWING_10D)
+    )
+
+    assert observations_repo.list_snapshot_dates_calls == 1
+    assert response.generated_dates == (early,)
+    assert response.skipped_dates == (recent,)
+    assert response.observation_count == 1
+    assert response.generated_count == 1
+    assert response.unavailable_count == 0
+    assert response.labels[0].ticker == "BBCA"
+    assert labels_repo.saved == list(response.labels)
+
+
+def _observation(
+    signal_date: date,
+    payload: dict,
+    *,
+    ticker: str = "BBCA",
+    captured_at: datetime = datetime(2026, 7, 1, 9, 0, 0),
+) -> CandidateObservation:
     payload = {
         "schema_version": 1,
         "artifact_type": "candidate_observation",
-        "ticker": "BBCA",
+        "ticker": ticker,
         "snapshot_date": signal_date.isoformat(),
         **payload,
     }
     return CandidateObservation(
-        ticker="BBCA",
+        ticker=ticker,
         snapshot_date=signal_date,
-        captured_at=datetime(2026, 7, 1, 9, 0, 0),
+        captured_at=captured_at,
         payload=payload,
     )
 
 
-def _candle(day: date, close: str, *, high: str | None = None, low: str | None = None) -> Candle:
+def _candle(
+    day: date,
+    close: str,
+    *,
+    high: str | None = None,
+    low: str | None = None,
+    ticker: str = "BBCA",
+) -> Candle:
     value = Decimal(close)
     return Candle(
-        ticker="BBCA",
+        ticker=ticker,
         date=day,
         open=value,
         high=Decimal(high) if high is not None else value,

@@ -159,7 +159,7 @@ after cloning and installing the package:
 ./install_cron.sh /opt/ai-saham     # explicit path (for non-default deploy locations)
 ```
 
-This installs 5 cron jobs (Mon–Fri, IDX calendar). The host crontab is expected
+This installs 9 cron jobs (Mon–Fri, IDX calendar). The host crontab is expected
 to run in `Asia/Jakarta` local time:
 
 | Time (WIB) | Command | Purpose |
@@ -167,8 +167,12 @@ to run in `Asia/Jakarta` local time:
 | 08:55 | `saham fetch iev` | Collect IEV pre-open snapshot |
 | 08:57 | `saham learn snapshot` | NCP-locked screener prediction |
 | 09:00 | `saham learn track` | 5-min orderbook tracking until 09:30 |
+| 09:31 | `saham trade confirm --track-file ... && saham trade log intraday` | Confirm and log opening-session paper trades |
 | 09:35 | `saham learn grade` | Compute accuracy report |
 | 09:40 | `saham learn tune` | AI config recommendations |
+| 18:30 | `saham fetch market --universe lq45` | Refresh EOD LQ45 candles |
+| 19:15 | `saham screen accum --universe lq45 --multi --format json` | Capture swing observation fingerprints |
+| 19:45 | `saham analyze signal-labels --eligible-dates --horizon SWING_10D --generate-all` | Idempotently label saved observations once forward candles are sufficient |
 
 Logs are written to `logs/` in the project directory.
 
