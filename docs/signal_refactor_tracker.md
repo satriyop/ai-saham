@@ -3,7 +3,7 @@
 _Design rationale: `docs/signal_refactor.md`_
 _Phase plan: `docs/signal_refactor_phases.md`_
 _Current implementation target: Phase I readiness audit_
-_Updated: 2026-07-07 — PIT enrichment schema fix for fundamentals + shareholding; `saham fetch enrichment-history` command added; 6 new PIT tests (151 total for these test modules, 2722+ total suite pass)_
+_Updated: 2026-07-07 — PIT replay cache audit expanded beyond fundamentals/shareholding; stock metadata, company profile, seasonality, earnings, and SignalEngine replay enrichment paths now guarded/converted where replay-relevant._
 
 This tracker records implementation state and the concrete checklist for the
 SignalEngine refactor. Phases A1–H are closed. Phase I is the active target.
@@ -186,22 +186,35 @@ Work that can proceed without touching signal authority, scoring, or tuning.
       - Point-in-time enrichment status (updated 2026-07-07):
         analyst consensus, forward estimates, and ticker notation use
         `date(fetched_date) <= date(as_of_date)` queries and were already
-        multi-row PIT tables.
+        multi-row PIT tables. SignalEngine self-fetch replay now passes
+        `as_of_date` into analyst, forward-estimates, and seasonality providers;
+        live calls still pass `None`, preserving live fetch behavior.
         Fundamentals (`company_fundamentals`) and shareholding
-        (`shareholding_composition`) had `ticker TEXT PRIMARY KEY` — single
-        row per ticker — and the backtest guard (`fetched_at > as_of_date →
-        return None`) was useless when only today's row existed. Both tables
-        are now converted to multi-row `UNIQUE(ticker, fetched_date)` via
-        migrations 3-6 (pattern: create PIT temp table → copy → drop old →
-        rename). `_read_cache()` now uses PIT queries for both. A new
+        (`shareholding_composition`) were converted earlier to multi-row
+        `UNIQUE(ticker, fetched_date)` PIT caches. A new
         `saham fetch enrichment-history --universe lq45` command stores
         periodic snapshots with today's fetched_date.
-        PROVIDER LIMITATION: Stockbit returns current values only; no
-        historical fundamentals or shareholding API exists. Historical
-        observations before the first snapshot stored by
-        `enrichment-history` will continue to return UNKNOWN for
-        market_cap_bucket and shareholding data. Run
-        `enrichment-history` regularly going forward to build a PIT history.
+        Additional replay-cache audit results:
+
+        | Cache/table | Previous/current key | Used by replay? | Action | Reason |
+        |---|---|---:|---|---|
+        | `stock_meta` | was `ticker PRIMARY KEY`; now multi-row by `ticker`, `fetched_at` | Yes, sector/universe metadata can feed fingerprints and sector context | Converted | Historical reads use latest row with `fetched_at <= as_of_date`; future-only rows return `None`. |
+        | `company_profile_cache` | was `ticker PRIMARY KEY`; now multi-row by `ticker`, `fetched_date` | Potentially, listing/profile fields can feed ticker-profile/readiness attribution | Converted | Historical reads use latest row with `fetched_date <= as_of_date`; future-only rows return `None`. |
+        | `seasonality_cache` | was keyed by `ticker/year/month`; now snapshot rows include fetch metadata | Yes, seasonality can feed signal/company-quality diagnostics | Guarded PIT snapshot reads | Historical reads are cache-only and require a cached aggregate fetched on/before replay date; no prior snapshot returns unavailable. |
+        | `earnings_cache` | was `PRIMARY KEY(ticker, year, quarter)`; now `UNIQUE(ticker, year, quarter, fetched_date)` | Yes, earnings history can feed quality diagnostics | Converted | Historical reads select the latest stored snapshot per quarter with `fetched_date <= as_of_date`; no reliable announcement date exists in cache. |
+        | `valuation_metrics_cache` | `ticker PRIMARY KEY` | No current signal/risk/backfill/fingerprint/tuning usage | Left display-only | Forward valuation used by signals comes from PIT `forward_estimates_cache`; latest valuation metrics remain dashboard/fetch display data. |
+
+        Signal factor coverage reporting now includes `sector_metadata`,
+        `company_profile`, and `earnings_history`. Enrichment PIT snapshot
+        coverage now includes `stock_meta`, `company_profile_cache`,
+        `seasonality_cache`, and `earnings_cache` in addition to the earlier PIT
+        enrichment tables. Display-only latest valuation metrics are not counted
+        as replay coverage.
+        PROVIDER LIMITATION: Stockbit returns current values only for several
+        enrichment endpoints; no historical vendor API exists. Historical
+        observations before the first locally stored snapshot will continue to
+        return UNKNOWN/unavailable for those fields. Run `enrichment-history`
+        regularly going forward to build a PIT history.
       - No SignalEngine authority, DecisionPolicy, RiskEngine, tuning patch, or
         diagnostic evidence promotion change.
 - [ ] CLI adapter rendering regression tests for setup phase / evidence output.

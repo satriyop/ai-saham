@@ -8,6 +8,7 @@ Layer: Domain (port definition)
 """
 
 from abc import ABC, abstractmethod
+from datetime import date
 
 from src.domain.value_objects.seasonal_edge import SeasonalEdge
 
@@ -22,6 +23,7 @@ class SeasonalityProvider(ABC):
         year: int,
         month: int,
         back_years: int = 5,
+        as_of_date: date | None = None,
     ) -> SeasonalEdge | None:
         """Return seasonality statistics for ticker in the given calendar month.
 
@@ -30,6 +32,8 @@ class SeasonalityProvider(ABC):
             year:       Reference year (used as the end year for history lookup).
             month:      Calendar month to retrieve (1=Jan … 12=Dec).
             back_years: Number of historical years to include.
+            as_of_date: When provided, only use a cache row fetched on or before
+                this historical date. None means current/live behavior.
 
         Returns:
             SeasonalEdge if data is available, None otherwise.

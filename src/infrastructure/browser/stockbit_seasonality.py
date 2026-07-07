@@ -142,10 +142,35 @@ class StockbitSeasonalityProvider(SeasonalityProvider, StockbitCachingProvider):
                         source           TEXT,
                         fetched_month    TEXT NOT NULL,
                         fetched_at       TEXT,
-                        PRIMARY KEY (ticker, year, month)
+                        UNIQUE(ticker, year, month, fetched_month, fetched_at)
                     )"""),
         (1, "CREATE INDEX IF NOT EXISTS idx_seasonality_ticker_month ON seasonality_cache(ticker, fetched_month)"),
         (2, "ALTER TABLE seasonality_cache ADD COLUMN fetched_at TEXT"),
+        (3, """CREATE TABLE IF NOT EXISTS seasonality_cache_pit (
+                        ticker           TEXT NOT NULL,
+                        year             INTEGER NOT NULL,
+                        month            INTEGER NOT NULL,
+                        avg_return_pct   REAL,
+                        win_rate_pct     REAL,
+                        positive_years   INTEGER,
+                        total_years      INTEGER,
+                        back_years       INTEGER,
+                        source           TEXT,
+                        fetched_month    TEXT NOT NULL,
+                        fetched_at       TEXT,
+                        UNIQUE(ticker, year, month, fetched_month, fetched_at)
+                    )"""),
+        (4, """INSERT INTO seasonality_cache_pit
+                    (ticker, year, month, avg_return_pct, win_rate_pct,
+                     positive_years, total_years, back_years, source,
+                     fetched_month, fetched_at)
+                SELECT ticker, year, month, avg_return_pct, win_rate_pct,
+                       positive_years, total_years, back_years, source,
+                       fetched_month, fetched_at
+                FROM seasonality_cache"""),
+        (5, "DROP TABLE seasonality_cache"),
+        (6, "ALTER TABLE seasonality_cache_pit RENAME TO seasonality_cache"),
+        (7, "CREATE INDEX IF NOT EXISTS idx_seasonality_ticker_month ON seasonality_cache(ticker, year, month, fetched_month, fetched_at)"),
     ]
 
     def _ensure_schema(self) -> None:
@@ -173,17 +198,31 @@ class StockbitSeasonalityProvider(SeasonalityProvider, StockbitCachingProvider):
         except Exception:
             return False
 
-    def _read_cache(self, ticker: str, year: int, month: int) -> SeasonalEdge | None:
+    def _read_cache(
+        self,
+        ticker: str,
+        year: int,
+        month: int,
+        as_of_date: date | None = None,
+    ) -> SeasonalEdge | None:
+        where = "WHERE ticker=? AND year=? AND month=?"
+        params: tuple = (ticker.upper(), year, month)
+        if as_of_date is not None:
+            where += " AND date(COALESCE(substr(fetched_at,1,10), fetched_month || '-01')) <= date(?)"
+            params = (ticker.upper(), year, month, as_of_date.isoformat())
         try:
             with self._get_conn() as conn:
                 row = conn.execute(
-                    """
+                    f"""
                     SELECT avg_return_pct, win_rate_pct, positive_years,
                            total_years, back_years, source, fetched_at
                     FROM seasonality_cache
-                    WHERE ticker=? AND year=? AND month=?
+                    {where}
+                    ORDER BY date(COALESCE(substr(fetched_at,1,10), fetched_month || '-01')) DESC,
+                             fetched_at DESC
+                    LIMIT 1
                     """,
-                    (ticker.upper(), year, month),
+                    params,
                 ).fetchone()
         except Exception as e:
             logger.debug("seasonality_cache read error for %s: %s", ticker, e)
@@ -225,10 +264,17 @@ class StockbitSeasonalityProvider(SeasonalityProvider, StockbitCachingProvider):
             with self._get_conn() as conn:
                 conn.execute(
                     """
-                    INSERT OR REPLACE INTO seasonality_cache
+                    INSERT INTO seasonality_cache
                         (ticker, year, month, avg_return_pct, win_rate_pct,
                          positive_years, total_years, back_years, source, fetched_month, fetched_at)
                     VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                    ON CONFLICT(ticker, year, month, fetched_month, fetched_at) DO UPDATE SET
+                        avg_return_pct=excluded.avg_return_pct,
+                        win_rate_pct=excluded.win_rate_pct,
+                        positive_years=excluded.positive_years,
+                        total_years=excluded.total_years,
+                        back_years=excluded.back_years,
+                        source=excluded.source
                     """,
                     (
                         ticker.upper(),
@@ -255,6 +301,7 @@ class StockbitSeasonalityProvider(SeasonalityProvider, StockbitCachingProvider):
         year: int,
         month: int,
         back_years: int = 5,
+        as_of_date: date | None = None,
     ) -> SeasonalEdge | None:
         """Return SeasonalEdge for ticker in given year/month.
 
@@ -262,6 +309,9 @@ class StockbitSeasonalityProvider(SeasonalityProvider, StockbitCachingProvider):
         calls the Stockbit API and writes results before returning.
         """
         ticker = ticker.upper()
+
+        if as_of_date is not None:
+            return self._read_cache(ticker, year, month, as_of_date=as_of_date)
 
         if self._is_cache_fresh(ticker, year, month):
             return self._read_cache(ticker, year, month)

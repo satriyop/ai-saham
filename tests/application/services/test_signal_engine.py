@@ -1,3 +1,5 @@
+from datetime import date
+
 from src.application.services.signal_engine import SignalEngine
 from src.application.use_case.assess_signal_use_case import (
     ForeignFlowScoreMappingConfig,
@@ -17,7 +19,7 @@ class EmptyInsiderProvider:
 
 class ForwardProviderWithMissingPe:
     """Returns ForwardEstimates with no pre-computed PE — must be derived from price."""
-    def get_forward_estimates(self, ticker):
+    def get_forward_estimates(self, ticker, as_of_date=None):
         return ForwardEstimates(
             ticker=ticker,
             forward_eps_1y=2.0,          # PE=125 when price=250, PE=40 when price=80
@@ -29,7 +31,7 @@ class ForwardProviderWithMissingPe:
 
 class AnalystProviderWithLowCurrentPrice:
     """Returns analyst consensus with a low current_price (→ PE=40, below threshold)."""
-    def get_consensus(self, ticker):
+    def get_consensus(self, ticker, as_of_date=None):
         return type("Consensus", (), {
             "analyst_count": 1,
             "buy_count": 1,
@@ -40,7 +42,7 @@ class AnalystProviderWithLowCurrentPrice:
 
 
 class SeasonalityProviderWithShortHistory:
-    def get_seasonal_edge(self, ticker, year, month):
+    def get_seasonal_edge(self, ticker, year, month, as_of_date=None):
         return SeasonalEdge(
             ticker=ticker,
             month=month,
@@ -49,6 +51,38 @@ class SeasonalityProviderWithShortHistory:
             positive_years=3,
             total_years=4,
             back_years=5,
+        )
+
+
+class RecordingForwardProvider(ForwardProviderWithMissingPe):
+    def __init__(self):
+        self.calls = []
+
+    def get_forward_estimates(self, ticker, as_of_date=None):
+        self.calls.append((ticker, as_of_date))
+        return super().get_forward_estimates(ticker, as_of_date=as_of_date)
+
+
+class RecordingAnalystProvider(AnalystProviderWithLowCurrentPrice):
+    def __init__(self):
+        self.calls = []
+
+    def get_consensus(self, ticker, as_of_date=None):
+        self.calls.append((ticker, as_of_date))
+        return super().get_consensus(ticker, as_of_date=as_of_date)
+
+
+class RecordingSeasonalityProvider(SeasonalityProviderWithShortHistory):
+    def __init__(self):
+        self.calls = []
+
+    def get_seasonal_edge(self, ticker, year, month, as_of_date=None):
+        self.calls.append((ticker, year, month, as_of_date))
+        return super().get_seasonal_edge(
+            ticker,
+            year,
+            month,
+            as_of_date=as_of_date,
         )
 
 
@@ -111,3 +145,24 @@ def test_signal_engine_threads_seasonality_sample_size_into_context():
     assert ctx.seasonality_avg_return_pct == 2.5
     assert ctx.seasonality_total_years == 4
     assert ctx.seasonality_back_years == 5
+
+
+def test_signal_engine_passes_none_as_of_for_live_enrichment_and_date_for_replay():
+    analyst = RecordingAnalystProvider()
+    forward = RecordingForwardProvider()
+    seasonality = RecordingSeasonalityProvider()
+    engine = SignalEngine(
+        analyst_provider=analyst,
+        forward_estimates_provider=forward,
+        seasonality_provider=seasonality,
+    )
+
+    live_ctx = engine.build_context("BBCA")
+    replay_ctx = engine.build_context("BBCA", as_of_date=date(2026, 6, 15))
+
+    assert live_ctx.snapshot_date == date.today()
+    assert replay_ctx.snapshot_date == date(2026, 6, 15)
+    assert analyst.calls == [("BBCA", None), ("BBCA", date(2026, 6, 15))]
+    assert forward.calls == [("BBCA", None), ("BBCA", date(2026, 6, 15))]
+    assert seasonality.calls[0][3] is None
+    assert seasonality.calls[1] == ("BBCA", 2026, 6, date(2026, 6, 15))

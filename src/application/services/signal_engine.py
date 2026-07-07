@@ -23,7 +23,6 @@ Layer: Application
 from __future__ import annotations
 
 import logging
-from dataclasses import replace
 from datetime import date
 from typing import TYPE_CHECKING, Callable
 
@@ -113,9 +112,7 @@ class SignalEngine:
         Evidence groups (SetupEvidence, FlowConfirmationEvidence) are not
         available in the self-fetch path — confidence will be 0, flags still apply.
         """
-        ctx = self._build_signal_context(ticker)
-        if as_of_date is not None:
-            ctx = replace(ctx, snapshot_date=as_of_date)
+        ctx = self._build_signal_context(ticker, as_of_date=as_of_date)
         return self._evidence_use_case.execute(
             AssessSignalEvidenceRequest(
                 ticker=ticker,
@@ -134,10 +131,7 @@ class SignalEngine:
         Used by AuditSignalUseCase / signal-audit CLI to inspect the exact inputs
         that feed the flag evaluation without re-implementing provider wiring.
         """
-        ctx = self._build_signal_context(ticker)
-        if as_of_date is not None:
-            ctx = replace(ctx, snapshot_date=as_of_date)
-        return ctx
+        return self._build_signal_context(ticker, as_of_date=as_of_date)
 
     def evaluate_with_context(
         self,
@@ -217,9 +211,11 @@ class SignalEngine:
 
     # ── internals ────────────────────────────────────────────────────────────
 
-    def _build_signal_context(self, ticker: str) -> SignalContext:
+    def _build_signal_context(
+        self, ticker: str, as_of_date: date | None = None
+    ) -> SignalContext:
         """Fetch enrichment from injected providers. Each provider fails gracefully."""
-        today = date.today()
+        snapshot_date = as_of_date or date.today()
 
         bandar_score: int | None = None
         bandar_max_range: int = self._config.scoring.bandar.default_max_range
@@ -259,10 +255,10 @@ class SignalEngine:
                 from src.domain.value_objects.insider_transaction import compute_net_buy_ratio
                 txns = self._insider.get_insider_transactions(
                     ticker=ticker,
-                    from_date=today - timedelta(
+                    from_date=snapshot_date - timedelta(
                         days=self._config.enrichment.insider_lookback_days
                     ),
-                    to_date=today,
+                    to_date=snapshot_date,
                     action_type="ALL",
                 )
                 insider_ratio = compute_net_buy_ratio(txns)
@@ -274,7 +270,12 @@ class SignalEngine:
         # ── seasonality ──────────────────────────────────────────────────────
         if self._seasonality is not None:
             try:
-                edge = self._seasonality.get_seasonal_edge(ticker, today.year, today.month)
+                edge = self._seasonality.get_seasonal_edge(
+                    ticker,
+                    snapshot_date.year,
+                    snapshot_date.month,
+                    as_of_date=as_of_date,
+                )
                 if edge is not None:
                     win_rate = edge.win_rate_pct
                     avg_return = edge.avg_monthly_return_pct
@@ -286,7 +287,7 @@ class SignalEngine:
         # ── analyst consensus ─────────────────────────────────────────────────
         if self._analyst is not None:
             try:
-                consensus = self._analyst.get_consensus(ticker)
+                consensus = self._analyst.get_consensus(ticker, as_of_date=as_of_date)
                 if consensus is not None and consensus.buy_ratio is not None:
                     buy_pct = consensus.buy_ratio
                     upside_pct = consensus.upside_pct  # percentage, e.g. 15.0 = 15%
@@ -297,7 +298,10 @@ class SignalEngine:
         # ── forward estimates ─────────────────────────────────────────────────
         if self._forward_estimates is not None:
             try:
-                fe = self._forward_estimates.get_forward_estimates(ticker)
+                fe = self._forward_estimates.get_forward_estimates(
+                    ticker,
+                    as_of_date=as_of_date,
+                )
                 if fe is not None:
                     forward_pe = fe.forward_pe  # None for loss-making companies
                     if forward_pe is None:
@@ -311,7 +315,7 @@ class SignalEngine:
 
         return SignalContext(
             ticker=ticker,
-            snapshot_date=today,
+            snapshot_date=snapshot_date,
             bandar_broad_score=bandar_score,
             bandar_max_range=bandar_max_range,
             insider_net_buy_ratio=insider_ratio,

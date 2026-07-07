@@ -72,10 +72,7 @@ class SQLiteUniverseSummaryProvider(UniverseSummaryProvider):
         try:
             candle_rows = self._query_candles(conn, sorted_tickers, ph, date_ceil)
             broker_rows = self._query_broker(conn, sorted_tickers, ph, date_ceil)
-            meta_rows = conn.execute(
-                f"SELECT ticker, name, sector FROM stock_meta WHERE ticker IN ({ph})",
-                sorted_tickers,
-            ).fetchall()
+            meta_rows = self._query_meta(conn, sorted_tickers, ph, date_ceil)
         finally:
             conn.close()
 
@@ -87,6 +84,46 @@ class SQLiteUniverseSummaryProvider(UniverseSummaryProvider):
             broker_rows=broker_rows,
             meta_rows=meta_rows,
         )
+
+    def _query_meta(
+        self,
+        conn: sqlite3.Connection,
+        sorted_tickers: list[str],
+        placeholders: str,
+        date_ceil: str | None,
+    ) -> list[sqlite3.Row]:
+        if date_ceil is None:
+            return conn.execute(
+                f"""
+                SELECT sm.ticker, sm.name, sm.sector
+                FROM stock_meta sm
+                JOIN (
+                    SELECT ticker, MAX(fetched_at) AS max_fetched_at
+                    FROM stock_meta
+                    WHERE ticker IN ({placeholders})
+                    GROUP BY ticker
+                ) latest
+                  ON latest.ticker = sm.ticker
+                 AND latest.max_fetched_at = sm.fetched_at
+                """,
+                sorted_tickers,
+            ).fetchall()
+        return conn.execute(
+            f"""
+            SELECT sm.ticker, sm.name, sm.sector
+            FROM stock_meta sm
+            JOIN (
+                SELECT ticker, MAX(fetched_at) AS max_fetched_at
+                FROM stock_meta
+                WHERE ticker IN ({placeholders})
+                  AND date(substr(fetched_at,1,10)) <= date(?)
+                GROUP BY ticker
+            ) latest
+              ON latest.ticker = sm.ticker
+             AND latest.max_fetched_at = sm.fetched_at
+            """,
+            [*sorted_tickers, date_ceil],
+        ).fetchall()
 
     def _query_candles(
         self,

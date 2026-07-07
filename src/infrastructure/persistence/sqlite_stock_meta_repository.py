@@ -2,7 +2,7 @@
 SQLite implementation of StockMetaRepository.
 
 Table: stock_meta
-  ticker       TEXT PRIMARY KEY
+  ticker       TEXT
   name         TEXT
   sector       TEXT
   sector_key   TEXT
@@ -16,7 +16,7 @@ Layer: Infrastructure
 """
 
 import sqlite3
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 from src.domain.entities.stock_meta import StockMeta
@@ -24,7 +24,7 @@ from src.domain.ports.stock_meta_repository import StockMetaRepository
 
 _CREATE_TABLE = """
 CREATE TABLE IF NOT EXISTS stock_meta (
-    ticker       TEXT PRIMARY KEY,
+    ticker       TEXT NOT NULL,
     name         TEXT,
     sector       TEXT,
     sector_key   TEXT,
@@ -32,8 +32,10 @@ CREATE TABLE IF NOT EXISTS stock_meta (
     industry_key TEXT,
     source       TEXT NOT NULL DEFAULT 'yahoo',
     fetched_at   TEXT NOT NULL,
-    checksum     TEXT NOT NULL
+    checksum     TEXT NOT NULL,
+    UNIQUE(ticker, fetched_at)
 );
+CREATE INDEX IF NOT EXISTS idx_stock_meta_ticker_fetched ON stock_meta(ticker, fetched_at);
 CREATE INDEX IF NOT EXISTS idx_stock_meta_sector   ON stock_meta(sector);
 CREATE INDEX IF NOT EXISTS idx_stock_meta_industry ON stock_meta(industry);
 """
@@ -52,11 +54,26 @@ class SQLiteStockMetaRepository(StockMetaRepository):
     def _init_schema(self) -> None:
         with self._connect() as conn:
             conn.executescript(_CREATE_TABLE)
+            _rebuild_stock_meta_if_needed(conn)
+            conn.executescript(_CREATE_TABLE)
 
-    def get(self, ticker: str) -> StockMeta | None:
+    def get(
+        self,
+        ticker: str,
+        as_of_date: date | None = None,
+    ) -> StockMeta | None:
+        where = "WHERE ticker = ?"
+        params: tuple[str, ...] = (ticker.upper(),)
+        if as_of_date is not None:
+            where += " AND date(substr(fetched_at,1,10)) <= date(?)"
+            params = (ticker.upper(), as_of_date.isoformat())
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT * FROM stock_meta WHERE ticker = ?", (ticker.upper(),)
+                "SELECT * FROM stock_meta "
+                f"{where} "
+                "ORDER BY date(substr(fetched_at,1,10)) DESC, fetched_at DESC "
+                "LIMIT 1",
+                params,
             ).fetchone()
         if row is None:
             return None
@@ -69,14 +86,13 @@ class SQLiteStockMetaRepository(StockMetaRepository):
                 INSERT INTO stock_meta
                     (ticker, name, sector, sector_key, industry, industry_key, source, fetched_at, checksum)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(ticker) DO UPDATE SET
+                ON CONFLICT(ticker, fetched_at) DO UPDATE SET
                     name         = excluded.name,
                     sector       = excluded.sector,
                     sector_key   = excluded.sector_key,
                     industry     = excluded.industry,
                     industry_key = excluded.industry_key,
                     source       = excluded.source,
-                    fetched_at   = excluded.fetched_at,
                     checksum     = excluded.checksum
                 """,
                 (
@@ -118,6 +134,8 @@ class SQLiteStockMetaRepository(StockMetaRepository):
                     (julianday('now') - julianday(fetched_at)) AS INTEGER
                 ) AS age_days
                 FROM stock_meta WHERE ticker = ?
+                ORDER BY date(substr(fetched_at,1,10)) DESC, fetched_at DESC
+                LIMIT 1
                 """,
                 (ticker.upper(),),
             ).fetchone()
@@ -136,3 +154,23 @@ class SQLiteStockMetaRepository(StockMetaRepository):
             fetched_at=datetime.fromisoformat(row["fetched_at"]),
             checksum=row["checksum"],
         )
+
+
+def _rebuild_stock_meta_if_needed(conn: sqlite3.Connection) -> None:
+    rows = conn.execute("PRAGMA table_info(stock_meta)").fetchall()
+    ticker_pk = any(row["name"] == "ticker" and int(row["pk"]) > 0 for row in rows)
+    if not ticker_pk:
+        return
+    conn.execute("ALTER TABLE stock_meta RENAME TO stock_meta_old")
+    conn.executescript(_CREATE_TABLE)
+    conn.execute(
+        """
+        INSERT INTO stock_meta
+            (ticker, name, sector, sector_key, industry, industry_key, source,
+             fetched_at, checksum)
+        SELECT ticker, name, sector, sector_key, industry, industry_key, source,
+               fetched_at, checksum
+        FROM stock_meta_old
+        """
+    )
+    conn.execute("DROP TABLE stock_meta_old")

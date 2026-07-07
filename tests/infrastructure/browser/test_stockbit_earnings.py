@@ -1,6 +1,9 @@
 """Tests for StockbitEarningsProvider parser and cache logic."""
 
 
+import sqlite3
+from datetime import date, datetime
+
 import pytest
 
 from src.domain.value_objects.earnings_record import EarningsRecord
@@ -142,6 +145,52 @@ def test_schema_created(tmp_provider):
     assert row is not None
 
 
+def test_legacy_primary_key_schema_rebuilds_to_pit_snapshots(tmp_path):
+    db_path = tmp_path / "legacy.db"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            """
+            CREATE TABLE earnings_cache (
+                ticker TEXT NOT NULL,
+                year INTEGER NOT NULL,
+                quarter INTEGER NOT NULL,
+                eps_actual REAL,
+                eps_estimate REAL,
+                eps_surprise_pct REAL,
+                eps_yoy_change REAL,
+                eps_prev_year REAL,
+                fetched_date TEXT NOT NULL,
+                PRIMARY KEY (ticker, year, quarter)
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO earnings_cache
+                (ticker, year, quarter, eps_actual, eps_estimate, eps_surprise_pct,
+                 eps_yoy_change, eps_prev_year, fetched_date)
+            VALUES ('BBCA', 2026, 1, 101.0, NULL, NULL, NULL, NULL, '2026-06-01T09:00:00')
+            """
+        )
+
+    provider = StockbitEarningsProvider(api_client=None, db_path=db_path)
+
+    with provider._get_conn() as conn:
+        pk_columns = {
+            row["name"] for row in conn.execute("PRAGMA table_info(earnings_cache)")
+            if int(row["pk"]) > 0
+        }
+    result = provider.get_earnings_history(
+        "BBCA",
+        quarters=4,
+        as_of_date=date(2026, 6, 6),
+    )
+
+    assert pk_columns == set()
+    assert len(result) == 1
+    assert result[0].eps_actual == pytest.approx(101.0)
+
+
 def test_write_then_read_single(tmp_provider):
     from datetime import datetime
     record = EarningsRecord(
@@ -158,7 +207,6 @@ def test_write_then_read_single(tmp_provider):
 
 
 def test_read_cache_returns_newest_first(tmp_provider):
-    from datetime import datetime
     for q in [1, 2, 3]:
         tmp_provider._write_record(EarningsRecord(
             ticker="BBCA", year=2026, quarter=q,
@@ -171,6 +219,78 @@ def test_read_cache_returns_newest_first(tmp_provider):
     assert results[0].quarter == 3  # newest first
     assert results[1].quarter == 2
     assert results[2].quarter == 1
+
+
+def test_get_earnings_history_filters_future_fetched_rows_for_as_of_date(tmp_provider):
+    tmp_provider._write_record(EarningsRecord(
+        ticker="BBCA", year=2026, quarter=1,
+        eps_actual=101.0, eps_estimate=None, eps_surprise_pct=None,
+        eps_yoy_change=None, eps_prev_year=None,
+        fetched_at=datetime(2026, 6, 1, 9),
+    ))
+    tmp_provider._write_record(EarningsRecord(
+        ticker="BBCA", year=2026, quarter=2,
+        eps_actual=102.0, eps_estimate=None, eps_surprise_pct=None,
+        eps_yoy_change=None, eps_prev_year=None,
+        fetched_at=datetime(2026, 6, 10, 9),
+    ))
+
+    results = tmp_provider.get_earnings_history(
+        "BBCA",
+        quarters=4,
+        as_of_date=date(2026, 6, 6),
+    )
+
+    assert len(results) == 1
+    assert results[0].quarter == 1
+
+
+def test_get_earnings_history_keeps_multiple_snapshots_per_quarter(tmp_provider):
+    tmp_provider._write_record(EarningsRecord(
+        ticker="BBCA", year=2026, quarter=1,
+        eps_actual=101.0, eps_estimate=None, eps_surprise_pct=None,
+        eps_yoy_change=None, eps_prev_year=None,
+        fetched_at=datetime(2026, 6, 1, 9),
+    ))
+    tmp_provider._write_record(EarningsRecord(
+        ticker="BBCA", year=2026, quarter=1,
+        eps_actual=111.0, eps_estimate=None, eps_surprise_pct=None,
+        eps_yoy_change=None, eps_prev_year=None,
+        fetched_at=datetime(2026, 6, 10, 9),
+    ))
+
+    prior = tmp_provider.get_earnings_history(
+        "BBCA",
+        quarters=4,
+        as_of_date=date(2026, 6, 6),
+    )
+    latest = tmp_provider.get_earnings_history(
+        "BBCA",
+        quarters=4,
+        as_of_date=date(2026, 6, 12),
+    )
+
+    assert len(prior) == 1
+    assert prior[0].eps_actual == pytest.approx(101.0)
+    assert len(latest) == 1
+    assert latest[0].eps_actual == pytest.approx(111.0)
+
+
+def test_get_earnings_history_returns_empty_when_no_prior_fetched_row(tmp_provider):
+    tmp_provider._write_record(EarningsRecord(
+        ticker="BBCA", year=2026, quarter=2,
+        eps_actual=102.0, eps_estimate=None, eps_surprise_pct=None,
+        eps_yoy_change=None, eps_prev_year=None,
+        fetched_at=datetime(2026, 6, 10, 9),
+    ))
+
+    results = tmp_provider.get_earnings_history(
+        "BBCA",
+        quarters=4,
+        as_of_date=date(2026, 6, 6),
+    )
+
+    assert results == []
 
 
 def test_is_cache_fresh_false_when_empty(tmp_provider):

@@ -19,23 +19,30 @@ from src.application.use_case.fetch_enrichment_history_use_case import (
 
 logger = logging.getLogger(__name__)
 
-_PIT_TABLES = (
-    "company_fundamentals",
-    "shareholding_composition",
-    "analyst_cache",
-    "ticker_notation_cache",
-    "forward_estimates_cache",
+_PIT_TABLES: tuple[tuple[str, str], ...] = (
+    ("company_fundamentals", "date(fetched_date)"),
+    ("shareholding_composition", "date(fetched_date)"),
+    ("analyst_cache", "date(fetched_date)"),
+    ("ticker_notation_cache", "date(fetched_date)"),
+    ("forward_estimates_cache", "date(fetched_date)"),
+    ("stock_meta", "date(substr(fetched_at,1,10))"),
+    ("company_profile_cache", "date(substr(fetched_date,1,10))"),
+    (
+        "seasonality_cache",
+        "date(COALESCE(substr(fetched_at,1,10), fetched_month || '-01'))",
+    ),
+    ("earnings_cache", "date(substr(fetched_date,1,10))"),
 )
 
 
 def read_enrichment_pit_coverage(db_path: Path) -> list[EnrichmentPitTableCoverage]:
     """Return per-table PIT coverage rows for all enrichment cache tables."""
     rows: list[EnrichmentPitTableCoverage] = []
-    for table in _PIT_TABLES:
+    for table, date_expr in _PIT_TABLES:
         try:
             with sqlite3.connect(str(db_path)) as conn:
                 agg = conn.execute(
-                    f"SELECT COUNT(DISTINCT date(fetched_date)), MAX(date(fetched_date)) "
+                    f"SELECT COUNT(DISTINCT {date_expr}), MAX({date_expr}) "
                     f"FROM {table}"
                 ).fetchone()
                 snap_count = int(agg[0]) if agg and agg[0] else 0
@@ -45,7 +52,7 @@ def read_enrichment_pit_coverage(db_path: Path) -> list[EnrichmentPitTableCovera
                     ticker_count = (
                         conn.execute(
                             f"SELECT COUNT(DISTINCT ticker) FROM {table} "
-                            f"WHERE date(fetched_date) = ?",
+                            f"WHERE {date_expr} = ?",
                             (latest_date,),
                         ).fetchone()[0]
                         or 0

@@ -1,13 +1,18 @@
 """Port: stock metadata persistence."""
 
 from abc import ABC, abstractmethod
+from datetime import date
 
 from src.domain.entities.stock_meta import StockMeta
 
 
 class StockMetaRepository(ABC):
     @abstractmethod
-    def get(self, ticker: str) -> StockMeta | None: ...
+    def get(
+        self,
+        ticker: str,
+        as_of_date: date | None = None,
+    ) -> StockMeta | None: ...
 
     @abstractmethod
     def save(self, meta: StockMeta) -> None: ...

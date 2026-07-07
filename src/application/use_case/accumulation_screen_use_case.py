@@ -1043,6 +1043,7 @@ class AccumulationScreenUseCase:
                     ticker=result.ticker,
                     year=today.year,
                     month=today.month,
+                    as_of_date=request.as_of_date,
                 )
 
             # Insider activity: director/commissioner transactions in last 90 days

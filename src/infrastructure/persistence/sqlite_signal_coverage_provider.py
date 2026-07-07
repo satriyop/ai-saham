@@ -33,6 +33,9 @@ _FACTOR_TABLES: tuple[tuple[str, str, str | None], ...] = (
     ("seasonality_edge",    "seasonality_cache",      None),
     ("analyst_consensus",   "analyst_cache",          "analyst_count > 0"),
     ("forward_valuation",   "forward_estimates_cache",None),
+    ("sector_metadata",     "stock_meta",             "sector IS NOT NULL"),
+    ("company_profile",     "company_profile_cache",  "listing_board IS NOT NULL"),
+    ("earnings_history",    "earnings_cache",         "eps_actual IS NOT NULL"),
 )
 
 _CACHE_TOTAL_NOTE = "cache total (no quality filter)"

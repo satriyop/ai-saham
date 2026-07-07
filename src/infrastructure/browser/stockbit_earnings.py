@@ -17,7 +17,7 @@ Actual API shape (confirmed 2026-06-20, BBCA Q1 2026):
   data.company[0].analyst.prevyear.previous   → prior year EPS (str)
 
 Caching: SQLite table `earnings_cache`, TTL = 7 days.
-  Primary key: (ticker, year, quarter)
+  PIT key: unique (ticker, year, quarter, fetched_date)
 
 Layer: Infrastructure
 """
@@ -45,6 +45,27 @@ _EARNINGS_URL = STOCKBIT_CFG.earnings_url
 
 _TTL_DAYS = 7
 _DEFAULT_QUARTERS = 4
+
+
+_CREATE_TABLE = """
+CREATE TABLE IF NOT EXISTS earnings_cache (
+    ticker           TEXT NOT NULL,
+    year             INTEGER NOT NULL,
+    quarter          INTEGER NOT NULL,
+    eps_actual       REAL,
+    eps_estimate     REAL,
+    eps_surprise_pct REAL,
+    eps_yoy_change   REAL,
+    eps_prev_year    REAL,
+    fetched_date     TEXT NOT NULL,
+    UNIQUE(ticker, year, quarter, fetched_date)
+)
+"""
+
+_CREATE_INDEX = """
+CREATE INDEX IF NOT EXISTS idx_earnings_ticker_period
+ON earnings_cache(ticker, year DESC, quarter DESC, fetched_date DESC)
+"""
 
 
 def _parse_float(raw: str | None) -> float | None:
@@ -136,24 +157,10 @@ class StockbitEarningsProvider(EarningsProvider, StockbitCachingProvider):
     def _ensure_schema(self) -> None:
         try:
             with self._get_conn() as conn:
-                conn.execute("""
-                    CREATE TABLE IF NOT EXISTS earnings_cache (
-                        ticker          TEXT NOT NULL,
-                        year            INTEGER NOT NULL,
-                        quarter         INTEGER NOT NULL,
-                        eps_actual      REAL,
-                        eps_estimate    REAL,
-                        eps_surprise_pct REAL,
-                        eps_yoy_change  REAL,
-                        eps_prev_year   REAL,
-                        fetched_date    TEXT NOT NULL,
-                        PRIMARY KEY (ticker, year, quarter)
-                    )
-                """)
-                conn.execute("""
-                    CREATE INDEX IF NOT EXISTS idx_earnings_ticker_period
-                    ON earnings_cache(ticker, year DESC, quarter DESC)
-                """)
+                conn.execute(_CREATE_TABLE)
+                _rebuild_earnings_cache_if_needed(conn)
+                conn.execute(_CREATE_TABLE)
+                conn.execute(_CREATE_INDEX)
         except Exception as e:
             logger.warning("earnings_cache schema error: %s", e)
 
@@ -177,19 +184,49 @@ class StockbitEarningsProvider(EarningsProvider, StockbitCachingProvider):
         q, y = _current_quarter_year()
         return self._is_row_fresh(ticker, y, q)
 
-    def _read_cache(self, ticker: str, quarters: int) -> list[EarningsRecord]:
+    def _read_cache(
+        self,
+        ticker: str,
+        quarters: int,
+        as_of_date: date | None = None,
+    ) -> list[EarningsRecord]:
+        where = "WHERE e.ticker=?"
+        subquery_where = "WHERE ticker=?"
+        params: tuple = (ticker.upper(), ticker.upper(), quarters)
+        if as_of_date is not None:
+            where += " AND date(substr(fetched_date,1,10)) <= date(?)"
+            subquery_where += " AND date(substr(fetched_date,1,10)) <= date(?)"
+            params = (
+                ticker.upper(),
+                as_of_date.isoformat(),
+                ticker.upper(),
+                as_of_date.isoformat(),
+                quarters,
+            )
         try:
             with self._get_conn() as conn:
                 rows = conn.execute(
-                    """
-                    SELECT year, quarter, eps_actual, eps_estimate,
-                           eps_surprise_pct, eps_yoy_change, eps_prev_year, fetched_date
+                    f"""
+                    SELECT e.year, e.quarter, e.eps_actual, e.eps_estimate,
+                           e.eps_surprise_pct, e.eps_yoy_change, e.eps_prev_year,
+                           e.fetched_date
                     FROM earnings_cache
-                    WHERE ticker=?
-                    ORDER BY year DESC, quarter DESC
+                    e
+                    JOIN (
+                        SELECT ticker, year, quarter, MAX(fetched_date) AS max_fetched_date
+                        FROM earnings_cache
+                        {subquery_where}
+                        GROUP BY ticker, year, quarter
+                    ) latest
+                      ON latest.ticker = e.ticker
+                     AND latest.year = e.year
+                     AND latest.quarter = e.quarter
+                     AND latest.max_fetched_date = e.fetched_date
+                    {where}
+                    ORDER BY e.year DESC, e.quarter DESC
                     LIMIT ?
                     """,
-                    (ticker.upper(), quarters),
+                    params,
                 ).fetchall()
         except Exception as e:
             logger.debug("earnings_cache read error for %s: %s", ticker, e)
@@ -220,10 +257,16 @@ class StockbitEarningsProvider(EarningsProvider, StockbitCachingProvider):
             with self._get_conn() as conn:
                 conn.execute(
                     """
-                    INSERT OR REPLACE INTO earnings_cache
+                    INSERT INTO earnings_cache
                         (ticker, year, quarter, eps_actual, eps_estimate,
                          eps_surprise_pct, eps_yoy_change, eps_prev_year, fetched_date)
                     VALUES (?,?,?,?,?,?,?,?,?)
+                    ON CONFLICT(ticker, year, quarter, fetched_date) DO UPDATE SET
+                        eps_actual=excluded.eps_actual,
+                        eps_estimate=excluded.eps_estimate,
+                        eps_surprise_pct=excluded.eps_surprise_pct,
+                        eps_yoy_change=excluded.eps_yoy_change,
+                        eps_prev_year=excluded.eps_prev_year
                     """,
                     (
                         record.ticker,
@@ -243,13 +286,21 @@ class StockbitEarningsProvider(EarningsProvider, StockbitCachingProvider):
 
     # ── Port implementation ───────────────────────────────────────────────────
 
-    def get_earnings_history(self, ticker: str, quarters: int = _DEFAULT_QUARTERS) -> list[EarningsRecord]:
+    def get_earnings_history(
+        self,
+        ticker: str,
+        quarters: int = _DEFAULT_QUARTERS,
+        as_of_date: date | None = None,
+    ) -> list[EarningsRecord]:
         """Return up to `quarters` most recent earnings records, newest first.
 
         Fetches fresh data from API for any quarter outside the 7-day TTL.
         Falls back to cached data when API is unavailable.
         """
         ticker = ticker.upper()
+
+        if as_of_date is not None:
+            return self._read_cache(ticker, quarters, as_of_date=as_of_date)
 
         # Check if current quarter is fresh — if so, serve fully from cache
         if self.is_cache_fresh(ticker):
@@ -328,7 +379,10 @@ class StockbitEarningsProvider(EarningsProvider, StockbitCachingProvider):
                 row = conn.execute(
                     """SELECT year, quarter, eps_actual, eps_estimate,
                               eps_surprise_pct, eps_yoy_change, eps_prev_year, fetched_date
-                       FROM earnings_cache WHERE ticker=? AND year=? AND quarter=? LIMIT 1""",
+                       FROM earnings_cache
+                       WHERE ticker=? AND year=? AND quarter=?
+                       ORDER BY fetched_date DESC
+                       LIMIT 1""",
                     (ticker.upper(), year, quarter),
                 ).fetchone()
         except Exception:
@@ -350,3 +404,23 @@ class StockbitEarningsProvider(EarningsProvider, StockbitCachingProvider):
             eps_prev_year=row["eps_prev_year"],
             fetched_at=fetched_at,
         )
+
+
+def _rebuild_earnings_cache_if_needed(conn: sqlite3.Connection) -> None:
+    rows = conn.execute("PRAGMA table_info(earnings_cache)").fetchall()
+    pk_columns = {row["name"] for row in rows if int(row["pk"]) > 0}
+    if not pk_columns:
+        return
+    conn.execute("ALTER TABLE earnings_cache RENAME TO earnings_cache_old")
+    conn.execute(_CREATE_TABLE)
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO earnings_cache
+            (ticker, year, quarter, eps_actual, eps_estimate, eps_surprise_pct,
+             eps_yoy_change, eps_prev_year, fetched_date)
+        SELECT ticker, year, quarter, eps_actual, eps_estimate, eps_surprise_pct,
+               eps_yoy_change, eps_prev_year, fetched_date
+        FROM earnings_cache_old
+        """
+    )
+    conn.execute("DROP TABLE earnings_cache_old")

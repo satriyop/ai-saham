@@ -41,7 +41,7 @@ _CACHE_TTL_DAYS = STOCKBIT_CFG.cache_ttl_days_company_profile
 
 _CREATE_TABLE = """
 CREATE TABLE IF NOT EXISTS company_profile_cache (
-    ticker          TEXT PRIMARY KEY,
+    ticker          TEXT NOT NULL,
     fetched_date    TEXT NOT NULL,
     background      TEXT,
     listing_board   TEXT,
@@ -50,7 +50,8 @@ CREATE TABLE IF NOT EXISTS company_profile_cache (
     ipo_amount      TEXT,
     website         TEXT,
     email           TEXT,
-    office_address  TEXT
+    office_address  TEXT,
+    UNIQUE(ticker, fetched_date)
 )
 """
 
@@ -116,11 +117,22 @@ class StockbitCompanyProfileProvider(CompanyProfileProvider, StockbitCachingProv
         try:
             with sqlite3.connect(str(self._db_path)) as conn:
                 conn.execute(_CREATE_TABLE)
+                _rebuild_company_profile_cache_if_needed(conn)
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_company_profile_ticker_fetched "
+                    "ON company_profile_cache(ticker, fetched_date)"
+                )
         except Exception as e:
             logger.warning("company_profile_cache: table creation failed: %s", e)
 
-    def get_profile(self, ticker: str) -> CompanyProfile | None:
+    def get_profile(
+        self,
+        ticker: str,
+        as_of_date: date | None = None,
+    ) -> CompanyProfile | None:
         ticker = ticker.upper()
+        if as_of_date is not None:
+            return self._read_cache(ticker, as_of_date=as_of_date, require_fresh=False)
         cached = self._read_cache(ticker)
         if cached is not None:
             return cached
@@ -129,19 +141,33 @@ class StockbitCompanyProfileProvider(CompanyProfileProvider, StockbitCachingProv
             self._write_cache(result)
         return result
 
-    def _read_cache(self, ticker: str) -> CompanyProfile | None:
+    def _read_cache(
+        self,
+        ticker: str,
+        as_of_date: date | None = None,
+        require_fresh: bool = True,
+    ) -> CompanyProfile | None:
+        where = "WHERE ticker=?"
+        params: tuple[str, ...] = (ticker,)
+        if as_of_date is not None:
+            where += " AND date(substr(fetched_date,1,10)) <= date(?)"
+            params = (ticker, as_of_date.isoformat())
         try:
             with sqlite3.connect(str(self._db_path)) as conn:
                 row = conn.execute(
                     "SELECT fetched_date, background, listing_board, ipo_date, ipo_price, "
                     "ipo_amount, website, email, office_address "
-                    "FROM company_profile_cache WHERE ticker=?",
-                    (ticker,),
+                    f"FROM company_profile_cache {where} "
+                    "ORDER BY date(substr(fetched_date,1,10)) DESC, fetched_date DESC "
+                    "LIMIT 1",
+                    params,
                 ).fetchone()
             if not row:
                 return None
             fetched_at = _parse_fetched_at(row[0])
-            if fetched_at is None or (datetime.now() - fetched_at).days > _CACHE_TTL_DAYS:
+            if require_fresh and (
+                fetched_at is None or (datetime.now() - fetched_at).days > _CACHE_TTL_DAYS
+            ):
                 return None
             return CompanyProfile(
                 ticker=ticker,
@@ -164,9 +190,18 @@ class StockbitCompanyProfileProvider(CompanyProfileProvider, StockbitCachingProv
         try:
             with sqlite3.connect(str(self._db_path)) as conn:
                 conn.execute(
-                    "INSERT OR REPLACE INTO company_profile_cache "
+                    "INSERT INTO company_profile_cache "
                     "(ticker, fetched_date, background, listing_board, ipo_date, ipo_price, "
-                    "ipo_amount, website, email, office_address) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                    "ipo_amount, website, email, office_address) VALUES (?,?,?,?,?,?,?,?,?,?) "
+                    "ON CONFLICT(ticker, fetched_date) DO UPDATE SET "
+                    "background=excluded.background, "
+                    "listing_board=excluded.listing_board, "
+                    "ipo_date=excluded.ipo_date, "
+                    "ipo_price=excluded.ipo_price, "
+                    "ipo_amount=excluded.ipo_amount, "
+                    "website=excluded.website, "
+                    "email=excluded.email, "
+                    "office_address=excluded.office_address",
                     (
                         profile.ticker,
                         fetched_str,
@@ -199,3 +234,23 @@ class StockbitCompanyProfileProvider(CompanyProfileProvider, StockbitCachingProv
         except Exception as e:
             logger.warning("Company profile fetch failed for %s: %s", ticker, e)
             return None
+
+
+def _rebuild_company_profile_cache_if_needed(sqlite_conn: sqlite3.Connection) -> None:
+    rows = sqlite_conn.execute("PRAGMA table_info(company_profile_cache)").fetchall()
+    ticker_pk = any(row[1] == "ticker" and int(row[5]) > 0 for row in rows)
+    if not ticker_pk:
+        return
+    sqlite_conn.execute("ALTER TABLE company_profile_cache RENAME TO company_profile_cache_old")
+    sqlite_conn.execute(_CREATE_TABLE)
+    sqlite_conn.execute(
+        """
+        INSERT INTO company_profile_cache
+            (ticker, fetched_date, background, listing_board, ipo_date, ipo_price,
+             ipo_amount, website, email, office_address)
+        SELECT ticker, fetched_date, background, listing_board, ipo_date, ipo_price,
+               ipo_amount, website, email, office_address
+        FROM company_profile_cache_old
+        """
+    )
+    sqlite_conn.execute("DROP TABLE company_profile_cache_old")
