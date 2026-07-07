@@ -3,7 +3,7 @@
 _Design rationale: `docs/signal_refactor.md`_
 _Phase plan: `docs/signal_refactor_phases.md`_
 _Current implementation target: Phase I readiness audit_
-_Updated: 2026-07-07 — persistence tests + CLI Alpha/Trigger & Sector Context rendering complete_
+_Updated: 2026-07-07 — Phase D CLI regression tests complete; tracker reorganised into Active Blockers / Safe While Waiting / Blocked Until OOS Proof / Future Enhancement Backlog_
 
 This tracker records implementation state and the concrete checklist for the
 SignalEngine refactor. Phases A1–H are closed. Phase I is the active target.
@@ -88,113 +88,130 @@ SignalEngine refactor. Phases A1–H are closed. Phase I is the active target.
 
 ## Open Items Index
 
-All open items across all phases. This is the canonical list — phase sections below contain prose context but do not repeat these bullets.
+Reorganised into four working lists so "unfinished refactor" is not confused
+with "future improvement". Nothing has been deleted; only reclassified.
 
-### Phase C
-- [ ] Enforce pullback requirements: trend/context support plus support reclaim
-      or pivot confirmation.
-- [ ] Enforce mean-reversion requirements: support/reversal evidence and
-      explicit risk controls.
-- [ ] Add dedicated support reclaim and squeeze release trigger routing beyond
-      the current positive close / VWAP reclaim / volume expansion path.
-- [ ] Add explicit CLI adapter rendering regression tests for phase/evidence
-      output.
+---
 
-### Phase D
-- [ ] Config-driven mapping from strategy package/rule to setup family + phase
-      evidence (multi-match coexistence and conflict reporting).
-- [ ] Empirical readiness summary from existing backtests (min sample size,
-      SWING_10D grouping).
-- [x] CLI adapter rendering regression tests for strategy evidence display.
-      _(Done 2026-07-07: `tests/adapters/cli/test_swing_display_strategy.py` —
-      29 tests covering panel gate, MATCHED/NOT_MATCHED/UNAVAILABLE/INVALID
-      display, rule name/outcome/route/phase, coverage/conviction/freshness,
-      unavailable reasons, DIAGNOSTIC disclaimer, and coexistence with backtest
-      stats; `StrategyEvidence` VO wired into `_print_swing_output` /
-      `print_swing_output` / swing call site; 2687 tests pass.)_
-- [x] Document Phase G as first phase allowed to consume strategy evidence in
-      Alpha/Trigger aggregation. _(Documented in Phase G implemented contract:
-      strategy evidence is not passed into the aggregator; the Alpha/Trigger
-      architecture is the gate before any future promotion.)_
+## Active Blockers
 
-### Phase E
-- [x] Persistence integration test: verify `ia_*`, `sc_*`, and `cq_*` fields land
-      in saved observation payload via `AccumulationScreenUseCase` with a broker-repo
-      stub. _(Implemented 2026-07-07: `tests/application/use_case/test_accumulation_screen_persistence.py`,
-      13 tests. Covers CNFB wiring, sector peer path, company-quality `cq_*`
-      key-presence (2026-07-07), and structural key-presence guard distinguishing
-      "key absent" from "key present with None".)_
-- [x] CLI adapter rendering for `InstitutionalAccumulationEvidence` / `ia_*`
-      foreign-vs-domestic track details. _(Implemented 2026-07-07: new
-      `INSTITUTIONAL ACCUMULATION` panel in `analyze_swing_display.py`, gated
-      by `--with-flow-detail`. Renders foreign institutional track (coverage,
-      conviction, participation, CR4, CR8, CNFB divergence, VWAP distance),
-      domestic bandar track (coverage, conviction, broker consistency, reversal,
-      accum session ratio, domestic VWAP dist, HHI divergence, bandar broad,
-      bandar accumulation if present), and counterparty transfer (asymmetry,
-      buy/sell HHI). Shows `—` for missing values; never shows `0` for absent
-      data. Unavailable evidence renders reasons only, no misleading metrics
-      table. Panel header reads "DIAGNOSTIC — no scoring authority". Broker
-      classification (`foreign_broker_codes`) moved to
-      `config/institutional_accumulation.yaml` under `broker_classification:`
-      — tunable without code edits; fallback to hardcoded set when YAML key
-      absent.)_
+These are the only items that block Phase I completion. Everything else below
+is either safe to ignore for now or explicitly deferred.
 
-### Phase G
-- [ ] Phase D/E/F/H and company-quality diagnostic evidence not yet promoted
-      into production scoring (all remain DIAGNOSTIC, awaiting Phase I OOS proof).
-- [ ] `market_context` slot now has Phase H sector-context as a diagnostic
-      producer but remains DIAGNOSTIC with zero scoring authority; promotion
-      pending Phase I OOS proof.
-- [x] `company_quality_context` slot now has a DIAGNOSTIC producer.
-      _(Implemented 2026-07-07: `CompanyQualityContextEvidenceBuilder` +
-      `CompanyQualityContextEvidence` VO; axes = valuation (forward P/E), analyst
-      consensus, insider net-buy, and CAPPED generic seasonality via a shared
-      extracted scorer module. `alpha_fraction=1.00` (pure Alpha). Registration
-      stays DIAGNOSTIC so `effective_weight` resolves to 0.0 — zero scoring
-      authority, verified by a test asserting `final_exact_score` is unchanged
-      vs. an empty slot. No Piotroski/ROE/liquidity/free-float logic duplicated;
-      those remain RiskEngine. Event alpha (MSCI/FTSE, dividend-chase, calendar)
-      explicitly deferred — no data source exists. `cq_*` replay fingerprint
-      fields persisted. Promotion to PRODUCTION deferred to Phase I.
-      `config/company_quality_context.yaml` cannot promote this producer;
-      authority is forced to DIAGNOSTIC in code. Promotion must happen through
-      the Alpha/Trigger EvidenceRegistration path after Phase I proof.)_
-- [ ] Promote `company_quality_context` slot from DIAGNOSTIC when OOS proof
-      justifies (Phase I).
-- [x] CLI display formatting for Alpha/Trigger diagnostics implemented.
-      _(ALPHA/TRIGGER DETAIL panel: per-group score, weight, alpha/trigger
-      weighted contributions, flow_trigger status. DIAGNOSTIC groups labelled
-      "— no weight". Gated by `--signal-detail`.)_
-- [ ] ATR hint thresholds and size multipliers are placeholders; not
-      Phase-I-calibrated production tunables.
+> **Current blocker: 0 SWING_10D forward labels available locally as of 2026-07-07.**
+> Candle data ends on 2026-07-07; SWING_10D labels require 10 future trading sessions.
+> The nightly cron accumulates observations and labels automatically.
+
+- [ ] **SWING_10D forward labels unavailable.** Labels cannot be generated until
+      10 future trading sessions are captured. Nightly cron running; no manual
+      action needed.
+- [ ] **Target candidate filtering blocked until labels exist.** 120 rows matching
+      `foreign_institutional` / `large` / `SWING_10D` are ready; filter resolves
+      to 0 labeled rows. Unblocks automatically when cron delivers labels.
+- [ ] **Readiness summary blocked until labels exist.** `saham analyze signal-readiness`
+      reports 135 observations, 0 forward labels, patch-eligible: false. Unblocks
+      automatically.
+- [ ] **Tuning patches blocked until readiness passes.** No tuning patches or config
+      changes may be proposed until `patch_eligible: true` is reported.
+- [ ] **Evidence promotion blocked until OOS proof exists.** All Phase D–H
+      diagnostic evidence (strategy, institutional accumulation, sector context,
+      company quality, ticker profile) remains DIAGNOSTIC, zero scoring authority,
+      until walk-forward OOS attribution justifies a manual promotion.
+
+---
+
+## Safe While Waiting For Labels
+
+Work that can proceed without touching signal authority, scoring, or tuning.
+
+- [x] CLI adapter regression tests for strategy evidence display.
+      _(Done 2026-07-07 — see Phase D open items below.)_
+- [ ] CLI adapter rendering regression tests for setup phase / evidence output.
+      _(Phase C carry-forward. Adapter-only; no scoring impact.)_
+- [ ] Optional docs / README accuracy cleanup.
+- [ ] Optional display-only polish that does not change scoring or decisions
+      (e.g. formatting, label wording in CLI panels).
+
+---
+
+## Blocked Until OOS Proof
+
+These items require walk-forward OOS attribution before they are actionable.
+Do not implement until `patch_eligible: true` and explicit OOS evidence exist.
+
+- [ ] Promote `market_context` Alpha/Trigger slot from DIAGNOSTIC, zero scoring
+      authority, to LOW_WEIGHT or PRODUCTION. Blocked until sector-context
+      evidence proves discriminative in OOS attribution.
+- [ ] Promote `company_quality_context` Alpha/Trigger slot from DIAGNOSTIC, zero
+      scoring authority, to LOW_WEIGHT or PRODUCTION. Blocked until
+      company-quality evidence proves discriminative in OOS attribution.
+- [ ] Promote any Phase D/E/F/H/company-quality diagnostic evidence into
+      production scoring. All remain DIAGNOSTIC until labels/OOS proof exist.
+- [ ] ATR hint thresholds and size multipliers calibration. Currently
+      placeholders; not Phase-I-calibrated production tunables.
 - [ ] `company_quality_context` seasonality cap and per-axis aggregation weights
-      (`config/company_quality_context.yaml`) are config-driven placeholders,
-      same status class as the ATR-hint placeholders; not Phase-I-calibrated.
-- [ ] `company_quality_context` event alpha (MSCI/FTSE inclusion, dividend-chase
-      windows, market calendar) explicitly deferred — no event-window data source
-      or computation exists in the codebase. The `earnings_trend` axis is likewise
-      deferred (recorded as an unavailable axis, excluded from coverage).
+      calibration. Currently config-driven placeholders, same status as ATR-hint
+      placeholders; not Phase-I-calibrated.
 - [ ] Phase I walk-forward calibration, promotion workflow, and empirical
-      readiness gates remain out of scope.
+      readiness gates. Out of scope until labels and OOS attribution are ready.
+- [ ] Propose validator-bounded tuning patches. Blocked until readiness passes
+      (patch-eligible: false as of 2026-07-07).
 
-### Phase H
-- [x] CLI rendering for sector context evidence display. _(Implemented
-      2026-07-07: SECTOR CONTEXT panel shows sector label, regime, peer count,
-      signed-pct metrics table, coverage, and "DIAGNOSTIC — no scoring impact"
-      footer. Unavailable evidence renders a single dim reason line. Gated by
-      `--market-detail`. `sector_context_evidence` wired from `SwingEvidence`
-      through `swing()` → `_print_swing_output()` → `print_swing_output()`.)_
-- [ ] Promote `market_context` Alpha/Trigger slot from DIAGNOSTIC when sector
-      evidence proves discriminative (Phase I).
-- [ ] Promote `company_quality_context` Alpha/Trigger slot from DIAGNOSTIC when
-      company-quality evidence proves discriminative (Phase I).
+---
 
-### Phase I (Active — see Phase I Tracker for detail)
-- [ ] Filter target candidates (blocked: no SWING_10D labels yet).
-- [ ] Produce readiness summary (blocked: no forward labels).
-- [ ] Propose validator-bounded tuning patches after readiness passes.
-- [ ] Label readiness blocked until enough future sessions exist.
+## Future Enhancement Backlog
+
+Useful ideas that are non-blocking and have no current data source or are
+explicitly deferred. Do not treat these as signals that the refactor is
+unfinished.
+
+- [ ] Enforce pullback requirements: trend/context support plus support reclaim
+      or pivot confirmation. _(Phase C carry-forward. Future enhancement — no
+      current calibration target.)_
+- [ ] Enforce mean-reversion requirements: support/reversal evidence and explicit
+      risk controls. _(Phase C carry-forward. Future enhancement.)_
+- [ ] Dedicated support reclaim trigger routing beyond the current positive
+      close / VWAP reclaim / volume expansion path. _(Phase C carry-forward.
+      Future enhancement.)_
+- [ ] Dedicated squeeze release trigger routing. _(Phase C carry-forward.
+      Future enhancement.)_
+- [ ] Config-driven mapping from strategy package/rule to setup family + phase
+      evidence (multi-match coexistence and conflict reporting). _(Phase D
+      carry-forward. Future enhancement — not required for Phase I.)_
+- [ ] Empirical readiness summary from existing backtests (min sample size,
+      SWING_10D grouping), if separate from the implemented `signal-readiness`
+      command. _(Phase D carry-forward. May already be covered by
+      `saham analyze signal-readiness`; evaluate before implementing.)_
+- [ ] `company_quality_context` event alpha: MSCI/FTSE inclusion, dividend-chase
+      windows, market calendar. Explicitly deferred — no event-window data
+      source or computation exists in the codebase. _(Phase G carry-forward.)_
+- [ ] `earnings_trend` axis producer. Deferred — recorded as an unavailable
+      axis, excluded from coverage. _(Phase G carry-forward.)_
+
+---
+
+## Completed Since Tracker Compression
+
+Short list of recently closed items for orientation. Full phase contracts are
+in the phase tracker sections below.
+
+- [x] Phase E IA persistence test: `ia_*`, `sc_*`, and `cq_*` fields verified
+      in saved observation payload. _(2026-07-07)_
+- [x] Phase E Institutional Accumulation display panel: `INSTITUTIONAL ACCUMULATION`
+      panel in `analyze_swing_display.py`, gated by `--with-flow-detail`.
+      _(2026-07-07)_
+- [x] Broker classification moved to `config/institutional_accumulation.yaml`.
+      Tunable without code edits. _(2026-07-07)_
+- [x] Phase G Alpha/Trigger detail display: `ALPHA/TRIGGER DETAIL` panel, per-group
+      score, weight, DIAGNOSTIC groups labelled "— no weight". _(2026-07-07)_
+- [x] Phase H Sector Context display: `SECTOR CONTEXT` panel, signed-pct metrics
+      table, "DIAGNOSTIC — no scoring impact" footer. _(2026-07-07)_
+- [x] Phase G `company_quality_context` DIAGNOSTIC producer: valuation/analyst/
+      insider/capped-seasonality axes, `alpha_fraction=1.00`, `effective_weight`
+      resolves to 0.0, zero scoring authority. _(2026-07-07)_
+- [x] Phase D CLI adapter regression tests for strategy evidence display:
+      29 tests, all 4 outcomes, DIAGNOSTIC disclaimer, coexistence with backtest
+      stats. _(2026-07-07)_
 
 ---
 
