@@ -98,6 +98,31 @@ _MIGRATIONS: list[tuple[int, str]] = [
 ]
 
 
+_QUARTER_END: dict[str, tuple[int, int]] = {
+    "Q1": (3, 31), "Q2": (6, 30), "Q3": (9, 30), "Q4": (12, 31)
+}
+
+
+def _parse_financial_value(s: str | None) -> float | None:
+    """Parse Stockbit formatted value like '14,684 B' or '29,654 B' → 14684.0.
+
+    Units (B/T/M/K) are stripped — the caller uses the ratio, not the absolute
+    value, so units only need to be consistent within a single response.
+    """
+    if not s or s.strip() in ("-", "N/A", ""):
+        return None
+    try:
+        cleaned = s.strip().replace(",", "")
+        # Strip unit suffix if present
+        for suffix in (" B", " T", " M", " K", "B", "T", "M", "K"):
+            if cleaned.endswith(suffix):
+                cleaned = cleaned[: -len(suffix)].strip()
+                break
+        return float(cleaned)
+    except (ValueError, TypeError):
+        return None
+
+
 def _strip(raw: str | None) -> str:
     return (raw or "").strip().rstrip("%").replace(",", "")
 
@@ -219,6 +244,91 @@ def _parse_fundamentals(ticker: str, body: dict) -> CompanyFundamentals | None:
         fetched_at=datetime.now(),
     )
 
+
+
+def _parse_historical_rows(ticker: str, body: dict) -> list[CompanyFundamentals]:
+    """Extract quarterly Net Income + Revenue history from financial_year_parent.
+
+    Returns one CompanyFundamentals per (year, quarter) where both values are
+    available. Only net_profit_margin and revenue_yoy_growth are populated;
+    all other fields (market_cap_idr, piotroski_f_score, roe_ttm, etc.) are None.
+
+    fetched_at is set to the quarter end date so PIT queries work correctly:
+      Q1 → March 31, Q2 → June 30, Q3 → Sep 30, Q4 → Dec 31.
+    """
+    try:
+        data = body.get("data") if isinstance(body, dict) else None
+        fyp = (data or {}).get("financial_year_parent") or {}
+        groups = fyp.get("financial_year_groups") or []
+        if not groups:
+            return []
+
+        # Collect quarterly values keyed by (year, quarter)
+        quarterly: dict[tuple[str, str], dict[str, float]] = {}
+        for group in groups:
+            fitem_name = group.get("fitem_name", "")
+            if fitem_name not in ("Net Income", "Revenue"):
+                continue
+            col = "net_income" if fitem_name == "Net Income" else "revenue"
+            for year_entry in group.get("financial_year_values") or []:
+                year = str(year_entry.get("year") or "").strip()
+                if not year:
+                    continue
+                for pv in year_entry.get("period_values") or []:
+                    period = str(pv.get("period") or "").strip()
+                    if period not in _QUARTER_END:
+                        continue
+                    val = _parse_financial_value(pv.get("quarter_value"))
+                    if val is None:
+                        continue
+                    key = (year, period)
+                    if key not in quarterly:
+                        quarterly[key] = {}
+                    quarterly[key][col] = val
+
+        rows: list[CompanyFundamentals] = []
+        for (year, period), vals in quarterly.items():
+            net_income = vals.get("net_income")
+            revenue = vals.get("revenue")
+            if net_income is None or revenue is None or revenue == 0:
+                continue
+
+            npm: float | None = (net_income / revenue) * 100
+
+            prior_year = str(int(year) - 1)
+            prior = quarterly.get((prior_year, period), {})
+            prior_rev = prior.get("revenue")
+            rev_yoy: float | None = None
+            if prior_rev and prior_rev != 0:
+                rev_yoy = ((revenue - prior_rev) / abs(prior_rev)) * 100
+
+            month, day = _QUARTER_END[period]
+            try:
+                fetched_at = datetime(int(year), month, day)
+            except ValueError:
+                continue
+
+            rows.append(
+                CompanyFundamentals(
+                    ticker=ticker.upper(),
+                    pe_ratio_ttm=None,
+                    roe_ttm=None,
+                    net_profit_margin=round(npm, 4),
+                    revenue_yoy_growth=round(rev_yoy, 4) if rev_yoy is not None else None,
+                    piotroski_f_score=None,
+                    dividend_yield=None,
+                    week52_high=None,
+                    week52_low=None,
+                    near_52w_high_rank=None,
+                    market_cap_idr=None,
+                    pbv=None,
+                    fetched_at=fetched_at,
+                )
+            )
+        return rows
+    except Exception as exc:
+        logger.debug("_parse_historical_rows failed for %s: %s", ticker, exc)
+        return []
 
 
 class StockbitFundamentalsProvider(FundamentalsProvider, StockbitCachingProvider):
@@ -363,6 +473,48 @@ class StockbitFundamentalsProvider(FundamentalsProvider, StockbitCachingProvider
         except Exception as e:
             logger.warning("company_fundamentals: cache write failed for %s: %s", fund.ticker, e)
 
+    def _write_historical_rows(self, rows: list[CompanyFundamentals]) -> int:
+        """Write historical quarterly rows using INSERT OR IGNORE.
+
+        Never overwrites an existing row — real snapshots taken during a period
+        are more complete (have piotroski, market_cap, etc.) and must be kept.
+        Uses bare date string (YYYY-MM-DD) as fetched_date so historical rows
+        are visually distinct from full-timestamp real snapshots.
+        """
+        inserted = 0
+        try:
+            with sqlite3.connect(self._db_path) as conn:
+                for fund in rows:
+                    if fund.fetched_at is None:
+                        continue
+                    fetched_date = fund.fetched_at.strftime("%Y-%m-%d")
+                    cursor = conn.execute(
+                        "INSERT OR IGNORE INTO company_fundamentals "
+                        "(ticker, fetched_date, pe_ratio_ttm, roe_ttm, net_profit_margin, "
+                        "revenue_yoy_growth, piotroski_f_score, dividend_yield, "
+                        "week52_high, week52_low, near_52w_high_rank, market_cap_idr, pbv) "
+                        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                        (
+                            fund.ticker,
+                            fetched_date,
+                            fund.pe_ratio_ttm,
+                            fund.roe_ttm,
+                            fund.net_profit_margin,
+                            fund.revenue_yoy_growth,
+                            fund.piotroski_f_score,
+                            fund.dividend_yield,
+                            fund.week52_high,
+                            fund.week52_low,
+                            fund.near_52w_high_rank,
+                            fund.market_cap_idr,
+                            fund.pbv,
+                        ),
+                    )
+                    inserted += cursor.rowcount
+        except Exception as e:
+            logger.warning("company_fundamentals: historical write failed: %s", e)
+        return inserted
+
     def _fetch(self, ticker: str) -> CompanyFundamentals | None:
         if self._api_client is None:
             return None
@@ -380,6 +532,15 @@ class StockbitFundamentalsProvider(FundamentalsProvider, StockbitCachingProvider
                     result.roe_ttm or 0,
                     result.piotroski_f_score,
                     result.pe_ratio_ttm or 0,
+                )
+            # Backfill historical quarterly rows from financial_year_parent.
+            # Uses INSERT OR IGNORE so real snapshots are never overwritten.
+            historical = _parse_historical_rows(ticker, body)
+            if historical:
+                written = self._write_historical_rows(historical)
+                logger.debug(
+                    "Fundamentals %s: backfilled %d/%d historical quarterly rows",
+                    ticker, written, len(historical),
                 )
             return result
         except Exception as e:
