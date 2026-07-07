@@ -3,7 +3,7 @@
 _Design rationale: `docs/signal_refactor.md`_
 _Phase plan: `docs/signal_refactor_phases.md`_
 _Current implementation target: Phase I readiness audit_
-_Updated: 2026-07-07 — Phase D CLI regression tests complete; tracker reorganised into Active Blockers / Safe While Waiting / Blocked Until OOS Proof / Future Enhancement Backlog_
+_Updated: 2026-07-07 — Diagnostic target `foreign_institutional_accumulation_SWING_10D` added; setup_family wildcard bug fixed; 12 new tests, 2722 total pass_
 
 This tracker records implementation state and the concrete checklist for the
 SignalEngine refactor. Phases A1–H are closed. Phase I is the active target.
@@ -103,11 +103,29 @@ is either safe to ignore for now or explicitly deferred.
 > However, because there is no historical fundamentals data in the cache prior to
 > June/July 2026, all backfilled observations resolve to `tp_market_cap_bucket: UNKNOWN`.
 > Consequently, 0 labeled target rows match the "large" market-cap bucket requirement.
-> Running readiness diagnostics on the broader target (`foreign_institutional_accumulation_unknown_cap_SWING_10D`)
-> yields 5,672 matched labels and is `diagnostic_ready: true`. However, it shows no positive edge/signal
-> (OOS profit factor: 0.4041, OOS average return: -4.02%).
+>
+> **Diagnostic target `foreign_institutional_accumulation_SWING_10D` added (2026-07-07).**
+> Bug fix also applied (2026-07-07): `_fingerprint_matches_target()` previously returned `True`
+> when `setup_family` was missing, making setup-specific targets act as wildcards. Fixed to
+> return `False` — a missing setup_family never satisfies a setup-specific target.
+>
+> After the fix, running `saham analyze signal-readiness --target
+> foreign_institutional_accumulation_SWING_10D` yields `labeled_target_count: 0` and
+> `diagnostic_ready: false` — because all 5,760 backfilled labels have `setup_family=NONE`
+> (backfilled fingerprints do not capture setup phase). The earlier incorrect reading of
+> 5,672 matched labels was produced by the wildcard bug, not by genuine accumulation evidence.
+>
+> **Attribution highlights (all 5,760 backfilled labels):**
+> - `tp_market_cap_bucket`: 100% UNKNOWN (expected — no pre-July-2026 fundamentals cache)
+> - `ticker_profile_label`: 98.5% `foreign_institutional`, 1.5% `retail_speculative`
+> - `setup_family`: 100% NONE (backfilled fingerprints do not capture setup phase)
+> - `alpha_bucket` / `trigger_bucket` / `alpha_trigger_final_bucket`: 100% NONE
+> - `coverage_bucket` / `conviction_bucket`: 100% NONE
+> - `ia_foreign_track_coverage`: 94.8% coverage=1.0, 5.2% coverage=0.75
+> - `sc_sector_regime`: NEUTRAL 53.6%, BULLISH 24.3%, BEARISH 17.6%, UNKNOWN 4.4%
+>
 > The nightly EOD cron automatically accumulates live observations with full fundamentals
-> going forward, which will naturally yield matching targets.
+> going forward, which will naturally yield matching targets for both targets.
 
 - [ ] **SWING_10D forward labels generated, but target matching is blocked.**
       5,760 labels generated from historical dates, but 0 match the target filter.
@@ -132,6 +150,19 @@ is either safe to ignore for now or explicitly deferred.
 
 Work that can proceed without touching signal authority, scoring, or tuning.
 
+- [x] Diagnostic readiness target `foreign_institutional_accumulation_SWING_10D` added (2026-07-07):
+      - `SignalReadinessTarget.parse()` extended to accept targets without `_cap` suffix;
+        `is_diagnostic=True`, `market_cap_bucket=None` for this form.
+      - `_fingerprint_matches_target()` skips market-cap check when `market_cap_bucket is None`.
+      - Bug fix: `_fingerprint_matches_target()` previously returned `True` for missing
+        `setup_family`, making it a wildcard. Now returns `False` — a missing setup_family
+        never matches any setup-specific target (canonical or diagnostic).
+      - `patch_eligible` is always `False` for diagnostic targets regardless of label counts.
+      - Diagnostic note added to `notes` in `SignalReadinessReport`.
+      - `is_diagnostic_target` field added to `to_dict()` output.
+      - CLI display shows `cap=any (diagnostic — no cap filter)` and a `[DIAGNOSTIC]` header line.
+      - 12 new focused tests (3 regression tests for setup_family wildcard); 2722 total pass.
+      - Canonical target `foreign_institutional_accumulation_large_cap_SWING_10D` unchanged.
 - [x] CLI adapter regression tests for strategy evidence display.
       _(Done 2026-07-07 — see Phase D open items below.)_
 - [x] Deterministic historical signal-observation backfill implemented:
@@ -699,6 +730,24 @@ out-of-sample proof justify manual promotion through validator-bounded config.
           cache contains no fundamentals snapshots prior to 2026-07-07, all historical
           observations resolved to `tp_market_cap_bucket: UNKNOWN`.
         - Labeled target count remains 0; patch eligibility remains false (not eligible).
+- [x] Diagnostic readiness target `foreign_institutional_accumulation_SWING_10D` added (2026-07-07):
+      - Same profile and setup-family filter as canonical target; no market-cap bucket filter.
+      - `is_diagnostic_target: true` in JSON output; `patch_eligible` hardcoded `false`.
+      - Diagnostic target readiness result after setup_family wildcard fix (2026-07-07):
+        - `target_filter_count`: 0 (all backfilled obs have setup_family=NONE, correctly excluded)
+        - `label_count`: 5,760; `labeled_target_count`: 0
+        - `diagnostic_ready: false`; `patch_eligible: false`
+        - Blockers: no rows matching target filter; no available labels match target filter
+        - Prior incorrect reading (5,672 matched labels) was produced by the wildcard bug
+      - Attribution summary for 5,760 backfilled labels:
+        - `tp_market_cap_bucket`: 100% UNKNOWN (no pre-July-2026 fundamentals cache)
+        - `ticker_profile_label`: 98.5% foreign_institutional, 1.5% retail_speculative
+        - `setup_family`: 100% NONE (backfilled fingerprints do not capture setup phase)
+        - `alpha/trigger/coverage/conviction` buckets: 100% NONE
+        - `ia_foreign_track_coverage`: 94.8% full, 5.2% partial
+        - `sc_sector_regime`: NEUTRAL 53.6%, BULLISH 24.3%, BEARISH 17.6%, UNKNOWN 4.4%
+      - No tuning patches generated; no diagnostic evidence promoted.
+      - Canonical `foreign_institutional_accumulation_large_cap_SWING_10D` is unchanged.
 - [ ] Label readiness remains blocked until enough future sessions exist for
       live observations under `SWING_10D`; no tuning patches or evidence
       promotion before patch-eligible OOS proof.
@@ -712,4 +761,6 @@ out-of-sample proof justify manual promotion through validator-bounded config.
       classifier/domain/accumulation-screen/forward-label focused tests:
       101 passed.
 - [x] Full pytest: 2572 passed after `tp_market_cap_bucket` readiness fix.
+- [x] Diagnostic target focused pytest: 14 passed (12 new + 2 existing).
+- [x] Full pytest: 2722 passed after diagnostic target + setup_family fix (2026-07-07).
 - [x] `git diff --check`.

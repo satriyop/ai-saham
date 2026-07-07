@@ -3,9 +3,12 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 
+import pytest
+
 from src.application.use_case.report_signal_readiness_use_case import (
     ReportSignalReadinessRequest,
     ReportSignalReadinessUseCase,
+    SignalReadinessTarget,
 )
 from src.domain.ports.candidate_observations_repository import CandidateObservation
 from src.domain.value_objects.signal_forward_label import (
@@ -16,6 +19,7 @@ from src.domain.value_objects.signal_forward_label import (
 )
 
 TARGET = "foreign_institutional_accumulation_large_cap_SWING_10D"
+DIAGNOSTIC_TARGET = "foreign_institutional_accumulation_SWING_10D"
 
 
 class FakeCandidateObservationsRepository:
@@ -169,7 +173,14 @@ def _label(
     ticker: str,
     signal_date: date,
     close_return: float,
+    market_cap_bucket: str = "large",
+    setup_family: str | None = "accumulation",
 ) -> SignalForwardLabel:
+    fp = (
+        _fingerprint(market_cap_bucket=market_cap_bucket, setup=setup_family)
+        if setup_family is not None
+        else _fingerprint_no_setup(market_cap_bucket=market_cap_bucket)
+    )
     return SignalForwardLabel(
         ticker=ticker,
         signal_date=signal_date,
@@ -186,7 +197,7 @@ def _label(
         target_would_trigger=True,
         outcome_label=SignalForwardOutcome.SUCCESS,
         unavailable_reason=None,
-        fingerprint=_fingerprint(),
+        fingerprint=fp,
         observation_captured_at=datetime.combine(signal_date, datetime.min.time()),
     )
 
@@ -194,9 +205,241 @@ def _label(
 def _fingerprint(
     *,
     market_cap_bucket: str = "large",
+    setup: str = "accumulation",
 ) -> SignalObservationFingerprint:
     return SignalObservationFingerprint(
-        setup_family="accumulation",
+        setup_family=setup,
+        ticker_profile_label="foreign_institutional",
+        tp_market_cap_bucket=market_cap_bucket,
+        alpha_trigger_horizon="SWING_10D",
+        market_regime={"regime": "RISK_ON"},
+        coverage=0.8,
+        conviction=0.8,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Diagnostic target: parse and filter behaviour
+# ---------------------------------------------------------------------------
+
+
+def test_canonical_target_parse_extracts_market_cap_bucket():
+    t = SignalReadinessTarget.parse(TARGET)
+    assert t.profile == "foreign_institutional"
+    assert t.setup_family == "accumulation"
+    assert t.market_cap_bucket == "large"
+    assert t.horizon is SignalLabelHorizon.SWING_10D
+    assert t.is_diagnostic is False
+
+
+def test_diagnostic_target_parse_has_no_market_cap_bucket():
+    t = SignalReadinessTarget.parse(DIAGNOSTIC_TARGET)
+    assert t.profile == "foreign_institutional"
+    assert t.setup_family == "accumulation"
+    assert t.market_cap_bucket is None
+    assert t.horizon is SignalLabelHorizon.SWING_10D
+    assert t.is_diagnostic is True
+
+
+def test_invalid_target_still_raises():
+    with pytest.raises(ValueError):
+        SignalReadinessTarget.parse("bad_target_no_horizon")
+
+
+def test_diagnostic_target_matches_unknown_cap_observations():
+    """Observations with tp_market_cap_bucket=UNKNOWN must match the diagnostic target."""
+    day = date(2026, 7, 7)
+    report = ReportSignalReadinessUseCase(
+        candidate_observations_repository=FakeCandidateObservationsRepository(
+            {
+                day: [
+                    _observation("BBCA", day, _fingerprint(market_cap_bucket="UNKNOWN")),
+                    _observation("BBRI", day, _fingerprint(market_cap_bucket="UNKNOWN")),
+                ]
+            }
+        ),
+        signal_forward_labels_repository=FakeSignalForwardLabelsRepository(),
+    ).execute(ReportSignalReadinessRequest(target=DIAGNOSTIC_TARGET))
+
+    assert report.target_filter_count == 2
+
+
+def test_canonical_target_excludes_unknown_cap_observations():
+    """The same UNKNOWN-cap observations must NOT match the canonical large-cap target."""
+    day = date(2026, 7, 7)
+    report = ReportSignalReadinessUseCase(
+        candidate_observations_repository=FakeCandidateObservationsRepository(
+            {
+                day: [
+                    _observation("BBCA", day, _fingerprint(market_cap_bucket="UNKNOWN")),
+                    _observation("BBRI", day, _fingerprint(market_cap_bucket="UNKNOWN")),
+                ]
+            }
+        ),
+        signal_forward_labels_repository=FakeSignalForwardLabelsRepository(),
+    ).execute(ReportSignalReadinessRequest(target=TARGET))
+
+    assert report.target_filter_count == 0
+
+
+def test_diagnostic_target_is_never_patch_eligible():
+    """Even with 100 passing labels the diagnostic target must not be patch-eligible."""
+    day = date(2026, 7, 7)
+    labels = tuple(
+        _label(
+            ticker=f"T{i:03d}",
+            signal_date=day + timedelta(days=i),
+            close_return=2.0,
+            market_cap_bucket="UNKNOWN",
+        )
+        for i in range(100)
+    )
+
+    report = ReportSignalReadinessUseCase(
+        candidate_observations_repository=FakeCandidateObservationsRepository(
+            {
+                day: [
+                    _observation("BBCA", day, _fingerprint(market_cap_bucket="UNKNOWN")),
+                ]
+            }
+        ),
+        signal_forward_labels_repository=FakeSignalForwardLabelsRepository(labels),
+    ).execute(ReportSignalReadinessRequest(target=DIAGNOSTIC_TARGET))
+
+    assert report.diagnostic_ready is True
+    assert report.patch_eligible is False
+
+
+def test_diagnostic_target_note_in_report():
+    day = date(2026, 7, 7)
+    report = ReportSignalReadinessUseCase(
+        candidate_observations_repository=FakeCandidateObservationsRepository(
+            {day: [_observation("BBCA", day, _fingerprint(market_cap_bucket="UNKNOWN"))]}
+        ),
+        signal_forward_labels_repository=FakeSignalForwardLabelsRepository(),
+    ).execute(ReportSignalReadinessRequest(target=DIAGNOSTIC_TARGET))
+
+    assert any("canonical large-cap target remains blocked" in note for note in report.notes)
+
+
+def test_diagnostic_target_flagged_in_to_dict():
+    day = date(2026, 7, 7)
+    report = ReportSignalReadinessUseCase(
+        candidate_observations_repository=FakeCandidateObservationsRepository(
+            {day: [_observation("BBCA", day, _fingerprint(market_cap_bucket="UNKNOWN"))]}
+        ),
+        signal_forward_labels_repository=FakeSignalForwardLabelsRepository(),
+    ).execute(ReportSignalReadinessRequest(target=DIAGNOSTIC_TARGET))
+
+    d = report.to_dict()
+    assert d["is_diagnostic_target"] is True
+    assert d["target_components"]["market_cap_bucket"] is None
+
+
+def test_canonical_target_not_flagged_as_diagnostic_in_to_dict():
+    day = date(2026, 7, 7)
+    report = ReportSignalReadinessUseCase(
+        candidate_observations_repository=FakeCandidateObservationsRepository(
+            {day: [_observation("BBCA", day, _fingerprint())]}
+        ),
+        signal_forward_labels_repository=FakeSignalForwardLabelsRepository(),
+    ).execute(ReportSignalReadinessRequest(target=TARGET))
+
+    d = report.to_dict()
+    assert d["is_diagnostic_target"] is False
+    assert d["target_components"]["market_cap_bucket"] == "large"
+
+
+# ---------------------------------------------------------------------------
+# Regression: missing setup_family must not match any setup-specific target
+# ---------------------------------------------------------------------------
+
+
+def test_diagnostic_target_excludes_missing_setup_family():
+    """A fingerprint with setup_family=None/empty must not match even the diagnostic target."""
+    day = date(2026, 7, 7)
+    report = ReportSignalReadinessUseCase(
+        candidate_observations_repository=FakeCandidateObservationsRepository(
+            {
+                day: [
+                    _observation("BBCA", day, _fingerprint_no_setup(market_cap_bucket="UNKNOWN")),
+                ]
+            }
+        ),
+        signal_forward_labels_repository=FakeSignalForwardLabelsRepository(
+            [
+                _label(
+                    ticker="BBCA",
+                    signal_date=day,
+                    close_return=1.0,
+                    market_cap_bucket="UNKNOWN",
+                    setup_family=None,
+                )
+            ]
+        ),
+    ).execute(ReportSignalReadinessRequest(target=DIAGNOSTIC_TARGET))
+
+    assert report.target_filter_count == 0
+    assert report.labeled_target_count == 0
+
+
+def test_canonical_target_excludes_missing_setup_family():
+    """A fingerprint with setup_family=None/empty must not match the canonical target either."""
+    day = date(2026, 7, 7)
+    report = ReportSignalReadinessUseCase(
+        candidate_observations_repository=FakeCandidateObservationsRepository(
+            {
+                day: [
+                    _observation("BBCA", day, _fingerprint_no_setup(market_cap_bucket="large")),
+                ]
+            }
+        ),
+        signal_forward_labels_repository=FakeSignalForwardLabelsRepository(
+            [
+                _label(
+                    ticker="BBCA",
+                    signal_date=day,
+                    close_return=1.0,
+                    setup_family=None,
+                )
+            ]
+        ),
+    ).execute(ReportSignalReadinessRequest(target=TARGET))
+
+    assert report.target_filter_count == 0
+    assert report.labeled_target_count == 0
+
+
+def test_diagnostic_target_includes_unknown_cap_with_explicit_setup_family():
+    """Diagnostic target must still match UNKNOWN-cap rows that DO have accumulation setup."""
+    day = date(2026, 7, 7)
+    report = ReportSignalReadinessUseCase(
+        candidate_observations_repository=FakeCandidateObservationsRepository(
+            {
+                day: [
+                    _observation("BBCA", day, _fingerprint(market_cap_bucket="UNKNOWN")),
+                    _observation(
+                        "BBRI", day, _fingerprint(market_cap_bucket="UNKNOWN", setup="foreign_bounce")
+                    ),
+                    _observation(
+                        "TLKM", day, _fingerprint_no_setup(market_cap_bucket="UNKNOWN")
+                    ),
+                ]
+            }
+        ),
+        signal_forward_labels_repository=FakeSignalForwardLabelsRepository(),
+    ).execute(ReportSignalReadinessRequest(target=DIAGNOSTIC_TARGET))
+
+    # BBCA (accumulation) + BBRI (foreign_bounce) match; TLKM (no setup) does not
+    assert report.target_filter_count == 2
+
+
+def _fingerprint_no_setup(
+    *,
+    market_cap_bucket: str = "large",
+) -> SignalObservationFingerprint:
+    return SignalObservationFingerprint(
+        setup_family=None,
         ticker_profile_label="foreign_institutional",
         tp_market_cap_bucket=market_cap_bucket,
         alpha_trigger_horizon="SWING_10D",

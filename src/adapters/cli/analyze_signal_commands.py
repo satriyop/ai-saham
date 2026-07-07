@@ -574,13 +574,23 @@ def _display_label_summary(day, horizon, ticker, summary) -> None:
 def _display_readiness_report(report: SignalReadinessReport) -> None:
     typer.echo(f"\nSignal Readiness · {report.target.raw}")
     typer.echo("═" * 78)
+    cap_display = (
+        report.target.market_cap_bucket
+        if report.target.market_cap_bucket is not None
+        else "any (diagnostic — no cap filter)"
+    )
     typer.echo(
         "Target: "
         f"profile={report.target.profile}, "
         f"setup={report.target.setup_family}, "
-        f"cap={report.target.market_cap_bucket}, "
+        f"cap={cap_display}, "
         f"horizon={report.target.horizon.value}"
     )
+    if report.target.is_diagnostic:
+        typer.echo(
+            "[DIAGNOSTIC] market-cap bucket not required; "
+            "canonical large-cap target remains blocked."
+        )
     dates = (
         ", ".join(day.isoformat() for day in report.observation_dates)
         if report.observation_dates

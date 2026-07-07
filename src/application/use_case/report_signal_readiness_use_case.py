@@ -35,8 +35,9 @@ class SignalReadinessTarget:
     raw: str
     profile: str
     setup_family: str
-    market_cap_bucket: str
+    market_cap_bucket: str | None
     horizon: SignalLabelHorizon
+    is_diagnostic: bool = False
 
     @classmethod
     def parse(cls, raw: str) -> "SignalReadinessTarget":
@@ -55,19 +56,43 @@ class SignalReadinessTarget:
             raise ValueError(f"target must end with one of: {valid}")
 
         parts = base.split("_")
-        if len(parts) < 5 or parts[-1] != "cap":
-            raise ValueError("target must include profile, setup family, and market-cap bucket")
-        market_cap_bucket = parts[-2]
-        setup_family = parts[-3]
-        profile = "_".join(parts[:-3])
-        if not profile or not setup_family or not market_cap_bucket:
-            raise ValueError("target profile, setup family, and market-cap bucket cannot be empty")
-        return cls(
-            raw=normalized,
-            profile=profile,
-            setup_family=setup_family,
-            market_cap_bucket=market_cap_bucket,
-            horizon=matched_horizon,
+
+        # Canonical target: ends with <bucket>_cap (e.g. large_cap).
+        if len(parts) >= 5 and parts[-1] == "cap":
+            market_cap_bucket = parts[-2]
+            setup_family = parts[-3]
+            profile = "_".join(parts[:-3])
+            if not profile or not setup_family or not market_cap_bucket:
+                raise ValueError(
+                    "target profile, setup family, and market-cap bucket cannot be empty"
+                )
+            return cls(
+                raw=normalized,
+                profile=profile,
+                setup_family=setup_family,
+                market_cap_bucket=market_cap_bucket,
+                horizon=matched_horizon,
+                is_diagnostic=False,
+            )
+
+        # Diagnostic target: no market-cap bucket (e.g. foreign_institutional_accumulation_SWING_10D).
+        # Requires at least profile (≥2 parts) + setup_family (1 part) = 3 parts minimum.
+        if len(parts) >= 3:
+            setup_family = parts[-1]
+            profile = "_".join(parts[:-1])
+            if not profile or not setup_family:
+                raise ValueError("diagnostic target profile and setup family cannot be empty")
+            return cls(
+                raw=normalized,
+                profile=profile,
+                setup_family=setup_family,
+                market_cap_bucket=None,
+                horizon=matched_horizon,
+                is_diagnostic=True,
+            )
+
+        raise ValueError(
+            "target must include profile, setup family, and optionally a market-cap bucket"
         )
 
 
@@ -96,6 +121,7 @@ class SignalReadinessReport:
     def to_dict(self) -> dict:
         return {
             "target": self.target.raw,
+            "is_diagnostic_target": self.target.is_diagnostic,
             "target_components": {
                 "profile": self.target.profile,
                 "setup_family": self.target.setup_family,
@@ -201,10 +227,12 @@ class ReportSignalReadinessUseCase:
             oos_rows=oos_rows,
         )
         diagnostic_ready = len(oos_rows) >= _DIAGNOSTIC_MIN_OOS_LABELS
-        patch_eligible = not blockers
+        # Diagnostic targets are never patch-eligible regardless of label counts.
+        patch_eligible = not blockers and not target.is_diagnostic
         notes = _notes(
             latest_observation_count=len(latest_observations),
             raw_latest_observation_count=len(raw_latest_observations),
+            is_diagnostic=target.is_diagnostic,
         )
         return SignalReadinessReport(
             target=target,
@@ -255,13 +283,14 @@ def _fingerprint_matches_target(
 ) -> bool:
     if (fingerprint.ticker_profile_label or "").lower() != target.profile.lower():
         return False
-    if (fingerprint.tp_market_cap_bucket or "").lower() != target.market_cap_bucket.lower():
-        return False
+    if target.market_cap_bucket is not None:
+        if (fingerprint.tp_market_cap_bucket or "").lower() != target.market_cap_bucket.lower():
+            return False
     if (fingerprint.alpha_trigger_horizon or "").upper() != target.horizon.value:
         return False
     setup_family = (fingerprint.setup_family or "").lower()
     if not setup_family:
-        return True
+        return False
     if target.setup_family.lower() == "accumulation":
         return setup_family in _ACCUMULATION_SETUP_FAMILIES
     return setup_family == target.setup_family.lower()
@@ -375,13 +404,20 @@ def _notes(
     *,
     latest_observation_count: int,
     raw_latest_observation_count: int,
+    is_diagnostic: bool = False,
 ) -> list[str]:
+    result: list[str] = []
+    if is_diagnostic:
+        result.append(
+            "Diagnostic target: market-cap bucket not required; "
+            "canonical large-cap target remains blocked."
+        )
     if raw_latest_observation_count != latest_observation_count:
-        return [
+        result.append(
             "Multi-window observations collapsed to latest per ticker for "
             "readiness to avoid duplicate ticker/day labels."
-        ]
-    return []
+        )
+    return result
 
 
 def _has_regime_attribution(labels: tuple[SignalForwardLabel, ...]) -> bool:
