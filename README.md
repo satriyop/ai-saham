@@ -44,7 +44,7 @@ A **local-first, production-grade CLI application** for stock analysis focused o
 - **Accumulation Audit** - Replay accumulation signals historically and measure forward returns
 - **Ticker Dashboard** - Read-only, cached-data dashboard via `saham view BBCA` showing notation, valuation, consensus, ownership, bandar signal, company profile, recent candles, corporate actions, insider activity, seasonality, IEV, and sentiment
 - **Universe Overview** - Market-wide view via `saham view universe lq45` showing price, foreign flow, and sector context per ticker
-- **Signal Assessment** - `saham screen accum` scores each ticker 0–100 via evidence-based `SignalEngine` with staged group scoring (Setup Quality + Flow Confirmation), regime-aware thresholds, coverage/conviction separation, and optionally enriched with institutional accumulation evidence, strategy evidence, setup phase state, and ticker profile diagnostics
+- **Signal Assessment** - `saham screen accum` scores each ticker 0–100 via evidence-based `SignalEngine` with staged group scoring (Setup Quality + Flow Confirmation), Alpha/Trigger split, regime-aware thresholds, coverage/conviction separation, and optionally enriched with institutional accumulation evidence, strategy evidence, setup phase state, sector context, and ticker profile diagnostics. `saham analyze swing --with-signal-detail` renders Alpha/Trigger breakdown panel
 - **Earnings History** - Quarterly earnings beat/miss streak from Stockbit `/earnings` endpoint, surfaced in swing analysis and enrichment cache
 - **Valuation Metrics** - P/E and EPS TTM from Stockbit, cached alongside fundamentals
 - **Watchlist Persistence** - `saham screen accum --save NAME` persists screener results; `saham screen watchlist` / `saham screen compare` to review and diff against fresh runs
@@ -56,13 +56,16 @@ A **local-first, production-grade CLI application** for stock analysis focused o
 - **Evidence-Based Signal Engine** — Staged evidence scoring with Setup Quality (0.60) + Flow Confirmation (0.40) group aggregation; coverage/conviction separation; regime-conditioned thresholds; AS OF replayable via `signal_score_raw`
 - **Setup Phase State Tracking** — Temporal lifecycle detection (ACCUMULATION → COMPRESSION → BREAKOUT_CONFIRMATION → EXHAUSTION/DISTRIBUTION/FAILED) with sequence validation, phase history persistence, and per-family configurable phase requirements
 - **Market Regime Detection & Replay** — Deterministic `RegimeDetectionEvidence` (IHSG trend, breadth, volume, volatility, market-wide foreign flow) persisted in `regime_observations` with forward labels for out-of-sample validation
-- **Institutional Accumulation Evidence** — Two-track flow evidence (foreign institutional + domestic bandar) with CR4/CR8 concentration, CNFB price divergence, asymmetric observation windows (20d/30d bullish, 3d/5d/7d bearish), counterparty HHI transfer metrics, and foreign VWAP distance — all DIAGNOSTIC status by default
-- **Strategy Evidence Harness** — Deterministic evaluation of YAML strategy rules through `IndicatorRegistry`, persisted in observation fingerprints for attribution analysis (DIAGNOSTIC-only)
-- **Ticker Profile Diagnostics** — Per-ticker behavior classification (blue_chip/second_liner/third_liner/speculative/unknown) from liquidity, broker concentration, foreign flow, volatility, and index membership scores; DIAGNOSTIC-only, persisted at signal time
+- **Institutional Accumulation Evidence (Phase E)** — Two-track flow evidence (foreign institutional + domestic bandar) with CR4/CR8 concentration, CNFB price divergence, asymmetric observation windows (20d/30d bullish, 3d/5d/7d bearish), counterparty HHI transfer metrics, and foreign VWAP distance — all DIAGNOSTIC status by default
+- **Strategy Evidence Harness (Phase D)** — Deterministic evaluation of YAML strategy rules through `IndicatorRegistry`, persisted in observation fingerprints for attribution analysis (DIAGNOSTIC-only)
+- **Ticker Profile Diagnostics (Phase F)** — Per-ticker behavior classification (blue_chip/second_liner/third_liner/speculative/unknown) from liquidity, broker concentration, foreign flow, volatility, and index membership scores; DIAGNOSTIC-only, persisted at signal time
 - **Signal Forward Labels & Observation Fingerprints** — Saved signal-time `sub_signal_fingerprint` for deterministic replay attribution; horizon-specific forward labels (TACTICAL_3D/SWING_10D/ACCUM_20D) with SUCCESS/FAILURE/NEUTRAL outcomes
 - **Coverage vs Conviction** — Evidence availability and evidence strength tracked separately across all evidence types; missing evidence lowers coverage, not conviction; weak/mixed signals lower conviction, not coverage
 - **DecisionPolicy** — Application-layer policy resolving regime-level max_decision, setup-specific regime actions, score/coverage/conviction thresholds, and setup phase constraints into deterministic decision constraints
 - **Continuous Setup/Trigger Scoring** — Setup quality from trend alignment, RSI quality, BB compression readiness, VWAP position, and RS vs IHSG; volume dry-up + expansion as primary SWING_10D trigger pattern for accumulation setups; volume data quality guardrails
+- **Alpha/Trigger Score Split (Phase G)** — Each evidence group routed into Alpha (structural attractiveness) and Trigger (entry timing) fractions via per-horizon `alpha_fraction` config; final scores weighted by `alpha_weight` per horizon; fronted by `EvidenceAuthorityStatus` three-tier registry (DIAGNOSTIC/LOW_WEIGHT/PRODUCTION) that caps effective weights. Available via `saham analyze swing --with-signal-detail`
+- **Sector Context Evidence (Phase H)** — Local-universe sector diagnostics: equal-weight sector 20d return, breadth, ticker-vs-sector RS, sector regime (BULLISH/NEUTRAL/BEARISH); computed from cached local ticker data, no external provider needed; DIAGNOSTIC-only, fed into Alpha/Trigger re-score; rendered via `saham analyze swing --with-market-detail`
+- **Signal Readiness Audit (Phase I, in progress)** — `saham analyze signal-readiness TARGET` reports observation/label counts, IS/OOS split, profit factor, and avg return for a calibration target; diagnostic readiness requires ≥10 OOS labels; patch eligibility requires ≥60 IS + ≥30 OOS labels with profit factor ≥1.15
 - **Hexagonal Architecture** - Clean separation of domain, application, and infrastructure
 
 ---
@@ -1490,6 +1493,8 @@ src/
 │       ├── strategy_evidence.py         # Diagnostic strategy rule outcomes
 │       ├── institutional_accumulation_evidence.py  # Two-track foreign + bandar flow evidence, EvidenceStatus enum
 │       ├── ticker_profile_snapshot.py   # Per-ticker behavior profile (Phase F)
+│       ├── sector_context_evidence.py   # Local-universe sector diagnostics (Phase H)
+│       ├── alpha_trigger_score.py       # Alpha/Trigger split + EvidenceRegistration (Phase G)
 │       ├── decision_constraints.py      # Emitted by DecisionPolicy resolution
 │       ├── earnings_record.py / forward_estimates.py
 │       ├── insider_transaction.py / bandar_detector_snapshot.py
@@ -1513,6 +1518,8 @@ src/
 │   ├── use_case/                      # All use cases follow *_use_case.py naming
 │   │   ├── assess_signal_evidence_use_case.py  # Staged evidence-first group scoring
 │   │   ├── generate_signal_forward_labels_use_case.py # Phase B forward label generation
+│   │   ├── report_signal_readiness_use_case.py  # Phase I calibration readiness audit
+│   │   ├── summarize_signal_forward_labels_use_case.py # Phase I attribution bucketing
 │   │   ├── fetch_market_data_use_case.py
 │   │   ├── refresh_market_data_use_case.py
 │   │   ├── fetch_broker_data_use_case.py
@@ -1566,6 +1573,7 @@ src/
 │   │   ├── institutional_accumulation_evidence_builder.py  # Phase E two-track flow evidence
 │   │   ├── strategy_evidence_builder.py   # Phase D diagnostic strategy evaluation
 │   │   ├── ticker_profile_classifier.py   # Phase F deterministic ticker profile
+│   │   ├── sector_context_evidence_builder.py  # Phase H local-universe sector diagnostics
 │   │   ├── setup_phase_detector.py   # Phase C deterministic setup phase detection
 │   │   ├── setup_phase_history.py    # Phase C persisted phase sequence loader
 │   │   ├── indicator_registry.py
