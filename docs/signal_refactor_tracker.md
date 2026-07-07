@@ -103,6 +103,9 @@ is either safe to ignore for now or explicitly deferred.
 > However, because there is no historical fundamentals data in the cache prior to
 > June/July 2026, all backfilled observations resolve to `tp_market_cap_bucket: UNKNOWN`.
 > Consequently, 0 labeled target rows match the "large" market-cap bucket requirement.
+> Running readiness diagnostics on the broader target (`foreign_institutional_accumulation_unknown_cap_SWING_10D`)
+> yields 5,672 matched labels and is `diagnostic_ready: true`. However, it shows no positive edge/signal
+> (OOS profit factor: 0.4041, OOS average return: -4.02%).
 > The nightly EOD cron automatically accumulates live observations with full fundamentals
 > going forward, which will naturally yield matching targets.
 
