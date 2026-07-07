@@ -4,7 +4,7 @@ Tests for Alpha/Trigger and Sector Context detail panels in `saham analyze swing
 Verifies that:
   - ALPHA/TRIGGER DETAIL panel renders when include_signal_detail=True and
     signal_assessment.alpha_trigger_score is present.
-  - DIAGNOSTIC groups are visually labelled "no scoring authority".
+  - DIAGNOSTIC groups are visually labelled "— no weight" (effective_weight == 0.0).
   - SECTOR CONTEXT panel renders when include_market_detail=True and
     sector_context_evidence is present.
   - Unavailable sector context renders a single dim line (no metrics table).
@@ -261,15 +261,15 @@ class TestAlphaTriggerPanel:
         assert "DIAGNOSTIC" in out
         assert "no weight" in out
 
-    def test_production_group_not_labelled_no_authority(self, capsys):
+    def test_production_group_not_labelled_no_weight(self, capsys):
         ats = _alpha_trigger_score(with_production=True, with_diagnostic=False)
         sa = _minimal_signal_assessment(alpha_trigger_score=ats)
         _call_print(include_signal_detail=True, signal_assessment=sa)
 
         out = capsys.readouterr().out
         assert "PRODUCTION" in out
-        # The "no scoring authority" label must NOT appear for production-only groups
-        assert "no scoring authority" not in out
+        # The "no weight" dim-label must NOT appear for production-only groups
+        assert "no weight" not in out
 
     def test_unavailable_reasons_shown(self, capsys):
         ats = _alpha_trigger_score(with_production=False, with_unavailable=True)
