@@ -356,6 +356,7 @@ from src.adapters.cli.analyze_sentiment_commands import sentiment as _sentiment_
 from src.adapters.cli.analyze_sentiment_commands import sentiment_audit as _sentiment_audit_fn
 from src.adapters.cli.analyze_signal_commands import signal_audit as _signal_audit_fn
 from src.adapters.cli.analyze_signal_commands import signal_labels as _signal_labels_fn
+from src.adapters.cli.analyze_signal_commands import signal_readiness as _signal_readiness_fn
 from src.adapters.cli.analyze_signal_commands import signal_replay as _signal_replay_fn
 from src.adapters.cli.analyze_swing_commands import swing as _swing_fn
 from src.adapters.cli.analyze_swing_commands import swing_compare as _swing_compare_fn
@@ -368,4 +369,5 @@ analyze_app.command("accum-audit")(_accumulation_audit_fn)
 analyze_app.command("swing-compare")(_swing_compare_fn)
 analyze_app.command("signal-audit")(_signal_audit_fn)
 analyze_app.command("signal-labels")(_signal_labels_fn)
+analyze_app.command("signal-readiness")(_signal_readiness_fn)
 analyze_app.command("signal-replay")(_signal_replay_fn)

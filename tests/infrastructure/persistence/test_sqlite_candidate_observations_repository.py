@@ -155,6 +155,42 @@ def test_list_by_date_returns_latest_observation_per_ticker(tmp_path: Path):
     ]
 
 
+def test_list_all_by_date_returns_raw_observation_rows(tmp_path: Path):
+    db_path = tmp_path / "data.db"
+    repo = SQLiteCandidateObservationsRepository(db_path)
+    day = date(2026, 7, 3)
+    repo.save_many(
+        [
+            CandidateObservation(
+                ticker="BBCA",
+                snapshot_date=day,
+                captured_at=datetime(2026, 7, 3, 9, 0, 0),
+                payload={"schema_version": 1, "ticker": "BBCA", "value": "bbca_old"},
+            ),
+            CandidateObservation(
+                ticker="BBCA",
+                snapshot_date=day,
+                captured_at=datetime(2026, 7, 3, 10, 0, 0),
+                payload={"schema_version": 1, "ticker": "BBCA", "value": "bbca_new"},
+            ),
+            CandidateObservation(
+                ticker="BBRI",
+                snapshot_date=day,
+                captured_at=datetime(2026, 7, 3, 9, 30, 0),
+                payload={"schema_version": 1, "ticker": "BBRI", "value": "bbri"},
+            ),
+        ]
+    )
+
+    rows = repo.list_all_by_date(day)
+
+    assert [row.payload["value"] for row in rows] == [
+        "bbca_new",
+        "bbca_old",
+        "bbri",
+    ]
+
+
 def test_schema_created_via_migration_runner(tmp_path: Path):
     db_path = tmp_path / "data.db"
     SQLiteCandidateObservationsRepository(db_path)

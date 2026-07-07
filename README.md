@@ -106,7 +106,7 @@ saham analyze chart price BBRI --sma 20 --ema 50
 | **`saham learn`** | Feedback Loop | `snapshot`, `track`, `grade`, `prompt`, `tune` |
 | **`saham view`** | Read-only Browsing | `broker status/flow/top/history/top-foreign/distribution/mappings`, `market-context`, `ticker TICKER` (or just `BBCA`), `universe` |
 | **`saham indicator`**| Technical Math | `compute`, `snapshot`, `create`, `list`, `show`, `delete` |
-| **`saham analyze`** | Insights & Charts | `risk`, `compare`, `sentiment`, `audit`, `regime`, `chart price/rsi/volume`, `swing`, `accum-audit`, `swing-compare` |
+| **`saham analyze`** | Insights & Charts | `risk`, `compare`, `sentiment`, `audit`, `regime`, `chart price/rsi/volume`, `swing`, `accum-audit`, `swing-compare`, `signal-labels`, `signal-readiness` |
 | **`saham strategy`** | Strategy Lifecycle| `init`, `validate`, `list`, `create`, `backtest`, `skill generate/check/index` |
 | **`saham trade`** | Paper Trade Workspace | `confirm`, `outcome`, `size`, `backtest-swing`, `tune-swing`, `backtest-intraday`, `log`, `migrate-journal`, `review intraday/swing` |
 

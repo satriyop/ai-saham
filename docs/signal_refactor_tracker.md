@@ -809,9 +809,19 @@ out-of-sample proof justify manual promotion through validator-bounded config.
       to `logs/swing-labels.log`.
 - [x] Update cron cleanup to remove old loose `saham screen` and
       `saham analyze` lines in addition to fetch/learn/trade lines.
-- [ ] Dedicated readiness report command deferred; current change keeps
-      labeling/summary behavior separate from patch eligibility policy instead
-      of adding adapter-side tuning readiness logic.
+- [x] Dedicated readiness report command implemented:
+      `saham analyze signal-readiness --target
+      foreign_institutional_accumulation_large_cap_SWING_10D` reports
+      observation dates, latest per-ticker observation count, raw observation
+      count, target-filter count, raw target rows, label counts, labeled target
+      count, IS/OOS split, patch eligibility, and blockers without generating
+      patches.
+      - Local report after implementation: observation dates
+        `2026-07-04`, `2026-07-06`, `2026-07-07`; latest per-ticker
+        observation count 45; raw latest observation rows 135; latest-per-ticker
+        target observations 40; raw target rows remain 120; label count 0;
+        labeled target count 0; patch-eligible false because SWING_10D labels
+        are not available yet.
 - [ ] Label readiness remains blocked until enough future sessions exist for
       `SWING_10D`; no tuning patches or evidence promotion before
       patch-eligible OOS proof.

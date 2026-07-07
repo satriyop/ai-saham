@@ -59,6 +59,7 @@ EXPECTED_COMMANDS: dict[tuple[str, ...], tuple[str, ...]] = {
         "swing-compare",
         "signal-audit",
         "signal-labels",
+        "signal-readiness",
         "signal-replay",
         "chart",
     ),
@@ -262,6 +263,13 @@ def test_signal_labels_help_exposes_batch_generation_flags():
     assert result.exit_code == 0
     assert "--generate-all" in result.stdout
     assert "--eligible-dates" in result.stdout
+
+
+def test_signal_readiness_help_exposes_target_option():
+    result = runner.invoke(app, ["analyze", "signal-readiness", "--help"])
+
+    assert result.exit_code == 0
+    assert "--target" in result.stdout
 
 
 def test_removed_legacy_paths_stay_removed():

@@ -182,6 +182,19 @@ class SQLiteCandidateObservationsRepository:
             ).fetchall()
         return [self._row_to_observation(row) for row in rows]
 
+    def list_all_by_date(self, snapshot_date: date) -> list[CandidateObservation]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT ticker, snapshot_date, captured_at, schema_version, payload_json
+                FROM candidate_observations
+                WHERE snapshot_date = ?
+                ORDER BY ticker ASC, captured_at DESC, id DESC
+                """,
+                (snapshot_date.isoformat(),),
+            ).fetchall()
+        return [self._row_to_observation(row) for row in rows]
+
     def list_snapshot_dates(self) -> list[date]:
         with self._connect() as conn:
             rows = conn.execute(
