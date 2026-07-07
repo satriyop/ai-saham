@@ -164,6 +164,7 @@ def test_swing_command_delegates_workflow_construction_to_builder(monkeypatch):
                     sentiment_warning=None,
                     sector_context_evidence=None,
                     institutional_accumulation_evidence=None,
+                    strategy_rule_evidence=None,
                 ),
                 diagnostics=SimpleNamespace(
                     data_freshness=FakeFreshness(),
@@ -255,6 +256,7 @@ def test_swing_display_path_prefers_grouped_response_contracts(monkeypatch):
                     regime_label=None,
                     sector_context_evidence=None,
                     institutional_accumulation_evidence=None,
+                    strategy_rule_evidence=None,
                 ),
                 diagnostics=SimpleNamespace(
                     data_freshness=grouped_data,

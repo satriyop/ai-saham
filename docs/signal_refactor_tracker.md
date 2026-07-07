@@ -105,7 +105,13 @@ All open items across all phases. This is the canonical list — phase sections 
       evidence (multi-match coexistence and conflict reporting).
 - [ ] Empirical readiness summary from existing backtests (min sample size,
       SWING_10D grouping).
-- [ ] CLI adapter rendering regression tests for strategy evidence display.
+- [x] CLI adapter rendering regression tests for strategy evidence display.
+      _(Done 2026-07-07: `tests/adapters/cli/test_swing_display_strategy.py` —
+      29 tests covering panel gate, MATCHED/NOT_MATCHED/UNAVAILABLE/INVALID
+      display, rule name/outcome/route/phase, coverage/conviction/freshness,
+      unavailable reasons, DIAGNOSTIC disclaimer, and coexistence with backtest
+      stats; `StrategyEvidence` VO wired into `_print_swing_output` /
+      `print_swing_output` / swing call site; 2687 tests pass.)_
 - [x] Document Phase G as first phase allowed to consume strategy evidence in
       Alpha/Trigger aggregation. _(Documented in Phase G implemented contract:
       strategy evidence is not passed into the aggregator; the Alpha/Trigger
