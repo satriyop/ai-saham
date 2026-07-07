@@ -44,7 +44,7 @@ A **local-first, production-grade CLI application** for stock analysis focused o
 - **Accumulation Audit** - Replay accumulation signals historically and measure forward returns
 - **Ticker Dashboard** - Read-only, cached-data dashboard via `saham view BBCA` showing notation, valuation, consensus, ownership, bandar signal, company profile, recent candles, corporate actions, insider activity, seasonality, IEV, and sentiment
 - **Universe Overview** - Market-wide view via `saham view universe lq45` showing price, foreign flow, and sector context per ticker
-- **Signal Assessment** - `saham screen accum` scores each ticker 0–100 via `SignalEngine` (bandar, foreign flow, insider activity, seasonality, analyst consensus, forward valuation) with STRONG/MODERATE/WEAK rating
+- **Signal Assessment** - `saham screen accum` scores each ticker 0–100 via evidence-based `SignalEngine` with staged group scoring (Setup Quality + Flow Confirmation), regime-aware thresholds, coverage/conviction separation, and optionally enriched with institutional accumulation evidence, strategy evidence, setup phase state, and ticker profile diagnostics
 - **Earnings History** - Quarterly earnings beat/miss streak from Stockbit `/earnings` endpoint, surfaced in swing analysis and enrichment cache
 - **Valuation Metrics** - P/E and EPS TTM from Stockbit, cached alongside fundamentals
 - **Watchlist Persistence** - `saham screen accum --save NAME` persists screener results; `saham screen watchlist` / `saham screen compare` to review and diff against fresh runs
@@ -53,6 +53,16 @@ A **local-first, production-grade CLI application** for stock analysis focused o
 - **Data Status Labels** - Staleness replaced with contextual labels (`pending-eod` during market hours, `ready`, `bf+` for backfill, `✓` for aggregation up-to-date)
 - **Regime-Aware Backtesting** - Swing backtests can group/filter entries by MarketContextEngine regime and use regime-specific setup exits
 - **IDX Floor Price Filter** - Rp 50 minimum price filter applied during IDX data ingestion
+- **Evidence-Based Signal Engine** — Staged evidence scoring with Setup Quality (0.60) + Flow Confirmation (0.40) group aggregation; coverage/conviction separation; regime-conditioned thresholds; AS OF replayable via `signal_score_raw`
+- **Setup Phase State Tracking** — Temporal lifecycle detection (ACCUMULATION → COMPRESSION → BREAKOUT_CONFIRMATION → EXHAUSTION/DISTRIBUTION/FAILED) with sequence validation, phase history persistence, and per-family configurable phase requirements
+- **Market Regime Detection & Replay** — Deterministic `RegimeDetectionEvidence` (IHSG trend, breadth, volume, volatility, market-wide foreign flow) persisted in `regime_observations` with forward labels for out-of-sample validation
+- **Institutional Accumulation Evidence** — Two-track flow evidence (foreign institutional + domestic bandar) with CR4/CR8 concentration, CNFB price divergence, asymmetric observation windows (20d/30d bullish, 3d/5d/7d bearish), counterparty HHI transfer metrics, and foreign VWAP distance — all DIAGNOSTIC status by default
+- **Strategy Evidence Harness** — Deterministic evaluation of YAML strategy rules through `IndicatorRegistry`, persisted in observation fingerprints for attribution analysis (DIAGNOSTIC-only)
+- **Ticker Profile Diagnostics** — Per-ticker behavior classification (blue_chip/second_liner/third_liner/speculative/unknown) from liquidity, broker concentration, foreign flow, volatility, and index membership scores; DIAGNOSTIC-only, persisted at signal time
+- **Signal Forward Labels & Observation Fingerprints** — Saved signal-time `sub_signal_fingerprint` for deterministic replay attribution; horizon-specific forward labels (TACTICAL_3D/SWING_10D/ACCUM_20D) with SUCCESS/FAILURE/NEUTRAL outcomes
+- **Coverage vs Conviction** — Evidence availability and evidence strength tracked separately across all evidence types; missing evidence lowers coverage, not conviction; weak/mixed signals lower conviction, not coverage
+- **DecisionPolicy** — Application-layer policy resolving regime-level max_decision, setup-specific regime actions, score/coverage/conviction thresholds, and setup phase constraints into deterministic decision constraints
+- **Continuous Setup/Trigger Scoring** — Setup quality from trend alignment, RSI quality, BB compression readiness, VWAP position, and RS vs IHSG; volume dry-up + expansion as primary SWING_10D trigger pattern for accumulation setups; volume data quality guardrails
 - **Hexagonal Architecture** - Clean separation of domain, application, and infrastructure
 
 ---
@@ -1459,7 +1469,7 @@ src/
 │   │   ├── analyze_stock.py
 │   │   ├── backtest_engine.py
 │   │   └── trading_calendar.py
-│   └── value_objects/               # Immutable domain objects (34)
+│   └── value_objects/               # Immutable domain objects (44+)
 │       ├── risk_assessment.py / risk_signal.py
 │       ├── backtest_result.py / screener_result.py
 │       ├── sentiment.py
@@ -1468,6 +1478,15 @@ src/
 │       ├── analyst_consensus.py / company_fundamentals.py
 │       ├── company_profile.py
 │       ├── signal_assessment.py
+│       ├── signal_evidence.py / factor_evidence.py
+│       ├── setup_evidence.py / flow_confirmation_evidence.py
+│       ├── setup_phase.py               # SetupPhaseState enum + phase snapshot/history
+│       ├── regime_detection_evidence.py # Deterministic market-wide regime evidence
+│       ├── signal_forward_label.py      # SignalObservationFingerprint + forward labels
+│       ├── strategy_evidence.py         # Diagnostic strategy rule outcomes
+│       ├── institutional_accumulation_evidence.py  # Two-track foreign + bandar flow evidence, EvidenceStatus enum
+│       ├── ticker_profile_snapshot.py   # Per-ticker behavior profile (Phase F)
+│       ├── decision_constraints.py      # Emitted by DecisionPolicy resolution
 │       ├── earnings_record.py / forward_estimates.py
 │       ├── insider_transaction.py / bandar_detector_snapshot.py
 │       ├── intraday_broker_chart.py
@@ -1488,6 +1507,8 @@ src/
 │   │   ├── rules_loader.py
 │   │   └── universe_summary_provider.py
 │   ├── use_case/                      # All use cases follow *_use_case.py naming
+│   │   ├── assess_signal_evidence_use_case.py  # Staged evidence-first group scoring
+│   │   ├── generate_signal_forward_labels_use_case.py # Phase B forward label generation
 │   │   ├── fetch_market_data_use_case.py
 │   │   ├── refresh_market_data_use_case.py
 │   │   ├── fetch_broker_data_use_case.py
@@ -1534,6 +1555,15 @@ src/
 │   │   ├── risk_engine.py            # First-class risk assessment (ADR-024)
 │   │   ├── signal_engine.py          # First-class signal assessment (ADR-025)
 │   │   ├── market_context_engine.py  # First-class market context (ADR-029)
+│   │   ├── decision_policy.py        # Regime/setup decision constraint resolution
+│   │   ├── signal_evidence_builder.py     # Phase 1 factor evidence annotation
+│   │   ├── setup_evidence_builder.py      # Phase 2 technical setup evidence
+│   │   ├── flow_confirmation_evidence_builder.py # Phase 3 broker/flow sub-signals
+│   │   ├── institutional_accumulation_evidence_builder.py  # Phase E two-track flow evidence
+│   │   ├── strategy_evidence_builder.py   # Phase D diagnostic strategy evaluation
+│   │   ├── ticker_profile_classifier.py   # Phase F deterministic ticker profile
+│   │   ├── setup_phase_detector.py   # Phase C deterministic setup phase detection
+│   │   ├── setup_phase_history.py    # Phase C persisted phase sequence loader
 │   │   ├── indicator_registry.py
 │   │   ├── indicator_evaluator.py    # Evaluates indicators from config
 │   │   ├── strategy_loader.py
@@ -1689,6 +1719,8 @@ src/
 - External systems never leak into the domain
 - Rule-first, AI-optional — risk gates and rules do the work; AI explains
 - RiskEngine, SignalEngine, and MarketContextEngine are first-class application services
+- Evidence-based scoring separates coverage (data availability) from conviction (signal strength); missing evidence never inflates conviction
+- Regime controls thresholds and constraints, not raw scores — a score of 74 means the same thing in RISK_OFF as in RISK_ON
 - Complete trade verdicts are composed through TradeSetup / AssessTradeSetupUseCase
 - AI is always optional and swappable (DeepSeek default)
 - Plugins extend functionality without modifying core
@@ -1749,7 +1781,9 @@ For `saham analyze swing --format json`, grouped `verdict`, `evidence`, and
 | `config/universes.yaml` | Ticker universe definitions |
 | `config/idx_groups.yaml` | IDX sector/industry group mappings |
 | `config/risk_engine.yaml` | Risk gate enablement, thresholds, confidence/missing-data policy, indicator defaults, technical-gate tuning, and market-context gate policy |
-| `config/signal_engine.yaml` | Signal factor enablement, weights, classification thresholds, missing-data policy, enrichment lookbacks, input mapping, and factor scoring thresholds |
+| `config/signal_engine.yaml` | Signal factor enablement, weights, classification thresholds, missing-data policy, enrichment lookbacks, input mapping, and factor scoring thresholds; also houses regime decision policy, regime conditioning, and coverage/conviction floors |
+| `config/institutional_accumulation.yaml` | Two-track institutional flow evidence weights, asymmetric observation windows, min valid sessions, and track component weights |
+| `config/ticker_profile.yaml` | Ticker profile classifier thresholds: market cap buckets, index membership scores, liquidity/volatility saturating scales, sparse-history fallback |
 | `config/market_context_engine.yaml` | Market context factors, thresholds, VIX score anchors, scoring labels/fallbacks, warning policy, and regime effects |
 | `config/accumulation_screener.yaml` | Accumulation discovery policy (filters, sector breadth, broker quality, BCI, evidence weights, and derived feature windows) |
 | `config/accumulation_audit.yaml` | Accumulation-audit learning policy: setup presets, forward-return horizons, exit simulation assumptions, grouping dimensions, and bucket edges |
@@ -1789,7 +1823,7 @@ make format
 make clean
 ```
 
-**Project Stats:** 325 source files (~62k LOC), 148 test files (~36k LOC)
+**Project Stats:** 330+ source files (~63k LOC), 150+ test files (~37k LOC)
 
 ---
 
