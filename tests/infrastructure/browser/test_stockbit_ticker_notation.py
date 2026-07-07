@@ -4,6 +4,7 @@ from src.infrastructure.browser.stockbit_ticker_notation import (
     StockbitTickerNotationProvider,
     _parse_snapshot,
 )
+from src.domain.value_objects.ticker_notation import TickerNotationSnapshot
 
 
 def test_parse_emitten_info_notation_and_status():
@@ -90,3 +91,60 @@ def test_sqlite_cache_round_trip(tmp_path):
     assert cached.listing_board == "Papan Pemantauan Khusus"
     assert cached.haircut_percentage == "100%"
     assert provider.is_cache_fresh("MTFN") is True
+
+
+def test_get_notation_returns_latest_snapshot_on_or_before_as_of_date(tmp_path):
+    provider = StockbitTickerNotationProvider(
+        api_client=None,
+        db_path=tmp_path / "data.db",
+    )
+    provider.save_notation(_snapshot("MTFN", "STATUS_ACTIVE", datetime(2026, 6, 1, 9)))
+    provider.save_notation(_snapshot("MTFN", "STATUS_SUSPENDED", datetime(2026, 6, 5, 9)))
+    provider.save_notation(_snapshot("MTFN", "STATUS_ACTIVE", datetime(2026, 6, 10, 9)))
+
+    cached = provider.get_notation("MTFN", as_of_date=date(2026, 6, 6))
+
+    assert cached is not None
+    assert cached.status == "STATUS_SUSPENDED"
+    assert cached.fetched_at == datetime(2026, 6, 5, 9)
+
+
+def test_get_notation_ignores_future_snapshot_for_as_of_date(tmp_path):
+    provider = StockbitTickerNotationProvider(
+        api_client=None,
+        db_path=tmp_path / "data.db",
+    )
+    provider.save_notation(_snapshot("MTFN", "STATUS_ACTIVE", datetime(2026, 6, 10, 9)))
+
+    cached = provider.get_notation("MTFN", as_of_date=date(2026, 6, 6))
+
+    assert cached is None
+
+
+def test_get_notation_live_mode_returns_latest_cached_snapshot(tmp_path):
+    provider = StockbitTickerNotationProvider(
+        api_client=None,
+        db_path=tmp_path / "data.db",
+    )
+    provider.save_notation(_snapshot("MTFN", "STATUS_ACTIVE", datetime(2026, 6, 1, 9)))
+    provider.save_notation(_snapshot("MTFN", "STATUS_SUSPENDED", datetime(2026, 6, 5, 9)))
+
+    cached = provider.get_notation("MTFN")
+
+    assert cached is not None
+    assert cached.status == "STATUS_SUSPENDED"
+
+
+def _snapshot(
+    ticker: str,
+    status: str,
+    fetched_at: datetime,
+) -> TickerNotationSnapshot:
+    return TickerNotationSnapshot(
+        ticker=ticker,
+        status=status,
+        tradeable=True,
+        market_status="open",
+        haircut_percentage="100%",
+        fetched_at=fetched_at,
+    )

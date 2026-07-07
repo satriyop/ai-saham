@@ -185,7 +185,11 @@ class _MockTickerNotationProvider(TickerNotationProvider):
     def __init__(self, sector: str) -> None:
         self._sector = sector
 
-    def get_notation(self, ticker: str) -> TickerNotationSnapshot | None:
+    def get_notation(
+        self,
+        ticker: str,
+        as_of_date: date | None = None,
+    ) -> TickerNotationSnapshot | None:
         return TickerNotationSnapshot(ticker=ticker, sector=self._sector)
 
 

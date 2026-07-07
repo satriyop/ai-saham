@@ -42,7 +42,7 @@ _CONSENSUS_URL = STOCKBIT_CFG.analyst_consensus_url
 
 _CREATE_TABLE = """
 CREATE TABLE IF NOT EXISTS forward_estimates_cache (
-    ticker              TEXT PRIMARY KEY,
+    ticker              TEXT NOT NULL,
     fetched_date        TEXT NOT NULL,
     forward_eps_1y      REAL,
     revenue_forward_1y  REAL,
@@ -160,11 +160,26 @@ class StockbitForwardEstimatesProvider(ForwardEstimatesProvider, StockbitCaching
         try:
             with sqlite3.connect(str(self._db_path)) as conn:
                 conn.execute(_CREATE_TABLE)
+                _rebuild_forward_estimates_cache_if_needed(conn)
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_forward_estimates_ticker_fetched "
+                    "ON forward_estimates_cache(ticker, fetched_date)"
+                )
         except Exception as e:
             logger.warning("forward_estimates_cache: table creation failed: %s", e)
 
-    def get_forward_estimates(self, ticker: str) -> ForwardEstimates | None:
+    def get_forward_estimates(
+        self,
+        ticker: str,
+        as_of_date: date | None = None,
+    ) -> ForwardEstimates | None:
         ticker = ticker.upper()
+        if as_of_date is not None:
+            return self._read_cache(
+                ticker,
+                require_fresh=False,
+                as_of_date=as_of_date,
+            )
         cached = self._read_cache(ticker, require_fresh=self._api_client is not None)
         if cached is not None:
             return cached
@@ -173,14 +188,26 @@ class StockbitForwardEstimatesProvider(ForwardEstimatesProvider, StockbitCaching
             self._write_cache(result)
         return result
 
-    def _read_cache(self, ticker: str, require_fresh: bool = True) -> ForwardEstimates | None:
+    def _read_cache(
+        self,
+        ticker: str,
+        require_fresh: bool = True,
+        as_of_date: date | None = None,
+    ) -> ForwardEstimates | None:
+        where = "WHERE ticker=?"
+        params: tuple[str, ...] = (ticker,)
+        if as_of_date is not None:
+            where += " AND date(substr(fetched_date,1,10)) <= date(?)"
+            params = (ticker, as_of_date.isoformat())
         try:
             with sqlite3.connect(str(self._db_path)) as conn:
                 row = conn.execute(
                     "SELECT fetched_date, forward_eps_1y, revenue_forward_1y, "
                     "current_price, forward_pe "
-                    "FROM forward_estimates_cache WHERE ticker=?",
-                    (ticker,),
+                    f"FROM forward_estimates_cache {where} "
+                    "ORDER BY date(substr(fetched_date,1,10)) DESC, fetched_date DESC "
+                    "LIMIT 1",
+                    params,
                 ).fetchone()
             if not row:
                 return None
@@ -204,7 +231,7 @@ class StockbitForwardEstimatesProvider(ForwardEstimatesProvider, StockbitCaching
         try:
             with sqlite3.connect(str(self._db_path)) as conn:
                 conn.execute(
-                    "INSERT OR REPLACE INTO forward_estimates_cache "
+                    "INSERT INTO forward_estimates_cache "
                     "(ticker, fetched_date, forward_eps_1y, revenue_forward_1y, "
                     "current_price, forward_pe) VALUES (?,?,?,?,?,?)",
                     (
@@ -240,3 +267,23 @@ class StockbitForwardEstimatesProvider(ForwardEstimatesProvider, StockbitCaching
         except Exception as e:
             logger.warning("Forward estimates fetch failed for %s: %s", ticker, e)
             return None
+
+
+def _rebuild_forward_estimates_cache_if_needed(sqlite_conn: sqlite3.Connection) -> None:
+    rows = sqlite_conn.execute("PRAGMA table_info(forward_estimates_cache)").fetchall()
+    ticker_pk = any(row[1] == "ticker" and int(row[5]) > 0 for row in rows)
+    if not ticker_pk:
+        return
+    sqlite_conn.execute("ALTER TABLE forward_estimates_cache RENAME TO forward_estimates_cache_old")
+    sqlite_conn.execute(_CREATE_TABLE)
+    sqlite_conn.execute(
+        """
+        INSERT INTO forward_estimates_cache
+            (ticker, fetched_date, forward_eps_1y, revenue_forward_1y,
+             current_price, forward_pe)
+        SELECT ticker, fetched_date, forward_eps_1y, revenue_forward_1y,
+               current_price, forward_pe
+        FROM forward_estimates_cache_old
+        """
+    )
+    sqlite_conn.execute("DROP TABLE forward_estimates_cache_old")

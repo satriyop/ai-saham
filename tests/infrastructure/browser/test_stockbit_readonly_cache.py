@@ -36,6 +36,48 @@ def test_readonly_analyst_provider_returns_stale_cache_without_overwriting(tmp_p
     assert consensus.analyst_count == 32
 
 
+def test_analyst_provider_returns_latest_snapshot_on_or_before_as_of_date(tmp_path):
+    provider = StockbitAnalystConsensusProvider(
+        api_client=None,
+        db_path=tmp_path / "stockbit.db",
+    )
+    provider._write_cache("ASII", _analyst_snapshot("ASII", 10, datetime(2026, 6, 1, 9)))
+    provider._write_cache("ASII", _analyst_snapshot("ASII", 20, datetime(2026, 6, 5, 9)))
+    provider._write_cache("ASII", _analyst_snapshot("ASII", 30, datetime(2026, 6, 10, 9)))
+
+    consensus = provider.get_consensus("ASII", as_of_date=date(2026, 6, 6))
+
+    assert consensus is not None
+    assert consensus.buy_count == 20
+    assert consensus.fetched_at == datetime(2026, 6, 5, 9)
+
+
+def test_analyst_provider_ignores_future_snapshot_for_as_of_date(tmp_path):
+    provider = StockbitAnalystConsensusProvider(
+        api_client=None,
+        db_path=tmp_path / "stockbit.db",
+    )
+    provider._write_cache("ASII", _analyst_snapshot("ASII", 30, datetime(2026, 6, 10, 9)))
+
+    consensus = provider.get_consensus("ASII", as_of_date=date(2026, 6, 6))
+
+    assert consensus is None
+
+
+def test_analyst_provider_live_mode_returns_latest_cached_snapshot(tmp_path):
+    provider = StockbitAnalystConsensusProvider(
+        api_client=None,
+        db_path=tmp_path / "stockbit.db",
+    )
+    provider._write_cache("ASII", _analyst_snapshot("ASII", 10, datetime(2026, 6, 1, 9)))
+    provider._write_cache("ASII", _analyst_snapshot("ASII", 20, datetime(2026, 6, 5, 9)))
+
+    consensus = provider.get_consensus("ASII")
+
+    assert consensus is not None
+    assert consensus.buy_count == 20
+
+
 def test_readonly_forward_provider_returns_stale_cache(tmp_path):
     provider = StockbitForwardEstimatesProvider(
         api_client=None,
@@ -56,6 +98,48 @@ def test_readonly_forward_provider_returns_stale_cache(tmp_path):
 
     assert estimates is not None
     assert estimates.forward_eps_1y == 490.46
+
+
+def test_forward_provider_returns_latest_snapshot_on_or_before_as_of_date(tmp_path):
+    provider = StockbitForwardEstimatesProvider(
+        api_client=None,
+        db_path=tmp_path / "stockbit.db",
+    )
+    provider._write_cache(_forward_snapshot("BBCA", 400.0, datetime(2026, 6, 1, 9)))
+    provider._write_cache(_forward_snapshot("BBCA", 450.0, datetime(2026, 6, 5, 9)))
+    provider._write_cache(_forward_snapshot("BBCA", 500.0, datetime(2026, 6, 10, 9)))
+
+    estimates = provider.get_forward_estimates("BBCA", as_of_date=date(2026, 6, 6))
+
+    assert estimates is not None
+    assert estimates.forward_eps_1y == 450.0
+    assert estimates.fetched_at == datetime(2026, 6, 5, 9)
+
+
+def test_forward_provider_ignores_future_snapshot_for_as_of_date(tmp_path):
+    provider = StockbitForwardEstimatesProvider(
+        api_client=None,
+        db_path=tmp_path / "stockbit.db",
+    )
+    provider._write_cache(_forward_snapshot("BBCA", 500.0, datetime(2026, 6, 10, 9)))
+
+    estimates = provider.get_forward_estimates("BBCA", as_of_date=date(2026, 6, 6))
+
+    assert estimates is None
+
+
+def test_forward_provider_live_mode_returns_latest_cached_snapshot(tmp_path):
+    provider = StockbitForwardEstimatesProvider(
+        api_client=None,
+        db_path=tmp_path / "stockbit.db",
+    )
+    provider._write_cache(_forward_snapshot("BBCA", 400.0, datetime(2026, 6, 1, 9)))
+    provider._write_cache(_forward_snapshot("BBCA", 450.0, datetime(2026, 6, 5, 9)))
+
+    estimates = provider.get_forward_estimates("BBCA")
+
+    assert estimates is not None
+    assert estimates.forward_eps_1y == 450.0
 
 
 def test_readonly_insider_provider_does_not_write_empty_sentinel_on_cache_miss(tmp_path):
@@ -110,3 +194,27 @@ def test_readonly_insider_provider_returns_cached_transactions(tmp_path):
 
     assert len(transactions) == 1
     assert transactions[0].is_buy is True
+
+
+def _analyst_snapshot(ticker: str, buy_count: int, fetched_at: datetime) -> AnalystConsensus:
+    return AnalystConsensus(
+        ticker=ticker,
+        buy_count=buy_count,
+        hold_count=1,
+        sell_count=0,
+        avg_price_target=7000.0,
+        current_price=5000.0,
+        last_updated=fetched_at.date(),
+        fetched_at=fetched_at,
+    )
+
+
+def _forward_snapshot(ticker: str, eps: float, fetched_at: datetime) -> ForwardEstimates:
+    return ForwardEstimates(
+        ticker=ticker,
+        forward_eps_1y=eps,
+        revenue_forward_1y=None,
+        current_price=None,
+        forward_pe=None,
+        fetched_at=fetched_at,
+    )

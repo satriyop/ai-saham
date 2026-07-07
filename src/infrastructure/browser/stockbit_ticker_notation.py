@@ -133,7 +133,7 @@ class StockbitTickerNotationProvider(TickerNotationProvider, TickerNotationRepos
             with self._get_conn() as conn:
                 conn.execute("""
                     CREATE TABLE IF NOT EXISTS ticker_notation_cache (
-                        ticker              TEXT PRIMARY KEY,
+                        ticker              TEXT NOT NULL,
                         status              TEXT,
                         tradeable           INTEGER,
                         listing_board       TEXT,
@@ -151,6 +151,7 @@ class StockbitTickerNotationProvider(TickerNotationProvider, TickerNotationRepos
                         fetched_at          TEXT NOT NULL
                     )
                 """)
+                _rebuild_ticker_notation_cache_if_needed(conn)
                 conn.execute("""
                     CREATE INDEX IF NOT EXISTS idx_ticker_notation_fetched
                     ON ticker_notation_cache(ticker, fetched_date)
@@ -173,8 +174,14 @@ class StockbitTickerNotationProvider(TickerNotationProvider, TickerNotationRepos
         except Exception:
             return False
 
-    def get_notation(self, ticker: str) -> TickerNotationSnapshot | None:
+    def get_notation(
+        self,
+        ticker: str,
+        as_of_date: date | None = None,
+    ) -> TickerNotationSnapshot | None:
         key = ticker.upper()
+        if as_of_date is not None:
+            return self._read_cache(key, as_of_date=as_of_date)
         if self.is_cache_fresh(key):
             return self._read_cache(key)
         if self._api_client is None:
@@ -192,7 +199,7 @@ class StockbitTickerNotationProvider(TickerNotationProvider, TickerNotationRepos
             with self._get_conn() as conn:
                 conn.execute(
                     """
-                    INSERT OR REPLACE INTO ticker_notation_cache (
+                    INSERT INTO ticker_notation_cache (
                         ticker, status, tradeable, listing_board, sector, sub_sector,
                         haircut_percentage, notations_json, market_status, suspend_info,
                         corp_action_active, has_uma, catalogs_json, source,
@@ -221,12 +228,24 @@ class StockbitTickerNotationProvider(TickerNotationProvider, TickerNotationRepos
         except Exception as e:
             logger.debug("ticker_notation_cache write error for %s: %s", snapshot.ticker, e)
 
-    def _read_cache(self, ticker: str) -> TickerNotationSnapshot | None:
+    def _read_cache(
+        self,
+        ticker: str,
+        as_of_date: date | None = None,
+    ) -> TickerNotationSnapshot | None:
+        where = "WHERE ticker=?"
+        params: tuple[str, ...] = (ticker.upper(),)
+        if as_of_date is not None:
+            where += " AND date(fetched_date) <= date(?)"
+            params = (ticker.upper(), as_of_date.isoformat())
         try:
             with self._get_conn() as conn:
                 row = conn.execute(
-                    "SELECT * FROM ticker_notation_cache WHERE ticker=?",
-                    (ticker.upper(),),
+                    "SELECT * FROM ticker_notation_cache "
+                    f"{where} "
+                    "ORDER BY date(fetched_date) DESC, fetched_at DESC "
+                    "LIMIT 1",
+                    params,
                 ).fetchone()
         except Exception as e:
             logger.debug("ticker_notation_cache read error for %s: %s", ticker, e)
@@ -291,3 +310,45 @@ def _int_to_bool(value) -> bool | None:
     if value is None:
         return None
     return bool(value)
+
+
+def _rebuild_ticker_notation_cache_if_needed(sqlite_conn: sqlite3.Connection) -> None:
+    rows = sqlite_conn.execute("PRAGMA table_info(ticker_notation_cache)").fetchall()
+    ticker_pk = any(row[1] == "ticker" and int(row[5]) > 0 for row in rows)
+    if not ticker_pk:
+        return
+    sqlite_conn.execute("ALTER TABLE ticker_notation_cache RENAME TO ticker_notation_cache_old")
+    sqlite_conn.execute("""
+        CREATE TABLE ticker_notation_cache (
+            ticker              TEXT NOT NULL,
+            status              TEXT,
+            tradeable           INTEGER,
+            listing_board       TEXT,
+            sector              TEXT,
+            sub_sector          TEXT,
+            haircut_percentage  TEXT,
+            notations_json      TEXT NOT NULL DEFAULT '[]',
+            market_status       TEXT,
+            suspend_info        TEXT,
+            corp_action_active  INTEGER,
+            has_uma             INTEGER,
+            catalogs_json       TEXT NOT NULL DEFAULT '[]',
+            source              TEXT NOT NULL DEFAULT 'stockbit',
+            fetched_date        TEXT NOT NULL,
+            fetched_at          TEXT NOT NULL
+        )
+    """)
+    sqlite_conn.execute("""
+        INSERT INTO ticker_notation_cache (
+            ticker, status, tradeable, listing_board, sector, sub_sector,
+            haircut_percentage, notations_json, market_status, suspend_info,
+            corp_action_active, has_uma, catalogs_json, source, fetched_date,
+            fetched_at
+        )
+        SELECT ticker, status, tradeable, listing_board, sector, sub_sector,
+               haircut_percentage, notations_json, market_status, suspend_info,
+               corp_action_active, has_uma, catalogs_json, source, fetched_date,
+               fetched_at
+        FROM ticker_notation_cache_old
+    """)
+    sqlite_conn.execute("DROP TABLE ticker_notation_cache_old")

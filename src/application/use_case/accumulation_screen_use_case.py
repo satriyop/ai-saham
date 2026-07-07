@@ -1071,6 +1071,7 @@ class AccumulationScreenUseCase:
             if self._analyst_provider is not None:
                 result.analyst_consensus = self._analyst_provider.get_consensus(
                     ticker=result.ticker,
+                    as_of_date=request.as_of_date,
                 )
 
             # Shareholding composition: institutional %, individual %, top holder
@@ -1097,12 +1098,14 @@ class AccumulationScreenUseCase:
             if self._ticker_notation_provider is not None:
                 result.ticker_notation = self._ticker_notation_provider.get_notation(
                     ticker=result.ticker,
+                    as_of_date=request.as_of_date,
                 )
 
             # Forward EPS estimates — used in composite score
             if self._forward_estimates_provider is not None:
                 result.forward_estimates = self._forward_estimates_provider.get_forward_estimates(
                     ticker=result.ticker,
+                    as_of_date=request.as_of_date,
                 )
                 if (
                     result.forward_estimates is not None

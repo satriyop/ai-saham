@@ -131,6 +131,29 @@ class StockbitAnalystConsensusProvider(AnalystConsensusProvider, StockbitCaching
         (1, "CREATE INDEX IF NOT EXISTS idx_analyst_ticker_fetched ON analyst_cache(ticker, fetched_date)"),
         (2, "ALTER TABLE analyst_cache ADD COLUMN price_target_low REAL"),
         (3, "ALTER TABLE analyst_cache ADD COLUMN price_target_high REAL"),
+        (4, """CREATE TABLE IF NOT EXISTS analyst_cache_pit (
+                        ticker             TEXT NOT NULL,
+                        buy_count          INTEGER NOT NULL DEFAULT 0,
+                        hold_count         INTEGER NOT NULL DEFAULT 0,
+                        sell_count         INTEGER NOT NULL DEFAULT 0,
+                        avg_price_target   REAL,
+                        current_price      REAL,
+                        last_updated       TEXT,
+                        fetched_date       TEXT NOT NULL,
+                        price_target_low   REAL,
+                        price_target_high  REAL
+                    )"""),
+        (5, """INSERT INTO analyst_cache_pit
+                    (ticker, buy_count, hold_count, sell_count, avg_price_target,
+                     current_price, last_updated, fetched_date, price_target_low,
+                     price_target_high)
+                SELECT ticker, buy_count, hold_count, sell_count, avg_price_target,
+                       current_price, last_updated, fetched_date, price_target_low,
+                       price_target_high
+                FROM analyst_cache"""),
+        (6, "DROP TABLE analyst_cache"),
+        (7, "ALTER TABLE analyst_cache_pit RENAME TO analyst_cache"),
+        (8, "CREATE INDEX IF NOT EXISTS idx_analyst_ticker_fetched ON analyst_cache(ticker, fetched_date)"),
     ]
 
     def _ensure_schema(self) -> None:
@@ -153,18 +176,29 @@ class StockbitAnalystConsensusProvider(AnalystConsensusProvider, StockbitCaching
         except Exception:
             return False
 
-    def _read_cache(self, ticker: str) -> AnalystConsensus | None:
+    def _read_cache(
+        self,
+        ticker: str,
+        as_of_date: date | None = None,
+    ) -> AnalystConsensus | None:
+        where = "WHERE ticker=?"
+        params: tuple[str, ...] = (ticker.upper(),)
+        if as_of_date is not None:
+            where += " AND date(substr(fetched_date,1,10)) <= date(?)"
+            params = (ticker.upper(), as_of_date.isoformat())
         try:
             with self._get_conn() as conn:
                 row = conn.execute(
-                    """
+                    f"""
                     SELECT buy_count, hold_count, sell_count,
                            avg_price_target, current_price, last_updated,
                            price_target_low, price_target_high, fetched_date
                     FROM analyst_cache
-                    WHERE ticker=?
+                    {where}
+                    ORDER BY date(substr(fetched_date,1,10)) DESC, fetched_date DESC
+                    LIMIT 1
                     """,
-                    (ticker.upper(),),
+                    params,
                 ).fetchone()
         except Exception as e:
             logger.debug("analyst_cache read error for %s: %s", ticker, e)
@@ -198,7 +232,7 @@ class StockbitAnalystConsensusProvider(AnalystConsensusProvider, StockbitCaching
             with self._get_conn() as conn:
                 conn.execute(
                     """
-                    INSERT OR REPLACE INTO analyst_cache
+                    INSERT INTO analyst_cache
                         (ticker, buy_count, hold_count, sell_count,
                          avg_price_target, current_price, last_updated, fetched_date,
                          price_target_low, price_target_high)
@@ -222,13 +256,20 @@ class StockbitAnalystConsensusProvider(AnalystConsensusProvider, StockbitCaching
 
     # ── Port implementation ───────────────────────────────────────────────────
 
-    def get_consensus(self, ticker: str) -> AnalystConsensus | None:
+    def get_consensus(
+        self,
+        ticker: str,
+        as_of_date: date | None = None,
+    ) -> AnalystConsensus | None:
         """Return analyst consensus for ticker.
 
         Checks SQLite cache first (TTL = today). On cache miss, calls the
         Stockbit API and writes results before returning.
         """
         ticker = ticker.upper()
+
+        if as_of_date is not None:
+            return self._read_cache(ticker, as_of_date=as_of_date)
 
         if self._api_client is None:
             return self._read_cache(ticker)

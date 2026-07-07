@@ -150,9 +150,11 @@ Work that can proceed without touching signal authority, scoring, or tuning.
       - Reruns are safe; raw timestamped observation rows may append, and
         readiness/reporting paths continue to collapse to latest per ticker for
         ticker/day label readiness.
-      - Caveat: enrichment providers that do not yet support point-in-time
-        `as_of_date` replay still use the cached enrichment available locally at
-        backfill runtime.
+      - Point-in-time enrichment status:
+        analyst consensus, forward estimates, and ticker notation now read the
+        latest cached snapshot with `fetched_date <= as_of_date` and return
+        unavailable when no prior snapshot exists. Fundamentals and
+        shareholding were verified as already point-in-time via `as_of_date`.
       - No SignalEngine authority, DecisionPolicy, RiskEngine, tuning patch, or
         diagnostic evidence promotion change.
 - [ ] CLI adapter rendering regression tests for setup phase / evidence output.
@@ -683,8 +685,11 @@ out-of-sample proof justify manual promotion through validator-bounded config.
       for historical replay. Labels are generated second and only through the
       existing forward-label use case when enough future candles exist. The
       command does not generate tuning patches and does not promote diagnostic
-      evidence. Point-in-time caveat remains for cached enrichment providers
-      that do not yet support `as_of_date`.
+      evidence.
+      - Enrichment replay status: analyst consensus, forward estimates, and
+        ticker notation use cached point-in-time reads (`fetched_date <=
+        as_of_date`) and return unavailable if only future snapshots exist.
+        Fundamentals and shareholding were already verified as point-in-time.
 - [ ] Label readiness remains blocked until enough future sessions exist for
       `SWING_10D`; no tuning patches or evidence promotion before
       patch-eligible OOS proof.
