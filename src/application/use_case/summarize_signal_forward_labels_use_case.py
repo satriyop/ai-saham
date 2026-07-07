@@ -101,6 +101,26 @@ def _build_buckets(
             ("strategy_rule", fp.strategy_rule_name or "UNKNOWN"),
             ("strategy_outcome", fp.strategy_evidence_outcome or "UNKNOWN"),
             ("strategy_route", fp.strategy_evidence_route or "UNKNOWN"),
+            (
+                "ia_foreign_track_coverage",
+                _score_bucket(fp.ia_foreign_track_coverage),
+            ),
+            (
+                "ia_domestic_track_coverage",
+                _score_bucket(fp.ia_domestic_track_coverage),
+            ),
+            (
+                "ia_foreign_track_conviction",
+                _score_bucket(fp.ia_foreign_track_conviction),
+            ),
+            (
+                "ia_domestic_track_conviction",
+                _score_bucket(fp.ia_domestic_track_conviction),
+            ),
+            ("ticker_profile_label", fp.ticker_profile_label or "UNKNOWN"),
+            ("tp_market_cap_bucket", fp.tp_market_cap_bucket or "UNKNOWN"),
+            ("tp_market_tier", fp.tp_market_tier or "UNKNOWN"),
+            ("tp_coverage_score", _score_bucket(fp.tp_coverage_score)),
             ("alpha_bucket", _score_bucket_100(fp.alpha_score)),
             ("trigger_bucket", _score_bucket_100(fp.trigger_score)),
             (

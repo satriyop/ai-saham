@@ -203,6 +203,115 @@ def test_summarize_groups_by_saved_alpha_trigger_buckets():
     assert by_group[("flow_trigger_allowed", "True")].observation_count == 1
 
 
+def test_summarize_groups_by_saved_institutional_accumulation_buckets():
+    day = date(2026, 7, 1)
+    label = SignalForwardLabel(
+        ticker="BBCA",
+        signal_date=day,
+        horizon=SignalLabelHorizon.SWING_10D,
+        entry_reference_price=Decimal("100"),
+        label_window_start=date(2026, 7, 2),
+        label_window_end=date(2026, 7, 15),
+        close_return=4.0,
+        max_forward_return=5.0,
+        max_adverse_excursion=-1.0,
+        days_to_peak=2,
+        days_to_trough=1,
+        stop_would_trigger=False,
+        target_would_trigger=True,
+        outcome_label=SignalForwardOutcome.SUCCESS,
+        unavailable_reason=None,
+        fingerprint=SignalObservationFingerprint(
+            ia_foreign_track_coverage=0.8,
+            ia_domestic_track_coverage=0.5,
+            ia_foreign_track_conviction=0.3,
+            ia_domestic_track_conviction=None,
+        ),
+    )
+    repo = FakeSignalForwardLabelsRepository([label])
+
+    response = SummarizeSignalForwardLabelsUseCase(repo).execute(
+        SummarizeSignalForwardLabelsRequest()
+    )
+
+    by_group = {(bucket.group, bucket.key): bucket for bucket in response.buckets}
+    assert by_group[("ia_foreign_track_coverage", "HIGH")].observation_count == 1
+    assert by_group[("ia_domestic_track_coverage", "MEDIUM")].observation_count == 1
+    assert by_group[("ia_foreign_track_conviction", "LOW")].observation_count == 1
+    assert by_group[("ia_domestic_track_conviction", "UNKNOWN")].observation_count == 1
+
+
+def test_summarize_groups_by_saved_ticker_profile_buckets():
+    day = date(2026, 7, 1)
+    label = SignalForwardLabel(
+        ticker="BBCA",
+        signal_date=day,
+        horizon=SignalLabelHorizon.SWING_10D,
+        entry_reference_price=Decimal("100"),
+        label_window_start=date(2026, 7, 2),
+        label_window_end=date(2026, 7, 15),
+        close_return=4.0,
+        max_forward_return=5.0,
+        max_adverse_excursion=-1.0,
+        days_to_peak=2,
+        days_to_trough=1,
+        stop_would_trigger=False,
+        target_would_trigger=True,
+        outcome_label=SignalForwardOutcome.SUCCESS,
+        unavailable_reason=None,
+        fingerprint=SignalObservationFingerprint(
+            ticker_profile_label="foreign_institutional",
+            tp_market_cap_bucket="large",
+            tp_market_tier="blue_chip",
+            tp_coverage_score=0.6,
+        ),
+    )
+    repo = FakeSignalForwardLabelsRepository([label])
+
+    response = SummarizeSignalForwardLabelsUseCase(repo).execute(
+        SummarizeSignalForwardLabelsRequest()
+    )
+
+    by_group = {(bucket.group, bucket.key): bucket for bucket in response.buckets}
+    assert by_group[("ticker_profile_label", "foreign_institutional")].observation_count == 1
+    assert by_group[("tp_market_cap_bucket", "large")].observation_count == 1
+    assert by_group[("tp_market_tier", "blue_chip")].observation_count == 1
+    assert by_group[("tp_coverage_score", "MEDIUM")].observation_count == 1
+
+
+def test_summarize_missing_phase_i_fields_as_unknown():
+    day = date(2026, 7, 1)
+    label = SignalForwardLabel(
+        ticker="BBCA",
+        signal_date=day,
+        horizon=SignalLabelHorizon.SWING_10D,
+        entry_reference_price=Decimal("100"),
+        label_window_start=date(2026, 7, 2),
+        label_window_end=date(2026, 7, 15),
+        close_return=4.0,
+        max_forward_return=5.0,
+        max_adverse_excursion=-1.0,
+        days_to_peak=2,
+        days_to_trough=1,
+        stop_would_trigger=False,
+        target_would_trigger=True,
+        outcome_label=SignalForwardOutcome.SUCCESS,
+        unavailable_reason=None,
+        fingerprint=SignalObservationFingerprint(),
+    )
+    repo = FakeSignalForwardLabelsRepository([label])
+
+    response = SummarizeSignalForwardLabelsUseCase(repo).execute(
+        SummarizeSignalForwardLabelsRequest()
+    )
+
+    by_group = {(bucket.group, bucket.key): bucket for bucket in response.buckets}
+    assert by_group[("ia_foreign_track_coverage", "UNKNOWN")].observation_count == 1
+    assert by_group[("ticker_profile_label", "UNKNOWN")].observation_count == 1
+    assert by_group[("tp_market_cap_bucket", "UNKNOWN")].observation_count == 1
+    assert by_group[("alpha_trigger_final_bucket", "UNKNOWN")].observation_count == 1
+
+
 def _label(
     *,
     ticker: str,
