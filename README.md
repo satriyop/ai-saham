@@ -63,9 +63,10 @@ A **local-first, production-grade CLI application** for stock analysis focused o
 - **Coverage vs Conviction** — Evidence availability and evidence strength tracked separately across all evidence types; missing evidence lowers coverage, not conviction; weak/mixed signals lower conviction, not coverage
 - **DecisionPolicy** — Application-layer policy resolving regime-level max_decision, setup-specific regime actions, score/coverage/conviction thresholds, and setup phase constraints into deterministic decision constraints
 - **Continuous Setup/Trigger Scoring** — Setup quality from trend alignment, RSI quality, BB compression readiness, VWAP position, and RS vs IHSG; volume dry-up + expansion as primary SWING_10D trigger pattern for accumulation setups; volume data quality guardrails
-- **Alpha/Trigger Score Split (Phase G)** — Each evidence group routed into Alpha (structural attractiveness) and Trigger (entry timing) fractions via per-horizon `alpha_fraction` config; final scores weighted by `alpha_weight` per horizon; fronted by `EvidenceAuthorityStatus` three-tier registry (DIAGNOSTIC/LOW_WEIGHT/PRODUCTION) that caps effective weights. Available via `saham analyze swing --with-signal-detail`
+- **Alpha/Trigger Score Split (Phase G)** — Each evidence group routed into Alpha (structural attractiveness) and Trigger (entry timing) fractions via per-horizon `alpha_fraction` config; final scores weighted by `alpha_weight` per horizon; fronted by `EvidenceAuthorityStatus` three-tier registry (DIAGNOSTIC/LOW_WEIGHT/PRODUCTION) that caps effective weights. Four canonical groups: `setup_quality`, `institutional_flow`, `market_context` (Phase H), and `company_quality_context` (valuation/analyst/insider/seasonality, DIAGNOSTIC). Available via `saham analyze swing --with-signal-detail`
+- **Company Quality Context (Phase G producer)** — Ticker-alpha conviction from forward P/E valuation, analyst consensus, insider net-buy direction, and capped generic seasonality; all axes read from local enrichment (no new fetch). Coverage-weighted aggregate with seasonality-capped contribution. DIAGNOSTIC-only — zero scoring authority until walk-forward OOS proof
 - **Sector Context Evidence (Phase H)** — Local-universe sector diagnostics: equal-weight sector 20d return, breadth, ticker-vs-sector RS, sector regime (BULLISH/NEUTRAL/BEARISH); computed from cached local ticker data, no external provider needed; DIAGNOSTIC-only, fed into Alpha/Trigger re-score; rendered via `saham analyze swing --with-market-detail`
-- **Signal Readiness Audit (Phase I, in progress)** — `saham analyze signal-readiness --target TARGET` reports observation/label counts, IS/OOS split, profit factor, and avg return for a calibration target; diagnostic readiness requires ≥10 OOS labels; patch eligibility requires ≥60 IS + ≥30 OOS labels with profit factor ≥1.15
+- **Signal Readiness Audit (Phase I, in progress)** — `saham analyze signal-readiness --target TARGET` reports observation/label counts, IS/OOS split, profit factor, and avg return for a calibration target; diagnostic readiness requires ≥10 OOS labels; patch eligibility requires ≥60 IS + ≥30 OOS labels with profit factor ≥1.15. `saham analyze signal-backfill` replays the accumulation pipeline historically to build observation and label coverage for walk-forward calibration
 - **Hexagonal Architecture** - Clean separation of domain, application, and infrastructure
 
 ---
@@ -109,7 +110,7 @@ saham analyze chart price BBRI --sma 20 --ema 50
 | **`saham learn`** | Feedback Loop | `snapshot`, `track`, `grade`, `prompt`, `tune` |
 | **`saham view`** | Read-only Browsing | `broker status/flow/top/history/top-foreign/distribution/mappings`, `market-context`, `ticker TICKER` (or just `BBCA`), `universe` |
 | **`saham indicator`**| Technical Math | `compute`, `snapshot`, `create`, `list`, `show`, `delete` |
-| **`saham analyze`** | Insights & Charts | `risk`, `compare`, `sentiment`, `audit`, `regime`, `chart price/rsi/volume`, `swing`, `accum-audit`, `swing-compare`, `signal-labels`, `signal-readiness` |
+| **`saham analyze`** | Insights & Charts | `risk`, `compare`, `sentiment`, `audit`, `regime`, `chart price/rsi/volume`, `swing`, `accum-audit`, `swing-compare`, `signal-labels`, `signal-readiness`, `signal-backfill` |
 | **`saham strategy`** | Strategy Lifecycle| `init`, `validate`, `list`, `create`, `backtest`, `skill generate/check/index` |
 | **`saham trade`** | Paper Trade Workspace | `confirm`, `outcome`, `size`, `backtest-swing`, `tune-swing`, `backtest-intraday`, `log`, `migrate-journal`, `review intraday/swing` |
 
@@ -1495,6 +1496,7 @@ src/
 │       ├── ticker_profile_snapshot.py   # Per-ticker behavior profile (Phase F)
 │       ├── sector_context_evidence.py   # Local-universe sector diagnostics (Phase H)
 │       ├── alpha_trigger_score.py       # Alpha/Trigger split + EvidenceRegistration (Phase G)
+│       ├── company_quality_context_evidence.py  # Valuation/analyst/insider/seasonality conviction (Phase G producer)
 │       ├── decision_constraints.py      # Emitted by DecisionPolicy resolution
 │       ├── earnings_record.py / forward_estimates.py
 │       ├── insider_transaction.py / bandar_detector_snapshot.py
@@ -1518,6 +1520,7 @@ src/
 │   ├── use_case/                      # All use cases follow *_use_case.py naming
 │   │   ├── assess_signal_evidence_use_case.py  # Staged evidence-first group scoring
 │   │   ├── generate_signal_forward_labels_use_case.py # Phase B forward label generation
+│   │   ├── backfill_signal_observations_use_case.py # Phase I historical accumulation pipeline replay
 │   │   ├── report_signal_readiness_use_case.py  # Phase I calibration readiness audit
 │   │   ├── summarize_signal_forward_labels_use_case.py # Phase I attribution bucketing
 │   │   ├── fetch_market_data_use_case.py
@@ -1574,6 +1577,10 @@ src/
 │   │   ├── strategy_evidence_builder.py   # Phase D diagnostic strategy evaluation
 │   │   ├── ticker_profile_classifier.py   # Phase F deterministic ticker profile
 │   │   ├── sector_context_evidence_builder.py  # Phase H local-universe sector diagnostics
+│   │   ├── company_quality_context_evidence_builder.py  # Phase G producer: valuation/analyst/insider/seasonality
+│   │   ├── company_quality_scoring.py       # Extracted conviction-scorer module shared by company quality evidence
+│   │   ├── signal_scoring_config.py         # Phase G Alpha/Trigger scoring config loader
+│   │   ├── signal_observation_request_builder.py  # Phase I historical observation backfill request builder
 │   │   ├── setup_phase_detector.py   # Phase C deterministic setup phase detection
 │   │   ├── setup_phase_history.py    # Phase C persisted phase sequence loader
 │   │   ├── indicator_registry.py
@@ -1796,6 +1803,7 @@ For `saham analyze swing --format json`, grouped `verdict`, `evidence`, and
 | `config/signal_engine.yaml` | Signal factor enablement, weights, classification thresholds, missing-data policy, enrichment lookbacks, input mapping, and factor scoring thresholds; also houses regime decision policy, regime conditioning, and coverage/conviction floors |
 | `config/institutional_accumulation.yaml` | Two-track institutional flow evidence weights, asymmetric observation windows, min valid sessions, and track component weights |
 | `config/ticker_profile.yaml` | Ticker profile classifier thresholds: market cap buckets, index membership scores, liquidity/volatility saturating scales, sparse-history fallback |
+| `config/company_quality_context.yaml` | Company quality context axis weights, seasonality cap, and scored axis count for valuation/analyst/insider/seasonality conviction |
 | `config/market_context_engine.yaml` | Market context factors, thresholds, VIX score anchors, scoring labels/fallbacks, warning policy, and regime effects |
 | `config/accumulation_screener.yaml` | Accumulation discovery policy (filters, sector breadth, broker quality, BCI, evidence weights, and derived feature windows) |
 | `config/accumulation_audit.yaml` | Accumulation-audit learning policy: setup presets, forward-return horizons, exit simulation assumptions, grouping dimensions, and bucket edges |
