@@ -3,7 +3,7 @@
 _Design rationale: `docs/signal_refactor.md`_
 _Phase plan: `docs/signal_refactor_phases.md`_
 _Current implementation target: Phase I readiness audit_
-_Updated: 2026-07-07_
+_Updated: 2026-07-07 — persistence tests complete_
 
 This tracker records implementation state and the concrete checklist for the
 SignalEngine refactor. Phases A1–H are closed. Phase I is the active target.
@@ -81,7 +81,7 @@ SignalEngine refactor. Phases A1–H are closed. Phase I is the active target.
 
 ## Open Items Index
 
-All unchecked carry-forward items from closed phases. This is the canonical list — phase sections below contain prose context but do not repeat these bullets.
+All open items across all phases. This is the canonical list — phase sections below contain prose context but do not repeat these bullets.
 
 ### Phase C
 - [ ] Enforce pullback requirements: trend/context support plus support reclaim
@@ -99,12 +99,18 @@ All unchecked carry-forward items from closed phases. This is the canonical list
 - [ ] Empirical readiness summary from existing backtests (min sample size,
       SWING_10D grouping).
 - [ ] CLI adapter rendering regression tests for strategy evidence display.
-- [ ] Document Phase G as first phase allowed to consume strategy evidence in
-      Alpha/Trigger aggregation.
+- [x] Document Phase G as first phase allowed to consume strategy evidence in
+      Alpha/Trigger aggregation. _(Documented in Phase G implemented contract:
+      strategy evidence is not passed into the aggregator; the Alpha/Trigger
+      architecture is the gate before any future promotion.)_
 
 ### Phase E
-- [ ] Persistence integration test: verify `ia_*` fields land in saved
-      observation payload via `AccumulationScreenUseCase` with a broker-repo stub.
+- [x] Persistence integration test: verify `ia_*` and `sc_*` fields land in
+      saved observation payload via `AccumulationScreenUseCase` with a broker-repo
+      stub. _(Implemented 2026-07-07: `tests/application/use_case/test_accumulation_screen_persistence.py`,
+      10 tests, 2598 total pass. Covers CNFB wiring, sector peer path, and
+      structural key-presence guard distinguishing "key absent" from "key present
+      with None".)_
 - [ ] CLI adapter regression tests for Phase E evidence rendering.
 
 ### Phase G
@@ -499,35 +505,15 @@ out-of-sample proof justify manual promotion through validator-bounded config.
 - [ ] Filter target candidates by horizon `SWING_10D`, ticker profile
       foreign-institutional/large-cap path, setup family accumulation-style, and
       available forward labels.
-      - Blocked until fresh Phase B-H observations and SWING_10D labels exist.
-      - Fresh observations include 129 `foreign_institutional` / `SWING_10D`
-        rows, but `tp_market_cap_bucket` is not populated and labels are still
-        unavailable, so the full large-cap target filter is not ready.
-      - Fixed for new observations: ticker-profile classification and
-        candidate fingerprints persist unavailable market-cap enrichment as
-        explicit `UNKNOWN` instead of silent null, while available market-cap
-        data maps into `large`/`mid`/`small`/`micro` buckets.
-      - Local enrichment is now ready for regeneration:
-        `company_fundamentals` has 294 rows with 294 populated
-        `market_cap_idr` values; next fresh observations should populate
-        `tp_market_cap_bucket` where ticker-profile evidence is available.
-      - Regenerated 2026-07-07 `lq45` observations after market-cap enrichment:
-        135 rows, 135 populated `tp_market_cap_bucket` values, bucket
-        distribution `large=123`, `mid=12`, `UNKNOWN=0`.
-      - Exact current target filter now resolves locally:
-        `foreign_institutional` / `large` / `SWING_10D` = 120 observations.
+      - Current state (2026-07-07): observation filter resolves — 120 rows
+        matching `foreign_institutional` / `large` / `SWING_10D`; all 135 lq45
+        observations have populated `tp_market_cap_bucket` (large=123, mid=12).
+        Blocked on SWING_10D forward labels.
 - [ ] Produce readiness summary: sample count, OOS count, success/failure
       balance, unavailable label count, and attribution bucket coverage.
-      - Current local readiness: 45 candidate observations, 0 forward labels,
-        0 observations with Phase B-H fingerprint coverage; not diagnostic-ready
-        and not patch-eligible.
-      - Updated local readiness after fresh screen: 135 current observations,
-        129 foreign-institutional/SWING_10D observations, 0 forward labels, 0
-        future candles after 2026-07-06; still not diagnostic-ready and not
-        patch-eligible.
-      - Updated after 2026-07-07 regeneration: observation readiness improved
-        with populated `tp_market_cap_bucket`; label readiness remains blocked
-        with 0 forward labels and no future candle sessions after 2026-07-07.
+      - Current state (2026-07-07): 135 observations, 0 forward labels, 0 future
+        candle sessions after 2026-07-07; not patch-eligible. Blocked until
+        enough future sessions accumulate for SWING_10D labels.
 - [ ] Only after readiness passes: propose validator-bounded tuning patches for
       review; no auto-apply.
 
