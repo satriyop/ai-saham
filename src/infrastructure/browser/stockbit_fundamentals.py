@@ -112,6 +112,27 @@ def _build_metrics(body: dict) -> dict[str, str]:
     return metrics
 
 
+def _parse_market_cap(raw: str | None) -> int | None:
+    if not raw:
+        return None
+    try:
+        cleaned = raw.replace(",", "").strip()
+        multiplier = 1
+        if cleaned.endswith("T"):
+            multiplier = 1_000_000_000_000
+            cleaned = cleaned[:-1].strip()
+        elif cleaned.endswith("B"):
+            multiplier = 1_000_000_000
+            cleaned = cleaned[:-1].strip()
+        elif cleaned.endswith("M"):
+            multiplier = 1_000_000
+            cleaned = cleaned[:-1].strip()
+        val = float(cleaned)
+        return int(round(val * multiplier))
+    except (ValueError, TypeError):
+        return None
+
+
 def _parse_fundamentals(ticker: str, body: dict) -> CompanyFundamentals | None:
     metrics = _build_metrics(body)
     if not metrics:
@@ -131,20 +152,23 @@ def _parse_fundamentals(ticker: str, body: dict) -> CompanyFundamentals | None:
         return None
 
     data_raw = body.get("data") if isinstance(body, dict) else {}
-    info = (data_raw or {}).get("info") or {}
+    stats = (data_raw or {}).get("stats") or {}
+    
+    # 1. Parse market cap from stats.market_cap
     market_cap_idr: int | None = None
-    pbv: float | None = None
-    if isinstance(info, dict):
-        mc = (info.get("market_cap") or {}).get("raw")
-        try:
-            market_cap_idr = int(mc) if mc is not None else None
-        except (TypeError, ValueError):
-            pass
-        pbv_raw = (info.get("pbv") or {}).get("raw")
-        try:
-            pbv = float(pbv_raw) if pbv_raw is not None else None
-        except (TypeError, ValueError):
-            pass
+    if isinstance(stats, dict) and "market_cap" in stats:
+        market_cap_idr = _parse_market_cap(stats["market_cap"])
+    
+    # 2. Parse PBV from flat metrics list, with fallback to legacy info
+    pbv = _parse_float(metrics.get("Current Price to Book Value"))
+    if pbv is None:
+        info = (data_raw or {}).get("info") or {}
+        if isinstance(info, dict):
+            pbv_raw = (info.get("pbv") or {}).get("raw")
+            try:
+                pbv = float(pbv_raw) if pbv_raw is not None else None
+            except (TypeError, ValueError):
+                pass
 
     return CompanyFundamentals(
         ticker=ticker.upper(),
@@ -161,6 +185,7 @@ def _parse_fundamentals(ticker: str, body: dict) -> CompanyFundamentals | None:
         pbv=pbv,
         fetched_at=datetime.now(),
     )
+
 
 
 class StockbitFundamentalsProvider(FundamentalsProvider, StockbitCachingProvider):
