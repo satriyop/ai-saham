@@ -773,6 +773,11 @@ out-of-sample proof justify manual promotion through validator-bounded config.
         `company_fundamentals` has 294 rows with 294 populated
         `market_cap_idr` values; next fresh observations should populate
         `tp_market_cap_bucket` where ticker-profile evidence is available.
+      - Regenerated 2026-07-07 `lq45` observations after market-cap enrichment:
+        135 rows, 135 populated `tp_market_cap_bucket` values, bucket
+        distribution `large=123`, `mid=12`, `UNKNOWN=0`.
+      - Exact current target filter now resolves locally:
+        `foreign_institutional` / `large` / `SWING_10D` = 120 observations.
 - [ ] Produce readiness summary: sample count, OOS count, success/failure
       balance, unavailable label count, and attribution bucket coverage.
       - Current local readiness: 45 candidate observations, 0 forward labels,
@@ -782,6 +787,9 @@ out-of-sample proof justify manual promotion through validator-bounded config.
         129 foreign-institutional/SWING_10D observations, 0 forward labels, 0
         future candles after 2026-07-06; still not diagnostic-ready and not
         patch-eligible.
+      - Updated after 2026-07-07 regeneration: observation readiness improved
+        with populated `tp_market_cap_bucket`; label readiness remains blocked
+        with 0 forward labels and no future candle sessions after 2026-07-07.
 - [ ] Only after readiness passes: propose validator-bounded tuning patches for
       review; no auto-apply.
 
