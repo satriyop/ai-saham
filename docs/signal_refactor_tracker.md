@@ -74,14 +74,14 @@ SignalEngine refactor. Phases A1–H are closed. Phase I is the active target.
 |---|---|---|---|
 | Legacy 0-8 | Staged Evidence Foundation | Done | Historical foundation. |
 | A1 | Regime Eligibility Policy Quick Win | Done | Implemented and verified; decision constraints are explicit. |
-| A2 | Full RegimeDetectionEvidence And Replay | Done | Implemented 2026-07-05; all checklist items complete, 2347 tests pass. |
+| A2 | Full RegimeDetectionEvidence And Replay | Done | Implemented 2026-07-05; all checklist items complete, 2347 tests pass at phase closure. |
 | B | Minimal Forward Labels And Observation Fingerprints | Done | Implemented and verified; saved labels and fingerprint attribution are operational. |
 | C | SetupPhaseState And Continuous Setup/Trigger Scoring | Done | Closed 2026-07-06; diagnostic setup phase, replay history, and data-quality volume trigger implemented. |
-| D | Strategy Evidence Harness | Done (2026-07-06) | Diagnostic-only strategy evidence harness. 2424 tests pass. |
-| E | Institutional Accumulation Evidence | Done (2026-07-06) | Two-track institutional flow evidence, diagnostic-only. 2457 tests pass. |
-| F | Minimal Ticker Profile Diagnostics | Done (2026-07-06) | Deterministic ticker behavior classifier, diagnostic-only. 2489 tests pass. |
+| D | Strategy Evidence Harness | Done (2026-07-06) | Diagnostic-only strategy evidence harness. 2424 tests pass at phase closure. |
+| E | Institutional Accumulation Evidence | Done (2026-07-06) | Two-track institutional flow evidence, diagnostic-only. 2457 tests pass at phase closure. |
+| F | Minimal Ticker Profile Diagnostics | Done (2026-07-06) | Deterministic ticker behavior classifier, diagnostic-only. 2489 tests pass at phase closure. |
 | G | Simplified Alpha/Trigger Split | Done (2026-07-06; producers completed 2026-07-07) | Four canonical Alpha/Trigger slots configured. Both `market_context` (Phase H sector-context) and `company_quality_context` now have DIAGNOSTIC producers with zero scoring authority (`effective_weight` resolves to 0.0). `company_quality_context` producer: valuation/analyst/insider/capped-seasonality axes, `alpha_fraction=1.00`. |
-| H | Sector Context | Done (2026-07-06) | Local-universe sector-relative return, breadth, ticker-vs-sector RS; DIAGNOSTIC-only; 2564 tests pass. |
+| H | Sector Context | Done (2026-07-06) | Local-universe sector-relative return, breadth, ticker-vs-sector RS; DIAGNOSTIC-only; 2564 tests pass at phase closure. |
 | I | Full Walk-Forward Calibration And Expanded Tunables | In Progress (readiness audit) | Audit-first opening; no tuning patches or evidence promotion until OOS readiness is proven. |
 
 ---
@@ -105,12 +105,14 @@ is either safe to ignore for now or explicitly deferred.
 - [ ] **SWING_10D forward labels unavailable.** Labels cannot be generated until
       10 future trading sessions are captured. Nightly cron running; no manual
       action needed.
-- [ ] **Target candidate filtering blocked until labels exist.** 120 rows matching
-      `foreign_institutional` / `large` / `SWING_10D` are ready; filter resolves
-      to 0 labeled rows. Unblocks automatically when cron delivers labels.
-- [ ] **Readiness summary blocked until labels exist.** `saham analyze signal-readiness`
-      reports 135 observations, 0 forward labels, patch-eligible: false. Unblocks
-      automatically.
+- [ ] **Labeled target attribution blocked until labels exist.** 120 observation
+      rows matching `foreign_institutional` / `large` / `SWING_10D` resolve
+      correctly; what is blocked is labeled attribution (0 labeled rows).
+      Unblocks automatically when cron delivers labels.
+- [ ] **Patch eligibility blocked until labels exist.** `saham analyze signal-readiness`
+      is implemented and reports observations, label counts, and blockers.
+      Patch eligibility itself remains false until SWING_10D labels exist.
+      Unblocks automatically.
 - [ ] **Tuning patches blocked until readiness passes.** No tuning patches or config
       changes may be proposed until `patch_eligible: true` is reported.
 - [ ] **Evidence promotion blocked until OOS proof exists.** All Phase D–H
@@ -234,7 +236,10 @@ in the phase tracker sections below.
   diagnostic and cannot override canonical setup phase or SignalEngine decisions.
 - Phase B labels remain the source for replay attribution; no recomputation of
   historical evidence.
-- Phase I tuning/config patching remains out of scope until Phase I is opened.
+- Phase I patch generation remains blocked until readiness reports
+  `patch_eligible: true`. Phase I is the active target; the audit pass is
+  underway but no tuning patches or config changes may be proposed until the
+  readiness gate passes.
 - Network-dependent tests remain out of scope for refactor phases.
 - `SWING_10D` remains the first calibrated ticker-signal horizon.
 
