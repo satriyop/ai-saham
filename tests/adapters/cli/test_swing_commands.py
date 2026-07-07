@@ -251,6 +251,7 @@ def test_swing_display_path_prefers_grouped_response_contracts(monkeypatch):
                     take_profit_pct=Decimal("6"),
                     stop_loss_pct=Decimal("4"),
                     regime_label=None,
+                    sector_context_evidence=None,
                 ),
                 diagnostics=SimpleNamespace(
                     data_freshness=grouped_data,

@@ -29,7 +29,12 @@ from src.adapters.cli.view_market_context_display import (
     context_factor_value,
 )
 from src.application.use_case.swing_backtest_use_case import SwingBacktestResponse
+from src.domain.value_objects.alpha_trigger_score import (
+    AlphaTriggerScore,
+    EvidenceAuthorityStatus,
+)
 from src.domain.value_objects.market_context import MarketContext
+from src.domain.value_objects.sector_context_evidence import SectorContextEvidence
 
 
 @dataclass(frozen=True)
@@ -787,6 +792,7 @@ def print_swing_rich_overview(
     market_context_risk_preview=None,
     market_context_trade_setup_preview=None,
     with_technical_gate: bool = False,
+    sector_context_evidence: "SectorContextEvidence | None" = None,
 ) -> None:
     plan_text, plan_style = swing_plan_text(
         ticker,
@@ -967,6 +973,7 @@ def print_swing_output(
     market_context_trade_setup_preview=None,
     config: SwingDisplayConfig | None = None,
     with_technical_gate: bool = False,
+    sector_context_evidence: "SectorContextEvidence | None" = None,
 ) -> None:
     config = config or SwingDisplayConfig(
         enter_min_score=70,
@@ -1011,6 +1018,7 @@ def print_swing_output(
         market_context_risk_preview=market_context_risk_preview,
         market_context_trade_setup_preview=market_context_trade_setup_preview,
         with_technical_gate=with_technical_gate,
+        sector_context_evidence=sector_context_evidence,
     )
 
     # ── Market Context Preview Panel ─────────────────────────────────────────
@@ -1190,6 +1198,68 @@ def print_swing_output(
             )
         )
 
+    # ── Alpha/Trigger Detail ─────────────────────────────────────────────────
+    alpha_trigger_text = []
+    if include_signal_detail and signal_assessment is not None:
+        ats: AlphaTriggerScore | None = getattr(signal_assessment, "alpha_trigger_score", None)
+        if ats is not None:
+            alpha_wt_pct = int(ats.alpha_weight * 100)
+            trigger_wt_pct = 100 - alpha_wt_pct
+            alpha_s = f"{ats.alpha_score:.1f}" if ats.alpha_score is not None else "—"
+            trig_s = f"{ats.trigger_score:.1f}" if ats.trigger_score is not None else "—"
+            final_s = f"{ats.final_exact_score:.1f}" if ats.final_exact_score is not None else "—"
+            alpha_trigger_text.append(Text(
+                f"α {alpha_s}  trigger {trig_s}  final {final_s}  "
+                f"horizon {ats.horizon}  "
+                f"alpha {alpha_wt_pct}% · trigger {trigger_wt_pct}%",
+                style="bold cyan",
+            ))
+            alpha_trigger_text.append(Text(
+                f"coverage {ats.coverage:.2f}  authority {ats.authority_coverage:.2f}  "
+                f"conviction {ats.conviction:.2f}  "
+                f"flow_trigger {'✓ allowed' if ats.flow_trigger_allowed else '✗ blocked'}",
+                style="dim",
+            ))
+            if ats.group_contributions:
+                ct = compact_table()
+                ct.add_column("Group")
+                ct.add_column("Score", justify="right")
+                ct.add_column("Present")
+                ct.add_column("Status")
+                ct.add_column("CfgWt", justify="right")
+                ct.add_column("EffWt", justify="right")
+                ct.add_column("AlphaWtd", justify="right")
+                ct.add_column("TrigWtd", justify="right")
+                ct.add_column("TrigOK")
+                for c in ats.group_contributions:
+                    is_diag = (
+                        c.evidence_status == EvidenceAuthorityStatus.DIAGNOSTIC
+                        or c.effective_weight == 0.0
+                    )
+                    status_text = Text(
+                        c.evidence_status.value + (" — no weight" if is_diag else ""),
+                        style="dim" if is_diag else "",
+                    )
+                    eff_wt_text = Text(f"{c.effective_weight:.3f}", style="dim" if is_diag else "")
+                    ct.add_row(
+                        Text(c.group, style="dim" if is_diag else ""),
+                        Text(f"{c.score:.1f}" if c.present else "—", style="dim" if is_diag else ""),
+                        Text("✓" if c.present else "✗", style="dim" if is_diag else ""),
+                        status_text,
+                        Text(f"{c.configured_weight:.3f}", style="dim" if is_diag else ""),
+                        eff_wt_text,
+                        Text(f"{c.alpha_weighted:.3f}", style="dim" if is_diag else ""),
+                        Text(f"{c.trigger_weighted:.3f}", style="dim" if is_diag else ""),
+                        Text("✓" if c.trigger_allowed else "✗", style="dim" if is_diag else ""),
+                    )
+                alpha_trigger_text.append(ct)
+            for reason in list(ats.unavailable_reasons)[-3:]:
+                alpha_trigger_text.append(Text(f"  ⚠ {reason}", style="dim yellow"))
+
+    if alpha_trigger_text:
+        console().print("")
+        console().print(panel(Group(*alpha_trigger_text), title="ALPHA/TRIGGER DETAIL"))
+
     if risk_text:
         console().print("")
         console().print(
@@ -1207,6 +1277,60 @@ def print_swing_output(
                 title="MARKET DETAIL",
             )
         )
+
+    # ── Sector Context Detail ────────────────────────────────────────────────
+    sc_text = []
+    if include_market_detail and sector_context_evidence is not None:
+        sc = sector_context_evidence
+        if sc.peer_count == 0 and sc.sector_regime == "UNKNOWN" and sc.unavailable_reasons:
+            for reason in list(sc.unavailable_reasons)[:2]:
+                sc_text.append(Text(f"Sector context unavailable: {reason}", style="dim"))
+        else:
+            _regime_style = {
+                "BULLISH": "bold green",
+                "BEARISH": "bold red",
+                "NEUTRAL": "yellow",
+                "UNKNOWN": "dim",
+            }.get(sc.sector_regime, "white")
+            header = Text()
+            header.append(f"Sector: {sc.sector or '—'}  ", style="bold")
+            header.append("Regime: ")
+            header.append(sc.sector_regime, style=_regime_style)
+            header.append(f"  Peers: {sc.peer_count}")
+            sc_text.append(header)
+
+            def _spct(v: float | None) -> str:
+                return f"{v * 100:+.1f}%" if v is not None else "—"
+
+            mt = compact_table()
+            mt.add_column("Sector 20d")
+            mt.add_column("vs IHSG")
+            mt.add_column("Breadth")
+            mt.add_column("vs Sector RS")
+            mt.add_row(
+                _spct(sc.sector_20d_return),
+                _spct(sc.sector_vs_ihsg_20d),
+                f"{sc.sector_breadth:.0%}" if sc.sector_breadth is not None else "—",
+                _spct(sc.ticker_vs_sector_rs),
+            )
+            sc_text.append(mt)
+
+            peer_tickers = list(sc.peer_tickers)
+            if peer_tickers:
+                shown = ", ".join(peer_tickers[:3])
+                suffix = " …" if len(peer_tickers) > 3 else ""
+                sc_text.append(Text(f"  Peers ({sc.peer_count}): {shown}{suffix}", style="dim"))
+
+            sc_text.append(Text(
+                f"  Coverage: {sc.coverage_score:.2f}  DIAGNOSTIC — no scoring impact",
+                style="dim",
+            ))
+            for reason in list(sc.unavailable_reasons)[:2]:
+                sc_text.append(Text(f"  ⚠ {reason}", style="dim yellow"))
+
+    if sc_text:
+        console().print("")
+        console().print(panel(Group(*sc_text), title="SECTOR CONTEXT"))
 
     # ── Panel 4: FLOW / BROKER DETAIL ───────────────────────────────────────
     flow_group = []
