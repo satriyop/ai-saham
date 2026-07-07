@@ -118,10 +118,21 @@ All open items across all phases. This is the canonical list — phase sections 
       13 tests. Covers CNFB wiring, sector peer path, company-quality `cq_*`
       key-presence (2026-07-07), and structural key-presence guard distinguishing
       "key absent" from "key present with None".)_
-- [ ] CLI adapter rendering for `InstitutionalAccumulationEvidence` / `ia_*`
-      foreign-vs-domestic track details. _(Alpha/Trigger and Sector Context
-      panels added 2026-07-07 close Phase G and Phase H display items
-      respectively; Phase E `ia_*` detail rendering remains unimplemented.)_
+- [x] CLI adapter rendering for `InstitutionalAccumulationEvidence` / `ia_*`
+      foreign-vs-domestic track details. _(Implemented 2026-07-07: new
+      `INSTITUTIONAL ACCUMULATION` panel in `analyze_swing_display.py`, gated
+      by `--with-flow-detail`. Renders foreign institutional track (coverage,
+      conviction, participation, CR4, CR8, CNFB divergence, VWAP distance),
+      domestic bandar track (coverage, conviction, broker consistency, reversal,
+      accum session ratio, domestic VWAP dist, HHI divergence, bandar broad,
+      bandar accumulation if present), and counterparty transfer (asymmetry,
+      buy/sell HHI). Shows `—` for missing values; never shows `0` for absent
+      data. Unavailable evidence renders reasons only, no misleading metrics
+      table. Panel header reads "DIAGNOSTIC — no scoring authority". Broker
+      classification (`foreign_broker_codes`) moved to
+      `config/institutional_accumulation.yaml` under `broker_classification:`
+      — tunable without code edits; fallback to hardcoded set when YAML key
+      absent.)_
 
 ### Phase G
 - [ ] Phase D/E/F/H and company-quality diagnostic evidence not yet promoted

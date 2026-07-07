@@ -37,3 +37,27 @@ institutional_accumulation:
     foreign_institutional_track: 0.45
     domestic_bandar_track: 0.40
     counterparty_transfer: 0.15
+
+  # Broker codes classified as foreign institutional.
+  # Domestic bandar track = all flows EXCLUDING these codes.
+  # Change here takes effect without code edits.
+  broker_classification:
+    foreign_broker_codes:
+      - AK
+      - BK
+      - ZP
+      - KZ
+      - YU
+      - RX
+      - HD
+      - CP
+      - DR
+      - DB
+      - ML
+      - CS
+      - AI
+      - GW
+      - BW
+      - KI
+      - DP
+      - YB

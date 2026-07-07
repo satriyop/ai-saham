@@ -407,3 +407,75 @@ def test_ia_fingerprint_reads_raw_cnfb_window_keys():
     assert fp["ia_cnfb_divergence_20d"] == pytest.approx(expected_20d, abs=1e-6)
     expected_30d = result.metadata["cnfb_bullish_scores"]["cnfb_30d"]
     assert fp["ia_cnfb_divergence_30d"] == pytest.approx(expected_30d, abs=1e-6)
+
+
+# --------------------------------------------------------------------------- #
+# Broker classification config tests (Part 1)
+# --------------------------------------------------------------------------- #
+
+def test_config_loads_foreign_broker_codes_from_yaml():
+    """YAML broker_classification.foreign_broker_codes is parsed into frozenset."""
+    raw = {
+        "institutional_accumulation": {
+            "evidence_status": "DIAGNOSTIC",
+            "broker_classification": {
+                "foreign_broker_codes": ["zp", " YU ", "ak"]
+            },
+        }
+    }
+    config = InstitutionalAccumulationConfig.from_mapping(raw)
+    assert "ZP" in config.foreign_broker_codes
+    assert "YU" in config.foreign_broker_codes
+    assert "AK" in config.foreign_broker_codes
+    assert len(config.foreign_broker_codes) == 3
+
+
+def test_local_flows_excludes_configured_foreign_codes():
+    """Config-loaded foreign_broker_codes drive the local/foreign split."""
+    config = InstitutionalAccumulationConfig.from_mapping({
+        "institutional_accumulation": {
+            "broker_classification": {
+                "foreign_broker_codes": ["XX", "YY"],
+            },
+            "foreign_institutional_track_components": {
+                "foreign_participation": 0.25,
+                "foreign_concentration_cr4_cr8": 0.20,
+                "cnfb_price_divergence": 0.35,
+                "foreign_vwap_distance": 0.20,
+            },
+            "domestic_bandar_track_components": {
+                "broker_consistency": 0.25,
+                "broker_reversal": 0.15,
+                "accumulation_session_ratio": 0.20,
+                "domestic_buy_vwap_distance": 0.15,
+                "broker_hhi_divergence": 0.15,
+                "bandar_broad_or_accumulation_score": 0.10,
+            },
+            "track_weights": {
+                "foreign_institutional_track": 0.45,
+                "domestic_bandar_track": 0.40,
+                "counterparty_transfer": 0.15,
+            },
+        }
+    })
+    builder = InstitutionalAccumulationEvidenceBuilder(config)
+
+    flows = [
+        _flow("XX", 0, buy=100.0, sell=0.0),
+        _flow("YY", 0, buy=50.0, sell=0.0),
+        _flow("PD", 0, buy=80.0, sell=0.0),
+    ]
+
+    assert [f.broker_code for f in builder._local_flows(flows)] == ["PD"]
+    assert [f.broker_code for f in builder._foreign_flows(flows)] == ["XX", "YY"]
+
+
+def test_fallback_when_yaml_omits_broker_classification():
+    """Omitting broker_classification from YAML falls back to DEFAULT_FOREIGN_BROKER_CODES."""
+    from src.application.services.institutional_accumulation_evidence_builder import (
+        DEFAULT_FOREIGN_BROKER_CODES,
+    )
+
+    raw = {"institutional_accumulation": {"evidence_status": "DIAGNOSTIC"}}
+    config = InstitutionalAccumulationConfig.from_mapping(raw)
+    assert config.foreign_broker_codes == DEFAULT_FOREIGN_BROKER_CODES

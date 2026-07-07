@@ -72,6 +72,14 @@ _DEFAULT_CONFIG_PATH = (
 # --------------------------------------------------------------------------- #
 # Request / config dataclasses
 # --------------------------------------------------------------------------- #
+
+def _parse_foreign_broker_codes(block: dict) -> frozenset[str]:
+    raw = (block.get("broker_classification") or {}).get("foreign_broker_codes")
+    if raw is None:
+        return DEFAULT_FOREIGN_BROKER_CODES
+    return frozenset(c.upper().strip() for c in raw)
+
+
 @dataclass(frozen=True)
 class InstitutionalAccumulationEvidenceRequest:
     ticker: str
@@ -96,6 +104,7 @@ class InstitutionalAccumulationConfig:
     foreign_track_weights: dict[str, float]
     domestic_track_weights: dict[str, float]
     track_weights: dict[str, float]
+    foreign_broker_codes: frozenset[str] = DEFAULT_FOREIGN_BROKER_CODES
 
     def validate(self) -> None:
         """Raise ValueError if any weight group does not sum to 1.00."""
@@ -146,6 +155,7 @@ class InstitutionalAccumulationConfig:
             track_weights={
                 str(k): float(v) for k, v in (block.get("track_weights") or {}).items()
             },
+            foreign_broker_codes=_parse_foreign_broker_codes(block),
         )
 
 
@@ -210,7 +220,7 @@ class InstitutionalAccumulationEvidenceBuilder:
         self._foreign_codes = (
             foreign_broker_codes
             if foreign_broker_codes is not None
-            else DEFAULT_FOREIGN_BROKER_CODES
+            else self._config.foreign_broker_codes
         )
 
     # ---------------------------------------------------------------- config

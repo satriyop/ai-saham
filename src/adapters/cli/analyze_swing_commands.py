@@ -215,6 +215,7 @@ def _print_swing_output(
     market_context_trade_setup_preview=None,
     with_technical_gate: bool = False,
     sector_context_evidence=None,
+    institutional_accumulation_evidence=None,
 ) -> None:
     from src.adapters.cli.analyze_swing_display import print_swing_output
 
@@ -251,6 +252,7 @@ def _print_swing_output(
         market_context_risk_preview=market_context_risk_preview,
         market_context_trade_setup_preview=market_context_trade_setup_preview,
         sector_context_evidence=sector_context_evidence,
+        institutional_accumulation_evidence=institutional_accumulation_evidence,
         config=_DISPLAY_CONFIG,
         with_technical_gate=with_technical_gate,
     )
@@ -536,6 +538,7 @@ def swing(
         market_context_trade_setup_preview=verdict.market_context_trade_setup_preview,
         with_technical_gate=with_technical_gate,
         sector_context_evidence=evidence.sector_context_evidence,
+        institutional_accumulation_evidence=evidence.institutional_accumulation_evidence,
     )
 
 
