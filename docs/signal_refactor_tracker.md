@@ -73,7 +73,7 @@ SignalEngine refactor. Phases A1–H are closed. Phase I is the active target.
 | D | Strategy Evidence Harness | Done (2026-07-06) | Diagnostic-only strategy evidence harness. 2424 tests pass. |
 | E | Institutional Accumulation Evidence | Done (2026-07-06) | Two-track institutional flow evidence, diagnostic-only. 2457 tests pass. |
 | F | Minimal Ticker Profile Diagnostics | Done (2026-07-06) | Deterministic ticker behavior classifier, diagnostic-only. 2489 tests pass. |
-| G | Simplified Alpha/Trigger Split | Done (2026-07-06) | Four canonical Alpha/Trigger slots configured; market/company slots start DIAGNOSTIC/unavailable until producers feed them. |
+| G | Simplified Alpha/Trigger Split | Done (2026-07-06) | Four canonical Alpha/Trigger slots configured; `market_context` slot has Phase H sector-context as DIAGNOSTIC producer (zero scoring authority); `company_quality_context` remains unavailable/deferred. |
 | H | Sector Context | Done (2026-07-06) | Local-universe sector-relative return, breadth, ticker-vs-sector RS; DIAGNOSTIC-only; 2564 tests pass. |
 | I | Full Walk-Forward Calibration And Expanded Tunables | In Progress (readiness audit) | Audit-first opening; no tuning patches or evidence promotion until OOS readiness is proven. |
 
@@ -111,11 +111,10 @@ All open items across all phases. This is the canonical list — phase sections 
       10 tests, 2598 total pass. Covers CNFB wiring, sector peer path, and
       structural key-presence guard distinguishing "key absent" from "key present
       with None".)_
-- [x] CLI adapter regression tests for Phase E evidence rendering. _(Implemented
-      2026-07-07: ALPHA/TRIGGER DETAIL and SECTOR CONTEXT panels in
-      `analyze_swing_display.py`; 23 new tests in
-      `tests/adapters/cli/test_swing_display_alpha_sector.py`, 2621 total pass.
-      Adapter-only; no scoring, weighting, cache, or policy logic touched.)_
+- [ ] CLI adapter rendering for `InstitutionalAccumulationEvidence` / `ia_*`
+      foreign-vs-domestic track details. _(Alpha/Trigger and Sector Context
+      panels added 2026-07-07 close Phase G and Phase H display items
+      respectively; Phase E `ia_*` detail rendering remains unimplemented.)_
 
 ### Phase G
 - [ ] Phase D/E/F diagnostic evidence not yet promoted into production scoring.
