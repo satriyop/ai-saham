@@ -98,25 +98,24 @@ with "future improvement". Nothing has been deleted; only reclassified.
 These are the only items that block Phase I completion. Everything else below
 is either safe to ignore for now or explicitly deferred.
 
-> **Current blocker: 0 SWING_10D forward labels available locally as of 2026-07-07.**
-> Candle data ends on 2026-07-07; SWING_10D labels require 10 future trading sessions.
-> The nightly cron accumulates live observations and labels automatically. Historical
-> labels can also be generated from past candles, but only after saved historical
-> `candidate_observations` exist for those signal dates.
+> **Current blocker: 0 matching target labels available locally as of 2026-07-07.**
+> 5,760 forward labels have been generated via historical backfill (Jan 1 to Jun 15, 2026).
+> However, because there is no historical fundamentals data in the cache prior to
+> June/July 2026, all backfilled observations resolve to `tp_market_cap_bucket: UNKNOWN`.
+> Consequently, 0 labeled target rows match the "large" market-cap bucket requirement.
+> The nightly EOD cron automatically accumulates live observations with full fundamentals
+> going forward, which will naturally yield matching targets.
 
-- [ ] **SWING_10D forward labels unavailable.** Labels cannot be generated until
-      10 future trading sessions are captured. Nightly cron running; no manual
-      action needed for live observations. Historical labels remain blocked for
-      any date that has candles but no saved signal observation; backfill now
-      creates those observations first.
-- [ ] **Labeled target attribution blocked until labels exist.** 120 observation
-      rows matching `foreign_institutional` / `large` / `SWING_10D` resolve
-      correctly; what is blocked is labeled attribution (0 labeled rows).
-      Unblocks automatically when cron delivers labels.
-- [ ] **Patch eligibility blocked until labels exist.** `saham analyze signal-readiness`
-      is implemented and reports observations, label counts, and blockers.
-      Patch eligibility itself remains false until SWING_10D labels exist.
-      Unblocks automatically.
+- [ ] **SWING_10D forward labels generated, but target matching is blocked.**
+      5,760 labels generated from historical dates, but 0 match the target filter.
+      Live observations captured by the EOD cron will accumulate matching targets
+      as future candles deliver labels.
+- [ ] **Labeled target attribution blocked.** 120 observation rows matching
+      `foreign_institutional` / `large` / `SWING_10D` are ready, but labeled
+      target count remains 0. Unblocks automatically as new live labels accumulate.
+- [ ] **Patch eligibility blocked.** `saham analyze signal-readiness` is implemented
+      and reports 5,760 total labels, 0 labeled targets, and patch-eligible: false.
+      Unblocks automatically as live labels match the target filter.
 - [ ] **Tuning patches blocked until readiness passes.** No tuning patches or config
       changes may be proposed until `patch_eligible: true` is reported.
 - [ ] **Evidence promotion blocked until OOS proof exists.** All Phase D–H
@@ -690,9 +689,16 @@ out-of-sample proof justify manual promotion through validator-bounded config.
         ticker notation use cached point-in-time reads (`fetched_date <=
         as_of_date`) and return unavailable if only future snapshots exist.
         Fundamentals and shareholding were already verified as point-in-time.
+      - Backfill smoke test and readiness audit run (2026-07-07):
+        - Backfilled LQ45 universe from 2026-01-01 to 2026-06-15 (102 dates).
+        - Saved 13,770 historical observations and generated 4,590 SWING_10D labels.
+        - Verified that point-in-time lookups functioned correctly; because the local
+          cache contains no fundamentals snapshots prior to 2026-07-07, all historical
+          observations resolved to `tp_market_cap_bucket: UNKNOWN`.
+        - Labeled target count remains 0; patch eligibility remains false (not eligible).
 - [ ] Label readiness remains blocked until enough future sessions exist for
-      `SWING_10D`; no tuning patches or evidence promotion before
-      patch-eligible OOS proof.
+      live observations under `SWING_10D`; no tuning patches or evidence
+      promotion before patch-eligible OOS proof.
 
 ### Verification
 
