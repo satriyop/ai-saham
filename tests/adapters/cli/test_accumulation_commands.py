@@ -137,6 +137,70 @@ def test_screen_accum_delegates_workflow_construction_to_builder(monkeypatch):
     assert captured["request"].tickers == ["BBCA"]
 
 
+def test_screen_accum_multi_uses_canonical_observation_request_builder(monkeypatch):
+    captured = {"requests": []}
+
+    class FakeUseCase:
+        def execute(self, request):
+            captured["requests"].append(request)
+            return AccumulationScreenResponse(
+                candidates=[_candidate(window_days=request.window_days)],
+                screened_at=date(2026, 6, 28),
+                window_days=request.window_days,
+                total_tickers_checked=len(request.tickers),
+                tickers_skipped=0,
+                provider="fake",
+            )
+
+    monkeypatch.setattr(
+        accum_cli,
+        "create_accumulation_screen_workflow",
+        lambda **kwargs: SimpleNamespace(
+            use_case=FakeUseCase(),
+            broker_repository=FakeBrokerSummaryRepository([]),
+            market_repository=object(),
+        ),
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "screen",
+            "accum",
+            "BBCA",
+            "--multi",
+            "--windows",
+            "7,30",
+            "--min-piotroski",
+            "5",
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert [request.window_days for request in captured["requests"]] == [7, 30]
+    request = captured["requests"][0]
+    assert request.tickers == ["BBCA"]
+    assert request.min_net_buy_days == 1
+    assert request.min_foreign_flow_score == 0.0
+    assert request.min_foreign_flow_score_enabled is False
+    assert request.min_signal_score == 0.0
+    assert request.min_signal_score_enabled is False
+    assert request.min_piotroski == 5
+    assert request.tier1_broker_codes == accum_cli._SC.tier1_broker_codes
+    assert request.bci_cluster_min_count == accum_cli._SC.bci_cluster_min_count
+    assert request.bci_stable_min_count == accum_cli._SC.bci_stable_min_count
+    assert request.min_market_cap_idr == accum_cli._SC.min_market_cap_idr
+    assert request.resistance_gate_enabled == accum_cli._SC.resistance_gate_enabled
+    assert request.resistance_headroom_min_pct == accum_cli._SC.resistance_headroom_min_pct
+    assert request.ex_date_warning_days == accum_cli._SC.ex_date_warning_days
+    assert request.sector_breadth_enabled == accum_cli._SC.sector_breadth_enabled
+    assert request.sector_breadth_threshold == accum_cli._SC.sector_breadth_threshold
+    assert request.sector_breadth_bonus_pts == accum_cli._SC.sector_breadth_bonus_pts
+    assert request.sector_breadth_min_tickers == accum_cli._SC.sector_breadth_min_tickers
+
+
 def test_screen_broker_quality_counts_local_noise_brokers():
     quality_batch = compute_broker_quality_batch(
         tickers=["BBCA"],

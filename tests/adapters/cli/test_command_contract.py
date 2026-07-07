@@ -58,6 +58,7 @@ EXPECTED_COMMANDS: dict[tuple[str, ...], tuple[str, ...]] = {
         "accum-audit",
         "swing-compare",
         "signal-audit",
+        "signal-backfill-observations",
         "signal-labels",
         "signal-readiness",
         "signal-replay",
@@ -270,6 +271,16 @@ def test_signal_readiness_help_exposes_target_option():
 
     assert result.exit_code == 0
     assert "--target" in result.stdout
+
+
+def test_signal_backfill_observations_help_exposes_required_options():
+    result = runner.invoke(app, ["analyze", "signal-backfill-observations", "--help"])
+
+    assert result.exit_code == 0
+    assert "--universe" in result.stdout
+    assert "--start" in result.stdout
+    assert "--end" in result.stdout
+    assert "--generate-labels" in result.stdout
 
 
 def test_removed_legacy_paths_stay_removed():

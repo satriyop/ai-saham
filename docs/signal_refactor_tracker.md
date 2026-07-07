@@ -100,11 +100,15 @@ is either safe to ignore for now or explicitly deferred.
 
 > **Current blocker: 0 SWING_10D forward labels available locally as of 2026-07-07.**
 > Candle data ends on 2026-07-07; SWING_10D labels require 10 future trading sessions.
-> The nightly cron accumulates observations and labels automatically.
+> The nightly cron accumulates live observations and labels automatically. Historical
+> labels can also be generated from past candles, but only after saved historical
+> `candidate_observations` exist for those signal dates.
 
 - [ ] **SWING_10D forward labels unavailable.** Labels cannot be generated until
       10 future trading sessions are captured. Nightly cron running; no manual
-      action needed.
+      action needed for live observations. Historical labels remain blocked for
+      any date that has candles but no saved signal observation; backfill now
+      creates those observations first.
 - [ ] **Labeled target attribution blocked until labels exist.** 120 observation
       rows matching `foreign_institutional` / `large` / `SWING_10D` resolve
       correctly; what is blocked is labeled attribution (0 labeled rows).
@@ -128,6 +132,29 @@ Work that can proceed without touching signal authority, scoring, or tuning.
 
 - [x] CLI adapter regression tests for strategy evidence display.
       _(Done 2026-07-07 — see Phase D open items below.)_
+- [x] Deterministic historical signal-observation backfill implemented:
+      `saham analyze signal-backfill-observations --universe lq45 --start
+      YYYY-MM-DD --end YYYY-MM-DD --horizon SWING_10D --generate-labels
+      --format table|json`.
+      - Uses the application-layer accumulation screen pipeline with
+        `AccumulationScreenRequest.as_of_date`.
+      - Backfill/live observation parity is enforced through the shared
+        application-layer `BuildSignalObservationScreenRequest` builder. Live
+        observation capture remains the canonical policy; historical backfill
+        replays the same policy with only `tickers`, `window_days`, and
+        `as_of_date` varied per historical run.
+      - Persists historical `candidate_observations` before optional label
+        generation.
+      - Optional label generation uses `GenerateSignalForwardLabelsUseCase` only
+        for saved observation dates with enough future candles.
+      - Reruns are safe; raw timestamped observation rows may append, and
+        readiness/reporting paths continue to collapse to latest per ticker for
+        ticker/day label readiness.
+      - Caveat: enrichment providers that do not yet support point-in-time
+        `as_of_date` replay still use the cached enrichment available locally at
+        backfill runtime.
+      - No SignalEngine authority, DecisionPolicy, RiskEngine, tuning patch, or
+        diagnostic evidence promotion change.
 - [ ] CLI adapter rendering regression tests for setup phase / evidence output.
       _(Phase C carry-forward. Adapter-only; no scoring impact.)_
 - [ ] Optional docs / README accuracy cleanup.
@@ -646,6 +673,18 @@ out-of-sample proof justify manual promotion through validator-bounded config.
         target observations 40; raw target rows remain 120; label count 0;
         labeled target count 0; patch-eligible false because SWING_10D labels
         are not available yet.
+- [x] Historical observation backfill command implemented for Phase I readiness:
+      `saham analyze signal-backfill-observations --universe lq45 --start
+      YYYY-MM-DD --end YYYY-MM-DD --horizon SWING_10D --generate-labels`.
+      Backfill creates saved historical observations first, with the current
+      Phase B-H fingerprint surface from the live accumulation screen path.
+      Shared request-builder parity now prevents live/backfill request-policy
+      drift; backfill only overrides `tickers`, `window_days`, and `as_of_date`
+      for historical replay. Labels are generated second and only through the
+      existing forward-label use case when enough future candles exist. The
+      command does not generate tuning patches and does not promote diagnostic
+      evidence. Point-in-time caveat remains for cached enrichment providers
+      that do not yet support `as_of_date`.
 - [ ] Label readiness remains blocked until enough future sessions exist for
       `SWING_10D`; no tuning patches or evidence promotion before
       patch-eligible OOS proof.

@@ -23,6 +23,9 @@ from src.application.services.broker_quality import (
     BrokerQualitySnapshot,
     compute_broker_quality_batch,
 )
+from src.application.services.signal_observation_request_builder import (
+    BuildSignalObservationScreenRequest,
+)
 from src.application.services.strategy_loader import StrategyLoader, StrategyNotFoundError
 from src.application.services.universe_loader import (
     UniverseNotFoundError,
@@ -149,32 +152,17 @@ def _run_multi(
     use_case,
     tickers: list[str],
     windows: list[int],
-    base_request: AccumulationScreenRequest,
+    request_builder: BuildSignalObservationScreenRequest,
 ) -> dict[int, AccumulationScreenResponse]:
     """Run screener for each window. Disable score filters to get full picture."""
+    multi_builder = request_builder.with_score_filters_disabled()
     return {
-        w: use_case.execute(AccumulationScreenRequest(
-            tickers=tickers,
-            window_days=w,
-            min_net_buy_days=base_request.min_net_buy_days,
-            min_foreign_flow_score=0.0,
-            min_foreign_flow_score_enabled=False,
-            min_signal_score=0.0,
-            min_signal_score_enabled=False,
-            rsi_period=base_request.rsi_period,
-            sma_period=base_request.sma_period,
-            tier1_broker_codes=base_request.tier1_broker_codes,
-            bci_cluster_min_count=base_request.bci_cluster_min_count,
-            bci_stable_min_count=base_request.bci_stable_min_count,
-            min_market_cap_idr=base_request.min_market_cap_idr,
-            resistance_gate_enabled=base_request.resistance_gate_enabled,
-            resistance_headroom_min_pct=base_request.resistance_headroom_min_pct,
-            ex_date_warning_days=base_request.ex_date_warning_days,
-            sector_breadth_enabled=base_request.sector_breadth_enabled,
-            sector_breadth_threshold=base_request.sector_breadth_threshold,
-            sector_breadth_bonus_pts=base_request.sector_breadth_bonus_pts,
-            sector_breadth_min_tickers=base_request.sector_breadth_min_tickers,
-        ))
+        w: use_case.execute(
+            multi_builder.build(
+                tickers=tickers,
+                window_days=w,
+            )
+        )
         for w in windows
     }
 
@@ -316,18 +304,6 @@ def accumulation_run(
 
     resolved_db = db_path or DEFAULT_DB_PATH
 
-    min_foreign_flow_score_enabled = _ASC.min_foreign_flow_score.enabled
-    if min_foreign_flow_score is None:
-        min_foreign_flow_score = _ASC.min_foreign_flow_score.value
-    else:
-        min_foreign_flow_score_enabled = True
-
-    min_signal_score_enabled = _ASC.min_signal_score.enabled
-    if min_signal_score is None:
-        min_signal_score = _ASC.min_signal_score.value
-    else:
-        min_signal_score_enabled = True
-
     try:
         ticker_list = resolve_tickers(
             universe=universe,
@@ -358,27 +334,18 @@ def accumulation_run(
     market_repo = workflow.market_repository
     use_case = workflow.use_case
 
-    base_request = AccumulationScreenRequest(
-        tickers=ticker_list,
-        window_days=window,
+    request_builder = BuildSignalObservationScreenRequest.from_configs(
+        swing_config=_SC,
+        accumulation_screener_config=_ASC,
         min_net_buy_days=max(1, min_streak),
         min_foreign_flow_score=min_foreign_flow_score,
-        min_foreign_flow_score_enabled=min_foreign_flow_score_enabled,
         min_signal_score=min_signal_score,
-        min_signal_score_enabled=min_signal_score_enabled,
         min_piotroski=min_piotroski,
-        tier1_broker_codes=_SC.tier1_broker_codes,
-        bci_cluster_min_count=_SC.bci_cluster_min_count,
-        bci_stable_min_count=_SC.bci_stable_min_count,
-        min_market_cap_idr=_SC.min_market_cap_idr,
-        resistance_gate_enabled=_SC.resistance_gate_enabled,
-        resistance_headroom_min_pct=_SC.resistance_headroom_min_pct,
-        ex_date_warning_days=_SC.ex_date_warning_days,
-        sector_breadth_enabled=_SC.sector_breadth_enabled,
-        sector_breadth_threshold=_SC.sector_breadth_threshold,
-        sector_breadth_bonus_pts=_SC.sector_breadth_bonus_pts,
-        sector_breadth_min_tickers=_SC.sector_breadth_min_tickers,
         strategy_name=strategy,
+    )
+    base_request = request_builder.build(
+        tickers=ticker_list,
+        window_days=window,
     )
 
     if multi:
@@ -388,7 +355,7 @@ def accumulation_run(
                 f"Screening {len(ticker_list)} tickers | windows: "
                 f"{', '.join(str(w) + ' sessions' for w in window_list)}..."
             )
-        multi_results = _run_multi(use_case, ticker_list, window_list, base_request)
+        multi_results = _run_multi(use_case, ticker_list, window_list, request_builder)
         screened_at = next(iter(multi_results.values())).screened_at
         broker_quality = compute_broker_quality_batch(
             tickers=ticker_list,
