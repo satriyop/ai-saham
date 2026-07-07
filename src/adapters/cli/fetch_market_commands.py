@@ -943,11 +943,17 @@ def fetch_market(
         if broker_provider_name == "stockbit"
         else _fetch_candles
     )
+    _read_coverage_fn = (
+        functools.partial(_read_enrichment_pit_coverage, resolved_db)
+        if enrichment_available
+        else None
+    )
     use_case = FetchMarketRefreshUseCase(
         fetch_candles=_candles_fn,
         fetch_broker=_fetch_broker,
         fetch_meta=_fetch_meta,
         fetch_enrichment=_fetch_enrichment,
+        read_pit_coverage=_read_coverage_fn,
     )
     try:
         response = use_case.execute(
@@ -1026,6 +1032,137 @@ def fetch_market(
         market_is_open=_mstatus.is_open if _mstatus else False,
     )
 
+    if response.pit_coverage:
+        _render_enrichment_pit_coverage(response.pit_coverage)
+
     # Fetch MCE global context tickers (VIX, EIDO, USD/IDR) using no-suffix Yahoo provider
     if not broker_only:
         _fetch_global_context_tickers(resolved_db, days=days)
+
+
+def _read_enrichment_pit_coverage(db_path: Path):
+    """Delegate PIT coverage read to the infrastructure persistence layer."""
+    from src.infrastructure.persistence.sqlite_enrichment_pit_coverage import (
+        read_enrichment_pit_coverage,
+    )
+    return read_enrichment_pit_coverage(db_path)
+
+
+def _render_enrichment_pit_coverage(coverage) -> None:
+    """Print a per-table PIT coverage summary to stdout."""
+    w = 26
+    typer.echo("\nPoint-in-time enrichment coverage:")
+    typer.echo(f"  {'TABLE':<{w}} {'SNAPSHOTS':>10} {'LATEST':>12} {'TICKERS (LATEST)':>18}")
+    typer.echo(f"  {'─'*w} {'─'*10} {'─'*12} {'─'*18}")
+    for row in coverage:
+        typer.echo(
+            f"  {row.table:<{w}} {row.snapshot_count:>10} "
+            f"{str(row.latest_date or 'n/a'):>12} {row.tickers_in_latest:>18}"
+        )
+    typer.echo("")
+    typer.echo(
+        "Note: Stockbit returns current values only — no historical API exists. "
+        "Observations before the first snapshot will have UNKNOWN market_cap_bucket "
+        "and enrichment fields. Run this command periodically to build a PIT history."
+    )
+
+
+def fetch_enrichment_history(
+    tickers: Annotated[
+        Optional[list[str]],
+        typer.Argument(help="Explicit ticker symbols (e.g. BBCA BBRI)"),
+    ] = None,
+    universe: Annotated[
+        Optional[str],
+        typer.Option("--universe", "-u", help="Universe name — see `saham fetch universe list`"),
+    ] = None,
+    db_path: Annotated[
+        Optional[Path],
+        typer.Option("--db", help="SQLite database path"),
+    ] = None,
+    force: Annotated[
+        bool,
+        typer.Option("--force/--no-force", help="Force refresh even if cached today"),
+    ] = True,
+) -> None:
+    """Store a timestamped enrichment snapshot for all universe tickers.
+
+    Fetches current fundamental, shareholding, analyst, notation, and forward-estimates
+    data from Stockbit and stores each fetch with today's date. Re-running this
+    command on a different day adds a new PIT snapshot without overwriting prior rows.
+
+    IMPORTANT: Stockbit does not provide historical values. Only TODAY's data
+    can be retrieved. Historical observations before the first snapshot will
+    return UNKNOWN for market_cap_bucket, analyst consensus, shareholding, etc.
+    Run this command regularly (daily or weekly) to build a useful PIT history.
+
+    Examples:
+        saham fetch enrichment-history --universe lq45
+        saham fetch enrichment-history BBCA BBRI BMRI
+    """
+    from src.application.use_case.fetch_enrichment_history_use_case import (
+        FetchEnrichmentHistoryRequest,
+        FetchEnrichmentHistoryUseCase,
+    )
+
+    resolved_db = db_path or Path(APP_CFG.storage.db_path)
+    today = date.today()
+
+    try:
+        ticker_list = resolve_tickers(
+            universe=universe,
+            explicit=list(tickers) if tickers else [],
+            db_path=resolved_db,
+        )
+    except UniverseNotFoundError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+    except FileNotFoundError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+    if not ticker_list:
+        typer.echo(
+            "No tickers to update. Specify --universe or provide ticker arguments.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    broker_provider, broker_provider_name = _create_broker_provider(None)
+    if broker_provider_name != "stockbit":
+        typer.echo(
+            "Error: Stockbit session required for enrichment fetch. "
+            "Log in with `saham fetch stockbit login` first.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    universe_label = universe or f"{len(ticker_list)} tickers"
+    typer.echo(f"\nFetching enrichment snapshot  universe={universe_label}  date={today}")
+    typer.echo("  (Stockbit provides current values only; prior snapshots are preserved)")
+    typer.echo("")
+
+    # Wire callables — provider construction stays in the adapter
+    enrich_one = functools.partial(
+        _fetch_enrichment, db_path=resolved_db, broker_provider=broker_provider, force_refresh=force
+    )
+    read_coverage = functools.partial(_read_enrichment_pit_coverage, resolved_db)
+
+    use_case = FetchEnrichmentHistoryUseCase(
+        enrich_ticker=enrich_one,
+        read_pit_coverage=read_coverage,
+    )
+    response = use_case.execute(
+        FetchEnrichmentHistoryRequest(tickers=ticker_list, force_refresh=force)
+    )
+
+    for ticker, status in response.results:
+        color = typer.colors.RED if status.startswith("ERR:") else typer.colors.GREEN
+        typer.echo(typer.style(f"  {ticker:<8} {status}", fg=color))
+
+    typer.echo("")
+    typer.echo(
+        f"Done: {response.ok_count} ok"
+        + (f", {response.fail_count} failed" if response.fail_count else "")
+    )
+    _render_enrichment_pit_coverage(response.coverage)

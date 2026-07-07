@@ -3,7 +3,7 @@
 _Design rationale: `docs/signal_refactor.md`_
 _Phase plan: `docs/signal_refactor_phases.md`_
 _Current implementation target: Phase I readiness audit_
-_Updated: 2026-07-07 — Diagnostic target `foreign_institutional_accumulation_SWING_10D` added; setup_family wildcard bug fixed; 12 new tests, 2722 total pass_
+_Updated: 2026-07-07 — PIT enrichment schema fix for fundamentals + shareholding; `saham fetch enrichment-history` command added; 6 new PIT tests (151 total for these test modules, 2722+ total suite pass)_
 
 This tracker records implementation state and the concrete checklist for the
 SignalEngine refactor. Phases A1–H are closed. Phase I is the active target.
@@ -183,11 +183,25 @@ Work that can proceed without touching signal authority, scoring, or tuning.
       - Reruns are safe; raw timestamped observation rows may append, and
         readiness/reporting paths continue to collapse to latest per ticker for
         ticker/day label readiness.
-      - Point-in-time enrichment status:
-        analyst consensus, forward estimates, and ticker notation now read the
-        latest cached snapshot with `fetched_date <= as_of_date` and return
-        unavailable when no prior snapshot exists. Fundamentals and
-        shareholding were verified as already point-in-time via `as_of_date`.
+      - Point-in-time enrichment status (updated 2026-07-07):
+        analyst consensus, forward estimates, and ticker notation use
+        `date(fetched_date) <= date(as_of_date)` queries and were already
+        multi-row PIT tables.
+        Fundamentals (`company_fundamentals`) and shareholding
+        (`shareholding_composition`) had `ticker TEXT PRIMARY KEY` — single
+        row per ticker — and the backtest guard (`fetched_at > as_of_date →
+        return None`) was useless when only today's row existed. Both tables
+        are now converted to multi-row `UNIQUE(ticker, fetched_date)` via
+        migrations 3-6 (pattern: create PIT temp table → copy → drop old →
+        rename). `_read_cache()` now uses PIT queries for both. A new
+        `saham fetch enrichment-history --universe lq45` command stores
+        periodic snapshots with today's fetched_date.
+        PROVIDER LIMITATION: Stockbit returns current values only; no
+        historical fundamentals or shareholding API exists. Historical
+        observations before the first snapshot stored by
+        `enrichment-history` will continue to return UNKNOWN for
+        market_cap_bucket and shareholding data. Run
+        `enrichment-history` regularly going forward to build a PIT history.
       - No SignalEngine authority, DecisionPolicy, RiskEngine, tuning patch, or
         diagnostic evidence promotion change.
 - [ ] CLI adapter rendering regression tests for setup phase / evidence output.
@@ -276,6 +290,15 @@ in the phase tracker sections below.
 - [x] Phase D CLI adapter regression tests for strategy evidence display:
       29 tests, all 4 outcomes, DIAGNOSTIC disclaimer, coexistence with backtest
       stats. _(2026-07-07)_
+- [x] PIT enrichment schema fix: `company_fundamentals` and `shareholding_composition`
+      converted from single-row (`ticker PRIMARY KEY`) to multi-row
+      (`UNIQUE(ticker, fetched_date)`) via migrations 3-6. `_read_cache()` in both
+      providers now uses `date(fetched_date) <= date(as_of_date)` PIT query.
+      Shareholding uses `COALESCE(report_date, fetched_date)` as boundary.
+      `saham fetch enrichment-history --universe lq45` command added to store
+      periodic enrichment snapshots. Limitation documented: Stockbit provides
+      current values only; no historical fundamentals API exists. 6 new tests.
+      _(2026-07-07)_
 
 ---
 

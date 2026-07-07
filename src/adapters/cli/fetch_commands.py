@@ -14,7 +14,7 @@ from src.adapters.cli.fetch_broker_commands import (
     broker_top_foreign,
 )
 from src.adapters.cli.fetch_iev_commands import collect_iev
-from src.adapters.cli.fetch_market_commands import fetch_market
+from src.adapters.cli.fetch_market_commands import fetch_enrichment_history, fetch_market
 from src.adapters.cli.fetch_status_commands import status
 from src.adapters.cli.fetch_stockbit_commands import stockbit_app
 from src.adapters.cli.fetch_universe_commands import universe_app
@@ -27,6 +27,7 @@ fetch_app = typer.Typer(
 )
 
 fetch_app.command("market")(fetch_market)
+fetch_app.command("enrichment-history")(fetch_enrichment_history)
 fetch_app.command("broker")(broker_fetch)
 fetch_app.command("broker-import")(broker_import)
 fetch_app.command("broker-history")(broker_history)

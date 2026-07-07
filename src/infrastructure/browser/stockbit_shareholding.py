@@ -86,10 +86,39 @@ CREATE TABLE IF NOT EXISTS shareholding_composition (
 )
 """
 
+_CREATE_TABLE_PIT = """
+CREATE TABLE IF NOT EXISTS shareholding_composition_pit (
+    ticker TEXT NOT NULL,
+    fetched_date TEXT NOT NULL,
+    report_date TEXT,
+    institution_pct REAL,
+    individual_pct REAL,
+    top_holder_name TEXT,
+    top_holder_pct REAL,
+    total_shares INTEGER,
+    total_shares_formatted TEXT,
+    UNIQUE(ticker, fetched_date)
+)
+"""
+
 _MIGRATIONS: list[tuple[int, str]] = [
     (0, _CREATE_TABLE),
     (1, "ALTER TABLE shareholding_composition ADD COLUMN total_shares INTEGER"),
     (2, "ALTER TABLE shareholding_composition ADD COLUMN total_shares_formatted TEXT"),
+    # Migrations 3-6: convert from single-row (ticker PRIMARY KEY) to multi-row
+    # PIT table keyed by (ticker, fetched_date). report_date (IDX quarterly filing
+    # date) is used as the PIT boundary in historical replay; fetched_date is the
+    # fallback when report_date is absent.
+    (3, _CREATE_TABLE_PIT),
+    (
+        4,
+        "INSERT OR IGNORE INTO shareholding_composition_pit "
+        "SELECT ticker, fetched_date, report_date, institution_pct, individual_pct, "
+        "top_holder_name, top_holder_pct, total_shares, total_shares_formatted "
+        "FROM shareholding_composition",
+    ),
+    (5, "DROP TABLE shareholding_composition"),
+    (6, "ALTER TABLE shareholding_composition_pit RENAME TO shareholding_composition"),
 ]
 
 
@@ -198,7 +227,8 @@ class StockbitShareholdingProvider(ShareholdingProvider, StockbitCachingProvider
         try:
             with sqlite3.connect(self._db_path) as conn:
                 row = conn.execute(
-                    "SELECT fetched_date FROM shareholding_composition WHERE ticker=?",
+                    "SELECT fetched_date FROM shareholding_composition "
+                    "WHERE ticker=? ORDER BY date(fetched_date) DESC, fetched_date DESC LIMIT 1",
                     (ticker.upper(),),
                 ).fetchone()
             if not row:
@@ -238,28 +268,33 @@ class StockbitShareholdingProvider(ShareholdingProvider, StockbitCachingProvider
     def _read_cache(
         self, ticker: str, as_of_date: date | None = None
     ) -> ShareholdingComposition | None:
+        where = "WHERE ticker=?"
+        params: tuple = (ticker,)
+        if as_of_date is not None:
+            # PIT mode: use report_date (IDX quarterly filing date) as the primary
+            # boundary because it is when the data became publicly available.
+            # Fall back to fetched_date when report_date is absent.
+            # Never fall back to a future row — look-ahead bias in historical replay.
+            where += " AND COALESCE(date(report_date), date(fetched_date)) <= date(?)"
+            params = (ticker, as_of_date.isoformat())
         try:
             with sqlite3.connect(self._db_path) as conn:
                 row = conn.execute(
                     "SELECT fetched_date, report_date, institution_pct, individual_pct, "
                     "top_holder_name, top_holder_pct, total_shares, total_shares_formatted "
-                    "FROM shareholding_composition WHERE ticker=?",
-                    (ticker,),
+                    "FROM shareholding_composition "
+                    f"{where} "
+                    "ORDER BY COALESCE(date(report_date), date(fetched_date)) DESC, "
+                    "fetched_date DESC "
+                    "LIMIT 1",
+                    params,
                 ).fetchone()
             if not row:
                 return None
             fetched_at = _parse_fetched_at(row[0])
             if fetched_at is None:
                 return None
-            if as_of_date is not None:
-                # Backtest guard: prefer report_date (the IDX filing date) as the
-                # boundary — it is semantically more accurate than fetched_date.
-                # Fall back to fetched_date when report_date is absent.
-                row_report_date = _parse_date(row[1] or "")
-                boundary_date = row_report_date or fetched_at.date()
-                if boundary_date > as_of_date:
-                    return None
-            elif (datetime.now() - fetched_at).days > _CACHE_TTL_DAYS:
+            if as_of_date is None and (datetime.now() - fetched_at).days > _CACHE_TTL_DAYS:
                 return None
             return ShareholdingComposition(
                 ticker=ticker,

@@ -58,10 +58,43 @@ CREATE TABLE IF NOT EXISTS company_fundamentals (
 )
 """
 
+_CREATE_TABLE_PIT = """
+CREATE TABLE IF NOT EXISTS company_fundamentals_pit (
+    ticker              TEXT NOT NULL,
+    fetched_date        TEXT NOT NULL,
+    pe_ratio_ttm        REAL,
+    roe_ttm             REAL,
+    net_profit_margin   REAL,
+    revenue_yoy_growth  REAL,
+    piotroski_f_score   INTEGER,
+    dividend_yield      REAL,
+    week52_high         REAL,
+    week52_low          REAL,
+    near_52w_high_rank  REAL,
+    market_cap_idr      INTEGER,
+    pbv                 REAL,
+    UNIQUE(ticker, fetched_date)
+)
+"""
+
 _MIGRATIONS: list[tuple[int, str]] = [
     (0, _CREATE_TABLE),
     (1, "ALTER TABLE company_fundamentals ADD COLUMN market_cap_idr INTEGER"),
     (2, "ALTER TABLE company_fundamentals ADD COLUMN pbv REAL"),
+    # Migrations 3-6: convert from single-row (ticker PRIMARY KEY) to multi-row
+    # PIT table keyed by (ticker, fetched_date). Follows the same pattern as
+    # analyst_cache migrations 4-8. Existing rows are preserved.
+    (3, _CREATE_TABLE_PIT),
+    (
+        4,
+        "INSERT OR IGNORE INTO company_fundamentals_pit "
+        "SELECT ticker, fetched_date, pe_ratio_ttm, roe_ttm, net_profit_margin, "
+        "revenue_yoy_growth, piotroski_f_score, dividend_yield, week52_high, "
+        "week52_low, near_52w_high_rank, market_cap_idr, pbv "
+        "FROM company_fundamentals",
+    ),
+    (5, "DROP TABLE company_fundamentals"),
+    (6, "ALTER TABLE company_fundamentals_pit RENAME TO company_fundamentals"),
 ]
 
 
@@ -214,7 +247,8 @@ class StockbitFundamentalsProvider(FundamentalsProvider, StockbitCachingProvider
         try:
             with sqlite3.connect(self._db_path) as conn:
                 row = conn.execute(
-                    "SELECT fetched_date FROM company_fundamentals WHERE ticker=? LIMIT 1",
+                    "SELECT fetched_date FROM company_fundamentals "
+                    "WHERE ticker=? ORDER BY date(fetched_date) DESC, fetched_date DESC LIMIT 1",
                     (ticker.upper(),),
                 ).fetchone()
             if not row:
@@ -254,28 +288,31 @@ class StockbitFundamentalsProvider(FundamentalsProvider, StockbitCachingProvider
     def _read_cache(
         self, ticker: str, as_of_date: date | None = None
     ) -> CompanyFundamentals | None:
+        where = "WHERE ticker=?"
+        params: tuple = (ticker,)
+        if as_of_date is not None:
+            # PIT mode: return the latest snapshot whose fetch date is on or before
+            # as_of_date. Never fall back to a future row — that would introduce
+            # look-ahead bias in historical replay.
+            where += " AND date(fetched_date) <= date(?)"
+            params = (ticker, as_of_date.isoformat())
         try:
             with sqlite3.connect(self._db_path) as conn:
                 row = conn.execute(
                     "SELECT fetched_date, pe_ratio_ttm, roe_ttm, net_profit_margin, "
                     "revenue_yoy_growth, piotroski_f_score, dividend_yield, "
                     "week52_high, week52_low, near_52w_high_rank, market_cap_idr, pbv "
-                    "FROM company_fundamentals WHERE ticker=?",
-                    (ticker,),
+                    f"FROM company_fundamentals {where} "
+                    "ORDER BY date(fetched_date) DESC, fetched_date DESC "
+                    "LIMIT 1",
+                    params,
                 ).fetchone()
             if not row:
                 return None
             fetched_at = _parse_fetched_at(row[0])
             if fetched_at is None:
                 return None
-            if as_of_date is not None:
-                # Backtest guard: only use data that was fetched on or before the
-                # historical replay date. Data fetched after as_of_date is future
-                # information relative to the backtest — return None to prevent
-                # look-ahead bias.
-                if fetched_at.date() > as_of_date:
-                    return None
-            elif (datetime.now() - fetched_at).days > _CACHE_TTL_DAYS:
+            if as_of_date is None and (datetime.now() - fetched_at).days > _CACHE_TTL_DAYS:
                 return None
             f_score_raw = row[5]
             return CompanyFundamentals(

@@ -10,12 +10,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from src.application.services.universe_loader import resolve_tickers
+from src.application.use_case.fetch_enrichment_history_use_case import (
+    EnrichmentPitTableCoverage,
+)
 from src.domain.value_objects.benchmark_symbol import (
     CANONICAL_BENCHMARK_TICKER,
     canonicalize_ticker,
     is_benchmark_ticker,
 )
-from src.application.services.universe_loader import resolve_tickers
 
 BENCHMARK_TICKER = CANONICAL_BENCHMARK_TICKER
 
@@ -67,6 +70,7 @@ class FetchMarketRefreshResponse:
     broker_backfills: list[str] = field(default_factory=list)
     meta_changed: list[str] = field(default_factory=list)
     enrichment_available: bool = False
+    pit_coverage: list[EnrichmentPitTableCoverage] = field(default_factory=list)
 
 
 class FetchMarketRefreshUseCase:
@@ -78,11 +82,13 @@ class FetchMarketRefreshUseCase:
         fetch_broker: Callable[..., BrokerFetchResult],
         fetch_meta: Callable[..., str],
         fetch_enrichment: Callable[..., str],
+        read_pit_coverage: Callable[[], list[EnrichmentPitTableCoverage]] | None = None,
     ) -> None:
         self._fetch_candles = fetch_candles
         self._fetch_broker = fetch_broker
         self._fetch_meta = fetch_meta
         self._fetch_enrichment = fetch_enrichment
+        self._read_pit_coverage = read_pit_coverage
 
     def execute(
         self,
@@ -194,6 +200,9 @@ class FetchMarketRefreshUseCase:
             ticker for ticker in ticker_list
             if not is_benchmark_ticker(ticker) and not ticker.startswith("^")
         ]
+        pit_coverage: list[EnrichmentPitTableCoverage] = []
+        if enrichment_available and self._read_pit_coverage is not None:
+            pit_coverage = self._read_pit_coverage()
         return FetchMarketRefreshResponse(
             ticker_list=ticker_list,
             stock_tickers_only=stock_tickers_only,
@@ -205,6 +214,7 @@ class FetchMarketRefreshUseCase:
             broker_backfills=broker_backfills,
             meta_changed=meta_changed,
             enrichment_available=enrichment_available,
+            pit_coverage=pit_coverage,
         )
 
     def _with_benchmark_first(self, tickers: list[str]) -> list[str]:

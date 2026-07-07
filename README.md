@@ -67,6 +67,7 @@ A **local-first, production-grade CLI application** for stock analysis focused o
 - **Company Quality Context (Phase G producer)** — Ticker-alpha conviction from forward P/E valuation, analyst consensus, insider net-buy direction, and capped generic seasonality; all axes read from local enrichment (no new fetch). Coverage-weighted aggregate with seasonality-capped contribution. DIAGNOSTIC-only — zero scoring authority until walk-forward OOS proof
 - **Sector Context Evidence (Phase H)** — Local-universe sector diagnostics: equal-weight sector 20d return, breadth, ticker-vs-sector RS, sector regime (BULLISH/NEUTRAL/BEARISH); computed from cached local ticker data, no external provider needed; DIAGNOSTIC-only, fed into Alpha/Trigger re-score; rendered via `saham analyze swing --with-market-detail`
 - **Signal Readiness Audit (Phase I, in progress)** — `saham analyze signal-readiness --target TARGET` reports observation/label counts, IS/OOS split, profit factor, and avg return for a calibration target; diagnostic readiness requires ≥10 OOS labels; patch eligibility requires ≥60 IS + ≥30 OOS labels with profit factor ≥1.15. `saham analyze signal-backfill` replays the accumulation pipeline historically to build observation and label coverage for walk-forward calibration
+- **Point-in-time enrichment workflow** — Signal backfill replay uses enrichment data valid as of the observation date. Run `saham fetch enrichment-history --universe lq45` regularly (weekly or daily) to build a PIT history. All enrichment tables (`company_fundamentals`, `shareholding_composition`, `analyst_cache`, `ticker_notation_cache`, `forward_estimates_cache`) store one row per `(ticker, fetched_date)`. Historical observations before the first enrichment snapshot will resolve to `UNKNOWN` for `market_cap_bucket` and other enrichment fields because Stockbit provides only current values — no historical fundamentals API exists
 - **Hexagonal Architecture** - Clean separation of domain, application, and infrastructure
 
 ---
@@ -111,6 +112,7 @@ saham analyze chart price BBRI --sma 20 --ema 50
 | **`saham view`** | Read-only Browsing | `broker status/flow/top/history/top-foreign/distribution/mappings`, `market-context`, `ticker TICKER` (or just `BBCA`), `universe` |
 | **`saham indicator`**| Technical Math | `compute`, `snapshot`, `create`, `list`, `show`, `delete` |
 | **`saham analyze`** | Insights & Charts | `risk`, `compare`, `sentiment`, `audit`, `regime`, `chart price/rsi/volume`, `swing`, `accum-audit`, `swing-compare`, `signal-labels`, `signal-readiness`, `signal-backfill` |
+| **`saham fetch enrichment-history`** | Enrichment PIT Snapshot | Store a timestamped enrichment snapshot for a universe — run regularly to build a point-in-time history for accurate signal backfill replay |
 | **`saham strategy`** | Strategy Lifecycle| `init`, `validate`, `list`, `create`, `backtest`, `skill generate/check/index` |
 | **`saham trade`** | Paper Trade Workspace | `confirm`, `outcome`, `size`, `backtest-swing`, `tune-swing`, `backtest-intraday`, `log`, `migrate-journal`, `review intraday/swing` |
 
