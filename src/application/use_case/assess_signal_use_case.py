@@ -17,6 +17,19 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date
 
+from src.application.services.company_quality_scoring import (
+    score_analyst as _shared_score_analyst,
+    score_forward_pe as _shared_score_forward_pe,
+    score_insider_activity as _shared_score_insider_activity,
+    score_seasonality as _shared_score_seasonality,
+)
+from src.application.services.signal_scoring_config import (
+    AnalystScoringConfig,
+    BandarScoringConfig,
+    ForwardPeScoringConfig,
+    SeasonalityScoringConfig,
+    SignalScoringConfig,
+)
 from src.application.services.stats import interpolate
 from src.domain.value_objects.alpha_trigger_score import (
     AlphaTriggerScore,
@@ -44,48 +57,10 @@ class SignalMissingDataConfig:
     coverage_warning_missing_factors: int = 3
 
 
-@dataclass(frozen=True)
-class SeasonalityScoringConfig:
-    tailwind_min_avg_return_pct: float = 0.0
-    tailwind_min_win_rate_pct: float = 50.0
-    headwind_max_avg_return_pct: float = 0.0
-    headwind_max_win_rate_pct: float = 50.0
-
-
-@dataclass(frozen=True)
-class AnalystScoringConfig:
-    buy_score_max_points: float = 60.0
-    upside_score_max_points: float = 40.0
-    upside_cap_pct: float = 30.0
-
-
-@dataclass(frozen=True)
-class ForwardPeScoringConfig:
-    very_cheap_pe: float = 10.0
-    cheap_pe: float = 15.0
-    fair_pe: float = 20.0
-    expensive_pe: float = 30.0
-    very_cheap_score: float = 95.0
-    cheap_score: float = 75.0
-    fair_score: float = 50.0
-    expensive_score: float = 25.0
-    post_expensive_pe_step: float = 10.0
-    post_expensive_score_decay: float = 15.0
-
-
-@dataclass(frozen=True)
-class BandarScoringConfig:
-    mandatory_signal_count: int = 3
-    signal_score_unit: int = 2
-    default_max_range: int = 6
-
-
-@dataclass(frozen=True)
-class SignalScoringConfig:
-    bandar: BandarScoringConfig = field(default_factory=BandarScoringConfig)
-    seasonality: SeasonalityScoringConfig = field(default_factory=SeasonalityScoringConfig)
-    analyst: AnalystScoringConfig = field(default_factory=AnalystScoringConfig)
-    forward_pe: ForwardPeScoringConfig = field(default_factory=ForwardPeScoringConfig)
+# SeasonalityScoringConfig, AnalystScoringConfig, ForwardPeScoringConfig,
+# BandarScoringConfig, and SignalScoringConfig now live in
+# src/application/services/signal_scoring_config.py and are imported above.
+# They remain re-exported from this module for backward-compatible imports.
 
 
 @dataclass(frozen=True)
@@ -505,119 +480,51 @@ class AssessSignalUseCase:
         return max(0.0, min(100.0, ctx.foreign_flow_quality * 100.0)), True
 
     def _score_insider_activity(self, ctx: SignalContext) -> tuple[float, bool]:
-        """
-        Insider net buy ratio (-1.0 to +1.0) → 0–100.
-
-        -1.0 (full selling) → 0, 0.0 (neutral) → 50, +1.0 (full buying) → 100.
-        Returns neutral 50.0 when no insider data is available (no provider yet).
-        """
-        if ctx.insider_net_buy_ratio is None:
-            return self._config.missing_data.neutral_score, False
-        return max(0.0, min(100.0, (ctx.insider_net_buy_ratio + 1.0) / 2.0 * 100.0)), True
+        """Insider net buy direction → 0–100. Delegates to shared scorer."""
+        return _shared_score_insider_activity(
+            ctx, neutral_score=self._config.missing_data.neutral_score
+        )
 
     def _score_seasonality(self, ctx: SignalContext) -> tuple[float, bool]:
-        """
-        Map seasonal win rate to 0–100 with direction awareness.
-
-        Tailwind  (avg_return > 0 AND win_rate > 50): score = win_rate_pct
-        Headwind  (avg_return < 0 AND win_rate < 50): score = win_rate_pct
-        Neutral   (everything else):                   score = 50
-
-        This is directional for long-candidate attractiveness: a historically
-        weak month should reduce the score, not become a strong positive signal.
-        """
-        if ctx.seasonality_win_rate is None or ctx.seasonality_avg_return_pct is None:
-            return self._config.missing_data.neutral_score, False
-        if (
-            ctx.seasonality_total_years is None
-            or ctx.seasonality_total_years < 5
-        ):
-            return self._config.missing_data.neutral_score, False
-
-        win = ctx.seasonality_win_rate
-        avg = ctx.seasonality_avg_return_pct
+        """Directional seasonal edge → 0–100. Delegates to shared scorer."""
         cfg = self._config.scoring.seasonality
-        is_tailwind = (
-            avg > cfg.tailwind_min_avg_return_pct
-            and win > cfg.tailwind_min_win_rate_pct
+        return _shared_score_seasonality(
+            ctx,
+            tailwind_min_avg_return_pct=cfg.tailwind_min_avg_return_pct,
+            tailwind_min_win_rate_pct=cfg.tailwind_min_win_rate_pct,
+            headwind_max_avg_return_pct=cfg.headwind_max_avg_return_pct,
+            headwind_max_win_rate_pct=cfg.headwind_max_win_rate_pct,
+            neutral_score=self._config.missing_data.neutral_score,
         )
-        is_headwind = (
-            avg < cfg.headwind_max_avg_return_pct
-            and win < cfg.headwind_max_win_rate_pct
-        )
-
-        if is_tailwind:
-            return win, True
-        if is_headwind:
-            return win, True
-        return self._config.missing_data.neutral_score, True
 
     def _score_analyst(self, ctx: SignalContext) -> tuple[float, bool]:
-        """
-        Analyst consensus: buy% (max 60 pts) + upside capped at 30% (max 40 pts).
-
-        analyst_buy_pct:  0.0–1.0  fraction of buy recommendations
-        analyst_upside_pct: percentage, e.g. 15.0 = 15% price target upside
-        """
-        if ctx.analyst_buy_pct is None:
-            return self._config.missing_data.neutral_score, False
+        """Analyst consensus conviction → 0–100. Delegates to shared scorer."""
         cfg = self._config.scoring.analyst
-        buy_score = ctx.analyst_buy_pct * cfg.buy_score_max_points
-        upside_score = (
-            max(0.0, min(cfg.upside_cap_pct, ctx.analyst_upside_pct or 0.0))
-            / cfg.upside_cap_pct
-            * cfg.upside_score_max_points
-            if cfg.upside_cap_pct > 0
-            else 0.0
+        return _shared_score_analyst(
+            ctx,
+            buy_score_max_points=cfg.buy_score_max_points,
+            upside_score_max_points=cfg.upside_score_max_points,
+            upside_cap_pct=cfg.upside_cap_pct,
+            neutral_score=self._config.missing_data.neutral_score,
         )
-        return min(100.0, buy_score + upside_score), True
 
     def _score_forward_pe(self, ctx: SignalContext) -> tuple[float, bool]:
-        """
-        Forward P/E → 0–100 via smooth linear interpolation across price tiers.
-
-        P/E ≤ 0 (loss-maker / unavailable) → neutral 50
-        P/E ≤ 10                            → 95  (very cheap)
-        P/E ≤ 15                            → 95→75 linear
-        P/E ≤ 20                            → 75→50 linear
-        P/E ≤ 30                            → 50→25 linear
-        P/E > 30                            → approaches 0
-
-        Ported from _composite_score() in accumulation_screen_use_case.py.
-        """
-        pe = ctx.forward_pe
-        if pe is None or pe <= 0:
-            return self._config.missing_data.neutral_score, False
-
+        """Forward-P/E valuation attractiveness → 0–100. Delegates to shared scorer."""
         cfg = self._config.scoring.forward_pe
-        if pe <= cfg.very_cheap_pe:
-            fwd = cfg.very_cheap_score
-        elif pe <= cfg.cheap_pe:
-            fwd = _interpolate(
-                pe, cfg.very_cheap_pe, cfg.cheap_pe,
-                cfg.very_cheap_score, cfg.cheap_score,
-            )
-        elif pe <= cfg.fair_pe:
-            fwd = _interpolate(
-                pe, cfg.cheap_pe, cfg.fair_pe,
-                cfg.cheap_score, cfg.fair_score,
-            )
-        elif pe <= cfg.expensive_pe:
-            fwd = _interpolate(
-                pe, cfg.fair_pe, cfg.expensive_pe,
-                cfg.fair_score, cfg.expensive_score,
-            )
-        else:
-            decay = (
-                (pe - cfg.expensive_pe)
-                / cfg.post_expensive_pe_step
-                * cfg.post_expensive_score_decay
-                if cfg.post_expensive_pe_step > 0
-                else cfg.expensive_score
-            )
-            fwd = max(0.0, cfg.expensive_score - decay)
-
-        return fwd, True
+        return _shared_score_forward_pe(
+            ctx,
+            very_cheap_pe=cfg.very_cheap_pe,
+            cheap_pe=cfg.cheap_pe,
+            fair_pe=cfg.fair_pe,
+            expensive_pe=cfg.expensive_pe,
+            very_cheap_score=cfg.very_cheap_score,
+            cheap_score=cfg.cheap_score,
+            fair_score=cfg.fair_score,
+            expensive_score=cfg.expensive_score,
+            post_expensive_pe_step=cfg.post_expensive_pe_step,
+            post_expensive_score_decay=cfg.post_expensive_score_decay,
+            neutral_score=self._config.missing_data.neutral_score,
+        )
 
     # ── classification ───────────────────────────────────────────────────────
 

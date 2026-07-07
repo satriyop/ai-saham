@@ -325,6 +325,75 @@ def test_alpha_trigger_sector_context_feeds_market_slot_as_diagnostic_coverage()
     assert "diagnostic_report_only" in market.reasons
 
 
+def _company_quality(aggregate: float = 72.0) -> "CompanyQualityContextEvidence":
+    from src.domain.value_objects.company_quality_context_evidence import (
+        CompanyQualityContextEvidence,
+    )
+
+    return CompanyQualityContextEvidence(
+        valuation_score=80.0,
+        earnings_trend_score=None,
+        analyst_score=70.0,
+        insider_score=60.0,
+        seasonality_score=55.0,
+        present_axes=("valuation", "analyst", "insider", "seasonality"),
+        aggregate_score=aggregate,
+        coverage_score=1.0,
+        evidence_status=EvidenceStatus.DIAGNOSTIC,
+        reasons=(),
+        unavailable_reasons=(),
+    )
+
+
+def test_alpha_trigger_company_quality_feeds_slot_as_diagnostic_coverage():
+    resp = _use_case().execute(_req(
+        setup_evidence=_setup_evidence("MATCH"),
+        flow_confirmation_evidence=_flow_evidence(capped_strength=0.50),
+        setup_phase=_phase_state(SetupPhaseState.BREAKOUT_CONFIRMATION),
+        company_quality_context_evidence=_company_quality(72.0),
+    ))
+
+    at = resp.alpha_trigger_score
+    assert at is not None
+    cq = [c for c in at.group_contributions if c.group == "company_quality_context"][0]
+    assert cq.present is True
+    assert cq.score == pytest.approx(72.0)
+    assert cq.effective_weight == pytest.approx(0.0)
+    assert "diagnostic_report_only" in cq.reasons
+    # alpha_fraction=1.00 for company_quality_context (pure Alpha, zero Trigger)
+    assert cq.alpha_fraction == pytest.approx(1.0)
+
+
+def test_company_quality_slot_has_zero_scoring_authority():
+    """DIAGNOSTIC proof: a real company_quality score must NOT move final score."""
+    common = dict(
+        setup_evidence=_setup_evidence("MATCH"),
+        flow_confirmation_evidence=_flow_evidence(capped_strength=0.50),
+        setup_phase=_phase_state(SetupPhaseState.BREAKOUT_CONFIRMATION),
+    )
+    empty = _use_case().execute(_req(**common))
+    filled = _use_case().execute(_req(
+        **common,
+        company_quality_context_evidence=_company_quality(88.0),
+    ))
+
+    # Final blended score is byte-identical whether the slot is empty or filled.
+    assert filled.alpha_trigger_score.final_exact_score == pytest.approx(
+        empty.alpha_trigger_score.final_exact_score
+    )
+    assert filled.alpha_trigger_score.alpha_score == pytest.approx(
+        empty.alpha_trigger_score.alpha_score
+    )
+    assert filled.assessment.score == empty.assessment.score
+    # The evidence is present (adds coverage) but contributes zero effective weight.
+    cq = [
+        c for c in filled.alpha_trigger_score.group_contributions
+        if c.group == "company_quality_context"
+    ][0]
+    assert cq.present is True
+    assert cq.effective_weight == pytest.approx(0.0)
+
+
 def test_alpha_trigger_missing_groups_do_not_neutral_fill_side_denominators():
     resp = _use_case().execute(_req(setup_evidence=_setup_evidence("MATCH")))
 

@@ -287,6 +287,32 @@ class TestAlphaTriggerPanel:
         out = capsys.readouterr().out
         assert "allowed" in out or "blocked" in out
 
+    def test_company_quality_context_row_renders_diagnostic_no_weight(self, capsys):
+        # company_quality_context feeds the slot DIAGNOSTIC-only: it must appear
+        # in the table with a real score but be labelled "— no weight".
+        cq = _diagnostic_contribution(group="company_quality_context")
+        ats = AlphaTriggerScore(
+            alpha_score=62.0,
+            trigger_score=55.0,
+            final_exact_score=59.5,
+            horizon="swing_7d",
+            alpha_weight=0.7,
+            group_contributions=(_production_contribution(), cq),
+            coverage=0.75,
+            authority_coverage=0.6,
+            conviction=0.65,
+            flow_trigger_allowed=True,
+            reasons=("within threshold",),
+            unavailable_reasons=(),
+        )
+        sa = _minimal_signal_assessment(alpha_trigger_score=ats)
+        _call_print(include_signal_detail=True, signal_assessment=sa)
+
+        out = capsys.readouterr().out
+        assert "company_quality_context" in out
+        assert "DIAGNOSTIC" in out
+        assert "no weight" in out
+
 
 # ── Sector Context panel ──────────────────────────────────────────────────────
 

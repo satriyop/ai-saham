@@ -136,6 +136,20 @@ def _build_buckets(
             ("conviction_bucket", _score_bucket(fp.conviction)),
             ("sc_sector", fp.sc_sector or "UNKNOWN"),
             ("sc_sector_regime", fp.sc_sector_regime or "UNKNOWN"),
+            # Phase G company_quality_context producer (DIAGNOSTIC): attribution
+            # buckets over persisted cq_* fields. Missing → UNKNOWN, never crash.
+            ("cq_valuation_score", _score_bucket_100(fp.cq_valuation_score)),
+            ("cq_analyst_score", _score_bucket_100(fp.cq_analyst_score)),
+            ("cq_insider_score", _score_bucket_100(fp.cq_insider_score)),
+            ("cq_seasonality_score", _score_bucket_100(fp.cq_seasonality_score)),
+            ("cq_aggregate_score", _score_bucket_100(fp.cq_aggregate_score)),
+            ("cq_coverage_score", _score_bucket(fp.cq_coverage_score)),
+            (
+                "cq_present_axis_count",
+                "UNKNOWN"
+                if fp.cq_present_axis_count is None
+                else str(fp.cq_present_axis_count),
+            ),
         )
         for key in keys:
             groups.setdefault(key, []).append(label)

@@ -119,6 +119,15 @@ class SignalObservationFingerprint:
     sc_ticker_vs_sector_rs: float | None = None
     sc_sector_regime: str | None = None
     sc_coverage_score: float | None = None
+    # Phase G producer: company quality context evidence fingerprint (DIAGNOSTIC)
+    cq_valuation_score: float | None = None
+    cq_earnings_trend_score: float | None = None
+    cq_analyst_score: float | None = None
+    cq_insider_score: float | None = None
+    cq_seasonality_score: float | None = None
+    cq_aggregate_score: float | None = None
+    cq_coverage_score: float | None = None
+    cq_present_axis_count: int | None = None
     # Phase G: Alpha/Trigger projection fingerprint
     alpha_score: float | None = None
     trigger_score: float | None = None
@@ -209,6 +218,14 @@ class SignalObservationFingerprint:
             "sc_ticker_vs_sector_rs": self.sc_ticker_vs_sector_rs,
             "sc_sector_regime": self.sc_sector_regime,
             "sc_coverage_score": self.sc_coverage_score,
+            "cq_valuation_score": self.cq_valuation_score,
+            "cq_earnings_trend_score": self.cq_earnings_trend_score,
+            "cq_analyst_score": self.cq_analyst_score,
+            "cq_insider_score": self.cq_insider_score,
+            "cq_seasonality_score": self.cq_seasonality_score,
+            "cq_aggregate_score": self.cq_aggregate_score,
+            "cq_coverage_score": self.cq_coverage_score,
+            "cq_present_axis_count": self.cq_present_axis_count,
             "alpha_score": self.alpha_score,
             "trigger_score": self.trigger_score,
             "alpha_trigger_final_exact_score": self.alpha_trigger_final_exact_score,
@@ -356,6 +373,14 @@ class SignalObservationFingerprint:
             sc_ticker_vs_sector_rs=_optional_float(data.get("sc_ticker_vs_sector_rs")),
             sc_sector_regime=data.get("sc_sector_regime"),
             sc_coverage_score=_optional_float(data.get("sc_coverage_score")),
+            cq_valuation_score=_optional_float(data.get("cq_valuation_score")),
+            cq_earnings_trend_score=_optional_float(data.get("cq_earnings_trend_score")),
+            cq_analyst_score=_optional_float(data.get("cq_analyst_score")),
+            cq_insider_score=_optional_float(data.get("cq_insider_score")),
+            cq_seasonality_score=_optional_float(data.get("cq_seasonality_score")),
+            cq_aggregate_score=_optional_float(data.get("cq_aggregate_score")),
+            cq_coverage_score=_optional_float(data.get("cq_coverage_score")),
+            cq_present_axis_count=_optional_int(data.get("cq_present_axis_count")),
             alpha_score=_optional_float(data.get("alpha_score")),
             trigger_score=_optional_float(data.get("trigger_score")),
             alpha_trigger_final_exact_score=_optional_float(

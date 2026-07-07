@@ -39,6 +39,9 @@ if TYPE_CHECKING:
     from src.domain.value_objects.forward_estimates import ForwardEstimates
     from src.domain.value_objects.institutional_accumulation_evidence import InstitutionalAccumulationEvidence
     from src.domain.value_objects.risk_assessment import RiskAssessment
+    from src.domain.value_objects.company_quality_context_evidence import (
+        CompanyQualityContextEvidence,
+    )
     from src.domain.value_objects.sector_context_evidence import SectorContextEvidence
     from src.domain.value_objects.ticker_profile_snapshot import TickerProfileSnapshot
     from src.domain.value_objects.seasonal_edge import SeasonalEdge
@@ -449,6 +452,7 @@ def _candidate_observation_payload(
     ia_evidence: "InstitutionalAccumulationEvidence | None" = None,
     tp_snapshot: "TickerProfileSnapshot | None" = None,
     sc_evidence: "SectorContextEvidence | None" = None,
+    cq_evidence: "CompanyQualityContextEvidence | None" = None,
 ) -> dict:
     """Build schema-versioned replay payload for one screened candidate.
 
@@ -488,6 +492,7 @@ def _candidate_observation_payload(
         ia_evidence=ia_evidence,
         tp_snapshot=tp_snapshot,
         sc_evidence=sc_evidence,
+        cq_evidence=cq_evidence,
     )
 
     return {
@@ -523,6 +528,7 @@ def _sub_signal_fingerprint(
     ia_evidence: "InstitutionalAccumulationEvidence | None" = None,
     tp_snapshot: "TickerProfileSnapshot | None" = None,
     sc_evidence: "SectorContextEvidence | None" = None,
+    cq_evidence: "CompanyQualityContextEvidence | None" = None,
 ) -> dict:
     """Persist raw sub-signal values as they were at observation time."""
     assessment = signal.assessment if signal is not None else None
@@ -543,6 +549,7 @@ def _sub_signal_fingerprint(
     ia_dict = _ia_evidence_fingerprint(ia_evidence)
     tp_dict = _tp_fingerprint(tp_snapshot)
     sc_dict = _sc_fingerprint(sc_evidence)
+    cq_dict = _cq_fingerprint(cq_evidence)
     alpha_trigger_dict = _alpha_trigger_fingerprint(signal)
     return {
         "setup_family": constraints.get("setup_family"),
@@ -551,6 +558,7 @@ def _sub_signal_fingerprint(
         **ia_dict,
         **tp_dict,
         **sc_dict,
+        **cq_dict,
         **alpha_trigger_dict,
         "rsi_at_signal": candidate.rsi,
         "bb_width_pctile_at_signal": candidate.bb_width_pctile,
@@ -763,6 +771,33 @@ def _sc_fingerprint(
         "sc_ticker_vs_sector_rs": sc.ticker_vs_sector_rs,
         "sc_sector_regime": sc.sector_regime,
         "sc_coverage_score": sc.coverage_score,
+    }
+
+
+def _cq_fingerprint(
+    cq: "CompanyQualityContextEvidence | None",
+) -> dict:
+    _none: dict = {
+        "cq_valuation_score": None,
+        "cq_earnings_trend_score": None,
+        "cq_analyst_score": None,
+        "cq_insider_score": None,
+        "cq_seasonality_score": None,
+        "cq_aggregate_score": None,
+        "cq_coverage_score": None,
+        "cq_present_axis_count": None,
+    }
+    if cq is None:
+        return _none
+    return {
+        "cq_valuation_score": cq.valuation_score,
+        "cq_earnings_trend_score": cq.earnings_trend_score,
+        "cq_analyst_score": cq.analyst_score,
+        "cq_insider_score": cq.insider_score,
+        "cq_seasonality_score": cq.seasonality_score,
+        "cq_aggregate_score": cq.aggregate_score,
+        "cq_coverage_score": cq.coverage_score,
+        "cq_present_axis_count": len(cq.present_axes),
     }
 
 
@@ -1174,6 +1209,10 @@ class AccumulationScreenUseCase:
                     snapshot_date,
                     tp_snapshot,
                 )
+                cq_evidence = self._build_candidate_company_quality_context(
+                    c,
+                    snapshot_date,
+                )
                 observations.append(
                     CandidateObservation(
                         ticker=c.ticker,
@@ -1188,6 +1227,7 @@ class AccumulationScreenUseCase:
                             ia_evidence=ia_evidence,
                             tp_snapshot=tp_snapshot,
                             sc_evidence=sc_evidence,
+                            cq_evidence=cq_evidence,
                             snapshot_date=snapshot_date,
                             captured_at=captured_at,
                             request=request,
@@ -1371,6 +1411,41 @@ class AccumulationScreenUseCase:
                     ticker_candles=ticker_candles,
                     peer_candles=peer_candles,
                     ihsg_20d_return=ihsg_20d_return,
+                )
+            )
+        except Exception:
+            return None
+
+    def _build_candidate_company_quality_context(
+        self,
+        candidate: "AccumulationCandidate",
+        snapshot_date: date,
+    ) -> "CompanyQualityContextEvidence | None":
+        """Build DIAGNOSTIC company-quality / ticker-alpha conviction evidence.
+
+        Uses enrichment already loaded on the candidate (forward P/E, analyst,
+        insider, seasonality) via the shared SignalContext builder — no extra
+        provider fetch. Zero scoring authority (DIAGNOSTIC).
+        """
+        if self._signal_engine is None:
+            return None
+        try:
+            from src.application.services.company_quality_context_evidence_builder import (
+                CompanyQualityContextEvidenceBuilder,
+                CompanyQualityContextRequest,
+            )
+
+            signal_ctx = build_signal_context_from_candidate(
+                ticker=candidate.ticker,
+                snapshot_date=snapshot_date,
+                candidate=candidate,
+                signal_engine=self._signal_engine,
+            )
+            return CompanyQualityContextEvidenceBuilder.from_yaml().build(
+                CompanyQualityContextRequest(
+                    ticker=candidate.ticker,
+                    snapshot_date=snapshot_date,
+                    signal_context=signal_ctx,
                 )
             )
         except Exception:

@@ -40,6 +40,9 @@ from src.domain.value_objects.benchmark_symbol import canonicalize_ticker
 if TYPE_CHECKING:
     from src.domain.value_objects.flow_confirmation_evidence import FlowConfirmationEvidence
     from src.domain.value_objects.institutional_accumulation_evidence import InstitutionalAccumulationEvidence
+    from src.domain.value_objects.company_quality_context_evidence import (
+        CompanyQualityContextEvidence,
+    )
     from src.domain.value_objects.sector_context_evidence import SectorContextEvidence
     from src.domain.value_objects.market_context import MarketContext
     from src.domain.value_objects.ticker_profile_snapshot import TickerProfileSnapshot
@@ -131,6 +134,7 @@ class SwingEvidence:
     institutional_accumulation_evidence: "InstitutionalAccumulationEvidence | None" = None
     ticker_profile_snapshot: "TickerProfileSnapshot | None" = None
     sector_context_evidence: "SectorContextEvidence | None" = None
+    company_quality_context_evidence: "CompanyQualityContextEvidence | None" = None
 
     def to_dict(self, *, strategy_name: str | None = None, max_hold_days: int | None = None) -> dict[str, Any]:
         candidate = self.accumulation_candidate
@@ -209,6 +213,10 @@ class SwingEvidence:
             "sector_context_evidence": (
                 self.sector_context_evidence.to_dict()
                 if self.sector_context_evidence else None
+            ),
+            "company_quality_context_evidence": (
+                self.company_quality_context_evidence.to_dict()
+                if self.company_quality_context_evidence else None
             ),
         }
 
@@ -1139,6 +1147,36 @@ class SwingAnalysisWorkflowUseCase:
         except Exception as exc:
             warnings.append(f"Sector context evidence unavailable: {exc}")
 
+        # DIAGNOSTIC-only company-quality / ticker-alpha conviction evidence.
+        # Built from the same enrichment already loaded on accumulation_candidate;
+        # no extra fetch. Feeds the Alpha/Trigger company_quality_context slot with
+        # zero effective score authority (DIAGNOSTIC → effective_weight 0.0).
+        company_quality_context_evidence = None
+        if accumulation_candidate is not None and self._signal_engine is not None:
+            try:
+                from src.application.services.company_quality_context_evidence_builder import (
+                    CompanyQualityContextEvidenceBuilder,
+                    CompanyQualityContextRequest,
+                )
+
+                _cq_ctx = build_signal_context_from_candidate(
+                    ticker=request.ticker,
+                    snapshot_date=request.today,
+                    candidate=accumulation_candidate,
+                    signal_engine=self._signal_engine,
+                )
+                company_quality_context_evidence = (
+                    CompanyQualityContextEvidenceBuilder.from_yaml().build(
+                        CompanyQualityContextRequest(
+                            ticker=request.ticker,
+                            snapshot_date=request.today,
+                            signal_context=_cq_ctx,
+                        )
+                    )
+                )
+            except Exception as exc:
+                warnings.append(f"Company quality context evidence unavailable: {exc}")
+
         evidence = SwingEvidence(
             accumulation_candidate=accumulation_candidate,
             setup_eval=setup_eval,
@@ -1155,6 +1193,7 @@ class SwingAnalysisWorkflowUseCase:
             institutional_accumulation_evidence=institutional_accumulation_evidence,
             ticker_profile_snapshot=ticker_profile_snapshot,
             sector_context_evidence=sector_context_evidence,
+            company_quality_context_evidence=company_quality_context_evidence,
         )
 
         # Re-score with evidence now that both groups are available. Signal was
@@ -1182,6 +1221,7 @@ class SwingAnalysisWorkflowUseCase:
                     setup_family=request.setup_name,
                     setup_phase=setup_phase,
                     sector_context_evidence=sector_context_evidence,
+                    company_quality_context_evidence=company_quality_context_evidence,
                 )
             except Exception as exc:
                 warnings.append(f"Evidence-enriched signal re-score unavailable: {exc}")

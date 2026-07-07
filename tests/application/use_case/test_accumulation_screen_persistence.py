@@ -284,6 +284,21 @@ _SC_KEYS = [
     "sc_coverage_score",
 ]
 
+# Complete list of expected cq_* fingerprint keys from _cq_fingerprint() —
+# the DIAGNOSTIC company_quality_context producer. Every key must be present
+# in the saved payload even when the underlying data is unavailable (None):
+# distinguish "key absent = wiring bug" from "key present, None = data missing".
+_CQ_KEYS = [
+    "cq_valuation_score",
+    "cq_earnings_trend_score",
+    "cq_analyst_score",
+    "cq_insider_score",
+    "cq_seasonality_score",
+    "cq_aggregate_score",
+    "cq_coverage_score",
+    "cq_present_axis_count",
+]
+
 
 # --------------------------------------------------------------------------- #
 # Test 1 — ia_cnfb_divergence_20d is not None with plausible CNFB data
@@ -448,6 +463,15 @@ class TestScFingerprintWithPeerCandles:
         missing = [k for k in _SC_KEYS if k not in fp]
         assert not missing, f"sc_* keys missing from fingerprint: {missing}"
 
+    def test_all_cq_keys_present_when_screening(self):
+        fp = self._run()
+        missing = [k for k in _CQ_KEYS if k not in fp]
+        assert not missing, (
+            f"cq_* keys missing from fingerprint: {missing}. "
+            "If _cq_fingerprint() was never called or its dict not spread into "
+            "sub_signal_fingerprint, these keys will be absent — a wiring gap."
+        )
+
 
 # --------------------------------------------------------------------------- #
 # Test 3 — all ia_* and sc_* keys exist even when inputs are unavailable
@@ -527,4 +551,23 @@ class TestFingerprintKeysExistWhenInputsUnavailable:
         assert fp["sc_sector"] is None, (
             "sc_sector should be None when no ticker_notation provides sector, "
             f"but got {fp['sc_sector']!r}."
+        )
+
+    def test_all_cq_keys_present_with_none_values(self):
+        fp = self._run_minimal_screen()
+        missing = [k for k in _CQ_KEYS if k not in fp]
+        assert not missing, (
+            f"cq_* keys missing from fingerprint: {missing}. "
+            "If _cq_fingerprint() was never called, these keys will be absent."
+        )
+
+    def test_cq_aggregate_score_is_none_not_absent_when_no_enrichment(self):
+        fp = self._run_minimal_screen()
+        assert "cq_aggregate_score" in fp, (
+            "cq_aggregate_score key is absent — wiring gap in _cq_fingerprint()."
+        )
+        # No forward-P/E, analyst, insider, or seasonality enrichment → no axes.
+        assert fp["cq_aggregate_score"] is None, (
+            "cq_aggregate_score should be None with no company-quality enrichment, "
+            f"but got {fp['cq_aggregate_score']!r}."
         )

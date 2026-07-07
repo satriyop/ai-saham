@@ -43,6 +43,9 @@ from src.domain.value_objects.signal_assessment import (
 )
 
 if TYPE_CHECKING:
+    from src.domain.value_objects.company_quality_context_evidence import (
+        CompanyQualityContextEvidence,
+    )
     from src.domain.value_objects.flow_confirmation_evidence import FlowConfirmationEvidence
     from src.domain.value_objects.market_context import MarketContext
     from src.domain.value_objects.sector_context_evidence import SectorContextEvidence
@@ -62,6 +65,7 @@ class AssessSignalEvidenceRequest:
     setup_phase: "SetupPhaseSnapshot | None" = None
     horizon: str | None = None
     sector_context_evidence: "SectorContextEvidence | None" = None
+    company_quality_context_evidence: "CompanyQualityContextEvidence | None" = None
 
 
 class AssessSignalEvidenceUseCase:
@@ -179,11 +183,15 @@ class AssessSignalEvidenceUseCase:
                         ),
                         AlphaTriggerGroupInput(
                             group="company_quality_context",
-                            score=0.0,
+                            score=self._score_company_quality(
+                                request.company_quality_context_evidence
+                            ),
                             configured_weight=self._config.alpha_trigger.group_weights.get(
                                 "company_quality_context", 0.0
                             ),
-                            present=False,
+                            present=self._company_quality_present(
+                                request.company_quality_context_evidence
+                            ),
                         ),
                     ),
                     setup_phase=request.setup_phase,
@@ -271,6 +279,30 @@ class AssessSignalEvidenceUseCase:
             ev is not None
             and ev.coverage_score > 0.0
             and ev.sector_regime != "UNKNOWN"
+        )
+
+    def _score_company_quality(
+        self,
+        ev: "CompanyQualityContextEvidence | None",
+    ) -> float:
+        """Diagnostic company-quality / ticker-alpha conviction score (0-100).
+
+        Routed through the Alpha/Trigger company_quality_context slot, but its
+        DIAGNOSTIC registration gives it zero effective score authority
+        (effective_weight = 0.0) — it never moves final_exact_score.
+        """
+        if ev is None or ev.aggregate_score is None:
+            return 0.0
+        return ev.aggregate_score
+
+    def _company_quality_present(
+        self,
+        ev: "CompanyQualityContextEvidence | None",
+    ) -> bool:
+        return (
+            ev is not None
+            and ev.coverage_score > 0.0
+            and ev.aggregate_score is not None
         )
 
     # ── regime conditioning (TRANSITIONAL — Phase 5 legacy) ──────────────────

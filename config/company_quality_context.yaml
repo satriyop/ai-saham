@@ -1,0 +1,35 @@
+# Company Quality Context Evidence Configuration (Phase I preparation)
+#
+# Evidence authority is forced to DIAGNOSTIC in code.
+# This file cannot promote company_quality_context to LOW_WEIGHT or PRODUCTION.
+# Promotion must happen through the Alpha/Trigger EvidenceRegistration path
+# after Phase I walk-forward attribution proof.
+#
+# Axes = valuation (forward P/E), analyst consensus, insider net-buy direction,
+# and CAPPED generic seasonality. It MUST NOT contain liquidity, free-float,
+# Piotroski, bandar-distribution, or technical-gate logic — those remain
+# RiskEngine responsibilities (docs/signal_refactor.md lines 1842-1844).
+#
+# Deferred (no data source/computation exists yet):
+#   - earnings_trend axis
+#   - configured event alpha (MSCI/FTSE, dividend-chase windows, market calendar)
+
+# Per-axis aggregation weights. The aggregate is a coverage-weighted mean over
+# PRESENT axes only (missing axes lower coverage_score, they do not inject a
+# fake neutral-50). These are Phase-I-calibratable placeholders, NOT final
+# production constants.
+axis_weights:
+  valuation: 1.0
+  analyst: 1.0
+  insider: 1.0
+
+# Generic seasonality is CAPPED separately: it carries a strictly lower maximum
+# weight than the valuation/analyst/insider axes so a weak generic-seasonality
+# prior cannot dominate contextual conviction (canon: "generic seasonality
+# remains capped separately").
+seasonality_weight: 0.5
+
+# Number of scored axes used as the coverage denominator. earnings_trend and
+# event alpha are deferred and excluded from coverage so absence of a
+# not-yet-built producer does not depress coverage.
+scored_axis_count: 4

@@ -58,6 +58,13 @@ SignalEngine refactor. Phases A1–H are closed. Phase I is the active target.
   at construction; never fetches data), and wired into both use cases as
   DIAGNOSTIC-only without affecting SignalEngine group scoring,
   `DecisionPolicy`, or `AssessSignalEvidenceUseCase`.
+- The Phase G `company_quality_context` producer (2026-07-07) added a shared
+  extracted conviction-scorer module (`company_quality_scoring`) and
+  `CompanyQualityContextEvidence` + `CompanyQualityContextEvidenceBuilder`
+  WITHOUT changing the `AssessSignalUseCase` flat-composite breakdown (byte-
+  identical, guarded by its existing tests), group scoring, `DecisionPolicy`, or
+  `RiskEngine`, and WITHOUT duplicating Piotroski, liquidity, free-float, bandar
+  distribution, or technical-gate logic (those remain RiskEngine authority).
 
 ---
 
@@ -73,7 +80,7 @@ SignalEngine refactor. Phases A1–H are closed. Phase I is the active target.
 | D | Strategy Evidence Harness | Done (2026-07-06) | Diagnostic-only strategy evidence harness. 2424 tests pass. |
 | E | Institutional Accumulation Evidence | Done (2026-07-06) | Two-track institutional flow evidence, diagnostic-only. 2457 tests pass. |
 | F | Minimal Ticker Profile Diagnostics | Done (2026-07-06) | Deterministic ticker behavior classifier, diagnostic-only. 2489 tests pass. |
-| G | Simplified Alpha/Trigger Split | Done (2026-07-06) | Four canonical Alpha/Trigger slots configured; `market_context` slot has Phase H sector-context as DIAGNOSTIC producer (zero scoring authority); `company_quality_context` remains unavailable/deferred. |
+| G | Simplified Alpha/Trigger Split | Done (2026-07-06; producers completed 2026-07-07) | Four canonical Alpha/Trigger slots configured. Both `market_context` (Phase H sector-context) and `company_quality_context` now have DIAGNOSTIC producers with zero scoring authority (`effective_weight` resolves to 0.0). `company_quality_context` producer: valuation/analyst/insider/capped-seasonality axes, `alpha_fraction=1.00`. |
 | H | Sector Context | Done (2026-07-06) | Local-universe sector-relative return, breadth, ticker-vs-sector RS; DIAGNOSTIC-only; 2564 tests pass. |
 | I | Full Walk-Forward Calibration And Expanded Tunables | In Progress (readiness audit) | Audit-first opening; no tuning patches or evidence promotion until OOS readiness is proven. |
 
@@ -105,30 +112,52 @@ All open items across all phases. This is the canonical list — phase sections 
       architecture is the gate before any future promotion.)_
 
 ### Phase E
-- [x] Persistence integration test: verify `ia_*` and `sc_*` fields land in
-      saved observation payload via `AccumulationScreenUseCase` with a broker-repo
+- [x] Persistence integration test: verify `ia_*`, `sc_*`, and `cq_*` fields land
+      in saved observation payload via `AccumulationScreenUseCase` with a broker-repo
       stub. _(Implemented 2026-07-07: `tests/application/use_case/test_accumulation_screen_persistence.py`,
-      10 tests, 2598 total pass. Covers CNFB wiring, sector peer path, and
-      structural key-presence guard distinguishing "key absent" from "key present
-      with None".)_
+      13 tests. Covers CNFB wiring, sector peer path, company-quality `cq_*`
+      key-presence (2026-07-07), and structural key-presence guard distinguishing
+      "key absent" from "key present with None".)_
 - [ ] CLI adapter rendering for `InstitutionalAccumulationEvidence` / `ia_*`
       foreign-vs-domestic track details. _(Alpha/Trigger and Sector Context
       panels added 2026-07-07 close Phase G and Phase H display items
       respectively; Phase E `ia_*` detail rendering remains unimplemented.)_
 
 ### Phase G
-- [ ] Phase D/E/F diagnostic evidence not yet promoted into production scoring.
+- [ ] Phase D/E/F/H and company-quality diagnostic evidence not yet promoted
+      into production scoring (all remain DIAGNOSTIC, awaiting Phase I OOS proof).
 - [ ] `market_context` slot now has Phase H sector-context as a diagnostic
       producer but remains DIAGNOSTIC with zero scoring authority; promotion
       pending Phase I OOS proof.
-- [ ] `company_quality_context` slot has no producer; remains unavailable and
-      deferred.
+- [x] `company_quality_context` slot now has a DIAGNOSTIC producer.
+      _(Implemented 2026-07-07: `CompanyQualityContextEvidenceBuilder` +
+      `CompanyQualityContextEvidence` VO; axes = valuation (forward P/E), analyst
+      consensus, insider net-buy, and CAPPED generic seasonality via a shared
+      extracted scorer module. `alpha_fraction=1.00` (pure Alpha). Registration
+      stays DIAGNOSTIC so `effective_weight` resolves to 0.0 — zero scoring
+      authority, verified by a test asserting `final_exact_score` is unchanged
+      vs. an empty slot. No Piotroski/ROE/liquidity/free-float logic duplicated;
+      those remain RiskEngine. Event alpha (MSCI/FTSE, dividend-chase, calendar)
+      explicitly deferred — no data source exists. `cq_*` replay fingerprint
+      fields persisted. Promotion to PRODUCTION deferred to Phase I.
+      `config/company_quality_context.yaml` cannot promote this producer;
+      authority is forced to DIAGNOSTIC in code. Promotion must happen through
+      the Alpha/Trigger EvidenceRegistration path after Phase I proof.)_
+- [ ] Promote `company_quality_context` slot from DIAGNOSTIC when OOS proof
+      justifies (Phase I).
 - [x] CLI display formatting for Alpha/Trigger diagnostics implemented.
       _(ALPHA/TRIGGER DETAIL panel: per-group score, weight, alpha/trigger
       weighted contributions, flow_trigger status. DIAGNOSTIC groups labelled
       "— no weight". Gated by `--signal-detail`.)_
 - [ ] ATR hint thresholds and size multipliers are placeholders; not
       Phase-I-calibrated production tunables.
+- [ ] `company_quality_context` seasonality cap and per-axis aggregation weights
+      (`config/company_quality_context.yaml`) are config-driven placeholders,
+      same status class as the ATR-hint placeholders; not Phase-I-calibrated.
+- [ ] `company_quality_context` event alpha (MSCI/FTSE inclusion, dividend-chase
+      windows, market calendar) explicitly deferred — no event-window data source
+      or computation exists in the codebase. The `earnings_trend` axis is likewise
+      deferred (recorded as an unavailable axis, excluded from coverage).
 - [ ] Phase I walk-forward calibration, promotion workflow, and empirical
       readiness gates remain out of scope.
 
@@ -141,6 +170,8 @@ All open items across all phases. This is the canonical list — phase sections 
       through `swing()` → `_print_swing_output()` → `print_swing_output()`.)_
 - [ ] Promote `market_context` Alpha/Trigger slot from DIAGNOSTIC when sector
       evidence proves discriminative (Phase I).
+- [ ] Promote `company_quality_context` Alpha/Trigger slot from DIAGNOSTIC when
+      company-quality evidence proves discriminative (Phase I).
 
 ### Phase I (Active — see Phase I Tracker for detail)
 - [ ] Filter target candidates (blocked: no SWING_10D labels yet).
@@ -156,6 +187,11 @@ All open items across all phases. This is the canonical list — phase sections 
 - Phase H sector context evidence feeds the `market_context` Alpha/Trigger slot
   as DIAGNOSTIC-only evidence; it can improve coverage/metadata but has zero
   score authority until a future promotion.
+- Company-quality evidence feeds the `company_quality_context` Alpha/Trigger slot
+  as DIAGNOSTIC-only evidence; it can improve coverage/metadata but has zero
+  score authority (`effective_weight` = 0.0) until a future promotion. Its
+  seasonality cap and aggregation weights are Phase-I-calibratable placeholders;
+  event alpha and the `earnings_trend` axis are deferred (no data source).
 - Phase F profile snapshots remain DIAGNOSTIC-only; profiles do not feed into
   SignalEngine group scoring or DecisionPolicy.
 - Phase E institutional accumulation evidence is DIAGNOSTIC-only; `FlowConfirmationEvidence`
@@ -362,10 +398,11 @@ epoch-keyed SQLite table, and per-horizon profile tunables deferred to Phase I.
 **Implemented contract:**
 - Four canonical Alpha/Trigger group slots configured: `setup_quality`,
   `institutional_flow`, `market_context`, `company_quality_context`. Runtime
-  producers currently populate `setup_quality` and `institutional_flow`;
-  `market_context` now has Phase H sector-context as a diagnostic producer but
-  remains DIAGNOSTIC with zero scoring authority; `company_quality_context` has
-  no producer and remains unavailable and deferred.
+  producers populate `setup_quality` and `institutional_flow`; `market_context`
+  has Phase H sector-context as a diagnostic producer and `company_quality_context`
+  has a diagnostic producer (`CompanyQualityContextEvidenceBuilder`, added
+  2026-07-07). Both context slots remain DIAGNOSTIC with zero scoring authority
+  (`effective_weight` = 0.0); promotion pending Phase I OOS proof.
 - `AlphaTriggerScore` domain value object: alpha/trigger/final exact scores,
   horizon, route contributions, coverage, authority coverage, conviction,
   flow-trigger gate state, reasons, unavailable reasons.
@@ -484,9 +521,18 @@ out-of-sample proof justify manual promotion through validator-bounded config.
       - Fresh `lq45` screen on 2026-07-06 generated 135 rows; all 135 have
         setup phase, institutional accumulation, ticker profile, Alpha/Trigger,
         and sector-context fingerprint fields populated.
+      - Company-quality (`cq_*`) fingerprint fields (valuation/analyst/insider/
+        seasonality axis scores, aggregate, coverage, present-axis count) added
+        2026-07-07 as a new attribution dimension, wired end-to-end so forward-
+        label attribution can use them: candidate observation payload
+        (`_cq_fingerprint`) → `SignalObservationFingerprint` cq_* fields
+        (`to_dict`/`from_dict`, backward-compatible `data.get()`) →
+        `SummarizeSignalForwardLabelsUseCase` cq_* buckets. Persisted/parsed with
+        None when the underlying enrichment is unavailable; missing fields bucket
+        to UNKNOWN, never crash.
 - [x] Confirm forward-label attribution groups include `sc_sector`,
-      `sc_sector_regime`, Alpha/Trigger buckets, coverage/conviction buckets,
-      setup phase, and market regime.
+      `sc_sector_regime`, `cq_*` company-quality axes, Alpha/Trigger buckets,
+      coverage/conviction buckets, setup phase, and market regime.
       - Attribution cleanup added persisted-field-only groups for IA track
         coverage/conviction, ticker profile label/market-cap/tier/coverage,
         and retained existing Alpha/Trigger bucket names
@@ -507,6 +553,11 @@ out-of-sample proof justify manual promotion through validator-bounded config.
       - `market_context` and `company_quality_context` Alpha/Trigger
         registrations remain DIAGNOSTIC; no Phase D-H diagnostic evidence was
         promoted.
+      - Clarification (2026-07-07): `company_quality_context` now has a
+        DIAGNOSTIC producer (valuation/analyst/insider/capped-seasonality). The
+        producer was added, but its `EvidenceRegistration` stays DIAGNOSTIC and
+        `effective_weight` resolves to 0.0 — no scoring authority changed. A test
+        asserts `final_exact_score` is identical with the slot filled vs. empty.
 
 ### First Calibration Target
 
