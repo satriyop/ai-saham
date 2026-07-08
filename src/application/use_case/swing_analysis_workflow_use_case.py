@@ -354,6 +354,9 @@ def _signal_response_to_dict(response: "AssessSignalResponse | None") -> dict[st
         "strength": response.assessment.strength.value,
         "entry_quality": response.assessment.entry_quality.value,
         "breakdown": response.assessment.breakdown_dict,
+        "coverage_score": response.coverage_score,             # canonical
+        "evidence_confidence": response.evidence_confidence,   # legacy alias
+        "confidence_score": response.assessment.confidence_score,  # legacy alias
         "coverage_warning": response.coverage_warning,
         "alpha_trigger_score": (
             response.assessment.alpha_trigger_score.to_dict()

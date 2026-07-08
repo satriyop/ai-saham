@@ -15,6 +15,7 @@ from src.application.use_case.swing_analysis_workflow_use_case import (
     SwingAnalysisWorkflowRequest,
     SwingAnalysisWorkflowUseCase,
     SwingEvidence,
+    _signal_response_to_dict,
     _simple_return,
 )
 from src.domain.entities.candle import Candle
@@ -624,3 +625,45 @@ def test_swing_evidence_to_dict_includes_setup_phase():
 
     assert d["setup_phase"]["current_phase"] == "BREAKOUT_CONFIRMATION"
     assert d["setup_phase"]["sequence_valid"] is True
+
+
+def test_signal_response_to_dict_emits_coverage_fields():
+    """_signal_response_to_dict must include canonical coverage_score and legacy aliases."""
+    from datetime import date as _date
+    from src.application.use_case.assess_signal_use_case import AssessSignalResponse
+    from src.domain.value_objects.signal_assessment import (
+        EntryQuality,
+        SignalAssessment,
+        SignalStrength,
+    )
+
+    assessment = SignalAssessment(
+        ticker="BBCA",
+        snapshot_date=_date(2026, 7, 8),
+        score=72,
+        strength=SignalStrength.STRONG,
+        entry_quality=EntryQuality.ENTER,
+        breakdown=(("setup_quality_group", 80.0),),
+        rationale=(),
+        confidence_score=0.85,
+    )
+    response = AssessSignalResponse(
+        ticker="BBCA",
+        assessment=assessment,
+        evidence_confidence=0.85,
+    )
+
+    d = _signal_response_to_dict(response)
+    assert d is not None
+    # Canonical key present
+    assert "coverage_score" in d
+    assert d["coverage_score"] == pytest.approx(0.85)
+    # Legacy aliases preserved
+    assert "evidence_confidence" in d
+    assert "confidence_score" in d
+    assert d["evidence_confidence"] == d["coverage_score"]
+    assert d["confidence_score"] == d["coverage_score"]
+
+
+def test_signal_response_to_dict_none_returns_none():
+    assert _signal_response_to_dict(None) is None

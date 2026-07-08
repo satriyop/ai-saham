@@ -829,6 +829,42 @@ def test_screener_populates_signal_assessment():
     assert 0 <= c.signal_assessment.assessment.score <= 100
 
 
+def test_candidate_to_dict_emits_canonical_coverage_score():
+    """Candidate.to_dict() signal_assessment block must include canonical coverage_score."""
+    session_dates = _weekdays(date(2026, 1, 1), 7)
+    as_of = session_dates[-1]
+    candles = [
+        _candle("BBCA", date(2025, 12, 1) + timedelta(days=i), Decimal("100")) for i in range(45)
+    ]
+    summaries = [_summary("BBCA", day, Decimal("110")) for day in session_dates]
+
+    uc = AccumulationScreenUseCase(
+        broker_repository=MockBrokerRepository(summaries),
+        market_repository=MockMarketRepository(candles),
+    )
+    resp = uc.execute(
+        AccumulationScreenRequest(
+            tickers=["BBCA"],
+            window_days=7,
+            min_net_buy_days=0,
+            min_foreign_flow_score=0.0,
+            min_foreign_flow_score_enabled=True,
+            as_of_date=as_of,
+        )
+    )
+    c = resp.candidates[0]
+    assert c.signal_assessment is not None
+    d = c.to_dict()
+    sa_dict = d["signal_assessment"]
+    # Canonical key present
+    assert "coverage_score" in sa_dict
+    # Legacy key preserved for backward compat
+    assert "confidence_score" in sa_dict
+    # Both carry the same value
+    assert sa_dict["coverage_score"] == sa_dict["confidence_score"]
+    assert sa_dict["coverage_score"] is not None
+
+
 # ── Piotroski quality gate ────────────────────────────────────────────────────
 
 

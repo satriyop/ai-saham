@@ -517,14 +517,14 @@ def _display_replay(payload: dict) -> None:
     typer.echo(f"Captured: {captured_at}")
     typer.echo(f"Schema:   {payload.get('schema_version', '?')}")
     typer.echo("")
-    confidence = assessment.get("confidence_score")
-    confidence_text = "—" if confidence is None else f"{float(confidence):.0%}"
+    coverage = assessment.get("coverage_score") or assessment.get("confidence_score")
+    coverage_text = "—" if coverage is None else f"{float(coverage):.0%}"
     typer.echo(
         "Signal:  "
         f"{assessment.get('score', '—')}/100  "
         f"{assessment.get('strength', '—')}  "
         f"{assessment.get('entry_quality', '—')}  "
-        f"conf={confidence_text}"
+        f"cov={coverage_text}"
     )
     if signal.get("coverage_warning"):
         typer.echo(f"Warning: {signal['coverage_warning']}")

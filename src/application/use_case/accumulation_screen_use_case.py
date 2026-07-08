@@ -388,7 +388,8 @@ class AccumulationCandidate:
                 "strength": self.signal_assessment.assessment.strength.value,
                 "entry_quality": self.signal_assessment.assessment.entry_quality.value,
                 "breakdown": self.signal_assessment.assessment.breakdown_dict,
-                "confidence_score": self.signal_assessment.assessment.confidence_score,
+                "coverage_score": self.signal_assessment.assessment.coverage_score,   # canonical
+                "confidence_score": self.signal_assessment.assessment.confidence_score,  # legacy alias
                 "coverage_warning": self.signal_assessment.coverage_warning,
                 "decision_constraints": (
                     self.signal_assessment.assessment.decision_constraints.to_dict()
