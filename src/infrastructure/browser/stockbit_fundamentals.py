@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -270,9 +270,8 @@ def _parse_historical_rows(ticker: str, body: dict) -> list[CompanyFundamentals]
     all other fields (market_cap_idr, piotroski_f_score, roe_ttm, etc.) are None.
 
     fetched_at is set to the quarter end date (Q1→Mar31, Q2→Jun30, Q3→Sep30,
-    Q4→Dec31) for use as period_end_date when writing to company_fundamentals_history.
-    These are NOT availability/PIT dates — quarter-end ≠ publication date.
-    Rows go to the diagnostic history table, never to the PIT table.
+    Q4→Dec31). _write_historical_rows adds a 60-day publication lag before
+    storing, so the resulting PIT fetched_date = quarter_end + 60 days.
     """
     try:
         data = body.get("data") if isinstance(body, dict) else None
@@ -492,41 +491,58 @@ class StockbitFundamentalsProvider(FundamentalsProvider, StockbitCachingProvider
             logger.warning("company_fundamentals: cache write failed for %s: %s", fund.ticker, e)
 
     def _write_historical_rows(self, rows: list[CompanyFundamentals]) -> int:
-        """Write derived quarterly rows to company_fundamentals_history (not PIT table).
+        """Write historical quarterly rows to the PIT table with a 60-day publication lag.
 
-        Historical rows go to a separate table so get_fundamentals() PIT reads
-        are never polluted with data whose availability date is unknown.
-        Quarter-end date ≠ publication date — Q1 2024 results typically publish
-        in April/May, not March 31, so storing them as PIT rows would introduce
-        look-ahead bias for as_of queries in that window.
+        IDX companies publish quarterly reports within ~30 days of quarter end;
+        60 days is a conservative upper bound. A Q1 2024 row (period_end March 31)
+        is stored with fetched_date = "2024-05-30", so PIT reads only surface it
+        for as_of_date >= 2024-05-30 — after the report was realistically public.
+
+        Rows where available_date is within the 7-day cache TTL window (or in the
+        future) are skipped. Without this guard, a near-future fetched_date would
+        make _is_cache_fresh() return True and suppress the live fetch entirely.
+
+        Uses INSERT OR IGNORE so real snapshots (which carry piotroski_f_score,
+        market_cap_idr, etc.) are never overwritten by these derived rows.
         """
-        _month_to_period = {3: "Q1", 6: "Q2", 9: "Q3", 12: "Q4"}
+        _LAG = timedelta(days=60)
+        # Skip rows whose availability date is so recent that the freshness check
+        # would mistake them for a current snapshot (within TTL) or a future one.
+        cutoff = date.today() - timedelta(days=_CACHE_TTL_DAYS)
         inserted = 0
         try:
             with sqlite3.connect(self._db_path) as conn:
                 for fund in rows:
                     if fund.fetched_at is None:
                         continue
-                    period = _month_to_period.get(fund.fetched_at.month)
-                    if period is None:
+                    available_date = fund.fetched_at.date() + _LAG
+                    if available_date >= cutoff:
                         continue
                     cursor = conn.execute(
-                        "INSERT OR IGNORE INTO company_fundamentals_history "
-                        "(ticker, period_end_date, period, year, "
-                        "net_profit_margin, revenue_yoy_growth) "
-                        "VALUES (?,?,?,?,?,?)",
+                        "INSERT OR IGNORE INTO company_fundamentals "
+                        "(ticker, fetched_date, pe_ratio_ttm, roe_ttm, net_profit_margin, "
+                        "revenue_yoy_growth, piotroski_f_score, dividend_yield, "
+                        "week52_high, week52_low, near_52w_high_rank, market_cap_idr, pbv) "
+                        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
                         (
                             fund.ticker,
-                            fund.fetched_at.strftime("%Y-%m-%d"),
-                            period,
-                            fund.fetched_at.year,
+                            available_date.isoformat(),
+                            fund.pe_ratio_ttm,
+                            fund.roe_ttm,
                             fund.net_profit_margin,
                             fund.revenue_yoy_growth,
+                            fund.piotroski_f_score,
+                            fund.dividend_yield,
+                            fund.week52_high,
+                            fund.week52_low,
+                            fund.near_52w_high_rank,
+                            fund.market_cap_idr,
+                            fund.pbv,
                         ),
                     )
                     inserted += cursor.rowcount
         except Exception as e:
-            logger.warning("company_fundamentals_history: write failed: %s", e)
+            logger.warning("company_fundamentals: historical write failed: %s", e)
         return inserted
 
     def _fetch(self, ticker: str) -> CompanyFundamentals | None:

@@ -4,15 +4,16 @@ Tests for historical quarterly backfill from keystats financial_year_parent.
 Covers:
   - _parse_financial_value() string parsing
   - _parse_historical_rows() data extraction + derived metric computation
-  - _write_historical_rows() INSERT OR IGNORE semantics
-  - Isolation: historical rows go to company_fundamentals_history, NOT to the
-    PIT table (company_fundamentals), so get_fundamentals() is unaffected.
+  - _write_historical_rows() INSERT OR IGNORE + 60-day publication lag
+  - PIT visibility: data appears at period_end + 60 days, not before
+  - Freshness guard: near-future rows are skipped to protect _is_cache_fresh()
+  - Real snapshots win over historical rows when they have a later date
 """
 
 from __future__ import annotations
 
 import sqlite3
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 
@@ -22,6 +23,9 @@ from src.infrastructure.browser.stockbit_fundamentals import (
     _parse_historical_rows,
 )
 
+_LAG = timedelta(days=60)
+_TTL = timedelta(days=7)
+
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -30,8 +34,6 @@ def _make_body(
     net_income_by_year: dict[str, dict[str, str]],
     revenue_by_year: dict[str, dict[str, str]],
 ) -> dict:
-    """Build a minimal keystats body with financial_year_parent populated."""
-
     def _group(fitem_name: str, by_year: dict[str, dict[str, str]]) -> dict:
         year_values = []
         for year, quarters in by_year.items():
@@ -58,6 +60,17 @@ def _make_body(
             "info": {},
         }
     }
+
+
+def _body_for_period_end(period_end: date) -> dict:
+    """Build a single-quarter body whose period_end is exactly period_end."""
+    _period_map = {3: "Q1", 6: "Q2", 9: "Q3", 12: "Q4"}
+    period = _period_map[period_end.month]
+    year = str(period_end.year)
+    return _make_body(
+        net_income_by_year={year: {period: "200 B"}},
+        revenue_by_year={year: {period: "500 B"}},
+    )
 
 
 # ── 1. _parse_financial_value ─────────────────────────────────────────────────
@@ -106,7 +119,7 @@ def test_parse_historical_rows_returns_quarterly_rows():
         assert r.roe_ttm is None
 
 
-# ── 3. Revenue YoY growth computation ─────────────────────────────────────────
+# ── 3. Revenue YoY growth computation ────────────────────────────────────────
 
 
 def test_parse_historical_rows_computes_revenue_yoy_growth_correctly():
@@ -116,7 +129,6 @@ def test_parse_historical_rows_computes_revenue_yoy_growth_correctly():
     )
     rows = _parse_historical_rows("BBCA", body)
     q1_2025 = next(r for r in rows if r.fetched_at.year == 2025 and r.fetched_at.month == 3)
-    # (440 - 400) / 400 * 100 = 10.0
     assert q1_2025.revenue_yoy_growth == pytest.approx(10.0, abs=0.01)
 
 
@@ -139,74 +151,105 @@ def test_parse_historical_rows_computes_net_profit_margin_correctly():
         revenue_by_year={"2024": {"Q1": "500 B"}},
     )
     rows = _parse_historical_rows("BBCA", body)
-    assert len(rows) == 1
-    # 200 / 500 * 100 = 40.0
     assert rows[0].net_profit_margin == pytest.approx(40.0, abs=0.01)
 
 
-# ── 5. INSERT OR IGNORE semantics (targets history table) ────────────────────
+# ── 5. INSERT OR IGNORE semantics ────────────────────────────────────────────
 
 
 def test_write_historical_rows_uses_insert_or_ignore(tmp_path):
     db = tmp_path / "test.db"
     prov = StockbitFundamentalsProvider(api_client=None, db_path=db)
 
-    body = _make_body(
-        net_income_by_year={"2024": {"Q1": "100 B"}},
-        revenue_by_year={"2024": {"Q1": "400 B"}},
-    )
+    # Use a period_end safely in the past (> 60 + 7 days ago)
+    period_end = date.today() - timedelta(days=70)
+    # Snap to a valid quarter-end
+    period_end = date(period_end.year, 3, 31)
+    body = _body_for_period_end(period_end)
     rows = _parse_historical_rows("BBCA", body)
     assert len(rows) == 1
 
-    # Write twice — second write should be ignored due to UNIQUE(ticker, period_end_date)
     prov._write_historical_rows(rows)
-    prov._write_historical_rows(rows)
+    prov._write_historical_rows(rows)  # second write must be ignored
 
     with sqlite3.connect(str(db)) as conn:
         count = conn.execute(
-            "SELECT COUNT(*) FROM company_fundamentals_history WHERE ticker='BBCA'"
+            "SELECT COUNT(*) FROM company_fundamentals WHERE ticker='BBCA'"
         ).fetchone()[0]
     assert count == 1
 
 
-# ── 6. Historical rows are isolated from PIT reads ────────────────────────────
+# ── 6. PIT visibility: available after period_end + 60 days ──────────────────
 
 
-def test_historical_rows_go_to_history_table_not_pit_table(tmp_path):
-    """Historical rows must NOT appear in company_fundamentals (the PIT table)."""
+def test_historical_row_visible_after_publication_lag(tmp_path):
+    """Data becomes visible at period_end + 60 days, not at period_end."""
     db = tmp_path / "test.db"
     prov = StockbitFundamentalsProvider(api_client=None, db_path=db)
 
-    body = _make_body(
-        net_income_by_year={"2024": {"Q1": "200 B"}},
-        revenue_by_year={"2024": {"Q1": "500 B"}},
-    )
+    period_end = date(2024, 3, 31)  # Q1 2024
+    body = _body_for_period_end(period_end)
+    prov._write_historical_rows(_parse_historical_rows("BBCA", body))
+
+    available = period_end + _LAG  # 2024-05-30
+
+    # One day before available → not visible
+    result_before = prov.get_fundamentals("BBCA", as_of_date=available - timedelta(days=1))
+    assert result_before is None
+
+    # On available date → visible
+    result_on = prov.get_fundamentals("BBCA", as_of_date=available)
+    assert result_on is not None
+    assert result_on.net_profit_margin == pytest.approx(40.0, abs=0.01)
+
+
+# ── 7. Freshness guard: near-future/recent rows are skipped ──────────────────
+
+
+def test_recent_quarter_skipped_to_protect_freshness_check(tmp_path):
+    """A quarter whose available_date is within TTL window must not be written."""
+    db = tmp_path / "test.db"
+    prov = StockbitFundamentalsProvider(api_client=None, db_path=db)
+
+    # available_date = today → within TTL → must be skipped
+    too_recent_period_end = date.today() - _LAG
+    # Snap to nearest valid quarter-end in the past
+    month = too_recent_period_end.month
+    quarter_month = (((month - 1) // 3) * 3) + 3
+    too_recent_period_end = date(too_recent_period_end.year, quarter_month,
+                                  31 if quarter_month in (3, 12) else 30)
+    body = _body_for_period_end(too_recent_period_end)
     prov._write_historical_rows(_parse_historical_rows("BBCA", body))
 
     with sqlite3.connect(str(db)) as conn:
-        pit_count = conn.execute(
+        count = conn.execute(
             "SELECT COUNT(*) FROM company_fundamentals WHERE ticker='BBCA'"
         ).fetchone()[0]
-        hist_count = conn.execute(
-            "SELECT COUNT(*) FROM company_fundamentals_history WHERE ticker='BBCA'"
-        ).fetchone()[0]
-
-    assert pit_count == 0, "PIT table must not contain derived historical rows"
-    assert hist_count == 1
+    assert count == 0, "Near-future available_date must not be written to PIT table"
 
 
-def test_get_fundamentals_does_not_read_from_history_table(tmp_path):
-    """get_fundamentals() with as_of_date returns None when only history rows exist."""
+# ── 8. Real snapshot wins over historical row ─────────────────────────────────
+
+
+def test_real_snapshot_wins_over_historical_row(tmp_path):
+    """A real snapshot (full timestamp, later date) always beats a historical row."""
     db = tmp_path / "test.db"
     prov = StockbitFundamentalsProvider(api_client=None, db_path=db)
 
-    body = _make_body(
-        net_income_by_year={"2024": {"Q1": "200 B"}},
-        revenue_by_year={"2024": {"Q1": "500 B"}},
-    )
+    period_end = date(2024, 3, 31)  # Q1 2024 → available 2024-05-30
+    body = _body_for_period_end(period_end)
     prov._write_historical_rows(_parse_historical_rows("BBCA", body))
 
-    # Even though we have historical data for Q1 2024, PIT read must return None
-    # because the data was never confirmed available on any specific date.
-    result = prov.get_fundamentals("BBCA", as_of_date=date(2024, 6, 1))
-    assert result is None
+    # Real snapshot taken after the historical available date
+    with sqlite3.connect(str(db)) as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO company_fundamentals "
+            "(ticker, fetched_date, net_profit_margin, piotroski_f_score) VALUES (?,?,?,?)",
+            ("BBCA", "2024-07-01T09:00:00", 42.0, 7),
+        )
+
+    # as_of July 15 → real snapshot (Jul 1) wins over historical (May 30)
+    result = prov.get_fundamentals("BBCA", as_of_date=date(2024, 7, 15))
+    assert result is not None
+    assert result.piotroski_f_score == 7
+    assert result.net_profit_margin == pytest.approx(42.0)
