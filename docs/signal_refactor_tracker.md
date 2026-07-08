@@ -100,8 +100,9 @@ is either safe to ignore for now or explicitly deferred.
 
 > **Current blocker: 0 matching target labels available locally as of 2026-07-07.**
 > 5,760 forward labels have been generated via historical backfill (Jan 1 to Jun 15, 2026).
-> However, because there is no historical fundamentals data in the cache prior to
-> June/July 2026, all backfilled observations resolve to `tp_market_cap_bucket: UNKNOWN`.
+> However, because historically derived fundamentals rows (60-day conservative lag)
+> do not include `market_cap_idr`, `piotroski_f_score`, or PE/PBV, all backfilled
+> observations still resolve to `tp_market_cap_bucket: UNKNOWN`.
 > Consequently, 0 labeled target rows match the "large" market-cap bucket requirement.
 >
 > **Diagnostic target `foreign_institutional_accumulation_SWING_10D` added (2026-07-07).**
@@ -116,7 +117,7 @@ is either safe to ignore for now or explicitly deferred.
 > 5,672 matched labels was produced by the wildcard bug, not by genuine accumulation evidence.
 >
 > **Attribution highlights (all 5,760 backfilled labels):**
-> - `tp_market_cap_bucket`: 100% UNKNOWN (expected — no pre-July-2026 fundamentals cache)
+> - `tp_market_cap_bucket`: 100% UNKNOWN (derived historical fundamentals lack `market_cap_idr`)
 > - `ticker_profile_label`: 98.5% `foreign_institutional`, 1.5% `retail_speculative`
 > - `setup_family`: 100% NONE (backfilled fingerprints do not capture setup phase)
 > - `alpha_bucket` / `trigger_bucket` / `alpha_trigger_final_bucket`: 100% NONE
@@ -309,8 +310,11 @@ in the phase tracker sections below.
       providers now uses `date(fetched_date) <= date(as_of_date)` PIT query.
       Shareholding uses `COALESCE(report_date, fetched_date)` as boundary.
       `saham fetch enrichment-history --universe lq45` command added to store
-      periodic enrichment snapshots. Limitation documented: Stockbit provides
-      current values only; no historical fundamentals API exists. 6 new tests.
+       periodic enrichment snapshots. Limitation documented: Stockbit provides
+       current values only; no historical fundamentals API exists. Derived
+       historical fundamentals rows (60-day conservative lag) are now produced
+       via `saham fetch enrichment-history` but lack `market_cap_idr`,
+       `piotroski_f_score`, and PE/PBV. 6 new tests.
       _(2026-07-07)_
 
 ---
@@ -763,8 +767,9 @@ out-of-sample proof justify manual promotion through validator-bounded config.
         - Backfilled LQ45 universe from 2026-01-01 to 2026-06-15 (102 dates).
         - Saved 13,770 historical observations and generated 4,590 SWING_10D labels.
         - Verified that point-in-time lookups functioned correctly; because the local
-          cache contains no fundamentals snapshots prior to 2026-07-07, all historical
-          observations resolved to `tp_market_cap_bucket: UNKNOWN`.
+          cache contains derived historical fundamentals (60-day lag) but includes no
+          `market_cap_idr`, `piotroski_f_score`, or PE/PBV; all historical observations
+          resolved to `tp_market_cap_bucket: UNKNOWN`.
         - Labeled target count remains 0; patch eligibility remains false (not eligible).
 - [x] Diagnostic readiness target `foreign_institutional_accumulation_SWING_10D` added (2026-07-07):
       - Same profile and setup-family filter as canonical target; no market-cap bucket filter.
@@ -776,7 +781,7 @@ out-of-sample proof justify manual promotion through validator-bounded config.
         - Blockers: no rows matching target filter; no available labels match target filter
         - Prior incorrect reading (5,672 matched labels) was produced by the wildcard bug
       - Attribution summary for 5,760 backfilled labels:
-        - `tp_market_cap_bucket`: 100% UNKNOWN (no pre-July-2026 fundamentals cache)
+        - `tp_market_cap_bucket`: 100% UNKNOWN (derived historical fundamentals lack `market_cap_idr`)
         - `ticker_profile_label`: 98.5% foreign_institutional, 1.5% retail_speculative
         - `setup_family`: 100% NONE (backfilled fingerprints do not capture setup phase)
         - `alpha/trigger/coverage/conviction` buckets: 100% NONE
