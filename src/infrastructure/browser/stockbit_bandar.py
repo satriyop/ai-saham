@@ -75,13 +75,6 @@ CREATE TABLE IF NOT EXISTS bandar_detector (
 
 _MIGRATIONS: list[tuple[int, str]] = [
     (0, _CREATE_TABLE),
-    (1, "ALTER TABLE bandar_detector ADD COLUMN top3_accdist TEXT"),
-    (2, "ALTER TABLE bandar_detector ADD COLUMN top5_accdist TEXT"),
-    (3, "ALTER TABLE bandar_detector ADD COLUMN top10_accdist TEXT"),
-    (4, "ALTER TABLE bandar_detector ADD COLUMN number_broker_buysell INTEGER"),
-    (5, "ALTER TABLE bandar_detector ADD COLUMN vwap REAL"),
-    (6, "ALTER TABLE bandar_detector ADD COLUMN total_value REAL"),
-    (7, "ALTER TABLE bandar_detector ADD COLUMN total_volume INTEGER"),
 ]
 
 

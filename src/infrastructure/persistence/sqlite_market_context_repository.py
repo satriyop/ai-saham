@@ -31,17 +31,13 @@ CREATE TABLE IF NOT EXISTS market_context_snapshots (
     factors_json      TEXT NOT NULL,
     staleness_warning TEXT,
     coverage_warning  TEXT,
-    created_at        TEXT NOT NULL
+    created_at        TEXT NOT NULL,
+    regime_confidence REAL,
+    regime_stability  TEXT,
+    days_in_regime    INTEGER,
+    transition_warning TEXT
 )
 """
-
-# A2: new optional regime quality columns added to existing table
-_A2_MIGRATIONS = [
-    "ALTER TABLE market_context_snapshots ADD COLUMN regime_confidence REAL",
-    "ALTER TABLE market_context_snapshots ADD COLUMN regime_stability TEXT",
-    "ALTER TABLE market_context_snapshots ADD COLUMN days_in_regime INTEGER",
-    "ALTER TABLE market_context_snapshots ADD COLUMN transition_warning TEXT",
-]
 
 
 class SQLiteMarketContextRepository:
@@ -54,11 +50,6 @@ class SQLiteMarketContextRepository:
     def _init_db(self) -> None:
         with sqlite3.connect(self._db_path) as conn:
             conn.execute(_CREATE_TABLE)
-            for stmt in _A2_MIGRATIONS:
-                try:
-                    conn.execute(stmt)
-                except sqlite3.OperationalError:
-                    pass  # column already exists — idempotent
             conn.commit()
 
     # ── writes ────────────────────────────────────────────────────────────────

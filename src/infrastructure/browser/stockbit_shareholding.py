@@ -74,20 +74,6 @@ _INSTITUTION_LABELS = {
 
 _CREATE_TABLE = """
 CREATE TABLE IF NOT EXISTS shareholding_composition (
-    ticker TEXT NOT NULL PRIMARY KEY,
-    fetched_date TEXT NOT NULL,
-    report_date TEXT,
-    institution_pct REAL,
-    individual_pct REAL,
-    top_holder_name TEXT,
-    top_holder_pct REAL,
-    total_shares INTEGER,
-    total_shares_formatted TEXT
-)
-"""
-
-_CREATE_TABLE_PIT = """
-CREATE TABLE IF NOT EXISTS shareholding_composition_pit (
     ticker TEXT NOT NULL,
     fetched_date TEXT NOT NULL,
     report_date TEXT,
@@ -103,22 +89,6 @@ CREATE TABLE IF NOT EXISTS shareholding_composition_pit (
 
 _MIGRATIONS: list[tuple[int, str]] = [
     (0, _CREATE_TABLE),
-    (1, "ALTER TABLE shareholding_composition ADD COLUMN total_shares INTEGER"),
-    (2, "ALTER TABLE shareholding_composition ADD COLUMN total_shares_formatted TEXT"),
-    # Migrations 3-6: convert from single-row (ticker PRIMARY KEY) to multi-row
-    # PIT table keyed by (ticker, fetched_date). report_date (IDX quarterly filing
-    # date) is used as the PIT boundary in historical replay; fetched_date is the
-    # fallback when report_date is absent.
-    (3, _CREATE_TABLE_PIT),
-    (
-        4,
-        "INSERT OR IGNORE INTO shareholding_composition_pit "
-        "SELECT ticker, fetched_date, report_date, institution_pct, individual_pct, "
-        "top_holder_name, top_holder_pct, total_shares, total_shares_formatted "
-        "FROM shareholding_composition",
-    ),
-    (5, "DROP TABLE shareholding_composition"),
-    (6, "ALTER TABLE shareholding_composition_pit RENAME TO shareholding_composition"),
 ]
 
 

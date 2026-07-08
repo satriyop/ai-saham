@@ -144,33 +144,7 @@ class StockbitSeasonalityProvider(SeasonalityProvider, StockbitCachingProvider):
                         fetched_at       TEXT,
                         UNIQUE(ticker, year, month, fetched_month, fetched_at)
                     )"""),
-        (1, "CREATE INDEX IF NOT EXISTS idx_seasonality_ticker_month ON seasonality_cache(ticker, fetched_month)"),
-        (2, "ALTER TABLE seasonality_cache ADD COLUMN fetched_at TEXT"),
-        (3, """CREATE TABLE IF NOT EXISTS seasonality_cache_pit (
-                        ticker           TEXT NOT NULL,
-                        year             INTEGER NOT NULL,
-                        month            INTEGER NOT NULL,
-                        avg_return_pct   REAL,
-                        win_rate_pct     REAL,
-                        positive_years   INTEGER,
-                        total_years      INTEGER,
-                        back_years       INTEGER,
-                        source           TEXT,
-                        fetched_month    TEXT NOT NULL,
-                        fetched_at       TEXT,
-                        UNIQUE(ticker, year, month, fetched_month, fetched_at)
-                    )"""),
-        (4, """INSERT INTO seasonality_cache_pit
-                    (ticker, year, month, avg_return_pct, win_rate_pct,
-                     positive_years, total_years, back_years, source,
-                     fetched_month, fetched_at)
-                SELECT ticker, year, month, avg_return_pct, win_rate_pct,
-                       positive_years, total_years, back_years, source,
-                       fetched_month, fetched_at
-                FROM seasonality_cache"""),
-        (5, "DROP TABLE seasonality_cache"),
-        (6, "ALTER TABLE seasonality_cache_pit RENAME TO seasonality_cache"),
-        (7, "CREATE INDEX IF NOT EXISTS idx_seasonality_ticker_month ON seasonality_cache(ticker, year, month, fetched_month, fetched_at)"),
+        (1, "CREATE INDEX IF NOT EXISTS idx_seasonality_ticker_month ON seasonality_cache(ticker, year, month, fetched_month, fetched_at)"),
     ]
 
     def _ensure_schema(self) -> None:

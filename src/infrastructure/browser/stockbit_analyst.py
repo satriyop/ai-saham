@@ -117,21 +117,6 @@ class StockbitAnalystConsensusProvider(AnalystConsensusProvider, StockbitCaching
 
     _MIGRATIONS: list[tuple[int, str]] = [
         (0, """CREATE TABLE IF NOT EXISTS analyst_cache (
-                        ticker             TEXT NOT NULL PRIMARY KEY,
-                        buy_count          INTEGER NOT NULL DEFAULT 0,
-                        hold_count         INTEGER NOT NULL DEFAULT 0,
-                        sell_count         INTEGER NOT NULL DEFAULT 0,
-                        avg_price_target   REAL,
-                        current_price      REAL,
-                        last_updated       TEXT,
-                        fetched_date       TEXT NOT NULL,
-                        price_target_low   REAL,
-                        price_target_high  REAL
-                    )"""),
-        (1, "CREATE INDEX IF NOT EXISTS idx_analyst_ticker_fetched ON analyst_cache(ticker, fetched_date)"),
-        (2, "ALTER TABLE analyst_cache ADD COLUMN price_target_low REAL"),
-        (3, "ALTER TABLE analyst_cache ADD COLUMN price_target_high REAL"),
-        (4, """CREATE TABLE IF NOT EXISTS analyst_cache_pit (
                         ticker             TEXT NOT NULL,
                         buy_count          INTEGER NOT NULL DEFAULT 0,
                         hold_count         INTEGER NOT NULL DEFAULT 0,
@@ -143,17 +128,7 @@ class StockbitAnalystConsensusProvider(AnalystConsensusProvider, StockbitCaching
                         price_target_low   REAL,
                         price_target_high  REAL
                     )"""),
-        (5, """INSERT INTO analyst_cache_pit
-                    (ticker, buy_count, hold_count, sell_count, avg_price_target,
-                     current_price, last_updated, fetched_date, price_target_low,
-                     price_target_high)
-                SELECT ticker, buy_count, hold_count, sell_count, avg_price_target,
-                       current_price, last_updated, fetched_date, price_target_low,
-                       price_target_high
-                FROM analyst_cache"""),
-        (6, "DROP TABLE analyst_cache"),
-        (7, "ALTER TABLE analyst_cache_pit RENAME TO analyst_cache"),
-        (8, "CREATE INDEX IF NOT EXISTS idx_analyst_ticker_fetched ON analyst_cache(ticker, fetched_date)"),
+        (1, "CREATE INDEX IF NOT EXISTS idx_analyst_ticker_fetched ON analyst_cache(ticker, fetched_date)"),
     ]
 
     def _ensure_schema(self) -> None:
