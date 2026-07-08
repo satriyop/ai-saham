@@ -95,10 +95,7 @@ _MIGRATIONS: list[tuple[int, str]] = [
     ),
     (5, "DROP TABLE company_fundamentals"),
     (6, "ALTER TABLE company_fundamentals_pit RENAME TO company_fundamentals"),
-    # Migration 7: separate table for derived historical fundamentals.
-    # These rows are NOT used by PIT reads (get_fundamentals with as_of_date).
-    # Quarter-end date ≠ publication date, so mixing them into the PIT table
-    # would introduce look-ahead bias for as_of queries near the quarter end.
+    # Migration 7: created company_fundamentals_history (superseded by migration 8).
     (
         7,
         """CREATE TABLE IF NOT EXISTS company_fundamentals_history (
@@ -111,6 +108,9 @@ _MIGRATIONS: list[tuple[int, str]] = [
             UNIQUE(ticker, period_end_date)
         )""",
     ),
+    # Migration 8: drop the history table — historical rows now go into the PIT
+    # table with a 60-day publication lag instead of a separate table.
+    (8, "DROP TABLE IF EXISTS company_fundamentals_history"),
 ]
 
 
