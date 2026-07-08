@@ -2793,6 +2793,16 @@ Any implementation based on this recommendation should satisfy:
   require a new external provider.
 - No scoring policy lives in CLI adapters.
 - All tuning uses saved observations and forward labels.
+- Replay-relevant enrichment caches are time-series/PIT-capable (one row per
+  `(ticker, fetched_date)` or `(ticker, fetched_at)`); historical replay reads
+  only rows available on or before `as_of_date` (ADR-038).
+- Derived historical fundamental rows (from Stockbit keystats quarterly trends)
+  are admitted with a 60-day conservative estimated availability
+  (`period_end + 60 days`). They populate only `net_profit_margin` and
+  `revenue_yoy_growth`; `market_cap_idr`, `piotroski_f_score`, PE/PBV, ROE,
+  and dividend yield must remain NULL in derived rows (ADR-038).
+- Derived rows must not suppress live refresh. Freshness guards must not be
+  fooled by recent or future-dated derived rows (ADR-038).
 
 ## Final Recommendation
 

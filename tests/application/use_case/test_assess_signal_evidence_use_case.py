@@ -720,3 +720,43 @@ def test_response_has_all_phase4_fields():
     assert isinstance(resp.active_flags, tuple)
     assert isinstance(resp.flag_adjustment, int)
     assert resp.raw_group_score is not None
+
+
+def test_diagnostic_producers_zero_authority():
+    """Verify that strategy, institutional accumulation, and ticker profile diagnostic
+    producers are not accepted by AssessSignalEvidenceRequest, and that sector context
+    and company quality context are diagnostic-only (zero effective weight).
+    """
+    from src.application.use_case.assess_signal_evidence_use_case import AssessSignalEvidenceRequest
+
+    # Verify field exclusions
+    fields = [f.name for f in AssessSignalEvidenceRequest.__dataclass_fields__.values()]
+    assert "strategy_evidence" not in fields
+    assert "institutional_accumulation_evidence" not in fields
+    assert "ticker_profile_snapshot" not in fields
+
+    # Verify that company quality and sector context have zero scoring weight
+    uc = _use_case()
+    common = dict(
+        setup_evidence=_setup_evidence("MATCH"),
+        flow_confirmation_evidence=_flow_evidence(capped_strength=0.50),
+        setup_phase=_phase_state(SetupPhaseState.BREAKOUT_CONFIRMATION),
+    )
+    empty = uc.execute(_req(**common))
+    filled = uc.execute(_req(
+        **common,
+        sector_context_evidence=_sector_context("BULLISH"),
+        company_quality_context_evidence=_company_quality(88.0),
+    ))
+
+    # The final scores must be identical
+    assert filled.alpha_trigger_score.final_exact_score == pytest.approx(
+        empty.alpha_trigger_score.final_exact_score
+    )
+    assert filled.assessment.score == empty.assessment.score
+
+    # Confirm both diagnostic groups have 0.0 effective weight
+    market = [c for c in filled.alpha_trigger_score.group_contributions if c.group == "market_context"][0]
+    cq = [c for c in filled.alpha_trigger_score.group_contributions if c.group == "company_quality_context"][0]
+    assert market.effective_weight == pytest.approx(0.0)
+    assert cq.effective_weight == pytest.approx(0.0)

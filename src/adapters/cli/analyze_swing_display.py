@@ -1718,8 +1718,9 @@ def print_swing_output(
         if se.coverage_score is not None or se.conviction_score is not None or se.freshness_score is not None:
             history_group.append(scores_table)
 
-        for line in list(se.rationale)[:3]:
-            history_group.append(Text(f"  {line}", style="dim"))
+        if not mr:
+            for line in list(se.rationale)[:3]:
+                history_group.append(Text(f"  {line}", style="dim"))
         if se.unavailable_reasons:
             for reason in list(se.unavailable_reasons)[:2]:
                 history_group.append(Text(f"  ⚠ {reason}", style="dim yellow"))
@@ -1746,7 +1747,9 @@ def print_swing_output(
             call_val = snap.overall_sentiment.value.upper()
             call_style = "green" if call_val == "POSITIVE" else ("red" if call_val == "NEGATIVE" else "yellow")
 
-            sentiment_group.append(Text(f"News Sentiment (3d): [{call_style}]{call_val}[/]", style="bold cyan"))
+            _sentiment_label = Text("News Sentiment (3d): ", style="bold cyan")
+            _sentiment_label.append(call_val, style=call_style)
+            sentiment_group.append(_sentiment_label)
             sentiment_group.append(Text(
                 f"Headlines scanned: {snap.total_count} (+{snap.positive_count} / ={snap.neutral_count} / -{snap.negative_count}) | "
                 f"Confidence: {snap.confidence_pct}%"

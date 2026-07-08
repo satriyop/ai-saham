@@ -218,8 +218,8 @@ Work that can proceed without touching signal authority, scoring, or tuning.
         regularly going forward to build a PIT history.
       - No SignalEngine authority, DecisionPolicy, RiskEngine, tuning patch, or
         diagnostic evidence promotion change.
-- [ ] CLI adapter rendering regression tests for setup phase / evidence output.
-      _(Phase C carry-forward. Adapter-only; no scoring impact.)_
+- [x] CLI adapter rendering regression tests for setup phase / evidence output.
+      _(Fulfilled by Phase D: test_swing_display_strategy.py covers setup_phase, evidence_route, rule fields. 64 display tests pass.)_
 - [ ] Optional docs / README accuracy cleanup.
 - [ ] Optional display-only polish that does not change scoring or decisions
       (e.g. formatting, label wording in CLI panels).
@@ -306,16 +306,24 @@ in the phase tracker sections below.
       stats. _(2026-07-07)_
 - [x] PIT enrichment schema fix: `company_fundamentals` and `shareholding_composition`
       converted from single-row (`ticker PRIMARY KEY`) to multi-row
-      (`UNIQUE(ticker, fetched_date)`) via migrations 3-6. `_read_cache()` in both
-      providers now uses `date(fetched_date) <= date(as_of_date)` PIT query.
-      Shareholding uses `COALESCE(report_date, fetched_date)` as boundary.
-      `saham fetch enrichment-history --universe lq45` command added to store
-       periodic enrichment snapshots. Limitation documented: Stockbit provides
-       current values only; no historical fundamentals API exists. Derived
-       historical fundamentals rows (60-day conservative lag) are now produced
-       via `saham fetch enrichment-history` but lack `market_cap_idr`,
-       `piotroski_f_score`, and PE/PBV. 6 new tests.
-      _(2026-07-07)_
+      `UNIQUE(ticker, fetched_date)` schema (migrations squashed to single baseline
+      migration 0). `_read_cache()` in both providers uses
+      `date(fetched_date) <= date(as_of_date)` PIT query. Shareholding uses
+      `COALESCE(report_date, fetched_date)` as boundary.
+      `saham fetch market --universe lq45` and/or
+      `saham fetch enrichment-history --universe lq45` commands store periodic
+      snapshots to build a PIT history.
+      Derived historical fundamentals (60-day conservative lag) are produced by the
+      Stockbit fundamentals fetch path (`StockbitFundamentalsProvider._fetch()` →
+      `_parse_historical_rows()` → `_write_historical_rows()`). Derived rows
+      populate only `net_profit_margin` and `revenue_yoy_growth`; `market_cap_idr`,
+      `piotroski_f_score`, PE/PBV, ROE, and dividend yield remain NULL. Derived rows
+      use `INSERT OR IGNORE` so live snapshots are never overwritten. A freshness
+      guard skips rows whose estimated availability date (`period_end + 60 days`) is
+      within the live cache TTL window to prevent suppressing live API fetches.
+      Governs data ingestion only; does not promote company-quality evidence or
+      change SignalEngine scoring. See ADR-038.
+      _(2026-07-07; squash 2026-07-08)_
 
 ---
 
@@ -793,6 +801,43 @@ out-of-sample proof justify manual promotion through validator-bounded config.
       live observations under `SWING_10D`; no tuning patches or evidence
       promotion before patch-eligible OOS proof.
 
+### Evidence Authority Guard Coverage
+
+All Phase D–H diagnostic evidence has zero scoring authority. Tests confirm this
+at three layers — no new tests needed:
+
+| Layer | Test file | What is asserted |
+|---|---|---|
+| Domain | `tests/domain/value_objects/test_alpha_trigger_score.py` | `EvidenceAuthorityStatus.DIAGNOSTIC.effective_weight(w) == 0.0` |
+| Application | `tests/application/use_case/test_assess_signal_evidence_use_case.py` | `market.effective_weight == 0.0`, `cq.effective_weight == 0.0` |
+| Application | `tests/application/services/test_alpha_trigger_aggregator.py` | `market.effective_weight == 0.0` |
+| Display | `tests/adapters/cli/test_swing_display_alpha_sector.py` | DIAGNOSTIC groups labelled `— no weight` in output |
+| Display | `tests/adapters/cli/test_swing_display_strategy.py` | Strategy evidence shows `DIAGNOSTIC` disclaimer |
+
+Config source: `config/signal_engine.yaml` registers `market_context` and
+`company_quality_context` as `status: DIAGNOSTIC`. `config/sector_context.yaml`
+registers sector context as `evidence_status: DIAGNOSTIC`.
+
+### PIT Schema Contract Coverage
+
+All 9 replay-relevant enrichment tables are covered by offline deterministic tests:
+
+| Table | Test file |
+|---|---|
+| `company_fundamentals` | `tests/infrastructure/browser/test_pit_enrichment.py` |
+| `shareholding_composition` | `tests/infrastructure/browser/test_pit_enrichment.py` |
+| `analyst_cache` | `tests/infrastructure/persistence/test_pit_schema_contracts.py` |
+| `forward_estimates_cache` | `tests/infrastructure/persistence/test_pit_schema_contracts.py` |
+| `ticker_notation_cache` | `tests/infrastructure/persistence/test_pit_schema_contracts.py` |
+| `stock_meta` | `tests/infrastructure/persistence/test_pit_schema_contracts.py` |
+| `company_profile_cache` | `tests/infrastructure/persistence/test_pit_schema_contracts.py` |
+| `seasonality_cache` | `tests/infrastructure/persistence/test_pit_schema_contracts.py` |
+| `earnings_cache` | `tests/infrastructure/persistence/test_pit_schema_contracts.py` |
+
+Derived fundamentals constraints (60-day lag, INSERT OR IGNORE, freshness guard,
+NULL fields) are covered by `tests/infrastructure/browser/test_historical_fundamentals_backfill.py`.
+Coverage reporter is tested by `tests/infrastructure/persistence/test_sqlite_enrichment_pit_coverage.py`.
+
 ### Verification
 
 - [x] `python -m py_compile` for changed application/domain/config files.
@@ -804,4 +849,6 @@ out-of-sample proof justify manual promotion through validator-bounded config.
 - [x] Full pytest: 2572 passed after `tp_market_cap_bucket` readiness fix.
 - [x] Diagnostic target focused pytest: 14 passed (12 new + 2 existing).
 - [x] Full pytest: 2722 passed after diagnostic target + setup_family fix (2026-07-07).
+- [x] Evidence authority guard coverage verified (2026-07-08) — see table above; no new tests needed.
+- [x] PIT schema contract coverage verified (2026-07-08) — see table above.
 - [x] `git diff --check`.
