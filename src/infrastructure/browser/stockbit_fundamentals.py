@@ -269,8 +269,10 @@ def _parse_historical_rows(ticker: str, body: dict) -> list[CompanyFundamentals]
     available. Only net_profit_margin and revenue_yoy_growth are populated;
     all other fields (market_cap_idr, piotroski_f_score, roe_ttm, etc.) are None.
 
-    fetched_at is set to the quarter end date so PIT queries work correctly:
-      Q1 → March 31, Q2 → June 30, Q3 → Sep 30, Q4 → Dec 31.
+    fetched_at is set to the quarter end date (Q1→Mar31, Q2→Jun30, Q3→Sep30,
+    Q4→Dec31) for use as period_end_date when writing to company_fundamentals_history.
+    These are NOT availability/PIT dates — quarter-end ≠ publication date.
+    Rows go to the diagnostic history table, never to the PIT table.
     """
     try:
         data = body.get("data") if isinstance(body, dict) else None
