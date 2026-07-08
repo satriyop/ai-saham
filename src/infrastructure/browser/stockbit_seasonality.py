@@ -144,7 +144,6 @@ class StockbitSeasonalityProvider(SeasonalityProvider, StockbitCachingProvider):
                         fetched_at       TEXT,
                         UNIQUE(ticker, year, month, fetched_month, fetched_at)
                     )"""),
-        (1, "CREATE INDEX IF NOT EXISTS idx_seasonality_ticker_month ON seasonality_cache(ticker, year, month, fetched_month, fetched_at)"),
     ]
 
     def _ensure_schema(self) -> None:

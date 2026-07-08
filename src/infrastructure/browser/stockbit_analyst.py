@@ -126,9 +126,9 @@ class StockbitAnalystConsensusProvider(AnalystConsensusProvider, StockbitCaching
                         last_updated       TEXT,
                         fetched_date       TEXT NOT NULL,
                         price_target_low   REAL,
-                        price_target_high  REAL
+                        price_target_high  REAL,
+                        UNIQUE(ticker, fetched_date)
                     )"""),
-        (1, "CREATE INDEX IF NOT EXISTS idx_analyst_ticker_fetched ON analyst_cache(ticker, fetched_date)"),
     ]
 
     def _ensure_schema(self) -> None:
