@@ -207,7 +207,7 @@ class StockbitAnalystConsensusProvider(AnalystConsensusProvider, StockbitCaching
             with self._get_conn() as conn:
                 conn.execute(
                     """
-                    INSERT INTO analyst_cache
+                    INSERT OR IGNORE INTO analyst_cache
                         (ticker, buy_count, hold_count, sell_count,
                          avg_price_target, current_price, last_updated, fetched_date,
                          price_target_low, price_target_high)
