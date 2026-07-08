@@ -353,12 +353,17 @@ class AssessSignalResponse:
     coverage_warning: str | None = None
     signal_score_raw: int | None = None  # pre-regime score; None means no regime adjustment applied
     # Phase 4 evidence fields — None/empty when produced by the old flat path
-    evidence_confidence: float | None = None   # 0.0–1.0; None = flat-path, no evidence tracking
+    evidence_confidence: float | None = None   # legacy alias for coverage_score (0.0–1.0; None = flat-path)
     active_flags: tuple[str, ...] = field(default_factory=tuple)
     flag_adjustment: int = 0
     raw_group_score: int | None = None          # score before flag adjustments
     raw_exact_score: float | None = None
     alpha_trigger_score: AlphaTriggerScore | None = None
+
+    @property
+    def coverage_score(self) -> float | None:
+        """Canonical name: evidence completeness (0.0–1.0). Alias for evidence_confidence."""
+        return self.evidence_confidence
 
     @property
     def score(self) -> int:

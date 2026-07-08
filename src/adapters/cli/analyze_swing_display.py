@@ -564,13 +564,11 @@ def _build_signal_panel(signal_assessment) -> Any:
 
     assessment = signal_assessment.assessment
     strength_value, strength_style, _ = _signal_label(signal_assessment)
-    confidence_score = getattr(
-        assessment,
-        "confidence_score",
-        getattr(signal_assessment, "evidence_confidence", 1.0),
+    coverage_score = (
+        getattr(assessment, "coverage_score", None)
+        or getattr(signal_assessment, "evidence_confidence", None)
+        or 1.0
     )
-    if confidence_score is None:
-        confidence_score = 1.0
 
     headline_table = compact_table(show_header=False)
     headline_table.add_column("Strength")
@@ -580,7 +578,7 @@ def _build_signal_panel(signal_assessment) -> Any:
         Text(strength_value, style=strength_style),
         (
             f"score {assessment.score:.1f}  "
-            f"conf {confidence_score:.0%}  "
+            f"cov {coverage_score:.0%}  "
             f"{assessment.entry_quality.value}"
         ),
         "",
@@ -599,7 +597,7 @@ def _build_signal_panel(signal_assessment) -> Any:
         key_map = [
             ("setup_quality_group", "Setup", False),
             ("flow_confirmation_group", "Flow", False),
-            ("evidence_confidence", "Conf%", True),
+            ("evidence_confidence", "Cov%", True),
         ]
         factor_table = compact_table()
         for _, header, _ in key_map:
@@ -1172,16 +1170,14 @@ def print_swing_output(
             "MODERATE": "yellow",
             "WEAK": "red",
         }.get(sa.strength.value, "white")
-        confidence_score = getattr(
-            sa,
-            "confidence_score",
-            getattr(signal_assessment, "evidence_confidence", 1.0),
+        evidence_coverage = (
+            getattr(sa, "coverage_score", None)
+            or getattr(signal_assessment, "evidence_confidence", None)
+            or 1.0
         )
-        if confidence_score is None:
-            confidence_score = 1.0
         signal_text.append(Text(
             f"Explains the Signal column in Verdict: {sa.score_label} "
-            f"{sa.strength.value} / {confidence_score:.0%} confidence "
+            f"{sa.strength.value} / {evidence_coverage:.0%} coverage "
             f"-> {sa.entry_quality.value}",
             style=_sig_style,
         ))
@@ -1198,13 +1194,13 @@ def print_swing_output(
             _group_labels = {
                 "setup_quality_group": "Setup Quality",
                 "flow_confirmation_group": "Flow Confirmation",
-                "evidence_confidence": "Evidence Confidence",
+                "evidence_confidence": "Evidence Coverage",
                 "flag_adjustment": "Flag Adjustment",
             }
             _group_sources = {
                 "setup_quality_group": "SetupEvidence.match_strength (MATCH=100, PARTIAL=60, NO_MATCH=20)",
                 "flow_confirmation_group": "FlowConfirmationEvidence.capped_strength × 100",
-                "evidence_confidence": "present weight / total weight (60% Setup + 40% Flow)",
+                "evidence_confidence": "coverage: present weight / total weight (60% Setup + 40% Flow)",
                 "flag_adjustment": "sum of active flag penalties",
             }
             bd_table = compact_table()
@@ -1286,8 +1282,8 @@ def print_swing_output(
                 style="bold cyan",
             ))
             alpha_trigger_text.append(Text(
-                f"coverage {ats.coverage:.2f}  authority {ats.authority_coverage:.2f}  "
-                f"conviction {ats.conviction:.2f}  "
+                f"coverage {ats.coverage_score:.2f}  authority {ats.authority_coverage_score:.2f}  "
+                f"conviction {ats.conviction_score:.2f}  "
                 f"flow_trigger {'✓ allowed' if ats.flow_trigger_allowed else '✗ blocked'}",
                 style="dim",
             ))

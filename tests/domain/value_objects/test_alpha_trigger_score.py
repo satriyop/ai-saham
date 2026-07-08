@@ -67,3 +67,54 @@ def test_route_fraction_bounds_are_validated():
             trigger_weighted=0.0,
             evidence_status=EvidenceAuthorityStatus.PRODUCTION,
         )
+
+
+# ── canonical naming properties ───────────────────────────────────────────────
+
+def _make_score(coverage: float = 0.75, conviction: float = 0.60,
+                authority: float = 0.65) -> AlphaTriggerScore:
+    return AlphaTriggerScore(
+        alpha_score=70.0,
+        trigger_score=55.0,
+        final_exact_score=61.0,
+        horizon="SWING_10D",
+        alpha_weight=0.40,
+        coverage=coverage,
+        authority_coverage=authority,
+        conviction=conviction,
+    )
+
+
+def test_alpha_trigger_coverage_score_property():
+    ats = _make_score(coverage=0.75)
+    assert ats.coverage_score == pytest.approx(0.75)
+    assert ats.coverage_score == ats.coverage
+
+
+def test_alpha_trigger_authority_coverage_score_property():
+    ats = _make_score(authority=0.65)
+    assert ats.authority_coverage_score == pytest.approx(0.65)
+    assert ats.authority_coverage_score == ats.authority_coverage
+
+
+def test_alpha_trigger_conviction_score_property():
+    ats = _make_score(conviction=0.60)
+    assert ats.conviction_score == pytest.approx(0.60)
+    assert ats.conviction_score == ats.conviction
+
+
+def test_alpha_trigger_to_dict_emits_canonical_and_legacy_keys():
+    ats = _make_score(coverage=0.75, conviction=0.60, authority=0.65)
+    d = ats.to_dict()
+    # Canonical keys present
+    assert "coverage_score" in d
+    assert "conviction_score" in d
+    assert "authority_coverage_score" in d
+    # Legacy keys preserved for compatibility
+    assert "coverage" in d
+    assert "conviction" in d
+    assert "authority_coverage" in d
+    # Values agree
+    assert d["coverage_score"] == pytest.approx(d["coverage"])
+    assert d["conviction_score"] == pytest.approx(d["conviction"])
+    assert d["authority_coverage_score"] == pytest.approx(d["authority_coverage"])

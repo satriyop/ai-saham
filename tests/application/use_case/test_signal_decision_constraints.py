@@ -102,3 +102,65 @@ def test_risk_off_enter_allowed_false_caps_enter_without_mutating_score():
     assert constraints.setup_family == "foreign_bounce"
     assert constraints.effective_size_multiplier == 0.25
     assert "RISK_OFF disables ENTER" in constraints.constraint_reasons
+
+
+def test_decision_policy_receives_coverage_score_and_conviction_score_from_setup_phase():
+    """DecisionPolicyService must receive explicit coverage_score and conviction_score.
+
+    SetupPhaseSnapshot.coverage_score is passed as policy_coverage and
+    SetupPhaseSnapshot.conviction_score as policy_conviction inside
+    assess_signal_evidence_use_case.py. This test verifies the wiring by
+    checking that a low coverage_score produces a coverage constraint reason.
+    """
+    from src.application.use_case.assess_signal_evidence_use_case import (
+        AssessSignalEvidenceRequest,
+        AssessSignalEvidenceUseCase,
+    )
+    from src.domain.value_objects.setup_phase import SetupPhaseSnapshot, SetupPhaseState
+
+    phase = SetupPhaseSnapshot(
+        current_phase=SetupPhaseState.ACCUMULATION,
+        previous_phase=None,
+        phase_age_sessions=3,
+        phase_strength=0.50,
+        coverage_score=0.20,   # deliberately low — below RISK_ON min_coverage=0.70
+        conviction_score=0.80,
+        sequence_valid=True,
+    )
+
+    # Use RISK_OFF where code-default min_coverage=0.80 (coverage 0.20 < 0.80)
+    response = AssessSignalEvidenceUseCase().execute(
+        AssessSignalEvidenceRequest(
+            ticker="TEST",
+            snapshot_date=SNAP,
+            setup_evidence=_setup(),
+            flow_confirmation_evidence=_flow(),
+            market_context=_mctx("RISK_OFF"),
+            setup_family="foreign-bounce",
+            setup_phase=phase,
+        )
+    )
+
+    # Coverage gate should fire (0.20 < min_coverage=0.80 for RISK_OFF in code default)
+    constraints = response.assessment.decision_constraints
+    assert constraints is not None
+    assert any("coverage" in r.lower() for r in constraints.constraint_reasons), (
+        f"Expected coverage constraint reason, got: {constraints.constraint_reasons}"
+    )
+
+    # canonical property exists on SignalAssessment
+    assert response.assessment.coverage_score is not None
+
+
+def test_assess_signal_response_coverage_score_is_alias_for_evidence_confidence():
+    """AssessSignalResponse.coverage_score must equal evidence_confidence."""
+    response = AssessSignalEvidenceUseCase().execute(
+        AssessSignalEvidenceRequest(
+            ticker="TEST",
+            snapshot_date=SNAP,
+            setup_evidence=_setup(),
+            flow_confirmation_evidence=_flow(),
+        )
+    )
+    assert response.coverage_score == response.evidence_confidence
+    assert response.coverage_score is not None

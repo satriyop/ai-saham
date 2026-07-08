@@ -118,7 +118,7 @@ class SignalAssessment:
     breakdown: tuple[tuple[str, float], ...] # (factor_name, component_score) pairs
     rationale: tuple[str, ...]
     snapshot_date: date
-    confidence_score: float = 1.0          # 0.0–1.0 evidence coverage/decision confidence
+    confidence_score: float = 1.0          # legacy alias for coverage_score (evidence completeness, 0.0–1.0)
     decision_constraints: "DecisionConstraints | None" = None
     legacy_conditioned_score: int | None = None
     raw_exact_score: float | None = None
@@ -142,6 +142,11 @@ class SignalAssessment:
                 f"SignalAssessment raw_exact_score must be 0.0–100.0, "
                 f"got {self.raw_exact_score}"
             )
+
+    @property
+    def coverage_score(self) -> float:
+        """Canonical name: evidence completeness (0.0–1.0). Alias for confidence_score."""
+        return self.confidence_score
 
     @property
     def breakdown_dict(self) -> dict[str, float]:
@@ -172,7 +177,8 @@ class SignalAssessment:
             "breakdown": self.breakdown_dict,
             "rationale": list(self.rationale),
             "snapshot_date": self.snapshot_date.isoformat(),
-            "confidence_score": self.confidence_score,
+            "coverage_score": self.confidence_score,   # canonical
+            "confidence_score": self.confidence_score,  # legacy alias
             "raw_exact_score": self.raw_exact_score,
             "alpha_trigger_score": (
                 self.alpha_trigger_score.to_dict()

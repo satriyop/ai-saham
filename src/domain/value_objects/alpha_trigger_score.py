@@ -113,12 +113,28 @@ class AlphaTriggerScore:
     group_contributions: tuple[AlphaTriggerGroupContribution, ...] = field(
         default_factory=tuple
     )
-    coverage: float = 0.0
-    authority_coverage: float = 0.0
-    conviction: float = 0.0
+    coverage: float = 0.0           # legacy field name — use coverage_score property
+    authority_coverage: float = 0.0  # legacy field name — use authority_coverage_score property
+    conviction: float = 0.0          # legacy field name — use conviction_score property
     flow_trigger_allowed: bool = False
     reasons: tuple[str, ...] = field(default_factory=tuple)
     unavailable_reasons: tuple[str, ...] = field(default_factory=tuple)
+
+    # ── canonical name properties ──────────────────────────────────────────────
+    @property
+    def coverage_score(self) -> float:
+        """Evidence completeness: fraction of alpha/trigger groups present."""
+        return self.coverage
+
+    @property
+    def authority_coverage_score(self) -> float:
+        """Post-registration coverage: fraction of groups allowed to affect production scoring."""
+        return self.authority_coverage
+
+    @property
+    def conviction_score(self) -> float:
+        """Directional strength: how strong the present evidence is."""
+        return self.conviction
 
     def __post_init__(self) -> None:
         if not self.horizon:
@@ -144,9 +160,12 @@ class AlphaTriggerScore:
             "alpha_weight": round(self.alpha_weight, 6),
             "trigger_weight": round(1.0 - self.alpha_weight, 6),
             "group_contributions": [c.to_dict() for c in self.group_contributions],
-            "coverage": round(self.coverage, 4),
-            "authority_coverage": round(self.authority_coverage, 4),
-            "conviction": round(self.conviction, 4),
+            "coverage_score": round(self.coverage, 4),         # canonical
+            "authority_coverage_score": round(self.authority_coverage, 4),  # canonical
+            "conviction_score": round(self.conviction, 4),      # canonical
+            "coverage": round(self.coverage, 4),                # legacy alias
+            "authority_coverage": round(self.authority_coverage, 4),  # legacy alias
+            "conviction": round(self.conviction, 4),            # legacy alias
             "flow_trigger_allowed": self.flow_trigger_allowed,
             "reasons": list(self.reasons),
             "unavailable_reasons": list(self.unavailable_reasons),

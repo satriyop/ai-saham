@@ -481,7 +481,9 @@ class TestSignalAssessmentValueObject:
         d = a.to_dict()
         assert set(d.keys()) == {
             "ticker", "score", "legacy_conditioned_score", "strength", "entry_quality",
-            "breakdown", "rationale", "snapshot_date", "confidence_score",
+            "breakdown", "rationale", "snapshot_date",
+            "coverage_score",    # canonical
+            "confidence_score",  # legacy alias
             "raw_exact_score", "alpha_trigger_score", "decision_constraints",
         }
         assert d["ticker"] == "BBCA"
@@ -507,3 +509,42 @@ class TestSignalContext:
         assert ctx.analyst_buy_pct is None
         assert ctx.analyst_upside_pct is None
         assert ctx.forward_pe is None
+
+
+# ── coverage/conviction naming normalization ──────────────────────────────────
+# Verify that canonical property aliases exist and match legacy field values.
+# No behavior change; purely naming contract.
+
+class TestCoverageConvictionNaming:
+    def _make_assessment(self, confidence: float = 0.75) -> SignalAssessment:
+        return SignalAssessment(
+            ticker="BBCA",
+            score=60,
+            strength=SignalStrength.MODERATE,
+            entry_quality=EntryQuality.WATCH,
+            breakdown=(("bandar_intensity", 60.0),),
+            rationale=(),
+            snapshot_date=date.today(),
+            confidence_score=confidence,
+        )
+
+    def test_signal_assessment_coverage_score_is_alias_for_confidence_score(self):
+        a = self._make_assessment(0.75)
+        assert a.coverage_score == a.confidence_score
+        assert a.coverage_score == pytest.approx(0.75)
+
+    def test_to_dict_emits_both_canonical_and_legacy_keys(self):
+        a = self._make_assessment(0.80)
+        d = a.to_dict()
+        # Both keys present and equal
+        assert "coverage_score" in d
+        assert "confidence_score" in d
+        assert d["coverage_score"] == pytest.approx(d["confidence_score"])
+        assert d["coverage_score"] == pytest.approx(0.80)
+
+    def test_signal_assessment_score_and_entry_quality_unchanged_by_naming(self):
+        # Sanity: adding properties does not change computed score or entry_quality
+        a = self._make_assessment(0.60)
+        assert a.score == 60
+        assert a.entry_quality == EntryQuality.WATCH
+        assert a.coverage_score == pytest.approx(0.60)

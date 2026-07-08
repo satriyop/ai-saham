@@ -357,6 +357,37 @@ in the phase tracker sections below.
 
 ## Known Technical Debt (Explicitly Tracked)
 
+### TD-2: Coverage/Conviction Naming Normalization
+
+**Status:** Normalized (aliases added). Legacy fields retained for compatibility.
+
+**What was the problem:** `confidence_score` on `SignalAssessment` conflated evidence completeness
+(how many groups are present) with evidence strength (how strong they are). `AlphaTriggerScore`
+used bare `coverage`, `conviction`, `authority_coverage` without the `_score` suffix.
+
+**What was done (2026-07-08, no behavior change):**
+- `SignalAssessment.coverage_score` property added → alias for `confidence_score`.
+- `AlphaTriggerScore.coverage_score`, `.conviction_score`, `.authority_coverage_score` properties
+  added. `to_dict()` now emits both canonical `_score` suffixed keys and legacy bare keys.
+- `AssessSignalResponse.coverage_score` property added → alias for `evidence_confidence`.
+- CLI display wording updated: "conf" → "cov" for evidence completeness in headline panel;
+  `evidence_confidence` breakdown label renamed "Evidence Coverage".
+- Field comments updated to mark `confidence_score` and `evidence_confidence` as legacy aliases.
+
+**What remains (no rush):**
+- `confidence_score` field on `SignalAssessment` still the actual dataclass field.
+- `evidence_confidence` field on `AssessSignalResponse` still the actual dataclass field.
+- `coverage`, `conviction`, `authority_coverage` on `AlphaTriggerScore` still the actual fields.
+- Legacy JSON keys still emitted (compatibility). Remove in a future clean-break bump.
+
+**Semantic definitions locked:**
+- `coverage_score` = evidence completeness (present groups / total groups by weight)
+- `conviction_score` = directional strength of present evidence
+- `authority_coverage_score` = fraction of evidence groups allowed to affect production scoring
+- `confidence_score` = legacy alias for `coverage_score` only
+
+---
+
 ### TD-1: Double Regime Effect — regime_conditioning + decision_policy both active
 
 **Status:** Resolved (double-regime effect fixed). Cleanup deferred pending live labels.
