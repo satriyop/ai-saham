@@ -402,3 +402,109 @@ def test_display_multi_renders_rich_accumulation_panel(capsys):
     assert "Pattern" in out
     assert "Run Context" not in out
     assert "Broker Flow" in out
+
+
+def test_display_results_renders_phase_column_and_note(capsys):
+    from src.domain.value_objects.setup_phase import SetupPhaseSnapshot, SetupPhaseState
+
+    setup_phase = SetupPhaseSnapshot(
+        current_phase=SetupPhaseState.ACCUMULATION,
+        previous_phase=None,
+        phase_age_sessions=1,
+        phase_strength=0.6,
+        coverage_score=0.67,
+        conviction_score=0.4,
+        sequence_valid=True,
+    )
+    response = AccumulationScreenResponse(
+        candidates=[_candidate(setup_phase=setup_phase)],
+        screened_at=date(2026, 6, 19),
+        window_days=7,
+        total_tickers_checked=1,
+        tickers_skipped=0,
+        provider="stockbit",
+    )
+
+    _display_results(
+        response=response,
+        universe_label="lq45",
+        top_n=10,
+        show_top_broker=False,
+        vwap_only=False,
+        squeeze_only=False,
+        include_explanation=False,
+    )
+
+    out = capsys.readouterr().out
+    assert "Phase" in out
+    assert "ACCUMULATION" in out
+    assert "accumulation-lifecycle diagnostic" in out
+    assert "saham analyze swing TICKER --setup SETUP" in out
+
+
+def test_display_results_shows_unknown_phase_when_detection_unavailable(capsys):
+    response = AccumulationScreenResponse(
+        candidates=[_candidate()],  # setup_phase defaults to None
+        screened_at=date(2026, 6, 19),
+        window_days=7,
+        total_tickers_checked=1,
+        tickers_skipped=0,
+        provider="stockbit",
+    )
+
+    _display_results(
+        response=response,
+        universe_label="lq45",
+        top_n=10,
+        show_top_broker=False,
+        vwap_only=False,
+        squeeze_only=False,
+        include_explanation=False,
+    )
+
+    out = capsys.readouterr().out
+    assert "UNKNOWN" in out
+
+
+def test_screen_accum_json_includes_setup_phase(monkeypatch):
+    from src.domain.value_objects.setup_phase import SetupPhaseSnapshot, SetupPhaseState
+
+    setup_phase = SetupPhaseSnapshot(
+        current_phase=SetupPhaseState.COMPRESSION,
+        previous_phase=SetupPhaseState.ACCUMULATION,
+        phase_age_sessions=2,
+        phase_strength=0.7,
+        coverage_score=0.8,
+        conviction_score=0.56,
+        sequence_valid=True,
+    )
+
+    class FakeUseCase:
+        def execute(self, request):
+            return AccumulationScreenResponse(
+                candidates=[_candidate(setup_phase=setup_phase)],
+                screened_at=date(2026, 6, 28),
+                window_days=request.window_days,
+                total_tickers_checked=len(request.tickers),
+                tickers_skipped=0,
+                provider="fake",
+            )
+
+    monkeypatch.setattr(
+        accum_cli,
+        "create_accumulation_screen_workflow",
+        lambda **kwargs: SimpleNamespace(
+            use_case=FakeUseCase(),
+            broker_repository=object(),
+            market_repository=object(),
+        ),
+    )
+
+    result = runner.invoke(app, ["screen", "accum", "INDF", "--format", "json"])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    candidate_json = payload["candidates"][0]
+    assert "setup_phase" in candidate_json
+    assert candidate_json["setup_phase"]["current_phase"] == "COMPRESSION"
+    assert candidate_json["setup_phase"]["previous_phase"] == "ACCUMULATION"

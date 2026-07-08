@@ -1524,3 +1524,71 @@ def test_screen_result_returned_even_when_persistence_fails():
     # Response returned despite persistence failure
     assert len(response.candidates) == 1
     assert response.candidates[0].ticker == "BBCA"
+
+
+def test_screen_populates_setup_phase_for_displayed_candidates():
+    """Displayed screen candidates get setup_phase populated, not only persisted
+    observations — no candidate_observations_repository is injected here."""
+    session_dates = _weekdays(date(2026, 1, 1), 9)
+    as_of = session_dates[-1]
+    candles = [
+        _candle("BBCA", date(2025, 12, 1) + timedelta(days=i), Decimal("100")) for i in range(45)
+    ]
+    summaries = [_summary("BBCA", day, Decimal("110")) for day in session_dates]
+
+    use_case = AccumulationScreenUseCase(
+        broker_repository=MockBrokerRepository(summaries),
+        market_repository=MockMarketRepository(candles),
+    )
+
+    response = use_case.execute(
+        AccumulationScreenRequest(
+            tickers=["BBCA"],
+            window_days=7,
+            min_net_buy_days=1,
+            as_of_date=as_of,
+        )
+    )
+
+    from src.domain.value_objects.setup_phase import SetupPhaseSnapshot
+
+    candidate = response.candidates[0]
+    assert candidate.setup_phase is not None
+    assert isinstance(candidate.setup_phase, SetupPhaseSnapshot)
+    assert candidate.to_dict()["setup_phase"] == candidate.setup_phase.to_dict()
+
+
+def test_screen_setup_phase_is_none_when_detection_fails(monkeypatch):
+    """A detection failure must not crash the screen; setup_phase falls back to None."""
+    session_dates = _weekdays(date(2026, 1, 1), 9)
+    as_of = session_dates[-1]
+    candles = [
+        _candle("BBCA", date(2025, 12, 1) + timedelta(days=i), Decimal("100")) for i in range(45)
+    ]
+    summaries = [_summary("BBCA", day, Decimal("110")) for day in session_dates]
+
+    def _boom(self, **kwargs):
+        raise RuntimeError("detector exploded")
+
+    monkeypatch.setattr(
+        "src.application.services.setup_phase_detector.SetupPhaseDetector.detect",
+        _boom,
+    )
+
+    use_case = AccumulationScreenUseCase(
+        broker_repository=MockBrokerRepository(summaries),
+        market_repository=MockMarketRepository(candles),
+    )
+
+    response = use_case.execute(
+        AccumulationScreenRequest(
+            tickers=["BBCA"],
+            window_days=7,
+            min_net_buy_days=1,
+            as_of_date=as_of,
+        )
+    )
+
+    assert len(response.candidates) == 1
+    assert response.candidates[0].setup_phase is None
+    assert response.candidates[0].to_dict()["setup_phase"] is None

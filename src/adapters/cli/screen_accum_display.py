@@ -116,6 +116,39 @@ def notation_detail(snapshot) -> str:
 
 _STRAT_SYMBOL = {"LOW_RISK": "↑", "HIGH_RISK": "↓", "MODERATE": "~"}
 
+_PHASE_LABELS = {
+    "NONE": "NONE",
+    "ACCUMULATION": "ACCUMULATION",
+    "COMPRESSION": "COMPRESSION",
+    "BREAKOUT_CONFIRMATION": "BREAKOUT",
+    "EXHAUSTION": "EXHAUSTION",
+    "DISTRIBUTION": "DISTRIBUTION",
+    "FAILED": "FAILED",
+}
+
+_PHASE_STYLES = {
+    "ACCUMULATION": "cyan",
+    "COMPRESSION": "yellow",
+    "BREAKOUT": "bold green",
+    "EXHAUSTION": "yellow",
+    "DISTRIBUTION": "red",
+    "FAILED": "bold red",
+    "NONE": "bright_black",
+    "UNKNOWN": "bright_black",
+}
+
+
+def _phase_cell(setup_phase) -> Text:
+    """Render the accumulation-lifecycle phase diagnostic for a candidate row.
+
+    setup_phase is None when detection was unavailable or failed — displayed as
+    UNKNOWN, distinct from a successfully-detected SetupPhaseState.NONE.
+    """
+    if setup_phase is None:
+        return Text("UNKNOWN", style=_PHASE_STYLES["UNKNOWN"])
+    label = _PHASE_LABELS.get(setup_phase.current_phase.value, "UNKNOWN")
+    return Text(label, style=_PHASE_STYLES.get(label, ""))
+
 
 def _price_text(value: Decimal | None) -> str:
     if value is None:
@@ -368,6 +401,7 @@ def display_results(
     action_table.add_column("Accum", justify="right")
     action_table.add_column("Gate")
     action_table.add_column("Trend")
+    action_table.add_column("Phase")
     if strategy_signals is not None:
         action_table.add_column("Strat")
 
@@ -474,6 +508,7 @@ def display_results(
             Text(f"{c.foreign_flow_score:.1f}", style=score_style),
             gate_cell,
             c.trend,
+            _phase_cell(c.setup_phase),
         ]
         if strategy_signals is not None:
             raw = strategy_signals.get(c.ticker, "?")
@@ -695,7 +730,18 @@ def display_results(
                     has_detail_rows = True
 
     sections = [
-        panel(action_table, title="Candidate Actions"),
+        panel(
+            Group(
+                action_table,
+                Text(
+                    "\nPhase is accumulation-lifecycle diagnostic; use "
+                    "saham analyze swing TICKER --setup SETUP for setup gates "
+                    "and entry validation.",
+                    style="dim",
+                ),
+            ),
+            title="Candidate Actions",
+        ),
         panel(evidence_table, title="Foreign Flow Score"),
         panel(signal_table, title="Signal"),
         panel(

@@ -317,6 +317,9 @@ class AccumulationCandidate:
     risk_assessment: "RiskAssessment | None" = None
     # Unified trade action verdict — requires both signal_assessment and risk funnel
     trade_setup: "TradeSetup | None" = None
+    # Accumulation-lifecycle diagnostic (ACCUMULATION/COMPRESSION/BREAKOUT_CONFIRMATION/
+    # EXHAUSTION/DISTRIBUTION/FAILED/NONE); None when detection is unavailable or fails.
+    setup_phase: "SetupPhaseSnapshot | None" = None
 
     def to_dict(self) -> dict:
         return {
@@ -402,6 +405,7 @@ class AccumulationCandidate:
             "risk_status": self.risk_assessment.risk_level_name if self.risk_assessment else None,
             "risk_confidence": self.risk_assessment.confidence if self.risk_assessment else None,
             "risk_gate": self.risk_assessment.gate_triggered if self.risk_assessment else None,
+            "setup_phase": self.setup_phase.to_dict() if self.setup_phase else None,
         }
 
 
@@ -1144,6 +1148,10 @@ class AccumulationScreenUseCase:
             result.signal_assessment = self._signal_engine.evaluate_with_context(
                 result.ticker, signal_ctx, flow_confirmation_evidence=_flow_ev
             )
+            # Accumulation-lifecycle diagnostic for screen display and persisted
+            # observations alike — computed once here and reused by
+            # _persist_candidate_observations() to avoid detecting twice.
+            result.setup_phase = self._detect_candidate_setup_phase(result, _flow_ev, today)
 
             if (
                 request.min_foreign_flow_score_enabled
@@ -1194,11 +1202,9 @@ class AccumulationScreenUseCase:
             captured_at = datetime.now()
             observations = []
             for c, screen_result, flow_ev in all_results:
-                setup_phase = self._detect_candidate_setup_phase(
-                    c,
-                    flow_ev,
-                    snapshot_date,
-                )
+                # Reuse the phase already detected in execute() — same candidate,
+                # same flow evidence, same snapshot date. Avoids detecting twice.
+                setup_phase = c.setup_phase
                 strategy_evidence = self._build_candidate_strategy_evidence(
                     c,
                     setup_phase,
