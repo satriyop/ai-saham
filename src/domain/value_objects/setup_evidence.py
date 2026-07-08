@@ -51,6 +51,14 @@ class SetupEvidence:
     volume_trend_ratio: float | None  # 5d/20d volume ratio; None when unavailable
     volume_freshness: Freshness
     candle_source: str | None    # e.g. "idx", "stockbit", "yahoo_inferred", None
+    # Entry authority metadata — sourced from config/swing_setups.yaml via
+    # EvaluateSwingSetupUseCase + SetupEvidenceBuilder, never inferred from
+    # setup_name. DecisionPolicyService reads these to decide whether a MATCH
+    # is allowed to independently produce ENTER. Defaults are backward-compat
+    # only (no setup_eval available); config is explicit for every named setup.
+    setup_family: str | None = None
+    entry_authority: bool = True
+    can_enter_from_phases: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if self.match_strength not in _VALID_STRENGTH:
@@ -97,4 +105,7 @@ class SetupEvidence:
             "volume_trend_ratio": self.volume_trend_ratio,
             "volume_freshness": self.volume_freshness.value,
             "candle_source": self.candle_source,
+            "setup_family": self.setup_family,
+            "entry_authority": self.entry_authority,
+            "can_enter_from_phases": list(self.can_enter_from_phases),
         }

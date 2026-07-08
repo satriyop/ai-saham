@@ -40,11 +40,17 @@ def _setup_eval(
     name: str = "pullback_uptrend",
     match: str = "MATCH",
     failed_reasons: tuple[str, ...] = (),
+    family: str = "unknown",
+    entry_authority: bool = True,
+    can_enter_from_phases: tuple[str, ...] = (),
 ) -> SimpleNamespace:
     return SimpleNamespace(
         name=name,
         match=SimpleNamespace(value=match),
         failed_reasons=failed_reasons,
+        family=family,
+        entry_authority=entry_authority,
+        can_enter_from_phases=can_enter_from_phases,
     )
 
 
@@ -158,6 +164,48 @@ def test_no_setup_eval():
     assert evidence.setup_match == "NO_MATCH"
     assert evidence.match_strength == 20.0
     assert evidence.failed_gates == ()
+    # No setup_eval available — backward-compat defaults, not a hard failure.
+    assert evidence.setup_family is None
+    assert evidence.entry_authority is True
+    assert evidence.can_enter_from_phases == ()
+
+
+def test_entry_authority_metadata_threaded_from_setup_eval():
+    """Entry authority metadata comes from setup_eval (config-derived), never
+    guessed from setup name — and is visible in evidence.setup_evidence JSON."""
+    evidence = SetupEvidenceBuilder().build(
+        _candidate(),
+        _setup_eval(
+            name="smart-money-confirmed",
+            family="confirmation",
+            entry_authority=False,
+            can_enter_from_phases=(),
+        ),
+    )
+    assert evidence.setup_family == "confirmation"
+    assert evidence.entry_authority is False
+    assert evidence.can_enter_from_phases == ()
+
+    d = evidence.to_dict()
+    assert d["setup_family"] == "confirmation"
+    assert d["entry_authority"] is False
+    assert d["can_enter_from_phases"] == []
+
+
+def test_phase_gated_entry_authority_metadata_threaded_from_setup_eval():
+    evidence = SetupEvidenceBuilder().build(
+        _candidate(),
+        _setup_eval(
+            name="foreign-bounce",
+            family="accumulation",
+            entry_authority=True,
+            can_enter_from_phases=("BREAKOUT_CONFIRMATION",),
+        ),
+    )
+    assert evidence.setup_family == "accumulation"
+    assert evidence.entry_authority is True
+    assert evidence.can_enter_from_phases == ("BREAKOUT_CONFIRMATION",)
+    assert evidence.to_dict()["can_enter_from_phases"] == ["BREAKOUT_CONFIRMATION"]
 
 
 def test_freshness_fields_are_enum_instances():

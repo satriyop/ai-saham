@@ -39,7 +39,13 @@ class AlphaTriggerAggregationRequest:
 
 
 class AlphaTriggerAggregator:
-    """Project canonical evidence-group scores into Alpha and Trigger views."""
+    """Project canonical evidence-group scores into Alpha and Trigger views.
+
+    Trigger score is phase-gated. Institutional-flow trigger contribution is
+    routed only when setup phase is BREAKOUT_CONFIRMATION and flow confirmation
+    status is CONFIRMED. Otherwise the flow score remains visible as evidence,
+    but trigger contribution is blocked with an explicit reason.
+    """
 
     def __init__(self, config: "AlphaTriggerConfig") -> None:
         self._config = config

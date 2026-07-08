@@ -90,6 +90,23 @@ def _production_contribution(group: str = "setup_quality") -> AlphaTriggerGroupC
     )
 
 
+def _phase_blocked_flow_contribution() -> AlphaTriggerGroupContribution:
+    return AlphaTriggerGroupContribution(
+        group="institutional_flow",
+        score=95.0,
+        configured_weight=0.30,
+        effective_weight=0.30,
+        alpha_fraction=0.80,
+        trigger_fraction=0.20,
+        alpha_weighted=22.8,
+        trigger_weighted=0.0,
+        evidence_status=EvidenceAuthorityStatus.PRODUCTION,
+        present=True,
+        trigger_allowed=False,
+        reasons=("flow_trigger_blocked:setup_phase_not_breakout_confirmation",),
+    )
+
+
 def _diagnostic_contribution(group: str = "sector_context") -> AlphaTriggerGroupContribution:
     return AlphaTriggerGroupContribution(
         group=group,
@@ -295,6 +312,59 @@ class TestAlphaTriggerPanel:
 
         out = capsys.readouterr().out
         assert "allowed" in out or "blocked" in out
+
+    def test_flow_trigger_blocked_reason_rendered_readably(self, capsys):
+        ats = AlphaTriggerScore(
+            alpha_score=80.0,
+            trigger_score=70.0,
+            final_exact_score=74.0,
+            horizon="SWING_10D",
+            alpha_weight=0.40,
+            group_contributions=(
+                _production_contribution(),
+                _phase_blocked_flow_contribution(),
+            ),
+            coverage=1.0,
+            authority_coverage=1.0,
+            conviction=0.74,
+            flow_trigger_allowed=False,
+            reasons=("flow_trigger_blocked:setup_phase_not_breakout_confirmation",),
+            unavailable_reasons=(),
+        )
+        sa = _minimal_signal_assessment(alpha_trigger_score=ats)
+
+        _call_print(include_signal_detail=True, signal_assessment=sa)
+
+        out = capsys.readouterr().out
+        assert "Flow trigger blocked" in out
+        assert "setup phase is not BREAKOUT_CONFIRMATION" in out
+
+    def test_phase_blocked_flow_output_does_not_imply_weak_flow(self, capsys):
+        ats = AlphaTriggerScore(
+            alpha_score=80.0,
+            trigger_score=70.0,
+            final_exact_score=74.0,
+            horizon="SWING_10D",
+            alpha_weight=0.40,
+            group_contributions=(
+                _production_contribution(),
+                _phase_blocked_flow_contribution(),
+            ),
+            coverage=1.0,
+            authority_coverage=1.0,
+            conviction=0.74,
+            flow_trigger_allowed=False,
+            reasons=("flow_trigger_blocked:setup_phase_not_breakout_confirmation",),
+            unavailable_reasons=(),
+        )
+        sa = _minimal_signal_assessment(alpha_trigger_score=ats)
+
+        _call_print(include_signal_detail=True, signal_assessment=sa)
+
+        out = capsys.readouterr().out.lower()
+        assert "95.0" in out
+        assert "weak flow" not in out
+        assert "flow_not_confirmed" not in out
 
     def test_company_quality_context_row_renders_diagnostic_no_weight(self, capsys):
         # company_quality_context feeds the slot DIAGNOSTIC-only: it must appear

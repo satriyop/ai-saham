@@ -65,12 +65,19 @@ def _req(**kwargs) -> AssessSignalEvidenceRequest:
     return AssessSignalEvidenceRequest(**defaults)
 
 
-def _setup_evidence(match: str = "MATCH") -> SetupEvidence:
+def _setup_evidence(
+    match: str = "MATCH",
+    *,
+    setup_name: str = "foreign-bounce",
+    setup_family: str | None = None,
+    entry_authority: bool = True,
+    can_enter_from_phases: tuple[str, ...] = (),
+) -> SetupEvidence:
     strengths = {"MATCH": 100.0, "PARTIAL": 60.0, "NO_MATCH": 20.0}
     return SetupEvidence(
         ticker="TEST",
         snapshot_date=SNAP,
-        setup_name="foreign-bounce",
+        setup_name=setup_name,
         setup_match=match,
         match_strength=strengths[match],
         failed_gates=(),
@@ -84,6 +91,9 @@ def _setup_evidence(match: str = "MATCH") -> SetupEvidence:
         volume_trend_ratio=1.2,
         volume_freshness=Freshness.FRESH,
         candle_source="stockbit",
+        setup_family=setup_family,
+        entry_authority=entry_authority,
+        can_enter_from_phases=can_enter_from_phases,
     )
 
 
@@ -221,6 +231,103 @@ def test_setup_phase_coverage_and_conviction_drive_decision_floors():
     assert resp.assessment.entry_quality.value == "WATCH"
     assert any(
         "ENTER requires coverage" in reason
+        for reason in resp.assessment.decision_constraints.constraint_reasons
+    )
+
+
+# ── setup entry authority (end-to-end through SetupEvidence) ──────────────────
+
+def test_confirmation_only_setup_evidence_caps_enter_to_watch():
+    """smart-money-confirmed MATCH with entry_authority=False must not
+    independently produce ENTER, even with a high combined score."""
+    resp = _use_case().execute(
+        _req(
+            setup_evidence=_setup_evidence(
+                "MATCH",
+                setup_name="smart-money-confirmed",
+                setup_family="confirmation",
+                entry_authority=False,
+            ),
+            flow_confirmation_evidence=_flow_evidence(0.95),
+            setup_family="smart-money-confirmed",
+        )
+    )
+
+    assert resp.assessment.entry_quality.value == "WATCH"
+    assert resp.assessment.decision_constraints.max_decision == "WATCH"
+    assert any(
+        "smart_money_confirmed has no standalone entry authority" in reason
+        for reason in resp.assessment.decision_constraints.constraint_reasons
+    )
+
+
+def test_phase_gated_setup_evidence_caps_enter_when_phase_not_breakout():
+    """foreign-bounce MATCH but setup_phase=ACCUMULATION caps ENTER to WATCH."""
+    resp = _use_case().execute(
+        _req(
+            setup_evidence=_setup_evidence(
+                "MATCH",
+                setup_name="foreign-bounce",
+                setup_family="accumulation",
+                entry_authority=True,
+                can_enter_from_phases=("BREAKOUT_CONFIRMATION",),
+            ),
+            flow_confirmation_evidence=_flow_evidence(0.95),
+            setup_family="foreign-bounce",
+            setup_phase=_phase_state(SetupPhaseState.ACCUMULATION),
+        )
+    )
+
+    assert resp.assessment.entry_quality.value == "WATCH"
+    assert resp.assessment.decision_constraints.max_decision == "WATCH"
+    assert any(
+        "requires phase BREAKOUT_CONFIRMATION for ENTER" in reason
+        for reason in resp.assessment.decision_constraints.constraint_reasons
+    )
+
+
+def test_phase_gated_setup_evidence_allows_enter_at_breakout_confirmation():
+    """foreign-bounce MATCH with setup_phase=BREAKOUT_CONFIRMATION can remain
+    ENTER when nothing else caps the decision."""
+    resp = _use_case().execute(
+        _req(
+            setup_evidence=_setup_evidence(
+                "MATCH",
+                setup_name="foreign-bounce",
+                setup_family="accumulation",
+                entry_authority=True,
+                can_enter_from_phases=("BREAKOUT_CONFIRMATION",),
+            ),
+            flow_confirmation_evidence=_flow_evidence(0.95),
+            setup_family="foreign-bounce",
+            setup_phase=_phase_state(SetupPhaseState.BREAKOUT_CONFIRMATION),
+        )
+    )
+
+    assert resp.assessment.entry_quality.value == "ENTER"
+    assert resp.assessment.decision_constraints.max_decision == "ENTER"
+
+
+def test_missing_setup_phase_with_required_phases_caps_enter_to_watch():
+    """Missing setup_phase with a phase-gated setup must not default-allow ENTER."""
+    resp = _use_case().execute(
+        _req(
+            setup_evidence=_setup_evidence(
+                "MATCH",
+                setup_name="foreign-bounce",
+                setup_family="accumulation",
+                entry_authority=True,
+                can_enter_from_phases=("BREAKOUT_CONFIRMATION",),
+            ),
+            flow_confirmation_evidence=_flow_evidence(0.95),
+            setup_family="foreign-bounce",
+            setup_phase=None,
+        )
+    )
+
+    assert resp.assessment.entry_quality.value == "WATCH"
+    assert any(
+        "requires setup phase for ENTER" in reason
         for reason in resp.assessment.decision_constraints.constraint_reasons
     )
 

@@ -87,6 +87,65 @@ def test_market_and_company_diagnostic_groups_do_not_move_final_score():
     assert company.evidence_status is EvidenceAuthorityStatus.DIAGNOSTIC
 
 
+def test_flow_trigger_blocked_by_non_breakout_phase_keeps_flow_score_visible():
+    score = AlphaTriggerAggregator(AlphaTriggerConfig()).aggregate(
+        AlphaTriggerAggregationRequest(
+            horizon="SWING_10D",
+            groups=(
+                AlphaTriggerGroupInput("setup_quality", 70.0, 0.35, True),
+                AlphaTriggerGroupInput("institutional_flow", 95.0, 0.30, True),
+            ),
+            setup_phase=_compression_phase(),
+            flow_confirmation_evidence=_flow("CONFIRMED"),
+        )
+    )
+
+    flow = [c for c in score.group_contributions if c.group == "institutional_flow"][0]
+    assert flow.score == pytest.approx(95.0)
+    assert flow.trigger_allowed is False
+    assert flow.trigger_weighted == pytest.approx(0.0)
+    assert "flow_trigger_blocked:setup_phase_not_breakout_confirmation" in flow.reasons
+
+
+def test_flow_trigger_routed_for_breakout_phase_with_confirmed_flow():
+    score = AlphaTriggerAggregator(AlphaTriggerConfig()).aggregate(
+        AlphaTriggerAggregationRequest(
+            horizon="SWING_10D",
+            groups=(
+                AlphaTriggerGroupInput("setup_quality", 70.0, 0.35, True),
+                AlphaTriggerGroupInput("institutional_flow", 95.0, 0.30, True),
+            ),
+            setup_phase=_breakout_phase(),
+            flow_confirmation_evidence=_flow("CONFIRMED"),
+        )
+    )
+
+    flow = [c for c in score.group_contributions if c.group == "institutional_flow"][0]
+    assert flow.trigger_allowed is True
+    assert flow.trigger_fraction == pytest.approx(0.20)
+    assert flow.trigger_weighted == pytest.approx(5.7)
+    assert not [r for r in flow.reasons if r.startswith("flow_trigger_blocked:")]
+
+
+def test_flow_trigger_blocked_when_setup_phase_missing():
+    score = AlphaTriggerAggregator(AlphaTriggerConfig()).aggregate(
+        AlphaTriggerAggregationRequest(
+            horizon="SWING_10D",
+            groups=(
+                AlphaTriggerGroupInput("setup_quality", 70.0, 0.35, True),
+                AlphaTriggerGroupInput("institutional_flow", 95.0, 0.30, True),
+            ),
+            setup_phase=None,
+            flow_confirmation_evidence=_flow("CONFIRMED"),
+        )
+    )
+
+    flow = [c for c in score.group_contributions if c.group == "institutional_flow"][0]
+    assert flow.trigger_allowed is False
+    assert flow.trigger_weighted == pytest.approx(0.0)
+    assert "flow_trigger_blocked:no_setup_phase" in flow.reasons
+
+
 def _breakout_phase() -> SetupPhaseSnapshot:
     return SetupPhaseSnapshot(
         current_phase=SetupPhaseState.BREAKOUT_CONFIRMATION,
@@ -99,7 +158,19 @@ def _breakout_phase() -> SetupPhaseSnapshot:
     )
 
 
-def _flow() -> FlowConfirmationEvidence:
+def _compression_phase() -> SetupPhaseSnapshot:
+    return SetupPhaseSnapshot(
+        current_phase=SetupPhaseState.COMPRESSION,
+        previous_phase=SetupPhaseState.ACCUMULATION,
+        phase_age_sessions=3,
+        phase_strength=0.8,
+        coverage_score=0.8,
+        conviction_score=0.8,
+        sequence_valid=True,
+    )
+
+
+def _flow(confirmation_status: str = "CONFIRMED") -> FlowConfirmationEvidence:
     signal = FlowSubSignal(
         key="cons",
         score=40.0,
@@ -112,7 +183,7 @@ def _flow() -> FlowConfirmationEvidence:
         snapshot_date=SNAP,
         flow_signals=(signal,),
         flow_score_ex_bb=40.0,
-        confirmation_status="CONFIRMED",
+        confirmation_status=confirmation_status,
         flow_direction="POSITIVE",
         bandar_broad_score=None,
         bandar_direction=Direction.NEUTRAL,

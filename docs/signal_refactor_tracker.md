@@ -173,6 +173,18 @@ Work that can proceed without touching signal authority, scoring, or tuning.
       historical replay uses cache-only insider rows with `fetched_date <= as_of_date`.
       Live behavior remains TTL/network-backed. Older insider cache snapshots are
       preserved for replay; no scoring, tuning, or evidence promotion changed.
+- [x] Six-factor / diagnostic scorer tuning guardrails added (2026-07-08):
+      `factors.*` remains archived baseline-only. `scoring.seasonality.*`,
+      `scoring.analyst.*`, and `scoring.forward_pe.*` are shared baseline /
+      diagnostic company-quality scorers. These paths now warn when changed and
+      are rejected by tuning patch validation as not patch-eligible. No runtime
+      scoring behavior changed. Deletion/migration is deferred until live-label
+      proof is sufficient.
+- [x] Alpha/Trigger flow-trigger phase gate clarified (2026-07-08):
+      Trigger score is phase-gated. Institutional-flow trigger contribution
+      requires `BREAKOUT_CONFIRMATION` setup phase and `CONFIRMED` flow. Blocked
+      reasons are displayed in the Alpha/Trigger detail panel. No scoring
+      behavior changed.
 - [x] CLI adapter regression tests for strategy evidence display.
       _(Done 2026-07-07 — see Phase D open items below.)_
 - [x] Deterministic historical signal-observation backfill implemented:

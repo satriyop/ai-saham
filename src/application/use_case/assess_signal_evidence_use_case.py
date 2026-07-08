@@ -143,6 +143,14 @@ class AssessSignalEvidenceUseCase:
             market_context=request.market_context,
             setup_family=request.setup_family,
             setup_phase=request.setup_phase,
+            setup_entry_authority=(
+                request.setup_evidence.entry_authority
+                if request.setup_evidence is not None else True
+            ),
+            setup_can_enter_from_phases=(
+                request.setup_evidence.can_enter_from_phases
+                if request.setup_evidence is not None else ()
+            ),
         )
         entry_quality = decision_result.entry_quality
         decision_constraints = decision_result.constraints

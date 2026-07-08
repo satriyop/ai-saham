@@ -58,6 +58,17 @@ class SetupEvidenceBuilder:
             getattr(setup_eval, "failed_reasons", ()) if setup_eval is not None else ()
         )
 
+        # --- Entry authority metadata (explicit config; no name-guessing) ------
+        setup_family = getattr(setup_eval, "family", None) if setup_eval is not None else None
+        entry_authority = (
+            bool(getattr(setup_eval, "entry_authority", True))
+            if setup_eval is not None else True
+        )
+        can_enter_from_phases = tuple(
+            getattr(setup_eval, "can_enter_from_phases", ()) or ()
+            if setup_eval is not None else ()
+        )
+
         # --- Technical structure ----------------------------------------------
         trend = getattr(candidate, "trend", None) if candidate is not None else None
         rsi = getattr(candidate, "rsi", None) if candidate is not None else None
@@ -106,6 +117,9 @@ class SetupEvidenceBuilder:
             volume_trend_ratio=volume_trend_ratio,
             volume_freshness=volume_freshness,
             candle_source=candle_source,
+            setup_family=setup_family,
+            entry_authority=entry_authority,
+            can_enter_from_phases=can_enter_from_phases,
         )
 
     @staticmethod

@@ -1259,6 +1259,22 @@ This is a breaking rename. Public CLI flags, JSON fields, and journal fields use
 | journal `preset` | journal `setup` |
 | journal `classification` | journal `setup_match` |
 
+### Setup Entry Authority Metadata
+
+Each setup in `config/swing_setups.yaml` must declare:
+
+| Field | Purpose |
+|-------|---------|
+| `family` | Canonical setup family used for target filter matching |
+| `entry_authority` | Whether this setup may independently produce `ENTER` |
+| `can_enter_from_phases` | Setup phases that satisfy the entry authority gate |
+
+`SetupEvaluation` remains pattern-fit evidence only — it answers "does this candidate fit the named setup?" and returns `MATCH`/`PARTIAL`/`NO_MATCH`. It does not decide final action.
+
+`DecisionPolicy` consumes `entry_authority` metadata from the resolved setup configuration. A setup with `entry_authority: false` (e.g. `smart-money-confirmed`) cannot independently create `ENTER` even if `SetupEvaluation` returns `MATCH`. Such setups may contribute evidence, rationale, or conviction to the final verdict, but the final action remains the exclusive responsibility of `SignalEngine + DecisionPolicy -> TradeSetup`.
+
+This ensures that confirmation-only patterns complement the decision without bypassing the authority chain.
+
 ---
 
 ## ADR-032: `analyze swing` Verdict Boundary

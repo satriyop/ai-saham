@@ -12,6 +12,9 @@ description: |
 setups:
   foreign-bounce:
     enabled: true
+    family: accumulation
+    entry_authority: true
+    can_enter_from_phases: [BREAKOUT_CONFIRMATION]
     # Reversal/absorption: foreigners are accumulating while price is still depressed.
     gates:
       min_foreign_flow_score: 70              # composite foreign-flow score gate (0-120 scale)
@@ -23,6 +26,9 @@ setups:
 
   coiled-spring:
     enabled: true
+    family: accumulation
+    entry_authority: true
+    can_enter_from_phases: [BREAKOUT_CONFIRMATION]
     # Breakout preparation: accumulation is present while volatility compresses.
     gates:
       min_foreign_flow_score: 60
@@ -33,7 +39,12 @@ setups:
 
   smart-money-confirmed:
     enabled: true
+    family: confirmation
+    entry_authority: false
+    can_enter_from_phases: []
     # Quality filter: named-broker attribution confirms the accumulation.
+    # No standalone entry authority — confirms flow quality but cannot alone
+    # promote a candidate to ENTER (see DecisionPolicyService).
     gates:
       min_foreign_flow_score: 60
       min_smart_flow_idr: 0
@@ -44,6 +55,9 @@ setups:
 
   pullback-continuation:
     enabled: true
+    family: trend_continuation
+    entry_authority: true
+    can_enter_from_phases: [BREAKOUT_CONFIRMATION]
     # Trend-following: controlled pullback/accumulation inside an uptrend.
     gates:
       min_foreign_flow_score: 55

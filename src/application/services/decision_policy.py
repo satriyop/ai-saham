@@ -50,6 +50,8 @@ class DecisionPolicyService:
         market_context: "MarketContext | None",
         setup_family: str | None = None,
         setup_phase: "SetupPhaseSnapshot | None" = None,
+        setup_entry_authority: bool = True,
+        setup_can_enter_from_phases: tuple[str, ...] = (),
     ) -> DecisionPolicyResult:
         regime = market_context.regime.value if market_context else "RISK_ON"
         regime_policy = self._config.regime_policy[regime]
@@ -176,6 +178,31 @@ class DecisionPolicyService:
             if setup_phase.sequence_valid is False:
                 max_decision = _stricter(max_decision, EntryQuality.WATCH.value)
                 reasons.append("Setup phase sequence invalid — ENTER capped to WATCH")
+
+        # ── Setup entry authority (explicit config; never inferred from name) ──
+        # A setup MATCH alone must not create ENTER. entry_authority and
+        # can_enter_from_phases come from config/swing_setups.yaml via
+        # SetupEvidence — this is the only place that enforces them.
+        if entry_quality == EntryQuality.ENTER:
+            setup_label = setup_key or "setup"
+            if not setup_entry_authority:
+                max_decision = _stricter(max_decision, EntryQuality.WATCH.value)
+                reasons.append(
+                    f"Setup {setup_label} has no standalone entry authority"
+                )
+            elif setup_can_enter_from_phases:
+                if setup_phase is None:
+                    max_decision = _stricter(max_decision, EntryQuality.WATCH.value)
+                    reasons.append(
+                        f"Setup {setup_label} requires setup phase for ENTER"
+                    )
+                elif setup_phase.current_phase.value not in setup_can_enter_from_phases:
+                    max_decision = _stricter(max_decision, EntryQuality.WATCH.value)
+                    reasons.append(
+                        f"Setup {setup_label} requires phase "
+                        f"{', '.join(setup_can_enter_from_phases)} for ENTER; "
+                        f"current phase {setup_phase.current_phase.value}"
+                    )
 
         constrained = _cap_entry(entry_quality, max_decision)
         constraints = DecisionConstraints(

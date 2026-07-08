@@ -227,6 +227,60 @@ def test_resolve_signal_config_current_file_passes():
     )
 
 
+def test_resolve_signal_config_current_file_emits_no_archived_warning(caplog):
+    cfg = yaml.safe_load(Path("config/signal_engine.yaml").read_text()) or {}
+
+    _resolve_signal_config(cfg)
+
+    assert not [
+        r for r in caplog.records
+        if "archived/baseline-only" in r.getMessage()
+    ]
+
+
+def test_resolve_signal_config_warns_when_archived_factor_changes(caplog):
+    cfg = {
+        "signal_engine": {
+            "factors": {
+                "bandar_intensity": {
+                    "enabled": True,
+                    "weight": 0.25,
+                },
+            },
+        },
+    }
+
+    _resolve_signal_config(cfg)
+
+    assert any(
+        "signal_engine.factors.bandar_intensity.weight" in r.getMessage()
+        and "archived/baseline-only" in r.getMessage()
+        for r in caplog.records
+    )
+
+
+def test_resolve_signal_config_warns_when_archived_analyst_scoring_changes(caplog):
+    cfg = {
+        "signal_engine": {
+            "scoring": {
+                "analyst": {
+                    "buy_score_max_points": 55.0,
+                },
+            },
+        },
+    }
+
+    resolved = _resolve_signal_config(cfg)
+
+    assert resolved.scoring.analyst.buy_score_max_points == 55.0
+    assert any(
+        "signal_engine.scoring.analyst.buy_score_max_points" in r.getMessage()
+        and "diagnostic company-quality scorer" in r.getMessage()
+        and "company_quality_context remains DIAGNOSTIC" in r.getMessage()
+        for r in caplog.records
+    )
+
+
 def test_resolve_signal_config_rejects_market_context_production_without_promotion():
     cfg = {
         "signal_engine": {

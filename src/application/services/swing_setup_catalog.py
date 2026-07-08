@@ -28,6 +28,9 @@ def build_swing_setup_catalog_config(swing_config: Any) -> SwingSetupCatalogConf
             gate_min_flow_ratio_pct=swing_config.gate_min_flow_ratio_pct,
             gate_max_rsi=swing_config.gate_max_rsi,
             partial_max_failed_gates=swing_config.partial_max_failed_gates,
+            family=swing_config.foreign_bounce_family,
+            entry_authority=swing_config.foreign_bounce_entry_authority,
+            can_enter_from_phases=swing_config.foreign_bounce_can_enter_from_phases,
         ),
         coiled_spring=CoiledSpringSetupConfig(
             enabled=swing_config.coiled_spring_enabled,
@@ -36,6 +39,9 @@ def build_swing_setup_catalog_config(swing_config: Any) -> SwingSetupCatalogConf
             gate_min_flow_ratio_pct=swing_config.coiled_spring_gate_min_flow_ratio_pct,
             gate_max_rsi=swing_config.coiled_spring_gate_max_rsi,
             partial_max_failed_gates=swing_config.coiled_spring_partial_max_failed_gates,
+            family=swing_config.coiled_spring_family,
+            entry_authority=swing_config.coiled_spring_entry_authority,
+            can_enter_from_phases=swing_config.coiled_spring_can_enter_from_phases,
         ),
         smart_money_confirmed=SmartMoneyConfirmedSetupConfig(
             enabled=swing_config.smart_money_confirmed_enabled,
@@ -45,6 +51,9 @@ def build_swing_setup_catalog_config(swing_config: Any) -> SwingSetupCatalogConf
             gate_max_noise_share_pct=swing_config.smart_money_confirmed_gate_max_noise_share_pct,
             reject_smart_net_selling=swing_config.smart_money_confirmed_reject_smart_net_selling,
             partial_max_failed_gates=swing_config.smart_money_confirmed_partial_max_failed_gates,
+            family=swing_config.smart_money_confirmed_family,
+            entry_authority=swing_config.smart_money_confirmed_entry_authority,
+            can_enter_from_phases=swing_config.smart_money_confirmed_can_enter_from_phases,
         ),
         pullback_continuation=PullbackContinuationSetupConfig(
             enabled=swing_config.pullback_continuation_enabled,
@@ -55,5 +64,8 @@ def build_swing_setup_catalog_config(swing_config: Any) -> SwingSetupCatalogConf
             gate_max_rsi=swing_config.pullback_continuation_gate_max_rsi,
             gate_min_vwap_discount_pct=swing_config.pullback_continuation_gate_min_vwap_discount_pct,
             partial_max_failed_gates=swing_config.pullback_continuation_partial_max_failed_gates,
+            family=swing_config.pullback_continuation_family,
+            entry_authority=swing_config.pullback_continuation_entry_authority,
+            can_enter_from_phases=swing_config.pullback_continuation_can_enter_from_phases,
         ),
     )

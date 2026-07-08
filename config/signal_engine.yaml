@@ -11,11 +11,25 @@
 #   Stage 6: Gate tightening — ENTER → WATCH cap when MarketContext.gate_tightening=True
 #   Stage 7: Decision policy — explicit regime/setup max_decision constraints (A1/A2)
 #
-# Tune: evidence_groups.*.weight, flags.*.score_penalty
-#       classification.* score and confidence thresholds
-#       decision_policy.regime_policy.* thresholds and multipliers  ← PREFERRED for regime
-#       scoring.bandar.* (still active — controls bandar_max_range helper)
-#       DO NOT tune regime_conditioning.* (legacy/transitional — see Stage 2 note above)
+# PRODUCTION / CANONICAL EVIDENCE ENGINE tuning surface:
+#   evidence_groups.*.weight
+#   flags.*.score_penalty
+#   alpha_trigger.*
+#   classification.* score and confidence thresholds
+#   decision_policy.regime_policy.* thresholds and multipliers  ← PREFERRED for regime
+#   scoring.bandar.* (still active — controls bandar_max_range helper)
+#
+# NOT PATCH-ELIGIBLE FOR PHASE I TUNING:
+#   factors.*
+#     Archived baseline / six-factor compatibility only.
+#   scoring.seasonality.*
+#   scoring.analyst.*
+#   scoring.forward_pe.*
+#     Shared baseline / diagnostic company-quality scorers. These do not affect
+#     canonical production score while company_quality_context remains DIAGNOSTIC.
+# Do not use these paths for Phase I tuning patches.
+#
+# DO NOT tune regime_conditioning.* (legacy/transitional — see Stage 2 note above)
 #
 # See ADR-024 for full configurability contract.
 #
@@ -50,16 +64,21 @@ signal_engine:
   # Scoring helpers.
   #   scoring.bandar.*: ACTIVE — used by SignalEngine.bandar_max_range() to
   #     compute the dynamic score ceiling for bandar broad_score.
-  #   scoring.seasonality/analyst/forward_pe: ARCHIVED — used only by the
-  #     retired AssessSignalUseCase flat-factor path, not by Phase 4 aggregator.
+  #   scoring.seasonality/analyst/forward_pe:
+  #     SHARED BASELINE / DIAGNOSTIC COMPANY-QUALITY SCORERS — NOT PATCH-ELIGIBLE.
+  #     Used by AssessSignalUseCase baseline compatibility and by the diagnostic
+  #     company_quality_context producer. These do not affect canonical production
+  #     score while company_quality_context remains DIAGNOSTIC. Do not use them
+  #     for Phase I tuning.
   scoring:
     bandar:
       mandatory_signal_count: 3
       signal_score_unit: 2
       default_max_range: 6
-    # ARCHIVED: seasonality, analyst, forward_pe scoring thresholds below are
-    # read only by AssessSignalUseCase (baseline reference). Phase 4 uses flags
-    # for analyst/valuation signals and SetupEvidence for timing structure.
+    # SHARED BASELINE / DIAGNOSTIC COMPANY-QUALITY SCORERS — NOT PATCH-ELIGIBLE.
+    # Used by AssessSignalUseCase baseline compatibility and by the diagnostic
+    # company_quality_context producer. Phase 4 production scoring uses flags for
+    # analyst/valuation signals and SetupEvidence for timing structure.
     seasonality:
       tailwind_min_avg_return_pct: 0.0
       tailwind_min_win_rate_pct: 50.0
@@ -81,9 +100,12 @@ signal_engine:
       post_expensive_pe_step: 10.0
       post_expensive_score_decay: 15.0
 
-  # ARCHIVED: flat six-factor weights used by AssessSignalUseCase (baseline
-  # reference only). Not read by Phase 4 AssessSignalEvidenceUseCase.
-  # Do not tune these — tune evidence_groups and flags below instead.
+  # ARCHIVED BASELINE / SIX-FACTOR COMPATIBILITY ONLY — DO NOT TUNE.
+  # Flat six-factor weights used by AssessSignalUseCase (baseline reference
+  # only). Not read by Phase 4 AssessSignalEvidenceUseCase. These archived
+  # knobs are kept for baseline compatibility and old flat-path tests. They do
+  # not tune the canonical staged evidence SignalEngine. Do not use them for
+  # Phase I tuning.
   factors:
     bandar_intensity:
       enabled: true
@@ -104,6 +126,7 @@ signal_engine:
       enabled: true
       weight: 0.10
 
+  # PRODUCTION / CANONICAL EVIDENCE ENGINE.
   # Evidence-group weights for AssessSignalEvidenceUseCase (canonical Phase 4 path).
   # Weights are relative — renormalized when a group is missing (never neutral-filled).
   evidence_groups:
@@ -112,6 +135,7 @@ signal_engine:
     flow_confirmation:
       weight: 0.40
 
+  # PRODUCTION / CANONICAL EVIDENCE ENGINE.
   # Phase G: diagnostic Alpha/Trigger projection. This is derived from the
   # canonical evidence groups, not a second factor tree. Existing runtime
   # setup_quality and flow_confirmation evidence map into the canonical
@@ -157,6 +181,7 @@ signal_engine:
       company_quality_context:
         status: DIAGNOSTIC
 
+  # PRODUCTION / CANONICAL EVIDENCE ENGINE.
   # Phase 4: Do-no-harm flags applied as score penalties.
   # Flags fire when the condition is met; penalty is subtracted from the group score.
   flags:
@@ -193,6 +218,7 @@ signal_engine:
       setup_discount: 0.70          # ×0.70 applied to all setups in volatile regime
       flow_discount: 0.80           # ×0.80 applied to all flow in volatile regime
 
+  # PRODUCTION / CANONICAL EVIDENCE ENGINE.
   # Phase A1: explicit regime eligibility policy. This caps final signal
   # entry_quality and emits decision_constraints; it does not mutate raw score.
   decision_policy:

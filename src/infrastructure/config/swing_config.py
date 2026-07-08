@@ -53,6 +53,11 @@ class SwingConfig:
     gate_min_flow_ratio_pct: float = 5.0
     gate_max_rsi: float = 60.0
     partial_max_failed_gates: int = 2
+    # foreign_bounce entry authority (explicit config; no name-guessing — see
+    # DecisionPolicyService). Backward-compat defaults only; current YAML is explicit.
+    foreign_bounce_family: str = "unknown"
+    foreign_bounce_entry_authority: bool = True
+    foreign_bounce_can_enter_from_phases: tuple[str, ...] = ()
     # coiled_spring setup gates
     coiled_spring_enabled: bool = True
     coiled_spring_gate_min_foreign_flow_score: float = 60.0
@@ -60,6 +65,9 @@ class SwingConfig:
     coiled_spring_gate_min_flow_ratio_pct: float = 3.0
     coiled_spring_gate_max_rsi: float = 65.0
     coiled_spring_partial_max_failed_gates: int = 2
+    coiled_spring_family: str = "unknown"
+    coiled_spring_entry_authority: bool = True
+    coiled_spring_can_enter_from_phases: tuple[str, ...] = ()
     # smart_money_confirmed setup gates
     smart_money_confirmed_enabled: bool = True
     smart_money_confirmed_gate_min_foreign_flow_score: float = 60.0
@@ -68,6 +76,9 @@ class SwingConfig:
     smart_money_confirmed_gate_max_noise_share_pct: float = 60.0
     smart_money_confirmed_reject_smart_net_selling: bool = True
     smart_money_confirmed_partial_max_failed_gates: int = 1
+    smart_money_confirmed_family: str = "unknown"
+    smart_money_confirmed_entry_authority: bool = True
+    smart_money_confirmed_can_enter_from_phases: tuple[str, ...] = ()
     # pullback_continuation setup gates
     pullback_continuation_enabled: bool = True
     pullback_continuation_gate_min_foreign_flow_score: float = 55.0
@@ -77,6 +88,9 @@ class SwingConfig:
     pullback_continuation_gate_max_rsi: float = 65.0
     pullback_continuation_gate_min_vwap_discount_pct: float = -2.0
     pullback_continuation_partial_max_failed_gates: int = 2
+    pullback_continuation_family: str = "unknown"
+    pullback_continuation_entry_authority: bool = True
+    pullback_continuation_can_enter_from_phases: tuple[str, ...] = ()
     # verdict + signal label thresholds
     enter_min_score: float = 70.0
     watch_min_score: float = 40.0
@@ -152,6 +166,12 @@ def load_swing_config(
 
         def _b(d: dict, k: str, default: bool) -> bool:
             return bool(d[k]) if k in d else default
+
+        def _phases(d: dict, k: str, default: tuple[str, ...]) -> tuple[str, ...]:
+            raw = d.get(k)
+            if not isinstance(raw, list):
+                return default
+            return tuple(str(v).strip().upper() for v in raw if v)
 
         def _setup_targets(raw: Any) -> dict[str, SetupTargetConfig]:
             if not isinstance(raw, dict):
@@ -309,12 +329,22 @@ def load_swing_config(
             gate_min_flow_ratio_pct=_f(fb_gates, "min_flow_ratio_pct", defaults.gate_min_flow_ratio_pct),
             gate_max_rsi=_f(fb_gates, "max_rsi", defaults.gate_max_rsi),
             partial_max_failed_gates=_i(fb, "partial_max_failed_gates", defaults.partial_max_failed_gates),
+            foreign_bounce_family=_s(fb, "family", defaults.foreign_bounce_family),
+            foreign_bounce_entry_authority=_b(fb, "entry_authority", defaults.foreign_bounce_entry_authority),
+            foreign_bounce_can_enter_from_phases=_phases(
+                fb, "can_enter_from_phases", defaults.foreign_bounce_can_enter_from_phases
+            ),
             coiled_spring_enabled=_b(cs, "enabled", defaults.coiled_spring_enabled),
             coiled_spring_gate_min_foreign_flow_score=_f(cs_gates, "min_foreign_flow_score", defaults.coiled_spring_gate_min_foreign_flow_score),
             coiled_spring_gate_max_bb_width_pctile=_f(cs_gates, "max_bb_width_pctile", defaults.coiled_spring_gate_max_bb_width_pctile),
             coiled_spring_gate_min_flow_ratio_pct=_f(cs_gates, "min_flow_ratio_pct", defaults.coiled_spring_gate_min_flow_ratio_pct),
             coiled_spring_gate_max_rsi=_f(cs_gates, "max_rsi", defaults.coiled_spring_gate_max_rsi),
             coiled_spring_partial_max_failed_gates=_i(cs, "partial_max_failed_gates", defaults.coiled_spring_partial_max_failed_gates),
+            coiled_spring_family=_s(cs, "family", defaults.coiled_spring_family),
+            coiled_spring_entry_authority=_b(cs, "entry_authority", defaults.coiled_spring_entry_authority),
+            coiled_spring_can_enter_from_phases=_phases(
+                cs, "can_enter_from_phases", defaults.coiled_spring_can_enter_from_phases
+            ),
             smart_money_confirmed_enabled=_b(smc, "enabled", defaults.smart_money_confirmed_enabled),
             smart_money_confirmed_gate_min_foreign_flow_score=_f(smc_gates, "min_foreign_flow_score", defaults.smart_money_confirmed_gate_min_foreign_flow_score),
             smart_money_confirmed_gate_min_smart_flow_idr=Decimal(
@@ -324,6 +354,13 @@ def load_swing_config(
             smart_money_confirmed_gate_max_noise_share_pct=_f(smc_gates, "max_noise_share_pct", defaults.smart_money_confirmed_gate_max_noise_share_pct),
             smart_money_confirmed_reject_smart_net_selling=_b(smc_gates, "reject_smart_net_selling", defaults.smart_money_confirmed_reject_smart_net_selling),
             smart_money_confirmed_partial_max_failed_gates=_i(smc, "partial_max_failed_gates", defaults.smart_money_confirmed_partial_max_failed_gates),
+            smart_money_confirmed_family=_s(smc, "family", defaults.smart_money_confirmed_family),
+            smart_money_confirmed_entry_authority=_b(
+                smc, "entry_authority", defaults.smart_money_confirmed_entry_authority
+            ),
+            smart_money_confirmed_can_enter_from_phases=_phases(
+                smc, "can_enter_from_phases", defaults.smart_money_confirmed_can_enter_from_phases
+            ),
             pullback_continuation_enabled=_b(pc, "enabled", defaults.pullback_continuation_enabled),
             pullback_continuation_gate_min_foreign_flow_score=_f(pc_gates, "min_foreign_flow_score", defaults.pullback_continuation_gate_min_foreign_flow_score),
             pullback_continuation_gate_required_trend=_s(pc_gates, "required_trend", defaults.pullback_continuation_gate_required_trend),
@@ -332,6 +369,13 @@ def load_swing_config(
             pullback_continuation_gate_max_rsi=_f(pc_gates, "max_rsi", defaults.pullback_continuation_gate_max_rsi),
             pullback_continuation_gate_min_vwap_discount_pct=_f(pc_gates, "min_vwap_discount_pct", defaults.pullback_continuation_gate_min_vwap_discount_pct),
             pullback_continuation_partial_max_failed_gates=_i(pc, "partial_max_failed_gates", defaults.pullback_continuation_partial_max_failed_gates),
+            pullback_continuation_family=_s(pc, "family", defaults.pullback_continuation_family),
+            pullback_continuation_entry_authority=_b(
+                pc, "entry_authority", defaults.pullback_continuation_entry_authority
+            ),
+            pullback_continuation_can_enter_from_phases=_phases(
+                pc, "can_enter_from_phases", defaults.pullback_continuation_can_enter_from_phases
+            ),
             enter_min_score=_f(vd, "enter_min_score", defaults.enter_min_score),
             watch_min_score=_f(vd, "watch_min_score", defaults.watch_min_score),
             strong_min_score=_f(vd_sig, "strong_min_score", defaults.strong_min_score),

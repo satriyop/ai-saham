@@ -34,6 +34,13 @@ class SetupEvaluation:
     match: SetupMatch
     gates: tuple[SetupGate, ...]
     failed_reasons: tuple[str, ...]
+    # Entry authority metadata — sourced from config/swing_setups.yaml via
+    # EvaluateSwingSetupUseCase, never inferred from setup name. Defaults exist
+    # only for backward compatibility with callers that construct SetupEvaluation
+    # without config; config/swing_setups.yaml is explicit for every current setup.
+    family: str = "unknown"
+    entry_authority: bool = True
+    can_enter_from_phases: tuple[str, ...] = ()
 
     @property
     def passed(self) -> bool:
@@ -46,6 +53,9 @@ class SetupEvaluation:
             "match": self.match.value,
             "passed": self.passed,
             "failed_reasons": list(self.failed_reasons),
+            "family": self.family,
+            "entry_authority": self.entry_authority,
+            "can_enter_from_phases": list(self.can_enter_from_phases),
             "gates": [
                 {
                     "label": gate.label,

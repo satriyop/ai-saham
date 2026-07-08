@@ -104,6 +104,60 @@ def test_loads_setup_catalog_thresholds_from_yaml(tmp_path):
     assert result.pullback_continuation_gate_required_trend == "UP"
 
 
+def test_loads_setup_entry_authority_metadata_from_yaml(tmp_path):
+    cfg = _write_yaml(tmp_path / "s.yaml", {
+        "setups": {
+            "foreign-bounce": {
+                "family": "accumulation",
+                "entry_authority": True,
+                "can_enter_from_phases": ["BREAKOUT_CONFIRMATION"],
+            },
+            "smart-money-confirmed": {
+                "family": "confirmation",
+                "entry_authority": False,
+                "can_enter_from_phases": [],
+            },
+        },
+    })
+    result = _load_swing_config(cfg)
+
+    assert result.foreign_bounce_family == "accumulation"
+    assert result.foreign_bounce_entry_authority is True
+    assert result.foreign_bounce_can_enter_from_phases == ("BREAKOUT_CONFIRMATION",)
+    assert result.smart_money_confirmed_family == "confirmation"
+    assert result.smart_money_confirmed_entry_authority is False
+    assert result.smart_money_confirmed_can_enter_from_phases == ()
+
+
+def test_setup_entry_authority_metadata_falls_back_to_defaults_when_absent(tmp_path):
+    cfg = _write_yaml(tmp_path / "s.yaml", {
+        "setups": {"foreign-bounce": {"gates": {"max_rsi": 55}}},
+    })
+    result = _load_swing_config(cfg)
+
+    assert result.foreign_bounce_family == "unknown"
+    assert result.foreign_bounce_entry_authority is True
+    assert result.foreign_bounce_can_enter_from_phases == ()
+
+
+def test_live_config_setups_are_explicit_entry_authority_metadata():
+    """The shipped config/swing_setups.yaml must declare explicit metadata for
+    every setup — defaults exist only for backward compatibility."""
+    result = _load_swing_config()
+    assert result.foreign_bounce_family == "accumulation"
+    assert result.foreign_bounce_entry_authority is True
+    assert result.foreign_bounce_can_enter_from_phases == ("BREAKOUT_CONFIRMATION",)
+    assert result.coiled_spring_family == "accumulation"
+    assert result.coiled_spring_entry_authority is True
+    assert result.coiled_spring_can_enter_from_phases == ("BREAKOUT_CONFIRMATION",)
+    assert result.smart_money_confirmed_family == "confirmation"
+    assert result.smart_money_confirmed_entry_authority is False
+    assert result.smart_money_confirmed_can_enter_from_phases == ()
+    assert result.pullback_continuation_family == "trend_continuation"
+    assert result.pullback_continuation_entry_authority is True
+    assert result.pullback_continuation_can_enter_from_phases == ("BREAKOUT_CONFIRMATION",)
+
+
 def test_loads_verdict_thresholds_from_yaml(tmp_path):
     cfg = _write_yaml(tmp_path / "s.yaml", {
         "verdicts": {"enter_min_score": 75, "watch_min_score": 45},

@@ -37,6 +37,10 @@ class ForeignBounceSetupConfig:
     gate_max_rsi: float = 60.0
     partial_max_failed_gates: int = 2
     enabled: bool = True
+    # Entry authority metadata — explicit config, never inferred from setup name.
+    family: str = "unknown"
+    entry_authority: bool = True
+    can_enter_from_phases: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -47,6 +51,9 @@ class CoiledSpringSetupConfig:
     gate_max_rsi: float = 65.0
     partial_max_failed_gates: int = 2
     enabled: bool = True
+    family: str = "unknown"
+    entry_authority: bool = True
+    can_enter_from_phases: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -58,6 +65,9 @@ class SmartMoneyConfirmedSetupConfig:
     reject_smart_net_selling: bool = True
     partial_max_failed_gates: int = 1
     enabled: bool = True
+    family: str = "unknown"
+    entry_authority: bool = True
+    can_enter_from_phases: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -70,6 +80,9 @@ class PullbackContinuationSetupConfig:
     gate_min_vwap_discount_pct: float = -2.0
     partial_max_failed_gates: int = 2
     enabled: bool = True
+    family: str = "unknown"
+    entry_authority: bool = True
+    can_enter_from_phases: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -114,6 +127,22 @@ def _fmt_gate_value(value: float | None, suffix: str = "") -> str:
     return f"{value:.1f}{suffix}"
 
 
+def _entry_authority_meta(config: Any) -> dict:
+    """Extract SetupEvaluation entry-authority kwargs from a per-setup config.
+
+    Explicit config is canonical; SetupEvaluation's own field defaults
+    (family="unknown", entry_authority=True, can_enter_from_phases=()) apply
+    only when config is unavailable (e.g. legacy construction without config).
+    """
+    if config is None:
+        return {}
+    return {
+        "family": getattr(config, "family", "unknown"),
+        "entry_authority": getattr(config, "entry_authority", True),
+        "can_enter_from_phases": getattr(config, "can_enter_from_phases", ()),
+    }
+
+
 class EvaluateSwingSetupUseCase:
     """Deterministic setup-fit evaluator for swing workflows."""
 
@@ -126,6 +155,9 @@ class EvaluateSwingSetupUseCase:
                 match=SetupMatch.NO_MATCH,
                 gates=(SetupGate("setup enabled", False, "false", "true"),),
                 failed_reasons=("setup enabled: false (required true)",),
+                family=config.family,
+                entry_authority=config.entry_authority,
+                can_enter_from_phases=config.can_enter_from_phases,
             )
         if setup_name == FOREIGN_BOUNCE_SETUP:
             return self._foreign_bounce(request.candidate, config)
@@ -141,7 +173,7 @@ class EvaluateSwingSetupUseCase:
             return self._pullback_continuation(request.candidate, config)
         raise ValueError(f"Unsupported swing setup: {request.setup_name}")
 
-    def _missing_candidate(self, setup_name: str) -> SetupEvaluation:
+    def _missing_candidate(self, setup_name: str, config: Any = None) -> SetupEvaluation:
         return SetupEvaluation(
             name=setup_name,
             match=SetupMatch.NO_MATCH,
@@ -154,6 +186,7 @@ class EvaluateSwingSetupUseCase:
                 ),
             ),
             failed_reasons=("No accumulation/broker-flow candidate available",),
+            **_entry_authority_meta(config),
         )
 
     def _evaluation(
@@ -163,6 +196,7 @@ class EvaluateSwingSetupUseCase:
         gates: tuple[SetupGate, ...],
         partial_max_failed_gates: int,
         force_partial_when_score_passes: bool = False,
+        config: Any = None,
     ) -> SetupEvaluation:
         failed = tuple(
             f"{gate.label}: {gate.actual} (required {gate.required})"
@@ -180,6 +214,7 @@ class EvaluateSwingSetupUseCase:
             match=match,
             gates=gates,
             failed_reasons=failed,
+            **_entry_authority_meta(config),
         )
 
     def _foreign_bounce(
@@ -188,7 +223,7 @@ class EvaluateSwingSetupUseCase:
         config: ForeignBounceSetupConfig,
     ) -> SetupEvaluation:
         if candidate is None:
-            return self._missing_candidate(FOREIGN_BOUNCE_SETUP)
+            return self._missing_candidate(FOREIGN_BOUNCE_SETUP, config)
 
         gates = (
             SetupGate(
@@ -239,6 +274,7 @@ class EvaluateSwingSetupUseCase:
             gates=gates,
             partial_max_failed_gates=config.partial_max_failed_gates,
             force_partial_when_score_passes=candidate.foreign_flow_score >= config.gate_min_foreign_flow_score,
+            config=config,
         )
 
     def _coiled_spring(
@@ -247,7 +283,7 @@ class EvaluateSwingSetupUseCase:
         config: CoiledSpringSetupConfig,
     ) -> SetupEvaluation:
         if candidate is None:
-            return self._missing_candidate(COILED_SPRING_SETUP)
+            return self._missing_candidate(COILED_SPRING_SETUP, config)
 
         gates = (
             SetupGate(
@@ -292,6 +328,7 @@ class EvaluateSwingSetupUseCase:
             gates=gates,
             partial_max_failed_gates=config.partial_max_failed_gates,
             force_partial_when_score_passes=candidate.foreign_flow_score >= config.gate_min_foreign_flow_score,
+            config=config,
         )
 
     def _smart_money_confirmed(
@@ -301,7 +338,7 @@ class EvaluateSwingSetupUseCase:
         config: SmartMoneyConfirmedSetupConfig,
     ) -> SetupEvaluation:
         if candidate is None:
-            return self._missing_candidate(SMART_MONEY_CONFIRMED_SETUP)
+            return self._missing_candidate(SMART_MONEY_CONFIRMED_SETUP, config)
         if broker_detail is None:
             gate = SetupGate(
                 label="broker detail",
@@ -314,6 +351,7 @@ class EvaluateSwingSetupUseCase:
                 match=SetupMatch.NO_MATCH,
                 gates=(gate,),
                 failed_reasons=("broker detail: missing (required available)",),
+                **_entry_authority_meta(config),
             )
 
         smart_flow = getattr(broker_detail, "smart_flow", Decimal("0"))
@@ -370,6 +408,7 @@ class EvaluateSwingSetupUseCase:
             gates=gates,
             partial_max_failed_gates=config.partial_max_failed_gates,
             force_partial_when_score_passes=candidate.foreign_flow_score >= config.gate_min_foreign_flow_score,
+            config=config,
         )
 
     def _pullback_continuation(
@@ -378,7 +417,7 @@ class EvaluateSwingSetupUseCase:
         config: PullbackContinuationSetupConfig,
     ) -> SetupEvaluation:
         if candidate is None:
-            return self._missing_candidate(PULLBACK_CONTINUATION_SETUP)
+            return self._missing_candidate(PULLBACK_CONTINUATION_SETUP, config)
 
         gates = (
             SetupGate(
@@ -429,4 +468,5 @@ class EvaluateSwingSetupUseCase:
             gates=gates,
             partial_max_failed_gates=config.partial_max_failed_gates,
             force_partial_when_score_passes=candidate.foreign_flow_score >= config.gate_min_foreign_flow_score,
+            config=config,
         )

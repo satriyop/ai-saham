@@ -400,6 +400,24 @@ def _market_label(market_regime: MarketContext | None) -> tuple[str, str, str]:
     return label, style, f"conviction {score}/7"
 
 
+def _flow_trigger_blocked_text(reason: str) -> str | None:
+    messages = {
+        "flow_trigger_blocked:no_setup_phase": (
+            "Flow trigger blocked: setup phase unavailable"
+        ),
+        "flow_trigger_blocked:setup_phase_not_breakout_confirmation": (
+            "Flow trigger blocked: setup phase is not BREAKOUT_CONFIRMATION"
+        ),
+        "flow_trigger_blocked:no_flow_confirmation_evidence": (
+            "Flow trigger blocked: flow evidence unavailable"
+        ),
+        "flow_trigger_blocked:flow_not_confirmed": (
+            "Flow trigger blocked: flow confirmation is not CONFIRMED"
+        ),
+    }
+    return messages.get(reason)
+
+
 def _broker_label(
     broker_detail: BrokerDetail | None,
     broker_quality_note: BrokerQualityNote | None,
@@ -1320,6 +1338,14 @@ def print_swing_output(
                         Text("✓" if c.trigger_allowed else "✗", style="dim" if is_diag else ""),
                     )
                 alpha_trigger_text.append(ct)
+                for c in ats.group_contributions:
+                    if c.group == "institutional_flow" and not c.trigger_allowed:
+                        for reason in c.reasons:
+                            text = _flow_trigger_blocked_text(reason)
+                            if text is not None:
+                                alpha_trigger_text.append(
+                                    Text(f"  {text}", style="dim yellow")
+                                )
             for reason in list(ats.unavailable_reasons)[-3:]:
                 alpha_trigger_text.append(Text(f"  ⚠ {reason}", style="dim yellow"))
 
