@@ -23,16 +23,16 @@ def refresh_swing_data(
 ) -> tuple[str, ...]:
     """Refresh only the requested ticker for swing analysis."""
     actions: list[str] = []
+    broker_provider, broker_provider_name = create_broker_provider(None)
     candles_status = fetch_candles(
         ticker=ticker,
         days=market_refresh_days,
         db_path=db_path,
-        provider_name="yahoo",
+        provider_name="stockbit",
         refresh=force_refresh,
+        broker_provider=broker_provider,
     )
     actions.append(f"candles={candles_status}")
-
-    broker_provider, broker_provider_name = create_broker_provider(None)
     broker_status = fetch_broker(
         ticker=ticker,
         days=broker_refresh_days,

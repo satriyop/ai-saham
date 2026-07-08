@@ -31,17 +31,19 @@ def test_refresh_swing_data_delegates_to_fetch_functions():
     )
 
     assert actions == ("candles=cached-current", "broker(idx)=flow-current")
-    assert calls[0] == (
+    # broker provider is created first so it can be passed to fetch_candles
+    assert calls[0] == ("provider", None)
+    assert calls[1] == (
         "candles",
         {
             "ticker": "BBCA",
             "days": 90,
             "db_path": Path("data/db/data.db"),
-            "provider_name": "yahoo",
+            "provider_name": "stockbit",
             "refresh": True,
+            "broker_provider": broker_provider,
         },
     )
-    assert calls[1] == ("provider", None)
     assert calls[2] == (
         "broker",
         {
@@ -58,17 +60,20 @@ def test_refresh_swing_data_uses_configured_windows_and_provider_factory(tmp_pat
     class FakeBrokerProvider:
         provider_name = "idx"
 
+    fake_broker = FakeBrokerProvider()
+
     def fake_fetch_candles(**kwargs):
         assert kwargs["ticker"] == "JPFA"
         assert kwargs["days"] == 365
         assert kwargs["db_path"] == tmp_path / "data.db"
-        assert kwargs["provider_name"] == "yahoo"
+        assert kwargs["provider_name"] == "stockbit"
         assert kwargs["refresh"] is False
+        assert kwargs["broker_provider"] is fake_broker
         return "cached-current"
 
     def fake_create_broker_provider(name):
         assert name is None
-        return FakeBrokerProvider(), "idx"
+        return fake_broker, "idx"
 
     def fake_fetch_broker(**kwargs):
         assert kwargs["ticker"] == "JPFA"
