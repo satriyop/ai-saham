@@ -5,13 +5,14 @@ Covers:
   - _parse_financial_value() string parsing
   - _parse_historical_rows() data extraction + derived metric computation
   - _write_historical_rows() INSERT OR IGNORE semantics
-  - PIT query behaviour with historical rows vs real snapshots
+  - Isolation: historical rows go to company_fundamentals_history, NOT to the
+    PIT table (company_fundamentals), so get_fundamentals() is unaffected.
 """
 
 from __future__ import annotations
 
 import sqlite3
-from datetime import date, datetime
+from datetime import date
 
 import pytest
 
@@ -143,7 +144,7 @@ def test_parse_historical_rows_computes_net_profit_margin_correctly():
     assert rows[0].net_profit_margin == pytest.approx(40.0, abs=0.01)
 
 
-# ── 5. INSERT OR IGNORE semantics ─────────────────────────────────────────────
+# ── 5. INSERT OR IGNORE semantics (targets history table) ────────────────────
 
 
 def test_write_historical_rows_uses_insert_or_ignore(tmp_path):
@@ -157,71 +158,45 @@ def test_write_historical_rows_uses_insert_or_ignore(tmp_path):
     rows = _parse_historical_rows("BBCA", body)
     assert len(rows) == 1
 
-    # Write twice — second write should be ignored
+    # Write twice — second write should be ignored due to UNIQUE(ticker, period_end_date)
     prov._write_historical_rows(rows)
     prov._write_historical_rows(rows)
 
     with sqlite3.connect(str(db)) as conn:
         count = conn.execute(
-            "SELECT COUNT(*) FROM company_fundamentals WHERE ticker='BBCA'"
+            "SELECT COUNT(*) FROM company_fundamentals_history WHERE ticker='BBCA'"
         ).fetchone()[0]
     assert count == 1
 
 
-# ── 6. Historical row visible via PIT query ───────────────────────────────────
+# ── 6. Historical rows are isolated from PIT reads ────────────────────────────
 
 
-def test_historical_row_visible_via_pit_query(tmp_path):
+def test_historical_rows_go_to_history_table_not_pit_table(tmp_path):
+    """Historical rows must NOT appear in company_fundamentals (the PIT table)."""
     db = tmp_path / "test.db"
     prov = StockbitFundamentalsProvider(api_client=None, db_path=db)
 
-    body = _make_body(
-        net_income_by_year={"2024": {"Q1": "200 B"}},
-        revenue_by_year={"2024": {"Q1": "500 B"}},
-    )
-    rows = _parse_historical_rows("BBCA", body)
-    prov._write_historical_rows(rows)
-
-    # Q1 2024 row has fetched_date = "2024-03-31"
-    # as_of_date = 2024-04-01 should return it
-    result = prov.get_fundamentals("BBCA", as_of_date=date(2024, 4, 1))
-    assert result is not None
-    assert result.net_profit_margin == pytest.approx(40.0, abs=0.01)
-
-
-# ── 7. Real snapshot wins over historical when it has a later date ────────────
-
-
-def test_real_snapshot_wins_over_historical_when_later(tmp_path):
-    db = tmp_path / "test.db"
-    prov = StockbitFundamentalsProvider(api_client=None, db_path=db)
-
-    # Historical Q1 2024 row → fetched_date "2024-03-31"
     body = _make_body(
         net_income_by_year={"2024": {"Q1": "200 B"}},
         revenue_by_year={"2024": {"Q1": "500 B"}},
     )
     prov._write_historical_rows(_parse_historical_rows("BBCA", body))
 
-    # Real snapshot taken on 2024-04-10 — richer data (has piotroski)
     with sqlite3.connect(str(db)) as conn:
-        conn.execute(
-            "INSERT OR REPLACE INTO company_fundamentals "
-            "(ticker, fetched_date, net_profit_margin, piotroski_f_score) VALUES (?,?,?,?)",
-            ("BBCA", "2024-04-10T09:00:00", 42.0, 7),
-        )
+        pit_count = conn.execute(
+            "SELECT COUNT(*) FROM company_fundamentals WHERE ticker='BBCA'"
+        ).fetchone()[0]
+        hist_count = conn.execute(
+            "SELECT COUNT(*) FROM company_fundamentals_history WHERE ticker='BBCA'"
+        ).fetchone()[0]
 
-    # For as_of_date=2024-04-15, the real snapshot (Apr 10) should win
-    result = prov.get_fundamentals("BBCA", as_of_date=date(2024, 4, 15))
-    assert result is not None
-    assert result.piotroski_f_score == 7
-    assert result.net_profit_margin == pytest.approx(42.0)
+    assert pit_count == 0, "PIT table must not contain derived historical rows"
+    assert hist_count == 1
 
 
-# ── 8. Historical row not visible before quarter end ─────────────────────────
-
-
-def test_historical_row_does_not_appear_before_quarter_end(tmp_path):
+def test_get_fundamentals_does_not_read_from_history_table(tmp_path):
+    """get_fundamentals() with as_of_date returns None when only history rows exist."""
     db = tmp_path / "test.db"
     prov = StockbitFundamentalsProvider(api_client=None, db_path=db)
 
@@ -231,7 +206,7 @@ def test_historical_row_does_not_appear_before_quarter_end(tmp_path):
     )
     prov._write_historical_rows(_parse_historical_rows("BBCA", body))
 
-    # Q1 2024 row has fetched_date "2024-03-31"
-    # as_of_date = 2024-03-15 — before quarter end — must return None
-    result = prov.get_fundamentals("BBCA", as_of_date=date(2024, 3, 15))
+    # Even though we have historical data for Q1 2024, PIT read must return None
+    # because the data was never confirmed available on any specific date.
+    result = prov.get_fundamentals("BBCA", as_of_date=date(2024, 6, 1))
     assert result is None

@@ -95,6 +95,22 @@ _MIGRATIONS: list[tuple[int, str]] = [
     ),
     (5, "DROP TABLE company_fundamentals"),
     (6, "ALTER TABLE company_fundamentals_pit RENAME TO company_fundamentals"),
+    # Migration 7: separate table for derived historical fundamentals.
+    # These rows are NOT used by PIT reads (get_fundamentals with as_of_date).
+    # Quarter-end date ≠ publication date, so mixing them into the PIT table
+    # would introduce look-ahead bias for as_of queries near the quarter end.
+    (
+        7,
+        """CREATE TABLE IF NOT EXISTS company_fundamentals_history (
+            ticker TEXT NOT NULL,
+            period_end_date TEXT NOT NULL,
+            period TEXT NOT NULL,
+            year INTEGER NOT NULL,
+            net_profit_margin REAL,
+            revenue_yoy_growth REAL,
+            UNIQUE(ticker, period_end_date)
+        )""",
+    ),
 ]
 
 
@@ -474,45 +490,41 @@ class StockbitFundamentalsProvider(FundamentalsProvider, StockbitCachingProvider
             logger.warning("company_fundamentals: cache write failed for %s: %s", fund.ticker, e)
 
     def _write_historical_rows(self, rows: list[CompanyFundamentals]) -> int:
-        """Write historical quarterly rows using INSERT OR IGNORE.
+        """Write derived quarterly rows to company_fundamentals_history (not PIT table).
 
-        Never overwrites an existing row — real snapshots taken during a period
-        are more complete (have piotroski, market_cap, etc.) and must be kept.
-        Uses bare date string (YYYY-MM-DD) as fetched_date so historical rows
-        are visually distinct from full-timestamp real snapshots.
+        Historical rows go to a separate table so get_fundamentals() PIT reads
+        are never polluted with data whose availability date is unknown.
+        Quarter-end date ≠ publication date — Q1 2024 results typically publish
+        in April/May, not March 31, so storing them as PIT rows would introduce
+        look-ahead bias for as_of queries in that window.
         """
+        _month_to_period = {3: "Q1", 6: "Q2", 9: "Q3", 12: "Q4"}
         inserted = 0
         try:
             with sqlite3.connect(self._db_path) as conn:
                 for fund in rows:
                     if fund.fetched_at is None:
                         continue
-                    fetched_date = fund.fetched_at.strftime("%Y-%m-%d")
+                    period = _month_to_period.get(fund.fetched_at.month)
+                    if period is None:
+                        continue
                     cursor = conn.execute(
-                        "INSERT OR IGNORE INTO company_fundamentals "
-                        "(ticker, fetched_date, pe_ratio_ttm, roe_ttm, net_profit_margin, "
-                        "revenue_yoy_growth, piotroski_f_score, dividend_yield, "
-                        "week52_high, week52_low, near_52w_high_rank, market_cap_idr, pbv) "
-                        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                        "INSERT OR IGNORE INTO company_fundamentals_history "
+                        "(ticker, period_end_date, period, year, "
+                        "net_profit_margin, revenue_yoy_growth) "
+                        "VALUES (?,?,?,?,?,?)",
                         (
                             fund.ticker,
-                            fetched_date,
-                            fund.pe_ratio_ttm,
-                            fund.roe_ttm,
+                            fund.fetched_at.strftime("%Y-%m-%d"),
+                            period,
+                            fund.fetched_at.year,
                             fund.net_profit_margin,
                             fund.revenue_yoy_growth,
-                            fund.piotroski_f_score,
-                            fund.dividend_yield,
-                            fund.week52_high,
-                            fund.week52_low,
-                            fund.near_52w_high_rank,
-                            fund.market_cap_idr,
-                            fund.pbv,
                         ),
                     )
                     inserted += cursor.rowcount
         except Exception as e:
-            logger.warning("company_fundamentals: historical write failed: %s", e)
+            logger.warning("company_fundamentals_history: write failed: %s", e)
         return inserted
 
     def _fetch(self, ticker: str) -> CompanyFundamentals | None:
