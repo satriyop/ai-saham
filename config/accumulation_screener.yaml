@@ -68,7 +68,12 @@ accumulation_screener:
         weight: 10.0
         saturate_pct: 20.0
       bb_squeeze:
-        enabled: true
+        # Disabled by default: BB compression is setup-phase/trigger-readiness
+        # diagnostic (feeds SetupPhaseDetector COMPRESSION), not flow evidence.
+        # Kept enabled=false with thresholds/weight retained for possible future
+        # diagnostic/tuning use — do not flip to true without an explicit
+        # architecture decision (see ARCHITECTURE_DECISIONS.md).
+        enabled: false
         weight: 10.0
         tight_pctile: 0.20
         loose_pctile: 0.40

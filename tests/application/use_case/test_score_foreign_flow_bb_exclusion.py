@@ -62,3 +62,19 @@ def test_bb_can_be_re_enabled_via_explicit_policy():
     uc = ScoreForeignFlowUseCase(policy)
     resp = uc.execute(_request(0.0))
     assert resp.evidence.breakdown_dict["bb"] > 0.0
+
+
+def test_bb_score_zero_with_live_loaded_config_at_maximum_squeeze():
+    """Regression guard: the shipped config/accumulation_screener.yaml must
+    not re-enable bb_squeeze scoring. bb_width_pctile stays populated for
+    setup-phase diagnostics; only the score contribution is zero."""
+    from src.infrastructure.config.accumulation_screener_config import (
+        load_accumulation_screener_config,
+    )
+
+    loaded_policy = load_accumulation_screener_config().foreign_flow_score_policy
+    uc = ScoreForeignFlowUseCase(loaded_policy)
+    resp = uc.execute(_request(0.0))
+
+    assert resp.evidence.breakdown_dict["bb"] == 0.0
+    assert resp.evidence.bb_width_pctile == 0.0

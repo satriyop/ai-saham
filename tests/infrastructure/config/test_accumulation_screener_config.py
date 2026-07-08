@@ -53,3 +53,33 @@ accumulation_screener:
     assert loaded.derived_features.resistance_ma_period == 150
     assert loaded.derived_features.resistance_high_period == 180
     assert loaded.derived_features.insider_lookback_days == 60
+
+
+def test_bb_squeeze_disabled_by_default_in_live_config():
+    """BB compression is setup-phase/trigger-readiness diagnostic, not flow
+    evidence — the shipped config must not score it by default."""
+    loaded = load_accumulation_screener_config()
+    assert loaded.foreign_flow_score_policy.bb_squeeze.enabled is False
+    # Thresholds/weight are retained for possible future diagnostic/tuning use.
+    assert loaded.foreign_flow_score_policy.bb_squeeze.weight == 10.0
+    assert loaded.foreign_flow_score_policy.bb_squeeze.tight_pctile == 0.20
+    assert loaded.foreign_flow_score_policy.bb_squeeze.loose_pctile == 0.40
+
+
+def test_bb_squeeze_can_be_explicitly_re_enabled_via_yaml(tmp_path: Path):
+    config = tmp_path / "accumulation_screener.yaml"
+    config.write_text(
+        """
+accumulation_screener:
+  evidence:
+    components:
+      bb_squeeze:
+        enabled: true
+        weight: 8
+""",
+        encoding="utf-8",
+    )
+
+    loaded = load_accumulation_screener_config(config)
+    assert loaded.foreign_flow_score_policy.bb_squeeze.enabled is True
+    assert loaded.foreign_flow_score_policy.bb_squeeze.weight == 8.0

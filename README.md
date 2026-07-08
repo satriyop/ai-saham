@@ -658,7 +658,7 @@ saham screen accum --universe lq45 --format json
 | `--explain` | | false | Append run context and scoring definitions after results |
 | `--db` | | | SQLite database path |
 
-**Foreign Flow Score (0-120 soft cap):** consistency, streak, VWAP discount, RSI headroom, flow %, BB squeeze, and BCI. Thresholds and weights are configured in `config/accumulation_screener.yaml`.
+**Foreign Flow Score (0-120 soft cap):** consistency, streak, VWAP discount, RSI headroom, flow %, and BCI. BB%ile is shown as setup/phase diagnostic (feeds setup-phase COMPRESSION detection) and does not contribute to foreign-flow score by default. Thresholds and weights are configured in `config/accumulation_screener.yaml`.
 
 **SignalAssessment score (0-100, via SignalEngine):** bandar intensity, foreign flow quality, insider net buy ratio, seasonality win rate, analyst buy consensus, and forward PE valuation. Weights, classification thresholds, missing-data policy, enrichment lookbacks, input mapping, and factor scoring thresholds are configured in `config/signal_engine.yaml`.
 

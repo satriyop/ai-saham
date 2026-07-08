@@ -307,6 +307,12 @@ def _evidence_factor_rows(candidate: AccumulationCandidate) -> list[tuple[str, .
         f"{candidate.bb_width_pctile * 100:.0f}%"
         if candidate.bb_width_pctile is not None else "-"
     )
+    bb_scored = _ASC.foreign_flow_score_policy.bb_squeeze.enabled
+    bb_pts = f"{bd.get('bb', 0):.1f}" if bb_scored else "—"
+    bb_means = (
+        "Volatility squeeze" if bb_scored
+        else "Setup compression diagnostic, not flow score"
+    )
     return [
         (
             f"{bd.get('cons', 0):.1f}",
@@ -339,10 +345,10 @@ def _evidence_factor_rows(candidate: AccumulationCandidate) -> list[tuple[str, .
             "Foreign share of turnover",
         ),
         (
-            f"{bd.get('bb', 0):.1f}",
+            bb_pts,
             "BB%ile",
             bb,
-            "Volatility squeeze",
+            bb_means,
         ),
         (
             f"{bd.get('inst', 0):.1f}",
@@ -988,7 +994,7 @@ def print_column_guide() -> None:
     guide_table.add_row(
         "SCORE (0–120)",
         "≥ 70 (green)\n40-69 (yellow)\n< 40 (white)",
-        "Composite signal strength. Combines net days, streak, VWAP, RSI, flow, BB width, and BCI into a single score.\n- Green: Strong signal, worth research.\n- Yellow: Moderate watch, wait for confirmation.\n- White: Weak, likely noise, skip."
+        "Composite signal strength. Combines net days, streak, VWAP, RSI, flow, and BCI into a single score. BB%ile is shown as setup/phase diagnostic — it does not contribute to foreign-flow score by default.\n- Green: Strong signal, worth research.\n- Yellow: Moderate watch, wait for confirmation.\n- White: Weak, likely noise, skip."
     )
     guide_table.add_row(
         "STREAK",

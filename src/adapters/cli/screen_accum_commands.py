@@ -279,7 +279,8 @@ def accumulation_run(
 
     Computes composite foreign-flow score 0-120 based on: consistency of daily foreign buying,
     consecutive buy streak, whether foreigners are underwater (VWAP vs price),
-    RSI headroom, foreign flow as % of total turnover, and BB Width squeeze.
+    RSI headroom, and foreign flow as % of total turnover. BB Width is shown as a
+    setup/phase diagnostic and does not contribute to the score by default.
 
     Run `saham fetch market --universe lq45` first to ensure fresh data.
 
