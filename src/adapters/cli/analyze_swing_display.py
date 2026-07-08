@@ -237,8 +237,19 @@ def swing_plan_text(
     setup_eval: Any | None,
     setup_sizing: Any | None,
     config: SwingDisplayConfig,
+    trade_setup: Any | None = None,
+    signal_assessment: Any | None = None,
 ) -> tuple[str, str]:
     if setup_eval is not None:
+        if setup_eval.passed:
+            block_reason = _setup_entry_authority_block_reason(signal_assessment)
+            if block_reason is not None:
+                action_label = getattr(getattr(trade_setup, "action", None), "value", "WATCH")
+                return (
+                    f"Setup matched as confirmation evidence, but action is "
+                    f"{action_label}: {block_reason}",
+                    "yellow",
+                )
         if setup_eval.passed and setup_sizing and setup_sizing.lots > 0:
             return (
                 f"Setup matched. Consider {setup_sizing.lots} lots at "
@@ -318,6 +329,26 @@ def _trade_action_label(trade_setup: Any | None) -> tuple[str, str, str]:
         "BLOCKED_STRUCTURAL": "bold red",
     }.get(trade_setup.action.value, "white")
     return trade_setup.action.short, style, trade_setup.rationale
+
+
+_SETUP_ENTRY_AUTHORITY_REASON_MARKERS = (
+    "no standalone entry authority",
+    "requires phase",
+    "requires setup phase for ENTER",
+)
+
+
+def _setup_entry_authority_block_reason(signal_assessment: Any | None) -> str | None:
+    """Return the DecisionPolicy constraint reason that blocked ENTER on entry
+    authority/phase grounds, if any fired — so display text does not contradict
+    the actual TradeSetup.action with a stale "matched" framing."""
+    assessment = getattr(signal_assessment, "assessment", None)
+    constraints = getattr(assessment, "decision_constraints", None) if assessment else None
+    reasons = getattr(constraints, "constraint_reasons", ()) if constraints else ()
+    for reason in reasons:
+        if any(marker in reason for marker in _SETUP_ENTRY_AUTHORITY_REASON_MARKERS):
+            return reason
+    return None
 
 
 def _setup_match_label(setup_eval: Any | None) -> tuple[str, str]:
@@ -816,6 +847,8 @@ def print_swing_rich_overview(
     with_technical_gate: bool = False,
     sector_context_evidence: "SectorContextEvidence | None" = None,
 ) -> None:
+    signal_source = signal_assessment or getattr(accum, "signal_assessment", None)
+
     plan_text, plan_style = swing_plan_text(
         ticker,
         capital,
@@ -824,13 +857,14 @@ def print_swing_rich_overview(
         setup_eval,
         setup_sizing,
         config,
+        trade_setup=trade_setup,
+        signal_assessment=signal_source,
     )
 
     action_value, action_style, action_detail = _trade_action_label(trade_setup)
     setup_value, setup_style = _setup_match_label(setup_eval)
     price = _price_text(accum, sizing, setup_sizing)
 
-    signal_source = signal_assessment or getattr(accum, "signal_assessment", None)
     signal_value, signal_style, _ = _signal_label(signal_source)
     risk_value, risk_style, _ = _risk_label(risk_resp)
     market_value, market_style, _ = _market_label(market_regime)
