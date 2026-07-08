@@ -4,6 +4,7 @@ from src.domain.value_objects.alpha_trigger_score import (
     AlphaTriggerGroupContribution,
     AlphaTriggerScore,
     EvidenceAuthorityStatus,
+    EvidencePromotionRecord,
     EvidenceRegistration,
 )
 
@@ -20,6 +21,31 @@ def test_evidence_registration_enforces_status_caps():
     assert diagnostic.effective_weight(0.30) == 0.0
     assert low_weight.effective_weight(0.30) == 0.10
     assert production.effective_weight(0.30) == 0.30
+
+
+def test_evidence_promotion_record_stores_requirements_immutably():
+    record = EvidencePromotionRecord(
+        target="foreign_institutional_accumulation_large_cap_SWING_10D",
+        evidence_name="market_context",
+        promoted_to=EvidenceAuthorityStatus.LOW_WEIGHT,
+        promoted_by="manual",
+        promoted_date="2026-07-08",
+        attribution_ref="journals/signal-readiness/phase-i-report.json",
+        requirements=(
+            ("min_is_labels", 60.0),
+            ("min_oos_labels", 30.0),
+        ),
+    )
+
+    assert record.requirements == (
+        ("min_is_labels", 60.0),
+        ("min_oos_labels", 30.0),
+    )
+    assert record.requirements_dict == {
+        "min_is_labels": 60.0,
+        "min_oos_labels": 30.0,
+    }
+    assert record.to_dict()["requirements"] == record.requirements_dict
 
 
 def test_alpha_trigger_score_serializes_exact_components():

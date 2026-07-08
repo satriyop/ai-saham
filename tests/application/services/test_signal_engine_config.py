@@ -1,6 +1,31 @@
+from pathlib import Path
+
 import pytest
+import yaml
 
 from src.application.services.bootstrap import _resolve_signal_config
+
+
+def _valid_promotion(
+    *,
+    evidence_name: str = "market_context",
+    promoted_to: str = "LOW_WEIGHT",
+) -> dict:
+    return {
+        "target": "foreign_institutional_accumulation_large_cap_SWING_10D",
+        "evidence_name": evidence_name,
+        "promoted_to": promoted_to,
+        "promoted_by": "manual",
+        "promoted_date": "2026-07-08",
+        "attribution_ref": "journals/signal-readiness/phase-i-report.json",
+        "requirements": {
+            "min_is_labels": 60,
+            "min_oos_labels": 30,
+            "min_oos_profit_factor": 1.15,
+            "min_oos_avg_return_pct": 0.0,
+            "max_drawdown_regression_pct": 0.0,
+        },
+    }
 
 
 def test_resolve_signal_config_reads_policy_blocks():
@@ -124,6 +149,7 @@ def test_resolve_signal_config_reads_policy_blocks():
                     "market_context": {
                         "status": "LOW_WEIGHT",
                         "low_weight_cap": 0.05,
+                        "promotion": _valid_promotion(),
                     },
                 },
             },
@@ -174,6 +200,207 @@ def test_resolve_signal_config_reads_policy_blocks():
         resolved.alpha_trigger.evidence_registrations["market_context"].status.value
         == "LOW_WEIGHT"
     )
+
+
+def test_resolve_signal_config_current_file_passes():
+    cfg = yaml.safe_load(Path("config/signal_engine.yaml").read_text()) or {}
+
+    resolved = _resolve_signal_config(cfg)
+
+    assert (
+        resolved.alpha_trigger.evidence_registrations["setup_quality"].status.value
+        == "PRODUCTION"
+    )
+    assert (
+        resolved.alpha_trigger.evidence_registrations["institutional_flow"].status.value
+        == "PRODUCTION"
+    )
+    assert (
+        resolved.alpha_trigger.evidence_registrations["market_context"].status.value
+        == "DIAGNOSTIC"
+    )
+    assert (
+        resolved.alpha_trigger.evidence_registrations[
+            "company_quality_context"
+        ].status.value
+        == "DIAGNOSTIC"
+    )
+
+
+def test_resolve_signal_config_rejects_market_context_production_without_promotion():
+    cfg = {
+        "signal_engine": {
+            "alpha_trigger": {
+                "evidence_registrations": {
+                    "market_context": {"status": "PRODUCTION"},
+                },
+            },
+        },
+    }
+
+    with pytest.raises(ValueError, match="market_context\\.promotion is required"):
+        _resolve_signal_config(cfg)
+
+
+def test_resolve_signal_config_rejects_company_quality_low_weight_without_promotion():
+    cfg = {
+        "signal_engine": {
+            "alpha_trigger": {
+                "evidence_registrations": {
+                    "company_quality_context": {"status": "LOW_WEIGHT"},
+                },
+            },
+        },
+    }
+
+    with pytest.raises(
+        ValueError,
+        match="company_quality_context\\.promotion is required",
+    ):
+        _resolve_signal_config(cfg)
+
+
+def test_resolve_signal_config_rejects_unknown_promoted_group_without_promotion():
+    cfg = {
+        "signal_engine": {
+            "alpha_trigger": {
+                "group_weights": {"new_diagnostic_group": 0.05},
+                "evidence_registrations": {
+                    "new_diagnostic_group": {"status": "LOW_WEIGHT"},
+                },
+            },
+        },
+    }
+
+    with pytest.raises(
+        ValueError,
+        match="new_diagnostic_group\\.promotion is required",
+    ):
+        _resolve_signal_config(cfg)
+
+
+def test_resolve_signal_config_rejects_promotion_evidence_name_mismatch():
+    cfg = {
+        "signal_engine": {
+            "alpha_trigger": {
+                "evidence_registrations": {
+                    "market_context": {
+                        "status": "LOW_WEIGHT",
+                        "promotion": _valid_promotion(
+                            evidence_name="company_quality_context"
+                        ),
+                    },
+                },
+            },
+        },
+    }
+
+    with pytest.raises(ValueError, match="evidence_name must match"):
+        _resolve_signal_config(cfg)
+
+
+def test_resolve_signal_config_rejects_promotion_status_mismatch():
+    cfg = {
+        "signal_engine": {
+            "alpha_trigger": {
+                "evidence_registrations": {
+                    "market_context": {
+                        "status": "PRODUCTION",
+                        "promotion": _valid_promotion(promoted_to="LOW_WEIGHT"),
+                    },
+                },
+            },
+        },
+    }
+
+    with pytest.raises(ValueError, match="promoted_to must equal status"):
+        _resolve_signal_config(cfg)
+
+
+def test_resolve_signal_config_rejects_invalid_promotion_date():
+    promotion = _valid_promotion()
+    promotion["promoted_date"] = "2026/07/08"
+    cfg = {
+        "signal_engine": {
+            "alpha_trigger": {
+                "evidence_registrations": {
+                    "market_context": {
+                        "status": "LOW_WEIGHT",
+                        "promotion": promotion,
+                    },
+                },
+            },
+        },
+    }
+
+    with pytest.raises(ValueError, match="promoted_date must be a valid ISO date"):
+        _resolve_signal_config(cfg)
+
+
+@pytest.mark.parametrize(
+    ("gate", "invalid_value", "message"),
+    (
+        ("min_is_labels", 59, "min_is_labels must be >= 60"),
+        ("min_oos_labels", 29, "min_oos_labels must be >= 30"),
+        (
+            "min_oos_profit_factor",
+            1.14,
+            "min_oos_profit_factor must be >= 1.15",
+        ),
+        ("min_oos_avg_return_pct", -0.01, "min_oos_avg_return_pct must be >= 0"),
+        (
+            "max_drawdown_regression_pct",
+            0.01,
+            "max_drawdown_regression_pct must be <= 0",
+        ),
+    ),
+)
+def test_resolve_signal_config_rejects_promotion_below_phase_i_gates(
+    gate,
+    invalid_value,
+    message,
+):
+    promotion = _valid_promotion()
+    promotion["requirements"][gate] = invalid_value
+    cfg = {
+        "signal_engine": {
+            "alpha_trigger": {
+                "evidence_registrations": {
+                    "market_context": {
+                        "status": "LOW_WEIGHT",
+                        "promotion": promotion,
+                    },
+                },
+            },
+        },
+    }
+
+    with pytest.raises(ValueError, match=message):
+        _resolve_signal_config(cfg)
+
+
+def test_resolve_signal_config_complete_valid_promotion_record_passes():
+    cfg = {
+        "signal_engine": {
+            "alpha_trigger": {
+                "evidence_registrations": {
+                    "market_context": {
+                        "status": "LOW_WEIGHT",
+                        "promotion": _valid_promotion(),
+                    },
+                },
+            },
+        },
+    }
+
+    resolved = _resolve_signal_config(cfg)
+
+    promotion = resolved.alpha_trigger.evidence_registrations[
+        "market_context"
+    ].promotion
+    assert promotion is not None
+    assert promotion.evidence_name == "market_context"
+    assert promotion.promoted_to.value == "LOW_WEIGHT"
 
 
 def test_resolve_signal_config_rejects_missing_decision_policy_regime():

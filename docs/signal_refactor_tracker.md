@@ -164,6 +164,15 @@ Work that can proceed without touching signal authority, scoring, or tuning.
       - CLI display shows `cap=any (diagnostic — no cap filter)` and a `[DIAGNOSTIC]` header line.
       - 12 new focused tests (3 regression tests for setup_family wildcard); 2722 total pass.
       - Canonical target `foreign_institutional_accumulation_large_cap_SWING_10D` unchanged.
+- [x] Evidence authority promotion guardrails added (2026-07-08):
+      `LOW_WEIGHT` or `PRODUCTION` authority for non-baseline Alpha/Trigger evidence
+      now requires a complete local promotion record with Phase I-level gates.
+      Current diagnostic groups remain diagnostic; no scoring behavior changed.
+      Promotion still requires future live-label attribution proof.
+- [x] Insider activity PIT gap fixed (2026-07-08):
+      historical replay uses cache-only insider rows with `fetched_date <= as_of_date`.
+      Live behavior remains TTL/network-backed. Older insider cache snapshots are
+      preserved for replay; no scoring, tuning, or evidence promotion changed.
 - [x] CLI adapter regression tests for strategy evidence display.
       _(Done 2026-07-07 — see Phase D open items below.)_
 - [x] Deterministic historical signal-observation backfill implemented:

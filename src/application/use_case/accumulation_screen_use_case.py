@@ -1060,6 +1060,7 @@ class AccumulationScreenUseCase:
                     from_date=today - timedelta(days=self._derived_features.insider_lookback_days),
                     to_date=today,
                     action_type="ALL",
+                    as_of_date=request.as_of_date,
                 )
                 buy_txns = [t for t in insider_txns if t.is_buy]
                 if buy_txns:

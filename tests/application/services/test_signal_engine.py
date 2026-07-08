@@ -17,6 +17,15 @@ class EmptyInsiderProvider:
         return []
 
 
+class RecordingInsiderProvider(EmptyInsiderProvider):
+    def __init__(self):
+        self.calls = []
+
+    def get_insider_transactions(self, **kwargs):
+        self.calls.append(kwargs)
+        return []
+
+
 class ForwardProviderWithMissingPe:
     """Returns ForwardEstimates with no pre-computed PE — must be derived from price."""
     def get_forward_estimates(self, ticker, as_of_date=None):
@@ -148,10 +157,12 @@ def test_signal_engine_threads_seasonality_sample_size_into_context():
 
 
 def test_signal_engine_passes_none_as_of_for_live_enrichment_and_date_for_replay():
+    insider = RecordingInsiderProvider()
     analyst = RecordingAnalystProvider()
     forward = RecordingForwardProvider()
     seasonality = RecordingSeasonalityProvider()
     engine = SignalEngine(
+        insider_activity_provider=insider,
         analyst_provider=analyst,
         forward_estimates_provider=forward,
         seasonality_provider=seasonality,
@@ -166,3 +177,5 @@ def test_signal_engine_passes_none_as_of_for_live_enrichment_and_date_for_replay
     assert forward.calls == [("BBCA", None), ("BBCA", date(2026, 6, 15))]
     assert seasonality.calls[0][3] is None
     assert seasonality.calls[1] == ("BBCA", 2026, 6, date(2026, 6, 15))
+    assert insider.calls[0]["as_of_date"] is None
+    assert insider.calls[1]["as_of_date"] == date(2026, 6, 15)

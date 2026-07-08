@@ -23,6 +23,7 @@ class InsiderActivityProvider(ABC):
         from_date: date,
         to_date: date,
         action_type: str = "BUY",
+        as_of_date: date | None = None,
     ) -> list[InsiderTransaction]:
         """Return insider transactions for ticker in [from_date, to_date].
 
@@ -31,6 +32,10 @@ class InsiderActivityProvider(ABC):
             from_date:   Start of the lookback window (inclusive).
             to_date:     End of the lookback window (inclusive).
             action_type: "BUY", "SELL", or "ALL" (both).
+            as_of_date:  None for live/latest behavior, where implementations may
+                         use TTL and network. A date value means point-in-time
+                         replay: cache-only, using only rows fetched on or before
+                         that date.
 
         Returns:
             List of InsiderTransaction objects, newest first.

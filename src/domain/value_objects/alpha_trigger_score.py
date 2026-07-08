@@ -18,6 +18,57 @@ class EvidenceAuthorityStatus(str, Enum):
 
 
 @dataclass(frozen=True)
+class EvidencePromotionRecord:
+    target: str
+    evidence_name: str
+    promoted_to: EvidenceAuthorityStatus
+    promoted_by: str
+    promoted_date: str
+    attribution_ref: str
+    requirements: tuple[tuple[str, float], ...]
+
+    def __post_init__(self) -> None:
+        if not self.target:
+            raise ValueError("promotion.target cannot be empty")
+        if not self.evidence_name:
+            raise ValueError("promotion.evidence_name cannot be empty")
+        if not isinstance(self.promoted_to, EvidenceAuthorityStatus):
+            raise ValueError("promotion.promoted_to must be an EvidenceAuthorityStatus")
+        if not self.promoted_by:
+            raise ValueError("promotion.promoted_by cannot be empty")
+        if not self.promoted_date:
+            raise ValueError("promotion.promoted_date cannot be empty")
+        if not self.attribution_ref:
+            raise ValueError("promotion.attribution_ref cannot be empty")
+        if not isinstance(self.requirements, tuple):
+            raise ValueError("promotion.requirements must be a tuple")
+        for item in self.requirements:
+            if (
+                not isinstance(item, tuple)
+                or len(item) != 2
+                or not isinstance(item[0], str)
+            ):
+                raise ValueError(
+                    "promotion.requirements must contain (name, value) tuples"
+                )
+
+    @property
+    def requirements_dict(self) -> dict[str, float]:
+        return dict(self.requirements)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "target": self.target,
+            "evidence_name": self.evidence_name,
+            "promoted_to": self.promoted_to.value,
+            "promoted_by": self.promoted_by,
+            "promoted_date": self.promoted_date,
+            "attribution_ref": self.attribution_ref,
+            "requirements": self.requirements_dict,
+        }
+
+
+@dataclass(frozen=True)
 class EvidenceRegistration:
     evidence_name: str
     status: EvidenceAuthorityStatus
@@ -25,6 +76,7 @@ class EvidenceRegistration:
     promotion_requires: tuple[str, ...] = field(default_factory=tuple)
     promoted_by: str | None = None
     promoted_date: str | None = None
+    promotion: EvidencePromotionRecord | None = None
 
     def __post_init__(self) -> None:
         if not self.evidence_name:
@@ -32,6 +84,10 @@ class EvidenceRegistration:
         if not isinstance(self.status, EvidenceAuthorityStatus):
             raise ValueError("status must be an EvidenceAuthorityStatus")
         _validate_unit("low_weight_cap", self.low_weight_cap)
+        if self.promotion is not None and not isinstance(
+            self.promotion, EvidencePromotionRecord
+        ):
+            raise ValueError("promotion must be an EvidencePromotionRecord")
 
     def effective_weight(self, configured_weight: float) -> float:
         if configured_weight < 0:
@@ -50,6 +106,10 @@ class EvidenceRegistration:
             "promotion_requires": list(self.promotion_requires),
             "promoted_by": self.promoted_by,
             "promoted_date": self.promoted_date,
+            "promotion": (
+                self.promotion.to_dict()
+                if self.promotion is not None else None
+            ),
         }
 
 

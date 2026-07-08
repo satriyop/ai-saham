@@ -260,6 +260,7 @@ class SignalEngine:
                     ),
                     to_date=snapshot_date,
                     action_type="ALL",
+                    as_of_date=as_of_date,
                 )
                 insider_ratio = compute_net_buy_ratio(txns)
                 if insider_ratio is None:

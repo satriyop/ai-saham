@@ -96,6 +96,30 @@ class MockBrokerRepository(BrokerDataRepository):
         return rows[0].date, rows[-1].date
 
 
+class RecordingInsiderProvider:
+    def __init__(self) -> None:
+        self.calls = []
+
+    def get_insider_transactions(
+        self,
+        ticker,
+        from_date,
+        to_date,
+        action_type="BUY",
+        as_of_date=None,
+    ):
+        self.calls.append(
+            {
+                "ticker": ticker,
+                "from_date": from_date,
+                "to_date": to_date,
+                "action_type": action_type,
+                "as_of_date": as_of_date,
+            }
+        )
+        return []
+
+
 def _candle(ticker: str, day: date, close: Decimal) -> Candle:
     return Candle(
         ticker=ticker,
@@ -162,6 +186,37 @@ def test_screen_window_uses_latest_broker_sessions_not_calendar_days():
     assert candidate.net_buy_days == 7
     assert candidate.consecutive_streak == 7
     assert candidate.window_days == 7
+
+
+def test_screen_passes_as_of_date_to_insider_provider():
+    session_dates = _weekdays(date(2026, 1, 1), 9)
+    as_of = session_dates[-1]
+    candles = [
+        _candle("BBCA", date(2025, 12, 1) + timedelta(days=i), Decimal("100"))
+        for i in range(45)
+    ]
+    summaries = [_summary("BBCA", day, Decimal("110")) for day in session_dates]
+    insider_provider = RecordingInsiderProvider()
+
+    use_case = AccumulationScreenUseCase(
+        broker_repository=MockBrokerRepository(summaries),
+        market_repository=MockMarketRepository(candles),
+        insider_activity_provider=insider_provider,
+    )
+
+    use_case.execute(
+        AccumulationScreenRequest(
+            tickers=["BBCA"],
+            window_days=7,
+            min_net_buy_days=1,
+            as_of_date=as_of,
+        )
+    )
+
+    assert insider_provider.calls
+    assert insider_provider.calls[0]["ticker"] == "BBCA"
+    assert insider_provider.calls[0]["action_type"] == "ALL"
+    assert insider_provider.calls[0]["as_of_date"] == as_of
 
 
 def test_screen_ignores_unsafe_broker_summary_rows():
