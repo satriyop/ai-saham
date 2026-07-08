@@ -48,6 +48,7 @@ from src.domain.value_objects.setup_phase import SetupPhaseSnapshot, SetupPhaseS
 from src.domain.value_objects.sector_context_evidence import SectorContextEvidence
 from src.domain.value_objects.signal_assessment import SignalContext, SignalStrength
 from src.domain.value_objects.institutional_accumulation_evidence import EvidenceStatus
+from src.domain.value_objects.market_context import MarketContext, MarketRegime
 
 SNAP = date(2026, 7, 3)
 
@@ -760,3 +761,67 @@ def test_diagnostic_producers_zero_authority():
     cq = [c for c in filled.alpha_trigger_score.group_contributions if c.group == "company_quality_context"][0]
     assert market.effective_weight == pytest.approx(0.0)
     assert cq.effective_weight == pytest.approx(0.0)
+
+
+# ── regime-neutral canonical score regression ────────────────────────────────
+# ADR-024 / TD-1 contract: assessment.score must be identical across all regimes.
+# _condition_group_scores() output is stored only as legacy_conditioned_score.
+# entry_quality and decision_constraints may differ per regime — that is expected.
+
+def _market_ctx(regime: str, gate_tightening: bool = False) -> MarketContext:
+    return MarketContext(
+        regime=MarketRegime(regime),
+        conviction=0.6,
+        factors=(),
+        signal_multiplier=1.0,
+        gate_tightening=gate_tightening,
+        as_of_date=SNAP,
+    )
+
+
+@pytest.mark.parametrize("regime", ["RISK_ON", "NEUTRAL", "RISK_OFF", "VOLATILE"])
+def test_canonical_score_is_identical_across_regimes(regime):
+    """assessment.score must be regime-neutral regardless of _condition_group_scores output."""
+    uc = _use_case()
+    resp_no_ctx = uc.execute(
+        _req(
+            setup_evidence=_setup_evidence("MATCH"),
+            flow_confirmation_evidence=_flow_evidence(0.70),
+        )
+    )
+    resp_with_ctx = uc.execute(
+        _req(
+            setup_evidence=_setup_evidence("MATCH"),
+            flow_confirmation_evidence=_flow_evidence(0.70),
+            market_context=_market_ctx(regime),
+        )
+    )
+    # Canonical score must be the same regardless of which regime was passed
+    assert resp_with_ctx.assessment.score == resp_no_ctx.assessment.score, (
+        f"assessment.score changed under regime={regime}: "
+        f"{resp_no_ctx.assessment.score} → {resp_with_ctx.assessment.score}. "
+        "Regime must not mutate canonical score (ADR-024 TD-1)."
+    )
+
+
+def test_legacy_conditioned_score_may_differ_from_canonical():
+    """legacy_conditioned_score is diagnostic only and is allowed to differ from canonical."""
+    uc = _use_case()
+    # RISK_OFF + NO_MATCH setup (score=20 < threshold=60) → conditioning fires on legacy path
+    resp = uc.execute(
+        _req(
+            setup_evidence=_setup_evidence("NO_MATCH"),
+            flow_confirmation_evidence=_flow_evidence(0.70),
+            market_context=_market_ctx("RISK_OFF"),
+        )
+    )
+    # Canonical score is unaffected by regime
+    resp_no_ctx = uc.execute(
+        _req(
+            setup_evidence=_setup_evidence("NO_MATCH"),
+            flow_confirmation_evidence=_flow_evidence(0.70),
+        )
+    )
+    assert resp.assessment.score == resp_no_ctx.assessment.score
+    # Legacy path fires the RISK_OFF ×0.50 discount → legacy_conditioned_score must be lower
+    assert resp.assessment.legacy_conditioned_score < resp.assessment.score

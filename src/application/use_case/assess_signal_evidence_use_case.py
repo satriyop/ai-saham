@@ -305,16 +305,15 @@ class AssessSignalEvidenceUseCase:
             and ev.aggregate_score is not None
         )
 
-    # ── regime conditioning (TRANSITIONAL — Phase 5 legacy) ──────────────────
+    # ── regime conditioning (ARCHIVED DIAGNOSTIC — Phase 5 legacy) ───────────
     #
-    # TRANSITIONAL: This conditioning mutates group scores before renormalization,
-    # meaning assessment.score reflects regime. A1/A2 decision_policy constraints
-    # provide the same regime gate without score mutation. Both currently run together,
-    # creating a double-regime effect. When walk-forward validation confirms
-    # decision_policy alone is sufficient, _condition_group_scores() will be removed
-    # and assessment.score will become fully regime-neutral (= signal_score_raw).
+    # The double-regime effect is resolved: canonical assessment.score now uses
+    # regime-neutral group scores (see Stage 3 above). _condition_group_scores()
+    # output is stored as legacy_conditioned_score only — diagnostic/fallback.
+    # decision_policy is the canonical regime gate.
     #
-    # Until then: DO NOT tune regime_conditioning params further. Tune decision_policy.
+    # Do not tune regime_conditioning params. Do not remove yet — pending explicit
+    # clean-break decision after live labels confirm decision_policy is sufficient.
 
     def _condition_group_scores(
         self,

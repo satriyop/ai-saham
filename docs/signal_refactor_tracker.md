@@ -359,25 +359,26 @@ in the phase tracker sections below.
 
 ### TD-1: Double Regime Effect — regime_conditioning + decision_policy both active
 
-**Status:** Transitional — tracked, not a blocker for Phase C planning.
+**Status:** Resolved (double-regime effect fixed). Cleanup deferred pending live labels.
 
-**Description:** `AssessSignalEvidenceUseCase._condition_group_scores()` (Phase 5 legacy) mutates
-group scores before renormalization when regime is RISK_OFF/VOLATILE/NEUTRAL. A1/A2 then adds
-explicit `decision_policy` constraints on top. This creates a compound effect: score is discounted
-AND ENTER is blocked.
+**What was the problem:** `_condition_group_scores()` (Phase 5 legacy) mutated group scores before
+renormalization, causing `assessment.score` to reflect regime AND `decision_policy` to also gate
+ENTER — a compound double effect.
 
-**Contract violation:** The A1/A2 contract states "regime controls constraints, not score."
-`assessment.score` still reflects regime conditioning. `signal_score_raw` (added in A2) preserves
-the regime-neutral score for comparability.
+**Current state (resolved):** Canonical `assessment.score` is now regime-neutral. Stage 2 calls
+`_condition_group_scores()` but its output is stored only as `legacy_conditioned_score` (diagnostic).
+`decision_policy` is the sole canonical regime gate. The contract "regime controls constraints, not
+score" is now satisfied.
 
-**Documented workaround:**
-- `config/signal_engine.yaml` `regime_conditioning.*` block marked TRANSITIONAL — DO NOT TUNE.
-- `_condition_group_scores()` docstring marks it as transitional Phase 5 legacy.
-- `AssessSignalResponse.signal_score_raw` holds the regime-neutral score.
+**What remains (deferred, not a blocker):**
+- `_condition_group_scores()` still runs (output diagnostic only).
+- `regime_conditioning.*` config block still exists, marked ARCHIVED DIAGNOSTIC.
+- `legacy_conditioned_score` still appears in output JSON (no contract break if removed later).
+- Removal is a clean-break change; defer until after live labels or explicit decision.
 
-**Resolution path:** When walk-forward validation (Phase I) confirms `decision_policy` alone
-provides equivalent or better regime gating, remove `_condition_group_scores()` from the canonical
-path and promote `signal_score_raw` → `assessment.score`. Requires updating test expectations.
+**Resolution path:** After live labels confirm decision_policy is sufficient, remove
+`_condition_group_scores()`, `regime_conditioning` config, and `legacy_conditioned_score`.
+Requires test expectation updates and JSON output contract bump.
 
 ---
 

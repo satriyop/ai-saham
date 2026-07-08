@@ -2,10 +2,9 @@
 #
 # Canonical scoring path: AssessSignalEvidenceUseCase
 #   Stage 1: Group scoring — Setup Quality (60%) + Flow Confirmation (40%)
-#   Stage 2: [TRANSITIONAL] Regime conditioning — mutates group scores before renormalization.
-#            This is a Phase 5 legacy layer. A1/A2 adds explicit decision_policy constraints.
-#            Both run simultaneously — see ADR-TODO for removal plan.
-#            DO NOT tune regime_conditioning.* further; tune decision_policy instead.
+#   Stage 2: [ARCHIVED DIAGNOSTIC] Regime conditioning — output stored as legacy_conditioned_score
+#            only; does NOT affect canonical assessment.score (resolved double-regime effect).
+#            decision_policy is the canonical regime gate. DO NOT tune regime_conditioning.*.
 #   Stage 3: Renormalize — missing groups excluded from denominator
 #   Stage 4: Do-no-harm flags — score penalties from SignalContext
 #   Stage 5: Confidence-aware entry classification — ENTER requires score + confidence
@@ -174,18 +173,15 @@ signal_engine:
       net_buy_ratio_threshold: -0.30
       score_penalty: 12
 
-  # Phase 5: Regime-conditional group score conditioning applied BEFORE renormalization.
-  # RISK_ON:  no conditioning — full confidence in evidence.
-  # TRANSITIONAL — Phase 5 legacy score conditioning.
-  # A1/A2 adds explicit decision_policy constraints that achieve the same regime gate.
-  # Running both causes a double regime effect: score is discounted AND ENTER is blocked.
-  # This will be removed when walk-forward validation confirms decision_policy alone
-  # is sufficient. Until then: DO NOT tune these values further.
-  # A2 adds signal_score_raw (regime-neutral) to AssessSignalResponse for comparability.
-  # NEUTRAL:  weak flow confirmation (< threshold) discounted.
-  # RISK_OFF: weak setup evidence (< threshold = PARTIAL or NO_MATCH) heavily discounted.
-  # VOLATILE: both groups discounted regardless of score level.
-  # gate_tightening: ENTER → WATCH cap is set per MarketContext, not here.
+  # Phase 5: Archived diagnostic legacy conditioning.
+  # Output is stored as legacy_conditioned_score only — does NOT affect canonical
+  # assessment.score. decision_policy is the canonical regime gate (Stage 7).
+  # The double-regime effect is resolved: canonical score is regime-neutral.
+  # DO NOT tune these values. Removal pending explicit clean-break decision.
+  # NEUTRAL:  weak flow confirmation (< threshold) discounted in legacy path.
+  # RISK_OFF: weak setup evidence (< threshold) discounted in legacy path.
+  # VOLATILE: both groups discounted in legacy path.
+  # gate_tightening: ENTER → WATCH cap is set per MarketContext via decision_policy.
   regime_conditioning:
     neutral:
       weak_flow_threshold: 50.0     # flow scores below this are discounted
