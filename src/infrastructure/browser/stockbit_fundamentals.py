@@ -42,24 +42,6 @@ _CACHE_TTL_DAYS = STOCKBIT_CFG.cache_ttl_days_fundamentals
 
 _CREATE_TABLE = """
 CREATE TABLE IF NOT EXISTS company_fundamentals (
-    ticker              TEXT PRIMARY KEY,
-    fetched_date        TEXT NOT NULL,
-    pe_ratio_ttm        REAL,
-    roe_ttm             REAL,
-    net_profit_margin   REAL,
-    revenue_yoy_growth  REAL,
-    piotroski_f_score   INTEGER,
-    dividend_yield      REAL,
-    week52_high         REAL,
-    week52_low          REAL,
-    near_52w_high_rank  REAL,
-    market_cap_idr      INTEGER,
-    pbv                 REAL
-)
-"""
-
-_CREATE_TABLE_PIT = """
-CREATE TABLE IF NOT EXISTS company_fundamentals_pit (
     ticker              TEXT NOT NULL,
     fetched_date        TEXT NOT NULL,
     pe_ratio_ttm        REAL,
@@ -79,38 +61,6 @@ CREATE TABLE IF NOT EXISTS company_fundamentals_pit (
 
 _MIGRATIONS: list[tuple[int, str]] = [
     (0, _CREATE_TABLE),
-    (1, "ALTER TABLE company_fundamentals ADD COLUMN market_cap_idr INTEGER"),
-    (2, "ALTER TABLE company_fundamentals ADD COLUMN pbv REAL"),
-    # Migrations 3-6: convert from single-row (ticker PRIMARY KEY) to multi-row
-    # PIT table keyed by (ticker, fetched_date). Follows the same pattern as
-    # analyst_cache migrations 4-8. Existing rows are preserved.
-    (3, _CREATE_TABLE_PIT),
-    (
-        4,
-        "INSERT OR IGNORE INTO company_fundamentals_pit "
-        "SELECT ticker, fetched_date, pe_ratio_ttm, roe_ttm, net_profit_margin, "
-        "revenue_yoy_growth, piotroski_f_score, dividend_yield, week52_high, "
-        "week52_low, near_52w_high_rank, market_cap_idr, pbv "
-        "FROM company_fundamentals",
-    ),
-    (5, "DROP TABLE company_fundamentals"),
-    (6, "ALTER TABLE company_fundamentals_pit RENAME TO company_fundamentals"),
-    # Migration 7: created company_fundamentals_history (superseded by migration 8).
-    (
-        7,
-        """CREATE TABLE IF NOT EXISTS company_fundamentals_history (
-            ticker TEXT NOT NULL,
-            period_end_date TEXT NOT NULL,
-            period TEXT NOT NULL,
-            year INTEGER NOT NULL,
-            net_profit_margin REAL,
-            revenue_yoy_growth REAL,
-            UNIQUE(ticker, period_end_date)
-        )""",
-    ),
-    # Migration 8: drop the history table — historical rows now go into the PIT
-    # table with a 60-day publication lag instead of a separate table.
-    (8, "DROP TABLE IF EXISTS company_fundamentals_history"),
 ]
 
 
