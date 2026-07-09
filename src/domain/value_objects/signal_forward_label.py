@@ -78,6 +78,12 @@ class SignalObservationFingerprint:
     foreign_concentration: float | None = None
     domestic_broker_accumulation: float | None = None
     market_regime: dict[str, Any] = field(default_factory=dict)
+    market_regime_at_signal: str | None = None
+    regime_confidence_at_signal: float | None = None
+    regime_stability_at_signal: str | None = None
+    days_in_regime_at_signal: int | None = None
+    regime_transition_warning_at_signal: str | None = None
+    regime_detection_method_at_signal: str | None = None
     coverage: float | None = None
     conviction: float | None = None
     # Phase E: institutional accumulation evidence fingerprint
@@ -190,6 +196,12 @@ class SignalObservationFingerprint:
             "foreign_concentration": self.foreign_concentration,
             "domestic_broker_accumulation": self.domestic_broker_accumulation,
             "market_regime": dict(self.market_regime),
+            "market_regime_at_signal": self.market_regime_at_signal,
+            "regime_confidence_at_signal": self.regime_confidence_at_signal,
+            "regime_stability_at_signal": self.regime_stability_at_signal,
+            "days_in_regime_at_signal": self.days_in_regime_at_signal,
+            "regime_transition_warning_at_signal": self.regime_transition_warning_at_signal,
+            "regime_detection_method_at_signal": self.regime_detection_method_at_signal,
             "coverage": self.coverage,
             "conviction": self.conviction,
             "institutional_accumulation_status": self.institutional_accumulation_status,
@@ -351,6 +363,29 @@ class SignalObservationFingerprint:
                 )
             ),
             market_regime=dict(regime or {}),
+            market_regime_at_signal=(
+                data.get("market_regime_at_signal")
+                or (regime.get("regime") if regime else None)
+            ),
+            regime_confidence_at_signal=_optional_float(
+                data.get("regime_confidence_at_signal")
+                if data.get("regime_confidence_at_signal") is not None
+                else (regime.get("regime_confidence") if regime else None)
+            ),
+            regime_stability_at_signal=(
+                data.get("regime_stability_at_signal")
+                or (regime.get("regime_stability") if regime else None)
+            ),
+            days_in_regime_at_signal=_optional_int(
+                data.get("days_in_regime_at_signal")
+                if data.get("days_in_regime_at_signal") is not None
+                else (regime.get("days_in_regime") if regime else None)
+            ),
+            regime_transition_warning_at_signal=(
+                data.get("regime_transition_warning_at_signal")
+                or (regime.get("transition_warning") if regime else None)
+            ),
+            regime_detection_method_at_signal=data.get("regime_detection_method_at_signal"),
             coverage=_optional_float(data.get("coverage", data.get("coverage_score"))),
             conviction=_optional_float(data.get("conviction", data.get("conviction_score"))),
             institutional_accumulation_status=data.get("institutional_accumulation_status"),

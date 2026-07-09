@@ -4,11 +4,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from datetime import date
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.application.use_case.accumulation_screen_use_case import (
     AccumulationScreenRequest,
 )
+
+if TYPE_CHECKING:
+    from src.domain.value_objects.market_context import MarketContext
 
 
 @dataclass(frozen=True)
@@ -104,6 +107,7 @@ class BuildSignalObservationScreenRequest:
         tickers: list[str],
         window_days: int,
         as_of_date: date | None = None,
+        market_context: "MarketContext | None" = None,
     ) -> AccumulationScreenRequest:
         return AccumulationScreenRequest(
             tickers=tickers,
@@ -127,4 +131,5 @@ class BuildSignalObservationScreenRequest:
             sector_breadth_min_tickers=self.sector_breadth_min_tickers,
             strategy_name=self.strategy_name,
             as_of_date=as_of_date,
+            market_context=market_context,
         )

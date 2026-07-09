@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date
+from typing import TYPE_CHECKING, Callable
 
 from src.application.services.signal_observation_request_builder import (
     BuildSignalObservationScreenRequest,
@@ -18,6 +19,9 @@ from src.domain.ports.candidate_observations_repository import (
 )
 from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.value_objects.signal_forward_label import SignalLabelHorizon
+
+if TYPE_CHECKING:
+    from src.domain.value_objects.market_context import MarketContext
 
 
 @dataclass(frozen=True)
@@ -76,12 +80,14 @@ class BackfillSignalObservationsUseCase:
         market_data_repository: MarketDataRepository,
         candidate_observations_repository: CandidateObservationsRepository,
         label_generation_use_case: GenerateSignalForwardLabelsUseCase | None = None,
+        evaluate_market_context: "Callable[..., MarketContext] | None" = None,
     ) -> None:
         self._screen = accumulation_screen_use_case
         self._request_builder = screen_request_builder
         self._market = market_data_repository
         self._observations = candidate_observations_repository
         self._labels = label_generation_use_case
+        self._evaluate_market_context = evaluate_market_context
 
     def execute(
         self,
@@ -115,6 +121,7 @@ class BackfillSignalObservationsUseCase:
 
         processed: list[date] = []
         skipped: list[BackfillSkippedDate] = []
+        market_context_notes: list[str] = []
         saved_count = 0
         generated_label_count = 0
         unavailable_label_count = 0
@@ -129,6 +136,17 @@ class BackfillSignalObservationsUseCase:
                 )
                 continue
 
+            market_context = None
+            if self._evaluate_market_context is not None:
+                try:
+                    market_context = self._evaluate_market_context(
+                        as_of_date=trading_date
+                    )
+                except Exception:
+                    market_context_notes.append(
+                        f"market_context_unavailable_for_{trading_date.isoformat()}"
+                    )
+
             before_count = len(self._observations.list_all_by_date(trading_date))
             for window in request.windows:
                 self._screen.execute(
@@ -136,6 +154,7 @@ class BackfillSignalObservationsUseCase:
                         tickers=list(tickers),
                         window_days=int(window),
                         as_of_date=trading_date,
+                        market_context=market_context,
                     )
                 )
             after_count = len(self._observations.list_all_by_date(trading_date))
@@ -195,6 +214,7 @@ class BackfillSignalObservationsUseCase:
                 "candidate_observations are timestamped; reruns may append raw "
                 "rows while readiness uses latest per ticker to avoid duplicate "
                 "ticker/day labels.",
+                *market_context_notes,
             ),
         )
 

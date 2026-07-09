@@ -65,6 +65,70 @@ def test_signal_backfill_observations_json_output_is_stable(monkeypatch):
     assert captured["request"].generate_labels is True
 
 
+def test_signal_backfill_observations_wires_evaluate_market_context(monkeypatch):
+    captured = {}
+    market_context_calls = []
+
+    class FakeBackfillUseCase:
+        def __init__(self, **kwargs):
+            captured["dependencies"] = kwargs
+
+        def execute(self, request):
+            captured["request"] = request
+            return BackfillSignalObservationsResponse(
+                requested_date_count=2,
+                processed_date_count=1,
+                skipped_date_count=1,
+                saved_observation_count=3,
+                generated_label_count=1,
+                unavailable_label_count=0,
+                processed_dates=(date(2026, 6, 1),),
+                notes=("candidate_observations are timestamped",),
+            )
+
+    def fake_evaluate_market_context(*, db_path, as_of_date, universe):
+        market_context_calls.append(
+            {"db_path": db_path, "as_of_date": as_of_date, "universe": universe}
+        )
+        return SimpleNamespace(sentinel="fake-market-context")
+
+    _patch_command_dependencies(monkeypatch, FakeBackfillUseCase)
+    monkeypatch.setattr(
+        analyze_signal_commands,
+        "evaluate_market_context",
+        fake_evaluate_market_context,
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "analyze",
+            "signal-backfill-observations",
+            "--universe",
+            "lq45",
+            "--start",
+            "2026-06-01",
+            "--end",
+            "2026-06-02",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    dependencies = captured["dependencies"]
+    assert dependencies["evaluate_market_context"] is not None
+    assert callable(dependencies["evaluate_market_context"])
+
+    # Prove the wrapper is bound to the right db_path/universe by invoking it
+    # directly and inspecting what it forwards to evaluate_market_context.
+    result_context = dependencies["evaluate_market_context"](as_of_date=date(2026, 6, 1))
+    assert result_context.sentinel == "fake-market-context"
+    assert len(market_context_calls) == 1
+    call = market_context_calls[0]
+    assert call["universe"] == "lq45"
+    assert call["as_of_date"] == date(2026, 6, 1)
+    assert call["db_path"] == analyze_signal_commands.DEFAULT_DB_PATH
+
+
 def test_signal_backfill_observations_rejects_invalid_date(monkeypatch):
     _patch_command_dependencies(monkeypatch)
 

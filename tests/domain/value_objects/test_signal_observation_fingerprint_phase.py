@@ -133,3 +133,93 @@ def test_signal_observation_fingerprint_volume_trigger_dual_key_fallback():
 
     assert fp.volume_dry_up_ratio == 0.4
     assert fp.volume_expansion_ratio == 2.0
+
+
+def test_signal_observation_fingerprint_preserves_regime_attribution_fields():
+    """market_regime_at_signal / regime_confidence_at_signal /
+    regime_stability_at_signal / days_in_regime_at_signal /
+    regime_transition_warning_at_signal / regime_detection_method_at_signal
+    (Phase: regime confidence/stability/days-in-regime/transition-warning/
+    detection-method attribution fingerprint) must survive a
+    to_dict/from_dict round trip unchanged."""
+    fp = SignalObservationFingerprint(
+        market_regime_at_signal="BULLISH",
+        regime_confidence_at_signal=0.72,
+        regime_stability_at_signal="STABLE",
+        days_in_regime_at_signal=4,
+        regime_transition_warning_at_signal=None,
+        regime_detection_method_at_signal=None,
+    )
+
+    round_tripped = SignalObservationFingerprint.from_dict(fp.to_dict())
+
+    assert round_tripped.market_regime_at_signal == "BULLISH"
+    assert round_tripped.regime_confidence_at_signal == 0.72
+    assert round_tripped.regime_stability_at_signal == "STABLE"
+    assert round_tripped.days_in_regime_at_signal == 4
+    assert round_tripped.regime_transition_warning_at_signal is None
+    assert round_tripped.regime_detection_method_at_signal is None
+
+
+def test_signal_observation_fingerprint_regime_confidence_and_days_survive_zero_values():
+    """Proves the `is not None` handling for regime_confidence_at_signal and
+    days_in_regime_at_signal: a real 0.0 / 0 must survive a to_dict/from_dict
+    round trip and must NOT be dropped or coerced to None by truthiness
+    checks (`0.0` and `0` are falsy in Python but are valid, meaningful
+    values here)."""
+    fp = SignalObservationFingerprint(
+        days_in_regime_at_signal=0,
+        regime_confidence_at_signal=0.0,
+    )
+
+    assert fp.days_in_regime_at_signal == 0
+    assert fp.regime_confidence_at_signal == 0.0
+
+    round_tripped = SignalObservationFingerprint.from_dict(fp.to_dict())
+
+    assert round_tripped.days_in_regime_at_signal == 0
+    assert round_tripped.days_in_regime_at_signal is not None
+    assert round_tripped.regime_confidence_at_signal == 0.0
+    assert round_tripped.regime_confidence_at_signal is not None
+
+
+def test_signal_observation_fingerprint_regime_attribution_backward_compat_nested_dict():
+    """Backward-compat: older persisted payloads only had the nested
+    `market_regime` dict (no flat `*_at_signal` keys). from_dict must derive
+    the new flat regime-attribution fields from that nested dict, including
+    days_in_regime_at_signal == 0 (not None) to prove the numeric fallback
+    also uses `is not None`, not truthiness."""
+    fp = SignalObservationFingerprint.from_dict(
+        {
+            "market_regime": {
+                "regime": "RISK_OFF",
+                "regime_confidence": 0.4,
+                "regime_stability": "TRANSITIONING",
+                "days_in_regime": 0,
+                "transition_warning": "narrowing",
+            }
+        }
+    )
+
+    assert fp.market_regime_at_signal == "RISK_OFF"
+    assert fp.regime_confidence_at_signal == 0.4
+    assert fp.regime_stability_at_signal == "TRANSITIONING"
+    assert fp.days_in_regime_at_signal == 0
+    assert fp.days_in_regime_at_signal is not None
+    assert fp.regime_transition_warning_at_signal == "narrowing"
+    # No nested-dict fallback exists for detection-method (MarketContext
+    # never had this field, so there's nothing to reconstruct from).
+    assert fp.regime_detection_method_at_signal is None
+
+
+def test_signal_observation_fingerprint_regime_attribution_flat_key_precedence():
+    """When both the flat key and the nested `market_regime` dict are
+    present, the flat key must win."""
+    fp = SignalObservationFingerprint.from_dict(
+        {
+            "market_regime_at_signal": "RISK_ON",
+            "market_regime": {"regime": "RISK_OFF"},
+        }
+    )
+
+    assert fp.market_regime_at_signal == "RISK_ON"

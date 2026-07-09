@@ -48,6 +48,7 @@ if TYPE_CHECKING:
     from src.domain.value_objects.flow_confirmation_evidence import FlowConfirmationEvidence
     from src.domain.value_objects.forward_estimates import ForwardEstimates
     from src.domain.value_objects.institutional_accumulation_evidence import InstitutionalAccumulationEvidence
+    from src.domain.value_objects.market_context import MarketContext
     from src.domain.value_objects.risk_assessment import RiskAssessment
     from src.domain.value_objects.company_quality_context_evidence import (
         CompanyQualityContextEvidence,
@@ -192,6 +193,10 @@ class AccumulationScreenRequest:
     # Piotroski F-Score floor (0–9). Tickers below this are excluded (0 = disabled)
     min_piotroski: int = 0
     strategy_name: str | None = None
+    # market_context is observation-attribution only for screen accum. It is
+    # persisted into candidate observation fingerprints. It must not affect
+    # screen scoring/verdict without an explicit behavior-change task.
+    market_context: "MarketContext | None" = None
 
     def __init__(
         self,
@@ -219,6 +224,10 @@ class AccumulationScreenRequest:
         min_market_cap_idr: int = 0,
         min_piotroski: int = 0,
         strategy_name: str | None = None,
+        # market_context is observation-attribution only for screen accum. It is
+        # persisted into candidate observation fingerprints. It must not affect
+        # screen scoring/verdict without an explicit behavior-change task.
+        market_context: "MarketContext | None" = None,
     ) -> None:
         self.tickers = tickers
         self.window_days = window_days
@@ -244,6 +253,7 @@ class AccumulationScreenRequest:
         self.min_market_cap_idr = min_market_cap_idr
         self.min_piotroski = min_piotroski
         self.strategy_name = strategy_name
+        self.market_context = market_context
 
 
 @dataclass(frozen=True)
@@ -514,6 +524,7 @@ def _candidate_observation_payload(
         sc_evidence=sc_evidence,
         cq_evidence=cq_evidence,
         setup_family_result=setup_family_result,
+        market_context=request.market_context,
     )
 
     return {
@@ -539,6 +550,27 @@ def _candidate_observation_payload(
     }
 
 
+def _market_context_fingerprint(market_context: "MarketContext | None") -> dict:
+    """Persist full regime attribution from a supplied MarketContext, else None."""
+    return {
+        "regime_confidence_at_signal": (
+            market_context.regime_confidence if market_context is not None else None
+        ),
+        "regime_stability_at_signal": (
+            market_context.regime_stability if market_context is not None else None
+        ),
+        "days_in_regime_at_signal": (
+            market_context.days_in_regime if market_context is not None else None
+        ),
+        "regime_transition_warning_at_signal": (
+            market_context.transition_warning if market_context is not None else None
+        ),
+        # MarketContext exposes no detection-method field anywhere in the codebase
+        # (verified: zero hits for regime_detection_method/detection_method/regime_source).
+        "regime_detection_method_at_signal": None,
+    }
+
+
 def _sub_signal_fingerprint(
     *,
     candidate: "AccumulationCandidate",
@@ -551,6 +583,7 @@ def _sub_signal_fingerprint(
     sc_evidence: "SectorContextEvidence | None" = None,
     cq_evidence: "CompanyQualityContextEvidence | None" = None,
     setup_family_result: "PrimarySetupFamilyResult | None" = None,
+    market_context: "MarketContext | None" = None,
 ) -> dict:
     """Persist raw sub-signal values as they were at observation time."""
     assessment = signal.assessment if signal is not None else None
@@ -584,6 +617,11 @@ def _sub_signal_fingerprint(
         )
     else:
         resolved_setup_family = constraints.get("setup_family")
+    market_regime_at_signal = (
+        market_context.regime.value
+        if market_context is not None
+        else constraints.get("regime")
+    )
     return {
         "setup_family": resolved_setup_family,
         "matched_setup_families": (
@@ -629,9 +667,8 @@ def _sub_signal_fingerprint(
             and hasattr(candidate.bandar_detector, "bandar_score")
             else None
         ),
-        "market_regime_at_signal": constraints.get("regime"),
-        "regime_confidence_at_signal": None,
-        "regime_stability_at_signal": None,
+        "market_regime_at_signal": market_regime_at_signal,
+        **_market_context_fingerprint(market_context),
         "decision_constraints": constraints or None,
         "coverage_score": coverage_score,
         "conviction_score": conviction_score,

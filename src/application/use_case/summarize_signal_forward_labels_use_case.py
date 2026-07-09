@@ -97,6 +97,14 @@ def _build_buckets(
                 "UNKNOWN" if fp.phase_sequence_valid is None else str(fp.phase_sequence_valid),
             ),
             ("market_regime", str(fp.market_regime.get("regime") or "UNKNOWN")),
+            ("market_regime_at_signal", fp.market_regime_at_signal or "UNKNOWN"),
+            ("regime_confidence_bucket", _score_bucket(fp.regime_confidence_at_signal)),
+            ("regime_stability_at_signal", fp.regime_stability_at_signal or "UNKNOWN"),
+            ("days_in_regime_bucket", _days_in_regime_bucket(fp.days_in_regime_at_signal)),
+            (
+                "regime_detection_method_at_signal",
+                fp.regime_detection_method_at_signal or "UNKNOWN",
+            ),
             ("strategy_name", fp.strategy_name or "UNKNOWN"),
             ("strategy_rule", fp.strategy_rule_name or "UNKNOWN"),
             ("strategy_outcome", fp.strategy_evidence_outcome or "UNKNOWN"),
@@ -214,6 +222,18 @@ def _score_bucket_100(value: float | None) -> str:
     if value is None:
         return "UNKNOWN"
     return _score_bucket(float(value) / 100.0)
+
+
+def _days_in_regime_bucket(value: int | None) -> str:
+    if value is None:
+        return "UNKNOWN"
+    if value <= 2:
+        return "D0_2"
+    if value <= 5:
+        return "D3_5"
+    if value <= 10:
+        return "D6_10"
+    return "D11_PLUS"
 
 
 def _average(values) -> float | None:

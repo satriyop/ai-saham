@@ -86,6 +86,51 @@ def test_summarize_uses_saved_label_fingerprints_for_attribution():
     assert by_group[("conviction_bucket", "LOW")].observation_count == 1
 
 
+def test_summarize_groups_by_regime_attribution_fingerprint():
+    """market_regime_at_signal / regime_confidence_bucket /
+    regime_stability_at_signal / days_in_regime_bucket /
+    regime_detection_method_at_signal buckets must be built from the
+    persisted regime-attribution fingerprint fields."""
+    day = date(2026, 7, 1)
+    label = _label(
+        ticker="BBCA",
+        day=day,
+        outcome=SignalForwardOutcome.SUCCESS,
+        setup_family="foreign_bounce",
+        regime="RISK_ON",
+        coverage=0.8,
+        conviction=0.9,
+        close_return=5.0,
+        regime_at_signal="BULLISH",
+        regime_confidence_at_signal=0.85,
+        regime_stability_at_signal="STABLE",
+        days_in_regime_at_signal=4,
+        regime_detection_method_at_signal=None,
+    )
+    repo = FakeSignalForwardLabelsRepository([label])
+
+    response = SummarizeSignalForwardLabelsUseCase(repo).execute(
+        SummarizeSignalForwardLabelsRequest(
+            signal_date=day,
+            horizon=SignalLabelHorizon.SWING_10D,
+        )
+    )
+
+    by_group = {(bucket.group, bucket.key): bucket for bucket in response.buckets}
+    assert by_group[("market_regime_at_signal", "BULLISH")].observation_count == 1
+    assert by_group[("market_regime_at_signal", "BULLISH")].success_count == 1
+    assert by_group[("regime_confidence_bucket", "HIGH")].observation_count == 1
+    assert by_group[("regime_stability_at_signal", "STABLE")].observation_count == 1
+    assert by_group[("days_in_regime_bucket", "D3_5")].observation_count == 1
+    assert by_group[("regime_detection_method_at_signal", "UNKNOWN")].observation_count == 1
+    # The pre-existing market_regime bucket (sourced from the nested dict
+    # field, not the new flat field) is untouched by this change: _label()
+    # only populated market_regime={"regime": "RISK_ON"} on the fingerprint,
+    # so that bucket still works as before.
+    assert by_group[("market_regime", "RISK_ON")].observation_count == 1
+    assert by_group[("market_regime", "RISK_ON")].success_count == 1
+
+
 def test_summarize_groups_by_setup_phase_and_sequence_validity():
     day = date(2026, 7, 1)
     label = _label(
@@ -411,6 +456,11 @@ def _label(
     coverage: float,
     conviction: float,
     close_return: float,
+    regime_at_signal: str | None = None,
+    regime_confidence_at_signal: float | None = None,
+    regime_stability_at_signal: str | None = None,
+    days_in_regime_at_signal: int | None = None,
+    regime_detection_method_at_signal: str | None = None,
 ) -> SignalForwardLabel:
     return SignalForwardLabel(
         ticker=ticker,
@@ -433,6 +483,11 @@ def _label(
             market_regime={"regime": regime},
             coverage=coverage,
             conviction=conviction,
+            market_regime_at_signal=regime_at_signal,
+            regime_confidence_at_signal=regime_confidence_at_signal,
+            regime_stability_at_signal=regime_stability_at_signal,
+            days_in_regime_at_signal=days_in_regime_at_signal,
+            regime_detection_method_at_signal=regime_detection_method_at_signal,
         ),
         observation_captured_at=datetime(2026, 7, 1, 9, 0, 0),
     )

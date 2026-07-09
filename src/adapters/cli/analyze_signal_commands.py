@@ -59,12 +59,14 @@ from src.application.use_case.summarize_signal_forward_labels_use_case import (
     SummarizeSignalForwardLabelsRequest,
     SummarizeSignalForwardLabelsUseCase,
 )
+from src.domain.value_objects.market_context import MarketContext
 from src.domain.value_objects.signal_audit import SignalAuditReport
 from src.domain.value_objects.signal_forward_label import SignalLabelHorizon
 from src.infrastructure.config.accumulation_screener_config import (
     load_accumulation_screener_config,
 )
 from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.market_context_factory import evaluate_market_context
 from src.infrastructure.config.swing_config import load_swing_config
 from src.infrastructure.persistence.sqlite_candidate_observations_repository import (
     SQLiteCandidateObservationsRepository,
@@ -445,12 +447,21 @@ def signal_backfill_observations(
         market_data_repository=market_repo,
         signal_forward_labels_repository=labels_repo,
     )
+
+    def _evaluate_market_context_for_backfill(*, as_of_date: date) -> MarketContext:
+        return evaluate_market_context(
+            db_path=resolved_db,
+            as_of_date=as_of_date,
+            universe=universe,
+        )
+
     response = BackfillSignalObservationsUseCase(
         accumulation_screen_use_case=workflow.use_case,
         screen_request_builder=screen_request_builder,
         market_data_repository=market_repo,
         candidate_observations_repository=observations_repo,
         label_generation_use_case=label_use_case,
+        evaluate_market_context=_evaluate_market_context_for_backfill,
     ).execute(
         BackfillSignalObservationsRequest(
             tickers=tuple(tickers),

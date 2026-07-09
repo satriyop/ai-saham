@@ -1374,6 +1374,214 @@ def test_screen_persists_candidate_observations_when_repo_injected():
     # None today. The key itself must be present in the fingerprint dict.
     assert "setup_name" in fingerprint
     assert fingerprint["setup_name"] is None
+    # Regime attribution fingerprint (confidence/stability/days-in-regime/
+    # transition-warning/detection-method): without a market_context on the
+    # request, all five must be None, and market_regime_at_signal falls back
+    # to constraints.get("regime") which is also None here (no signal engine
+    # regime constraint set up in this test).
+    assert fingerprint["market_regime_at_signal"] is None
+    assert fingerprint["regime_confidence_at_signal"] is None
+    assert fingerprint["regime_stability_at_signal"] is None
+    assert fingerprint["days_in_regime_at_signal"] is None
+    assert fingerprint["regime_transition_warning_at_signal"] is None
+    assert fingerprint["regime_detection_method_at_signal"] is None
+
+
+def test_screen_persists_regime_attribution_fingerprint_when_market_context_supplied():
+    """When a market_context is supplied on the request, the persisted
+    sub_signal_fingerprint carries the full regime attribution: confidence,
+    stability, days-in-regime, and market_regime_at_signal sourced from the
+    MarketContext (rather than from decision_constraints)."""
+    from src.domain.ports.candidate_observations_repository import CandidateObservation
+    from src.domain.value_objects.market_context import MarketContext, MarketRegime
+
+    session_dates = _weekdays(date(2026, 1, 1), 7)
+    as_of = session_dates[-1]
+    candles = [
+        _candle("BBCA", date(2025, 12, 1) + timedelta(days=i), Decimal("100")) for i in range(45)
+    ]
+    summaries = [_summary("BBCA", day, Decimal("110")) for day in session_dates]
+
+    spy_repo = SpyCandidateObservationsRepository()
+    use_case = AccumulationScreenUseCase(
+        broker_repository=MockBrokerRepository(summaries),
+        market_repository=MockMarketRepository(candles),
+        candidate_observations_repository=spy_repo,
+    )
+
+    market_context = MarketContext(
+        regime=MarketRegime.RISK_ON,
+        conviction=0.6,
+        factors=(),
+        signal_multiplier=1.0,
+        gate_tightening=False,
+        as_of_date=as_of,
+        regime_confidence=0.8,
+        regime_stability="STABLE",
+        days_in_regime=6,
+    )
+
+    response = use_case.execute(
+        AccumulationScreenRequest(
+            tickers=["BBCA"],
+            window_days=7,
+            min_net_buy_days=1,
+            as_of_date=as_of,
+            market_context=market_context,
+        )
+    )
+
+    assert len(response.candidates) == 1
+    assert len(spy_repo.saved) == 1
+
+    obs = spy_repo.saved[0]
+    assert isinstance(obs, CandidateObservation)
+    fingerprint = obs.payload["sub_signal_fingerprint"]
+    assert fingerprint["market_regime_at_signal"] == MarketRegime.RISK_ON.value
+    assert fingerprint["regime_confidence_at_signal"] == 0.8
+    assert fingerprint["regime_stability_at_signal"] == "STABLE"
+    assert fingerprint["days_in_regime_at_signal"] == 6
+    assert fingerprint["regime_transition_warning_at_signal"] is None
+    assert fingerprint["regime_detection_method_at_signal"] is None
+
+
+def test_market_context_never_leaks_into_scoring_only_into_fingerprint_attribution():
+    """Regression guard: market_context is observation-attribution only. Running
+    the exact same screen twice — once with market_context=None and once with a
+    real MarketContext supplied — must produce an IDENTICAL signal_assessment
+    (score/strength/entry_quality) and IDENTICAL trade_setup for the same
+    candidate. Only the regime-attribution keys inside sub_signal_fingerprint
+    may differ between the two persisted observations."""
+    from src.domain.ports.candidate_observations_repository import CandidateObservation
+    from src.domain.value_objects.market_context import MarketContext, MarketRegime
+
+    session_dates = _weekdays(date(2026, 1, 1), 7)
+    as_of = session_dates[-1]
+
+    def _fresh_candles():
+        return [
+            _candle("BBCA", date(2025, 12, 1) + timedelta(days=i), Decimal("100"))
+            for i in range(45)
+        ]
+
+    def _fresh_summaries():
+        return [_summary("BBCA", day, Decimal("110")) for day in session_dates]
+
+    # Run 1: no market_context.
+    spy_repo_a = SpyCandidateObservationsRepository()
+    use_case_a = AccumulationScreenUseCase(
+        broker_repository=MockBrokerRepository(_fresh_summaries()),
+        market_repository=MockMarketRepository(_fresh_candles()),
+        candidate_observations_repository=spy_repo_a,
+    )
+    response_a = use_case_a.execute(
+        AccumulationScreenRequest(
+            tickers=["BBCA"],
+            window_days=7,
+            min_net_buy_days=1,
+            as_of_date=as_of,
+            market_context=None,
+        )
+    )
+
+    # Run 2: fresh use-case instance, identical fixture data, but with a real
+    # MarketContext supplied.
+    spy_repo_b = SpyCandidateObservationsRepository()
+    use_case_b = AccumulationScreenUseCase(
+        broker_repository=MockBrokerRepository(_fresh_summaries()),
+        market_repository=MockMarketRepository(_fresh_candles()),
+        candidate_observations_repository=spy_repo_b,
+    )
+    market_context = MarketContext(
+        regime=MarketRegime.RISK_OFF,
+        conviction=0.35,
+        factors=(),
+        signal_multiplier=1.0,
+        gate_tightening=True,
+        as_of_date=as_of,
+        regime_confidence=0.9,
+        regime_stability="TRANSITIONING",
+        days_in_regime=2,
+        transition_warning="regime shifted 2 days ago",
+    )
+    response_b = use_case_b.execute(
+        AccumulationScreenRequest(
+            tickers=["BBCA"],
+            window_days=7,
+            min_net_buy_days=1,
+            as_of_date=as_of,
+            market_context=market_context,
+        )
+    )
+
+    assert len(response_a.candidates) == 1
+    assert len(response_b.candidates) == 1
+    candidate_a = response_a.candidates[0]
+    candidate_b = response_b.candidates[0]
+
+    # Scoring/verdict must be bit-for-bit identical regardless of market_context.
+    assert candidate_a.signal_assessment is not None
+    assert candidate_b.signal_assessment is not None
+    assert (
+        candidate_a.signal_assessment.assessment.score
+        == candidate_b.signal_assessment.assessment.score
+    )
+    assert (
+        candidate_a.signal_assessment.assessment.strength
+        == candidate_b.signal_assessment.assessment.strength
+    )
+    assert (
+        candidate_a.signal_assessment.assessment.entry_quality
+        == candidate_b.signal_assessment.assessment.entry_quality
+    )
+    # Neither run configured a risk_use_case, so trade_setup stays None in both —
+    # still an identity assertion guarding against market_context accidentally
+    # populating it.
+    assert candidate_a.trade_setup is None
+    assert candidate_b.trade_setup is None
+
+    assert len(spy_repo_a.saved) == 1
+    assert len(spy_repo_b.saved) == 1
+    obs_a = spy_repo_a.saved[0]
+    obs_b = spy_repo_b.saved[0]
+    assert isinstance(obs_a, CandidateObservation)
+    assert isinstance(obs_b, CandidateObservation)
+
+    fingerprint_a = dict(obs_a.payload["sub_signal_fingerprint"])
+    fingerprint_b = dict(obs_b.payload["sub_signal_fingerprint"])
+
+    regime_attribution_keys = {
+        "market_regime_at_signal",
+        "regime_confidence_at_signal",
+        "regime_stability_at_signal",
+        "days_in_regime_at_signal",
+        "regime_transition_warning_at_signal",
+    }
+
+    # These must differ — proof the attribution was actually threaded through.
+    for key in regime_attribution_keys:
+        assert fingerprint_a[key] != fingerprint_b[key], (
+            f"expected {key} to differ between runs, both were {fingerprint_a[key]!r}"
+        )
+    assert fingerprint_b["market_regime_at_signal"] == MarketRegime.RISK_OFF.value
+    assert fingerprint_b["regime_confidence_at_signal"] == 0.9
+    assert fingerprint_b["regime_stability_at_signal"] == "TRANSITIONING"
+    assert fingerprint_b["days_in_regime_at_signal"] == 2
+    assert fingerprint_b["regime_transition_warning_at_signal"] == "regime shifted 2 days ago"
+
+    # Everything else in the fingerprint must be identical — market_context must
+    # not leak into any other sub-signal value.
+    for key in regime_attribution_keys:
+        fingerprint_a.pop(key)
+        fingerprint_b.pop(key)
+    assert fingerprint_a == fingerprint_b
+
+    # Full candidate/signal payload equality (minus captured_at/timestamps),
+    # as a second, coarser confirmation that scoring is untouched.
+    candidate_dict_a = obs_a.payload["candidate"]
+    candidate_dict_b = obs_b.payload["candidate"]
+    assert candidate_dict_a == candidate_dict_b
+    assert obs_a.payload["trade_setup"] == obs_b.payload["trade_setup"]
 
 
 def test_screen_persists_setup_family_fingerprint_when_swing_setup_catalog_matches():

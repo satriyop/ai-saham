@@ -18,6 +18,7 @@ from src.application.use_case.generate_signal_forward_labels_use_case import (
 )
 from src.domain.entities.candle import Candle
 from src.domain.ports.candidate_observations_repository import CandidateObservation
+from src.domain.value_objects.market_context import MarketContext, MarketRegime
 from src.domain.value_objects.signal_forward_label import SignalLabelHorizon
 
 
@@ -103,6 +104,59 @@ class FakeAccumulationScreenUseCase:
         assert request.as_of_date is not None
         for ticker in request.tickers:
             self.observations.append(ticker, request.as_of_date)
+        return AccumulationScreenResponse(
+            candidates=[],
+            screened_at=request.as_of_date,
+            window_days=request.window_days,
+            total_tickers_checked=len(request.tickers),
+            tickers_skipped=0,
+            provider="test",
+        )
+
+
+class FakeAccumulationScreenUseCaseWithFingerprint:
+    """Like FakeAccumulationScreenUseCase, but persists a sub_signal_fingerprint
+    payload carrying the regime attribution sourced from request.market_context —
+    mirroring the real AccumulationScreenUseCase._market_context_fingerprint()
+    wiring closely enough to assert on it, without depending on the full
+    production screener pipeline."""
+
+    def __init__(self, observations: FakeCandidateObservationsRepository):
+        self.observations = observations
+        self.requests = []
+
+    def execute(self, request):
+        self.requests.append(request)
+        assert request.as_of_date is not None
+        market_context = request.market_context
+        fingerprint = {
+            "market_regime_at_signal": (
+                market_context.regime.value if market_context is not None else None
+            ),
+            "regime_confidence_at_signal": (
+                market_context.regime_confidence if market_context is not None else None
+            ),
+            "regime_stability_at_signal": (
+                market_context.regime_stability if market_context is not None else None
+            ),
+            "days_in_regime_at_signal": (
+                market_context.days_in_regime if market_context is not None else None
+            ),
+        }
+        for ticker in request.tickers:
+            observations = self.observations.by_date.setdefault(request.as_of_date, [])
+            observations.append(
+                CandidateObservation(
+                    ticker=ticker.upper(),
+                    snapshot_date=request.as_of_date,
+                    captured_at=datetime(2026, 7, 7, 12, 0, len(observations)),
+                    payload={
+                        "ticker": ticker.upper(),
+                        "snapshot_date": request.as_of_date.isoformat(),
+                        "sub_signal_fingerprint": fingerprint,
+                    },
+                )
+            )
         return AccumulationScreenResponse(
             candidates=[],
             screened_at=request.as_of_date,
@@ -277,6 +331,114 @@ def test_backfill_as_of_date_changes_per_historical_date():
 
     assert response.processed_dates == (first_date, second_date)
     assert [request.as_of_date for request in screen.requests] == [first_date, second_date]
+
+
+class RecordingMarketContextEvaluator:
+    """Fake evaluate_market_context callable: records every as_of_date it is
+    called with and returns a fixed MarketContext."""
+
+    def __init__(self):
+        self.calls: list[date] = []
+
+    def __call__(self, *, as_of_date: date) -> MarketContext:
+        self.calls.append(as_of_date)
+        return MarketContext(
+            regime=MarketRegime.RISK_ON,
+            conviction=0.6,
+            factors=(),
+            signal_multiplier=1.0,
+            gate_tightening=False,
+            as_of_date=as_of_date,
+            regime_confidence=0.8,
+            regime_stability="STABLE",
+            days_in_regime=6,
+        )
+
+
+class RaisingMarketContextEvaluator:
+    """Fake evaluate_market_context callable that always fails."""
+
+    def __init__(self):
+        self.calls: list[date] = []
+
+    def __call__(self, *, as_of_date: date) -> MarketContext:
+        self.calls.append(as_of_date)
+        raise RuntimeError("boom")
+
+
+def test_backfill_evaluates_market_context_once_per_date_and_persists_regime_attribution():
+    signal_date = date(2026, 6, 1)
+    observations = FakeCandidateObservationsRepository()
+    screen = FakeAccumulationScreenUseCaseWithFingerprint(observations)
+    evaluator = RecordingMarketContextEvaluator()
+
+    response = BackfillSignalObservationsUseCase(
+        accumulation_screen_use_case=screen,
+        screen_request_builder=_request_builder(),
+        market_data_repository=FakeMarketRepository(
+            [_candle("IHSG", signal_date), _candle("BBCA", signal_date)]
+        ),
+        candidate_observations_repository=observations,
+        evaluate_market_context=evaluator,
+    ).execute(
+        BackfillSignalObservationsRequest(
+            tickers=("BBCA",),
+            start_date=signal_date,
+            end_date=signal_date,
+            windows=(7, 30, 90),
+        )
+    )
+
+    # Evaluated exactly once for the single trading date in range, not once per window.
+    assert evaluator.calls == [signal_date]
+    assert response.saved_observation_count == 3
+
+    saved = observations.list_all_by_date(signal_date)
+    assert len(saved) == 3
+    for observation in saved:
+        fingerprint = observation.payload["sub_signal_fingerprint"]
+        assert fingerprint["market_regime_at_signal"] == MarketRegime.RISK_ON.value
+        assert fingerprint["regime_confidence_at_signal"] == 0.8
+        assert fingerprint["regime_stability_at_signal"] == "STABLE"
+        assert fingerprint["days_in_regime_at_signal"] == 6
+
+
+def test_backfill_market_context_failure_does_not_block_observations_but_notes_it():
+    signal_date = date(2026, 6, 1)
+    observations = FakeCandidateObservationsRepository()
+    screen = FakeAccumulationScreenUseCaseWithFingerprint(observations)
+    evaluator = RaisingMarketContextEvaluator()
+
+    response = BackfillSignalObservationsUseCase(
+        accumulation_screen_use_case=screen,
+        screen_request_builder=_request_builder(),
+        market_data_repository=FakeMarketRepository(
+            [_candle("IHSG", signal_date), _candle("BBCA", signal_date)]
+        ),
+        candidate_observations_repository=observations,
+        evaluate_market_context=evaluator,
+    ).execute(
+        BackfillSignalObservationsRequest(
+            tickers=("BBCA",),
+            start_date=signal_date,
+            end_date=signal_date,
+            windows=(7, 30, 90),
+        )
+    )
+
+    # Observations must still be generated — market_context failure is non-blocking.
+    assert response.saved_observation_count == 3
+    expected_note = f"market_context_unavailable_for_{signal_date.isoformat()}"
+    assert any(expected_note in note for note in response.notes)
+
+    saved = observations.list_all_by_date(signal_date)
+    assert len(saved) == 3
+    for observation in saved:
+        fingerprint = observation.payload["sub_signal_fingerprint"]
+        assert fingerprint["market_regime_at_signal"] is None
+        assert fingerprint["regime_confidence_at_signal"] is None
+        assert fingerprint["regime_stability_at_signal"] is None
+        assert fingerprint["days_in_regime_at_signal"] is None
 
 
 def _request_builder() -> BuildSignalObservationScreenRequest:
