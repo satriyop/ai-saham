@@ -6,11 +6,13 @@ Extracts scored sub-components from an existing ForeignFlowEvidence (or
 AccumulationCandidate) and adds the Bandar operator snapshot as a second
 dimension.
 
-BB is explicitly excluded: it lives in SetupEvidence. RSI is also excluded
-(price-action, not broker flow). Only keys: cons, streak, vwap, flow, inst.
+BB is explicitly excluded: it is setup-phase/trigger-readiness diagnostic
+owned by SetupEvidence, not broker-flow evidence. RSI is also excluded: it is
+price-action, not broker flow. Only keys: cons, streak, vwap, flow, inst.
 
 Layer: Application
-Depends on: domain VOs (FlowConfirmationEvidence, Direction, Freshness) + stdlib.
+Depends on: domain VOs (FlowConfirmationEvidence, Direction, Freshness) +
+ForeignFlowScorePolicy (application-layer value object, not YAML) + stdlib.
 No provider/repository/CLI imports.
 """
 
@@ -19,6 +21,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
+from src.application.use_case.score_foreign_flow_use_case import ForeignFlowScorePolicy
 from src.domain.value_objects.factor_evidence import Direction, Freshness
 from src.domain.value_objects.flow_confirmation_evidence import (
     FlowConfirmationEvidence,
@@ -28,24 +31,6 @@ from src.domain.value_objects.flow_confirmation_evidence import (
 # Sub-signal keys extracted from the ForeignFlowScoreBreakdown.
 # BB excluded (SetupEvidence owns it). RSI excluded (price-action, not flow).
 _FLOW_SIGNAL_KEYS = ("cons", "streak", "vwap", "flow", "inst")
-
-# Max weight for each sub-signal (from ForeignFlowScorePolicy defaults —
-# rescaled 0-120 -> 0-100 in lockstep with score_foreign_flow_use_case.py,
-# see ADR-039. This dict is an independent copy, not read from config; if
-# ForeignFlowScorePolicy weights are ever tuned via YAML, this must be
-# updated to match).
-# Used for direction thresholding and group strength normalization.
-_FLOW_SIGNAL_WEIGHTS: dict[str, float] = {
-    "cons": 33.3,
-    "streak": 25.0,
-    "vwap": 16.7,
-    "flow": 8.3,
-    "inst": 12.5,  # max achievable = cluster_points (CLUSTER > STABLE)
-}
-
-# Normalization denominator: derived from _FLOW_SIGNAL_WEIGHTS so it can never
-# drift out of sync with the weights above (BB and RSI are excluded from both).
-_FLOW_MAX_SCORE = sum(_FLOW_SIGNAL_WEIGHTS.values())
 
 # Default group cap for the flow confirmation group.
 # Even when bandar + foreign flow are both max-bullish, the combined group
@@ -57,7 +42,31 @@ _BANDAR_MAX_SCORE = 12.0
 
 
 class FlowConfirmationEvidenceBuilder:
-    """Builds diagnostic FlowConfirmationEvidence from prior flow/bandar results."""
+    """Builds diagnostic FlowConfirmationEvidence from prior flow/bandar results.
+
+    Max weights for direction thresholding and group-strength normalization
+    are derived from the injected ForeignFlowScorePolicy — the same policy
+    ScoreForeignFlowUseCase uses to compute the breakdown this builder reads.
+    This prevents the drift that occurred when this builder previously kept
+    its own hardcoded copy of the weights (see ADR-039): a policy change (via
+    config/accumulation_screener.yaml or direct construction) now propagates
+    here automatically instead of requiring a matching code edit.
+    """
+
+    def __init__(
+        self,
+        foreign_flow_score_policy: ForeignFlowScorePolicy | None = None,
+    ) -> None:
+        policy = foreign_flow_score_policy or ForeignFlowScorePolicy()
+        self._flow_signal_weights: dict[str, float] = {
+            "cons": policy.consistency.weight if policy.consistency.enabled else 0.0,
+            "streak": policy.streak.weight if policy.streak.enabled else 0.0,
+            "vwap": policy.vwap_discount.weight if policy.vwap_discount.enabled else 0.0,
+            "flow": policy.foreign_flow_ratio.weight if policy.foreign_flow_ratio.enabled else 0.0,
+            # max achievable = cluster_points (CLUSTER > STABLE)
+            "inst": policy.bci.cluster_points if policy.bci.enabled else 0.0,
+        }
+        self._flow_max_score = sum(self._flow_signal_weights.values())
 
     def build(
         self,
@@ -114,7 +123,13 @@ class FlowConfirmationEvidenceBuilder:
         bci_tier1_count = int(getattr(candidate, "bci_tier1_count", 0) or 0) if candidate else 0
 
         # --- Group aggregate with cap ----------------------------------------
-        flow_strength = flow_score_ex_bb / _FLOW_MAX_SCORE if flow_evidence is not None else 0.0
+        # Guard against a zero denominator (e.g. every included component
+        # disabled in the policy) rather than dividing by zero.
+        flow_strength = (
+            flow_score_ex_bb / self._flow_max_score
+            if flow_evidence is not None and self._flow_max_score > 0
+            else 0.0
+        )
 
         if bandar_broad_score is not None:
             bandar_strength = (bandar_broad_score + _BANDAR_MAX_SCORE) / (2.0 * _BANDAR_MAX_SCORE)
@@ -153,14 +168,19 @@ class FlowConfirmationEvidenceBuilder:
             return {}
         return {k: float(v) for k, v in breakdown if isinstance(k, str)}
 
-    @staticmethod
     def _make_sub_signal(
+        self,
         key: str,
         breakdown: dict[str, float],
         freshness: Freshness,
     ) -> FlowSubSignal:
-        score = breakdown.get(key, 0.0)
-        weight = _FLOW_SIGNAL_WEIGHTS.get(key, 1.0)
+        weight = self._flow_signal_weights.get(key, 0.0)
+        # Policy-disabled components must not contribute even if stale,
+        # malformed, or custom breakdown data still carries a nonzero score
+        # for that key (ScoreForeignFlowUseCase itself always emits 0.0 for a
+        # disabled component, but this builder does not control every caller
+        # of build()).
+        score = breakdown.get(key, 0.0) if weight > 0 else 0.0
         direction = Direction.BULLISH if score > 0 else Direction.NEUTRAL
         return FlowSubSignal(
             key=key,

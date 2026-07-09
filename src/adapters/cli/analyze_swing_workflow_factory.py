@@ -166,6 +166,7 @@ def create_swing_analysis_workflow(
         signal_engine=create_signal_engine(db_path=db_path, with_enrichment=True),
         risk_engine=create_risk_engine(db_path=db_path, with_enrichment=True),
         candidate_observations_repository=candidate_observations_repo,
+        foreign_flow_score_policy=accumulation_config.foreign_flow_score_policy,
     )
 
 

@@ -99,6 +99,13 @@ class ScoreForeignFlowUseCase:
     def __init__(self, policy: ForeignFlowScorePolicy | None = None) -> None:
         self._policy = policy or ForeignFlowScorePolicy()
 
+    @property
+    def policy(self) -> ForeignFlowScorePolicy:
+        """Expose the active policy so other services (e.g.
+        FlowConfirmationEvidenceBuilder) can derive weights from the same
+        source of truth instead of maintaining a separate copy."""
+        return self._policy
+
     def execute(
         self,
         request: ScoreForeignFlowRequest,

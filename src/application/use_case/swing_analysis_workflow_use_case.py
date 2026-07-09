@@ -17,6 +17,9 @@ if TYPE_CHECKING:
     from src.application.services.signal_engine import SignalEngine
     from src.application.use_case.assess_signal_use_case import AssessSignalResponse
 
+from src.application.services.flow_confirmation_evidence_builder import (
+    FlowConfirmationEvidenceBuilder,
+)
 from src.application.services.position_sizer import (
     PercentSizingResult,
     SizingResult,
@@ -29,6 +32,7 @@ from src.application.services.signal_context_builder import (
 from src.application.services.strategy_loader import StrategyLoader
 from src.application.use_case.assess_risk_use_case import AssessRiskRequest, AssessRiskUseCase
 from src.application.use_case.backtest_use_case import BacktestRequest, BacktestUseCase
+from src.application.use_case.score_foreign_flow_use_case import ForeignFlowScorePolicy
 from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.candidate_observations_repository import (
     CandidateObservationsRepository,
@@ -560,6 +564,7 @@ class SwingAnalysisWorkflowUseCase:
         signal_engine: "SignalEngine | None" = None,
         risk_engine: "RiskEngine | None" = None,
         candidate_observations_repository: CandidateObservationsRepository | None = None,
+        foreign_flow_score_policy: ForeignFlowScorePolicy | None = None,
     ) -> None:
         self._market_repo = market_repository
         self._broker_repo = broker_repository
@@ -580,6 +585,11 @@ class SwingAnalysisWorkflowUseCase:
         self._signal_engine = signal_engine
         self._risk_engine = risk_engine
         self._candidate_observations_repo = candidate_observations_repository
+        # Derive weights from the same policy ScoreForeignFlowUseCase/screener
+        # use, so the two can never drift apart (see ADR-039).
+        self._flow_confirmation_builder = FlowConfirmationEvidenceBuilder(
+            foreign_flow_score_policy=foreign_flow_score_policy
+        )
 
     def execute(
         self,
@@ -944,11 +954,7 @@ class SwingAnalysisWorkflowUseCase:
         flow_confirmation_evidence = None
         if accumulation_candidate is not None:
             try:
-                from src.application.services.flow_confirmation_evidence_builder import (
-                    FlowConfirmationEvidenceBuilder,
-                )
-
-                flow_confirmation_evidence = FlowConfirmationEvidenceBuilder().build(
+                flow_confirmation_evidence = self._flow_confirmation_builder.build(
                     accumulation_candidate,
                     analysis_date=request.today,
                 )

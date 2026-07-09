@@ -891,6 +891,9 @@ class AccumulationScreenUseCase:
         derived_feature_policy: AccumulationDerivedFeaturePolicy | None = None,
     ) -> None:
         from src.application.services.signal_engine import SignalEngine as _SignalEngine
+        from src.application.services.flow_confirmation_evidence_builder import (
+            FlowConfirmationEvidenceBuilder,
+        )
 
         self._broker_repo = broker_repository
         self._market_repo = market_repository
@@ -908,6 +911,11 @@ class AccumulationScreenUseCase:
         self._candidate_observations_repo = candidate_observations_repository
         self._foreign_flow_score_uc = foreign_flow_score_use_case or ScoreForeignFlowUseCase()
         self._derived_features = derived_feature_policy or AccumulationDerivedFeaturePolicy()
+        # Derive weights from the same policy ScoreForeignFlowUseCase uses, so
+        # the two can never drift apart (see ADR-039).
+        self._flow_confirmation_builder = FlowConfirmationEvidenceBuilder(
+            foreign_flow_score_policy=self._foreign_flow_score_uc.policy
+        )
         # idx_groups: {group_name: [ticker, ...]} from config/idx_groups.yaml
         # Build a reverse map: ticker → group_name for fast lookup
         self._ticker_to_group: dict[str, str] = {}
@@ -1138,11 +1146,7 @@ class AccumulationScreenUseCase:
             # 0.40 (flow group only) until the full workflow enriches it further.
             _flow_ev = None
             try:
-                from src.application.services.flow_confirmation_evidence_builder import (
-                    FlowConfirmationEvidenceBuilder,
-                )
-
-                _flow_ev = FlowConfirmationEvidenceBuilder().build(result, analysis_date=today)
+                _flow_ev = self._flow_confirmation_builder.build(result, analysis_date=today)
             except Exception:
                 pass
             result.signal_assessment = self._signal_engine.evaluate_with_context(

@@ -4,6 +4,7 @@ from unittest.mock import Mock
 from src.application.services.accumulation_screen_factory import (
     create_accumulation_screen_use_case,
 )
+from src.application.use_case.score_foreign_flow_use_case import ForeignFlowScorePolicy
 
 
 def test_create_accumulation_screen_use_case_wires_stockbit_providers():
@@ -29,7 +30,7 @@ def test_create_accumulation_screen_use_case_wires_stockbit_providers():
         stockbit_providers=providers,
         risk_use_case=risk_use_case,
         signal_engine=signal_engine,
-        foreign_flow_score_policy=Mock(),
+        foreign_flow_score_policy=ForeignFlowScorePolicy(),
     )
 
     assert use_case._broker_repo is broker_repo
