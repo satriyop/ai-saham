@@ -28,6 +28,10 @@ class SetupPhaseThresholdsConfig:
     accumulation_min_flow_ratio_pct: float = 2.0
     compression_max_bb_width_pctile: float = 0.20
     breakout_min_close_above_prev_high_pct: float = 0.0
+    # Superseded by volume_trigger.dry_up_max_ratio / expansion_min_ratio
+    # (Point 3, explicit dry-up + expansion evidence). Kept for backward
+    # compatibility with existing config/tuning-bounds entries; no longer an
+    # active lever in _constructive_phase().
     breakout_min_volume_ratio: float = 1.2
     breakout_reclaim_vwap_min_pct: float = 0.0
     exhaustion_rsi_min: float = 72.0
@@ -52,6 +56,37 @@ class VolumeTriggerValidityConfig:
     trusted_benchmark_volume_sources: tuple[str, ...] = ("stockbit", "idx")
     min_valid_20d_sessions: int = 18
     zero_volume_tolerance: int = 1
+    # Explicit dry-up/expansion evidence (Point 3). Requires
+    # dry_up_reference_sessions + 1 total candles: the latest session is a
+    # standalone expansion candidate, dry_up_lookback_sessions immediately
+    # before it form the dry-up window, and the remaining
+    # (dry_up_reference_sessions - dry_up_lookback_sessions) sessions before
+    # that form the reference/baseline window. dry_up_ratio = avg(dry-up
+    # window) / avg(reference window). expansion_ratio = latest session
+    # volume / avg(dry-up window).
+    dry_up_lookback_sessions: int = 5
+    dry_up_reference_sessions: int = 20
+    dry_up_max_ratio: float = 0.50
+    expansion_min_ratio: float = 1.50
+    expansion_requires_positive_close: bool = True
+
+
+@dataclass(frozen=True)
+class VolumeTriggerEvidence:
+    """Explicit dry-up/expansion evidence — replaces a single loose ratio.
+
+    volume_trigger_confirmed is the ONLY flag that may justify claiming a
+    genuine "dry-up then expansion" breakout trigger. dry_up_confirmed or
+    expansion_confirmed alone are honest partial evidence, not a trigger.
+    """
+
+    dry_up_ratio: float | None
+    expansion_ratio: float | None
+    dry_up_confirmed: bool
+    expansion_confirmed: bool
+    volume_trigger_confirmed: bool
+    data_valid: bool
+    unavailable_reasons: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -161,12 +196,15 @@ class SetupPhaseDetector:
         latest = ordered[-1] if ordered else None
         previous = ordered[-2] if len(ordered) >= 2 else None
 
-        volume_ratio, volume_valid, volume_notes = _volume_trigger(
-            recent,
+        # Pass the full ordered history, not `recent` (last 20) — the dry-up
+        # evidence window needs dry_up_reference_sessions + 1 candles, which
+        # can exceed 20 depending on config; the function slices internally.
+        volume_evidence = _volume_trigger_evidence(
+            ordered,
             setup_evidence=setup_evidence,
             cfg=cfg.volume_trigger,
         )
-        unavailable.extend(volume_notes)
+        unavailable.extend(volume_evidence.unavailable_reasons)
 
         rs_constraint_reasons = _rs_reasons(
             setup_evidence=setup_evidence,
@@ -193,8 +231,9 @@ class SetupPhaseDetector:
                 previous_phases=previous_phases,
                 reasons=tuple(reasons),
                 unavailable=tuple(unavailable),
-                coverage=_coverage(setup_evidence, flow_evidence, volume_valid),
+                coverage=_coverage(setup_evidence, flow_evidence, volume_evidence.data_valid),
                 config=cfg,
+                volume_evidence=volume_evidence,
             )
 
         constructive = self._constructive_phase(
@@ -204,8 +243,7 @@ class SetupPhaseDetector:
             setup_evidence=setup_evidence,
             flow_evidence=flow_evidence,
             thresholds=cfg.thresholds,
-            volume_ratio=volume_ratio,
-            volume_valid=volume_valid,
+            volume_evidence=volume_evidence,
             passed_gates=passed,
             reasons=reasons,
         )
@@ -222,8 +260,9 @@ class SetupPhaseDetector:
             previous_phases=previous_phases,
             reasons=tuple(reasons),
             unavailable=tuple(unavailable),
-            coverage=_coverage(setup_evidence, flow_evidence, volume_valid),
+            coverage=_coverage(setup_evidence, flow_evidence, volume_evidence.data_valid),
             config=cfg,
+            volume_evidence=volume_evidence,
         )
 
     def _terminal_phase(
@@ -280,8 +319,7 @@ class SetupPhaseDetector:
         setup_evidence: Any | None,
         flow_evidence: Any | None,
         thresholds: SetupPhaseThresholdsConfig,
-        volume_ratio: float | None,
-        volume_valid: bool,
+        volume_evidence: VolumeTriggerEvidence,
         passed_gates: dict[str, bool],
         reasons: list[str],
     ) -> tuple[SetupPhaseState, float] | None:
@@ -309,22 +347,32 @@ class SetupPhaseDetector:
                 )
             )
         price_hits = [label for label, ok in price_gates if ok]
-        volume_hit = (
-            volume_valid
-            and volume_ratio is not None
-            and volume_ratio >= thresholds.breakout_min_volume_ratio
-        )
-        if price_hits and volume_hit:
+        if price_hits and volume_evidence.volume_trigger_confirmed:
             reasons.extend(f"breakout: {label}" for label in price_hits)
-            reasons.append("breakout: volume dry-up then expansion")
+            reasons.append("breakout: volume dry-up then expansion confirmed")
             strength = 0.65 + 0.05 * len(price_hits)
             if flow_status == "CONFIRMED":
                 reasons.append("breakout strength: flow confirmation")
                 strength += 0.1
             return SetupPhaseState.BREAKOUT_CONFIRMATION, min(1.0, strength)
 
+        if (
+            price_hits
+            and volume_evidence.expansion_confirmed
+            and not volume_evidence.dry_up_confirmed
+        ):
+            # Honest partial evidence only — expansion without a proven prior
+            # dry-up is not the primary SWING_10D trigger. Config does not
+            # currently allow this to substitute for the confirmed trigger
+            # above; falls through to compression/accumulation checks below.
+            reasons.append("breakout: volume expansion without prior dry-up")
+
         if bb is not None and bb <= thresholds.compression_max_bb_width_pctile:
             reasons.append("compression: BB width readiness")
+            if volume_evidence.dry_up_confirmed and not volume_evidence.expansion_confirmed:
+                reasons.append(
+                    "compression: volume dry-up readiness, no expansion yet"
+                )
             return SetupPhaseState.COMPRESSION, min(1.0, 0.55 + (match_strength / 250.0))
 
         accumulation_gates = (
@@ -334,6 +382,10 @@ class SetupPhaseDetector:
         )
         if any(accumulation_gates):
             reasons.append("accumulation: flow/absorption evidence present")
+            if volume_evidence.dry_up_confirmed and not volume_evidence.expansion_confirmed:
+                reasons.append(
+                    "accumulation: volume dry-up readiness, no expansion yet"
+                )
             return SetupPhaseState.ACCUMULATION, min(1.0, 0.45 + (match_strength / 220.0))
 
         if rsi is not None and 40.0 <= rsi <= 60.0 and match_strength >= 60.0:
@@ -353,6 +405,7 @@ def _snapshot(
     unavailable: tuple[str, ...],
     coverage: float,
     config: SetupPhaseConfig,
+    volume_evidence: VolumeTriggerEvidence | None = None,
 ) -> SetupPhaseSnapshot:
     sequence_valid, sequence_reason = _sequence_validity(
         setup_family,
@@ -376,6 +429,21 @@ def _snapshot(
         sequence_valid=sequence_valid,
         reasons=tuple(out_reasons),
         unavailable_evidence_reasons=unavailable,
+        volume_dry_up_ratio=(
+            volume_evidence.dry_up_ratio if volume_evidence is not None else None
+        ),
+        volume_expansion_ratio=(
+            volume_evidence.expansion_ratio if volume_evidence is not None else None
+        ),
+        volume_dry_up_confirmed=(
+            volume_evidence.dry_up_confirmed if volume_evidence is not None else None
+        ),
+        volume_expansion_confirmed=(
+            volume_evidence.expansion_confirmed if volume_evidence is not None else None
+        ),
+        volume_trigger_confirmed=(
+            volume_evidence.volume_trigger_confirmed if volume_evidence is not None else None
+        ),
         history=tuple(
             SetupPhaseHistoryEntry(
                 phase=previous_phase,
@@ -457,12 +525,24 @@ def _gate_map(setup_eval: Any | None) -> dict[str, bool]:
     }
 
 
-def _volume_trigger(
+def _unavailable_volume_evidence(reasons: list[str]) -> VolumeTriggerEvidence:
+    return VolumeTriggerEvidence(
+        dry_up_ratio=None,
+        expansion_ratio=None,
+        dry_up_confirmed=False,
+        expansion_confirmed=False,
+        volume_trigger_confirmed=False,
+        data_valid=False,
+        unavailable_reasons=tuple(reasons),
+    )
+
+
+def _volume_trigger_evidence(
     candles: list[Any],
     *,
     setup_evidence: Any | None,
     cfg: VolumeTriggerValidityConfig,
-) -> tuple[float | None, bool, list[str]]:
+) -> VolumeTriggerEvidence:
     ticker = getattr(setup_evidence, "ticker", None) or (
         getattr(candles[-1], "ticker", None) if candles else None
     )
@@ -473,24 +553,69 @@ def _volume_trigger(
         cfg=cfg,
     )
     if source_reason is not None:
-        return None, False, [source_reason]
-    if len(candles) < 20:
-        return None, False, [
-            f"volume trigger unavailable: required 20 sessions, found {len(candles)}"
-        ]
-    zero_volume = sum(1 for candle in candles[-20:] if int(candle.volume) <= 0)
-    valid_sessions = 20 - zero_volume
+        return _unavailable_volume_evidence([source_reason])
+
+    reference_total = cfg.dry_up_reference_sessions
+    lookback = cfg.dry_up_lookback_sessions
+    # dry_up_reference_sessions is the reference+dry-up window size (matching
+    # the min_valid_20d_sessions/zero_volume_tolerance data-quality check,
+    # unchanged below). The latest session is a standalone expansion
+    # candidate reserved OUTSIDE that window — a spike on the latest session
+    # must not dilute its own baseline — so one extra candle is required
+    # beyond reference_total, and reference_window ends up sized exactly
+    # reference_total - lookback (matching the documented contract).
+    total_required = reference_total + 1
+    if len(candles) < total_required:
+        return _unavailable_volume_evidence([
+            f"volume trigger unavailable: required {total_required} sessions, "
+            f"found {len(candles)}"
+        ])
+    if lookback <= 0 or lookback >= reference_total:
+        return _unavailable_volume_evidence([
+            "volume trigger unavailable: invalid dry-up window configuration"
+        ])
+
+    quality_window = candles[-reference_total:]
+    zero_volume = sum(1 for candle in quality_window if int(candle.volume) <= 0)
+    valid_sessions = reference_total - zero_volume
     if valid_sessions < cfg.min_valid_20d_sessions or zero_volume > cfg.zero_volume_tolerance:
-        return None, False, [
+        return _unavailable_volume_evidence([
             "volume trigger unavailable: insufficient valid 20d volume sessions"
-        ]
-    first_15 = candles[-20:-5]
-    last_5 = candles[-5:]
-    dry_avg = _avg_volume(first_15)
-    expansion_avg = _avg_volume(last_5)
-    if dry_avg <= 0:
-        return None, False, ["volume trigger unavailable: invalid dry-up baseline"]
-    return expansion_avg / dry_avg, True, []
+        ])
+
+    window = candles[-total_required:]
+    latest = window[-1]
+    dry_up_window = window[-(lookback + 1):-1]
+    reference_window = window[:-(lookback + 1)]
+
+    reference_avg = _avg_volume(reference_window)
+    dry_up_avg = _avg_volume(dry_up_window)
+    if reference_avg <= 0:
+        return _unavailable_volume_evidence(
+            ["volume trigger unavailable: invalid reference baseline"]
+        )
+    if dry_up_avg <= 0:
+        return _unavailable_volume_evidence(
+            ["volume trigger unavailable: invalid dry-up baseline"]
+        )
+
+    dry_up_ratio = round(dry_up_avg / reference_avg, 4)
+    expansion_ratio = round(float(latest.volume) / dry_up_avg, 4)
+
+    dry_up_confirmed = dry_up_ratio <= cfg.dry_up_max_ratio
+    expansion_confirmed = expansion_ratio >= cfg.expansion_min_ratio
+    if expansion_confirmed and cfg.expansion_requires_positive_close:
+        expansion_confirmed = latest.close > latest.open
+
+    return VolumeTriggerEvidence(
+        dry_up_ratio=dry_up_ratio,
+        expansion_ratio=expansion_ratio,
+        dry_up_confirmed=dry_up_confirmed,
+        expansion_confirmed=expansion_confirmed,
+        volume_trigger_confirmed=dry_up_confirmed and expansion_confirmed,
+        data_valid=True,
+        unavailable_reasons=(),
+    )
 
 
 def _volume_source_unavailable_reason(

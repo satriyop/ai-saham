@@ -98,7 +98,6 @@ _PARAMETER_BOUNDS: tuple[tuple[str, float, float, float | None, float], ...] = (
     ("setup_phase.thresholds.accumulation_min_flow_ratio_pct", 0.5, 25.0, 0.5, 2.0),
     ("setup_phase.thresholds.compression_max_bb_width_pctile", 0.05, 0.50, 0.05, 0.10),
     ("setup_phase.thresholds.breakout_min_close_above_prev_high_pct", -2.0, 5.0, 0.5, 1.0),
-    ("setup_phase.thresholds.breakout_min_volume_ratio", 1.0, 3.0, 0.1, 0.3),
     ("setup_phase.thresholds.breakout_reclaim_vwap_min_pct", -3.0, 5.0, 0.5, 1.0),
     ("setup_phase.thresholds.exhaustion_rsi_min", 60.0, 90.0, 1.0, 5.0),
     ("setup_phase.thresholds.exhaustion_min_price_extension_pct", 3.0, 20.0, 0.5, 3.0),
@@ -107,6 +106,9 @@ _PARAMETER_BOUNDS: tuple[tuple[str, float, float, float | None, float], ...] = (
     ("setup_phase.thresholds.failed_breakdown_below_support_pct", -10.0, -0.5, 0.5, 2.0),
     ("setup_phase.rs_policy_by_setup_family.*.lag_warning_below", -10.0, 5.0, 0.5, 1.5),
     ("setup_phase.rs_policy_by_setup_family.*.hard_exclude_below", -20.0, 0.0, 0.5, 2.0),
+    # --- setup phase volume trigger paths (Point 3, explicit dry-up/expansion) ---
+    ("setup_phase.volume_trigger.dry_up_max_ratio", 0.20, 0.80, 0.05, 0.10),
+    ("setup_phase.volume_trigger.expansion_min_ratio", 1.10, 3.0, 0.1, 0.3),
     # --- risk_engine gate paths ---
     ("risk_engine.gates.free_float.min_free_float_pct", 10.0, 25.0, 0.5, 2.0),
     ("risk_engine.gates.fundamental.piotroski_min", 1, 7, 1, 1),
@@ -148,6 +150,13 @@ _NON_TUNABLE_DOCUMENT_PATHS: tuple[tuple[str, str], ...] = (
     ("setup_phase.rs_policy_by_setup_family.*.mean_reversion_exception_requires_support_reclaim", "boolean_rs_policy_not_numeric_tunable"),
     ("setup_phase.volume_trigger.require_trusted_volume", "boolean_volume_policy_not_numeric_tunable"),
     ("setup_phase.volume_trigger.trusted_benchmark_volume_sources", "list_volume_policy_not_numeric_tunable"),
+    ("setup_phase.volume_trigger.dry_up_lookback_sessions", "window_size_not_numeric_tunable"),
+    ("setup_phase.volume_trigger.dry_up_reference_sessions", "window_size_not_numeric_tunable"),
+    ("setup_phase.volume_trigger.expansion_requires_positive_close", "boolean_volume_policy_not_numeric_tunable"),
+    # Point 3: superseded by volume_trigger.dry_up_max_ratio / expansion_min_ratio.
+    # No longer read by _constructive_phase() — patching it would have zero
+    # behavioral effect, so it must not be patch-eligible.
+    ("setup_phase.thresholds.breakout_min_volume_ratio", "superseded_by_volume_trigger_policy"),
 )
 
 

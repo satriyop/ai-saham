@@ -279,6 +279,92 @@ def test_summarize_groups_by_saved_ticker_profile_buckets():
     assert by_group[("tp_coverage_score", "MEDIUM")].observation_count == 1
 
 
+def test_summarize_groups_by_volume_trigger_confirmation_buckets():
+    day = date(2026, 7, 1)
+    confirmed_label = SignalForwardLabel(
+        ticker="BBCA",
+        signal_date=day,
+        horizon=SignalLabelHorizon.SWING_10D,
+        entry_reference_price=Decimal("100"),
+        label_window_start=date(2026, 7, 2),
+        label_window_end=date(2026, 7, 15),
+        close_return=4.0,
+        max_forward_return=5.0,
+        max_adverse_excursion=-1.0,
+        days_to_peak=2,
+        days_to_trough=1,
+        stop_would_trigger=False,
+        target_would_trigger=True,
+        outcome_label=SignalForwardOutcome.SUCCESS,
+        unavailable_reason=None,
+        fingerprint=SignalObservationFingerprint(
+            volume_dry_up_confirmed=True,
+            volume_expansion_confirmed=True,
+            volume_trigger_confirmed=True,
+        ),
+    )
+    unconfirmed_label = SignalForwardLabel(
+        ticker="BBRI",
+        signal_date=day,
+        horizon=SignalLabelHorizon.SWING_10D,
+        entry_reference_price=Decimal("100"),
+        label_window_start=date(2026, 7, 2),
+        label_window_end=date(2026, 7, 15),
+        close_return=-2.0,
+        max_forward_return=0.0,
+        max_adverse_excursion=-2.0,
+        days_to_peak=1,
+        days_to_trough=2,
+        stop_would_trigger=True,
+        target_would_trigger=False,
+        outcome_label=SignalForwardOutcome.FAILURE,
+        unavailable_reason=None,
+        fingerprint=SignalObservationFingerprint(
+            volume_dry_up_confirmed=False,
+            volume_expansion_confirmed=False,
+            volume_trigger_confirmed=False,
+        ),
+    )
+    unknown_label = SignalForwardLabel(
+        ticker="TLKM",
+        signal_date=day,
+        horizon=SignalLabelHorizon.SWING_10D,
+        entry_reference_price=Decimal("100"),
+        label_window_start=date(2026, 7, 2),
+        label_window_end=date(2026, 7, 15),
+        close_return=1.0,
+        max_forward_return=1.0,
+        max_adverse_excursion=0.0,
+        days_to_peak=1,
+        days_to_trough=1,
+        stop_would_trigger=False,
+        target_would_trigger=False,
+        outcome_label=SignalForwardOutcome.NEUTRAL,
+        unavailable_reason=None,
+        fingerprint=SignalObservationFingerprint(),
+    )
+    repo = FakeSignalForwardLabelsRepository(
+        [confirmed_label, unconfirmed_label, unknown_label]
+    )
+
+    response = SummarizeSignalForwardLabelsUseCase(repo).execute(
+        SummarizeSignalForwardLabelsRequest()
+    )
+
+    by_group = {(bucket.group, bucket.key): bucket for bucket in response.buckets}
+    assert by_group[("volume_dry_up_confirmed", "True")].observation_count == 1
+    assert by_group[("volume_dry_up_confirmed", "False")].observation_count == 1
+    assert by_group[("volume_dry_up_confirmed", "UNKNOWN")].observation_count == 1
+    assert by_group[("volume_expansion_confirmed", "True")].observation_count == 1
+    assert by_group[("volume_expansion_confirmed", "False")].observation_count == 1
+    assert by_group[("volume_expansion_confirmed", "UNKNOWN")].observation_count == 1
+    assert by_group[("volume_trigger_confirmed", "True")].observation_count == 1
+    assert by_group[("volume_trigger_confirmed", "False")].observation_count == 1
+    assert by_group[("volume_trigger_confirmed", "UNKNOWN")].observation_count == 1
+    assert by_group[("volume_trigger_confirmed", "True")].success_count == 1
+    assert by_group[("volume_trigger_confirmed", "False")].failure_count == 1
+
+
 def test_summarize_missing_phase_i_fields_as_unknown():
     day = date(2026, 7, 1)
     label = SignalForwardLabel(
@@ -310,6 +396,9 @@ def test_summarize_missing_phase_i_fields_as_unknown():
     assert by_group[("ticker_profile_label", "UNKNOWN")].observation_count == 1
     assert by_group[("tp_market_cap_bucket", "UNKNOWN")].observation_count == 1
     assert by_group[("alpha_trigger_final_bucket", "UNKNOWN")].observation_count == 1
+    assert by_group[("volume_dry_up_confirmed", "UNKNOWN")].observation_count == 1
+    assert by_group[("volume_expansion_confirmed", "UNKNOWN")].observation_count == 1
+    assert by_group[("volume_trigger_confirmed", "UNKNOWN")].observation_count == 1
 
 
 def _label(

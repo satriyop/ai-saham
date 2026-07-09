@@ -6,6 +6,8 @@ from src.application.services.setup_phase_detector import (
     SetupPhaseConfig,
     SetupPhaseDetector,
     SetupPhaseRequirementConfig,
+    VolumeTriggerValidityConfig,
+    _volume_trigger_evidence,
 )
 from src.domain.entities.candle import Candle
 from src.domain.value_objects.factor_evidence import Direction, Freshness
@@ -22,16 +24,29 @@ from src.domain.value_objects.setup_phase import SetupPhaseState
 
 
 def _candles(*, breakout: bool = False, zero_volume: bool = False) -> list[Candle]:
+    """Build 21 candles with a genuine dry-up-then-expansion volume pattern.
+
+    With defaults (dry_up_lookback_sessions=5, dry_up_reference_sessions=20),
+    total_required = dry_up_reference_sessions + 1 = 21:
+      - indices 0-14 (15 candles, reference window): volume=2_000 (baseline)
+      - indices 15-19 (5 candles, dry-up window): volume=800
+        -> dry_up_ratio = 800/2000 = 0.4 <= dry_up_max_ratio(0.50) confirmed
+      - index 20 (latest/today): volume=1_600
+        -> expansion_ratio = 1600/800 = 2.0 >= expansion_min_ratio(1.50) confirmed
+    """
     start = date(2026, 6, 1)
     rows = []
-    for idx in range(20):
+    for idx in range(21):
         close = Decimal("100")
         high = Decimal("101")
         open_ = Decimal("99")
-        volume = 1_000
-        if idx >= 15:
+        if idx < 15:
             volume = 2_000
-        if breakout and idx == 19:
+        elif idx < 20:
+            volume = 800
+        else:
+            volume = 1_600
+        if breakout and idx == 20:
             open_ = Decimal("101")
             close = Decimal("105")
             high = Decimal("106")
@@ -139,7 +154,15 @@ def test_detector_routes_close_reclaim_and_valid_volume_to_breakout():
     assert snapshot.current_phase == SetupPhaseState.BREAKOUT_CONFIRMATION
     assert snapshot.sequence_valid is False
     assert snapshot.previous_phase is None
-    assert any("volume dry-up then expansion" in reason for reason in snapshot.reasons)
+    assert any(
+        "volume dry-up then expansion confirmed" in reason
+        for reason in snapshot.reasons
+    )
+    assert snapshot.volume_dry_up_confirmed is True
+    assert snapshot.volume_expansion_confirmed is True
+    assert snapshot.volume_trigger_confirmed is True
+    assert snapshot.volume_dry_up_ratio == 0.4
+    assert snapshot.volume_expansion_ratio == 2.0
 
 
 def test_breakout_sequence_valid_requires_observed_prior_phases():
@@ -374,3 +397,153 @@ def test_unknown_family_has_no_sequence_requirement():
     )
 
     assert snapshot.sequence_valid is None
+
+
+def _candles_with_volumes(
+    volumes: list[int],
+    *,
+    latest_open: Decimal = Decimal("99"),
+    latest_close: Decimal = Decimal("100"),
+) -> list[Candle]:
+    """Build len(volumes) candles with a fixed non-breakout price shape, except
+    the final (latest) candle's open/close are overridable so tests can flip
+    the positive-close gate independently of the volume pattern."""
+    start = date(2026, 6, 1)
+    rows = []
+    n = len(volumes)
+    for idx, volume in enumerate(volumes):
+        close = Decimal("100")
+        high = Decimal("101")
+        open_ = Decimal("99")
+        if idx == n - 1:
+            open_ = latest_open
+            close = latest_close
+            high = max(high, latest_close + Decimal("1"))
+        rows.append(
+            Candle(
+                ticker="BBCA",
+                date=start + timedelta(days=idx),
+                open=open_,
+                high=high,
+                low=Decimal("98"),
+                close=close,
+                volume=volume,
+            )
+        )
+    return rows
+
+
+def test_expansion_without_dry_up_does_not_confirm_breakout():
+    """Dry-up window is NOT meaningfully lower than the reference window
+    (ratio=1.0, not <=0.50), but the latest session spikes well above the
+    dry-up window average (expansion_ratio=2.0 >= 1.50), with a positive
+    close so price gates pass. Must NOT reach BREAKOUT_CONFIRMATION and must
+    not claim the confirmed trigger."""
+    volumes = [1_000] * 20 + [2_000]
+    candles = _candles_with_volumes(
+        volumes, latest_open=Decimal("101"), latest_close=Decimal("105")
+    )
+    snapshot = SetupPhaseDetector().detect(
+        candles=candles,
+        setup_eval=_setup_eval(),
+        setup_evidence=_setup_evidence(),
+        flow_evidence=_flow(),
+        setup_family="foreign-bounce",
+    )
+
+    assert snapshot.current_phase != SetupPhaseState.BREAKOUT_CONFIRMATION
+    assert "breakout: volume expansion without prior dry-up" in snapshot.reasons
+    assert not any(
+        "volume dry-up then expansion confirmed" in reason
+        for reason in snapshot.reasons
+    )
+
+
+def test_dry_up_without_expansion_routes_to_compression():
+    """Dry-up IS confirmed (dry-up window notably lower than reference,
+    ratio=0.4) but the latest session does NOT spike (expansion_ratio=1.125,
+    not >=1.50). Default _setup_evidence() bb_width_pctile=0.15 lands the
+    phase on COMPRESSION."""
+    volumes = [2_000] * 15 + [800] * 5 + [900]
+    candles = _candles_with_volumes(volumes)
+    snapshot = SetupPhaseDetector().detect(
+        candles=candles,
+        setup_eval=_setup_eval(),
+        setup_evidence=_setup_evidence(),
+        flow_evidence=_flow(),
+        setup_family="foreign-bounce",
+    )
+
+    assert snapshot.current_phase == SetupPhaseState.COMPRESSION
+    assert (
+        "compression: volume dry-up readiness, no expansion yet"
+        in snapshot.reasons
+    )
+
+
+def test_volume_trigger_evidence_insufficient_sessions_marks_data_invalid():
+    candles = _candles(breakout=True)[:15]
+    evidence = _volume_trigger_evidence(
+        candles,
+        setup_evidence=_setup_evidence(),
+        cfg=VolumeTriggerValidityConfig(),
+    )
+
+    assert evidence.data_valid is False
+    assert any(
+        "required 21 sessions" in reason for reason in evidence.unavailable_reasons
+    )
+
+
+def test_detect_reports_partial_coverage_with_fewer_than_20_candles():
+    candles = _candles(breakout=True)[:15]
+    snapshot = SetupPhaseDetector().detect(
+        candles=candles,
+        setup_eval=_setup_eval(),
+        setup_evidence=_setup_evidence(),
+        flow_evidence=_flow(),
+        setup_family="foreign-bounce",
+    )
+
+    assert snapshot.coverage_score < 1.0
+
+
+def test_volume_trigger_evidence_zero_volume_distortion_above_tolerance():
+    candles = _candles(zero_volume=True)
+    evidence = _volume_trigger_evidence(
+        candles,
+        setup_evidence=_setup_evidence(candle_source="stockbit"),
+        cfg=VolumeTriggerValidityConfig(),
+    )
+
+    assert evidence.data_valid is False
+    assert (
+        "volume trigger unavailable: insufficient valid 20d volume sessions"
+        in evidence.unavailable_reasons
+    )
+
+
+def test_expansion_requires_positive_close_blocks_on_flat_or_negative_close():
+    volumes = [2_000] * 15 + [800] * 5 + [1_600]
+    candles = _candles_with_volumes(
+        volumes, latest_open=Decimal("100"), latest_close=Decimal("99")
+    )
+
+    blocked = _volume_trigger_evidence(
+        candles,
+        setup_evidence=_setup_evidence(),
+        cfg=VolumeTriggerValidityConfig(expansion_requires_positive_close=True),
+    )
+    assert blocked.expansion_confirmed is False
+    assert blocked.volume_trigger_confirmed is False
+    # Raw ratio math is unaffected by the close gate.
+    assert blocked.expansion_ratio == 2.0
+    assert blocked.dry_up_confirmed is True
+
+    allowed = _volume_trigger_evidence(
+        candles,
+        setup_evidence=_setup_evidence(),
+        cfg=VolumeTriggerValidityConfig(expansion_requires_positive_close=False),
+    )
+    assert allowed.expansion_confirmed is True
+    assert allowed.volume_trigger_confirmed is True

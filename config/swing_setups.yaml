@@ -78,6 +78,10 @@ setup_phase:
     accumulation_min_flow_ratio_pct: 2.0
     compression_max_bb_width_pctile: 0.20
     breakout_min_close_above_prev_high_pct: 0.0
+    # ARCHIVED/inactive (Point 3): superseded by volume_trigger.dry_up_max_ratio
+    # + expansion_min_ratio below. Not read by _constructive_phase() and not
+    # patch-eligible (see swing_tuning_patch_validator.py
+    # _NON_TUNABLE_DOCUMENT_PATHS). Kept only for backward compatibility.
     breakout_min_volume_ratio: 1.20
     breakout_reclaim_vwap_min_pct: 0.0
     exhaustion_rsi_min: 72.0
@@ -130,3 +134,22 @@ setup_phase:
     trusted_benchmark_volume_sources: ["stockbit", "idx"]
     min_valid_20d_sessions: 18
     zero_volume_tolerance: 1
+
+    # Explicit dry-up/expansion evidence (Point 3, docs/signal_refactor.md
+    # "primary SWING_10D trigger" pattern). Requires
+    # dry_up_reference_sessions + 1 total candles: the latest session is a
+    # standalone expansion candidate, dry_up_lookback_sessions sessions
+    # immediately before it are the dry-up window, and the remaining
+    # (dry_up_reference_sessions - dry_up_lookback_sessions) sessions before
+    # that are the reference/baseline window (15 with these defaults).
+    # dry-up ratio = avg(dry-up window) / avg(reference window).
+    # expansion ratio = latest session volume / avg(dry-up window).
+    # Both must confirm before the setup phase detector may claim a genuine
+    # "dry-up then expansion" breakout trigger. Structural defaults, not
+    # tuned from outcomes.
+    dry_up_lookback_sessions: 5
+    dry_up_reference_sessions: 20
+    dry_up_max_ratio: 0.50
+
+    expansion_min_ratio: 1.50
+    expansion_requires_positive_close: true

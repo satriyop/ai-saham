@@ -120,14 +120,26 @@ def test_simple_return_computes_decimal_return_from_candles():
 
 
 def _breakout_candles() -> list[Candle]:
+    # Genuine dry-up (idx 15-19) then expansion (idx 20) volume pattern,
+    # matching SetupPhaseDetector's explicit dry_up_ratio/expansion_ratio
+    # evidence (defaults: dry_up_max_ratio=0.50, expansion_min_ratio=1.50),
+    # total_required = dry_up_reference_sessions + 1 = 21:
+    #   reference (idx 0-14): 2_000_000 baseline
+    #   dry-up window (idx 15-19): 800_000 -> ratio 0.4 <= 0.50 confirmed
+    #   latest (idx 20): 1_600_000 -> ratio 2.0 >= 1.50 confirmed
     start = date(2026, 5, 30)
     candles = []
-    for idx in range(20):
+    for idx in range(21):
         open_ = Decimal("1000")
         high = Decimal("1010")
         close = Decimal("1005")
-        volume = 1_000_000 if idx < 15 else 2_000_000
-        if idx == 19:
+        if idx < 15:
+            volume = 2_000_000
+        elif idx < 20:
+            volume = 800_000
+        else:
+            volume = 1_600_000
+        if idx == 20:
             open_ = Decimal("1015")
             close = Decimal("1050")
             high = Decimal("1060")

@@ -363,6 +363,31 @@ def load_swing_config(
                         "zero_volume_tolerance",
                         defaults.setup_phase_config.volume_trigger.zero_volume_tolerance,
                     ),
+                    dry_up_lookback_sessions=_i(
+                        vol,
+                        "dry_up_lookback_sessions",
+                        defaults.setup_phase_config.volume_trigger.dry_up_lookback_sessions,
+                    ),
+                    dry_up_reference_sessions=_i(
+                        vol,
+                        "dry_up_reference_sessions",
+                        defaults.setup_phase_config.volume_trigger.dry_up_reference_sessions,
+                    ),
+                    dry_up_max_ratio=_f(
+                        vol,
+                        "dry_up_max_ratio",
+                        defaults.setup_phase_config.volume_trigger.dry_up_max_ratio,
+                    ),
+                    expansion_min_ratio=_f(
+                        vol,
+                        "expansion_min_ratio",
+                        defaults.setup_phase_config.volume_trigger.expansion_min_ratio,
+                    ),
+                    expansion_requires_positive_close=_b(
+                        vol,
+                        "expansion_requires_positive_close",
+                        defaults.setup_phase_config.volume_trigger.expansion_requires_positive_close,
+                    ),
                 ),
             )
 

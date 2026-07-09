@@ -134,6 +134,19 @@ def _build_buckets(
             ),
             ("coverage_bucket", _score_bucket(fp.coverage)),
             ("conviction_bucket", _score_bucket(fp.conviction)),
+            # Point 3: explicit dry-up/expansion volume trigger evidence.
+            (
+                "volume_dry_up_confirmed",
+                "UNKNOWN" if fp.volume_dry_up_confirmed is None else str(fp.volume_dry_up_confirmed),
+            ),
+            (
+                "volume_expansion_confirmed",
+                "UNKNOWN" if fp.volume_expansion_confirmed is None else str(fp.volume_expansion_confirmed),
+            ),
+            (
+                "volume_trigger_confirmed",
+                "UNKNOWN" if fp.volume_trigger_confirmed is None else str(fp.volume_trigger_confirmed),
+            ),
             ("sc_sector", fp.sc_sector or "UNKNOWN"),
             ("sc_sector_regime", fp.sc_sector_regime or "UNKNOWN"),
             # Phase G company_quality_context producer (DIAGNOSTIC): attribution

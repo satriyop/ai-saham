@@ -75,6 +75,13 @@ class SetupPhaseSnapshot:
     reasons: tuple[str, ...] = field(default_factory=tuple)
     unavailable_evidence_reasons: tuple[str, ...] = field(default_factory=tuple)
     history: tuple[SetupPhaseHistoryEntry, ...] = field(default_factory=tuple)
+    # Explicit dry-up/expansion evidence (Point 3) — None when volume trigger
+    # evidence was not computed (e.g. no config/candles supplied to detect()).
+    volume_dry_up_ratio: float | None = None
+    volume_expansion_ratio: float | None = None
+    volume_dry_up_confirmed: bool | None = None
+    volume_expansion_confirmed: bool | None = None
+    volume_trigger_confirmed: bool | None = None
 
     def __post_init__(self) -> None:
         if self.phase_age_sessions < 0:
@@ -95,6 +102,11 @@ class SetupPhaseSnapshot:
             "reasons": list(self.reasons),
             "unavailable_evidence_reasons": list(self.unavailable_evidence_reasons),
             "history": [entry.to_dict() for entry in self.history],
+            "volume_dry_up_ratio": self.volume_dry_up_ratio,
+            "volume_expansion_ratio": self.volume_expansion_ratio,
+            "volume_dry_up_confirmed": self.volume_dry_up_confirmed,
+            "volume_expansion_confirmed": self.volume_expansion_confirmed,
+            "volume_trigger_confirmed": self.volume_trigger_confirmed,
         }
 
     @classmethod
@@ -118,6 +130,11 @@ class SetupPhaseSnapshot:
                 SetupPhaseHistoryEntry.from_dict(v)
                 for v in data.get("history") or ()
             ),
+            volume_dry_up_ratio=_optional_float(data.get("volume_dry_up_ratio")),
+            volume_expansion_ratio=_optional_float(data.get("volume_expansion_ratio")),
+            volume_dry_up_confirmed=data.get("volume_dry_up_confirmed"),
+            volume_expansion_confirmed=data.get("volume_expansion_confirmed"),
+            volume_trigger_confirmed=data.get("volume_trigger_confirmed"),
         )
 
 
@@ -130,3 +147,7 @@ def _optional_date(value: str | date | None) -> date | None:
     if value is None:
         return None
     return value if isinstance(value, date) else date.fromisoformat(str(value))
+
+
+def _optional_float(value: Any) -> float | None:
+    return None if value is None else float(value)

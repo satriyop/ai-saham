@@ -320,6 +320,55 @@ def test_patch_modifying_regime_conditioning_fails(tmp_path):
     assert result.valid is False
     assert "target_path_not_tunable:regime_conditioning_is_legacy_layer" in result.issues
 
+def test_breakout_min_volume_ratio_bounds_lookup_returns_none():
+    """Superseded by volume_trigger.dry_up_max_ratio/expansion_min_ratio (Point
+    3) — must not resolve to numeric bounds, else it would look tunable."""
+    assert _bounds_for_document_path(
+        "setup_phase.thresholds.breakout_min_volume_ratio"
+    ) is None
+
+
+def test_breakout_min_volume_ratio_non_tunable_reason_declared():
+    assert (
+        _non_tunable_reason_for_document_path(
+            "setup_phase.thresholds.breakout_min_volume_ratio"
+        )
+        == "superseded_by_volume_trigger_policy"
+    )
+
+
+def test_patch_modifying_breakout_min_volume_ratio_fails(tmp_path):
+    """No longer read by _constructive_phase() — a patch against it would have
+    zero behavioral effect, so the validator must reject it, not silently
+    accept a no-op tuning proposal."""
+    config_dir = tmp_path / "config"
+    config_dir.mkdir(exist_ok=True)
+    (config_dir / "swing_setups.yaml").write_text(
+        "setup_phase:\n"
+        "  thresholds:\n"
+        "    breakout_min_volume_ratio: 1.20\n",
+        encoding="utf-8",
+    )
+    patch_path = tmp_path / "patch.json"
+    patch_path.write_text(json.dumps({
+        "artifact_type": "swing_tuning_patch_review",
+        "apply": {"supported": False},
+        "source_review": _COMPLETE_SOURCE_REVIEW,
+        "patch_items": [
+            {
+                "target_path": "config/swing_setups.yaml:setup_phase.thresholds.breakout_min_volume_ratio",
+                "current_value": 1.20,
+                "proposed_value": 1.50,
+            },
+        ],
+    }))
+    report = SwingTuningPatchValidator(config_root=tmp_path).validate(patch_path)
+    result = report.item_results[0]
+
+    assert result.valid is False
+    assert "target_path_not_tunable:superseded_by_volume_trigger_policy" in result.issues
+
+
 def test_signal_strength_target_includes_enter_min_confidence_path():
     signal_strength = _target_by_dimension("signal_strength")
     assert (

@@ -87,3 +87,49 @@ def test_signal_observation_fingerprint_preserves_setup_family_resolution_fields
     assert round_tripped.setup_family_rationale == (
         "setup 'coiled-spring' matched screen gates -> family=breakout",
     )
+
+
+def test_signal_observation_fingerprint_preserves_volume_trigger_evidence_fields():
+    """volume_dry_up_ratio / volume_expansion_ratio / volume_dry_up_confirmed /
+    volume_expansion_confirmed / volume_trigger_confirmed (Point 3 explicit
+    dry-up/expansion volume trigger evidence) must survive a to_dict/from_dict
+    round trip. The two float fields support the dual-key `_at_signal`
+    fallback (matching rs_vs_ihsg/rs_vs_ihsg_20d_at_signal); the three boolean
+    fields use a plain key with no `_at_signal` fallback."""
+    fp = SignalObservationFingerprint.from_dict(
+        {
+            "volume_dry_up_ratio_at_signal": 0.4,
+            "volume_expansion_ratio_at_signal": 2.0,
+            "volume_dry_up_confirmed": True,
+            "volume_expansion_confirmed": True,
+            "volume_trigger_confirmed": True,
+        }
+    )
+
+    assert fp.volume_dry_up_ratio == 0.4
+    assert fp.volume_expansion_ratio == 2.0
+    assert fp.volume_dry_up_confirmed is True
+    assert fp.volume_expansion_confirmed is True
+    assert fp.volume_trigger_confirmed is True
+
+    round_tripped = SignalObservationFingerprint.from_dict(fp.to_dict())
+    assert round_tripped.volume_dry_up_ratio == 0.4
+    assert round_tripped.volume_expansion_ratio == 2.0
+    assert round_tripped.volume_dry_up_confirmed is True
+    assert round_tripped.volume_expansion_confirmed is True
+    assert round_tripped.volume_trigger_confirmed is True
+
+
+def test_signal_observation_fingerprint_volume_trigger_dual_key_fallback():
+    """Proves the dual-key fallback works both ways: the non-suffixed key
+    (as written by to_dict()) is read directly, without needing the
+    `_at_signal` suffix."""
+    fp = SignalObservationFingerprint.from_dict(
+        {
+            "volume_dry_up_ratio": 0.4,
+            "volume_expansion_ratio": 2.0,
+        }
+    )
+
+    assert fp.volume_dry_up_ratio == 0.4
+    assert fp.volume_expansion_ratio == 2.0

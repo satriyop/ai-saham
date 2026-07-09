@@ -26,6 +26,11 @@ setup_phase:
     trusted_benchmark_volume_sources: ["stockbit", "idx"]
     min_valid_20d_sessions: 19
     zero_volume_tolerance: 0
+    dry_up_lookback_sessions: 4
+    dry_up_reference_sessions: 18
+    dry_up_max_ratio: 0.40
+    expansion_min_ratio: 1.75
+    expansion_requires_positive_close: false
 """,
         encoding="utf-8",
     )
@@ -38,6 +43,11 @@ setup_phase:
     assert cfg.setup_phase_config.volume_trigger.trusted_benchmark_volume_sources == ("stockbit", "idx")
     assert cfg.setup_phase_config.volume_trigger.min_valid_20d_sessions == 19
     assert cfg.setup_phase_config.volume_trigger.zero_volume_tolerance == 0
+    assert cfg.setup_phase_config.volume_trigger.dry_up_lookback_sessions == 4
+    assert cfg.setup_phase_config.volume_trigger.dry_up_reference_sessions == 18
+    assert cfg.setup_phase_config.volume_trigger.dry_up_max_ratio == 0.40
+    assert cfg.setup_phase_config.volume_trigger.expansion_min_ratio == 1.75
+    assert cfg.setup_phase_config.volume_trigger.expansion_requires_positive_close is False
     assert (
         cfg.setup_phase_config.rs_policy_for("foreign-bounce").hard_exclude_below
         == -5.0

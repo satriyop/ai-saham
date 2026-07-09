@@ -680,6 +680,11 @@ def _setup_phase_fingerprint(
             "phase_history": [],
             "phase_coverage_score": None,
             "phase_conviction_score": None,
+            "volume_dry_up_ratio_at_signal": None,
+            "volume_expansion_ratio_at_signal": None,
+            "volume_dry_up_confirmed": None,
+            "volume_expansion_confirmed": None,
+            "volume_trigger_confirmed": None,
         }
     return {
         "setup_phase_current": setup_phase.current_phase.value,
@@ -693,6 +698,11 @@ def _setup_phase_fingerprint(
         "phase_history": [entry.to_dict() for entry in setup_phase.history],
         "phase_coverage_score": setup_phase.coverage_score,
         "phase_conviction_score": setup_phase.conviction_score,
+        "volume_dry_up_ratio_at_signal": setup_phase.volume_dry_up_ratio,
+        "volume_expansion_ratio_at_signal": setup_phase.volume_expansion_ratio,
+        "volume_dry_up_confirmed": setup_phase.volume_dry_up_confirmed,
+        "volume_expansion_confirmed": setup_phase.volume_expansion_confirmed,
+        "volume_trigger_confirmed": setup_phase.volume_trigger_confirmed,
     }
 
 

@@ -67,6 +67,12 @@ class SignalObservationFingerprint:
     vwap_position: float | None = None
     rs_vs_ihsg: float | None = None
     volume_ratio: float | None = None
+    # Explicit dry-up/expansion evidence (Point 3, docs/signal_refactor.md)
+    volume_dry_up_ratio: float | None = None
+    volume_expansion_ratio: float | None = None
+    volume_dry_up_confirmed: bool | None = None
+    volume_expansion_confirmed: bool | None = None
+    volume_trigger_confirmed: bool | None = None
     cnfb: float | None = None
     foreign_participation: float | None = None
     foreign_concentration: float | None = None
@@ -174,6 +180,11 @@ class SignalObservationFingerprint:
             "vwap_position": self.vwap_position,
             "rs_vs_ihsg": self.rs_vs_ihsg,
             "volume_ratio": self.volume_ratio,
+            "volume_dry_up_ratio": self.volume_dry_up_ratio,
+            "volume_expansion_ratio": self.volume_expansion_ratio,
+            "volume_dry_up_confirmed": self.volume_dry_up_confirmed,
+            "volume_expansion_confirmed": self.volume_expansion_confirmed,
+            "volume_trigger_confirmed": self.volume_trigger_confirmed,
             "cnfb": self.cnfb,
             "foreign_participation": self.foreign_participation,
             "foreign_concentration": self.foreign_concentration,
@@ -311,6 +322,15 @@ class SignalObservationFingerprint:
             volume_ratio=_optional_float(
                 data.get("volume_ratio", data.get("volume_ratio_at_signal"))
             ),
+            volume_dry_up_ratio=_optional_float(
+                data.get("volume_dry_up_ratio", data.get("volume_dry_up_ratio_at_signal"))
+            ),
+            volume_expansion_ratio=_optional_float(
+                data.get("volume_expansion_ratio", data.get("volume_expansion_ratio_at_signal"))
+            ),
+            volume_dry_up_confirmed=_optional_bool(data.get("volume_dry_up_confirmed")),
+            volume_expansion_confirmed=_optional_bool(data.get("volume_expansion_confirmed")),
+            volume_trigger_confirmed=_optional_bool(data.get("volume_trigger_confirmed")),
             cnfb=_optional_float(data.get("cnfb", data.get("cnfb_20d_at_signal"))),
             foreign_participation=_optional_float(
                 data.get(
