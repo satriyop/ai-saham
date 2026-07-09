@@ -26,9 +26,16 @@ from src.domain.ports.candidate_observations_repository import CandidateObservat
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
+    from src.application.services.primary_setup_family_resolver import (
+        PrimarySetupFamilyResolver,
+        PrimarySetupFamilyResult,
+    )
     from src.application.services.signal_engine import SignalEngine
     from src.application.use_case.assess_risk_use_case import AssessRiskUseCase
     from src.application.use_case.assess_signal_use_case import AssessSignalResponse
+    from src.application.use_case.evaluate_swing_setup_use_case import (
+        SwingSetupCatalogConfig,
+    )
     from src.domain.ports.candidate_observations_repository import (
         CandidateObservationsRepository,
     )
@@ -77,6 +84,10 @@ from src.domain.value_objects.idx_market import SHARES_PER_LOT
 # Default setup targets (1:1 R:R, regime-unaware fallback)
 _DEFAULT_TAKE_PROFIT = Decimal("5")
 _DEFAULT_STOP_LOSS = Decimal("5")
+# Sentinel distinguishing "no override supplied, resolve internally" from an
+# explicit `setup_family=None` override (i.e. the final resolution is
+# genuinely unknown) in _detect_candidate_setup_phase().
+_UNSET_SETUP_FAMILY = object()
 
 # Regime-specific targets (validated direction: IHSG has documented regime cycles)
 # MCE vocabulary (RISK_ON/NEUTRAL/VOLATILE/RISK_OFF).
@@ -458,6 +469,7 @@ def _candidate_observation_payload(
     tp_snapshot: "TickerProfileSnapshot | None" = None,
     sc_evidence: "SectorContextEvidence | None" = None,
     cq_evidence: "CompanyQualityContextEvidence | None" = None,
+    setup_family_result: "PrimarySetupFamilyResult | None" = None,
 ) -> dict:
     """Build schema-versioned replay payload for one screened candidate.
 
@@ -498,6 +510,7 @@ def _candidate_observation_payload(
         tp_snapshot=tp_snapshot,
         sc_evidence=sc_evidence,
         cq_evidence=cq_evidence,
+        setup_family_result=setup_family_result,
     )
 
     return {
@@ -534,6 +547,7 @@ def _sub_signal_fingerprint(
     tp_snapshot: "TickerProfileSnapshot | None" = None,
     sc_evidence: "SectorContextEvidence | None" = None,
     cq_evidence: "CompanyQualityContextEvidence | None" = None,
+    setup_family_result: "PrimarySetupFamilyResult | None" = None,
 ) -> dict:
     """Persist raw sub-signal values as they were at observation time."""
     assessment = signal.assessment if signal is not None else None
@@ -556,8 +570,39 @@ def _sub_signal_fingerprint(
     sc_dict = _sc_fingerprint(sc_evidence)
     cq_dict = _cq_fingerprint(cq_evidence)
     alpha_trigger_dict = _alpha_trigger_fingerprint(signal)
+    if setup_family_result is not None:
+        # Prefer the resolver's primary family; fall back to
+        # decision_constraints only when the resolver itself came back
+        # unresolved (e.g. fallback_unknown), so a real constraints-sourced
+        # family is never silently discarded.
+        resolved_setup_family = (
+            setup_family_result.primary_setup_family
+            or constraints.get("setup_family")
+        )
+    else:
+        resolved_setup_family = constraints.get("setup_family")
     return {
-        "setup_family": constraints.get("setup_family"),
+        "setup_family": resolved_setup_family,
+        "matched_setup_families": (
+            list(setup_family_result.matched_setup_families)
+            if setup_family_result is not None
+            else []
+        ),
+        "primary_setup_family": (
+            setup_family_result.primary_setup_family
+            if setup_family_result is not None
+            else None
+        ),
+        "setup_family_source": (
+            setup_family_result.setup_family_source
+            if setup_family_result is not None
+            else None
+        ),
+        "setup_family_rationale": (
+            list(setup_family_result.rationale)
+            if setup_family_result is not None
+            else []
+        ),
         "setup_name": constraints.get("setup_name"),
         **phase_dict,
         **strategy_dict,
@@ -890,10 +935,15 @@ class AccumulationScreenUseCase:
         candidate_observations_repository: "CandidateObservationsRepository | None" = None,
         foreign_flow_score_use_case: ScoreForeignFlowUseCase | None = None,
         derived_feature_policy: AccumulationDerivedFeaturePolicy | None = None,
+        swing_setup_catalog: "SwingSetupCatalogConfig | None" = None,
+        primary_setup_family_resolver: "PrimarySetupFamilyResolver | None" = None,
     ) -> None:
         from src.application.services.signal_engine import SignalEngine as _SignalEngine
         from src.application.services.flow_confirmation_evidence_builder import (
             FlowConfirmationEvidenceBuilder,
+        )
+        from src.application.services.primary_setup_family_resolver import (
+            PrimarySetupFamilyResolver as _PrimarySetupFamilyResolver,
         )
 
         self._broker_repo = broker_repository
@@ -912,6 +962,10 @@ class AccumulationScreenUseCase:
         self._candidate_observations_repo = candidate_observations_repository
         self._foreign_flow_score_uc = foreign_flow_score_use_case or ScoreForeignFlowUseCase()
         self._derived_features = derived_feature_policy or AccumulationDerivedFeaturePolicy()
+        self._swing_setup_catalog = swing_setup_catalog
+        self._setup_family_resolver = (
+            primary_setup_family_resolver or _PrimarySetupFamilyResolver()
+        )
         # Derive weights from the same policy ScoreForeignFlowUseCase uses, so
         # the two can never drift apart (see ADR-039).
         self._flow_confirmation_builder = FlowConfirmationEvidenceBuilder(
@@ -1230,6 +1284,31 @@ class AccumulationScreenUseCase:
                     c,
                     snapshot_date,
                 )
+                # Stage 2 resolution: strategy_evidence, setup_phase, and flow
+                # evidence are all available now — final family for this
+                # persisted observation.
+                preliminary_family = self._resolve_preliminary_setup_family(c)
+                setup_family_result = self._setup_family_resolver.resolve(
+                    candidate=c,
+                    strategy_evidence=strategy_evidence,
+                    setup_phase=setup_phase,
+                    flow_confirmation_evidence=flow_ev,
+                    swing_setup_catalog=self._swing_setup_catalog,
+                )
+                if setup_family_result.primary_setup_family != preliminary_family:
+                    # A higher-priority source (e.g. strategy_evidence) revised
+                    # the family after phase detection already ran with the
+                    # stage-1 preliminary family. Recompute setup_phase with
+                    # the final family so the persisted setup_phase and
+                    # setup_family always share one contract — attribution
+                    # must be able to trust that phase_sequence_valid was
+                    # evaluated under the same family as primary_setup_family.
+                    setup_phase = self._detect_candidate_setup_phase(
+                        c,
+                        flow_ev,
+                        snapshot_date,
+                        setup_family=setup_family_result.primary_setup_family,
+                    )
                 observations.append(
                     CandidateObservation(
                         ticker=c.ticker,
@@ -1245,6 +1324,7 @@ class AccumulationScreenUseCase:
                             tp_snapshot=tp_snapshot,
                             sc_evidence=sc_evidence,
                             cq_evidence=cq_evidence,
+                            setup_family_result=setup_family_result,
                             snapshot_date=snapshot_date,
                             captured_at=captured_at,
                             request=request,
@@ -1254,6 +1334,20 @@ class AccumulationScreenUseCase:
             self._candidate_observations_repo.save_many(observations)
         except Exception as exc:
             logger.warning("Candidate observation persistence unavailable: %s", exc)
+
+    def _resolve_preliminary_setup_family(
+        self, candidate: "AccumulationCandidate"
+    ) -> str | None:
+        """Stage-1 family resolution: explicit request + setup families
+        detected from screen evidence only — strategy_evidence does not exist
+        yet at this point in the pipeline. Shared by setup phase detection and
+        strategy-evidence construction so both agree on the same family before
+        strategy evidence (a higher-priority source) can potentially revise it
+        in stage 2 (see _persist_candidate_observations)."""
+        return self._setup_family_resolver.resolve(
+            candidate=candidate,
+            swing_setup_catalog=self._swing_setup_catalog,
+        ).primary_setup_family
 
     def _build_candidate_strategy_evidence(
         self,
@@ -1274,13 +1368,14 @@ class AccumulationScreenUseCase:
                 candidate.ticker,
                 end_date=snapshot_date,
             )
+            setup_family = self._resolve_preliminary_setup_family(candidate)
             return StrategyEvidenceBuilder().build(
                 StrategyEvidenceRequest(
                     ticker=candidate.ticker,
                     strategy_name=request.strategy_name,
                     candles=tuple(candles),
                     snapshot_date=snapshot_date,
-                    setup_family="accumulation",
+                    setup_family=setup_family,
                     setup_phase=setup_phase,
                 )
             )
@@ -1473,6 +1568,7 @@ class AccumulationScreenUseCase:
         candidate: "AccumulationCandidate",
         flow_ev: "FlowConfirmationEvidence | None",
         snapshot_date: date,
+        setup_family: "str | None" = _UNSET_SETUP_FAMILY,  # type: ignore[assignment]
     ) -> "SetupPhaseSnapshot | None":
         try:
             from src.application.services.candle_provenance import resolve_candle_source
@@ -1484,6 +1580,17 @@ class AccumulationScreenUseCase:
                 load_previous_setup_phases,
             )
 
+            if setup_family is _UNSET_SETUP_FAMILY:
+                # Stage 1 resolution: no strategy_evidence yet (it is built
+                # later, in the persist loop, using this very phase snapshot
+                # as input — see _build_candidate_strategy_evidence). Relies
+                # only on explicit request family (none today for screen
+                # accum) and setup families detected from screen evidence.
+                setup_family = self._resolve_preliminary_setup_family(candidate)
+            # else: caller (stage 2 recompute in _persist_candidate_observations)
+            # supplies the final, strategy-evidence-aware family explicitly —
+            # used verbatim, including an explicit None for "genuinely unknown".
+
             candles = self._market_repo.get_candles(
                 candidate.ticker,
                 end_date=snapshot_date,
@@ -1492,7 +1599,7 @@ class AccumulationScreenUseCase:
                 self._candidate_observations_repo,
                 ticker=candidate.ticker,
                 before_date=snapshot_date,
-                setup_family="accumulation",
+                setup_family=setup_family,
             )
             candle_source = resolve_candle_source(
                 self._market_repo,
@@ -1512,7 +1619,7 @@ class AccumulationScreenUseCase:
                 setup_eval=None,
                 setup_evidence=setup_evidence,
                 flow_evidence=flow_ev,
-                setup_family="accumulation",
+                setup_family=setup_family,
                 previous_phases=previous_phases,
             )
         except Exception:

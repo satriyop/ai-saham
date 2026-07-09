@@ -428,12 +428,14 @@ def signal_backfill_observations(
     market_repo = SQLiteMarketRepository(resolved_db)
     labels_repo = SQLiteSignalForwardLabelsRepository(resolved_db)
     accumulation_config = load_accumulation_screener_config()
+    swing_config = load_swing_config()
     workflow = create_accumulation_screen_workflow(
         db_path=resolved_db,
         screener_config=accumulation_config,
+        swing_config=swing_config,
     )
     screen_request_builder = BuildSignalObservationScreenRequest.from_configs(
-        swing_config=load_swing_config(),
+        swing_config=swing_config,
         accumulation_screener_config=accumulation_config,
         min_net_buy_days=1,
         disable_score_filters=True,

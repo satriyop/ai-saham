@@ -1376,6 +1376,86 @@ def test_screen_persists_candidate_observations_when_repo_injected():
     assert fingerprint["setup_name"] is None
 
 
+def test_screen_persists_setup_family_fingerprint_when_swing_setup_catalog_matches():
+    """When a swing_setup_catalog is injected and the screened candidate's
+    derived signals MATCH a named setup (coiled-spring, family "breakout"),
+    the persisted sub_signal_fingerprint carries the resolved setup-family
+    fields end-to-end (screen -> PrimarySetupFamilyResolver -> payload)."""
+    from src.application.use_case.evaluate_swing_setup_use_case import (
+        CoiledSpringSetupConfig,
+        ForeignBounceSetupConfig,
+        PullbackContinuationSetupConfig,
+        SmartMoneyConfirmedSetupConfig,
+        SwingSetupCatalogConfig,
+    )
+    from src.domain.ports.candidate_observations_repository import CandidateObservation
+
+    session_dates = _weekdays(date(2026, 1, 1), 7)
+    as_of = session_dates[-1]
+    # 130 days of varied-close candles: bb_width_pctile is None unless the use
+    # case can compute >= bb_history (60) rolling BB widths (period 20), which
+    # in turn needs a long enough, non-constant-price candle history. Without
+    # this, even a maximally loosened coiled-spring config would fail the
+    # "bb_width_pctile present" gate and only ever PARTIAL-match.
+    candles = [
+        _candle("BBCA", date(2025, 9, 1) + timedelta(days=i), Decimal("100") + Decimal(i % 5))
+        for i in range(130)
+    ]
+    summaries = [_summary("BBCA", day, Decimal("110")) for day in session_dates]
+
+    # coiled-spring gates are maximally loosened so the screened candidate's
+    # derived signals MATCH regardless of the exact computed values (we don't
+    # control AccumulationCandidate fields directly here, unlike the resolver
+    # unit tests). The other three setups are disabled so they cannot also
+    # match and confuse the "primary family" assertion.
+    swing_setup_catalog = SwingSetupCatalogConfig(
+        foreign_bounce=ForeignBounceSetupConfig(enabled=False, family="foreign_bounce"),
+        coiled_spring=CoiledSpringSetupConfig(
+            gate_min_foreign_flow_score=0.0,
+            gate_max_bb_width_pctile=1.0,
+            gate_min_flow_ratio_pct=-100.0,
+            gate_max_rsi=100.0,
+            family="breakout",
+        ),
+        smart_money_confirmed=SmartMoneyConfirmedSetupConfig(
+            enabled=False, family="confirmation"
+        ),
+        pullback_continuation=PullbackContinuationSetupConfig(
+            enabled=False, family="pullback"
+        ),
+    )
+
+    spy_repo = SpyCandidateObservationsRepository()
+    use_case = AccumulationScreenUseCase(
+        broker_repository=MockBrokerRepository(summaries),
+        market_repository=MockMarketRepository(candles),
+        candidate_observations_repository=spy_repo,
+        swing_setup_catalog=swing_setup_catalog,
+    )
+
+    response = use_case.execute(
+        AccumulationScreenRequest(
+            tickers=["BBCA"],
+            window_days=7,
+            min_net_buy_days=1,
+            as_of_date=as_of,
+        )
+    )
+
+    assert len(response.candidates) == 1
+    assert len(spy_repo.saved) == 1
+
+    obs = spy_repo.saved[0]
+    assert isinstance(obs, CandidateObservation)
+    fingerprint = obs.payload["sub_signal_fingerprint"]
+    assert "matched_setup_families" in fingerprint
+    assert "primary_setup_family" in fingerprint
+    assert "setup_family_source" in fingerprint
+    assert "setup_family_rationale" in fingerprint
+    assert fingerprint["primary_setup_family"] == "breakout"
+    assert "breakout" in fingerprint["matched_setup_families"]
+
+
 def test_screen_persists_market_cap_bucket_when_fundamentals_available():
     from src.domain.ports.candidate_observations_repository import CandidateObservation
 
@@ -1597,3 +1677,143 @@ def test_screen_setup_phase_is_none_when_detection_fails(monkeypatch):
     assert len(response.candidates) == 1
     assert response.candidates[0].setup_phase is None
     assert response.candidates[0].to_dict()["setup_phase"] is None
+
+
+def test_screen_recomputes_setup_phase_when_stage2_family_differs_from_preliminary():
+    """Regression test for the stage-1/stage-2 setup-family inconsistency fix
+    in _persist_candidate_observations.
+
+    Stage 1 (main loop, _detect_candidate_setup_phase with no strategy_evidence
+    yet) resolves a *preliminary* setup family and detects setup_phase against
+    it. Stage 2 (_persist_candidate_observations, after strategy_evidence is
+    built) re-resolves the *final* family via self._setup_family_resolver — a
+    higher-priority source (strategy_evidence) can revise the family. Before
+    the fix, the persisted setup_phase fields (e.g. phase_sequence_valid)
+    would still reflect the stale stage-1 family's sequencing rules even
+    though primary_setup_family in the payload reflects the new stage-2
+    family. The fix recomputes setup_phase when
+    setup_family_result.primary_setup_family != preliminary_family.
+
+    We inject a fake PrimarySetupFamilyResolver that returns "breakout" when
+    called without strategy_evidence (stage 1: _resolve_preliminary_setup_family
+    and _detect_candidate_setup_phase's internal default path never pass
+    strategy_evidence) and "foreign_bounce" when called with strategy_evidence
+    (stage 2's full resolve call in _persist_candidate_observations always
+    passes strategy_evidence=strategy_evidence). Setting request.strategy_name
+    to a bogus (non-existent) strategy name is enough to make
+    _build_candidate_strategy_evidence produce a real, non-None
+    StrategyEvidence object: StrategyEvidenceBuilder.build() wraps the
+    strategy-loading and rule-evaluation logic in a broad try/except that
+    falls back to _unavailable(...), which still constructs and returns a
+    genuine StrategyEvidence instance (not None) -- confirmed by reading
+    src/application/services/strategy_evidence_builder.py.
+
+    Candle data is the same 130-day varied-close recipe used in
+    test_screen_persists_setup_family_fingerprint_when_swing_setup_catalog_matches
+    to produce a real (non-None) bb_width_pctile <= 0.20, landing the
+    genuinely-derived setup_phase in SetupPhaseState.COMPRESSION.
+
+    Per SetupPhaseConfig's default requirements_by_family:
+      - "breakout"       -> sequence (COMPRESSION, BREAKOUT_CONFIRMATION).
+                            COMPRESSION is idx=0 -> sequence_valid=True
+                            (first phase in sequence, no prior history needed).
+      - "foreign_bounce" -> same sequence object as "accumulation":
+                            (ACCUMULATION, COMPRESSION, BREAKOUT_CONFIRMATION).
+                            COMPRESSION is idx=1 -> requires ACCUMULATION to
+                            already be in previous_phases, which it is not
+                            (no observation history seeded) -> sequence_valid=False.
+
+    So: if the fix's recompute reran phase detection with the FINAL family
+    ("foreign_bounce"), the persisted phase_sequence_valid must be False. If
+    the stale stage-1 family ("breakout") were used instead (the bug), it
+    would incorrectly be True. This test asserts False, proving the recompute
+    used the FINAL family.
+    """
+    from src.application.services.primary_setup_family_resolver import (
+        PrimarySetupFamilyResult,
+    )
+    from src.domain.ports.candidate_observations_repository import CandidateObservation
+
+    class _FakeResolver:
+        """Returns a different primary_setup_family depending on whether
+        strategy_evidence is present, simulating a higher-priority source
+        (strategy_evidence) revising the family between stage 1 and stage 2."""
+
+        def resolve(self, *, candidate, strategy_evidence=None, **kwargs):
+            if strategy_evidence is None:
+                # Stage 1: _resolve_preliminary_setup_family and
+                # _detect_candidate_setup_phase's internal default path.
+                return PrimarySetupFamilyResult(
+                    matched_setup_families=("breakout",),
+                    primary_setup_family="breakout",
+                    setup_family_source="detected_screen_evidence",
+                )
+            # Stage 2: _persist_candidate_observations' full resolve call.
+            return PrimarySetupFamilyResult(
+                matched_setup_families=("foreign_bounce", "breakout"),
+                primary_setup_family="foreign_bounce",
+                setup_family_source="strategy_evidence",
+            )
+
+    session_dates = _weekdays(date(2026, 1, 1), 7)
+    as_of = session_dates[-1]
+    # 130 days of varied-close candles so bb_width_pctile is a real, non-None
+    # value (needs >= bb_history=60 rolling BB widths over period 20, which in
+    # turn needs a long enough, non-constant-price candle history) -- same
+    # technique as the neighboring swing-setup-catalog fingerprint test, but
+    # with modulo 6 (instead of 5) so the naturally-derived phase actually
+    # lands in SetupPhaseState.COMPRESSION (bb_width_pctile ~0.167 <= the
+    # default 0.20 threshold) rather than ACCUMULATION -- verified empirically,
+    # since _constructive_phase() checks the compression gate before the
+    # accumulation gate but only when bb_width_pctile is low enough.
+    candles = [
+        _candle("BBCA", date(2025, 9, 1) + timedelta(days=i), Decimal("100") + Decimal(i % 6))
+        for i in range(130)
+    ]
+    summaries = [_summary("BBCA", day, Decimal("110")) for day in session_dates]
+
+    spy_repo = SpyCandidateObservationsRepository()
+    use_case = AccumulationScreenUseCase(
+        broker_repository=MockBrokerRepository(summaries),
+        market_repository=MockMarketRepository(candles),
+        candidate_observations_repository=spy_repo,
+        primary_setup_family_resolver=_FakeResolver(),
+    )
+
+    response = use_case.execute(
+        AccumulationScreenRequest(
+            tickers=["BBCA"],
+            window_days=7,
+            min_net_buy_days=1,
+            as_of_date=as_of,
+            # Non-None (even if not a real/loadable strategy YAML) is enough to
+            # make _build_candidate_strategy_evidence pass strategy_evidence
+            # through to stage 2's resolve() call as non-None.
+            strategy_name="nonexistent-strategy-for-regression-test",
+        )
+    )
+
+    assert len(response.candidates) == 1
+    assert len(spy_repo.saved) == 1
+
+    obs = spy_repo.saved[0]
+    assert isinstance(obs, CandidateObservation)
+    fingerprint = obs.payload["sub_signal_fingerprint"]
+
+    # The persisted family must be the FINAL (stage-2) family, not the stale
+    # stage-1 preliminary one.
+    assert fingerprint["primary_setup_family"] == "foreign_bounce"
+    assert fingerprint["setup_family_source"] == "strategy_evidence"
+
+    # Sanity check: the underlying candle-derived phase actually landed on
+    # COMPRESSION as designed -- otherwise the sequence_valid assertion below
+    # would be vacuous.
+    assert fingerprint["setup_phase_current"] == "COMPRESSION"
+
+    # The crux of the regression test: phase_sequence_valid must reflect the
+    # FINAL family's ("foreign_bounce") sequencing rule (requires prior
+    # ACCUMULATION phase, absent here -> False), not the stale preliminary
+    # family's ("breakout") rule (COMPRESSION is first in sequence -> True).
+    # If the recompute branch were missing/broken, this would incorrectly be
+    # True.
+    assert fingerprint["phase_sequence_valid"] is False

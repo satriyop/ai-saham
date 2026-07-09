@@ -330,6 +330,7 @@ def accumulation_run(
     workflow = create_accumulation_screen_workflow(
         db_path=resolved_db,
         screener_config=_ASC,
+        swing_config=_SC,
     )
     broker_repo = workflow.broker_repository
     market_repo = workflow.market_repository
@@ -519,6 +520,7 @@ def _make_use_case_for_compare(
             db_path=db_path,
             screener_config=_ASC,
             with_risk=False,
+            swing_config=_SC,
         )
         use_case = workflow.use_case
         response = use_case.execute(AccumulationScreenRequest(

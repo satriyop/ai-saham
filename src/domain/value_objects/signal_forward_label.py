@@ -39,6 +39,10 @@ class SignalObservationFingerprint:
     """Raw signal-time facts persisted for later attribution."""
 
     setup_family: str | None = None
+    matched_setup_families: tuple[str, ...] = ()
+    primary_setup_family: str | None = None
+    setup_family_source: str | None = None
+    setup_family_rationale: tuple[str, ...] = ()
     setup_name: str | None = None
     setup_phase: str | None = None
     setup_phase_previous: str | None = None
@@ -142,6 +146,10 @@ class SignalObservationFingerprint:
     def to_dict(self) -> dict[str, Any]:
         return {
             "setup_family": self.setup_family,
+            "matched_setup_families": list(self.matched_setup_families),
+            "primary_setup_family": self.primary_setup_family,
+            "setup_family_source": self.setup_family_source,
+            "setup_family_rationale": list(self.setup_family_rationale),
             "setup_name": self.setup_name,
             "setup_phase": self.setup_phase,
             "setup_phase_previous": self.setup_phase_previous,
@@ -255,6 +263,14 @@ class SignalObservationFingerprint:
                 regime["decision_constraints"] = data.get("decision_constraints")
         return cls(
             setup_family=data.get("setup_family"),
+            matched_setup_families=tuple(
+                str(v) for v in data.get("matched_setup_families") or ()
+            ),
+            primary_setup_family=data.get("primary_setup_family"),
+            setup_family_source=data.get("setup_family_source"),
+            setup_family_rationale=tuple(
+                str(v) for v in data.get("setup_family_rationale") or ()
+            ),
             setup_name=data.get("setup_name"),
             setup_phase=data.get("setup_phase") or data.get("setup_phase_current"),
             setup_phase_previous=data.get("setup_phase_previous"),

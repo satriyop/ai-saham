@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from src.application.services.accumulation_screen_factory import (
     create_accumulation_screen_use_case,
@@ -16,6 +17,7 @@ from src.application.services.bootstrap import (
     _load_engine_config,
     _resolve_risk_gates,
 )
+from src.application.services.swing_setup_catalog import build_swing_setup_catalog_config
 from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
 from src.application.use_case.assess_risk_use_case import AssessRiskUseCase
 from src.domain.ports.broker_data_repository import BrokerDataRepository
@@ -46,8 +48,14 @@ def create_accumulation_screen_workflow(
     db_path: Path,
     screener_config: AccumulationScreenerConfig,
     with_risk: bool = True,
+    swing_config: Any | None = None,
 ) -> AccumulationScreenWorkflow:
     """Build accumulation screen workflow dependencies for CLI commands."""
+    swing_setup_catalog = (
+        build_swing_setup_catalog_config(swing_config)
+        if swing_config is not None
+        else None
+    )
     broker_repo = SQLiteBrokerRepository(db_path)
     market_repo = SQLiteMarketRepository(db_path=db_path)
     observations_repo = SQLiteCandidateObservationsRepository(db_path)
@@ -72,6 +80,7 @@ def create_accumulation_screen_workflow(
         candidate_observations_repository=observations_repo,
         foreign_flow_score_policy=screener_config.foreign_flow_score_policy,
         derived_feature_policy=screener_config.derived_features,
+        swing_setup_catalog=swing_setup_catalog,
     )
 
     return AccumulationScreenWorkflow(

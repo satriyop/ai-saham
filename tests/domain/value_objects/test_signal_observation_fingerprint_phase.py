@@ -55,3 +55,35 @@ def test_signal_observation_fingerprint_setup_name_defaults_to_none():
 
     assert fp.setup_name is None
     assert fp.to_dict()["setup_name"] is None
+
+
+def test_signal_observation_fingerprint_preserves_setup_family_resolution_fields():
+    """matched_setup_families / primary_setup_family / setup_family_source /
+    setup_family_rationale (PrimarySetupFamilyResolver's output) must survive
+    a to_dict/from_dict round trip so replay/attribution can reconstruct how
+    setup_family was resolved for a persisted observation."""
+    fp = SignalObservationFingerprint.from_dict(
+        {
+            "matched_setup_families": ["breakout", "pullback"],
+            "primary_setup_family": "breakout",
+            "setup_family_source": "detected_screen_evidence",
+            "setup_family_rationale": [
+                "setup 'coiled-spring' matched screen gates -> family=breakout"
+            ],
+        }
+    )
+
+    assert fp.matched_setup_families == ("breakout", "pullback")
+    assert fp.primary_setup_family == "breakout"
+    assert fp.setup_family_source == "detected_screen_evidence"
+    assert fp.setup_family_rationale == (
+        "setup 'coiled-spring' matched screen gates -> family=breakout",
+    )
+
+    round_tripped = SignalObservationFingerprint.from_dict(fp.to_dict())
+    assert round_tripped.matched_setup_families == ("breakout", "pullback")
+    assert round_tripped.primary_setup_family == "breakout"
+    assert round_tripped.setup_family_source == "detected_screen_evidence"
+    assert round_tripped.setup_family_rationale == (
+        "setup 'coiled-spring' matched screen gates -> family=breakout",
+    )
