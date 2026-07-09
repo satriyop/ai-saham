@@ -504,7 +504,7 @@ def _staleness_warning(
     for name, candles in [("VIX", vix_candles), ("EIDO", eido_candles), ("USD/IDR", usd_idr_candles)]:
         if candles and _business_day_gap(candles[-1].date, as_of) > stale_business_day_gap:
             stale.append(f"{name} ({candles[-1].date})")
-    return f"Using T-1 data for: {', '.join(stale)}. Run: saham fetch market" if stale else None
+    return f"Using T-1 data for: {', '.join(stale)}. Run: saham fetch market --universe lq45" if stale else None
 
 
 def _coverage_warning(factors: list[ContextFactor], unavailable_ratio: float) -> str | None:

@@ -158,9 +158,11 @@ class MarketContextConfig:
 
 
 def load_market_context_config(
-    config_path: Path = MARKET_CONTEXT_CONFIG_PATH,
+    config_path: Path | None = None,
 ) -> MarketContextConfig:
     """Load MCE config from YAML. Returns defaults on any error."""
+    if config_path is None:
+        config_path = MARKET_CONTEXT_CONFIG_PATH
     defaults = MarketContextConfig()
     try:
         with open(config_path, encoding="utf-8") as fh:
@@ -350,9 +352,11 @@ def get_global_context_tickers() -> set[str]:
             tickers.add(cfg.eido.ticker.upper().strip())
         if cfg.usd_idr.enabled:
             tickers.add(cfg.usd_idr.ticker.upper().strip())
-        if cfg.commodity_composite.enabled and cfg.commodity_composite.components:
-            for comp in cfg.commodity_composite.components:
-                tickers.add(comp.ticker.upper().strip())
+        if cfg.commodity.enabled:
+            if cfg.commodity.cpo_ticker:
+                tickers.add(cfg.commodity.cpo_ticker.upper().strip())
+            if cfg.commodity.coal_ticker:
+                tickers.add(cfg.commodity.coal_ticker.upper().strip())
         return tickers
     except Exception:
         # Fallback to defaults on error
