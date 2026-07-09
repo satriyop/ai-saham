@@ -587,3 +587,87 @@ def test_fmt_enrichment_column():
     assert _fmt_enrichment_column("notation+analyst+insider  ✓(season,corp,holding,bandar,fundam,fwd_est,profile)") == "10/10 (+3)"
     # Errors
     assert _fmt_enrichment_column("ERR:insider:Playwright error,corp:timeout") == "8/10 (ERR: insider, corp)"
+
+
+def test_fetch_global_context_tickers_passes_configured_tolerance(monkeypatch, tmp_path):
+    from src.adapters.cli.fetch_market_commands import _fetch_global_context_tickers
+    from src.application.use_case.refresh_market_data_use_case import RefreshMarketDataResponse
+    from src.infrastructure.config.market_context_config import MarketContextConfig, MarketContextFetchConfig
+
+    # Create dummy config with end_tolerance_days = 5
+    dummy_cfg = MarketContextConfig(
+        fetch=MarketContextFetchConfig(global_context_end_tolerance_days=5)
+    )
+
+    # Mock load_market_context_config to return our dummy config
+    monkeypatch.setattr(
+        "src.infrastructure.config.market_context_config.load_market_context_config",
+        lambda *args, **kwargs: dummy_cfg
+    )
+
+    # Let's intercept execute calls
+    captured_requests = []
+    def mock_execute(self, request):
+        captured_requests.append(request)
+        return RefreshMarketDataResponse(
+            ticker=request.ticker,
+            status="cached-current",
+            candles=[],
+            date_range=(date(2026, 7, 1), date(2026, 7, 5)),
+            added_count=0,
+            fetch_modes=frozenset(),
+        )
+
+    monkeypatch.setattr(
+        "src.application.use_case.refresh_market_data_use_case.RefreshMarketDataUseCase.execute",
+        mock_execute
+    )
+
+    # Also need to make sure get_global_context_tickers doesn't call the actual config loading or returns expected set
+    monkeypatch.setattr(
+        "src.infrastructure.config.market_context_config.get_global_context_tickers",
+        lambda: {"^VIX", "EIDO", "IDR=X"}
+    )
+
+    # Execute
+    _fetch_global_context_tickers(db_path=tmp_path / "dummy.db")
+
+    # Assert
+    assert len(captured_requests) > 0
+    for req in captured_requests:
+        assert req.end_tolerance_days == 5
+
+
+def test_fetch_global_context_tickers_uses_default_tolerance_when_not_customized(monkeypatch, tmp_path):
+    from src.adapters.cli.fetch_market_commands import _fetch_global_context_tickers
+    from src.application.use_case.refresh_market_data_use_case import RefreshMarketDataResponse
+
+    # Let's intercept execute calls
+    captured_requests = []
+    def mock_execute(self, request):
+        captured_requests.append(request)
+        return RefreshMarketDataResponse(
+            ticker=request.ticker,
+            status="cached-current",
+            candles=[],
+            date_range=(date(2026, 7, 1), date(2026, 7, 5)),
+            added_count=0,
+            fetch_modes=frozenset(),
+        )
+
+    monkeypatch.setattr(
+        "src.application.use_case.refresh_market_data_use_case.RefreshMarketDataUseCase.execute",
+        mock_execute
+    )
+
+    # Execute with real config (which should yield whatever value is in config/market_context_engine.yaml)
+    _fetch_global_context_tickers(db_path=tmp_path / "dummy.db")
+
+    # Assert that all requests used the config value
+    from src.infrastructure.config.market_context_config import load_market_context_config
+    expected_val = load_market_context_config().fetch.global_context_end_tolerance_days
+
+    assert len(captured_requests) > 0
+    for req in captured_requests:
+        assert req.end_tolerance_days == expected_val
+

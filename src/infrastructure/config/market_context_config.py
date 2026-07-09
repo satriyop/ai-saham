@@ -125,6 +125,11 @@ class MarketContextScoringConfig:
 
 
 @dataclass(frozen=True)
+class MarketContextFetchConfig:
+    global_context_end_tolerance_days: int = 1
+
+
+@dataclass(frozen=True)
 class MarketContextConfig:
     """
     Full config for MarketContextEngine. All fields carry hardcoded defaults
@@ -140,6 +145,7 @@ class MarketContextConfig:
     commodity: CommodityCompositeConfig = field(default_factory=CommodityCompositeConfig)
     regime_thresholds: RegimeThresholds = field(default_factory=RegimeThresholds)
     scoring: MarketContextScoringConfig = field(default_factory=MarketContextScoringConfig)
+    fetch: MarketContextFetchConfig = field(default_factory=MarketContextFetchConfig)
     regime_effects: dict[str, RegimeEffect] = field(default_factory=lambda: {
         "RISK_ON":  RegimeEffect(signal_multiplier=1.0, gate_tightening=False),
         "NEUTRAL":  RegimeEffect(signal_multiplier=1.0, gate_tightening=False),
@@ -167,6 +173,7 @@ def load_market_context_config(
         factors = root.get("factors", {})
         rt = root.get("regime_thresholds", {})
         re_cfg = root.get("regime_effects", {})
+        fetch_cfg = root.get("fetch", {})
 
         def _vix(f: dict) -> VixFactorConfig:
             d = defaults.vix
@@ -314,6 +321,12 @@ def load_market_context_config(
                         ),
                     ),
                 ),
+            ),
+            fetch=MarketContextFetchConfig(
+                global_context_end_tolerance_days=fetch_cfg.get(
+                    "global_context_end_tolerance_days",
+                    defaults.fetch.global_context_end_tolerance_days,
+                )
             ),
             regime_effects={
                 "RISK_ON":  _re("RISK_ON"),

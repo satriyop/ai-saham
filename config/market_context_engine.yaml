@@ -8,6 +8,9 @@ market_context_engine:
       favorable_min_score: 0.65
       neutral_min_score: 0.35
 
+  fetch:
+    global_context_end_tolerance_days: 1
+
   factors:
 
     vix:

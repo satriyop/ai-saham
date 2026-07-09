@@ -724,7 +724,7 @@ def _fetch_global_context_tickers(db_path: Path, days: int = 180) -> None:
                     days=days,
                     refresh=False,
                     start_tolerance_days=MARKET_START_TOLERANCE_DAYS,
-                    end_tolerance_days=3,   # global markets close at US hours; allow 3d tolerance
+                    end_tolerance_days=cfg.fetch.global_context_end_tolerance_days,
                 )
             )
             if resp.status.startswith("cached"):

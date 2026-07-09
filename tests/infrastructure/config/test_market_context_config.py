@@ -47,3 +47,23 @@ market_context_engine:
     assert cfg.idx_trend.fast_sma_adjustment == 0.08
     assert cfg.foreign_flow.bearish_diff_ratio == -0.4
     assert cfg.foreign_flow.bullish_diff_ratio == 0.6
+
+
+def test_load_market_context_config_default_fetch_policy():
+    cfg = load_market_context_config()
+    assert cfg.fetch.global_context_end_tolerance_days == 1
+
+
+def test_load_market_context_config_reads_fetch_policy(tmp_path):
+    path = tmp_path / "market_context_engine.yaml"
+    path.write_text(
+        """
+market_context_engine:
+  fetch:
+    global_context_end_tolerance_days: 5
+""",
+        encoding="utf-8",
+    )
+    cfg = load_market_context_config(path)
+    assert cfg.fetch.global_context_end_tolerance_days == 5
+
