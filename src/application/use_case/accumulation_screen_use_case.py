@@ -30,6 +30,9 @@ if TYPE_CHECKING:
         PrimarySetupFamilyResolver,
         PrimarySetupFamilyResult,
     )
+    from src.application.services.relative_strength_calculator import (
+        RelativeStrengthCalculator,
+    )
     from src.application.services.signal_engine import SignalEngine
     from src.application.use_case.assess_risk_use_case import AssessRiskUseCase
     from src.application.use_case.assess_signal_use_case import AssessSignalResponse
@@ -614,7 +617,8 @@ def _sub_signal_fingerprint(
         "rsi_at_signal": candidate.rsi,
         "bb_width_pctile_at_signal": candidate.bb_width_pctile,
         "vwap_position_at_signal": candidate.vwap_pct,
-        "rs_vs_ihsg_20d_at_signal": None,
+        "rs_vs_ihsg_20d_at_signal": getattr(candidate, "rs_vs_ihsg_20d", None),
+        "rs_vs_ihsg_5d_at_signal": getattr(candidate, "rs_vs_ihsg_5d", None),
         "volume_ratio_at_signal": candidate.avg_flow_ratio,
         "cnfb_20d_at_signal": float(candidate.total_net_value),
         "foreign_participation_at_signal": candidate.net_buy_ratio,
@@ -937,6 +941,7 @@ class AccumulationScreenUseCase:
         derived_feature_policy: AccumulationDerivedFeaturePolicy | None = None,
         swing_setup_catalog: "SwingSetupCatalogConfig | None" = None,
         primary_setup_family_resolver: "PrimarySetupFamilyResolver | None" = None,
+        relative_strength_calculator: "RelativeStrengthCalculator | None" = None,
     ) -> None:
         from src.application.services.signal_engine import SignalEngine as _SignalEngine
         from src.application.services.flow_confirmation_evidence_builder import (
@@ -944,6 +949,9 @@ class AccumulationScreenUseCase:
         )
         from src.application.services.primary_setup_family_resolver import (
             PrimarySetupFamilyResolver as _PrimarySetupFamilyResolver,
+        )
+        from src.application.services.relative_strength_calculator import (
+            RelativeStrengthCalculator as _RelativeStrengthCalculator,
         )
 
         self._broker_repo = broker_repository
@@ -965,6 +973,9 @@ class AccumulationScreenUseCase:
         self._swing_setup_catalog = swing_setup_catalog
         self._setup_family_resolver = (
             primary_setup_family_resolver or _PrimarySetupFamilyResolver()
+        )
+        self._relative_strength_calculator = (
+            relative_strength_calculator or _RelativeStrengthCalculator()
         )
         # Derive weights from the same policy ScoreForeignFlowUseCase uses, so
         # the two can never drift apart (see ADR-039).
@@ -1579,6 +1590,9 @@ class AccumulationScreenUseCase:
             from src.application.services.setup_phase_history import (
                 load_previous_setup_phases,
             )
+            from src.domain.value_objects.benchmark_symbol import (
+                CANONICAL_BENCHMARK_TICKER,
+            )
 
             if setup_family is _UNSET_SETUP_FAMILY:
                 # Stage 1 resolution: no strategy_evidence yet (it is built
@@ -1595,6 +1609,20 @@ class AccumulationScreenUseCase:
                 candidate.ticker,
                 end_date=snapshot_date,
             )
+            benchmark_candles = self._market_repo.get_candles(
+                CANONICAL_BENCHMARK_TICKER,
+                end_date=snapshot_date,
+            )
+            rs_result = self._relative_strength_calculator.calculate(
+                ticker_candles=candles,
+                benchmark_candles=benchmark_candles,
+                as_of_date=snapshot_date,
+            )
+            # Attached as diagnostic instance attributes (not formal dataclass
+            # fields) so _sub_signal_fingerprint() can read them without
+            # threading a new return value through this method's signature.
+            candidate.rs_vs_ihsg_5d = rs_result.rs_vs_ihsg_5d
+            candidate.rs_vs_ihsg_20d = rs_result.rs_vs_ihsg_20d
             previous_phases = load_previous_setup_phases(
                 self._candidate_observations_repo,
                 ticker=candidate.ticker,
@@ -1609,7 +1637,7 @@ class AccumulationScreenUseCase:
             setup_evidence = SetupEvidenceBuilder().build(
                 candidate,
                 None,
-                rs_vs_ihsg_5d=None,
+                rs_vs_ihsg_5d=rs_result.rs_vs_ihsg_5d,
                 volume_trend_ratio=None,
                 candle_source=candle_source,
                 analysis_date=snapshot_date,
