@@ -195,7 +195,7 @@ def accumulation_run(
         Optional[float],
         typer.Option(
             "--min-foreign-flow-score",
-            help="Minimum composite foreign-flow score (0-120; config default)",
+            help="Minimum composite foreign-flow score (0-100; config default)",
             min=0,
         ),
     ] = None,
@@ -277,7 +277,7 @@ def accumulation_run(
     """
     Screen stocks for foreign accumulation patterns.
 
-    Computes composite foreign-flow score 0-120 based on: consistency of daily foreign buying,
+    Computes composite foreign-flow score 0-100 based on: consistency of daily foreign buying,
     consecutive buy streak, whether foreigners are underwater (VWAP vs price),
     RSI headroom, and foreign flow as % of total turnover. BB Width is shown as a
     setup/phase diagnostic and does not contribute to the score by default.

@@ -1987,7 +1987,7 @@ accumulation scores are equal.
 
 ```bash
 # Accumulation evidence threshold
-saham screen accum --universe lq45 --min-accum-score 50 --top 10
+saham screen accum --universe lq45 --min-foreign-flow-score 50 --top 10
 
 # Optional SignalEngine threshold
 saham screen accum --universe lq45 --min-signal-score 55 --top 10
@@ -2016,7 +2016,7 @@ saham screen accum --universe lq45 --save morning-watch
 | `--universe` | `-u` | | Universe: lq45, idx80, idxcomp100, cached |
 | `--window` | `-w` | 7 | Analysis window in broker sessions (7, 30, 90) |
 | `--min-streak` | | 0 | Minimum consecutive buy days |
-| `--min-accum-score` | | config | Minimum accumulation evidence score (0-120) |
+| `--min-foreign-flow-score` | | config | Minimum accumulation evidence score (0-100) |
 | `--min-signal-score` | | disabled/config | Optional minimum SignalEngine score (0-100) |
 | `--vwap-only` | | false | Only underwater foreign positions |
 | `--squeeze-only` | | false | Only BB squeeze stocks |
@@ -2748,7 +2748,7 @@ saham strategy backtest BBCA --strategy my_flow_strategy
 | `saham indicator list` | List all indicators | `--formulas` |
 | `saham indicator show NAME` | Show formula details | — |
 | `saham indicator delete NAME` | Delete custom formula | `--force` |
-| `saham screen accum` | Foreign accumulation screener (SignalAssessment 0–100) | `--universe`, `--window`, `--multi`, `--top-broker`, `--min-accum-score`, `--min-signal-score`, `--min-piotroski`, `--vwap-only`, `--squeeze-only`, `--save`, `--format`, `--guide`, `--explain`, `--db` |
+| `saham screen accum` | Foreign accumulation screener (SignalAssessment 0–100) | `--universe`, `--window`, `--multi`, `--top-broker`, `--min-foreign-flow-score`, `--min-signal-score`, `--min-piotroski`, `--vwap-only`, `--squeeze-only`, `--save`, `--format`, `--guide`, `--explain`, `--db` |
 | `saham screen watchlist` | List saved watchlists / show tickers in a named one | — |
 | `saham screen compare NAME` | Diff saved watchlist against fresh screener run | `--universe`, `--top` |
 | `saham analyze accum-audit` | Historical accumulation audit | `--universe`, `--setup`, `--simulate-exits` |

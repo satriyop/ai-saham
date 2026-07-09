@@ -18,7 +18,7 @@ class ForeignFlowScoreBreakdown:
     snapshot_date: date
     foreign_flow_score: float
     breakdown: tuple[tuple[str, float], ...] = field(default_factory=tuple)
-    max_score: float = 120.0
+    max_score: float = 100.0
     net_buy_ratio: float = 0.0
     consecutive_streak: int = 0
     vwap_discount_pct: float | None = None

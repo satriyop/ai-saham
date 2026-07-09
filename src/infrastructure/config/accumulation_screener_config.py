@@ -37,9 +37,9 @@ class ScoreFilterConfig:
 
 @dataclass(frozen=True)
 class AccumulationDisplayConfig:
-    enter_min_foreign_flow_score: float = 70.0
-    watch_min_foreign_flow_score: float = 40.0
-    coiled_spring_min_foreign_flow_score: float = 60.0
+    enter_min_foreign_flow_score: float = 58.3
+    watch_min_foreign_flow_score: float = 33.3
+    coiled_spring_min_foreign_flow_score: float = 50.0
     coiled_spring_bb_pctile: float = 0.20
 
 
@@ -52,7 +52,7 @@ class AccumulationScreenerConfig:
         default_factory=AccumulationDerivedFeaturePolicy
     )
     min_foreign_flow_score: ScoreFilterConfig = field(
-        default_factory=lambda: ScoreFilterConfig(enabled=True, value=70.0)
+        default_factory=lambda: ScoreFilterConfig(enabled=True, value=58.3)
     )
     min_signal_score: ScoreFilterConfig = field(
         default_factory=lambda: ScoreFilterConfig(enabled=False, value=45.0)

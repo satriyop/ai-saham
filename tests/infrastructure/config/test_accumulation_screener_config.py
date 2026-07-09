@@ -61,7 +61,8 @@ def test_bb_squeeze_disabled_by_default_in_live_config():
     loaded = load_accumulation_screener_config()
     assert loaded.foreign_flow_score_policy.bb_squeeze.enabled is False
     # Thresholds/weight are retained for possible future diagnostic/tuning use.
-    assert loaded.foreign_flow_score_policy.bb_squeeze.weight == 10.0
+    # Rescaled 0-120 -> 0-100 (ADR-039).
+    assert loaded.foreign_flow_score_policy.bb_squeeze.weight == 8.3
     assert loaded.foreign_flow_score_policy.bb_squeeze.tight_pctile == 0.20
     assert loaded.foreign_flow_score_policy.bb_squeeze.loose_pctile == 0.40
 

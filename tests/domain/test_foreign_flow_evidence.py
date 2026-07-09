@@ -17,7 +17,7 @@ def _foreign_flow_score_breakdown(
         ticker="BBCA",
         snapshot_date=date(2026, 6, 29),
         foreign_flow_score=score,
-        max_score=120.0,
+        max_score=100.0,
         net_buy_ratio=0.7,
         consecutive_streak=streak,
         vwap_discount_pct=vwap_discount_pct,

@@ -111,10 +111,10 @@ FOREIGN ACCUMULATION — LQ45 | 7d window | 2026-06-11
 =============================================================================================
   # TICKER   SCORE  STREAK  NET_DAYS    NET_VALUE  FLOW%  VWAP_DISC    RSI  BB%ILE TREND
 -------------------------------------------------------------------------------------------
-  1 GGRM      72.4      4d       4/4       +19.4B  +24.8      -1.9%   42.5    —    DOWN
-  2 GOTO      71.5      4d       4/4       +59.3B  +83.1      +0.0%   37.6    —    SIDE
-  3 EXCL      70.8      4d       4/4       +22.4B  +24.1      -0.7%   36.6    —    DOWN
-  4 BDMN      53.0      0d       3/4       +23.2B  +14.3      +3.2%   42.0   68%   DOWN
+  1 GGRM      60.3      4d       4/4       +19.4B  +24.8      -1.9%   42.5    —    DOWN
+  2 GOTO      59.6      4d       4/4       +59.3B  +83.1      +0.0%   37.6    —    SIDE
+  3 EXCL      59.0      4d       4/4       +22.4B  +24.1      -0.7%   36.6    —    DOWN
+  4 BDMN      44.2      0d       3/4       +23.2B  +14.3      +3.2%   42.0   68%   DOWN
 ```
 
 ### Multi-Window Table (`--multi`)
@@ -125,27 +125,27 @@ FOREIGN ACCUMULATION — LQ45 | MULTI-WINDOW | 2026-06-11
 =============================================================================================
   # TICKER     7d    30d    90d  PATTERN            TREND
 -------------------------------------------------------------------------------------------
-  1 GGRM      72.4    78.0    69.8  sustained           DOWN
-  2 GOTO      71.5    82.4    63.7  sustained           SIDE
-  3 EXCL      70.8    59.8    55.0  fresh rotation      DOWN
-  4 BDMN      53.0    58.4    43.9  weak                DOWN
+  1 GGRM      60.3    65.0    58.2  sustained           DOWN
+  2 GOTO      59.6    68.7    53.1  sustained           SIDE
+  3 EXCL      59.0    49.8    45.8  fresh rotation      DOWN
+  4 BDMN      44.2    48.7    36.6  weak                DOWN
 ```
 
 ---
 
 ## Column-by-Column Explanation
 
-### FOREIGN FLOW SCORE (0-120)
+### FOREIGN FLOW SCORE (0-100)
 
 The deterministic foreign-flow evidence strength. Combines all indicators below into one number. Higher = stronger foreign-flow accumulation evidence.
 
 | Range | Meaning | What to do |
 |---|---|---|
-| 70–120 | **Strong signal** | Worth researching further |
-| 40–69 | **Moderate signal** | Watch, wait for confirmation |
-| < 40 | **Weak signal** | Likely noise, skip |
+| 58–100 | **Strong signal** | Worth researching further |
+| 33–57 | **Moderate signal** | Watch, wait for confirmation |
+| < 33 | **Weak signal** | Likely noise, skip |
 
-Use `--min-foreign-flow-score 50` to filter out weak foreign-flow evidence. The foreign-flow score has a soft cap at 120 — scores above 100 are rare and represent exceptional setups.
+Use `--min-foreign-flow-score 50` to filter out weak foreign-flow evidence. The foreign-flow score has a soft cap at 100 — component weights rarely all saturate at once.
 
 ---
 
@@ -172,7 +172,7 @@ Format: `4/7` means foreigners were net buyers on 4 out of the last 7 trading da
 
 **Why it matters:** Streak measures the *current* run. NET_DAYS measures *overall consistency* across the full window. A stock with `4/4` (100% of days) is more convincing than `5/30` (only 17% of days) even if the streak number looks similar.
 
-This is the **highest-weighted signal** (40 points out of 120) because sustained consistency is the clearest sign of institutional intent.
+This is the **highest-weighted signal** (33.3 points out of 100) because sustained consistency is the clearest sign of institutional intent.
 
 | Ratio | Meaning |
 |---|---|
@@ -253,13 +253,13 @@ RSI (Relative Strength Index) measures recent price momentum on a 0–100 scale.
 
 **Why it matters for accumulation:** The best accumulation setups are stocks where foreigners are buying consistently *while the price is still depressed*. An RSI of 35–45 with a 5-day buy streak means smart money is re-entering during weakness. By the time RSI hits 70, most of the move is already done.
 
-**Scoring:** Tent function peaking at RSI=40 (maximum 10 points). Both extremes (< 25 and > 75) score zero — panic and overbought conditions are equally unfavorable.
+**Scoring:** Tent function peaking at RSI=40 (maximum 8.3 points). Both extremes (< 25 and > 75) score zero — panic and overbought conditions are equally unfavorable.
 
 | RSI | Score | What it means |
 |---|---|---|
-| 40 | 10 pts (max) | Perfect entry zone |
-| 30 or 50 | ~7 pts | Good zone |
-| 25 or 65 | ~0–3 pts | Getting extreme |
+| 40 | 8.3 pts (max) | Perfect entry zone |
+| 30 or 50 | ~5.8 pts | Good zone |
+| 25 or 65 | ~0–2.5 pts | Getting extreme |
 | < 25 or > 75 | 0 pts | Panic or overbought |
 
 ---
@@ -286,7 +286,7 @@ The combination of **accumulation + squeeze** is considered the highest-probabil
 | > 40% | White | Normal/expanding volatility |
 | `—` | — | Not enough price history (< 60 days of data) |
 
-**Scoring:** Up to 10 points. Bottom 20% earns 5–10 pts; bottom 40% earns 0–5 pts; above 40% earns 0.
+**Scoring:** Up to 8.3 points when enabled (disabled by default — see ADR-039: BB compression is a setup-phase diagnostic, not scored flow evidence). Bottom 20% would earn 4.2–8.3 pts; bottom 40% would earn 0–4.2 pts; above 40% earns 0.
 
 ---
 
@@ -308,12 +308,12 @@ The pattern label summarizes what the multi-window comparison reveals about the 
 
 | Pattern | Meaning | Trade implication |
 |---|---|---|
-| **sustained** | Score ≥ 60 across all 3 windows | Foreigners have been accumulating for months — highest conviction, strongest signal |
+| **sustained** | Score ≥ 50 across all 3 windows | Foreigners have been accumulating for months — highest conviction, strongest signal |
 | **building** | Strong 7d and 30d, weaker 90d | Accumulation is intensifying — recent acceleration of interest |
 | **fresh rotation** | Strong 7d only, weak 30d/90d | Very recent buying — may be early or a one-week rotation, needs more time to confirm |
 | **long-term only** | Strong 90d, weak recent windows | Foreigners were buying months ago but have slowed — position may be complete, watch for distribution |
-| **coiled spring** | Any window: squeeze + score ≥ 60 | Accumulation AND volatility compression — highest probability short-term breakout setup |
-| **weak** | No window scores ≥ 60 | Not a meaningful accumulation pattern currently |
+| **coiled spring** | Any window: squeeze + score ≥ 50 | Accumulation AND volatility compression — highest probability short-term breakout setup |
+| **weak** | No window scores ≥ 50 | Not a meaningful accumulation pattern currently |
 
 **How to use PATTERN in your workflow:**
 - `sustained` stocks are the safest bets — they've been building for a long time
@@ -329,11 +329,11 @@ Add `--explain` after a screen run to show run context and scoring definitions.
 Use `--guide` when you only want the column reference without running a screen.
 
 This shows GGRM earned:
-- `cons=40.0` — perfect consistency (4/4 days = 100%)
-- `streak=13.1` — 4-day streak (exponential: not at max yet)
+- `cons=33.3` — perfect consistency (4/4 days = 100%)
+- `streak=10.9` — 4-day streak (exponential: not at max yet)
 - `vwap=0.0` — foreigners are actually in profit (negative VWAP_DISC = 0 pts)
-- `rsi=9.3` — RSI near 42, close to the ideal 40 sweet spot
-- `flow=10.0` — 24.8% flow ratio earns full 10 pts (saturates at 20%)
+- `rsi=7.8` — RSI near 42, close to the ideal 40 sweet spot
+- `flow=8.3` — 24.8% flow ratio earns full 8.3 pts (saturates at 20%)
 - `bb=0.0` — no squeeze data (< 60 days of candle history)
 - `inst=0.0` — no institutional brokers detected (IDX data, no Stockbit)
 
@@ -348,14 +348,16 @@ This shows GGRM earned:
 
 | Signal | Max pts | Formula |
 |---|---|---|
-| Consistency | 40 | `net_buy_ratio × 40` (linear: 100% days = 40 pts) |
-| Streak | 30 | `30 × (1 − e^(−streak/7))` — 7d≈63%, 14d≈86%, never caps |
-| VWAP discount | 20 | Linear: 0% = 0 pts, 10%+ underwater = 20 pts |
-| RSI headroom | 10 | Tent peak at RSI=40, zero at RSI≤25 or ≥75 |
-| Foreign flow ratio | 10 | Linear: 0% = 0 pts, 20%+ of turnover = 10 pts |
-| BB squeeze | 10 | Bottom 20th pctile = 5–10 pts; bottom 40th = 0–5 pts |
-| Institutional brokers | 5 | Bonus if known institutional broker in top buyers (Stockbit only) |
-| **Total (soft cap)** | **120** | |
+| Consistency | 33.3 | `net_buy_ratio × 33.3` (linear: 100% days = 33.3 pts) |
+| Streak | 25 | `25 × (1 − e^(−streak/7))` — 7d≈63%, 14d≈86%, never caps |
+| VWAP discount | 16.7 | Linear: 0% = 0 pts, 10%+ underwater = 16.7 pts |
+| RSI headroom | 8.3 | Tent peak at RSI=40, zero at RSI≤25 or ≥75 |
+| Foreign flow ratio | 8.3 | Linear: 0% = 0 pts, 20%+ of turnover = 8.3 pts |
+| BB squeeze | 8.3 | Disabled by default (setup-phase diagnostic, see ADR-039); bottom 20th pctile would earn 4.2–8.3 pts; bottom 40th 0–4.2 pts |
+| Institutional brokers | 4.2 | Bonus if known institutional broker in top buyers (Stockbit only) |
+| **Total (soft cap)** | **100** | |
+
+Rescaled from a 0-120 scale to 0-100 (proportional ÷1.2) — see ADR-039 in `ARCHITECTURE_DECISIONS.md`.
 
 ---
 

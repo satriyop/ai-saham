@@ -21,7 +21,10 @@ from src.domain.value_objects.setup_phase import (
 
 @dataclass(frozen=True)
 class SetupPhaseThresholdsConfig:
-    accumulation_min_flow_score: float = 60.0
+    # Rescaled 0-120 -> 0-100 (ADR-039). NOT currently read by
+    # _constructive_phase()'s accumulation gate (uses passed_gates/flow_status
+    # instead) — kept for potential future wiring, not an active lever.
+    accumulation_min_flow_score: float = 50.0
     accumulation_min_flow_ratio_pct: float = 2.0
     compression_max_bb_width_pctile: float = 0.20
     breakout_min_close_above_prev_high_pct: float = 0.0

@@ -46,30 +46,30 @@ class BollingerSqueezePolicy(EvidenceComponentPolicy):
 @dataclass(frozen=True)
 class BciEvidencePolicy:
     enabled: bool = True
-    cluster_points: float = 15.0
-    stable_points: float = 5.0
+    cluster_points: float = 12.5
+    stable_points: float = 4.2
 
 
 @dataclass(frozen=True)
 class ForeignFlowScorePolicy:
-    max_score: float = 120.0
+    max_score: float = 100.0
     consistency: EvidenceComponentPolicy = field(
-        default_factory=lambda: EvidenceComponentPolicy(weight=40.0)
+        default_factory=lambda: EvidenceComponentPolicy(weight=33.3)
     )
     streak: StreakEvidencePolicy = field(
-        default_factory=lambda: StreakEvidencePolicy(weight=30.0)
+        default_factory=lambda: StreakEvidencePolicy(weight=25.0)
     )
     vwap_discount: LinearSaturationPolicy = field(
-        default_factory=lambda: LinearSaturationPolicy(weight=20.0, saturate_at=10.0)
+        default_factory=lambda: LinearSaturationPolicy(weight=16.7, saturate_at=10.0)
     )
     rsi_headroom: RsiEvidencePolicy = field(
-        default_factory=lambda: RsiEvidencePolicy(weight=10.0)
+        default_factory=lambda: RsiEvidencePolicy(weight=8.3)
     )
     foreign_flow_ratio: LinearSaturationPolicy = field(
-        default_factory=lambda: LinearSaturationPolicy(weight=10.0, saturate_at=20.0)
+        default_factory=lambda: LinearSaturationPolicy(weight=8.3, saturate_at=20.0)
     )
     bb_squeeze: BollingerSqueezePolicy = field(
-        default_factory=lambda: BollingerSqueezePolicy(enabled=False, weight=10.0)
+        default_factory=lambda: BollingerSqueezePolicy(enabled=False, weight=8.3)
     )
     bci: BciEvidencePolicy = field(default_factory=BciEvidencePolicy)
 

@@ -83,14 +83,18 @@ _PARAMETER_BOUNDS: tuple[tuple[str, float, float, float | None, float], ...] = (
     ("setups.*.gates.max_rsi", 25, 80, 1, 5),
     ("setups.*.gates.min_rsi", 15, 60, 1, 5),
     ("setups.*.gates.min_flow_ratio_pct", 0.5, 25.0, 0.5, 2.0),
-    ("setups.*.gates.min_foreign_flow_score", 30, 90, 1, 5),
+    # Rescaled 0-120 -> 0-100 (ADR-039): 30-90 -> 25-75.
+    ("setups.*.gates.min_foreign_flow_score", 25.0, 75.0, 1.0, 4.0),
     ("setups.*.gates.min_vwap_discount_pct", -5.0, 15.0, 0.5, 1.5),
     ("setups.*.gates.min_smart_flow_idr", 0.0, 1e12, 1e9, 5e10),
     ("setups.*.gates.min_smart_share_pct", 0.0, 100.0, 1.0, 10.0),
     ("setups.*.gates.max_noise_share_pct", 0.0, 100.0, 1.0, 10.0),
     ("setups.*.partial_max_failed_gates", 0, 5, 1, 1),
     # --- setup phase / RS policy paths ---
-    ("setup_phase.thresholds.accumulation_min_flow_score", 30.0, 90.0, 1.0, 5.0),
+    # Rescaled 0-120 -> 0-100 (ADR-039): 30-90 -> 25-75. Field is currently
+    # unused by SetupPhaseDetector (see config/swing_setups.yaml comment);
+    # bounds kept in sync anyway to avoid a stale-scale trap if ever wired.
+    ("setup_phase.thresholds.accumulation_min_flow_score", 25.0, 75.0, 1.0, 4.0),
     ("setup_phase.thresholds.accumulation_min_flow_ratio_pct", 0.5, 25.0, 0.5, 2.0),
     ("setup_phase.thresholds.compression_max_bb_width_pctile", 0.05, 0.50, 0.05, 0.10),
     ("setup_phase.thresholds.breakout_min_close_above_prev_high_pct", -2.0, 5.0, 0.5, 1.0),

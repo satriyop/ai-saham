@@ -5,7 +5,7 @@ accumulation_audit:
     foreign-bounce:
       universe: idx80
       window: 7
-      min_foreign_flow_score: 70.0
+      min_foreign_flow_score: 58.3
       min_net_buy_days: 2
       min_vwap_disc: 3.0
       trend: SIDE
@@ -20,7 +20,7 @@ accumulation_audit:
     coiled-spring:
       universe: idx80
       window: 7
-      min_foreign_flow_score: 60.0
+      min_foreign_flow_score: 50.0
       min_net_buy_days: 2
       min_flow_pct: 3.0
       require_rsi: true
@@ -34,7 +34,7 @@ accumulation_audit:
     smart-money-confirmed:
       universe: idx80
       window: 7
-      min_foreign_flow_score: 60.0
+      min_foreign_flow_score: 50.0
       min_net_buy_days: 2
       broker_quality: smart+
       simulate_exits: true
@@ -45,7 +45,7 @@ accumulation_audit:
     pullback-continuation:
       universe: idx80
       window: 7
-      min_foreign_flow_score: 55.0
+      min_foreign_flow_score: 45.8
       min_net_buy_days: 2
       min_vwap_disc: -2.0
       trend: UP
@@ -92,7 +92,7 @@ accumulation_audit:
     # Bucket edges for learning reports. Values below the first edge use
     # "<edge"; values at/above the last edge use "edge+".
     bucket_edges:
-      foreign_flow_score: [40, 70]
+      foreign_flow_score: [33.3, 58.3]
       streak: [3, 5]
       flow_pct: [5, 15]
       vwap_disc_pct: [0, 5]

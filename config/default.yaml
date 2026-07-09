@@ -80,7 +80,7 @@ swing:
   max_hold: 10           # max hold days before forced exit
   atr_mult: 1.5          # ATR multiplier for stop-loss placement
   rr: 2.0                # reward:risk ratio for take-profit calculation
-  min_foreign_flow_score: 70.0        # composite foreign-flow score floor for screening
+  min_foreign_flow_score: 58.3        # composite foreign-flow score floor for screening (0-100 scale)
   capital: null          # IDR — personal capital, set in user.yaml; null disables position sizing
   risk_pct: 1.0          # % of capital at risk per trade
 

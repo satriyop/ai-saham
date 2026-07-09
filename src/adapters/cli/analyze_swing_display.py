@@ -1096,14 +1096,18 @@ def print_swing_output(
     institutional_accumulation_evidence: "InstitutionalAccumulationEvidence | None" = None,
     strategy_evidence: "StrategyEvidence | None" = None,
 ) -> None:
+    # Rescaled 0-120 -> 0-100 (see ADR-039). Note: these literals already
+    # didn't match swing_config.py's canonical defaults before the rescale
+    # (a pre-existing drift, not introduced here) — converted proportionally
+    # but not unified with swing_config.py, which is unrelated cleanup.
     config = config or SwingDisplayConfig(
-        enter_min_score=70,
-        watch_min_score=50,
+        enter_min_score=58.3,
+        watch_min_score=41.7,
         coiled_spring_bb_pctile=0.2,
-        coiled_spring_min_score=70,
-        strong_min_score=80,
+        coiled_spring_min_score=58.3,
+        strong_min_score=66.7,
         strong_min_streak=3,
-        building_min_score=60,
+        building_min_score=50.0,
         building_min_streak=2,
         foreign_bounce_max_hold_days=10,
     )

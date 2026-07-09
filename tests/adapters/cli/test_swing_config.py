@@ -237,9 +237,9 @@ def test_live_config_loads_without_error():
     result = _load_swing_config()
     assert len(result.smart_money_brokers) > 0
     assert len(result.noise_brokers) > 0
-    assert result.gate_min_foreign_flow_score == 70.0
-    assert result.enter_min_score == 70.0
-    assert result.watch_min_score == 40.0
+    assert result.gate_min_foreign_flow_score == 58.3
+    assert result.enter_min_score == 58.3
+    assert result.watch_min_score == 33.3
     assert result.strong_min_streak == 8
     assert result.coiled_spring_bb_pctile == 0.20
     assert result.resistance_gate_enabled is True

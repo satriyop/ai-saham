@@ -264,7 +264,7 @@ class AccumulationCandidate:
     # positive = foreigners are underwater
     rsi: float | None
     trend: str  # "UP" | "DOWN" | "SIDE"
-    foreign_flow_score: float  # 0-120 composite foreign-flow score
+    foreign_flow_score: float  # 0-100 composite foreign-flow score
     top_brokers: list[str] | None  # per-broker codes (Stockbit only)
     institutional_flag: bool  # True if major institutional broker present
     # Improvement #1: flow ratio signal

@@ -42,7 +42,11 @@ DEFAULT_AUDIT_GROUP_DIMENSIONS = (
 class AuditBucketPolicy:
     """Bucket boundaries used by accumulation-audit learning summaries."""
 
-    foreign_flow_score: tuple[float, ...] = (40.0, 70.0)
+    # Edges are on the live 0-100 foreign_flow_score scale. Audit replay always
+    # recomputes scores fresh via ScoreForeignFlowUseCase, so all records in a
+    # run share the current scale; previously-exported audit JSON/CSV artifacts
+    # are on their era's scale and must not be re-bucketed with these edges.
+    foreign_flow_score: tuple[float, ...] = (33.3, 58.3)
     streak: tuple[int, ...] = (3, 5)
     flow_pct: tuple[float, ...] = (5.0, 15.0)
     vwap_disc_pct: tuple[float, ...] = (0.0, 5.0)
@@ -796,11 +800,11 @@ def _nullable_range_bucket(
 
 
 def _score_bucket(record: AuditRecord) -> str:
-    if record.foreign_flow_score >= 70:
-        return "70+"
-    if record.foreign_flow_score >= 40:
-        return "40-69"
-    return "0-39"
+    if record.foreign_flow_score >= 58.3:
+        return "58+"
+    if record.foreign_flow_score >= 33.3:
+        return "33-57"
+    return "0-32"
 
 
 def _streak_bucket(record: AuditRecord) -> str:

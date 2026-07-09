@@ -65,7 +65,7 @@ class SignalMissingDataConfig:
 
 @dataclass(frozen=True)
 class ForeignFlowScoreMappingConfig:
-    max_score: float = 120.0
+    max_score: float = 100.0
     clamp: bool = True
 
 

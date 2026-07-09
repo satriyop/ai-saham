@@ -254,10 +254,15 @@ class AccumulationJournalService:
     def _foreign_flow_score_buckets(
         self, entries: list[AccumulationJournalEntry]
     ) -> list[ForeignFlowScoreBucketStat]:
+        # Edges are on the live 0-100 foreign_flow_score scale (see ADR-039).
+        # Entries logged before the rescale carry their era's raw score value
+        # with no stored max_score, so a pre-rescale entry may report a
+        # different bucket label than when it was originally logged. This is
+        # an accepted, documented limitation — labels only, no data change.
         buckets = [
-            ("70+", lambda e: e.foreign_flow_score is not None and e.foreign_flow_score >= 70),
-            ("40–69", lambda e: e.foreign_flow_score is not None and 40 <= e.foreign_flow_score < 70),
-            ("0–39", lambda e: e.foreign_flow_score is not None and e.foreign_flow_score < 40),
+            ("58.3+", lambda e: e.foreign_flow_score is not None and e.foreign_flow_score >= 58.3),
+            ("33.3–58.2", lambda e: e.foreign_flow_score is not None and 33.3 <= e.foreign_flow_score < 58.3),
+            ("0–33.2", lambda e: e.foreign_flow_score is not None and e.foreign_flow_score < 33.3),
         ]
         result = []
         for label, pred in buckets:

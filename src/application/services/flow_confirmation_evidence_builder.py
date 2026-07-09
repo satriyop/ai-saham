@@ -29,20 +29,23 @@ from src.domain.value_objects.flow_confirmation_evidence import (
 # BB excluded (SetupEvidence owns it). RSI excluded (price-action, not flow).
 _FLOW_SIGNAL_KEYS = ("cons", "streak", "vwap", "flow", "inst")
 
-# Max weight for each sub-signal (from ForeignFlowScorePolicy defaults).
+# Max weight for each sub-signal (from ForeignFlowScorePolicy defaults —
+# rescaled 0-120 -> 0-100 in lockstep with score_foreign_flow_use_case.py,
+# see ADR-039. This dict is an independent copy, not read from config; if
+# ForeignFlowScorePolicy weights are ever tuned via YAML, this must be
+# updated to match).
 # Used for direction thresholding and group strength normalization.
 _FLOW_SIGNAL_WEIGHTS: dict[str, float] = {
-    "cons": 40.0,
-    "streak": 30.0,
-    "vwap": 20.0,
-    "flow": 10.0,
-    "inst": 15.0,  # max achievable = cluster_points (CLUSTER > STABLE)
+    "cons": 33.3,
+    "streak": 25.0,
+    "vwap": 16.7,
+    "flow": 8.3,
+    "inst": 12.5,  # max achievable = cluster_points (CLUSTER > STABLE)
 }
 
-# Normalization denominator: sum of max weights for the 5 included sub-signals
-# (cons=40 + streak=30 + vwap=20 + flow=10 + inst=15 = 115).
-# BB (10) and RSI (10) are excluded, so 120 is not the correct ceiling here.
-_FLOW_MAX_SCORE = 115.0
+# Normalization denominator: derived from _FLOW_SIGNAL_WEIGHTS so it can never
+# drift out of sync with the weights above (BB and RSI are excluded from both).
+_FLOW_MAX_SCORE = sum(_FLOW_SIGNAL_WEIGHTS.values())
 
 # Default group cap for the flow confirmation group.
 # Even when bandar + foreign flow are both max-bullish, the combined group

@@ -382,7 +382,7 @@ def test_bci_cluster_when_three_or_more_tier1_codes_are_net_buyers():
 
     assert c.bci_label == BCI_CLUSTER
     assert c.bci_tier1_count == 3
-    assert c.foreign_flow_score_breakdown.breakdown_dict["inst"] == 15.0
+    assert c.foreign_flow_score_breakdown.breakdown_dict["inst"] == 12.5
 
 
 def test_bci_stable_when_one_or_two_tier1_codes_are_net_buyers():
@@ -405,7 +405,7 @@ def test_bci_stable_when_one_or_two_tier1_codes_are_net_buyers():
 
     assert c.bci_label == BCI_STABLE
     assert c.bci_tier1_count == 1
-    assert c.foreign_flow_score_breakdown.breakdown_dict["inst"] == 5.0
+    assert c.foreign_flow_score_breakdown.breakdown_dict["inst"] == 4.2
 
 
 def test_bci_retail_when_no_tier1_codes_are_net_buyers():
@@ -712,7 +712,7 @@ from src.domain.value_objects.signal_assessment import SignalContext, SignalStre
 
 
 def _assess(
-    flow_score: float = 60.0,
+    flow_score: float = 50.0,
     bandar_broad_score: int | None = None,
     bandar_max_range: int = 6,
     insider_net_buy_ratio: float | None = None,
@@ -728,7 +728,7 @@ def _assess(
     ctx = SignalContext(
         ticker="TEST",
         snapshot_date=_date.today(),
-        foreign_flow_quality=min(flow_score, 120.0) / 120.0,
+        foreign_flow_quality=min(flow_score, 100.0) / 100.0,
         bandar_broad_score=bandar_broad_score,
         bandar_max_range=bandar_max_range,
         insider_net_buy_ratio=insider_net_buy_ratio,
@@ -744,9 +744,9 @@ def _assess(
 
 
 def test_signal_all_neutral_when_no_enrichment():
-    # score=60 → foreign_quality=0.5 → foreign component=50.0; all others neutral=50
+    # score=50 → foreign_quality=0.5 → foreign component=50.0; all others neutral=50
     # total = 50 (all factors neutral) → score=50
-    sa = _assess(flow_score=60.0)
+    sa = _assess(flow_score=50.0)
     assert sa.assessment.score == 50
     bd = sa.assessment.breakdown_dict
     # All components should be 50 (neutral)
@@ -798,7 +798,7 @@ def test_screen_derives_forward_pe_from_latest_price_when_cache_has_eps_only():
 
 
 def test_signal_insider_full_buy_raises_score():
-    sa = _assess(flow_score=60.0, insider_net_buy_ratio=1.0)
+    sa = _assess(flow_score=50.0, insider_net_buy_ratio=1.0)
     # insider_component = (+1.0+1.0)/2*100 = 100.0
     bd = sa.assessment.breakdown_dict
     assert bd["insider_activity"] == pytest.approx(100.0)
@@ -807,7 +807,7 @@ def test_signal_insider_full_buy_raises_score():
 
 def test_signal_analyst_all_buy_full_upside():
     # buy_pct=1.0 → buy_score=60; upside=30% → upside_score=40; analyst=100
-    sa = _assess(flow_score=60.0, analyst_buy_pct=1.0, analyst_upside_pct=30.0)
+    sa = _assess(flow_score=50.0, analyst_buy_pct=1.0, analyst_upside_pct=30.0)
     bd = sa.assessment.breakdown_dict
     assert bd["analyst_consensus"] == 100.0
     assert sa.assessment.score > 50
@@ -816,7 +816,7 @@ def test_signal_analyst_all_buy_full_upside():
 def test_signal_seasonality_tailwind_uses_win_rate():
     # is_tailwind (avg>0 and win>50) → component = win_rate_pct = 80.0
     sa = _assess(
-        flow_score=60.0,
+        flow_score=50.0,
         seasonality_win_rate=80.0,
         seasonality_avg_return_pct=2.5,
         seasonality_total_years=5,
@@ -829,15 +829,15 @@ def test_signal_seasonality_tailwind_uses_win_rate():
 def test_signal_bandar_full_accumulation():
     # All 3 optional present → max_range=12; broad_score near top
     # If broad_score=12 (max), normalized = (12+12)/(2*12)*100 = 100
-    sa = _assess(flow_score=60.0, bandar_broad_score=10, bandar_max_range=12)
+    sa = _assess(flow_score=50.0, bandar_broad_score=10, bandar_max_range=12)
     bd = sa.assessment.breakdown_dict
     assert bd["bandar_intensity"] > 85.0
 
 
 def test_signal_strong_when_multiple_factors_elevated():
-    # score=110 → foreign=91.7; insider=+1.0 → 100; analyst all-buy → 100; seasonality tailwind 75%
+    # score=91.7 → foreign=91.7; insider=+1.0 → 100; analyst all-buy → 100; seasonality tailwind 75%
     sa = _assess(
-        flow_score=110.0,
+        flow_score=91.7,
         insider_net_buy_ratio=1.0,
         analyst_buy_pct=0.8,
         analyst_upside_pct=20.0,

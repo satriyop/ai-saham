@@ -30,7 +30,7 @@ AVAILABLE_SWING_SETUPS = (
 
 @dataclass(frozen=True)
 class ForeignBounceSetupConfig:
-    gate_min_foreign_flow_score: float = 70.0
+    gate_min_foreign_flow_score: float = 58.3
     gate_min_vwap_discount_pct: float = 3.0
     gate_required_trend: str = "SIDE"
     gate_min_flow_ratio_pct: float = 5.0
@@ -45,7 +45,7 @@ class ForeignBounceSetupConfig:
 
 @dataclass(frozen=True)
 class CoiledSpringSetupConfig:
-    gate_min_foreign_flow_score: float = 60.0
+    gate_min_foreign_flow_score: float = 50.0
     gate_max_bb_width_pctile: float = 0.20
     gate_min_flow_ratio_pct: float = 3.0
     gate_max_rsi: float = 65.0
@@ -58,7 +58,7 @@ class CoiledSpringSetupConfig:
 
 @dataclass(frozen=True)
 class SmartMoneyConfirmedSetupConfig:
-    gate_min_foreign_flow_score: float = 60.0
+    gate_min_foreign_flow_score: float = 50.0
     gate_min_smart_flow_idr: Decimal = Decimal("0")
     gate_min_smart_share_pct: float = 30.0
     gate_max_noise_share_pct: float = 60.0
@@ -72,7 +72,7 @@ class SmartMoneyConfirmedSetupConfig:
 
 @dataclass(frozen=True)
 class PullbackContinuationSetupConfig:
-    gate_min_foreign_flow_score: float = 55.0
+    gate_min_foreign_flow_score: float = 45.8
     gate_required_trend: str = "UP"
     gate_min_flow_ratio_pct: float = 2.0
     gate_min_rsi: float = 40.0

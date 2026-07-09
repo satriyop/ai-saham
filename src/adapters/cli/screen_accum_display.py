@@ -811,7 +811,7 @@ def display_results(
 
     explain_lines = [
         "Candidate Actions is the screen summary. Context panels explain why.",
-        "ACCUM is deterministic foreign-flow evidence (0-120). SIGNAL is SignalEngine attractiveness (0-100).",
+        "ACCUM is deterministic foreign-flow evidence (0-100). SIGNAL is SignalEngine attractiveness (0-100).",
         "GATE OPEN means no structural/execution risk gate fired; it does not mean the ticker is risk-free.",
         "FLOW% = avg net foreign % of turnover. F_VWAP% positive = price below foreign average buy cost. BB%ILE lower = tighter squeeze.",
     ]
@@ -947,7 +947,7 @@ def display_multi(
 
     meta_table.add_row(
         "Scores",
-        "Accum ≥70 green | ≥40 yellow | <40 white"
+        "Accum ≥58 green | ≥33 yellow | <33 white"
     )
 
     meta_table.add_row(
@@ -992,8 +992,8 @@ def print_column_guide() -> None:
     guide_table.add_column("Details & Mechanics")
 
     guide_table.add_row(
-        "SCORE (0–120)",
-        "≥ 70 (green)\n40-69 (yellow)\n< 40 (white)",
+        "SCORE (0–100)",
+        "≥ 58 (green)\n33-57 (yellow)\n< 33 (white)",
         "Composite signal strength. Combines net days, streak, VWAP, RSI, flow, and BCI into a single score. BB%ile is shown as setup/phase diagnostic — it does not contribute to foreign-flow score by default.\n- Green: Strong signal, worth research.\n- Yellow: Moderate watch, wait for confirmation.\n- White: Weak, likely noise, skip."
     )
     guide_table.add_row(
@@ -1014,17 +1014,17 @@ def print_column_guide() -> None:
     guide_table.add_row(
         "FLOW%",
         "0-5%\n5-15%\n15-30%\n30%+",
-        "Average net foreign % of total daily turnover.\nA mid-cap at 35% FLOW% is a stronger signal than a large-cap at 3%.\nScoring: up to 10 pts, saturates at 20% flow ratio."
+        "Average net foreign % of total daily turnover.\nA mid-cap at 35% FLOW% is a stronger signal than a large-cap at 3%.\nScoring: up to 8.3 pts, saturates at 20% flow ratio."
     )
     guide_table.add_row(
         "F_VWAP%",
         "> +5% (green)\n+1% to +5%\n< 0%",
-        "Foreigners' VWAP to today's close price percentage.\n- Positive: foreigners bought higher than today's price (underwater, motivated to defend position).\n- Negative: foreigners in profit.\nScoring: 10% underwater = 20 pts."
+        "Foreigners' VWAP to today's close price percentage.\n- Positive: foreigners bought higher than today's price (underwater, motivated to defend position).\n- Negative: foreigners in profit.\nScoring: 10% underwater = 16.7 pts."
     )
     guide_table.add_row(
         "RSI (14-day)",
         "> 70\n55-70\n40-55\n25-40\n< 25",
-        "Relative Strength Index (0–100).\n- 25-40: Ideal entry zone.\n- > 70: Overbought.\nScoring: peak at RSI=40 (10 pts), zero at RSI≤25 or ≥75."
+        "Relative Strength Index (0–100).\n- 25-40: Ideal entry zone.\n- > 70: Overbought.\nScoring: peak at RSI=40 (8.3 pts), zero at RSI≤25 or ≥75."
     )
     guide_table.add_row(
         "BB%ILE",
@@ -1039,12 +1039,12 @@ def print_column_guide() -> None:
     guide_table.add_row(
         "PATTERN",
         "sustained\nbuilding\nfresh rotation\ncoiled spring",
-        "Multi-window 7d/30d/90d evaluation.\n- sustained: score ≥60 on all windows.\n- building: strong 7d+30d, weak 90d.\n- coiled spring: BB squeeze + score ≥60 on any window."
+        "Multi-window 7d/30d/90d evaluation.\n- sustained: score ≥50 on all windows.\n- building: strong 7d+30d, weak 90d.\n- coiled spring: BB squeeze + score ≥50 on any window."
     )
     guide_table.add_row(
         "EVIDENCE PTS",
         "cons / streak / vwap\nrsi / flow / bb / inst",
-        "Foreign-flow score components: cons (40 pts), streak (30 pts), vwap (20 pts), rsi (10 pts), flow (10 pts), inst (15 pts BCI). bb shown diagnostically — not scored by default."
+        "Foreign-flow score components: cons (33.3 pts), streak (25 pts), vwap (16.7 pts), rsi (8.3 pts), flow (8.3 pts), inst (12.5 pts BCI). bb shown diagnostically — not scored by default."
     )
 
     checklist_text = Text(

@@ -633,7 +633,10 @@ def test_broker_quality_note_supports_watch_when_smart_buying():
     )
     setup = _evaluate_swing_setup(
         FOREIGN_BOUNCE_SETUP_NAME,
-        _candidate(score=68, trend="SIDE"),
+        # Rescaled 0-120 -> 0-100 (ADR-039): 56.0 is below the new
+        # foreign-flow gate (58.3), preserving the original PARTIAL-match
+        # intent of this test (was 68, below the old 70 gate).
+        _candidate(score=56.0, trend="SIDE"),
     )
 
     note = _build_broker_quality_note(detail, setup)
@@ -1823,7 +1826,7 @@ def test_swing_flow_detail_calls_out_conflicted_negative_flow(capsys):
             ticker="ASII",
             snapshot_date=date(2026, 6, 27),
             foreign_flow_score=42.8,
-            max_score=120.0,
+            max_score=100.0,
             breakdown=(
                 ("cons", 17.1),
                 ("streak", 0.0),

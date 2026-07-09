@@ -34,14 +34,15 @@ def _candidate(
     )
 
 
+# Rescaled 0-120 -> 0-100 (ADR-039).
 _FULL_BREAKDOWN = {
-    "cons": 40.0,
-    "streak": 19.0,
-    "vwap": 20.0,
-    "rsi": 10.0,
-    "flow": 10.0,
-    "bb": 10.0,
-    "inst": 15.0,
+    "cons": 33.3,
+    "streak": 15.8,
+    "vwap": 16.7,
+    "rsi": 8.3,
+    "flow": 8.3,
+    "bb": 8.3,
+    "inst": 12.5,
 }
 
 
@@ -137,7 +138,8 @@ def test_bandar_direction_mapping():
 def test_group_cap_applied():
     builder = FlowConfirmationEvidenceBuilder()
     # Max-bullish flow + max-bullish bandar would push uncapped strength high.
-    max_breakdown = {"cons": 40.0, "streak": 30.0, "vwap": 20.0, "flow": 10.0, "inst": 15.0}
+    # Rescaled 0-120 -> 0-100 (ADR-039) — max weight per component.
+    max_breakdown = {"cons": 33.3, "streak": 25.0, "vwap": 16.7, "flow": 8.3, "inst": 12.5}
     candidate = _candidate(
         flow_evidence=_flow_evidence(max_breakdown),
         bandar_detector=SimpleNamespace(broad_score=12),
@@ -157,8 +159,8 @@ def test_flow_score_ex_bb_sum():
 
     expected = round(sum(s.score for s in evidence.flow_signals), 1)
     assert evidence.flow_score_ex_bb == expected
-    # cons+streak+vwap+flow+inst = 40+19+20+10+15 (bb & rsi excluded)
-    assert evidence.flow_score_ex_bb == 104.0
+    # cons+streak+vwap+flow+inst = 33.3+15.8+16.7+8.3+12.5 (bb & rsi excluded)
+    assert evidence.flow_score_ex_bb == 86.6
 
 
 def test_to_dict_structure():

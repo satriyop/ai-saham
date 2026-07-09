@@ -186,8 +186,8 @@ def classify_confirmation_status(
     flow_direction: str,
 ) -> str:
     score_ratio = composite_score / max_score
-    if flow_direction == "POSITIVE" and score_ratio >= (70.0 / 120.0):
+    if flow_direction == "POSITIVE" and score_ratio >= (58.3 / 100.0):
         return "CONFIRMED"
-    if score_ratio >= (40.0 / 120.0):
+    if score_ratio >= (33.3 / 100.0):
         return "WATCH_ZONE"
     return "WEAK"

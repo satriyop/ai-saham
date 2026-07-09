@@ -43,29 +43,31 @@ accumulation_screener:
       stable_min_count: 1
 
   evidence:
-    max_score: 120.0
+    # Rescaled 0-120 -> 0-100 (proportional /1.2, see ADR-039). All component
+    # weights below are converted in lockstep with max_score.
+    max_score: 100.0
     components:
       consistency:
         enabled: true
-        weight: 40.0
+        weight: 33.3
       streak:
         enabled: true
-        weight: 30.0
+        weight: 25.0
         tau_days: 7.0
       vwap_discount:
         enabled: true
-        weight: 20.0
+        weight: 16.7
         saturate_pct: 10.0
       rsi_headroom:
         enabled: true
-        weight: 10.0
+        weight: 8.3
         low: 25.0
         peak: 40.0
         high: 75.0
         missing_fraction: 0.5
       foreign_flow_ratio:
         enabled: true
-        weight: 10.0
+        weight: 8.3
         saturate_pct: 20.0
       bb_squeeze:
         # Disabled by default: BB compression is setup-phase/trigger-readiness
@@ -74,13 +76,13 @@ accumulation_screener:
         # diagnostic/tuning use — do not flip to true without an explicit
         # architecture decision (see ARCHITECTURE_DECISIONS.md).
         enabled: false
-        weight: 10.0
+        weight: 8.3
         tight_pctile: 0.20
         loose_pctile: 0.40
       bci:
         enabled: true
-        cluster_points: 15.0
-        stable_points: 5.0
+        cluster_points: 12.5
+        stable_points: 4.2
 
   derived_features:
     # Price/flow feature windows used before foreign-flow scoring and setup gates.
@@ -108,7 +110,7 @@ accumulation_screener:
     tertiary: foreign_flow_score
 
   display:
-    enter_min_foreign_flow_score: 70.0
-    watch_min_foreign_flow_score: 40.0
-    coiled_spring_min_foreign_flow_score: 60.0
+    enter_min_foreign_flow_score: 58.3
+    watch_min_foreign_flow_score: 33.3
+    coiled_spring_min_foreign_flow_score: 50.0
     coiled_spring_bb_pctile: 0.20

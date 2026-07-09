@@ -91,7 +91,7 @@ class SwingDefaults:
     max_hold: int = 10
     atr_mult: float = 1.5
     rr: float = 2.0
-    min_foreign_flow_score: float = 70.0
+    min_foreign_flow_score: float = 58.3
     capital: int | None = None  # personal capital — set in user.yaml; None disables position sizing
     risk_pct: float = 1.0
 

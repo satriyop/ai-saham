@@ -210,7 +210,7 @@ def _resolve_signal_config(cfg: dict):
         ),
         input_mapping=SignalInputMappingConfig(
             foreign_flow_score=ForeignFlowScoreMappingConfig(
-                max_score=foreign_flow_score_mapping.get("max_score", 120.0),
+                max_score=foreign_flow_score_mapping.get("max_score", 100.0),
                 clamp=foreign_flow_score_mapping.get("clamp", True),
             ),
         ),

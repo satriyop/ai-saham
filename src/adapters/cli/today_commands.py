@@ -161,10 +161,10 @@ def today(
             trend_style = trend_map.get(str(candidate.trend).upper(), "white")
             trend_text = f"[{trend_style}]{candidate.trend or '-'}[/{trend_style}]"
 
-            # Color score
-            if candidate.foreign_flow_score >= 80:
+            # Color score (0-100 scale, see ADR-039)
+            if candidate.foreign_flow_score >= 66.7:
                 score_style = "green"
-            elif candidate.foreign_flow_score >= 60:
+            elif candidate.foreign_flow_score >= 50.0:
                 score_style = "yellow"
             else:
                 score_style = "white"
