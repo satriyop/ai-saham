@@ -1,0 +1,73 @@
+version: 1
+name: "Donchian Channel"
+description: |
+  Classic 20-period Donchian Channel breakout strategy.
+  Enters when the close price breaks above the N-period high (Upper Band)
+  with RSI confirming that momentum is healthy (not extremely overbought).
+  
+  Exit: Price falls back below the middle band (earlier exit) or RSI extremely overbought.
+  Minimum data: N + 1 candles (Donchian Channel lookup) + 14 candles (RSI).
+
+indicators:
+  donchian_upper:
+    type: DONCHIAN_UPPER
+    period: 20
+  donchian_lower:
+    type: DONCHIAN_LOWER
+    period: 20
+  donchian_middle:
+    type: DONCHIAN_MIDDLE
+    period: 20
+  rsi:
+    type: RSI
+    period: 14
+
+default_outcome: MODERATE
+
+signal_mapping:
+  LOW_RISK: ENTER_LONG
+  MODERATE: HOLD
+  HIGH_RISK: EXIT_LONG
+
+rules:
+  # Entry Rule: Breakout of 20-period high, with RSI not yet overbought
+  - name: donchian_bullish_breakout
+    priority: 10
+    when:
+      all:
+        - left:
+            indicator: CLOSE
+          operator: ">"
+          right:
+            indicator: donchian_upper
+        - left:
+            indicator: rsi
+          operator: "<"
+          right:
+            value: 70
+    outcome: LOW_RISK
+    rationale: "Price broke above the 20-day high (Donchian Upper Band) with RSI < 70 indicating room to run"
+
+  # Exit Rule: Break below middle line (trailing stop / momentum fade)
+  - name: donchian_middle_exit
+    priority: 10
+    when:
+      left:
+        indicator: CLOSE
+      operator: "<"
+      right:
+        indicator: donchian_middle
+    outcome: HIGH_RISK
+    rationale: "Price crossed below the Donchian Middle Band — trend weakness detected, exit position"
+
+  # Exit Rule: RSI overbought exhaustion
+  - name: rsi_exhaustion_exit
+    priority: 20
+    when:
+      left:
+        indicator: rsi
+      operator: ">"
+      right:
+        value: 80
+    outcome: HIGH_RISK
+    rationale: "RSI > 80 indicates extreme overbought condition/climax — exit to secure profits"

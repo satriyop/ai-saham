@@ -1,0 +1,67 @@
+version: 1
+name: "Volume Climax Absorption"
+description: |
+  Volume-driven oversold mean reversion strategy.
+  Enters when a stock exhibits an abnormal volume spike (2.5x+ average)
+  at deep oversold levels (RSI < 35), signaling institutional absorption of retail panic.
+  
+  Exit: RSI rebounds above 55 (profit target) or RSI drops below 25 (stop loss).
+  Minimum data: 20 candles (VOLUME_RATIO warmup).
+
+indicators:
+  vol_ratio:
+    type: VOLUME_RATIO
+    period: 20
+  rsi:
+    type: RSI
+    period: 14
+
+default_outcome: MODERATE
+
+signal_mapping:
+  LOW_RISK: ENTER_LONG
+  MODERATE: HOLD
+  HIGH_RISK: EXIT_LONG
+
+rules:
+  # Entry Rule: Heavy volume spike at deep oversold levels
+  - name: climax_volume_entry
+    priority: 10
+    when:
+      all:
+        - left:
+            indicator: vol_ratio
+          operator: ">"
+          right:
+            value: 2.5
+        - left:
+            indicator: rsi
+          operator: "<"
+          right:
+            value: 35
+    outcome: LOW_RISK
+    rationale: "Volume spike >2.5x with RSI < 35 — capitulation volume absorption setup"
+
+  # Exit Rule: RSI rebounds to neutral/bullish territory (take profit)
+  - name: climax_rebound_tp
+    priority: 10
+    when:
+      left:
+        indicator: rsi
+      operator: ">"
+      right:
+        value: 55
+    outcome: HIGH_RISK
+    rationale: "RSI rebounded above 55 — relief bounce profit target achieved"
+
+  # Exit Rule: RSI falls even deeper (stop loss)
+  - name: climax_breakdown_sl
+    priority: 20
+    when:
+      left:
+        indicator: rsi
+      operator: "<"
+      right:
+        value: 25
+    outcome: HIGH_RISK
+    rationale: "RSI fell below 25 — panic selling resumed, stop out"

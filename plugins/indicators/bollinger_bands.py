@@ -74,3 +74,18 @@ class BollingerWidthIndicator(IndicatorPlugin):
             else:
                 result.append((upper - lower) / mid * 100)
         return result
+
+
+class BollingerWidthT1Indicator(IndicatorPlugin):
+    """Previous day's Bollinger Band Width (T-1). Squeeze detector helper."""
+
+    name = "BB_WIDTH_T1"
+    default_period = 20
+
+    def compute(self, candles: list[Candle], period: int) -> list[Decimal]:
+        if len(candles) < period + 1:
+            return []
+        width_indicator = BollingerWidthIndicator()
+        widths = width_indicator.compute(candles, period)
+        return widths[:-1]
+

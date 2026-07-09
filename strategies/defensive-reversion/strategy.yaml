@@ -1,0 +1,57 @@
+version: 1
+name: "Defensive Reversion"
+description: |
+  Mean reversion strategy designed for stable defensive consumer stocks (e.g. INDF, JPFA).
+  These stocks have sticky earnings and firm price support, making oversold pullbacks (RSI < 35) high-probability bounce buys.
+  
+  Exit: RSI recovers above 65 (take profit) or RSI drops below 25 (stop loss).
+  Minimum data: 14 candles (RSI warmup).
+
+indicators:
+  rsi:
+    type: RSI
+    period: 14
+
+default_outcome: MODERATE
+
+signal_mapping:
+  LOW_RISK: ENTER_LONG
+  MODERATE: HOLD
+  HIGH_RISK: EXIT_LONG
+
+rules:
+  # Entry Rule: Pullback to oversold levels
+  - name: defensive_oversold_entry
+    priority: 10
+    when:
+      left:
+        indicator: rsi
+      operator: "<"
+      right:
+        value: 35
+    outcome: LOW_RISK
+    rationale: "Defensive stock pulled back to oversold levels (RSI < 35) — high-probability support buy"
+
+  # Exit Rule: RSI recovered to overbought/rebound target (take profit)
+  - name: defensive_rebound_tp
+    priority: 10
+    when:
+      left:
+        indicator: rsi
+      operator: ">"
+      right:
+        value: 65
+    outcome: HIGH_RISK
+    rationale: "RSI rebounded above 65 — swing target met, take profit"
+
+  # Exit Rule: RSI falls even deeper (stop loss)
+  - name: defensive_breakdown_sl
+    priority: 20
+    when:
+      left:
+        indicator: rsi
+      operator: "<"
+      right:
+        value: 25
+    outcome: HIGH_RISK
+    rationale: "RSI fell below 25 — key support broken, stop out"

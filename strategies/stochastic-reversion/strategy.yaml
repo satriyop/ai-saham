@@ -1,0 +1,71 @@
+version: 1
+name: "Stochastic Reversion"
+description: |
+  Pure mean-reversion strategy based on deep Stochastic oversold levels.
+  Unlike Stochastic + Trend, this strategy has no uptrend filter (no EMA 50 gate).
+  It aims to buy short-term capitulation bottoms and oversold relief rallies.
+  
+  Entry: Stochastic %K < 15 and RSI < 35 (deep oversold extremes).
+  Exit: Stochastic %K > 85 (overbought take-profit) or price breaks below the 20-period EMA.
+  Minimum data: 20 candles (EMA warmup).
+
+indicators:
+  stochastic:
+    type: STOCHASTIC
+    period: 14
+  rsi:
+    type: RSI
+    period: 14
+  ema_20:
+    type: EMA
+    period: 20
+
+default_outcome: MODERATE
+
+signal_mapping:
+  LOW_RISK: ENTER_LONG
+  MODERATE: HOLD
+  HIGH_RISK: EXIT_LONG
+
+rules:
+  # Entry Rule: Deep oversold extremes
+  - name: stoch_deep_oversold
+    priority: 10
+    when:
+      all:
+        - left:
+            indicator: stochastic
+          operator: "<"
+          right:
+            value: 15
+        - left:
+            indicator: rsi
+          operator: "<"
+          right:
+            value: 35
+    outcome: LOW_RISK
+    rationale: "Stochastic %K (<15) and RSI (<35) indicate deep capitulation oversold extremes"
+
+  # Exit Rule: Stochastic overbought profit target
+  - name: stoch_overbought_exit
+    priority: 10
+    when:
+      left:
+        indicator: stochastic
+      operator: ">"
+      right:
+        value: 85
+    outcome: HIGH_RISK
+    rationale: "Stochastic %K crossed above 85 — overbought extreme, take profit"
+
+  # Exit Rule: Trend break stop loss
+  - name: stoch_trend_break_exit
+    priority: 20
+    when:
+      left:
+        indicator: CLOSE
+      operator: "<"
+      right:
+        indicator: ema_20
+    outcome: HIGH_RISK
+    rationale: "Price broke below the 20-period EMA — relief bounce momentum failed, exit position"

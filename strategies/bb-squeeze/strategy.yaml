@@ -1,0 +1,81 @@
+version: 1
+name: "Bollinger Band Squeeze"
+description: |
+  Volatility compression breakout strategy.
+  Enters when the Bollinger Band Width was compressed (below 12% at T-1)
+  and the current price breaks above the Upper Bollinger Band with rising RSI.
+  
+  Exit: Price crosses back below the 20-period SMA (Middle Band) or RSI reaches extreme overbought.
+  Minimum data: 21 candles (SMA/BB warmup).
+
+indicators:
+  bb_upper:
+    type: BB_UPPER
+    period: 20
+  bb_lower:
+    type: BB_LOWER
+    period: 20
+  bb_width_t1:
+    type: BB_WIDTH_T1
+    period: 20
+  sma_20:
+    type: SMA
+    period: 20
+  rsi:
+    type: RSI
+    period: 14
+
+default_outcome: MODERATE
+
+signal_mapping:
+  LOW_RISK: ENTER_LONG
+  MODERATE: HOLD
+  HIGH_RISK: EXIT_LONG
+
+rules:
+  # Entry Rule: Breakout of Upper Band after a T-1 squeeze (width < 12)
+  - name: bb_squeeze_breakout
+    priority: 10
+    when:
+      all:
+        - left:
+            indicator: CLOSE
+          operator: ">"
+          right:
+            indicator: bb_upper
+        - left:
+            indicator: bb_width_t1
+          operator: "<"
+          right:
+            value: 12
+        - left:
+            indicator: rsi
+          operator: ">"
+          right:
+            value: 50
+    outcome: LOW_RISK
+    rationale: "Price broke above upper BB after volatility squeeze (previous width < 12%) with RSI > 50 confirming momentum"
+
+  # Exit Rule: Close crosses below middle band (SMA 20)
+  - name: bb_sma_exit
+    priority: 10
+    when:
+      left:
+        indicator: CLOSE
+      operator: "<"
+      right:
+        indicator: sma_20
+    outcome: HIGH_RISK
+    rationale: "Price broke below the 20-day SMA (Middle Band) — momentum lost, exit position"
+
+  # Exit Rule: RSI overbought extreme
+  - name: rsi_exhaustion_exit
+    priority: 20
+    when:
+      left:
+        indicator: rsi
+      operator: ">"
+      right:
+        value: 80
+    outcome: HIGH_RISK
+    rationale: "RSI > 80 indicates extreme buying climax — secure profits before reversal"

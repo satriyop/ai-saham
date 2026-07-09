@@ -1,0 +1,72 @@
+version: 1
+name: "Defensive Trend"
+description: |
+  Trend-following strategy designed for defensive consumer stocks (e.g. INDF, JPFA).
+  Consumer non-cyclicals and staples tend to hold their trend better during market corrections.
+  Enters when the price is above the 50-day EMA and RSI shows a healthy, non-exhausted uptrend (45-65).
+  
+  Exit: Price breaks below the 50-day EMA or RSI exceeds 75 (exhaustion).
+  Minimum data: 50 candles (EMA 50 warmup).
+
+indicators:
+  ema_50:
+    type: EMA
+    period: 50
+  rsi:
+    type: RSI
+    period: 14
+
+default_outcome: MODERATE
+
+signal_mapping:
+  LOW_RISK: ENTER_LONG
+  MODERATE: HOLD
+  HIGH_RISK: EXIT_LONG
+
+rules:
+  # Entry Rule: Price above EMA 50 with healthy consolidation RSI (45-65)
+  - name: defensive_trend_entry
+    priority: 10
+    when:
+      all:
+        - left:
+            indicator: CLOSE
+          operator: ">"
+          right:
+            indicator: ema_50
+        - left:
+            indicator: rsi
+          operator: ">"
+          right:
+            value: 45
+        - left:
+            indicator: rsi
+          operator: "<"
+          right:
+            value: 65
+    outcome: LOW_RISK
+    rationale: "Defensive stock holding its 50-day EMA trend with healthy consolidation RSI"
+
+  # Exit Rule: Trend break (Close < EMA 50)
+  - name: trend_break_exit
+    priority: 10
+    when:
+      left:
+        indicator: CLOSE
+      operator: "<"
+      right:
+        indicator: ema_50
+    outcome: HIGH_RISK
+    rationale: "Price broke below the 50-day EMA — trend invalidated, exit position"
+
+  # Exit Rule: RSI overbought exhaustion
+  - name: rsi_exhaustion_exit
+    priority: 20
+    when:
+      left:
+        indicator: rsi
+      operator: ">"
+      right:
+        value: 75
+    outcome: HIGH_RISK
+    rationale: "RSI > 75 — momentum exhausted, take profit"

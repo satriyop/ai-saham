@@ -9,6 +9,12 @@ from plugins.indicators.bollinger_bands import (
     BollingerLowerIndicator,
     BollingerUpperIndicator,
     BollingerWidthIndicator,
+    BollingerWidthT1Indicator,
+)
+from plugins.indicators.donchian_channel import (
+    DonchianLowerIndicator,
+    DonchianMiddleIndicator,
+    DonchianUpperIndicator,
 )
 from plugins.indicators.foreign_vwap import ForeignVWAPIndicator
 from plugins.indicators.ichimoku import (
@@ -32,6 +38,10 @@ __all__ = [
     "BollingerUpperIndicator",
     "BollingerLowerIndicator",
     "BollingerWidthIndicator",
+    "BollingerWidthT1Indicator",
+    "DonchianUpperIndicator",
+    "DonchianLowerIndicator",
+    "DonchianMiddleIndicator",
     "StochasticIndicator",
     "ForeignVWAPIndicator",
     "IchimokuTenkan",
