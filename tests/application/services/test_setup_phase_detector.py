@@ -2,7 +2,11 @@ from datetime import date, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
 
-from src.application.services.setup_phase_detector import SetupPhaseDetector
+from src.application.services.setup_phase_detector import (
+    SetupPhaseConfig,
+    SetupPhaseDetector,
+    SetupPhaseRequirementConfig,
+)
 from src.domain.entities.candle import Candle
 from src.domain.value_objects.factor_evidence import Direction, Freshness
 from src.domain.value_objects.flow_confirmation_evidence import (
@@ -274,3 +278,99 @@ def test_negative_rs_emits_decision_constraint_reason():
     )
 
     assert any("rs_policy_hard_exclude" in reason for reason in snapshot.reasons)
+
+
+def test_injected_config_drives_sequence_validity_for_custom_family():
+    """Config-driven dispatch mechanism: a setup_family unknown to the default
+    SetupPhaseConfig still gets sequence validation when an explicit config
+    with a matching requirements_by_family entry is injected."""
+    custom_cfg = SetupPhaseConfig(
+        requirements_by_family={
+            "my-custom-setup": SetupPhaseRequirementConfig(
+                required_sequence=(
+                    SetupPhaseState.COMPRESSION,
+                    SetupPhaseState.BREAKOUT_CONFIRMATION,
+                ),
+            ),
+        }
+    )
+
+    valid_snapshot = SetupPhaseDetector().detect(
+        candles=_candles(breakout=True),
+        setup_eval=_setup_eval(),
+        setup_evidence=_setup_evidence(),
+        flow_evidence=_flow(),
+        setup_family="my-custom-setup",
+        previous_phases=(SetupPhaseState.COMPRESSION,),
+        config=custom_cfg,
+    )
+
+    assert valid_snapshot.sequence_valid is True
+
+    invalid_snapshot = SetupPhaseDetector().detect(
+        candles=_candles(breakout=True),
+        setup_eval=_setup_eval(),
+        setup_evidence=_setup_evidence(),
+        flow_evidence=_flow(),
+        setup_family="my-custom-setup",
+        previous_phases=(),
+        config=custom_cfg,
+    )
+
+    assert invalid_snapshot.sequence_valid is False
+
+
+def test_pullback_family_sequence_valid_requires_vwap_reclaim_reason():
+    snapshot = SetupPhaseDetector().detect(
+        candles=_candles(breakout=True),
+        setup_eval=_setup_eval(),
+        setup_evidence=_setup_evidence(),
+        flow_evidence=_flow(),
+        setup_family="pullback-continuation",
+    )
+
+    assert snapshot.current_phase == SetupPhaseState.BREAKOUT_CONFIRMATION
+    assert any("VWAP reclaim" in reason for reason in snapshot.reasons)
+    assert snapshot.sequence_valid is True
+
+
+def test_pullback_family_sequence_invalid_without_vwap_reclaim_reason():
+    snapshot = SetupPhaseDetector().detect(
+        candles=_candles(breakout=True),
+        setup_eval=_setup_eval(),
+        setup_evidence=_setup_evidence(vwap_pct=None),
+        flow_evidence=_flow(),
+        setup_family="pullback-continuation",
+    )
+
+    # Without vwap_pct, the "VWAP reclaim" price gate is not constructed, but
+    # breakout is still reached via "positive close above previous high" and
+    # "positive close" alone — neither of which counts as a reclaim/pivot
+    # confirmation, so sequence_valid must be False (not None).
+    assert not any("VWAP reclaim" in reason for reason in snapshot.reasons)
+    assert snapshot.current_phase == SetupPhaseState.BREAKOUT_CONFIRMATION
+    assert snapshot.sequence_valid is False
+
+
+def test_confirmation_family_has_no_sequence_requirement():
+    snapshot = SetupPhaseDetector().detect(
+        candles=_candles(breakout=True),
+        setup_eval=_setup_eval(),
+        setup_evidence=_setup_evidence(),
+        flow_evidence=_flow(),
+        setup_family="smart-money-confirmed",
+    )
+
+    assert snapshot.sequence_valid is None
+
+
+def test_unknown_family_has_no_sequence_requirement():
+    snapshot = SetupPhaseDetector().detect(
+        candles=_candles(breakout=True),
+        setup_eval=_setup_eval(),
+        setup_evidence=_setup_evidence(),
+        flow_evidence=_flow(),
+        setup_family="totally-unrecognized-setup-xyz",
+    )
+
+    assert snapshot.sequence_valid is None

@@ -15,10 +15,12 @@ import yaml
 
 from src.application.services.setup_phase_detector import (
     SetupPhaseConfig,
+    SetupPhaseRequirementConfig,
     SetupPhaseRSPolicyConfig,
     SetupPhaseThresholdsConfig,
     VolumeTriggerValidityConfig,
 )
+from src.domain.value_objects.setup_phase import SetupPhaseState
 from src.infrastructure.config.app_config import APP_CFG
 
 ACCUMULATION_SCREENER_CONFIG_PATH = Path(APP_CFG.config_paths.accumulation_screener)
@@ -191,12 +193,63 @@ def load_swing_config(
             parsed = tuple(str(c).strip().upper() for c in raw if c)
             return parsed if parsed else default
 
-        def _setup_phase_config(raw: Any) -> SetupPhaseConfig:
+        def _setup_phase_config(raw: Any, setups: dict) -> SetupPhaseConfig:
             if not isinstance(raw, dict):
                 return defaults.setup_phase_config
             th = raw.get("thresholds") or {}
             vol = raw.get("volume_trigger") or {}
             rs_by_family = raw.get("rs_policy_by_setup_family") or {}
+            requirements_raw = raw.get("requirements") or {}
+
+            def _phase_state(name: Any) -> SetupPhaseState:
+                try:
+                    return SetupPhaseState(str(name).strip().upper())
+                except ValueError as exc:
+                    raise ValueError(
+                        f"invalid setup phase name in setup_phase.requirements: {name!r}"
+                    ) from exc
+
+            def _requirement(value: Any) -> SetupPhaseRequirementConfig:
+                if not isinstance(value, dict):
+                    return SetupPhaseRequirementConfig()
+                return SetupPhaseRequirementConfig(
+                    required_sequence=tuple(
+                        _phase_state(p) for p in (value.get("required_sequence") or [])
+                    ),
+                    enter_phases=tuple(
+                        _phase_state(p) for p in (value.get("enter_phases") or [])
+                    ),
+                    requires_reclaim_or_pivot=_b(
+                        value, "requires_reclaim_or_pivot", False
+                    ),
+                    entry_authority=(
+                        bool(value["entry_authority"])
+                        if "entry_authority" in value
+                        else None
+                    ),
+                )
+
+            parsed_requirements: dict[str, SetupPhaseRequirementConfig] = {}
+            for fam_key, fam_val in requirements_raw.items():
+                requirement = _requirement(fam_val)
+                norm_key = str(fam_key).strip().lower()
+                parsed_requirements[norm_key] = requirement
+                parsed_requirements[norm_key.replace("-", "_")] = requirement
+
+            for setup_key, setup_val in setups.items():
+                if not isinstance(setup_val, dict):
+                    continue
+                family_value = str(setup_val.get("family") or "").strip().lower()
+                requirement = parsed_requirements.get(
+                    family_value
+                ) or parsed_requirements.get(family_value.replace("-", "_"))
+                if requirement is None:
+                    continue
+                name_key = str(setup_key).strip().lower()
+                parsed_requirements.setdefault(name_key, requirement)
+                parsed_requirements.setdefault(
+                    name_key.replace("-", "_"), requirement
+                )
 
             def _rs_policy(value: Any) -> SetupPhaseRSPolicyConfig:
                 if not isinstance(value, dict):
@@ -291,6 +344,8 @@ def load_swing_config(
                     str(key): _rs_policy(value)
                     for key, value in rs_by_family.items()
                 } or defaults.setup_phase_config.rs_policy_by_setup_family,
+                requirements_by_family=parsed_requirements
+                or defaults.setup_phase_config.requirements_by_family,
                 volume_trigger=VolumeTriggerValidityConfig(
                     require_trusted_volume=_b(
                         vol,
@@ -395,8 +450,18 @@ def load_swing_config(
             resistance_gate_enabled=_b(resistance, "enabled", defaults.resistance_gate_enabled),
             resistance_headroom_min_pct=_f(resistance, "headroom_min_pct", defaults.resistance_headroom_min_pct),
             ex_date_warning_days=_i(corporate_actions, "ex_date_warning_days", defaults.ex_date_warning_days),
-            setup_phase_config=_setup_phase_config(setup_phase),
+            setup_phase_config=_setup_phase_config(setup_phase, setups),
         )
+    except ValueError as exc:
+        # An invalid setup phase name (e.g. a typo in setup_phase.requirements)
+        # must fail loudly rather than silently degrade to default phase
+        # requirements/entry-authority rules — a misconfigured guardrail that
+        # "looks like it loaded" is worse than one that errors. Every other
+        # malformed field in this loader (bad numeric strings, etc.) keeps the
+        # existing fail-soft-to-defaults contract.
+        if "invalid setup phase name" in str(exc):
+            raise
+        return defaults
     except Exception:
         return defaults
 
@@ -428,13 +493,22 @@ def _read_split_config() -> dict:
         for key in ("screener", "sector_breadth", "broker_quality", "verdicts"):
             _merge_section(data, accumulation, key)
 
-    for path in (
-        SWING_SETUPS_CONFIG_PATH,
-        SWING_TARGETS_CONFIG_PATH,
-        SWING_RISK_POLICY_CONFIG_PATH,
+    for path, keys in (
+        (
+            SWING_SETUPS_CONFIG_PATH,
+            ("setups", "setup_targets", "resistance", "corporate_actions", "setup_phase"),
+        ),
+        (
+            SWING_TARGETS_CONFIG_PATH,
+            ("setups", "setup_targets", "resistance", "corporate_actions"),
+        ),
+        (
+            SWING_RISK_POLICY_CONFIG_PATH,
+            ("setups", "setup_targets", "resistance", "corporate_actions"),
+        ),
     ):
         raw = _read_yaml(path)
-        for key in ("setups", "setup_targets", "resistance", "corporate_actions"):
+        for key in keys:
             _merge_section(data, raw, key)
 
     return data

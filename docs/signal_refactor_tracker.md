@@ -905,3 +905,11 @@ Coverage reporter is tested by `tests/infrastructure/persistence/test_sqlite_enr
 - [x] Evidence authority guard coverage verified (2026-07-08) — see table above; no new tests needed.
 - [x] PIT schema contract coverage verified (2026-07-08) — see table above.
 - [x] `git diff --check`.
+- [x] `setup_phase.requirements` is now config-driven; `SetupPhaseDetector`
+      no longer hardcodes family sequence policy (2026-07-09). Also fixed a
+      pre-existing production gap where `_read_split_config()` never merged
+      the `setup_phase` YAML key, so `setup_phase.thresholds` /
+      `rs_policy_by_setup_family` were silently ignored outside single-file
+      test mode. `coiled-spring` family normalized `accumulation` → `breakout`;
+      `pullback-continuation` family normalized `trend_continuation` →
+      `pullback`. Full pytest: 2880 passed.

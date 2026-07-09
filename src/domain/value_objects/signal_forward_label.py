@@ -39,6 +39,7 @@ class SignalObservationFingerprint:
     """Raw signal-time facts persisted for later attribution."""
 
     setup_family: str | None = None
+    setup_name: str | None = None
     setup_phase: str | None = None
     setup_phase_previous: str | None = None
     phase_sequence_valid: bool | None = None
@@ -141,6 +142,7 @@ class SignalObservationFingerprint:
     def to_dict(self) -> dict[str, Any]:
         return {
             "setup_family": self.setup_family,
+            "setup_name": self.setup_name,
             "setup_phase": self.setup_phase,
             "setup_phase_previous": self.setup_phase_previous,
             "phase_sequence_valid": self.phase_sequence_valid,
@@ -253,6 +255,7 @@ class SignalObservationFingerprint:
                 regime["decision_constraints"] = data.get("decision_constraints")
         return cls(
             setup_family=data.get("setup_family"),
+            setup_name=data.get("setup_name"),
             setup_phase=data.get("setup_phase") or data.get("setup_phase_current"),
             setup_phase_previous=data.get("setup_phase_previous"),
             phase_sequence_valid=_optional_bool(data.get("phase_sequence_valid")),

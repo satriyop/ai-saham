@@ -28,3 +28,30 @@ def test_signal_observation_fingerprint_parses_setup_phase_fields():
     assert fp.phase_conviction_score == 0.8
     assert fp.to_dict()["phase_sequence_valid"] is True
     assert fp.to_dict()["phase_history"] == [{"phase": "COMPRESSION", "age_sessions": 3}]
+
+
+def test_signal_observation_fingerprint_preserves_setup_name_separately_from_family():
+    """setup_name (the named setup, e.g. 'coiled-spring') must survive a
+    to_dict/from_dict round trip independently of setup_family (e.g.
+    'accumulation') — needed so replay/attribution can tell which named setup
+    produced an observation, not just its broader family."""
+    fp = SignalObservationFingerprint.from_dict(
+        {
+            "setup_family": "accumulation",
+            "setup_name": "coiled-spring",
+        }
+    )
+
+    assert fp.setup_family == "accumulation"
+    assert fp.setup_name == "coiled-spring"
+
+    round_tripped = SignalObservationFingerprint.from_dict(fp.to_dict())
+    assert round_tripped.setup_name == "coiled-spring"
+    assert round_tripped.setup_family == "accumulation"
+
+
+def test_signal_observation_fingerprint_setup_name_defaults_to_none():
+    fp = SignalObservationFingerprint.from_dict({"setup_family": "accumulation"})
+
+    assert fp.setup_name is None
+    assert fp.to_dict()["setup_name"] is None

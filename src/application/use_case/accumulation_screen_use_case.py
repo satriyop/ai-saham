@@ -558,6 +558,7 @@ def _sub_signal_fingerprint(
     alpha_trigger_dict = _alpha_trigger_fingerprint(signal)
     return {
         "setup_family": constraints.get("setup_family"),
+        "setup_name": constraints.get("setup_name"),
         **phase_dict,
         **strategy_dict,
         **ia_dict,

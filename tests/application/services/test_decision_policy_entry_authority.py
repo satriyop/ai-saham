@@ -117,6 +117,43 @@ def test_missing_setup_phase_with_required_phases_caps_enter_to_watch():
     )
 
 
+def test_coiled_spring_breakout_family_still_respects_own_entry_authority():
+    """coiled-spring's family YAML value changed from accumulation to breakout
+    (ADR: sequence-validity policy moved to config), but DecisionPolicyService's
+    entry-authority enforcement is independent of family/setup_family — it is
+    sourced purely from the explicit setup_entry_authority /
+    setup_can_enter_from_phases arguments. This must be unaffected."""
+    result = DecisionPolicyService().resolve(
+        entry_quality=EntryQuality.ENTER,
+        score=90,
+        coverage_score=1.0,
+        conviction_score=1.0,
+        market_context=None,
+        setup_family="coiled-spring",
+        setup_phase=_phase(SetupPhaseState.BREAKOUT_CONFIRMATION),
+        setup_entry_authority=True,
+        setup_can_enter_from_phases=("BREAKOUT_CONFIRMATION",),
+    )
+
+    assert result.entry_quality == EntryQuality.ENTER
+    assert result.constraints.max_decision == "ENTER"
+
+    downgraded = DecisionPolicyService().resolve(
+        entry_quality=EntryQuality.ENTER,
+        score=90,
+        coverage_score=1.0,
+        conviction_score=1.0,
+        market_context=None,
+        setup_family="coiled-spring",
+        setup_phase=_phase(SetupPhaseState.ACCUMULATION),
+        setup_entry_authority=True,
+        setup_can_enter_from_phases=("BREAKOUT_CONFIRMATION",),
+    )
+
+    assert downgraded.entry_quality == EntryQuality.WATCH
+    assert downgraded.constraints.max_decision == "WATCH"
+
+
 def test_entry_authority_defaults_do_not_change_existing_behavior():
     """Backward compat: omitting the new params (defaults True/()) must not
     cap ENTER — preserves behavior for callers that don't supply setup metadata."""

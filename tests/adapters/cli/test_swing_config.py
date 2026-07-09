@@ -147,13 +147,13 @@ def test_live_config_setups_are_explicit_entry_authority_metadata():
     assert result.foreign_bounce_family == "accumulation"
     assert result.foreign_bounce_entry_authority is True
     assert result.foreign_bounce_can_enter_from_phases == ("BREAKOUT_CONFIRMATION",)
-    assert result.coiled_spring_family == "accumulation"
+    assert result.coiled_spring_family == "breakout"
     assert result.coiled_spring_entry_authority is True
     assert result.coiled_spring_can_enter_from_phases == ("BREAKOUT_CONFIRMATION",)
     assert result.smart_money_confirmed_family == "confirmation"
     assert result.smart_money_confirmed_entry_authority is False
     assert result.smart_money_confirmed_can_enter_from_phases == ()
-    assert result.pullback_continuation_family == "trend_continuation"
+    assert result.pullback_continuation_family == "pullback"
     assert result.pullback_continuation_entry_authority is True
     assert result.pullback_continuation_can_enter_from_phases == ("BREAKOUT_CONFIRMATION",)
 

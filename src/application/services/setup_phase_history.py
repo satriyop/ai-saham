@@ -34,14 +34,16 @@ def load_previous_setup_phases(
     expected_family = _normalize_setup_family(setup_family)
     for observation in reversed(observations):
         fingerprint = (observation.payload or {}).get("sub_signal_fingerprint") or {}
+        phase = _parse_phase(fingerprint.get("setup_phase_current"))
         if expected_family is not None:
             observed_family = _normalize_setup_family(fingerprint.get("setup_family"))
             if observed_family is None:
-                if not _allows_generic_screen_history(observation.payload, expected_family):
+                if not _allows_generic_screen_history(
+                    observation.payload, expected_family, phase
+                ):
                     continue
             elif observed_family != expected_family:
                 continue
-        phase = _parse_phase(fingerprint.get("setup_phase_current"))
         if phase is not None:
             phases.append(phase)
     return tuple(phases)
@@ -62,8 +64,24 @@ def _normalize_setup_family(value: object) -> str | None:
     return str(value).strip().lower().replace("_", "-")
 
 
-def _allows_generic_screen_history(payload: dict, expected_family: str) -> bool:
-    return (
-        payload.get("workflow") == "screen_accum"
-        and expected_family in {"accumulation", "foreign-bounce"}
-    )
+def _allows_generic_screen_history(
+    payload: dict,
+    expected_family: str,
+    phase: SetupPhaseState | None,
+) -> bool:
+    if payload.get("workflow") != "screen_accum":
+        return False
+    if expected_family in {"accumulation", "foreign-bounce"}:
+        return True
+    if expected_family in {"breakout", "coiled-spring"}:
+        # `screen accum` is the only workflow that persists lifecycle-phase
+        # observations today (`analyze swing` never writes candidate
+        # observations, only reads them) — without this, breakout/coiled-spring
+        # required_sequence=[COMPRESSION, BREAKOUT_CONFIRMATION] could never
+        # accumulate the prior COMPRESSION history it needs from normal use.
+        # Only COMPRESSION is accepted generically: it's a benign, family-
+        # agnostic lifecycle fact, whereas a generic screen scan reaching
+        # BREAKOUT_CONFIRMATION should not itself count as a validated entry
+        # signal for a specific named setup's gates.
+        return phase == SetupPhaseState.COMPRESSION
+    return False

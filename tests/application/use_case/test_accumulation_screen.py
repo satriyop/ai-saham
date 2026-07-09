@@ -1369,6 +1369,11 @@ def test_screen_persists_candidate_observations_when_repo_injected():
     # flow_evidence key must be present inside signal (None when no signal engine;
     # the key itself must exist so replay consumers don't need to special-case)
     assert "flow_evidence" in (payload.get("signal") or {})
+    # setup_name forward-compat key: the batch screener never evaluates a named
+    # setup, so DecisionConstraints has no setup_name field and this is always
+    # None today. The key itself must be present in the fingerprint dict.
+    assert "setup_name" in fingerprint
+    assert fingerprint["setup_name"] is None
 
 
 def test_screen_persists_market_cap_bucket_when_fundamentals_available():

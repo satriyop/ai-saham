@@ -55,6 +55,36 @@ class VolumeTriggerValidityConfig:
 
 
 @dataclass(frozen=True)
+class SetupPhaseRequirementConfig:
+    required_sequence: tuple[SetupPhaseState, ...] = ()
+    enter_phases: tuple[SetupPhaseState, ...] = ()
+    requires_reclaim_or_pivot: bool = False
+    entry_authority: bool | None = None
+
+
+_ACCUMULATION_SEQUENCE_REQUIREMENT = SetupPhaseRequirementConfig(
+    required_sequence=(
+        SetupPhaseState.ACCUMULATION,
+        SetupPhaseState.COMPRESSION,
+        SetupPhaseState.BREAKOUT_CONFIRMATION,
+    ),
+    enter_phases=(SetupPhaseState.BREAKOUT_CONFIRMATION,),
+)
+_BREAKOUT_SEQUENCE_REQUIREMENT = SetupPhaseRequirementConfig(
+    required_sequence=(
+        SetupPhaseState.COMPRESSION,
+        SetupPhaseState.BREAKOUT_CONFIRMATION,
+    ),
+    enter_phases=(SetupPhaseState.BREAKOUT_CONFIRMATION,),
+)
+_PULLBACK_SEQUENCE_REQUIREMENT = SetupPhaseRequirementConfig(
+    enter_phases=(SetupPhaseState.BREAKOUT_CONFIRMATION,),
+    requires_reclaim_or_pivot=True,
+)
+_CONFIRMATION_SEQUENCE_REQUIREMENT = SetupPhaseRequirementConfig(entry_authority=False)
+
+
+@dataclass(frozen=True)
 class SetupPhaseConfig:
     thresholds: SetupPhaseThresholdsConfig = field(
         default_factory=SetupPhaseThresholdsConfig
@@ -69,6 +99,22 @@ class SetupPhaseConfig:
             "coiled_spring": SetupPhaseRSPolicyConfig(),
         }
     )
+    requirements_by_family: dict[str, SetupPhaseRequirementConfig] = field(
+        default_factory=lambda: {
+            "accumulation": _ACCUMULATION_SEQUENCE_REQUIREMENT,
+            "foreign-bounce": _ACCUMULATION_SEQUENCE_REQUIREMENT,
+            "foreign_bounce": _ACCUMULATION_SEQUENCE_REQUIREMENT,
+            "breakout": _BREAKOUT_SEQUENCE_REQUIREMENT,
+            "coiled-spring": _BREAKOUT_SEQUENCE_REQUIREMENT,
+            "coiled_spring": _BREAKOUT_SEQUENCE_REQUIREMENT,
+            "pullback": _PULLBACK_SEQUENCE_REQUIREMENT,
+            "pullback-continuation": _PULLBACK_SEQUENCE_REQUIREMENT,
+            "pullback_continuation": _PULLBACK_SEQUENCE_REQUIREMENT,
+            "confirmation": _CONFIRMATION_SEQUENCE_REQUIREMENT,
+            "smart-money-confirmed": _CONFIRMATION_SEQUENCE_REQUIREMENT,
+            "smart_money_confirmed": _CONFIRMATION_SEQUENCE_REQUIREMENT,
+        }
+    )
     volume_trigger: VolumeTriggerValidityConfig = field(
         default_factory=VolumeTriggerValidityConfig
     )
@@ -78,6 +124,16 @@ class SetupPhaseConfig:
             return None
         key = setup_family.strip().lower()
         return self.rs_policy_by_setup_family.get(key) or self.rs_policy_by_setup_family.get(
+            key.replace("-", "_")
+        )
+
+    def requirement_for(
+        self, setup_family: str | None
+    ) -> SetupPhaseRequirementConfig | None:
+        if not setup_family:
+            return None
+        key = setup_family.strip().lower()
+        return self.requirements_by_family.get(key) or self.requirements_by_family.get(
             key.replace("-", "_")
         )
 
@@ -138,6 +194,7 @@ class SetupPhaseDetector:
                 reasons=tuple(reasons),
                 unavailable=tuple(unavailable),
                 coverage=_coverage(setup_evidence, flow_evidence, volume_valid),
+                config=cfg,
             )
 
         constructive = self._constructive_phase(
@@ -166,6 +223,7 @@ class SetupPhaseDetector:
             reasons=tuple(reasons),
             unavailable=tuple(unavailable),
             coverage=_coverage(setup_evidence, flow_evidence, volume_valid),
+            config=cfg,
         )
 
     def _terminal_phase(
@@ -294,12 +352,14 @@ def _snapshot(
     reasons: tuple[str, ...],
     unavailable: tuple[str, ...],
     coverage: float,
+    config: SetupPhaseConfig,
 ) -> SetupPhaseSnapshot:
     sequence_valid, sequence_reason = _sequence_validity(
         setup_family,
         phase,
         reasons,
         previous_phases,
+        config,
     )
     out_reasons = list(reasons)
     if sequence_reason:
@@ -336,8 +396,8 @@ def _sequence_validity(
     phase: SetupPhaseState,
     reasons: tuple[str, ...],
     previous_phases: tuple[SetupPhaseState, ...],
+    config: SetupPhaseConfig,
 ) -> tuple[bool | None, str | None]:
-    key = (setup_family or "").strip().lower()
     if phase in {
         SetupPhaseState.NONE,
         SetupPhaseState.FAILED,
@@ -345,32 +405,36 @@ def _sequence_validity(
         SetupPhaseState.EXHAUSTION,
     }:
         return None, None
-    if key in {"foreign-bounce", "foreign_bounce", "accumulation"}:
-        if phase == SetupPhaseState.ACCUMULATION:
-            valid = True
-        elif phase == SetupPhaseState.COMPRESSION:
-            valid = SetupPhaseState.ACCUMULATION in previous_phases
-        elif phase == SetupPhaseState.BREAKOUT_CONFIRMATION:
-            valid = _contains_ordered(
-                previous_phases,
-                (SetupPhaseState.ACCUMULATION, SetupPhaseState.COMPRESSION),
-            )
-        else:
-            valid = False
-        return valid, "sequence policy: accumulation -> compression -> breakout"
-    if key in {"coiled-spring", "coiled_spring", "breakout"}:
-        if phase == SetupPhaseState.COMPRESSION:
-            valid = True
-        elif phase == SetupPhaseState.BREAKOUT_CONFIRMATION:
-            valid = SetupPhaseState.COMPRESSION in previous_phases
-        else:
-            valid = False
-        return valid, "sequence policy: compression -> breakout"
-    if key in {"pullback-continuation", "pullback_continuation"}:
-        has_reclaim = any("VWAP reclaim" in r or "support reclaim" in r for r in reasons)
+    requirement = config.requirement_for(setup_family)
+    if requirement is None:
+        return None, None
+    if requirement.requires_reclaim_or_pivot:
+        has_reclaim = any(
+            "VWAP reclaim" in r or "support reclaim" in r for r in reasons
+        )
         valid = phase == SetupPhaseState.BREAKOUT_CONFIRMATION and has_reclaim
         return valid, "sequence policy: trend support plus reclaim/pivot confirmation"
-    return None, None
+    if not requirement.required_sequence:
+        return None, None
+    seq = requirement.required_sequence
+    if phase not in seq:
+        valid = False
+    else:
+        idx = seq.index(phase)
+        valid = True if idx == 0 else _contains_ordered(previous_phases, seq[:idx])
+    return valid, _sequence_reason_text(seq)
+
+
+def _sequence_reason_text(seq: tuple[SetupPhaseState, ...]) -> str:
+    if seq == (
+        SetupPhaseState.ACCUMULATION,
+        SetupPhaseState.COMPRESSION,
+        SetupPhaseState.BREAKOUT_CONFIRMATION,
+    ):
+        return "sequence policy: accumulation -> compression -> breakout"
+    if seq == (SetupPhaseState.COMPRESSION, SetupPhaseState.BREAKOUT_CONFIRMATION):
+        return "sequence policy: compression -> breakout"
+    return "sequence policy: " + " -> ".join(p.value.lower() for p in seq)
 
 
 def _contains_ordered(

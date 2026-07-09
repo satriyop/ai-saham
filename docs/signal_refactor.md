@@ -335,36 +335,46 @@ not foreign-bounce ENTER.
 DISTRIBUTION or FAILED caps decision or blocks entry.
 ```
 
-Setup-family phase requirements are config-driven and must be persisted in
-observations:
+Setup-family phase requirements are config-driven, nested under `setup_phase`
+in `config/swing_setups.yaml` (sibling of `thresholds`, `rs_policy_by_setup_family`,
+`volume_trigger`), and are the sole source of sequence-validity policy consumed
+by `SetupPhaseDetector` (via `SetupPhaseConfig.requirements_by_family` /
+`requirement_for()`):
 
 ```yaml
-setup_phase_requirements:
-  accumulation:
-    required_sequence: [ACCUMULATION, COMPRESSION, BREAKOUT_CONFIRMATION]
+setup_phase:
+  requirements:
+    accumulation:
+      required_sequence: [ACCUMULATION, COMPRESSION, BREAKOUT_CONFIRMATION]
+      enter_phases: [BREAKOUT_CONFIRMATION]
 
-  foreign_bounce:
-    required_sequence: [ACCUMULATION, COMPRESSION, BREAKOUT_CONFIRMATION]
+    breakout:
+      required_sequence: [COMPRESSION, BREAKOUT_CONFIRMATION]
+      enter_phases: [BREAKOUT_CONFIRMATION]
 
-  breakout:
-    required_sequence: [COMPRESSION, BREAKOUT_CONFIRMATION]
-    prior_accumulation: optional_unless_config_requires
+    pullback:
+      required_sequence: []
+      enter_phases: [BREAKOUT_CONFIRMATION]
+      requires_reclaim_or_pivot: true
 
-  pullback:
-    requires:
-      trend_or_context_support: true
-      support_reclaim_or_pivot_confirmation: true
-    compression: optional
-
-  mean_reversion:
-    prior_accumulation_required: false
-    requires:
-      support_or_reversal_evidence: true
-      explicit_risk_controls: true
+    confirmation:
+      required_sequence: []
+      enter_phases: []
+      entry_authority: false
 ```
 
-This keeps strict sequencing for accumulation and foreign-bounce without
-incorrectly forcing every setup family into the same lifecycle.
+Named setups declare which broad family they belong to via their own
+`family:` field under `setups:` (e.g. `foreign-bounce: family: accumulation`,
+`coiled-spring: family: breakout`, `pullback-continuation: family: pullback`,
+`smart-money-confirmed: family: confirmation`). The config loader derives
+name→family aliases from this mapping, so `SetupPhaseDetector` — which is
+always invoked with the concrete setup name, not the broad family word —
+resolves the correct requirement transparently. This keeps strict sequencing
+for accumulation and foreign-bounce without incorrectly forcing every setup
+family into the same lifecycle. `entry_authority` inside a requirement entry
+is descriptive metadata only; actual ENTER authority enforcement stays owned
+by `DecisionPolicyService` via each named setup's own `entry_authority` /
+`can_enter_from_phases` fields.
 
 This phase state is evidence produced by SignalEngine, not a RiskEngine gate.
 RiskEngine remains the only hard gate authority.

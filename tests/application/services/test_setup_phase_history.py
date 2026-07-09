@@ -94,7 +94,7 @@ def test_load_previous_setup_phases_ignores_other_setup_families_and_bad_values(
     assert phases == (SetupPhaseState.COMPRESSION,)
 
 
-def test_generic_history_only_feeds_accumulation_compatibility_path():
+def test_generic_history_feeds_accumulation_compatibility_path():
     repo = FakeCandidateObservationsRepository(
         [
             _observation(date(2026, 7, 1), "ACCUMULATION", None, "screen_accum"),
@@ -114,6 +114,29 @@ def test_generic_history_only_feeds_accumulation_compatibility_path():
         before_date=date(2026, 7, 3),
         setup_family="pullback-continuation",
     )
+
+    assert accumulation == (
+        SetupPhaseState.ACCUMULATION,
+        SetupPhaseState.COMPRESSION,
+    )
+    # pullback-continuation's required_sequence is [] (config), so generic
+    # screen history is not needed/whitelisted for it.
+    assert pullback == ()
+
+
+def test_generic_compression_history_feeds_coiled_spring_breakout_family():
+    """screen accum is the only workflow that persists lifecycle-phase
+    observations (analyze swing never writes them, only reads). Without
+    generic COMPRESSION history flowing into breakout/coiled-spring, their
+    required_sequence=[COMPRESSION, BREAKOUT_CONFIRMATION] could never be
+    satisfied from normal use."""
+    repo = FakeCandidateObservationsRepository(
+        [
+            _observation(date(2026, 7, 1), "ACCUMULATION", None, "screen_accum"),
+            _observation(date(2026, 7, 2), "COMPRESSION", None, "screen_accum"),
+        ]
+    )
+
     breakout = load_previous_setup_phases(
         repo,
         ticker="BBCA",
@@ -121,11 +144,28 @@ def test_generic_history_only_feeds_accumulation_compatibility_path():
         setup_family="coiled-spring",
     )
 
-    assert accumulation == (
-        SetupPhaseState.ACCUMULATION,
-        SetupPhaseState.COMPRESSION,
+    # Only the COMPRESSION observation is accepted generically — a generic
+    # screen scan reaching ACCUMULATION (or, symmetrically, a generic scan
+    # reaching BREAKOUT_CONFIRMATION) must not count as validated history for
+    # a specific named setup's entry sequence.
+    assert breakout == (SetupPhaseState.COMPRESSION,)
+
+
+def test_generic_non_compression_history_does_not_feed_coiled_spring_breakout_family():
+    repo = FakeCandidateObservationsRepository(
+        [
+            _observation(date(2026, 7, 1), "ACCUMULATION", None, "screen_accum"),
+            _observation(date(2026, 7, 2), "BREAKOUT_CONFIRMATION", None, "screen_accum"),
+        ]
     )
-    assert pullback == ()
+
+    breakout = load_previous_setup_phases(
+        repo,
+        ticker="BBCA",
+        before_date=date(2026, 7, 3),
+        setup_family="coiled-spring",
+    )
+
     assert breakout == ()
 
 

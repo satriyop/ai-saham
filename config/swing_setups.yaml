@@ -26,7 +26,7 @@ setups:
 
   coiled-spring:
     enabled: true
-    family: accumulation
+    family: breakout
     entry_authority: true
     can_enter_from_phases: [BREAKOUT_CONFIRMATION]
     # Breakout preparation: accumulation is present while volatility compresses.
@@ -55,7 +55,7 @@ setups:
 
   pullback-continuation:
     enabled: true
-    family: trend_continuation
+    family: pullback
     entry_authority: true
     can_enter_from_phases: [BREAKOUT_CONFIRMATION]
     # Trend-following: controlled pullback/accumulation inside an uptrend.
@@ -110,6 +110,21 @@ setup_phase:
       warning_max_decision: WATCH
       hard_exclude_max_decision: AVOID
       mean_reversion_exception_requires_support_reclaim: true
+  requirements:
+    accumulation:
+      required_sequence: [ACCUMULATION, COMPRESSION, BREAKOUT_CONFIRMATION]
+      enter_phases: [BREAKOUT_CONFIRMATION]
+    breakout:
+      required_sequence: [COMPRESSION, BREAKOUT_CONFIRMATION]
+      enter_phases: [BREAKOUT_CONFIRMATION]
+    pullback:
+      required_sequence: []
+      enter_phases: [BREAKOUT_CONFIRMATION]
+      requires_reclaim_or_pivot: true
+    confirmation:
+      required_sequence: []
+      enter_phases: []
+      entry_authority: false
   volume_trigger:
     require_trusted_volume: true
     trusted_benchmark_volume_sources: ["stockbit", "idx"]
