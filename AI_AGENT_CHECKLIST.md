@@ -141,6 +141,91 @@ If any answer is unclear, stop.
 
 ---
 
+## 12. Code Convention
+
+### File Size Rules
+
+- Python files <= 400 LOC are preferred.
+- 401-700 LOC requires a clear single responsibility.
+- > 700 LOC requires an extraction plan before adding more behavior.
+- > 1000 LOC is a merge blocker unless the task is explicitly a temporary characterization/test fixture file.
+- Tests follow the same thresholds; split by behavior, not by arbitrary line count.
+
+### Filename Responsibility Rules
+
+- File name must answer: "What responsibility lives here?"
+- Use suffixes consistently:
+  - `_use_case.py` for application use-case entry points.
+  - `_engine.py` for first-class reusable decision engines.
+  - `_builder.py` for assembling immutable evidence/DTOs from inputs.
+  - `_calculator.py` or `_metrics.py` for pure computations.
+  - `_parser.py` for external payload/string parsing.
+  - `_repository.py` for persistence implementations.
+  - `_provider.py` for external/live/cached data provider implementations.
+  - `_display.py` for CLI rendering only.
+  - `_commands.py` for CLI command registration only.
+  - `_factory.py` for dependency construction/wiring.
+  - `_validator.py`, `_applier.py`, `_verifier.py` only when the file does exactly that role.
+- Avoid generic names such as `bootstrap.py`, `utils.py`, `helpers.py`, `workflow.py`, `loader.py`, or `commands.py` when the module has a more specific responsibility.
+
+### Extraction Rules
+
+- Extract by stable responsibility, not by private helper grouping.
+- Preserve public request/response contracts during extraction.
+- Keep compatibility imports temporarily when renaming widely imported modules.
+- First extraction target in a large use case should be DTOs and serialization, because they reduce scan burden without altering behavior.
+- Second extraction target should be pure calculators/parsers, because they are easiest to characterize with tests.
+- Do not extract a new abstraction unless the filename and public API make the next change easier to locate.
+
+### Adapter Rules
+
+- Adapter files must not own:
+  - cache freshness policy
+  - fetch/backfill/refresh/retry decisions
+  - persistence orchestration beyond dependency wiring
+  - scoring thresholds
+  - business status calculation
+  - provider-specific behavior beyond choosing the adapter/provider
+- Adapter files may own:
+  - Typer command definitions
+  - option parsing
+  - request DTO construction
+  - dependency wiring
+  - use-case invocation
+  - output rendering
+  - exception-to-user-message mapping
+
+### Display Rules
+
+- Display modules render facts; they do not decide facts.
+- Any label derived from thresholds must either:
+  - consume a label already computed by application/domain, or
+  - clearly be named as presentation-only and backed by config/response metadata.
+- Display defaults must not drift from engine/use-case config.
+
+### DTO and Serialization Rules
+
+- DTOs used by multiple functions/classes in a large workflow belong in `src/application/dto/`.
+- `to_dict()` schema methods should live near DTO definitions unless they are adapter-specific.
+- Persisted JSON/CSV/schema fields require compatibility notes before rename.
+- New machine-facing outputs must include explicit names; avoid generic `score`, `status`, or `verdict` unless the artifact contract defines them.
+
+### Infrastructure Provider Rules
+
+- Provider files split by external capability, not by vendor alone once they exceed 700 LOC.
+- Raw payload parsers should be separate from network/browser clients.
+- Browser lifecycle must not share a file with HTTP payload parsers unless the file is small and strictly cohesive.
+- Provider class names and filenames must match the dominant mechanism: `playwright_*` for browser, `stockbit_api_*` or `stockbit_http_*` for HTTP/token API.
+
+### Test Organization Rules
+
+- Split tests by behavior contract.
+- Test file name must map to the production responsibility being protected.
+- Prefer focused fixtures over one global mega-fixture.
+- Characterization tests are required before extracting files above 1000 LOC.
+
+---
+
 ## Final Acknowledgement
 
 Before proceeding, the agent must internally acknowledge:
