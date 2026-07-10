@@ -129,9 +129,9 @@ class AssessRiskUseCase:
         self._repository = repository
         self._registry = registry if registry is not None else IndicatorRegistry()
         if rules_loader is None:
-            from src.infrastructure.config.yaml_loader import YamlConfigLoader
+            from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 
-            rules_loader = YamlConfigLoader()
+            rules_loader = RulesYamlLoader()
         self._rules_loader = rules_loader
         self._structural_gates: list[RiskGate] = structural_gates or []
         self._execution_gates: list[RiskGate] = execution_gates or []
@@ -225,9 +225,11 @@ class AssessRiskUseCase:
             )
 
             if not agg_response.has_values:
+                ticker_upper = request.ticker.upper()
                 raise ValueError(
-                    f"Insufficient data for {request.ticker.upper()}. "
-                    f"Run 'saham fetch market {request.ticker.upper()} --days {self._indicator_history_days}' first."
+                    f"Insufficient data for {ticker_upper}. Run "
+                    f"'saham fetch market {ticker_upper} --days "
+                    f"{self._indicator_history_days}' first."
                 )
 
             latest_snapshot = agg_response.snapshots[-1]
@@ -358,8 +360,9 @@ class AssessRiskUseCase:
         candles = self._repository.get_candles(ticker)
         if not candles:
             raise ValueError(
-                f"Insufficient data for {ticker}. "
-                    f"Run 'saham fetch market {ticker} --days {self._indicator_history_days}' first."
+                f"Insufficient data for {ticker}. Run "
+                f"'saham fetch market {ticker} --days "
+                f"{self._indicator_history_days}' first."
             )
 
         # Compute each required indicator using registry
@@ -465,9 +468,11 @@ class AssessRiskUseCase:
         )
 
         if not agg_response.has_values:
+            ticker_upper = request.ticker.upper()
             raise ValueError(
-                f"Insufficient data for {request.ticker.upper()}. "
-                f"Run 'saham fetch market {request.ticker.upper()} --days {self._indicator_history_days}' first."
+                f"Insufficient data for {ticker_upper}. Run "
+                f"'saham fetch market {ticker_upper} --days "
+                f"{self._indicator_history_days}' first."
             )
 
         window = agg_response.snapshots[-days:]

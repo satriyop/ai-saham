@@ -5,7 +5,7 @@ Orchestrates AI-powered translation of natural language strategy descriptions
 into validated YAML configurations that can be used with the strategy system.
 
 Layer: Application
-Depends on: StrategyTranslator port, YamlConfigLoader, IndicatorRegistry
+Depends on: StrategyTranslator port, RulesYamlLoader, IndicatorRegistry
 """
 
 from dataclasses import dataclass
@@ -169,7 +169,7 @@ class CreateStrategyFromIntentUseCase:
         1. Validates the input intent
         2. Gets available indicators from the registry
         3. Calls the StrategyTranslator to get YAML content
-        4. Parses and validates the YAML using YamlConfigLoader
+        4. Parses and validates the YAML using RulesYamlLoader
         5. Returns the validated YAML and RuleSet
 
     Important:
@@ -216,9 +216,9 @@ class CreateStrategyFromIntentUseCase:
         self._translator = translator
         self._registry = registry
         if rules_loader is None:
-            from src.infrastructure.config.yaml_loader import YamlConfigLoader
+            from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 
-            rules_loader = YamlConfigLoader()
+            rules_loader = RulesYamlLoader()
         self._rules_loader = rules_loader
 
     def execute(

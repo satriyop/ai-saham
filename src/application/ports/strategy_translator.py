@@ -39,7 +39,7 @@ class StrategyTranslator(Protocol):
 
     Translates natural language descriptions of trading strategies into
     complete strategy YAML configurations that can be parsed by the
-    YamlConfigLoader.
+    RulesYamlLoader.
 
     Example:
         translator = StrategyTranslatorAdapter(provider="claude")

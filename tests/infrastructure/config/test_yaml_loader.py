@@ -619,3 +619,19 @@ rules:
                 YamlConfigLoader.load(path)
         finally:
             path.unlink()
+
+
+class TestRulesYamlLoaderCompatibility:
+    """Test compatibility of RulesYamlLoader import and usage."""
+
+    def test_rules_yaml_loader_equivalence(self):
+        """Should import RulesYamlLoader and verify load_from_string has same behavior."""
+        from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
+
+        rules_from_string_old = YamlConfigLoader.load_from_string(VALID_YAML)
+        rules_from_string_new = RulesYamlLoader.load_from_string(VALID_YAML)
+
+        assert RulesYamlLoader is YamlConfigLoader
+        assert rules_from_string_new.name == rules_from_string_old.name
+        assert len(rules_from_string_new.rules) == len(rules_from_string_old.rules)
+        assert rules_from_string_new.rules[0].name == rules_from_string_old.rules[0].name

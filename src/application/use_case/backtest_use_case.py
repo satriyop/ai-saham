@@ -110,9 +110,9 @@ class BacktestUseCase:
         self._repository = repository
         self._registry = registry if registry is not None else IndicatorRegistry()
         if rules_loader is None:
-            from src.infrastructure.config.yaml_loader import YamlConfigLoader
+            from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 
-            rules_loader = YamlConfigLoader()
+            rules_loader = RulesYamlLoader()
         self._rules_loader = rules_loader
 
     def execute(self, request: BacktestRequest) -> BacktestResponse:

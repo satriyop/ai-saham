@@ -7,6 +7,6 @@ Provides adapters for loading configuration from various sources
 Layer: Infrastructure
 """
 
-from src.infrastructure.config.yaml_loader import YamlConfigLoader
+from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader, YamlConfigLoader
 
-__all__ = ["YamlConfigLoader"]
+__all__ = ["RulesYamlLoader", "YamlConfigLoader"]
