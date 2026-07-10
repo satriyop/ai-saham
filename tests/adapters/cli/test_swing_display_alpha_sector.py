@@ -21,7 +21,7 @@ import pytest
 
 from src.adapters.cli.analyze_swing_commands import _print_swing_output
 from src.application.services.swing_data_freshness import SwingDataFreshness
-from src.application.use_case.accumulation_screen_use_case import AccumulationCandidate
+from src.application.dto.accumulation_screen import AccumulationCandidate
 from src.domain.value_objects.alpha_trigger_score import (
     AlphaTriggerGroupContribution,
     AlphaTriggerScore,

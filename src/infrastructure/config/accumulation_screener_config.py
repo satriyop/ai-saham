@@ -22,9 +22,7 @@ from src.application.use_case.score_foreign_flow_use_case import (
     RsiEvidencePolicy,
     StreakEvidencePolicy,
 )
-from src.application.use_case.accumulation_screen_use_case import (
-    AccumulationDerivedFeaturePolicy,
-)
+from src.application.dto.accumulation_screen import AccumulationDerivedFeaturePolicy
 
 ACCUMULATION_SCREENER_CONFIG_PATH = Path(APP_CFG.config_paths.accumulation_screener)
 

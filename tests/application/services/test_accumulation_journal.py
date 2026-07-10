@@ -5,7 +5,7 @@ from decimal import Decimal
 from unittest.mock import MagicMock
 
 from src.application.services.accumulation_journal import AccumulationJournalService
-from src.application.use_case.accumulation_screen_use_case import AccumulationCandidate
+from src.application.dto.accumulation_screen import AccumulationCandidate
 from src.domain.entities.candle import Candle
 from src.domain.value_objects.accumulation_journal_entry import AccumulationJournalEntry
 

@@ -26,10 +26,8 @@ from __future__ import annotations
 from datetime import date, timedelta
 from decimal import Decimal
 
-from src.application.use_case.accumulation_screen_use_case import (
-    AccumulationScreenRequest,
-    AccumulationScreenUseCase,
-)
+from src.application.dto.accumulation_screen import AccumulationScreenRequest
+from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
 from src.domain.entities.broker_flow import BrokerSummary, ForeignFlowPoint
 from src.domain.entities.candle import Candle
 from src.domain.ports.broker_data_repository import BrokerDataRepository

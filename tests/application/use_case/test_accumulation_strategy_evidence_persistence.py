@@ -2,10 +2,8 @@ from datetime import date, datetime
 from decimal import Decimal
 from types import SimpleNamespace
 
-from src.application.use_case.accumulation_screen_use_case import (
-    AccumulationScreenRequest,
-    _candidate_observation_payload,
-)
+from src.application.dto.accumulation_screen import AccumulationScreenRequest
+from src.application.use_case.accumulation_screen_use_case import _candidate_observation_payload
 from src.domain.value_objects.strategy_evidence import (
     StrategyEvidence,
     StrategyEvidenceOutcome,

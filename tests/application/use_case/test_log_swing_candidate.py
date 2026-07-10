@@ -7,7 +7,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 from typing import Any
 
-from src.application.use_case.accumulation_screen_use_case import (
+from src.application.dto.accumulation_screen import (
     AccumulationCandidate,
     AccumulationScreenRequest,
     AccumulationScreenResponse,

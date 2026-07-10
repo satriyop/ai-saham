@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from src.application.use_case.accumulation_screen_use_case import AccumulationCandidate
+from src.application.dto.accumulation_screen import AccumulationCandidate
 from src.application.use_case.accumulation_audit_use_case import _range_bucket, AuditBucketPolicy
 from src.application.use_case.evaluate_swing_setup_use_case import (
     COILED_SPRING_SETUP,

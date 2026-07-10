@@ -15,8 +15,8 @@ from datetime import date
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
+from src.application.dto.accumulation_screen import AccumulationScreenRequest
 from src.application.use_case.accumulation_screen_use_case import (
-    AccumulationScreenRequest,
     classify_multi_window_pattern,
     compute_percent_plan,
 )
@@ -29,8 +29,8 @@ from src.application.use_case.evaluate_swing_setup_use_case import (
 
 if TYPE_CHECKING:
     from src.application.services.accumulation_journal import AccumulationJournalService
+    from src.application.dto.accumulation_screen import AccumulationCandidate
     from src.application.use_case.accumulation_screen_use_case import (
-        AccumulationCandidate,
         AccumulationScreenUseCase,
     )
     from src.application.services.market_context_engine import MarketContextEngine

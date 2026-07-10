@@ -5,13 +5,15 @@ from decimal import Decimal
 
 import pytest
 
+from src.application.dto.accumulation_screen import (
+    TIER1_FOREIGN_BROKERS,
+    AccumulationDerivedFeaturePolicy,
+    AccumulationScreenRequest,
+)
 from src.application.use_case.accumulation_screen_use_case import (
     BCI_CLUSTER,
     BCI_RETAIL,
     BCI_STABLE,
-    TIER1_FOREIGN_BROKERS,
-    AccumulationDerivedFeaturePolicy,
-    AccumulationScreenRequest,
     AccumulationScreenUseCase,
 )
 from src.domain.entities.broker_flow import BrokerDailyFlow, BrokerSummary
@@ -1225,10 +1227,8 @@ def test_no_gate_active_fundamentals_fetched_in_enrichment_pass():
 # classify_multi_window_pattern
 # ---------------------------------------------------------------------------
 
-from src.application.use_case.accumulation_screen_use_case import (
-    AccumulationCandidate,
-    classify_multi_window_pattern,
-)
+from src.application.dto.accumulation_screen import AccumulationCandidate
+from src.application.use_case.accumulation_screen_use_case import classify_multi_window_pattern
 
 
 def _make_candidate(score: float, bb_width_pctile: float | None = None) -> AccumulationCandidate:

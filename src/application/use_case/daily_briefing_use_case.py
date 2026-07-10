@@ -11,11 +11,11 @@ from datetime import date, datetime
 from pathlib import Path
 
 from src.application.services.universe_loader import load_universe
-from src.application.use_case.accumulation_screen_use_case import (
+from src.application.dto.accumulation_screen import (
     AccumulationCandidate,
     AccumulationScreenRequest,
-    AccumulationScreenUseCase,
 )
+from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:

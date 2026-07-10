@@ -15,7 +15,7 @@ from datetime import date
 from decimal import Decimal
 
 from src.adapters.cli.screen_accum_commands import _display_results
-from src.application.use_case.accumulation_screen_use_case import (
+from src.application.dto.accumulation_screen import (
     AccumulationCandidate,
     AccumulationScreenResponse,
 )

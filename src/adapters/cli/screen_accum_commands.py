@@ -31,7 +31,7 @@ from src.application.services.universe_loader import (
     UniverseNotFoundError,
     resolve_tickers,
 )
-from src.application.use_case.accumulation_screen_use_case import (
+from src.application.dto.accumulation_screen import (
     AccumulationScreenRequest,
     AccumulationScreenResponse,
 )

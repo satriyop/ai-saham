@@ -6,9 +6,7 @@ from dataclasses import dataclass, replace
 from datetime import date
 from typing import TYPE_CHECKING, Any
 
-from src.application.use_case.accumulation_screen_use_case import (
-    AccumulationScreenRequest,
-)
+from src.application.dto.accumulation_screen import AccumulationScreenRequest
 
 if TYPE_CHECKING:
     from src.domain.value_objects.market_context import MarketContext

@@ -4,10 +4,8 @@ from decimal import Decimal
 
 import pytest
 
-from src.application.use_case.accumulation_screen_use_case import (
-    AccumulationCandidate,
-    compute_percent_plan,
-)
+from src.application.dto.accumulation_screen import AccumulationCandidate
+from src.application.use_case.accumulation_screen_use_case import compute_percent_plan
 from src.application.use_case.evaluate_swing_setup_use_case import (
     COILED_SPRING_SETUP,
     PULLBACK_CONTINUATION_SETUP,

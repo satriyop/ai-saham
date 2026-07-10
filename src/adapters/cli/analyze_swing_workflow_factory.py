@@ -34,11 +34,11 @@ from src.application.services.swing_data_freshness import (
 )
 from src.application.services.swing_data_refresh import refresh_swing_data
 from src.application.services.swing_setup_catalog import build_swing_setup_catalog_config
-from src.application.use_case.accumulation_screen_use_case import (
+from src.application.dto.accumulation_screen import (
     AccumulationCandidate,
     AccumulationScreenRequest,
-    resolve_setup_targets,
 )
+from src.application.use_case.accumulation_screen_use_case import resolve_setup_targets
 from src.application.use_case.evaluate_swing_setup_use_case import (
     EvaluateSwingSetupRequest,
     EvaluateSwingSetupUseCase,
@@ -48,9 +48,7 @@ from src.application.use_case.fetch_sentiment_use_case import (
     FetchSentimentRequest,
     FetchSentimentUseCase,
 )
-from src.application.use_case.swing_analysis_workflow_use_case import (
-    SwingAnalysisWorkflowUseCase,
-)
+from src.application.use_case.swing_analysis_workflow_use_case import SwingAnalysisWorkflowUseCase
 from src.domain.rules.bandar_gate import BandarGate
 from src.domain.rules.free_float_gate import FreeFloatGate
 from src.domain.rules.fundamental_gate import FundamentalGate

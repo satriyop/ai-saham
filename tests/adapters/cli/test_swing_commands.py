@@ -66,7 +66,7 @@ from src.application.services.swing_backtest_attribution import (
     SwingBacktestAttributionSummary,
 )
 from src.application.services.swing_data_freshness import SwingDataFreshness
-from src.application.use_case.accumulation_screen_use_case import AccumulationCandidate
+from src.application.dto.accumulation_screen import AccumulationCandidate
 from src.application.use_case.swing_backtest_use_case import SwingBacktestResponse
 from src.domain.entities.broker_flow import BrokerSummary, BrokerTransaction, BrokerType
 from src.domain.value_objects.foreign_flow_score_breakdown import ForeignFlowScoreBreakdown

@@ -26,12 +26,12 @@ from src.application.services.swing_backtest_attribution import (
     SwingBacktestAttributionSummary,
     summarize_swing_backtest_attribution,
 )
-from src.application.use_case.accumulation_screen_use_case import (
+from src.application.dto.accumulation_screen import (
     AccumulationCandidate,
     AccumulationDerivedFeaturePolicy,
     AccumulationScreenRequest,
-    AccumulationScreenUseCase,
 )
+from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
 from src.application.use_case.assess_trade_setup_use_case import (
     AssessTradeSetupRequest,
     AssessTradeSetupUseCase,

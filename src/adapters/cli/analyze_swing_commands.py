@@ -40,9 +40,7 @@ from src.application.services.universe_loader import (
 )
 from src.application.services.swing_setup_catalog import build_swing_setup_catalog_config
 from src.application.services.bootstrap import create_risk_engine
-from src.application.use_case.accumulation_screen_use_case import (
-    AccumulationCandidate,
-)
+from src.application.dto.accumulation_screen import AccumulationCandidate
 from src.application.use_case.evaluate_swing_setup_use_case import (
     AVAILABLE_SWING_SETUPS,
     EvaluateSwingSetupRequest,
@@ -51,10 +49,8 @@ from src.application.use_case.evaluate_swing_setup_use_case import (
     SwingSetupCatalogConfig,
 )
 from src.domain.value_objects.market_context import MarketContext
-from src.application.use_case.swing_analysis_workflow_use_case import (
-    SwingAnalysisDataUnavailable,
-    SwingAnalysisWorkflowRequest,
-)
+from src.application.dto.swing_analysis import SwingAnalysisWorkflowRequest
+from src.application.use_case.swing_analysis_workflow_use_case import SwingAnalysisDataUnavailable
 from src.application.use_case.swing_backtest_use_case import (
     SwingBacktestRequest,
     SwingBacktestResponse,

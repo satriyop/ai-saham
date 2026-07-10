@@ -13,7 +13,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from src.application.services.stats import average, win_rate
-from src.application.use_case.accumulation_screen_use_case import AccumulationCandidate
+from src.application.dto.accumulation_screen import AccumulationCandidate
 from src.domain.ports.accumulation_journal_store import AccumulationJournalStore
 from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.value_objects.accumulation_journal_entry import AccumulationJournalEntry

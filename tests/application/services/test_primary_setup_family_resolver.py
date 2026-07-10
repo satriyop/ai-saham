@@ -14,7 +14,7 @@ from decimal import Decimal
 from src.application.services.primary_setup_family_resolver import (
     PrimarySetupFamilyResolver,
 )
-from src.application.use_case.accumulation_screen_use_case import AccumulationCandidate
+from src.application.dto.accumulation_screen import AccumulationCandidate
 from src.application.use_case.evaluate_swing_setup_use_case import (
     CoiledSpringSetupConfig,
     ForeignBounceSetupConfig,

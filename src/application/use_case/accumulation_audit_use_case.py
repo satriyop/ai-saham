@@ -15,12 +15,12 @@ from decimal import Decimal
 from typing import Callable
 
 from src.application.services.stats import average, pct_change, win_rate
-from src.application.use_case.accumulation_screen_use_case import (
+from src.application.dto.accumulation_screen import (
     AccumulationCandidate,
     AccumulationDerivedFeaturePolicy,
     AccumulationScreenRequest,
-    AccumulationScreenUseCase,
 )
+from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
 from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.market_data_repository import MarketDataRepository
 

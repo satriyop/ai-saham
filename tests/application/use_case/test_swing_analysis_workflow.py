@@ -11,12 +11,14 @@ from src.application.services.flow_confirmation_evidence_builder import (
     FlowConfirmationEvidenceBuilder,
 )
 from src.application.services.volatility_context import build_volatility_context
-from src.application.use_case.swing_analysis_workflow_use_case import (
-    SwingAnalysisDataUnavailable,
+from src.application.dto.swing_analysis import (
     SwingAnalysisWorkflowRequest,
-    SwingAnalysisWorkflowUseCase,
     SwingEvidence,
     _signal_response_to_dict,
+)
+from src.application.use_case.swing_analysis_workflow_use_case import (
+    SwingAnalysisDataUnavailable,
+    SwingAnalysisWorkflowUseCase,
     _simple_return,
 )
 from src.domain.entities.candle import Candle

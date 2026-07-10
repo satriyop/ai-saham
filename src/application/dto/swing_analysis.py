@@ -1,0 +1,459 @@
+"""DTOs and serialization contracts for swing analysis workflow output."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import date
+from decimal import Decimal
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+from src.application.services.position_sizer import PercentSizingResult, SizingResult
+from src.application.services.volatility_context import build_volatility_context
+
+if TYPE_CHECKING:
+    from src.application.use_case.assess_signal_use_case import AssessSignalResponse
+    from src.domain.value_objects.company_quality_context_evidence import (
+        CompanyQualityContextEvidence,
+    )
+    from src.domain.value_objects.flow_confirmation_evidence import FlowConfirmationEvidence
+    from src.domain.value_objects.institutional_accumulation_evidence import (
+        InstitutionalAccumulationEvidence,
+    )
+    from src.domain.value_objects.market_context import MarketContext
+    from src.domain.value_objects.sector_context_evidence import SectorContextEvidence
+    from src.domain.value_objects.setup_evidence import SetupEvidence
+    from src.domain.value_objects.setup_phase import SetupPhaseSnapshot
+    from src.domain.value_objects.strategy_evidence import StrategyEvidence
+    from src.domain.value_objects.ticker_profile_snapshot import TickerProfileSnapshot
+    from src.domain.value_objects.trade_setup import TradeSetup
+
+
+@dataclass(frozen=True)
+class SwingAnalysisWorkflowRequest:
+    ticker: str
+    today: date
+    strategy_name: str | None
+    setup_name: str | None
+    window: int
+    flow_window: int
+    capital: int | None
+    risk_pct: float
+    entry_price: float | None
+    atr_mult: float
+    rr: float
+    include_sentiment: bool
+    include_flow_detail: bool
+    include_signal_detail: bool
+    include_risk_detail: bool
+    include_market_detail: bool
+    sentiment_verbose: bool
+    auto_refresh: bool
+    force_refresh: bool
+    with_market_context: bool
+    regime_universe: str
+    benchmark: str
+    db_path: Path
+    with_technical_gate: bool = False
+
+
+@dataclass(frozen=True)
+class SwingVerdict:
+    """Decision-producing outputs for swing analysis."""
+
+    trade_setup: "TradeSetup | None"
+    signal_assessment: "AssessSignalResponse | None"
+    risk_response: Any | None
+    market_regime: "MarketContext | None"
+    market_context_signal_preview: "AssessSignalResponse | None" = None
+    market_context_risk_preview: Any | None = None
+    market_context_trade_setup_preview: "TradeSetup | None" = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "trade_setup": self.trade_setup.to_dict() if self.trade_setup else None,
+            "signal_assessment": _signal_response_to_dict(self.signal_assessment),
+            "risk_assessment": _risk_response_to_dict(self.risk_response),
+            "market_context": (
+                self.market_regime.to_dict() if self.market_regime else None
+            ),
+            "market_context_preview": {
+                "signal_preview": _signal_response_to_dict(
+                    self.market_context_signal_preview
+                ),
+                "risk_preview": _risk_response_to_preview_dict(
+                    self.market_context_risk_preview
+                ),
+                "trade_setup_preview": (
+                    self.market_context_trade_setup_preview.to_dict()
+                    if self.market_context_trade_setup_preview else None
+                ),
+            } if self.market_regime else None,
+        }
+
+
+@dataclass(frozen=True)
+class SwingEvidence:
+    """Supporting evidence that informs or explains swing analysis."""
+
+    accumulation_candidate: Any | None
+    setup_eval: Any | None
+    backtest_result: Any | None
+    sentiment_response: Any | None
+    sentiment_warning: str | None
+    take_profit_pct: Decimal
+    stop_loss_pct: Decimal
+    regime_label: str | None
+    setup_evidence: "SetupEvidence | None" = None
+    flow_confirmation_evidence: "FlowConfirmationEvidence | None" = None
+    setup_phase: "SetupPhaseSnapshot | None" = None
+    strategy_rule_evidence: "StrategyEvidence | None" = None
+    institutional_accumulation_evidence: "InstitutionalAccumulationEvidence | None" = None
+    ticker_profile_snapshot: "TickerProfileSnapshot | None" = None
+    sector_context_evidence: "SectorContextEvidence | None" = None
+    company_quality_context_evidence: "CompanyQualityContextEvidence | None" = None
+
+    def to_dict(self, *, strategy_name: str | None = None, max_hold_days: int | None = None) -> dict[str, Any]:
+        candidate = self.accumulation_candidate
+        setup_eval = self.setup_eval
+        backtest_result = self.backtest_result
+        sentiment_resp = self.sentiment_response
+        return {
+            "foreign_flow_evidence": (
+                candidate.foreign_flow_evidence.to_dict()
+                if candidate and getattr(candidate, "foreign_flow_evidence", None) else None
+            ),
+            "accumulation": _candidate_accumulation_to_dict(candidate),
+            "setup": {
+                "name": setup_eval.name if setup_eval else None,
+                "passed": setup_eval.passed if setup_eval else None,
+                "match": setup_eval.match.value if setup_eval else None,
+                "failed_reasons": list(setup_eval.failed_reasons) if setup_eval else [],
+                "plan": {
+                    "take_profit_pct": float(self.take_profit_pct) if setup_eval else None,
+                    "stop_loss_pct": float(self.stop_loss_pct) if setup_eval else None,
+                    "regime": self.regime_label,
+                    "max_hold_days": max_hold_days if setup_eval else None,
+                },
+            } if setup_eval else None,
+            "strategy_evidence": {
+                "name": strategy_name,
+                "win_rate": float(backtest_result.win_rate) if backtest_result else None,
+                "profit_factor": (
+                    float(backtest_result.profit_factor) if backtest_result else None
+                ),
+                "max_drawdown_pct": (
+                    float(backtest_result.max_drawdown_pct)
+                    if backtest_result else None
+                ),
+                "trade_count": backtest_result.trade_count if backtest_result else None,
+                "diagnostic": (
+                    self.strategy_rule_evidence.to_dict()
+                    if self.strategy_rule_evidence
+                    else None
+                ),
+            } if strategy_name else None,
+            "sentiment": {
+                "call": (
+                    sentiment_resp.snapshot.overall_sentiment.value
+                    if sentiment_resp and not sentiment_resp.warning else None
+                ),
+                "warning": self.sentiment_warning,
+                "total_headlines": (
+                    sentiment_resp.snapshot.total_count
+                    if sentiment_resp and not sentiment_resp.warning else None
+                ),
+                "confidence_pct": (
+                    sentiment_resp.snapshot.confidence_pct
+                    if sentiment_resp and not sentiment_resp.warning else None
+                ),
+            },
+            "setup_evidence": self.setup_evidence.to_dict() if self.setup_evidence else None,
+            "setup_phase": self.setup_phase.to_dict() if self.setup_phase else None,
+            "strategy_rule_evidence": (
+                self.strategy_rule_evidence.to_dict()
+                if self.strategy_rule_evidence
+                else None
+            ),
+            "flow_confirmation_evidence": (
+                self.flow_confirmation_evidence.to_dict()
+                if self.flow_confirmation_evidence else None
+            ),
+            "institutional_accumulation_evidence": (
+                self.institutional_accumulation_evidence.to_dict()
+                if self.institutional_accumulation_evidence else None
+            ),
+            "ticker_profile_snapshot": (
+                self.ticker_profile_snapshot.to_dict()
+                if self.ticker_profile_snapshot else None
+            ),
+            "sector_context_evidence": (
+                self.sector_context_evidence.to_dict()
+                if self.sector_context_evidence else None
+            ),
+            "company_quality_context_evidence": (
+                self.company_quality_context_evidence.to_dict()
+                if self.company_quality_context_evidence else None
+            ),
+        }
+
+
+@dataclass(frozen=True)
+class SwingDiagnostics:
+    """Data quality and diagnostic outputs for swing analysis."""
+
+    data_freshness: Any
+    flow_detail: Any
+    broker_detail: Any
+    broker_quality_note: Any | None
+    refresh_actions: tuple[str, ...]
+    warnings: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        data_out = _object_to_dict(self.data_freshness)
+        return {
+            "data": data_out,
+            "flow_detail": _object_to_dict(self.flow_detail),
+            "broker_detail": _object_to_dict(self.broker_detail),
+            "broker_quality_note": _object_to_dict(self.broker_quality_note),
+            "refresh_actions": list(self.refresh_actions),
+            "warnings": list(self.warnings),
+        }
+
+
+@dataclass(frozen=True)
+class SwingAnalysisWorkflowResponse:
+    ticker: str
+    today: date
+    refresh_actions: tuple[str, ...]
+    data_freshness: Any
+    flow_detail: Any
+    broker_detail: Any
+    candles: list[Any]
+    latest_close: Decimal
+    accumulation_candidate: Any | None
+    risk_response: Any | None
+    atr_value: Decimal | None
+    sizing: SizingResult | None
+    setup_eval: Any | None
+    setup_sizing: PercentSizingResult | None
+    broker_quality_note: Any | None
+    backtest_result: Any | None
+    sentiment_response: Any | None
+    sentiment_warning: str | None
+    market_regime: "MarketContext | None"
+    take_profit_pct: Decimal
+    stop_loss_pct: Decimal
+    regime_label: str | None
+    signal_assessment: "AssessSignalResponse | None" = None
+    trade_setup: "TradeSetup | None" = None
+    market_context_signal_preview: "AssessSignalResponse | None" = None
+    market_context_risk_preview: Any | None = None
+    market_context_trade_setup_preview: "TradeSetup | None" = None
+    verdict: SwingVerdict | None = None
+    evidence: SwingEvidence | None = None
+    diagnostics: SwingDiagnostics | None = None
+    modules: dict[str, bool] | None = None
+    warnings: tuple[str, ...] = ()
+
+    def to_dict(
+        self,
+        *,
+        strategy_name: str | None = None,
+        max_hold_days: int | None = None,
+        include_sentiment: bool = True,
+    ) -> dict[str, Any]:
+        verdict = self.verdict or SwingVerdict(
+            trade_setup=self.trade_setup,
+            signal_assessment=self.signal_assessment,
+            risk_response=self.risk_response,
+            market_regime=self.market_regime,
+            market_context_signal_preview=self.market_context_signal_preview,
+            market_context_risk_preview=self.market_context_risk_preview,
+            market_context_trade_setup_preview=self.market_context_trade_setup_preview,
+        )
+        evidence = self.evidence or SwingEvidence(
+            accumulation_candidate=self.accumulation_candidate,
+            setup_eval=self.setup_eval,
+            backtest_result=self.backtest_result,
+            sentiment_response=self.sentiment_response,
+            sentiment_warning=self.sentiment_warning,
+            take_profit_pct=self.take_profit_pct,
+            stop_loss_pct=self.stop_loss_pct,
+            regime_label=self.regime_label,
+        )
+        diagnostics = self.diagnostics or SwingDiagnostics(
+            data_freshness=self.data_freshness,
+            flow_detail=self.flow_detail,
+            broker_detail=self.broker_detail,
+            broker_quality_note=self.broker_quality_note,
+            refresh_actions=self.refresh_actions,
+            warnings=self.warnings,
+        )
+        diagnostics_out = diagnostics.to_dict()
+        if (
+            isinstance(diagnostics_out.get("data"), dict)
+            and verdict.market_regime is not None
+        ):
+            diagnostics_out["data"]["regime_as_of"] = verdict.market_regime.as_of_date.isoformat()
+        diagnostics_out["volatility_context"] = _volatility_context_to_dict(
+            atr_value=self.atr_value,
+            latest_close=self.latest_close,
+        )
+        evidence_out = evidence.to_dict(
+            strategy_name=strategy_name,
+            max_hold_days=max_hold_days,
+        )
+        if not include_sentiment:
+            evidence_out["sentiment"] = None
+
+        return {
+            "schema_version": 1,
+            "artifact_type": "swing_analysis",
+            "json_contract": {
+                "canonical": ("verdict", "evidence", "diagnostics"),
+            },
+            "ticker": self.ticker,
+            "date": str(self.today),
+            "modules": self.modules or {},
+            "verdict": verdict.to_dict(),
+            "evidence": evidence_out,
+            "diagnostics": diagnostics_out,
+        }
+
+
+def _signal_response_to_dict(response: "AssessSignalResponse | None") -> dict[str, Any] | None:
+    if response is None:
+        return None
+    return {
+        "score": response.assessment.score,
+        "raw_exact_score": response.assessment.raw_exact_score,
+        "strength": response.assessment.strength.value,
+        "entry_quality": response.assessment.entry_quality.value,
+        "breakdown": response.assessment.breakdown_dict,
+        "coverage_score": response.coverage_score,             # canonical
+        "evidence_confidence": response.evidence_confidence,   # legacy alias
+        "confidence_score": response.assessment.confidence_score,  # legacy alias
+        "coverage_warning": response.coverage_warning,
+        "alpha_trigger_score": (
+            response.assessment.alpha_trigger_score.to_dict()
+            if response.assessment.alpha_trigger_score else None
+        ),
+        "decision_constraints": (
+            response.assessment.decision_constraints.to_dict()
+            if getattr(response.assessment, "decision_constraints", None) else None
+        ),
+    }
+
+
+def _volatility_context_to_dict(
+    *,
+    atr_value: Decimal | None,
+    latest_close: Decimal | None,
+) -> dict[str, Any]:
+    vc = build_volatility_context(atr_value=atr_value, latest_close=latest_close)
+    return {
+        "atr_20": vc.atr_at_signal,
+        "atr_pct": vc.atr_pct_at_signal,
+        "volatility_bucket": vc.volatility_bucket_at_signal,
+        "stop_model_hint": "ATR_MULTIPLE",
+        "suggested_stop_atr": 2.0,
+        "suggested_target_atr": 3.0,
+        "volatility_size_multiplier": vc.volatility_size_multiplier_at_signal,
+    }
+
+
+def _object_to_dict(value: Any | None) -> Any | None:
+    if value is None:
+        return None
+    to_dict = getattr(value, "to_dict", None)
+    if callable(to_dict):
+        return to_dict()
+    return value
+
+
+def _risk_response_to_dict(response: Any | None) -> dict[str, Any] | None:
+    if response is None:
+        return None
+    assessment = response.assessment
+    return {
+        "risk_status": assessment.risk_level_name,
+        "confidence": assessment.confidence,
+        "sma20": float(assessment.indicators.sma),
+        "ema20": float(assessment.indicators.ema),
+        "rsi14": float(assessment.indicators.rsi),
+        "gate_triggered": assessment.gate_triggered,
+    }
+
+
+def _risk_response_to_preview_dict(response: Any | None) -> dict[str, Any] | None:
+    if response is None:
+        return None
+    return {
+        "level": response.assessment.risk_level_name,
+        "gate_triggered": response.assessment.gate_triggered,
+    }
+
+
+def _candidate_accumulation_to_dict(candidate: Any | None) -> dict[str, Any]:
+    if candidate is None:
+        return {
+            "foreign_flow_score": None,
+            "streak": None,
+            "trend": None,
+            "flow_pct": None,
+            "vwap_disc_pct": None,
+            "bb_width_pctile": None,
+            "foreign_flow_evidence": None,
+            "dividend_risk": False,
+            "rights_issue_risk": False,
+            "upcoming_rups": [],
+            "seasonal_score": None,
+            "seasonal_label": None,
+            "insider_buying": False,
+            "recent_insider_buys": [],
+            "analyst_consensus": None,
+            "shareholding": None,
+            "bandar_detector": None,
+            "fundamentals": None,
+            "ticker_notation": None,
+        }
+    return {
+        "foreign_flow_score": candidate.foreign_flow_score,
+        "streak": candidate.consecutive_streak,
+        "trend": candidate.trend,
+        "flow_pct": candidate.avg_flow_ratio,
+        "vwap_disc_pct": candidate.vwap_discount_pct,
+        "bb_width_pctile": candidate.bb_width_pctile,
+        "foreign_flow_evidence": (
+            candidate.foreign_flow_evidence.to_dict()
+            if getattr(candidate, "foreign_flow_evidence", None) else None
+        ),
+        "dividend_risk": candidate.dividend_risk,
+        "rights_issue_risk": candidate.rights_issue_risk,
+        "upcoming_rups": candidate.upcoming_rups,
+        "seasonal_score": (
+            candidate.seasonal_edge.score if candidate.seasonal_edge else None
+        ),
+        "seasonal_label": (
+            candidate.seasonal_edge.label if candidate.seasonal_edge else None
+        ),
+        "insider_buying": candidate.insider_buying,
+        "recent_insider_buys": candidate.recent_insider_buys,
+        "analyst_consensus": (
+            candidate.analyst_consensus.to_dict()
+            if candidate.analyst_consensus else None
+        ),
+        "shareholding": (
+            candidate.shareholding.to_dict() if candidate.shareholding else None
+        ),
+        "bandar_detector": (
+            candidate.bandar_detector.to_dict() if candidate.bandar_detector else None
+        ),
+        "fundamentals": (
+            candidate.fundamentals.to_dict() if candidate.fundamentals else None
+        ),
+        "ticker_notation": (
+            candidate.ticker_notation.to_dict() if candidate.ticker_notation else None
+        ),
+    }

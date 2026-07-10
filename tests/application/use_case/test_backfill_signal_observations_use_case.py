@@ -3,9 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 
-from src.application.use_case.accumulation_screen_use_case import (
-    AccumulationScreenResponse,
-)
+from src.application.dto.accumulation_screen import AccumulationScreenResponse
 from src.application.services.signal_observation_request_builder import (
     BuildSignalObservationScreenRequest,
 )

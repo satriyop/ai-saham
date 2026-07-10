@@ -16,11 +16,11 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.application.use_case.accumulation_screen_use_case import (
+from src.application.dto.accumulation_screen import (
     AccumulationCandidate,
     AccumulationScreenRequest,
-    AccumulationScreenUseCase,
 )
+from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
 from src.application.use_case.assess_risk_use_case import AssessRiskUseCase
 from src.application.use_case.assess_risk_use_case import AssessRiskResponse
 from src.application.use_case.assess_signal_use_case import AssessSignalResponse

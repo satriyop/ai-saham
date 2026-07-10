@@ -30,7 +30,7 @@ Before proposing or writing any code, the agent must:
 * Read `DEFINITION_OF_DONE.md`
 * Read `PROMPT_CONTRACT.md`
 * Read `TASK_TEMPLATE.md`
-* Read `AI_AGENTS_CHECKLIST.md`
+* Read `AI_AGENT_CHECKLIST.md`
 * Read `ARCHITECTURE_DECISIONS.md`
 * Read its own agent contract (if present)
 
