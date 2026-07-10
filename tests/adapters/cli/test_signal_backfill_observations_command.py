@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 from typer.testing import CliRunner
 
-from src.adapters.cli import analyze_signal_commands
+from src.adapters.cli import analyze_signal_backfill_commands as analyze_signal_commands
 from src.adapters.cli.main import app
 from src.application.use_case.backfill_signal_observations_use_case import (
     BackfillSignalObservationsResponse,
