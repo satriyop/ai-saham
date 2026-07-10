@@ -8,7 +8,6 @@ from zoneinfo import ZoneInfo
 
 from typer.testing import CliRunner
 
-import src.adapters.cli.trade_intraday_commands as trade_intraday_commands
 from src.adapters.cli.main import app
 from src.adapters.cli.trade_intraday_backtest_display import display_intraday_backtest
 from src.application.use_case.intraday_backtest_use_case import IntradayBacktestResponse
@@ -28,23 +27,24 @@ class _FakeIEVRepo:
 
 
 def _patch_intraday_proxy_dependencies(monkeypatch, captured: dict) -> None:
+    from src.adapters.cli import trade_intraday_backtest_commands
     monkeypatch.setattr(
-        trade_intraday_commands,
+        trade_intraday_backtest_commands,
         "resolve_tickers",
         lambda universe, explicit, db_path: explicit or ["BBCA"],
     )
     monkeypatch.setattr(
-        trade_intraday_commands,
+        trade_intraday_backtest_commands,
         "SQLiteMarketRepository",
         lambda db_path: object(),
     )
     monkeypatch.setattr(
-        trade_intraday_commands,
+        trade_intraday_backtest_commands,
         "SQLiteBrokerRepository",
         lambda db_path: object(),
     )
     monkeypatch.setattr(
-        trade_intraday_commands,
+        trade_intraday_backtest_commands,
         "create_indicator_registry",
         lambda broker_repository, market_repository: object(),
     )
@@ -54,7 +54,13 @@ def _patch_intraday_proxy_dependencies(monkeypatch, captured: dict) -> None:
     )
 
     class FakeUseCase:
-        def __init__(self, market_repository, broker_repository, indicator_registry, iev_repository=None):
+        def __init__(
+            self,
+            market_repository,
+            broker_repository,
+            indicator_registry,
+            iev_repository=None,
+        ):
             pass
 
         def execute(self, request):
@@ -89,7 +95,8 @@ def _patch_intraday_proxy_dependencies(monkeypatch, captured: dict) -> None:
                 warnings=[],
             )
 
-    monkeypatch.setattr(trade_intraday_commands, "IntradayBacktestUseCase", FakeUseCase)
+    monkeypatch.setattr(trade_intraday_backtest_commands, "IntradayBacktestUseCase", FakeUseCase)
+
 
 
 def test_intraday_backtest_display_calls_it_proxy_simulation(capsys):
