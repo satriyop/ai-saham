@@ -213,13 +213,23 @@ def test_saved_observations_make_day_n_plus_2_breakout_sequence_valid(tmp_path):
 
 
 def _breakout_candles() -> list[Candle]:
+    """21 sessions matching VolumeTriggerValidityConfig defaults (Point 3):
+    15 reference sessions + 5 dry-up sessions (volume <= 50% of reference) +
+    1 standalone expansion/breakout session (volume >= 150% of dry-up avg,
+    positive close) — the only shape that confirms volume_trigger_confirmed.
+    """
     candles = []
-    for idx in range(20):
+    for idx in range(21):
         close = Decimal("100")
         high = Decimal("101")
         open_ = Decimal("99")
-        volume = 1_000 if idx < 15 else 2_000
-        if idx == 19:
+        if idx < 15:
+            volume = 2_000  # reference/baseline window
+        elif idx < 20:
+            volume = 800  # dry-up window: 800/2000 = 0.4 <= dry_up_max_ratio 0.50
+        else:
+            volume = 2_400  # expansion session: 2400/800 = 3.0 >= expansion_min_ratio 1.50
+        if idx == 20:
             open_ = Decimal("101")
             close = Decimal("105")
             high = Decimal("106")
