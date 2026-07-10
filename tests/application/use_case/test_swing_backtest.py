@@ -19,9 +19,6 @@ from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 from src.domain.value_objects.risk_assessment import RiskAssessment
-from src.infrastructure.config.config_backed_market_context_provider import (
-    ConfigBackedMarketContextProvider,
-)
 
 
 class MockMarketRepository(MarketDataRepository):
@@ -203,13 +200,30 @@ def test_swing_backtest_opens_signal_and_exits_at_target():
     market_repo = MockMarketRepository(
         _base_candles("BBCA", base) + benchmark_candles
     )
+    from src.domain.value_objects.market_context import MarketContext, MarketRegime
+    fake_context = MarketContext(
+        regime=MarketRegime.NEUTRAL,
+        conviction=0.5,
+        factors=(),
+        signal_multiplier=1.0,
+        gate_tightening=False,
+        as_of_date=signal_date,
+    )
+    fake_context_exit = MarketContext(
+        regime=MarketRegime.NEUTRAL,
+        conviction=0.5,
+        factors=(),
+        signal_multiplier=1.0,
+        gate_tightening=False,
+        as_of_date=exit_date,
+    )
     use_case = SwingBacktestUseCase(
         broker_repository=broker_repo,
         market_repository=market_repo,
-        market_context_provider=ConfigBackedMarketContextProvider(
-            market_repository=market_repo,
-            broker_repository=broker_repo,
-        ),
+        market_context_provider=FakeMarketContextProvider({
+            signal_date: fake_context,
+            exit_date: fake_context_exit,
+        }),
     )
 
     response = use_case.execute(SwingBacktestRequest(
@@ -490,13 +504,30 @@ def test_swing_backtest_can_filter_entries_by_allowed_regimes():
     market_repo = MockMarketRepository(
         _base_candles("BBCA", base) + benchmark_candles
     )
+    from src.domain.value_objects.market_context import MarketContext, MarketRegime
+    fake_context = MarketContext(
+        regime=MarketRegime.NEUTRAL,
+        conviction=0.5,
+        factors=(),
+        signal_multiplier=1.0,
+        gate_tightening=False,
+        as_of_date=signal_date,
+    )
+    fake_context_exit = MarketContext(
+        regime=MarketRegime.NEUTRAL,
+        conviction=0.5,
+        factors=(),
+        signal_multiplier=1.0,
+        gate_tightening=False,
+        as_of_date=exit_date,
+    )
     use_case = SwingBacktestUseCase(
         broker_repository=broker_repo,
         market_repository=market_repo,
-        market_context_provider=ConfigBackedMarketContextProvider(
-            market_repository=market_repo,
-            broker_repository=broker_repo,
-        ),
+        market_context_provider=FakeMarketContextProvider({
+            signal_date: fake_context,
+            exit_date: fake_context_exit,
+        }),
     )
 
     response = use_case.execute(SwingBacktestRequest(
