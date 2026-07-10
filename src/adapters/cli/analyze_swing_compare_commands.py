@@ -37,6 +37,9 @@ from src.application.use_case.swing_backtest_use_case import (
     SwingBacktestResponse,
     SwingBacktestUseCase,
 )
+from src.application.services.config_backed_market_context_provider import (
+    ConfigBackedMarketContextProvider,
+)
 from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
@@ -186,11 +189,17 @@ def swing_compare(
             f"{start_date} to {end_date}..."
         )
 
+    broker_repo = SQLiteBrokerRepository(resolved_db)
+    market_repo = SQLiteMarketRepository(db_path=resolved_db)
     use_case = SwingBacktestUseCase(
-        broker_repository=SQLiteBrokerRepository(resolved_db),
-        market_repository=SQLiteMarketRepository(db_path=resolved_db),
+        broker_repository=broker_repo,
+        market_repository=market_repo,
         derived_feature_policy=ACCUMULATION_SCREENER_CONFIG.derived_features,
         risk_engine=create_risk_engine(resolved_db, with_enrichment=True),
+        market_context_provider=ConfigBackedMarketContextProvider(
+            market_repository=market_repo,
+            broker_repository=broker_repo,
+        ),
     )
     rows: list[tuple[str, SwingBacktestResponse]] = []
     try:

@@ -6,7 +6,6 @@ AI usage: None
 """
 
 import logging
-from dataclasses import replace
 from datetime import date
 from decimal import Decimal
 from typing import Any
@@ -27,6 +26,7 @@ from src.application.dto.swing_backtest import (
     SwingBacktestResponse,
     SwingBacktestTrade,
 )
+from src.application.ports.market_context_provider import MarketContextProvider
 from src.application.services.backtest_statistics import (
     average_pct,
     equity_max_drawdown_pct,
@@ -34,7 +34,6 @@ from src.application.services.backtest_statistics import (
     trade_profit_factor,
     win_rate_pct,
 )
-from src.application.services.market_context_engine import MarketContextEngine
 from src.application.services.swing_backtest_attribution import (
     summarize_swing_backtest_attribution,
 )
@@ -55,10 +54,8 @@ from src.application.use_case.evaluate_swing_setup_use_case import (
 )
 from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.market_data_repository import MarketDataRepository
-from src.domain.value_objects.benchmark_symbol import canonicalize_ticker
 from src.domain.value_objects.market_context import MarketContext
 from src.domain.value_objects.setup_evaluation import SetupEvaluation
-from src.infrastructure.config.market_context_config import load_market_context_config
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +86,7 @@ class SwingBacktestUseCase:
         market_repository: MarketDataRepository,
         derived_feature_policy: AccumulationDerivedFeaturePolicy | None = None,
         risk_engine: Any | None = None,
+        market_context_provider: MarketContextProvider | None = None,
     ) -> None:
         self._broker_repo = broker_repository
         self._market_repo = market_repository
@@ -98,10 +96,7 @@ class SwingBacktestUseCase:
             market_repository=market_repository,
             derived_feature_policy=self._derived_features,
         )
-        self._regime = MarketContextEngine(
-            market_repository=market_repository,
-            broker_repository=broker_repository,
-        )
+        self._market_context_provider = market_context_provider
         self._attributor = SwingBacktestTradeSetupAttributor(
             risk_engine=risk_engine,
         )
@@ -292,23 +287,17 @@ class SwingBacktestUseCase:
         if not request.include_regime and not request.allowed_regimes:
             return {}
 
-        cfg = load_market_context_config()
-        benchmark = canonicalize_ticker(request.benchmark_ticker)
-        if benchmark != cfg.idx_trend.benchmark_ticker:
-            cfg = replace(
-                cfg,
-                idx_trend=replace(cfg.idx_trend, benchmark_ticker=benchmark),
+        if self._market_context_provider is None:
+            raise ValueError(
+                "market_context_provider is required when include_regime=True "
+                "or allowed_regimes is non-empty"
             )
-        engine = MarketContextEngine(
-            market_repository=self._market_repo,
-            config=cfg,
-            universe=tickers,
-            broker_repository=self._broker_repo,
+
+        return self._market_context_provider.evaluate_for_dates(
+            tickers=tickers,
+            replay_dates=replay_dates,
+            benchmark_ticker=request.benchmark_ticker,
         )
-        regimes: dict[date, MarketContext] = {}
-        for replay_date in replay_dates:
-            regimes[replay_date] = engine.evaluate(as_of_date=replay_date)
-        return regimes
 
     def _regime_stats(
         self,

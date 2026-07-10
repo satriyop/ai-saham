@@ -45,6 +45,9 @@ from src.application.use_case.swing_backtest_use_case import (
     SwingBacktestResponse,
     SwingBacktestUseCase,
 )
+from src.application.services.config_backed_market_context_provider import (
+    ConfigBackedMarketContextProvider,
+)
 from src.infrastructure.config.accumulation_screener_config import (
     load_accumulation_screener_config,
 )
@@ -152,11 +155,17 @@ def _run_swing_backtest(
             f"setup={setup_name} | max positions={max_positions}..."
         )
 
+    broker_repo = SQLiteBrokerRepository(resolved_db)
+    market_repo = SQLiteMarketRepository(db_path=resolved_db)
     use_case = SwingBacktestUseCase(
-        broker_repository=SQLiteBrokerRepository(resolved_db),
-        market_repository=SQLiteMarketRepository(db_path=resolved_db),
+        broker_repository=broker_repo,
+        market_repository=market_repo,
         derived_feature_policy=_ASC.derived_features,
         risk_engine=create_risk_engine(resolved_db, with_enrichment=True),
+        market_context_provider=ConfigBackedMarketContextProvider(
+            market_repository=market_repo,
+            broker_repository=broker_repo,
+        ),
     )
     try:
         return use_case.execute(SwingBacktestRequest(
