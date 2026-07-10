@@ -1,6 +1,13 @@
 import json
 from datetime import datetime
 
+from src.application.services.swing_tuning_patch_validator import (
+    SwingTuningPatchApplier,
+    SwingTuningPatchDryRunPlanner,
+    SwingTuningPatchValidator,
+    SwingTuningPatchVerifier,
+)
+
 _COMPLETE_SOURCE_REVIEW = {
     "readiness_state": "PATCH_ELIGIBLE",
     "walk_forward_enforced": True,
@@ -30,21 +37,12 @@ _COMPLETE_SOURCE_REVIEW = {
     },
 }
 
-from src.application.services.swing_tuning_patch_validator import (
-    SwingTuningPatchApplier,
-    SwingTuningPatchDryRunPlanner,
-    SwingTuningPatchValidator,
-    SwingTuningPatchVerifier,
-)
-
 
 def _write_config(tmp_path):
     config_dir = tmp_path / "config"
     config_dir.mkdir()
     (config_dir / "signal_engine.yaml").write_text(
-        "signal_engine:\n"
-        "  classification:\n"
-        "    strong_min_score: 70\n",
+        "signal_engine:\n  classification:\n    strong_min_score: 70\n",
         encoding="utf-8",
     )
 
@@ -70,21 +68,25 @@ def _write_config_with_archived_paths(tmp_path):
 def test_swing_tuning_patch_validator_accepts_matching_current_value(tmp_path):
     _write_config(tmp_path)
     patch_path = tmp_path / "patch.json"
-    patch_path.write_text(json.dumps({
-        "artifact_type": "swing_tuning_patch_review",
-        "apply": {"supported": False},
-        "source_review": _COMPLETE_SOURCE_REVIEW,
-        "patch_items": [
+    patch_path.write_text(
+        json.dumps(
             {
-                "target_path": (
-                    "config/signal_engine.yaml:"
-                    "signal_engine.classification.strong_min_score"
-                ),
-                "current_value": 70,
-                "proposed_value": 71,
-            },
-        ],
-    }))
+                "artifact_type": "swing_tuning_patch_review",
+                "apply": {"supported": False},
+                "source_review": _COMPLETE_SOURCE_REVIEW,
+                "patch_items": [
+                    {
+                        "target_path": (
+                            "config/signal_engine.yaml:"
+                            "signal_engine.classification.strong_min_score"
+                        ),
+                        "current_value": 70,
+                        "proposed_value": 71,
+                    },
+                ],
+            }
+        )
+    )
 
     report = SwingTuningPatchValidator(config_root=tmp_path).validate(patch_path)
 
@@ -96,49 +98,52 @@ def test_swing_tuning_patch_validator_accepts_matching_current_value(tmp_path):
 def test_swing_tuning_patch_validator_rejects_archived_factor_target(tmp_path):
     _write_config_with_archived_paths(tmp_path)
     patch_path = tmp_path / "patch.json"
-    patch_path.write_text(json.dumps({
-        "artifact_type": "swing_tuning_patch_review",
-        "apply": {"supported": False},
-        "source_review": _COMPLETE_SOURCE_REVIEW,
-        "patch_items": [
+    patch_path.write_text(
+        json.dumps(
             {
-                "target_path": (
-                    "config/signal_engine.yaml:"
-                    "signal_engine.factors.bandar_intensity"
-                ),
-                "current_value": {"enabled": True, "weight": 0.20},
-                "proposed_value": {"enabled": True, "weight": 0.25},
-            },
-        ],
-    }))
+                "artifact_type": "swing_tuning_patch_review",
+                "apply": {"supported": False},
+                "source_review": _COMPLETE_SOURCE_REVIEW,
+                "patch_items": [
+                    {
+                        "target_path": (
+                            "config/signal_engine.yaml:signal_engine.factors.bandar_intensity"
+                        ),
+                        "current_value": {"enabled": True, "weight": 0.20},
+                        "proposed_value": {"enabled": True, "weight": 0.25},
+                    },
+                ],
+            }
+        )
+    )
 
     report = SwingTuningPatchValidator(config_root=tmp_path).validate(patch_path)
 
     assert report.valid is False
-    assert (
-        "target_path_not_tunable:archived_baseline_only"
-        in report.item_results[0].issues
-    )
+    assert "target_path_not_tunable:archived_baseline_only" in report.item_results[0].issues
 
 
 def test_swing_tuning_patch_validator_rejects_archived_forward_pe_target(tmp_path):
     _write_config_with_archived_paths(tmp_path)
     patch_path = tmp_path / "patch.json"
-    patch_path.write_text(json.dumps({
-        "artifact_type": "swing_tuning_patch_review",
-        "apply": {"supported": False},
-        "source_review": _COMPLETE_SOURCE_REVIEW,
-        "patch_items": [
+    patch_path.write_text(
+        json.dumps(
             {
-                "target_path": (
-                    "config/signal_engine.yaml:"
-                    "signal_engine.scoring.forward_pe.cheap_pe"
-                ),
-                "current_value": 15.0,
-                "proposed_value": 14.0,
-            },
-        ],
-    }))
+                "artifact_type": "swing_tuning_patch_review",
+                "apply": {"supported": False},
+                "source_review": _COMPLETE_SOURCE_REVIEW,
+                "patch_items": [
+                    {
+                        "target_path": (
+                            "config/signal_engine.yaml:signal_engine.scoring.forward_pe.cheap_pe"
+                        ),
+                        "current_value": 15.0,
+                        "proposed_value": 14.0,
+                    },
+                ],
+            }
+        )
+    )
 
     report = SwingTuningPatchValidator(config_root=tmp_path).validate(patch_path)
 
@@ -152,21 +157,25 @@ def test_swing_tuning_patch_validator_rejects_archived_forward_pe_target(tmp_pat
 def test_swing_tuning_patch_validator_rejects_stale_current_value(tmp_path):
     _write_config(tmp_path)
     patch_path = tmp_path / "patch.json"
-    patch_path.write_text(json.dumps({
-        "artifact_type": "swing_tuning_patch_review",
-        "apply": {"supported": False},
-        "source_review": _COMPLETE_SOURCE_REVIEW,
-        "patch_items": [
+    patch_path.write_text(
+        json.dumps(
             {
-                "target_path": (
-                    "config/signal_engine.yaml:"
-                    "signal_engine.classification.strong_min_score"
-                ),
-                "current_value": 69,
-                "proposed_value": 71,
-            },
-        ],
-    }))
+                "artifact_type": "swing_tuning_patch_review",
+                "apply": {"supported": False},
+                "source_review": _COMPLETE_SOURCE_REVIEW,
+                "patch_items": [
+                    {
+                        "target_path": (
+                            "config/signal_engine.yaml:"
+                            "signal_engine.classification.strong_min_score"
+                        ),
+                        "current_value": 69,
+                        "proposed_value": 71,
+                    },
+                ],
+            }
+        )
+    )
 
     report = SwingTuningPatchValidator(config_root=tmp_path).validate(patch_path)
 
@@ -176,11 +185,15 @@ def test_swing_tuning_patch_validator_rejects_stale_current_value(tmp_path):
 
 def test_swing_tuning_patch_validator_rejects_applyable_artifact(tmp_path):
     patch_path = tmp_path / "patch.json"
-    patch_path.write_text(json.dumps({
-        "artifact_type": "swing_tuning_patch_review",
-        "apply": {"supported": True},
-        "patch_items": [],
-    }))
+    patch_path.write_text(
+        json.dumps(
+            {
+                "artifact_type": "swing_tuning_patch_review",
+                "apply": {"supported": True},
+                "patch_items": [],
+            }
+        )
+    )
 
     report = SwingTuningPatchValidator(config_root=tmp_path).validate(patch_path)
 
@@ -191,21 +204,25 @@ def test_swing_tuning_patch_validator_rejects_applyable_artifact(tmp_path):
 def test_swing_tuning_patch_dry_run_plans_yaml_changes(tmp_path):
     _write_config(tmp_path)
     patch_path = tmp_path / "patch.json"
-    patch_path.write_text(json.dumps({
-        "artifact_type": "swing_tuning_patch_review",
-        "apply": {"supported": False},
-        "source_review": _COMPLETE_SOURCE_REVIEW,
-        "patch_items": [
+    patch_path.write_text(
+        json.dumps(
             {
-                "target_path": (
-                    "config/signal_engine.yaml:"
-                    "signal_engine.classification.strong_min_score"
-                ),
-                "current_value": 70,
-                "proposed_value": 71,
-            },
-        ],
-    }))
+                "artifact_type": "swing_tuning_patch_review",
+                "apply": {"supported": False},
+                "source_review": _COMPLETE_SOURCE_REVIEW,
+                "patch_items": [
+                    {
+                        "target_path": (
+                            "config/signal_engine.yaml:"
+                            "signal_engine.classification.strong_min_score"
+                        ),
+                        "current_value": 70,
+                        "proposed_value": 71,
+                    },
+                ],
+            }
+        )
+    )
 
     report = SwingTuningPatchDryRunPlanner(config_root=tmp_path).plan(patch_path)
 
@@ -218,12 +235,16 @@ def test_swing_tuning_patch_dry_run_plans_yaml_changes(tmp_path):
 
 def test_swing_tuning_patch_dry_run_rejects_empty_patch(tmp_path):
     patch_path = tmp_path / "patch.json"
-    patch_path.write_text(json.dumps({
-        "artifact_type": "swing_tuning_patch_review",
-        "apply": {"supported": False},
-        "source_review": _COMPLETE_SOURCE_REVIEW,
-        "patch_items": [],
-    }))
+    patch_path.write_text(
+        json.dumps(
+            {
+                "artifact_type": "swing_tuning_patch_review",
+                "apply": {"supported": False},
+                "source_review": _COMPLETE_SOURCE_REVIEW,
+                "patch_items": [],
+            }
+        )
+    )
 
     report = SwingTuningPatchDryRunPlanner(config_root=tmp_path).plan(patch_path)
 
@@ -235,21 +256,25 @@ def test_swing_tuning_patch_apply_writes_yaml_and_audit_log(tmp_path):
     _write_config(tmp_path)
     patch_path = tmp_path / "patch.json"
     log_path = tmp_path / "journals" / "swing_tuning_apply_log.jsonl"
-    patch_path.write_text(json.dumps({
-        "artifact_type": "swing_tuning_patch_review",
-        "apply": {"supported": False},
-        "source_review": _COMPLETE_SOURCE_REVIEW,
-        "patch_items": [
+    patch_path.write_text(
+        json.dumps(
             {
-                "target_path": (
-                    "config/signal_engine.yaml:"
-                    "signal_engine.classification.strong_min_score"
-                ),
-                "current_value": 70,
-                "proposed_value": 71,
-            },
-        ],
-    }))
+                "artifact_type": "swing_tuning_patch_review",
+                "apply": {"supported": False},
+                "source_review": _COMPLETE_SOURCE_REVIEW,
+                "patch_items": [
+                    {
+                        "target_path": (
+                            "config/signal_engine.yaml:"
+                            "signal_engine.classification.strong_min_score"
+                        ),
+                        "current_value": 70,
+                        "proposed_value": 71,
+                    },
+                ],
+            }
+        )
+    )
 
     report = SwingTuningPatchApplier(
         config_root=tmp_path,
@@ -260,9 +285,7 @@ def test_swing_tuning_patch_apply_writes_yaml_and_audit_log(tmp_path):
     assert report.issues == ()
     assert report.changes[0].old_value == 70
     assert report.changes[0].new_value == 71
-    config_text = (tmp_path / "config" / "signal_engine.yaml").read_text(
-        encoding="utf-8"
-    )
+    config_text = (tmp_path / "config" / "signal_engine.yaml").read_text(encoding="utf-8")
     assert "strong_min_score: 71" in config_text
 
     log_payload = json.loads(log_path.read_text(encoding="utf-8"))
@@ -275,21 +298,25 @@ def test_swing_tuning_patch_apply_writes_yaml_and_audit_log(tmp_path):
 def test_swing_tuning_patch_apply_rejects_without_confirmation(tmp_path):
     _write_config(tmp_path)
     patch_path = tmp_path / "patch.json"
-    patch_path.write_text(json.dumps({
-        "artifact_type": "swing_tuning_patch_review",
-        "apply": {"supported": False},
-        "source_review": _COMPLETE_SOURCE_REVIEW,
-        "patch_items": [
+    patch_path.write_text(
+        json.dumps(
             {
-                "target_path": (
-                    "config/signal_engine.yaml:"
-                    "signal_engine.classification.strong_min_score"
-                ),
-                "current_value": 70,
-                "proposed_value": 71,
-            },
-        ],
-    }))
+                "artifact_type": "swing_tuning_patch_review",
+                "apply": {"supported": False},
+                "source_review": _COMPLETE_SOURCE_REVIEW,
+                "patch_items": [
+                    {
+                        "target_path": (
+                            "config/signal_engine.yaml:"
+                            "signal_engine.classification.strong_min_score"
+                        ),
+                        "current_value": 70,
+                        "proposed_value": 71,
+                    },
+                ],
+            }
+        )
+    )
 
     report = SwingTuningPatchApplier(config_root=tmp_path).apply(
         patch_path,
@@ -299,30 +326,32 @@ def test_swing_tuning_patch_apply_rejects_without_confirmation(tmp_path):
 
     assert report.applied is False
     assert report.issues == ("apply_confirmation_required",)
-    config_text = (tmp_path / "config" / "signal_engine.yaml").read_text(
-        encoding="utf-8"
-    )
+    config_text = (tmp_path / "config" / "signal_engine.yaml").read_text(encoding="utf-8")
     assert "strong_min_score: 70" in config_text
 
 
 def test_swing_tuning_patch_apply_rejects_dirty_target(tmp_path):
     _write_config(tmp_path)
     patch_path = tmp_path / "patch.json"
-    patch_path.write_text(json.dumps({
-        "artifact_type": "swing_tuning_patch_review",
-        "apply": {"supported": False},
-        "source_review": _COMPLETE_SOURCE_REVIEW,
-        "patch_items": [
+    patch_path.write_text(
+        json.dumps(
             {
-                "target_path": (
-                    "config/signal_engine.yaml:"
-                    "signal_engine.classification.strong_min_score"
-                ),
-                "current_value": 70,
-                "proposed_value": 71,
-            },
-        ],
-    }))
+                "artifact_type": "swing_tuning_patch_review",
+                "apply": {"supported": False},
+                "source_review": _COMPLETE_SOURCE_REVIEW,
+                "patch_items": [
+                    {
+                        "target_path": (
+                            "config/signal_engine.yaml:"
+                            "signal_engine.classification.strong_min_score"
+                        ),
+                        "current_value": 70,
+                        "proposed_value": 71,
+                    },
+                ],
+            }
+        )
+    )
 
     report = SwingTuningPatchApplier(
         config_root=tmp_path,
@@ -331,36 +360,36 @@ def test_swing_tuning_patch_apply_rejects_dirty_target(tmp_path):
 
     assert report.applied is False
     assert report.issues == ("target_config_dirty:config/signal_engine.yaml",)
-    config_text = (tmp_path / "config" / "signal_engine.yaml").read_text(
-        encoding="utf-8"
-    )
+    config_text = (tmp_path / "config" / "signal_engine.yaml").read_text(encoding="utf-8")
     assert "strong_min_score: 70" in config_text
 
 
 def test_swing_tuning_patch_verify_passes_after_value_applied(tmp_path):
     _write_config(tmp_path)
     (tmp_path / "config" / "signal_engine.yaml").write_text(
-        "signal_engine:\n"
-        "  classification:\n"
-        "    strong_min_score: 71\n",
+        "signal_engine:\n  classification:\n    strong_min_score: 71\n",
         encoding="utf-8",
     )
     patch_path = tmp_path / "patch.json"
-    patch_path.write_text(json.dumps({
-        "artifact_type": "swing_tuning_patch_review",
-        "apply": {"supported": False},
-        "source_review": _COMPLETE_SOURCE_REVIEW,
-        "patch_items": [
+    patch_path.write_text(
+        json.dumps(
             {
-                "target_path": (
-                    "config/signal_engine.yaml:"
-                    "signal_engine.classification.strong_min_score"
-                ),
-                "current_value": 70,
-                "proposed_value": 71,
-            },
-        ],
-    }))
+                "artifact_type": "swing_tuning_patch_review",
+                "apply": {"supported": False},
+                "source_review": _COMPLETE_SOURCE_REVIEW,
+                "patch_items": [
+                    {
+                        "target_path": (
+                            "config/signal_engine.yaml:"
+                            "signal_engine.classification.strong_min_score"
+                        ),
+                        "current_value": 70,
+                        "proposed_value": 71,
+                    },
+                ],
+            }
+        )
+    )
 
     report = SwingTuningPatchVerifier(config_root=tmp_path).verify(patch_path)
 
@@ -373,21 +402,25 @@ def test_swing_tuning_patch_verify_passes_after_value_applied(tmp_path):
 def test_swing_tuning_patch_verify_fails_before_value_applied(tmp_path):
     _write_config(tmp_path)
     patch_path = tmp_path / "patch.json"
-    patch_path.write_text(json.dumps({
-        "artifact_type": "swing_tuning_patch_review",
-        "apply": {"supported": False},
-        "source_review": _COMPLETE_SOURCE_REVIEW,
-        "patch_items": [
+    patch_path.write_text(
+        json.dumps(
             {
-                "target_path": (
-                    "config/signal_engine.yaml:"
-                    "signal_engine.classification.strong_min_score"
-                ),
-                "current_value": 70,
-                "proposed_value": 71,
-            },
-        ],
-    }))
+                "artifact_type": "swing_tuning_patch_review",
+                "apply": {"supported": False},
+                "source_review": _COMPLETE_SOURCE_REVIEW,
+                "patch_items": [
+                    {
+                        "target_path": (
+                            "config/signal_engine.yaml:"
+                            "signal_engine.classification.strong_min_score"
+                        ),
+                        "current_value": 70,
+                        "proposed_value": 71,
+                    },
+                ],
+            }
+        )
+    )
 
     report = SwingTuningPatchVerifier(config_root=tmp_path).verify(patch_path)
 
@@ -395,3 +428,33 @@ def test_swing_tuning_patch_verify_fails_before_value_applied(tmp_path):
     assert report.verified_item_count == 0
     assert report.item_results[0].actual_value == 70
     assert report.item_results[0].issues == ("proposed_value_not_applied",)
+
+
+def test_swing_tuning_patch_verifier_missing_path_returns_error(tmp_path):
+    missing_path = tmp_path / "does_not_exist.json"
+    report = SwingTuningPatchVerifier(config_root=tmp_path).verify(missing_path)
+    assert report.verified is False
+    assert "patch_file_not_found" in report.issues
+
+
+def test_swing_tuning_patch_verifier_invalid_json_returns_error(tmp_path):
+    bad_path = tmp_path / "bad.json"
+    bad_path.write_text("invalid json content", encoding="utf-8")
+    report = SwingTuningPatchVerifier(config_root=tmp_path).verify(bad_path)
+    assert report.verified is False
+    assert "patch_json_invalid" in report.issues
+
+
+def test_swing_tuning_patch_validator_missing_path_returns_error(tmp_path):
+    missing_path = tmp_path / "does_not_exist.json"
+    report = SwingTuningPatchValidator(config_root=tmp_path).validate(missing_path)
+    assert report.valid is False
+    assert "patch_file_not_found" in report.issues
+
+
+def test_swing_tuning_patch_validator_invalid_json_returns_error(tmp_path):
+    bad_path = tmp_path / "bad.json"
+    bad_path.write_text("invalid json content", encoding="utf-8")
+    report = SwingTuningPatchValidator(config_root=tmp_path).validate(bad_path)
+    assert report.valid is False
+    assert "patch_json_invalid" in report.issues

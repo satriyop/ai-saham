@@ -5,15 +5,23 @@ import time
 
 from src.application.services.swing_backtest_attribution import (
     DEFAULT_TUNING_TARGETS,
+    SwingBacktestAttributionSummary,
 )
+from src.application.services.swing_tuning_config_paths import (
+    expand_tuning_config_paths,
+    parse_tuning_config_path,
+)
+from src.application.services.swing_tuning_contracts import build_tuning_config_diff_draft
 from src.application.services.swing_tuning_diff_policy import (
     _classify_tuning_target_kind,
 )
-from src.application.services.swing_tuning_patch_validator import (
-    SwingTuningPatchValidator,
+from src.application.services.swing_tuning_patch_validation import (
     _bounds_for_document_path,
     _is_quantized,
     _non_tunable_reason_for_document_path,
+)
+from src.application.services.swing_tuning_patch_validator import (
+    SwingTuningPatchValidator,
 )
 from src.application.services.swing_tuning_review_journal import (
     SwingTuningReviewJournal,
@@ -22,13 +30,6 @@ from src.application.services.swing_tuning_review_journal import (
 from src.infrastructure.persistence.swing_tuning_review_jsonl_writer import (
     SwingTuningReviewJsonlWriter,
 )
-from src.application.services.swing_tuning_config_paths import (
-    expand_tuning_config_paths,
-    parse_tuning_config_path,
-)
-from src.application.services.swing_backtest_attribution import SwingBacktestAttributionSummary
-from src.application.services.swing_tuning_contracts import build_tuning_config_diff_draft
-
 
 _SIGNAL_ENGINE_YAML = (
     "signal_engine:\n"
@@ -92,18 +93,22 @@ def _validate_single(tmp_path, document_leaf, current_value, proposed_value):
     """
     _write_config(tmp_path)
     patch_path = tmp_path / "patch.json"
-    patch_path.write_text(json.dumps({
-        "artifact_type": "swing_tuning_patch_review",
-        "apply": {"supported": False},
-        "source_review": _COMPLETE_SOURCE_REVIEW,
-        "patch_items": [
+    patch_path.write_text(
+        json.dumps(
             {
-                "target_path": f"config/signal_engine.yaml:{document_leaf}",
-                "current_value": current_value,
-                "proposed_value": proposed_value,
-            },
-        ],
-    }))
+                "artifact_type": "swing_tuning_patch_review",
+                "apply": {"supported": False},
+                "source_review": _COMPLETE_SOURCE_REVIEW,
+                "patch_items": [
+                    {
+                        "target_path": f"config/signal_engine.yaml:{document_leaf}",
+                        "current_value": current_value,
+                        "proposed_value": proposed_value,
+                    },
+                ],
+            }
+        )
+    )
     report = SwingTuningPatchValidator(config_root=tmp_path).validate(patch_path)
     return report.item_results[0]
 
@@ -113,6 +118,7 @@ _STRONG_PATH = "signal_engine.classification.strong_min_score"
 
 
 # --- 1. _bounds_for_document_path ------------------------------------------
+
 
 def test_bounds_for_document_path_known_returns_bounds():
     bounds = _bounds_for_document_path(_WEIGHT_PATH)
@@ -131,8 +137,7 @@ def test_current_tuning_target_paths_are_bounded_or_explicitly_non_tunable():
                 parsed = parse_tuning_config_path(expanded_path)
                 bounded = _bounds_for_document_path(parsed.document_path) is not None
                 non_tunable = (
-                    _non_tunable_reason_for_document_path(parsed.document_path)
-                    is not None
+                    _non_tunable_reason_for_document_path(parsed.document_path) is not None
                 )
                 if not bounded and not non_tunable:
                     missing.append(expanded_path)
@@ -144,27 +149,28 @@ def test_unbounded_resolved_numeric_path_fails_closed(tmp_path):
     config_dir = tmp_path / "config"
     config_dir.mkdir()
     (config_dir / "signal_engine.yaml").write_text(
-        "signal_engine:\n"
-        "  experimental:\n"
-        "    loose_threshold: 1.0\n",
+        "signal_engine:\n  experimental:\n    loose_threshold: 1.0\n",
         encoding="utf-8",
     )
     patch_path = tmp_path / "patch.json"
-    patch_path.write_text(json.dumps({
-        "artifact_type": "swing_tuning_patch_review",
-        "apply": {"supported": False},
-        "source_review": _COMPLETE_SOURCE_REVIEW,
-        "patch_items": [
+    patch_path.write_text(
+        json.dumps(
             {
-                "target_path": (
-                    "config/signal_engine.yaml:"
-                    "signal_engine.experimental.loose_threshold"
-                ),
-                "current_value": 1.0,
-                "proposed_value": 1.1,
-            },
-        ],
-    }))
+                "artifact_type": "swing_tuning_patch_review",
+                "apply": {"supported": False},
+                "source_review": _COMPLETE_SOURCE_REVIEW,
+                "patch_items": [
+                    {
+                        "target_path": (
+                            "config/signal_engine.yaml:signal_engine.experimental.loose_threshold"
+                        ),
+                        "current_value": 1.0,
+                        "proposed_value": 1.1,
+                    },
+                ],
+            }
+        )
+    )
 
     report = SwingTuningPatchValidator(config_root=tmp_path).validate(patch_path)
 
@@ -173,6 +179,7 @@ def test_unbounded_resolved_numeric_path_fails_closed(tmp_path):
 
 
 # --- 2. _is_quantized -------------------------------------------------------
+
 
 def test_is_quantized_true_for_grid_value():
     assert _is_quantized(0.60, 0.05) is True
@@ -183,6 +190,7 @@ def test_is_quantized_false_for_off_grid_value():
 
 
 # --- 3-5. range enforcement -------------------------------------------------
+
 
 def test_range_rejects_weight_above_max(tmp_path):
     result = _validate_single(tmp_path, _WEIGHT_PATH, 0.60, 1.5)
@@ -204,6 +212,7 @@ def test_range_accepts_in_bounds_weight(tmp_path):
 
 # --- 6-7. quantization enforcement -----------------------------------------
 
+
 def test_quantization_rejects_off_grid_weight(tmp_path):
     result = _validate_single(tmp_path, _WEIGHT_PATH, 0.60, 0.63)
     assert result.valid is False
@@ -217,6 +226,7 @@ def test_quantization_accepts_on_grid_weight(tmp_path):
 
 
 # --- 8-11. shift cap enforcement -------------------------------------------
+
 
 def test_shift_cap_rejects_large_weight_change(tmp_path):
     result = _validate_single(tmp_path, _WEIGHT_PATH, 0.60, 0.80)
@@ -244,6 +254,7 @@ def test_shift_cap_rejects_score_change_over_cap(tmp_path):
 
 # --- 12-14. IS/OOS tracking in review journal ------------------------------
 
+
 def test_summary_without_is_ratio_is_not_walk_forward_enforced():
     summary = _summarize_record({})
     assert summary.is_ratio is None
@@ -268,37 +279,38 @@ def test_summary_with_is_ratio_but_no_is_end_date_is_not_enforced():
 def test_compare_latest_notes_when_walk_forward_not_enforced(tmp_path):
     path = tmp_path / "journals" / "swing_tuning_reviews.jsonl"
     store = SwingTuningReviewJsonlWriter(path)
-    store.append({
-        "recorded_at": "2026-07-01T10:00:00+07:00",
-        "artifact_type": "swing_tuning_review",
-        "setup": "foreign-bounce",
-        "is_ratio": 0.70,
-        "backtest_summary": {"trade_count": 10},
-    })
-    store.append({
-        "recorded_at": "2026-07-02T10:00:00+07:00",
-        "artifact_type": "swing_tuning_review",
-        "setup": "foreign-bounce",
-        "is_ratio": 1.0,
-        "backtest_summary": {"trade_count": 12},
-    })
+    store.append(
+        {
+            "recorded_at": "2026-07-01T10:00:00+07:00",
+            "artifact_type": "swing_tuning_review",
+            "setup": "foreign-bounce",
+            "is_ratio": 0.70,
+            "backtest_summary": {"trade_count": 10},
+        }
+    )
+    store.append(
+        {
+            "recorded_at": "2026-07-02T10:00:00+07:00",
+            "artifact_type": "swing_tuning_review",
+            "setup": "foreign-bounce",
+            "is_ratio": 1.0,
+            "backtest_summary": {"trade_count": 12},
+        }
+    )
 
     comparison = SwingTuningReviewJournal(store).compare_latest()
 
     assert comparison.status == "READY"
     assert comparison.candidate.is_ratio == 1.0
     assert comparison.candidate.walk_forward_enforced is False
-    assert any(
-        note.startswith("walk_forward_not_enforced") for note in comparison.notes
-    )
+    assert any(note.startswith("walk_forward_not_enforced") for note in comparison.notes)
 
 
 # --- 15-16. attribution allowlist extensions -------------------------------
 
+
 def _target_by_dimension(dimension):
-    return next(
-        target for target in DEFAULT_TUNING_TARGETS if target.dimension == dimension
-    )
+    return next(target for target in DEFAULT_TUNING_TARGETS if target.dimension == dimension)
 
 
 def test_regime_target_excludes_regime_conditioning_paths():
@@ -309,8 +321,11 @@ def test_regime_target_excludes_regime_conditioning_paths():
         f"regime_conditioning paths must not be tunable: {conditioning_paths}"
     )
 
+
 def test_patch_modifying_regime_conditioning_fails(tmp_path):
-    """Explicitly test that target paths containing 'regime_conditioning' are blocked by validator."""
+    """Explicitly test that target paths containing 'regime_conditioning'
+    are blocked by validator.
+    """
     result = _validate_single(
         tmp_path,
         "signal_engine.regime_conditioning.neutral.weak_flow_discount",
@@ -356,16 +371,12 @@ def test_patch_changing_evidence_promotion_record_rejected(tmp_path):
 def test_breakout_min_volume_ratio_bounds_lookup_returns_none():
     """Superseded by volume_trigger.dry_up_max_ratio/expansion_min_ratio (Point
     3) — must not resolve to numeric bounds, else it would look tunable."""
-    assert _bounds_for_document_path(
-        "setup_phase.thresholds.breakout_min_volume_ratio"
-    ) is None
+    assert _bounds_for_document_path("setup_phase.thresholds.breakout_min_volume_ratio") is None
 
 
 def test_breakout_min_volume_ratio_non_tunable_reason_declared():
     assert (
-        _non_tunable_reason_for_document_path(
-            "setup_phase.thresholds.breakout_min_volume_ratio"
-        )
+        _non_tunable_reason_for_document_path("setup_phase.thresholds.breakout_min_volume_ratio")
         == "superseded_by_volume_trigger_policy"
     )
 
@@ -377,24 +388,29 @@ def test_patch_modifying_breakout_min_volume_ratio_fails(tmp_path):
     config_dir = tmp_path / "config"
     config_dir.mkdir(exist_ok=True)
     (config_dir / "swing_setups.yaml").write_text(
-        "setup_phase:\n"
-        "  thresholds:\n"
-        "    breakout_min_volume_ratio: 1.20\n",
+        "setup_phase:\n  thresholds:\n    breakout_min_volume_ratio: 1.20\n",
         encoding="utf-8",
     )
     patch_path = tmp_path / "patch.json"
-    patch_path.write_text(json.dumps({
-        "artifact_type": "swing_tuning_patch_review",
-        "apply": {"supported": False},
-        "source_review": _COMPLETE_SOURCE_REVIEW,
-        "patch_items": [
+    patch_path.write_text(
+        json.dumps(
             {
-                "target_path": "config/swing_setups.yaml:setup_phase.thresholds.breakout_min_volume_ratio",
-                "current_value": 1.20,
-                "proposed_value": 1.50,
-            },
-        ],
-    }))
+                "artifact_type": "swing_tuning_patch_review",
+                "apply": {"supported": False},
+                "source_review": _COMPLETE_SOURCE_REVIEW,
+                "patch_items": [
+                    {
+                        "target_path": (
+                            "config/swing_setups.yaml:"
+                            "setup_phase.thresholds.breakout_min_volume_ratio"
+                        ),
+                        "current_value": 1.20,
+                        "proposed_value": 1.50,
+                    },
+                ],
+            }
+        )
+    )
     report = SwingTuningPatchValidator(config_root=tmp_path).validate(patch_path)
     result = report.item_results[0]
 
@@ -412,16 +428,21 @@ def test_signal_strength_target_includes_enter_min_confidence_path():
 
 # --- 17. patch provenance guardrail (walk_forward_not_enforced = hard issue) -
 
+
 def test_patch_without_source_review_fails_validation(tmp_path):
     # Patches with no source_review (legacy or bypassed format) must fail: there
     # is no provenance guarantee that proposals came from IS data only.
     _write_config(tmp_path)
     patch_path = tmp_path / "patch.json"
-    patch_path.write_text(json.dumps({
-        "artifact_type": "swing_tuning_patch_review",
-        "apply": {"supported": False},
-        "patch_items": [],
-    }))
+    patch_path.write_text(
+        json.dumps(
+            {
+                "artifact_type": "swing_tuning_patch_review",
+                "apply": {"supported": False},
+                "patch_items": [],
+            }
+        )
+    )
     report = SwingTuningPatchValidator(config_root=tmp_path).validate(patch_path)
     assert report.valid is False
     assert any("walk_forward_not_enforced" in issue for issue in report.issues)
@@ -430,12 +451,16 @@ def test_patch_without_source_review_fails_validation(tmp_path):
 def test_patch_with_walk_forward_false_fails_validation(tmp_path):
     _write_config(tmp_path)
     patch_path = tmp_path / "patch.json"
-    patch_path.write_text(json.dumps({
-        "artifact_type": "swing_tuning_patch_review",
-        "apply": {"supported": False},
-        "source_review": {"walk_forward_enforced": False},
-        "patch_items": [],
-    }))
+    patch_path.write_text(
+        json.dumps(
+            {
+                "artifact_type": "swing_tuning_patch_review",
+                "apply": {"supported": False},
+                "source_review": {"walk_forward_enforced": False},
+                "patch_items": [],
+            }
+        )
+    )
     report = SwingTuningPatchValidator(config_root=tmp_path).validate(patch_path)
     assert report.valid is False
     assert any("walk_forward_not_enforced" in issue for issue in report.issues)
@@ -444,19 +469,23 @@ def test_patch_with_walk_forward_false_fails_validation(tmp_path):
 def test_patch_with_walk_forward_true_but_missing_oos_fails(tmp_path):
     _write_config(tmp_path)
     patch_path = tmp_path / "patch.json"
-    patch_path.write_text(json.dumps({
-        "artifact_type": "swing_tuning_patch_review",
-        "apply": {"supported": False},
-        "source_review": {
-            "walk_forward_enforced": True,
-            "is_ratio": 0.70,
-            "is_end_date": "2026-04-01",
-            "oos_start_date": "2026-04-02",
-            "full_end_date": "2026-07-01",
-            # oos_backtest_summary intentionally absent
-        },
-        "patch_items": [],
-    }))
+    patch_path.write_text(
+        json.dumps(
+            {
+                "artifact_type": "swing_tuning_patch_review",
+                "apply": {"supported": False},
+                "source_review": {
+                    "walk_forward_enforced": True,
+                    "is_ratio": 0.70,
+                    "is_end_date": "2026-04-01",
+                    "oos_start_date": "2026-04-02",
+                    "full_end_date": "2026-07-01",
+                    # oos_backtest_summary intentionally absent
+                },
+                "patch_items": [],
+            }
+        )
+    )
     report = SwingTuningPatchValidator(config_root=tmp_path).validate(patch_path)
     assert report.valid is False
     assert any("walk_forward_not_enforced" in issue for issue in report.issues)
@@ -465,12 +494,16 @@ def test_patch_with_walk_forward_true_but_missing_oos_fails(tmp_path):
 def test_patch_with_complete_source_review_passes_validation(tmp_path):
     _write_config(tmp_path)
     patch_path = tmp_path / "patch.json"
-    patch_path.write_text(json.dumps({
-        "artifact_type": "swing_tuning_patch_review",
-        "apply": {"supported": False},
-        "source_review": _COMPLETE_SOURCE_REVIEW,
-        "patch_items": [],
-    }))
+    patch_path.write_text(
+        json.dumps(
+            {
+                "artifact_type": "swing_tuning_patch_review",
+                "apply": {"supported": False},
+                "source_review": _COMPLETE_SOURCE_REVIEW,
+                "patch_items": [],
+            }
+        )
+    )
     report = SwingTuningPatchValidator(config_root=tmp_path).validate(patch_path)
     assert report.valid is True
     assert all("walk_forward_not_enforced" not in issue for issue in report.issues)
@@ -482,40 +515,50 @@ def test_patch_oos_with_zero_trades_fails_sample_guard(tmp_path):
     # A patch must have at least 5 OOS trades to be applicable.
     _write_config(tmp_path)
     patch_path = tmp_path / "patch.json"
-    patch_path.write_text(json.dumps({
-        "artifact_type": "swing_tuning_patch_review",
-        "apply": {"supported": False},
-        "source_review": {
-            **_COMPLETE_SOURCE_REVIEW,
-            "oos_backtest_summary": {
-                "trade_count": 0,
-                "total_return_pct": None,
-                "win_rate_pct": None,
-            },
-        },
-        "patch_items": [],
-    }))
+    patch_path.write_text(
+        json.dumps(
+            {
+                "artifact_type": "swing_tuning_patch_review",
+                "apply": {"supported": False},
+                "source_review": {
+                    **_COMPLETE_SOURCE_REVIEW,
+                    "oos_backtest_summary": {
+                        "trade_count": 0,
+                        "total_return_pct": None,
+                        "win_rate_pct": None,
+                    },
+                },
+                "patch_items": [],
+            }
+        )
+    )
     report = SwingTuningPatchValidator(config_root=tmp_path).validate(patch_path)
     assert report.valid is False
     assert all("walk_forward_not_enforced" not in issue for issue in report.issues)
-    assert any("sample_not_ready" in issue and "OOS trade_count=0" in issue
-               for issue in report.issues)
+    assert any(
+        "sample_not_ready" in issue and "OOS trade_count=0" in issue for issue in report.issues
+    )
 
 
 # --- 18b. walk_forward_enforced exact boolean + date ordering ----------------
 
+
 def test_truthy_string_walk_forward_fails(tmp_path):
     _write_config(tmp_path)
     patch_path = tmp_path / "patch.json"
-    patch_path.write_text(json.dumps({
-        "artifact_type": "swing_tuning_patch_review",
-        "apply": {"supported": False},
-        "source_review": {
-            **_COMPLETE_SOURCE_REVIEW,
-            "walk_forward_enforced": "true",  # truthy but not bool True
-        },
-        "patch_items": [],
-    }))
+    patch_path.write_text(
+        json.dumps(
+            {
+                "artifact_type": "swing_tuning_patch_review",
+                "apply": {"supported": False},
+                "source_review": {
+                    **_COMPLETE_SOURCE_REVIEW,
+                    "walk_forward_enforced": "true",  # truthy but not bool True
+                },
+                "patch_items": [],
+            }
+        )
+    )
     report = SwingTuningPatchValidator(config_root=tmp_path).validate(patch_path)
     assert report.valid is False
     assert any("walk_forward_not_enforced" in issue for issue in report.issues)
@@ -524,15 +567,19 @@ def test_truthy_string_walk_forward_fails(tmp_path):
 def test_malformed_oos_start_date_fails(tmp_path):
     _write_config(tmp_path)
     patch_path = tmp_path / "patch.json"
-    patch_path.write_text(json.dumps({
-        "artifact_type": "swing_tuning_patch_review",
-        "apply": {"supported": False},
-        "source_review": {
-            **_COMPLETE_SOURCE_REVIEW,
-            "oos_start_date": "not-a-date",
-        },
-        "patch_items": [],
-    }))
+    patch_path.write_text(
+        json.dumps(
+            {
+                "artifact_type": "swing_tuning_patch_review",
+                "apply": {"supported": False},
+                "source_review": {
+                    **_COMPLETE_SOURCE_REVIEW,
+                    "oos_start_date": "not-a-date",
+                },
+                "patch_items": [],
+            }
+        )
+    )
     report = SwingTuningPatchValidator(config_root=tmp_path).validate(patch_path)
     assert report.valid is False
     assert any("walk_forward_not_enforced" in issue for issue in report.issues)
@@ -541,21 +588,26 @@ def test_malformed_oos_start_date_fails(tmp_path):
 def test_oos_start_date_not_after_is_end_date_fails(tmp_path):
     _write_config(tmp_path)
     patch_path = tmp_path / "patch.json"
-    patch_path.write_text(json.dumps({
-        "artifact_type": "swing_tuning_patch_review",
-        "apply": {"supported": False},
-        "source_review": {
-            **_COMPLETE_SOURCE_REVIEW,
-            "oos_start_date": "2026-04-01",  # same day as is_end_date, not after
-        },
-        "patch_items": [],
-    }))
+    patch_path.write_text(
+        json.dumps(
+            {
+                "artifact_type": "swing_tuning_patch_review",
+                "apply": {"supported": False},
+                "source_review": {
+                    **_COMPLETE_SOURCE_REVIEW,
+                    "oos_start_date": "2026-04-01",  # same day as is_end_date, not after
+                },
+                "patch_items": [],
+            }
+        )
+    )
     report = SwingTuningPatchValidator(config_root=tmp_path).validate(patch_path)
     assert report.valid is False
     assert any("walk_forward_not_enforced" in issue for issue in report.issues)
 
 
 # --- 18. target_kind for evidence_groups.*.weight ----------------------------
+
 
 def test_evidence_group_weight_classified_as_weight_kind():
     path = parse_tuning_config_path(
@@ -565,6 +617,7 @@ def test_evidence_group_weight_classified_as_weight_kind():
 
 
 # --- 18. OOS backtest metrics stored in journal ------------------------------
+
 
 def test_oos_backtest_summary_populated_from_record():
     record = {
@@ -591,23 +644,28 @@ def test_oos_fields_none_when_no_oos_summary():
 
 # --- 19. performance budget: diff generation and patch validation -----------
 
+
 def test_patch_diff_generation_within_performance_budget(tmp_path):
     # Pure-Python patch validation must complete within 1s on a single-item patch.
     # This is the per-item validation floor; a full sweep of N paths scales linearly.
     _write_config(tmp_path)
     patch_path = tmp_path / "patch.json"
-    patch_path.write_text(json.dumps({
-        "artifact_type": "swing_tuning_patch_review",
-        "apply": {"supported": False},
-        "source_review": _COMPLETE_SOURCE_REVIEW,
-        "patch_items": [
+    patch_path.write_text(
+        json.dumps(
             {
-                "target_path": "config/signal_engine.yaml:" + _WEIGHT_PATH,
-                "current_value": 0.60,
-                "proposed_value": 0.65,
-            },
-        ],
-    }))
+                "artifact_type": "swing_tuning_patch_review",
+                "apply": {"supported": False},
+                "source_review": _COMPLETE_SOURCE_REVIEW,
+                "patch_items": [
+                    {
+                        "target_path": "config/signal_engine.yaml:" + _WEIGHT_PATH,
+                        "current_value": 0.60,
+                        "proposed_value": 0.65,
+                    },
+                ],
+            }
+        )
+    )
     start = time.monotonic()
     SwingTuningPatchValidator(config_root=tmp_path).validate(patch_path)
     elapsed = time.monotonic() - start
@@ -620,9 +678,13 @@ def test_tuning_config_diff_draft_within_performance_budget():
     # Budget: 0.5s. A real 200-ticker / 12-month run must stay under 5s total;
     # the per-call floor dominates, so this test catches regressions early.
     from decimal import Decimal
+
     from src.application.services.swing_backtest_attribution import (
-        AttributionGroupStat, CandidateAttributionStat, SampleQuality,
+        AttributionGroupStat,
+        CandidateAttributionStat,
+        SampleQuality,
     )
+
     group_stats = tuple(
         AttributionGroupStat(
             dimension=f"dim_{i}",
@@ -663,7 +725,9 @@ def test_tuning_config_diff_draft_within_performance_budget():
     start = time.monotonic()
     build_tuning_config_diff_draft(summary)
     elapsed = time.monotonic() - start
-    assert elapsed < 0.5, f"build_tuning_config_diff_draft took {elapsed:.3f}s — exceeds 0.5s budget"
+    assert elapsed < 0.5, (
+        f"build_tuning_config_diff_draft took {elapsed:.3f}s — exceeds 0.5s budget"
+    )
 
 
 # --- sample readiness guards --------------------------------------------------
@@ -672,12 +736,16 @@ def test_tuning_config_diff_draft_within_performance_budget():
 def _patch_with_source_review(source_review: dict, tmp_path) -> object:
     _write_config(tmp_path)
     p = tmp_path / "patch.json"
-    p.write_text(json.dumps({
-        "artifact_type": "swing_tuning_patch_review",
-        "apply": {"supported": False},
-        "source_review": source_review,
-        "patch_items": [],
-    }))
+    p.write_text(
+        json.dumps(
+            {
+                "artifact_type": "swing_tuning_patch_review",
+                "apply": {"supported": False},
+                "source_review": source_review,
+                "patch_items": [],
+            }
+        )
+    )
     return SwingTuningPatchValidator(config_root=tmp_path).validate(p)
 
 
@@ -707,8 +775,10 @@ def test_is_trade_count_below_30_fails_sample_guard(tmp_path):
     review = {**_COMPLETE_SOURCE_REVIEW, "backtest_summary": {"trade_count": 16}}
     report = _patch_with_source_review(review, tmp_path)
     assert report.valid is False
-    assert any("sample_not_ready" in issue and "IS completed_trade_count=16" in issue
-               for issue in report.issues)
+    assert any(
+        "sample_not_ready" in issue and "IS completed_trade_count=16" in issue
+        for issue in report.issues
+    )
 
 
 def test_oos_trade_count_below_5_fails_sample_guard(tmp_path):
@@ -718,8 +788,9 @@ def test_oos_trade_count_below_5_fails_sample_guard(tmp_path):
     }
     report = _patch_with_source_review(review, tmp_path)
     assert report.valid is False
-    assert any("sample_not_ready" in issue and "OOS trade_count=2" in issue
-               for issue in report.issues)
+    assert any(
+        "sample_not_ready" in issue and "OOS trade_count=2" in issue for issue in report.issues
+    )
 
 
 def test_diagnostic_ready_source_review_is_report_only_not_patchable(tmp_path):
@@ -772,8 +843,9 @@ def test_oos_average_return_negative_fails_sample_guard(tmp_path):
     }
     report = _patch_with_source_review(review, tmp_path)
     assert report.valid is False
-    assert any("sample_not_ready" in issue and "average_return_pct" in issue
-               for issue in report.issues)
+    assert any(
+        "sample_not_ready" in issue and "average_return_pct" in issue for issue in report.issues
+    )
 
 
 def test_oos_drawdown_regression_fails_sample_guard(tmp_path):
@@ -786,11 +858,14 @@ def test_oos_drawdown_regression_fails_sample_guard(tmp_path):
     }
     report = _patch_with_source_review(review, tmp_path)
     assert report.valid is False
-    assert any("sample_not_ready" in issue and "drawdown_regression_pct" in issue
-               for issue in report.issues)
+    assert any(
+        "sample_not_ready" in issue and "drawdown_regression_pct" in issue
+        for issue in report.issues
+    )
 
 
 # --- Finding 1: missing IS sample fields are now required ---
+
 
 def test_missing_sample_dict_fails_guard(tmp_path):
     review = {k: v for k, v in _COMPLETE_SOURCE_REVIEW.items() if k != "sample"}
@@ -814,6 +889,7 @@ def test_non_integer_is_trade_count_fails_guard(tmp_path):
 
 
 # --- Finding 3: profit_factor required and floor-checked ---
+
 
 def test_missing_profit_factor_with_oos_trades_fails_guard(tmp_path):
     oos = dict(_COMPLETE_SOURCE_REVIEW["oos_backtest_summary"])
@@ -879,9 +955,11 @@ def test_null_oos_metrics_with_sufficient_oos_trades_fail_guard(tmp_path):
     }
     report = _patch_with_source_review(review, tmp_path)
     assert report.valid is False
-    assert any("sample_not_ready" in issue and "profit_factor" in issue
-               for issue in report.issues)
-    assert any("sample_not_ready" in issue and "average_return_pct" in issue
-               for issue in report.issues)
-    assert any("sample_not_ready" in issue and "drawdown_regression_pct" in issue
-               for issue in report.issues)
+    assert any("sample_not_ready" in issue and "profit_factor" in issue for issue in report.issues)
+    assert any(
+        "sample_not_ready" in issue and "average_return_pct" in issue for issue in report.issues
+    )
+    assert any(
+        "sample_not_ready" in issue and "drawdown_regression_pct" in issue
+        for issue in report.issues
+    )
