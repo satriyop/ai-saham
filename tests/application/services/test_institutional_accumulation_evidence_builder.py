@@ -479,3 +479,94 @@ def test_fallback_when_yaml_omits_broker_classification():
     raw = {"institutional_accumulation": {"evidence_status": "DIAGNOSTIC"}}
     config = InstitutionalAccumulationConfig.from_mapping(raw)
     assert config.foreign_broker_codes == DEFAULT_FOREIGN_BROKER_CODES
+
+
+def test_behavior_equivalence_characterization():
+    # 30 days of data to satisfy all metric window thresholds
+    flows = []
+    for off in range(30):
+        # Foreign broker flows
+        flows.append(_flow(FOREIGN, off, buy=100.0, sell=10.0))
+        flows.append(_flow(FOREIGN2, off, buy=50.0, sell=5.0))
+        # Local broker flows
+        flows.append(_flow(LOCAL, off, buy=120.0, sell=20.0))
+        flows.append(_flow(LOCAL2, off, buy=30.0, sell=80.0))
+        flows.append(_flow(LOCAL3, off, buy=10.0, sell=60.0))
+
+    points = tuple(_ffp(off, 100.0) for off in range(30))
+    candles = tuple(_candle(off, 100.0 + off * 2) for off in range(30))
+    summaries = tuple(_summary(off, fb=150.0, fs=15.0, total=410.0) for off in range(30))
+    bandar_snap = _bandar("Big Acc")
+
+    req = _request(
+        broker_daily_flows=tuple(flows),
+        foreign_flow_points=points,
+        broker_summaries=summaries,
+        bandar_snapshot=bandar_snap,
+        candles=candles,
+    )
+
+    builder = _builder()
+    result = builder.build(req)
+
+    # 1. Assert foreign track values
+    ft = result.foreign_institutional_track
+    assert ft.foreign_participation_score == pytest.approx(0.402439, abs=1e-5)
+    assert ft.foreign_cr4_score == pytest.approx(1.0, abs=1e-4)
+    assert ft.foreign_cr8_score == pytest.approx(1.0, abs=1e-4)
+    assert ft.cnfb_divergence_score == pytest.approx(0.5, abs=1e-4)
+    assert ft.foreign_vwap_distance_score == pytest.approx(0.0, abs=1e-4)
+    assert ft.coverage_score == pytest.approx(1.0, abs=1e-4)
+    assert ft.conviction_score == pytest.approx(0.4756, abs=1e-4)
+
+    # 2. Assert domestic track values
+    dt = result.domestic_bandar_track
+    assert dt.broker_consistency_score == pytest.approx(0.0, abs=1e-4)
+    assert dt.broker_reversal_score == pytest.approx(0.0, abs=1e-4)
+    assert dt.accumulation_session_ratio == pytest.approx(0.0, abs=1e-4)
+    assert dt.domestic_buy_vwap_distance_score == pytest.approx(0.0, abs=1e-4)
+    assert dt.broker_hhi_divergence_score == pytest.approx(0.0, abs=1e-4)
+    assert dt.bandar_broad_score_normalized == pytest.approx(1.0, abs=1e-4)
+    assert dt.bandar_accumulation_score_normalized == pytest.approx(1.0, abs=1e-4)
+    assert dt.coverage_score == pytest.approx(1.0, abs=1e-4)
+    assert dt.conviction_score == pytest.approx(0.1, abs=1e-4)
+
+    # 3. Assert counterparty transfer values
+    cp = result.counterparty_transfer
+    assert cp is not None
+    assert cp.transfer_asymmetry_score == pytest.approx(0.4322, abs=1e-4)
+    assert cp.buy_side_hhi == pytest.approx(0.364418, abs=1e-6)
+    assert cp.sell_side_hhi == pytest.approx(0.5, abs=1e-4)
+    assert cp.coverage_score == pytest.approx(1.0, abs=1e-4)
+    assert cp.conviction_score == pytest.approx(0.4322, abs=1e-4)
+
+    # 4. Assert top-level coverage & conviction
+    assert result.coverage_score == pytest.approx(1.0, abs=1e-4)
+    assert result.conviction_score == pytest.approx(0.3189, abs=1e-4)
+
+    # 5. Assert metadata keys and status
+    assert result.evidence_status is EvidenceStatus.DIAGNOSTIC
+    assert result.metadata["diagnostic_only"] is True
+    assert result.metadata["cnfb_bullish_scores"] == {
+        "cnfb_20d": 0.5,
+        "cnfb_30d": 0.5,
+    }
+    assert result.metadata["cnfb_distribution_3d"] == 0.5
+    assert result.metadata["cnfb_bearish_scores"] == {
+        "cnfb_3d": 0.5,
+        "cnfb_5d": 0.5,
+        "cnfb_7d": 0.5,
+    }
+
+    # 6. Assert empty unavailable reasons
+    assert ft.unavailable_reasons == ()
+    assert dt.unavailable_reasons == ()
+    assert cp.unavailable_reasons == ()
+    assert result.unavailable_reasons == ()
+
+
+def test_explicit_nonexistent_config_path_raises_file_not_found():
+    with pytest.raises(FileNotFoundError):
+        InstitutionalAccumulationEvidenceBuilder.from_yaml("nonexistent_config_path_xyz_123.yaml")
+
+
