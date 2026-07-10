@@ -254,7 +254,10 @@ def _build(
 ) -> IntradayBacktestUseCase:
     hist = history if history is not None else _history_with_prev(ticker, PREV_DAY)
     market = InMemoryMarketRepository(hist + [today_candle])
-    broker = InMemoryBrokerRepository(summaries if summaries is not None else _backed_summaries(ticker, PREV_DAY))
+    default_sums = _backed_summaries(ticker, PREV_DAY)
+    broker = InMemoryBrokerRepository(
+        summaries if summaries is not None else default_sums
+    )
     reg = registry if registry is not None else StubIndicatorRegistry()
     return IntradayBacktestUseCase(
         market_repository=market,
