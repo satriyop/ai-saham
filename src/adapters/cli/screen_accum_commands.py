@@ -18,6 +18,10 @@ import typer
 from src.adapters.cli.screen_accum_workflow_factory import (
     create_accumulation_screen_workflow,
 )
+from src.application.dto.accumulation_screen import (
+    AccumulationScreenRequest,
+    AccumulationScreenResponse,
+)
 from src.application.services.bootstrap import create_indicator_registry
 from src.application.services.broker_quality import (
     BrokerQualitySnapshot,
@@ -31,15 +35,11 @@ from src.application.services.universe_loader import (
     UniverseNotFoundError,
     resolve_tickers,
 )
-from src.application.dto.accumulation_screen import (
-    AccumulationScreenRequest,
-    AccumulationScreenResponse,
-)
 from src.application.use_case.assess_risk_use_case import AssessRiskRequest, AssessRiskUseCase
-from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.config.accumulation_screener_config import (
     load_accumulation_screener_config as _load_accumulation_screener_config,
 )
+from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.config.swing_config import load_swing_config as _load_swing_config
 
 _SC = _load_swing_config()
