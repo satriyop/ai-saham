@@ -5,18 +5,15 @@ Layer: Adapter
 
 Compatibility facade: implementations now live in focused modules
 (analyze_swing_formatters, analyze_swing_overview_display,
-analyze_swing_evidence_display, analyze_swing_compare_display). This module
-re-exports the public API that CLI command adapters and tests import.
+analyze_swing_evidence_display, analyze_swing_institutional_display,
+analyze_swing_compare_display). This module re-exports the public API
+that CLI command adapters and tests import.
 """
 
 from __future__ import annotations
 
 from src.adapters.cli.analyze_swing_compare_display import display_swing_compare
-from src.adapters.cli.analyze_swing_evidence_display import (
-    has_bandar_distribution,
-    has_current_flow_confirmation,
-    print_swing_output,
-)
+from src.adapters.cli.analyze_swing_evidence_display import print_swing_output
 from src.adapters.cli.analyze_swing_formatters import (
     SwingDisplayConfig,
     _fmt_pct_compare,
@@ -38,6 +35,10 @@ from src.adapters.cli.analyze_swing_formatters import (
     style_trend,
     style_winrate,
     swing_summary_parts,
+)
+from src.adapters.cli.analyze_swing_institutional_display import (
+    has_bandar_distribution,
+    has_current_flow_confirmation,
 )
 from src.adapters.cli.analyze_swing_overview_display import (
     flow_trigger_blocked_text,
