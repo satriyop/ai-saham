@@ -54,12 +54,17 @@ from src.adapters.cli.analyze_swing_commands import (
     FOREIGN_BOUNCE_SETUP_NAME,
     _evaluate_swing_setup,
     _fetch_swing_sentiment,
-    _print_swing_output,
+)
+from src.adapters.cli.analyze_swing_display import (
+    SwingOutputDisplayContext,
+    SwingOutputDisplayOptions,
+    print_swing_output,
 )
 from src.adapters.cli.analyze_swing_display import (
     format_failed_gates_summary as _format_failed_gates_summary,
 )
 from src.adapters.cli.main import app
+from src.application.dto.swing_analysis import SwingDiagnostics, SwingEvidence, SwingVerdict
 from src.application.services.swing_backtest_attribution import (
     AttributionGroupStat,
     SampleQuality,
@@ -275,19 +280,20 @@ def test_swing_display_path_prefers_grouped_response_contracts(monkeypatch):
     )
     monkeypatch.setattr(
         swing_cli,
-        "_print_swing_output",
-        lambda **kwargs: captured.update(kwargs),
+        "print_swing_output",
+        lambda ctx: captured.update({"ctx": ctx}),
     )
 
     result = runner.invoke(app, ["analyze", "swing", "BBCA"])
 
     assert result.exit_code == 0
-    assert captured["data_freshness"] is grouped_data
-    assert captured["accum"] is grouped_accum
-    assert captured["risk_resp"] == "grouped-risk"
-    assert captured["market_regime"] == "grouped-market"
-    assert captured["signal_assessment"] == "grouped-signal"
-    assert captured["trade_setup"] == "grouped-setup"
+    ctx = captured["ctx"]
+    assert ctx.diagnostics.data_freshness is grouped_data
+    assert ctx.evidence.accumulation_candidate is grouped_accum
+    assert ctx.verdict.risk_response == "grouped-risk"
+    assert ctx.verdict.market_regime == "grouped-market"
+    assert ctx.verdict.signal_assessment == "grouped-signal"
+    assert ctx.verdict.trade_setup == "grouped-setup"
 
 
 def _build_broker_detail(*args, **kwargs):
@@ -297,7 +303,7 @@ def _build_broker_detail(*args, **kwargs):
         smart_money_brokers=swing_cli.SMART_MONEY_BROKERS,
         noise_brokers=swing_cli.NOISE_BROKERS,
         broker_weights=swing_cli.BROKER_WEIGHTS,
-        smart_share_threshold_pct=swing_cli._SC.smart_share_threshold_pct,
+        smart_share_threshold_pct=swing_cli.SWING_CONFIG.smart_share_threshold_pct,
     )
 
 
@@ -1614,41 +1620,51 @@ def test_swing_output_renders_rich_decision_overview(capsys):
         failed_reasons=("trend: DOWN (required SIDE)",),
     )
 
-    _print_swing_output(
+    ctx = SwingOutputDisplayContext(
         ticker="BBCA",
         today=date(2026, 6, 19),
         strategy_name="foreign-accumulation",
-        data_freshness=SwingDataFreshness(
-            as_of_date=date(2026, 6, 19),
-            candle_start=date(2026, 1, 1),
-            candle_end=date(2026, 6, 18),
-            broker_start=date(2026, 1, 1),
-            broker_end=date(2026, 6, 18),
-            warnings=("Latest candle is stale",),
-        ),
-        flow_detail=None,
-        broker_detail=None,
         window=7,
-        accum=_candidate(score=70.0, trend="DOWN"),
-        risk_resp=None,
-        atr_value=None,
-        sizing=None,
-        setup_eval=setup,
-        setup_sizing=None,
-        broker_quality_note=None,
-        market_regime=None,
-        capital=None,
-        backtest_result=None,
-        sentiment_resp=None,
-        sentiment_warning=None,
-        sentiment_verbose=False,
-        include_strategy=False,
-        include_sentiment=False,
-        include_flow_detail=False,
-        include_signal_detail=False,
-        include_risk_detail=False,
-        include_market_detail=False,
+        verdict=SwingVerdict(
+            trade_setup=None,
+            signal_assessment=None,
+            risk_response=None,
+            market_regime=None,
+        ),
+        evidence=SwingEvidence(
+            accumulation_candidate=_candidate(score=70.0, trend="DOWN"),
+            setup_eval=setup,
+            backtest_result=None,
+            sentiment_response=None,
+            sentiment_warning=None,
+            take_profit_pct=Decimal("5"),
+            stop_loss_pct=Decimal("5"),
+            regime_label=None,
+        ),
+        diagnostics=SwingDiagnostics(
+            data_freshness=SwingDataFreshness(
+                as_of_date=date(2026, 6, 19),
+                candle_start=date(2026, 1, 1),
+                candle_end=date(2026, 6, 18),
+                broker_start=date(2026, 1, 1),
+                broker_end=date(2026, 6, 18),
+                warnings=("Latest candle is stale",),
+            ),
+            flow_detail=None,
+            broker_detail=None,
+            broker_quality_note=None,
+            refresh_actions=(),
+        ),
+        options=SwingOutputDisplayOptions(
+            include_strategy=False,
+            include_sentiment=False,
+            include_flow_detail=False,
+            include_signal_detail=False,
+            include_risk_detail=False,
+            include_market_detail=False,
+        ),
     )
+    print_swing_output(ctx)
 
     out = capsys.readouterr().out
     assert "Swing Analysis - BBCA" in out
@@ -1719,43 +1735,52 @@ def test_swing_output_renders_optional_evidence_as_separate_panels(capsys):
         ),
     )
 
-    _print_swing_output(
+    ctx = SwingOutputDisplayContext(
         ticker="BBCA",
         today=date(2026, 6, 19),
         strategy_name="foreign-accumulation",
-        data_freshness=SwingDataFreshness(
-            as_of_date=date(2026, 6, 19),
-            candle_start=date(2026, 1, 1),
-            candle_end=date(2026, 6, 18),
-            broker_start=date(2026, 1, 1),
-            broker_end=date(2026, 6, 18),
-            warnings=(),
-        ),
-        flow_detail=None,
-        broker_detail=None,
         window=7,
-        accum=_candidate(score=82.0, trend="SIDE"),
-        risk_resp=risk_resp,
-        atr_value=None,
-        sizing=None,
-        setup_eval=None,
-        setup_sizing=None,
-        broker_quality_note=None,
-        market_regime=None,
-        capital=None,
-        backtest_result=backtest_result,
-        sentiment_resp=sentiment_resp,
-        sentiment_warning=None,
-        sentiment_verbose=False,
-        include_strategy=True,
-        include_sentiment=True,
-        include_flow_detail=True,
-        include_signal_detail=True,
-        include_risk_detail=True,
-        include_market_detail=False,
-        signal_assessment=signal_assessment,
-        market_context_trade_setup_preview=None,
+        verdict=SwingVerdict(
+            trade_setup=None,
+            signal_assessment=signal_assessment,
+            risk_response=risk_resp,
+            market_regime=None,
+            market_context_trade_setup_preview=None,
+        ),
+        evidence=SwingEvidence(
+            accumulation_candidate=_candidate(score=82.0, trend="SIDE"),
+            setup_eval=None,
+            backtest_result=backtest_result,
+            sentiment_response=sentiment_resp,
+            sentiment_warning=None,
+            take_profit_pct=Decimal("5"),
+            stop_loss_pct=Decimal("5"),
+            regime_label=None,
+        ),
+        diagnostics=SwingDiagnostics(
+            data_freshness=SwingDataFreshness(
+                as_of_date=date(2026, 6, 19),
+                candle_start=date(2026, 1, 1),
+                candle_end=date(2026, 6, 18),
+                broker_start=date(2026, 1, 1),
+                broker_end=date(2026, 6, 18),
+                warnings=(),
+            ),
+            flow_detail=None,
+            broker_detail=None,
+            broker_quality_note=None,
+            refresh_actions=(),
+        ),
+        options=SwingOutputDisplayOptions(
+            include_strategy=True,
+            include_sentiment=True,
+            include_flow_detail=True,
+            include_signal_detail=True,
+            include_risk_detail=True,
+            include_market_detail=False,
+        ),
     )
+    print_swing_output(ctx)
 
     out = capsys.readouterr().out
     assert "SIGNAL DETAIL" in out
@@ -1845,43 +1870,52 @@ def test_swing_flow_detail_calls_out_conflicted_negative_flow(capsys):
         ),
     )
 
-    _print_swing_output(
+    ctx = SwingOutputDisplayContext(
         ticker="ASII",
         today=date(2026, 6, 27),
         strategy_name=None,
-        data_freshness=SwingDataFreshness(
-            as_of_date=date(2026, 6, 27),
-            candle_start=date(2026, 1, 1),
-            candle_end=date(2026, 6, 26),
-            broker_start=date(2026, 1, 1),
-            broker_end=date(2026, 6, 26),
-            warnings=(),
-        ),
-        flow_detail=flow_detail,
-        broker_detail=None,
         window=7,
-        accum=accum,
-        risk_resp=risk_resp,
-        atr_value=None,
-        sizing=None,
-        setup_eval=None,
-        setup_sizing=None,
-        broker_quality_note=None,
-        market_regime=None,
-        capital=None,
-        backtest_result=None,
-        sentiment_resp=None,
-        sentiment_warning=None,
-        sentiment_verbose=False,
-        include_strategy=False,
-        include_sentiment=False,
-        include_flow_detail=True,
-        include_signal_detail=True,
-        include_risk_detail=False,
-        include_market_detail=False,
-        signal_assessment=signal_assessment,
-        market_context_trade_setup_preview=None,
+        verdict=SwingVerdict(
+            trade_setup=None,
+            signal_assessment=signal_assessment,
+            risk_response=risk_resp,
+            market_regime=None,
+            market_context_trade_setup_preview=None,
+        ),
+        evidence=SwingEvidence(
+            accumulation_candidate=accum,
+            setup_eval=None,
+            backtest_result=None,
+            sentiment_response=None,
+            sentiment_warning=None,
+            take_profit_pct=Decimal("5"),
+            stop_loss_pct=Decimal("5"),
+            regime_label=None,
+        ),
+        diagnostics=SwingDiagnostics(
+            data_freshness=SwingDataFreshness(
+                as_of_date=date(2026, 6, 27),
+                candle_start=date(2026, 1, 1),
+                candle_end=date(2026, 6, 26),
+                broker_start=date(2026, 1, 1),
+                broker_end=date(2026, 6, 26),
+                warnings=(),
+            ),
+            flow_detail=flow_detail,
+            broker_detail=None,
+            broker_quality_note=None,
+            refresh_actions=(),
+        ),
+        options=SwingOutputDisplayOptions(
+            include_strategy=False,
+            include_sentiment=False,
+            include_flow_detail=True,
+            include_signal_detail=True,
+            include_risk_detail=False,
+            include_market_detail=False,
+        ),
     )
+    print_swing_output(ctx)
 
     out = capsys.readouterr().out
     assert "WATCH-ZONE / FLOW NEGATIVE" in out

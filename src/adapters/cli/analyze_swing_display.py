@@ -40,6 +40,10 @@ from src.adapters.cli.analyze_swing_institutional_display import (
     has_bandar_distribution,
     has_current_flow_confirmation,
 )
+from src.adapters.cli.analyze_swing_output_context import (
+    SwingOutputDisplayContext,
+    SwingOutputDisplayOptions,
+)
 from src.adapters.cli.analyze_swing_overview_display import (
     flow_trigger_blocked_text,
     format_failed_gates_summary,
@@ -50,6 +54,8 @@ from src.adapters.cli.analyze_swing_overview_display import (
 
 __all__ = [
     "SwingDisplayConfig",
+    "SwingOutputDisplayContext",
+    "SwingOutputDisplayOptions",
     "display_swing_compare",
     "flow_direction_label",
     "flow_trigger_blocked_text",

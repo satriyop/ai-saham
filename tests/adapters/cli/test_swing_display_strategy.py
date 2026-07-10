@@ -21,11 +21,17 @@ Layer: Adapter (render-only, no scoring, no DecisionPolicy changes).
 from __future__ import annotations
 
 from datetime import date
+from decimal import Decimal
 from types import SimpleNamespace
 
 import pytest
 
-from src.adapters.cli.analyze_swing_commands import _print_swing_output
+from src.adapters.cli.analyze_swing_display import (
+    SwingOutputDisplayContext,
+    SwingOutputDisplayOptions,
+    print_swing_output,
+)
+from src.application.dto.swing_analysis import SwingDiagnostics, SwingEvidence, SwingVerdict
 from src.application.services.swing_data_freshness import SwingDataFreshness
 from src.domain.value_objects.strategy_evidence import (
     StrategyEvidence,
@@ -97,38 +103,45 @@ def _call_print(
     strategy_evidence: StrategyEvidence | None = None,
     backtest_result=None,
 ) -> None:
-    _print_swing_output(
+    ctx = SwingOutputDisplayContext(
         ticker="BBCA",
         today=date(2026, 7, 1),
         strategy_name="foreign-accumulation",
-        data_freshness=_freshness(),
-        flow_detail=None,
-        broker_detail=None,
         window=7,
-        accum=None,
-        risk_resp=None,
-        atr_value=None,
-        sizing=None,
-        setup_eval=None,
-        setup_sizing=None,
-        broker_quality_note=None,
-        market_regime=None,
-        capital=None,
-        backtest_result=backtest_result,
-        sentiment_resp=None,
-        sentiment_warning=None,
-        sentiment_verbose=False,
-        include_strategy=include_strategy,
-        include_sentiment=False,
-        include_flow_detail=False,
-        include_signal_detail=False,
-        include_risk_detail=False,
-        include_market_detail=False,
-        signal_assessment=None,
-        sector_context_evidence=None,
-        institutional_accumulation_evidence=None,
-        strategy_evidence=strategy_evidence,
+        verdict=SwingVerdict(
+            trade_setup=None,
+            signal_assessment=None,
+            risk_response=None,
+            market_regime=None,
+        ),
+        evidence=SwingEvidence(
+            accumulation_candidate=None,
+            setup_eval=None,
+            backtest_result=backtest_result,
+            sentiment_response=None,
+            sentiment_warning=None,
+            take_profit_pct=Decimal("5"),
+            stop_loss_pct=Decimal("5"),
+            regime_label=None,
+            strategy_rule_evidence=strategy_evidence,
+        ),
+        diagnostics=SwingDiagnostics(
+            data_freshness=_freshness(),
+            flow_detail=None,
+            broker_detail=None,
+            broker_quality_note=None,
+            refresh_actions=(),
+        ),
+        options=SwingOutputDisplayOptions(
+            include_strategy=include_strategy,
+            include_sentiment=False,
+            include_flow_detail=False,
+            include_signal_detail=False,
+            include_risk_detail=False,
+            include_market_detail=False,
+        ),
     )
+    print_swing_output(ctx)
 
 
 # ── Panel gate tests ───────────────────────────────────────────────────────────

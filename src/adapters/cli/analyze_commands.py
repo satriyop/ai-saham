@@ -362,7 +362,7 @@ from src.adapters.cli.analyze_signal_commands import signal_labels as _signal_la
 from src.adapters.cli.analyze_signal_commands import signal_readiness as _signal_readiness_fn
 from src.adapters.cli.analyze_signal_commands import signal_replay as _signal_replay_fn
 from src.adapters.cli.analyze_swing_commands import swing as _swing_fn
-from src.adapters.cli.analyze_swing_commands import swing_compare as _swing_compare_fn
+from src.adapters.cli.analyze_swing_compare_commands import swing_compare as _swing_compare_fn
 
 analyze_app.command("sentiment")(_sentiment_fn)
 analyze_app.command("audit")(_sentiment_audit_fn)

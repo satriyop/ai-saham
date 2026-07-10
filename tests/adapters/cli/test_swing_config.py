@@ -5,8 +5,8 @@ from pathlib import Path
 
 import yaml
 
+from src.adapters.cli.analyze_swing_command_config import SWING_CONFIG
 from src.adapters.cli.analyze_swing_commands import (
-    _SC,
     BROKER_WEIGHTS,
     NOISE_BROKERS,
     SMART_MONEY_BROKERS,
@@ -253,15 +253,15 @@ def test_module_constants_populated():
     assert "AK" in SMART_MONEY_BROKERS
     assert "YP" in NOISE_BROKERS
     assert "AK" not in NOISE_BROKERS
-    assert BROKER_WEIGHTS["AK"] == _SC.smart_weight
-    assert BROKER_WEIGHTS["YP"] == _SC.noise_weight
+    assert BROKER_WEIGHTS["AK"] == SWING_CONFIG.smart_weight
+    assert BROKER_WEIGHTS["YP"] == SWING_CONFIG.noise_weight
 
 
 def test_broker_weights_derived_from_sc():
     for code in SMART_MONEY_BROKERS:
-        assert BROKER_WEIGHTS[code] == _SC.smart_weight
+        assert BROKER_WEIGHTS[code] == SWING_CONFIG.smart_weight
     for code in NOISE_BROKERS:
-        assert BROKER_WEIGHTS[code] == _SC.noise_weight
+        assert BROKER_WEIGHTS[code] == SWING_CONFIG.noise_weight
 
 
 # ── Tier1 broker codes ────────────────────────────────────────────────────
@@ -293,9 +293,9 @@ def test_tier1_falls_back_to_defaults_when_empty(tmp_path):
 
 def test_cs_not_in_tier1_brokers():
     """CS (Credit Suisse) was wound down — must not appear in any broker set."""
-    assert "CS" not in _SC.smart_money_brokers
-    assert "CS" not in _SC.noise_brokers
-    assert "CS" not in _SC.tier1_broker_codes
+    assert "CS" not in SWING_CONFIG.smart_money_brokers
+    assert "CS" not in SWING_CONFIG.noise_brokers
+    assert "CS" not in SWING_CONFIG.tier1_broker_codes
 
 
 # ── Setup targets ─────────────────────────────────────────────────────────
