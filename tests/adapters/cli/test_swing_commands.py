@@ -2,35 +2,6 @@
 
 import inspect
 import json
-
-_COMPLETE_SOURCE_REVIEW = {
-    "readiness_state": "PATCH_ELIGIBLE",
-    "walk_forward_enforced": True,
-    "is_ratio": 0.70,
-    "is_end_date": "2026-04-01",
-    "oos_start_date": "2026-04-02",
-    "full_end_date": "2026-07-01",
-    "sample": {"status": "TRADE_READY", "min_sample_size": 30},
-    "backtest_summary": {"trade_count": 60},
-    "oos_backtest_summary": {
-        "trade_count": 30,
-        "total_return_pct": 3.2,
-        "average_return_pct": 0.2,
-        "win_rate_pct": 50.0,
-        "profit_factor": 1.5,
-        "drawdown_regression_pct": 0.0,
-    },
-    "attribution": {
-        "market_regime": {
-            "buckets": [
-                {"key": "RISK_ON", "oos_trade_count": 15, "oos_profit": 1.0},
-                {"key": "NEUTRAL", "oos_trade_count": 15, "oos_profit": 0.8},
-            ],
-        },
-        "coverage_bucket": {"buckets": [{"key": "HIGH", "observation_count": 30}]},
-        "conviction_bucket": {"buckets": [{"key": "HIGH", "observation_count": 30}]},
-    },
-}
 import logging
 import sys
 from datetime import date, timedelta
@@ -64,6 +35,7 @@ from src.adapters.cli.analyze_swing_display import (
     format_failed_gates_summary as _format_failed_gates_summary,
 )
 from src.adapters.cli.main import app
+from src.application.dto.accumulation_screen import AccumulationCandidate
 from src.application.dto.swing_analysis import SwingDiagnostics, SwingEvidence, SwingVerdict
 from src.application.services.swing_backtest_attribution import (
     AttributionGroupStat,
@@ -71,11 +43,39 @@ from src.application.services.swing_backtest_attribution import (
     SwingBacktestAttributionSummary,
 )
 from src.application.services.swing_data_freshness import SwingDataFreshness
-from src.application.dto.accumulation_screen import AccumulationCandidate
 from src.application.use_case.swing_backtest_use_case import SwingBacktestResponse
 from src.domain.entities.broker_flow import BrokerSummary, BrokerTransaction, BrokerType
 from src.domain.value_objects.foreign_flow_score_breakdown import ForeignFlowScoreBreakdown
 from src.domain.value_objects.setup_evaluation import SetupEvaluation, SetupGate, SetupMatch
+
+_COMPLETE_SOURCE_REVIEW = {
+    "readiness_state": "PATCH_ELIGIBLE",
+    "walk_forward_enforced": True,
+    "is_ratio": 0.70,
+    "is_end_date": "2026-04-01",
+    "oos_start_date": "2026-04-02",
+    "full_end_date": "2026-07-01",
+    "sample": {"status": "TRADE_READY", "min_sample_size": 30},
+    "backtest_summary": {"trade_count": 60},
+    "oos_backtest_summary": {
+        "trade_count": 30,
+        "total_return_pct": 3.2,
+        "average_return_pct": 0.2,
+        "win_rate_pct": 50.0,
+        "profit_factor": 1.5,
+        "drawdown_regression_pct": 0.0,
+    },
+    "attribution": {
+        "market_regime": {
+            "buckets": [
+                {"key": "RISK_ON", "oos_trade_count": 15, "oos_profit": 1.0},
+                {"key": "NEUTRAL", "oos_trade_count": 15, "oos_profit": 0.8},
+            ],
+        },
+        "coverage_bucket": {"buckets": [{"key": "HIGH", "observation_count": 30}]},
+        "conviction_bucket": {"buckets": [{"key": "HIGH", "observation_count": 30}]},
+    },
+}
 
 runner = CliRunner()
 
@@ -867,7 +867,7 @@ def _trade_ready_backtest_response() -> SwingBacktestResponse:
 
 
 def _patch_swing_backtest_command(monkeypatch):
-    from src.adapters.cli import trade_swing_commands
+    from src.adapters.cli import trade_swing_backtest_runner
 
     class FakeSwingBacktestUseCase:
         def __init__(self, *args, **kwargs):
@@ -877,18 +877,25 @@ def _patch_swing_backtest_command(monkeypatch):
             return _trade_ready_backtest_response()
 
     monkeypatch.setattr(
-        trade_swing_commands,
+        trade_swing_backtest_runner,
         "resolve_tickers",
         lambda universe, explicit, db_path: tuple(explicit) or ("BBCA",),
     )
-    monkeypatch.setattr(trade_swing_commands, "SQLiteBrokerRepository", lambda *a, **k: object())
-    monkeypatch.setattr(trade_swing_commands, "SQLiteMarketRepository", lambda *a, **k: object())
-    monkeypatch.setattr(trade_swing_commands, "create_risk_engine", lambda *a, **k: object())
     monkeypatch.setattr(
-        trade_swing_commands,
+        trade_swing_backtest_runner, "SQLiteBrokerRepository", lambda *a, **k: object()
+    )
+    monkeypatch.setattr(
+        trade_swing_backtest_runner, "SQLiteMarketRepository", lambda *a, **k: object()
+    )
+    monkeypatch.setattr(
+        trade_swing_backtest_runner, "create_risk_engine", lambda *a, **k: object()
+    )
+    monkeypatch.setattr(
+        trade_swing_backtest_runner,
         "SwingBacktestUseCase",
         FakeSwingBacktestUseCase,
     )
+
 
 
 def test_swing_backtest_tuning_diff_json_exposes_guardrails(monkeypatch):
