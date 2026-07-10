@@ -3,7 +3,9 @@ from decimal import Decimal
 from types import SimpleNamespace
 
 from src.application.dto.accumulation_screen import AccumulationScreenRequest
-from src.application.use_case.accumulation_screen_use_case import _candidate_observation_payload
+from src.application.services.accumulation_observation_fingerprint import (
+    build_candidate_observation_payload,
+)
 from src.domain.value_objects.strategy_evidence import (
     StrategyEvidence,
     StrategyEvidenceOutcome,
@@ -31,7 +33,7 @@ def test_candidate_observation_payload_persists_strategy_evidence_fields():
         rationale=("Custom rule 'close_breakout' matched",),
     )
 
-    payload = _candidate_observation_payload(
+    payload = build_candidate_observation_payload(
         _candidate(),
         screen_result="pass",
         flow_ev=None,

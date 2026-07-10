@@ -20,6 +20,7 @@ from src.application.dto.accumulation_screen import (
     AccumulationCandidate,
     AccumulationScreenRequest,
 )
+from src.application.services.accumulation_risk_funnel import AccumulationRiskFunnel
 from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
 from src.application.use_case.assess_risk_use_case import AssessRiskUseCase
 from src.application.use_case.assess_risk_use_case import AssessRiskResponse
@@ -77,7 +78,7 @@ def _mock_market_repo(tickers: list[str]) -> MagicMock:
 def _mock_broker_repo() -> MagicMock:
     """Minimal broker repo stub — returns empty summaries.
 
-    Most risk-funnel tests call _run_risk_funnel() directly with manually
+    Most risk-funnel tests call AccumulationRiskFunnel directly with manually
     constructed candidates, so no real BrokerSummary data is needed.
     The repo is required only to satisfy AccumulationScreenUseCase's constructor.
     """
@@ -130,7 +131,7 @@ def test_risk_funnel_fires_fundamental_gate_on_distressed_ticker():
     )
     candidate.bandar_detector = None
 
-    uc._run_risk_funnel([candidate], _TODAY)
+    AccumulationRiskFunnel(risk_uc).run([candidate], _TODAY)
 
     assert candidate.risk_assessment is not None
     assert candidate.risk_assessment.gate_triggered is not None
@@ -161,7 +162,7 @@ def test_risk_funnel_passes_healthy_ticker():
     )
     candidate.bandar_detector = None
 
-    uc._run_risk_funnel([candidate], _TODAY)
+    AccumulationRiskFunnel(risk_uc).run([candidate], _TODAY)
 
     assert candidate.risk_assessment is not None
     # FundamentalGate must not have fired (F-score=8 is healthy).
@@ -219,7 +220,7 @@ def test_risk_funnel_composes_trade_setup_from_signal_and_risk():
     candidate.bandar_detector = None
     candidate.signal_assessment = signal_response
 
-    uc._run_risk_funnel([candidate], _TODAY)
+    AccumulationRiskFunnel(risk_uc).run([candidate], _TODAY)
 
     assert candidate.risk_assessment == risk_response.assessment
     assert candidate.trade_setup is not None
@@ -263,7 +264,7 @@ def test_risk_funnel_builds_gate_context_from_candidate_data():
     candidate.bandar_detector = MagicMock()
     candidate.bandar_detector.five_day_accdist = "Big Acc"
 
-    uc._run_risk_funnel([candidate], _TODAY)
+    AccumulationRiskFunnel(risk_uc).run([candidate], _TODAY)
 
     assert len(captured_contexts) >= 1
     ctx = captured_contexts[0]
@@ -304,7 +305,7 @@ def test_risk_funnel_skips_failed_candidate_and_continues():
     c2.fundamentals = None
     c2.bandar_detector = None
 
-    uc._run_risk_funnel([c1, c2], _TODAY)
+    AccumulationRiskFunnel(risk_uc).run([c1, c2], _TODAY)
 
     # c1 failed — risk_assessment should not be set (MagicMock auto-creates attribute)
     # Verify execute was called for both

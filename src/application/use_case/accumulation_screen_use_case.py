@@ -65,11 +65,23 @@ if TYPE_CHECKING:
     from src.application.services.volatility_context import VolatilityContext
 
 from src.application.ports.corporate_action_repository import CorporateActionRepository
+from src.application.services.accumulation_candidate_evidence_builder import (
+    AccumulationCandidateEvidenceBuilder,
+)
+from src.application.services.accumulation_observation_fingerprint import (
+    build_candidate_observation_payload,
+)
+from src.application.services.accumulation_risk_funnel import AccumulationRiskFunnel
+from src.application.services.accumulation_technical_features import (
+    compute_accumulation_rsi,
+    compute_accumulation_trend,
+    compute_bb_squeeze,
+    compute_resistance_levels,
+)
 from src.application.services.signal_context_builder import (
     build_signal_context_from_candidate,
 )
 from src.application.services.stats import foreign_vwap_discount_pct
-from src.application.services.volatility_context import build_volatility_context
 from src.application.use_case.score_foreign_flow_use_case import (
     ScoreForeignFlowRequest,
     ScoreForeignFlowUseCase,
@@ -90,11 +102,6 @@ from src.domain.value_objects.idx_market import SHARES_PER_LOT
 # Default setup targets (1:1 R:R, regime-unaware fallback)
 _DEFAULT_TAKE_PROFIT = Decimal("5")
 _DEFAULT_STOP_LOSS = Decimal("5")
-# Sentinel distinguishing "no override supplied, resolve internally" from an
-# explicit `setup_family=None` override (i.e. the final resolution is
-# genuinely unknown) in _detect_candidate_setup_phase().
-_UNSET_SETUP_FAMILY = object()
-
 # Regime-specific targets (validated direction: IHSG has documented regime cycles)
 # MCE vocabulary (RISK_ON/NEUTRAL/VOLATILE/RISK_OFF).
 _REGIME_TARGETS: dict[str, tuple[Decimal, Decimal]] = {
@@ -176,517 +183,6 @@ def _screen_sort_key(candidate: "accumulation_dto.AccumulationCandidate") -> tup
     )
 
 
-def _candidate_observation_payload(
-    candidate: "accumulation_dto.AccumulationCandidate",
-    *,
-    screen_result: str,
-    flow_ev: "FlowConfirmationEvidence | None",
-    setup_phase: "SetupPhaseSnapshot | None",
-    snapshot_date: date,
-    captured_at: datetime,
-    request: "accumulation_dto.AccumulationScreenRequest",
-    strategy_evidence: "StrategyEvidence | None" = None,
-    ia_evidence: "InstitutionalAccumulationEvidence | None" = None,
-    tp_snapshot: "TickerProfileSnapshot | None" = None,
-    sc_evidence: "SectorContextEvidence | None" = None,
-    cq_evidence: "CompanyQualityContextEvidence | None" = None,
-    setup_family_result: "PrimarySetupFamilyResult | None" = None,
-    volatility_context: "VolatilityContext | None" = None,
-) -> dict:
-    """Build schema-versioned replay payload for one screened candidate.
-
-    screen_result: "pass" | "rejected_flow" | "rejected_signal"
-    flow_ev: FlowConfirmationEvidence used as signal input; None if builder failed.
-
-    Note: SignalEvidence (Phase 1 flat-factor bundle) is intentionally absent from
-    the screen path. The Phase 4 staged-evidence path does not produce per-factor
-    scores — building SignalEvidence from group-level breakdown would serialize
-    strength=0.0 and direction=BEARISH for all present factors, which is misleading.
-    flow_evidence captures the equivalent information for screen replay.
-    """
-    signal = candidate.signal_assessment
-    signal_payload = None
-    if signal is not None:
-        signal_payload = {
-            "assessment": signal.assessment.to_dict(),
-            "coverage_warning": signal.coverage_warning,
-            "evidence_confidence": signal.evidence_confidence,
-            "active_flags": list(signal.active_flags),
-            "flag_adjustment": signal.flag_adjustment,
-            "raw_group_score": signal.raw_group_score,
-            "raw_exact_score": signal.raw_exact_score,
-            "alpha_trigger_score": (
-                signal.alpha_trigger_score.to_dict()
-                if signal.alpha_trigger_score is not None else None
-            ),
-            "flow_evidence": flow_ev.to_dict() if flow_ev is not None else None,
-        }
-
-    sub_signal_fingerprint = _sub_signal_fingerprint(
-        candidate=candidate,
-        signal=signal,
-        flow_ev=flow_ev,
-        setup_phase=setup_phase,
-        strategy_evidence=strategy_evidence,
-        ia_evidence=ia_evidence,
-        tp_snapshot=tp_snapshot,
-        sc_evidence=sc_evidence,
-        cq_evidence=cq_evidence,
-        setup_family_result=setup_family_result,
-        volatility_context=volatility_context,
-        market_context=request.market_context,
-    )
-
-    return {
-        "schema_version": 1,
-        "artifact_type": "candidate_observation",
-        "ticker": candidate.ticker,
-        "snapshot_date": snapshot_date.isoformat(),
-        "captured_at": captured_at.isoformat(),
-        "workflow": "screen_accum",
-        "screen_result": screen_result,
-        "request": {
-            "window_days": request.window_days,
-            "min_net_buy_days": request.min_net_buy_days,
-            "min_foreign_flow_score": request.min_foreign_flow_score,
-            "min_signal_score": request.min_signal_score,
-        },
-        "sub_signal_fingerprint": sub_signal_fingerprint,
-        "candidate": candidate.to_dict(),
-        "signal": signal_payload,
-        "trade_setup": (
-            candidate.trade_setup.to_dict() if candidate.trade_setup is not None else None
-        ),
-    }
-
-
-def _market_context_fingerprint(market_context: "MarketContext | None") -> dict:
-    """Persist full regime attribution from a supplied MarketContext, else None."""
-    return {
-        "regime_confidence_at_signal": (
-            market_context.regime_confidence if market_context is not None else None
-        ),
-        "regime_stability_at_signal": (
-            market_context.regime_stability if market_context is not None else None
-        ),
-        "days_in_regime_at_signal": (
-            market_context.days_in_regime if market_context is not None else None
-        ),
-        "regime_transition_warning_at_signal": (
-            market_context.transition_warning if market_context is not None else None
-        ),
-        # MarketContext exposes no detection-method field anywhere in the codebase
-        # (verified: zero hits for regime_detection_method/detection_method/regime_source).
-        "regime_detection_method_at_signal": None,
-    }
-
-
-def _sub_signal_fingerprint(
-    *,
-    candidate: "accumulation_dto.AccumulationCandidate",
-    signal: "AssessSignalResponse | None",
-    flow_ev: "FlowConfirmationEvidence | None",
-    setup_phase: "SetupPhaseSnapshot | None" = None,
-    strategy_evidence: "StrategyEvidence | None" = None,
-    ia_evidence: "InstitutionalAccumulationEvidence | None" = None,
-    tp_snapshot: "TickerProfileSnapshot | None" = None,
-    sc_evidence: "SectorContextEvidence | None" = None,
-    cq_evidence: "CompanyQualityContextEvidence | None" = None,
-    setup_family_result: "PrimarySetupFamilyResult | None" = None,
-    volatility_context: "VolatilityContext | None" = None,
-    market_context: "MarketContext | None" = None,
-) -> dict:
-    """Persist raw sub-signal values as they were at observation time."""
-    assessment = signal.assessment if signal is not None else None
-    constraints = (
-        assessment.decision_constraints.to_dict()
-        if assessment is not None and assessment.decision_constraints is not None
-        else {}
-    )
-    coverage_score = _candidate_observation_coverage_score(flow_ev=flow_ev)
-    conviction_score = (
-        round(signal.raw_group_score / 100.0, 4)
-        if signal is not None and signal.raw_group_score is not None
-        else None
-    )
-    flow_dict = flow_ev.to_dict() if flow_ev is not None else {}
-    phase_dict = _setup_phase_fingerprint(setup_phase)
-    strategy_dict = _strategy_evidence_fingerprint(strategy_evidence)
-    ia_dict = _ia_evidence_fingerprint(ia_evidence)
-    tp_dict = _tp_fingerprint(tp_snapshot)
-    sc_dict = _sc_fingerprint(sc_evidence)
-    cq_dict = _cq_fingerprint(cq_evidence)
-    alpha_trigger_dict = _alpha_trigger_fingerprint(signal)
-    volatility_dict = _volatility_fingerprint(volatility_context)
-    if setup_family_result is not None:
-        # Prefer the resolver's primary family; fall back to
-        # decision_constraints only when the resolver itself came back
-        # unresolved (e.g. fallback_unknown), so a real constraints-sourced
-        # family is never silently discarded.
-        resolved_setup_family = (
-            setup_family_result.primary_setup_family
-            or constraints.get("setup_family")
-        )
-    else:
-        resolved_setup_family = constraints.get("setup_family")
-    market_regime_at_signal = (
-        market_context.regime.value
-        if market_context is not None
-        else constraints.get("regime")
-    )
-    return {
-        "setup_family": resolved_setup_family,
-        "matched_setup_families": (
-            list(setup_family_result.matched_setup_families)
-            if setup_family_result is not None
-            else []
-        ),
-        "primary_setup_family": (
-            setup_family_result.primary_setup_family
-            if setup_family_result is not None
-            else None
-        ),
-        "setup_family_source": (
-            setup_family_result.setup_family_source
-            if setup_family_result is not None
-            else None
-        ),
-        "setup_family_rationale": (
-            list(setup_family_result.rationale)
-            if setup_family_result is not None
-            else []
-        ),
-        "setup_name": constraints.get("setup_name"),
-        **phase_dict,
-        **strategy_dict,
-        **ia_dict,
-        **tp_dict,
-        **sc_dict,
-        **cq_dict,
-        **alpha_trigger_dict,
-        **volatility_dict,
-        "rsi_at_signal": candidate.rsi,
-        "bb_width_pctile_at_signal": candidate.bb_width_pctile,
-        "vwap_position_at_signal": candidate.vwap_pct,
-        "rs_vs_ihsg_20d_at_signal": getattr(candidate, "rs_vs_ihsg_20d", None),
-        "rs_vs_ihsg_5d_at_signal": getattr(candidate, "rs_vs_ihsg_5d", None),
-        "volume_ratio_at_signal": candidate.avg_flow_ratio,
-        "cnfb_20d_at_signal": float(candidate.total_net_value),
-        "foreign_participation_at_signal": candidate.net_buy_ratio,
-        "foreign_concentration_at_signal": flow_dict.get("capped_strength"),
-        "domestic_broker_accumulation_at_signal": (
-            candidate.bandar_detector.bandar_score
-            if candidate.bandar_detector is not None
-            and hasattr(candidate.bandar_detector, "bandar_score")
-            else None
-        ),
-        "market_regime_at_signal": market_regime_at_signal,
-        **_market_context_fingerprint(market_context),
-        "decision_constraints": constraints or None,
-        "coverage_score": coverage_score,
-        "conviction_score": conviction_score,
-    }
-
-
-def _alpha_trigger_fingerprint(signal: "AssessSignalResponse | None") -> dict:
-    score = signal.alpha_trigger_score if signal is not None else None
-    if score is None:
-        return {
-            "alpha_score": None,
-            "trigger_score": None,
-            "alpha_trigger_final_exact_score": None,
-            "alpha_trigger_horizon": None,
-            "alpha_trigger_alpha_weight": None,
-            "flow_trigger_allowed": None,
-            "alpha_trigger_route_metadata": None,
-            "alpha_trigger_unavailable_reasons": [],
-        }
-    return {
-        "alpha_score": score.alpha_score,
-        "trigger_score": score.trigger_score,
-        "alpha_trigger_final_exact_score": score.final_exact_score,
-        "alpha_trigger_horizon": score.horizon,
-        "alpha_trigger_alpha_weight": score.alpha_weight,
-        "flow_trigger_allowed": score.flow_trigger_allowed,
-        "alpha_trigger_route_metadata": [
-            contribution.to_dict()
-            for contribution in score.group_contributions
-        ],
-        "alpha_trigger_unavailable_reasons": list(score.unavailable_reasons),
-    }
-
-
-def _setup_phase_fingerprint(
-    setup_phase: "SetupPhaseSnapshot | None",
-) -> dict:
-    if setup_phase is None:
-        return {
-            "setup_phase_current": None,
-            "setup_phase_previous": None,
-            "phase_sequence_valid": None,
-            "phase_age_sessions": None,
-            "phase_strength": None,
-            "phase_reasons": [],
-            "phase_history": [],
-            "phase_coverage_score": None,
-            "phase_conviction_score": None,
-            "volume_dry_up_ratio_at_signal": None,
-            "volume_expansion_ratio_at_signal": None,
-            "volume_dry_up_confirmed": None,
-            "volume_expansion_confirmed": None,
-            "volume_trigger_confirmed": None,
-        }
-    return {
-        "setup_phase_current": setup_phase.current_phase.value,
-        "setup_phase_previous": (
-            setup_phase.previous_phase.value if setup_phase.previous_phase else None
-        ),
-        "phase_sequence_valid": setup_phase.sequence_valid,
-        "phase_age_sessions": setup_phase.phase_age_sessions,
-        "phase_strength": setup_phase.phase_strength,
-        "phase_reasons": list(setup_phase.reasons),
-        "phase_history": [entry.to_dict() for entry in setup_phase.history],
-        "phase_coverage_score": setup_phase.coverage_score,
-        "phase_conviction_score": setup_phase.conviction_score,
-        "volume_dry_up_ratio_at_signal": setup_phase.volume_dry_up_ratio,
-        "volume_expansion_ratio_at_signal": setup_phase.volume_expansion_ratio,
-        "volume_dry_up_confirmed": setup_phase.volume_dry_up_confirmed,
-        "volume_expansion_confirmed": setup_phase.volume_expansion_confirmed,
-        "volume_trigger_confirmed": setup_phase.volume_trigger_confirmed,
-    }
-
-
-def _ia_evidence_fingerprint(
-    ia_evidence: "InstitutionalAccumulationEvidence | None",
-) -> dict:
-    _none: dict = {
-        "institutional_accumulation_status": None,
-        "ia_foreign_participation": None,
-        "ia_foreign_cr4": None,
-        "ia_foreign_cr8": None,
-        "ia_cnfb_divergence_20d": None,
-        "ia_cnfb_divergence_30d": None,
-        "ia_cnfb_distribution_3d": None,
-        "ia_foreign_vwap_distance": None,
-        "ia_foreign_track_coverage": None,
-        "ia_foreign_track_conviction": None,
-        "ia_domestic_broker_consistency": None,
-        "ia_domestic_broker_reversal": None,
-        "ia_domestic_accumulation_session_ratio": None,
-        "ia_domestic_buy_vwap_distance": None,
-        "ia_domestic_broker_hhi_divergence": None,
-        "ia_bandar_broad_score_normalized": None,
-        "ia_domestic_track_coverage": None,
-        "ia_domestic_track_conviction": None,
-        "ia_counterparty_transfer_asymmetry": None,
-        "ia_counterparty_buy_hhi": None,
-        "ia_counterparty_sell_hhi": None,
-        "ia_coverage_score": None,
-        "ia_conviction_score": None,
-    }
-    if ia_evidence is None:
-        return _none
-    ft = ia_evidence.foreign_institutional_track
-    dt = ia_evidence.domestic_bandar_track
-    ct = ia_evidence.counterparty_transfer
-    meta = ia_evidence.metadata or {}
-    bullish = meta.get("cnfb_bullish_scores") or {}
-    bearish = meta.get("cnfb_bearish_scores") or {}
-    return {
-        "institutional_accumulation_status": ia_evidence.evidence_status.value,
-        "ia_foreign_participation": ft.foreign_participation_score,
-        "ia_foreign_cr4": ft.foreign_cr4_score,
-        "ia_foreign_cr8": ft.foreign_cr8_score,
-        "ia_cnfb_divergence_20d": bullish.get("cnfb_20d"),
-        "ia_cnfb_divergence_30d": bullish.get("cnfb_30d"),
-        "ia_cnfb_distribution_3d": bearish.get("cnfb_3d"),
-        "ia_foreign_vwap_distance": ft.foreign_vwap_distance_score,
-        "ia_foreign_track_coverage": ft.coverage_score,
-        "ia_foreign_track_conviction": ft.conviction_score,
-        "ia_domestic_broker_consistency": dt.broker_consistency_score,
-        "ia_domestic_broker_reversal": dt.broker_reversal_score,
-        "ia_domestic_accumulation_session_ratio": dt.accumulation_session_ratio,
-        "ia_domestic_buy_vwap_distance": dt.domestic_buy_vwap_distance_score,
-        "ia_domestic_broker_hhi_divergence": dt.broker_hhi_divergence_score,
-        "ia_bandar_broad_score_normalized": dt.bandar_broad_score_normalized,
-        "ia_domestic_track_coverage": dt.coverage_score,
-        "ia_domestic_track_conviction": dt.conviction_score,
-        "ia_counterparty_transfer_asymmetry": ct.transfer_asymmetry_score if ct else None,
-        "ia_counterparty_buy_hhi": ct.buy_side_hhi if ct else None,
-        "ia_counterparty_sell_hhi": ct.sell_side_hhi if ct else None,
-        "ia_coverage_score": ia_evidence.coverage_score,
-        "ia_conviction_score": ia_evidence.conviction_score,
-    }
-
-
-def _tp_fingerprint(
-    tp: "TickerProfileSnapshot | None",
-) -> dict:
-    _none: dict = {
-        "ticker_profile_label": None,
-        "ticker_profile_confidence": None,
-        "tp_market_tier": None,
-        "tp_foreign_institutional_exposure": None,
-        "tp_domestic_bandar_exposure": None,
-        "tp_retail_speculative_exposure": None,
-        "tp_liquidity_score": None,
-        "tp_broker_concentration_score": None,
-        "tp_foreign_flow_score": None,
-        "tp_volatility_score": None,
-        "tp_index_membership_score": None,
-        "tp_market_cap_bucket": None,
-        "tp_sector": None,
-        "tp_index_memberships": None,
-        "tp_coverage_score": None,
-        "tp_epoch": None,
-    }
-    if tp is None:
-        return _none
-    return {
-        "ticker_profile_label": tp.primary_profile,
-        "ticker_profile_confidence": tp.profile_confidence,
-        "tp_market_tier": tp.market_tier,
-        "tp_foreign_institutional_exposure": tp.foreign_institutional_exposure,
-        "tp_domestic_bandar_exposure": tp.domestic_bandar_exposure,
-        "tp_retail_speculative_exposure": tp.retail_speculative_exposure,
-        "tp_liquidity_score": tp.liquidity_score,
-        "tp_broker_concentration_score": tp.broker_concentration_score,
-        "tp_foreign_flow_score": tp.foreign_flow_score,
-        "tp_volatility_score": tp.volatility_score,
-        "tp_index_membership_score": tp.index_membership_score,
-        "tp_market_cap_bucket": tp.market_cap_bucket or "UNKNOWN",
-        "tp_sector": tp.sector,
-        "tp_index_memberships": ",".join(tp.index_memberships) if tp.index_memberships else None,
-        "tp_coverage_score": tp.coverage_score,
-        "tp_epoch": tp.epoch,
-    }
-
-
-def _volatility_fingerprint(vc: "VolatilityContext | None") -> dict:
-    if vc is None:
-        return {
-            "atr_at_signal": None,
-            "atr_pct_at_signal": None,
-            "volatility_bucket_at_signal": None,
-            "volatility_size_multiplier_at_signal": None,
-        }
-    return {
-        "atr_at_signal": vc.atr_at_signal,
-        "atr_pct_at_signal": vc.atr_pct_at_signal,
-        "volatility_bucket_at_signal": vc.volatility_bucket_at_signal,
-        "volatility_size_multiplier_at_signal": vc.volatility_size_multiplier_at_signal,
-    }
-
-
-def _sc_fingerprint(
-    sc: "SectorContextEvidence | None",
-) -> dict:
-    _none: dict = {
-        "sc_sector": None,
-        "sc_peer_count": None,
-        "sc_sector_20d_return": None,
-        "sc_sector_vs_ihsg_20d": None,
-        "sc_sector_breadth": None,
-        "sc_ticker_vs_sector_rs": None,
-        "sc_sector_regime": None,
-        "sc_coverage_score": None,
-    }
-    if sc is None:
-        return _none
-    return {
-        "sc_sector": sc.sector,
-        "sc_peer_count": sc.peer_count,
-        "sc_sector_20d_return": sc.sector_20d_return,
-        "sc_sector_vs_ihsg_20d": sc.sector_vs_ihsg_20d,
-        "sc_sector_breadth": sc.sector_breadth,
-        "sc_ticker_vs_sector_rs": sc.ticker_vs_sector_rs,
-        "sc_sector_regime": sc.sector_regime,
-        "sc_coverage_score": sc.coverage_score,
-    }
-
-
-def _cq_fingerprint(
-    cq: "CompanyQualityContextEvidence | None",
-) -> dict:
-    _none: dict = {
-        "cq_valuation_score": None,
-        "cq_earnings_trend_score": None,
-        "cq_analyst_score": None,
-        "cq_insider_score": None,
-        "cq_seasonality_score": None,
-        "cq_aggregate_score": None,
-        "cq_coverage_score": None,
-        "cq_present_axis_count": None,
-    }
-    if cq is None:
-        return _none
-    return {
-        "cq_valuation_score": cq.valuation_score,
-        "cq_earnings_trend_score": cq.earnings_trend_score,
-        "cq_analyst_score": cq.analyst_score,
-        "cq_insider_score": cq.insider_score,
-        "cq_seasonality_score": cq.seasonality_score,
-        "cq_aggregate_score": cq.aggregate_score,
-        "cq_coverage_score": cq.coverage_score,
-        "cq_present_axis_count": len(cq.present_axes),
-    }
-
-
-def _strategy_evidence_fingerprint(
-    strategy_evidence: "StrategyEvidence | None",
-) -> dict:
-    if strategy_evidence is None:
-        return {
-            "strategy_name": None,
-            "strategy_rule_name": None,
-            "strategy_rule_outcome": None,
-            "strategy_evidence_route": None,
-            "strategy_evidence_outcome": None,
-            "strategy_coverage_score": None,
-            "strategy_conviction_score": None,
-            "strategy_freshness_score": None,
-            "strategy_rationale": [],
-        }
-    matched = strategy_evidence.matched_rule
-    return {
-        "strategy_name": strategy_evidence.strategy_name,
-        "strategy_rule_name": matched.rule_name if matched else None,
-        "strategy_rule_outcome": matched.rule_outcome if matched else None,
-        "strategy_evidence_route": matched.evidence_route if matched else None,
-        "strategy_evidence_outcome": strategy_evidence.outcome.value,
-        "strategy_coverage_score": strategy_evidence.coverage_score,
-        "strategy_conviction_score": strategy_evidence.conviction_score,
-        "strategy_freshness_score": strategy_evidence.freshness_score,
-        "strategy_rationale": list(strategy_evidence.rationale),
-    }
-
-
-def _candidate_observation_coverage_score(
-    *,
-    flow_ev: "FlowConfirmationEvidence | None",
-) -> float:
-    # Phase B has no SetupPhaseState/setup evidence in screen observations yet.
-    # Persist availability ratio, not directional strength.
-    present_groups = 1 if flow_ev is not None else 0
-    return round(present_groups / 2.0, 4)
-
-
-def _simple_return(
-    candles: list[Any] | tuple[Any, ...],
-    *,
-    lookback: int,
-    min_valid: int,
-) -> float | None:
-    sorted_candles = sorted(candles, key=lambda c: c.date)
-    window = sorted_candles[-lookback:] if len(sorted_candles) >= lookback else sorted_candles
-    valid = [c for c in window if getattr(c, "close", None) and float(c.close) > 0.0]
-    if len(valid) < min_valid:
-        return None
-    reference = float(valid[0].close)
-    if reference <= 0.0:
-        return None
-    return (float(valid[-1].close) - reference) / reference
-
 
 class AccumulationScreenUseCase:
     """
@@ -760,6 +256,21 @@ class AccumulationScreenUseCase:
         # the two can never drift apart (see ADR-039).
         self._flow_confirmation_builder = FlowConfirmationEvidenceBuilder(
             foreign_flow_score_policy=self._foreign_flow_score_uc.policy
+        )
+        self._candidate_evidence_builder = AccumulationCandidateEvidenceBuilder(
+            market_repository=self._market_repo,
+            broker_repository=self._broker_repo,
+            signal_engine=self._signal_engine,
+            candidate_observations_repository=self._candidate_observations_repo,
+            swing_setup_catalog=self._swing_setup_catalog,
+            primary_setup_family_resolver=self._setup_family_resolver,
+            relative_strength_calculator=self._relative_strength_calculator,
+            indicator_registry=self._indicator_registry,
+        )
+        self._risk_funnel = (
+            AccumulationRiskFunnel(self._risk_use_case)
+            if self._risk_use_case is not None
+            else None
         )
         # idx_groups: {group_name: [ticker, ...]} from config/idx_groups.yaml
         # Build a reverse map: ticker → group_name for fast lookup
@@ -1000,7 +511,9 @@ class AccumulationScreenUseCase:
             # Accumulation-lifecycle diagnostic for screen display and persisted
             # observations alike — computed once here and reused by
             # _persist_candidate_observations() to avoid detecting twice.
-            result.setup_phase = self._detect_candidate_setup_phase(result, _flow_ev, today)
+            result.setup_phase = self._candidate_evidence_builder.detect_candidate_setup_phase(
+                result, _flow_ev, today
+            )
 
             if (
                 request.min_foreign_flow_score_enabled
@@ -1024,8 +537,8 @@ class AccumulationScreenUseCase:
         # Phase E (Rec 14): post-screening risk funnel — runs only on survivors,
         # not on all 800+ tickers. Reuses already-loaded fundamentals + bandar
         # data from candidates (Rec 15 data sharing — zero extra provider queries).
-        if self._risk_use_case is not None:
-            self._run_risk_funnel(candidates, today)
+        if self._risk_funnel is not None:
+            self._risk_funnel.run(candidates, today)
 
         candidates.sort(key=_screen_sort_key, reverse=True)
         self._persist_candidate_observations(all_results, today, request)
@@ -1054,34 +567,34 @@ class AccumulationScreenUseCase:
                 # Reuse the phase already detected in execute() — same candidate,
                 # same flow evidence, same snapshot date. Avoids detecting twice.
                 setup_phase = c.setup_phase
-                strategy_evidence = self._build_candidate_strategy_evidence(
+                strategy_evidence = self._candidate_evidence_builder.build_candidate_strategy_evidence(
                     c,
                     setup_phase,
                     snapshot_date,
                     request,
                 )
-                ia_evidence = self._build_candidate_institutional_accumulation_evidence(
+                ia_evidence = self._candidate_evidence_builder.build_candidate_institutional_accumulation_evidence(
                     c,
                     snapshot_date,
                 )
-                tp_snapshot = self._build_candidate_ticker_profile(c, snapshot_date)
-                sc_evidence = self._build_candidate_sector_context(
+                tp_snapshot = self._candidate_evidence_builder.build_candidate_ticker_profile(c, snapshot_date)
+                sc_evidence = self._candidate_evidence_builder.build_candidate_sector_context(
                     c,
                     snapshot_date,
                     tp_snapshot,
                 )
-                cq_evidence = self._build_candidate_company_quality_context(
+                cq_evidence = self._candidate_evidence_builder.build_candidate_company_quality_context(
                     c,
                     snapshot_date,
                 )
-                volatility_context = self._build_candidate_volatility_context(
+                volatility_context = self._candidate_evidence_builder.build_candidate_volatility_context(
                     c,
                     snapshot_date,
                 )
                 # Stage 2 resolution: strategy_evidence, setup_phase, and flow
                 # evidence are all available now — final family for this
                 # persisted observation.
-                preliminary_family = self._resolve_preliminary_setup_family(c)
+                preliminary_family = self._candidate_evidence_builder.resolve_preliminary_setup_family(c)
                 setup_family_result = self._setup_family_resolver.resolve(
                     candidate=c,
                     strategy_evidence=strategy_evidence,
@@ -1097,7 +610,7 @@ class AccumulationScreenUseCase:
                     # setup_family always share one contract — attribution
                     # must be able to trust that phase_sequence_valid was
                     # evaluated under the same family as primary_setup_family.
-                    setup_phase = self._detect_candidate_setup_phase(
+                    setup_phase = self._candidate_evidence_builder.detect_candidate_setup_phase(
                         c,
                         flow_ev,
                         snapshot_date,
@@ -1108,7 +621,7 @@ class AccumulationScreenUseCase:
                         ticker=c.ticker,
                         snapshot_date=snapshot_date,
                         captured_at=captured_at,
-                        payload=_candidate_observation_payload(
+                        payload=build_candidate_observation_payload(
                             c,
                             screen_result=screen_result,
                             flow_ev=flow_ev,
@@ -1129,403 +642,6 @@ class AccumulationScreenUseCase:
             self._candidate_observations_repo.save_many(observations)
         except Exception as exc:
             logger.warning("Candidate observation persistence unavailable: %s", exc)
-
-    def _resolve_preliminary_setup_family(
-        self, candidate: "accumulation_dto.AccumulationCandidate"
-    ) -> str | None:
-        """Stage-1 family resolution: explicit request + setup families
-        detected from screen evidence only — strategy_evidence does not exist
-        yet at this point in the pipeline. Shared by setup phase detection and
-        strategy-evidence construction so both agree on the same family before
-        strategy evidence (a higher-priority source) can potentially revise it
-        in stage 2 (see _persist_candidate_observations)."""
-        return self._setup_family_resolver.resolve(
-            candidate=candidate,
-            swing_setup_catalog=self._swing_setup_catalog,
-        ).primary_setup_family
-
-    def _build_candidate_strategy_evidence(
-        self,
-        candidate: "accumulation_dto.AccumulationCandidate",
-        setup_phase: "SetupPhaseSnapshot | None",
-        snapshot_date: date,
-        request: accumulation_dto.AccumulationScreenRequest,
-    ) -> "StrategyEvidence | None":
-        if request.strategy_name is None:
-            return None
-        try:
-            from src.application.services.strategy_evidence_builder import (
-                StrategyEvidenceBuilder,
-                StrategyEvidenceRequest,
-            )
-
-            candles = self._market_repo.get_candles(
-                candidate.ticker,
-                end_date=snapshot_date,
-            )
-            setup_family = self._resolve_preliminary_setup_family(candidate)
-            return StrategyEvidenceBuilder().build(
-                StrategyEvidenceRequest(
-                    ticker=candidate.ticker,
-                    strategy_name=request.strategy_name,
-                    candles=tuple(candles),
-                    snapshot_date=snapshot_date,
-                    setup_family=setup_family,
-                    setup_phase=setup_phase,
-                )
-            )
-        except Exception:
-            return None
-
-    def _build_candidate_institutional_accumulation_evidence(
-        self,
-        candidate: "accumulation_dto.AccumulationCandidate",
-        snapshot_date: date,
-    ) -> "InstitutionalAccumulationEvidence | None":
-        try:
-            from datetime import timedelta
-
-            from src.application.services.institutional_accumulation_evidence_builder import (
-                InstitutionalAccumulationEvidenceBuilder,
-                InstitutionalAccumulationEvidenceRequest,
-            )
-
-            start_date = snapshot_date - timedelta(days=45)
-            candles = self._market_repo.get_candles(candidate.ticker, end_date=snapshot_date)
-            broker_daily_flows = tuple(
-                self._broker_repo.get_broker_daily_flows(
-                    candidate.ticker, start_date=start_date, end_date=snapshot_date
-                )
-            )
-            foreign_flow_points = tuple(
-                self._broker_repo.get_foreign_flow_points(
-                    candidate.ticker, start_date=start_date, end_date=snapshot_date
-                )
-            )
-            broker_summaries = tuple(
-                self._broker_repo.get_broker_summaries(
-                    candidate.ticker, start_date=start_date, end_date=snapshot_date
-                )
-            )
-            return InstitutionalAccumulationEvidenceBuilder.from_yaml().build(
-                InstitutionalAccumulationEvidenceRequest(
-                    ticker=candidate.ticker,
-                    snapshot_date=snapshot_date,
-                    broker_daily_flows=broker_daily_flows,
-                    foreign_flow_points=foreign_flow_points,
-                    broker_summaries=broker_summaries,
-                    bandar_snapshot=candidate.bandar_detector,
-                    candles=tuple(candles),
-                )
-            )
-        except Exception:
-            return None
-
-    def _build_candidate_ticker_profile(
-        self,
-        candidate: "accumulation_dto.AccumulationCandidate",
-        snapshot_date: date,
-    ) -> "TickerProfileSnapshot | None":
-        try:
-            from datetime import timedelta
-            from decimal import Decimal as _Decimal
-
-            from src.application.services.ticker_profile_classifier import (
-                TickerProfileClassifier,
-                TickerProfileRequest,
-            )
-
-            start_date = snapshot_date - timedelta(days=45)
-            candles = self._market_repo.get_candles(candidate.ticker, end_date=snapshot_date)
-            broker_daily_flows = tuple(
-                self._broker_repo.get_broker_daily_flows(
-                    candidate.ticker, start_date=start_date, end_date=snapshot_date
-                )
-            )
-            broker_summaries = tuple(
-                self._broker_repo.get_broker_summaries(
-                    candidate.ticker, start_date=start_date, end_date=snapshot_date
-                )
-            )
-            market_cap_idr: _Decimal | None = None
-            if candidate.fundamentals is not None and candidate.fundamentals.market_cap_idr is not None:
-                market_cap_idr = _Decimal(str(candidate.fundamentals.market_cap_idr))
-            sector = (
-                candidate.ticker_notation.sector
-                if candidate.ticker_notation is not None
-                else None
-            )
-            sub_sector = (
-                candidate.ticker_notation.sub_sector
-                if candidate.ticker_notation is not None
-                else None
-            )
-            return TickerProfileClassifier.from_yaml().classify(
-                TickerProfileRequest(
-                    ticker=candidate.ticker,
-                    snapshot_date=snapshot_date,
-                    candles=tuple(candles),
-                    broker_daily_flows=broker_daily_flows,
-                    broker_summaries=broker_summaries,
-                    market_cap_idr=market_cap_idr,
-                    sector=sector,
-                    sub_sector=sub_sector,
-                )
-            )
-        except Exception:
-            return None
-
-    def _build_candidate_volatility_context(
-        self,
-        candidate: "accumulation_dto.AccumulationCandidate",
-        snapshot_date: date,
-    ) -> "VolatilityContext":
-        """Point-in-time ATR(14) volatility context for one candidate.
-
-        Never raises: an unavailable ATR (e.g. insufficient candle history)
-        must not block candidate observation generation, so failures resolve
-        to the shared helper's UNKNOWN/None behavior instead.
-        """
-        atr_value = None
-        try:
-            candles = self._market_repo.get_candles(candidate.ticker, end_date=snapshot_date)
-            atr_values = self._indicator_registry.compute("ATR", candles, 14)
-            if atr_values:
-                atr_value = atr_values[-1][1]
-        except Exception:
-            atr_value = None
-        return build_volatility_context(
-            atr_value=atr_value,
-            latest_close=candidate.current_price,
-        )
-
-    def _build_candidate_sector_context(
-        self,
-        candidate: "accumulation_dto.AccumulationCandidate",
-        snapshot_date: date,
-        tp_snapshot: "TickerProfileSnapshot | None",
-    ) -> "SectorContextEvidence | None":
-        try:
-            from src.application.services.sector_context_evidence_builder import (
-                SectorContextEvidenceBuilder,
-                SectorContextRequest,
-            )
-
-            builder = SectorContextEvidenceBuilder.from_yaml()
-            sector = (
-                candidate.ticker_notation.sector
-                if candidate.ticker_notation is not None
-                else None
-            ) or (tp_snapshot.sector if tp_snapshot is not None else None)
-            peer_tickers = builder.peers_for_ticker(candidate.ticker)
-            peer_candles: dict[str, list] = {}
-            for peer in peer_tickers:
-                try:
-                    candles = self._market_repo.get_candles(peer, end_date=snapshot_date)
-                    if candles:
-                        peer_candles[peer] = list(candles)
-                except Exception:
-                    pass
-            ticker_candles = tuple(
-                self._market_repo.get_candles(candidate.ticker, end_date=snapshot_date)
-            )
-            ihsg_20d_return = _simple_return(
-                self._market_repo.get_candles("IHSG", end_date=snapshot_date),
-                lookback=20,
-                min_valid=18,
-            )
-            return builder.build(
-                SectorContextRequest(
-                    ticker=candidate.ticker,
-                    snapshot_date=snapshot_date,
-                    sector=sector,
-                    ticker_candles=ticker_candles,
-                    peer_candles=peer_candles,
-                    ihsg_20d_return=ihsg_20d_return,
-                )
-            )
-        except Exception:
-            return None
-
-    def _build_candidate_company_quality_context(
-        self,
-        candidate: "accumulation_dto.AccumulationCandidate",
-        snapshot_date: date,
-    ) -> "CompanyQualityContextEvidence | None":
-        """Build DIAGNOSTIC company-quality / ticker-alpha conviction evidence.
-
-        Uses enrichment already loaded on the candidate (forward P/E, analyst,
-        insider, seasonality) via the shared SignalContext builder — no extra
-        provider fetch. Zero scoring authority (DIAGNOSTIC).
-        """
-        if self._signal_engine is None:
-            return None
-        try:
-            from src.application.services.company_quality_context_evidence_builder import (
-                CompanyQualityContextEvidenceBuilder,
-                CompanyQualityContextRequest,
-            )
-
-            signal_ctx = build_signal_context_from_candidate(
-                ticker=candidate.ticker,
-                snapshot_date=snapshot_date,
-                candidate=candidate,
-                signal_engine=self._signal_engine,
-            )
-            return CompanyQualityContextEvidenceBuilder.from_yaml().build(
-                CompanyQualityContextRequest(
-                    ticker=candidate.ticker,
-                    snapshot_date=snapshot_date,
-                    signal_context=signal_ctx,
-                )
-            )
-        except Exception:
-            return None
-
-    def _detect_candidate_setup_phase(
-        self,
-        candidate: "accumulation_dto.AccumulationCandidate",
-        flow_ev: "FlowConfirmationEvidence | None",
-        snapshot_date: date,
-        setup_family: "str | None" = _UNSET_SETUP_FAMILY,  # type: ignore[assignment]
-    ) -> "SetupPhaseSnapshot | None":
-        try:
-            from src.application.services.candle_provenance import resolve_candle_source
-            from src.application.services.setup_evidence_builder import (
-                SetupEvidenceBuilder,
-            )
-            from src.application.services.setup_phase_detector import SetupPhaseDetector
-            from src.application.services.setup_phase_history import (
-                load_previous_setup_phases,
-            )
-            from src.domain.value_objects.benchmark_symbol import (
-                CANONICAL_BENCHMARK_TICKER,
-            )
-
-            if setup_family is _UNSET_SETUP_FAMILY:
-                # Stage 1 resolution: no strategy_evidence yet (it is built
-                # later, in the persist loop, using this very phase snapshot
-                # as input — see _build_candidate_strategy_evidence). Relies
-                # only on explicit request family (none today for screen
-                # accum) and setup families detected from screen evidence.
-                setup_family = self._resolve_preliminary_setup_family(candidate)
-            # else: caller (stage 2 recompute in _persist_candidate_observations)
-            # supplies the final, strategy-evidence-aware family explicitly —
-            # used verbatim, including an explicit None for "genuinely unknown".
-
-            candles = self._market_repo.get_candles(
-                candidate.ticker,
-                end_date=snapshot_date,
-            )
-            benchmark_candles = self._market_repo.get_candles(
-                CANONICAL_BENCHMARK_TICKER,
-                end_date=snapshot_date,
-            )
-            rs_result = self._relative_strength_calculator.calculate(
-                ticker_candles=candles,
-                benchmark_candles=benchmark_candles,
-                as_of_date=snapshot_date,
-            )
-            # Attached as diagnostic instance attributes (not formal dataclass
-            # fields) so _sub_signal_fingerprint() can read them without
-            # threading a new return value through this method's signature.
-            candidate.rs_vs_ihsg_5d = rs_result.rs_vs_ihsg_5d
-            candidate.rs_vs_ihsg_20d = rs_result.rs_vs_ihsg_20d
-            previous_phases = load_previous_setup_phases(
-                self._candidate_observations_repo,
-                ticker=candidate.ticker,
-                before_date=snapshot_date,
-                setup_family=setup_family,
-            )
-            candle_source = resolve_candle_source(
-                self._market_repo,
-                ticker=candidate.ticker,
-                as_of_date=candles[-1].date if candles else snapshot_date,
-            )
-            setup_evidence = SetupEvidenceBuilder().build(
-                candidate,
-                None,
-                rs_vs_ihsg_5d=rs_result.rs_vs_ihsg_5d,
-                volume_trend_ratio=None,
-                candle_source=candle_source,
-                analysis_date=snapshot_date,
-            )
-            return SetupPhaseDetector().detect(
-                candles=candles,
-                setup_eval=None,
-                setup_evidence=setup_evidence,
-                flow_evidence=flow_ev,
-                setup_family=setup_family,
-                previous_phases=previous_phases,
-            )
-        except Exception:
-            return None
-
-    def _run_risk_funnel(
-        self,
-        candidates: list[accumulation_dto.AccumulationCandidate],
-        as_of_date: date,
-    ) -> None:
-        """Run AssessRiskUseCase on each survivor and attach the result in-place.
-
-        Builds GateContext from already-loaded candidate data — no duplicate
-        provider calls (Rec 15: share data snapshots).
-        """
-        from src.application.use_case.assess_risk_use_case import AssessRiskRequest
-        from src.application.use_case.assess_trade_setup_use_case import (
-            AssessTradeSetupRequest,
-            AssessTradeSetupUseCase,
-        )
-        from src.domain.rules.risk_gate import GateContext
-
-        trade_setup_uc = AssessTradeSetupUseCase()
-
-        for candidate in candidates:
-            try:
-                gate_ctx = GateContext(
-                    ticker=candidate.ticker,
-                    snapshot_date=as_of_date,
-                    piotroski_f_score=(
-                        candidate.fundamentals.piotroski_f_score if candidate.fundamentals else None
-                    ),
-                    market_cap_idr=(
-                        candidate.fundamentals.market_cap_idr if candidate.fundamentals else None
-                    ),
-                    free_float_pct=(
-                        candidate.shareholding.free_float_pct
-                        if candidate.shareholding is not None
-                        else None
-                    ),
-                    five_day_accdist=(
-                        candidate.bandar_detector.five_day_accdist
-                        if candidate.bandar_detector
-                        else None
-                    ),
-                )
-                resp = self._risk_use_case.execute(  # type: ignore[union-attr]
-                    AssessRiskRequest(
-                        ticker=candidate.ticker,
-                        gate_context=gate_ctx,
-                    )
-                )
-                candidate.risk_assessment = resp.assessment
-                if candidate.signal_assessment is not None:
-                    try:
-                        trade_resp = trade_setup_uc.execute(
-                            AssessTradeSetupRequest(
-                                ticker=candidate.ticker,
-                                snapshot_date=as_of_date,
-                                signal_response=candidate.signal_assessment,
-                                risk_response=resp,
-                            )
-                        )
-                        candidate.trade_setup = trade_resp.setup
-                    except Exception as exc2:
-                        logger.debug(
-                            "Risk funnel: trade_setup failed for %s: %s", candidate.ticker, exc2
-                        )
-            except Exception as exc:
-                logger.debug("Risk funnel: assessment failed for %s: %s", candidate.ticker, exc)
 
     def _evaluate_ticker(
         self,
@@ -1605,17 +721,24 @@ class AccumulationScreenUseCase:
         else:
             current_price = candles[-1].close
             latest_candle_date = candles[-1].date
-            rsi = self._compute_rsi(candles, rsi_period)
-            trend = self._compute_trend(candles, sma_period)
-            bb_width, bb_width_pctile = self._compute_bb_squeeze(
+            rsi = compute_accumulation_rsi(candles, rsi_period)
+            trend = compute_accumulation_trend(
+                candles,
+                sma_period,
+                trend_threshold_pct=self._derived_features.trend_threshold_pct,
+            )
+            bb_width, bb_width_pctile = compute_bb_squeeze(
                 candles,
                 period=self._derived_features.bb_period,
                 history=self._derived_features.bb_history,
             )
 
         # Phase 2.2: Resistance proximity (MA200 and 52-week high)
-        ma200, week52_high, nearest_resistance_pct = self._compute_resistance(
-            candles, current_price
+        ma200, week52_high, nearest_resistance_pct = compute_resistance_levels(
+            candles,
+            current_price,
+            resistance_ma_period=self._derived_features.resistance_ma_period,
+            resistance_high_period=self._derived_features.resistance_high_period,
         )
 
         # Foreign VWAP discount % — how far foreigners' avg buy is above current price
@@ -1748,119 +871,6 @@ class AccumulationScreenUseCase:
                 if breadth_pct >= request.sector_breadth_threshold:
                     m.foreign_flow_score += request.sector_breadth_bonus_pts
                     m.sector_breadth_bonus = request.sector_breadth_bonus_pts
-
-    def _compute_rsi(self, candles: list, period: int) -> float | None:
-        """Wilder's RSI from candle close prices."""
-        closes = [float(c.close) for c in candles]
-        if len(closes) < period + 1:
-            return None
-
-        gains, losses = [], []
-        for i in range(1, len(closes)):
-            delta = closes[i] - closes[i - 1]
-            gains.append(max(delta, 0))
-            losses.append(max(-delta, 0))
-
-        # Initial averages (SMA seed)
-        avg_gain = sum(gains[:period]) / period
-        avg_loss = sum(losses[:period]) / period
-
-        # Wilder's smoothing for the rest
-        for i in range(period, len(gains)):
-            avg_gain = (avg_gain * (period - 1) + gains[i]) / period
-            avg_loss = (avg_loss * (period - 1) + losses[i]) / period
-
-        if avg_loss == 0:
-            return 100.0
-        rs = avg_gain / avg_loss
-        return round(100 - (100 / (1 + rs)), 2)
-
-    def _compute_trend(self, candles: list, sma_period: int) -> str:
-        """Classify trend relative to SMA."""
-        if len(candles) < sma_period:
-            return "SIDE"
-
-        recent = candles[-sma_period:]
-        sma = sum(float(c.close) for c in recent) / sma_period
-        current = float(candles[-1].close)
-        pct_diff = (current - sma) / sma * 100
-
-        threshold = self._derived_features.trend_threshold_pct
-        if pct_diff > threshold:
-            return "UP"
-        elif pct_diff < -threshold:
-            return "DOWN"
-        return "SIDE"
-
-    @staticmethod
-    def _compute_bb_widths(candles: list, period: int = 20) -> list[float]:
-        """BB Width = (upper - lower) / mid * 100 for each candle."""
-        closes = [float(c.close) for c in candles]
-        if len(closes) < period:
-            return []
-        out = []
-        for i in range(period - 1, len(closes)):
-            window = closes[i - period + 1 : i + 1]
-            mid = sum(window) / period
-            if mid <= 0:
-                out.append(0.0)
-                continue
-            std = (sum((x - mid) ** 2 for x in window) / period) ** 0.5
-            out.append(4.0 * std / mid * 100)  # (upper-lower)/mid*100, upper=mid+2σ
-        return out
-
-    def _compute_bb_squeeze(
-        self, candles: list, period: int = 20, history: int = 60
-    ) -> tuple[float | None, float | None]:
-        """Return (bb_width_now, percentile_rank_vs_last_N_days).
-
-        percentile=0.0 means current width is the tightest in `history` days
-        (maximum squeeze). percentile=1.0 means widest (expanding volatility).
-        """
-        widths = self._compute_bb_widths(candles, period)
-        if not widths:
-            return None, None
-        bb_width_now = widths[-1]
-        if len(widths) < history:
-            return bb_width_now, None
-        recent = widths[-history:]
-        rank = sum(1 for w in recent if w <= bb_width_now) / len(recent)
-        return bb_width_now, rank
-
-    def _compute_resistance(
-        self,
-        candles: list,
-        current_price: Decimal,
-    ) -> tuple[Decimal | None, Decimal | None, float | None]:
-        """Compute MA200, 52-week high, and % distance to nearest resistance above price.
-
-        Returns (ma200, week52_high, nearest_resistance_pct).
-        nearest_resistance_pct is None if no resistance level is above current price.
-        Positive value = resistance is X% above current price (more headroom = better).
-        """
-        if not candles or current_price <= 0:
-            return None, None, None
-
-        ma200: Decimal | None = None
-        ma_period = self._derived_features.resistance_ma_period
-        if len(candles) >= ma_period:
-            ma200 = Decimal(str(sum(c.close for c in candles[-ma_period:]) / ma_period))
-
-        week52_high: Decimal | None = None
-        if len(candles) >= 1:
-            week52_high = max(
-                c.high for c in candles[-self._derived_features.resistance_high_period :]
-            )
-
-        resistances: list[float] = []
-        for level in (ma200, week52_high):
-            if level is not None and level > current_price:
-                pct = float((level - current_price) / current_price * 100)
-                resistances.append(pct)
-
-        nearest_resistance_pct = min(resistances) if resistances else None
-        return ma200, week52_high, nearest_resistance_pct
-
 
 def compute_percent_plan(
     entry: "Decimal",
