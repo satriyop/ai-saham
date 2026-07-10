@@ -21,6 +21,9 @@ if TYPE_CHECKING:
 from src.application.services.flow_confirmation_evidence_builder import (
     FlowConfirmationEvidenceBuilder,
 )
+from src.application.services.swing_analysis_market_helpers import (
+    benchmark_return_from_repository,
+)
 from src.application.services.position_sizer import (
     PercentSizingResult,
     SizingResult,
@@ -55,42 +58,6 @@ if TYPE_CHECKING:
     from src.domain.value_objects.setup_phase import SetupPhaseSnapshot
     from src.domain.value_objects.strategy_evidence import StrategyEvidence
     from src.domain.value_objects.trade_setup import TradeSetup
-
-
-def _benchmark_return_from_repository(
-    repository: MarketDataRepository,
-    *,
-    benchmark: str,
-    end_date: date,
-    lookback: int,
-    min_valid: int,
-) -> float | None:
-    try:
-        candles = repository.get_candles(
-            canonicalize_ticker(benchmark),
-            end_date=end_date,
-        )
-    except Exception:
-        return None
-    return _simple_return(candles, lookback=lookback, min_valid=min_valid)
-
-
-def _simple_return(
-    candles: list[Any] | tuple[Any, ...],
-    *,
-    lookback: int,
-    min_valid: int,
-) -> float | None:
-    sorted_candles = sorted(candles, key=lambda c: c.date)
-    window = sorted_candles[-lookback:] if len(sorted_candles) >= lookback else sorted_candles
-    valid = [c for c in window if getattr(c, "close", None) and float(c.close) > 0.0]
-    if len(valid) < min_valid:
-        return None
-    reference = float(valid[0].close)
-    if reference <= 0.0:
-        return None
-    return (float(valid[-1].close) - reference) / reference
-
 
 class SwingAnalysisWorkflowUseCase:
     """Run deterministic swing analysis steps and return structured state."""
@@ -688,7 +655,7 @@ class SwingAnalysisWorkflowUseCase:
                         peer_candles[peer] = list(pc)
                 except Exception:
                     pass
-            ihsg_20d_return = _benchmark_return_from_repository(
+            ihsg_20d_return = benchmark_return_from_repository(
                 self._market_repo,
                 benchmark=request.benchmark,
                 end_date=request.today,

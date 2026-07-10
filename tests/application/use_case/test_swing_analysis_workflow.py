@@ -10,16 +10,16 @@ import pytest
 from src.application.services.flow_confirmation_evidence_builder import (
     FlowConfirmationEvidenceBuilder,
 )
+from src.application.services.swing_analysis_market_helpers import simple_return
+from src.application.services.swing_analysis_serialization import signal_response_to_dict
 from src.application.services.volatility_context import build_volatility_context
 from src.application.dto.swing_analysis import (
     SwingAnalysisWorkflowRequest,
     SwingEvidence,
-    _signal_response_to_dict,
 )
 from src.application.use_case.swing_analysis_workflow_use_case import (
     SwingAnalysisDataUnavailable,
     SwingAnalysisWorkflowUseCase,
-    _simple_return,
 )
 from src.domain.entities.candle import Candle
 from src.domain.ports.candidate_observations_repository import CandidateObservation
@@ -117,7 +117,7 @@ def test_simple_return_computes_decimal_return_from_candles():
         for idx in range(20)
     ]
 
-    ret = _simple_return(candles, lookback=20, min_valid=18)
+    ret = simple_return(candles, lookback=20, min_valid=18)
 
     assert ret == pytest.approx(0.19)
 
@@ -700,7 +700,7 @@ def test_swing_evidence_to_dict_includes_setup_phase():
 
 
 def test_signal_response_to_dict_emits_coverage_fields():
-    """_signal_response_to_dict must include canonical coverage_score and legacy aliases."""
+    """signal_response_to_dict must include canonical coverage_score and legacy aliases."""
     from datetime import date as _date
     from src.application.use_case.assess_signal_use_case import AssessSignalResponse
     from src.domain.value_objects.signal_assessment import (
@@ -725,7 +725,7 @@ def test_signal_response_to_dict_emits_coverage_fields():
         evidence_confidence=0.85,
     )
 
-    d = _signal_response_to_dict(response)
+    d = signal_response_to_dict(response)
     assert d is not None
     # Canonical key present
     assert "coverage_score" in d
@@ -738,4 +738,4 @@ def test_signal_response_to_dict_emits_coverage_fields():
 
 
 def test_signal_response_to_dict_none_returns_none():
-    assert _signal_response_to_dict(None) is None
+    assert signal_response_to_dict(None) is None

@@ -9,7 +9,14 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from src.application.services.position_sizer import PercentSizingResult, SizingResult
-from src.application.services.volatility_context import build_volatility_context
+from src.application.services.swing_analysis_serialization import (
+    candidate_accumulation_to_dict,
+    object_to_dict,
+    risk_response_to_dict,
+    risk_response_to_preview_dict,
+    signal_response_to_dict,
+    volatility_context_to_dict,
+)
 
 if TYPE_CHECKING:
     from src.application.use_case.assess_signal_use_case import AssessSignalResponse
@@ -72,16 +79,16 @@ class SwingVerdict:
     def to_dict(self) -> dict[str, Any]:
         return {
             "trade_setup": self.trade_setup.to_dict() if self.trade_setup else None,
-            "signal_assessment": _signal_response_to_dict(self.signal_assessment),
-            "risk_assessment": _risk_response_to_dict(self.risk_response),
+            "signal_assessment": signal_response_to_dict(self.signal_assessment),
+            "risk_assessment": risk_response_to_dict(self.risk_response),
             "market_context": (
                 self.market_regime.to_dict() if self.market_regime else None
             ),
             "market_context_preview": {
-                "signal_preview": _signal_response_to_dict(
+                "signal_preview": signal_response_to_dict(
                     self.market_context_signal_preview
                 ),
-                "risk_preview": _risk_response_to_preview_dict(
+                "risk_preview": risk_response_to_preview_dict(
                     self.market_context_risk_preview
                 ),
                 "trade_setup_preview": (
@@ -123,7 +130,7 @@ class SwingEvidence:
                 candidate.foreign_flow_evidence.to_dict()
                 if candidate and getattr(candidate, "foreign_flow_evidence", None) else None
             ),
-            "accumulation": _candidate_accumulation_to_dict(candidate),
+            "accumulation": candidate_accumulation_to_dict(candidate),
             "setup": {
                 "name": setup_eval.name if setup_eval else None,
                 "passed": setup_eval.passed if setup_eval else None,
@@ -210,12 +217,12 @@ class SwingDiagnostics:
     warnings: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
-        data_out = _object_to_dict(self.data_freshness)
+        data_out = object_to_dict(self.data_freshness)
         return {
             "data": data_out,
-            "flow_detail": _object_to_dict(self.flow_detail),
-            "broker_detail": _object_to_dict(self.broker_detail),
-            "broker_quality_note": _object_to_dict(self.broker_quality_note),
+            "flow_detail": object_to_dict(self.flow_detail),
+            "broker_detail": object_to_dict(self.broker_detail),
+            "broker_quality_note": object_to_dict(self.broker_quality_note),
             "refresh_actions": list(self.refresh_actions),
             "warnings": list(self.warnings),
         }
@@ -296,7 +303,7 @@ class SwingAnalysisWorkflowResponse:
             and verdict.market_regime is not None
         ):
             diagnostics_out["data"]["regime_as_of"] = verdict.market_regime.as_of_date.isoformat()
-        diagnostics_out["volatility_context"] = _volatility_context_to_dict(
+        diagnostics_out["volatility_context"] = volatility_context_to_dict(
             atr_value=self.atr_value,
             latest_close=self.latest_close,
         )
@@ -320,140 +327,3 @@ class SwingAnalysisWorkflowResponse:
             "evidence": evidence_out,
             "diagnostics": diagnostics_out,
         }
-
-
-def _signal_response_to_dict(response: "AssessSignalResponse | None") -> dict[str, Any] | None:
-    if response is None:
-        return None
-    return {
-        "score": response.assessment.score,
-        "raw_exact_score": response.assessment.raw_exact_score,
-        "strength": response.assessment.strength.value,
-        "entry_quality": response.assessment.entry_quality.value,
-        "breakdown": response.assessment.breakdown_dict,
-        "coverage_score": response.coverage_score,             # canonical
-        "evidence_confidence": response.evidence_confidence,   # legacy alias
-        "confidence_score": response.assessment.confidence_score,  # legacy alias
-        "coverage_warning": response.coverage_warning,
-        "alpha_trigger_score": (
-            response.assessment.alpha_trigger_score.to_dict()
-            if response.assessment.alpha_trigger_score else None
-        ),
-        "decision_constraints": (
-            response.assessment.decision_constraints.to_dict()
-            if getattr(response.assessment, "decision_constraints", None) else None
-        ),
-    }
-
-
-def _volatility_context_to_dict(
-    *,
-    atr_value: Decimal | None,
-    latest_close: Decimal | None,
-) -> dict[str, Any]:
-    vc = build_volatility_context(atr_value=atr_value, latest_close=latest_close)
-    return {
-        "atr_20": vc.atr_at_signal,
-        "atr_pct": vc.atr_pct_at_signal,
-        "volatility_bucket": vc.volatility_bucket_at_signal,
-        "stop_model_hint": "ATR_MULTIPLE",
-        "suggested_stop_atr": 2.0,
-        "suggested_target_atr": 3.0,
-        "volatility_size_multiplier": vc.volatility_size_multiplier_at_signal,
-    }
-
-
-def _object_to_dict(value: Any | None) -> Any | None:
-    if value is None:
-        return None
-    to_dict = getattr(value, "to_dict", None)
-    if callable(to_dict):
-        return to_dict()
-    return value
-
-
-def _risk_response_to_dict(response: Any | None) -> dict[str, Any] | None:
-    if response is None:
-        return None
-    assessment = response.assessment
-    return {
-        "risk_status": assessment.risk_level_name,
-        "confidence": assessment.confidence,
-        "sma20": float(assessment.indicators.sma),
-        "ema20": float(assessment.indicators.ema),
-        "rsi14": float(assessment.indicators.rsi),
-        "gate_triggered": assessment.gate_triggered,
-    }
-
-
-def _risk_response_to_preview_dict(response: Any | None) -> dict[str, Any] | None:
-    if response is None:
-        return None
-    return {
-        "level": response.assessment.risk_level_name,
-        "gate_triggered": response.assessment.gate_triggered,
-    }
-
-
-def _candidate_accumulation_to_dict(candidate: Any | None) -> dict[str, Any]:
-    if candidate is None:
-        return {
-            "foreign_flow_score": None,
-            "streak": None,
-            "trend": None,
-            "flow_pct": None,
-            "vwap_disc_pct": None,
-            "bb_width_pctile": None,
-            "foreign_flow_evidence": None,
-            "dividend_risk": False,
-            "rights_issue_risk": False,
-            "upcoming_rups": [],
-            "seasonal_score": None,
-            "seasonal_label": None,
-            "insider_buying": False,
-            "recent_insider_buys": [],
-            "analyst_consensus": None,
-            "shareholding": None,
-            "bandar_detector": None,
-            "fundamentals": None,
-            "ticker_notation": None,
-        }
-    return {
-        "foreign_flow_score": candidate.foreign_flow_score,
-        "streak": candidate.consecutive_streak,
-        "trend": candidate.trend,
-        "flow_pct": candidate.avg_flow_ratio,
-        "vwap_disc_pct": candidate.vwap_discount_pct,
-        "bb_width_pctile": candidate.bb_width_pctile,
-        "foreign_flow_evidence": (
-            candidate.foreign_flow_evidence.to_dict()
-            if getattr(candidate, "foreign_flow_evidence", None) else None
-        ),
-        "dividend_risk": candidate.dividend_risk,
-        "rights_issue_risk": candidate.rights_issue_risk,
-        "upcoming_rups": candidate.upcoming_rups,
-        "seasonal_score": (
-            candidate.seasonal_edge.score if candidate.seasonal_edge else None
-        ),
-        "seasonal_label": (
-            candidate.seasonal_edge.label if candidate.seasonal_edge else None
-        ),
-        "insider_buying": candidate.insider_buying,
-        "recent_insider_buys": candidate.recent_insider_buys,
-        "analyst_consensus": (
-            candidate.analyst_consensus.to_dict()
-            if candidate.analyst_consensus else None
-        ),
-        "shareholding": (
-            candidate.shareholding.to_dict() if candidate.shareholding else None
-        ),
-        "bandar_detector": (
-            candidate.bandar_detector.to_dict() if candidate.bandar_detector else None
-        ),
-        "fundamentals": (
-            candidate.fundamentals.to_dict() if candidate.fundamentals else None
-        ),
-        "ticker_notation": (
-            candidate.ticker_notation.to_dict() if candidate.ticker_notation else None
-        ),
-    }
