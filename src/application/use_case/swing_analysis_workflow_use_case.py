@@ -30,6 +30,7 @@ from src.application.services.signal_context_builder import (
     build_signal_context_from_candidate,
 )
 from src.application.services.strategy_loader import StrategyLoader
+from src.application.services.volatility_context import build_volatility_context
 from src.application.use_case.assess_risk_use_case import AssessRiskRequest, AssessRiskUseCase
 from src.application.use_case.backtest_use_case import BacktestRequest, BacktestUseCase
 from src.application.use_case.score_foreign_flow_use_case import ForeignFlowScorePolicy
@@ -378,35 +379,16 @@ def _volatility_context_to_dict(
     atr_value: Decimal | None,
     latest_close: Decimal | None,
 ) -> dict[str, Any]:
-    atr_float = float(atr_value) if atr_value is not None else None
-    close_float = float(latest_close) if latest_close is not None else None
-    atr_pct = (
-        round((atr_float / close_float) * 100.0, 4)
-        if atr_float is not None and close_float and close_float > 0
-        else None
-    )
-    bucket, size_multiplier = _volatility_bucket(atr_pct)
+    vc = build_volatility_context(atr_value=atr_value, latest_close=latest_close)
     return {
-        "atr_20": atr_float,
-        "atr_pct": atr_pct,
-        "volatility_bucket": bucket,
+        "atr_20": vc.atr_at_signal,
+        "atr_pct": vc.atr_pct_at_signal,
+        "volatility_bucket": vc.volatility_bucket_at_signal,
         "stop_model_hint": "ATR_MULTIPLE",
         "suggested_stop_atr": 2.0,
         "suggested_target_atr": 3.0,
-        "volatility_size_multiplier": size_multiplier,
+        "volatility_size_multiplier": vc.volatility_size_multiplier_at_signal,
     }
-
-
-def _volatility_bucket(atr_pct: float | None) -> tuple[str, float]:
-    if atr_pct is None:
-        return "UNKNOWN", 1.0
-    if atr_pct < 2.0:
-        return "LOW", 1.0
-    if atr_pct < 5.0:
-        return "NORMAL", 1.0
-    if atr_pct < 8.0:
-        return "HIGH", 0.75
-    return "EXTREME", 0.50
 
 
 def _benchmark_return_from_repository(

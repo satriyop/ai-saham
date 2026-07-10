@@ -446,6 +446,99 @@ def test_summarize_missing_phase_i_fields_as_unknown():
     assert by_group[("volume_trigger_confirmed", "UNKNOWN")].observation_count == 1
 
 
+def test_summarize_groups_by_volatility_context_buckets():
+    """volatility_bucket_at_signal / atr_pct_bucket / volatility_size_multiplier_bucket
+    must be built from the persisted VolatilityContext fingerprint fields
+    (atr_pct_at_signal=1.5 -> LT_2, atr_pct_at_signal=6.0 -> D5_8;
+    volatility_size_multiplier_bucket formatted as f"{value:.2f}")."""
+    day = date(2026, 7, 1)
+    normal_label = SignalForwardLabel(
+        ticker="BBCA",
+        signal_date=day,
+        horizon=SignalLabelHorizon.SWING_10D,
+        entry_reference_price=Decimal("100"),
+        label_window_start=date(2026, 7, 2),
+        label_window_end=date(2026, 7, 15),
+        close_return=4.0,
+        max_forward_return=5.0,
+        max_adverse_excursion=-1.0,
+        days_to_peak=2,
+        days_to_trough=1,
+        stop_would_trigger=False,
+        target_would_trigger=True,
+        outcome_label=SignalForwardOutcome.SUCCESS,
+        unavailable_reason=None,
+        fingerprint=SignalObservationFingerprint(
+            atr_at_signal=1.5,
+            atr_pct_at_signal=1.5,
+            volatility_bucket_at_signal="NORMAL",
+            volatility_size_multiplier_at_signal=1.0,
+        ),
+    )
+    high_label = SignalForwardLabel(
+        ticker="BBRI",
+        signal_date=day,
+        horizon=SignalLabelHorizon.SWING_10D,
+        entry_reference_price=Decimal("100"),
+        label_window_start=date(2026, 7, 2),
+        label_window_end=date(2026, 7, 15),
+        close_return=-2.0,
+        max_forward_return=0.0,
+        max_adverse_excursion=-2.0,
+        days_to_peak=1,
+        days_to_trough=2,
+        stop_would_trigger=True,
+        target_would_trigger=False,
+        outcome_label=SignalForwardOutcome.FAILURE,
+        unavailable_reason=None,
+        fingerprint=SignalObservationFingerprint(
+            atr_at_signal=6.0,
+            atr_pct_at_signal=6.0,
+            volatility_bucket_at_signal="HIGH",
+            volatility_size_multiplier_at_signal=0.75,
+        ),
+    )
+    unknown_label = SignalForwardLabel(
+        ticker="TLKM",
+        signal_date=day,
+        horizon=SignalLabelHorizon.SWING_10D,
+        entry_reference_price=Decimal("100"),
+        label_window_start=date(2026, 7, 2),
+        label_window_end=date(2026, 7, 15),
+        close_return=1.0,
+        max_forward_return=1.0,
+        max_adverse_excursion=0.0,
+        days_to_peak=1,
+        days_to_trough=1,
+        stop_would_trigger=False,
+        target_would_trigger=False,
+        outcome_label=SignalForwardOutcome.NEUTRAL,
+        unavailable_reason=None,
+        fingerprint=SignalObservationFingerprint(),
+    )
+    repo = FakeSignalForwardLabelsRepository([normal_label, high_label, unknown_label])
+
+    response = SummarizeSignalForwardLabelsUseCase(repo).execute(
+        SummarizeSignalForwardLabelsRequest()
+    )
+
+    by_group = {(bucket.group, bucket.key): bucket for bucket in response.buckets}
+
+    assert by_group[("volatility_bucket_at_signal", "NORMAL")].observation_count == 1
+    assert by_group[("volatility_bucket_at_signal", "NORMAL")].success_count == 1
+    assert by_group[("volatility_bucket_at_signal", "HIGH")].observation_count == 1
+    assert by_group[("volatility_bucket_at_signal", "HIGH")].failure_count == 1
+    assert by_group[("volatility_bucket_at_signal", "UNKNOWN")].observation_count == 1
+
+    assert by_group[("atr_pct_bucket", "LT_2")].observation_count == 1
+    assert by_group[("atr_pct_bucket", "D5_8")].observation_count == 1
+    assert by_group[("atr_pct_bucket", "UNKNOWN")].observation_count == 1
+
+    assert by_group[("volatility_size_multiplier_bucket", "1.00")].observation_count == 1
+    assert by_group[("volatility_size_multiplier_bucket", "0.75")].observation_count == 1
+    assert by_group[("volatility_size_multiplier_bucket", "UNKNOWN")].observation_count == 1
+
+
 def _label(
     *,
     ticker: str,

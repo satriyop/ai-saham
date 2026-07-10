@@ -223,3 +223,65 @@ def test_signal_observation_fingerprint_regime_attribution_flat_key_precedence()
     )
 
     assert fp.market_regime_at_signal == "RISK_ON"
+
+
+def test_signal_observation_fingerprint_preserves_volatility_context_fields():
+    """atr_at_signal / atr_pct_at_signal / volatility_bucket_at_signal /
+    volatility_size_multiplier_at_signal (shared VolatilityContext fingerprint)
+    must survive a to_dict/from_dict round trip unchanged."""
+    fp = SignalObservationFingerprint(
+        atr_at_signal=3.0,
+        atr_pct_at_signal=3.0,
+        volatility_bucket_at_signal="NORMAL",
+        volatility_size_multiplier_at_signal=1.0,
+    )
+
+    round_tripped = SignalObservationFingerprint.from_dict(fp.to_dict())
+
+    assert round_tripped.atr_at_signal == 3.0
+    assert round_tripped.atr_pct_at_signal == 3.0
+    assert round_tripped.volatility_bucket_at_signal == "NORMAL"
+    assert round_tripped.volatility_size_multiplier_at_signal == 1.0
+
+
+def test_signal_observation_fingerprint_volatility_context_defaults_to_none():
+    """Missing volatility fields entirely (e.g. from_dict({})) must default
+    all 4 new fields to None."""
+    fp = SignalObservationFingerprint.from_dict({})
+
+    assert fp.atr_at_signal is None
+    assert fp.atr_pct_at_signal is None
+    assert fp.volatility_bucket_at_signal is None
+    assert fp.volatility_size_multiplier_at_signal is None
+
+
+def test_signal_observation_fingerprint_volatility_context_aliases_analyze_swing_keys():
+    """Old analyze-swing-style keys (atr_20/atr_pct/volatility_bucket/
+    volatility_size_multiplier) must still parse into the new canonical
+    `*_at_signal` field names."""
+    fp = SignalObservationFingerprint.from_dict(
+        {
+            "atr_20": 4.5,
+            "atr_pct": 4.5,
+            "volatility_bucket": "NORMAL",
+            "volatility_size_multiplier": 1.0,
+        }
+    )
+
+    assert fp.atr_at_signal == 4.5
+    assert fp.atr_pct_at_signal == 4.5
+    assert fp.volatility_bucket_at_signal == "NORMAL"
+    assert fp.volatility_size_multiplier_at_signal == 1.0
+
+
+def test_signal_observation_fingerprint_volatility_context_canonical_key_precedence():
+    """When both the new canonical name and the old analyze-swing alias are
+    present in the dict, the canonical name must win."""
+    fp = SignalObservationFingerprint.from_dict(
+        {
+            "atr_at_signal": 9.0,
+            "atr_20": 1.0,
+        }
+    )
+
+    assert fp.atr_at_signal == 9.0

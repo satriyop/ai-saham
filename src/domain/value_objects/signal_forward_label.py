@@ -154,6 +154,11 @@ class SignalObservationFingerprint:
     flow_trigger_allowed: bool | None = None
     alpha_trigger_route_metadata: tuple[dict[str, Any], ...] = ()
     alpha_trigger_unavailable_reasons: tuple[str, ...] = ()
+    # Volatility context fingerprint (shared with analyze swing diagnostics)
+    atr_at_signal: float | None = None
+    atr_pct_at_signal: float | None = None
+    volatility_bucket_at_signal: str | None = None
+    volatility_size_multiplier_at_signal: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -271,6 +276,10 @@ class SignalObservationFingerprint:
             "alpha_trigger_unavailable_reasons": list(
                 self.alpha_trigger_unavailable_reasons
             ),
+            "atr_at_signal": self.atr_at_signal,
+            "atr_pct_at_signal": self.atr_pct_at_signal,
+            "volatility_bucket_at_signal": self.volatility_bucket_at_signal,
+            "volatility_size_multiplier_at_signal": self.volatility_size_multiplier_at_signal,
         }
 
     @classmethod
@@ -472,6 +481,21 @@ class SignalObservationFingerprint:
             ),
             alpha_trigger_unavailable_reasons=tuple(
                 str(v) for v in data.get("alpha_trigger_unavailable_reasons") or ()
+            ),
+            atr_at_signal=_optional_float(
+                data.get("atr_at_signal", data.get("atr_20"))
+            ),
+            atr_pct_at_signal=_optional_float(
+                data.get("atr_pct_at_signal", data.get("atr_pct"))
+            ),
+            volatility_bucket_at_signal=(
+                data.get("volatility_bucket_at_signal", data.get("volatility_bucket"))
+            ),
+            volatility_size_multiplier_at_signal=_optional_float(
+                data.get(
+                    "volatility_size_multiplier_at_signal",
+                    data.get("volatility_size_multiplier"),
+                )
             ),
         )
 

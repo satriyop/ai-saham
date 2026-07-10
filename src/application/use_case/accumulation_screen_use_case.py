@@ -33,6 +33,7 @@ if TYPE_CHECKING:
     from src.application.services.relative_strength_calculator import (
         RelativeStrengthCalculator,
     )
+    from src.application.services.indicator_registry import IndicatorRegistry
     from src.application.services.signal_engine import SignalEngine
     from src.application.use_case.assess_risk_use_case import AssessRiskUseCase
     from src.application.use_case.assess_signal_use_case import AssessSignalResponse
@@ -61,12 +62,14 @@ if TYPE_CHECKING:
     from src.domain.value_objects.shareholding_composition import ShareholdingComposition
     from src.domain.value_objects.ticker_notation import TickerNotationSnapshot
     from src.domain.value_objects.trade_setup import TradeSetup
+    from src.application.services.volatility_context import VolatilityContext
 
 from src.application.ports.corporate_action_repository import CorporateActionRepository
 from src.application.services.signal_context_builder import (
     build_signal_context_from_candidate,
 )
 from src.application.services.stats import foreign_vwap_discount_pct
+from src.application.services.volatility_context import build_volatility_context
 from src.application.use_case.score_foreign_flow_use_case import (
     ScoreForeignFlowRequest,
     ScoreForeignFlowUseCase,
@@ -483,6 +486,7 @@ def _candidate_observation_payload(
     sc_evidence: "SectorContextEvidence | None" = None,
     cq_evidence: "CompanyQualityContextEvidence | None" = None,
     setup_family_result: "PrimarySetupFamilyResult | None" = None,
+    volatility_context: "VolatilityContext | None" = None,
 ) -> dict:
     """Build schema-versioned replay payload for one screened candidate.
 
@@ -524,6 +528,7 @@ def _candidate_observation_payload(
         sc_evidence=sc_evidence,
         cq_evidence=cq_evidence,
         setup_family_result=setup_family_result,
+        volatility_context=volatility_context,
         market_context=request.market_context,
     )
 
@@ -583,6 +588,7 @@ def _sub_signal_fingerprint(
     sc_evidence: "SectorContextEvidence | None" = None,
     cq_evidence: "CompanyQualityContextEvidence | None" = None,
     setup_family_result: "PrimarySetupFamilyResult | None" = None,
+    volatility_context: "VolatilityContext | None" = None,
     market_context: "MarketContext | None" = None,
 ) -> dict:
     """Persist raw sub-signal values as they were at observation time."""
@@ -606,6 +612,7 @@ def _sub_signal_fingerprint(
     sc_dict = _sc_fingerprint(sc_evidence)
     cq_dict = _cq_fingerprint(cq_evidence)
     alpha_trigger_dict = _alpha_trigger_fingerprint(signal)
+    volatility_dict = _volatility_fingerprint(volatility_context)
     if setup_family_result is not None:
         # Prefer the resolver's primary family; fall back to
         # decision_constraints only when the resolver itself came back
@@ -652,6 +659,7 @@ def _sub_signal_fingerprint(
         **sc_dict,
         **cq_dict,
         **alpha_trigger_dict,
+        **volatility_dict,
         "rsi_at_signal": candidate.rsi,
         "bb_width_pctile_at_signal": candidate.bb_width_pctile,
         "vwap_position_at_signal": candidate.vwap_pct,
@@ -849,6 +857,22 @@ def _tp_fingerprint(
     }
 
 
+def _volatility_fingerprint(vc: "VolatilityContext | None") -> dict:
+    if vc is None:
+        return {
+            "atr_at_signal": None,
+            "atr_pct_at_signal": None,
+            "volatility_bucket_at_signal": None,
+            "volatility_size_multiplier_at_signal": None,
+        }
+    return {
+        "atr_at_signal": vc.atr_at_signal,
+        "atr_pct_at_signal": vc.atr_pct_at_signal,
+        "volatility_bucket_at_signal": vc.volatility_bucket_at_signal,
+        "volatility_size_multiplier_at_signal": vc.volatility_size_multiplier_at_signal,
+    }
+
+
 def _sc_fingerprint(
     sc: "SectorContextEvidence | None",
 ) -> dict:
@@ -989,6 +1013,7 @@ class AccumulationScreenUseCase:
         swing_setup_catalog: "SwingSetupCatalogConfig | None" = None,
         primary_setup_family_resolver: "PrimarySetupFamilyResolver | None" = None,
         relative_strength_calculator: "RelativeStrengthCalculator | None" = None,
+        indicator_registry: "IndicatorRegistry | None" = None,
     ) -> None:
         from src.application.services.signal_engine import SignalEngine as _SignalEngine
         from src.application.services.flow_confirmation_evidence_builder import (
@@ -1000,6 +1025,7 @@ class AccumulationScreenUseCase:
         from src.application.services.relative_strength_calculator import (
             RelativeStrengthCalculator as _RelativeStrengthCalculator,
         )
+        from src.application.services.bootstrap import create_indicator_registry
 
         self._broker_repo = broker_repository
         self._market_repo = market_repository
@@ -1024,6 +1050,7 @@ class AccumulationScreenUseCase:
         self._relative_strength_calculator = (
             relative_strength_calculator or _RelativeStrengthCalculator()
         )
+        self._indicator_registry = indicator_registry or create_indicator_registry()
         # Derive weights from the same policy ScoreForeignFlowUseCase uses, so
         # the two can never drift apart (see ADR-039).
         self._flow_confirmation_builder = FlowConfirmationEvidenceBuilder(
@@ -1342,6 +1369,10 @@ class AccumulationScreenUseCase:
                     c,
                     snapshot_date,
                 )
+                volatility_context = self._build_candidate_volatility_context(
+                    c,
+                    snapshot_date,
+                )
                 # Stage 2 resolution: strategy_evidence, setup_phase, and flow
                 # evidence are all available now — final family for this
                 # persisted observation.
@@ -1383,6 +1414,7 @@ class AccumulationScreenUseCase:
                             sc_evidence=sc_evidence,
                             cq_evidence=cq_evidence,
                             setup_family_result=setup_family_result,
+                            volatility_context=volatility_context,
                             snapshot_date=snapshot_date,
                             captured_at=captured_at,
                             request=request,
@@ -1537,6 +1569,30 @@ class AccumulationScreenUseCase:
             )
         except Exception:
             return None
+
+    def _build_candidate_volatility_context(
+        self,
+        candidate: "AccumulationCandidate",
+        snapshot_date: date,
+    ) -> "VolatilityContext":
+        """Point-in-time ATR(14) volatility context for one candidate.
+
+        Never raises: an unavailable ATR (e.g. insufficient candle history)
+        must not block candidate observation generation, so failures resolve
+        to the shared helper's UNKNOWN/None behavior instead.
+        """
+        atr_value = None
+        try:
+            candles = self._market_repo.get_candles(candidate.ticker, end_date=snapshot_date)
+            atr_values = self._indicator_registry.compute("ATR", candles, 14)
+            if atr_values:
+                atr_value = atr_values[-1][1]
+        except Exception:
+            atr_value = None
+        return build_volatility_context(
+            atr_value=atr_value,
+            latest_close=candidate.current_price,
+        )
 
     def _build_candidate_sector_context(
         self,

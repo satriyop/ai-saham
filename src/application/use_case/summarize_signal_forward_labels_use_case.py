@@ -171,6 +171,14 @@ def _build_buckets(
                 if fp.cq_present_axis_count is None
                 else str(fp.cq_present_axis_count),
             ),
+            # Volatility context attribution: reads persisted fingerprint
+            # values only — never recomputes ATR during attribution.
+            ("volatility_bucket_at_signal", fp.volatility_bucket_at_signal or "UNKNOWN"),
+            ("atr_pct_bucket", _atr_pct_bucket(fp.atr_pct_at_signal)),
+            (
+                "volatility_size_multiplier_bucket",
+                _volatility_size_multiplier_bucket(fp.volatility_size_multiplier_at_signal),
+            ),
         )
         for key in keys:
             groups.setdefault(key, []).append(label)
@@ -234,6 +242,24 @@ def _days_in_regime_bucket(value: int | None) -> str:
     if value <= 10:
         return "D6_10"
     return "D11_PLUS"
+
+
+def _atr_pct_bucket(value: float | None) -> str:
+    if value is None:
+        return "UNKNOWN"
+    if value < 2.0:
+        return "LT_2"
+    if value < 5.0:
+        return "D2_5"
+    if value < 8.0:
+        return "D5_8"
+    return "GTE_8"
+
+
+def _volatility_size_multiplier_bucket(value: float | None) -> str:
+    if value is None:
+        return "UNKNOWN"
+    return f"{value:.2f}"
 
 
 def _average(values) -> float | None:
