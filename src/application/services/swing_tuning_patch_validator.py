@@ -157,6 +157,13 @@ _NON_TUNABLE_DOCUMENT_PATHS: tuple[tuple[str, str], ...] = (
     # No longer read by _constructive_phase() — patching it would have zero
     # behavioral effect, so it must not be patch-eligible.
     ("setup_phase.thresholds.breakout_min_volume_ratio", "superseded_by_volume_trigger_policy"),
+    # Evidence authority (DIAGNOSTIC/LOW_WEIGHT/PRODUCTION) and its promotion
+    # record are a manual-review guardrail (see bootstrap._validate_promotion_record),
+    # not a walk-forward tuning target. A tuning patch must never silently
+    # promote diagnostic evidence into scoring authority.
+    ("signal_engine.alpha_trigger.evidence_registrations.*.status", "evidence_authority_promotion_requires_manual_review"),
+    ("signal_engine.alpha_trigger.evidence_registrations.*.promotion", "evidence_authority_promotion_requires_manual_review"),
+    ("signal_engine.alpha_trigger.evidence_registrations.*.promotion.*", "evidence_authority_promotion_requires_manual_review"),
 )
 
 

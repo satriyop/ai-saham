@@ -320,6 +320,39 @@ def test_patch_modifying_regime_conditioning_fails(tmp_path):
     assert result.valid is False
     assert "target_path_not_tunable:regime_conditioning_is_legacy_layer" in result.issues
 
+
+def test_patch_changing_evidence_registration_status_rejected(tmp_path):
+    """Evidence authority (DIAGNOSTIC/LOW_WEIGHT/PRODUCTION) must never be
+    promoted by the tuning system — only a manual promotion record review."""
+    result = _validate_single(
+        tmp_path,
+        "signal_engine.alpha_trigger.evidence_registrations.market_context.status",
+        "DIAGNOSTIC",
+        "LOW_WEIGHT",
+    )
+    assert result.valid is False
+    assert (
+        "target_path_not_tunable:evidence_authority_promotion_requires_manual_review"
+        in result.issues
+    )
+
+
+def test_patch_changing_evidence_promotion_record_rejected(tmp_path):
+    """A patch must not silently attach/alter a promotion record either —
+    promotion is a manual-review artifact, not a tuning-diff target."""
+    result = _validate_single(
+        tmp_path,
+        "signal_engine.alpha_trigger.evidence_registrations.market_context.promotion.promoted_to",
+        "DIAGNOSTIC",
+        "LOW_WEIGHT",
+    )
+    assert result.valid is False
+    assert (
+        "target_path_not_tunable:evidence_authority_promotion_requires_manual_review"
+        in result.issues
+    )
+
+
 def test_breakout_min_volume_ratio_bounds_lookup_returns_none():
     """Superseded by volume_trigger.dry_up_max_ratio/expansion_min_ratio (Point
     3) — must not resolve to numeric bounds, else it would look tunable."""
