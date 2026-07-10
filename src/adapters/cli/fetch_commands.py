@@ -13,8 +13,9 @@ from src.adapters.cli.fetch_broker_commands import (
     broker_import,
     broker_top_foreign,
 )
+from src.adapters.cli.fetch_enrichment_history_commands import fetch_enrichment_history
 from src.adapters.cli.fetch_iev_commands import collect_iev
-from src.adapters.cli.fetch_market_commands import fetch_enrichment_history, fetch_market
+from src.adapters.cli.fetch_market_commands import fetch_market
 from src.adapters.cli.fetch_status_commands import status
 from src.adapters.cli.fetch_stockbit_commands import stockbit_app
 from src.adapters.cli.fetch_universe_commands import universe_app

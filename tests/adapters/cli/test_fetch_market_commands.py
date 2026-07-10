@@ -1,24 +1,29 @@
 """Tests for fetch market command helper behavior."""
 
+import re
 from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
 
+import pytest
+
+from src.adapters.cli.fetch_market_broker_refresh import fetch_broker
+from src.adapters.cli.fetch_market_candle_refresh import fetch_candles
 from src.adapters.cli.fetch_market_commands import (
     _broker_update_status,
     _cached_status,
-    _clean_row_span,
-    _fetch_broker,
-    _fetch_candles,
-    _fmt_enrichment_column,
-    _fmt_inst_flow_column,
-    _fmt_meta_column,
-    _fmt_tracked_flow_column,
     _is_cached_status,
     _no_new_data_status,
-    _print_table_summary,
     _range_update_status,
-    _split_flow_parts,
+)
+from src.adapters.cli.fetch_market_display import (
+    clean_row_span,
+    fmt_enrichment_column,
+    fmt_inst_flow_column,
+    fmt_meta_column,
+    fmt_tracked_flow_column,
+    print_table_summary,
+    split_flow_parts,
 )
 from src.domain.entities.broker_flow import BrokerSummary, ForeignFlowPoint
 from src.domain.entities.candle import Candle
@@ -163,7 +168,7 @@ def test_range_update_status_distinguishes_rows_from_calendar_span():
 
 
 def test_fetch_broker_skips_index_ticker(tmp_path: Path):
-    result = _fetch_broker(
+    result = fetch_broker(
         ticker="IHSG",
         days=90,
         db_path=tmp_path / "data.db",
@@ -176,7 +181,7 @@ def test_fetch_broker_skips_index_ticker(tmp_path: Path):
 
 
 def test_fetch_broker_skips_legacy_index_alias(tmp_path: Path):
-    result = _fetch_broker(
+    result = fetch_broker(
         ticker="^JKSE",
         days=90,
         db_path=tmp_path / "data.db",
@@ -210,14 +215,14 @@ def test_fetch_candles_uses_stockbit_historical_for_benchmark_with_stockbit(
             return [_candle("IHSG", start_date)]
 
     monkeypatch.setattr(
-        "src.adapters.cli.fetch_market_commands.StockbitHistoricalProvider",
+        "src.adapters.cli.fetch_market_candle_refresh.StockbitHistoricalProvider",
         FakeStockbitHistoricalProvider,
     )
 
     class _FakeBroker:
         api_client = object()
 
-    status = _fetch_candles(
+    status = fetch_candles(
         ticker="^JKSE",
         days=1,
         db_path=db_path,
@@ -246,12 +251,12 @@ def test_fetch_candles_backfills_older_gap(monkeypatch, tmp_path: Path):
 
     FakeMarketProvider.instances.clear()
     monkeypatch.setattr(
-        "src.adapters.cli.fetch_market_commands.StockbitHistoricalProvider",
+        "src.adapters.cli.fetch_market_candle_refresh.StockbitHistoricalProvider",
         FakeMarketProvider,
     )
     notes: list[str] = []
 
-    status = _fetch_candles(
+    status = fetch_candles(
         ticker="BBCA",
         days=365,
         db_path=db_path,
@@ -286,12 +291,12 @@ def test_fetch_candles_treats_small_leading_non_trading_gap_as_current(
 
     FakeMarketProvider.instances.clear()
     monkeypatch.setattr(
-        "src.adapters.cli.fetch_market_commands.StockbitHistoricalProvider",
+        "src.adapters.cli.fetch_market_candle_refresh.StockbitHistoricalProvider",
         FakeMarketProvider,
     )
     notes: list[str] = []
 
-    status = _fetch_candles(
+    status = fetch_candles(
         ticker="BBCA",
         days=365,
         db_path=db_path,
@@ -322,11 +327,11 @@ def test_fetch_candles_treats_recent_trading_day_as_current(monkeypatch, tmp_pat
 
     FakeMarketProvider.instances.clear()
     monkeypatch.setattr(
-        "src.adapters.cli.fetch_market_commands.StockbitHistoricalProvider",
+        "src.adapters.cli.fetch_market_candle_refresh.StockbitHistoricalProvider",
         FakeMarketProvider,
     )
 
-    status = _fetch_candles(
+    status = fetch_candles(
         ticker="BBCA",
         days=365,
         db_path=db_path,
@@ -339,6 +344,64 @@ def test_fetch_candles_treats_recent_trading_day_as_current(monkeypatch, tmp_pat
     assert FakeMarketProvider.instances[0].requested_ranges == []
 
 
+def test_fetch_candles_requires_stockbit_session_for_regular_idx_ticker(tmp_path: Path):
+    from src.application.use_case.resolve_candle_provider_policy_use_case import (
+        STOCKBIT_SESSION_REQUIRED_ERROR,
+    )
+
+    with pytest.raises(ValueError, match=re.escape(STOCKBIT_SESSION_REQUIRED_ERROR)):
+        fetch_candles(
+            ticker="BBCA",
+            days=90,
+            db_path=tmp_path / "data.db",
+            provider_name="yahoo",
+            refresh=False,
+            broker_provider=None,
+        )
+
+
+def test_fetch_market_command_fails_fast_when_stockbit_session_missing(monkeypatch, tmp_path: Path):
+    """The command must fail fast with a clear user-facing message and exit
+    code 1 before starting the ticker loop — not let a raw ValueError from a
+    per-ticker fetch escape uncaught."""
+    from typer import Typer
+    from typer.testing import CliRunner
+
+    from src.adapters.cli.fetch_market_commands import fetch_market
+    from src.application.use_case.resolve_candle_provider_policy_use_case import (
+        STOCKBIT_SESSION_REQUIRED_ERROR,
+    )
+
+    monkeypatch.setattr(
+        "src.adapters.cli.fetch_market_commands.create_broker_provider",
+        lambda name: (object(), "idx"),
+    )
+    monkeypatch.setattr(
+        "src.adapters.cli.fetch_market_commands.resolve_tickers",
+        lambda **kwargs: ["BBCA"],
+    )
+
+    app = Typer()
+    app.command()(fetch_market)
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        [
+            "BBCA",
+            "--provider", "yahoo",
+            "--no-meta",
+            "--no-enrichment",
+            "--db", str(tmp_path / "data.db"),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert f"Error: {STOCKBIT_SESSION_REQUIRED_ERROR}" in result.output
+    # Fail-fast: the header/ticker-loop output must never have started.
+    assert "Updating" not in result.output
+
+
 def test_fetch_broker_backfills_older_summary_gap(tmp_path: Path):
     db_path = tmp_path / "data.db"
     repo = SQLiteBrokerRepository(db_path)
@@ -349,7 +412,7 @@ def test_fetch_broker_backfills_older_summary_gap(tmp_path: Path):
     repo.save_broker_summary(_summary("BBCA", today, "idx"))
     provider = FakeBrokerProvider("idx")
 
-    result = _fetch_broker(
+    result = fetch_broker(
         ticker="BBCA",
         days=365,
         db_path=db_path,
@@ -402,7 +465,7 @@ def test_fetch_broker_uses_flow_points_for_stockbit_session_coverage(tmp_path: P
     stockbit_provider = FakeBrokerProvider("stockbit", historical_points=historical_points)
     idx_provider = FakeBrokerProvider("idx")
 
-    result = _fetch_broker(
+    result = fetch_broker(
         ticker="BBCA",
         days=365,
         db_path=db_path,
@@ -455,7 +518,7 @@ def test_fetch_broker_treats_recent_trading_day_as_current(tmp_path: Path):
     market_repo.save_candles([_candle("IHSG", latest)])
     provider = FakeBrokerProvider("stockbit")
 
-    result = _fetch_broker(
+    result = fetch_broker(
         ticker="BBCA",
         days=365,
         db_path=db_path,
@@ -491,7 +554,7 @@ def test_fetch_broker_counts_only_new_local_dates(tmp_path: Path):
     # IDX provider echoes back 'latest' so no new dates are added (up-to-date path)
     idx_provider = EchoLatestBrokerProvider("idx", echo_date=latest)
 
-    result = _fetch_broker(
+    result = fetch_broker(
         ticker="BBCA",
         days=365,
         db_path=db_path,
@@ -511,7 +574,7 @@ def test_print_table_summary_does_not_truncate_impact(monkeypatch, tmp_path: Pat
     from src.application.use_case.data_update_status_use_case import DataUpdateTableStatus
 
     monkeypatch.setattr(
-        "src.adapters.cli.fetch_market_commands.build_data_update_table_statuses",
+        "src.adapters.cli.fetch_market_display.build_data_update_table_statuses",
         lambda **_: [
             DataUpdateTableStatus(
                 table="foreign_flow_points",
@@ -527,7 +590,7 @@ def test_print_table_summary_does_not_truncate_impact(monkeypatch, tmp_path: Pat
         ],
     )
 
-    _print_table_summary(
+    print_table_summary(
         db_path=tmp_path / "data.db",
         stock_tickers=["BBCA"],
         candles_provider="yahoo",
@@ -535,6 +598,7 @@ def test_print_table_summary_does_not_truncate_impact(monkeypatch, tmp_path: Pat
         no_meta=False,
         candles_only=False,
         broker_only=False,
+        expected_trading_day=date(2026, 6, 17),
         enrichment_available=True,
     )
 
@@ -544,130 +608,54 @@ def test_print_table_summary_does_not_truncate_impact(monkeypatch, tmp_path: Pat
 
 
 def test_clean_row_span():
-    assert _clean_row_span("up-to-date(2026-06-19)") == "✓(2026-06-19)"
-    assert _clean_row_span("+26rows/span=84d") == "+26r(84d)"
-    assert _clean_row_span("backfill+90rows/span=260d") == "bf+90r(260d)"
-    assert _clean_row_span("refreshed/span=260d") == "ref(260d)"
+    assert clean_row_span("up-to-date(2026-06-19)") == "✓(2026-06-19)"
+    assert clean_row_span("+26rows/span=84d") == "+26r(84d)"
+    assert clean_row_span("backfill+90rows/span=260d") == "bf+90r(260d)"
+    assert clean_row_span("refreshed/span=260d") == "ref(260d)"
 
 
 def test_split_flow_parts():
-    assert _split_flow_parts("daily=✓(2026-06-19)") == ("daily=✓(2026-06-19)", "skip")
-    assert _split_flow_parts("daily=✓(2026-06-19) agg=✓(2026-06-19)") == ("daily=✓(2026-06-19)", "agg=✓(2026-06-19)")
-    assert _split_flow_parts("daily:+648rows/12codes/96d agg:+2rows/373d") == ("daily:+648rows/12codes/96d", "agg:+2rows/373d")
-    assert _split_flow_parts("skip") == ("skip", "skip")
-    assert _split_flow_parts("ERR:auth") == ("ERR:auth", "ERR:auth")
+    assert split_flow_parts("daily=✓(2026-06-19)") == ("daily=✓(2026-06-19)", "skip")
+    assert split_flow_parts("daily=✓(2026-06-19) agg=✓(2026-06-19)") == ("daily=✓(2026-06-19)", "agg=✓(2026-06-19)")
+    assert split_flow_parts("daily:+648rows/12codes/96d agg:+2rows/373d") == ("daily:+648rows/12codes/96d", "agg:+2rows/373d")
+    assert split_flow_parts("skip") == ("skip", "skip")
+    assert split_flow_parts("ERR:auth") == ("ERR:auth", "ERR:auth")
 
 
 def test_fmt_tracked_flow_column():
-    assert _fmt_tracked_flow_column("daily=✓(2026-06-19)") == "✓(06-19)"
-    assert _fmt_tracked_flow_column("daily:+648rows/12codes/96d") == "+648r(96d)"
-    assert _fmt_tracked_flow_column("skip") == "skip"
+    assert fmt_tracked_flow_column("daily=✓(2026-06-19)") == "✓(06-19)"
+    assert fmt_tracked_flow_column("daily:+648rows/12codes/96d") == "+648r(96d)"
+    assert fmt_tracked_flow_column("skip") == "skip"
 
 
 def test_fmt_inst_flow_column():
-    assert _fmt_inst_flow_column("agg=✓(2026-06-19)") == "✓(06-19)"
-    assert _fmt_inst_flow_column("agg:+2rows/373d") == "+2r(373d)"
-    assert _fmt_inst_flow_column("skip") == "skip"
+    assert fmt_inst_flow_column("agg=✓(2026-06-19)") == "✓(06-19)"
+    assert fmt_inst_flow_column("agg:+2rows/373d") == "+2r(373d)"
+    assert fmt_inst_flow_column("skip") == "skip"
 
 
 
 def test_fmt_meta_column():
-    assert _fmt_meta_column("cached(5d)") == "cached(5d)"
-    assert _fmt_meta_column("new(Financial Services)") == "new(Financial S..)"
-    assert _fmt_meta_column("skip") == "skip"
+    assert fmt_meta_column("cached(5d)") == "cached(5d)"
+    assert fmt_meta_column("new(Financial Services)") == "new(Financial S..)"
+    assert fmt_meta_column("skip") == "skip"
 
 
 def test_fmt_enrichment_column():
-    assert _fmt_enrichment_column("skip") == "skip"
+    assert fmt_enrichment_column("skip") == "skip"
     # All cached
-    assert _fmt_enrichment_column("✓(notation,analyst,insider,season,corp,holding,bandar,fundam,fwd_est,profile)") == "10/10 ✓"
+    assert fmt_enrichment_column("✓(notation,analyst,insider,season,corp,holding,bandar,fundam,fwd_est,profile)") == "10/10 ✓"
     # Some fetched
-    assert _fmt_enrichment_column("notation+analyst  ✓(insider,season,corp,holding,bandar,fundam,fwd_est,profile)") == "10/10 (+2: notation, analyst)"
+    assert fmt_enrichment_column("notation+analyst  ✓(insider,season,corp,holding,bandar,fundam,fwd_est,profile)") == "10/10 (+2: notation, analyst)"
     # More fetched
-    assert _fmt_enrichment_column("notation+analyst+insider  ✓(season,corp,holding,bandar,fundam,fwd_est,profile)") == "10/10 (+3)"
+    assert fmt_enrichment_column("notation+analyst+insider  ✓(season,corp,holding,bandar,fundam,fwd_est,profile)") == "10/10 (+3)"
     # Errors
-    assert _fmt_enrichment_column("ERR:insider:Playwright error,corp:timeout") == "8/10 (ERR: insider, corp)"
+    assert fmt_enrichment_column("ERR:insider:Playwright error,corp:timeout") == "8/10 (ERR: insider, corp)"
 
 
-def test_fetch_global_context_tickers_passes_configured_tolerance(monkeypatch, tmp_path):
-    from src.adapters.cli.fetch_market_commands import _fetch_global_context_tickers
-    from src.application.use_case.refresh_market_data_use_case import RefreshMarketDataResponse
-    from src.infrastructure.config.market_context_config import MarketContextConfig, MarketContextFetchConfig
-
-    # Create dummy config with end_tolerance_days = 5
-    dummy_cfg = MarketContextConfig(
-        fetch=MarketContextFetchConfig(global_context_end_tolerance_days=5)
-    )
-
-    # Mock load_market_context_config to return our dummy config
-    monkeypatch.setattr(
-        "src.infrastructure.config.market_context_config.load_market_context_config",
-        lambda *args, **kwargs: dummy_cfg
-    )
-
-    # Let's intercept execute calls
-    captured_requests = []
-    def mock_execute(self, request):
-        captured_requests.append(request)
-        return RefreshMarketDataResponse(
-            ticker=request.ticker,
-            status="cached-current",
-            candles=[],
-            date_range=(date(2026, 7, 1), date(2026, 7, 5)),
-            added_count=0,
-            fetch_modes=frozenset(),
-        )
-
-    monkeypatch.setattr(
-        "src.application.use_case.refresh_market_data_use_case.RefreshMarketDataUseCase.execute",
-        mock_execute
-    )
-
-    # Also need to make sure get_global_context_tickers doesn't call the actual config loading or returns expected set
-    monkeypatch.setattr(
-        "src.infrastructure.config.market_context_config.get_global_context_tickers",
-        lambda: {"^VIX", "EIDO", "IDR=X"}
-    )
-
-    # Execute
-    _fetch_global_context_tickers(db_path=tmp_path / "dummy.db")
-
-    # Assert
-    assert len(captured_requests) > 0
-    for req in captured_requests:
-        assert req.end_tolerance_days == 5
-
-
-def test_fetch_global_context_tickers_uses_default_tolerance_when_not_customized(monkeypatch, tmp_path):
-    from src.adapters.cli.fetch_market_commands import _fetch_global_context_tickers
-    from src.application.use_case.refresh_market_data_use_case import RefreshMarketDataResponse
-
-    # Let's intercept execute calls
-    captured_requests = []
-    def mock_execute(self, request):
-        captured_requests.append(request)
-        return RefreshMarketDataResponse(
-            ticker=request.ticker,
-            status="cached-current",
-            candles=[],
-            date_range=(date(2026, 7, 1), date(2026, 7, 5)),
-            added_count=0,
-            fetch_modes=frozenset(),
-        )
-
-    monkeypatch.setattr(
-        "src.application.use_case.refresh_market_data_use_case.RefreshMarketDataUseCase.execute",
-        mock_execute
-    )
-
-    # Execute with real config (which should yield whatever value is in config/market_context_engine.yaml)
-    _fetch_global_context_tickers(db_path=tmp_path / "dummy.db")
-
-    # Assert that all requests used the config value
-    from src.infrastructure.config.market_context_config import load_market_context_config
-    expected_val = load_market_context_config().fetch.global_context_end_tolerance_days
-
-    assert len(captured_requests) > 0
-    for req in captured_requests:
-        assert req.end_tolerance_days == expected_val
+# RefreshMarketContextInputsUseCase tests moved to
+# tests/application/use_case/test_refresh_market_context_inputs_use_case.py
+# (pure application logic, injected callable, no infrastructure monkeypatching).
+# Adapter wiring (config loading, provider/repository construction, no-.JK-suffix
+# provider) is covered by tests/adapters/cli/test_fetch_market_context_inputs.py.
 

@@ -175,11 +175,9 @@ def _auto_refresh_swing_data(
     force_refresh: bool,
     analyze_config: AnalyzeSwingConfig,
 ) -> tuple[str, ...]:
-    from src.adapters.cli.fetch_market_commands import (
-        _create_broker_provider,
-        _fetch_broker,
-        _fetch_candles,
-    )
+    from src.adapters.cli.fetch_market_broker_refresh import fetch_broker
+    from src.adapters.cli.fetch_market_candle_refresh import fetch_candles
+    from src.adapters.cli.fetch_market_provider_factory import create_broker_provider
 
     return refresh_swing_data(
         ticker=ticker,
@@ -187,9 +185,9 @@ def _auto_refresh_swing_data(
         force_refresh=force_refresh,
         market_refresh_days=analyze_config.market_refresh_days,
         broker_refresh_days=analyze_config.broker_refresh_days,
-        fetch_candles=_fetch_candles,
-        create_broker_provider=_create_broker_provider,
-        fetch_broker=_fetch_broker,
+        fetch_candles=fetch_candles,
+        create_broker_provider=create_broker_provider,
+        fetch_broker=fetch_broker,
     )
 
 

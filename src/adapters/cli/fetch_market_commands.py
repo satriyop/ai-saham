@@ -17,64 +17,56 @@ Layer: Adapter
 """
 
 import functools
-from datetime import date, timedelta
+from datetime import date
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Optional
-
-if TYPE_CHECKING:
-    from src.infrastructure.browser.stockbit_broker_provider import StockbitBrokerProvider
+from typing import Annotated, Optional
 
 import typer
 
+from src.adapters.cli.fetch_market_broker_refresh import fetch_broker
+from src.adapters.cli.fetch_market_candle_refresh import fetch_candles
+from src.adapters.cli.fetch_market_context_inputs import refresh_market_context_inputs
+from src.adapters.cli.fetch_market_display import (
+    clean_row_span,
+    echo_note_group,
+    fmt_enrichment_column,
+    fmt_inst_flow_column,
+    fmt_meta_column,
+    fmt_tracked_flow_column,
+    print_table_summary,
+    render_enrichment_pit_coverage,
+    split_flow_parts,
+)
+from src.adapters.cli.fetch_market_enrichment_refresh import (
+    fetch_enrichment,
+    read_enrichment_pit_coverage,
+)
+from src.adapters.cli.fetch_market_meta_refresh import fetch_meta
+from src.adapters.cli.fetch_market_provider_factory import create_broker_provider
+from src.application.services.market_freshness_service import (
+    BenchmarkTickerAliases,
+    MarketFreshnessService,
+)
 from src.application.services.universe_loader import (
     UniverseNotFoundError,
     resolve_tickers,
 )
 from src.application.use_case.fetch_market_refresh_use_case import (
     BENCHMARK_TICKER,
-    BrokerFetchResult,
     FetchMarketRefreshRequest,
     FetchMarketRefreshUseCase,
 )
-from src.application.use_case.fetch_stock_meta_use_case import (
-    FetchStockMetaRequest,
-    FetchStockMetaUseCase,
+from src.application.use_case.resolve_candle_provider_policy_use_case import (
+    ResolveCandleProviderPolicyRequest,
+    ResolveCandleProviderPolicyUseCase,
 )
-from src.application.use_case.refresh_broker_data_use_case import (
-    RefreshBrokerDataRequest,
-    RefreshBrokerDataUseCase,
-)
-from src.application.use_case.refresh_market_data_use_case import (
-    RefreshMarketDataRequest,
-    RefreshMarketDataUseCase,
-)
-from src.domain.value_objects.benchmark_symbol import (
-    YAHOO_IHSG_TICKER,
-    canonicalize_ticker,
-    is_benchmark_ticker,
-)
+from src.domain.value_objects.benchmark_symbol import YAHOO_IHSG_TICKER, canonicalize_ticker
 from src.infrastructure.config.app_config import APP_CFG
-from src.infrastructure.config.data_sources_config import (
-    broker_summary_source as _broker_summary_source,
-)
 from src.infrastructure.config.data_sources_config import (
     candle_source as _candle_source,
 )
-from src.infrastructure.data_providers.idx import IdxBrokerDataProvider
-from src.infrastructure.data_providers.stockbit_historical import StockbitHistoricalProvider
-from src.infrastructure.data_providers.yahoo import YahooFinanceProvider
-from src.infrastructure.data_providers.yahoo_stock_meta import YahooStockMetaProvider
-from src.infrastructure.persistence.sqlite_broker_repository import (
-    SQLiteBrokerRepository,
-)
-from src.infrastructure.persistence.sqlite_data_update_status import (
-    build_data_update_table_statuses,
-)
 from src.infrastructure.persistence.sqlite_market_repository import (
     SQLiteMarketRepository,
-)
-from src.infrastructure.persistence.sqlite_stock_meta_repository import (
-    SQLiteStockMetaRepository,
 )
 
 DEFAULT_DAYS: int = APP_CFG.fetch.default_days
@@ -82,185 +74,8 @@ STOCKBIT_PROFILE_DIR = Path(APP_CFG.storage.stockbit_profile_dir)
 
 # Benchmark ticker always included in every market refresh run (first in list).
 # Required by: saham analyze regime, saham analyze swing (market context).
-# Also used as ground truth for last IDX trading day (see _last_known_trading_day).
 _BENCHMARK_TICKER = BENCHMARK_TICKER
-
-# How many calendar days of gap at the START of a requested range is tolerable
-# before triggering a backfill. 7 covers cases where IDX simply has no data
-# for the first few days of a very old historical range.
-MARKET_START_TOLERANCE_DAYS: int = APP_CFG.fetch.start_tolerance_days
-
-
-def _last_known_trading_day(db_path: Path) -> date | None:
-    """
-    Return the latest date in the benchmark candle cache.
-
-    Stockbit/Yahoo only include actual IDX trading sessions, so this date
-    is the last known trading day, correctly excluding weekends and IDX
-    public holidays without a calendar heuristic.
-
-    Returns None on first run before benchmark candles have been cached.
-    """
-    repo = SQLiteMarketRepository(db_path=db_path)
-    date_range = repo.get_date_range(_BENCHMARK_TICKER)
-    if date_range is None:
-        # Temporary compatibility while old local databases still contain the
-        # Yahoo benchmark symbol.
-        date_range = repo.get_date_range(YAHOO_IHSG_TICKER)
-    return date_range[1] if date_range else None
-
-
-def _last_weekday(as_of: date) -> date:
-    """
-    Fallback: most recent Mon–Fri on or before as_of.
-    Used only when benchmark candles are not yet cached (first run).
-    Does NOT account for IDX holidays — use _last_known_trading_day() when possible.
-    """
-    if as_of.weekday() == 5:   # Saturday → Friday
-        return as_of - timedelta(days=1)
-    if as_of.weekday() == 6:   # Sunday → Friday
-        return as_of - timedelta(days=2)
-    return as_of
-
-
-def _fmt_status(s: str) -> str:
-    """Map internal status strings to concise display labels."""
-    for prefix in ("agg=up-to-date(", "daily=up-to-date(", "up-to-date("):
-        if s.startswith(prefix):
-            tag = prefix[: prefix.index("up-to-date(")]  # "" | "agg=" | "daily="
-            date_part = s[len(prefix):-1]
-            return f"{tag}✓({date_part})"
-    return s
-
-
-def _clean_row_span(s: str) -> str:
-    import re
-    # Remove up-to-date prefix
-    s = _fmt_status(s)
-    # Replace backfill+Nrows/span=Kd -> bf+Nr(Kd)
-    s = re.sub(r'backfill\+(\d+)rows/span=(\d+)d', r'bf+\1r(\2d)', s)
-    # Replace +Nrows/span=Kd -> +Nr(Kd)
-    s = re.sub(r'\+(\d+)rows/span=(\d+)d', r'+\1r(\2d)', s)
-    # Replace refreshed/span=Kd -> ref(Kd)
-    s = re.sub(r'refreshed/span=(\d+)d', r'ref(\1d)', s)
-    return s
-
-
-def _split_flow_parts(flow_str: str) -> tuple[str, str]:
-    import re
-    daily_part = "skip"
-    agg_part = "skip"
-
-    # Extract daily part
-    daily_match = re.search(r'(daily=✓\([^)]+\)|daily=[^ ]+|daily:\+[^ ]+)', flow_str)
-    if daily_match:
-        daily_part = daily_match.group(1)
-
-    # Extract agg part
-    agg_match = re.search(r'(agg=✓\([^)]+\)|agg=[^ ]+|agg:\+[^ ]+)', flow_str)
-    if agg_match:
-        agg_part = agg_match.group(1)
-
-    # If it's a fallback single status (e.g. no daily or agg keys, like "✓(2026-06-19)" or "skip" or "ERR:...")
-    if not daily_match and not agg_match:
-        if "ERR:" in flow_str:
-            return flow_str, flow_str
-        return flow_str, flow_str
-
-    return daily_part, agg_part
-
-
-def _fmt_tracked_flow_column(daily_part: str) -> str:
-    import re
-    s = _fmt_status(daily_part)
-    s = re.sub(r'\b\d{4}-', '', s)
-    s = re.sub(r'daily=✓\(([^)]+)\)', r'✓(\1)', s)
-    s = re.sub(r'daily=✓', '✓', s)
-    s = re.sub(r'daily:\+(\d+)rows/\d+codes/(\d+)d', r'+\1r(\2d)', s)
-    s = re.sub(r'daily:\+(\d+)rows/(\d+)d', r'+\1r(\2d)', s)
-    s = re.sub(r'daily:', '', s)
-    return s
-
-
-def _fmt_inst_flow_column(agg_part: str) -> str:
-    import re
-    s = _fmt_status(agg_part)
-    s = re.sub(r'\b\d{4}-', '', s)
-    s = re.sub(r'agg=✓\(([^)]+)\)', r'✓(\1)', s)
-    s = re.sub(r'agg=✓', '✓', s)
-    s = re.sub(r'agg:\+(\d+)rows/(\d+)d', r'+\1r(\2d)', s)
-    s = re.sub(r'agg:', '', s)
-    return s
-
-
-
-
-
-def _fmt_meta_column(s: str) -> str:
-    # E.g. "new(Financial Services)" or "cached(5d)" or "skip"
-    if len(s) <= 18:
-        return s
-
-    import re
-    match = re.match(r'(\w+)\((.+)\)', s)
-    if match:
-        prefix, content = match.groups()
-        # Truncate content so total length is 18
-        max_content_len = 18 - len(prefix) - 2  # -2 for "(" and ")"
-        if max_content_len > 3:
-            truncated = content[:max_content_len-2] + ".."
-            return f"{prefix}({truncated})"
-    return s[:18]
-
-
-def _fmt_enrichment_column(s: str) -> str:
-    # E.g. "✓(notation,analyst,insider,season,corp,holding,bandar,fundam,fwd_est,profile)"
-    # or "notation+analyst  ✓(insider,season,corp,holding,bandar,fundam,fwd_est,profile)"
-    # or "ERR:insider:Playwright error,corp:timeout"
-    # or "skip"
-    if s == "skip":
-        return "skip"
-
-    if s.startswith("ERR:"):
-        errors_part = s[4:]
-        err_tokens = errors_part.split(",")
-        err_labels = []
-        for token in err_tokens:
-            parts = token.split(":")
-            if parts:
-                err_labels.append(parts[0])
-        failed_count = len(err_labels)
-        success_count = max(0, 10 - failed_count)
-        return f"{success_count}/10 (ERR: {', '.join(err_labels)})"
-
-    fetched_part = ""
-    cached_part = ""
-
-    if "  ✓(" in s:
-        parts = s.split("  ✓(")
-        fetched_part = parts[0].strip()
-        cached_part = parts[1].rstrip(")")
-    elif s.startswith("✓("):
-        cached_part = s[2:].rstrip(")")
-    else:
-        fetched_part = s.strip()
-
-    fetched_list = [x for x in fetched_part.split("+") if x]
-    cached_list = [x for x in cached_part.split(",") if x]
-
-    fetched_count = len(fetched_list)
-    cached_count = len(cached_list)
-    total_count = fetched_count + cached_count
-
-    if total_count == 0:
-        return s
-
-    if fetched_count == 0:
-        return f"{total_count}/{total_count} ✓"
-
-    if fetched_count <= 2:
-        return f"{total_count}/{total_count} (+{fetched_count}: {', '.join(fetched_list)})"
-    return f"{total_count}/{total_count} (+{fetched_count})"
+_BENCHMARK_ALIASES = BenchmarkTickerAliases(canonical=_BENCHMARK_TICKER, legacy=YAHOO_IHSG_TICKER)
 
 
 def _cached_status(latest: date, end_date: date) -> str:
@@ -317,425 +132,35 @@ def _range_update_status(
     return f"{prefix}{added_count}rows/span={span_days}d"
 
 
-def _echo_note_group(
-    title: str,
-    messages: list[str],
-    color: str,
-    limit: int = 12,
-    footer: str | None = None,
-) -> None:
-    """Print a compact note group without flooding large universe updates."""
-    if not messages:
-        return
-    typer.echo("")
-    typer.echo(typer.style(title, fg=color))
-    for msg in messages[:limit]:
-        typer.echo(typer.style(msg, fg=color))
-    remaining = len(messages) - limit
-    if remaining > 0:
-        typer.echo(typer.style(f"  ... {remaining} more", fg=color))
-    if footer:
-        typer.echo(typer.style(footer, fg=color))
-
-
-def _create_broker_provider(name: str | None):
-    """
-    Create broker provider by explicit name, or auto-detect if name is None.
-
-    The returned provider is used for broker_daily_flow, foreign_flow_points, and optionally
-    broker_summaries. Summary source is controlled by preferences.broker_summary_source in
-    config/stockbit.yaml (default: idx). Stockbit is valid since it now uses
-    /company-price-feed/historical/summary for true total_value.
-
-    Auto-detect order:
-      1. Playwright session (.stockbit_profile/) — preferred; no token file needed
-      2. IDX public API — always available fallback
-    """
-    from src.application.services.stockbit_session import get_stockbit_session
-    from src.infrastructure.browser.stockbit_broker_provider import StockbitBrokerProvider
-
-    if name == "stockbit":
-        session = get_stockbit_session()
-        if session and session.authenticated:
-            return StockbitBrokerProvider(session.api_client), "stockbit"
-        return IdxBrokerDataProvider(), "idx"
-    if name == "idx":
-        return IdxBrokerDataProvider(), "idx"
-    if name is not None:
-        raise ValueError(
-            "Unknown broker provider: "
-            f"{name}. Choose from: idx, stockbit"
-        )
-
-    # Auto-detect
-    session = get_stockbit_session()
-    if session and session.authenticated:
-        return StockbitBrokerProvider(session.api_client), "stockbit"
-    return IdxBrokerDataProvider(), "idx"
-
-
-def _fetch_candles(
-    ticker: str,
-    days: int,
-    db_path: Path,
-    provider_name: str,
-    refresh: bool,
-    short_history: list[str] | None = None,
-    broker_provider: "StockbitBrokerProvider | None" = None,
-) -> str:
-    """Fetch candles for one ticker. Returns status string."""
-    from src.domain.value_objects import is_non_idx_ticker
-    from src.infrastructure.data_providers.idx_market import IdxMarketDataProvider
-
-    ticker = canonicalize_ticker(ticker)
-
-    from src.infrastructure.config.market_context_config import get_global_context_tickers
-    non_idx = get_global_context_tickers()
-
-    if is_non_idx_ticker(ticker, non_idx):
-        provider = YahooFinanceProvider(non_idx_tickers=non_idx)
-    elif is_benchmark_ticker(ticker):
-        if broker_provider is not None:
-            provider = StockbitHistoricalProvider(api_client=broker_provider.api_client, non_idx_tickers=non_idx)
-        else:
-            provider = YahooFinanceProvider(non_idx_tickers=non_idx)
-    elif provider_name == "idx":
-        provider = IdxMarketDataProvider()
-    else:
-        # Standard IDX stock ticker
-        if broker_provider is None:
-            raise ValueError(
-                "Stockbit session is required to fetch IDX tickers to ensure correct exchange volumes. "
-                "Please run 'saham login' first."
-            )
-        provider = StockbitHistoricalProvider(api_client=broker_provider.api_client, non_idx_tickers=non_idx)
-
-    repo = SQLiteMarketRepository(db_path=db_path)
-    use_case = RefreshMarketDataUseCase(provider=provider, repository=repo)
-
-    try:
-        # End tolerance: how many calendar days old can cached data be and still
-        # be considered current? Derived from the last known IDX trading day.
-        # For the benchmark itself, use weekday fallback to break the circular
-        # dependency (benchmark candles can't use their own stale data to decide
-        # if they need updating).
-        today = date.today()
-        if is_benchmark_ticker(ticker):
-            last_trading = _last_weekday(today)
-        else:
-            last_trading = _last_known_trading_day(db_path) or _last_weekday(today)
-        end_tolerance = max(0, (today - last_trading).days)
-
-        response = use_case.execute(
-            RefreshMarketDataRequest(
-                ticker=ticker,
-                days=days,
-                refresh=refresh,
-                start_tolerance_days=MARKET_START_TOLERANCE_DAYS,
-                end_tolerance_days=end_tolerance,
-            )
-        )
-        if short_history is not None and response.short_history_note:
-            short_history.append(response.short_history_note)
-
-        # Embed the latest date into "cached-current" for display clarity
-        if response.status == "cached-current" and response.date_range:
-            return f"✓({response.date_range[1]})"
-        return response.status
-    except Exception as e:
-        return f"ERR:{str(e)[:30]}"
-
-
-def _fetch_broker(
-    ticker: str,
-    days: int,
-    db_path: Path,
-    broker_provider,
-    refresh: bool,
-    short_history: list[str] | None = None,
-    _idx_summary_provider=None,  # injectable for testing; production code uses IdxBrokerDataProvider
-) -> BrokerFetchResult:
-    """Fetch broker flow for one ticker. Returns split status for summaries and flow tables."""
-    ticker = canonicalize_ticker(ticker)
-    if is_benchmark_ticker(ticker) or ticker.startswith("^"):
-        return BrokerFetchResult(summaries="n/a:index", flow="n/a:index")
-
-    end_date = date.today()
-    repo = SQLiteBrokerRepository(db_path)
-    if _idx_summary_provider is not None:
-        idx_summary_provider = _idx_summary_provider
-    elif broker_provider.provider_name == "idx":
-        idx_summary_provider = broker_provider
-    elif _broker_summary_source() == "stockbit":
-        idx_summary_provider = broker_provider  # Stockbit now returns accurate total_value
-    else:
-        idx_summary_provider = IdxBrokerDataProvider()
-
-    from src.infrastructure.browser.stockbit_ticker_notation import StockbitTickerNotationProvider
-
-    notation_repo = StockbitTickerNotationProvider(api_client=None, db_path=db_path)
-
-    response = RefreshBrokerDataUseCase(
-        broker_provider=broker_provider,
-        idx_summary_provider=idx_summary_provider,
-        repository=repo,
-        notation_repository=notation_repo,
-    ).execute(
-        RefreshBrokerDataRequest(
-            ticker=ticker,
-            days=days,
-            refresh=refresh,
-            end_date=end_date,
-            last_trading_day=_last_known_trading_day(db_path) or _last_weekday(end_date),
-            requested_start_tolerance_days=MARKET_START_TOLERANCE_DAYS,
-        )
-    )
-    if short_history is not None:
-        short_history.extend(response.notes)
-    return BrokerFetchResult(
-        summaries=response.summaries_status,
-        flow=response.flow_status,
-    )
-
-
-def _print_table_summary(
-    db_path: Path,
-    stock_tickers: list[str],
+def _find_missing_stockbit_session_error(
+    tickers: list[str],
+    non_idx_tickers: frozenset[str],
     candles_provider: str,
-    broker_provider_name: str,
-    no_meta: bool,
-    candles_only: bool,
-    broker_only: bool,
-    enrichment_available: bool = False,
-    market_is_open: bool = False,
-) -> None:
-    """Print a dynamic post-run database status for tables touched by update."""
-    try:
-        statuses = build_data_update_table_statuses(
-            db_path=db_path,
-            tickers=stock_tickers,
-            candles_provider=candles_provider,
-            broker_provider_name=broker_provider_name,
-            no_meta=no_meta,
-            candles_only=candles_only,
-            broker_only=broker_only,
-            enrichment_available=enrichment_available,
-            expected_trading_day=_last_known_trading_day(db_path) or _last_weekday(date.today()),
-            market_is_open=market_is_open,
-        )
-    except Exception as e:
-        typer.echo("")
-        typer.echo(typer.style(f"Database status unavailable: {str(e)[:80]}", fg=typer.colors.YELLOW))
-        return
-
-    W = 140
-    prefix_width = 95
-    impact_width = W - prefix_width
-    typer.echo(f"\n{'─' * W}")
-    typer.echo("  Database status after command (scoped to this run's stock tickers)")
-    typer.echo(f"{'─' * W}")
-    typer.echo(f"  {'TABLE':<24} {'SOURCE':<16} {'ROWS':>8} {'TICKERS':>7} {'RANGE/FRESH':<23} {'STATUS':<9} IMPACT")
-    typer.echo(f"{'─' * W}")
-
-    issues: list[str] = []
-    for status in statuses:
-        rows = "-" if status.rows is None else f"{status.rows:,}"
-        tickers = "-" if status.tickers is None else f"{status.tickers:,}"
-        color = typer.colors.GREEN
-        if status.status in {"skipped", "n/a"}:
-            color = typer.colors.BRIGHT_BLACK
-        elif status.status == "pending-eod":
-            color = typer.colors.CYAN
-        elif status.status in {"partial", "stale", "empty", "missing", "missing-db"}:
-            color = typer.colors.YELLOW
-        prefix = (
-            f"  {status.table:<24} {status.source:<16} {rows:>8} {tickers:>7} "
-            f"{status.range_label:<23} {status.status:<9}"
-        )
-        if len(status.impact) <= impact_width:
-            typer.echo(typer.style(f"{prefix} {status.impact}", fg=color))
-        else:
-            typer.echo(typer.style(prefix, fg=color))
-            typer.echo(typer.style(f"  {'':<{prefix_width - 2}}{status.impact}", fg=color))
-        if status.issue and status.status != "pending-eod":
-            issues.append(f"  {status.table}: {status.issue}")
-
-    typer.echo(f"{'─' * W}")
-    typer.echo(f"  Rows/tickers are totals for the {len(stock_tickers)} stock ticker(s) in this run.")
-    if issues:
-        _echo_note_group(
-            title=f"Database issues/impact ({len(issues)}):",
-            messages=issues,
-            color=typer.colors.YELLOW,
-            footer="   Update succeeded unless a fetch error was listed above; incomplete optional caches are warnings.",
-        )
-
-
-def _fetch_enrichment(
-    ticker: str,
-    db_path: Path,
-    broker_provider,
-    *,
-    force_refresh: bool = False,
-) -> str:
-    """Pre-fetch Stockbit enrichment data for one ticker into SQLite cache.
-
-    Delegates cache-freshness-then-fetch policy to RefreshStockbitEnrichmentUseCase.
-    Returns a compact status string, e.g. "analyst+bandar  ✓(insider,season,corp,holding)".
+    has_broker_session: bool,
+) -> str | None:
     """
-    if broker_provider is None:
-        return "skip:no-stockbit"
-    ticker = canonicalize_ticker(ticker)
-    if is_benchmark_ticker(ticker) or ticker.startswith("^"):
-        return "n/a:index"
+    Return the candle-provider policy error message if any ticker in the batch
+    would fail provider resolution (regular IDX ticker, provider != idx, no
+    Stockbit session), or None if the batch is fetchable as-is.
 
-    from datetime import timedelta
-
-    from src.application.use_case.refresh_stockbit_enrichment_use_case import (
-        EnrichmentTask,
-        RefreshStockbitEnrichmentRequest,
-        RefreshStockbitEnrichmentUseCase,
-    )
-    from src.infrastructure.browser.stockbit_analyst import StockbitAnalystConsensusProvider
-    from src.infrastructure.browser.stockbit_bandar import StockbitBandarDetectorProvider
-    from src.infrastructure.browser.stockbit_broker_distribution import (
-        StockbitBrokerDistributionProvider,
-    )
-    from src.infrastructure.browser.stockbit_company_profile import StockbitCompanyProfileProvider
-    from src.infrastructure.browser.stockbit_corp_action import StockbitCorporateActionRepository
-    from src.infrastructure.browser.stockbit_earnings import StockbitEarningsProvider
-    from src.infrastructure.browser.stockbit_forward_estimates import (
-        StockbitForwardEstimatesProvider,
-    )
-    from src.infrastructure.browser.stockbit_fundamentals import StockbitFundamentalsProvider
-    from src.infrastructure.browser.stockbit_insider import StockbitInsiderActivityProvider
-    from src.infrastructure.browser.stockbit_seasonality import StockbitSeasonalityProvider
-    from src.infrastructure.browser.stockbit_shareholding import StockbitShareholdingProvider
-    from src.infrastructure.browser.stockbit_ticker_notation import StockbitTickerNotationProvider
-    from src.infrastructure.browser.stockbit_valuation import StockbitValuationProvider
-
-    today = date.today()
-    insider_from = today - timedelta(days=365)
-
-    _api_client = broker_provider.api_client
-    analyst_prov = StockbitAnalystConsensusProvider(api_client=_api_client, db_path=db_path)
-    insider_prov = StockbitInsiderActivityProvider(api_client=_api_client, db_path=db_path)
-    season_prov = StockbitSeasonalityProvider(api_client=_api_client, db_path=db_path)
-    corp_repo = StockbitCorporateActionRepository(api_client=_api_client, db_path=db_path)
-    shareholding_prov = StockbitShareholdingProvider(api_client=_api_client, db_path=db_path)
-    bandar_prov = StockbitBandarDetectorProvider(api_client=_api_client, db_path=db_path)
-    fundamentals_prov = StockbitFundamentalsProvider(api_client=_api_client, db_path=db_path)
-    notation_prov = StockbitTickerNotationProvider(api_client=_api_client, db_path=db_path)
-    fwd_est_prov = StockbitForwardEstimatesProvider(api_client=_api_client, db_path=db_path)
-    profile_prov = StockbitCompanyProfileProvider(api_client=_api_client, db_path=db_path)
-    earnings_prov = StockbitEarningsProvider(api_client=_api_client, db_path=db_path)
-    distribution_prov = StockbitBrokerDistributionProvider(api_client=_api_client, db_path=db_path)
-    valuation_prov = StockbitValuationProvider(api_client=_api_client, db_path=db_path)
-
-    tasks = [
-        EnrichmentTask("notation", lambda: notation_prov.is_cache_fresh(ticker),   lambda: notation_prov.get_notation(ticker)),
-        EnrichmentTask("analyst",  lambda: analyst_prov._is_cache_fresh(ticker),   lambda: analyst_prov.get_consensus(ticker)),
-        EnrichmentTask("insider",  lambda: insider_prov._is_cache_fresh(ticker),   lambda: insider_prov.get_insider_transactions(ticker, insider_from, today, "ALL")),
-        EnrichmentTask("season",   lambda: season_prov._is_cache_fresh(ticker, today.year, today.month), lambda: season_prov.get_seasonal_edge(ticker, today.year, today.month)),
-        EnrichmentTask("corp",     lambda: corp_repo._is_cache_fresh(ticker),      lambda: corp_repo.get_upcoming_events(ticker, today, today + timedelta(days=90))),
-        EnrichmentTask("holding",  lambda: shareholding_prov._is_cache_fresh(ticker), lambda: shareholding_prov.get_composition(ticker)),
-        EnrichmentTask("bandar",   lambda: bandar_prov._is_cache_fresh(ticker),    lambda: bandar_prov.get_snapshot(ticker)),
-        EnrichmentTask("fundam",   lambda: fundamentals_prov._is_cache_fresh(ticker), lambda: fundamentals_prov.get_fundamentals(ticker)),
-        EnrichmentTask("fwd_est",  lambda: fwd_est_prov._read_cache(ticker) is not None, lambda: fwd_est_prov.get_forward_estimates(ticker)),
-        EnrichmentTask("profile",  lambda: profile_prov._read_cache(ticker) is not None, lambda: profile_prov.get_profile(ticker)),
-        EnrichmentTask("earnings", lambda: earnings_prov.is_cache_fresh(ticker),   lambda: earnings_prov.get_earnings_history(ticker)),
-        EnrichmentTask("brdist",   lambda: distribution_prov.is_cache_fresh(ticker), lambda: distribution_prov.get_distribution(ticker)),
-        EnrichmentTask("valuation", lambda: valuation_prov.is_cache_fresh(ticker),   lambda: valuation_prov.get_valuation(ticker)),
-    ]
-    return RefreshStockbitEnrichmentUseCase().execute(
-        RefreshStockbitEnrichmentRequest(
-            ticker=ticker,
-            tasks=tasks,
-            force_refresh=force_refresh,
-        )
-    ).status
-
-
-def _fetch_meta(ticker: str, db_path: Path) -> str:
-    """Fetch sector/industry metadata for one ticker. Returns a status string."""
-    ticker = canonicalize_ticker(ticker)
-    if is_benchmark_ticker(ticker) or ticker.startswith("^"):
-        return "n/a:index"
-
-    try:
-        repo = SQLiteStockMetaRepository(db_path)
-        provider = YahooStockMetaProvider()
-        use_case = FetchStockMetaUseCase(provider=provider, repository=repo)
-        result = use_case.execute(FetchStockMetaRequest(ticker=ticker))
-
-        if result.status == "cached":
-            return f"cached({result.cached_days}d)"
-        if result.status == "new":
-            return f"new({result.sector or '?'})"
-        if result.status == "changed":
-            return f"changed→{result.sector or '?'}"
-        if result.status == "verified":
-            return "verified"
-        # error
-        return f"ERR:{(result.error or 'unknown')[:30]}"
-    except Exception as e:
-        return f"ERR:{str(e)[:30]}"
-
-
-def _fetch_global_context_tickers(db_path: Path, days: int = 180) -> None:
+    This is a command precondition, not a per-ticker transient fetch failure:
+    every affected ticker would fail identically, so the command must fail
+    fast before starting the ticker loop instead of surfacing a raw exception
+    mid-run.
     """
-    Fetch MCE global context tickers (^VIX, EIDO, IDR=X, etc.) via Yahoo Finance
-    with no market suffix — these are not IDX stocks.
-
-    Called automatically at the end of `saham fetch market` (candles path only).
-    Tickers are read from config/market_context_engine.yaml so disabling a factor
-    also stops fetching its ticker.
-    """
-    from src.application.use_case.refresh_market_data_use_case import (
-        RefreshMarketDataRequest,
-        RefreshMarketDataUseCase,
-    )
-    from src.infrastructure.config.market_context_config import load_market_context_config
-
-    cfg = load_market_context_config()
-    global_tickers: list[tuple[str, str]] = []  # (ticker, factor_name)
-
-    if cfg.vix.enabled:
-        global_tickers.append((cfg.vix.ticker, "vix"))
-    if cfg.eido.enabled:
-        global_tickers.append((cfg.eido.ticker, "eido"))
-    if cfg.usd_idr.enabled:
-        global_tickers.append((cfg.usd_idr.ticker, "usd_idr"))
-
-    if not global_tickers:
-        return
-
-    from src.infrastructure.config.market_context_config import get_global_context_tickers
-    provider = YahooFinanceProvider(market_suffix="", non_idx_tickers=get_global_context_tickers())
-    repo = SQLiteMarketRepository(db_path=db_path)
-    use_case = RefreshMarketDataUseCase(provider=provider, repository=repo)
-
-    results: list[str] = []
-    for ticker, factor in global_tickers:
-        try:
-            resp = use_case.execute(
-                RefreshMarketDataRequest(
-                    ticker=ticker,
-                    days=days,
-                    refresh=False,
-                    start_tolerance_days=MARKET_START_TOLERANCE_DAYS,
-                    end_tolerance_days=cfg.fetch.global_context_end_tolerance_days,
-                )
+    policy_use_case = ResolveCandleProviderPolicyUseCase()
+    for ticker in tickers:
+        decision = policy_use_case.execute(
+            ResolveCandleProviderPolicyRequest(
+                ticker=ticker,
+                non_idx_tickers=non_idx_tickers,
+                requested_provider_name=candles_provider,
+                has_broker_session=has_broker_session,
             )
-            if resp.status.startswith("cached"):
-                status = "✓"
-            else:
-                status = resp.status
-            results.append(f"{ticker}({factor}):{status}")
-        except Exception as e:
-            results.append(f"{ticker}({factor}):ERR:{str(e)[:20]}")
-
-    typer.echo(f"  Context tickers: {', '.join(results)}")
+        )
+        if decision.error is not None:
+            return decision.error
+    return None
 
 
 def fetch_market(
@@ -817,7 +242,7 @@ def fetch_market(
 
     # Determine broker provider
     try:
-        broker_provider, broker_provider_name = _create_broker_provider(broker_provider)
+        broker_provider, broker_provider_name = create_broker_provider(broker_provider)
     except ValueError as e:
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1)
@@ -850,6 +275,29 @@ def fetch_market(
         if canonicalize_ticker(t) != _BENCHMARK_TICKER
     ]
     full_ticker_list = [_BENCHMARK_TICKER] + list(dict.fromkeys(without_benchmark))
+
+    # Fail fast on a command precondition: if candles will be fetched and any
+    # ticker in the batch requires a Stockbit session that is not available,
+    # abort before starting the per-ticker loop instead of letting the
+    # resulting ValueError surface uncaught mid-run.
+    if not broker_only:
+        from src.infrastructure.config.market_context_config import get_global_context_tickers
+
+        precondition_error = _find_missing_stockbit_session_error(
+            tickers=full_ticker_list,
+            non_idx_tickers=frozenset(get_global_context_tickers()),
+            candles_provider=candles_provider,
+            # Matches the real ticker-loop signal below: fetch_candles only
+            # receives a broker_provider (enabling Stockbit-backed fetches)
+            # when broker_provider_name == "stockbit"; create_broker_provider
+            # always returns a non-None object even for the IDX fallback, so
+            # `broker_provider is not None` would never detect a missing
+            # session here.
+            has_broker_session=broker_provider_name == "stockbit",
+        )
+        if precondition_error is not None:
+            typer.echo(f"Error: {precondition_error}", err=True)
+            raise typer.Exit(1)
 
     enrichment_available = (
         not no_enrichment
@@ -913,12 +361,12 @@ def fetch_market(
             status_color = typer.colors.GREEN
 
         # Format column values
-        candles_col = _clean_row_span(result.candles_status)[:13]
-        summaries_col = _clean_row_span(result.broker_result.summaries)[:18]
+        candles_col = clean_row_span(result.candles_status)[:13]
+        summaries_col = clean_row_span(result.broker_result.summaries)[:18]
 
-        daily_flow, agg_flow = _split_flow_parts(result.broker_result.flow)
-        tracked_col = _fmt_tracked_flow_column(daily_flow)[:18]
-        inst_col = _fmt_inst_flow_column(agg_flow)[:18]
+        daily_flow, agg_flow = split_flow_parts(result.broker_result.flow)
+        tracked_col = fmt_tracked_flow_column(daily_flow)[:18]
+        inst_col = fmt_inst_flow_column(agg_flow)[:18]
 
         line_parts = [
             f"  {progress:<9} {result.ticker:<5}",
@@ -929,30 +377,30 @@ def fetch_market(
         ]
 
         if not no_meta:
-            meta_col = _fmt_meta_column(result.meta_status)[:18]
+            meta_col = fmt_meta_column(result.meta_status)[:18]
             line_parts.append(f"{meta_col:<18}")
         if enrichment_available:
-            enrich_col = _fmt_enrichment_column(result.enrichment_status)[:26]
+            enrich_col = fmt_enrichment_column(result.enrichment_status)[:26]
             line_parts.append(f"{enrich_col:<26}")
 
         status_line = "  ".join(line_parts)
         typer.echo(typer.style(status_line, fg=status_color))
 
     _candles_fn = (
-        functools.partial(_fetch_candles, broker_provider=broker_provider)
+        functools.partial(fetch_candles, broker_provider=broker_provider)
         if broker_provider_name == "stockbit"
-        else _fetch_candles
+        else fetch_candles
     )
     _read_coverage_fn = (
-        functools.partial(_read_enrichment_pit_coverage, resolved_db)
+        functools.partial(read_enrichment_pit_coverage, resolved_db)
         if enrichment_available
         else None
     )
     use_case = FetchMarketRefreshUseCase(
         fetch_candles=_candles_fn,
-        fetch_broker=_fetch_broker,
-        fetch_meta=_fetch_meta,
-        fetch_enrichment=_fetch_enrichment,
+        fetch_broker=fetch_broker,
+        fetch_meta=fetch_meta,
+        fetch_enrichment=fetch_enrichment,
         read_pit_coverage=_read_coverage_fn,
     )
     try:
@@ -989,7 +437,7 @@ def fetch_market(
     )
     if response.failures:
         typer.echo(f"Failed: {', '.join(response.failures)}")
-    _echo_note_group(
+    echo_note_group(
         title=(
             f"⚠  Candle cache shorter than --days {days} for "
             f"{len(response.candle_short_history)} ticker(s); "
@@ -999,7 +447,7 @@ def fetch_market(
         color=typer.colors.YELLOW,
         footer="   Use --refresh only when you want to re-fetch the full requested candle window.",
     )
-    _echo_note_group(
+    echo_note_group(
         title=(
             f"Broker history shorter than --days {days} for "
             f"{len(response.broker_backfills)} ticker(s); older broker gaps were fetched automatically:"
@@ -1009,7 +457,7 @@ def fetch_market(
         messages=response.broker_backfills,
         color=typer.colors.CYAN,
     )
-    _echo_note_group(
+    echo_note_group(
         title=(
             f"Sector classification changed for {len(response.meta_changed)} ticker(s):"
             if response.meta_changed
@@ -1020,7 +468,7 @@ def fetch_market(
     )
 
     # Table summary — exclude index tickers since they have no broker/meta rows
-    _print_table_summary(
+    print_table_summary(
         db_path=resolved_db,
         stock_tickers=response.stock_tickers_only,
         candles_provider=candles_provider,
@@ -1028,141 +476,18 @@ def fetch_market(
         no_meta=no_meta,
         candles_only=candles_only,
         broker_only=broker_only,
+        expected_trading_day=MarketFreshnessService(
+            repository=SQLiteMarketRepository(db_path=resolved_db)
+        ).resolve_reference_trading_day(_BENCHMARK_ALIASES, date.today()),
         enrichment_available=response.enrichment_available,
         market_is_open=_mstatus.is_open if _mstatus else False,
     )
 
     if response.pit_coverage:
-        _render_enrichment_pit_coverage(response.pit_coverage)
+        render_enrichment_pit_coverage(response.pit_coverage)
 
     # Fetch MCE global context tickers (VIX, EIDO, USD/IDR) using no-suffix Yahoo provider
     if not broker_only:
-        _fetch_global_context_tickers(resolved_db, days=days)
-
-
-def _read_enrichment_pit_coverage(db_path: Path):
-    """Delegate PIT coverage read to the infrastructure persistence layer."""
-    from src.infrastructure.persistence.sqlite_enrichment_pit_coverage import (
-        read_enrichment_pit_coverage,
-    )
-    return read_enrichment_pit_coverage(db_path)
-
-
-def _render_enrichment_pit_coverage(coverage) -> None:
-    """Print a per-table PIT coverage summary to stdout."""
-    w = 26
-    typer.echo("\nPoint-in-time enrichment coverage:")
-    typer.echo(f"  {'TABLE':<{w}} {'SNAPSHOTS':>10} {'LATEST':>12} {'TICKERS (LATEST)':>18}")
-    typer.echo(f"  {'─'*w} {'─'*10} {'─'*12} {'─'*18}")
-    for row in coverage:
-        typer.echo(
-            f"  {row.table:<{w}} {row.snapshot_count:>10} "
-            f"{str(row.latest_date or 'n/a'):>12} {row.tickers_in_latest:>18}"
-        )
-    typer.echo("")
-    typer.echo(
-        "Note: Stockbit returns current values only — no historical API exists. "
-        "Observations before the first snapshot will have UNKNOWN market_cap_bucket "
-        "and enrichment fields. Run this command periodically to build a PIT history."
-    )
-
-
-def fetch_enrichment_history(
-    tickers: Annotated[
-        Optional[list[str]],
-        typer.Argument(help="Explicit ticker symbols (e.g. BBCA BBRI)"),
-    ] = None,
-    universe: Annotated[
-        Optional[str],
-        typer.Option("--universe", "-u", help="Universe name — see `saham fetch universe list`"),
-    ] = None,
-    db_path: Annotated[
-        Optional[Path],
-        typer.Option("--db", help="SQLite database path"),
-    ] = None,
-    force: Annotated[
-        bool,
-        typer.Option("--force/--no-force", help="Force refresh even if cached today"),
-    ] = True,
-) -> None:
-    """Store a timestamped enrichment snapshot for all universe tickers.
-
-    Fetches current fundamental, shareholding, analyst, notation, and forward-estimates
-    data from Stockbit and stores each fetch with today's date. Re-running this
-    command on a different day adds a new PIT snapshot without overwriting prior rows.
-
-    IMPORTANT: Stockbit does not provide historical values. Only TODAY's data
-    can be retrieved. Historical observations before the first snapshot will
-    return UNKNOWN for market_cap_bucket, analyst consensus, shareholding, etc.
-    Run this command regularly (daily or weekly) to build a useful PIT history.
-
-    Examples:
-        saham fetch enrichment-history --universe lq45
-        saham fetch enrichment-history BBCA BBRI BMRI
-    """
-    from src.application.use_case.fetch_enrichment_history_use_case import (
-        FetchEnrichmentHistoryRequest,
-        FetchEnrichmentHistoryUseCase,
-    )
-
-    resolved_db = db_path or Path(APP_CFG.storage.db_path)
-    today = date.today()
-
-    try:
-        ticker_list = resolve_tickers(
-            universe=universe,
-            explicit=list(tickers) if tickers else [],
-            db_path=resolved_db,
-        )
-    except UniverseNotFoundError as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1)
-    except FileNotFoundError as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1)
-
-    if not ticker_list:
-        typer.echo(
-            "No tickers to update. Specify --universe or provide ticker arguments.",
-            err=True,
-        )
-        raise typer.Exit(1)
-
-    broker_provider, broker_provider_name = _create_broker_provider(None)
-    if broker_provider_name != "stockbit":
-        typer.echo(
-            "Error: Stockbit session required for enrichment fetch. "
-            "Log in with `saham fetch stockbit login` first.",
-            err=True,
-        )
-        raise typer.Exit(1)
-
-    universe_label = universe or f"{len(ticker_list)} tickers"
-    typer.echo(f"\nFetching enrichment snapshot  universe={universe_label}  date={today}")
-    typer.echo("  (Stockbit provides current values only; prior snapshots are preserved)")
-    typer.echo("")
-
-    # Wire callables — provider construction stays in the adapter
-    enrich_one = functools.partial(
-        _fetch_enrichment, db_path=resolved_db, broker_provider=broker_provider, force_refresh=force
-    )
-    read_coverage = functools.partial(_read_enrichment_pit_coverage, resolved_db)
-
-    use_case = FetchEnrichmentHistoryUseCase(
-        enrich_ticker=enrich_one,
-        read_pit_coverage=read_coverage,
-    )
-    response = use_case.execute(
-        FetchEnrichmentHistoryRequest(tickers=ticker_list, force_refresh=force)
-    )
-
-    for ticker, status in response.results:
-        color = typer.colors.RED if status.startswith("ERR:") else typer.colors.GREEN
-        typer.echo(typer.style(f"  {ticker:<8} {status}", fg=color))
-
-    typer.echo("")
-    typer.echo(
-        f"Done: {response.ok_count} ok"
-        + (f", {response.fail_count} failed" if response.fail_count else "")
-    )
-    _render_enrichment_pit_coverage(response.coverage)
+        context_response = refresh_market_context_inputs(resolved_db, days=days)
+        if context_response.statuses:
+            typer.echo(f"  Context tickers: {', '.join(context_response.statuses)}")
