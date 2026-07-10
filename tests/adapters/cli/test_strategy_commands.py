@@ -267,8 +267,12 @@ class TestBacktestWithStrategy:
         # Should fail on "no data" not "strategy not found"
         output = result.output or result.stdout
         output_lower = output.lower()
-        # Strategy was found, so error should be about data or database, not about strategy not found
-        assert "strategy" not in output_lower or "not found" not in output_lower or "data" in output_lower
+        # Strategy was found, so error should be about data/db, not strategy not found
+        assert (
+            "strategy" not in output_lower
+            or "not found" not in output_lower
+            or "data" in output_lower
+        )
 
     def test_backtest_strategy_not_found_error(self, temp_dir, monkeypatch):
         """Should show helpful error when strategy not found."""
