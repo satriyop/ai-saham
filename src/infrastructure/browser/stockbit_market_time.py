@@ -319,7 +319,7 @@ def _fetch_and_maybe_cache_live_status() -> MarketStatus | None:
     """Fetch from Stockbit, cache on success, return None if unavailable. Never raises."""
     try:
         from src.infrastructure.browser.stockbit_api_client import create_stockbit_api_client
-        from src.infrastructure.browser.playwright_stockbit_provider import StockbitBrokerProvider
+        from src.infrastructure.browser.stockbit_broker_provider import StockbitBrokerProvider
         from src.infrastructure.config.app_config import APP_CFG
         if not Path(APP_CFG.storage.stockbit_profile_dir).exists():
             return None

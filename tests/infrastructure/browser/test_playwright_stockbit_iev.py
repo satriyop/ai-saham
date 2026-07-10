@@ -1,6 +1,7 @@
 """Tests for Stockbit IEV/IEP mover parsing."""
 
 from src.infrastructure.browser import playwright_stockbit_provider as stockbit
+from src.infrastructure.browser import stockbit_preopen_parsers
 
 
 def _body(ticker: str, iev: int, iep: int | None) -> dict:
@@ -20,7 +21,7 @@ def _body(ticker: str, iev: int, iep: int | None) -> dict:
 
 
 def test_parse_iev_response_captures_iep():
-    movers = stockbit._parse_iev_response(_body("BBCA", 450_000, 5_925), iev_min=1)
+    movers = stockbit_preopen_parsers._parse_iev_response(_body("BBCA", 450_000, 5_925), iev_min=1)
 
     assert len(movers) == 1
     assert movers[0].ticker == "BBCA"

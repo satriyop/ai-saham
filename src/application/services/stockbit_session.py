@@ -34,7 +34,7 @@ def get_stockbit_session() -> StockbitSession | None:
     try:
         from pathlib import Path
 
-        from src.infrastructure.browser.playwright_stockbit_provider import StockbitBrokerProvider
+        from src.infrastructure.browser.stockbit_broker_provider import StockbitBrokerProvider
         from src.infrastructure.browser.stockbit_api_client import create_stockbit_api_client
         from src.infrastructure.config.app_config import APP_CFG
 

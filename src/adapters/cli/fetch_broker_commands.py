@@ -57,7 +57,7 @@ def _create_provider(provider_name: str) -> BrokerDataProvider:
         return IdxBrokerDataProvider()
     elif provider_name == "stockbit":
         from src.application.services.stockbit_session import get_stockbit_session
-        from src.infrastructure.browser.playwright_stockbit_provider import StockbitBrokerProvider
+        from src.infrastructure.browser.stockbit_broker_provider import StockbitBrokerProvider
         session = get_stockbit_session()
         if not session or not session.authenticated:
             raise ValueError("No active Stockbit session. Run `saham fetch stockbit login`.")

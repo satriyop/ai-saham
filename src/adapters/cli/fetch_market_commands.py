@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Optional
 
 if TYPE_CHECKING:
-    from src.infrastructure.browser.playwright_stockbit_provider import StockbitBrokerProvider
+    from src.infrastructure.browser.stockbit_broker_provider import StockbitBrokerProvider
 
 import typer
 
@@ -352,7 +352,7 @@ def _create_broker_provider(name: str | None):
       2. IDX public API — always available fallback
     """
     from src.application.services.stockbit_session import get_stockbit_session
-    from src.infrastructure.browser.playwright_stockbit_provider import StockbitBrokerProvider
+    from src.infrastructure.browser.stockbit_broker_provider import StockbitBrokerProvider
 
     if name == "stockbit":
         session = get_stockbit_session()

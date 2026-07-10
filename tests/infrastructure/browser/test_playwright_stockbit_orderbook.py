@@ -2,7 +2,7 @@
 
 from decimal import Decimal
 
-from src.infrastructure.browser.playwright_stockbit_provider import _parse_top_of_book
+from src.infrastructure.browser.stockbit_preopen_parsers import _parse_top_of_book
 
 
 def _body(bid_price, bid_qty, offer_price, offer_qty):

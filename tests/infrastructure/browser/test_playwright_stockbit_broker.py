@@ -3,9 +3,11 @@
 from datetime import date
 from decimal import Decimal
 
-from src.infrastructure.browser.playwright_stockbit_provider import (
-    _fetch_historical_summary_totals,
+from src.infrastructure.browser.stockbit_broker_parsers import (
     _parse_marketdetectors_response,
+)
+from src.infrastructure.browser.stockbit_broker_provider import (
+    _fetch_historical_summary_totals,
 )
 
 

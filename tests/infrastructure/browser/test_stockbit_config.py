@@ -6,8 +6,10 @@ import yaml
 
 from src.infrastructure.browser.playwright_stockbit_provider import (
     _IEV_MOVER_URL_MAIN,
-    _INSTITUTIONAL_PROXY_CODES,
     _ORDER_BOOK_API,
+)
+from src.infrastructure.browser.stockbit_broker_provider import (
+    _INSTITUTIONAL_PROXY_CODES,
     TRACKED_BROKER_CODES,
 )
 from src.infrastructure.config.stockbit_config import (
