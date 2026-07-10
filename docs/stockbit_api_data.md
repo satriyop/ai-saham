@@ -534,7 +534,6 @@ data.companies[]                          → list of companies:
 ---
 
 ### 21. Corporate Action Calendar (Market-Wide)
-```
 GET /corpaction/dividend
 GET /corpaction/stocksplit
 GET /corpaction/rightissue
@@ -544,8 +543,214 @@ GET /corpaction/tenderoffer
 GET /corpaction/rups
 GET /corpaction/pubex
 GET /corpaction/ipo
+  economic[]    — today's economic calendar items
+  ipo[]         — today's IPO events
+  pubex[]       — today's public expose events
 ```
-**Not yet implemented — JSON shape unknown.** Likely same shape as §4 per-ticker endpoint but without ticker filter.
+
+---
+
+#### `/corpaction/dividend` — ~463 items
+```
+data:
+  today: "2026-07-10"        ← reference date the API uses
+  dividend[]:
+    company_id, company_symbol
+    corp_action_active        → bool
+    dividend_cumdate          → "2026-07-08"  (YYYY-MM-DD)
+    dividend_exdate           → "2026-07-09"
+    dividend_recdate          → "2026-07-10"
+    dividend_paydate          → "2026-07-31"
+    dividend_value            → "25.65" (string, raw value per share)
+    dividend_value_formatted  → "Rp 25.65"
+    lastprice                 → "468" (string, current price)
+    lastprice_formatted       → "468"
+    dividend_currency         → "CURRENCY_IDR"
+    dividend_fiscal_year      → int
+    dividend_value_adjusted   → int
+    dividend_id, dividend_datahash, dividend_lock, dividend_created
+    event_note                → string, optional
+```
+
+---
+
+#### `/corpaction/stocksplit` — ~9 items
+```
+data:
+  stocksplit[]:
+    company_id, company_symbol
+    corp_action_active        → bool
+    stocksplit_cumdate        → "2026-07-28"
+    stocksplit_exdate         → "2026-07-29"
+    stocksplit_recdate        → "2026-07-30"
+    stocksplit_ratio          → "1 : 25" (string: "old : new")
+    stocksplit_factor         → "25" (string)
+    stocksplit_old            → "1"
+    stocksplit_new            → "25"
+    stocksplit_new_price      → int (0 if unknown)
+    stocksplit_new_share      → int
+    stocksplit_id, stocksplit_created, stocksplit_lock, event_note
+```
+
+---
+
+#### `/corpaction/reversesplit` — ~0 items (rare)
+Same field shape as stocksplit with `stock_reverse_*` prefix under `data.stock_reverse[]`.
+
+---
+
+#### `/corpaction/rightissue` — ~23 items
+```
+data:
+  rightissue[]:
+    company_id, company_symbol
+    corp_action_active        → bool
+    rightissue_cumdate        → "2026-08-24"
+    rightissue_exdate         → "2026-08-26"
+    rightissue_recdate        → "2026-08-27"
+    rightissue_subdate        → "" (subscription date)
+    rightissue_trading_start  → "2026-08-31"
+    rightissue_trading_end    → "2026-09-04"
+    rightissue_ratio          → "2 : 1" (string: "old : new")
+    rightissue_factor         → "1.5"
+    rightissue_old            → "2"
+    rightissue_new            → "1"
+    rightissue_price          → 500 (int; formatted string also in rightissue_price_formatted)
+    rightissue_adj_factor     → int
+    rightissue_foreign_percentage → int
+    rightissue_local_percentage   → int
+    rightissue_number_of_securities
+    rightissue_id, rightissue_created, rightissue_lock, event_note
+```
+
+---
+
+#### `/corpaction/warrant` — ~1,315 items (all warrant series across all tickers)
+```
+data:
+  warrant[]:
+    company_id, company_symbol
+    corp_action_active        → bool
+    wrant_serie               → "" (warrant series label, e.g. "Seri I")
+    wrant_trading_from        → "2026-07-14" (trading start)
+    wrant_trading_end         → "2031-07-09" (trading end)
+    wrant_exc_from            → "2027-01-14" (exercise start)
+    wrant_exc_end             → "2031-07-14" (exercise end)
+    wrant_exc_price           → "145" (string, exercise price)
+    wrant_exc_price_formatted
+    wrant_total               → "" (total warrants, string)
+    wrant_foreign_percentage, wrant_local_percentage
+    wrant_number_of_securities
+    wrant_id, wrant_lastupdate, event_note
+```
+**Note:** ~1,315 items is very large (all warrant series). Consider filtering by `?symbol=` or paginating.
+
+---
+
+#### `/corpaction/bonus` — ~10 items
+```
+data:
+  bonus[]:
+    company_id, company_symbol
+    corp_action_active        → bool
+    sahabonus_ratio           → "100 : 30" (string)
+    sahabonus_id, sahabonus_iqp_id
+    sahabonus_new_price, sahabonus_new_share
+    stocksplit_cumdate        → "2026-07-08"  (note: reuses stocksplit field names)
+    stocksplit_exdate         → "2026-07-09"
+    stocksplit_recdate        → "2026-07-10"
+    stocksplit_paymentdate    → "2026-07-30"
+    stocksplit_factor         → "1.3"
+    stocksplit_old, stocksplit_new
+    event_note
+```
+
+---
+
+#### `/corpaction/tenderoffer` — ~42 items
+```
+data:
+  tender[]:
+    company_id, company_name, company_symbol
+    corp_action_active        → bool
+    tender_start              → "2026-07-09" (offer start)
+    tender_end                → "2026-08-07" (offer end)
+    tender_paydate            → "2026-08-14"
+    tender_price              → "523" (string)
+    tender_price_formatted
+    tender_shares             → "994442000" (string, total shares sought)
+    tender_percentage         → "35.00" (string, % of outstanding)
+    tender_created, tender_datahash
+    tender_id, event_note
+```
+
+---
+
+#### `/corpaction/rups` — ~964 items
+```
+data:
+  rups[]:
+    company_id, company_symbol, company_name
+    corp_action_active        → bool
+    rups_date                 → "2026-08-18"
+    rups_time                 → "10:00"
+    rups_venue                → "Kantor Pusat ..." (full address string)
+    rups_eligible_date        → "2026-07-22"
+    rups_iqp_agenda, rups_iqp_type, rups_iqp_result
+    rups_iqp_remark, rups_iqp_rec_dt, rups_iqp_revised_date
+    rups_created, rups_datahash, rups_id
+    company_icon_url
+```
+
+---
+
+#### `/corpaction/pubex` — ~400 items
+```
+data:
+  pubex[]:
+    company_id, company_symbol
+    corp_action_active        → bool
+    puexp_date                → "2026-07-23"
+    puexp_time                → "15:00:00"
+    puexp_venue               → "dilakukan secara online" (string)
+    puexp_id, puexp_lastupdate
+```
+
+---
+
+#### `/corpaction/ipo` — ~15 items
+```
+data:
+  ipo[]:
+    ipo_id, company_id, company_symbol, company_name
+    corp_action_active        → bool
+    ipo_listing_date          → "2026-07-10"
+    ipo_price                 → { minimum: 0, maximum: 0, final: 170 }
+    ipo_data                  → JSON string (raw): {"%":"20.02","Offering Start":"...", ...}
+    ipo_data_detail           → structured object:
+      price, shares, percentage, offering_start, offering_end,
+      allotment_date, refund_date, listing_board, underwriter[], bureau_administration
+    ipo_created, ipo_iqp_id
+```
+
+---
+
+#### `/corpaction/economic` — ~135 items (macroeconomic calendar)
+```
+data:
+  today: "2026-07-10"
+  timezone: int
+  economic[]:
+    econcal_id
+    econcal_date              → "2026-07-10"
+    econcal_time              → "07:00:00"
+    econcal_month             → "JUN"
+    econcal_item              → "Car Sales YoY" (event name)
+    econcal_actual            → "12.0%" (actual value string)
+    econcal_previous          → "14.0%" (previous value string)
+    econcal_forecast          → "" (forecast value string)
+    econcal_lastdate          → "2026-07-10T21:00:06+07:00"
+```
 
 ---
 
@@ -680,5 +885,5 @@ data.broker_activity_transaction.brokers_sell[] → net selling stocks:
 | Intrinsic value estimate | `/valuation/company/{ticker}` | ✗ Not implemented |
 | Market-wide broker ranking | `/order-trade/broker/top` | ✗ Not implemented |
 | Full broker list (codes + names) | `/findata-view/marketdetectors/brokers` | ✗ Not implemented |
-| Dividend / split calendar (market-wide) | `/corpaction/dividend` etc. | ✗ Not implemented |
+| Dividend / split calendar (market-wide) | `/corpaction/dividend` etc. | ✓ Probed (not yet integrated) |
 | Insider buying scan (all tickers) | `/insider/company/majorholder` (no symbols param) | ✗ Not implemented |
