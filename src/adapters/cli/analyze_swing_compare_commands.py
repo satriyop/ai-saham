@@ -37,10 +37,10 @@ from src.application.use_case.swing_backtest_use_case import (
     SwingBacktestResponse,
     SwingBacktestUseCase,
 )
-from src.application.services.config_backed_market_context_provider import (
+from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.config_backed_market_context_provider import (
     ConfigBackedMarketContextProvider,
 )
-from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
@@ -73,7 +73,11 @@ def swing_compare(
     ] = None,
     universe: Annotated[
         Optional[str],
-        typer.Option("--universe", "-u", help="Universe name or 'cached' — see `saham fetch universe list`"),
+        typer.Option(
+            "--universe",
+            "-u",
+            help="Universe name or 'cached' — see `saham fetch universe list`"
+        ),
     ] = None,
     variants: Annotated[
         str,

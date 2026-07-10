@@ -7,9 +7,6 @@ The backtest must be deterministic, offline, and portfolio-aware.
 from datetime import date, timedelta
 from decimal import Decimal
 
-from src.application.services.config_backed_market_context_provider import (
-    ConfigBackedMarketContextProvider,
-)
 from src.application.use_case.assess_risk_use_case import AssessRiskResponse
 from src.application.use_case.swing_backtest_use_case import (
     DEFAULT_SWING_COST_BPS,
@@ -22,6 +19,9 @@ from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 from src.domain.value_objects.risk_assessment import RiskAssessment
+from src.infrastructure.config.config_backed_market_context_provider import (
+    ConfigBackedMarketContextProvider,
+)
 
 
 class MockMarketRepository(MarketDataRepository):

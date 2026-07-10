@@ -1,6 +1,6 @@
 """Infrastructure config-backed market context provider.
 
-Layer: Application Service / Infrastructure Adapter
+Layer: Infrastructure Adapter
 """
 
 from __future__ import annotations

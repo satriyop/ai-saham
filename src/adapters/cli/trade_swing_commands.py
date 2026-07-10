@@ -45,13 +45,13 @@ from src.application.use_case.swing_backtest_use_case import (
     SwingBacktestResponse,
     SwingBacktestUseCase,
 )
-from src.application.services.config_backed_market_context_provider import (
-    ConfigBackedMarketContextProvider,
-)
 from src.infrastructure.config.accumulation_screener_config import (
     load_accumulation_screener_config,
 )
 from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.config_backed_market_context_provider import (
+    ConfigBackedMarketContextProvider,
+)
 from src.infrastructure.config.swing_backtest_config import (
     load_swing_backtest_config as _load_swing_backtest_config,
 )
