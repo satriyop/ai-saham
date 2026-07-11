@@ -204,6 +204,29 @@ If unsure, default to TradingView / TA-Lib behavior.
 
 ---
 
+## 13. Architecture Boundary Enforcement (Executable)
+
+Architecture boundary enforcement is executable, not just documented.
+
+Before finalizing code changes, agents must run:
+
+```
+pytest tests/architecture/test_layer_boundaries.py
+```
+
+Rules:
+
+- Application and domain code must not import infrastructure or adapters.
+- If application needs config values, define application-layer policy/dataclass
+  objects and have infrastructure loaders return those objects.
+- Infrastructure loaders may depend inward on application policy objects;
+  application use cases must not import infrastructure loaders.
+- A narrow, per-import `BASELINE_ALLOWLIST` inside the test file carries
+  pre-existing legacy violations. Do not add new entries to it — new code
+  that imports across a forbidden boundary must be fixed, not allowlisted.
+
+---
+
 ## Reference Architecture Decisions
 
 All work must comply with recorded decisions in `ARCHITECTURE_DECISIONS.md`.

@@ -228,6 +228,14 @@ If any answer is unclear, stop.
 
 ---
 
+## 13. Architecture Boundary Guard
+
+- I ran `pytest tests/architecture/test_layer_boundaries.py`
+- I did not introduce new application/domain imports from infrastructure or adapters
+- If config/policy is needed by application, the consumed policy type lives in application, not infrastructure
+
+---
+
 ## Final Acknowledgement
 
 Before proceeding, the agent must internally acknowledge:
