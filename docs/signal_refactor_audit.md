@@ -1,6 +1,6 @@
 # Signal Refactor Code Alignment Audit
 
-Date: 2026-07-10
+Date: 2026-07-11
 
 Scope: audit current codebase alignment with `docs/signal_refactor.md`, using code as source of truth. This document intentionally does not change implementation behavior.
 
@@ -14,6 +14,7 @@ Layer plan:
 Verification run during audit:
 - `.venv/bin/python -m pytest -q` -> 2954 passed
 - `git diff --check` -> passed
+- Code was trusted over prior audit text for file:line references.
 
 ## Executive Summary
 
@@ -36,7 +37,7 @@ No production-breaking issue was found in the current tested code. The risk is f
 
 Code evidence:
 - `src/application/services/setup_phase_detector.py:679` reads `setup_evidence.rs_vs_ihsg_5d`.
-- `src/application/use_case/accumulation_screen_use_case.py:666-667` persists both `rs_vs_ihsg_20d_at_signal` and `rs_vs_ihsg_5d_at_signal`.
+- `src/application/services/accumulation_candidate_evidence_builder.py:362-363, 378` attaches `rs_vs_ihsg_5d` and `rs_vs_ihsg_20d` to the candidate and passes `rs_vs_ihsg_5d` to `SetupEvidenceBuilder`.
 - `src/application/services/relative_strength_calculator.py:35-36` computes both 5d and 20d values.
 
 Doc evidence:
@@ -79,8 +80,8 @@ Recommendation:
 
 Code evidence:
 - `src/application/services/institutional_accumulation_evidence_builder.py:6-15` says the evidence is DIAGNOSTIC-only and `evidence_status is always DIAGNOSTIC`.
-- `src/application/services/institutional_accumulation_evidence_builder.py:127-129` reads `evidence_status` from YAML.
-- `src/application/services/institutional_accumulation_evidence_builder.py:318`, `403`, `493`, `514`, `862`, `875`, `983`, `997`, and `1009` return `self._config.evidence_status`.
+- `src/application/services/institutional_flow_config.py:63-69` reads `evidence_status` from YAML via `from_mapping()`.
+- `src/application/services/institutional_accumulation_evidence_builder.py:210`, `249`, `258`, `272`, `284` return `self._config.evidence_status` from the in-memory config.
 - `config/institutional_accumulation.yaml:4` currently sets `evidence_status: DIAGNOSTIC`.
 
 Why it matters:
@@ -115,8 +116,8 @@ Recommendation:
 Code evidence:
 - `src/domain/value_objects/decision_constraints.py:17-26` contains `regime_size_multiplier` and `effective_size_multiplier`, but no `volatility_size_multiplier` or `liquidity_size_multiplier`.
 - `src/application/services/volatility_context.py:14-19` computes volatility multiplier separately.
-- `src/application/use_case/swing_analysis_workflow_use_case.py:377-390` emits volatility context, but decision constraints do not consume it.
-- `src/application/use_case/accumulation_screen_use_case.py:573-575` explicitly writes `regime_detection_method_at_signal: None` because `MarketContext` exposes no method field.
+- `src/application/services/swing_analysis_serialization.py:40-53` and `src/application/services/accumulation_observation_fingerprint.py:416-428` emit volatility context, but decision constraints do not consume it.
+- `src/application/services/accumulation_observation_fingerprint.py:129-131` explicitly writes `regime_detection_method_at_signal: None` because `MarketContext` exposes no method field.
 - `src/domain/value_objects/market_context.py:58-71` has regime, confidence, stability, and days-in-regime, but no detection method or last-changed date.
 
 Doc evidence:
@@ -139,7 +140,7 @@ Recommendation:
 ### MEDIUM-4: Signal Refactor Phase Docs Disagree With Tracker And Code
 
 Doc evidence:
-- `docs/signal_refactor_phases.md:90-129` says A1 is partially implemented and A2 is planned.
+- `docs/signal_refactor_phases.md:92, 129` says A1 is partially implemented and A2 is planned.
 - `docs/signal_refactor_tracker.md:71-85` says A1-H are done and I is in progress.
 
 Code evidence:
@@ -168,19 +169,6 @@ Recommendation:
 - Keep behavior for now, but add an explicit warning/rationale to returned assessments when `evaluate()` is used without evidence groups.
 - Consider a later rename to `evaluate_context_only()` or `evaluate_fallback()` after checking call sites.
 - Add tests that `evaluate()` cannot produce high-confidence ENTER without evidence groups.
-
-### LOW-1: Setup Phase Test Fixture Is Now Correct, But This Was A Real Drift Point
-
-Current code:
-- `tests/application/services/test_setup_phase_history.py:215-245` now creates 21 candles matching current dry-up + expansion semantics.
-- Full test run passes.
-
-Why it matters:
-This was previously failing because the fixture described the old expansion-only behavior. It is now fixed, but it is worth recording because it proves the volume-trigger contract changed materially.
-
-Recommendation:
-- No code action now.
-- Keep the 21-session fixture as the canonical example of `dry_up_reference_sessions + 1`.
 
 ### LOW-2: `setup_scoring` Example Still Shows RS As 15% Weight Beside Text Saying It Is Not Merely A Weight
 
@@ -242,4 +230,38 @@ These parts are implemented and broadly aligned with `docs/signal_refactor.md`:
 - Do not tune RS thresholds until the 5d vs 20d contract is settled.
 - Do not tune `regime_conditioning.*`; code and config correctly mark it legacy diagnostic.
 - Do not use historical replay labels as production proof if the fingerprints are incomplete or generated before the current PIT enrichment/fingerprint contract.
+
+## Resolved Since Prior Audit
+
+### LOW-1: Setup Phase Test Fixture Is Now Correct (Was A Real Drift Point)
+
+Current code:
+- `tests/application/services/test_setup_phase_history.py:215-245` now creates 21 candles matching current dry-up + expansion semantics.
+- Full test run passes.
+
+Why it matters:
+This was previously failing because the fixture described the old expansion-only behavior. It is now fixed, but it is worth recording because it proves the volume-trigger contract changed materially.
+
+Recommendation:
+- No code action now.
+- Keep the 21-session fixture as the canonical example of `dry_up_reference_sessions + 1`.
+
+### INFO-1: Corporate Action Calendar Synced But Not Wired To Scoring
+
+New code (commit `d5d805b`, 2026-07-11):
+- `src/domain/value_objects/corporate_action_calendar.py` — `CorporateActionCalendarEvent`, `CorporateActionCalendarDate` value objects.
+- `src/domain/value_objects/corporate_action_event.py` — `CorporateActionEvent` value object.
+- `src/adapters/cli/fetch_calendar_commands.py` — CLI command for sync.
+- SQLite tables: `corp_action_cache`, `corporate_action_calendar_sync`, `corporate_action_event_dates`, `corporate_action_events` — populated with IDX corporate action data.
+
+Current status:
+- Data is populated into SQLite but not consumed by `SignalEngine`, `CompanyQualityContext`, or any scoring provider.
+- No evidence builder or use case reads the calendar tables during signal evaluation.
+
+Why it matters:
+This is a correct first step (data availability before scoring), but future agents should not assume calendar-aware scoring is already live. Calendar events can materially affect outcome labels (e.g., a dividend record date coinciding with a foreign-buy streak).
+
+Recommendation:
+- Add `CorporateActionCalendarEvidence` producer (DIAGNOSTIC) that checks whether forward labels overlap corporate action windows.
+- Add a promotion gate: do not promote calendar evidence until base rate is > 10k observations.
 
