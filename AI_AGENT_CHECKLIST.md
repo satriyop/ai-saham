@@ -109,7 +109,17 @@ If an adapter needs any forbidden logic, create or reuse an application use case
 
 ---
 
-## 8. Risk And Signal Guardrail Discipline
+## 8. Shared Worktree And Git Safety
+
+* I inspected `git status --short` before editing or git operations
+* I know which dirty files are unrelated and will leave them untouched
+* I will stage and commit only files owned by the current task
+* I will not run `git reset`, `git checkout --`, `git restore`, `git clean`, broad stash commands, or equivalent destructive cleanup without explicit user approval and file scope
+* If unrelated changes block the task, I will stop and report the conflict
+
+---
+
+## 9. Risk And Signal Guardrail Discipline
 
 * SignalEngine, RiskEngine, TradeSetup, market context, setup policy, and evidence authority impact is explicit when analysis behavior is touched
 * No silent overrides of risk, signal, setup, tuning, or evidence-promotion settings
@@ -118,7 +128,7 @@ If an adapter needs any forbidden logic, create or reuse an application use case
 
 ---
 
-## 9. Data & Persistence
+## 10. Data & Persistence
 
 * I know what data is read
 * I know what data is written
@@ -128,7 +138,7 @@ If an adapter needs any forbidden logic, create or reuse an application use case
 
 ---
 
-## 10. Testing Readiness
+## 11. Testing Readiness
 
 * Core/application logic is testable outside the CLI
 * Tests do not require network access
@@ -137,7 +147,7 @@ If an adapter needs any forbidden logic, create or reuse an application use case
 
 ---
 
-## 11. Documentation Intent
+## 12. Documentation Intent
 
 * Changes will be explainable to a human
 * Configuration and usage will be documented when user-facing behavior changes
@@ -145,7 +155,7 @@ If an adapter needs any forbidden logic, create or reuse an application use case
 
 ---
 
-## 12. Self-Check Before Proceeding
+## 13. Self-Check Before Proceeding
 
 The agent must be able to answer:
 
@@ -159,7 +169,7 @@ If any answer is unclear, stop.
 
 ---
 
-## 13. Code Convention
+## 14. Code Convention
 
 ### File Size Rules
 
@@ -246,7 +256,7 @@ If any answer is unclear, stop.
 
 ---
 
-## 14. Architecture Boundary Guard
+## 15. Architecture Boundary Guard
 
 - I ran `pytest tests/architecture/test_layer_boundaries.py`
 - I did not introduce new application/domain imports from infrastructure or adapters

@@ -15,6 +15,7 @@ Read this before every task. This is the mandatory entry point for agents. The l
 - Do not promote diagnostic evidence or tune patch-eligible config without out-of-sample proof and validator support.
 - Trust current code during audits. Treat docs as intent, then verify against implementation.
 - Do not revert unrelated user or agent changes.
+- Do not run destructive git cleanup in a shared dirty worktree. `git reset`, `git checkout --`, `git restore`, `git clean`, and broad stash/cleanup commands require explicit user approval and a stated file scope.
 
 ## Before Editing
 
@@ -24,6 +25,7 @@ Read this before every task. This is the mandatory entry point for agents. The l
 4. State risks, ambiguities, and assumptions.
 5. State persistence/config/CLI behavior impact if any.
 6. Pick focused verification before changing files.
+7. Check `git status --short` before edits or git operations, and treat unrelated dirty files as user/other-agent work.
 
 Layer plan format:
 
@@ -36,6 +38,18 @@ Layer plan:
 ```
 
 If a layer is not touched, say `not touched`.
+
+## Shared Worktree Safety
+
+Agents often work in the same local checkout. Protect other work first:
+
+- Before editing, committing, or any git operation, inspect `git status --short`.
+- Never use broad cleanup commands to get a clean tree.
+- Never run `git reset`, `git checkout --`, `git restore`, `git clean`, or equivalent destructive cleanup unless the user explicitly approves the exact operation and file scope.
+- Do not stash the whole worktree when unrelated files are dirty. If stashing is needed, stash only files you own and state the path list first.
+- Stage and commit only files touched for the current task.
+- If your uncommitted work matters, commit it before handing off or before another agent starts risky work.
+- If unrelated changes block the task, stop and report the conflict instead of overwriting them.
 
 ## Required Reading Matrix
 

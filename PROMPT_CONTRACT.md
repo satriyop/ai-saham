@@ -79,12 +79,25 @@ Agents must not:
 * Couple domain logic to UI, CLI, or AI providers
 * Introduce mandatory cloud dependencies
 * Bypass risk, signal, tuning, evidence-promotion, or architecture guardrails silently
+* Destroy or overwrite unrelated worktree changes with broad git cleanup commands
 
 Any such change requires explicit approval.
 
+## 5.1 Shared Worktree And Git Safety
+
+Agents must treat the local checkout as shared state:
+
+* Inspect `git status --short` before editing, committing, or running git operations
+* Stage and commit only files touched for the current task
+* Leave unrelated dirty files untouched
+* Never run `git reset`, `git checkout --`, `git restore`, `git clean`, broad stash commands, or equivalent destructive cleanup without explicit user approval and a stated file scope
+* Stop and report conflicts when unrelated changes block the task
+
+Silent cleanup of another agent's or user's work is a contract violation.
+
 ---
 
-## 5.1 Adapter Thinness Rule
+## 5.2 Adapter Thinness Rule
 
 Adapters may:
 
