@@ -365,9 +365,9 @@ def browse_stockbit_session(
     """
     Open a headed browser with the saved Stockbit session and keep it open.
 
-    If no session exists or the persisted JWT is expired/missing, the login
-    flow (save_stockbit_session) runs first so the user never has to manually
-    re-authenticate before browsing.
+    The persisted browser profile is authoritative for browsing. API-token
+    expiry never blocks opening it: valid browser cookies may still issue a
+    fresh JWT, which this session observes and persists opportunistically.
 
     While open, any newer Exodus Bearer token observed on normal browser
     requests is opportunistically saved (see _persist_newer_token). Page
@@ -377,15 +377,8 @@ def browse_stockbit_session(
         profile_dir: Persistent browser profile directory
         url: Stockbit page to open (default: stream/home)
     """
-    status = get_stockbit_session_status(profile_dir)
-    if not status.profile_exists or status.token_state != "valid":
-        if not status.profile_exists:
-            print("No Stockbit browser profile found.")
-        else:
-            print(f"Stockbit token state: {status.token_state}.")
-        print("Running login flow to renew authentication...\n")
-        save_stockbit_session(profile_dir=profile_dir)
-        print("\nLogin complete. Opening browser...\n")
+    if not (profile_dir.exists() and any(profile_dir.iterdir())):
+        raise RuntimeError("No Stockbit profile found.\nRun: saham fetch stockbit login")
 
     sync_playwright = _require_playwright()
     token_store = StockbitTokenStore(profile_dir / "token.json")

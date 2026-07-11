@@ -67,6 +67,21 @@ def test_get_with_valid_cached_token(tmp_path):
     assert mock_get.call_args[1]["headers"]["Authorization"] == f"Bearer {token}"
 
 
+def test_get_sends_browser_compatible_headers(tmp_path):
+    token = _make_jwt()
+    client = StockbitApiClient(_make_store(tmp_path, token), lambda: None)
+
+    with patch("httpx.get", return_value=_fake_response()) as mock_get:
+        client.get("https://exodus.stockbit.com/test")
+
+    headers = mock_get.call_args.kwargs["headers"]
+    assert headers["user-agent"].startswith("Mozilla/5.0")
+    assert "Chrome/" in headers["user-agent"]
+    assert headers["accept-language"] == "en-US,en;q=0.9,id;q=0.8"
+    assert headers["origin"] == "https://stockbit.com"
+    assert headers["referer"] == "https://stockbit.com/"
+
+
 def test_get_without_cached_token_triggers_refresh(tmp_path):
     store = _make_store(tmp_path, None)  # no stored token
     fresh_token = _make_jwt()

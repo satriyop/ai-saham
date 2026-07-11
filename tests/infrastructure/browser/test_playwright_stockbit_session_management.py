@@ -263,7 +263,7 @@ def test_save_session_login_succeeds_hs256_token_rejected(monkeypatch, tmp_path,
 
 
 def _setup_valid_session(tmp_path) -> str:
-    """Write a valid RS256 token + profile marker so browse skips re-auth."""
+    """Write a valid RS256 token and a non-empty persistent browser profile."""
     token = _make_jwt({"exp": _future_ts(2)}, alg="RS256")
     (tmp_path / ".gitkeep").write_text("x")  # non-empty profile dir
     StockbitTokenStore(tmp_path / "token.json").save(token)
@@ -272,7 +272,7 @@ def _setup_valid_session(tmp_path) -> str:
 
 def test_browse_session_proceeds_with_valid_token_ignores_logged_in_at(monkeypatch, tmp_path):
     _setup_valid_session(tmp_path)
-    # Deliberately no .logged_in_at — proves browse gates on token_state, not marker.
+    # Deliberately no .logged_in_at — browser profile contents are sufficient.
     fake_page = _FakeBrowsePage(max_ticks=1)
     _patch_common(monkeypatch, fake_page)
 
@@ -306,28 +306,16 @@ def test_browse_session_flushes_token_when_first_wait_is_interrupted(monkeypatch
     assert fake_ctx.closed is True
 
 
-def test_browse_session_re_auth_when_no_profile(monkeypatch, tmp_path):
-    """No profile or token → browse calls save_stockbit_session first."""
-    token = _make_jwt({"exp": _future_ts(2)}, alg="RS256")
-
-    def fake_save(profile_dir=None, timeout=300):
-        profile_dir.mkdir(parents=True, exist_ok=True)
-        (profile_dir / ".gitkeep").write_text("x")
-        StockbitTokenStore(profile_dir / "token.json").save(token)
-
-    monkeypatch.setattr(browser_mod, "save_stockbit_session", fake_save)
-    fake_page = _FakeBrowsePage(max_ticks=1)
-    _patch_common(monkeypatch, fake_page)
-
-    browser_mod.browse_stockbit_session(profile_dir=tmp_path)
-
-    assert (tmp_path / "token.json").exists()
-    assert StockbitTokenStore(tmp_path / "token.json").load() == token
-    assert fake_page.goto_calls == ["https://stockbit.com/stream"]
+def test_browse_session_requires_existing_profile(tmp_path):
+    try:
+        browser_mod.browse_stockbit_session(profile_dir=tmp_path)
+        assert False, "expected RuntimeError"
+    except RuntimeError as exc:
+        assert "stockbit login" in str(exc)
 
 
-def test_browse_session_re_auth_when_expired_token(monkeypatch, tmp_path):
-    """Expired token → browse calls save_stockbit_session first."""
+def test_browse_session_expired_token_does_not_force_login(monkeypatch, tmp_path):
+    """Browser cookies may renew an expired API token during normal browsing."""
     expired_token = _make_jwt({"exp": _past_ts(1)}, alg="RS256")
     f = tmp_path / "token.json"
     f.write_text(
@@ -342,13 +330,14 @@ def test_browse_session_re_auth_when_expired_token(monkeypatch, tmp_path):
     (tmp_path / ".gitkeep").write_text("x")
 
     fresh_token = _make_jwt({"exp": _future_ts(2)}, alg="RS256")
-
-    def fake_save(profile_dir=None, timeout=300):
-        StockbitTokenStore(profile_dir / "token.json").save(fresh_token)
-
-    monkeypatch.setattr(browser_mod, "save_stockbit_session", fake_save)
+    monkeypatch.setattr(
+        browser_mod,
+        "save_stockbit_session",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("login must not run")),
+    )
     fake_page = _FakeBrowsePage(max_ticks=1)
     _patch_common(monkeypatch, fake_page)
+    monkeypatch.setattr(browser_mod, "_intercept_token", lambda page: [fresh_token])
 
     browser_mod.browse_stockbit_session(profile_dir=tmp_path)
 
