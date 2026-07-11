@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 from src.application.services.volatility_context import build_volatility_context
 
 if TYPE_CHECKING:
-    from src.application.use_case.assess_signal_use_case import AssessSignalResponse
+    from src.application.dto.assess_signal import AssessSignalResponse
 
 
 def signal_response_to_dict(

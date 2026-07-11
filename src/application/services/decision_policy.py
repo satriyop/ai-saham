@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from src.application.use_case.assess_signal_use_case import DecisionPolicyConfig
+from src.application.services.signal_engine_config import DecisionPolicyConfig
 from src.domain.value_objects.decision_constraints import DecisionConstraints
 from src.domain.value_objects.setup_phase import SetupPhaseState
 from src.domain.value_objects.signal_assessment import EntryQuality

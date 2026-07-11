@@ -11,7 +11,7 @@ from src.domain.value_objects.foreign_flow_evidence import ForeignFlowEvidence
 from src.domain.value_objects.foreign_flow_score_breakdown import ForeignFlowScoreBreakdown
 
 if TYPE_CHECKING:
-    from src.application.use_case.assess_signal_use_case import AssessSignalResponse
+    from src.application.dto.assess_signal import AssessSignalResponse
     from src.domain.value_objects.analyst_consensus import AnalystConsensus
     from src.domain.value_objects.bandar_detector_snapshot import BandarDetectorSnapshot
     from src.domain.value_objects.company_fundamentals import CompanyFundamentals

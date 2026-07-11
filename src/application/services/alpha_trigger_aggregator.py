@@ -17,7 +17,7 @@ from src.domain.value_objects.alpha_trigger_score import (
 )
 
 if TYPE_CHECKING:
-    from src.application.use_case.assess_signal_use_case import AlphaTriggerConfig
+    from src.application.services.signal_engine_config import AlphaTriggerConfig
     from src.domain.value_objects.flow_confirmation_evidence import FlowConfirmationEvidence
     from src.domain.value_objects.setup_phase import SetupPhaseSnapshot
 

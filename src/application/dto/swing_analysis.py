@@ -19,7 +19,7 @@ from src.application.services.swing_analysis_serialization import (
 )
 
 if TYPE_CHECKING:
-    from src.application.use_case.assess_signal_use_case import AssessSignalResponse
+    from src.application.dto.assess_signal import AssessSignalResponse
     from src.domain.value_objects.company_quality_context_evidence import (
         CompanyQualityContextEvidence,
     )

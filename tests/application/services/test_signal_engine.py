@@ -2,8 +2,8 @@ from datetime import date
 
 from src.application.services.signal_engine import SignalEngine
 from src.application.use_case.assess_signal_use_case import (
-    ForeignFlowScoreMappingConfig,
     BandarScoringConfig,
+    ForeignFlowScoreMappingConfig,
     SignalEngineConfig,
     SignalInputMappingConfig,
     SignalScoringConfig,

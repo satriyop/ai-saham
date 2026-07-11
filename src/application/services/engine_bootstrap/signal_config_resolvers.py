@@ -81,7 +81,7 @@ def load_signal_weight_tables():
 
 
 def _resolve_signal_config(cfg: dict):
-    from src.application.use_case.assess_signal_use_case import (
+    from src.application.services.signal_engine_config import (
         AlphaTriggerConfig,
         AnalystBearishFlagConfig,
         AnalystScoringConfig,

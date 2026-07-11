@@ -20,11 +20,9 @@ from dataclasses import dataclass
 
 from src.application.services.signal_evidence_builder import SignalEvidenceBuilder
 from src.application.services.signal_presence import is_signal_factor_present
-from src.application.use_case.assess_signal_use_case import (
-    AssessSignalRequest,
-    AssessSignalUseCase,
-    SignalEngineConfig,
-)
+from src.application.dto.assess_signal import AssessSignalRequest
+from src.application.use_case.assess_signal_use_case import AssessSignalUseCase
+from src.application.services.signal_engine_config import SignalEngineConfig
 from src.domain.value_objects.signal_assessment import SignalContext
 from src.domain.value_objects.signal_audit import SignalAuditEntry, SignalAuditReport
 from src.domain.value_objects.signal_evidence import SignalEvidence

@@ -7,7 +7,6 @@ from src.application.use_case.assess_signal_use_case import DecisionPolicyConfig
 from src.domain.value_objects.market_context import MarketContext, MarketRegime
 from src.domain.value_objects.signal_assessment import EntryQuality
 
-
 SNAP = date(2026, 7, 5)
 
 
@@ -145,5 +144,8 @@ def test_low_regime_confidence_caps_enter_to_watch():
         market_context=mctx,
     )
     assert result.entry_quality == EntryQuality.WATCH
-    assert "Low regime_confidence (0.20 < 0.35) — ENTER capped" in result.constraints.constraint_reasons
+    assert (
+        "Low regime_confidence (0.20 < 0.35) — ENTER capped"
+        in result.constraints.constraint_reasons
+    )
 

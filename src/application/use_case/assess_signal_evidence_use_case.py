@@ -30,10 +30,8 @@ from src.application.services.alpha_trigger_aggregator import (
     AlphaTriggerAggregator,
     AlphaTriggerGroupInput,
 )
-from src.application.use_case.assess_signal_use_case import (
-    AssessSignalResponse,
-    SignalEngineConfig,
-)
+from src.application.dto.assess_signal import AssessSignalResponse
+from src.application.services.signal_engine_config import SignalEngineConfig
 from src.application.services.decision_policy import DecisionPolicyService
 from src.domain.value_objects.signal_assessment import (
     EntryQuality,

@@ -30,11 +30,8 @@ from src.application.use_case.assess_signal_evidence_use_case import (
     AssessSignalEvidenceRequest,
     AssessSignalEvidenceUseCase,
 )
-from src.application.use_case.assess_signal_use_case import (
-    AssessSignalRequest,
-    AssessSignalResponse,
-    SignalEngineConfig,
-)
+from src.application.dto.assess_signal import AssessSignalRequest, AssessSignalResponse
+from src.application.services.signal_engine_config import SignalEngineConfig
 from src.domain.value_objects.signal_assessment import SignalContext
 from src.domain.value_objects.forward_estimates import derive_forward_pe
 

@@ -18,9 +18,7 @@ Covers:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import date
-from types import SimpleNamespace
 
 import pytest
 
@@ -28,7 +26,6 @@ from src.application.use_case.assess_signal_evidence_use_case import (
     AssessSignalEvidenceRequest,
     AssessSignalEvidenceUseCase,
 )
-from src.application.use_case.assess_signal_use_case import SignalEngineConfig
 from src.domain.value_objects.factor_evidence import Direction, Freshness
 from src.domain.value_objects.flow_confirmation_evidence import (
     FlowConfirmationEvidence,
@@ -36,7 +33,7 @@ from src.domain.value_objects.flow_confirmation_evidence import (
 )
 from src.domain.value_objects.market_context import MarketContext, MarketRegime
 from src.domain.value_objects.setup_evidence import SetupEvidence
-from src.domain.value_objects.signal_assessment import EntryQuality, SignalStrength
+from src.domain.value_objects.signal_assessment import EntryQuality
 
 SNAP = date(2026, 7, 3)
 UC = AssessSignalEvidenceUseCase()
@@ -336,7 +333,7 @@ def test_gate_tightening_note_in_rationale():
 # ── conditioning applied exactly once ────────────────────────────────────────
 
 def test_regime_conditioning_applied_exactly_once():
-    """Each execute() call applies conditioning once. Calling twice is idempotent (two separate responses)."""
+    """Each execute() applies conditioning once. Two calls are idempotent (separate responses)."""
     setup = _setup("MATCH")   # score=100 → after VOLATILE: 70
     flow = _flow(0.40)         # score=40 → after VOLATILE: 32
     ctx = _mctx("VOLATILE")

@@ -18,7 +18,7 @@ from src.domain.rules.risk_gate import GateContext, RiskGate
 if TYPE_CHECKING:
     from src.application.services.risk_engine import RiskEngine
     from src.application.services.signal_engine import SignalEngine
-    from src.application.use_case.assess_signal_use_case import AssessSignalResponse
+    from src.application.dto.assess_signal import AssessSignalResponse
     from src.domain.value_objects.market_context import MarketContext
     from src.domain.value_objects.trade_setup import TradeSetup
 

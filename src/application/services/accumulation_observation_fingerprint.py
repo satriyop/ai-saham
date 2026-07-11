@@ -12,7 +12,7 @@ if TYPE_CHECKING:
         PrimarySetupFamilyResult,
     )
     from src.application.services.volatility_context import VolatilityContext
-    from src.application.use_case.assess_signal_use_case import AssessSignalResponse
+    from src.application.dto.assess_signal import AssessSignalResponse
     from src.domain.value_objects.company_quality_context_evidence import (
         CompanyQualityContextEvidence,
     )

@@ -14,10 +14,10 @@ from datetime import date
 import pytest
 
 from src.application.use_case.assess_signal_use_case import (
+    AnalystScoringConfig,
     AssessSignalRequest,
     AssessSignalResponse,
     AssessSignalUseCase,
-    AnalystScoringConfig,
     ForwardPeScoringConfig,
     SeasonalityScoringConfig,
     SignalClassificationConfig,
@@ -379,7 +379,7 @@ class TestAssessSignalUseCaseScoring:
 
     def test_rationale_notes_missing_data(self):
         resp = self._run(_ctx())  # all None
-        missing_lines = [l for l in resp.assessment.rationale if "no data" in l]
+        missing_lines = [line for line in resp.assessment.rationale if "no data" in line]
         assert len(missing_lines) >= 4
 
     # coverage warning
