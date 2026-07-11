@@ -5,15 +5,15 @@ from decimal import Decimal
 import pytest
 
 from src.application.dto.accumulation_screen import AccumulationCandidate
-from src.application.use_case.accumulation_screen_use_case import compute_percent_plan
+from src.application.services.accumulation_trade_plan import compute_percent_plan
 from src.application.use_case.evaluate_swing_setup_use_case import (
     COILED_SPRING_SETUP,
+    FOREIGN_BOUNCE_SETUP,
     PULLBACK_CONTINUATION_SETUP,
     SMART_MONEY_CONFIRMED_SETUP,
     CoiledSpringSetupConfig,
     EvaluateSwingSetupRequest,
     EvaluateSwingSetupUseCase,
-    FOREIGN_BOUNCE_SETUP,
     ForeignBounceSetupConfig,
     PullbackContinuationSetupConfig,
     SmartMoneyConfirmedSetupConfig,
@@ -85,7 +85,13 @@ def test_single_gate_fail_returns_partial():
 
 
 def test_many_gates_fail_returns_no_match():
-    c = _candidate(rsi=75.0, trend="UP", avg_flow_ratio=1.0, vwap_discount_pct=0.5, foreign_flow_score=30.0)
+    c = _candidate(
+        rsi=75.0,
+        trend="UP",
+        avg_flow_ratio=1.0,
+        vwap_discount_pct=0.5,
+        foreign_flow_score=30.0,
+    )
     evaluation = _eval(c)
     assert evaluation.match == SetupMatch.NO_MATCH
     assert len(evaluation.failed_reasons) > 2

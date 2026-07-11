@@ -7,7 +7,7 @@ from src.application.dto.accumulation_screen import (
     TIER1_FOREIGN_BROKERS,
     AccumulationScreenRequest,
 )
-from src.application.use_case.accumulation_screen_use_case import (
+from src.application.services.accumulation_candidate_evaluator import (
     BCI_CLUSTER,
     BCI_RETAIL,
     BCI_STABLE,

@@ -16,24 +16,24 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from src.application.dto.accumulation_screen import AccumulationScreenRequest
-from src.application.use_case.accumulation_screen_use_case import (
+from src.application.services.accumulation_multi_window_pattern import (
     classify_multi_window_pattern,
-    compute_percent_plan,
 )
+from src.application.services.accumulation_trade_plan import compute_percent_plan
 from src.application.use_case.evaluate_swing_setup_use_case import (
+    FOREIGN_BOUNCE_SETUP,
     EvaluateSwingSetupRequest,
     EvaluateSwingSetupUseCase,
-    FOREIGN_BOUNCE_SETUP,
     SwingSetupCatalogConfig,
 )
 
 if TYPE_CHECKING:
-    from src.application.services.accumulation_journal import AccumulationJournalService
     from src.application.dto.accumulation_screen import AccumulationCandidate
+    from src.application.services.accumulation_journal import AccumulationJournalService
+    from src.application.services.market_context_engine import MarketContextEngine
     from src.application.use_case.accumulation_screen_use_case import (
         AccumulationScreenUseCase,
     )
-    from src.application.services.market_context_engine import MarketContextEngine
     from src.domain.ports.market_data_repository import MarketDataRepository
     from src.domain.ports.trade_journal_store import TradeJournalStore
 
@@ -42,11 +42,11 @@ if TYPE_CHECKING:
 class LogSwingCandidateRequest:
     ticker: str
     window_days: int
-    entry_price: Decimal | None         # None = resolve from latest candle
-    from_analysis: bool                 # True: run setup evaluation + trade plan
-    setup: str | None                   # e.g. "foreign-bounce"
+    entry_price: Decimal | None  # None = resolve from latest candle
+    from_analysis: bool  # True: run setup evaluation + trade plan
+    setup: str | None  # e.g. "foreign-bounce"
     with_regime: bool
-    regime_universe: list[str]          # pre-resolved ticker list
+    regime_universe: list[str]  # pre-resolved ticker list
     benchmark_ticker: str
     logged_at: date
     # Screen config (passed from SwingConfig — adapter owns _SC)
@@ -72,15 +72,15 @@ class LogSwingCandidateRequest:
 @dataclass(frozen=True)
 class LogSwingCandidateResponse:
     ticker: str
-    written: bool                       # False if duplicate
-    setup_match: str | None             # MATCH / PARTIAL / NO_MATCH (None when from_analysis=False)
+    written: bool  # False if duplicate
+    setup_match: str | None  # MATCH / PARTIAL / NO_MATCH (None when from_analysis=False)
     pattern: str | None
     regime: str | None
     entry_price: Decimal
     planned_stop: Decimal | None
     planned_target: Decimal | None
     failed_gates: tuple[str, ...]
-    candidate_foreign_flow_score: float | None       # None when ticker had no accumulation data
+    candidate_foreign_flow_score: float | None  # None when ticker had no accumulation data
 
 
 class LogSwingCandidateUseCase:
@@ -127,21 +127,23 @@ class LogSwingCandidateUseCase:
         try:
             windows = list(request.multi_windows)
             multi = {
-                w: self._screen.execute(AccumulationScreenRequest(
-                    tickers=[ticker],
-                    window_days=w,
-                    min_foreign_flow_score=0.0,
-                    min_foreign_flow_score_enabled=True,
-                    min_net_buy_days=0,
-                    tier1_broker_codes=request.tier1_broker_codes,
-                    sector_breadth_enabled=request.sector_breadth_enabled,
-                    sector_breadth_threshold=request.sector_breadth_threshold,
-                    sector_breadth_bonus_pts=request.sector_breadth_bonus_pts,
-                    sector_breadth_min_tickers=request.sector_breadth_min_tickers,
-                    resistance_gate_enabled=request.resistance_gate_enabled,
-                    resistance_headroom_min_pct=request.resistance_headroom_min_pct,
-                    ex_date_warning_days=request.ex_date_warning_days,
-                ))
+                w: self._screen.execute(
+                    AccumulationScreenRequest(
+                        tickers=[ticker],
+                        window_days=w,
+                        min_foreign_flow_score=0.0,
+                        min_foreign_flow_score_enabled=True,
+                        min_net_buy_days=0,
+                        tier1_broker_codes=request.tier1_broker_codes,
+                        sector_breadth_enabled=request.sector_breadth_enabled,
+                        sector_breadth_threshold=request.sector_breadth_threshold,
+                        sector_breadth_bonus_pts=request.sector_breadth_bonus_pts,
+                        sector_breadth_min_tickers=request.sector_breadth_min_tickers,
+                        resistance_gate_enabled=request.resistance_gate_enabled,
+                        resistance_headroom_min_pct=request.resistance_headroom_min_pct,
+                        ex_date_warning_days=request.ex_date_warning_days,
+                    )
+                )
                 for w in windows
             }
             candidates_by_window = {
@@ -149,7 +151,8 @@ class LogSwingCandidateUseCase:
                 for w, resp in multi.items()
             }
             pattern = classify_multi_window_pattern(
-                windows, candidates_by_window,
+                windows,
+                candidates_by_window,
                 request.coiled_spring_min_score,
                 request.coiled_spring_bb_pctile,
             )
@@ -227,22 +230,24 @@ class LogSwingCandidateUseCase:
 
         # 7. JSONL dual-write (only on new rows)
         if written_count > 0 and self._trade_store is not None:
-            self._trade_store.append(self._build_trade_record(
-                ticker=ticker,
-                logged_at=request.logged_at,
-                window_days=request.window_days,
-                entry_price=resolved_entry,
-                candidate=candidate,
-                pattern=pattern,
-                setup=journal_setup,
-                setup_match=setup_match,
-                failed_gates=failed_gates,
-                regime=regime,
-                planned_entry=planned_entry,
-                planned_stop=planned_stop,
-                planned_target=planned_target,
-                max_hold_days=active_max_hold,
-            ))
+            self._trade_store.append(
+                self._build_trade_record(
+                    ticker=ticker,
+                    logged_at=request.logged_at,
+                    window_days=request.window_days,
+                    entry_price=resolved_entry,
+                    candidate=candidate,
+                    pattern=pattern,
+                    setup=journal_setup,
+                    setup_match=setup_match,
+                    failed_gates=failed_gates,
+                    regime=regime,
+                    planned_entry=planned_entry,
+                    planned_stop=planned_stop,
+                    planned_target=planned_target,
+                    max_hold_days=active_max_hold,
+                )
+            )
 
         return LogSwingCandidateResponse(
             ticker=ticker,
@@ -294,9 +299,15 @@ class LogSwingCandidateUseCase:
             "window_days": window_days,
             "foreign_flow_score": candidate.foreign_flow_score if candidate else None,
             "foreign_flow_buy_streak": candidate.consecutive_streak if candidate else None,
-            "flow_pct": float(candidate.avg_flow_ratio) if candidate and candidate.avg_flow_ratio is not None else None,
-            "vwap_disc_pct": float(candidate.vwap_discount_pct) if candidate and candidate.vwap_discount_pct is not None else None,
-            "bb_pctile": float(candidate.bb_width_pctile) if candidate and candidate.bb_width_pctile is not None else None,
+            "flow_pct": float(candidate.avg_flow_ratio)
+            if candidate and candidate.avg_flow_ratio is not None
+            else None,
+            "vwap_disc_pct": float(candidate.vwap_discount_pct)
+            if candidate and candidate.vwap_discount_pct is not None
+            else None,
+            "bb_pctile": float(candidate.bb_width_pctile)
+            if candidate and candidate.bb_width_pctile is not None
+            else None,
             "pattern": pattern,
             "setup": setup,
             "failed_gates": list(failed_gates),

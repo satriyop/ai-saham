@@ -8,9 +8,11 @@ from src.application.dto.accumulation_screen import (
     AccumulationDerivedFeaturePolicy,
     AccumulationScreenRequest,
 )
+from src.application.services.accumulation_multi_window_pattern import (
+    classify_multi_window_pattern,
+)
 from src.application.use_case.accumulation_screen_use_case import (
     AccumulationScreenUseCase,
-    classify_multi_window_pattern,
 )
 from src.domain.entities.broker_flow import BrokerSummary
 from tests.application.use_case.accumulation_screen_fixtures import (

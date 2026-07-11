@@ -1,0 +1,156 @@
+"""
+AccumulationCandidateObservationPersister service.
+
+Orchestrates candidate observation payload construction and persistence.
+
+Layer: Application
+"""
+
+from __future__ import annotations
+
+import logging
+from datetime import date, datetime
+from typing import TYPE_CHECKING
+
+from src.application.services.accumulation_observation_fingerprint import (
+    build_candidate_observation_payload,
+)
+from src.domain.ports.candidate_observations_repository import CandidateObservation
+
+if TYPE_CHECKING:
+    from src.application.dto import accumulation_screen as accumulation_dto
+    from src.application.services.accumulation_candidate_evidence_builder import (
+        AccumulationCandidateEvidenceBuilder,
+    )
+    from src.application.services.primary_setup_family_resolver import (
+        PrimarySetupFamilyResolver,
+    )
+    from src.application.use_case.evaluate_swing_setup_use_case import (
+        SwingSetupCatalogConfig,
+    )
+    from src.domain.ports.candidate_observations_repository import (
+        CandidateObservationsRepository,
+    )
+    from src.domain.value_objects.flow_confirmation_evidence import (
+        FlowConfirmationEvidence,
+    )
+
+logger = logging.getLogger(__name__)
+
+
+class AccumulationCandidateObservationPersister:
+    def __init__(
+        self,
+        candidate_observations_repository: CandidateObservationsRepository | None,
+        candidate_evidence_builder: AccumulationCandidateEvidenceBuilder,
+        setup_family_resolver: PrimarySetupFamilyResolver,
+        swing_setup_catalog: SwingSetupCatalogConfig | None,
+    ) -> None:
+        self._candidate_observations_repo = candidate_observations_repository
+        self._candidate_evidence_builder = candidate_evidence_builder
+        self._setup_family_resolver = setup_family_resolver
+        self._swing_setup_catalog = swing_setup_catalog
+
+    def persist(
+        self,
+        all_results: list[
+            tuple[accumulation_dto.AccumulationCandidate, str, FlowConfirmationEvidence | None]
+        ],
+        snapshot_date: date,
+        request: accumulation_dto.AccumulationScreenRequest,
+    ) -> None:
+        if self._candidate_observations_repo is None or not all_results:
+            return
+        try:
+            captured_at = datetime.now()
+            observations = []
+            for c, screen_result, flow_ev in all_results:
+                # Reuse the phase already detected in execute() — same candidate,
+                # same flow evidence, same snapshot date. Avoids detecting twice.
+                setup_phase = c.setup_phase
+                strategy_evidence = (
+                    self._candidate_evidence_builder.build_candidate_strategy_evidence(
+                        c,
+                        setup_phase,
+                        snapshot_date,
+                        request,
+                    )
+                )
+                builder = self._candidate_evidence_builder
+                ia_evidence = builder.build_candidate_institutional_accumulation_evidence(
+                    c,
+                    snapshot_date,
+                )
+                tp_snapshot = self._candidate_evidence_builder.build_candidate_ticker_profile(
+                    c, snapshot_date
+                )
+                sc_evidence = self._candidate_evidence_builder.build_candidate_sector_context(
+                    c,
+                    snapshot_date,
+                    tp_snapshot,
+                )
+                cq_evidence = (
+                    self._candidate_evidence_builder.build_candidate_company_quality_context(
+                        c,
+                        snapshot_date,
+                    )
+                )
+                volatility_context = (
+                    self._candidate_evidence_builder.build_candidate_volatility_context(
+                        c,
+                        snapshot_date,
+                    )
+                )
+                # Stage 2 resolution: strategy_evidence, setup_phase, and flow
+                # evidence are all available now — final family for this
+                # persisted observation.
+                preliminary_family = (
+                    self._candidate_evidence_builder.resolve_preliminary_setup_family(c)
+                )
+                setup_family_result = self._setup_family_resolver.resolve(
+                    candidate=c,
+                    strategy_evidence=strategy_evidence,
+                    setup_phase=setup_phase,
+                    flow_confirmation_evidence=flow_ev,
+                    swing_setup_catalog=self._swing_setup_catalog,
+                )
+                if setup_family_result.primary_setup_family != preliminary_family:
+                    # A higher-priority source (e.g. strategy_evidence) revised
+                    # the family after phase detection already ran with the
+                    # stage-1 preliminary family. Recompute setup_phase with
+                    # the final family so the persisted setup_phase and
+                    # setup_family always share one contract — attribution
+                    # must be able to trust that phase_sequence_valid was
+                    # evaluated under the same family as primary_setup_family.
+                    setup_phase = self._candidate_evidence_builder.detect_candidate_setup_phase(
+                        c,
+                        flow_ev,
+                        snapshot_date,
+                        setup_family=setup_family_result.primary_setup_family,
+                    )
+                observations.append(
+                    CandidateObservation(
+                        ticker=c.ticker,
+                        snapshot_date=snapshot_date,
+                        captured_at=captured_at,
+                        payload=build_candidate_observation_payload(
+                            c,
+                            screen_result=screen_result,
+                            flow_ev=flow_ev,
+                            setup_phase=setup_phase,
+                            strategy_evidence=strategy_evidence,
+                            ia_evidence=ia_evidence,
+                            tp_snapshot=tp_snapshot,
+                            sc_evidence=sc_evidence,
+                            cq_evidence=cq_evidence,
+                            setup_family_result=setup_family_result,
+                            volatility_context=volatility_context,
+                            snapshot_date=snapshot_date,
+                            captured_at=captured_at,
+                            request=request,
+                        ),
+                    )
+                )
+            self._candidate_observations_repo.save_many(observations)
+        except Exception as exc:
+            logger.warning("Candidate observation persistence unavailable: %s", exc)

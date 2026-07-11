@@ -16,72 +16,19 @@ Depends on: Domain ports only — no infrastructure imports
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime
-from decimal import Decimal, InvalidOperation
+from datetime import date
+from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
 from src.application.dto import accumulation_screen as accumulation_dto
-from src.domain.ports.candidate_observations_repository import CandidateObservation
-
-logger = logging.getLogger(__name__)
-
-if TYPE_CHECKING:
-    from src.application.services.primary_setup_family_resolver import (
-        PrimarySetupFamilyResolver,
-        PrimarySetupFamilyResult,
-    )
-    from src.application.services.relative_strength_calculator import (
-        RelativeStrengthCalculator,
-    )
-    from src.application.services.indicator_registry import IndicatorRegistry
-    from src.application.services.signal_engine import SignalEngine
-    from src.application.use_case.assess_risk_use_case import AssessRiskUseCase
-    from src.application.use_case.assess_signal_use_case import AssessSignalResponse
-    from src.application.use_case.evaluate_swing_setup_use_case import (
-        SwingSetupCatalogConfig,
-    )
-    from src.domain.ports.candidate_observations_repository import (
-        CandidateObservationsRepository,
-    )
-    from src.domain.value_objects.analyst_consensus import AnalystConsensus
-    from src.domain.value_objects.bandar_detector_snapshot import BandarDetectorSnapshot
-    from src.domain.value_objects.company_fundamentals import CompanyFundamentals
-    from src.domain.value_objects.flow_confirmation_evidence import FlowConfirmationEvidence
-    from src.domain.value_objects.forward_estimates import ForwardEstimates
-    from src.domain.value_objects.institutional_accumulation_evidence import InstitutionalAccumulationEvidence
-    from src.domain.value_objects.market_context import MarketContext
-    from src.domain.value_objects.risk_assessment import RiskAssessment
-    from src.domain.value_objects.company_quality_context_evidence import (
-        CompanyQualityContextEvidence,
-    )
-    from src.domain.value_objects.sector_context_evidence import SectorContextEvidence
-    from src.domain.value_objects.ticker_profile_snapshot import TickerProfileSnapshot
-    from src.domain.value_objects.seasonal_edge import SeasonalEdge
-    from src.domain.value_objects.setup_phase import SetupPhaseSnapshot
-    from src.domain.value_objects.strategy_evidence import StrategyEvidence
-    from src.domain.value_objects.shareholding_composition import ShareholdingComposition
-    from src.domain.value_objects.ticker_notation import TickerNotationSnapshot
-    from src.domain.value_objects.trade_setup import TradeSetup
-    from src.application.services.volatility_context import VolatilityContext
-
 from src.application.ports.corporate_action_repository import CorporateActionRepository
 from src.application.services.accumulation_candidate_evidence_builder import (
     AccumulationCandidateEvidenceBuilder,
 )
-from src.application.services.accumulation_observation_fingerprint import (
-    build_candidate_observation_payload,
-)
 from src.application.services.accumulation_risk_funnel import AccumulationRiskFunnel
-from src.application.services.accumulation_technical_features import (
-    compute_accumulation_rsi,
-    compute_accumulation_trend,
-    compute_bb_squeeze,
-    compute_resistance_levels,
-)
 from src.application.services.signal_context_builder import (
     build_signal_context_from_candidate,
 )
-from src.application.services.stats import foreign_vwap_discount_pct
 from src.application.use_case.score_foreign_flow_use_case import (
     ScoreForeignFlowRequest,
     ScoreForeignFlowUseCase,
@@ -97,7 +44,26 @@ from src.domain.ports.seasonality_provider import SeasonalityProvider
 from src.domain.ports.shareholding_provider import ShareholdingProvider
 from src.domain.ports.ticker_notation_provider import TickerNotationProvider
 from src.domain.value_objects.foreign_flow_evidence import ForeignFlowEvidence
-from src.domain.value_objects.idx_market import SHARES_PER_LOT
+
+logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from src.application.services.indicator_registry import IndicatorRegistry
+    from src.application.services.primary_setup_family_resolver import (
+        PrimarySetupFamilyResolver,
+    )
+    from src.application.services.relative_strength_calculator import (
+        RelativeStrengthCalculator,
+    )
+    from src.application.services.signal_engine import SignalEngine
+    from src.application.use_case.assess_risk_use_case import AssessRiskUseCase
+    from src.application.use_case.evaluate_swing_setup_use_case import (
+        SwingSetupCatalogConfig,
+    )
+    from src.domain.ports.candidate_observations_repository import (
+        CandidateObservationsRepository,
+    )
+    from src.domain.value_objects.flow_confirmation_evidence import FlowConfirmationEvidence
 
 # Default setup targets (1:1 R:R, regime-unaware fallback)
 _DEFAULT_TAKE_PROFIT = Decimal("5")
@@ -144,22 +110,6 @@ def resolve_setup_targets(
     return _DEFAULT_TAKE_PROFIT, _DEFAULT_STOP_LOSS
 
 
-def _is_usable_broker_summary(summary) -> bool:
-    """Return True when a broker summary is safe for accumulation metrics."""
-    return (
-        summary.total_value > Decimal("0")
-        and summary.total_lot >= 0
-        and summary.foreign_buy_lot >= 0
-        and summary.foreign_sell_lot >= 0
-    )
-
-
-# Broker Concentration Index (BCI) tiers
-BCI_CLUSTER = "CLUSTER"  # 3+ Tier 1 codes in window top net-buyers → +15 pts
-BCI_STABLE = "STABLE"  # 1–2 Tier 1 codes                         → +5 pts
-BCI_RETAIL = "RETAIL-LED"  # 0 Tier 1 codes                           → +0 pts
-
-
 def _trade_action_rank(candidate: "accumulation_dto.AccumulationCandidate") -> int:
     if candidate.trade_setup is None:
         return 0
@@ -173,7 +123,9 @@ def _trade_action_rank(candidate: "accumulation_dto.AccumulationCandidate") -> i
     }.get(action, 0)
 
 
-def _screen_sort_key(candidate: "accumulation_dto.AccumulationCandidate") -> tuple[float, float, float, float]:
+def _screen_sort_key(
+    candidate: "accumulation_dto.AccumulationCandidate",
+) -> tuple[float, float, float, float]:
     """Default screener ordering: verdict, signal, foreign-flow score, seasonality."""
     return (
         float(_trade_action_rank(candidate)),
@@ -181,7 +133,6 @@ def _screen_sort_key(candidate: "accumulation_dto.AccumulationCandidate") -> tup
         candidate.foreign_flow_score,
         candidate.seasonal_edge.score if candidate.seasonal_edge else 0.0,
     )
-
 
 
 class AccumulationScreenUseCase:
@@ -216,7 +167,7 @@ class AccumulationScreenUseCase:
         relative_strength_calculator: "RelativeStrengthCalculator | None" = None,
         indicator_registry: "IndicatorRegistry | None" = None,
     ) -> None:
-        from src.application.services.signal_engine import SignalEngine as _SignalEngine
+        from src.application.services.bootstrap import create_indicator_registry
         from src.application.services.flow_confirmation_evidence_builder import (
             FlowConfirmationEvidenceBuilder,
         )
@@ -226,7 +177,7 @@ class AccumulationScreenUseCase:
         from src.application.services.relative_strength_calculator import (
             RelativeStrengthCalculator as _RelativeStrengthCalculator,
         )
-        from src.application.services.bootstrap import create_indicator_registry
+        from src.application.services.signal_engine import SignalEngine as _SignalEngine
 
         self._broker_repo = broker_repository
         self._market_repo = market_repository
@@ -243,11 +194,11 @@ class AccumulationScreenUseCase:
         self._signal_engine = signal_engine or _SignalEngine()
         self._candidate_observations_repo = candidate_observations_repository
         self._foreign_flow_score_uc = foreign_flow_score_use_case or ScoreForeignFlowUseCase()
-        self._derived_features = derived_feature_policy or accumulation_dto.AccumulationDerivedFeaturePolicy()
-        self._swing_setup_catalog = swing_setup_catalog
-        self._setup_family_resolver = (
-            primary_setup_family_resolver or _PrimarySetupFamilyResolver()
+        self._derived_features = (
+            derived_feature_policy or accumulation_dto.AccumulationDerivedFeaturePolicy()
         )
+        self._swing_setup_catalog = swing_setup_catalog
+        self._setup_family_resolver = primary_setup_family_resolver or _PrimarySetupFamilyResolver()
         self._relative_strength_calculator = (
             relative_strength_calculator or _RelativeStrengthCalculator()
         )
@@ -268,30 +219,55 @@ class AccumulationScreenUseCase:
             indicator_registry=self._indicator_registry,
         )
         self._risk_funnel = (
-            AccumulationRiskFunnel(self._risk_use_case)
-            if self._risk_use_case is not None
-            else None
+            AccumulationRiskFunnel(self._risk_use_case) if self._risk_use_case is not None else None
         )
-        # idx_groups: {group_name: [ticker, ...]} from config/idx_groups.yaml
-        # Build a reverse map: ticker → group_name for fast lookup
         self._ticker_to_group: dict[str, str] = {}
         if idx_groups:
             for group_name, tickers in idx_groups.items():
                 for t in tickers:
                     self._ticker_to_group[t.upper()] = group_name
 
-    def execute(self, request: accumulation_dto.AccumulationScreenRequest) -> accumulation_dto.AccumulationScreenResponse:
+        from src.application.services.accumulation_candidate_evaluator import (
+            AccumulationCandidateEvaluator,
+        )
+        from src.application.services.accumulation_candidate_observation_persister import (
+            AccumulationCandidateObservationPersister,
+        )
+        from src.application.services.accumulation_sector_breadth import (
+            AccumulationSectorBreadthApplier,
+        )
+
+        self._candidate_evaluator = AccumulationCandidateEvaluator(
+            broker_repository=self._broker_repo,
+            market_repository=self._market_repo,
+            derived_feature_policy=self._derived_features,
+        )
+        self._observation_persister = AccumulationCandidateObservationPersister(
+            candidate_observations_repository=self._candidate_observations_repo,
+            candidate_evidence_builder=self._candidate_evidence_builder,
+            setup_family_resolver=self._setup_family_resolver,
+            swing_setup_catalog=self._swing_setup_catalog,
+        )
+        self._sector_breadth_applier = AccumulationSectorBreadthApplier(
+            ticker_to_group=self._ticker_to_group
+        )
+
+    def execute(
+        self, request: accumulation_dto.AccumulationScreenRequest
+    ) -> accumulation_dto.AccumulationScreenResponse:
         today = request.as_of_date or date.today()
         candidates: list[accumulation_dto.AccumulationCandidate] = []
         # Collects (candidate, screen_result, flow_ev) for ALL evaluated tickers —
         # survivors and filtered-out alike. Rejected records are negative samples
         # for future tuning (Phase 7: "rejected candidates become learnable").
-        all_results: list[tuple[accumulation_dto.AccumulationCandidate, str, FlowConfirmationEvidence | None]] = []
+        all_results: list[
+            tuple[accumulation_dto.AccumulationCandidate, str, FlowConfirmationEvidence | None]
+        ] = []
         skipped = 0
         uses_stockbit = False
 
         for ticker in request.tickers:
-            result = self._evaluate_ticker(
+            result = self._candidate_evaluator.evaluate(
                 ticker=ticker,
                 window_days=request.window_days,
                 today=today,
@@ -532,7 +508,7 @@ class AccumulationScreenUseCase:
 
         # Phase 3.2: sector breadth post-processing pass
         if request.sector_breadth_enabled and self._ticker_to_group:
-            self._apply_sector_breadth(candidates, request)
+            self._sector_breadth_applier.apply(candidates, request)
 
         # Phase E (Rec 14): post-screening risk funnel — runs only on survivors,
         # not on all 800+ tickers. Reuses already-loaded fundamentals + bandar
@@ -541,7 +517,7 @@ class AccumulationScreenUseCase:
             self._risk_funnel.run(candidates, today)
 
         candidates.sort(key=_screen_sort_key, reverse=True)
-        self._persist_candidate_observations(all_results, today, request)
+        self._observation_persister.persist(all_results, today, request)
 
         return accumulation_dto.AccumulationScreenResponse(
             candidates=candidates,
@@ -554,94 +530,13 @@ class AccumulationScreenUseCase:
 
     def _persist_candidate_observations(
         self,
-        all_results: list[tuple[accumulation_dto.AccumulationCandidate, str, FlowConfirmationEvidence | None]],
+        all_results: list[
+            tuple[accumulation_dto.AccumulationCandidate, str, FlowConfirmationEvidence | None]
+        ],
         snapshot_date: date,
         request: accumulation_dto.AccumulationScreenRequest,
     ) -> None:
-        if self._candidate_observations_repo is None or not all_results:
-            return
-        try:
-            captured_at = datetime.now()
-            observations = []
-            for c, screen_result, flow_ev in all_results:
-                # Reuse the phase already detected in execute() — same candidate,
-                # same flow evidence, same snapshot date. Avoids detecting twice.
-                setup_phase = c.setup_phase
-                strategy_evidence = self._candidate_evidence_builder.build_candidate_strategy_evidence(
-                    c,
-                    setup_phase,
-                    snapshot_date,
-                    request,
-                )
-                ia_evidence = self._candidate_evidence_builder.build_candidate_institutional_accumulation_evidence(
-                    c,
-                    snapshot_date,
-                )
-                tp_snapshot = self._candidate_evidence_builder.build_candidate_ticker_profile(c, snapshot_date)
-                sc_evidence = self._candidate_evidence_builder.build_candidate_sector_context(
-                    c,
-                    snapshot_date,
-                    tp_snapshot,
-                )
-                cq_evidence = self._candidate_evidence_builder.build_candidate_company_quality_context(
-                    c,
-                    snapshot_date,
-                )
-                volatility_context = self._candidate_evidence_builder.build_candidate_volatility_context(
-                    c,
-                    snapshot_date,
-                )
-                # Stage 2 resolution: strategy_evidence, setup_phase, and flow
-                # evidence are all available now — final family for this
-                # persisted observation.
-                preliminary_family = self._candidate_evidence_builder.resolve_preliminary_setup_family(c)
-                setup_family_result = self._setup_family_resolver.resolve(
-                    candidate=c,
-                    strategy_evidence=strategy_evidence,
-                    setup_phase=setup_phase,
-                    flow_confirmation_evidence=flow_ev,
-                    swing_setup_catalog=self._swing_setup_catalog,
-                )
-                if setup_family_result.primary_setup_family != preliminary_family:
-                    # A higher-priority source (e.g. strategy_evidence) revised
-                    # the family after phase detection already ran with the
-                    # stage-1 preliminary family. Recompute setup_phase with
-                    # the final family so the persisted setup_phase and
-                    # setup_family always share one contract — attribution
-                    # must be able to trust that phase_sequence_valid was
-                    # evaluated under the same family as primary_setup_family.
-                    setup_phase = self._candidate_evidence_builder.detect_candidate_setup_phase(
-                        c,
-                        flow_ev,
-                        snapshot_date,
-                        setup_family=setup_family_result.primary_setup_family,
-                    )
-                observations.append(
-                    CandidateObservation(
-                        ticker=c.ticker,
-                        snapshot_date=snapshot_date,
-                        captured_at=captured_at,
-                        payload=build_candidate_observation_payload(
-                            c,
-                            screen_result=screen_result,
-                            flow_ev=flow_ev,
-                            setup_phase=setup_phase,
-                            strategy_evidence=strategy_evidence,
-                            ia_evidence=ia_evidence,
-                            tp_snapshot=tp_snapshot,
-                            sc_evidence=sc_evidence,
-                            cq_evidence=cq_evidence,
-                            setup_family_result=setup_family_result,
-                            volatility_context=volatility_context,
-                            snapshot_date=snapshot_date,
-                            captured_at=captured_at,
-                            request=request,
-                        ),
-                    )
-                )
-            self._candidate_observations_repo.save_many(observations)
-        except Exception as exc:
-            logger.warning("Candidate observation persistence unavailable: %s", exc)
+        self._observation_persister.persist(all_results, snapshot_date, request)
 
     def _evaluate_ticker(
         self,
@@ -655,181 +550,16 @@ class AccumulationScreenUseCase:
         bci_cluster_min_count: int = 3,
         bci_stable_min_count: int = 1,
     ) -> accumulation_dto.AccumulationCandidate | None:
-        """Compute accumulation metrics for one ticker."""
-        # Load all broker rows up to as_of_date, then select the latest N
-        # broker sessions. Calendar-day cutoffs distort IDX windows around
-        # weekends, holidays, and data-lag days.
-        summaries = self._broker_repo.get_broker_summaries(
-            ticker=ticker,
-            start_date=None,
-            end_date=today,
-        )
-
-        if not summaries:
-            return None
-
-        summaries = [s for s in summaries if _is_usable_broker_summary(s)]
-        if not summaries:
-            return None
-
-        window_summaries = sorted(summaries, key=lambda s: s.date)[-window_days:]
-
-        if len(window_summaries) < min_net_buy_days:
-            return None
-
-        # Core accumulation metrics
-        net_buy_days = sum(1 for s in window_summaries if s.is_foreign_accumulating)
-        total_days = len(window_summaries)
-        net_buy_ratio = net_buy_days / total_days if total_days > 0 else 0.0
-        total_net_value = sum((s.foreign_net_value for s in window_summaries), Decimal("0"))
-
-        # Consecutive buy streak (counting backwards from most recent)
-        streak = 0
-        for s in sorted(window_summaries, key=lambda x: x.date, reverse=True):
-            if s.is_foreign_accumulating:
-                streak += 1
-            else:
-                break
-
-        # Foreign VWAP
-        total_buy_value = sum((s.foreign_buy_value for s in window_summaries), Decimal("0"))
-        total_buy_lots = sum(s.foreign_buy_lot for s in window_summaries)
-        foreign_vwap: Decimal | None = None
-        if total_buy_lots > 0:
-            try:
-                foreign_vwap = (total_buy_value / (total_buy_lots * SHARES_PER_LOT)).quantize(
-                    Decimal("0.01")
-                )
-            except InvalidOperation:
-                foreign_vwap = None
-
-        # Avg foreign flow ratio (% of total daily turnover, already in BrokerSummary)
-        flow_ratios = [float(s.foreign_flow_ratio) for s in window_summaries if s.total_value > 0]
-        avg_flow_ratio = sum(flow_ratios) / len(flow_ratios) if flow_ratios else None
-
-        latest_broker_date = window_summaries[-1].date if window_summaries else None
-
-        # Load candles for price + RSI + trend + BB squeeze
-        candles = self._market_repo.get_candles(ticker, end_date=today)
-        if not candles:
-            current_price = Decimal("0")
-            rsi = None
-            trend = "SIDE"
-            bb_width = None
-            bb_width_pctile = None
-            latest_candle_date = None
-        else:
-            current_price = candles[-1].close
-            latest_candle_date = candles[-1].date
-            rsi = compute_accumulation_rsi(candles, rsi_period)
-            trend = compute_accumulation_trend(
-                candles,
-                sma_period,
-                trend_threshold_pct=self._derived_features.trend_threshold_pct,
-            )
-            bb_width, bb_width_pctile = compute_bb_squeeze(
-                candles,
-                period=self._derived_features.bb_period,
-                history=self._derived_features.bb_history,
-            )
-
-        # Phase 2.2: Resistance proximity (MA200 and 52-week high)
-        ma200, week52_high, nearest_resistance_pct = compute_resistance_levels(
-            candles,
-            current_price,
-            resistance_ma_period=self._derived_features.resistance_ma_period,
-            resistance_high_period=self._derived_features.resistance_high_period,
-        )
-
-        # Foreign VWAP discount % — how far foreigners' avg buy is above current price
-        vwap_discount_pct = foreign_vwap_discount_pct(foreign_vwap, current_price)
-
-        # Market VWAP % — how far current price is from 20-day all-participant VWAP
-        # Negative = price below VWAP (constructive; entering below market average cost basis)
-        vwap_pct: float | None = None
-        if candles:
-            try:
-                vwap_window = candles[-self._derived_features.market_vwap_period :]
-                total_vol = sum(c.volume for c in vwap_window)
-                if total_vol > 0:
-                    total_tpv = sum(
-                        (c.high + c.low + c.close) / Decimal("3") * c.volume for c in vwap_window
-                    )
-                    market_vwap = total_tpv / total_vol
-                    if market_vwap > 0:
-                        vwap_pct = float((current_price - market_vwap) / market_vwap * 100)
-            except (InvalidOperation, ZeroDivisionError):
-                pass
-
-        # Granular broker info from per-day broker_daily_flow (Stockbit only).
-        # These are real daily rows — never period aggregates.
-        top_brokers: list[str] | None = None
-        institutional_flag = False
-        bci_label: str | None = None
-        bci_tier1_count: int = 0
-
-        daily_flows = self._broker_repo.get_broker_daily_flows(
-            ticker=ticker,
-            end_date=today,
-        )
-        if daily_flows:
-            # Collect the window dates from broker summaries to align the window
-            window_dates = {s.date for s in window_summaries}
-            window_flows = [f for f in daily_flows if f.date in window_dates]
-
-            if window_flows:
-                # Aggregate net_lot per broker across the window
-                from collections import defaultdict
-
-                broker_net: dict[str, int] = defaultdict(int)
-                for f in window_flows:
-                    broker_net[f.broker_code] += f.net_lot
-
-                net_buyers = sorted(
-                    [(code, net) for code, net in broker_net.items() if net > 0],
-                    key=lambda x: x[1],
-                    reverse=True,
-                )
-                if net_buyers:
-                    top_brokers = [code for code, _ in net_buyers[:5]]
-                    # BCI: count all Tier 1 codes among any net-buyers (not just top 5)
-                    all_net_buyer_codes = {code for code, _ in net_buyers}
-                    bci_tier1_count = len(all_net_buyer_codes & tier1_broker_codes)
-                    if bci_tier1_count >= bci_cluster_min_count:
-                        bci_label = BCI_CLUSTER
-                    elif bci_tier1_count >= bci_stable_min_count:
-                        bci_label = BCI_STABLE
-                    else:
-                        bci_label = BCI_RETAIL
-                    institutional_flag = bci_tier1_count > 0
-
-        return accumulation_dto.AccumulationCandidate(
+        return self._candidate_evaluator.evaluate(
             ticker=ticker,
             window_days=window_days,
-            net_buy_days=net_buy_days,
-            total_days=total_days,
-            net_buy_ratio=net_buy_ratio,
-            total_net_value=total_net_value,
-            consecutive_streak=streak,
-            foreign_vwap=foreign_vwap,
-            current_price=current_price,
-            vwap_discount_pct=vwap_discount_pct,
-            rsi=rsi,
-            trend=trend,
-            foreign_flow_score=0.0,  # populated later by ScoreForeignFlowUseCase
-            top_brokers=top_brokers,
-            institutional_flag=institutional_flag,
-            bci_label=bci_label,
-            bci_tier1_count=bci_tier1_count,
-            vwap_pct=vwap_pct,
-            avg_flow_ratio=avg_flow_ratio,
-            bb_width=bb_width,
-            bb_width_pctile=bb_width_pctile,
-            ma200=ma200,
-            week52_high=week52_high,
-            nearest_resistance_pct=nearest_resistance_pct,
-            latest_candle_date=latest_candle_date,
-            latest_broker_date=latest_broker_date,
+            today=today,
+            min_net_buy_days=min_net_buy_days,
+            rsi_period=rsi_period,
+            sma_period=sma_period,
+            tier1_broker_codes=tier1_broker_codes,
+            bci_cluster_min_count=bci_cluster_min_count,
+            bci_stable_min_count=bci_stable_min_count,
         )
 
     def _apply_sector_breadth(
@@ -837,89 +567,4 @@ class AccumulationScreenUseCase:
         candidates: list[accumulation_dto.AccumulationCandidate],
         request: accumulation_dto.AccumulationScreenRequest,
     ) -> None:
-        """Post-processing: compute sector breadth and apply bonus in-place.
-
-        Groups candidates by idx_groups mapping. For groups with enough members
-        (>= min_tickers_for_breadth), computes the fraction with net_buy_ratio > 0.
-        Applies sector_breadth_bonus_pts to ALL members of qualifying groups.
-        """
-        from collections import defaultdict
-
-        # Group candidates by their idx_groups group
-        group_candidates: dict[str, list[accumulation_dto.AccumulationCandidate]] = defaultdict(list)
-        for candidate in candidates:
-            group = self._ticker_to_group.get(candidate.ticker.upper())
-            if group:
-                group_candidates[group].append(candidate)
-
-        # For each group with enough members, compute breadth and apply bonus
-        for group, members in group_candidates.items():
-            if len(members) < request.sector_breadth_min_tickers:
-                # Set breadth_pct but no bonus (insufficient sample)
-                total = len(members)
-                positive = sum(1 for m in members if m.net_buy_ratio > 0)
-                breadth_pct = positive / total if total > 0 else 0.0
-                for m in members:
-                    m.sector_breadth_pct = breadth_pct
-                continue
-
-            positive = sum(1 for m in members if m.net_buy_ratio > 0)
-            breadth_pct = positive / len(members)
-
-            for m in members:
-                m.sector_breadth_pct = breadth_pct
-                if breadth_pct >= request.sector_breadth_threshold:
-                    m.foreign_flow_score += request.sector_breadth_bonus_pts
-                    m.sector_breadth_bonus = request.sector_breadth_bonus_pts
-
-def compute_percent_plan(
-    entry: "Decimal",
-    stop_pct: "Decimal",
-    target_pct: "Decimal",
-) -> "tuple[Decimal, Decimal]":
-    """Compute stop and target prices from a percentage plan."""
-    stop = entry * (Decimal("1") - stop_pct / Decimal("100"))
-    target = entry * (Decimal("1") + target_pct / Decimal("100"))
-    return stop, target
-
-
-def classify_multi_window_pattern(
-    windows: list[int],
-    candidates_by_window: dict[int, "accumulation_dto.AccumulationCandidate | None"],
-    coiled_spring_min_score: float,
-    coiled_spring_bb_pctile: float,
-) -> str:
-    """
-    Label the multi-window accumulation pattern for a single ticker.
-
-    Returns one of: "coiled spring", "sustained", "building",
-    "fresh rotation", "long-term only", "mixed", "weak"
-    """
-    hot = [
-        w
-        for w in windows
-        if candidates_by_window.get(w)
-        and candidates_by_window[w].foreign_flow_score >= coiled_spring_min_score
-    ]
-
-    for w in windows:
-        c = candidates_by_window.get(w)
-        if (
-            c
-            and c.foreign_flow_score >= coiled_spring_min_score
-            and c.bb_width_pctile is not None
-            and c.bb_width_pctile <= coiled_spring_bb_pctile
-        ):
-            return "coiled spring"
-
-    if not hot:
-        return "weak"
-    if set(hot) == set(windows):
-        return "sustained"
-    if min(windows) in hot and max(windows) not in hot:
-        return "fresh rotation"
-    if max(windows) in hot and min(windows) not in hot:
-        return "long-term only"
-    if min(windows) in hot and len(hot) >= 2:
-        return "building"
-    return "mixed"
+        self._sector_breadth_applier.apply(candidates, request)
