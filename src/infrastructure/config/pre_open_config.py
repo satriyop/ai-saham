@@ -12,7 +12,7 @@ from typing import Any
 
 import yaml
 
-from src.application.use_case.pre_open_screen_use_case import PreOpenScreenConfig
+from src.application.services.pre_open_screen_config import PreOpenScreenConfig
 from src.infrastructure.config.app_config import APP_CFG
 
 PRE_OPEN_CONFIG_PATH = Path(APP_CFG.config_paths.pre_open_screener)
