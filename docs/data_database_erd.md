@@ -1,6 +1,6 @@
 # Database ERD — data.db
 
-18 tables total. All `Decimal` values stored as `TEXT` to avoid floating-point precision loss.
+21 tables total. All `Decimal` values stored as `TEXT` to avoid floating-point precision loss.
 OHLCV volumes are stored in raw shares. Broker/foreign flow lots are stored as lots (÷100) in `_lot` columns.
 
 ```mermaid
@@ -225,6 +225,47 @@ erDiagram
         total_buyer INT        "Total buyer brokers"
         total_seller INT       "Total seller brokers"
     }
+
+    corporate_action_events {
+        source TEXT PK           "Always stockbit"
+        event_type TEXT PK       "dividend | stock_split | reverse_split | rights_issue | bonus | tender_offer | rups | pubex | ipo"
+        source_event_id TEXT PK  "Source id, or SHA-256 fallback"
+        ticker TEXT PK           "Stock code"
+        company_id TEXT          "Source company id"
+        company_name TEXT        "Company name (when provided by source)"
+        active INT               "corp_action_active flag"
+        event_note TEXT          "Free-text note, if any"
+        amount_value TEXT        "Dividend per-share value, etc."
+        amount_currency TEXT     "Currency code"
+        ratio_old TEXT           "Split/rights/bonus ratio, old side"
+        ratio_new TEXT           "Split/rights/bonus ratio, new side"
+        price TEXT               "Rights/tender/IPO price"
+        raw_payload_json TEXT    "Full source item, preserved"
+        fetched_at TEXT          "Fetch timestamp"
+        created_at TEXT          "Auto timestamp"
+        updated_at TEXT          "Auto timestamp"
+    }
+
+    corporate_action_event_dates {
+        source TEXT PK           "Always stockbit"
+        event_type TEXT PK       "Matches corporate_action_events"
+        source_event_id TEXT PK  "Matches corporate_action_events"
+        ticker TEXT PK           "Matches corporate_action_events"
+        date_role TEXT PK        "cum_date | ex_date | recording_date | payment_date | rups_date | etc."
+        event_date TEXT          "ISO date"
+        event_time TEXT          "Time, if source provides one"
+        timezone TEXT            "Timezone, if known"
+        fetched_at TEXT          "Fetch timestamp"
+    }
+
+    corporate_action_calendar_sync {
+        source TEXT PK           "Always stockbit"
+        sync_key TEXT PK         "Sorted, comma-joined event types requested"
+        synced_for_date TEXT PK  "Calendar date this sync covers"
+        fetched_at TEXT          "Fetch timestamp"
+        event_types_json TEXT    "Requested event types, JSON array"
+        status TEXT              "success | partial"
+    }
 ```
 
 ## Table Groupings
@@ -294,6 +335,21 @@ SENTIMENT                      STOCKBIT ENRICHMENT (per-ticker)
                               │    bandar_detector            │
                               │   institutional op/dist score │
                               └───────────────────────────────┘
+
+MARKET-WIDE CORPORATE ACTION CALENDAR (distinct from per-ticker corp_action_cache)
+┌───────────────────────────────┐        ┌──────────────────────────────────┐
+│  corporate_action_events       │───────▶│  corporate_action_event_dates    │
+│  one row per source event      │ (src,  │  one row per dated milestone     │
+│  (source,event_type,           │  type, │  adds date_role to the PK        │
+│   source_event_id,ticker)      │  id,   │                                  │
+└───────────────────────────────┘  tkr)  └──────────────────────────────────┘
+
+┌──────────────────────────────────────┐
+│  corporate_action_calendar_sync       │
+│  sync marker — has today's market-    │
+│  wide calendar already been synced    │
+│  for this set of event types?         │
+└──────────────────────────────────────┘
 ```
 
 ## Notes

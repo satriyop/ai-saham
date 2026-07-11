@@ -68,6 +68,16 @@ class StockbitConfig:
         "&period=BROKER_SUMMARY_PERIOD_LATEST"
     )
     corp_action_url: str = "https://exodus.stockbit.com/corpaction/{ticker}?limit=50"
+    # ── Market-wide corporate action calendar endpoints ───────────────────
+    calendar_dividend_url: str = "https://exodus.stockbit.com/corpaction/dividend"
+    calendar_stocksplit_url: str = "https://exodus.stockbit.com/corpaction/stocksplit"
+    calendar_reversesplit_url: str = "https://exodus.stockbit.com/corpaction/reversesplit"
+    calendar_rightissue_url: str = "https://exodus.stockbit.com/corpaction/rightissue"
+    calendar_bonus_url: str = "https://exodus.stockbit.com/corpaction/bonus"
+    calendar_tenderoffer_url: str = "https://exodus.stockbit.com/corpaction/tenderoffer"
+    calendar_rups_url: str = "https://exodus.stockbit.com/corpaction/rups"
+    calendar_pubex_url: str = "https://exodus.stockbit.com/corpaction/pubex"
+    calendar_ipo_url: str = "https://exodus.stockbit.com/corpaction/ipo"
     running_trade_url: str = (
         "https://exodus.stockbit.com/order-trade/running-trade"
         "?symbols[]={ticker}&sort=DESC&limit={limit}&order_by=RUNNING_TRADE_ORDER_BY_TIME"
@@ -170,6 +180,15 @@ def load_stockbit_config(
             historical_summary_url=_url("historical_summary", defaults.historical_summary_url),
             bandar_detector_url=_url("bandar_detector", defaults.bandar_detector_url),
             corp_action_url=_url("corp_action", defaults.corp_action_url),
+            calendar_dividend_url=_url("calendar_dividend", defaults.calendar_dividend_url),
+            calendar_stocksplit_url=_url("calendar_stocksplit", defaults.calendar_stocksplit_url),
+            calendar_reversesplit_url=_url("calendar_reversesplit", defaults.calendar_reversesplit_url),
+            calendar_rightissue_url=_url("calendar_rightissue", defaults.calendar_rightissue_url),
+            calendar_bonus_url=_url("calendar_bonus", defaults.calendar_bonus_url),
+            calendar_tenderoffer_url=_url("calendar_tenderoffer", defaults.calendar_tenderoffer_url),
+            calendar_rups_url=_url("calendar_rups", defaults.calendar_rups_url),
+            calendar_pubex_url=_url("calendar_pubex", defaults.calendar_pubex_url),
+            calendar_ipo_url=_url("calendar_ipo", defaults.calendar_ipo_url),
             running_trade_url=_url("running_trade", defaults.running_trade_url),
             running_trade_chart_url=_url("running_trade_chart", defaults.running_trade_chart_url),
             intraday_broker_chart_url=_url("intraday_broker_chart", defaults.intraday_broker_chart_url),

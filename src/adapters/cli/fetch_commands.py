@@ -13,6 +13,7 @@ from src.adapters.cli.fetch_broker_commands import (
     broker_import,
     broker_top_foreign,
 )
+from src.adapters.cli.fetch_calendar_commands import fetch_calendar
 from src.adapters.cli.fetch_enrichment_history_commands import fetch_enrichment_history
 from src.adapters.cli.fetch_iev_commands import collect_iev
 from src.adapters.cli.fetch_market_commands import fetch_market
@@ -33,6 +34,7 @@ fetch_app.command("broker")(broker_fetch)
 fetch_app.command("broker-import")(broker_import)
 fetch_app.command("broker-history")(broker_history)
 fetch_app.command("broker-top-foreign")(broker_top_foreign)
+fetch_app.command("calendar")(fetch_calendar)
 fetch_app.command("iev")(collect_iev)
 fetch_app.command("status")(status)
 fetch_app.command("audit")(data_quality_audit)

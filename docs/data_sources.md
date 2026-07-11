@@ -592,6 +592,37 @@ When `saham fetch market` runs with a Stockbit provider available, `_fetch_enric
 
 All enrichment tables are **per-ticker** caches. They are fetched during `saham fetch market` enrichment phase and consumed by analysis commands (`saham analyze swing`, `saham screen accum`, etc.) without network calls.
 
+---
+
+## Market-Wide Corporate Action Calendar
+
+Distinct from the per-ticker `corp_action_cache` table above, `saham fetch calendar` (and `saham fetch market`, once per run) syncs Stockbit's **market-wide** corporate action calendar endpoints — one API call per event type covering every listed ticker at once, rather than one call per ticker.
+
+**Supported v1 event types:** `dividend`, `stock_split`, `reverse_split`, `rights_issue`, `bonus`, `tender_offer`, `rups`, `pubex`, `ipo`.
+
+**Explicitly not fetched in v1:** `warrant` (per-ticker warrant series, not a calendar concept) and `economic` (macro calendar, unrelated to corporate actions). Requesting either via `--types` is rejected with a CLI error.
+
+**Tables:**
+
+| Table | Purpose |
+|-------|---------|
+| `corporate_action_events` | One row per source event (dividend, split, rights issue, etc.), keyed by `(source, event_type, source_event_id, ticker)` |
+| `corporate_action_event_dates` | One row per dated milestone of an event (`cum_date`, `ex_date`, `payment_date`, `rups_date`, etc.), keyed by `(source, event_type, source_event_id, ticker, date_role)` — an event may have several date rows |
+| `corporate_action_calendar_sync` | Sync marker recording whether today's market-wide sync already ran for a given set of event types, so re-running `saham fetch market` does not re-hit the network |
+
+**Write path:**
+
+| Command | Trigger | Frequency |
+|---------|---------|-----------|
+| `saham fetch calendar` | Explicit, user-invoked | Once per invocation |
+| `saham fetch market --universe lq45` | Automatic, when `broker_provider_name == stockbit` and neither `--no-enrichment` nor `--no-calendar` is set | Once per invocation (not once per ticker) |
+
+**Freshness:** `saham fetch calendar` / `saham fetch market` skip the remote fetch when today's calendar has already been synced for the requested event types (tracked in `corporate_action_calendar_sync`). Use `--refresh` to force a remote re-fetch; `--refresh` re-fetches and upserts matching events, replacing their date rows, but never truncates the table or touches unrelated historical rows. A sync marked `"partial"` (some event types failed) does not count as synced — the next run automatically retries without needing `--refresh`.
+
+**Read path:** query by ticker, by universe, or by date role via `CorporateActionCalendarRepository.get_events_for_ticker()` / `get_events_for_universe()` / `get_events_by_date_role()`.
+
+**Limitation:** this data is stored as context only. It does not currently alter `SignalEngine`, `RiskEngine`, or any trading/screening decision — that integration is explicitly out of scope for this feature.
+
 ### Analysis Flow
 
 ```

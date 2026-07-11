@@ -210,6 +210,10 @@ def fetch_market(
         bool,
         typer.Option("--no-enrichment", help="Skip Stockbit enrichment fetch (analyst/insider/seasonality/corp)"),
     ] = False,
+    no_calendar: Annotated[
+        bool,
+        typer.Option("--no-calendar", help="Skip market-wide corporate action calendar sync"),
+    ] = False,
     db_path: Annotated[
         Optional[Path],
         typer.Option("--db", help="SQLite database path"),
@@ -303,6 +307,19 @@ def fetch_market(
         not no_enrichment
         and broker_provider_name == "stockbit"
     )
+
+    # Flag-routing for the market-wide calendar sync (pure flag combination — no
+    # fetch/freshness policy here). The actual fetch happens once after the
+    # per-ticker loop; skip statuses are decided by flags alone.
+    calendar_skip_status: str | None
+    if no_calendar:
+        calendar_skip_status = "skip:--no-calendar"
+    elif no_enrichment:
+        calendar_skip_status = "skip:--no-enrichment"
+    elif broker_provider_name != "stockbit":
+        calendar_skip_status = "skip:no-stockbit"
+    else:
+        calendar_skip_status = None
 
     # Header
     from src.infrastructure.browser.stockbit_market_time import (
@@ -428,6 +445,20 @@ def fetch_market(
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1)
 
+    # Market-wide corporate action calendar — synced ONCE per command run,
+    # never per ticker. Skip statuses are pure flag routing decided above;
+    # the actual fetch/freshness policy lives inside the use case.
+    if calendar_skip_status is not None:
+        calendar_status = calendar_skip_status
+    else:
+        from src.adapters.cli.fetch_market_calendar_refresh import refresh_market_calendar
+
+        calendar_status = refresh_market_calendar(
+            db_path=resolved_db,
+            api_client=broker_provider.api_client,
+            refresh=refresh,
+        )
+
     # Summary
     typer.echo("")
     typer.echo("=" * 50)
@@ -482,6 +513,8 @@ def fetch_market(
         enrichment_available=response.enrichment_available,
         market_is_open=_mstatus.is_open if _mstatus else False,
     )
+
+    typer.echo(f"Calendar: {calendar_status}")
 
     if response.pit_coverage:
         render_enrichment_pit_coverage(response.pit_coverage)

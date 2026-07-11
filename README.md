@@ -106,7 +106,7 @@ saham analyze chart price BBRI --sma 20 --ema 50
 | :--- | :--- | :--- |
 | **`saham today`** | Daily briefing | `--universe`, `--top`, `--date` |
 | **`saham version`** | Version info | (no subcommands) |
-| **`saham fetch`** | Data Ingestion | `market`, `broker`, `broker-import`, `broker-history`, `broker-top-foreign`, `iev`, `status`, `audit`, `stockbit login/status/spy/test/browse/fetch-top5`, `universe list/update/inspect/create` |
+| **`saham fetch`** | Data Ingestion | `market`, `broker`, `broker-import`, `broker-history`, `broker-top-foreign`, `iev`, `calendar`, `status`, `audit`, `stockbit login/status/spy/test/browse/fetch-top5`, `universe list/update/inspect/create` |
 | **`saham screen`** | Candidate Discovery | `pre-open`, `accum`, `watchlist`, `compare` |
 | **`saham learn`** | Feedback Loop | `snapshot`, `track`, `grade`, `prompt`, `tune` |
 | **`saham view`** | Read-only Browsing | `broker status/flow/top/history/top-foreign/distribution/mappings`, `market-context`, `ticker TICKER` (or just `BBCA`), `universe` |
@@ -552,6 +552,7 @@ saham fetch market --universe lq45 --refresh    # Force refresh all
 saham fetch market BBCA --broker-provider stockbit --days 30  # Use Stockbit broker provider
 saham fetch market --universe lq45 --no-meta    # Skip metadata fetch
 saham fetch market --universe lq45 --no-enrichment  # Skip enrichment fetch
+saham fetch market --universe lq45 --no-calendar    # Skip market-wide calendar sync
 ```
 
 | Option | Short | Default | Description |
@@ -564,8 +565,38 @@ saham fetch market --universe lq45 --no-enrichment  # Skip enrichment fetch
 | `--broker-provider` | | auto | Broker provider: idx or stockbit (auto-detected) |
 | `--no-meta` | | false | Skip sector/industry metadata fetch |
 | `--no-enrichment` | | false | Skip Stockbit enrichment fetch |
+| `--no-calendar` | | false | Skip market-wide corporate action calendar sync |
 | `--refresh` | `-r` | false | Force refresh even if cached |
 | `--db` | | | SQLite database path |
+
+When a Stockbit session is active and neither `--no-enrichment` nor `--no-calendar` is set, `saham fetch market`
+also syncs the market-wide corporate action calendar **once per run** (not once per ticker) and prints a single
+`Calendar: ...` summary line, e.g. `Calendar: stockbit dividend=463 stock_split=9 rups=964 ...` or `Calendar: cached`
+if already synced today. See `saham fetch calendar` below and `docs/data_sources.md` for details.
+
+---
+
+### `saham fetch calendar` - Market-Wide Corporate Action Calendar
+
+Sync Stockbit's market-wide corporate action calendar (dividend, stock split, reverse split, rights issue,
+bonus, tender offer, RUPS, public expose, IPO — 9 v1 event types) into normalized SQLite tables, queryable by
+ticker, universe, date window, or date role. Requires an active Stockbit session (`saham fetch stockbit login`).
+
+```bash
+saham fetch calendar                              # Sync all 9 supported event types
+saham fetch calendar --types dividend,rups,ipo    # Sync a subset
+saham fetch calendar --refresh                    # Force remote fetch, bypass today's sync marker
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--types` | all 9 supported types | Comma-separated normalized event types |
+| `--refresh` | false | Force remote fetch, bypass sync marker |
+| `--db` | | SQLite database path |
+
+**Not fetched in v1:** `warrant` and `economic` calendars are explicitly out of scope (rejected with a CLI error
+if requested via `--types`). **Limitation:** calendar data is stored as context only — it does not currently
+affect `SignalEngine`, `RiskEngine`, or any trading/screening decision.
 
 ---
 

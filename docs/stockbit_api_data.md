@@ -534,19 +534,32 @@ data.companies[]                          → list of companies:
 ---
 
 ### 21. Corporate Action Calendar (Market-Wide)
+```
 GET /corpaction/dividend
 GET /corpaction/stocksplit
+GET /corpaction/reversesplit
 GET /corpaction/rightissue
-GET /corpaction/warrant
 GET /corpaction/bonus
 GET /corpaction/tenderoffer
 GET /corpaction/rups
 GET /corpaction/pubex
 GET /corpaction/ipo
-  economic[]    — today's economic calendar items
-  ipo[]         — today's IPO events
-  pubex[]       — today's public expose events
 ```
+**v1 supported (implemented 2026-07):** dividend, stocksplit → `stock_split`, reversesplit → `reverse_split`,
+rightissue → `rights_issue`, bonus, tenderoffer → `tender_offer`, rups, pubex, ipo.
+
+**Explicitly NOT fetched in v1:**
+```
+GET /corpaction/warrant   — per-ticker warrant series, not a calendar concept, out of scope
+GET /corpaction/economic  — macroeconomic calendar, unrelated to corporate actions, out of scope
+```
+
+**Implementation:** `src/infrastructure/browser/stockbit_corporate_action_calendar.py`
+(`StockbitCorporateActionCalendarProvider`) + `src/infrastructure/persistence/sqlite_corporate_action_calendar_repository.py`.
+**Storage:** SQLite `corporate_action_events` / `corporate_action_event_dates` / `corporate_action_calendar_sync`
+(market-wide — distinct from the per-ticker `corp_action_cache` table in §4 above).
+**CLI:** `saham fetch calendar`; also synced once per `saham fetch market` run (see `docs/data_sources.md`
+"Market-Wide Corporate Action Calendar" section for the full table/query/freshness reference).
 
 ---
 
@@ -885,5 +898,5 @@ data.broker_activity_transaction.brokers_sell[] → net selling stocks:
 | Intrinsic value estimate | `/valuation/company/{ticker}` | ✗ Not implemented |
 | Market-wide broker ranking | `/order-trade/broker/top` | ✗ Not implemented |
 | Full broker list (codes + names) | `/findata-view/marketdetectors/brokers` | ✗ Not implemented |
-| Dividend / split calendar (market-wide) | `/corpaction/dividend` etc. | ✓ Probed (not yet integrated) |
+| Corporate action calendar (market-wide, 9 v1 types) | `/corpaction/dividend` etc. | ✓ Implemented |
 | Insider buying scan (all tickers) | `/insider/company/majorholder` (no symbols param) | ✗ Not implemented |
