@@ -16,6 +16,9 @@ from src.application.dto import swing_analysis as swing_analysis_dto
 if TYPE_CHECKING:
     from src.application.services.risk_engine import RiskEngine
     from src.application.services.signal_engine import SignalEngine
+    from src.application.use_case.assess_corporate_action_event_risk_use_case import (
+        AssessCorporateActionEventRiskUseCase,
+    )
     from src.application.use_case.assess_signal_use_case import AssessSignalResponse
 
 from src.application.services.flow_confirmation_evidence_builder import (
@@ -84,6 +87,7 @@ class SwingAnalysisWorkflowUseCase:
         risk_engine: "RiskEngine | None" = None,
         candidate_observations_repository: CandidateObservationsRepository | None = None,
         foreign_flow_score_policy: ForeignFlowScorePolicy | None = None,
+        corporate_action_risk_use_case: "AssessCorporateActionEventRiskUseCase | None" = None,
     ) -> None:
         self._market_repo = market_repository
         self._broker_repo = broker_repository
@@ -104,6 +108,7 @@ class SwingAnalysisWorkflowUseCase:
         self._signal_engine = signal_engine
         self._risk_engine = risk_engine
         self._candidate_observations_repo = candidate_observations_repository
+        self._corporate_action_risk_use_case = corporate_action_risk_use_case
         # Derive weights from the same policy ScoreForeignFlowUseCase/screener
         # use, so the two can never drift apart (see ADR-039).
         self._flow_confirmation_builder = FlowConfirmationEvidenceBuilder(
@@ -705,6 +710,25 @@ class SwingAnalysisWorkflowUseCase:
             except Exception as exc:
                 warnings.append(f"Company quality context evidence unavailable: {exc}")
 
+        # Corporate calendar event-risk context — display/diagnostics only. Never
+        # consumed by SignalEngine, RiskEngine, or AssessTradeSetupUseCase; the
+        # verdict chain remains exclusively SignalEngine + RiskEngine -> TradeSetup.
+        corporate_action_risk = None
+        if self._corporate_action_risk_use_case is not None:
+            try:
+                from src.application.use_case.assess_corporate_action_event_risk_use_case import (
+                    AssessCorporateActionEventRiskRequest,
+                )
+
+                corporate_action_risk = self._corporate_action_risk_use_case.execute(
+                    AssessCorporateActionEventRiskRequest(
+                        ticker=request.ticker,
+                        as_of_date=request.today,
+                    )
+                ).assessment
+            except Exception as exc:
+                warnings.append(f"Corporate action event-risk unavailable: {exc}")
+
         evidence = swing_analysis_dto.SwingEvidence(
             accumulation_candidate=accumulation_candidate,
             setup_eval=setup_eval,
@@ -722,6 +746,7 @@ class SwingAnalysisWorkflowUseCase:
             ticker_profile_snapshot=ticker_profile_snapshot,
             sector_context_evidence=sector_context_evidence,
             company_quality_context_evidence=company_quality_context_evidence,
+            corporate_action_risk=corporate_action_risk,
         )
 
         # Re-score with evidence now that both groups are available. Signal was

@@ -595,8 +595,12 @@ saham fetch calendar --refresh                    # Force remote fetch, bypass t
 | `--db` | | SQLite database path |
 
 **Not fetched in v1:** `warrant` and `economic` calendars are explicitly out of scope (rejected with a CLI error
-if requested via `--types`). **Limitation:** calendar data is stored as context only — it does not currently
+if requested via `--types`). **Limitation:** calendar data is stored as context only — it does not
 affect `SignalEngine`, `RiskEngine`, or any trading/screening decision.
+
+`saham analyze swing TICKER` reads this synced calendar data (offline, no network) and displays a
+deterministic **Corporate Calendar** event-risk panel — see below and `docs/data_sources.md` for the
+supported event types, date roles, and config file.
 
 ---
 
@@ -846,6 +850,8 @@ embed real-time institutional absorption ratios from Stockbit (requires login).
 ### `saham analyze swing` - Swing Trade Workflow
 
 Verdict-first swing analysis composing `SignalEngine + RiskEngine` into the final `TradeSetup`. RiskEngine now reports `OPEN` (no gate fired) or `BLOCKED (gate: Name)` instead of legacy risk levels. MarketContextEngine is optional preview/enrichment via `--with-market-context` while engine thresholds are still being tuned. An optional `--with-technical-gate` enables the SMA/EMA/RSI technical execution gate (off by default). Setup gates, strategy backtest, sentiment, market context, and detailed broker attribution are opt-in evidence.
+
+A **Corporate Calendar** panel (no flag required) shows deterministic event-risk context from the locally synced market-wide corporate action calendar — dividends, rights issues, splits, tender offers, RUPS, pubex, IPO listings inside a configurable date window (`config/corporate_action_policy.yaml`). It is display/context only: it never changes `SignalEngine` scores, `RiskEngine` gates, or the final `TradeSetup.action`. See `docs/data_sources.md` for supported event types and example output.
 
 ```bash
 saham analyze swing BBRI

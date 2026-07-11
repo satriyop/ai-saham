@@ -14,6 +14,9 @@ from typing import Any
 from rich.console import Group
 from rich.text import Text
 
+from src.adapters.cli.analyze_swing_corporate_calendar_display import (
+    print_corporate_calendar_panel,
+)
 from src.adapters.cli.analyze_swing_flow_detail_display import print_flow_detail_panel
 from src.adapters.cli.analyze_swing_formatters import fmt_pct
 from src.adapters.cli.analyze_swing_institutional_display import (
@@ -267,4 +270,5 @@ def print_swing_output(ctx: SwingOutputDisplayContext) -> None:
     print_flow_detail_panel(ctx)
     print_strategy_evidence_panel(ctx)
     print_sentiment_evidence_panel(ctx)
+    print_corporate_calendar_panel(ctx)
     console().print("")

@@ -621,7 +621,40 @@ Distinct from the per-ticker `corp_action_cache` table above, `saham fetch calen
 
 **Read path:** query by ticker, by universe, or by date role via `CorporateActionCalendarRepository.get_events_for_ticker()` / `get_events_for_universe()` / `get_events_by_date_role()`.
 
-**Limitation:** this data is stored as context only. It does not currently alter `SignalEngine`, `RiskEngine`, or any trading/screening decision — that integration is explicitly out of scope for this feature.
+**Limitation:** this data is stored as context only. It does not alter `SignalEngine`, `RiskEngine`, or any trading/screening decision.
+
+### Event-Risk Context (`saham analyze swing TICKER`)
+
+`AssessCorporateActionEventRiskUseCase` (`src/application/use_case/assess_corporate_action_event_risk_use_case.py`) turns the raw calendar rows above into a deterministic, config-driven event-risk assessment for a single ticker as of a date. It is read entirely from the local calendar tables — **no network call** — and is surfaced in `saham analyze swing TICKER` as a **Corporate Calendar** panel.
+
+**Context only, not decision authority.** Corporate calendar event risk never changes `SignalEngine` scores, `RiskEngine` gates, or `TradeSetup.action`. The swing verdict chain remains exclusively `SignalEngine + RiskEngine -> TradeSetup` (ADR-026, ADR-032, ADR-033). This assessment is diagnostics/display evidence only, exactly like sentiment or sector context.
+
+**Policy config:** `config/corporate_action_policy.yaml`, loaded by `src/infrastructure/config/corporate_action_policy_config.py`. For each event type, each relevant date role declares a `severity` (`none` / `info` / `warning` / `blocking`), a `lookback_days` / `lookahead_days` inclusion window, and zero or more risk `flags` (`price_distortion`, `volume_distortion`, `liquidity_distortion`, `special_situation`, `governance_context`, `disclosure_context`, `new_listing`). A missing config file falls back to deterministic defaults (identical to the shipped YAML); an existing-but-invalid config (unknown event type/date role/severity/flag, or a negative window) fails loudly at load time rather than silently falling back.
+
+**Supported event types and date roles (defaults):**
+
+| Event type | Date role(s) | Severity | Flags |
+|---|---|---|---|
+| `dividend` | `ex_date` | warning | `price_distortion` |
+| `dividend` | `cum_date` | warning | `liquidity_distortion` |
+| `rights_issue` | `cum_date`, `ex_date`, `trading_start` | warning | `price_distortion`, `liquidity_distortion` |
+| `stock_split` / `reverse_split` / `bonus` | `ex_date` | warning | `price_distortion`, `volume_distortion` |
+| `tender_offer` | `offer_start`, `offer_end` | warning | `special_situation` |
+| `rups` | `rups_date` | info | `governance_context` |
+| `pubex` | `pubex_date` | info | `disclosure_context` |
+| `ipo` | `listing_date` | info | `new_listing` |
+
+A date role not listed for its event type (e.g. dividend `payment_date`) is intentionally not matched — date roles are not interchangeable within an event type.
+
+**Example output:**
+
+```
+Corporate Calendar
+WARNING  dividend ex_date 2026-07-15 (+2d) price_distortion
+INFO     rups rups_date 2026-07-18 (+5d) governance_context
+```
+
+When no configured event risk falls inside the assessment window: `Corporate Calendar: no configured event risk in window`.
 
 ### Analysis Flow
 

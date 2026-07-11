@@ -23,6 +23,9 @@ if TYPE_CHECKING:
     from src.domain.value_objects.company_quality_context_evidence import (
         CompanyQualityContextEvidence,
     )
+    from src.domain.value_objects.corporate_action_event_risk import (
+        CorporateActionRiskAssessment,
+    )
     from src.domain.value_objects.flow_confirmation_evidence import FlowConfirmationEvidence
     from src.domain.value_objects.institutional_accumulation_evidence import (
         InstitutionalAccumulationEvidence,
@@ -119,6 +122,7 @@ class SwingEvidence:
     ticker_profile_snapshot: "TickerProfileSnapshot | None" = None
     sector_context_evidence: "SectorContextEvidence | None" = None
     company_quality_context_evidence: "CompanyQualityContextEvidence | None" = None
+    corporate_action_risk: "CorporateActionRiskAssessment | None" = None
 
     def to_dict(self, *, strategy_name: str | None = None, max_hold_days: int | None = None) -> dict[str, Any]:
         candidate = self.accumulation_candidate
@@ -201,6 +205,10 @@ class SwingEvidence:
             "company_quality_context_evidence": (
                 self.company_quality_context_evidence.to_dict()
                 if self.company_quality_context_evidence else None
+            ),
+            "corporate_action_risk": (
+                self.corporate_action_risk.to_dict()
+                if self.corporate_action_risk else None
             ),
         }
 

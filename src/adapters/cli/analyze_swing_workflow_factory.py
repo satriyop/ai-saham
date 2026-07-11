@@ -39,6 +39,9 @@ from src.application.dto.accumulation_screen import (
     AccumulationScreenRequest,
 )
 from src.application.use_case.accumulation_screen_use_case import resolve_setup_targets
+from src.application.use_case.assess_corporate_action_event_risk_use_case import (
+    AssessCorporateActionEventRiskUseCase,
+)
 from src.application.use_case.evaluate_swing_setup_use_case import (
     EvaluateSwingSetupRequest,
     EvaluateSwingSetupUseCase,
@@ -61,11 +64,17 @@ from src.infrastructure.config.analyze_swing_config import AnalyzeSwingConfig
 from src.infrastructure.config.accumulation_screener_config import (
     load_accumulation_screener_config,
 )
+from src.infrastructure.config.corporate_action_policy_config import (
+    load_corporate_action_policy_config,
+)
 from src.infrastructure.config.market_context_factory import evaluate_market_context
 from src.infrastructure.config.swing_config import SwingConfig
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_candidate_observations_repository import (
     SQLiteCandidateObservationsRepository,
+)
+from src.infrastructure.persistence.sqlite_corporate_action_calendar_repository import (
+    SQLiteCorporateActionCalendarRepository,
 )
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 from src.infrastructure.sentiment import SentimentFactory
@@ -85,6 +94,10 @@ def create_swing_analysis_workflow(
     market_repo = SQLiteMarketRepository(db_path=db_path)
     broker_repo = SQLiteBrokerRepository(db_path)
     candidate_observations_repo = SQLiteCandidateObservationsRepository(db_path)
+    corporate_action_risk_use_case = AssessCorporateActionEventRiskUseCase(
+        repository=SQLiteCorporateActionCalendarRepository(db_path),
+        policy=load_corporate_action_policy_config(),
+    )
     registry = create_indicator_registry(
         broker_repository=broker_repo,
         market_repository=market_repo,
@@ -165,6 +178,7 @@ def create_swing_analysis_workflow(
         risk_engine=create_risk_engine(db_path=db_path, with_enrichment=True),
         candidate_observations_repository=candidate_observations_repo,
         foreign_flow_score_policy=accumulation_config.foreign_flow_score_policy,
+        corporate_action_risk_use_case=corporate_action_risk_use_case,
     )
 
 

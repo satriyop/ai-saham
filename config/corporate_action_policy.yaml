@@ -1,0 +1,105 @@
+corporate_action_policy:
+  default_lookback_days: 5
+  default_lookahead_days: 30
+
+  event_types:
+    dividend:
+      enabled: true
+      date_roles:
+        ex_date:
+          severity: warning
+          lookback_days: 2
+          lookahead_days: 5
+          flags: [price_distortion]
+        cum_date:
+          severity: warning
+          lookback_days: 0
+          lookahead_days: 3
+          flags: [liquidity_distortion]
+
+    rights_issue:
+      enabled: true
+      date_roles:
+        cum_date:
+          severity: warning
+          lookback_days: 0
+          lookahead_days: 10
+          flags: [liquidity_distortion]
+        ex_date:
+          severity: warning
+          lookback_days: 5
+          lookahead_days: 10
+          flags: [price_distortion, liquidity_distortion]
+        trading_start:
+          severity: warning
+          lookback_days: 10
+          lookahead_days: 10
+          flags: [liquidity_distortion]
+
+    stock_split:
+      enabled: true
+      date_roles:
+        ex_date:
+          severity: warning
+          lookback_days: 5
+          lookahead_days: 10
+          flags: [price_distortion, volume_distortion]
+
+    reverse_split:
+      enabled: true
+      date_roles:
+        ex_date:
+          severity: warning
+          lookback_days: 5
+          lookahead_days: 10
+          flags: [price_distortion, volume_distortion]
+
+    bonus:
+      enabled: true
+      date_roles:
+        ex_date:
+          severity: warning
+          lookback_days: 5
+          lookahead_days: 10
+          flags: [price_distortion, volume_distortion]
+
+    tender_offer:
+      enabled: true
+      date_roles:
+        offer_start:
+          severity: warning
+          lookback_days: 0
+          lookahead_days: 10
+          flags: [special_situation]
+        offer_end:
+          severity: warning
+          lookback_days: 3
+          lookahead_days: 10
+          flags: [special_situation]
+
+    rups:
+      enabled: true
+      date_roles:
+        rups_date:
+          severity: info
+          lookback_days: 1
+          lookahead_days: 7
+          flags: [governance_context]
+
+    pubex:
+      enabled: true
+      date_roles:
+        pubex_date:
+          severity: info
+          lookback_days: 1
+          lookahead_days: 7
+          flags: [disclosure_context]
+
+    ipo:
+      enabled: true
+      date_roles:
+        listing_date:
+          severity: info
+          lookback_days: 30
+          lookahead_days: 30
+          flags: [new_listing]

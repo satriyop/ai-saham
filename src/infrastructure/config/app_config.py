@@ -62,6 +62,7 @@ class ConfigPathsConfig:
     signal_engine: str = "config/signal_engine.yaml"
     market_context_engine: str = "config/market_context_engine.yaml"
     stockbit: str = "config/stockbit.yaml"
+    corporate_action_policy: str = "config/corporate_action_policy.yaml"
 
 
 @dataclass(frozen=True)
