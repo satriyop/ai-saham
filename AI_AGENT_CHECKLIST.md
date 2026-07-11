@@ -173,6 +173,7 @@ If any answer is unclear, stop.
 - Extract by stable responsibility, not by private helper grouping.
 - Preserve public request/response contracts during extraction.
 - Keep compatibility imports temporarily when renaming widely imported modules.
+- When a file is split, the old file may remain only as a compatibility facade; it must not keep implementation logic.
 - First extraction target in a large use case should be DTOs and serialization, because they reduce scan burden without altering behavior.
 - Second extraction target should be pure calculators/parsers, because they are easiest to characterize with tests.
 - Do not extract a new abstraction unless the filename and public API make the next change easier to locate.
@@ -223,6 +224,7 @@ If any answer is unclear, stop.
 - Test file name must map to the production responsibility being protected.
 - Prefer focused fixtures over one global mega-fixture.
 - Characterization tests are required before extracting files above 1000 LOC.
+- Placeholder tests are not allowed; every collected test must assert real behavior or contract.
 
 ---
 

@@ -1,8 +1,9 @@
 # Code Convention Audit: File Size, Naming Context, and AI-Agent Readability
 
 Date: 2026-07-10
+Last status update: 2026-07-11
 
-Scope: source, tests, config, docs, scripts, plugins, and strategies. This is an audit report only. No production code was changed.
+Scope: source, tests, config, docs, scripts, plugins, and strategies. This document started as an audit report and is now also the tracking record for extraction status.
 
 ## Audit Standard
 
@@ -18,24 +19,40 @@ This repository already commits to deterministic-first, hexagonal architecture, 
 
 ## Executive Findings
 
-The codebase has good high-level architecture documents, but several implementation files are now too large for efficient AI-agent review. The biggest problems are not merely LOC. They are mixed responsibility modules where the filename hides multiple workflows, serialization contracts, display policy, and persistence/audit mechanics.
+The codebase has good high-level architecture documents, but several implementation files became too large for efficient AI-agent review. The biggest problems were not merely LOC. They were mixed responsibility modules where the filename hid multiple workflows, serialization contracts, display policy, and persistence/audit mechanics.
 
-Highest-risk extraction targets:
+Most high-risk extraction targets have now been addressed. Remaining risk is concentrated in partially extracted use cases and follow-up parser/test refinements.
 
-1. `src/application/use_case/accumulation_screen_use_case.py` - 2210 LOC.
-2. `src/adapters/cli/analyze_swing_display.py` - 1911 LOC.
-3. `src/infrastructure/browser/playwright_stockbit_provider.py` - 1520 LOC.
-4. `src/application/use_case/swing_analysis_workflow_use_case.py` - 1342 LOC.
-5. `src/adapters/cli/fetch_market_commands.py` - 1168 LOC.
-6. `src/application/services/swing_tuning_patch_validator.py` - 1093 LOC.
-7. `src/adapters/cli/screen_accum_display.py` - 1083 LOC.
-8. `src/application/services/institutional_accumulation_evidence_builder.py` - 1017 LOC.
-9. `src/application/use_case/swing_backtest_use_case.py` - 1010 LOC.
-10. `src/application/services/bootstrap.py` - 1010 LOC.
+Status legend:
+- Done: recommendation implemented and current file shape is acceptable.
+- Partial: major recommendation implemented, but a follow-up remains useful.
+- Retired: audit item removed manually because it is no longer needed.
+
+| # | Finding | Status | Current note |
+|---|---|---|---|
+| 1 | `accumulation_screen_use_case.py` workflow warehouse | Partial | DTOs/fingerprints/evidence/risk/technical services extracted; use case still ~925 LOC and should not absorb new behavior. |
+| 2 | `analyze_swing_display.py` too large | Done | Facade reduced to ~86 LOC; display responsibilities split. |
+| 3 | `playwright_stockbit_provider.py` misleading | Done | Browser/provider/parser responsibilities split; compatibility facade remains ~270 LOC. |
+| 4 | `swing_analysis_workflow_use_case.py` mixed DTOs/helpers | Partial | DTO/serialization/helpers extracted; use case still ~879 LOC and should be reduced further only with focused characterization. |
+| 5 | `fetch_market_commands.py` not thin enough | Done | Command file reduced below adapter threshold at ~526 LOC. |
+| 6 | `swing_tuning_patch_validator.py` misleading | Done | Validator facade reduced to ~46 LOC; validate/dry-run/apply/verify/report helpers split. |
+| 7 | `screen_accum_display.py` display cluster | Done | Facade reduced to ~29 LOC; display split by mode/panel. |
+| 8 | `institutional_accumulation_evidence_builder.py` dense metric engine | Done | Orchestrator reduced to ~298 LOC; metric tracks/config/counterparty math split. |
+| 9 | `swing_backtest_use_case.py` mixed backtest engine | Done | Use case reduced to ~322 LOC; DTO/simulator/observation/position helpers split. |
+| 10 | `bootstrap.py` engine factory cluster | Done | Compatibility facade reduced to ~59 LOC; `engine_bootstrap/` package owns factories/resolvers. |
+| 11 | `intraday_backtest_use_case.py` too broad | Done | Use case reduced to ~120 LOC; simulator/report/execution/candidate services split. |
+| 12 | CLI command modules exceed readability limits | Done | Large command groups split by command family. |
+| 13 | `yaml_loader.py` name too generic | Partial | Generic file is now a compatibility facade; `rules_yaml_loader.py` owns parser. Parser internals are still broad and can be split later. |
+| 14 | `strategy_translator.py` mixes providers/templates | Done | Facade reduced to ~201 LOC; provider clients, mock templates, output canonicalization split. |
+| 15 | Documentation naming inconsistency | Retired | Removed manually; no longer tracked in this audit. |
+| 17 | Oversized test files | Done | Target tests split by behavior; focused split suite has 211 tests. |
+| 18 | Generated/local-state scan noise | Retired | Removed manually; no longer tracked in this audit. |
 
 ## Findings
 
 ### 1. Critical: `src/application/use_case/accumulation_screen_use_case.py` is a workflow warehouse
+
+Status: Partial. Major extractions have been completed into DTO, fingerprint, evidence, technical feature, and risk funnel modules. The use case is much smaller but remains above the preferred threshold, so future changes should not add new responsibilities here.
 
 Pointer: `src/application/use_case/accumulation_screen_use_case.py`, 2210 LOC. Mixed sections include request/response DTOs, candidate object, sorting, observation payloads, fingerprint serializers, evidence builders, risk funnel, ticker evaluation, indicator calculations, resistance calculation, percent plan, and multi-window classification.
 
@@ -62,6 +79,8 @@ Edge cases to watch:
 
 ### 2. Critical: `src/adapters/cli/analyze_swing_display.py` is too large and partly policy-shaped
 
+Status: Done. The file is now a small display facade and responsibility-specific display modules own overview, evidence, institutional, compare, and style concerns.
+
 Pointer: `src/adapters/cli/analyze_swing_display.py`, 1911 LOC. It contains style helpers, labels, plan text, top findings, setup gate summaries, signal/risk/market/data panels, institutional accumulation panels, full text output, and swing-compare display.
 
 Rationale: Display files can be large, but this one hides many independent rendering surfaces and label decisions. It is difficult for AI agents to update one panel without accidentally changing verdict wording elsewhere.
@@ -87,6 +106,8 @@ Edge cases to watch:
 
 ### 3. Critical: `src/infrastructure/browser/playwright_stockbit_provider.py` filename is misleading
 
+Status: Done. Stockbit browser/provider/parser responsibilities have been split and the old file is now a small compatibility surface.
+
 Pointer: `src/infrastructure/browser/playwright_stockbit_provider.py`, 1520 LOC. It contains `PlaywrightStockbitProvider`, `StockbitBrokerProvider`, broker summary fetch, foreign top stocks, daily flow fetch, IEV parsing, order book parsing, market detector parsing, and many raw JSON extraction helpers.
 
 Rationale: The filename says Playwright provider, but much of the file is authenticated Stockbit HTTP provider/parsing logic. This violates filename/context clarity and makes infrastructure changes risky.
@@ -111,6 +132,8 @@ Edge cases to watch:
 
 ### 4. Critical: `src/application/use_case/swing_analysis_workflow_use_case.py` mixes DTOs, serialization, helpers, and orchestration
 
+Status: Partial. DTOs and serialization were extracted, and workflow helpers were reduced. The use case remains above the preferred threshold and should be kept orchestration-only.
+
 Pointer: `src/application/use_case/swing_analysis_workflow_use_case.py`, 1342 LOC. It defines request/response DTOs, nested verdict/evidence/diagnostic DTOs, `to_dict()` serialization, return helpers, risk preview mapping, candidate mapping, orchestration, and ATR calculation.
 
 Rationale: A workflow use case should be readable as a workflow. Current file forces agents to parse serialization and helper details before they can reason about the canonical swing decision path.
@@ -133,6 +156,8 @@ Edge cases to watch:
 
 ### 5. Critical: `src/adapters/cli/fetch_market_commands.py` is not thin enough
 
+Status: Done. Fetch command behavior was split into focused adapter/application-support modules and the command file is below the readability threshold.
+
 Pointer: `src/adapters/cli/fetch_market_commands.py`, 1168 LOC. It includes status formatting, cache status calculation, broker provider construction, candle fetch, broker fetch, summary rendering, enrichment fetch, metadata fetch, global context ticker fetch, Typer command handling, callback progress, and enrichment PIT coverage rendering.
 
 Rationale: This adapter contains workflow and fetch policy that should be application-owned. It is hard for agents to distinguish CLI formatting from business decisions around cache/fetch/no-new-data statuses.
@@ -154,6 +179,8 @@ Edge cases to watch:
 - Enrichment PIT history and coverage labels.
 
 ### 6. Critical: `src/application/services/swing_tuning_patch_validator.py` has a misleading name
+
+Status: Done. Validation, dry-run, apply, verify, reports, path handling, and readiness behavior have been split; the original validator file is now a compatibility facade.
 
 Pointer: `src/application/services/swing_tuning_patch_validator.py`, 1093 LOC. It contains patch validation, dry-run planning, apply logic, verify logic, report DTOs, YAML mutation helpers, attribution readiness validation, and document path setters.
 
@@ -180,6 +207,8 @@ Edge cases to watch:
 
 ### 7. Critical: `src/adapters/cli/screen_accum_display.py` should be split by table/panel responsibility
 
+Status: Done. Screen accumulation display was split by single result, multi-window, guide, enrichment, and facade responsibilities.
+
 Pointer: `src/adapters/cli/screen_accum_display.py`, 1083 LOC. It contains score formatting, pattern classification, notation rendering, risk detail lines, data freshness display, scoring definition panel, evidence rows, primary results, multi-window table, and column guide.
 
 Rationale: It is a display module, but it mixes multiple display modes and includes `classify_pattern`, which looks like business classification from the filename alone.
@@ -203,6 +232,8 @@ Edge cases to watch:
 - Data freshness labels.
 
 ### 8. Critical: `src/application/services/institutional_accumulation_evidence_builder.py` is a dense metric engine
+
+Status: Done. Institutional flow config, foreign/domestic tracks, counterparty/broker metrics, and math helpers have been extracted; the builder is now an orchestrator.
 
 Pointer: `src/application/services/institutional_accumulation_evidence_builder.py`, 1017 LOC. It handles config, validation, foreign track scoring, domestic track scoring, counterparty metrics, VWAP distance, HHI, CNFB divergence, broker filtering, and unavailable evidence handling.
 
@@ -229,6 +260,8 @@ Edge cases to watch:
 
 ### 9. Critical: `src/application/use_case/swing_backtest_use_case.py` mixes simulation engine, DTOs, stats, and candidate observation building
 
+Status: Done. DTOs, simulator, exit/position handling, observation building, and trade setup attribution have been extracted.
+
 Pointer: `src/application/use_case/swing_backtest_use_case.py`, 1010 LOC.
 
 Rationale: Backtest behavior is high-risk because small changes can alter historical results. The current file mixes request/response DTOs, open position state, signal generation, setup evaluation, risk composition, exit simulation, equity curve, regime stats, and utility math.
@@ -250,6 +283,8 @@ Edge cases to watch:
 - Position concurrency and mark-to-market.
 
 ### 10. Critical: `src/application/services/bootstrap.py` is an engine factory cluster
+
+Status: Done. `bootstrap.py` is now a compatibility facade; `src/application/services/engine_bootstrap/` owns factories, config resolvers, and evidence authority validation.
 
 Pointer: `src/application/services/bootstrap.py`, 1010 LOC. It loads engine config, resolves signal weights/config, validates evidence authority promotion, resolves decision policy, risk gates, indicators, technical gate config, indicator registry, risk engine, signal engine, and formula loading.
 
@@ -276,6 +311,8 @@ Edge cases to watch:
 
 ### 11. High: `src/application/use_case/intraday_backtest_use_case.py` is too broad
 
+Status: Done. Intraday DTOs, candidate building, simulation, execution, and report construction have been extracted; the use case is now an orchestration entry point.
+
 Pointer: `src/application/use_case/intraday_backtest_use_case.py`, 952 LOC.
 
 Rationale: It mixes candidate construction, broker assessment, entry range computation, sizing, PnL, drawdown, bucket breakdowns, replay dates, and response construction.
@@ -294,6 +331,8 @@ Edge cases to watch:
 - Include-wait behavior.
 
 ### 12. High: CLI command modules exceed adapter readability limits
+
+Status: Done. Command modules were split by sub-command family while preserving router registration and command compatibility.
 
 Pointers:
 - `src/adapters/cli/trade_swing_commands.py`, 917 LOC.
@@ -327,6 +366,8 @@ Edge cases to watch:
 
 ### 13. High: `src/infrastructure/config/yaml_loader.py` name is too generic
 
+Status: Partial. `yaml_loader.py` is now a compatibility facade and `rules_yaml_loader.py` is the contextual implementation. Condition/indicator parser internals remain a possible future split.
+
 Pointer: `src/infrastructure/config/yaml_loader.py`, 761 LOC. It parses the custom rules DSL, indicators, signal mappings, conditions, compound conditions, and rule objects.
 
 Rationale: The filename suggests a generic YAML loader, but the file owns rules DSL parsing. This confuses agents looking for general YAML config loading and creates a naming collision with other config loaders.
@@ -347,6 +388,8 @@ Edge cases to watch:
 
 ### 14. High: `src/infrastructure/ai/strategy_translator.py` mixes provider clients and mock templates
 
+Status: Done. `StrategyTranslatorAdapter` remains the facade; provider clients, mock templates, and YAML canonicalization were extracted.
+
 Pointer: `src/infrastructure/ai/strategy_translator.py`, 746 LOC.
 
 Rationale: It contains provider-specific LLM calls for Claude/OpenAI/Gemini/Ollama/mock plus canonicalization and large mock YAML templates. Filename is contextual but responsibility is too broad.
@@ -365,31 +408,9 @@ Edge cases to watch:
 - Provider auth error messages.
 - Mock tests expecting exact YAML.
 
-### 15. Medium: Documentation naming is inconsistent and not responsibility-first
-
-Pointers:
-- `docs/codex_recomendation_190626.md` has a typo: `recomendation`.
-- Agent/vendor-prefixed files such as `docs/claude_rearchitecture_recommendation_240626.md`, `docs/deepseek_preopen_recommendation_170626.md`, `docs/gemini_preopen_recommendation170626.md`, and `docs/agy_*` are source-oriented, not topic/responsibility-oriented.
-- `docs/signal_refactor.md` is 2826 LOC and `docs/signal_refactor_tracker.md` is 915 LOC.
-
-Rationale: AI agents search by feature/responsibility. Vendor/date names hide the domain topic and bury current guidance among historical recommendations.
-
-Recommendation:
-- Move historical agent recommendation documents under `docs/archive/<agent>/<yyyy-mm-dd>-<topic>.md`.
-- Keep active docs responsibility-first: `signal-engine-refactor.md`, `pre-open-tuning.md`, `stockbit-data-quality.md`.
-- Split long active docs into index + phase/topic files.
-
-Guardrails:
-- Do not rewrite historical content casually.
-- Add redirect/index links if docs are referenced from README or ADRs.
-
-Edge cases to watch:
-- Links from ADRs and trackers.
-- Existing task references to old filenames.
-
-
-
 ### 17. Medium: Test files are too large for targeted review
+
+Status: Done. The target tests were split by behavior, with contextual helper modules and no placeholder tests.
 
 Pointers:
 - `tests/application/use_case/test_accumulation_screen.py`, 2395 LOC.
@@ -417,121 +438,29 @@ Edge cases to watch:
 - Test order dependencies.
 - Monkeypatch paths after module splits.
 
-### 18. Medium: Generated/local-state files pollute scan results
-
-Pointers:
-- `.DS_Store` appears in multiple directories.
-- `__pycache__` files are present under `src/` and `tests/`.
-- Root/local data files include `saham.db`, `stockbit_session.json`, `.market_status.json`, and database files under `data/`.
-
-Rationale: AI agents use file search heavily. Generated and local-state files create noise and can mislead audits or code search.
-
-Recommendation:
-- Ensure generated artifacts are ignored and cleaned from tracked files if tracked.
-- Keep persistent local app state under ADR-023 paths: `data/db/`, `data/session/`, `data/debug/`.
-
-Guardrails:
-- Do not delete user data without explicit approval.
-- Audit git tracking before cleanup.
-
-Edge cases to watch:
-- Existing scripts expecting root-level database/session paths.
-
 ## Future Code Convention for AI-Agent Optimization
 
-Add the following to `AI_AGENT_CHECKLIST.md` or a dedicated ADR/code convention document.
+Status: Moved to `AI_AGENT_CHECKLIST.md`.
 
-### File Size Rules
-
-- Python files <= 400 LOC are preferred.
-- 401-700 LOC requires a clear single responsibility.
-- > 700 LOC requires an extraction plan before adding more behavior.
-- > 1000 LOC is a merge blocker unless the task is explicitly a temporary characterization/test fixture file.
-- Tests follow the same thresholds; split by behavior, not by arbitrary line count.
-
-### Filename Responsibility Rules
-
-- File name must answer: "What responsibility lives here?"
-- Use suffixes consistently:
-  - `_use_case.py` for application use-case entry points.
-  - `_engine.py` for first-class reusable decision engines.
-  - `_builder.py` for assembling immutable evidence/DTOs from inputs.
-  - `_calculator.py` or `_metrics.py` for pure computations.
-  - `_parser.py` for external payload/string parsing.
-  - `_repository.py` for persistence implementations.
-  - `_provider.py` for external/live/cached data provider implementations.
-  - `_display.py` for CLI rendering only.
-  - `_commands.py` for CLI command registration only.
-  - `_factory.py` for dependency construction/wiring.
-  - `_validator.py`, `_applier.py`, `_verifier.py` only when the file does exactly that role.
-- Avoid generic names such as `bootstrap.py`, `utils.py`, `helpers.py`, `workflow.py`, `loader.py`, or `commands.py` when the module has a more specific responsibility.
-- Historical docs should be topic-first, not agent/vendor-first.
-
-### Extraction Rules
-
-- Extract by stable responsibility, not by private helper grouping.
-- Preserve public request/response contracts during extraction.
-- Keep compatibility imports temporarily when renaming widely imported modules.
-- First extraction target in a large use case should be DTOs and serialization, because they reduce scan burden without altering behavior.
-- Second extraction target should be pure calculators/parsers, because they are easiest to characterize with tests.
-- Do not extract a new abstraction unless the filename and public API make the next change easier to locate.
-
-### Adapter Rules
-
-- Adapter files must not own:
-  - cache freshness policy
-  - fetch/backfill/refresh/retry decisions
-  - persistence orchestration beyond dependency wiring
-  - scoring thresholds
-  - business status calculation
-  - provider-specific behavior beyond choosing the adapter/provider
-- Adapter files may own:
-  - Typer command definitions
-  - option parsing
-  - request DTO construction
-  - dependency wiring
-  - use-case invocation
-  - output rendering
-  - exception-to-user-message mapping
-
-### Display Rules
-
-- Display modules render facts; they do not decide facts.
-- Any label derived from thresholds must either:
-  - consume a label already computed by application/domain, or
-  - clearly be named as presentation-only and backed by config/response metadata.
-- Display defaults must not drift from engine/use-case config.
-
-### DTO and Serialization Rules
-
-- DTOs used by multiple functions/classes in a large workflow belong in `src/application/dto/`.
-- `to_dict()` schema methods should live near DTO definitions unless they are adapter-specific.
-- Persisted JSON/CSV/schema fields require compatibility notes before rename.
-- New machine-facing outputs must include explicit names; avoid generic `score`, `status`, or `verdict` unless the artifact contract defines them.
-
-### Infrastructure Provider Rules
-
-- Provider files split by external capability, not by vendor alone once they exceed 700 LOC.
-- Raw payload parsers should be separate from network/browser clients.
-- Browser lifecycle must not share a file with HTTP payload parsers unless the file is small and strictly cohesive.
-- Provider class names and filenames must match the dominant mechanism: `playwright_*` for browser, `stockbit_api_*` or `stockbit_http_*` for HTTP/token API.
-
-### Test Organization Rules
-
-- Split tests by behavior contract.
-- Test file name must map to the production responsibility being protected.
-- Prefer focused fixtures over one global mega-fixture.
-- Characterization tests are required before extracting files above 1000 LOC.
+The authoritative convention now lives under `AI_AGENT_CHECKLIST.md` section
+`12. Code Convention`. Keep this audit focused on findings and extraction
+status; update the checklist when changing future-agent rules.
 
 ## Recommended Refactor Order
 
-1. Extract DTOs/serialization from `accumulation_screen_use_case.py` and `swing_analysis_workflow_use_case.py`.
-2. Split pure parser/provider responsibilities from `playwright_stockbit_provider.py`.
-3. Split display modules: `analyze_swing_display.py` and `screen_accum_display.py`.
-4. Split `swing_tuning_patch_validator.py` by validate/dry-run/apply/verify.
-5. Thin `fetch_market_commands.py` by moving workflow/fetch policy into application services.
-6. Split `bootstrap.py` into explicit factory/config modules.
-7. Split oversized backtest use cases and tests after characterization coverage is in place.
+1. Done: Extract DTOs/serialization from `accumulation_screen_use_case.py` and `swing_analysis_workflow_use_case.py`.
+2. Done: Split pure parser/provider responsibilities from `playwright_stockbit_provider.py`.
+3. Done: Split display modules: `analyze_swing_display.py` and `screen_accum_display.py`.
+4. Done: Split `swing_tuning_patch_validator.py` by validate/dry-run/apply/verify.
+5. Done: Thin `fetch_market_commands.py` by moving workflow/fetch policy into application services.
+6. Done: Split `bootstrap.py` into explicit factory/config modules.
+7. Done: Split oversized backtest use cases and target oversized tests.
+
+Remaining cleanup candidates:
+- Keep reducing `accumulation_screen_use_case.py` only when a concrete behavior change needs it; do not perform broad opportunistic churn.
+- Keep reducing `swing_analysis_workflow_use_case.py` only around a focused workflow/helper boundary.
+- Split `rules_yaml_loader.py` parser internals later if rules DSL work resumes.
+- Split `test_swing_commands_tuning.py` if it grows beyond the current near-limit size.
 
 ## Definition of Done for Future Extraction PRs
 
