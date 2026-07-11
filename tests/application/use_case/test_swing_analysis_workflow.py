@@ -7,16 +7,16 @@ from types import SimpleNamespace
 
 import pytest
 
+from src.application.dto.swing_analysis import (
+    SwingAnalysisWorkflowRequest,
+    SwingEvidence,
+)
 from src.application.services.flow_confirmation_evidence_builder import (
     FlowConfirmationEvidenceBuilder,
 )
 from src.application.services.swing_analysis_market_helpers import simple_return
 from src.application.services.swing_analysis_serialization import signal_response_to_dict
 from src.application.services.volatility_context import build_volatility_context
-from src.application.dto.swing_analysis import (
-    SwingAnalysisWorkflowRequest,
-    SwingEvidence,
-)
 from src.application.use_case.swing_analysis_workflow_use_case import (
     SwingAnalysisDataUnavailable,
     SwingAnalysisWorkflowUseCase,
@@ -281,7 +281,11 @@ def test_swing_workflow_diagnostics_volatility_context_matches_shared_helper():
     }
     assert volatility_context["atr_20"] == expected_vc.atr_at_signal == 25.0
     assert volatility_context["atr_pct"] == expected_vc.atr_pct_at_signal == 2.4752
-    assert volatility_context["volatility_bucket"] == expected_vc.volatility_bucket_at_signal == "NORMAL"
+    assert (
+        volatility_context["volatility_bucket"]
+        == expected_vc.volatility_bucket_at_signal
+        == "NORMAL"
+    )
     assert volatility_context["stop_model_hint"] == "ATR_MULTIPLE"
     assert volatility_context["suggested_stop_atr"] == 2.0
     assert volatility_context["suggested_target_atr"] == 3.0
@@ -481,9 +485,13 @@ def test_swing_workflow_mce_regime_forwarded_to_signal_engine():
     The FakeSignalEngine records calls to verify forwarding. TradeSetup action
     IS allowed to differ with vs without MCE (ADR-037 supersedes ADR-032).
     """
-    from src.domain.value_objects.market_context import MarketContext, MarketRegime
-    from src.domain.value_objects.signal_assessment import SignalAssessment, SignalStrength, EntryQuality
     from src.application.use_case.assess_signal_use_case import AssessSignalResponse
+    from src.domain.value_objects.market_context import MarketContext, MarketRegime
+    from src.domain.value_objects.signal_assessment import (
+        EntryQuality,
+        SignalAssessment,
+        SignalStrength,
+    )
 
     _RISK_OFF_CONTEXT = MarketContext(
         regime=MarketRegime.RISK_OFF,
@@ -529,8 +537,8 @@ def test_swing_workflow_mce_regime_forwarded_to_signal_engine():
     class FakeRiskEngine:
         def _make_response(self):
             from src.application.use_case.assess_risk_use_case import AssessRiskResponse
-            from src.domain.value_objects.risk_assessment import RiskAssessment
             from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
+            from src.domain.value_objects.risk_assessment import RiskAssessment
             assessment = RiskAssessment(
                 gate_triggered=None,
                 gate_is_structural=None,
@@ -702,6 +710,7 @@ def test_swing_evidence_to_dict_includes_setup_phase():
 def test_signal_response_to_dict_emits_coverage_fields():
     """signal_response_to_dict must include canonical coverage_score and legacy aliases."""
     from datetime import date as _date
+
     from src.application.use_case.assess_signal_use_case import AssessSignalResponse
     from src.domain.value_objects.signal_assessment import (
         EntryQuality,
