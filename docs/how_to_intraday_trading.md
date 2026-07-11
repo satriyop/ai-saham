@@ -999,7 +999,10 @@ Adapter Stockbit menggunakan Playwright untuk mengakses Exodus API (API internal
 saham fetch stockbit login
 ```
 
-Ini membuka browser Chrome. Login manual seperti biasa (termasuk 2FA kalau ada). Setelah berhasil, sesi tersimpan di `.stockbit_profile/` dan **tidak perlu login ulang** selama sesi masih valid.
+Ini membuka browser Chrome. Login manual seperti biasa (termasuk 2FA kalau ada).
+Setelah berhasil, profil browser tersimpan di `.stockbit_profile/` dan tool akan
+mencoba menangkap JWT Exodus. Jika JWT belum tertangkap, profil tetap tersimpan
+dan API client akan mencoba mengambilnya satu kali pada request berikutnya.
 
 ```bash
 saham fetch stockbit status    # Cek apakah sesi masih valid
@@ -1007,12 +1010,16 @@ saham fetch stockbit status    # Cek apakah sesi masih valid
 
 Output contoh:
 ```
-  Type   : persistent browser profile (recommended)
-  Saved  : 2.5h ago
-  Status : likely valid
+  Browser login   : 20.5h ago (informational only)
+  Token state     : valid
+  Token expires   : 2026-07-11T09:26:39+00:00  (source: jwt_exp)
 ```
 
-Sesi expired otomatis dalam 8–12 jam. `pre-open` akan cepat-fail tanpa membuka browser kalau sesi expired (> 8 jam).
+Umur login browser tidak menentukan kedaluwarsa API. JWT memakai claim `exp`;
+TTL delapan jam hanya fallback jika JWT valid tidak memiliki `exp`. Request yang
+ditolak dengan HTTP 401 akan mencoba satu refresh lewat profil browser. Login
+manual baru diperlukan jika profil tersebut tidak dapat menghasilkan JWT RS256
+yang dapat dipakai.
 
 ---
 
@@ -1025,7 +1032,7 @@ Sesi expired otomatis dalam 8–12 jam. `pre-open` akan cepat-fail tanpa membuka
 | `saham fetch stockbit fetch-top5` | Ambil top-N IEV + orderbook dalam satu sesi browser (sekarang termasuk offer side) |
 | `saham fetch stockbit test` | Smoke test: verifikasi movers + orderbook bekerja |
 | `saham fetch stockbit spy` | Capture semua API traffic (debugging endpoint, bukan prasyarat harian) |
-| `saham fetch stockbit browse` | Buka browser dengan sesi tersimpan (tidak auto-close) |
+| `saham fetch stockbit browse` | Buka profil browser; simpan JWT RS256 lebih baru jika terlihat pada request normal |
 
 ### Perintah Intraday Lengkap
 

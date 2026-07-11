@@ -128,23 +128,23 @@ saham fetch market BUMI BREN GOTO --days 365
 saham fetch stockbit status
 ```
 
-Output yang diharapkan (sesi masih fresh):
+Output yang diharapkan (token masih valid secara lokal):
 ```
-  Type   : persistent browser profile (recommended)
-  Profile: .stockbit_profile
-  Saved  : 2.1h ago
-  Status : likely valid
+  Browser login   : 20.1h ago (informational only)
+  Token state     : valid
+  Token expires   : 2026-07-11T09:26:39+00:00  (source: jwt_exp)
 ```
 
-Output kalau sesi sudah expired (> 8 jam):
+Output kalau token lokal sudah kedaluwarsa:
 ```
-  Type   : persistent browser profile (recommended)
-  Profile: .stockbit_profile
-  Saved  : 13.4h ago
-  Status : possibly expired — re-run login
+  Browser login   : 42.4h ago (informational only)
+  Token state     : expired
+  Token expires   : 2026-07-10T09:26:39+00:00  (source: jwt_exp)
+```
 
-Run: saham fetch stockbit login
-```
+Umur profil browser tidak memblokir request. Pada request API berikutnya, tool
+akan mencoba satu kali mengambil JWT RS256 baru dari profil tersebut. Jalankan
+login manual hanya jika refresh itu gagal atau server tetap menjawab HTTP 401.
 
 Untuk inspeksi manual sesi (browser interaktif):
 ```bash
@@ -153,7 +153,9 @@ saham fetch stockbit browse
 Membuka browser headed dengan sesi yang sudah login — berguna untuk debugging
 endpoint atau melihat data mentah langsung di Stockbit.
 
-**Kalau status `possibly expired`:** jalankan `saham fetch stockbit login` sekarang. Tool akan otomatis warm-up token setelah login — tidak perlu langkah ekstra.
+`browse` dapat menyimpan JWT RS256 yang lebih baru jika token tersebut terlihat
+pada request Exodus normal. Berhasil membuka halaman saja bukan bukti bahwa API
+sudah menerima autentikasi.
 
 ---
 

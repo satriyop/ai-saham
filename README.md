@@ -1166,7 +1166,7 @@ Manage the Stockbit JWT token and browser session. Browser is used only for
 `login`, `spy`, and `browse` — all data commands use the persisted token via httpx.
 
 ```bash
-saham fetch stockbit login                    # Open browser for manual login (saves JWT)
+saham fetch stockbit login                    # Save browser profile; attempt JWT capture
 saham fetch stockbit login --timeout 180      # Longer timeout for 2FA
 saham fetch stockbit status                   # Check session health
 saham fetch stockbit spy                      # Capture API traffic
@@ -1179,12 +1179,20 @@ saham fetch stockbit browse                   # Interactive browser session
 
 | Command | Purpose |
 |---------|---------|
-| `saham fetch stockbit login` | Open browser once to save JWT to `.stockbit_profile/token.json` |
-| `saham fetch stockbit status` | Check token age and session health |
+| `saham fetch stockbit login` | Save the browser profile and attempt to capture an Exodus JWT; login still succeeds if capture must wait for the next API call |
+| `saham fetch stockbit status` | Read-only local view of browser-profile age and API-token validity; does not prove server acceptance |
 | `saham fetch stockbit spy` | Capture API traffic to identify endpoints |
 | `saham fetch stockbit test` | Smoke-test movers + orderbook via persisted JWT (no browser) |
 | `saham fetch stockbit fetch-top5` | Top IEV movers + live orderbook snapshots |
-| `saham fetch stockbit browse` | Open headed browser with saved session |
+| `saham fetch stockbit browse` | Open the saved browser profile and opportunistically persist a newer observed RS256 Exodus JWT |
+
+JWT validity normally follows the issuer-provided `exp` claim. The eight-hour
+TTL is used only when a structurally valid JWT has no `exp`. Browser-profile age
+is informational and never blocks an API request. When a token is missing,
+locally expired, or rejected with HTTP 401, the API client makes one bounded
+attempt to capture a fresh RS256 token from the saved browser profile. Manual
+login is required only when that profile can no longer issue a usable token.
+Opening a page successfully is not, by itself, proof of API authentication.
 
 ---
 
