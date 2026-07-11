@@ -7,7 +7,6 @@ the schema types used by the rule interpreter.
 Layer: Infrastructure
 """
 
-from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -19,21 +18,14 @@ from src.application.rules.exceptions import (
     RulesSchemaError,
     RulesValidationError,
 )
-from src.application.rules.schema import (
-    BUILTIN_INDICATORS,
-    CompoundCondition,
-    ConditionIndicatorVsIndicator,
-    ConditionIndicatorVsValue,
-    IndicatorDefinition,
-    IndicatorRef,
-    IndicatorType,
-    Operator,
-    Outcome,
-    Rule,
-    RuleSet,
-    SignalMapping,
+from src.application.rules.schema import Outcome, Rule, RuleSet
+from src.infrastructure.config.rules_condition_parser import build_rule_condition
+from src.infrastructure.config.rules_indicator_parser import (
+    build_rule_indicators,
+    validate_indicator_references,
 )
-from src.domain.value_objects.trade_action import TradeAction
+from src.infrastructure.config.rules_parser_helpers import require_field
+from src.infrastructure.config.rules_signal_mapping_parser import build_signal_mapping
 
 if TYPE_CHECKING:
     from src.application.services.indicator_registry import IndicatorRegistry
@@ -206,10 +198,10 @@ class RulesYamlLoader(RulesLoader):
             RulesValidationError: If rule content is invalid
         """
         # Validate required top-level fields
-        cls._require_field(data, "version", int, "top-level")
-        cls._require_field(data, "name", str, "top-level")
-        cls._require_field(data, "default_outcome", str, "top-level")
-        cls._require_field(data, "rules", list, "top-level")
+        require_field(data, "version", int, "top-level")
+        require_field(data, "name", str, "top-level")
+        require_field(data, "default_outcome", str, "top-level")
+        require_field(data, "rules", list, "top-level")
 
         version = data["version"]
         if version != 1:
@@ -228,12 +220,12 @@ class RulesYamlLoader(RulesLoader):
 
         # Parse indicators (optional section)
         indicators_data = data.get("indicators", {})
-        indicators = cls._build_indicators(indicators_data)
+        indicators = build_rule_indicators(indicators_data)
 
         # Parse signal_mapping (optional section)
         signal_mapping = None
         if "signal_mapping" in data:
-            signal_mapping = cls._build_signal_mapping(data["signal_mapping"])
+            signal_mapping = build_signal_mapping(data["signal_mapping"])
 
         # Parse rules
         rules_data = data["rules"]
@@ -262,243 +254,9 @@ class RulesYamlLoader(RulesLoader):
             raise RulesValidationError(str(e))
 
         # Validate that all referenced indicators are defined
-        cls._validate_indicator_references(rule_set, registry=registry)
+        validate_indicator_references(rule_set, registry=registry)
 
         return rule_set
-
-    @classmethod
-    def _build_indicators(
-        cls, indicators_data: dict[str, Any]
-    ) -> tuple[IndicatorDefinition, ...]:
-        """Build indicator definitions from parsed YAML data.
-
-        Args:
-            indicators_data: Dictionary mapping indicator names to their definitions
-
-        Returns:
-            Tuple of IndicatorDefinition objects
-
-        Raises:
-            RulesSchemaError: If indicator structure is invalid
-            RulesValidationError: If indicator content is invalid
-        """
-        if not isinstance(indicators_data, dict):
-            raise RulesSchemaError(
-                f"indicators: expected mapping, got {type(indicators_data).__name__}"
-            )
-
-        indicators = []
-        for ind_name, ind_data in indicators_data.items():
-            try:
-                indicator = cls._build_indicator_definition(ind_name, ind_data)
-                indicators.append(indicator)
-            except (RulesSchemaError, RulesValidationError) as e:
-                raise type(e)(f"indicators.{ind_name}: {e}")
-
-        return tuple(indicators)
-
-    @classmethod
-    def _build_signal_mapping(cls, data: dict[str, Any]) -> SignalMapping:
-        """Build SignalMapping from parsed YAML data.
-
-        Parses the optional signal_mapping section that maps risk levels
-        to trade actions for backtesting.
-
-        Args:
-            data: Dictionary mapping outcome names to action names
-
-        Returns:
-            SignalMapping with custom or default actions
-
-        Raises:
-            RulesSchemaError: If structure is invalid
-            RulesValidationError: If values are invalid
-        """
-        if not isinstance(data, dict):
-            raise RulesSchemaError(
-                f"signal_mapping: expected mapping, got {type(data).__name__}"
-            )
-
-        # Map of valid action strings to TradeAction enums
-        action_map = {
-            "ENTER_LONG": TradeAction.ENTER_LONG,
-            "EXIT_LONG": TradeAction.EXIT_LONG,
-            "HOLD": TradeAction.HOLD,
-            "FLAT": TradeAction.FLAT,
-        }
-
-        # Parse each mapping with defaults
-        def parse_action(key: str, default: TradeAction) -> TradeAction:
-            if key not in data:
-                return default
-            value = data[key]
-            if not isinstance(value, str):
-                raise RulesSchemaError(
-                    f"signal_mapping.{key}: expected string, got {type(value).__name__}"
-                )
-            normalized = value.upper().strip()
-            if normalized not in action_map:
-                valid = list(action_map.keys())
-                raise RulesValidationError(
-                    f"signal_mapping.{key}: '{value}' is not valid. Must be one of: {valid}"
-                )
-            return action_map[normalized]
-
-        return SignalMapping(
-            low_risk=parse_action("LOW_RISK", TradeAction.ENTER_LONG),
-            moderate=parse_action("MODERATE", TradeAction.HOLD),
-            high_risk=parse_action("HIGH_RISK", TradeAction.EXIT_LONG),
-        )
-
-    @classmethod
-    def _build_indicator_definition(
-        cls, name: str, data: dict[str, Any]
-    ) -> IndicatorDefinition:
-        """Build a single indicator definition.
-
-        Supports three modes:
-        1. Built-in indicators (SMA, EMA, RSI) with type and period
-        2. Plugin indicators (ATR, VWAP, etc.) with type and period
-        3. Formula-based indicators with formula expression
-
-        Args:
-            name: Indicator instance name
-            data: Indicator definition dictionary
-
-        Returns:
-            IndicatorDefinition object
-
-        Raises:
-            RulesSchemaError: If required fields missing
-            RulesValidationError: If values are invalid
-        """
-        if not isinstance(data, dict):
-            raise RulesSchemaError(
-                f"expected mapping, got {type(data).__name__}"
-            )
-
-        has_type = "type" in data
-        has_formula = "formula" in data
-
-        # Validate mutual exclusivity
-        if has_type and has_formula:
-            raise RulesSchemaError(
-                "cannot have both 'type' and 'formula'. "
-                "Use either type+period OR formula."
-            )
-
-        if not has_type and not has_formula:
-            raise RulesSchemaError(
-                "must have either 'type' (with period) or 'formula'"
-            )
-
-        # Parse override (common to both modes)
-        override = data.get("override", False)
-        if not isinstance(override, bool):
-            raise RulesSchemaError(
-                f"override: expected bool, got {type(override).__name__}"
-            )
-
-        # Formula-based indicator
-        if has_formula:
-            formula = data["formula"]
-            if not isinstance(formula, str):
-                raise RulesSchemaError(
-                    f"formula: expected string, got {type(formula).__name__}"
-                )
-
-            formula = formula.strip()
-            if not formula:
-                raise RulesValidationError("formula: cannot be empty")
-
-            # Period should not be specified for formula indicators
-            if "period" in data:
-                raise RulesSchemaError(
-                    "formula indicators should not have 'period'. "
-                    "Period is determined by the formula expression."
-                )
-
-            try:
-                return IndicatorDefinition(
-                    name=name,
-                    formula=formula,
-                    override=override,
-                )
-            except ValueError as e:
-                raise RulesValidationError(str(e))
-
-        # Type-based indicator (existing logic)
-        cls._require_field(data, "period", int, "indicator")
-
-        # Parse indicator type - try built-in first, then accept as plugin name
-        type_str = data["type"].strip()
-        try:
-            indicator_type: IndicatorType | str = IndicatorType.from_string(type_str)
-        except ValueError:
-            # Not a built-in - store as string for plugin lookup
-            # Plugin validation happens at runtime via IndicatorRegistry
-            indicator_type = type_str.upper()
-
-        period = data["period"]
-        if period < 1:
-            raise RulesValidationError(f"period: must be >= 1, got {period}")
-
-        try:
-            return IndicatorDefinition(
-                name=name,
-                indicator_type=indicator_type,
-                period=period,
-                override=override,
-            )
-        except ValueError as e:
-            raise RulesValidationError(str(e))
-
-    # Price field names that are valid as indicator references in rules
-    _PRICE_FIELDS = frozenset({"OPEN", "HIGH", "LOW", "CLOSE", "VOLUME"})
-
-    @classmethod
-    def _validate_indicator_references(
-        cls,
-        rule_set: RuleSet,
-        registry: "IndicatorRegistry | None" = None,
-    ) -> None:
-        """Validate that all indicator references in rules are defined.
-
-        Args:
-            rule_set: The rule set to validate
-            registry: Optional IndicatorRegistry for checking registered
-                     formulas and plugins
-
-        Raises:
-            RulesValidationError: If any indicator reference is undefined
-        """
-        referenced = rule_set.get_all_referenced_indicators()
-        for ref_name in referenced:
-            # Check if it's a price field (OPEN, HIGH, LOW, CLOSE, VOLUME)
-            if ref_name.upper() in cls._PRICE_FIELDS:
-                continue
-
-            # Check if defined in rules file or is a built-in
-            if rule_set.is_indicator_defined(ref_name):
-                continue
-
-            # Check if registered in the registry (formula or plugin)
-            if registry is not None and registry.is_registered(ref_name.upper()):
-                continue
-
-            # Not found anywhere - raise error
-            sources = list(BUILTIN_INDICATORS.keys()) + sorted(cls._PRICE_FIELDS)
-            if registry is not None:
-                # Add registry indicators to the error message
-                sources.extend(sorted(registry.list_indicators()))
-                sources = sorted(set(sources))
-
-            raise RulesValidationError(
-                f"Rule references undefined indicator '{ref_name}'. "
-                f"Define it in the 'indicators' section, use a built-in, "
-                f"or register a formula. Available: {', '.join(sources[:10])}"
-                + ("..." if len(sources) > 10 else "")
-            )
 
     @classmethod
     def _build_rule(cls, data: dict[str, Any], index: int) -> Rule:
@@ -518,9 +276,9 @@ class RulesYamlLoader(RulesLoader):
         if not isinstance(data, dict):
             raise RulesSchemaError(f"rule must be a mapping, got {type(data).__name__}")
 
-        cls._require_field(data, "name", str, "rule")
-        cls._require_field(data, "when", dict, "rule")
-        cls._require_field(data, "outcome", str, "rule")
+        require_field(data, "name", str, "rule")
+        require_field(data, "when", dict, "rule")
+        require_field(data, "outcome", str, "rule")
 
         name = data["name"]
         rationale = data.get("rationale")
@@ -538,7 +296,7 @@ class RulesYamlLoader(RulesLoader):
             raise RulesValidationError(f"outcome: {e}")
 
         # Parse condition
-        condition = cls._build_condition(data["when"])
+        condition = build_rule_condition(data["when"])
 
         return Rule(
             name=name,
@@ -547,220 +305,6 @@ class RulesYamlLoader(RulesLoader):
             priority=priority,
             rationale=rationale,
         )
-
-    @classmethod
-    def _build_condition(
-        cls, data: dict[str, Any]
-    ) -> ConditionIndicatorVsValue | ConditionIndicatorVsIndicator | CompoundCondition:
-        """Build a Condition from parsed YAML data.
-
-        Detects condition type based on fields present:
-        - all: list of sub-conditions (CompoundCondition, logical AND)
-        - indicator + value: ConditionIndicatorVsValue
-        - left + right: ConditionIndicatorVsIndicator
-
-        Args:
-            data: Condition dictionary from YAML
-
-        Returns:
-            Validated Condition
-
-        Raises:
-            RulesSchemaError: If required fields missing or wrong type
-            RulesValidationError: If condition content is invalid
-        """
-        # Check for compound condition (all: [...])
-        if "all" in data:
-            return cls._build_compound_condition(data)
-
-        # Check for indicator-vs-value condition
-        if "indicator" in data and "value" in data:
-            return cls._build_indicator_vs_value(data)
-
-        # Check for indicator-vs-indicator condition (or indicator-vs-value in left/right form)
-        if "left" in data and "right" in data:
-            return cls._build_indicator_vs_indicator(data)
-
-        raise RulesSchemaError(
-            "when: must have either (indicator + operator + value), "
-            "(left + operator + right), or (all: [...])"
-        )
-
-    @classmethod
-    def _build_compound_condition(cls, data: dict[str, Any]) -> CompoundCondition:
-        """Build a compound AND condition from a list of sub-conditions.
-
-        Args:
-            data: Condition dictionary containing an 'all' key with a list.
-
-        Returns:
-            CompoundCondition with all sub-conditions.
-
-        Raises:
-            RulesSchemaError: If structure is invalid.
-        """
-        sub_list = data["all"]
-        if not isinstance(sub_list, list):
-            raise RulesSchemaError(
-                f"when.all: expected list, got {type(sub_list).__name__}"
-            )
-        if len(sub_list) < 2:
-            raise RulesSchemaError("when.all: must have at least 2 sub-conditions")
-
-        subs = []
-        for i, sub_data in enumerate(sub_list):
-            if not isinstance(sub_data, dict):
-                raise RulesSchemaError(
-                    f"when.all[{i}]: expected mapping, got {type(sub_data).__name__}"
-                )
-            try:
-                sub = cls._build_condition(sub_data)
-                subs.append(sub)
-            except (RulesSchemaError, RulesValidationError) as e:
-                raise type(e)(f"when.all[{i}]: {e}")
-
-        return CompoundCondition(conditions=tuple(subs))
-
-    @classmethod
-    def _build_indicator_vs_value(
-        cls, data: dict[str, Any]
-    ) -> ConditionIndicatorVsValue:
-        """Build an indicator-vs-value condition.
-
-        Indicator references are strings that can be either:
-        - Custom defined indicators (e.g., "fast_ema", "rsi_short")
-        - Built-in indicators ("RSI", "SMA", "EMA")
-
-        Validation of references happens after all indicators are parsed.
-
-        Args:
-            data: Condition dictionary
-
-        Returns:
-            ConditionIndicatorVsValue
-
-        Raises:
-            RulesSchemaError: If fields missing
-            RulesValidationError: If content invalid
-        """
-        cls._require_field(data, "indicator", str, "when")
-        cls._require_field(data, "operator", str, "when")
-        # value can be int, float, or str
-
-        # Indicator is now a string reference (validated later)
-        indicator_name = data["indicator"].strip()
-        if not indicator_name:
-            raise RulesValidationError("when.indicator: cannot be empty")
-
-        try:
-            operator = Operator.from_string(data["operator"])
-        except ValueError as e:
-            raise RulesValidationError(f"when.operator: {e}")
-
-        try:
-            # First try parsing as Decimal
-            value = Decimal(str(data["value"]))
-        except (InvalidOperation, TypeError):
-            # If it fails, keep it as a string
-            value = str(data["value"])
-
-        return ConditionIndicatorVsValue(
-            indicator_name=indicator_name,
-            operator=operator,
-            value=value,
-        )
-
-    @classmethod
-    def _build_indicator_vs_indicator(
-        cls, data: dict[str, Any]
-    ) -> ConditionIndicatorVsIndicator:
-        """Build an indicator-vs-indicator (or indicator-vs-value) condition.
-
-        Left side must always be an indicator reference. Right side can be
-        either an indicator reference or a literal value:
-        - right: {indicator: "slow_ema"}  — indicator vs indicator
-        - right: {value: 50000000000}     — indicator vs literal value
-
-        Args:
-            data: Condition dictionary
-
-        Returns:
-            ConditionIndicatorVsIndicator
-
-        Raises:
-            RulesSchemaError: If fields missing
-            RulesValidationError: If content invalid
-        """
-        cls._require_field(data, "left", dict, "when")
-        cls._require_field(data, "operator", str, "when")
-        cls._require_field(data, "right", dict, "when")
-
-        try:
-            operator = Operator.from_string(data["operator"])
-        except ValueError as e:
-            raise RulesValidationError(f"when.operator: {e}")
-
-        left_data = data["left"]
-        right_data = data["right"]
-
-        # Left side must always be an indicator reference
-        cls._require_field(left_data, "indicator", str, "when.left")
-        left_name = left_data["indicator"].strip()
-        if not left_name:
-            raise RulesValidationError("when.left.indicator: cannot be empty")
-
-        # Right side: indicator reference OR literal value
-        if "indicator" in right_data:
-            right_name = right_data["indicator"]
-            if not isinstance(right_name, str) or not right_name.strip():
-                raise RulesValidationError("when.right.indicator: must be a non-empty string")
-            right: IndicatorRef | Decimal = IndicatorRef(name=right_name.strip())
-        elif "value" in right_data:
-            try:
-                right = Decimal(str(right_data["value"]))
-            except (InvalidOperation, TypeError):
-                raise RulesValidationError(
-                    f"when.right.value: must be a number, got '{right_data['value']}'"
-                )
-        else:
-            raise RulesSchemaError(
-                "when.right: must have either 'indicator' or 'value'"
-            )
-
-        return ConditionIndicatorVsIndicator(
-            left=IndicatorRef(name=left_name),
-            operator=operator,
-            right=right,
-        )
-
-    @classmethod
-    def _require_field(
-        cls,
-        data: dict[str, Any],
-        field: str,
-        expected_type: type,
-        context: str,
-    ) -> None:
-        """Validate that a required field exists and has correct type.
-
-        Args:
-            data: Dictionary to check
-            field: Field name to require
-            expected_type: Expected type of the field
-            context: Context for error messages (e.g., "rule", "when")
-
-        Raises:
-            RulesSchemaError: If field missing or wrong type
-        """
-        if field not in data:
-            raise RulesSchemaError(f"{context}: missing required field '{field}'")
-
-        value = data[field]
-        if not isinstance(value, expected_type):
-            raise RulesSchemaError(
-                f"{context}.{field}: expected {expected_type.__name__}, "
-                f"got {type(value).__name__}"
-            )
 
 
 # Backward-compatible alias
