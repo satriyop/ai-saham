@@ -226,5 +226,11 @@ def test_no_active_setups_preserves_all_setup_expansion(tmp_path):
         config_root=tmp_path,
     )
 
-    assert "config/swing_setups.yaml:setups.foreign-bounce.gates.min_foreign_flow_score" in gate_paths
-    assert "config/swing_setups.yaml:setups.coiled-spring.gates.max_bb_width_pctile" in gate_paths
+    assert (
+        "config/swing_setups.yaml:setups.foreign-bounce.gates.min_foreign_flow_score"
+        in gate_paths
+    )
+    assert (
+        "config/swing_setups.yaml:setups.coiled-spring.gates.max_bb_width_pctile"
+        in gate_paths
+    )
