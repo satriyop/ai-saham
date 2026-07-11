@@ -7,11 +7,11 @@ The audit must be deterministic, offline, and free from future data leakage.
 from datetime import date, timedelta
 from decimal import Decimal
 
+from src.application.services.stats import pct_change as _pct_change
 from src.application.use_case.accumulation_audit_use_case import (
     AccumulationAuditPolicy,
     AccumulationAuditRequest,
     AccumulationAuditUseCase,
-    _pct_change,
 )
 from src.domain.entities.broker_flow import BrokerSummary, BrokerTransaction, BrokerType
 from src.domain.entities.candle import Candle

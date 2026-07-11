@@ -12,8 +12,9 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+from src.application.dto.accumulation_audit import AuditBucketPolicy
 from src.application.dto.accumulation_screen import AccumulationCandidate
-from src.application.use_case.accumulation_audit_use_case import _range_bucket, AuditBucketPolicy
+from src.application.services.accumulation_audit_statistics import _range_bucket
 from src.application.use_case.evaluate_swing_setup_use_case import (
     COILED_SPRING_SETUP,
     FOREIGN_BOUNCE_SETUP,
@@ -68,7 +69,13 @@ def test_foreign_bounce_gate_passes_at_new_boundary_58_3():
 def test_foreign_bounce_gate_fails_score_just_below_new_boundary():
     evaluation = _evaluate(
         FOREIGN_BOUNCE_SETUP,
-        _candidate(foreign_flow_score=58.2, rsi=75.0, trend="UP", avg_flow_ratio=1.0, vwap_discount_pct=0.5),
+        _candidate(
+            foreign_flow_score=58.2,
+            rsi=75.0,
+            trend="UP",
+            avg_flow_ratio=1.0,
+            vwap_discount_pct=0.5,
+        ),
     )
     assert evaluation.match == SetupMatch.NO_MATCH
 
