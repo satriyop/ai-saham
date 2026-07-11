@@ -204,6 +204,7 @@ If any answer is unclear, stop.
 - When a file is split, the old file may remain only as a compatibility facade; it must not keep implementation logic.
 - First extraction target in a large use case should be DTOs and serialization, because they reduce scan burden without altering behavior.
 - Second extraction target should be pure calculators/parsers, because they are easiest to characterize with tests.
+- Use cases own workflow orchestration only; extract calculators, parsers, serializers, evidence builders, simulators, statistics, and persistence stores when they become independent scan targets.
 - Do not extract a new abstraction unless the filename and public API make the next change easier to locate.
 
 ### Adapter Rules
@@ -237,6 +238,7 @@ If any answer is unclear, stop.
 - DTOs used by multiple functions/classes in a large workflow belong in `src/application/dto/`.
 - `to_dict()` schema methods should live near DTO definitions unless they are adapter-specific.
 - Persisted JSON/CSV/schema fields require compatibility notes before rename.
+- Persisted schema builders should split by schema section once they exceed 400 LOC.
 - New machine-facing outputs must include explicit names; avoid generic `score`, `status`, or `verdict` unless the artifact contract defines them.
 
 ### Infrastructure Provider Rules
@@ -245,6 +247,12 @@ If any answer is unclear, stop.
 - Raw payload parsers should be separate from network/browser clients.
 - Browser lifecycle must not share a file with HTTP payload parsers unless the file is small and strictly cohesive.
 - Provider class names and filenames must match the dominant mechanism: `playwright_*` for browser, `stockbit_api_*` or `stockbit_http_*` for HTTP/token API.
+
+### Repository and Config Rules
+
+- Repository modules above 700 LOC must split schema/migration, row mapping, and table-family stores.
+- Application must not import infrastructure config classes directly.
+- Infrastructure may load and parse config; application consumes application/domain config models.
 
 ### Test Organization Rules
 
