@@ -40,7 +40,10 @@ setup_phase:
     assert cfg.setup_phase_config.thresholds.compression_max_bb_width_pctile == 0.15
     assert cfg.setup_phase_config.thresholds.breakout_min_volume_ratio == 1.5
     assert cfg.setup_phase_config.volume_trigger.require_trusted_volume is True
-    assert cfg.setup_phase_config.volume_trigger.trusted_benchmark_volume_sources == ("stockbit", "idx")
+    assert (
+        cfg.setup_phase_config.volume_trigger.trusted_benchmark_volume_sources
+        == ("stockbit", "idx")
+    )
     assert cfg.setup_phase_config.volume_trigger.min_valid_20d_sessions == 19
     assert cfg.setup_phase_config.volume_trigger.zero_volume_tolerance == 0
     assert cfg.setup_phase_config.volume_trigger.dry_up_lookback_sessions == 4
@@ -121,8 +124,9 @@ setup_phase:
         cfg.setup_phase_config.requirements_by_family
         == SetupPhaseConfig().requirements_by_family
     )
-    assert cfg.setup_phase_config.requirement_for("accumulation") == SetupPhaseConfig().requirement_for(
-        "accumulation"
+    assert (
+        cfg.setup_phase_config.requirement_for("accumulation")
+        == SetupPhaseConfig().requirement_for("accumulation")
     )
 
 

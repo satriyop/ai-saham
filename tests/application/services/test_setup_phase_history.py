@@ -2,14 +2,14 @@ from datetime import date, datetime
 from decimal import Decimal
 from types import SimpleNamespace
 
-from src.application.services.setup_phase_history import load_previous_setup_phases
 from src.application.services.setup_phase_detector import SetupPhaseDetector
+from src.application.services.setup_phase_history import load_previous_setup_phases
 from src.domain.entities.candle import Candle
 from src.domain.ports.candidate_observations_repository import CandidateObservation
+from src.domain.value_objects.setup_phase import SetupPhaseState
 from src.infrastructure.persistence.sqlite_candidate_observations_repository import (
     SQLiteCandidateObservationsRepository,
 )
-from src.domain.value_objects.setup_phase import SetupPhaseState
 
 
 class FakeCandidateObservationsRepository:

@@ -1,6 +1,5 @@
 from datetime import date, timedelta
 from decimal import Decimal
-from types import SimpleNamespace
 
 from src.application.services.setup_phase_detector import (
     SetupPhaseConfig,
@@ -197,7 +196,10 @@ def test_flow_confirmation_without_volume_cannot_create_breakout():
     )
 
     assert snapshot.current_phase != SetupPhaseState.BREAKOUT_CONFIRMATION
-    assert any("synthetic/missing source" in reason for reason in snapshot.unavailable_evidence_reasons)
+    assert any(
+        "synthetic/missing source" in reason
+        for reason in snapshot.unavailable_evidence_reasons
+    )
 
 
 def test_terminal_distribution_precedes_constructive_breakout():
@@ -288,7 +290,10 @@ def test_volume_trigger_unavailable_for_synthetic_source_or_zero_volume_window()
     )
 
     assert snapshot.coverage_score < 1.0
-    assert any("synthetic/missing source" in reason for reason in snapshot.unavailable_evidence_reasons)
+    assert any(
+        "synthetic/missing source" in reason
+        for reason in snapshot.unavailable_evidence_reasons
+    )
 
 
 def test_negative_rs_emits_decision_constraint_reason():

@@ -13,7 +13,7 @@ from typing import Any
 
 import yaml
 
-from src.application.services.setup_phase_detector import (
+from src.application.services.setup_phase_config import (
     SetupPhaseConfig,
     SetupPhaseRequirementConfig,
     SetupPhaseRSPolicyConfig,
@@ -105,7 +105,9 @@ class SwingConfig:
     # screener: market cap floor (0 = disabled; e.g. 500_000_000_000 = 500B IDR)
     min_market_cap_idr: int = 0
     # tier1 broker codes for BCI (Broker Concentration Index) scoring
-    tier1_broker_codes: frozenset[str] = frozenset({"AK", "BK", "ZP", "KZ", "YU", "RX", "HD", "CP", "DR"})
+    tier1_broker_codes: frozenset[str] = frozenset(
+        {"AK", "BK", "ZP", "KZ", "YU", "RX", "HD", "CP", "DR"}
+    )
     bci_cluster_min_count: int = 3
     bci_stable_min_count: int = 1
     # regime-adaptive setup exits
@@ -400,40 +402,87 @@ def load_swing_config(
             noise_brokers=_codes(ns, defaults.noise_brokers),
             smart_weight=Decimal(str(_f(sm, "weight", float(defaults.smart_weight)))),
             noise_weight=Decimal(str(_f(ns, "weight", float(defaults.noise_weight)))),
-            smart_share_threshold_pct=_f(bq, "smart_share_threshold_pct", defaults.smart_share_threshold_pct),
-            smart_sell_min_share_pct=_f(bq, "smart_sell_min_share_pct", defaults.smart_sell_min_share_pct),
+            smart_share_threshold_pct=_f(
+                bq, "smart_share_threshold_pct", defaults.smart_share_threshold_pct
+            ),
+            smart_sell_min_share_pct=_f(
+                bq, "smart_sell_min_share_pct", defaults.smart_sell_min_share_pct
+            ),
             foreign_bounce_enabled=_b(fb, "enabled", defaults.foreign_bounce_enabled),
-            gate_min_foreign_flow_score=_f(fb_gates, "min_foreign_flow_score", defaults.gate_min_foreign_flow_score),
-            gate_min_vwap_discount_pct=_f(fb_gates, "min_vwap_discount_pct", defaults.gate_min_vwap_discount_pct),
+            gate_min_foreign_flow_score=_f(
+                fb_gates, "min_foreign_flow_score", defaults.gate_min_foreign_flow_score
+            ),
+            gate_min_vwap_discount_pct=_f(
+                fb_gates, "min_vwap_discount_pct", defaults.gate_min_vwap_discount_pct
+            ),
             gate_required_trend=_s(fb_gates, "required_trend", defaults.gate_required_trend),
-            gate_min_flow_ratio_pct=_f(fb_gates, "min_flow_ratio_pct", defaults.gate_min_flow_ratio_pct),
+            gate_min_flow_ratio_pct=_f(
+                fb_gates, "min_flow_ratio_pct", defaults.gate_min_flow_ratio_pct
+            ),
             gate_max_rsi=_f(fb_gates, "max_rsi", defaults.gate_max_rsi),
-            partial_max_failed_gates=_i(fb, "partial_max_failed_gates", defaults.partial_max_failed_gates),
+            partial_max_failed_gates=_i(
+                fb, "partial_max_failed_gates", defaults.partial_max_failed_gates
+            ),
             foreign_bounce_family=_s(fb, "family", defaults.foreign_bounce_family),
-            foreign_bounce_entry_authority=_b(fb, "entry_authority", defaults.foreign_bounce_entry_authority),
+            foreign_bounce_entry_authority=_b(
+                fb, "entry_authority", defaults.foreign_bounce_entry_authority
+            ),
             foreign_bounce_can_enter_from_phases=_phases(
                 fb, "can_enter_from_phases", defaults.foreign_bounce_can_enter_from_phases
             ),
             coiled_spring_enabled=_b(cs, "enabled", defaults.coiled_spring_enabled),
-            coiled_spring_gate_min_foreign_flow_score=_f(cs_gates, "min_foreign_flow_score", defaults.coiled_spring_gate_min_foreign_flow_score),
-            coiled_spring_gate_max_bb_width_pctile=_f(cs_gates, "max_bb_width_pctile", defaults.coiled_spring_gate_max_bb_width_pctile),
-            coiled_spring_gate_min_flow_ratio_pct=_f(cs_gates, "min_flow_ratio_pct", defaults.coiled_spring_gate_min_flow_ratio_pct),
+            coiled_spring_gate_min_foreign_flow_score=_f(
+                cs_gates,
+                "min_foreign_flow_score",
+                defaults.coiled_spring_gate_min_foreign_flow_score,
+            ),
+            coiled_spring_gate_max_bb_width_pctile=_f(
+                cs_gates, "max_bb_width_pctile", defaults.coiled_spring_gate_max_bb_width_pctile
+            ),
+            coiled_spring_gate_min_flow_ratio_pct=_f(
+                cs_gates, "min_flow_ratio_pct", defaults.coiled_spring_gate_min_flow_ratio_pct
+            ),
             coiled_spring_gate_max_rsi=_f(cs_gates, "max_rsi", defaults.coiled_spring_gate_max_rsi),
-            coiled_spring_partial_max_failed_gates=_i(cs, "partial_max_failed_gates", defaults.coiled_spring_partial_max_failed_gates),
+            coiled_spring_partial_max_failed_gates=_i(
+                cs, "partial_max_failed_gates", defaults.coiled_spring_partial_max_failed_gates
+            ),
             coiled_spring_family=_s(cs, "family", defaults.coiled_spring_family),
-            coiled_spring_entry_authority=_b(cs, "entry_authority", defaults.coiled_spring_entry_authority),
+            coiled_spring_entry_authority=_b(
+                cs, "entry_authority", defaults.coiled_spring_entry_authority
+            ),
             coiled_spring_can_enter_from_phases=_phases(
                 cs, "can_enter_from_phases", defaults.coiled_spring_can_enter_from_phases
             ),
-            smart_money_confirmed_enabled=_b(smc, "enabled", defaults.smart_money_confirmed_enabled),
-            smart_money_confirmed_gate_min_foreign_flow_score=_f(smc_gates, "min_foreign_flow_score", defaults.smart_money_confirmed_gate_min_foreign_flow_score),
-            smart_money_confirmed_gate_min_smart_flow_idr=Decimal(
-                str(_f(smc_gates, "min_smart_flow_idr", float(defaults.smart_money_confirmed_gate_min_smart_flow_idr)))
+            smart_money_confirmed_enabled=_b(
+                smc, "enabled", defaults.smart_money_confirmed_enabled
             ),
-            smart_money_confirmed_gate_min_smart_share_pct=_f(smc_gates, "min_smart_share_pct", defaults.smart_money_confirmed_gate_min_smart_share_pct),
-            smart_money_confirmed_gate_max_noise_share_pct=_f(smc_gates, "max_noise_share_pct", defaults.smart_money_confirmed_gate_max_noise_share_pct),
-            smart_money_confirmed_reject_smart_net_selling=_b(smc_gates, "reject_smart_net_selling", defaults.smart_money_confirmed_reject_smart_net_selling),
-            smart_money_confirmed_partial_max_failed_gates=_i(smc, "partial_max_failed_gates", defaults.smart_money_confirmed_partial_max_failed_gates),
+            smart_money_confirmed_gate_min_foreign_flow_score=_f(
+                smc_gates,
+                "min_foreign_flow_score",
+                defaults.smart_money_confirmed_gate_min_foreign_flow_score,
+            ),
+            smart_money_confirmed_gate_min_smart_flow_idr=Decimal(
+                str(_f(
+                    smc_gates, "min_smart_flow_idr",
+                    float(defaults.smart_money_confirmed_gate_min_smart_flow_idr)
+                ))
+            ),
+            smart_money_confirmed_gate_min_smart_share_pct=_f(
+                smc_gates, "min_smart_share_pct",
+                defaults.smart_money_confirmed_gate_min_smart_share_pct
+            ),
+            smart_money_confirmed_gate_max_noise_share_pct=_f(
+                smc_gates, "max_noise_share_pct",
+                defaults.smart_money_confirmed_gate_max_noise_share_pct
+            ),
+            smart_money_confirmed_reject_smart_net_selling=_b(
+                smc_gates, "reject_smart_net_selling",
+                defaults.smart_money_confirmed_reject_smart_net_selling
+            ),
+            smart_money_confirmed_partial_max_failed_gates=_i(
+                smc, "partial_max_failed_gates",
+                defaults.smart_money_confirmed_partial_max_failed_gates
+            ),
             smart_money_confirmed_family=_s(smc, "family", defaults.smart_money_confirmed_family),
             smart_money_confirmed_entry_authority=_b(
                 smc, "entry_authority", defaults.smart_money_confirmed_entry_authority
@@ -442,13 +491,32 @@ def load_swing_config(
                 smc, "can_enter_from_phases", defaults.smart_money_confirmed_can_enter_from_phases
             ),
             pullback_continuation_enabled=_b(pc, "enabled", defaults.pullback_continuation_enabled),
-            pullback_continuation_gate_min_foreign_flow_score=_f(pc_gates, "min_foreign_flow_score", defaults.pullback_continuation_gate_min_foreign_flow_score),
-            pullback_continuation_gate_required_trend=_s(pc_gates, "required_trend", defaults.pullback_continuation_gate_required_trend),
-            pullback_continuation_gate_min_flow_ratio_pct=_f(pc_gates, "min_flow_ratio_pct", defaults.pullback_continuation_gate_min_flow_ratio_pct),
-            pullback_continuation_gate_min_rsi=_f(pc_gates, "min_rsi", defaults.pullback_continuation_gate_min_rsi),
-            pullback_continuation_gate_max_rsi=_f(pc_gates, "max_rsi", defaults.pullback_continuation_gate_max_rsi),
-            pullback_continuation_gate_min_vwap_discount_pct=_f(pc_gates, "min_vwap_discount_pct", defaults.pullback_continuation_gate_min_vwap_discount_pct),
-            pullback_continuation_partial_max_failed_gates=_i(pc, "partial_max_failed_gates", defaults.pullback_continuation_partial_max_failed_gates),
+            pullback_continuation_gate_min_foreign_flow_score=_f(
+                pc_gates, "min_foreign_flow_score",
+                defaults.pullback_continuation_gate_min_foreign_flow_score
+            ),
+            pullback_continuation_gate_required_trend=_s(
+                pc_gates, "required_trend",
+                defaults.pullback_continuation_gate_required_trend
+            ),
+            pullback_continuation_gate_min_flow_ratio_pct=_f(
+                pc_gates, "min_flow_ratio_pct",
+                defaults.pullback_continuation_gate_min_flow_ratio_pct
+            ),
+            pullback_continuation_gate_min_rsi=_f(
+                pc_gates, "min_rsi", defaults.pullback_continuation_gate_min_rsi
+            ),
+            pullback_continuation_gate_max_rsi=_f(
+                pc_gates, "max_rsi", defaults.pullback_continuation_gate_max_rsi
+            ),
+            pullback_continuation_gate_min_vwap_discount_pct=_f(
+                pc_gates, "min_vwap_discount_pct",
+                defaults.pullback_continuation_gate_min_vwap_discount_pct
+            ),
+            pullback_continuation_partial_max_failed_gates=_i(
+                pc, "partial_max_failed_gates",
+                defaults.pullback_continuation_partial_max_failed_gates
+            ),
             pullback_continuation_family=_s(pc, "family", defaults.pullback_continuation_family),
             pullback_continuation_entry_authority=_b(
                 pc, "entry_authority", defaults.pullback_continuation_entry_authority
@@ -462,8 +530,12 @@ def load_swing_config(
             strong_min_streak=_i(vd_sig, "strong_min_streak", defaults.strong_min_streak),
             building_min_score=_f(vd_sig, "building_min_score", defaults.building_min_score),
             building_min_streak=_i(vd_sig, "building_min_streak", defaults.building_min_streak),
-            coiled_spring_bb_pctile=_f(vd_sig, "coiled_spring_bb_pctile", defaults.coiled_spring_bb_pctile),
-            coiled_spring_min_score=_f(vd_sig, "coiled_spring_min_score", defaults.coiled_spring_min_score),
+            coiled_spring_bb_pctile=_f(
+                vd_sig, "coiled_spring_bb_pctile", defaults.coiled_spring_bb_pctile
+            ),
+            coiled_spring_min_score=_f(
+                vd_sig, "coiled_spring_min_score", defaults.coiled_spring_min_score
+            ),
             tier1_broker_codes=frozenset(_codes(t1, tuple(defaults.tier1_broker_codes))),
             bci_cluster_min_count=_i(t1, "cluster_min_count", defaults.bci_cluster_min_count),
             bci_stable_min_count=_i(t1, "stable_min_count", defaults.bci_stable_min_count),
@@ -471,10 +543,16 @@ def load_swing_config(
             sector_breadth_enabled=_b(sb, "enabled", defaults.sector_breadth_enabled),
             sector_breadth_threshold=_f(sb, "breadth_threshold", defaults.sector_breadth_threshold),
             sector_breadth_bonus_pts=_f(sb, "bonus_pts", defaults.sector_breadth_bonus_pts),
-            sector_breadth_min_tickers=_i(sb, "min_tickers_for_breadth", defaults.sector_breadth_min_tickers),
+            sector_breadth_min_tickers=_i(
+                sb, "min_tickers_for_breadth", defaults.sector_breadth_min_tickers
+            ),
             resistance_gate_enabled=_b(resistance, "enabled", defaults.resistance_gate_enabled),
-            resistance_headroom_min_pct=_f(resistance, "headroom_min_pct", defaults.resistance_headroom_min_pct),
-            ex_date_warning_days=_i(corporate_actions, "ex_date_warning_days", defaults.ex_date_warning_days),
+            resistance_headroom_min_pct=_f(
+                resistance, "headroom_min_pct", defaults.resistance_headroom_min_pct
+            ),
+            ex_date_warning_days=_i(
+                corporate_actions, "ex_date_warning_days", defaults.ex_date_warning_days
+            ),
             setup_phase_config=_setup_phase_config(setup_phase, setups),
         )
     except ValueError as exc:
