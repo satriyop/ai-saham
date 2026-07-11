@@ -16,6 +16,12 @@ from src.infrastructure.ai.strategy_translator import (
     StrategyTranslatorAdapter,
     canonicalize_yaml,
 )
+from src.infrastructure.ai.strategy_translator_mock_templates import (
+    call_mock_strategy_translator,
+)
+from src.infrastructure.ai.strategy_translator_output import (
+    canonicalize_yaml as output_canonicalize_yaml,
+)
 from src.infrastructure.ai.strategy_translator_prompt import (
     build_retry_prompt,
     build_system_prompt,
@@ -455,3 +461,78 @@ class TestMockYamlValidation:
             assert "name" in rule
             assert "when" in rule
             assert "outcome" in rule
+
+
+class TestOutputCanonicalizeYaml:
+    """Direct import coverage for strategy_translator_output.canonicalize_yaml."""
+
+    def test_matches_facade_reexport(self):
+        """Facade re-export should be the same function object."""
+        assert canonicalize_yaml is output_canonicalize_yaml
+
+    def test_strips_markdown_fence(self):
+        """Should strip a fenced yaml code block."""
+        result = output_canonicalize_yaml("```yaml\nversion: 1\n```")
+
+        assert result == "version: 1"
+
+
+class TestCallMockStrategyTranslator:
+    """Direct import coverage for strategy_translator_mock_templates."""
+
+    def test_matches_adapter_for_rsi(self):
+        adapter = StrategyTranslatorAdapter(provider="mock")
+        intent, strategy_name = "RSI oversold strategy", "rsi_test"
+        expected = adapter.translate(
+            intent=intent,
+            strategy_name=strategy_name,
+            available_indicators={"RSI", "SMA", "EMA"},
+        )
+
+        user_prompt = build_user_prompt(intent, strategy_name)
+        result = canonicalize_yaml(call_mock_strategy_translator(user_prompt))
+
+        assert result == expected
+
+    def test_matches_adapter_for_ema_crossover(self):
+        adapter = StrategyTranslatorAdapter(provider="mock")
+        intent, strategy_name = "EMA crossover strategy", "ema_test"
+        expected = adapter.translate(
+            intent=intent,
+            strategy_name=strategy_name,
+            available_indicators={"RSI", "SMA", "EMA"},
+        )
+
+        user_prompt = build_user_prompt(intent, strategy_name)
+        result = canonicalize_yaml(call_mock_strategy_translator(user_prompt))
+
+        assert result == expected
+
+    def test_matches_adapter_for_rsi_ema_combined(self):
+        adapter = StrategyTranslatorAdapter(provider="mock")
+        intent, strategy_name = "RSI with EMA crossover confirmation", "combined_test"
+        expected = adapter.translate(
+            intent=intent,
+            strategy_name=strategy_name,
+            available_indicators={"RSI", "SMA", "EMA"},
+        )
+
+        user_prompt = build_user_prompt(intent, strategy_name)
+        result = canonicalize_yaml(call_mock_strategy_translator(user_prompt))
+
+        assert result == expected
+
+    def test_matches_adapter_for_unsupported_prediction(self):
+        adapter = StrategyTranslatorAdapter(provider="mock")
+        intent, strategy_name = "predict tomorrow's price", "prediction"
+        expected = adapter.translate(
+            intent=intent,
+            strategy_name=strategy_name,
+            available_indicators={"RSI", "SMA", "EMA"},
+        )
+
+        user_prompt = build_user_prompt(intent, strategy_name)
+        result = call_mock_strategy_translator(user_prompt)
+
+        assert result == expected
+        assert result == "UNSUPPORTED"
