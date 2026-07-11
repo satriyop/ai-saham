@@ -19,13 +19,10 @@ Gemini should behave as a **supporting senior engineer**, not the system archite
 
 Before Gemini writes or modifies code, Gemini MUST read and comply with:
 
-* `README.md`
-* `PROMPT_CONTRACT.md`
-* `DEFINITION_OF_DONE.md`
-* `TASK_TEMPLATE.md`
-* `AI_AGENT_CHECKLIST.md`
-* `ARCHITECTURE_DECISIONS.md`
+* `AGENT_QUICKSTART.md`
 * This `GEMINI.md`
+
+Gemini must then use the reading matrix in `AGENT_QUICKSTART.md` to select the longer docs required for the task. Do not load every governance document by default when the task does not require it.
 
 Gemini must then state:
 
@@ -118,11 +115,11 @@ If code decides what data to fetch, when to fetch it, whether cached data is fre
 
 Before coding, Gemini MUST:
 
-* Confirm `AI_AGENT_CHECKLIST.md` compliance
+* Confirm `AGENT_QUICKSTART.md` compliance and any task-specific `AI_AGENT_CHECKLIST.md` items that apply
 * State the layer plan
 * Identify whether adapters are touched
 * If adapters are touched, explicitly state why the adapter remains thin
-* Identify persistence, determinism, AI, and risk-profile impact
+* Identify persistence, determinism, AI, risk/signal, and evidence-authority impact
 
 ---
 
@@ -136,15 +133,16 @@ Gemini should prioritize **transparent data flow**.
 
 ---
 
-## Risk Profiles Awareness
+## Risk, Signal, And Evidence Guardrails
 
-Gemini must assume the system supports:
+Gemini must preserve the current decision boundaries:
 
-* Conservative
-* Balanced
-* Aggressive
+* SignalEngine assesses evidence.
+* RiskEngine blocks unsafe setups.
+* TradeSetup owns setup/action verdicts.
+* Market context, setup policy, and evidence authority must remain explicit and configurable.
 
-Any implementation must be compatible with all profiles.
+Diagnostic evidence must not become authoritative without the promotion guardrails required by the current design docs and validators.
 
 ---
 

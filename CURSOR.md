@@ -10,6 +10,8 @@ Cursor is treated as a **local pair-programmer** that operates inside the editor
 
 ## Project Summary (Read First)
 
+Cursor must read `AGENT_QUICKSTART.md` before code work and use its reading matrix to select any longer docs required for the task.
+
 This is a **local-first, production-grade stock analysis system** with:
 
 * Deterministic, rule-based core
@@ -82,15 +84,16 @@ Cursor should prefer simple SQL or SQLAlchemy Core.
 
 ---
 
-## Risk Profiles
+## Risk, Signal, And Evidence Guardrails
 
-The system supports:
+Cursor must preserve the current decision boundaries:
 
-* Conservative
-* Balanced
-* Aggressive
+* SignalEngine assesses evidence.
+* RiskEngine blocks unsafe setups.
+* TradeSetup owns setup/action verdicts.
+* Market context, setup policy, and evidence authority must remain explicit and configurable.
 
-Cursor implementations must remain compatible with all profiles.
+Diagnostic evidence must not become authoritative without the promotion guardrails required by the current design docs and validators.
 
 ---
 

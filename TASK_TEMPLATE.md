@@ -8,7 +8,7 @@ This template enforces:
 
 * Deterministic-first development
 * Architectural safety
-* Compliance with `PROMPT_CONTRACT.md` and `DEFINITION_OF_DONE.md`
+* Compliance with `AGENT_QUICKSTART.md`, `PROMPT_CONTRACT.md`, and `DEFINITION_OF_DONE.md`
 
 ---
 
@@ -59,7 +59,7 @@ List what this task must **not** do, for example:
 * No new data providers
 * No AI model changes
 * No UI changes
-* No risk profile changes
+* No risk/signal/evidence-authority policy changes
 
 This prevents scope creep.
 
@@ -120,17 +120,22 @@ If AI is used:
 
 ---
 
-## 7. Risk Profile Considerations
+## 7. Risk, Signal, And Evidence Authority Considerations
 
-* Which risk profiles are affected?
+* Which decision components are affected?
 
-  * Conservative
-  * Balanced
-  * Aggressive
+  * SignalEngine
+  * RiskEngine
+  * TradeSetup
+  * Market context
+  * Setup policy
+  * Evidence authority / promotion
 
 * How does behavior differ (if at all)?
 
-* Does conservative behavior remain unchanged?
+* Does this change what can produce ENTER/WATCH/AVOID?
+
+* Does this promote diagnostic evidence or change tuning eligibility?
 
 ---
 
@@ -180,7 +185,7 @@ Skipping tests requires justification.
 Before implementation, the agent must:
 
 * Confirm understanding of the task
-* Confirm compliance with `AI_AGENT_CHECKLIST.md`
+* Confirm compliance with `AGENT_QUICKSTART.md` and the relevant `AI_AGENT_CHECKLIST.md` task-type checklist
 * State any risks or ambiguities
 * State the layer plan
 

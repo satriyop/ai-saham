@@ -2,22 +2,40 @@
 
 This checklist must be followed **before** an AI agent writes or modifies any code in this repository.
 
+Start with `AGENT_QUICKSTART.md`. Use this checklist as the detailed code-change checklist, not as a reason to load every long document for every task.
+
 If any item cannot be satisfied, the agent must stop and state why.
 
 ---
 
 ## 1. Context Awareness
 
-* I have read `README.md`
-* I have read `PROMPT_CONTRACT.md`
-* I have read `DEFINITION_OF_DONE.md`
-* I have read `TASK_TEMPLATE.md`
+* I have read `AGENT_QUICKSTART.md`
 * I have read my agent-specific contract, if present (`CLAUDE.md`, `GEMINI.md`, `AGENTS.md`, etc.)
+* I have selected required task-specific docs from the `AGENT_QUICKSTART.md` reading matrix
+* For code changes, I have read `DEFINITION_OF_DONE.md` and relevant `PROMPT_CONTRACT.md` sections
+* For architecture, persistence, scoring, signal, risk, tuning, strategy, market context, or evidence-promotion changes, I have read relevant ADR/design/config docs
+* For CLI/output/workflow changes, I have read relevant README/CLI docs
 * I understand the system is analysis-first, not trading
 
 ---
 
-## 2. Scope Validation
+## 2. Required Reading By Task Type
+
+Use the smallest reading set that fully covers the task:
+
+* Documentation-only: read the edited docs and referenced docs; read code only when the docs make code claims
+* Local bugfix/refactor: read the touched code, focused tests, `DEFINITION_OF_DONE.md`, and relevant checklist sections
+* Shared engine/risk/signal/tuning/persistence/config: read relevant ADR/design docs, configs, use cases, and tests
+* CLI/output/workflow: read relevant README/CLI docs, adapter code, workflow/use case code, and command contract tests
+* Architecture or boundary changes: read `ARCHITECTURE_DECISIONS.md`, relevant design docs, architecture tests, and affected layer contracts
+* Ambiguous or new feature work: read `TASK_TEMPLATE.md` before implementing
+
+If a required source is stale or contradicts code, trust the code for audit findings and document the mismatch.
+
+---
+
+## 3. Scope Validation
 
 * I understand what is being asked
 * I understand what is **not** being asked
@@ -27,7 +45,7 @@ If any item cannot be satisfied, the agent must stop and state why.
 
 ---
 
-## 3. Layer Plan
+## 4. Layer Plan
 
 Before implementation, the agent must state:
 
@@ -43,7 +61,7 @@ Each touched layer must have a clear reason. If a layer is not touched, state `n
 
 ---
 
-## 4. Architecture Check
+## 5. Architecture Check
 
 * Core logic remains independent of adapters
 * Domain remains free of I/O, providers, repositories, CLI, UI, and AI
@@ -57,7 +75,7 @@ Each touched layer must have a clear reason. If a layer is not touched, state `n
 
 ---
 
-## 5. Adapter Thinness Check
+## 6. Adapter Thinness Check
 
 Adapters may:
 
@@ -81,7 +99,7 @@ If an adapter needs any forbidden logic, create or reuse an application use case
 
 ---
 
-## 6. Determinism & Safety
+## 7. Determinism & Safety
 
 * The feature works without AI enabled
 * Outputs are reproducible for the same inputs, config, and data
@@ -91,16 +109,16 @@ If an adapter needs any forbidden logic, create or reuse an application use case
 
 ---
 
-## 7. Risk Profile Discipline
+## 8. Risk And Signal Guardrail Discipline
 
-* Risk profile behavior is explicit when analysis behavior is touched
-* No silent overrides of risk settings
-* Conservative behavior remains conservative
-* Conservative, Balanced, and Aggressive profiles remain compatible
+* SignalEngine, RiskEngine, TradeSetup, market context, setup policy, and evidence authority impact is explicit when analysis behavior is touched
+* No silent overrides of risk, signal, setup, tuning, or evidence-promotion settings
+* Blocking risk gates remain separate from bullish signal scoring
+* Diagnostic evidence remains non-authoritative unless promotion guardrails are explicitly satisfied
 
 ---
 
-## 8. Data & Persistence
+## 9. Data & Persistence
 
 * I know what data is read
 * I know what data is written
@@ -110,7 +128,7 @@ If an adapter needs any forbidden logic, create or reuse an application use case
 
 ---
 
-## 9. Testing Readiness
+## 10. Testing Readiness
 
 * Core/application logic is testable outside the CLI
 * Tests do not require network access
@@ -119,7 +137,7 @@ If an adapter needs any forbidden logic, create or reuse an application use case
 
 ---
 
-## 10. Documentation Intent
+## 11. Documentation Intent
 
 * Changes will be explainable to a human
 * Configuration and usage will be documented when user-facing behavior changes
@@ -127,7 +145,7 @@ If an adapter needs any forbidden logic, create or reuse an application use case
 
 ---
 
-## 11. Self-Check Before Proceeding
+## 12. Self-Check Before Proceeding
 
 The agent must be able to answer:
 
@@ -141,7 +159,7 @@ If any answer is unclear, stop.
 
 ---
 
-## 12. Code Convention
+## 13. Code Convention
 
 ### File Size Rules
 
@@ -228,7 +246,7 @@ If any answer is unclear, stop.
 
 ---
 
-## 13. Architecture Boundary Guard
+## 14. Architecture Boundary Guard
 
 - I ran `pytest tests/architecture/test_layer_boundaries.py`
 - I did not introduce new application/domain imports from infrastructure or adapters
@@ -238,6 +256,6 @@ If any answer is unclear, stop.
 
 ## Final Acknowledgement
 
-Before proceeding, the agent must internally acknowledge:
+Before proceeding on a code task, the agent must internally acknowledge:
 
-"I am operating under the Prompt Contract, Definition of Done, Task Template, and AI Agent Pre-Flight Checklist."
+"I am operating under the Agent Quickstart, Prompt Contract, Definition of Done, Task Template, and AI Agent Pre-Flight Checklist."

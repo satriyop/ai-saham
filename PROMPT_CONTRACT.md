@@ -13,28 +13,28 @@ This document **references and enforces** the Definition of Done (DoD).
 Agents must respect the following order of authority:
 
 1. `DEFINITION_OF_DONE.md` (quality gate)
-2. `README.md` (project intent)
-3. Agent-specific contracts (CLAUDE.md, GEMINI.md)
-4. Existing codebase patterns
-5. Task-specific instructions
+2. `AGENT_QUICKSTART.md` (mandatory task entry point)
+3. `README.md` (project intent)
+4. Agent-specific contracts (AGENTS.md, CLAUDE.md, GEMINI.md, CURSOR.md)
+5. Existing codebase patterns
+6. Task-specific instructions
 
 If instructions conflict, **higher authority wins**.
 
 ---
 
-## 2. Mandatory Pre-Read
+## 2. Mandatory Preflight
 
 Before proposing or writing any code, the agent must:
 
-* Read `README.md`
-* Read `DEFINITION_OF_DONE.md`
-* Read `PROMPT_CONTRACT.md`
-* Read `TASK_TEMPLATE.md`
-* Read `AI_AGENT_CHECKLIST.md`
-* Read `ARCHITECTURE_DECISIONS.md`
+* Read `AGENT_QUICKSTART.md`
 * Read its own agent contract (if present)
+* Use the reading matrix in `AGENT_QUICKSTART.md` to select task-specific docs
+* Read `DEFINITION_OF_DONE.md`, relevant `PROMPT_CONTRACT.md` sections, and relevant `AI_AGENT_CHECKLIST.md` sections for code changes
+* Read `ARCHITECTURE_DECISIONS.md` and relevant design docs for architecture, persistence, scoring, signal, risk, tuning, strategy, market context, or evidence-promotion changes
+* Read relevant `README.md` or CLI docs for user-facing command/output/workflow changes
 
-If this has not been done, the agent must stop and say so.
+If the required task-specific docs have not been read, the agent must stop and say so. Agents should not load every long governance document for small documentation-only or command-output tasks unless the reading matrix requires it.
 
 ---
 
@@ -78,7 +78,7 @@ Agents must not:
 * Introduce hidden global state
 * Couple domain logic to UI, CLI, or AI providers
 * Introduce mandatory cloud dependencies
-* Bypass risk profiles or guardrails silently
+* Bypass risk, signal, tuning, evidence-promotion, or architecture guardrails silently
 
 Any such change requires explicit approval.
 
@@ -110,13 +110,14 @@ clarification before writing code.
 
 ---
 
-## 6. Risk Profile Discipline
+## 6. Risk And Signal Guardrail Discipline
 
 When analysis behavior is involved, the agent must:
 
-* Declare supported risk profiles (Conservative, Balanced, Aggressive)
-* Explain differences between profiles
-* Avoid hard-coding subjective risk assumptions
+* Declare whether SignalEngine, RiskEngine, TradeSetup, market context, setup policy, or evidence authority is affected
+* Keep blocking risk gates separate from bullish signal scoring
+* Avoid hard-coding subjective risk, setup, or evidence-promotion assumptions
+* Preserve diagnostic evidence as non-authoritative unless promotion guardrails are explicitly satisfied
 
 ---
 

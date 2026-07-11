@@ -3,7 +3,7 @@
 ## Agent & SubAgent
 - Always use model Opus for Planning & Implementation.
 - Always use model Haiku for code/file exploration, use sub agents for everytime you need to explore the code
-- Always use model Opus to think edge case when crafting test code, but use Sonnet sub agents to write the test code. When test code failed switch back to use model Opus to fix the implementation. in loop until all test code is passed. 
+- Always use model Opus to think edge case when crafting test code, but use Sonnet sub agents to write the test code. When test code failed switch back to use model Opus to fix the implementation. in loop until all test code is passed.
 - When execute test code, use subagent, do not pollute context
 - Offer to create skills if you find some insight that will potentially help you to work more effectively in upcoming task, skills should be project scope not user scope. Use Skill creator plugin to create the skill.
 
@@ -11,13 +11,10 @@
 
 Before Claude writes or modifies code, Claude MUST read and comply with:
 
-- `README.md`
-- `PROMPT_CONTRACT.md`
-- `DEFINITION_OF_DONE.md`
-- `TASK_TEMPLATE.md`
-- `AI_AGENT_CHECKLIST.md`
-- `ARCHITECTURE_DECISIONS.md`
+- `AGENT_QUICKSTART.md`
 - This `CLAUDE.md`
+
+Claude must then use the reading matrix in `AGENT_QUICKSTART.md` to select the longer docs required for the task. Do not load every governance document by default when the task does not require it.
 
 Claude must then state:
 
@@ -144,25 +141,28 @@ Claude MUST NOT hardcode any data provider.
 * Uses technical indicators (SMA, RSI, MACD, Bollinger Bands, ATR, etc.)
 
 #### AI Mode OFF
-* Claude MUST ensure the system is useful without AI. 
+* Claude MUST ensure the system is useful without AI.
 * OFF by default
 * AI acts as an **advisor**, not a decision maker
 * AI output must be explainable and traceable
 
 #### AI Mode ON
-* Claude will prioritize AI LLM as first class citizen to 
+* Claude will prioritize AI LLM as first class citizen to
 * SKILL.md and SKILLS_INDEX.md are always disposable artifacts, Must be regeneratable, Never manually edited.
 * AI → YAML → Validator → Registry → Runtime
 * A compiler where AI writes source code
 ---
 
-### 5. Risk Profiles
+### 5. Risk, Signal, And Evidence Guardrails
 
-The system must support multiple analysis profiles:
+Claude must preserve the current decision boundaries:
 
-* Conservative: rule-heavy, confirmation-based
-* Balanced: rules + AI insight
-* Aggressive: AI-weighted, fewer constraints
+* SignalEngine assesses evidence.
+* RiskEngine blocks unsafe setups.
+* TradeSetup owns setup/action verdicts.
+* Market context, setup policy, and evidence authority must remain explicit and configurable.
+
+Diagnostic evidence MUST NOT become authoritative without the promotion guardrails required by the current design docs and validators.
 
 Risk profiles MUST be configuration-driven and MUST NOT break architecture.
 
@@ -188,11 +188,11 @@ No hidden state. No silent decisions.
 Claude MUST:
 
 1. Confirm the task's scope and non-goals.
-2. Confirm `AI_AGENT_CHECKLIST.md` compliance.
+2. Confirm `AGENT_QUICKSTART.md` compliance and any task-specific `AI_AGENT_CHECKLIST.md` items that apply.
 3. State the layer plan.
 4. Identify whether adapters are touched.
 5. If adapters are touched, explicitly state why the adapter remains thin.
-6. Identify persistence, determinism, AI, and risk-profile impact.
+6. Identify persistence, determinism, AI, risk/signal, and evidence-authority impact.
 
 ### Layer Placement
 
@@ -256,6 +256,5 @@ If uncertain, Claude should choose the **simpler, safer** design.
 ## Guiding Principle
 
 > "If AI disappears tomorrow, this system must still be valuable."
-
 
 
