@@ -24,6 +24,8 @@ logger = logging.getLogger(__name__)
 
 _EXODUS_HEADERS = {
     "accept": "application/json, text/plain, */*",
+    "accept-language": "en-US,en;q=0.9,id;q=0.8",
+    "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
     "x-platform": "web",
     "origin": "https://stockbit.com",
     "referer": "https://stockbit.com/",
