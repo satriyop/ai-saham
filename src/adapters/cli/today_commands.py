@@ -13,20 +13,24 @@ from rich.console import Console, Group
 from rich.text import Text
 
 from src.adapters.cli.rich_display import compact_table, panel
-from src.application.services.universe_loader import resolve_tickers
-from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
-from src.application.use_case.daily_briefing_use_case import DailyBriefingRequest, DailyBriefingUseCase
-from src.application.services.market_context_engine import MarketContextEngine
 from src.adapters.cli.view_market_context_display import (
     REGIME_DISPLAY_LABEL,
     context_conviction_score,
     context_factor_value,
     context_regime_style,
 )
-from src.infrastructure.config.app_config import APP_CFG
+from src.application.services.market_context_engine import MarketContextEngine
+from src.application.services.universe_loader import resolve_tickers
+from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
+from src.application.use_case.daily_briefing_use_case import (
+    DailyBriefingRequest,
+    DailyBriefingUseCase,
+)
 from src.infrastructure.config.accumulation_screener_config import (
     load_accumulation_screener_config,
 )
+from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.market_context_config import load_market_context_config
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
@@ -45,7 +49,9 @@ def _parse_date(value: str | None) -> date | None:
 
 
 def today(
-    universe: Annotated[str, typer.Option("--universe", "-u", help="Universe to brief")] = APP_CFG.analysis.universe,
+    universe: Annotated[
+        str, typer.Option("--universe", "-u", help="Universe to brief"),
+    ] = APP_CFG.analysis.universe,
     top: Annotated[int, typer.Option("--top", help="Number of candidates per section", min=1)] = 3,
     date_str: Annotated[Optional[str], typer.Option("--date", help="Date YYYY-MM-DD")] = None,
     db_path: Annotated[
@@ -75,6 +81,7 @@ def today(
         market_repository=market_repo,
         regime_use_case=MarketContextEngine(
             market_repository=market_repo,
+            config=load_market_context_config(),
             broker_repository=broker_repo,
             universe=regime_tickers,
         ),
@@ -105,7 +112,10 @@ def today(
 
     # Style market status value
     market_style = "green" if market_status.is_open else "yellow"
-    market_text = f"[{market_style}]{market_status.session_name}[/{market_style}]  [{market_status.source}]"
+    market_text = (
+        f"[{market_style}]{market_status.session_name}[/{market_style}]  "
+        f"[{market_status.source}]"
+    )
     if market_status.is_open:
         market_text += "  ⚠ open"
     summary.add_row("Market", market_text)
@@ -148,7 +158,9 @@ def today(
 
             opening.add_row(candidate.ticker, setup_text, iev, iep, trend_text)
     else:
-        opening.add_row("-", "No saved opening snapshot", "-", "-", "Run: saham learn snapshot --force")
+        opening.add_row(
+            "-", "No saved opening snapshot", "-", "-", "Run: saham learn snapshot --force",
+        )
 
     accumulation = compact_table()
     accumulation.add_column("Ticker", style="bold")
@@ -202,7 +214,10 @@ def today(
         )
         next_style = "bold yellow"
     else:
-        next_action = f"Next: saham screen accum --universe {response.universe} | saham analyze swing TICKER"
+        next_action = (
+            f"Next: saham screen accum --universe {response.universe} | "
+            f"saham analyze swing TICKER"
+        )
         next_style = "bold"
 
     sections.append(Text(next_action, style=next_style))

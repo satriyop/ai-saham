@@ -125,10 +125,6 @@ BASELINE_ALLOWLIST = {
         "src.infrastructure.persistence.sqlite_market_repository",
     ): "LEGACY: composition-root factory wires infrastructure repository directly; predates architecture guard. Do not copy.",
     (
-        "src/application/services/market_context_engine.py",
-        "src.infrastructure.config.market_context_config",
-    ): "LEGACY: application engine reads infrastructure config loader directly; predates architecture guard. Do not copy.",
-    (
         "src/application/services/stockbit_session.py",
         "src.infrastructure.browser.stockbit_api_client",
     ): "LEGACY: application session service wires infrastructure browser client directly; predates architecture guard. Do not copy.",
@@ -156,10 +152,6 @@ BASELINE_ALLOWLIST = {
         "src/application/use_case/backtest_use_case.py",
         "src.infrastructure.config.rules_yaml_loader",
     ): "LEGACY: application use case calls infrastructure YAML loader directly; predates architecture guard. Do not copy.",
-    (
-        "src/application/use_case/build_market_context_use_case.py",
-        "src.infrastructure.config.market_context_config",
-    ): "LEGACY: application use case calls infrastructure config loader directly; predates architecture guard. Do not copy.",
     (
         "src/application/use_case/create_strategy_from_intent_use_case.py",
         "src.infrastructure.config.rules_yaml_loader",

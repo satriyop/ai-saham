@@ -18,6 +18,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
+from src.application.config.market_context_config import MarketContextConfig
 from src.application.use_case.build_market_context_use_case import (
     BuildMarketContextRequest,
     BuildMarketContextUseCase,
@@ -25,10 +26,6 @@ from src.application.use_case.build_market_context_use_case import (
 from src.domain.value_objects.regime_detection_evidence import (
     RegimeDetectionEvidence,
     RegimeStability,
-)
-from src.infrastructure.config.market_context_config import (
-    MarketContextConfig,
-    load_market_context_config,
 )
 
 if TYPE_CHECKING:
@@ -72,7 +69,7 @@ class MarketContextEngine:
         self._broker_repo = broker_repository
         self._context_repo = context_repository
         self._obs_repo = regime_observation_repository
-        self._config = config or load_market_context_config()
+        self._config = config or MarketContextConfig()
         self._universe = [t.upper() for t in (universe or [])]
         self._banking_universe = [t.upper() for t in (banking_universe or [])]
         self._use_case = BuildMarketContextUseCase()
@@ -106,7 +103,9 @@ class MarketContextEngine:
                 if candles:
                     universe_candles[ticker] = candles
 
-        foreign_flow_series = self._aggregate_foreign_flow(as_of) if cfg.foreign_flow.enabled else []
+        foreign_flow_series = (
+            self._aggregate_foreign_flow(as_of) if cfg.foreign_flow.enabled else []
+        )
 
         # ── Pass 1: compute regime without stability (current regime unknown yet) ─
         request = BuildMarketContextRequest(

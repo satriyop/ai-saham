@@ -1,7 +1,8 @@
 from datetime import date
 from decimal import Decimal
-from src.application.use_case.build_market_context_use_case import (
-    _staleness_warning,
+
+from src.application.services.market_context_quality_warnings import (
+    market_context_staleness_warning,
 )
 from src.domain.entities.candle import Candle
 
@@ -44,7 +45,7 @@ def test_staleness_warning_contains_actionable_universe_flag():
         )
     ]
 
-    warning = _staleness_warning(
+    warning = market_context_staleness_warning(
         vix_candles=vix_candles,
         eido_candles=eido_candles,
         usd_idr_candles=usd_idr_candles,

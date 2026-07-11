@@ -1,160 +1,57 @@
 """
 Market Context Engine calibration config — loaded from config/market_context_engine.yaml.
 
+Config dataclasses live in src.application.config.market_context_config; this
+module only loads YAML and instantiates them. Re-exported here for backward
+compatibility so existing `from src.infrastructure.config.market_context_config
+import X` call sites keep working.
+
 Layer: Infrastructure
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
 
+from src.application.config.market_context_config import (
+    CommodityCompositeConfig,
+    EidoFactorConfig,
+    ForeignFlowFactorConfig,
+    IdxBreadthFactorConfig,
+    IdxTrendFactorConfig,
+    MarketContextConfig,
+    MarketContextFetchConfig,
+    MarketContextScoringConfig,
+    RegimeEffect,
+    RegimeThresholds,
+    ScoreLabelThresholds,
+    UsdIdrFactorConfig,
+    VixFactorConfig,
+)
 from src.infrastructure.config.app_config import APP_CFG
 
+__all__ = [
+    "MARKET_CONTEXT_CONFIG_PATH",
+    "VixFactorConfig",
+    "EidoFactorConfig",
+    "UsdIdrFactorConfig",
+    "IdxTrendFactorConfig",
+    "IdxBreadthFactorConfig",
+    "ForeignFlowFactorConfig",
+    "CommodityCompositeConfig",
+    "RegimeThresholds",
+    "RegimeEffect",
+    "ScoreLabelThresholds",
+    "MarketContextScoringConfig",
+    "MarketContextFetchConfig",
+    "MarketContextConfig",
+    "load_market_context_config",
+    "get_global_context_tickers",
+]
+
 MARKET_CONTEXT_CONFIG_PATH = Path(APP_CFG.config_paths.market_context_engine)
-
-
-@dataclass(frozen=True)
-class VixFactorConfig:
-    enabled: bool = True
-    weight: float = 0.20
-    ticker: str = "^VIX"
-    very_low: float = 15.0    # ≤ → score 1.0
-    low: float = 20.0         # (15, 20] → score 0.75
-    elevated: float = 25.0   # (20, 25] → score 0.50; (25, 35] → score 0.25
-    high: float = 35.0        # > → score 0.0 + VOLATILE override
-    very_low_score: float = 1.0
-    low_score: float = 0.75
-    elevated_score: float = 0.50
-    risk_off_score: float = 0.25
-    high_score: float = 0.0
-
-
-@dataclass(frozen=True)
-class EidoFactorConfig:
-    enabled: bool = True
-    weight: float = 0.20
-    ticker: str = "EIDO"
-    premium_pct: float = 1.0    # EIDO outperforms IHSG 5d return by > pct → score 1.0
-    discount_pct: float = -2.0  # EIDO underperforms IHSG 5d return by > pct → score 0.0
-    lookback_days: int = 5
-
-
-@dataclass(frozen=True)
-class UsdIdrFactorConfig:
-    enabled: bool = True
-    weight: float = 0.15
-    ticker: str = "IDR=X"
-    strengthen_pct: float = -1.0  # Rupiah strengthens > 1% (negative = stronger IDR) → score 1.0
-    weaken_pct: float = 2.5       # Rupiah weakens > 2.5% → score 0.0
-    lookback_days: int = 5
-
-
-@dataclass(frozen=True)
-class IdxTrendFactorConfig:
-    enabled: bool = True
-    weight: float = 0.15
-    benchmark_ticker: str = "IHSG"
-    sma_fast: int = 20
-    sma_slow: int = 50
-    # Distance from SMA50 scoring (pct of SMA50 price)
-    above_pct_strong: float = 3.0   # > +3% above SMA50 → score 1.0
-    below_pct_strong: float = -5.0  # > -5% below SMA50 → score 0.0
-    fast_sma_adjustment: float = 0.05
-
-
-@dataclass(frozen=True)
-class IdxBreadthFactorConfig:
-    enabled: bool = True
-    weight: float = 0.15
-    above_sma_period: int = 20
-    bullish_pct: float = 65.0    # ≥ 65% above SMA20 → score 1.0
-    bearish_pct: float = 35.0    # ≤ 35% above SMA20 → score 0.0
-
-
-@dataclass(frozen=True)
-class ForeignFlowFactorConfig:
-    enabled: bool = True
-    weight: float = 0.15
-    lookback_days: int = 5
-    reference_days: int = 20
-    bearish_diff_ratio: float = -0.5
-    bullish_diff_ratio: float = 0.5
-
-
-@dataclass(frozen=True)
-class CommodityCompositeConfig:
-    enabled: bool = False   # off by default
-    weight: float = 0.05
-    cpo_ticker: str = "KO=F"
-    cpo_weight: float = 0.60
-    coal_ticker: str = "MTF=F"
-    coal_weight: float = 0.40
-    lookback_days: int = 20
-    drawdown_risk_off_pct: float = -5.0   # composite return < -5% → score 0.0
-    rally_risk_on_pct: float = 5.0        # composite return > +5% → score 1.0
-
-
-@dataclass(frozen=True)
-class RegimeThresholds:
-    risk_on_min_score: float = 0.65
-    risk_off_max_score: float = 0.35
-    volatile_vix_override: float = 35.0   # VIX > threshold forces VOLATILE
-
-
-@dataclass(frozen=True)
-class RegimeEffect:
-    signal_multiplier: float = 1.0
-    gate_tightening: bool = False
-
-
-@dataclass(frozen=True)
-class ScoreLabelThresholds:
-    favorable_min_score: float = 0.65
-    neutral_min_score: float = 0.35
-
-
-@dataclass(frozen=True)
-class MarketContextScoringConfig:
-    neutral_score: float = 0.5
-    stale_business_day_gap: int = 1
-    coverage_warning_unavailable_ratio: float = 0.5
-    labels: ScoreLabelThresholds = field(default_factory=ScoreLabelThresholds)
-
-
-@dataclass(frozen=True)
-class MarketContextFetchConfig:
-    global_context_end_tolerance_days: int = 1
-
-
-@dataclass(frozen=True)
-class MarketContextConfig:
-    """
-    Full config for MarketContextEngine. All fields carry hardcoded defaults
-    so the system works when config/market_context_engine.yaml is absent.
-    """
-
-    vix: VixFactorConfig = field(default_factory=VixFactorConfig)
-    eido: EidoFactorConfig = field(default_factory=EidoFactorConfig)
-    usd_idr: UsdIdrFactorConfig = field(default_factory=UsdIdrFactorConfig)
-    idx_trend: IdxTrendFactorConfig = field(default_factory=IdxTrendFactorConfig)
-    idx_breadth: IdxBreadthFactorConfig = field(default_factory=IdxBreadthFactorConfig)
-    foreign_flow: ForeignFlowFactorConfig = field(default_factory=ForeignFlowFactorConfig)
-    commodity: CommodityCompositeConfig = field(default_factory=CommodityCompositeConfig)
-    regime_thresholds: RegimeThresholds = field(default_factory=RegimeThresholds)
-    scoring: MarketContextScoringConfig = field(default_factory=MarketContextScoringConfig)
-    fetch: MarketContextFetchConfig = field(default_factory=MarketContextFetchConfig)
-    regime_effects: dict[str, RegimeEffect] = field(default_factory=lambda: {
-        "RISK_ON":  RegimeEffect(signal_multiplier=1.0, gate_tightening=False),
-        "NEUTRAL":  RegimeEffect(signal_multiplier=1.0, gate_tightening=False),
-        "RISK_OFF": RegimeEffect(signal_multiplier=0.60, gate_tightening=True),
-        "VOLATILE": RegimeEffect(signal_multiplier=0.50, gate_tightening=True),
-    })
-
-    def get_effect(self, regime_name: str) -> RegimeEffect:
-        return self.regime_effects.get(regime_name, RegimeEffect())
 
 
 def load_market_context_config(
@@ -218,40 +115,44 @@ def load_market_context_config(
 
         def _idx_trend(f: dict) -> IdxTrendFactorConfig:
             d = defaults.idx_trend
+            th = f.get("thresholds", {})
             return IdxTrendFactorConfig(
                 enabled=f.get("enabled", d.enabled),
                 weight=f.get("weight", d.weight),
                 benchmark_ticker=f.get("benchmark_ticker", d.benchmark_ticker),
-                sma_fast=f.get("thresholds", {}).get("sma_fast", d.sma_fast),
-                sma_slow=f.get("thresholds", {}).get("sma_slow", d.sma_slow),
-                above_pct_strong=f.get("thresholds", {}).get("above_pct_strong", d.above_pct_strong),
-                below_pct_strong=f.get("thresholds", {}).get("below_pct_strong", d.below_pct_strong),
-                fast_sma_adjustment=f.get("thresholds", {}).get("fast_sma_adjustment", d.fast_sma_adjustment),
+                sma_fast=th.get("sma_fast", d.sma_fast),
+                sma_slow=th.get("sma_slow", d.sma_slow),
+                above_pct_strong=th.get("above_pct_strong", d.above_pct_strong),
+                below_pct_strong=th.get("below_pct_strong", d.below_pct_strong),
+                fast_sma_adjustment=th.get("fast_sma_adjustment", d.fast_sma_adjustment),
             )
 
         def _idx_breadth(f: dict) -> IdxBreadthFactorConfig:
             d = defaults.idx_breadth
+            th = f.get("thresholds", {})
             return IdxBreadthFactorConfig(
                 enabled=f.get("enabled", d.enabled),
                 weight=f.get("weight", d.weight),
-                above_sma_period=f.get("thresholds", {}).get("above_sma_period", d.above_sma_period),
-                bullish_pct=f.get("thresholds", {}).get("bullish_pct", d.bullish_pct),
-                bearish_pct=f.get("thresholds", {}).get("bearish_pct", d.bearish_pct),
+                above_sma_period=th.get("above_sma_period", d.above_sma_period),
+                bullish_pct=th.get("bullish_pct", d.bullish_pct),
+                bearish_pct=th.get("bearish_pct", d.bearish_pct),
             )
 
         def _foreign_flow(f: dict) -> ForeignFlowFactorConfig:
             d = defaults.foreign_flow
+            th = f.get("thresholds", {})
             return ForeignFlowFactorConfig(
                 enabled=f.get("enabled", d.enabled),
                 weight=f.get("weight", d.weight),
-                lookback_days=f.get("thresholds", {}).get("lookback_days", d.lookback_days),
-                reference_days=f.get("thresholds", {}).get("reference_days", d.reference_days),
-                bearish_diff_ratio=f.get("thresholds", {}).get("bearish_diff_ratio", d.bearish_diff_ratio),
-                bullish_diff_ratio=f.get("thresholds", {}).get("bullish_diff_ratio", d.bullish_diff_ratio),
+                lookback_days=th.get("lookback_days", d.lookback_days),
+                reference_days=th.get("reference_days", d.reference_days),
+                bearish_diff_ratio=th.get("bearish_diff_ratio", d.bearish_diff_ratio),
+                bullish_diff_ratio=th.get("bullish_diff_ratio", d.bullish_diff_ratio),
             )
 
         def _commodity(f: dict) -> CommodityCompositeConfig:
             d = defaults.commodity
+            th = f.get("thresholds", {})
             comps = f.get("components", [])
             cpo_ticker = d.cpo_ticker
             cpo_weight = d.cpo_weight
@@ -271,9 +172,9 @@ def load_market_context_config(
                 cpo_weight=cpo_weight,
                 coal_ticker=coal_ticker,
                 coal_weight=coal_weight,
-                lookback_days=f.get("thresholds", {}).get("lookback_days", d.lookback_days),
-                drawdown_risk_off_pct=f.get("thresholds", {}).get("drawdown_risk_off_pct", d.drawdown_risk_off_pct),
-                rally_risk_on_pct=f.get("thresholds", {}).get("rally_risk_on_pct", d.rally_risk_on_pct),
+                lookback_days=th.get("lookback_days", d.lookback_days),
+                drawdown_risk_off_pct=th.get("drawdown_risk_off_pct", d.drawdown_risk_off_pct),
+                rally_risk_on_pct=th.get("rally_risk_on_pct", d.rally_risk_on_pct),
             )
 
         def _re(name: str) -> RegimeEffect:
@@ -293,12 +194,20 @@ def load_market_context_config(
             foreign_flow=_foreign_flow(factors.get("foreign_flow", {})),
             commodity=_commodity(factors.get("commodity_composite", {})),
             regime_thresholds=RegimeThresholds(
-                risk_on_min_score=rt.get("risk_on_min_score", defaults.regime_thresholds.risk_on_min_score),
-                risk_off_max_score=rt.get("risk_off_max_score", defaults.regime_thresholds.risk_off_max_score),
-                volatile_vix_override=rt.get("volatile_vix_override", defaults.regime_thresholds.volatile_vix_override),
+                risk_on_min_score=rt.get(
+                    "risk_on_min_score", defaults.regime_thresholds.risk_on_min_score,
+                ),
+                risk_off_max_score=rt.get(
+                    "risk_off_max_score", defaults.regime_thresholds.risk_off_max_score,
+                ),
+                volatile_vix_override=rt.get(
+                    "volatile_vix_override", defaults.regime_thresholds.volatile_vix_override,
+                ),
             ),
             scoring=MarketContextScoringConfig(
-                neutral_score=root.get("scoring", {}).get("neutral_score", defaults.scoring.neutral_score),
+                neutral_score=root.get("scoring", {}).get(
+                    "neutral_score", defaults.scoring.neutral_score,
+                ),
                 stale_business_day_gap=root.get("scoring", {}).get(
                     "stale_business_day_gap",
                     defaults.scoring.stale_business_day_gap,

@@ -20,11 +20,13 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.application.use_case.build_market_context_use_case import (
+from src.application.services.market_context_detection_inputs import (
     _compute_banking_vs_ihsg,
     _compute_foreign_flow_inputs,
     _compute_ihsg_inputs,
-    _compute_regime_confidence,
+)
+from src.application.services.market_context_detection_inputs import (
+    compute_regime_confidence as _compute_regime_confidence,
 )
 from src.domain.entities.candle import Candle
 from src.domain.value_objects.market_context import MarketRegime
