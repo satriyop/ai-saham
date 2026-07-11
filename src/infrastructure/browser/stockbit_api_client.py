@@ -91,15 +91,22 @@ class StockbitApiClient:
     def _do_refresh(self) -> str | None:
         logger.debug("Extracting fresh Stockbit token via browser")
         token = self._refresher()
-        if token:
-            self._store.save(token)
-            logger.debug("Token persisted (%d chars)", len(token))
-        else:
+        if not token:
             logger.warning("Token refresh returned None — is the browser profile logged in?")
+            return None
+
+        candidate = self._store.describe_candidate(token)
+        if candidate.state != "valid" or candidate.algorithm != "RS256":
+            logger.warning("Token refresh did not return a usable RS256 Exodus JWT")
+            return None
+
+        self._store.save(token)
+        logger.debug("Token persisted (%d chars)", len(token))
         return token
 
     def _http_get(self, url: str, token: str, params: dict | None) -> dict | None:
         import httpx
+
         headers = {**_EXODUS_HEADERS, "Authorization": f"Bearer {token}"}
         try:
             resp = httpx.get(url, headers=headers, params=params, timeout=15)

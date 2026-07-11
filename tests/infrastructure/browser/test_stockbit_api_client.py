@@ -7,24 +7,16 @@ Mocking strategy:
 - httpx.get is monkeypatched to return fake responses
 """
 
+import base64
 import json
+import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
-
-from src.infrastructure.browser.stockbit_api_client import (
-    StockbitApiClient,
-    StockbitSessionExpired,
-)
+from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
 from src.infrastructure.browser.stockbit_token_store import StockbitTokenStore
 
-
 # ── Helpers ────────────────────────────────────────────────────────────────
-
-import base64
-import time
-
 
 _counter = 0
 
@@ -34,6 +26,7 @@ def _make_jwt(exp_offset_hours: float = 4.0) -> str:
     global _counter
     _counter += 1
     import json as _json
+
     payload = {"sub": f"user-{_counter}", "exp": int(time.time() + exp_offset_hours * 3600)}
     header = base64.urlsafe_b64encode(b'{"alg":"RS256"}').rstrip(b"=").decode()
     body = base64.urlsafe_b64encode(_json.dumps(payload).encode()).rstrip(b"=").decode()
@@ -102,6 +95,7 @@ def test_get_401_triggers_single_refresh_then_retries(tmp_path):
     client = StockbitApiClient(store, refresher)
 
     call_count = [0]
+
     def fake_get(url, **kwargs):
         call_count[0] += 1
         token_used = kwargs["headers"]["Authorization"].removeprefix("Bearer ")
@@ -151,6 +145,37 @@ def test_get_401_and_refresher_returns_none(tmp_path):
     assert result is None
 
 
+def test_get_rejects_hs256_refresh_without_persisting_or_requesting(tmp_path):
+    store = _make_store(tmp_path)
+    payload = (
+        base64.urlsafe_b64encode(json.dumps({"exp": int(time.time() + 3600)}).encode())
+        .rstrip(b"=")
+        .decode()
+    )
+    header = base64.urlsafe_b64encode(b'{"alg":"HS256"}').rstrip(b"=").decode()
+    client = StockbitApiClient(store, lambda: f"{header}.{payload}.signature")
+
+    with patch("httpx.get") as mock_get:
+        result = client.get("https://exodus.stockbit.com/test")
+
+    assert result is None
+    assert store.load() is None
+    mock_get.assert_not_called()
+
+
+def test_get_rejects_malformed_rs256_refresh_without_persisting_or_requesting(tmp_path):
+    store = _make_store(tmp_path)
+    header = base64.urlsafe_b64encode(b'{"alg":"RS256"}').rstrip(b"=").decode()
+    client = StockbitApiClient(store, lambda: f"{header}.not-valid-base64.signature")
+
+    with patch("httpx.get") as mock_get:
+        result = client.get("https://exodus.stockbit.com/test")
+
+    assert result is None
+    assert store.load() is None
+    mock_get.assert_not_called()
+
+
 # ── Network errors ─────────────────────────────────────────────────────────
 
 
@@ -163,6 +188,51 @@ def test_get_network_error_returns_none(tmp_path):
         result = client.get("https://exodus.stockbit.com/test")
 
     assert result is None
+
+
+def test_get_network_error_does_not_call_refresher(tmp_path):
+    token = _make_jwt()
+    store = _make_store(tmp_path, token)
+    refresh_count = []
+    client = StockbitApiClient(store, lambda: (refresh_count.append(1), None)[1])
+
+    with patch("httpx.get", side_effect=Exception("connection refused")):
+        result = client.get("https://exodus.stockbit.com/test")
+
+    assert result is None
+    assert len(refresh_count) == 0, "refresher must not be called on a network error"
+
+
+def test_get_locally_expired_token_triggers_exactly_one_refresh(tmp_path):
+    expired_token = _make_jwt(exp_offset_hours=-1.0)
+    f = tmp_path / "token.json"
+    f.write_text(
+        json.dumps(
+            {
+                "token": expired_token,
+                "fetched_at": "2020-01-01T00:00:00+00:00",
+                "exp": int(time.time() - 3600),
+            }
+        )
+    )
+    store = StockbitTokenStore(f)
+
+    fresh_token = _make_jwt()
+    refresh_count = [0]
+
+    def refresher():
+        refresh_count[0] += 1
+        return fresh_token
+
+    client = StockbitApiClient(store, refresher)
+
+    with patch("httpx.get", return_value=_fake_response(200, {"result": "fresh-data"})) as mock_get:
+        result = client.get("https://exodus.stockbit.com/test")
+
+    assert refresh_count[0] == 1, "exactly one refresh when locally-stored token is expired"
+    assert result == {"result": "fresh-data"}
+    assert mock_get.call_args[1]["headers"]["Authorization"] == f"Bearer {fresh_token}"
+    assert store.load() == fresh_token
 
 
 # ── No infinite refresh loop ───────────────────────────────────────────────
