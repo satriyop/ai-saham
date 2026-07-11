@@ -154,10 +154,7 @@ def snapshot(
     api_client = create_stockbit_api_client(
         profile_dir=Path(APP_CFG.storage.stockbit_profile_dir), headless=headless
     )
-    browser = PlaywrightStockbitProvider(
-        api_client=api_client,
-        profile_dir=Path(APP_CFG.storage.stockbit_profile_dir),
-    )
+    browser = PlaywrightStockbitProvider(api_client=api_client)
 
     # Load today's NCP-locked IEP values for enrichment
     iev_repo = SQLiteIEVRepository(resolved_db)
@@ -274,10 +271,7 @@ def track(
         profile_dir=Path(APP_CFG.storage.stockbit_profile_dir), headless=headless
     )
 
-    browser = PlaywrightStockbitProvider(
-        api_client=_api_client,
-        profile_dir=Path(APP_CFG.storage.stockbit_profile_dir),
-    )
+    browser = PlaywrightStockbitProvider(api_client=_api_client)
 
     # Optionally wire broker confirmation provider
     running_trade_provider = None

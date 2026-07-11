@@ -30,8 +30,7 @@ def _require_playwright_cli() -> None:
         import playwright  # noqa: F401
     except ImportError:
         typer.echo(
-            "playwright not installed.\n"
-            "Run: pip install playwright && playwright install chromium",
+            "playwright not installed.\nRun: pip install playwright && playwright install chromium",
             err=True,
         )
         raise typer.Exit(1)
@@ -41,7 +40,9 @@ def _require_playwright_cli() -> None:
 def login(
     timeout: Annotated[
         int,
-        typer.Option("--timeout", help="Seconds to wait for manual login (use 300+ if you have 2FA)", min=30),
+        typer.Option(
+            "--timeout", help="Seconds to wait for manual login (use 300+ if you have 2FA)", min=30
+        ),
     ] = 300,
 ) -> None:
     """
@@ -69,50 +70,64 @@ def status() -> None:
     """
     Check the health of the saved Stockbit session without opening a browser.
 
-    Shows profile age and whether the session is likely still valid.
+    Shows browser-profile age (informational only) and the Exodus API JWT's
+    local validity separately. This is a local, read-only assessment — it
+    does not prove Stockbit has accepted the token; only a live API call can.
 
     Example:
         saham fetch stockbit status
     """
-    from src.infrastructure.browser.playwright_stockbit_provider import get_session_status
+    from src.infrastructure.browser.playwright_stockbit_provider import get_stockbit_session_status
 
-    info = get_session_status()
+    info = get_stockbit_session_status()
 
     typer.echo("")
     typer.echo("Stockbit Session Status")
     typer.echo("=" * 40)
 
-    if not info["exists"]:
-        typer.echo(typer.style("  No session found.", fg=typer.colors.RED))
-        typer.echo(f"  Expected profile: {info['path']}")
+    if not info.profile_exists:
+        typer.echo(typer.style("  No browser profile found.", fg=typer.colors.RED))
+        typer.echo(f"  Expected profile: {info.profile_path}")
         typer.echo("")
         typer.echo("Run: saham fetch stockbit login")
         return
 
     typer.echo("  Type            : persistent browser profile")
-    typer.echo(f"  Profile dir     : {info['path']}")
+    typer.echo(f"  Profile dir     : {info.profile_path}")
 
-    if info.get("age_hours") is not None:
-        age = info["age_hours"]
-        age_str = f"{age:.1f}h ago"
-        if age > 24:
-            age_color = typer.colors.YELLOW
-            age_str += " (may need refresh)"
-        else:
-            age_color = typer.colors.GREEN
-        typer.echo("  Saved      : " + typer.style(age_str, fg=age_color))
+    if info.browser_login_age_hours is not None:
+        typer.echo(
+            f"  Browser login   : {info.browser_login_age_hours:.1f}h ago (informational only)"
+        )
+    else:
+        typer.echo("  Browser login   : unknown (no .logged_in_at marker)")
 
-    valid = info.get("likely_valid", False)
-    validity_str = "likely valid" if valid else "possibly expired — re-run login"
-    validity_color = typer.colors.GREEN if valid else typer.colors.RED
-    typer.echo("  Status     : " + typer.style(validity_str, fg=validity_color))
+    state_colors = {
+        "valid": typer.colors.GREEN,
+        "expired": typer.colors.YELLOW,
+        "missing": typer.colors.YELLOW,
+        "invalid": typer.colors.RED,
+    }
+    typer.echo(
+        "  Token state     : "
+        + typer.style(info.token_state, fg=state_colors.get(info.token_state, typer.colors.WHITE))
+    )
+    if info.token_expires_at:
+        typer.echo(
+            f"  Token expires   : {info.token_expires_at}  (source: {info.token_expiry_source})"
+        )
+    if info.token_state == "valid" and info.token_seconds_remaining is not None:
+        typer.echo(f"  Token remaining : {info.token_seconds_remaining // 60} min")
 
     typer.echo("")
-    if not valid:
-        typer.echo("Run: saham fetch stockbit login")
-    else:
+    if info.token_state == "valid":
         typer.echo("Next: saham fetch stockbit spy  (discover API endpoints)")
         typer.echo("      saham fetch stockbit test (live smoke-test)")
+    else:
+        typer.echo(
+            "Token is not locally valid. It will refresh automatically from the\n"
+            "browser profile on the next API call, or run: saham fetch stockbit login"
+        )
 
 
 @stockbit_app.command("spy")
@@ -267,9 +282,7 @@ def test(
     try:
         movers = provider.fetch_preopen_movers(iev_min=iev_min)
         if movers:
-            typer.echo(
-                typer.style(f"  ✓ {len(movers)} movers returned", fg=typer.colors.GREEN)
-            )
+            typer.echo(typer.style(f"  ✓ {len(movers)} movers returned", fg=typer.colors.GREEN))
             typer.echo("")
             typer.echo(f"  {'TICKER':<8} {'IEV':>12} {'IEP':>10}")
             typer.echo("  " + "-" * 33)
@@ -305,7 +318,9 @@ def test(
         else:
             typer.echo(typer.style("  ✗ No bid returned", fg=typer.colors.RED))
             typer.echo("")
-            typer.echo(f"  Next step: saham fetch stockbit spy --target orderbook --ticker {ticker}")
+            typer.echo(
+                f"  Next step: saham fetch stockbit spy --target orderbook --ticker {ticker}"
+            )
     except Exception as e:
         typer.echo(typer.style(f"  ✗ Error: {e}", fg=typer.colors.RED))
 

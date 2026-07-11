@@ -32,7 +32,6 @@ from src.application.use_case.sync_corporate_action_calendar_use_case import (
 )
 from src.domain.value_objects.corporate_action_calendar import CorporateActionType
 
-
 # ── DEFAULT_CALENDAR_EVENT_TYPES ─────────────────────────────────────────────
 
 
@@ -75,9 +74,9 @@ def _patch_use_case(monkeypatch, response=None, exception=None):
 
     fake_uc = FakeUseCase(response=response, exception=exception)
     monkeypatch.setattr(
-        refresh_module.SyncCorporateActionCalendarUseCase,
-        "__new__",
-        lambda cls, *a, **k: fake_uc,
+        refresh_module,
+        "SyncCorporateActionCalendarUseCase",
+        lambda *args, **kwargs: fake_uc,
     )
     return fake_uc
 
@@ -90,12 +89,16 @@ class TestRefreshMarketCalendarNeverRaises:
             raise RuntimeError("boom")
 
         monkeypatch.setattr(provider_module, "StockbitCorporateActionCalendarProvider", _boom)
-        status = refresh_market_calendar(db_path=tmp_path / "x.db", api_client=object(), refresh=False)
+        status = refresh_market_calendar(
+            db_path=tmp_path / "x.db", api_client=object(), refresh=False
+        )
         assert status.startswith("ERR:")
 
     def test_use_case_raising_returns_err_status_not_exception(self, monkeypatch, tmp_path: Path):
         _patch_use_case(monkeypatch, exception=RuntimeError("network exploded"))
-        status = refresh_market_calendar(db_path=tmp_path / "x.db", api_client=object(), refresh=False)
+        status = refresh_market_calendar(
+            db_path=tmp_path / "x.db", api_client=object(), refresh=False
+        )
         assert status.startswith("ERR:")
         assert "network exploded"[:30] in status
 
@@ -103,7 +106,9 @@ class TestRefreshMarketCalendarNeverRaises:
 class TestRefreshMarketCalendarStatusMapping:
     def test_from_cache_maps_to_cached(self, monkeypatch, tmp_path: Path):
         _patch_use_case(monkeypatch, response=_response(from_cache=True, status="cached"))
-        status = refresh_market_calendar(db_path=tmp_path / "x.db", api_client=object(), refresh=False)
+        status = refresh_market_calendar(
+            db_path=tmp_path / "x.db", api_client=object(), refresh=False
+        )
         assert status == "cached"
 
     def test_success_maps_to_stockbit_prefixed_counts(self, monkeypatch, tmp_path: Path):
@@ -111,7 +116,9 @@ class TestRefreshMarketCalendarStatusMapping:
             monkeypatch,
             response=_response(status="success", event_type_counts={"dividend": 3, "ipo": 1}),
         )
-        status = refresh_market_calendar(db_path=tmp_path / "x.db", api_client=object(), refresh=False)
+        status = refresh_market_calendar(
+            db_path=tmp_path / "x.db", api_client=object(), refresh=False
+        )
         assert status.startswith("stockbit")
         assert "dividend=3" in status
         assert "ipo=1" in status
@@ -121,23 +128,41 @@ class TestRefreshMarketCalendarStatusMapping:
             monkeypatch,
             response=_response(status="partial", event_type_counts={"dividend": 2}),
         )
-        status = refresh_market_calendar(db_path=tmp_path / "x.db", api_client=object(), refresh=False)
+        status = refresh_market_calendar(
+            db_path=tmp_path / "x.db", api_client=object(), refresh=False
+        )
         assert status.startswith("PARTIAL stockbit")
 
     def test_failed_with_auth_reason_maps_to_err_auth(self, monkeypatch, tmp_path: Path):
         _patch_use_case(
             monkeypatch,
-            response=_response(status="failed", errors=("dividend:auth-or-network",), fetched_count=0, stored_count=0, event_type_counts={}),
+            response=_response(
+                status="failed",
+                errors=("dividend:auth-or-network",),
+                fetched_count=0,
+                stored_count=0,
+                event_type_counts={},
+            ),
         )
-        status = refresh_market_calendar(db_path=tmp_path / "x.db", api_client=object(), refresh=False)
+        status = refresh_market_calendar(
+            db_path=tmp_path / "x.db", api_client=object(), refresh=False
+        )
         assert status == "ERR:auth"
 
     def test_failed_without_auth_reason_uses_first_error(self, monkeypatch, tmp_path: Path):
         _patch_use_case(
             monkeypatch,
-            response=_response(status="failed", errors=("dividend:parse-error:bad",), fetched_count=0, stored_count=0, event_type_counts={}),
+            response=_response(
+                status="failed",
+                errors=("dividend:parse-error:bad",),
+                fetched_count=0,
+                stored_count=0,
+                event_type_counts={},
+            ),
         )
-        status = refresh_market_calendar(db_path=tmp_path / "x.db", api_client=object(), refresh=False)
+        status = refresh_market_calendar(
+            db_path=tmp_path / "x.db", api_client=object(), refresh=False
+        )
         assert status.startswith("ERR:")
         assert "auth" not in status
 
@@ -238,10 +263,14 @@ class TestCalendarCalledOnceNotPerTicker:
         result = runner.invoke(
             _make_app(),
             [
-                "BBCA", "BBRI", "BMRI",
-                "--provider", "yahoo",
+                "BBCA",
+                "BBRI",
+                "BMRI",
+                "--provider",
+                "yahoo",
                 "--no-meta",
-                "--db", str(_base_monkeypatches / "data.db"),
+                "--db",
+                str(_base_monkeypatches / "data.db"),
             ],
         )
         assert result.exit_code == 0, result.output
@@ -256,17 +285,22 @@ class TestCalendarCalledOnceNotPerTicker:
         result = runner.invoke(
             _make_app(),
             [
-                "BBCA", "BBRI",
-                "--provider", "yahoo",
+                "BBCA",
+                "BBRI",
+                "--provider",
+                "yahoo",
                 "--no-meta",
-                "--db", str(_base_monkeypatches / "data.db"),
+                "--db",
+                str(_base_monkeypatches / "data.db"),
             ],
         )
         assert "Calendar: stockbit dividend=2" in result.output
 
 
 class TestSkipFlagRouting:
-    def test_no_calendar_flag_skips_and_never_invokes_refresh(self, monkeypatch, _base_monkeypatches):
+    def test_no_calendar_flag_skips_and_never_invokes_refresh(
+        self, monkeypatch, _base_monkeypatches
+    ):
         counting = _CountingCalendarRefresh()
         monkeypatch.setattr(
             "src.adapters.cli.fetch_market_calendar_refresh.refresh_market_calendar", counting
@@ -276,10 +310,12 @@ class TestSkipFlagRouting:
             _make_app(),
             [
                 "BBCA",
-                "--provider", "yahoo",
+                "--provider",
+                "yahoo",
                 "--no-meta",
                 "--no-calendar",
-                "--db", str(_base_monkeypatches / "data.db"),
+                "--db",
+                str(_base_monkeypatches / "data.db"),
             ],
         )
         assert result.exit_code == 0, result.output
@@ -298,17 +334,21 @@ class TestSkipFlagRouting:
             _make_app(),
             [
                 "BBCA",
-                "--provider", "yahoo",
+                "--provider",
+                "yahoo",
                 "--no-meta",
                 "--no-enrichment",
-                "--db", str(_base_monkeypatches / "data.db"),
+                "--db",
+                str(_base_monkeypatches / "data.db"),
             ],
         )
         assert result.exit_code == 0, result.output
         assert counting.calls == []
         assert "Calendar: skip:--no-enrichment" in result.output
 
-    def test_both_no_calendar_and_no_enrichment_no_calendar_wins(self, monkeypatch, _base_monkeypatches):
+    def test_both_no_calendar_and_no_enrichment_no_calendar_wins(
+        self, monkeypatch, _base_monkeypatches
+    ):
         counting = _CountingCalendarRefresh()
         monkeypatch.setattr(
             "src.adapters.cli.fetch_market_calendar_refresh.refresh_market_calendar", counting
@@ -318,11 +358,13 @@ class TestSkipFlagRouting:
             _make_app(),
             [
                 "BBCA",
-                "--provider", "yahoo",
+                "--provider",
+                "yahoo",
                 "--no-meta",
                 "--no-calendar",
                 "--no-enrichment",
-                "--db", str(_base_monkeypatches / "data.db"),
+                "--db",
+                str(_base_monkeypatches / "data.db"),
             ],
         )
         assert "Calendar: skip:--no-calendar" in result.output
@@ -344,9 +386,11 @@ class TestSkipFlagRouting:
             _make_app(),
             [
                 "BBCA",
-                "--provider", "yahoo",
+                "--provider",
+                "yahoo",
                 "--no-meta",
-                "--db", str(_base_monkeypatches / "data.db"),
+                "--db",
+                str(_base_monkeypatches / "data.db"),
             ],
         )
         assert counting.calls == []
@@ -375,9 +419,11 @@ class TestCalendarRefreshNeverAbortsCommand:
             _make_app(),
             [
                 "BBCA",
-                "--provider", "yahoo",
+                "--provider",
+                "yahoo",
                 "--no-meta",
-                "--db", str(_base_monkeypatches / "data.db"),
+                "--db",
+                str(_base_monkeypatches / "data.db"),
             ],
         )
         assert result.exit_code == 0, result.output

@@ -13,12 +13,12 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import List
 
-from src.domain.value_objects.benchmark_symbol import YAHOO_IHSG_TICKER
 from src.domain.ports.system_status_provider import (
     ProviderStatusDto,
     SystemStatusProvider,
     TableFreshnessDto,
 )
+from src.domain.value_objects.benchmark_symbol import YAHOO_IHSG_TICKER
 
 
 class SQLiteSystemStatusProvider(SystemStatusProvider):
@@ -98,6 +98,7 @@ class SQLiteSystemStatusProvider(SystemStatusProvider):
                 fetch_and_cache_market_status,
                 get_display_market_status,
             )
+
             live = fetch_and_cache_market_status()
             elapsed = round(time.time() - start, 1)
             if live:
@@ -215,12 +216,14 @@ class SQLiteSystemStatusProvider(SystemStatusProvider):
     def _check_stockbit_session(self) -> ProviderStatusDto:
         start = time.time()
         try:
-            from src.infrastructure.browser.playwright_stockbit_provider import get_session_status
+            from src.infrastructure.browser.playwright_stockbit_provider import (
+                get_stockbit_session_status,
+            )
 
-            info = get_session_status()
+            info = get_stockbit_session_status()
             elapsed = round(time.time() - start, 1)
 
-            if not info.get("exists"):
+            if not info.profile_exists:
                 return ProviderStatusDto(
                     name="Stockbit session",
                     ok=False,
@@ -228,20 +231,19 @@ class SQLiteSystemStatusProvider(SystemStatusProvider):
                     ms=elapsed,
                 )
 
-            likely = info.get("likely_valid", False)
-            age = info.get("age_hours")
-            age_str = f" ({age}h old)" if age is not None else ""
-            if likely:
+            age = info.browser_login_age_hours
+            age_str = f", browser {age}h old" if age is not None else ""
+            if info.token_state == "valid":
                 return ProviderStatusDto(
                     name="Stockbit session",
                     ok=True,
-                    label=f"valid{age_str}",
+                    label=f"token valid{age_str}",
                     ms=elapsed,
                 )
             return ProviderStatusDto(
                 name="Stockbit session",
                 ok=False,
-                label=f"expired{age_str}",
+                label=f"token {info.token_state}{age_str}",
                 ms=elapsed,
             )
         except ImportError:

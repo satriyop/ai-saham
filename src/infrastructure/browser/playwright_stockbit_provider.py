@@ -27,7 +27,6 @@ from __future__ import annotations
 
 import json
 import logging
-import time
 from pathlib import Path
 
 from src.domain.ports.browser_data_provider import BrowserDataProvider
@@ -37,50 +36,71 @@ from src.domain.value_objects.screener_result import (
     OrderBookBid,
     OrderBookTopOfBook,
 )
+from src.infrastructure.browser.playwright_stockbit_browser import (
+    NAV_TIMEOUT as NAV_TIMEOUT,
+)
+from src.infrastructure.browser.playwright_stockbit_browser import (
+    ORDERBOOK_PAGE_URL as ORDERBOOK_PAGE_URL,
+)
+from src.infrastructure.browser.playwright_stockbit_browser import (
+    SPA_SETTLE_MS as SPA_SETTLE_MS,
+)
+from src.infrastructure.browser.playwright_stockbit_browser import (
+    _exodus_get as _exodus_get,
+)
+from src.infrastructure.browser.playwright_stockbit_browser import (
+    _intercept_token as _intercept_token,
+)
+from src.infrastructure.browser.playwright_stockbit_browser import (
+    _persistent_context as _persistent_context,
+)
+from src.infrastructure.browser.playwright_stockbit_browser import (
+    _require_playwright as _require_playwright,
+)
+from src.infrastructure.browser.playwright_stockbit_browser import (
+    _resolve_token as _resolve_token,
+)
+from src.infrastructure.browser.playwright_stockbit_browser import (
+    browse_stockbit_session as browse_stockbit_session,
+)
+from src.infrastructure.browser.playwright_stockbit_browser import (
+    get_stockbit_session_status as get_stockbit_session_status,
+)
+from src.infrastructure.browser.playwright_stockbit_browser import (
+    save_stockbit_session as save_stockbit_session,
+)
 from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
 from src.infrastructure.browser.stockbit_preopen_parsers import (
     _parse_iev_response,
     _parse_top_of_book,
 )
+from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
 
 logger = logging.getLogger(__name__)
 
 # ── Session utilities — live in playwright_stockbit_browser, imported here ──
-from src.infrastructure.browser.playwright_stockbit_browser import (
-    DEFAULT_PROFILE_DIR,
-    NAV_TIMEOUT,
-    ORDERBOOK_PAGE_URL,
-    SPA_SETTLE_MS,
-    _exodus_get,
-    _intercept_token,
-    _persistent_context,
-    _require_playwright,
-    _resolve_token,
-    browse_stockbit_session,
-    get_session_status,
-    save_stockbit_session,
-)
-
-# ── Stockbit API config — driven by config/stockbit.yaml ─────────────────
-from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+# Imports above remain explicit aliases for backward-compatible re-export.
 
 _sb = STOCKBIT_CFG
 
-_IEV_MOVER_URL_MAIN    = _sb.iev_movers_main_url
+_IEV_MOVER_URL_MAIN = _sb.iev_movers_main_url
 _IEV_MOVER_URL_SPECIAL = _sb.iev_movers_special_url
-_ORDER_BOOK_API        = _sb.orderbook_url
+_ORDER_BOOK_API = _sb.orderbook_url
 
 ELEMENT_TIMEOUT = STOCKBIT_CFG.element_timeout_ms
 
 
 # ── Main provider ──────────────────────────────────────────────────────────
 
+
 class PlaywrightStockbitProvider(BrowserDataProvider):
     """
     Autonomous Stockbit IEV/OrderBook provider backed by StockbitApiClient.
 
     No browser launches for data — uses the persisted JWT via api_client.
-    The browser profile is only referenced by _assert_session_fresh().
+    Authentication health (token validity, refresh) is entirely owned by
+    StockbitApiClient/StockbitTokenStore; this provider never gates a
+    request on browser-profile age.
 
     Usage:
         from src.infrastructure.browser.stockbit_api_client import create_stockbit_api_client
@@ -90,28 +110,8 @@ class PlaywrightStockbitProvider(BrowserDataProvider):
         ob = provider.fetch_order_book_best_bid("BBCA")
     """
 
-    def __init__(
-        self,
-        api_client: StockbitApiClient,
-        profile_dir: Path = DEFAULT_PROFILE_DIR,
-    ) -> None:
+    def __init__(self, api_client: StockbitApiClient) -> None:
         self._api_client = api_client
-        self._profile_dir = profile_dir  # kept only for _assert_session_fresh
-
-    def _assert_session_fresh(self) -> None:
-        """Raise before making API calls if the session marker is too old."""
-        marker = self._profile_dir / ".logged_in_at"
-        if not marker.exists():
-            return  # no marker yet — first run after login
-        try:
-            age_hours = (time.time() - float(marker.read_text())) / 3600
-        except Exception:
-            return
-        if age_hours >= 8:
-            raise RuntimeError(
-                f"Stockbit session is {age_hours:.1f}h old — likely expired.\n"
-                "Run: saham fetch stockbit login"
-            )
 
     def fetch_preopen_movers(self, iev_min: int) -> list[MoverData]:
         """
@@ -121,13 +121,10 @@ class PlaywrightStockbitProvider(BrowserDataProvider):
           1. Call IEV movers API for main boards + special monitoring, merge results
           2. Parse and return MoverData list filtered by iev_min
         """
-        self._assert_session_fresh()
         try:
             all_movers = _fetch_iev_all_boards(self._api_client)
         except Exception as e:
-            raise RuntimeError(
-                f"IEV fetch failed: {e}\nRun: saham fetch stockbit login"
-            ) from None
+            raise RuntimeError(f"IEV fetch failed: {e}\nRun: saham fetch stockbit login") from None
         return [m for m in all_movers if m.iev >= iev_min]
 
     def fetch_top5_iev_with_orderbooks(self, top_n: int = 5) -> list[MoverWithOrderBook]:
@@ -146,7 +143,6 @@ class PlaywrightStockbitProvider(BrowserDataProvider):
         Returns:
             List of MoverWithOrderBook sorted by IEV descending
         """
-        self._assert_session_fresh()
         all_movers = _fetch_iev_all_boards(self._api_client)
         top_movers = all_movers[:top_n]
         logger.info("Top %d movers: %s", len(top_movers), [m.ticker for m in top_movers])
@@ -156,18 +152,24 @@ class PlaywrightStockbitProvider(BrowserDataProvider):
             ob_url = _ORDER_BOOK_API.format(ticker=mover.ticker.upper())
             body = self._api_client.get(ob_url)
             bid_price, bid_lots, offer_price, offer_lots = _parse_top_of_book(body)
-            results.append(MoverWithOrderBook(
-                ticker=mover.ticker,
-                iev=mover.iev,
-                best_bid=bid_price,
-                best_bid_lots=bid_lots,
-                best_offer=offer_price,
-                best_offer_lots=offer_lots,
-                iep=mover.iep,
-            ))
+            results.append(
+                MoverWithOrderBook(
+                    ticker=mover.ticker,
+                    iev=mover.iev,
+                    best_bid=bid_price,
+                    best_bid_lots=bid_lots,
+                    best_offer=offer_price,
+                    best_offer_lots=offer_lots,
+                    iep=mover.iep,
+                )
+            )
             logger.info(
                 "%s: bid=%s (%s lots)  offer=%s (%s lots)",
-                mover.ticker, bid_price, bid_lots, offer_price, offer_lots,
+                mover.ticker,
+                bid_price,
+                bid_lots,
+                offer_price,
+                offer_lots,
             )
 
         return results
@@ -182,7 +184,6 @@ class PlaywrightStockbitProvider(BrowserDataProvider):
         Args:
             top_n: Maximum movers to return (default 50 to capture a broad universe).
         """
-        self._assert_session_fresh()
         return _fetch_iev_all_boards(self._api_client)[:top_n]
 
     def _fetch_order_book_raw(self, ticker: str) -> OrderBookTopOfBook | None:
@@ -214,10 +215,18 @@ class PlaywrightStockbitProvider(BrowserDataProvider):
             return None
 
         bid = OrderBookBid(price=bid_price, volume=bid_lots) if bid_price and bid_lots else None
-        offer = OrderBookBid(price=offer_price, volume=offer_lots) if offer_price and offer_lots else None
+        offer = (
+            OrderBookBid(price=offer_price, volume=offer_lots)
+            if offer_price and offer_lots
+            else None
+        )
         logger.info(
             "Order book %s: bid=%s (%s lots)  offer=%s (%s lots)",
-            ticker, bid_price, bid_lots, offer_price, offer_lots,
+            ticker,
+            bid_price,
+            bid_lots,
+            offer_price,
+            offer_lots,
         )
         return OrderBookTopOfBook(bid=bid, offer=offer)
 
@@ -232,6 +241,7 @@ class PlaywrightStockbitProvider(BrowserDataProvider):
 
 
 # ── Board-aware IEV fetcher ────────────────────────────────────────────────
+
 
 def _fetch_iev_all_boards(api_client: StockbitApiClient) -> list[MoverData]:
     """
@@ -261,6 +271,7 @@ def _fetch_iev_all_boards(api_client: StockbitApiClient) -> list[MoverData]:
 
 
 # ── API patterns file (populated by spy) ──────────────────────────────────
+
 
 def _load_api_patterns(path: Path) -> dict:
     """Load custom API patterns discovered by spy-session."""

@@ -292,10 +292,7 @@ def pre_open(
                 profile_dir=Path(APP_CFG.storage.stockbit_profile_dir),
                 headless=headless,
             )
-            browser_provider = PlaywrightStockbitProvider(
-                api_client=api_client,
-                profile_dir=Path(APP_CFG.storage.stockbit_profile_dir),
-            )
+            browser_provider = PlaywrightStockbitProvider(api_client=api_client)
         else:
             if _playwright_available() and not _session_exists():
                 typer.echo("Playwright installed but no session found.")
