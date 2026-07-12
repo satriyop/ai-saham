@@ -7,6 +7,9 @@ from unittest.mock import MagicMock
 from src.application.use_case.accumulation_screen_use_case import (
     AccumulationScreenUseCase,
 )
+from src.infrastructure.config.ticker_profile_config_loader import (
+    create_ticker_profile_classifier,
+)
 from src.domain.entities.broker_flow import BrokerDailyFlow, BrokerSummary
 from src.domain.entities.candle import Candle
 from src.domain.ports.broker_data_repository import BrokerDataRepository
@@ -317,6 +320,7 @@ def _make_use_case_with_all_providers(
         bandar_detector_provider=bandar_prov,
         analyst_consensus_provider=analyst_prov,
         candidate_observations_repository=candidate_observations_repository,
+        ticker_profile_classifier_factory=create_ticker_profile_classifier,
     )
     return use_case, as_of, fund_prov, seasonality_prov, bandar_prov, analyst_prov
 

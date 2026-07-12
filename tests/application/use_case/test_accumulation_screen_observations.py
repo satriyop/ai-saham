@@ -12,6 +12,9 @@ from src.application.use_case.accumulation_screen_use_case import (
 from src.domain.ports.candidate_observations_repository import CandidateObservation
 from src.domain.value_objects.market_context import MarketContext, MarketRegime
 from src.domain.value_objects.setup_phase import SetupPhaseSnapshot
+from src.infrastructure.config.ticker_profile_config_loader import (
+    create_ticker_profile_classifier,
+)
 from tests.application.use_case.accumulation_screen_fixtures import (
     MockBrokerRepository,
     MockMarketRepository,
@@ -38,6 +41,7 @@ def test_screen_persists_candidate_observations_when_repo_injected():
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
         candidate_observations_repository=spy_repo,
+        ticker_profile_classifier_factory=create_ticker_profile_classifier,
     )
 
     response = use_case.execute(

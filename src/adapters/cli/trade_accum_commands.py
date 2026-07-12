@@ -27,11 +27,14 @@ from src.infrastructure.browser.stockbit_provider_bundle import (
     create_readonly_stockbit_providers,
 )
 from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.market_context_factory import create_market_context_engine
 from src.infrastructure.config.swing_backtest_config import (
     load_swing_backtest_config as _load_swing_backtest_config,
 )
 from src.infrastructure.config.swing_config import load_swing_config as _load_swing_config
-from src.infrastructure.config.market_context_factory import create_market_context_engine
+from src.infrastructure.config.ticker_profile_config_loader import (
+    create_ticker_profile_classifier,
+)
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
@@ -98,6 +101,7 @@ def _accumulation_log_impl(
         broker_repository=broker_repo,
         market_repository=market_repo,
         stockbit_providers=_sb,
+        ticker_profile_classifier_factory=create_ticker_profile_classifier,
     )
     journal_svc = AccumulationJournalService(
         store=AccumulationJournalCsvWriter(journal_path),
@@ -148,7 +152,8 @@ def _accumulation_log_impl(
 
     if result.candidate_foreign_flow_score is None and entry_price is None:
         typer.echo(
-            f"Warning: no accumulation data for {ticker_upper} in the last {window} broker sessions. "
+            f"Warning: no accumulation data for {ticker_upper} in "
+            f"the last {window} broker sessions. "
             "Logging without a foreign-flow score.",
             err=True,
         )
@@ -160,7 +165,11 @@ def _accumulation_log_impl(
         )
         return
 
-    score_str = f"{result.candidate_foreign_flow_score:.1f}" if result.candidate_foreign_flow_score is not None else "N/A"
+    score_str = (
+        f"{result.candidate_foreign_flow_score:.1f}"
+        if result.candidate_foreign_flow_score is not None
+        else "N/A"
+    )
     pattern_str = f" | pattern: {result.pattern}" if result.pattern else ""
     decision_str = (
         f" | setup={setup_name} | match={result.setup_match}"

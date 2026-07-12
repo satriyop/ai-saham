@@ -18,7 +18,7 @@ from __future__ import annotations
 import logging
 from datetime import date
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable
 
 from src.application.dto import accumulation_screen as accumulation_dto
 from src.application.ports.corporate_action_repository import CorporateActionRepository
@@ -51,6 +51,9 @@ if TYPE_CHECKING:
         RelativeStrengthCalculator,
     )
     from src.application.services.signal_engine import SignalEngine
+    from src.application.services.ticker_profile_classifier import (
+        TickerProfileClassifier,
+    )
     from src.application.use_case.assess_risk_use_case import AssessRiskUseCase
     from src.application.use_case.evaluate_swing_setup_use_case import (
         SwingSetupCatalogConfig,
@@ -163,6 +166,7 @@ class AccumulationScreenUseCase:
         primary_setup_family_resolver: "PrimarySetupFamilyResolver | None" = None,
         relative_strength_calculator: "RelativeStrengthCalculator | None" = None,
         indicator_registry: "IndicatorRegistry | None" = None,
+        ticker_profile_classifier_factory: Callable[[], TickerProfileClassifier] | None = None,
     ) -> None:
         from src.application.services.bootstrap import create_indicator_registry
         from src.application.services.flow_confirmation_evidence_builder import (
@@ -205,6 +209,7 @@ class AccumulationScreenUseCase:
             primary_setup_family_resolver=self._setup_family_resolver,
             relative_strength_calculator=self._relative_strength_calculator,
             indicator_registry=self._indicator_registry,
+            ticker_profile_classifier_factory=ticker_profile_classifier_factory,
         )
         self._risk_funnel = (
             AccumulationRiskFunnel(self._risk_use_case) if self._risk_use_case is not None else None

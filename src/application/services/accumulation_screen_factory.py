@@ -28,6 +28,7 @@ def create_accumulation_screen_use_case(
     derived_feature_policy: Any | None = None,
     idx_groups: dict[str, list[str]] | None = None,
     swing_setup_catalog: Any | None = None,
+    ticker_profile_classifier_factory: Any | None = None,
 ) -> AccumulationScreenUseCase:
     """Build AccumulationScreenUseCase with consistent optional enrichment wiring."""
     score_use_case = (
@@ -54,4 +55,5 @@ def create_accumulation_screen_use_case(
         foreign_flow_score_use_case=score_use_case,
         derived_feature_policy=derived_feature_policy,
         swing_setup_catalog=swing_setup_catalog,
+        ticker_profile_classifier_factory=ticker_profile_classifier_factory,
     )

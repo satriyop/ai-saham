@@ -7,10 +7,9 @@ from decimal import Decimal
 
 import pytest
 
+from src.application.dto.ticker_profile import TickerProfileConfig, TickerProfileRequest
 from src.application.services.ticker_profile_classifier import (
     TickerProfileClassifier,
-    TickerProfileConfig,
-    TickerProfileRequest,
 )
 from src.domain.entities.broker_flow import BrokerDailyFlow, BrokerSummary
 from src.domain.entities.candle import Candle
@@ -89,7 +88,9 @@ def _candle(offset: int, *, high: float, low: float, close: float, volume: int) 
     )
 
 
-def _flat_candles(n: int, *, high=100.0, low=99.0, close=100.0, volume=10_000) -> tuple[Candle, ...]:
+def _flat_candles(
+    n: int, *, high=100.0, low=99.0, close=100.0, volume=10_000
+) -> tuple[Candle, ...]:
     return tuple(
         _candle(off, high=high, low=low, close=close, volume=volume)
         for off in range(n)
@@ -191,7 +192,10 @@ def test_index_membership_score_not_in_any_index():
 # --------------------------------------------------------------------------- #
 def test_market_cap_bucket_large():
     snap = _classifier().classify(
-        _request(candles=_flat_candles(12), market_cap_idr=Decimal("15_000_000_000_000".replace("_", "")))
+        _request(
+            candles=_flat_candles(12),
+            market_cap_idr=Decimal("15_000_000_000_000".replace("_", "")),
+        )
     )
     assert snap.market_cap_bucket == "large"
 

@@ -4,6 +4,7 @@ Application workflow coordinator for `saham analyze swing`.
 Layer: Application
 AI usage: Optional sentiment provider, controlled by injected fetcher.
 """
+from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import replace
@@ -15,6 +16,9 @@ from src.application.dto import swing_analysis as swing_analysis_dto
 if TYPE_CHECKING:
     from src.application.services.risk_engine import RiskEngine
     from src.application.services.signal_engine import SignalEngine
+    from src.application.services.ticker_profile_classifier import (
+        TickerProfileClassifier,
+    )
     from src.application.use_case.assess_corporate_action_event_risk_use_case import (
         AssessCorporateActionEventRiskUseCase,
     )
@@ -78,6 +82,7 @@ class SwingAnalysisWorkflowUseCase:
         candidate_observations_repository: CandidateObservationsRepository | None = None,
         foreign_flow_score_policy: ForeignFlowScorePolicy | None = None,
         corporate_action_risk_use_case: "AssessCorporateActionEventRiskUseCase | None" = None,
+        ticker_profile_classifier_factory: Callable[[], TickerProfileClassifier] | None = None,
     ) -> None:
         self._market_repo = market_repository
         self._broker_repo = broker_repository
@@ -120,6 +125,7 @@ class SwingAnalysisWorkflowUseCase:
             candidate_observations_repository=candidate_observations_repository,
             signal_engine=signal_engine,
             corporate_action_risk_use_case=corporate_action_risk_use_case,
+            ticker_profile_classifier_factory=ticker_profile_classifier_factory,
         )
 
     def execute(

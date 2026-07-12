@@ -29,6 +29,9 @@ from src.infrastructure.config.accumulation_screener_config import (
     AccumulationScreenerConfig,
 )
 from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.ticker_profile_config_loader import (
+    create_ticker_profile_classifier,
+)
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_candidate_observations_repository import (
     SQLiteCandidateObservationsRepository,
@@ -81,6 +84,7 @@ def create_accumulation_screen_workflow(
         foreign_flow_score_policy=screener_config.foreign_flow_score_policy,
         derived_feature_policy=screener_config.derived_features,
         swing_setup_catalog=swing_setup_catalog,
+        ticker_profile_classifier_factory=create_ticker_profile_classifier,
     )
 
     return AccumulationScreenWorkflow(

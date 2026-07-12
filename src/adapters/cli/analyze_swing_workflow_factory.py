@@ -69,6 +69,9 @@ from src.infrastructure.config.corporate_action_policy_config import (
     load_corporate_action_policy_config,
 )
 from src.infrastructure.config.market_context_factory import evaluate_market_context
+from src.infrastructure.config.ticker_profile_config_loader import (
+    create_ticker_profile_classifier,
+)
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_candidate_observations_repository import (
     SQLiteCandidateObservationsRepository,
@@ -112,6 +115,7 @@ def create_swing_analysis_workflow(
             stockbit_providers=stockbit_providers,
             foreign_flow_score_policy=accumulation_config.foreign_flow_score_policy,
             derived_feature_policy=accumulation_config.derived_features,
+            ticker_profile_classifier_factory=create_ticker_profile_classifier,
         )
         accum_resp = accum_uc.execute(
             AccumulationScreenRequest(
@@ -182,6 +186,7 @@ def create_swing_analysis_workflow(
         candidate_observations_repository=candidate_observations_repo,
         foreign_flow_score_policy=accumulation_config.foreign_flow_score_policy,
         corporate_action_risk_use_case=corporate_action_risk_use_case,
+        ticker_profile_classifier_factory=create_ticker_profile_classifier,
     )
 
 

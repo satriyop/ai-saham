@@ -9,10 +9,11 @@ independent: a failure appends a warning and does not abort the workflow.
 Extracted from `SwingAnalysisWorkflowUseCase` to keep the use case as
 orchestration only.
 """
+from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, timedelta
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable
 
 from src.application.services.signal_context_builder import (
     build_signal_context_from_candidate,
@@ -27,6 +28,9 @@ if TYPE_CHECKING:
         FlowConfirmationEvidenceBuilder,
     )
     from src.application.services.signal_engine import SignalEngine
+    from src.application.services.ticker_profile_classifier import (
+        TickerProfileClassifier,
+    )
     from src.application.use_case.assess_corporate_action_event_risk_use_case import (
         AssessCorporateActionEventRiskUseCase,
     )
@@ -80,6 +84,7 @@ class SwingAnalysisEvidenceBuilder:
         candidate_observations_repository: "CandidateObservationsRepository | None",
         signal_engine: "SignalEngine | None",
         corporate_action_risk_use_case: "AssessCorporateActionEventRiskUseCase | None",
+        ticker_profile_classifier_factory: Callable[[], TickerProfileClassifier] | None = None,
     ) -> None:
         self._market_repo = market_repository
         self._broker_repo = broker_repository
@@ -88,6 +93,7 @@ class SwingAnalysisEvidenceBuilder:
         self._candidate_observations_repo = candidate_observations_repository
         self._signal_engine = signal_engine
         self._corporate_action_risk_use_case = corporate_action_risk_use_case
+        self._ticker_profile_classifier_factory = ticker_profile_classifier_factory
 
     def build(
         self,
@@ -244,49 +250,48 @@ class SwingAnalysisEvidenceBuilder:
             warnings.append(f"Institutional accumulation evidence unavailable: {exc}")
 
         ticker_profile_snapshot = None
-        try:
-            from decimal import Decimal as _Decimal
+        if self._ticker_profile_classifier_factory is not None:
+            try:
+                from decimal import Decimal as _Decimal
 
-            from src.application.services.ticker_profile_classifier import (
-                TickerProfileClassifier,
-                TickerProfileRequest,
-            )
+                from src.application.dto.ticker_profile import TickerProfileRequest
 
-            tp_market_cap_idr: _Decimal | None = None
-            if (
-                accumulation_candidate is not None
-                and accumulation_candidate.fundamentals is not None
-                and accumulation_candidate.fundamentals.market_cap_idr is not None
-            ):
-                tp_market_cap_idr = _Decimal(
-                    str(accumulation_candidate.fundamentals.market_cap_idr)
+                tp_market_cap_idr: _Decimal | None = None
+                if (
+                    accumulation_candidate is not None
+                    and accumulation_candidate.fundamentals is not None
+                    and accumulation_candidate.fundamentals.market_cap_idr is not None
+                ):
+                    tp_market_cap_idr = _Decimal(
+                        str(accumulation_candidate.fundamentals.market_cap_idr)
+                    )
+                tp_sector = (
+                    accumulation_candidate.ticker_notation.sector
+                    if accumulation_candidate is not None
+                    and accumulation_candidate.ticker_notation is not None
+                    else None
                 )
-            tp_sector = (
-                accumulation_candidate.ticker_notation.sector
-                if accumulation_candidate is not None
-                and accumulation_candidate.ticker_notation is not None
-                else None
-            )
-            tp_sub_sector = (
-                accumulation_candidate.ticker_notation.sub_sector
-                if accumulation_candidate is not None
-                and accumulation_candidate.ticker_notation is not None
-                else None
-            )
-            ticker_profile_snapshot = TickerProfileClassifier.from_yaml().classify(
-                TickerProfileRequest(
-                    ticker=ticker,
-                    snapshot_date=snapshot_date,
-                    candles=tuple(candles),
-                    broker_daily_flows=broker_daily_flows,
-                    broker_summaries=broker_summaries,
-                    market_cap_idr=tp_market_cap_idr,
-                    sector=tp_sector,
-                    sub_sector=tp_sub_sector,
+                tp_sub_sector = (
+                    accumulation_candidate.ticker_notation.sub_sector
+                    if accumulation_candidate is not None
+                    and accumulation_candidate.ticker_notation is not None
+                    else None
                 )
-            )
-        except Exception as exc:
-            warnings.append(f"Ticker profile classification unavailable: {exc}")
+                classifier = self._ticker_profile_classifier_factory()
+                ticker_profile_snapshot = classifier.classify(
+                    TickerProfileRequest(
+                        ticker=ticker,
+                        snapshot_date=snapshot_date,
+                        candles=tuple(candles),
+                        broker_daily_flows=broker_daily_flows,
+                        broker_summaries=broker_summaries,
+                        market_cap_idr=tp_market_cap_idr,
+                        sector=tp_sector,
+                        sub_sector=tp_sub_sector,
+                    )
+                )
+            except Exception as exc:
+                warnings.append(f"Ticker profile classification unavailable: {exc}")
 
         sector_context_evidence = None
         try:

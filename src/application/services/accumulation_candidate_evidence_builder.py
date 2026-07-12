@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable
 
 from src.application.dto import accumulation_screen as accumulation_dto
 from src.application.services.signal_context_builder import (
@@ -21,6 +21,9 @@ if TYPE_CHECKING:
         RelativeStrengthCalculator,
     )
     from src.application.services.signal_engine import SignalEngine
+    from src.application.services.ticker_profile_classifier import (
+        TickerProfileClassifier,
+    )
     from src.application.services.volatility_context import VolatilityContext
     from src.application.use_case.evaluate_swing_setup_use_case import (
         SwingSetupCatalogConfig,
@@ -60,6 +63,7 @@ class AccumulationCandidateEvidenceBuilder:
         primary_setup_family_resolver: "PrimarySetupFamilyResolver",
         relative_strength_calculator: "RelativeStrengthCalculator",
         indicator_registry: "IndicatorRegistry",
+        ticker_profile_classifier_factory: Callable[[], TickerProfileClassifier] | None = None,
     ) -> None:
         self._market_repo = market_repository
         self._broker_repo = broker_repository
@@ -69,6 +73,7 @@ class AccumulationCandidateEvidenceBuilder:
         self._setup_family_resolver = primary_setup_family_resolver
         self._relative_strength_calculator = relative_strength_calculator
         self._indicator_registry = indicator_registry
+        self._ticker_profile_classifier_factory = ticker_profile_classifier_factory
 
     def resolve_preliminary_setup_family(
         self, candidate: "accumulation_dto.AccumulationCandidate"
@@ -159,11 +164,10 @@ class AccumulationCandidateEvidenceBuilder:
         candidate: "accumulation_dto.AccumulationCandidate",
         snapshot_date: date,
     ) -> "TickerProfileSnapshot | None":
+        if self._ticker_profile_classifier_factory is None:
+            return None
         try:
-            from src.application.services.ticker_profile_classifier import (
-                TickerProfileClassifier,
-                TickerProfileRequest,
-            )
+            from src.application.dto.ticker_profile import TickerProfileRequest
 
             start_date = snapshot_date - timedelta(days=45)
             candles = self._market_repo.get_candles(candidate.ticker, end_date=snapshot_date)
@@ -178,7 +182,10 @@ class AccumulationCandidateEvidenceBuilder:
                 )
             )
             market_cap_idr: Decimal | None = None
-            if candidate.fundamentals is not None and candidate.fundamentals.market_cap_idr is not None:
+            if (
+                candidate.fundamentals is not None
+                and candidate.fundamentals.market_cap_idr is not None
+            ):
                 market_cap_idr = Decimal(str(candidate.fundamentals.market_cap_idr))
             sector = (
                 candidate.ticker_notation.sector
@@ -190,7 +197,8 @@ class AccumulationCandidateEvidenceBuilder:
                 if candidate.ticker_notation is not None
                 else None
             )
-            return TickerProfileClassifier.from_yaml().classify(
+            classifier = self._ticker_profile_classifier_factory()
+            return classifier.classify(
                 TickerProfileRequest(
                     ticker=candidate.ticker,
                     snapshot_date=snapshot_date,
