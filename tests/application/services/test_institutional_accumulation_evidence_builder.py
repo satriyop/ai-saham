@@ -392,7 +392,7 @@ def test_cnfb_bearish_scores_stored_per_window_in_metadata():
 
 def test_ia_fingerprint_reads_raw_cnfb_window_keys():
     """_ia_evidence_fingerprint must read cnfb_bullish_scores/cnfb_bearish_scores."""
-    from src.application.services.accumulation_observation_fingerprint import (
+    from src.application.services.accumulation_observation_institutional_fingerprint import (
         _ia_evidence_fingerprint,
     )
 
