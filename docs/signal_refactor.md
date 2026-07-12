@@ -26,6 +26,7 @@ thresholds, rollout order, or readiness may no longer describe runtime behavior.
 - [Archived Full Signal Refactor Rationale](archive/signal_refactor_full_rationale.md)
   preserves the complete long-form historical document and its implementation
   phases, examples, calibration proposals, and detailed reasoning.
+- [Tracker](archive/signal_refactor_tracker.md) preseve done and open implementation.
 
 ## Authority Warning
 
