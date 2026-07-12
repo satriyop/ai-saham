@@ -11,8 +11,6 @@ import typer
 
 from src.application.use_case.aggregate_indicators_use_case import AggregateIndicatorsResponse
 
-VALID_FIELDS = ["open", "high", "low", "close"]
-
 
 def rsi_signal(value: Decimal) -> str:
     if value > Decimal("70"):
@@ -30,14 +28,6 @@ def print_no_data_error(ticker: str, days: int) -> None:
 def print_db_not_found_error(db_path: Path, ticker: str, days: int) -> None:
     typer.echo(f"[error] Database not found at {db_path}.", err=True)
     typer.echo(f"        Fix:   saham fetch market {ticker.upper()} --days {days}", err=True)
-
-
-def validate_field(value: str) -> str:
-    if value.lower() not in VALID_FIELDS:
-        raise typer.BadParameter(
-            f"Invalid field '{value}'. Must be one of: {', '.join(VALID_FIELDS)}"
-        )
-    return value.lower()
 
 
 def print_compute_header(ticker: str, label: str, values: list, display_count: int = 0) -> None:
@@ -110,13 +100,17 @@ def print_snapshot_summary(response: AggregateIndicatorsResponse) -> None:
     typer.echo(f"\n{'─'*60}")
     typer.echo("Summary (latest)")
     typer.echo(f"{'─'*60}")
-    typer.echo(f"  SMA({response.sma_period}):  {latest.sma:>12,.2f}  Range [{min(sma_vals):,.2f} – {max(sma_vals):,.2f}]")
-    typer.echo(f"  EMA({response.ema_period}):  {latest.ema:>12,.2f}  Range [{min(ema_vals):,.2f} – {max(ema_vals):,.2f}]")
+
+    def _fmt_range(vals):
+        return f"[{min(vals):,.2f} – {max(vals):,.2f}]"
+
+    typer.echo(f"  SMA({response.sma_period}):  "
+               f"{latest.sma:>12,.2f}  Range {_fmt_range(sma_vals)}")
+    typer.echo(f"  EMA({response.ema_period}):  "
+               f"{latest.ema:>12,.2f}  Range {_fmt_range(ema_vals)}")
     rsi_sig = rsi_signal(latest.rsi)
     typer.echo(
-        f"  RSI({response.rsi_period}):  {latest.rsi:>12.2f}  Range [{min(rsi_vals):.2f} – {max(rsi_vals):.2f}]"
+        f"  RSI({response.rsi_period}):  {latest.rsi:>12.2f}  "
+        f"Range {_fmt_range(rsi_vals)}"
         f"  ← {rsi_sig}"
     )
-
-
-

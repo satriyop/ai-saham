@@ -8,9 +8,8 @@ from pathlib import Path
 from typing import Annotated, Optional
 
 import typer
-from rich.console import Console
-from rich.table import Table
 
+from src.adapters.cli.indicator_formula_display import print_formula_list
 from src.application.services.bootstrap import create_indicator_registry
 from src.application.use_case.create_indicator_from_intent_use_case import (
     CreateIndicatorFromIntentRequest,
@@ -26,31 +25,28 @@ DEFAULT_FORMULAS_PATH = Path("config/formulas.yaml")
 
 
 def create(
-    intent: Annotated[str, typer.Argument(help="Natural language description of the indicator")],
-    name: Annotated[Optional[str], typer.Option("--name", "-n", help="Indicator name (e.g., SMOOTH_RSI)")] = None,
-    provider: Annotated[str, typer.Option("--provider", "-p", help="AI provider (deepseek/claude/openai/gemini/ollama/mock)")] = "mock",
-    model: Annotated[Optional[str], typer.Option("--model", "-m", help="Model name for AI provider")] = None,
-    save: Annotated[bool, typer.Option("--save/--no-save", help="Save formula to storage")] = True,
-    formulas_path: Annotated[Optional[Path], typer.Option("--formulas", help="Path to formulas file")] = None,
+    intent: Annotated[
+        str, typer.Argument(help="Natural language description of the indicator")
+    ],
+    name: Annotated[
+        Optional[str],
+        typer.Option("--name", "-n", help="Indicator name (e.g., SMOOTH_RSI)"),
+    ] = None,
+    provider: Annotated[
+        str,
+        typer.Option("--provider", "-p",
+                      help="AI provider (deepseek/claude/openai/gemini/ollama/mock)"),
+    ] = "mock",
+    model: Annotated[
+        Optional[str], typer.Option("--model", "-m", help="Model name for AI provider")
+    ] = None,
+    save: Annotated[
+        bool, typer.Option("--save/--no-save", help="Save formula to storage")
+    ] = True,
+    formulas_path: Annotated[
+        Optional[Path], typer.Option("--formulas", help="Path to formulas file")
+    ] = None,
 ) -> None:
-    """
-    Create a custom indicator from natural language description.
-
-    Uses AI to translate intent into a formula, validates it, and optionally saves
-    it for reuse with `saham indicator compute`.
-
-    AI Providers:
-      mock      — local mock (no API key needed, for testing)
-      claude    — Anthropic Claude (requires ANTHROPIC_API_KEY)
-      openai    — OpenAI GPT (requires OPENAI_API_KEY)
-      gemini    — Google Gemini (requires GOOGLE_API_KEY)
-      ollama    — local Ollama (requires running Ollama server)
-
-    Examples:
-        saham indicator create "smoothed RSI with 14 period" --name SMOOTH_RSI
-        saham indicator create "MACD line" --name MACD --provider claude
-        saham indicator create "14-day RSI" --no-save
-    """
     typer.echo(f"Translating: {intent!r}")
     typer.echo(f"Provider:    {provider}")
 
@@ -68,8 +64,10 @@ def create(
         ))
 
         if response.unsupported:
-            typer.echo("\n[error] This intent cannot be expressed as a formula.", err=True)
-            typer.echo("        Tip:   Describe a mathematical combination of indicators.", err=True)
+            typer.echo("\n[error] This intent cannot be expressed as a "
+                       "formula.", err=True)
+            typer.echo("        Tip:   Describe a mathematical combination "
+                       "of indicators.", err=True)
             raise typer.Exit(1)
 
         if not response.success:
@@ -111,7 +109,8 @@ def create(
         msg = str(e).lower()
         if "api key" in msg or "authentication" in msg:
             typer.echo(f"[error] {e}", err=True)
-            typer.echo(f"        Tip:   Set the API key environment variable for {provider}.", err=True)
+            typer.echo("        Tip:   Set the API key environment "
+                       f"variable for {provider}.", err=True)
         elif "connection" in msg or "timeout" in msg:
             typer.echo("[error] Could not connect to AI provider.", err=True)
             if provider == "ollama":
@@ -123,100 +122,29 @@ def create(
         raise typer.Exit(1)
 
 
-def _print_formula_list(registry, stored_formulas, show_formulas, resolved_path):
-    from src.application.services.indicator_registry import BUILTIN_NAMES
-
-    console = Console()
-
-    console.print("")
-    console.print("[bold]Built-in Indicators[/bold]")
-    builtin_descriptions = {
-        "SMA": "Simple Moving Average",
-        "EMA": "Exponential Moving Average",
-        "RSI": "Relative Strength Index",
-    }
-
-    builtin_table = Table(show_header=True, header_style="bold magenta")
-    builtin_table.add_column("Indicator", style="cyan")
-    builtin_table.add_column("Description", style="white")
-    builtin_table.add_column("Default Period", justify="right")
-
-    for ind_name in sorted(BUILTIN_NAMES):
-        desc = builtin_descriptions.get(ind_name, "")
-        period = registry.get_default_period(ind_name)
-        builtin_table.add_row(ind_name, desc, str(period))
-    console.print(builtin_table)
-
-    plugin_names = set(registry.list_indicators()) - BUILTIN_NAMES - set(registry.list_formulas())
-    if plugin_names:
-        console.print("")
-        console.print("[bold]Plugin Indicators[/bold]")
-        plugin_table = Table(show_header=True, header_style="bold magenta")
-        plugin_table.add_column("Indicator", style="cyan")
-        plugin_table.add_column("Default Period", justify="right")
-        for ind_name in sorted(plugin_names):
-            period = registry.get_default_period(ind_name)
-            plugin_table.add_row(ind_name, str(period))
-        console.print(plugin_table)
-
-    console.print("")
-    console.print("[bold]Custom Formulas[/bold]")
-    if stored_formulas:
-        custom_table = Table(show_header=True, header_style="bold magenta")
-        custom_table.add_column("Indicator", style="cyan")
-        if show_formulas:
-            custom_table.add_column("Formula Expression", style="green")
-
-        for ind_name, stored in sorted(stored_formulas.items()):
-            if show_formulas:
-                custom_table.add_row(ind_name, stored.formula)
-            else:
-                custom_table.add_row(ind_name)
-        console.print(custom_table)
-        console.print(f"Formulas file: {resolved_path}")
-    else:
-        console.print("No custom formulas saved.")
-        console.print("Tip: Use `saham indicator create` to create custom indicators.")
-
-    total = len(registry.list_indicators()) + len(stored_formulas)
-    console.print(f"\nTotal available: {total}")
-
-
 def list_indicators(
-    show_formulas: Annotated[bool, typer.Option("--formulas", "-f", help="Show formula expressions")] = False,
-    formulas_path: Annotated[Optional[Path], typer.Option("--formulas-file", help="Path to formulas file")] = None,
+    show_formulas: Annotated[
+        bool, typer.Option("--formulas", "-f", help="Show formula expressions")
+    ] = False,
+    formulas_path: Annotated[
+        Optional[Path],
+        typer.Option("--formulas-file", help="Path to formulas file"),
+    ] = None,
 ) -> None:
-    """
-    List all available indicators.
-
-    Shows built-in indicators, loaded plugins, and saved custom formulas.
-    Use --formulas to see the formula expressions for custom indicators.
-
-    Examples:
-        saham indicator list
-        saham indicator list --formulas
-    """
     registry = create_indicator_registry()
     resolved_path = formulas_path or DEFAULT_FORMULAS_PATH
     storage = FormulaStorage(path=resolved_path)
     stored_formulas = storage.load_all()
-
-    _print_formula_list(registry, stored_formulas, show_formulas, resolved_path)
+    print_formula_list(registry, stored_formulas, show_formulas, resolved_path)
 
 
 def show(
     name: Annotated[str, typer.Argument(help="Formula name")],
-    formulas_path: Annotated[Optional[Path], typer.Option("--formulas-file", help="Path to formulas file")] = None,
+    formulas_path: Annotated[
+        Optional[Path],
+        typer.Option("--formulas-file", help="Path to formulas file"),
+    ] = None,
 ) -> None:
-    """
-    Show details of a saved custom formula.
-
-    Displays the formula expression, original intent, and creation date.
-
-    Examples:
-        saham indicator show SMOOTH_RSI
-        saham indicator show MACD
-    """
     resolved_path = formulas_path or DEFAULT_FORMULAS_PATH
     storage = FormulaStorage(path=resolved_path)
     stored = storage.get(name)
@@ -237,19 +165,14 @@ def show(
 
 def delete(
     name: Annotated[str, typer.Argument(help="Formula name to delete")],
-    force: Annotated[bool, typer.Option("--force", "-f", help="Skip confirmation prompt")] = False,
-    formulas_path: Annotated[Optional[Path], typer.Option("--formulas-file", help="Path to formulas file")] = None,
+    force: Annotated[
+        bool, typer.Option("--force", "-f", help="Skip confirmation prompt")
+    ] = False,
+    formulas_path: Annotated[
+        Optional[Path],
+        typer.Option("--formulas-file", help="Path to formulas file"),
+    ] = None,
 ) -> None:
-    """
-    Delete a saved custom formula.
-
-    Removes the formula from persistent storage. Built-in and plugin
-    indicators cannot be deleted.
-
-    Examples:
-        saham indicator delete SMOOTH_RSI
-        saham indicator delete MACD --force
-    """
     from src.application.services.indicator_registry import BUILTIN_NAMES
 
     name_upper = name.upper()

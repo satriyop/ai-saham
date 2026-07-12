@@ -29,12 +29,26 @@ DEFAULT_DAYS = APP_CFG.market.default_days
 
 def snapshot(
     ticker: Annotated[str, typer.Argument(help="Stock ticker symbol (e.g., BBCA)")],
-    sma_period: Annotated[int, typer.Option("--sma", help="SMA period (default: 20)", min=1)] = 20,
-    ema_period: Annotated[int, typer.Option("--ema", help="EMA period (default: 20)", min=1)] = 20,
-    rsi_period: Annotated[int, typer.Option("--rsi", help="RSI period (default: 14)", min=1)] = 14,
-    days: Annotated[int, typer.Option("--days", "-d", help="Days of history to load", min=1)] = DEFAULT_DAYS,
-    db_path: Annotated[Optional[Path], typer.Option("--db", help="Path to SQLite database")] = None,
-    fmt: Annotated[str, typer.Option("--format", help="Output format: table or json")] = APP_CFG.analysis.format,
+    sma_period: Annotated[
+        int, typer.Option("--sma", help="SMA period (default: 20)", min=1)
+    ] = 20,
+    ema_period: Annotated[
+        int, typer.Option("--ema", help="EMA period (default: 20)", min=1)
+    ] = 20,
+    rsi_period: Annotated[
+        int, typer.Option("--rsi", help="RSI period (default: 14)", min=1)
+    ] = 14,
+    days: Annotated[
+        int,
+        typer.Option("--days", "-d", help="Days of history to load", min=1),
+    ] = DEFAULT_DAYS,
+    db_path: Annotated[
+        Optional[Path], typer.Option("--db", help="Path to SQLite database")
+    ] = None,
+    fmt: Annotated[
+        str,
+        typer.Option("--format", help="Output format: table or json"),
+    ] = APP_CFG.analysis.format,
 ) -> None:
     """
     Multi-indicator view: SMA, EMA, and RSI aligned by date.
@@ -49,7 +63,11 @@ def snapshot(
     """
     resolved_db = db_path or DEFAULT_DB_PATH
     ticker_upper = ticker.upper()
-    typer.echo(f"Loading {ticker_upper} · SMA({sma_period})/EMA({ema_period})/RSI({rsi_period}) from {resolved_db}...")
+    typer.echo(
+        f"Loading {ticker_upper} · "
+        f"SMA({sma_period})/EMA({ema_period})/RSI({rsi_period}) "
+        f"from {resolved_db}..."
+    )
 
     try:
         repository = SQLiteMarketRepository(db_path=resolved_db)

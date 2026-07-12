@@ -25,7 +25,12 @@ DEFAULT_DAYS = APP_CFG.market.default_days
 
 
 def compute(
-    indicator: Annotated[str, typer.Argument(help="Indicator name (SMA, RSI, ATR, or custom formula)")],
+    indicator: Annotated[
+        str,
+        typer.Argument(
+            help="Indicator name (SMA, RSI, ATR, or custom formula)"
+        ),
+    ],
     ticker: Annotated[str, typer.Argument(help="Stock ticker symbol (e.g., BBCA)")],
     period: Annotated[
         int,
