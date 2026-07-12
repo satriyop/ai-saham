@@ -285,3 +285,80 @@ def test_signal_observation_fingerprint_volatility_context_canonical_key_precede
     )
 
     assert fp.atr_at_signal == 9.0
+
+
+def test_signal_observation_fingerprint_imports():
+    from src.domain.value_objects.signal_forward_label import (
+        SignalObservationFingerprint as Compat,
+    )
+    from src.domain.value_objects.signal_observation_fingerprint import (
+        SignalObservationFingerprint as Canonical,
+    )
+    assert Canonical is Compat
+
+
+def test_signal_observation_fingerprint_legacy_aliases_and_conversions():
+    from src.domain.value_objects.signal_observation_fingerprint import SignalObservationFingerprint
+
+    # 1. Test legacy aliases mapping
+    data = {
+        "setup_phase_current": "ACCUMULATION",
+        "rsi_at_signal": 45.0,
+        "bb_width_pctile_at_signal": 0.25,
+        "vwap_position_at_signal": 1.02,
+        "rs_vs_ihsg_20d_at_signal": -0.05,
+        "volume_ratio_at_signal": 1.5,
+        "cnfb_20d_at_signal": 0.002,
+        "foreign_participation_at_signal": 0.45,
+        "foreign_concentration_at_signal": 0.6,
+        "domestic_broker_accumulation_at_signal": 0.1,
+    }
+    fp = SignalObservationFingerprint.from_dict(data)
+    assert fp.setup_phase == "ACCUMULATION"
+    assert fp.rsi == 45.0
+    assert fp.bb_width_pctile == 0.25
+    assert fp.vwap_position == 1.02
+    assert fp.rs_vs_ihsg == -0.05
+    assert fp.volume_ratio == 1.5
+    assert fp.cnfb == 0.002
+    assert fp.foreign_participation == 0.45
+    assert fp.foreign_concentration == 0.6
+    assert fp.domestic_broker_accumulation == 0.1
+
+    # 2. Test market_regime reconstruction from flat fields
+    data_regime = {
+        "market_regime_at_signal": "BULL_MARKET",
+        "regime_confidence_at_signal": 0.85,
+        "regime_stability_at_signal": "HIGH",
+        "decision_constraints": {"min_score": 0.4},
+    }
+    fp_regime = SignalObservationFingerprint.from_dict(data_regime)
+    assert fp_regime.market_regime == {
+        "regime": "BULL_MARKET",
+        "regime_confidence": 0.85,
+        "regime_stability": "HIGH",
+        "decision_constraints": {"min_score": 0.4},
+    }
+    assert fp_regime.market_regime_at_signal == "BULL_MARKET"
+    assert fp_regime.regime_confidence_at_signal == 0.85
+    assert fp_regime.regime_stability_at_signal == "HIGH"
+
+    # 3. Test tuple/list fields still round-trip as tuples internally and lists in to_dict()
+    data_collections = {
+        "matched_setup_families": ["breakout", "coiled-spring"],
+        "setup_family_rationale": ["matched some criteria"],
+        "phase_reasons": ["first reason", "second reason"],
+        "strategy_rationale": ["strategy description"],
+    }
+    fp_coll = SignalObservationFingerprint.from_dict(data_collections)
+    assert isinstance(fp_coll.matched_setup_families, tuple)
+    assert fp_coll.matched_setup_families == ("breakout", "coiled-spring")
+
+    serialized = fp_coll.to_dict()
+    assert isinstance(serialized["matched_setup_families"], list)
+    assert serialized["matched_setup_families"] == ["breakout", "coiled-spring"]
+
+    # 4. Test exact round-trip equivalence
+    round_tripped = SignalObservationFingerprint.from_dict(fp_coll.to_dict())
+    assert round_tripped == fp_coll
+    assert round_tripped.to_dict() == fp_coll.to_dict()
