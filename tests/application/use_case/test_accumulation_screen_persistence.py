@@ -1,9 +1,8 @@
 """
 Persistence integration tests for ia_* and sc_* fingerprint fields.
 
-Verifies that AccumulationScreenUseCase._persist_candidate_observations()
-correctly serializes both sets of diagnostic evidence into the saved
-CandidateObservation payload.
+Verifies that AccumulationScreenUseCase.execute() persists both sets of
+diagnostic evidence into the saved CandidateObservation payload.
 
 The distinction under test:
   - A field being None because evidence was genuinely unavailable (e.g. no
@@ -37,7 +36,6 @@ from src.domain.ports.candidate_observations_repository import (
 from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.ports.ticker_notation_provider import TickerNotationProvider
 from src.domain.value_objects.ticker_notation import TickerNotationSnapshot
-
 
 # --------------------------------------------------------------------------- #
 # Stubs

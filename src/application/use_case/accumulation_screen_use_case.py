@@ -26,11 +26,7 @@ from src.application.services.accumulation_candidate_evidence_builder import (
     AccumulationCandidateEvidenceBuilder,
 )
 from src.application.services.accumulation_risk_funnel import AccumulationRiskFunnel
-from src.application.services.signal_context_builder import (
-    build_signal_context_from_candidate,
-)
 from src.application.use_case.score_foreign_flow_use_case import (
-    ScoreForeignFlowRequest,
     ScoreForeignFlowUseCase,
 )
 from src.domain.ports.analyst_consensus_provider import AnalystConsensusProvider
@@ -43,7 +39,6 @@ from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.ports.seasonality_provider import SeasonalityProvider
 from src.domain.ports.shareholding_provider import ShareholdingProvider
 from src.domain.ports.ticker_notation_provider import TickerNotationProvider
-from src.domain.value_objects.foreign_flow_evidence import ForeignFlowEvidence
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +58,9 @@ if TYPE_CHECKING:
     from src.domain.ports.candidate_observations_repository import (
         CandidateObservationsRepository,
     )
-    from src.domain.value_objects.flow_confirmation_evidence import FlowConfirmationEvidence
+    from src.domain.value_objects.flow_confirmation_evidence import (
+        FlowConfirmationEvidence,
+    )
 
 # Default setup targets (1:1 R:R, regime-unaware fallback)
 _DEFAULT_TAKE_PROFIT = Decimal("5")
@@ -181,15 +178,6 @@ class AccumulationScreenUseCase:
 
         self._broker_repo = broker_repository
         self._market_repo = market_repository
-        self._corp_action_repo = corporate_action_repo
-        self._seasonality_provider = seasonality_provider
-        self._insider_provider = insider_activity_provider
-        self._analyst_provider = analyst_consensus_provider
-        self._forward_estimates_provider = forward_estimates_provider
-        self._shareholding_provider = shareholding_provider
-        self._bandar_provider = bandar_detector_provider
-        self._fundamentals_provider = fundamentals_provider
-        self._ticker_notation_provider = ticker_notation_provider
         self._risk_use_case = risk_use_case
         self._signal_engine = signal_engine or _SignalEngine()
         self._candidate_observations_repo = candidate_observations_repository
@@ -227,11 +215,20 @@ class AccumulationScreenUseCase:
                 for t in tickers:
                     self._ticker_to_group[t.upper()] = group_name
 
+        from src.application.services.accumulation_candidate_enricher import (
+            AccumulationCandidateEnricher,
+        )
         from src.application.services.accumulation_candidate_evaluator import (
             AccumulationCandidateEvaluator,
         )
         from src.application.services.accumulation_candidate_observation_persister import (
             AccumulationCandidateObservationPersister,
+        )
+        from src.application.services.accumulation_candidate_signal_assessor import (
+            AccumulationCandidateSignalAssessor,
+        )
+        from src.application.services.accumulation_candidate_structural_filter import (
+            AccumulationCandidateStructuralFilter,
         )
         from src.application.services.accumulation_sector_breadth import (
             AccumulationSectorBreadthApplier,
@@ -250,6 +247,27 @@ class AccumulationScreenUseCase:
         )
         self._sector_breadth_applier = AccumulationSectorBreadthApplier(
             ticker_to_group=self._ticker_to_group
+        )
+        self._structural_filter = AccumulationCandidateStructuralFilter(
+            fundamentals_provider=fundamentals_provider,
+        )
+        self._enricher = AccumulationCandidateEnricher(
+            corp_action_repo=corporate_action_repo,
+            seasonality_provider=seasonality_provider,
+            insider_provider=insider_activity_provider,
+            analyst_provider=analyst_consensus_provider,
+            shareholding_provider=shareholding_provider,
+            bandar_provider=bandar_detector_provider,
+            fundamentals_provider=fundamentals_provider,
+            ticker_notation_provider=ticker_notation_provider,
+            forward_estimates_provider=forward_estimates_provider,
+            derived_features=self._derived_features,
+        )
+        self._signal_assessor = AccumulationCandidateSignalAssessor(
+            signal_engine=self._signal_engine,
+            flow_confirmation_builder=self._flow_confirmation_builder,
+            candidate_evidence_builder=self._candidate_evidence_builder,
+            foreign_flow_score_uc=self._foreign_flow_score_uc,
         )
 
     def execute(
@@ -286,225 +304,33 @@ class AccumulationScreenUseCase:
             if result.top_brokers is not None:
                 uses_stockbit = True
 
-            # Early pruning: fetch fundamentals first when market_cap or piotroski
-            # gates are active. Avoids 6+ enrichment queries for tickers that will
-            # be skipped by these structural filters.
-            fundamentals_fetched = False
-            if self._fundamentals_provider is not None and (
-                request.min_market_cap_idr > 0 or request.min_piotroski > 0
-            ):
-                result.fundamentals = self._fundamentals_provider.get_fundamentals(
-                    ticker=result.ticker,
-                    as_of_date=request.as_of_date,
-                )
-                fundamentals_fetched = True
+            # Step 1: Structural filter — early pruning before expensive enrichment
+            filter_result = self._structural_filter.apply(result, request)
 
-                # Market cap floor gate
-                if request.min_market_cap_idr > 0 and (
-                    result.fundamentals is None
-                    or result.fundamentals.market_cap_idr is None
-                    or result.fundamentals.market_cap_idr < request.min_market_cap_idr
-                ):
-                    cap_b = (
-                        result.fundamentals.market_cap_idr // 1_000_000_000
-                        if result.fundamentals and result.fundamentals.market_cap_idr
-                        else None
-                    )
-                    logger.debug(
-                        "Skip %s: market_cap %sB IDR < floor %dB IDR",
-                        result.ticker,
-                        cap_b,
-                        request.min_market_cap_idr // 1_000_000_000,
-                    )
-                    skipped += 1
-                    continue
-
-                # Piotroski floor gate
-                if request.min_piotroski > 0:
-                    fscore = (
-                        result.fundamentals.piotroski_f_score
-                        if result.fundamentals is not None
-                        else None
-                    )
-                    if fscore is None or fscore < request.min_piotroski:
-                        skipped += 1
-                        continue
-
-            evidence_resp = self._foreign_flow_score_uc.execute(
-                ScoreForeignFlowRequest(
-                    ticker=result.ticker,
-                    snapshot_date=today,
-                    net_buy_ratio=result.net_buy_ratio,
-                    consecutive_streak=result.consecutive_streak,
-                    vwap_discount_pct=result.vwap_discount_pct,
-                    rsi=result.rsi,
-                    avg_flow_ratio=result.avg_flow_ratio,
-                    bb_width_pctile=result.bb_width_pctile,
-                    bci_label=result.bci_label,
-                    bci_tier1_count=result.bci_tier1_count,
-                )
-            )
-            result.foreign_flow_score_breakdown = evidence_resp.evidence
-            result.foreign_flow_score = evidence_resp.evidence.foreign_flow_score
-            result.foreign_flow_evidence = ForeignFlowEvidence.from_score_breakdown(
-                evidence_resp.evidence,
-                net_buy_days=result.net_buy_days,
-                total_days=result.total_days,
-                vwap_pct=result.vwap_pct,
-                longer_term_context={
-                    "bci_label": result.bci_label,
-                    "bci_tier1_count": result.bci_tier1_count,
-                },
-            )
-
-            # Phase 2.2: resistance-proximity flag
-            if (
-                request.resistance_gate_enabled
-                and result.nearest_resistance_pct is not None
-                and result.nearest_resistance_pct < request.resistance_headroom_min_pct
-            ):
-                result.resistance_flag = True
-
-            # Phase 3.1: corporate action risk flags (dividend, rights issue, RUPS)
-            if self._corp_action_repo is not None:
-                from datetime import timedelta
-
-                events = self._corp_action_repo.get_upcoming_events(
-                    ticker=result.ticker,
-                    from_date=today,
-                    to_date=today + timedelta(days=request.ex_date_warning_days),
-                )
-                for event in events:
-                    if event.is_dividend:
-                        result.dividend_risk = True
-                    elif event.is_rights_issue:
-                        result.rights_issue_risk = True
-                    elif event.is_rups:
-                        result.upcoming_rups.append(event.detail or "RUPS")
-
-            # Phase 3.3: seasonality signal
-            if self._seasonality_provider is not None:
-                result.seasonal_edge = self._seasonality_provider.get_seasonal_edge(
-                    ticker=result.ticker,
-                    year=today.year,
-                    month=today.month,
-                    as_of_date=request.as_of_date,
-                )
-
-            # Insider activity: director/commissioner transactions in last 90 days
-            insider_txns: list = []
-            insider_net_buy_ratio: float | None = None
-            if self._insider_provider is not None:
-                from datetime import timedelta
-
-                from src.domain.value_objects.insider_transaction import compute_net_buy_ratio
-
-                insider_txns = self._insider_provider.get_insider_transactions(
-                    ticker=result.ticker,
-                    from_date=today - timedelta(days=self._derived_features.insider_lookback_days),
-                    to_date=today,
-                    action_type="ALL",
-                    as_of_date=request.as_of_date,
-                )
-                buy_txns = [t for t in insider_txns if t.is_buy]
-                if buy_txns:
-                    result.insider_buying = True
-                    result.recent_insider_buys = [t.label for t in buy_txns[:3]]
-                insider_net_buy_ratio = compute_net_buy_ratio(insider_txns)
-                if insider_net_buy_ratio is None:
-                    insider_net_buy_ratio = 0.0
-
-            # Analyst consensus: aggregated buy/hold/sell + price target
-            if self._analyst_provider is not None:
-                result.analyst_consensus = self._analyst_provider.get_consensus(
-                    ticker=result.ticker,
-                    as_of_date=request.as_of_date,
-                )
-
-            # Shareholding composition: institutional %, individual %, top holder
-            if self._shareholding_provider is not None:
-                result.shareholding = self._shareholding_provider.get_composition(
-                    ticker=result.ticker,
-                    as_of_date=request.as_of_date,
-                )
-
-            # Bandar detector: Stockbit's institutional operator accumulation signal
-            if self._bandar_provider is not None:
-                result.bandar_detector = self._bandar_provider.get_snapshot(
-                    ticker=result.ticker,
-                    session_date=request.as_of_date,
-                )
-
-            # Company fundamentals (skip if already fetched by early gate above)
-            if self._fundamentals_provider is not None and not fundamentals_fetched:
-                result.fundamentals = self._fundamentals_provider.get_fundamentals(
-                    ticker=result.ticker,
-                    as_of_date=request.as_of_date,
-                )
-
-            if self._ticker_notation_provider is not None:
-                result.ticker_notation = self._ticker_notation_provider.get_notation(
-                    ticker=result.ticker,
-                    as_of_date=request.as_of_date,
-                )
-
-            # Forward EPS estimates — used in composite score
-            if self._forward_estimates_provider is not None:
-                result.forward_estimates = self._forward_estimates_provider.get_forward_estimates(
-                    ticker=result.ticker,
-                    as_of_date=request.as_of_date,
-                )
-                if (
-                    result.forward_estimates is not None
-                    and result.forward_estimates.forward_pe is None
-                    and result.forward_estimates.forward_eps_1y is not None
-                    and result.current_price > Decimal("0")
-                ):
-                    result.forward_estimates = result.forward_estimates.with_current_price(
-                        float(result.current_price)
-                    )
-
-            result.insider_net_buy_ratio = insider_net_buy_ratio
-            signal_ctx = build_signal_context_from_candidate(
-                ticker=result.ticker,
-                snapshot_date=today,
-                candidate=result,
-                signal_engine=self._signal_engine,
-            )
-            # Flow evidence is built from candidate data already in memory — no
-            # extra fetch. SetupEvidence is intentionally absent here: the batch
-            # screener does not evaluate named setup patterns per ticker; that
-            # happens only in the per-ticker swing workflow. Confidence will be
-            # 0.40 (flow group only) until the full workflow enriches it further.
-            _flow_ev = None
-            try:
-                _flow_ev = self._flow_confirmation_builder.build(result, analysis_date=today)
-            except Exception:
-                pass
-            result.signal_assessment = self._signal_engine.evaluate_with_context(
-                result.ticker, signal_ctx, flow_confirmation_evidence=_flow_ev
-            )
-            # Accumulation-lifecycle diagnostic for screen display and persisted
-            # observations alike — computed once here and reused by
-            # _persist_candidate_observations() to avoid detecting twice.
-            result.setup_phase = self._candidate_evidence_builder.detect_candidate_setup_phase(
-                result, _flow_ev, today
-            )
-
-            if (
-                request.min_foreign_flow_score_enabled
-                and result.foreign_flow_score < request.min_foreign_flow_score
-            ):
-                all_results.append((result, "rejected_flow", _flow_ev))
+            if filter_result.rejected:
+                all_results.append((filter_result.candidate, filter_result.screen_result, None))
+                skipped += 1
                 continue
-            if request.min_signal_score_enabled and (
-                result.signal_assessment is None
-                or result.signal_assessment.assessment.score < request.min_signal_score
-            ):
-                all_results.append((result, "rejected_signal", _flow_ev))
-                continue
-            all_results.append((result, "pass", _flow_ev))
-            candidates.append(result)
+
+            # Step 2: Provider-backed enrichment
+            enrich_result = self._enricher.enrich(
+                filter_result.candidate,
+                request=request,
+                as_of_date=today,
+                fundamentals_fetched=filter_result.fundamentals_fetched,
+            )
+            result = enrich_result.candidate
+            result.insider_net_buy_ratio = enrich_result.insider_net_buy_ratio
+
+            # Step 3: Signal assessment, flow evidence, setup phase, classification
+            assessment = self._signal_assessor.assess(
+                result, request=request, as_of_date=today
+            )
+            result = assessment.candidate
+
+            all_results.append((result, assessment.screen_result, assessment.flow_evidence))
+            if assessment.passes:
+                candidates.append(result)
 
         # Phase 3.2: sector breadth post-processing pass
         if request.sector_breadth_enabled and self._ticker_to_group:
@@ -527,44 +353,3 @@ class AccumulationScreenUseCase:
             tickers_skipped=skipped,
             provider="stockbit" if uses_stockbit else "idx",
         )
-
-    def _persist_candidate_observations(
-        self,
-        all_results: list[
-            tuple[accumulation_dto.AccumulationCandidate, str, FlowConfirmationEvidence | None]
-        ],
-        snapshot_date: date,
-        request: accumulation_dto.AccumulationScreenRequest,
-    ) -> None:
-        self._observation_persister.persist(all_results, snapshot_date, request)
-
-    def _evaluate_ticker(
-        self,
-        ticker: str,
-        window_days: int,
-        today: date,
-        min_net_buy_days: int,
-        rsi_period: int,
-        sma_period: int,
-        tier1_broker_codes: frozenset[str] = accumulation_dto.TIER1_FOREIGN_BROKERS,
-        bci_cluster_min_count: int = 3,
-        bci_stable_min_count: int = 1,
-    ) -> accumulation_dto.AccumulationCandidate | None:
-        return self._candidate_evaluator.evaluate(
-            ticker=ticker,
-            window_days=window_days,
-            today=today,
-            min_net_buy_days=min_net_buy_days,
-            rsi_period=rsi_period,
-            sma_period=sma_period,
-            tier1_broker_codes=tier1_broker_codes,
-            bci_cluster_min_count=bci_cluster_min_count,
-            bci_stable_min_count=bci_stable_min_count,
-        )
-
-    def _apply_sector_breadth(
-        self,
-        candidates: list[accumulation_dto.AccumulationCandidate],
-        request: accumulation_dto.AccumulationScreenRequest,
-    ) -> None:
-        self._sector_breadth_applier.apply(candidates, request)
