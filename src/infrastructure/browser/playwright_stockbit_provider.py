@@ -9,7 +9,8 @@ Broker/foreign-flow JSON parsing lives in stockbit_broker_parsers.py.
 IEV/orderbook JSON parsing lives in stockbit_preopen_parsers.py.
 
 Browser session utilities (login, spy, browse, JWT extraction) live in
-playwright_stockbit_browser.py and are re-exported from here for backward compat.
+stockbit_session_actions.py / stockbit_token_extractor.py (with a compatibility
+facade in playwright_stockbit_browser.py) and are re-exported from here.
 
 Phase D+E: browser launches removed from data-fetching methods. All Exodus API
 calls now go through StockbitApiClient (JWT managed by StockbitTokenStore).
@@ -36,43 +37,40 @@ from src.domain.value_objects.screener_result import (
     OrderBookBid,
     OrderBookTopOfBook,
 )
-from src.infrastructure.browser.playwright_stockbit_browser import (
+from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
+from src.infrastructure.browser.stockbit_browser_context import (
     NAV_TIMEOUT as NAV_TIMEOUT,
 )
-from src.infrastructure.browser.playwright_stockbit_browser import (
+from src.infrastructure.browser.stockbit_browser_context import (
     ORDERBOOK_PAGE_URL as ORDERBOOK_PAGE_URL,
 )
-from src.infrastructure.browser.playwright_stockbit_browser import (
+from src.infrastructure.browser.stockbit_browser_context import (
     SPA_SETTLE_MS as SPA_SETTLE_MS,
 )
-from src.infrastructure.browser.playwright_stockbit_browser import (
-    _exodus_get as _exodus_get,
-)
-from src.infrastructure.browser.playwright_stockbit_browser import (
-    _intercept_token as _intercept_token,
-)
-from src.infrastructure.browser.playwright_stockbit_browser import (
+from src.infrastructure.browser.stockbit_browser_context import (
     _persistent_context as _persistent_context,
 )
-from src.infrastructure.browser.playwright_stockbit_browser import (
+from src.infrastructure.browser.stockbit_browser_context import (
     _require_playwright as _require_playwright,
 )
-from src.infrastructure.browser.playwright_stockbit_browser import (
-    _resolve_token as _resolve_token,
-)
-from src.infrastructure.browser.playwright_stockbit_browser import (
-    browse_stockbit_session as browse_stockbit_session,
-)
-from src.infrastructure.browser.playwright_stockbit_browser import (
-    get_stockbit_session_status as get_stockbit_session_status,
-)
-from src.infrastructure.browser.playwright_stockbit_browser import (
-    save_stockbit_session as save_stockbit_session,
-)
-from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
 from src.infrastructure.browser.stockbit_preopen_parsers import (
     _parse_iev_response,
     _parse_top_of_book,
+)
+from src.infrastructure.browser.stockbit_session_actions import (
+    browse_stockbit_session as browse_stockbit_session,
+)
+from src.infrastructure.browser.stockbit_session_actions import (
+    get_stockbit_session_status as get_stockbit_session_status,
+)
+from src.infrastructure.browser.stockbit_session_actions import (
+    save_stockbit_session as save_stockbit_session,
+)
+from src.infrastructure.browser.stockbit_token_extractor import (
+    _intercept_token as _intercept_token,
+)
+from src.infrastructure.browser.stockbit_token_extractor import (
+    _resolve_token as _resolve_token,
 )
 from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
 

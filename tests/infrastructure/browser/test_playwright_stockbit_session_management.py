@@ -1,6 +1,6 @@
 """
 Tests for save_stockbit_session / browse_stockbit_session / get_stockbit_session_status
-and the pure helper _persist_newer_token in playwright_stockbit_browser.py.
+and the pure helper _persist_newer_token in stockbit_session_actions.py.
 
 All Playwright interaction is faked — no real browser is ever launched.
 """
@@ -11,7 +11,7 @@ import base64
 import json
 import time
 
-import src.infrastructure.browser.playwright_stockbit_browser as browser_mod
+import src.infrastructure.browser.stockbit_session_actions as browser_mod
 from src.infrastructure.browser.stockbit_token_store import StockbitTokenStore
 
 # ── Helpers ───────────────────────────────────────────────────────────────
@@ -402,3 +402,37 @@ def test_get_session_status_performs_no_playwright_or_network_calls(tmp_path):
     assert status.profile_exists is False
     assert status.token_exists is False
     assert status.token_state == "missing"
+
+
+def test_facade_compatibility():
+    import src.infrastructure.browser.playwright_stockbit_browser as facade_mod
+    import src.infrastructure.browser.stockbit_browser_context as context_mod
+    import src.infrastructure.browser.stockbit_session_actions as session_mod
+    import src.infrastructure.browser.stockbit_token_extractor as extractor_mod
+    from src.infrastructure.browser.stockbit_api_client import StockbitSessionExpired
+
+    assert facade_mod.save_stockbit_session is session_mod.save_stockbit_session
+    assert facade_mod.browse_stockbit_session is session_mod.browse_stockbit_session
+    assert facade_mod.spy_stockbit_session is session_mod.spy_stockbit_session
+    assert facade_mod.get_stockbit_session_status is session_mod.get_stockbit_session_status
+    assert facade_mod._persist_newer_token is session_mod._persist_newer_token
+
+    assert facade_mod.DEFAULT_PROFILE_DIR is context_mod.DEFAULT_PROFILE_DIR
+    assert facade_mod.BASE_URL is context_mod.BASE_URL
+    assert facade_mod.STREAM_URL is context_mod.STREAM_URL
+    assert facade_mod.SCREENER_URL is context_mod.SCREENER_URL
+    assert facade_mod.ORDER_BOOK_URL is context_mod.ORDER_BOOK_URL
+    assert facade_mod.ORDERBOOK_PAGE_URL is context_mod.ORDERBOOK_PAGE_URL
+    assert facade_mod.LOGIN_URL is context_mod.LOGIN_URL
+    assert facade_mod.NAV_TIMEOUT is context_mod.NAV_TIMEOUT
+    assert facade_mod.ELEMENT_TIMEOUT is context_mod.ELEMENT_TIMEOUT
+    assert facade_mod.SPA_SETTLE_MS is context_mod.SPA_SETTLE_MS
+    assert facade_mod._require_playwright is context_mod._require_playwright
+    assert facade_mod._persistent_context is context_mod._persistent_context
+
+    assert facade_mod._intercept_token is extractor_mod._intercept_token
+    assert facade_mod._resolve_token is extractor_mod._resolve_token
+    assert facade_mod._extract_jwt is extractor_mod._extract_jwt
+    assert facade_mod.extract_exodus_token is extractor_mod.extract_exodus_token
+
+    assert facade_mod.StockbitSessionExpired is StockbitSessionExpired

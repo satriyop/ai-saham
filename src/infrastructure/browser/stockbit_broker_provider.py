@@ -27,7 +27,6 @@ from src.domain.entities.broker_flow import (
     ForeignFlowSnapshot,
 )
 from src.domain.ports.broker_data_provider import BrokerDataProvider
-from src.infrastructure.browser.playwright_stockbit_browser import DEFAULT_PROFILE_DIR
 from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
 from src.infrastructure.browser.stockbit_broker_parsers import (
     _dict_dec,
@@ -37,6 +36,7 @@ from src.infrastructure.browser.stockbit_broker_parsers import (
     _parse_historical_summary_flow,
     _parse_marketdetectors_response,
 )
+from src.infrastructure.browser.stockbit_browser_context import DEFAULT_PROFILE_DIR
 from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
 
 logger = logging.getLogger(__name__)
@@ -146,7 +146,9 @@ class StockbitBrokerProvider(BrokerDataProvider):
             )
             return []
 
-        real_total = _fetch_historical_summary_totals(ticker, start_date, end_date, self._api_client)
+        real_total = _fetch_historical_summary_totals(
+            ticker, start_date, end_date, self._api_client
+        )
         if real_total is None:
             logger.warning(
                 "fetch_broker_summaries/%s: historical/summary unavailable, "

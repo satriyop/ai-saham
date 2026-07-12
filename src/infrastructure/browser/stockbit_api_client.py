@@ -147,9 +147,11 @@ def create_stockbit_api_client(
     Lazily imports playwright only when a token refresh is actually needed.
     Call once per CLI invocation and share the instance across all providers.
     """
-    from src.infrastructure.browser.playwright_stockbit_browser import (
+    from src.infrastructure.browser.stockbit_browser_context import (
         DEFAULT_PROFILE_DIR,
         NAV_TIMEOUT,
+    )
+    from src.infrastructure.browser.stockbit_token_extractor import (
         extract_exodus_token,
     )
 
