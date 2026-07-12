@@ -15,7 +15,6 @@ from typing import Annotated, Optional
 
 import typer
 
-from src.adapters.cli.analyze_swing_broker_display import BrokerDetail
 from src.adapters.cli.analyze_swing_command_config import (
     ANALYZE_SWING_CONFIG,
     SWING_BACKTEST_CONFIG,
@@ -29,17 +28,20 @@ from src.adapters.cli.analyze_swing_display import (
     print_swing_output,
 )
 from src.adapters.cli.analyze_swing_workflow_factory import (
-    create_swing_analysis_workflow,
     _fetch_swing_sentiment as _fetch_swing_sentiment_with_config,
 )
+from src.adapters.cli.analyze_swing_workflow_factory import (
+    create_swing_analysis_workflow,
+)
 from src.application.dto.accumulation_screen import AccumulationCandidate
+from src.application.dto.swing_analysis import SwingAnalysisWorkflowRequest
+from src.application.dto.swing_broker_detail import BrokerDetail
 from src.application.use_case.evaluate_swing_setup_use_case import (
     AVAILABLE_SWING_SETUPS,
+    FOREIGN_BOUNCE_SETUP,
     EvaluateSwingSetupRequest,
     EvaluateSwingSetupUseCase,
-    FOREIGN_BOUNCE_SETUP,
 )
-from src.application.dto.swing_analysis import SwingAnalysisWorkflowRequest
 from src.application.use_case.swing_analysis_workflow_use_case import SwingAnalysisDataUnavailable
 from src.domain.value_objects.setup_evaluation import SetupEvaluation
 from src.infrastructure.config.app_config import APP_CFG

@@ -6,15 +6,15 @@ from decimal import Decimal
 from typer.testing import CliRunner
 
 from src.adapters.cli import analyze_swing_commands as swing_cli
-from src.adapters.cli.analyze_swing_broker_display import (
-    build_broker_detail as _build_broker_detail_base,
-)
 from src.adapters.cli.analyze_swing_commands import FOREIGN_BOUNCE_SETUP_NAME
 from src.application.dto.accumulation_screen import AccumulationCandidate
 from src.application.services.swing_backtest_attribution import (
     AttributionGroupStat,
     SampleQuality,
     SwingBacktestAttributionSummary,
+)
+from src.application.services.swing_broker_detail_builder import (
+    build_broker_detail as _build_broker_detail_base,
 )
 from src.application.use_case.swing_backtest_use_case import SwingBacktestResponse
 from src.domain.entities.broker_flow import BrokerSummary, BrokerTransaction, BrokerType

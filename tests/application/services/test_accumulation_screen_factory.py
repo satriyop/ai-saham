@@ -35,14 +35,14 @@ def test_create_accumulation_screen_use_case_wires_stockbit_providers():
 
     assert use_case._broker_repo is broker_repo
     assert use_case._market_repo is market_repo
-    assert use_case._corp_action_repo is providers.corp_repo
-    assert use_case._seasonality_provider is providers.season_prov
-    assert use_case._insider_provider is providers.insider_prov
-    assert use_case._analyst_provider is providers.analyst_prov
-    assert use_case._forward_estimates_provider is providers.forward_estimates_prov
-    assert use_case._shareholding_provider is providers.shareholding_prov
-    assert use_case._bandar_provider is providers.bandar_prov
-    assert use_case._fundamentals_provider is providers.fundamentals_prov
-    assert use_case._ticker_notation_provider is providers.notation_prov
+    assert use_case._enricher._corp_action_repo is providers.corp_repo
+    assert use_case._enricher._seasonality_provider is providers.season_prov
+    assert use_case._enricher._insider_provider is providers.insider_prov
+    assert use_case._enricher._analyst_provider is providers.analyst_prov
+    assert use_case._enricher._forward_estimates_provider is providers.forward_estimates_prov
+    assert use_case._enricher._shareholding_provider is providers.shareholding_prov
+    assert use_case._enricher._bandar_provider is providers.bandar_prov
+    assert use_case._structural_filter._fundamentals_provider is providers.fundamentals_prov
+    assert use_case._enricher._ticker_notation_provider is providers.notation_prov
     assert use_case._risk_use_case is risk_use_case
     assert use_case._signal_engine is signal_engine

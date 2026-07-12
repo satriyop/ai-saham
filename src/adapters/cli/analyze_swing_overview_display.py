@@ -12,15 +12,16 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from src.application.dto.accumulation_screen import AccumulationCandidate
+    from src.application.services.position_sizer import SizingResult
+    from src.application.services.swing_data_freshness import SwingDataFreshness
 
 from rich.console import Group
 from rich.text import Text
 
-from src.adapters.cli.analyze_swing_broker_display import (
-    BrokerDetail,
-    BrokerQualityNote,
-)
 from src.adapters.cli.analyze_swing_formatters import (
     SwingDisplayConfig,
     fmt_pct,
@@ -37,6 +38,10 @@ from src.adapters.cli.analyze_swing_overview_panels import (
     _signal_label,
 )
 from src.adapters.cli.rich_display import compact_table, console, panel
+from src.application.dto.swing_broker_detail import (
+    BrokerDetail,
+    BrokerQualityNote,
+)
 from src.domain.value_objects.market_context import MarketContext
 from src.domain.value_objects.sector_context_evidence import SectorContextEvidence
 
@@ -327,7 +332,8 @@ def swing_plan_text(
         return ("Position too small for 1 lot; reduce entry or increase capital.", "red")
     if capital and not atr_value:
         return (
-            f"Fetch more data to enable position sizing (run saham fetch market {ticker} --days 90).",
+            f"Fetch more data to enable position sizing "
+            f"(run saham fetch market {ticker} --days 90).",
             "yellow",
         )
     return (
@@ -340,7 +346,7 @@ def print_swing_rich_overview(
     ticker: str,
     today: date,
     strategy_name: str,
-    data_freshness: DataFreshness,
+    data_freshness: SwingDataFreshness,
     broker_detail: BrokerDetail | None,
     accum: AccumulationCandidate | None,
     risk_resp,

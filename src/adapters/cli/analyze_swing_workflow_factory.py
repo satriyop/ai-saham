@@ -15,16 +15,11 @@ from decimal import Decimal
 from io import StringIO
 from pathlib import Path
 
-from src.adapters.cli.analyze_swing_broker_display import (
-    BrokerDetail,
-    build_broker_detail,
-    build_broker_quality_note,
-    build_flow_detail,
-)
 from src.application.dto.accumulation_screen import (
     AccumulationCandidate,
     AccumulationScreenRequest,
 )
+from src.application.dto.swing_broker_detail import BrokerDetail
 from src.application.dto.swing_config import SwingConfig
 from src.application.services.accumulation_screen_factory import (
     create_accumulation_screen_use_case,
@@ -33,6 +28,11 @@ from src.application.services.bootstrap import (
     create_indicator_registry,
     create_risk_engine,
     create_signal_engine,
+)
+from src.application.services.swing_broker_detail_builder import (
+    build_broker_detail,
+    build_broker_quality_note,
+    build_flow_detail,
 )
 from src.application.services.swing_data_freshness import (
     build_swing_data_freshness,
