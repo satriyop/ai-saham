@@ -145,10 +145,6 @@ BASELINE_ALLOWLIST = {
         "src.infrastructure.persistence.sqlite_broker_repository",
     ): "LEGACY: application loader constructs infrastructure repository directly; predates architecture guard. Do not copy.",
     (
-        "src/application/use_case/assess_risk_use_case.py",
-        "src.infrastructure.config.rules_yaml_loader",
-    ): "LEGACY: application use case calls infrastructure YAML loader directly; predates architecture guard. Do not copy.",
-    (
         "src/application/use_case/backtest_use_case.py",
         "src.infrastructure.config.rules_yaml_loader",
     ): "LEGACY: application use case calls infrastructure YAML loader directly; predates architecture guard. Do not copy.",

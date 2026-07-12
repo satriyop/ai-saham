@@ -28,6 +28,7 @@ from src.domain.ports.ai_explainer import ExplainerAuthError
 from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 from src.domain.value_objects.risk_assessment import RiskAssessment
 from src.infrastructure.ai import ExplainerFactory
+from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
 analyze_app = typer.Typer(
@@ -145,7 +146,9 @@ def risk(
         typer.echo(f"Assessing risk for {ticker.upper()}...")
 
     try:
-        engine = create_risk_engine(resolved_db, with_enrichment=True)
+        engine = create_risk_engine(
+            resolved_db, with_enrichment=True, rules_loader=RulesYamlLoader()
+        )
 
         sentiment_snapshot = None
         if with_sentiment:
@@ -314,7 +317,9 @@ def compare(
 
     resolved_db = db_path or DEFAULT_DB_PATH
     repository = SQLiteMarketRepository(db_path=resolved_db)
-    engine = create_risk_engine(resolved_db, with_enrichment=True)
+    engine = create_risk_engine(
+        resolved_db, with_enrichment=True, rules_loader=RulesYamlLoader()
+    )
 
     typer.echo(f"\n{'=' * 60}")
     typer.echo(" Risk Comparison")

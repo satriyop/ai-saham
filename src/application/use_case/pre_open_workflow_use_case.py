@@ -5,20 +5,16 @@ Layer: Application
 AI usage: Optional, only when caller injects an AI-enabled PreOpenScreenUseCase.
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
-from collections.abc import Callable
+from typing import TYPE_CHECKING
 
+from src.application.ports.rules_loader import RulesLoader
 from src.application.services.indicator_registry import IndicatorRegistry
 from src.application.services.strategy_loader import StrategyLoader, StrategyNotFoundError
 from src.application.use_case.assess_risk_use_case import AssessRiskRequest, AssessRiskUseCase
-from typing import TYPE_CHECKING
-
-from src.domain.value_objects.benchmark_symbol import canonicalize_ticker
-
-if TYPE_CHECKING:
-    from src.domain.value_objects.market_context import MarketContext
 from src.application.use_case.pre_open_screen_use_case import (
     PreOpenScreenConfig,
     PreOpenScreenRequest,
@@ -26,10 +22,14 @@ from src.application.use_case.pre_open_screen_use_case import (
 )
 from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.market_data_repository import MarketDataRepository
+from src.domain.value_objects.benchmark_symbol import canonicalize_ticker
 from src.domain.value_objects.screener_result import (
     PreOpenScreenResult,
     ScreenerCandidate,
 )
+
+if TYPE_CHECKING:
+    from src.domain.value_objects.market_context import MarketContext
 
 
 @dataclass(frozen=True)
@@ -75,12 +75,14 @@ class PreOpenWorkflowUseCase:
         broker_repository: BrokerDataRepository,
         registry: IndicatorRegistry,
         evaluate_market_context: Callable[..., "MarketContext"] | None = None,
+        rules_loader: RulesLoader | None = None,
     ) -> None:
         self._screen_use_case = screen_use_case
         self._market_repo = market_repository
         self._broker_repo = broker_repository
         self._registry = registry
         self._evaluate_market_context = evaluate_market_context
+        self._rules_loader = rules_loader
 
     def execute(self, request: PreOpenWorkflowRequest) -> PreOpenWorkflowResponse:
         screen_response = self._screen_use_case.execute(
@@ -145,6 +147,7 @@ class PreOpenWorkflowUseCase:
         risk_use_case = AssessRiskUseCase(
             repository=self._market_repo,
             registry=self._registry,
+            rules_loader=self._rules_loader,
         )
         statuses: dict[str, str] = {}
         for candidate in candidates:

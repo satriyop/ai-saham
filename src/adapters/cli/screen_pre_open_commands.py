@@ -40,6 +40,7 @@ from src.infrastructure.browser.stockbit_browser_provider import ManualBrowserDa
 from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.config.market_context_factory import evaluate_market_context
 from src.infrastructure.config.pre_open_config import load_pre_open_screen_config
+from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
@@ -371,6 +372,7 @@ def pre_open(
         broker_repository=broker_repo,
         registry=registry,
         evaluate_market_context=evaluate_market_context,
+        rules_loader=RulesYamlLoader(),
     )
 
     try:

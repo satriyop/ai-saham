@@ -38,6 +38,7 @@ from src.infrastructure.config.accumulation_screener_config import (
     load_accumulation_screener_config as _load_accumulation_screener_config,
 )
 from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 from src.infrastructure.config.swing_config import load_swing_config as _load_swing_config
 
 _SC = _load_swing_config()
@@ -408,7 +409,11 @@ def accumulation_run(
         try:
             strat_loader = StrategyLoader(registry=registry)
             rules_path = strat_loader.resolve(strategy)
-            risk_uc = AssessRiskUseCase(repository=market_repo, registry=registry)
+            risk_uc = AssessRiskUseCase(
+                repository=market_repo,
+                registry=registry,
+                rules_loader=RulesYamlLoader(),
+            )
             visible = response.candidates[:top]
             for c in visible:
                 try:

@@ -26,12 +26,14 @@ from src.application.services.engine_bootstrap.risk_config_resolvers import (
 )
 
 if TYPE_CHECKING:
+    from src.application.ports.rules_loader import RulesLoader
     from src.application.services.risk_engine import RiskEngine
 
 
 def create_risk_engine(
     db_path: "str | Path",
     with_enrichment: bool = False,
+    rules_loader: "RulesLoader | None" = None,
 ) -> "RiskEngine":
     """
     Create a fully-configured RiskEngine with all three gates wired.
@@ -43,6 +45,9 @@ def create_risk_engine(
             can fire from the engine's own assess() call.
             When False (default), LiquidityGate still fires from candle
             data; the other gates skip gracefully.
+        rules_loader: RulesLoader port injected by the caller's adapter.
+            Required only when the caller sends requests with rules_file set
+            (custom-rules mode) via engine.assess_request().
     """
     from pathlib import Path as _Path
 
@@ -103,4 +108,5 @@ def create_risk_engine(
         indicator_defaults=indicator_defaults,
         market_context_gate=market_context_gate,
         technical_gate_config=technical_gate_config,
+        rules_loader=rules_loader,
     )

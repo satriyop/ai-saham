@@ -34,6 +34,7 @@ from src.application.services.indicator_registry import IndicatorRegistry
 from src.application.use_case.assess_risk_use_case import AssessRiskRequest, AssessRiskUseCase
 from src.application.use_case.backtest_use_case import BacktestRequest, BacktestUseCase
 from src.domain.entities.candle import Candle
+from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 
 # --- Fixtures ---
 
@@ -199,6 +200,7 @@ class TestAssessRiskWithFormula:
         use_case = AssessRiskUseCase(
             repository=mock_repository,
             registry=registry_with_formula,
+            rules_loader=RulesYamlLoader(),
         )
 
         request = AssessRiskRequest(
@@ -239,6 +241,7 @@ rules:
         use_case = AssessRiskUseCase(
             repository=mock_repository,
             registry=registry_with_formula,
+            rules_loader=RulesYamlLoader(),
         )
 
         request = AssessRiskRequest(
@@ -343,6 +346,7 @@ signal_mapping:
         use_case = AssessRiskUseCase(
             repository=mock_repository,
             registry=registry,
+            rules_loader=RulesYamlLoader(),
         )
 
         request = AssessRiskRequest(
@@ -393,6 +397,7 @@ rules:
         use_case = AssessRiskUseCase(
             repository=mock_repository,
             registry=registry,
+            rules_loader=RulesYamlLoader(),
         )
 
         request = AssessRiskRequest(
@@ -441,6 +446,7 @@ rules:
         use_case = AssessRiskUseCase(
             repository=mock_repository,
             registry=registry,
+            rules_loader=RulesYamlLoader(),
         )
 
         request = AssessRiskRequest(
@@ -486,6 +492,7 @@ rules:
         use_case = AssessRiskUseCase(
             repository=mock_repository,
             registry=registry,
+            rules_loader=RulesYamlLoader(),
         )
 
         request = AssessRiskRequest(

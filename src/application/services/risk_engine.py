@@ -25,16 +25,17 @@ from src.application.use_case.assess_risk_use_case import (
     AssessRiskTrendResponse,
     AssessRiskUseCase,
 )
-from src.domain.rules.risk_gate import GateContext, RiskGate
 from src.domain.ports.market_data_repository import MarketDataRepository
+from src.domain.rules.risk_gate import GateContext, RiskGate
 
 if TYPE_CHECKING:
+    from src.application.ports.rules_loader import RulesLoader
     from src.application.services.indicator_evaluator import IndicatorEvaluator
     from src.application.services.indicator_registry import IndicatorRegistry
-    from src.domain.rules.technical_gate import TechnicalGateConfig
-    from src.domain.ports.fundamentals_provider import FundamentalsProvider
     from src.domain.ports.bandar_detector_provider import BandarDetectorProvider
+    from src.domain.ports.fundamentals_provider import FundamentalsProvider
     from src.domain.ports.shareholding_provider import ShareholdingProvider
+    from src.domain.rules.technical_gate import TechnicalGateConfig
     from src.domain.value_objects.market_context import MarketContext
 
 logger = logging.getLogger(__name__)
@@ -79,6 +80,7 @@ class RiskEngine:
         indicator_defaults: RiskIndicatorDefaults | None = None,
         market_context_gate: MarketContextGateConfig | None = None,
         technical_gate_config: "TechnicalGateConfig | None" = None,
+        rules_loader: "RulesLoader | None" = None,
     ) -> None:
         self._indicator_defaults = indicator_defaults or RiskIndicatorDefaults()
         self._market_context_gate = market_context_gate or MarketContextGateConfig()
@@ -87,6 +89,7 @@ class RiskEngine:
         self._use_case = AssessRiskUseCase(
             repository=repository,
             registry=registry,
+            rules_loader=rules_loader,
             structural_gates=structural_gates,
             execution_gates=execution_gates,
             indicator_evaluator=self._indicator_evaluator,
@@ -167,7 +170,9 @@ class RiskEngine:
         """
         if request.rules_file is not None:
             return self._use_case.execute(request)
-        response = self._use_case.execute(self._inject_gate_context(self._apply_request_defaults(request)))
+        request_with_defaults = self._apply_request_defaults(request)
+        request_with_context = self._inject_gate_context(request_with_defaults)
+        response = self._use_case.execute(request_with_context)
         return _apply_regime_gate(response, market_context, self._market_context_gate)
 
     def assess_trend(
