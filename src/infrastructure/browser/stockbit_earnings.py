@@ -180,9 +180,24 @@ class StockbitEarningsProvider(EarningsProvider, StockbitCachingProvider):
             return False
 
     def is_cache_fresh(self, ticker: str) -> bool:
-        """True when the most recent quarter's cache row is within TTL."""
-        q, y = _current_quarter_year()
-        return self._is_row_fresh(ticker, y, q)
+        """True when any earnings-history snapshot for this ticker is within TTL.
+
+        The current calendar quarter is often not reported yet. Treating that
+        missing period as stale causes repeated enrichment fetches that do not
+        add usable rows. The refresh gate only needs to know whether the latest
+        available earnings history was fetched recently.
+        """
+        cutoff = (date.today() - timedelta(days=_TTL_DAYS)).isoformat()
+        try:
+            with self._get_conn() as conn:
+                row = conn.execute(
+                    "SELECT 1 FROM earnings_cache WHERE ticker=?"
+                    " AND date(substr(fetched_date,1,10)) >= date(?) LIMIT 1",
+                    (ticker.upper(), cutoff),
+                ).fetchone()
+            return row is not None
+        except Exception:
+            return False
 
     def _read_cache(
         self,

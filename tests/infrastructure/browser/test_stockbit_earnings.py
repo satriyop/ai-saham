@@ -2,7 +2,7 @@
 
 
 import sqlite3
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 import pytest
 
@@ -294,6 +294,28 @@ def test_get_earnings_history_returns_empty_when_no_prior_fetched_row(tmp_provid
 
 
 def test_is_cache_fresh_false_when_empty(tmp_provider):
+    assert tmp_provider.is_cache_fresh("BBCA") is False
+
+
+def test_is_cache_fresh_true_when_latest_available_history_snapshot_is_recent(tmp_provider):
+    tmp_provider._write_record(EarningsRecord(
+        ticker="BBCA", year=2026, quarter=1,
+        eps_actual=101.0, eps_estimate=None, eps_surprise_pct=None,
+        eps_yoy_change=None, eps_prev_year=None,
+        fetched_at=datetime.now(),
+    ))
+
+    assert tmp_provider.is_cache_fresh("BBCA") is True
+
+
+def test_is_cache_fresh_false_when_latest_available_history_snapshot_is_stale(tmp_provider):
+    tmp_provider._write_record(EarningsRecord(
+        ticker="BBCA", year=2026, quarter=1,
+        eps_actual=101.0, eps_estimate=None, eps_surprise_pct=None,
+        eps_yoy_change=None, eps_prev_year=None,
+        fetched_at=datetime.now() - timedelta(days=8),
+    ))
+
     assert tmp_provider.is_cache_fresh("BBCA") is False
 
 
