@@ -1,0 +1,61 @@
+"""
+Factory for fresh accumulation screen used by 'saham screen compare'.
+
+Layer: Adapter
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from src.adapters.cli.screen_accum_workflow_factory import (
+    create_accumulation_screen_workflow,
+)
+from src.application.dto.accumulation_screen import AccumulationScreenRequest
+from src.application.services.universe_loader import resolve_tickers
+
+
+def run_fresh_accumulation_screen_for_compare(
+    *,
+    universe: str,
+    window: int,
+    top: int,
+    db_path: Path,
+    screener_config,
+    swing_config,
+) -> list | None:
+    """Run the accumulation screen silently and return the top candidates.
+
+    Used by ``saham screen compare``.  Returns None on failure
+    (empty universe, network error, etc.).
+    """
+    try:
+        ticker_list = resolve_tickers(universe=universe, explicit=[], db_path=db_path)
+        if not ticker_list:
+            return None
+
+        workflow = create_accumulation_screen_workflow(
+            db_path=db_path,
+            screener_config=screener_config,
+            with_risk=False,
+            swing_config=swing_config,
+        )
+        use_case = workflow.use_case
+        response = use_case.execute(
+            AccumulationScreenRequest(
+                tickers=ticker_list,
+                window_days=window,
+                min_net_buy_days=1,
+                min_foreign_flow_score=0.0,
+                min_foreign_flow_score_enabled=False,
+                tier1_broker_codes=swing_config.tier1_broker_codes,
+                bci_cluster_min_count=swing_config.bci_cluster_min_count,
+                bci_stable_min_count=swing_config.bci_stable_min_count,
+                resistance_gate_enabled=swing_config.resistance_gate_enabled,
+                resistance_headroom_min_pct=swing_config.resistance_headroom_min_pct,
+                ex_date_warning_days=swing_config.ex_date_warning_days,
+            )
+        )
+        return response.candidates[:top]
+    except Exception:
+        return None

@@ -13,11 +13,11 @@ from src.adapters.cli.screen_accum_commands import (
     _display_multi,
     _display_results,
 )
-from src.application.services.broker_quality import compute_broker_quality_batch
 from src.application.dto.accumulation_screen import (
     AccumulationCandidate,
     AccumulationScreenResponse,
 )
+from src.application.services.broker_quality import compute_broker_quality_batch
 from src.domain.entities.broker_flow import BrokerSummary, BrokerTransaction, BrokerType
 from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 from src.domain.value_objects.risk_assessment import RiskAssessment
@@ -508,3 +508,60 @@ def test_screen_accum_json_includes_setup_phase(monkeypatch):
     assert "setup_phase" in candidate_json
     assert candidate_json["setup_phase"]["current_phase"] == "COMPRESSION"
     assert candidate_json["setup_phase"]["previous_phase"] == "ACCUMULATION"
+
+
+def test_screen_accum_save_calls_use_case(monkeypatch):
+    """Prove --save invokes SaveScreenWatchlistUseCase with correct fields."""
+    captured = {}
+
+    class FakeUseCase:
+        def execute(self, request):
+            captured["request"] = request
+            return AccumulationScreenResponse(
+                candidates=[_candidate(
+                    ticker="BBCA", foreign_flow_score=80.0, bci_label="CLUSTER",
+                )],
+                screened_at=date(2026, 6, 28),
+                window_days=7,
+                total_tickers_checked=1,
+                tickers_skipped=0,
+                provider="fake",
+            )
+
+    monkeypatch.setattr(
+        accum_cli,
+        "create_accumulation_screen_workflow",
+        lambda **kwargs: SimpleNamespace(
+            use_case=FakeUseCase(),
+            broker_repository=object(),
+            market_repository=object(),
+        ),
+    )
+
+    saved_entries = []
+
+    class FakeRepo:
+        def save_snapshot(self, entries):
+            saved_entries.extend(entries)
+
+    import src.infrastructure.persistence.sqlite_watchlist_repository as wr_mod
+    monkeypatch.setattr(wr_mod, "SQLiteWatchlistRepository", lambda _: FakeRepo())
+
+    result = runner.invoke(
+        app,
+        ["screen", "accum", "BBCA", "--save", "mywatch"],
+    )
+
+    assert result.exit_code == 0, (
+        f"exit {result.exit_code} stdout={result.output!r} exc={result.exception}"
+    )
+    assert "✓ Saved" in result.output
+    assert "mywatch" in result.output
+
+    assert len(saved_entries) == 1
+    entry = saved_entries[0]
+    assert entry.ticker == "BBCA"
+    assert entry.rank == 1
+    assert entry.name == "mywatch"
+    assert entry.flow_score == 80.0
+    assert entry.bci_label == "CLUSTER"

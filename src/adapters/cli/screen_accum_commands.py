@@ -9,7 +9,6 @@ Layer: Adapter
 
 import json
 from datetime import date
-from decimal import Decimal
 from pathlib import Path
 from typing import Annotated, Optional
 
@@ -19,7 +18,6 @@ from src.adapters.cli.screen_accum_workflow_factory import (
     create_accumulation_screen_workflow,
 )
 from src.application.dto.accumulation_screen import (
-    AccumulationScreenRequest,
     AccumulationScreenResponse,
 )
 from src.application.services.bootstrap import create_indicator_registry
@@ -50,51 +48,6 @@ DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 FOREIGN_BOUNCE_SETUP = "foreign-bounce"
 
 
-def _format_value(value: Decimal) -> str:
-    """Format large IDR values with T/B/M suffix."""
-    abs_v = abs(value)
-    sign = "+" if value >= 0 else "-"
-    if abs_v >= 1_000_000_000_000:
-        return f"{sign}{abs_v / 1_000_000_000_000:.1f}T"
-    if abs_v >= 1_000_000_000:
-        return f"{sign}{abs_v / 1_000_000_000:.1f}B"
-    if abs_v >= 1_000_000:
-        return f"{sign}{abs_v / 1_000_000:.0f}M"
-    return f"{sign}{abs_v:.0f}"
-
-
-def _notation_label(snapshot) -> str:
-    if snapshot is None:
-        return "-"
-    parts = []
-    if getattr(snapshot, "codes", None):
-        parts.append(",".join(snapshot.codes))
-    if getattr(snapshot, "tradeable", None) is False:
-        parts.append("NO-TRADE")
-    status = getattr(snapshot, "status", None)
-    if status and status != "STATUS_ACTIVE":
-        parts.append(status.replace("STATUS_", ""))
-    if getattr(snapshot, "suspend_info", None):
-        parts.append("SUSP")
-    if getattr(snapshot, "has_uma", None):
-        parts.append("UMA")
-    return "+".join(parts) if parts else "-"
-
-
-def _notation_detail(snapshot) -> str:
-    if snapshot is None:
-        return ""
-    bits = []
-    label = _notation_label(snapshot)
-    if label != "-":
-        bits.append(label)
-    if snapshot.listing_board:
-        bits.append(snapshot.listing_board)
-    if snapshot.haircut_percentage:
-        bits.append(f"haircut={snapshot.haircut_percentage}")
-    return " | ".join(bits)
-
-
 def _display_results(
     response: AccumulationScreenResponse,
     universe_label: str,
@@ -107,6 +60,7 @@ def _display_results(
     strategy_name: str | None = None,
 ) -> None:
     from src.adapters.cli.screen_accum_display import display_results
+
     display_results(
         response=response,
         universe_label=universe_label,
@@ -131,6 +85,7 @@ def _display_multi(
     include_explanation: bool = False,
 ) -> None:
     from src.adapters.cli.screen_accum_display import display_multi
+
     display_multi(
         results=results,
         universe_label=universe_label,
@@ -145,6 +100,7 @@ def _display_multi(
 
 def _print_column_guide() -> None:
     from src.adapters.cli.screen_accum_display import print_column_guide
+
     print_column_guide()
 
 
@@ -175,14 +131,16 @@ def accumulation_run(
     universe: Annotated[
         Optional[str],
         typer.Option(
-            "--universe", "-u",
+            "--universe",
+            "-u",
             help="Universe name or 'cached' — see `saham fetch universe list`",
         ),
     ] = None,
     window: Annotated[
         int,
         typer.Option(
-            "--window", "-w",
+            "--window",
+            "-w",
             help="Analysis window in broker sessions (7, 30, or 90)",
             min=3,
         ),
@@ -203,14 +161,19 @@ def accumulation_run(
         Optional[float],
         typer.Option(
             "--min-signal-score",
-            help="Optional minimum SignalEngine score (0–100; disabled unless set or enabled in config)",
+            help=(
+                "Optional minimum SignalEngine score "
+                "(0–100; disabled unless set or enabled in config)"
+            ),
             min=0,
             max=100,
         ),
     ] = None,
     min_piotroski: Annotated[
         int,
-        typer.Option("--min-piotroski", help="Minimum Piotroski F-Score 0–9 (0 = disabled)", min=0, max=9),
+        typer.Option(
+            "--min-piotroski", help="Minimum Piotroski F-Score 0–9 (0 = disabled)", min=0, max=9
+        ),
     ] = 0,
     vwap_only: Annotated[
         bool,
@@ -218,7 +181,9 @@ def accumulation_run(
     ] = False,
     squeeze_only: Annotated[
         bool,
-        typer.Option("--squeeze-only", help="Only show stocks in BB squeeze (BB width pctile ≤ 20%)"),
+        typer.Option(
+            "--squeeze-only", help="Only show stocks in BB squeeze (BB width pctile ≤ 20%)"
+        ),
     ] = False,
     top: Annotated[
         int,
@@ -226,7 +191,9 @@ def accumulation_run(
     ] = 20,
     show_top_broker: Annotated[
         bool,
-        typer.Option("--top-broker", help="Show top broker-code detail and BCI label when available"),
+        typer.Option(
+            "--top-broker", help="Show top broker-code detail and BCI label when available"
+        ),
     ] = False,
     multi: Annotated[
         bool,
@@ -234,7 +201,10 @@ def accumulation_run(
     ] = False,
     windows: Annotated[
         Optional[str],
-        typer.Option("--windows", help="Comma-separated broker-session windows for --multi (default: 7,30,90)"),
+        typer.Option(
+            "--windows",
+            help="Comma-separated broker-session windows for --multi (default: 7,30,90)",
+        ),
     ] = None,
     sort_by: Annotated[
         str,
@@ -261,8 +231,12 @@ def accumulation_run(
     strategy: Annotated[
         Optional[str],
         typer.Option(
-            "--strategy", "-S",
-            help="Show strategy signal column alongside foreign-flow score (e.g. williams-r-bounce)",
+            "--strategy",
+            "-S",
+            help=(
+                "Show strategy signal column alongside foreign-flow score "
+                "(e.g. williams-r-bounce)"
+            ),
         ),
     ] = None,
     db_path: Annotated[
@@ -271,7 +245,9 @@ def accumulation_run(
     ] = None,
     save_name: Annotated[
         Optional[str],
-        typer.Option("--save", help="Save results to watchlist under this name (e.g. morning-watch)"),
+        typer.Option(
+            "--save", help="Save results to watchlist under this name (e.g. morning-watch)"
+        ),
     ] = None,
 ) -> None:
     """
@@ -374,14 +350,20 @@ def accumulation_run(
                     by_ticker.setdefault(c.ticker, {})[f"{w}_sessions"] = c.to_dict()
             for ticker_key, quality in broker_quality.items():
                 by_ticker.setdefault(ticker_key, {})["broker_quality"] = quality.to_dict()
-            typer.echo(json.dumps({
-                "schema_version": 1,
-                "artifact_type": "accumulation_screen_multi",
-                "mode": "multi",
-                "windows": [f"{w}_sessions" for w in sorted(multi_results.keys())],
-                "screened_at": str(screened_at),
-                "tickers": by_ticker,
-            }, indent=2, default=str))
+            typer.echo(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "artifact_type": "accumulation_screen_multi",
+                        "mode": "multi",
+                        "windows": [f"{w}_sessions" for w in sorted(multi_results.keys())],
+                        "screened_at": str(screened_at),
+                        "tickers": by_ticker,
+                    },
+                    indent=2,
+                    default=str,
+                )
+            )
             return
 
         _display_multi(
@@ -397,15 +379,11 @@ def accumulation_run(
         return
 
     if output_format != "json":
-        typer.echo(
-            f"Screening {len(ticker_list)} tickers | {window} sessions..."
-        )
+        typer.echo(f"Screening {len(ticker_list)} tickers | {window} sessions...")
     response = use_case.execute(base_request)
 
     if min_streak > 0:
-        response.candidates = [
-            c for c in response.candidates if c.consecutive_streak >= min_streak
-        ]
+        response.candidates = [c for c in response.candidates if c.consecutive_streak >= min_streak]
 
     if output_format == "json":
         data = {
@@ -455,87 +433,26 @@ def accumulation_run(
     )
 
     if save_name:
-        _save_watchlist(
-            name=save_name,
-            candidates=response.candidates[:top],
-            universe=str(universe or ""),
-            window_days=window,
-            db_path=resolved_db,
+        from src.application.use_case.save_screen_watchlist_use_case import (
+            SaveScreenWatchlistRequest,
+            SaveScreenWatchlistUseCase,
+        )
+        from src.infrastructure.persistence.sqlite_watchlist_repository import (
+            SQLiteWatchlistRepository,
         )
 
-
-def _save_watchlist(
-    name: str,
-    candidates: list,
-    universe: str,
-    window_days: int,
-    db_path: "Path",
-) -> None:
-    from datetime import datetime
-
-    from src.domain.value_objects.screen_snapshot import ScreenSnapshotEntry
-    from src.infrastructure.persistence.sqlite_watchlist_repository import SQLiteWatchlistRepository
-
-    now = datetime.now()
-    entries = [
-        ScreenSnapshotEntry(
-            name=name,
-            saved_at=now,
-            universe=universe,
-            window_days=window_days,
-            ticker=c.ticker,
-            rank=i + 1,
-            flow_score=c.foreign_flow_score,
-            composite_score=c.signal_assessment.assessment.score if c.signal_assessment else None,
-            consecutive_streak=c.consecutive_streak,
-            net_buy_ratio=c.net_buy_ratio,
-            bci_label=c.bci_label,
+        repo = SQLiteWatchlistRepository(resolved_db)
+        result = SaveScreenWatchlistUseCase(repo).execute(
+            SaveScreenWatchlistRequest(
+                name=save_name,
+                candidates=response.candidates[:top],
+                universe=str(universe or ""),
+                window_days=window,
+            )
         )
-        for i, c in enumerate(candidates)
-    ]
-    repo = SQLiteWatchlistRepository(db_path)
-    repo.save_snapshot(entries)
-    typer.echo(
-        typer.style(f"\n  ✓ Saved {len(entries)} tickers to watchlist '{name}'", fg=typer.colors.GREEN)
-    )
-
-
-def _make_use_case_for_compare(
-    universe: str,
-    window: int,
-    top: int,
-    db_path: "Path",
-) -> "list | None":
-    """Run the accumulation screen silently and return the top candidates.
-
-    Used by `saham screen compare`. Returns None on failure.
-    """
-    try:
-        from src.application.services.universe_loader import resolve_tickers
-        ticker_list = resolve_tickers(universe=universe, explicit=[], db_path=db_path)
-        if not ticker_list:
-            return None
-
-        workflow = create_accumulation_screen_workflow(
-            db_path=db_path,
-            screener_config=_ASC,
-            with_risk=False,
-            swing_config=_SC,
+        typer.echo(
+            typer.style(
+                f"\n  ✓ Saved {result.saved_count} tickers to watchlist '{result.name}'",
+                fg=typer.colors.GREEN,
+            )
         )
-        use_case = workflow.use_case
-        response = use_case.execute(AccumulationScreenRequest(
-            tickers=ticker_list,
-            window_days=window,
-            min_net_buy_days=1,
-            min_foreign_flow_score=0.0,
-            min_foreign_flow_score_enabled=False,
-            tier1_broker_codes=_SC.tier1_broker_codes,
-            bci_cluster_min_count=_SC.bci_cluster_min_count,
-            bci_stable_min_count=_SC.bci_stable_min_count,
-            resistance_gate_enabled=_SC.resistance_gate_enabled,
-            resistance_headroom_min_pct=_SC.resistance_headroom_min_pct,
-            ex_date_warning_days=_SC.ex_date_warning_days,
-        ))
-        return response.candidates[:top]
-    except Exception:
-        return None

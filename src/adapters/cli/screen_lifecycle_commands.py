@@ -9,8 +9,16 @@ from typing import Annotated, Optional
 
 import typer
 
-from src.adapters.cli.screen_accum_commands import DEFAULT_DB_PATH, accumulation_run
+from src.adapters.cli.screen_accum_commands import (
+    _ASC,
+    _SC,
+    DEFAULT_DB_PATH,
+    accumulation_run,
+)
 from src.adapters.cli.screen_pre_open_commands import pre_open
+from src.application.use_case.compare_screen_snapshots_use_case import (
+    ScreenCompareResult,
+)
 
 screen_app = typer.Typer(
     name="screen",
@@ -52,7 +60,7 @@ def screen_watchlist(
             typer.echo("No saved watchlists. Use 'saham screen accum --save NAME' to create one.")
             return
         typer.echo(f"\n  {'NAME':<24} {'TICKERS':>7}  {'WINDOW':>6}  SAVED AT")
-        typer.echo(f"  {'─'*24}  {'─'*7}  {'─'*6}  {'─'*20}")
+        typer.echo(f"  {'─' * 24}  {'─' * 7}  {'─' * 6}  {'─' * 20}")
         for s in summaries:
             saved_str = s["latest_saved_at"][:16].replace("T", " ")
             typer.echo(
@@ -71,9 +79,11 @@ def screen_watchlist(
 
     saved_str = entries[0].saved_at.strftime("%Y-%m-%d %H:%M")
     typer.echo(f"\n  Watchlist: {name}  |  {len(entries)} tickers  |  saved {saved_str}")
-    typer.echo(f"  {'─'*60}")
-    typer.echo(f"  {'#':>3}  {'TICKER':<8}  {'CMP':>5}  {'SCORE':>6}  {'STREAK':>6}  {'NET BUY':>7}  BCI")
-    typer.echo(f"  {'─'*3}  {'─'*8}  {'─'*5}  {'─'*6}  {'─'*6}  {'─'*7}  {'─'*10}")
+    typer.echo(f"  {'─' * 60}")
+    typer.echo(
+        f"  {'#':>3}  {'TICKER':<8}  {'CMP':>5}  {'SCORE':>6}  {'STREAK':>6}  {'NET BUY':>7}  BCI"
+    )
+    typer.echo(f"  {'─' * 3}  {'─' * 8}  {'─' * 5}  {'─' * 6}  {'─' * 6}  {'─' * 7}  {'─' * 10}")
     for e in entries:
         cmp_str = f"{e.composite_score:.0f}" if e.composite_score is not None else "  —"
         bci = e.bci_label or "—"
@@ -134,18 +144,22 @@ def screen_compare(
     run_universe = universe or saved_universe or "cached"
     saved_at_str = snapshot[0].saved_at.strftime("%Y-%m-%d %H:%M")
 
-    typer.echo(f"\n  Comparing '{name}' (saved {saved_at_str}) against fresh screen on '{run_universe}'...")
-
-    # Run a fresh screen inline (reuse accumulation_run logic via use case)
-    from src.adapters.cli.screen_accum_commands import (
-        _make_use_case_for_compare,
+    typer.echo(
+        f"\n  Comparing '{name}' (saved {saved_at_str}) against fresh screen on '{run_universe}'..."
     )
 
-    fresh_candidates = _make_use_case_for_compare(
+    # Run a fresh screen inline (reuse accumulation_run logic via use case)
+    from src.adapters.cli.screen_accum_compare_factory import (
+        run_fresh_accumulation_screen_for_compare,
+    )
+
+    fresh_candidates = run_fresh_accumulation_screen_for_compare(
         universe=run_universe,
         window=window,
         top=top,
         db_path=resolved_db,
+        screener_config=_ASC,
+        swing_config=_SC,
     )
 
     if fresh_candidates is None:
@@ -154,7 +168,10 @@ def screen_compare(
 
     fresh_tickers = [c.ticker for c in fresh_candidates]
     fresh_scores = {
-        c.ticker: (c.foreign_flow_score, c.signal_assessment.assessment.score if c.signal_assessment else None)
+        c.ticker: (
+            c.foreign_flow_score,
+            c.signal_assessment.assessment.score if c.signal_assessment else None,
+        )
         for c in fresh_candidates
     }
     fresh_ranks = {c.ticker: i + 1 for i, c in enumerate(fresh_candidates)}
@@ -170,34 +187,50 @@ def screen_compare(
     _display_compare_result(result)
 
 
-def _display_compare_result(result: "ScreenCompareResult") -> None:
-    from src.application.use_case.compare_screen_snapshots_use_case import ScreenCompareResult  # noqa: F401
-
+def _display_compare_result(result: ScreenCompareResult) -> None:
     typer.echo(
         f"\n  Snapshot: {result.snapshot_name} ({result.snapshot_count} tickers)  →  "
         f"Fresh: {result.fresh_count} tickers"
     )
 
     if result.new_tickers:
-        typer.echo(typer.style(f"\n  ✦ NEW  ({len(result.new_tickers)} entries)", fg=typer.colors.GREEN))
+        typer.echo(
+            typer.style(f"\n  ✦ NEW  ({len(result.new_tickers)} entries)", fg=typer.colors.GREEN)
+        )
         for t in result.new_tickers:
             typer.echo(f"    + {t}")
 
     if result.dropped_tickers:
-        typer.echo(typer.style(f"\n  ✗ DROPPED  ({len(result.dropped_tickers)} entries)", fg=typer.colors.RED))
+        typer.echo(
+            typer.style(
+                f"\n  ✗ DROPPED  ({len(result.dropped_tickers)} entries)", fg=typer.colors.RED
+            )
+        )
         for t in result.dropped_tickers:
             typer.echo(f"    - {t}")
 
     if result.changed:
         strengthening = [c for c in result.changed if c.strengthening]
         if strengthening:
-            typer.echo(typer.style(f"\n  ↑ STRENGTHENING  ({len(strengthening)} signals)", fg=typer.colors.CYAN))
+            typer.echo(
+                typer.style(
+                    f"\n  ↑ STRENGTHENING  ({len(strengthening)} signals)", fg=typer.colors.CYAN
+                )
+            )
             for c in sorted(strengthening, key=lambda x: x.rank_delta, reverse=True)[:10]:
                 delta = c.composite_delta
                 delta_str = f"  cmp {delta:+.0f}" if delta is not None else ""
                 typer.echo(f"    {c.ticker:<8} rank #{c.old_rank}→#{c.new_rank}{delta_str}")
 
-    if not result.new_tickers and not result.dropped_tickers and not any(c.strengthening for c in result.changed):
-        typer.echo(typer.style("\n  ≈ No significant changes since last save.", fg=typer.colors.BRIGHT_BLACK))
+    if (
+        not result.new_tickers
+        and not result.dropped_tickers
+        and not any(c.strengthening for c in result.changed)
+    ):
+        typer.echo(
+            typer.style(
+                "\n  ≈ No significant changes since last save.", fg=typer.colors.BRIGHT_BLACK
+            )
+        )
 
     typer.echo("")
