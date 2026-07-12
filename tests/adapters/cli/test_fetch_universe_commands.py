@@ -225,7 +225,8 @@ def test_universe_create_sector_level_fail_fast(monkeypatch, tmp_path: Path):
     )
 
     assert result.exit_code == 1
-    assert "Error: Failed to fetch data for sector 1 subsector 11." in result.stdout or "Error: Failed to fetch data for sector 1 subsector 11." in result.stderr
+    expected_err = "Error: Failed to fetch data for sector 1 subsector 11."
+    assert expected_err in result.stdout or expected_err in result.stderr
     # Config file should not have been updated/created because of transactional safety check
     assert not config_file.exists()
 
@@ -345,8 +346,9 @@ def test_universe_update_all_includes_custom_universes(monkeypatch, tmp_path: Pa
     )
 
     # The command should succeed even if default list_available fetches fail/succeed
-    # In MockUniverseProvider list_available returns lq45 & finance, but we mocked exodus get to return None for those,
-    # so they will fail (logged as FAILED) but bank will succeed and it will write successful ones.
+    # In MockUniverseProvider list_available returns lq45 & finance, but we mocked
+    # exodus get to return None for those, so they will fail (logged as FAILED) but
+    # bank will succeed and it will write successful ones.
     assert result.exit_code == 0
 
     with open(config_file) as f:
