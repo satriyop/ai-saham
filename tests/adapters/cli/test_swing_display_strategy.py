@@ -24,8 +24,6 @@ from datetime import date
 from decimal import Decimal
 from types import SimpleNamespace
 
-import pytest
-
 from src.adapters.cli.analyze_swing_display import (
     SwingOutputDisplayContext,
     SwingOutputDisplayOptions,
@@ -38,7 +36,6 @@ from src.domain.value_objects.strategy_evidence import (
     StrategyEvidenceOutcome,
     StrategyRuleEvidence,
 )
-
 
 # ── Shared helpers ─────────────────────────────────────────────────────────────
 
