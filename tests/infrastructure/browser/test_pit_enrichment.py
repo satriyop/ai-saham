@@ -22,7 +22,7 @@ from src.infrastructure.browser.stockbit_shareholding import StockbitShareholdin
 @pytest.fixture
 def fundamentals_db(tmp_path):
     db = tmp_path / "test.db"
-    prov = StockbitFundamentalsProvider(api_client=None, db_path=db)
+    StockbitFundamentalsProvider(api_client=None, db_path=db)
     # Pre-populate two PIT rows
     with sqlite3.connect(str(db)) as conn:
         conn.execute(
@@ -41,7 +41,7 @@ def fundamentals_db(tmp_path):
 @pytest.fixture
 def shareholding_db(tmp_path):
     db = tmp_path / "test.db"
-    prov = StockbitShareholdingProvider(api_client=None, db_path=db)
+    StockbitShareholdingProvider(api_client=None, db_path=db)
     with sqlite3.connect(str(db)) as conn:
         conn.execute(
             "INSERT OR REPLACE INTO shareholding_composition "
@@ -151,7 +151,6 @@ def _make_classifier():
         TickerProfileClassifier,
         TickerProfileConfig,
     )
-    from src.domain.value_objects.institutional_accumulation_evidence import EvidenceStatus
 
     config = TickerProfileConfig.from_mapping({})  # uses all defaults (large=10T IDR)
     return TickerProfileClassifier(config=config)

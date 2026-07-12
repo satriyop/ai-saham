@@ -1,6 +1,8 @@
-from datetime import datetime
-from src.infrastructure.browser.stockbit_fundamentals import _parse_fundamentals, _parse_market_cap
-from src.domain.value_objects.company_fundamentals import CompanyFundamentals
+from src.infrastructure.browser.stockbit_fundamentals_parser import (
+    _parse_fundamentals,
+    _parse_market_cap,
+)
+
 
 def test_parse_market_cap():
     assert _parse_market_cap("755,060 B") == 755_060_000_000_000
@@ -50,7 +52,7 @@ def test_parse_fundamentals_new_schema():
             "info": ""
         }
     }
-    
+
     result = _parse_fundamentals("BBCA", body)
     assert result is not None
     assert result.ticker == "BBCA"
@@ -80,11 +82,10 @@ def test_parse_fundamentals_legacy_schema():
             }
         }
     }
-    
+
     result = _parse_fundamentals("BBCA", body)
     assert result is not None
     assert result.ticker == "BBCA"
     assert result.pe_ratio_ttm == 13.00
-    # Since stats is missing, market_cap is None in new logic unless info fallback is used
-    # (The code currently falls back for PBV, but not for market_cap since the legacy JSON structure is deprecated)
+    assert result.market_cap_idr == 776_634_150_000_000
     assert result.pbv == 3.1

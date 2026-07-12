@@ -17,8 +17,8 @@ from datetime import date, timedelta
 
 import pytest
 
-from src.infrastructure.browser.stockbit_fundamentals import (
-    StockbitFundamentalsProvider,
+from src.infrastructure.browser.stockbit_fundamentals import StockbitFundamentalsProvider
+from src.infrastructure.browser.stockbit_fundamentals_parser import (
     _parse_financial_value,
     _parse_historical_rows,
 )
