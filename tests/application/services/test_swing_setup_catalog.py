@@ -1,7 +1,7 @@
 from decimal import Decimal
 
+from src.application.dto.swing_config import SwingConfig
 from src.application.services.swing_setup_catalog import build_swing_setup_catalog_config
-from src.infrastructure.config.swing_config import SwingConfig
 
 
 def test_build_swing_setup_catalog_config_maps_loaded_swing_config():

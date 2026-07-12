@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 
+from src.application.dto.swing_config import SwingConfig
 from src.application.services.signal_observation_request_builder import (
     BuildSignalObservationScreenRequest,
 )
@@ -10,7 +11,6 @@ from src.infrastructure.config.accumulation_screener_config import (
     AccumulationScreenerConfig,
     ScoreFilterConfig,
 )
-from src.infrastructure.config.swing_config import SwingConfig
 
 
 def test_builder_maps_swing_and_accumulation_config_to_screen_request():

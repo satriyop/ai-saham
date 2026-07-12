@@ -11,7 +11,12 @@ from src.adapters.cli.analyze_swing_commands import (
     NOISE_BROKERS,
     SMART_MONEY_BROKERS,
 )
-from src.infrastructure.config.swing_config import SwingConfig as _SwingConfig
+from src.infrastructure.config.swing_config import (
+    SetupTargetConfig as _SetupTargetConfig,
+)
+from src.infrastructure.config.swing_config import (
+    SwingConfig as _SwingConfig,
+)
 from src.infrastructure.config.swing_config import (
     load_swing_config as _load_swing_config,
 )
@@ -268,7 +273,9 @@ def test_broker_weights_derived_from_sc():
 
 def test_loads_tier1_brokers_from_yaml(tmp_path):
     cfg = _write_yaml(tmp_path / "s.yaml", {
-        "broker_quality": {"tier1": {"brokers": ["AK", "BK"], "cluster_min_count": 3, "stable_min_count": 1}},
+        "broker_quality": {
+            "tier1": {"brokers": ["AK", "BK"], "cluster_min_count": 3, "stable_min_count": 1},
+        },
     })
     result = _load_swing_config(cfg)
     assert result.tier1_broker_codes == frozenset({"AK", "BK"})
@@ -276,7 +283,9 @@ def test_loads_tier1_brokers_from_yaml(tmp_path):
 
 def test_loads_bci_count_thresholds(tmp_path):
     cfg = _write_yaml(tmp_path / "s.yaml", {
-        "broker_quality": {"tier1": {"brokers": ["AK"], "cluster_min_count": 4, "stable_min_count": 2}},
+        "broker_quality": {
+            "tier1": {"brokers": ["AK"], "cluster_min_count": 4, "stable_min_count": 2},
+        },
     })
     result = _load_swing_config(cfg)
     assert result.bci_cluster_min_count == 4
@@ -320,3 +329,38 @@ def test_live_config_loads_tier1_and_setup_targets():
     assert set(result.setup_targets) == {"risk_on", "neutral", "volatile", "risk_off", "default"}
     assert result.setup_targets["risk_on"].take_profit_pct == Decimal("8.0")
     assert result.bci_cluster_min_count == 3
+
+
+# ── Import / facade compatibility tests ─────────────────────────────────
+
+
+def test_dto_import_matches_facade_defaults():
+    """DTO import produces the same default SwingConfig as the facade."""
+    from src.application.dto.swing_config import (
+        SetupTargetConfig as DtoSetupTargetConfig,
+    )
+    from src.application.dto.swing_config import (
+        SwingConfig as DtoSwingConfig,
+    )
+
+    dto = DtoSwingConfig()
+    facade = _SwingConfig()
+    assert dto == facade
+    assert DtoSetupTargetConfig() == _SetupTargetConfig()
+
+
+def test_facade_still_re_exports_everything():
+    """The compatibility facade still exports all public names."""
+    from src.infrastructure.config.swing_config import (
+        SetupTargetConfig as FacadeSetupTargetConfig,
+    )
+    from src.infrastructure.config.swing_config import (
+        SwingConfig as FacadeSwingConfig,
+    )
+    from src.infrastructure.config.swing_config import (
+        load_swing_config as facade_load,
+    )
+
+    assert FacadeSwingConfig is _SwingConfig
+    assert FacadeSetupTargetConfig is _SetupTargetConfig
+    assert facade_load is _load_swing_config

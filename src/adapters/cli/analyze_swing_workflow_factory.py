@@ -21,6 +21,11 @@ from src.adapters.cli.analyze_swing_broker_display import (
     build_broker_quality_note,
     build_flow_detail,
 )
+from src.application.dto.accumulation_screen import (
+    AccumulationCandidate,
+    AccumulationScreenRequest,
+)
+from src.application.dto.swing_config import SwingConfig
 from src.application.services.accumulation_screen_factory import (
     create_accumulation_screen_use_case,
 )
@@ -34,10 +39,6 @@ from src.application.services.swing_data_freshness import (
 )
 from src.application.services.swing_data_refresh import refresh_swing_data
 from src.application.services.swing_setup_catalog import build_swing_setup_catalog_config
-from src.application.dto.accumulation_screen import (
-    AccumulationCandidate,
-    AccumulationScreenRequest,
-)
 from src.application.use_case.accumulation_screen_use_case import resolve_setup_targets
 from src.application.use_case.assess_corporate_action_event_risk_use_case import (
     AssessCorporateActionEventRiskUseCase,
@@ -60,15 +61,14 @@ from src.domain.value_objects.setup_evaluation import SetupEvaluation
 from src.infrastructure.browser.stockbit_provider_bundle import (
     create_readonly_stockbit_providers,
 )
-from src.infrastructure.config.analyze_swing_config import AnalyzeSwingConfig
 from src.infrastructure.config.accumulation_screener_config import (
     load_accumulation_screener_config,
 )
+from src.infrastructure.config.analyze_swing_config import AnalyzeSwingConfig
 from src.infrastructure.config.corporate_action_policy_config import (
     load_corporate_action_policy_config,
 )
 from src.infrastructure.config.market_context_factory import evaluate_market_context
-from src.infrastructure.config.swing_config import SwingConfig
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_candidate_observations_repository import (
     SQLiteCandidateObservationsRepository,
@@ -130,6 +130,18 @@ def create_swing_analysis_workflow(
         )
         return accum_resp.candidates[0] if accum_resp.candidates else None
 
+    def _build_broker_detail(ticker, broker_repo, window_sessions=5, as_of_date=None):
+        return build_broker_detail(
+            ticker=ticker,
+            broker_repo=broker_repo,
+            window_sessions=window_sessions,
+            as_of_date=as_of_date,
+            smart_money_brokers=smart_money_brokers,
+            noise_brokers=noise_brokers,
+            broker_weights=broker_weights,
+            smart_share_threshold_pct=swing_config.smart_share_threshold_pct,
+        )
+
     return SwingAnalysisWorkflowUseCase(
         market_repository=market_repo,
         broker_repository=broker_repo,
@@ -142,16 +154,7 @@ def create_swing_analysis_workflow(
         ),
         build_data_freshness=build_swing_data_freshness,
         build_flow_detail=build_flow_detail,
-        build_broker_detail=lambda ticker, broker_repo, window_sessions=5, as_of_date=None: build_broker_detail(
-            ticker=ticker,
-            broker_repo=broker_repo,
-            window_sessions=window_sessions,
-            as_of_date=as_of_date,
-            smart_money_brokers=smart_money_brokers,
-            noise_brokers=noise_brokers,
-            broker_weights=broker_weights,
-            smart_share_threshold_pct=swing_config.smart_share_threshold_pct,
-        ),
+        build_broker_detail=_build_broker_detail,
         build_accumulation_candidate=_build_accumulation_candidate,
         evaluate_setup=lambda candidate, broker_detail: _evaluate_swing_setup(
             setup_name=setup_name,
