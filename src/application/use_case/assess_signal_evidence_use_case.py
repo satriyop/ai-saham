@@ -16,54 +16,27 @@ Missing evidence excluded from weight denominator. Flags from SignalContext appl
 score penalties as do-no-harm signals.
 
 Layer: Application
-Depends on: domain only + stdlib. No IO, no providers, no repositories.
+Depends on: domain only + services + stdlib. No IO, no providers, no repositories.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import date
 from typing import TYPE_CHECKING
 
-from src.application.services.alpha_trigger_aggregator import (
-    AlphaTriggerAggregationRequest,
-    AlphaTriggerAggregator,
-    AlphaTriggerGroupInput,
-)
-from src.application.dto.assess_signal import AssessSignalResponse
-from src.application.services.signal_engine_config import SignalEngineConfig
+from src.application.dto.assess_signal import AssessSignalEvidenceRequest
 from src.application.services.decision_policy import DecisionPolicyService
-from src.domain.value_objects.signal_assessment import (
-    EntryQuality,
-    SignalAssessment,
-    SignalContext,
-    SignalStrength,
+from src.application.services.signal_alpha_trigger_projection import SignalAlphaTriggerProjection
+from src.application.services.signal_engine_config import SignalEngineConfig
+from src.application.services.signal_evidence_group_scorer import (
+    SignalEvidenceGroupScorer,
+)
+from src.application.services.signal_evidence_response_builder import SignalEvidenceResponseBuilder
+from src.application.services.signal_legacy_regime_conditioning import (
+    SignalLegacyRegimeConditioning,
 )
 
 if TYPE_CHECKING:
-    from src.domain.value_objects.company_quality_context_evidence import (
-        CompanyQualityContextEvidence,
-    )
-    from src.domain.value_objects.flow_confirmation_evidence import FlowConfirmationEvidence
-    from src.domain.value_objects.market_context import MarketContext
-    from src.domain.value_objects.sector_context_evidence import SectorContextEvidence
-    from src.domain.value_objects.setup_evidence import SetupEvidence
-    from src.domain.value_objects.setup_phase import SetupPhaseSnapshot
-
-
-@dataclass
-class AssessSignalEvidenceRequest:
-    ticker: str
-    snapshot_date: date
-    setup_evidence: "SetupEvidence | None" = None
-    flow_confirmation_evidence: "FlowConfirmationEvidence | None" = None
-    signal_context: SignalContext | None = None   # for flag evaluation
-    market_context: "MarketContext | None" = None  # for regime conditioning
-    setup_family: str | None = None
-    setup_phase: "SetupPhaseSnapshot | None" = None
-    horizon: str | None = None
-    sector_context_evidence: "SectorContextEvidence | None" = None
-    company_quality_context_evidence: "CompanyQualityContextEvidence | None" = None
+    from src.application.dto.assess_signal import AssessSignalResponse
 
 
 class AssessSignalEvidenceUseCase:
@@ -77,65 +50,36 @@ class AssessSignalEvidenceUseCase:
 
     def __init__(self, config: SignalEngineConfig | None = None) -> None:
         self._config = config or SignalEngineConfig()
-        self._alpha_trigger = AlphaTriggerAggregator(self._config.alpha_trigger)
 
     def execute(self, request: AssessSignalEvidenceRequest) -> AssessSignalResponse:
-        # ── Stage 1: Group scoring ────────────────────────────────────────────
-        setup_score, setup_present = self._score_setup_group(request.setup_evidence)
-        flow_score, flow_present = self._score_flow_group(request.flow_confirmation_evidence)
+        # 1. Score evidence groups
+        group_scores = SignalEvidenceGroupScorer.score(request, self._config)
 
-        # Save regime-neutral group scores before conditioning (for comparability)
-        setup_score_raw, flow_score_raw = setup_score, flow_score
-
-        # ── Stage 2: Regime conditioning (TRANSITIONAL / LEGACY ONLY) ─────────
-        # Legacy conditioning is calculated purely for diagnostic/fallback tracking
-        # but does NOT mutate the canonical score or breakdown.
-        setup_score_conditioned, flow_score_conditioned, regime_notes = self._condition_group_scores(
-            setup_score_raw, setup_present, flow_score_raw, flow_present, request.market_context
+        # 2. Compute legacy diagnostic conditioning
+        legacy_conditioning = SignalLegacyRegimeConditioning.condition(
+            setup_score=group_scores.setup_score,
+            setup_present=group_scores.setup_present,
+            flow_score=group_scores.flow_score,
+            flow_present=group_scores.flow_present,
+            market_context=request.market_context,
+            config=self._config,
+            flag_adjustment=group_scores.flag_adjustment,
         )
 
-        # ── Stage 3: Renormalize — missing groups excluded from denominator ───
-        # Canonical (regime-neutral) path
-        base_score_neutral, confidence = self._renormalize(
-            setup_score_raw, setup_present, flow_score_raw, flow_present
-        )
-
-        # Legacy (regime-conditioned) path
-        base_score_conditioned, _ = self._renormalize(
-            setup_score_conditioned, setup_present, flow_score_conditioned, flow_present
-        )
-
-        # ── Stage 4: Flags (do-no-harm penalties from SignalContext) ──────────
-        active_flags, flag_adj = self._evaluate_flags(request.signal_context)
-
-        # ── Final score (regime-neutral) ─────────────────────────────────────
-        raw_exact_score = max(0.0, min(100.0, base_score_neutral + flag_adj))
-        raw_group_score = round(base_score_neutral)
-        final_score = max(0, min(100, raw_group_score + flag_adj))
-
-        # Legacy conditioned score
-        legacy_conditioned_score = max(0, min(100, round(base_score_conditioned) + flag_adj))
-
-        strength = self._classify_strength(final_score)
-        entry_quality = self._classify_entry(strength, confidence)
-
-        # ── Stage 5: Gate tightening (ENTER → WATCH cap) ─────────────────────
-        entry_quality, gate_tightened = self._apply_gate_tightening(
-            entry_quality, request.market_context
-        )
-
-        # ── Stage 6: Decision constraints (A1 explicit policy) ───────────────
+        # 3. Apply flags/classification/decision policy
         policy_coverage = (
             request.setup_phase.coverage_score
-            if request.setup_phase is not None else confidence
+            if request.setup_phase is not None
+            else group_scores.confidence
         )
         policy_conviction = (
             request.setup_phase.conviction_score
-            if request.setup_phase is not None else confidence
+            if request.setup_phase is not None
+            else group_scores.confidence
         )
         decision_result = DecisionPolicyService(self._config.decision_policy).resolve(
-            entry_quality=entry_quality,
-            score=final_score,
+            entry_quality=group_scores.entry_quality,
+            score=group_scores.final_score,
             coverage_score=policy_coverage,
             conviction_score=policy_conviction,
             market_context=request.market_context,
@@ -143,420 +87,29 @@ class AssessSignalEvidenceUseCase:
             setup_phase=request.setup_phase,
             setup_entry_authority=(
                 request.setup_evidence.entry_authority
-                if request.setup_evidence is not None else True
+                if request.setup_evidence is not None
+                else True
             ),
             setup_can_enter_from_phases=(
                 request.setup_evidence.can_enter_from_phases
-                if request.setup_evidence is not None else ()
+                if request.setup_evidence is not None
+                else ()
             ),
         )
         entry_quality = decision_result.entry_quality
         decision_constraints = decision_result.constraints
 
-        alpha_trigger_score = None
-        if self._config.alpha_trigger.enabled:
-            alpha_trigger_score = self._alpha_trigger.aggregate(
-                AlphaTriggerAggregationRequest(
-                    horizon=request.horizon or self._config.alpha_trigger.default_horizon,
-                    groups=(
-                        AlphaTriggerGroupInput(
-                            group="setup_quality",
-                            score=setup_score_raw,
-                            configured_weight=self._config.alpha_trigger.group_weights.get(
-                                "setup_quality", 0.0
-                            ),
-                            present=setup_present,
-                        ),
-                        AlphaTriggerGroupInput(
-                            group="institutional_flow",
-                            score=flow_score_raw,
-                            configured_weight=self._config.alpha_trigger.group_weights.get(
-                                "institutional_flow", 0.0
-                            ),
-                            present=flow_present,
-                        ),
-                        AlphaTriggerGroupInput(
-                            group="market_context",
-                            score=self._score_sector_market_context(
-                                request.sector_context_evidence
-                            ),
-                            configured_weight=self._config.alpha_trigger.group_weights.get(
-                                "market_context", 0.0
-                            ),
-                            present=self._sector_context_present(
-                                request.sector_context_evidence
-                            ),
-                        ),
-                        AlphaTriggerGroupInput(
-                            group="company_quality_context",
-                            score=self._score_company_quality(
-                                request.company_quality_context_evidence
-                            ),
-                            configured_weight=self._config.alpha_trigger.group_weights.get(
-                                "company_quality_context", 0.0
-                            ),
-                            present=self._company_quality_present(
-                                request.company_quality_context_evidence
-                            ),
-                        ),
-                    ),
-                    setup_phase=request.setup_phase,
-                    flow_confirmation_evidence=request.flow_confirmation_evidence,
-                )
-            )
-
-        # Breakdown and rationale use canonical (regime-neutral) scores
-        breakdown = self._build_breakdown(
-            setup_score_raw, setup_present, flow_score_raw, flow_present,
-            confidence, active_flags, flag_adj, bool(regime_notes), gate_tightened,
-        )
-        rationale = self._build_rationale(
-            request.ticker, final_score, strength, entry_quality,
-            setup_present, flow_present, confidence, active_flags, flag_adj,
-            regime_notes, gate_tightened,
+        # 4. Compute alpha/trigger score
+        alpha_trigger_score = SignalAlphaTriggerProjection.build_score(
+            request, self._config, group_scores
         )
 
-        assessment = SignalAssessment(
-            ticker=request.ticker,
-            score=final_score,
-            strength=strength,
+        # 5. Build response
+        return SignalEvidenceResponseBuilder.build(
+            request=request,
+            group_scores=group_scores,
+            legacy_conditioning=legacy_conditioning,
             entry_quality=entry_quality,
-            breakdown=breakdown,
-            rationale=rationale,
-            snapshot_date=request.snapshot_date,
-            confidence_score=round(confidence, 4),
             decision_constraints=decision_constraints,
-            legacy_conditioned_score=legacy_conditioned_score,
-            raw_exact_score=round(raw_exact_score, 4),
             alpha_trigger_score=alpha_trigger_score,
         )
-
-        coverage_warning = self._coverage_warning(confidence, setup_present, flow_present)
-
-        return AssessSignalResponse(
-            ticker=request.ticker,
-            assessment=assessment,
-            coverage_warning=coverage_warning,
-            evidence_confidence=round(confidence, 4),
-            active_flags=tuple(active_flags),
-            flag_adjustment=flag_adj,
-            raw_group_score=raw_group_score,
-            signal_score_raw=final_score,
-            raw_exact_score=round(raw_exact_score, 4),
-            alpha_trigger_score=alpha_trigger_score,
-        )
-
-    # ── group scorers ─────────────────────────────────────────────────────────
-
-    def _score_setup_group(self, ev: "SetupEvidence | None") -> tuple[float, bool]:
-        """Setup quality group score (0–100) from SetupEvidence.match_strength."""
-        if ev is None:
-            return 0.0, False
-        return float(ev.match_strength), True
-
-    def _score_flow_group(self, ev: "FlowConfirmationEvidence | None") -> tuple[float, bool]:
-        """Flow confirmation group score (0–100) from capped_strength (0–1)."""
-        if ev is None:
-            return 0.0, False
-        return max(0.0, min(100.0, ev.capped_strength * 100.0)), True
-
-    def _score_sector_market_context(
-        self,
-        ev: "SectorContextEvidence | None",
-    ) -> float:
-        """Diagnostic market-context score from sector regime.
-
-        The score is routed through the Alpha/Trigger market_context slot, but
-        its DIAGNOSTIC registration gives it zero effective score authority.
-        """
-        if ev is None:
-            return 0.0
-        return {
-            "BULLISH": 75.0,
-            "NEUTRAL": 50.0,
-            "BEARISH": 25.0,
-        }.get(ev.sector_regime, 0.0)
-
-    def _sector_context_present(
-        self,
-        ev: "SectorContextEvidence | None",
-    ) -> bool:
-        return (
-            ev is not None
-            and ev.coverage_score > 0.0
-            and ev.sector_regime != "UNKNOWN"
-        )
-
-    def _score_company_quality(
-        self,
-        ev: "CompanyQualityContextEvidence | None",
-    ) -> float:
-        """Diagnostic company-quality / ticker-alpha conviction score (0-100).
-
-        Routed through the Alpha/Trigger company_quality_context slot, but its
-        DIAGNOSTIC registration gives it zero effective score authority
-        (effective_weight = 0.0) — it never moves final_exact_score.
-        """
-        if ev is None or ev.aggregate_score is None:
-            return 0.0
-        return ev.aggregate_score
-
-    def _company_quality_present(
-        self,
-        ev: "CompanyQualityContextEvidence | None",
-    ) -> bool:
-        return (
-            ev is not None
-            and ev.coverage_score > 0.0
-            and ev.aggregate_score is not None
-        )
-
-    # ── regime conditioning (ARCHIVED DIAGNOSTIC — Phase 5 legacy) ───────────
-    #
-    # The double-regime effect is resolved: canonical assessment.score now uses
-    # regime-neutral group scores (see Stage 3 above). _condition_group_scores()
-    # output is stored as legacy_conditioned_score only — diagnostic/fallback.
-    # decision_policy is the canonical regime gate.
-    #
-    # Do not tune regime_conditioning params. Do not remove yet — pending explicit
-    # clean-break decision after live labels confirm decision_policy is sufficient.
-
-    def _condition_group_scores(
-        self,
-        setup_score: float, setup_present: bool,
-        flow_score: float, flow_present: bool,
-        market_context: "MarketContext | None",
-    ) -> tuple[float, float, list[str]]:
-        """TRANSITIONAL Phase 5 layer — see class-level comment above.
-
-        Returns (conditioned_setup_score, conditioned_flow_score, regime_notes).
-        RISK_ON: no change. Notes list is empty when no conditioning fires.
-        """
-        if market_context is None:
-            return setup_score, flow_score, []
-
-        regime = market_context.regime.value
-        cfg = self._config.regime_conditioning
-        notes: list[str] = []
-
-        if regime == "RISK_OFF" and setup_present:
-            rc = cfg.risk_off
-            if setup_score < rc.weak_setup_threshold:
-                old = setup_score
-                setup_score = setup_score * rc.weak_setup_discount
-                notes.append(
-                    f"RISK_OFF: setup {old:.0f}→{setup_score:.0f} "
-                    f"(×{rc.weak_setup_discount:.2f}, below MATCH threshold)"
-                )
-
-        elif regime == "NEUTRAL" and flow_present:
-            rc = cfg.neutral
-            if flow_score < rc.weak_flow_threshold:
-                old = flow_score
-                flow_score = flow_score * rc.weak_flow_discount
-                notes.append(
-                    f"NEUTRAL: flow {old:.0f}→{flow_score:.0f} "
-                    f"(×{rc.weak_flow_discount:.2f}, below confirmation threshold)"
-                )
-
-        elif regime == "VOLATILE":
-            rc = cfg.volatile
-            if setup_present:
-                old_s = setup_score
-                setup_score = setup_score * rc.setup_discount
-                notes.append(
-                    f"VOLATILE: setup {old_s:.0f}→{setup_score:.0f} "
-                    f"(×{rc.setup_discount:.2f})"
-                )
-            if flow_present:
-                old_f = flow_score
-                flow_score = flow_score * rc.flow_discount
-                notes.append(
-                    f"VOLATILE: flow {old_f:.0f}→{flow_score:.0f} "
-                    f"(×{rc.flow_discount:.2f})"
-                )
-
-        return setup_score, flow_score, notes
-
-    def _apply_gate_tightening(
-        self,
-        entry_quality: EntryQuality,
-        market_context: "MarketContext | None",
-    ) -> tuple[EntryQuality, bool]:
-        """Cap ENTER→WATCH when gate_tightening is set on market_context."""
-        if (
-            market_context is not None
-            and market_context.gate_tightening
-            and entry_quality == EntryQuality.ENTER
-        ):
-            return EntryQuality.WATCH, True
-        return entry_quality, False
-
-    # ── renormalization ───────────────────────────────────────────────────────
-
-    def _renormalize(
-        self,
-        setup_score: float, setup_present: bool,
-        flow_score: float, flow_present: bool,
-    ) -> tuple[float, float]:
-        """
-        Compute base score and confidence from present evidence groups.
-
-        confidence = present_weight / total_weight.
-        When no groups are present, base_score = 50.0 (no directional information).
-        """
-        g = self._config.evidence_groups
-        total_weight = g.setup_quality.weight + g.flow_confirmation.weight
-
-        active: list[tuple[float, float]] = []  # (score, weight)
-        if setup_present:
-            active.append((setup_score, g.setup_quality.weight))
-        if flow_present:
-            active.append((flow_score, g.flow_confirmation.weight))
-
-        if not active:
-            return 50.0, 0.0
-
-        present_weight = sum(w for _, w in active)
-        base_score = sum(s * w for s, w in active) / present_weight
-        confidence = min(1.0, present_weight / total_weight) if total_weight > 0 else 0.0
-        return base_score, confidence
-
-    # ── flags ─────────────────────────────────────────────────────────────────
-
-    def _evaluate_flags(
-        self, ctx: SignalContext | None
-    ) -> tuple[list[str], int]:
-        """Return (active_flag_names, total_penalty) from SignalContext."""
-        if ctx is None:
-            return [], 0
-
-        flags_cfg = self._config.flags
-        active: list[str] = []
-        total_penalty = 0
-
-        if (
-            flags_cfg.valuation_stretched.enabled
-            and ctx.forward_pe is not None
-            and ctx.forward_pe > flags_cfg.valuation_stretched.forward_pe_threshold
-        ):
-            active.append("VALUATION_STRETCHED")
-            total_penalty -= flags_cfg.valuation_stretched.score_penalty
-
-        if (
-            flags_cfg.analyst_bearish.enabled
-            and ctx.analyst_buy_pct is not None
-            and ctx.analyst_buy_pct < flags_cfg.analyst_bearish.buy_ratio_threshold
-        ):
-            active.append("ANALYST_BEARISH")
-            total_penalty -= flags_cfg.analyst_bearish.score_penalty
-
-        if (
-            flags_cfg.insider_selling.enabled
-            and ctx.insider_net_buy_ratio is not None
-            and ctx.insider_net_buy_ratio < flags_cfg.insider_selling.net_buy_ratio_threshold
-        ):
-            active.append("INSIDER_SELLING")
-            total_penalty -= flags_cfg.insider_selling.score_penalty
-
-        return active, total_penalty
-
-    # ── breakdown and rationale ───────────────────────────────────────────────
-
-    def _build_breakdown(
-        self,
-        setup_score: float, setup_present: bool,
-        flow_score: float, flow_present: bool,
-        confidence: float,
-        active_flags: list[str],
-        flag_adj: int,
-        regime_conditioned: bool,
-        gate_tightened: bool,
-    ) -> tuple[tuple[str, float], ...]:
-        entries: list[tuple[str, float]] = []
-        if setup_present:
-            entries.append(("setup_quality_group", round(setup_score, 2)))
-        if flow_present:
-            entries.append(("flow_confirmation_group", round(flow_score, 2)))
-        entries.append(("evidence_confidence", round(confidence * 100.0, 2)))
-        if flag_adj != 0:
-            entries.append(("flag_adjustment", float(flag_adj)))
-        if regime_conditioned:
-            entries.append(("regime_conditioning", 1.0))
-        if gate_tightened:
-            entries.append(("gate_tightening", 1.0))
-        return tuple(entries)
-
-    def _build_rationale(
-        self,
-        ticker: str,
-        final_score: int,
-        strength: SignalStrength,
-        entry_quality: EntryQuality,
-        setup_present: bool,
-        flow_present: bool,
-        confidence: float,
-        active_flags: list[str],
-        flag_adj: int,
-        regime_notes: list[str],
-        gate_tightened: bool,
-    ) -> tuple[str, ...]:
-        lines: list[str] = []
-        if not setup_present:
-            lines.append("Setup quality: no evidence (excluded from score)")
-        if not flow_present:
-            lines.append("Flow confirmation: no evidence (excluded from score)")
-        if active_flags:
-            flag_str = ", ".join(active_flags)
-            lines.append(f"Flags active: {flag_str} ({flag_adj:+d} pts)")
-        for note in regime_notes:
-            lines.append(note)
-        if gate_tightened:
-            lines.append("Gate tightening: ENTER → WATCH (regime gate_tightening=True)")
-        lines.append(
-            f"Evidence confidence: {confidence:.0%} — "
-            f"score {final_score} ({strength.value}/{entry_quality.value})"
-        )
-        return tuple(lines)
-
-    # ── classification ────────────────────────────────────────────────────────
-
-    def _classify_strength(self, score: int) -> SignalStrength:
-        cfg = self._config.classification
-        if score >= cfg.strong_min_score:
-            return SignalStrength.STRONG
-        if score >= cfg.moderate_min_score:
-            return SignalStrength.MODERATE
-        return SignalStrength.WEAK
-
-    def _classify_entry(
-        self, strength: SignalStrength, confidence: float
-    ) -> EntryQuality:
-        cfg = self._config.classification
-        if strength == SignalStrength.STRONG and confidence >= cfg.enter_min_confidence:
-            return EntryQuality.ENTER
-        if (
-            strength in {SignalStrength.STRONG, SignalStrength.MODERATE}
-            and confidence >= cfg.watch_min_confidence
-        ):
-            return EntryQuality.WATCH
-        return EntryQuality.AVOID
-
-    # ── coverage warning ──────────────────────────────────────────────────────
-
-    def _coverage_warning(
-        self,
-        confidence: float,
-        setup_present: bool,
-        flow_present: bool,
-    ) -> str | None:
-        if confidence == 0.0:
-            return "No evidence groups present — score is neutral prior only"
-        if confidence < 0.5:
-            missing = []
-            if not setup_present:
-                missing.append("setup_quality")
-            if not flow_present:
-                missing.append("flow_confirmation")
-            return f"Low evidence confidence ({confidence:.0%}) — missing: {', '.join(missing)}"
-        return None

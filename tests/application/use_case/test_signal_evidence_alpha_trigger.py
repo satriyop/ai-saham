@@ -2,9 +2,7 @@
 
 import pytest
 
-from src.application.use_case.assess_signal_evidence_use_case import (
-    AssessSignalEvidenceRequest,
-)
+from src.application.dto.assess_signal import AssessSignalEvidenceRequest
 from src.application.use_case.assess_signal_use_case import (
     DecisionPolicyConfig,
     RegimeDecisionPolicyConfig,
@@ -154,11 +152,13 @@ def test_missing_setup_phase_with_required_phases_caps_enter_to_watch():
 
 
 def test_alpha_trigger_projection_uses_existing_group_scores():
-    resp = _use_case().execute(_req(
-        setup_evidence=_setup_evidence("MATCH"),
-        flow_confirmation_evidence=_flow_evidence(capped_strength=0.50),
-        setup_phase=_phase_state(SetupPhaseState.BREAKOUT_CONFIRMATION),
-    ))
+    resp = _use_case().execute(
+        _req(
+            setup_evidence=_setup_evidence("MATCH"),
+            flow_confirmation_evidence=_flow_evidence(capped_strength=0.50),
+            setup_phase=_phase_state(SetupPhaseState.BREAKOUT_CONFIRMATION),
+        )
+    )
 
     at = resp.alpha_trigger_score
 
@@ -184,12 +184,14 @@ def test_alpha_trigger_projection_uses_existing_group_scores():
 
 
 def test_alpha_trigger_sector_context_feeds_market_slot_as_diagnostic_coverage():
-    resp = _use_case().execute(_req(
-        setup_evidence=_setup_evidence("MATCH"),
-        flow_confirmation_evidence=_flow_evidence(capped_strength=0.50),
-        setup_phase=_phase_state(SetupPhaseState.BREAKOUT_CONFIRMATION),
-        sector_context_evidence=_sector_context("BULLISH"),
-    ))
+    resp = _use_case().execute(
+        _req(
+            setup_evidence=_setup_evidence("MATCH"),
+            flow_confirmation_evidence=_flow_evidence(capped_strength=0.50),
+            setup_phase=_phase_state(SetupPhaseState.BREAKOUT_CONFIRMATION),
+            sector_context_evidence=_sector_context("BULLISH"),
+        )
+    )
 
     at = resp.alpha_trigger_score
 
@@ -206,12 +208,14 @@ def test_alpha_trigger_sector_context_feeds_market_slot_as_diagnostic_coverage()
 
 
 def test_alpha_trigger_company_quality_feeds_slot_as_diagnostic_coverage():
-    resp = _use_case().execute(_req(
-        setup_evidence=_setup_evidence("MATCH"),
-        flow_confirmation_evidence=_flow_evidence(capped_strength=0.50),
-        setup_phase=_phase_state(SetupPhaseState.BREAKOUT_CONFIRMATION),
-        company_quality_context_evidence=_company_quality(72.0),
-    ))
+    resp = _use_case().execute(
+        _req(
+            setup_evidence=_setup_evidence("MATCH"),
+            flow_confirmation_evidence=_flow_evidence(capped_strength=0.50),
+            setup_phase=_phase_state(SetupPhaseState.BREAKOUT_CONFIRMATION),
+            company_quality_context_evidence=_company_quality(72.0),
+        )
+    )
 
     at = resp.alpha_trigger_score
     assert at is not None
@@ -231,10 +235,12 @@ def test_company_quality_slot_has_zero_scoring_authority():
         setup_phase=_phase_state(SetupPhaseState.BREAKOUT_CONFIRMATION),
     )
     empty = _use_case().execute(_req(**common))
-    filled = _use_case().execute(_req(
-        **common,
-        company_quality_context_evidence=_company_quality(88.0),
-    ))
+    filled = _use_case().execute(
+        _req(
+            **common,
+            company_quality_context_evidence=_company_quality(88.0),
+        )
+    )
 
     assert filled.alpha_trigger_score.final_exact_score == pytest.approx(
         empty.alpha_trigger_score.final_exact_score
@@ -244,7 +250,8 @@ def test_company_quality_slot_has_zero_scoring_authority():
     )
     assert filled.assessment.score == empty.assessment.score
     cq = [
-        c for c in filled.alpha_trigger_score.group_contributions
+        c
+        for c in filled.alpha_trigger_score.group_contributions
         if c.group == "company_quality_context"
     ][0]
     assert cq.present is True
@@ -269,11 +276,13 @@ def test_alpha_trigger_missing_groups_do_not_neutral_fill_side_denominators():
 
 
 def test_flow_does_not_contribute_to_trigger_without_price_volume_confirmation():
-    resp = _use_case().execute(_req(
-        setup_evidence=_setup_evidence("MATCH"),
-        flow_confirmation_evidence=_flow_evidence(capped_strength=0.50),
-        setup_phase=_phase_state(SetupPhaseState.COMPRESSION),
-    ))
+    resp = _use_case().execute(
+        _req(
+            setup_evidence=_setup_evidence("MATCH"),
+            flow_confirmation_evidence=_flow_evidence(capped_strength=0.50),
+            setup_phase=_phase_state(SetupPhaseState.COMPRESSION),
+        )
+    )
 
     at = resp.alpha_trigger_score
 
@@ -287,14 +296,16 @@ def test_flow_does_not_contribute_to_trigger_without_price_volume_confirmation()
 
 
 def test_breakout_confirmation_with_confirmed_flow_unlocks_flow_trigger_contribution():
-    resp = _use_case().execute(_req(
-        setup_evidence=_setup_evidence("MATCH"),
-        flow_confirmation_evidence=_flow_evidence(
-            capped_strength=0.50,
-            confirmation_status="CONFIRMED",
-        ),
-        setup_phase=_phase_state(SetupPhaseState.BREAKOUT_CONFIRMATION),
-    ))
+    resp = _use_case().execute(
+        _req(
+            setup_evidence=_setup_evidence("MATCH"),
+            flow_confirmation_evidence=_flow_evidence(
+                capped_strength=0.50,
+                confirmation_status="CONFIRMED",
+            ),
+            setup_phase=_phase_state(SetupPhaseState.BREAKOUT_CONFIRMATION),
+        )
+    )
 
     at = resp.alpha_trigger_score
 
@@ -304,14 +315,16 @@ def test_breakout_confirmation_with_confirmed_flow_unlocks_flow_trigger_contribu
 
 
 def test_flow_still_blocked_when_breakout_phase_lacks_confirmed_flow():
-    resp = _use_case().execute(_req(
-        setup_evidence=_setup_evidence("MATCH"),
-        flow_confirmation_evidence=_flow_evidence(
-            capped_strength=0.50,
-            confirmation_status="WATCH_ZONE",
-        ),
-        setup_phase=_phase_state(SetupPhaseState.BREAKOUT_CONFIRMATION),
-    ))
+    resp = _use_case().execute(
+        _req(
+            setup_evidence=_setup_evidence("MATCH"),
+            flow_confirmation_evidence=_flow_evidence(
+                capped_strength=0.50,
+                confirmation_status="WATCH_ZONE",
+            ),
+            setup_phase=_phase_state(SetupPhaseState.BREAKOUT_CONFIRMATION),
+        )
+    )
 
     at = resp.alpha_trigger_score
 
@@ -341,22 +354,24 @@ def test_diagnostic_producers_zero_authority():
         setup_phase=_phase_state(SetupPhaseState.BREAKOUT_CONFIRMATION),
     )
     empty = uc.execute(_req(**common))
-    filled = uc.execute(_req(
-        **common,
-        sector_context_evidence=_sector_context("BULLISH"),
-        company_quality_context_evidence=_company_quality(88.0),
-    ))
+    filled = uc.execute(
+        _req(
+            **common,
+            sector_context_evidence=_sector_context("BULLISH"),
+            company_quality_context_evidence=_company_quality(88.0),
+        )
+    )
 
     assert filled.alpha_trigger_score.final_exact_score == pytest.approx(
         empty.alpha_trigger_score.final_exact_score
     )
     assert filled.assessment.score == empty.assessment.score
     market = [
-        c for c in filled.alpha_trigger_score.group_contributions
-        if c.group == "market_context"
+        c for c in filled.alpha_trigger_score.group_contributions if c.group == "market_context"
     ][0]
     cq = [
-        c for c in filled.alpha_trigger_score.group_contributions
+        c
+        for c in filled.alpha_trigger_score.group_contributions
         if c.group == "company_quality_context"
     ][0]
     assert market.effective_weight == pytest.approx(0.0)

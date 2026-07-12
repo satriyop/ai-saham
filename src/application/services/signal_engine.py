@@ -26,26 +26,29 @@ import logging
 from datetime import date
 from typing import TYPE_CHECKING, Callable
 
-from src.application.use_case.assess_signal_evidence_use_case import (
+from src.application.dto.assess_signal import (
     AssessSignalEvidenceRequest,
+    AssessSignalRequest,
+    AssessSignalResponse,
+)
+from src.application.services.signal_engine_config import SignalEngineConfig
+from src.application.use_case.assess_signal_evidence_use_case import (
     AssessSignalEvidenceUseCase,
 )
-from src.application.dto.assess_signal import AssessSignalRequest, AssessSignalResponse
-from src.application.services.signal_engine_config import SignalEngineConfig
-from src.domain.value_objects.signal_assessment import SignalContext
 from src.domain.value_objects.forward_estimates import derive_forward_pe
+from src.domain.value_objects.signal_assessment import SignalContext
 
 if TYPE_CHECKING:
+    from src.domain.ports.analyst_consensus_provider import AnalystConsensusProvider
     from src.domain.ports.bandar_detector_provider import BandarDetectorProvider
+    from src.domain.ports.forward_estimates_provider import ForwardEstimatesProvider
     from src.domain.ports.fundamentals_provider import FundamentalsProvider
     from src.domain.ports.insider_activity_provider import InsiderActivityProvider
     from src.domain.ports.seasonality_provider import SeasonalityProvider
-    from src.domain.ports.analyst_consensus_provider import AnalystConsensusProvider
-    from src.domain.ports.forward_estimates_provider import ForwardEstimatesProvider
-    from src.domain.value_objects.flow_confirmation_evidence import FlowConfirmationEvidence
     from src.domain.value_objects.company_quality_context_evidence import (
         CompanyQualityContextEvidence,
     )
+    from src.domain.value_objects.flow_confirmation_evidence import FlowConfirmationEvidence
     from src.domain.value_objects.market_context import MarketContext
     from src.domain.value_objects.sector_context_evidence import SectorContextEvidence
     from src.domain.value_objects.setup_evidence import SetupEvidence
@@ -120,9 +123,7 @@ class SignalEngine:
             )
         )
 
-    def build_context(
-        self, ticker: str, as_of_date: date | None = None
-    ) -> SignalContext:
+    def build_context(self, ticker: str, as_of_date: date | None = None) -> SignalContext:
         """Public accessor for the enrichment SignalContext (observability path).
 
         Used by AuditSignalUseCase / signal-audit CLI to inspect the exact inputs
@@ -208,9 +209,7 @@ class SignalEngine:
 
     # ── internals ────────────────────────────────────────────────────────────
 
-    def _build_signal_context(
-        self, ticker: str, as_of_date: date | None = None
-    ) -> SignalContext:
+    def _build_signal_context(self, ticker: str, as_of_date: date | None = None) -> SignalContext:
         """Fetch enrichment from injected providers. Each provider fails gracefully."""
         snapshot_date = as_of_date or date.today()
 
@@ -237,7 +236,8 @@ class SignalEngine:
                     bandar_score = snap.broad_score
                     # dynamic range: (3 mandatory + num optional top3/5/10) × ±2
                     num_optional = sum(
-                        1 for x in [snap.top3_accdist, snap.top5_accdist, snap.top10_accdist]
+                        1
+                        for x in [snap.top3_accdist, snap.top5_accdist, snap.top10_accdist]
                         if x is not None
                     )
                     bandar_max_range = self.bandar_max_range(num_optional)
@@ -249,12 +249,13 @@ class SignalEngine:
         if self._insider is not None:
             try:
                 from datetime import timedelta
+
                 from src.domain.value_objects.insider_transaction import compute_net_buy_ratio
+
                 txns = self._insider.get_insider_transactions(
                     ticker=ticker,
-                    from_date=snapshot_date - timedelta(
-                        days=self._config.enrichment.insider_lookback_days
-                    ),
+                    from_date=snapshot_date
+                    - timedelta(days=self._config.enrichment.insider_lookback_days),
                     to_date=snapshot_date,
                     action_type="ALL",
                     as_of_date=as_of_date,

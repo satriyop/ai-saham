@@ -11,8 +11,8 @@ from datetime import date
 
 import pytest
 
+from src.application.dto.assess_signal import AssessSignalEvidenceRequest
 from src.application.use_case.assess_signal_evidence_use_case import (
-    AssessSignalEvidenceRequest,
     AssessSignalEvidenceUseCase,
 )
 from src.domain.value_objects.factor_evidence import Direction, Freshness
@@ -22,7 +22,6 @@ from src.domain.value_objects.flow_confirmation_evidence import (
 )
 from src.domain.value_objects.setup_evidence import SetupEvidence
 from src.domain.value_objects.signal_assessment import EntryQuality, SignalStrength
-
 
 SNAP = date(2026, 7, 3)
 

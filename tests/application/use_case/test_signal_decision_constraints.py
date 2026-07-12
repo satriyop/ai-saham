@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from datetime import date
 
+from src.application.dto.assess_signal import AssessSignalEvidenceRequest
 from src.application.use_case.assess_signal_evidence_use_case import (
-    AssessSignalEvidenceRequest,
     AssessSignalEvidenceUseCase,
 )
 from src.domain.value_objects.factor_evidence import Direction, Freshness
@@ -14,7 +14,6 @@ from src.domain.value_objects.flow_confirmation_evidence import (
 from src.domain.value_objects.market_context import MarketContext, MarketRegime
 from src.domain.value_objects.setup_evidence import SetupEvidence
 from src.domain.value_objects.signal_assessment import EntryQuality
-
 
 SNAP = date(2026, 7, 5)
 
@@ -113,7 +112,6 @@ def test_decision_policy_receives_coverage_score_and_conviction_score_from_setup
     checking that a low coverage_score produces a coverage constraint reason.
     """
     from src.application.use_case.assess_signal_evidence_use_case import (
-        AssessSignalEvidenceRequest,
         AssessSignalEvidenceUseCase,
     )
     from src.domain.value_objects.setup_phase import SetupPhaseSnapshot, SetupPhaseState
@@ -123,7 +121,7 @@ def test_decision_policy_receives_coverage_score_and_conviction_score_from_setup
         previous_phase=None,
         phase_age_sessions=3,
         phase_strength=0.50,
-        coverage_score=0.20,   # deliberately low — below RISK_ON min_coverage=0.70
+        coverage_score=0.20,  # deliberately low — below RISK_ON min_coverage=0.70
         conviction_score=0.80,
         sequence_valid=True,
     )

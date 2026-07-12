@@ -2,8 +2,8 @@
 
 from datetime import date
 
+from src.application.dto.assess_signal import AssessSignalEvidenceRequest
 from src.application.use_case.assess_signal_evidence_use_case import (
-    AssessSignalEvidenceRequest,
     AssessSignalEvidenceUseCase,
 )
 from src.application.use_case.assess_signal_use_case import SignalEngineConfig
@@ -72,8 +72,11 @@ def _flow_evidence(
     confirmation_status: str = "CONFIRMED",
 ) -> FlowConfirmationEvidence:
     signal = FlowSubSignal(
-        key="cons", score=40.0, weight=40.0,
-        direction=Direction.BULLISH, freshness=Freshness.FRESH,
+        key="cons",
+        score=40.0,
+        weight=40.0,
+        direction=Direction.BULLISH,
+        freshness=Freshness.FRESH,
     )
     return FlowConfirmationEvidence(
         ticker="TEST",
