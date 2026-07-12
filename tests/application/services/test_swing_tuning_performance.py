@@ -13,14 +13,14 @@ from src.application.services.swing_tuning_config_paths import (
 from src.application.services.swing_tuning_contracts import (
     build_tuning_config_diff_draft,
 )
-from src.application.services.swing_tuning_diff_policy import (
-    _classify_tuning_target_kind,
-)
 from src.application.services.swing_tuning_patch_validator import (
     SwingTuningPatchValidator,
 )
 from src.application.services.swing_tuning_review_journal import (
     _summarize_record,
+)
+from src.application.services.swing_tuning_target_classification import (
+    TuningTargetClassification,
 )
 from tests.application.services.swing_tuning_guardrail_fixtures import (
     _COMPLETE_SOURCE_REVIEW,
@@ -33,7 +33,8 @@ def test_evidence_group_weight_classified_as_weight_kind():
     path = parse_tuning_config_path(
         "config/signal_engine.yaml:signal_engine.evidence_groups.setup_quality.weight"
     )
-    assert _classify_tuning_target_kind(path) == "weight"
+    classification = TuningTargetClassification.from_path(path)
+    assert classification.target_kind == "weight"
 
 
 def test_oos_backtest_summary_populated_from_record():
