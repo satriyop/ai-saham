@@ -13,7 +13,7 @@ import typer
 from src.application.ports.signal_coverage_provider import SignalCoverageReport
 from src.application.services.bootstrap import (
     create_signal_engine,
-    load_signal_weight_tables,
+    resolve_signal_weight_tables,
 )
 from src.application.use_case.audit_signal_use_case import (
     AuditSignalRequest,
@@ -21,6 +21,9 @@ from src.application.use_case.audit_signal_use_case import (
 )
 from src.domain.value_objects.signal_audit import SignalAuditReport
 from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.signal_engine_config_loader import (
+    load_signal_engine_config_raw,
+)
 from src.infrastructure.persistence.sqlite_signal_coverage_provider import (
     SqliteSignalCoverageProvider,
 )
@@ -81,7 +84,9 @@ def signal_audit(
     try:
         engine = create_signal_engine(resolved_db, with_enrichment=True)
         ctx = engine.build_context(ticker_u, as_of_date=snapshot_date)
-        active_weights, raw_weights, signal_config = load_signal_weight_tables()
+        active_weights, raw_weights, signal_config = resolve_signal_weight_tables(
+            load_signal_engine_config_raw()
+        )
 
         response = AuditSignalUseCase().execute(
             AuditSignalRequest(

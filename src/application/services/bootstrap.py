@@ -8,7 +8,12 @@ risk engine, and signal engine. That behavior now lives in the
 
 - `engine_bootstrap.evidence_authority_validation` — promotion record validation
 - `engine_bootstrap.config_resolvers` — shared YAML engine config loading
-- `engine_bootstrap.signal_config_resolvers` — signal engine config resolving
+- `engine_bootstrap.signal_weight_config_resolver` — signal factor weight resolving
+- `engine_bootstrap.signal_archived_config_warnings` — archived config warnings
+- `engine_bootstrap.signal_decision_policy_config_resolver` — decision policy resolving
+- `engine_bootstrap.signal_alpha_trigger_config_resolver` — alpha/trigger resolving
+- `engine_bootstrap.signal_scoring_config_resolver` — full SignalEngineConfig composition
+- `engine_bootstrap.signal_config_resolvers` — signal engine config compatibility facade
 - `engine_bootstrap.risk_config_resolvers` — risk engine config resolving
 - `engine_bootstrap.indicator_registry_factory` — IndicatorRegistry construction
 - `engine_bootstrap.risk_engine_factory` — RiskEngine construction
@@ -38,17 +43,19 @@ from src.application.services.engine_bootstrap.risk_engine_factory import (
 )
 from src.application.services.engine_bootstrap.signal_config_resolvers import (
     _resolve_signal_config,
-    load_signal_weight_tables,
 )
 from src.application.services.engine_bootstrap.signal_engine_factory import (
     create_signal_engine,
+)
+from src.application.services.engine_bootstrap.signal_weight_config_resolver import (
+    resolve_signal_weight_tables,
 )
 
 __all__ = [
     "create_indicator_registry",
     "create_risk_engine",
     "create_signal_engine",
-    "load_signal_weight_tables",
+    "resolve_signal_weight_tables",
     "_load_engine_config",
     "_resolve_indicator_evaluator_config",
     "_resolve_market_context_gate",

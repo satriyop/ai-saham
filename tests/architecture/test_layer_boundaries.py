@@ -93,13 +93,12 @@ BASELINE_ALLOWLIST = {
         "src.infrastructure.browser.stockbit_shareholding",
     ): "LEGACY: composition-root factory wires infrastructure browser provider directly; predates architecture guard. Do not copy.",
     (
-        "src/application/services/engine_bootstrap/signal_config_resolvers.py",
-        "src.infrastructure.config.app_config",
-    ): "LEGACY: application resolver reads infrastructure config module directly; predates architecture guard. Do not copy.",
-    (
         "src/application/services/engine_bootstrap/signal_engine_factory.py",
-        "src.infrastructure.config.app_config",
-    ): "LEGACY: composition-root factory reads infrastructure config module directly; predates architecture guard. Do not copy.",
+        "src.infrastructure.config.signal_engine_config_loader",
+    ): (
+        "LEGACY: composition-root factory reads infrastructure config module "
+        "directly; predates architecture guard. Do not copy."
+    ),
     (
         "src/application/services/engine_bootstrap/signal_engine_factory.py",
         "src.infrastructure.browser.stockbit_analyst",

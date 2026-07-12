@@ -11,11 +11,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from src.application.services.engine_bootstrap.config_resolvers import (
-    _load_engine_config,
+from src.application.services.engine_bootstrap.signal_scoring_config_resolver import (
+    resolve_signal_engine_config,
 )
-from src.application.services.engine_bootstrap.signal_config_resolvers import (
-    _resolve_signal_config,
+from src.application.services.engine_bootstrap.signal_weight_config_resolver import (
     _resolve_signal_weights,
 )
 
@@ -41,11 +40,13 @@ def create_signal_engine(
     from pathlib import Path as _Path
 
     from src.application.services.signal_engine import SignalEngine
-    from src.infrastructure.config.app_config import APP_CFG
+    from src.infrastructure.config.signal_engine_config_loader import (
+        load_signal_engine_config_raw,
+    )
 
-    cfg = _load_engine_config(Path(APP_CFG.config_paths.signal_engine))
+    cfg = load_signal_engine_config_raw()
     weights = _resolve_signal_weights(cfg)
-    signal_config = _resolve_signal_config(cfg)
+    signal_config = resolve_signal_engine_config(cfg)
 
     if not with_enrichment:
         return SignalEngine(weights=weights, config=signal_config)
