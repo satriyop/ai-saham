@@ -43,6 +43,10 @@ from src.adapters.cli.fetch_market_enrichment_refresh import (
 )
 from src.adapters.cli.fetch_market_meta_refresh import fetch_meta
 from src.adapters.cli.fetch_market_provider_factory import create_broker_provider
+from src.application.services.fetch_market_provider_precondition import (
+    FetchMarketProviderPrecondition,
+    FetchMarketProviderPreconditionRequest,
+)
 from src.application.services.market_freshness_service import (
     BenchmarkTickerAliases,
     MarketFreshnessService,
@@ -55,10 +59,6 @@ from src.application.use_case.fetch_market_refresh_use_case import (
     BENCHMARK_TICKER,
     FetchMarketRefreshRequest,
     FetchMarketRefreshUseCase,
-)
-from src.application.use_case.resolve_candle_provider_policy_use_case import (
-    ResolveCandleProviderPolicyRequest,
-    ResolveCandleProviderPolicyUseCase,
 )
 from src.domain.value_objects.benchmark_symbol import YAHOO_IHSG_TICKER, canonicalize_ticker
 from src.infrastructure.config.app_config import APP_CFG
@@ -76,91 +76,6 @@ STOCKBIT_PROFILE_DIR = Path(APP_CFG.storage.stockbit_profile_dir)
 # Required by: saham analyze regime, saham analyze swing (market context).
 _BENCHMARK_TICKER = BENCHMARK_TICKER
 _BENCHMARK_ALIASES = BenchmarkTickerAliases(canonical=_BENCHMARK_TICKER, legacy=YAHOO_IHSG_TICKER)
-
-
-def _cached_status(latest: date, end_date: date) -> str:
-    """Return an explicit cache status for update output."""
-    lag_days = (end_date - latest).days
-    if lag_days <= 0:
-        return f"✓({latest})"
-    return f"cached({lag_days}d lag)"
-
-
-def _no_new_data_status(latest: date | None) -> str:
-    if latest is None:
-        return "no-data"
-    return f"up-to-date({latest.isoformat()})"
-
-
-def _is_cached_status(status: str) -> bool:
-    return status.startswith("✓(")
-
-
-def _broker_update_status(
-    added_count: int,
-    updated_range: tuple[date, date] | None,
-    fetch_modes: set[str],
-) -> str:
-    """Return an explicit broker update status for update output."""
-    if added_count == 0 and updated_range is None:
-        return "no-data"
-
-    span_days = (
-        (updated_range[1] - updated_range[0]).days + 1
-        if updated_range
-        else 0
-    )
-    prefix = "backfill+" if "backfill" in fetch_modes else "+"
-    return f"{prefix}{added_count}rows/span={span_days}d"
-
-
-def _range_update_status(
-    added_count: int,
-    updated_range: tuple[date, date] | None,
-    fetch_modes: set[str],
-) -> str:
-    """Return an explicit cache update status for date-ranged data."""
-    if added_count == 0 and updated_range is None:
-        return "no-data"
-
-    span_days = (
-        (updated_range[1] - updated_range[0]).days + 1
-        if updated_range
-        else 0
-    )
-    prefix = "backfill+" if "backfill" in fetch_modes else "+"
-    return f"{prefix}{added_count}rows/span={span_days}d"
-
-
-def _find_missing_stockbit_session_error(
-    tickers: list[str],
-    non_idx_tickers: frozenset[str],
-    candles_provider: str,
-    has_broker_session: bool,
-) -> str | None:
-    """
-    Return the candle-provider policy error message if any ticker in the batch
-    would fail provider resolution (regular IDX ticker, provider != idx, no
-    Stockbit session), or None if the batch is fetchable as-is.
-
-    This is a command precondition, not a per-ticker transient fetch failure:
-    every affected ticker would fail identically, so the command must fail
-    fast before starting the ticker loop instead of surfacing a raw exception
-    mid-run.
-    """
-    policy_use_case = ResolveCandleProviderPolicyUseCase()
-    for ticker in tickers:
-        decision = policy_use_case.execute(
-            ResolveCandleProviderPolicyRequest(
-                ticker=ticker,
-                non_idx_tickers=non_idx_tickers,
-                requested_provider_name=candles_provider,
-                has_broker_session=has_broker_session,
-            )
-        )
-        if decision.error is not None:
-            return decision.error
-    return None
 
 
 def fetch_market(
@@ -189,7 +104,10 @@ def fetch_market(
     ] = False,
     candles_provider: Annotated[
         Optional[str],
-        typer.Option("--provider", help="Candles provider: yahoo or idx (default from config/data_sources.yaml)"),
+        typer.Option(
+            "--provider",
+            help="Candles provider: yahoo or idx (default from config/data_sources.yaml)",
+        ),
     ] = None,
     broker_provider: Annotated[
         Optional[str],
@@ -208,7 +126,10 @@ def fetch_market(
     ] = False,
     no_enrichment: Annotated[
         bool,
-        typer.Option("--no-enrichment", help="Skip Stockbit enrichment fetch (analyst/insider/seasonality/corp)"),
+        typer.Option(
+            "--no-enrichment",
+            help="Skip Stockbit enrichment fetch (analyst/insider/seasonality/corp)",
+        ),
     ] = False,
     no_calendar: Annotated[
         bool,
@@ -287,17 +208,19 @@ def fetch_market(
     if not broker_only:
         from src.infrastructure.config.market_context_config import get_global_context_tickers
 
-        precondition_error = _find_missing_stockbit_session_error(
-            tickers=full_ticker_list,
-            non_idx_tickers=frozenset(get_global_context_tickers()),
-            candles_provider=candles_provider,
-            # Matches the real ticker-loop signal below: fetch_candles only
-            # receives a broker_provider (enabling Stockbit-backed fetches)
-            # when broker_provider_name == "stockbit"; create_broker_provider
-            # always returns a non-None object even for the IDX fallback, so
-            # `broker_provider is not None` would never detect a missing
-            # session here.
-            has_broker_session=broker_provider_name == "stockbit",
+        precondition_error = FetchMarketProviderPrecondition().validate(
+            FetchMarketProviderPreconditionRequest(
+                tickers=full_ticker_list,
+                non_idx_tickers=frozenset(get_global_context_tickers()),
+                candles_provider=candles_provider,
+                # Matches the real ticker-loop signal below: fetch_candles
+                # only receives a broker_provider (enabling Stockbit-backed
+                # fetches) when broker_provider_name == "stockbit";
+                # create_broker_provider always returns a non-None object
+                # even for the IDX fallback, so `broker_provider is not
+                # None` would never detect a missing session here.
+                has_broker_session=broker_provider_name == "stockbit",
+            )
         )
         if precondition_error is not None:
             typer.echo(f"Error: {precondition_error}", err=True)
@@ -335,23 +258,41 @@ def fetch_market(
         typer.echo(f"  Candles:          {candles_provider}")
     if not candles_only:
         if broker_provider_name == "stockbit":
-            typer.echo("  Summaries:        idx  (true daily totals + top 10 brokers list populated via stockbit)")
+            typer.echo(
+                "  Summaries:        idx  (true daily totals + top 10 brokers list"
+                " populated via stockbit)"
+            )
             typer.echo("  Tracked Flow:     stockbit  (daily activity for 15 tracked brokers)")
             typer.echo("  Inst. Flow:       stockbit  (net flow proxy for 10 institutional desks)")
         else:
-            typer.echo("  Summaries:        idx  (true daily totals; top 10 brokers list NOT available without stockbit)")
+            typer.echo(
+                "  Summaries:        idx  (true daily totals; top 10 brokers list"
+                " NOT available without stockbit)"
+            )
             typer.echo("  Tracked Flow:     skip  (requires stockbit login)")
             typer.echo("  Inst. Flow:       skip  (requires stockbit login)")
     if not no_meta:
         typer.echo("  Meta:             yahoo  (sector/industry, 30d TTL)")
     if enrichment_available:
-        typer.echo("  Enrichment:       stockbit  (notation/analyst/insider/seasonality/corp, daily SQLite cache)")
-    typer.echo("  Legend:  ✓(DATE) = up-to-date through DATE  +N = new rows stored  bf+N = backfilled older gap  agg = inst. flow  ERR: = failed")
+        typer.echo(
+            "  Enrichment:       stockbit  (notation/analyst/insider/seasonality/corp,"
+            " daily SQLite cache)"
+        )
+    typer.echo(
+        "  Legend:  ✓(DATE) = up-to-date through DATE  +N = new rows stored"
+        "  bf+N = backfilled older gap  agg = inst. flow  ERR: = failed"
+    )
     typer.echo("")
 
     # Print table header
-    header_line = f"  {'[Index] Ticker':<15}  {'Candles':<13}  {'Summaries':<18}  {'Tracked Flow':<18}  {'Inst. Flow':<18}"
-    sep_line    = f"  {'─────── ──────':<15}  {'─────────────':<13}  {'──────────────────':<18}  {'──────────────────':<18}  {'──────────────────':<18}"
+    header_line = (
+        f"  {'[Index] Ticker':<15}  {'Candles':<13}  {'Summaries':<18}"
+        f"  {'Tracked Flow':<18}  {'Inst. Flow':<18}"
+    )
+    sep_line = (
+        f"  {'─────── ──────':<15}  {'─────────────':<13}  {'──────────────────':<18}"
+        f"  {'──────────────────':<18}  {'──────────────────':<18}"
+    )
     if not no_meta:
         header_line += f"  {'Meta':<18}"
         sep_line    += f"  {'──────────────────':<18}"
@@ -365,7 +306,11 @@ def fetch_market(
     def on_ticker_complete(result, index: int, total: int) -> None:
         progress = f"[{index:>3}/{total}]"
 
-        has_critical_error = "ERR:" in result.candles_status or "ERR:" in result.broker_result.summaries or "ERR:" in result.broker_result.flow
+        has_critical_error = (
+            "ERR:" in result.candles_status
+            or "ERR:" in result.broker_result.summaries
+            or "ERR:" in result.broker_result.flow
+        )
         has_enrich_error = "ERR:" in result.enrichment_status
 
         if has_critical_error:
@@ -481,7 +426,8 @@ def fetch_market(
     echo_note_group(
         title=(
             f"Broker history shorter than --days {days} for "
-            f"{len(response.broker_backfills)} ticker(s); older broker gaps were fetched automatically:"
+            f"{len(response.broker_backfills)} ticker(s); "
+            "older broker gaps were fetched automatically:"
         )
         if response.broker_backfills
         else "",

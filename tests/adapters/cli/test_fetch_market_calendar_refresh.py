@@ -225,9 +225,9 @@ def _base_monkeypatches(monkeypatch, tmp_path: Path):
         lambda **kwargs: ["BBCA", "BBRI", "BMRI"],
     )
     monkeypatch.setattr(
-        fetch_market_commands,
-        "_find_missing_stockbit_session_error",
-        lambda **kwargs: None,
+        fetch_market_commands.FetchMarketProviderPrecondition,
+        "validate",
+        lambda self, request: None,
     )
 
     from src.application.use_case.fetch_market_refresh_use_case import (

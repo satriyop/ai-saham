@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from src.application.services.fetch_market_status_policy import is_cached_status
 from src.application.services.universe_loader import resolve_tickers
 from src.application.use_case.fetch_enrichment_history_use_case import (
     EnrichmentPitTableCoverage,
@@ -169,9 +170,9 @@ class FetchMarketRefreshUseCase:
                 or "ERR:" in enrichment_status
             )
             all_cached = (
-                _is_cached_status(candles_status)
-                and _is_cached_status(broker_result.summaries)
-                and _is_cached_status(broker_result.flow)
+                is_cached_status(candles_status)
+                and is_cached_status(broker_result.summaries)
+                and is_cached_status(broker_result.flow)
                 and (request.no_meta or meta_status.startswith("cached"))
                 and (not enrichment_available or enrichment_status.startswith("✓"))
             )
@@ -227,7 +228,3 @@ class FetchMarketRefreshUseCase:
             seen.add(canonical)
             without_benchmark.append(canonical)
         return [BENCHMARK_TICKER] + without_benchmark
-
-
-def _is_cached_status(status: str) -> bool:
-    return status.startswith("✓(")

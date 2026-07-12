@@ -14,6 +14,9 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from inspect import Parameter, signature
 
+from src.application.services.fetch_market_status_policy import (
+    range_update_status as _shared_range_update_status,
+)
 from src.domain.entities.candle import Candle
 from src.domain.ports.market_data_provider import MarketDataProvider
 from src.domain.ports.market_data_repository import MarketDataRepository
@@ -182,18 +185,10 @@ class RefreshMarketDataUseCase:
         updated_range: tuple[date, date] | None,
         fetch_modes: set[str],
     ) -> str:
-        if added_count == 0 and updated_range is None:
-            return "no-data"
-
-        span_days = (
-            (updated_range[1] - updated_range[0]).days + 1
-            if updated_range
-            else 0
-        )
-        if added_count == 0 and "refresh" in fetch_modes:
+        if added_count == 0 and updated_range is not None and "refresh" in fetch_modes:
+            span_days = (updated_range[1] - updated_range[0]).days + 1
             return f"refreshed/span={span_days}d"
-        prefix = "backfill+" if "backfill" in fetch_modes else "+"
-        return f"{prefix}{added_count}rows/span={span_days}d"
+        return _shared_range_update_status(added_count, updated_range, fetch_modes)
 
     def _date_range(self, candles: list[Candle]) -> tuple[date, date] | None:
         if not candles:

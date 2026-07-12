@@ -14,6 +14,10 @@ import logging
 from dataclasses import dataclass
 from datetime import date, timedelta
 
+from src.application.services.fetch_market_status_policy import (
+    no_new_data_status,
+    range_update_status,
+)
 from src.application.use_case.fetch_broker_daily_flows_use_case import (
     FetchBrokerDailyFlowsRequest,
     FetchBrokerDailyFlowsResponse,
@@ -252,10 +256,10 @@ class RefreshBrokerDataUseCase:
         if added_count == 0 and not fetch_ranges and updated_range is not None:
             return f"✓({updated_range[1]})"
         if added_count == 0 and previous_latest is not None:
-            return _no_new_data_status(previous_latest)
+            return no_new_data_status(previous_latest)
         if added_count == 0 and updated_range is not None:
             return f"✓({updated_range[1]})"
-        return _range_update_status(added_count, updated_range, fetch_modes)
+        return range_update_status(added_count, updated_range, fetch_modes)
 
     def _flow_status(
         self,
@@ -305,26 +309,3 @@ class RefreshBrokerDataUseCase:
         if flow_part:
             return flow_part
         return f"✓({latest_date})" if latest_date else "✓"
-
-
-def _no_new_data_status(latest: date | None) -> str:
-    if latest is None:
-        return "no-data"
-    return f"up-to-date({latest.isoformat()})"
-
-
-def _range_update_status(
-    added_count: int,
-    updated_range: tuple[date, date] | None,
-    fetch_modes: set[str],
-) -> str:
-    if added_count == 0 and updated_range is None:
-        return "no-data"
-
-    span_days = (
-        (updated_range[1] - updated_range[0]).days + 1
-        if updated_range
-        else 0
-    )
-    prefix = "backfill+" if "backfill" in fetch_modes else "+"
-    return f"{prefix}{added_count}rows/span={span_days}d"
