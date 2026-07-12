@@ -68,6 +68,13 @@ from src.application.services.swing_tuning_review_journal import (
     SwingTuningReviewJournal,
 )
 from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.swing_tuning_document_loader import (
+    swing_tuning_document_loader,
+)
+from src.infrastructure.config.swing_tuning_document_writer import (
+    read_swing_tuning_document,
+    write_swing_tuning_document,
+)
 from src.infrastructure.persistence.swing_tuning_review_jsonl_writer import (
     SwingTuningReviewJsonlWriter,
 )
@@ -124,7 +131,7 @@ def tuning_status(
     journal_path = journal or Path(APP_CFG.storage.swing_tuning_review_journal)
     report = SwingTuningLoopStatusService(
         SwingTuningReviewJsonlWriter(journal_path),
-        config_root=config_root,
+        document_loader=swing_tuning_document_loader(config_root),
     ).status(
         review_journal_path=journal_path,
         patch_path=patch_path,
@@ -229,7 +236,9 @@ def validate_tuning_patch(
     ] = APP_CFG.analysis.format,
 ) -> None:
     """Validate exported swing tuning patch JSON without applying it."""
-    report = SwingTuningPatchValidator(config_root=config_root).validate(patch_path)
+    report = SwingTuningPatchValidator(
+        document_loader=swing_tuning_document_loader(config_root)
+    ).validate(patch_path)
 
     if output_format == "json":
         payload = {
@@ -287,7 +296,9 @@ def apply_tuning_patch(
         raise typer.Exit(1)
 
     if verify:
-        report = SwingTuningPatchVerifier(config_root=config_root).verify(patch_path)
+        report = SwingTuningPatchVerifier(
+            document_loader=swing_tuning_document_loader(config_root)
+        ).verify(patch_path)
         if output_format == "json":
             payload = {
                 **report.to_dict(),
@@ -305,7 +316,9 @@ def apply_tuning_patch(
         return
 
     if dry_run:
-        report = SwingTuningPatchDryRunPlanner(config_root=config_root).plan(patch_path)
+        report = SwingTuningPatchDryRunPlanner(
+            document_loader=swing_tuning_document_loader(config_root)
+        ).plan(patch_path)
         if output_format == "json":
             payload = {
                 **report.to_dict(),
@@ -324,6 +337,9 @@ def apply_tuning_patch(
 
     report = SwingTuningPatchApplier(
         config_root=config_root,
+        document_loader=swing_tuning_document_loader(config_root),
+        document_reader=read_swing_tuning_document,
+        document_writer=write_swing_tuning_document,
         target_dirty_checker=lambda path: _git_path_is_dirty(path, config_root),
     ).apply(
         patch_path,

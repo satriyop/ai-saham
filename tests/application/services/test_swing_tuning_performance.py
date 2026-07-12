@@ -16,6 +16,9 @@ from src.application.services.swing_tuning_contracts import (
 from src.application.services.swing_tuning_patch_validator import (
     SwingTuningPatchValidator,
 )
+from src.infrastructure.config.swing_tuning_document_loader import (
+    swing_tuning_document_loader,
+)
 from src.application.services.swing_tuning_review_journal import (
     _summarize_record,
 )
@@ -82,7 +85,9 @@ def test_patch_diff_generation_within_performance_budget(tmp_path):
         )
     )
     start = time.monotonic()
-    SwingTuningPatchValidator(config_root=tmp_path).validate(patch_path)
+    SwingTuningPatchValidator(
+        document_loader=swing_tuning_document_loader(tmp_path)
+    ).validate(patch_path)
     elapsed = time.monotonic() - start
     assert elapsed < 1.0, f"Patch validation took {elapsed:.3f}s — exceeds 1s budget"
 
@@ -136,7 +141,7 @@ def test_tuning_config_diff_draft_within_performance_budget():
         candidate_group_stats=candidate_stats,
     )
     start = time.monotonic()
-    build_tuning_config_diff_draft(summary)
+    build_tuning_config_diff_draft(summary, document_loader=swing_tuning_document_loader())
     elapsed = time.monotonic() - start
     assert elapsed < 0.5, (
         f"build_tuning_config_diff_draft took {elapsed:.3f}s — exceeds 0.5s budget"

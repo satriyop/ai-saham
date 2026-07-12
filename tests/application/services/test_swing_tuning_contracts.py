@@ -19,6 +19,9 @@ from src.application.services.swing_tuning_contracts import (
     build_tuning_proposal_draft,
     build_tuning_readiness_plan,
 )
+from src.infrastructure.config.swing_tuning_document_loader import (
+    swing_tuning_document_loader,
+)
 from tests.application.services.swing_backtest_attribution_fixtures import (
     ObservationFixture,
     make_trade,
@@ -175,7 +178,7 @@ def test_tuning_config_diff_draft_blocks_insufficient_sample():
         (ObservationFixture(forward_return_pct=1.0),),
     )
 
-    draft = build_tuning_config_diff_draft(summary)
+    draft = build_tuning_config_diff_draft(summary, document_loader=swing_tuning_document_loader())
 
     assert draft.intent == "config_diff_schema_only_no_apply"
     assert draft.status == "BLOCKED"
@@ -228,7 +231,7 @@ def test_tuning_config_diff_draft_explains_non_value_selected_paths():
         ),
     )
 
-    draft = build_tuning_config_diff_draft(summary)
+    draft = build_tuning_config_diff_draft(summary, document_loader=swing_tuning_document_loader())
 
     assert draft.status == "READ_ONLY_VALUES"
     assert draft.proposal_status == "READY_FOR_HUMAN_REVIEW"
@@ -302,7 +305,7 @@ def test_tuning_config_diff_draft_selects_guarded_numeric_values(tmp_path):
         )
     )
 
-    draft = build_tuning_config_diff_draft(summary, config_root=tmp_path)
+    draft = build_tuning_config_diff_draft(summary, document_loader=swing_tuning_document_loader(tmp_path))
     threshold_items = {
         item.parsed_target_path.document_path: item
         for item in draft.diff_items
@@ -419,7 +422,7 @@ def test_tuning_config_diff_draft_deduplicates_target_paths(tmp_path):
         )
     )
 
-    draft = build_tuning_config_diff_draft(summary, config_root=tmp_path)
+    draft = build_tuning_config_diff_draft(summary, document_loader=swing_tuning_document_loader(tmp_path))
     target_paths = [item.target_path for item in draft.diff_items]
     strong_threshold = next(
         item
@@ -464,7 +467,7 @@ def test_tuning_config_diff_draft_can_loosen_setup_thresholds(tmp_path):
         ),
     )
 
-    draft = build_tuning_config_diff_draft(summary, config_root=tmp_path)
+    draft = build_tuning_config_diff_draft(summary, document_loader=swing_tuning_document_loader(tmp_path))
     by_path = {item.target_path: item for item in draft.diff_items}
 
     assert draft.status == "PROPOSED_VALUES_DRY_RUN"
@@ -521,7 +524,7 @@ def test_tuning_config_diff_apply_block_rejects_applyable_drafts(tmp_path):
         )
     )
 
-    draft = build_tuning_config_diff_draft(summary, config_root=tmp_path)
+    draft = build_tuning_config_diff_draft(summary, document_loader=swing_tuning_document_loader(tmp_path))
 
     assert draft.status == "PROPOSED_VALUES_DRY_RUN"
     assert assert_tuning_config_diff_apply_block(draft) is draft

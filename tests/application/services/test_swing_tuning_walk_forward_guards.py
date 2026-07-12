@@ -5,6 +5,9 @@ import json
 from src.application.services.swing_tuning_patch_validator import (
     SwingTuningPatchValidator,
 )
+from src.infrastructure.config.swing_tuning_document_loader import (
+    swing_tuning_document_loader,
+)
 from src.application.services.swing_tuning_review_journal import (
     SwingTuningReviewJournal,
     _summarize_record,
@@ -80,7 +83,7 @@ def test_patch_with_walk_forward_false_fails_validation(tmp_path):
             }
         )
     )
-    report = SwingTuningPatchValidator(config_root=tmp_path).validate(patch_path)
+    report = SwingTuningPatchValidator(document_loader=swing_tuning_document_loader(tmp_path)).validate(patch_path)
     assert report.valid is False
     assert any("walk_forward_not_enforced" in issue for issue in report.issues)
 
@@ -104,7 +107,7 @@ def test_patch_with_walk_forward_true_but_missing_oos_fails(tmp_path):
             }
         )
     )
-    report = SwingTuningPatchValidator(config_root=tmp_path).validate(patch_path)
+    report = SwingTuningPatchValidator(document_loader=swing_tuning_document_loader(tmp_path)).validate(patch_path)
     assert report.valid is False
     assert any("walk_forward_not_enforced" in issue for issue in report.issues)
 
@@ -122,7 +125,7 @@ def test_patch_with_complete_source_review_passes_validation(tmp_path):
             }
         )
     )
-    report = SwingTuningPatchValidator(config_root=tmp_path).validate(patch_path)
+    report = SwingTuningPatchValidator(document_loader=swing_tuning_document_loader(tmp_path)).validate(patch_path)
     assert report.valid is True
     assert all("walk_forward_not_enforced" not in issue for issue in report.issues)
 
@@ -143,7 +146,7 @@ def test_truthy_string_walk_forward_fails(tmp_path):
             }
         )
     )
-    report = SwingTuningPatchValidator(config_root=tmp_path).validate(patch_path)
+    report = SwingTuningPatchValidator(document_loader=swing_tuning_document_loader(tmp_path)).validate(patch_path)
     assert report.valid is False
     assert any("walk_forward_not_enforced" in issue for issue in report.issues)
 
@@ -164,7 +167,7 @@ def test_malformed_oos_start_date_fails(tmp_path):
             }
         )
     )
-    report = SwingTuningPatchValidator(config_root=tmp_path).validate(patch_path)
+    report = SwingTuningPatchValidator(document_loader=swing_tuning_document_loader(tmp_path)).validate(patch_path)
     assert report.valid is False
     assert any("walk_forward_not_enforced" in issue for issue in report.issues)
 
@@ -185,6 +188,6 @@ def test_oos_start_date_not_after_is_end_date_fails(tmp_path):
             }
         )
     )
-    report = SwingTuningPatchValidator(config_root=tmp_path).validate(patch_path)
+    report = SwingTuningPatchValidator(document_loader=swing_tuning_document_loader(tmp_path)).validate(patch_path)
     assert report.valid is False
     assert any("walk_forward_not_enforced" in issue for issue in report.issues)

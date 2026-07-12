@@ -43,12 +43,21 @@ from src.domain.ports.ticker_notation_provider import TickerNotationProvider
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
+    from src.application.services.company_quality_context_evidence_builder import (
+        CompanyQualityContextEvidenceBuilder,
+    )
     from src.application.services.indicator_registry import IndicatorRegistry
+    from src.application.services.institutional_flow_config import (
+        InstitutionalAccumulationConfig,
+    )
     from src.application.services.primary_setup_family_resolver import (
         PrimarySetupFamilyResolver,
     )
     from src.application.services.relative_strength_calculator import (
         RelativeStrengthCalculator,
+    )
+    from src.application.services.sector_context_evidence_builder import (
+        SectorContextEvidenceBuilder,
     )
     from src.application.services.signal_engine import SignalEngine
     from src.application.services.ticker_profile_classifier import (
@@ -167,6 +176,13 @@ class AccumulationScreenUseCase:
         relative_strength_calculator: "RelativeStrengthCalculator | None" = None,
         indicator_registry: "IndicatorRegistry | None" = None,
         ticker_profile_classifier_factory: Callable[[], TickerProfileClassifier] | None = None,
+        institutional_accumulation_config_factory: (
+            Callable[[], InstitutionalAccumulationConfig] | None
+        ) = None,
+        sector_context_builder_factory: Callable[[], SectorContextEvidenceBuilder] | None = None,
+        company_quality_context_builder_factory: (
+            Callable[[], CompanyQualityContextEvidenceBuilder] | None
+        ) = None,
     ) -> None:
         from src.application.services.bootstrap import create_indicator_registry
         from src.application.services.flow_confirmation_evidence_builder import (
@@ -210,6 +226,9 @@ class AccumulationScreenUseCase:
             relative_strength_calculator=self._relative_strength_calculator,
             indicator_registry=self._indicator_registry,
             ticker_profile_classifier_factory=ticker_profile_classifier_factory,
+            institutional_accumulation_config_factory=institutional_accumulation_config_factory,
+            sector_context_builder_factory=sector_context_builder_factory,
+            company_quality_context_builder_factory=company_quality_context_builder_factory,
         )
         self._risk_funnel = (
             AccumulationRiskFunnel(self._risk_use_case) if self._risk_use_case is not None else None

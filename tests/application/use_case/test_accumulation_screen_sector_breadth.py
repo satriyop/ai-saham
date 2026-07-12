@@ -31,7 +31,7 @@ from tests.application.use_case.accumulation_screen_fixtures import (
 )
 
 
-def test_screen_persists_sector_context_fingerprint_when_builder_available(monkeypatch):
+def test_screen_persists_sector_context_fingerprint_when_builder_available():
     class FakeSectorContextBuilder:
         def peers_for_ticker(self, ticker):
             return ("BBRI",)
@@ -52,11 +52,6 @@ def test_screen_persists_sector_context_fingerprint_when_builder_available(monke
                 unavailable_reasons=(),
             )
 
-    monkeypatch.setattr(
-        "src.application.services.sector_context_evidence_builder."
-        "SectorContextEvidenceBuilder.from_yaml",
-        staticmethod(lambda: FakeSectorContextBuilder()),
-    )
     session_dates = _weekdays(date(2026, 1, 1), 7)
     as_of = session_dates[-1]
     candles = [
@@ -72,6 +67,7 @@ def test_screen_persists_sector_context_fingerprint_when_builder_available(monke
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
         candidate_observations_repository=spy_repo,
+        sector_context_builder_factory=lambda: FakeSectorContextBuilder(),
     )
 
     use_case.execute(

@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 
 from src.application.services.swing_tuning_config_paths import (
+    DocumentLoader,
     parse_tuning_config_path,
     resolve_tuning_config_value,
 )
@@ -21,8 +22,8 @@ from src.application.services.swing_tuning_patch_validation import _str
 
 
 class SwingTuningPatchVerifier:
-    def __init__(self, config_root: Path | str = Path(".")) -> None:
-        self._config_root = Path(config_root)
+    def __init__(self, document_loader: DocumentLoader) -> None:
+        self._document_loader = document_loader
 
     def verify(self, patch_path: Path) -> SwingTuningPatchVerifyReport:
         try:
@@ -94,7 +95,7 @@ class SwingTuningPatchVerifier:
             else:
                 resolution = resolve_tuning_config_value(
                     parsed,
-                    config_root=self._config_root,
+                    document_loader=self._document_loader,
                 )
                 if not resolution.resolved:
                     item_issues.append(f"target_path_unresolved:{resolution.unresolved_reason}")

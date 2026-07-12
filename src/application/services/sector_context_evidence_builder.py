@@ -5,42 +5,26 @@ sector breadth, and ticker-vs-sector relative strength.
 
 Design invariants:
 - The builder NEVER fetches data. All inputs arrive on the request.
-- At construction time, a sector reverse index is built from universes.yaml
-  so the workflow can ask for peer tickers without doing YAML parsing itself.
+- The sector reverse index (universe_group -> tickers) is supplied at
+  construction time by infrastructure, which owns parsing universes.yaml.
 - The builder NEVER raises. Every metric computation degrades to None with an
   unavailable reason; an unhandled error degrades the whole snapshot with
   metadata["error"].
 - evidence_status is always DIAGNOSTIC in Phase H.
 
-Layer: Application. Depends only on domain entities/VOs + stdlib + PyYAML.
+Layer: Application. Depends only on domain entities/VOs + stdlib.
 No provider/repository/CLI imports.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date
-from pathlib import Path
 from typing import Any
-
-import yaml
 
 from src.domain.entities.candle import Candle
 from src.domain.value_objects.institutional_accumulation_evidence import EvidenceStatus
 from src.domain.value_objects.sector_context_evidence import SectorContextEvidence
-
-_DEFAULT_CONFIG_PATH = (
-    Path(__file__).parent.parent.parent.parent / "config" / "sector_context.yaml"
-)
-_DEFAULT_UNIVERSES_PATH = (
-    Path(__file__).parent.parent.parent.parent / "config" / "universes.yaml"
-)
-
-# Universe keys that represent index membership, not sector groups.
-_INDEX_UNIVERSE_KEYS: frozenset[str] = frozenset(
-    {"lq45", "idx30", "idx80", "jii", "mbx"}
-)
-
 
 # --------------------------------------------------------------------------- #
 # Config dataclass
@@ -99,10 +83,10 @@ class SectorContextRequest:
 class SectorContextEvidenceBuilder:
     """Build SectorContextEvidence from local candle data.
 
-    The sector reverse index (universe_group → tickers) is built once at
-    construction from universes.yaml. The workflow calls `peers_for_group`
-    to retrieve peer tickers before fetching their candles and submitting a
-    SectorContextRequest.
+    The sector reverse index (universe_group → tickers) is supplied at
+    construction time by an infrastructure loader. The workflow calls
+    `peers_for_group` to retrieve peer tickers before fetching their candles
+    and submitting a SectorContextRequest.
     """
 
     def __init__(
@@ -113,39 +97,6 @@ class SectorContextEvidenceBuilder:
         self._config = config
         # {universe_group_name: (ticker, ...)} for non-index groups only
         self._sector_index = sector_universe_index
-
-    # --------------------------------------------------------- factory
-    @classmethod
-    def from_yaml(
-        cls,
-        config_path: str | Path | None = None,
-        universes_path: str | Path | None = None,
-    ) -> "SectorContextEvidenceBuilder":
-        cfg_p = Path(config_path) if config_path is not None else _DEFAULT_CONFIG_PATH
-        uni_p = Path(universes_path) if universes_path is not None else _DEFAULT_UNIVERSES_PATH
-        with open(cfg_p, "r") as fh:
-            raw = yaml.safe_load(fh) or {}
-        config = SectorContextConfig.from_mapping(raw)
-        index = cls._build_sector_index(uni_p)
-        return cls(config, index)
-
-    @staticmethod
-    def _build_sector_index(universes_path: Path) -> dict[str, tuple[str, ...]]:
-        """Build {universe_group_name: (ticker, ...)} for sector (non-index) groups."""
-        result: dict[str, tuple[str, ...]] = {}
-        if not universes_path.exists():
-            return result
-        with open(universes_path, "r") as fh:
-            data = yaml.safe_load(fh) or {}
-        for key, block in data.items():
-            if key in _INDEX_UNIVERSE_KEYS:
-                continue
-            if not isinstance(block, dict):
-                continue
-            tickers = block.get("tickers") or []
-            if tickers:
-                result[key] = tuple(str(t).upper() for t in tickers)
-        return result
 
     # --------------------------------------------------------- public helpers
 

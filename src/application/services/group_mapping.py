@@ -1,16 +1,13 @@
 """
 Group mapping service.
 
-Loads IDX conglomerate and group mappings from YAML and provides
-lookup methods for sentiment propagation.
+Provides lookup methods for IDX conglomerate/group affiliations from an
+already-loaded groups mapping, for sentiment propagation.
 
 Layer: Application (Service)
 """
 
-from pathlib import Path
 from typing import TypedDict
-
-import yaml
 
 
 class GroupInfo(TypedDict):
@@ -21,42 +18,22 @@ class GroupInfo(TypedDict):
 class GroupMappingService:
     """Service for looking up stock group/conglomerate affiliations.
 
-    Loads mappings from a static YAML file (default: config/idx_groups.yaml).
+    Consumes an already-loaded groups mapping (group_id -> GroupInfo).
+    Infrastructure loaders own reading the backing YAML file.
     """
 
-    def __init__(self, config_path: str | Path = "config/idx_groups.yaml"):
-        """Initialize service by loading config.
+    def __init__(self, groups: dict[str, GroupInfo] | None = None) -> None:
+        """Initialize service from a pre-loaded groups mapping.
 
         Args:
-            config_path: Path to the groups YAML file
+            groups: Mapping of group_id -> GroupInfo, or None/empty when
+                group data is unavailable.
         """
-        self._config_path = Path(config_path)
-        self._groups: dict[str, GroupInfo] = {}
+        self._groups: dict[str, GroupInfo] = groups or {}
         self._ticker_to_group: dict[str, str] = {}
-        self._load_config()
-
-    def _load_config(self) -> None:
-        """Load and parse the YAML config file."""
-        if not self._config_path.exists():
-            return
-
-        try:
-            with open(self._config_path, "r") as f:
-                data = yaml.safe_load(f)
-
-            if not data or "groups" not in data:
-                return
-
-            self._groups = data["groups"]
-
-            # Build reverse lookup: ticker -> group_id
-            for group_id, info in self._groups.items():
-                for ticker in info.get("tickers", []):
-                    self._ticker_to_group[ticker.upper()] = group_id
-
-        except Exception:
-            # Fail silently - group mapping is an optional enrichment
-            pass
+        for group_id, info in self._groups.items():
+            for ticker in info.get("tickers", []):
+                self._ticker_to_group[ticker.upper()] = group_id
 
     def get_group_id(self, ticker: str) -> str | None:
         """Get the group ID for a given ticker.

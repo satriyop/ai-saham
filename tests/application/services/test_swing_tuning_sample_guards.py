@@ -5,6 +5,9 @@ import json
 from src.application.services.swing_tuning_patch_validator import (
     SwingTuningPatchValidator,
 )
+from src.infrastructure.config.swing_tuning_document_loader import (
+    swing_tuning_document_loader,
+)
 from tests.application.services.swing_tuning_guardrail_fixtures import (
     _COMPLETE_SOURCE_REVIEW,
     _patch_with_source_review,
@@ -35,7 +38,7 @@ def test_patch_oos_with_zero_trades_fails_sample_guard(tmp_path):
             }
         )
     )
-    report = SwingTuningPatchValidator(config_root=tmp_path).validate(patch_path)
+    report = SwingTuningPatchValidator(document_loader=swing_tuning_document_loader(tmp_path)).validate(patch_path)
     assert report.valid is False
     assert all("walk_forward_not_enforced" not in issue for issue in report.issues)
     assert any(

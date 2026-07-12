@@ -11,6 +11,7 @@ from fnmatch import fnmatch
 from pathlib import Path
 
 from src.application.services.swing_tuning_config_paths import (
+    DocumentLoader,
     parse_tuning_config_path,
     resolve_tuning_config_value,
 )
@@ -224,8 +225,8 @@ def _is_quantized(value: float, step: float) -> bool:
 
 
 class SwingTuningPatchValidator:
-    def __init__(self, config_root: Path | str = Path(".")) -> None:
-        self._config_root = Path(config_root)
+    def __init__(self, document_loader: DocumentLoader) -> None:
+        self._document_loader = document_loader
 
     def validate(self, patch_path: Path) -> SwingTuningPatchValidationReport:
         try:
@@ -309,7 +310,7 @@ class SwingTuningPatchValidator:
                         item_issues.append(f"target_path_not_tunable:{non_tunable_reason}")
                     resolution = resolve_tuning_config_value(
                         parsed,
-                        config_root=self._config_root,
+                        document_loader=self._document_loader,
                     )
                     if not resolution.resolved:
                         item_issues.append(f"target_path_unresolved:{resolution.unresolved_reason}")

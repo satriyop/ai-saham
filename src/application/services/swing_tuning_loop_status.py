@@ -12,6 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from src.application.services.swing_tuning_config_paths import DocumentLoader
 from src.application.services.swing_tuning_patch_validator import (
     SwingTuningPatchDryRunPlanner,
     SwingTuningPatchValidationReport,
@@ -103,10 +104,10 @@ class SwingTuningLoopStatusService:
         self,
         review_store: SwingTuningReviewStore,
         *,
-        config_root: Path | str = Path("."),
+        document_loader: DocumentLoader,
     ) -> None:
         self._review_journal = SwingTuningReviewJournal(review_store)
-        self._config_root = Path(config_root)
+        self._document_loader = document_loader
 
     def status(
         self,
@@ -153,12 +154,12 @@ class SwingTuningLoopStatusService:
                 verify=None,
             )
         validation = SwingTuningPatchValidator(
-            config_root=self._config_root
+            document_loader=self._document_loader
         ).validate(patch_path)
         dry_run = SwingTuningPatchDryRunPlanner(
-            config_root=self._config_root
+            document_loader=self._document_loader
         ).plan(patch_path)
-        verify = SwingTuningPatchVerifier(config_root=self._config_root).verify(
+        verify = SwingTuningPatchVerifier(document_loader=self._document_loader).verify(
             patch_path
         )
         return SwingTuningPatchStatus(

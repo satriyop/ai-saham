@@ -27,7 +27,16 @@ from src.infrastructure.browser.stockbit_provider_bundle import (
     create_readonly_stockbit_providers,
 )
 from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.company_quality_context_config_loader import (
+    create_company_quality_context_evidence_builder,
+)
+from src.infrastructure.config.institutional_accumulation_config_loader import (
+    load_institutional_accumulation_config,
+)
 from src.infrastructure.config.market_context_factory import create_market_context_engine
+from src.infrastructure.config.sector_context_config_loader import (
+    create_sector_context_evidence_builder,
+)
 from src.infrastructure.config.swing_backtest_config import (
     load_swing_backtest_config as _load_swing_backtest_config,
 )
@@ -102,6 +111,9 @@ def _accumulation_log_impl(
         market_repository=market_repo,
         stockbit_providers=_sb,
         ticker_profile_classifier_factory=create_ticker_profile_classifier,
+        institutional_accumulation_config_factory=load_institutional_accumulation_config,
+        sector_context_builder_factory=create_sector_context_evidence_builder,
+        company_quality_context_builder_factory=create_company_quality_context_evidence_builder,
     )
     journal_svc = AccumulationJournalService(
         store=AccumulationJournalCsvWriter(journal_path),

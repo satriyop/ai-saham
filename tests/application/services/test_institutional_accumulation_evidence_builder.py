@@ -20,6 +20,9 @@ from src.domain.entities.broker_flow import (
 from src.domain.entities.candle import Candle
 from src.domain.value_objects.bandar_detector_snapshot import BandarDetectorSnapshot
 from src.domain.value_objects.institutional_accumulation_evidence import EvidenceStatus
+from src.infrastructure.config.institutional_accumulation_config_loader import (
+    load_institutional_accumulation_config,
+)
 
 BASE = date(2026, 6, 1)
 FOREIGN = "ZP"  # in DEFAULT_FOREIGN_BROKER_CODES
@@ -131,7 +134,9 @@ def _request(**kwargs) -> InstitutionalAccumulationEvidenceRequest:
 
 
 def _builder() -> InstitutionalAccumulationEvidenceBuilder:
-    return InstitutionalAccumulationEvidenceBuilder()
+    # Uses the real config/institutional_accumulation.yaml values via the
+    # infrastructure loader, matching production wiring.
+    return InstitutionalAccumulationEvidenceBuilder(load_institutional_accumulation_config())
 
 
 # --------------------------------------------------------------------------- #
@@ -334,6 +339,23 @@ def test_valid_config_passes_validation():
         track_weights={"f": 0.45, "d": 0.4, "c": 0.15},
     )
     cfg.validate()  # should not raise
+
+
+def test_institutional_accumulation_config_empty_mapping_is_valid_default():
+    """from_mapping({}) must produce a config whose weight groups already
+    sum to 1.00, so the bare builder constructor works without YAML."""
+    config = InstitutionalAccumulationConfig.from_mapping({})
+    config.validate()
+    assert config.foreign_track_weights
+    assert config.domestic_track_weights
+    assert config.track_weights
+
+
+def test_institutional_accumulation_builder_bare_constructor_uses_valid_defaults():
+    """No config supplied: builder must construct successfully with pure
+    application defaults and no YAML/file I/O."""
+    builder = InstitutionalAccumulationEvidenceBuilder()
+    assert builder is not None
 
 
 # --------------------------------------------------------------------------- #
@@ -567,6 +589,6 @@ def test_behavior_equivalence_characterization():
 
 def test_explicit_nonexistent_config_path_raises_file_not_found():
     with pytest.raises(FileNotFoundError):
-        InstitutionalAccumulationEvidenceBuilder.from_yaml("nonexistent_config_path_xyz_123.yaml")
+        load_institutional_accumulation_config("nonexistent_config_path_xyz_123.yaml")
 
 

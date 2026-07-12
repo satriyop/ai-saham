@@ -10,13 +10,13 @@ Layer: Application
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Iterable
 
 from src.application.services.swing_backtest_attribution import (
     SwingBacktestAttributionSummary,
 )
 from src.application.services.swing_tuning_config_paths import (
+    DocumentLoader,
     expand_tuning_config_paths,
     parse_tuning_config_path,
     resolve_tuning_config_value,
@@ -48,7 +48,7 @@ __all__ = (
 
 def build_tuning_config_diff_draft(
     summary: SwingBacktestAttributionSummary,
-    config_root: Path | str = Path("."),
+    document_loader: DocumentLoader,
     active_setups: frozenset[str] | None = None,
 ) -> TuningConfigDiffDraft:
     """Build a guarded dry-run config-diff schema without mutating config.
@@ -103,13 +103,13 @@ def build_tuning_config_diff_draft(
         for target_path in candidate.yaml_paths:
             for expanded_target_path in expand_tuning_config_paths(
                 target_path,
-                config_root=config_root,
+                document_loader=document_loader,
                 active_setups=active_setups,
             ):
                 parsed_target_path = parse_tuning_config_path(expanded_target_path)
                 resolution = resolve_tuning_config_value(
                     parsed_target_path,
-                    config_root=config_root,
+                    document_loader=document_loader,
                 )
                 if not resolution.resolved:
                     rejected_items.append(

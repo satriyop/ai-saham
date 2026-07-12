@@ -12,6 +12,9 @@ from src.application.services.swing_tuning_patch_validation import (
     _is_quantized,
     _non_tunable_reason_for_document_path,
 )
+from src.infrastructure.config.swing_tuning_document_loader import (
+    swing_tuning_document_loader,
+)
 from tests.application.services.swing_tuning_guardrail_fixtures import (
     _WEIGHT_PATH,
     _validate_single,
@@ -31,7 +34,9 @@ def test_current_tuning_target_paths_are_bounded_or_explicitly_non_tunable():
     missing: list[str] = []
     for target in DEFAULT_TUNING_TARGETS:
         for raw_path in target.yaml_paths:
-            for expanded_path in expand_tuning_config_paths(raw_path, config_root="."):
+            for expanded_path in expand_tuning_config_paths(
+                raw_path, document_loader=swing_tuning_document_loader()
+            ):
                 parsed = parse_tuning_config_path(expanded_path)
                 bounded = _bounds_for_document_path(parsed.document_path) is not None
                 non_tunable = (

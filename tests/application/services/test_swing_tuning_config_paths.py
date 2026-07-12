@@ -15,6 +15,9 @@ from src.application.services.swing_tuning_config_paths import (
     resolve_tuning_config_value,
     validate_tuning_target_paths,
 )
+from src.infrastructure.config.swing_tuning_document_loader import (
+    swing_tuning_document_loader,
+)
 
 
 def test_parse_tuning_config_path_splits_file_and_document_path():
@@ -59,7 +62,7 @@ def test_resolve_tuning_config_value_reads_concrete_yaml_path(tmp_path):
         "config/signal_engine.yaml:signal_engine.classification.strong_min_score"
     )
 
-    resolution = resolve_tuning_config_value(parsed, config_root=tmp_path)
+    resolution = resolve_tuning_config_value(parsed, document_loader=swing_tuning_document_loader(tmp_path))
 
     assert resolution.resolved is True
     assert resolution.current_value == 70
@@ -72,7 +75,7 @@ def test_resolve_tuning_config_value_reports_missing_config_file(tmp_path):
         "config/signal_engine.yaml:signal_engine.classification.strong_min_score"
     )
 
-    resolution = resolve_tuning_config_value(parsed, config_root=tmp_path)
+    resolution = resolve_tuning_config_value(parsed, document_loader=swing_tuning_document_loader(tmp_path))
 
     assert resolution.resolved is False
     assert resolution.current_value is None
@@ -91,7 +94,7 @@ def test_resolve_tuning_config_value_reports_missing_document_path(tmp_path):
         "config/signal_engine.yaml:signal_engine.classification.strong_min_score"
     )
 
-    resolution = resolve_tuning_config_value(parsed, config_root=tmp_path)
+    resolution = resolve_tuning_config_value(parsed, document_loader=swing_tuning_document_loader(tmp_path))
 
     assert resolution.resolved is False
     assert resolution.current_value is None
@@ -101,7 +104,7 @@ def test_resolve_tuning_config_value_reports_missing_document_path(tmp_path):
 def test_resolve_tuning_config_value_rejects_wildcard_without_reading_yaml(tmp_path):
     parsed = parse_tuning_config_path("config/swing_setups.yaml:setups.*.gates")
 
-    resolution = resolve_tuning_config_value(parsed, config_root=tmp_path)
+    resolution = resolve_tuning_config_value(parsed, document_loader=swing_tuning_document_loader(tmp_path))
 
     assert resolution.resolved is False
     assert resolution.current_value is None
@@ -123,11 +126,11 @@ def test_expand_tuning_config_paths_expands_allowlisted_setup_wildcards(tmp_path
 
     gate_paths = expand_tuning_config_paths(
         "config/swing_setups.yaml:setups.*.gates",
-        config_root=tmp_path,
+        document_loader=swing_tuning_document_loader(tmp_path),
     )
     partial_paths = expand_tuning_config_paths(
         "config/swing_setups.yaml:setups.*.partial_max_failed_gates",
-        config_root=tmp_path,
+        document_loader=swing_tuning_document_loader(tmp_path),
     )
 
     assert gate_paths == (
@@ -142,7 +145,7 @@ def test_expand_tuning_config_paths_expands_allowlisted_setup_wildcards(tmp_path
 def test_expand_tuning_config_paths_leaves_unknown_wildcards_unexpanded():
     raw_path = "config/risk_engine.yaml:risk_engine.gates.*.enabled"
 
-    assert expand_tuning_config_paths(raw_path) == (raw_path,)
+    assert expand_tuning_config_paths(raw_path, document_loader=swing_tuning_document_loader()) == (raw_path,)
 
 
 def test_validate_tuning_target_paths_covers_all_current_targets():
@@ -179,12 +182,12 @@ def test_active_setups_gate_filter_returns_only_matching_setup(tmp_path):
 
     gate_paths = expand_tuning_config_paths(
         "config/swing_setups.yaml:setups.*.gates",
-        config_root=tmp_path,
+        document_loader=swing_tuning_document_loader(tmp_path),
         active_setups=frozenset({"foreign-bounce"}),
     )
     partial_paths = expand_tuning_config_paths(
         "config/swing_setups.yaml:setups.*.partial_max_failed_gates",
-        config_root=tmp_path,
+        document_loader=swing_tuning_document_loader(tmp_path),
         active_setups=frozenset({"foreign-bounce"}),
     )
 
@@ -203,12 +206,12 @@ def test_active_setups_unknown_setup_returns_empty(tmp_path):
 
     gate_paths = expand_tuning_config_paths(
         "config/swing_setups.yaml:setups.*.gates",
-        config_root=tmp_path,
+        document_loader=swing_tuning_document_loader(tmp_path),
         active_setups=frozenset({"does-not-exist"}),
     )
     partial_paths = expand_tuning_config_paths(
         "config/swing_setups.yaml:setups.*.partial_max_failed_gates",
-        config_root=tmp_path,
+        document_loader=swing_tuning_document_loader(tmp_path),
         active_setups=frozenset({"does-not-exist"}),
     )
 
@@ -223,7 +226,7 @@ def test_no_active_setups_preserves_all_setup_expansion(tmp_path):
 
     gate_paths = expand_tuning_config_paths(
         "config/swing_setups.yaml:setups.*.gates",
-        config_root=tmp_path,
+        document_loader=swing_tuning_document_loader(tmp_path),
     )
 
     assert (

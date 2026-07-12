@@ -24,8 +24,17 @@ from src.application.services.swing_analysis_market_helpers import (
 )
 
 if TYPE_CHECKING:
+    from src.application.services.company_quality_context_evidence_builder import (
+        CompanyQualityContextEvidenceBuilder,
+    )
     from src.application.services.flow_confirmation_evidence_builder import (
         FlowConfirmationEvidenceBuilder,
+    )
+    from src.application.services.institutional_flow_config import (
+        InstitutionalAccumulationConfig,
+    )
+    from src.application.services.sector_context_evidence_builder import (
+        SectorContextEvidenceBuilder,
     )
     from src.application.services.signal_engine import SignalEngine
     from src.application.services.ticker_profile_classifier import (
@@ -85,6 +94,13 @@ class SwingAnalysisEvidenceBuilder:
         signal_engine: "SignalEngine | None",
         corporate_action_risk_use_case: "AssessCorporateActionEventRiskUseCase | None",
         ticker_profile_classifier_factory: Callable[[], TickerProfileClassifier] | None = None,
+        institutional_accumulation_config_factory: (
+            Callable[[], InstitutionalAccumulationConfig] | None
+        ) = None,
+        sector_context_builder_factory: Callable[[], SectorContextEvidenceBuilder] | None = None,
+        company_quality_context_builder_factory: (
+            Callable[[], CompanyQualityContextEvidenceBuilder] | None
+        ) = None,
     ) -> None:
         self._market_repo = market_repository
         self._broker_repo = broker_repository
@@ -94,6 +110,40 @@ class SwingAnalysisEvidenceBuilder:
         self._signal_engine = signal_engine
         self._corporate_action_risk_use_case = corporate_action_risk_use_case
         self._ticker_profile_classifier_factory = ticker_profile_classifier_factory
+        self._institutional_accumulation_config_factory = institutional_accumulation_config_factory
+        self._sector_context_builder_factory = sector_context_builder_factory
+        self._company_quality_context_builder_factory = company_quality_context_builder_factory
+
+    def _institutional_accumulation_builder(self):
+        from src.application.services.institutional_accumulation_evidence_builder import (
+            InstitutionalAccumulationEvidenceBuilder,
+        )
+
+        if self._institutional_accumulation_config_factory is not None:
+            return InstitutionalAccumulationEvidenceBuilder(
+                self._institutional_accumulation_config_factory()
+            )
+        return InstitutionalAccumulationEvidenceBuilder()
+
+    def _sector_context_builder(self):
+        if self._sector_context_builder_factory is not None:
+            return self._sector_context_builder_factory()
+        from src.application.services.sector_context_evidence_builder import (
+            SectorContextConfig,
+            SectorContextEvidenceBuilder,
+        )
+
+        return SectorContextEvidenceBuilder(SectorContextConfig.from_mapping({}), {})
+
+    def _company_quality_context_builder(self):
+        if self._company_quality_context_builder_factory is not None:
+            return self._company_quality_context_builder_factory()
+        from src.application.services.company_quality_context_evidence_builder import (
+            CompanyQualityContextConfig,
+            CompanyQualityContextEvidenceBuilder,
+        )
+
+        return CompanyQualityContextEvidenceBuilder(CompanyQualityContextConfig.from_mapping({}))
 
     def build(
         self,
@@ -209,7 +259,6 @@ class SwingAnalysisEvidenceBuilder:
         institutional_accumulation_evidence = None
         try:
             from src.application.services.institutional_accumulation_evidence_builder import (
-                InstitutionalAccumulationEvidenceBuilder,
                 InstitutionalAccumulationEvidenceRequest,
             )
 
@@ -229,21 +278,20 @@ class SwingAnalysisEvidenceBuilder:
                     ticker, start_date=ia_start_date, end_date=snapshot_date
                 )
             )
-            institutional_accumulation_evidence = (
-                InstitutionalAccumulationEvidenceBuilder.from_yaml().build(
-                    InstitutionalAccumulationEvidenceRequest(
-                        ticker=ticker,
-                        snapshot_date=snapshot_date,
-                        broker_daily_flows=broker_daily_flows,
-                        foreign_flow_points=foreign_flow_points,
-                        broker_summaries=broker_summaries,
-                        bandar_snapshot=(
-                            accumulation_candidate.bandar_detector
-                            if accumulation_candidate is not None
-                            else None
-                        ),
-                        candles=tuple(candles),
-                    )
+            ia_builder = self._institutional_accumulation_builder()
+            institutional_accumulation_evidence = ia_builder.build(
+                InstitutionalAccumulationEvidenceRequest(
+                    ticker=ticker,
+                    snapshot_date=snapshot_date,
+                    broker_daily_flows=broker_daily_flows,
+                    foreign_flow_points=foreign_flow_points,
+                    broker_summaries=broker_summaries,
+                    bandar_snapshot=(
+                        accumulation_candidate.bandar_detector
+                        if accumulation_candidate is not None
+                        else None
+                    ),
+                    candles=tuple(candles),
                 )
             )
         except Exception as exc:
@@ -296,18 +344,19 @@ class SwingAnalysisEvidenceBuilder:
         sector_context_evidence = None
         try:
             from src.application.services.sector_context_evidence_builder import (
-                SectorContextEvidenceBuilder,
                 SectorContextRequest,
             )
 
-            sc_builder = SectorContextEvidenceBuilder.from_yaml()
+            sc_builder = self._sector_context_builder()
             sc_sector = (
                 accumulation_candidate.ticker_notation.sector
                 if accumulation_candidate is not None
                 and accumulation_candidate.ticker_notation is not None
                 else None
             ) or (
-                ticker_profile_snapshot.sector if ticker_profile_snapshot is not None else None
+                ticker_profile_snapshot.sector
+                if ticker_profile_snapshot is not None
+                else None
             )
             peer_tickers = sc_builder.peers_for_ticker(ticker)
             peer_candles: dict[str, list] = {}
@@ -346,7 +395,6 @@ class SwingAnalysisEvidenceBuilder:
         if accumulation_candidate is not None and self._signal_engine is not None:
             try:
                 from src.application.services.company_quality_context_evidence_builder import (
-                    CompanyQualityContextEvidenceBuilder,
                     CompanyQualityContextRequest,
                 )
 
@@ -356,13 +404,12 @@ class SwingAnalysisEvidenceBuilder:
                     candidate=accumulation_candidate,
                     signal_engine=self._signal_engine,
                 )
-                company_quality_context_evidence = (
-                    CompanyQualityContextEvidenceBuilder.from_yaml().build(
-                        CompanyQualityContextRequest(
-                            ticker=ticker,
-                            snapshot_date=snapshot_date,
-                            signal_context=_cq_ctx,
-                        )
+                cq_builder = self._company_quality_context_builder()
+                company_quality_context_evidence = cq_builder.build(
+                    CompanyQualityContextRequest(
+                        ticker=ticker,
+                        snapshot_date=snapshot_date,
+                        signal_context=_cq_ctx,
                     )
                 )
             except Exception as exc:

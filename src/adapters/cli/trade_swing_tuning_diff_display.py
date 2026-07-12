@@ -23,6 +23,9 @@ from src.adapters.cli.trade_swing_display_formatters import (
 )
 from src.application.services.swing_tuning_contracts import build_tuning_config_diff_draft
 from src.application.use_case.swing_backtest_use_case import SwingBacktestResponse
+from src.infrastructure.config.swing_tuning_document_loader import (
+    swing_tuning_document_loader,
+)
 
 
 def display_swing_tuning_config_diff(response: SwingBacktestResponse) -> None:
@@ -33,7 +36,10 @@ def display_swing_tuning_config_diff(response: SwingBacktestResponse) -> None:
     Preserves all labels: Can Apply, Human Review, Resolved Candidates,
     Rejected Candidates, Review Checklist.
     """
-    draft = build_tuning_config_diff_draft(response.attribution_summary)
+    draft = build_tuning_config_diff_draft(
+        response.attribution_summary,
+        document_loader=swing_tuning_document_loader(),
+    )
     summary = draft.summary or {}
     summary_table = compact_table(show_header=False)
     summary_table.add_column("Metric", style="bold cyan")

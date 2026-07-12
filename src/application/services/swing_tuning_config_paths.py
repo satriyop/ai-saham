@@ -3,6 +3,8 @@
 Intent:
     Parse, expand, validate, and resolve allowlisted tuning config paths.
     This module never mutates YAML and never generates applyable diffs.
+    Document loading is delegated to an injected loader callable; this
+    module never reads files or parses YAML directly.
 
 Layer: Application
 """
@@ -10,9 +12,9 @@ Layer: Application
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
+from typing import Callable
 
-import yaml
+DocumentLoader = Callable[[str], "dict | None"]
 
 _SETUP_GATES_WILDCARD_PATH = "setups.*.gates"
 _SETUP_PARTIAL_MAX_FAILED_GATES_WILDCARD_PATH = "setups.*.partial_max_failed_gates"
@@ -80,10 +82,15 @@ def parse_tuning_config_path(raw_path: str) -> TuningConfigPath:
 
 def expand_tuning_config_paths(
     raw_path: str,
-    config_root: Path | str = Path("."),
+    document_loader: DocumentLoader,
     active_setups: frozenset[str] | None = None,
 ) -> tuple[str, ...]:
     """Expand allowlisted wildcard tuning paths into concrete YAML paths.
+
+    document_loader: callable that loads a YAML document by file_path
+    (relative, e.g. "config/swing_setups.yaml"), returning the parsed
+    mapping or None when the file does not exist. Infrastructure owns the
+    actual file read.
 
     active_setups: when provided, only expand paths for setups whose name
     is in the set (e.g. frozenset({"foreign-bounce"})). Other setup paths
@@ -98,10 +105,12 @@ def expand_tuning_config_paths(
         return (parsed_path.raw,)
 
     if parsed_path.document_path == _SETUP_GATES_WILDCARD_PATH:
-        return _expand_swing_setup_gate_paths(parsed_path, config_root, active_setups)
+        return _expand_swing_setup_gate_paths(parsed_path, document_loader, active_setups)
 
     if parsed_path.document_path == _SETUP_PARTIAL_MAX_FAILED_GATES_WILDCARD_PATH:
-        return _expand_swing_setup_partial_gate_paths(parsed_path, config_root, active_setups)
+        return _expand_swing_setup_partial_gate_paths(
+            parsed_path, document_loader, active_setups
+        )
 
     return (parsed_path.raw,)
 
@@ -117,9 +126,13 @@ def validate_tuning_target_paths(summary) -> tuple[str, ...]:
 
 def resolve_tuning_config_value(
     target_path: TuningConfigPath,
-    config_root: Path | str = Path("."),
+    document_loader: DocumentLoader,
 ) -> TuningConfigValueResolution:
-    """Resolve a concrete YAML tuning path without mutating config."""
+    """Resolve a concrete YAML tuning path without mutating config.
+
+    document_loader: callable that loads a YAML document by file_path,
+    returning the parsed mapping or None when the file does not exist.
+    """
     if "*" in target_path.document_path:
         return TuningConfigValueResolution(
             target_path=target_path,
@@ -127,17 +140,13 @@ def resolve_tuning_config_value(
             unresolved_reason="wildcard_path_not_resolved",
         )
 
-    root = Path(config_root)
-    yaml_path = root / target_path.file_path
-    if not yaml_path.exists():
+    document = document_loader(target_path.file_path)
+    if document is None:
         return TuningConfigValueResolution(
             target_path=target_path,
             resolved=False,
             unresolved_reason="config_file_not_found",
         )
-
-    with yaml_path.open(encoding="utf-8") as fh:
-        document = yaml.safe_load(fh) or {}
 
     current: object = document
     for part in target_path.document_path.split("."):
@@ -158,10 +167,10 @@ def resolve_tuning_config_value(
 
 def _expand_swing_setup_gate_paths(
     target_path: TuningConfigPath,
-    config_root: Path | str,
+    document_loader: DocumentLoader,
     active_setups: frozenset[str] | None = None,
 ) -> tuple[str, ...]:
-    document = _load_yaml_document(target_path.file_path, config_root)
+    document = document_loader(target_path.file_path) or {}
     setups = document.get("setups") if isinstance(document, dict) else None
     if not isinstance(setups, dict):
         return (target_path.raw,)
@@ -188,10 +197,10 @@ def _expand_swing_setup_gate_paths(
 
 def _expand_swing_setup_partial_gate_paths(
     target_path: TuningConfigPath,
-    config_root: Path | str,
+    document_loader: DocumentLoader,
     active_setups: frozenset[str] | None = None,
 ) -> tuple[str, ...]:
-    document = _load_yaml_document(target_path.file_path, config_root)
+    document = document_loader(target_path.file_path) or {}
     setups = document.get("setups") if isinstance(document, dict) else None
     if not isinstance(setups, dict):
         return (target_path.raw,)
@@ -206,15 +215,3 @@ def _expand_swing_setup_partial_gate_paths(
     if active_setups is not None:
         return expanded_paths
     return expanded_paths or (target_path.raw,)
-
-
-def _load_yaml_document(
-    file_path: str,
-    config_root: Path | str,
-) -> dict:
-    yaml_path = Path(config_root) / file_path
-    if not yaml_path.exists():
-        return {}
-    with yaml_path.open(encoding="utf-8") as fh:
-        document = yaml.safe_load(fh) or {}
-    return document if isinstance(document, dict) else {}

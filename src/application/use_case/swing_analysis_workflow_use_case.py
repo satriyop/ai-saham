@@ -14,7 +14,16 @@ from typing import TYPE_CHECKING, Any
 from src.application.dto import swing_analysis as swing_analysis_dto
 
 if TYPE_CHECKING:
+    from src.application.services.company_quality_context_evidence_builder import (
+        CompanyQualityContextEvidenceBuilder,
+    )
+    from src.application.services.institutional_flow_config import (
+        InstitutionalAccumulationConfig,
+    )
     from src.application.services.risk_engine import RiskEngine
+    from src.application.services.sector_context_evidence_builder import (
+        SectorContextEvidenceBuilder,
+    )
     from src.application.services.signal_engine import SignalEngine
     from src.application.services.ticker_profile_classifier import (
         TickerProfileClassifier,
@@ -83,6 +92,13 @@ class SwingAnalysisWorkflowUseCase:
         foreign_flow_score_policy: ForeignFlowScorePolicy | None = None,
         corporate_action_risk_use_case: "AssessCorporateActionEventRiskUseCase | None" = None,
         ticker_profile_classifier_factory: Callable[[], TickerProfileClassifier] | None = None,
+        institutional_accumulation_config_factory: (
+            Callable[[], InstitutionalAccumulationConfig] | None
+        ) = None,
+        sector_context_builder_factory: Callable[[], SectorContextEvidenceBuilder] | None = None,
+        company_quality_context_builder_factory: (
+            Callable[[], CompanyQualityContextEvidenceBuilder] | None
+        ) = None,
     ) -> None:
         self._market_repo = market_repository
         self._broker_repo = broker_repository
@@ -126,6 +142,9 @@ class SwingAnalysisWorkflowUseCase:
             signal_engine=signal_engine,
             corporate_action_risk_use_case=corporate_action_risk_use_case,
             ticker_profile_classifier_factory=ticker_profile_classifier_factory,
+            institutional_accumulation_config_factory=institutional_accumulation_config_factory,
+            sector_context_builder_factory=sector_context_builder_factory,
+            company_quality_context_builder_factory=company_quality_context_builder_factory,
         )
 
     def execute(

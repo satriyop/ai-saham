@@ -13,12 +13,21 @@ from src.application.services.signal_context_builder import (
 from src.application.services.volatility_context import build_volatility_context
 
 if TYPE_CHECKING:
+    from src.application.services.company_quality_context_evidence_builder import (
+        CompanyQualityContextEvidenceBuilder,
+    )
     from src.application.services.indicator_registry import IndicatorRegistry
+    from src.application.services.institutional_flow_config import (
+        InstitutionalAccumulationConfig,
+    )
     from src.application.services.primary_setup_family_resolver import (
         PrimarySetupFamilyResolver,
     )
     from src.application.services.relative_strength_calculator import (
         RelativeStrengthCalculator,
+    )
+    from src.application.services.sector_context_evidence_builder import (
+        SectorContextEvidenceBuilder,
     )
     from src.application.services.signal_engine import SignalEngine
     from src.application.services.ticker_profile_classifier import (
@@ -64,6 +73,13 @@ class AccumulationCandidateEvidenceBuilder:
         relative_strength_calculator: "RelativeStrengthCalculator",
         indicator_registry: "IndicatorRegistry",
         ticker_profile_classifier_factory: Callable[[], TickerProfileClassifier] | None = None,
+        institutional_accumulation_config_factory: (
+            Callable[[], InstitutionalAccumulationConfig] | None
+        ) = None,
+        sector_context_builder_factory: Callable[[], SectorContextEvidenceBuilder] | None = None,
+        company_quality_context_builder_factory: (
+            Callable[[], CompanyQualityContextEvidenceBuilder] | None
+        ) = None,
     ) -> None:
         self._market_repo = market_repository
         self._broker_repo = broker_repository
@@ -74,6 +90,40 @@ class AccumulationCandidateEvidenceBuilder:
         self._relative_strength_calculator = relative_strength_calculator
         self._indicator_registry = indicator_registry
         self._ticker_profile_classifier_factory = ticker_profile_classifier_factory
+        self._institutional_accumulation_config_factory = institutional_accumulation_config_factory
+        self._sector_context_builder_factory = sector_context_builder_factory
+        self._company_quality_context_builder_factory = company_quality_context_builder_factory
+
+    def _institutional_accumulation_builder(self):
+        from src.application.services.institutional_accumulation_evidence_builder import (
+            InstitutionalAccumulationEvidenceBuilder,
+        )
+
+        if self._institutional_accumulation_config_factory is not None:
+            return InstitutionalAccumulationEvidenceBuilder(
+                self._institutional_accumulation_config_factory()
+            )
+        return InstitutionalAccumulationEvidenceBuilder()
+
+    def _sector_context_builder(self):
+        if self._sector_context_builder_factory is not None:
+            return self._sector_context_builder_factory()
+        from src.application.services.sector_context_evidence_builder import (
+            SectorContextConfig,
+            SectorContextEvidenceBuilder,
+        )
+
+        return SectorContextEvidenceBuilder(SectorContextConfig.from_mapping({}), {})
+
+    def _company_quality_context_builder(self):
+        if self._company_quality_context_builder_factory is not None:
+            return self._company_quality_context_builder_factory()
+        from src.application.services.company_quality_context_evidence_builder import (
+            CompanyQualityContextConfig,
+            CompanyQualityContextEvidenceBuilder,
+        )
+
+        return CompanyQualityContextEvidenceBuilder(CompanyQualityContextConfig.from_mapping({}))
 
     def resolve_preliminary_setup_family(
         self, candidate: "accumulation_dto.AccumulationCandidate"
@@ -124,7 +174,6 @@ class AccumulationCandidateEvidenceBuilder:
     ) -> "InstitutionalAccumulationEvidence | None":
         try:
             from src.application.services.institutional_accumulation_evidence_builder import (
-                InstitutionalAccumulationEvidenceBuilder,
                 InstitutionalAccumulationEvidenceRequest,
             )
 
@@ -145,7 +194,8 @@ class AccumulationCandidateEvidenceBuilder:
                     candidate.ticker, start_date=start_date, end_date=snapshot_date
                 )
             )
-            return InstitutionalAccumulationEvidenceBuilder.from_yaml().build(
+            ia_builder = self._institutional_accumulation_builder()
+            return ia_builder.build(
                 InstitutionalAccumulationEvidenceRequest(
                     ticker=candidate.ticker,
                     snapshot_date=snapshot_date,
@@ -245,11 +295,10 @@ class AccumulationCandidateEvidenceBuilder:
     ) -> "SectorContextEvidence | None":
         try:
             from src.application.services.sector_context_evidence_builder import (
-                SectorContextEvidenceBuilder,
                 SectorContextRequest,
             )
 
-            builder = SectorContextEvidenceBuilder.from_yaml()
+            builder = self._sector_context_builder()
             sector = (
                 candidate.ticker_notation.sector
                 if candidate.ticker_notation is not None
@@ -300,7 +349,6 @@ class AccumulationCandidateEvidenceBuilder:
             return None
         try:
             from src.application.services.company_quality_context_evidence_builder import (
-                CompanyQualityContextEvidenceBuilder,
                 CompanyQualityContextRequest,
             )
 
@@ -310,7 +358,8 @@ class AccumulationCandidateEvidenceBuilder:
                 candidate=candidate,
                 signal_engine=self._signal_engine,
             )
-            return CompanyQualityContextEvidenceBuilder.from_yaml().build(
+            builder = self._company_quality_context_builder()
+            return builder.build(
                 CompanyQualityContextRequest(
                     ticker=candidate.ticker,
                     snapshot_date=snapshot_date,

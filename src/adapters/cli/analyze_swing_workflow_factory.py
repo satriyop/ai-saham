@@ -65,10 +65,19 @@ from src.infrastructure.config.accumulation_screener_config import (
     load_accumulation_screener_config,
 )
 from src.infrastructure.config.analyze_swing_config import AnalyzeSwingConfig
+from src.infrastructure.config.company_quality_context_config_loader import (
+    create_company_quality_context_evidence_builder,
+)
 from src.infrastructure.config.corporate_action_policy_config import (
     load_corporate_action_policy_config,
 )
+from src.infrastructure.config.institutional_accumulation_config_loader import (
+    load_institutional_accumulation_config,
+)
 from src.infrastructure.config.market_context_factory import evaluate_market_context
+from src.infrastructure.config.sector_context_config_loader import (
+    create_sector_context_evidence_builder,
+)
 from src.infrastructure.config.ticker_profile_config_loader import (
     create_ticker_profile_classifier,
 )
@@ -116,6 +125,9 @@ def create_swing_analysis_workflow(
             foreign_flow_score_policy=accumulation_config.foreign_flow_score_policy,
             derived_feature_policy=accumulation_config.derived_features,
             ticker_profile_classifier_factory=create_ticker_profile_classifier,
+            institutional_accumulation_config_factory=load_institutional_accumulation_config,
+            sector_context_builder_factory=create_sector_context_evidence_builder,
+            company_quality_context_builder_factory=create_company_quality_context_evidence_builder,
         )
         accum_resp = accum_uc.execute(
             AccumulationScreenRequest(
@@ -187,6 +199,9 @@ def create_swing_analysis_workflow(
         foreign_flow_score_policy=accumulation_config.foreign_flow_score_policy,
         corporate_action_risk_use_case=corporate_action_risk_use_case,
         ticker_profile_classifier_factory=create_ticker_profile_classifier,
+        institutional_accumulation_config_factory=load_institutional_accumulation_config,
+        sector_context_builder_factory=create_sector_context_evidence_builder,
+        company_quality_context_builder_factory=create_company_quality_context_evidence_builder,
     )
 
 

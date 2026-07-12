@@ -32,6 +32,9 @@ _COMPLETE_SOURCE_REVIEW = {
 from src.application.services.swing_tuning_loop_status import (
     SwingTuningLoopStatusService,
 )
+from src.infrastructure.config.swing_tuning_document_loader import (
+    swing_tuning_document_loader,
+)
 from src.infrastructure.persistence.swing_tuning_review_jsonl_writer import (
     SwingTuningReviewJsonlWriter,
 )
@@ -42,7 +45,7 @@ def test_swing_tuning_loop_status_starts_with_save_review_action(tmp_path):
 
     report = SwingTuningLoopStatusService(
         SwingTuningReviewJsonlWriter(journal_path),
-        config_root=tmp_path,
+        document_loader=swing_tuning_document_loader(tmp_path),
     ).status(
         review_journal_path=journal_path,
         patch_path=tmp_path / "journals" / "swing_tuning_patch.json",
@@ -136,7 +139,7 @@ def test_swing_tuning_loop_status_reports_ready_measurement(tmp_path):
 
     report = SwingTuningLoopStatusService(
         SwingTuningReviewJsonlWriter(journal_path),
-        config_root=tmp_path,
+        document_loader=swing_tuning_document_loader(tmp_path),
     ).status(
         review_journal_path=journal_path,
         patch_path=patch_path,
@@ -187,7 +190,7 @@ def test_swing_tuning_loop_status_handles_empty_patch_from_insufficient_sample(t
 
     report = SwingTuningLoopStatusService(
         SwingTuningReviewJsonlWriter(journal_path),
-        config_root=tmp_path,
+        document_loader=swing_tuning_document_loader(tmp_path),
     ).status(
         review_journal_path=journal_path,
         patch_path=patch_path,

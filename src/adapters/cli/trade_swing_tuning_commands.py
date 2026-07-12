@@ -32,6 +32,9 @@ from src.infrastructure.config.swing_backtest_config import (
     load_swing_backtest_config as _load_swing_backtest_config,
 )
 from src.infrastructure.config.swing_config import load_swing_config as _load_swing_config
+from src.infrastructure.config.swing_tuning_document_loader import (
+    swing_tuning_document_loader,
+)
 from src.infrastructure.persistence.swing_tuning_review_jsonl_writer import (
     SwingTuningReviewJsonlWriter,
 )
@@ -50,6 +53,7 @@ def _swing_tuning_payload(response: SwingBacktestResponse) -> dict:
     active_setups = frozenset({response.setup}) if response.setup else None
     config_diff = build_tuning_config_diff_draft(
         response.attribution_summary,
+        document_loader=swing_tuning_document_loader(),
         active_setups=active_setups,
     )
     return {

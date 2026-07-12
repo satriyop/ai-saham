@@ -28,6 +28,9 @@ from src.infrastructure.config.swing_backtest_config import (
     load_swing_backtest_config as _load_swing_backtest_config,
 )
 from src.infrastructure.config.swing_config import load_swing_config as _load_swing_config
+from src.infrastructure.config.swing_tuning_document_loader import (
+    swing_tuning_document_loader,
+)
 
 _SC = _load_swing_config()
 _BT = _load_swing_backtest_config()
@@ -227,6 +230,7 @@ def swing_backtest(
             active_setups_bs = frozenset({response.setup}) if response.setup else None
             payload["tuning_config_diff"] = build_tuning_config_diff_draft(
                 response.attribution_summary,
+                document_loader=swing_tuning_document_loader(),
                 active_setups=active_setups_bs,
             ).to_dict()
         typer.echo(json.dumps(payload, indent=2, default=str))

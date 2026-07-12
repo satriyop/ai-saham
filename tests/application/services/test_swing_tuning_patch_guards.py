@@ -9,6 +9,9 @@ from src.application.services.swing_tuning_patch_validation import (
 from src.application.services.swing_tuning_patch_validator import (
     SwingTuningPatchValidator,
 )
+from src.infrastructure.config.swing_tuning_document_loader import (
+    swing_tuning_document_loader,
+)
 from tests.application.services.swing_tuning_guardrail_fixtures import (
     _COMPLETE_SOURCE_REVIEW,
     _STRONG_PATH,
@@ -45,7 +48,7 @@ def test_unbounded_resolved_numeric_path_fails_closed(tmp_path):
         )
     )
 
-    report = SwingTuningPatchValidator(config_root=tmp_path).validate(patch_path)
+    report = SwingTuningPatchValidator(document_loader=swing_tuning_document_loader(tmp_path)).validate(patch_path)
 
     assert report.valid is False
     assert "target_path_unbounded" in report.item_results[0].issues
@@ -175,7 +178,7 @@ def test_patch_modifying_breakout_min_volume_ratio_fails(tmp_path):
             }
         )
     )
-    report = SwingTuningPatchValidator(config_root=tmp_path).validate(patch_path)
+    report = SwingTuningPatchValidator(document_loader=swing_tuning_document_loader(tmp_path)).validate(patch_path)
     result = report.item_results[0]
 
     assert result.valid is False
@@ -204,6 +207,6 @@ def test_patch_without_source_review_fails_validation(tmp_path):
             }
         )
     )
-    report = SwingTuningPatchValidator(config_root=tmp_path).validate(patch_path)
+    report = SwingTuningPatchValidator(document_loader=swing_tuning_document_loader(tmp_path)).validate(patch_path)
     assert report.valid is False
     assert any("walk_forward_not_enforced" in issue for issue in report.issues)

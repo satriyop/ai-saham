@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from src.application.services.swing_tuning_config_paths import DocumentLoader
 from src.application.services.swing_tuning_patch_reports import (
     SwingTuningPatchDryRunChange,
     SwingTuningPatchDryRunReport,
@@ -17,8 +18,8 @@ from src.application.services.swing_tuning_patch_validation import (
 
 
 class SwingTuningPatchDryRunPlanner:
-    def __init__(self, config_root: Path | str = Path(".")) -> None:
-        self._validator = SwingTuningPatchValidator(config_root=config_root)
+    def __init__(self, document_loader: DocumentLoader) -> None:
+        self._validator = SwingTuningPatchValidator(document_loader=document_loader)
 
     def plan(self, patch_path: Path) -> SwingTuningPatchDryRunReport:
         validation = self._validator.validate(patch_path)

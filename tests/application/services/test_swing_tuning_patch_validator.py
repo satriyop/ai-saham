@@ -7,6 +7,13 @@ from src.application.services.swing_tuning_patch_validator import (
     SwingTuningPatchValidator,
     SwingTuningPatchVerifier,
 )
+from src.infrastructure.config.swing_tuning_document_loader import (
+    swing_tuning_document_loader,
+)
+from src.infrastructure.config.swing_tuning_document_writer import (
+    read_swing_tuning_document,
+    write_swing_tuning_document,
+)
 
 _COMPLETE_SOURCE_REVIEW = {
     "readiness_state": "PATCH_ELIGIBLE",
@@ -88,7 +95,7 @@ def test_swing_tuning_patch_validator_accepts_matching_current_value(tmp_path):
         )
     )
 
-    report = SwingTuningPatchValidator(config_root=tmp_path).validate(patch_path)
+    report = SwingTuningPatchValidator(document_loader=swing_tuning_document_loader(tmp_path)).validate(patch_path)
 
     assert report.valid is True
     assert report.valid_item_count == 1
@@ -117,7 +124,7 @@ def test_swing_tuning_patch_validator_rejects_archived_factor_target(tmp_path):
         )
     )
 
-    report = SwingTuningPatchValidator(config_root=tmp_path).validate(patch_path)
+    report = SwingTuningPatchValidator(document_loader=swing_tuning_document_loader(tmp_path)).validate(patch_path)
 
     assert report.valid is False
     assert "target_path_not_tunable:archived_baseline_only" in report.item_results[0].issues
@@ -145,7 +152,7 @@ def test_swing_tuning_patch_validator_rejects_archived_forward_pe_target(tmp_pat
         )
     )
 
-    report = SwingTuningPatchValidator(config_root=tmp_path).validate(patch_path)
+    report = SwingTuningPatchValidator(document_loader=swing_tuning_document_loader(tmp_path)).validate(patch_path)
 
     assert report.valid is False
     assert (
@@ -177,7 +184,7 @@ def test_swing_tuning_patch_validator_rejects_stale_current_value(tmp_path):
         )
     )
 
-    report = SwingTuningPatchValidator(config_root=tmp_path).validate(patch_path)
+    report = SwingTuningPatchValidator(document_loader=swing_tuning_document_loader(tmp_path)).validate(patch_path)
 
     assert report.valid is False
     assert report.item_results[0].issues == ("current_value_mismatch",)
@@ -195,7 +202,7 @@ def test_swing_tuning_patch_validator_rejects_applyable_artifact(tmp_path):
         )
     )
 
-    report = SwingTuningPatchValidator(config_root=tmp_path).validate(patch_path)
+    report = SwingTuningPatchValidator(document_loader=swing_tuning_document_loader(tmp_path)).validate(patch_path)
 
     assert report.valid is False
     assert "apply_supported_must_be_false" in report.issues
@@ -224,7 +231,7 @@ def test_swing_tuning_patch_dry_run_plans_yaml_changes(tmp_path):
         )
     )
 
-    report = SwingTuningPatchDryRunPlanner(config_root=tmp_path).plan(patch_path)
+    report = SwingTuningPatchDryRunPlanner(document_loader=swing_tuning_document_loader(tmp_path)).plan(patch_path)
 
     assert report.ready is True
     assert report.issues == ()
@@ -246,7 +253,7 @@ def test_swing_tuning_patch_dry_run_rejects_empty_patch(tmp_path):
         )
     )
 
-    report = SwingTuningPatchDryRunPlanner(config_root=tmp_path).plan(patch_path)
+    report = SwingTuningPatchDryRunPlanner(document_loader=swing_tuning_document_loader(tmp_path)).plan(patch_path)
 
     assert report.ready is False
     assert report.issues == ("patch_has_no_items",)
@@ -278,6 +285,9 @@ def test_swing_tuning_patch_apply_writes_yaml_and_audit_log(tmp_path):
 
     report = SwingTuningPatchApplier(
         config_root=tmp_path,
+        document_loader=swing_tuning_document_loader(tmp_path),
+        document_reader=read_swing_tuning_document,
+        document_writer=write_swing_tuning_document,
         clock=lambda: datetime(2026, 7, 3, 9, 0, 0),
     ).apply(patch_path, confirmed=True, log_path=log_path)
 
@@ -318,7 +328,12 @@ def test_swing_tuning_patch_apply_rejects_without_confirmation(tmp_path):
         )
     )
 
-    report = SwingTuningPatchApplier(config_root=tmp_path).apply(
+    report = SwingTuningPatchApplier(
+        config_root=tmp_path,
+        document_loader=swing_tuning_document_loader(tmp_path),
+        document_reader=read_swing_tuning_document,
+        document_writer=write_swing_tuning_document,
+    ).apply(
         patch_path,
         confirmed=False,
         log_path=tmp_path / "apply.jsonl",
@@ -355,6 +370,9 @@ def test_swing_tuning_patch_apply_rejects_dirty_target(tmp_path):
 
     report = SwingTuningPatchApplier(
         config_root=tmp_path,
+        document_loader=swing_tuning_document_loader(tmp_path),
+        document_reader=read_swing_tuning_document,
+        document_writer=write_swing_tuning_document,
         target_dirty_checker=lambda _path: True,
     ).apply(patch_path, confirmed=True, log_path=tmp_path / "apply.jsonl")
 
@@ -391,7 +409,7 @@ def test_swing_tuning_patch_verify_passes_after_value_applied(tmp_path):
         )
     )
 
-    report = SwingTuningPatchVerifier(config_root=tmp_path).verify(patch_path)
+    report = SwingTuningPatchVerifier(document_loader=swing_tuning_document_loader(tmp_path)).verify(patch_path)
 
     assert report.verified is True
     assert report.verified_item_count == 1
@@ -422,7 +440,7 @@ def test_swing_tuning_patch_verify_fails_before_value_applied(tmp_path):
         )
     )
 
-    report = SwingTuningPatchVerifier(config_root=tmp_path).verify(patch_path)
+    report = SwingTuningPatchVerifier(document_loader=swing_tuning_document_loader(tmp_path)).verify(patch_path)
 
     assert report.verified is False
     assert report.verified_item_count == 0
@@ -432,7 +450,7 @@ def test_swing_tuning_patch_verify_fails_before_value_applied(tmp_path):
 
 def test_swing_tuning_patch_verifier_missing_path_returns_error(tmp_path):
     missing_path = tmp_path / "does_not_exist.json"
-    report = SwingTuningPatchVerifier(config_root=tmp_path).verify(missing_path)
+    report = SwingTuningPatchVerifier(document_loader=swing_tuning_document_loader(tmp_path)).verify(missing_path)
     assert report.verified is False
     assert "patch_file_not_found" in report.issues
 
@@ -440,14 +458,14 @@ def test_swing_tuning_patch_verifier_missing_path_returns_error(tmp_path):
 def test_swing_tuning_patch_verifier_invalid_json_returns_error(tmp_path):
     bad_path = tmp_path / "bad.json"
     bad_path.write_text("invalid json content", encoding="utf-8")
-    report = SwingTuningPatchVerifier(config_root=tmp_path).verify(bad_path)
+    report = SwingTuningPatchVerifier(document_loader=swing_tuning_document_loader(tmp_path)).verify(bad_path)
     assert report.verified is False
     assert "patch_json_invalid" in report.issues
 
 
 def test_swing_tuning_patch_validator_missing_path_returns_error(tmp_path):
     missing_path = tmp_path / "does_not_exist.json"
-    report = SwingTuningPatchValidator(config_root=tmp_path).validate(missing_path)
+    report = SwingTuningPatchValidator(document_loader=swing_tuning_document_loader(tmp_path)).validate(missing_path)
     assert report.valid is False
     assert "patch_file_not_found" in report.issues
 
@@ -455,6 +473,6 @@ def test_swing_tuning_patch_validator_missing_path_returns_error(tmp_path):
 def test_swing_tuning_patch_validator_invalid_json_returns_error(tmp_path):
     bad_path = tmp_path / "bad.json"
     bad_path.write_text("invalid json content", encoding="utf-8")
-    report = SwingTuningPatchValidator(config_root=tmp_path).validate(bad_path)
+    report = SwingTuningPatchValidator(document_loader=swing_tuning_document_loader(tmp_path)).validate(bad_path)
     assert report.valid is False
     assert "patch_json_invalid" in report.issues

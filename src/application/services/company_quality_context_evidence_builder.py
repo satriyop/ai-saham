@@ -20,7 +20,7 @@ Design invariants:
 It MUST NOT compute liquidity, free-float, Piotroski, bandar-distribution, or
 technical-gate logic — those remain RiskEngine responsibilities.
 
-Layer: Application. Depends only on domain VOs + application scorers + PyYAML.
+Layer: Application. Depends only on domain VOs + application scorers.
 No provider/repository/CLI imports.
 """
 
@@ -28,10 +28,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
-from pathlib import Path
 from typing import Any
-
-import yaml
 
 from src.application.services.company_quality_scoring import (
     score_analyst,
@@ -45,12 +42,6 @@ from src.domain.value_objects.company_quality_context_evidence import (
 )
 from src.domain.value_objects.institutional_accumulation_evidence import EvidenceStatus
 from src.domain.value_objects.signal_assessment import SignalContext
-
-_DEFAULT_CONFIG_PATH = (
-    Path(__file__).parent.parent.parent.parent
-    / "config"
-    / "company_quality_context.yaml"
-)
 
 _DEFAULT_NEUTRAL_SCORE = 50.0
 
@@ -111,22 +102,6 @@ class CompanyQualityContextEvidenceBuilder:
         # uses; callers holding the full engine config may override.
         self._scoring = scoring or SignalScoringConfig()
         self._neutral_score = neutral_score
-
-    # --------------------------------------------------------- factory
-    @classmethod
-    def from_yaml(
-        cls,
-        config_path: str | Path | None = None,
-        scoring: SignalScoringConfig | None = None,
-        neutral_score: float = _DEFAULT_NEUTRAL_SCORE,
-    ) -> "CompanyQualityContextEvidenceBuilder":
-        cfg_p = Path(config_path) if config_path is not None else _DEFAULT_CONFIG_PATH
-        raw: dict[str, Any] = {}
-        if cfg_p.exists():
-            with open(cfg_p, "r") as fh:
-                raw = yaml.safe_load(fh) or {}
-        config = CompanyQualityContextConfig.from_mapping(raw)
-        return cls(config, scoring=scoring, neutral_score=neutral_score)
 
     # --------------------------------------------------------- main build
 

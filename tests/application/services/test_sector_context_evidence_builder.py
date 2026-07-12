@@ -378,8 +378,3 @@ class TestSectorContextEvidenceBuilderIndex:
         )
         assert builder.sector_group_for_ticker("BBCA") == "bank"
         assert builder.sector_group_for_ticker("TLKM") is None
-
-    def test_from_yaml_does_not_raise(self):
-        # Smoke test — just ensure the factory doesn't crash with real config files.
-        builder = SectorContextEvidenceBuilder.from_yaml()
-        assert isinstance(builder, SectorContextEvidenceBuilder)

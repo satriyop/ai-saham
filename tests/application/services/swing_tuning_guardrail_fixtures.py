@@ -8,6 +8,9 @@ from src.application.services.swing_backtest_attribution import (
 from src.application.services.swing_tuning_patch_validator import (
     SwingTuningPatchValidator,
 )
+from src.infrastructure.config.swing_tuning_document_loader import (
+    swing_tuning_document_loader,
+)
 
 _SIGNAL_ENGINE_YAML = (
     "signal_engine:\n"
@@ -89,7 +92,7 @@ def _validate_single(tmp_path, document_leaf, current_value, proposed_value):
             }
         )
     )
-    report = SwingTuningPatchValidator(config_root=tmp_path).validate(patch_path)
+    report = SwingTuningPatchValidator(document_loader=swing_tuning_document_loader(tmp_path)).validate(patch_path)
     return report.item_results[0]
 
 
@@ -106,4 +109,4 @@ def _patch_with_source_review(source_review: dict, tmp_path) -> object:
             }
         )
     )
-    return SwingTuningPatchValidator(config_root=tmp_path).validate(p)
+    return SwingTuningPatchValidator(document_loader=swing_tuning_document_loader(tmp_path)).validate(p)

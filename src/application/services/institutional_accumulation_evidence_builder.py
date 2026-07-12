@@ -22,7 +22,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
-from pathlib import Path
 from typing import Any
 
 from src.application.services.institutional_flow_broker_metrics import (
@@ -34,7 +33,6 @@ from src.application.services.institutional_flow_broker_metrics import (
 from src.application.services.institutional_flow_config import (
     DEFAULT_FOREIGN_BROKER_CODES,
     InstitutionalAccumulationConfig,
-    load_institutional_accumulation_config,
 )
 from src.application.services.institutional_flow_counterparty import (
     build_counterparty_transfer,
@@ -83,23 +81,15 @@ class InstitutionalAccumulationEvidenceBuilder:
         *,
         foreign_broker_codes: frozenset[str] | None = None,
     ) -> None:
-        self._config = config if config is not None else self._load_default_config()
+        self._config = (
+            config if config is not None else InstitutionalAccumulationConfig.from_mapping({})
+        )
         self._config.validate()
         self._foreign_codes = (
             foreign_broker_codes
             if foreign_broker_codes is not None
             else self._config.foreign_broker_codes
         )
-
-    @classmethod
-    def from_yaml(
-        cls, path: str | Path | None = None
-    ) -> "InstitutionalAccumulationEvidenceBuilder":
-        return cls(load_institutional_accumulation_config(path))
-
-    @staticmethod
-    def _load_default_config() -> InstitutionalAccumulationConfig:
-        return load_institutional_accumulation_config()
 
     def build(
         self, request: InstitutionalAccumulationEvidenceRequest

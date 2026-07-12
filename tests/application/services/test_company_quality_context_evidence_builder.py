@@ -25,6 +25,9 @@ from src.application.services import company_quality_scoring as cqs
 from src.application.use_case.assess_signal_use_case import AssessSignalUseCase
 from src.domain.value_objects.institutional_accumulation_evidence import EvidenceStatus
 from src.domain.value_objects.signal_assessment import SignalContext
+from src.infrastructure.config.company_quality_context_config_loader import (
+    create_company_quality_context_evidence_builder,
+)
 
 SNAP = date(2026, 7, 3)
 
@@ -34,7 +37,7 @@ def _ctx(**kwargs) -> SignalContext:
 
 
 def _builder() -> CompanyQualityContextEvidenceBuilder:
-    return CompanyQualityContextEvidenceBuilder.from_yaml()
+    return create_company_quality_context_evidence_builder()
 
 
 def _build(ctx: SignalContext):
@@ -129,7 +132,7 @@ def test_seasonality_cap_lowers_its_influence():
 
 
 def test_seasonality_cap_weight_is_strictly_lower_than_other_axes():
-    cfg = CompanyQualityContextEvidenceBuilder.from_yaml()._config
+    cfg = create_company_quality_context_evidence_builder()._config
     assert cfg.seasonality_weight < cfg.valuation_weight
     assert cfg.seasonality_weight < cfg.analyst_weight
     assert cfg.seasonality_weight < cfg.insider_weight

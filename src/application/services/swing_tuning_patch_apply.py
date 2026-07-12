@@ -10,9 +10,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
-import yaml
-
 from src.application.services.swing_tuning_config_paths import (
+    DocumentLoader,
     parse_tuning_config_path,
 )
 from src.application.services.swing_tuning_patch_dry_run import (
@@ -26,6 +25,8 @@ from src.application.services.swing_tuning_patch_reports import (
 from src.application.services.yaml_document_path import _set_document_value
 
 TargetDirtyChecker = Callable[[Path], bool]
+DocumentReader = Callable[[Path], dict]
+DocumentWriter = Callable[[Path, dict], None]
 
 
 class SwingTuningPatchApplier:
@@ -33,11 +34,16 @@ class SwingTuningPatchApplier:
         self,
         config_root: Path | str = Path("."),
         *,
+        document_loader: DocumentLoader,
+        document_reader: DocumentReader,
+        document_writer: DocumentWriter,
         target_dirty_checker: TargetDirtyChecker | None = None,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
         self._config_root = Path(config_root)
-        self._planner = SwingTuningPatchDryRunPlanner(config_root=config_root)
+        self._planner = SwingTuningPatchDryRunPlanner(document_loader=document_loader)
+        self._document_reader = document_reader
+        self._document_writer = document_writer
         self._target_dirty_checker = target_dirty_checker or (lambda _path: False)
         self._clock = clock or datetime.now
 
@@ -120,22 +126,12 @@ class SwingTuningPatchApplier:
         changes: tuple[SwingTuningPatchApplyChange, ...],
     ) -> None:
         full_path = self._resolve_target_file(file_path)
-        with full_path.open(encoding="utf-8") as fh:
-            document = yaml.safe_load(fh) or {}
-        if not isinstance(document, dict):
-            raise ValueError(f"YAML document must be a mapping: {file_path}")
+        document = self._document_reader(full_path)
 
         for change in changes:
             _set_document_value(document, change.document_path, change.new_value)
 
-        with full_path.open("w", encoding="utf-8") as fh:
-            yaml.safe_dump(
-                document,
-                fh,
-                sort_keys=False,
-                default_flow_style=False,
-                allow_unicode=True,
-            )
+        self._document_writer(full_path, document)
 
     def _resolve_target_file(self, file_path: str) -> Path:
         root = self._config_root.resolve()

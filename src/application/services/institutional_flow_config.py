@@ -3,10 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
-
-import yaml
 
 from src.domain.value_objects.institutional_accumulation_evidence import EvidenceStatus
 
@@ -17,11 +14,28 @@ DEFAULT_FOREIGN_BROKER_CODES: frozenset[str] = frozenset(
     }
 )
 
-_DEFAULT_CONFIG_PATH = (
-    Path(__file__).parent.parent.parent.parent
-    / "config"
-    / "institutional_accumulation.yaml"
-)
+# Component weights mirror config/institutional_accumulation.yaml. Pure
+# application defaults used when no explicit config is supplied (no YAML
+# read); an explicit config mapping always overrides these.
+DEFAULT_FOREIGN_TRACK_WEIGHTS: dict[str, float] = {
+    "foreign_participation": 0.25,
+    "foreign_concentration_cr4_cr8": 0.20,
+    "cnfb_price_divergence": 0.35,
+    "foreign_vwap_distance": 0.20,
+}
+DEFAULT_DOMESTIC_TRACK_WEIGHTS: dict[str, float] = {
+    "broker_consistency": 0.25,
+    "broker_reversal": 0.15,
+    "accumulation_session_ratio": 0.20,
+    "domestic_buy_vwap_distance": 0.15,
+    "broker_hhi_divergence": 0.15,
+    "bandar_broad_or_accumulation_score": 0.10,
+}
+DEFAULT_TRACK_WEIGHTS: dict[str, float] = {
+    "foreign_institutional_track": 0.45,
+    "domestic_bandar_track": 0.40,
+    "counterparty_transfer": 0.15,
+}
 
 
 def _parse_foreign_broker_codes(block: dict) -> frozenset[str]:
@@ -85,31 +99,21 @@ class InstitutionalAccumulationConfig:
             foreign_track_weights={
                 str(k): float(v)
                 for k, v in (
-                    block.get("foreign_institutional_track_components") or {}
+                    block.get("foreign_institutional_track_components")
+                    or DEFAULT_FOREIGN_TRACK_WEIGHTS
                 ).items()
             },
             domestic_track_weights={
                 str(k): float(v)
-                for k, v in (block.get("domestic_bandar_track_components") or {}).items()
+                for k, v in (
+                    block.get("domestic_bandar_track_components")
+                    or DEFAULT_DOMESTIC_TRACK_WEIGHTS
+                ).items()
             },
             track_weights={
-                str(k): float(v) for k, v in (block.get("track_weights") or {}).items()
+                str(k): float(v)
+                for k, v in (block.get("track_weights") or DEFAULT_TRACK_WEIGHTS).items()
             },
             foreign_broker_codes=_parse_foreign_broker_codes(block),
         )
-
-
-def load_institutional_accumulation_config(
-    path: str | Path | None = None
-) -> InstitutionalAccumulationConfig:
-    if path is None:
-        if not _DEFAULT_CONFIG_PATH.exists():
-            return InstitutionalAccumulationConfig.from_mapping({})
-        config_path = _DEFAULT_CONFIG_PATH
-    else:
-        config_path = Path(path)
-
-    with open(config_path, "r") as handle:
-        raw = yaml.safe_load(handle) or {}
-    return InstitutionalAccumulationConfig.from_mapping(raw)
 

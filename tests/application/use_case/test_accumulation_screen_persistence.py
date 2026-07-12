@@ -36,6 +36,21 @@ from src.domain.ports.candidate_observations_repository import (
 from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.ports.ticker_notation_provider import TickerNotationProvider
 from src.domain.value_objects.ticker_notation import TickerNotationSnapshot
+from src.infrastructure.config.company_quality_context_config_loader import (
+    create_company_quality_context_evidence_builder,
+)
+from src.infrastructure.config.institutional_accumulation_config_loader import (
+    load_institutional_accumulation_config,
+)
+from src.infrastructure.config.sector_context_config_loader import (
+    create_sector_context_evidence_builder,
+)
+
+_EVIDENCE_BUILDER_FACTORY_KWARGS = dict(
+    institutional_accumulation_config_factory=load_institutional_accumulation_config,
+    sector_context_builder_factory=create_sector_context_evidence_builder,
+    company_quality_context_builder_factory=create_company_quality_context_evidence_builder,
+)
 
 # --------------------------------------------------------------------------- #
 # Stubs
@@ -339,6 +354,7 @@ class TestIaCnfbDivergenceWithPlausibleFlowData:
             broker_repository=_MockBrokerRepo(summaries, flow_points),
             market_repository=_MockMarketRepo(candles),
             candidate_observations_repository=obs_repo,
+            **_EVIDENCE_BUILDER_FACTORY_KWARGS,
         )
         uc.execute(
             AccumulationScreenRequest(
@@ -420,6 +436,7 @@ class TestScFingerprintWithPeerCandles:
             candidate_observations_repository=obs_repo,
             # Provides sector="Finance" so sc_sector flows into SectorContextRequest.
             ticker_notation_provider=_MockTickerNotationProvider("Finance"),
+            **_EVIDENCE_BUILDER_FACTORY_KWARGS,
         )
         uc.execute(
             AccumulationScreenRequest(
@@ -500,6 +517,7 @@ class TestFingerprintKeysExistWhenInputsUnavailable:
             # No peer candles and no IHSG candles (only BBCA).
             market_repository=_MockMarketRepo(candles),
             candidate_observations_repository=obs_repo,
+            **_EVIDENCE_BUILDER_FACTORY_KWARGS,
             # No ticker_notation_provider — sc_sector will be None.
         )
         uc.execute(
