@@ -115,8 +115,8 @@ class TestComputeCommand:
         assert "No data for BBCA" in output or "No cached data" in output
         assert "saham fetch market BBCA --days 365" in output
 
-    @patch("src.adapters.cli.indicator_commands.SQLiteMarketRepository")
-    @patch("src.adapters.cli.indicator_commands.create_indicator_registry")
+    @patch("src.adapters.cli.indicator_compute_commands.SQLiteMarketRepository")
+    @patch("src.adapters.cli.indicator_compute_commands.create_indicator_registry")
     def test_compute_builtin_indicator_success(
         self, mock_registry_fn, mock_repo_cls, mock_candles, db_file
     ):
@@ -160,8 +160,8 @@ class TestComputeCommand:
         assert "Latest:" in result.stdout
         mock_registry.compute.assert_called_once()
 
-    @patch("src.adapters.cli.indicator_commands.SQLiteMarketRepository")
-    @patch("src.adapters.cli.indicator_commands.create_indicator_registry")
+    @patch("src.adapters.cli.indicator_compute_commands.SQLiteMarketRepository")
+    @patch("src.adapters.cli.indicator_compute_commands.create_indicator_registry")
     def test_compute_formula_hides_period(
         self, mock_registry_fn, mock_repo_cls, mock_candles, db_file
     ):
@@ -199,8 +199,8 @@ class TestComputeCommand:
         # Period should not be shown for formulas (default_period=0)
         assert "Period:" not in result.stdout
 
-    @patch("src.adapters.cli.indicator_commands.SQLiteMarketRepository")
-    @patch("src.adapters.cli.indicator_commands.create_indicator_registry")
+    @patch("src.adapters.cli.indicator_compute_commands.SQLiteMarketRepository")
+    @patch("src.adapters.cli.indicator_compute_commands.create_indicator_registry")
     def test_compute_insufficient_data(
         self, mock_registry_fn, mock_repo_cls, mock_candles, db_file
     ):
@@ -232,8 +232,8 @@ class TestComputeCommand:
         output = result.stdout + (result.stderr or "")
         assert "Insufficient data" in output
 
-    @patch("src.adapters.cli.indicator_commands.SQLiteMarketRepository")
-    @patch("src.adapters.cli.indicator_commands.create_indicator_registry")
+    @patch("src.adapters.cli.indicator_compute_commands.SQLiteMarketRepository")
+    @patch("src.adapters.cli.indicator_compute_commands.create_indicator_registry")
     def test_compute_respects_tail_option(
         self, mock_registry_fn, mock_repo_cls, mock_candles, db_file
     ):
@@ -271,8 +271,8 @@ class TestComputeCommand:
         # Should show "80 (showing last 5)"
         assert "showing last 5" in result.stdout
 
-    @patch("src.adapters.cli.indicator_commands.SQLiteMarketRepository")
-    @patch("src.adapters.cli.indicator_commands.create_indicator_registry")
+    @patch("src.adapters.cli.indicator_compute_commands.SQLiteMarketRepository")
+    @patch("src.adapters.cli.indicator_compute_commands.create_indicator_registry")
     def test_compute_shows_summary_statistics(
         self, mock_registry_fn, mock_repo_cls, mock_candles, db_file
     ):
