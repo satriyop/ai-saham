@@ -1,6 +1,7 @@
 # Signal Engine Refactor Tracker
 
-_Design rationale: `docs/signal_refactor.md`_
+_Design index: `docs/signal_refactor.md`_
+_Archived full rationale: `docs/archive/signal_refactor_full_rationale.md`_
 _Phase plan: `docs/signal_refactor_phases.md`_
 _Current implementation target: Phase I readiness audit_
 _Updated: 2026-07-07 — PIT replay cache audit expanded beyond fundamentals/shareholding; stock metadata, company profile, seasonality, earnings, and SignalEngine replay enrichment paths now guarded/converted where replay-relevant._
@@ -12,7 +13,8 @@ SignalEngine refactor. Phases A1–H are closed. Phase I is the active target.
 
 ## Authority
 
-- `docs/signal_refactor.md` remains the design rationale.
+- `docs/signal_refactor.md` indexes the active design guidance and archive.
+- `docs/archive/signal_refactor_full_rationale.md` preserves the full rationale.
 - `docs/signal_refactor_phases.md` remains the execution plan.
 - This tracker records current state and the concrete implementation checklist.
 - If this tracker conflicts with the design rationale or phase plan, pause and

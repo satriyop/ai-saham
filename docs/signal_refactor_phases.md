@@ -2,12 +2,14 @@
 
 Date: 2026-07-05
 
-Purpose: provide the implementation phase plan for the finalized SignalEngine
-refactor direction in `docs/signal_refactor.md`.
+Purpose: provide the historical implementation phase plan for the SignalEngine
+refactor direction indexed by `docs/signal_refactor.md` and preserved in full at
+`docs/archive/signal_refactor_full_rationale.md`.
 
 This document is a planning artifact only. It does not change runtime behavior.
-`docs/signal_refactor.md` remains the design rationale; this file is the phase
-execution plan.
+The archive preserves the full design rationale; this file is the historical
+phase execution plan. Current code, tests, ADRs, config, and
+`AI_AGENT_CHECKLIST.md` remain authoritative.
 
 ## Rollout Principle
 

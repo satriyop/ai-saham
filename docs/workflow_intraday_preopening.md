@@ -1,7 +1,9 @@
 # Workflow Pre-Opening Intraday Trading
 ## Panduan Operasional Step-by-Step
 
-> Dokumen ini adalah **playbook harian** — fokus pada apa yang kamu lakukan dan kapan, bukan teori. Untuk penjelasan indikator dan konsep, lihat [`how_to_intraday_trading.md`](how_to_intraday_trading.md).
+> Dokumen ini adalah **playbook harian** — fokus pada apa yang kamu lakukan dan
+> kapan, bukan teori. Untuk penjelasan indikator dan konsep, lihat
+> [`intraday_trading_design_notes.md`](intraday_trading_design_notes.md).
 
 ---
 
@@ -833,4 +835,5 @@ Tanpa data IEV: `saham trade backtest-intraday` tetap bisa jalan dengan universe
 
 ---
 
-*Untuk penjelasan lengkap setiap indikator dan sinyal, lihat [`how_to_intraday_trading.md`](how_to_intraday_trading.md).*
+*Untuk penjelasan lengkap setiap indikator dan sinyal, lihat
+[`intraday_trading_design_notes.md`](intraday_trading_design_notes.md).*

@@ -1,623 +1,589 @@
-# Code Convention Audit: File Size, Naming Context, and AI-Agent Readability
+# Code Convention Audit - Production Code Only
 
-Date: 2026-07-11
+Scope: fresh audit of `src/**/*.py` only. Documentation and tests are intentionally excluded.
 
-Scope: `src/`, `tests/`, `docs/`, `config/`, and scripts. This is a fresh audit after the previous refactor wave. Old completed status rows were intentionally removed; this file now tracks only current findings.
-
-## Audit Standard
-
-- Preferred Python module size: <= 400 LOC.
-- 401-700 LOC: allowed only when one filename maps to one responsibility.
-- > 700 LOC: extraction plan required before adding behavior.
-- > 1000 LOC: merge blocker unless it is generated data or a temporary characterization fixture.
-- A filename must answer: "what responsibility lives here?"
-- A use case should read as orchestration, not as DTO/schema/parser/scorer/repository/display implementation.
-- Adapters may parse input, wire dependencies, call use cases, render output, and map errors only.
-- Tests must be split by behavior contract. A failing test filename should point directly to the behavior under review.
-
-## Executive Findings
-
-The largest remaining risks are no longer the old DTO/facade files. Current risk is concentrated in:
-
-- orchestration use cases that still own calculators, evidence builders, and simulation/statistics logic;
-- infrastructure files that combine schema migration, row mapping, and multiple repository families;
-- config/parser modules whose filenames are contextual but whose internals still span several parsers;
-- CLI adapters that still own file/session/journal workflows instead of only command registration and rendering;
-- oversized tests that slow targeted AI-agent review.
+Audit goals:
+- Keep files small enough for AI agents and humans to scan quickly.
+- Make filenames expose the dominant responsibility.
+- Prefer single responsibility, composability, deduplication, simplification, and clear boundaries.
+- Preserve deterministic-first behavior and current public contracts during extraction.
 
 ## Findings
 
-### 1. Critical: `src/application/use_case/swing_analysis_workflow_use_case.py` is still a workflow warehouse
+### 1. Critical: `src/domain/value_objects/signal_forward_label.py` is a schema warehouse
 
-Pointer: `src/application/use_case/swing_analysis_workflow_use_case.py`, 904 LOC. `execute()` owns refresh, freshness, broker detail, accumulation candidate loading, market context, risk, signal, sizing, backtest, sentiment, trade setup, setup evidence, flow evidence, setup phase, strategy evidence, institutional accumulation evidence, ticker profile, sector context, company quality, corporate action risk, and final re-score/recomposition.
+Pointer: `src/domain/value_objects/signal_forward_label.py`, 625 LOC. `SignalObservationFingerprint` alone spans setup, strategy, flow, market regime, institutional accumulation, ticker profile, sector context, company quality, alpha/trigger, volatility fields, plus `to_dict()` and `from_dict()` compatibility parsing.
 
-Rationale: The filename says one workflow use case, but the method is a full workflow engine. AI agents must scan most of the file to understand one evidence addition, one preview change, or one warning path.
-
-Recommendation:
-- Keep `SwingAnalysisWorkflowUseCase.execute()` as visible orchestration only.
-- Extract risk/trade setup composition to `swing_analysis_risk_trade_setup.py`.
-- Extract optional evidence assembly to `swing_analysis_evidence_builder.py`.
-- Extract market-context preview/recomposition to `swing_analysis_market_context_preview.py`.
-- Extract sizing/backtest/sentiment side modules only if touched after the evidence split.
-
-Guardrails:
-- Preserve `SwingAnalysisWorkflowResponse` and JSON groups: `verdict`, `evidence`, `diagnostics`.
-- Do not let optional evidence overwrite canonical `TradeSetup.action` except through the existing re-score path.
-- Keep refresh/freshness policy in application, never CLI.
-
-Risks to maintain:
-- Evidence-enriched signal re-score must keep `trade_setup` and MCE preview internally consistent.
-- Warning strings are user-facing diagnostics; do not silently rename them.
-
-Edge cases to watch:
-- `with_market_context`, `with_technical_gate`, `include_signal_detail`, `include_market_detail`.
-- Missing candles must still raise `SwingAnalysisDataUnavailable`.
-- Optional evidence builders must remain best-effort and append warnings, not abort the workflow.
-
-### 2. Critical: `src/application/use_case/accumulation_audit_use_case.py` mixes replay orchestration, DTOs, exit simulation, bucketing, and broker quality
-
-Pointer: `src/application/use_case/accumulation_audit_use_case.py`, 861 LOC. It defines policy DTOs, record/response DTOs, replay loop, strict filters, forward return building, TP/SL/max-hold simulation, group stats, broker quality classification, and bucket helpers.
-
-Rationale: Historical audit logic is high-risk because small changes alter learning output. Current filename hides three responsibilities: replay, simulation, and attribution/statistics.
+Rationale: This is too dense for the domain layer. One persisted fingerprint change forces agents to scan hundreds of unrelated keys and compatibility aliases.
 
 Recommendation:
-- Move DTOs/policies to `src/application/dto/accumulation_audit.py`.
-- Extract exit simulation to `src/application/services/accumulation_audit_exit_simulator.py`.
-- Extract group stats/buckets to `src/application/services/accumulation_audit_statistics.py`.
-- Extract broker quality classification to `src/application/services/accumulation_broker_quality_classifier.py`.
-- Keep `AccumulationAuditUseCase` as validation + replay orchestration.
+- Extract `SignalObservationFingerprint` into `src/domain/value_objects/signal_observation_fingerprint.py`.
+- Extract serialization/parsing into `src/application/services/signal_observation_fingerprint_serializer.py` or a clearly named domain-safe serializer if existing persistence requires domain locality.
+- Split field groups into named helpers: setup, strategy, flow, regime, institutional accumulation, ticker profile, sector, company quality, alpha/trigger, volatility.
+- Keep `signal_forward_label.py` focused on `SignalLabelHorizon`, `SignalForwardOutcome`, and `SignalForwardLabel`.
 
 Guardrails:
-- Preserve same-day stop/target priority semantics.
-- Preserve output keys from every `to_dict()`.
-- Do not fetch network data; replay must stay local and deterministic.
+- Do not rename persisted keys.
+- Preserve legacy aliases in `from_dict()`.
+- Preserve `None` versus missing-key semantics.
 
 Risks to maintain:
-- Current-universe replay warning must remain visible.
-- Custom `forward_return_horizons` must keep dynamic `return_{horizon}d_pct` fields.
+- Signal label generation, readiness reporting, observation persistence, and tuning attribution depend on exact fingerprint keys.
 
 Edge cases to watch:
-- No forward candles, floor price candidates, empty group stats, and exit grids with zero outcomes.
+- `market_regime` fallback reconstruction.
+- Legacy `*_at_signal` aliases.
+- Tuple/list conversion for JSON fields.
 
-### 3. Critical: `src/infrastructure/persistence/sqlite_broker_repository.py` combines schema migrator, row mapper, and three repository families
+### 2. Critical: `src/adapters/cli/analyze_swing_broker_display.py` is not display-only
 
-Pointer: `src/infrastructure/persistence/sqlite_broker_repository.py`, 832 LOC. It owns schema creation, three migrations, cleanup policy, transaction serialization, summary CRUD, foreign-flow point CRUD, foreign-flow snapshot CRUD, and broker-daily-flow CRUD.
+Pointer: `src/adapters/cli/analyze_swing_broker_display.py`, 606 LOC. Despite the `_display.py` name, it defines DTOs, broker-quality policy notes, repository-derived flow detail builders, broker weighting math, and formatting helpers.
 
-Rationale: The filename is contextual but too broad. A repository change forces agents to inspect migrations and unrelated table families. Migration risk and query behavior are coupled in one file.
+Rationale: A display module should render facts. This file decides broker quality and derives facts from repositories, which makes the adapter heavier than its filename implies.
 
 Recommendation:
-- Extract schema/migrations to `sqlite_broker_schema.py`.
-- Extract row mapping to `sqlite_broker_row_mappers.py`.
-- Split storage helpers by table family:
-  - `sqlite_broker_summary_store.py`
-  - `sqlite_foreign_flow_store.py`
-  - `sqlite_broker_daily_flow_store.py`
-- Keep `SQLiteBrokerRepository` as the port-facing facade/delegator.
+- Move `BrokerQualityNote`, `FlowDetail`, `BrokerDetailLine`, and `BrokerDetail` to `src/application/dto/swing_broker_detail.py`.
+- Move `build_flow_detail`, `build_broker_detail_from_daily_flows`, `build_broker_detail`, broker tier/weight/share calculations, and `build_broker_quality_note` to `src/application/services/swing_broker_detail_builder.py`.
+- Keep this file as `analyze_swing_broker_display.py` with money formatters and Rich rendering only.
 
 Guardrails:
-- Do not change table names, primary keys, indexes, or source-preference behavior.
-- Preserve IDX-over-Stockbit preference for broker summaries and Stockbit preference for foreign flow points.
-- Migration must remain idempotent.
+- Do not change terminal output text without explicit approval.
+- Do not change JSON payloads built from these DTOs.
+- Do not fetch new data; builders must use already supplied repositories/data exactly as today.
 
 Risks to maintain:
-- Existing DB files must open without manual migration.
-- `BrokerDataRepositoryError` wrapping must remain consistent.
+- Swing analysis output and setup review rely on broker-quality note wording.
 
 Edge cases to watch:
-- Legacy `broker_flow_points` rename, duplicate IDX/Stockbit same-date rows, empty batch saves, broker code filters.
+- Empty broker summaries.
+- Smart-money net selling warning.
+- Noise-led accumulation warning.
 
-### 4. Critical: `src/application/services/swing_tuning_contracts.py` is not just contracts
+### 3. Critical: `src/adapters/cli/learn_commands.py` is a multi-command workflow module
 
-Pointer: `src/application/services/swing_tuning_contracts.py`, 795 LOC. It contains DTO contracts, default tuning target catalog, readiness planning, proposal draft selection, config diff draft building, value resolution orchestration, dedupe, evidence strength, and bucket formatting.
+Pointer: `src/adapters/cli/learn_commands.py`, 578 LOC. It owns `snapshot`, `track`, `grade`, `tune`, `prompt`, date/path helpers, session checks, infrastructure wiring, and output formatting.
 
-Rationale: The filename says contracts, but the file performs deterministic proposal orchestration. Agents looking for passive DTOs can accidentally alter tuning behavior.
+Rationale: The file is a command family cluster. Agents changing one command must scan unrelated opening-session workflows.
 
 Recommendation:
-- Keep DTOs and constants in `swing_tuning_contracts.py`.
-- Move `DEFAULT_TUNING_TARGETS` to `swing_tuning_target_catalog.py`.
-- Move readiness/proposal builders to `swing_tuning_proposal_builder.py`.
-- Move config-diff draft construction/dedupe to `swing_tuning_config_diff_draft_builder.py`.
-- Move evidence strength helpers to `swing_tuning_evidence_strength.py`.
+- Keep `learn_commands.py` as router only.
+- Extract:
+  - `learn_snapshot_commands.py`
+  - `learn_track_commands.py`
+  - `learn_grade_commands.py`
+  - `learn_tune_commands.py`
+  - `learn_prompt_commands.py`
+  - `learn_command_paths.py` for `_today_dir`, date parsing, and shared storage paths.
+- Move repeated Stockbit session construction into an application/adapter wiring helper with an explicit name.
 
 Guardrails:
-- Keep `TUNING_CONFIG_DIFF_NO_APPLY_INTENT` and apply-block guarantees unchanged.
-- No YAML mutation or AI call may be introduced.
-- Preserve `to_dict()` output keys.
+- Preserve command names under `saham learn`.
+- Preserve option names, defaults, and exit codes.
+- Do not move CLI parsing into use cases.
 
 Risks to maintain:
-- Tests may import public names from `swing_tuning_contracts`; keep compatibility re-exports temporarily.
+- Cron jobs and daily workflow depend on exact command names and sidecar file locations.
 
 Edge cases to watch:
-- Active setup wildcard expansion, unresolved config paths, duplicate target paths, candidate-only readiness.
+- `--force` behavior.
+- Retrospective `--date`.
+- Missing Playwright session handling.
 
-### 5. High: `src/infrastructure/config/rules_yaml_loader.py` still combines file loading, YAML parsing, schema construction, and DSL parsers
+### 4. Critical: `src/infrastructure/browser/playwright_stockbit_browser.py` mixes browser session, token extraction, HTTP, and CLI actions
 
-Pointer: `src/infrastructure/config/rules_yaml_loader.py`, 767 LOC. It loads files, parses YAML, builds rule sets, parses indicators, signal mappings, rules, compound conditions, indicator-vs-value, indicator-vs-indicator, and validates indicator references.
+Pointer: `src/infrastructure/browser/playwright_stockbit_browser.py`, 572 LOC. It handles Playwright context creation, token interception, localStorage fallback, direct Exodus HTTP GET, login/session saving, browse, spy, token extraction, and status.
 
-Rationale: The filename is now contextual, but the implementation is a parser cluster. A formula indicator change requires reading condition parser and file-loader code.
+Rationale: The filename says browser utilities, but the file also owns token and authenticated HTTP behavior. Browser lifecycle and token/API concerns change for different reasons.
 
 Recommendation:
-- Keep `RulesYamlLoader` as the `RulesLoader` adapter facade.
-- Extract condition parsing to `rules_condition_parser.py`.
-- Extract indicator parsing/reference validation to `rules_indicator_parser.py`.
-- Extract signal mapping parsing to `rules_signal_mapping_parser.py`.
-- Keep file resolution/YAML syntax parsing in the loader.
+- Extract Playwright context helpers to `stockbit_browser_context.py`.
+- Extract token interception/extraction to `stockbit_token_extractor.py`.
+- Move `_exodus_get` into `stockbit_api_client.py` or `stockbit_exodus_http.py`.
+- Move login/browse/spy/status action functions to `stockbit_session_actions.py`.
+- Keep `playwright_stockbit_browser.py` as a compatibility facade only if imports require it.
 
 Guardrails:
-- Preserve exception classes and error message context prefixes (`rules[i]`, `when.all[i]`, etc.).
-- Preserve `YamlConfigLoader = RulesYamlLoader` compatibility alias.
-- Do not move application schema objects into infrastructure.
+- Preserve session file/profile behavior.
+- Preserve auth error messages.
+- Do not reintroduce cookie-file auth.
 
 Risks to maintain:
-- AI-generated strategy validation depends on exact validation behavior.
+- Stockbit login, spy, and API token refresh are fragile integration surfaces.
 
 Edge cases to watch:
-- Formula indicators, plugin indicators, registry-backed references, string literals vs decimal values.
+- No captured request token.
+- LocalStorage token fallback.
+- 401 session expiry.
 
-### 6. High: `src/application/use_case/build_market_context_use_case.py` violates application/infrastructure boundary and mixes factor scoring with fingerprint helpers
+### 5. High: `src/application/services/ticker_profile_classifier.py` violates classifier purity with config loading
 
-Pointer: `src/application/use_case/build_market_context_use_case.py`, 732 LOC. It imports `MarketContextConfig` and `ScoreLabelThresholds` from `src.infrastructure.config`, scores every factor, computes regime confidence, detection fingerprints, staleness/coverage warnings, and banking-vs-IHSG diagnostics.
+Pointer: `src/application/services/ticker_profile_classifier.py`, 586 LOC. The file defines request/config DTOs, YAML loading, universe/index membership loading, numeric helpers, exposure scoring, and the classifier.
 
-Rationale: Application use cases should not import infrastructure config classes directly. The file is also too broad: factor scoring and replay fingerprint construction are separate responsibilities.
+Rationale: The docstring says the classifier never fetches data, but it reads YAML/config internally. That makes the application service harder to test and couples profile classification to file layout.
 
 Recommendation:
-- Move config DTOs used by the use case to application or domain config models; infrastructure YAML loader should only instantiate them.
-- Extract factor scoring to `market_context_factor_scorers.py`.
-- Extract regime confidence and detection inputs to `market_context_detection_inputs.py`.
-- Extract staleness/coverage warning helpers to `market_context_quality_warnings.py`.
+- Extract config loading to `src/infrastructure/config/ticker_profile_config_loader.py`.
+- Extract universe/index membership resolution to `src/application/services/ticker_index_membership_resolver.py` with data injected from infrastructure.
+- Keep `TickerProfileClassifier` focused on pure classification from `TickerProfileRequest`, `TickerProfileConfig`, and explicit memberships.
+- Move `TickerProfileRequest` and `TickerProfileConfig` to `src/application/dto/ticker_profile.py` if reused outside this service.
 
 Guardrails:
-- Preserve deterministic score formulas and regime labels.
-- Do not change persisted `regime_detection_inputs` keys.
-- Do not add repository/provider access to this use case.
+- Preserve default config values.
+- Preserve `EvidenceStatus.DIAGNOSTIC`.
+- Preserve "never raises" fallback behavior.
 
 Risks to maintain:
-- MarketContextEngine callers may expect current config class shape.
+- Observation fingerprints depend on stable profile labels and exposure scores.
 
 Edge cases to watch:
-- Missing VIX/EIDO/USD-IDR candles, insufficient SMA history, volatile VIX override, zero foreign-flow baseline.
+- Sparse history fallback.
+- Unknown market cap.
+- Missing universes config.
 
-### 7. High: `src/application/services/setup_phase_detector.py` mixes config models, phase detection, sequence policy, and volume-trigger evidence
+### 6. High: `src/application/services/swing_tuning_diff_policy.py` has too many policy axes
 
-Pointer: `src/application/services/setup_phase_detector.py`, 707 LOC. It contains config dataclasses, phase detector, terminal/constructive phase logic, sequence validation, volume trigger quality checks, RS policy reasons, and snapshot assembly.
+Pointer: `src/application/services/swing_tuning_diff_policy.py`, 569 LOC. It classifies target paths, suggests values, builds summaries/checklists, interprets rows, prioritizes rows, parses evidence buckets, and counts dimensions.
 
-Rationale: The detector name is contextual, but the module is at the extraction threshold and combines several policy families. Volume trigger evidence is complex enough to deserve its own file.
+Rationale: The filename is generic; the file contains several independently changeable policies. This increases tuning-risk because a small value-selection edit requires scanning interpretation and reporting logic.
 
 Recommendation:
-- Move config dataclasses to `setup_phase_config.py`.
-- Extract volume dry-up/expansion logic to `setup_phase_volume_trigger.py`.
-- Extract sequence policy to `setup_phase_sequence_policy.py`.
-- Keep `SetupPhaseDetector` focused on selecting terminal vs constructive phase.
+- Extract `swing_tuning_target_classification.py`.
+- Extract `swing_tuning_value_suggestion_policy.py`.
+- Extract `swing_tuning_diff_summary_policy.py`.
+- Extract `swing_tuning_diff_interpretation.py`.
+- Keep `swing_tuning_diff_policy.py` as a compatibility facade if imports are broad.
 
 Guardrails:
-- Preserve `SetupPhaseSnapshot` fields exactly.
-- `volume_trigger_confirmed` must remain the only trigger-authoritative volume flag.
-- Do not loosen RS hard-exclude/warning behavior.
+- Do not change proposed values.
+- Do not change priority ordering.
+- Do not change interpretation strings without updating CLI snapshots/tests.
 
 Risks to maintain:
-- Setup family aliases (`foreign-bounce`, `foreign_bounce`, etc.) must continue resolving.
+- Tuning review is safety-critical; accidental proposal widening can bypass human review intent.
 
 Edge cases to watch:
-- Benchmark ticker volume source trust, zero-volume tolerance, insufficient reference sessions, ordered sequence validation.
+- Weight-grid snapping.
+- Custom step paths.
+- Evidence bucket parsing.
 
-### 8. High: `src/application/services/swing_backtest_attribution.py` mixes DTO contracts, target catalog, bucketing, and statistic aggregation
+### 7. High: `src/application/use_case/assess_signal_evidence_use_case.py` still does aggregation, policy, projection, and response assembly
 
-Pointer: `src/application/services/swing_backtest_attribution.py`, 700 LOC. It defines attribution DTOs, default tuning target catalog, sample quality, summary builder, trade/candidate bucket extraction, score bucketing, and stat builders.
+Pointer: `src/application/use_case/assess_signal_evidence_use_case.py`, 562 LOC. `execute()` scores groups, computes legacy regime-conditioned diagnostics, renormalizes, applies flags, resolves decision policy, builds alpha/trigger projection, builds breakdown, and builds rationale.
 
-Rationale: This file sits exactly at the extraction threshold and is a tuning authority. The filename says attribution, but it also owns the tuning target catalog.
+Rationale: A use case should orchestrate. This file owns several reusable scoring/reporting sub-policies that agents need to reason about independently.
 
 Recommendation:
-- Move DTOs to `src/application/dto/swing_backtest_attribution.py`.
-- Move `DEFAULT_TUNING_TARGETS` to `swing_tuning_target_catalog.py` shared with tuning contracts.
-- Move bucket extraction to `swing_backtest_attribution_buckets.py`.
-- Keep `summarize_swing_backtest_attribution` as the public orchestrator.
+- Extract group scoring and renormalization to `signal_evidence_group_scorer.py`.
+- Extract legacy regime diagnostic conditioning to `signal_legacy_regime_conditioning.py`.
+- Extract breakdown/rationale assembly to `signal_evidence_response_builder.py`.
+- Keep `AssessSignalEvidenceUseCase.execute()` as orchestration across these collaborators.
 
 Guardrails:
-- Preserve `intent="learning_summary_only_not_entry_logic"`.
-- Do not let attribution output influence live entry logic.
-- Preserve bucket labels; tuning consumers may depend on them.
+- Preserve canonical regime-neutral score behavior.
+- Preserve `legacy_conditioned_score` as diagnostic only.
+- Preserve decision policy ordering and alpha/trigger inputs.
 
 Risks to maintain:
-- Candidate and trade attribution scopes must not be merged incorrectly.
+- Signal scores, entry quality, and tuning labels are central contracts.
 
 Edge cases to watch:
-- Empty trades with candidate observations, missing signal breakdown, score bucket thresholds.
+- Missing setup evidence.
+- Missing flow evidence.
+- Gate tightening from market context.
 
-### 9. High: `src/application/use_case/pre_open_screen_use_case.py` remains too broad for a time-sensitive workflow
+### 8. High: `src/adapters/cli/trade_commands.py` is a router plus tuning command implementation cluster
 
-Pointer: `src/application/use_case/pre_open_screen_use_case.py`, 672 LOC. It owns config parsing, mover filtering, technical context, ATR entry range, order book gap/spread/imbalance, stop calculation, trend classification, broker backing, foreign VWAP, notation, optional AI research, and candidate construction.
+Pointer: `src/adapters/cli/trade_commands.py`, 536 LOC. The top registers commands, but the file also implements tuning status, tuning review, patch validation, patch apply, dirty-git checks, journal migration, and log routing.
 
-Rationale: This is below the hard threshold but violates single responsibility. Pre-open behavior is operationally sensitive; changes to one gate should not require scanning AI research and broker VWAP code.
+Rationale: The router filename suggests command aggregation, but it still owns several full command bodies. Agents changing tuning patch behavior scan unrelated trade log and migration code.
 
 Recommendation:
-- Move config parsing to `pre_open_screen_config.py`.
-- Extract technical context to `pre_open_technical_context.py`.
-- Extract entry/stop/range logic to `pre_open_entry_plan.py`.
-- Extract broker backing/FVWAP to `pre_open_broker_signals.py`.
-- Extract candidate assembly to `pre_open_candidate_builder.py`.
+- Keep `trade_commands.py` as router only.
+- Extract:
+  - `trade_tuning_status_commands.py`
+  - `trade_tuning_patch_commands.py`
+  - `trade_log_router_commands.py`
+  - `trade_journal_migration_commands.py`
+- Keep existing subcommand names by registering extracted functions.
 
 Guardrails:
-- Keep browser/provider calls behind ports.
-- AI research remains optional and non-authoritative.
-- Preserve floor-price and speculative-symbol filters.
+- Preserve `saham trade ...` command paths.
+- Preserve JSON schemas for tuning outputs.
+- Preserve dirty-git guard behavior.
 
 Risks to maintain:
-- Call auction entry assumptions must remain explicit.
+- Tuning patch apply is a guarded manual action; regressions are high cost.
 
 Edge cases to watch:
-- Fast mode without order book, missing IEP, floor price 50, insufficient history, ATR unavailable.
+- `--format json`.
+- dirty config file detection.
+- dry-run versus explicit apply.
 
-### 10. High: `src/adapters/cli/trade_intraday_confirm_commands.py` is not thin enough
+### 9. High: `src/adapters/cli/fetch_market_commands.py` still contains status policy and provider precondition logic
 
-Pointer: `src/adapters/cli/trade_intraday_confirm_commands.py`, 648 LOC. It loads confirmation candidates, parses session files, writes sidecars, confirms opening entries, logs journal entries, reviews confirmation, and records outcomes.
+Pointer: `src/adapters/cli/fetch_market_commands.py`, 526 LOC. It has Typer parsing plus cache status formatters, row-span status policy, missing Stockbit-session precondition logic, universe resolution, provider wiring, and output coordination.
 
-Rationale: This adapter owns file/session workflow and journal orchestration. Command files should not own non-trivial confirmation policy or sidecar persistence behavior.
+Rationale: Previous extraction improved fetch internals, but this adapter still decides statuses and validates provider policy. Those are application-level concerns or display helpers.
 
 Recommendation:
-- Extract session/sidecar file I/O to `intraday_confirmation_session_store.py` in application or infrastructure depending on path ownership.
-- Extract confirm/log workflow to `ConfirmIntradayOpenUseCase` / `LogIntradayConfirmationUseCase`.
-- Keep CLI file to Typer command definitions, request DTO construction, use-case invocation, rendering, and exception mapping.
+- Move `_cached_status`, `_no_new_data_status`, `_broker_update_status`, and `_range_update_status` to `src/application/services/fetch_market_status_policy.py`.
+- Move `_find_missing_stockbit_session_error` into `FetchMarketRefreshUseCase` or a named application precondition service.
+- Keep `fetch_market_commands.py` focused on options, request construction, dependency wiring, use-case call, and rendering.
 
 Guardrails:
-- Preserve command names and JSON/table output.
-- Do not move policy into display helpers.
-- Keep local-first files explicit.
+- Preserve fail-fast missing Stockbit session behavior.
+- Preserve status strings used by tests and scripts.
+- Do not change provider selection semantics.
 
 Risks to maintain:
-- Tests patching command module symbols may need compatibility wrappers.
+- Fetch command is daily workflow critical.
 
 Edge cases to watch:
-- Missing session file, malformed sidecar JSON, duplicate journal log, confirmation/outcome date mismatch.
+- benchmark ticker aliases.
+- explicit non-IDX tickers.
+- broker-only and candles-only combinations.
 
-### 11. High: `src/infrastructure/csv/broker_csv_adapter.py` is a parser cluster hidden behind an adapter name
+### 10. High: `src/application/use_case/assess_risk_use_case.py` mixes custom rule evaluation, configured gates, trend response DTOs, and infrastructure fallback
 
-Pointer: `src/infrastructure/csv/broker_csv_adapter.py`, 640 LOC. It detects format, previews, parses simple rows, parses detailed rows, handles encodings, aggregates transactions, maps headers, parses dates/decimals/ints, and maps broker types.
+Pointer: `src/application/use_case/assess_risk_use_case.py`, 517 LOC. It contains request/response DTOs, custom YAML rule evaluation, standard gate evaluation, indicator snapshot building, trend response type, and a fallback import of `RulesYamlLoader` from infrastructure.
 
-Rationale: The filename says adapter, but most risk is parser logic. Simple and detailed CSV formats are separate contracts and should be independently testable.
+Rationale: Risk assessment has two modes with different dependencies. The infrastructure fallback also weakens the application boundary.
 
 Recommendation:
-- Keep `BrokerCsvAdapter` as facade implementing `CsvBrokerParser`.
-- Extract `simple_broker_csv_parser.py`.
-- Extract `detailed_broker_csv_parser.py`.
-- Extract shared parsing primitives to `broker_csv_fields.py`.
-- Extract transaction aggregation to `broker_transaction_aggregator.py`.
+- Move DTOs to `src/application/dto/assess_risk.py`.
+- Extract custom rules path to `assess_risk_custom_rules_evaluator.py`.
+- Extract configured gate path to `assess_risk_gate_evaluator.py`.
+- Move trend behavior to `assess_risk_trend_use_case.py` if still used.
+- Require `RulesLoader` injection from an adapter/factory; do not import `RulesYamlLoader` inside the use case.
 
 Guardrails:
-- Preserve accepted CSV column aliases and encoding fallback behavior.
-- Do not change aggregation semantics for top buyers/sellers.
+- Preserve custom-rule behavior when `rules_file` is provided.
+- Preserve gate ordering: structural before execution.
+- Preserve `RiskAssessment` fields and display aliases.
 
 Risks to maintain:
-- Real broker CSVs are messy; parser error messages must stay actionable.
+- Risk gates are blocking policy, not bullish scoring.
 
 Edge cases to watch:
-- Decimal separators, missing headers, empty rows, unknown broker type, mixed encodings.
+- Sentiment extras in custom rules.
+- Missing `gate_context`.
+- insufficient candle coverage warnings.
 
-### 12. High: `src/application/use_case/assess_signal_use_case.py` mixes signal config schema with legacy scorer implementation
+### 11. High: `src/infrastructure/config/swing_config_loader.py` is a nested parser cluster
 
-Pointer: `src/application/use_case/assess_signal_use_case.py`, 618 LOC. It defines many config dataclasses, request/response DTOs, computed response properties, `AssessSignalUseCase`, scoring methods, classification helpers, coverage warning, and rationale construction.
+Pointer: `src/infrastructure/config/swing_config_loader.py`, 514 LOC. One loader parses broker quality, four setup families, verdict thresholds, resistance, corporate actions, setup targets, setup phase requirements, RS policy, volume trigger policy, and split-config composition.
 
-Rationale: The file name says use case, but the first half is signal-engine configuration schema. Agents editing config contracts must scan scoring logic, and agents editing scoring must scan schema models.
+Rationale: The file is infrastructure, but it has too many independently changeable config sections. The nested parser functions make diffs hard to review and hard for agents to target.
 
 Recommendation:
-- Move config dataclasses to `src/application/dto/signal_engine_config.py` or `src/application/services/signal_engine_config.py`.
-- Move request/response DTOs to `src/application/dto/assess_signal.py`.
-- Keep `AssessSignalUseCase` as legacy scorer only, or rename to `legacy_assess_signal_use_case.py` if `SignalEngine` is now canonical.
+- Extract:
+  - `swing_broker_quality_config_parser.py`
+  - `swing_setup_family_config_parser.py`
+  - `swing_setup_phase_config_parser.py`
+  - `swing_targets_config_parser.py`
+  - `swing_config_composer.py`
+- Keep `load_swing_config()` as the public entry point.
 
 Guardrails:
-- Preserve public imports with compatibility re-exports during transition.
-- Do not change scoring thresholds or response properties.
+- Preserve fail-soft defaults except the existing invalid setup phase hard failure.
+- Preserve split-config precedence.
+- Preserve hyphen/underscore setup-family aliases.
 
 Risks to maintain:
-- Many factories/loaders likely import these config classes.
+- Swing workflow gates and setup phase entry authority depend on exact config parsing.
 
 Edge cases to watch:
-- Missing enrichment coverage, bandar/foreign scoring, regime conditioning config compatibility.
+- invalid setup phase names.
+- missing split files.
+- list parsing for allowed phases and broker codes.
 
-### 13. High: `src/adapters/cli/trade_swing_display.py` mixes backtest, tuning plan, config diff, and attribution rendering
+### 12. High: `src/application/services/engine_bootstrap/signal_config_resolvers.py` is too broad and crosses infrastructure boundaries
 
-Pointer: `src/adapters/cli/trade_swing_display.py`, 618 LOC. It renders swing backtest output, tuning plan, tuning proposal, config diff, attribution summary, and formatting helpers.
+Pointer: `src/application/services/engine_bootstrap/signal_config_resolvers.py`, 497 LOC. It loads config via `APP_CFG`, resolves weights, signal scoring config, decision policy, alpha/trigger config, evidence authority promotion, and archived-config warnings.
 
-Rationale: The filename is too broad for multiple display surfaces. Display changes for attribution should not risk tuning diff wording.
+Rationale: The filename says config resolving, but it resolves every signal-engine section. It also imports infrastructure config from application service code.
+
+Recommendation:
+- Move file-loading wrappers that depend on `APP_CFG` to infrastructure or adapter wiring.
+- Split section resolvers:
+  - `signal_scoring_config_resolver.py`
+  - `signal_decision_policy_config_resolver.py`
+  - `signal_alpha_trigger_config_resolver.py`
+  - `signal_weight_config_resolver.py`
+  - `signal_archived_config_warnings.py`
+- Keep pure mapping functions in application; inject raw dicts from infrastructure.
+
+Guardrails:
+- Preserve archived-config warnings.
+- Preserve evidence authority validation.
+- Preserve default values exactly.
+
+Risks to maintain:
+- Signal engine construction controls scoring authority and decision constraints.
+
+Edge cases to watch:
+- missing config file.
+- invalid evidence promotion record.
+- raw versus renormalized weight tables.
+
+### 13. Medium: `src/application/rules/schema.py` combines every DSL schema type and validation rule
+
+Pointer: `src/application/rules/schema.py`, 524 LOC. It defines indicator schema, operators, outcomes, signal mapping, condition types, rule, ruleset, validation, and required-indicator collection.
+
+Rationale: The file is conceptually cohesive but too broad for targeted DSL changes. Indicator schema changes are unrelated to rule ordering or condition validation.
 
 Recommendation:
 - Split into:
-  - `trade_swing_backtest_display.py`
-  - `trade_swing_tuning_plan_display.py`
-  - `trade_swing_tuning_diff_display.py`
-  - `trade_swing_attribution_display.py`
-  - `trade_swing_display_formatters.py`
-- Keep a small `trade_swing_display.py` facade only if import compatibility is needed.
+  - `rules/indicator_schema.py`
+  - `rules/condition_schema.py`
+  - `rules/rule_schema.py`
+  - `rules/outcome_schema.py`
+- Keep `rules/schema.py` as a compatibility re-export facade.
 
 Guardrails:
-- Display must not decide tuning eligibility or evidence strength.
-- Display must consume DTO fields, not recompute policy.
+- Preserve public imports from `src.application.rules.schema`.
+- Preserve dataclass immutability.
+- Preserve validation messages unless tests are updated deliberately.
 
 Risks to maintain:
-- Rich table snapshots and JSON output parity.
+- YAML loader and interpreter import these symbols broadly.
 
 Edge cases to watch:
-- Empty attribution, rejected diff items, unavailable proposal values, zero trades.
+- backward-compatible `Indicator` alias.
+- duplicate rule/indicator name validation.
+- required indicator traversal.
 
-### 14. High: `src/adapters/cli/fetch_universe_commands.py` owns provider payload parsing and universe persistence workflow
+### 14. Medium: `src/application/formula/evaluator.py` mixes AST walking, series math, and registry adapter
 
-Pointer: `src/adapters/cli/fetch_universe_commands.py`, 616 LOC. It extracts lists from provider bodies, lists universes, updates universes, inspects universes, creates universes, writes config, and renders output.
+Pointer: `src/application/formula/evaluator.py`, 490 LOC. It defines `SeriesProvider`, AST evaluator, SMA/EMA-on-series math, binary alignment/broadcasting, and `RegistrySeriesProvider`.
 
-Rationale: The command module is doing adapter parsing plus persistence workflow. Universe creation/update is application behavior and should be testable outside Typer.
+Rationale: Formula behavior is easier to audit when expression traversal is separate from series arithmetic and registry adaptation.
 
 Recommendation:
-- Extract provider payload normalization to `universe_payload_parser.py`.
-- Create application use cases for update/inspect/create universe.
-- Keep CLI to Typer options, request construction, use-case calls, and rendering.
+- Extract series operations to `formula/series_ops.py`.
+- Extract indicator-on-series functions to `formula/series_indicators.py`.
+- Move `RegistrySeriesProvider` to `formula/registry_series_provider.py`.
+- Keep `FormulaEvaluator` focused on AST traversal and error context.
 
 Guardrails:
-- Preserve command names and config file output shape.
-- Do not introduce network calls in application use cases; provider access stays infrastructure/adapter-wired.
+- Preserve index alignment from the end.
+- Preserve scalar broadcasting.
+- Preserve division-by-zero behavior.
+- Preserve SMA-seeded EMA behavior.
 
 Risks to maintain:
-- User-created universes are persistent config; accidental key changes are user-visible.
+- Strategy formulas and rule indicators depend on exact output length.
 
 Edge cases to watch:
-- Empty provider lists, duplicate tickers, invalid universe names, manual YAML comments.
+- empty series.
+- scalar versus series operations.
+- nested formulas like `SMA(RSI(14), 10)`.
 
-### 15. High: `src/adapters/cli/indicator_commands.py` mixes indicator compute/snapshot with formula lifecycle commands
-
-Pointer: `src/adapters/cli/indicator_commands.py`, 602 LOC. It owns compute, snapshot, create, list, show, delete, field validation, RSI signal text, and error display.
-
-Rationale: The command group spans two responsibilities: calculating indicators and managing formula artifacts. The filename is contextual but too broad for scan efficiency.
-
-Recommendation:
-- Split command modules:
-  - `indicator_compute_commands.py`
-  - `indicator_snapshot_commands.py`
-  - `indicator_formula_commands.py`
-- Move reusable CLI formatting/errors to `indicator_display.py`.
-
-Guardrails:
-- Keep Typer registration explicit in the group router.
-- Formula creation validation remains deterministic; AI is not involved here.
-
-Risks to maintain:
-- Tests may patch command symbols; provide route-level compatibility imports if necessary.
-
-Edge cases to watch:
-- Missing local data, invalid field names, formula overwrite/delete behavior.
-
-### 16. Medium: `src/adapters/cli/view_ticker_display.py` is a dashboard panel cluster
-
-Pointer: `src/adapters/cli/view_ticker_display.py`, 558 LOC. It renders identity, valuation, analyst, ownership, bandar, profile, candles, corporate actions, insider, seasonality, IEV, sentiment, and the top-level ticker view.
-
-Rationale: Display modules can be larger, but this one has many independent panels. A change to seasonality display should not require scanning valuation and ownership panels.
-
-Recommendation:
-- Split by panel family:
-  - `view_ticker_identity_display.py`
-  - `view_ticker_valuation_display.py`
-  - `view_ticker_flow_display.py`
-  - `view_ticker_events_display.py`
-  - `view_ticker_market_activity_display.py`
-- Keep `show_ticker_view()` as facade/composer.
-
-Guardrails:
-- No business policy in panel helpers.
-- Display missing data as facts, not inferred conclusions.
-
-Risks to maintain:
-- Rich layout should remain stable for terminal width.
-
-Edge cases to watch:
-- Missing cached data, empty corporate action list, unavailable sentiment logs.
-
-### 17. Medium: `src/adapters/cli/screen_accum_commands.py` still mixes command handling, display wrappers, and watchlist persistence
-
-Pointer: `src/adapters/cli/screen_accum_commands.py`, 541 LOC. It formats values, notation labels, result display wrappers, multi-window execution, command handler, save watchlist, and compare use-case construction.
-
-Rationale: Previous display modules were split, but the command file still owns non-command concerns. Watchlist save behavior is persistence workflow, not CLI command registration.
-
-Recommendation:
-- Move `_save_watchlist` to an application service or use case.
-- Move compare use-case construction to an adapter factory.
-- Keep display wrappers only if they delegate to display modules.
-
-Guardrails:
-- Preserve `saham screen accum` command behavior and saved watchlist schema.
-- Do not duplicate thresholds from config.
-
-Risks to maintain:
-- Save/compare paths are likely used in daily workflow.
-
-Edge cases to watch:
-- `--multi`, `--guide`, empty candidates, missing notation provider.
-
-### 18. Medium: `src/infrastructure/config/swing_config.py` hides split-config loading behind one generic config module
-
-Pointer: `src/infrastructure/config/swing_config.py`, 539 LOC. It defines config DTOs, loads merged swing config, reads single/split config files, and merges sections.
-
-Rationale: The filename is contextual but broad. Config schema and config source composition are separate responsibilities.
-
-Recommendation:
-- Move dataclasses to `src/application/dto/swing_config.py` or `src/application/services/swing_config_model.py`.
-- Keep YAML reading/merge in `src/infrastructure/config/swing_config_loader.py`.
-- Keep `swing_config.py` as compatibility facade temporarily.
-
-Guardrails:
-- Do not change default paths or merge precedence.
-- Application must not depend on infrastructure config models after extraction.
-
-Risks to maintain:
-- Many factories likely import `load_swing_config`.
-
-Edge cases to watch:
-- Missing split file, partial overrides, invalid nested setup targets.
-
-### 19. Medium: `src/infrastructure/browser/stockbit_fundamentals.py` mixes parser, cache repository, schema, and live provider
-
-Pointer: `src/infrastructure/browser/stockbit_fundamentals.py`, 528 LOC. It parses financial values, market cap, fundamentals, historical rows, ensures cache schema, checks freshness, reads/writes cache, writes historical rows, and fetches Stockbit payloads.
-
-Rationale: Provider, parser, and cache store are separate infrastructure responsibilities. The filename suggests provider behavior, but parser/cache internals dominate.
-
-Recommendation:
-- Extract payload parsing to `stockbit_fundamentals_parser.py`.
-- Extract SQLite cache to `stockbit_fundamentals_cache.py`.
-- Keep `StockbitFundamentalsProvider` as orchestration facade.
-
-Guardrails:
-- Preserve TTL/cache freshness behavior.
-- Do not leak raw Stockbit payloads outside infrastructure.
-- Preserve conservative publication lag for historical rows.
-
-Risks to maintain:
-- Fundamentals feed into risk gates and point-in-time replay.
-
-Edge cases to watch:
-- Missing keystats fields, non-numeric financial strings, historical rows with publication lag.
-
-### 20. Medium: `src/application/services/accumulation_observation_fingerprint.py` is a dense persisted-schema builder
-
-Pointer: `src/application/services/accumulation_observation_fingerprint.py`, 522 LOC. It builds candidate observation payloads and many nested fingerprint sections for signal, setup, institutional, profile, sector, company quality, volatility, and request/config metadata.
-
-Rationale: The file is contextual, but persisted schemas are high blast-radius. Multiple schema families in one builder make small changes risky.
-
-Recommendation:
-- Split by payload section:
-  - `accumulation_observation_signal_fingerprint.py`
-  - `accumulation_observation_setup_fingerprint.py`
-  - `accumulation_observation_institutional_fingerprint.py`
-  - `accumulation_observation_profile_fingerprint.py`
-  - `accumulation_observation_metadata.py`
-- Keep `build_candidate_observation_payload()` as facade.
-
-Guardrails:
-- No key rename without explicit migration/compatibility note.
-- Preserve missing-data semantics: missing evidence lowers coverage, not conviction.
-
-Risks to maintain:
-- Backfill, signal labels, and tuning attribution depend on exact payload keys.
-
-Edge cases to watch:
-- `as_of_date`, `captured_at`, diagnostic evidence with unavailable reasons, `None` vs absent keys.
-
-### 21. Medium: `src/application/use_case/accumulation_screen_use_case.py` still has an extractable per-ticker pipeline
-
-Pointer: `src/application/use_case/accumulation_screen_use_case.py`, 570 LOC. The old warehouse was reduced, but `execute()` still owns a long per-ticker pipeline: early fundamentals pruning, foreign-flow score assignment, corporate action enrichment, seasonality, insider activity, analyst/shareholding/bandar/fundamentals/notation/forward-estimate enrichment, signal assessment, flow evidence, setup phase, and pass/reject classification.
-
-Rationale: The file is below the 700 LOC extraction threshold, so it is not urgent. The remaining issue is scan locality: agents changing one enrichment source or one rejection rule still need to inspect a broad per-ticker block.
-
-Recommendation:
-- Extract structural pruning to `accumulation_candidate_structural_filter.py`.
-- Extract provider-backed enrichment to `accumulation_candidate_enricher.py`.
-- Extract foreign-flow score, signal assessment, flow evidence, setup phase, and pass/reject result to `accumulation_candidate_signal_assessor.py`.
-- Keep `AccumulationScreenUseCase` as ticker loop, survivor collection, sector breadth, risk funnel, sort, persistence, and response construction.
-
-Guardrails:
-- Preserve early-pruning behavior; do not fetch all enrichment providers before market-cap/Piotroski rejection.
-- Preserve `all_results` rejected samples for observation learning.
-- Preserve `screen_result` values: `pass`, `rejected_flow`, `rejected_signal`.
-- Preserve setup phase computed once before persistence.
-- Do not move provider calls or screening policy to CLI.
-
-Risks to maintain:
-- Moving enrichment too early can slow full-universe screens and change skipped ticker counts.
-- Moving pass/reject classification without tests can break signal-label learning samples.
-
-Edge cases to watch:
-- Missing fundamentals with active market-cap/Piotroski gates.
-- Forward estimates where `forward_pe` is absent and current price must derive it.
-- Flow evidence builder failure must remain best-effort.
-
-### 22. Medium: Oversized test files slow targeted review
+### 15. Medium: Stockbit PIT provider cache logic is duplicated across provider files
 
 Pointers:
-- `tests/application/use_case/test_swing_backtest.py`, 892 LOC.
-- `tests/domain/test_backtest_engine.py`, 802 LOC.
-- `tests/application/rules/test_interpreter.py`, 774 LOC.
-- `tests/application/use_case/test_swing_analysis_workflow.py`, 741 LOC.
-- `tests/adapters/cli/test_swing_commands_tuning.py`, 686 LOC.
-- `tests/application/use_case/test_intraday_backtest.py`, 687 LOC.
-- `tests/adapters/cli/test_swing_display_alpha_sector.py`, 680 LOC.
-- `tests/adapters/cli/test_fetch_market_commands.py`, 661 LOC.
+- `src/infrastructure/browser/stockbit_insider.py`, 502 LOC.
+- `src/infrastructure/browser/stockbit_earnings.py`, 426 LOC.
+- `src/infrastructure/browser/stockbit_shareholding.py`, 325 LOC.
+- `src/infrastructure/browser/stockbit_forward_estimates.py`, 272 LOC.
+- `src/infrastructure/browser/stockbit_company_profile.py`, 239 LOC.
+- `src/infrastructure/browser/stockbit_seasonality.py`, 315 LOC.
+- `src/infrastructure/browser/stockbit_fundamentals.py`, 222 LOC.
 
-Rationale: Tests are now the biggest AI-agent scanning burden. Many are organized by old module name instead of behavior contract.
+Rationale: These files repeat schema creation, freshness checks, PIT cache reads, row writes, API fetch, and cache fallback patterns. The base class only centralizes connection/schema entry, not PIT row lifecycle.
 
 Recommendation:
-- Split `test_swing_backtest.py` into entry/exit, attribution, regime-provider, forward-data, and portfolio-cap files.
-- Split `test_backtest_engine.py` by entity/value-object vs engine-run behavior.
-- Split `test_interpreter.py` into condition types, rule ordering, required indicators, and rationale.
-- Split `test_swing_analysis_workflow.py` by refresh, optional evidence, market context, serialization.
-- Split CLI tests by command family and output contract.
+- Introduce `src/infrastructure/browser/stockbit_pit_cache.py` with small primitives:
+  - table schema migration runner wrapper.
+  - latest-as-of query builder.
+  - fetched-date freshness check.
+  - safe read/write exception handling.
+- Keep endpoint-specific parsing and value-object mapping in each provider.
 
 Guardrails:
-- No placeholder tests.
-- Do not weaken characterization coverage during splits.
-- Shared fixtures may move to local `*_fixtures.py` files only when they reduce duplication.
+- Do not change table names or primary keys.
+- Do not change TTLs.
+- Do not change point-in-time `as_of_date` semantics.
 
 Risks to maintain:
-- Monkeypatch paths often break after production module splits.
+- Historical replay correctness depends on latest row at or before `as_of_date`.
 
 Edge cases to watch:
-- Test order independence, fixture mutation leakage, CLI runner state.
+- old schema rebuilds.
+- multiple rows per fetched date.
+- live cache miss versus historical cache-only replay.
 
-### 23. Medium: Large documentation files are not reviewable as active working specs
+### 16. Medium: `src/infrastructure/browser/stockbit_broker_provider.py` still owns endpoint period mapping and request construction
+
+Pointer: `src/infrastructure/browser/stockbit_broker_provider.py`, 475 LOC. The provider owns broker-summary period mapping, foreign-top period mapping, request URL construction, historical summary fallback, pagination, and provider orchestration.
+
+Rationale: The provider is below the hard threshold, but period mapping and URL construction are pure, testable responsibilities that are easy to accidentally duplicate.
+
+Recommendation:
+- Extract period mapping to `stockbit_broker_periods.py`.
+- Extract request URL builders to `stockbit_broker_requests.py`.
+- Keep `StockbitBrokerProvider` focused on calling `api_client`, passing responses to parsers, and returning domain entities.
+
+Guardrails:
+- Preserve confirmed Stockbit enum strings.
+- Preserve fallback to historical summary totals.
+- Preserve warning behavior when endpoints return no data.
+
+Risks to maintain:
+- Stockbit endpoint enum drift is likely; keeping mappings isolated improves repair speed.
+
+Edge cases to watch:
+- 1D/3D/7D/1M/3M/1Y period cutoffs.
+- `limit` and pagination.
+- synthetic total value fallback.
+
+### 17. Medium: `src/infrastructure/browser/stockbit_preopen_parsers.py` contains two parser strategies in one file
+
+Pointer: `src/infrastructure/browser/stockbit_preopen_parsers.py`, 416 LOC. It contains confirmed-shape pre-open parsing plus generic recursive JSON discovery helpers for movers, best bid, order book, price, and volume.
+
+Rationale: Confirmed API-shape parsers and exploratory fallback scanners have different stability and review expectations.
+
+Recommendation:
+- Extract recursive fallback scanners to `stockbit_preopen_json_search.py`.
+- Keep confirmed response parsers in `stockbit_preopen_parsers.py`.
+- Name fallback functions as fallback/search behavior, not canonical parser behavior.
+
+Guardrails:
+- Preserve parsing results for current live payloads.
+- Preserve fallback behavior for unknown response shapes.
+- Do not make fallback scanner authoritative over confirmed parser fields.
+
+Risks to maintain:
+- Pre-open data is session-time sensitive; parser regressions can break morning workflow.
+
+Edge cases to watch:
+- nested list depth.
+- missing IEV/IEP.
+- lots versus shares conversion.
+
+### 18. Medium: `src/infrastructure/browser/stockbit_corporate_action_calendar.py` repeats event-specific parser boilerplate
+
+Pointer: `src/infrastructure/browser/stockbit_corporate_action_calendar.py`, 401 LOC. It defines separate parse methods for dividend, stock split, reverse split, rights issue, bonus, tender offer, RUPS, pubex, and IPO, with shared date/note/id mechanics.
+
+Rationale: The file is close to the preferred limit and event parser repetition makes new corporate action types expensive to add safely.
+
+Recommendation:
+- Extract event-type mapping and shared parse helpers to `stockbit_corporate_action_event_parsers.py`.
+- Represent event-specific field extraction with small strategy functions or a table-driven parser.
+- Keep provider class responsible for endpoint routing and API calls only.
+
+Guardrails:
+- Preserve fallback ID generation.
+- Preserve event date semantics.
+- Preserve unsupported-event behavior.
+
+Risks to maintain:
+- Corporate-action warnings affect risk display and swing workflow context.
+
+Edge cases to watch:
+- missing dates.
+- multiple date fields per event.
+- RUPS meeting date stored as event date.
+
+### 19. Medium: Application services directly parse YAML in several places
 
 Pointers:
-- `docs/signal_refactor.md`, 2826 LOC.
-- `docs/stockbit_api_probe_response.md`, 1784 LOC.
-- `docs/how_to_intraday_trading.md`, 1261 LOC.
-- `docs/workflow_swing_foreign_accumulation.md`, 1019 LOC.
-- `docs/signal_refactor_tracker.md`, 915 LOC.
+- `src/application/services/ticker_profile_classifier.py`
+- `src/application/services/company_quality_context_evidence_builder.py`
+- `src/application/services/sector_context_evidence_builder.py`
+- `src/application/services/group_mapping.py`
+- `src/application/services/swing_tuning_config_paths.py`
+- `src/application/services/swing_tuning_patch_apply.py`
+- `src/application/services/institutional_flow_config.py`
 
-Rationale: These are not source modules, but they are too large for future agents to use as active guidance. Large historical docs blur current rules, old plans, and raw probe data.
+Rationale: YAML parsing is infrastructure/config concern. Application services should consume typed config or explicit dictionaries. Direct YAML reads make tests filesystem-dependent and duplicate `_read_yaml` patterns.
 
 Recommendation:
-- Mark raw probe/old tracker docs as archival at the top, or move under `docs/archive/`.
-- Split active workflow docs into quick-reference, operational checklist, and design notes.
-- Keep `AI_AGENT_CHECKLIST.md`, ADRs, and README as the authoritative current guidance.
+- Move YAML file reads into `src/infrastructure/config/*_loader.py`.
+- Keep application services accepting typed config dataclasses or raw mappings passed in.
+- Keep pure path parsing or patch application logic separate from file IO.
 
 Guardrails:
-- Do not delete historical evidence without user approval.
-- Do not let archived docs override ADR/checklist instructions.
+- Preserve default config behavior.
+- Preserve local-first file locations through adapters/factories.
+- Do not introduce mandatory remote or global config dependencies.
 
 Risks to maintain:
-- Agents may follow stale plans if active vs archival status is unclear.
+- Config loading failures currently often degrade to defaults; changing that can alter live workflow.
 
 Edge cases to watch:
-- Links from README and ADRs to moved docs.
+- missing files.
+- malformed YAML.
+- partial config with defaults.
 
-## Refactor Order
+### 20. Medium: Compatibility facades are accumulating and need explicit expiry discipline
 
-1. Split `swing_analysis_workflow_use_case.py` evidence/risk/recomposition first.
-2. Split `accumulation_audit_use_case.py` DTOs, exit simulator, and stats.
-3. Split `sqlite_broker_repository.py` schema/migrations and table-family stores.
-4. Split `swing_tuning_contracts.py` and `swing_backtest_attribution.py` target catalog/builders.
-5. Split `rules_yaml_loader.py` parser internals.
-6. Fix `build_market_context_use_case.py` boundary violation and factor helpers.
-7. Split `setup_phase_detector.py` volume/sequence/config.
-8. Extract the remaining `accumulation_screen_use_case.py` per-ticker pipeline when touching enrichment or rejection behavior.
-9. Thin CLI command modules: intraday confirm, universe, indicator, screen accumulation.
-10. Split high-value tests after each production extraction.
+Pointers:
+- `src/application/services/bootstrap.py`
+- `src/infrastructure/config/yaml_loader.py`
+- `src/infrastructure/config/swing_config.py`
+- `src/infrastructure/config/user_config.py`
+- `src/infrastructure/browser/playwright_stockbit_provider.py`
+- `src/infrastructure/ai/strategy_translator.py`
+- `src/application/services/setup_phase_detector.py`
+- `src/application/use_case/assess_signal_use_case.py`
 
-## Code Convention for Future Agents
+Rationale: Facades are useful during extraction, but many now live indefinitely. Future agents cannot tell which import path is canonical and may add implementation back into the facade.
 
-These rules should be kept in `AI_AGENT_CHECKLIST.md` and followed in review:
+Recommendation:
+- Add a `COMPATIBILITY_FACADE.md` or inline module comment standard with:
+  - canonical replacement import.
+  - allowed contents: re-export/delegation only.
+  - expiry condition or "permanent public API" label.
+- Audit each facade so it contains no implementation logic beyond re-export/delegation.
 
-- Files above 700 LOC require an extraction plan before adding behavior.
-- Files above 1000 LOC are merge blockers unless generated or temporary characterization fixtures.
-- A filename must expose one dominant responsibility: use case, DTO, parser, provider, repository, display, command, factory, validator, simulator, statistics, or config loader.
-- Compatibility facades may re-export or delegate only; they must not keep implementation logic.
-- Use cases own workflow orchestration only. Extract calculators, parsers, serializers, evidence builders, simulators, statistics, and persistence stores.
-- Application must not import infrastructure config classes directly. Infrastructure loads/parses config; application consumes application/domain config models.
-- CLI command modules must stay thin: parse options, build request DTOs, wire dependencies, call use cases, render output, map exceptions.
-- Display modules render facts only; they must not decide scores, thresholds, actions, or business status.
-- Persisted schema builders must be split by schema section once they exceed 400 LOC; no key rename without compatibility notes.
-- Repository modules above 700 LOC must split schema/migration, row mapping, and table-family stores.
-- Tests follow the same size rules. Split by behavior contract, not by arbitrary line count.
-- Placeholder tests are forbidden. Every collected test must assert real behavior or a real contract.
+Guardrails:
+- Do not remove compatibility imports without checking all call sites and tests.
+- Do not move implementation back into facades.
 
-## Acceptance Gate for Extraction PRs
+Risks to maintain:
+- Broad import rewrites can break monkeypatch paths and external scripts.
 
-- Behavior is unchanged unless the task explicitly says otherwise.
-- Existing CLI commands still register under the same names.
-- JSON/CSV/persisted contracts are unchanged or migrated explicitly.
-- Tests cover moved responsibilities at their new boundaries.
-- No adapter gains workflow/policy during extraction.
-- No application use case gains infrastructure imports.
-- AI can locate the edited responsibility from the filename alone.
+Edge cases to watch:
+- private names re-exported for tests.
+- Typer command registration modules.
+- external user scripts importing old paths.
+
+## Code Convention For Future Agents
+
+Add or keep these rules in `AI_AGENT_CHECKLIST.md` or an ADR:
+
+1. Production Python files above 400 LOC require a single dominant responsibility stated by filename.
+2. Production Python files above 550 LOC require extraction before adding new behavior, even if below the 700 LOC hard threshold.
+3. Domain value objects must not become persisted-schema warehouses. Split large fingerprints by schema section and centralize serialization compatibility.
+4. Display modules render facts only. Builders that query repositories, derive quality labels, or apply thresholds belong in application services.
+5. CLI command modules may parse options, build request DTOs, wire dependencies, call use cases, render output, and map errors. They must not own status policy, provider preconditions, scoring policy, or persistence workflow.
+6. Config file IO belongs in infrastructure/config loaders. Application services consume typed configs, raw mappings, or explicit constructor arguments.
+7. Browser/provider files split by capability: browser lifecycle, token extraction, HTTP client, endpoint request builder, parser, cache store, and provider orchestration.
+8. PIT cache providers must share cache primitives instead of copying schema/read/write/freshness loops across endpoint providers.
+9. Compatibility facades must be re-export/delegation only and must name the canonical import path.
+10. Parser files must distinguish confirmed payload parsers from exploratory recursive fallback scanners.
+11. Tuning and signal policy files must split value selection, target classification, interpretation, and report assembly once they exceed 400 LOC.
+12. Use cases orchestrate. Extract group scoring, rationale/breakdown builders, serializers, calculators, and policy helpers when they become independently reviewable.
+
+## Suggested Refactor Order
+
+1. Fix `signal_forward_label.py` first because persisted fingerprint scan burden is highest and affects many workflows.
+2. Move broker-detail builders out of `analyze_swing_broker_display.py` so display modules become trustworthy again.
+3. Split `learn_commands.py` and `trade_commands.py` routers to reduce adapter scan cost.
+4. Split `playwright_stockbit_browser.py` by browser/token/session action.
+5. Extract `swing_config_loader.py` section parsers.
+6. Split `assess_signal_evidence_use_case.py` and `assess_risk_use_case.py` into orchestration plus collaborators.
+7. Introduce shared Stockbit PIT cache primitives, then simplify the largest endpoint providers.
+8. Clean up compatibility facades and application YAML-loading boundaries.
+
+## Acceptance Gate For Refactor PRs
+
+- No production behavior changes unless explicitly requested.
+- No CLI command names, option names, JSON keys, CSV keys, or persisted keys change without migration notes.
+- Existing tests for moved responsibilities pass at their new boundaries.
+- New filenames must answer "what responsibility lives here?"
+- Facades may remain only as compatibility shims.
+- No adapter gains workflow or policy.
+- No application service gains infrastructure config/file IO.
+- AI agents can locate the edited responsibility from filename alone.

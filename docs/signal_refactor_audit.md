@@ -2,7 +2,11 @@
 
 Date: 2026-07-11
 
-Scope: audit current codebase alignment with `docs/signal_refactor.md`, using code as source of truth. This document intentionally does not change implementation behavior.
+Scope: audit current codebase alignment with the historical rationale now
+preserved at `docs/archive/signal_refactor_full_rationale.md`, using code as
+source of truth. This document intentionally does not change implementation
+behavior. Historical line citations below use the original pre-archive line
+numbers; the archive banner adds six lines to the current file positions.
 
 Layer plan:
 - Domain: not touched
@@ -264,4 +268,3 @@ This is a correct first step (data availability before scoring), but future agen
 Recommendation:
 - Add `CorporateActionCalendarEvidence` producer (DIAGNOSTIC) that checks whether forward labels overlap corporate action windows.
 - Add a promotion gate: do not promote calendar evidence until base rate is > 10k observations.
-
