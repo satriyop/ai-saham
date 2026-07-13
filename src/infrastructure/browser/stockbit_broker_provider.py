@@ -36,6 +36,17 @@ from src.infrastructure.browser.stockbit_broker_parsers import (
     _parse_historical_summary_flow,
     _parse_marketdetectors_response,
 )
+from src.infrastructure.browser.stockbit_broker_periods import (
+    broker_summary_period_for_range,
+    foreign_top_period_for_range,
+)
+from src.infrastructure.browser.stockbit_broker_requests import (
+    build_broker_daily_flow_url,
+    build_broker_summary_url,
+    build_foreign_flow_history_url,
+    build_foreign_top_stocks_url,
+    build_historical_summary_url,
+)
 from src.infrastructure.browser.stockbit_browser_context import DEFAULT_PROFILE_DIR
 from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
 
@@ -44,10 +55,6 @@ logger = logging.getLogger(__name__)
 # ── Stockbit API config — driven by config/stockbit.yaml ─────────────────
 _sb = STOCKBIT_CFG
 
-_MARKETDETECTORS_API   = _sb.marketdetectors_url
-_BROKER_ACTIVITY_API   = _sb.broker_activity_url
-_BROKER_HISTORICAL_API  = _sb.broker_historical_url
-_HISTORICAL_SUMMARY_API = _sb.historical_summary_url
 _INSTITUTIONAL_PROXY_CODES = list(_sb.institutional_proxy_codes)
 TRACKED_BROKER_CODES       = list(_sb.tracked_broker_codes)
 
@@ -115,28 +122,8 @@ class StockbitBrokerProvider(BrokerDataProvider):
         which named brokers bought/sold the stock in the requested period.
         Maps the date range to the closest supported period parameter.
         """
-        days = (end_date - start_date).days
-        # All confirmed valid as of 2026-06-13
-        if days <= 1:
-            period = "BROKER_SUMMARY_PERIOD_LATEST"
-        elif days <= 7:
-            period = "BROKER_SUMMARY_PERIOD_LAST_7_DAYS"
-        elif days <= 30:
-            period = "BROKER_SUMMARY_PERIOD_LAST_1_MONTH"
-        elif days <= 90:
-            period = "BROKER_SUMMARY_PERIOD_LAST_3_MONTHS"
-        elif days <= 180:
-            period = "BROKER_SUMMARY_PERIOD_LAST_6_MONTHS"
-        else:
-            period = "BROKER_SUMMARY_PERIOD_LAST_1_YEAR"
-        url = (
-            f"{_MARKETDETECTORS_API}/{ticker.upper()}"
-            f"?transaction_type=TRANSACTION_TYPE_NET"
-            f"&market_board=MARKET_BOARD_REGULER"
-            f"&investor_type=INVESTOR_TYPE_ALL"
-            f"&limit=25"
-            f"&period={period}"
-        )
+        period = broker_summary_period_for_range(start_date, end_date)
+        url = build_broker_summary_url(ticker, period)
         body = self._api_client.get(url)
         if not body:
             logger.warning(
@@ -179,30 +166,8 @@ class StockbitBrokerProvider(BrokerDataProvider):
         returns which stocks they collectively bought/sold the most. Useful for
         universe-level screening ("is this IEV mover in foreign top buys?").
         """
-        days = (end_date - start_date).days
-        # Confirmed valid periods (2026-06-13): 1D, 3D, 7D, 1M, 3M, 1Y
-        # LAST_1_WEEK and LAST_6_MONTHS are not valid values
-        if days <= 1:
-            period = "RT_PERIOD_LAST_1_DAY"
-        elif days <= 3:
-            period = "RT_PERIOD_LAST_3_DAYS"
-        elif days <= 7:
-            period = "RT_PERIOD_LAST_7_DAYS"
-        elif days <= 30:
-            period = "RT_PERIOD_LAST_1_MONTH"
-        elif days <= 90:
-            period = "RT_PERIOD_LAST_3_MONTHS"
-        else:
-            period = "RT_PERIOD_LAST_1_YEAR"
-        broker_params = "&".join(f"broker_code={c}" for c in _INSTITUTIONAL_PROXY_CODES)
-        url = (
-            f"{_BROKER_ACTIVITY_API}?{broker_params}"
-            f"&transaction_type=TRANSACTION_TYPE_NET"
-            f"&investor_type=INVESTOR_TYPE_ALL"
-            f"&limit={limit}&market_board=MARKET_TYPE_REGULER&page=1"
-            f"&period={period}"
-            f"&net_val_period=NET_VAL_PERIOD_7D"
-        )
+        period = foreign_top_period_for_range(start_date, end_date)
+        url = build_foreign_top_stocks_url(_INSTITUTIONAL_PROXY_CODES, period, limit)
         body = self._api_client.get(url)
         if not body:
             logger.warning("No response from broker-centric scan endpoint")
@@ -222,16 +187,7 @@ class StockbitBrokerProvider(BrokerDataProvider):
         Uses the stock-centric historical Exodus API. Returns daily N.Val/N.Lot
         time-series for trend context and backfilling the foreign-flow table.
         """
-        codes_params = "&".join(f"broker_codes={c}" for c in _INSTITUTIONAL_PROXY_CODES)
-        url = (
-            f"{_BROKER_HISTORICAL_API}?interval=INTERVAL_DAILY"
-            f"&period=RT_PERIOD_LAST_1_YEAR"
-            f"&{codes_params}"
-            f"&symbols={ticker.upper()}"
-            f"&market_board=BOARD_TYPE_REGULAR"
-            f"&investor_type=INVESTOR_TYPE_ALL"
-            f"&pagination.page=1&pagination.limit={min(days, 365)}"
-        )
+        url = build_foreign_flow_history_url(ticker, _INSTITUTIONAL_PROXY_CODES, days)
         body = self._api_client.get(url)
         if not body:
             logger.debug("No response from foreign flow history endpoint for %s", ticker)
@@ -257,13 +213,7 @@ class StockbitBrokerProvider(BrokerDataProvider):
         page = 1
         try:
             while True:
-                url = (
-                    f"{_HISTORICAL_SUMMARY_API.format(ticker=ticker.upper())}"
-                    f"?period=HS_PERIOD_DAILY"
-                    f"&start_date={start_date.isoformat()}"
-                    f"&end_date={end_date.isoformat()}"
-                    f"&limit=50&page={page}"
-                )
+                url = build_historical_summary_url(ticker, start_date, end_date, page)
                 body = self._api_client.get(url)
                 if not body:
                     break
@@ -340,17 +290,7 @@ def _fetch_broker_daily_flows_for_code(
     broker_name = broker_code  # default; overwritten from first response
 
     while True:
-        url = (
-            f"{_BROKER_HISTORICAL_API}"
-            f"?broker_codes={broker_code}"
-            f"&symbols={ticker.upper()}"
-            f"&market_board=BOARD_TYPE_REGULAR"
-            f"&investor_type=INVESTOR_TYPE_ALL"
-            f"&interval=INTERVAL_DAILY"
-            f"&period=RT_PERIOD_LAST_1_YEAR"
-            f"&pagination.page={page}"
-            f"&pagination.limit=100"
-        )
+        url = build_broker_daily_flow_url(ticker, broker_code, page)
         body = api_client.get(url)
         if not body:
             break
@@ -447,13 +387,7 @@ def _fetch_historical_summary_totals(
 
     try:
         while True:
-            url = (
-                f"{_HISTORICAL_SUMMARY_API.format(ticker=ticker.upper())}"
-                f"?period=HS_PERIOD_DAILY"
-                f"&start_date={start_date.isoformat()}"
-                f"&end_date={end_date.isoformat()}"
-                f"&limit=50&page={page}"
-            )
+            url = build_historical_summary_url(ticker, start_date, end_date, page)
             body = api_client.get(url)
             if not body:
                 break
