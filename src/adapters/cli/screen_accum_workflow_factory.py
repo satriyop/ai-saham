@@ -19,6 +19,12 @@ from src.application.services.bootstrap import (
 from src.application.services.swing_setup_catalog import build_swing_setup_catalog_config
 from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
 from src.application.use_case.assess_risk_use_case import AssessRiskUseCase
+from src.application.use_case.run_accumulation_screen_workflow_use_case import (
+    RunAccumulationScreenWorkflowUseCase,
+)
+from src.application.use_case.save_screen_watchlist_use_case import (
+    SaveScreenWatchlistUseCase,
+)
 from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.market_data_repository import MarketDataRepository
 from src.infrastructure.browser.stockbit_provider_bundle import (
@@ -50,6 +56,9 @@ from src.infrastructure.persistence.sqlite_candidate_observations_repository imp
     SQLiteCandidateObservationsRepository,
 )
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
+from src.infrastructure.persistence.sqlite_watchlist_repository import (
+    SQLiteWatchlistRepository,
+)
 
 
 @dataclass(frozen=True)
@@ -109,4 +118,31 @@ def create_accumulation_screen_workflow(
         use_case=use_case,
         broker_repository=broker_repo,
         market_repository=market_repo,
+    )
+
+
+def create_run_accumulation_screen_workflow_use_case(
+    *,
+    db_path: Path,
+    screener_config: AccumulationScreenerConfig,
+    swing_config: Any,
+) -> RunAccumulationScreenWorkflowUseCase:
+    """Build the accumulation screen workflow use case with all dependencies wired."""
+    base = create_accumulation_screen_workflow(
+        db_path=db_path,
+        screener_config=screener_config,
+        swing_config=swing_config,
+    )
+
+    return RunAccumulationScreenWorkflowUseCase(
+        screen_use_case=base.use_case,
+        broker_repository=base.broker_repository,
+        market_repository=base.market_repository,
+        swing_config=swing_config,
+        accumulation_screener_config=screener_config,
+        rules_loader=RulesYamlLoader(),
+        indicator_registry_factory=create_indicator_registry,
+        save_watchlist_use_case=SaveScreenWatchlistUseCase(
+            SQLiteWatchlistRepository(db_path)
+        ),
     )

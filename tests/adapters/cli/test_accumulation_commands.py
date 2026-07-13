@@ -103,63 +103,255 @@ def _candidate(**overrides) -> AccumulationCandidate:
     return AccumulationCandidate(**values)
 
 
+def _fake_workflow_result(**overrides):
+    """Build a RunAccumulationScreenWorkflowResult-like object for CLI mocks."""
+    from src.application.use_case.run_accumulation_screen_workflow_use_case import (
+        RunAccumulationScreenWorkflowResult,
+    )
+    params = dict(
+        response=None,
+        multi_results={},
+        broker_quality={},
+        strategy_signals={},
+        save_result=None,
+        warnings=(),
+    )
+    params.update(overrides)
+    return RunAccumulationScreenWorkflowResult(**params)
+
+
+# ---------------------------------------------------------------------------
+# CLI wiring tests — delegate to workflow use case
+# ---------------------------------------------------------------------------
+
+
 def test_screen_accum_delegates_workflow_construction_to_builder(monkeypatch):
     captured = {}
 
-    class FakeUseCase:
-        def execute(self, request):
-            captured["request"] = request
-            return AccumulationScreenResponse(
-                candidates=[_candidate()],
-                screened_at=date(2026, 6, 28),
-                window_days=request.window_days,
-                total_tickers_checked=len(request.tickers),
-                tickers_skipped=0,
-                provider="fake",
+    def fake_workflow_uc(**kwargs):
+        captured["factory_kwargs"] = kwargs
+        uc = SimpleNamespace()
+        uc.execute = lambda req: (
+            captured.update(request=req)
+            or _fake_workflow_result(
+                response=AccumulationScreenResponse(
+                    candidates=[_candidate()],
+                    screened_at=date(2026, 6, 28),
+                    window_days=getattr(req, "window", 7),
+                    total_tickers_checked=len(req.tickers),
+                    tickers_skipped=0,
+                    provider="fake",
+                )
             )
-
-    def fake_builder(**kwargs):
-        captured["builder"] = kwargs
-        return SimpleNamespace(
-            use_case=FakeUseCase(),
-            broker_repository=object(),
-            market_repository=object(),
         )
+        return uc
 
-    monkeypatch.setattr(accum_cli, "create_accumulation_screen_workflow", fake_builder)
+    monkeypatch.setattr(
+        accum_cli,
+        "create_run_accumulation_screen_workflow_use_case",
+        fake_workflow_uc,
+    )
 
     result = runner.invoke(app, ["screen", "accum", "BBCA", "--format", "json"])
 
     assert result.exit_code == 0
     payload = json.loads(result.output)
     assert payload["artifact_type"] == "accumulation_screen"
-    assert captured["builder"]["screener_config"] is accum_cli._ASC
-    assert captured["request"].tickers == ["BBCA"]
+    req = captured["request"]
+    assert req.tickers == ["BBCA"]
+    assert req.multi is False
 
 
-def test_screen_accum_multi_uses_canonical_observation_request_builder(monkeypatch):
-    captured = {"requests": []}
+def test_screen_accum_single_table_mode_sets_strategy_overlay(monkeypatch):
+    """--strategy in single table mode must set include_strategy_overlay=True."""
+    captured = {}
 
-    class FakeUseCase:
-        def execute(self, request):
-            captured["requests"].append(request)
-            return AccumulationScreenResponse(
-                candidates=[_candidate(window_days=request.window_days)],
-                screened_at=date(2026, 6, 28),
-                window_days=request.window_days,
-                total_tickers_checked=len(request.tickers),
-                tickers_skipped=0,
-                provider="fake",
+    def fake_uc(**kwargs):
+        uc = SimpleNamespace()
+        uc.execute = lambda req: (
+            captured.update(request=req)
+            or _fake_workflow_result(
+                response=AccumulationScreenResponse(
+                    candidates=[_candidate()],
+                    screened_at=date(2026, 6, 28),
+                    window_days=getattr(req, "window", 7),
+                    total_tickers_checked=len(req.tickers),
+                    tickers_skipped=0,
+                    provider="fake",
+                )
             )
+        )
+        return uc
 
     monkeypatch.setattr(
         accum_cli,
-        "create_accumulation_screen_workflow",
-        lambda **kwargs: SimpleNamespace(
-            use_case=FakeUseCase(),
-            broker_repository=FakeBrokerSummaryRepository([]),
-            market_repository=object(),
-        ),
+        "create_run_accumulation_screen_workflow_use_case",
+        fake_uc,
+    )
+
+    result = runner.invoke(
+        app,
+        ["screen", "accum", "BBCA", "--strategy", "test-strat"],
+    )
+
+    assert result.exit_code == 0, result.output
+    req = captured["request"]
+    assert req.include_strategy_overlay is True
+    assert req.strategy_name == "test-strat"
+    assert req.save_enabled is False
+
+
+def test_screen_accum_strategy_overlay_suppressed_in_json(monkeypatch):
+    """--strategy --format json must NOT set include_strategy_overlay."""
+    captured = {}
+
+    def fake_uc(**kwargs):
+        uc = SimpleNamespace()
+        uc.execute = lambda req: (
+            captured.update(request=req)
+            or _fake_workflow_result(
+                response=AccumulationScreenResponse(
+                    candidates=[_candidate()],
+                    screened_at=date(2026, 6, 28),
+                    window_days=getattr(req, "window", 7),
+                    total_tickers_checked=len(req.tickers),
+                    tickers_skipped=0,
+                    provider="fake",
+                )
+            )
+        )
+        return uc
+
+    monkeypatch.setattr(
+        accum_cli,
+        "create_run_accumulation_screen_workflow_use_case",
+        fake_uc,
+    )
+
+    result = runner.invoke(
+        app,
+        ["screen", "accum", "BBCA", "--strategy", "test-strat", "--format", "json"],
+    )
+
+    assert result.exit_code == 0, result.output
+    req = captured["request"]
+    assert req.include_strategy_overlay is False
+
+
+def test_screen_accum_strategy_overlay_suppressed_in_multi(monkeypatch):
+    """--strategy --multi must NOT set include_strategy_overlay."""
+    captured = {}
+
+    def fake_uc(**kwargs):
+        uc = SimpleNamespace()
+        uc.execute = lambda req: (
+            captured.update(request=req)
+            or _fake_workflow_result(
+                multi_results={
+                    7: AccumulationScreenResponse(
+                        candidates=[_candidate()],
+                        screened_at=date(2026, 6, 28),
+                        window_days=7,
+                        total_tickers_checked=1,
+                        tickers_skipped=0,
+                        provider="fake",
+                    ),
+                },
+            )
+        )
+        return uc
+
+    monkeypatch.setattr(
+        accum_cli,
+        "create_run_accumulation_screen_workflow_use_case",
+        fake_uc,
+    )
+
+    result = runner.invoke(
+        app,
+        ["screen", "accum", "BBCA", "--multi", "--strategy", "test-strat"],
+    )
+
+    assert result.exit_code == 0, result.output
+    req = captured["request"]
+    assert req.include_strategy_overlay is False
+
+
+def test_screen_accum_single_table_mode_sets_save_enabled(monkeypatch):
+    """--save in single table mode must set save_enabled=True and save_name."""
+    captured = {}
+
+    def fake_uc(**kwargs):
+        uc = SimpleNamespace()
+        uc.execute = lambda req: (
+            captured.update(request=req)
+            or _fake_workflow_result(
+                response=AccumulationScreenResponse(
+                    candidates=[_candidate()],
+                    screened_at=date(2026, 6, 28),
+                    window_days=getattr(req, "window", 7),
+                    total_tickers_checked=len(req.tickers),
+                    tickers_skipped=0,
+                    provider="fake",
+                ),
+                save_result=SimpleNamespace(saved_count=1, name="mywatch"),
+            )
+        )
+        return uc
+
+    monkeypatch.setattr(
+        accum_cli,
+        "create_run_accumulation_screen_workflow_use_case",
+        fake_uc,
+    )
+
+    result = runner.invoke(
+        app,
+        ["screen", "accum", "BBCA", "--save", "mywatch"],
+    )
+
+    assert result.exit_code == 0, result.output
+    req = captured["request"]
+    assert req.save_enabled is True
+    assert req.save_name == "mywatch"
+    assert req.include_strategy_overlay is False
+
+
+def test_screen_accum_multi_sets_correct_request_fields(monkeypatch):
+    captured = {}
+
+    def fake_workflow_uc(**kwargs):
+        captured["factory_kwargs"] = kwargs
+        uc = SimpleNamespace()
+        uc.execute = lambda req: (
+            captured.update(request=req)
+            or _fake_workflow_result(
+                multi_results={
+                    7: AccumulationScreenResponse(
+                        candidates=[_candidate(window_days=7)],
+                        screened_at=date(2026, 6, 28),
+                        window_days=7,
+                        total_tickers_checked=len(req.tickers),
+                        tickers_skipped=0,
+                        provider="fake",
+                    ),
+                    30: AccumulationScreenResponse(
+                        candidates=[_candidate(window_days=30)],
+                        screened_at=date(2026, 6, 28),
+                        window_days=30,
+                        total_tickers_checked=len(req.tickers),
+                        tickers_skipped=0,
+                        provider="fake",
+                    ),
+                },
+            )
+        )
+        return uc
+
+    monkeypatch.setattr(
+        accum_cli,
+        "create_run_accumulation_screen_workflow_use_case",
+        fake_workflow_uc,
     )
 
     result = runner.invoke(
@@ -179,26 +371,17 @@ def test_screen_accum_multi_uses_canonical_observation_request_builder(monkeypat
     )
 
     assert result.exit_code == 0, result.output
-    assert [request.window_days for request in captured["requests"]] == [7, 30]
-    request = captured["requests"][0]
-    assert request.tickers == ["BBCA"]
-    assert request.min_net_buy_days == 1
-    assert request.min_foreign_flow_score == 0.0
-    assert request.min_foreign_flow_score_enabled is False
-    assert request.min_signal_score == 0.0
-    assert request.min_signal_score_enabled is False
-    assert request.min_piotroski == 5
-    assert request.tier1_broker_codes == accum_cli._SC.tier1_broker_codes
-    assert request.bci_cluster_min_count == accum_cli._SC.bci_cluster_min_count
-    assert request.bci_stable_min_count == accum_cli._SC.bci_stable_min_count
-    assert request.min_market_cap_idr == accum_cli._SC.min_market_cap_idr
-    assert request.resistance_gate_enabled == accum_cli._SC.resistance_gate_enabled
-    assert request.resistance_headroom_min_pct == accum_cli._SC.resistance_headroom_min_pct
-    assert request.ex_date_warning_days == accum_cli._SC.ex_date_warning_days
-    assert request.sector_breadth_enabled == accum_cli._SC.sector_breadth_enabled
-    assert request.sector_breadth_threshold == accum_cli._SC.sector_breadth_threshold
-    assert request.sector_breadth_bonus_pts == accum_cli._SC.sector_breadth_bonus_pts
-    assert request.sector_breadth_min_tickers == accum_cli._SC.sector_breadth_min_tickers
+    req = captured["request"]
+    assert req.multi is True
+    assert req.windows == [7, 30]
+    assert req.include_strategy_overlay is False
+    assert req.save_enabled is False
+    assert req.min_piotroski == 5
+
+
+# ---------------------------------------------------------------------------
+# Broker quality tests (pure application function, not CLI-specific)
+# ---------------------------------------------------------------------------
 
 
 def test_screen_broker_quality_counts_local_noise_brokers():
@@ -222,8 +405,8 @@ def test_screen_broker_quality_counts_local_noise_brokers():
     quality = quality_batch.get("BBCA")
     assert quality is not None
     assert quality.label == "noise+"
-    assert quality.noise_flow == Decimal("155000000")  # (100M-10M) + (70M-5M) = 90M + 65M
-    assert quality.neutral_flow == Decimal("-20000000")  # AK: 5M buy - 25M sell = -20M
+    assert quality.noise_flow == Decimal("155000000")
+    assert quality.neutral_flow == Decimal("-20000000")
     assert quality.to_dict()["source"] == "stockbit"
 
 
@@ -246,6 +429,11 @@ def test_screen_broker_quality_marks_smart_selling_pressure():
     assert quality is not None
     assert quality.label == "smart-"
     assert quality.smart_flow == Decimal("-85000000")
+
+
+# ---------------------------------------------------------------------------
+# Display tests (render functions only)
+# ---------------------------------------------------------------------------
 
 
 def test_display_results_renders_rich_accumulation_panel(capsys):
@@ -444,7 +632,7 @@ def test_display_results_renders_phase_column_and_note(capsys):
 
 def test_display_results_shows_unknown_phase_when_detection_unavailable(capsys):
     response = AccumulationScreenResponse(
-        candidates=[_candidate()],  # setup_phase defaults to None
+        candidates=[_candidate()],
         screened_at=date(2026, 6, 19),
         window_days=7,
         total_tickers_checked=1,
@@ -466,6 +654,11 @@ def test_display_results_shows_unknown_phase_when_detection_unavailable(capsys):
     assert "UNKNOWN" in out
 
 
+# ---------------------------------------------------------------------------
+# JSON output shape tests
+# ---------------------------------------------------------------------------
+
+
 def test_screen_accum_json_includes_setup_phase(monkeypatch):
     from src.domain.value_objects.setup_phase import SetupPhaseSnapshot, SetupPhaseState
 
@@ -479,25 +672,24 @@ def test_screen_accum_json_includes_setup_phase(monkeypatch):
         sequence_valid=True,
     )
 
-    class FakeUseCase:
-        def execute(self, request):
-            return AccumulationScreenResponse(
+    def fake_uc(**kwargs):
+        uc = SimpleNamespace()
+        uc.execute = lambda req: _fake_workflow_result(
+            response=AccumulationScreenResponse(
                 candidates=[_candidate(setup_phase=setup_phase)],
                 screened_at=date(2026, 6, 28),
-                window_days=request.window_days,
-                total_tickers_checked=len(request.tickers),
+                window_days=getattr(req, "window", 7),
+                total_tickers_checked=len(req.tickers),
                 tickers_skipped=0,
                 provider="fake",
             )
+        )
+        return uc
 
     monkeypatch.setattr(
         accum_cli,
-        "create_accumulation_screen_workflow",
-        lambda **kwargs: SimpleNamespace(
-            use_case=FakeUseCase(),
-            broker_repository=object(),
-            market_repository=object(),
-        ),
+        "create_run_accumulation_screen_workflow_use_case",
+        fake_uc,
     )
 
     result = runner.invoke(app, ["screen", "accum", "INDF", "--format", "json"])
@@ -510,42 +702,40 @@ def test_screen_accum_json_includes_setup_phase(monkeypatch):
     assert candidate_json["setup_phase"]["previous_phase"] == "ACCUMULATION"
 
 
-def test_screen_accum_save_calls_use_case(monkeypatch):
-    """Prove --save invokes SaveScreenWatchlistUseCase with correct fields."""
-    captured = {}
+# ---------------------------------------------------------------------------
+# Save behavior tests
+# ---------------------------------------------------------------------------
 
-    class FakeUseCase:
-        def execute(self, request):
-            captured["request"] = request
-            return AccumulationScreenResponse(
+
+def test_screen_accum_save_calls_use_case(monkeypatch):
+    from src.application.use_case.save_screen_watchlist_use_case import (
+        SaveScreenWatchlistResult,
+    )
+
+    def fake_uc(**kwargs):
+        uc = SimpleNamespace()
+        uc.execute = lambda req: _fake_workflow_result(
+            response=AccumulationScreenResponse(
                 candidates=[_candidate(
                     ticker="BBCA", foreign_flow_score=80.0, bci_label="CLUSTER",
                 )],
                 screened_at=date(2026, 6, 28),
-                window_days=7,
-                total_tickers_checked=1,
+                window_days=getattr(req, "window", 7),
+                total_tickers_checked=len(req.tickers),
                 tickers_skipped=0,
                 provider="fake",
-            )
+            ),
+            save_result=SaveScreenWatchlistResult(
+                saved_count=1, name="mywatch"
+            ),
+        )
+        return uc
 
     monkeypatch.setattr(
         accum_cli,
-        "create_accumulation_screen_workflow",
-        lambda **kwargs: SimpleNamespace(
-            use_case=FakeUseCase(),
-            broker_repository=object(),
-            market_repository=object(),
-        ),
+        "create_run_accumulation_screen_workflow_use_case",
+        fake_uc,
     )
-
-    saved_entries = []
-
-    class FakeRepo:
-        def save_snapshot(self, entries):
-            saved_entries.extend(entries)
-
-    import src.infrastructure.persistence.sqlite_watchlist_repository as wr_mod
-    monkeypatch.setattr(wr_mod, "SQLiteWatchlistRepository", lambda _: FakeRepo())
 
     result = runner.invoke(
         app,
@@ -558,10 +748,80 @@ def test_screen_accum_save_calls_use_case(monkeypatch):
     assert "✓ Saved" in result.output
     assert "mywatch" in result.output
 
-    assert len(saved_entries) == 1
-    entry = saved_entries[0]
-    assert entry.ticker == "BBCA"
-    assert entry.rank == 1
-    assert entry.name == "mywatch"
-    assert entry.flow_score == 80.0
-    assert entry.bci_label == "CLUSTER"
+
+def test_screen_accum_json_skips_save(monkeypatch):
+    captured = {}
+
+    def fake_uc(**kwargs):
+        uc = SimpleNamespace()
+        uc.execute = lambda req: (
+            captured.update(request=req)
+            or _fake_workflow_result(
+                response=AccumulationScreenResponse(
+                    candidates=[_candidate(ticker="BBCA")],
+                    screened_at=date(2026, 6, 28),
+                    window_days=getattr(req, "window", 7),
+                    total_tickers_checked=1,
+                    tickers_skipped=0,
+                    provider="fake",
+                ),
+            )
+        )
+        return uc
+
+    monkeypatch.setattr(
+        accum_cli,
+        "create_run_accumulation_screen_workflow_use_case",
+        fake_uc,
+    )
+
+    result = runner.invoke(
+        app,
+        ["screen", "accum", "BBCA", "--format", "json", "--save", "mywatch"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Saved" not in result.output
+    req = captured["request"]
+    assert req.save_enabled is False
+    assert req.save_name == "mywatch"
+
+
+def test_screen_accum_multi_skips_save(monkeypatch):
+    captured = {}
+
+    def fake_uc(**kwargs):
+        uc = SimpleNamespace()
+        uc.execute = lambda req: (
+            captured.update(request=req)
+            or _fake_workflow_result(
+                multi_results={
+                    7: AccumulationScreenResponse(
+                        candidates=[_candidate()],
+                        screened_at=date(2026, 6, 28),
+                        window_days=7,
+                        total_tickers_checked=1,
+                        tickers_skipped=0,
+                        provider="fake",
+                    ),
+                },
+            )
+        )
+        return uc
+
+    monkeypatch.setattr(
+        accum_cli,
+        "create_run_accumulation_screen_workflow_use_case",
+        fake_uc,
+    )
+
+    result = runner.invoke(
+        app,
+        ["screen", "accum", "BBCA", "--multi", "--save", "mywatch"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Saved" not in result.output
+    req = captured["request"]
+    assert req.save_enabled is False
+    assert req.save_name == "mywatch"

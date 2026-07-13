@@ -15,30 +15,25 @@ from typing import Annotated, Optional
 import typer
 
 from src.adapters.cli.screen_accum_workflow_factory import (
-    create_accumulation_screen_workflow,
+    create_run_accumulation_screen_workflow_use_case,
 )
 from src.application.dto.accumulation_screen import (
     AccumulationScreenResponse,
 )
 from src.application.services.broker_quality import (
     BrokerQualitySnapshot,
-    compute_broker_quality_batch,
 )
-from src.application.services.signal_observation_request_builder import (
-    BuildSignalObservationScreenRequest,
-)
-from src.application.services.strategy_loader import StrategyLoader, StrategyNotFoundError
 from src.application.services.universe_loader import (
     UniverseNotFoundError,
     resolve_tickers,
 )
-from src.application.use_case.assess_risk_use_case import AssessRiskRequest, AssessRiskUseCase
-from src.infrastructure.composition.indicator_registry_factory import create_indicator_registry
+from src.application.use_case.run_accumulation_screen_workflow_use_case import (
+    RunAccumulationScreenWorkflowRequest,
+)
 from src.infrastructure.config.accumulation_screener_config import (
     load_accumulation_screener_config as _load_accumulation_screener_config,
 )
 from src.infrastructure.config.app_config import APP_CFG
-from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 from src.infrastructure.config.swing_config import load_swing_config as _load_swing_config
 from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
@@ -105,25 +100,6 @@ def _print_column_guide() -> None:
     from src.adapters.cli.screen_accum_display import print_column_guide
 
     print_column_guide()
-
-
-def _run_multi(
-    use_case,
-    tickers: list[str],
-    windows: list[int],
-    request_builder: BuildSignalObservationScreenRequest,
-) -> dict[int, AccumulationScreenResponse]:
-    """Run screener for each window. Disable score filters to get full picture."""
-    multi_builder = request_builder.with_score_filters_disabled()
-    return {
-        w: use_case.execute(
-            multi_builder.build(
-                tickers=tickers,
-                window_days=w,
-            )
-        )
-        for w in windows
-    }
 
 
 def accumulation_run(
@@ -308,28 +284,8 @@ def accumulation_run(
 
     universe_label = universe or f"{len(ticker_list)} tickers"
 
-    workflow = create_accumulation_screen_workflow(
-        db_path=resolved_db,
-        screener_config=_ASC,
-        swing_config=_SC,
-    )
-    broker_repo = workflow.broker_repository
-    market_repo = workflow.market_repository
-    use_case = workflow.use_case
-
-    request_builder = BuildSignalObservationScreenRequest.from_configs(
-        swing_config=_SC,
-        accumulation_screener_config=_ASC,
-        min_net_buy_days=max(1, min_streak),
-        min_foreign_flow_score=min_foreign_flow_score,
-        min_signal_score=min_signal_score,
-        min_piotroski=min_piotroski,
-        strategy_name=strategy,
-    )
-    base_request = request_builder.build(
-        tickers=ticker_list,
-        window_days=window,
-    )
+    include_strategy_overlay = bool(strategy and output_format != "json" and not multi)
+    save_enabled = bool(save_name and output_format != "json" and not multi)
 
     if multi:
         window_list = [int(w.strip()) for w in (windows or "7,30,90").split(",")]
@@ -338,57 +294,129 @@ def accumulation_run(
                 f"Screening {len(ticker_list)} tickers | windows: "
                 f"{', '.join(str(w) + ' sessions' for w in window_list)}..."
             )
-        multi_results = _run_multi(use_case, ticker_list, window_list, request_builder)
-        screened_at = next(iter(multi_results.values())).screened_at
-        broker_quality = compute_broker_quality_batch(
+    else:
+        window_list = []
+        if output_format != "json":
+            typer.echo(f"Screening {len(ticker_list)} tickers | {window} sessions...")
+
+    workflow_uc = create_run_accumulation_screen_workflow_use_case(
+        db_path=resolved_db,
+        screener_config=_ASC,
+        swing_config=_SC,
+    )
+
+    result = workflow_uc.execute(
+        RunAccumulationScreenWorkflowRequest(
             tickers=ticker_list,
-            broker_repo=broker_repo,
-            smart_money_brokers=_SC.smart_money_brokers,
-            noise_brokers=_SC.noise_brokers,
-            as_of_date=screened_at,
-        )
-
-        if output_format == "json":
-            by_ticker: dict = {}
-            for w, resp in multi_results.items():
-                for c in resp.candidates:
-                    by_ticker.setdefault(c.ticker, {})[f"{w}_sessions"] = c.to_dict()
-            for ticker_key, quality in broker_quality.items():
-                by_ticker.setdefault(ticker_key, {})["broker_quality"] = quality.to_dict()
-            typer.echo(
-                json.dumps(
-                    {
-                        "schema_version": 1,
-                        "artifact_type": "accumulation_screen_multi",
-                        "mode": "multi",
-                        "windows": [f"{w}_sessions" for w in sorted(multi_results.keys())],
-                        "screened_at": str(screened_at),
-                        "tickers": by_ticker,
-                    },
-                    indent=2,
-                    default=str,
-                )
-            )
-            return
-
-        _display_multi(
-            results=multi_results,
             universe_label=universe_label,
-            top_n=top,
+            universe_name=universe,
+            window=window,
+            min_streak=min_streak,
+            min_foreign_flow_score=min_foreign_flow_score,
+            min_signal_score=min_signal_score,
+            min_piotroski=min_piotroski,
+            strategy_name=strategy,
+            include_strategy_overlay=include_strategy_overlay,
+            multi=multi,
+            windows=window_list,
+            top=top,
+            save_name=save_name,
+            save_enabled=save_enabled,
+        )
+    )
+
+    for warning in result.warnings:
+        typer.echo(f"⚠ {warning}", err=True)
+
+    if multi:
+        _render_multi(
+            result=result,
+            universe_label=universe_label,
+            top=top,
             sort_by=sort_by,
             squeeze_only=squeeze_only,
-            screened_at=screened_at,
-            broker_quality=broker_quality,
-            include_explanation=explain,
+            output_format=output_format,
+            explain=explain,
         )
         return
 
-    if output_format != "json":
-        typer.echo(f"Screening {len(ticker_list)} tickers | {window} sessions...")
-    response = use_case.execute(base_request)
+    _render_single(
+        result=result,
+        universe_label=universe_label,
+        top=top,
+        show_top_broker=show_top_broker,
+        vwap_only=vwap_only,
+        squeeze_only=squeeze_only,
+        output_format=output_format,
+        explain=explain,
+        strategy=strategy,
+    )
 
-    if min_streak > 0:
-        response.candidates = [c for c in response.candidates if c.consecutive_streak >= min_streak]
+
+def _render_multi(
+    *,
+    result,
+    universe_label: str,
+    top: int,
+    sort_by: str,
+    squeeze_only: bool,
+    output_format: str,
+    explain: bool,
+) -> None:
+    multi_results = result.multi_results
+    broker_quality = result.broker_quality
+    screened_at = next(iter(multi_results.values())).screened_at
+
+    if output_format == "json":
+        by_ticker: dict = {}
+        for w, resp in multi_results.items():
+            for c in resp.candidates:
+                by_ticker.setdefault(c.ticker, {})[f"{w}_sessions"] = c.to_dict()
+        for ticker_key, quality in broker_quality.items():
+            by_ticker.setdefault(ticker_key, {})["broker_quality"] = quality.to_dict()
+        typer.echo(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "artifact_type": "accumulation_screen_multi",
+                    "mode": "multi",
+                    "windows": [f"{w}_sessions" for w in sorted(multi_results.keys())],
+                    "screened_at": str(screened_at),
+                    "tickers": by_ticker,
+                },
+                indent=2,
+                default=str,
+            )
+        )
+        return
+
+    _display_multi(
+        results=multi_results,
+        universe_label=universe_label,
+        top_n=top,
+        sort_by=sort_by,
+        squeeze_only=squeeze_only,
+        screened_at=screened_at,
+        broker_quality=broker_quality,
+        include_explanation=explain,
+    )
+
+
+def _render_single(
+    *,
+    result,
+    universe_label: str,
+    top: int,
+    show_top_broker: bool,
+    vwap_only: bool,
+    squeeze_only: bool,
+    output_format: str,
+    explain: bool,
+    strategy: str | None,
+) -> None:
+    response = result.response
+    if response is None:
+        return
 
     if output_format == "json":
         data = {
@@ -404,33 +432,6 @@ def accumulation_run(
         typer.echo(json.dumps(data, indent=2, default=str))
         return
 
-    strategy_signals: dict[str, str] = {}
-    if strategy:
-        registry = create_indicator_registry(
-            broker_repository=broker_repo,
-            market_repository=market_repo,
-        )
-        try:
-            strat_loader = StrategyLoader(
-                rules_loader=RulesYamlLoader(), registry=registry
-            )
-            rules_path = strat_loader.resolve(strategy)
-            risk_uc = AssessRiskUseCase(
-                repository=market_repo,
-                registry=registry,
-                rules_loader=RulesYamlLoader(),
-            )
-            visible = response.candidates[:top]
-            for c in visible:
-                try:
-                    req = AssessRiskRequest(ticker=c.ticker, rules_file=rules_path)
-                    res = risk_uc.execute(req)
-                    strategy_signals[c.ticker] = res.assessment.risk_level_name
-                except Exception:
-                    strategy_signals[c.ticker] = "?"
-        except StrategyNotFoundError as e:
-            typer.echo(f"⚠ Strategy not found: {e}", err=True)
-
     _display_results(
         response=response,
         universe_label=universe_label,
@@ -439,31 +440,15 @@ def accumulation_run(
         vwap_only=vwap_only,
         squeeze_only=squeeze_only,
         include_explanation=explain,
-        strategy_signals=strategy_signals or None,
+        strategy_signals=result.strategy_signals or None,
         strategy_name=strategy,
     )
 
-    if save_name:
-        from src.application.use_case.save_screen_watchlist_use_case import (
-            SaveScreenWatchlistRequest,
-            SaveScreenWatchlistUseCase,
-        )
-        from src.infrastructure.persistence.sqlite_watchlist_repository import (
-            SQLiteWatchlistRepository,
-        )
-
-        repo = SQLiteWatchlistRepository(resolved_db)
-        result = SaveScreenWatchlistUseCase(repo).execute(
-            SaveScreenWatchlistRequest(
-                name=save_name,
-                candidates=response.candidates[:top],
-                universe=str(universe or ""),
-                window_days=window,
-            )
-        )
+    if result.save_result:
         typer.echo(
             typer.style(
-                f"\n  ✓ Saved {result.saved_count} tickers to watchlist '{result.name}'",
+                f"\n  ✓ Saved {result.save_result.saved_count} tickers "
+                f"to watchlist '{result.save_result.name}'",
                 fg=typer.colors.GREEN,
             )
         )
