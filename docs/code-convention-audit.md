@@ -1,6 +1,7 @@
 # Code Convention Audit - Production Code Only
 
 Scope: fresh audit of `src/**/*.py` only. Documentation and tests are intentionally excluded.
+Status updated after follow-up refactors; completed findings are retained for audit traceability.
 
 Audit goals:
 - Keep files small enough for AI agents and humans to scan quickly.
@@ -10,7 +11,14 @@ Audit goals:
 
 ## Findings
 
+Status legend:
+- `DONE`: implementation has been split/extracted and vetted against the original finding.
+- `OPEN`: the original responsibility/scanability problem still exists.
+- `PARTIAL`: guardrail or documentation exists, but production cleanup remains.
+
 ### 1. Critical: `src/domain/value_objects/signal_forward_label.py` is a schema warehouse
+
+Status: DONE.
 
 Pointer: `src/domain/value_objects/signal_forward_label.py`, 625 LOC. `SignalObservationFingerprint` alone spans setup, strategy, flow, market regime, institutional accumulation, ticker profile, sector context, company quality, alpha/trigger, volatility fields, plus `to_dict()` and `from_dict()` compatibility parsing.
 
@@ -37,6 +45,8 @@ Edge cases to watch:
 
 ### 2. Critical: `src/adapters/cli/analyze_swing_broker_display.py` is not display-only
 
+Status: DONE.
+
 Pointer: `src/adapters/cli/analyze_swing_broker_display.py`, 606 LOC. Despite the `_display.py` name, it defines DTOs, broker-quality policy notes, repository-derived flow detail builders, broker weighting math, and formatting helpers.
 
 Rationale: A display module should render facts. This file decides broker quality and derives facts from repositories, which makes the adapter heavier than its filename implies.
@@ -60,6 +70,8 @@ Edge cases to watch:
 - Noise-led accumulation warning.
 
 ### 3. Critical: `src/adapters/cli/learn_commands.py` is a multi-command workflow module
+
+Status: OPEN.
 
 Pointer: `src/adapters/cli/learn_commands.py`, 578 LOC. It owns `snapshot`, `track`, `grade`, `tune`, `prompt`, date/path helpers, session checks, infrastructure wiring, and output formatting.
 
@@ -91,6 +103,8 @@ Edge cases to watch:
 
 ### 4. Critical: `src/infrastructure/browser/playwright_stockbit_browser.py` mixes browser session, token extraction, HTTP, and CLI actions
 
+Status: DONE.
+
 Pointer: `src/infrastructure/browser/playwright_stockbit_browser.py`, 572 LOC. It handles Playwright context creation, token interception, localStorage fallback, direct Exodus HTTP GET, login/session saving, browse, spy, token extraction, and status.
 
 Rationale: The filename says browser utilities, but the file also owns token and authenticated HTTP behavior. Browser lifecycle and token/API concerns change for different reasons.
@@ -117,6 +131,8 @@ Edge cases to watch:
 
 ### 5. High: `src/application/services/ticker_profile_classifier.py` violates classifier purity with config loading
 
+Status: DONE.
+
 Pointer: `src/application/services/ticker_profile_classifier.py`, 586 LOC. The file defines request/config DTOs, YAML loading, universe/index membership loading, numeric helpers, exposure scoring, and the classifier.
 
 Rationale: The docstring says the classifier never fetches data, but it reads YAML/config internally. That makes the application service harder to test and couples profile classification to file layout.
@@ -141,6 +157,8 @@ Edge cases to watch:
 - Missing universes config.
 
 ### 6. High: `src/application/services/swing_tuning_diff_policy.py` has too many policy axes
+
+Status: DONE.
 
 Pointer: `src/application/services/swing_tuning_diff_policy.py`, 569 LOC. It classifies target paths, suggests values, builds summaries/checklists, interprets rows, prioritizes rows, parses evidence buckets, and counts dimensions.
 
@@ -168,6 +186,8 @@ Edge cases to watch:
 
 ### 7. High: `src/application/use_case/assess_signal_evidence_use_case.py` still does aggregation, policy, projection, and response assembly
 
+Status: DONE.
+
 Pointer: `src/application/use_case/assess_signal_evidence_use_case.py`, 562 LOC. `execute()` scores groups, computes legacy regime-conditioned diagnostics, renormalizes, applies flags, resolves decision policy, builds alpha/trigger projection, builds breakdown, and builds rationale.
 
 Rationale: A use case should orchestrate. This file owns several reusable scoring/reporting sub-policies that agents need to reason about independently.
@@ -192,6 +212,8 @@ Edge cases to watch:
 - Gate tightening from market context.
 
 ### 8. High: `src/adapters/cli/trade_commands.py` is a router plus tuning command implementation cluster
+
+Status: OPEN.
 
 Pointer: `src/adapters/cli/trade_commands.py`, 536 LOC. The top registers commands, but the file also implements tuning status, tuning review, patch validation, patch apply, dirty-git checks, journal migration, and log routing.
 
@@ -221,6 +243,8 @@ Edge cases to watch:
 
 ### 9. High: `src/adapters/cli/fetch_market_commands.py` still contains status policy and provider precondition logic
 
+Status: DONE.
+
 Pointer: `src/adapters/cli/fetch_market_commands.py`, 526 LOC. It has Typer parsing plus cache status formatters, row-span status policy, missing Stockbit-session precondition logic, universe resolution, provider wiring, and output coordination.
 
 Rationale: Previous extraction improved fetch internals, but this adapter still decides statuses and validates provider policy. Those are application-level concerns or display helpers.
@@ -244,6 +268,8 @@ Edge cases to watch:
 - broker-only and candles-only combinations.
 
 ### 10. High: `src/application/use_case/assess_risk_use_case.py` mixes custom rule evaluation, configured gates, trend response DTOs, and infrastructure fallback
+
+Status: DONE.
 
 Pointer: `src/application/use_case/assess_risk_use_case.py`, 517 LOC. It contains request/response DTOs, custom YAML rule evaluation, standard gate evaluation, indicator snapshot building, trend response type, and a fallback import of `RulesYamlLoader` from infrastructure.
 
@@ -270,6 +296,8 @@ Edge cases to watch:
 - insufficient candle coverage warnings.
 
 ### 11. High: `src/infrastructure/config/swing_config_loader.py` is a nested parser cluster
+
+Status: DONE.
 
 Pointer: `src/infrastructure/config/swing_config_loader.py`, 514 LOC. One loader parses broker quality, four setup families, verdict thresholds, resistance, corporate actions, setup targets, setup phase requirements, RS policy, volume trigger policy, and split-config composition.
 
@@ -298,6 +326,8 @@ Edge cases to watch:
 - list parsing for allowed phases and broker codes.
 
 ### 12. High: `src/application/services/engine_bootstrap/signal_config_resolvers.py` is too broad and crosses infrastructure boundaries
+
+Status: DONE.
 
 Pointer: `src/application/services/engine_bootstrap/signal_config_resolvers.py`, 497 LOC. It loads config via `APP_CFG`, resolves weights, signal scoring config, decision policy, alpha/trigger config, evidence authority promotion, and archived-config warnings.
 
@@ -328,6 +358,8 @@ Edge cases to watch:
 
 ### 13. Medium: `src/application/rules/schema.py` combines every DSL schema type and validation rule
 
+Status: DONE.
+
 Pointer: `src/application/rules/schema.py`, 524 LOC. It defines indicator schema, operators, outcomes, signal mapping, condition types, rule, ruleset, validation, and required-indicator collection.
 
 Rationale: The file is conceptually cohesive but too broad for targeted DSL changes. Indicator schema changes are unrelated to rule ordering or condition validation.
@@ -355,6 +387,8 @@ Edge cases to watch:
 
 ### 14. Medium: `src/application/formula/evaluator.py` mixes AST walking, series math, and registry adapter
 
+Status: DONE.
+
 Pointer: `src/application/formula/evaluator.py`, 490 LOC. It defines `SeriesProvider`, AST evaluator, SMA/EMA-on-series math, binary alignment/broadcasting, and `RegistrySeriesProvider`.
 
 Rationale: Formula behavior is easier to audit when expression traversal is separate from series arithmetic and registry adaptation.
@@ -380,6 +414,8 @@ Edge cases to watch:
 - nested formulas like `SMA(RSI(14), 10)`.
 
 ### 15. Medium: Stockbit PIT provider cache logic is duplicated across provider files
+
+Status: DONE.
 
 Pointers:
 - `src/infrastructure/browser/stockbit_insider.py`, 502 LOC.
@@ -415,6 +451,8 @@ Edge cases to watch:
 
 ### 16. Medium: `src/infrastructure/browser/stockbit_broker_provider.py` still owns endpoint period mapping and request construction
 
+Status: DONE.
+
 Pointer: `src/infrastructure/browser/stockbit_broker_provider.py`, 475 LOC. The provider owns broker-summary period mapping, foreign-top period mapping, request URL construction, historical summary fallback, pagination, and provider orchestration.
 
 Rationale: The provider is below the hard threshold, but period mapping and URL construction are pure, testable responsibilities that are easy to accidentally duplicate.
@@ -438,6 +476,8 @@ Edge cases to watch:
 - synthetic total value fallback.
 
 ### 17. Medium: `src/infrastructure/browser/stockbit_preopen_parsers.py` contains two parser strategies in one file
+
+Status: OPEN.
 
 Pointer: `src/infrastructure/browser/stockbit_preopen_parsers.py`, 416 LOC. It contains confirmed-shape pre-open parsing plus generic recursive JSON discovery helpers for movers, best bid, order book, price, and volume.
 
@@ -463,6 +503,8 @@ Edge cases to watch:
 
 ### 18. Medium: `src/infrastructure/browser/stockbit_corporate_action_calendar.py` repeats event-specific parser boilerplate
 
+Status: OPEN.
+
 Pointer: `src/infrastructure/browser/stockbit_corporate_action_calendar.py`, 401 LOC. It defines separate parse methods for dividend, stock split, reverse split, rights issue, bonus, tender offer, RUPS, pubex, and IPO, with shared date/note/id mechanics.
 
 Rationale: The file is close to the preferred limit and event parser repetition makes new corporate action types expensive to add safely.
@@ -486,6 +528,8 @@ Edge cases to watch:
 - RUPS meeting date stored as event date.
 
 ### 19. Medium: Application services directly parse YAML in several places
+
+Status: PARTIAL. The listed files were addressed, but application-layer YAML parsing still exists in other files and should be handled by a follow-up boundary cleanup.
 
 Pointers:
 - `src/application/services/ticker_profile_classifier.py`
@@ -517,6 +561,8 @@ Edge cases to watch:
 - partial config with defaults.
 
 ### 20. Medium: Compatibility facades are accumulating and need explicit expiry discipline
+
+Status: PARTIAL.
 
 Pointers:
 - `src/application/services/bootstrap.py`
@@ -566,16 +612,14 @@ Add or keep these rules in `AI_AGENT_CHECKLIST.md` or an ADR:
 11. Tuning and signal policy files must split value selection, target classification, interpretation, and report assembly once they exceed 400 LOC.
 12. Use cases orchestrate. Extract group scoring, rationale/breakdown builders, serializers, calculators, and policy helpers when they become independently reviewable.
 
-## Suggested Refactor Order
+## Remaining Suggested Refactor Order
 
-1. Fix `signal_forward_label.py` first because persisted fingerprint scan burden is highest and affects many workflows.
-2. Move broker-detail builders out of `analyze_swing_broker_display.py` so display modules become trustworthy again.
-3. Split `learn_commands.py` and `trade_commands.py` routers to reduce adapter scan cost.
-4. Split `playwright_stockbit_browser.py` by browser/token/session action.
-5. Extract `swing_config_loader.py` section parsers.
-6. Split `assess_signal_evidence_use_case.py` and `assess_risk_use_case.py` into orchestration plus collaborators.
-7. Introduce shared Stockbit PIT cache primitives, then simplify the largest endpoint providers.
-8. Clean up compatibility facades and application YAML-loading boundaries.
+1. Split `learn_commands.py` into command modules and shared path/session helpers.
+2. Split `trade_commands.py` so it is a router only; move tuning, log, and migration command bodies out.
+3. Split `stockbit_preopen_parsers.py` into confirmed payload parsers and fallback JSON search helpers.
+4. Extract repeated corporate-action event parsing from `stockbit_corporate_action_calendar.py`.
+5. Finish application YAML boundary cleanup for remaining application files that still call `yaml.safe_load`.
+6. Finish compatibility facade cleanup by marking canonical imports and ensuring facades contain re-export/delegation only.
 
 ## Acceptance Gate For Refactor PRs
 
