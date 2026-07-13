@@ -20,17 +20,24 @@ from src.adapters.cli.fetch_broker_display import (
     display_import_preview,
     display_recent_fetch_summary,
 )
-from src.application.use_case.fetch_broker_data_use_case import (
-    FetchBrokerDataRequest,
-    FetchBrokerDataUseCase,
+from src.adapters.cli.fetch_broker_provider_factory import PROVIDERS
+from src.adapters.cli.fetch_broker_workflow_factory import (
+    create_broker_flow_history_workflow,
+    create_fetch_broker_summary_workflow,
+    create_foreign_top_stocks_workflow,
+    create_import_broker_data_use_case,
+    load_broker_import_mapping,
+)
+from src.application.use_case.fetch_broker_command_workflows import (
+    FetchBrokerFlowHistoryWorkflowRequest,
+    FetchBrokerSummaryWorkflowRequest,
+    FetchForeignTopStocksWorkflowRequest,
 )
 from src.application.use_case.import_broker_data_use_case import (
     ImportBrokerDataRequest,
-    ImportBrokerDataUseCase,
 )
 from src.domain.ports.broker_data_provider import (
     BrokerDataAuthError,
-    BrokerDataProvider,
     BrokerDataProviderError,
 )
 from src.domain.ports.csv_broker_parser import (
@@ -38,32 +45,10 @@ from src.domain.ports.csv_broker_parser import (
     ErrorStrategy,
 )
 from src.infrastructure.config.app_config import APP_CFG
-from src.infrastructure.csv import BrokerCsvAdapter, MappingLoader
-from src.infrastructure.data_providers.idx import IdxBrokerDataProvider
-from src.infrastructure.persistence.sqlite_broker_repository import (
-    SQLiteBrokerRepository,
-)
 
-# Supported providers
-PROVIDERS = ("idx", "stockbit")
 DEFAULT_PROVIDER = APP_CFG.broker.provider
 
 _DEFAULT_PROFILE_DIR = Path(APP_CFG.storage.stockbit_profile_dir)
-
-
-def _create_provider(provider_name: str) -> BrokerDataProvider:
-    """Create a broker data provider by name."""
-    if provider_name == "idx":
-        return IdxBrokerDataProvider()
-    elif provider_name == "stockbit":
-        from src.infrastructure.browser.stockbit_broker_provider import StockbitBrokerProvider
-        from src.infrastructure.composition.stockbit_session_factory import get_stockbit_session
-        session = get_stockbit_session()
-        if not session or not session.authenticated:
-            raise ValueError("No active Stockbit session. Run `saham fetch stockbit login`.")
-        return StockbitBrokerProvider(session.api_client)
-    else:
-        raise ValueError(f"Unknown provider: {provider_name}. Choose from: {', '.join(PROVIDERS)}")
 
 
 # Default configuration
@@ -148,37 +133,39 @@ def broker_fetch(
     typer.echo(f"Fetching broker data for {ticker.upper()}...")
     typer.echo(f"Provider: {provider_name} | Date range: {start_date} to {end_date}")
 
-    # Initialize dependencies
-    provider = _create_provider(provider_name)
-    repository = SQLiteBrokerRepository(db_path)
-    use_case = FetchBrokerDataUseCase(provider, repository)
-
     try:
-        response = use_case.execute(
-            FetchBrokerDataRequest(
+        workflow = create_fetch_broker_summary_workflow(provider_name, db_path)
+        result = workflow.execute(
+            FetchBrokerSummaryWorkflowRequest(
                 ticker=ticker,
                 start_date=start_date,
                 end_date=end_date,
+                days=days,
                 refresh=refresh,
+                provider_name=provider_name,
             )
         )
 
+        response = result.response
         source = "cache" if response.from_cache else provider_name
         typer.echo(
             typer.style(f"Loaded {len(response.summaries)} days from {source}",
                        fg=typer.colors.GREEN)
         )
 
-        # For Stockbit providers, also fetch exact historical foreign flow
-        # (avg_price) so the daily foreign-flow series is complete.
-        if not response.from_cache and provider_name == "stockbit":
-            points = provider.fetch_foreign_flow_history(ticker, days=days)
-            if points:
-                repository.save_foreign_flow_points(points)
-                typer.echo(typer.style(f"Saved {len(points)} exact foreign-flow points", fg=typer.colors.CYAN))
+        if result.exact_flow_saved_count > 0:
+            typer.echo(
+                typer.style(
+                    f"Saved {result.exact_flow_saved_count} exact foreign-flow points",
+                    fg=typer.colors.CYAN,
+                )
+            )
 
         display_recent_fetch_summary(response.summaries)
 
+    except ValueError as e:
+        typer.echo(typer.style(str(e), fg=typer.colors.RED))
+        raise typer.Exit(1)
     except BrokerDataAuthError as e:
         typer.echo(typer.style(f"Auth error: {e}", fg=typer.colors.RED))
         typer.echo("Run: saham fetch stockbit login")
@@ -225,14 +212,6 @@ def broker_top_foreign(
         saham fetch broker-top-foreign --days 7 --limit 20
         saham fetch broker-top-foreign --days 365
     """
-    prov = _create_provider(provider)
-    if not prov.is_authenticated():
-        typer.echo(
-            typer.style("Not authenticated.", fg=typer.colors.RED)
-            + " Run: saham fetch stockbit login"
-        )
-        raise typer.Exit(1)
-
     end = date.today()
     start = end - timedelta(days=days)
 
@@ -246,29 +225,58 @@ def broker_top_foreign(
     typer.echo("─" * 55)
 
     try:
-        snapshots = prov.fetch_foreign_top_stocks(start, end, limit=limit)
+        workflow = create_foreign_top_stocks_workflow(provider, db_path)
+        result = workflow.execute(
+            FetchForeignTopStocksWorkflowRequest(
+                days=days,
+                limit=limit,
+                save=not no_save,
+                today=end,
+            )
+        )
+    except ValueError as e:
+        typer.echo(typer.style(str(e), fg=typer.colors.RED))
+        raise typer.Exit(1)
+    except BrokerDataProviderError as e:
+        if "Not authenticated" in str(e):
+            typer.echo(
+                typer.style("Not authenticated.", fg=typer.colors.RED)
+                + " Run: saham fetch stockbit login"
+            )
+            raise typer.Exit(1)
+        typer.echo(typer.style(f"Error: {e}", fg=typer.colors.RED), err=True)
+        raise typer.Exit(1)
     except Exception as e:
         typer.echo(typer.style(f"Error: {e}", fg=typer.colors.RED), err=True)
         raise typer.Exit(1)
 
-    if not snapshots:
+    if not result.snapshots:
         typer.echo(typer.style("No data returned.", fg=typer.colors.YELLOW))
         typer.echo("Run: saham fetch stockbit spy --target broker-scan")
         return
 
-    # Auto-save to database
+    # Auto-save notice
     if not no_save:
-        try:
-            repo = SQLiteBrokerRepository(db_path)
-            repo.save_foreign_flow_snapshots(snapshots, snapshot_date=end, period_days=days)
-            typer.echo(typer.style(f"  Saved {len(snapshots)} snapshots → {db_path}", fg=typer.colors.CYAN))
-        except Exception as e:
-            typer.echo(typer.style(f"  Warning: could not save to DB: {e}", fg=typer.colors.YELLOW), err=True)
+        if result.save_warning:
+            typer.echo(
+                typer.style(
+                    f"  Warning: could not save to DB: {result.save_warning}",
+                    fg=typer.colors.YELLOW,
+                ),
+                err=True,
+            )
+        elif result.saved_count > 0:
+            typer.echo(
+                typer.style(
+                    f"  Saved {result.saved_count} snapshots → {db_path}",
+                    fg=typer.colors.CYAN,
+                )
+            )
 
-    display_foreign_top_scan(snapshots)
+    display_foreign_top_scan(result.snapshots)
 
     typer.echo("")
-    typer.echo(f"Showing {len(snapshots)} stocks. Use --limit to adjust.")
+    typer.echo(f"Showing {len(result.snapshots)} stocks. Use --limit to adjust.")
 
 
 def broker_history(
@@ -299,33 +307,45 @@ def broker_history(
         saham fetch broker-history BBCA
         saham fetch broker-history BBCA --days 30
     """
-    prov = _create_provider(provider)
-    if not prov.is_authenticated():
-        typer.echo(
-            typer.style("Not authenticated.", fg=typer.colors.RED)
-            + " Run: saham fetch stockbit login"
-        )
-        raise typer.Exit(1)
-
     ticker = ticker.upper()
     typer.echo(f"\nFetching {days}-day flow history for {ticker}...")
 
     try:
-        points = prov.fetch_foreign_flow_history(ticker, days=days)
+        workflow = create_broker_flow_history_workflow(provider, db_path)
+        result = workflow.execute(
+            FetchBrokerFlowHistoryWorkflowRequest(
+                ticker=ticker,
+                days=days,
+            )
+        )
+    except ValueError as e:
+        typer.echo(typer.style(str(e), fg=typer.colors.RED))
+        raise typer.Exit(1)
+    except BrokerDataProviderError as e:
+        if "Not authenticated" in str(e):
+            typer.echo(
+                typer.style("Not authenticated.", fg=typer.colors.RED)
+                + " Run: saham fetch stockbit login"
+            )
+            raise typer.Exit(1)
+        typer.echo(typer.style(f"Error: {e}", fg=typer.colors.RED), err=True)
+        raise typer.Exit(1)
     except Exception as e:
         typer.echo(typer.style(f"Error: {e}", fg=typer.colors.RED), err=True)
         raise typer.Exit(1)
 
-    if not points:
+    if not result.points:
         typer.echo(typer.style("No historical data returned.", fg=typer.colors.YELLOW))
         return
 
-    repo = SQLiteBrokerRepository(db_path)
-    repo.save_foreign_flow_points(points)
+    typer.echo(
+        typer.style(
+            f"Saved {result.saved_count} foreign-flow points for {ticker} → {db_path}",
+            fg=typer.colors.GREEN,
+        )
+    )
 
-    typer.echo(typer.style(f"Saved {len(points)} foreign-flow points for {ticker} → {db_path}", fg=typer.colors.GREEN))
-
-    display_history_fetch_preview(ticker, points)
+    display_history_fetch_preview(ticker, result.points)
 
 
 def broker_import(
@@ -398,23 +418,16 @@ def broker_import(
     # Load custom mapping if specified
     mapping_config = None
     if mapping:
-        mapping_loader = MappingLoader()
         try:
-            # Check if it's a file path
-            mapping_path = Path(mapping)
-            if mapping_path.exists():
-                mapping_config = mapping_loader.load_from_file(mapping_path)
-            else:
-                mapping_config = mapping_loader.load(mapping)
-            typer.echo(f"Using mapping: {mapping_config.name}")
+            mapping_config = load_broker_import_mapping(mapping)
+            if mapping_config:
+                typer.echo(f"Using mapping: {mapping_config.name}")
         except CsvBrokerParserError as e:
             typer.echo(typer.style(f"Mapping error: {e}", fg=typer.colors.RED))
             raise typer.Exit(1)
 
-    # Initialize dependencies
-    parser = BrokerCsvAdapter()
-    repository = SQLiteBrokerRepository(db_path)
-    use_case = ImportBrokerDataUseCase(parser, repository)
+    # Initialize dependencies using factory
+    use_case = create_import_broker_data_use_case(db_path)
 
     # Create request
     request = ImportBrokerDataRequest(
