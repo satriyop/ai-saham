@@ -199,8 +199,8 @@ def test_write_then_read_single(tmp_provider):
         eps_yoy_change=3.81, eps_prev_year=114.75,
         fetched_at=datetime.now(),
     )
-    tmp_provider._write_record(record)
-    result = tmp_provider._read_cache_single("BBCA", 2026, 1)
+    tmp_provider._cache.write_record(record)
+    result = tmp_provider._cache.read_single("BBCA", 2026, 1)
     assert result is not None
     assert result.eps_actual == pytest.approx(119.12)
     assert result.eps_prev_year == pytest.approx(114.75)
@@ -208,13 +208,13 @@ def test_write_then_read_single(tmp_provider):
 
 def test_read_cache_returns_newest_first(tmp_provider):
     for q in [1, 2, 3]:
-        tmp_provider._write_record(EarningsRecord(
+        tmp_provider._cache.write_record(EarningsRecord(
             ticker="BBCA", year=2026, quarter=q,
             eps_actual=100.0 + q, eps_estimate=None, eps_surprise_pct=None,
             eps_yoy_change=None, eps_prev_year=None,
             fetched_at=datetime.now(),
         ))
-    results = tmp_provider._read_cache("BBCA", quarters=4)
+    results = tmp_provider._cache.read("BBCA")
     assert len(results) == 3
     assert results[0].quarter == 3  # newest first
     assert results[1].quarter == 2
@@ -222,13 +222,13 @@ def test_read_cache_returns_newest_first(tmp_provider):
 
 
 def test_get_earnings_history_filters_future_fetched_rows_for_as_of_date(tmp_provider):
-    tmp_provider._write_record(EarningsRecord(
+    tmp_provider._cache.write_record(EarningsRecord(
         ticker="BBCA", year=2026, quarter=1,
         eps_actual=101.0, eps_estimate=None, eps_surprise_pct=None,
         eps_yoy_change=None, eps_prev_year=None,
         fetched_at=datetime(2026, 6, 1, 9),
     ))
-    tmp_provider._write_record(EarningsRecord(
+    tmp_provider._cache.write_record(EarningsRecord(
         ticker="BBCA", year=2026, quarter=2,
         eps_actual=102.0, eps_estimate=None, eps_surprise_pct=None,
         eps_yoy_change=None, eps_prev_year=None,
@@ -246,13 +246,13 @@ def test_get_earnings_history_filters_future_fetched_rows_for_as_of_date(tmp_pro
 
 
 def test_get_earnings_history_keeps_multiple_snapshots_per_quarter(tmp_provider):
-    tmp_provider._write_record(EarningsRecord(
+    tmp_provider._cache.write_record(EarningsRecord(
         ticker="BBCA", year=2026, quarter=1,
         eps_actual=101.0, eps_estimate=None, eps_surprise_pct=None,
         eps_yoy_change=None, eps_prev_year=None,
         fetched_at=datetime(2026, 6, 1, 9),
     ))
-    tmp_provider._write_record(EarningsRecord(
+    tmp_provider._cache.write_record(EarningsRecord(
         ticker="BBCA", year=2026, quarter=1,
         eps_actual=111.0, eps_estimate=None, eps_surprise_pct=None,
         eps_yoy_change=None, eps_prev_year=None,
@@ -277,7 +277,7 @@ def test_get_earnings_history_keeps_multiple_snapshots_per_quarter(tmp_provider)
 
 
 def test_get_earnings_history_returns_empty_when_no_prior_fetched_row(tmp_provider):
-    tmp_provider._write_record(EarningsRecord(
+    tmp_provider._cache.write_record(EarningsRecord(
         ticker="BBCA", year=2026, quarter=2,
         eps_actual=102.0, eps_estimate=None, eps_surprise_pct=None,
         eps_yoy_change=None, eps_prev_year=None,
@@ -298,7 +298,7 @@ def test_is_cache_fresh_false_when_empty(tmp_provider):
 
 
 def test_is_cache_fresh_true_when_latest_available_history_snapshot_is_recent(tmp_provider):
-    tmp_provider._write_record(EarningsRecord(
+    tmp_provider._cache.write_record(EarningsRecord(
         ticker="BBCA", year=2026, quarter=1,
         eps_actual=101.0, eps_estimate=None, eps_surprise_pct=None,
         eps_yoy_change=None, eps_prev_year=None,
@@ -309,7 +309,7 @@ def test_is_cache_fresh_true_when_latest_available_history_snapshot_is_recent(tm
 
 
 def test_is_cache_fresh_false_when_latest_available_history_snapshot_is_stale(tmp_provider):
-    tmp_provider._write_record(EarningsRecord(
+    tmp_provider._cache.write_record(EarningsRecord(
         ticker="BBCA", year=2026, quarter=1,
         eps_actual=101.0, eps_estimate=None, eps_surprise_pct=None,
         eps_yoy_change=None, eps_prev_year=None,

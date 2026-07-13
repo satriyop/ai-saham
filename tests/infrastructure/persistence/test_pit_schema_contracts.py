@@ -236,10 +236,10 @@ def test_earnings_cache_pit(db_path):
             (_TICKER, 2024, 4, 125.0, 110.0, "2025-06-01T00:00:00")
         )
 
-    res_list = provider._read_cache(_TICKER, quarters=1, as_of_date=date(2025, 3, 1))
+    res_list = provider._cache.read(_TICKER, as_of_date=date(2025, 3, 1))[:1]
     assert len(res_list) == 1
     assert res_list[0].eps_actual == 120.0
 
-    res_list = provider._read_cache(_TICKER, quarters=1, as_of_date=date(2025, 7, 1))
+    res_list = provider._cache.read(_TICKER, as_of_date=date(2025, 7, 1))[:1]
     assert len(res_list) == 1
     assert res_list[0].eps_actual == 125.0

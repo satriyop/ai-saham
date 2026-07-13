@@ -168,7 +168,7 @@ def test_readonly_insider_provider_returns_cached_transactions(tmp_path):
         api_client=None,
         db_path=tmp_path / "stockbit.db",
     )
-    provider._write_cache(
+    provider._cache.write(
         "ASII",
         [
             InsiderTransaction(

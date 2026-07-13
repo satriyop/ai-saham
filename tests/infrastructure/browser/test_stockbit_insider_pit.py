@@ -110,7 +110,7 @@ def test_insider_write_cache_preserves_historical_snapshots(tmp_path):
     provider = StockbitInsiderActivityProvider(api_client=None, db_path=db_path)
     _insert_insider_row(db_path, fetched_date=date(2026, 6, 1))
 
-    provider._write_cache(
+    provider._cache.write(
         "BBCA",
         [
             InsiderTransaction(
