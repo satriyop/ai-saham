@@ -60,27 +60,28 @@ def test_run_swing_backtest_accepts_explicit_config():
         mock_load.assert_not_called()
 
 
-def test_tuning_commands_resolves_none_options():
-    mock_config = MagicMock(spec=SwingBacktestRunnerConfig)
-    mock_config.backtest_config = MagicMock()
-    mock_config.backtest_config.capital = 12345678
-    mock_config.backtest_config.risk_pct = 2.5
-    mock_config.backtest_config.max_positions = 5
-    mock_config.backtest_config.take_profit_pct = 8.0
-    mock_config.backtest_config.stop_loss_pct = 4.0
-    mock_config.backtest_config.max_hold_days = 15
-    mock_config.backtest_config.cost_bps = 25.0
-
-    runner_pkg = "src.adapters.cli.trade_swing_backtest_runner"
+def test_tuning_commands_delegates_raw_options_to_workflow():
+    # Default resolution now lives in RunSwingTuningReviewUseCase (see
+    # tests/application/use_case/test_run_swing_tuning_review_use_case.py).
+    # This adapter test only verifies swing_tune builds a request with the
+    # raw CLI intent and delegates to the injected workflow.
     tune_pkg = "src.adapters.cli.trade_swing_tuning_commands"
-    with patch(f"{runner_pkg}.load_swing_backtest_runner_config", return_value=mock_config), \
-         patch(f"{tune_pkg}._run_swing_backtest") as mock_run, \
-         patch(f"{tune_pkg}._swing_tuning_payload"), \
-         patch(f"{tune_pkg}.display_swing_backtest"):
+    mock_workflow = MagicMock()
+    mock_result = MagicMock()
+    mock_result.is_split_message = None
+    mock_result.persistence = None
+    mock_result.patch_payload = None
+    mock_result.payload = {}
+    mock_workflow.execute.return_value = mock_result
+
+    with patch(
+        f"{tune_pkg}.create_run_swing_tuning_review_workflow",
+        return_value=mock_workflow,
+    ), patch(f"{tune_pkg}.display_swing_backtest"):
 
         swing_tune(
             tickers=["BBCA"],
-            capital=None, # should resolve to 12345678
+            capital=None,
             risk_pct=None,
             max_positions=None,
             take_profit=None,
@@ -89,15 +90,16 @@ def test_tuning_commands_resolves_none_options():
             cost_bps=None,
         )
 
-        mock_run.assert_called_once()
-        call_kwargs = mock_run.call_args[1]
-        assert call_kwargs["capital"] == 12345678
-        assert call_kwargs["risk_pct"] == 2.5
-        assert call_kwargs["max_positions"] == 5
-        assert call_kwargs["take_profit"] == 8.0
-        assert call_kwargs["stop_loss"] == 4.0
-        assert call_kwargs["max_hold"] == 15
-        assert call_kwargs["cost_bps"] == 25.0
+        mock_workflow.execute.assert_called_once()
+        request = mock_workflow.execute.call_args[0][0]
+        assert request.tickers == ["BBCA"]
+        assert request.capital is None
+        assert request.risk_pct is None
+        assert request.max_positions is None
+        assert request.take_profit is None
+        assert request.stop_loss is None
+        assert request.max_hold is None
+        assert request.cost_bps is None
 
 
 def test_analyze_commands_use_load_config_per_invocation():
