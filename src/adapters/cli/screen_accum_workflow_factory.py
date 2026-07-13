@@ -10,6 +10,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from src.adapters.cli.accumulation_risk_workflow_factory import (
+    create_accumulation_assess_risk_use_case,
+)
 from src.adapters.cli.stock_analysis_workflow_dependencies import (
     StockAnalysisWorkflowDependencies,
     create_stock_analysis_workflow_dependencies,
@@ -17,12 +20,8 @@ from src.adapters.cli.stock_analysis_workflow_dependencies import (
 from src.application.services.accumulation_screen_factory import (
     create_accumulation_screen_use_case,
 )
-from src.application.services.bootstrap import (
-    _resolve_risk_gates,
-)
 from src.application.services.swing_setup_catalog import build_swing_setup_catalog_config
 from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
-from src.application.use_case.assess_risk_use_case import AssessRiskUseCase
 from src.application.use_case.run_accumulation_screen_workflow_use_case import (
     RunAccumulationScreenWorkflowUseCase,
 )
@@ -34,8 +33,6 @@ from src.domain.ports.market_data_repository import MarketDataRepository
 from src.infrastructure.config.accumulation_screener_config import (
     AccumulationScreenerConfig,
 )
-from src.infrastructure.config.app_config import APP_CFG
-from src.infrastructure.config.engine_config_loader import load_engine_config
 from src.infrastructure.persistence.sqlite_watchlist_repository import (
     SQLiteWatchlistRepository,
 )
@@ -64,16 +61,13 @@ def create_accumulation_screen_workflow(
         else None
     )
 
-    risk_use_case = None
-    if with_risk:
-        structural_gates, execution_gates = _resolve_risk_gates(
-            load_engine_config(Path(APP_CFG.config_paths.risk_engine))
+    risk_use_case = (
+        create_accumulation_assess_risk_use_case(
+            market_repository=deps.market_repository,
         )
-        risk_use_case = AssessRiskUseCase(
-            repository=deps.market_repository,
-            structural_gates=structural_gates,
-            execution_gates=execution_gates,
-        )
+        if with_risk
+        else None
+    )
 
     use_case = create_accumulation_screen_use_case(
         broker_repository=deps.broker_repository,

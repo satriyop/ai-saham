@@ -79,6 +79,11 @@ def _resolve_risk_gates(cfg: dict) -> tuple[list, list]:
     return structural, execution
 
 
+def resolve_risk_gates(cfg: dict) -> tuple[list, list]:
+    """Public wrapper for `_resolve_risk_gates`, for use outside this package."""
+    return _resolve_risk_gates(cfg)
+
+
 def _resolve_risk_indicator_defaults(cfg: dict):
     from src.application.services.risk_engine import RiskIndicatorDefaults
 

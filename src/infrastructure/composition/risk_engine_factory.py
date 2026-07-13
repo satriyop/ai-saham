@@ -17,9 +17,9 @@ from typing import TYPE_CHECKING
 from src.application.services.engine_bootstrap.risk_config_resolvers import (
     _resolve_indicator_evaluator_config,
     _resolve_market_context_gate,
-    _resolve_risk_gates,
     _resolve_risk_indicator_defaults,
     _resolve_technical_gate_config,
+    resolve_risk_gates,
 )
 from src.application.services.indicator_evaluator import IndicatorEvaluator
 from src.application.services.risk_engine import RiskEngine
@@ -66,7 +66,7 @@ def create_risk_engine(
     )
 
     cfg = config if config is not None else {}
-    structural_gates, execution_gates = _resolve_risk_gates(cfg)
+    structural_gates, execution_gates = resolve_risk_gates(cfg)
     indicator_defaults = _resolve_risk_indicator_defaults(cfg)
     market_context_gate = _resolve_market_context_gate(cfg)
     indicator_evaluator_config = _resolve_indicator_evaluator_config(cfg)
