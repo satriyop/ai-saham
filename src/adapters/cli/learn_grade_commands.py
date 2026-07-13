@@ -1,0 +1,98 @@
+"""
+Grade command for the opening session learning loop.
+
+Computes deterministic accuracy report from snapshot + track data.
+
+Layer: Adapter
+"""
+
+from typing import Annotated, Optional
+
+import typer
+
+from src.adapters.cli.learn_command_paths import (
+    opening_day_dir,
+    parse_learn_date,
+)
+
+
+def grade(
+    date_str: Annotated[Optional[str], typer.Option("--date")] = None,
+) -> None:
+    """
+    Compute deterministic accuracy report from today's snapshot + track data.
+
+    Requires: snapshot.json and at least one track_*.json from today.
+
+    Examples:
+        saham learn grade
+        saham learn grade --date 2026-06-17
+    """
+    run_date = parse_learn_date(date_str)
+
+    try:
+        from src.application.use_case.opening_grade_use_case import compute_grade
+        from src.infrastructure.config.pre_open_grade_config_loader import (
+            load_pre_open_grade_config_snapshot,
+        )
+    except ImportError as e:
+        typer.echo(f"Import error: {e}", err=True)
+        raise typer.Exit(1)
+
+    try:
+        config_snapshot = load_pre_open_grade_config_snapshot()
+        result = compute_grade(run_date, config_snapshot=config_snapshot)
+    except FileNotFoundError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+    out_dir = opening_day_dir(run_date)
+    typer.echo(f"Grade saved → {out_dir}/grade.json + grade.md")
+    typer.echo("")
+    typer.echo(f"  Entry range hit rate:   {_pct(result.get('entry_range_hit_rate'))}")
+    typer.echo(f"  Trend accuracy T+5m:    {_pct(result.get('trend_accuracy_T5'))}")
+    typer.echo(f"  Trend accuracy T+30m:   {_pct(result.get('trend_accuracy_T30'))}")
+    typer.echo(f"  Clean trade rate:       {_pct(result.get('clean_trade_rate'))}")
+    typer.echo("")
+    for opening_setup in ("PRIME", "WATCH", "SKIP"):
+        v = result.get("by_opening_setup", {}).get(opening_setup, {})
+        if v.get("count", 0) > 0:
+            typer.echo(
+                f"  {opening_setup:5s}  n={v['count']}  "
+                f"entry_hit={_pct(v.get('entry_range_hit_rate'))}  "
+                f"clean={_pct(v.get('clean_trade_rate'))}"
+            )
+
+    broker_tickers = [
+        t
+        for t in result.get("per_ticker", [])
+        if t.get("institutional_absorption_rate") is not None
+    ]
+    if broker_tickers:
+        typer.echo("")
+        typer.echo("  Broker Confirmation (institutional absorption):")
+        for t in broker_tickers:
+            side = t.get("broker_dominant_side", "?")
+            abs_rate = t.get("institutional_absorption_rate")
+            typer.echo(f"    {t['ticker']:8s}  {side:7s}  abs={_pct(abs_rate)}")
+
+    ob_tickers = [t for t in result.get("per_ticker", []) if t.get("bid_pressure_T0") is not None]
+    if ob_tickers:
+        typer.echo("")
+        typer.echo("  Order Book Depth (bid pressure ratio + live F.Net):")
+        for t in ob_tickers:
+            bp_t0 = t.get("bid_pressure_T0")
+            bp_t5 = t.get("bid_pressure_T5")
+            momentum = t.get("bid_momentum")
+            fnet = t.get("fnet_latest")
+            fnet_str = f"{fnet / 1e9:+.1f}B" if fnet is not None else "?"
+            momentum_str = f"{momentum:+.3f}" if momentum is not None else "?"
+            bp_t5_str = _pct(bp_t5) if bp_t5 is not None else "?"
+            typer.echo(
+                f"    {t['ticker']:8s}  bp_T0={_pct(bp_t0)}  bp_T5={bp_t5_str}"
+                f"  Δ={momentum_str}  F.Net={fnet_str}"
+            )
+
+
+def _pct(v) -> str:
+    return f"{v * 100:.1f}%" if v is not None else "N/A"
