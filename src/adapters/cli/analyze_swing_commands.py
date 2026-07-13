@@ -25,8 +25,8 @@ from src.adapters.cli.analyze_swing_display import (
     SwingOutputDisplayOptions,
     print_swing_output,
 )
-from src.adapters.cli.analyze_swing_workflow_factory import (
-    _fetch_swing_sentiment as _fetch_swing_sentiment_with_config,
+from src.adapters.cli.analyze_swing_optional_fetchers import (
+    fetch_swing_sentiment as _fetch_swing_sentiment_with_config,
 )
 from src.adapters.cli.analyze_swing_workflow_factory import (
     create_swing_analysis_workflow,
