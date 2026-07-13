@@ -4,6 +4,109 @@ This document records **high-impact, cross-cutting architectural decisions** tha
 
 These decisions are considered **binding** unless explicitly superseded by a new recorded decision.
 
+## How to use this record
+
+This is a decision log, not a complete implementation manual. Read the current
+state and amendment map below before opening an older ADR. Historical rationale
+is retained even when implementation names or mechanics have evolved.
+
+Authority when sources disagree:
+
+1. Current executable code and tests describe implemented behavior.
+2. Accepted ADRs describe architectural intent; a newer amendment wins.
+3. Shipped config describes current policy and thresholds.
+4. Guides, examples, and plans are explanatory and may lag implementation.
+
+An ADR marked **implementation evolved** remains binding in intent, but its old
+class names, commands, schemas, or file lists are not current contracts. Verify
+those details in source and live `saham --help` before changing code.
+
+### Current implementation snapshot
+
+_Code-audited: 2026-07-13_
+
+| Concern | Current implementation |
+|---|---|
+| Core posture | Deterministic-first, local-first, rule-first; AI is optional and non-authoritative |
+| Layers | Pure domain; application-owned workflow/policy; infrastructure-owned I/O; thin adapters; enforced by architecture tests with a named legacy allowlist |
+| Signal | `SignalEngine` delegates canonical production scoring to `AssessSignalEvidenceUseCase`: Setup Quality 60% + Flow Confirmation 40%, explicit coverage/conviction, Alpha/Trigger projection, and `DecisionPolicy` |
+| Legacy signal | The earlier six-factor model is retained as an archived compatibility/diagnostic baseline, not the canonical production scorer |
+| Risk | `RiskEngine` owns deterministic structural/execution gates and emits OPEN/BLOCKED assessments; risk profiles are retired |
+| Market context | `MarketContextEngine` is a canonical conditioning input to signal when requested; regime-adjusted risk remains a preview |
+| Final action | `AssessTradeSetupUseCase` is the single composition point for Signal + Risk → `TradeSetup` |
+| Evidence promotion | Diagnostic evidence cannot gain production authority without out-of-sample proof and validator support |
+| Swing tuning | Deterministic backtest/review/diff/validate/apply/verify/status workflow; generated drafts are non-applicable until validated |
+| Persistence | SQLite at `data/db/data.db`, plus purpose-specific JSONL/CSV journals and session artifacts; replay uses point-in-time data |
+| CLI authority | `src/adapters/cli/main.py` and live `saham --help`; adapters wire and render but do not own policy |
+
+### Decision index
+
+| ADR | Decision | Current reading |
+|---|---|---|
+| [001](#adr-001-deterministic-first-core) | Deterministic-first core | Accepted |
+| [002](#adr-002-rule-first-ai-optional-design) | Rule-first, AI-optional | Accepted; T2 implementation evolved |
+| [003](#adr-003-hexagonal-ports--adapters-architecture) | Hexagonal architecture | Accepted |
+| [004](#adr-004-pure-domain-layer) | Pure domain | Accepted |
+| [005](#adr-005-local-first-persistence) | Local-first persistence | Accepted |
+| [006](#adr-006-market-data-provider-abstraction) | Provider abstraction | Accepted |
+| [007](#adr-007-indicator-initialization--warm-up-policy) | Indicator warm-up | Accepted |
+| [008](#adr-008-decoupled-fetch-vs-analyze-data) | Fetch/analyze separation | Accepted |
+| [009](#adr-009-config-driven-behavior) | Config-driven behavior | Accepted |
+| [010](#adr-010-risk-gates-as-policy-layer) | Risk gates | Accepted; profiles retired |
+| [011](#adr-011-offline-capable-cli-as-primary-interface) | Offline-capable CLI | Accepted |
+| [012](#adr-012-oss-encapsulation-rule) | OSS encapsulation | Accepted |
+| [013](#adr-013-ai-agent-governance) | Agent governance | Accepted |
+| [014](#adr-014-full-ai-mode-explicit-bypass-mode--rejected) | Full-AI bypass | Rejected |
+| [015](#adr-015-sentiment-analysis-classification) | Sentiment classification | Accepted |
+| [016](#adr-016-formula-dsl-domain-specific-language-for-indicators) | Formula DSL | Accepted |
+| [017](#adr-017-plugin-based-indicator-registration) | Indicator plugins | Accepted |
+| [018](#adr-018-cli-command-depth--saham-view-broker-exception) | CLI depth exception | Accepted |
+| [019](#adr-019-unified-fetch-timestamp-fetched_at-datetime-on-cached-domain-value-objects) | Fetch timestamp | Accepted |
+| [020](#adr-020-cli-adapter-file-naming-convention) | CLI file naming | Accepted |
+| [021](#adr-021-strict-boundary-enforcement--infrastructure-decoupling-hexagonal-audit-clean-up) | Boundary enforcement | Accepted |
+| [022](#adr-022-idx-regular-market-price-floor-rp-50-enforcements) | IDX Rp50 floor | Accepted |
+| [023](#adr-023-codebase-directory-and-use-case-file-naming-standards) | Layout/naming | Accepted |
+| [024](#adr-024-signal-engine-and-risk-engine-as-first-class-application-services) | First-class Signal/Risk engines | Accepted; Signal details evolved |
+| [025](#adr-025-signalengine-architecture) | SignalEngine architecture | Accepted; canonical scorer replaced by staged evidence |
+| [026](#adr-026-risksignal-pipeline-composition) | Signal/Risk composition | Accepted |
+| [027](#adr-027-risksignal-learning-loop) | Swing learning loop | Accepted intent; implementation evolved |
+| [028](#adr-028-idx-market-microstructure-rules) | IDX microstructure | Accepted; contains explicit future items |
+| [029](#adr-029-market-context-engine-mce--third-first-class-application-service) | MarketContextEngine | Accepted |
+| [030](#adr-030-accumulation-screener-evidence-split) | Accumulation evidence split | Accepted; score scale amended by 039 |
+| [031](#adr-031-swing-setup-evaluation-boundary) | Setup evaluation boundary | Accepted |
+| [032](#adr-032-analyze-swing-verdict-boundary) | Swing verdict boundary | Accepted; signal rule amended by 037 |
+| [033](#adr-033-workflow-composition-artifact-boundaries) | Workflow artifact boundaries | Accepted |
+| [034](#adr-034-date-field-semantics) | Date semantics | Accepted |
+| [035](#adr-035-port-method-naming-convention) | Port method naming | Accepted |
+| [036](#adr-036-persisted-jwt-token-store-replaces-playwright-per-invocation-for-stockbit-data-fetching) | Stockbit token store | Accepted |
+| [037](#adr-037-marketcontext-promotes-from-preview-only-to-canonical-signal-input) | MCE canonical signal conditioning | Accepted; amends 032 |
+| [038](#adr-038-point-in-time-enrichment-and-conservative-derived-fundamentals) | Point-in-time enrichment | Accepted |
+| [039](#adr-039-foreign-flow-score-rescale-to-0-100-amends-adr-030) | Foreign-flow 0–100 scale | Accepted; amends 030 |
+
+### Amendment and migration map
+
+| Older decision | Read together with | Effective rule |
+|---|---|---|
+| ADR-002 T2 AI tuner plan | ADR-027 current note + tuning source | Tuning proposals are non-authoritative; current swing workflow is deterministic and validator-gated |
+| ADR-010 risk profiles | ADR-024 + current `RiskEngine` | OPEN/BLOCKED gate pipeline; no conservative/balanced/aggressive runtime modes |
+| ADR-024/025 six-factor signal | Current notes in ADR-024/025 | Staged evidence is canonical; six-factor scoring is archived compatibility/diagnostic behavior |
+| ADR-027 proposed `swing learn ...` CLI | Current note in ADR-027 | Use `saham trade backtest-swing`, `tune-swing`, review/patch/status commands |
+| ADR-030 0–120 flow score | ADR-039 | Foreign-flow score and tuned thresholds use 0–100 |
+| ADR-032 MCE preview-only signal | ADR-037 | MCE can condition canonical signal when requested; risk adjustment stays preview |
+
+### High-value code entry points
+
+| Decision area | Implementation entry point |
+|---|---|
+| CLI surface | `src/adapters/cli/main.py` |
+| Engine construction | `src/application/services/engine_bootstrap/` |
+| Signal facade/canonical scorer | `src/application/services/signal_engine.py`, `src/application/use_case/assess_signal_evidence_use_case.py` |
+| Risk facade | `src/application/services/risk_engine.py` |
+| Trade setup composition | `src/application/use_case/assess_trade_setup_use_case.py` |
+| Market context | `src/application/services/market_context_engine.py` |
+| Swing tuning guardrails | `src/application/services/swing_tuning_patch_validation.py` and adjacent `swing_tuning_*` services |
+| Layer enforcement | `tests/architecture/test_layer_boundaries.py` |
+
 ---
 
 ## ADR-001: Deterministic-First Core
@@ -23,6 +126,16 @@ Trustworthy financial analysis requires reproducibility and auditability.
 ---
 
 ## ADR-002: Rule-First, AI-Optional Design
+
+**Status:** Accepted — T2 implementation evolved
+
+> **Current implementation note (2026-07-13):** T1 and T3 remain optional and
+> validation-gated. The planned `SwingSignalTunerUseCase` is not the current
+> swing tuning authority. Swing calibration now uses deterministic backtest,
+> review, diff generation, patch validation, explicit apply, verification, and
+> status reporting. Draft diffs are created with `can_apply=false`; AI output,
+> where used, cannot make a patch eligible or apply it. The tier model below is
+> historical design context, not a current class/CLI contract.
 
 **Decision**
 Rule-based logic is the primary decision mechanism. AI is an optional enhancement layer operating in three distinct tiers.
@@ -481,6 +594,20 @@ Standardizing use case suffixes prevents namespace collisions, preserves hexagon
 
 _Date: 2026-06-23 · Revised: 2026-06-24 · Context: crystallised from AGY risk methodology improvements (Phases A–E); Signal Engine architecture added in revision_
 
+**Status:** Accepted — SignalEngine scoring details evolved
+
+> **Current implementation note (2026-07-13):** The first-class, injectable,
+> orthogonal engine boundary remains binding. RiskEngine still owns risk gates.
+> SignalEngine's canonical production path is now staged evidence implemented by
+> `AssessSignalEvidenceUseCase`, with Setup Quality (60%) and Flow Confirmation
+> (40%), explicit evidence authority, coverage/conviction separation,
+> Alpha/Trigger projection, regime conditioning, and `DecisionPolicy`. The
+> six-factor weights/schema and `AssessSignalUseCase` details below describe the
+> archived baseline and must not be used to implement new production scoring.
+> Engine construction has also moved into focused
+> `src/application/services/engine_bootstrap/` modules;
+> `services/bootstrap.py` is a compatibility facade.
+
 **Decision**
 Signal Engine and Risk Engine are designated first-class application services with distinct, orthogonal responsibilities. Neither is an implementation detail of a CLI adapter or a use-case function body. Both must exist as symmetric, injectable, independently testable services.
 
@@ -681,6 +808,16 @@ AGY risk Phases A–E revealed that per-adapter gate wiring produces silent fail
 
 _Date: 2026-06-24 · Context: Signal Engine formalized as first-class service, parallel to RiskEngine (ADR-024)_
 
+**Status:** Accepted — canonical scoring model superseded in implementation
+
+> **Current implementation note (2026-07-13):** The ownership rule remains
+> binding: adapters and workflows must not invent composite signal scores.
+> However, the six-factor `SignalContext` model documented below is no longer the
+> canonical production scorer. New production work must enter through
+> `SignalEngine` and `AssessSignalEvidenceUseCase`, honor the authority registry,
+> and preserve missing-evidence/coverage semantics. The old model remains useful
+> for compatibility and diagnostics only.
+
 **Decision**
 `SignalEngine` is a first-class application service in `src/application/services/signal_engine.py`. It is the sole owner of all signal scoring logic. No use case, adapter, or CLI command may compute a composite signal score outside this service.
 
@@ -845,6 +982,20 @@ Without a formal composition rule, every CLI command that shows both signal and 
 ## ADR-027: Risk/Signal Learning Loop
 
 _Date: 2026-06-24 · Context: Extends the pre-open learning loop pattern (already implemented) to the swing domain_
+
+**Status:** Accepted intent — implementation evolved
+
+> **Current implementation note (2026-07-13):** The feedback, attribution,
+> out-of-sample evidence, human approval, and auditability requirements remain
+> binding. The proposed `swing learn record/grade/attribute/tune` commands,
+> `SwingSignalTunerUseCase`, and journal names below were not adopted as the
+> public contract. The implemented swing path is exposed under `saham trade`:
+> `backtest-swing`, `tune-swing`, `review-tuning-swing`,
+> `validate-tuning-patch`, `apply-tuning-patch`, and `tuning-status`. It produces
+> deterministic evidence/reviews and non-applicable draft diffs, then requires
+> allowlisted targets, bounds, sample readiness, walk-forward provenance,
+> validation, and explicit application. Use live `saham trade --help` and the
+> `swing_tuning_*` application services for current mechanics.
 
 **Decision**
 The system provides a four-phase learning loop for the swing domain that records engine outputs, grades forward outcomes, attributes performance to engine components, and produces AI-assisted parameter suggestions. Human approval is required at every change boundary.
@@ -1280,8 +1431,14 @@ This ensures that confirmation-only patterns complement the decision without byp
 
 ## ADR-032: `analyze swing` Verdict Boundary
 
-**Status:** Accepted
+**Status:** Accepted — signal-preview constraint amended by ADR-037
 **Date:** 2026-06-26
+
+> **Current rule:** `TradeSetup` remains the authoritative verdict and evidence
+> modules cannot independently override it. When market context is requested,
+> MCE conditioning is part of the canonical signal before composition. Only the
+> risk-side regime adjustment remains preview-only. The preview-only signal text
+> in this ADR is retained as history and is superseded by ADR-037.
 
 ### Context
 
