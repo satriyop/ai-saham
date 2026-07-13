@@ -83,6 +83,7 @@ stockbit_session.json
 logs/
 notes/
 docs/archive/
+docs/thought/
 
 # Paper trade journal (local artefacts, not committed)
 journals/
