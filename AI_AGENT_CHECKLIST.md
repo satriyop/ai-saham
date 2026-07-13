@@ -68,6 +68,8 @@ Each touched layer must have a clear reason. If a layer is not touched, state `n
 * Application use cases own non-trivial workflow and orchestration
 * Infrastructure implements ports and external integrations
 * Adapters only parse input, call use cases, format output, and map errors
+* Dependencies are injected manually through constructors, request objects, typed bundles, ports, or narrow callables
+* Application use cases/services do not construct concrete SQLite, Stockbit, browser, filesystem, HTTP, or YAML-loader implementations
 * No new mandatory external services are introduced
 * No AI dependency is introduced into the domain layer
 * Local-first assumptions are preserved
@@ -237,6 +239,12 @@ If any answer is unclear, stop.
 
 ### Composition and Config Rules
 
+- Manual dependency injection is the canonical pattern. Do not introduce a DI
+  framework or service locator.
+- Stable dependencies that cross a layer boundary should be expressed as
+  application/domain ports or typed policy/config objects.
+- Narrow callables are acceptable for tiny seams, but repeated callable bundles
+  should become a port or typed dependency bundle.
 - Application-layer modules must not be composition roots for concrete
   infrastructure. Composition belongs in adapters or infrastructure factories;
   application receives ports, typed configs, and callables.

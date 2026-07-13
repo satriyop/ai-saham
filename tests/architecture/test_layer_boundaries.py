@@ -55,6 +55,16 @@ FORBIDDEN_LIBRARY_IMPORTS = {
     },
 }
 
+APPLICATION_FACTORY_GLOB_PATTERNS = ("*factory*.py", "*bootstrap*.py")
+CONCRETE_COMPOSITION_CALL_MARKERS = (
+    "SQLite",
+    "Stockbit",
+    "Playwright",
+    "Yahoo",
+    "RulesYamlLoader",
+    "YamlStrategyDocumentReader",
+)
+
 
 @dataclass(frozen=True)
 class AllowlistEntry:
@@ -101,6 +111,14 @@ def _imports(path: Path):
 
 def _matches(imported: str, forbidden: str) -> bool:
     return imported == forbidden or imported.startswith(forbidden + ".")
+
+
+def _call_name(node: ast.Call) -> str | None:
+    if isinstance(node.func, ast.Name):
+        return node.func.id
+    if isinstance(node.func, ast.Attribute):
+        return node.func.attr
+    return None
 
 
 def _layer_for(path: Path) -> str | None:
@@ -163,6 +181,35 @@ def test_layer_boundaries_do_not_drift():
     assert not unused, "Stale BASELINE_ALLOWLIST entries (remove them): " + ", ".join(
         f"{path}:{imported}" for path, imported in sorted(unused)
     )
+
+
+def test_application_factories_are_not_concrete_composition_roots():
+    """Application factory/bootstrap modules may assemble injected dependencies.
+
+    They must not construct concrete infrastructure dependencies. Concrete
+    provider/repository/config-loader wiring belongs in infrastructure
+    composition roots or thin CLI workflow factories.
+    """
+    paths: set[Path] = set()
+    for pattern in APPLICATION_FACTORY_GLOB_PATTERNS:
+        paths.update(Path("src/application").rglob(pattern))
+
+    violations: list[str] = []
+    for path in sorted(paths):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            call_name = _call_name(node)
+            if call_name is None:
+                continue
+            for marker in CONCRETE_COMPOSITION_CALL_MARKERS:
+                if marker in call_name:
+                    violations.append(
+                        f"{path}:{node.lineno}: constructs concrete dependency {call_name!r}"
+                    )
+
+    assert not violations, "\n".join(violations)
 
 
 _VAGUE_CANONICAL_FIX_MARKERS = ("TBD", "later", "legacy only", "unknown")

@@ -123,6 +123,27 @@ clarification before writing code.
 
 ---
 
+## 5.3 Manual Dependency Injection Rule
+
+The project uses explicit manual dependency injection. Agents must not add a
+DI framework or service locator.
+
+Rules:
+
+* Domain code constructs pure domain objects only; it never receives concrete
+  infrastructure dependencies.
+* Application use cases/services receive dependencies through constructors,
+  request objects, typed bundles, ports/protocols, typed config/policy objects,
+  or narrow callables.
+* Application code must not construct concrete SQLite, Stockbit, browser,
+  filesystem, HTTP, or YAML-loader implementations.
+* Infrastructure composition roots and thin CLI workflow factories own concrete
+  provider/repository/config-loader construction.
+* Repeated ad hoc wiring should become a named factory, typed dependency
+  bundle, or port.
+
+---
+
 ## 6. Risk And Signal Guardrail Discipline
 
 When analysis behavior is involved, the agent must:

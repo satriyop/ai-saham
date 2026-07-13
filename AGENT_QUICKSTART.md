@@ -10,6 +10,7 @@ Read this before every task. This is the mandatory entry point for agents. The l
 - Application use cases own workflow, policy, orchestration, cache/fetch decisions, and business status calculation.
 - Infrastructure implements ports for databases, providers, browser/API clients, filesystem, and AI integrations.
 - Adapters stay thin: parse input, wire dependencies, call use cases, format output, and map errors.
+- Use manual dependency injection. Application services/use cases receive ports, typed config objects, pure services, or narrow callables; they do not construct concrete SQLite, Stockbit, browser, filesystem, or YAML loader implementations.
 - AI may assist authoring and explanations, but must not become the source of truth for scoring, risk, strategy, or persistence decisions.
 - Do not bypass risk, signal, tuning, evidence-promotion, or architecture guardrails unless the user explicitly asks for an ADR/design change first.
 - Do not promote diagnostic evidence or tune patch-eligible config without out-of-sample proof and validator support.
@@ -50,6 +51,18 @@ Agents often work in the same local checkout. Protect other work first:
 - Stage and commit only files touched for the current task.
 - If your uncommitted work matters, commit it before handing off or before another agent starts risky work.
 - If unrelated changes block the task, stop and report the conflict instead of overwriting them.
+
+## Manual Dependency Injection
+
+This repository uses explicit manual DI, not a DI framework:
+
+- Domain objects are constructed normally, but never receive infrastructure dependencies.
+- Application use cases/services receive dependencies through constructors or request objects.
+- Stable cross-boundary dependencies should be ports/protocols or typed policy/config objects.
+- Narrow callables are acceptable for small adapter-bound seams when a full port would be ceremony.
+- Concrete provider/repository/config-loader construction belongs in infrastructure composition roots or thin CLI workflow factories.
+- `src/application/*factory*.py` and `src/application/*bootstrap*.py` files are compatibility/pure assembly helpers only; they must not become concrete infrastructure composition roots.
+- Adapters may instantiate infrastructure only as wiring. If an adapter decides freshness, retry, scoring, setup, risk, or persistence policy, move that logic into an application use case.
 
 ## Required Reading Matrix
 
