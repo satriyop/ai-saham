@@ -27,6 +27,7 @@ from src.domain.value_objects.ticker_notation import (
     TickerNotationSnapshot,
 )
 from tests.application.use_case.accumulation_screen_fixtures import (
+    FakeRulesLoader,
     MockBrokerRepository,
     MockMarketRepository,
     _candle,
@@ -115,6 +116,7 @@ def test_screen_attaches_ticker_notation_without_changing_score():
         indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
+        rules_loader=FakeRulesLoader(),
     ).execute(
         AccumulationScreenRequest(
             tickers=["BTEK"],
@@ -128,6 +130,7 @@ def test_screen_attaches_ticker_notation_without_changing_score():
         indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
+        rules_loader=FakeRulesLoader(),
         ticker_notation_provider=MockTickerNotationProvider(),
     ).execute(
         AccumulationScreenRequest(
@@ -169,6 +172,7 @@ def test_historical_screen_uses_as_of_date_for_point_in_time_enrichment():
         indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
+        rules_loader=FakeRulesLoader(),
         analyst_consensus_provider=analyst,
         forward_estimates_provider=forward,
         ticker_notation_provider=notation,
@@ -205,6 +209,7 @@ def test_live_screen_passes_none_as_of_date_to_fetch_capable_enrichment():
         indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
+        rules_loader=FakeRulesLoader(),
         analyst_consensus_provider=analyst,
         forward_estimates_provider=forward,
         ticker_notation_provider=notation,
@@ -288,6 +293,7 @@ def test_screen_derives_forward_pe_from_latest_price_when_cache_has_eps_only():
         indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
+        rules_loader=FakeRulesLoader(),
         forward_estimates_provider=forward_provider,
     )
 
@@ -368,6 +374,7 @@ def test_screener_populates_signal_assessment():
         indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
+        rules_loader=FakeRulesLoader(),
     )
     resp = uc.execute(
         AccumulationScreenRequest(
@@ -398,6 +405,7 @@ def test_candidate_to_dict_emits_canonical_coverage_score():
         indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
+        rules_loader=FakeRulesLoader(),
     )
     resp = uc.execute(
         AccumulationScreenRequest(

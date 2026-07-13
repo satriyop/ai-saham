@@ -34,6 +34,7 @@ from src.domain.value_objects.signal_assessment import (
     SignalStrength,
 )
 from src.domain.value_objects.trade_setup import SetupAction
+from tests.application.use_case.accumulation_screen_fixtures import FakeRulesLoader
 
 _TODAY = date(2026, 6, 23)
 
@@ -96,6 +97,7 @@ def test_risk_assessment_none_when_no_risk_use_case():
         indicator_registry=IndicatorRegistry(),
         broker_repository=_mock_broker_repo(),
         market_repository=mkt_repo,
+        rules_loader=FakeRulesLoader(),
         risk_use_case=None,
     )
     resp = uc.execute(AccumulationScreenRequest(tickers=["BBCA"]))
@@ -117,6 +119,7 @@ def test_risk_funnel_fires_fundamental_gate_on_distressed_ticker():
         indicator_registry=IndicatorRegistry(),
         broker_repository=_mock_broker_repo(),
         market_repository=mkt_repo,
+        rules_loader=FakeRulesLoader(),
         risk_use_case=risk_uc,
     )
 
@@ -149,6 +152,7 @@ def test_risk_funnel_passes_healthy_ticker():
         indicator_registry=IndicatorRegistry(),
         broker_repository=_mock_broker_repo(),
         market_repository=mkt_repo,
+        rules_loader=FakeRulesLoader(),
         risk_use_case=risk_uc,
     )
 
@@ -212,6 +216,7 @@ def test_risk_funnel_composes_trade_setup_from_signal_and_risk():
         indicator_registry=IndicatorRegistry(),
         broker_repository=_mock_broker_repo(),
         market_repository=mkt_repo,
+        rules_loader=FakeRulesLoader(),
         risk_use_case=risk_uc,
     )
 
@@ -252,6 +257,7 @@ def test_risk_funnel_builds_gate_context_from_candidate_data():
         indicator_registry=IndicatorRegistry(),
         broker_repository=_mock_broker_repo(),
         market_repository=mkt_repo,
+        rules_loader=FakeRulesLoader(),
         risk_use_case=risk_uc,
     )
 
@@ -296,6 +302,7 @@ def test_risk_funnel_skips_failed_candidate_and_continues():
         indicator_registry=IndicatorRegistry(),
         broker_repository=_mock_broker_repo(),
         market_repository=mkt_repo,
+        rules_loader=FakeRulesLoader(),
         risk_use_case=risk_uc,
     )
 

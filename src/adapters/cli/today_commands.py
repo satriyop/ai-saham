@@ -34,6 +34,7 @@ from src.infrastructure.config.accumulation_screener_config import (
 )
 from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.config.market_context_config import load_market_context_config
+from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
@@ -95,6 +96,7 @@ def today(
             broker_repository=broker_repo,
             market_repository=market_repo,
             indicator_registry=create_indicator_registry(),
+            rules_loader=RulesYamlLoader(),
             derived_feature_policy=_ASC.derived_features,
         ),
         universe_loader=YamlUniverseConfigLoader(),

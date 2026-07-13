@@ -1,6 +1,7 @@
 from datetime import date, timedelta
 from decimal import Decimal
 
+from src.application.ports.rules_loader import RulesLoader
 from src.application.use_case.assess_risk_use_case import AssessRiskResponse
 from src.domain.entities.broker_flow import BrokerSummary
 from src.domain.entities.candle import Candle
@@ -8,6 +9,23 @@ from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 from src.domain.value_objects.risk_assessment import RiskAssessment
+
+
+class FakeRulesLoader(RulesLoader):
+    """Minimal RulesLoader stand-in for tests that require the constructor
+    parameter but never exercise real YAML parsing."""
+
+    def load(self, path=None, registry=None):
+        raise NotImplementedError(
+            "FakeRulesLoader does not parse rules — inject a real loader "
+            "if this test needs strategy evidence to actually resolve"
+        )
+
+    def load_from_string(self, content, registry=None, source_name="<generated>"):
+        raise NotImplementedError(
+            "FakeRulesLoader does not parse rules — inject a real loader "
+            "if this test needs strategy evidence to actually resolve"
+        )
 
 
 class MockMarketRepository(MarketDataRepository):

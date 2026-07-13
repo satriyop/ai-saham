@@ -11,6 +11,7 @@ from src.application.use_case.accumulation_screen_use_case import (
     AccumulationScreenUseCase,
 )
 from tests.application.use_case.accumulation_screen_fixtures import (
+    FakeRulesLoader,
     MockBrokerRepository,
     MockMarketRepository,
     SpyCandidateObservationsRepository,
@@ -209,6 +210,7 @@ def test_screen_persists_rejected_candidates_with_filter_outcome():
         indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
+        rules_loader=FakeRulesLoader(),
         candidate_observations_repository=spy_repo,
     )
 

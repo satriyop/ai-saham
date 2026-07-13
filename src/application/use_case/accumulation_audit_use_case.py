@@ -26,6 +26,7 @@ from src.application.dto.accumulation_screen import (
     AccumulationDerivedFeaturePolicy,
     AccumulationScreenRequest,
 )
+from src.application.ports.rules_loader import RulesLoader
 from src.application.services.accumulation_audit_exit_simulator import (
     AccumulationAuditExitSimulator,
 )
@@ -72,6 +73,7 @@ class AccumulationAuditUseCase:
         broker_repository: BrokerDataRepository,
         market_repository: MarketDataRepository,
         indicator_registry: Any,
+        rules_loader: RulesLoader,
         derived_feature_policy: AccumulationDerivedFeaturePolicy | None = None,
     ) -> None:
         self._broker_repo = broker_repository
@@ -81,6 +83,7 @@ class AccumulationAuditUseCase:
             broker_repository=broker_repository,
             market_repository=market_repository,
             indicator_registry=indicator_registry,
+            rules_loader=rules_loader,
             derived_feature_policy=self._derived_features,
         )
         self._broker_quality_classifier = AccumulationBrokerQualityClassifier(broker_repository)

@@ -6,6 +6,7 @@ from decimal import Decimal
 from src.application.dto.accumulation_screen import (
     AccumulationScreenRequest,
 )
+from src.application.ports.rules_loader import RulesLoader
 from src.application.services.indicator_registry import IndicatorRegistry
 from src.application.use_case.accumulation_screen_use_case import (
     AccumulationScreenUseCase,
@@ -18,6 +19,7 @@ from src.infrastructure.config.ticker_profile_config_loader import (
     create_ticker_profile_classifier,
 )
 from tests.application.use_case.accumulation_screen_fixtures import (
+    FakeRulesLoader,
     MockBrokerRepository,
     MockMarketRepository,
     SpyCandidateObservationsRepository,
@@ -43,6 +45,7 @@ def test_screen_persists_candidate_observations_when_repo_injected():
         indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
+        rules_loader=FakeRulesLoader(),
         candidate_observations_repository=spy_repo,
         ticker_profile_classifier_factory=create_ticker_profile_classifier,
     )
@@ -108,6 +111,7 @@ def test_screen_persists_regime_attribution_fingerprint_when_market_context_supp
         indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
+        rules_loader=FakeRulesLoader(),
         candidate_observations_repository=spy_repo,
     )
 
@@ -172,6 +176,7 @@ def test_market_context_never_leaks_into_scoring_only_into_fingerprint_attributi
         indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(_fresh_summaries()),
         market_repository=MockMarketRepository(_fresh_candles()),
+        rules_loader=FakeRulesLoader(),
         candidate_observations_repository=spy_repo_a,
     )
     response_a = use_case_a.execute(
@@ -191,6 +196,7 @@ def test_market_context_never_leaks_into_scoring_only_into_fingerprint_attributi
         indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(_fresh_summaries()),
         market_repository=MockMarketRepository(_fresh_candles()),
+        rules_loader=FakeRulesLoader(),
         candidate_observations_repository=spy_repo_b,
     )
     market_context = MarketContext(
@@ -325,6 +331,7 @@ def test_screen_persists_setup_family_fingerprint_when_swing_setup_catalog_match
         indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
+        rules_loader=FakeRulesLoader(),
         candidate_observations_repository=spy_repo,
         swing_setup_catalog=swing_setup_catalog,
     )
@@ -393,6 +400,7 @@ def test_screen_result_returned_even_when_persistence_fails():
         indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
+        rules_loader=FakeRulesLoader(),
         candidate_observations_repository=spy_repo,
     )
 
@@ -423,6 +431,7 @@ def test_screen_populates_setup_phase_for_displayed_candidates():
         indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
+        rules_loader=FakeRulesLoader(),
     )
 
     response = use_case.execute(
@@ -461,6 +470,7 @@ def test_screen_setup_phase_is_none_when_detection_fails(monkeypatch):
         indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
+        rules_loader=FakeRulesLoader(),
     )
 
     response = use_case.execute(
@@ -535,3 +545,55 @@ def test_screen_recomputes_setup_phase_when_stage2_family_differs_from_prelimina
     assert fingerprint["setup_family_source"] == "strategy_evidence"
     assert fingerprint["setup_phase_current"] == "COMPRESSION"
     assert fingerprint["phase_sequence_valid"] is False
+
+
+class _RecordingRulesLoader(RulesLoader):
+    """Fake RulesLoader that only records whether load() was invoked.
+
+    Does not parse YAML — used to prove the injected loader is actually
+    reached rather than the strategy-evidence path being silently skipped.
+    """
+
+    def __init__(self) -> None:
+        self.load_called = False
+
+    def load(self, path=None, registry=None):
+        self.load_called = True
+        raise RuntimeError("recording loader does not parse rules")
+
+    def load_from_string(self, content, registry=None, source_name="<generated>"):
+        raise NotImplementedError("recording loader does not parse rules")
+
+
+def test_screen_uses_injected_rules_loader_for_strategy_evidence(tmp_path):
+    strategy_path = tmp_path / "strategy.yaml"
+    strategy_path.write_text("version: 1\nname: placeholder\n", encoding="utf-8")
+
+    session_dates = _weekdays(date(2026, 1, 1), 7)
+    as_of = session_dates[-1]
+    candles = [
+        _candle("BBCA", date(2025, 9, 1) + timedelta(days=i), Decimal("100") + Decimal(i % 6))
+        for i in range(130)
+    ]
+    summaries = [_summary("BBCA", day, Decimal("110")) for day in session_dates]
+
+    fake_loader = _RecordingRulesLoader()
+    use_case = AccumulationScreenUseCase(
+        indicator_registry=IndicatorRegistry(),
+        broker_repository=MockBrokerRepository(summaries),
+        market_repository=MockMarketRepository(candles),
+        candidate_observations_repository=SpyCandidateObservationsRepository(),
+        rules_loader=fake_loader,
+    )
+
+    use_case.execute(
+        AccumulationScreenRequest(
+            tickers=["BBCA"],
+            window_days=7,
+            min_net_buy_days=1,
+            as_of_date=as_of,
+            strategy_name=str(strategy_path),
+        )
+    )
+
+    assert fake_loader.load_called is True

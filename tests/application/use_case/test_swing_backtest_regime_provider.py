@@ -10,6 +10,7 @@ from src.application.use_case.swing_backtest_use_case import (
 )
 from tests.application.use_case.swing_backtest_fixtures import (
     FakeMarketContextProvider,
+    FakeRulesLoader,
     MockBrokerRepository,
     MockMarketRepository,
     _base_candles,
@@ -55,6 +56,7 @@ def test_swing_backtest_can_filter_entries_by_allowed_regimes():
         indicator_registry=IndicatorRegistry(),
         broker_repository=broker_repo,
         market_repository=market_repo,
+        rules_loader=FakeRulesLoader(),
         market_context_provider=FakeMarketContextProvider({
             signal_date: fake_context,
             exit_date: fake_context_exit,
@@ -106,6 +108,7 @@ def test_swing_backtest_provider_is_not_called_when_regime_is_not_requested():
         indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
+        rules_loader=FakeRulesLoader(),
         market_context_provider=provider,
     )
 
@@ -153,6 +156,7 @@ def test_swing_backtest_provider_is_called_when_include_regime_is_true():
         indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
+        rules_loader=FakeRulesLoader(),
         market_context_provider=provider,
     )
 
@@ -203,6 +207,7 @@ def test_swing_backtest_provider_is_called_when_allowed_regimes_non_empty():
         indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
+        rules_loader=FakeRulesLoader(),
         market_context_provider=provider,
     )
 
@@ -238,6 +243,7 @@ def test_swing_backtest_raises_when_regime_requested_without_provider():
         indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
+        rules_loader=FakeRulesLoader(),
     )
 
     with pytest.raises(ValueError, match="market_context_provider is required"):
@@ -269,6 +275,7 @@ def test_swing_backtest_raises_when_allowed_regimes_without_provider():
         indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
+        rules_loader=FakeRulesLoader(),
     )
 
     with pytest.raises(ValueError, match="market_context_provider is required"):

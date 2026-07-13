@@ -22,6 +22,7 @@ from src.domain.value_objects.sector_context_evidence import (
 from tests.application.use_case.accumulation_screen_fixtures import (
     EmptyATRRegistry,
     FakeATRRegistry,
+    FakeRulesLoader,
     MockBrokerRepository,
     MockMarketRepository,
     RaisingATRRegistry,
@@ -68,6 +69,7 @@ def test_screen_persists_sector_context_fingerprint_when_builder_available():
         indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
+        rules_loader=FakeRulesLoader(),
         candidate_observations_repository=spy_repo,
         sector_context_builder_factory=lambda: FakeSectorContextBuilder(),
     )
@@ -154,6 +156,7 @@ def test_screen_persists_relative_strength_and_evaluates_rs_policy():
         indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
+        rules_loader=FakeRulesLoader(),
         candidate_observations_repository=spy_repo,
         swing_setup_catalog=swing_setup_catalog,
     )
@@ -201,6 +204,7 @@ def test_screen_rs_fields_stay_none_when_ihsg_candles_missing():
         indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),  # no IHSG candles seeded
+        rules_loader=FakeRulesLoader(),
         candidate_observations_repository=spy_repo,
     )
 
@@ -240,6 +244,7 @@ def test_screen_persists_volatility_context_fingerprint_from_injected_registry()
     use_case = AccumulationScreenUseCase(
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
+        rules_loader=FakeRulesLoader(),
         candidate_observations_repository=spy_repo,
         indicator_registry=FakeATRRegistry(),
     )
@@ -289,6 +294,7 @@ def test_screen_volatility_context_falls_back_to_unknown_when_atr_unavailable():
         use_case = AccumulationScreenUseCase(
             broker_repository=MockBrokerRepository(summaries),
             market_repository=MockMarketRepository(candles),
+            rules_loader=FakeRulesLoader(),
             candidate_observations_repository=spy_repo,
             indicator_registry=registry,
         )
@@ -341,6 +347,7 @@ def test_volatility_context_fingerprint_never_leaks_into_scoring():
     use_case_a = AccumulationScreenUseCase(
         broker_repository=MockBrokerRepository(_fresh_summaries()),
         market_repository=MockMarketRepository(_fresh_candles()),
+        rules_loader=FakeRulesLoader(),
         candidate_observations_repository=spy_repo_a,
         indicator_registry=FakeATRRegistry(),
     )
@@ -357,6 +364,7 @@ def test_volatility_context_fingerprint_never_leaks_into_scoring():
     use_case_b = AccumulationScreenUseCase(
         broker_repository=MockBrokerRepository(_fresh_summaries()),
         market_repository=MockMarketRepository(_fresh_candles()),
+        rules_loader=FakeRulesLoader(),
         candidate_observations_repository=spy_repo_b,
         indicator_registry=EmptyATRRegistry(),
     )

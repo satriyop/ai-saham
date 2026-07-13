@@ -177,7 +177,7 @@ class AccumulationScreenUseCase:
         relative_strength_calculator: "RelativeStrengthCalculator | None" = None,
         *,
         indicator_registry: "IndicatorRegistry",
-        rules_loader: RulesLoader | None = None,
+        rules_loader: RulesLoader,
         ticker_profile_classifier_factory: Callable[[], TickerProfileClassifier] | None = None,
         institutional_accumulation_config_factory: (
             Callable[[], InstitutionalAccumulationConfig] | None

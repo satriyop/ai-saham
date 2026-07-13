@@ -44,6 +44,7 @@ from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.config.config_backed_market_context_provider import (
     ConfigBackedMarketContextProvider,
 )
+from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
@@ -205,6 +206,7 @@ def swing_compare(
         broker_repository=broker_repo,
         market_repository=market_repo,
         indicator_registry=create_indicator_registry(),
+        rules_loader=RulesYamlLoader(),
         derived_feature_policy=ACCUMULATION_SCREENER_CONFIG.derived_features,
         risk_engine=create_configured_risk_engine(resolved_db, with_enrichment=True),
         market_context_provider=ConfigBackedMarketContextProvider(

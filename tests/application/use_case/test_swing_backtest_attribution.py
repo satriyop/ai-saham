@@ -9,6 +9,7 @@ from src.application.use_case.swing_backtest_use_case import (
 from tests.application.use_case.swing_backtest_fixtures import (
     FailingRiskEngine,
     FakeRiskEngine,
+    FakeRulesLoader,
     MockBrokerRepository,
     MockMarketRepository,
     _base_candles,
@@ -28,6 +29,7 @@ def test_swing_backtest_records_rejected_candidate_observations():
         indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(_base_candles("BBCA", base)),
+        rules_loader=FakeRulesLoader(),
     )
 
     response = use_case.execute(SwingBacktestRequest(
@@ -67,6 +69,7 @@ def test_swing_backtest_records_risk_and_trade_setup_attribution():
         indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(_base_candles("BBCA", base)),
+        rules_loader=FakeRulesLoader(),
         risk_engine=risk_engine,
     )
 
@@ -103,6 +106,7 @@ def test_swing_backtest_keeps_trade_when_risk_attribution_fails():
         indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(_base_candles("BBCA", base)),
+        rules_loader=FakeRulesLoader(),
         risk_engine=FailingRiskEngine(),
     )
 

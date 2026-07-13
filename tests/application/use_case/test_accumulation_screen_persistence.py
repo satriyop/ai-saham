@@ -46,6 +46,7 @@ from src.infrastructure.config.institutional_accumulation_config_loader import (
 from src.infrastructure.config.sector_context_config_loader import (
     create_sector_context_evidence_builder,
 )
+from tests.application.use_case.accumulation_screen_fixtures import FakeRulesLoader
 
 _EVIDENCE_BUILDER_FACTORY_KWARGS = dict(
     institutional_accumulation_config_factory=load_institutional_accumulation_config,
@@ -355,6 +356,7 @@ class TestIaCnfbDivergenceWithPlausibleFlowData:
             indicator_registry=IndicatorRegistry(),
             broker_repository=_MockBrokerRepo(summaries, flow_points),
             market_repository=_MockMarketRepo(candles),
+            rules_loader=FakeRulesLoader(),
             candidate_observations_repository=obs_repo,
             **_EVIDENCE_BUILDER_FACTORY_KWARGS,
         )
@@ -436,6 +438,7 @@ class TestScFingerprintWithPeerCandles:
             indicator_registry=IndicatorRegistry(),
             broker_repository=_MockBrokerRepo(summaries),
             market_repository=_MockMarketRepo(all_candles),
+            rules_loader=FakeRulesLoader(),
             candidate_observations_repository=obs_repo,
             # Provides sector="Finance" so sc_sector flows into SectorContextRequest.
             ticker_notation_provider=_MockTickerNotationProvider("Finance"),
@@ -520,6 +523,7 @@ class TestFingerprintKeysExistWhenInputsUnavailable:
             broker_repository=_MockBrokerRepo(summaries),
             # No peer candles and no IHSG candles (only BBCA).
             market_repository=_MockMarketRepo(candles),
+            rules_loader=FakeRulesLoader(),
             candidate_observations_repository=obs_repo,
             **_EVIDENCE_BUILDER_FACTORY_KWARGS,
             # No ticker_notation_provider — sc_sector will be None.

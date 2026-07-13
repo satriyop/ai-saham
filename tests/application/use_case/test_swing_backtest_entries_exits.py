@@ -8,6 +8,7 @@ from src.application.use_case.swing_backtest_use_case import (
 )
 from tests.application.use_case.swing_backtest_fixtures import (
     FakeMarketContextProvider,
+    FakeRulesLoader,
     MockBrokerRepository,
     MockMarketRepository,
     _base_candles,
@@ -54,6 +55,7 @@ def test_swing_backtest_opens_signal_and_exits_at_target():
         indicator_registry=IndicatorRegistry(),
         broker_repository=broker_repo,
         market_repository=market_repo,
+        rules_loader=FakeRulesLoader(),
         market_context_provider=FakeMarketContextProvider({
             signal_date: fake_context,
             exit_date: fake_context_exit,
@@ -141,6 +143,7 @@ def test_swing_backtest_can_prioritize_target_when_same_day_hits_stop_and_target
         indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
+        rules_loader=FakeRulesLoader(),
     )
 
     response = use_case.execute(SwingBacktestRequest(
@@ -190,6 +193,7 @@ def test_swing_backtest_can_prioritize_stop_when_same_day_hits_stop_and_target()
         indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
+        rules_loader=FakeRulesLoader(),
     )
 
     response = use_case.execute(SwingBacktestRequest(
@@ -230,6 +234,7 @@ def test_swing_backtest_force_exit_period_end():
         indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
+        rules_loader=FakeRulesLoader(),
     )
 
     response = use_case.execute(SwingBacktestRequest(

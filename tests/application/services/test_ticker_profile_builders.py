@@ -27,6 +27,7 @@ def test_accumulation_candidate_evidence_builder_no_factory():
         primary_setup_family_resolver=MagicMock(),
         relative_strength_calculator=MagicMock(),
         indicator_registry=MagicMock(),
+        rules_loader=RulesYamlLoader(),
         ticker_profile_classifier_factory=None,
     )
     candidate = MagicMock()
@@ -63,6 +64,7 @@ def test_accumulation_candidate_evidence_builder_with_fake_factory():
         primary_setup_family_resolver=MagicMock(),
         relative_strength_calculator=MagicMock(),
         indicator_registry=MagicMock(),
+        rules_loader=RulesYamlLoader(),
         ticker_profile_classifier_factory=fake_factory,
     )
     candidate = MagicMock()

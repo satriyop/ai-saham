@@ -17,6 +17,7 @@ from src.application.use_case.accumulation_screen_use_case import (
 )
 from src.domain.entities.broker_flow import BrokerSummary
 from tests.application.use_case.accumulation_screen_fixtures import (
+    FakeRulesLoader,
     MockBrokerRepository,
     MockMarketRepository,
     RecordingInsiderProvider,
@@ -64,6 +65,7 @@ def test_screen_window_uses_latest_broker_sessions_not_calendar_days():
         indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
+        rules_loader=FakeRulesLoader(),
     )
 
     response = use_case.execute(
@@ -96,6 +98,7 @@ def test_screen_passes_as_of_date_to_insider_provider():
         indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
+        rules_loader=FakeRulesLoader(),
         insider_activity_provider=insider_provider,
     )
 
@@ -138,6 +141,7 @@ def test_screen_ignores_unsafe_broker_summary_rows():
         indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository([*valid_summaries, unsafe_latest]),
         market_repository=MockMarketRepository(candles),
+        rules_loader=FakeRulesLoader(),
     )
 
     response = use_case.execute(
@@ -171,6 +175,7 @@ def test_screen_uses_derived_feature_policy_for_trend_threshold():
         indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
+        rules_loader=FakeRulesLoader(),
         derived_feature_policy=AccumulationDerivedFeaturePolicy(
             trend_sma_period=20,
             trend_threshold_pct=5.0,
@@ -180,6 +185,7 @@ def test_screen_uses_derived_feature_policy_for_trend_threshold():
         indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
+        rules_loader=FakeRulesLoader(),
         derived_feature_policy=AccumulationDerivedFeaturePolicy(
             trend_sma_period=20,
             trend_threshold_pct=2.0,

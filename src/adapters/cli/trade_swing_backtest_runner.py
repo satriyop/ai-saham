@@ -36,6 +36,7 @@ from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.config.config_backed_market_context_provider import (
     ConfigBackedMarketContextProvider,
 )
+from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 from src.infrastructure.config.swing_backtest_config import (
     load_swing_backtest_config as _load_swing_backtest_config,
 )
@@ -141,6 +142,7 @@ def _run_swing_backtest(
         broker_repository=broker_repo,
         market_repository=market_repo,
         indicator_registry=create_indicator_registry(),
+        rules_loader=RulesYamlLoader(),
         derived_feature_policy=_ASC.derived_features,
         risk_engine=create_configured_risk_engine(resolved_db, with_enrichment=True),
         market_context_provider=ConfigBackedMarketContextProvider(

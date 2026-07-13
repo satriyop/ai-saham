@@ -28,6 +28,7 @@ from src.application.services.sector_context_evidence_builder import (
 from src.domain.entities.candle import Candle
 from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.market_data_repository import MarketDataRepository
+from tests.application.use_case.accumulation_screen_fixtures import FakeRulesLoader
 
 
 def _builder(**factory_overrides) -> AccumulationCandidateEvidenceBuilder:
@@ -40,6 +41,7 @@ def _builder(**factory_overrides) -> AccumulationCandidateEvidenceBuilder:
         primary_setup_family_resolver=None,
         relative_strength_calculator=None,
         indicator_registry=None,
+        rules_loader=FakeRulesLoader(),
         **factory_overrides,
     )
 
@@ -230,6 +232,7 @@ def _full_builder(**factory_overrides) -> AccumulationCandidateEvidenceBuilder:
         primary_setup_family_resolver=None,
         relative_strength_calculator=None,
         indicator_registry=None,
+        rules_loader=FakeRulesLoader(),
         **factory_overrides,
     )
 

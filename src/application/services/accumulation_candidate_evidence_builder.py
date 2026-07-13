@@ -73,7 +73,7 @@ class AccumulationCandidateEvidenceBuilder:
         primary_setup_family_resolver: "PrimarySetupFamilyResolver",
         relative_strength_calculator: "RelativeStrengthCalculator",
         indicator_registry: "IndicatorRegistry",
-        rules_loader: RulesLoader | None = None,
+        rules_loader: RulesLoader,
         ticker_profile_classifier_factory: Callable[[], TickerProfileClassifier] | None = None,
         institutional_accumulation_config_factory: (
             Callable[[], InstitutionalAccumulationConfig] | None
@@ -145,8 +145,6 @@ class AccumulationCandidateEvidenceBuilder:
         request: accumulation_dto.AccumulationScreenRequest,
     ) -> "StrategyEvidence | None":
         if request.strategy_name is None:
-            return None
-        if self._rules_loader is None:
             return None
         try:
             from src.application.services.strategy_evidence_builder import (

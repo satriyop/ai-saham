@@ -4,6 +4,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from unittest.mock import MagicMock
 
+from src.application.ports.rules_loader import RulesLoader
 from src.application.services.indicator_registry import IndicatorRegistry
 from src.application.use_case.accumulation_screen_use_case import (
     AccumulationScreenUseCase,
@@ -16,6 +17,25 @@ from src.domain.value_objects.company_fundamentals import CompanyFundamentals
 from src.infrastructure.config.ticker_profile_config_loader import (
     create_ticker_profile_classifier,
 )
+
+
+class FakeRulesLoader(RulesLoader):
+    """Minimal RulesLoader stand-in for tests that require the constructor
+    parameter but never exercise real YAML parsing (no strategy_name set,
+    or strategy_name resolution fails before load() is reached).
+    """
+
+    def load(self, path=None, registry=None):
+        raise NotImplementedError(
+            "FakeRulesLoader does not parse rules — inject a real loader "
+            "if this test needs strategy evidence to actually resolve"
+        )
+
+    def load_from_string(self, content, registry=None, source_name="<generated>"):
+        raise NotImplementedError(
+            "FakeRulesLoader does not parse rules — inject a real loader "
+            "if this test needs strategy evidence to actually resolve"
+        )
 
 
 class MockMarketRepository(MarketDataRepository):
@@ -235,6 +255,7 @@ def _make_use_case(summaries, daily_flows=None):
             indicator_registry=IndicatorRegistry(),
             broker_repository=MockBrokerRepositoryWithDaily(summaries, daily_flows),
             market_repository=MockMarketRepository(candles),
+            rules_loader=FakeRulesLoader(),
         ),
         session_dates,
     )
@@ -270,6 +291,7 @@ def _make_use_case_with_fundamentals(piotroski_score: int | None):
         indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
+        rules_loader=FakeRulesLoader(),
         fundamentals_provider=fund_prov,
     )
     return use_case, as_of
@@ -319,6 +341,7 @@ def _make_use_case_with_all_providers(
         indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
+        rules_loader=FakeRulesLoader(),
         fundamentals_provider=fund_prov,
         seasonality_provider=seasonality_prov,
         bandar_detector_provider=bandar_prov,

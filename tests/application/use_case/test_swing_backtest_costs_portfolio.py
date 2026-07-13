@@ -8,6 +8,7 @@ from src.application.use_case.swing_backtest_use_case import (
     SwingBacktestUseCase,
 )
 from tests.application.use_case.swing_backtest_fixtures import (
+    FakeRulesLoader,
     MockBrokerRepository,
     MockMarketRepository,
     _base_candles,
@@ -27,6 +28,7 @@ def test_swing_backtest_default_applies_transaction_costs():
         indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(_base_candles("BBCA", base)),
+        rules_loader=FakeRulesLoader(),
     )
 
     response = use_case.execute(SwingBacktestRequest(
@@ -60,6 +62,7 @@ def test_swing_backtest_respects_max_positions():
         indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
+        rules_loader=FakeRulesLoader(),
     )
 
     response = use_case.execute(SwingBacktestRequest(

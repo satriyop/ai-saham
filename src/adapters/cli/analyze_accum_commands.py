@@ -31,6 +31,7 @@ from src.infrastructure.config.accumulation_screener_config import (
     load_accumulation_screener_config,
 )
 from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
@@ -318,6 +319,7 @@ def accumulation_audit(
         broker_repository=SQLiteBrokerRepository(resolved_db),
         market_repository=SQLiteMarketRepository(db_path=resolved_db),
         indicator_registry=create_indicator_registry(),
+        rules_loader=RulesYamlLoader(),
         derived_feature_policy=_SCREEN_CFG.derived_features,
     )
     response = use_case.execute(

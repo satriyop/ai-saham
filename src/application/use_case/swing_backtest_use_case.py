@@ -27,6 +27,7 @@ from src.application.dto.swing_backtest import (
     SwingBacktestTrade,
 )
 from src.application.ports.market_context_provider import MarketContextProvider
+from src.application.ports.rules_loader import RulesLoader
 from src.application.services.backtest_statistics import (
     average_pct,
     equity_max_drawdown_pct,
@@ -85,6 +86,7 @@ class SwingBacktestUseCase:
         broker_repository: BrokerDataRepository,
         market_repository: MarketDataRepository,
         indicator_registry: Any,
+        rules_loader: RulesLoader,
         derived_feature_policy: AccumulationDerivedFeaturePolicy | None = None,
         risk_engine: Any | None = None,
         market_context_provider: MarketContextProvider | None = None,
@@ -96,6 +98,7 @@ class SwingBacktestUseCase:
             broker_repository=broker_repository,
             market_repository=market_repository,
             indicator_registry=indicator_registry,
+            rules_loader=rules_loader,
             derived_feature_policy=self._derived_features,
         )
         self._market_context_provider = market_context_provider
