@@ -175,6 +175,7 @@ If any answer is unclear, stop.
 
 - Python files <= 400 LOC are preferred.
 - 401-700 LOC requires a clear single responsibility.
+- Production Python files above 550 LOC require an extraction plan before adding new behavior, even if they are below the 700 LOC threshold.
 - > 700 LOC requires an extraction plan before adding more behavior.
 - > 1000 LOC is a merge blocker unless the task is explicitly a temporary characterization/test fixture file.
 - Tests follow the same thresholds; split by behavior, not by arbitrary line count.
@@ -202,6 +203,7 @@ If any answer is unclear, stop.
 - Preserve public request/response contracts during extraction.
 - Keep compatibility imports temporarily when renaming widely imported modules.
 - When a file is split, the old file may remain only as a compatibility facade; it must not keep implementation logic.
+- Compatibility facades must name the canonical replacement import path and may only re-export/delegate.
 - First extraction target in a large use case should be DTOs and serialization, because they reduce scan burden without altering behavior.
 - Second extraction target should be pure calculators/parsers, because they are easiest to characterize with tests.
 - Use cases own workflow orchestration only; extract calculators, parsers, serializers, evidence builders, simulators, statistics, and persistence stores when they become independent scan targets.
@@ -238,6 +240,7 @@ If any answer is unclear, stop.
 - DTOs used by multiple functions/classes in a large workflow belong in `src/application/dto/`.
 - `to_dict()` schema methods should live near DTO definitions unless they are adapter-specific.
 - Persisted JSON/CSV/schema fields require compatibility notes before rename.
+- Domain value objects must not become persisted-schema warehouses. Large persisted fingerprints/snapshots must split field groups by schema section and keep serialization compatibility explicit.
 - Persisted schema builders should split by schema section once they exceed 400 LOC.
 - New machine-facing outputs must include explicit names; avoid generic `score`, `status`, or `verdict` unless the artifact contract defines them.
 
@@ -245,8 +248,14 @@ If any answer is unclear, stop.
 
 - Provider files split by external capability, not by vendor alone once they exceed 700 LOC.
 - Raw payload parsers should be separate from network/browser clients.
+- Parser modules must separate confirmed payload parsers from exploratory recursive fallback scanners. Fallback/search helpers must be named as fallback behavior, not canonical parsing.
 - Browser lifecycle must not share a file with HTTP payload parsers unless the file is small and strictly cohesive.
 - Provider class names and filenames must match the dominant mechanism: `playwright_*` for browser, `stockbit_api_*` or `stockbit_http_*` for HTTP/token API.
+- Point-in-time cache providers must reuse shared cache primitives for fetched-date filtering, freshness checks, safe read/write handling, and schema update wrappers when semantics match. Provider-specific PIT rules must remain explicit.
+
+### Policy Module Rules
+
+- Tuning and signal policy modules must split value selection, target classification, interpretation, and report assembly once those responsibilities are independently reviewable.
 
 ### Repository and Config Rules
 
