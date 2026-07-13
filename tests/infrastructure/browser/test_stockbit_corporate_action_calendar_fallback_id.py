@@ -11,7 +11,9 @@ builds internally.
 import hashlib
 import json
 
-from src.infrastructure.browser.stockbit_corporate_action_calendar import _fallback_id
+from src.infrastructure.browser.stockbit_corporate_action_event_parsers import (
+    _fallback_id,
+)
 
 
 class TestFallbackIdDeterminism:
@@ -27,7 +29,12 @@ class TestFallbackIdDeterminism:
         int(digest, 16)  # raises ValueError if not valid hex
 
     def test_matches_hand_computed_sha256(self):
-        event_type, ticker, dates, raw = "dividend", "BBCA", ["2026-07-15", "2026-07-10"], {"b": 2, "a": 1}
+        event_type, ticker, dates, raw = (
+            "dividend",
+            "BBCA",
+            ["2026-07-15", "2026-07-10"],
+            {"b": 2, "a": 1},
+        )
         expected_composite = (
             f"{event_type}|{ticker}|"
             f"{'|'.join(sorted(d for d in dates if d))}|"

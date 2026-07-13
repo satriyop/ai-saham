@@ -120,21 +120,24 @@ class TestCrossCuttingRowGuards:
 
     def test_one_exception_raising_row_does_not_abort_sibling_rows(self, monkeypatch):
         """Per-row guard: if a single row's parser raises, siblings still parse."""
+        from src.infrastructure.browser import stockbit_corporate_action_event_parsers as parsers
+
         good1 = {"company_symbol": "BBCA", "dividend_id": "1"}
         bad = {"company_symbol": "BBRI", "dividend_id": "2", "company_id": object()}
         good2 = {"company_symbol": "BMRI", "dividend_id": "3"}
         provider = _provider({DIVIDEND_URL: _dividend_body([good1, bad, good2])})
-        # company_id as an unhashable/unserializable object still round-trips via
-        # str(); to force an actual per-row exception we monkeypatch a parser
-        # that raises for a specific row.
-        original = provider._parse_dividend
+        list_key, original_parser = parsers._EVENT_TYPE_MAP[CorporateActionType.DIVIDEND]
 
         def _boom(item, fetched_at):
             if item.get("company_symbol") == "BBRI":
                 raise RuntimeError("boom")
-            return original(item, fetched_at)
+            return original_parser(item, fetched_at)
 
-        monkeypatch.setattr(provider, "_parse_dividend", _boom)
+        monkeypatch.setitem(
+            parsers._EVENT_TYPE_MAP,
+            CorporateActionType.DIVIDEND,
+            (list_key, _boom),
+        )
         events = provider.fetch_events((CorporateActionType.DIVIDEND,))
         tickers = {e.ticker for e in events}
         assert tickers == {"BBCA", "BMRI"}
