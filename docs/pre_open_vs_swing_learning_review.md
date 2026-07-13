@@ -377,6 +377,272 @@ The shared kernel should own:
 
 The pre-open and swing applications should own their own observation schemas, outcome labels, execution models, feature attribution, and economically appropriate horizons.
 
+## `saham today` as the primary daily integration point
+
+The primary daily command should consume all three decision horizons consistently:
+
+1. pre-open assessment;
+2. accumulation discovery and canonical assessment;
+3. bounded swing analysis for the strongest eligible candidates.
+
+The current briefing is asymmetric. It shows a pre-open verdict, but its accumulation section displays only foreign-flow score, streak, and trend. It does not show canonical SignalEngine, RiskEngine, setup, or TradeSetup results, and it does not perform swing analysis.
+
+This is a P0 product gap. A first daily command should not require the user to infer that a high foreign-flow score is merely a discovery signal and then manually guess which ticker deserves complete analysis.
+
+### Current accumulation score is not a swing verdict
+
+The `Score` currently displayed by `saham today` is `foreign_flow_score`. It is not:
+
+- the canonical SignalEngine score;
+- a calibrated success probability;
+- a setup-quality result;
+- a RiskEngine decision;
+- a TradeSetup action;
+- proof of sufficient data coverage;
+- a recommendation to enter.
+
+For example, a ticker with foreign-flow score 77.3 may still have:
+
+- missing or low-coverage signal evidence;
+- no valid swing setup;
+- exhaustion/distribution phase;
+- structural or execution risk gates;
+- stale candle or broker data;
+- an AVOID or BLOCKED TradeSetup action.
+
+The section should therefore be called **Foreign-Flow Discovery** unless the full canonical assessment has been composed.
+
+### Required daily composition
+
+The desired deterministic pipeline is:
+
+```text
+Selected universe
+    ↓
+Per-dataset readiness and completed-session cutoff
+    ↓
+Structural eligibility
+    ↓
+Accumulation discovery across the full ready universe
+    ↓
+Canonical signal assessment for survivors
+    ↓
+Risk funnel
+    ↓
+TradeSetup composition
+    ↓
+Canonical ranking
+    ↓
+Compact swing analysis for the top eligible candidates
+```
+
+The final top set must not be selected solely by foreign-flow score before signal, risk, and setup composition. Otherwise the command can miss a lower-flow candidate with substantially better setup quality, evidence coverage, and risk status.
+
+### Canonical ranking policy
+
+Recommended ranking priority:
+
+1. data readiness and minimum evidence coverage;
+2. structural eligibility;
+3. TradeSetup action rank: ENTER, WATCH, AVOID, BLOCKED_EXECUTION, BLOCKED_STRUCTURAL;
+4. setup match and setup phase;
+5. canonical signal coverage/conviction;
+6. canonical SignalEngine score;
+7. foreign-flow score;
+8. liquidity/capacity;
+9. sector diversification for the final shortlist.
+
+Raw numerical score must not override a structural block, insufficient evidence, or absence of a valid setup.
+
+### Required accumulation assessment
+
+The daily briefing should first summarize the funnel:
+
+```text
+ACCUMULATION SCREEN
+Universe checked: 45
+Data-ready:        41
+Structural pass:   12
+Flow candidates:    6
+Canonical WATCH:    2
+Canonical ENTER:    0
+Blocked:            3
+Insufficient data:  1
+```
+
+Then show the best survivors with comparable decision fields:
+
+```text
+Ticker  Flow  Phase         Signal  Coverage  Risk       Action  Primary reason
+INDF    60.6  ACCUMULATION  72      82%       OPEN       WATCH   Setup not confirmed
+BBTN    56.9  COMPRESSION   68      76%       OPEN       WATCH   Await breakout
+GOTO    77.3  EXHAUSTION    61      64%       EXECUTION  AVOID   Distribution risk
+```
+
+These values are illustrative layout examples, not audited current assessments for the named tickers.
+
+The table must include candle and broker-data as-of dates when they differ from the briefing session.
+
+### Required bounded swing assessment
+
+After canonical accumulation ranking, the command should run a compact swing assessment for a bounded top set—three candidates by default. The summary should include:
+
+- setup family and match status;
+- setup phase;
+- canonical signal score and evidence coverage;
+- RiskEngine status and blocking gate;
+- canonical TradeSetup action;
+- market-context regime and optional preview effect;
+- freshest candle and broker dates;
+- primary supporting evidence;
+- primary invalidation, blocker, or missing confirmation;
+- the detailed follow-up command.
+
+Example:
+
+```text
+SWING SHORTLIST
+1. INDF — WATCH
+   Setup: foreign-bounce, partial match
+   Signal: 72, coverage 82% | Risk: OPEN
+   Positive: persistent foreign accumulation
+   Missing: breakout confirmation
+   Next: saham analyze swing INDF
+
+2. BBTN — WATCH
+   Setup: coiled-spring, partial match
+   Signal: 68, coverage 76% | Risk: OPEN
+   Positive: compression with improving flow
+   Risk: resistance headroom limited
+   Next: saham analyze swing BBTN
+```
+
+When nothing qualifies, `NO ENTER CANDIDATES` or `NO ACTIONABLE SWING SETUPS` is the correct primary result. The command must not fill the table with weak names merely to show a fixed top count.
+
+### Data readiness must control assessment authority
+
+The inspected daily output combined a live session with incomplete current-day EOD candles and continued to display rankings. The briefing needs separate clocks:
+
+```text
+Live session date
+Latest completed EOD analysis date
+Opening snapshot date
+```
+
+It also needs per-dataset readiness rather than one candle count:
+
+```text
+Dataset                 Required as-of  Coverage  Status
+Completed candles       YYYY-MM-DD      41/45     PARTIAL
+Broker/foreign flow     YYYY-MM-DD      45/45     READY
+Market context          YYYY-MM-DD      6/6       READY
+Opening snapshot        YYYY-MM-DD      valid NCP READY
+Point-in-time enrichment YYYY-MM-DD     37/45     PARTIAL
+```
+
+If required readiness falls below policy, candidate rankings should be suppressed or explicitly marked non-authoritative. A warning below a normal-looking green/yellow ranking is not sufficient.
+
+### Universe scope must remain explicit
+
+The opening snapshot may contain market-wide movers that are not members of the requested briefing universe. The command must either:
+
+- filter opening rows to the selected universe; or
+- label them explicitly as `Market-Wide Pre-Open Movers` and separately report that no requested-universe setup qualified.
+
+A briefing titled LQ45 must not silently present non-LQ45 names as its top candidates.
+
+### Phase-aware daily action
+
+The final next action should depend on the IDX session:
+
+- before pre-open: refresh required data and capture IEV;
+- NCP window: run the snapshot/pre-open assessment;
+- opening window: confirm actionable opening setups;
+- regular session: track opening outcomes and inspect the swing shortlist;
+- after close: refresh completed candles, grade the opening session, and prepare the next-session list;
+- historical mode: show replay/review actions, not the current live market status.
+
+Return one primary next command and then optional alternatives. Do not end with a generic command chain containing an unresolved `TICKER` placeholder.
+
+### Architecture boundary
+
+`saham today` must not invoke other CLI commands or parse their display output. The application layer should compose reusable use cases and return a daily briefing DTO. The adapter should remain responsible only for flags, dependency wiring, rendering, and error mapping.
+
+A suitable application composition is conceptually:
+
+```text
+DailyBriefingUseCase
+  ├── MarketDataReadinessService
+  ├── MarketContextEngine
+  ├── OpeningSnapshotReader
+  ├── AccumulationScreenUseCase
+  └── DailySwingShortlistUseCase
+```
+
+`DailySwingShortlistUseCase` should consume already-built accumulation candidates and their evidence rather than rescanning each ticker. It should return a compact summary DTO rather than the full verbose swing-analysis display model.
+
+### Performance and provider policy
+
+The default daily command should remain deterministic, local, and read-only:
+
+- run accumulation discovery once;
+- reuse candidate evidence for SignalEngine and setup assessment;
+- run RiskEngine only for survivors;
+- produce full compact swing summaries only for the final bounded set;
+- perform no implicit network refresh;
+- target completion within approximately 5–8 seconds.
+
+An optional deeper mode may enable more cached enrichment, but network refresh should remain an explicit separate command.
+
+### Recommended target layout
+
+```text
+Daily Briefing — 13 Jul 2026
+Universe: LQ45
+
+STATUS
+Data readiness: NOT READY / PARTIAL / READY
+Live session:   REGULAR
+Analysis date:  latest completed IDX session
+
+MARKET POSTURE
+RISK_ON — low confidence
+Local trend stressed | Breadth neutral | No gate tightening
+
+PRE-OPEN ASSESSMENT
+No actionable LQ45 setup
+Market-wide movers: RBMS SKIP | BNBR SKIP
+
+ACCUMULATION SCREEN
+45 checked | 6 flow candidates | 2 WATCH | 0 ENTER | 3 blocked
+
+Ticker  Flow  Phase         Signal/Coverage  Risk  Action
+INDF    60.6  ACCUMULATION  72 / 82%         OPEN  WATCH
+BBTN    56.9  COMPRESSION   68 / 76%         OPEN  WATCH
+GOTO    77.3  EXHAUSTION    61 / 64%         BLOCK AVOID
+
+SWING SHORTLIST
+1. INDF — WATCH — wait for breakout confirmation
+2. BBTN — WATCH — resistance headroom limited
+
+NO ENTER CANDIDATES TODAY
+
+NEXT ACTION
+Review INDF: saham analyze swing INDF
+```
+
+### Revised P0 priority for the primary command
+
+1. Restore CLI startup reliability.
+2. Separate live-session, completed-EOD, and opening-snapshot dates.
+3. Add fail-closed per-dataset readiness.
+4. Enforce or clearly label universe scope.
+5. Add canonical accumulation assessment.
+6. Add bounded top-three swing assessment.
+7. Rank by TradeSetup, setup match, coverage, and risk—not raw flow score.
+8. Present pre-open, accumulation, and swing verdicts with equal authority semantics.
+9. Emit a phase-aware primary next action.
+
 ## Recommended implementation sequence
 
 ### Phase 1 — Stop authority leakage
