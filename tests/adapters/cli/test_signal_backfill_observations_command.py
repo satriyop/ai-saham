@@ -202,7 +202,7 @@ def _patch_command_dependencies(monkeypatch, backfill_cls=None):
     monkeypatch.setattr(
         analyze_signal_commands,
         "resolve_tickers",
-        lambda universe, explicit, db_path: ["BBCA"],
+        lambda universe, explicit, db_path, **kwargs: ["BBCA"],
     )
     monkeypatch.setattr(
         analyze_signal_commands,

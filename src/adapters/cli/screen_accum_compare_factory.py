@@ -13,6 +13,8 @@ from src.adapters.cli.screen_accum_workflow_factory import (
 )
 from src.application.dto.accumulation_screen import AccumulationScreenRequest
 from src.application.services.universe_loader import resolve_tickers
+from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
+from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 
 
 def run_fresh_accumulation_screen_for_compare(
@@ -30,7 +32,13 @@ def run_fresh_accumulation_screen_for_compare(
     (empty universe, network error, etc.).
     """
     try:
-        ticker_list = resolve_tickers(universe=universe, explicit=[], db_path=db_path)
+        ticker_list = resolve_tickers(
+            universe=universe,
+            explicit=[],
+            db_path=db_path,
+            loader=YamlUniverseConfigLoader(),
+            repository=SQLiteBrokerRepository(db_path),
+        )
         if not ticker_list:
             return None
 

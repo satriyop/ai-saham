@@ -40,6 +40,8 @@ from src.infrastructure.config.accumulation_screener_config import (
 from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 from src.infrastructure.config.swing_config import load_swing_config as _load_swing_config
+from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
+from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 
 _SC = _load_swing_config()
 _ASC = _load_accumulation_screener_config(Path(APP_CFG.config_paths.accumulation_screener))
@@ -287,6 +289,8 @@ def accumulation_run(
             universe=universe,
             explicit=list(tickers) if tickers else [],
             db_path=resolved_db,
+            loader=YamlUniverseConfigLoader(),
+            repository=SQLiteBrokerRepository(resolved_db),
         )
     except UniverseNotFoundError as e:
         typer.echo(f"Error: {e}", err=True)

@@ -16,7 +16,7 @@ from src.application.dto.universe_management import (
     UniverseUpdateResult,
 )
 from src.application.ports.universe_catalog_provider import UniverseCatalogProvider
-from src.application.services.universe_config_store import UniverseConfigStore
+from src.application.ports.universe_config_store import UniverseConfigStore
 from src.application.services.universe_payload_parser import (
     extract_company_rows,
     extract_company_tickers,

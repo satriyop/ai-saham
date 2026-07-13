@@ -26,8 +26,11 @@ from src.application.services.universe_loader import (
 )
 from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.config.market_context_config import load_market_context_config
+from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
-from src.infrastructure.persistence.sqlite_market_context_repository import SQLiteMarketContextRepository
+from src.infrastructure.persistence.sqlite_market_context_repository import (
+    SQLiteMarketContextRepository,
+)
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
 DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
@@ -40,7 +43,11 @@ def market_context_show(
     ] = None,
     universe: Annotated[
         Optional[str],
-        typer.Option("--universe", "-u", help="Universe for idx_breadth factor (default: regime_universe config)"),
+        typer.Option(
+            "--universe",
+            "-u",
+            help="Universe for idx_breadth factor (default: regime_universe config)",
+        ),
     ] = None,
     verbose: Annotated[
         bool,
@@ -74,6 +81,8 @@ def market_context_show(
             universe=resolved_universe,
             explicit=[],
             db_path=resolved_db,
+            loader=YamlUniverseConfigLoader(),
+            repository=SQLiteBrokerRepository(resolved_db),
         )
     except (UniverseNotFoundError, FileNotFoundError):
         ticker_list = []

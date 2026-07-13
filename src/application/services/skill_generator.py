@@ -10,11 +10,10 @@ Layer: Application
 from dataclasses import dataclass
 from pathlib import Path
 
-import yaml
-
 from src.application.ports.annotation_reader import AnnotationReader
 from src.application.ports.rules_hasher import RulesHasher
 from src.application.ports.skill_writer import SkillWriter
+from src.application.ports.strategy_document_reader import StrategyDocumentReader
 from src.domain.value_objects.skill_annotation import (
     ArtifactType,
     DriftInfo,
@@ -51,10 +50,12 @@ class SkillGeneratorService:
         annotation_reader: AnnotationReader,
         skill_writer: SkillWriter,
         rules_hasher: RulesHasher,
+        strategy_reader: StrategyDocumentReader,
     ) -> None:
         self._reader = annotation_reader
         self._writer = skill_writer
         self._hasher = rules_hasher
+        self._strategy_reader = strategy_reader
 
     def generate_for_strategy(self, strategy_path: Path) -> SkillGenerationResult:
         """Generate SKILL.md for a strategy.
@@ -69,8 +70,7 @@ class SkillGeneratorService:
 
         # Load strategy YAML
         try:
-            text = strategy_path.read_text(encoding="utf-8")
-            data = yaml.safe_load(text)
+            data = self._strategy_reader.read_strategy(strategy_path)
         except Exception as e:
             return SkillGenerationResult(
                 success=False,
@@ -303,7 +303,10 @@ class SkillGeneratorService:
                 name = rule.get("name", "unnamed")
                 rationale = rule.get("rationale", "")
                 outcome = rule.get("outcome", "")
-                summary = f"**{name}** ({outcome}): {rationale}" if rationale else f"**{name}** ({outcome})"
+                if rationale:
+                    summary = f"**{name}** ({outcome}): {rationale}"
+                else:
+                    summary = f"**{name}** ({outcome})"
                 summaries.append(summary)
         return tuple(summaries)
 

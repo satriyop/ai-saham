@@ -65,6 +65,8 @@ from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.config.data_sources_config import (
     candle_source as _candle_source,
 )
+from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
+from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import (
     SQLiteMarketRepository,
 )
@@ -178,6 +180,8 @@ def fetch_market(
             universe=universe,
             explicit=list(tickers) if tickers else [],
             db_path=resolved_db,
+            loader=YamlUniverseConfigLoader(),
+            repository=SQLiteBrokerRepository(resolved_db),
         )
     except UniverseNotFoundError as e:
         typer.echo(f"Error: {e}", err=True)
@@ -363,6 +367,8 @@ def fetch_market(
         fetch_broker=fetch_broker,
         fetch_meta=fetch_meta,
         fetch_enrichment=fetch_enrichment,
+        universe_loader=YamlUniverseConfigLoader(),
+        broker_repository=SQLiteBrokerRepository(resolved_db),
         read_pit_coverage=_read_coverage_fn,
     )
     try:

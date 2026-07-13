@@ -26,10 +26,15 @@ from src.application.services.universe_loader import (
 )
 from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.config.market_context_config import load_market_context_config
+from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
-from src.infrastructure.persistence.sqlite_market_context_repository import SQLiteMarketContextRepository
+from src.infrastructure.persistence.sqlite_market_context_repository import (
+    SQLiteMarketContextRepository,
+)
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
-from src.infrastructure.persistence.sqlite_regime_observation_repository import SQLiteRegimeObservationRepository
+from src.infrastructure.persistence.sqlite_regime_observation_repository import (
+    SQLiteRegimeObservationRepository,
+)
 
 DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 
@@ -45,7 +50,10 @@ def regime(
     ] = None,
     benchmark: Annotated[
         str,
-        typer.Option("--benchmark", help="Benchmark ticker (overrides config idx_trend.benchmark_ticker)"),
+        typer.Option(
+            "--benchmark",
+            help="Benchmark ticker (overrides config idx_trend.benchmark_ticker)",
+        ),
     ] = APP_CFG.analysis.benchmark,
     as_of: Annotated[
         Optional[str],
@@ -87,6 +95,8 @@ def regime(
             universe=resolved_universe,
             explicit=list(tickers) if tickers else [],
             db_path=resolved_db,
+            loader=YamlUniverseConfigLoader(),
+            repository=SQLiteBrokerRepository(resolved_db),
         )
     except (UniverseNotFoundError, FileNotFoundError) as e:
         typer.echo(f"Error: {e}", err=True)

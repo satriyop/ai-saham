@@ -31,6 +31,7 @@ from src.infrastructure.config.accumulation_screener_config import (
 )
 from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.config.market_context_config import load_market_context_config
+from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
@@ -74,6 +75,8 @@ def today(
             universe=APP_CFG.analysis.regime_universe,
             explicit=[],
             db_path=db_path,
+            loader=YamlUniverseConfigLoader(),
+            repository=broker_repo,
         )
     except Exception:
         regime_tickers = []
@@ -90,6 +93,7 @@ def today(
             market_repository=market_repo,
             derived_feature_policy=_ASC.derived_features,
         ),
+        universe_loader=YamlUniverseConfigLoader(),
     )
 
     response = use_case.execute(

@@ -25,6 +25,8 @@ from src.application.services.universe_loader import (
     resolve_tickers,
 )
 from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
+from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 
 
 def fetch_enrichment_history(
@@ -73,6 +75,8 @@ def fetch_enrichment_history(
             universe=universe,
             explicit=list(tickers) if tickers else [],
             db_path=resolved_db,
+            loader=YamlUniverseConfigLoader(),
+            repository=SQLiteBrokerRepository(resolved_db),
         )
     except UniverseNotFoundError as e:
         typer.echo(f"Error: {e}", err=True)

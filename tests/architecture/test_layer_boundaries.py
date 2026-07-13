@@ -78,10 +78,6 @@ BASELINE_ALLOWLIST = {
     ): "LEGACY: composition-root factory wires infrastructure repository directly; predates architecture guard. Do not copy.",
     (
         "src/application/services/engine_bootstrap/risk_engine_factory.py",
-        "src.infrastructure.config.app_config",
-    ): "LEGACY: composition-root factory reads infrastructure config module directly; predates architecture guard. Do not copy.",
-    (
-        "src/application/services/engine_bootstrap/risk_engine_factory.py",
         "src.infrastructure.browser.stockbit_bandar",
     ): "LEGACY: composition-root factory wires infrastructure browser provider directly; predates architecture guard. Do not copy.",
     (
@@ -139,10 +135,7 @@ BASELINE_ALLOWLIST = {
         "src/application/services/strategy_loader.py",
         "src.infrastructure.config.rules_yaml_loader",
     ): "LEGACY: application loader calls infrastructure YAML loader directly; predates architecture guard. Do not copy.",
-    (
-        "src/application/services/universe_loader.py",
-        "src.infrastructure.persistence.sqlite_broker_repository",
-    ): "LEGACY: application loader constructs infrastructure repository directly; predates architecture guard. Do not copy.",
+
     (
         "src/application/use_case/backtest_use_case.py",
         "src.infrastructure.config.rules_yaml_loader",
@@ -151,10 +144,6 @@ BASELINE_ALLOWLIST = {
         "src/application/use_case/create_strategy_from_intent_use_case.py",
         "src.infrastructure.config.rules_yaml_loader",
     ): "LEGACY: application use case calls infrastructure YAML loader directly; predates architecture guard. Do not copy.",
-    (
-        "src/application/use_case/opening_grade_use_case.py",
-        "src.infrastructure.config.app_config",
-    ): "LEGACY: application use case reads infrastructure config module directly; predates architecture guard. Do not copy.",
     (
         "src/application/use_case/view_universe_summary_use_case.py",
         "src.infrastructure.persistence.sqlite_universe_summary_provider",

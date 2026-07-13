@@ -212,7 +212,7 @@ def _patch_swing_backtest_command(monkeypatch):
     monkeypatch.setattr(
         trade_swing_backtest_runner,
         "resolve_tickers",
-        lambda universe, explicit, db_path: tuple(explicit) or ("BBCA",),
+        lambda universe, explicit, db_path, **kwargs: tuple(explicit) or ("BBCA",),
     )
     monkeypatch.setattr(
         trade_swing_backtest_runner, "SQLiteBrokerRepository", lambda *a, **k: object()
@@ -221,7 +221,7 @@ def _patch_swing_backtest_command(monkeypatch):
         trade_swing_backtest_runner, "SQLiteMarketRepository", lambda *a, **k: object()
     )
     monkeypatch.setattr(
-        trade_swing_backtest_runner, "create_risk_engine", lambda *a, **k: object()
+        trade_swing_backtest_runner, "create_configured_risk_engine", lambda *a, **k: object()
     )
     monkeypatch.setattr(
         trade_swing_backtest_runner,

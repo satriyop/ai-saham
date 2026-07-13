@@ -19,6 +19,7 @@ from src.application.use_case.intraday_backtest_use_case import (
 )
 from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.config.pre_open_config import load_pre_open_screen_config
+from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
@@ -122,6 +123,8 @@ def intraday_backtest(
             universe=universe,
             explicit=list(tickers) if tickers else [],
             db_path=resolved_db,
+            loader=YamlUniverseConfigLoader(),
+            repository=SQLiteBrokerRepository(resolved_db),
         )
     except (UniverseNotFoundError, FileNotFoundError) as exc:
         typer.echo(f"Error: {exc}", err=True)

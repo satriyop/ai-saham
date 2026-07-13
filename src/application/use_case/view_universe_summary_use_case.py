@@ -14,6 +14,7 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
+from src.application.ports.universe_config_loader import UniverseConfigLoader
 from src.application.ports.universe_summary_provider import UniverseSummaryProvider
 from src.application.services.universe_loader import (
     UNIVERSE_CONFIG_PATH,
@@ -48,6 +49,7 @@ class UniverseViewResult:
 def build_universe_view(
     universe_name: str,
     db_path: Path,
+    loader: UniverseConfigLoader,
     config_path: Path = UNIVERSE_CONFIG_PATH,
     as_of_date: date | None = None,
     provider: UniverseSummaryProvider | None = None,
@@ -61,7 +63,7 @@ def build_universe_view(
         UniverseNotFoundError: If universe_name is not in config.
         FileNotFoundError: If universes.yaml does not exist.
     """
-    tickers, updated = load_universe_entry(universe_name, config_path)
+    tickers, updated = load_universe_entry(universe_name, loader, config_path)
 
     if not tickers:
         return UniverseViewResult(

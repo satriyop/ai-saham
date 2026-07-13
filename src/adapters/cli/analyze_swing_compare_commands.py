@@ -23,7 +23,7 @@ from src.adapters.cli.analyze_swing_command_config import (
     setup_config,
 )
 from src.adapters.cli.analyze_swing_display import display_swing_compare
-from src.application.services.bootstrap import create_risk_engine
+from src.adapters.cli.risk_engine_helper import create_configured_risk_engine
 from src.application.services.universe_loader import (
     UniverseNotFoundError,
     resolve_tickers,
@@ -41,6 +41,7 @@ from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.config.config_backed_market_context_provider import (
     ConfigBackedMarketContextProvider,
 )
+from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
@@ -175,6 +176,8 @@ def swing_compare(
             universe=universe,
             explicit=list(tickers) if tickers else [],
             db_path=resolved_db,
+            loader=YamlUniverseConfigLoader(),
+            repository=SQLiteBrokerRepository(resolved_db),
         )
     except (UniverseNotFoundError, FileNotFoundError) as e:
         typer.echo(f"Error: {e}", err=True)
@@ -199,7 +202,7 @@ def swing_compare(
         broker_repository=broker_repo,
         market_repository=market_repo,
         derived_feature_policy=ACCUMULATION_SCREENER_CONFIG.derived_features,
-        risk_engine=create_risk_engine(resolved_db, with_enrichment=True),
+        risk_engine=create_configured_risk_engine(resolved_db, with_enrichment=True),
         market_context_provider=ConfigBackedMarketContextProvider(
             market_repository=market_repo,
             broker_repository=broker_repo,

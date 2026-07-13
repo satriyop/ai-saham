@@ -394,12 +394,14 @@ def grade(
 
     try:
         from src.application.use_case.opening_grade_use_case import compute_grade
+        from src.infrastructure.config.pre_open_grade_config_loader import load_pre_open_grade_config_snapshot
     except ImportError as e:
         typer.echo(f"Import error: {e}", err=True)
         raise typer.Exit(1)
 
     try:
-        result = compute_grade(run_date)
+        config_snapshot = load_pre_open_grade_config_snapshot()
+        result = compute_grade(run_date, config_snapshot=config_snapshot)
     except FileNotFoundError as e:
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1)

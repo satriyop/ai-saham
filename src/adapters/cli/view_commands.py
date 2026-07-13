@@ -101,7 +101,11 @@ def view_universe(
     ] = None,
     as_of: Annotated[
         Optional[str],
-        typer.Option("--date", "-d", help="Show data as of this date (YYYY-MM-DD). Default: latest cached."),
+        typer.Option(
+            "--date",
+            "-d",
+            help="Show data as of this date (YYYY-MM-DD). Default: latest cached.",
+        ),
     ] = None,
     db_path: Annotated[
         Path,
@@ -131,6 +135,9 @@ def view_universe(
         load_universe_meta,
     )
     from src.application.use_case.view_universe_summary_use_case import build_universe_view
+    from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
+
+    loader = YamlUniverseConfigLoader()
 
     _valid_sorts = {"flow", "change", "volume", "ticker"}
     if sort_by not in _valid_sorts:
@@ -141,7 +148,7 @@ def view_universe(
         raise typer.Exit(1)
 
     if name is None:
-        meta = load_universe_meta(UNIVERSE_CONFIG_PATH)
+        meta = load_universe_meta(loader, UNIVERSE_CONFIG_PATH)
         if not meta:
             typer.echo("No universe config found. Run: saham fetch universe update")
             raise typer.Exit(1)
@@ -165,6 +172,7 @@ def view_universe(
         result = build_universe_view(
             universe_name=name.lower(),
             db_path=db_path,
+            loader=loader,
             as_of_date=as_of_date,
             provider=provider,
         )

@@ -9,14 +9,15 @@ import json
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from src.application.services.universe_loader import load_universe
 from src.application.dto.accumulation_screen import (
     AccumulationCandidate,
     AccumulationScreenRequest,
 )
+from src.application.ports.universe_config_loader import UniverseConfigLoader
+from src.application.services.universe_loader import load_universe
 from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from src.domain.value_objects.market_context import MarketContext
@@ -70,10 +71,12 @@ class DailyBriefingUseCase:
         market_repository: MarketDataRepository,
         regime_use_case,
         accumulation_use_case: AccumulationScreenUseCase,
+        universe_loader: UniverseConfigLoader,
     ) -> None:
         self._market_repo = market_repository
         self._regime_uc = regime_use_case
         self._accumulation_uc = accumulation_use_case
+        self._universe_loader = universe_loader
 
     def execute(self, request: DailyBriefingRequest) -> DailyBriefingResponse:
         from datetime import timedelta
@@ -85,7 +88,11 @@ class DailyBriefingUseCase:
         warnings: list[str] = []
 
         try:
-            universe_tickers = load_universe(request.universe, request.universe_config_path)
+            universe_tickers = load_universe(
+                request.universe,
+                self._universe_loader,
+                request.universe_config_path,
+            )
         except Exception as exc:
             universe_tickers = []
             warnings.append(f"Universe unavailable: {exc}")

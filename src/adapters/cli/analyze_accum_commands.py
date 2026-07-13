@@ -21,13 +21,14 @@ from src.application.use_case.accumulation_audit_use_case import (
     AccumulationAuditResponse,
     AccumulationAuditUseCase,
 )
-from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.config.accumulation_audit_config import (
     load_accumulation_audit_config,
 )
 from src.infrastructure.config.accumulation_screener_config import (
     load_accumulation_screener_config,
 )
+from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
@@ -256,6 +257,8 @@ def accumulation_audit(
             universe=universe,
             explicit=list(tickers) if tickers else [],
             db_path=resolved_db,
+            loader=YamlUniverseConfigLoader(),
+            repository=SQLiteBrokerRepository(resolved_db),
         )
     except (UniverseNotFoundError, FileNotFoundError) as e:
         typer.echo(f"Error: {e}", err=True)

@@ -1,14 +1,17 @@
-"""YAML config persistence for universe management.
+"""
+YAML implementation of UniverseConfigStore.
 
-Layer: Application
+Layer: Infrastructure
 """
 
 from pathlib import Path
 
 import yaml
 
+from src.application.ports.universe_config_store import UniverseConfigStore
 
-class UniverseConfigStore:
+
+class YamlUniverseConfigStore(UniverseConfigStore):
     """Handles loading and saving universe YAML configuration."""
 
     def __init__(self, config_path: Path) -> None:

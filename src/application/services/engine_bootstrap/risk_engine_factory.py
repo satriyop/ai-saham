@@ -11,9 +11,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from src.application.services.engine_bootstrap.config_resolvers import (
-    _load_engine_config,
-)
 from src.application.services.engine_bootstrap.indicator_registry_factory import (
     create_indicator_registry,
 )
@@ -34,6 +31,7 @@ def create_risk_engine(
     db_path: "str | Path",
     with_enrichment: bool = False,
     rules_loader: "RulesLoader | None" = None,
+    config: dict | None = None,
 ) -> "RiskEngine":
     """
     Create a fully-configured RiskEngine with all three gates wired.
@@ -48,6 +46,7 @@ def create_risk_engine(
         rules_loader: RulesLoader port injected by the caller's adapter.
             Required only when the caller sends requests with rules_file set
             (custom-rules mode) via engine.assess_request().
+        config: Loaded configuration dict.
     """
     from pathlib import Path as _Path
 
@@ -67,9 +66,7 @@ def create_risk_engine(
         broker_repository=broker_repository,
     )
 
-    from src.infrastructure.config.app_config import APP_CFG
-
-    cfg = _load_engine_config(Path(APP_CFG.config_paths.risk_engine))
+    cfg = config if config is not None else {}
     structural_gates, execution_gates = _resolve_risk_gates(cfg)
     indicator_defaults = _resolve_risk_indicator_defaults(cfg)
     market_context_gate = _resolve_market_context_gate(cfg)

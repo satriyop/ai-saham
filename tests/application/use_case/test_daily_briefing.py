@@ -23,6 +23,7 @@ def test_daily_briefing_rolls_back_weekends():
         market_repository=market_repo,
         regime_use_case=regime_uc,
         accumulation_use_case=accum_uc,
+        universe_loader=MagicMock(),
     )
 
     # Mocking date.today() via patch of daily_briefing's imported date class

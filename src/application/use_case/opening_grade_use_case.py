@@ -18,7 +18,7 @@ from pathlib import Path
 OPENING_DATA_DIR = Path("data/opening")
 
 
-def compute_grade(run_date: date | None = None) -> dict:
+def compute_grade(run_date: date | None = None, config_snapshot: dict | None = None) -> dict:
     """
     Load today's snapshot + track files and compute accuracy report.
     Saves grade.json and grade.md. Returns the grade dict.
@@ -138,8 +138,14 @@ def compute_grade(run_date: date | None = None) -> dict:
         institutional_absorption_rate = None
         broker_dominant_side = None
         if broker_signals:
-            absorptions = [s["absorption_ratio"] for s in broker_signals if s.get("absorption_ratio") is not None]
-            institutional_absorption_rate = round(sum(absorptions) / len(absorptions), 4) if absorptions else None
+            absorptions = [
+                s["absorption_ratio"]
+                for s in broker_signals
+                if s.get("absorption_ratio") is not None
+            ]
+            institutional_absorption_rate = (
+                round(sum(absorptions) / len(absorptions), 4) if absorptions else None
+            )
             # Most frequent dominant_side across snapshots
             sides = [s["dominant_side"] for s in broker_signals if s.get("dominant_side")]
             if sides:
@@ -226,13 +232,15 @@ def compute_grade(run_date: date | None = None) -> dict:
     iep_errors = [t["iep_error_pct"] for t in tracked if t.get("iep_error_pct") is not None]
     data_quality = _compute_data_quality(snapshot, tracked)
 
-    # Load current config snapshot
-    config_snapshot = _load_config_snapshot()
+    # Use passed config snapshot or default to empty dict
+    cfg_snapshot = config_snapshot or {}
 
     grade = {
         "date": str(today),
         "capture_phase": snapshot.get("capture_phase"),
-        "capture_valid_for_opening_prediction": snapshot.get("capture_valid_for_opening_prediction"),
+        "capture_valid_for_opening_prediction": snapshot.get(
+            "capture_valid_for_opening_prediction"
+        ),
         "capture_confidence": snapshot.get("capture_confidence"),
         "data_quality": data_quality,
         "tickers_screened": len(candidates),
@@ -251,7 +259,7 @@ def compute_grade(run_date: date | None = None) -> dict:
             "mean_error_pct": round(sum(iep_errors) / len(iep_errors), 3) if iep_errors else None,
             "max_error_pct": round(max(iep_errors), 3) if iep_errors else None,
         },
-        "config_snapshot": config_snapshot,
+        "config_snapshot": cfg_snapshot,
         "per_ticker": per_ticker,
     }
 
@@ -320,32 +328,15 @@ def _extract_observed_price(tdata) -> tuple[float, str, str] | None:
     return None
 
 
-def _load_config_snapshot() -> dict:
-    try:
-        import yaml
-        from src.infrastructure.config.app_config import APP_CFG
-        with open(APP_CFG.config_paths.pre_open_screener) as f:
-            data = yaml.safe_load(f)
-        analysis = data.get("analysis", {})
-        risk = data.get("risk", {})
-        return {
-            "rsi_overbought_threshold": analysis.get("rsi_overbought_threshold"),
-            "iev_intensity_unusual_threshold": analysis.get("iev_intensity_unusual_threshold"),
-            "atr_range_cap_min": analysis.get("atr_range_cap_min"),
-            "atr_range_cap_max": analysis.get("atr_range_cap_max"),
-            "broker_backing_threshold": analysis.get("broker_backing_threshold"),
-            "min_target_ticks": risk.get("min_target_ticks"),
-            "tick_friction_gate": risk.get("tick_friction_gate"),
-        }
-    except Exception:
-        return {}
-
 
 def _write_grade_md(grade: dict, path: Path) -> None:
     lines = [
         f"# Opening Session Accuracy — {grade['date']}",
         "",
-        f"**Tickers screened:** {grade['tickers_screened']} | **Tracked:** {grade['tickers_tracked']}",
+        (
+            f"**Tickers screened:** {grade['tickers_screened']} | "
+            f"**Tracked:** {grade['tickers_tracked']}"
+        ),
         "",
         "## Session Summary",
         "",
@@ -358,8 +349,14 @@ def _write_grade_md(grade: dict, path: Path) -> None:
         f"| Clean trade rate | {_pct(grade.get('clean_trade_rate'))} |",
         f"| IEP mean error | {grade['iep_accuracy'].get('mean_error_pct', 'N/A')}% |",
         f"| Snapshot phase | {grade.get('data_quality', {}).get('capture_phase', 'N/A')} |",
-        f"| High-confidence prices | {grade.get('data_quality', {}).get('high_confidence_price_count', 0)} |",
-        f"| Low-confidence prices | {grade.get('data_quality', {}).get('low_confidence_price_count', 0)} |",
+        (
+            f"| High-confidence prices | "
+            f"{grade.get('data_quality', {}).get('high_confidence_price_count', 0)} |"
+        ),
+        (
+            f"| Low-confidence prices | "
+            f"{grade.get('data_quality', {}).get('low_confidence_price_count', 0)} |"
+        ),
         "",
         "## By Opening Setup",
         "",
@@ -376,12 +373,22 @@ def _write_grade_md(grade: dict, path: Path) -> None:
             f"| {_pct(v.get('trend_accuracy_T30'))} |"
         )
 
-    lines += ["", "## Per Ticker", "",
-              "| Ticker | Opening Setup | Trend | Opening | Entry Range | 1R Avail | Stop Hit | Clean | Trend T5 | Trend T30 |",
-              "|---|---|---|---|---|---|---|---|---|---|"]
+    lines += [
+        "",
+        "## Per Ticker",
+        "",
+        (
+            "| Ticker | Opening Setup | Trend | Opening | Entry Range | "
+            "1R Avail | Stop Hit | Clean | Trend T5 | Trend T30 |"
+        ),
+        "|---|---|---|---|---|---|---|---|---|---|",
+    ]
     for t in grade.get("per_ticker", []):
         if t.get("no_track_data"):
-            lines.append(f"| {t['ticker']} | {t.get('opening_setup','?')} | — | NO DATA | — | — | — | — | — | — |")
+            lines.append(
+                f"| {t['ticker']} | {t.get('opening_setup', '?')} | — | "
+                "NO DATA | — | — | — | — | — | — |"
+            )
         else:
             lines.append(
                 f"| {t['ticker']} "

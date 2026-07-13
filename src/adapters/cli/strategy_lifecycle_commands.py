@@ -382,10 +382,13 @@ def _generate_skill_md(strategy_path: Path) -> None:
     if not sidecar_path.exists():
         return
 
+    from src.infrastructure.skill.yaml_strategy_document_reader import YamlStrategyDocumentReader
+
     generator = SkillGeneratorService(
         annotation_reader=AnnotationReader(),
         skill_writer=MarkdownSkillWriter(),
         rules_hasher=RulesHasher(),
+        strategy_reader=YamlStrategyDocumentReader(),
     )
 
     result = generator.generate_for_strategy(strategy_path)

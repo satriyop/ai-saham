@@ -17,12 +17,12 @@ from typing import Annotated, Optional
 
 import typer
 
+from src.adapters.cli.risk_engine_helper import create_configured_risk_engine
 from src.application.rules.exceptions import (
     RulesFileError,
     RulesSchemaError,
     RulesValidationError,
 )
-from src.application.services.bootstrap import create_risk_engine
 from src.application.use_case.assess_risk_use_case import AssessRiskRequest
 from src.domain.ports.ai_explainer import ExplainerAuthError
 from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
@@ -146,7 +146,7 @@ def risk(
         typer.echo(f"Assessing risk for {ticker.upper()}...")
 
     try:
-        engine = create_risk_engine(
+        engine = create_configured_risk_engine(
             resolved_db, with_enrichment=True, rules_loader=RulesYamlLoader()
         )
 
@@ -317,7 +317,7 @@ def compare(
 
     resolved_db = db_path or DEFAULT_DB_PATH
     repository = SQLiteMarketRepository(db_path=resolved_db)
-    engine = create_risk_engine(
+    engine = create_configured_risk_engine(
         resolved_db, with_enrichment=True, rules_loader=RulesYamlLoader()
     )
 

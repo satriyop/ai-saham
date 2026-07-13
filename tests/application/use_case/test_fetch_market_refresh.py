@@ -1,6 +1,7 @@
 """Tests for fetch market refresh orchestration."""
 
 from pathlib import Path
+from unittest.mock import MagicMock
 
 from src.application.use_case.fetch_market_refresh_use_case import (
     BENCHMARK_TICKER,
@@ -45,6 +46,7 @@ def test_fetch_market_refresh_adds_benchmark_first():
         fetch_broker=fetch_broker,
         fetch_meta=lambda ticker, db_path: "cached(1d)",
         fetch_enrichment=lambda ticker, db_path, broker_provider, force_refresh=False: "skip",
+        universe_loader=MagicMock(),
     )
 
     response = use_case.execute(_request())
@@ -62,6 +64,7 @@ def test_fetch_market_refresh_normalizes_legacy_benchmark_alias():
         fetch_broker=lambda **kwargs: BrokerFetchResult("n/a:index", "n/a:index"),
         fetch_meta=lambda ticker, db_path: "cached(1d)",
         fetch_enrichment=lambda ticker, db_path, broker_provider, force_refresh=False: "skip",
+        universe_loader=MagicMock(),
     )
 
     response = use_case.execute(_request(tickers=["^JKSE", "BBCA"]))
@@ -75,6 +78,7 @@ def test_fetch_market_refresh_empty_input_returns_empty_response():
         fetch_broker=lambda **kwargs: BrokerFetchResult("unexpected", "unexpected"),
         fetch_meta=lambda ticker, db_path: "unexpected",
         fetch_enrichment=lambda ticker, db_path, broker_provider, force_refresh=False: "unexpected",
+        universe_loader=MagicMock(),
     )
 
     response = use_case.execute(_request(tickers=[]))
@@ -97,6 +101,7 @@ def test_fetch_market_refresh_honors_skip_flags_and_collects_notes():
         fetch_broker=lambda **kwargs: BrokerFetchResult("skip", "skip"),
         fetch_meta=lambda ticker, db_path: "skip",
         fetch_enrichment=lambda ticker, db_path, broker_provider, force_refresh=False: "skip",
+        universe_loader=MagicMock(),
     )
 
     response = use_case.execute(
@@ -123,6 +128,7 @@ def test_fetch_market_refresh_counts_failures_and_meta_changes():
         fetch_broker=lambda **kwargs: BrokerFetchResult("✓(2026-06-18)", "✓(2026-06-18)"),
         fetch_meta=fetch_meta,
         fetch_enrichment=lambda ticker, db_path, broker_provider, force_refresh=False: "skip",
+        universe_loader=MagicMock(),
     )
 
     response = use_case.execute(_request())
@@ -145,6 +151,7 @@ def test_fetch_market_refresh_passes_refresh_to_enrichment():
         fetch_broker=lambda **kwargs: BrokerFetchResult("✓(2026-06-18)", "✓(2026-06-18)"),
         fetch_meta=lambda ticker, db_path: "cached(1d)",
         fetch_enrichment=fetch_enrichment,
+        universe_loader=MagicMock(),
     )
 
     use_case.execute(_request(

@@ -24,6 +24,7 @@ from src.application.services.skill_generator import (
 from src.infrastructure.skill.annotation_reader import AnnotationReader
 from src.infrastructure.skill.markdown_writer import MarkdownSkillWriter
 from src.infrastructure.skill.rules_hasher import RulesHasher
+from src.infrastructure.skill.yaml_strategy_document_reader import YamlStrategyDocumentReader
 
 
 class TestSkillGeneratorStrategy:
@@ -58,6 +59,7 @@ when_to_use: When RSI shows oversold conditions
             annotation_reader=AnnotationReader(),
             skill_writer=MarkdownSkillWriter(),
             rules_hasher=RulesHasher(),
+            strategy_reader=YamlStrategyDocumentReader(),
         )
 
         result = generator.generate_for_strategy(strategy_path)
@@ -94,6 +96,7 @@ tags:
             annotation_reader=AnnotationReader(),
             skill_writer=MarkdownSkillWriter(),
             rules_hasher=RulesHasher(),
+            strategy_reader=YamlStrategyDocumentReader(),
         )
 
         result = generator.generate_for_strategy(strategy_path)
@@ -121,6 +124,7 @@ rules: []
             annotation_reader=AnnotationReader(),
             skill_writer=MarkdownSkillWriter(),
             rules_hasher=RulesHasher(),
+            strategy_reader=YamlStrategyDocumentReader(),
         )
 
         result = generator.generate_for_strategy(strategy_path)
@@ -154,6 +158,7 @@ rules: []
             annotation_reader=AnnotationReader(),
             skill_writer=MarkdownSkillWriter(),
             rules_hasher=RulesHasher(),
+            strategy_reader=YamlStrategyDocumentReader(),
         )
 
         result = generator.generate_for_strategy(strategy_path)
@@ -168,7 +173,10 @@ rules: []
     def test_generate_for_strategy_detects_broker_data_requirements(
         self, tmp_path: Path
     ):
-        """generate_for_strategy() should detect broker_flow requirement from FOREIGN_FLOW indicators."""
+        """generate_for_strategy() should detect broker_flow requirement.
+
+        Checks that it handles FOREIGN_FLOW indicators correctly.
+        """
         strategy_yaml = """
 name: Foreign Flow Strategy
 indicators:
@@ -188,6 +196,7 @@ rules: []
             annotation_reader=AnnotationReader(),
             skill_writer=MarkdownSkillWriter(),
             rules_hasher=RulesHasher(),
+            strategy_reader=YamlStrategyDocumentReader(),
         )
 
         result = generator.generate_for_strategy(strategy_path)
@@ -220,6 +229,7 @@ rules: []
             annotation_reader=AnnotationReader(),
             skill_writer=MarkdownSkillWriter(),
             rules_hasher=RulesHasher(),
+            strategy_reader=YamlStrategyDocumentReader(),
         )
 
         result = generator.generate_for_strategy(strategy_path)
@@ -255,6 +265,7 @@ rules:
             annotation_reader=AnnotationReader(),
             skill_writer=MarkdownSkillWriter(),
             rules_hasher=RulesHasher(),
+            strategy_reader=YamlStrategyDocumentReader(),
         )
 
         result = generator.generate_for_strategy(strategy_path)
@@ -288,6 +299,7 @@ rules:
             annotation_reader=AnnotationReader(),
             skill_writer=MarkdownSkillWriter(),
             rules_hasher=RulesHasher(),
+            strategy_reader=YamlStrategyDocumentReader(),
         )
 
         # Generate first version
@@ -330,6 +342,7 @@ rules: []
             annotation_reader=AnnotationReader(),
             skill_writer=MarkdownSkillWriter(),
             rules_hasher=RulesHasher(),
+            strategy_reader=YamlStrategyDocumentReader(),
         )
 
         result = generator.generate_for_strategy(strategy_path)
@@ -358,6 +371,7 @@ invalid yaml syntax here
             annotation_reader=AnnotationReader(),
             skill_writer=MarkdownSkillWriter(),
             rules_hasher=RulesHasher(),
+            strategy_reader=YamlStrategyDocumentReader(),
         )
 
         result = generator.generate_for_strategy(strategy_path)
@@ -390,6 +404,7 @@ tags:
             annotation_reader=AnnotationReader(),
             skill_writer=MarkdownSkillWriter(),
             rules_hasher=RulesHasher(),
+            strategy_reader=YamlStrategyDocumentReader(),
         )
 
         result = generator.generate_for_indicator(plugin_path)
@@ -420,6 +435,7 @@ when_to_use: For trend following
             annotation_reader=AnnotationReader(),
             skill_writer=MarkdownSkillWriter(),
             rules_hasher=RulesHasher(),
+            strategy_reader=YamlStrategyDocumentReader(),
         )
 
         result = generator.generate_for_indicator(plugin_path)
@@ -440,6 +456,7 @@ when_to_use: For trend following
             annotation_reader=AnnotationReader(),
             skill_writer=MarkdownSkillWriter(),
             rules_hasher=RulesHasher(),
+            strategy_reader=YamlStrategyDocumentReader(),
         )
 
         result = generator.generate_for_indicator(plugin_path)
@@ -474,6 +491,7 @@ SMOOTH_RSI:
             annotation_reader=AnnotationReader(),
             skill_writer=MarkdownSkillWriter(),
             rules_hasher=RulesHasher(),
+            strategy_reader=YamlStrategyDocumentReader(),
         )
 
         output_dir = tmp_path / "skills" / "formulas"
@@ -508,6 +526,7 @@ MOMENTUM_SCORE:
             annotation_reader=AnnotationReader(),
             skill_writer=MarkdownSkillWriter(),
             rules_hasher=RulesHasher(),
+            strategy_reader=YamlStrategyDocumentReader(),
         )
 
         output_dir = tmp_path / "skills" / "formulas"
@@ -537,6 +556,7 @@ OTHER_FORMULA:
             annotation_reader=AnnotationReader(),
             skill_writer=MarkdownSkillWriter(),
             rules_hasher=RulesHasher(),
+            strategy_reader=YamlStrategyDocumentReader(),
         )
 
         output_dir = tmp_path / "skills" / "formulas"
@@ -545,7 +565,8 @@ OTHER_FORMULA:
         )
 
         assert result.success is True
-        assert any("No annotation found for formula 'MISSING_FORMULA'" in w for w in result.warnings)
+        msg = "No annotation found for formula 'MISSING_FORMULA'"
+        assert any(msg in w for w in result.warnings)
 
     def test_generate_for_formula_includes_cli_usage(self, tmp_path: Path):
         """generate_for_formula() should include CLI usage examples."""
@@ -564,6 +585,7 @@ TEST_FORMULA:
             annotation_reader=AnnotationReader(),
             skill_writer=MarkdownSkillWriter(),
             rules_hasher=RulesHasher(),
+            strategy_reader=YamlStrategyDocumentReader(),
         )
 
         output_dir = tmp_path / "skills" / "formulas"

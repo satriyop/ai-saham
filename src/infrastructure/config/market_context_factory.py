@@ -10,9 +10,9 @@ from dataclasses import replace as dc_replace
 from datetime import date
 from pathlib import Path
 
-from src.domain.value_objects.benchmark_symbol import canonicalize_ticker
 from src.application.services.market_context_engine import MarketContextEngine
 from src.application.services.universe_loader import resolve_tickers
+from src.domain.value_objects.benchmark_symbol import canonicalize_ticker
 from src.domain.value_objects.market_context import MarketContext
 from src.infrastructure.config.market_context_config import load_market_context_config
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
@@ -25,7 +25,6 @@ from src.infrastructure.persistence.sqlite_regime_observation_repository import 
 )
 
 
-
 def create_market_context_engine(
     *,
     db_path: Path,
@@ -33,7 +32,14 @@ def create_market_context_engine(
     benchmark: str = "IHSG",
 ) -> MarketContextEngine:
     """Construct MCE with local SQLite repositories and configured universe."""
-    tickers = resolve_tickers(universe=universe, explicit=[], db_path=db_path)
+    from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
+    tickers = resolve_tickers(
+        universe=universe,
+        explicit=[],
+        db_path=db_path,
+        loader=YamlUniverseConfigLoader(),
+        repository=SQLiteBrokerRepository(db_path),
+    )
     config = load_market_context_config()
     benchmark = canonicalize_ticker(benchmark) if benchmark else benchmark
     if benchmark and benchmark != config.idx_trend.benchmark_ticker:

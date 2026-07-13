@@ -28,9 +28,10 @@ from src.adapters.cli.fetch_universe_factories import (
     create_provider_adapter,
     create_update_use_case,
 )
-from src.application.services.universe_config_store import UniverseConfigStore
 from src.application.services.universe_loader import UNIVERSE_CONFIG_PATH, load_universe_meta
 from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
+from src.infrastructure.config.yaml_universe_config_store import YamlUniverseConfigStore
 
 universe_app = typer.Typer(
     name="universe",
@@ -55,7 +56,7 @@ def universe_list(
         saham fetch universe list
     """
     resolved_config = config_path or UNIVERSE_CONFIG_PATH
-    meta = load_universe_meta(resolved_config)
+    meta = load_universe_meta(YamlUniverseConfigLoader(), resolved_config)
 
     if not meta:
         typer.echo(f"No universe config found at '{resolved_config}'.")
@@ -121,7 +122,7 @@ def universe_update(
         raise typer.Exit(1)
 
     provider = create_provider_adapter()
-    config_store = UniverseConfigStore(resolved_config)
+    config_store = YamlUniverseConfigStore(resolved_config)
     use_case = create_update_use_case(provider, config_store)
 
     typer.echo("")
@@ -239,7 +240,7 @@ def universe_create(
     resolved_config = config_path or Path("config/universes.yaml")
 
     provider = create_provider_adapter()
-    config_store = UniverseConfigStore(resolved_config)
+    config_store = YamlUniverseConfigStore(resolved_config)
     use_case = create_create_use_case(provider, config_store)
 
     typer.echo("")

@@ -25,9 +25,6 @@ from `src.application.services.bootstrap` keep working unchanged.
 
 from __future__ import annotations
 
-from src.application.services.engine_bootstrap.config_resolvers import (
-    _load_engine_config,
-)
 from src.application.services.engine_bootstrap.indicator_registry_factory import (
     create_indicator_registry,
 )
@@ -56,7 +53,6 @@ __all__ = [
     "create_risk_engine",
     "create_signal_engine",
     "resolve_signal_weight_tables",
-    "_load_engine_config",
     "_resolve_indicator_evaluator_config",
     "_resolve_market_context_gate",
     "_resolve_risk_gates",

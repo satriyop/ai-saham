@@ -7,12 +7,13 @@ from typing import Any
 import pytest
 
 from src.application.dto.universe_management import UniverseUpdateResult
-from src.application.services.universe_config_store import UniverseConfigStore
+from src.application.ports.universe_config_store import UniverseConfigStore
 from src.application.use_case.manage_universe_use_case import (
     CreateUniverseUseCase,
     InspectUniverseUseCase,
     UpdateUniverseUseCase,
 )
+from src.infrastructure.config.yaml_universe_config_store import YamlUniverseConfigStore
 
 
 class MockProvider:
@@ -70,8 +71,8 @@ def tmp_config(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-def config_store(tmp_config: Path) -> UniverseConfigStore:
-    return UniverseConfigStore(tmp_config)
+def config_store(tmp_config: Path) -> YamlUniverseConfigStore:
+    return YamlUniverseConfigStore(tmp_config)
 
 
 @pytest.fixture
@@ -143,7 +144,7 @@ def test_update_custom_universe_preserves_metadata(
     tmp_path: Path, provider: MockProvider, sleep: MockSleep
 ):
     config_path = tmp_path / "config" / "universes.yaml"
-    config_store = UniverseConfigStore(config_path)
+    config_store = YamlUniverseConfigStore(config_path)
 
     # Seed custom universe
     import yaml
@@ -195,7 +196,7 @@ def test_update_all_includes_custom_universes(
     tmp_path: Path, provider: MockProvider, sleep: MockSleep
 ):
     config_path = tmp_path / "config" / "universes.yaml"
-    config_store = UniverseConfigStore(config_path)
+    config_store = YamlUniverseConfigStore(config_path)
 
     import yaml
 
@@ -273,7 +274,7 @@ def test_update_custom_without_subsector_paces_between_subsectors(
     sleep: MockSleep
 ):
     config_path = tmp_path / "config" / "universes.yaml"
-    config_store = UniverseConfigStore(config_path)
+    config_store = YamlUniverseConfigStore(config_path)
 
     import yaml
     config_path.parent.mkdir(parents=True, exist_ok=True)
@@ -314,7 +315,7 @@ def test_update_custom_subsector_fetch_none_fails_that_universe(
     sleep: MockSleep
 ):
     config_path = tmp_path / "config" / "universes.yaml"
-    config_store = UniverseConfigStore(config_path)
+    config_store = YamlUniverseConfigStore(config_path)
 
     import yaml
     config_path.parent.mkdir(parents=True, exist_ok=True)
@@ -447,7 +448,7 @@ def test_create_sector_level_fail_fast_no_config_write(
     sleep: MockSleep
 ):
     config_path = tmp_path / "config" / "universes.yaml"
-    config_store = UniverseConfigStore(config_path)
+    config_store = YamlUniverseConfigStore(config_path)
 
     provider.set_get_response("sectors/1/subsectors", {
         "data": {"subsectors": [

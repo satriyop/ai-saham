@@ -31,7 +31,7 @@ def _patch_intraday_proxy_dependencies(monkeypatch, captured: dict) -> None:
     monkeypatch.setattr(
         trade_intraday_backtest_commands,
         "resolve_tickers",
-        lambda universe, explicit, db_path: explicit or ["BBCA"],
+        lambda universe, explicit, db_path, **kwargs: explicit or ["BBCA"],
     )
     monkeypatch.setattr(
         trade_intraday_backtest_commands,

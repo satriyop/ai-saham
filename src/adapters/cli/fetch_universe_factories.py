@@ -6,7 +6,7 @@ Layer: Adapter
 
 import src.application.services.stockbit_session as _stockbit_session
 import src.infrastructure.browser.stockbit_universe as _stockbit_universe
-from src.application.services.universe_config_store import UniverseConfigStore
+from src.application.ports.universe_config_store import UniverseConfigStore
 from src.application.use_case.manage_universe_use_case import (
     CreateUniverseUseCase,
     InspectUniverseUseCase,

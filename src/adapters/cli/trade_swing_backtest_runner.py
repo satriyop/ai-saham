@@ -10,7 +10,7 @@ from pathlib import Path
 
 import typer
 
-from src.application.services.bootstrap import create_risk_engine
+from src.adapters.cli.risk_engine_helper import create_configured_risk_engine
 from src.application.services.swing_backtest_attribution import AttributionBucketPolicy
 from src.application.services.swing_setup_catalog import build_swing_setup_catalog_config
 from src.application.services.universe_loader import (
@@ -37,6 +37,7 @@ from src.infrastructure.config.swing_backtest_config import (
     load_swing_backtest_config as _load_swing_backtest_config,
 )
 from src.infrastructure.config.swing_config import load_swing_config as _load_swing_config
+from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
@@ -105,6 +106,8 @@ def _run_swing_backtest(
             universe=universe,
             explicit=list(tickers) if tickers else [],
             db_path=resolved_db,
+            loader=YamlUniverseConfigLoader(),
+            repository=SQLiteBrokerRepository(resolved_db),
         )
     except (UniverseNotFoundError, FileNotFoundError) as e:
         typer.echo(f"Error: {e}", err=True)
@@ -135,7 +138,7 @@ def _run_swing_backtest(
         broker_repository=broker_repo,
         market_repository=market_repo,
         derived_feature_policy=_ASC.derived_features,
-        risk_engine=create_risk_engine(resolved_db, with_enrichment=True),
+        risk_engine=create_configured_risk_engine(resolved_db, with_enrichment=True),
         market_context_provider=ConfigBackedMarketContextProvider(
             market_repository=market_repo,
             broker_repository=broker_repo,

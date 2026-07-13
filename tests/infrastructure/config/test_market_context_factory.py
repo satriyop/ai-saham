@@ -14,7 +14,7 @@ def test_create_market_context_engine_resolves_universe_and_overrides_benchmark(
     monkeypatch.setattr(
         market_context_factory,
         "resolve_tickers",
-        lambda universe, explicit, db_path: ["bbca", "bbri"],
+        lambda universe, explicit, db_path, **kwargs: ["bbca", "bbri"],
     )
 
     engine = create_market_context_engine(

@@ -10,11 +10,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from src.application.ports.universe_config_loader import UniverseConfigLoader
 from src.application.services.fetch_market_status_policy import is_cached_status
 from src.application.services.universe_loader import resolve_tickers
 from src.application.use_case.fetch_enrichment_history_use_case import (
     EnrichmentPitTableCoverage,
 )
+from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.value_objects.benchmark_symbol import (
     CANONICAL_BENCHMARK_TICKER,
     canonicalize_ticker,
@@ -83,12 +85,16 @@ class FetchMarketRefreshUseCase:
         fetch_broker: Callable[..., BrokerFetchResult],
         fetch_meta: Callable[..., str],
         fetch_enrichment: Callable[..., str],
+        universe_loader: UniverseConfigLoader,
+        broker_repository: BrokerDataRepository | None = None,
         read_pit_coverage: Callable[[], list[EnrichmentPitTableCoverage]] | None = None,
     ) -> None:
         self._fetch_candles = fetch_candles
         self._fetch_broker = fetch_broker
         self._fetch_meta = fetch_meta
         self._fetch_enrichment = fetch_enrichment
+        self._universe_loader = universe_loader
+        self._broker_repo = broker_repository
         self._read_pit_coverage = read_pit_coverage
 
     def execute(
@@ -100,6 +106,8 @@ class FetchMarketRefreshUseCase:
             universe=request.universe,
             explicit=request.tickers,
             db_path=request.db_path,
+            loader=self._universe_loader,
+            repository=self._broker_repo,
         )
         if not ticker_list:
             return FetchMarketRefreshResponse(

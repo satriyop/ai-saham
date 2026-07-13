@@ -34,6 +34,8 @@ from src.infrastructure.config.accumulation_screener_config import (
 from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.config.market_context_factory import evaluate_market_context
 from src.infrastructure.config.swing_config import load_swing_config
+from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
+from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_candidate_observations_repository import (
     SQLiteCandidateObservationsRepository,
 )
@@ -80,7 +82,13 @@ def signal_backfill_observations(
         typer.echo(f"[error] Invalid horizon: {horizon}", err=True)
         raise typer.Exit(1)
     try:
-        tickers = resolve_tickers(universe=universe, explicit=[], db_path=resolved_db)
+        tickers = resolve_tickers(
+            universe=universe,
+            explicit=[],
+            db_path=resolved_db,
+            loader=YamlUniverseConfigLoader(),
+            repository=SQLiteBrokerRepository(resolved_db),
+        )
     except (UniverseNotFoundError, FileNotFoundError) as exc:
         typer.echo(f"[error] {exc}", err=True)
         raise typer.Exit(1)

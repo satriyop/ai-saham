@@ -14,9 +14,9 @@ from src.application.services.accumulation_screen_factory import (
     create_accumulation_screen_use_case,
 )
 from src.application.services.bootstrap import (
-    _load_engine_config,
     _resolve_risk_gates,
 )
+from src.infrastructure.config.engine_config_loader import load_engine_config
 from src.application.services.swing_setup_catalog import build_swing_setup_catalog_config
 from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
 from src.application.use_case.assess_risk_use_case import AssessRiskUseCase
@@ -62,7 +62,7 @@ def create_accumulation_screen_workflow(
     with_risk: bool = True,
     swing_config: Any | None = None,
 ) -> AccumulationScreenWorkflow:
-    """Build accumulation screen workflow dependencies for CLI commands."""
+    """Build accumulation screen workflow dependencies for reconciliation."""
     swing_setup_catalog = (
         build_swing_setup_catalog_config(swing_config)
         if swing_config is not None
@@ -76,7 +76,7 @@ def create_accumulation_screen_workflow(
     risk_use_case = None
     if with_risk:
         structural_gates, execution_gates = _resolve_risk_gates(
-            _load_engine_config(Path(APP_CFG.config_paths.risk_engine))
+            load_engine_config(Path(APP_CFG.config_paths.risk_engine))
         )
         risk_use_case = AssessRiskUseCase(
             repository=market_repo,

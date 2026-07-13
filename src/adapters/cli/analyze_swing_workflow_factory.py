@@ -15,6 +15,7 @@ from decimal import Decimal
 from io import StringIO
 from pathlib import Path
 
+from src.adapters.cli.risk_engine_helper import create_configured_risk_engine
 from src.application.dto.accumulation_screen import (
     AccumulationCandidate,
     AccumulationScreenRequest,
@@ -26,7 +27,6 @@ from src.application.services.accumulation_screen_factory import (
 )
 from src.application.services.bootstrap import (
     create_indicator_registry,
-    create_risk_engine,
     create_signal_engine,
 )
 from src.application.services.swing_broker_detail_builder import (
@@ -194,7 +194,7 @@ def create_swing_analysis_workflow(
         structural_gates=[FundamentalGate(), LiquidityGate(), FreeFloatGate()],
         execution_gates=[BandarGate()],
         signal_engine=create_signal_engine(db_path=db_path, with_enrichment=True),
-        risk_engine=create_risk_engine(db_path=db_path, with_enrichment=True),
+        risk_engine=create_configured_risk_engine(db_path=db_path, with_enrichment=True),
         candidate_observations_repository=candidate_observations_repo,
         foreign_flow_score_policy=accumulation_config.foreign_flow_score_policy,
         corporate_action_risk_use_case=corporate_action_risk_use_case,

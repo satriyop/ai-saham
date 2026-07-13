@@ -30,10 +30,12 @@ skill_app = typer.Typer(
 
 def _create_skill_generator() -> SkillGeneratorService:
     """Wire up the skill generator with its dependencies."""
+    from src.infrastructure.skill.yaml_strategy_document_reader import YamlStrategyDocumentReader
     return SkillGeneratorService(
         annotation_reader=AnnotationReader(),
         skill_writer=MarkdownSkillWriter(),
         rules_hasher=RulesHasher(),
+        strategy_reader=YamlStrategyDocumentReader(),
     )
 
 

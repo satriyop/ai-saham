@@ -10,12 +10,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from src.application.services.engine_bootstrap.config_resolvers import (
-    _load_engine_config,
-)
+from src.infrastructure.config.engine_config_loader import load_engine_config
 from src.infrastructure.config.app_config import APP_CFG
 
 
 def load_signal_engine_config_raw() -> dict:
     """Load the raw signal_engine.yaml config as a dict."""
-    return _load_engine_config(Path(APP_CFG.config_paths.signal_engine))
+    return load_engine_config(Path(APP_CFG.config_paths.signal_engine))
