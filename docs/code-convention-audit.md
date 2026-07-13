@@ -19,7 +19,12 @@ Status legend:
 
 ### 1. Critical: application-layer bootstrap factories still import infrastructure
 
-Status: OPEN.
+Status: DONE.
+
+Vetted: 2026-07-13. Concrete engine/registry/session wiring has been moved out
+of the application layer; the named application bootstrap/session files no
+longer import `src.infrastructure`. The remaining concrete factories live in
+adapter or infrastructure composition modules, and focused boundary tests pass.
 
 Pointers:
 - `src/application/services/engine_bootstrap/risk_engine_factory.py`
@@ -52,7 +57,12 @@ Edge cases to watch:
 
 ### 2. Critical: architecture boundary test normalizes legacy violations instead of forcing cleanup
 
-Status: OPEN.
+Status: DONE.
+
+Vetted: 2026-07-13. `BASELINE_ALLOWLIST` and
+`ALLOWLISTED_PATHS_REQUIRE_BOUNDARY_CLEANUP` are empty. The architecture guard
+passes with no application-to-infrastructure or domain-to-application
+exceptions.
 
 Pointer: `tests/architecture/test_layer_boundaries.py`, `BASELINE_ALLOWLIST`.
 

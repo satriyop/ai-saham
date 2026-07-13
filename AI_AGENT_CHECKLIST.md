@@ -226,6 +226,25 @@ If any answer is unclear, stop.
   - use-case invocation
   - output rendering
   - exception-to-user-message mapping
+- CLI command files over 300 LOC require proof they are still thin. If they
+  resolve universes, run secondary use cases, save follow-up artifacts, or
+  classify statuses, extract an application workflow.
+- Adapters must not import private application helpers. If a helper is needed
+  outside its module, promote a public application service or move the
+  composition outward.
+- Shared dependency graphs must be explicit typed bundles or factories, not
+  repeated ad hoc wiring or service-locator functions.
+
+### Composition and Config Rules
+
+- Application-layer modules must not be composition roots for concrete
+  infrastructure. Composition belongs in adapters or infrastructure factories;
+  application receives ports, typed configs, and callables.
+- Architecture allowlists are temporary debt, not accepted design. Each entry
+  needs a cleanup owner, canonical replacement path, and a test preventing new
+  usage.
+- No module-level loaded config objects in CLI/display modules. Load config once
+  per command invocation or pass it through typed command config objects.
 
 ### Display Rules
 
@@ -252,6 +271,9 @@ If any answer is unclear, stop.
 - Browser lifecycle must not share a file with HTTP payload parsers unless the file is small and strictly cohesive.
 - Provider class names and filenames must match the dominant mechanism: `playwright_*` for browser, `stockbit_api_*` or `stockbit_http_*` for HTTP/token API.
 - Point-in-time cache providers must reuse shared cache primitives for fetched-date filtering, freshness checks, safe read/write handling, and schema update wrappers when semantics match. Provider-specific PIT rules must remain explicit.
+- Provider files must separate endpoint orchestration, payload parsing, PIT cache
+  store, and schema migration once any two of those responsibilities exceed one
+  screen.
 
 ### Policy Module Rules
 
@@ -270,6 +292,9 @@ If any answer is unclear, stop.
 - Prefer focused fixtures over one global mega-fixture.
 - Characterization tests are required before extracting files above 1000 LOC.
 - Placeholder tests are not allowed; every collected test must assert real behavior or contract.
+- Tests must not hide architecture violations by relying on global bootstrap
+  fixtures. Pure tests construct pure services; integration tests name the
+  infrastructure they exercise.
 
 ---
 
@@ -278,6 +303,7 @@ If any answer is unclear, stop.
 - I ran `pytest tests/architecture/test_layer_boundaries.py`
 - I did not introduce new application/domain imports from infrastructure or adapters
 - If config/policy is needed by application, the consumed policy type lives in application, not infrastructure
+- I did not add or expand an architecture allowlist entry
 
 ---
 
