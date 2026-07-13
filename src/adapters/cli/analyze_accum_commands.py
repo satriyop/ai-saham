@@ -7,34 +7,23 @@ Public command registration lives in lifecycle routers:
 Layer: Adapter
 """
 
-import csv
 import json
-from datetime import date
 from pathlib import Path
 from typing import Annotated, Optional
 
 import typer
 
-from src.application.services.universe_loader import UniverseNotFoundError, resolve_tickers
-from src.application.use_case.accumulation_audit_use_case import (
-    AccumulationAuditRequest,
-    AccumulationAuditResponse,
-    AccumulationAuditUseCase,
+from src.adapters.cli.analyze_accum_csv_writer import write_accumulation_audit_csv
+from src.adapters.cli.analyze_accum_workflow_factory import (
+    create_run_accumulation_audit_workflow,
 )
-from src.infrastructure.composition.indicator_registry_factory import (
-    create_indicator_registry,
-)
-from src.infrastructure.config.accumulation_audit_config import (
-    load_accumulation_audit_config,
-)
-from src.infrastructure.config.accumulation_screener_config import (
-    load_accumulation_screener_config,
+from src.application.services.universe_loader import UniverseNotFoundError
+from src.application.use_case.accumulation_audit_use_case import AccumulationAuditResponse
+from src.application.use_case.run_accumulation_audit_workflow_use_case import (
+    NoTickersError,
+    RunAccumulationAuditWorkflowRequest,
 )
 from src.infrastructure.config.app_config import APP_CFG
-from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
-from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
-from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
-from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
 DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 
@@ -42,41 +31,6 @@ DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 def _display_audit_summary(response: AccumulationAuditResponse, top_groups: int) -> None:
     from src.adapters.cli.analyze_accum_display import display_audit_summary
     display_audit_summary(response=response, top_groups=top_groups)
-
-
-def _write_audit_csv(response: AccumulationAuditResponse, output_path: Path) -> None:
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    rows = [r.to_dict() for r in response.records]
-    fieldnames = list(rows[0].keys()) if rows else [
-        "signal_date", "ticker", "score", "streak", "net_buy_ratio",
-        "total_net_value", "flow_pct", "vwap_disc_pct", "rsi", "bb_pctile",
-        "trend", "broker_quality", "current_price", "return_5d_pct", "return_10d_pct",
-        "return_20d_pct", "max_upside_pct", "max_drawdown_pct",
-    ]
-    with output_path.open("w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(rows)
-
-
-def _parse_float_grid(value: str, option_name: str) -> tuple[float, ...]:
-    try:
-        parsed = tuple(float(part.strip()) for part in value.split(",") if part.strip())
-    except ValueError as e:
-        raise typer.BadParameter(f"{option_name} must be comma-separated numbers") from e
-    if not parsed or any(item <= 0 for item in parsed):
-        raise typer.BadParameter(f"{option_name} must contain positive numbers")
-    return parsed
-
-
-def _parse_int_grid(value: str, option_name: str) -> tuple[int, ...]:
-    try:
-        parsed = tuple(int(part.strip()) for part in value.split(",") if part.strip())
-    except ValueError as e:
-        raise typer.BadParameter(f"{option_name} must be comma-separated integers") from e
-    if not parsed or any(item <= 0 for item in parsed):
-        raise typer.BadParameter(f"{option_name} must contain positive integers")
-    return parsed
 
 
 def accumulation_audit(
@@ -203,183 +157,59 @@ def accumulation_audit(
     """
     resolved_db = db_path or DEFAULT_DB_PATH
 
-    cfg_audit = load_accumulation_audit_config()
-    cfg_screen = load_accumulation_screener_config()
-    audit_setups = cfg_audit.setups
-
-    resolved_horizon = (
-        horizon if horizon is not None
-        else max(cfg_audit.policy.forward_return_horizons)
+    workflow = create_run_accumulation_audit_workflow(db_path=resolved_db)
+    request = RunAccumulationAuditWorkflowRequest(
+        tickers=list(tickers) if tickers else [],
+        universe=universe,
+        setup=setup,
+        start=start,
+        end=end,
+        window=window,
+        min_foreign_flow_score=min_foreign_flow_score,
+        min_net_buy_days=min_net_buy_days,
+        min_vwap_disc=min_vwap_disc,
+        trend=trend,
+        min_flow_pct=min_flow_pct,
+        require_rsi=require_rsi,
+        max_rsi=max_rsi,
+        min_rsi=min_rsi,
+        max_bb_width_pctile=max_bb_width_pctile,
+        broker_quality=broker_quality,
+        simulate_exits=simulate_exits,
+        take_profits=take_profits,
+        stop_losses=stop_losses,
+        max_holds=max_holds,
+        horizon=horizon,
     )
-
-    setup_name = setup.lower() if setup else None
-    setup_values = {}
-    if setup_name is not None:
-        if setup_name not in audit_setups:
-            typer.echo(
-                f"Error: unknown setup '{setup}'. "
-                f"Available setups: {', '.join(audit_setups)}",
-                err=True,
-            )
-            raise typer.Exit(1)
-        setup_values = audit_setups[setup_name]
-
-    universe = universe or setup_values.get("universe")
-    window = window if window is not None else int(setup_values.get("window", 7))
-    min_foreign_flow_score = (
-        min_foreign_flow_score if min_foreign_flow_score is not None
-        else float(setup_values.get("min_foreign_flow_score", 40.0))
-    )
-    min_net_buy_days = (
-        min_net_buy_days if min_net_buy_days is not None
-        else int(setup_values.get("min_net_buy_days", 2))
-    )
-    min_vwap_disc = (
-        min_vwap_disc if min_vwap_disc is not None
-        else setup_values.get("min_vwap_disc")
-    )
-    trend = trend or setup_values.get("trend")
-    min_flow_pct = (
-        min_flow_pct if min_flow_pct is not None
-        else setup_values.get("min_flow_pct")
-    )
-    require_rsi = require_rsi or bool(setup_values.get("require_rsi", False))
-    max_rsi = max_rsi if max_rsi is not None else setup_values.get("max_rsi")
-    min_rsi = min_rsi if min_rsi is not None else setup_values.get("min_rsi")
-    max_bb_width_pctile = (
-        max_bb_width_pctile if max_bb_width_pctile is not None
-        else setup_values.get("max_bb_width_pctile")
-    )
-    broker_quality = broker_quality or setup_values.get("broker_quality")
-    simulate_exits = (
-        simulate_exits if simulate_exits is not None
-        else bool(setup_values.get("simulate_exits", False))
-    )
-    take_profits = take_profits or str(setup_values.get("take_profits", "4,5,6"))
-    stop_losses = stop_losses or str(setup_values.get("stop_losses", "3,5,7"))
-    max_holds = max_holds or str(setup_values.get("max_holds", "3,5,7,10"))
 
     try:
-        start_date = date.fromisoformat(start)
-        end_date = date.fromisoformat(end) if end else date.today()
-    except ValueError as e:
-        typer.echo(f"Error: invalid date format: {e}", err=True)
+        result = workflow.execute(request)
+    except NoTickersError as e:
+        typer.echo(str(e), err=True)
         raise typer.Exit(1)
-
-    try:
-        ticker_list = resolve_tickers(
-            universe=universe,
-            explicit=list(tickers) if tickers else [],
-            db_path=resolved_db,
-            loader=YamlUniverseConfigLoader(),
-            repository=SQLiteBrokerRepository(resolved_db),
-        )
-    except (UniverseNotFoundError, FileNotFoundError) as e:
+    except (ValueError, UniverseNotFoundError, FileNotFoundError) as e:
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1)
 
-    if not ticker_list:
-        typer.echo(
-            "No tickers to audit. Specify --universe or provide ticker arguments.",
-            err=True,
-        )
-        raise typer.Exit(1)
-
-    trend_filter = trend.upper() if trend else None
-    if trend_filter is not None and trend_filter not in {"UP", "SIDE", "DOWN"}:
-        typer.echo("Error: --trend must be one of: UP, SIDE, DOWN", err=True)
-        raise typer.Exit(1)
-
-    filter_parts = []
-    if min_vwap_disc is not None:
-        filter_parts.append(f"VWAP>={min_vwap_disc:g}%")
-    if trend_filter is not None:
-        filter_parts.append(f"trend={trend_filter}")
-    if min_flow_pct is not None:
-        filter_parts.append(f"flow>={min_flow_pct:g}%")
-    if require_rsi:
-        filter_parts.append("RSI present")
-    if max_rsi is not None:
-        filter_parts.append(f"RSI<={max_rsi:g}")
-    if min_rsi is not None:
-        filter_parts.append(f"RSI>={min_rsi:g}")
-    if max_bb_width_pctile is not None:
-        filter_parts.append(f"BBpct<={max_bb_width_pctile:g}")
-    if broker_quality is not None:
-        filter_parts.append(f"broker={broker_quality}")
-    if simulate_exits:
-        filter_parts.append("exit simulation")
-    filter_label = f" | filters: {', '.join(filter_parts)}" if filter_parts else ""
-
-    try:
-        take_profit_grid = _parse_float_grid(take_profits, "--take-profits")
-        stop_loss_grid = _parse_float_grid(stop_losses, "--stop-losses")
-        max_hold_grid = _parse_int_grid(max_holds, "--max-holds")
-    except typer.BadParameter as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1)
+    response = result.response
 
     if output_format != "json":
         typer.echo(
-            f"Auditing {len(ticker_list)} tickers | {start_date} to {end_date} | "
-            f"{window} sessions | min foreign-flow score "
-            f"{min_foreign_flow_score:g}{filter_label}..."
+            f"Auditing {result.ticker_count} tickers | "
+            f"{result.start_date} to {result.end_date} | "
+            f"{result.window} sessions | min foreign-flow score "
+            f"{result.min_foreign_flow_score:g}{result.filter_label}..."
         )
-
-    use_case = AccumulationAuditUseCase(
-        broker_repository=SQLiteBrokerRepository(resolved_db),
-        market_repository=SQLiteMarketRepository(db_path=resolved_db),
-        indicator_registry=create_indicator_registry(),
-        rules_loader=RulesYamlLoader(),
-        derived_feature_policy=cfg_screen.derived_features,
-    )
-    response = use_case.execute(
-        AccumulationAuditRequest(
-            tickers=ticker_list,
-            start_date=start_date,
-            end_date=end_date,
-            window_days=window,
-            min_net_buy_days=min_net_buy_days,
-            min_foreign_flow_score=min_foreign_flow_score,
-            horizon_days=resolved_horizon,
-            min_vwap_disc_pct=min_vwap_disc,
-            trend=trend_filter,
-            min_flow_pct=min_flow_pct,
-            require_rsi=require_rsi,
-            min_rsi=min_rsi,
-            max_rsi=max_rsi,
-            max_bb_width_pctile=max_bb_width_pctile,
-            broker_quality=broker_quality,
-            simulate_exits=simulate_exits,
-            take_profit_pcts=take_profit_grid,
-            stop_loss_pcts=stop_loss_grid,
-            max_hold_days=max_hold_grid,
-            policy=cfg_audit.policy,
-        )
-    )
 
     if output_path is not None:
-        _write_audit_csv(response, output_path)
+        write_accumulation_audit_csv(response, output_path)
         typer.echo(
             f"Wrote {response.total_records} audit records to {output_path}",
             err=output_format == "json",
         )
 
     if output_format == "json":
-        typer.echo(json.dumps({
-            "schema_version": 1,
-            "artifact_type": "accumulation_audit",
-            "start_date": response.start_date.isoformat(),
-            "end_date": response.end_date.isoformat(),
-            "window_days": response.window_days,
-            "total_replay_dates": response.total_replay_dates,
-            "total_tickers": response.total_tickers,
-            "total_records": response.total_records,
-            "skipped_no_forward_data": response.skipped_no_forward_data,
-            "warnings": response.warnings,
-            "group_stats": [s.to_dict() for s in response.group_stats],
-            "exit_simulations": [s.to_dict() for s in response.exit_simulations],
-        }, indent=2, default=str))
+        typer.echo(json.dumps(result.to_json_dict(), indent=2, default=str))
         return
 
     _display_audit_summary(response, top_groups=top_groups)
