@@ -269,6 +269,7 @@ class TestBacktestWithFormula:
         """Should compute formula indicator for backtest."""
         use_case = BacktestUseCase(
             repository=mock_repository,
+            rules_loader=RulesYamlLoader(),
             registry=registry_with_formula,
         )
 
@@ -292,6 +293,7 @@ class TestBacktestWithFormula:
         """Backtest should record strategy name from rules file."""
         use_case = BacktestUseCase(
             repository=mock_repository,
+            rules_loader=RulesYamlLoader(),
             registry=registry_with_formula,
         )
 

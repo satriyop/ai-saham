@@ -38,6 +38,7 @@ from src.infrastructure.config.engine_config_loader import load_engine_config
 from src.infrastructure.config.institutional_accumulation_config_loader import (
     load_institutional_accumulation_config,
 )
+from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 from src.infrastructure.config.sector_context_config_loader import (
     create_sector_context_evidence_builder,
 )
@@ -97,6 +98,7 @@ def create_accumulation_screen_workflow(
         foreign_flow_score_policy=screener_config.foreign_flow_score_policy,
         derived_feature_policy=screener_config.derived_features,
         swing_setup_catalog=swing_setup_catalog,
+        rules_loader=RulesYamlLoader(),
         ticker_profile_classifier_factory=create_ticker_profile_classifier,
         institutional_accumulation_config_factory=load_institutional_accumulation_config,
         sector_context_builder_factory=create_sector_context_evidence_builder,

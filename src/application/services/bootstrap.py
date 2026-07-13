@@ -4,8 +4,8 @@ Application bootstrap compatibility facade.
 Historically this module owned all engine config resolving, evidence
 authority validation, and factory construction for the indicator registry,
 risk engine, and signal engine. That behavior now lives in the
-`src.application.services.engine_bootstrap` package (pure config resolving)
-and `src.infrastructure.composition` (concrete engine/registry wiring):
+`engine_bootstrap` package below (pure config resolving) and the
+infrastructure composition package (concrete engine/registry wiring):
 
 - `engine_bootstrap.evidence_authority_validation` — promotion record validation
 - `engine_bootstrap.signal_weight_config_resolver` — signal factor weight resolving
@@ -15,15 +15,16 @@ and `src.infrastructure.composition` (concrete engine/registry wiring):
 - `engine_bootstrap.signal_scoring_config_resolver` — full SignalEngineConfig composition
 - `engine_bootstrap.signal_config_resolvers` — signal engine config compatibility facade
 - `engine_bootstrap.risk_config_resolvers` — risk engine config resolving
-- `infrastructure.composition.indicator_registry_factory` — IndicatorRegistry construction
-- `infrastructure.composition.risk_engine_factory` — RiskEngine construction
-- `infrastructure.composition.signal_engine_factory` — SignalEngine construction
+- infrastructure composition: indicator_registry_factory — IndicatorRegistry construction
+- infrastructure composition: risk_engine_factory — RiskEngine construction
+- infrastructure composition: signal_engine_factory — SignalEngine construction
 
 This module re-exports only the pure config-resolving API. Concrete engine
 construction (create_indicator_registry, create_risk_engine,
 create_signal_engine) requires infrastructure wiring and must be imported
-from src.infrastructure.composition directly — application must not import
-infrastructure (see tests/architecture/test_layer_boundaries.py).
+from the infrastructure composition package directly — application code
+must not import the infrastructure layer (see the layer boundary guard
+under tests/architecture/).
 
 Compatibility surface:
 - Canonical package:

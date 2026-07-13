@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from src.application.use_case.swing_analysis_workflow_use_case import SwingAnalysisWorkflowUseCase
 from src.domain.value_objects.setup_evaluation import SetupEvaluation, SetupGate, SetupMatch
 from src.domain.value_objects.setup_phase import SetupPhaseState
+from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 from tests.application.use_case.swing_analysis_workflow_fixtures import (
     FakeBrokerRepository,
     FakeCandidateObservationsRepository,
@@ -51,6 +52,7 @@ def test_swing_analysis_workflow_can_emit_breakout_confirmation_with_local_volum
         fetch_sentiment=lambda **kwargs: (None, None),
         load_swing_config=lambda: SimpleNamespace(),
         resolve_setup_targets=lambda regime, config: (Decimal("5"), Decimal("5")),
+        rules_loader=RulesYamlLoader(),
         candidate_observations_repository=FakeCandidateObservationsRepository(
             ("ACCUMULATION", "COMPRESSION")
         ),
@@ -115,6 +117,7 @@ def test_swing_workflow_only_builds_optional_evidence_when_requested():
         fetch_sentiment=lambda **kwargs: calls.append("sentiment") or (None, None),
         load_swing_config=lambda: {},
         resolve_setup_targets=lambda regime, config: (Decimal("5"), Decimal("5")),
+        rules_loader=RulesYamlLoader(),
     )
 
     response = workflow.execute(

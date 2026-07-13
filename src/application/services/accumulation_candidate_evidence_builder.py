@@ -7,6 +7,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Callable
 
 from src.application.dto import accumulation_screen as accumulation_dto
+from src.application.ports.rules_loader import RulesLoader
 from src.application.services.signal_context_builder import (
     build_signal_context_from_candidate,
 )
@@ -72,6 +73,7 @@ class AccumulationCandidateEvidenceBuilder:
         primary_setup_family_resolver: "PrimarySetupFamilyResolver",
         relative_strength_calculator: "RelativeStrengthCalculator",
         indicator_registry: "IndicatorRegistry",
+        rules_loader: RulesLoader | None = None,
         ticker_profile_classifier_factory: Callable[[], TickerProfileClassifier] | None = None,
         institutional_accumulation_config_factory: (
             Callable[[], InstitutionalAccumulationConfig] | None
@@ -89,6 +91,7 @@ class AccumulationCandidateEvidenceBuilder:
         self._setup_family_resolver = primary_setup_family_resolver
         self._relative_strength_calculator = relative_strength_calculator
         self._indicator_registry = indicator_registry
+        self._rules_loader = rules_loader
         self._ticker_profile_classifier_factory = ticker_profile_classifier_factory
         self._institutional_accumulation_config_factory = institutional_accumulation_config_factory
         self._sector_context_builder_factory = sector_context_builder_factory
@@ -143,18 +146,23 @@ class AccumulationCandidateEvidenceBuilder:
     ) -> "StrategyEvidence | None":
         if request.strategy_name is None:
             return None
+        if self._rules_loader is None:
+            return None
         try:
             from src.application.services.strategy_evidence_builder import (
                 StrategyEvidenceBuilder,
                 StrategyEvidenceRequest,
             )
+            from src.application.services.strategy_loader import StrategyLoader
 
             candles = self._market_repo.get_candles(
                 candidate.ticker,
                 end_date=snapshot_date,
             )
             setup_family = self.resolve_preliminary_setup_family(candidate)
-            return StrategyEvidenceBuilder().build(
+            return StrategyEvidenceBuilder(
+                loader=StrategyLoader(rules_loader=self._rules_loader),
+            ).build(
                 StrategyEvidenceRequest(
                     ticker=candidate.ticker,
                     strategy_name=request.strategy_name,

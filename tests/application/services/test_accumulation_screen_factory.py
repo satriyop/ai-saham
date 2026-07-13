@@ -6,6 +6,7 @@ from src.application.services.accumulation_screen_factory import (
 )
 from src.application.services.indicator_registry import IndicatorRegistry
 from src.application.use_case.score_foreign_flow_use_case import ForeignFlowScorePolicy
+from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 
 
 def test_create_accumulation_screen_use_case_wires_stockbit_providers():
@@ -29,6 +30,7 @@ def test_create_accumulation_screen_use_case_wires_stockbit_providers():
         indicator_registry=IndicatorRegistry(),
         broker_repository=broker_repo,
         market_repository=market_repo,
+        rules_loader=RulesYamlLoader(),
         stockbit_providers=providers,
         risk_use_case=risk_use_case,
         signal_engine=signal_engine,

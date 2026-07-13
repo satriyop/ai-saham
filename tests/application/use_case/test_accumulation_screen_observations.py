@@ -13,6 +13,7 @@ from src.application.use_case.accumulation_screen_use_case import (
 from src.domain.ports.candidate_observations_repository import CandidateObservation
 from src.domain.value_objects.market_context import MarketContext, MarketRegime
 from src.domain.value_objects.setup_phase import SetupPhaseSnapshot
+from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 from src.infrastructure.config.ticker_profile_config_loader import (
     create_ticker_profile_classifier,
 )
@@ -510,6 +511,7 @@ def test_screen_recomputes_setup_phase_when_stage2_family_differs_from_prelimina
         market_repository=MockMarketRepository(candles),
         candidate_observations_repository=spy_repo,
         primary_setup_family_resolver=_FakeResolver(),
+        rules_loader=RulesYamlLoader(),
     )
 
     response = use_case.execute(

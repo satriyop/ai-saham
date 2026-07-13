@@ -75,6 +75,7 @@ from src.infrastructure.config.institutional_accumulation_config_loader import (
     load_institutional_accumulation_config,
 )
 from src.infrastructure.config.market_context_factory import evaluate_market_context
+from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 from src.infrastructure.config.sector_context_config_loader import (
     create_sector_context_evidence_builder,
 )
@@ -122,6 +123,7 @@ def create_swing_analysis_workflow(
             broker_repository=broker_repo,
             market_repository=market_repo,
             indicator_registry=create_indicator_registry(),
+            rules_loader=RulesYamlLoader(),
             stockbit_providers=stockbit_providers,
             foreign_flow_score_policy=accumulation_config.foreign_flow_score_policy,
             derived_feature_policy=accumulation_config.derived_features,
@@ -191,6 +193,7 @@ def create_swing_analysis_workflow(
         ),
         load_swing_config=lambda: swing_config,
         resolve_setup_targets=resolve_setup_targets,
+        rules_loader=RulesYamlLoader(),
         evaluate_market_context=evaluate_market_context,
         structural_gates=[FundamentalGate(), LiquidityGate(), FreeFloatGate()],
         execution_gates=[BandarGate()],

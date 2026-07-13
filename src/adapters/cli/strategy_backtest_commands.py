@@ -21,6 +21,7 @@ from src.application.services.strategy_loader import StrategyLoader
 from src.application.use_case.backtest_use_case import BacktestRequest, BacktestUseCase
 from src.infrastructure.composition.indicator_registry_factory import create_indicator_registry
 from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
@@ -101,7 +102,7 @@ def backtest(
 
     if strategy:
         registry = create_indicator_registry(broker_repository=broker_repository)
-        loader = StrategyLoader(registry=registry)
+        loader = StrategyLoader(rules_loader=RulesYamlLoader(), registry=registry)
         try:
             resolved_rules_path = loader.resolve(strategy)
             strategy_display = strategy
@@ -120,7 +121,9 @@ def backtest(
             broker_repository=broker_repository,
             market_repository=repository,
         )
-        use_case = BacktestUseCase(repository=repository, registry=registry)
+        use_case = BacktestUseCase(
+            repository=repository, rules_loader=RulesYamlLoader(), registry=registry
+        )
         response = use_case.execute(BacktestRequest(
             ticker=ticker,
             rules_file=resolved_rules_path,

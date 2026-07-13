@@ -5,7 +5,7 @@ Orchestrates rule loading, indicator computation, rule evaluation,
 and backtest engine execution to produce deterministic results.
 
 Layer: Application
-Depends on: Domain services, Infrastructure loaders, MarketDataRepository
+Depends on: Domain services, RulesLoader port, MarketDataRepository
 """
 
 from dataclasses import dataclass
@@ -95,24 +95,22 @@ class BacktestUseCase:
     def __init__(
         self,
         repository: MarketDataRepository,
+        rules_loader: RulesLoader,
         registry: IndicatorRegistry | None = None,
-        rules_loader: RulesLoader | None = None,
     ) -> None:
         """
-        Initialize with repository, optional registry, and optional rules loader.
+        Initialize with repository, rules loader, and optional registry.
 
         Args:
             repository: MarketDataRepository for fetching cached candles
+            rules_loader: RulesLoader port interface. Must be injected by the
+                caller's adapter/composition root with a concrete
+                implementation from the infrastructure layer.
             registry: IndicatorRegistry for computing indicators.
                      If None, creates default registry (built-ins only).
-            rules_loader: RulesLoader port interface.
         """
         self._repository = repository
         self._registry = registry if registry is not None else IndicatorRegistry()
-        if rules_loader is None:
-            from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
-
-            rules_loader = RulesYamlLoader()
         self._rules_loader = rules_loader
 
     def execute(self, request: BacktestRequest) -> BacktestResponse:

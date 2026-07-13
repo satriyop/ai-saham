@@ -38,6 +38,7 @@ from src.domain.value_objects.corporate_action_event_risk import (
 from src.infrastructure.config.corporate_action_policy_config import (
     load_corporate_action_policy_config,
 )
+from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 
 
 class FakeMarketRepository:
@@ -151,6 +152,7 @@ def _build_workflow(*, corporate_action_risk_use_case=None) -> SwingAnalysisWork
         fetch_sentiment=lambda **kwargs: (None, None),
         load_swing_config=lambda: {},
         resolve_setup_targets=lambda regime, config: (Decimal("5"), Decimal("5")),
+        rules_loader=RulesYamlLoader(),
         corporate_action_risk_use_case=corporate_action_risk_use_case,
     )
 

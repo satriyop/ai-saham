@@ -31,6 +31,7 @@ from src.domain.value_objects.trade_action import TradeAction
 from src.infrastructure.ai.formula_translator import FormulaTranslatorAdapter
 from src.infrastructure.ai.strategy_translator import StrategyTranslatorAdapter
 from src.infrastructure.composition.indicator_registry_factory import create_indicator_registry
+from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 from src.infrastructure.config.yaml_loader import YamlConfigLoader
 from src.infrastructure.persistence.formula_storage import FormulaStorage
 from tests.integration.conftest import (
@@ -194,7 +195,7 @@ class TestAICreatedStrategyWorkflow:
         translator = StrategyTranslatorAdapter(provider="mock")
         registry = IndicatorRegistry()
 
-        use_case = CreateStrategyFromIntentUseCase(translator, registry)
+        use_case = CreateStrategyFromIntentUseCase(translator, registry, RulesYamlLoader())
 
         response = use_case.execute(
             CreateStrategyFromIntentRequest(
@@ -224,7 +225,7 @@ class TestAICreatedStrategyWorkflow:
         translator = StrategyTranslatorAdapter(provider="mock")
         registry = IndicatorRegistry()
 
-        use_case = CreateStrategyFromIntentUseCase(translator, registry)
+        use_case = CreateStrategyFromIntentUseCase(translator, registry, RulesYamlLoader())
 
         response = use_case.execute(
             CreateStrategyFromIntentRequest(
@@ -314,7 +315,7 @@ class TestAICreatedStrategyWorkflow:
         translator = StrategyTranslatorAdapter(provider="mock")
         registry = IndicatorRegistry()
 
-        use_case = CreateStrategyFromIntentUseCase(translator, registry)
+        use_case = CreateStrategyFromIntentUseCase(translator, registry, RulesYamlLoader())
 
         # Test with empty intent (should fail validation)
         response = use_case.execute(

@@ -100,20 +100,18 @@ class StrategyLoader:
 
     def __init__(
         self,
+        rules_loader: RulesLoader,
         registry: "IndicatorRegistry | None" = None,
-        rules_loader: RulesLoader | None = None,
     ) -> None:
         """Initialize strategy loader.
 
         Args:
+            rules_loader: RulesLoader port interface. Must be injected by the
+                caller's adapter/composition root with a concrete
+                implementation from the infrastructure layer.
             registry: Optional IndicatorRegistry for validating indicator references
-            rules_loader: Optional RulesLoader port interface
         """
         self._registry = registry
-        if rules_loader is None:
-            from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
-
-            rules_loader = RulesYamlLoader()
         self._rules_loader = rules_loader
 
     def resolve(self, name_or_path: str) -> Path:

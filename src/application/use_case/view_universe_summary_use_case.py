@@ -48,16 +48,17 @@ class UniverseViewResult:
 
 def build_universe_view(
     universe_name: str,
-    db_path: Path,
     loader: UniverseConfigLoader,
+    provider: UniverseSummaryProvider,
     config_path: Path = UNIVERSE_CONFIG_PATH,
     as_of_date: date | None = None,
-    provider: UniverseSummaryProvider | None = None,
 ) -> UniverseViewResult:
     """Aggregate locally cached data for all tickers in a named universe.
 
-    Uses a UniverseSummaryProvider (SQLite implementation by default) to perform
-    fast batch retrieval without per-entity hydration overhead.
+    Uses the injected UniverseSummaryProvider to perform fast batch retrieval
+    without per-entity hydration overhead. The caller's adapter/composition
+    root is responsible for constructing the concrete provider (e.g.
+    SQLiteUniverseSummaryProvider).
 
     Raises:
         UniverseNotFoundError: If universe_name is not in config.
@@ -75,13 +76,6 @@ def build_universe_view(
             missing_candles=0,
             missing_flow=0,
         )
-
-    if provider is None:
-        from src.infrastructure.persistence.sqlite_universe_summary_provider import (
-            SQLiteUniverseSummaryProvider,
-        )
-
-        provider = SQLiteUniverseSummaryProvider(db_path)
 
     return provider.build_universe_view(
         universe_name=universe_name,

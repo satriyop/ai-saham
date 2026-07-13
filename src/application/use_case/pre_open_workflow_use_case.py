@@ -137,9 +137,13 @@ class PreOpenWorkflowUseCase:
     ) -> tuple[dict[str, str] | None, str | None]:
         if not risk_strategy_name:
             return None, None
+        if self._rules_loader is None:
+            return {}, "rules_loader is required when risk_strategy is provided"
 
         try:
-            strategy_loader = StrategyLoader(registry=self._registry)
+            strategy_loader = StrategyLoader(
+                rules_loader=self._rules_loader, registry=self._registry
+            )
             rules_path = strategy_loader.resolve(risk_strategy_name)
         except StrategyNotFoundError as exc:
             return {}, f"Strategy '{risk_strategy_name}' not found: {exc}"

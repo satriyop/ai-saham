@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import TYPE_CHECKING, Any, Callable
 
+from src.application.ports.rules_loader import RulesLoader
 from src.application.services.signal_context_builder import (
     build_signal_context_from_candidate,
 )
@@ -89,6 +90,7 @@ class SwingAnalysisEvidenceBuilder:
         market_repository: "MarketDataRepository",
         broker_repository: "BrokerDataRepository",
         registry: Any,
+        rules_loader: RulesLoader,
         flow_confirmation_builder: "FlowConfirmationEvidenceBuilder",
         candidate_observations_repository: "CandidateObservationsRepository | None",
         signal_engine: "SignalEngine | None",
@@ -105,6 +107,7 @@ class SwingAnalysisEvidenceBuilder:
         self._market_repo = market_repository
         self._broker_repo = broker_repository
         self._registry = registry
+        self._rules_loader = rules_loader
         self._flow_confirmation_builder = flow_confirmation_builder
         self._candidate_observations_repo = candidate_observations_repository
         self._signal_engine = signal_engine
@@ -240,7 +243,9 @@ class SwingAnalysisEvidenceBuilder:
 
                 strategy_rule_evidence = StrategyEvidenceBuilder(
                     registry=self._registry,
-                    loader=StrategyLoader(registry=self._registry),
+                    loader=StrategyLoader(
+                        rules_loader=self._rules_loader, registry=self._registry
+                    ),
                 ).build(
                     StrategyEvidenceRequest(
                         ticker=ticker,

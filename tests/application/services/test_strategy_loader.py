@@ -23,6 +23,7 @@ from src.application.services.strategy_loader import (
     StrategyLoader,
     ValidationResult,
 )
+from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 
 # ============================================================================
 # Test Fixtures
@@ -39,7 +40,7 @@ def temp_dir():
 @pytest.fixture
 def loader():
     """Create StrategyLoader without registry."""
-    return StrategyLoader()
+    return StrategyLoader(rules_loader=RulesYamlLoader())
 
 
 def create_strategy_package(

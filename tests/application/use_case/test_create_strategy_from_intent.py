@@ -21,6 +21,7 @@ from src.application.use_case.create_strategy_from_intent_use_case import (
 )
 from src.infrastructure.ai.strategy_translator import StrategyTranslatorAdapter
 from src.infrastructure.composition.indicator_registry_factory import create_indicator_registry
+from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 
 
 class MockStrategyTranslator:
@@ -123,6 +124,7 @@ class TestCreateStrategyFromIntentUseCase:
         use_case = CreateStrategyFromIntentUseCase(
             translator=translator,
             registry=registry,
+            rules_loader=RulesYamlLoader(),
         )
 
         response = use_case.execute(
@@ -147,6 +149,7 @@ class TestCreateStrategyFromIntentUseCase:
         use_case = CreateStrategyFromIntentUseCase(
             translator=translator,
             registry=registry,
+            rules_loader=RulesYamlLoader(),
         )
 
         response = use_case.execute(
@@ -167,6 +170,7 @@ class TestCreateStrategyFromIntentUseCase:
         use_case = CreateStrategyFromIntentUseCase(
             translator=translator,
             registry=registry,
+            rules_loader=RulesYamlLoader(),
         )
 
         response = use_case.execute(
@@ -188,6 +192,7 @@ class TestCreateStrategyFromIntentUseCase:
         use_case = CreateStrategyFromIntentUseCase(
             translator=translator,
             registry=registry,
+            rules_loader=RulesYamlLoader(),
         )
 
         response = use_case.execute(
@@ -208,6 +213,7 @@ class TestCreateStrategyFromIntentUseCase:
         use_case = CreateStrategyFromIntentUseCase(
             translator=translator,
             registry=registry,
+            rules_loader=RulesYamlLoader(),
         )
 
         response = use_case.execute(
@@ -227,6 +233,7 @@ class TestCreateStrategyFromIntentUseCase:
         use_case = CreateStrategyFromIntentUseCase(
             translator=translator,
             registry=registry,
+            rules_loader=RulesYamlLoader(),
         )
 
         response = use_case.execute(
@@ -246,6 +253,7 @@ class TestCreateStrategyFromIntentUseCase:
         use_case = CreateStrategyFromIntentUseCase(
             translator=translator,
             registry=registry,
+            rules_loader=RulesYamlLoader(),
         )
 
         response = use_case.execute(
@@ -270,6 +278,7 @@ default_outcome: MODERATE
         use_case = CreateStrategyFromIntentUseCase(
             translator=translator,
             registry=registry,
+            rules_loader=RulesYamlLoader(),
         )
 
         response = use_case.execute(
@@ -300,6 +309,7 @@ rules:
         use_case = CreateStrategyFromIntentUseCase(
             translator=translator,
             registry=registry,
+            rules_loader=RulesYamlLoader(),
         )
 
         response = use_case.execute(
@@ -318,6 +328,7 @@ rules:
         use_case = CreateStrategyFromIntentUseCase(
             translator=translator,
             registry=registry,
+            rules_loader=RulesYamlLoader(),
         )
 
         response = use_case.execute(
@@ -337,6 +348,7 @@ rules:
         use_case = CreateStrategyFromIntentUseCase(
             translator=translator,
             registry=registry,
+            rules_loader=RulesYamlLoader(),
         )
 
         response = use_case.execute(
@@ -355,6 +367,7 @@ rules:
         use_case = CreateStrategyFromIntentUseCase(
             translator=translator,
             registry=registry,
+            rules_loader=RulesYamlLoader(),
         )
 
         response = use_case.execute(
@@ -373,6 +386,7 @@ rules:
         use_case = CreateStrategyFromIntentUseCase(
             translator=translator,
             registry=registry,
+            rules_loader=RulesYamlLoader(),
         )
 
         response = use_case.execute(
@@ -391,6 +405,7 @@ rules:
         use_case = CreateStrategyFromIntentUseCase(
             translator=translator,
             registry=registry,
+            rules_loader=RulesYamlLoader(),
         )
 
         response = use_case.execute(
@@ -409,6 +424,7 @@ rules:
         use_case = CreateStrategyFromIntentUseCase(
             translator=translator,
             registry=registry,
+            rules_loader=RulesYamlLoader(),
         )
 
         use_case.execute(
@@ -429,6 +445,7 @@ rules:
         use_case = CreateStrategyFromIntentUseCase(
             translator=translator,
             registry=registry,
+            rules_loader=RulesYamlLoader(),
         )
 
         use_case.execute(
@@ -517,6 +534,7 @@ class TestWithRealMockAdapter:
         use_case = CreateStrategyFromIntentUseCase(
             translator=adapter,
             registry=registry,
+            rules_loader=RulesYamlLoader(),
         )
 
         response = use_case.execute(
@@ -536,6 +554,7 @@ class TestWithRealMockAdapter:
         use_case = CreateStrategyFromIntentUseCase(
             translator=adapter,
             registry=registry,
+            rules_loader=RulesYamlLoader(),
         )
 
         response = use_case.execute(
@@ -555,6 +574,7 @@ class TestWithRealMockAdapter:
         use_case = CreateStrategyFromIntentUseCase(
             translator=adapter,
             registry=registry,
+            rules_loader=RulesYamlLoader(),
         )
 
         response = use_case.execute(

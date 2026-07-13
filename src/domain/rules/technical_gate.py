@@ -7,13 +7,10 @@ Layer: Domain
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
 from src.domain.indicators.indicator_reading import IndicatorReading
+from src.domain.ports.indicator_evaluator import IndicatorEvaluator
 from src.domain.rules.risk_gate import GateContext, GateResult, RiskGate
-
-if TYPE_CHECKING:
-    from src.application.services.indicator_evaluator import IndicatorEvaluator
 
 
 @dataclass(frozen=True)
@@ -27,7 +24,7 @@ class TechnicalGateConfig:
 class TechnicalGate(RiskGate):
     def __init__(
         self,
-        evaluator: "IndicatorEvaluator",
+        evaluator: IndicatorEvaluator,
         config: TechnicalGateConfig | None = None,
     ) -> None:
         self._evaluator = evaluator

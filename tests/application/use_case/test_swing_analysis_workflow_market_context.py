@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from src.application.services.volatility_context import build_volatility_context
 from src.application.use_case.swing_analysis_workflow_use_case import SwingAnalysisWorkflowUseCase
+from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 from tests.application.use_case.swing_analysis_workflow_fixtures import (
     FakeBrokerRepository,
     FakeMarketRepository,
@@ -28,6 +29,7 @@ def test_swing_workflow_diagnostics_volatility_context_matches_shared_helper():
         fetch_sentiment=lambda **kwargs: (None, None),
         load_swing_config=lambda: {},
         resolve_setup_targets=lambda regime, config: (Decimal("5"), Decimal("5")),
+        rules_loader=RulesYamlLoader(),
     )
 
     response = workflow.execute(_request(auto_refresh=False))
@@ -184,6 +186,7 @@ def test_swing_workflow_mce_regime_forwarded_to_signal_engine():
         fetch_sentiment=lambda **kwargs: (None, None),
         load_swing_config=lambda: {},
         resolve_setup_targets=lambda regime, config: (Decimal("5"), Decimal("5")),
+        rules_loader=RulesYamlLoader(),
         evaluate_market_context=lambda **kwargs: _RISK_OFF_CONTEXT,
         signal_engine=fake_signal,
         risk_engine=FakeRiskEngine(),

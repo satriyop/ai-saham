@@ -12,6 +12,7 @@ from src.application.services.swing_analysis_evidence_builder import (
     SwingAnalysisEvidenceBuilder,
 )
 from src.domain.value_objects.ticker_profile_snapshot import TickerProfileSnapshot
+from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 
 
 def test_accumulation_candidate_evidence_builder_no_factory():
@@ -79,6 +80,7 @@ def test_swing_analysis_evidence_builder_no_factory():
         market_repository=MagicMock(),
         broker_repository=MagicMock(),
         registry=MagicMock(),
+        rules_loader=RulesYamlLoader(),
         flow_confirmation_builder=MagicMock(),
         candidate_observations_repository=None,
         signal_engine=None,
@@ -117,6 +119,7 @@ def test_swing_analysis_evidence_builder_with_fake_factory():
         market_repository=MagicMock(),
         broker_repository=broker_mock,
         registry=MagicMock(),
+        rules_loader=RulesYamlLoader(),
         flow_confirmation_builder=MagicMock(),
         candidate_observations_repository=None,
         signal_engine=None,

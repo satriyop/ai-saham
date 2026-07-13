@@ -8,6 +8,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Union
 
+from src.application.ports.rules_loader import RulesLoader
 from src.application.rules.interpreter import YamlRuleInterpreter
 from src.application.rules.schema import BUILTIN_INDICATORS, IndicatorType
 from src.application.services.indicator_registry import IndicatorRegistry
@@ -44,11 +45,19 @@ class StrategyEvidenceBuilder:
         self,
         registry: IndicatorRegistry | None = None,
         loader: StrategyLoader | None = None,
+        rules_loader: RulesLoader | None = None,
     ) -> None:
         self._registry = registry if registry is not None else IndicatorRegistry()
-        self._loader = loader if loader is not None else StrategyLoader(
-            registry=self._registry
-        )
+        if loader is not None:
+            self._loader = loader
+        else:
+            if rules_loader is None:
+                raise ValueError(
+                    "rules_loader is required when loader is not provided"
+                )
+            self._loader = StrategyLoader(
+                rules_loader=rules_loader, registry=self._registry
+            )
 
     def build(self, request: StrategyEvidenceRequest) -> StrategyEvidence:
         ticker = request.ticker.upper().strip()

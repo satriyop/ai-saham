@@ -37,6 +37,7 @@ from src.infrastructure.config.institutional_accumulation_config_loader import (
     load_institutional_accumulation_config,
 )
 from src.infrastructure.config.market_context_factory import create_market_context_engine
+from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 from src.infrastructure.config.sector_context_config_loader import (
     create_sector_context_evidence_builder,
 )
@@ -113,6 +114,7 @@ def _accumulation_log_impl(
         broker_repository=broker_repo,
         market_repository=market_repo,
         indicator_registry=create_indicator_registry(),
+        rules_loader=RulesYamlLoader(),
         stockbit_providers=_sb,
         ticker_profile_classifier_factory=create_ticker_profile_classifier,
         institutional_accumulation_config_factory=load_institutional_accumulation_config,

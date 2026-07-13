@@ -5,7 +5,7 @@ Orchestrates AI-powered translation of natural language strategy descriptions
 into validated YAML configurations that can be used with the strategy system.
 
 Layer: Application
-Depends on: StrategyTranslator port, RulesYamlLoader, IndicatorRegistry
+Depends on: StrategyTranslator port, RulesLoader port, IndicatorRegistry
 """
 
 from dataclasses import dataclass
@@ -169,7 +169,7 @@ class CreateStrategyFromIntentUseCase:
         1. Validates the input intent
         2. Gets available indicators from the registry
         3. Calls the StrategyTranslator to get YAML content
-        4. Parses and validates the YAML using RulesYamlLoader
+        4. Parses and validates the YAML using the injected RulesLoader
         5. Returns the validated YAML and RuleSet
 
     Important:
@@ -177,12 +177,13 @@ class CreateStrategyFromIntentUseCase:
         - UNSUPPORTED is a valid response (not an error)
         - The YAML is validated before being returned
 
-    Example:
+    Example (adapter/composition-root wiring):
         translator = StrategyTranslatorAdapter(provider="mock")
         registry = create_indicator_registry()
         use_case = CreateStrategyFromIntentUseCase(
             translator=translator,
             registry=registry,
+            rules_loader=rules_loader,  # RulesLoader impl injected by the adapter
         )
         response = use_case.execute(CreateStrategyFromIntentRequest(
             intent="RSI oversold strategy",
@@ -202,23 +203,21 @@ class CreateStrategyFromIntentUseCase:
         self,
         translator: StrategyTranslator,
         registry: "IndicatorRegistry",
-        rules_loader: RulesLoader | None = None,
+        rules_loader: RulesLoader,
     ) -> None:
         """
-        Initialize with translator, indicator registry, and optional rules loader.
+        Initialize with translator, indicator registry, and rules loader.
 
         Args:
             translator: StrategyTranslator adapter for AI translation.
             registry: IndicatorRegistry for getting available indicators
                      and validating generated YAML.
-            rules_loader: RulesLoader port interface.
+            rules_loader: RulesLoader port interface. Must be injected by the
+                caller's adapter/composition root with a concrete
+                implementation from the infrastructure layer.
         """
         self._translator = translator
         self._registry = registry
-        if rules_loader is None:
-            from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
-
-            rules_loader = RulesYamlLoader()
         self._rules_loader = rules_loader
 
     def execute(

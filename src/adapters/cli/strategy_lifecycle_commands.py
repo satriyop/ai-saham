@@ -16,6 +16,7 @@ from src.application.rules.exceptions import (
 )
 from src.application.services.strategy_loader import StrategyLoader
 from src.infrastructure.composition.indicator_registry_factory import create_indicator_registry
+from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 
 # Template for new strategy.yaml
 STRATEGY_TEMPLATE = '''version: 1
@@ -238,7 +239,7 @@ def validate(
     """
     # Create registry for indicator validation
     registry = create_indicator_registry()
-    loader = StrategyLoader(registry=registry)
+    loader = StrategyLoader(rules_loader=RulesYamlLoader(), registry=registry)
 
     # Resolve path
     try:
@@ -299,7 +300,7 @@ def list_strategies(
     """
     # Create registry for validation
     registry = create_indicator_registry()
-    loader = StrategyLoader(registry=registry)
+    loader = StrategyLoader(rules_loader=RulesYamlLoader(), registry=registry)
 
     # List strategies
     strategies = loader.list_available(include_invalid=include_invalid)

@@ -12,6 +12,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
 from src.application.dto import swing_analysis as swing_analysis_dto
+from src.application.ports.rules_loader import RulesLoader
 
 if TYPE_CHECKING:
     from src.application.services.company_quality_context_evidence_builder import (
@@ -83,6 +84,7 @@ class SwingAnalysisWorkflowUseCase:
         fetch_sentiment: Callable[..., tuple[Any | None, str | None]],
         load_swing_config: Callable[[], Any],
         resolve_setup_targets: Callable[[str | None, Any], tuple[Decimal, Decimal]],
+        rules_loader: RulesLoader,
         evaluate_market_context: Callable[..., "MarketContext"] | None = None,
         structural_gates: list[RiskGate] | None = None,
         execution_gates: list[RiskGate] | None = None,
@@ -113,6 +115,7 @@ class SwingAnalysisWorkflowUseCase:
         self._fetch_sentiment = fetch_sentiment
         self._load_swing_config = load_swing_config
         self._resolve_setup_targets = resolve_setup_targets
+        self._rules_loader = rules_loader
         self._evaluate_market_context = evaluate_market_context
         self._structural_gates: list[RiskGate] = structural_gates or []
         self._execution_gates: list[RiskGate] = execution_gates or []
@@ -137,6 +140,7 @@ class SwingAnalysisWorkflowUseCase:
             market_repository=market_repository,
             broker_repository=broker_repository,
             registry=registry,
+            rules_loader=rules_loader,
             flow_confirmation_builder=self._flow_confirmation_builder,
             candidate_observations_repository=candidate_observations_repository,
             signal_engine=signal_engine,
@@ -301,10 +305,13 @@ class SwingAnalysisWorkflowUseCase:
         backtest_result = None
         if request.strategy_name is not None:
             try:
-                loader = StrategyLoader(registry=self._registry)
+                loader = StrategyLoader(
+                    rules_loader=self._rules_loader, registry=self._registry
+                )
                 rules_path = loader.resolve(request.strategy_name)
                 backtest_use_case = BacktestUseCase(
                     repository=self._market_repo,
+                    rules_loader=self._rules_loader,
                     registry=self._registry,
                 )
                 backtest_response = backtest_use_case.execute(

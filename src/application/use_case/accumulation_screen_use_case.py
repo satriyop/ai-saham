@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, Any, Callable
 
 from src.application.dto import accumulation_screen as accumulation_dto
 from src.application.ports.corporate_action_repository import CorporateActionRepository
+from src.application.ports.rules_loader import RulesLoader
 from src.application.services.accumulation_candidate_evidence_builder import (
     AccumulationCandidateEvidenceBuilder,
 )
@@ -176,6 +177,7 @@ class AccumulationScreenUseCase:
         relative_strength_calculator: "RelativeStrengthCalculator | None" = None,
         *,
         indicator_registry: "IndicatorRegistry",
+        rules_loader: RulesLoader | None = None,
         ticker_profile_classifier_factory: Callable[[], TickerProfileClassifier] | None = None,
         institutional_accumulation_config_factory: (
             Callable[[], InstitutionalAccumulationConfig] | None
@@ -225,6 +227,7 @@ class AccumulationScreenUseCase:
             primary_setup_family_resolver=self._setup_family_resolver,
             relative_strength_calculator=self._relative_strength_calculator,
             indicator_registry=self._indicator_registry,
+            rules_loader=rules_loader,
             ticker_profile_classifier_factory=ticker_profile_classifier_factory,
             institutional_accumulation_config_factory=institutional_accumulation_config_factory,
             sector_context_builder_factory=sector_context_builder_factory,

@@ -7,6 +7,7 @@ from src.application.services.strategy_evidence_builder import (
 )
 from src.domain.entities.candle import Candle
 from src.domain.value_objects.strategy_evidence import StrategyEvidenceOutcome
+from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 
 
 def test_strategy_evidence_builder_matches_price_rule(tmp_path):
@@ -30,7 +31,7 @@ rules:
         encoding="utf-8",
     )
 
-    evidence = StrategyEvidenceBuilder().build(
+    evidence = StrategyEvidenceBuilder(rules_loader=RulesYamlLoader()).build(
         StrategyEvidenceRequest(
             ticker="BBCA",
             strategy_name=strategy_path,
@@ -71,7 +72,7 @@ rules:
         encoding="utf-8",
     )
 
-    evidence = StrategyEvidenceBuilder().build(
+    evidence = StrategyEvidenceBuilder(rules_loader=RulesYamlLoader()).build(
         StrategyEvidenceRequest(
             ticker="BBCA",
             strategy_name=strategy_path,
@@ -104,7 +105,7 @@ rules:
         encoding="utf-8",
     )
 
-    evidence = StrategyEvidenceBuilder().build(
+    evidence = StrategyEvidenceBuilder(rules_loader=RulesYamlLoader()).build(
         StrategyEvidenceRequest(
             ticker="BBCA",
             strategy_name=strategy_path,
@@ -123,7 +124,7 @@ def test_strategy_evidence_builder_reports_invalid_strategy(tmp_path):
     strategy_path = tmp_path / "strategy.yaml"
     strategy_path.write_text("not: a strategy", encoding="utf-8")
 
-    evidence = StrategyEvidenceBuilder().build(
+    evidence = StrategyEvidenceBuilder(rules_loader=RulesYamlLoader()).build(
         StrategyEvidenceRequest(
             ticker="BBCA",
             strategy_name=strategy_path,

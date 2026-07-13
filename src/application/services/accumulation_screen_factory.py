@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.application.ports.rules_loader import RulesLoader
 from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
 from src.application.use_case.score_foreign_flow_use_case import (
     ScoreForeignFlowUseCase,
@@ -21,6 +22,7 @@ def create_accumulation_screen_use_case(
     broker_repository: BrokerDataRepository,
     market_repository: MarketDataRepository,
     indicator_registry: Any,
+    rules_loader: RulesLoader,
     stockbit_providers: Any | None = None,
     risk_use_case: Any | None = None,
     signal_engine: Any | None = None,
@@ -34,7 +36,12 @@ def create_accumulation_screen_use_case(
     sector_context_builder_factory: Any | None = None,
     company_quality_context_builder_factory: Any | None = None,
 ) -> AccumulationScreenUseCase:
-    """Build AccumulationScreenUseCase with consistent optional enrichment wiring."""
+    """Build AccumulationScreenUseCase with consistent optional enrichment wiring.
+
+    rules_loader must be supplied by the caller's adapter/composition root
+    with a concrete implementation from the infrastructure layer, so
+    strategy-evidence lookups keep working when request.strategy_name is set.
+    """
     score_use_case = (
         ScoreForeignFlowUseCase(foreign_flow_score_policy)
         if foreign_flow_score_policy is not None
@@ -60,6 +67,7 @@ def create_accumulation_screen_use_case(
         foreign_flow_score_use_case=score_use_case,
         derived_feature_policy=derived_feature_policy,
         swing_setup_catalog=swing_setup_catalog,
+        rules_loader=rules_loader,
         ticker_profile_classifier_factory=ticker_profile_classifier_factory,
         institutional_accumulation_config_factory=institutional_accumulation_config_factory,
         sector_context_builder_factory=sector_context_builder_factory,

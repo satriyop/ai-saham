@@ -16,6 +16,7 @@ from src.application.use_case.create_strategy_from_intent_use_case import (
 )
 from src.infrastructure.ai.strategy_translator import StrategyTranslatorAdapter
 from src.infrastructure.composition.indicator_registry_factory import create_indicator_registry
+from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 
 
 def create(
@@ -76,6 +77,7 @@ def create(
         use_case = CreateStrategyFromIntentUseCase(
             translator=translator,
             registry=registry,
+            rules_loader=RulesYamlLoader(),
         )
 
         response = use_case.execute(

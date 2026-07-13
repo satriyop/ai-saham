@@ -8,6 +8,7 @@ from src.application.use_case.swing_analysis_workflow_use_case import (
     SwingAnalysisDataUnavailable,
     SwingAnalysisWorkflowUseCase,
 )
+from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 from tests.application.use_case.swing_analysis_workflow_fixtures import (
     FakeBrokerRepository,
     FakeMarketRepository,
@@ -82,6 +83,7 @@ def test_swing_workflow_records_accumulation_failure_warning():
         fetch_sentiment=lambda **kwargs: (None, None),
         load_swing_config=lambda: {},
         resolve_setup_targets=lambda regime, config: (Decimal("5"), Decimal("5")),
+        rules_loader=RulesYamlLoader(),
     )
 
     response = workflow.execute(_request())

@@ -15,6 +15,7 @@ import typer
 from src.application.services.skill_generator import SkillGeneratorService
 from src.application.services.strategy_loader import StrategyLoader
 from src.infrastructure.composition.indicator_registry_factory import create_indicator_registry
+from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 from src.infrastructure.skill.annotation_reader import AnnotationReader
 from src.infrastructure.skill.index_writer import SkillIndexWriter
 from src.infrastructure.skill.markdown_writer import MarkdownSkillWriter
@@ -70,7 +71,7 @@ def generate(
     if artifact_type == "strategy":
         # Resolve strategy path
         registry = create_indicator_registry()
-        loader = StrategyLoader(registry=registry)
+        loader = StrategyLoader(rules_loader=RulesYamlLoader(), registry=registry)
         try:
             strategy_path = loader.resolve(artifact)
         except Exception as e:

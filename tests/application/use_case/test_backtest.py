@@ -25,6 +25,7 @@ from src.application.use_case.backtest_use_case import (
 )
 from src.domain.entities.candle import Candle
 from src.domain.ports.market_data_repository import MarketDataRepository
+from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 
 # ============================================================================
 # Test Fixtures
@@ -225,7 +226,7 @@ class TestBacktestUseCaseBasics:
         """Should return BacktestResponse for valid inputs."""
         candles = make_trending_candles("BBCA", 100)
         repository = MockRepository(candles)
-        use_case = BacktestUseCase(repository)
+        use_case = BacktestUseCase(repository, rules_loader=RulesYamlLoader())
 
         rules_file = create_temp_rules_file(SIMPLE_RSI_RULES)
         try:
@@ -246,7 +247,7 @@ class TestBacktestUseCaseBasics:
     def test_execute_with_empty_ticker_raises_error(self):
         """Should raise ValueError for empty ticker."""
         repository = MockRepository([])
-        use_case = BacktestUseCase(repository)
+        use_case = BacktestUseCase(repository, rules_loader=RulesYamlLoader())
 
         rules_file = create_temp_rules_file(SIMPLE_RSI_RULES)
         try:
@@ -260,7 +261,7 @@ class TestBacktestUseCaseBasics:
     def test_execute_with_no_data_raises_error(self):
         """Should raise ValueError when no data available."""
         repository = MockRepository([])  # Empty repository
-        use_case = BacktestUseCase(repository)
+        use_case = BacktestUseCase(repository, rules_loader=RulesYamlLoader())
 
         rules_file = create_temp_rules_file(SIMPLE_RSI_RULES)
         try:
@@ -279,7 +280,7 @@ class TestBacktestUseCaseDateFiltering:
         """Should filter candles by start date."""
         candles = make_trending_candles("BBCA", 100)
         repository = MockRepository(candles)
-        use_case = BacktestUseCase(repository)
+        use_case = BacktestUseCase(repository, rules_loader=RulesYamlLoader())
 
         rules_file = create_temp_rules_file(SIMPLE_RSI_RULES)
         try:
@@ -301,7 +302,7 @@ class TestBacktestUseCaseDateFiltering:
         """Should filter candles by date range."""
         candles = make_trending_candles("BBCA", 100)
         repository = MockRepository(candles)
-        use_case = BacktestUseCase(repository)
+        use_case = BacktestUseCase(repository, rules_loader=RulesYamlLoader())
 
         rules_file = create_temp_rules_file(SIMPLE_RSI_RULES)
         try:
@@ -328,7 +329,7 @@ class TestBacktestUseCaseSignalMapping:
         """Should use default signal mapping when not in YAML."""
         candles = make_trending_candles("BBCA", 100)
         repository = MockRepository(candles)
-        use_case = BacktestUseCase(repository)
+        use_case = BacktestUseCase(repository, rules_loader=RulesYamlLoader())
 
         rules_file = create_temp_rules_file(SIMPLE_RSI_RULES)  # No signal_mapping
         try:
@@ -344,7 +345,7 @@ class TestBacktestUseCaseSignalMapping:
         """Should use signal mapping from YAML file."""
         candles = make_trending_candles("BBCA", 100)
         repository = MockRepository(candles)
-        use_case = BacktestUseCase(repository)
+        use_case = BacktestUseCase(repository, rules_loader=RulesYamlLoader())
 
         rules_file = create_temp_rules_file(RSI_RULES_WITH_SIGNAL_MAPPING)
         try:
@@ -364,7 +365,7 @@ class TestBacktestUseCaseMetrics:
         """Response should expose metrics via convenience properties."""
         candles = make_trending_candles("BBCA", 100)
         repository = MockRepository(candles)
-        use_case = BacktestUseCase(repository)
+        use_case = BacktestUseCase(repository, rules_loader=RulesYamlLoader())
 
         rules_file = create_temp_rules_file(SIMPLE_RSI_RULES)
         try:
@@ -403,7 +404,7 @@ rules:
 """
         candles = make_trending_candles("BBCA", 50)
         repository = MockRepository(candles)
-        use_case = BacktestUseCase(repository)
+        use_case = BacktestUseCase(repository, rules_loader=RulesYamlLoader())
 
         rules_file = create_temp_rules_file(moderate_rules)
         try:
@@ -429,7 +430,7 @@ class TestBacktestUseCaseDeterminism:
         """Running twice with same input should give identical results."""
         candles = make_trending_candles("BBCA", 100)
         repository = MockRepository(candles)
-        use_case = BacktestUseCase(repository)
+        use_case = BacktestUseCase(repository, rules_loader=RulesYamlLoader())
 
         rules_file = create_temp_rules_file(SIMPLE_RSI_RULES)
         try:
@@ -457,7 +458,7 @@ class TestBacktestUseCaseErrorHandling:
     def test_invalid_rules_file_raises_error(self):
         """Should raise error for non-existent rules file."""
         repository = MockRepository([])
-        use_case = BacktestUseCase(repository)
+        use_case = BacktestUseCase(repository, rules_loader=RulesYamlLoader())
 
         request = BacktestRequest(
             ticker="BBCA",
@@ -471,7 +472,7 @@ class TestBacktestUseCaseErrorHandling:
         """Should raise error for invalid YAML syntax."""
         candles = make_trending_candles("BBCA", 50)
         repository = MockRepository(candles)
-        use_case = BacktestUseCase(repository)
+        use_case = BacktestUseCase(repository, rules_loader=RulesYamlLoader())
 
         bad_yaml = "this: is: not: valid: yaml: {"
         rules_file = create_temp_rules_file(bad_yaml)

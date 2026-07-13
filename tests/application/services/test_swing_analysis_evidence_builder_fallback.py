@@ -27,6 +27,7 @@ from src.application.services.swing_analysis_evidence_builder import (
 from src.domain.entities.candle import Candle
 from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.market_data_repository import MarketDataRepository
+from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 
 
 def _builder(**factory_overrides) -> SwingAnalysisEvidenceBuilder:
@@ -34,6 +35,7 @@ def _builder(**factory_overrides) -> SwingAnalysisEvidenceBuilder:
         market_repository=None,
         broker_repository=None,
         registry=None,
+        rules_loader=RulesYamlLoader(),
         flow_confirmation_builder=None,
         candidate_observations_repository=None,
         signal_engine=None,
@@ -203,6 +205,7 @@ class TestPublicBuildFlowWithoutInjectedFactories:
             market_repository=_StubMarketRepository(candles),
             broker_repository=_StubBrokerRepository(),
             registry=None,
+            rules_loader=RulesYamlLoader(),
             flow_confirmation_builder=FlowConfirmationEvidenceBuilder(),
             candidate_observations_repository=None,
             signal_engine=None,

@@ -171,7 +171,6 @@ def view_universe(
         provider = SQLiteUniverseSummaryProvider(db_path)
         result = build_universe_view(
             universe_name=name.lower(),
-            db_path=db_path,
             loader=loader,
             as_of_date=as_of_date,
             provider=provider,

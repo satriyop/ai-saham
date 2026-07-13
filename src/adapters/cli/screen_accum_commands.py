@@ -411,7 +411,9 @@ def accumulation_run(
             market_repository=market_repo,
         )
         try:
-            strat_loader = StrategyLoader(registry=registry)
+            strat_loader = StrategyLoader(
+                rules_loader=RulesYamlLoader(), registry=registry
+            )
             rules_path = strat_loader.resolve(strategy)
             risk_uc = AssessRiskUseCase(
                 repository=market_repo,
