@@ -22,9 +22,8 @@ Example:
 
 from __future__ import annotations
 
-import logging
 from decimal import Decimal
-from typing import TYPE_CHECKING, Protocol
+from typing import Protocol
 
 from src.application.formula.ast_nodes import (
     ASTNode,
@@ -34,13 +33,8 @@ from src.application.formula.ast_nodes import (
     SeriesNode,
 )
 from src.application.formula.exceptions import FormulaEvaluationError
-
-if TYPE_CHECKING:
-
-    from src.domain.entities.candle import Candle
-
-
-logger = logging.getLogger(__name__)
+from src.application.formula.series_indicators import apply_indicator_to_series
+from src.application.formula.series_ops import apply_binary_op
 
 
 class SeriesProvider(Protocol):
@@ -222,7 +216,7 @@ class FormulaEvaluator:
             # Use default period
             series = self._evaluate(arg)
             period = self._provider.get_default_period(name)
-            return self._apply_indicator_to_series(name, series, period)
+            return apply_indicator_to_series(name, series, period)
 
         # Two arguments: series and period (e.g., SMA(CLOSE, 20), SMA(RSI(14), 10))
         if len(args) == 2:
@@ -238,102 +232,12 @@ class FormulaEvaluator:
             period = int(period_arg.value)
             series = self._evaluate(series_arg)
 
-            return self._apply_indicator_to_series(name, series, period)
+            return apply_indicator_to_series(name, series, period)
 
         raise FormulaEvaluationError(
             f"Too many arguments to {name}: expected 0-2, got {len(args)}",
             formula_name=name,
         )
-
-    def _apply_indicator_to_series(
-        self, name: str, series: list[Decimal], period: int
-    ) -> list[Decimal]:
-        """Apply an indicator function to a series.
-
-        This is used when the indicator is applied to a computed series
-        rather than raw price data (e.g., SMA(RSI(14), 10)).
-
-        The implementation depends on the indicator type:
-        - SMA: Simple moving average of the series
-        - EMA: Exponential moving average of the series
-        - RSI: Not applicable to arbitrary series (raises error)
-
-        Args:
-            name: Indicator name.
-            series: Input series values.
-            period: Calculation period.
-
-        Returns:
-            List of Decimal values.
-        """
-        if not series:
-            return []
-
-        if name == "SMA":
-            return self._compute_sma_on_series(series, period)
-        elif name == "EMA":
-            return self._compute_ema_on_series(series, period)
-        else:
-            # For other indicators, we can't easily apply them to arbitrary series
-            # Try using the provider's compute_indicator with the first series value
-            raise FormulaEvaluationError(
-                f"Indicator {name} cannot be applied to computed series. "
-                "Only SMA and EMA support series-to-series computation.",
-                formula_name=name,
-            )
-
-    def _compute_sma_on_series(self, series: list[Decimal], period: int) -> list[Decimal]:
-        """Compute SMA on an arbitrary series.
-
-        Args:
-            series: Input values.
-            period: SMA period.
-
-        Returns:
-            SMA values (length = len(series) - period + 1).
-        """
-        if len(series) < period:
-            return []
-
-        result: list[Decimal] = []
-        window_sum = sum(series[:period])
-        result.append(window_sum / period)
-
-        for i in range(period, len(series)):
-            window_sum = window_sum - series[i - period] + series[i]
-            result.append(window_sum / period)
-
-        return result
-
-    def _compute_ema_on_series(self, series: list[Decimal], period: int) -> list[Decimal]:
-        """Compute EMA on an arbitrary series.
-
-        Uses standard EMA formula: EMA = price * k + EMA_prev * (1 - k)
-        where k = 2 / (period + 1)
-
-        Args:
-            series: Input values.
-            period: EMA period.
-
-        Returns:
-            EMA values (length = len(series) - period + 1).
-        """
-        if len(series) < period:
-            return []
-
-        multiplier = Decimal(2) / (Decimal(period) + 1)
-        one_minus_k = Decimal(1) - multiplier
-
-        # Initial SMA as seed
-        initial_sma = sum(series[:period]) / period
-        result: list[Decimal] = [initial_sma]
-
-        # EMA for remaining values
-        for i in range(period, len(series)):
-            ema = series[i] * multiplier + result[-1] * one_minus_k
-            result.append(ema)
-
-        return result
 
     def _evaluate_binary_op(self, node: BinaryOpNode) -> list[Decimal]:
         """Evaluate a binary operation.
@@ -350,141 +254,10 @@ class FormulaEvaluator:
         left = self._evaluate(node.left)
         right = self._evaluate(node.right)
 
-        return self._apply_binary_op(node.operator, left, right)
-
-    def _apply_binary_op(
-        self, operator: str, left: list[Decimal], right: list[Decimal]
-    ) -> list[Decimal]:
-        """Apply a binary operator to two series.
-
-        Series are aligned from the end, so shorter series are matched
-        to the end of the longer series.
-
-        Special cases:
-        - Scalar (single element) is broadcast to match other series length
-        - Division by zero returns Decimal("0") and logs warning
-
-        Args:
-            operator: The operator (+, -, *, /).
-            left: Left operand series.
-            right: Right operand series.
-
-        Returns:
-            Result series.
-        """
-        # Handle scalar broadcasting
-        if len(left) == 1 and len(right) > 1:
-            left = left * len(right)
-        elif len(right) == 1 and len(left) > 1:
-            right = right * len(left)
-
-        # Align from end (result length = min of both)
-        result_len = min(len(left), len(right))
-        if result_len == 0:
-            return []
-
-        # Slice from end
-        left_aligned = left[-result_len:]
-        right_aligned = right[-result_len:]
-
-        result: list[Decimal] = []
-
-        for l_val, r_val in zip(left_aligned, right_aligned):
-            if operator == "+":
-                result.append(l_val + r_val)
-            elif operator == "-":
-                result.append(l_val - r_val)
-            elif operator == "*":
-                result.append(l_val * r_val)
-            elif operator == "/":
-                if r_val == 0:
-                    logger.warning("Division by zero in formula evaluation, using 0")
-                    result.append(Decimal("0"))
-                else:
-                    result.append(l_val / r_val)
-
-        return result
+        return apply_binary_op(node.operator, left, right)
 
 
-class RegistrySeriesProvider:
-    """SeriesProvider implementation wrapping IndicatorRegistry.
-
-    This adapter connects the FormulaEvaluator to the IndicatorRegistry,
-    managing candle context and series extraction.
-
-    Usage:
-        provider = RegistrySeriesProvider(registry, candles)
-        evaluator = FormulaEvaluator(provider)
-        values = evaluator.compute(ast, len(candles))
-    """
-
-    def __init__(
-        self,
-        registry: "IndicatorRegistry",  # Forward reference
-        candles: list["Candle"],
-    ) -> None:
-        """Initialize the provider.
-
-        Args:
-            registry: The indicator registry.
-            candles: Candle data for computation.
-        """
-        self._registry = registry
-        self._candles = candles
-
-    def get_series(self, name: str) -> list[Decimal]:
-        """Get a series by name.
-
-        Args:
-            name: OPEN, HIGH, LOW, CLOSE, VOLUME, or indicator name.
-
-        Returns:
-            List of Decimal values.
-        """
-        name_upper = name.upper()
-
-        # Price series
-        if name_upper == "OPEN":
-            return [c.open for c in self._candles]
-        elif name_upper == "HIGH":
-            return [c.high for c in self._candles]
-        elif name_upper == "LOW":
-            return [c.low for c in self._candles]
-        elif name_upper == "CLOSE":
-            return [c.close for c in self._candles]
-        elif name_upper == "VOLUME":
-            return [Decimal(c.volume) for c in self._candles]
-
-        # Indicator series - compute with default period
-        period = self._registry.get_default_period(name_upper)
-        result = self._registry.compute(name_upper, self._candles, period)
-        return [v for _, v in result]  # Strip dates
-
-    def compute_indicator(self, name: str, period: int) -> list[Decimal]:
-        """Compute an indicator with the given period.
-
-        Args:
-            name: Indicator name.
-            period: Calculation period.
-
-        Returns:
-            List of Decimal values.
-        """
-        result = self._registry.compute(name, self._candles, period)
-        return [v for _, v in result]  # Strip dates
-
-    def get_default_period(self, name: str) -> int:
-        """Get the default period for an indicator.
-
-        Args:
-            name: Indicator name.
-
-        Returns:
-            Default period value.
-        """
-        return self._registry.get_default_period(name)
-
-
-# Type hint for forward reference resolution
-if TYPE_CHECKING:
-    from src.application.services.indicator_registry import IndicatorRegistry
+# Temporary compatibility re-export - canonical import is registry_series_provider.py
+from src.application.formula.registry_series_provider import (  # noqa: E402, F401
+    RegistrySeriesProvider,
+)

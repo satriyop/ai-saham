@@ -41,11 +41,7 @@ from src.application.formula.ast_nodes import (
     NumberNode,
     SeriesNode,
 )
-from src.application.formula.evaluator import (
-    FormulaEvaluator,
-    RegistrySeriesProvider,
-    SeriesProvider,
-)
+from src.application.formula.evaluator import FormulaEvaluator, SeriesProvider
 from src.application.formula.exceptions import (
     FormulaError,
     FormulaEvaluationError,
@@ -54,6 +50,7 @@ from src.application.formula.exceptions import (
     FormulaValidationError,
 )
 from src.application.formula.parser import Parser, parse
+from src.application.formula.registry_series_provider import RegistrySeriesProvider
 from src.application.formula.tokenizer import Token, TokenType, tokenize
 from src.application.formula.validator import (
     build_dependency_graph,
