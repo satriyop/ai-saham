@@ -192,7 +192,7 @@ def test_fetch_market_command_fails_fast_when_stockbit_session_missing(monkeypat
         lambda name: (object(), "idx"),
     )
     monkeypatch.setattr(
-        "src.adapters.cli.fetch_market_commands.resolve_tickers",
+        "src.adapters.cli.fetch_market_workflow_factory.resolve_tickers",
         lambda **kwargs: ["BBCA"],
     )
 

@@ -14,6 +14,7 @@ from pathlib import Path
 
 import typer
 
+from src.application.use_case.fetch_market_refresh_use_case import FetchMarketTickerResult
 from src.infrastructure.persistence.sqlite_data_update_status import (
     build_data_update_table_statuses,
 )
@@ -55,7 +56,8 @@ def split_flow_parts(flow_str: str) -> tuple[str, str]:
     if agg_match:
         agg_part = agg_match.group(1)
 
-    # If it's a fallback single status (e.g. no daily or agg keys, like "✓(2026-06-19)" or "skip" or "ERR:...")
+    # If it's a fallback single status (e.g. no daily or agg keys,
+    # like "✓(2026-06-19)" or "skip" or "ERR:...")
     if not daily_match and not agg_match:
         if "ERR:" in flow_str:
             return flow_str, flow_str
@@ -200,7 +202,11 @@ def print_table_summary(
         )
     except Exception as e:
         typer.echo("")
-        typer.echo(typer.style(f"Database status unavailable: {str(e)[:80]}", fg=typer.colors.YELLOW))
+        typer.echo(
+            typer.style(
+                f"Database status unavailable: {str(e)[:80]}", fg=typer.colors.YELLOW
+            )
+        )
         return
 
     W = 140
@@ -209,7 +215,10 @@ def print_table_summary(
     typer.echo(f"\n{'─' * W}")
     typer.echo("  Database status after command (scoped to this run's stock tickers)")
     typer.echo(f"{'─' * W}")
-    typer.echo(f"  {'TABLE':<24} {'SOURCE':<16} {'ROWS':>8} {'TICKERS':>7} {'RANGE/FRESH':<23} {'STATUS':<9} IMPACT")
+    typer.echo(
+        f"  {'TABLE':<24} {'SOURCE':<16} {'ROWS':>8} {'TICKERS':>7} "
+        f"{'RANGE/FRESH':<23} {'STATUS':<9} IMPACT"
+    )
     typer.echo(f"{'─' * W}")
 
     issues: list[str] = []
@@ -236,13 +245,19 @@ def print_table_summary(
             issues.append(f"  {status.table}: {status.issue}")
 
     typer.echo(f"{'─' * W}")
-    typer.echo(f"  Rows/tickers are totals for the {len(stock_tickers)} stock ticker(s) in this run.")
+    typer.echo(
+        f"  Rows/tickers are totals for the {len(stock_tickers)} "
+        "stock ticker(s) in this run."
+    )
     if issues:
         echo_note_group(
             title=f"Database issues/impact ({len(issues)}):",
             messages=issues,
             color=typer.colors.YELLOW,
-            footer="   Update succeeded unless a fetch error was listed above; incomplete optional caches are warnings.",
+            footer=(
+                "   Update succeeded unless a fetch error was listed above; "
+                "incomplete optional caches are warnings."
+            ),
         )
 
 
@@ -263,3 +278,59 @@ def render_enrichment_pit_coverage(coverage) -> None:
         "Observations before the first snapshot will have UNKNOWN market_cap_bucket "
         "and enrichment fields. Run this command periodically to build a PIT history."
     )
+
+
+def render_fetch_market_row(
+    result: FetchMarketTickerResult,
+    index: int,
+    total: int,
+    *,
+    include_meta: bool,
+    include_enrichment: bool,
+) -> str:
+    """Format the display string for a single ticker row in the progress table."""
+    progress = f"[{index:>3}/{total}]"
+
+    # Format column values
+    candles_col = clean_row_span(result.candles_status)[:13]
+    summaries_col = clean_row_span(result.broker_result.summaries)[:18]
+
+    daily_flow, agg_flow = split_flow_parts(result.broker_result.flow)
+    tracked_col = fmt_tracked_flow_column(daily_flow)[:18]
+    inst_col = fmt_inst_flow_column(agg_flow)[:18]
+
+    line_parts = [
+        f"  {progress:<9} {result.ticker:<5}",
+        f"{candles_col:<13}",
+        f"{summaries_col:<18}",
+        f"{tracked_col:<18}",
+        f"{inst_col:<18}"
+    ]
+
+    if include_meta:
+        meta_col = fmt_meta_column(result.meta_status)[:18]
+        line_parts.append(f"{meta_col:<18}")
+    if include_enrichment:
+        enrich_col = fmt_enrichment_column(result.enrichment_status)[:26]
+        line_parts.append(f"{enrich_col:<26}")
+
+    return "  ".join(line_parts)
+
+
+def fetch_market_row_color(result: FetchMarketTickerResult) -> str:
+    """Determine the terminal color for the status line based on task results."""
+    has_critical_error = (
+        "ERR:" in result.candles_status
+        or "ERR:" in result.broker_result.summaries
+        or "ERR:" in result.broker_result.flow
+    )
+    has_enrich_error = "ERR:" in result.enrichment_status
+
+    if has_critical_error:
+        return typer.colors.RED
+    elif has_enrich_error:
+        return typer.colors.YELLOW
+    elif result.all_cached:
+        return typer.colors.BRIGHT_BLACK
+    else:
+        return typer.colors.GREEN

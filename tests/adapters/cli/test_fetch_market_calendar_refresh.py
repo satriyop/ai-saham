@@ -220,34 +220,27 @@ def _base_monkeypatches(monkeypatch, tmp_path: Path):
         lambda name: (fake_broker_provider, "stockbit"),
     )
     monkeypatch.setattr(
-        fetch_market_commands,
-        "resolve_tickers",
+        "src.adapters.cli.fetch_market_workflow_factory.resolve_tickers",
         lambda **kwargs: ["BBCA", "BBRI", "BMRI"],
     )
     monkeypatch.setattr(
-        fetch_market_commands.FetchMarketProviderPrecondition,
-        "validate",
+        "src.application.services.fetch_market_provider_precondition.FetchMarketProviderPrecondition.validate",
         lambda self, request: None,
     )
 
     from src.application.use_case.fetch_market_refresh_use_case import (
         FetchMarketRefreshResponse,
     )
-
-    class _FakeMarketUseCase:
-        def __init__(self, **kwargs):
-            pass
-
-        def execute(self, request, on_ticker_complete=None):
-            return FetchMarketRefreshResponse(
-                ticker_list=request.tickers,
-                stock_tickers_only=request.tickers,
-                ticker_results=[],
-                ok_count=len(request.tickers),
-                fail_count=0,
-            )
-
-    monkeypatch.setattr(fetch_market_commands, "FetchMarketRefreshUseCase", _FakeMarketUseCase)
+    monkeypatch.setattr(
+        "src.application.use_case.fetch_market_refresh_use_case.FetchMarketRefreshUseCase.execute",
+        lambda self, request, on_ticker_complete=None: FetchMarketRefreshResponse(
+            ticker_list=request.tickers,
+            stock_tickers_only=request.tickers,
+            ticker_results=[],
+            ok_count=len(request.tickers),
+            fail_count=0,
+        )
+    )
     return tmp_path
 
 
