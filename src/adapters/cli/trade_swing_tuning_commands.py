@@ -28,19 +28,12 @@ from src.application.use_case.swing_backtest_use_case import (
     SwingBacktestResponse,
 )
 from src.infrastructure.config.app_config import APP_CFG
-from src.infrastructure.config.swing_backtest_config import (
-    load_swing_backtest_config as _load_swing_backtest_config,
-)
-from src.infrastructure.config.swing_config import load_swing_config as _load_swing_config
 from src.infrastructure.config.swing_tuning_document_loader import (
     swing_tuning_document_loader,
 )
 from src.infrastructure.persistence.swing_tuning_review_jsonl_writer import (
     SwingTuningReviewJsonlWriter,
 )
-
-_SC = _load_swing_config()
-_BT = _load_swing_backtest_config()
 
 DEFAULT_SWING_TUNING_REVIEW_JOURNAL_PATH = Path(
     APP_CFG.storage.swing_tuning_review_journal
@@ -171,37 +164,37 @@ def swing_tune(
         typer.Option("--end", help="Backtest end date, YYYY-MM-DD (default: today)"),
     ] = None,
     capital: Annotated[
-        int,
+        Optional[int],
         typer.Option("--capital", "-c", help="Initial capital in IDR", min=1),
-    ] = _BT.capital,
+    ] = None,
     risk_pct: Annotated[
-        float,
+        Optional[float],
         typer.Option("--risk-pct", help="% of capital risked per trade", min=0.01),
-    ] = _BT.risk_pct,
+    ] = None,
     max_positions: Annotated[
-        int,
+        Optional[int],
         typer.Option("--max-positions", help="Maximum concurrent open positions", min=1),
-    ] = _BT.max_positions,
+    ] = None,
     take_profit: Annotated[
-        float,
+        Optional[float],
         typer.Option("--take-profit", help="Take-profit percentage", min=0.01),
-    ] = _BT.take_profit_pct,
+    ] = None,
     stop_loss: Annotated[
-        float,
+        Optional[float],
         typer.Option("--stop-loss", help="Stop-loss percentage", min=0.01),
-    ] = _BT.stop_loss_pct,
+    ] = None,
     max_hold: Annotated[
-        int,
+        Optional[int],
         typer.Option("--max-hold", help="Maximum holding period in trading days", min=1),
-    ] = _BT.max_hold_days,
+    ] = None,
     cost_bps: Annotated[
-        float,
+        Optional[float],
         typer.Option(
             "--cost-bps",
             help="One-way transaction cost in basis points (20 ~= 0.20%)",
             min=0,
         ),
-    ] = _BT.cost_bps,
+    ] = None,
     with_regime: Annotated[
         bool,
         typer.Option("--with-regime", help="Group evidence by entry-date market regime"),
@@ -303,24 +296,53 @@ def swing_tune(
                 f"OOS {oos_start_dt.isoformat()} -> {end}"
             )
 
+    from src.adapters.cli.trade_swing_backtest_runner import load_swing_backtest_runner_config
+    runner_config = load_swing_backtest_runner_config()
+
+    resolved_capital = (
+        capital if capital is not None else runner_config.backtest_config.capital
+    )
+    resolved_risk_pct = (
+        risk_pct if risk_pct is not None else runner_config.backtest_config.risk_pct
+    )
+    resolved_max_positions = (
+        max_positions if max_positions is not None
+        else runner_config.backtest_config.max_positions
+    )
+    resolved_take_profit = (
+        take_profit if take_profit is not None
+        else runner_config.backtest_config.take_profit_pct
+    )
+    resolved_stop_loss = (
+        stop_loss if stop_loss is not None
+        else runner_config.backtest_config.stop_loss_pct
+    )
+    resolved_max_hold = (
+        max_hold if max_hold is not None else runner_config.backtest_config.max_hold_days
+    )
+    resolved_cost_bps = (
+        cost_bps if cost_bps is not None else runner_config.backtest_config.cost_bps
+    )
+
     response = _run_swing_backtest(
         tickers=tickers,
         universe=universe,
         setup=setup,
         start=start,
         end=effective_end,
-        capital=capital,
-        risk_pct=risk_pct,
-        max_positions=max_positions,
-        take_profit=take_profit,
-        stop_loss=stop_loss,
-        max_hold=max_hold,
-        cost_bps=cost_bps,
+        capital=resolved_capital,
+        risk_pct=resolved_risk_pct,
+        max_positions=resolved_max_positions,
+        take_profit=resolved_take_profit,
+        stop_loss=resolved_stop_loss,
+        max_hold=resolved_max_hold,
+        cost_bps=resolved_cost_bps,
         with_regime=with_regime,
         allow_regimes=allow_regimes,
         benchmark=benchmark,
         db_path=db_path,
         announce=output_format != "json",
+        config=runner_config,
     )
 
     payload = _swing_tuning_payload(response)
@@ -336,18 +358,19 @@ def swing_tune(
                 setup=setup,
                 start=oos_start_date,
                 end=end,
-                capital=capital,
-                risk_pct=risk_pct,
-                max_positions=max_positions,
-                take_profit=take_profit,
-                stop_loss=stop_loss,
-                max_hold=max_hold,
-                cost_bps=cost_bps,
+                capital=resolved_capital,
+                risk_pct=resolved_risk_pct,
+                max_positions=resolved_max_positions,
+                take_profit=resolved_take_profit,
+                stop_loss=resolved_stop_loss,
+                max_hold=resolved_max_hold,
+                cost_bps=resolved_cost_bps,
                 with_regime=with_regime,
                 allow_regimes=allow_regimes,
                 benchmark=benchmark,
                 db_path=db_path,
                 announce=False,
+                config=runner_config,
             )
             payload["oos_backtest_summary"] = {
                 "trade_count": oos_response.trade_count,

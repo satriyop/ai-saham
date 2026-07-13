@@ -37,12 +37,6 @@ from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBroker
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
 DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
-_AUDIT_CFG = load_accumulation_audit_config()
-_SCREEN_CFG = load_accumulation_screener_config()
-AUDIT_SETUPS = _AUDIT_CFG.setups
-
-_AUDIT_SETUP_HELP = ", ".join(AUDIT_SETUPS)
-_DEFAULT_AUDIT_HORIZON = max(_AUDIT_CFG.policy.forward_return_horizons)
 
 
 def _display_audit_summary(response: AccumulationAuditResponse, top_groups: int) -> None:
@@ -92,11 +86,15 @@ def accumulation_audit(
     ] = None,
     universe: Annotated[
         Optional[str],
-        typer.Option("--universe", "-u", help="Universe name or 'cached' — see `saham fetch universe list`"),
+        typer.Option(
+            "--universe",
+            "-u",
+            help="Universe name or 'cached' — see `saham fetch universe list`"
+        ),
     ] = None,
     setup: Annotated[
         Optional[str],
-        typer.Option("--setup", help=f"Audit setup: {_AUDIT_SETUP_HELP}"),
+        typer.Option("--setup", help="Audit setup name"),
     ] = None,
     start: Annotated[
         str,
@@ -151,7 +149,10 @@ def accumulation_audit(
     ] = None,
     max_bb_width_pctile: Annotated[
         Optional[float],
-        typer.Option("--max-bb-width-pctile", help="Require BB width percentile at or below this value"),
+        typer.Option(
+            "--max-bb-width-pctile",
+            help="Require BB width percentile at or below this value"
+        ),
     ] = None,
     broker_quality: Annotated[
         Optional[str],
@@ -174,9 +175,9 @@ def accumulation_audit(
         typer.Option("--max-holds", help="Comma-separated max holding days"),
     ] = None,
     horizon: Annotated[
-        int,
+        Optional[int],
         typer.Option("--horizon", help="Forward horizon for max up/down metrics", min=5),
-    ] = _DEFAULT_AUDIT_HORIZON,
+    ] = None,
     output_path: Annotated[
         Optional[Path],
         typer.Option("--output", "-o", help="Write raw audit records to CSV"),
@@ -202,17 +203,26 @@ def accumulation_audit(
     """
     resolved_db = db_path or DEFAULT_DB_PATH
 
+    cfg_audit = load_accumulation_audit_config()
+    cfg_screen = load_accumulation_screener_config()
+    audit_setups = cfg_audit.setups
+
+    resolved_horizon = (
+        horizon if horizon is not None
+        else max(cfg_audit.policy.forward_return_horizons)
+    )
+
     setup_name = setup.lower() if setup else None
     setup_values = {}
     if setup_name is not None:
-        if setup_name not in AUDIT_SETUPS:
+        if setup_name not in audit_setups:
             typer.echo(
                 f"Error: unknown setup '{setup}'. "
-                f"Available setups: {', '.join(AUDIT_SETUPS)}",
+                f"Available setups: {', '.join(audit_setups)}",
                 err=True,
             )
             raise typer.Exit(1)
-        setup_values = AUDIT_SETUPS[setup_name]
+        setup_values = audit_setups[setup_name]
 
     universe = universe or setup_values.get("universe")
     window = window if window is not None else int(setup_values.get("window", 7))
@@ -312,7 +322,8 @@ def accumulation_audit(
     if output_format != "json":
         typer.echo(
             f"Auditing {len(ticker_list)} tickers | {start_date} to {end_date} | "
-            f"{window} sessions | min foreign-flow score {min_foreign_flow_score:g}{filter_label}..."
+            f"{window} sessions | min foreign-flow score "
+            f"{min_foreign_flow_score:g}{filter_label}..."
         )
 
     use_case = AccumulationAuditUseCase(
@@ -320,7 +331,7 @@ def accumulation_audit(
         market_repository=SQLiteMarketRepository(db_path=resolved_db),
         indicator_registry=create_indicator_registry(),
         rules_loader=RulesYamlLoader(),
-        derived_feature_policy=_SCREEN_CFG.derived_features,
+        derived_feature_policy=cfg_screen.derived_features,
     )
     response = use_case.execute(
         AccumulationAuditRequest(
@@ -330,7 +341,7 @@ def accumulation_audit(
             window_days=window,
             min_net_buy_days=min_net_buy_days,
             min_foreign_flow_score=min_foreign_flow_score,
-            horizon_days=horizon,
+            horizon_days=resolved_horizon,
             min_vwap_disc_pct=min_vwap_disc,
             trend=trend_filter,
             min_flow_pct=min_flow_pct,
@@ -343,7 +354,7 @@ def accumulation_audit(
             take_profit_pcts=take_profit_grid,
             stop_loss_pcts=stop_loss_grid,
             max_hold_days=max_hold_grid,
-            policy=_AUDIT_CFG.policy,
+            policy=cfg_audit.policy,
         )
     )
 

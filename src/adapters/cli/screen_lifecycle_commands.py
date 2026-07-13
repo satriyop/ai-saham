@@ -10,8 +10,6 @@ from typing import Annotated, Optional
 import typer
 
 from src.adapters.cli.screen_accum_commands import (
-    _ASC,
-    _SC,
     DEFAULT_DB_PATH,
     accumulation_run,
 )
@@ -152,14 +150,24 @@ def screen_compare(
     from src.adapters.cli.screen_accum_compare_factory import (
         run_fresh_accumulation_screen_for_compare,
     )
+    from src.infrastructure.config.accumulation_screener_config import (
+        load_accumulation_screener_config,
+    )
+    from src.infrastructure.config.app_config import APP_CFG
+    from src.infrastructure.config.swing_config import load_swing_config
+
+    swing_config = load_swing_config()
+    screener_config = load_accumulation_screener_config(
+        Path(APP_CFG.config_paths.accumulation_screener)
+    )
 
     fresh_candidates = run_fresh_accumulation_screen_for_compare(
         universe=run_universe,
         window=window,
         top=top,
         db_path=resolved_db,
-        screener_config=_ASC,
-        swing_config=_SC,
+        screener_config=screener_config,
+        swing_config=swing_config,
     )
 
     if fresh_candidates is None:

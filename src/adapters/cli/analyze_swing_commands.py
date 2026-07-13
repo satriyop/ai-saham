@@ -16,10 +16,8 @@ from typing import Annotated, Optional
 import typer
 
 from src.adapters.cli.analyze_swing_command_config import (
-    ANALYZE_SWING_CONFIG,
-    SWING_BACKTEST_CONFIG,
-    SWING_CONFIG,
-    setup_config,
+    AnalyzeSwingCommandConfig,
+    load_analyze_swing_command_config,
 )
 from src.adapters.cli.analyze_swing_display import (
     SwingDisplayConfig,
@@ -56,37 +54,17 @@ FOREIGN_BOUNCE_SETUP_NAME = FOREIGN_BOUNCE_SETUP
 FOREIGN_BOUNCE_TAKE_PROFIT = Decimal("5")
 FOREIGN_BOUNCE_STOP_LOSS = Decimal("5")
 
-_DISPLAY_CONFIG = SwingDisplayConfig(
-    enter_min_score=SWING_CONFIG.enter_min_score,
-    watch_min_score=SWING_CONFIG.watch_min_score,
-    coiled_spring_bb_pctile=SWING_CONFIG.coiled_spring_bb_pctile,
-    coiled_spring_min_score=SWING_CONFIG.coiled_spring_min_score,
-    strong_min_score=SWING_CONFIG.strong_min_score,
-    strong_min_streak=SWING_CONFIG.strong_min_streak,
-    building_min_score=SWING_CONFIG.building_min_score,
-    building_min_streak=SWING_CONFIG.building_min_streak,
-    foreign_bounce_max_hold_days=SWING_BACKTEST_CONFIG.max_hold_days,
-)
-
-SMART_MONEY_BROKERS = set(SWING_CONFIG.smart_money_brokers)
-NOISE_BROKERS       = set(SWING_CONFIG.noise_brokers)
-
-
-BROKER_WEIGHTS: dict[str, Decimal] = {
-    **{code: SWING_CONFIG.smart_weight for code in SMART_MONEY_BROKERS},
-    **{code: SWING_CONFIG.noise_weight for code in NOISE_BROKERS},
-}
-
 
 def _fetch_swing_sentiment(
     ticker: str,
     sentiment_verbose: bool,
 ):
     """Compatibility wrapper for tests and helper imports."""
+    cfg = load_analyze_swing_command_config()
     return _fetch_swing_sentiment_with_config(
         ticker=ticker,
         sentiment_verbose=sentiment_verbose,
-        analyze_config=ANALYZE_SWING_CONFIG,
+        analyze_config=cfg.analyze_swing_config,
     )
 
 
@@ -94,13 +72,16 @@ def _evaluate_swing_setup(
     setup_name: str,
     accum: AccumulationCandidate | None,
     broker_detail: BrokerDetail | None = None,
+    cfg: AnalyzeSwingCommandConfig | None = None,
 ) -> SetupEvaluation:
     """Evaluate audited setup fit for one accumulation candidate."""
+    if cfg is None:
+        cfg = load_analyze_swing_command_config()
     return EvaluateSwingSetupUseCase().execute(
         EvaluateSwingSetupRequest(
             setup_name=setup_name,
             candidate=accum,
-            config=setup_config(),
+            config=cfg.setup_config,
             broker_detail=broker_detail,
         )
     )
@@ -109,9 +90,11 @@ def _evaluate_swing_setup(
 def _evaluate_foreign_bounce_setup(
     accum: "AccumulationCandidate | None",
     broker_detail: "BrokerDetail | None" = None,
+    cfg: AnalyzeSwingCommandConfig | None = None,
 ) -> "SetupEvaluation":
     """Convenience wrapper: evaluate the foreign-bounce setup for one candidate."""
-    return _evaluate_swing_setup(FOREIGN_BOUNCE_SETUP_NAME, accum, broker_detail)
+    return _evaluate_swing_setup(FOREIGN_BOUNCE_SETUP_NAME, accum, broker_detail, cfg)
+
 
 
 # ─── swing command ───────────────────────────────────────────────────────────
@@ -135,9 +118,9 @@ def swing(
         typer.Option("--window", "-w", help="Accumulation analysis window in broker sessions"),
     ] = APP_CFG.swing.window,
     flow_window: Annotated[
-        int,
+        Optional[int],
         typer.Option("--flow-window", help="Broker-flow detail window in broker sessions", min=1),
-    ] = ANALYZE_SWING_CONFIG.flow_detail_window_sessions,
+    ] = None,
     capital: Annotated[
         Optional[int],
         typer.Option("--capital", "-c", help="Capital in IDR — enables position sizing block"),
@@ -261,6 +244,14 @@ def swing(
     ticker_upper = ticker.upper()
     today = date.today()
 
+    cfg = load_analyze_swing_command_config()
+
+    resolved_flow_window = (
+        flow_window
+        if flow_window is not None
+        else cfg.analyze_swing_config.flow_detail_window_sessions
+    )
+
     if capital is None:
         _cfg = get_swing_default("capital")
         if _cfg is not None:
@@ -281,14 +272,21 @@ def swing(
     include_risk_detail = with_risk_detail or explain or full
     include_market_detail = with_market_detail or explain or full
 
+    smart_money_brokers = set(cfg.swing_config.smart_money_brokers)
+    noise_brokers = set(cfg.swing_config.noise_brokers)
+    broker_weights: dict[str, Decimal] = {
+        **{code: cfg.swing_config.smart_weight for code in smart_money_brokers},
+        **{code: cfg.swing_config.noise_weight for code in noise_brokers},
+    }
+
     workflow = create_swing_analysis_workflow(
         db_path=resolved_db,
         setup_name=setup_name,
-        swing_config=SWING_CONFIG,
-        analyze_config=ANALYZE_SWING_CONFIG,
-        smart_money_brokers=SMART_MONEY_BROKERS,
-        noise_brokers=NOISE_BROKERS,
-        broker_weights=BROKER_WEIGHTS,
+        swing_config=cfg.swing_config,
+        analyze_config=cfg.analyze_swing_config,
+        smart_money_brokers=smart_money_brokers,
+        noise_brokers=noise_brokers,
+        broker_weights=broker_weights,
     )
     try:
         workflow_response = workflow.execute(
@@ -298,7 +296,7 @@ def swing(
                 strategy_name=strategy_evidence_name,
                 setup_name=setup_name,
                 window=window,
-                flow_window=flow_window,
+                flow_window=resolved_flow_window,
                 capital=capital,
                 risk_pct=risk_pct,
                 entry_price=entry_price,
@@ -343,11 +341,23 @@ def swing(
     if output_format == "json":
         out = workflow_response.to_dict(
             strategy_name=strategy_evidence_name,
-            max_hold_days=SWING_BACKTEST_CONFIG.max_hold_days,
+            max_hold_days=cfg.swing_backtest_config.max_hold_days,
             include_sentiment=include_sentiment,
         )
         typer.echo(json.dumps(out, indent=2, default=str))
         return
+
+    display_config = SwingDisplayConfig(
+        enter_min_score=cfg.swing_config.enter_min_score,
+        watch_min_score=cfg.swing_config.watch_min_score,
+        coiled_spring_bb_pctile=cfg.swing_config.coiled_spring_bb_pctile,
+        coiled_spring_min_score=cfg.swing_config.coiled_spring_min_score,
+        strong_min_score=cfg.swing_config.strong_min_score,
+        strong_min_streak=cfg.swing_config.strong_min_streak,
+        building_min_score=cfg.swing_config.building_min_score,
+        building_min_streak=cfg.swing_config.building_min_streak,
+        foreign_bounce_max_hold_days=cfg.swing_backtest_config.max_hold_days,
+    )
 
     ctx = SwingOutputDisplayContext(
         ticker=ticker_upper,
@@ -367,7 +377,7 @@ def swing(
             with_technical_gate=with_technical_gate,
             sentiment_verbose=sentiment_verbose,
         ),
-        config=_DISPLAY_CONFIG,
+        config=display_config,
         atr_value=atr_value,
         sizing=sizing,
         setup_sizing=setup_sizing,

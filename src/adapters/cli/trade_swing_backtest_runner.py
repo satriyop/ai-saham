@@ -4,6 +4,7 @@ Shared runner helper for swing backtesting and tuning.
 Layer: Adapter
 """
 
+from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -30,6 +31,7 @@ from src.infrastructure.composition.indicator_registry_factory import (
     create_indicator_registry,
 )
 from src.infrastructure.config.accumulation_screener_config import (
+    AccumulationScreenerConfig,
     load_accumulation_screener_config,
 )
 from src.infrastructure.config.app_config import APP_CFG
@@ -38,21 +40,36 @@ from src.infrastructure.config.config_backed_market_context_provider import (
 )
 from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 from src.infrastructure.config.swing_backtest_config import (
+    SwingBacktestConfig,
+)
+from src.infrastructure.config.swing_backtest_config import (
     load_swing_backtest_config as _load_swing_backtest_config,
 )
+from src.infrastructure.config.swing_config import SwingConfig
 from src.infrastructure.config.swing_config import load_swing_config as _load_swing_config
 from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
 DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
-_SC = _load_swing_config()
-_BT = _load_swing_backtest_config()
-_ASC = load_accumulation_screener_config()
 
 
-def _setup_config() -> SwingSetupCatalogConfig:
-    return build_swing_setup_catalog_config(_SC)
+@dataclass(frozen=True)
+class SwingBacktestRunnerConfig:
+    swing_config: SwingConfig
+    backtest_config: SwingBacktestConfig
+    accumulation_config: AccumulationScreenerConfig
+    setup_config: SwingSetupCatalogConfig
+
+
+def load_swing_backtest_runner_config() -> SwingBacktestRunnerConfig:
+    swing_config = _load_swing_config()
+    return SwingBacktestRunnerConfig(
+        swing_config=swing_config,
+        backtest_config=_load_swing_backtest_config(),
+        accumulation_config=load_accumulation_screener_config(),
+        setup_config=build_swing_setup_catalog_config(swing_config),
+    )
 
 
 def _parse_regime_filter(value: str | None) -> tuple[str, ...]:
@@ -87,6 +104,7 @@ def _run_swing_backtest(
     benchmark: str,
     db_path: Path | None,
     announce: bool,
+    config: SwingBacktestRunnerConfig | None = None,
 ) -> SwingBacktestResponse:
     setup_name = setup.lower()
     if setup_name not in AVAILABLE_SWING_SETUPS:
@@ -136,6 +154,8 @@ def _run_swing_backtest(
             f"setup={setup_name} | max positions={max_positions}..."
         )
 
+    runner_config = config or load_swing_backtest_runner_config()
+
     broker_repo = SQLiteBrokerRepository(resolved_db)
     market_repo = SQLiteMarketRepository(db_path=resolved_db)
     use_case = SwingBacktestUseCase(
@@ -143,7 +163,7 @@ def _run_swing_backtest(
         market_repository=market_repo,
         indicator_registry=create_indicator_registry(),
         rules_loader=RulesYamlLoader(),
-        derived_feature_policy=_ASC.derived_features,
+        derived_feature_policy=runner_config.accumulation_config.derived_features,
         risk_engine=create_configured_risk_engine(resolved_db, with_enrichment=True),
         market_context_provider=ConfigBackedMarketContextProvider(
             market_repository=market_repo,
@@ -166,16 +186,16 @@ def _run_swing_backtest(
             include_regime=with_regime or bool(allowed_regimes),
             benchmark_ticker=benchmark,
             allowed_regimes=allowed_regimes,
-            setup_targets=_SC.setup_targets,
-            setup_config=_setup_config(),
-            resistance_gate_enabled=_SC.resistance_gate_enabled,
-            resistance_headroom_min_pct=_SC.resistance_headroom_min_pct,
-            ex_date_warning_days=_SC.ex_date_warning_days,
-            forward_data_lookahead_days=_BT.forward_data_lookahead_days,
-            same_day_exit_priority=_BT.same_day_exit_priority,
+            setup_targets=runner_config.swing_config.setup_targets,
+            setup_config=runner_config.setup_config,
+            resistance_gate_enabled=runner_config.swing_config.resistance_gate_enabled,
+            resistance_headroom_min_pct=runner_config.swing_config.resistance_headroom_min_pct,
+            ex_date_warning_days=runner_config.swing_config.ex_date_warning_days,
+            forward_data_lookahead_days=runner_config.backtest_config.forward_data_lookahead_days,
+            same_day_exit_priority=runner_config.backtest_config.same_day_exit_priority,
             attribution_bucket_policy=AttributionBucketPolicy(
-                high_min_score=_BT.attribution_high_min_score,
-                mid_min_score=_BT.attribution_mid_min_score,
+                high_min_score=runner_config.backtest_config.attribution_high_min_score,
+                mid_min_score=runner_config.backtest_config.attribution_mid_min_score,
             ),
         ))
     except ValueError as e:

@@ -16,6 +16,7 @@ from src.adapters.cli.screen_accum_enrichment_display import (
 )
 from src.adapters.cli.screen_accum_formatters import (
     _STRAT_SYMBOL,
+    AccumulationDisplayConfig,
     _data_freshness,
     _phase_cell,
     _price_text,
@@ -25,19 +26,10 @@ from src.adapters.cli.screen_accum_formatters import (
 from src.application.dto.accumulation_screen import (
     AccumulationScreenResponse,
 )
-from src.infrastructure.config.accumulation_screener_config import (
-    load_accumulation_screener_config as _load_accumulation_screener_config,
-)
-from src.infrastructure.config.swing_config import (
-    load_swing_config as _load_swing_config,
-)
-
-_SC = _load_swing_config()
-_ASC = _load_accumulation_screener_config()
 
 
-def _scoring_definitions_panel():
-    p = _ASC.foreign_flow_score_policy
+def _scoring_definitions_panel(display_config: AccumulationDisplayConfig):
+    p = display_config.foreign_flow_score_policy
 
     accum_table = compact_table()
     accum_table.add_column("Factor", style="bold")
@@ -140,6 +132,7 @@ def display_results(
     show_top_broker: bool,
     vwap_only: bool,
     squeeze_only: bool,
+    display_config: AccumulationDisplayConfig,
     include_explanation: bool = False,
     strategy_signals: dict[str, str] | None = None,
     strategy_name: str | None = None,
@@ -152,7 +145,7 @@ def display_results(
         candidates = [
             c for c in candidates
             if c.bb_width_pctile is not None
-            and c.bb_width_pctile <= _ASC.display.coiled_spring_bb_pctile
+            and c.bb_width_pctile <= display_config.coiled_spring_bb_pctile
         ]
 
     candidates = candidates[:top_n]
@@ -227,9 +220,9 @@ def display_results(
 
     for i, c in enumerate(candidates, 1):
         # Color flow score
-        if c.foreign_flow_score >= _ASC.display.enter_min_foreign_flow_score:
+        if c.foreign_flow_score >= display_config.enter_min_foreign_flow_score:
             score_style = "green"
-        elif c.foreign_flow_score >= _ASC.display.watch_min_foreign_flow_score:
+        elif c.foreign_flow_score >= display_config.watch_min_foreign_flow_score:
             score_style = "yellow"
         else:
             score_style = ""
@@ -295,7 +288,7 @@ def display_results(
             row.append(Text(sym, style=strat_style))
         action_table.add_row(*row)
 
-        for evidence_row in _evidence_factor_rows(c):
+        for evidence_row in _evidence_factor_rows(c, display_config):
             if show_context_ticker:
                 evidence_table.add_row(evidence_row[0], c.ticker, *evidence_row[1:])
             else:
@@ -488,4 +481,4 @@ def display_results(
             title="Run Context",
         )
     )
-    console().print(_scoring_definitions_panel())
+    console().print(_scoring_definitions_panel(display_config))

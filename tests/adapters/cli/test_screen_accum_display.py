@@ -7,6 +7,9 @@ from src.adapters.cli.screen_accum_display import (
     display_multi,
     display_results,
 )
+from src.adapters.cli.screen_accum_formatters import (
+    accumulation_display_config_from_screener,
+)
 from src.application.dto.accumulation_screen import (
     AccumulationScreenResponse,
 )
@@ -14,7 +17,10 @@ from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 from src.domain.value_objects.risk_assessment import RiskAssessment
 from src.domain.value_objects.signal_assessment import SignalStrength
 from src.domain.value_objects.trade_setup import SetupAction, TradeSetup
+from src.infrastructure.config.accumulation_screener_config import load_accumulation_screener_config
 from tests.adapters.cli.screen_accum_test_fixtures import _candidate
+
+_CFG = accumulation_display_config_from_screener(load_accumulation_screener_config())
 
 
 def test_display_results_renders_rich_accumulation_panel(capsys):
@@ -34,6 +40,7 @@ def test_display_results_renders_rich_accumulation_panel(capsys):
         show_top_broker=False,
         vwap_only=False,
         squeeze_only=False,
+        display_config=_CFG,
         include_explanation=False,
     )
 
@@ -67,6 +74,7 @@ def test_display_results_renders_explanation_panels_when_requested(capsys):
         show_top_broker=False,
         vwap_only=False,
         squeeze_only=False,
+        display_config=_CFG,
         include_explanation=True,
     )
 
@@ -125,6 +133,7 @@ def test_display_results_renders_blocked_risk_diagnostics(capsys):
         show_top_broker=False,
         vwap_only=False,
         squeeze_only=False,
+        display_config=_CFG,
         include_explanation=False,
     )
 
@@ -162,6 +171,7 @@ def test_display_multi_renders_rich_accumulation_panel(capsys):
         sort_by="avg",
         squeeze_only=False,
         screened_at=date(2026, 6, 19),
+        display_config=_CFG,
     )
 
     out = capsys.readouterr().out
@@ -201,6 +211,7 @@ def test_display_results_renders_phase_column_and_note(capsys):
         show_top_broker=False,
         vwap_only=False,
         squeeze_only=False,
+        display_config=_CFG,
         include_explanation=False,
     )
 
@@ -228,6 +239,7 @@ def test_display_results_shows_unknown_phase_when_detection_unavailable(capsys):
         show_top_broker=False,
         vwap_only=False,
         squeeze_only=False,
+        display_config=_CFG,
         include_explanation=False,
     )
 

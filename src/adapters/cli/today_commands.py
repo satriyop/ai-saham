@@ -40,7 +40,6 @@ from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBroker
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
 DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
-_ASC = load_accumulation_screener_config()
 
 
 def _parse_date(value: str | None) -> date | None:
@@ -74,6 +73,7 @@ def today(
     as_of = _parse_date(date_str)
     market_repo = SQLiteMarketRepository(db_path)
     broker_repo = SQLiteBrokerRepository(db_path)
+    accumulation_config = load_accumulation_screener_config()
     try:
         regime_tickers = resolve_tickers(
             universe=APP_CFG.analysis.regime_universe,
@@ -97,7 +97,7 @@ def today(
             market_repository=market_repo,
             indicator_registry=create_indicator_registry(),
             rules_loader=RulesYamlLoader(),
-            derived_feature_policy=_ASC.derived_features,
+            derived_feature_policy=accumulation_config.derived_features,
         ),
         universe_loader=YamlUniverseConfigLoader(),
     )

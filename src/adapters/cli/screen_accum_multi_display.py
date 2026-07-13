@@ -11,16 +11,11 @@ from datetime import date
 from rich.text import Text
 
 from src.adapters.cli.rich_display import compact_table, console, panel
-from src.adapters.cli.screen_accum_formatters import classify_pattern
+from src.adapters.cli.screen_accum_formatters import AccumulationDisplayConfig, classify_pattern
 from src.application.dto.accumulation_screen import (
     AccumulationCandidate,
     AccumulationScreenResponse,
 )
-from src.infrastructure.config.accumulation_screener_config import (
-    load_accumulation_screener_config as _load_accumulation_screener_config,
-)
-
-_ASC = _load_accumulation_screener_config()
 
 
 def display_multi(
@@ -30,6 +25,7 @@ def display_multi(
     sort_by: str,
     squeeze_only: bool,
     screened_at: date,
+    display_config: AccumulationDisplayConfig,
     broker_quality = None,
     include_explanation: bool = False,
 ) -> None:
@@ -45,9 +41,11 @@ def display_multi(
     # Apply squeeze filter
     if squeeze_only:
         by_ticker = {
-            tk: pw for tk, pw in by_ticker.items()
+            tk: pw
+            for tk, pw in by_ticker.items()
             if any(
-                c.bb_width_pctile is not None and c.bb_width_pctile <= 0.20
+                c.bb_width_pctile is not None
+                and c.bb_width_pctile <= display_config.coiled_spring_bb_pctile
                 for c in pw.values()
             )
         }
@@ -101,14 +99,14 @@ def display_multi(
                 score_cells.append(Text("—", style="bright_black"))
                 continue
             style = "green" if candidate.foreign_flow_score >= (
-                _ASC.display.enter_min_foreign_flow_score
+                display_config.enter_min_foreign_flow_score
             ) else (
                 "yellow" if candidate.foreign_flow_score >= (
-                    _ASC.display.watch_min_foreign_flow_score
+                    display_config.watch_min_foreign_flow_score
                 ) else ""
             )
             score_cells.append(Text(f"{candidate.foreign_flow_score:.0f}", style=style))
-        pattern = classify_pattern(windows, pw)
+        pattern = classify_pattern(windows, pw, display_config)
         trend = next((c.trend for w in sorted(windows) for c in [pw.get(w)] if c), "—")
         quality = (broker_quality or {}).get(tk)
         brk = quality.label if quality else "n/a"
@@ -138,9 +136,11 @@ def display_multi(
         f"Provider: {sample_resp.provider}"
     )
 
+    enter_score = display_config.enter_min_foreign_flow_score
+    watch_score = display_config.watch_min_foreign_flow_score
     meta_table.add_row(
         "Scores",
-        "Accum ≥58 green | ≥33 yellow | <33 white"
+        f"Accum ≥{enter_score:g} green | ≥{watch_score:g} yellow | <{watch_score:g} white"
     )
 
     meta_table.add_row(

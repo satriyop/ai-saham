@@ -5,7 +5,6 @@ from decimal import Decimal
 
 from typer.testing import CliRunner
 
-from src.adapters.cli import analyze_swing_commands as swing_cli
 from src.adapters.cli.analyze_swing_commands import FOREIGN_BOUNCE_SETUP_NAME
 from src.application.dto.accumulation_screen import AccumulationCandidate
 from src.application.services.swing_backtest_attribution import (
@@ -52,14 +51,23 @@ runner = CliRunner()
 
 
 def _build_broker_detail(*args, **kwargs):
+    from src.adapters.cli.analyze_swing_command_config import load_analyze_swing_command_config
+    cfg = load_analyze_swing_command_config()
+    smart_money_brokers = set(cfg.swing_config.smart_money_brokers)
+    noise_brokers = set(cfg.swing_config.noise_brokers)
+    broker_weights = {
+        **{code: cfg.swing_config.smart_weight for code in smart_money_brokers},
+        **{code: cfg.swing_config.noise_weight for code in noise_brokers},
+    }
     return _build_broker_detail_base(
         *args,
         **kwargs,
-        smart_money_brokers=swing_cli.SMART_MONEY_BROKERS,
-        noise_brokers=swing_cli.NOISE_BROKERS,
-        broker_weights=swing_cli.BROKER_WEIGHTS,
-        smart_share_threshold_pct=swing_cli.SWING_CONFIG.smart_share_threshold_pct,
+        smart_money_brokers=smart_money_brokers,
+        noise_brokers=noise_brokers,
+        broker_weights=broker_weights,
+        smart_share_threshold_pct=cfg.swing_config.smart_share_threshold_pct,
     )
+
 
 
 class FakeBrokerSummaryRepository:

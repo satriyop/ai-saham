@@ -9,21 +9,40 @@ Neither command module owns the other's dependencies.
 Layer: Adapter
 """
 
+from dataclasses import dataclass
+
 from src.application.services.swing_setup_catalog import build_swing_setup_catalog_config
 from src.application.use_case.evaluate_swing_setup_use_case import SwingSetupCatalogConfig
 from src.infrastructure.config.accumulation_screener_config import (
+    AccumulationScreenerConfig,
     load_accumulation_screener_config,
 )
-from src.infrastructure.config.analyze_swing_config import load_analyze_swing_config
-from src.infrastructure.config.swing_backtest_config import load_swing_backtest_config
-from src.infrastructure.config.swing_config import load_swing_config
+from src.infrastructure.config.analyze_swing_config import (
+    AnalyzeSwingConfig,
+    load_analyze_swing_config,
+)
+from src.infrastructure.config.swing_backtest_config import (
+    SwingBacktestConfig,
+    load_swing_backtest_config,
+)
+from src.infrastructure.config.swing_config import SwingConfig, load_swing_config
 
-# Load split swing workflow config; fall back to typed defaults on any error.
-SWING_CONFIG = load_swing_config()
-SWING_BACKTEST_CONFIG = load_swing_backtest_config()
-ANALYZE_SWING_CONFIG = load_analyze_swing_config()
-ACCUMULATION_SCREENER_CONFIG = load_accumulation_screener_config()
+
+@dataclass(frozen=True)
+class AnalyzeSwingCommandConfig:
+    swing_config: SwingConfig
+    swing_backtest_config: SwingBacktestConfig
+    analyze_swing_config: AnalyzeSwingConfig
+    accumulation_screener_config: AccumulationScreenerConfig
+    setup_config: SwingSetupCatalogConfig
 
 
-def setup_config() -> SwingSetupCatalogConfig:
-    return build_swing_setup_catalog_config(SWING_CONFIG)
+def load_analyze_swing_command_config() -> AnalyzeSwingCommandConfig:
+    swing_config = load_swing_config()
+    return AnalyzeSwingCommandConfig(
+        swing_config=swing_config,
+        swing_backtest_config=load_swing_backtest_config(),
+        analyze_swing_config=load_analyze_swing_config(),
+        accumulation_screener_config=load_accumulation_screener_config(),
+        setup_config=build_swing_setup_catalog_config(swing_config),
+    )

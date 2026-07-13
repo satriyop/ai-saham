@@ -11,14 +11,9 @@ from typing import Any
 from rich.text import Text
 
 from src.adapters.cli.rich_display import compact_table
-from src.adapters.cli.screen_accum_formatters import notation_detail
+from src.adapters.cli.screen_accum_formatters import AccumulationDisplayConfig, notation_detail
 from src.application.dto.accumulation_screen import AccumulationCandidate
 from src.domain.services.trading_calendar import trading_sessions_apart
-from src.infrastructure.config.accumulation_screener_config import (
-    load_accumulation_screener_config as _load_accumulation_screener_config,
-)
-
-_ASC = _load_accumulation_screener_config()
 
 
 def _detail_status(style_key: str) -> Text:
@@ -51,7 +46,10 @@ def _add_detail_row(
     table.add_row(*row)
 
 
-def _evidence_factor_rows(candidate: AccumulationCandidate) -> list[tuple[str, ...]]:
+def _evidence_factor_rows(
+    candidate: AccumulationCandidate,
+    display_config: AccumulationDisplayConfig
+) -> list[tuple[str, ...]]:
     bd = (
         candidate.foreign_flow_score_breakdown.breakdown_dict
         if candidate.foreign_flow_score_breakdown else {}
@@ -66,7 +64,7 @@ def _evidence_factor_rows(candidate: AccumulationCandidate) -> list[tuple[str, .
         f"{candidate.bb_width_pctile * 100:.0f}%"
         if candidate.bb_width_pctile is not None else "-"
     )
-    bb_scored = _ASC.foreign_flow_score_policy.bb_squeeze.enabled
+    bb_scored = display_config.foreign_flow_score_policy.bb_squeeze.enabled
     bb_pts = f"{bd.get('bb', 0):.1f}" if bb_scored else "—"
     bb_means = (
         "Volatility squeeze" if bb_scored

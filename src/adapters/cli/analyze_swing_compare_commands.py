@@ -17,10 +17,7 @@ from typing import Annotated, Optional
 import typer
 
 from src.adapters.cli.analyze_swing_command_config import (
-    ACCUMULATION_SCREENER_CONFIG,
-    SWING_BACKTEST_CONFIG,
-    SWING_CONFIG,
-    setup_config,
+    load_analyze_swing_command_config,
 )
 from src.adapters.cli.analyze_swing_display import display_swing_compare
 from src.adapters.cli.risk_engine_helper import create_configured_risk_engine
@@ -104,37 +101,37 @@ def swing_compare(
         typer.Option("--end", help="Backtest end date, YYYY-MM-DD (default: today)"),
     ] = None,
     capital: Annotated[
-        int,
+        Optional[int],
         typer.Option("--capital", "-c", help="Initial capital in IDR", min=1),
-    ] = SWING_BACKTEST_CONFIG.capital,
+    ] = None,
     risk_pct: Annotated[
-        float,
+        Optional[float],
         typer.Option("--risk-pct", help="% of capital risked per trade", min=0.01),
-    ] = SWING_BACKTEST_CONFIG.risk_pct,
+    ] = None,
     max_positions: Annotated[
-        int,
+        Optional[int],
         typer.Option("--max-positions", help="Maximum concurrent open positions", min=1),
-    ] = SWING_BACKTEST_CONFIG.max_positions,
+    ] = None,
     take_profit: Annotated[
-        float,
+        Optional[float],
         typer.Option("--take-profit", help="Take-profit percentage", min=0.01),
-    ] = SWING_BACKTEST_CONFIG.take_profit_pct,
+    ] = None,
     stop_loss: Annotated[
-        float,
+        Optional[float],
         typer.Option("--stop-loss", help="Stop-loss percentage", min=0.01),
-    ] = SWING_BACKTEST_CONFIG.stop_loss_pct,
+    ] = None,
     max_hold: Annotated[
-        int,
+        Optional[int],
         typer.Option("--max-hold", help="Maximum holding period in trading days", min=1),
-    ] = SWING_BACKTEST_CONFIG.max_hold_days,
+    ] = None,
     cost_bps: Annotated[
-        float,
+        Optional[float],
         typer.Option(
             "--cost-bps",
             help="One-way transaction cost in basis points (20 ~= 0.20%)",
             min=0,
         ),
-    ] = SWING_BACKTEST_CONFIG.cost_bps,
+    ] = None,
     benchmark: Annotated[
         str,
         typer.Option("--benchmark", help="Benchmark ticker for regime context"),
@@ -200,6 +197,33 @@ def swing_compare(
             f"{start_date} to {end_date}..."
         )
 
+    cfg = load_analyze_swing_command_config()
+
+    resolved_capital = (
+        capital if capital is not None else cfg.swing_backtest_config.capital
+    )
+    resolved_risk_pct = (
+        risk_pct if risk_pct is not None else cfg.swing_backtest_config.risk_pct
+    )
+    resolved_max_positions = (
+        max_positions if max_positions is not None
+        else cfg.swing_backtest_config.max_positions
+    )
+    resolved_take_profit = (
+        take_profit if take_profit is not None
+        else cfg.swing_backtest_config.take_profit_pct
+    )
+    resolved_stop_loss = (
+        stop_loss if stop_loss is not None
+        else cfg.swing_backtest_config.stop_loss_pct
+    )
+    resolved_max_hold = (
+        max_hold if max_hold is not None else cfg.swing_backtest_config.max_hold_days
+    )
+    resolved_cost_bps = (
+        cost_bps if cost_bps is not None else cfg.swing_backtest_config.cost_bps
+    )
+
     broker_repo = SQLiteBrokerRepository(resolved_db)
     market_repo = SQLiteMarketRepository(db_path=resolved_db)
     use_case = SwingBacktestUseCase(
@@ -207,7 +231,7 @@ def swing_compare(
         market_repository=market_repo,
         indicator_registry=create_indicator_registry(),
         rules_loader=RulesYamlLoader(),
-        derived_feature_policy=ACCUMULATION_SCREENER_CONFIG.derived_features,
+        derived_feature_policy=cfg.accumulation_screener_config.derived_features,
         risk_engine=create_configured_risk_engine(resolved_db, with_enrichment=True),
         market_context_provider=ConfigBackedMarketContextProvider(
             market_repository=market_repo,
@@ -223,22 +247,22 @@ def swing_compare(
                 start_date=start_date,
                 end_date=end_date,
                 setup=setup_name,
-                capital=Decimal(str(capital)),
-                risk_pct=Decimal(str(risk_pct)) / Decimal("100"),
-                max_positions=max_positions,
-                take_profit_pct=Decimal(str(take_profit)),
-                stop_loss_pct=Decimal(str(stop_loss)),
-                max_hold_days=max_hold,
-                cost_bps=Decimal(str(cost_bps)),
+                capital=Decimal(str(resolved_capital)),
+                risk_pct=Decimal(str(resolved_risk_pct)) / Decimal("100"),
+                max_positions=resolved_max_positions,
+                take_profit_pct=Decimal(str(resolved_take_profit)),
+                stop_loss_pct=Decimal(str(resolved_stop_loss)),
+                max_hold_days=resolved_max_hold,
+                cost_bps=Decimal(str(resolved_cost_bps)),
                 include_regime=True,
                 benchmark_ticker=benchmark,
                 allowed_regimes=allowed_regimes,
-                setup_config=setup_config(),
-                resistance_gate_enabled=SWING_CONFIG.resistance_gate_enabled,
-                resistance_headroom_min_pct=SWING_CONFIG.resistance_headroom_min_pct,
-                ex_date_warning_days=SWING_CONFIG.ex_date_warning_days,
-                forward_data_lookahead_days=SWING_BACKTEST_CONFIG.forward_data_lookahead_days,
-                same_day_exit_priority=SWING_BACKTEST_CONFIG.same_day_exit_priority,
+                setup_config=cfg.setup_config,
+                resistance_gate_enabled=cfg.swing_config.resistance_gate_enabled,
+                resistance_headroom_min_pct=cfg.swing_config.resistance_headroom_min_pct,
+                ex_date_warning_days=cfg.swing_config.ex_date_warning_days,
+                forward_data_lookahead_days=cfg.swing_backtest_config.forward_data_lookahead_days,
+                same_day_exit_priority=cfg.swing_backtest_config.same_day_exit_priority,
             ))
             rows.append((variant, response))
     except ValueError as e:

@@ -18,6 +18,10 @@ from src.adapters.cli.screen_accum_display import (
     display_results,
     print_column_guide,
 )
+from src.adapters.cli.screen_accum_formatters import (
+    AccumulationDisplayConfig,
+    accumulation_display_config_from_screener,
+)
 from src.adapters.cli.screen_accum_workflow_factory import (
     create_run_accumulation_screen_workflow_use_case,
 )
@@ -35,9 +39,6 @@ from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.config.swing_config import load_swing_config as _load_swing_config
 from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
-
-_SC = _load_swing_config()
-_ASC = _load_accumulation_screener_config(Path(APP_CFG.config_paths.accumulation_screener))
 
 DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 
@@ -202,6 +203,12 @@ def accumulation_run(
 
     resolved_db = db_path or DEFAULT_DB_PATH
 
+    swing_config = _load_swing_config()
+    accumulation_config = _load_accumulation_screener_config(
+        Path(APP_CFG.config_paths.accumulation_screener)
+    )
+    display_config = accumulation_display_config_from_screener(accumulation_config)
+
     try:
         ticker_list = resolve_tickers(
             universe=universe,
@@ -243,8 +250,8 @@ def accumulation_run(
 
     workflow_uc = create_run_accumulation_screen_workflow_use_case(
         db_path=resolved_db,
-        screener_config=_ASC,
-        swing_config=_SC,
+        screener_config=accumulation_config,
+        swing_config=swing_config,
     )
 
     result = workflow_uc.execute(
@@ -279,6 +286,7 @@ def accumulation_run(
             squeeze_only=squeeze_only,
             output_format=output_format,
             explain=explain,
+            display_config=display_config,
         )
         return
 
@@ -292,6 +300,7 @@ def accumulation_run(
         output_format=output_format,
         explain=explain,
         strategy=strategy,
+        display_config=display_config,
     )
 
 
@@ -304,6 +313,7 @@ def _render_multi(
     squeeze_only: bool,
     output_format: str,
     explain: bool,
+    display_config: AccumulationDisplayConfig,
 ) -> None:
     multi_results = result.multi_results
     broker_quality = result.broker_quality
@@ -339,6 +349,7 @@ def _render_multi(
         sort_by=sort_by,
         squeeze_only=squeeze_only,
         screened_at=screened_at,
+        display_config=display_config,
         broker_quality=broker_quality,
         include_explanation=explain,
     )
@@ -355,6 +366,7 @@ def _render_single(
     output_format: str,
     explain: bool,
     strategy: str | None,
+    display_config: AccumulationDisplayConfig,
 ) -> None:
     response = result.response
     if response is None:
@@ -381,6 +393,7 @@ def _render_single(
         show_top_broker=show_top_broker,
         vwap_only=vwap_only,
         squeeze_only=squeeze_only,
+        display_config=display_config,
         include_explanation=explain,
         strategy_signals=result.strategy_signals or None,
         strategy_name=strategy,

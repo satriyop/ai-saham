@@ -6,21 +6,34 @@ Layer: Adapter
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from decimal import Decimal
+from typing import Any
 
 import typer
 from rich.text import Text
 
 from src.application.dto.accumulation_screen import AccumulationCandidate
-from src.infrastructure.config.accumulation_screener_config import (
-    load_accumulation_screener_config as _load_accumulation_screener_config,
-)
-from src.infrastructure.config.swing_config import (
-    load_swing_config as _load_swing_config,
-)
 
-_SC = _load_swing_config()
-_ASC = _load_accumulation_screener_config()
+
+@dataclass(frozen=True)
+class AccumulationDisplayConfig:
+    enter_min_foreign_flow_score: float
+    watch_min_foreign_flow_score: float
+    coiled_spring_min_foreign_flow_score: float
+    coiled_spring_bb_pctile: float
+    foreign_flow_score_policy: Any
+
+
+def accumulation_display_config_from_screener(config) -> AccumulationDisplayConfig:
+    return AccumulationDisplayConfig(
+        enter_min_foreign_flow_score=config.display.enter_min_foreign_flow_score,
+        watch_min_foreign_flow_score=config.display.watch_min_foreign_flow_score,
+        coiled_spring_min_foreign_flow_score=config.display.coiled_spring_min_foreign_flow_score,
+        coiled_spring_bb_pctile=config.display.coiled_spring_bb_pctile,
+        foreign_flow_score_policy=config.foreign_flow_score_policy,
+    )
+
 
 _STRAT_SYMBOL = {"LOW_RISK": "↑", "HIGH_RISK": "↓", "MODERATE": "~"}
 
@@ -59,13 +72,13 @@ def format_value(value: Decimal) -> str:
     return f"{sign}{abs_v:.0f}"
 
 
-def fmt_score(s: float | None) -> str:
+def fmt_score(s: float | None, display_config: AccumulationDisplayConfig) -> str:
     """Format a score with color for table cells."""
     if s is None:
         return typer.style("   —  ", fg=typer.colors.BRIGHT_BLACK)
-    if s >= _ASC.display.enter_min_foreign_flow_score:
+    if s >= display_config.enter_min_foreign_flow_score:
         return typer.style(f"{s:>6.1f}", fg=typer.colors.GREEN)
-    if s >= _ASC.display.watch_min_foreign_flow_score:
+    if s >= display_config.watch_min_foreign_flow_score:
         return typer.style(f"{s:>6.1f}", fg=typer.colors.YELLOW)
     return typer.style(f"{s:>6.1f}", fg=typer.colors.WHITE)
 
@@ -73,9 +86,10 @@ def fmt_score(s: float | None) -> str:
 def classify_pattern(
     windows: list[int],
     candidates_by_window: dict[int, AccumulationCandidate | None],
+    display_config: AccumulationDisplayConfig,
 ) -> str:
     """Label the multi-window pattern for a ticker."""
-    threshold = _ASC.display.coiled_spring_min_foreign_flow_score
+    threshold = display_config.coiled_spring_min_foreign_flow_score
     hot = [
         w for w in windows
         if candidates_by_window.get(w) and candidates_by_window[w].foreign_flow_score >= threshold
@@ -88,7 +102,7 @@ def classify_pattern(
             c
             and c.foreign_flow_score >= threshold
             and c.bb_width_pctile is not None
-            and c.bb_width_pctile <= _ASC.display.coiled_spring_bb_pctile
+            and c.bb_width_pctile <= display_config.coiled_spring_bb_pctile
         ):
             return "coiled spring"
 
