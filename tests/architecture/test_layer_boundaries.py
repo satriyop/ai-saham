@@ -55,49 +55,108 @@ FORBIDDEN_LIBRARY_IMPORTS = {
     },
 }
 
+
+@dataclass(frozen=True)
+class AllowlistEntry:
+    """Structured cleanup debt record for a legacy boundary violation.
+
+    Every field is required so an entry can never regress into a vague,
+    unowned permanent exception (see docs/code-convention-audit.md finding 2).
+    """
+
+    reason: str
+    cleanup_owner: str
+    canonical_fix: str
+    issue: str
+
+
+_RULES_LOADER_REASON = (
+    "LEGACY: application code calls infrastructure YAML loader directly; "
+    "predates architecture guard."
+)
+_RULES_LOADER_FIX = (
+    "Define an application-owned RulesSource port and have infrastructure "
+    "provide the RulesYamlLoader implementation behind it, so application "
+    "code depends only on the port."
+)
+
 # Baseline of pre-existing violations, captured before this guard existed.
 # Do NOT add new entries here for code written after this guard was added —
-# fix the import instead (e.g. have infrastructure return an application
-# policy/dataclass object rather than have application import the loader).
-BASELINE_ALLOWLIST = {
+# fix the import instead. Every entry is tracked cleanup debt with an owner
+# and a canonical fix direction; see docs/code-convention-audit.md finding 2.
+BASELINE_ALLOWLIST: dict[tuple[str, str], AllowlistEntry] = {
     (
         "src/application/services/strategy_loader.py",
         "src.infrastructure.config.rules_yaml_loader",
-    ): (
-        "LEGACY: application loader calls infrastructure YAML loader "
-        "directly; predates architecture guard. Do not copy."
+    ): AllowlistEntry(
+        reason=_RULES_LOADER_REASON,
+        cleanup_owner="rules_loader_boundary",
+        canonical_fix=_RULES_LOADER_FIX,
+        issue="code-convention-audit finding 2",
     ),
     (
         "src/application/use_case/backtest_use_case.py",
         "src.infrastructure.config.rules_yaml_loader",
-    ): (
-        "LEGACY: application use case calls infrastructure YAML loader "
-        "directly; predates architecture guard. Do not copy."
+    ): AllowlistEntry(
+        reason=_RULES_LOADER_REASON,
+        cleanup_owner="rules_loader_boundary",
+        canonical_fix=_RULES_LOADER_FIX,
+        issue="code-convention-audit finding 2",
     ),
     (
         "src/application/use_case/create_strategy_from_intent_use_case.py",
         "src.infrastructure.config.rules_yaml_loader",
-    ): (
-        "LEGACY: application use case calls infrastructure YAML loader "
-        "directly; predates architecture guard. Do not copy."
+    ): AllowlistEntry(
+        reason=_RULES_LOADER_REASON,
+        cleanup_owner="rules_loader_boundary",
+        canonical_fix=_RULES_LOADER_FIX,
+        issue="code-convention-audit finding 2",
     ),
     (
         "src/application/use_case/view_universe_summary_use_case.py",
         "src.infrastructure.persistence.sqlite_universe_summary_provider",
-    ): (
-        "LEGACY: application use case constructs infrastructure provider "
-        "directly; predates architecture guard. Do not copy."
+    ): AllowlistEntry(
+        reason=(
+            "LEGACY: application use case constructs infrastructure "
+            "provider directly; predates architecture guard."
+        ),
+        cleanup_owner="universe_summary_boundary",
+        canonical_fix=(
+            "Inject a UniverseSummaryProvider port into the use case "
+            "constructor and move SqliteUniverseSummaryProvider "
+            "construction to adapter/composition-root wiring."
+        ),
+        issue="code-convention-audit finding 2",
     ),
     (
         "src/domain/rules/technical_gate.py",
         "src.application.services.indicator_evaluator",
-    ): (
-        "LEGACY: TYPE_CHECKING-only forward reference for a constructor "
-        "parameter hint; not a runtime import but still ast-visible. "
-        "Predates architecture guard. Do not copy — prefer a "
-        "domain-level Protocol port."
+    ): AllowlistEntry(
+        reason=(
+            "LEGACY: TYPE_CHECKING-only forward reference for a "
+            "constructor parameter hint; not a runtime import but "
+            "still ast-visible."
+        ),
+        cleanup_owner="technical_gate_protocol",
+        canonical_fix=(
+            "Replace the TYPE_CHECKING import with a domain-level "
+            "Protocol port describing the indicator-evaluator "
+            "interface, so domain has no reference to the application "
+            "module even under TYPE_CHECKING."
+        ),
+        issue="code-convention-audit finding 2",
     ),
 }
+
+ALLOWLISTED_PATHS_REQUIRE_BOUNDARY_CLEANUP = frozenset(
+    {
+        "src/application/services/strategy_loader.py",
+        "src/application/use_case/backtest_use_case.py",
+        "src/application/use_case/create_strategy_from_intent_use_case.py",
+        "src/application/use_case/view_universe_summary_use_case.py",
+        "src/domain/rules/technical_gate.py",
+    }
+)
 
 
 def _iter_python_files():
@@ -130,9 +189,9 @@ def _layer_for(path: Path) -> str | None:
 
 def _matching_allowlist_key(path: Path, imported: str) -> tuple[str, str] | None:
     path_str = path.as_posix()
-    for key, reason in BASELINE_ALLOWLIST.items():
+    for key, entry in BASELINE_ALLOWLIST.items():
         allowed_path, allowed_import = key
-        if not reason:
+        if not entry.reason:
             raise AssertionError(f"Allowlist entry missing reason: {key}")
         if path_str != allowed_path:
             continue
@@ -180,3 +239,30 @@ def test_layer_boundaries_do_not_drift():
     assert not unused, "Stale BASELINE_ALLOWLIST entries (remove them): " + ", ".join(
         f"{path}:{imported}" for path, imported in sorted(unused)
     )
+
+
+_VAGUE_CANONICAL_FIX_MARKERS = ("TBD", "later", "legacy only", "unknown")
+
+
+def test_boundary_allowlist_entries_are_actionable_cleanup_debt():
+    for key, entry in BASELINE_ALLOWLIST.items():
+        assert entry.reason, f"{key}: reason must not be empty"
+        assert entry.cleanup_owner, f"{key}: cleanup_owner must not be empty"
+        assert entry.canonical_fix, f"{key}: canonical_fix must not be empty"
+        assert entry.issue, f"{key}: issue must not be empty"
+        assert "code-convention-audit" in entry.issue, (
+            f"{key}: issue must reference code-convention-audit, "
+            f"got {entry.issue!r}"
+        )
+        lowered_fix = entry.canonical_fix.lower()
+        for marker in _VAGUE_CANONICAL_FIX_MARKERS:
+            assert marker.lower() not in lowered_fix, (
+                f"{key}: canonical_fix must not contain vague text "
+                f"{marker!r}, got {entry.canonical_fix!r}"
+            )
+
+
+def test_allowlisted_paths_are_explicitly_tracked():
+    assert ALLOWLISTED_PATHS_REQUIRE_BOUNDARY_CLEANUP == {
+        path for path, _imported in BASELINE_ALLOWLIST
+    }
