@@ -257,6 +257,10 @@ If any answer is unclear, stop.
 ### Display Rules
 
 - Display modules render facts; they do not decide facts.
+- Display modules may be large only when every function renders one cohesive
+  surface. If unrelated panels share only scalar formatting helpers, split by
+  panel family and move shared scalar formatting into a narrow display
+  formatter module.
 - Any label derived from thresholds must either:
   - consume a label already computed by application/domain, or
   - clearly be named as presentation-only and backed by config/response metadata.

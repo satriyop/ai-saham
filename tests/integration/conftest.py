@@ -16,9 +16,9 @@ from pathlib import Path
 
 import pytest
 
+from src.application.formula.parser import parse
 from src.application.services.indicator_registry import IndicatorRegistry
 from src.domain.entities.candle import Candle
-from src.infrastructure.composition.indicator_registry_factory import create_indicator_registry
 from src.infrastructure.persistence.formula_storage import FormulaStorage
 
 # --- Workspace Fixtures ---
@@ -217,24 +217,42 @@ def simple_candles() -> list[Candle]:
 
 
 @pytest.fixture
-def registry_with_formulas(storage: FormulaStorage) -> IndicatorRegistry:
-    """Registry with pre-registered custom formulas.
+def registry_with_formulas() -> IndicatorRegistry:
+    """Pure application registry with custom formulas registered in memory.
 
     Includes:
     - SMOOTH_RSI: SMA(RSI(14), 10)
     - MY_RSI: RSI(14)
+
+    Does not touch formula storage or infrastructure composition. Use
+    `registry_loaded_from_formula_storage` for tests that specifically
+    verify persisted-formula loading.
     """
-    # Save formulas to storage
+    registry = IndicatorRegistry()
+    registry.register_formula("SMOOTH_RSI", parse("SMA(RSI(14), 10)"))
+    registry.register_formula("MY_RSI", parse("RSI(14)"))
+    return registry
+
+
+@pytest.fixture
+def registry_loaded_from_formula_storage(storage: FormulaStorage) -> IndicatorRegistry:
+    """Registry built via infrastructure composition from persisted formulas.
+
+    Exercises FormulaStorage persistence plus indicator_registry_factory
+    composition. Use this only for tests whose purpose is formula-storage/
+    composition integration.
+    """
+    from src.infrastructure.composition.indicator_registry_factory import (
+        create_indicator_registry,
+    )
+
     storage.save("SMOOTH_RSI", "SMA(RSI(14), 10)", intent="smoothed RSI")
     storage.save("MY_RSI", "RSI(14)", intent="14-day RSI")
 
-    # Create registry with formulas loaded
-    registry = create_indicator_registry(
+    return create_indicator_registry(
         formula_storage=storage,
         load_formulas=True,
     )
-
-    return registry
 
 
 @pytest.fixture

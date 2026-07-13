@@ -12,6 +12,11 @@ Audit goals:
 
 ## Findings
 
+Audit completion note: findings 3-15 were implemented and vetted across the
+July 2026 refactor batch. Focused harnesses passed during each review. The
+historical rationale and guardrails remain below as convention context for
+future audits.
+
 Status legend:
 - `OPEN`: not fixed.
 - `PARTIAL`: guardrail exists, but production cleanup remains.
@@ -89,7 +94,7 @@ Edge cases to watch:
 
 ### 3. Critical: `src/adapters/cli/screen_accum_commands.py` still owns workflow/policy branches
 
-Status: OPEN.
+Status: DONE.
 
 Pointer: `src/adapters/cli/screen_accum_commands.py`, 467 LOC.
 
@@ -117,7 +122,7 @@ Edge cases to watch:
 
 ### 4. Critical: `src/adapters/cli/fetch_market_commands.py` still owns provider/status workflow
 
-Status: OPEN.
+Status: DONE.
 
 Pointer: `src/adapters/cli/fetch_market_commands.py`, 478 LOC.
 
@@ -145,7 +150,7 @@ Edge cases to watch:
 
 ### 5. High: `src/adapters/cli/fetch_broker_commands.py` mixes command adapter, provider factory, direct provider calls, and persistence continuation
 
-Status: OPEN.
+Status: DONE.
 
 Pointer: `src/adapters/cli/fetch_broker_commands.py`, 487 LOC.
 
@@ -174,7 +179,7 @@ Edge cases to watch:
 
 ### 6. High: `src/adapters/cli/trade_accum_commands.py` is adapter plus workflow factory plus journal policy
 
-Status: OPEN.
+Status: DONE.
 
 Pointer: `src/adapters/cli/trade_accum_commands.py`, 339 LOC.
 
@@ -201,7 +206,7 @@ Edge cases to watch:
 
 ### 7. High: import-time config loading creates hidden global state in CLI modules
 
-Status: OPEN.
+Status: DONE.
 
 Pointers:
 - `src/adapters/cli/screen_accum_commands.py`: `_SC`, `_ASC`
@@ -234,7 +239,7 @@ Edge cases to watch:
 
 ### 8. High: duplicated config loading/wiring exists across swing and accumulation workflow factories
 
-Status: OPEN.
+Status: DONE.
 
 Pointers:
 - `src/adapters/cli/analyze_swing_workflow_factory.py`
@@ -265,7 +270,7 @@ Edge cases to watch:
 
 ### 9. High: `src/application/use_case/swing_analysis_workflow_use_case.py` remains a broad linear workflow
 
-Status: OPEN.
+Status: DONE.
 
 Pointer: `src/application/use_case/swing_analysis_workflow_use_case.py`, 538 LOC.
 
@@ -297,7 +302,7 @@ Edge cases to watch:
 
 ### 10. High: `src/domain/value_objects/signal_observation_fingerprint_serialization.py` is a persisted-schema warehouse in domain
 
-Status: OPEN.
+Status: DONE.
 
 Pointer: `src/domain/value_objects/signal_observation_fingerprint_serialization.py`, 565 LOC.
 
@@ -329,7 +334,7 @@ Edge cases to watch:
 
 ### 11. Medium: Stockbit PIT providers still repeat cache/schema/read/write patterns
 
-Status: OPEN.
+Status: DONE.
 
 Pointers:
 - `src/infrastructure/browser/stockbit_insider.py`, 508 LOC.
@@ -360,7 +365,7 @@ Edge cases to watch:
 
 ### 12. Medium: `src/adapters/cli/trade_swing_tuning_display.py` is a display pack for unrelated panels
 
-Status: OPEN.
+Status: DONE.
 
 Pointer: `src/adapters/cli/trade_swing_tuning_display.py`, 509 LOC.
 
@@ -390,7 +395,7 @@ Edge cases to watch:
 
 ### 13. Medium: `src/adapters/cli/analyze_swing_workflow_factory.py` is a mixed composition root and mini workflow
 
-Status: OPEN.
+Status: DONE.
 
 Pointer: `src/adapters/cli/analyze_swing_workflow_factory.py`, 280+ LOC.
 
@@ -419,7 +424,7 @@ Edge cases to watch:
 
 ### 14. Medium: `src/adapters/cli/screen_accum_workflow_factory.py` imports private bootstrap resolver and infrastructure config directly
 
-Status: OPEN.
+Status: DONE.
 
 Pointer: `src/adapters/cli/screen_accum_workflow_factory.py`.
 
@@ -444,7 +449,7 @@ Edge cases to watch:
 
 ### 15. Medium: integration tests use production bootstrap fixtures that hide boundary coupling
 
-Status: OPEN.
+Status: DONE.
 
 Pointer: `tests/integration/conftest.py`, especially `registry_with_formulas`.
 
