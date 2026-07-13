@@ -11,7 +11,7 @@ from typing import Annotated
 
 import typer
 
-from src.adapters.cli.trade_swing_tuning_display import (
+from src.adapters.cli.trade_swing_tuning_patch_display import (
     display_swing_tuning_patch_apply,
     display_swing_tuning_patch_dry_run,
     display_swing_tuning_patch_validation,
