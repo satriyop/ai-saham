@@ -13,13 +13,34 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from types import SimpleNamespace
 
 from src.adapters.cli.screen_accum_display import display_results
+from src.adapters.cli.screen_accum_formatters import AccumulationDisplayConfig
 from src.application.dto.accumulation_screen import (
     AccumulationCandidate,
     AccumulationScreenResponse,
 )
 from src.domain.value_objects.foreign_flow_score_breakdown import ForeignFlowScoreBreakdown
+
+
+def _bb_disabled_config() -> AccumulationDisplayConfig:
+    return AccumulationDisplayConfig(
+        enter_min_foreign_flow_score=70.0,
+        watch_min_foreign_flow_score=50.0,
+        coiled_spring_min_foreign_flow_score=60.0,
+        coiled_spring_bb_pctile=0.05,
+        foreign_flow_score_policy=SimpleNamespace(
+            bb_squeeze=SimpleNamespace(
+                enabled=False,
+                weight=0,
+                tight_pctile=0.05,
+                loose_pctile=0.15,
+            ),
+            base_enter_score=70,
+            base_watch_score=50,
+        ),
+    )
 
 
 def _candidate(**overrides) -> AccumulationCandidate:
@@ -95,6 +116,7 @@ def test_bb_not_shown_as_scored_flow_points_when_disabled(capsys):
         show_top_broker=False,
         vwap_only=False,
         squeeze_only=False,
+        display_config=_bb_disabled_config(),
         include_explanation=False,
     )
 

@@ -11,7 +11,10 @@ from pathlib import Path
 
 import typer
 
-from src.adapters.cli.risk_engine_helper import create_configured_risk_engine
+from src.adapters.cli.stock_analysis_workflow_dependencies import (
+    StockAnalysisWorkflowDependencies,
+    create_stock_analysis_workflow_dependencies,
+)
 from src.application.services.swing_backtest_attribution import AttributionBucketPolicy
 from src.application.services.swing_setup_catalog import build_swing_setup_catalog_config
 from src.application.services.universe_loader import (
@@ -27,18 +30,11 @@ from src.application.use_case.swing_backtest_use_case import (
     SwingBacktestResponse,
     SwingBacktestUseCase,
 )
-from src.infrastructure.composition.indicator_registry_factory import (
-    create_indicator_registry,
-)
 from src.infrastructure.config.accumulation_screener_config import (
     AccumulationScreenerConfig,
     load_accumulation_screener_config,
 )
 from src.infrastructure.config.app_config import APP_CFG
-from src.infrastructure.config.config_backed_market_context_provider import (
-    ConfigBackedMarketContextProvider,
-)
-from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 from src.infrastructure.config.swing_backtest_config import (
     SwingBacktestConfig,
 )
@@ -48,8 +44,6 @@ from src.infrastructure.config.swing_backtest_config import (
 from src.infrastructure.config.swing_config import SwingConfig
 from src.infrastructure.config.swing_config import load_swing_config as _load_swing_config
 from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
-from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
-from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
 DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 
@@ -105,6 +99,7 @@ def _run_swing_backtest(
     db_path: Path | None,
     announce: bool,
     config: SwingBacktestRunnerConfig | None = None,
+    dependencies: StockAnalysisWorkflowDependencies | None = None,
 ) -> SwingBacktestResponse:
     setup_name = setup.lower()
     if setup_name not in AVAILABLE_SWING_SETUPS:
@@ -123,13 +118,14 @@ def _run_swing_backtest(
         raise typer.Exit(1)
 
     resolved_db = db_path or DEFAULT_DB_PATH
+    deps = dependencies or create_stock_analysis_workflow_dependencies(resolved_db)
     try:
         ticker_list = resolve_tickers(
             universe=universe,
             explicit=list(tickers) if tickers else [],
             db_path=resolved_db,
             loader=YamlUniverseConfigLoader(),
-            repository=SQLiteBrokerRepository(resolved_db),
+            repository=deps.broker_repository,
         )
     except (UniverseNotFoundError, FileNotFoundError) as e:
         typer.echo(f"Error: {e}", err=True)
@@ -156,19 +152,14 @@ def _run_swing_backtest(
 
     runner_config = config or load_swing_backtest_runner_config()
 
-    broker_repo = SQLiteBrokerRepository(resolved_db)
-    market_repo = SQLiteMarketRepository(db_path=resolved_db)
     use_case = SwingBacktestUseCase(
-        broker_repository=broker_repo,
-        market_repository=market_repo,
-        indicator_registry=create_indicator_registry(),
-        rules_loader=RulesYamlLoader(),
+        broker_repository=deps.broker_repository,
+        market_repository=deps.market_repository,
+        indicator_registry=deps.indicator_registry_factory(),
+        rules_loader=deps.rules_loader_factory(),
         derived_feature_policy=runner_config.accumulation_config.derived_features,
-        risk_engine=create_configured_risk_engine(resolved_db, with_enrichment=True),
-        market_context_provider=ConfigBackedMarketContextProvider(
-            market_repository=market_repo,
-            broker_repository=broker_repo,
-        ),
+        risk_engine=deps.create_risk_engine(),
+        market_context_provider=deps.create_market_context_provider(),
     )
     try:
         return use_case.execute(SwingBacktestRequest(

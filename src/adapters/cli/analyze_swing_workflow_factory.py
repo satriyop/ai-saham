@@ -15,7 +15,10 @@ from decimal import Decimal
 from io import StringIO
 from pathlib import Path
 
-from src.adapters.cli.risk_engine_helper import create_configured_risk_engine
+from src.adapters.cli.stock_analysis_workflow_dependencies import (
+    StockAnalysisWorkflowDependencies,
+    create_stock_analysis_workflow_dependencies,
+)
 from src.application.dto.accumulation_screen import (
     AccumulationCandidate,
     AccumulationScreenRequest,
@@ -54,42 +57,17 @@ from src.domain.rules.free_float_gate import FreeFloatGate
 from src.domain.rules.fundamental_gate import FundamentalGate
 from src.domain.rules.liquidity_gate import LiquidityGate
 from src.domain.value_objects.setup_evaluation import SetupEvaluation
-from src.infrastructure.browser.stockbit_provider_bundle import (
-    create_readonly_stockbit_providers,
-)
-from src.infrastructure.composition.indicator_registry_factory import (
-    create_indicator_registry,
-)
-from src.infrastructure.composition.signal_engine_factory import create_signal_engine
 from src.infrastructure.config.accumulation_screener_config import (
     load_accumulation_screener_config,
 )
 from src.infrastructure.config.analyze_swing_config import AnalyzeSwingConfig
-from src.infrastructure.config.company_quality_context_config_loader import (
-    create_company_quality_context_evidence_builder,
-)
 from src.infrastructure.config.corporate_action_policy_config import (
     load_corporate_action_policy_config,
 )
-from src.infrastructure.config.institutional_accumulation_config_loader import (
-    load_institutional_accumulation_config,
-)
 from src.infrastructure.config.market_context_factory import evaluate_market_context
-from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
-from src.infrastructure.config.sector_context_config_loader import (
-    create_sector_context_evidence_builder,
-)
-from src.infrastructure.config.ticker_profile_config_loader import (
-    create_ticker_profile_classifier,
-)
-from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
-from src.infrastructure.persistence.sqlite_candidate_observations_repository import (
-    SQLiteCandidateObservationsRepository,
-)
 from src.infrastructure.persistence.sqlite_corporate_action_calendar_repository import (
     SQLiteCorporateActionCalendarRepository,
 )
-from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 from src.infrastructure.sentiment import SentimentFactory
 
 
@@ -102,35 +80,37 @@ def create_swing_analysis_workflow(
     smart_money_brokers: set[str],
     noise_brokers: set[str],
     broker_weights: dict[str, Decimal],
+    dependencies: StockAnalysisWorkflowDependencies | None = None,
 ) -> SwingAnalysisWorkflowUseCase:
     """Build the composite swing analysis workflow with CLI infrastructure."""
-    market_repo = SQLiteMarketRepository(db_path=db_path)
-    broker_repo = SQLiteBrokerRepository(db_path)
-    candidate_observations_repo = SQLiteCandidateObservationsRepository(db_path)
+    deps = dependencies or create_stock_analysis_workflow_dependencies(db_path)
     corporate_action_risk_use_case = AssessCorporateActionEventRiskUseCase(
         repository=SQLiteCorporateActionCalendarRepository(db_path),
         policy=load_corporate_action_policy_config(),
     )
-    registry = create_indicator_registry(
-        broker_repository=broker_repo,
-        market_repository=market_repo,
+    registry = deps.indicator_registry_factory(
+        broker_repository=deps.broker_repository,
+        market_repository=deps.market_repository,
     )
     accumulation_config = load_accumulation_screener_config()
 
     def _build_accumulation_candidate(ticker: str, window: int):
-        stockbit_providers = create_readonly_stockbit_providers(db_path)
         accum_uc = create_accumulation_screen_use_case(
-            broker_repository=broker_repo,
-            market_repository=market_repo,
-            indicator_registry=create_indicator_registry(),
-            rules_loader=RulesYamlLoader(),
-            stockbit_providers=stockbit_providers,
+            broker_repository=deps.broker_repository,
+            market_repository=deps.market_repository,
+            indicator_registry=deps.indicator_registry_factory(),
+            rules_loader=deps.rules_loader_factory(),
+            stockbit_providers=deps.stockbit_providers,
             foreign_flow_score_policy=accumulation_config.foreign_flow_score_policy,
             derived_feature_policy=accumulation_config.derived_features,
-            ticker_profile_classifier_factory=create_ticker_profile_classifier,
-            institutional_accumulation_config_factory=load_institutional_accumulation_config,
-            sector_context_builder_factory=create_sector_context_evidence_builder,
-            company_quality_context_builder_factory=create_company_quality_context_evidence_builder,
+            ticker_profile_classifier_factory=deps.ticker_profile_classifier_factory,
+            institutional_accumulation_config_factory=(
+                deps.institutional_accumulation_config_factory
+            ),
+            sector_context_builder_factory=deps.sector_context_builder_factory,
+            company_quality_context_builder_factory=(
+                deps.company_quality_context_builder_factory
+            ),
         )
         accum_resp = accum_uc.execute(
             AccumulationScreenRequest(
@@ -162,8 +142,8 @@ def create_swing_analysis_workflow(
         )
 
     return SwingAnalysisWorkflowUseCase(
-        market_repository=market_repo,
-        broker_repository=broker_repo,
+        market_repository=deps.market_repository,
+        broker_repository=deps.broker_repository,
         registry=registry,
         refresh_data=lambda ticker, db_path, force_refresh: _auto_refresh_swing_data(
             ticker=ticker,
@@ -193,19 +173,23 @@ def create_swing_analysis_workflow(
         ),
         load_swing_config=lambda: swing_config,
         resolve_setup_targets=resolve_setup_targets,
-        rules_loader=RulesYamlLoader(),
+        rules_loader=deps.rules_loader_factory(),
         evaluate_market_context=evaluate_market_context,
         structural_gates=[FundamentalGate(), LiquidityGate(), FreeFloatGate()],
         execution_gates=[BandarGate()],
-        signal_engine=create_signal_engine(db_path=db_path, with_enrichment=True),
-        risk_engine=create_configured_risk_engine(db_path=db_path, with_enrichment=True),
-        candidate_observations_repository=candidate_observations_repo,
+        signal_engine=deps.create_signal_engine(),
+        risk_engine=deps.create_risk_engine(),
+        candidate_observations_repository=deps.candidate_observations_repository,
         foreign_flow_score_policy=accumulation_config.foreign_flow_score_policy,
         corporate_action_risk_use_case=corporate_action_risk_use_case,
-        ticker_profile_classifier_factory=create_ticker_profile_classifier,
-        institutional_accumulation_config_factory=load_institutional_accumulation_config,
-        sector_context_builder_factory=create_sector_context_evidence_builder,
-        company_quality_context_builder_factory=create_company_quality_context_evidence_builder,
+        ticker_profile_classifier_factory=deps.ticker_profile_classifier_factory,
+        institutional_accumulation_config_factory=(
+            deps.institutional_accumulation_config_factory
+        ),
+        sector_context_builder_factory=deps.sector_context_builder_factory,
+        company_quality_context_builder_factory=(
+            deps.company_quality_context_builder_factory
+        ),
     )
 
 

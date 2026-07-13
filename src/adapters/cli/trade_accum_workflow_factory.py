@@ -7,6 +7,10 @@ Layer: Adapter
 from pathlib import Path
 from typing import Optional
 
+from src.adapters.cli.stock_analysis_workflow_dependencies import (
+    StockAnalysisWorkflowDependencies,
+    create_stock_analysis_workflow_dependencies,
+)
 from src.application.services.accumulation_journal import AccumulationJournalService
 from src.application.services.accumulation_screen_factory import (
     create_accumulation_screen_use_case,
@@ -20,33 +24,13 @@ from src.application.use_case.log_accumulation_trade_workflow_use_case import (
 from src.application.use_case.log_swing_candidate_use_case import (
     LogSwingCandidateUseCase,
 )
-from src.infrastructure.browser.stockbit_provider_bundle import (
-    create_readonly_stockbit_providers,
-)
-from src.infrastructure.composition.indicator_registry_factory import (
-    create_indicator_registry,
-)
 from src.infrastructure.config.app_config import APP_CFG
-from src.infrastructure.config.company_quality_context_config_loader import (
-    create_company_quality_context_evidence_builder,
-)
-from src.infrastructure.config.institutional_accumulation_config_loader import (
-    load_institutional_accumulation_config,
-)
 from src.infrastructure.config.market_context_factory import create_market_context_engine
-from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
-from src.infrastructure.config.sector_context_config_loader import (
-    create_sector_context_evidence_builder,
-)
 from src.infrastructure.config.swing_backtest_config import load_swing_backtest_config
 from src.infrastructure.config.swing_config import load_swing_config
-from src.infrastructure.config.ticker_profile_config_loader import (
-    create_ticker_profile_classifier,
-)
 from src.infrastructure.persistence.accumulation_journal_csv_writer import (
     AccumulationJournalCsvWriter,
 )
-from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 from src.infrastructure.persistence.trade_journal_jsonl_writer import TradeJournalJsonlWriter
 
@@ -58,8 +42,10 @@ def create_log_accumulation_trade_workflow(
     with_regime: bool,
     regime_universe: Optional[str],
     benchmark: str,
+    dependencies: StockAnalysisWorkflowDependencies | None = None,
 ) -> LogAccumulationTradeWorkflowBundle:
     """Wire up all repository, service, and engine dependencies for log swing trade workflow."""
+    deps = dependencies or create_stock_analysis_workflow_dependencies(db_path)
     warnings: list[str] = []
 
     # Load configuration
@@ -69,28 +55,27 @@ def create_log_accumulation_trade_workflow(
     # Build policy DTO
     policy = build_log_accumulation_trade_policy(swing_config, backtest_config)
 
-    # Instantiate repositories & providers
-    broker_repo = SQLiteBrokerRepository(db_path)
-    market_repo = SQLiteMarketRepository(db_path=db_path)
-    sb = create_readonly_stockbit_providers(db_path)
-
     # Build screen use case
     screen_uc = create_accumulation_screen_use_case(
-        broker_repository=broker_repo,
-        market_repository=market_repo,
-        indicator_registry=create_indicator_registry(),
-        rules_loader=RulesYamlLoader(),
-        stockbit_providers=sb,
-        ticker_profile_classifier_factory=create_ticker_profile_classifier,
-        institutional_accumulation_config_factory=load_institutional_accumulation_config,
-        sector_context_builder_factory=create_sector_context_evidence_builder,
-        company_quality_context_builder_factory=create_company_quality_context_evidence_builder,
+        broker_repository=deps.broker_repository,
+        market_repository=deps.market_repository,
+        indicator_registry=deps.indicator_registry_factory(),
+        rules_loader=deps.rules_loader_factory(),
+        stockbit_providers=deps.stockbit_providers,
+        ticker_profile_classifier_factory=deps.ticker_profile_classifier_factory,
+        institutional_accumulation_config_factory=(
+            deps.institutional_accumulation_config_factory
+        ),
+        sector_context_builder_factory=deps.sector_context_builder_factory,
+        company_quality_context_builder_factory=(
+            deps.company_quality_context_builder_factory
+        ),
     )
 
     # Build journal service
     journal_svc = AccumulationJournalService(
         store=AccumulationJournalCsvWriter(journal_path),
-        repository=market_repo,
+        repository=deps.market_repository,
     )
 
     # Handle regime engine context setup
@@ -109,7 +94,7 @@ def create_log_accumulation_trade_workflow(
     log_uc = LogSwingCandidateUseCase(
         screen_use_case=screen_uc,
         journal_service=journal_svc,
-        market_repository=market_repo,
+        market_repository=deps.market_repository,
         trade_journal_store=TradeJournalJsonlWriter(journal_path.parent / "trades.jsonl"),
         regime_use_case=regime_uc,
     )
