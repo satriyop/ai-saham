@@ -231,6 +231,9 @@ If any answer is unclear, stop.
 - CLI command files over 300 LOC require proof they are still thin. If they
   resolve universes, run secondary use cases, save follow-up artifacts, or
   classify statuses, extract an application workflow.
+- CLI command modules must not own workflow policy. If a command computes run
+  guards, default precedence, multi-step orchestration, persistence schema, or
+  secondary use-case calls, extract an application workflow use case.
 - Adapters must not import private application helpers. If a helper is needed
   outside its module, promote a public application service or move the
   composition outward.
@@ -253,6 +256,9 @@ If any answer is unclear, stop.
   usage.
 - No module-level loaded config objects in CLI/display modules. Load config once
   per command invocation or pass it through typed command config objects.
+- Import-time config objects are hidden global state. Infrastructure providers
+  must receive runtime config from composition roots, not copy loaded YAML
+  values into module-level constants.
 
 ### Display Rules
 
@@ -286,10 +292,17 @@ If any answer is unclear, stop.
 - Provider files must separate endpoint orchestration, payload parsing, PIT cache
   store, and schema migration once any two of those responsibilities exceed one
   screen.
+- Shared mutable infrastructure state must be explicit and injectable.
+  Module-level registries, connection caches, and session stores are allowed
+  only when immutable, test-resettable, or wrapped in an injected lifecycle
+  object.
 
 ### Policy Module Rules
 
 - Tuning and signal policy modules must split value selection, target classification, interpretation, and report assembly once those responsibilities are independently reviewable.
+- Builder modules should describe one output shape. If a builder also contains
+  ranking policy, source normalization, note/message policy, and fallback
+  aggregation, split those responsibilities into named services.
 
 ### Repository and Config Rules
 
