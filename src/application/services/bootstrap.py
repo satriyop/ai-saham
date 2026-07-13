@@ -7,7 +7,6 @@ risk engine, and signal engine. That behavior now lives in the
 `src.application.services.engine_bootstrap` package, split by responsibility:
 
 - `engine_bootstrap.evidence_authority_validation` — promotion record validation
-- `engine_bootstrap.config_resolvers` — shared YAML engine config loading
 - `engine_bootstrap.signal_weight_config_resolver` — signal factor weight resolving
 - `engine_bootstrap.signal_archived_config_warnings` — archived config warnings
 - `engine_bootstrap.signal_decision_policy_config_resolver` — decision policy resolving
@@ -21,6 +20,15 @@ risk engine, and signal engine. That behavior now lives in the
 
 This module re-exports the public and tested-private API so existing imports
 from `src.application.services.bootstrap` keep working unchanged.
+
+Compatibility surface:
+- Canonical package:
+  - src.application.services.engine_bootstrap (see submodules listed above)
+- Allowed contents:
+  - imports and __all__ only. No new implementation may be added here.
+- Expiry:
+  - permanent public API unless all internal/external imports migrate to
+    src.application.services.engine_bootstrap directly.
 """
 
 from __future__ import annotations

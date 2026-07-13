@@ -7,6 +7,17 @@ Implements the StrategyTranslator port using various LLM providers
 Layer: Infrastructure
 """
 
+# Compatibility surface:
+# - Canonical import(s):
+#   - canonicalize_yaml -> src.infrastructure.ai.strategy_translator_output
+# - Allowed contents:
+#   - re-export only for canonicalize_yaml. This module remains canonical
+#     for StrategyTranslatorAdapter itself, which is not part of the
+#     compatibility surface.
+# - Expiry:
+#   - permanent public API, or remove after internal imports migrate to
+#     src.infrastructure.ai.strategy_translator_output directly.
+
 import logging
 import os
 import time

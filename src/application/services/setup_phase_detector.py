@@ -10,6 +10,18 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any
 
+# Compatibility surface:
+# - Canonical import(s):
+#   - SetupPhaseConfig, SetupPhaseRequirementConfig, SetupPhaseRSPolicyConfig,
+#     SetupPhaseThresholdsConfig, VolumeTriggerEvidence,
+#     VolumeTriggerValidityConfig -> src.application.services.setup_phase_config
+# - Allowed contents:
+#   - re-export only for the config DTOs above. This module remains canonical
+#     for SetupPhaseDetector itself, which is not part of the compatibility
+#     surface.
+# - Expiry:
+#   - permanent public API, or remove after internal imports migrate to
+#     src.application.services.setup_phase_config directly.
 from src.application.services.setup_phase_config import (
     SetupPhaseConfig,
     SetupPhaseRequirementConfig,  # noqa: F401 — re-exported for backward compat
@@ -32,6 +44,16 @@ from src.domain.value_objects.setup_phase import (
     SetupPhaseSnapshot,
     SetupPhaseState,
 )
+
+__all__ = [
+    "SetupPhaseDetector",
+    "SetupPhaseConfig",
+    "SetupPhaseRequirementConfig",
+    "SetupPhaseRSPolicyConfig",
+    "SetupPhaseThresholdsConfig",
+    "VolumeTriggerEvidence",
+    "VolumeTriggerValidityConfig",
+]
 
 
 class SetupPhaseDetector:

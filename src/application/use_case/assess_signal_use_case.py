@@ -285,6 +285,26 @@ def _interpolate(
 ) -> float:
     return interpolate(value, low_value, high_value, low_score, high_score)
 
+# Compatibility surface:
+# - Canonical import(s):
+#   - signal config symbols (AlphaTriggerConfig, AlphaTriggerRouteFractionsConfig,
+#     AnalystBearishFlagConfig, AnalystScoringConfig, BandarScoringConfig,
+#     DecisionPolicyConfig, EvidenceGroupConfig, EvidenceGroupsConfig,
+#     ForeignFlowScoreMappingConfig, ForwardPeScoringConfig,
+#     InsiderSellingFlagConfig, NeutralRegimeConfig, RegimeConditioningConfig,
+#     RegimeDecisionPolicyConfig, RiskOffRegimeConfig, SeasonalityScoringConfig,
+#     SetupRegimeActionConfig, SignalClassificationConfig,
+#     SignalEnrichmentConfig, SignalFlagsConfig, SignalInputMappingConfig,
+#     SignalMissingDataConfig, SignalScoringConfig,
+#     ValuationStretchedFlagConfig, VolatileRegimeConfig) ->
+#     src.application.services.signal_engine_config
+# - Allowed contents:
+#   - re-export only for the config symbols above. This module remains
+#     canonical for AssessSignalUseCase, _DEFAULT_WEIGHTS, and _interpolate,
+#     which are not part of the compatibility surface.
+# - Expiry:
+#   - permanent public API, or remove after internal imports migrate to
+#     src.application.services.signal_engine_config directly.
 # Backward-compatible re-exports
 __all__ = [
     "AssessSignalRequest",

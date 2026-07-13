@@ -78,6 +78,22 @@ logger = logging.getLogger(__name__)
 
 # ── Session utilities — live in playwright_stockbit_browser, imported here ──
 # Imports above remain explicit aliases for backward-compatible re-export.
+#
+# Compatibility surface:
+# - Canonical import(s):
+#   - NAV_TIMEOUT, ORDERBOOK_PAGE_URL, SPA_SETTLE_MS, _persistent_context,
+#     _require_playwright -> src.infrastructure.browser.stockbit_browser_context
+#   - browse_stockbit_session, get_stockbit_session_status,
+#     save_stockbit_session -> src.infrastructure.browser.stockbit_session_actions
+#   - _intercept_token, _resolve_token ->
+#     src.infrastructure.browser.stockbit_token_extractor
+# - Allowed contents:
+#   - re-export/delegation only for the compatibility symbols above. This
+#     module remains canonical for PlaywrightStockbitProvider itself, which
+#     is not part of the compatibility surface.
+# - Expiry:
+#   - permanent public API, or remove after internal imports migrate to the
+#     canonical modules above.
 
 _sb = STOCKBIT_CFG
 
