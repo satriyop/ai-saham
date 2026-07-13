@@ -15,66 +15,19 @@ from typing import Annotated, Optional
 
 import typer
 
-from src.application.services.accumulation_screen_factory import (
-    create_accumulation_screen_use_case,
-)
-from src.application.services.swing_setup_catalog import build_swing_setup_catalog_config
-from src.application.use_case.evaluate_swing_setup_use_case import (
-    AVAILABLE_SWING_SETUPS,
-    SwingSetupCatalogConfig,
-)
-from src.infrastructure.browser.stockbit_provider_bundle import (
-    create_readonly_stockbit_providers,
-)
-from src.infrastructure.composition.indicator_registry_factory import (
-    create_indicator_registry,
+from src.adapters.cli.trade_accum_workflow_factory import create_log_accumulation_trade_workflow
+from src.application.use_case.evaluate_swing_setup_use_case import FOREIGN_BOUNCE_SETUP
+from src.application.use_case.log_accumulation_trade_workflow_use_case import (
+    LogAccumulationTradeWorkflowRequest,
 )
 from src.infrastructure.config.app_config import APP_CFG
-from src.infrastructure.config.company_quality_context_config_loader import (
-    create_company_quality_context_evidence_builder,
-)
-from src.infrastructure.config.institutional_accumulation_config_loader import (
-    load_institutional_accumulation_config,
-)
-from src.infrastructure.config.market_context_factory import create_market_context_engine
-from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
-from src.infrastructure.config.sector_context_config_loader import (
-    create_sector_context_evidence_builder,
-)
-from src.infrastructure.config.swing_backtest_config import (
-    load_swing_backtest_config as _load_swing_backtest_config,
-)
-from src.infrastructure.config.swing_config import load_swing_config as _load_swing_config
-from src.infrastructure.config.ticker_profile_config_loader import (
-    create_ticker_profile_classifier,
-)
-from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
-from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
-
-_SC = _load_swing_config()
-_BT = _load_swing_backtest_config()
 
 DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 DEFAULT_ACCUM_JOURNAL_PATH = Path(APP_CFG.storage.accum_journal)
 DEFAULT_TRADE_JOURNAL_PATH = Path(APP_CFG.storage.trade_journal)
 
-FOREIGN_BOUNCE_SETUP = "foreign-bounce"
-_DEFAULT_SETUP_TARGET = _SC.setup_targets.get("default")
-FOREIGN_BOUNCE_TAKE_PROFIT = (
-    _DEFAULT_SETUP_TARGET.take_profit_pct
-    if _DEFAULT_SETUP_TARGET else Decimal(str(_BT.take_profit_pct))
-)
-FOREIGN_BOUNCE_STOP_LOSS = (
-    _DEFAULT_SETUP_TARGET.stop_loss_pct
-    if _DEFAULT_SETUP_TARGET else Decimal(str(_BT.stop_loss_pct))
-)
 
-
-def _setup_config() -> SwingSetupCatalogConfig:
-    return build_swing_setup_catalog_config(_SC)
-
-
-def _accumulation_log_impl(
+def run_accumulation_log_command(
     ticker: str,
     window: int,
     entry_price: Optional[float],
@@ -83,90 +36,46 @@ def _accumulation_log_impl(
     with_regime: bool,
     regime_universe: Optional[str],
     benchmark: str,
-    journal_path: Path,
-    db_path: Path,
+    journal_path: Optional[Path] = None,
+    db_path: Optional[Path] = None,
 ) -> None:
-    """Thin adapter wrapper: wires repos → calls LogSwingCandidateUseCase → formats output."""
-    from src.application.services.accumulation_journal import AccumulationJournalService
-    from src.application.use_case.log_swing_candidate_use_case import (
-        LogSwingCandidateRequest,
-        LogSwingCandidateUseCase,
-    )
-    from src.infrastructure.persistence.accumulation_journal_csv_writer import (
-        AccumulationJournalCsvWriter,
-    )
-    from src.infrastructure.persistence.trade_journal_jsonl_writer import TradeJournalJsonlWriter
+    """Public helper to run the log accumulation workflow and format CLI output."""
+    resolved_journal = journal_path or DEFAULT_ACCUM_JOURNAL_PATH
+    resolved_db = db_path or DEFAULT_DB_PATH
 
-    ticker_upper = ticker.upper()
-    logged_at = date.today()
-    setup_name = setup.lower()
-    if from_analysis and setup_name not in AVAILABLE_SWING_SETUPS:
-        typer.echo(
-            f"Unknown swing setup '{setup}'. Available setups: {', '.join(AVAILABLE_SWING_SETUPS)}",
-            err=True,
-        )
-        raise typer.Exit(1)
+    bundle = create_log_accumulation_trade_workflow(
+        db_path=resolved_db,
+        journal_path=resolved_journal,
+        with_regime=with_regime,
+        regime_universe=regime_universe,
+        benchmark=benchmark,
+    )
 
-    broker_repo = SQLiteBrokerRepository(db_path)
-    market_repo = SQLiteMarketRepository(db_path=db_path)
-    _sb = create_readonly_stockbit_providers(db_path)
-    screen_uc = create_accumulation_screen_use_case(
-        broker_repository=broker_repo,
-        market_repository=market_repo,
-        indicator_registry=create_indicator_registry(),
-        rules_loader=RulesYamlLoader(),
-        stockbit_providers=_sb,
-        ticker_profile_classifier_factory=create_ticker_profile_classifier,
-        institutional_accumulation_config_factory=load_institutional_accumulation_config,
-        sector_context_builder_factory=create_sector_context_evidence_builder,
-        company_quality_context_builder_factory=create_company_quality_context_evidence_builder,
-    )
-    journal_svc = AccumulationJournalService(
-        store=AccumulationJournalCsvWriter(journal_path),
-        repository=market_repo,
-    )
-    regime_uc = None
-    regime_tickers: list[str] = []
-    if with_regime:
-        try:
-            regime_uc = create_market_context_engine(
-                db_path=db_path,
-                universe=regime_universe or APP_CFG.analysis.regime_universe,
-                benchmark=benchmark,
-            )
-        except Exception as exc:
-            typer.echo(f"Warning: could not resolve regime universe: {exc}", err=True)
+    # Print any warnings from factory to stderr
+    for warning in bundle.warnings:
+        typer.echo(warning, err=True)
 
-    log_uc = LogSwingCandidateUseCase(
-        screen_use_case=screen_uc,
-        journal_service=journal_svc,
-        market_repository=market_repo,
-        trade_journal_store=TradeJournalJsonlWriter(journal_path.parent / "trades.jsonl"),
-        regime_use_case=regime_uc,
-    )
-    result = log_uc.execute(LogSwingCandidateRequest(
-        ticker=ticker_upper,
-        window_days=window,
+    request = LogAccumulationTradeWorkflowRequest(
+        ticker=ticker,
+        window=window,
         entry_price=Decimal(str(entry_price)) if entry_price is not None else None,
         from_analysis=from_analysis,
-        setup=setup_name if from_analysis else None,
+        setup=setup,
         with_regime=with_regime,
-        regime_universe=regime_tickers,
-        benchmark_ticker=benchmark,
-        logged_at=logged_at,
-        tier1_broker_codes=_SC.tier1_broker_codes,
-        sector_breadth_enabled=_SC.sector_breadth_enabled,
-        sector_breadth_threshold=_SC.sector_breadth_threshold,
-        sector_breadth_bonus_pts=_SC.sector_breadth_bonus_pts,
-        sector_breadth_min_tickers=_SC.sector_breadth_min_tickers,
-        setup_config=_setup_config(),
-        resistance_gate_enabled=_SC.resistance_gate_enabled,
-        resistance_headroom_min_pct=_SC.resistance_headroom_min_pct,
-        ex_date_warning_days=_SC.ex_date_warning_days,
-        take_profit_pct=FOREIGN_BOUNCE_TAKE_PROFIT,
-        stop_loss_pct=FOREIGN_BOUNCE_STOP_LOSS,
-        max_hold_days=_BT.max_hold_days,
-    ))
+        benchmark=benchmark,
+        logged_at=date.today(),
+    )
+
+    try:
+        workflow_result = bundle.workflow.execute(request)
+    except ValueError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(1)
+
+    result = workflow_result.response
+    ticker_upper = result.ticker
+    logged_at = workflow_result.logged_at
+    setup_name = workflow_result.setup_name
 
     if result.candidate_foreign_flow_score is None and entry_price is None:
         typer.echo(
@@ -179,7 +88,7 @@ def _accumulation_log_impl(
     if not result.written:
         typer.echo(
             f"Already logged {ticker_upper} for {logged_at} (window={window} sessions) — "
-            f"no new row added ({journal_path})"
+            f"no new row added ({resolved_journal})"
         )
         return
 
@@ -189,20 +98,17 @@ def _accumulation_log_impl(
         else "N/A"
     )
     pattern_str = f" | pattern: {result.pattern}" if result.pattern else ""
-    decision_str = (
-        f" | setup={setup_name} | match={result.setup_match}"
-        if from_analysis else ""
-    )
+    decision_str = f" | setup={setup_name} | match={result.setup_match}" if from_analysis else ""
     plan_str = (
         f" | plan entry={result.entry_price:,.0f} stop={result.planned_stop:,.0f} "
-        f"target={result.planned_target:,.0f} hold={_BT.max_hold_days}d"
+        f"target={result.planned_target:,.0f} hold={workflow_result.max_hold_days}d"
         if from_analysis and result.planned_stop is not None and result.planned_target is not None
         else ""
     )
     regime_str = f" | regime={result.regime}" if result.regime else ""
     typer.echo(
         f"Logged {ticker_upper} | {logged_at} | window={window} sessions | "
-        f"score={score_str}{pattern_str}{decision_str}{regime_str}{plan_str} → {journal_path}"
+        f"score={score_str}{pattern_str}{decision_str}{regime_str}{plan_str} → {resolved_journal}"
     )
     if from_analysis and result.failed_gates:
         typer.echo("Failed gates:")
@@ -267,7 +173,7 @@ def accumulation_log(
         saham trade log swing --ticker BBCA --entry-price 9450
         saham trade log swing --ticker BBRI --from-analysis --with-regime
     """
-    _accumulation_log_impl(
+    run_accumulation_log_command(
         ticker=ticker,
         window=window,
         entry_price=entry_price,
@@ -276,8 +182,8 @@ def accumulation_log(
         with_regime=with_regime,
         regime_universe=regime_universe,
         benchmark=benchmark,
-        journal_path=journal or DEFAULT_ACCUM_JOURNAL_PATH,
-        db_path=db_path or DEFAULT_DB_PATH,
+        journal_path=journal,
+        db_path=db_path,
     )
 
 
@@ -312,9 +218,8 @@ def accumulation_review(
         saham trade review swing
         saham trade review swing --horizon 10 --min-foreign-flow-score 70
     """
-    from src.application.services.accumulation_journal import AccumulationJournalService
-    from src.infrastructure.persistence.accumulation_journal_csv_writer import (
-        AccumulationJournalCsvWriter,
+    from src.adapters.cli.trade_accum_workflow_factory import (
+        create_accumulation_journal_service,
     )
 
     journal_path = journal or DEFAULT_ACCUM_JOURNAL_PATH
@@ -328,9 +233,10 @@ def accumulation_review(
         )
         raise typer.Exit(1)
 
-    market_repo = SQLiteMarketRepository(db_path=resolved_db)
-    store = AccumulationJournalCsvWriter(journal_path)
-    service = AccumulationJournalService(store=store, repository=market_repo)
+    service = create_accumulation_journal_service(
+        db_path=resolved_db,
+        journal_path=journal_path,
+    )
 
     typer.echo(f"Reviewing journal ({journal_path}) | horizon={horizon}d ...")
     report = service.review(horizon_days=horizon)

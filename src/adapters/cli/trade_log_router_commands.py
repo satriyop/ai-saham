@@ -13,7 +13,7 @@ from src.adapters.cli.trade_accum_commands import (
     DEFAULT_ACCUM_JOURNAL_PATH,
     DEFAULT_DB_PATH,
     FOREIGN_BOUNCE_SETUP,
-    _accumulation_log_impl,
+    run_accumulation_log_command,
 )
 from src.adapters.cli.trade_intraday_commands import (
     DEFAULT_CONFIRMATION_JOURNAL_PATH,
@@ -94,7 +94,7 @@ def trade_log(
         if ticker is None:
             typer.echo("--ticker is required for --type swing", err=True)
             raise typer.Exit(1)
-        _accumulation_log_impl(
+        run_accumulation_log_command(
             ticker=ticker,
             window=window,
             entry_price=entry_price,
