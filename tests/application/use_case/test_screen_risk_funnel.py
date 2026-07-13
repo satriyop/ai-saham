@@ -115,13 +115,6 @@ def test_risk_funnel_fires_fundamental_gate_on_distressed_ticker():
         repository=mkt_repo,
         structural_gates=[FundamentalGate(distress_threshold=3)],
     )
-    uc = AccumulationScreenUseCase(
-        indicator_registry=IndicatorRegistry(),
-        broker_repository=_mock_broker_repo(),
-        market_repository=mkt_repo,
-        rules_loader=FakeRulesLoader(),
-        risk_use_case=risk_uc,
-    )
 
     candidate = MagicMock()
     candidate.ticker = "BBCA"
@@ -148,13 +141,6 @@ def test_risk_funnel_passes_healthy_ticker():
         repository=mkt_repo,
         structural_gates=[FundamentalGate(distress_threshold=3)],
     )
-    uc = AccumulationScreenUseCase(
-        indicator_registry=IndicatorRegistry(),
-        broker_repository=_mock_broker_repo(),
-        market_repository=mkt_repo,
-        rules_loader=FakeRulesLoader(),
-        risk_use_case=risk_uc,
-    )
 
     candidate = MagicMock()
     candidate.ticker = "BBCA"
@@ -178,7 +164,6 @@ def test_risk_funnel_passes_healthy_ticker():
 
 def test_risk_funnel_composes_trade_setup_from_signal_and_risk():
     """screen accum final action must come from AssessTradeSetupUseCase."""
-    mkt_repo = _mock_market_repo(["BBCA"])
     signal_response = AssessSignalResponse(
         ticker="BBCA",
         assessment=SignalAssessment(
@@ -212,13 +197,6 @@ def test_risk_funnel_composes_trade_setup_from_signal_and_risk():
     )
     risk_uc = MagicMock(spec=AssessRiskUseCase)
     risk_uc.execute.return_value = risk_response
-    uc = AccumulationScreenUseCase(
-        indicator_registry=IndicatorRegistry(),
-        broker_repository=_mock_broker_repo(),
-        market_repository=mkt_repo,
-        rules_loader=FakeRulesLoader(),
-        risk_use_case=risk_uc,
-    )
 
     candidate = MagicMock()
     candidate.ticker = "BBCA"
@@ -253,13 +231,6 @@ def test_risk_funnel_builds_gate_context_from_candidate_data():
         repository=mkt_repo,
         structural_gates=[_CapturingGate()],
     )
-    uc = AccumulationScreenUseCase(
-        indicator_registry=IndicatorRegistry(),
-        broker_repository=_mock_broker_repo(),
-        market_repository=mkt_repo,
-        rules_loader=FakeRulesLoader(),
-        risk_use_case=risk_uc,
-    )
 
     candidate = MagicMock()
     candidate.ticker = "BBCA"
@@ -287,8 +258,6 @@ def test_risk_funnel_builds_gate_context_from_candidate_data():
 
 def test_risk_funnel_skips_failed_candidate_and_continues():
     """One failing ticker must not abort others — second candidate gets its assessment."""
-    mkt_repo = _mock_market_repo(["BBCA", "TLKM"])
-
     success_assessment = MagicMock()
     success_assessment.gate_triggered = None
 
@@ -297,14 +266,6 @@ def test_risk_funnel_skips_failed_candidate_and_continues():
         ValueError("no candle data"),  # first ticker fails
         MagicMock(assessment=success_assessment),  # second succeeds
     ]
-
-    uc = AccumulationScreenUseCase(
-        indicator_registry=IndicatorRegistry(),
-        broker_repository=_mock_broker_repo(),
-        market_repository=mkt_repo,
-        rules_loader=FakeRulesLoader(),
-        risk_use_case=risk_uc,
-    )
 
     c1 = MagicMock()
     c1.ticker = "BBCA"
