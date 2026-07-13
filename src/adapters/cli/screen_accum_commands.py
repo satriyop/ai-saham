@@ -8,20 +8,18 @@ Layer: Adapter
 """
 
 import json
-from datetime import date
 from pathlib import Path
 from typing import Annotated, Optional
 
 import typer
 
+from src.adapters.cli.screen_accum_display import (
+    display_multi,
+    display_results,
+    print_column_guide,
+)
 from src.adapters.cli.screen_accum_workflow_factory import (
     create_run_accumulation_screen_workflow_use_case,
-)
-from src.application.dto.accumulation_screen import (
-    AccumulationScreenResponse,
-)
-from src.application.services.broker_quality import (
-    BrokerQualitySnapshot,
 )
 from src.application.services.universe_loader import (
     UniverseNotFoundError,
@@ -44,62 +42,6 @@ _ASC = _load_accumulation_screener_config(Path(APP_CFG.config_paths.accumulation
 DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 
 FOREIGN_BOUNCE_SETUP = "foreign-bounce"
-
-
-def _display_results(
-    response: AccumulationScreenResponse,
-    universe_label: str,
-    top_n: int,
-    show_top_broker: bool,
-    vwap_only: bool,
-    squeeze_only: bool,
-    include_explanation: bool,
-    strategy_signals: dict[str, str] | None = None,
-    strategy_name: str | None = None,
-) -> None:
-    from src.adapters.cli.screen_accum_display import display_results
-
-    display_results(
-        response=response,
-        universe_label=universe_label,
-        top_n=top_n,
-        show_top_broker=show_top_broker,
-        vwap_only=vwap_only,
-        squeeze_only=squeeze_only,
-        include_explanation=include_explanation,
-        strategy_signals=strategy_signals,
-        strategy_name=strategy_name,
-    )
-
-
-def _display_multi(
-    results: dict[int, AccumulationScreenResponse],
-    universe_label: str,
-    top_n: int,
-    sort_by: str,
-    squeeze_only: bool,
-    screened_at: "date",
-    broker_quality: dict[str, BrokerQualitySnapshot] | None = None,
-    include_explanation: bool = False,
-) -> None:
-    from src.adapters.cli.screen_accum_display import display_multi
-
-    display_multi(
-        results=results,
-        universe_label=universe_label,
-        top_n=top_n,
-        sort_by=sort_by,
-        squeeze_only=squeeze_only,
-        screened_at=screened_at,
-        broker_quality=broker_quality,
-        include_explanation=include_explanation,
-    )
-
-
-def _print_column_guide() -> None:
-    from src.adapters.cli.screen_accum_display import print_column_guide
-
-    print_column_guide()
 
 
 def accumulation_run(
@@ -255,7 +197,7 @@ def accumulation_run(
         saham screen accum --universe lq45 --format json
     """
     if guide:
-        _print_column_guide()
+        print_column_guide()
         return
 
     resolved_db = db_path or DEFAULT_DB_PATH
@@ -390,7 +332,7 @@ def _render_multi(
         )
         return
 
-    _display_multi(
+    display_multi(
         results=multi_results,
         universe_label=universe_label,
         top_n=top,
@@ -432,7 +374,7 @@ def _render_single(
         typer.echo(json.dumps(data, indent=2, default=str))
         return
 
-    _display_results(
+    display_results(
         response=response,
         universe_label=universe_label,
         top_n=top,

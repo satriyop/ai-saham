@@ -14,7 +14,7 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
-from src.adapters.cli.screen_accum_commands import _display_results
+from src.adapters.cli.screen_accum_display import display_results
 from src.application.dto.accumulation_screen import (
     AccumulationCandidate,
     AccumulationScreenResponse,
@@ -88,7 +88,7 @@ def test_bb_not_shown_as_scored_flow_points_when_disabled(capsys):
         foreign_flow_score_breakdown=_breakdown_with_tight_bb(),
     )
 
-    _display_results(
+    display_results(
         response=_response(candidate),
         universe_label="lq45",
         top_n=10,
@@ -118,9 +118,9 @@ def test_bb_width_pctile_remains_populated_in_json_dict():
 
 
 def test_guide_text_states_bb_is_diagnostic_not_default_flow_score(capsys):
-    from src.adapters.cli.screen_accum_commands import _print_column_guide
+    from src.adapters.cli.screen_accum_display import print_column_guide
 
-    _print_column_guide()
+    print_column_guide()
     out = capsys.readouterr().out
 
     assert "not scored in default foreign-flow score" in out.lower()

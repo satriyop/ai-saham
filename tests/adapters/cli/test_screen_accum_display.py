@@ -3,9 +3,9 @@
 from datetime import date
 from decimal import Decimal
 
-from src.adapters.cli.screen_accum_commands import (
-    _display_multi,
-    _display_results,
+from src.adapters.cli.screen_accum_display import (
+    display_multi,
+    display_results,
 )
 from src.application.dto.accumulation_screen import (
     AccumulationScreenResponse,
@@ -27,7 +27,7 @@ def test_display_results_renders_rich_accumulation_panel(capsys):
         provider="stockbit",
     )
 
-    _display_results(
+    display_results(
         response=response,
         universe_label="lq45",
         top_n=10,
@@ -60,7 +60,7 @@ def test_display_results_renders_explanation_panels_when_requested(capsys):
         provider="stockbit",
     )
 
-    _display_results(
+    display_results(
         response=response,
         universe_label="lq45",
         top_n=10,
@@ -118,7 +118,7 @@ def test_display_results_renders_blocked_risk_diagnostics(capsys):
         provider="stockbit",
     )
 
-    _display_results(
+    display_results(
         response=response,
         universe_label="lq45",
         top_n=10,
@@ -155,7 +155,7 @@ def test_display_multi_renders_rich_accumulation_panel(capsys):
         ),
     }
 
-    _display_multi(
+    display_multi(
         results=results,
         universe_label="lq45",
         top_n=10,
@@ -194,7 +194,7 @@ def test_display_results_renders_phase_column_and_note(capsys):
         provider="stockbit",
     )
 
-    _display_results(
+    display_results(
         response=response,
         universe_label="lq45",
         top_n=10,
@@ -221,7 +221,7 @@ def test_display_results_shows_unknown_phase_when_detection_unavailable(capsys):
         provider="stockbit",
     )
 
-    _display_results(
+    display_results(
         response=response,
         universe_label="lq45",
         top_n=10,
