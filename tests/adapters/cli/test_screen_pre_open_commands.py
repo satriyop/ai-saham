@@ -3,24 +3,37 @@
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
-from zoneinfo import ZoneInfo
 
 from typer.testing import CliRunner
 
 from src.adapters.cli.main import app
-from src.adapters.cli.screen_pre_open_commands import (
-    DEFAULT_PRE_OPEN_CONFIG_PATH,
-    _build_intraday_run_guard,
-    _write_sidecar,
-)
+from src.adapters.cli.screen_pre_open_commands import DEFAULT_PRE_OPEN_CONFIG_PATH
 from src.adapters.cli.screen_pre_open_display import (
     display_results as _display_results,
 )
-from src.application.use_case.pre_open_workflow_use_case import PreOpenDataFreshness
+from src.adapters.cli.screen_pre_open_workflow_factory import (
+    PreOpenBrowserPlan,
+    PreOpenCliWorkflow,
+)
+from src.application.use_case.pre_open_workflow_use_case import (
+    PreOpenDataFreshness,
+    PreOpenWorkflowResponse,
+)
+from src.domain.ports.browser_data_provider import BrowserInteractionRequired
 from src.domain.value_objects.market_status import MarketStatus
-from src.domain.value_objects.screener_result import ScreenerCandidate
+from src.domain.value_objects.screener_result import PreOpenScreenResult, ScreenerCandidate
 
 runner = CliRunner()
+
+_BYPASS_GUARD_STATUS = MarketStatus(
+    status="STATUS_OPEN",
+    session_name="Pre-Open",
+    is_open=False,
+    session_open=None,
+    session_close=None,
+    fetched_at=datetime(2026, 6, 12, 8, 50),
+    source="stockbit",
+)
 
 
 def _candidate(ticker: str) -> ScreenerCandidate:
@@ -31,55 +44,6 @@ def _candidate(ticker: str) -> ScreenerCandidate:
         stop_loss_price=Decimal("950"),
         capital=Decimal("3000000"),
     )
-
-
-def _local_clock_status(session_name: str, is_open: bool, dt: datetime) -> MarketStatus:
-    """Build a local_clock MarketStatus for guard tests — isolated from file cache."""
-    return MarketStatus(
-        status="STATUS_OPEN" if is_open else "STATUS_CLOSE",
-        session_name=session_name,
-        is_open=is_open,
-        session_open=None,
-        session_close=None,
-        fetched_at=dt,
-        source="local_clock",
-    )
-
-
-def test_pre_open_guard_blocks_weekends_without_override():
-    dt = datetime(2026, 6, 13, 8, 50, tzinfo=ZoneInfo("Asia/Jakarta"))
-    guard = _build_intraday_run_guard(
-        dt,
-        allow_non_trading_day=False,
-        market_status=_local_clock_status("Weekend", False, dt),
-    )
-
-    assert guard.error is not None
-    assert "weekend" in guard.error
-
-
-def test_pre_open_guard_allows_weekend_dry_run_with_warning():
-    dt = datetime(2026, 6, 13, 8, 50, tzinfo=ZoneInfo("Asia/Jakarta"))
-    guard = _build_intraday_run_guard(
-        dt,
-        allow_non_trading_day=True,
-        market_status=_local_clock_status("Weekend", False, dt),
-    )
-
-    assert guard.error is None
-    assert any("weekend" in warning for warning in guard.warnings)
-
-
-def test_pre_open_guard_warns_outside_pre_open_window():
-    dt = datetime(2026, 6, 12, 10, 15, tzinfo=ZoneInfo("Asia/Jakarta"))
-    guard = _build_intraday_run_guard(
-        dt,
-        allow_non_trading_day=False,
-        market_status=_local_clock_status("Regular", True, dt),
-    )
-
-    assert guard.error is None
-    assert any("outside IDX pre-open window" in warning for warning in guard.warnings)
 
 
 def test_default_pre_open_config_lives_under_config():
@@ -132,22 +96,6 @@ def test_pre_open_results_render_rich_summary_panel(capsys):
     assert "freshness warning" in out
 
 
-def test_pre_open_sidecar_includes_json_contract_metadata(tmp_path):
-    sidecar_path = tmp_path / "pre-open.json"
-
-    _write_sidecar(
-        candidates=[_candidate("BBCA")],
-        screened_date=date(2026, 6, 12),
-        sidecar_path=sidecar_path,
-    )
-
-    import json
-    data = json.loads(sidecar_path.read_text())
-    assert data["schema_version"] == 1
-    assert data["artifact_type"] == "pre_open_session"
-    assert data["candidates"][0]["ticker"] == "BBCA"
-
-
 def test_pre_open_empty_results_points_to_fetch_iev(capsys):
     _display_results(
         candidates=[],
@@ -160,3 +108,152 @@ def test_pre_open_empty_results_points_to_fetch_iev(capsys):
     out = capsys.readouterr().out
     assert "Run: saham fetch iev" in out
     assert "fetch-top5" not in out
+
+
+def test_pre_open_invalid_movers_json_exits_1(monkeypatch):
+    monkeypatch.setattr(
+        "src.adapters.cli.screen_pre_open_commands.resolve_pre_open_market_status",
+        lambda: _BYPASS_GUARD_STATUS,
+    )
+
+    result = runner.invoke(
+        app,
+        ["screen", "pre-open", "--movers-json", "{not valid json"],
+    )
+
+    assert result.exit_code == 1
+
+
+def test_pre_open_non_array_movers_json_exits_1(monkeypatch):
+    monkeypatch.setattr(
+        "src.adapters.cli.screen_pre_open_commands.resolve_pre_open_market_status",
+        lambda: _BYPASS_GUARD_STATUS,
+    )
+
+    result = runner.invoke(
+        app,
+        ["screen", "pre-open", "--movers-json", '{"ticker": "BBCA"}'],
+    )
+
+    assert result.exit_code == 1
+
+
+def test_pre_open_missing_playwright_session_prints_plan_and_exits_0(monkeypatch):
+    monkeypatch.setattr(
+        "src.adapters.cli.screen_pre_open_commands.resolve_pre_open_market_status",
+        lambda: _BYPASS_GUARD_STATUS,
+    )
+    monkeypatch.setattr(
+        "src.adapters.cli.screen_pre_open_commands.resolve_pre_open_browser_plan",
+        lambda **kwargs: PreOpenBrowserPlan(
+            provider=None, autonomous=False, session_missing=True
+        ),
+    )
+
+    result = runner.invoke(app, ["screen", "pre-open"])
+
+    assert result.exit_code == 0
+    assert "Playwright installed but no session found." in result.output
+    assert "Run: saham fetch stockbit login" in result.output
+
+
+def test_pre_open_delegates_workflow_construction_and_writes_sidecar(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        "src.adapters.cli.screen_pre_open_commands.resolve_pre_open_market_status",
+        lambda: _BYPASS_GUARD_STATUS,
+    )
+    monkeypatch.setattr(
+        "src.adapters.cli.screen_pre_open_commands.resolve_pre_open_browser_plan",
+        lambda **kwargs: PreOpenBrowserPlan(
+            provider=object(), autonomous=False, session_missing=False
+        ),
+    )
+
+    fake_response = PreOpenWorkflowResponse(
+        result=PreOpenScreenResult(
+            screened_date=date(2026, 6, 12),
+            iev_min=100_000,
+            total_movers_seen=1,
+            candidates=[_candidate("BBCA")],
+        ),
+        warnings=[],
+        raw_movers=[],
+        data_freshness=PreOpenDataFreshness(
+            analysis_date=date(2026, 6, 12),
+            candle_end=None,
+            broker_end=None,
+        ),
+    )
+
+    calls = {"factory": None, "execute": 0, "sidecar": None}
+
+    class _FakeWorkflow:
+        def execute(self, request):
+            calls["execute"] += 1
+            return fake_response
+
+    def _fake_create_pre_open_cli_workflow(**kwargs):
+        calls["factory"] = kwargs
+        return PreOpenCliWorkflow(
+            workflow=_FakeWorkflow(),
+            market_repository=None,
+            broker_repository=None,
+        )
+
+    monkeypatch.setattr(
+        "src.adapters.cli.screen_pre_open_commands.create_pre_open_cli_workflow",
+        _fake_create_pre_open_cli_workflow,
+    )
+
+    def _fake_write_sidecar(**kwargs):
+        calls["sidecar"] = kwargs
+
+    monkeypatch.setattr(
+        "src.adapters.cli.screen_pre_open_commands.write_pre_open_sidecar",
+        _fake_write_sidecar,
+    )
+
+    result = runner.invoke(
+        app,
+        ["screen", "pre-open", "--movers-json", '[{"ticker":"BBCA","iev":150000}]'],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert calls["factory"] is not None
+    assert calls["execute"] == 1
+    assert calls["sidecar"] is not None
+    assert calls["sidecar"]["candidates"] == fake_response.result.candidates
+
+
+def test_pre_open_browser_interaction_required_maps_to_exit_1(monkeypatch):
+    monkeypatch.setattr(
+        "src.adapters.cli.screen_pre_open_commands.resolve_pre_open_market_status",
+        lambda: _BYPASS_GUARD_STATUS,
+    )
+    monkeypatch.setattr(
+        "src.adapters.cli.screen_pre_open_commands.resolve_pre_open_browser_plan",
+        lambda **kwargs: PreOpenBrowserPlan(
+            provider=object(), autonomous=False, session_missing=False
+        ),
+    )
+
+    class _RaisingWorkflow:
+        def execute(self, request):
+            raise BrowserInteractionRequired(
+                url="https://stockbit.com", instructions="log in manually"
+            )
+
+    monkeypatch.setattr(
+        "src.adapters.cli.screen_pre_open_commands.create_pre_open_cli_workflow",
+        lambda **kwargs: PreOpenCliWorkflow(
+            workflow=_RaisingWorkflow(), market_repository=None, broker_repository=None
+        ),
+    )
+
+    result = runner.invoke(
+        app,
+        ["screen", "pre-open", "--movers-json", '[{"ticker":"BBCA","iev":150000}]'],
+    )
+
+    assert result.exit_code == 1
+    assert "Browser action required" in result.output
