@@ -27,19 +27,17 @@ from __future__ import annotations
 import logging
 import sqlite3
 from datetime import date, datetime, timedelta
-from pathlib import Path
-from typing import TYPE_CHECKING
 
 from src.domain.ports.earnings_provider import EarningsProvider
 from src.domain.value_objects.earnings_record import EarningsRecord
-
-if TYPE_CHECKING:
-    from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
+from src.infrastructure.browser.stockbit_base_provider import StockbitCachingProvider
+from src.infrastructure.browser.stockbit_pit_cache import (
+    safe_cache_write,
+    safe_schema_update,
+)
+from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
 
 logger = logging.getLogger(__name__)
-
-from src.infrastructure.browser.stockbit_base_provider import StockbitCachingProvider
-from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
 
 _EARNINGS_URL = STOCKBIT_CFG.earnings_url
 
@@ -155,14 +153,14 @@ class StockbitEarningsProvider(EarningsProvider, StockbitCachingProvider):
     # ── Schema ───────────────────────────────────────────────────────────────
 
     def _ensure_schema(self) -> None:
-        try:
+        def _update():
             with self._get_conn() as conn:
                 conn.execute(_CREATE_TABLE)
                 _rebuild_earnings_cache_if_needed(conn)
                 conn.execute(_CREATE_TABLE)
                 conn.execute(_CREATE_INDEX)
-        except Exception as e:
-            logger.warning("earnings_cache schema error: %s", e)
+
+        safe_schema_update(logger=logger, label="earnings_cache", update=_update)
 
     # ── Cache ─────────────────────────────────────────────────────────────────
 
@@ -250,7 +248,8 @@ class StockbitEarningsProvider(EarningsProvider, StockbitCachingProvider):
         records = []
         for row in rows:
             try:
-                fetched_at = datetime.fromisoformat(row["fetched_date"]) if row["fetched_date"] else None
+                raw_fa = row["fetched_date"]
+                fetched_at = datetime.fromisoformat(raw_fa) if raw_fa else None
             except ValueError:
                 fetched_at = None
             records.append(EarningsRecord(
@@ -267,8 +266,10 @@ class StockbitEarningsProvider(EarningsProvider, StockbitCachingProvider):
         return records
 
     def _write_record(self, record: EarningsRecord) -> None:
-        fetched_str = record.fetched_at.isoformat() if record.fetched_at else datetime.now().isoformat()
-        try:
+        now = datetime.now()
+        fetched_str = record.fetched_at.isoformat() if record.fetched_at else now.isoformat()
+
+        def _do_write():
             with self._get_conn() as conn:
                 conn.execute(
                     """
@@ -295,9 +296,13 @@ class StockbitEarningsProvider(EarningsProvider, StockbitCachingProvider):
                         fetched_str,
                     ),
                 )
-        except Exception as e:
-            logger.debug("earnings_cache write error for %s Q%s %s: %s",
-                         record.ticker, record.quarter, record.year, e)
+
+        safe_cache_write(
+            logger=logger,
+            label="earnings_cache",
+            ticker=record.ticker,
+            write=_do_write,
+        )
 
     # ── Port implementation ───────────────────────────────────────────────────
 
@@ -368,7 +373,7 @@ class StockbitEarningsProvider(EarningsProvider, StockbitCachingProvider):
             if prev is not None:
                 current_q, current_y = prev
             else:
-                # If we haven't found any records yet, walk backward to search for the latest reported quarter
+                # Walk backward to find the latest reported quarter
                 if not records:
                     consecutive_failures += 1
                     current_q -= 1
@@ -405,7 +410,8 @@ class StockbitEarningsProvider(EarningsProvider, StockbitCachingProvider):
         if row is None:
             return None
         try:
-            fetched_at = datetime.fromisoformat(row["fetched_date"]) if row["fetched_date"] else None
+            raw_fa = row["fetched_date"]
+            fetched_at = datetime.fromisoformat(raw_fa) if raw_fa else None
         except ValueError:
             fetched_at = None
         return EarningsRecord(

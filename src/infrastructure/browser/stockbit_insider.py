@@ -19,19 +19,17 @@ from __future__ import annotations
 import logging
 import sqlite3
 from datetime import date, datetime
-from pathlib import Path
-from typing import TYPE_CHECKING
 
 from src.domain.ports.insider_activity_provider import InsiderActivityProvider
 from src.domain.value_objects.insider_transaction import InsiderTransaction
-
-if TYPE_CHECKING:
-    from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
+from src.infrastructure.browser.stockbit_base_provider import StockbitCachingProvider
+from src.infrastructure.browser.stockbit_pit_cache import (
+    safe_cache_write,
+    safe_schema_update,
+)
+from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
 
 logger = logging.getLogger(__name__)
-
-from src.infrastructure.browser.stockbit_base_provider import StockbitCachingProvider
-from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
 
 _INSIDER_URL = STOCKBIT_CFG.insider_url
 
@@ -113,7 +111,8 @@ def _parse_transactions(ticker: str, body: dict, action_filter: str) -> list[Ins
             continue
 
         # Shares transacted — abs value of changes.value
-        raw_shares = item.get("changes", {}).get("value") or item.get("changes", {}).get("formatted_value") or "0"
+        chg = item.get("changes", {})
+        raw_shares = chg.get("value") or chg.get("formatted_value") or "0"
         shares = int(_strip_num(raw_shares))
         if shares <= 0:
             continue
@@ -164,7 +163,7 @@ class StockbitInsiderActivityProvider(InsiderActivityProvider, StockbitCachingPr
     # ── Schema ───────────────────────────────────────────────────────────────
 
     def _ensure_schema(self) -> None:
-        try:
+        def _update():
             with self._get_conn() as conn:
                 self._ensure_pit_schema(conn)
                 conn.execute("""
@@ -175,8 +174,8 @@ class StockbitInsiderActivityProvider(InsiderActivityProvider, StockbitCachingPr
                     CREATE INDEX IF NOT EXISTS idx_insider_ticker_txn_fetched
                     ON insider_cache(ticker, transaction_date, action_type, fetched_date)
                 """)
-        except Exception as e:
-            logger.warning("insider_cache schema error: %s", e)
+
+        safe_schema_update(logger=logger, label="insider_cache", update=_update)
 
     def _ensure_pit_schema(self, conn: sqlite3.Connection) -> None:
         conn.execute("""
@@ -400,8 +399,10 @@ class StockbitInsiderActivityProvider(InsiderActivityProvider, StockbitCachingPr
         return real_row is None
 
     def _write_cache(self, ticker: str, transactions: list[InsiderTransaction]) -> None:
+        _ticker = ticker.upper()
         today_str = date.today().isoformat()
-        try:
+
+        def _do_write():
             with self._get_conn() as conn:
                 for t in transactions:
                     conn.execute(
@@ -435,10 +436,15 @@ class StockbitInsiderActivityProvider(InsiderActivityProvider, StockbitCachingPr
                              fetched_date)
                         VALUES (?, '__NONE__', '', 'NONE', 0, 0, '1970-01-01', 0, 0, ?)
                         """,
-                        (ticker.upper(), today_str),
+                        (_ticker, today_str),
                     )
-        except Exception as e:
-            logger.debug("insider_cache write error for %s: %s", ticker, e)
+
+        safe_cache_write(
+            logger=logger,
+            label="insider_cache",
+            ticker=ticker,
+            write=_do_write,
+        )
 
     # ── Port implementation ───────────────────────────────────────────────────
 

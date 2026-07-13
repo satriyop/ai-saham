@@ -16,22 +16,16 @@ Depends on: playwright_stockbit (for token), SeasonalityProvider port
 from __future__ import annotations
 
 import logging
-import sqlite3
 from datetime import date, datetime
-from pathlib import Path
-from typing import TYPE_CHECKING
 
 from src.domain.ports.seasonality_provider import SeasonalityProvider
 from src.domain.value_objects.seasonal_edge import SeasonalEdge
-
-if TYPE_CHECKING:
-    from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
-
-logger = logging.getLogger(__name__)
-
 from src.infrastructure.browser.stockbit_base_provider import StockbitCachingProvider
+from src.infrastructure.browser.stockbit_pit_cache import safe_schema_update
 from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
 from src.infrastructure.persistence.sqlite_migration_runner import SqliteMigrationRunner
+
+logger = logging.getLogger(__name__)
 
 _SEASONALITY_URL = STOCKBIT_CFG.seasonality_url
 
@@ -147,10 +141,10 @@ class StockbitSeasonalityProvider(SeasonalityProvider, StockbitCachingProvider):
     ]
 
     def _ensure_schema(self) -> None:
-        try:
+        def _update():
             SqliteMigrationRunner(self._db_path).run("seasonality_cache", self._MIGRATIONS)
-        except Exception as e:
-            logger.warning("seasonality_cache schema error: %s", e)
+
+        safe_schema_update(logger=logger, label="seasonality_cache", update=_update)
 
     # ── Cache ─────────────────────────────────────────────────────────────────
 
@@ -164,7 +158,9 @@ class StockbitSeasonalityProvider(SeasonalityProvider, StockbitCachingProvider):
         try:
             with self._get_conn() as conn:
                 row = conn.execute(
-                    "SELECT 1 FROM seasonality_cache WHERE ticker=? AND year=? AND month=? AND fetched_month=? LIMIT 1",
+                    "SELECT 1 FROM seasonality_cache "
+                    "WHERE ticker=? AND year=? AND month=? "
+                    "AND fetched_month=? LIMIT 1",
                     (ticker.upper(), year, month, month_key),
                 ).fetchone()
             return row is not None
@@ -181,7 +177,10 @@ class StockbitSeasonalityProvider(SeasonalityProvider, StockbitCachingProvider):
         where = "WHERE ticker=? AND year=? AND month=?"
         params: tuple = (ticker.upper(), year, month)
         if as_of_date is not None:
-            where += " AND date(COALESCE(substr(fetched_at,1,10), fetched_month || '-01')) <= date(?)"
+            where += (
+                " AND date(COALESCE(substr(fetched_at,1,10), fetched_month || '-01'))"
+                " <= date(?)"
+            )
             params = (ticker.upper(), year, month, as_of_date.isoformat())
         try:
             with self._get_conn() as conn:

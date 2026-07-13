@@ -22,19 +22,21 @@ from __future__ import annotations
 import logging
 import sqlite3
 from datetime import date, datetime, time
-from pathlib import Path
-from typing import TYPE_CHECKING
 
 from src.domain.ports.company_profile_provider import CompanyProfileProvider
 from src.domain.value_objects.company_profile import CompanyProfile
-
-if TYPE_CHECKING:
-    from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
+from src.infrastructure.browser.stockbit_base_provider import StockbitCachingProvider
+from src.infrastructure.browser.stockbit_pit_cache import (
+    fetched_at_is_fresh,
+    fetched_date_as_of_filter,
+    latest_fetched_order,
+    safe_cache_read,
+    safe_cache_write,
+    safe_schema_update,
+)
+from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
 
 logger = logging.getLogger(__name__)
-
-from src.infrastructure.browser.stockbit_base_provider import StockbitCachingProvider
-from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
 
 _PROFILE_URL = STOCKBIT_CFG.company_profile_url
 _CACHE_TTL_DAYS = STOCKBIT_CFG.cache_ttl_days_company_profile
@@ -114,7 +116,7 @@ class StockbitCompanyProfileProvider(CompanyProfileProvider, StockbitCachingProv
     """
 
     def _ensure_schema(self) -> None:
-        try:
+        def _update():
             with sqlite3.connect(str(self._db_path)) as conn:
                 conn.execute(_CREATE_TABLE)
                 _rebuild_company_profile_cache_if_needed(conn)
@@ -122,8 +124,8 @@ class StockbitCompanyProfileProvider(CompanyProfileProvider, StockbitCachingProv
                     "CREATE INDEX IF NOT EXISTS idx_company_profile_ticker_fetched "
                     "ON company_profile_cache(ticker, fetched_date)"
                 )
-        except Exception as e:
-            logger.warning("company_profile_cache: table creation failed: %s", e)
+
+        safe_schema_update(logger=logger, label="company_profile_cache", update=_update)
 
     def get_profile(
         self,
@@ -149,25 +151,23 @@ class StockbitCompanyProfileProvider(CompanyProfileProvider, StockbitCachingProv
     ) -> CompanyProfile | None:
         where = "WHERE ticker=?"
         params: tuple[str, ...] = (ticker,)
-        if as_of_date is not None:
-            where += " AND date(substr(fetched_date,1,10)) <= date(?)"
-            params = (ticker, as_of_date.isoformat())
-        try:
+        frag, extra_params = fetched_date_as_of_filter(as_of_date)
+        where += frag
+        params += extra_params
+
+        def _do_read():
             with sqlite3.connect(str(self._db_path)) as conn:
                 row = conn.execute(
                     "SELECT fetched_date, background, listing_board, ipo_date, ipo_price, "
                     "ipo_amount, website, email, office_address "
                     f"FROM company_profile_cache {where} "
-                    "ORDER BY date(substr(fetched_date,1,10)) DESC, fetched_date DESC "
-                    "LIMIT 1",
+                    f"{latest_fetched_order()} LIMIT 1",
                     params,
                 ).fetchone()
             if not row:
                 return None
             fetched_at = _parse_fetched_at(row[0])
-            if require_fresh and (
-                fetched_at is None or (datetime.now() - fetched_at).days > _CACHE_TTL_DAYS
-            ):
+            if require_fresh and not fetched_at_is_fresh(fetched_at, ttl_days=_CACHE_TTL_DAYS):
                 return None
             return CompanyProfile(
                 ticker=ticker,
@@ -181,13 +181,20 @@ class StockbitCompanyProfileProvider(CompanyProfileProvider, StockbitCachingProv
                 office_address=row[8],
                 fetched_at=fetched_at,
             )
-        except Exception as e:
-            logger.debug("company_profile_cache read failed for %s: %s", ticker, e)
-            return None
+
+        return safe_cache_read(
+            logger=logger,
+            label="company_profile_cache",
+            ticker=ticker,
+            default=None,
+            read=_do_read,
+        )
 
     def _write_cache(self, profile: CompanyProfile) -> None:
-        fetched_str = profile.fetched_at.isoformat() if profile.fetched_at else datetime.now().isoformat()
-        try:
+        now = datetime.now()
+        fetched_str = profile.fetched_at.isoformat() if profile.fetched_at else now.isoformat()
+
+        def _do_write():
             with sqlite3.connect(str(self._db_path)) as conn:
                 conn.execute(
                     "INSERT INTO company_profile_cache "
@@ -215,8 +222,13 @@ class StockbitCompanyProfileProvider(CompanyProfileProvider, StockbitCachingProv
                         profile.office_address,
                     ),
                 )
-        except Exception as e:
-            logger.debug("company_profile_cache write failed for %s: %s", profile.ticker, e)
+
+        safe_cache_write(
+            logger=logger,
+            label="company_profile_cache",
+            ticker=profile.ticker,
+            write=_do_write,
+        )
 
     def _fetch(self, ticker: str) -> CompanyProfile | None:
         if self._api_client is None:
@@ -229,7 +241,12 @@ class StockbitCompanyProfileProvider(CompanyProfileProvider, StockbitCachingProv
                 return None
             result = _parse_profile(ticker, body)
             if result:
-                logger.debug("CompanyProfile %s → board=%s IPO=%s", ticker, result.listing_board, result.ipo_date)
+                logger.debug(
+                    "CompanyProfile %s → board=%s IPO=%s",
+                    ticker,
+                    result.listing_board,
+                    result.ipo_date,
+                )
             return result
         except Exception as e:
             logger.warning("Company profile fetch failed for %s: %s", ticker, e)

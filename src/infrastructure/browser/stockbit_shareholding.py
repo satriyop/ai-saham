@@ -35,15 +35,19 @@ from typing import TYPE_CHECKING
 
 from src.domain.ports.shareholding_provider import ShareholdingProvider
 from src.domain.value_objects.shareholding_composition import ShareholdingComposition
+from src.infrastructure.browser.stockbit_base_provider import StockbitCachingProvider
+from src.infrastructure.browser.stockbit_pit_cache import (
+    has_fresh_ticker_row,
+    safe_cache_write,
+    safe_schema_update,
+)
+from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+from src.infrastructure.persistence.sqlite_migration_runner import SqliteMigrationRunner
 
 if TYPE_CHECKING:
     from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
 
 logger = logging.getLogger(__name__)
-
-from src.infrastructure.browser.stockbit_base_provider import StockbitCachingProvider
-from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
-from src.infrastructure.persistence.sqlite_migration_runner import SqliteMigrationRunner
 
 _COMPOSITION_URL = STOCKBIT_CFG.shareholding_url
 _CACHE_TTL_DAYS = STOCKBIT_CFG.cache_ttl_days_shareholding
@@ -187,24 +191,21 @@ class StockbitShareholdingProvider(ShareholdingProvider, StockbitCachingProvider
         super().__init__(api_client, db_path)
 
     def _ensure_schema(self) -> None:
-        try:
+        def _update():
             SqliteMigrationRunner(self._db_path).run("shareholding_composition", _MIGRATIONS)
-        except Exception as e:
-            logger.warning("shareholding: failed to create cache table: %s", e)
+
+        safe_schema_update(logger=logger, label="shareholding_composition", update=_update)
 
     def _is_cache_fresh(self, ticker: str) -> bool:
         """True if a row exists within the 7-day TTL window."""
         try:
             with sqlite3.connect(self._db_path) as conn:
-                row = conn.execute(
-                    "SELECT fetched_date FROM shareholding_composition "
-                    "WHERE ticker=? ORDER BY date(fetched_date) DESC, fetched_date DESC LIMIT 1",
-                    (ticker.upper(),),
-                ).fetchone()
-            if not row:
-                return False
-            fetched_at = _parse_fetched_at(row[0])
-            return fetched_at is not None and (datetime.now() - fetched_at).days <= _CACHE_TTL_DAYS
+                return has_fresh_ticker_row(
+                    conn,
+                    table="shareholding_composition",
+                    ticker=ticker,
+                    ttl_days=_CACHE_TTL_DAYS,
+                )
         except Exception:
             return False
 
@@ -285,7 +286,8 @@ class StockbitShareholdingProvider(ShareholdingProvider, StockbitCachingProvider
         fetched_str = (
             comp.fetched_at.isoformat() if comp.fetched_at else datetime.now().isoformat()
         )
-        try:
+
+        def _do_write():
             with sqlite3.connect(self._db_path) as conn:
                 conn.execute(
                     "INSERT OR REPLACE INTO shareholding_composition "
@@ -304,8 +306,13 @@ class StockbitShareholdingProvider(ShareholdingProvider, StockbitCachingProvider
                         comp.total_shares_formatted,
                     ),
                 )
-        except Exception as e:
-            logger.warning("shareholding: cache write failed for %s: %s", comp.ticker, e)
+
+        safe_cache_write(
+            logger=logger,
+            label="shareholding_composition",
+            ticker=comp.ticker,
+            write=_do_write,
+        )
 
     def _fetch(self, ticker: str) -> ShareholdingComposition | None:
         if self._api_client is None:
