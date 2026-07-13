@@ -4,8 +4,8 @@ Factory helpers for universe CLI commands.
 Layer: Adapter
 """
 
-import src.application.services.stockbit_session as _stockbit_session
 import src.infrastructure.browser.stockbit_universe as _stockbit_universe
+import src.infrastructure.composition.stockbit_session_factory as _stockbit_session
 from src.application.ports.universe_config_store import UniverseConfigStore
 from src.application.use_case.manage_universe_use_case import (
     CreateUniverseUseCase,

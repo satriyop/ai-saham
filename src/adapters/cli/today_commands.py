@@ -26,6 +26,9 @@ from src.application.use_case.daily_briefing_use_case import (
     DailyBriefingRequest,
     DailyBriefingUseCase,
 )
+from src.infrastructure.composition.indicator_registry_factory import (
+    create_indicator_registry,
+)
 from src.infrastructure.config.accumulation_screener_config import (
     load_accumulation_screener_config,
 )
@@ -91,6 +94,7 @@ def today(
         accumulation_use_case=AccumulationScreenUseCase(
             broker_repository=broker_repo,
             market_repository=market_repo,
+            indicator_registry=create_indicator_registry(),
             derived_feature_policy=_ASC.derived_features,
         ),
         universe_loader=YamlUniverseConfigLoader(),

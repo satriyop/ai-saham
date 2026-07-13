@@ -11,12 +11,12 @@ from typing import Annotated, Optional
 
 import typer
 
-from src.application.services.bootstrap import create_indicator_registry
 from src.application.services.universe_loader import UniverseNotFoundError, resolve_tickers
 from src.application.use_case.intraday_backtest_use_case import (
     IntradayBacktestRequest,
     IntradayBacktestUseCase,
 )
+from src.infrastructure.composition.indicator_registry_factory import create_indicator_registry
 from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.config.pre_open_config import load_pre_open_screen_config
 from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader

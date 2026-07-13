@@ -14,16 +14,14 @@ from datetime import date, timedelta
 from decimal import Decimal
 from unittest.mock import MagicMock
 
-import pytest
-
 from src.application.dto.accumulation_screen import (
     AccumulationCandidate,
     AccumulationScreenRequest,
 )
 from src.application.services.accumulation_risk_funnel import AccumulationRiskFunnel
+from src.application.services.indicator_registry import IndicatorRegistry
 from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
-from src.application.use_case.assess_risk_use_case import AssessRiskUseCase
-from src.application.use_case.assess_risk_use_case import AssessRiskResponse
+from src.application.use_case.assess_risk_use_case import AssessRiskResponse, AssessRiskUseCase
 from src.application.use_case.assess_signal_use_case import AssessSignalResponse
 from src.domain.entities.candle import Candle
 from src.domain.rules.fundamental_gate import FundamentalGate
@@ -95,6 +93,7 @@ def test_risk_assessment_none_when_no_risk_use_case():
     """risk_use_case=None → funnel never runs → risk_assessment stays None."""
     mkt_repo = _mock_market_repo(["BBCA"])
     uc = AccumulationScreenUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=_mock_broker_repo(),
         market_repository=mkt_repo,
         risk_use_case=None,
@@ -115,6 +114,7 @@ def test_risk_funnel_fires_fundamental_gate_on_distressed_ticker():
         structural_gates=[FundamentalGate(distress_threshold=3)],
     )
     uc = AccumulationScreenUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=_mock_broker_repo(),
         market_repository=mkt_repo,
         risk_use_case=risk_uc,
@@ -146,6 +146,7 @@ def test_risk_funnel_passes_healthy_ticker():
         structural_gates=[FundamentalGate(distress_threshold=3)],
     )
     uc = AccumulationScreenUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=_mock_broker_repo(),
         market_repository=mkt_repo,
         risk_use_case=risk_uc,
@@ -208,6 +209,7 @@ def test_risk_funnel_composes_trade_setup_from_signal_and_risk():
     risk_uc = MagicMock(spec=AssessRiskUseCase)
     risk_uc.execute.return_value = risk_response
     uc = AccumulationScreenUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=_mock_broker_repo(),
         market_repository=mkt_repo,
         risk_use_case=risk_uc,
@@ -247,6 +249,7 @@ def test_risk_funnel_builds_gate_context_from_candidate_data():
         structural_gates=[_CapturingGate()],
     )
     uc = AccumulationScreenUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=_mock_broker_repo(),
         market_repository=mkt_repo,
         risk_use_case=risk_uc,
@@ -290,6 +293,7 @@ def test_risk_funnel_skips_failed_candidate_and_continues():
     ]
 
     uc = AccumulationScreenUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=_mock_broker_repo(),
         market_repository=mkt_repo,
         risk_use_case=risk_uc,

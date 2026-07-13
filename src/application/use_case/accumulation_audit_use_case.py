@@ -10,6 +10,7 @@ AI usage: None
 """
 
 from datetime import date
+from typing import Any
 
 from src.application.dto.accumulation_audit import (
     AccumulationAuditPolicy,
@@ -70,6 +71,7 @@ class AccumulationAuditUseCase:
         self,
         broker_repository: BrokerDataRepository,
         market_repository: MarketDataRepository,
+        indicator_registry: Any,
         derived_feature_policy: AccumulationDerivedFeaturePolicy | None = None,
     ) -> None:
         self._broker_repo = broker_repository
@@ -78,6 +80,7 @@ class AccumulationAuditUseCase:
         self._screen = AccumulationScreenUseCase(
             broker_repository=broker_repository,
             market_repository=market_repository,
+            indicator_registry=indicator_registry,
             derived_feature_policy=self._derived_features,
         )
         self._broker_quality_classifier = AccumulationBrokerQualityClassifier(broker_repository)

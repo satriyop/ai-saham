@@ -17,9 +17,9 @@ from src.application.rules.exceptions import (
     RulesValidationError,
     StrategyNotFoundError,
 )
-from src.application.services.bootstrap import create_indicator_registry
 from src.application.services.strategy_loader import StrategyLoader
 from src.application.use_case.backtest_use_case import BacktestRequest, BacktestUseCase
+from src.infrastructure.composition.indicator_registry_factory import create_indicator_registry
 from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository

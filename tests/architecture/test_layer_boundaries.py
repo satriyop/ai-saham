@@ -61,97 +61,42 @@ FORBIDDEN_LIBRARY_IMPORTS = {
 # policy/dataclass object rather than have application import the loader).
 BASELINE_ALLOWLIST = {
     (
-        "src/application/services/engine_bootstrap/indicator_registry_factory.py",
-        "src.infrastructure.persistence.formula_storage",
-    ): "LEGACY: composition-root factory constructs infrastructure persistence directly; predates architecture guard. Do not copy.",
-    (
-        "src/application/services/engine_bootstrap/indicator_registry_factory.py",
-        "src.infrastructure.plugins.indicator_loader",
-    ): "LEGACY: composition-root factory wires infrastructure plugin loader directly; predates architecture guard. Do not copy.",
-    (
-        "src/application/services/engine_bootstrap/risk_engine_factory.py",
-        "src.infrastructure.persistence.sqlite_broker_repository",
-    ): "LEGACY: composition-root factory wires infrastructure repository directly; predates architecture guard. Do not copy.",
-    (
-        "src/application/services/engine_bootstrap/risk_engine_factory.py",
-        "src.infrastructure.persistence.sqlite_market_repository",
-    ): "LEGACY: composition-root factory wires infrastructure repository directly; predates architecture guard. Do not copy.",
-    (
-        "src/application/services/engine_bootstrap/risk_engine_factory.py",
-        "src.infrastructure.browser.stockbit_bandar",
-    ): "LEGACY: composition-root factory wires infrastructure browser provider directly; predates architecture guard. Do not copy.",
-    (
-        "src/application/services/engine_bootstrap/risk_engine_factory.py",
-        "src.infrastructure.browser.stockbit_fundamentals",
-    ): "LEGACY: composition-root factory wires infrastructure browser provider directly; predates architecture guard. Do not copy.",
-    (
-        "src/application/services/engine_bootstrap/risk_engine_factory.py",
-        "src.infrastructure.browser.stockbit_shareholding",
-    ): "LEGACY: composition-root factory wires infrastructure browser provider directly; predates architecture guard. Do not copy.",
-    (
-        "src/application/services/engine_bootstrap/signal_engine_factory.py",
-        "src.infrastructure.config.signal_engine_config_loader",
+        "src/application/services/strategy_loader.py",
+        "src.infrastructure.config.rules_yaml_loader",
     ): (
-        "LEGACY: composition-root factory reads infrastructure config module "
+        "LEGACY: application loader calls infrastructure YAML loader "
         "directly; predates architecture guard. Do not copy."
     ),
     (
-        "src/application/services/engine_bootstrap/signal_engine_factory.py",
-        "src.infrastructure.browser.stockbit_analyst",
-    ): "LEGACY: composition-root factory wires infrastructure browser provider directly; predates architecture guard. Do not copy.",
-    (
-        "src/application/services/engine_bootstrap/signal_engine_factory.py",
-        "src.infrastructure.browser.stockbit_bandar",
-    ): "LEGACY: composition-root factory wires infrastructure browser provider directly; predates architecture guard. Do not copy.",
-    (
-        "src/application/services/engine_bootstrap/signal_engine_factory.py",
-        "src.infrastructure.browser.stockbit_forward_estimates",
-    ): "LEGACY: composition-root factory wires infrastructure browser provider directly; predates architecture guard. Do not copy.",
-    (
-        "src/application/services/engine_bootstrap/signal_engine_factory.py",
-        "src.infrastructure.browser.stockbit_insider",
-    ): "LEGACY: composition-root factory wires infrastructure browser provider directly; predates architecture guard. Do not copy.",
-    (
-        "src/application/services/engine_bootstrap/signal_engine_factory.py",
-        "src.infrastructure.browser.stockbit_seasonality",
-    ): "LEGACY: composition-root factory wires infrastructure browser provider directly; predates architecture guard. Do not copy.",
-    (
-        "src/application/services/engine_bootstrap/signal_engine_factory.py",
-        "src.infrastructure.persistence.sqlite_market_repository",
-    ): "LEGACY: composition-root factory wires infrastructure repository directly; predates architecture guard. Do not copy.",
-    (
-        "src/application/services/stockbit_session.py",
-        "src.infrastructure.browser.stockbit_api_client",
-    ): "LEGACY: application session service wires infrastructure browser client directly; predates architecture guard. Do not copy.",
-    (
-        "src/application/services/stockbit_session.py",
-        "src.infrastructure.browser.stockbit_broker_provider",
-    ): "LEGACY: application session service wires infrastructure browser provider directly; predates architecture guard. Do not copy.",
-    (
-        "src/application/services/stockbit_session.py",
-        "src.infrastructure.config.app_config",
-    ): "LEGACY: application session service reads infrastructure config module directly; predates architecture guard. Do not copy.",
-    (
-        "src/application/services/strategy_loader.py",
-        "src.infrastructure.config.rules_yaml_loader",
-    ): "LEGACY: application loader calls infrastructure YAML loader directly; predates architecture guard. Do not copy.",
-
-    (
         "src/application/use_case/backtest_use_case.py",
         "src.infrastructure.config.rules_yaml_loader",
-    ): "LEGACY: application use case calls infrastructure YAML loader directly; predates architecture guard. Do not copy.",
+    ): (
+        "LEGACY: application use case calls infrastructure YAML loader "
+        "directly; predates architecture guard. Do not copy."
+    ),
     (
         "src/application/use_case/create_strategy_from_intent_use_case.py",
         "src.infrastructure.config.rules_yaml_loader",
-    ): "LEGACY: application use case calls infrastructure YAML loader directly; predates architecture guard. Do not copy.",
+    ): (
+        "LEGACY: application use case calls infrastructure YAML loader "
+        "directly; predates architecture guard. Do not copy."
+    ),
     (
         "src/application/use_case/view_universe_summary_use_case.py",
         "src.infrastructure.persistence.sqlite_universe_summary_provider",
-    ): "LEGACY: application use case constructs infrastructure provider directly; predates architecture guard. Do not copy.",
+    ): (
+        "LEGACY: application use case constructs infrastructure provider "
+        "directly; predates architecture guard. Do not copy."
+    ),
     (
         "src/domain/rules/technical_gate.py",
         "src.application.services.indicator_evaluator",
-    ): "LEGACY: TYPE_CHECKING-only forward reference for a constructor parameter hint; not a runtime import but still ast-visible. Predates architecture guard. Do not copy — prefer a domain-level Protocol port.",
+    ): (
+        "LEGACY: TYPE_CHECKING-only forward reference for a constructor "
+        "parameter hint; not a runtime import but still ast-visible. "
+        "Predates architecture guard. Do not copy — prefer a "
+        "domain-level Protocol port."
+    ),
 }
 
 

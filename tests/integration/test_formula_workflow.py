@@ -17,7 +17,6 @@ from pathlib import Path
 
 import pytest
 
-from src.application.services.bootstrap import create_indicator_registry
 from src.application.services.indicator_registry import IndicatorRegistry
 from src.application.use_case.create_indicator_from_intent_use_case import (
     CreateIndicatorFromIntentRequest,
@@ -25,6 +24,7 @@ from src.application.use_case.create_indicator_from_intent_use_case import (
 )
 from src.domain.entities.candle import Candle
 from src.infrastructure.ai.formula_translator import FormulaTranslatorAdapter
+from src.infrastructure.composition.indicator_registry_factory import create_indicator_registry
 from src.infrastructure.persistence.formula_storage import FormulaStorage
 
 # --- Fixtures ---

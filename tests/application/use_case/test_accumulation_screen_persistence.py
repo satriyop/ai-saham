@@ -26,6 +26,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from src.application.dto.accumulation_screen import AccumulationScreenRequest
+from src.application.services.indicator_registry import IndicatorRegistry
 from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
 from src.domain.entities.broker_flow import BrokerSummary, ForeignFlowPoint
 from src.domain.entities.candle import Candle
@@ -351,6 +352,7 @@ class TestIaCnfbDivergenceWithPlausibleFlowData:
 
         obs_repo = _CapturingObservationsRepo()
         uc = AccumulationScreenUseCase(
+            indicator_registry=IndicatorRegistry(),
             broker_repository=_MockBrokerRepo(summaries, flow_points),
             market_repository=_MockMarketRepo(candles),
             candidate_observations_repository=obs_repo,
@@ -431,6 +433,7 @@ class TestScFingerprintWithPeerCandles:
 
         obs_repo = _CapturingObservationsRepo()
         uc = AccumulationScreenUseCase(
+            indicator_registry=IndicatorRegistry(),
             broker_repository=_MockBrokerRepo(summaries),
             market_repository=_MockMarketRepo(all_candles),
             candidate_observations_repository=obs_repo,
@@ -512,6 +515,7 @@ class TestFingerprintKeysExistWhenInputsUnavailable:
 
         obs_repo = _CapturingObservationsRepo()
         uc = AccumulationScreenUseCase(
+            indicator_registry=IndicatorRegistry(),
             # No ForeignFlowPoints (get_foreign_flow_points returns []).
             broker_repository=_MockBrokerRepo(summaries),
             # No peer candles and no IHSG candles (only BBCA).

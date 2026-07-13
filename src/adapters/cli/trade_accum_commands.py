@@ -26,6 +26,9 @@ from src.application.use_case.evaluate_swing_setup_use_case import (
 from src.infrastructure.browser.stockbit_provider_bundle import (
     create_readonly_stockbit_providers,
 )
+from src.infrastructure.composition.indicator_registry_factory import (
+    create_indicator_registry,
+)
 from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.config.company_quality_context_config_loader import (
     create_company_quality_context_evidence_builder,
@@ -109,6 +112,7 @@ def _accumulation_log_impl(
     screen_uc = create_accumulation_screen_use_case(
         broker_repository=broker_repo,
         market_repository=market_repo,
+        indicator_registry=create_indicator_registry(),
         stockbit_providers=_sb,
         ticker_profile_classifier_factory=create_ticker_profile_classifier,
         institutional_accumulation_config_factory=load_institutional_accumulation_config,

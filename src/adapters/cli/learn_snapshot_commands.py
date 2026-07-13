@@ -63,8 +63,8 @@ def snapshot(
 
     if not force:
         try:
-            from src.application.services.stockbit_session import get_stockbit_session
             from src.infrastructure.browser.stockbit_market_time import StockbitMarketTimeProvider
+            from src.infrastructure.composition.stockbit_session_factory import get_stockbit_session
 
             _mstatus = None
             _mtime_session = get_stockbit_session()
@@ -89,7 +89,6 @@ def snapshot(
         from src.adapters.cli.screen_pre_open_commands import (
             _playwright_available,
         )
-        from src.application.services.bootstrap import create_indicator_registry
         from src.application.use_case.opening_snapshot_use_case import (
             OpeningSnapshotRequest,
             OpeningSnapshotUseCase,
@@ -99,6 +98,9 @@ def snapshot(
         )
         from src.infrastructure.browser.stockbit_ticker_notation import (
             StockbitTickerNotationProvider,
+        )
+        from src.infrastructure.composition.indicator_registry_factory import (
+            create_indicator_registry,
         )
         from src.infrastructure.config.pre_open_config import load_pre_open_screen_config
         from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository

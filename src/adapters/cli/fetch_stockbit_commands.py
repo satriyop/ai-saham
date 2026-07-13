@@ -264,8 +264,8 @@ def test(
         saham fetch stockbit test
         saham fetch stockbit test --ticker BMRI
     """
-    from src.application.services.stockbit_session import get_stockbit_session
     from src.infrastructure.browser.playwright_stockbit_provider import PlaywrightStockbitProvider
+    from src.infrastructure.composition.stockbit_session_factory import get_stockbit_session
 
     _test_session = get_stockbit_session()
     if not _test_session or not _test_session.authenticated:
@@ -373,8 +373,8 @@ def fetch_top5(
         saham fetch stockbit fetch-top5
         saham fetch stockbit fetch-top5 --top 10
     """
-    from src.application.services.stockbit_session import get_stockbit_session
     from src.infrastructure.browser.playwright_stockbit_provider import PlaywrightStockbitProvider
+    from src.infrastructure.composition.stockbit_session_factory import get_stockbit_session
 
     _top5_session = get_stockbit_session()
     if not _top5_session or not _top5_session.authenticated:

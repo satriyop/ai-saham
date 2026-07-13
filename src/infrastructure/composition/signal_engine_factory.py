@@ -1,15 +1,17 @@
 """
-Signal engine construction.
+Signal engine construction (infrastructure composition root).
 
 Wires a fully-configured SignalEngine: loads signal-related config via the
-shared config resolvers and injects enrichment providers. No CLI policy, no
-backtest/screening workflow.
+shared application-layer config resolvers and injects Stockbit-backed
+enrichment providers. This is concrete wiring, so it lives in
+infrastructure, not application.
+
+Layer: Infrastructure (composition root)
 """
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from src.application.services.engine_bootstrap.signal_scoring_config_resolver import (
     resolve_signal_engine_config,
@@ -17,9 +19,18 @@ from src.application.services.engine_bootstrap.signal_scoring_config_resolver im
 from src.application.services.engine_bootstrap.signal_weight_config_resolver import (
     _resolve_signal_weights,
 )
-
-if TYPE_CHECKING:
-    from src.application.services.signal_engine import SignalEngine
+from src.application.services.signal_engine import SignalEngine
+from src.infrastructure.browser.stockbit_analyst import StockbitAnalystConsensusProvider
+from src.infrastructure.browser.stockbit_bandar import StockbitBandarDetectorProvider
+from src.infrastructure.browser.stockbit_forward_estimates import (
+    StockbitForwardEstimatesProvider,
+)
+from src.infrastructure.browser.stockbit_insider import StockbitInsiderActivityProvider
+from src.infrastructure.browser.stockbit_seasonality import StockbitSeasonalityProvider
+from src.infrastructure.config.signal_engine_config_loader import (
+    load_signal_engine_config_raw,
+)
+from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
 
 def create_signal_engine(
@@ -37,13 +48,6 @@ def create_signal_engine(
             When False (default), all providers are None and all factors fall
             back to neutral (50.0) — useful for testing the engine wiring.
     """
-    from pathlib import Path as _Path
-
-    from src.application.services.signal_engine import SignalEngine
-    from src.infrastructure.config.signal_engine_config_loader import (
-        load_signal_engine_config_raw,
-    )
-
     cfg = load_signal_engine_config_raw()
     weights = _resolve_signal_weights(cfg)
     signal_config = resolve_signal_engine_config(cfg)
@@ -51,20 +55,7 @@ def create_signal_engine(
     if not with_enrichment:
         return SignalEngine(weights=weights, config=signal_config)
 
-    from src.infrastructure.browser.stockbit_analyst import StockbitAnalystConsensusProvider
-    from src.infrastructure.browser.stockbit_bandar import StockbitBandarDetectorProvider
-    from src.infrastructure.browser.stockbit_forward_estimates import (
-        StockbitForwardEstimatesProvider,
-    )
-    from src.infrastructure.browser.stockbit_insider import (
-        StockbitInsiderActivityProvider,
-    )
-    from src.infrastructure.browser.stockbit_seasonality import StockbitSeasonalityProvider
-    from src.infrastructure.persistence.sqlite_market_repository import (
-        SQLiteMarketRepository,
-    )
-
-    resolved = _Path(db_path)
+    resolved = Path(db_path)
     market_repository = SQLiteMarketRepository(db_path=resolved)
 
     def _latest_close(ticker: str) -> float | None:

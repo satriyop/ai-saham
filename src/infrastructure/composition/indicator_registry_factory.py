@@ -1,8 +1,13 @@
 """
-Indicator registry construction.
+Indicator registry construction (infrastructure composition root).
 
 Builds an IndicatorRegistry with built-in indicators, discovered plugins, and
-persisted formulas loaded. No signal/risk engine construction, no CLI behavior.
+persisted formulas loaded. This is concrete wiring — it constructs the
+infrastructure plugin loader and formula storage directly — so it lives in
+infrastructure, not application. Adapters call this to obtain a fully-wired
+registry and pass it explicitly into application use cases.
+
+Layer: Infrastructure (composition root)
 """
 
 from __future__ import annotations
@@ -13,11 +18,12 @@ from typing import TYPE_CHECKING
 
 from src.application.formula.parser import parse
 from src.application.services.indicator_registry import IndicatorRegistry
+from src.infrastructure.persistence.formula_storage import FormulaStorage
+from src.infrastructure.plugins.indicator_loader import IndicatorPluginLoader
 
 if TYPE_CHECKING:
     from src.domain.ports.broker_data_repository import BrokerDataRepository
     from src.domain.ports.market_data_repository import MarketDataRepository
-    from src.infrastructure.persistence.formula_storage import FormulaStorage
 
 logger = logging.getLogger(__name__)
 
@@ -53,13 +59,9 @@ def create_indicator_registry(
         index_ticker=index_ticker,
     )
 
-    # Load plugins
-    from src.infrastructure.plugins.indicator_loader import IndicatorPluginLoader
-
     loader = IndicatorPluginLoader(Path(plugin_dir) if plugin_dir else None)
     plugins = loader.discover()
 
-    # Register each plugin
     for plugin_class in plugins:
         try:
             registry.register_plugin(plugin_class)
@@ -67,7 +69,6 @@ def create_indicator_registry(
         except Exception as e:
             logger.warning(f"Failed to register plugin {plugin_class.name}: {e}")
 
-    # Load persisted formulas
     if load_formulas:
         _load_formulas_into_registry(registry, formula_storage)
 
@@ -86,13 +87,9 @@ def _load_formulas_into_registry(
         formula_storage: Optional FormulaStorage instance. If None,
                         creates default storage from config/formulas.yaml.
     """
-    # Create default storage if not provided
     if formula_storage is None:
-        from src.infrastructure.persistence.formula_storage import FormulaStorage
-
         formula_storage = FormulaStorage()
 
-    # Load all formulas
     try:
         stored_formulas = formula_storage.load_all()
     except Exception as e:
@@ -103,18 +100,13 @@ def _load_formulas_into_registry(
         logger.debug("No formulas found in storage")
         return
 
-    # Register each formula
     loaded_count = 0
     for name, stored in stored_formulas.items():
         try:
-            # Parse formula string to AST
             ast = parse(stored.formula)
-
-            # Register in registry
             registry.register_formula(name, ast)
             logger.debug(f"Loaded formula from storage: {name}")
             loaded_count += 1
-
         except Exception as e:
             logger.warning(f"Failed to load formula {name}: {e}")
 

@@ -174,7 +174,8 @@ class AccumulationScreenUseCase:
         swing_setup_catalog: "SwingSetupCatalogConfig | None" = None,
         primary_setup_family_resolver: "PrimarySetupFamilyResolver | None" = None,
         relative_strength_calculator: "RelativeStrengthCalculator | None" = None,
-        indicator_registry: "IndicatorRegistry | None" = None,
+        *,
+        indicator_registry: "IndicatorRegistry",
         ticker_profile_classifier_factory: Callable[[], TickerProfileClassifier] | None = None,
         institutional_accumulation_config_factory: (
             Callable[[], InstitutionalAccumulationConfig] | None
@@ -184,7 +185,6 @@ class AccumulationScreenUseCase:
             Callable[[], CompanyQualityContextEvidenceBuilder] | None
         ) = None,
     ) -> None:
-        from src.application.services.bootstrap import create_indicator_registry
         from src.application.services.flow_confirmation_evidence_builder import (
             FlowConfirmationEvidenceBuilder,
         )
@@ -210,7 +210,7 @@ class AccumulationScreenUseCase:
         self._relative_strength_calculator = (
             relative_strength_calculator or _RelativeStrengthCalculator()
         )
-        self._indicator_registry = indicator_registry or create_indicator_registry()
+        self._indicator_registry = indicator_registry
         # Derive weights from the same policy ScoreForeignFlowUseCase uses, so
         # the two can never drift apart (see ADR-039).
         self._flow_confirmation_builder = FlowConfirmationEvidenceBuilder(

@@ -6,8 +6,8 @@ Layer: Adapter
 
 from pathlib import Path
 
-from src.application.services.bootstrap import create_risk_engine
 from src.application.services.risk_engine import RiskEngine
+from src.infrastructure.composition.risk_engine_factory import create_risk_engine
 from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.config.engine_config_loader import load_engine_config
 

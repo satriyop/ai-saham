@@ -12,8 +12,8 @@ from typing import Annotated, Optional
 
 import typer
 
-from src.application.services.bootstrap import create_indicator_registry
 from src.application.services.position_sizer import compute_position_size
+from src.infrastructure.composition.indicator_registry_factory import create_indicator_registry
 from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.config.user_config import get_swing_default
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository

@@ -84,6 +84,7 @@ class SwingBacktestUseCase:
         self,
         broker_repository: BrokerDataRepository,
         market_repository: MarketDataRepository,
+        indicator_registry: Any,
         derived_feature_policy: AccumulationDerivedFeaturePolicy | None = None,
         risk_engine: Any | None = None,
         market_context_provider: MarketContextProvider | None = None,
@@ -94,6 +95,7 @@ class SwingBacktestUseCase:
         self._screen = AccumulationScreenUseCase(
             broker_repository=broker_repository,
             market_repository=market_repository,
+            indicator_registry=indicator_registry,
             derived_feature_policy=self._derived_features,
         )
         self._market_context_provider = market_context_provider

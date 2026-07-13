@@ -16,9 +16,9 @@ from pathlib import Path
 
 import pytest
 
-from src.application.services.bootstrap import create_indicator_registry
 from src.application.services.indicator_registry import IndicatorRegistry
 from src.domain.entities.candle import Candle
+from src.infrastructure.composition.indicator_registry_factory import create_indicator_registry
 from src.infrastructure.persistence.formula_storage import FormulaStorage
 
 # --- Workspace Fixtures ---

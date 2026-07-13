@@ -136,13 +136,13 @@ def confirm_open(
             "to skip browser-backed auto resolution."
         )
         try:
-            from src.application.services.stockbit_session import get_stockbit_session
             from src.infrastructure.browser.stockbit_order_book import (
                 StockbitOrderBookProvider,
             )
             from src.infrastructure.browser.stockbit_running_trade import (
                 StockbitRunningTradeProvider,
             )
+            from src.infrastructure.composition.stockbit_session_factory import get_stockbit_session
             _trade_session = get_stockbit_session()
             if not _trade_session or not _trade_session.authenticated:
                 typer.echo(

@@ -16,7 +16,7 @@ from src.adapters.cli.indicator_display import (
     print_db_not_found_error,
     print_no_data_error,
 )
-from src.application.services.bootstrap import create_indicator_registry
+from src.infrastructure.composition.indicator_registry_factory import create_indicator_registry
 from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 

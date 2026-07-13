@@ -20,6 +20,7 @@ def create_accumulation_screen_use_case(
     *,
     broker_repository: BrokerDataRepository,
     market_repository: MarketDataRepository,
+    indicator_registry: Any,
     stockbit_providers: Any | None = None,
     risk_use_case: Any | None = None,
     signal_engine: Any | None = None,
@@ -42,6 +43,7 @@ def create_accumulation_screen_use_case(
     return AccumulationScreenUseCase(
         broker_repository=broker_repository,
         market_repository=market_repository,
+        indicator_registry=indicator_registry,
         corporate_action_repo=getattr(stockbit_providers, "corp_repo", None),
         seasonality_provider=getattr(stockbit_providers, "season_prov", None),
         insider_activity_provider=getattr(stockbit_providers, "insider_prov", None),

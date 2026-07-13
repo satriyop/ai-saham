@@ -11,8 +11,8 @@ from plugins.indicators.donchian_channel import (
     DonchianMiddleIndicator,
     DonchianUpperIndicator,
 )
-from src.application.services.bootstrap import create_indicator_registry
 from src.domain.entities.candle import Candle
+from src.infrastructure.composition.indicator_registry_factory import create_indicator_registry
 
 
 def make_candle(i: int, close: float, high: float, low: float) -> Candle:
@@ -32,11 +32,11 @@ class TestDonchianChannelIndicators:
         # We need period + 1 candles to produce 1 value
         # 30 candles, period 20 -> length of values should be 10 (30 - 20)
         candles = [make_candle(i, 1000, 1010, 990) for i in range(30)]
-        
+
         upper = DonchianUpperIndicator().compute(candles, 20)
         lower = DonchianLowerIndicator().compute(candles, 20)
         mid = DonchianMiddleIndicator().compute(candles, 20)
-        
+
         assert len(upper) == 10
         assert len(lower) == 10
         assert len(mid) == 10
@@ -52,16 +52,16 @@ class TestDonchianChannelIndicators:
             make_candle(4, 104, 107, 97), # high=107, low=97
             make_candle(5, 105, 120, 85), # high=120, low=85 (ignored for index 5 calculation)
         ]
-        
+
         upper = DonchianUpperIndicator().compute(candles, 5)
         lower = DonchianLowerIndicator().compute(candles, 5)
         mid = DonchianMiddleIndicator().compute(candles, 5)
-        
+
         # We have 6 candles, period 5 -> exactly 1 output value representing index 5's channel
         assert len(upper) == 1
         assert len(lower) == 1
         assert len(mid) == 1
-        
+
         assert upper[0] == Decimal("115") # max(105, 110, 108, 115, 107)
         assert lower[0] == Decimal("92")  # min(95, 96, 92, 98, 97)
         assert mid[0] == Decimal("103.5") # (115 + 92) / 2
@@ -76,10 +76,10 @@ class TestDonchianChannelIndicators:
     def test_plugin_attributes(self):
         assert DonchianUpperIndicator.name == "DONCHIAN_UPPER"
         assert DonchianUpperIndicator.default_period == 20
-        
+
         assert DonchianLowerIndicator.name == "DONCHIAN_LOWER"
         assert DonchianLowerIndicator.default_period == 20
-        
+
         assert DonchianMiddleIndicator.name == "DONCHIAN_MIDDLE"
         assert DonchianMiddleIndicator.default_period == 20
 
@@ -93,7 +93,7 @@ class TestDonchianRegistryIntegration:
     def test_registry_compute_aligns_dates(self):
         registry = create_indicator_registry("plugins/indicators")
         candles = [make_candle(i, 100, 105, 95) for i in range(25)]
-        
+
         result = registry.compute("DONCHIAN_UPPER", candles, 20)
         assert len(result) == 5
         # The last value's date should match the last candle's date

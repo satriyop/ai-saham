@@ -6,6 +6,7 @@ from decimal import Decimal
 from src.application.dto.accumulation_screen import (
     AccumulationScreenRequest,
 )
+from src.application.services.indicator_registry import IndicatorRegistry
 from src.application.use_case.accumulation_screen_use_case import (
     AccumulationScreenUseCase,
 )
@@ -205,6 +206,7 @@ def test_screen_persists_rejected_candidates_with_filter_outcome():
 
     spy_repo = SpyCandidateObservationsRepository()
     use_case = AccumulationScreenUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
         candidate_observations_repository=spy_repo,

@@ -6,6 +6,7 @@ from decimal import Decimal
 from src.application.dto.accumulation_screen import (
     AccumulationScreenRequest,
 )
+from src.application.services.indicator_registry import IndicatorRegistry
 from src.application.use_case.accumulation_screen_use_case import (
     AccumulationScreenUseCase,
 )
@@ -38,6 +39,7 @@ def test_screen_persists_candidate_observations_when_repo_injected():
 
     spy_repo = SpyCandidateObservationsRepository()
     use_case = AccumulationScreenUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
         candidate_observations_repository=spy_repo,
@@ -102,6 +104,7 @@ def test_screen_persists_regime_attribution_fingerprint_when_market_context_supp
 
     spy_repo = SpyCandidateObservationsRepository()
     use_case = AccumulationScreenUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
         candidate_observations_repository=spy_repo,
@@ -165,6 +168,7 @@ def test_market_context_never_leaks_into_scoring_only_into_fingerprint_attributi
     # Run 1: no market_context.
     spy_repo_a = SpyCandidateObservationsRepository()
     use_case_a = AccumulationScreenUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(_fresh_summaries()),
         market_repository=MockMarketRepository(_fresh_candles()),
         candidate_observations_repository=spy_repo_a,
@@ -183,6 +187,7 @@ def test_market_context_never_leaks_into_scoring_only_into_fingerprint_attributi
     # MarketContext supplied.
     spy_repo_b = SpyCandidateObservationsRepository()
     use_case_b = AccumulationScreenUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(_fresh_summaries()),
         market_repository=MockMarketRepository(_fresh_candles()),
         candidate_observations_repository=spy_repo_b,
@@ -316,6 +321,7 @@ def test_screen_persists_setup_family_fingerprint_when_swing_setup_catalog_match
 
     spy_repo = SpyCandidateObservationsRepository()
     use_case = AccumulationScreenUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
         candidate_observations_repository=spy_repo,
@@ -383,6 +389,7 @@ def test_screen_result_returned_even_when_persistence_fails():
     spy_repo.raise_on_save = RuntimeError("DB write failed")
 
     use_case = AccumulationScreenUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
         candidate_observations_repository=spy_repo,
@@ -412,6 +419,7 @@ def test_screen_populates_setup_phase_for_displayed_candidates():
     summaries = [_summary("BBCA", day, Decimal("110")) for day in session_dates]
 
     use_case = AccumulationScreenUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
     )
@@ -449,6 +457,7 @@ def test_screen_setup_phase_is_none_when_detection_fails(monkeypatch):
     )
 
     use_case = AccumulationScreenUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
     )
@@ -496,6 +505,7 @@ def test_screen_recomputes_setup_phase_when_stage2_family_differs_from_prelimina
 
     spy_repo = SpyCandidateObservationsRepository()
     use_case = AccumulationScreenUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
         candidate_observations_repository=spy_repo,

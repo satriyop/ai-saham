@@ -21,6 +21,9 @@ from src.application.use_case.accumulation_audit_use_case import (
     AccumulationAuditResponse,
     AccumulationAuditUseCase,
 )
+from src.infrastructure.composition.indicator_registry_factory import (
+    create_indicator_registry,
+)
 from src.infrastructure.config.accumulation_audit_config import (
     load_accumulation_audit_config,
 )
@@ -314,6 +317,7 @@ def accumulation_audit(
     use_case = AccumulationAuditUseCase(
         broker_repository=SQLiteBrokerRepository(resolved_db),
         market_repository=SQLiteMarketRepository(db_path=resolved_db),
+        indicator_registry=create_indicator_registry(),
         derived_feature_policy=_SCREEN_CFG.derived_features,
     )
     response = use_case.execute(

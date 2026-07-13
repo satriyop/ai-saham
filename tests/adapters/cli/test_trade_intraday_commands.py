@@ -345,10 +345,10 @@ def test_intraday_confirm_open_auto_uses_stockbit_provider_stubs(tmp_path, monke
         def fetch_snapshot(self, ticker: str):
             return None
 
-    import src.application.services.stockbit_session as _session_svc
     import src.infrastructure.browser.stockbit_api_client as _stockbit_api_client
     import src.infrastructure.browser.stockbit_order_book as stockbit_order_book
     import src.infrastructure.browser.stockbit_running_trade as stockbit_running_trade
+    import src.infrastructure.composition.stockbit_session_factory as _session_svc
     from src.application.services.stockbit_session import StockbitSession
 
     _fake_client = object.__new__(_stockbit_api_client.StockbitApiClient)

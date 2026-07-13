@@ -11,6 +11,7 @@ from src.application.dto.accumulation_screen import (
 from src.application.services.accumulation_multi_window_pattern import (
     classify_multi_window_pattern,
 )
+from src.application.services.indicator_registry import IndicatorRegistry
 from src.application.use_case.accumulation_screen_use_case import (
     AccumulationScreenUseCase,
 )
@@ -60,6 +61,7 @@ def test_screen_window_uses_latest_broker_sessions_not_calendar_days():
     summaries = [_summary("BBCA", day, Decimal("110")) for day in session_dates]
 
     use_case = AccumulationScreenUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
     )
@@ -91,6 +93,7 @@ def test_screen_passes_as_of_date_to_insider_provider():
     insider_provider = RecordingInsiderProvider()
 
     use_case = AccumulationScreenUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
         insider_activity_provider=insider_provider,
@@ -132,6 +135,7 @@ def test_screen_ignores_unsafe_broker_summary_rows():
     )
 
     use_case = AccumulationScreenUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository([*valid_summaries, unsafe_latest]),
         market_repository=MockMarketRepository(candles),
     )
@@ -164,6 +168,7 @@ def test_screen_uses_derived_feature_policy_for_trend_threshold():
     summaries = [_summary("BBCA", day, Decimal("110")) for day in session_dates]
 
     loose_threshold = AccumulationScreenUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
         derived_feature_policy=AccumulationDerivedFeaturePolicy(
@@ -172,6 +177,7 @@ def test_screen_uses_derived_feature_policy_for_trend_threshold():
         ),
     )
     strict_threshold = AccumulationScreenUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
         derived_feature_policy=AccumulationDerivedFeaturePolicy(

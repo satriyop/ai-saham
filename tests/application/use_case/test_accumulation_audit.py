@@ -7,6 +7,7 @@ The audit must be deterministic, offline, and free from future data leakage.
 from datetime import date, timedelta
 from decimal import Decimal
 
+from src.application.services.indicator_registry import IndicatorRegistry
 from src.application.services.stats import pct_change as _pct_change
 from src.application.use_case.accumulation_audit_use_case import (
     AccumulationAuditPolicy,
@@ -199,6 +200,7 @@ def test_accumulation_audit_replays_signal_and_forward_returns_without_ai():
     ]
 
     use_case = AccumulationAuditUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
     )
@@ -244,6 +246,7 @@ def test_accumulation_audit_does_not_use_future_candle_as_signal_price():
     ]
 
     use_case = AccumulationAuditUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
     )
@@ -284,6 +287,7 @@ def test_accumulation_audit_strict_filters_keep_only_matching_candidates():
     )
 
     use_case = AccumulationAuditUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
     )
@@ -358,6 +362,7 @@ def test_accumulation_audit_groups_outcomes_by_broker_quality():
     )
 
     use_case = AccumulationAuditUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
     )
@@ -411,6 +416,7 @@ def test_accumulation_audit_exit_simulation_reports_target_and_max_hold_stats():
     ]
 
     use_case = AccumulationAuditUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
     )
@@ -465,6 +471,7 @@ def test_accumulation_audit_exit_simulation_can_prioritize_target_on_same_day():
     ]
 
     use_case = AccumulationAuditUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
     )

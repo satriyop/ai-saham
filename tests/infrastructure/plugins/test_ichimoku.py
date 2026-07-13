@@ -15,8 +15,8 @@ from plugins.indicators.ichimoku import (
     IchimokuSpanB,
     IchimokuTenkan,
 )
-from src.application.services.bootstrap import create_indicator_registry
 from src.domain.entities.candle import Candle
+from src.infrastructure.composition.indicator_registry_factory import create_indicator_registry
 
 # ---------------------------------------------------------------------------
 # Fixtures

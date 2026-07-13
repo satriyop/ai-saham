@@ -1,6 +1,7 @@
 from datetime import date, timedelta
 from decimal import Decimal
 
+from src.application.services.indicator_registry import IndicatorRegistry
 from src.application.use_case.swing_backtest_use_case import (
     SwingBacktestRequest,
     SwingBacktestUseCase,
@@ -24,6 +25,7 @@ def test_swing_backtest_records_rejected_candidate_observations():
         for i in range(18, 25)
     ]
     use_case = SwingBacktestUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(_base_candles("BBCA", base)),
     )
@@ -62,6 +64,7 @@ def test_swing_backtest_records_risk_and_trade_setup_attribution():
     ]
     risk_engine = FakeRiskEngine()
     use_case = SwingBacktestUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(_base_candles("BBCA", base)),
         risk_engine=risk_engine,
@@ -97,6 +100,7 @@ def test_swing_backtest_keeps_trade_when_risk_attribution_fails():
         for i in range(18, 25)
     ]
     use_case = SwingBacktestUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(_base_candles("BBCA", base)),
         risk_engine=FailingRiskEngine(),

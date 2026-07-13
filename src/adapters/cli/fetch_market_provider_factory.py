@@ -25,8 +25,8 @@ def create_broker_provider(name: str | None):
       1. Playwright session (.stockbit_profile/) — preferred; no token file needed
       2. IDX public API — always available fallback
     """
-    from src.application.services.stockbit_session import get_stockbit_session
     from src.infrastructure.browser.stockbit_broker_provider import StockbitBrokerProvider
+    from src.infrastructure.composition.stockbit_session_factory import get_stockbit_session
 
     if name == "stockbit":
         session = get_stockbit_session()

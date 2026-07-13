@@ -14,8 +14,8 @@ from rich.table import Table
 from src.application.rules.exceptions import (
     StrategyNotFoundError,
 )
-from src.application.services.bootstrap import create_indicator_registry
 from src.application.services.strategy_loader import StrategyLoader
+from src.infrastructure.composition.indicator_registry_factory import create_indicator_registry
 
 # Template for new strategy.yaml
 STRATEGY_TEMPLATE = '''version: 1

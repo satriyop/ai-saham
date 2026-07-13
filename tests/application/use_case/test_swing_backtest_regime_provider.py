@@ -3,6 +3,7 @@ from decimal import Decimal
 
 import pytest
 
+from src.application.services.indicator_registry import IndicatorRegistry
 from src.application.use_case.swing_backtest_use_case import (
     SwingBacktestRequest,
     SwingBacktestUseCase,
@@ -51,6 +52,7 @@ def test_swing_backtest_can_filter_entries_by_allowed_regimes():
         as_of_date=exit_date,
     )
     use_case = SwingBacktestUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=broker_repo,
         market_repository=market_repo,
         market_context_provider=FakeMarketContextProvider({
@@ -101,6 +103,7 @@ def test_swing_backtest_provider_is_not_called_when_regime_is_not_requested():
     provider = FakeMarketContextProvider({signal_date: fake_context})
 
     use_case = SwingBacktestUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
         market_context_provider=provider,
@@ -147,6 +150,7 @@ def test_swing_backtest_provider_is_called_when_include_regime_is_true():
     provider = FakeMarketContextProvider({signal_date: fake_context})
 
     use_case = SwingBacktestUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
         market_context_provider=provider,
@@ -196,6 +200,7 @@ def test_swing_backtest_provider_is_called_when_allowed_regimes_non_empty():
     provider = FakeMarketContextProvider({signal_date: fake_context})
 
     use_case = SwingBacktestUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
         market_context_provider=provider,
@@ -230,6 +235,7 @@ def test_swing_backtest_raises_when_regime_requested_without_provider():
     ]
 
     use_case = SwingBacktestUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
     )
@@ -260,6 +266,7 @@ def test_swing_backtest_raises_when_allowed_regimes_without_provider():
     ]
 
     use_case = SwingBacktestUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
     )

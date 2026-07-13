@@ -25,10 +25,6 @@ from src.application.dto.swing_config import SwingConfig
 from src.application.services.accumulation_screen_factory import (
     create_accumulation_screen_use_case,
 )
-from src.application.services.bootstrap import (
-    create_indicator_registry,
-    create_signal_engine,
-)
 from src.application.services.swing_broker_detail_builder import (
     build_broker_detail,
     build_broker_quality_note,
@@ -61,6 +57,10 @@ from src.domain.value_objects.setup_evaluation import SetupEvaluation
 from src.infrastructure.browser.stockbit_provider_bundle import (
     create_readonly_stockbit_providers,
 )
+from src.infrastructure.composition.indicator_registry_factory import (
+    create_indicator_registry,
+)
+from src.infrastructure.composition.signal_engine_factory import create_signal_engine
 from src.infrastructure.config.accumulation_screener_config import (
     load_accumulation_screener_config,
 )
@@ -121,6 +121,7 @@ def create_swing_analysis_workflow(
         accum_uc = create_accumulation_screen_use_case(
             broker_repository=broker_repo,
             market_repository=market_repo,
+            indicator_registry=create_indicator_registry(),
             stockbit_providers=stockbit_providers,
             foreign_flow_score_policy=accumulation_config.foreign_flow_score_policy,
             derived_feature_policy=accumulation_config.derived_features,

@@ -4,8 +4,8 @@ from pathlib import Path
 import yaml
 from typer.testing import CliRunner
 
-import src.application.services.stockbit_session as _session_svc
 import src.infrastructure.browser.stockbit_api_client as _stockbit_api_client
+import src.infrastructure.composition.stockbit_session_factory as _session_svc
 from src.adapters.cli.main import app
 from src.application.services.stockbit_session import StockbitSession
 

@@ -1,9 +1,12 @@
 """
-Risk engine construction.
+Risk engine construction (infrastructure composition root).
 
 Wires a fully-configured RiskEngine: loads risk-related config via the shared
-config resolvers, builds the indicator registry, and injects gates/providers.
-No signal engine construction, no CLI policy, no backtest/screening workflow.
+application-layer config resolvers, builds the indicator registry, and
+injects SQLite-backed repositories and Stockbit-backed enrichment providers.
+This is concrete wiring, so it lives in infrastructure, not application.
+
+Layer: Infrastructure (composition root)
 """
 
 from __future__ import annotations
@@ -11,9 +14,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from src.application.services.engine_bootstrap.indicator_registry_factory import (
-    create_indicator_registry,
-)
 from src.application.services.engine_bootstrap.risk_config_resolvers import (
     _resolve_indicator_evaluator_config,
     _resolve_market_context_gate,
@@ -21,10 +21,19 @@ from src.application.services.engine_bootstrap.risk_config_resolvers import (
     _resolve_risk_indicator_defaults,
     _resolve_technical_gate_config,
 )
+from src.application.services.indicator_evaluator import IndicatorEvaluator
+from src.application.services.risk_engine import RiskEngine
+from src.infrastructure.browser.stockbit_bandar import StockbitBandarDetectorProvider
+from src.infrastructure.browser.stockbit_fundamentals import StockbitFundamentalsProvider
+from src.infrastructure.browser.stockbit_shareholding import StockbitShareholdingProvider
+from src.infrastructure.composition.indicator_registry_factory import (
+    create_indicator_registry,
+)
+from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
+from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
 if TYPE_CHECKING:
     from src.application.ports.rules_loader import RulesLoader
-    from src.application.services.risk_engine import RiskEngine
 
 
 def create_risk_engine(
@@ -48,17 +57,7 @@ def create_risk_engine(
             (custom-rules mode) via engine.assess_request().
         config: Loaded configuration dict.
     """
-    from pathlib import Path as _Path
-
-    from src.application.services.risk_engine import RiskEngine
-    from src.infrastructure.persistence.sqlite_broker_repository import (
-        SQLiteBrokerRepository,
-    )
-    from src.infrastructure.persistence.sqlite_market_repository import (
-        SQLiteMarketRepository,
-    )
-
-    resolved = _Path(db_path)
+    resolved = Path(db_path)
     repository = SQLiteMarketRepository(db_path=resolved)
     broker_repository = SQLiteBrokerRepository(db_path=resolved)
     registry = create_indicator_registry(
@@ -77,21 +76,9 @@ def create_risk_engine(
     bandar_prov = None
     shareholding_prov = None
     if with_enrichment:
-        from src.infrastructure.browser.stockbit_bandar import (
-            StockbitBandarDetectorProvider,
-        )
-        from src.infrastructure.browser.stockbit_fundamentals import (
-            StockbitFundamentalsProvider,
-        )
-        from src.infrastructure.browser.stockbit_shareholding import (
-            StockbitShareholdingProvider,
-        )
-
         fund_prov = StockbitFundamentalsProvider(api_client=None, db_path=resolved)
         bandar_prov = StockbitBandarDetectorProvider(api_client=None, db_path=resolved)
         shareholding_prov = StockbitShareholdingProvider(api_client=None, db_path=resolved)
-
-    from src.application.services.indicator_evaluator import IndicatorEvaluator
 
     return RiskEngine(
         repository=repository,

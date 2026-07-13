@@ -4,17 +4,18 @@ from datetime import date, timedelta
 from decimal import Decimal
 from unittest.mock import MagicMock
 
+from src.application.services.indicator_registry import IndicatorRegistry
 from src.application.use_case.accumulation_screen_use_case import (
     AccumulationScreenUseCase,
-)
-from src.infrastructure.config.ticker_profile_config_loader import (
-    create_ticker_profile_classifier,
 )
 from src.domain.entities.broker_flow import BrokerDailyFlow, BrokerSummary
 from src.domain.entities.candle import Candle
 from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.value_objects.company_fundamentals import CompanyFundamentals
+from src.infrastructure.config.ticker_profile_config_loader import (
+    create_ticker_profile_classifier,
+)
 
 
 class MockMarketRepository(MarketDataRepository):
@@ -231,6 +232,7 @@ def _make_use_case(summaries, daily_flows=None):
     ]
     return (
         AccumulationScreenUseCase(
+            indicator_registry=IndicatorRegistry(),
             broker_repository=MockBrokerRepositoryWithDaily(summaries, daily_flows),
             market_repository=MockMarketRepository(candles),
         ),
@@ -265,6 +267,7 @@ def _make_use_case_with_fundamentals(piotroski_score: int | None):
         fund_prov.get_fundamentals.return_value = None
 
     use_case = AccumulationScreenUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
         fundamentals_provider=fund_prov,
@@ -313,6 +316,7 @@ def _make_use_case_with_all_providers(
     analyst_prov.get_consensus.return_value = None
 
     use_case = AccumulationScreenUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
         fundamentals_provider=fund_prov,

@@ -8,6 +8,7 @@ import pytest
 from src.application.dto.accumulation_screen import (
     AccumulationScreenRequest,
 )
+from src.application.services.indicator_registry import IndicatorRegistry
 from src.application.use_case.accumulation_screen_use_case import (
     AccumulationScreenUseCase,
 )
@@ -64,6 +65,7 @@ def test_screen_persists_sector_context_fingerprint_when_builder_available():
     summaries = [_summary("BBCA", day, Decimal("110")) for day in session_dates]
     spy_repo = SpyCandidateObservationsRepository()
     use_case = AccumulationScreenUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
         candidate_observations_repository=spy_repo,
@@ -149,6 +151,7 @@ def test_screen_persists_relative_strength_and_evaluates_rs_policy():
 
     spy_repo = SpyCandidateObservationsRepository()
     use_case = AccumulationScreenUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
         candidate_observations_repository=spy_repo,
@@ -195,6 +198,7 @@ def test_screen_rs_fields_stay_none_when_ihsg_candles_missing():
 
     spy_repo = SpyCandidateObservationsRepository()
     use_case = AccumulationScreenUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),  # no IHSG candles seeded
         candidate_observations_repository=spy_repo,

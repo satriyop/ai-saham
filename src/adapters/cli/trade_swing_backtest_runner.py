@@ -26,6 +26,9 @@ from src.application.use_case.swing_backtest_use_case import (
     SwingBacktestResponse,
     SwingBacktestUseCase,
 )
+from src.infrastructure.composition.indicator_registry_factory import (
+    create_indicator_registry,
+)
 from src.infrastructure.config.accumulation_screener_config import (
     load_accumulation_screener_config,
 )
@@ -137,6 +140,7 @@ def _run_swing_backtest(
     use_case = SwingBacktestUseCase(
         broker_repository=broker_repo,
         market_repository=market_repo,
+        indicator_registry=create_indicator_registry(),
         derived_feature_policy=_ASC.derived_features,
         risk_engine=create_configured_risk_engine(resolved_db, with_enrichment=True),
         market_context_provider=ConfigBackedMarketContextProvider(

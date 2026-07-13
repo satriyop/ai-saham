@@ -54,7 +54,7 @@ def broker_status() -> None:
                + " (public API, no auth required)")
 
     # Stockbit Playwright session provider
-    from src.application.services.stockbit_session import get_stockbit_session
+    from src.infrastructure.composition.stockbit_session_factory import get_stockbit_session
     _session = get_stockbit_session()
     if _session and _session.authenticated:
         marker = _DEFAULT_PROFILE_DIR / ".logged_in_at"

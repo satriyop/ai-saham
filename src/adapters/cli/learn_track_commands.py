@@ -87,7 +87,9 @@ def track(
         typer.echo("No Stockbit session. Run: saham fetch stockbit login", err=True)
         raise typer.Exit(1)
 
-    from src.application.services.stockbit_session import get_stockbit_session as _get_learn_session
+    from src.infrastructure.composition.stockbit_session_factory import (
+        get_stockbit_session as _get_learn_session,
+    )
     _learn_session = _get_learn_session()
 
     from src.infrastructure.browser.stockbit_api_client import create_stockbit_api_client

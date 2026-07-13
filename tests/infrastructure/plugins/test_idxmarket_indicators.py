@@ -13,8 +13,8 @@ from plugins.indicators.obv import OnBalanceVolumeIndicator
 from plugins.indicators.relative_strength import RelativeStrengthIHSGIndicator
 from plugins.indicators.volume_ratio import VolumeRatioIndicator
 from plugins.indicators.williams_r import WilliamsRIndicator
-from src.application.services.bootstrap import create_indicator_registry
 from src.domain.entities.candle import Candle
+from src.infrastructure.composition.indicator_registry_factory import create_indicator_registry
 
 # ---------------------------------------------------------------------------
 # Fixtures

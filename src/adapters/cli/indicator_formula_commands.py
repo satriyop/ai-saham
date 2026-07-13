@@ -10,12 +10,12 @@ from typing import Annotated, Optional
 import typer
 
 from src.adapters.cli.indicator_formula_display import print_formula_list
-from src.application.services.bootstrap import create_indicator_registry
 from src.application.use_case.create_indicator_from_intent_use_case import (
     CreateIndicatorFromIntentRequest,
     CreateIndicatorFromIntentUseCase,
 )
 from src.infrastructure.ai.formula_translator import FormulaTranslatorAdapter
+from src.infrastructure.composition.indicator_registry_factory import create_indicator_registry
 from src.infrastructure.persistence.formula_storage import (
     FormulaStorage,
     FormulaStorageError,

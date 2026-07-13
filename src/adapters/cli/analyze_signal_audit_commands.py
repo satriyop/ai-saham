@@ -11,15 +11,13 @@ from typing import Annotated, Optional
 import typer
 
 from src.application.ports.signal_coverage_provider import SignalCoverageReport
-from src.application.services.bootstrap import (
-    create_signal_engine,
-    resolve_signal_weight_tables,
-)
+from src.application.services.bootstrap import resolve_signal_weight_tables
 from src.application.use_case.audit_signal_use_case import (
     AuditSignalRequest,
     AuditSignalUseCase,
 )
 from src.domain.value_objects.signal_audit import SignalAuditReport
+from src.infrastructure.composition.signal_engine_factory import create_signal_engine
 from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.config.signal_engine_config_loader import (
     load_signal_engine_config_raw,

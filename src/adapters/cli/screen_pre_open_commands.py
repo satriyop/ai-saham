@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime
-from decimal import Decimal
 from pathlib import Path
 from typing import Annotated, Optional
 
@@ -18,8 +17,6 @@ from src.adapters.cli.screen_pre_open_display import (
     display_raw_movers,
     display_results,
 )
-from src.application.services.bootstrap import create_indicator_registry
-from src.domain.value_objects.market_context import MarketContext
 from src.application.use_case.pre_open_screen_use_case import (
     PreOpenScreenUseCase,
 )
@@ -35,8 +32,10 @@ from src.domain.value_objects.idx_market import (
 from src.domain.value_objects.idx_market import (
     REGULAR_OPEN as PRE_OPEN_END,
 )
+from src.domain.value_objects.market_context import MarketContext
 from src.domain.value_objects.screener_result import ScreenerCandidate
 from src.infrastructure.browser.stockbit_browser_provider import ManualBrowserDataProvider
+from src.infrastructure.composition.indicator_registry_factory import create_indicator_registry
 from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.config.market_context_factory import evaluate_market_context
 from src.infrastructure.config.pre_open_config import load_pre_open_screen_config
@@ -285,8 +284,9 @@ def pre_open(
     if not movers_json:
         if _playwright_available() and _session_exists():
             typer.echo("Playwright session found — running autonomously...")
-            from src.infrastructure.browser.playwright_stockbit_provider import PlaywrightStockbitProvider
-
+            from src.infrastructure.browser.playwright_stockbit_provider import (
+                PlaywrightStockbitProvider,
+            )
             from src.infrastructure.browser.stockbit_api_client import create_stockbit_api_client
 
             api_client = create_stockbit_api_client(

@@ -37,6 +37,9 @@ from src.application.use_case.swing_backtest_use_case import (
     SwingBacktestResponse,
     SwingBacktestUseCase,
 )
+from src.infrastructure.composition.indicator_registry_factory import (
+    create_indicator_registry,
+)
 from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.config.config_backed_market_context_provider import (
     ConfigBackedMarketContextProvider,
@@ -201,6 +204,7 @@ def swing_compare(
     use_case = SwingBacktestUseCase(
         broker_repository=broker_repo,
         market_repository=market_repo,
+        indicator_registry=create_indicator_registry(),
         derived_feature_policy=ACCUMULATION_SCREENER_CONFIG.derived_features,
         risk_engine=create_configured_risk_engine(resolved_db, with_enrichment=True),
         market_context_provider=ConfigBackedMarketContextProvider(

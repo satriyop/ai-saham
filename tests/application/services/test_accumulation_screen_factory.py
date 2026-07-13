@@ -4,6 +4,7 @@ from unittest.mock import Mock
 from src.application.services.accumulation_screen_factory import (
     create_accumulation_screen_use_case,
 )
+from src.application.services.indicator_registry import IndicatorRegistry
 from src.application.use_case.score_foreign_flow_use_case import ForeignFlowScorePolicy
 
 
@@ -25,6 +26,7 @@ def test_create_accumulation_screen_use_case_wires_stockbit_providers():
     )
 
     use_case = create_accumulation_screen_use_case(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=broker_repo,
         market_repository=market_repo,
         stockbit_providers=providers,

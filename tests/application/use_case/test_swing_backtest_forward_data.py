@@ -1,6 +1,7 @@
 from datetime import date, timedelta
 from decimal import Decimal
 
+from src.application.services.indicator_registry import IndicatorRegistry
 from src.application.use_case.swing_backtest_use_case import (
     SwingBacktestRequest,
     SwingBacktestUseCase,
@@ -24,6 +25,7 @@ def test_swing_backtest_no_forward_data_increments_skipped_no_forward_data():
         for i in range(18, 25)
     ]
     use_case = SwingBacktestUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
     )

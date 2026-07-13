@@ -8,6 +8,7 @@ import pytest
 from src.application.dto.accumulation_screen import (
     AccumulationScreenRequest,
 )
+from src.application.services.indicator_registry import IndicatorRegistry
 from src.application.use_case.accumulation_screen_use_case import (
     AccumulationScreenUseCase,
 )
@@ -111,6 +112,7 @@ def test_screen_attaches_ticker_notation_without_changing_score():
     summaries = [_summary("BTEK", day, Decimal("110")) for day in session_dates]
 
     base = AccumulationScreenUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
     ).execute(
@@ -123,6 +125,7 @@ def test_screen_attaches_ticker_notation_without_changing_score():
     )
 
     enriched = AccumulationScreenUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
         ticker_notation_provider=MockTickerNotationProvider(),
@@ -163,6 +166,7 @@ def test_historical_screen_uses_as_of_date_for_point_in_time_enrichment():
     notation = FutureOnlyTickerNotationProvider(future_date)
 
     response = AccumulationScreenUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
         analyst_consensus_provider=analyst,
@@ -198,6 +202,7 @@ def test_live_screen_passes_none_as_of_date_to_fetch_capable_enrichment():
     notation = FutureOnlyTickerNotationProvider(date.today())
 
     response = AccumulationScreenUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
         analyst_consensus_provider=analyst,
@@ -280,6 +285,7 @@ def test_screen_derives_forward_pe_from_latest_price_when_cache_has_eps_only():
     )
 
     use_case = AccumulationScreenUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
         forward_estimates_provider=forward_provider,
@@ -359,6 +365,7 @@ def test_screener_populates_signal_assessment():
     summaries = [_summary("BBCA", day, Decimal("110")) for day in session_dates]
 
     uc = AccumulationScreenUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
     )
@@ -388,6 +395,7 @@ def test_candidate_to_dict_emits_canonical_coverage_score():
     summaries = [_summary("BBCA", day, Decimal("110")) for day in session_dates]
 
     uc = AccumulationScreenUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
     )

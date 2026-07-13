@@ -20,7 +20,6 @@ from src.adapters.cli.screen_accum_workflow_factory import (
 from src.application.dto.accumulation_screen import (
     AccumulationScreenResponse,
 )
-from src.application.services.bootstrap import create_indicator_registry
 from src.application.services.broker_quality import (
     BrokerQualitySnapshot,
     compute_broker_quality_batch,
@@ -34,6 +33,7 @@ from src.application.services.universe_loader import (
     resolve_tickers,
 )
 from src.application.use_case.assess_risk_use_case import AssessRiskRequest, AssessRiskUseCase
+from src.infrastructure.composition.indicator_registry_factory import create_indicator_registry
 from src.infrastructure.config.accumulation_screener_config import (
     load_accumulation_screener_config as _load_accumulation_screener_config,
 )

@@ -17,7 +17,6 @@ from typing import Annotated, Optional
 
 import typer
 
-from src.application.services.stockbit_session import get_stockbit_session
 from src.application.use_case.sync_corporate_action_calendar_use_case import (
     SyncCorporateActionCalendarRequest,
     SyncCorporateActionCalendarUseCase,
@@ -26,6 +25,7 @@ from src.domain.value_objects.corporate_action_calendar import CorporateActionTy
 from src.infrastructure.browser.stockbit_corporate_action_calendar import (
     StockbitCorporateActionCalendarProvider,
 )
+from src.infrastructure.composition.stockbit_session_factory import get_stockbit_session
 from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.persistence.sqlite_corporate_action_calendar_repository import (
     SQLiteCorporateActionCalendarRepository,

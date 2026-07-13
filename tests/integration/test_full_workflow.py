@@ -16,7 +16,6 @@ import pytest
 
 from src.application.formula.parser import parse
 from src.application.rules.interpreter import YamlRuleInterpreter
-from src.application.services.bootstrap import create_indicator_registry
 from src.application.services.indicator_registry import IndicatorRegistry
 from src.application.use_case.create_indicator_from_intent_use_case import (
     CreateIndicatorFromIntentRequest,
@@ -31,6 +30,7 @@ from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 from src.domain.value_objects.trade_action import TradeAction
 from src.infrastructure.ai.formula_translator import FormulaTranslatorAdapter
 from src.infrastructure.ai.strategy_translator import StrategyTranslatorAdapter
+from src.infrastructure.composition.indicator_registry_factory import create_indicator_registry
 from src.infrastructure.config.yaml_loader import YamlConfigLoader
 from src.infrastructure.persistence.formula_storage import FormulaStorage
 from tests.integration.conftest import (

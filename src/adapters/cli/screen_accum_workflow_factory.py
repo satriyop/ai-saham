@@ -16,7 +16,6 @@ from src.application.services.accumulation_screen_factory import (
 from src.application.services.bootstrap import (
     _resolve_risk_gates,
 )
-from src.infrastructure.config.engine_config_loader import load_engine_config
 from src.application.services.swing_setup_catalog import build_swing_setup_catalog_config
 from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
 from src.application.use_case.assess_risk_use_case import AssessRiskUseCase
@@ -25,6 +24,9 @@ from src.domain.ports.market_data_repository import MarketDataRepository
 from src.infrastructure.browser.stockbit_provider_bundle import (
     create_readonly_stockbit_providers,
 )
+from src.infrastructure.composition.indicator_registry_factory import (
+    create_indicator_registry,
+)
 from src.infrastructure.config.accumulation_screener_config import (
     AccumulationScreenerConfig,
 )
@@ -32,6 +34,7 @@ from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.config.company_quality_context_config_loader import (
     create_company_quality_context_evidence_builder,
 )
+from src.infrastructure.config.engine_config_loader import load_engine_config
 from src.infrastructure.config.institutional_accumulation_config_loader import (
     load_institutional_accumulation_config,
 )
@@ -87,6 +90,7 @@ def create_accumulation_screen_workflow(
     use_case = create_accumulation_screen_use_case(
         broker_repository=broker_repo,
         market_repository=market_repo,
+        indicator_registry=create_indicator_registry(),
         stockbit_providers=stockbit_providers,
         risk_use_case=risk_use_case,
         candidate_observations_repository=observations_repo,

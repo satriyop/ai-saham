@@ -10,12 +10,12 @@ from typing import Annotated, Optional
 
 import typer
 
-from src.application.services.bootstrap import create_indicator_registry
 from src.application.use_case.create_strategy_from_intent_use_case import (
     CreateStrategyFromIntentRequest,
     CreateStrategyFromIntentUseCase,
 )
 from src.infrastructure.ai.strategy_translator import StrategyTranslatorAdapter
+from src.infrastructure.composition.indicator_registry_factory import create_indicator_registry
 
 
 def create(

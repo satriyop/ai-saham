@@ -1,6 +1,7 @@
 from datetime import date, timedelta
 from decimal import Decimal
 
+from src.application.services.indicator_registry import IndicatorRegistry
 from src.application.use_case.swing_backtest_use_case import (
     DEFAULT_SWING_COST_BPS,
     SwingBacktestRequest,
@@ -23,6 +24,7 @@ def test_swing_backtest_default_applies_transaction_costs():
         for i in range(18, 25)
     ]
     use_case = SwingBacktestUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(_base_candles("BBCA", base)),
     )
@@ -55,6 +57,7 @@ def test_swing_backtest_respects_max_positions():
         for i in range(18, 25)
     ]
     use_case = SwingBacktestUseCase(
+        indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
     )
