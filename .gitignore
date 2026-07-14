@@ -84,7 +84,14 @@ logs/
 notes/
 docs/archive/
 docs/thought/
-tasks/
+
+# Task management
+# Track shared backlog and completed task records; keep scratch/thought files local.
+tasks/*
+!tasks/backlog/
+!tasks/backlog/*.md
+!tasks/done/
+!tasks/done/*.md
 
 # Paper trade journal (local artefacts, not committed)
 journals/

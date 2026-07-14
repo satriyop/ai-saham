@@ -238,6 +238,9 @@ If any answer is unclear, stop.
   they diverge. Status/session checks, display rendering, provider factories,
   and cached query commands should live in named modules instead of one broad
   command file.
+- Broad CLI command files should split by public command responsibility first.
+  Keep any remaining router/facade implementation-free, and move repeated
+  adapter-only error/status rendering into named display/helper modules.
 - Adapters must not import private application helpers. If a helper is needed
   outside its module, promote a public application service or move the
   composition outward.
@@ -284,6 +287,10 @@ If any answer is unclear, stop.
 - Domain value objects must not become persisted-schema warehouses. Large persisted fingerprints/snapshots must split field groups by schema section and keep serialization compatibility explicit.
 - Persisted schema builders should split by schema section once they exceed 400 LOC.
 - New machine-facing outputs must include explicit names; avoid generic `score`, `status`, or `verdict` unless the artifact contract defines them.
+- Journal/store services should remain persistence-facing facades. Move DTOs,
+  `to_dict()` schemas, raw-record summarization, comparison policy, and
+  post-action measurement/attribution into named DTO/service modules once those
+  concerns become independently searchable.
 
 ### Infrastructure Provider Rules
 
@@ -311,6 +318,10 @@ If any answer is unclear, stop.
 - Builder modules should describe one output shape. If a builder also contains
   ranking policy, source normalization, note/message policy, and fallback
   aggregation, split those responsibilities into named services.
+- Evidence builders should compose by evidence family. Repeated point-in-time
+  candle/broker/peer/benchmark loading belongs in a shared data-loader
+  collaborator; per-family request construction belongs in named assembler
+  services, not duplicated inside each coordinator.
 
 ### Repository and Config Rules
 
