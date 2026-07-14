@@ -32,7 +32,9 @@ from src.domain.ports.csv_broker_parser import CsvFormat, ParseError
 runner = CliRunner()
 
 
-def test_provider_factory_unknown_provider_and_missing_session() -> None:
+def test_provider_factory_unknown_provider_and_missing_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     # 1. Unknown provider raises ValueError
     with pytest.raises(ValueError) as exc:
         create_broker_data_provider("nonexistent")
@@ -41,18 +43,14 @@ def test_provider_factory_unknown_provider_and_missing_session() -> None:
     # 2. Missing stockbit session message
     import src.infrastructure.composition.stockbit_session_factory as session_factory
 
-    original_get_session = session_factory.get_stockbit_session
-    session_factory.get_stockbit_session = lambda: None
+    monkeypatch.setattr(session_factory, "get_stockbit_session", lambda: None)
 
-    try:
-        with pytest.raises(ValueError) as exc_session:
-            create_broker_data_provider("stockbit")
-        assert (
-            "No active Stockbit session. Run `saham fetch stockbit login`."
-            in str(exc_session.value)
-        )
-    finally:
-        session_factory.get_stockbit_session = original_get_session
+    with pytest.raises(ValueError) as exc_session:
+        create_broker_data_provider("stockbit")
+    assert (
+        "No active Stockbit session. Run `saham fetch stockbit login`."
+        in str(exc_session.value)
+    )
 
 
 def test_broker_fetch_exact_flow_message_appears(monkeypatch: pytest.MonkeyPatch) -> None:
