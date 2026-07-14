@@ -119,6 +119,39 @@ class TestStrategyInit:
         output = result.output or result.stdout
         assert "already exists" in output.lower()
 
+    def test_init_readme_write_failure_warns_but_exits_zero(self, temp_dir, monkeypatch):
+        """Should warn (not fail) when README.md cannot be written."""
+        target = temp_dir / "readme_fail"
+
+        from src.application.use_case import create_strategy_package_use_case as use_case_mod
+
+        original_execute = use_case_mod.CreateStrategyPackageUseCase.execute
+
+        def patched_execute(self, request):
+            response = original_execute(self, request)
+            return type(response)(
+                name=response.name,
+                target_dir=response.target_dir,
+                strategy_path=response.strategy_path,
+                readme_path=response.readme_path,
+                readme_written=False,
+                readme_warning="disk full",
+            )
+
+        monkeypatch.setattr(
+            use_case_mod.CreateStrategyPackageUseCase, "execute", patched_execute
+        )
+
+        result = runner.invoke(
+            app,
+            ["strategy", "init", "readme_fail", "--dir", str(target)],
+        )
+
+        assert result.exit_code == 0
+        output = result.output or result.stdout
+        assert "Warning" in output
+        assert "README.md" in output
+
     def test_init_overwrites_with_force(self, temp_dir):
         """Should overwrite existing with --force."""
         target = temp_dir / "existing"
@@ -189,6 +222,33 @@ class TestStrategyValidate:
         assert result.exit_code != 0
         output = result.output or result.stdout
         assert "not found" in output.lower()
+
+    def test_validate_skips_skill_generation_without_sidecar(self, temp_dir, monkeypatch):
+        """Should not emit SKILL.md output when no sidecar exists."""
+        monkeypatch.chdir(temp_dir)
+        strategies_dir = temp_dir / "strategies"
+        create_strategy(strategies_dir, "no_sidecar")
+
+        result = runner.invoke(app, ["strategy", "validate", "no_sidecar"])
+
+        assert result.exit_code == 0
+        assert "SKILL.md" not in result.stdout
+
+    def test_validate_generates_skill_md_with_sidecar(self, temp_dir, monkeypatch):
+        """Should generate SKILL.md when a sidecar .skill.yaml exists."""
+        monkeypatch.chdir(temp_dir)
+        strategies_dir = temp_dir / "strategies"
+        strategy_dir = create_strategy(strategies_dir, "with_sidecar")
+        (strategy_dir / "strategy.skill.yaml").write_text(
+            "description: Test strategy\nwhen_to_use: When testing\n",
+            encoding="utf-8",
+        )
+
+        result = runner.invoke(app, ["strategy", "validate", "with_sidecar"])
+
+        assert result.exit_code == 0
+        assert "SKILL.md" in result.stdout
+        assert (strategy_dir / "SKILL.md").exists()
 
 
 # ============================================================================
