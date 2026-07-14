@@ -149,12 +149,22 @@ Edge cases to watch:
 
 ### 4. Medium: `src/application/services/swing_tuning_review_journal.py` mixes store, DTOs, comparison, and measurement
 
-Status: `OPEN`
+Status: `RESOLVED` (2026-07-14)
 
-Pointer:
-- `src/application/services/swing_tuning_review_journal.py:19` through `src/application/services/swing_tuning_review_journal.py:163` define DTOs and `to_dict()` serialization.
-- `src/application/services/swing_tuning_review_journal.py:165` through `src/application/services/swing_tuning_review_journal.py:303` perform journal append/review, latest comparison, and post-apply measurement.
-- `src/application/services/swing_tuning_review_journal.py:306` through `src/application/services/swing_tuning_review_journal.py:475` parse raw records, summarize apply logs, and compute metric deltas.
+Resolution:
+- Extracted `src/application/dto/swing_tuning_review.py` holding all report/DTO dataclasses (`SwingTuningReviewSaveResult`, `SwingTuningReviewSummary`, `SwingTuningReviewReport`, `SwingTuningMetricDelta`, `SwingTuningReviewComparison`, `SwingTuningAppliedPatchSummary`, `SwingTuningPostApplyMeasurement`) and their `to_dict()` bodies verbatim.
+- Extracted `src/application/services/swing_tuning_review_summary.py` (`summarize_review_record`, formerly private `_summarize_record`, plus its parsing helpers `_dict`/`_str`/`_int`/`_float`/`_list` and the shared `_metric_deltas`/`_delta` helpers).
+- Extracted `src/application/services/swing_tuning_review_comparison.py` (`compare_latest_review`, a new pure function taking already-sorted records; the `len(records) < 2` early return moved into this function as comparison policy).
+- Extracted `src/application/services/swing_tuning_post_apply_measurement.py` (`measure_post_apply`, a new pure function taking already-sorted apply/review records).
+- `SwingTuningReviewJournal` is now a thin facade over `SwingTuningReviewStore`: `append_review`, `review`, `compare_latest`, `measure_latest_apply` each read/sort via the store and delegate to the extracted functions.
+- No JSON key, status string (`INSUFFICIENT_HISTORY`, `READY`, `NO_APPLY_LOG`, `APPLY_LOG_INVALID`, `INSUFFICIENT_REVIEW_HISTORY`), note string, or metric name changed. Sort order unchanged (`compare_latest` descending, `measure_latest_apply` ascending by `recorded_at`).
+- No compatibility re-export left behind; every call site (`src/adapters/cli/trade_swing_tuning_measurement_display.py`, `src/adapters/cli/trade_swing_tuning_review_display.py`, `src/application/services/swing_tuning_loop_status.py`, and the affected test files) imports moved symbols from their new location.
+- Verified by `tests/application/services/test_swing_tuning_review_journal.py` (facade, unchanged), new `test_swing_tuning_review_summary.py`, `test_swing_tuning_review_comparison.py`, `test_swing_tuning_post_apply_measurement.py`, plus `test_swing_tuning_performance.py`, `test_swing_tuning_walk_forward_guards.py`, `test_run_swing_tuning_review_use_case.py`, `test_trade_swing_tuning_workflow_factory.py`, `tests/architecture`, `tests/integration/test_command_smoke_matrix.py`, and the full suite (3888 passed).
+
+Pointer (pre-refactor, kept for history):
+- `src/application/services/swing_tuning_review_journal.py:19` through `src/application/services/swing_tuning_review_journal.py:163` defined DTOs and `to_dict()` serialization.
+- `src/application/services/swing_tuning_review_journal.py:165` through `src/application/services/swing_tuning_review_journal.py:303` performed journal append/review, latest comparison, and post-apply measurement.
+- `src/application/services/swing_tuning_review_journal.py:306` through `src/application/services/swing_tuning_review_journal.py:475` parsed raw records, summarized apply logs, and computed metric deltas.
 
 Rationale:
 - The filename says journal, but the file also owns report DTOs, comparison policy, post-apply attribution, and raw dict parsing.

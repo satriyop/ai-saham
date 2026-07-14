@@ -17,7 +17,7 @@ from src.adapters.cli.trade_swing_tuning_display_formatters import (
     format_value,
     period,
 )
-from src.application.services.swing_tuning_review_journal import (
+from src.application.dto.swing_tuning_review import (
     SwingTuningReviewComparison,
     SwingTuningReviewReport,
 )

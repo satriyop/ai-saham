@@ -19,8 +19,8 @@ from src.application.services.swing_tuning_patch_validator import (
 from src.infrastructure.config.swing_tuning_document_loader import (
     swing_tuning_document_loader,
 )
-from src.application.services.swing_tuning_review_journal import (
-    _summarize_record,
+from src.application.services.swing_tuning_review_summary import (
+    summarize_review_record,
 )
 from src.application.services.swing_tuning_target_classification import (
     TuningTargetClassification,
@@ -50,14 +50,14 @@ def test_oos_backtest_summary_populated_from_record():
             "win_rate_pct": 50.0,
         },
     }
-    summary = _summarize_record(record)
+    summary = summarize_review_record(record)
     assert summary.oos_trade_count == 8
     assert summary.oos_total_return_pct == 4.2
     assert summary.oos_win_rate_pct == 50.0
 
 
 def test_oos_fields_none_when_no_oos_summary():
-    summary = _summarize_record({"is_ratio": 1.0})
+    summary = summarize_review_record({"is_ratio": 1.0})
     assert summary.oos_trade_count is None
     assert summary.oos_total_return_pct is None
     assert summary.oos_win_rate_pct is None

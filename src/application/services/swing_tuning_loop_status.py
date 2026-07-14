@@ -12,6 +12,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from src.application.dto.swing_tuning_review import (
+    SwingTuningAppliedPatchSummary,
+    SwingTuningPostApplyMeasurement,
+    SwingTuningReviewSummary,
+)
 from src.application.services.swing_tuning_config_paths import DocumentLoader
 from src.application.services.swing_tuning_patch_validator import (
     SwingTuningPatchDryRunPlanner,
@@ -21,10 +26,7 @@ from src.application.services.swing_tuning_patch_validator import (
     SwingTuningPatchVerifyReport,
 )
 from src.application.services.swing_tuning_review_journal import (
-    SwingTuningAppliedPatchSummary,
-    SwingTuningPostApplyMeasurement,
     SwingTuningReviewJournal,
-    SwingTuningReviewSummary,
 )
 from src.domain.ports.swing_tuning_review_store import SwingTuningReviewStore
 

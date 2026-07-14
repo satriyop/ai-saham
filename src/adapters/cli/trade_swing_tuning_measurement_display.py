@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from src.adapters.cli.rich_display import compact_table, console, panel
 from src.adapters.cli.trade_swing_tuning_display_formatters import format_delta, format_value
-from src.application.services.swing_tuning_review_journal import (
+from src.application.dto.swing_tuning_review import (
     SwingTuningPostApplyMeasurement,
 )
 

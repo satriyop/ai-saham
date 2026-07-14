@@ -10,7 +10,9 @@ from src.infrastructure.config.swing_tuning_document_loader import (
 )
 from src.application.services.swing_tuning_review_journal import (
     SwingTuningReviewJournal,
-    _summarize_record,
+)
+from src.application.services.swing_tuning_review_summary import (
+    summarize_review_record,
 )
 from src.infrastructure.persistence.swing_tuning_review_jsonl_writer import (
     SwingTuningReviewJsonlWriter,
@@ -22,19 +24,19 @@ from tests.application.services.swing_tuning_guardrail_fixtures import (
 
 
 def test_summary_without_is_ratio_is_not_walk_forward_enforced():
-    summary = _summarize_record({})
+    summary = summarize_review_record({})
     assert summary.is_ratio is None
     assert summary.walk_forward_enforced is False
 
 
 def test_summary_with_split_is_walk_forward_enforced():
-    summary = _summarize_record({"is_ratio": 0.70, "is_end_date": "2026-04-01"})
+    summary = summarize_review_record({"is_ratio": 0.70, "is_end_date": "2026-04-01"})
     assert summary.is_ratio == 0.70
     assert summary.walk_forward_enforced is True
 
 
 def test_summary_with_is_ratio_but_no_is_end_date_is_not_enforced():
-    summary = _summarize_record({"is_ratio": 0.70})
+    summary = summarize_review_record({"is_ratio": 0.70})
     assert summary.is_ratio == 0.70
     assert summary.walk_forward_enforced is False
 

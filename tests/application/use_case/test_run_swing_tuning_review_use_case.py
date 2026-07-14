@@ -17,7 +17,7 @@ import pytest
 from src.application.services.swing_backtest_attribution import (
     summarize_swing_backtest_attribution,
 )
-from src.application.services.swing_tuning_review_journal import (
+from src.application.dto.swing_tuning_review import (
     SwingTuningReviewSaveResult,
 )
 from src.application.use_case.run_swing_tuning_review_use_case import (
