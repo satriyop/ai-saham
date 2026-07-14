@@ -8,168 +8,17 @@ from datetime import date
 from decimal import Decimal
 from typing import Any
 
-from src.application.dto.swing_broker_detail import (
-    BrokerDetail,
-    BrokerDetailLine,
-    BrokerQualityNote,
-    FlowDetail,
+from src.application.dto.swing_broker_detail import BrokerDetail
+from src.application.services.broker_detail_aggregation import (
+    BrokerFlowRow,
+    aggregate_broker_detail_rows,
 )
 
-
-def build_broker_quality_note(
-    broker_detail: BrokerDetail | None,
-    setup_eval: Any | None,
-    *,
-    smart_sell_min_share_pct: float = 15.0,
-) -> BrokerQualityNote | None:
-    """Build a display-only broker-quality note without changing setup gates."""
-    if broker_detail is None or setup_eval is None:
-        return None
-
-    smart_flow = broker_detail.smart_flow
-    noise_flow = broker_detail.noise_flow
-    quality = broker_detail.broker_weight_quality
-
-    if smart_flow < Decimal("0"):
-        total_abs = abs(smart_flow) + abs(noise_flow) + abs(broker_detail.neutral_flow)
-        smart_sell_share = abs(smart_flow) / total_abs if total_abs > Decimal("0") else Decimal("0")
-        if smart_sell_share >= Decimal(str(smart_sell_min_share_pct)) / Decimal("100"):
-            pct_str = f"{float(smart_sell_share) * 100:.0f}%"
-            return BrokerQualityNote(
-                level="warning",
-                message=(
-                    f"Broker quality warning: smart-money net selling "
-                    f"({pct_str} of tracked flow) conflicts with the accumulation setup."
-                ),
-            )
-
-    if setup_eval.match.value == "MATCH" and (
-        quality == "noisy accumulation"
-        or (noise_flow > Decimal("0") and noise_flow > smart_flow)
-    ):
-        return BrokerQualityNote(
-            level="warning",
-            message=(
-                "Broker quality warning: accumulation is noise-led; require "
-                "stronger chart confirmation."
-            ),
-        )
-
-    if setup_eval.match.value == "PARTIAL" and smart_flow > Decimal("0"):
-        return BrokerQualityNote(
-            level="support",
-            message=(
-                "Broker quality support: smart-money buying supports "
-                "watchlist priority."
-            ),
-        )
-
-    if setup_eval.match.value == "MATCH" and smart_flow > Decimal("0"):
-        return BrokerQualityNote(
-            level="support",
-            message=(
-                "Broker quality support: smart-money buying confirms the "
-                "setup match."
-            ),
-        )
-
-    return None
-
-
-def build_flow_detail(
-    ticker: str,
-    broker_repo: Any,
-    window_sessions: int,
-    as_of_date: date,
-) -> FlowDetail | None:
-    summaries = broker_repo.get_broker_summaries(ticker, end_date=as_of_date)
-    summaries = summaries[-window_sessions:]
-    if not summaries:
-        return None
-
-    total_net_flow = sum(
-        (summary.foreign_net_value for summary in summaries),
-        Decimal("0"),
-    )
-    buy_sessions = sum(1 for summary in summaries if summary.is_foreign_accumulating)
-    sell_sessions = len(summaries) - buy_sessions
-
-    consecutive_buy_sessions = 0
-    for summary in reversed(summaries):
-        if summary.is_foreign_accumulating:
-            consecutive_buy_sessions += 1
-        else:
-            break
-
-    ratios = [float(summary.foreign_flow_ratio) for summary in summaries]
-    latest = summaries[-1]
-    return FlowDetail(
-        window_sessions=window_sessions,
-        available_sessions=len(summaries),
-        from_date=summaries[0].date,
-        through_date=latest.date,
-        total_net_flow=total_net_flow,
-        buy_sessions=buy_sessions,
-        sell_sessions=sell_sessions,
-        consecutive_buy_sessions=consecutive_buy_sessions,
-        avg_flow_ratio_pct=(sum(ratios) / len(ratios)) if ratios else None,
-        latest_net_flow=latest.foreign_net_value,
-        latest_flow_ratio_pct=float(latest.foreign_flow_ratio),
-        latest_date=latest.date,
-    )
-
-
-def _broker_line_sort_key(line: BrokerDetailLine) -> Decimal:
-    return abs(line.net_value)
-
-
-def _broker_tier(code: str, smart_money_brokers: set[str], noise_brokers: set[str]) -> str:
-    code_upper = code.upper()
-    if code_upper in smart_money_brokers:
-        return "smart"
-    if code_upper in noise_brokers:
-        return "noise"
-    return "neutral"
-
-
-def _broker_weight(code: str, broker_weights: dict[str, Decimal]) -> Decimal:
-    return broker_weights.get(code.upper(), Decimal("1.0"))
-
-
-def _smart_share_pct(
-    smart_flow: Decimal,
-    noise_flow: Decimal,
-    neutral_flow: Decimal,
-) -> float | None:
-    total = abs(smart_flow) + abs(noise_flow) + abs(neutral_flow)
-    if total == Decimal("0"):
-        return None
-    return round(float(abs(smart_flow) / total * Decimal("100")), 1)
-
-
-def _broker_weight_quality(
-    smart_flow: Decimal,
-    noise_flow: Decimal,
-    neutral_flow: Decimal,
-    latest_net_flow: Decimal,
-    smart_share_pct: float | None,
-    smart_share_threshold_pct: float,
-) -> str:
-    if latest_net_flow < Decimal("0") and smart_flow < Decimal("0"):
-        return "smart distribution"
-    if latest_net_flow < Decimal("0") and smart_flow > Decimal("0"):
-        return "smart distribution watch"
-    if smart_flow > Decimal("0") and (smart_share_pct or 0) >= smart_share_threshold_pct:
-        return "smart accumulation"
-    if noise_flow > Decimal("0") and smart_flow <= Decimal("0"):
-        return "noisy accumulation"
-    if smart_flow > Decimal("0"):
-        return "smart support"
-    if smart_flow < Decimal("0"):
-        return "smart selling pressure"
-    if neutral_flow > Decimal("0"):
-        return "neutral accumulation"
-    return "neutral detail"
+# Compatibility re-exports — no implementation logic.
+from src.application.services.swing_broker_quality_note_policy import (  # noqa: F401
+    build_broker_quality_note,
+)
+from src.application.services.swing_flow_detail_builder import build_flow_detail  # noqa: F401
 
 
 def build_broker_detail_from_daily_flows(
@@ -190,102 +39,36 @@ def build_broker_detail_from_daily_flows(
     if not window_flows:
         return None
 
-    buyer_values: dict[str, Decimal] = {}
-    buyer_names: dict[str, str] = {}
-    buyer_sessions: dict[str, set] = {}
-    seller_values: dict[str, Decimal] = {}
-    seller_names: dict[str, str] = {}
-    seller_sessions: dict[str, set] = {}
-    smart_flow = Decimal("0")
-    noise_flow = Decimal("0")
-    neutral_flow = Decimal("0")
-    weighted_net_flow = Decimal("0")
+    rows = [
+        BrokerFlowRow(
+            broker_code=f.broker_code,
+            broker_name=f.broker_name,
+            broker_type="unknown",
+            signed_value=f.net_value,
+            session_date=f.date,
+        )
+        for f in window_flows
+    ]
 
-    def add_weighted_flow(code: str, signed_value: Decimal) -> None:
-        nonlocal smart_flow, noise_flow, neutral_flow, weighted_net_flow
-        tier = _broker_tier(code, smart_money_brokers, noise_brokers)
-        if tier == "smart":
-            smart_flow += signed_value
-        elif tier == "noise":
-            noise_flow += signed_value
-        else:
-            neutral_flow += signed_value
-        weighted_net_flow += signed_value * _broker_weight(code, broker_weights)
-
-    for f in window_flows:
-        if f.net_value > Decimal("0"):
-            buyer_values[f.broker_code] = (
-                buyer_values.get(f.broker_code, Decimal("0")) + f.net_value
-            )
-            buyer_names[f.broker_code] = f.broker_name
-            buyer_sessions.setdefault(f.broker_code, set()).add(f.date)
-            add_weighted_flow(f.broker_code, f.net_value)
-        elif f.net_value < Decimal("0"):
-            seller_values[f.broker_code] = (
-                seller_values.get(f.broker_code, Decimal("0")) + abs(f.net_value)
-            )
-            seller_names[f.broker_code] = f.broker_name
-            seller_sessions.setdefault(f.broker_code, set()).add(f.date)
-            add_weighted_flow(f.broker_code, f.net_value)
-
-    buyers = tuple(sorted(
-        (
-            BrokerDetailLine(
-                broker_code=code,
-                broker_name=buyer_names.get(code, code),
-                broker_type="unknown",
-                net_value=value,
-                active_sessions=len(buyer_sessions.get(code, set())),
-            )
-            for code, value in buyer_values.items()
-        ),
-        key=_broker_line_sort_key,
-        reverse=True,
-    )[:5])
-    sellers = tuple(sorted(
-        (
-            BrokerDetailLine(
-                broker_code=code,
-                broker_name=seller_names.get(code, code),
-                broker_type="unknown",
-                net_value=-value,
-                active_sessions=len(seller_sessions.get(code, set())),
-            )
-            for code, value in seller_values.items()
-        ),
-        key=_broker_line_sort_key,
-        reverse=True,
-    )[:5])
-
-    total_buy = sum(buyer_values.values(), Decimal("0"))
-    total_sell = sum(seller_values.values(), Decimal("0"))
-    top_buyer_share = (
-        round(float(abs(buyers[0].net_value) / total_buy * Decimal("100")), 1)
-        if buyers and total_buy > Decimal("0") else None
-    )
-    top_seller_share = (
-        round(float(abs(sellers[0].net_value) / total_sell * Decimal("100")), 1)
-        if sellers and total_sell > Decimal("0") else None
-    )
-
-    through_date = max(f.date for f in window_flows)
-    smart_share = _smart_share_pct(smart_flow, noise_flow, neutral_flow)
-    broker_weight_quality = _broker_weight_quality(
-        smart_flow=smart_flow,
-        noise_flow=noise_flow,
-        neutral_flow=neutral_flow,
-        latest_net_flow=smart_flow + noise_flow + neutral_flow,
-        smart_share_pct=smart_share,
+    net_flow = sum((f.net_value for f in window_flows), Decimal("0"))
+    agg = aggregate_broker_detail_rows(
+        rows,
+        latest_net_flow=net_flow,
+        smart_money_brokers=smart_money_brokers,
+        noise_brokers=noise_brokers,
+        broker_weights=broker_weights,
         smart_share_threshold_pct=smart_share_threshold_pct,
     )
 
-    if not buyers:
+    through_date = max(f.date for f in window_flows)
+
+    if not agg.buyers:
         quality = "no buyer detail"
-    elif top_buyer_share is not None and top_buyer_share >= 60:
+    elif agg.top_buyer_share_pct is not None and agg.top_buyer_share_pct >= 60:
         quality = "concentrated accumulation"
-    elif len(buyers) >= 3 and len(window_dates) >= 3:
+    elif len(agg.buyers) >= 3 and len(window_dates) >= 3:
         quality = "broad accumulation"
-    elif smart_flow < Decimal("0"):
+    elif agg.smart_flow < Decimal("0"):
         quality = "recent distribution"
     else:
         quality = "limited accumulation detail"
@@ -295,16 +78,16 @@ def build_broker_detail_from_daily_flows(
         detail_sessions=len(window_dates),
         through_date=through_date,
         source="stockbit",
-        top_buyers=buyers,
-        top_sellers=sellers,
-        top_buyer_share_pct=top_buyer_share,
-        top_seller_share_pct=top_seller_share,
-        smart_flow=smart_flow,
-        noise_flow=noise_flow,
-        neutral_flow=neutral_flow,
-        weighted_net_flow=weighted_net_flow,
-        smart_share_pct=smart_share,
-        broker_weight_quality=broker_weight_quality,
+        top_buyers=agg.buyers,
+        top_sellers=agg.sellers,
+        top_buyer_share_pct=agg.top_buyer_share_pct,
+        top_seller_share_pct=agg.top_seller_share_pct,
+        smart_flow=agg.smart_flow,
+        noise_flow=agg.noise_flow,
+        neutral_flow=agg.neutral_flow,
+        weighted_net_flow=agg.weighted_net_flow,
+        smart_share_pct=agg.smart_share_pct,
+        broker_weight_quality=agg.broker_weight_quality,
         quality=quality,
     )
 
@@ -347,114 +130,44 @@ def build_broker_detail(
     if not detail_summaries:
         return None
 
-    buyer_values: dict[str, Decimal] = {}
-    buyer_names: dict[str, str] = {}
-    buyer_types: dict[str, str] = {}
-    buyer_sessions: dict[str, set[date]] = {}
-    seller_values: dict[str, Decimal] = {}
-    seller_names: dict[str, str] = {}
-    seller_types: dict[str, str] = {}
-    seller_sessions: dict[str, set[date]] = {}
-    smart_flow = Decimal("0")
-    noise_flow = Decimal("0")
-    neutral_flow = Decimal("0")
-    weighted_net_flow = Decimal("0")
-
-    def add_weighted_flow(code: str, signed_value: Decimal) -> None:
-        nonlocal smart_flow, noise_flow, neutral_flow, weighted_net_flow
-        tier = _broker_tier(code, smart_money_brokers, noise_brokers)
-        if tier == "smart":
-            smart_flow += signed_value
-        elif tier == "noise":
-            noise_flow += signed_value
-        else:
-            neutral_flow += signed_value
-        weighted_net_flow += signed_value * _broker_weight(code, broker_weights)
-
+    rows: list[BrokerFlowRow] = []
     for summary in detail_summaries:
         for tx in summary.top_buyers:
             if tx.net_value > Decimal("0"):
-                buyer_values[tx.broker_code] = (
-                    buyer_values.get(tx.broker_code, Decimal("0")) + tx.net_value
-                )
-                buyer_names[tx.broker_code] = tx.broker_name
-                buyer_types[tx.broker_code] = tx.broker_type.value
-                buyer_sessions.setdefault(tx.broker_code, set()).add(summary.date)
-                add_weighted_flow(tx.broker_code, tx.net_value)
+                rows.append(BrokerFlowRow(
+                    broker_code=tx.broker_code,
+                    broker_name=tx.broker_name,
+                    broker_type=tx.broker_type.value,
+                    signed_value=tx.net_value,
+                    session_date=summary.date,
+                ))
         for tx in summary.top_sellers:
             if tx.net_value < Decimal("0"):
-                signed_value = tx.net_value
-                seller_values[tx.broker_code] = (
-                    seller_values.get(tx.broker_code, Decimal("0")) + abs(signed_value)
-                )
-                seller_names[tx.broker_code] = tx.broker_name
-                seller_types[tx.broker_code] = tx.broker_type.value
-                seller_sessions.setdefault(tx.broker_code, set()).add(summary.date)
-                add_weighted_flow(tx.broker_code, signed_value)
-
-    buyers = tuple(sorted(
-        (
-            BrokerDetailLine(
-                broker_code=code,
-                broker_name=buyer_names.get(code, code),
-                broker_type=buyer_types.get(code, "unknown"),
-                net_value=value,
-                active_sessions=len(buyer_sessions.get(code, set())),
-            )
-            for code, value in buyer_values.items()
-        ),
-        key=_broker_line_sort_key,
-        reverse=True,
-    )[:5])
-    sellers = tuple(sorted(
-        (
-            BrokerDetailLine(
-                broker_code=code,
-                broker_name=seller_names.get(code, code),
-                broker_type=seller_types.get(code, "unknown"),
-                net_value=-value,
-                active_sessions=len(seller_sessions.get(code, set())),
-            )
-            for code, value in seller_values.items()
-        ),
-        key=_broker_line_sort_key,
-        reverse=True,
-    )[:5])
-
-    total_buy = sum(buyer_values.values(), Decimal("0"))
-    total_sell = sum(seller_values.values(), Decimal("0"))
-    top_buyer_share = (
-        round(float(abs(buyers[0].net_value) / total_buy * Decimal("100")), 1)
-        if buyers and total_buy > Decimal("0")
-        else None
-    )
-    top_seller_share = (
-        round(float(abs(sellers[0].net_value) / total_sell * Decimal("100")), 1)
-        if sellers and total_sell > Decimal("0")
-        else None
-    )
+                rows.append(BrokerFlowRow(
+                    broker_code=tx.broker_code,
+                    broker_name=tx.broker_name,
+                    broker_type=tx.broker_type.value,
+                    signed_value=tx.net_value,
+                    session_date=summary.date,
+                ))
 
     latest = detail_summaries[-1]
-    smart_share = _smart_share_pct(
-        smart_flow=smart_flow,
-        noise_flow=noise_flow,
-        neutral_flow=neutral_flow,
-    )
-    broker_weight_quality = _broker_weight_quality(
-        smart_flow=smart_flow,
-        noise_flow=noise_flow,
-        neutral_flow=neutral_flow,
+    agg = aggregate_broker_detail_rows(
+        rows,
         latest_net_flow=latest.foreign_net_value,
-        smart_share_pct=smart_share,
+        smart_money_brokers=smart_money_brokers,
+        noise_brokers=noise_brokers,
+        broker_weights=broker_weights,
         smart_share_threshold_pct=smart_share_threshold_pct,
     )
+
     if latest.foreign_net_value < Decimal("0"):
         quality = "recent distribution"
-    elif top_buyer_share is not None and top_buyer_share >= 60:
+    elif agg.top_buyer_share_pct is not None and agg.top_buyer_share_pct >= 60:
         quality = "concentrated accumulation"
-    elif len(buyers) >= 3 and len(detail_summaries) >= 3:
+    elif len(agg.buyers) >= 3 and len(detail_summaries) >= 3:
         quality = "broad accumulation"
-    elif buyers:
+    elif agg.buyers:
         quality = "limited accumulation detail"
     else:
         quality = "no buyer detail"
@@ -464,15 +177,15 @@ def build_broker_detail(
         detail_sessions=len(detail_summaries),
         through_date=latest.date,
         source=latest.source,
-        top_buyers=buyers,
-        top_sellers=sellers,
-        top_buyer_share_pct=top_buyer_share,
-        top_seller_share_pct=top_seller_share,
-        smart_flow=smart_flow,
-        noise_flow=noise_flow,
-        neutral_flow=neutral_flow,
-        weighted_net_flow=weighted_net_flow,
-        smart_share_pct=smart_share,
-        broker_weight_quality=broker_weight_quality,
+        top_buyers=agg.buyers,
+        top_sellers=agg.sellers,
+        top_buyer_share_pct=agg.top_buyer_share_pct,
+        top_seller_share_pct=agg.top_seller_share_pct,
+        smart_flow=agg.smart_flow,
+        noise_flow=agg.noise_flow,
+        neutral_flow=agg.neutral_flow,
+        weighted_net_flow=agg.weighted_net_flow,
+        smart_share_pct=agg.smart_share_pct,
+        broker_weight_quality=agg.broker_weight_quality,
         quality=quality,
     )
