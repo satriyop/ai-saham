@@ -193,7 +193,15 @@ Edge cases to watch:
 
 ### 5. Medium: `src/adapters/cli/fetch_broker_commands.py` is still a broad command cluster
 
-Status: `OPEN`
+Status: `RESOLVED`
+
+Resolution:
+- Split into `fetch_broker_summary_commands.py` (`broker_fetch`), `fetch_broker_foreign_top_commands.py` (`broker_top_foreign`), `fetch_broker_history_commands.py` (`broker_history`), and `fetch_broker_import_commands.py` (`broker_import`).
+- Extracted shared adapter-only helpers into `fetch_broker_error_display.py` (provider/auth/value/unexpected error rendering) and `fetch_broker_market_status_display.py` (market-status echo).
+- `fetch_broker_commands.py` is now a router/import facade only (`__all__` re-export of the four command functions); it holds no workflow factory imports, no `load_app_config`, and no Typer command bodies.
+- `fetch_commands.py` now imports command functions from the canonical contextual modules rather than the facade.
+- Command names, option names, output wording, and exit codes are unchanged. Verified via `ruff check`, `pytest tests/adapters/cli/test_fetch_broker_commands.py`, `pytest tests/integration/test_command_smoke_matrix.py`, and `pytest tests/architecture`.
+- Fixed a pre-existing bug surfaced during split review: `broker_fetch`'s success line used the unresolved `provider_name` argument instead of `resolved_provider`, printing `Loaded N days from None` when `--provider` was omitted. Now uses `resolved_provider`; regression test `test_broker_fetch_default_provider_shown_when_no_provider_flag` covers the no-flag path.
 
 Pointer:
 - `src/adapters/cli/fetch_broker_commands.py:47` through `src/adapters/cli/fetch_broker_commands.py:56` hold config-derived defaults.

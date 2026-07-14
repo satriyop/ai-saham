@@ -84,7 +84,7 @@ def test_broker_fetch_exact_flow_message_appears(monkeypatch: pytest.MonkeyPatch
             )
 
     monkeypatch.setattr(
-        "src.adapters.cli.fetch_broker_commands.create_fetch_broker_summary_workflow",
+        "src.adapters.cli.fetch_broker_summary_commands.create_fetch_broker_summary_workflow",
         lambda provider_name, db_path: DummyWorkflow(),
     )
 
@@ -117,7 +117,7 @@ def test_broker_top_foreign_no_save(monkeypatch: pytest.MonkeyPatch) -> None:
             )
 
     monkeypatch.setattr(
-        "src.adapters.cli.fetch_broker_commands.create_foreign_top_stocks_workflow",
+        "src.adapters.cli.fetch_broker_foreign_top_commands.create_foreign_top_stocks_workflow",
         lambda provider_name, db_path: DummyWorkflow(),
     )
 
@@ -151,7 +151,7 @@ def test_broker_import_on_error_report_prints_errors(
             )
 
     monkeypatch.setattr(
-        "src.adapters.cli.fetch_broker_commands.create_import_broker_data_use_case",
+        "src.adapters.cli.fetch_broker_import_commands.create_import_broker_data_use_case",
         lambda db_path: DummyWorkflow(),
     )
 
@@ -171,3 +171,122 @@ def test_broker_import_on_error_report_prints_errors(
     assert result.exit_code == 0
     assert "Parse Errors:" in result.stdout
     assert "some parsing error" in result.stdout
+
+
+def test_broker_fetch_default_provider_shown_when_no_provider_flag(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class DummyWorkflow:
+        def execute(self, request: Any) -> FetchBrokerSummaryWorkflowResult:
+            response = FetchBrokerDataResponse(
+                ticker="BBCA",
+                summaries=[
+                    BrokerSummary(
+                        ticker="BBCA",
+                        date=date(2024, 1, 1),
+                        top_buyers=(),
+                        top_sellers=(),
+                        foreign_buy_value=Decimal("100"),
+                        foreign_sell_value=Decimal("50"),
+                        foreign_buy_lot=10,
+                        foreign_sell_lot=5,
+                        total_value=Decimal("1000"),
+                        total_lot=100,
+                        source="idx",
+                    )
+                ],
+                from_cache=False,
+                message="ok",
+            )
+            return FetchBrokerSummaryWorkflowResult(
+                response=response,
+                exact_flow_saved_count=0,
+            )
+
+    monkeypatch.setattr(
+        "src.adapters.cli.fetch_broker_summary_commands.create_fetch_broker_summary_workflow",
+        lambda provider_name, db_path: DummyWorkflow(),
+    )
+
+    result = runner.invoke(app, ["fetch", "broker", "BBCA"])
+    assert result.exit_code == 0
+    assert "Loaded 1 days from idx" in result.stdout
+    assert "None" not in result.stdout
+
+
+def test_broker_fetch_unknown_provider_prints_available_providers() -> None:
+    result = runner.invoke(
+        app, ["fetch", "broker", "BBCA", "--provider", "nonexistent"]
+    )
+    assert result.exit_code == 1
+    assert "Unknown provider: nonexistent" in result.stdout
+    assert "Available providers:" in result.stdout
+
+
+def test_broker_top_foreign_not_authenticated_shows_login_guidance(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from src.domain.ports.broker_data_provider import BrokerDataProviderError
+
+    class DummyWorkflow:
+        def execute(self, request: Any) -> FetchForeignTopStocksWorkflowResult:
+            raise BrokerDataProviderError("Not authenticated")
+
+    monkeypatch.setattr(
+        "src.adapters.cli.fetch_broker_foreign_top_commands.create_foreign_top_stocks_workflow",
+        lambda provider_name, db_path: DummyWorkflow(),
+    )
+
+    result = runner.invoke(app, ["fetch", "broker-top-foreign"])
+    assert result.exit_code == 1
+    assert "Not authenticated." in result.stdout
+    assert "Run: saham fetch stockbit login" in result.stdout
+
+
+def test_broker_history_not_authenticated_shows_login_guidance(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from src.domain.ports.broker_data_provider import BrokerDataProviderError
+
+    class DummyWorkflow:
+        def execute(self, request: Any) -> Any:
+            raise BrokerDataProviderError("Not authenticated")
+
+    monkeypatch.setattr(
+        "src.adapters.cli.fetch_broker_history_commands.create_broker_flow_history_workflow",
+        lambda provider_name, db_path: DummyWorkflow(),
+    )
+
+    result = runner.invoke(app, ["fetch", "broker-history", "BBCA"])
+    assert result.exit_code == 1
+    assert "Not authenticated." in result.stdout
+    assert "Run: saham fetch stockbit login" in result.stdout
+
+
+def test_fetch_broker_commands_facade_has_no_workflow_or_config_imports() -> None:
+    import src.adapters.cli.fetch_broker_commands as facade
+
+    assert not hasattr(facade, "create_fetch_broker_summary_workflow")
+    assert not hasattr(facade, "create_foreign_top_stocks_workflow")
+    assert not hasattr(facade, "create_broker_flow_history_workflow")
+    assert not hasattr(facade, "create_import_broker_data_use_case")
+    assert not hasattr(facade, "load_app_config")
+    assert facade.__all__ == [
+        "broker_fetch",
+        "broker_import",
+        "broker_history",
+        "broker_top_foreign",
+    ]
+
+
+def test_fetch_commands_registers_canonical_command_functions() -> None:
+    import src.adapters.cli.fetch_broker_foreign_top_commands as foreign_top_module
+    import src.adapters.cli.fetch_broker_history_commands as history_module
+    import src.adapters.cli.fetch_broker_import_commands as import_module
+    import src.adapters.cli.fetch_broker_summary_commands as summary_module
+    from src.adapters.cli import fetch_commands
+
+    assert fetch_commands.broker_fetch is summary_module.broker_fetch
+    assert fetch_commands.broker_import is import_module.broker_import
+    assert fetch_commands.broker_history is history_module.broker_history
+    assert fetch_commands.broker_top_foreign is foreign_top_module.broker_top_foreign
