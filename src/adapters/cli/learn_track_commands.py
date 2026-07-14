@@ -88,19 +88,23 @@ def track(
         typer.echo("No Stockbit session. Run: saham fetch stockbit login", err=True)
         raise typer.Exit(1)
 
+    from src.infrastructure.browser.stockbit_config_bundle import load_stockbit_provider_config
     from src.infrastructure.composition.stockbit_session_factory import (
         get_stockbit_session as _get_learn_session,
     )
-    _learn_session = _get_learn_session()
+    _stockbit_config = load_stockbit_provider_config()
+    _learn_session = _get_learn_session(_stockbit_config)
 
     from src.infrastructure.browser.stockbit_api_client import create_stockbit_api_client
     _api_client = (
         _learn_session.api_client if _learn_session else None
     ) or create_stockbit_api_client(
-        profile_dir=Path(cfg.storage.stockbit_profile_dir), headless=headless
+        profile_dir=Path(cfg.storage.stockbit_profile_dir),
+        headless=headless,
+        stockbit_config=_stockbit_config,
     )
 
-    browser = PlaywrightStockbitProvider(api_client=_api_client)
+    browser = PlaywrightStockbitProvider(api_client=_api_client, stockbit_config=_stockbit_config)
 
     running_trade_provider = None
     institutional_codes: frozenset[str] = frozenset()
@@ -114,7 +118,7 @@ def track(
 
             if _learn_session and _learn_session.authenticated:
                 running_trade_provider = StockbitRunningTradeProvider(
-                    api_client=_learn_session.api_client
+                    api_client=_learn_session.api_client, stockbit_config=_stockbit_config
                 )
                 with open(cfg.config_paths.stockbit) as f:
                     stockbit_cfg = yaml.safe_load(f) or {}
@@ -137,7 +141,9 @@ def track(
         from src.infrastructure.browser.stockbit_order_book import StockbitOrderBookProvider
 
         if _learn_session and _learn_session.authenticated:
-            order_book_provider = StockbitOrderBookProvider(api_client=_learn_session.api_client)
+            order_book_provider = StockbitOrderBookProvider(
+                api_client=_learn_session.api_client, stockbit_config=_stockbit_config
+            )
             typer.echo("Order book depth enabled — bid_pressure_ratio + live F.Net per snapshot")
         else:
             typer.echo("Stockbit session not authenticated — order book disabled", err=True)

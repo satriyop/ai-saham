@@ -26,12 +26,15 @@ def create_broker_provider(name: str | None):
       2. IDX public API — always available fallback
     """
     from src.infrastructure.browser.stockbit_broker_provider import StockbitBrokerProvider
+    from src.infrastructure.browser.stockbit_config_bundle import load_stockbit_provider_config
     from src.infrastructure.composition.stockbit_session_factory import get_stockbit_session
 
     if name == "stockbit":
-        session = get_stockbit_session()
+        stockbit_config = load_stockbit_provider_config()
+        session = get_stockbit_session(stockbit_config)
         if session and session.authenticated:
-            return StockbitBrokerProvider(session.api_client), "stockbit"
+            provider = StockbitBrokerProvider(session.api_client, stockbit_config=stockbit_config)
+            return provider, "stockbit"
         return IdxBrokerDataProvider(), "idx"
     if name == "idx":
         return IdxBrokerDataProvider(), "idx"
@@ -42,7 +45,9 @@ def create_broker_provider(name: str | None):
         )
 
     # Auto-detect
-    session = get_stockbit_session()
+    stockbit_config = load_stockbit_provider_config()
+    session = get_stockbit_session(stockbit_config)
     if session and session.authenticated:
-        return StockbitBrokerProvider(session.api_client), "stockbit"
+        provider = StockbitBrokerProvider(session.api_client, stockbit_config=stockbit_config)
+        return provider, "stockbit"
     return IdxBrokerDataProvider(), "idx"

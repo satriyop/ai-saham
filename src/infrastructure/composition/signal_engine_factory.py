@@ -22,6 +22,7 @@ from src.application.services.engine_bootstrap.signal_weight_config_resolver imp
 from src.application.services.signal_engine import SignalEngine
 from src.infrastructure.browser.stockbit_analyst import StockbitAnalystConsensusProvider
 from src.infrastructure.browser.stockbit_bandar import StockbitBandarDetectorProvider
+from src.infrastructure.browser.stockbit_config_bundle import load_stockbit_provider_config
 from src.infrastructure.browser.stockbit_forward_estimates import (
     StockbitForwardEstimatesProvider,
 )
@@ -68,21 +69,37 @@ def create_signal_engine(
         return float(candles[-1].close)
 
     connection_provider = StockbitSQLiteConnectionProvider()
+    stockbit_config = load_stockbit_provider_config()
     return SignalEngine(
         bandar_provider=StockbitBandarDetectorProvider(
-            api_client=None, db_path=resolved, connection_provider=connection_provider
+            api_client=None,
+            db_path=resolved,
+            connection_provider=connection_provider,
+            stockbit_config=stockbit_config,
         ),
         insider_activity_provider=StockbitInsiderActivityProvider(
-            api_client=None, db_path=resolved, connection_provider=connection_provider
+            api_client=None,
+            db_path=resolved,
+            connection_provider=connection_provider,
+            stockbit_config=stockbit_config,
         ),
         seasonality_provider=StockbitSeasonalityProvider(
-            api_client=None, db_path=resolved, connection_provider=connection_provider
+            api_client=None,
+            db_path=resolved,
+            connection_provider=connection_provider,
+            stockbit_config=stockbit_config,
         ),
         analyst_provider=StockbitAnalystConsensusProvider(
-            api_client=None, db_path=resolved, connection_provider=connection_provider
+            api_client=None,
+            db_path=resolved,
+            connection_provider=connection_provider,
+            stockbit_config=stockbit_config,
         ),
         forward_estimates_provider=StockbitForwardEstimatesProvider(
-            api_client=None, db_path=resolved, connection_provider=connection_provider
+            api_client=None,
+            db_path=resolved,
+            connection_provider=connection_provider,
+            stockbit_config=stockbit_config,
         ),
         latest_price_provider=_latest_close,
         weights=weights,

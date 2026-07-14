@@ -105,7 +105,7 @@ def test_stockbit_help_lists_all_commands():
 def test_test_command_exits_1_with_session_expired_message_when_unauthenticated(monkeypatch):
     monkeypatch.setattr(
         "src.adapters.cli.fetch_stockbit_diagnostic_factory.get_stockbit_session",
-        lambda: None,
+        lambda stockbit_config=None: None,
     )
 
     result = runner.invoke(app, ["fetch", "stockbit", "test"])
@@ -117,7 +117,7 @@ def test_test_command_exits_1_with_session_expired_message_when_unauthenticated(
 def test_fetch_top5_command_exits_1_with_session_expired_message_when_unauthenticated(monkeypatch):
     monkeypatch.setattr(
         "src.adapters.cli.fetch_stockbit_diagnostic_factory.get_stockbit_session",
-        lambda: None,
+        lambda stockbit_config=None: None,
     )
 
     result = runner.invoke(app, ["fetch", "stockbit", "fetch-top5"])

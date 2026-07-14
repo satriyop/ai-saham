@@ -28,6 +28,7 @@ class IntradayAutoConfirmSetupError(RuntimeError):
 
 
 def _build_live_providers():
+    from src.infrastructure.browser.stockbit_config_bundle import load_stockbit_provider_config
     from src.infrastructure.browser.stockbit_order_book import (
         StockbitOrderBookProvider,
     )
@@ -39,13 +40,14 @@ def _build_live_providers():
     )
 
     try:
-        session = get_stockbit_session()
+        stockbit_config = load_stockbit_provider_config()
+        session = get_stockbit_session(stockbit_config)
         if session is None or not session.authenticated:
             return None, None
         api = session.api_client
         return (
-            StockbitRunningTradeProvider(api_client=api),
-            StockbitOrderBookProvider(api_client=api),
+            StockbitRunningTradeProvider(api_client=api, stockbit_config=stockbit_config),
+            StockbitOrderBookProvider(api_client=api, stockbit_config=stockbit_config),
         )
     except Exception as e:
         raise IntradayAutoConfirmSetupError(str(e)) from e

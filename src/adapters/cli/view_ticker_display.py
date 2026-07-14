@@ -38,6 +38,7 @@ def show_ticker_view(ticker: str, db_path: Path = DEFAULT_DB_PATH) -> None:
     from src.infrastructure.browser.stockbit_analyst import StockbitAnalystConsensusProvider
     from src.infrastructure.browser.stockbit_bandar import StockbitBandarDetectorProvider
     from src.infrastructure.browser.stockbit_company_profile import StockbitCompanyProfileProvider
+    from src.infrastructure.browser.stockbit_config_bundle import load_stockbit_provider_config
     from src.infrastructure.browser.stockbit_corp_action import StockbitCorporateActionRepository
     from src.infrastructure.browser.stockbit_forward_estimates import (
         StockbitForwardEstimatesProvider,
@@ -56,36 +57,67 @@ def show_ticker_view(ticker: str, db_path: Path = DEFAULT_DB_PATH) -> None:
 
     db = Path(db_path)
     connection_provider = StockbitSQLiteConnectionProvider()
+    stockbit_config = load_stockbit_provider_config()
 
     notation_prov = StockbitTickerNotationProvider(
-        api_client=None, db_path=db, connection_provider=connection_provider
+        api_client=None,
+        db_path=db,
+        connection_provider=connection_provider,
+        stockbit_config=stockbit_config,
     )
     fund_prov = StockbitFundamentalsProvider(
-        api_client=None, db_path=db, connection_provider=connection_provider
+        api_client=None,
+        db_path=db,
+        connection_provider=connection_provider,
+        stockbit_config=stockbit_config,
     )
     analyst_prov = StockbitAnalystConsensusProvider(
-        api_client=None, db_path=db, connection_provider=connection_provider
+        api_client=None,
+        db_path=db,
+        connection_provider=connection_provider,
+        stockbit_config=stockbit_config,
     )
     sh_prov = StockbitShareholdingProvider(
-        api_client=None, db_path=db, connection_provider=connection_provider
+        api_client=None,
+        db_path=db,
+        connection_provider=connection_provider,
+        stockbit_config=stockbit_config,
     )
     bandar_prov = StockbitBandarDetectorProvider(
-        api_client=None, db_path=db, connection_provider=connection_provider
+        api_client=None,
+        db_path=db,
+        connection_provider=connection_provider,
+        stockbit_config=stockbit_config,
     )
     fwd_prov = StockbitForwardEstimatesProvider(
-        api_client=None, db_path=db, connection_provider=connection_provider
+        api_client=None,
+        db_path=db,
+        connection_provider=connection_provider,
+        stockbit_config=stockbit_config,
     )
     profile_prov = StockbitCompanyProfileProvider(
-        api_client=None, db_path=db, connection_provider=connection_provider
+        api_client=None,
+        db_path=db,
+        connection_provider=connection_provider,
+        stockbit_config=stockbit_config,
     )
     corp_action_repo = StockbitCorporateActionRepository(
-        api_client=None, db_path=db, connection_provider=connection_provider
+        api_client=None,
+        db_path=db,
+        connection_provider=connection_provider,
+        stockbit_config=stockbit_config,
     )
     insider_prov = StockbitInsiderActivityProvider(
-        api_client=None, db_path=db, connection_provider=connection_provider
+        api_client=None,
+        db_path=db,
+        connection_provider=connection_provider,
+        stockbit_config=stockbit_config,
     )
     seasonality_prov = StockbitSeasonalityProvider(
-        api_client=None, db_path=db, connection_provider=connection_provider
+        api_client=None,
+        db_path=db,
+        connection_provider=connection_provider,
+        stockbit_config=stockbit_config,
     )
     market_repo = SQLiteMarketRepository(db)
     iev_repo = SQLiteIEVRepository(db)

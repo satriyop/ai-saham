@@ -15,5 +15,8 @@ def create_broker_distribution_provider(db_path: Path) -> BrokerDistributionProv
     from src.infrastructure.browser.stockbit_broker_distribution import (
         StockbitBrokerDistributionProvider,
     )
+    from src.infrastructure.browser.stockbit_config_bundle import load_stockbit_provider_config
 
-    return StockbitBrokerDistributionProvider(api_client=None, db_path=db_path)
+    return StockbitBrokerDistributionProvider(
+        api_client=None, db_path=db_path, stockbit_config=load_stockbit_provider_config()
+    )

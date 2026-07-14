@@ -19,10 +19,15 @@ from src.application.services.stockbit_session import StockbitSession
 from src.infrastructure.browser.stockbit_api_client import create_stockbit_api_client
 from src.infrastructure.browser.stockbit_broker_provider import StockbitBrokerProvider
 from src.infrastructure.browser.stockbit_browser_context import default_stockbit_profile_dir
+from src.infrastructure.browser.stockbit_config_bundle import load_stockbit_provider_config
+from src.infrastructure.config.stockbit_config import StockbitConfig
 
 
-def get_stockbit_session() -> StockbitSession | None:
+def get_stockbit_session(stockbit_config: StockbitConfig | None = None) -> StockbitSession | None:
     """Return a StockbitSession if a valid Stockbit profile exists, else None.
+
+    Loads `StockbitConfig` once (unless the caller already has one to share)
+    and passes it explicitly into the api client and broker provider it builds.
 
     Never raises. Returns None when:
     - .stockbit_profile/ directory is absent
@@ -31,8 +36,9 @@ def get_stockbit_session() -> StockbitSession | None:
     try:
         if not default_stockbit_profile_dir().exists():
             return None
-        api_client = create_stockbit_api_client()
-        authenticated = StockbitBrokerProvider(api_client).is_authenticated()
+        cfg = stockbit_config or load_stockbit_provider_config()
+        api_client = create_stockbit_api_client(stockbit_config=cfg)
+        authenticated = StockbitBrokerProvider(api_client, stockbit_config=cfg).is_authenticated()
         return StockbitSession(api_client=api_client, authenticated=authenticated)
     except Exception:
         return None

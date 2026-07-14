@@ -13,16 +13,19 @@ from src.application.use_case.manage_universe_use_case import (
     UpdateUniverseUseCase,
 )
 from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
+from src.infrastructure.browser.stockbit_config_bundle import load_stockbit_provider_config
+from src.infrastructure.config.stockbit_config import StockbitConfig
 
 
-def _require_api_client() -> StockbitApiClient:
-    """Get authenticated Stockbit API client or exit."""
-    _session = _stockbit_session.get_stockbit_session()
+def _require_api_client() -> tuple[StockbitApiClient, StockbitConfig]:
+    """Get authenticated Stockbit API client (and the config used to build it) or exit."""
+    stockbit_config = load_stockbit_provider_config()
+    _session = _stockbit_session.get_stockbit_session(stockbit_config)
     if not _session or not _session.authenticated:
         from typer import Exit, echo
         echo("Stockbit session expired. Run `saham fetch stockbit login` to refresh.")
         raise Exit(1)
-    return _session.api_client
+    return _session.api_client, stockbit_config
 
 
 class _ProviderAdapter:
@@ -50,8 +53,10 @@ class _ProviderAdapter:
 
 def create_provider_adapter() -> _ProviderAdapter:
     """Create provider adapter with authenticated API client."""
-    api_client = _require_api_client()
-    universe_prov = _stockbit_universe.StockbitUniverseProvider(api_client=api_client)
+    api_client, stockbit_config = _require_api_client()
+    universe_prov = _stockbit_universe.StockbitUniverseProvider(
+        api_client=api_client, stockbit_config=stockbit_config
+    )
     return _ProviderAdapter(universe_prov, api_client)
 
 

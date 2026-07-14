@@ -43,7 +43,9 @@ def test_provider_factory_unknown_provider_and_missing_session(
     # 2. Missing stockbit session message
     import src.infrastructure.composition.stockbit_session_factory as session_factory
 
-    monkeypatch.setattr(session_factory, "get_stockbit_session", lambda: None)
+    monkeypatch.setattr(
+        session_factory, "get_stockbit_session", lambda stockbit_config=None: None
+    )
 
     with pytest.raises(ValueError) as exc_session:
         create_broker_data_provider("stockbit")

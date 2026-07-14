@@ -396,7 +396,7 @@ def test_confirm_open_missing_stockbit_auto_confirm_shows_error(tmp_path, monkey
 
     import src.infrastructure.composition.stockbit_session_factory as _session_svc
 
-    monkeypatch.setattr(_session_svc, "get_stockbit_session", lambda: None)
+    monkeypatch.setattr(_session_svc, "get_stockbit_session", lambda stockbit_config=None: None)
 
     result = runner.invoke(
         app,
@@ -454,7 +454,7 @@ def test_intraday_confirm_open_auto_uses_stockbit_provider_stubs(tmp_path, monke
             return True
 
     class FakeRunningTradeProvider:
-        def __init__(self, api_client):
+        def __init__(self, api_client, stockbit_config=None):
             pass
 
         def fetch_running_trade(self, ticker: str, limit: int = 80):
@@ -473,7 +473,7 @@ def test_intraday_confirm_open_auto_uses_stockbit_provider_stubs(tmp_path, monke
             ]
 
     class FakeOrderBookProvider:
-        def __init__(self, api_client):
+        def __init__(self, api_client, stockbit_config=None):
             pass
 
         def fetch_snapshot(self, ticker: str):
@@ -488,7 +488,7 @@ def test_intraday_confirm_open_auto_uses_stockbit_provider_stubs(tmp_path, monke
     _fake_client = object.__new__(_stockbit_api_client.StockbitApiClient)
     monkeypatch.setattr(
         _session_svc, "get_stockbit_session",
-        lambda: StockbitSession(api_client=_fake_client, authenticated=True),
+        lambda stockbit_config=None: StockbitSession(api_client=_fake_client, authenticated=True),
     )
     monkeypatch.setattr(
         stockbit_running_trade,

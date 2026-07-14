@@ -22,6 +22,7 @@ from src.application.use_case.sync_corporate_action_calendar_use_case import (
     SyncCorporateActionCalendarUseCase,
 )
 from src.domain.value_objects.corporate_action_calendar import CorporateActionType
+from src.infrastructure.browser.stockbit_config_bundle import load_stockbit_provider_config
 from src.infrastructure.browser.stockbit_corporate_action_calendar import (
     StockbitCorporateActionCalendarProvider,
 )
@@ -87,7 +88,8 @@ def fetch_calendar(
     event_types = _parse_types(types or _DEFAULT_TYPES)
     resolved_db = db_path or Path(cfg.storage.db_path)
 
-    session = get_stockbit_session()
+    stockbit_config = load_stockbit_provider_config()
+    session = get_stockbit_session(stockbit_config)
     if session is None or not session.authenticated:
         typer.echo(
             typer.style("Not authenticated.", fg=typer.colors.RED)
@@ -96,7 +98,9 @@ def fetch_calendar(
         )
         raise typer.Exit(1)
 
-    provider = StockbitCorporateActionCalendarProvider(api_client=session.api_client)
+    provider = StockbitCorporateActionCalendarProvider(
+        api_client=session.api_client, stockbit_config=stockbit_config
+    )
     repository = SQLiteCorporateActionCalendarRepository(resolved_db)
     use_case = SyncCorporateActionCalendarUseCase(provider=provider, repository=repository)
 

@@ -42,7 +42,10 @@ def snapshot(
         saham learn snapshot --force       # manual dry-run anytime
         saham learn snapshot --date 2026-06-18 --force
     """
+    from src.infrastructure.browser.stockbit_config_bundle import load_stockbit_provider_config
+
     cfg = load_app_config()
+    stockbit_config = load_stockbit_provider_config()
     run_date = parse_learn_date(date_str)
     resolved_db = db_path or Path(cfg.storage.db_path)
     resolved_config = config_path or Path(cfg.config_paths.pre_open_screener)
@@ -65,10 +68,12 @@ def snapshot(
             from src.infrastructure.composition.stockbit_session_factory import get_stockbit_session
 
             _mstatus = None
-            _mtime_session = get_stockbit_session()
+            _mtime_session = get_stockbit_session(stockbit_config)
             if _mtime_session and _mtime_session.authenticated:
                 _mstatus = (
-                    StockbitMarketTimeProvider(api_client=_mtime_session.api_client).get_status()
+                    StockbitMarketTimeProvider(
+                        api_client=_mtime_session.api_client, stockbit_config=stockbit_config
+                    ).get_status()
                 )
             if _mstatus and _mstatus.source == "stockbit" and not _mstatus.is_pre_open:
                 typer.echo(
@@ -121,9 +126,11 @@ def snapshot(
     )
     from src.infrastructure.browser.stockbit_api_client import create_stockbit_api_client
     api_client = create_stockbit_api_client(
-        profile_dir=Path(cfg.storage.stockbit_profile_dir), headless=headless
+        profile_dir=Path(cfg.storage.stockbit_profile_dir),
+        headless=headless,
+        stockbit_config=stockbit_config,
     )
-    browser = PlaywrightStockbitProvider(api_client=api_client)
+    browser = PlaywrightStockbitProvider(api_client=api_client, stockbit_config=stockbit_config)
 
     iev_repo = SQLiteIEVRepository(resolved_db)
     today_date = run_date or now.date()
@@ -134,7 +141,9 @@ def snapshot(
     except Exception:
         pass
 
-    notation_provider = StockbitTickerNotationProvider(api_client=None, db_path=resolved_db)
+    notation_provider = StockbitTickerNotationProvider(
+        api_client=None, db_path=resolved_db, stockbit_config=stockbit_config
+    )
     use_case = OpeningSnapshotUseCase(
         browser=browser,
         repository=repository,

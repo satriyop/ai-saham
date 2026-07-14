@@ -35,6 +35,7 @@ def refresh_market_calendar(db_path: Path, api_client, refresh: bool) -> str:
     exceptions and returns an 'ERR:' status so calendar failure never aborts the
     candle/broker fetch loop."""
     try:
+        from src.infrastructure.browser.stockbit_config_bundle import load_stockbit_provider_config
         from src.infrastructure.browser.stockbit_corporate_action_calendar import (
             StockbitCorporateActionCalendarProvider,
         )
@@ -42,7 +43,9 @@ def refresh_market_calendar(db_path: Path, api_client, refresh: bool) -> str:
             SQLiteCorporateActionCalendarRepository,
         )
 
-        provider = StockbitCorporateActionCalendarProvider(api_client=api_client)
+        provider = StockbitCorporateActionCalendarProvider(
+            api_client=api_client, stockbit_config=load_stockbit_provider_config()
+        )
         repository = SQLiteCorporateActionCalendarRepository(db_path)
         use_case = SyncCorporateActionCalendarUseCase(provider=provider, repository=repository)
         response = use_case.execute(

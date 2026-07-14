@@ -24,6 +24,7 @@ from src.application.services.engine_bootstrap.risk_config_resolvers import (
 from src.application.services.indicator_evaluator import IndicatorEvaluator
 from src.application.services.risk_engine import RiskEngine
 from src.infrastructure.browser.stockbit_bandar import StockbitBandarDetectorProvider
+from src.infrastructure.browser.stockbit_config_bundle import load_stockbit_provider_config
 from src.infrastructure.browser.stockbit_fundamentals import StockbitFundamentalsProvider
 from src.infrastructure.browser.stockbit_shareholding import StockbitShareholdingProvider
 from src.infrastructure.browser.stockbit_sqlite_connection_provider import (
@@ -80,14 +81,24 @@ def create_risk_engine(
     shareholding_prov = None
     if with_enrichment:
         connection_provider = StockbitSQLiteConnectionProvider()
+        stockbit_config = load_stockbit_provider_config()
         fund_prov = StockbitFundamentalsProvider(
-            api_client=None, db_path=resolved, connection_provider=connection_provider
+            api_client=None,
+            db_path=resolved,
+            connection_provider=connection_provider,
+            stockbit_config=stockbit_config,
         )
         bandar_prov = StockbitBandarDetectorProvider(
-            api_client=None, db_path=resolved, connection_provider=connection_provider
+            api_client=None,
+            db_path=resolved,
+            connection_provider=connection_provider,
+            stockbit_config=stockbit_config,
         )
         shareholding_prov = StockbitShareholdingProvider(
-            api_client=None, db_path=resolved, connection_provider=connection_provider
+            api_client=None,
+            db_path=resolved,
+            connection_provider=connection_provider,
+            stockbit_config=stockbit_config,
         )
 
     return RiskEngine(

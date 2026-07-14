@@ -24,6 +24,7 @@ from src.domain.value_objects.market_status import MarketStatus
 from src.infrastructure.browser.playwright_stockbit_provider import PlaywrightStockbitProvider
 from src.infrastructure.browser.stockbit_api_client import create_stockbit_api_client
 from src.infrastructure.browser.stockbit_browser_provider import ManualBrowserDataProvider
+from src.infrastructure.browser.stockbit_config_bundle import load_stockbit_provider_config
 from src.infrastructure.browser.stockbit_market_time import get_current_market_status
 from src.infrastructure.browser.stockbit_ticker_notation import StockbitTickerNotationProvider
 from src.infrastructure.composition.indicator_registry_factory import create_indicator_registry
@@ -80,11 +81,15 @@ def resolve_pre_open_browser_plan(
 
     if playwright_available() and stockbit_session_exists():
         cfg = load_app_config()
+        stockbit_config = load_stockbit_provider_config()
         api_client = create_stockbit_api_client(
             profile_dir=Path(cfg.storage.stockbit_profile_dir),
             headless=headless,
+            stockbit_config=stockbit_config,
         )
-        provider = PlaywrightStockbitProvider(api_client=api_client)
+        provider = PlaywrightStockbitProvider(
+            api_client=api_client, stockbit_config=stockbit_config
+        )
         return PreOpenBrowserPlan(provider=provider, autonomous=True, session_missing=False)
 
     session_missing = playwright_available() and not stockbit_session_exists()
@@ -136,7 +141,9 @@ def create_pre_open_cli_workflow(
         broker_repository=broker_repository,
         market_repository=market_repository,
     )
-    notation_provider = StockbitTickerNotationProvider(api_client=None, db_path=resolved_db)
+    notation_provider = StockbitTickerNotationProvider(
+        api_client=None, db_path=resolved_db, stockbit_config=load_stockbit_provider_config()
+    )
 
     ai_explainer, ai_warnings = create_pre_open_ai_explainer(
         with_ai=with_ai, provider=ai_provider

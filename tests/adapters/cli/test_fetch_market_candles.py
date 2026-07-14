@@ -25,7 +25,7 @@ def test_fetch_candles_uses_stockbit_historical_for_benchmark_with_stockbit(
         price_adjustment_policy = "raw"
         instances: list["FakeStockbitHistoricalProvider"] = []
 
-        def __init__(self, api_client, non_idx_tickers=None) -> None:
+        def __init__(self, api_client, non_idx_tickers=None, stockbit_config=None) -> None:
             self.api_client = api_client
             self.requested: list[tuple[str, date, date]] = []
             self.instances.append(self)

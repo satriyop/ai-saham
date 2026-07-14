@@ -68,12 +68,24 @@ def collect_iev(
     today = now_idx.date()
     # Prefer Stockbit market-time API for is_ncp; fall back to wall-clock 08:56 heuristic
     _mstatus = _get_market_status()
-    is_ncp = _mstatus.is_pre_open if _mstatus.source == "stockbit" else now_idx.time() >= time(8, 56)
+    is_ncp = (
+        _mstatus.is_pre_open
+        if _mstatus.source == "stockbit"
+        else now_idx.time() >= time(8, 56)
+    )
 
     try:
         from src.infrastructure.browser.stockbit_api_client import create_stockbit_api_client
-        api_client = create_stockbit_api_client(headless=not no_headless)
-        provider = PlaywrightStockbitProvider(api_client=api_client)
+        from src.infrastructure.browser.stockbit_config_bundle import (
+            load_stockbit_provider_config,
+        )
+        stockbit_config = load_stockbit_provider_config()
+        api_client = create_stockbit_api_client(
+            headless=not no_headless, stockbit_config=stockbit_config
+        )
+        provider = PlaywrightStockbitProvider(
+            api_client=api_client, stockbit_config=stockbit_config
+        )
     except Exception as exc:
         typer.echo(f"Error initialising Stockbit provider: {exc}", err=True)
         raise typer.Exit(1)
@@ -86,7 +98,10 @@ def collect_iev(
         raise typer.Exit(1)
 
     if not movers:
-        typer.echo("No movers returned — session may be expired. Run: saham fetch stockbit login", err=True)
+        typer.echo(
+            "No movers returned — session may be expired. Run: saham fetch stockbit login",
+            err=True,
+        )
         raise typer.Exit(1)
 
     repo = SQLiteIEVRepository(resolved_db)
@@ -102,7 +117,9 @@ def collect_iev(
     except OSError as exc:
         sidecar_path = None
         typer.echo(
-            typer.style(f"Warning: could not write IEV JSON sidecar: {exc}", fg=typer.colors.YELLOW),
+            typer.style(
+                f"Warning: could not write IEV JSON sidecar: {exc}", fg=typer.colors.YELLOW
+            ),
             err=True,
         )
     deltas = repo.get_iev_delta(today)

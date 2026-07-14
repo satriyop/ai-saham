@@ -72,7 +72,8 @@ def fetch_broker(
     broker_provider,
     refresh: bool,
     short_history: list[str] | None = None,
-    _idx_summary_provider=None,  # injectable for testing; production code uses IdxBrokerDataProvider
+    # injectable for testing; production code uses IdxBrokerDataProvider
+    _idx_summary_provider=None,
 ) -> BrokerFetchResult:
     """Fetch broker flow for one ticker. Returns split status for summaries and flow tables."""
     cfg = load_app_config()
@@ -86,9 +87,12 @@ def fetch_broker(
     repo = SQLiteBrokerRepository(db_path)
     idx_summary_provider = _resolve_idx_summary_provider(broker_provider, _idx_summary_provider)
 
+    from src.infrastructure.browser.stockbit_config_bundle import load_stockbit_provider_config
     from src.infrastructure.browser.stockbit_ticker_notation import StockbitTickerNotationProvider
 
-    notation_repo = StockbitTickerNotationProvider(api_client=None, db_path=db_path)
+    notation_repo = StockbitTickerNotationProvider(
+        api_client=None, db_path=db_path, stockbit_config=load_stockbit_provider_config()
+    )
 
     freshness = MarketFreshnessService(repository=SQLiteMarketRepository(db_path=db_path))
     last_trading_day = freshness.resolve_reference_trading_day(_BENCHMARK_ALIASES, end_date)

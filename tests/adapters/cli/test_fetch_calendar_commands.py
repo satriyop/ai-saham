@@ -34,13 +34,15 @@ def _mock_authenticated_session(monkeypatch):
     monkeypatch.setattr(
         calendar_commands,
         "get_stockbit_session",
-        lambda: StockbitSession(api_client=fake_client, authenticated=True),
+        lambda stockbit_config=None: StockbitSession(api_client=fake_client, authenticated=True),
     )
     return fake_client
 
 
 def _mock_unauthenticated_session(monkeypatch):
-    monkeypatch.setattr(calendar_commands, "get_stockbit_session", lambda: None)
+    monkeypatch.setattr(
+        calendar_commands, "get_stockbit_session", lambda stockbit_config=None: None
+    )
 
 
 class FakeUseCase:
@@ -63,7 +65,9 @@ def _wire_fake_use_case(monkeypatch, response: SyncCorporateActionCalendarRespon
         lambda provider, repository: fake_uc,
     )
     monkeypatch.setattr(
-        calendar_commands, "StockbitCorporateActionCalendarProvider", lambda api_client: object()
+        calendar_commands,
+        "StockbitCorporateActionCalendarProvider",
+        lambda api_client, stockbit_config=None: object(),
     )
     monkeypatch.setattr(
         calendar_commands, "SQLiteCorporateActionCalendarRepository", lambda db_path: object()
@@ -91,12 +95,16 @@ class TestNotAuthenticated:
         assert result.exit_code == 1
         assert "Not authenticated." in result.stdout + (result.stderr or "")
 
-    def test_unauthenticated_session_object_prints_error_and_exits_1(self, monkeypatch, tmp_path: Path):
+    def test_unauthenticated_session_object_prints_error_and_exits_1(
+        self, monkeypatch, tmp_path: Path
+    ):
         fake_client = object.__new__(_stockbit_api_client.StockbitApiClient)
         monkeypatch.setattr(
             calendar_commands,
             "get_stockbit_session",
-            lambda: StockbitSession(api_client=fake_client, authenticated=False),
+            lambda stockbit_config=None: StockbitSession(
+                api_client=fake_client, authenticated=False
+            ),
         )
         result = runner.invoke(app, ["fetch", "calendar", "--db", str(tmp_path / "x.db")])
         assert result.exit_code == 1
@@ -144,11 +152,19 @@ class TestRefreshFlagThreading:
 
 
 class TestFromCacheOutput:
-    def test_from_cache_true_prints_already_synced_message_no_error_exit(self, monkeypatch, tmp_path: Path):
+    def test_from_cache_true_prints_already_synced_message_no_error_exit(
+        self, monkeypatch, tmp_path: Path
+    ):
         _mock_authenticated_session(monkeypatch)
         _wire_fake_use_case(
             monkeypatch,
-            _response(status="cached", from_cache=True, fetched_count=0, stored_count=0, event_type_counts={}),
+            _response(
+                status="cached",
+                from_cache=True,
+                fetched_count=0,
+                stored_count=0,
+                event_type_counts={},
+            ),
         )
         result = runner.invoke(app, ["fetch", "calendar", "--db", str(tmp_path / "x.db")])
         assert result.exit_code == 0

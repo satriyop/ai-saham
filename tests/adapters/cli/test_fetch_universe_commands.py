@@ -23,13 +23,13 @@ def _mock_authenticated_session(monkeypatch):
     _fake_client = object.__new__(_stockbit_api_client.StockbitApiClient)
     monkeypatch.setattr(
         _session_svc, "get_stockbit_session",
-        lambda: StockbitSession(api_client=_fake_client, authenticated=True),
+        lambda stockbit_config=None: StockbitSession(api_client=_fake_client, authenticated=True),
     )
     return _fake_client
 
 
 class MockUniverseProvider:
-    def __init__(self, api_client):
+    def __init__(self, api_client, stockbit_config=None):
         pass
 
     def list_available(self):

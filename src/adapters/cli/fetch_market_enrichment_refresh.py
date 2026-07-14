@@ -47,6 +47,7 @@ def fetch_enrichment(
         StockbitBrokerDistributionProvider,
     )
     from src.infrastructure.browser.stockbit_company_profile import StockbitCompanyProfileProvider
+    from src.infrastructure.browser.stockbit_config_bundle import load_stockbit_provider_config
     from src.infrastructure.browser.stockbit_corp_action import StockbitCorporateActionRepository
     from src.infrastructure.browser.stockbit_earnings import StockbitEarningsProvider
     from src.infrastructure.browser.stockbit_forward_estimates import (
@@ -67,44 +68,84 @@ def fetch_enrichment(
 
     _api_client = broker_provider.api_client
     connection_provider = StockbitSQLiteConnectionProvider()
+    stockbit_config = load_stockbit_provider_config()
     analyst_prov = StockbitAnalystConsensusProvider(
-        api_client=_api_client, db_path=db_path, connection_provider=connection_provider
+        api_client=_api_client,
+        db_path=db_path,
+        connection_provider=connection_provider,
+        stockbit_config=stockbit_config,
     )
     insider_prov = StockbitInsiderActivityProvider(
-        api_client=_api_client, db_path=db_path, connection_provider=connection_provider
+        api_client=_api_client,
+        db_path=db_path,
+        connection_provider=connection_provider,
+        stockbit_config=stockbit_config,
     )
     season_prov = StockbitSeasonalityProvider(
-        api_client=_api_client, db_path=db_path, connection_provider=connection_provider
+        api_client=_api_client,
+        db_path=db_path,
+        connection_provider=connection_provider,
+        stockbit_config=stockbit_config,
     )
     corp_repo = StockbitCorporateActionRepository(
-        api_client=_api_client, db_path=db_path, connection_provider=connection_provider
+        api_client=_api_client,
+        db_path=db_path,
+        connection_provider=connection_provider,
+        stockbit_config=stockbit_config,
     )
     shareholding_prov = StockbitShareholdingProvider(
-        api_client=_api_client, db_path=db_path, connection_provider=connection_provider
+        api_client=_api_client,
+        db_path=db_path,
+        connection_provider=connection_provider,
+        stockbit_config=stockbit_config,
     )
     bandar_prov = StockbitBandarDetectorProvider(
-        api_client=_api_client, db_path=db_path, connection_provider=connection_provider
+        api_client=_api_client,
+        db_path=db_path,
+        connection_provider=connection_provider,
+        stockbit_config=stockbit_config,
     )
     fundamentals_prov = StockbitFundamentalsProvider(
-        api_client=_api_client, db_path=db_path, connection_provider=connection_provider
+        api_client=_api_client,
+        db_path=db_path,
+        connection_provider=connection_provider,
+        stockbit_config=stockbit_config,
     )
     notation_prov = StockbitTickerNotationProvider(
-        api_client=_api_client, db_path=db_path, connection_provider=connection_provider
+        api_client=_api_client,
+        db_path=db_path,
+        connection_provider=connection_provider,
+        stockbit_config=stockbit_config,
     )
     fwd_est_prov = StockbitForwardEstimatesProvider(
-        api_client=_api_client, db_path=db_path, connection_provider=connection_provider
+        api_client=_api_client,
+        db_path=db_path,
+        connection_provider=connection_provider,
+        stockbit_config=stockbit_config,
     )
     profile_prov = StockbitCompanyProfileProvider(
-        api_client=_api_client, db_path=db_path, connection_provider=connection_provider
+        api_client=_api_client,
+        db_path=db_path,
+        connection_provider=connection_provider,
+        stockbit_config=stockbit_config,
     )
     earnings_prov = StockbitEarningsProvider(
-        api_client=_api_client, db_path=db_path, connection_provider=connection_provider
+        api_client=_api_client,
+        db_path=db_path,
+        connection_provider=connection_provider,
+        stockbit_config=stockbit_config,
     )
     distribution_prov = StockbitBrokerDistributionProvider(
-        api_client=_api_client, db_path=db_path, connection_provider=connection_provider
+        api_client=_api_client,
+        db_path=db_path,
+        connection_provider=connection_provider,
+        stockbit_config=stockbit_config,
     )
     valuation_prov = StockbitValuationProvider(
-        api_client=_api_client, db_path=db_path, connection_provider=connection_provider
+        api_client=_api_client,
+        db_path=db_path,
+        connection_provider=connection_provider,
+        stockbit_config=stockbit_config,
     )
 
     tasks = [

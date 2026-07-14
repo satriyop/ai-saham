@@ -58,7 +58,13 @@ def _construct_provider(
     if kind == CandleProviderKind.YAHOO:
         return YahooFinanceProvider(non_idx_tickers=non_idx)
     if kind == CandleProviderKind.STOCKBIT_HISTORICAL:
-        return StockbitHistoricalProvider(api_client=broker_provider.api_client, non_idx_tickers=non_idx)
+        from src.infrastructure.browser.stockbit_config_bundle import load_stockbit_provider_config
+
+        return StockbitHistoricalProvider(
+            api_client=broker_provider.api_client,
+            non_idx_tickers=non_idx,
+            stockbit_config=load_stockbit_provider_config(),
+        )
     from src.infrastructure.data_providers.idx_market import IdxMarketDataProvider
 
     return IdxMarketDataProvider()

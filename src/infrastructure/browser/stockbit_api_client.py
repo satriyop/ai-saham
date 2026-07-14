@@ -16,9 +16,12 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 from src.infrastructure.browser.stockbit_token_store import StockbitTokenStore
+
+if TYPE_CHECKING:
+    from src.infrastructure.config.stockbit_config import StockbitConfig
 
 logger = logging.getLogger(__name__)
 
@@ -140,12 +143,17 @@ def create_stockbit_api_client(
     profile_dir: Path | None = None,
     headless: bool = True,
     timeout: int | None = None,
+    *,
+    stockbit_config: "StockbitConfig | None" = None,
 ) -> StockbitApiClient:
     """
     Build a StockbitApiClient backed by the default persistent profile.
 
     Lazily imports playwright only when a token refresh is actually needed.
     Call once per CLI invocation and share the instance across all providers.
+
+    `stockbit_config` should be passed explicitly by composition roots that
+    already loaded one; it is only loaded here as a compatibility fallback.
     """
     from src.infrastructure.browser.stockbit_browser_context import (
         default_stockbit_profile_dir,
@@ -156,7 +164,7 @@ def create_stockbit_api_client(
     from src.infrastructure.config.stockbit_config import load_stockbit_config
 
     resolved_dir = profile_dir or default_stockbit_profile_dir()
-    cfg = load_stockbit_config()
+    cfg = stockbit_config or load_stockbit_config()
     resolved_timeout = timeout or cfg.nav_timeout_ms
     token_store = StockbitTokenStore(resolved_dir / "token.json")
 
