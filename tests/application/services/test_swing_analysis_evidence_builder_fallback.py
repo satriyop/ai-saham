@@ -133,13 +133,13 @@ def _candles(ticker: str, count: int = 10) -> list[Candle]:
 class TestFallbackWithoutInjectedFactories:
     def test_institutional_accumulation_builder_falls_back_to_pure_default(self):
         builder = _builder()
-        ia_builder = builder._institutional_accumulation_builder()
+        ia_builder = builder._institutional_assembler._builder_factory()
 
         assert isinstance(ia_builder, InstitutionalAccumulationEvidenceBuilder)
 
     def test_sector_context_builder_falls_back_to_pure_default(self):
         builder = _builder()
-        sc_builder = builder._sector_context_builder()
+        sc_builder = builder._sector_context_builder_factory()
 
         assert isinstance(sc_builder, SectorContextEvidenceBuilder)
         # Empty sector index is an acceptable fallback per spec.
@@ -147,7 +147,7 @@ class TestFallbackWithoutInjectedFactories:
 
     def test_company_quality_context_builder_falls_back_to_pure_default(self):
         builder = _builder()
-        cq_builder = builder._company_quality_context_builder()
+        cq_builder = builder._company_quality_assembler._builder_factory()
 
         assert isinstance(cq_builder, CompanyQualityContextEvidenceBuilder)
 
@@ -171,7 +171,7 @@ class TestInjectedFactoriesArePreferred:
             return sentinel_config
 
         builder = _builder(institutional_accumulation_config_factory=factory)
-        ia_builder = builder._institutional_accumulation_builder()
+        ia_builder = builder._institutional_assembler._builder_factory()
 
         assert captured.get("called") is True
         assert ia_builder._config is sentinel_config
@@ -180,13 +180,13 @@ class TestInjectedFactoriesArePreferred:
         sentinel = object()
         builder = _builder(sector_context_builder_factory=lambda: sentinel)
 
-        assert builder._sector_context_builder() is sentinel
+        assert builder._sector_context_builder_factory() is sentinel
 
     def test_company_quality_context_builder_uses_injected_factory(self):
         sentinel = object()
         builder = _builder(company_quality_context_builder_factory=lambda: sentinel)
 
-        assert builder._company_quality_context_builder() is sentinel
+        assert builder._company_quality_assembler._builder_factory() is sentinel
 
 
 class TestPublicBuildFlowWithoutInjectedFactories:

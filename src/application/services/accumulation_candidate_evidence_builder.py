@@ -1,15 +1,38 @@
-"""Per-candidate diagnostic evidence assembly for accumulation screening."""
+"""Per-candidate diagnostic evidence assembly for accumulation screening.
+
+Layer: Application
+
+Repository data loading and per-family evidence assembly live in dedicated
+collaborators (`CandidateEvidenceDataLoader` and the
+`candidate_*_evidence_assembler` modules) shared with
+`SwingAnalysisEvidenceBuilder`.
+"""
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Callable
 
 from src.application.dto import accumulation_screen as accumulation_dto
 from src.application.ports.rules_loader import RulesLoader
-from src.application.services.signal_context_builder import (
-    build_signal_context_from_candidate,
+from src.application.services.candidate_company_quality_context_evidence_assembler import (
+    CandidateCompanyQualityContextEvidenceAssembler,
+)
+from src.application.services.candidate_evidence_data_loader import (
+    CandidateEvidenceDataLoader,
+)
+from src.application.services.candidate_institutional_accumulation_evidence_assembler import (
+    CandidateInstitutionalAccumulationEvidenceAssembler,
+)
+from src.application.services.candidate_sector_context_evidence_assembler import (
+    CandidateSectorContextEvidenceAssembler,
+)
+from src.application.services.candidate_setup_phase_evidence_assembler import (
+    CandidateSetupPhaseEvidenceAssembler,
+)
+from src.application.services.candidate_ticker_profile_evidence_assembler import (
+    CandidateTickerProfileEvidenceAssembler,
 )
 from src.application.services.volatility_context import build_volatility_context
 
@@ -18,6 +41,9 @@ if TYPE_CHECKING:
         CompanyQualityContextEvidenceBuilder,
     )
     from src.application.services.indicator_registry import IndicatorRegistry
+    from src.application.services.institutional_accumulation_evidence_builder import (
+        InstitutionalAccumulationEvidenceBuilder,
+    )
     from src.application.services.institutional_flow_config import (
         InstitutionalAccumulationConfig,
     )
@@ -57,6 +83,7 @@ if TYPE_CHECKING:
 
 
 _UNSET_SETUP_FAMILY = object()
+_DEFAULT_BENCHMARK = "IHSG"
 
 
 class AccumulationCandidateEvidenceBuilder:
@@ -93,40 +120,26 @@ class AccumulationCandidateEvidenceBuilder:
         self._indicator_registry = indicator_registry
         self._rules_loader = rules_loader
         self._ticker_profile_classifier_factory = ticker_profile_classifier_factory
-        self._institutional_accumulation_config_factory = institutional_accumulation_config_factory
-        self._sector_context_builder_factory = sector_context_builder_factory
-        self._company_quality_context_builder_factory = company_quality_context_builder_factory
-
-    def _institutional_accumulation_builder(self):
-        from src.application.services.institutional_accumulation_evidence_builder import (
-            InstitutionalAccumulationEvidenceBuilder,
+        self._sector_context_builder_factory = _normalize_sector_context_factory(
+            sector_context_builder_factory
         )
 
-        if self._institutional_accumulation_config_factory is not None:
-            return InstitutionalAccumulationEvidenceBuilder(
-                self._institutional_accumulation_config_factory()
+        self._data_loader = CandidateEvidenceDataLoader(market_repository, broker_repository)
+        self._setup_phase_assembler = CandidateSetupPhaseEvidenceAssembler(
+            market_repository, candidate_observations_repository
+        )
+        self._institutional_assembler = CandidateInstitutionalAccumulationEvidenceAssembler(
+            _normalize_institutional_accumulation_factory(
+                institutional_accumulation_config_factory
             )
-        return InstitutionalAccumulationEvidenceBuilder()
-
-    def _sector_context_builder(self):
-        if self._sector_context_builder_factory is not None:
-            return self._sector_context_builder_factory()
-        from src.application.services.sector_context_evidence_builder import (
-            SectorContextConfig,
-            SectorContextEvidenceBuilder,
         )
-
-        return SectorContextEvidenceBuilder(SectorContextConfig.from_mapping({}), {})
-
-    def _company_quality_context_builder(self):
-        if self._company_quality_context_builder_factory is not None:
-            return self._company_quality_context_builder_factory()
-        from src.application.services.company_quality_context_evidence_builder import (
-            CompanyQualityContextConfig,
-            CompanyQualityContextEvidenceBuilder,
+        self._ticker_profile_assembler = CandidateTickerProfileEvidenceAssembler(
+            ticker_profile_classifier_factory
         )
-
-        return CompanyQualityContextEvidenceBuilder(CompanyQualityContextConfig.from_mapping({}))
+        self._sector_context_assembler = CandidateSectorContextEvidenceAssembler()
+        self._company_quality_assembler = CandidateCompanyQualityContextEvidenceAssembler(
+            _normalize_company_quality_context_factory(company_quality_context_builder_factory)
+        )
 
     def resolve_preliminary_setup_family(
         self, candidate: "accumulation_dto.AccumulationCandidate"
@@ -179,38 +192,14 @@ class AccumulationCandidateEvidenceBuilder:
         snapshot_date: date,
     ) -> "InstitutionalAccumulationEvidence | None":
         try:
-            from src.application.services.institutional_accumulation_evidence_builder import (
-                InstitutionalAccumulationEvidenceRequest,
+            inputs = self._data_loader.load_institutional_inputs(
+                ticker=candidate.ticker, snapshot_date=snapshot_date
             )
-
-            start_date = snapshot_date - timedelta(days=45)
-            candles = self._market_repo.get_candles(candidate.ticker, end_date=snapshot_date)
-            broker_daily_flows = tuple(
-                self._broker_repo.get_broker_daily_flows(
-                    candidate.ticker, start_date=start_date, end_date=snapshot_date
-                )
-            )
-            foreign_flow_points = tuple(
-                self._broker_repo.get_foreign_flow_points(
-                    candidate.ticker, start_date=start_date, end_date=snapshot_date
-                )
-            )
-            broker_summaries = tuple(
-                self._broker_repo.get_broker_summaries(
-                    candidate.ticker, start_date=start_date, end_date=snapshot_date
-                )
-            )
-            ia_builder = self._institutional_accumulation_builder()
-            return ia_builder.build(
-                InstitutionalAccumulationEvidenceRequest(
-                    ticker=candidate.ticker,
-                    snapshot_date=snapshot_date,
-                    broker_daily_flows=broker_daily_flows,
-                    foreign_flow_points=foreign_flow_points,
-                    broker_summaries=broker_summaries,
-                    bandar_snapshot=candidate.bandar_detector,
-                    candles=tuple(candles),
-                )
+            return self._institutional_assembler.assemble(
+                ticker=candidate.ticker,
+                snapshot_date=snapshot_date,
+                inputs=inputs,
+                bandar_snapshot=candidate.bandar_detector,
             )
         except Exception:
             return None
@@ -223,19 +212,8 @@ class AccumulationCandidateEvidenceBuilder:
         if self._ticker_profile_classifier_factory is None:
             return None
         try:
-            from src.application.dto.ticker_profile import TickerProfileRequest
-
-            start_date = snapshot_date - timedelta(days=45)
-            candles = self._market_repo.get_candles(candidate.ticker, end_date=snapshot_date)
-            broker_daily_flows = tuple(
-                self._broker_repo.get_broker_daily_flows(
-                    candidate.ticker, start_date=start_date, end_date=snapshot_date
-                )
-            )
-            broker_summaries = tuple(
-                self._broker_repo.get_broker_summaries(
-                    candidate.ticker, start_date=start_date, end_date=snapshot_date
-                )
+            inputs = self._data_loader.load_ticker_profile_inputs(
+                ticker=candidate.ticker, snapshot_date=snapshot_date
             )
             market_cap_idr: Decimal | None = None
             if (
@@ -253,18 +231,13 @@ class AccumulationCandidateEvidenceBuilder:
                 if candidate.ticker_notation is not None
                 else None
             )
-            classifier = self._ticker_profile_classifier_factory()
-            return classifier.classify(
-                TickerProfileRequest(
-                    ticker=candidate.ticker,
-                    snapshot_date=snapshot_date,
-                    candles=tuple(candles),
-                    broker_daily_flows=broker_daily_flows,
-                    broker_summaries=broker_summaries,
-                    market_cap_idr=market_cap_idr,
-                    sector=sector,
-                    sub_sector=sub_sector,
-                )
+            return self._ticker_profile_assembler.assemble(
+                ticker=candidate.ticker,
+                snapshot_date=snapshot_date,
+                inputs=inputs,
+                market_cap_idr=market_cap_idr,
+                sector=sector,
+                sub_sector=sub_sector,
             )
         except Exception:
             return None
@@ -300,42 +273,26 @@ class AccumulationCandidateEvidenceBuilder:
         tp_snapshot: "TickerProfileSnapshot | None",
     ) -> "SectorContextEvidence | None":
         try:
-            from src.application.services.sector_context_evidence_builder import (
-                SectorContextRequest,
-            )
-
-            builder = self._sector_context_builder()
+            sc_builder = self._sector_context_builder_factory()
             sector = (
                 candidate.ticker_notation.sector
                 if candidate.ticker_notation is not None
                 else None
             ) or (tp_snapshot.sector if tp_snapshot is not None else None)
-            peer_tickers = builder.peers_for_ticker(candidate.ticker)
-            peer_candles: dict[str, list] = {}
-            for peer in peer_tickers:
-                try:
-                    candles = self._market_repo.get_candles(peer, end_date=snapshot_date)
-                    if candles:
-                        peer_candles[peer] = list(candles)
-                except Exception:
-                    pass
-            ticker_candles = tuple(
-                self._market_repo.get_candles(candidate.ticker, end_date=snapshot_date)
+            peer_tickers = sc_builder.peers_for_ticker(candidate.ticker)
+            inputs = self._data_loader.load_sector_context_inputs(
+                ticker=candidate.ticker,
+                snapshot_date=snapshot_date,
+                sector=sector,
+                peer_tickers=peer_tickers,
+                benchmark=_DEFAULT_BENCHMARK,
             )
-            ihsg_20d_return = _simple_return(
-                self._market_repo.get_candles("IHSG", end_date=snapshot_date),
-                lookback=20,
-                min_valid=18,
-            )
-            return builder.build(
-                SectorContextRequest(
-                    ticker=candidate.ticker,
-                    snapshot_date=snapshot_date,
-                    sector=sector,
-                    ticker_candles=ticker_candles,
-                    peer_candles=peer_candles,
-                    ihsg_20d_return=ihsg_20d_return,
-                )
+            return self._sector_context_assembler.assemble(
+                builder=sc_builder,
+                ticker=candidate.ticker,
+                snapshot_date=snapshot_date,
+                sector=sector,
+                inputs=inputs,
             )
         except Exception:
             return None
@@ -354,23 +311,11 @@ class AccumulationCandidateEvidenceBuilder:
         if self._signal_engine is None:
             return None
         try:
-            from src.application.services.company_quality_context_evidence_builder import (
-                CompanyQualityContextRequest,
-            )
-
-            signal_ctx = build_signal_context_from_candidate(
+            return self._company_quality_assembler.assemble(
                 ticker=candidate.ticker,
                 snapshot_date=snapshot_date,
                 candidate=candidate,
                 signal_engine=self._signal_engine,
-            )
-            builder = self._company_quality_context_builder()
-            return builder.build(
-                CompanyQualityContextRequest(
-                    ticker=candidate.ticker,
-                    snapshot_date=snapshot_date,
-                    signal_context=signal_ctx,
-                )
             )
         except Exception:
             return None
@@ -383,18 +328,6 @@ class AccumulationCandidateEvidenceBuilder:
         setup_family: "str | None" = _UNSET_SETUP_FAMILY,  # type: ignore[assignment]
     ) -> "SetupPhaseSnapshot | None":
         try:
-            from src.application.services.candle_provenance import resolve_candle_source
-            from src.application.services.setup_evidence_builder import (
-                SetupEvidenceBuilder,
-            )
-            from src.application.services.setup_phase_detector import SetupPhaseDetector
-            from src.application.services.setup_phase_history import (
-                load_previous_setup_phases,
-            )
-            from src.domain.value_objects.benchmark_symbol import (
-                CANONICAL_BENCHMARK_TICKER,
-            )
-
             if setup_family is _UNSET_SETUP_FAMILY:
                 # Stage 1 resolution: no strategy_evidence yet (it is built
                 # later, in the persist loop, using this very phase snapshot
@@ -406,67 +339,62 @@ class AccumulationCandidateEvidenceBuilder:
             # supplies the final, strategy-evidence-aware family explicitly —
             # used verbatim, including an explicit None for "genuinely unknown".
 
-            candles = self._market_repo.get_candles(
-                candidate.ticker,
-                end_date=snapshot_date,
-            )
-            benchmark_candles = self._market_repo.get_candles(
-                CANONICAL_BENCHMARK_TICKER,
-                end_date=snapshot_date,
-            )
-            rs_result = self._relative_strength_calculator.calculate(
-                ticker_candles=candles,
-                benchmark_candles=benchmark_candles,
-                as_of_date=snapshot_date,
-            )
-            # Attached as diagnostic instance attributes (not formal dataclass
-            # fields) so _sub_signal_fingerprint() can read them without
-            # threading a new return value through this method's signature.
-            candidate.rs_vs_ihsg_5d = rs_result.rs_vs_ihsg_5d
-            candidate.rs_vs_ihsg_20d = rs_result.rs_vs_ihsg_20d
-            previous_phases = load_previous_setup_phases(
-                self._candidate_observations_repo,
+            return self._setup_phase_assembler.detect_setup_phase_with_relative_strength(
                 ticker=candidate.ticker,
-                before_date=snapshot_date,
-                setup_family=setup_family,
-            )
-            candle_source = resolve_candle_source(
-                self._market_repo,
-                ticker=candidate.ticker,
-                as_of_date=candles[-1].date if candles else snapshot_date,
-            )
-            setup_evidence = SetupEvidenceBuilder().build(
-                candidate,
-                None,
-                rs_vs_ihsg_5d=rs_result.rs_vs_ihsg_5d,
-                volume_trend_ratio=None,
-                candle_source=candle_source,
-                analysis_date=snapshot_date,
-            )
-            return SetupPhaseDetector().detect(
-                candles=candles,
-                setup_eval=None,
-                setup_evidence=setup_evidence,
+                snapshot_date=snapshot_date,
+                candidate=candidate,
                 flow_evidence=flow_ev,
                 setup_family=setup_family,
-                previous_phases=previous_phases,
+                relative_strength_calculator=self._relative_strength_calculator,
             )
         except Exception:
             return None
 
 
-def _simple_return(
-    candles: list[Any] | tuple[Any, ...],
-    *,
-    lookback: int,
-    min_valid: int,
-) -> float | None:
-    sorted_candles = sorted(candles, key=lambda c: c.date)
-    window = sorted_candles[-lookback:] if len(sorted_candles) >= lookback else sorted_candles
-    valid = [c for c in window if getattr(c, "close", None) and float(c.close) > 0.0]
-    if len(valid) < min_valid:
-        return None
-    reference = float(valid[0].close)
-    if reference <= 0.0:
-        return None
-    return (float(valid[-1].close) - reference) / reference
+def _normalize_sector_context_factory(
+    builder_factory: "Callable[[], SectorContextEvidenceBuilder] | None",
+) -> "Callable[[], SectorContextEvidenceBuilder]":
+    if builder_factory is not None:
+        return builder_factory
+
+    def _build() -> "SectorContextEvidenceBuilder":
+        from src.application.services.sector_context_evidence_builder import (
+            SectorContextConfig,
+            SectorContextEvidenceBuilder,
+        )
+
+        return SectorContextEvidenceBuilder(SectorContextConfig.from_mapping({}), {})
+
+    return _build
+
+
+def _normalize_institutional_accumulation_factory(
+    config_factory: Callable[[], "InstitutionalAccumulationConfig"] | None,
+) -> Callable[[], "InstitutionalAccumulationEvidenceBuilder"]:
+    def _build() -> "InstitutionalAccumulationEvidenceBuilder":
+        from src.application.services.institutional_accumulation_evidence_builder import (
+            InstitutionalAccumulationEvidenceBuilder,
+        )
+
+        if config_factory is not None:
+            return InstitutionalAccumulationEvidenceBuilder(config_factory())
+        return InstitutionalAccumulationEvidenceBuilder()
+
+    return _build
+
+
+def _normalize_company_quality_context_factory(
+    builder_factory: Callable[[], "CompanyQualityContextEvidenceBuilder"] | None,
+) -> Callable[[], "CompanyQualityContextEvidenceBuilder"]:
+    if builder_factory is not None:
+        return builder_factory
+
+    def _build() -> "CompanyQualityContextEvidenceBuilder":
+        from src.application.services.company_quality_context_evidence_builder import (
+            CompanyQualityContextConfig,
+            CompanyQualityContextEvidenceBuilder,
+        )
+
+        return CompanyQualityContextEvidenceBuilder(CompanyQualityContextConfig.from_mapping({}))
+
+    return _build

@@ -106,7 +106,14 @@ Edge cases to watch:
 
 ### 3. High: evidence builders are duplicated multi-concern orchestration hubs
 
-Status: `OPEN`
+Status: `RESOLVED` (2026-07-14)
+
+Resolution:
+- Extracted `src/application/services/candidate_evidence_data_loader.py` (`CandidateEvidenceDataLoader`) for shared point-in-time candle/broker-flow/peer-candle/benchmark-return loading, used by both coordinators.
+- Extracted per-family assemblers: `candidate_institutional_accumulation_evidence_assembler.py`, `candidate_ticker_profile_evidence_assembler.py`, `candidate_sector_context_evidence_assembler.py`, `candidate_company_quality_context_evidence_assembler.py`, `candidate_setup_phase_evidence_assembler.py`.
+- `SwingAnalysisEvidenceBuilder.build()` and `AccumulationCandidateEvidenceBuilder`'s public `build_candidate_*`/`detect_candidate_setup_phase` methods now delegate to the data loader and assemblers instead of duplicating repository fetches and request construction inline.
+- Fallback builder factories are normalized once at `__init__` time (no method-level lazy default construction), preserving the existing constructor-level factory-override contract.
+- Warning strings, best-effort `None`-on-failure behavior, 45-day broker windows, and `end_date=snapshot_date` point-in-time boundaries are unchanged; verified via `tests/application/services/test_candidate_evidence_data_loader.py`, `tests/application/services/test_swing_analysis_evidence_builder.py`, `tests/application/services/test_accumulation_candidate_evidence_builder.py`, plus the existing fallback/regression suites, `tests/architecture`, and `tests/integration/test_command_smoke_matrix.py`.
 
 Pointer:
 - `src/application/services/swing_analysis_evidence_builder.py:151` through `src/application/services/swing_analysis_evidence_builder.py:455` builds setup, flow, phase, strategy, institutional accumulation, ticker profile, sector, company quality, and corporate-action evidence in one method.

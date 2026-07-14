@@ -2,27 +2,42 @@
 
 Layer: Application
 
-Builds the best-effort evidence sections (setup evidence, flow confirmation,
-setup phase, strategy evidence, institutional accumulation, ticker profile,
-sector context, company quality, corporate action risk). Each section is
-independent: a failure appends a warning and does not abort the workflow.
-Extracted from `SwingAnalysisWorkflowUseCase` to keep the use case as
-orchestration only.
+Coordinates the best-effort evidence sections (setup evidence, flow
+confirmation, setup phase, strategy evidence, institutional accumulation,
+ticker profile, sector context, company quality, corporate action risk).
+Each section is independent: a failure appends a warning and does not abort
+the workflow. Extracted from `SwingAnalysisWorkflowUseCase` to keep the use
+case as orchestration only. Repository data loading and per-family evidence
+assembly live in dedicated collaborators (`CandidateEvidenceDataLoader` and
+the `candidate_*_evidence_assembler` modules) shared with
+`AccumulationCandidateEvidenceBuilder`.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date
 from typing import TYPE_CHECKING, Any, Callable
 
 from src.application.ports.rules_loader import RulesLoader
-from src.application.services.signal_context_builder import (
-    build_signal_context_from_candidate,
+from src.application.services.candidate_company_quality_context_evidence_assembler import (
+    CandidateCompanyQualityContextEvidenceAssembler,
+)
+from src.application.services.candidate_evidence_data_loader import (
+    CandidateEvidenceDataLoader,
+)
+from src.application.services.candidate_institutional_accumulation_evidence_assembler import (
+    CandidateInstitutionalAccumulationEvidenceAssembler,
+)
+from src.application.services.candidate_sector_context_evidence_assembler import (
+    CandidateSectorContextEvidenceAssembler,
+)
+from src.application.services.candidate_setup_phase_evidence_assembler import (
+    CandidateSetupPhaseEvidenceAssembler,
+)
+from src.application.services.candidate_ticker_profile_evidence_assembler import (
+    CandidateTickerProfileEvidenceAssembler,
 )
 from src.application.services.strategy_loader import StrategyLoader
-from src.application.services.swing_analysis_market_helpers import (
-    benchmark_return_from_repository,
-)
 
 if TYPE_CHECKING:
     from src.application.services.company_quality_context_evidence_builder import (
@@ -30,6 +45,9 @@ if TYPE_CHECKING:
     )
     from src.application.services.flow_confirmation_evidence_builder import (
         FlowConfirmationEvidenceBuilder,
+    )
+    from src.application.services.institutional_accumulation_evidence_builder import (
+        InstitutionalAccumulationEvidenceBuilder,
     )
     from src.application.services.institutional_flow_config import (
         InstitutionalAccumulationConfig,
@@ -113,40 +131,26 @@ class SwingAnalysisEvidenceBuilder:
         self._signal_engine = signal_engine
         self._corporate_action_risk_use_case = corporate_action_risk_use_case
         self._ticker_profile_classifier_factory = ticker_profile_classifier_factory
-        self._institutional_accumulation_config_factory = institutional_accumulation_config_factory
-        self._sector_context_builder_factory = sector_context_builder_factory
-        self._company_quality_context_builder_factory = company_quality_context_builder_factory
-
-    def _institutional_accumulation_builder(self):
-        from src.application.services.institutional_accumulation_evidence_builder import (
-            InstitutionalAccumulationEvidenceBuilder,
+        self._sector_context_builder_factory = _normalize_sector_context_factory(
+            sector_context_builder_factory
         )
 
-        if self._institutional_accumulation_config_factory is not None:
-            return InstitutionalAccumulationEvidenceBuilder(
-                self._institutional_accumulation_config_factory()
+        self._data_loader = CandidateEvidenceDataLoader(market_repository, broker_repository)
+        self._setup_phase_assembler = CandidateSetupPhaseEvidenceAssembler(
+            market_repository, candidate_observations_repository
+        )
+        self._institutional_assembler = CandidateInstitutionalAccumulationEvidenceAssembler(
+            _normalize_institutional_accumulation_factory(
+                institutional_accumulation_config_factory
             )
-        return InstitutionalAccumulationEvidenceBuilder()
-
-    def _sector_context_builder(self):
-        if self._sector_context_builder_factory is not None:
-            return self._sector_context_builder_factory()
-        from src.application.services.sector_context_evidence_builder import (
-            SectorContextConfig,
-            SectorContextEvidenceBuilder,
         )
-
-        return SectorContextEvidenceBuilder(SectorContextConfig.from_mapping({}), {})
-
-    def _company_quality_context_builder(self):
-        if self._company_quality_context_builder_factory is not None:
-            return self._company_quality_context_builder_factory()
-        from src.application.services.company_quality_context_evidence_builder import (
-            CompanyQualityContextConfig,
-            CompanyQualityContextEvidenceBuilder,
+        self._ticker_profile_assembler = CandidateTickerProfileEvidenceAssembler(
+            ticker_profile_classifier_factory
         )
-
-        return CompanyQualityContextEvidenceBuilder(CompanyQualityContextConfig.from_mapping({}))
+        self._sector_context_assembler = CandidateSectorContextEvidenceAssembler()
+        self._company_quality_assembler = CandidateCompanyQualityContextEvidenceAssembler(
+            _normalize_company_quality_context_factory(company_quality_context_builder_factory)
+        )
 
     def build(
         self,
@@ -166,25 +170,12 @@ class SwingAnalysisEvidenceBuilder:
         setup_evidence = None
         if accumulation_candidate is not None and setup_eval is not None:
             try:
-                from src.application.services.candle_provenance import (
-                    resolve_candle_source,
-                )
-                from src.application.services.setup_evidence_builder import (
-                    SetupEvidenceBuilder,
-                )
-
-                candle_source = resolve_candle_source(
-                    self._market_repo,
+                setup_evidence = self._setup_phase_assembler.build_setup_evidence(
                     ticker=ticker,
-                    as_of_date=candles[-1].date,
-                )
-                setup_evidence = SetupEvidenceBuilder().build(
-                    accumulation_candidate,
-                    setup_eval,
-                    rs_vs_ihsg_5d=None,
-                    volume_trend_ratio=None,
-                    candle_source=candle_source,
-                    analysis_date=snapshot_date,
+                    snapshot_date=snapshot_date,
+                    candles=candles,
+                    candidate=accumulation_candidate,
+                    setup_eval=setup_eval,
                 )
             except Exception as exc:
                 warnings.append(f"Setup evidence unavailable: {exc}")
@@ -202,32 +193,21 @@ class SwingAnalysisEvidenceBuilder:
         setup_phase = None
         if setup_eval is not None:
             try:
-                from src.application.services.setup_phase_detector import (
-                    SetupPhaseConfig,
-                    SetupPhaseDetector,
-                )
-                from src.application.services.setup_phase_history import (
-                    load_previous_setup_phases,
-                )
+                from src.application.services.setup_phase_detector import SetupPhaseConfig
 
                 setup_phase_config = getattr(
                     swing_config,
                     "setup_phase_config",
                     SetupPhaseConfig(),
                 )
-                previous_phases = load_previous_setup_phases(
-                    self._candidate_observations_repo,
+                setup_phase = self._setup_phase_assembler.detect_setup_phase(
                     ticker=ticker,
-                    before_date=snapshot_date,
-                    setup_family=setup_name,
-                )
-                setup_phase = SetupPhaseDetector().detect(
+                    snapshot_date=snapshot_date,
                     candles=candles,
                     setup_eval=setup_eval,
                     setup_evidence=setup_evidence,
                     flow_evidence=flow_confirmation_evidence,
                     setup_family=setup_name,
-                    previous_phases=previous_phases,
                     config=setup_phase_config,
                 )
             except Exception as exc:
@@ -263,41 +243,20 @@ class SwingAnalysisEvidenceBuilder:
         broker_summaries: tuple = ()
         institutional_accumulation_evidence = None
         try:
-            from src.application.services.institutional_accumulation_evidence_builder import (
-                InstitutionalAccumulationEvidenceRequest,
+            institutional_inputs = self._data_loader.load_institutional_inputs(
+                ticker=ticker, snapshot_date=snapshot_date, candles=candles
             )
-
-            ia_start_date = snapshot_date - timedelta(days=45)
-            broker_daily_flows = tuple(
-                self._broker_repo.get_broker_daily_flows(
-                    ticker, start_date=ia_start_date, end_date=snapshot_date
-                )
-            )
-            foreign_flow_points = tuple(
-                self._broker_repo.get_foreign_flow_points(
-                    ticker, start_date=ia_start_date, end_date=snapshot_date
-                )
-            )
-            broker_summaries = tuple(
-                self._broker_repo.get_broker_summaries(
-                    ticker, start_date=ia_start_date, end_date=snapshot_date
-                )
-            )
-            ia_builder = self._institutional_accumulation_builder()
-            institutional_accumulation_evidence = ia_builder.build(
-                InstitutionalAccumulationEvidenceRequest(
-                    ticker=ticker,
-                    snapshot_date=snapshot_date,
-                    broker_daily_flows=broker_daily_flows,
-                    foreign_flow_points=foreign_flow_points,
-                    broker_summaries=broker_summaries,
-                    bandar_snapshot=(
-                        accumulation_candidate.bandar_detector
-                        if accumulation_candidate is not None
-                        else None
-                    ),
-                    candles=tuple(candles),
-                )
+            broker_daily_flows = institutional_inputs.broker_daily_flows
+            broker_summaries = institutional_inputs.broker_summaries
+            institutional_accumulation_evidence = self._institutional_assembler.assemble(
+                ticker=ticker,
+                snapshot_date=snapshot_date,
+                inputs=institutional_inputs,
+                bandar_snapshot=(
+                    accumulation_candidate.bandar_detector
+                    if accumulation_candidate is not None
+                    else None
+                ),
             )
         except Exception as exc:
             warnings.append(f"Institutional accumulation evidence unavailable: {exc}")
@@ -306,8 +265,6 @@ class SwingAnalysisEvidenceBuilder:
         if self._ticker_profile_classifier_factory is not None:
             try:
                 from decimal import Decimal as _Decimal
-
-                from src.application.dto.ticker_profile import TickerProfileRequest
 
                 tp_market_cap_idr: _Decimal | None = None
                 if (
@@ -330,29 +287,23 @@ class SwingAnalysisEvidenceBuilder:
                     and accumulation_candidate.ticker_notation is not None
                     else None
                 )
-                classifier = self._ticker_profile_classifier_factory()
-                ticker_profile_snapshot = classifier.classify(
-                    TickerProfileRequest(
-                        ticker=ticker,
-                        snapshot_date=snapshot_date,
-                        candles=tuple(candles),
-                        broker_daily_flows=broker_daily_flows,
-                        broker_summaries=broker_summaries,
-                        market_cap_idr=tp_market_cap_idr,
-                        sector=tp_sector,
-                        sub_sector=tp_sub_sector,
-                    )
+                ticker_profile_inputs = self._data_loader.load_ticker_profile_inputs(
+                    ticker=ticker, snapshot_date=snapshot_date, candles=candles
+                )
+                ticker_profile_snapshot = self._ticker_profile_assembler.assemble(
+                    ticker=ticker,
+                    snapshot_date=snapshot_date,
+                    inputs=ticker_profile_inputs,
+                    market_cap_idr=tp_market_cap_idr,
+                    sector=tp_sector,
+                    sub_sector=tp_sub_sector,
                 )
             except Exception as exc:
                 warnings.append(f"Ticker profile classification unavailable: {exc}")
 
         sector_context_evidence = None
         try:
-            from src.application.services.sector_context_evidence_builder import (
-                SectorContextRequest,
-            )
-
-            sc_builder = self._sector_context_builder()
+            sc_builder = self._sector_context_builder_factory()
             sc_sector = (
                 accumulation_candidate.ticker_notation.sector
                 if accumulation_candidate is not None
@@ -364,30 +315,20 @@ class SwingAnalysisEvidenceBuilder:
                 else None
             )
             peer_tickers = sc_builder.peers_for_ticker(ticker)
-            peer_candles: dict[str, list] = {}
-            for peer in peer_tickers:
-                try:
-                    pc = self._market_repo.get_candles(peer)
-                    if pc:
-                        peer_candles[peer] = list(pc)
-                except Exception:
-                    pass
-            ihsg_20d_return = benchmark_return_from_repository(
-                self._market_repo,
+            sector_inputs = self._data_loader.load_sector_context_inputs(
+                ticker=ticker,
+                snapshot_date=snapshot_date,
+                sector=sc_sector,
+                peer_tickers=peer_tickers,
                 benchmark=benchmark,
-                end_date=snapshot_date,
-                lookback=20,
-                min_valid=18,
+                ticker_candles=candles,
             )
-            sector_context_evidence = sc_builder.build(
-                SectorContextRequest(
-                    ticker=ticker,
-                    snapshot_date=snapshot_date,
-                    sector=sc_sector,
-                    ticker_candles=tuple(candles),
-                    peer_candles=peer_candles,
-                    ihsg_20d_return=ihsg_20d_return,
-                )
+            sector_context_evidence = self._sector_context_assembler.assemble(
+                builder=sc_builder,
+                ticker=ticker,
+                snapshot_date=snapshot_date,
+                sector=sc_sector,
+                inputs=sector_inputs,
             )
         except Exception as exc:
             warnings.append(f"Sector context evidence unavailable: {exc}")
@@ -399,23 +340,11 @@ class SwingAnalysisEvidenceBuilder:
         company_quality_context_evidence = None
         if accumulation_candidate is not None and self._signal_engine is not None:
             try:
-                from src.application.services.company_quality_context_evidence_builder import (
-                    CompanyQualityContextRequest,
-                )
-
-                _cq_ctx = build_signal_context_from_candidate(
+                company_quality_context_evidence = self._company_quality_assembler.assemble(
                     ticker=ticker,
                     snapshot_date=snapshot_date,
                     candidate=accumulation_candidate,
                     signal_engine=self._signal_engine,
-                )
-                cq_builder = self._company_quality_context_builder()
-                company_quality_context_evidence = cq_builder.build(
-                    CompanyQualityContextRequest(
-                        ticker=ticker,
-                        snapshot_date=snapshot_date,
-                        signal_context=_cq_ctx,
-                    )
                 )
             except Exception as exc:
                 warnings.append(f"Company quality context evidence unavailable: {exc}")
@@ -453,3 +382,52 @@ class SwingAnalysisEvidenceBuilder:
             broker_summaries=broker_summaries,
             warnings=tuple(warnings),
         )
+
+
+def _normalize_sector_context_factory(
+    builder_factory: "Callable[[], SectorContextEvidenceBuilder] | None",
+) -> "Callable[[], SectorContextEvidenceBuilder]":
+    if builder_factory is not None:
+        return builder_factory
+
+    def _build() -> "SectorContextEvidenceBuilder":
+        from src.application.services.sector_context_evidence_builder import (
+            SectorContextConfig,
+            SectorContextEvidenceBuilder,
+        )
+
+        return SectorContextEvidenceBuilder(SectorContextConfig.from_mapping({}), {})
+
+    return _build
+
+
+def _normalize_institutional_accumulation_factory(
+    config_factory: Callable[[], "InstitutionalAccumulationConfig"] | None,
+) -> Callable[[], "InstitutionalAccumulationEvidenceBuilder"]:
+    def _build() -> "InstitutionalAccumulationEvidenceBuilder":
+        from src.application.services.institutional_accumulation_evidence_builder import (
+            InstitutionalAccumulationEvidenceBuilder,
+        )
+
+        if config_factory is not None:
+            return InstitutionalAccumulationEvidenceBuilder(config_factory())
+        return InstitutionalAccumulationEvidenceBuilder()
+
+    return _build
+
+
+def _normalize_company_quality_context_factory(
+    builder_factory: Callable[[], "CompanyQualityContextEvidenceBuilder"] | None,
+) -> Callable[[], "CompanyQualityContextEvidenceBuilder"]:
+    if builder_factory is not None:
+        return builder_factory
+
+    def _build() -> "CompanyQualityContextEvidenceBuilder":
+        from src.application.services.company_quality_context_evidence_builder import (
+            CompanyQualityContextConfig,
+            CompanyQualityContextEvidenceBuilder,
+        )
+
+        return CompanyQualityContextEvidenceBuilder(CompanyQualityContextConfig.from_mapping({}))
+
+    return _build
