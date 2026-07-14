@@ -26,6 +26,9 @@ from src.application.services.risk_engine import RiskEngine
 from src.infrastructure.browser.stockbit_bandar import StockbitBandarDetectorProvider
 from src.infrastructure.browser.stockbit_fundamentals import StockbitFundamentalsProvider
 from src.infrastructure.browser.stockbit_shareholding import StockbitShareholdingProvider
+from src.infrastructure.browser.stockbit_sqlite_connection_provider import (
+    StockbitSQLiteConnectionProvider,
+)
 from src.infrastructure.composition.indicator_registry_factory import (
     create_indicator_registry,
 )
@@ -76,9 +79,16 @@ def create_risk_engine(
     bandar_prov = None
     shareholding_prov = None
     if with_enrichment:
-        fund_prov = StockbitFundamentalsProvider(api_client=None, db_path=resolved)
-        bandar_prov = StockbitBandarDetectorProvider(api_client=None, db_path=resolved)
-        shareholding_prov = StockbitShareholdingProvider(api_client=None, db_path=resolved)
+        connection_provider = StockbitSQLiteConnectionProvider()
+        fund_prov = StockbitFundamentalsProvider(
+            api_client=None, db_path=resolved, connection_provider=connection_provider
+        )
+        bandar_prov = StockbitBandarDetectorProvider(
+            api_client=None, db_path=resolved, connection_provider=connection_provider
+        )
+        shareholding_prov = StockbitShareholdingProvider(
+            api_client=None, db_path=resolved, connection_provider=connection_provider
+        )
 
     return RiskEngine(
         repository=repository,

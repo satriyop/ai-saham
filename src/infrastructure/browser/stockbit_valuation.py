@@ -24,21 +24,22 @@ from __future__ import annotations
 
 import json
 import logging
-import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from src.domain.ports.valuation_provider import ValuationProvider
 from src.domain.value_objects.valuation_metrics import ValuationMetrics
+from src.infrastructure.browser.stockbit_base_provider import StockbitCachingProvider
+from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
 
 if TYPE_CHECKING:
     from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
+    from src.infrastructure.browser.stockbit_sqlite_connection_provider import (
+        StockbitSQLiteConnectionProvider,
+    )
 
 logger = logging.getLogger(__name__)
-
-from src.infrastructure.browser.stockbit_base_provider import StockbitCachingProvider
-from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
 
 _VALUATION_URL = STOCKBIT_CFG.valuation_metrics_url
 
@@ -91,8 +92,14 @@ class StockbitValuationProvider(ValuationProvider, StockbitCachingProvider):
         self,
         api_client: "StockbitApiClient | None",
         db_path: Path | None = None,
+        *,
+        connection_provider: "StockbitSQLiteConnectionProvider | None" = None,
     ) -> None:
-        super().__init__(api_client, db_path or Path("data/saham.db"))
+        super().__init__(
+            api_client,
+            db_path or Path("data/saham.db"),
+            connection_provider=connection_provider,
+        )
 
     def _ensure_schema(self) -> None:
         with self._get_conn() as conn:

@@ -56,6 +56,9 @@ def fetch_enrichment(
     from src.infrastructure.browser.stockbit_insider import StockbitInsiderActivityProvider
     from src.infrastructure.browser.stockbit_seasonality import StockbitSeasonalityProvider
     from src.infrastructure.browser.stockbit_shareholding import StockbitShareholdingProvider
+    from src.infrastructure.browser.stockbit_sqlite_connection_provider import (
+        StockbitSQLiteConnectionProvider,
+    )
     from src.infrastructure.browser.stockbit_ticker_notation import StockbitTickerNotationProvider
     from src.infrastructure.browser.stockbit_valuation import StockbitValuationProvider
 
@@ -63,34 +66,89 @@ def fetch_enrichment(
     insider_from = today - timedelta(days=365)
 
     _api_client = broker_provider.api_client
-    analyst_prov = StockbitAnalystConsensusProvider(api_client=_api_client, db_path=db_path)
-    insider_prov = StockbitInsiderActivityProvider(api_client=_api_client, db_path=db_path)
-    season_prov = StockbitSeasonalityProvider(api_client=_api_client, db_path=db_path)
-    corp_repo = StockbitCorporateActionRepository(api_client=_api_client, db_path=db_path)
-    shareholding_prov = StockbitShareholdingProvider(api_client=_api_client, db_path=db_path)
-    bandar_prov = StockbitBandarDetectorProvider(api_client=_api_client, db_path=db_path)
-    fundamentals_prov = StockbitFundamentalsProvider(api_client=_api_client, db_path=db_path)
-    notation_prov = StockbitTickerNotationProvider(api_client=_api_client, db_path=db_path)
-    fwd_est_prov = StockbitForwardEstimatesProvider(api_client=_api_client, db_path=db_path)
-    profile_prov = StockbitCompanyProfileProvider(api_client=_api_client, db_path=db_path)
-    earnings_prov = StockbitEarningsProvider(api_client=_api_client, db_path=db_path)
-    distribution_prov = StockbitBrokerDistributionProvider(api_client=_api_client, db_path=db_path)
-    valuation_prov = StockbitValuationProvider(api_client=_api_client, db_path=db_path)
+    connection_provider = StockbitSQLiteConnectionProvider()
+    analyst_prov = StockbitAnalystConsensusProvider(
+        api_client=_api_client, db_path=db_path, connection_provider=connection_provider
+    )
+    insider_prov = StockbitInsiderActivityProvider(
+        api_client=_api_client, db_path=db_path, connection_provider=connection_provider
+    )
+    season_prov = StockbitSeasonalityProvider(
+        api_client=_api_client, db_path=db_path, connection_provider=connection_provider
+    )
+    corp_repo = StockbitCorporateActionRepository(
+        api_client=_api_client, db_path=db_path, connection_provider=connection_provider
+    )
+    shareholding_prov = StockbitShareholdingProvider(
+        api_client=_api_client, db_path=db_path, connection_provider=connection_provider
+    )
+    bandar_prov = StockbitBandarDetectorProvider(
+        api_client=_api_client, db_path=db_path, connection_provider=connection_provider
+    )
+    fundamentals_prov = StockbitFundamentalsProvider(
+        api_client=_api_client, db_path=db_path, connection_provider=connection_provider
+    )
+    notation_prov = StockbitTickerNotationProvider(
+        api_client=_api_client, db_path=db_path, connection_provider=connection_provider
+    )
+    fwd_est_prov = StockbitForwardEstimatesProvider(
+        api_client=_api_client, db_path=db_path, connection_provider=connection_provider
+    )
+    profile_prov = StockbitCompanyProfileProvider(
+        api_client=_api_client, db_path=db_path, connection_provider=connection_provider
+    )
+    earnings_prov = StockbitEarningsProvider(
+        api_client=_api_client, db_path=db_path, connection_provider=connection_provider
+    )
+    distribution_prov = StockbitBrokerDistributionProvider(
+        api_client=_api_client, db_path=db_path, connection_provider=connection_provider
+    )
+    valuation_prov = StockbitValuationProvider(
+        api_client=_api_client, db_path=db_path, connection_provider=connection_provider
+    )
 
     tasks = [
-        EnrichmentTask("notation", lambda: notation_prov.is_cache_fresh(ticker),   lambda: notation_prov.get_notation(ticker)),
-        EnrichmentTask("analyst",  lambda: analyst_prov._is_cache_fresh(ticker),   lambda: analyst_prov.get_consensus(ticker)),
-        EnrichmentTask("insider",  lambda: insider_prov._is_cache_fresh(ticker),   lambda: insider_prov.get_insider_transactions(ticker, insider_from, today, "ALL")),
-        EnrichmentTask("season",   lambda: season_prov._is_cache_fresh(ticker, today.year, today.month), lambda: season_prov.get_seasonal_edge(ticker, today.year, today.month)),
-        EnrichmentTask("corp",     lambda: corp_repo._is_cache_fresh(ticker),      lambda: corp_repo.get_upcoming_events(ticker, today, today + timedelta(days=90))),
-        EnrichmentTask("holding",  lambda: shareholding_prov._is_cache_fresh(ticker), lambda: shareholding_prov.get_composition(ticker)),
-        EnrichmentTask("bandar",   lambda: bandar_prov._is_cache_fresh(ticker),    lambda: bandar_prov.get_snapshot(ticker)),
-        EnrichmentTask("fundam",   lambda: fundamentals_prov._is_cache_fresh(ticker), lambda: fundamentals_prov.get_fundamentals(ticker)),
-        EnrichmentTask("fwd_est",  lambda: fwd_est_prov._read_cache(ticker) is not None, lambda: fwd_est_prov.get_forward_estimates(ticker)),
-        EnrichmentTask("profile",  lambda: profile_prov._read_cache(ticker) is not None, lambda: profile_prov.get_profile(ticker)),
-        EnrichmentTask("earnings", lambda: earnings_prov.is_cache_fresh(ticker),   lambda: earnings_prov.get_earnings_history(ticker)),
-        EnrichmentTask("brdist",   lambda: distribution_prov.is_cache_fresh(ticker), lambda: distribution_prov.get_distribution(ticker)),
-        EnrichmentTask("valuation", lambda: valuation_prov.is_cache_fresh(ticker),   lambda: valuation_prov.get_valuation(ticker)),
+        EnrichmentTask("notation",
+            lambda: notation_prov.is_cache_fresh(ticker),
+            lambda: notation_prov.get_notation(ticker)),
+        EnrichmentTask("analyst",
+            lambda: analyst_prov._is_cache_fresh(ticker),
+            lambda: analyst_prov.get_consensus(ticker)),
+        EnrichmentTask("insider",
+            lambda: insider_prov._is_cache_fresh(ticker),
+            lambda: insider_prov.get_insider_transactions(
+                ticker, insider_from, today, "ALL")),
+        EnrichmentTask("season",
+            lambda: season_prov._is_cache_fresh(ticker, today.year, today.month),
+            lambda: season_prov.get_seasonal_edge(ticker, today.year, today.month)),
+        EnrichmentTask("corp",
+            lambda: corp_repo._is_cache_fresh(ticker),
+            lambda: corp_repo.get_upcoming_events(
+                ticker, today, today + timedelta(days=90))),
+        EnrichmentTask("holding",
+            lambda: shareholding_prov._is_cache_fresh(ticker),
+            lambda: shareholding_prov.get_composition(ticker)),
+        EnrichmentTask("bandar",
+            lambda: bandar_prov._is_cache_fresh(ticker),
+            lambda: bandar_prov.get_snapshot(ticker)),
+        EnrichmentTask("fundam",
+            lambda: fundamentals_prov._is_cache_fresh(ticker),
+            lambda: fundamentals_prov.get_fundamentals(ticker)),
+        EnrichmentTask("fwd_est",
+            lambda: fwd_est_prov._read_cache(ticker) is not None,
+            lambda: fwd_est_prov.get_forward_estimates(ticker)),
+        EnrichmentTask("profile",
+            lambda: profile_prov._read_cache(ticker) is not None,
+            lambda: profile_prov.get_profile(ticker)),
+        EnrichmentTask("earnings",
+            lambda: earnings_prov.is_cache_fresh(ticker),
+            lambda: earnings_prov.get_earnings_history(ticker)),
+        EnrichmentTask("brdist",
+            lambda: distribution_prov.is_cache_fresh(ticker),
+            lambda: distribution_prov.get_distribution(ticker)),
+        EnrichmentTask("valuation",
+            lambda: valuation_prov.is_cache_fresh(ticker),
+            lambda: valuation_prov.get_valuation(ticker)),
     ]
     return RefreshStockbitEnrichmentUseCase().execute(
         RefreshStockbitEnrichmentRequest(

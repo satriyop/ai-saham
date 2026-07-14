@@ -46,6 +46,9 @@ from src.infrastructure.persistence.sqlite_migration_runner import SqliteMigrati
 
 if TYPE_CHECKING:
     from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
+    from src.infrastructure.browser.stockbit_sqlite_connection_provider import (
+        StockbitSQLiteConnectionProvider,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -186,9 +189,11 @@ class StockbitShareholdingProvider(ShareholdingProvider, StockbitCachingProvider
         self,
         api_client: "StockbitApiClient | None",
         db_path: Path,
+        *,
+        connection_provider: "StockbitSQLiteConnectionProvider | None" = None,
     ) -> None:
         self._mem_cache: dict[str, ShareholdingComposition | None] = {}
-        super().__init__(api_client, db_path)
+        super().__init__(api_client, db_path, connection_provider=connection_provider)
 
     def _ensure_schema(self) -> None:
         def _update():

@@ -27,6 +27,9 @@ from src.infrastructure.browser.stockbit_forward_estimates import (
 )
 from src.infrastructure.browser.stockbit_insider import StockbitInsiderActivityProvider
 from src.infrastructure.browser.stockbit_seasonality import StockbitSeasonalityProvider
+from src.infrastructure.browser.stockbit_sqlite_connection_provider import (
+    StockbitSQLiteConnectionProvider,
+)
 from src.infrastructure.config.signal_engine_config_loader import (
     load_signal_engine_config_raw,
 )
@@ -64,15 +67,22 @@ def create_signal_engine(
             return None
         return float(candles[-1].close)
 
+    connection_provider = StockbitSQLiteConnectionProvider()
     return SignalEngine(
-        bandar_provider=StockbitBandarDetectorProvider(api_client=None, db_path=resolved),
-        insider_activity_provider=StockbitInsiderActivityProvider(
-            api_client=None, db_path=resolved
+        bandar_provider=StockbitBandarDetectorProvider(
+            api_client=None, db_path=resolved, connection_provider=connection_provider
         ),
-        seasonality_provider=StockbitSeasonalityProvider(api_client=None, db_path=resolved),
-        analyst_provider=StockbitAnalystConsensusProvider(api_client=None, db_path=resolved),
+        insider_activity_provider=StockbitInsiderActivityProvider(
+            api_client=None, db_path=resolved, connection_provider=connection_provider
+        ),
+        seasonality_provider=StockbitSeasonalityProvider(
+            api_client=None, db_path=resolved, connection_provider=connection_provider
+        ),
+        analyst_provider=StockbitAnalystConsensusProvider(
+            api_client=None, db_path=resolved, connection_provider=connection_provider
+        ),
         forward_estimates_provider=StockbitForwardEstimatesProvider(
-            api_client=None, db_path=resolved
+            api_client=None, db_path=resolved, connection_provider=connection_provider
         ),
         latest_price_provider=_latest_close,
         weights=weights,

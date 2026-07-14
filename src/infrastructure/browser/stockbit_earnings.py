@@ -32,6 +32,9 @@ from src.domain.ports.earnings_provider import EarningsProvider
 from src.domain.value_objects.earnings_record import EarningsRecord
 from src.infrastructure.browser.stockbit_base_provider import StockbitCachingProvider
 from src.infrastructure.browser.stockbit_earnings_cache import StockbitEarningsCache
+from src.infrastructure.browser.stockbit_sqlite_connection_provider import (
+    StockbitSQLiteConnectionProvider,
+)
 from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
 
 logger = logging.getLogger(__name__)
@@ -129,10 +132,17 @@ class StockbitEarningsProvider(EarningsProvider, StockbitCachingProvider):
         self,
         api_client,
         db_path: Path | str = Path("data.db"),
+        *,
+        connection_provider: StockbitSQLiteConnectionProvider | None = None,
     ) -> None:
         self._db_path = Path(db_path).expanduser()
+        self._connection_provider = connection_provider or StockbitSQLiteConnectionProvider()
         self._cache = StockbitEarningsCache(self._get_conn())
-        super().__init__(api_client, db_path)
+        super().__init__(
+            api_client,
+            db_path,
+            connection_provider=self._connection_provider,
+        )
 
     def _ensure_schema(self) -> None:
         self._cache.ensure_schema()

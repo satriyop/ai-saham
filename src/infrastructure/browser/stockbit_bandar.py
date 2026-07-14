@@ -38,15 +38,17 @@ from typing import TYPE_CHECKING
 
 from src.domain.ports.bandar_detector_provider import BandarDetectorProvider
 from src.domain.value_objects.bandar_detector_snapshot import BandarDetectorSnapshot
-
-if TYPE_CHECKING:
-    from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
-
-logger = logging.getLogger(__name__)
-
 from src.infrastructure.browser.stockbit_base_provider import StockbitCachingProvider
 from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
 from src.infrastructure.persistence.sqlite_migration_runner import SqliteMigrationRunner
+
+if TYPE_CHECKING:
+    from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
+    from src.infrastructure.browser.stockbit_sqlite_connection_provider import (
+        StockbitSQLiteConnectionProvider,
+    )
+
+logger = logging.getLogger(__name__)
 
 _MARKET_DETECTOR_URL = STOCKBIT_CFG.bandar_detector_url
 
@@ -174,9 +176,11 @@ class StockbitBandarDetectorProvider(BandarDetectorProvider, StockbitCachingProv
         self,
         api_client: "StockbitApiClient | None",
         db_path: Path,
+        *,
+        connection_provider: "StockbitSQLiteConnectionProvider | None" = None,
     ) -> None:
         self._mem_cache: dict[tuple[str, str], BandarDetectorSnapshot | None] = {}
-        super().__init__(api_client, db_path)
+        super().__init__(api_client, db_path, connection_provider=connection_provider)
 
     def _ensure_schema(self) -> None:
         try:
@@ -231,7 +235,8 @@ class StockbitBandarDetectorProvider(BandarDetectorProvider, StockbitCachingProv
             order_clause = "ORDER BY session_date DESC " if allow_previous else ""
             with sqlite3.connect(self._db_path) as conn:
                 row = conn.execute(
-                    "SELECT session_date, broker_accdist, today_accdist, five_day_accdist, top1_accdist, "
+                    "SELECT session_date, broker_accdist, today_accdist, "
+                    "five_day_accdist, top1_accdist, "
                     "top1_percent, today_percent, total_buyer, total_seller, "
                     "top3_accdist, top5_accdist, top10_accdist, "
                     "number_broker_buysell, vwap, total_value, total_volume "
