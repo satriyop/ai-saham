@@ -14,7 +14,7 @@ from typing import Annotated, Optional
 
 import typer
 
-from src.adapters.cli.fetch_stockbit_session_commands import _require_playwright_cli
+from src.adapters.cli.fetch_stockbit_playwright_guard import require_playwright_cli
 
 DEFAULT_SPY_OUTPUT = Path("journals/stockbit-spy.json")
 
@@ -60,7 +60,7 @@ def spy(
         saham fetch stockbit spy --target broker-scan           (foreign top stocks)
         saham fetch stockbit spy --wait 10 --output journals/my-capture.json
     """
-    _require_playwright_cli()
+    require_playwright_cli()
     from src.infrastructure.browser.playwright_stockbit_provider import spy_stockbit_session
 
     resolved_output = output or DEFAULT_SPY_OUTPUT

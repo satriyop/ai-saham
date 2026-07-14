@@ -11,6 +11,8 @@ rather than on the adapter module.
 
 from __future__ import annotations
 
+import pytest
+import typer
 from typer.testing import CliRunner
 
 import src.infrastructure.browser.playwright_stockbit_provider as playwright_stockbit_provider
@@ -138,3 +140,26 @@ def test_router_does_not_import_concrete_stockbit_infrastructure():
             imported_modules.add(node.module)
 
     assert not any(m.startswith("src.infrastructure") for m in imported_modules)
+
+
+def test_playwright_guard_exits_1_with_install_message_when_missing(monkeypatch, capsys):
+    import builtins
+
+    from src.adapters.cli.fetch_stockbit_playwright_guard import require_playwright_cli
+
+    real_import = builtins.__import__
+
+    def _fake_import(name, *args, **kwargs):
+        if name == "playwright":
+            raise ImportError("No module named 'playwright'")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", _fake_import)
+
+    with pytest.raises(typer.Exit) as exc_info:
+        require_playwright_cli()
+
+    assert exc_info.value.exit_code == 1
+    captured = capsys.readouterr()
+    assert "playwright not installed." in captured.err
+    assert "Run: pip install playwright && playwright install chromium" in captured.err

@@ -15,16 +15,7 @@ from typing import Annotated, Optional
 
 import typer
 
-
-def _require_playwright_cli() -> None:
-    try:
-        import playwright  # noqa: F401
-    except ImportError:
-        typer.echo(
-            "playwright not installed.\nRun: pip install playwright && playwright install chromium",
-            err=True,
-        )
-        raise typer.Exit(1)
+from src.adapters.cli.fetch_stockbit_playwright_guard import require_playwright_cli
 
 
 def login(
@@ -45,7 +36,7 @@ def login(
         saham fetch stockbit login
         saham fetch stockbit login --timeout 180
     """
-    _require_playwright_cli()
+    require_playwright_cli()
     from src.infrastructure.browser.playwright_stockbit_provider import save_stockbit_session
 
     try:
@@ -135,7 +126,7 @@ def browse(
         saham fetch stockbit browse
         saham fetch stockbit browse --url https://stockbit.com/stocks/BBCA
     """
-    _require_playwright_cli()
+    require_playwright_cli()
     from src.infrastructure.browser.playwright_stockbit_provider import browse_stockbit_session
 
     target = url or "https://stockbit.com/stream"
