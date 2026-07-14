@@ -20,12 +20,10 @@ from src.application.rules.exceptions import (
 from src.application.services.strategy_loader import StrategyLoader
 from src.application.use_case.backtest_use_case import BacktestRequest, BacktestUseCase
 from src.infrastructure.composition.indicator_registry_factory import create_indicator_registry
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
-
-DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 
 
 def backtest(
@@ -40,14 +38,14 @@ def backtest(
     ] = None,
     start: Annotated[
         Optional[str], typer.Option("--start", "-s", help="Start date (YYYY-MM-DD)")
-    ] = APP_CFG.backtest.start_date,
+    ] = None,
     end: Annotated[
         Optional[str], typer.Option("--end", "-e", help="End date (YYYY-MM-DD)")
     ] = None,
     capital: Annotated[
-        int,
+        Optional[int],
         typer.Option("--capital", "-c", help="Initial capital in IDR", min=1),
-    ] = APP_CFG.trading.capital,
+    ] = None,
     verbose: Annotated[
         bool, typer.Option("--verbose", "-v", help="Show trade-by-trade output")
     ] = False,
@@ -55,8 +53,8 @@ def backtest(
         Optional[Path], typer.Option("--db", help="Path to SQLite database")
     ] = None,
     fmt: Annotated[
-        str, typer.Option("--format", help="Output format: table or json")
-    ] = APP_CFG.analysis.format,
+        Optional[str], typer.Option("--format", help="Output format: table or json")
+    ] = None,
 ) -> None:
     """
     Backtest a strategy against historical data.
@@ -85,7 +83,11 @@ def backtest(
         typer.echo("        Fix:   saham strategy backtest BBCA --strategy momentum", err=True)
         raise typer.Exit(1)
 
-    resolved_db = db_path or DEFAULT_DB_PATH
+    cfg = load_app_config()
+    resolved_db = db_path or Path(cfg.storage.db_path)
+    start = start or cfg.backtest.start_date
+    capital = capital if capital is not None else cfg.trading.capital
+    fmt = fmt or cfg.analysis.format
 
     start_date = None
     end_date = None

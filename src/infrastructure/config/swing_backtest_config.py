@@ -10,9 +10,12 @@ from typing import Any
 
 import yaml
 
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import AppConfig, load_app_config
 
-SWING_BACKTEST_CONFIG_PATH = Path(APP_CFG.config_paths.swing_backtest)
+
+def default_swing_backtest_config_path(config: AppConfig | None = None) -> Path:
+    cfg = config or load_app_config()
+    return Path(cfg.config_paths.swing_backtest)
 
 
 @dataclass(frozen=True)
@@ -35,17 +38,19 @@ class SwingBacktestConfig:
 
 def load_swing_backtest_config(
     config_path: Path | None = None,
+    config: AppConfig | None = None,
 ) -> SwingBacktestConfig:
     """Load swing backtest config. Defaults preserve existing behavior."""
+    app_cfg = config or load_app_config()
     defaults = SwingBacktestConfig(
-        capital=APP_CFG.trading.capital,
-        risk_pct=APP_CFG.swing.risk_pct,
-        take_profit_pct=APP_CFG.swing.take_profit,
-        stop_loss_pct=APP_CFG.swing.stop_loss,
-        max_hold_days=APP_CFG.swing.max_hold,
-        cost_bps=APP_CFG.backtest.cost_bps,
+        capital=app_cfg.trading.capital,
+        risk_pct=app_cfg.swing.risk_pct,
+        take_profit_pct=app_cfg.swing.take_profit,
+        stop_loss_pct=app_cfg.swing.stop_loss,
+        max_hold_days=app_cfg.swing.max_hold,
+        cost_bps=app_cfg.backtest.cost_bps,
     )
-    raw = _read_yaml(config_path or SWING_BACKTEST_CONFIG_PATH)
+    raw = _read_yaml(config_path or default_swing_backtest_config_path(app_cfg))
     root = raw.get("swing_backtest") or raw
     if not isinstance(root, dict):
         return defaults

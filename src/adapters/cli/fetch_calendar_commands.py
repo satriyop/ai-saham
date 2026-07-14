@@ -26,12 +26,10 @@ from src.infrastructure.browser.stockbit_corporate_action_calendar import (
     StockbitCorporateActionCalendarProvider,
 )
 from src.infrastructure.composition.stockbit_session_factory import get_stockbit_session
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.persistence.sqlite_corporate_action_calendar_repository import (
     SQLiteCorporateActionCalendarRepository,
 )
-
-DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 
 # Default --types order (all 9 supported v1 types).
 _DEFAULT_TYPES = "dividend,stock_split,reverse_split,rights_issue,bonus,tender_offer,rups,pubex,ipo"
@@ -85,8 +83,9 @@ def fetch_calendar(
         saham fetch calendar --types dividend,ipo
         saham fetch calendar --refresh
     """
+    cfg = load_app_config()
     event_types = _parse_types(types or _DEFAULT_TYPES)
-    resolved_db = db_path or DEFAULT_DB_PATH
+    resolved_db = db_path or Path(cfg.storage.db_path)
 
     session = get_stockbit_session()
     if session is None or not session.authenticated:

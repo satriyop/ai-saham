@@ -36,13 +36,10 @@ from src.application.use_case.fetch_market_command_workflow_use_case import (
     FetchMarketCommandWorkflowRequest,
 )
 from src.application.use_case.fetch_market_refresh_use_case import FetchMarketTickerResult
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.data_sources_config import (
     candle_source as _candle_source,
 )
-
-DEFAULT_DAYS: int = APP_CFG.fetch.default_days
-STOCKBIT_PROFILE_DIR = Path(APP_CFG.storage.stockbit_profile_dir)
 
 
 def fetch_market(
@@ -58,9 +55,9 @@ def fetch_market(
         ),
     ] = None,
     days: Annotated[
-        int,
+        Optional[int],
         typer.Option("--days", "-d", help="Days of history to fetch", min=1),
-    ] = DEFAULT_DAYS,
+    ] = None,
     candles_only: Annotated[
         bool,
         typer.Option("--candles-only", help="Skip broker flow fetch"),
@@ -129,7 +126,9 @@ def fetch_market(
         saham fetch market --universe lq45 --no-meta
         saham fetch market BBCA --no-enrichment
     """
-    resolved_db = db_path or Path(APP_CFG.storage.db_path)
+    cfg = load_app_config()
+    resolved_days = days if days is not None else cfg.fetch.default_days
+    resolved_db = db_path or Path(cfg.storage.db_path)
     candles_provider = candles_provider or _candle_source()
 
     # Determine broker provider
@@ -149,7 +148,7 @@ def fetch_market(
     def on_start(event: FetchMarketCommandStartEvent) -> None:
         if event.market_status_line:
             typer.echo(f"\n{event.market_status_line}")
-        typer.echo(f"Updating {event.ticker_count} tickers | {event.days}d history")
+        typer.echo(f"Updating {event.ticker_count} tickers | {resolved_days}d history")
         if not event.broker_only:
             typer.echo(f"  Candles:          {event.candles_provider}")
         if not event.candles_only:
@@ -217,7 +216,7 @@ def fetch_market(
         req = FetchMarketCommandWorkflowRequest(
             tickers=list(tickers) if tickers else [],
             universe=universe,
-            days=days,
+            days=resolved_days,
             db_path=resolved_db,
             candles_provider=candles_provider,
             broker_provider=broker_provider_obj,

@@ -30,14 +30,16 @@ from src.application.use_case.pre_open_workflow_use_case import (
 )
 from src.domain.ports.browser_data_provider import BrowserInteractionRequired
 from src.domain.value_objects.idx_market import IDX_TIMEZONE
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.pre_open_config import load_pre_open_screen_config
 
-DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
-DEFAULT_PRE_OPEN_CONFIG_PATH = Path(APP_CFG.config_paths.pre_open_screener)
-DEFAULT_SIDECAR_PATH = Path(APP_CFG.storage.intraday_sidecar)
-DEFAULT_REGIME_UNIVERSE = APP_CFG.analysis.regime_universe
-DEFAULT_REGIME_BENCHMARK = APP_CFG.analysis.benchmark
+
+def _default_pre_open_config_path() -> Path:
+    return Path(load_app_config().config_paths.pre_open_screener)
+
+
+def _default_sidecar_path() -> Path:
+    return Path(load_app_config().storage.intraday_sidecar)
 
 
 def pre_open(
@@ -91,13 +93,13 @@ def pre_open(
         typer.Option("--with-regime", help="Add market regime context"),
     ] = False,
     regime_universe: Annotated[
-        str,
+        Optional[str],
         typer.Option("--regime-universe", help="Universe for regime breadth"),
-    ] = DEFAULT_REGIME_UNIVERSE,
+    ] = None,
     benchmark: Annotated[
-        str,
+        Optional[str],
         typer.Option("--benchmark", help="Benchmark ticker for regime context"),
-    ] = DEFAULT_REGIME_BENCHMARK,
+    ] = None,
     provider: Annotated[Optional[str], typer.Option("--provider")] = None,
     headless: Annotated[
         bool,
@@ -125,8 +127,11 @@ def pre_open(
     call auction mechanism. Enter at open only if opening price falls within
     the displayed range.
     """
-    resolved_config = config_path or DEFAULT_PRE_OPEN_CONFIG_PATH
-    resolved_db = db_path or DEFAULT_DB_PATH
+    cfg = load_app_config()
+    resolved_config = config_path or Path(cfg.config_paths.pre_open_screener)
+    resolved_db = db_path or Path(cfg.storage.db_path)
+    regime_universe = regime_universe or cfg.analysis.regime_universe
+    benchmark = benchmark or cfg.analysis.benchmark
 
     overrides: dict = {
         "iev_min": iev_min,
@@ -239,7 +244,7 @@ def pre_open(
         write_pre_open_sidecar(
             candidates=result.candidates,
             screened_date=result.screened_date,
-            sidecar_path=DEFAULT_SIDECAR_PATH,
+            sidecar_path=_default_sidecar_path(),
             market_regime=response.market_regime,
         )
 

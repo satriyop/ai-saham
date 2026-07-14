@@ -35,12 +35,10 @@ from src.application.use_case.run_accumulation_screen_workflow_use_case import (
 from src.infrastructure.config.accumulation_screener_config import (
     load_accumulation_screener_config as _load_accumulation_screener_config,
 )
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.swing_config import load_swing_config as _load_swing_config
 from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
-
-DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 
 FOREIGN_BOUNCE_SETUP = "foreign-bounce"
 
@@ -139,9 +137,9 @@ def accumulation_run(
         ),
     ] = "avg",
     output_format: Annotated[
-        str,
+        Optional[str],
         typer.Option("--format", help="Output format: table or json"),
-    ] = APP_CFG.analysis.format,
+    ] = None,
     guide: Annotated[
         bool,
         typer.Option("--guide", help="Print column reference guide and exit (no screen needed)"),
@@ -201,11 +199,13 @@ def accumulation_run(
         print_column_guide()
         return
 
-    resolved_db = db_path or DEFAULT_DB_PATH
+    cfg = load_app_config()
+    resolved_db = db_path or Path(cfg.storage.db_path)
+    output_format = output_format or cfg.analysis.format
 
     swing_config = _load_swing_config()
     accumulation_config = _load_accumulation_screener_config(
-        Path(APP_CFG.config_paths.accumulation_screener)
+        Path(cfg.config_paths.accumulation_screener)
     )
     display_config = accumulation_display_config_from_screener(accumulation_config)
 

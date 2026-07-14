@@ -24,16 +24,12 @@ from src.application.use_case.run_swing_tuning_review_use_case import (
     RunSwingTuningReviewUseCase,
     SwingTuningRunnerDefaults,
 )
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.swing_tuning_document_loader import (
     swing_tuning_document_loader,
 )
 from src.infrastructure.persistence.swing_tuning_review_jsonl_writer import (
     SwingTuningReviewJsonlWriter,
-)
-
-DEFAULT_SWING_TUNING_REVIEW_JOURNAL_PATH = Path(
-    APP_CFG.storage.swing_tuning_review_journal
 )
 
 
@@ -62,8 +58,11 @@ def create_run_swing_tuning_review_workflow(
     def _backtest_runner(**kwargs: Any):
         return _run_swing_backtest(config=runner_config, **kwargs)
 
+    resolved_journal_path = journal_path or Path(
+        load_app_config().storage.swing_tuning_review_journal
+    )
     review_journal = SwingTuningReviewJournal(
-        SwingTuningReviewJsonlWriter(journal_path or DEFAULT_SWING_TUNING_REVIEW_JOURNAL_PATH)
+        SwingTuningReviewJsonlWriter(resolved_journal_path)
     )
 
     return RunSwingTuningReviewUseCase(

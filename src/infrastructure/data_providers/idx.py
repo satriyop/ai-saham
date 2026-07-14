@@ -38,8 +38,6 @@ logger = logging.getLogger(__name__)
 IDX_API_BASE = "https://www.idx.co.id/primary/TradingSummary"
 STOCK_SUMMARY_ENDPOINT = "/GetStockSummary"
 
-# Rate limiting and retry settings — tunable in config/data_sources.yaml
-REQUEST_DELAY_SECONDS, MAX_RETRIES, RETRY_BACKOFF_BASE = idx_client_tuning()
 
 # Browser-like headers required by IDX
 IDX_HEADERS = {
@@ -80,6 +78,11 @@ class IdxBrokerDataProvider(BrokerDataProvider):
     def __init__(self, timeout: float = 30.0) -> None:
         self._timeout = timeout
         self._last_request_time: float = 0
+        (
+            self._request_delay_seconds,
+            self._max_retries,
+            self._retry_backoff_base,
+        ) = idx_client_tuning()
 
     @property
     def provider_name(self) -> str:
@@ -92,8 +95,8 @@ class IdxBrokerDataProvider(BrokerDataProvider):
     def _rate_limit(self) -> None:
         """Apply rate limiting between requests."""
         elapsed = time.time() - self._last_request_time
-        if elapsed < REQUEST_DELAY_SECONDS:
-            time.sleep(REQUEST_DELAY_SECONDS - elapsed)
+        if elapsed < self._request_delay_seconds:
+            time.sleep(self._request_delay_seconds - elapsed)
         self._last_request_time = time.time()
 
     def _make_request(self, target_date: date) -> dict[str, Any]:
@@ -120,7 +123,7 @@ class IdxBrokerDataProvider(BrokerDataProvider):
 
         last_error: Exception | None = None
 
-        for attempt in range(MAX_RETRIES):
+        for attempt in range(self._max_retries):
             try:
                 with httpx.Client(timeout=self._timeout) as client:
                     response = client.get(
@@ -131,10 +134,10 @@ class IdxBrokerDataProvider(BrokerDataProvider):
                     )
 
                     if response.status_code == 429:
-                        wait = RETRY_BACKOFF_BASE ** (attempt + 1)
+                        wait = self._retry_backoff_base ** (attempt + 1)
                         logger.warning(
                             "IDX rate limited (429), waiting %.1fs before retry %d/%d",
-                            wait, attempt + 1, MAX_RETRIES,
+                            wait, attempt + 1, self._max_retries,
                         )
                         time.sleep(wait)
                         continue
@@ -146,10 +149,10 @@ class IdxBrokerDataProvider(BrokerDataProvider):
                         return {"data": [], "recordsTotal": 0}
 
                     if response.status_code >= 500:
-                        wait = RETRY_BACKOFF_BASE ** (attempt + 1)
+                        wait = self._retry_backoff_base ** (attempt + 1)
                         logger.warning(
                             "IDX server error (%d), waiting %.1fs before retry %d/%d",
-                            response.status_code, wait, attempt + 1, MAX_RETRIES,
+                            response.status_code, wait, attempt + 1, self._max_retries,
                         )
                         time.sleep(wait)
                         last_error = BrokerDataProviderError(
@@ -166,17 +169,17 @@ class IdxBrokerDataProvider(BrokerDataProvider):
 
             except httpx.TimeoutException as e:
                 last_error = BrokerDataProviderError(f"IDX request timeout: {e}")
-                if attempt < MAX_RETRIES - 1:
-                    wait = RETRY_BACKOFF_BASE ** (attempt + 1)
+                if attempt < self._max_retries - 1:
+                    wait = self._retry_backoff_base ** (attempt + 1)
                     logger.warning(
                         "IDX timeout, waiting %.1fs before retry %d/%d",
-                        wait, attempt + 1, MAX_RETRIES,
+                        wait, attempt + 1, self._max_retries,
                     )
                     time.sleep(wait)
             except httpx.RequestError as e:
                 last_error = BrokerDataProviderError(f"IDX request failed: {e}")
-                if attempt < MAX_RETRIES - 1:
-                    wait = RETRY_BACKOFF_BASE ** (attempt + 1)
+                if attempt < self._max_retries - 1:
+                    wait = self._retry_backoff_base ** (attempt + 1)
                     time.sleep(wait)
 
         raise last_error or BrokerDataProviderError("IDX request failed after retries")

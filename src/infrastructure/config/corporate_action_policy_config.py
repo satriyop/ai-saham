@@ -35,9 +35,12 @@ from src.domain.value_objects.corporate_action_event_risk import (
     CorporateActionEventRiskFlag,
     CorporateActionEventRiskSeverity,
 )
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import AppConfig, load_app_config
 
-CORPORATE_ACTION_POLICY_CONFIG_PATH = Path(APP_CFG.config_paths.corporate_action_policy)
+
+def default_corporate_action_policy_config_path(config: AppConfig | None = None) -> Path:
+    cfg = config or load_app_config()
+    return Path(cfg.config_paths.corporate_action_policy)
 
 _KNOWN_EVENT_TYPES = {t.value for t in CorporateActionType}
 _KNOWN_DATE_ROLES = {r.value for r in CorporateActionDateRole}
@@ -155,7 +158,7 @@ def load_corporate_action_policy_config(
     negative lookback/lookahead window) raises CorporateActionPolicyConfigError
     rather than silently falling back.
     """
-    path = config_path or CORPORATE_ACTION_POLICY_CONFIG_PATH
+    path = config_path or default_corporate_action_policy_config_path()
     if not path.exists():
         raw = yaml.safe_load(_DEFAULT_POLICY_YAML)
         return _parse_and_validate(raw, source="<default>")

@@ -7,7 +7,7 @@ Layer: Adapter
 import json
 import subprocess
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Optional
 
 import typer
 
@@ -23,7 +23,7 @@ from src.application.services.swing_tuning_patch_validator import (
     SwingTuningPatchValidator,
     SwingTuningPatchVerifier,
 )
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.swing_tuning_document_loader import (
     swing_tuning_document_loader,
 )
@@ -61,11 +61,12 @@ def validate_tuning_patch(
         typer.Option("--config-root", help="Repository/config root for YAML resolution"),
     ] = Path("."),
     output_format: Annotated[
-        str,
+        Optional[str],
         typer.Option("--format", help="Output format: table or json"),
-    ] = APP_CFG.analysis.format,
+    ] = None,
 ) -> None:
     """Validate exported swing tuning patch JSON without applying it."""
+    output_format = output_format or load_app_config().analysis.format
     report = SwingTuningPatchValidator(
         document_loader=swing_tuning_document_loader(config_root)
     ).validate(patch_path)
@@ -108,11 +109,12 @@ def apply_tuning_patch(
         typer.Option("--log", help="Apply audit log JSONL path"),
     ] = Path("journals/swing_tuning_apply_log.jsonl"),
     output_format: Annotated[
-        str,
+        Optional[str],
         typer.Option("--format", help="Output format: table or json"),
-    ] = APP_CFG.analysis.format,
+    ] = None,
 ) -> None:
     """Dry-run or explicitly apply exported swing tuning patch changes."""
+    output_format = output_format or load_app_config().analysis.format
     selected_modes = sum(1 for selected in (dry_run, yes, verify) if selected)
     if selected_modes > 1:
         typer.echo("Error: choose only one of --dry-run, --yes, or --verify.", err=True)

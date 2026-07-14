@@ -37,7 +37,7 @@ from src.application.use_case.resolve_opening_prices_use_case import (
     ResolveOpeningPricesRequest,
     ResolveOpeningPricesUseCase,
 )
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.pre_open_config import load_pre_open_screen_config
 from src.infrastructure.persistence.intraday_confirmation_csv import (
     IntradayConfirmationCsvStore,
@@ -45,11 +45,6 @@ from src.infrastructure.persistence.intraday_confirmation_csv import (
 from src.infrastructure.persistence.trade_journal_jsonl_writer import (
     TradeJournalJsonlWriter,
 )
-
-DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
-DEFAULT_SIDECAR_PATH = Path(APP_CFG.storage.intraday_sidecar)
-DEFAULT_CONFIRMATION_PATH = Path(APP_CFG.storage.intraday_confirmation)
-DEFAULT_CONFIRMATION_JOURNAL_PATH = Path(APP_CFG.storage.intraday_confirmation_journal)
 
 
 def confirm_open(
@@ -72,8 +67,9 @@ def confirm_open(
         bool, typer.Option("--headless/--no-headless", help="Headless browser for auto-confirm")
     ] = True,
 ) -> None:
-    sidecar_path = session or DEFAULT_SIDECAR_PATH
-    output_path = output or DEFAULT_CONFIRMATION_PATH
+    cfg = load_app_config()
+    sidecar_path = session or Path(cfg.storage.intraday_sidecar)
+    output_path = output or Path(cfg.storage.intraday_confirmation)
     if not sidecar_path.exists():
         typer.echo(
             f"No session sidecar at '{sidecar_path}'.\n"
@@ -229,8 +225,9 @@ def confirm_log(
         Optional[Path], typer.Option("--journal", help="Intraday CSV journal")
     ] = None,
 ) -> None:
-    confirmation_path = confirmation or DEFAULT_CONFIRMATION_PATH
-    journal_path = journal or DEFAULT_CONFIRMATION_JOURNAL_PATH
+    cfg = load_app_config()
+    confirmation_path = confirmation or Path(cfg.storage.intraday_confirmation)
+    journal_path = journal or Path(cfg.storage.intraday_confirmation_journal)
     csv_store = IntradayConfirmationCsvStore(journal_path)
     jsonl_store = TradeJournalJsonlWriter(confirmation_path.parent / "trades.jsonl")
     use_case = LogIntradayConfirmationUseCase(
@@ -271,9 +268,10 @@ def confirm_review(
     ] = None,
     db_path: Annotated[Optional[Path], typer.Option("--db")] = None,
 ) -> None:
+    cfg = load_app_config()
     run_confirm_review(
-        journal_path=journal or DEFAULT_CONFIRMATION_JOURNAL_PATH,
-        db_path=db_path or DEFAULT_DB_PATH,
+        journal_path=journal or Path(cfg.storage.intraday_confirmation_journal),
+        db_path=db_path or Path(cfg.storage.db_path),
     )
 
 
@@ -295,6 +293,7 @@ def confirm_outcome(
     ] = None,
     db_path: Annotated[Optional[Path], typer.Option("--db")] = None,
 ) -> None:
+    cfg = load_app_config()
     run_confirm_outcome(
         ticker=ticker,
         entry=entry,
@@ -302,6 +301,6 @@ def confirm_outcome(
         result=result,
         confirmed_date=confirmed_date,
         notes=notes,
-        journal_path=journal or DEFAULT_CONFIRMATION_JOURNAL_PATH,
-        db_path=db_path or DEFAULT_DB_PATH,
+        journal_path=journal or Path(cfg.storage.intraday_confirmation_journal),
+        db_path=db_path or Path(cfg.storage.db_path),
     )

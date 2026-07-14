@@ -36,7 +36,7 @@ from src.domain.value_objects.benchmark_symbol import (
     canonicalize_ticker,
     is_benchmark_ticker,
 )
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.data_sources_config import (
     broker_summary_source as _broker_summary_source,
 )
@@ -49,10 +49,6 @@ from src.infrastructure.persistence.sqlite_market_repository import (
 )
 
 _BENCHMARK_ALIASES = BenchmarkTickerAliases(canonical=BENCHMARK_TICKER, legacy=YAHOO_IHSG_TICKER)
-
-# How many calendar days of gap at the START of a requested range is tolerable
-# before triggering a backfill.
-MARKET_START_TOLERANCE_DAYS: int = APP_CFG.fetch.start_tolerance_days
 
 
 def _resolve_idx_summary_provider(broker_provider, _idx_summary_provider):
@@ -79,6 +75,9 @@ def fetch_broker(
     _idx_summary_provider=None,  # injectable for testing; production code uses IdxBrokerDataProvider
 ) -> BrokerFetchResult:
     """Fetch broker flow for one ticker. Returns split status for summaries and flow tables."""
+    cfg = load_app_config()
+    market_start_tolerance_days = cfg.fetch.start_tolerance_days
+
     ticker = canonicalize_ticker(ticker)
     if is_benchmark_ticker(ticker) or ticker.startswith("^"):
         return BrokerFetchResult(summaries="n/a:index", flow="n/a:index")
@@ -106,7 +105,7 @@ def fetch_broker(
             refresh=refresh,
             end_date=end_date,
             last_trading_day=last_trading_day,
-            requested_start_tolerance_days=MARKET_START_TOLERANCE_DAYS,
+            requested_start_tolerance_days=market_start_tolerance_days,
         )
     )
     if short_history is not None:

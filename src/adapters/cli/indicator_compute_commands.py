@@ -17,11 +17,8 @@ from src.adapters.cli.indicator_display import (
     print_no_data_error,
 )
 from src.infrastructure.composition.indicator_registry_factory import create_indicator_registry
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
-
-DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
-DEFAULT_DAYS = APP_CFG.market.default_days
 
 
 def compute(
@@ -37,9 +34,9 @@ def compute(
         typer.Option("--period", "-p", help="Period (ignored for formula indicators)", min=1),
     ] = 14,
     days: Annotated[
-        int,
+        Optional[int],
         typer.Option("--days", "-d", help="Days of history to load", min=1),
-    ] = DEFAULT_DAYS,
+    ] = None,
     tail: Annotated[
         int,
         typer.Option("--tail", "-t", help="Show last N values (default 30)", min=1),
@@ -61,6 +58,10 @@ def compute(
         saham indicator compute SMOOTH_RSI BBCA --tail 10
         saham indicator compute ATR BBCA --days 180
     """
+    cfg = load_app_config()
+    resolved_days = days if days is not None else cfg.market.default_days
+    resolved_db = db_path or Path(cfg.storage.db_path)
+
     registry = create_indicator_registry()
     indicator_upper = indicator.upper()
     ticker_upper = ticker.upper()
@@ -71,8 +72,6 @@ def compute(
         for name in sorted(registry.list_indicators()):
             typer.echo(f"  {name}", err=True)
         raise typer.Exit(1)
-
-    resolved_db = db_path or DEFAULT_DB_PATH
     typer.echo(f"Loading {ticker_upper} · {indicator_upper} from {resolved_db}...")
 
     try:
@@ -80,21 +79,21 @@ def compute(
         candles = repository.get_candles(ticker_upper)
 
         if not candles:
-            print_no_data_error(ticker_upper, days)
+            print_no_data_error(ticker_upper, resolved_days)
             raise typer.Exit(1)
 
-        if len(candles) < days - 7:
+        if len(candles) < resolved_days - 7:
             typer.echo(
-                f"[warning] Only {len(candles)} trading days cached, {days} requested.",
+                f"[warning] Only {len(candles)} trading days cached, {resolved_days} requested.",
                 err=True,
             )
             typer.echo(
-                f"           Run: saham fetch market {ticker_upper} --days {days}",
+                f"           Run: saham fetch market {ticker_upper} --days {resolved_days}",
                 err=True,
             )
 
-        if len(candles) > days:
-            candles = candles[-days:]
+        if len(candles) > resolved_days:
+            candles = candles[-resolved_days:]
 
         values = registry.compute(indicator_upper, candles, period)
 
@@ -105,7 +104,7 @@ def compute(
                 err=True,
             )
             typer.echo(
-                f"        Fix:   saham fetch market {ticker_upper} --days {days}", err=True
+                f"        Fix:   saham fetch market {ticker_upper} --days {resolved_days}", err=True
             )
             raise typer.Exit(1)
 

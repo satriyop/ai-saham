@@ -14,11 +14,9 @@ import typer
 
 from src.application.services.position_sizer import compute_position_size
 from src.infrastructure.composition.indicator_registry_factory import create_indicator_registry
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.user_config import get_swing_default
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
-
-DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 
 
 def size(
@@ -33,29 +31,29 @@ def size(
         ),
     ] = None,
     risk_pct: Annotated[
-        float,
+        Optional[float],
         typer.Option("--risk-pct", help="% of capital at risk per trade"),
-    ] = APP_CFG.swing.risk_pct,
+    ] = None,
     entry_price: Annotated[
         Optional[float],
         typer.Option("--entry", help="Entry price in IDR (default: latest close)"),
     ] = None,
     atr_mult: Annotated[
-        float,
+        Optional[float],
         typer.Option("--atr-mult", help="ATR multiplier for stop distance"),
-    ] = APP_CFG.swing.atr_mult,
+    ] = None,
     rr: Annotated[
-        float,
+        Optional[float],
         typer.Option("--rr", help="Reward:risk ratio for target"),
-    ] = APP_CFG.swing.rr,
+    ] = None,
     atr_period: Annotated[
         int,
         typer.Option("--atr-period", help="ATR period (default: 14)", min=2),
     ] = 14,
     output_format: Annotated[
-        str,
+        Optional[str],
         typer.Option("--format", help="Output format: table or json"),
-    ] = APP_CFG.analysis.format,
+    ] = None,
     db_path: Annotated[
         Optional[Path],
         typer.Option("--db", help="SQLite database path"),
@@ -74,7 +72,13 @@ def size(
         saham trade size BBRI --capital 50000000 --risk-pct 1 --rr 2.5
         saham trade size BBRI --capital 10000000 --atr-mult 2.0
     """
-    resolved_db = db_path or DEFAULT_DB_PATH
+    cfg = load_app_config()
+    risk_pct = risk_pct if risk_pct is not None else cfg.swing.risk_pct
+    atr_mult = atr_mult if atr_mult is not None else cfg.swing.atr_mult
+    rr = rr if rr is not None else cfg.swing.rr
+    output_format = output_format or cfg.analysis.format
+
+    resolved_db = db_path or Path(cfg.storage.db_path)
     ticker_upper = ticker.upper()
     today = date.today()
 

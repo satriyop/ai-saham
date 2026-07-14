@@ -24,7 +24,7 @@ from src.application.use_case.log_accumulation_trade_workflow_use_case import (
 from src.application.use_case.log_swing_candidate_use_case import (
     LogSwingCandidateUseCase,
 )
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.market_context_factory import create_market_context_engine
 from src.infrastructure.config.swing_backtest_config import load_swing_backtest_config
 from src.infrastructure.config.swing_config import load_swing_config
@@ -82,9 +82,10 @@ def create_log_accumulation_trade_workflow(
     regime_uc = None
     if with_regime:
         try:
+            cfg = load_app_config()
             regime_uc = create_market_context_engine(
                 db_path=db_path,
-                universe=regime_universe or APP_CFG.analysis.regime_universe,
+                universe=regime_universe or cfg.analysis.regime_universe,
                 benchmark=benchmark,
             )
         except Exception as exc:

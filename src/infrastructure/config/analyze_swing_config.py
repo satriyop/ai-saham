@@ -10,9 +10,12 @@ from typing import Any
 
 import yaml
 
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import AppConfig, load_app_config
 
-ANALYZE_SWING_CONFIG_PATH = Path(APP_CFG.config_paths.analyze_swing)
+
+def default_analyze_swing_config_path(config: AppConfig | None = None) -> Path:
+    cfg = config or load_app_config()
+    return Path(cfg.config_paths.analyze_swing)
 
 
 @dataclass(frozen=True)
@@ -30,7 +33,7 @@ class AnalyzeSwingConfig:
 
 def load_analyze_swing_config(config_path: Path | None = None) -> AnalyzeSwingConfig:
     defaults = AnalyzeSwingConfig()
-    raw = _read_yaml(config_path or ANALYZE_SWING_CONFIG_PATH)
+    raw = _read_yaml(config_path or default_analyze_swing_config_path())
     root = raw.get("analyze_swing") or raw
     if not isinstance(root, dict):
         return defaults

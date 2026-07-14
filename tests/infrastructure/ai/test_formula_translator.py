@@ -369,7 +369,6 @@ class TestNewModuleImports:
         from src.infrastructure.ai.formula_translator import __all__
 
         assert "SUPPORTED_PROVIDERS" in __all__
-        assert "DEFAULT_PROVIDER" in __all__
         assert "FormulaTranslatorAdapter" in __all__
         assert "canonicalize_formula" in __all__
 

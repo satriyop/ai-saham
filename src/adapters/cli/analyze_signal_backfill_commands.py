@@ -31,7 +31,7 @@ from src.domain.value_objects.signal_forward_label import SignalLabelHorizon
 from src.infrastructure.config.accumulation_screener_config import (
     load_accumulation_screener_config,
 )
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.market_context_factory import evaluate_market_context
 from src.infrastructure.config.swing_config import load_swing_config
 from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
@@ -43,8 +43,6 @@ from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarket
 from src.infrastructure.persistence.sqlite_signal_forward_labels_repository import (
     SQLiteSignalForwardLabelsRepository,
 )
-
-DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 
 
 def signal_backfill_observations(
@@ -66,7 +64,8 @@ def signal_backfill_observations(
     db_path: Annotated[Optional[Path], typer.Option("--db")] = None,
 ) -> None:
     """Backfill historical candidate observations using local data only."""
-    resolved_db = db_path or DEFAULT_DB_PATH
+    cfg = load_app_config()
+    resolved_db = db_path or Path(cfg.storage.db_path)
     try:
         start_date = date.fromisoformat(start)
         end_date = date.fromisoformat(end)

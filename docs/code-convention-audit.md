@@ -11,7 +11,13 @@ Status legend: `OPEN` = genuine refactor candidate still present in current code
 
 ### 1. Critical: import-time `APP_CFG` still acts as hidden global config
 
-Status: `OPEN`
+Status: `RESOLVED` (2026-07-14) — `APP_CFG` module-level binding removed from
+`src/infrastructure/config/app_config.py`; all `src/**` call sites now resolve
+via `load_app_config()` at command/composition execution time. Verified by
+`tests/architecture/test_app_config_no_import_time_load.py` (no `src/**`
+module imports `APP_CFG`; no CLI module calls `load_app_config()` at import
+time) and `tests/architecture/test_layer_boundaries.py`. Full suite green
+(3828 passed).
 
 Pointer:
 - `src/infrastructure/config/app_config.py:163` loads YAML through `load_app_config()`.

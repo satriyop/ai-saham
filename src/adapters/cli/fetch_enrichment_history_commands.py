@@ -24,7 +24,7 @@ from src.application.services.universe_loader import (
     UniverseNotFoundError,
     resolve_tickers,
 )
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 
@@ -67,7 +67,8 @@ def fetch_enrichment_history(
         FetchEnrichmentHistoryUseCase,
     )
 
-    resolved_db = db_path or Path(APP_CFG.storage.db_path)
+    cfg = load_app_config()
+    resolved_db = db_path or Path(cfg.storage.db_path)
     today = date.today()
 
     try:

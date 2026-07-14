@@ -417,7 +417,7 @@ def test_facade_compatibility():
     assert facade_mod.get_stockbit_session_status is session_mod.get_stockbit_session_status
     assert facade_mod._persist_newer_token is session_mod._persist_newer_token
 
-    assert facade_mod.DEFAULT_PROFILE_DIR is context_mod.DEFAULT_PROFILE_DIR
+    assert facade_mod.default_stockbit_profile_dir is context_mod.default_stockbit_profile_dir
     assert facade_mod.BASE_URL is context_mod.BASE_URL
     assert facade_mod.STREAM_URL is context_mod.STREAM_URL
     assert facade_mod.SCREENER_URL is context_mod.SCREENER_URL

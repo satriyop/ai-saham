@@ -13,14 +13,11 @@ from typing import Annotated, Optional
 import typer
 
 from src.adapters.cli.learn_command_paths import (
-    DEFAULT_DB_PATH,
-    DEFAULT_PRE_OPEN_CONFIG,
-    DEFAULT_SESSION_FILE,
     opening_day_dir,
     parse_learn_date,
 )
 from src.domain.value_objects.idx_market import IDX_TIMEZONE
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import load_app_config
 
 
 def snapshot(
@@ -45,9 +42,10 @@ def snapshot(
         saham learn snapshot --force       # manual dry-run anytime
         saham learn snapshot --date 2026-06-18 --force
     """
+    cfg = load_app_config()
     run_date = parse_learn_date(date_str)
-    resolved_db = db_path or DEFAULT_DB_PATH
-    resolved_config = config_path or DEFAULT_PRE_OPEN_CONFIG
+    resolved_db = db_path or Path(cfg.storage.db_path)
+    resolved_config = config_path or Path(cfg.config_paths.pre_open_screener)
 
     now = datetime.now(IDX_TIMEZONE)
     hour, minute = now.hour, now.minute
@@ -110,7 +108,8 @@ def snapshot(
         typer.echo(f"Import error: {e}", err=True)
         raise typer.Exit(1)
 
-    if not _playwright_available() or not DEFAULT_SESSION_FILE.exists():
+    resolved_session_file = Path(cfg.storage.stockbit_session_file)
+    if not _playwright_available() or not resolved_session_file.exists():
         typer.echo("No Playwright session. Run: saham fetch stockbit login", err=True)
         raise typer.Exit(1)
 
@@ -122,7 +121,7 @@ def snapshot(
     )
     from src.infrastructure.browser.stockbit_api_client import create_stockbit_api_client
     api_client = create_stockbit_api_client(
-        profile_dir=Path(APP_CFG.storage.stockbit_profile_dir), headless=headless
+        profile_dir=Path(cfg.storage.stockbit_profile_dir), headless=headless
     )
     browser = PlaywrightStockbitProvider(api_client=api_client)
 

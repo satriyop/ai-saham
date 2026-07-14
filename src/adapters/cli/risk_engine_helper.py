@@ -8,7 +8,7 @@ from pathlib import Path
 
 from src.application.services.risk_engine import RiskEngine
 from src.infrastructure.composition.risk_engine_factory import create_risk_engine
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.engine_config_loader import load_engine_config
 
 
@@ -18,7 +18,8 @@ def create_configured_risk_engine(
     rules_loader=None,
 ) -> RiskEngine:
     """Load the production risk configuration and build the risk engine."""
-    config = load_engine_config(Path(APP_CFG.config_paths.risk_engine))
+    cfg = load_app_config()
+    config = load_engine_config(Path(cfg.config_paths.risk_engine))
     return create_risk_engine(
         db_path=db_path,
         with_enrichment=with_enrichment,

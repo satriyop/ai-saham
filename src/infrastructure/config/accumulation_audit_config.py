@@ -14,9 +14,12 @@ from src.application.use_case.accumulation_audit_use_case import (
     AccumulationAuditPolicy,
     AuditBucketPolicy,
 )
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import AppConfig, load_app_config
 
-ACCUMULATION_AUDIT_CONFIG_PATH = Path(APP_CFG.config_paths.accumulation_audit)
+
+def default_accumulation_audit_config_path(config: AppConfig | None = None) -> Path:
+    cfg = config or load_app_config()
+    return Path(cfg.config_paths.accumulation_audit)
 
 
 @dataclass(frozen=True)
@@ -31,7 +34,7 @@ def load_accumulation_audit_config(
     config_path: Path | None = None,
 ) -> AccumulationAuditConfig:
     """Load accumulation audit config including setup presets."""
-    path = config_path or ACCUMULATION_AUDIT_CONFIG_PATH
+    path = config_path or default_accumulation_audit_config_path()
     raw = _read_yaml(path)
     root = raw.get("accumulation_audit") or raw
     if not isinstance(root, dict):
@@ -53,7 +56,7 @@ def load_accumulation_audit_policy(
 ) -> AccumulationAuditPolicy:
     """Load accumulation audit policy. Defaults keep historical behavior."""
     defaults = AccumulationAuditPolicy()
-    path = config_path or ACCUMULATION_AUDIT_CONFIG_PATH
+    path = config_path or default_accumulation_audit_config_path()
     raw = _read_yaml(path)
     root = raw.get("accumulation_audit") or raw
     if not isinstance(root, dict):

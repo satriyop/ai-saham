@@ -20,11 +20,8 @@ from src.application.use_case.aggregate_indicators_use_case import (
     AggregateIndicatorsRequest,
     AggregateIndicatorsUseCase,
 )
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
-
-DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
-DEFAULT_DAYS = APP_CFG.market.default_days
 
 
 def snapshot(
@@ -39,16 +36,16 @@ def snapshot(
         int, typer.Option("--rsi", help="RSI period (default: 14)", min=1)
     ] = 14,
     days: Annotated[
-        int,
+        Optional[int],
         typer.Option("--days", "-d", help="Days of history to load", min=1),
-    ] = DEFAULT_DAYS,
+    ] = None,
     db_path: Annotated[
         Optional[Path], typer.Option("--db", help="Path to SQLite database")
     ] = None,
     fmt: Annotated[
-        str,
+        Optional[str],
         typer.Option("--format", help="Output format: table or json"),
-    ] = APP_CFG.analysis.format,
+    ] = None,
 ) -> None:
     """
     Multi-indicator view: SMA, EMA, and RSI aligned by date.
@@ -61,7 +58,10 @@ def snapshot(
         saham indicator snapshot BBRI --sma 50 --ema 50
         saham indicator snapshot TLKM --rsi 7 --days 180
     """
-    resolved_db = db_path or DEFAULT_DB_PATH
+    cfg = load_app_config()
+    resolved_days = days if days is not None else cfg.market.default_days
+    resolved_db = db_path or Path(cfg.storage.db_path)
+    resolved_fmt = fmt or cfg.analysis.format
     ticker_upper = ticker.upper()
     typer.echo(
         f"Loading {ticker_upper} · "
@@ -77,7 +77,7 @@ def snapshot(
             sma_period=sma_period,
             ema_period=ema_period,
             rsi_period=rsi_period,
-            days=days,
+            days=resolved_days,
         ))
 
         if not response.has_values:
@@ -87,13 +87,13 @@ def snapshot(
                 f" need at least {max(sma_period, ema_period, rsi_period)}.",
                 err=True,
             )
-            typer.echo(f"        Fix:   saham fetch market {ticker_upper} --days {days}", err=True)
+            typer.echo(f"        Fix:   saham fetch market {ticker_upper} --days {resolved_days}", err=True)
             raise typer.Exit(1)
 
         if response.coverage_warning:
             typer.echo(f"[warning] {response.coverage_warning}", err=True)
 
-        if fmt == "json":
+        if resolved_fmt == "json":
             out = [
                 {
                     "date": str(s.date),

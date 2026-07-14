@@ -20,11 +20,7 @@ from src.application.use_case.evaluate_swing_setup_use_case import FOREIGN_BOUNC
 from src.application.use_case.log_accumulation_trade_workflow_use_case import (
     LogAccumulationTradeWorkflowRequest,
 )
-from src.infrastructure.config.app_config import APP_CFG
-
-DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
-DEFAULT_ACCUM_JOURNAL_PATH = Path(APP_CFG.storage.accum_journal)
-DEFAULT_TRADE_JOURNAL_PATH = Path(APP_CFG.storage.trade_journal)
+from src.infrastructure.config.app_config import load_app_config
 
 
 def run_accumulation_log_command(
@@ -40,8 +36,9 @@ def run_accumulation_log_command(
     db_path: Optional[Path] = None,
 ) -> None:
     """Public helper to run the log accumulation workflow and format CLI output."""
-    resolved_journal = journal_path or DEFAULT_ACCUM_JOURNAL_PATH
-    resolved_db = db_path or DEFAULT_DB_PATH
+    cfg = load_app_config()
+    resolved_journal = journal_path or Path(cfg.storage.accum_journal)
+    resolved_db = db_path or Path(cfg.storage.db_path)
 
     bundle = create_log_accumulation_trade_workflow(
         db_path=resolved_db,
@@ -222,8 +219,9 @@ def accumulation_review(
         create_accumulation_journal_service,
     )
 
-    journal_path = journal or DEFAULT_ACCUM_JOURNAL_PATH
-    resolved_db = db_path or DEFAULT_DB_PATH
+    cfg = load_app_config()
+    journal_path = journal or Path(cfg.storage.accum_journal)
+    resolved_db = db_path or Path(cfg.storage.db_path)
 
     if not journal_path.exists():
         typer.echo(

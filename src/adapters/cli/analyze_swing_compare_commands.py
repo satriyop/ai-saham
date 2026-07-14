@@ -37,7 +37,7 @@ from src.application.use_case.swing_backtest_use_case import (
 from src.infrastructure.composition.indicator_registry_factory import (
     create_indicator_registry,
 )
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.config_backed_market_context_provider import (
     ConfigBackedMarketContextProvider,
 )
@@ -45,8 +45,6 @@ from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
-
-DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 
 SWING_COMPARE_VARIANTS: dict[str, tuple[str, ...]] = {
     "baseline": (),
@@ -93,9 +91,9 @@ def swing_compare(
         typer.Option("--setup", help="Swing setup to validate"),
     ] = BACKTEST_FOREIGN_BOUNCE_SETUP,
     start: Annotated[
-        str,
+        Optional[str],
         typer.Option("--start", help="Backtest start date, YYYY-MM-DD"),
-    ] = APP_CFG.backtest.start_date,
+    ] = None,
     end: Annotated[
         Optional[str],
         typer.Option("--end", help="Backtest end date, YYYY-MM-DD (default: today)"),
@@ -133,13 +131,13 @@ def swing_compare(
         ),
     ] = None,
     benchmark: Annotated[
-        str,
+        Optional[str],
         typer.Option("--benchmark", help="Benchmark ticker for regime context"),
-    ] = APP_CFG.analysis.benchmark,
+    ] = None,
     output_format: Annotated[
-        str,
+        Optional[str],
         typer.Option("--format", help="Output format: table or json"),
-    ] = APP_CFG.analysis.format,
+    ] = None,
     db_path: Annotated[
         Optional[Path],
         typer.Option("--db", help="SQLite database path"),
@@ -151,6 +149,11 @@ def swing_compare(
     Variants use the same portfolio simulation as `saham trade backtest-swing`;
     only the allowed entry regimes differ.
     """
+    app_cfg = load_app_config()
+    start = start or app_cfg.backtest.start_date
+    benchmark = benchmark or app_cfg.analysis.benchmark
+    output_format = output_format or app_cfg.analysis.format
+
     setup_name = setup.lower()
     if setup_name not in AVAILABLE_SWING_SETUPS:
         typer.echo(
@@ -171,7 +174,7 @@ def swing_compare(
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1)
 
-    resolved_db = db_path or DEFAULT_DB_PATH
+    resolved_db = db_path or Path(app_cfg.storage.db_path)
     try:
         ticker_list = resolve_tickers(
             universe=universe,

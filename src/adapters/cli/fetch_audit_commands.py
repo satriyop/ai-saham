@@ -6,7 +6,7 @@ Layer: Adapter
 """
 
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Optional
 
 import typer
 from rich.console import Console
@@ -20,12 +20,10 @@ from src.application.use_case.data_quality_audit_use_case import (
     DataQualityIssue,
     DataQualityTableSnapshot,
 )
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.persistence.sqlite_data_quality_audit import (
     SQLiteDataQualityAuditReader,
 )
-
-DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 
 
 def data_quality_audit(
@@ -34,15 +32,18 @@ def data_quality_audit(
         typer.Argument(help="Optional ticker scope, e.g. BBCA BBRI"),
     ] = None,
     db_path: Annotated[
-        Path,
+        Optional[Path],
         typer.Option("--db", help="SQLite database path"),
-    ] = DEFAULT_DB_PATH,
+    ] = None,
 ) -> None:
     """
     Audit local data quality without network access or data mutation.
     """
+    cfg = load_app_config()
+    resolved_db = db_path or Path(cfg.storage.db_path)
+
     response = DataQualityAuditUseCase(
-        SQLiteDataQualityAuditReader(db_path)
+        SQLiteDataQualityAuditReader(resolved_db)
     ).execute(DataQualityAuditRequest(tickers=tickers))
 
     console = Console()

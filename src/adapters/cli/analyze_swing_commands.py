@@ -42,10 +42,9 @@ from src.application.use_case.evaluate_swing_setup_use_case import (
 )
 from src.application.use_case.swing_analysis_workflow_use_case import SwingAnalysisDataUnavailable
 from src.domain.value_objects.setup_evaluation import SetupEvaluation
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.user_config import get_swing_default
 
-DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 _W = 70  # display width
 
 FOREIGN_BOUNCE_SETUP_NAME = FOREIGN_BOUNCE_SETUP
@@ -114,9 +113,9 @@ def swing(
         typer.Option("--setup", help="Swing setup to evaluate; omitted means no setup lens"),
     ] = None,
     window: Annotated[
-        int,
+        Optional[int],
         typer.Option("--window", "-w", help="Accumulation analysis window in broker sessions"),
-    ] = APP_CFG.swing.window,
+    ] = None,
     flow_window: Annotated[
         Optional[int],
         typer.Option("--flow-window", help="Broker-flow detail window in broker sessions", min=1),
@@ -126,21 +125,21 @@ def swing(
         typer.Option("--capital", "-c", help="Capital in IDR — enables position sizing block"),
     ] = None,
     risk_pct: Annotated[
-        float,
+        Optional[float],
         typer.Option("--risk-pct", help="% of capital at risk per trade"),
-    ] = APP_CFG.swing.risk_pct,
+    ] = None,
     entry_price: Annotated[
         Optional[float],
         typer.Option("--entry", help="Entry price in IDR (default: latest close)"),
     ] = None,
     atr_mult: Annotated[
-        float,
+        Optional[float],
         typer.Option("--atr-mult", help="ATR multiplier for stop distance"),
-    ] = APP_CFG.swing.atr_mult,
+    ] = None,
     rr: Annotated[
-        float,
+        Optional[float],
         typer.Option("--rr", help="Reward:risk ratio for target"),
-    ] = APP_CFG.swing.rr,
+    ] = None,
     with_sentiment: Annotated[
         bool,
         typer.Option("--with-sentiment", help="Include news sentiment evidence"),
@@ -205,17 +204,17 @@ def swing(
         ),
     ] = False,
     regime_universe: Annotated[
-        str,
+        Optional[str],
         typer.Option("--regime-universe", help="Universe for breadth context"),
-    ] = APP_CFG.analysis.regime_universe,
+    ] = None,
     benchmark: Annotated[
-        str,
+        Optional[str],
         typer.Option("--benchmark", help="Benchmark ticker for regime context"),
-    ] = APP_CFG.analysis.benchmark,
+    ] = None,
     output_format: Annotated[
-        str,
+        Optional[str],
         typer.Option("--format", help="Output format: table or json"),
-    ] = APP_CFG.analysis.format,
+    ] = None,
     db_path: Annotated[
         Optional[Path],
         typer.Option("--db", help="SQLite database path"),
@@ -240,7 +239,15 @@ def swing(
         saham analyze swing BBRI --force-refresh
         saham analyze swing BBRI --capital 10000000 --entry 4825 --rr 2.5
     """
-    resolved_db = db_path or DEFAULT_DB_PATH
+    app_cfg = load_app_config()
+    resolved_db = db_path or Path(app_cfg.storage.db_path)
+    window = window if window is not None else app_cfg.swing.window
+    risk_pct = risk_pct if risk_pct is not None else app_cfg.swing.risk_pct
+    atr_mult = atr_mult if atr_mult is not None else app_cfg.swing.atr_mult
+    rr = rr if rr is not None else app_cfg.swing.rr
+    regime_universe = regime_universe or app_cfg.analysis.regime_universe
+    benchmark = benchmark or app_cfg.analysis.benchmark
+    output_format = output_format or app_cfg.analysis.format
     ticker_upper = ticker.upper()
     today = date.today()
 

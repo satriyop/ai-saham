@@ -37,7 +37,7 @@ from src.domain.value_objects.benchmark_symbol import (
     canonicalize_ticker,
     is_benchmark_ticker,
 )
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.data_providers.stockbit_historical import StockbitHistoricalProvider
 from src.infrastructure.data_providers.yahoo import YahooFinanceProvider
 from src.infrastructure.persistence.sqlite_market_repository import (
@@ -48,11 +48,6 @@ from src.infrastructure.persistence.sqlite_market_repository import (
 # Required by: saham analyze regime, saham analyze swing (market context).
 _BENCHMARK_TICKER = BENCHMARK_TICKER
 _BENCHMARK_ALIASES = BenchmarkTickerAliases(canonical=_BENCHMARK_TICKER, legacy=YAHOO_IHSG_TICKER)
-
-# How many calendar days of gap at the START of a requested range is tolerable
-# before triggering a backfill. 7 covers cases where IDX simply has no data
-# for the first few days of a very old historical range.
-MARKET_START_TOLERANCE_DAYS: int = APP_CFG.fetch.start_tolerance_days
 
 
 def _construct_provider(
@@ -80,6 +75,9 @@ def fetch_candles(
 ) -> str:
     """Fetch candles for one ticker. Returns status string."""
     from src.infrastructure.config.market_context_config import get_global_context_tickers
+
+    cfg = load_app_config()
+    market_start_tolerance_days = cfg.fetch.start_tolerance_days
 
     ticker = canonicalize_ticker(ticker)
     non_idx = get_global_context_tickers()
@@ -114,7 +112,7 @@ def fetch_candles(
                 ticker=ticker,
                 days=days,
                 refresh=refresh,
-                start_tolerance_days=MARKET_START_TOLERANCE_DAYS,
+                start_tolerance_days=market_start_tolerance_days,
                 end_tolerance_days=end_tolerance,
             )
         )

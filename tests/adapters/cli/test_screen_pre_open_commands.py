@@ -7,7 +7,7 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from src.adapters.cli.main import app
-from src.adapters.cli.screen_pre_open_commands import DEFAULT_PRE_OPEN_CONFIG_PATH
+from src.adapters.cli.screen_pre_open_commands import _default_pre_open_config_path
 from src.adapters.cli.screen_pre_open_display import (
     display_results as _display_results,
 )
@@ -47,8 +47,8 @@ def _candidate(ticker: str) -> ScreenerCandidate:
 
 
 def test_default_pre_open_config_lives_under_config():
-    assert DEFAULT_PRE_OPEN_CONFIG_PATH == Path("config/pre_open_screener.yaml")
-    assert DEFAULT_PRE_OPEN_CONFIG_PATH.exists()
+    assert _default_pre_open_config_path() == Path("config/pre_open_screener.yaml")
+    assert _default_pre_open_config_path().exists()
 
 
 def test_pre_open_strategy_alias_is_removed():
@@ -60,7 +60,7 @@ def test_pre_open_strategy_alias_is_removed():
             '[{"ticker":"BBCA","iev":150000}]',
             "--fast",
             "--strategy",
-            str(DEFAULT_PRE_OPEN_CONFIG_PATH),
+            str(_default_pre_open_config_path()),
         ],
     )
 

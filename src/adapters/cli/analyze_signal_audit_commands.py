@@ -18,15 +18,13 @@ from src.application.use_case.audit_signal_use_case import (
 )
 from src.domain.value_objects.signal_audit import SignalAuditReport
 from src.infrastructure.composition.signal_engine_factory import create_signal_engine
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.signal_engine_config_loader import (
     load_signal_engine_config_raw,
 )
 from src.infrastructure.persistence.sqlite_signal_coverage_provider import (
     SqliteSignalCoverageProvider,
 )
-
-DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 
 _FACTOR_LABELS = {
     "bandar_intensity": "bandar_intensity",
@@ -66,7 +64,8 @@ def signal_audit(
         saham analyze signal-audit BBCA --date 2026-07-01
         saham analyze signal-audit BBCA --coverage
     """
-    resolved_db = db_path or DEFAULT_DB_PATH
+    cfg = load_app_config()
+    resolved_db = db_path or Path(cfg.storage.db_path)
 
     if date_str:
         try:

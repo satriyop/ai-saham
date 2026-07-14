@@ -11,11 +11,9 @@ import typer
 
 from src.adapters.cli.analyze_risk_workflow_factory import create_run_risk_compare_workflow
 from src.application.use_case.run_risk_compare_use_case import RunRiskCompareRequest
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import load_app_config
 
 __all__ = ["compare"]
-
-DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 
 
 def compare(
@@ -35,7 +33,8 @@ def compare(
     Examples:
         saham analyze compare BBCA BBRI BMRI
     """
-    resolved_db = db_path or DEFAULT_DB_PATH
+    cfg = load_app_config()
+    resolved_db = db_path or Path(cfg.storage.db_path)
 
     try:
         workflow = create_run_risk_compare_workflow(resolved_db)

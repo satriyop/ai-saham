@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 import json
-from datetime import date, timedelta
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
 from typer.testing import CliRunner
 
-from src.adapters.cli.main import app
 import src.adapters.cli.screen_pre_open_commands as screen_pre_open_commands
+from src.adapters.cli.main import app
 from src.domain.entities.broker_flow import BrokerSummary, BrokerTransaction, BrokerType
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
@@ -159,7 +159,9 @@ def test_pre_open_and_confirm_sidecar_contracts(temp_workspace, monkeypatch):
     session_path = temp_workspace / "pre-open.json"
     confirm_path = temp_workspace / "confirm.json"
     default_sidecar = temp_workspace / "default-pre-open.json"
-    monkeypatch.setattr(screen_pre_open_commands, "DEFAULT_SIDECAR_PATH", default_sidecar)
+    monkeypatch.setattr(
+        screen_pre_open_commands, "_default_sidecar_path", lambda: default_sidecar
+    )
 
     pre_open = runner.invoke(
         app,

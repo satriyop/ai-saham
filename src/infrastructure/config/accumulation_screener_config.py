@@ -12,7 +12,7 @@ from typing import Any
 
 import yaml
 
-from src.infrastructure.config.app_config import APP_CFG
+from src.application.dto.accumulation_screen import AccumulationDerivedFeaturePolicy
 from src.application.use_case.score_foreign_flow_use_case import (
     BciEvidencePolicy,
     BollingerSqueezePolicy,
@@ -22,9 +22,12 @@ from src.application.use_case.score_foreign_flow_use_case import (
     RsiEvidencePolicy,
     StreakEvidencePolicy,
 )
-from src.application.dto.accumulation_screen import AccumulationDerivedFeaturePolicy
+from src.infrastructure.config.app_config import AppConfig, load_app_config
 
-ACCUMULATION_SCREENER_CONFIG_PATH = Path(APP_CFG.config_paths.accumulation_screener)
+
+def default_accumulation_screener_config_path(config: AppConfig | None = None) -> Path:
+    cfg = config or load_app_config()
+    return Path(cfg.config_paths.accumulation_screener)
 
 
 @dataclass(frozen=True)
@@ -62,11 +65,12 @@ class AccumulationScreenerConfig:
 
 
 def load_accumulation_screener_config(
-    config_path: Path = ACCUMULATION_SCREENER_CONFIG_PATH,
+    config_path: Path | None = None,
 ) -> AccumulationScreenerConfig:
     defaults = AccumulationScreenerConfig()
+    path = config_path or default_accumulation_screener_config_path()
     try:
-        with open(config_path, encoding="utf-8") as fh:
+        with open(path, encoding="utf-8") as fh:
             raw = yaml.safe_load(fh) or {}
     except Exception:
         return defaults

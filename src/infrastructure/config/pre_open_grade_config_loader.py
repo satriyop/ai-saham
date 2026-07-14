@@ -8,13 +8,13 @@ from pathlib import Path
 
 import yaml
 
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import load_app_config
 
 
 def load_pre_open_grade_config_snapshot() -> dict:
     """Load pre-open screener analysis and risk config from YAML as a snapshot."""
     try:
-        path = Path(APP_CFG.config_paths.pre_open_screener)
+        path = Path(load_app_config().config_paths.pre_open_screener)
         if not path.exists():
             return {}
         with open(path, encoding="utf-8") as f:

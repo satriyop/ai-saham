@@ -30,10 +30,10 @@ from src.application.config.market_context_config import (
     UsdIdrFactorConfig,
     VixFactorConfig,
 )
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import AppConfig, load_app_config
 
 __all__ = [
-    "MARKET_CONTEXT_CONFIG_PATH",
+    "default_market_context_config_path",
     "VixFactorConfig",
     "EidoFactorConfig",
     "UsdIdrFactorConfig",
@@ -51,7 +51,9 @@ __all__ = [
     "get_global_context_tickers",
 ]
 
-MARKET_CONTEXT_CONFIG_PATH = Path(APP_CFG.config_paths.market_context_engine)
+def default_market_context_config_path(config: AppConfig | None = None) -> Path:
+    cfg = config or load_app_config()
+    return Path(cfg.config_paths.market_context_engine)
 
 
 def load_market_context_config(
@@ -59,7 +61,7 @@ def load_market_context_config(
 ) -> MarketContextConfig:
     """Load MCE config from YAML. Returns defaults on any error."""
     if config_path is None:
-        config_path = MARKET_CONTEXT_CONFIG_PATH
+        config_path = default_market_context_config_path()
     defaults = MarketContextConfig()
     try:
         with open(config_path, encoding="utf-8") as fh:
@@ -250,10 +252,10 @@ def load_market_context_config(
         return defaults
 
 
-def get_global_context_tickers() -> set[str]:
+def get_global_context_tickers(config_path: Path | None = None) -> set[str]:
     """Return all global context tickers configured in market_context_engine.yaml."""
     try:
-        cfg = load_market_context_config()
+        cfg = load_market_context_config(config_path)
         tickers = set()
         if cfg.vix.enabled:
             tickers.add(cfg.vix.ticker.upper().strip())

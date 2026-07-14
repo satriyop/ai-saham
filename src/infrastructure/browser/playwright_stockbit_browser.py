@@ -19,9 +19,6 @@ from src.infrastructure.browser.stockbit_browser_context import (
     BASE_URL as BASE_URL,
 )
 from src.infrastructure.browser.stockbit_browser_context import (
-    DEFAULT_PROFILE_DIR as DEFAULT_PROFILE_DIR,
-)
-from src.infrastructure.browser.stockbit_browser_context import (
     LOGIN_URL as LOGIN_URL,
 )
 from src.infrastructure.browser.stockbit_browser_context import (
@@ -41,6 +38,9 @@ from src.infrastructure.browser.stockbit_browser_context import (
 )
 from src.infrastructure.browser.stockbit_browser_context import (
     _require_playwright as _require_playwright,
+)
+from src.infrastructure.browser.stockbit_browser_context import (
+    default_stockbit_profile_dir as default_stockbit_profile_dir,
 )
 
 # Re-export from stockbit_session_actions

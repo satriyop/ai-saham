@@ -24,11 +24,9 @@ from src.application.use_case.explain_risk_use_case import ExplainRiskRequest
 from src.application.use_case.run_risk_analysis_workflow_use_case import (
     RunRiskAnalysisWorkflowRequest,
 )
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import load_app_config
 
 __all__ = ["risk"]
-
-DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 
 
 def _no_data_error(ticker: str) -> None:
@@ -46,8 +44,8 @@ def risk(
     rsi_period: Annotated[int, typer.Option("--rsi", help="RSI period", min=1)] = 14,
     db_path: Annotated[Optional[Path], typer.Option("--db", help="Path to SQLite database")] = None,
     explain: Annotated[
-        bool, typer.Option("--explain", "-e", help="Generate AI explanation")
-    ] = APP_CFG.ai.enabled,
+        Optional[bool], typer.Option("--explain", "-e", help="Generate AI explanation")
+    ] = None,
     provider: Annotated[
         Optional[str],
         typer.Option("--provider", help="AI provider (deepseek/claude/openai/gemini/ollama/mock)"),
@@ -70,8 +68,8 @@ def risk(
         int, typer.Option("--trend", help="Show risk trend over last N days (0=off)", min=0)
     ] = 0,
     fmt: Annotated[
-        str, typer.Option("--format", help="Output format: table or json")
-    ] = APP_CFG.analysis.format,
+        Optional[str], typer.Option("--format", help="Output format: table or json")
+    ] = None,
 ) -> None:
     """
     Assess risk for an IDX stock using deterministic risk gates.
@@ -86,7 +84,10 @@ def risk(
         saham analyze risk BBCA --explain
         saham analyze risk BBCA --with-sentiment
     """
-    resolved_db = db_path or DEFAULT_DB_PATH
+    cfg = load_app_config()
+    resolved_db = db_path or Path(cfg.storage.db_path)
+    explain = cfg.ai.enabled if explain is None else explain
+    fmt = fmt or cfg.analysis.format
 
     if fmt != "json":
         typer.echo(f"Assessing risk for {ticker.upper()}...")

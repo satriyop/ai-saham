@@ -74,7 +74,7 @@ def test_get_global_context_tickers_returns_defaults_without_fallback_exception(
     assert tickers == {"^VIX", "EIDO", "IDR=X"}
 
 
-def test_get_global_context_tickers_includes_commodities_when_enabled(monkeypatch, tmp_path):
+def test_get_global_context_tickers_includes_commodities_when_enabled(tmp_path):
     from src.infrastructure.config.market_context_config import get_global_context_tickers
     path = tmp_path / "market_context_engine.yaml"
     path.write_text(
@@ -91,11 +91,7 @@ market_context_engine:
 """,
         encoding="utf-8",
     )
-    monkeypatch.setattr(
-        "src.infrastructure.config.market_context_config.MARKET_CONTEXT_CONFIG_PATH",
-        path
-    )
-    tickers = get_global_context_tickers()
+    tickers = get_global_context_tickers(path)
     assert "^VIX" in tickers
     assert "EIDO" in tickers
     assert "IDR=X" in tickers

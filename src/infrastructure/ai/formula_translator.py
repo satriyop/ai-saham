@@ -38,19 +38,22 @@ from src.infrastructure.ai.formula_translator_prompt import (
     build_system_prompt,
     build_user_prompt,
 )
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import load_app_config
 
 logger = logging.getLogger("ai_saham.ai.translator")
 
 # Supported providers
 SUPPORTED_PROVIDERS = ("claude", "openai", "gemini", "ollama", "mock")
-DEFAULT_PROVIDER: str = APP_CFG.ai.provider
+
+
+def _default_provider() -> str:
+    return load_app_config().ai.provider
+
 
 # Re-exported for backward compatibility with existing imports:
 # from src.infrastructure.ai.formula_translator import canonicalize_formula
 __all__ = [
     "SUPPORTED_PROVIDERS",
-    "DEFAULT_PROVIDER",
     "FormulaTranslatorAdapter",
     "canonicalize_formula",
 ]
@@ -91,7 +94,7 @@ class FormulaTranslatorAdapter:
             ValueError: If provider is not supported.
         """
         if provider is None:
-            provider = os.getenv("AI_PROVIDER", DEFAULT_PROVIDER).lower()
+            provider = (os.getenv("AI_PROVIDER") or _default_provider()).lower()
         else:
             provider = provider.lower()
 

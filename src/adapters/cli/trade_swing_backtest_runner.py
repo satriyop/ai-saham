@@ -34,7 +34,7 @@ from src.infrastructure.config.accumulation_screener_config import (
     AccumulationScreenerConfig,
     load_accumulation_screener_config,
 )
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.swing_backtest_config import (
     SwingBacktestConfig,
 )
@@ -44,8 +44,6 @@ from src.infrastructure.config.swing_backtest_config import (
 from src.infrastructure.config.swing_config import SwingConfig
 from src.infrastructure.config.swing_config import load_swing_config as _load_swing_config
 from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
-
-DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 
 
 @dataclass(frozen=True)
@@ -117,7 +115,7 @@ def _run_swing_backtest(
         typer.echo(f"Error: invalid date format: {e}", err=True)
         raise typer.Exit(1)
 
-    resolved_db = db_path or DEFAULT_DB_PATH
+    resolved_db = db_path or Path(load_app_config().storage.db_path)
     deps = dependencies or create_stock_analysis_workflow_dependencies(resolved_db)
     try:
         ticker_list = resolve_tickers(

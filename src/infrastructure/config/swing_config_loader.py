@@ -7,7 +7,7 @@ Layer: Infrastructure
 from pathlib import Path
 
 from src.application.dto.swing_config import SwingConfig
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import AppConfig, load_app_config
 from src.infrastructure.config.swing_broker_quality_config_parser import (
     parse_broker_quality_fields,
 )
@@ -30,14 +30,10 @@ from src.infrastructure.config.swing_targets_config_parser import (
     parse_setup_targets,
 )
 
-ACCUMULATION_SCREENER_CONFIG_PATH = Path(APP_CFG.config_paths.accumulation_screener)
-SWING_SETUPS_CONFIG_PATH = Path(APP_CFG.config_paths.swing_setups)
-SWING_TARGETS_CONFIG_PATH = Path(APP_CFG.config_paths.swing_targets)
-SWING_RISK_POLICY_CONFIG_PATH = Path(APP_CFG.config_paths.swing_risk_policy)
-
 
 def load_swing_config(
     config_path: Path | None = None,
+    config: AppConfig | None = None,
 ) -> SwingConfig:
     """Load swing workflow calibration params from YAML. Returns defaults on any error."""
     defaults = SwingConfig()
@@ -45,11 +41,12 @@ def load_swing_config(
         if config_path:
             data = read_single_swing_config(config_path)
         else:
+            app_cfg = config or load_app_config()
             data = read_split_swing_config(
-                accumulation_screener_path=ACCUMULATION_SCREENER_CONFIG_PATH,
-                swing_setups_path=SWING_SETUPS_CONFIG_PATH,
-                swing_targets_path=SWING_TARGETS_CONFIG_PATH,
-                swing_risk_policy_path=SWING_RISK_POLICY_CONFIG_PATH,
+                accumulation_screener_path=Path(app_cfg.config_paths.accumulation_screener),
+                swing_setups_path=Path(app_cfg.config_paths.swing_setups),
+                swing_targets_path=Path(app_cfg.config_paths.swing_targets),
+                swing_risk_policy_path=Path(app_cfg.config_paths.swing_risk_policy),
             )
     except Exception:
         return defaults

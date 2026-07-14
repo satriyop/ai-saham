@@ -10,10 +10,10 @@ import logging
 from pathlib import Path
 
 from src.infrastructure.browser.stockbit_browser_context import (
-    DEFAULT_PROFILE_DIR,
     ORDERBOOK_PAGE_URL,
     _persistent_context,
     _require_playwright,
+    default_stockbit_profile_dir,
 )
 from src.infrastructure.config.stockbit_config import (
     StockbitConfig,
@@ -106,7 +106,7 @@ def _extract_jwt(page) -> str | None:
 
 
 def extract_exodus_token(
-    profile_dir: Path = DEFAULT_PROFILE_DIR,
+    profile_dir: Path | None = None,
     headless: bool = True,
     timeout: int | None = None,
     *,
@@ -119,6 +119,7 @@ def extract_exodus_token(
     Used by StockbitApiClient as the token_refresher callable. Returns None if
     the profile is missing or the session has expired (needs re-login).
     """
+    profile_dir = profile_dir or default_stockbit_profile_dir()
     cfg = stockbit_config or load_stockbit_config()
     nav_timeout = timeout or cfg.nav_timeout_ms
     settle_ms = cfg.spa_settle_ms

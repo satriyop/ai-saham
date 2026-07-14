@@ -14,12 +14,10 @@ from src.application.use_case.replay_signal_observation_use_case import (
     ReplaySignalObservationRequest,
     ReplaySignalObservationUseCase,
 )
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.persistence.sqlite_candidate_observations_repository import (
     SQLiteCandidateObservationsRepository,
 )
-
-DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 
 
 def signal_replay(
@@ -28,7 +26,8 @@ def signal_replay(
     db_path: Annotated[Optional[Path], typer.Option("--db")] = None,
 ) -> None:
     """Replay the latest stored signal observation for ticker/date."""
-    resolved_db = db_path or DEFAULT_DB_PATH
+    cfg = load_app_config()
+    resolved_db = db_path or Path(cfg.storage.db_path)
     ticker_u = ticker.upper()
     try:
         day = date.fromisoformat(snapshot_date)

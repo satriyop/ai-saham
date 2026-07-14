@@ -16,9 +16,12 @@ from pathlib import Path
 
 import yaml
 
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import AppConfig, load_app_config
 
-STOCKBIT_CONFIG_PATH = Path(APP_CFG.config_paths.stockbit)
+
+def default_stockbit_config_path(config: AppConfig | None = None) -> Path:
+    cfg = config or load_app_config()
+    return Path(cfg.config_paths.stockbit)
 
 
 @dataclass(frozen=True)
@@ -138,12 +141,12 @@ class StockbitConfig:
 
 
 def load_stockbit_config(
-    config_path: Path = STOCKBIT_CONFIG_PATH,
+    config_path: Path | None = None,
 ) -> StockbitConfig:
     """Load Stockbit API config from YAML. Returns hardcoded defaults on any error."""
     defaults = StockbitConfig()
     try:
-        with open(config_path, encoding="utf-8") as fh:
+        with open(config_path or default_stockbit_config_path(), encoding="utf-8") as fh:
             data = yaml.safe_load(fh) or {}
     except Exception:
         return defaults

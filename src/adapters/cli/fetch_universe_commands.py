@@ -29,7 +29,7 @@ from src.adapters.cli.fetch_universe_factories import (
     create_update_use_case,
 )
 from src.application.services.universe_loader import UNIVERSE_CONFIG_PATH, load_universe_meta
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
 from src.infrastructure.config.yaml_universe_config_store import YamlUniverseConfigStore
 
@@ -109,9 +109,10 @@ def universe_update(
         saham fetch universe update --universe lq45,idx80
         saham fetch universe update --discover          # list available without updating
     """
+    cfg = load_app_config()
     resolved_config = config_path or Path("config/universes.yaml")
 
-    _STOCKBIT_PROFILE_DIR = Path(APP_CFG.storage.stockbit_profile_dir)
+    _STOCKBIT_PROFILE_DIR = Path(cfg.storage.stockbit_profile_dir)
     if not _STOCKBIT_PROFILE_DIR.exists():
         typer.echo("")
         typer.echo("No Stockbit session found. Run `saham fetch stockbit login` first.")

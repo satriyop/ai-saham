@@ -21,7 +21,7 @@ from src.adapters.cli.view_broker_commands import (
 from src.adapters.cli.view_broker_distribution_commands import broker_distribution_view
 from src.adapters.cli.view_broker_status_commands import broker_status
 from src.adapters.cli.view_market_context_commands import market_context_show
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import load_app_config
 
 
 class _ViewGroup(TyperGroup):
@@ -82,7 +82,7 @@ def view_ticker(
 ) -> None:
     """Show all cached data for a ticker."""
     from src.adapters.cli.view_ticker_display import show_ticker_view
-    show_ticker_view(ticker.upper(), db_path=Path(APP_CFG.storage.db_path))
+    show_ticker_view(ticker.upper(), db_path=Path(load_app_config().storage.db_path))
 
 
 @view_app.command("universe")
@@ -108,9 +108,9 @@ def view_universe(
         ),
     ] = None,
     db_path: Annotated[
-        Path,
+        Optional[Path],
         typer.Option("--db", hidden=True),
-    ] = Path(APP_CFG.storage.db_path),
+    ] = None,
 ) -> None:
     """Show a market overview for all tickers in a named universe.
 
@@ -137,6 +137,7 @@ def view_universe(
     from src.application.use_case.view_universe_summary_use_case import build_universe_view
     from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
 
+    db_path = db_path or Path(load_app_config().storage.db_path)
     loader = YamlUniverseConfigLoader()
 
     _valid_sorts = {"flow", "change", "volume", "ticker"}

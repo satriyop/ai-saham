@@ -9,14 +9,12 @@ from typing import Annotated, Optional
 
 import typer
 
-from src.adapters.cli.screen_accum_commands import (
-    DEFAULT_DB_PATH,
-    accumulation_run,
-)
+from src.adapters.cli.screen_accum_commands import accumulation_run
 from src.adapters.cli.screen_pre_open_commands import pre_open
 from src.application.use_case.compare_screen_snapshots_use_case import (
     ScreenCompareResult,
 )
+from src.infrastructure.config.app_config import load_app_config
 
 screen_app = typer.Typer(
     name="screen",
@@ -49,7 +47,8 @@ def screen_watchlist(
     """
     from src.infrastructure.persistence.sqlite_watchlist_repository import SQLiteWatchlistRepository
 
-    resolved_db = db_path or DEFAULT_DB_PATH
+    cfg = load_app_config()
+    resolved_db = db_path or Path(cfg.storage.db_path)
     repo = SQLiteWatchlistRepository(resolved_db)
 
     if name is None:
@@ -127,7 +126,8 @@ def screen_compare(
     from src.application.use_case.compare_screen_snapshots_use_case import compare_screen_snapshots
     from src.infrastructure.persistence.sqlite_watchlist_repository import SQLiteWatchlistRepository
 
-    resolved_db = db_path or DEFAULT_DB_PATH
+    cfg = load_app_config()
+    resolved_db = db_path or Path(cfg.storage.db_path)
     repo = SQLiteWatchlistRepository(resolved_db)
     snapshot = repo.get_latest_snapshot(name)
 
@@ -153,12 +153,11 @@ def screen_compare(
     from src.infrastructure.config.accumulation_screener_config import (
         load_accumulation_screener_config,
     )
-    from src.infrastructure.config.app_config import APP_CFG
     from src.infrastructure.config.swing_config import load_swing_config
 
     swing_config = load_swing_config()
     screener_config = load_accumulation_screener_config(
-        Path(APP_CFG.config_paths.accumulation_screener)
+        Path(cfg.config_paths.accumulation_screener)
     )
 
     fresh_candidates = run_fresh_accumulation_screen_for_compare(

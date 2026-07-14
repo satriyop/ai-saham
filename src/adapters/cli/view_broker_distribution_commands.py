@@ -7,7 +7,7 @@ Layer: Adapter
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Optional
 
 import typer
 
@@ -17,17 +17,15 @@ from src.adapters.cli.view_broker_distribution_display import (
 from src.adapters.cli.view_broker_provider_factory import (
     create_broker_distribution_provider,
 )
-from src.infrastructure.config.app_config import APP_CFG
-
-DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
+from src.infrastructure.config.app_config import load_app_config
 
 
 def broker_distribution_view(
     ticker: Annotated[str, typer.Argument(help="Ticker symbol (e.g. BBCA)")],
     db_path: Annotated[
-        Path,
+        Optional[Path],
         typer.Option("--db", help="SQLite database path"),
-    ] = DEFAULT_DB_PATH,
+    ] = None,
 ) -> None:
     """
     Show cross-broker counterparty distribution for a ticker.
@@ -39,6 +37,7 @@ def broker_distribution_view(
         saham view broker distribution BBCA
         saham view broker distribution GOTO --db /path/to/data.db
     """
+    db_path = db_path or Path(load_app_config().storage.db_path)
     provider = create_broker_distribution_provider(db_path)
     snapshot = provider.get_distribution(ticker.upper())
 

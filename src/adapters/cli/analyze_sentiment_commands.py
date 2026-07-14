@@ -24,13 +24,11 @@ from src.application.use_case.fetch_sentiment_use_case import (
     FetchSentimentUseCase,
 )
 from src.domain.value_objects.sentiment import Sentiment, SentimentSnapshot
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.group_mapping_config_loader import create_group_mapping_service
 from src.infrastructure.persistence.sentiment_repository import SQLiteSentimentRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 from src.infrastructure.sentiment import SentimentFactory
-
-DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 
 
 def sentiment(
@@ -72,7 +70,8 @@ def sentiment(
     """
     Fetch and analyze news sentiment for an IDX stock.
     """
-    resolved_db = db_path or DEFAULT_DB_PATH
+    cfg = load_app_config()
+    resolved_db = db_path or Path(cfg.storage.db_path)
     typer.echo(f"Fetching news sentiment for {ticker.upper()}...")
 
     try:
@@ -138,7 +137,8 @@ def sentiment_audit(
     Finds logged sentiment predictions and checks their outcomes
     after 1, 3, and 5 trading days.
     """
-    resolved_db = db_path or DEFAULT_DB_PATH
+    cfg = load_app_config()
+    resolved_db = db_path or Path(cfg.storage.db_path)
     typer.echo("Auditing past sentiment predictions...")
 
     try:

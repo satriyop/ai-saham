@@ -177,6 +177,3 @@ def load_app_config() -> AppConfig:
         fetch=_build(cfg.get("fetch", {}), FetchConfig),
         ai=_build(cfg.get("ai", {}), AiConfig),
     )
-
-
-APP_CFG: AppConfig = load_app_config()

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import date
+from pathlib import Path
 from types import SimpleNamespace
 
 from typer.testing import CliRunner
@@ -11,6 +12,7 @@ from src.adapters.cli.main import app
 from src.application.use_case.backfill_signal_observations_use_case import (
     BackfillSignalObservationsResponse,
 )
+from src.infrastructure.config.app_config import load_app_config
 
 runner = CliRunner()
 
@@ -126,7 +128,7 @@ def test_signal_backfill_observations_wires_evaluate_market_context(monkeypatch)
     call = market_context_calls[0]
     assert call["universe"] == "lq45"
     assert call["as_of_date"] == date(2026, 6, 1)
-    assert call["db_path"] == analyze_signal_commands.DEFAULT_DB_PATH
+    assert call["db_path"] == Path(load_app_config().storage.db_path)
 
 
 def test_signal_backfill_observations_rejects_invalid_date(monkeypatch):

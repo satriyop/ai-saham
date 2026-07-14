@@ -15,7 +15,6 @@ from src.adapters.cli.trade_swing_tuning_patch_writer import (
     write_swing_tuning_patch_export,
 )
 from src.adapters.cli.trade_swing_tuning_workflow_factory import (
-    DEFAULT_SWING_TUNING_REVIEW_JOURNAL_PATH,
     create_run_swing_tuning_review_workflow,
 )
 from src.application.use_case.run_swing_tuning_review_use_case import (
@@ -24,7 +23,7 @@ from src.application.use_case.run_swing_tuning_review_use_case import (
 from src.application.use_case.swing_backtest_use_case import (
     FOREIGN_BOUNCE_SETUP as BACKTEST_FOREIGN_BOUNCE_SETUP,
 )
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import load_app_config
 
 
 def swing_tune(
@@ -45,9 +44,9 @@ def swing_tune(
         typer.Option("--setup", help="Swing setup to validate"),
     ] = BACKTEST_FOREIGN_BOUNCE_SETUP,
     start: Annotated[
-        str,
+        Optional[str],
         typer.Option("--start", help="Backtest start date, YYYY-MM-DD"),
-    ] = APP_CFG.backtest.start_date,
+    ] = None,
     end: Annotated[
         Optional[str],
         typer.Option("--end", help="Backtest end date, YYYY-MM-DD (default: today)"),
@@ -96,13 +95,13 @@ def swing_tune(
         ),
     ] = None,
     benchmark: Annotated[
-        str,
+        Optional[str],
         typer.Option("--benchmark", help="Benchmark ticker for regime context"),
-    ] = APP_CFG.analysis.benchmark,
+    ] = None,
     output_format: Annotated[
-        str,
+        Optional[str],
         typer.Option("--format", help="Output format: table or json"),
-    ] = APP_CFG.analysis.format,
+    ] = None,
     db_path: Annotated[
         Optional[Path],
         typer.Option("--db", help="SQLite database path"),
@@ -143,6 +142,11 @@ def swing_tune(
     deterministic workflow, summarizes attribution, and emits guarded config
     review artifacts. It never calls AI and never writes YAML.
     """
+    cfg = load_app_config()
+    start = start or cfg.backtest.start_date
+    benchmark = benchmark or cfg.analysis.benchmark
+    output_format = output_format or cfg.analysis.format
+
     workflow = create_run_swing_tuning_review_workflow(journal_path=journal)
     request = RunSwingTuningReviewRequest(
         tickers=tickers,
@@ -174,7 +178,7 @@ def swing_tune(
 
     payload = result.payload
     if save and result.persistence is not None:
-        journal_path = journal or DEFAULT_SWING_TUNING_REVIEW_JOURNAL_PATH
+        journal_path = journal or Path(cfg.storage.swing_tuning_review_journal)
         result.persistence["path"] = str(journal_path)
         payload["persistence"] = result.persistence
 

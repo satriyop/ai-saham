@@ -17,7 +17,7 @@ from typing import Annotated, Optional
 import typer
 
 from src.infrastructure.composition.indicator_registry_factory import create_indicator_registry
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
 chart_app = typer.Typer(
@@ -27,7 +27,9 @@ chart_app = typer.Typer(
     context_settings={"help_option_names": ["-h", "--help"]},
 )
 
-DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
+
+def _default_db_path() -> Path:
+    return Path(load_app_config().storage.db_path)
 
 
 def _require_plotext():
@@ -83,7 +85,7 @@ def chart_price(
         saham analyze chart price BBCA --sma 50 --days 365
     """
     plt = _require_plotext()
-    resolved_db = db_path or DEFAULT_DB_PATH
+    resolved_db = db_path or _default_db_path()
     candles = _load_candles(ticker, days, resolved_db)
 
     dates = [str(c.date) for c in candles]
@@ -140,7 +142,7 @@ def chart_rsi(
         saham analyze chart rsi BBCA --period 9 --days 120
     """
     plt = _require_plotext()
-    resolved_db = db_path or DEFAULT_DB_PATH
+    resolved_db = db_path or _default_db_path()
     candles = _load_candles(ticker, days, resolved_db)
 
     registry = create_indicator_registry()
@@ -191,7 +193,7 @@ def chart_volume(
         saham analyze chart volume BBCA --days 30
     """
     plt = _require_plotext()
-    resolved_db = db_path or DEFAULT_DB_PATH
+    resolved_db = db_path or _default_db_path()
     candles = _load_candles(ticker, days, resolved_db)
 
     dates = [str(c.date) for c in candles]

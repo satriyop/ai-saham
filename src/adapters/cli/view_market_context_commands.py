@@ -24,7 +24,7 @@ from src.application.services.universe_loader import (
     UniverseNotFoundError,
     resolve_tickers,
 )
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.market_context_config import load_market_context_config
 from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
@@ -32,8 +32,6 @@ from src.infrastructure.persistence.sqlite_market_context_repository import (
     SQLiteMarketContextRepository,
 )
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
-
-DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 
 
 def market_context_show(
@@ -54,9 +52,9 @@ def market_context_show(
         typer.Option("--verbose", "-v", help="Show score bar and full rationale per factor"),
     ] = False,
     output_format: Annotated[
-        str,
+        Optional[str],
         typer.Option("--format", help="Output format: table or json"),
-    ] = APP_CFG.analysis.format,
+    ] = None,
     db_path: Annotated[
         Optional[Path],
         typer.Option("--db", help="SQLite database path"),
@@ -67,7 +65,9 @@ def market_context_show(
 
     Reads cached candles — run `saham fetch market` first to ensure fresh data.
     """
-    resolved_db = db_path or DEFAULT_DB_PATH
+    app_cfg = load_app_config()
+    resolved_db = db_path or Path(app_cfg.storage.db_path)
+    output_format = output_format or app_cfg.analysis.format
 
     try:
         context_date = date.fromisoformat(as_of) if as_of else date.today()
@@ -75,7 +75,7 @@ def market_context_show(
         typer.echo(f"Error: invalid date format: {e}", err=True)
         raise typer.Exit(1)
 
-    resolved_universe = universe or APP_CFG.analysis.regime_universe
+    resolved_universe = universe or app_cfg.analysis.regime_universe
     try:
         ticker_list = resolve_tickers(
             universe=resolved_universe,

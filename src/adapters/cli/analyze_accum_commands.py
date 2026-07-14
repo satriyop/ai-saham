@@ -23,9 +23,7 @@ from src.application.use_case.run_accumulation_audit_workflow_use_case import (
     NoTickersError,
     RunAccumulationAuditWorkflowRequest,
 )
-from src.infrastructure.config.app_config import APP_CFG
-
-DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
+from src.infrastructure.config.app_config import load_app_config
 
 
 def _display_audit_summary(response: AccumulationAuditResponse, top_groups: int) -> None:
@@ -137,9 +135,9 @@ def accumulation_audit(
         typer.Option("--output", "-o", help="Write raw audit records to CSV"),
     ] = None,
     output_format: Annotated[
-        str,
+        Optional[str],
         typer.Option("--format", help="Output format: table or json"),
-    ] = APP_CFG.analysis.format,
+    ] = None,
     top_groups: Annotated[
         int,
         typer.Option("--top-groups", help="Number of grouped summary rows to print", min=1),
@@ -155,7 +153,9 @@ def accumulation_audit(
     This command is deterministic and offline. It uses cached local candles and
     broker summaries only; run `saham fetch market --universe <name>` first.
     """
-    resolved_db = db_path or DEFAULT_DB_PATH
+    cfg = load_app_config()
+    resolved_db = db_path or Path(cfg.storage.db_path)
+    output_format = output_format or cfg.analysis.format
 
     workflow = create_run_accumulation_audit_workflow(db_path=resolved_db)
     request = RunAccumulationAuditWorkflowRequest(

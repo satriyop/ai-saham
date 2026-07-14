@@ -47,7 +47,7 @@ from src.infrastructure.browser.stockbit_broker_requests import (
     build_foreign_top_stocks_url,
     build_historical_summary_url,
 )
-from src.infrastructure.browser.stockbit_browser_context import DEFAULT_PROFILE_DIR
+from src.infrastructure.browser.stockbit_browser_context import default_stockbit_profile_dir
 from src.infrastructure.config.stockbit_config import StockbitConfig, load_stockbit_config
 
 logger = logging.getLogger(__name__)
@@ -71,12 +71,12 @@ class StockbitBrokerProvider(BrokerDataProvider):
     def __init__(
         self,
         api_client: StockbitApiClient,
-        profile_dir: Path = DEFAULT_PROFILE_DIR,
+        profile_dir: Path | None = None,
         stockbit_config: StockbitConfig | None = None,
     ) -> None:
         self._api_client = api_client
         self._stockbit_config = stockbit_config or load_stockbit_config()
-        self._profile_dir = profile_dir
+        self._profile_dir = profile_dir or default_stockbit_profile_dir()
 
     @property
     def provider_name(self) -> str:

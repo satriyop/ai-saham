@@ -7,8 +7,6 @@ Layer: Adapter
 
 from src.adapters.cli.trade_intraday_backtest_commands import intraday_backtest
 from src.adapters.cli.trade_intraday_confirm_commands import (
-    DEFAULT_CONFIRMATION_JOURNAL_PATH,
-    DEFAULT_CONFIRMATION_PATH,
     _confirm_log_impl,
     confirm_log,
     confirm_open,
@@ -17,8 +15,6 @@ from src.adapters.cli.trade_intraday_confirm_commands import (
 )
 
 __all__ = [
-    "DEFAULT_CONFIRMATION_JOURNAL_PATH",
-    "DEFAULT_CONFIRMATION_PATH",
     "_confirm_log_impl",
     "confirm_open",
     "confirm_log",

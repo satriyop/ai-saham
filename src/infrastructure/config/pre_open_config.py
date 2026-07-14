@@ -13,9 +13,12 @@ from typing import Any
 import yaml
 
 from src.application.services.pre_open_screen_config import PreOpenScreenConfig
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import AppConfig, load_app_config
 
-PRE_OPEN_CONFIG_PATH = Path(APP_CFG.config_paths.pre_open_screener)
+
+def default_pre_open_config_path(config: AppConfig | None = None) -> Path:
+    cfg = config or load_app_config()
+    return Path(cfg.config_paths.pre_open_screener)
 
 
 def load_pre_open_screen_config(
@@ -23,7 +26,7 @@ def load_pre_open_screen_config(
     overrides: dict[str, Any] | None = None,
 ) -> PreOpenScreenConfig:
     """Load pre-open screener config and apply CLI-level overrides."""
-    path = config_path or PRE_OPEN_CONFIG_PATH
+    path = config_path or default_pre_open_config_path()
     if path.exists():
         with open(path, encoding="utf-8") as fh:
             data = yaml.safe_load(fh) or {}

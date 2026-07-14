@@ -23,14 +23,12 @@ from src.adapters.cli.view_broker_display import (
 from src.application.use_case.fetch_broker_data_use_case import (
     GetBrokerDataUseCase,
 )
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.csv import MappingLoader
 from src.infrastructure.persistence.sqlite_broker_repository import (
     SQLiteBrokerRepository,
 )
 
-DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
-DEFAULT_PROVIDER = APP_CFG.broker.provider
 PROVIDERS = ("idx", "stockbit")
 
 
@@ -44,13 +42,13 @@ def broker_flow(
         typer.Option("--days", "-d", help="Number of days to show"),
     ] = 10,
     db_path: Annotated[
-        Path,
+        Optional[Path],
         typer.Option("--db", help="Database path"),
-    ] = DEFAULT_DB_PATH,
+    ] = None,
     fmt: Annotated[
-        str,
+        Optional[str],
         typer.Option("--format", help="Output format: table or json"),
-    ] = APP_CFG.analysis.format,
+    ] = None,
 ) -> None:
     """
     Show foreign flow summary for a stock.
@@ -61,6 +59,9 @@ def broker_flow(
         saham view broker flow BBCA --days 20
         saham view broker flow BBCA --format json
     """
+    cfg = load_app_config()
+    db_path = db_path or Path(cfg.storage.db_path)
+    fmt = fmt or cfg.analysis.format
     repository = SQLiteBrokerRepository(db_path)
     use_case = GetBrokerDataUseCase(repository)
 
@@ -97,9 +98,9 @@ def broker_top(
         typer.Option("--date", "-d", help="Date (YYYY-MM-DD), default: latest"),
     ] = None,
     db_path: Annotated[
-        Path,
+        Optional[Path],
         typer.Option("--db", help="Database path"),
-    ] = DEFAULT_DB_PATH,
+    ] = None,
 ) -> None:
     """
     Show top brokers for a stock on a specific date.
@@ -108,6 +109,7 @@ def broker_top(
         saham view broker top BBCA
         saham view broker top BBCA --date 2024-01-15
     """
+    db_path = db_path or Path(load_app_config().storage.db_path)
     repository = SQLiteBrokerRepository(db_path)
 
     if target_date:
@@ -142,13 +144,13 @@ def broker_history_view(
         typer.Option("--source", help="Cached source to read: stockbit, idx, or auto"),
     ] = "auto",
     db_path: Annotated[
-        Path,
+        Optional[Path],
         typer.Option("--db", help="SQLite database path"),
-    ] = DEFAULT_DB_PATH,
+    ] = None,
     fmt: Annotated[
-        str,
+        Optional[str],
         typer.Option("--format", help="Output format: table or json"),
-    ] = APP_CFG.analysis.format,
+    ] = None,
 ) -> None:
     """
     Show cached daily foreign broker flow history for a stock.
@@ -160,6 +162,9 @@ def broker_history_view(
         saham view broker history BBCA --days 30
         saham view broker history BBCA --source stockbit --format json
     """
+    cfg = load_app_config()
+    db_path = db_path or Path(cfg.storage.db_path)
+    fmt = fmt or cfg.analysis.format
     selected_source = None if source == "auto" else source
     if source not in {"auto", "stockbit", "idx"}:
         typer.echo(typer.style("Unknown source. Use: auto, stockbit, or idx", fg=typer.colors.RED))
@@ -211,13 +216,13 @@ def broker_top_foreign_view(
         typer.Option("--limit", help="Max stocks to show", min=1, max=50),
     ] = 20,
     db_path: Annotated[
-        Path,
+        Optional[Path],
         typer.Option("--db", help="SQLite database path"),
-    ] = DEFAULT_DB_PATH,
+    ] = None,
     fmt: Annotated[
-        str,
+        Optional[str],
         typer.Option("--format", help="Output format: table or json"),
-    ] = APP_CFG.analysis.format,
+    ] = None,
 ) -> None:
     """
     Show cached foreign-broker top stock snapshots.
@@ -229,6 +234,9 @@ def broker_top_foreign_view(
         saham view broker top-foreign --days 7
         saham view broker top-foreign --date 2024-01-15 --limit 10
     """
+    cfg = load_app_config()
+    db_path = db_path or Path(cfg.storage.db_path)
+    fmt = fmt or cfg.analysis.format
     query_date = date.fromisoformat(snapshot_date) if snapshot_date else date.today()
     repo = SQLiteBrokerRepository(db_path)
     snapshots = repo.get_foreign_flow_snapshots(query_date, period_days=days)

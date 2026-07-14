@@ -26,7 +26,7 @@ from src.application.services.swing_tuning_loop_status import (
 from src.application.services.swing_tuning_review_journal import (
     SwingTuningReviewJournal,
 )
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.swing_tuning_document_loader import (
     swing_tuning_document_loader,
 )
@@ -53,12 +53,14 @@ def tuning_status(
         typer.Option("--config-root", help="Repository/config root for YAML resolution"),
     ] = Path("."),
     output_format: Annotated[
-        str,
+        Optional[str],
         typer.Option("--format", help="Output format: table or json"),
-    ] = APP_CFG.analysis.format,
+    ] = None,
 ) -> None:
     """Show read-only status for the swing tuning loop."""
-    journal_path = journal or Path(APP_CFG.storage.swing_tuning_review_journal)
+    cfg = load_app_config()
+    output_format = output_format or cfg.analysis.format
+    journal_path = journal or Path(cfg.storage.swing_tuning_review_journal)
     report = SwingTuningLoopStatusService(
         SwingTuningReviewJsonlWriter(journal_path),
         document_loader=swing_tuning_document_loader(config_root),
@@ -91,9 +93,9 @@ def review_tuning_swing(
         typer.Option("--limit", help="Number of recent saved runs to show", min=1),
     ] = 10,
     output_format: Annotated[
-        str,
+        Optional[str],
         typer.Option("--format", help="Output format: table or json"),
-    ] = APP_CFG.analysis.format,
+    ] = None,
     compare_latest: Annotated[
         bool,
         typer.Option(
@@ -114,7 +116,9 @@ def review_tuning_swing(
     ] = Path("journals/swing_tuning_apply_log.jsonl"),
 ) -> None:
     """Review saved swing tuning review runs."""
-    journal_path = journal or Path(APP_CFG.storage.swing_tuning_review_journal)
+    cfg = load_app_config()
+    output_format = output_format or cfg.analysis.format
+    journal_path = journal or Path(cfg.storage.swing_tuning_review_journal)
     journal_service = SwingTuningReviewJournal(
         SwingTuningReviewJsonlWriter(journal_path)
     )

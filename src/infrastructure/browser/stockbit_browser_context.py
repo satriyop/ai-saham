@@ -9,12 +9,15 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import AppConfig, load_app_config
 
 logger = logging.getLogger(__name__)
 
+
 # ── Defaults ───────────────────────────────────────────────────────────────
-DEFAULT_PROFILE_DIR = Path(APP_CFG.storage.stockbit_profile_dir)
+def default_stockbit_profile_dir(config: AppConfig | None = None) -> Path:
+    cfg = config or load_app_config()
+    return Path(cfg.storage.stockbit_profile_dir)
 
 # ── Stockbit URLs (hardcoded — not from StockbitConfig) ────────────────────
 BASE_URL = "https://stockbit.com"

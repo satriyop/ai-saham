@@ -13,7 +13,7 @@ from src.application.services.engine_bootstrap.risk_config_resolvers import (
 )
 from src.application.use_case.assess_risk_use_case import AssessRiskUseCase
 from src.domain.ports.market_data_repository import MarketDataRepository
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.engine_config_loader import load_engine_config
 
 
@@ -23,7 +23,8 @@ def create_accumulation_assess_risk_use_case(
     risk_config_path: Path | None = None,
 ) -> AssessRiskUseCase:
     """Build the AssessRiskUseCase used by accumulation screen workflows."""
-    config_path = risk_config_path or Path(APP_CFG.config_paths.risk_engine)
+    cfg = load_app_config()
+    config_path = risk_config_path or Path(cfg.config_paths.risk_engine)
     structural_gates, execution_gates = resolve_risk_gates(
         load_engine_config(config_path)
     )

@@ -10,16 +10,11 @@ from typing import Annotated, Optional
 import typer
 
 from src.adapters.cli.trade_accum_commands import (
-    DEFAULT_ACCUM_JOURNAL_PATH,
-    DEFAULT_DB_PATH,
     FOREIGN_BOUNCE_SETUP,
     run_accumulation_log_command,
 )
-from src.adapters.cli.trade_intraday_commands import (
-    DEFAULT_CONFIRMATION_JOURNAL_PATH,
-    DEFAULT_CONFIRMATION_PATH,
-    _confirm_log_impl,
-)
+from src.adapters.cli.trade_intraday_commands import _confirm_log_impl
+from src.infrastructure.config.app_config import load_app_config
 
 
 def trade_log(
@@ -90,6 +85,7 @@ def trade_log(
         saham trade log --type intraday
         saham trade log --type intraday --confirmation journals/.last-confirmation.json
     """
+    cfg = load_app_config()
     if trade_type == "swing":
         if ticker is None:
             typer.echo("--ticker is required for --type swing", err=True)
@@ -103,13 +99,13 @@ def trade_log(
             with_regime=with_regime,
             regime_universe=regime_universe,
             benchmark=benchmark,
-            journal_path=journal or DEFAULT_ACCUM_JOURNAL_PATH,
-            db_path=db_path or DEFAULT_DB_PATH,
+            journal_path=journal or Path(cfg.storage.accum_journal),
+            db_path=db_path or Path(cfg.storage.db_path),
         )
     elif trade_type == "intraday":
         _confirm_log_impl(
-            confirmation_path=confirmation or DEFAULT_CONFIRMATION_PATH,
-            journal_path=journal or DEFAULT_CONFIRMATION_JOURNAL_PATH,
+            confirmation_path=confirmation or Path(cfg.storage.intraday_confirmation),
+            journal_path=journal or Path(cfg.storage.intraday_confirmation_journal),
         )
     else:
         typer.echo(

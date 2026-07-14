@@ -32,14 +32,12 @@ from src.infrastructure.composition.indicator_registry_factory import (
 from src.infrastructure.config.accumulation_screener_config import (
     load_accumulation_screener_config,
 )
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.market_context_config import load_market_context_config
 from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
-
-DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 
 
 def _parse_date(value: str | None) -> date | None:
@@ -54,14 +52,14 @@ def _parse_date(value: str | None) -> date | None:
 
 def today(
     universe: Annotated[
-        str, typer.Option("--universe", "-u", help="Universe to brief"),
-    ] = APP_CFG.analysis.universe,
+        Optional[str], typer.Option("--universe", "-u", help="Universe to brief"),
+    ] = None,
     top: Annotated[int, typer.Option("--top", help="Number of candidates per section", min=1)] = 3,
     date_str: Annotated[Optional[str], typer.Option("--date", help="Date YYYY-MM-DD")] = None,
     db_path: Annotated[
-        Path,
+        Optional[Path],
         typer.Option("--db", help="Path to SQLite database"),
-    ] = DEFAULT_DB_PATH,
+    ] = None,
 ) -> None:
     """
     Show a read-only daily briefing from local cached data.
@@ -69,6 +67,9 @@ def today(
     This command does not fetch, tune, or write data. Use `saham fetch ...` and
     `saham screen ...` when you need to update inputs.
     """
+    cfg = load_app_config()
+    universe = universe or cfg.analysis.universe
+    db_path = db_path or Path(cfg.storage.db_path)
     console = Console()
     as_of = _parse_date(date_str)
     market_repo = SQLiteMarketRepository(db_path)
@@ -76,7 +77,7 @@ def today(
     accumulation_config = load_accumulation_screener_config()
     try:
         regime_tickers = resolve_tickers(
-            universe=APP_CFG.analysis.regime_universe,
+            universe=cfg.analysis.regime_universe,
             explicit=[],
             db_path=db_path,
             loader=YamlUniverseConfigLoader(),

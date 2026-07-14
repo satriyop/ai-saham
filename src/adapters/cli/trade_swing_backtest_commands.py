@@ -23,7 +23,7 @@ from src.application.use_case.swing_backtest_use_case import (
 from src.application.use_case.swing_backtest_use_case import (
     SwingBacktestResponse,
 )
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.swing_tuning_document_loader import (
     swing_tuning_document_loader,
 )
@@ -84,9 +84,9 @@ def swing_backtest(
         typer.Option("--setup", help="Swing setup to validate"),
     ] = BACKTEST_FOREIGN_BOUNCE_SETUP,
     start: Annotated[
-        str,
+        Optional[str],
         typer.Option("--start", help="Backtest start date, YYYY-MM-DD"),
-    ] = APP_CFG.backtest.start_date,
+    ] = None,
     end: Annotated[
         Optional[str],
         typer.Option("--end", help="Backtest end date, YYYY-MM-DD (default: today)"),
@@ -135,9 +135,9 @@ def swing_backtest(
         ),
     ] = None,
     benchmark: Annotated[
-        str,
+        Optional[str],
         typer.Option("--benchmark", help="Benchmark ticker for regime context"),
-    ] = APP_CFG.analysis.benchmark,
+    ] = None,
     show_trades: Annotated[
         int,
         typer.Option("--show-trades", help="Number of recent trades to print", min=0),
@@ -174,9 +174,9 @@ def swing_backtest(
         ),
     ] = False,
     output_format: Annotated[
-        str,
+        Optional[str],
         typer.Option("--format", help="Output format: table or json"),
-    ] = APP_CFG.analysis.format,
+    ] = None,
     db_path: Annotated[
         Optional[Path],
         typer.Option("--db", help="SQLite database path"),
@@ -188,6 +188,11 @@ def swing_backtest(
     Core verdict: SignalEngine + RiskEngine -> TradeSetup.
     Market context, strategy, setup, sentiment, and detailed flow panels are opt-in evidence.
     """
+    cfg = load_app_config()
+    start = start or cfg.backtest.start_date
+    benchmark = benchmark or cfg.analysis.benchmark
+    output_format = output_format or cfg.analysis.format
+
     from src.adapters.cli.trade_swing_backtest_runner import load_swing_backtest_runner_config
     runner_config = load_swing_backtest_runner_config()
 

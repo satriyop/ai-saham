@@ -27,7 +27,7 @@ from src.application.use_case.refresh_market_data_use_case import (
     RefreshMarketDataRequest,
     RefreshMarketDataUseCase,
 )
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.market_context_config import (
     get_global_context_tickers,
     load_market_context_config,
@@ -38,13 +38,15 @@ from src.infrastructure.persistence.sqlite_market_repository import (
 )
 
 DEFAULT_GLOBAL_CONTEXT_DAYS: int = 180
-MARKET_START_TOLERANCE_DAYS: int = APP_CFG.fetch.start_tolerance_days
 
 
 def refresh_market_context_inputs(
     db_path: Path, days: int = DEFAULT_GLOBAL_CONTEXT_DAYS
 ) -> RefreshMarketContextInputsResponse:
     """Refresh all enabled MCE global context tickers for `saham fetch market`."""
+    cfg_app = load_app_config()
+    market_start_tolerance_days = cfg_app.fetch.start_tolerance_days
+
     cfg = load_market_context_config()
     ticker_inputs: list[GlobalContextTickerInput] = []
 
@@ -88,7 +90,7 @@ def refresh_market_context_inputs(
                 ticker=ticker,
                 days=refresh_days,
                 refresh=False,
-                start_tolerance_days=MARKET_START_TOLERANCE_DAYS,
+                start_tolerance_days=market_start_tolerance_days,
                 end_tolerance_days=end_tolerance_days,
             )
         )

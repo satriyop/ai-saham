@@ -24,7 +24,7 @@ from src.application.services.universe_loader import (
     UniverseNotFoundError,
     resolve_tickers,
 )
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.market_context_config import load_market_context_config
 from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
@@ -35,8 +35,6 @@ from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarket
 from src.infrastructure.persistence.sqlite_regime_observation_repository import (
     SQLiteRegimeObservationRepository,
 )
-
-DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 
 
 def regime(
@@ -49,12 +47,12 @@ def regime(
         typer.Option("--universe", "-u", help="Universe name or 'cached'"),
     ] = None,
     benchmark: Annotated[
-        str,
+        Optional[str],
         typer.Option(
             "--benchmark",
             help="Benchmark ticker (overrides config idx_trend.benchmark_ticker)",
         ),
-    ] = APP_CFG.analysis.benchmark,
+    ] = None,
     as_of: Annotated[
         Optional[str],
         typer.Option("--as-of", help="Context date, YYYY-MM-DD (default: today)"),
@@ -64,9 +62,9 @@ def regime(
         typer.Option("--verbose", "-v", help="Show score bar and full rationale per factor"),
     ] = False,
     output_format: Annotated[
-        str,
+        Optional[str],
         typer.Option("--format", help="Output format: table or json"),
-    ] = APP_CFG.analysis.format,
+    ] = None,
     db_path: Annotated[
         Optional[Path],
         typer.Option("--db", help="SQLite database path"),
@@ -80,7 +78,10 @@ def regime(
 
     For a focused context view: saham view market-context [--verbose]
     """
-    resolved_db = db_path or DEFAULT_DB_PATH
+    app_cfg = load_app_config()
+    resolved_db = db_path or Path(app_cfg.storage.db_path)
+    benchmark = benchmark or app_cfg.analysis.benchmark
+    output_format = output_format or app_cfg.analysis.format
 
     try:
         context_date = date.fromisoformat(as_of) if as_of else date.today()
@@ -89,7 +90,7 @@ def regime(
         raise typer.Exit(1)
 
     # Breadth universe: --universe flag overrides default; explicit tickers are additive
-    resolved_universe = universe or APP_CFG.analysis.regime_universe
+    resolved_universe = universe or app_cfg.analysis.regime_universe
     try:
         ticker_list = resolve_tickers(
             universe=resolved_universe,

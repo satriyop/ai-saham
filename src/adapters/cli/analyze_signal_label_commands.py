@@ -22,7 +22,7 @@ from src.application.use_case.summarize_signal_forward_labels_use_case import (
     SummarizeSignalForwardLabelsUseCase,
 )
 from src.domain.value_objects.signal_forward_label import SignalLabelHorizon
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.persistence.sqlite_candidate_observations_repository import (
     SQLiteCandidateObservationsRepository,
 )
@@ -30,8 +30,6 @@ from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarket
 from src.infrastructure.persistence.sqlite_signal_forward_labels_repository import (
     SQLiteSignalForwardLabelsRepository,
 )
-
-DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 
 
 def signal_labels(
@@ -73,7 +71,8 @@ def signal_labels(
     db_path: Annotated[Optional[Path], typer.Option("--db")] = None,
 ) -> None:
     """Generate and summarize persisted signal forward labels."""
-    resolved_db = db_path or DEFAULT_DB_PATH
+    cfg = load_app_config()
+    resolved_db = db_path or Path(cfg.storage.db_path)
     day: date | None = None
     if snapshot_date is not None:
         try:

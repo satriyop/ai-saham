@@ -27,13 +27,11 @@ from src.infrastructure.browser.stockbit_browser_provider import ManualBrowserDa
 from src.infrastructure.browser.stockbit_market_time import get_current_market_status
 from src.infrastructure.browser.stockbit_ticker_notation import StockbitTickerNotationProvider
 from src.infrastructure.composition.indicator_registry_factory import create_indicator_registry
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.market_context_factory import evaluate_market_context
 from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
-
-DEFAULT_SESSION_FILE = Path(APP_CFG.storage.stockbit_session_file)
 
 
 def playwright_available() -> bool:
@@ -46,7 +44,8 @@ def playwright_available() -> bool:
 
 
 def stockbit_session_exists() -> bool:
-    return DEFAULT_SESSION_FILE.exists()
+    cfg = load_app_config()
+    return Path(cfg.storage.stockbit_session_file).exists()
 
 
 def resolve_pre_open_market_status() -> MarketStatus:
@@ -80,8 +79,9 @@ def resolve_pre_open_browser_plan(
         return PreOpenBrowserPlan(provider=provider, autonomous=False, session_missing=False)
 
     if playwright_available() and stockbit_session_exists():
+        cfg = load_app_config()
         api_client = create_stockbit_api_client(
-            profile_dir=Path(APP_CFG.storage.stockbit_profile_dir),
+            profile_dir=Path(cfg.storage.stockbit_profile_dir),
             headless=headless,
         )
         provider = PlaywrightStockbitProvider(api_client=api_client)

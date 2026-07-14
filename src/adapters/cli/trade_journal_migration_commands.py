@@ -9,9 +9,7 @@ from typing import Annotated, Optional
 
 import typer
 
-from src.adapters.cli.trade_accum_commands import DEFAULT_ACCUM_JOURNAL_PATH
-from src.adapters.cli.trade_intraday_commands import DEFAULT_CONFIRMATION_JOURNAL_PATH
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import load_app_config
 
 
 def trade_migrate_journal(
@@ -51,9 +49,10 @@ def trade_migrate_journal(
         intraday_entry_to_record,
     )
 
-    output_path = trades_journal or Path(APP_CFG.storage.trade_journal)
-    accum_path = accum_csv or DEFAULT_ACCUM_JOURNAL_PATH
-    intraday_path = intraday_csv or DEFAULT_CONFIRMATION_JOURNAL_PATH
+    cfg = load_app_config()
+    output_path = trades_journal or Path(cfg.storage.trade_journal)
+    accum_path = accum_csv or Path(cfg.storage.accum_journal)
+    intraday_path = intraday_csv or Path(cfg.storage.intraday_confirmation_journal)
 
     swing_entries = (
         AccumulationJournalCsvWriter(accum_path).read_all()

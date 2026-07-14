@@ -15,12 +15,10 @@ Layer: Infrastructure (composition root)
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from src.application.services.stockbit_session import StockbitSession
 from src.infrastructure.browser.stockbit_api_client import create_stockbit_api_client
 from src.infrastructure.browser.stockbit_broker_provider import StockbitBrokerProvider
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.browser.stockbit_browser_context import default_stockbit_profile_dir
 
 
 def get_stockbit_session() -> StockbitSession | None:
@@ -31,7 +29,7 @@ def get_stockbit_session() -> StockbitSession | None:
     - any unexpected exception during construction or auth check
     """
     try:
-        if not Path(APP_CFG.storage.stockbit_profile_dir).exists():
+        if not default_stockbit_profile_dir().exists():
             return None
         api_client = create_stockbit_api_client()
         authenticated = StockbitBrokerProvider(api_client).is_authenticated()

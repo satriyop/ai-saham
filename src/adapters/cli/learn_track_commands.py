@@ -14,11 +14,10 @@ from typing import Annotated, Optional
 import typer
 
 from src.adapters.cli.learn_command_paths import (
-    DEFAULT_SESSION_FILE,
     opening_day_dir,
     parse_learn_date,
 )
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import load_app_config
 
 
 def track(
@@ -52,6 +51,7 @@ def track(
         saham learn track --force BBCA BBRI BMRI       # manual dry-run
         saham learn track --broker-confirm              # with broker attribution
     """
+    cfg = load_app_config()
     run_date = parse_learn_date(date_str)
 
     if tickers:
@@ -83,7 +83,8 @@ def track(
         typer.echo(f"Import error: {e}", err=True)
         raise typer.Exit(1)
 
-    if not DEFAULT_SESSION_FILE.exists():
+    resolved_session_file = Path(cfg.storage.stockbit_session_file)
+    if not resolved_session_file.exists():
         typer.echo("No Stockbit session. Run: saham fetch stockbit login", err=True)
         raise typer.Exit(1)
 
@@ -96,7 +97,7 @@ def track(
     _api_client = (
         _learn_session.api_client if _learn_session else None
     ) or create_stockbit_api_client(
-        profile_dir=Path(APP_CFG.storage.stockbit_profile_dir), headless=headless
+        profile_dir=Path(cfg.storage.stockbit_profile_dir), headless=headless
     )
 
     browser = PlaywrightStockbitProvider(api_client=_api_client)
@@ -115,7 +116,7 @@ def track(
                 running_trade_provider = StockbitRunningTradeProvider(
                     api_client=_learn_session.api_client
                 )
-                with open(APP_CFG.config_paths.stockbit) as f:
+                with open(cfg.config_paths.stockbit) as f:
                     stockbit_cfg = yaml.safe_load(f) or {}
                 institutional_codes = frozenset(
                     stockbit_cfg.get("broker_codes", {}).get("institutional_proxy", [])

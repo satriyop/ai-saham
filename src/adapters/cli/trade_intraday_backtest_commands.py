@@ -17,13 +17,11 @@ from src.application.use_case.intraday_backtest_use_case import (
     IntradayBacktestUseCase,
 )
 from src.infrastructure.composition.indicator_registry_factory import create_indicator_registry
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.pre_open_config import load_pre_open_screen_config
 from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
-
-DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 
 
 def intraday_backtest(
@@ -36,21 +34,21 @@ def intraday_backtest(
         typer.Option("--universe", "-u", help="Universe name or 'cached'"),
     ] = None,
     start: Annotated[
-        str,
+        Optional[str],
         typer.Option("--start", help="Simulation start date YYYY-MM-DD"),
-    ] = APP_CFG.backtest.start_date,
+    ] = None,
     end: Annotated[
         Optional[str],
         typer.Option("--end", help="Simulation end date YYYY-MM-DD"),
     ] = None,
     capital: Annotated[
-        int,
+        Optional[int],
         typer.Option("--capital", "-c", help="Initial capital in IDR", min=1),
-    ] = APP_CFG.trading.capital,
+    ] = None,
     risk_pct: Annotated[
-        float,
+        Optional[float],
         typer.Option("--risk-pct", help="% of capital at risk per trade", min=0.01),
-    ] = APP_CFG.swing.risk_pct,
+    ] = None,
     max_daily_positions: Annotated[
         int,
         typer.Option("--max-daily-positions", help="Max simultaneous trades per day", min=1),
@@ -64,9 +62,9 @@ def intraday_backtest(
         ),
     ] = None,
     cost_bps: Annotated[
-        float,
+        Optional[float],
         typer.Option("--cost-bps", help="Transaction cost in basis points per side", min=0),
-    ] = APP_CFG.backtest.cost_bps,
+    ] = None,
     include_wait: Annotated[
         bool,
         typer.Option("--include-wait/--no-include-wait", help="Treat WAIT decisions as ENTER"),
@@ -95,9 +93,9 @@ def intraday_backtest(
         typer.Option("--show-trades", help="Number of recent trades to display", min=0),
     ] = 20,
     output_format: Annotated[
-        str,
+        Optional[str],
         typer.Option("--format", help="Output format: table or json"),
-    ] = APP_CFG.analysis.format,
+    ] = None,
     db_path: Annotated[
         Optional[Path],
         typer.Option("--db", help="Path to SQLite database"),
@@ -110,6 +108,13 @@ def intraday_backtest(
     proxy, same-day high/low/close for exits, and applies saved IEV snapshots
     only on dates where they exist.
     """
+    cfg = load_app_config()
+    start = start or cfg.backtest.start_date
+    capital = capital if capital is not None else cfg.trading.capital
+    risk_pct = risk_pct if risk_pct is not None else cfg.swing.risk_pct
+    cost_bps = cost_bps if cost_bps is not None else cfg.backtest.cost_bps
+    output_format = output_format or cfg.analysis.format
+
     try:
         start_date = date.fromisoformat(start)
         end_date = date.fromisoformat(end) if end else date.today()
@@ -117,7 +122,7 @@ def intraday_backtest(
         typer.echo(f"Error: invalid date format — {exc}", err=True)
         raise typer.Exit(1)
 
-    resolved_db = db_path or DEFAULT_DB_PATH
+    resolved_db = db_path or Path(cfg.storage.db_path)
     try:
         ticker_list = resolve_tickers(
             universe=universe,

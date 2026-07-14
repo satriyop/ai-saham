@@ -7,6 +7,7 @@ from src.application.services.swing_tuning_review_journal import SwingTuningRevi
 from src.application.use_case.run_swing_tuning_review_use_case import (
     RunSwingTuningReviewUseCase,
 )
+from src.infrastructure.config.app_config import load_app_config
 
 
 class _FakeBacktestConfig:
@@ -94,7 +95,7 @@ def test_factory_always_injects_review_journal_with_default_path(monkeypatch):
     workflow = factory.create_run_swing_tuning_review_workflow(journal_path=None)
 
     assert isinstance(workflow._review_journal, SwingTuningReviewJournal)
-    assert captured_paths == [factory.DEFAULT_SWING_TUNING_REVIEW_JOURNAL_PATH]
+    assert captured_paths == [Path(load_app_config().storage.swing_tuning_review_journal)]
 
 
 def test_factory_injects_review_journal_with_given_path(monkeypatch):

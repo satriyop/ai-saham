@@ -13,7 +13,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from src.infrastructure.browser.stockbit_browser_context import (
-    DEFAULT_PROFILE_DIR,
     LOGIN_URL,
     ORDER_BOOK_URL,
     ORDERBOOK_PAGE_URL,
@@ -21,6 +20,7 @@ from src.infrastructure.browser.stockbit_browser_context import (
     STREAM_URL,
     _persistent_context,
     _require_playwright,
+    default_stockbit_profile_dir,
 )
 from src.infrastructure.browser.stockbit_token_extractor import (
     _intercept_token,
@@ -68,7 +68,7 @@ def _url_matches(url: str, patterns: list[str]) -> bool:
 
 
 def save_stockbit_session(
-    profile_dir: Path = DEFAULT_PROFILE_DIR,
+    profile_dir: Path | None = None,
     timeout: int = 300,
     *,
     stockbit_config: StockbitConfig | None = None,
@@ -84,6 +84,7 @@ def save_stockbit_session(
         profile_dir: Persistent browser profile directory
         timeout: Seconds to wait for login completion
     """
+    profile_dir = profile_dir or default_stockbit_profile_dir()
     cfg = stockbit_config or load_stockbit_config()
     sync_playwright = _require_playwright()
 
@@ -203,7 +204,7 @@ def _persist_newer_token(
 
 
 def browse_stockbit_session(
-    profile_dir: Path = DEFAULT_PROFILE_DIR,
+    profile_dir: Path | None = None,
     url: str = STREAM_URL,
     *,
     stockbit_config: StockbitConfig | None = None,
@@ -223,6 +224,7 @@ def browse_stockbit_session(
         profile_dir: Persistent browser profile directory
         url: Stockbit page to open (default: stream/home)
     """
+    profile_dir = profile_dir or default_stockbit_profile_dir()
     cfg = stockbit_config or load_stockbit_config()
 
     if not (profile_dir.exists() and any(profile_dir.iterdir())):
@@ -252,7 +254,7 @@ def browse_stockbit_session(
 
 
 def spy_stockbit_session(
-    profile_dir: Path = DEFAULT_PROFILE_DIR,
+    profile_dir: Path | None = None,
     target: str = "screener",
     ticker: str = "BBCA",
     output_file: Path = Path("journals/stockbit-spy.json"),
@@ -276,6 +278,7 @@ def spy_stockbit_session(
     Returns:
         Summary dict with total_responses, unique_urls, output_file path
     """
+    profile_dir = profile_dir or default_stockbit_profile_dir()
     cfg = stockbit_config or load_stockbit_config()
 
     if not (profile_dir.exists() and any(profile_dir.iterdir())):
@@ -353,7 +356,7 @@ def spy_stockbit_session(
     }
 
 
-def get_stockbit_session_status(profile_dir: Path = DEFAULT_PROFILE_DIR) -> StockbitSessionStatus:
+def get_stockbit_session_status(profile_dir: Path | None = None) -> StockbitSessionStatus:
     """
     Compose a read-only Stockbit authentication-health snapshot.
 
@@ -366,6 +369,7 @@ def get_stockbit_session_status(profile_dir: Path = DEFAULT_PROFILE_DIR) -> Stoc
     """
     from src.application.services.stockbit_session import StockbitSessionStatus
 
+    profile_dir = profile_dir or default_stockbit_profile_dir()
     profile_exists = profile_dir.exists() and any(profile_dir.iterdir())
 
     browser_login_age_hours: float | None = None

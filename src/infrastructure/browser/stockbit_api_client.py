@@ -148,14 +148,14 @@ def create_stockbit_api_client(
     Call once per CLI invocation and share the instance across all providers.
     """
     from src.infrastructure.browser.stockbit_browser_context import (
-        DEFAULT_PROFILE_DIR,
+        default_stockbit_profile_dir,
     )
     from src.infrastructure.browser.stockbit_token_extractor import (
         extract_exodus_token,
     )
     from src.infrastructure.config.stockbit_config import load_stockbit_config
 
-    resolved_dir = profile_dir or DEFAULT_PROFILE_DIR
+    resolved_dir = profile_dir or default_stockbit_profile_dir()
     cfg = load_stockbit_config()
     resolved_timeout = timeout or cfg.nav_timeout_ms
     token_store = StockbitTokenStore(resolved_dir / "token.json")

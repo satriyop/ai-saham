@@ -44,16 +44,7 @@ from src.domain.ports.csv_broker_parser import (
     CsvBrokerParserError,
     ErrorStrategy,
 )
-from src.infrastructure.config.app_config import APP_CFG
-
-DEFAULT_PROVIDER = APP_CFG.broker.provider
-
-_DEFAULT_PROFILE_DIR = Path(APP_CFG.storage.stockbit_profile_dir)
-
-
-# Default configuration
-DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
-DEFAULT_DAYS = APP_CFG.broker.default_days
+from src.infrastructure.config.app_config import load_app_config
 
 
 def broker_fetch(
@@ -62,9 +53,9 @@ def broker_fetch(
         typer.Argument(help="Stock ticker symbol (e.g., BBCA)"),
     ],
     days: Annotated[
-        int,
+        Optional[int],
         typer.Option("--days", "-d", help="Number of days to fetch"),
-    ] = DEFAULT_DAYS,
+    ] = None,
     start: Annotated[
         Optional[str],
         typer.Option("--start", "-s", help="Start date (YYYY-MM-DD)"),
@@ -78,16 +69,16 @@ def broker_fetch(
         typer.Option("--refresh", "-r", help="Force refresh from provider"),
     ] = False,
     provider_name: Annotated[
-        str,
+        Optional[str],
         typer.Option(
             "--provider", "-P",
             help=f"Data provider ({', '.join(PROVIDERS)})",
         ),
-    ] = DEFAULT_PROVIDER,
+    ] = None,
     db_path: Annotated[
-        Path,
+        Optional[Path],
         typer.Option("--db", help="Database path"),
-    ] = DEFAULT_DB_PATH,
+    ] = None,
 ) -> None:
     """
     Fetch broker summary data for a stock.
@@ -106,10 +97,15 @@ def broker_fetch(
         saham fetch broker BBCA --refresh             # Force refresh
         saham fetch broker BBCA -s 2024-01-01 -e 2024-06-30
     """
+    cfg = load_app_config()
+    resolved_days = days if days is not None else cfg.broker.default_days
+    resolved_provider = provider_name or cfg.broker.provider
+    resolved_db = db_path or Path(cfg.storage.db_path)
+
     # Validate provider
-    if provider_name not in PROVIDERS:
+    if resolved_provider not in PROVIDERS:
         typer.echo(
-            typer.style(f"Unknown provider: {provider_name}", fg=typer.colors.RED)
+            typer.style(f"Unknown provider: {resolved_provider}", fg=typer.colors.RED)
         )
         typer.echo(f"Available providers: {', '.join(PROVIDERS)}")
         raise typer.Exit(1)
@@ -118,7 +114,7 @@ def broker_fetch(
     if start:
         start_date = date.fromisoformat(start)
     else:
-        start_date = date.today() - timedelta(days=days)
+        start_date = date.today() - timedelta(days=resolved_days)
 
     if end:
         end_date = date.fromisoformat(end)
@@ -131,18 +127,18 @@ def broker_fetch(
     )
     typer.echo(format_market_status_line(get_display_market_status()))
     typer.echo(f"Fetching broker data for {ticker.upper()}...")
-    typer.echo(f"Provider: {provider_name} | Date range: {start_date} to {end_date}")
+    typer.echo(f"Provider: {resolved_provider} | Date range: {start_date} to {end_date}")
 
     try:
-        workflow = create_fetch_broker_summary_workflow(provider_name, db_path)
+        workflow = create_fetch_broker_summary_workflow(resolved_provider, resolved_db)
         result = workflow.execute(
             FetchBrokerSummaryWorkflowRequest(
                 ticker=ticker,
                 start_date=start_date,
                 end_date=end_date,
-                days=days,
+                days=resolved_days,
                 refresh=refresh,
-                provider_name=provider_name,
+                provider_name=resolved_provider,
             )
         )
 
@@ -189,9 +185,9 @@ def broker_top_foreign(
         typer.Option("--provider", help="Provider: stockbit"),
     ] = "stockbit",
     db_path: Annotated[
-        Path,
+        Optional[Path],
         typer.Option("--db", help="SQLite database path"),
-    ] = DEFAULT_DB_PATH,
+    ] = None,
     no_save: Annotated[
         bool,
         typer.Option("--no-save", help="Do not persist results to database"),
@@ -212,6 +208,9 @@ def broker_top_foreign(
         saham fetch broker-top-foreign --days 7 --limit 20
         saham fetch broker-top-foreign --days 365
     """
+    cfg = load_app_config()
+    resolved_db = db_path or Path(cfg.storage.db_path)
+
     end = date.today()
     start = end - timedelta(days=days)
 
@@ -225,7 +224,7 @@ def broker_top_foreign(
     typer.echo("─" * 55)
 
     try:
-        workflow = create_foreign_top_stocks_workflow(provider, db_path)
+        workflow = create_foreign_top_stocks_workflow(provider, resolved_db)
         result = workflow.execute(
             FetchForeignTopStocksWorkflowRequest(
                 days=days,
@@ -268,7 +267,7 @@ def broker_top_foreign(
         elif result.saved_count > 0:
             typer.echo(
                 typer.style(
-                    f"  Saved {result.saved_count} snapshots → {db_path}",
+                    f"  Saved {result.saved_count} snapshots → {resolved_db}",
                     fg=typer.colors.CYAN,
                 )
             )
@@ -290,9 +289,9 @@ def broker_history(
         typer.Option("--provider", help="Provider: stockbit"),
     ] = "stockbit",
     db_path: Annotated[
-        Path,
+        Optional[Path],
         typer.Option("--db", help="SQLite database path"),
-    ] = DEFAULT_DB_PATH,
+    ] = None,
 ) -> None:
     """
     Fetch and store daily foreign broker flow history for a stock (time-series).
@@ -307,11 +306,14 @@ def broker_history(
         saham fetch broker-history BBCA
         saham fetch broker-history BBCA --days 30
     """
+    cfg = load_app_config()
+    resolved_db = db_path or Path(cfg.storage.db_path)
+
     ticker = ticker.upper()
     typer.echo(f"\nFetching {days}-day flow history for {ticker}...")
 
     try:
-        workflow = create_broker_flow_history_workflow(provider, db_path)
+        workflow = create_broker_flow_history_workflow(provider, resolved_db)
         result = workflow.execute(
             FetchBrokerFlowHistoryWorkflowRequest(
                 ticker=ticker,
@@ -340,7 +342,7 @@ def broker_history(
 
     typer.echo(
         typer.style(
-            f"Saved {result.saved_count} foreign-flow points for {ticker} → {db_path}",
+            f"Saved {result.saved_count} foreign-flow points for {ticker} → {resolved_db}",
             fg=typer.colors.GREEN,
         )
     )
@@ -381,9 +383,9 @@ def broker_import(
         ),
     ] = "skip",
     db_path: Annotated[
-        Path,
+        Optional[Path],
         typer.Option("--db", help="Database path"),
-    ] = DEFAULT_DB_PATH,
+    ] = None,
 ) -> None:
     """
     Import broker flow data from a CSV file.
@@ -406,6 +408,9 @@ def broker_import(
         saham fetch broker-import data.csv --mapping rti    # Use custom mapping
         saham fetch broker-import data.csv --on-error fail  # Stop on first error
     """
+    cfg = load_app_config()
+    resolved_db = db_path or Path(cfg.storage.db_path)
+
     try:
         error_strategy = ErrorStrategy.parse(on_error)
     except ValueError:
@@ -427,7 +432,7 @@ def broker_import(
             raise typer.Exit(1)
 
     # Initialize dependencies using factory
-    use_case = create_import_broker_data_use_case(db_path)
+    use_case = create_import_broker_data_use_case(resolved_db)
 
     # Create request
     request = ImportBrokerDataRequest(

@@ -10,10 +10,7 @@ from pathlib import Path
 
 import typer
 
-from src.infrastructure.config.app_config import APP_CFG
-
-_DEFAULT_PROFILE_DIR = Path(APP_CFG.storage.stockbit_profile_dir)
-DEFAULT_PROVIDER = APP_CFG.broker.provider
+from src.infrastructure.config.app_config import load_app_config
 
 
 def broker_status() -> None:
@@ -22,6 +19,7 @@ def broker_status() -> None:
 
     Shows status of all available providers.
     """
+    cfg = load_app_config()
     # IDX provider (always available)
     typer.echo("IDX provider: " + typer.style("Available", fg=typer.colors.GREEN)
                + " (public API, no auth required)")
@@ -30,7 +28,8 @@ def broker_status() -> None:
     from src.infrastructure.composition.stockbit_session_factory import get_stockbit_session
     _session = get_stockbit_session()
     if _session and _session.authenticated:
-        marker = _DEFAULT_PROFILE_DIR / ".logged_in_at"
+        profile_dir = Path(cfg.storage.stockbit_profile_dir)
+        marker = profile_dir / ".logged_in_at"
         age_h: float | None = None
         if marker.exists():
             import time as _time
@@ -51,4 +50,4 @@ def broker_status() -> None:
             + " (run 'saham fetch stockbit login' to set up)"
         )
 
-    typer.echo(f"\nDefault provider: {DEFAULT_PROVIDER}")
+    typer.echo(f"\nDefault provider: {cfg.broker.provider}")

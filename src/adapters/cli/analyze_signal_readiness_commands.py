@@ -15,15 +15,13 @@ from src.application.use_case.report_signal_readiness_use_case import (
     ReportSignalReadinessUseCase,
     SignalReadinessReport,
 )
-from src.infrastructure.config.app_config import APP_CFG
+from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.persistence.sqlite_candidate_observations_repository import (
     SQLiteCandidateObservationsRepository,
 )
 from src.infrastructure.persistence.sqlite_signal_forward_labels_repository import (
     SQLiteSignalForwardLabelsRepository,
 )
-
-DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
 
 
 def signal_readiness(
@@ -41,7 +39,8 @@ def signal_readiness(
     db_path: Annotated[Optional[Path], typer.Option("--db")] = None,
 ) -> None:
     """Report read-only Phase I observation/label readiness for one target."""
-    resolved_db = db_path or DEFAULT_DB_PATH
+    cfg = load_app_config()
+    resolved_db = db_path or Path(cfg.storage.db_path)
     try:
         report = ReportSignalReadinessUseCase(
             candidate_observations_repository=SQLiteCandidateObservationsRepository(

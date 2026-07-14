@@ -321,8 +321,10 @@ def _fetch_and_maybe_cache_live_status() -> MarketStatus | None:
     try:
         from src.infrastructure.browser.stockbit_api_client import create_stockbit_api_client
         from src.infrastructure.browser.stockbit_broker_provider import StockbitBrokerProvider
-        from src.infrastructure.config.app_config import APP_CFG
-        if not Path(APP_CFG.storage.stockbit_profile_dir).exists():
+        from src.infrastructure.browser.stockbit_browser_context import (
+            default_stockbit_profile_dir,
+        )
+        if not default_stockbit_profile_dir().exists():
             return None
         provider = StockbitBrokerProvider(create_stockbit_api_client())
         if not provider.is_authenticated():
