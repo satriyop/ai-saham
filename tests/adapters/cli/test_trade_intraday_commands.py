@@ -307,6 +307,140 @@ def test_confirm_open_rejects_non_object_opening_json(tmp_path):
     assert "--opening-json must be a JSON object" in result.output
 
 
+def test_confirm_open_rejects_invalid_opening_json(tmp_path):
+    session = tmp_path / "last-session.json"
+    _write_sidecar(session)
+
+    result = runner.invoke(
+        app,
+        [
+            "trade", "confirm",
+            "--session", str(session),
+            "--opening-json", "{not valid json",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "Error: Invalid --opening-json:" in result.output
+
+
+def test_confirm_open_rejects_non_numeric_opening_json(tmp_path):
+    session = tmp_path / "last-session.json"
+    _write_sidecar(session)
+
+    result = runner.invoke(
+        app,
+        [
+            "trade", "confirm",
+            "--session", str(session),
+            "--opening-json", '{"BBCA":"not-a-number"}',
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "Error: opening prices must be numeric:" in result.output
+
+
+def test_confirm_open_rejects_non_positive_max_stop(tmp_path):
+    session = tmp_path / "last-session.json"
+    _write_sidecar(session)
+
+    result = runner.invoke(
+        app,
+        [
+            "trade", "confirm",
+            "--session", str(session),
+            "--opening-json", '{"BBCA":9050,"GOTO":245}',
+            "--max-stop", "0",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "Error: --max-stop must be positive." in result.output
+
+
+def test_confirm_open_missing_sidecar_shows_error(tmp_path):
+    session = tmp_path / "does-not-exist.json"
+
+    result = runner.invoke(
+        app,
+        ["trade", "confirm", "--session", str(session)],
+    )
+
+    assert result.exit_code == 1
+    assert f"No session sidecar at '{session}'" in result.output
+    assert "saham screen pre-open" in result.output
+
+
+def test_confirm_open_missing_track_file_shows_error(tmp_path):
+    session = tmp_path / "last-session.json"
+    _write_sidecar(session)
+    track_file = tmp_path / "does-not-exist-track.json"
+
+    result = runner.invoke(
+        app,
+        [
+            "trade", "confirm",
+            "--session", str(session),
+            "--track-file", str(track_file),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert f"Error: Track file not found at '{track_file}'" in result.output
+
+
+def test_confirm_open_missing_stockbit_auto_confirm_shows_error(tmp_path, monkeypatch):
+    session = tmp_path / "last-session.json"
+    _write_sidecar(session)
+
+    import src.infrastructure.composition.stockbit_session_factory as _session_svc
+
+    monkeypatch.setattr(_session_svc, "get_stockbit_session", lambda: None)
+
+    result = runner.invoke(
+        app,
+        ["trade", "confirm", "--session", str(session)],
+    )
+
+    assert result.exit_code == 1
+    assert "No authenticated Stockbit profile for auto confirm." in result.output
+
+
+def test_confirm_open_delegates_to_workflow_use_case(tmp_path, monkeypatch):
+    session = tmp_path / "last-session.json"
+    output = tmp_path / "last-confirmation.json"
+    _write_sidecar(session)
+
+    from src.adapters.cli import trade_intraday_confirm_commands as command_module
+    from src.application.use_case import run_intraday_confirmation_workflow_use_case as wf_mod
+
+    captured = {}
+    original_init = wf_mod.RunIntradayConfirmationWorkflowUseCase.__init__
+
+    def spy_init(self, *args, **kwargs):
+        captured["called"] = True
+        original_init(self, *args, **kwargs)
+
+    monkeypatch.setattr(
+        wf_mod.RunIntradayConfirmationWorkflowUseCase, "__init__", spy_init
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "trade", "confirm",
+            "--session", str(session),
+            "--output", str(output),
+            "--opening-json", '{"BBCA":9050,"GOTO":245}',
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured.get("called") is True
+    assert command_module is not None
+
+
 def test_intraday_confirm_open_auto_uses_stockbit_provider_stubs(tmp_path, monkeypatch):
     session = tmp_path / "last-session.json"
     output = tmp_path / "last-confirmation.json"
