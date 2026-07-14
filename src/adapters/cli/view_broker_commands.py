@@ -23,9 +23,6 @@ from src.adapters.cli.view_broker_display import (
 from src.application.use_case.fetch_broker_data_use_case import (
     GetBrokerDataUseCase,
 )
-from src.domain.ports.broker_data_provider import (
-    BrokerDataProvider,
-)
 from src.infrastructure.config.app_config import APP_CFG
 from src.infrastructure.csv import MappingLoader
 from src.infrastructure.persistence.sqlite_broker_repository import (
@@ -33,52 +30,8 @@ from src.infrastructure.persistence.sqlite_broker_repository import (
 )
 
 DEFAULT_DB_PATH = Path(APP_CFG.storage.db_path)
-_DEFAULT_PROFILE_DIR = Path(APP_CFG.storage.stockbit_profile_dir)
 DEFAULT_PROVIDER = APP_CFG.broker.provider
 PROVIDERS = ("idx", "stockbit")
-
-
-def _create_provider(provider_name: str) -> BrokerDataProvider:
-    """Stub provider factory for test monkeypatch compatibility."""
-    raise NotImplementedError("Network providers are not supported in view-only commands.")
-
-
-def broker_status() -> None:
-    """
-    Check broker data provider status.
-
-    Shows status of all available providers.
-    """
-    # IDX provider (always available)
-    typer.echo("IDX provider: " + typer.style("Available", fg=typer.colors.GREEN)
-               + " (public API, no auth required)")
-
-    # Stockbit Playwright session provider
-    from src.infrastructure.composition.stockbit_session_factory import get_stockbit_session
-    _session = get_stockbit_session()
-    if _session and _session.authenticated:
-        marker = _DEFAULT_PROFILE_DIR / ".logged_in_at"
-        age_h: float | None = None
-        if marker.exists():
-            import time as _time
-            try:
-                age_h = round((_time.time() - float(marker.read_text())) / 3600, 1)
-            except Exception:
-                pass
-        age_str = f" ({age_h}h old)" if age_h is not None else ""
-        typer.echo(
-            "Stockbit-Session provider: "
-            + typer.style(f"Active{age_str}", fg=typer.colors.GREEN)
-            + " — use --provider stockbit"
-        )
-    else:
-        typer.echo(
-            "Stockbit-Session provider: "
-            + typer.style("No session", fg=typer.colors.YELLOW)
-            + " (run 'saham fetch stockbit login' to set up)"
-        )
-
-    typer.echo(f"\nDefault provider: {DEFAULT_PROVIDER}")
 
 
 def broker_flow(
@@ -311,103 +264,6 @@ def broker_top_foreign_view(
         query_date=query_date,
         days=days,
     )
-
-
-def broker_distribution_view(
-    ticker: Annotated[str, typer.Argument(help="Ticker symbol (e.g. BBCA)")],
-    db_path: Annotated[
-        Path,
-        typer.Option("--db", help="SQLite database path"),
-    ] = DEFAULT_DB_PATH,
-) -> None:
-    """
-    Show cross-broker counterparty distribution for a ticker.
-
-    Reveals which brokers bought FROM whom and sold TO whom today,
-    exposing institutional rotation and smart-money accumulation patterns.
-
-    Examples:
-        saham view broker distribution BBCA
-        saham view broker distribution GOTO --db /path/to/data.db
-    """
-    from src.infrastructure.browser.stockbit_broker_distribution import (
-        StockbitBrokerDistributionProvider,
-    )
-
-    prov = StockbitBrokerDistributionProvider(api_client=None, db_path=db_path)
-    snapshot = prov.get_distribution(ticker.upper())
-
-    if snapshot is None:
-        typer.echo(
-            typer.style(f"No broker distribution data cached for {ticker.upper()}. ", fg=typer.colors.YELLOW)
-            + "Run 'saham fetch market' with Stockbit first."
-        )
-        raise typer.Exit(1)
-
-    _display_distribution(snapshot)
-
-
-def _fmt_idr(amount: int) -> str:
-    """Format IDR amount as compact string (e.g. 510.5B, 88.4M)."""
-    abs_amt = abs(amount)
-    if abs_amt >= 1_000_000_000_000:
-        return f"{amount / 1_000_000_000_000:.1f}T"
-    if abs_amt >= 1_000_000_000:
-        return f"{amount / 1_000_000_000:.1f}B"
-    if abs_amt >= 1_000_000:
-        return f"{amount / 1_000_000:.1f}M"
-    return f"{amount:,}"
-
-
-def _broker_label(code: str, btype: str) -> str:
-    tag = "A" if btype.lower() == "asing" else ("G" if btype.lower() == "pemerintah" else "L")
-    return f"{code}[{tag}]"
-
-
-def _display_distribution(snapshot: "BrokerDistributionSnapshot") -> None:
-    """Render ASCII cross-broker distribution table."""
-    from src.domain.value_objects.broker_distribution import (
-        BrokerDistributionSnapshot,  # noqa: F401
-    )
-
-    acc_signal = ""
-    if snapshot.foreign_buying_from_domestic:
-        acc_signal = typer.style("  ★ Foreign accumulating from domestic (smart money signal)", fg=typer.colors.GREEN)
-    elif snapshot.net_foreign_buyer_dominance:
-        acc_signal = typer.style("  ● Foreign brokers dominate buy side", fg=typer.colors.CYAN)
-
-    typer.echo(f"\n  {snapshot.ticker} — Broker Distribution  ({snapshot.date})")
-    typer.echo(f"  {'─' * 64}")
-    if acc_signal:
-        typer.echo(acc_signal)
-
-    def _render_side(entries, side_label: str, arrow: str) -> None:
-        if not entries:
-            return
-        typer.echo(f"\n  {side_label}")
-        typer.echo(f"  {'─' * 60}")
-        for entry in entries[:5]:
-            total_str = _fmt_idr(entry.amount_idr)
-            label = _broker_label(entry.broker_code, entry.broker_type)
-            color = typer.colors.GREEN if side_label.startswith("TOP BUYERS") else typer.colors.RED
-            header = typer.style(f"  {label:<10} {total_str:>8}", fg=color)
-            typer.echo(header)
-            for cp in entry.counterparties[:4]:
-                cp_label = _broker_label(cp.broker_code, cp.broker_type)
-                pct = cp.amount_idr / entry.amount_idr * 100 if entry.amount_idr else 0
-                cp_color = (
-                    typer.colors.YELLOW if cp.broker_type.lower() == "lokal" else typer.colors.BRIGHT_BLACK
-                )
-                typer.echo(
-                    typer.style(
-                        f"    {arrow} {cp_label:<10} {_fmt_idr(cp.amount_idr):>8}  ({pct:.0f}%)",
-                        fg=cp_color,
-                    )
-                )
-
-    _render_side(snapshot.top_buyers, "TOP BUYERS  (bought FROM →)", "←")
-    _render_side(snapshot.top_sellers, "TOP SELLERS (sold TO →)", "→")
-    typer.echo("")
 
 
 def broker_mappings() -> None:

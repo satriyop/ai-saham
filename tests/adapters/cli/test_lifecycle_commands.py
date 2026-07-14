@@ -63,9 +63,8 @@ def test_view_broker_group_exposes_read_only_commands():
     result = runner.invoke(app, ["view", "broker", "--help"])
 
     assert result.exit_code == 0
-    assert "flow" in result.stdout
-    assert "top" in result.stdout
-    assert "mappings" in result.stdout
+    for cmd in ("status", "flow", "top", "history", "top-foreign", "distribution", "mappings"):
+        assert cmd in result.stdout
 
 
 def test_analyze_swing_is_available():
