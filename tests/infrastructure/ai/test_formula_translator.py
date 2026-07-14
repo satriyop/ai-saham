@@ -332,3 +332,229 @@ class TestExceptionHierarchy:
         """Errors should preserve their messages."""
         error = TranslatorAuthError("Missing API key")
         assert str(error) == "Missing API key"
+
+
+class TestNewModuleImports:
+    """Tests for import compatibility with new split modules."""
+
+    def test_canonicalize_formula_from_output_module(self):
+        """canonicalize_formula should be importable from formula_translator_output."""
+        from src.infrastructure.ai.formula_translator_output import canonicalize_formula as cf
+
+        result = cf("sma(close, 20)")
+        assert result == "SMA(CLOSE, 20)"
+
+    def test_canonicalize_formula_from_orchestration_module(self):
+        """canonicalize_formula should be re-exported from formula_translator (compat)."""
+        from src.infrastructure.ai.formula_translator import canonicalize_formula as cf
+
+        result = cf("sma(close, 20)")
+        assert result == "SMA(CLOSE, 20)"
+
+    def test_both_imports_return_same_function(self):
+        """Both import paths should return the same function object."""
+        from src.infrastructure.ai.formula_translator import canonicalize_formula as cf1
+        from src.infrastructure.ai.formula_translator_output import canonicalize_formula as cf2
+
+        assert cf1 is cf2
+
+    def test_function_name_pattern_from_output_module(self):
+        """FUNCTION_NAME_PATTERN should be importable from formula_translator_output."""
+        from src.infrastructure.ai.formula_translator_output import FUNCTION_NAME_PATTERN
+
+        assert FUNCTION_NAME_PATTERN.match("SMA(") is not None
+
+    def test_all_exports_exist(self):
+        """__all__ should list expected exports."""
+        from src.infrastructure.ai.formula_translator import __all__
+
+        assert "SUPPORTED_PROVIDERS" in __all__
+        assert "DEFAULT_PROVIDER" in __all__
+        assert "FormulaTranslatorAdapter" in __all__
+        assert "canonicalize_formula" in __all__
+
+
+class TestCallMockFormulaTranslator:
+    """Focused tests for call_mock_formula_translator."""
+
+    def test_smoothed_rsi(self):
+        """Smoothed RSI should map to SMA(RSI(14), 10)."""
+        from src.infrastructure.ai.formula_translator_mock_templates import (
+            call_mock_formula_translator,
+        )
+
+        result = call_mock_formula_translator("Translate to formula: smoothed RSI")
+        assert result == "SMA(RSI(14), 10)"
+
+    def test_macd(self):
+        """MACD should map to EMA(CLOSE, 12) - EMA(CLOSE, 26)."""
+        from src.infrastructure.ai.formula_translator_mock_templates import (
+            call_mock_formula_translator,
+        )
+
+        result = call_mock_formula_translator("Translate to formula: MACD line")
+        assert result == "EMA(CLOSE, 12) - EMA(CLOSE, 26)"
+
+    def test_rsi(self):
+        """RSI should map to RSI(14)."""
+        from src.infrastructure.ai.formula_translator_mock_templates import (
+            call_mock_formula_translator,
+        )
+
+        result = call_mock_formula_translator("Translate to formula: 14-day RSI")
+        assert result == "RSI(14)"
+
+    def test_sma(self):
+        """SMA should map to SMA(CLOSE, 20)."""
+        from src.infrastructure.ai.formula_translator_mock_templates import (
+            call_mock_formula_translator,
+        )
+
+        result = call_mock_formula_translator(
+            "Translate to formula: 20-day simple moving average"
+        )
+        assert result == "SMA(CLOSE, 20)"
+
+    def test_ema(self):
+        """EMA should map to EMA(CLOSE, 20)."""
+        from src.infrastructure.ai.formula_translator_mock_templates import (
+            call_mock_formula_translator,
+        )
+
+        result = call_mock_formula_translator(
+            "Translate to formula: exponential moving average"
+        )
+        assert result == "EMA(CLOSE, 20)"
+
+    def test_atr(self):
+        """ATR should map to ATR(14)."""
+        from src.infrastructure.ai.formula_translator_mock_templates import (
+            call_mock_formula_translator,
+        )
+
+        result = call_mock_formula_translator("Translate to formula: true range 14")
+        assert result == "ATR(14)"
+
+    def test_unsupported_predict(self):
+        """Predict intent should return UNSUPPORTED."""
+        from src.infrastructure.ai.formula_translator_mock_templates import (
+            call_mock_formula_translator,
+        )
+
+        result = call_mock_formula_translator("Translate to formula: predict price")
+        assert result == "UNSUPPORTED"
+
+    def test_unsupported_buy_signal(self):
+        """Buy/sell signal intent should return UNSUPPORTED."""
+        from src.infrastructure.ai.formula_translator_mock_templates import (
+            call_mock_formula_translator,
+        )
+
+        result = call_mock_formula_translator(
+            "Translate to formula: buy signal when RSI crosses 30"
+        )
+        assert result == "UNSUPPORTED"
+
+    def test_unsupported_advice(self):
+        """Advice intent should return UNSUPPORTED."""
+        from src.infrastructure.ai.formula_translator_mock_templates import (
+            call_mock_formula_translator,
+        )
+
+        result = call_mock_formula_translator("Translate to formula: give me advice")
+        assert result == "UNSUPPORTED"
+
+    def test_unsupported_recommend(self):
+        """Recommend intent should return UNSUPPORTED."""
+        from src.infrastructure.ai.formula_translator_mock_templates import (
+            call_mock_formula_translator,
+        )
+
+        result = call_mock_formula_translator("Translate to formula: recommend something")
+        assert result == "UNSUPPORTED"
+
+    def test_unsupported_fallback(self):
+        """Unknown intent should return UNSUPPORTED."""
+        from src.infrastructure.ai.formula_translator_mock_templates import (
+            call_mock_formula_translator,
+        )
+
+        result = call_mock_formula_translator(
+            "Translate to formula: something completely unknown"
+        )
+        assert result == "UNSUPPORTED"
+
+    def test_unsupported_keywords_list(self):
+        """UNSUPPORTED_KEYWORDS should contain expected keywords."""
+        from src.infrastructure.ai.formula_translator_mock_templates import (
+            UNSUPPORTED_KEYWORDS,
+        )
+
+        assert "predict" in UNSUPPORTED_KEYWORDS
+        assert "buy" in UNSUPPORTED_KEYWORDS
+        assert "sell" in UNSUPPORTED_KEYWORDS
+        assert "signal" in UNSUPPORTED_KEYWORDS
+        assert "advice" in UNSUPPORTED_KEYWORDS
+        assert "recommend" in UNSUPPORTED_KEYWORDS
+
+    def test_unsupported_keywords_not_empty(self):
+        """UNSUPPORTED_KEYWORDS should not be empty."""
+        from src.infrastructure.ai.formula_translator_mock_templates import (
+            UNSUPPORTED_KEYWORDS,
+        )
+
+        assert len(UNSUPPORTED_KEYWORDS) > 0
+
+
+class TestRetryBehavior:
+    """Tests for retry-once-when-UNSUPPORTED behavior."""
+
+    def test_retries_when_first_output_is_unsupported(self, monkeypatch):
+        """Should retry once when first call returns UNSUPPORTED."""
+        call_log: list[int] = []
+
+        def patched_call_llm(_self, system_prompt: str, user_prompt: str) -> str:
+            call_log.append(len(call_log) + 1)
+            if len(call_log) == 1:
+                return "UNSUPPORTED"
+            return "RSI(14)"
+
+        monkeypatch.setattr(
+            "src.infrastructure.ai.formula_translator.FormulaTranslatorAdapter._call_llm",
+            patched_call_llm,
+        )
+
+        adapter = FormulaTranslatorAdapter(provider="mock")
+        result = adapter.translate(
+            intent="14-day RSI",
+            available_functions={"RSI", "SMA", "EMA"},
+        )
+
+        assert result == "RSI(14)"
+        assert len(call_log) == 2, (
+            f"Expected exactly 2 calls to _call_llm, got {len(call_log)}"
+        )
+
+    def test_no_retry_when_first_output_is_valid(self, monkeypatch):
+        """Should NOT retry when first call returns a valid formula."""
+        call_log: list[int] = []
+
+        def patched_call_llm(_self, system_prompt: str, user_prompt: str) -> str:
+            call_log.append(len(call_log) + 1)
+            return "RSI(14)"
+
+        monkeypatch.setattr(
+            "src.infrastructure.ai.formula_translator.FormulaTranslatorAdapter._call_llm",
+            patched_call_llm,
+        )
+
+        adapter = FormulaTranslatorAdapter(provider="mock")
+        result = adapter.translate(
+            intent="14-day RSI",
+            available_functions={"RSI", "SMA", "EMA"},
+        )
+
+        assert result == "RSI(14)"
+        assert len(call_log) == 1, (
+            f"Expected exactly 1 call to _call_llm, got {len(call_log)}"
+        )
