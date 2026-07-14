@@ -48,15 +48,9 @@ from src.infrastructure.browser.stockbit_broker_requests import (
     build_historical_summary_url,
 )
 from src.infrastructure.browser.stockbit_browser_context import DEFAULT_PROFILE_DIR
-from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+from src.infrastructure.config.stockbit_config import StockbitConfig, load_stockbit_config
 
 logger = logging.getLogger(__name__)
-
-# ── Stockbit API config — driven by config/stockbit.yaml ─────────────────
-_sb = STOCKBIT_CFG
-
-_INSTITUTIONAL_PROXY_CODES = list(_sb.institutional_proxy_codes)
-TRACKED_BROKER_CODES       = list(_sb.tracked_broker_codes)
 
 
 # ── API-client-backed BrokerDataProvider ──────────────────────────────────
@@ -78,8 +72,10 @@ class StockbitBrokerProvider(BrokerDataProvider):
         self,
         api_client: StockbitApiClient,
         profile_dir: Path = DEFAULT_PROFILE_DIR,
+        stockbit_config: StockbitConfig | None = None,
     ) -> None:
         self._api_client = api_client
+        self._stockbit_config = stockbit_config or load_stockbit_config()
         self._profile_dir = profile_dir
 
     @property
@@ -123,7 +119,7 @@ class StockbitBrokerProvider(BrokerDataProvider):
         Maps the date range to the closest supported period parameter.
         """
         period = broker_summary_period_for_range(start_date, end_date)
-        url = build_broker_summary_url(ticker, period)
+        url = build_broker_summary_url(ticker, period, stockbit_config=self._stockbit_config)
         body = self._api_client.get(url)
         if not body:
             logger.warning(
@@ -134,7 +130,8 @@ class StockbitBrokerProvider(BrokerDataProvider):
             return []
 
         real_total = _fetch_historical_summary_totals(
-            ticker, start_date, end_date, self._api_client
+            ticker, start_date, end_date, self._api_client,
+            stockbit_config=self._stockbit_config,
         )
         if real_total is None:
             logger.warning(
@@ -167,7 +164,12 @@ class StockbitBrokerProvider(BrokerDataProvider):
         universe-level screening ("is this IEV mover in foreign top buys?").
         """
         period = foreign_top_period_for_range(start_date, end_date)
-        url = build_foreign_top_stocks_url(_INSTITUTIONAL_PROXY_CODES, period, limit)
+        url = build_foreign_top_stocks_url(
+            self._stockbit_config.institutional_proxy_codes,
+            period,
+            limit,
+            stockbit_config=self._stockbit_config,
+        )
         body = self._api_client.get(url)
         if not body:
             logger.warning("No response from broker-centric scan endpoint")
@@ -187,7 +189,12 @@ class StockbitBrokerProvider(BrokerDataProvider):
         Uses the stock-centric historical Exodus API. Returns daily N.Val/N.Lot
         time-series for trend context and backfilling the foreign-flow table.
         """
-        url = build_foreign_flow_history_url(ticker, _INSTITUTIONAL_PROXY_CODES, days)
+        url = build_foreign_flow_history_url(
+            ticker,
+            self._stockbit_config.institutional_proxy_codes,
+            days,
+            stockbit_config=self._stockbit_config,
+        )
         body = self._api_client.get(url)
         if not body:
             logger.debug("No response from foreign flow history endpoint for %s", ticker)
@@ -213,7 +220,10 @@ class StockbitBrokerProvider(BrokerDataProvider):
         page = 1
         try:
             while True:
-                url = build_historical_summary_url(ticker, start_date, end_date, page)
+                url = build_historical_summary_url(
+                    ticker, start_date, end_date, page,
+                    stockbit_config=self._stockbit_config,
+                )
                 body = self._api_client.get(url)
                 if not body:
                     break
@@ -251,11 +261,17 @@ class StockbitBrokerProvider(BrokerDataProvider):
             broker_codes: Which broker codes to fetch. Defaults to TRACKED_BROKER_CODES.
             days: Max calendar days to look back (capped at 365 by the API).
         """
-        codes = broker_codes if broker_codes is not None else TRACKED_BROKER_CODES
+        codes = (
+            broker_codes if broker_codes is not None
+            else self._stockbit_config.tracked_broker_codes
+        )
         all_flows: list[BrokerDailyFlow] = []
 
         for code in codes:
-            flows = _fetch_broker_daily_flows_for_code(self._api_client, ticker, code, days)
+            flows = _fetch_broker_daily_flows_for_code(
+                self._api_client, ticker, code, days,
+                stockbit_config=self._stockbit_config,
+            )
             all_flows.extend(flows)
             logger.debug(
                 "fetch_broker_daily_flows: %s/%s → %d records", ticker, code, len(flows)
@@ -273,6 +289,8 @@ def _fetch_broker_daily_flows_for_code(
     ticker: str,
     broker_code: str,
     days: int,
+    *,
+    stockbit_config: StockbitConfig | None = None,
 ) -> list[BrokerDailyFlow]:
     """
     Fetch all daily flow records for one broker code on one ticker, with pagination.
@@ -290,7 +308,9 @@ def _fetch_broker_daily_flows_for_code(
     broker_name = broker_code  # default; overwritten from first response
 
     while True:
-        url = build_broker_daily_flow_url(ticker, broker_code, page)
+        url = build_broker_daily_flow_url(
+            ticker, broker_code, page, stockbit_config=stockbit_config
+        )
         body = api_client.get(url)
         if not body:
             break
@@ -369,6 +389,8 @@ def _fetch_historical_summary_totals(
     start_date: date,
     end_date: date,
     api_client: StockbitApiClient,
+    *,
+    stockbit_config: StockbitConfig | None = None,
 ) -> tuple[Decimal, int] | None:
     """
     Return (total_value_IDR, total_lot) from /company-price-feed/historical/summary/{ticker}.
@@ -387,7 +409,10 @@ def _fetch_historical_summary_totals(
 
     try:
         while True:
-            url = build_historical_summary_url(ticker, start_date, end_date, page)
+            url = build_historical_summary_url(
+                ticker, start_date, end_date, page,
+                stockbit_config=stockbit_config,
+            )
             body = api_client.get(url)
             if not body:
                 break

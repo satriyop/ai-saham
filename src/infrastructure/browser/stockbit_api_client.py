@@ -149,14 +149,15 @@ def create_stockbit_api_client(
     """
     from src.infrastructure.browser.stockbit_browser_context import (
         DEFAULT_PROFILE_DIR,
-        NAV_TIMEOUT,
     )
     from src.infrastructure.browser.stockbit_token_extractor import (
         extract_exodus_token,
     )
+    from src.infrastructure.config.stockbit_config import load_stockbit_config
 
     resolved_dir = profile_dir or DEFAULT_PROFILE_DIR
-    resolved_timeout = timeout or NAV_TIMEOUT
+    cfg = load_stockbit_config()
+    resolved_timeout = timeout or cfg.nav_timeout_ms
     token_store = StockbitTokenStore(resolved_dir / "token.json")
 
     def _refresher() -> str | None:

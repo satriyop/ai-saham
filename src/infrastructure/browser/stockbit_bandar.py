@@ -39,7 +39,7 @@ from typing import TYPE_CHECKING
 from src.domain.ports.bandar_detector_provider import BandarDetectorProvider
 from src.domain.value_objects.bandar_detector_snapshot import BandarDetectorSnapshot
 from src.infrastructure.browser.stockbit_base_provider import StockbitCachingProvider
-from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+from src.infrastructure.config.stockbit_config import StockbitConfig, load_stockbit_config
 from src.infrastructure.persistence.sqlite_migration_runner import SqliteMigrationRunner
 
 if TYPE_CHECKING:
@@ -49,8 +49,6 @@ if TYPE_CHECKING:
     )
 
 logger = logging.getLogger(__name__)
-
-_MARKET_DETECTOR_URL = STOCKBIT_CFG.bandar_detector_url
 
 _CREATE_TABLE = """
 CREATE TABLE IF NOT EXISTS bandar_detector (
@@ -178,7 +176,9 @@ class StockbitBandarDetectorProvider(BandarDetectorProvider, StockbitCachingProv
         db_path: Path,
         *,
         connection_provider: "StockbitSQLiteConnectionProvider | None" = None,
+        stockbit_config: StockbitConfig | None = None,
     ) -> None:
+        self._stockbit_config = stockbit_config or load_stockbit_config()
         self._mem_cache: dict[tuple[str, str], BandarDetectorSnapshot | None] = {}
         super().__init__(api_client, db_path, connection_provider=connection_provider)
 
@@ -307,7 +307,7 @@ class StockbitBandarDetectorProvider(BandarDetectorProvider, StockbitCachingProv
         if self._api_client is None:
             return None
         try:
-            url = _MARKET_DETECTOR_URL.format(ticker=ticker)
+            url = self._stockbit_config.bandar_detector_url.format(ticker=ticker)
             body = self._api_client.get(url)
             if not body:
                 logger.debug("Empty bandar detector response for %s", ticker)

@@ -31,7 +31,10 @@ from typing import TYPE_CHECKING
 from src.domain.ports.valuation_provider import ValuationProvider
 from src.domain.value_objects.valuation_metrics import ValuationMetrics
 from src.infrastructure.browser.stockbit_base_provider import StockbitCachingProvider
-from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+from src.infrastructure.config.stockbit_config import (
+    StockbitConfig,
+    load_stockbit_config,
+)
 
 if TYPE_CHECKING:
     from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
@@ -40,8 +43,6 @@ if TYPE_CHECKING:
     )
 
 logger = logging.getLogger(__name__)
-
-_VALUATION_URL = STOCKBIT_CFG.valuation_metrics_url
 
 _TTL_DAYS = 1
 
@@ -93,8 +94,10 @@ class StockbitValuationProvider(ValuationProvider, StockbitCachingProvider):
         api_client: "StockbitApiClient | None",
         db_path: Path | None = None,
         *,
+        stockbit_config: StockbitConfig | None = None,
         connection_provider: "StockbitSQLiteConnectionProvider | None" = None,
     ) -> None:
+        self._stockbit_config = stockbit_config or load_stockbit_config()
         super().__init__(
             api_client,
             db_path or Path("data/saham.db"),
@@ -150,7 +153,7 @@ class StockbitValuationProvider(ValuationProvider, StockbitCachingProvider):
             return self._read_cache(ticker)
 
         key = ticker.upper()
-        url = _VALUATION_URL.format(ticker=key)
+        url = self._stockbit_config.valuation_metrics_url.format(ticker=key)
         try:
             body = self._api_client.get(url)
         except Exception as exc:

@@ -424,9 +424,6 @@ def test_facade_compatibility():
     assert facade_mod.ORDER_BOOK_URL is context_mod.ORDER_BOOK_URL
     assert facade_mod.ORDERBOOK_PAGE_URL is context_mod.ORDERBOOK_PAGE_URL
     assert facade_mod.LOGIN_URL is context_mod.LOGIN_URL
-    assert facade_mod.NAV_TIMEOUT is context_mod.NAV_TIMEOUT
-    assert facade_mod.ELEMENT_TIMEOUT is context_mod.ELEMENT_TIMEOUT
-    assert facade_mod.SPA_SETTLE_MS is context_mod.SPA_SETTLE_MS
     assert facade_mod._require_playwright is context_mod._require_playwright
     assert facade_mod._persistent_context is context_mod._persistent_context
 

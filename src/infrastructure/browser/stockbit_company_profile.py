@@ -22,10 +22,18 @@ from __future__ import annotations
 import logging
 import sqlite3
 from datetime import date, datetime, time
+from pathlib import Path
+from typing import TYPE_CHECKING
 
 from src.domain.ports.company_profile_provider import CompanyProfileProvider
 from src.domain.value_objects.company_profile import CompanyProfile
 from src.infrastructure.browser.stockbit_base_provider import StockbitCachingProvider
+
+if TYPE_CHECKING:
+    from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
+    from src.infrastructure.browser.stockbit_sqlite_connection_provider import (
+        StockbitSQLiteConnectionProvider,
+    )
 from src.infrastructure.browser.stockbit_pit_cache import (
     fetched_at_is_fresh,
     fetched_date_as_of_filter,
@@ -34,12 +42,9 @@ from src.infrastructure.browser.stockbit_pit_cache import (
     safe_cache_write,
     safe_schema_update,
 )
-from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+from src.infrastructure.config.stockbit_config import StockbitConfig, load_stockbit_config
 
 logger = logging.getLogger(__name__)
-
-_PROFILE_URL = STOCKBIT_CFG.company_profile_url
-_CACHE_TTL_DAYS = STOCKBIT_CFG.cache_ttl_days_company_profile
 
 _CREATE_TABLE = """
 CREATE TABLE IF NOT EXISTS company_profile_cache (
@@ -115,6 +120,17 @@ class StockbitCompanyProfileProvider(CompanyProfileProvider, StockbitCachingProv
     SQLite cache with 30-day TTL — profile data (IPO history, contacts) changes rarely.
     """
 
+    def __init__(
+        self,
+        api_client: "StockbitApiClient | None",
+        db_path: Path | str = Path("data.db"),
+        *,
+        connection_provider: "StockbitSQLiteConnectionProvider | None" = None,
+        stockbit_config: StockbitConfig | None = None,
+    ) -> None:
+        self._stockbit_config = stockbit_config or load_stockbit_config()
+        super().__init__(api_client, db_path, connection_provider=connection_provider)
+
     def _ensure_schema(self) -> None:
         def _update():
             with sqlite3.connect(str(self._db_path)) as conn:
@@ -167,7 +183,9 @@ class StockbitCompanyProfileProvider(CompanyProfileProvider, StockbitCachingProv
             if not row:
                 return None
             fetched_at = _parse_fetched_at(row[0])
-            if require_fresh and not fetched_at_is_fresh(fetched_at, ttl_days=_CACHE_TTL_DAYS):
+            if require_fresh and not fetched_at_is_fresh(
+                fetched_at, ttl_days=self._stockbit_config.cache_ttl_days_company_profile
+            ):
                 return None
             return CompanyProfile(
                 ticker=ticker,
@@ -234,7 +252,7 @@ class StockbitCompanyProfileProvider(CompanyProfileProvider, StockbitCachingProv
         if self._api_client is None:
             return None
         try:
-            url = _PROFILE_URL.format(ticker=ticker)
+            url = self._stockbit_config.company_profile_url.format(ticker=ticker)
             body = self._api_client.get(url)
             if not body:
                 logger.debug("Empty profile response for %s", ticker)

@@ -182,16 +182,22 @@ def load_stockbit_config(
             corp_action_url=_url("corp_action", defaults.corp_action_url),
             calendar_dividend_url=_url("calendar_dividend", defaults.calendar_dividend_url),
             calendar_stocksplit_url=_url("calendar_stocksplit", defaults.calendar_stocksplit_url),
-            calendar_reversesplit_url=_url("calendar_reversesplit", defaults.calendar_reversesplit_url),
+            calendar_reversesplit_url=_url(
+                "calendar_reversesplit", defaults.calendar_reversesplit_url
+            ),
             calendar_rightissue_url=_url("calendar_rightissue", defaults.calendar_rightissue_url),
             calendar_bonus_url=_url("calendar_bonus", defaults.calendar_bonus_url),
-            calendar_tenderoffer_url=_url("calendar_tenderoffer", defaults.calendar_tenderoffer_url),
+            calendar_tenderoffer_url=_url(
+                "calendar_tenderoffer", defaults.calendar_tenderoffer_url
+            ),
             calendar_rups_url=_url("calendar_rups", defaults.calendar_rups_url),
             calendar_pubex_url=_url("calendar_pubex", defaults.calendar_pubex_url),
             calendar_ipo_url=_url("calendar_ipo", defaults.calendar_ipo_url),
             running_trade_url=_url("running_trade", defaults.running_trade_url),
             running_trade_chart_url=_url("running_trade_chart", defaults.running_trade_chart_url),
-            intraday_broker_chart_url=_url("intraday_broker_chart", defaults.intraday_broker_chart_url),
+            intraday_broker_chart_url=_url(
+                "intraday_broker_chart", defaults.intraday_broker_chart_url
+            ),
             company_profile_url=_url("company_profile", defaults.company_profile_url),
             seasonality_url=_url("seasonality", defaults.seasonality_url),
             analyst_url=_url("analyst_ratings", defaults.analyst_url),
@@ -207,17 +213,18 @@ def load_stockbit_config(
             universe_sector_70_url=_url("universe_sector_70", defaults.universe_sector_70_url),
             universe_company_url=_url("universe_company", defaults.universe_company_url),
             universe_screener_url=_url("universe_screener", defaults.universe_screener_url),
-            cache_ttl_days_company_profile=_days("company_profile", defaults.cache_ttl_days_company_profile),
+            cache_ttl_days_company_profile=_days(
+                "company_profile", defaults.cache_ttl_days_company_profile
+            ),
             cache_ttl_days_fundamentals=_days("fundamentals", defaults.cache_ttl_days_fundamentals),
             cache_ttl_days_shareholding=_days("shareholding", defaults.cache_ttl_days_shareholding),
             nav_timeout_ms=_ms("nav_ms", defaults.nav_timeout_ms),
             element_timeout_ms=_ms("element_ms", defaults.element_timeout_ms),
             spa_settle_ms=_ms("spa_settle_ms", defaults.spa_settle_ms),
-            institutional_proxy_codes=_codes("institutional_proxy", defaults.institutional_proxy_codes),
+            institutional_proxy_codes=_codes(
+                "institutional_proxy", defaults.institutional_proxy_codes
+            ),
             tracked_broker_codes=_codes("tracked", defaults.tracked_broker_codes),
         )
     except Exception:
         return defaults
-
-
-STOCKBIT_CFG: StockbitConfig = load_stockbit_config()

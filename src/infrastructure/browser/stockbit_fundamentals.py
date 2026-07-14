@@ -39,11 +39,9 @@ from src.infrastructure.browser.stockbit_fundamentals_parser import (
     _parse_fundamentals,
     _parse_historical_rows,
 )
-from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+from src.infrastructure.config.stockbit_config import StockbitConfig, load_stockbit_config
 
 logger = logging.getLogger(__name__)
-
-_KEYSTATS_URL = STOCKBIT_CFG.keystats_url
 
 
 class StockbitFundamentalsProvider(FundamentalsProvider, StockbitCachingProvider):
@@ -59,9 +57,13 @@ class StockbitFundamentalsProvider(FundamentalsProvider, StockbitCachingProvider
         db_path: Path,
         *,
         connection_provider: "StockbitSQLiteConnectionProvider | None" = None,
+        stockbit_config: StockbitConfig | None = None,
     ) -> None:
+        self._stockbit_config = stockbit_config or load_stockbit_config()
         self._mem_cache: dict[str, CompanyFundamentals | None] = {}
-        self._cache = StockbitFundamentalsCache(db_path)
+        self._cache = StockbitFundamentalsCache(
+            db_path, cache_ttl_days=self._stockbit_config.cache_ttl_days_fundamentals
+        )
         super().__init__(api_client, db_path, connection_provider=connection_provider)
 
     def _ensure_schema(self) -> None:
@@ -112,7 +114,7 @@ class StockbitFundamentalsProvider(FundamentalsProvider, StockbitCachingProvider
         if self._api_client is None:
             return None
         try:
-            url = _KEYSTATS_URL.format(ticker=ticker)
+            url = self._stockbit_config.keystats_url.format(ticker=ticker)
             body = self._api_client.get(url)
             if not body:
                 logger.debug("Empty keystats response for %s", ticker)

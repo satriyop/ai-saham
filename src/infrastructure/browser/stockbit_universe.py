@@ -26,15 +26,11 @@ from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
     from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
+    from src.infrastructure.config.stockbit_config import StockbitConfig
+
+from src.infrastructure.config.stockbit_config import load_stockbit_config
 
 logger = logging.getLogger(__name__)
-
-from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
-
-_SECTOR_88_URL = STOCKBIT_CFG.universe_sector_88_url
-_SECTOR_70_URL = STOCKBIT_CFG.universe_sector_70_url
-_COMPANY_URL = STOCKBIT_CFG.universe_company_url
-_SCREENER_UNIVERSE_URL = STOCKBIT_CFG.universe_screener_url
 
 # Known subsector IDs for sector 88 — used as fast-path fallback if discovery fails.
 _KNOWN_IDS: dict[str, int | str] = {
@@ -121,8 +117,11 @@ class StockbitUniverseProvider:
         broker_provider: Authenticated StockbitPlaywrightBrokerProvider for token access.
     """
 
-    def __init__(self, api_client: "StockbitApiClient | None") -> None:
+    def __init__(
+        self, api_client: "StockbitApiClient | None", stockbit_config: StockbitConfig | None = None
+    ) -> None:
         self._api_client = api_client
+        self._stockbit_config = stockbit_config or load_stockbit_config()
         self._subsector_map: dict[str, tuple[int | str, int]] | None = None  # key → (id, sector)
 
     # ── Internal helpers ────────────────────────────────────────────────────
@@ -167,7 +166,9 @@ class StockbitUniverseProvider:
                 key = _match_hints(name, hints)
                 if key and key not in result:
                     result[key] = (sid, sector_num)
-                    logger.debug("Discovered [sector %d] %s → id=%s (%s)", sector_num, key, sid, name)
+                    logger.debug(
+                        "Discovered [sector %d] %s → id=%s (%s)", sector_num, key, sid, name
+                    )
         except Exception as e:
             logger.warning("Sector %d discovery failed: %s", sector_num, e)
 
@@ -183,16 +184,20 @@ class StockbitUniverseProvider:
         }
 
         # Discover broad indices (sector 88)
-        self._discover_sector(_SECTOR_88_URL, 88, _BROAD_NAME_HINTS, result)
+        self._discover_sector(
+            self._stockbit_config.universe_sector_88_url, 88, _BROAD_NAME_HINTS, result
+        )
 
         # Discover sectoral indices (sector 70)
-        self._discover_sector(_SECTOR_70_URL, 70, _SECTORAL_NAME_HINTS, result)
+        self._discover_sector(
+            self._stockbit_config.universe_sector_70_url, 70, _SECTORAL_NAME_HINTS, result
+        )
 
         return result
 
     def _fetch_tickers(self, subsector_id: int | str, sector_num: int) -> list[str]:
         """Fetch all ticker symbols for a given subsector ID."""
-        url = _COMPANY_URL.format(sector=sector_num, id=subsector_id)
+        url = self._stockbit_config.universe_company_url.format(sector=sector_num, id=subsector_id)
         try:
             body = self._get(url)
             if not body:
@@ -271,13 +276,16 @@ class StockbitUniverseProvider:
         Expected shape: {"data": [{"id": 550, "name": "LQ45", "sector_id": 88}, ...]}
         """
         try:
-            body = self._get(_SCREENER_UNIVERSE_URL)
+            body = self._get(self._stockbit_config.universe_screener_url)
             if not body:
                 logger.debug("Empty response from screener/universe")
                 return {}
             data = body.get("data")
             if not isinstance(data, list):
-                logger.info("screener/universe: unexpected shape — data is %s: %r", type(data).__name__, str(body)[:300])
+                logger.info(
+                    "screener/universe: unexpected shape — data is %s: %r",
+                    type(data).__name__, str(body)[:300]
+                )
                 return {}
             result: dict[str, int] = {}
             for item in data:
@@ -287,7 +295,9 @@ class StockbitUniverseProvider:
                 name = str(item.get("name") or "").strip()
                 if sid is not None and name:
                     result[name.lower()] = int(sid)
-            logger.info("screener/universe: found %d universes: %s", len(result), list(result.keys())[:10])
+            logger.info(
+                "screener/universe: found %d universes: %s", len(result), list(result.keys())[:10]
+            )
             return result
         except Exception as e:
             logger.warning("screener/universe fetch failed: %s", e)

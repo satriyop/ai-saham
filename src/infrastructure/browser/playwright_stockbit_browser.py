@@ -22,13 +22,7 @@ from src.infrastructure.browser.stockbit_browser_context import (
     DEFAULT_PROFILE_DIR as DEFAULT_PROFILE_DIR,
 )
 from src.infrastructure.browser.stockbit_browser_context import (
-    ELEMENT_TIMEOUT as ELEMENT_TIMEOUT,
-)
-from src.infrastructure.browser.stockbit_browser_context import (
     LOGIN_URL as LOGIN_URL,
-)
-from src.infrastructure.browser.stockbit_browser_context import (
-    NAV_TIMEOUT as NAV_TIMEOUT,
 )
 from src.infrastructure.browser.stockbit_browser_context import (
     ORDER_BOOK_URL as ORDER_BOOK_URL,
@@ -38,9 +32,6 @@ from src.infrastructure.browser.stockbit_browser_context import (
 )
 from src.infrastructure.browser.stockbit_browser_context import (
     SCREENER_URL as SCREENER_URL,
-)
-from src.infrastructure.browser.stockbit_browser_context import (
-    SPA_SETTLE_MS as SPA_SETTLE_MS,
 )
 from src.infrastructure.browser.stockbit_browser_context import (
     STREAM_URL as STREAM_URL,

@@ -17,17 +17,23 @@ from __future__ import annotations
 
 import logging
 from datetime import date, datetime
+from pathlib import Path
+from typing import TYPE_CHECKING
 
 from src.domain.ports.seasonality_provider import SeasonalityProvider
 from src.domain.value_objects.seasonal_edge import SeasonalEdge
 from src.infrastructure.browser.stockbit_base_provider import StockbitCachingProvider
 from src.infrastructure.browser.stockbit_pit_cache import safe_schema_update
-from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+from src.infrastructure.config.stockbit_config import StockbitConfig, load_stockbit_config
 from src.infrastructure.persistence.sqlite_migration_runner import SqliteMigrationRunner
 
-logger = logging.getLogger(__name__)
+if TYPE_CHECKING:
+    from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
+    from src.infrastructure.browser.stockbit_sqlite_connection_provider import (
+        StockbitSQLiteConnectionProvider,
+    )
 
-_SEASONALITY_URL = STOCKBIT_CFG.seasonality_url
+logger = logging.getLogger(__name__)
 
 # Stockbit uses abbreviated English month names as column keys
 _MONTH_TO_NAME = {
@@ -120,6 +126,17 @@ class StockbitSeasonalityProvider(SeasonalityProvider, StockbitCachingProvider):
         broker_provider: Authenticated StockbitPlaywrightBrokerProvider for token access.
         db_path: Path to the SQLite database (same data.db used by other repos).
     """
+
+    def __init__(
+        self,
+        api_client: "StockbitApiClient | None",
+        db_path: Path | str = Path("data.db"),
+        *,
+        connection_provider: "StockbitSQLiteConnectionProvider | None" = None,
+        stockbit_config: StockbitConfig | None = None,
+    ) -> None:
+        self._stockbit_config = stockbit_config or load_stockbit_config()
+        super().__init__(api_client, db_path, connection_provider=connection_provider)
 
     # ── Schema ───────────────────────────────────────────────────────────────
 
@@ -296,7 +313,7 @@ class StockbitSeasonalityProvider(SeasonalityProvider, StockbitCachingProvider):
         if self._api_client is None:
             return None
         try:
-            url = _SEASONALITY_URL.format(
+            url = self._stockbit_config.seasonality_url.format(
                 ticker=ticker.upper(),
                 year=year,
                 back_years=back_years,

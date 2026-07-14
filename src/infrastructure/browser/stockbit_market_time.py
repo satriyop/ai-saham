@@ -42,17 +42,15 @@ from src.domain.value_objects.idx_market import (
     REGULAR_OPEN as _REGULAR_START,
 )
 from src.domain.value_objects.market_status import MarketStatus
+from src.infrastructure.config.stockbit_config import (
+    StockbitConfig,
+    load_stockbit_config,
+)
 
 if TYPE_CHECKING:
     from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
 
 logger = logging.getLogger(__name__)
-
-from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
-
-_MARKET_TIME_URL = STOCKBIT_CFG.market_time_url
-_CACHE_TTL_SECONDS = 60
-
 
 class LocalClockMarketStatusProvider(MarketStatusProvider):
     """Derives IDX market status from Asia/Jakarta wall clock.
@@ -155,10 +153,12 @@ class StockbitMarketTimeProvider(MarketStatusProvider):
     def __init__(
         self,
         api_client: "StockbitApiClient | None",
-        ttl: int = _CACHE_TTL_SECONDS,
+        ttl: int = 60,
+        stockbit_config: StockbitConfig | None = None,
     ) -> None:
         self._api_client = api_client
         self._ttl = ttl
+        self._stockbit_config = stockbit_config or load_stockbit_config()
         self._cache: MarketStatus | None = None
         self._cache_at: float = 0.0
         self._fallback = LocalClockMarketStatusProvider()
@@ -179,7 +179,7 @@ class StockbitMarketTimeProvider(MarketStatusProvider):
 
     def _fetch(self) -> MarketStatus | None:
         try:
-            body = self._api_client.get(_MARKET_TIME_URL)
+            body = self._api_client.get(self._stockbit_config.market_time_url)
             if not body:
                 logger.debug("Empty market-time response")
                 return None
@@ -213,7 +213,8 @@ class StockbitMarketTimeProvider(MarketStatusProvider):
         is_open = raw_status == "STATUS_OPEN"
         status = "STATUS_OPEN" if is_open else "STATUS_CLOSE"
 
-        # iepiev_regular and iepiev_fca are STATUS_OPEN during pre-open call auction (market still CLOSE)
+        # iepiev_regular and iepiev_fca are STATUS_OPEN during pre-open
+        # call auction (market still CLOSE)
         fca_open = str(iepiev_fca.get("status") or "").upper() == "STATUS_OPEN"
         regular_open = str(iepiev_regular.get("status") or "").upper() == "STATUS_OPEN"
 

@@ -17,7 +17,6 @@ Depends on: playwright_stockbit (for token), sqlite3, CorporateActionEvent
 from __future__ import annotations
 
 import logging
-import sqlite3
 from datetime import date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -27,13 +26,15 @@ from src.domain.value_objects.corporate_action_event import CorporateActionEvent
 
 if TYPE_CHECKING:
     from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
-
-logger = logging.getLogger(__name__)
+    from src.infrastructure.browser.stockbit_sqlite_connection_provider import (
+        StockbitSQLiteConnectionProvider,
+    )
+    from src.infrastructure.config.stockbit_config import StockbitConfig
 
 from src.infrastructure.browser.stockbit_base_provider import StockbitCachingProvider
-from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+from src.infrastructure.config.stockbit_config import load_stockbit_config
 
-_CORPACTION_URL = STOCKBIT_CFG.corp_action_url
+logger = logging.getLogger(__name__)
 
 # Map raw Stockbit action type strings → CorporateActionEvent.TYPE_* constants
 _TYPE_MAP: dict[str, str] = {
@@ -182,6 +183,17 @@ class StockbitCorporateActionRepository(CorporateActionRepository, StockbitCachi
         db_path:  Path to the SQLite database (same data.db used by broker repos).
     """
 
+    def __init__(
+        self,
+        api_client: "StockbitApiClient | None",
+        db_path: Path | str = Path("data.db"),
+        *,
+        connection_provider: "StockbitSQLiteConnectionProvider | None" = None,
+        stockbit_config: StockbitConfig | None = None,
+    ) -> None:
+        self._stockbit_config = stockbit_config or load_stockbit_config()
+        super().__init__(api_client, db_path, connection_provider=connection_provider)
+
     # ── Schema ───────────────────────────────────────────────────────────────
 
     def _ensure_schema(self) -> None:
@@ -223,7 +235,9 @@ class StockbitCorporateActionRepository(CorporateActionRepository, StockbitCachi
         except Exception:
             return False
 
-    def _read_cache(self, ticker: str, from_date: date, to_date: date) -> list[CorporateActionEvent]:
+    def _read_cache(
+        self, ticker: str, from_date: date, to_date: date
+    ) -> list[CorporateActionEvent]:
         try:
             with self._get_conn() as conn:
                 rows = conn.execute(
@@ -310,7 +324,7 @@ class StockbitCorporateActionRepository(CorporateActionRepository, StockbitCachi
         if self._api_client is None:
             return []
         try:
-            url = _CORPACTION_URL.format(ticker=ticker.upper())
+            url = self._stockbit_config.corp_action_url.format(ticker=ticker.upper())
             body = self._api_client.get(url)
             if not body:
                 logger.debug("Empty corp action response for %s", ticker)

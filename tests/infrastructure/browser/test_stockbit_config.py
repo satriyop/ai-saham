@@ -4,14 +4,6 @@ from pathlib import Path
 
 import yaml
 
-from src.infrastructure.browser.playwright_stockbit_provider import (
-    _IEV_MOVER_URL_MAIN,
-    _ORDER_BOOK_API,
-)
-from src.infrastructure.browser.stockbit_broker_provider import (
-    _INSTITUTIONAL_PROXY_CODES,
-    TRACKED_BROKER_CODES,
-)
 from src.infrastructure.config.stockbit_config import (
     StockbitConfig as _StockbitConfig,
 )
@@ -107,11 +99,12 @@ def test_live_config_loads_without_error():
     assert "{ticker}" in result.orderbook_url
 
 
-# ── Module-level constants wired correctly ────────────────────────────────
+# ── Config values wired correctly ────────────────────────────────────────
 
-def test_module_constants_are_populated():
-    """Constants loaded at module import should match the live YAML values."""
-    assert "AK" in _INSTITUTIONAL_PROXY_CODES
-    assert "AK" in TRACKED_BROKER_CODES
-    assert "MOVER_TYPE_IEV_TOP_GAINER" in _IEV_MOVER_URL_MAIN
-    assert "{ticker}" in _ORDER_BOOK_API
+def test_config_values_are_populated():
+    """Config loaded from YAML should have populated lists and URLs."""
+    cfg = _load_stockbit_config(Path("config/stockbit.yaml"))
+    assert "AK" in cfg.institutional_proxy_codes
+    assert "AK" in cfg.tracked_broker_codes
+    assert "MOVER_TYPE_IEV_TOP_GAINER" in cfg.iev_movers_main_url
+    assert "{ticker}" in cfg.orderbook_url

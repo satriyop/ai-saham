@@ -34,15 +34,15 @@ from typing import TYPE_CHECKING
 
 from src.domain.ports.order_book_provider import OrderBookProvider
 from src.domain.value_objects.order_book_snapshot import OrderBookSnapshot
+from src.infrastructure.config.stockbit_config import (
+    StockbitConfig,
+    load_stockbit_config,
+)
 
 if TYPE_CHECKING:
     from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
 
 logger = logging.getLogger(__name__)
-
-from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
-
-_ORDERBOOK_URL = STOCKBIT_CFG.orderbook_url
 
 _DEPTH_LEVELS = 5  # top N levels for depth_ratio computation
 
@@ -157,12 +157,15 @@ class StockbitOrderBookProvider(OrderBookProvider):
     No cache — order book is real-time; each call fetches fresh data.
     """
 
-    def __init__(self, api_client: "StockbitApiClient | None") -> None:
+    def __init__(
+        self, api_client: "StockbitApiClient | None", stockbit_config: StockbitConfig | None = None
+    ) -> None:
         self._api_client = api_client
+        self._stockbit_config = stockbit_config or load_stockbit_config()
 
     def fetch_snapshot(self, ticker: str) -> OrderBookSnapshot | None:
         try:
-            url = _ORDERBOOK_URL.format(ticker=ticker.upper())
+            url = self._stockbit_config.orderbook_url.format(ticker=ticker.upper())
             body = self._api_client.get(url)
             if not body:
                 logger.debug("Empty order book response for %s", ticker)

@@ -15,11 +15,9 @@ from typing import TYPE_CHECKING
 from src.infrastructure.browser.stockbit_browser_context import (
     DEFAULT_PROFILE_DIR,
     LOGIN_URL,
-    NAV_TIMEOUT,
     ORDER_BOOK_URL,
     ORDERBOOK_PAGE_URL,
     SCREENER_URL,
-    SPA_SETTLE_MS,
     STREAM_URL,
     _persistent_context,
     _require_playwright,
@@ -29,6 +27,10 @@ from src.infrastructure.browser.stockbit_token_extractor import (
     _resolve_token,
 )
 from src.infrastructure.browser.stockbit_token_store import StockbitTokenStore
+from src.infrastructure.config.stockbit_config import (
+    StockbitConfig,
+    load_stockbit_config,
+)
 
 if TYPE_CHECKING:
     from src.application.services.stockbit_session import StockbitSessionStatus
@@ -68,6 +70,8 @@ def _url_matches(url: str, patterns: list[str]) -> bool:
 def save_stockbit_session(
     profile_dir: Path = DEFAULT_PROFILE_DIR,
     timeout: int = 300,
+    *,
+    stockbit_config: StockbitConfig | None = None,
 ) -> None:
     """
     Launch headed Chromium for manual Stockbit login.
@@ -80,6 +84,7 @@ def save_stockbit_session(
         profile_dir: Persistent browser profile directory
         timeout: Seconds to wait for login completion
     """
+    cfg = stockbit_config or load_stockbit_config()
     sync_playwright = _require_playwright()
 
     print("Opening Stockbit login page in a browser window.")
@@ -93,7 +98,7 @@ def save_stockbit_session(
         # Register before navigation so any Exodus Bearer token sent during or
         # after login is captured — never inferred from URL/page content.
         token_box = _intercept_token(page)
-        page.goto(LOGIN_URL, timeout=NAV_TIMEOUT, wait_until="domcontentloaded")
+        page.goto(LOGIN_URL, timeout=cfg.nav_timeout_ms, wait_until="domcontentloaded")
 
         logged_in = False
 
@@ -132,8 +137,10 @@ def save_stockbit_session(
         if logged_in:
             page.wait_for_timeout(3_000)
             try:
-                page.goto(ORDERBOOK_PAGE_URL, timeout=NAV_TIMEOUT, wait_until="domcontentloaded")
-                page.wait_for_timeout(SPA_SETTLE_MS)
+                page.goto(
+                    ORDERBOOK_PAGE_URL, timeout=cfg.nav_timeout_ms, wait_until="domcontentloaded"
+                )
+                page.wait_for_timeout(cfg.spa_settle_ms)
             except Exception as e:
                 logger.debug("Post-login navigation for JWT capture failed: %s", e)
             token = _resolve_token(page, token_box)
@@ -198,6 +205,8 @@ def _persist_newer_token(
 def browse_stockbit_session(
     profile_dir: Path = DEFAULT_PROFILE_DIR,
     url: str = STREAM_URL,
+    *,
+    stockbit_config: StockbitConfig | None = None,
 ) -> None:
     """
     Open a headed browser with the saved Stockbit session and keep it open.
@@ -214,6 +223,8 @@ def browse_stockbit_session(
         profile_dir: Persistent browser profile directory
         url: Stockbit page to open (default: stream/home)
     """
+    cfg = stockbit_config or load_stockbit_config()
+
     if not (profile_dir.exists() and any(profile_dir.iterdir())):
         raise RuntimeError("No Stockbit profile found.\nRun: saham fetch stockbit login")
 
@@ -226,7 +237,7 @@ def browse_stockbit_session(
     with sync_playwright() as pw:
         ctx, page = _persistent_context(pw, profile_dir, headless=False)
         token_box = _intercept_token(page)
-        page.goto(url, timeout=NAV_TIMEOUT, wait_until="domcontentloaded")
+        page.goto(url, timeout=cfg.nav_timeout_ms, wait_until="domcontentloaded")
 
         last_seen = 0
         try:
@@ -246,6 +257,8 @@ def spy_stockbit_session(
     ticker: str = "BBCA",
     output_file: Path = Path("journals/stockbit-spy.json"),
     settle_ms: int = 6_000,
+    *,
+    stockbit_config: StockbitConfig | None = None,
 ) -> dict:
     """
     Open Stockbit with the saved session, capture ALL API responses.
@@ -263,6 +276,8 @@ def spy_stockbit_session(
     Returns:
         Summary dict with total_responses, unique_urls, output_file path
     """
+    cfg = stockbit_config or load_stockbit_config()
+
     if not (profile_dir.exists() and any(profile_dir.iterdir())):
         raise RuntimeError("No Stockbit profile found.\nRun: saham fetch stockbit login")
 
@@ -309,7 +324,7 @@ def spy_stockbit_session(
         print("Press Ctrl+C to stop early.\n")
 
         try:
-            page.goto(url, timeout=NAV_TIMEOUT, wait_until="domcontentloaded")
+            page.goto(url, timeout=cfg.nav_timeout_ms, wait_until="domcontentloaded")
             page.wait_for_timeout(settle_ms)
         except KeyboardInterrupt:
             pass

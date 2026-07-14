@@ -3,7 +3,7 @@
 from datetime import date
 
 from src.infrastructure.browser.stockbit_broker_provider import StockbitBrokerProvider
-from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+from src.infrastructure.config.stockbit_config import load_stockbit_config
 
 
 class _CapturingApiClient:
@@ -18,6 +18,7 @@ class _CapturingApiClient:
 
 
 def test_fetch_broker_summaries_builds_url_via_helpers():
+    cfg = load_stockbit_config()
     client = _CapturingApiClient()
     provider = StockbitBrokerProvider(api_client=client)
 
@@ -25,6 +26,6 @@ def test_fetch_broker_summaries_builds_url_via_helpers():
 
     assert len(client.captured_urls) == 1
     url = client.captured_urls[0]
-    assert url.startswith(STOCKBIT_CFG.marketdetectors_url)
+    assert url.startswith(cfg.marketdetectors_url)
     assert "/BBCA" in url
     assert "period=BROKER_SUMMARY_PERIOD_LAST_7_DAYS" in url

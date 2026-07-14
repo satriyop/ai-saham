@@ -24,13 +24,15 @@ from src.domain.value_objects.ticker_notation import (
 
 if TYPE_CHECKING:
     from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
-
-logger = logging.getLogger(__name__)
+    from src.infrastructure.browser.stockbit_sqlite_connection_provider import (
+        StockbitSQLiteConnectionProvider,
+    )
+    from src.infrastructure.config.stockbit_config import StockbitConfig
 
 from src.infrastructure.browser.stockbit_base_provider import StockbitCachingProvider
-from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+from src.infrastructure.config.stockbit_config import load_stockbit_config
 
-_EMITTEN_INFO_URL = STOCKBIT_CFG.emitten_info_url
+logger = logging.getLogger(__name__)
 
 
 def _parse_bool(raw) -> bool | None:
@@ -125,8 +127,21 @@ def _parse_snapshot(ticker: str, body: dict) -> TickerNotationSnapshot | None:
     )
 
 
-class StockbitTickerNotationProvider(TickerNotationProvider, TickerNotationRepository, StockbitCachingProvider):
+class StockbitTickerNotationProvider(
+    TickerNotationProvider, TickerNotationRepository, StockbitCachingProvider
+):
     """Fetches and caches Stockbit ticker notation/status context."""
+
+    def __init__(
+        self,
+        api_client: "StockbitApiClient | None",
+        db_path: Path | str = Path("data.db"),
+        *,
+        connection_provider: "StockbitSQLiteConnectionProvider | None" = None,
+        stockbit_config: StockbitConfig | None = None,
+    ) -> None:
+        self._stockbit_config = stockbit_config or load_stockbit_config()
+        super().__init__(api_client, db_path, connection_provider=connection_provider)
 
     def _ensure_schema(self) -> None:
         try:
@@ -294,7 +309,9 @@ class StockbitTickerNotationProvider(TickerNotationProvider, TickerNotationRepos
     def _fetch(self, ticker: str) -> TickerNotationSnapshot | None:
         if self._api_client is None:
             return None
-        body = self._api_client.get(_EMITTEN_INFO_URL.format(ticker=ticker.upper()))
+        body = self._api_client.get(
+            self._stockbit_config.emitten_info_url.format(ticker=ticker.upper())
+        )
         if not body:
             return None
         return _parse_snapshot(ticker, body)

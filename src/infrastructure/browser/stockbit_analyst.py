@@ -23,7 +23,6 @@ Layer: Infrastructure
 from __future__ import annotations
 
 import logging
-import sqlite3
 from datetime import date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -33,14 +32,16 @@ from src.domain.value_objects.analyst_consensus import AnalystConsensus
 
 if TYPE_CHECKING:
     from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
-
-logger = logging.getLogger(__name__)
+    from src.infrastructure.browser.stockbit_sqlite_connection_provider import (
+        StockbitSQLiteConnectionProvider,
+    )
+    from src.infrastructure.config.stockbit_config import StockbitConfig
 
 from src.infrastructure.browser.stockbit_base_provider import StockbitCachingProvider
-from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+from src.infrastructure.config.stockbit_config import load_stockbit_config
 from src.infrastructure.persistence.sqlite_migration_runner import SqliteMigrationRunner
 
-_ANALYST_URL = STOCKBIT_CFG.analyst_url
+logger = logging.getLogger(__name__)
 
 
 def _parse_date(raw: str) -> date | None:
@@ -113,6 +114,17 @@ class StockbitAnalystConsensusProvider(AnalystConsensusProvider, StockbitCaching
         db_path: Path to the SQLite database (same data.db used by other repos).
     """
 
+    def __init__(
+        self,
+        api_client: "StockbitApiClient | None",
+        db_path: Path | str = Path("data.db"),
+        *,
+        connection_provider: "StockbitSQLiteConnectionProvider | None" = None,
+        stockbit_config: StockbitConfig | None = None,
+    ) -> None:
+        self._stockbit_config = stockbit_config or load_stockbit_config()
+        super().__init__(api_client, db_path, connection_provider=connection_provider)
+
     # ── Schema ───────────────────────────────────────────────────────────────
 
     _MIGRATIONS: list[tuple[int, str]] = [
@@ -144,7 +156,8 @@ class StockbitAnalystConsensusProvider(AnalystConsensusProvider, StockbitCaching
         try:
             with self._get_conn() as conn:
                 row = conn.execute(
-                    "SELECT 1 FROM analyst_cache WHERE ticker=? AND substr(fetched_date,1,10)=? LIMIT 1",
+                    "SELECT 1 FROM analyst_cache WHERE ticker=?"
+                    " AND substr(fetched_date,1,10)=? LIMIT 1",
                     (ticker.upper(), today_str),
                 ).fetchone()
             return row is not None
@@ -220,7 +233,8 @@ class StockbitAnalystConsensusProvider(AnalystConsensusProvider, StockbitCaching
                         consensus.sell_count if consensus else 0,
                         consensus.avg_price_target if consensus else None,
                         consensus.current_price if consensus else None,
-                        consensus.last_updated.isoformat() if consensus and consensus.last_updated else None,
+                        consensus.last_updated.isoformat()
+                        if consensus and consensus.last_updated else None,
                         fetched_str,
                         consensus.price_target_low if consensus else None,
                         consensus.price_target_high if consensus else None,
@@ -260,14 +274,17 @@ class StockbitAnalystConsensusProvider(AnalystConsensusProvider, StockbitCaching
         if self._api_client is None:
             return None
         try:
-            url = _ANALYST_URL.format(ticker=ticker.upper())
+            url = self._stockbit_config.analyst_url.format(ticker=ticker.upper())
             body = self._api_client.get(url)
             if not body:
                 logger.debug("Empty analyst response for %s", ticker)
                 return None
             result = _parse_consensus(ticker, body)
             if result:
-                logger.debug("Analyst %s → %s (%d analysts)", ticker, result.consensus_label, result.analyst_count)
+                logger.debug(
+                    "Analyst %s → %s (%d analysts)",
+                    ticker, result.consensus_label, result.analyst_count
+                )
             return result
         except Exception as e:
             logger.warning("Analyst fetch failed for %s: %s", ticker, e)

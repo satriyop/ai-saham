@@ -11,11 +11,13 @@ from pathlib import Path
 
 from src.infrastructure.browser.stockbit_browser_context import (
     DEFAULT_PROFILE_DIR,
-    NAV_TIMEOUT,
     ORDERBOOK_PAGE_URL,
-    SPA_SETTLE_MS,
     _persistent_context,
     _require_playwright,
+)
+from src.infrastructure.config.stockbit_config import (
+    StockbitConfig,
+    load_stockbit_config,
 )
 
 logger = logging.getLogger(__name__)
@@ -106,7 +108,9 @@ def _extract_jwt(page) -> str | None:
 def extract_exodus_token(
     profile_dir: Path = DEFAULT_PROFILE_DIR,
     headless: bool = True,
-    timeout: int = NAV_TIMEOUT,
+    timeout: int | None = None,
+    *,
+    stockbit_config: StockbitConfig | None = None,
 ) -> str | None:
     """
     Open a (headless) browser with the saved profile, navigate to trigger an
@@ -115,6 +119,10 @@ def extract_exodus_token(
     Used by StockbitApiClient as the token_refresher callable. Returns None if
     the profile is missing or the session has expired (needs re-login).
     """
+    cfg = stockbit_config or load_stockbit_config()
+    nav_timeout = timeout or cfg.nav_timeout_ms
+    settle_ms = cfg.spa_settle_ms
+
     if not (profile_dir.exists() and any(profile_dir.iterdir())):
         logger.debug("No Stockbit profile at %s — run: saham fetch stockbit login", profile_dir)
         return None
@@ -125,8 +133,8 @@ def extract_exodus_token(
             ctx, page = _persistent_context(pw, profile_dir, headless=headless)
             token_box = _intercept_token(page)
             try:
-                page.goto(ORDERBOOK_PAGE_URL, timeout=timeout, wait_until="domcontentloaded")
-                page.wait_for_timeout(SPA_SETTLE_MS)
+                page.goto(ORDERBOOK_PAGE_URL, timeout=nav_timeout, wait_until="domcontentloaded")
+                page.wait_for_timeout(settle_ms)
             except Exception as e:
                 logger.debug("Navigation failed during token extraction: %s", e)
             token = _resolve_token(page, token_box)

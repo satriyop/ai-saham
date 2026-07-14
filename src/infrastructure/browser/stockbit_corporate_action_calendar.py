@@ -34,7 +34,7 @@ from src.domain.value_objects.corporate_action_calendar import (
 from src.infrastructure.browser.stockbit_corporate_action_event_parsers import (
     parse_corporate_action_items,
 )
-from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+from src.infrastructure.config.stockbit_config import StockbitConfig, load_stockbit_config
 
 if TYPE_CHECKING:
     from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
@@ -45,8 +45,11 @@ logger = logging.getLogger(__name__)
 class StockbitCorporateActionCalendarProvider(CorporateActionCalendarProvider):
     """Fetches market-wide corporate action calendar events from Stockbit Exodus."""
 
-    def __init__(self, api_client: "StockbitApiClient") -> None:
+    def __init__(
+        self, api_client: "StockbitApiClient", stockbit_config: StockbitConfig | None = None
+    ) -> None:
         self._api_client = api_client
+        self._stockbit_config = stockbit_config or load_stockbit_config()
 
     # ── Port implementation ────────────────────────────────────────────────
 
@@ -87,15 +90,15 @@ class StockbitCorporateActionCalendarProvider(CorporateActionCalendarProvider):
 
     def _url_for(self, event_type: CorporateActionType) -> str | None:
         return {
-            CorporateActionType.DIVIDEND: STOCKBIT_CFG.calendar_dividend_url,
-            CorporateActionType.STOCK_SPLIT: STOCKBIT_CFG.calendar_stocksplit_url,
-            CorporateActionType.REVERSE_SPLIT: STOCKBIT_CFG.calendar_reversesplit_url,
-            CorporateActionType.RIGHTS_ISSUE: STOCKBIT_CFG.calendar_rightissue_url,
-            CorporateActionType.BONUS: STOCKBIT_CFG.calendar_bonus_url,
-            CorporateActionType.TENDER_OFFER: STOCKBIT_CFG.calendar_tenderoffer_url,
-            CorporateActionType.RUPS: STOCKBIT_CFG.calendar_rups_url,
-            CorporateActionType.PUBEX: STOCKBIT_CFG.calendar_pubex_url,
-            CorporateActionType.IPO: STOCKBIT_CFG.calendar_ipo_url,
+            CorporateActionType.DIVIDEND: self._stockbit_config.calendar_dividend_url,
+            CorporateActionType.STOCK_SPLIT: self._stockbit_config.calendar_stocksplit_url,
+            CorporateActionType.REVERSE_SPLIT: self._stockbit_config.calendar_reversesplit_url,
+            CorporateActionType.RIGHTS_ISSUE: self._stockbit_config.calendar_rightissue_url,
+            CorporateActionType.BONUS: self._stockbit_config.calendar_bonus_url,
+            CorporateActionType.TENDER_OFFER: self._stockbit_config.calendar_tenderoffer_url,
+            CorporateActionType.RUPS: self._stockbit_config.calendar_rups_url,
+            CorporateActionType.PUBEX: self._stockbit_config.calendar_pubex_url,
+            CorporateActionType.IPO: self._stockbit_config.calendar_ipo_url,
         }.get(event_type)
 
     # ── Body dispatch ──────────────────────────────────────────────────────

@@ -10,25 +10,19 @@ import logging
 from pathlib import Path
 
 from src.infrastructure.config.app_config import APP_CFG
-from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
 
 logger = logging.getLogger(__name__)
 
 # ── Defaults ───────────────────────────────────────────────────────────────
 DEFAULT_PROFILE_DIR = Path(APP_CFG.storage.stockbit_profile_dir)
 
-# ── Stockbit URLs ──────────────────────────────────────────────────────────
+# ── Stockbit URLs (hardcoded — not from StockbitConfig) ────────────────────
 BASE_URL = "https://stockbit.com"
 STREAM_URL = "https://stockbit.com/stream"
 SCREENER_URL = "https://stockbit.com/screener"
 ORDER_BOOK_URL = "https://stockbit.com/stock/{ticker}/orderbook"
 ORDERBOOK_PAGE_URL = "https://stockbit.com/orderbook"
 LOGIN_URL = "https://stockbit.com/login"
-
-# ── Timeouts ───────────────────────────────────────────────────────────────
-NAV_TIMEOUT = STOCKBIT_CFG.nav_timeout_ms
-ELEMENT_TIMEOUT = STOCKBIT_CFG.element_timeout_ms
-SPA_SETTLE_MS = STOCKBIT_CFG.spa_settle_ms
 
 
 def _require_playwright():

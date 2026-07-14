@@ -33,10 +33,13 @@ from src.domain.value_objects.broker_distribution import (
     BrokerDistributionSnapshot,
 )
 from src.infrastructure.browser.stockbit_base_provider import StockbitCachingProvider
-from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+from src.infrastructure.config.stockbit_config import StockbitConfig, load_stockbit_config
 
 if TYPE_CHECKING:
     from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
+    from src.infrastructure.browser.stockbit_sqlite_connection_provider import (
+        StockbitSQLiteConnectionProvider,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +118,17 @@ class StockbitBrokerDistributionProvider(BrokerDistributionProvider, StockbitCac
         db_path:         Path to SQLite database.
     """
 
+    def __init__(
+        self,
+        api_client: "StockbitApiClient | None",
+        db_path: Path | str = Path("data.db"),
+        *,
+        connection_provider: "StockbitSQLiteConnectionProvider | None" = None,
+        stockbit_config: StockbitConfig | None = None,
+    ) -> None:
+        self._stockbit_config = stockbit_config or load_stockbit_config()
+        super().__init__(api_client, db_path, connection_provider=connection_provider)
+
     # ── Schema ───────────────────────────────────────────────────────────────
 
     def _ensure_schema(self) -> None:
@@ -170,7 +184,11 @@ class StockbitBrokerDistributionProvider(BrokerDistributionProvider, StockbitCac
                 }
                 for e in snapshot.top_sellers
             ])
-            fetched_str = snapshot.fetched_at.isoformat() if snapshot.fetched_at else datetime.now().isoformat()
+            fetched_str = (
+                snapshot.fetched_at.isoformat()
+                if snapshot.fetched_at
+                else datetime.now().isoformat()
+            )
             with self._get_conn() as conn:
                 conn.execute(
                     """
@@ -178,22 +196,29 @@ class StockbitBrokerDistributionProvider(BrokerDistributionProvider, StockbitCac
                         (ticker, trading_date, top_buyers_json, top_sellers_json, fetched_date)
                     VALUES (?, ?, ?, ?, ?)
                     """,
-                    (snapshot.ticker, snapshot.date.isoformat(), buyers_json, sellers_json, fetched_str),
+                    (
+                        snapshot.ticker, snapshot.date.isoformat(),
+                        buyers_json, sellers_json, fetched_str,
+                    ),
                 )
         except Exception as exc:
             logger.debug("broker_distribution_cache write error for %s: %s", snapshot.ticker, exc)
 
-    def _read_cache(self, ticker: str, trading_date: date | None) -> BrokerDistributionSnapshot | None:
+    def _read_cache(
+        self, ticker: str, trading_date: date | None
+    ) -> BrokerDistributionSnapshot | None:
         try:
             with self._get_conn() as conn:
                 if trading_date:
                     row = conn.execute(
-                        "SELECT * FROM broker_distribution_cache WHERE ticker=? AND trading_date=? LIMIT 1",
+                        "SELECT * FROM broker_distribution_cache"
+                        " WHERE ticker=? AND trading_date=? LIMIT 1",
                         (ticker.upper(), trading_date.isoformat()),
                     ).fetchone()
                 else:
                     row = conn.execute(
-                        "SELECT * FROM broker_distribution_cache WHERE ticker=? ORDER BY trading_date DESC LIMIT 1",
+                        "SELECT * FROM broker_distribution_cache"
+                        " WHERE ticker=? ORDER BY trading_date DESC LIMIT 1",
                         (ticker.upper(),),
                     ).fetchone()
         except Exception:
@@ -262,7 +287,7 @@ class StockbitBrokerDistributionProvider(BrokerDistributionProvider, StockbitCac
 
     def _fetch_live(self, ticker: str) -> BrokerDistributionSnapshot | None:
         try:
-            url = STOCKBIT_CFG.broker_distribution_url.format(ticker=ticker)
+            url = self._stockbit_config.broker_distribution_url.format(ticker=ticker)
             body = self._api_client.get(url)
             if not body:
                 return None

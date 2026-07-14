@@ -27,11 +27,12 @@ from src.infrastructure.browser.stockbit_insider_cache import StockbitInsiderCac
 from src.infrastructure.browser.stockbit_sqlite_connection_provider import (
     StockbitSQLiteConnectionProvider,
 )
-from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+from src.infrastructure.config.stockbit_config import (
+    StockbitConfig,
+    load_stockbit_config,
+)
 
 logger = logging.getLogger(__name__)
-
-_INSIDER_URL = STOCKBIT_CFG.insider_url
 
 _ACTION_MAP = {
     "BUY": "ACTION_TYPE_BUY",
@@ -165,8 +166,10 @@ class StockbitInsiderActivityProvider(InsiderActivityProvider, StockbitCachingPr
         api_client,
         db_path: Path | str = Path("data.db"),
         *,
+        stockbit_config: StockbitConfig | None = None,
         connection_provider: StockbitSQLiteConnectionProvider | None = None,
     ) -> None:
+        self._stockbit_config = stockbit_config or load_stockbit_config()
         self._db_path = Path(db_path).expanduser()
         self._connection_provider = connection_provider or StockbitSQLiteConnectionProvider()
         self._cache = StockbitInsiderCache(self._get_conn())
@@ -222,7 +225,7 @@ class StockbitInsiderActivityProvider(InsiderActivityProvider, StockbitCachingPr
             return []
         try:
             action_param = _ACTION_MAP.get(action_type.upper(), "ACTION_TYPE_BUY")
-            url = _INSIDER_URL.format(
+            url = self._stockbit_config.insider_url.format(
                 ticker=ticker.upper(),
                 from_date=from_date.isoformat(),
                 to_date=to_date.isoformat(),

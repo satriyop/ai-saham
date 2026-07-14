@@ -39,13 +39,7 @@ from src.domain.value_objects.screener_result import (
 )
 from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
 from src.infrastructure.browser.stockbit_browser_context import (
-    NAV_TIMEOUT as NAV_TIMEOUT,
-)
-from src.infrastructure.browser.stockbit_browser_context import (
     ORDERBOOK_PAGE_URL as ORDERBOOK_PAGE_URL,
-)
-from src.infrastructure.browser.stockbit_browser_context import (
-    SPA_SETTLE_MS as SPA_SETTLE_MS,
 )
 from src.infrastructure.browser.stockbit_browser_context import (
     _persistent_context as _persistent_context,
@@ -72,7 +66,7 @@ from src.infrastructure.browser.stockbit_token_extractor import (
 from src.infrastructure.browser.stockbit_token_extractor import (
     _resolve_token as _resolve_token,
 )
-from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+from src.infrastructure.config.stockbit_config import StockbitConfig, load_stockbit_config
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +75,7 @@ logger = logging.getLogger(__name__)
 #
 # Compatibility surface:
 # - Canonical import(s):
-#   - NAV_TIMEOUT, ORDERBOOK_PAGE_URL, SPA_SETTLE_MS, _persistent_context,
+#   - ORDERBOOK_PAGE_URL, _persistent_context,
 #     _require_playwright -> src.infrastructure.browser.stockbit_browser_context
 #   - browse_stockbit_session, get_stockbit_session_status,
 #     save_stockbit_session -> src.infrastructure.browser.stockbit_session_actions
@@ -94,15 +88,6 @@ logger = logging.getLogger(__name__)
 # - Expiry:
 #   - permanent public API, or remove after internal imports migrate to the
 #     canonical modules above.
-
-_sb = STOCKBIT_CFG
-
-_IEV_MOVER_URL_MAIN = _sb.iev_movers_main_url
-_IEV_MOVER_URL_SPECIAL = _sb.iev_movers_special_url
-_ORDER_BOOK_API = _sb.orderbook_url
-
-ELEMENT_TIMEOUT = STOCKBIT_CFG.element_timeout_ms
-
 
 # ── Main provider ──────────────────────────────────────────────────────────
 
@@ -124,8 +109,13 @@ class PlaywrightStockbitProvider(BrowserDataProvider):
         ob = provider.fetch_order_book_best_bid("BBCA")
     """
 
-    def __init__(self, api_client: StockbitApiClient) -> None:
+    def __init__(
+        self,
+        api_client: StockbitApiClient,
+        stockbit_config: StockbitConfig | None = None,
+    ) -> None:
         self._api_client = api_client
+        self._stockbit_config = stockbit_config or load_stockbit_config()
 
     def fetch_preopen_movers(self, iev_min: int) -> list[MoverData]:
         """
@@ -136,7 +126,9 @@ class PlaywrightStockbitProvider(BrowserDataProvider):
           2. Parse and return MoverData list filtered by iev_min
         """
         try:
-            all_movers = _fetch_iev_all_boards(self._api_client)
+            all_movers = _fetch_iev_all_boards(
+                self._api_client, stockbit_config=self._stockbit_config
+            )
         except Exception as e:
             raise RuntimeError(f"IEV fetch failed: {e}\nRun: saham fetch stockbit login") from None
         return [m for m in all_movers if m.iev >= iev_min]
@@ -157,13 +149,15 @@ class PlaywrightStockbitProvider(BrowserDataProvider):
         Returns:
             List of MoverWithOrderBook sorted by IEV descending
         """
-        all_movers = _fetch_iev_all_boards(self._api_client)
+        all_movers = _fetch_iev_all_boards(
+            self._api_client, stockbit_config=self._stockbit_config
+        )
         top_movers = all_movers[:top_n]
         logger.info("Top %d movers: %s", len(top_movers), [m.ticker for m in top_movers])
 
         results: list[MoverWithOrderBook] = []
         for mover in top_movers:
-            ob_url = _ORDER_BOOK_API.format(ticker=mover.ticker.upper())
+            ob_url = self._stockbit_config.orderbook_url.format(ticker=mover.ticker.upper())
             body = self._api_client.get(ob_url)
             bid_price, bid_lots, offer_price, offer_lots = _parse_top_of_book(body)
             results.append(
@@ -198,11 +192,13 @@ class PlaywrightStockbitProvider(BrowserDataProvider):
         Args:
             top_n: Maximum movers to return (default 50 to capture a broad universe).
         """
-        return _fetch_iev_all_boards(self._api_client)[:top_n]
+        return _fetch_iev_all_boards(self._api_client, stockbit_config=self._stockbit_config)[
+            :top_n
+        ]
 
     def _fetch_order_book_raw(self, ticker: str) -> OrderBookTopOfBook | None:
         """Fetch orderbook via api_client and return both bid and offer."""
-        ob_url = _ORDER_BOOK_API.format(ticker=ticker.upper())
+        ob_url = self._stockbit_config.orderbook_url.format(ticker=ticker.upper())
         body = self._api_client.get(ob_url)
         if not body:
             return None
@@ -257,16 +253,20 @@ class PlaywrightStockbitProvider(BrowserDataProvider):
 # ── Board-aware IEV fetcher ────────────────────────────────────────────────
 
 
-def _fetch_iev_all_boards(api_client: StockbitApiClient) -> list[MoverData]:
+def _fetch_iev_all_boards(
+    api_client: StockbitApiClient,
+    stockbit_config: StockbitConfig | None = None,
+) -> list[MoverData]:
     """
     Call IEV movers API for both board groups, merge, deduplicate, sort by IEV desc.
 
     Mirrors how the Stockbit frontend works: two separate API calls (main boards
     and special monitoring board), then combined into one sorted list.
     """
+    _cfg = stockbit_config or load_stockbit_config()
     seen: dict[str, MoverData] = {}
 
-    for url in (_IEV_MOVER_URL_MAIN, _IEV_MOVER_URL_SPECIAL):
+    for url in (_cfg.iev_movers_main_url, _cfg.iev_movers_special_url):
         body = api_client.get(url)
         if not body:
             logger.debug("No response from %s", url)

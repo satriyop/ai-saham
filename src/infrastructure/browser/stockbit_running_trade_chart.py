@@ -33,16 +33,15 @@ from src.domain.value_objects.running_trade_chart import (
     IntradayPriceBar,
     RunningTradeChart,
 )
+from src.infrastructure.config.stockbit_config import (
+    StockbitConfig,
+    load_stockbit_config,
+)
 
 if TYPE_CHECKING:
     from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
 
 logger = logging.getLogger(__name__)
-
-from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
-
-_CHART_URL = STOCKBIT_CFG.running_trade_chart_url
-
 
 def _raw_int(obj: dict | None, key: str = "raw") -> int | None:
     if not isinstance(obj, dict):
@@ -126,12 +125,15 @@ class StockbitRunningTradeChartProvider(RunningTradeChartProvider):
     No caching — data is live intraday. Callers are responsible for re-fetch timing.
     """
 
-    def __init__(self, api_client: "StockbitApiClient | None") -> None:
+    def __init__(
+        self, api_client: "StockbitApiClient | None", stockbit_config: StockbitConfig | None = None
+    ) -> None:
         self._api_client = api_client
+        self._stockbit_config = stockbit_config or load_stockbit_config()
 
     def fetch_chart(self, ticker: str) -> RunningTradeChart | None:
         try:
-            url = _CHART_URL.format(ticker=ticker.upper())
+            url = self._stockbit_config.running_trade_chart_url.format(ticker=ticker.upper())
             body = self._api_client.get(url)
             if not body:
                 logger.debug("Empty running trade chart response for %s", ticker)

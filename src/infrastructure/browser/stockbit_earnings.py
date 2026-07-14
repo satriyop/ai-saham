@@ -35,11 +35,12 @@ from src.infrastructure.browser.stockbit_earnings_cache import StockbitEarningsC
 from src.infrastructure.browser.stockbit_sqlite_connection_provider import (
     StockbitSQLiteConnectionProvider,
 )
-from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+from src.infrastructure.config.stockbit_config import (
+    StockbitConfig,
+    load_stockbit_config,
+)
 
 logger = logging.getLogger(__name__)
-
-_EARNINGS_URL = STOCKBIT_CFG.earnings_url
 
 _DEFAULT_QUARTERS = 4
 
@@ -133,8 +134,10 @@ class StockbitEarningsProvider(EarningsProvider, StockbitCachingProvider):
         api_client,
         db_path: Path | str = Path("data.db"),
         *,
+        stockbit_config: StockbitConfig | None = None,
         connection_provider: StockbitSQLiteConnectionProvider | None = None,
     ) -> None:
+        self._stockbit_config = stockbit_config or load_stockbit_config()
         self._db_path = Path(db_path).expanduser()
         self._connection_provider = connection_provider or StockbitSQLiteConnectionProvider()
         self._cache = StockbitEarningsCache(self._get_conn())
@@ -240,7 +243,9 @@ class StockbitEarningsProvider(EarningsProvider, StockbitCachingProvider):
 
     def _do_get(self, ticker: str, quarter: int, year: int) -> dict | None:
         try:
-            url = _EARNINGS_URL.format(ticker=ticker, quarter=quarter, year=year)
+            url = self._stockbit_config.earnings_url.format(
+                ticker=ticker, quarter=quarter, year=year
+            )
             return self._api_client.get(url)
         except Exception as e:
             logger.debug("Earnings GET failed for %s Q%s %s: %s", ticker, quarter, year, e)

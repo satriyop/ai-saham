@@ -28,7 +28,7 @@ from src.domain.entities.candle import Candle
 from src.domain.ports.market_data_provider import MarketDataProvider
 from src.domain.value_objects import is_non_idx_ticker
 from src.domain.value_objects.benchmark_symbol import canonicalize_ticker
-from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+from src.infrastructure.config.stockbit_config import StockbitConfig, load_stockbit_config
 
 if TYPE_CHECKING:
     from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
@@ -116,8 +116,10 @@ class StockbitHistoricalProvider(MarketDataProvider):
         self,
         api_client: "StockbitApiClient | None",
         non_idx_tickers: set[str] | None = None,
+        stockbit_config: StockbitConfig | None = None,
     ) -> None:
         self._api_client = api_client
+        self._stockbit_config = stockbit_config or load_stockbit_config()
         self._non_idx_tickers = non_idx_tickers or set()
 
     def fetch_daily_ohlcv(
@@ -138,7 +140,7 @@ class StockbitHistoricalProvider(MarketDataProvider):
         if is_non_idx_ticker(canonical_ticker, self._non_idx_tickers):
             return []
 
-        base_url = STOCKBIT_CFG.historical_summary_url.format(ticker=canonical_ticker)
+        base_url = self._stockbit_config.historical_summary_url.format(ticker=canonical_ticker)
         all_candles: list[Candle] = []
         page = 1
 

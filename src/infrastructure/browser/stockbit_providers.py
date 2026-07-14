@@ -7,6 +7,21 @@ can wire them into use-cases without importing each provider class individually.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.infrastructure.browser.stockbit_analyst import StockbitAnalystConsensusProvider
+    from src.infrastructure.browser.stockbit_bandar import StockbitBandarDetectorProvider
+    from src.infrastructure.browser.stockbit_corp_action import StockbitCorporateActionRepository
+    from src.infrastructure.browser.stockbit_forward_estimates import (
+        StockbitForwardEstimatesProvider,
+    )
+    from src.infrastructure.browser.stockbit_fundamentals import StockbitFundamentalsProvider
+    from src.infrastructure.browser.stockbit_insider import StockbitInsiderActivityProvider
+    from src.infrastructure.browser.stockbit_seasonality import StockbitSeasonalityProvider
+    from src.infrastructure.browser.stockbit_shareholding import StockbitShareholdingProvider
+    from src.infrastructure.browser.stockbit_ticker_notation import StockbitTickerNotationProvider
+
 
 class StockbitProviders:
     """Holds all optional Stockbit providers sharing one authenticated session."""

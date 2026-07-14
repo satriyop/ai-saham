@@ -24,6 +24,14 @@ from __future__ import annotations
 import logging
 import sqlite3
 from datetime import date, datetime, time
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.infrastructure.browser.stockbit_sqlite_connection_provider import (
+        StockbitSQLiteConnectionProvider,
+    )
+    from src.infrastructure.config.stockbit_config import StockbitConfig
 
 from src.domain.ports.forward_estimates_provider import ForwardEstimatesProvider
 from src.domain.value_objects.forward_estimates import ForwardEstimates
@@ -36,11 +44,9 @@ from src.infrastructure.browser.stockbit_pit_cache import (
     safe_cache_write,
     safe_schema_update,
 )
-from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
+from src.infrastructure.config.stockbit_config import load_stockbit_config
 
 logger = logging.getLogger(__name__)
-
-_CONSENSUS_URL = STOCKBIT_CFG.analyst_consensus_url
 
 _CREATE_TABLE = """
 CREATE TABLE IF NOT EXISTS forward_estimates_cache (
@@ -158,6 +164,21 @@ class StockbitForwardEstimatesProvider(ForwardEstimatesProvider, StockbitCaching
     Analyst estimates change at most daily.
     """
 
+    def __init__(
+        self,
+        api_client,
+        db_path: Path | str = Path("data.db"),
+        *,
+        stockbit_config: StockbitConfig | None = None,
+        connection_provider: StockbitSQLiteConnectionProvider | None = None,
+    ) -> None:
+        self._stockbit_config = stockbit_config or load_stockbit_config()
+        super().__init__(
+            api_client,
+            db_path,
+            connection_provider=connection_provider,
+        )
+
     def _ensure_schema(self) -> None:
         def _update():
             with sqlite3.connect(str(self._db_path)) as conn:
@@ -263,7 +284,7 @@ class StockbitForwardEstimatesProvider(ForwardEstimatesProvider, StockbitCaching
         if self._api_client is None:
             return None
         try:
-            url = _CONSENSUS_URL.format(ticker=ticker)
+            url = self._stockbit_config.analyst_consensus_url.format(ticker=ticker)
             body = self._api_client.get(url)
             if not body:
                 logger.debug("Empty forward estimates response for %s", ticker)

@@ -34,16 +34,15 @@ from src.domain.value_objects.intraday_broker_chart import (
     IntradayBrokerChartPoint,
     IntradayBrokerSymbolChart,
 )
+from src.infrastructure.config.stockbit_config import (
+    StockbitConfig,
+    load_stockbit_config,
+)
 
 if TYPE_CHECKING:
     from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
 
 logger = logging.getLogger(__name__)
-
-from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
-
-_CHART_URL = STOCKBIT_CFG.intraday_broker_chart_url
-
 
 def _parse_chart(broker_code: str, body: dict) -> IntradayBrokerChart | None:
     data = body.get("data") if isinstance(body, dict) else None
@@ -118,12 +117,17 @@ class StockbitIntradayBrokerChartProvider(IntradayBrokerChartProvider):
     No caching — data is live intraday.
     """
 
-    def __init__(self, api_client: "StockbitApiClient | None") -> None:
+    def __init__(
+        self, api_client: "StockbitApiClient | None", stockbit_config: StockbitConfig | None = None
+    ) -> None:
         self._api_client = api_client
+        self._stockbit_config = stockbit_config or load_stockbit_config()
 
     def fetch_chart(self, broker_code: str) -> IntradayBrokerChart | None:
         try:
-            url = _CHART_URL.format(broker_code=broker_code.upper())
+            url = self._stockbit_config.intraday_broker_chart_url.format(
+                broker_code=broker_code.upper()
+            )
             body = self._api_client.get(url)
             if not body:
                 logger.debug("Empty intraday broker chart response for %s", broker_code)

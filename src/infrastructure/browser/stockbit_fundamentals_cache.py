@@ -15,12 +15,9 @@ from datetime import date, datetime, time, timedelta
 from pathlib import Path
 
 from src.domain.value_objects.company_fundamentals import CompanyFundamentals
-from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
 from src.infrastructure.persistence.sqlite_migration_runner import SqliteMigrationRunner
 
 logger = logging.getLogger(__name__)
-
-_CACHE_TTL_DAYS = STOCKBIT_CFG.cache_ttl_days_fundamentals
 
 _CREATE_TABLE = """
 CREATE TABLE IF NOT EXISTS company_fundamentals (
@@ -61,8 +58,9 @@ def _parse_fetched_at(raw: str | None) -> datetime | None:
 class StockbitFundamentalsCache:
     """SQLite cache for CompanyFundamentals with TTL and PIT lookups."""
 
-    def __init__(self, db_path: Path) -> None:
+    def __init__(self, db_path: Path, *, cache_ttl_days: int) -> None:
         self._db_path = Path(db_path).expanduser()
+        self._cache_ttl_days = cache_ttl_days
 
     def ensure_schema(self) -> None:
         try:
@@ -82,7 +80,10 @@ class StockbitFundamentalsCache:
             if not row:
                 return False
             fetched_at = _parse_fetched_at(row[0])
-            return fetched_at is not None and (datetime.now() - fetched_at).days <= _CACHE_TTL_DAYS
+            return (
+                fetched_at is not None
+                and (datetime.now() - fetched_at).days <= self._cache_ttl_days
+            )
         except Exception:
             return False
 
@@ -110,7 +111,7 @@ class StockbitFundamentalsCache:
             fetched_at = _parse_fetched_at(row[0])
             if fetched_at is None:
                 return None
-            if as_of_date is None and (datetime.now() - fetched_at).days > _CACHE_TTL_DAYS:
+            if as_of_date is None and (datetime.now() - fetched_at).days > self._cache_ttl_days:
                 return None
             f_score_raw = row[5]
             return CompanyFundamentals(
@@ -177,7 +178,7 @@ class StockbitFundamentalsCache:
         market_cap_idr, etc.) are never overwritten by these derived rows.
         """
         _LAG = timedelta(days=60)
-        cutoff = date.today() - timedelta(days=_CACHE_TTL_DAYS)
+        cutoff = date.today() - timedelta(days=self._cache_ttl_days)
         inserted = 0
         try:
             with sqlite3.connect(self._db_path) as conn:

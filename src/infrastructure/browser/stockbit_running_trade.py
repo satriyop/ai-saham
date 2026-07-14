@@ -1,7 +1,8 @@
 """
 StockbitRunningTradeProvider — fetch live executed trade ticks from Stockbit.
 
-Calls /order-trade/running-trade?symbols[]={ticker}&sort=DESC&limit={limit}&order_by=RUNNING_TRADE_ORDER_BY_TIME
+Calls /order-trade/running-trade?symbols[]={ticker}&sort=DESC&limit={limit}"
+"&order_by=RUNNING_TRADE_ORDER_BY_TIME
 and returns parsed TradeTick objects (newest first).
 
 No cache: running trade data changes every second — caching would be stale immediately.
@@ -19,16 +20,15 @@ from typing import TYPE_CHECKING
 
 from src.domain.entities.trade_tick import TradeTick
 from src.domain.ports.running_trade_provider import RunningTradeProvider
+from src.infrastructure.config.stockbit_config import (
+    StockbitConfig,
+    load_stockbit_config,
+)
 
 if TYPE_CHECKING:
     from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
 
 logger = logging.getLogger(__name__)
-
-from src.infrastructure.config.stockbit_config import STOCKBIT_CFG
-
-_RUNNING_TRADE_URL = STOCKBIT_CFG.running_trade_url
-
 
 def _parse_ticks(ticker: str, body: dict) -> list[TradeTick]:
     """Parse running-trade response into TradeTick list.
@@ -120,7 +120,9 @@ def _parse_ticks(ticker: str, body: dict) -> list[TradeTick]:
             if st and "UNSPECIFIED" not in st and "TYPE" not in st:
                 seller = st.upper().strip()
 
-        trade_type = str(item.get("trade_type") or item.get("action") or item.get("market_board") or "").strip()
+        trade_type = str(
+            item.get("trade_type") or item.get("action") or item.get("market_board") or ""
+        ).strip()
         investor_type = str(
             item.get("investor_type") or item.get("type_investor") or item.get("inv_type") or ""
         ).strip().upper()
@@ -148,13 +150,16 @@ class StockbitRunningTradeProvider(RunningTradeProvider):
         broker_provider: Authenticated StockbitPlaywrightBrokerProvider for token access.
     """
 
-    def __init__(self, api_client: "StockbitApiClient | None") -> None:
+    def __init__(
+        self, api_client: "StockbitApiClient | None", stockbit_config: StockbitConfig | None = None
+    ) -> None:
         self._api_client = api_client
+        self._stockbit_config = stockbit_config or load_stockbit_config()
 
     def fetch_running_trade(self, ticker: str, limit: int = 80) -> list[TradeTick]:
         """Return the most recent executed ticks for ticker. Returns [] on any error."""
         try:
-            url = _RUNNING_TRADE_URL.format(ticker=ticker.upper(), limit=limit)
+            url = self._stockbit_config.running_trade_url.format(ticker=ticker.upper(), limit=limit)
             body = self._api_client.get(url)
             if not body:
                 logger.debug("Empty running-trade response for %s", ticker)
