@@ -1,5 +1,14 @@
 # Adapter Thinness And Hidden State Audit - 2026-07-14
 
+Status: DONE.
+
+Retired: 2026-07-15.
+
+Completion note:
+- All five findings were implemented and vetted.
+- Final verification was handled before retirement: architecture boundary checks were clean, command smoke tests passed, and finding-specific greps/tests passed during vetting.
+- This file is historical record only. Do not use it as an active backlog queue.
+
 Scope: current code only. This audit intentionally ignores retired findings and focuses on remaining adapter thinness, hidden session/config wiring, service-locator patterns, and tests that can hide those patterns.
 
 Baseline checked:

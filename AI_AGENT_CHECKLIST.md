@@ -70,6 +70,7 @@ Each touched layer must have a clear reason. If a layer is not touched, state `n
 * Adapters only parse input, call use cases, format output, and map errors
 * Dependencies are injected manually through constructors, request objects, typed bundles, ports, or narrow callables
 * Application use cases/services do not construct concrete SQLite, Stockbit, browser, filesystem, HTTP, or YAML-loader implementations
+* Runtime-only provider/session construction is lazy when the dependency is only needed for an optional branch
 * No new mandatory external services are introduced
 * No AI dependency is introduced into the domain layer
 * Local-first assumptions are preserved
@@ -244,6 +245,9 @@ If any answer is unclear, stop.
 - Adapters must not import private application helpers. If a helper is needed
   outside its module, promote a public application service or move the
   composition outward.
+- Adapter modules must not import private helpers from sibling command modules.
+  Shared adapter-only behavior belongs in a public, named adapter helper,
+  display module, or factory module.
 - Shared dependency graphs must be explicit typed bundles or factories, not
   repeated ad hoc wiring or service-locator functions.
 
@@ -258,6 +262,10 @@ If any answer is unclear, stop.
 - Application-layer modules must not be composition roots for concrete
   infrastructure. Composition belongs in adapters or infrastructure factories;
   application receives ports, typed configs, and callables.
+- Do not eagerly construct concrete providers/sessions in adapter factories
+  when a use case can determine they are unnecessary. Pass a lazy callable or
+  narrow factory and invoke it only after the workflow proves the optional
+  dependency is needed.
 - Architecture allowlists are temporary debt, not accepted design. Each entry
   needs a cleanup owner, canonical replacement path, and a test preventing new
   usage.
@@ -339,6 +347,9 @@ If any answer is unclear, stop.
 - Tests must not hide architecture violations by relying on global bootstrap
   fixtures. Pure tests construct pure services; integration tests name the
   infrastructure they exercise.
+- Tests must use `monkeypatch.setattr(...)` or fixtures for temporary global
+  replacement. Do not manually assign module globals and restore them in
+  `finally` blocks.
 
 ---
 
