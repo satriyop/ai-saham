@@ -55,9 +55,22 @@ Edge cases to watch:
 
 ### 2. High: `src/infrastructure/sentiment/ai_classifier.py` is a multi-provider adapter cluster
 
-Status: `OPEN`
+Status: `RESOLVED` (2026-07-14) — `AIClassifier` is now a thin orchestrator only
+(resolve provider, lazy-create client, build prompt, call provider, parse
+response, fallback to `NEUTRAL|GENERAL`). Prompts moved to
+`ai_classifier_prompts.py`, response parsing to
+`ai_classifier_response_parser.py`, and provider client creation/calls to
+`ai_classifier_providers.py` (`SUPPORTED_AI_CLASSIFIER_PROVIDERS`,
+`create_ai_classifier_client`, `call_ai_classifier_provider`,
+`AIClassifierProviderClientFactory`). Provider names, fallback behavior, and
+`AI_PROVIDER` env/config precedence unchanged; `AIClassifier` remains
+import-compatible. Verified by
+`tests/infrastructure/sentiment/test_ai_classifier.py`,
+`test_ai_classifier_prompts.py`, `test_ai_classifier_response_parser.py`,
+`test_ai_classifier_providers.py`, plus `tests/architecture` and
+`tests/integration/test_command_smoke_matrix.py` (all green).
 
-Pointer:
+Pointer (pre-refactor, kept for history):
 - `src/infrastructure/sentiment/ai_classifier.py:20` captures provider config globally.
 - `src/infrastructure/sentiment/ai_classifier.py:27` through `src/infrastructure/sentiment/ai_classifier.py:48` own prompt templates.
 - `src/infrastructure/sentiment/ai_classifier.py:117` through `src/infrastructure/sentiment/ai_classifier.py:139` dispatch provider selection.
