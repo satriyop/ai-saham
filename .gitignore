@@ -84,6 +84,7 @@ logs/
 notes/
 docs/archive/
 docs/thought/
+tasks/
 
 # Paper trade journal (local artefacts, not committed)
 journals/
