@@ -91,9 +91,17 @@ Risk and edge cases:
 - Existing tests may assert template text and overwrite behavior; preserve exact file content and `--force` semantics.
 - Failed README write currently warns but does not fail the command. Preserve that behavior unless explicitly changed.
 
-### 3. High: `src/adapters/cli/trade_intraday_confirm_commands.py` still owns confirmation workflow orchestration and live provider setup
+### 3. High: `src/adapters/cli/trade_intraday_confirm_commands.py` still owns confirmation workflow orchestration and live provider setup — DONE (2026-07-14)
 
-Pointer:
+Resolution:
+- `confirm_open()` no longer owns sidecar/track-file loading, opening-price resolution, Stockbit provider construction, confirmation assembly, or sidecar persistence inline; orchestration moved into `RunIntradayConfirmationWorkflowUseCase` (`src/application/use_case/run_intraday_confirmation_workflow_use_case.py`), invoked via `RunIntradayConfirmationWorkflowRequest` (`src/application/dto/intraday_confirmation_workflow.py`).
+- The use case emits typed progress events (`EVENT_STARTED`, `EVENT_MANUAL_PRICES`, `EVENT_TRACK_PRICES`, `EVENT_AUTO_RESOLUTION_NEEDED`, `EVENT_OBSERVATION`, `EVENT_RESOLUTION_SUMMARY`, `EVENT_REGIME_WARNING`) so the adapter's `_make_confirm_progress_printer()` callback reproduces the exact original CLI output ordering without any printing inside application code.
+- Stockbit session/provider construction now lives in `src/adapters/cli/trade_intraday_confirm_factory.py` (`create_run_intraday_confirmation_workflow`), wired as a lazy callable invoked only when live auto-resolution is actually needed — manual/track-file-only confirmations never touch Stockbit.
+- Track-file parse errors are scoped to a dedicated `IntradayTrackFileParseError` instead of a broad except around the whole workflow.
+- Commit `15a1ea1`.
+- CLI messages, exit codes, `--opening-json`/`--track-file` behavior, the unauthenticated-Stockbit message, `max_stop <= 0` validation, and the `RISK_OFF` regime-warning fallback are preserved exactly; boundary test added (`tests/adapters/cli/test_trade_intraday_confirm_commands_boundaries.py`) plus new use-case tests (`tests/application/use_case/test_run_intraday_confirmation_workflow_use_case.py`) and adapter tests (`tests/adapters/cli/test_trade_intraday_commands.py`).
+
+Pointer (historical, pre-fix):
 - `src/adapters/cli/trade_intraday_confirm_commands.py:50-213` parses opening JSON, reads sidecar files, decides manual/track/live resolution, creates Stockbit providers, resolves prices, confirms candidates, renders, and writes the confirmation sidecar.
 - `src/adapters/cli/trade_intraday_confirm_commands.py:135-153` imports concrete Stockbit providers and calls `get_stockbit_session()` inside the command.
 - `src/adapters/cli/trade_intraday_confirm_commands.py:187-208` maps config and sidecar-derived regime into `ConfirmIntradayOpenRequest`.
@@ -122,9 +130,18 @@ Risk and edge cases:
 - `max_stop <= 0` is adapter validation today; keep the same error message unless tests are updated.
 - `load_pre_open_market_regime()` can return a warning and then force `RISK_OFF`; preserve this fallback.
 
-### 4. Medium: `src/adapters/cli/analyze_sentiment_commands.py` still embeds large Rich display rendering in the command module
+### 4. Medium: `src/adapters/cli/analyze_sentiment_commands.py` still embeds large Rich display rendering in the command module — DONE (2026-07-15)
 
-Pointer:
+Resolution:
+- `analyze_sentiment_commands.py` is now a thin Typer adapter: option parsing, `load_app_config()` db-path resolution, start-line echoes, request DTO construction, factory-created use-case calls, display invocation, and exception-to-message mapping only.
+- Display rendering extracted to `src/adapters/cli/analyze_sentiment_display.py` (`display_sentiment_full`, `display_sentiment_brief`, `display_sentiment_audit`), mirroring the existing `analyze_risk_display.py` pattern; Rich imports (`Console`, `Panel`, `Table`, `Text`) live only there.
+- Dependency wiring extracted to `src/adapters/cli/analyze_sentiment_workflow_factory.py` (`create_fetch_sentiment_use_case`, `create_audit_sentiment_use_case`), mirroring `analyze_risk_workflow_factory.py`; owns `SentimentFactory`, `create_group_mapping_service`, `SQLiteSentimentRepository`, `SQLiteMarketRepository` construction.
+- `src/adapters/cli/analyze_risk_commands.py` updated to import `display_sentiment_brief` from `analyze_sentiment_display` instead of the private `_display_sentiment_brief` helper; no compatibility alias left behind.
+- Provider/model/no-ai behavior, news-provider option behavior, db-path resolution, header text, disclaimer text, network-error mapping, and non-network/audit error messages preserved exactly.
+- Added `tests/adapters/cli/test_analyze_sentiment_commands.py` covering the no-Rich/no-infra boundary check, factory wiring (fetch and audit), and both command paths (`sentiment`, `audit`).
+- Verified: forbidden-token greps clean, no `src.infrastructure` import in `application`/`domain`, `ruff check` passes clean, targeted `pytest tests/adapters/cli -k "sentiment or analyze_risk"` (16/16), `tests/integration/test_command_smoke_matrix.py` (4/4), `tests/architecture` (8/8), `git diff --check` clean.
+
+Pointer (historical, pre-fix):
 - `src/adapters/cli/analyze_sentiment_commands.py:73-101` wires sentiment providers, classifier, group mapping, repository, and executes `FetchSentimentUseCase`.
 - `src/adapters/cli/analyze_sentiment_commands.py:128-212` executes audit and renders audit tables inline.
 - `src/adapters/cli/analyze_sentiment_commands.py:215-367` contains full/brief sentiment display rendering helpers.

@@ -138,9 +138,9 @@ def risk(
             display.render_risk_trend(result.trend_response, trend)
 
         if with_sentiment and result.sentiment_snapshot:
-            from src.adapters.cli.analyze_sentiment_commands import _display_sentiment_brief
+            from src.adapters.cli.analyze_sentiment_display import display_sentiment_brief
 
-            _display_sentiment_brief(snapshot=result.sentiment_snapshot)
+            display_sentiment_brief(snapshot=result.sentiment_snapshot)
 
         typer.echo("\nDISCLAIMER: Analysis only, not trading advice.")
 
