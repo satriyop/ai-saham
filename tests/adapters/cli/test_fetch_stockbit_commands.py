@@ -2,11 +2,11 @@
 CLI tests for `saham fetch stockbit status`.
 
 Follows the CliRunner + monkeypatch convention from test_fetch_calendar_commands.py:
-the `status()` command body does `from ...playwright_stockbit_provider import
-get_stockbit_session_status` as a local import inside the function, re-imported
-fresh on every call, so we patch the name on the *source* module
-(src.infrastructure.browser.playwright_stockbit_provider) rather than on the
-adapter module.
+the `status()` command body (now in fetch_stockbit_session_commands.py) does
+`from ...playwright_stockbit_provider import get_stockbit_session_status` as a
+local import inside the function, re-imported fresh on every call, so we patch
+the name on the *source* module (src.infrastructure.browser.playwright_stockbit_provider)
+rather than on the adapter module.
 """
 
 from __future__ import annotations
@@ -90,3 +90,51 @@ def test_status_no_profile_prints_message_and_exits_cleanly(monkeypatch):
 
     assert result.exit_code == 0
     assert "No browser profile found" in result.stdout
+
+
+def test_stockbit_help_lists_all_commands():
+    result = runner.invoke(app, ["fetch", "stockbit", "--help"])
+
+    assert result.exit_code == 0
+    for command_name in ("login", "status", "spy", "test", "browse", "fetch-top5"):
+        assert command_name in result.stdout
+
+
+def test_test_command_exits_1_with_session_expired_message_when_unauthenticated(monkeypatch):
+    monkeypatch.setattr(
+        "src.adapters.cli.fetch_stockbit_diagnostic_factory.get_stockbit_session",
+        lambda: None,
+    )
+
+    result = runner.invoke(app, ["fetch", "stockbit", "test"])
+
+    assert result.exit_code == 1
+    assert "Stockbit session expired. Run `saham fetch stockbit login` to refresh." in result.stdout
+
+
+def test_fetch_top5_command_exits_1_with_session_expired_message_when_unauthenticated(monkeypatch):
+    monkeypatch.setattr(
+        "src.adapters.cli.fetch_stockbit_diagnostic_factory.get_stockbit_session",
+        lambda: None,
+    )
+
+    result = runner.invoke(app, ["fetch", "stockbit", "fetch-top5"])
+
+    assert result.exit_code == 1
+    assert "Stockbit session expired. Run `saham fetch stockbit login` to refresh." in result.stdout
+
+
+def test_router_does_not_import_concrete_stockbit_infrastructure():
+    import ast
+    import inspect
+
+    import src.adapters.cli.fetch_stockbit_commands as router_module
+
+    source = inspect.getsource(router_module)
+    tree = ast.parse(source)
+    imported_modules = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module:
+            imported_modules.add(node.module)
+
+    assert not any(m.startswith("src.infrastructure") for m in imported_modules)
