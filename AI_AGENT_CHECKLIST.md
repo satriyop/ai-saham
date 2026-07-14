@@ -234,6 +234,10 @@ If any answer is unclear, stop.
 - CLI command modules must not own workflow policy. If a command computes run
   guards, default precedence, multi-step orchestration, persistence schema, or
   secondary use-case calls, extract an application workflow use case.
+- CLI command groups must split independently searchable responsibilities once
+  they diverge. Status/session checks, display rendering, provider factories,
+  and cached query commands should live in named modules instead of one broad
+  command file.
 - Adapters must not import private application helpers. If a helper is needed
   outside its module, promote a public application service or move the
   composition outward.
@@ -296,6 +300,10 @@ If any answer is unclear, stop.
   Module-level registries, connection caches, and session stores are allowed
   only when immutable, test-resettable, or wrapped in an injected lifecycle
   object.
+- Multi-provider AI adapters must split orchestration from provider transport.
+  Keep prompt flow and retry logic in the adapter, provider SDK/HTTP calls in a
+  client module, output canonicalization in an output module, and mock keyword
+  templates in a mock-template module.
 
 ### Policy Module Rules
 
