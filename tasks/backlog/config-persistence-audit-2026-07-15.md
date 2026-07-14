@@ -12,7 +12,7 @@ Baseline checked:
 
 ### 1. High: Stockbit providers hide config loading across constructors and request helpers
 
-Status: RESOLVED
+Status: RESOLVED (commit `11d28b9`)
 
 Resolution:
 - Added `src/infrastructure/browser/stockbit_config_bundle.py` (`load_stockbit_provider_config`) as
