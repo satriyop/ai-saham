@@ -126,7 +126,7 @@ Guardrails and edge cases:
 
 ### 4. Medium: AI provider default resolution is duplicated across AI and sentiment infrastructure
 
-Status: TODO
+Status: RESOLVED (commit `bb2afb0`)
 
 Pointer:
 - `src/infrastructure/ai/factory.py:26` defines `_default_provider()`.
@@ -153,7 +153,7 @@ Guardrails and edge cases:
 
 ### 5. Medium: Evidence-context config loaders bypass `AppConfig.config_paths`
 
-Status: TODO
+Status: RESOLVED (commit `d41b3ed`)
 
 Pointer:
 - `src/infrastructure/config/company_quality_context_config_loader.py:14` hardcodes `config/company_quality_context.yaml`.

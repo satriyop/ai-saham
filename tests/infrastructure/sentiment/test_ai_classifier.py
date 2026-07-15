@@ -2,11 +2,15 @@ from src.domain.value_objects.sentiment import CatalystType, Sentiment
 from src.infrastructure.sentiment.ai_classifier import AIClassifier
 
 
+def _make_config(provider: str):
+    import types
+
+    ai = types.SimpleNamespace(provider=provider)
+    return types.SimpleNamespace(ai=ai)
+
+
 def test_explicit_provider_beats_env_and_config(monkeypatch):
     monkeypatch.setenv("AI_PROVIDER", "openai")
-    monkeypatch.setattr(
-        "src.infrastructure.sentiment.ai_classifier._default_ai_provider", lambda: "claude"
-    )
     classifier = AIClassifier(provider="ollama")
     assert classifier.classifier_name == "ai:ollama"
 
@@ -14,7 +18,8 @@ def test_explicit_provider_beats_env_and_config(monkeypatch):
 def test_env_provider_beats_config(monkeypatch):
     monkeypatch.setenv("AI_PROVIDER", "openai")
     monkeypatch.setattr(
-        "src.infrastructure.sentiment.ai_classifier._default_ai_provider", lambda: "claude"
+        "src.infrastructure.ai.provider_config.load_app_config",
+        lambda: _make_config("claude"),
     )
     classifier = AIClassifier()
     assert classifier.classifier_name == "ai:openai"
@@ -23,7 +28,8 @@ def test_env_provider_beats_config(monkeypatch):
 def test_config_provider_used_when_explicit_and_env_absent(monkeypatch):
     monkeypatch.delenv("AI_PROVIDER", raising=False)
     monkeypatch.setattr(
-        "src.infrastructure.sentiment.ai_classifier._default_ai_provider", lambda: "claude"
+        "src.infrastructure.ai.provider_config.load_app_config",
+        lambda: _make_config("claude"),
     )
     classifier = AIClassifier()
     assert classifier.classifier_name == "ai:claude"

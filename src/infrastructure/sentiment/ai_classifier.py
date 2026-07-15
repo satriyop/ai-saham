@@ -8,11 +8,10 @@ Layer: Infrastructure
 """
 
 import logging
-import os
 import time
 
 from src.domain.value_objects.sentiment import CatalystType, Classification, Sentiment
-from src.infrastructure.config.app_config import load_app_config
+from src.infrastructure.ai.provider_config import resolve_ai_provider
 from src.infrastructure.sentiment.ai_classifier_prompts import build_user_prompt
 from src.infrastructure.sentiment.ai_classifier_providers import (
     call_ai_classifier_provider,
@@ -23,10 +22,6 @@ from src.infrastructure.sentiment.ai_classifier_response_parser import (
 )
 
 logger = logging.getLogger("ai_saham.sentiment")
-
-
-def _default_ai_provider() -> str:
-    return load_app_config().ai.provider
 
 
 class AIClassifier:
@@ -60,8 +55,7 @@ class AIClassifier:
         self._client = None  # Lazy initialization
 
     def _resolve_provider(self) -> str:
-        provider = self._provider or os.getenv("AI_PROVIDER") or _default_ai_provider()
-        return provider.lower()
+        return resolve_ai_provider(self._provider)
 
     @property
     def classifier_name(self) -> str:

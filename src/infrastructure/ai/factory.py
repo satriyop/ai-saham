@@ -16,15 +16,11 @@ from src.domain.ports.ai_explainer import (
 )
 from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 from src.domain.value_objects.risk_assessment import RiskAssessment
-from src.infrastructure.config.app_config import load_app_config
+from src.infrastructure.ai.provider_config import resolve_ai_provider
 
 # Supported providers
 SUPPORTED_PROVIDERS = ("deepseek", "claude", "openai", "gemini", "ollama", "mock")
 DEFAULT_RATE_LIMIT = 10  # calls per minute
-
-
-def _default_provider() -> str:
-    return load_app_config().ai.provider
 
 
 class RateLimitedExplainer:
@@ -110,10 +106,7 @@ class ExplainerFactory:
             ValueError: If provider is not supported
         """
         # Determine provider
-        if provider is None:
-            provider = (os.getenv("AI_PROVIDER") or _default_provider()).lower()
-        else:
-            provider = provider.lower()
+        provider = resolve_ai_provider(provider)
 
         # Validate provider
         if provider not in SUPPORTED_PROVIDERS:

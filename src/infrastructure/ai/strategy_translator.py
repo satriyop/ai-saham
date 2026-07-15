@@ -23,6 +23,7 @@ import os
 import time
 
 from src.application.ports.strategy_translator import StrategyTranslatorAuthError
+from src.infrastructure.ai.provider_config import resolve_ai_provider
 from src.infrastructure.ai.strategy_translator_clients import (
     call_strategy_translator_provider,
 )
@@ -35,16 +36,11 @@ from src.infrastructure.ai.strategy_translator_prompt import (
     build_system_prompt,
     build_user_prompt,
 )
-from src.infrastructure.config.app_config import load_app_config
 
 logger = logging.getLogger("ai_saham.ai.strategy_translator")
 
 # Supported providers
 SUPPORTED_PROVIDERS = ("claude", "openai", "gemini", "ollama", "mock")
-
-
-def _default_provider() -> str:
-    return load_app_config().ai.provider
 
 
 # Re-exported for backward compatibility with existing imports:
@@ -91,10 +87,7 @@ class StrategyTranslatorAdapter:
             StrategyTranslatorAuthError: If required API key is missing.
             ValueError: If provider is not supported.
         """
-        if provider is None:
-            provider = (os.getenv("AI_PROVIDER") or _default_provider()).lower()
-        else:
-            provider = provider.lower()
+        provider = resolve_ai_provider(provider)
 
         if provider not in SUPPORTED_PROVIDERS:
             raise ValueError(
