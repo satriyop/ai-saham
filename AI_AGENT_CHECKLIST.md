@@ -70,6 +70,7 @@ Each touched layer must have a clear reason. If a layer is not touched, state `n
 * Adapters only parse input, call use cases, format output, and map errors
 * Dependencies are injected manually through constructors, request objects, typed bundles, ports, or narrow callables
 * Application use cases/services do not construct concrete SQLite, Stockbit, browser, filesystem, HTTP, or YAML-loader implementations
+* If drafting instructions for another agent, follow the strict handoff harness in `AGENT_QUICKSTART.md`
 * Runtime-only provider/session construction is lazy when the dependency is only needed for an optional branch
 * No new mandatory external services are introduced
 * No AI dependency is introduced into the domain layer

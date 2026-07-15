@@ -52,6 +52,51 @@ Agents often work in the same local checkout. Protect other work first:
 - If your uncommitted work matters, commit it before handing off or before another agent starts risky work.
 - If unrelated changes block the task, stop and report the conflict instead of overwriting them.
 
+## Drafting Instructions For Other Agents
+
+When drafting instructions for another agent, use a strict implementation
+harness. Multi-agent prompts must reduce interpretation space, not merely
+describe intent.
+
+Required structure:
+
+1. State the chosen decision.
+   - Do not present multiple implementation options unless the task is
+     explicitly a design discussion.
+   - If one option is chosen, write "Implement this option only."
+2. State forbidden interpretations.
+   - Add a `Do Not Interpret This As` section.
+   - Explicitly list shortcuts, compatibility behavior, or alternative readings
+     that are not allowed.
+3. Define exact contracts.
+   - Name methods, DTOs, repository methods, config keys, CLI flags, and
+     ownership boundaries when they are known.
+   - Avoid vague phrases like "wire appropriately", "reuse if possible", or
+     "handle as needed."
+4. Include end-to-end invariants.
+   - Say which downstream consumers must change too.
+   - Do not only describe the local file change.
+5. Require negative tests.
+   - Tests must prove forbidden behavior cannot happen.
+   - Existing tests that preserve old behavior must be updated, not worked
+     around.
+6. Define close criteria.
+   - State what must be true before the task is considered done.
+   - Include focused tests, full tests when feasible, and `git diff --check`.
+7. Require pre-edit design confirmation for structural changes.
+   - The agent must state how it will implement the contract before editing.
+   - If the design violates any forbidden interpretation, stop before coding.
+
+Use a `Do Not Interpret This As` section for high-risk work. Example:
+
+```md
+Do Not Interpret This As:
+- Do not make ordinary diagnostic commands write canonical learning data.
+- Do not expose private services through public properties to avoid wiring.
+- Do not preserve old behavior tests when the task explicitly changes the contract.
+- Do not update only the producer; update downstream consumers that rely on the contract.
+```
+
 ## Manual Dependency Injection
 
 This repository uses explicit manual DI, not a DI framework:
