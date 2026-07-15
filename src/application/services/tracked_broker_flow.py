@@ -41,7 +41,7 @@ class TrackedBrokerFlowSnapshot:
     neutral_flow: Decimal
     sessions: int
     through_date: date
-    source: str
+    source: str          # fixed "broker_daily_flow" — the data-product name, not the raw provider
     scope: str = "tracked_brokers"
 
     def to_dict(self) -> dict:
@@ -155,7 +155,10 @@ def compute_tracked_broker_flow(
         neutral_flow=neutral_flow,
         sessions=len(recent_dates),
         through_date=latest.date,
-        source=latest.source,
+        # Fixed data-product label, not the raw provider (e.g. "stockbit") —
+        # CLI/JSON consumers must be able to tell at a glance that this
+        # value came from the tracked-broker-subset table, not a raw feed.
+        source="broker_daily_flow",
     )
 
 

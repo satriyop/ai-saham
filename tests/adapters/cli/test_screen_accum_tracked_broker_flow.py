@@ -36,7 +36,7 @@ def test_screen_tracked_broker_flow_counts_local_noise_brokers():
     assert quality.label == "noise+"
     assert quality.noise_flow == Decimal(1_000 * 100 * 1000) + Decimal(650 * 100 * 1000)
     assert quality.neutral_flow == Decimal(-200 * 100 * 1000)
-    assert quality.to_dict()["source"] == "stockbit"
+    assert quality.to_dict()["source"] == "broker_daily_flow"
     assert quality.to_dict()["scope"] == "tracked_brokers"
 
 
