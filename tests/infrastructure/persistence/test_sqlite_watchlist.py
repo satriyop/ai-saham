@@ -79,6 +79,131 @@ def test_list_snapshots_returns_all_names(repo):
     assert "evening" in names
 
 
+def test_list_snapshots_counts_latest_run_only(repo):
+    entries_a = [
+        ScreenSnapshotEntry(
+            name="multi-run", saved_at=datetime(2026, 7, 1, 9, 0),
+            universe="lq45", window_days=7,
+            ticker="BBCA", rank=1, flow_score=70.0, composite_score=65.0,
+            consecutive_streak=3, net_buy_ratio=0.5, bci_label="CLUSTER",
+        ),
+        ScreenSnapshotEntry(
+            name="multi-run", saved_at=datetime(2026, 7, 1, 9, 0),
+            universe="lq45", window_days=7,
+            ticker="BBRI", rank=2, flow_score=60.0, composite_score=55.0,
+            consecutive_streak=2, net_buy_ratio=0.4, bci_label="CLUSTER",
+        ),
+        ScreenSnapshotEntry(
+            name="multi-run", saved_at=datetime(2026, 7, 1, 9, 0),
+            universe="lq45", window_days=7,
+            ticker="BMRI", rank=3, flow_score=50.0, composite_score=45.0,
+            consecutive_streak=1, net_buy_ratio=0.3, bci_label="CLUSTER",
+        ),
+    ]
+    entries_b = [
+        ScreenSnapshotEntry(
+            name="multi-run", saved_at=datetime(2026, 7, 2, 9, 0),
+            universe="idx80", window_days=30,
+            ticker="BBCA", rank=1, flow_score=80.0, composite_score=70.0,
+            consecutive_streak=4, net_buy_ratio=0.6, bci_label="SMART",
+        ),
+        ScreenSnapshotEntry(
+            name="multi-run", saved_at=datetime(2026, 7, 2, 9, 0),
+            universe="idx80", window_days=30,
+            ticker="BBRI", rank=2, flow_score=75.0, composite_score=65.0,
+            consecutive_streak=3, net_buy_ratio=0.5, bci_label="SMART",
+        ),
+    ]
+    entries_c = [
+        ScreenSnapshotEntry(
+            name="multi-run", saved_at=datetime(2026, 7, 3, 9, 0),
+            universe="custom", window_days=90,
+            ticker="BBCA", rank=1, flow_score=90.0, composite_score=80.0,
+            consecutive_streak=5, net_buy_ratio=0.7, bci_label="SMART",
+        ),
+        ScreenSnapshotEntry(
+            name="multi-run", saved_at=datetime(2026, 7, 3, 9, 0),
+            universe="custom", window_days=90,
+            ticker="BBRI", rank=2, flow_score=85.0, composite_score=75.0,
+            consecutive_streak=4, net_buy_ratio=0.6, bci_label="SMART",
+        ),
+        ScreenSnapshotEntry(
+            name="multi-run", saved_at=datetime(2026, 7, 3, 9, 0),
+            universe="custom", window_days=90,
+            ticker="BMRI", rank=3, flow_score=80.0, composite_score=70.0,
+            consecutive_streak=3, net_buy_ratio=0.5, bci_label="SMART",
+        ),
+        ScreenSnapshotEntry(
+            name="multi-run", saved_at=datetime(2026, 7, 3, 9, 0),
+            universe="custom", window_days=90,
+            ticker="GOTO", rank=4, flow_score=75.0, composite_score=65.0,
+            consecutive_streak=2, net_buy_ratio=0.4, bci_label="NOISE",
+        ),
+    ]
+    repo.save_snapshot(entries_a)
+    repo.save_snapshot(entries_b)
+    repo.save_snapshot(entries_c)
+
+    summaries = repo.list_snapshots()
+    assert len(summaries) == 1
+    s = summaries[0]
+    assert s["name"] == "multi-run"
+    assert s["ticker_count"] == 4
+
+
+def test_list_snapshots_uses_latest_universe_and_window_days(repo):
+    old = [
+        ScreenSnapshotEntry(
+            name="morning-watch", saved_at=datetime(2026, 7, 1, 9, 0),
+            universe="lq45", window_days=7,
+            ticker="BBCA", rank=1, flow_score=70.0, composite_score=65.0,
+            consecutive_streak=3, net_buy_ratio=0.5, bci_label="CLUSTER",
+        ),
+    ]
+    latest = [
+        ScreenSnapshotEntry(
+            name="morning-watch", saved_at=datetime(2026, 7, 3, 9, 0),
+            universe="custom", window_days=90,
+            ticker="BBCA", rank=1, flow_score=90.0, composite_score=80.0,
+            consecutive_streak=5, net_buy_ratio=0.7, bci_label="SMART",
+        ),
+    ]
+    repo.save_snapshot(old)
+    repo.save_snapshot(latest)
+
+    summaries = repo.list_snapshots()
+    assert len(summaries) == 1
+    s = summaries[0]
+    assert s["universe"] == "custom"
+    assert s["window_days"] == 90
+
+
+def test_list_snapshots_orders_by_latest_saved_at_desc(repo):
+    early = [
+        ScreenSnapshotEntry(
+            name="alpha", saved_at=datetime(2026, 7, 1, 9, 0),
+            universe="lq45", window_days=7,
+            ticker="BBCA", rank=1, flow_score=70.0, composite_score=65.0,
+            consecutive_streak=3, net_buy_ratio=0.5, bci_label="CLUSTER",
+        ),
+    ]
+    late = [
+        ScreenSnapshotEntry(
+            name="beta", saved_at=datetime(2026, 7, 3, 9, 0),
+            universe="lq45", window_days=7,
+            ticker="BBCA", rank=1, flow_score=90.0, composite_score=80.0,
+            consecutive_streak=5, net_buy_ratio=0.7, bci_label="SMART",
+        ),
+    ]
+    repo.save_snapshot(early)
+    repo.save_snapshot(late)
+
+    summaries = repo.list_snapshots()
+    assert len(summaries) == 2
+    assert summaries[0]["name"] == "beta"
+    assert summaries[1]["name"] == "alpha"
+
+
 def test_snapshot_exists(repo):
     assert repo.snapshot_exists("nonexistent") is False
     repo.save_snapshot([_entry("BBCA", 1)])

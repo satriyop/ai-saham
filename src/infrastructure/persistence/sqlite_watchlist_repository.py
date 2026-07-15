@@ -113,13 +113,26 @@ class SQLiteWatchlistRepository:
         with self._get_conn() as conn:
             rows = conn.execute(
                 """
-                SELECT name,
-                       COUNT(*) as ticker_count,
-                       MAX(saved_at) as latest_saved_at,
-                       universe,
-                       window_days
-                FROM screen_snapshots
-                GROUP BY name
+                WITH latest AS (
+                    SELECT name, MAX(saved_at) AS latest_saved_at
+                    FROM screen_snapshots
+                    GROUP BY name
+                ),
+                latest_rows AS (
+                    SELECT s.*
+                    FROM screen_snapshots s
+                    JOIN latest l
+                      ON l.name = s.name
+                     AND l.latest_saved_at = s.saved_at
+                )
+                SELECT
+                    name,
+                    COUNT(*) AS ticker_count,
+                    saved_at AS latest_saved_at,
+                    MIN(universe) AS universe,
+                    MIN(window_days) AS window_days
+                FROM latest_rows
+                GROUP BY name, saved_at
                 ORDER BY latest_saved_at DESC
                 """
             ).fetchall()
