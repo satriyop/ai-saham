@@ -116,10 +116,10 @@ Layer plan:
 
 ### Acceptance Criteria
 
-- [ ] Source tag is visible in terminal output
-- [ ] No Rich markup exception
-- [ ] Existing `test_today_commands.py` still passes
-- [ ] `git diff --check` clean
+- [x] Source tag is visible in terminal output
+- [x] No Rich markup exception
+- [x] Existing `test_today_commands.py` still passes
+- [x] `git diff --check` clean
 
 ---
 
@@ -164,10 +164,10 @@ Layer plan:
 
 ### Acceptance Criteria
 
-- [ ] `test_cli_help_exits_zero` passes
-- [ ] `test_today_help_exits_zero` passes
-- [ ] All existing tests pass
-- [ ] `git diff --check` clean
+- [x] `test_cli_help_exits_zero` passes
+- [x] `test_today_help_exits_zero` passes
+- [x] All existing tests pass
+- [x] `git diff --check` clean
 
 ---
 
