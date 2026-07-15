@@ -43,7 +43,7 @@
 - `src/application/use_case/daily_briefing_use_case.py` has three clocks (`live_session_date`, `latest_completed_eod_date`, `opening_snapshot_date`) and `is_historical` flag.
 - Screen backlog S3 already introduced `src/domain/value_objects/data_freshness_status.py` and `src/application/services/data_freshness_service.py`; today work reuses these.
 - `src/application/use_case/daily_briefing_use_case.py` still reads opening snapshot candidates without universe filtering, so T5 remains valid.
-- `src/adapters/cli/today_commands.py` still renders `Top Pre-Open Candidates`, `Top Accumulation Candidates`, `REGIME_DISPLAY_LABEL`, plain capped warnings, and static `saham analyze swing TICKER`, so T6/T7/T9/T10/T11/T12 remain valid.
+- `src/adapters/cli/today_commands.py` still renders `Top Pre-Open Candidates`, `REGIME_DISPLAY_LABEL`, plain capped warnings, and static `saham analyze swing TICKER`, so T6/T9/T10/T11/T12 remain valid. T7 is resolved (see T7 section for as-built notes).
 
 ---
 
@@ -57,7 +57,7 @@
 | 4 | `T4` | P0 | Feature | Fail-closed per-dataset readiness + ranking suppression | ✅ RESOLVED |
 | 5 | `T5` | P0 | Bugfix | Enforce universe scope in pre-open opening candidates | ✅ RESOLVED |
 | 6 | `T6` | P0 | Refactor | Rename to verdict-first pre-open presentation | ✅ RESOLVED |
-| 7 | `T7` | P0 | Feature | Canonical accumulation funnel (Signal + Risk + TradeSetup) | ❌ Open |
+| 7 | `T7` | P0 | Feature | Canonical accumulation funnel (Signal + Risk + TradeSetup) | ✅ Done |
 | 8 | `T8` | P0 | Feature | Bounded swing shortlist assessment | ❌ Open |
 | 9 | `T9` | P1 | Refactor | Expose honest market context (stop aliasing RISK_ON→BULLISH) | ❌ Open |
 | 10 | `T10` | P1 | Feature | Primary verdict header before tables | ❌ Open |
@@ -516,15 +516,51 @@ Layer plan:
 
 ### Acceptance Criteria
 
-- [ ] Section is titled `ACCUMULATION SCREEN`
-- [ ] Funnel summary shows: checked, data-ready, flow candidates, WATCH, ENTER, blocked counts
-- [ ] Table shows: Ticker, Flow, Phase, Signal, Coverage, Risk, Action columns
-- [ ] `Score` column is gone; `Flow` column shows foreign flow score
-- [ ] Ranking follows canonical policy (TradeSetup action outranks flow score)
-- [ ] Test: ticker with high flow score but AVOID TradeSetup does not rank above a lower-flow WATCH
-- [ ] No new network calls; local only
-- [ ] Full test suite passes
-- [ ] `git diff --check` clean
+- [x] Section is titled `ACCUMULATION SCREEN`
+- [x] Funnel summary shows: checked, data-ready, flow candidates, WATCH, ENTER, blocked counts
+- [x] Table shows: Ticker, Flow, Phase, Signal, Coverage, Risk, Action columns
+- [x] `Score` column is gone; `Flow` column shows foreign flow score
+- [x] No new network calls; local only
+- [x] Full test suite passes
+- [x] `git diff --check` clean
+- [~] Ranking follows canonical policy (TradeSetup action outranks flow score) — **superseded, see As-Built Note**
+- [~] Test: ticker with high flow score but AVOID TradeSetup does not rank above a lower-flow WATCH — **superseded, see As-Built Note**
+
+### As-Built Note (2026-07-15)
+
+Implemented as a pure **projection**, not a new ranking/decision engine, per an
+explicit corrected principle from the task requester: `today` must not invent
+decision policy — it must project canonical `AccumulationScreenUseCase`
+output as-is.
+
+Deviations from the original design above:
+- No `DailySwingShortlistUseCase` was created. A new
+  `DailyAccumulationProjector` (`src/application/use_case/daily_accumulation_projection.py`)
+  maps each `AccumulationCandidate` already returned by
+  `AccumulationScreenUseCase` into a `DailyAccumulationCandidate` DTO
+  (flow score, setup phase, signal score/coverage, risk status, TradeSetup
+  action) and a `DailyAccumulationSummary` (checked/data-ready/flow
+  candidates/ENTER/WATCH/blocked/unclassified counts).
+- **No local ranking/sorting is introduced.** `today` preserves the exact
+  order returned by `AccumulationScreenUseCase` — the "TradeSetup outranks
+  flow score" acceptance criterion above is not applicable because `today`
+  does not rank at all; ranking policy remains solely inside
+  `AccumulationScreenUseCase`.
+- Candidates with no `trade_setup` are shown as **unclassified** (`action =
+  None`, counted in `unclassified_count`, with a warning), not assigned a
+  pseudo-action like `REVIEW`.
+- `today_commands.py` now wires a risk-enabled `AccumulationScreenUseCase`
+  via `create_accumulation_assess_risk_use_case` (adapter wiring only, no
+  policy) so `risk_assessment`/`trade_setup` are actually populated.
+
+Tests: `tests/application/use_case/test_daily_accumulation_projection.py`
+(new), `tests/application/use_case/test_daily_briefing.py`,
+`tests/adapters/cli/test_today_commands.py`.
+
+T8 (`SWING SHORTLIST`) was explicitly **not** implemented in this change. Its
+stated precondition ("T7 must be completed (requires
+`DailySwingShortlistUseCase`)") no longer holds as written, since T7 shipped
+without that use case — T8 scoping should be revisited before starting it.
 
 ---
 

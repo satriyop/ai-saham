@@ -19,6 +19,11 @@ from src.application.ports.universe_config_loader import UniverseConfigLoader
 from src.application.services.data_freshness_service import compute_data_freshness
 from src.application.services.universe_loader import load_universe
 from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
+from src.application.use_case.daily_accumulation_projection import (
+    DailyAccumulationCandidate,
+    DailyAccumulationProjector,
+    DailyAccumulationSummary,
+)
 from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.value_objects.data_freshness_status import (
@@ -92,6 +97,10 @@ class DailyBriefingResponse:
     opening_candidates: list[OpeningBriefingCandidate] = field(default_factory=list)
     market_wide_opening_observations: list[OpeningBriefingCandidate] = field(default_factory=list)
     accumulation_candidates: list[AccumulationCandidate] = field(default_factory=list)
+    accumulation_summary: DailyAccumulationSummary | None = None
+    daily_accumulation_candidates: list[DailyAccumulationCandidate] = field(
+        default_factory=list
+    )
     warnings: list[str] = field(default_factory=list)
 
 
@@ -190,9 +199,29 @@ class DailyBriefingUseCase:
         )
         overall_authority = self._overall_authority(readiness_items)
 
+        candle_coverage_count = next(
+            (item.coverage_count for item in readiness_items if item.dataset == "candles"),
+            None,
+        )
+        data_ready = (
+            candle_coverage_count
+            if candle_coverage_count is not None
+            else len(universe_tickers) - stale_count
+        )
+
         accumulation_candidates: list[AccumulationCandidate] = []
         if overall_authority == "NOT_READY":
             warnings.append("Accumulation screen suppressed because data readiness is NOT_READY.")
+            accumulation_summary = DailyAccumulationSummary(
+                checked=len(universe_tickers),
+                data_ready=data_ready,
+                flow_candidates=0,
+                enter_count=0,
+                watch_count=0,
+                blocked_count=0,
+                unclassified_count=0,
+            )
+            daily_accumulation_candidates: list[DailyAccumulationCandidate] = []
         else:
             if overall_authority == "PARTIAL":
                 warnings.append("Accumulation screen is shown with PARTIAL data readiness.")
@@ -216,6 +245,15 @@ class DailyBriefingUseCase:
                     except Exception as exc:
                         warnings.append(f"Accumulation screen unavailable: {exc}")
 
+            projection = DailyAccumulationProjector().project(
+                candidates=accumulation_candidates,
+                checked=len(universe_tickers),
+                data_ready=data_ready,
+            )
+            accumulation_summary = projection.summary
+            daily_accumulation_candidates = projection.candidates
+            warnings.extend(projection.warnings)
+
         return DailyBriefingResponse(
             live_session_date=live_session_date,
             latest_completed_eod_date=latest_completed_eod_date,
@@ -231,6 +269,8 @@ class DailyBriefingUseCase:
             opening_candidates=opening_candidates,
             market_wide_opening_observations=market_wide_opening_observations,
             accumulation_candidates=accumulation_candidates,
+            accumulation_summary=accumulation_summary,
+            daily_accumulation_candidates=daily_accumulation_candidates,
             warnings=warnings,
         )
 

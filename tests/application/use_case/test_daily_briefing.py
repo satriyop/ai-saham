@@ -4,6 +4,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
+from src.application.dto.accumulation_screen import AccumulationCandidate
 from src.application.services.indicator_registry import IndicatorRegistry
 from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
 from src.application.use_case.daily_briefing_use_case import (
@@ -515,3 +516,106 @@ def test_daily_briefing_empty_universe_treats_opening_rows_as_market_wide(tmp_pa
     assert response.opening_candidates == []
     assert len(response.market_wide_opening_observations) == 1
     assert response.market_wide_opening_observations[0].ticker == "A"
+
+
+def _real_accumulation_candidate(ticker: str = "BBCA") -> AccumulationCandidate:
+    return AccumulationCandidate(
+        ticker=ticker,
+        window_days=7,
+        net_buy_days=5,
+        total_days=7,
+        net_buy_ratio=0.71,
+        total_net_value=Decimal("1000000"),
+        consecutive_streak=3,
+        foreign_vwap=Decimal("10000"),
+        current_price=Decimal("10050"),
+        vwap_discount_pct=0.5,
+        rsi=50.0,
+        trend="UP",
+        foreign_flow_score=60.6,
+        top_brokers=None,
+        institutional_flag=True,
+    )
+
+
+def test_daily_briefing_projects_accumulation_candidates(monkeypatch):
+    tickers = ["T1", "T2", "T3"]
+    monkeypatch.setattr(
+        "src.application.use_case.daily_briefing_use_case.load_universe",
+        lambda *a, **kw: tickers,
+    )
+
+    market_repo = MagicMock()
+    market_repo.get_date_range.return_value = (date(2026, 6, 1), date(2026, 6, 19))
+    broker_repo = MagicMock()
+    broker_repo.get_date_range.return_value = (date(2026, 6, 1), date(2026, 6, 19))
+
+    regime_uc = MagicMock()
+    accum_uc = MagicMock()
+    fake_candidate = _real_accumulation_candidate("BBCA")
+    accum_uc.execute.return_value = MagicMock(candidates=[fake_candidate])
+
+    use_case = DailyBriefingUseCase(
+        market_repository=market_repo,
+        broker_repository=broker_repo,
+        regime_use_case=regime_uc,
+        accumulation_use_case=accum_uc,
+        universe_loader=MagicMock(),
+    )
+
+    response = use_case.execute(
+        DailyBriefingRequest(universe="lq45", as_of_date=date(2026, 6, 19))
+    )
+
+    assert response.accumulation_summary is not None
+    assert response.accumulation_summary.checked == 3
+    assert response.accumulation_summary.flow_candidates == 1
+    assert response.accumulation_summary.unclassified_count == 1
+    assert len(response.daily_accumulation_candidates) == 1
+    assert response.daily_accumulation_candidates[0].ticker == "BBCA"
+    assert response.daily_accumulation_candidates[0].flow_score == 60.6
+    assert response.daily_accumulation_candidates[0].action is None
+
+
+def test_daily_briefing_not_ready_skips_accumulation_projection_rows(monkeypatch):
+    tickers = [f"T{i}" for i in range(45)]
+    monkeypatch.setattr(
+        "src.application.use_case.daily_briefing_use_case.load_universe",
+        lambda *a, **kw: tickers,
+    )
+
+    current_tickers = [f"T{i}" for i in range(4)]
+    market_repo = MagicMock()
+
+    def market_side_effect(ticker):
+        if ticker in current_tickers:
+            return (date(2026, 6, 1), date(2026, 6, 19))
+        return (date(2026, 6, 1), date(2026, 6, 18))
+
+    market_repo.get_date_range.side_effect = market_side_effect
+
+    broker_repo = MagicMock()
+    broker_repo.get_date_range.return_value = (date(2026, 6, 1), date(2026, 6, 19))
+
+    regime_uc = MagicMock()
+    accum_uc = MagicMock()
+    accum_uc.execute.return_value = MagicMock(candidates=[])
+
+    use_case = DailyBriefingUseCase(
+        market_repository=market_repo,
+        broker_repository=broker_repo,
+        regime_use_case=regime_uc,
+        accumulation_use_case=accum_uc,
+        universe_loader=MagicMock(),
+    )
+
+    response = use_case.execute(
+        DailyBriefingRequest(universe="lq45", as_of_date=date(2026, 6, 19))
+    )
+
+    assert response.overall_authority == "NOT_READY"
+    assert response.daily_accumulation_candidates == []
+    assert response.accumulation_summary is not None
+    assert response.accumulation_summary.flow_candidates == 0
+    assert response.accumulation_summary.checked == 45
+    accum_uc.execute.assert_not_called()

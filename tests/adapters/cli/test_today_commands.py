@@ -77,7 +77,7 @@ def test_today_renders_rich_dashboard_with_lifecycle_next_steps(tmp_path: Path):
     assert "Daily Briefing - 2026-06-19" in result.stdout
     assert "Data & Regime" in result.stdout
     assert "PRE-OPEN ASSESSMENT" in result.stdout
-    assert "Top Accumulation Candidates" in result.stdout
+    assert "ACCUMULATION SCREEN" in result.stdout
     assert "Run: saham learn snapshot --force" in result.stdout
     stdout_clean = result.stdout.replace("\n", "").replace(" ", "").replace("│", "")
     assert "sahamscreenaccum--universelq45|sahamanalyzeswingTICKER" in stdout_clean
@@ -104,6 +104,8 @@ def test_today_uses_loaded_config_and_not_global(tmp_path: Path):
         mock_response.opening_candidates = []
         mock_response.market_wide_opening_observations = []
         mock_response.accumulation_candidates = []
+        mock_response.accumulation_summary = None
+        mock_response.daily_accumulation_candidates = []
         mock_response.warnings = []
         mock_response.live_session_date = date(2026, 6, 19)
         mock_response.latest_completed_eod_date = date(2026, 6, 19)
@@ -267,6 +269,10 @@ def test_today_marks_partial_accumulation_output():
     from unittest.mock import MagicMock, patch
 
     from src.application.dto.accumulation_screen import AccumulationCandidate
+    from src.application.use_case.daily_accumulation_projection import (
+        DailyAccumulationCandidate,
+        DailyAccumulationSummary,
+    )
     from src.application.use_case.daily_briefing_use_case import (
         DailyBriefingResponse,
         DataReadiness,
@@ -288,6 +294,16 @@ def test_today_marks_partial_accumulation_output():
         foreign_flow_score=80.0,
         top_brokers=None,
         institutional_flag=True,
+    )
+
+    fake_projected_candidate = DailyAccumulationCandidate(
+        ticker="BBCA",
+        flow_score=80.0,
+        setup_phase="ACCUMULATION",
+        signal_score=70,
+        coverage_score=0.8,
+        risk_status="OPEN",
+        action="WATCH",
     )
 
     fake_response = DailyBriefingResponse(
@@ -337,6 +353,16 @@ def test_today_marks_partial_accumulation_output():
         regime=None,
         opening_candidates=[],
         accumulation_candidates=[fake_candidate],
+        accumulation_summary=DailyAccumulationSummary(
+            checked=10,
+            data_ready=8,
+            flow_candidates=1,
+            enter_count=0,
+            watch_count=1,
+            blocked_count=0,
+            unclassified_count=0,
+        ),
+        daily_accumulation_candidates=[fake_projected_candidate],
         warnings=["Accumulation screen is shown with PARTIAL data readiness."],
     )
 
@@ -612,3 +638,122 @@ def test_today_pre_open_assessment_keeps_market_wide_separate():
         idx_pre_open = stdout.index("PRE-OPEN ASSESSMENT")
         # C does not appear between PRE-OPEN ASSESSMENT and Market-wide observations
         assert "│ C " not in stdout[idx_pre_open:idx_market_wide]
+
+
+def test_today_accumulation_screen_renders_canonical_projection():
+    from unittest.mock import MagicMock, patch
+
+    from src.application.use_case.daily_accumulation_projection import (
+        DailyAccumulationCandidate,
+        DailyAccumulationSummary,
+    )
+    from src.application.use_case.daily_briefing_use_case import DailyBriefingResponse
+
+    fake_response = DailyBriefingResponse(
+        live_session_date=date(2026, 6, 19),
+        latest_completed_eod_date=date(2026, 6, 19),
+        opening_snapshot_date=date(2026, 6, 19),
+        is_historical=True,
+        universe="lq45",
+        universe_count=45,
+        data_freshness=[],
+        stale_count=0,
+        readiness_items=[],
+        overall_authority="READY",
+        regime=None,
+        opening_candidates=[],
+        market_wide_opening_observations=[],
+        accumulation_candidates=[],
+        accumulation_summary=DailyAccumulationSummary(
+            checked=45,
+            data_ready=41,
+            flow_candidates=1,
+            enter_count=0,
+            watch_count=1,
+            blocked_count=0,
+            unclassified_count=0,
+        ),
+        daily_accumulation_candidates=[
+            DailyAccumulationCandidate(
+                ticker="INDF",
+                flow_score=60.6,
+                setup_phase="ACCUMULATION",
+                signal_score=72,
+                coverage_score=0.82,
+                risk_status="OPEN",
+                action="WATCH",
+            )
+        ],
+        warnings=[],
+    )
+
+    with patch("src.adapters.cli.today_commands.DailyBriefingUseCase") as mock_uc_class:
+        mock_uc = MagicMock()
+        mock_uc_class.return_value = mock_uc
+        mock_uc.execute.return_value = fake_response
+
+        result = runner.invoke(app, ["today", "--universe", "lq45", "--date", "2026-06-19"])
+        assert result.exit_code == 0
+
+        stdout = result.stdout
+        assert "ACCUMULATION SCREEN" in stdout
+        assert "Flow" in stdout
+        assert "Phase" in stdout
+        assert "Signal" in stdout
+        assert "Coverage" in stdout
+        assert "Risk" in stdout
+        assert "Action" in stdout
+        assert "INDF" in stdout
+        assert "WATCH" in stdout
+        assert "Top Accumulation Candidates" not in stdout
+
+
+def test_today_accumulation_not_ready_suppresses_projection_rows():
+    from unittest.mock import MagicMock, patch
+
+    from src.application.use_case.daily_accumulation_projection import (
+        DailyAccumulationCandidate,
+    )
+    from src.application.use_case.daily_briefing_use_case import DailyBriefingResponse
+
+    fake_response = DailyBriefingResponse(
+        live_session_date=date(2026, 6, 19),
+        latest_completed_eod_date=date(2026, 6, 19),
+        opening_snapshot_date=date(2026, 6, 19),
+        is_historical=True,
+        universe="lq45",
+        universe_count=45,
+        data_freshness=[],
+        stale_count=41,
+        readiness_items=[],
+        overall_authority="NOT_READY",
+        regime=None,
+        opening_candidates=[],
+        market_wide_opening_observations=[],
+        accumulation_candidates=[],
+        accumulation_summary=None,
+        # Simulates a use case bug that leaks rows even though NOT_READY; the
+        # adapter must still suppress rendering regardless of this field.
+        daily_accumulation_candidates=[
+            DailyAccumulationCandidate(
+                ticker="ZZZZ",
+                flow_score=99.0,
+                setup_phase="ACCUMULATION",
+                signal_score=90,
+                coverage_score=0.9,
+                risk_status="OPEN",
+                action="ENTER",
+            )
+        ],
+        warnings=["Accumulation screen suppressed because data readiness is NOT_READY."],
+    )
+
+    with patch("src.adapters.cli.today_commands.DailyBriefingUseCase") as mock_uc_class:
+        mock_uc = MagicMock()
+        mock_uc_class.return_value = mock_uc
+        mock_uc.execute.return_value = fake_response
+
+        result = runner.invoke(app, ["today", "--universe", "lq45", "--date", "2026-06-19"])
+        assert result.exit_code == 0
+        assert "Suppressed" in result.stdout
+        assert "ZZZZ" not in result.stdout

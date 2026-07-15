@@ -12,6 +12,9 @@ import typer
 from rich.console import Console, Group
 from rich.text import Text
 
+from src.adapters.cli.accumulation_risk_workflow_factory import (
+    create_accumulation_assess_risk_use_case,
+)
 from src.adapters.cli.rich_display import compact_table, panel
 from src.adapters.cli.view_market_context_display import (
     REGIME_DISPLAY_LABEL,
@@ -22,6 +25,9 @@ from src.adapters.cli.view_market_context_display import (
 from src.application.services.market_context_engine import MarketContextEngine
 from src.application.services.universe_loader import resolve_tickers
 from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
+from src.application.use_case.daily_accumulation_projection import (
+    DailyAccumulationCandidate,
+)
 from src.application.use_case.daily_briefing_use_case import (
     DailyBriefingRequest,
     DailyBriefingUseCase,
@@ -79,6 +85,41 @@ def _opening_table(candidates: list[OpeningBriefingCandidate]):
     return table
 
 
+_RISK_STATUS_STYLE = {"OPEN": "green", "BLOCK": "red", "UNKNOWN": "white"}
+
+
+def _accumulation_screen_table(candidates: list[DailyAccumulationCandidate]):
+    table = compact_table()
+    table.add_column("Ticker", style="bold")
+    table.add_column("Flow", justify="right")
+    table.add_column("Phase")
+    table.add_column("Signal", justify="right")
+    table.add_column("Coverage", justify="right")
+    table.add_column("Risk")
+    table.add_column("Action")
+    for candidate in candidates:
+        flow_text = f"{candidate.flow_score:.1f}"
+        phase_text = candidate.setup_phase or "-"
+        signal_text = str(candidate.signal_score) if candidate.signal_score is not None else "-"
+        coverage_text = (
+            f"{candidate.coverage_score:.0%}" if candidate.coverage_score is not None else "-"
+        )
+        risk_style = _RISK_STATUS_STYLE.get(candidate.risk_status, "white")
+        risk_text = f"[{risk_style}]{candidate.risk_status}[/{risk_style}]"
+        action_text = candidate.action or "-"
+
+        table.add_row(
+            candidate.ticker,
+            flow_text,
+            phase_text,
+            signal_text,
+            coverage_text,
+            risk_text,
+            action_text,
+        )
+    return table
+
+
 def today(
     universe: Annotated[
         Optional[str], typer.Option("--universe", "-u", help="Universe to brief"),
@@ -114,6 +155,9 @@ def today(
         )
     except Exception:
         regime_tickers = []
+    risk_use_case = create_accumulation_assess_risk_use_case(
+        market_repository=market_repo,
+    )
     use_case = DailyBriefingUseCase(
         market_repository=market_repo,
         broker_repository=broker_repo,
@@ -129,6 +173,7 @@ def today(
             indicator_registry=create_indicator_registry(),
             rules_loader=RulesYamlLoader(),
             derived_feature_policy=accumulation_config.derived_features,
+            risk_use_case=risk_use_case,
         ),
         universe_loader=YamlUniverseConfigLoader(),
     )
@@ -237,34 +282,7 @@ def today(
             _opening_table(response.market_wide_opening_observations),
         ])
 
-    accumulation = compact_table()
-    accumulation.add_column("Ticker", style="bold")
-    accumulation.add_column("Score", justify="right")
-    accumulation.add_column("Streak", justify="right")
-    accumulation.add_column("Trend")
-    if response.accumulation_candidates:
-        for candidate in response.accumulation_candidates:
-            trend_map = {"UP": "green", "DOWN": "red", "SIDE": "yellow"}
-            trend_style = trend_map.get(str(candidate.trend).upper(), "white")
-            trend_text = f"[{trend_style}]{candidate.trend or '-'}[/{trend_style}]"
-
-            # Color score (0-100 scale, see ADR-039)
-            if candidate.foreign_flow_score >= 66.7:
-                score_style = "green"
-            elif candidate.foreign_flow_score >= 50.0:
-                score_style = "yellow"
-            else:
-                score_style = "white"
-            score_text = f"[{score_style}]{candidate.foreign_flow_score:.1f}[/{score_style}]"
-
-            accumulation.add_row(
-                candidate.ticker,
-                score_text,
-                str(candidate.consecutive_streak),
-                trend_text,
-            )
-    else:
-        accumulation.add_row("-", "-", "-", "Run: saham screen accum --universe lq45")
+    accumulation = _accumulation_screen_table(response.daily_accumulation_candidates)
 
     # Build Data Readiness table
     readiness_table = compact_table()
@@ -300,20 +318,34 @@ def today(
     ]
     sections.extend(pre_open_elements)
 
-    # Section title for accumulation candidates
-    accum_title = Text("Top Accumulation Candidates", style="bold cyan")
+    # Section title for accumulation screen
+    accum_title = Text("ACCUMULATION SCREEN", style="bold cyan")
     if response.overall_authority == "PARTIAL":
         accum_title = Text.assemble(
-            ("Top Accumulation Candidates", "bold cyan"),
+            ("ACCUMULATION SCREEN", "bold cyan"),
             ("   ⚠ PARTIAL DATA — verify readiness before acting", "bold yellow")
         )
 
+    sections.append(accum_title)
     if response.overall_authority == "NOT_READY":
-        sections.append(accum_title)
         sections.append(Text("Suppressed — data readiness is NOT_READY", style="red"))
     else:
-        sections.append(accum_title)
-        sections.append(accumulation)
+        summary_row = response.accumulation_summary
+        if summary_row is not None:
+            summary_line = (
+                f"{summary_row.checked} checked | {summary_row.data_ready} data-ready | "
+                f"{summary_row.flow_candidates} flow candidates | "
+                f"{summary_row.watch_count} WATCH | {summary_row.enter_count} ENTER | "
+                f"{summary_row.blocked_count} blocked"
+            )
+            if summary_row.unclassified_count > 0:
+                summary_line += f" | {summary_row.unclassified_count} unclassified"
+            sections.append(Text(summary_line))
+
+        if response.daily_accumulation_candidates:
+            sections.append(accumulation)
+        else:
+            sections.append(Text("No accumulation candidates after canonical projection"))
 
     if response.warnings:
         warnings = compact_table(show_header=False)
