@@ -28,7 +28,7 @@ Files verified:
 |---|---------|----------|---------|--------|
 | 1 | `S1` | P0 | Multi-window screening corrupts observation identity | ❌ Open |
 | 2 | `S2` | P0 | Table and JSON output apply different filters | ✅ Resolved |
-| 3 | `S3` | P0 | Freshness is source alignment, not actual calendar freshness | ❌ Open |
+| 3 | `S3` | P0 | Freshness is source alignment, not actual calendar freshness | ✅ Resolved |
 | 4 | `S4` | P0 | Pre-open provider failure looks like valid empty result | ❌ Open |
 | 5 | `S5` | P1 | Unsupported 65–70% prediction claim in guide | ❌ Open |
 | 6 | `S6` | P1 | BCI grants full points despite negative aggregate flow | ❌ Open |
@@ -275,6 +275,7 @@ Layer plan:
 
 - **Type:** Feature / Refactor
 - **Priority:** P0 — "Fresh: OK" currently means sources agree with each other, not that data is current
+- **Status:** RESOLVED (commits `2225eb6`, `1162e9e`) — scoped to `screen accum` (single-window and `--multi`); `today`/`status`/`analyze` reuse not implemented, see note below
 
 ### Problem
 
@@ -323,13 +324,19 @@ Layer plan:
 
 ### Acceptance Criteria
 
-- [ ] `Fresh: OK` replaced by `Aligned` (source equality) + separate readiness state
-- [ ] `PENDING_EOD` shown when data is prior-session during an open market, not `STALE`
-- [ ] Signal evidence coverage percentage shown (not only enrichment object count)
-- [ ] Same `DataFreshnessStatus` value object reusable by `today` briefing (S3 and T3/T4 from `saham_today_improvements.md` can share this)
-- [ ] Tests: prior-session data during open market → `PENDING_EOD` not `STALE`
-- [ ] Full test suite passes
-- [ ] `git diff --check` clean
+- [x] `Fresh: OK` replaced by `Aligned` (source equality) + separate readiness state
+- [x] `PENDING_EOD` shown when data is prior-session during an open market, not `STALE`
+- [x] Signal evidence coverage percentage shown (not only enrichment object count)
+- [ ] Same `DataFreshnessStatus` value object reusable by `today` briefing (S3 and T3/T4 from `saham_today_improvements.md` can share this) — deferred; `DataFreshnessStatus`/`compute_data_freshness()` are application/domain code with no `screen`-specific coupling, so `today` can adopt them directly, but that wiring was not done in this pass
+- [x] Tests: prior-session data during open market → `PENDING_EOD` not `STALE`
+- [x] Full test suite passes (pre-existing unrelated failures in `test_stock_analysis_workflow_dependencies_config_paths.py` confirmed present on `main` before this change)
+- [x] `git diff --check` clean
+
+**Implementation notes:**
+- `src/domain/value_objects/data_freshness_status.py` — `DataFreshnessStatus`, `SourceFreshnessState`, `SourceAlignmentState`.
+- `src/application/services/data_freshness_service.py` — `compute_data_freshness()`; expected-latest-EOD derived from local Asia/Jakarta wall-clock + weekend-rollback only, no network/calendar-provider calls.
+- `src/application/services/screen_accum_result_projector.py` — computes freshness once per projected candidate (both single-window and `--multi`), so table and JSON render the identical object.
+- Adapter: `screen_accum_formatters.py` / `screen_accum_single_display.py` — `Fresh` column replaced by `Align` / `Ready` / `Coverage` columns.
 
 ---
 

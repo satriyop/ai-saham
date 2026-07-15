@@ -94,7 +94,14 @@ Guardrails and edge cases:
 
 ### 3. High: `sqlite_data_quality_audit.py` mixes snapshot orchestration, SQL probes, and rule/catalog definitions
 
-Status: TODO
+Status: RESOLVED (febbea8)
+
+Resolution:
+- Extracted `ENRICHMENT_TABLE_SPECS` and `CANDLE_PROVENANCE_COLUMNS` to `src/infrastructure/persistence/data_quality_audit_catalog.py`.
+- Extracted SQLite helpers/probes to `src/infrastructure/persistence/data_quality_audit_sql.py` (public functions, same predicates and behavior).
+- `SQLiteDataQualityAuditReader.load_snapshot()` in `sqlite_data_quality_audit.py` is now a thin orchestrator only.
+- Added `tests/infrastructure/persistence/test_data_quality_audit_sql.py` covering missing-table safety, stale ticker counts, unsafe broker summary rows, bad candle rows, unknown candle provenance, enrichment catalog iteration, empty analyst rows, forward-estimates missing P/E, and `parse_date` formats.
+- Existing use-case and architecture tests pass unchanged; no old private helpers remain in `sqlite_data_quality_audit.py`.
 
 Pointer:
 - `src/infrastructure/persistence/sqlite_data_quality_audit.py:29` orchestrates the full snapshot.
