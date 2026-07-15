@@ -35,7 +35,7 @@ Files verified:
 | 7 | `S7` | P1 | Multi-window output discards Signal/Risk/Phase already computed | 🟡 Partially resolved — S7 display/semantic contract (Signal/Risk/Phase/Data/Next + Tracked Broker Flow) resolved; S7 performance/one-pass 90-session optimization remains open as follow-up |
 | 8 | `S8` | P1 | Watchlist `list` reports wrong ticker count | ✅ Resolved (commit `988c6c0`) |
 | 9 | `S9` | P1 | `screen compare` missing weakening bucket; error/legacy-scale handling | ✅ Resolved |
-| 10 | `S10` | P2 | `saham fetch status` uses wrong default DB path | ❌ Open |
+| 10 | `S10` | P2 | `saham fetch status` uses wrong default DB path | ✅ Resolved|
 
 ---
 
