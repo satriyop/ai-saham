@@ -63,6 +63,11 @@ class ConfigPathsConfig:
     market_context_engine: str = "config/market_context_engine.yaml"
     stockbit: str = "config/stockbit.yaml"
     corporate_action_policy: str = "config/corporate_action_policy.yaml"
+    company_quality_context: str = "config/company_quality_context.yaml"
+    sector_context: str = "config/sector_context.yaml"
+    ticker_profile: str = "config/ticker_profile.yaml"
+    institutional_accumulation: str = "config/institutional_accumulation.yaml"
+    universes: str = "config/universes.yaml"
 
 
 @dataclass(frozen=True)

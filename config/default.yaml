@@ -53,6 +53,11 @@ config_paths:
   signal_engine: "config/signal_engine.yaml"
   market_context_engine: "config/market_context_engine.yaml"
   stockbit: "config/stockbit.yaml"
+  company_quality_context: "config/company_quality_context.yaml"
+  sector_context: "config/sector_context.yaml"
+  ticker_profile: "config/ticker_profile.yaml"
+  institutional_accumulation: "config/institutional_accumulation.yaml"
+  universes: "config/universes.yaml"
 
 # ── Broker ────────────────────────────────────────────────────────────────
 broker:

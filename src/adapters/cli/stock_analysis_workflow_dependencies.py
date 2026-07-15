@@ -25,6 +25,7 @@ from src.infrastructure.composition.indicator_registry_factory import (
     create_indicator_registry,
 )
 from src.infrastructure.composition.signal_engine_factory import create_signal_engine
+from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.company_quality_context_config_loader import (
     create_company_quality_context_evidence_builder,
 )
@@ -61,6 +62,7 @@ if TYPE_CHECKING:
         SectorContextEvidenceBuilder,
     )
     from src.application.services.signal_engine import SignalEngine
+    from src.application.services.signal_scoring_config import SignalScoringConfig
     from src.application.services.ticker_profile_classifier import (
         TickerProfileClassifier,
     )
@@ -130,6 +132,45 @@ def create_stock_analysis_workflow_dependencies(
             broker_repository=broker_repo,
         )
 
+    app_config = load_app_config()
+    config_paths = app_config.config_paths
+
+    def _create_ticker_profile_classifier(
+        profile_path: str | Path | None = None,
+        universes_path: str | Path | None = None,
+    ) -> TickerProfileClassifier:
+        return create_ticker_profile_classifier(
+            profile_path=profile_path or config_paths.ticker_profile,
+            universes_path=universes_path or config_paths.universes,
+        )
+
+    def _load_institutional_accumulation_config(
+        path: str | Path | None = None,
+    ) -> InstitutionalAccumulationConfig:
+        return load_institutional_accumulation_config(
+            path=path or config_paths.institutional_accumulation,
+        )
+
+    def _create_sector_context_evidence_builder(
+        config_path: str | Path | None = None,
+        universes_path: str | Path | None = None,
+    ) -> SectorContextEvidenceBuilder:
+        return create_sector_context_evidence_builder(
+            config_path=config_path or config_paths.sector_context,
+            universes_path=universes_path or config_paths.universes,
+        )
+
+    def _create_company_quality_context_evidence_builder(
+        config_path: str | Path | None = None,
+        scoring: SignalScoringConfig | None = None,
+        neutral_score: float = 50.0,
+    ) -> CompanyQualityContextEvidenceBuilder:
+        return create_company_quality_context_evidence_builder(
+            config_path=config_path or config_paths.company_quality_context,
+            scoring=scoring,
+            neutral_score=neutral_score,
+        )
+
     return StockAnalysisWorkflowDependencies(
         db_path=db_path,
         broker_repository=broker_repo,
@@ -138,13 +179,13 @@ def create_stock_analysis_workflow_dependencies(
         stockbit_providers=stockbit_providers,
         rules_loader_factory=RulesYamlLoader,
         indicator_registry_factory=create_indicator_registry,
-        ticker_profile_classifier_factory=create_ticker_profile_classifier,
+        ticker_profile_classifier_factory=_create_ticker_profile_classifier,
         institutional_accumulation_config_factory=(
-            load_institutional_accumulation_config
+            _load_institutional_accumulation_config
         ),
-        sector_context_builder_factory=create_sector_context_evidence_builder,
+        sector_context_builder_factory=_create_sector_context_evidence_builder,
         company_quality_context_builder_factory=(
-            create_company_quality_context_evidence_builder
+            _create_company_quality_context_evidence_builder
         ),
         create_risk_engine=_make_risk_engine,
         create_signal_engine=_make_signal_engine,
