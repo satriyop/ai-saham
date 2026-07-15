@@ -6,6 +6,7 @@ Layer: Adapter
 """
 
 from pathlib import Path
+from typing import Annotated, Optional
 
 import typer
 from rich.box import ROUNDED
@@ -16,19 +17,17 @@ from rich.table import Table
 from src.application.use_case.get_system_status_use_case import (
     GetSystemStatusUseCase,
 )
+from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.persistence.sqlite_system_status_provider import (
     SQLiteSystemStatusProvider,
 )
 
-DEFAULT_DB_PATH = Path("data.db")
-
 
 def status(
-    db_path: Path = typer.Option(
-        DEFAULT_DB_PATH,
-        "--db",
-        help="Path to SQLite database",
-    ),
+    db_path: Annotated[
+        Optional[Path],
+        typer.Option("--db", help="Path to SQLite database"),
+    ] = None,
 ) -> None:
     """
     Check data provider health and database freshness.
@@ -36,8 +35,10 @@ def status(
     Probes IDX API, Yahoo Finance, Stockbit session, and AI classifier.
     Reports latest data dates and row counts across all database tables.
     """
+    resolved_db = db_path or Path(load_app_config().storage.db_path)
+
     # Inject dependencies and execute use case
-    provider = SQLiteSystemStatusProvider(db_path=db_path)
+    provider = SQLiteSystemStatusProvider(db_path=resolved_db)
     use_case = GetSystemStatusUseCase(provider=provider)
     response = use_case.execute()
 
@@ -68,9 +69,9 @@ def status(
     console.print("")
 
     # 2. Data Freshness Table
-    if not db_path.exists():
+    if not resolved_db.exists():
         panel = Panel(
-            f"[yellow]No database found at [bold]{db_path}[/bold].[/yellow]\n\n"
+            f"[yellow]No database found at [bold]{resolved_db}[/bold].[/yellow]\n\n"
             "Run: [bold cyan]saham fetch market <TICKER>[/bold cyan] to initialize.",
             title="[bold cyan]Data Freshness[/bold cyan]",
             border_style="yellow",
