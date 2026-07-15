@@ -64,7 +64,7 @@ def build_data_update_table_specs(
         DataUpdateTableSpec(
             "broker_daily_flow",
             broker_provider_name,
-            "Per-broker named buy/sell flow",
+            "Tracked-broker daily buy/sell flow (configured broker subset)",
             "date",
             source_column="source",
             source_value=broker_source_value,

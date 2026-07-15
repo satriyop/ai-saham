@@ -34,7 +34,9 @@ class SQLiteBrokerRepository(BrokerDataRepository):
         broker_summaries(ticker, date, source, ...) PK (ticker, date, source)
         foreign_flow_points(ticker, date, source, ...) PK (ticker, date, source)
         foreign_flow_snapshots(ticker, snapshot_date, period_days, source) PK composite
-        broker_daily_flow(ticker, date, broker_code, source) PK — real per-day per-broker rows
+        broker_daily_flow(ticker, date, broker_code, source) PK — Stockbit
+            per-day rows for configured tracked broker codes only; not
+            exhaustive full-market broker composition
     """
 
     def __init__(self, db_path: str | Path) -> None:

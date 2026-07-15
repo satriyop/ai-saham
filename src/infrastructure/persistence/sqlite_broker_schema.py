@@ -79,6 +79,10 @@ def ensure_sqlite_broker_schema(db_path: str | Path) -> None:
                 CREATE INDEX IF NOT EXISTS idx_ffs_date_period
                 ON foreign_flow_snapshots(snapshot_date, period_days, source)
             """)
+            # broker_daily_flow stores Stockbit per-day rows for configured
+            # tracked broker codes only. It is not exhaustive full-market
+            # broker composition; consumers must name this as tracked-broker
+            # flow when exposing it in CLI/JSON.
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS broker_daily_flow (
                     ticker          TEXT NOT NULL,
