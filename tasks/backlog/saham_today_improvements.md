@@ -24,9 +24,9 @@
 | Verdict-first pre-open section title | ❌ Open — section is still "Top Pre-Open Candidates" |
 | Canonical accumulation funnel with Signal/Risk/TradeSetup | ❌ Open — `Score` is still `foreign_flow_score` |
 | Bounded setup-lens impact for accumulation candidates | ✅ Resolved |
-| Honest market context (`RISK_ON` not aliased to `BULLISH`) | ❌ Open — `REGIME_DISPLAY_LABEL` maps `RISK_ON` → `BULLISH` |
+| Honest market context (`RISK_ON` not aliased to `BULLISH`) | ✅ RESOLVED — `_market_regime_text` renders canonical values directly |
 | Primary verdict header (DATA STATUS / POSTURE / ACTION) | ❌ Open |
-| Session-aware next action | ❌ Open — static template with `TICKER` placeholder |
+| Session-aware next action | ✅ Resolved — stale static `saham analyze swing TICKER` footer removed. Concrete setup-lens next commands come from T8; fallback footer now uses existing response fields only. |
 | Warning severity (BLOCKER / WARNING / INFO) | ❌ Open — 5-row plain list |
 | Rich `[local_clock]` markup bug | ✅ `b3c6de1` — fixed; uses `rich.text.Text` instead of f-string markup |
 | Historical mode date separation | ✅ RESOLVED |
@@ -43,7 +43,7 @@
 - `src/application/use_case/daily_briefing_use_case.py` has three clocks (`live_session_date`, `latest_completed_eod_date`, `opening_snapshot_date`) and `is_historical` flag.
 - Screen backlog S3 already introduced `src/domain/value_objects/data_freshness_status.py` and `src/application/services/data_freshness_service.py`; today work reuses these.
 - `src/application/use_case/daily_briefing_use_case.py` still reads opening snapshot candidates without universe filtering, so T5 remains valid.
-- `src/adapters/cli/today_commands.py` still renders `Top Pre-Open Candidates`, `REGIME_DISPLAY_LABEL`, plain capped warnings, and static `saham analyze swing TICKER`, so T6/T9/T10/T11/T12 remain valid. T7 is resolved (see T7 section for as-built notes).
+- `src/adapters/cli/today_commands.py` still renders plain capped warnings, so T10/T12 remain valid. T6/T7/T8/T9/T11 are resolved (see their sections for as-built notes).
 
 ---
 
@@ -59,9 +59,9 @@
 | 6 | `T6` | P0 | Refactor | Rename to verdict-first pre-open presentation | ✅ RESOLVED |
 | 7 | `T7` | P0 | Feature | Canonical accumulation funnel (Signal + Risk + TradeSetup) | ✅ Done |
 | 8 | `T8` | P0 | Feature | Bounded setup-lens impact for accumulation candidates | ✅ Done |
-| 9 | `T9` | P1 | Refactor | Expose honest market context (stop aliasing RISK_ON→BULLISH) | ❌ Open |
+| 9 | `T9` | P1 | Refactor | Expose honest market context (stop aliasing RISK_ON→BULLISH) | ✅ Done |
 | 10 | `T10` | P1 | Feature | Primary verdict header before tables | ❌ Open |
-| 11 | `T11` | P1 | Feature | Session-aware IDX lifecycle next action | ❌ Open |
+| 11 | `T11` | P1 | Feature | Session-aware IDX lifecycle next action | ✅ Resolved — reduced to cleanup: stale static `saham analyze swing TICKER` footer removed. Concrete setup-lens next commands come from T8; fallback footer now uses existing response fields only. |
 | 12 | `T12` | P1 | Refactor | Warning severity (BLOCKER / WARNING / INFO) | ❌ Open |
 | 13 | `T13` | P2 | Bugfix | Historical mode: separate or omit live market status | ✅ RESOLVED |
 
@@ -798,12 +798,35 @@ Layer plan:
 
 ### Acceptance Criteria
 
-- [ ] `today` output shows `RISK_ON` not `BULLISH`
-- [ ] Low confidence is labeled when `regime_confidence < threshold`
-- [ ] No other command's output is changed
-- [ ] `test_today_commands.py` updated if it asserts `BULLISH`
-- [ ] Full test suite passes
-- [ ] `git diff --check` clean
+- [x] `today` output shows `RISK_ON` not `BULLISH`
+- [x] No other command's output is changed
+- [x] `test_today_commands.py` updated with new assertions
+- [x] Full test suite passes
+- [x] `git diff --check` clean
+
+### As-Built Note (2026-07-15)
+
+Implemented per the task instructions (commit `fd51cef`), which differed from the
+original design in the following ways:
+
+- The task explicitly forbade confidence labels (`LOW`, `HIGH`, `MEDIUM` buckets)
+  and thresholds, so no `low confidence` qualifier was added.
+- The task required a strict output shape — canonical values joined by ` | ` with
+  no invented display labels:
+  ```
+  Market regime  RISK_ON | conviction 0.69 | confidence 0.30 | stability TRANSITIONING
+  ```
+- Removed `REGIME_DISPLAY_LABEL` and `context_conviction_score` imports from
+  `today_commands.py`. Added a private `_market_regime_text(ctx)` renderer.
+- Preserved `context_regime_style` (color by conviction level) and
+  `context_factor_value` (breadth display).
+- `view_market_context_display.py` was not changed. Other commands that import
+  `REGIME_DISPLAY_LABEL` / `context_conviction_score` are unaffected.
+- New tests: `test_market_regime_text_renders_all_fields`,
+  `test_market_regime_text_omits_optional_metadata`,
+  `test_market_regime_text_appends_transition_warning`,
+  `test_today_market_regime_renders_plain_values` (asserts `BULLISH` and
+  `(5/7)` are absent from output).
 
 ---
 

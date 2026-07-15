@@ -79,8 +79,6 @@ def test_today_renders_rich_dashboard_with_lifecycle_next_steps(tmp_path: Path):
     assert "PRE-OPEN ASSESSMENT" in result.stdout
     assert "ACCUMULATION SCREEN" in result.stdout
     assert "Run: saham learn snapshot --force" in result.stdout
-    stdout_clean = result.stdout.replace("\n", "").replace(" ", "").replace("│", "")
-    assert "sahamscreenaccum--universelq45|sahamanalyzeswingTICKER" in stdout_clean
 
 
 def test_today_uses_loaded_config_and_not_global(tmp_path: Path):
@@ -849,11 +847,11 @@ def test_today_market_regime_renders_plain_values():
         assert "(5/7)" not in result.stdout
 
 
-def _render_to_text(elements) -> str:
+def _render_to_text(render) -> str:
     from rich.console import Console, Group
 
     console = Console(width=200, record=True)
-    console.print(Group(*elements))
+    console.print(Group(*render.elements))
     return console.export_text()
 
 
@@ -963,3 +961,198 @@ def test_today_no_candidates_shows_setup_lens_empty_message(tmp_path: Path):
     assert result.exit_code == 0
     assert "SETUP LENS IMPACT" in result.stdout
     assert "No accumulation candidates to evaluate." in result.stdout
+
+
+def test_today_never_renders_ticker_placeholder(tmp_path: Path):
+    result = runner.invoke(
+        app,
+        [
+            "today",
+            "--universe",
+            "lq45",
+            "--date",
+            "2026-06-19",
+            "--db",
+            str(tmp_path / "market.db"),
+        ],
+    )
+    assert result.exit_code == 0
+    assert "TICKER" not in result.stdout
+
+
+def test_setup_lens_next_commands_suppress_footer():
+    from unittest.mock import MagicMock, patch
+
+    from src.application.use_case.daily_setup_lens_impact_use_case import (
+        DailySetupLensImpactCell,
+        DailySetupLensImpactResult,
+        DailySetupLensImpactRow,
+    )
+    from src.application.use_case.evaluate_swing_setup_use_case import (
+        AVAILABLE_SWING_SETUPS,
+    )
+
+    cell = DailySetupLensImpactCell(
+        setup_name=AVAILABLE_SWING_SETUPS[0],
+        action="WATCH",
+        signal_score=72,
+        setup_match="MATCH",
+        entry_authority=True,
+        capped_reason=None,
+        warning=None,
+    )
+    row = DailySetupLensImpactRow(
+        ticker="BBCA",
+        base_action="WATCH",
+        cells=(cell,),
+    )
+    result = DailySetupLensImpactResult(rows=(row,))
+
+    fake_response = type("R", (), {
+        "universe": "lq45",
+        "universe_count": 45,
+        "stale_count": 0,
+        "regime": None,
+        "opening_candidates": [],
+        "market_wide_opening_observations": [],
+        "accumulation_candidates": [],
+        "accumulation_summary": None,
+        "daily_accumulation_candidates": [],
+        "warnings": [],
+        "live_session_date": date(2026, 6, 19),
+        "latest_completed_eod_date": date(2026, 6, 19),
+        "opening_snapshot_date": None,
+        "is_historical": True,
+        "readiness_items": [],
+        "overall_authority": "READY",
+        "setup_lens_impact": result,
+    })()
+
+    with patch("src.adapters.cli.today_commands.DailyBriefingUseCase") as mock_uc_class:
+        mock_uc = MagicMock()
+        mock_uc_class.return_value = mock_uc
+        mock_uc.execute.return_value = fake_response
+
+        result = runner.invoke(app, ["today", "--universe", "lq45", "--date", "2026-06-19"])
+        assert result.exit_code == 0
+        assert "saham analyze swing BBCA --setup" in result.stdout
+        assert "Next: saham screen accum" not in result.stdout
+        assert "TICKER" not in result.stdout
+
+
+def test_today_fallback_next_uses_first_accumulation_candidate():
+    from unittest.mock import MagicMock, patch
+
+    from src.application.use_case.daily_accumulation_projection import (
+        DailyAccumulationCandidate,
+    )
+    from src.application.use_case.daily_briefing_use_case import DailyBriefingResponse
+
+    fake_response = DailyBriefingResponse(
+        live_session_date=date(2026, 6, 19),
+        latest_completed_eod_date=date(2026, 6, 19),
+        opening_snapshot_date=None,
+        is_historical=True,
+        universe="lq45",
+        universe_count=45,
+        data_freshness=[],
+        stale_count=0,
+        readiness_items=[],
+        overall_authority="READY",
+        regime=None,
+        opening_candidates=[],
+        market_wide_opening_observations=[],
+        accumulation_candidates=[],
+        accumulation_summary=None,
+        daily_accumulation_candidates=[
+            DailyAccumulationCandidate(
+                ticker="BBCA",
+                flow_score=80.0,
+                setup_phase="ACCUMULATION",
+                signal_score=70,
+                coverage_score=0.8,
+                risk_status="OPEN",
+                action="WATCH",
+            )
+        ],
+        warnings=[],
+    )
+
+    with patch("src.adapters.cli.today_commands.DailyBriefingUseCase") as mock_uc_class:
+        mock_uc = MagicMock()
+        mock_uc_class.return_value = mock_uc
+        mock_uc.execute.return_value = fake_response
+
+        result = runner.invoke(app, ["today", "--universe", "lq45", "--date", "2026-06-19"])
+        assert result.exit_code == 0
+        assert "Next: saham analyze swing BBCA" in result.stdout
+
+
+def test_today_fallback_next_fetches_when_not_ready():
+    from unittest.mock import MagicMock, patch
+
+    from src.application.use_case.daily_briefing_use_case import DailyBriefingResponse
+
+    fake_response = DailyBriefingResponse(
+        live_session_date=date(2026, 6, 19),
+        latest_completed_eod_date=date(2026, 6, 19),
+        opening_snapshot_date=None,
+        is_historical=True,
+        universe="lq45",
+        universe_count=45,
+        data_freshness=[],
+        stale_count=41,
+        readiness_items=[],
+        overall_authority="NOT_READY",
+        regime=None,
+        opening_candidates=[],
+        market_wide_opening_observations=[],
+        accumulation_candidates=[],
+        accumulation_summary=None,
+        daily_accumulation_candidates=[],
+        warnings=[],
+    )
+
+    with patch("src.adapters.cli.today_commands.DailyBriefingUseCase") as mock_uc_class:
+        mock_uc = MagicMock()
+        mock_uc_class.return_value = mock_uc
+        mock_uc.execute.return_value = fake_response
+
+        result = runner.invoke(app, ["today", "--universe", "lq45", "--date", "2026-06-19"])
+        assert result.exit_code == 0
+        assert "Next: saham fetch market --universe lq45" in result.stdout
+
+
+def test_today_fallback_next_screen_accum_when_no_candidates():
+    from unittest.mock import MagicMock, patch
+
+    from src.application.use_case.daily_briefing_use_case import DailyBriefingResponse
+
+    fake_response = DailyBriefingResponse(
+        live_session_date=date(2026, 6, 19),
+        latest_completed_eod_date=date(2026, 6, 19),
+        opening_snapshot_date=None,
+        is_historical=True,
+        universe="lq45",
+        universe_count=45,
+        data_freshness=[],
+        stale_count=0,
+        readiness_items=[],
+        overall_authority="READY",
+        regime=None,
+        opening_candidates=[],
+        market_wide_opening_observations=[],
+        accumulation_candidates=[],
+        accumulation_summary=None,
+        daily_accumulation_candidates=[],
+        warnings=[],
+    )
+
+    with patch("src.adapters.cli.today_commands.DailyBriefingUseCase") as mock_uc_class:
+        mock_uc = MagicMock()
+        mock_uc_class.return_value = mock_uc
+        mock_uc.execute.return_value = fake_response
+
+        result = runner.invoke(app, ["today", "--universe", "lq45", "--date", "2026-06-19"])
+        assert result.exit_code == 0
+        assert "Next: saham screen accum --universe lq45" in result.stdout

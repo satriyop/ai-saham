@@ -4,6 +4,7 @@ Daily briefing command.
 Layer: Adapter
 """
 
+from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -207,7 +208,13 @@ def _build_setup_lens_impact_use_case(
     )
 
 
-def _setup_lens_impact_elements(setup_lens_impact) -> list:
+@dataclass(frozen=True)
+class SetupLensImpactRender:
+    elements: list
+    rendered_next_commands: bool
+
+
+def _setup_lens_impact_elements(setup_lens_impact) -> SetupLensImpactRender:
     """Render the SETUP LENS IMPACT section from the pre-computed result DTO.
 
     Rendering only: reads fields already on the result/row/cell; computes no
@@ -217,7 +224,7 @@ def _setup_lens_impact_elements(setup_lens_impact) -> list:
 
     if setup_lens_impact is None or not setup_lens_impact.rows:
         elements.append(Text("No accumulation candidates to evaluate."))
-        return elements
+        return SetupLensImpactRender(elements, rendered_next_commands=False)
 
     table = compact_table()
     table.add_column("Ticker", style="bold")
@@ -256,12 +263,24 @@ def _setup_lens_impact_elements(setup_lens_impact) -> list:
                 next_lines.append(
                     f"  saham analyze swing {row.ticker} --setup {cell.setup_name}"
                 )
+    rendered_next = bool(next_lines)
     if next_lines:
         elements.append(Text("Next:", style="bold"))
         for line in next_lines:
             elements.append(Text(line))
 
-    return elements
+    return SetupLensImpactRender(elements, rendered_next_commands=rendered_next)
+
+
+def _fallback_next_command(response) -> str:
+    if response.overall_authority == "NOT_READY":
+        return f"Next: saham fetch market --universe {response.universe}"
+
+    if response.daily_accumulation_candidates:
+        ticker = response.daily_accumulation_candidates[0].ticker
+        return f"Next: saham analyze swing {ticker}"
+
+    return f"Next: saham screen accum --universe {response.universe}"
 
 
 def today(
@@ -493,7 +512,8 @@ def today(
         else:
             sections.append(Text("No accumulation candidates after canonical projection"))
 
-    sections.extend(_setup_lens_impact_elements(response.setup_lens_impact))
+    setup_lens_render = _setup_lens_impact_elements(response.setup_lens_impact)
+    sections.extend(setup_lens_render.elements)
 
     if response.warnings:
         warnings = compact_table(show_header=False)
@@ -502,20 +522,8 @@ def today(
             warnings.add_row(f"- {warning}")
         sections.extend([Text("Warnings", style="bold yellow"), warnings])
 
-    if response.stale_count > 0:
-        next_action = (
-            f"Next: Run 'saham fetch market --universe {response.universe}' to update, "
-            f"then: saham screen accum --universe {response.universe} | saham analyze swing TICKER"
-        )
-        next_style = "bold yellow"
-    else:
-        next_action = (
-            f"Next: saham screen accum --universe {response.universe} | "
-            f"saham analyze swing TICKER"
-        )
-        next_style = "bold"
-
-    sections.append(Text(next_action, style=next_style))
+    if not setup_lens_render.rendered_next_commands:
+        sections.append(Text(_fallback_next_command(response), style="bold"))
     console.print(
         panel(
             Group(*sections),
