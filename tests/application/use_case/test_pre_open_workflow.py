@@ -4,14 +4,22 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
+import pytest
+
 from src.application.use_case.pre_open_screen_use_case import (
     PreOpenScreenConfig,
     PreOpenScreenResponse,
 )
 from src.application.use_case.pre_open_workflow_use_case import (
+    PreOpenSnapshotScreenResult,
     PreOpenWorkflowRequest,
     PreOpenWorkflowUseCase,
 )
+from src.domain.ports.browser_data_provider import (
+    BrowserDataProviderError,
+    BrowserInteractionRequired,
+)
+from src.domain.value_objects.pre_open_source_status import PreOpenSourceStatus
 from src.domain.value_objects.screener_result import (
     MoverData,
     PreOpenScreenResult,
@@ -27,6 +35,16 @@ class FakeScreenUseCase:
     def execute(self, request):
         self.requests.append(request)
         return self.response
+
+
+class RaisingScreenUseCase:
+    def __init__(self, exc: Exception) -> None:
+        self.exc = exc
+        self.requests = []
+
+    def execute(self, request):
+        self.requests.append(request)
+        raise self.exc
 
 
 class FakeMarketRepository:
@@ -221,3 +239,207 @@ def test_pre_open_workflow_uses_injected_market_context_evaluator():
             "benchmark": "IHSG",
         }
     ]
+
+
+def test_pre_open_workflow_reports_live_success_when_movers_seen():
+    run_date = date(2026, 6, 18)
+    screen = FakeScreenUseCase(_screen_response(run_date))
+    workflow = PreOpenWorkflowUseCase(
+        screen_use_case=screen,
+        market_repository=FakeMarketRepository({"BBCA": (date(2026, 1, 1), run_date)}),
+        broker_repository=FakeBrokerRepository({"BBCA": (date(2026, 1, 1), run_date)}),
+        registry=object(),
+    )
+
+    response = workflow.execute(
+        PreOpenWorkflowRequest(config=PreOpenScreenConfig(fast_mode=True), run_date=run_date)
+    )
+
+    assert response.source_status == PreOpenSourceStatus.LIVE_SUCCESS
+    assert response.source_message is None
+
+
+def test_pre_open_workflow_reports_empty_confirmed_when_zero_movers_seen():
+    run_date = date(2026, 6, 18)
+    screen_response = PreOpenScreenResponse(
+        result=PreOpenScreenResult(
+            screened_date=run_date,
+            iev_min=100_000,
+            total_movers_seen=0,
+            candidates=[],
+        ),
+        warnings=[],
+        raw_movers=[],
+    )
+    screen = FakeScreenUseCase(screen_response)
+    workflow = PreOpenWorkflowUseCase(
+        screen_use_case=screen,
+        market_repository=FakeMarketRepository({}),
+        broker_repository=FakeBrokerRepository({}),
+        registry=object(),
+    )
+
+    response = workflow.execute(
+        PreOpenWorkflowRequest(config=PreOpenScreenConfig(fast_mode=True), run_date=run_date)
+    )
+
+    assert response.source_status == PreOpenSourceStatus.EMPTY_CONFIRMED
+    assert response.result.candidates == []
+    assert response.source_message is not None
+
+
+def test_pre_open_workflow_does_not_treat_filtered_zero_candidates_as_empty_confirmed():
+    """total_movers_seen > 0 but every mover was filtered out -> still LIVE_SUCCESS."""
+    run_date = date(2026, 6, 18)
+    screen_response = PreOpenScreenResponse(
+        result=PreOpenScreenResult(
+            screened_date=run_date,
+            iev_min=100_000,
+            total_movers_seen=5,
+            candidates=[],
+        ),
+        warnings=[],
+        raw_movers=[MoverData("BBCA", 150_000)],
+    )
+    screen = FakeScreenUseCase(screen_response)
+    workflow = PreOpenWorkflowUseCase(
+        screen_use_case=screen,
+        market_repository=FakeMarketRepository({}),
+        broker_repository=FakeBrokerRepository({}),
+        registry=object(),
+    )
+
+    response = workflow.execute(
+        PreOpenWorkflowRequest(config=PreOpenScreenConfig(fast_mode=True), run_date=run_date)
+    )
+
+    assert response.source_status == PreOpenSourceStatus.LIVE_SUCCESS
+
+
+def test_pre_open_workflow_reports_unavailable_on_provider_error():
+    run_date = date(2026, 6, 18)
+    screen = RaisingScreenUseCase(BrowserDataProviderError("connection reset"))
+    workflow = PreOpenWorkflowUseCase(
+        screen_use_case=screen,
+        market_repository=FakeMarketRepository({}),
+        broker_repository=FakeBrokerRepository({}),
+        registry=object(),
+    )
+
+    response = workflow.execute(
+        PreOpenWorkflowRequest(config=PreOpenScreenConfig(fast_mode=True), run_date=run_date)
+    )
+
+    assert response.source_status == PreOpenSourceStatus.UNAVAILABLE
+    assert "connection reset" in response.source_message
+    assert response.result.candidates == []
+
+
+def test_pre_open_workflow_reraises_browser_interaction_required():
+    run_date = date(2026, 6, 18)
+    screen = RaisingScreenUseCase(
+        BrowserInteractionRequired(url="https://stockbit.com", instructions="log in")
+    )
+    workflow = PreOpenWorkflowUseCase(
+        screen_use_case=screen,
+        market_repository=FakeMarketRepository({}),
+        broker_repository=FakeBrokerRepository({}),
+        registry=object(),
+    )
+
+    with pytest.raises(BrowserInteractionRequired):
+        workflow.execute(
+            PreOpenWorkflowRequest(config=PreOpenScreenConfig(fast_mode=True), run_date=run_date)
+        )
+
+
+def test_pre_open_workflow_outside_window_skips_live_fetch():
+    run_date = date(2026, 6, 18)
+    screen = FakeScreenUseCase(_screen_response(run_date))
+    workflow = PreOpenWorkflowUseCase(
+        screen_use_case=screen,
+        market_repository=FakeMarketRepository({}),
+        broker_repository=FakeBrokerRepository({}),
+        registry=object(),
+    )
+
+    response = workflow.execute(
+        PreOpenWorkflowRequest(
+            config=PreOpenScreenConfig(fast_mode=True),
+            run_date=run_date,
+            outside_window=True,
+        )
+    )
+
+    assert screen.requests == []
+    assert response.source_status == PreOpenSourceStatus.OUTSIDE_WINDOW
+    assert response.result.candidates == []
+    assert response.source_message is not None
+
+
+def test_pre_open_workflow_outside_window_with_snapshot_returns_snapshot_success():
+    run_date = date(2026, 6, 18)
+    snapshot_date = date(2026, 6, 17)
+    live_screen = FakeScreenUseCase(_screen_response(run_date))
+
+    snapshot_calls: list[tuple] = []
+
+    def _run_snapshot_screen(config, as_of_date):
+        snapshot_calls.append((config, as_of_date))
+        return PreOpenSnapshotScreenResult(
+            snapshot_date=snapshot_date,
+            response=_screen_response(snapshot_date, candidates=[_candidate("BUMI")]),
+        )
+
+    workflow = PreOpenWorkflowUseCase(
+        screen_use_case=live_screen,
+        market_repository=FakeMarketRepository({"BUMI": (date(2026, 1, 1), snapshot_date)}),
+        broker_repository=FakeBrokerRepository({"BUMI": (date(2026, 1, 1), snapshot_date)}),
+        registry=object(),
+        run_snapshot_screen=_run_snapshot_screen,
+    )
+
+    response = workflow.execute(
+        PreOpenWorkflowRequest(
+            config=PreOpenScreenConfig(fast_mode=True),
+            run_date=run_date,
+            outside_window=True,
+        )
+    )
+
+    assert live_screen.requests == []
+    assert len(snapshot_calls) == 1
+    assert snapshot_calls[0][1] == run_date
+    assert response.source_status == PreOpenSourceStatus.SNAPSHOT_SUCCESS
+    assert response.result.candidates[0].ticker == "BUMI"
+    assert response.source_snapshot_path == snapshot_date.isoformat()
+    assert response.source_message is not None
+    assert snapshot_date.isoformat() in response.source_message
+
+
+def test_pre_open_workflow_outside_window_no_snapshot_falls_back_to_outside_window():
+    run_date = date(2026, 6, 18)
+    live_screen = FakeScreenUseCase(_screen_response(run_date))
+
+    def _run_snapshot_screen(config, as_of_date):
+        return None
+
+    workflow = PreOpenWorkflowUseCase(
+        screen_use_case=live_screen,
+        market_repository=FakeMarketRepository({}),
+        broker_repository=FakeBrokerRepository({}),
+        registry=object(),
+        run_snapshot_screen=_run_snapshot_screen,
+    )
+
+    response = workflow.execute(
+        PreOpenWorkflowRequest(
+            config=PreOpenScreenConfig(fast_mode=True),
+            run_date=run_date,
+            outside_window=True,
+        )
+    )
+
+    assert live_screen.requests == []
+    assert response.source_status == PreOpenSourceStatus.OUTSIDE_WINDOW
+    assert response.result.candidates == []

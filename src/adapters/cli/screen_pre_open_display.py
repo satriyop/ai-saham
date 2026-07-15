@@ -22,7 +22,45 @@ from src.adapters.cli.view_market_context_display import (
 from src.domain.value_objects.market_context import MarketContext
 from src.application.use_case.pre_open_screen_use_case import PreOpenScreenConfig
 from src.application.use_case.pre_open_workflow_use_case import PreOpenDataFreshness
+from src.domain.value_objects.pre_open_source_status import PreOpenSourceStatus
 from src.domain.value_objects.screener_result import ScreenerCandidate
+
+
+SOURCE_STATUS_LABEL: dict[PreOpenSourceStatus, str] = {
+    PreOpenSourceStatus.LIVE_SUCCESS: "LIVE",
+    PreOpenSourceStatus.SNAPSHOT_SUCCESS: "SNAPSHOT",
+    PreOpenSourceStatus.EMPTY_CONFIRMED: "EMPTY (confirmed)",
+    PreOpenSourceStatus.UNAVAILABLE: "UNAVAILABLE",
+    PreOpenSourceStatus.OUTSIDE_WINDOW: "OUTSIDE WINDOW",
+}
+
+SOURCE_STATUS_STYLE: dict[PreOpenSourceStatus, str] = {
+    PreOpenSourceStatus.LIVE_SUCCESS: "green",
+    PreOpenSourceStatus.SNAPSHOT_SUCCESS: "cyan",
+    PreOpenSourceStatus.EMPTY_CONFIRMED: "yellow",
+    PreOpenSourceStatus.UNAVAILABLE: "red",
+    PreOpenSourceStatus.OUTSIDE_WINDOW: "red",
+}
+
+
+def no_candidates_message(
+    source_status: PreOpenSourceStatus,
+    source_message: str | None,
+    source_snapshot_path: str | None,
+) -> str:
+    if source_status == PreOpenSourceStatus.UNAVAILABLE:
+        return (
+            "Data source unavailable or returned an invalid payload — "
+            f"{source_message or 'no details available'}."
+        )
+    if source_status == PreOpenSourceStatus.OUTSIDE_WINDOW:
+        return f"Outside the pre-open window — {source_message or 'no live fetch attempted.'}"
+    if source_status == PreOpenSourceStatus.EMPTY_CONFIRMED:
+        return "Provider returned a valid empty mover list — no movers met the IEV threshold."
+    if source_status == PreOpenSourceStatus.SNAPSHOT_SUCCESS:
+        suffix = f" ({source_snapshot_path})" if source_snapshot_path else ""
+        return f"Snapshot used{suffix} — no candidates passed the IEV filter."
+    return "No candidates passed the IEV filter."
 
 
 def display_data_freshness(freshness: PreOpenDataFreshness | None) -> None:
@@ -183,6 +221,9 @@ def display_pre_open_summary_panel(
     warnings: list[str],
     data_freshness: PreOpenDataFreshness | None,
     market_regime: MarketContext | None,
+    source_status: PreOpenSourceStatus = PreOpenSourceStatus.LIVE_SUCCESS,
+    source_message: str | None = None,
+    source_snapshot_path: str | None = None,
 ) -> None:
     sorted_candidates = sorted(
         candidates,
@@ -195,6 +236,12 @@ def display_pre_open_summary_panel(
     summary.add_column("Metric", style="bold")
     summary.add_column("Value")
     summary.add_row("Date", screened_date.isoformat())
+    status_label = SOURCE_STATUS_LABEL.get(source_status, source_status.value)
+    status_style = SOURCE_STATUS_STYLE.get(source_status, "white")
+    status_display = status_label
+    if source_status == PreOpenSourceStatus.SNAPSHOT_SUCCESS and source_snapshot_path:
+        status_display = f"{status_label} ({source_snapshot_path})"
+    summary.add_row("Source", f"[{status_style}]{status_display}[/]")
     summary.add_row("IEV threshold", f">= {iev_min:,}")
     summary.add_row("Movers evaluated", str(total_movers_seen))
     summary.add_row("Candidates", str(len(candidates)))
@@ -219,6 +266,8 @@ def display_pre_open_summary_panel(
         sections.append(Text("Run: saham fetch iev, or retry with --iev-min 50000", style="yellow"))
 
     all_warnings = list(warnings)
+    if source_status != PreOpenSourceStatus.LIVE_SUCCESS and source_message:
+        all_warnings.insert(0, f"Source ({status_label}): {source_message}")
     if data_freshness is not None:
         all_warnings.extend(data_freshness.warnings)
     if market_regime is not None:
@@ -267,6 +316,9 @@ def display_results(
     market_regime: MarketContext | None = None,
     strategy_risk_statuses: dict[str, str] | None = None,
     risk_strategy_name: str | None = None,
+    source_status: PreOpenSourceStatus = PreOpenSourceStatus.LIVE_SUCCESS,
+    source_message: str | None = None,
+    source_snapshot_path: str | None = None,
 ) -> None:
     # 1. Summary Panel
     display_pre_open_summary_panel(
@@ -277,13 +329,18 @@ def display_results(
         warnings=warnings,
         data_freshness=data_freshness,
         market_regime=market_regime,
+        source_status=source_status,
+        source_message=source_message,
+        source_snapshot_path=source_snapshot_path,
     )
 
     if not candidates:
+        message = no_candidates_message(source_status, source_message, source_snapshot_path)
+        style = SOURCE_STATUS_STYLE.get(source_status, "yellow")
         console().print("")
         console().print(
             panel(
-                Text("No candidates passed the IEV filter.", style="yellow"),
+                Text(message, style=style),
                 title="Screener Results"
             )
         )

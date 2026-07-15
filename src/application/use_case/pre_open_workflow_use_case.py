@@ -18,11 +18,19 @@ from src.application.use_case.assess_risk_use_case import AssessRiskRequest, Ass
 from src.application.use_case.pre_open_screen_use_case import (
     PreOpenScreenConfig,
     PreOpenScreenRequest,
+    PreOpenScreenResponse,
     PreOpenScreenUseCase,
 )
 from src.domain.ports.broker_data_repository import BrokerDataRepository
+from src.domain.ports.browser_data_provider import (
+    BrowserDataProviderError,
+    BrowserInteractionRequired,
+)
 from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.value_objects.benchmark_symbol import canonicalize_ticker
+from src.domain.value_objects.idx_market import PRE_OPEN_START
+from src.domain.value_objects.idx_market import REGULAR_OPEN as PRE_OPEN_END
+from src.domain.value_objects.pre_open_source_status import PreOpenSourceStatus
 from src.domain.value_objects.screener_result import (
     PreOpenScreenResult,
     ScreenerCandidate,
@@ -52,6 +60,15 @@ class PreOpenWorkflowRequest:
     benchmark: str = "IHSG"
     db_path: Path = Path("data.db")
     risk_strategy: str | None = None
+    outside_window: bool = False
+
+
+@dataclass(frozen=True)
+class PreOpenSnapshotScreenResult:
+    """A saved-snapshot screen run, used as the outside-window fallback."""
+
+    snapshot_date: date
+    response: PreOpenScreenResponse
 
 
 @dataclass(frozen=True)
@@ -63,6 +80,9 @@ class PreOpenWorkflowResponse:
     market_regime: "MarketContext | None" = None
     strategy_risk_statuses: dict[str, str] | None = None
     risk_strategy_name: str | None = None
+    source_status: PreOpenSourceStatus = PreOpenSourceStatus.LIVE_SUCCESS
+    source_message: str | None = None
+    source_snapshot_path: str | None = None
 
 
 class PreOpenWorkflowUseCase:
@@ -76,6 +96,9 @@ class PreOpenWorkflowUseCase:
         registry: IndicatorRegistry,
         evaluate_market_context: Callable[..., "MarketContext"] | None = None,
         rules_loader: RulesLoader | None = None,
+        run_snapshot_screen: (
+            Callable[[PreOpenScreenConfig, date], PreOpenSnapshotScreenResult | None] | None
+        ) = None,
     ) -> None:
         self._screen_use_case = screen_use_case
         self._market_repo = market_repository
@@ -83,14 +106,58 @@ class PreOpenWorkflowUseCase:
         self._registry = registry
         self._evaluate_market_context = evaluate_market_context
         self._rules_loader = rules_loader
+        self._run_snapshot_screen = run_snapshot_screen
 
     def execute(self, request: PreOpenWorkflowRequest) -> PreOpenWorkflowResponse:
-        screen_response = self._screen_use_case.execute(
-            PreOpenScreenRequest(
-                config=request.config,
-                run_date=request.run_date,
+        if request.outside_window:
+            if self._run_snapshot_screen is not None:
+                snapshot = self._run_snapshot_screen(request.config, request.run_date)
+                if snapshot is not None:
+                    message = f"Snapshot dated {snapshot.snapshot_date.isoformat()} used (outside live window)."
+                    return self._finish(
+                        request,
+                        snapshot.response,
+                        source_status=PreOpenSourceStatus.SNAPSHOT_SUCCESS,
+                        source_message=message,
+                        source_snapshot_path=snapshot.snapshot_date.isoformat(),
+                    )
+            return self._outside_window_response(request)
+
+        try:
+            screen_response = self._screen_use_case.execute(
+                PreOpenScreenRequest(
+                    config=request.config,
+                    run_date=request.run_date,
+                )
             )
+        except BrowserInteractionRequired:
+            raise
+        except BrowserDataProviderError as exc:
+            return self._unavailable_response(request, exc)
+
+        if screen_response.result.total_movers_seen == 0:
+            source_status = PreOpenSourceStatus.EMPTY_CONFIRMED
+            source_message = "Provider returned a valid empty mover list."
+        else:
+            source_status = PreOpenSourceStatus.LIVE_SUCCESS
+            source_message = None
+
+        return self._finish(
+            request,
+            screen_response,
+            source_status=source_status,
+            source_message=source_message,
         )
+
+    def _finish(
+        self,
+        request: PreOpenWorkflowRequest,
+        screen_response: PreOpenScreenResponse,
+        *,
+        source_status: PreOpenSourceStatus,
+        source_message: str | None,
+        source_snapshot_path: str | None = None,
+    ) -> PreOpenWorkflowResponse:
         result = screen_response.result
 
         warnings = list(screen_response.warnings) + list(request.guard_warnings)
@@ -128,6 +195,55 @@ class PreOpenWorkflowUseCase:
             market_regime=market_regime,
             strategy_risk_statuses=strategy_risk_statuses,
             risk_strategy_name=request.risk_strategy,
+            source_status=source_status,
+            source_message=source_message,
+            source_snapshot_path=source_snapshot_path,
+        )
+
+    def _outside_window_response(
+        self, request: PreOpenWorkflowRequest
+    ) -> PreOpenWorkflowResponse:
+        message = (
+            "Outside the pre-open live window "
+            f"({PRE_OPEN_START.strftime('%H:%M')}-{PRE_OPEN_END.strftime('%H:%M')} WIB); "
+            "no snapshot fallback available."
+        )
+        return PreOpenWorkflowResponse(
+            result=self._empty_result(request),
+            warnings=list(request.guard_warnings),
+            raw_movers=[],
+            data_freshness=self._empty_data_freshness(request.run_date),
+            source_status=PreOpenSourceStatus.OUTSIDE_WINDOW,
+            source_message=message,
+        )
+
+    def _unavailable_response(
+        self, request: PreOpenWorkflowRequest, exc: Exception
+    ) -> PreOpenWorkflowResponse:
+        return PreOpenWorkflowResponse(
+            result=self._empty_result(request),
+            warnings=list(request.guard_warnings),
+            raw_movers=[],
+            data_freshness=self._empty_data_freshness(request.run_date),
+            source_status=PreOpenSourceStatus.UNAVAILABLE,
+            source_message=str(exc),
+        )
+
+    @staticmethod
+    def _empty_result(request: PreOpenWorkflowRequest) -> PreOpenScreenResult:
+        return PreOpenScreenResult(
+            screened_date=request.run_date,
+            iev_min=request.config.iev_min,
+            total_movers_seen=0,
+            candidates=[],
+        )
+
+    @staticmethod
+    def _empty_data_freshness(analysis_date: date) -> PreOpenDataFreshness:
+        return PreOpenDataFreshness(
+            analysis_date=analysis_date,
+            candle_end=None,
+            broker_end=None,
         )
 
     def _build_strategy_risk_statuses(

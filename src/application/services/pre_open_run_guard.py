@@ -25,6 +25,7 @@ class PreOpenRunGuard:
     run_at: datetime
     warnings: tuple[str, ...] = ()
     error: str | None = None
+    outside_window: bool = False
 
 
 def build_pre_open_run_guard(
@@ -60,10 +61,13 @@ def build_pre_open_run_guard(
 
     # Pre-open window timing warning
     current_time = local_run_at.time()
-    if not (PRE_OPEN_START <= current_time < PRE_OPEN_END):
+    outside_window = not (PRE_OPEN_START <= current_time < PRE_OPEN_END)
+    if outside_window:
         warnings.append(
             "Current Asia/Jakarta time is outside IDX pre-open window "
             f"{PRE_OPEN_START.strftime('%H:%M')}-{PRE_OPEN_END.strftime('%H:%M')}."
         )
 
-    return PreOpenRunGuard(run_at=local_run_at, warnings=tuple(warnings))
+    return PreOpenRunGuard(
+        run_at=local_run_at, warnings=tuple(warnings), outside_window=outside_window
+    )

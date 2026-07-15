@@ -30,8 +30,15 @@ from src.application.use_case.pre_open_workflow_use_case import (
 )
 from src.domain.ports.browser_data_provider import BrowserInteractionRequired
 from src.domain.value_objects.idx_market import IDX_TIMEZONE
+from src.domain.value_objects.pre_open_source_status import PreOpenSourceStatus
+from src.infrastructure.browser.stockbit_browser_provider import ManualBrowserDataProvider
 from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.pre_open_config import load_pre_open_screen_config
+
+_SIDECAR_ELIGIBLE_STATUSES = (
+    PreOpenSourceStatus.LIVE_SUCCESS,
+    PreOpenSourceStatus.EMPTY_CONFIRMED,
+)
 
 
 def _default_pre_open_config_path() -> Path:
@@ -180,7 +187,13 @@ def pre_open(
         headless=headless,
     )
 
-    if browser_plan.provider is None:
+    # A live browser fetch is skipped when outside the pre-open window and the
+    # caller didn't supply --movers-json explicitly (that data is already
+    # captured, live-equivalent regardless of wall-clock time). The snapshot
+    # fallback below is DB-only, so it must not require a browser session.
+    skip_live_fetch = run_guard.outside_window and movers_raw is None
+
+    if browser_plan.provider is None and not skip_live_fetch:
         if browser_plan.session_missing:
             typer.echo("Playwright installed but no session found.")
             typer.echo("Run: saham fetch stockbit login")
@@ -192,19 +205,28 @@ def pre_open(
         print_browser_plan(config)
         raise typer.Exit(0)
 
-    if browser_plan.autonomous:
+    if browser_plan.provider is not None and browser_plan.autonomous:
         typer.echo("Playwright session found — running autonomously...")
-    else:
+    elif browser_plan.provider is not None:
         top_label = f"top {config.top_n}" if config.top_n else str(len(movers_raw))
         mode_label = "fast" if config.fast_mode else "normal"
         typer.echo(
             f"Running pre-open screen ({top_label} movers, IEV >= {config.iev_min:,}, "
             f"{mode_label} mode)..."
         )
+    else:
+        typer.echo(
+            "Outside the pre-open window and no live Stockbit session available — "
+            "checking for a saved IEV snapshot..."
+        )
+
+    # Never actually called when skip_live_fetch is True: the workflow returns
+    # SNAPSHOT_SUCCESS/OUTSIDE_WINDOW without touching the browser provider.
+    browser_provider = browser_plan.provider or ManualBrowserDataProvider(movers=[])
 
     cli_workflow = create_pre_open_cli_workflow(
         resolved_db=resolved_db,
-        browser_provider=browser_plan.provider,
+        browser_provider=browser_provider,
         with_ai=with_ai,
         ai_provider=provider,
     )
@@ -222,6 +244,7 @@ def pre_open(
                 benchmark=benchmark,
                 db_path=resolved_db,
                 risk_strategy=risk_strategy,
+                outside_window=skip_live_fetch,
             )
         )
         result = response.result
@@ -239,14 +262,18 @@ def pre_open(
             market_regime=response.market_regime,
             strategy_risk_statuses=response.strategy_risk_statuses,
             risk_strategy_name=response.risk_strategy_name,
+            source_status=response.source_status,
+            source_message=response.source_message,
+            source_snapshot_path=response.source_snapshot_path,
         )
 
-        write_pre_open_sidecar(
-            candidates=result.candidates,
-            screened_date=result.screened_date,
-            sidecar_path=_default_sidecar_path(),
-            market_regime=response.market_regime,
-        )
+        if response.source_status in _SIDECAR_ELIGIBLE_STATUSES:
+            write_pre_open_sidecar(
+                candidates=result.candidates,
+                screened_date=result.screened_date,
+                sidecar_path=_default_sidecar_path(),
+                market_regime=response.market_regime,
+            )
 
     except BrowserInteractionRequired as e:
         typer.echo("\nBrowser action required:", err=True)

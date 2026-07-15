@@ -93,6 +93,7 @@ def test_outside_pre_open_time_adds_timing_warning():
 
     assert guard.error is None
     assert any("outside IDX pre-open window" in warning for warning in guard.warnings)
+    assert guard.outside_window is True
 
 
 def test_valid_pre_open_time_has_no_timing_warning():
@@ -105,3 +106,4 @@ def test_valid_pre_open_time_has_no_timing_warning():
 
     assert guard.error is None
     assert not any("outside IDX pre-open window" in warning for warning in guard.warnings)
+    assert guard.outside_window is False
