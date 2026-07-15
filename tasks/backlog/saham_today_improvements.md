@@ -17,7 +17,7 @@
 | Finding | Status |
 |---------|--------|
 | CLI startup broken (`src.application.domain` import) | ✅ RESOLVED |
-| CLI smoke tests (`saham --help`, `saham today --help`) | ❌ Open — `test_today_commands.py` exists but help smoke tests are still absent |
+| CLI smoke tests (`saham --help`, `saham today --help`) | ✅ `b3c6de1` — `test_cli_help_exits_zero`, `test_today_help_exits_zero` added |
 | Three-clock date separation | ❌ Open — must reuse existing `DataFreshnessStatus` / `compute_data_freshness` where freshness is involved |
 | Fail-closed per-dataset readiness | ❌ Open — must derive from shared freshness primitives, not a duplicate freshness model |
 | Universe scope enforcement in pre-open | ❌ Open |
@@ -28,15 +28,15 @@
 | Primary verdict header (DATA STATUS / POSTURE / ACTION) | ❌ Open |
 | Session-aware next action | ❌ Open — static template with `TICKER` placeholder |
 | Warning severity (BLOCKER / WARNING / INFO) | ❌ Open — 5-row plain list |
-| Rich `[local_clock]` markup bug | ❌ Open — disappears from output |
+| Rich `[local_clock]` markup bug | ✅ `b3c6de1` — fixed; uses `rich.text.Text` instead of f-string markup |
 | Historical mode date separation | ❌ Open |
 
 ---
 
 ## Current Verification Notes (2026-07-15)
 
-- `src/adapters/cli/today_commands.py` still interpolates `[local_clock]` / `[stockbit]` into Rich markup, so T1 remains valid.
-- `tests/adapters/cli/test_today_commands.py` does not cover `saham --help` or `saham today --help`, so T2 remains valid.
+- T1 ✅ (`b3c6de1`): `src/adapters/cli/today_commands.py` now uses `rich.text.Text` to render the source tag as plain text.
+- T2 ✅ (`b3c6de1`): `tests/adapters/cli/test_today_commands.py` has `test_cli_help_exits_zero`, `test_today_help_exits_zero`, and `test_today_shows_market_source_tag`.
 - `src/application/use_case/daily_briefing_use_case.py` still has one `as_of_date`, one `stale_count`, no `is_historical`, no readiness authority, and no per-dataset suppression, so T3/T4/T13 remain valid.
 - Screen backlog S3 already introduced `src/domain/value_objects/data_freshness_status.py` and `src/application/services/data_freshness_service.py`; today work must reuse these instead of creating a second freshness/status concept.
 - `src/application/use_case/daily_briefing_use_case.py` still reads opening snapshot candidates without universe filtering, so T5 remains valid.
@@ -46,21 +46,21 @@
 
 ## Execution Order
 
-| # | Task ID | Priority | Type | Description |
-|---|---------|----------|------|-------------|
-| 1 | `T1` | P0 | Bugfix | Fix Rich `[source]` markup rendering bug |
-| 2 | `T2` | P0 | Bugfix | Add remaining CLI smoke tests |
-| 3 | `T3` | P0 | Refactor | Separate three date clocks in briefing use case |
-| 4 | `T4` | P0 | Feature | Fail-closed per-dataset readiness + ranking suppression |
-| 5 | `T5` | P0 | Bugfix | Enforce universe scope in pre-open opening candidates |
-| 6 | `T6` | P0 | Refactor | Rename to verdict-first pre-open presentation |
-| 7 | `T7` | P0 | Feature | Canonical accumulation funnel (Signal + Risk + TradeSetup) |
-| 8 | `T8` | P0 | Feature | Bounded swing shortlist assessment |
-| 9 | `T9` | P1 | Refactor | Expose honest market context (stop aliasing RISK_ON→BULLISH) |
-| 10 | `T10` | P1 | Feature | Primary verdict header before tables |
-| 11 | `T11` | P1 | Feature | Session-aware IDX lifecycle next action |
-| 12 | `T12` | P1 | Refactor | Warning severity (BLOCKER / WARNING / INFO) |
-| 13 | `T13` | P2 | Bugfix | Historical mode: separate or omit live market status |
+| # | Task ID | Priority | Type | Description | Status |
+|--:|---------|----------|------|-------------|--------|
+| 1 | `T1` | P0 | Bugfix | Fix Rich `[source]` markup rendering bug | ✅ `b3c6de1` |
+| 2 | `T2` | P0 | Bugfix | Add remaining CLI smoke tests | ✅ `b3c6de1` |
+| 3 | `T3` | P0 | Refactor | Separate three date clocks in briefing use case | ❌ Open |
+| 4 | `T4` | P0 | Feature | Fail-closed per-dataset readiness + ranking suppression | ❌ Open |
+| 5 | `T5` | P0 | Bugfix | Enforce universe scope in pre-open opening candidates | ❌ Open |
+| 6 | `T6` | P0 | Refactor | Rename to verdict-first pre-open presentation | ❌ Open |
+| 7 | `T7` | P0 | Feature | Canonical accumulation funnel (Signal + Risk + TradeSetup) | ❌ Open |
+| 8 | `T8` | P0 | Feature | Bounded swing shortlist assessment | ❌ Open |
+| 9 | `T9` | P1 | Refactor | Expose honest market context (stop aliasing RISK_ON→BULLISH) | ❌ Open |
+| 10 | `T10` | P1 | Feature | Primary verdict header before tables | ❌ Open |
+| 11 | `T11` | P1 | Feature | Session-aware IDX lifecycle next action | ❌ Open |
+| 12 | `T12` | P1 | Refactor | Warning severity (BLOCKER / WARNING / INFO) | ❌ Open |
+| 13 | `T13` | P2 | Bugfix | Historical mode: separate or omit live market status | ❌ Open |
 
 > **Note:** T7 and T8 are large and may require ADR discussion before implementation begins.
 
