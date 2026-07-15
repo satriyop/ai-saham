@@ -261,9 +261,15 @@ ORDER BY date;
 
 ---
 
-#### 2. `broker_daily_flow` — Per-Broker Per-Day Time-Series
+#### 2. `broker_daily_flow` — Tracked-Broker Per-Day Time-Series
 
 **PK:** `(ticker, date, broker_code, source)`
+
+**Scope:** This table stores Stockbit per-day rows for the configured tracked
+broker codes only. It is **not** exhaustive full-market broker composition and
+must not be used or displayed as if it covers every broker. User-facing outputs
+should call derived values "tracked broker flow" unless a separate full
+top-broker source is used.
 
 | Column | Type | Content |
 |--------|------|---------|
@@ -290,7 +296,7 @@ ORDER BY date;
 - `saham analyze swing TICKER --auto-refresh` (same path)
 - NOT available from standalone `saham fetch broker TICKER` (which only writes `broker_summaries`)
 
-The provider queries `/order-trade/broker/activity/historical` once per tracked broker code (15 codes), paginated (100 records/page), up to 365 days. Source=`"stockbit"`.
+The provider queries `/order-trade/broker/activity/historical` once per tracked broker code (configured subset), paginated (100 records/page), up to 365 days. Source=`"stockbit"`.
 
 **Reads:**
 

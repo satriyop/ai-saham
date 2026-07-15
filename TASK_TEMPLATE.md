@@ -146,6 +146,21 @@ If AI is used:
 * Where is it stored?
 * Is schema change required? (Yes / No)
 
+If this task changes a data source, provider, repository method, field mapping,
+or persisted field, answer explicitly:
+
+* Are the old and new sources semantically equivalent? (Yes / No)
+* Evidence checked:
+  * cardinality
+  * source owner
+  * aggregation meaning
+  * point-in-time behavior
+  * field semantics
+  * local DB sample comparison
+  * display/JSON naming
+* If not equivalent, what concept name or output contract changes make the
+  difference explicit?
+
 ---
 
 ## 9. Acceptance Criteria

@@ -201,6 +201,12 @@ For any task involving data (market data, indicators, analysis results), the age
 - State whether data or results are persisted
 - Justify if persistence is intentionally skipped
 - Use local-first persistence by default (e.g. SQLite, DuckDB)
+- Never infer that two data sources are equivalent from similar names. Before a
+  data-source, provider, repository-method, or persisted-field swap, verify
+  cardinality, source owner, aggregation meaning, point-in-time behavior, field
+  semantics, local DB samples, and display/JSON naming. If equivalence is not
+  proven, rename the concept or create a separate output field instead of
+  silently swapping.
 
 Ephemeral, in-memory-only behavior must be explicit and justified.
 

@@ -140,6 +140,26 @@ If an adapter needs any forbidden logic, create or reuse an application use case
 * Local-first persistence is preserved
 * Schema changes, if any, are explicit and justified
 
+### Data Source Swap Guardrail
+
+Before recommending or implementing any data-source swap, repository-method swap,
+provider swap, or persisted-field remapping, the agent must prove source
+equivalence or explicitly rename the concept.
+
+Required checks:
+
+* Cardinality: all entities vs selected subset
+* Source owner: IDX vs Stockbit vs Yahoo vs local derived data
+* Aggregation meaning: total market vs tracked subset vs top-N vs proxy
+* Point-in-time behavior: whether reads are safe for historical replay
+* Field semantics: same unit, scale, sign, horizon, and null/default meaning
+* Local DB sample comparison: compare representative rows before/after
+* Output contract: display wording and JSON field names still describe the data truthfully
+
+If equivalence is not proven, do not swap silently. Create a separate field or
+rename the concept so the limitation is visible in code, JSON, CLI output, and
+docs.
+
 ---
 
 ## 11. Testing Readiness

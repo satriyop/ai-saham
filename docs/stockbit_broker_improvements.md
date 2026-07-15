@@ -10,7 +10,7 @@ The system stores three tiers of broker data:
 |---|---|---|---|
 | `broker_summaries` | 35,829 (35,595 idx + 234 stockbit) | IDX public API + Stockbit | 1 row per ticker/date |
 | `foreign_flow_points` | 7,878 | Stockbit only | 1 row per ticker/date |
-| `broker_daily_flow` | 43,816+ | Stockbit only | 1 row per ticker/date/broker_code |
+| `broker_daily_flow` | 43,816+ | Stockbit only | 1 row per ticker/date/tracked broker code |
 
 ---
 
@@ -116,8 +116,8 @@ desk" to distinguish from the true all-foreign signal in the ACCUMULATION sectio
 | Net foreign days (2/7) | `broker_summaries.is_foreign_accumulating` (IDX) | ✅ True all-foreign |
 | VWAP% discount | `foreign_flow_points.avg_price` (Stockbit) | ✅ ±3% of close |
 | FLOW DETAIL net_val | `foreign_flow_points.net_val` (Stockbit, 10 codes) | ⚠️ Institutional desk proxy |
-| Named broker sessions | `broker_daily_flow` (Stockbit, per-day per-broker) | ✅ Real daily data |
-| Institutional flag | `broker_daily_flow` (Stockbit, per-day per-broker) | ✅ Real daily data |
+| Named broker sessions | `broker_daily_flow` (Stockbit, per-day per tracked broker) | ✅ Real daily data for configured broker subset |
+| Institutional flag | `broker_daily_flow` (Stockbit, per-day per tracked broker) | ✅ Real daily data for configured broker subset |
 
 ---
 
@@ -126,5 +126,5 @@ desk" to distinguish from the true all-foreign signal in the ACCUMULATION sectio
 ```
 broker_summaries:    IDX rows only (234 bad Stockbit rows cleaned up in migration)
 foreign_flow_points: 7,878 Stockbit rows (institutional desk proxy — avg_price accurate)
-broker_daily_flow:   43,816+ rows, 78 tickers, 12 codes, 2026-03-16 → 2026-06-12
+broker_daily_flow:   43,816+ rows, 78 tickers, 12 tracked codes, 2026-03-16 → 2026-06-12
 ```

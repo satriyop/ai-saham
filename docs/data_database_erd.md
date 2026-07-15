@@ -66,7 +66,7 @@ erDiagram
     broker_daily_flow {
         ticker TEXT PK        "Stock code"
         date TEXT PK          "Trading date"
-        broker_code TEXT PK   "Broker ID"
+        broker_code TEXT PK   "Tracked broker ID"
         broker_name TEXT      "Broker name"
         source TEXT PK        "Always stockbit"
         buy_lot INT           "Buy lots"
@@ -358,7 +358,7 @@ MARKET-WIDE CORPORATE ACTION CALENDAR (distinct from per-ticker corp_action_cach
 - All monetary values stored as `TEXT` (serialized `Decimal`) — cast with `CAST(field AS REAL)` for numeric ops.
 - `(ticker, date)` is the universal join key across all core market & broker tables.
 - `broker_summaries` stores per-day aggregate foreign flow from multiple sources (IDX, Stockbit, CSV). Source preference: IDX wins (lexicographic `MIN(source)`).
-- `broker_daily_flow` is Stockbit-only — IDX has no per-broker data.
+- `broker_daily_flow` is Stockbit-only and stores configured tracked broker codes only — it is not exhaustive full-market broker composition. Use "tracked broker flow" in user-facing output derived from this table.
 - `foreign_flow_points` holds data from 2 independent paths: derived from IDX `broker_summaries` (source=`"idx"`, avg_price=0) and direct from Stockbit historical API (source=`"stockbit"`, avg_price=exact). Source preference: Stockbit wins (`MAX(source)`).
 - `foreign_flow_snapshots` is a universe-scan cache layer — which stocks have highest net foreign flow.
 - `iev_snapshots` and `iev_snapshot_history` hold pre-open IEV rankings. The `history` table stores snapshots over time; `iev_snapshots` is upserted with latest per-day.
