@@ -22,6 +22,7 @@ from src.application.services.accumulation_multi_window_pattern import (
     classify_multi_window_pattern,
 )
 from src.application.services.broker_quality import BrokerQualitySnapshot
+from src.application.services.data_freshness_service import compute_data_freshness
 
 
 class ScreenAccumProjectionError(ValueError):
@@ -92,6 +93,17 @@ def project_single_screen_result(
         ]
 
     candidates = candidates[:top]
+
+    for c in candidates:
+        coverage = (
+            c.signal_assessment.assessment.coverage_score if c.signal_assessment else None
+        )
+        c.freshness = compute_data_freshness(
+            candle_as_of=c.latest_candle_date,
+            broker_as_of=c.latest_broker_date,
+            screen_date=response.screened_at,
+            signal_evidence_coverage=coverage,
+        )
 
     latest_candle = max(
         (c.latest_candle_date for c in candidates if c.latest_candle_date), default=None

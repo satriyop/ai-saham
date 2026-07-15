@@ -15,6 +15,7 @@ from src.application.dto.accumulation_screen import (
 )
 from src.application.services.screen_accum_result_projector import (
     project_multi_screen_result,
+    project_single_screen_result,
 )
 from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 from src.domain.value_objects.risk_assessment import RiskAssessment
@@ -56,6 +57,49 @@ def test_display_results_renders_rich_accumulation_panel(capsys):
     assert "TechnicalGate is not evaluated by screen accum" in out
     assert "Scoring Definitions" not in out
     assert "Run Context" not in out
+
+
+def test_display_results_never_shows_fresh_ok_and_splits_align_from_ready(capsys):
+    """S3: the retired 'Fresh: OK' label must be gone; alignment and
+    readiness render as separate, typed labels sourced from the same
+    DataFreshnessStatus the projector attaches to each candidate."""
+    candidate = _candidate(
+        latest_candle_date=date(2026, 6, 26),
+        latest_broker_date=date(2026, 6, 26),
+    )
+    response = AccumulationScreenResponse(
+        candidates=[candidate],
+        screened_at=date(2026, 6, 28),
+        window_days=7,
+        total_tickers_checked=1,
+        tickers_skipped=0,
+        provider="stockbit",
+    )
+    projection = project_single_screen_result(
+        response,
+        vwap_only=False,
+        squeeze_only=False,
+        top=10,
+        min_streak=0,
+        coiled_spring_bb_pctile=0.20,
+    )
+
+    display_results(
+        response=response,
+        candidates=projection.candidates,
+        universe_label="lq45",
+        show_top_broker=False,
+        display_config=_CFG,
+        include_explanation=False,
+    )
+
+    out = capsys.readouterr().out
+    assert "Fresh" not in out
+    assert "OK" not in out
+    assert "Align" in out
+    assert "Ready" in out
+    assert candidate.freshness is not None
+    assert candidate.freshness.alignment_state.value == "ALIGNED"
 
 
 def test_display_results_renders_explanation_panels_when_requested(capsys):

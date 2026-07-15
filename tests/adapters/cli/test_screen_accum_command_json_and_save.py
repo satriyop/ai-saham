@@ -106,6 +106,53 @@ def test_screen_accum_json_includes_setup_phase(monkeypatch):
     assert candidate_json["setup_phase"]["previous_phase"] == "ACCUMULATION"
 
 
+def test_screen_accum_json_includes_typed_freshness(monkeypatch):
+    """S3: JSON must carry typed freshness fields, no bare "OK" state, and
+    it must come from the same DataFreshnessStatus the table renders."""
+
+    def fake_uc(**kwargs):
+        uc = SimpleNamespace()
+        uc.execute = lambda req: _fake_workflow_result(
+            response=AccumulationScreenResponse(
+                candidates=[
+                    _candidate(
+                        latest_candle_date=date(2026, 6, 26),
+                        latest_broker_date=date(2026, 6, 26),
+                    )
+                ],
+                screened_at=date(2026, 6, 28),
+                window_days=getattr(req, "window", 7),
+                total_tickers_checked=len(req.tickers),
+                tickers_skipped=0,
+                provider="fake",
+            )
+        )
+        return uc
+
+    monkeypatch.setattr(
+        accum_cli,
+        "create_run_accumulation_screen_workflow_use_case",
+        fake_uc,
+    )
+
+    result = runner.invoke(app, ["screen", "accum", "INDF", "--format", "json"])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    freshness = payload["candidates"][0]["freshness"]
+
+    assert freshness["candle_as_of"] == "2026-06-26"
+    assert freshness["broker_as_of"] == "2026-06-26"
+    assert freshness["alignment_state"] == "ALIGNED"
+    assert freshness["sources_aligned"] is True
+    assert isinstance(freshness["candle_state"], str)
+    assert isinstance(freshness["broker_state"], str)
+    assert freshness["candle_state"] != "OK"
+    assert freshness["broker_state"] != "OK"
+    assert freshness["alignment_state"] != "OK"
+    assert "OK" not in result.output
+
+
 def test_screen_accum_save_calls_use_case(monkeypatch):
     from src.application.use_case.save_screen_watchlist_use_case import (
         SaveScreenWatchlistResult,

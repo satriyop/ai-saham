@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from src.domain.value_objects.analyst_consensus import AnalystConsensus
     from src.domain.value_objects.bandar_detector_snapshot import BandarDetectorSnapshot
     from src.domain.value_objects.company_fundamentals import CompanyFundamentals
+    from src.domain.value_objects.data_freshness_status import DataFreshnessStatus
     from src.domain.value_objects.flow_confirmation_evidence import FlowConfirmationEvidence
     from src.domain.value_objects.forward_estimates import ForwardEstimates
     from src.domain.value_objects.market_context import MarketContext
@@ -220,6 +221,9 @@ class AccumulationCandidate:
     # Accumulation-lifecycle diagnostic (ACCUMULATION/COMPRESSION/BREAKOUT_CONFIRMATION/
     # EXHAUSTION/DISTRIBUTION/FAILED/NONE); None when detection is unavailable or fails.
     setup_phase: "SetupPhaseSnapshot | None" = None
+    # Market-calendar-aware freshness/alignment (S3); None until the screen
+    # accum projector computes it — table and JSON both render this field.
+    freshness: "DataFreshnessStatus | None" = None
 
     def to_dict(self) -> dict:
         return {
@@ -306,6 +310,7 @@ class AccumulationCandidate:
             "risk_confidence": self.risk_assessment.confidence if self.risk_assessment else None,
             "risk_gate": self.risk_assessment.gate_triggered if self.risk_assessment else None,
             "setup_phase": self.setup_phase.to_dict() if self.setup_phase else None,
+            "freshness": self.freshness.to_dict() if self.freshness else None,
         }
 
 

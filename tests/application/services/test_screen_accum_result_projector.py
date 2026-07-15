@@ -314,3 +314,49 @@ def test_project_multi_screen_result_raises_on_invalid_sort_by():
             coiled_spring_min_foreign_flow_score=50.0,
             coiled_spring_bb_pctile=0.20,
         )
+
+
+# ---------------------------------------------------------------------------
+# S3 — freshness computed once by the projector, shared by table and JSON
+# ---------------------------------------------------------------------------
+
+
+def test_single_projection_attaches_freshness_to_each_projected_candidate():
+    c = _candidate(
+        ticker="A",
+        latest_candle_date=date(2026, 7, 13),
+        latest_broker_date=date(2026, 7, 13),
+    )
+    response = _response([c])
+
+    projection = project_single_screen_result(
+        response,
+        vwap_only=False,
+        squeeze_only=False,
+        top=10,
+        min_streak=0,
+        coiled_spring_bb_pctile=0.20,
+    )
+
+    (result_candidate,) = projection.candidates
+    assert result_candidate.freshness is not None
+    assert result_candidate.freshness.candle_as_of == date(2026, 7, 13)
+    assert result_candidate.freshness.broker_as_of == date(2026, 7, 13)
+    assert result_candidate.freshness.sources_aligned is True
+
+
+def test_single_projection_does_not_attach_freshness_to_filtered_out_candidates():
+    kept = _candidate(ticker="A", vwap_discount_pct=5.0)
+    dropped = _candidate(ticker="B", vwap_discount_pct=-2.0)
+    response = _response([kept, dropped])
+
+    project_single_screen_result(
+        response,
+        vwap_only=True,
+        squeeze_only=False,
+        top=10,
+        min_streak=0,
+        coiled_spring_bb_pctile=0.20,
+    )
+
+    assert dropped.freshness is None

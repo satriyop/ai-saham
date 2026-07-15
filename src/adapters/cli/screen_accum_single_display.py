@@ -17,9 +17,11 @@ from src.adapters.cli.screen_accum_enrichment_display import (
 from src.adapters.cli.screen_accum_formatters import (
     _STRAT_SYMBOL,
     AccumulationDisplayConfig,
-    _data_freshness,
+    _alignment_text,
+    _coverage_text,
     _phase_cell,
     _price_text,
+    _readiness_text,
     _risk_detail_line,
     _risk_tier,
 )
@@ -201,11 +203,13 @@ def display_results(
     risk_table.add_column("Gate")
 
     data_table = compact_table()
-    data_table.add_column("Fresh")
+    data_table.add_column("Align")
+    data_table.add_column("Ready")
     if show_context_ticker:
         data_table.add_column("Ticker", style="bold")
     data_table.add_column("Candle")
     data_table.add_column("Broker")
+    data_table.add_column("Coverage")
     data_table.add_column("Missing")
 
     risk_detail_lines: list[Text] = []
@@ -342,13 +346,15 @@ def display_results(
             if val is None
         ]
         data_row = [
-            _data_freshness(c),
+            _alignment_text(c),
+            _readiness_text(c),
             c.latest_candle_date.isoformat() if c.latest_candle_date else "-",
             c.latest_broker_date.isoformat() if c.latest_broker_date else "-",
+            _coverage_text(c),
             " ".join(missing) if missing else "-",
         ]
         if show_context_ticker:
-            data_table.add_row(data_row[0], c.ticker, *data_row[1:])
+            data_table.add_row(data_row[0], data_row[1], c.ticker, *data_row[2:])
         else:
             data_table.add_row(*data_row)
 

@@ -194,9 +194,46 @@ def _risk_detail_line(rank: int, candidate: AccumulationCandidate) -> Text:
     )
 
 
-def _data_freshness(candidate: AccumulationCandidate) -> str:
-    if candidate.latest_candle_date is None or candidate.latest_broker_date is None:
-        return "MISSING"
-    if candidate.latest_candle_date == candidate.latest_broker_date:
-        return "OK"
-    return "LAG"
+_ALIGNMENT_LABELS = {
+    "ALIGNED": "Aligned",
+    "LAG": "Lag",
+    "MISSING": "Missing",
+    "UNKNOWN": "Unknown",
+}
+
+_READINESS_LABELS = {
+    "READY": "Ready",
+    "PENDING_EOD": "Pending EOD",
+    "STALE": "Stale",
+    "PARTIAL": "Partial",
+    "MISSING": "Missing",
+    "UNKNOWN": "Unknown",
+}
+
+
+def _alignment_text(candidate: AccumulationCandidate) -> str:
+    """Source-equality label: candle date == broker date? Distinct from
+    readiness — alignment alone does not mean the data is current."""
+    if candidate.freshness is None:
+        return _ALIGNMENT_LABELS["UNKNOWN"]
+    return _ALIGNMENT_LABELS[candidate.freshness.alignment_state.value]
+
+
+def _readiness_text(candidate: AccumulationCandidate) -> str:
+    """Worst-of(candle_state, broker_state) — is the data current for the
+    expected latest IDX EOD session?"""
+    if candidate.freshness is None:
+        return _READINESS_LABELS["UNKNOWN"]
+    order = ["MISSING", "STALE", "UNKNOWN", "PARTIAL", "PENDING_EOD", "READY"]
+    states = [
+        candidate.freshness.candle_state.value,
+        candidate.freshness.broker_state.value,
+    ]
+    worst = min(states, key=order.index)
+    return _READINESS_LABELS[worst]
+
+
+def _coverage_text(candidate: AccumulationCandidate) -> str:
+    if candidate.freshness is None or candidate.freshness.signal_evidence_coverage is None:
+        return "-"
+    return f"{candidate.freshness.signal_evidence_coverage:.0%}"
