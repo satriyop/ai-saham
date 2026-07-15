@@ -66,7 +66,14 @@ Guardrails and edge cases:
 
 ### 2. High: `sqlite_data_update_status.py` mixes table catalog, SQL reader, and freshness policy
 
-Status: TODO
+Status: RESOLVED
+
+Resolution:
+- Extracted `DataUpdateTableSpec` dataclass and `build_data_update_table_specs()` catalog to `src/infrastructure/persistence/data_update_status_catalog.py`.
+- Extracted `range_label`, `parse_dateish`, and `freshness_status` pure helpers to `src/infrastructure/persistence/data_update_status_freshness.py`.
+- `sqlite_data_update_status.py` now owns only: DB existence handling, SQLite connection, table existence check, per-spec SQL aggregation, and mapping results to `DataUpdateTableStatus`.
+- Added `tests/infrastructure/persistence/test_data_update_status_freshness.py` with 8 pure-function tests covering `range_label`, `parse_dateish`, empty, range ready/partial/stale/pending-eod, today, month, ttl30/ttl7, and unknown freshness fallback.
+- Existing integration tests in `test_sqlite_data_update_status.py` and `test_fetch_market_output_formatting.py` pass unchanged; no string or behavior drift.
 
 Pointer:
 - `src/infrastructure/persistence/sqlite_data_update_status.py:17` defines `_TableSpec`.
