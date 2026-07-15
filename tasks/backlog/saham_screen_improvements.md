@@ -30,7 +30,7 @@ Files verified:
 | 2 | `S2` | P0 | Table and JSON output apply different filters | ✅ Resolved |
 | 3 | `S3` | P0 | Freshness is source alignment, not actual calendar freshness | ✅ Resolved |
 | 4 | `S4` | P0 | Pre-open provider failure looks like valid empty result | ✅ Resolved |
-| 5 | `S5` | P1 | Unsupported 65–70% prediction claim in guide | ❌ Open |
+| 5 | `S5` | P1 | Unsupported 65–70% prediction claim in guide | ✅ Resolved |
 | 6 | `S6` | P1 | BCI grants full points despite negative aggregate flow | ❌ Open |
 | 7 | `S7` | P1 | Multi-window output discards Signal/Risk/Phase already computed | ❌ Open |
 | 8 | `S8` | P1 | Watchlist `list` reports wrong ticker count | ❌ Open |
@@ -428,6 +428,14 @@ Layer plan:
 
 - **Type:** Documentation / Bugfix
 - **Priority:** P1 — misleads users into false confidence
+- **Status:** RESOLVED
+
+### Resolution
+
+- Removed 65–70% claim from `src/adapters/cli/screen_accum_guide_display.py` intro text and `docs/screener-foreign-accumulation.md`.
+- Replaced with a caveat stating performance evidence is not yet independently validated and directing users to the learning/grade workflow for local evidence.
+- Softened "highest-probability" phrasing to "higher-priority candidate" in the same docs.
+- No scoring, config, or logic files touched.
 
 ### Problem
 
@@ -483,10 +491,10 @@ Layer plan:
 
 ### Acceptance Criteria
 
-- [ ] `65–70%` text is removed from `screen_accum_guide_display.py`
-- [ ] Replacement text directs users to `saham learn grade` for local evidence
-- [ ] Equivalent claim removed from docs if it exists
-- [ ] `git diff --check` clean
+- [x] `65–70%` text is removed from `screen_accum_guide_display.py`
+- [x] Replacement text directs users to `saham learn grade` for local evidence
+- [x] Equivalent claim removed from docs if it exists
+- [x] `git diff --check` clean
 
 ---
 

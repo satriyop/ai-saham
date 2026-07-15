@@ -6,7 +6,7 @@ Every day on IDX, foreign investors (banks, hedge funds, institutional brokers) 
 
 > **Which stocks are foreigners quietly buying — day after day — while the price is still low?**
 
-This pattern is called **accumulation**: large players building a position before a price move. When foreigners accumulate consistently over multiple days AND their average buy price is higher than the current price (meaning they're "underwater" and motivated to defend their position), stocks in IHSG historically resolve upward **65–70% of the time within 10–20 trading days**.
+This pattern is called **accumulation**: large players building a position before a price move. Performance evidence is not yet independently validated in this repository. Treat the screener as a deterministic evidence-ranking workflow until a versioned local audit reports universe, date range, sample count, horizon, costs, and config hash.
 
 This is a **swing trade watchlist**, not an intraday tool. Signals here are for 5–20 day holding periods.
 
@@ -277,7 +277,7 @@ BB%ILE tells you where today's volatility sits relative to the last 60 days:
 
 **Why the squeeze matters:** When volatility compresses *while foreigners are quietly accumulating*, the stock is like a coiled spring. The accumulation adds buying pressure without moving the price (because volatility is low and the stock is trading flat). This typically precedes a sharp breakout — the compression releases suddenly when a catalyst hits.
 
-The combination of **accumulation + squeeze** is considered the highest-probability swing setup in IHSG.
+The combination of **accumulation + squeeze** is considered a higher-priority candidate setup in IHSG.
 
 | BB%ILE | Color | Meaning |
 |---|---|---|
@@ -312,7 +312,7 @@ The pattern label summarizes what the multi-window comparison reveals about the 
 | **building** | Strong 7d and 30d, weaker 90d | Accumulation is intensifying — recent acceleration of interest |
 | **fresh rotation** | Strong 7d only, weak 30d/90d | Very recent buying — may be early or a one-week rotation, needs more time to confirm |
 | **long-term only** | Strong 90d, weak recent windows | Foreigners were buying months ago but have slowed — position may be complete, watch for distribution |
-| **coiled spring** | Any window: squeeze + score ≥ 50 | Accumulation AND volatility compression — highest probability short-term breakout setup |
+| **coiled spring** | Any window: squeeze + score ≥ 50 | Accumulation AND volatility compression — higher-priority short-term breakout candidate |
 | **weak** | No window scores ≥ 50 | Not a meaningful accumulation pattern currently |
 
 **How to use PATTERN in your workflow:**

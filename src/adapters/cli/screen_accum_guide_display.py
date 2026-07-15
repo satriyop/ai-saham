@@ -17,10 +17,12 @@ def print_column_guide() -> None:
     # Top introductory text
     intro = Text(
         "Detects stocks being quietly bought by foreign institutions over\n"
-        "multiple days. When foreigners accumulate consistently AND are\n"
-        "'underwater' (bought higher than today's price), IHSG stocks\n"
-        "resolve upward 65–70% of the time within 10–20 trading days.\n"
-        "This is a swing trade watchlist (5–20 day horizon).\n",
+        "multiple days. Performance evidence: not yet independently\n"
+        "validated. Treat this screen as deterministic evidence ranking,\n"
+        "not a calibrated prediction. Use the learning/grade workflow\n"
+        "after enough observations are collected to measure local\n"
+        "resolution rates. This is a swing trade watchlist (5–20 day\n"
+        "horizon).\n",
         style="italic"
     )
 
