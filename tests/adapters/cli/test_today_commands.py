@@ -1,5 +1,6 @@
 """Tests for the daily briefing CLI command."""
 
+from datetime import date
 from pathlib import Path
 
 from typer.testing import CliRunner
@@ -49,8 +50,6 @@ def test_today_shows_market_source_tag(tmp_path: Path):
                 "today",
                 "--universe",
                 "lq45",
-                "--date",
-                "2026-06-19",
                 "--db",
                 str(tmp_path / "market.db"),
             ],
@@ -88,6 +87,7 @@ def test_today_uses_loaded_config_and_not_global(tmp_path: Path):
     from unittest.mock import MagicMock, patch
 
     from src.adapters.cli.today_commands import today
+
     with patch("src.adapters.cli.today_commands.load_accumulation_screener_config") as mock_load, \
          patch("src.adapters.cli.today_commands.DailyBriefingUseCase") as mock_uc_class:
         mock_cfg = MagicMock()
@@ -101,11 +101,48 @@ def test_today_uses_loaded_config_and_not_global(tmp_path: Path):
         mock_response.universe_count = 0
         mock_response.stale_count = 0
         mock_response.regime = None
-        mock_response.pre_open = []
-        mock_response.accumulation = []
-        mock_response.watchlist_triggers = []
-        mock_response.lifecycle_suggestions = []
+        mock_response.opening_candidates = []
+        mock_response.accumulation_candidates = []
+        mock_response.warnings = []
+        mock_response.live_session_date = date(2026, 6, 19)
+        mock_response.latest_completed_eod_date = date(2026, 6, 19)
+        mock_response.opening_snapshot_date = date(2026, 6, 19)
+        mock_response.is_historical = True
 
         today(universe="lq45", date_str="2026-06-19", db_path=tmp_path / "market.db")
 
         mock_load.assert_called_once()
+
+
+def test_today_historical_mode_output_and_suppression(tmp_path: Path):
+    from unittest.mock import patch
+
+    # Patch get_display_market_status to raise an exception.
+    # It should NOT be called in historical mode.
+    with patch(
+        "src.infrastructure.browser.stockbit_market_time.get_display_market_status",
+        side_effect=RuntimeError("Should not be called!"),
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "today",
+                "--universe",
+                "lq45",
+                "--date",
+                "2026-06-19",
+                "--db",
+                str(tmp_path / "market.db"),
+            ],
+        )
+
+    assert result.exit_code == 0
+    # Output must contain HISTORICAL and the summary rows
+    assert "HISTORICAL — 2026-06-19" in result.stdout
+    assert "Live session date" in result.stdout
+    assert "Latest completed EOD" in result.stdout
+    assert "Opening snapshot date" in result.stdout
+    # Should not contain any live market status indications (since
+    # get_display_market_status was not called/rendered)
+    assert "Regular" not in result.stdout
+    assert "⚠ open" not in result.stdout

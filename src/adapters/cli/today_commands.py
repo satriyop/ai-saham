@@ -87,6 +87,7 @@ def today(
         regime_tickers = []
     use_case = DailyBriefingUseCase(
         market_repository=market_repo,
+        broker_repository=broker_repo,
         regime_use_case=MarketContextEngine(
             market_repository=market_repo,
             config=load_market_context_config(),
@@ -111,25 +112,41 @@ def today(
         )
     )
 
-    from src.infrastructure.browser.stockbit_market_time import (
-        get_display_market_status,
-    )
-    market_status = get_display_market_status()
-
     fresh_count = response.universe_count - response.stale_count
     summary = compact_table(show_header=False)
     summary.add_column("Metric", style="bold")
     summary.add_column("Value")
 
-    # Style market status value
-    market_style = "green" if market_status.is_open else "yellow"
-    market_text = Text()
-    market_text.append(market_status.session_name, style=market_style)
-    market_text.append("  ")
-    market_text.append(f"[{market_status.source}]")
-    if market_status.is_open:
-        market_text.append("  ⚠ open")
-    summary.add_row("Market", market_text)
+    # Style market status value / Mode row
+    if not response.is_historical:
+        from src.infrastructure.browser.stockbit_market_time import (
+            get_display_market_status,
+        )
+        market_status = get_display_market_status()
+        market_style = "green" if market_status.is_open else "yellow"
+        market_text = Text()
+        market_text.append(market_status.session_name, style=market_style)
+        market_text.append("  ")
+        market_text.append(f"[{market_status.source}]")
+        if market_status.is_open:
+            market_text.append("  ⚠ open")
+        summary.add_row("Market", market_text)
+    else:
+        summary.add_row("Mode", f"HISTORICAL — {response.live_session_date.isoformat()}")
+
+    summary.add_row("Live session date", response.live_session_date.isoformat())
+    latest_eod_str = (
+        response.latest_completed_eod_date.isoformat()
+        if response.latest_completed_eod_date
+        else "-"
+    )
+    summary.add_row("Latest completed EOD", latest_eod_str)
+    opening_date_str = (
+        response.opening_snapshot_date.isoformat()
+        if response.opening_snapshot_date
+        else "-"
+    )
+    summary.add_row("Opening snapshot date", opening_date_str)
 
     summary.add_row("Universe", f"{response.universe.upper()} ({response.universe_count} tickers)")
     summary.add_row("Cached candles current", f"{fresh_count}/{response.universe_count}")
@@ -235,7 +252,7 @@ def today(
     console.print(
         panel(
             Group(*sections),
-            title=f"Daily Briefing - {response.as_of_date.isoformat()}",
+            title=f"Daily Briefing - {response.live_session_date.isoformat()}",
             subtitle=response.universe.upper(),
         )
     )

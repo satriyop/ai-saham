@@ -18,7 +18,7 @@
 |---------|--------|
 | CLI startup broken (`src.application.domain` import) | ✅ RESOLVED |
 | CLI smoke tests (`saham --help`, `saham today --help`) | ✅ `b3c6de1` — `test_cli_help_exits_zero`, `test_today_help_exits_zero` added |
-| Three-clock date separation | ❌ Open — must reuse existing `DataFreshnessStatus` / `compute_data_freshness` where freshness is involved |
+| Three-clock date separation | ✅ RESOLVED |
 | Fail-closed per-dataset readiness | ❌ Open — must derive from shared freshness primitives, not a duplicate freshness model |
 | Universe scope enforcement in pre-open | ❌ Open |
 | Verdict-first pre-open section title | ❌ Open — section is still "Top Pre-Open Candidates" |
@@ -29,7 +29,7 @@
 | Session-aware next action | ❌ Open — static template with `TICKER` placeholder |
 | Warning severity (BLOCKER / WARNING / INFO) | ❌ Open — 5-row plain list |
 | Rich `[local_clock]` markup bug | ✅ `b3c6de1` — fixed; uses `rich.text.Text` instead of f-string markup |
-| Historical mode date separation | ❌ Open |
+| Historical mode date separation | ✅ RESOLVED |
 
 ---
 
@@ -37,8 +37,10 @@
 
 - T1 ✅ (`b3c6de1`): `src/adapters/cli/today_commands.py` now uses `rich.text.Text` to render the source tag as plain text.
 - T2 ✅ (`b3c6de1`): `tests/adapters/cli/test_today_commands.py` has `test_cli_help_exits_zero`, `test_today_help_exits_zero`, and `test_today_shows_market_source_tag`.
-- `src/application/use_case/daily_briefing_use_case.py` still has one `as_of_date`, one `stale_count`, no `is_historical`, no readiness authority, and no per-dataset suppression, so T3/T4/T13 remain valid.
-- Screen backlog S3 already introduced `src/domain/value_objects/data_freshness_status.py` and `src/application/services/data_freshness_service.py`; today work must reuse these instead of creating a second freshness/status concept.
+- T3 ✅: Implemented clean-break date separation (live_session_date, latest_completed_eod_date, opening_snapshot_date, is_historical), decoupled from as_of_date, and suppressed market status in historical mode.
+- T13 ✅: Historical mode conditional rendering suppresses live market status and displays historical mode label.
+- `src/application/use_case/daily_briefing_use_case.py` has three clocks (`live_session_date`, `latest_completed_eod_date`, `opening_snapshot_date`) and `is_historical` flag.
+- Screen backlog S3 already introduced `src/domain/value_objects/data_freshness_status.py` and `src/application/services/data_freshness_service.py`; today work reuses these.
 - `src/application/use_case/daily_briefing_use_case.py` still reads opening snapshot candidates without universe filtering, so T5 remains valid.
 - `src/adapters/cli/today_commands.py` still renders `Top Pre-Open Candidates`, `Top Accumulation Candidates`, `REGIME_DISPLAY_LABEL`, plain capped warnings, and static `saham analyze swing TICKER`, so T6/T7/T9/T10/T11/T12 remain valid.
 
@@ -50,7 +52,7 @@
 |--:|---------|----------|------|-------------|--------|
 | 1 | `T1` | P0 | Bugfix | Fix Rich `[source]` markup rendering bug | ✅ `b3c6de1` |
 | 2 | `T2` | P0 | Bugfix | Add remaining CLI smoke tests | ✅ `b3c6de1` |
-| 3 | `T3` | P0 | Refactor | Separate three date clocks in briefing use case | ❌ Open |
+| 3 | `T3` | P0 | Refactor | Separate three date clocks in briefing use case | ✅ RESOLVED |
 | 4 | `T4` | P0 | Feature | Fail-closed per-dataset readiness + ranking suppression | ❌ Open |
 | 5 | `T5` | P0 | Bugfix | Enforce universe scope in pre-open opening candidates | ❌ Open |
 | 6 | `T6` | P0 | Refactor | Rename to verdict-first pre-open presentation | ❌ Open |
@@ -60,7 +62,7 @@
 | 10 | `T10` | P1 | Feature | Primary verdict header before tables | ❌ Open |
 | 11 | `T11` | P1 | Feature | Session-aware IDX lifecycle next action | ❌ Open |
 | 12 | `T12` | P1 | Refactor | Warning severity (BLOCKER / WARNING / INFO) | ❌ Open |
-| 13 | `T13` | P2 | Bugfix | Historical mode: separate or omit live market status | ❌ Open |
+| 13 | `T13` | P2 | Bugfix | Historical mode: separate or omit live market status | ✅ RESOLVED |
 
 > **Note:** T7 and T8 are large and may require ADR discussion before implementation begins.
 
@@ -242,16 +244,16 @@ Layer plan:
 
 ### Acceptance Criteria
 
-- [ ] `DailyBriefingResponse` has `live_session_date`, `latest_completed_eod_date`, `opening_snapshot_date`
-- [ ] `DailyBriefingResponse` has `is_historical: bool`
-- [ ] Staleness check for candles uses `latest_completed_eod_date`
-- [ ] Freshness calculation reuses `compute_data_freshness()` / `DataFreshnessStatus`; no duplicate freshness service/value object is introduced
-- [ ] Historical mode sets `is_historical: bool = True` in response
-- [ ] Adapter renders three dates and suppresses live market status in historical mode
-- [ ] Regression test: weekend today → correct `latest_completed_eod_date`
-- [ ] Test: historical `--date` mode sets `is_historical = True`
-- [ ] Full test suite passes
-- [ ] `git diff --check` clean
+- [x] `DailyBriefingResponse` has `live_session_date`, `latest_completed_eod_date`, `opening_snapshot_date`
+- [x] `DailyBriefingResponse` has `is_historical: bool`
+- [x] Staleness check for candles uses `latest_completed_eod_date`
+- [x] Freshness calculation reuses `compute_data_freshness()` / `DataFreshnessStatus`; no duplicate freshness service/value object is introduced
+- [x] Historical mode sets `is_historical: bool = True` in response
+- [x] Adapter renders three dates and suppresses live market status in historical mode
+- [x] Regression test: weekend today → correct `latest_completed_eod_date`
+- [x] Test: historical `--date` mode sets `is_historical = True`
+- [x] Full test suite passes
+- [x] `git diff --check` clean
 
 ---
 
@@ -848,11 +850,11 @@ Layer plan:
 
 ### Acceptance Criteria
 
-- [ ] `saham today --date 2026-06-19` does not show "Regular / open" as the current status
-- [ ] Historical mode label is visible in output
-- [ ] `test_today_commands.py` covers the historical rendering path
-- [ ] Full test suite passes
-- [ ] `git diff --check` clean
+- [x] `saham today --date 2026-06-19` does not show "Regular / open" as the current status
+- [x] Historical mode label is visible in output
+- [x] `test_today_commands.py` covers the historical rendering path
+- [x] Full test suite passes
+- [x] `git diff --check` clean
 
 ---
 
