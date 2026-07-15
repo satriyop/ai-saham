@@ -123,7 +123,47 @@ clarification before writing code.
 
 ---
 
-## 5.3 Manual Dependency Injection Rule
+## 5.3 Canonical Projection Rule
+
+Adapters, displays, reports, and CLI commands must project canonical
+domain/application outputs. They must not reinterpret them.
+
+Before adding any label, score, threshold, rank, action, bucket,
+recommendation, qualifier, or next-step wording, the agent must prove that the
+concept already exists in one of:
+
+* Domain value object
+* Application use case/service output
+* Accepted config
+* Accepted ADR
+
+If the concept does not already exist there, do not add it in an adapter.
+
+Forbidden adapter-local inventions include:
+
+* Bullish/bearish aliases for canonical regimes
+* LOW/MEDIUM/HIGH confidence buckets
+* Arbitrary thresholds
+* Local ranking formulas
+* Pseudo-actions such as REVIEW
+* Setup bonuses or penalties
+* Recommendation text that is not backed by canonical action/status fields
+
+Allowed adapter behavior:
+
+* Render canonical enum/value fields directly
+* Format numbers without changing meaning
+* Order/display fields already ordered by application output
+* Map technical exceptions to user-facing error messages
+* Show commands that invoke canonical workflows
+
+If a better human-facing label is needed, create a separate task to add that
+semantic label in the application/domain/config layer first. Do not introduce
+it in the adapter.
+
+---
+
+## 5.4 Manual Dependency Injection Rule
 
 The project uses explicit manual dependency injection. Agents must not add a
 DI framework or service locator.

@@ -129,6 +129,7 @@ If an adapter needs any forbidden logic, create or reuse an application use case
 * No silent overrides of risk, signal, setup, tuning, or evidence-promotion settings
 * Blocking risk gates remain separate from bullish signal scoring
 * Diagnostic evidence remains non-authoritative unless promotion guardrails are explicitly satisfied
+* I did not introduce adapter-local labels, thresholds, rankings, buckets, scores, pseudo-actions, or recommendation language. Every displayed decision concept is sourced from domain/application/config/ADR.
 
 ---
 
