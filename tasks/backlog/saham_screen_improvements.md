@@ -27,7 +27,7 @@ Files verified:
 | # | Task ID | Priority | Finding | Status |
 |---|---------|----------|---------|--------|
 | 1 | `S1` | P0 | Multi-window screening corrupts observation identity | ❌ Open |
-| 2 | `S2` | P0 | Table and JSON output apply different filters | ❌ Open |
+| 2 | `S2` | P0 | Table and JSON output apply different filters | ✅ Resolved |
 | 3 | `S3` | P0 | Freshness is source alignment, not actual calendar freshness | ❌ Open |
 | 4 | `S4` | P0 | Pre-open provider failure looks like valid empty result | ❌ Open |
 | 5 | `S5` | P1 | Unsupported 65–70% prediction claim in guide | ❌ Open |
@@ -199,6 +199,7 @@ Layer plan:
 - **Type:** Bugfix / Refactor
 - **Priority:** P0 — table and JSON return different candidate sets for the same command
 - **Pre-condition:** S1 must be resolved first (to establish the clean result contract)
+- **Status:** RESOLVED (commit `c6ef8d3`)
 
 ### Problem
 
@@ -248,13 +249,23 @@ Layer plan:
 
 ### Acceptance Criteria
 
-- [ ] `saham screen accum --vwap-only --format json` returns the same candidate set as the table view
-- [ ] `saham screen accum --squeeze-only --format json` returns the same candidate set as table view
-- [ ] `saham screen accum --multi --top 5 --sort-by 30s --format json` respects all three options
-- [ ] JSON output includes `applied_filters`, `universe`, `counts_before_filter`, `counts_after_filter`
-- [ ] Invalid `--sort-by` value exits with a clear error message
-- [ ] Full test suite passes
-- [ ] `git diff --check` clean
+- [x] `saham screen accum --vwap-only --format json` returns the same candidate set as the table view
+- [x] `saham screen accum --squeeze-only --format json` returns the same candidate set as table view
+- [x] `saham screen accum --multi --top 5 --sort-by 30s --format json` respects all three options
+- [x] JSON output includes `applied_filters`, `universe`, `counts_before_filter`, `counts_after_filter`
+- [x] Invalid `--sort-by` value exits with a clear error message
+- [x] Full test suite passes
+- [x] `git diff --check` clean
+
+**Resolution notes:**
+- New `src/application/services/screen_accum_result_projector.py` owns `vwap_only`/`squeeze_only`/`min_streak`/`top`/`sort_by` filtering and multi-window pattern/trend classification exactly once, producing `ScreenAccumSingleProjection` and `ScreenAccumMultiProjection`. `RunAccumulationScreenWorkflowUseCase` builds the projection and returns it on the result; both `_render_single` and `_render_multi` in `screen_accum_commands.py` render from the same projection for table and JSON.
+- `display_results()`/`display_multi()` no longer filter, sort, or slice — they render whatever candidates/rows they're given.
+- CLI `min_streak` no longer leaks into the raw `AccumulationScreenRequest.min_net_buy_days` (previously `max(1, min_streak)` could drop candidates upstream of the projector); the raw screen now uses a fixed baseline availability floor, and `consecutive_streak >= min_streak` is applied exclusively inside the projector, so `raw_candidate_count` reflects the true pre-filter count.
+- `validate_multi_window_request()` fails explicitly (non-zero exit, clear message) on duplicate windows, empty windows, invalid `sort_by`, and a window-label `sort_by` not present in the resolved windows.
+- `--strategy` combined with `--multi` or `--format json` now fails explicitly instead of silently disabling the overlay; `--save` combined with `--multi` or `--format json` now fails explicitly instead of silently skipping the save (previously both were silent no-ops).
+- Single JSON adds `applied_filters`, `counts_before_filter`, `counts_after_filter`, `data_as_of`, `universe`, `warnings`, `partial_result`. Multi JSON adds the same plus `requested_windows`/`resolved_windows`, and rows come from `ScreenAccumMultiRow` (candidates_by_window, pattern, trend, broker_quality) instead of raw per-window candidate dumps.
+- Not implemented as part of S2 (deferred to S3): explicit per-source freshness *state* (`READY`/`PENDING_EOD`/`STALE`/...). `data_as_of` in the single JSON projection currently reports only the latest candle/broker dates observed across projected candidates, not a typed freshness classification — S3 owns that.
+- Verified: 56 focused screen-accum tests pass (14 projector, 12 JSON/save, 6 wiring, 6 display, 1 bb-diagnostic, 17 workflow use case). Full suite: 3990 passed, only 7 pre-existing/unrelated test-order-dependent failures in `test_stock_analysis_workflow_dependencies_config_paths.py` (confirmed identical on `main` before this change). `git diff --check` clean.
 
 ---
 
