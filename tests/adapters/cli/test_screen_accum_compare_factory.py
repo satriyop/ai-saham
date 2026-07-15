@@ -97,13 +97,14 @@ def test_returns_top_candidates(monkeypatch):
         swing_config=_FAKE_SC,
     )
 
-    assert result is not None
-    assert len(result) == 2
-    assert result[0].ticker == "BBCA"
-    assert result[1].ticker == "BBRI"
+    assert result.ok
+    assert result.error is None
+    assert len(result.candidates) == 2
+    assert result.candidates[0].ticker == "BBCA"
+    assert result.candidates[1].ticker == "BBRI"
 
 
-def test_returns_none_on_empty_universe(monkeypatch):
+def test_returns_specific_error_on_empty_universe(monkeypatch):
     monkeypatch.setattr(
         "src.adapters.cli.screen_accum_compare_factory.resolve_tickers",
         lambda **kwargs: [],
@@ -118,10 +119,12 @@ def test_returns_none_on_empty_universe(monkeypatch):
         swing_config=_FAKE_SC,
     )
 
-    assert result is None
+    assert not result.ok
+    assert result.candidates == []
+    assert "No tickers resolved for universe 'empty'" in result.error
 
 
-def test_returns_none_on_exception(monkeypatch):
+def test_returns_specific_error_on_exception(monkeypatch):
     def fake_resolve(**kwargs):
         raise RuntimeError("simulated failure")
 
@@ -139,7 +142,9 @@ def test_returns_none_on_exception(monkeypatch):
         swing_config=_FAKE_SC,
     )
 
-    assert result is None
+    assert not result.ok
+    assert "RuntimeError" in result.error
+    assert "simulated failure" in result.error
 
 
 def test_builds_workflow_with_risk_false(monkeypatch):
@@ -215,7 +220,7 @@ def test_compare_writes_zero_candidate_observations(monkeypatch):
         lambda **kwargs: SimpleNamespace(use_case=real_use_case),
     )
 
-    run_fresh_accumulation_screen_for_compare(
+    result = run_fresh_accumulation_screen_for_compare(
         universe="lq45",
         window=7,
         top=10,
@@ -224,4 +229,6 @@ def test_compare_writes_zero_candidate_observations(monkeypatch):
         swing_config=_FAKE_SC,
     )
 
+    assert result.ok, result.error
+    assert len(result.candidates) >= 1
     assert spy_repo.saved == []

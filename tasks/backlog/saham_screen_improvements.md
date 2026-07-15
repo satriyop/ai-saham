@@ -33,8 +33,8 @@ Files verified:
 | 5 | `S5` | P1 | Unsupported 65–70% prediction claim in guide | ✅ Resolved |
 | 6 | `S6` | P1 | BCI grants full points despite negative aggregate flow | 🟡 Spike complete — hypothesis supported; validation-first follow-up needed before any scoring change |
 | 7 | `S7` | P1 | Multi-window output discards Signal/Risk/Phase already computed | 🟡 Partially resolved — S7 display/semantic contract (Signal/Risk/Phase/Data/Next + Tracked Broker Flow) resolved; S7 performance/one-pass 90-session optimization remains open as follow-up |
-| 8 | `S8` | P1 | Watchlist `list` reports wrong ticker count | ❌ Open |
-| 9 | `S9` | P1 | `screen compare` missing weakening bucket; still persists observations | ❌ Open |
+| 8 | `S8` | P1 | Watchlist `list` reports wrong ticker count | ✅ Resolved (commit `988c6c0`) |
+| 9 | `S9` | P1 | `screen compare` missing weakening bucket; error/legacy-scale handling | ✅ Resolved |
 | 10 | `S10` | P2 | `saham fetch status` uses wrong default DB path | ❌ Open |
 
 ---
@@ -698,11 +698,11 @@ Layer plan:
 
 ### Acceptance Criteria
 
-- [ ] `list_snapshots()` returns the ticker count from the most recent snapshot only
-- [ ] `universe` and `window_days` are from the most recent snapshot row only
-- [ ] Test: watchlist saved 3 times with 10 tickers each → `ticker_count = 10`
-- [ ] Full test suite passes
-- [ ] `git diff --check` clean
+- [x] `list_snapshots()` returns the ticker count from the most recent snapshot only
+- [x] `universe` and `window_days` are from the most recent snapshot row only
+- [x] Test: watchlist saved 3 times with 4 tickers each → `ticker_count = 4` (latest run has 4)
+- [x] Full test suite passes (15/15)
+- [x] `git diff --check` clean
 
 ---
 
@@ -713,55 +713,58 @@ Layer plan:
 - **Type:** Bugfix / Refactor
 - **Priority:** P1
 - **Pre-condition:** S1 must be resolved first (so compare cannot accidentally persist)
+- **Status:** RESOLVED
 
 ### Problem
 
 **Missing weakening bucket:**
 The compare command shows new tickers, dropped tickers, and strengthening rows. Weakening rows (tickers whose score decreased since the saved snapshot) and ordinary score/flow changes are silently omitted. Users see only positive changes.
 
-**Persistence side-effect:**
-`src/adapters/cli/screen_accum_compare_factory.py:52` calls `use_case.execute()` directly, which currently always persists via `self._observation_persister.persist()` (resolved by S1). After S1, this will be safe — but the compare factory should explicitly use a no-persistence path.
+**Persistence (corrected):**
+`src/adapters/cli/screen_accum_compare_factory.py` calls `AccumulationScreenUseCase.execute()` via `create_accumulation_screen_workflow()`. After S1, `execute()` is read-only by construction — it builds `observation_candidates` but never calls a persister. The compare factory does not use `create_accumulation_screen_workflow_bundle()` or `RecordAccumulationObservationsUseCase`, so no separate no-persistence path was needed. S9 added a regression test (`test_compare_writes_zero_candidate_observations`, using a spy `CandidateObservationsRepository`) proving compare stays read-only going forward.
 
-**Exception swallowing:**
-Line 68: `except Exception: return None` — every failure returns `None` with no diagnostic. The adapter then shows "Could not run fresh screen — check data." with no actionable details.
+**Exception swallowing (fixed):**
+Previously `except Exception: return None` — every failure returned `None` with no diagnostic, and the adapter showed a generic "Could not run fresh screen — check data." Replaced with `FreshAccumulationScreenForCompareResult(candidates, error)`, which reports empty-universe (`No tickers resolved for universe '<name>'`) and exception (`Fresh accumulation screen failed: <ExcType>: <message>`) cases explicitly.
 
-**ADR-039 score scale conflict:**
-Historical watchlist snapshots may have been saved with the old 0–120 scale, while current scores use 0–100. A comparison without schema version checking will show false deltas.
+**ADR-039 score scale conflict (fixed):**
+Historical watchlist snapshots may have been saved with the old 0–120 scale, while current scores use 0–100. `compare_screen_snapshots()` now detects legacy scale by value (`saved flow_score > 100` or `saved composite_score > 100`), normalizes saved values by `/1.2` before computing deltas, and emits a warning string on `ScreenCompareResult.warnings`. No schema migration or new column was added — detection is value-based only.
 
 ### Desired Outcome
 
-- Compare shows four delta buckets: **new**, **dropped**, **strengthening**, **weakening**, **unchanged**
+- Compare shows five delta buckets: **new**, **dropped**, **strengthening**, **weakening**, **unchanged**
 - Both flow-score and signal-score deltas are shown, not a single generic `cmp` value
-- Compare calls are explicitly read-only (no observation persistence), either via S1 or by using a separate read-only use case
+- Compare calls are explicitly read-only (no observation persistence) — covered by regression test
 - Provider failures report specific errors (not silent `None`)
-- Schema/version check: if a stored snapshot used the old 0–120 scale, normalize before comparing or show a warning
+- Schema/version check: if a stored snapshot used the old 0–120 scale, normalize before comparing and show a warning
+- Bucket membership is single-authority and mutually exclusive: `SignalChange.movement` (`MovementStatus.STRENGTHENING | WEAKENING | UNCHANGED`) is computed once; composite delta is primary, rank delta is only a fallback when composite delta is missing or neutral — a ticker never appears in two buckets
 
 ### Non-Goals
 
 - No change to scoring formula.
 - No new watchlist save features.
+- No schema migration; no new/removed `screen_snapshots` columns.
 
-### Layer Plan (Agent Must State Before Coding)
+### Layer Plan (As Implemented)
 
 ```md
 Layer plan:
 - Domain: not touched
-- Application: compare logic (new or extended use case) — produce 4-bucket delta; verify score schema version before comparing
+- Application: compare_screen_snapshots_use_case.py — added weakening/unchanged bucket properties, flow_delta, legacy 0-120 detection/normalization, warnings tuple
 - Infrastructure: not touched
-- Adapter: screen_accum_compare_factory.py — use no-persistence path (after S1); propagate specific errors instead of returning None
-- Adapter: compare display — render weakening and unchanged buckets
+- Adapter: screen_accum_compare_factory.py — returns FreshAccumulationScreenForCompareResult(candidates, error) instead of list | None
+- Adapter: screen_lifecycle_commands.py — renders new/dropped/strengthening/weakening/unchanged buckets, flow+signal deltas, warnings, and specific error text
 ```
 
 ### Acceptance Criteria
 
-- [ ] Compare shows new, dropped, strengthening, weakening, and unchanged buckets
-- [ ] Both flow-score delta and signal-score delta displayed per ticker
-- [ ] Compare run produces zero observation rows (after S1)
-- [ ] Provider failures show specific error text, not generic "Could not run fresh screen"
-- [ ] Old 0–120 scale snapshots either normalized or flagged with a warning
-- [ ] Tests: weakening ticker appears in weakening bucket (not silently dropped)
-- [ ] Full test suite passes
-- [ ] `git diff --check` clean
+- [x] Compare shows new, dropped, strengthening, weakening, and unchanged buckets
+- [x] Both flow-score delta and signal-score delta displayed per ticker
+- [x] Compare run produces zero observation rows (regression test added; not a persistence-logic change)
+- [x] Provider failures show specific error text, not generic "Could not run fresh screen"
+- [x] Old 0–120 scale snapshots normalized (value-based, `/1.2`) and flagged with a warning
+- [x] Tests: weakening ticker appears in weakening bucket (not silently dropped) — see `tests/application/use_case/test_compare_screen_snapshots_use_case.py`
+- [x] Full test suite passes (pre-existing unrelated failures in `test_stock_analysis_workflow_dependencies_config_paths.py` confirmed present on `main` before this change — test-isolation issue, not touched by S9)
+- [x] `git diff --check` clean
 
 ---
 

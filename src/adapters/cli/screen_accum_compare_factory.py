@@ -6,6 +6,7 @@ Layer: Adapter
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 
 from src.adapters.cli.screen_accum_workflow_factory import (
@@ -17,6 +18,18 @@ from src.infrastructure.config.universe_config_loader import YamlUniverseConfigL
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 
 
+@dataclass(frozen=True)
+class FreshAccumulationScreenForCompareResult:
+    """Outcome of running a fresh accumulation screen for 'saham screen compare'."""
+
+    candidates: list
+    error: str | None = None
+
+    @property
+    def ok(self) -> bool:
+        return self.error is None
+
+
 def run_fresh_accumulation_screen_for_compare(
     *,
     universe: str,
@@ -25,11 +38,12 @@ def run_fresh_accumulation_screen_for_compare(
     db_path: Path,
     screener_config,
     swing_config,
-) -> list | None:
+) -> FreshAccumulationScreenForCompareResult:
     """Run the accumulation screen silently and return the top candidates.
 
-    Used by ``saham screen compare``.  Returns None on failure
-    (empty universe, network error, etc.).
+    Used by ``saham screen compare``. Uses ``create_accumulation_screen_workflow``
+    (not the persistence bundle), so this call is read-only — it never writes
+    candidate observations.
     """
     try:
         ticker_list = resolve_tickers(
@@ -40,7 +54,10 @@ def run_fresh_accumulation_screen_for_compare(
             repository=SQLiteBrokerRepository(db_path),
         )
         if not ticker_list:
-            return None
+            return FreshAccumulationScreenForCompareResult(
+                candidates=[],
+                error=f"No tickers resolved for universe '{universe}'",
+            )
 
         workflow = create_accumulation_screen_workflow(
             db_path=db_path,
@@ -64,6 +81,9 @@ def run_fresh_accumulation_screen_for_compare(
                 ex_date_warning_days=swing_config.ex_date_warning_days,
             )
         )
-        return response.candidates[:top]
-    except Exception:
-        return None
+        return FreshAccumulationScreenForCompareResult(candidates=response.candidates[:top])
+    except Exception as exc:
+        return FreshAccumulationScreenForCompareResult(
+            candidates=[],
+            error=f"Fresh accumulation screen failed: {type(exc).__name__}: {exc}",
+        )

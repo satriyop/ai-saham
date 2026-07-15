@@ -160,7 +160,7 @@ def screen_compare(
         Path(cfg.config_paths.accumulation_screener)
     )
 
-    fresh_candidates = run_fresh_accumulation_screen_for_compare(
+    fresh_result = run_fresh_accumulation_screen_for_compare(
         universe=run_universe,
         window=window,
         top=top,
@@ -169,10 +169,11 @@ def screen_compare(
         swing_config=swing_config,
     )
 
-    if fresh_candidates is None:
-        typer.echo(typer.style("  Could not run fresh screen — check data.", fg=typer.colors.RED))
+    if not fresh_result.ok:
+        typer.echo(typer.style(f"  {fresh_result.error}", fg=typer.colors.RED))
         raise typer.Exit(1)
 
+    fresh_candidates = fresh_result.candidates
     fresh_tickers = [c.ticker for c in fresh_candidates]
     fresh_scores = {
         c.ticker: (
@@ -194,11 +195,23 @@ def screen_compare(
     _display_compare_result(result)
 
 
+def _signal_change_row(c) -> str:
+    delta = c.composite_delta
+    signal_str = f"signal {delta:+.1f}" if delta is not None else "signal N/A"
+    return (
+        f"    {c.ticker:<8} rank #{c.old_rank}→#{c.new_rank}"
+        f"  flow {c.flow_delta:+.1f}  {signal_str}"
+    )
+
+
 def _display_compare_result(result: ScreenCompareResult) -> None:
     typer.echo(
         f"\n  Snapshot: {result.snapshot_name} ({result.snapshot_count} tickers)  →  "
         f"Fresh: {result.fresh_count} tickers"
     )
+
+    for warning in result.warnings:
+        typer.echo(typer.style(f"\n  ⚠ {warning}", fg=typer.colors.YELLOW))
 
     if result.new_tickers:
         typer.echo(
@@ -216,24 +229,37 @@ def _display_compare_result(result: ScreenCompareResult) -> None:
         for t in result.dropped_tickers:
             typer.echo(f"    - {t}")
 
-    if result.changed:
-        strengthening = [c for c in result.changed if c.strengthening]
-        if strengthening:
-            typer.echo(
-                typer.style(
-                    f"\n  ↑ STRENGTHENING  ({len(strengthening)} signals)", fg=typer.colors.CYAN
-                )
+    strengthening = result.strengthening
+    if strengthening:
+        typer.echo(
+            typer.style(
+                f"\n  ↑ STRENGTHENING  ({len(strengthening)} signals)", fg=typer.colors.CYAN
             )
-            for c in sorted(strengthening, key=lambda x: x.rank_delta, reverse=True)[:10]:
-                delta = c.composite_delta
-                delta_str = f"  cmp {delta:+.0f}" if delta is not None else ""
-                typer.echo(f"    {c.ticker:<8} rank #{c.old_rank}→#{c.new_rank}{delta_str}")
+        )
+        for c in sorted(strengthening, key=lambda x: x.rank_delta, reverse=True)[:10]:
+            typer.echo(_signal_change_row(c))
 
-    if (
-        not result.new_tickers
-        and not result.dropped_tickers
-        and not any(c.strengthening for c in result.changed)
-    ):
+    weakening = result.weakening
+    if weakening:
+        typer.echo(
+            typer.style(
+                f"\n  ↓ WEAKENING  ({len(weakening)} signals)", fg=typer.colors.MAGENTA
+            )
+        )
+        for c in sorted(weakening, key=lambda x: x.rank_delta)[:10]:
+            typer.echo(_signal_change_row(c))
+
+    unchanged = result.unchanged
+    if unchanged:
+        typer.echo(
+            typer.style(
+                f"\n  · UNCHANGED  ({len(unchanged)} signals)", fg=typer.colors.BRIGHT_BLACK
+            )
+        )
+        for c in unchanged[:10]:
+            typer.echo(_signal_change_row(c))
+
+    if not result.new_tickers and not result.dropped_tickers and not result.changed:
         typer.echo(
             typer.style(
                 "\n  ≈ No significant changes since last save.", fg=typer.colors.BRIGHT_BLACK
